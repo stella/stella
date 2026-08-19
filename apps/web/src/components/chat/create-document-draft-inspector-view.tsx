@@ -2,7 +2,7 @@ import { lazy, Suspense } from "react";
 
 import { useTranslations } from "use-intl";
 
-import { cn } from "@stll/ui/lib/utils";
+import { cn } from "@stll/ui/utils";
 
 import type { CreateDocumentDraftPayload } from "@/components/chat/create-document-draft.logic";
 import { DocumentIcon } from "@/components/document-icon";

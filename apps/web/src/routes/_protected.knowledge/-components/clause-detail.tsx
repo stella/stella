@@ -24,8 +24,8 @@ import {
   AlertDialogHeader,
   AlertDialogPopup,
   AlertDialogTitle,
-} from "@stll/ui/components/alert-dialog";
-import { Button } from "@stll/ui/components/button";
+} from "@stll/ui/alert-dialog";
+import { Button } from "@stll/ui/button";
 import {
   Combobox,
   ComboboxEmpty,
@@ -33,7 +33,7 @@ import {
   ComboboxItem,
   ComboboxList,
   ComboboxPopup,
-} from "@stll/ui/components/combobox";
+} from "@stll/ui/combobox";
 import {
   Dialog,
   DialogClose,
@@ -42,25 +42,25 @@ import {
   DialogPanel,
   DialogPopup,
   DialogTitle,
-} from "@stll/ui/components/dialog";
-import { Input } from "@stll/ui/components/input";
+} from "@stll/ui/dialog";
+import { Input } from "@stll/ui/input";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@stll/ui/components/menu";
+} from "@stll/ui/menu";
 import {
   Select,
   SelectItem,
   SelectPopup,
   SelectTrigger,
   SelectValue,
-} from "@stll/ui/components/select";
-import { Tabs, TabsList, TabsPanel, TabsTab } from "@stll/ui/components/tabs";
-import { Textarea } from "@stll/ui/components/textarea";
-import { stellaToast } from "@stll/ui/components/toast";
-import { cn } from "@stll/ui/lib/utils";
+} from "@stll/ui/select";
+import { Tabs, TabsList, TabsPanel, TabsTab } from "@stll/ui/tabs";
+import { Textarea } from "@stll/ui/textarea";
+import { stellaToast } from "@stll/ui/toast";
+import { cn } from "@stll/ui/utils";
 
 import { InlineEdit } from "@/components/inline-edit";
 import type { ClauseParagraph } from "@/components/templates/clause-editor-types";

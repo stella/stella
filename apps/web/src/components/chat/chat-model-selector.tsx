@@ -3,10 +3,10 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
-import { BidiText } from "@stll/ui/components/bidi-text";
-import { Button } from "@stll/ui/components/button";
-import { Menu, MenuPopup, MenuTrigger } from "@stll/ui/components/menu";
-import { cn } from "@stll/ui/lib/utils";
+import { BidiText } from "@stll/ui/bidi-text";
+import { Button } from "@stll/ui/button";
+import { Menu, MenuPopup, MenuTrigger } from "@stll/ui/menu";
+import { cn } from "@stll/ui/utils";
 
 import type { ProviderValue } from "@/components/ai-config-role-models.logic";
 import { AIProviderIcon } from "@/components/ai-provider-icons";

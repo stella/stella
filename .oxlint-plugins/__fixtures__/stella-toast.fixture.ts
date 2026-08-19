@@ -4,7 +4,7 @@
 import { toastManager as rawManager } from "@base-ui/react/toast";
 
 // oxlint-disable-next-line stella-toast/stella-toast -- fixture: restricted wrapper export bypasses stellaToast
-import { stellaToast, toastManager } from "@stll/ui/components/toast";
+import { stellaToast, toastManager } from "@stll/ui/toast";
 
 void rawManager;
 void toastManager;

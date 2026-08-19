@@ -13,8 +13,8 @@ import { useRouteContext } from "@tanstack/react-router";
 import { Trash2Icon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { Button } from "@stll/ui/components/button";
-import { Frame, FramePanel } from "@stll/ui/components/frame";
+import { Button } from "@stll/ui/button";
+import { Frame, FramePanel } from "@stll/ui/frame";
 
 import { SecretInput } from "@/components/secret-input";
 import { api } from "@/lib/api";

@@ -22,12 +22,12 @@ import { useTranslations } from "use-intl";
 
 import { resolveFindMatchRange } from "@stll/folio-core/prosemirror/findReplaceSelection";
 import type { DocxEditorRef } from "@stll/folio-react";
-import { Button } from "@stll/ui/components/button";
-import type { OverlayLayer } from "@stll/ui/lib/overlay-layer";
+import { Button } from "@stll/ui/button";
+import type { OverlayLayer } from "@stll/ui/overlay-layer";
 import "@stll/folio-react/editor.css";
 
 import "./peek-docx.css";
-import { composeRefs } from "@stll/ui/lib/utils";
+import { composeRefs } from "@stll/ui/utils";
 
 import { FileViewerWithAI } from "@/components/ai-suggestions/file-viewer-with-ai";
 import {

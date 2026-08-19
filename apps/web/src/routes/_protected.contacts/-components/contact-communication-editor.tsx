@@ -6,8 +6,8 @@ import type { LucideIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
-import { Button } from "@stll/ui/components/button";
-import { stellaToast } from "@stll/ui/components/toast";
+import { Button } from "@stll/ui/button";
+import { stellaToast } from "@stll/ui/toast";
 
 import { normalizeOptionalArray, optionalArray } from "@/lib/arrays";
 import { AddContactMethodForm } from "@/routes/_protected.contacts/-components/add-contact-method-form";

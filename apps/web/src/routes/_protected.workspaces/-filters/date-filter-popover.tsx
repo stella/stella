@@ -1,9 +1,9 @@
 import { CheckIcon, XIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { Button } from "@stll/ui/components/button";
-import { Separator } from "@stll/ui/components/separator";
-import { cn } from "@stll/ui/lib/utils";
+import { Button } from "@stll/ui/button";
+import { Separator } from "@stll/ui/separator";
+import { cn } from "@stll/ui/utils";
 
 import { DatePickerPopover } from "@/components/date-picker-popover";
 import type { DateFilter, DateFilterPreset } from "@/lib/workspaces/types";

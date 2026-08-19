@@ -43,9 +43,9 @@ import type {
   FolioAIEditSeverity,
   FolioAIEditSnapshot,
 } from "@stll/folio-react";
-import { BidiText } from "@stll/ui/components/bidi-text";
-import { stellaToast } from "@stll/ui/components/toast";
-import { cn } from "@stll/ui/lib/utils";
+import { BidiText } from "@stll/ui/bidi-text";
+import { stellaToast } from "@stll/ui/toast";
+import { cn } from "@stll/ui/utils";
 
 import { resolveDocxSuggestionRequest } from "@/components/ai-suggestions/docx-suggestion-persistence";
 import { resolveFileReviewSessionId } from "@/components/ai-suggestions/file-review-session";

@@ -12,9 +12,9 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { Button } from "@stll/ui/components/button";
-import { Separator } from "@stll/ui/components/separator";
-import { stellaToast } from "@stll/ui/components/toast";
+import { Button } from "@stll/ui/button";
+import { Separator } from "@stll/ui/separator";
+import { stellaToast } from "@stll/ui/toast";
 
 import {
   fetchPrintPdf,

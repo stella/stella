@@ -3,24 +3,20 @@ import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
-import { Button } from "@stll/ui/components/button";
-import { Checkbox } from "@stll/ui/components/checkbox";
-import { Field, FieldLabel } from "@stll/ui/components/field";
+import { Button } from "@stll/ui/button";
+import { Checkbox } from "@stll/ui/checkbox";
+import { Field, FieldLabel } from "@stll/ui/field";
 import {
   Frame,
   FrameDescription,
   FrameHeader,
   FramePanel,
   FrameTitle,
-} from "@stll/ui/components/frame";
-import { Input } from "@stll/ui/components/input";
-import {
-  InputOTP,
-  InputOTPGroup,
-  InputOTPSlot,
-} from "@stll/ui/components/input-otp";
-import { stellaToast } from "@stll/ui/components/toast";
-import { cn } from "@stll/ui/lib/utils";
+} from "@stll/ui/frame";
+import { Input } from "@stll/ui/input";
+import { InputOTP, InputOTPGroup, InputOTPSlot } from "@stll/ui/input-otp";
+import { stellaToast } from "@stll/ui/toast";
+import { cn } from "@stll/ui/utils";
 
 import { useInvalidateSession } from "@/hooks/use-invalidate-session";
 import { usePulse } from "@/hooks/use-pulse";

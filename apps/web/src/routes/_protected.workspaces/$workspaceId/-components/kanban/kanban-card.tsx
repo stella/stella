@@ -6,8 +6,8 @@ import { setCustomNativeDragPreview } from "@atlaskit/pragmatic-drag-and-drop/el
 import { CalendarIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { containedHandler } from "@stll/ui/hooks/use-contained-handler";
-import { cn } from "@stll/ui/lib/utils";
+import { containedHandler } from "@stll/ui/use-contained-handler";
+import { cn } from "@stll/ui/utils";
 
 import { InlineEdit } from "@/components/inline-edit";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";

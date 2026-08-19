@@ -11,10 +11,10 @@ import { useTranslations } from "use-intl";
 
 import { prorateHourlyCents } from "@stll/money";
 import type { CentsAmount } from "@stll/money";
-import { BidiText } from "@stll/ui/components/bidi-text";
-import { Button } from "@stll/ui/components/button";
-import { Checkbox } from "@stll/ui/components/checkbox";
-import { cn } from "@stll/ui/lib/utils";
+import { BidiText } from "@stll/ui/bidi-text";
+import { Button } from "@stll/ui/button";
+import { Checkbox } from "@stll/ui/checkbox";
+import { cn } from "@stll/ui/utils";
 
 import { usePermissions } from "@/hooks/use-permissions";
 import { formatCurrencyAmount } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/format-currency";

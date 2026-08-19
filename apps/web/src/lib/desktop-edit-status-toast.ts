@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-import { stellaToast } from "@stll/ui/components/toast";
+import { stellaToast } from "@stll/ui/toast";
 
 import { getAnalytics } from "@/lib/analytics/provider";
 import type { OpenFileInDesktopResult } from "@/lib/desktop-bridge";

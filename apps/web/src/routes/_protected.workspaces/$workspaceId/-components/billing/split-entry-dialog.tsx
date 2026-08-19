@@ -3,12 +3,12 @@ import { useState } from "react";
 import { PlusIcon, TrashIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { Button } from "@stll/ui/components/button";
-import { Dialog, DialogPopup } from "@stll/ui/components/dialog";
-import { Input } from "@stll/ui/components/input";
-import { Label } from "@stll/ui/components/label";
-import { stellaToast } from "@stll/ui/components/toast";
-import { cn } from "@stll/ui/lib/utils";
+import { Button } from "@stll/ui/button";
+import { Dialog, DialogPopup } from "@stll/ui/dialog";
+import { Input } from "@stll/ui/input";
+import { Label } from "@stll/ui/label";
+import { stellaToast } from "@stll/ui/toast";
+import { cn } from "@stll/ui/utils";
 
 import { MatterCombobox } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/matter-combobox";
 import { useSplitTimeEntry } from "@/routes/_protected.workspaces/$workspaceId/-mutations/time-entries";

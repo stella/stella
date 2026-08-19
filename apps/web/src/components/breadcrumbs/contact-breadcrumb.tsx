@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
 import type { ResolveParams } from "@tanstack/react-router";
 
-import { BidiText } from "@stll/ui/components/bidi-text";
+import { BidiText } from "@stll/ui/bidi-text";
 
 import { BreadcrumbLink } from "@/components/breadcrumbs/shared";
 import { contactOptions } from "@/lib/contacts/queries";

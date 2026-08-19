@@ -5,7 +5,7 @@ import { useSuspenseQuery } from "@tanstack/react-query";
 import type { Editor } from "@tiptap/react";
 import { useTranslations } from "use-intl";
 
-import { FieldError } from "@stll/ui/components/field";
+import { FieldError } from "@stll/ui/field";
 
 import { AIPromptInput } from "@/components/ai-prompt-input/ai-prompt-input";
 import { PropertyFormField } from "@/components/workspaces/properties/form";

@@ -1,7 +1,7 @@
 import { MessageSquarePlusIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { MenuItem } from "@stll/ui/components/menu";
+import { MenuItem } from "@stll/ui/menu";
 
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import type { ChatTab } from "@/components/inspector/inspector-tabs-store";

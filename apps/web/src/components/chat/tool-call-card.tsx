@@ -4,13 +4,9 @@ import { useQuery } from "@tanstack/react-query";
 import { ChevronRightIcon, CircleHelpIcon } from "lucide-react";
 import { useFormatter, useTranslations } from "use-intl";
 
-import { DirectionalIcon } from "@stll/ui/components/directional-icon";
-import {
-  Popover,
-  PopoverPopup,
-  PopoverTrigger,
-} from "@stll/ui/components/popover";
-import { cn } from "@stll/ui/lib/utils";
+import { DirectionalIcon } from "@stll/ui/directional-icon";
+import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
+import { cn } from "@stll/ui/utils";
 
 import { ChatActivityOrb } from "@/components/chat/chat-activity-orb";
 import { getChatToolActivityState } from "@/components/chat/chat-activity.logic";

@@ -11,8 +11,8 @@ import { Streamdown } from "streamdown";
 import type { PluggableList } from "unified";
 import { useTranslations } from "use-intl";
 
-import { contentDir } from "@stll/ui/hooks/use-content-dir";
-import { cn } from "@stll/ui/lib/utils";
+import { contentDir } from "@stll/ui/use-content-dir";
+import { cn } from "@stll/ui/utils";
 
 import { AnonymizedSpan } from "@/components/chat/anonymized-span";
 import type {

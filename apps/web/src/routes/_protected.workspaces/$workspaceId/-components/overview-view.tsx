@@ -19,7 +19,7 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { Button } from "@stll/ui/components/button";
+import { Button } from "@stll/ui/button";
 import {
   Menu,
   MenuItem,
@@ -30,21 +30,17 @@ import {
   MenuSubPopup,
   MenuSubTrigger,
   MenuTrigger,
-} from "@stll/ui/components/menu";
-import {
-  Popover,
-  PopoverPopup,
-  PopoverTrigger,
-} from "@stll/ui/components/popover";
-import { ScrollArea } from "@stll/ui/components/scroll-area";
-import { stellaToast } from "@stll/ui/components/toast";
+} from "@stll/ui/menu";
+import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
+import { ScrollArea } from "@stll/ui/scroll-area";
+import { stellaToast } from "@stll/ui/toast";
 import {
   TooltipPopup,
   Tooltip as TooltipRoot,
   TooltipTrigger,
-} from "@stll/ui/components/tooltip";
-import { containedEventHandler } from "@stll/ui/hooks/use-contained-handler";
-import { cn } from "@stll/ui/lib/utils";
+} from "@stll/ui/tooltip";
+import { containedEventHandler } from "@stll/ui/use-contained-handler";
+import { cn } from "@stll/ui/utils";
 
 import { EmptyScreen } from "@/components/empty-screen";
 import { isTerminalFlowRunStatus } from "@/components/flows/flow-meta";

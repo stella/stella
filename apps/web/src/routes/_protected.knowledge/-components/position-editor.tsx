@@ -30,7 +30,7 @@ import {
   pruneIncomplete,
   type ConditionNode,
 } from "@stll/conditions";
-import { Button } from "@stll/ui/components/button";
+import { Button } from "@stll/ui/button";
 import {
   Combobox,
   ComboboxEmpty,
@@ -38,9 +38,9 @@ import {
   ComboboxItem,
   ComboboxList,
   ComboboxPopup,
-} from "@stll/ui/components/combobox";
-import { Input } from "@stll/ui/components/input";
-import { Label } from "@stll/ui/components/label";
+} from "@stll/ui/combobox";
+import { Input } from "@stll/ui/input";
+import { Label } from "@stll/ui/label";
 import {
   Menu,
   MenuItem,
@@ -49,16 +49,16 @@ import {
   MenuRadioItem,
   MenuSeparator,
   MenuTrigger,
-} from "@stll/ui/components/menu";
+} from "@stll/ui/menu";
 import {
   Select,
   SelectItem,
   SelectPopup,
   SelectTrigger,
   SelectValue,
-} from "@stll/ui/components/select";
-import { Textarea } from "@stll/ui/components/textarea";
-import { cn } from "@stll/ui/lib/utils";
+} from "@stll/ui/select";
+import { Textarea } from "@stll/ui/textarea";
+import { cn } from "@stll/ui/utils";
 
 import { ConditionBuilder } from "@/components/conditions/condition-builder";
 import type { FieldOption } from "@/components/conditions/condition-builder-logic";

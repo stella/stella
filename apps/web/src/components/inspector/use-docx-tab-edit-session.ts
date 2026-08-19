@@ -3,7 +3,7 @@ import { useCallback, useRef, useState } from "react";
 import { useTranslations } from "use-intl";
 
 import type { DocxCompatibility } from "@stll/folio-react";
-import { stellaToast } from "@stll/ui/components/toast";
+import { stellaToast } from "@stll/ui/toast";
 
 import type { DocxBrowserEditorActions } from "@/components/docx/docx-browser-editor";
 import { getDocxEditBlockReason } from "@/components/docx/docx-browser-editor.logic";

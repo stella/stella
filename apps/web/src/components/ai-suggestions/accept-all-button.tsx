@@ -23,8 +23,8 @@ import {
   AlertDialogPanel,
   AlertDialogPopup,
   AlertDialogTitle,
-} from "@stll/ui/components/alert-dialog";
-import { Button } from "@stll/ui/components/button";
+} from "@stll/ui/alert-dialog";
+import { Button } from "@stll/ui/button";
 
 import {
   SEVERITY_ORDER,

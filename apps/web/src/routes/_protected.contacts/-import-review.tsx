@@ -14,19 +14,19 @@ import {
   type ContactImportTaxIdScheme,
   type ContactType,
 } from "@stll/api-contract";
-import { Button } from "@stll/ui/components/button";
-import { Field, FieldLabel } from "@stll/ui/components/field";
-import { Input } from "@stll/ui/components/input";
+import { Button } from "@stll/ui/button";
+import { Field, FieldLabel } from "@stll/ui/field";
+import { Input } from "@stll/ui/input";
 import {
   Select,
   SelectItem,
   SelectPopup,
   SelectTrigger,
   SelectValue,
-} from "@stll/ui/components/select";
-import { Textarea } from "@stll/ui/components/textarea";
-import { stellaToast } from "@stll/ui/components/toast";
-import { cn } from "@stll/ui/lib/utils";
+} from "@stll/ui/select";
+import { Textarea } from "@stll/ui/textarea";
+import { stellaToast } from "@stll/ui/toast";
+import { cn } from "@stll/ui/utils";
 
 import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";

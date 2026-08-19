@@ -5,8 +5,8 @@ import { createFileRoute, getRouteApi } from "@tanstack/react-router";
 import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
-import { Skeleton } from "@stll/ui/components/skeleton";
-import { stellaToast } from "@stll/ui/components/toast";
+import { Skeleton } from "@stll/ui/skeleton";
+import { stellaToast } from "@stll/ui/toast";
 
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";

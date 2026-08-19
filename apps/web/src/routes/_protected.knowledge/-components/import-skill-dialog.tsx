@@ -4,9 +4,9 @@ import { useMutation } from "@tanstack/react-query";
 import { LoaderIcon, SearchIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { BidiText } from "@stll/ui/components/bidi-text";
-import { Button } from "@stll/ui/components/button";
-import { Checkbox } from "@stll/ui/components/checkbox";
+import { BidiText } from "@stll/ui/bidi-text";
+import { Button } from "@stll/ui/button";
+import { Checkbox } from "@stll/ui/checkbox";
 import {
   Dialog,
   DialogClose,
@@ -15,16 +15,16 @@ import {
   DialogPanel,
   DialogPopup,
   DialogTitle,
-} from "@stll/ui/components/dialog";
-import { Input } from "@stll/ui/components/input";
+} from "@stll/ui/dialog";
+import { Input } from "@stll/ui/input";
 import {
   Select,
   SelectItem,
   SelectPopup,
   SelectTrigger,
   SelectValue,
-} from "@stll/ui/components/select";
-import { stellaToast } from "@stll/ui/components/toast";
+} from "@stll/ui/select";
+import { stellaToast } from "@stll/ui/toast";
 
 import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";

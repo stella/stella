@@ -4,12 +4,12 @@ import { useQuery } from "@tanstack/react-query";
 import { ChevronRightIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { BidiText } from "@stll/ui/components/bidi-text";
-import { DirectionalIcon } from "@stll/ui/components/directional-icon";
-import { Input } from "@stll/ui/components/input";
-import { Label } from "@stll/ui/components/label";
-import { ScrollArea } from "@stll/ui/components/scroll-area";
-import { cn } from "@stll/ui/lib/utils";
+import { BidiText } from "@stll/ui/bidi-text";
+import { DirectionalIcon } from "@stll/ui/directional-icon";
+import { Input } from "@stll/ui/input";
+import { Label } from "@stll/ui/label";
+import { ScrollArea } from "@stll/ui/scroll-area";
+import { cn } from "@stll/ui/utils";
 
 import { MatterIcon } from "@/components/matter-icon";
 import Tooltip from "@/components/tooltip";

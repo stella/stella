@@ -4,15 +4,15 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { useTranslations } from "use-intl";
 
-import { Avatar, AvatarFallback } from "@stll/ui/components/avatar";
-import { Button } from "@stll/ui/components/button";
-import { Checkbox } from "@stll/ui/components/checkbox";
-import { FramePanel } from "@stll/ui/components/frame";
-import { Label } from "@stll/ui/components/label";
-import { ScrollArea } from "@stll/ui/components/scroll-area";
-import { Separator } from "@stll/ui/components/separator";
-import { Tabs, TabsList, TabsPanel, TabsTab } from "@stll/ui/components/tabs";
-import { cn } from "@stll/ui/lib/utils";
+import { Avatar, AvatarFallback } from "@stll/ui/avatar";
+import { Button } from "@stll/ui/button";
+import { Checkbox } from "@stll/ui/checkbox";
+import { FramePanel } from "@stll/ui/frame";
+import { Label } from "@stll/ui/label";
+import { ScrollArea } from "@stll/ui/scroll-area";
+import { Separator } from "@stll/ui/separator";
+import { Tabs, TabsList, TabsPanel, TabsTab } from "@stll/ui/tabs";
+import { cn } from "@stll/ui/utils";
 
 import { isAppSnapshot } from "../shared/rpc";
 import type {

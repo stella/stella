@@ -8,8 +8,8 @@ import {
   InputGroup,
   InputGroupAddon,
   InputGroupInput,
-} from "@stll/ui/components/input-group";
-import { cn } from "@stll/ui/lib/utils";
+} from "@stll/ui/input-group";
+import { cn } from "@stll/ui/utils";
 
 import Tooltip from "@/components/tooltip";
 import { useFormatter, useLocale } from "@/i18n/formatting-context";

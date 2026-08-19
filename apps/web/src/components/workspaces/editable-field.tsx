@@ -14,10 +14,10 @@ import { useState, type ReactNode } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
-import { BidiText } from "@stll/ui/components/bidi-text";
-import { Input } from "@stll/ui/components/input";
-import { stellaToast } from "@stll/ui/components/toast";
-import { contentDir } from "@stll/ui/hooks/use-content-dir";
+import { BidiText } from "@stll/ui/bidi-text";
+import { Input } from "@stll/ui/input";
+import { stellaToast } from "@stll/ui/toast";
+import { contentDir } from "@stll/ui/use-content-dir";
 
 import { DatePickerPopover } from "@/components/date-picker-popover";
 import { DocumentIcon } from "@/components/document-icon";

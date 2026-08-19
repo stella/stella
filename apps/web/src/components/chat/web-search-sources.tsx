@@ -1,7 +1,7 @@
 import { ChevronRightIcon, GlobeIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { cn } from "@stll/ui/lib/utils";
+import { cn } from "@stll/ui/utils";
 
 import type { ChatMessage } from "@/components/chat/chat-ui-tools";
 

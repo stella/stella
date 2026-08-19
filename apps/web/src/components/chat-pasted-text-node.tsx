@@ -11,14 +11,10 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { Button } from "@stll/ui/components/button";
-import {
-  Popover,
-  PopoverPopup,
-  PopoverTrigger,
-} from "@stll/ui/components/popover";
-import { contentDir } from "@stll/ui/hooks/use-content-dir";
-import { cn } from "@stll/ui/lib/utils";
+import { Button } from "@stll/ui/button";
+import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
+import { contentDir } from "@stll/ui/use-content-dir";
+import { cn } from "@stll/ui/utils";
 
 import type {
   PastedTextAttrs,

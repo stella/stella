@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-import { Skeleton } from "@stll/ui/components/skeleton";
+import { Skeleton } from "@stll/ui/skeleton";
 
 import { chatThreadOptions } from "@/features/chat/queries";
 import { toChatThreadId } from "@/lib/chat-thread-ref";

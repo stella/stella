@@ -1,8 +1,8 @@
 import { Link } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
-import { BidiText } from "@stll/ui/components/bidi-text";
-import { Skeleton } from "@stll/ui/components/skeleton";
+import { BidiText } from "@stll/ui/bidi-text";
+import { Skeleton } from "@stll/ui/skeleton";
 
 import { useFormatter } from "@/i18n/formatting-context";
 import { createCaseLawDecisionRouteParams } from "@/lib/case-law-route";

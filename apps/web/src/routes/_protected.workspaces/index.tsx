@@ -16,17 +16,12 @@ import * as v from "valibot";
 import { useShallow } from "zustand/shallow";
 
 import { WORKSPACES_PER_ORGANIZATION_MAX } from "@stll/api-contract";
-import { Button } from "@stll/ui/components/button";
-import { Frame } from "@stll/ui/components/frame";
-import { Input } from "@stll/ui/components/input";
-import {
-  Menu,
-  MenuItem,
-  MenuPopup,
-  MenuTrigger,
-} from "@stll/ui/components/menu";
-import { Separator } from "@stll/ui/components/separator";
-import { Skeleton } from "@stll/ui/components/skeleton";
+import { Button } from "@stll/ui/button";
+import { Frame } from "@stll/ui/frame";
+import { Input } from "@stll/ui/input";
+import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
+import { Separator } from "@stll/ui/separator";
+import { Skeleton } from "@stll/ui/skeleton";
 import {
   Table,
   TableBody,
@@ -34,9 +29,9 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@stll/ui/components/table";
-import { containedEventHandler } from "@stll/ui/hooks/use-contained-handler";
-import { cn } from "@stll/ui/lib/utils";
+} from "@stll/ui/table";
+import { containedEventHandler } from "@stll/ui/use-contained-handler";
+import { cn } from "@stll/ui/utils";
 
 import { EmptyScreen } from "@/components/empty-screen";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";

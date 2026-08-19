@@ -4,17 +4,17 @@ import { useInfiniteQuery } from "@tanstack/react-query";
 import { useRouteContext } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
-import { Button } from "@stll/ui/components/button";
-import { Field, FieldLabel } from "@stll/ui/components/field";
+import { Button } from "@stll/ui/button";
+import { Field, FieldLabel } from "@stll/ui/field";
 import {
   Select,
   SelectItem,
   SelectPopup,
   SelectTrigger,
   SelectValue,
-} from "@stll/ui/components/select";
-import { Skeleton } from "@stll/ui/components/skeleton";
-import { Tabs, TabsList, TabsPanel, TabsTab } from "@stll/ui/components/tabs";
+} from "@stll/ui/select";
+import { Skeleton } from "@stll/ui/skeleton";
+import { Tabs, TabsList, TabsPanel, TabsTab } from "@stll/ui/tabs";
 
 import { usePermissions } from "@/hooks/use-permissions";
 import { detached } from "@/lib/detached";

@@ -11,13 +11,13 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { BidiText } from "@stll/ui/components/bidi-text";
-import { Button } from "@stll/ui/components/button";
-import { Checkbox } from "@stll/ui/components/checkbox";
-import { DirectionalIcon } from "@stll/ui/components/directional-icon";
-import { Textarea } from "@stll/ui/components/textarea";
-import { stellaToast } from "@stll/ui/components/toast";
-import { cn } from "@stll/ui/lib/utils";
+import { BidiText } from "@stll/ui/bidi-text";
+import { Button } from "@stll/ui/button";
+import { Checkbox } from "@stll/ui/checkbox";
+import { DirectionalIcon } from "@stll/ui/directional-icon";
+import { Textarea } from "@stll/ui/textarea";
+import { stellaToast } from "@stll/ui/toast";
+import { cn } from "@stll/ui/utils";
 
 import { resolveAppTimeZone } from "@/i18n/time-zone";
 import { api } from "@/lib/api";

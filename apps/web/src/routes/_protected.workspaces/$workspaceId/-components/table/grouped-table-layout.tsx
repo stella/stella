@@ -10,8 +10,8 @@ import { ChevronDownIcon, ChevronRightIcon, TableIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { ENTITY_KINDS } from "@stll/api-contract";
-import { Skeleton } from "@stll/ui/components/skeleton";
-import { cn } from "@stll/ui/lib/utils";
+import { Skeleton } from "@stll/ui/skeleton";
+import { cn } from "@stll/ui/utils";
 
 import {
   getInternalPropertyId,

@@ -11,11 +11,11 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { BidiText } from "@stll/ui/components/bidi-text";
-import { Button } from "@stll/ui/components/button";
-import { DirectionalIcon } from "@stll/ui/components/directional-icon";
-import { contentDir } from "@stll/ui/hooks/use-content-dir";
-import { cn } from "@stll/ui/lib/utils";
+import { BidiText } from "@stll/ui/bidi-text";
+import { Button } from "@stll/ui/button";
+import { DirectionalIcon } from "@stll/ui/directional-icon";
+import { contentDir } from "@stll/ui/use-content-dir";
+import { cn } from "@stll/ui/utils";
 
 import { useChatMatters } from "@/components/chat/chat-matters-context";
 import { assistantMessageFallbackText } from "@/components/chat/chat-thread-messages.logic";

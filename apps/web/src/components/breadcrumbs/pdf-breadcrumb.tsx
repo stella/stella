@@ -1,8 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link, useMatch } from "@tanstack/react-router";
 
-import { BidiText } from "@stll/ui/components/bidi-text";
-import { BreadcrumbItem } from "@stll/ui/components/breadcrumb";
+import { BidiText } from "@stll/ui/bidi-text";
+import { BreadcrumbItem } from "@stll/ui/breadcrumb";
 
 import { fileMetadataOptions } from "@/lib/files/file-metadata-query";
 

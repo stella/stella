@@ -8,8 +8,8 @@ import {
 import { useTranslations } from "use-intl";
 
 import type { LoadedCatalogueEntry } from "@stll/catalogue";
-import { BidiText } from "@stll/ui/components/bidi-text";
-import { DirectionalIcon } from "@stll/ui/components/directional-icon";
+import { BidiText } from "@stll/ui/bidi-text";
+import { DirectionalIcon } from "@stll/ui/directional-icon";
 
 import { CostBadge, SetupBadge } from "@/components/catalogue/catalogue-badges";
 import { CatalogueEntryIcon } from "@/components/catalogue/catalogue-entry-icon";

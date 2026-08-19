@@ -5,7 +5,7 @@ import { getRouteApi, useNavigate } from "@tanstack/react-router";
 import { ArrowLeftIcon, LayoutTemplateIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { Button } from "@stll/ui/components/button";
+import { Button } from "@stll/ui/button";
 import {
   Dialog,
   DialogDescription,
@@ -13,9 +13,9 @@ import {
   DialogPanel,
   DialogPopup,
   DialogTitle,
-} from "@stll/ui/components/dialog";
-import { DirectionalIcon } from "@stll/ui/components/directional-icon";
-import { Input } from "@stll/ui/components/input";
+} from "@stll/ui/dialog";
+import { DirectionalIcon } from "@stll/ui/directional-icon";
+import { Input } from "@stll/ui/input";
 
 import { TemplateForm } from "@/components/templates/template-form";
 import { useTemplateFillSchema } from "@/components/templates/use-template-fill-schema";

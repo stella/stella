@@ -1,6 +1,6 @@
 import { useTranslations } from "use-intl";
 
-import { Frame, FramePanel } from "@stll/ui/components/frame";
+import { Frame, FramePanel } from "@stll/ui/frame";
 
 import { CopyField } from "@/components/copy-field";
 

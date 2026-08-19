@@ -7,9 +7,9 @@ import { useTranslations } from "use-intl";
 import "@stll/folio-react/editor.css";
 import { fromMarkdown, toMarkdown } from "@stll/folio-react";
 import type { Document, MarkdownOptions } from "@stll/folio-react";
-import { Button } from "@stll/ui/components/button";
-import { Textarea } from "@stll/ui/components/textarea";
-import { cn, composeRefs } from "@stll/ui/lib/utils";
+import { Button } from "@stll/ui/button";
+import { Textarea } from "@stll/ui/textarea";
+import { cn, composeRefs } from "@stll/ui/utils";
 
 import {
   DOCX_PAGE_FIT_WIDTH,

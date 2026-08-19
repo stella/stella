@@ -13,7 +13,7 @@ import {
 import { flexRender } from "@tanstack/react-table";
 import { CheckIcon, GripVerticalIcon, MinusIcon } from "lucide-react";
 
-import { cn } from "@stll/ui/lib/utils";
+import { cn } from "@stll/ui/utils";
 
 import type { TableHeader } from "@/components/workspaces/table/types";
 import { useExternalSyncEffect } from "@/hooks/use-effect";

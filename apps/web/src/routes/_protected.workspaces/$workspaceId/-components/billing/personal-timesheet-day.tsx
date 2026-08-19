@@ -15,16 +15,11 @@ import {
   AlertDialogHeader,
   AlertDialogPopup,
   AlertDialogTitle,
-} from "@stll/ui/components/alert-dialog";
-import { BidiText } from "@stll/ui/components/bidi-text";
-import { Button } from "@stll/ui/components/button";
-import {
-  Dialog,
-  DialogPanel,
-  DialogPopup,
-  DialogTitle,
-} from "@stll/ui/components/dialog";
-import { stellaToast } from "@stll/ui/components/toast";
+} from "@stll/ui/alert-dialog";
+import { BidiText } from "@stll/ui/bidi-text";
+import { Button } from "@stll/ui/button";
+import { Dialog, DialogPanel, DialogPopup, DialogTitle } from "@stll/ui/dialog";
+import { stellaToast } from "@stll/ui/toast";
 
 import { usePermissions } from "@/hooks/use-permissions";
 import { getAnalytics } from "@/lib/analytics/provider";

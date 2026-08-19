@@ -2,8 +2,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
-import { Input } from "@stll/ui/components/input";
-import { stellaToast } from "@stll/ui/components/toast";
+import { Input } from "@stll/ui/input";
+import { stellaToast } from "@stll/ui/toast";
 
 import { useInlineRename } from "@/hooks/use-inline-rename";
 import { useUpdateContact } from "@/lib/contacts/mutations";

@@ -5,11 +5,11 @@ import { useSelector } from "@tanstack/react-store";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
-import { Button } from "@stll/ui/components/button";
-import { Field, FieldError, FieldLabel } from "@stll/ui/components/field";
-import { Form } from "@stll/ui/components/form";
-import { Input } from "@stll/ui/components/input";
-import { cn } from "@stll/ui/lib/utils";
+import { Button } from "@stll/ui/button";
+import { Field, FieldError, FieldLabel } from "@stll/ui/field";
+import { Form } from "@stll/ui/form";
+import { Input } from "@stll/ui/input";
+import { cn } from "@stll/ui/utils";
 
 import { usePulse } from "@/hooks/use-pulse";
 import { detached } from "@/lib/detached";

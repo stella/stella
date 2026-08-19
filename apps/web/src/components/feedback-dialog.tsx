@@ -2,16 +2,8 @@ import { useLocation } from "@tanstack/react-router";
 import { MailIcon, MegaphoneIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import {
-  DiscordLogoIcon,
-  GitHubLogoIcon,
-} from "@stll/ui/components/brand-icons";
-import {
-  Menu,
-  MenuItem,
-  MenuPopup,
-  MenuTrigger,
-} from "@stll/ui/components/menu";
+import { DiscordLogoIcon, GitHubLogoIcon } from "@stll/ui/brand-icons";
+import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
 
 import { buildFeedbackMailto } from "@/components/feedback-dialog.logic";
 import { SidebarMenuButton, SidebarMenuItem } from "@/components/sidebar";

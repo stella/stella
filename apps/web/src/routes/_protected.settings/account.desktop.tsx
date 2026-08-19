@@ -4,11 +4,11 @@ import { createFileRoute } from "@tanstack/react-router";
 import { LinkIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { Button } from "@stll/ui/components/button";
-import { buttonVariants } from "@stll/ui/components/button-variants";
-import { Frame, FramePanel } from "@stll/ui/components/frame";
-import { stellaToast } from "@stll/ui/components/toast";
-import { cn } from "@stll/ui/lib/utils";
+import { Button } from "@stll/ui/button";
+import { buttonVariants } from "@stll/ui/button-variants";
+import { Frame, FramePanel } from "@stll/ui/frame";
+import { stellaToast } from "@stll/ui/toast";
+import { cn } from "@stll/ui/utils";
 
 import { env } from "@/env";
 import { useHydrationSafeDesktopPlatform } from "@/hooks/use-hydration-safe-desktop-platform";

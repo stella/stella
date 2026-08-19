@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
-import { stellaToast } from "@stll/ui/components/toast";
+import { stellaToast } from "@stll/ui/toast";
 
 import { closeInspectorTabsForEntities } from "@/components/inspector/inspector-tabs-store";
 import type { EditableFieldContent } from "@/components/workspaces/edit-field-dialog";

@@ -1,4 +1,4 @@
-import { cn } from "@stll/ui/lib/utils";
+import { cn } from "@stll/ui/utils";
 
 import { TOOLBAR_ROW_HEIGHT, TOOLBAR_ROW_MIN_HEIGHT } from "@/lib/consts";
 

@@ -1,4 +1,4 @@
-import { stellaToast } from "@stll/ui/components/toast";
+import { stellaToast } from "@stll/ui/toast";
 
 import {
   isEntityActiveInMainRoute,

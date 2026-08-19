@@ -3,14 +3,14 @@ import { useCallback, useState } from "react";
 import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 
-import { Input } from "@stll/ui/components/input";
+import { Input } from "@stll/ui/input";
 import {
   Select,
   SelectItem,
   SelectPopup,
   SelectTrigger,
   SelectValue,
-} from "@stll/ui/components/select";
+} from "@stll/ui/select";
 
 import { DatePickerPopover } from "@/components/date-picker-popover";
 import type {

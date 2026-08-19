@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
-import { stellaToast } from "@stll/ui/components/toast";
+import { stellaToast } from "@stll/ui/toast";
 
 import type { ToAPIErrorProps } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";

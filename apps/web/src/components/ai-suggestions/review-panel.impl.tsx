@@ -20,25 +20,21 @@ import { useTranslations } from "use-intl";
 
 import { diffWordSegments } from "@stll/folio-react";
 import type { DocxEditorRef, FolioAIBlockPreviewRun } from "@stll/folio-react";
-import { Avatar, AvatarFallback } from "@stll/ui/components/avatar";
-import { Button } from "@stll/ui/components/button";
-import { Checkbox } from "@stll/ui/components/checkbox";
-import { DirectionalIcon } from "@stll/ui/components/directional-icon";
-import { Input } from "@stll/ui/components/input";
-import {
-  Popover,
-  PopoverPopup,
-  PopoverTrigger,
-} from "@stll/ui/components/popover";
+import { Avatar, AvatarFallback } from "@stll/ui/avatar";
+import { Button } from "@stll/ui/button";
+import { Checkbox } from "@stll/ui/checkbox";
+import { DirectionalIcon } from "@stll/ui/directional-icon";
+import { Input } from "@stll/ui/input";
+import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 import {
   Select,
   SelectItem,
   SelectPopup,
   SelectTrigger,
   SelectValue,
-} from "@stll/ui/components/select";
-import { stellaToast } from "@stll/ui/components/toast";
-import { cn } from "@stll/ui/lib/utils";
+} from "@stll/ui/select";
+import { stellaToast } from "@stll/ui/toast";
+import { cn } from "@stll/ui/utils";
 
 import { AcceptAllButton } from "@/components/ai-suggestions/accept-all-button";
 import { canRevertReviewSuggestion } from "@/components/ai-suggestions/review-bar.logic";

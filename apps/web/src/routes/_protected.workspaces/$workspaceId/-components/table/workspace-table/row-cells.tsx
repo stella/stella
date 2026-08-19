@@ -12,13 +12,13 @@ import {
 import { ChevronRightIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { Checkbox } from "@stll/ui/components/checkbox";
-import { DirectionalIcon } from "@stll/ui/components/directional-icon";
+import { Checkbox } from "@stll/ui/checkbox";
+import { DirectionalIcon } from "@stll/ui/directional-icon";
 import {
   containedEventHandler,
   containedHandler,
-} from "@stll/ui/hooks/use-contained-handler";
-import { cn } from "@stll/ui/lib/utils";
+} from "@stll/ui/use-contained-handler";
+import { cn } from "@stll/ui/utils";
 
 import { renderDragPreview } from "@/components/drag-preview";
 import { InlineEdit } from "@/components/inline-edit";

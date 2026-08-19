@@ -3,7 +3,7 @@ import type { MouseEvent } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useShallow } from "zustand/react/shallow";
 
-import { cn } from "@stll/ui/lib/utils";
+import { cn } from "@stll/ui/utils";
 
 import { getOverlayRectKey } from "@/lib/anonymize/overlay-rects";
 import { getEntityColor } from "@/lib/anonymize/ui-constants";

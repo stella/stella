@@ -5,10 +5,10 @@ import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/react/shallow";
 
 import { parseDocumentAst } from "@stll/legal-ast/document-ast";
-import { BidiText } from "@stll/ui/components/bidi-text";
-import { Button } from "@stll/ui/components/button";
-import { OutlineRail } from "@stll/ui/components/outline-rail";
-import type { OutlineItem } from "@stll/ui/components/outline-rail";
+import { BidiText } from "@stll/ui/bidi-text";
+import { Button } from "@stll/ui/button";
+import { OutlineRail } from "@stll/ui/outline-rail";
+import type { OutlineItem } from "@stll/ui/outline-rail";
 
 import { MarginNotes } from "@/features/case-law/components/case-viewer/analysis/margin-notes";
 import {

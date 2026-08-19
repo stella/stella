@@ -3,8 +3,8 @@ import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
-import { Skeleton } from "@stll/ui/components/skeleton";
-import { stellaToast } from "@stll/ui/components/toast";
+import { Skeleton } from "@stll/ui/skeleton";
+import { stellaToast } from "@stll/ui/toast";
 
 import { useReviewStore } from "@/components/ai-suggestions/review-store";
 import { FacetBar } from "@/components/inspector/inspector-facet-bar";

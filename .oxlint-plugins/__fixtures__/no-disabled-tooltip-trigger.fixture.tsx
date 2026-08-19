@@ -6,10 +6,10 @@
 // `--report-unused-disable-directives-severity=error` fails CI. Lines without a
 // directive cover the allow-list and must keep passing.
 
-import { Button } from "@stll/ui/components/button";
-import { DialogTrigger } from "@stll/ui/components/dialog";
-import { MenuTrigger } from "@stll/ui/components/menu";
-import { TooltipTrigger } from "@stll/ui/components/tooltip";
+import { Button } from "@stll/ui/button";
+import { DialogTrigger } from "@stll/ui/dialog";
+import { MenuTrigger } from "@stll/ui/menu";
+import { TooltipTrigger } from "@stll/ui/tooltip";
 
 import Tooltip from "@/components/tooltip";
 

@@ -180,7 +180,7 @@ const Toasts = ({ position }: { position: ToastPosition }) => {
           // (chrome, z-[80]) so an error toast is never painted behind the
           // glass, and above dialogs (z-[85]) so a toast raised by a dialog's
           // own action stays readable; still below actively-open context
-          // menus (z-[100]). See @stll/ui/lib/overlay-layer for the ladder.
+          // menus (z-[100]). See @stll/ui/overlay-layer for the ladder.
           "fixed z-[90] mx-auto flex w-[calc(100%-var(--toast-inset)*2)] max-w-90 [--toast-inset:--spacing(4)] sm:[--toast-inset:--spacing(8)]",
           "md:data-[position*=right]:w-[calc(100%-var(--toast-inset)*2-min(var(--stella-toast-right-offset,0px),calc(100vw-var(--toast-inset)*2-10rem)))]",
           // Vertical positioning

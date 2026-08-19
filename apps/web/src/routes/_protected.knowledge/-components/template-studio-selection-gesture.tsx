@@ -21,15 +21,12 @@ import {
   getFolioSelectionViewportRect,
   getTemplateDirectives,
 } from "@stll/folio-react";
-import { Button } from "@stll/ui/components/button";
-import { DirectionalIcon } from "@stll/ui/components/directional-icon";
-import {
-  MenuPreviewLayout,
-  PreviewPane,
-} from "@stll/ui/components/preview-pane";
-import { Separator } from "@stll/ui/components/separator";
-import { stellaToast } from "@stll/ui/components/toast";
-import { cn } from "@stll/ui/lib/utils";
+import { Button } from "@stll/ui/button";
+import { DirectionalIcon } from "@stll/ui/directional-icon";
+import { MenuPreviewLayout, PreviewPane } from "@stll/ui/preview-pane";
+import { Separator } from "@stll/ui/separator";
+import { stellaToast } from "@stll/ui/toast";
+import { cn } from "@stll/ui/utils";
 
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import type { TranslationKey } from "@/i18n/types";

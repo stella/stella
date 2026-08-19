@@ -4,11 +4,11 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
-import { BidiText } from "@stll/ui/components/bidi-text";
-import { Button } from "@stll/ui/components/button";
-import { Frame, FramePanel } from "@stll/ui/components/frame";
-import { Skeleton } from "@stll/ui/components/skeleton";
-import { stellaToast } from "@stll/ui/components/toast";
+import { BidiText } from "@stll/ui/bidi-text";
+import { Button } from "@stll/ui/button";
+import { Frame, FramePanel } from "@stll/ui/frame";
+import { Skeleton } from "@stll/ui/skeleton";
+import { stellaToast } from "@stll/ui/toast";
 
 import { env } from "@/env";
 import { useFormatter } from "@/i18n/formatting-context";

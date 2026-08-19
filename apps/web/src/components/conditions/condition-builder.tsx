@@ -4,8 +4,8 @@ import { PlusIcon, XIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import type { ConditionNode, GroupNode } from "@stll/conditions";
-import { Button } from "@stll/ui/components/button";
-import { Input } from "@stll/ui/components/input";
+import { Button } from "@stll/ui/button";
+import { Input } from "@stll/ui/input";
 import {
   Select,
   SelectItem,
@@ -13,8 +13,8 @@ import {
   SelectSeparator,
   SelectTrigger,
   SelectValue,
-} from "@stll/ui/components/select";
-import { cn } from "@stll/ui/lib/utils";
+} from "@stll/ui/select";
+import { cn } from "@stll/ui/utils";
 
 import {
   appendChild,

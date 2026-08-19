@@ -5,7 +5,7 @@ import type { Hotkey } from "@tanstack/react-hotkeys";
 import { PencilIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { Button } from "@stll/ui/components/button";
+import { Button } from "@stll/ui/button";
 import {
   Dialog,
   DialogDescription,
@@ -13,9 +13,9 @@ import {
   DialogPanel,
   DialogPopup,
   DialogTitle,
-} from "@stll/ui/components/dialog";
-import { stellaToast } from "@stll/ui/components/toast";
-import { cn } from "@stll/ui/lib/utils";
+} from "@stll/ui/dialog";
+import { stellaToast } from "@stll/ui/toast";
+import { cn } from "@stll/ui/utils";
 
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useHydrationSafeHotkeyPlatform } from "@/hooks/use-hydration-safe-hotkey-platform";

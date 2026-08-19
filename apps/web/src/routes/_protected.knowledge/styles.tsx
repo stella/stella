@@ -15,8 +15,8 @@ import {
 } from "lucide-react";
 import { useFormatter, useTranslations } from "use-intl";
 
-import { Button } from "@stll/ui/components/button";
-import { DestructiveConfirmDialog } from "@stll/ui/components/destructive-confirm-dialog";
+import { Button } from "@stll/ui/button";
+import { DestructiveConfirmDialog } from "@stll/ui/destructive-confirm-dialog";
 import {
   Dialog,
   DialogClose,
@@ -26,9 +26,9 @@ import {
   DialogPanel,
   DialogPopup,
   DialogTitle,
-} from "@stll/ui/components/dialog";
-import { Input } from "@stll/ui/components/input";
-import { stellaToast } from "@stll/ui/components/toast";
+} from "@stll/ui/dialog";
+import { Input } from "@stll/ui/input";
+import { stellaToast } from "@stll/ui/toast";
 
 import { StyleSetEditorDialog } from "@/features/style-sets/style-set-editor-dialog";
 import type { StyleSetEditorTarget } from "@/features/style-sets/style-set-editor-types";

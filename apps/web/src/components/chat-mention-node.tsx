@@ -4,7 +4,7 @@ import { LandmarkIcon } from "lucide-react";
 
 import { isEntityKind } from "@stll/api-contract";
 import type { EntityKind } from "@stll/api-contract";
-import { cn } from "@stll/ui/lib/utils";
+import { cn } from "@stll/ui/utils";
 
 import type { ChatReferenceCategory } from "@/components/chat-mention-extension";
 import { isMentionCategory } from "@/components/chat/chat-mention-href";

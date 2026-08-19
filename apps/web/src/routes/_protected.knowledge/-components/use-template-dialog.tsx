@@ -7,7 +7,7 @@ import {
   DialogPanel,
   DialogPopup,
   DialogTitle,
-} from "@stll/ui/components/dialog";
+} from "@stll/ui/dialog";
 
 import {
   TemplateForm,

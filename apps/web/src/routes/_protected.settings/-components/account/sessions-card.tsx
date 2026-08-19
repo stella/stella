@@ -8,7 +8,7 @@ import {
 } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
-import { Button } from "@stll/ui/components/button";
+import { Button } from "@stll/ui/button";
 import {
   Dialog,
   DialogClose,
@@ -18,14 +18,9 @@ import {
   DialogPopup,
   DialogTitle,
   DialogTrigger,
-} from "@stll/ui/components/dialog";
-import {
-  Frame,
-  FrameHeader,
-  FramePanel,
-  FrameTitle,
-} from "@stll/ui/components/frame";
-import { Skeleton } from "@stll/ui/components/skeleton";
+} from "@stll/ui/dialog";
+import { Frame, FrameHeader, FramePanel, FrameTitle } from "@stll/ui/frame";
+import { Skeleton } from "@stll/ui/skeleton";
 import {
   Table,
   TableBody,
@@ -33,8 +28,8 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@stll/ui/components/table";
-import { stellaToast } from "@stll/ui/components/toast";
+} from "@stll/ui/table";
+import { stellaToast } from "@stll/ui/toast";
 
 import { QuerySuspenseBoundary } from "@/components/query-suspense-boundary";
 import Tooltip from "@/components/tooltip";

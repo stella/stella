@@ -41,20 +41,20 @@ import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/react/shallow";
 
-import { BidiText } from "@stll/ui/components/bidi-text";
-import { Button } from "@stll/ui/components/button";
-import { DirectionalIcon } from "@stll/ui/components/directional-icon";
-import { Input } from "@stll/ui/components/input";
+import { BidiText } from "@stll/ui/bidi-text";
+import { Button } from "@stll/ui/button";
+import { DirectionalIcon } from "@stll/ui/directional-icon";
+import { Input } from "@stll/ui/input";
 import {
   Menu,
   MenuItem,
   MenuPopup,
   MenuSeparator,
   MenuTrigger,
-} from "@stll/ui/components/menu";
-import { stellaToast } from "@stll/ui/components/toast";
-import { containedEventHandler } from "@stll/ui/hooks/use-contained-handler";
-import { cn } from "@stll/ui/lib/utils";
+} from "@stll/ui/menu";
+import { stellaToast } from "@stll/ui/toast";
+import { containedEventHandler } from "@stll/ui/use-contained-handler";
+import { cn } from "@stll/ui/utils";
 
 import {
   matterActivityIsKnownEmpty,

@@ -2,7 +2,7 @@ import { useState } from "react";
 
 import { useTranslations } from "use-intl";
 
-import { stellaToast } from "@stll/ui/components/toast";
+import { stellaToast } from "@stll/ui/toast";
 
 import { getAnalytics } from "@/lib/analytics/provider";
 import { externalApiOrigin } from "@/lib/api-origins";

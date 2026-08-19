@@ -4,9 +4,9 @@ import { useSuspenseQuery } from "@tanstack/react-query";
 import { PlusIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { Button } from "@stll/ui/components/button";
-import { Dialog, DialogPopup } from "@stll/ui/components/dialog";
-import { stellaToast } from "@stll/ui/components/toast";
+import { Button } from "@stll/ui/button";
+import { Dialog, DialogPopup } from "@stll/ui/dialog";
+import { stellaToast } from "@stll/ui/toast";
 
 import { expensesOptions } from "@/lib/workspaces/queries/expenses";
 import { ExpenseForm } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/expense-form";

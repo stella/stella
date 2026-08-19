@@ -7,10 +7,10 @@ import type {
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
-import { Button } from "@stll/ui/components/button";
-import { stellaToast } from "@stll/ui/components/toast";
-import { contentDir } from "@stll/ui/hooks/use-content-dir";
-import { cn } from "@stll/ui/lib/utils";
+import { Button } from "@stll/ui/button";
+import { stellaToast } from "@stll/ui/toast";
+import { contentDir } from "@stll/ui/use-content-dir";
+import { cn } from "@stll/ui/utils";
 
 import { FileViewerWithAI } from "@/components/ai-suggestions/file-viewer-with-ai";
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";

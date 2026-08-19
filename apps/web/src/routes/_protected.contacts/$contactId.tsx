@@ -9,13 +9,13 @@ import {
 import { ArrowLeftIcon, BuildingIcon, PlusIcon, UserIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { BidiText } from "@stll/ui/components/bidi-text";
-import { Button } from "@stll/ui/components/button";
-import { DestructiveConfirmDialog } from "@stll/ui/components/destructive-confirm-dialog";
-import { DirectionalIcon } from "@stll/ui/components/directional-icon";
-import { Skeleton } from "@stll/ui/components/skeleton";
-import { stellaToast } from "@stll/ui/components/toast";
-import { cn } from "@stll/ui/lib/utils";
+import { BidiText } from "@stll/ui/bidi-text";
+import { Button } from "@stll/ui/button";
+import { DestructiveConfirmDialog } from "@stll/ui/destructive-confirm-dialog";
+import { DirectionalIcon } from "@stll/ui/directional-icon";
+import { Skeleton } from "@stll/ui/skeleton";
+import { stellaToast } from "@stll/ui/toast";
+import { cn } from "@stll/ui/utils";
 
 import { MatterIcon } from "@/components/matter-icon";
 import { MatterRefLink } from "@/components/matter-ref-link";

@@ -5,13 +5,13 @@ import { useMutation, useSuspenseQuery } from "@tanstack/react-query";
 import { PlusIcon, TrashIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { Button } from "@stll/ui/components/button";
-import { Checkbox } from "@stll/ui/components/checkbox";
-import { Dialog, DialogPopup } from "@stll/ui/components/dialog";
-import { Input } from "@stll/ui/components/input";
-import { Label } from "@stll/ui/components/label";
-import { Tabs, TabsList, TabsTab } from "@stll/ui/components/tabs";
-import { stellaToast } from "@stll/ui/components/toast";
+import { Button } from "@stll/ui/button";
+import { Checkbox } from "@stll/ui/checkbox";
+import { Dialog, DialogPopup } from "@stll/ui/dialog";
+import { Input } from "@stll/ui/input";
+import { Label } from "@stll/ui/label";
+import { Tabs, TabsList, TabsTab } from "@stll/ui/tabs";
+import { stellaToast } from "@stll/ui/toast";
 
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";

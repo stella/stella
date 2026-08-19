@@ -5,7 +5,7 @@ import type {
   ReactNode,
 } from "react";
 
-import { cn } from "@stll/ui/lib/utils";
+import { cn } from "@stll/ui/utils";
 
 import Tooltip from "@/components/tooltip";
 

@@ -6,21 +6,17 @@ import { useNavigate } from "@tanstack/react-router";
 import { TaggedError } from "better-result";
 import { useTranslations } from "use-intl";
 
-import { BidiText } from "@stll/ui/components/bidi-text";
-import { Button } from "@stll/ui/components/button";
+import { BidiText } from "@stll/ui/bidi-text";
+import { Button } from "@stll/ui/button";
 import {
   Frame,
   FrameDescription,
   FrameHeader,
   FramePanel,
-} from "@stll/ui/components/frame";
-import {
-  InputOTP,
-  InputOTPGroup,
-  InputOTPSlot,
-} from "@stll/ui/components/input-otp";
-import { stellaToast } from "@stll/ui/components/toast";
-import { cn } from "@stll/ui/lib/utils";
+} from "@stll/ui/frame";
+import { InputOTP, InputOTPGroup, InputOTPSlot } from "@stll/ui/input-otp";
+import { stellaToast } from "@stll/ui/toast";
+import { cn } from "@stll/ui/utils";
 
 import { InboxQuickJump } from "@/components/auth/inbox-quick-jump";
 import { useInvalidateSession } from "@/hooks/use-invalidate-session";

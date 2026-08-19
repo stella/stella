@@ -14,20 +14,20 @@ import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
-import { Avatar, AvatarFallback } from "@stll/ui/components/avatar";
-import { Button } from "@stll/ui/components/button";
-import { Field, FieldError, FieldLabel } from "@stll/ui/components/field";
-import { Form } from "@stll/ui/components/form";
+import { Avatar, AvatarFallback } from "@stll/ui/avatar";
+import { Button } from "@stll/ui/button";
+import { Field, FieldError, FieldLabel } from "@stll/ui/field";
+import { Form } from "@stll/ui/form";
 import {
   Frame,
   FrameDescription,
   FrameHeader,
   FramePanel,
   FrameTitle,
-} from "@stll/ui/components/frame";
-import { Input } from "@stll/ui/components/input";
-import { Skeleton } from "@stll/ui/components/skeleton";
-import { stellaToast } from "@stll/ui/components/toast";
+} from "@stll/ui/frame";
+import { Input } from "@stll/ui/input";
+import { Skeleton } from "@stll/ui/skeleton";
+import { stellaToast } from "@stll/ui/toast";
 
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useHydrated } from "@/hooks/use-hydrated";

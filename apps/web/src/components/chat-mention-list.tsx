@@ -13,10 +13,10 @@ import {
 import { useTranslations } from "use-intl";
 
 import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
-import { Button } from "@stll/ui/components/button";
-import { DirectionalIcon } from "@stll/ui/components/directional-icon";
-import { Popover, PopoverPopup } from "@stll/ui/components/popover";
-import { cn } from "@stll/ui/lib/utils";
+import { Button } from "@stll/ui/button";
+import { DirectionalIcon } from "@stll/ui/directional-icon";
+import { Popover, PopoverPopup } from "@stll/ui/popover";
+import { cn } from "@stll/ui/utils";
 
 import type {
   ChatMentionOption,

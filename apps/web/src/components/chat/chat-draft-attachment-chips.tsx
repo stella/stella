@@ -1,8 +1,8 @@
 import { XIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { Button } from "@stll/ui/components/button";
-import { cn } from "@stll/ui/lib/utils";
+import { Button } from "@stll/ui/button";
+import { cn } from "@stll/ui/utils";
 
 import type { ChatDraftAttachment } from "@/components/chat-editor-provider";
 import { DocumentIcon } from "@/components/document-icon";

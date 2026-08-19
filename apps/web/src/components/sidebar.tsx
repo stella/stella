@@ -7,24 +7,24 @@ import type { VariantProps } from "class-variance-authority";
 import { PanelLeftIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { Button } from "@stll/ui/components/button";
-import { Input } from "@stll/ui/components/input";
-import { Separator } from "@stll/ui/components/separator";
+import { Button } from "@stll/ui/button";
+import { Input } from "@stll/ui/input";
+import { Separator } from "@stll/ui/separator";
 import {
   Sheet,
   SheetDescription,
   SheetHeader,
   SheetPopup,
   SheetTitle,
-} from "@stll/ui/components/sheet";
-import { Skeleton } from "@stll/ui/components/skeleton";
+} from "@stll/ui/sheet";
+import { Skeleton } from "@stll/ui/skeleton";
 import {
   TooltipPopup,
   Tooltip as TooltipRoot,
   TooltipTrigger,
-} from "@stll/ui/components/tooltip";
-import { useIsMobile } from "@stll/ui/hooks/use-mobile";
-import { cn } from "@stll/ui/lib/utils";
+} from "@stll/ui/tooltip";
+import { useIsMobile } from "@stll/ui/use-mobile";
+import { cn } from "@stll/ui/utils";
 
 import {
   SIDEBAR_WIDTH_ICON_PX,

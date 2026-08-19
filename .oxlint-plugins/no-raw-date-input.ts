@@ -10,7 +10,7 @@ import { eslintCompatPlugin } from "@oxlint/plugins";
 //   - cannot share min/max/disabled logic with the rest of the design system.
 //
 // Use `<DatePickerPopover>` from `@/components/date-picker-popover`
-// (which wraps `@stll/ui/components/date-picker-popover`) instead.
+// (which wraps `@stll/ui/date-picker-popover`) instead.
 //
 // Flagged:
 //   <input type="date" ... />

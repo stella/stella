@@ -14,8 +14,8 @@ import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/shallow";
 
 import type { ContactType } from "@stll/api-contract";
-import { BidiText } from "@stll/ui/components/bidi-text";
-import { Button } from "@stll/ui/components/button";
+import { BidiText } from "@stll/ui/bidi-text";
+import { Button } from "@stll/ui/button";
 import {
   Combobox,
   ComboboxEmpty,
@@ -23,7 +23,7 @@ import {
   ComboboxItem,
   ComboboxList,
   ComboboxPopup,
-} from "@stll/ui/components/combobox";
+} from "@stll/ui/combobox";
 import {
   Dialog,
   DialogClose,
@@ -32,12 +32,12 @@ import {
   DialogPanel,
   DialogPopup,
   DialogTitle,
-} from "@stll/ui/components/dialog";
-import { Field, FieldLabel } from "@stll/ui/components/field";
-import { Input } from "@stll/ui/components/input";
-import { ScrollArea } from "@stll/ui/components/scroll-area";
-import { stellaToast } from "@stll/ui/components/toast";
-import { cn } from "@stll/ui/lib/utils";
+} from "@stll/ui/dialog";
+import { Field, FieldLabel } from "@stll/ui/field";
+import { Input } from "@stll/ui/input";
+import { ScrollArea } from "@stll/ui/scroll-area";
+import { stellaToast } from "@stll/ui/toast";
+import { cn } from "@stll/ui/utils";
 
 import { ContactPicker } from "@/components/contact-picker";
 import { UserIdentity } from "@/components/user-avatar";

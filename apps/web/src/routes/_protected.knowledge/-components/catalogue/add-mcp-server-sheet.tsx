@@ -4,8 +4,8 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { KeyRoundIcon, LoaderIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { Button } from "@stll/ui/components/button";
-import { Input } from "@stll/ui/components/input";
+import { Button } from "@stll/ui/button";
+import { Input } from "@stll/ui/input";
 import {
   Sheet,
   SheetFooter,
@@ -13,8 +13,8 @@ import {
   SheetPanel,
   SheetPopup,
   SheetTitle,
-} from "@stll/ui/components/sheet";
-import { stellaToast } from "@stll/ui/components/toast";
+} from "@stll/ui/sheet";
+import { stellaToast } from "@stll/ui/toast";
 
 import { SecretInput } from "@/components/secret-input";
 import { api } from "@/lib/api";

@@ -3,7 +3,7 @@ import { useOptimistic, useRef, useState, useTransition } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
-import { Frame, FramePanel } from "@stll/ui/components/frame";
+import { Frame, FramePanel } from "@stll/ui/frame";
 
 import { JurisdictionPicker } from "@/components/jurisdiction-picker";
 import { api } from "@/lib/api";

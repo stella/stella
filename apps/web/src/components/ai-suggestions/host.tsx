@@ -39,15 +39,11 @@ import type {
   AISuggestionPreset,
   AISuggestionSeverity,
 } from "@stll/folio-react";
-import { Button } from "@stll/ui/components/button";
-import { DirectionalIcon } from "@stll/ui/components/directional-icon";
-import {
-  Tooltip,
-  TooltipPopup,
-  TooltipTrigger,
-} from "@stll/ui/components/tooltip";
-import { OVERLAY_LAYER_CLASS_NAMES } from "@stll/ui/lib/overlay-layer";
-import { cn } from "@stll/ui/lib/utils";
+import { Button } from "@stll/ui/button";
+import { DirectionalIcon } from "@stll/ui/directional-icon";
+import { OVERLAY_LAYER_CLASS_NAMES } from "@stll/ui/overlay-layer";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
+import { cn } from "@stll/ui/utils";
 
 import { useChatComposerWiring } from "@/components/chat-editor-provider";
 import type {

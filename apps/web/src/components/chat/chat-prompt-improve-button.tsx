@@ -9,13 +9,9 @@ import {
   CHAT_PROMPT_IMPROVEMENT_STRATEGY,
   type ChatPromptImprovementStrategy,
 } from "@stll/api-contract/chat";
-import { Button } from "@stll/ui/components/button";
-import {
-  Popover,
-  PopoverPopup,
-  PopoverTrigger,
-} from "@stll/ui/components/popover";
-import { stellaToast } from "@stll/ui/components/toast";
+import { Button } from "@stll/ui/button";
+import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
+import { stellaToast } from "@stll/ui/toast";
 
 import type { ChatEditorController } from "@/components/chat-editor-provider";
 import type { TranslationKey } from "@/i18n/types";

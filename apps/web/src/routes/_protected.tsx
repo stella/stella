@@ -17,24 +17,14 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { Button } from "@stll/ui/components/button";
-import {
-  Menu,
-  MenuItem,
-  MenuPopup,
-  MenuTrigger,
-} from "@stll/ui/components/menu";
-import { Separator } from "@stll/ui/components/separator";
-import {
-  Sheet,
-  SheetHeader,
-  SheetPopup,
-  SheetTitle,
-} from "@stll/ui/components/sheet";
-import { Skeleton } from "@stll/ui/components/skeleton";
-import { TOAST_RIGHT_OFFSET_VAR } from "@stll/ui/components/toast";
-import { useViewportWidth } from "@stll/ui/hooks/use-viewport-width";
-import { cn } from "@stll/ui/lib/utils";
+import { Button } from "@stll/ui/button";
+import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
+import { Separator } from "@stll/ui/separator";
+import { Sheet, SheetHeader, SheetPopup, SheetTitle } from "@stll/ui/sheet";
+import { Skeleton } from "@stll/ui/skeleton";
+import { TOAST_RIGHT_OFFSET_VAR } from "@stll/ui/toast";
+import { useViewportWidth } from "@stll/ui/use-viewport-width";
+import { cn } from "@stll/ui/utils";
 
 import { ApiVersionMismatchBanner } from "@/components/api-version-mismatch-banner";
 import { AppSidebar } from "@/components/app-sidebar";

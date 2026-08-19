@@ -7,16 +7,16 @@ import {
   ComboboxItem,
   ComboboxList,
   ComboboxPopup,
-} from "@stll/ui/components/combobox";
-import { Field, FieldDescription, FieldLabel } from "@stll/ui/components/field";
+} from "@stll/ui/combobox";
+import { Field, FieldDescription, FieldLabel } from "@stll/ui/field";
 import {
   Select,
   SelectItem,
   SelectPopup,
   SelectTrigger,
   SelectValue,
-} from "@stll/ui/components/select";
-import { cn } from "@stll/ui/lib/utils";
+} from "@stll/ui/select";
+import { cn } from "@stll/ui/utils";
 
 import {
   getDefaultModelSelection,

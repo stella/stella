@@ -3,15 +3,11 @@ import { useId, useState } from "react";
 import { ChevronDownIcon, Loader2Icon, WandSparklesIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { Button } from "@stll/ui/components/button";
-import { Label } from "@stll/ui/components/label";
-import {
-  Popover,
-  PopoverPopup,
-  PopoverTrigger,
-} from "@stll/ui/components/popover";
-import { Textarea } from "@stll/ui/components/textarea";
-import { cn } from "@stll/ui/lib/utils";
+import { Button } from "@stll/ui/button";
+import { Label } from "@stll/ui/label";
+import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
+import { Textarea } from "@stll/ui/textarea";
+import { cn } from "@stll/ui/utils";
 
 const MAX_CUSTOM_INSTRUCTION_LENGTH = 2000;
 

@@ -4,9 +4,9 @@ import { CircleHelpIcon, ExternalLinkIcon } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { Button } from "@stll/ui/components/button";
-import { buttonVariants } from "@stll/ui/components/button-variants";
-import { cn } from "@stll/ui/lib/utils";
+import { Button } from "@stll/ui/button";
+import { buttonVariants } from "@stll/ui/button-variants";
+import { cn } from "@stll/ui/utils";
 
 import { sanitizeHref } from "@/lib/sanitize-href";
 

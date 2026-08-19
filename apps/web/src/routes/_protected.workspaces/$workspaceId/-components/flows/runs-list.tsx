@@ -1,7 +1,7 @@
 import { ChevronRightIcon } from "lucide-react";
 import { useFormatter, useTranslations } from "use-intl";
 
-import { DirectionalIcon } from "@stll/ui/components/directional-icon";
+import { DirectionalIcon } from "@stll/ui/directional-icon";
 
 import {
   FlowStatusBadge,

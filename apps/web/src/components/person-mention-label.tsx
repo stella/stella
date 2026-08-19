@@ -1,4 +1,4 @@
-import { cn } from "@stll/ui/lib/utils";
+import { cn } from "@stll/ui/utils";
 
 import { UserIdentity } from "@/components/user-avatar";
 import type { PersonMention } from "@/lib/types";

@@ -7,7 +7,7 @@ export type {
 
 // ── Color system ──────────────────────────────────────────
 //
-// Uses --option-* CSS variables from globals.css so colors
+// Uses --option-* CSS variables from the design-system theme so colors
 // adapt to all theme palettes (neutral, nord, flexoki).
 
 /**

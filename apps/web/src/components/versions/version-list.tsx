@@ -20,9 +20,9 @@ import {
 import { useTranslations } from "use-intl";
 
 import { markerPattern } from "@stll/template-conditions";
-import { Button } from "@stll/ui/components/button";
-import { DirectionalIcon } from "@stll/ui/components/directional-icon";
-import { cn } from "@stll/ui/lib/utils";
+import { Button } from "@stll/ui/button";
+import { DirectionalIcon } from "@stll/ui/directional-icon";
+import { cn } from "@stll/ui/utils";
 
 import Tooltip from "@/components/tooltip";
 import { UserAvatar } from "@/components/user-avatar";

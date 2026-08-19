@@ -4,8 +4,8 @@ import type { CSSProperties, ReactNode } from "react";
 import { Result } from "better-result";
 import { useShallow } from "zustand/react/shallow";
 
-import { Skeleton } from "@stll/ui/components/skeleton";
-import { cn } from "@stll/ui/lib/utils";
+import { Skeleton } from "@stll/ui/skeleton";
+import { cn } from "@stll/ui/utils";
 
 import {
   PAGE_ID_ATTRIBUTE,

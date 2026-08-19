@@ -5,7 +5,7 @@ import { useTranslations } from "use-intl";
 
 import type { Block, DocumentAst } from "@stll/legal-ast/document-ast";
 import { parseDocumentAst } from "@stll/legal-ast/document-ast";
-import { cn } from "@stll/ui/lib/utils";
+import { cn } from "@stll/ui/utils";
 
 import {
   BlockRenderer,

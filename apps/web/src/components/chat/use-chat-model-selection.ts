@@ -4,7 +4,7 @@ import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import type { ReasoningEffort } from "@stll/ai-catalog";
-import { stellaToast } from "@stll/ui/components/toast";
+import { stellaToast } from "@stll/ui/toast";
 
 import { api } from "@/lib/api";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";

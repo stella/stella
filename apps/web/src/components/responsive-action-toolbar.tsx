@@ -1,6 +1,6 @@
 import type * as React from "react";
 
-import { cn } from "@stll/ui/lib/utils";
+import { cn } from "@stll/ui/utils";
 
 export type ResponsiveActionToolbarSlot = "primary" | "secondary" | "action";
 

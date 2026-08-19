@@ -41,8 +41,8 @@ import {
   AlertDialogHeader,
   AlertDialogPopup,
   AlertDialogTitle,
-} from "@stll/ui/components/alert-dialog";
-import { Button } from "@stll/ui/components/button";
+} from "@stll/ui/alert-dialog";
+import { Button } from "@stll/ui/button";
 import {
   Menu,
   MenuItem,
@@ -52,11 +52,11 @@ import {
   MenuSubPopup,
   MenuSubTrigger,
   MenuTrigger,
-} from "@stll/ui/components/menu";
-import { MenuPreviewLayout } from "@stll/ui/components/preview-pane";
-import { Tabs, TabsList, TabsTab } from "@stll/ui/components/tabs";
-import { stellaToast } from "@stll/ui/components/toast";
-import { cn } from "@stll/ui/lib/utils";
+} from "@stll/ui/menu";
+import { MenuPreviewLayout } from "@stll/ui/preview-pane";
+import { Tabs, TabsList, TabsTab } from "@stll/ui/tabs";
+import { stellaToast } from "@stll/ui/toast";
+import { cn } from "@stll/ui/utils";
 
 import { InlineEdit } from "@/components/inline-edit";
 import { useAnchoredMenu } from "@/components/inspector/use-anchored-menu";

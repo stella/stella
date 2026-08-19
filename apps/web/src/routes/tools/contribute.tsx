@@ -14,17 +14,17 @@ import {
   type CatalogueCost,
   type CatalogueSetup,
 } from "@stll/catalogue/schema";
-import { Button } from "@stll/ui/components/button";
-import { Input } from "@stll/ui/components/input";
-import { Label } from "@stll/ui/components/label";
+import { Button } from "@stll/ui/button";
+import { Input } from "@stll/ui/input";
+import { Label } from "@stll/ui/label";
 import {
   Select,
   SelectItem,
   SelectPopup,
   SelectTrigger,
   SelectValue,
-} from "@stll/ui/components/select";
-import { Textarea } from "@stll/ui/components/textarea";
+} from "@stll/ui/select";
+import { Textarea } from "@stll/ui/textarea";
 
 import { useMountEffect } from "@/hooks/use-effect";
 import type { TranslationKey } from "@/i18n/types";

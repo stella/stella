@@ -15,34 +15,30 @@ import {
   TASK_STATUSES as STATUS_VALUES,
 } from "@stll/api-contract";
 import type { ConditionNode, GroupNode } from "@stll/conditions";
-import { Button } from "@stll/ui/components/button";
+import { Button } from "@stll/ui/button";
 import {
   Command,
   CommandInput,
   CommandItem,
   CommandList,
   CommandSeparator,
-} from "@stll/ui/components/command";
-import { Input } from "@stll/ui/components/input";
+} from "@stll/ui/command";
+import { Input } from "@stll/ui/input";
 import {
   Menu,
   MenuItem,
   MenuPopup,
   MenuSeparator,
   MenuTrigger,
-} from "@stll/ui/components/menu";
-import {
-  Popover,
-  PopoverPopup,
-  PopoverTrigger,
-} from "@stll/ui/components/popover";
+} from "@stll/ui/menu";
+import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 import {
   Select,
   SelectItem,
   SelectPopup,
   SelectTrigger,
   SelectValue,
-} from "@stll/ui/components/select";
+} from "@stll/ui/select";
 
 import type {
   ConditionOperator,

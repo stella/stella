@@ -18,7 +18,7 @@ import {
 import type { LucideIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { cn } from "@stll/ui/lib/utils";
+import { cn } from "@stll/ui/utils";
 
 import { env } from "@/env";
 import type { TranslationKey } from "@/i18n/types";

@@ -1,12 +1,8 @@
 import type { ComponentProps } from "react";
 
-import {
-  Avatar,
-  AvatarFallback,
-  AvatarImage,
-} from "@stll/ui/components/avatar";
-import { BidiText } from "@stll/ui/components/bidi-text";
-import { cn } from "@stll/ui/lib/utils";
+import { Avatar, AvatarFallback, AvatarImage } from "@stll/ui/avatar";
+import { BidiText } from "@stll/ui/bidi-text";
+import { cn } from "@stll/ui/utils";
 
 import { getDisplayName } from "@/lib/get-display-name";
 import { getInitials } from "@/lib/get-initials";

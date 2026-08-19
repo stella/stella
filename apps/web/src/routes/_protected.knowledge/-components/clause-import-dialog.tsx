@@ -3,7 +3,7 @@ import { useRef, useState } from "react";
 import { UploadIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { Button } from "@stll/ui/components/button";
+import { Button } from "@stll/ui/button";
 import {
   Dialog,
   DialogClose,
@@ -12,8 +12,8 @@ import {
   DialogPanel,
   DialogPopup,
   DialogTitle,
-} from "@stll/ui/components/dialog";
-import { stellaToast } from "@stll/ui/components/toast";
+} from "@stll/ui/dialog";
+import { stellaToast } from "@stll/ui/toast";
 
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";

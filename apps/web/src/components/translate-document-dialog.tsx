@@ -14,7 +14,7 @@ import { useNavigate, useRouteContext } from "@tanstack/react-router";
 import { LanguagesIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { Button } from "@stll/ui/components/button";
+import { Button } from "@stll/ui/button";
 import {
   Combobox,
   ComboboxEmpty,
@@ -22,7 +22,7 @@ import {
   ComboboxItem,
   ComboboxList,
   ComboboxPopup,
-} from "@stll/ui/components/combobox";
+} from "@stll/ui/combobox";
 import {
   Dialog,
   DialogClose,
@@ -33,8 +33,8 @@ import {
   DialogPopup,
   DialogTitle,
   DialogTrigger,
-} from "@stll/ui/components/dialog";
-import { stellaToast } from "@stll/ui/components/toast";
+} from "@stll/ui/dialog";
+import { stellaToast } from "@stll/ui/toast";
 
 import { useLocale } from "@/i18n/formatting-context";
 import { useAnalytics } from "@/lib/analytics/provider";

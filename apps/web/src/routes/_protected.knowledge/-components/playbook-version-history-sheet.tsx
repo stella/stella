@@ -12,17 +12,17 @@ import {
   AlertDialogHeader,
   AlertDialogPopup,
   AlertDialogTitle,
-} from "@stll/ui/components/alert-dialog";
-import { Button } from "@stll/ui/components/button";
+} from "@stll/ui/alert-dialog";
+import { Button } from "@stll/ui/button";
 import {
   Sheet,
   SheetHeader,
   SheetPanel,
   SheetPopup,
   SheetTitle,
-} from "@stll/ui/components/sheet";
-import { Skeleton } from "@stll/ui/components/skeleton";
-import { stellaToast } from "@stll/ui/components/toast";
+} from "@stll/ui/sheet";
+import { Skeleton } from "@stll/ui/skeleton";
+import { stellaToast } from "@stll/ui/toast";
 
 import { usePermissions } from "@/hooks/use-permissions";
 import { useFormatter } from "@/i18n/formatting-context";

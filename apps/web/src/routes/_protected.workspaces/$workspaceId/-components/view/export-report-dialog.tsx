@@ -5,8 +5,8 @@ import { useNavigate, useRouteContext } from "@tanstack/react-router";
 import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
-import { Button } from "@stll/ui/components/button";
-import { Checkbox } from "@stll/ui/components/checkbox";
+import { Button } from "@stll/ui/button";
+import { Checkbox } from "@stll/ui/checkbox";
 import {
   Dialog,
   DialogClose,
@@ -16,7 +16,7 @@ import {
   DialogPanel,
   DialogPopup,
   DialogTitle,
-} from "@stll/ui/components/dialog";
+} from "@stll/ui/dialog";
 import {
   Select,
   SelectItem,
@@ -24,8 +24,8 @@ import {
   SelectSeparator,
   SelectTrigger,
   SelectValue,
-} from "@stll/ui/components/select";
-import { stellaToast } from "@stll/ui/components/toast";
+} from "@stll/ui/select";
+import { stellaToast } from "@stll/ui/toast";
 
 import type { TranslationKey } from "@/i18n/types";
 import { useAnalytics } from "@/lib/analytics/provider";

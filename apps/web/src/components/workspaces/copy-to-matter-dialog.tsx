@@ -5,7 +5,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
-import { Button } from "@stll/ui/components/button";
+import { Button } from "@stll/ui/button";
 import {
   Dialog,
   DialogDescription,
@@ -14,9 +14,9 @@ import {
   DialogPanel,
   DialogPopup,
   DialogTitle,
-} from "@stll/ui/components/dialog";
-import { Label } from "@stll/ui/components/label";
-import { stellaToast } from "@stll/ui/components/toast";
+} from "@stll/ui/dialog";
+import { Label } from "@stll/ui/label";
+import { stellaToast } from "@stll/ui/toast";
 
 import {
   MatterTargetPicker,

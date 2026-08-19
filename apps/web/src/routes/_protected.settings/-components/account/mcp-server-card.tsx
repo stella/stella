@@ -1,7 +1,7 @@
 import { useTranslations } from "use-intl";
 
 import { MCP_ANONYMIZED_HTTP_PATH, MCP_HTTP_PATH } from "@stll/api-contract";
-import { Frame, FramePanel } from "@stll/ui/components/frame";
+import { Frame, FramePanel } from "@stll/ui/frame";
 
 import { CopyField } from "@/components/copy-field";
 

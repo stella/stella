@@ -6,7 +6,7 @@ import { Link } from "@tanstack/react-router";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
-import { Button } from "@stll/ui/components/button";
+import { Button } from "@stll/ui/button";
 import {
   Dialog,
   DialogClose,
@@ -15,8 +15,8 @@ import {
   DialogHeader,
   DialogPopup,
   DialogTitle,
-} from "@stll/ui/components/dialog";
-import { stellaToast } from "@stll/ui/components/toast";
+} from "@stll/ui/dialog";
+import { stellaToast } from "@stll/ui/toast";
 
 import { AIConfigProvidersEditor } from "@/components/ai-config-providers-editor";
 import { AIConfigRoleModelPicker } from "@/components/ai-config-role-model-picker";

@@ -41,15 +41,15 @@ import {
 import { useTranslations } from "use-intl";
 
 import type { DocxEditorRef } from "@stll/folio-react";
-import { Button } from "@stll/ui/components/button";
+import { Button } from "@stll/ui/button";
 import {
   Select,
   SelectItem,
   SelectPopup,
   SelectTrigger,
   SelectValue,
-} from "@stll/ui/components/select";
-import { cn } from "@stll/ui/lib/utils";
+} from "@stll/ui/select";
+import { cn } from "@stll/ui/utils";
 
 import { AcceptAllButton } from "@/components/ai-suggestions/accept-all-button";
 import { DOCKED_COMPOSER_WIDTH_CLASS } from "@/components/ai-suggestions/composer-geometry";

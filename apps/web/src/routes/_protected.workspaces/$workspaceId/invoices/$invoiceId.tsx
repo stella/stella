@@ -30,18 +30,18 @@ import {
   AlertDialogPopup,
   AlertDialogTitle,
   AlertDialogTrigger,
-} from "@stll/ui/components/alert-dialog";
-import { Button } from "@stll/ui/components/button";
-import { Dialog, DialogPopup } from "@stll/ui/components/dialog";
-import { DirectionalIcon } from "@stll/ui/components/directional-icon";
-import { Field, FieldError } from "@stll/ui/components/field";
-import { Form } from "@stll/ui/components/form";
-import { Input } from "@stll/ui/components/input";
-import { Label } from "@stll/ui/components/label";
-import { Skeleton } from "@stll/ui/components/skeleton";
-import { Textarea } from "@stll/ui/components/textarea";
-import { stellaToast } from "@stll/ui/components/toast";
-import { cn } from "@stll/ui/lib/utils";
+} from "@stll/ui/alert-dialog";
+import { Button } from "@stll/ui/button";
+import { Dialog, DialogPopup } from "@stll/ui/dialog";
+import { DirectionalIcon } from "@stll/ui/directional-icon";
+import { Field, FieldError } from "@stll/ui/field";
+import { Form } from "@stll/ui/form";
+import { Input } from "@stll/ui/input";
+import { Label } from "@stll/ui/label";
+import { Skeleton } from "@stll/ui/skeleton";
+import { Textarea } from "@stll/ui/textarea";
+import { stellaToast } from "@stll/ui/toast";
+import { cn } from "@stll/ui/utils";
 
 import { DatePickerPopover } from "@/components/date-picker-popover";
 import { usePermissions } from "@/hooks/use-permissions";

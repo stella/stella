@@ -6,8 +6,8 @@ import {
   PaginationLink,
   PaginationNext,
   PaginationPrevious,
-} from "@stll/ui/components/pagination";
-import { cn } from "@stll/ui/lib/utils";
+} from "@stll/ui/pagination";
+import { cn } from "@stll/ui/utils";
 
 type EntityPaginationProps = {
   page: number;

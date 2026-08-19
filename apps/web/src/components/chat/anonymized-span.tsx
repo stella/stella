@@ -2,7 +2,7 @@ import type { ComponentProps, ReactNode } from "react";
 
 import { useTranslations } from "use-intl";
 
-import { cn } from "@stll/ui/lib/utils";
+import { cn } from "@stll/ui/utils";
 
 import { InlinePill } from "@/components/inline-pill";
 

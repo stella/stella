@@ -1,7 +1,7 @@
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
 
-import { BreadcrumbItem } from "@stll/ui/components/breadcrumb";
+import { BreadcrumbItem } from "@stll/ui/breadcrumb";
 
 import { shouldFetchChatThreadTitle } from "@/components/breadcrumbs/chat-breadcrumb.logic";
 import { ChatTitleRename } from "@/features/chat/components/chat-title-rename";

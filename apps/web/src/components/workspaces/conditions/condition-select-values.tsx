@@ -10,8 +10,8 @@ import {
   SelectPopup,
   SelectTrigger,
   SelectValue,
-} from "@stll/ui/components/select";
-import { cn } from "@stll/ui/lib/utils";
+} from "@stll/ui/select";
+import { cn } from "@stll/ui/utils";
 
 import type { FieldOption } from "@/components/conditions/condition-builder-logic";
 import { SelectColorIcon } from "@/components/workspaces/properties/shared";

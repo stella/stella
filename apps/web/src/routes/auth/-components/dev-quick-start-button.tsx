@@ -4,8 +4,8 @@ import { useNavigate } from "@tanstack/react-router";
 import { Result, TaggedError } from "better-result";
 import { useTranslations } from "use-intl";
 
-import { Button } from "@stll/ui/components/button";
-import { stellaToast } from "@stll/ui/components/toast";
+import { Button } from "@stll/ui/button";
+import { stellaToast } from "@stll/ui/toast";
 
 import { useMountEffect } from "@/hooks/use-effect";
 import { useInvalidateSession } from "@/hooks/use-invalidate-session";

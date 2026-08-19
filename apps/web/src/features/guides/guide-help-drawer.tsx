@@ -3,8 +3,8 @@ import { useState } from "react";
 import { CircleHelpIcon, ExternalLinkIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { DiscordLogoIcon } from "@stll/ui/components/brand-icons";
-import { Button } from "@stll/ui/components/button";
+import { DiscordLogoIcon } from "@stll/ui/brand-icons";
+import { Button } from "@stll/ui/button";
 import {
   Sheet,
   SheetDescription,
@@ -13,8 +13,8 @@ import {
   SheetPopup,
   SheetTitle,
   SheetTrigger,
-} from "@stll/ui/components/sheet";
-import { Tabs, TabsList, TabsPanel, TabsTab } from "@stll/ui/components/tabs";
+} from "@stll/ui/sheet";
+import { Tabs, TabsList, TabsPanel, TabsTab } from "@stll/ui/tabs";
 
 import { SidebarMenuButton, SidebarMenuItem } from "@/components/sidebar";
 import { GuideChecklist } from "@/features/guides/guide-checklist";

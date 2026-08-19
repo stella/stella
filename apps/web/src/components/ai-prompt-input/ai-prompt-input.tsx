@@ -12,8 +12,8 @@ import { useEditor } from "@tiptap/react";
 import type { Editor } from "@tiptap/react";
 
 import "@/components/workspaces/properties/property-input/tiptap.css";
-import { ScrollArea } from "@stll/ui/components/scroll-area";
-import { cn } from "@stll/ui/lib/utils";
+import { ScrollArea } from "@stll/ui/scroll-area";
+import { cn } from "@stll/ui/utils";
 
 import { AiRewriteControl } from "@/components/ai-rewrite-control";
 import {

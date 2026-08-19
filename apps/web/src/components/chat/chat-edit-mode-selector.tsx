@@ -14,7 +14,7 @@ import {
   MenuRadioGroup,
   MenuRadioItem,
   MenuTrigger,
-} from "@stll/ui/components/menu";
+} from "@stll/ui/menu";
 
 import type { TranslationKey } from "@/i18n/types";
 import type { ChatEditModeOptionId } from "@/lib/chat-edit-mode";

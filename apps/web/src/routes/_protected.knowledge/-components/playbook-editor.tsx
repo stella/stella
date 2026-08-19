@@ -25,26 +25,21 @@ import {
   AlertDialogHeader,
   AlertDialogPopup,
   AlertDialogTitle,
-} from "@stll/ui/components/alert-dialog";
-import { Button } from "@stll/ui/components/button";
-import { Input } from "@stll/ui/components/input";
-import { Label } from "@stll/ui/components/label";
-import {
-  Menu,
-  MenuItem,
-  MenuPopup,
-  MenuTrigger,
-} from "@stll/ui/components/menu";
+} from "@stll/ui/alert-dialog";
+import { Button } from "@stll/ui/button";
+import { Input } from "@stll/ui/input";
+import { Label } from "@stll/ui/label";
+import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
 import {
   Select,
   SelectItem,
   SelectPopup,
   SelectTrigger,
   SelectValue,
-} from "@stll/ui/components/select";
-import { Textarea } from "@stll/ui/components/textarea";
-import { stellaToast } from "@stll/ui/components/toast";
-import { cn } from "@stll/ui/lib/utils";
+} from "@stll/ui/select";
+import { Textarea } from "@stll/ui/textarea";
+import { stellaToast } from "@stll/ui/toast";
+import { cn } from "@stll/ui/utils";
 
 import Tooltip from "@/components/tooltip";
 import { useExternalSyncEffect } from "@/hooks/use-effect";

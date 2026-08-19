@@ -1,7 +1,7 @@
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
 // Require event handlers on ref-tracked containers to be wrapped in a
-// containment helper from `@stll/ui/hooks/use-contained-handler`.
+// containment helper from `@stll/ui/use-contained-handler`.
 //
 // React forwards synthetic events through the parent React tree even when
 // descendants are rendered via createPortal. A handler attached to a
@@ -255,7 +255,7 @@ export default eslintCompatPlugin({
           requireContainedHandler:
             "`{{handler}}` on a ref-tracked element must be wrapped with " +
             "`containedHandler({{ref}}, …)` from " +
-            "`@stll/ui/hooks/use-contained-handler`. Otherwise, events " +
+            "`@stll/ui/use-contained-handler`. Otherwise, events " +
             "bubbled in from portaled descendants (Dialog, Combobox, etc.) " +
             "will trigger this handler.",
         },

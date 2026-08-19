@@ -15,7 +15,7 @@ import {
 import { Sparkles } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { cn } from "@stll/ui/lib/utils";
+import { cn } from "@stll/ui/utils";
 
 import { DocumentPropertiesSection } from "@/components/inspector/document-properties-section";
 import { MetadataPanelSkeleton } from "@/components/inspector/file-facets";

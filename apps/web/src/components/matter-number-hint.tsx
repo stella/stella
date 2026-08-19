@@ -3,13 +3,9 @@ import { Link } from "@tanstack/react-router";
 import { AlertTriangleIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { Button } from "@stll/ui/components/button";
-import {
-  Popover,
-  PopoverPopup,
-  PopoverTrigger,
-} from "@stll/ui/components/popover";
-import { cn } from "@stll/ui/lib/utils";
+import { Button } from "@stll/ui/button";
+import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
+import { cn } from "@stll/ui/utils";
 
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { matchesPattern, previewReference } from "@/lib/matter-reference";

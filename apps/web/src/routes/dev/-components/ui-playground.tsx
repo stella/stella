@@ -24,7 +24,7 @@ import {
   AccordionItem,
   AccordionPanel,
   AccordionTrigger,
-} from "@stll/ui/components/accordion";
+} from "@stll/ui/accordion";
 import {
   AlertDialog,
   AlertDialogClose,
@@ -35,12 +35,8 @@ import {
   AlertDialogPopup,
   AlertDialogTitle,
   AlertDialogTrigger,
-} from "@stll/ui/components/alert-dialog";
-import {
-  Avatar,
-  AvatarFallback,
-  AvatarImage,
-} from "@stll/ui/components/avatar";
+} from "@stll/ui/alert-dialog";
+import { Avatar, AvatarFallback, AvatarImage } from "@stll/ui/avatar";
 import {
   Breadcrumb,
   BreadcrumbEllipsis,
@@ -49,11 +45,11 @@ import {
   BreadcrumbList,
   BreadcrumbPage,
   BreadcrumbSeparator,
-} from "@stll/ui/components/breadcrumb";
-import { Button } from "@stll/ui/components/button";
-import { buttonVariants } from "@stll/ui/components/button-variants";
-import { Checkbox } from "@stll/ui/components/checkbox";
-import { ColorPicker } from "@stll/ui/components/color-picker";
+} from "@stll/ui/breadcrumb";
+import { Button } from "@stll/ui/button";
+import { buttonVariants } from "@stll/ui/button-variants";
+import { Checkbox } from "@stll/ui/checkbox";
+import { ColorPicker } from "@stll/ui/color-picker";
 import {
   Combobox,
   ComboboxEmpty,
@@ -61,11 +57,11 @@ import {
   ComboboxItem,
   ComboboxList,
   ComboboxPopup,
-} from "@stll/ui/components/combobox";
+} from "@stll/ui/combobox";
 import {
   DestructiveActionConfirmation,
   useDestructiveActionConfirmation,
-} from "@stll/ui/components/destructive-action-confirmation";
+} from "@stll/ui/destructive-action-confirmation";
 import {
   Dialog,
   DialogClose,
@@ -76,14 +72,14 @@ import {
   DialogPopup,
   DialogTitle,
   DialogTrigger,
-} from "@stll/ui/components/dialog";
+} from "@stll/ui/dialog";
 import {
   Field,
   FieldDescription,
   FieldError,
   FieldLabel,
-} from "@stll/ui/components/field";
-import { Form } from "@stll/ui/components/form";
+} from "@stll/ui/field";
+import { Form } from "@stll/ui/form";
 import {
   Frame,
   FrameDescription,
@@ -91,23 +87,23 @@ import {
   FrameHeader,
   FramePanel,
   FrameTitle,
-} from "@stll/ui/components/frame";
-import { HexColorPicker } from "@stll/ui/components/hex-color-picker";
-import { Input } from "@stll/ui/components/input";
+} from "@stll/ui/frame";
+import { HexColorPicker } from "@stll/ui/hex-color-picker";
+import { Input } from "@stll/ui/input";
 import {
   InputGroup,
   InputGroupAddon,
   InputGroupInput,
   InputGroupText,
   InputGroupTextarea,
-} from "@stll/ui/components/input-group";
+} from "@stll/ui/input-group";
 import {
   InputOTP,
   InputOTPGroup,
   InputOTPSeparator,
   InputOTPSlot,
-} from "@stll/ui/components/input-otp";
-import { Label } from "@stll/ui/components/label";
+} from "@stll/ui/input-otp";
+import { Label } from "@stll/ui/label";
 import {
   Menu,
   MenuCheckboxItem,
@@ -123,7 +119,7 @@ import {
   MenuSubPopup,
   MenuSubTrigger,
   MenuTrigger,
-} from "@stll/ui/components/menu";
+} from "@stll/ui/menu";
 import {
   Pagination,
   PaginationContent,
@@ -132,29 +128,29 @@ import {
   PaginationLink,
   PaginationNext,
   PaginationPrevious,
-} from "@stll/ui/components/pagination";
+} from "@stll/ui/pagination";
 import {
   Popover,
   PopoverDescription,
   PopoverPopup,
   PopoverTitle,
   PopoverTrigger,
-} from "@stll/ui/components/popover";
+} from "@stll/ui/popover";
 import {
   PreviewCard,
   PreviewCardPopup,
   PreviewCardTrigger,
-} from "@stll/ui/components/preview-card";
-import { ScrollArea } from "@stll/ui/components/scroll-area";
-import { ScrollToTop } from "@stll/ui/components/scroll-to-top";
+} from "@stll/ui/preview-card";
+import { ScrollArea } from "@stll/ui/scroll-area";
+import { ScrollToTop } from "@stll/ui/scroll-to-top";
 import {
   Select,
   SelectItem,
   SelectPopup,
   SelectTrigger,
   SelectValue,
-} from "@stll/ui/components/select";
-import { Separator } from "@stll/ui/components/separator";
+} from "@stll/ui/select";
+import { Separator } from "@stll/ui/separator";
 import {
   Sheet,
   SheetClose,
@@ -165,8 +161,8 @@ import {
   SheetPopup,
   SheetTitle,
   SheetTrigger,
-} from "@stll/ui/components/sheet";
-import { Skeleton } from "@stll/ui/components/skeleton";
+} from "@stll/ui/sheet";
+import { Skeleton } from "@stll/ui/skeleton";
 import {
   Table,
   TableBody,
@@ -176,16 +172,12 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@stll/ui/components/table";
-import { Tabs, TabsList, TabsPanel, TabsTab } from "@stll/ui/components/tabs";
-import { Textarea } from "@stll/ui/components/textarea";
-import { stellaToast } from "@stll/ui/components/toast";
-import {
-  Tooltip,
-  TooltipPopup,
-  TooltipTrigger,
-} from "@stll/ui/components/tooltip";
-import { cn } from "@stll/ui/lib/utils";
+} from "@stll/ui/table";
+import { Tabs, TabsList, TabsPanel, TabsTab } from "@stll/ui/tabs";
+import { Textarea } from "@stll/ui/textarea";
+import { stellaToast } from "@stll/ui/toast";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
+import { cn } from "@stll/ui/utils";
 
 import { ChatActivityOrb } from "@/components/chat/chat-activity-orb";
 import { ChatApprovalContext } from "@/components/chat/chat-approval-context";

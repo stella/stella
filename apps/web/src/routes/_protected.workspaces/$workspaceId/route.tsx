@@ -15,7 +15,7 @@ import {
   REALTIME_EVENT_TYPE,
   type WorkspaceRealtimeEvent,
 } from "@stll/api-contract";
-import { stellaToast } from "@stll/ui/components/toast";
+import { stellaToast } from "@stll/ui/toast";
 
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { WorkflowServiceTierPromptProvider } from "@/components/workspaces/workflow-service-tier-prompt";

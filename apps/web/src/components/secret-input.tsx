@@ -1,7 +1,7 @@
 import { useTranslations } from "use-intl";
 
-import { SecretInput as SecretInputPrimitive } from "@stll/ui/components/secret-input";
-import type { SecretInputProps as SecretInputPrimitiveProps } from "@stll/ui/components/secret-input";
+import { SecretInput as SecretInputPrimitive } from "@stll/ui/secret-input";
+import type { SecretInputProps as SecretInputPrimitiveProps } from "@stll/ui/secret-input";
 
 type SecretInputProps = Omit<
   SecretInputPrimitiveProps,

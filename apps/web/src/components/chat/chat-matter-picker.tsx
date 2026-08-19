@@ -11,9 +11,9 @@ import {
   MenuGroup,
   MenuPopup,
   MenuTrigger,
-} from "@stll/ui/components/menu";
-import { contentDir } from "@stll/ui/hooks/use-content-dir";
-import { cn } from "@stll/ui/lib/utils";
+} from "@stll/ui/menu";
+import { contentDir } from "@stll/ui/use-content-dir";
+import { cn } from "@stll/ui/utils";
 
 import { MatterIcon } from "@/components/matter-icon";
 import { useFormatter, useLocale } from "@/i18n/formatting-context";

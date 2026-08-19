@@ -8,7 +8,7 @@ import {
   SelectPopup,
   SelectTrigger,
   SelectValue,
-} from "@stll/ui/components/select";
+} from "@stll/ui/select";
 
 import { formatValidityDate } from "@/features/statutes/statute-format";
 import { useFormatter } from "@/i18n/formatting-context";

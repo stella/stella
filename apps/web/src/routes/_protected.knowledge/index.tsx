@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
-import { cn } from "@stll/ui/lib/utils";
+import { cn } from "@stll/ui/utils";
 
 import { usePermissions } from "@/hooks/use-permissions";
 import { useWorkflowsPreviewEnabled } from "@/hooks/use-workflows-preview";

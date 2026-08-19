@@ -2,13 +2,13 @@ import type { PropsWithChildren } from "react";
 
 import type { Tooltip as TooltipPrimitive } from "@base-ui/react/tooltip";
 
+import type { OverlayLayer } from "@stll/ui/overlay-layer";
 import {
   TooltipPopup,
   Tooltip as TooltipRoot,
   TooltipTrigger,
-} from "@stll/ui/components/tooltip";
-import type { OverlayLayer } from "@stll/ui/lib/overlay-layer";
-import { cn } from "@stll/ui/lib/utils";
+} from "@stll/ui/tooltip";
+import { cn } from "@stll/ui/utils";
 
 type TooltipProps = {
   render: TooltipPrimitive.Trigger.Props["render"];

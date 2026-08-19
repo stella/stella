@@ -1,6 +1,6 @@
 import { LayersIcon } from "lucide-react";
 
-import { cn } from "@stll/ui/lib/utils";
+import { cn } from "@stll/ui/utils";
 
 import { resolveMatterColor } from "@/lib/matter-colors";
 

@@ -4,7 +4,7 @@ import { dropTargetForExternal } from "@atlaskit/pragmatic-drag-and-drop/externa
 import { containsFiles } from "@atlaskit/pragmatic-drag-and-drop/external/file";
 import { useTranslations } from "use-intl";
 
-import { stellaToast } from "@stll/ui/components/toast";
+import { stellaToast } from "@stll/ui/toast";
 
 import {
   collectDroppedFileTree,

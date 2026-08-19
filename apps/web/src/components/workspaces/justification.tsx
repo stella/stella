@@ -2,7 +2,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { produce } from "immer";
 import { useTranslations } from "use-intl";
 
-import { cn } from "@stll/ui/lib/utils";
+import { cn } from "@stll/ui/utils";
 
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
 import Tooltip from "@/components/tooltip";

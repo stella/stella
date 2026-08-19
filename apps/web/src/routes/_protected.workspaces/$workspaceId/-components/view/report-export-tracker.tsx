@@ -4,7 +4,7 @@ import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/shallow";
 
-import { stellaToast } from "@stll/ui/components/toast";
+import { stellaToast } from "@stll/ui/toast";
 
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useAnalytics } from "@/lib/analytics/provider";

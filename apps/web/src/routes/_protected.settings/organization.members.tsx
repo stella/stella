@@ -14,29 +14,24 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { BidiText } from "@stll/ui/components/bidi-text";
-import { Button } from "@stll/ui/components/button";
-import { DestructiveConfirmDialog } from "@stll/ui/components/destructive-confirm-dialog";
-import { Frame, FramePanel } from "@stll/ui/components/frame";
+import { BidiText } from "@stll/ui/bidi-text";
+import { Button } from "@stll/ui/button";
+import { DestructiveConfirmDialog } from "@stll/ui/destructive-confirm-dialog";
+import { Frame, FramePanel } from "@stll/ui/frame";
 import {
   InputGroup,
   InputGroupAddon,
   InputGroupInput,
-} from "@stll/ui/components/input-group";
-import {
-  Menu,
-  MenuItem,
-  MenuPopup,
-  MenuTrigger,
-} from "@stll/ui/components/menu";
+} from "@stll/ui/input-group";
+import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
 import {
   Select,
   SelectItem,
   SelectPopup,
   SelectTrigger,
   SelectValue,
-} from "@stll/ui/components/select";
-import { Skeleton } from "@stll/ui/components/skeleton";
+} from "@stll/ui/select";
+import { Skeleton } from "@stll/ui/skeleton";
 import {
   Table,
   TableBody,
@@ -44,9 +39,9 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@stll/ui/components/table";
-import { stellaToast } from "@stll/ui/components/toast";
-import { cn } from "@stll/ui/lib/utils";
+} from "@stll/ui/table";
+import { stellaToast } from "@stll/ui/toast";
+import { cn } from "@stll/ui/utils";
 
 import Tooltip from "@/components/tooltip";
 import { UserIdentity } from "@/components/user-avatar";

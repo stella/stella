@@ -9,9 +9,9 @@ import {
   AlertDialogHeader,
   AlertDialogPopup,
   AlertDialogTitle,
-} from "@stll/ui/components/alert-dialog";
-import { Button } from "@stll/ui/components/button";
-import { DirectionalIcon } from "@stll/ui/components/directional-icon";
+} from "@stll/ui/alert-dialog";
+import { Button } from "@stll/ui/button";
+import { DirectionalIcon } from "@stll/ui/directional-icon";
 
 /** Confirmation shown when leaving a detail view with unsaved/un-versioned
  *  changes. The "keep editing" action cancels; the secondary and primary

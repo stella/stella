@@ -3,7 +3,7 @@
 // Disabled attributes are production-shaped compositions the rule must flag;
 // the unsuppressed attributes pin the safe boundary against false positives.
 
-import { cn, cn as mergeClasses } from "@stll/ui/lib/utils";
+import { cn, cn as mergeClasses } from "@stll/ui/utils";
 
 type MatterRowProps = {
   active: boolean;

@@ -22,7 +22,7 @@ import {
 import { useTranslations } from "use-intl";
 
 import type { PlaybookRunProjection } from "@stll/api-contract";
-import { Button } from "@stll/ui/components/button";
+import { Button } from "@stll/ui/button";
 import {
   Menu,
   MenuGroup,
@@ -33,8 +33,8 @@ import {
   MenuRadioItem,
   MenuSeparator,
   MenuTrigger,
-} from "@stll/ui/components/menu";
-import { SegmentedIconToggle } from "@stll/ui/components/segmented-icon-toggle";
+} from "@stll/ui/menu";
+import { SegmentedIconToggle } from "@stll/ui/segmented-icon-toggle";
 import {
   Select,
   SelectItem,
@@ -42,8 +42,8 @@ import {
   SelectSeparator,
   SelectTrigger,
   SelectValue,
-} from "@stll/ui/components/select";
-import { stellaToast } from "@stll/ui/components/toast";
+} from "@stll/ui/select";
+import { stellaToast } from "@stll/ui/toast";
 
 import { CsvIcon, DocxIcon, XlsxIcon } from "@/components/document-icon";
 import { FolderExpandToggle } from "@/components/file-tree/folder-expand-toggle";

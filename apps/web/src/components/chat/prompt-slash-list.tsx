@@ -4,8 +4,8 @@ import type { Ref } from "react";
 import type { SuggestionOptions, SuggestionProps } from "@tiptap/suggestion";
 import { useTranslations } from "use-intl";
 
-import { Popover, PopoverPopup } from "@stll/ui/components/popover";
-import { cn } from "@stll/ui/lib/utils";
+import { Popover, PopoverPopup } from "@stll/ui/popover";
+import { cn } from "@stll/ui/utils";
 
 import type { SlashItem } from "@/components/chat/prompt-slash-extension";
 import {

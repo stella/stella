@@ -5,7 +5,7 @@ import { IntlProvider } from "use-intl";
 
 import { DocxEditor } from "@stll/folio-react";
 import { getFolioMessages } from "@stll/folio-react/messages";
-import { Button } from "@stll/ui/components/button";
+import { Button } from "@stll/ui/button";
 
 // A real Word .docx (Y Combinator's post-money SAFE, published free to use) so
 // the tool opens on a genuine, richly-formatted legal document, then lets a

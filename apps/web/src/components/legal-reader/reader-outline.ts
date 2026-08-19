@@ -1,6 +1,6 @@
 import type { Block, HeadingBlock } from "@stll/legal-ast/document-ast";
 import { stripDiacritics } from "@stll/text-normalize";
-import type { OutlineItem } from "@stll/ui/components/outline-rail";
+import type { OutlineItem } from "@stll/ui/outline-rail";
 
 import { inlinesToPlainText } from "@/components/legal-reader/document-ast-text";
 

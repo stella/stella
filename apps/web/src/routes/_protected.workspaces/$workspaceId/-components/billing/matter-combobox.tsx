@@ -7,7 +7,7 @@ import {
   ComboboxItem,
   ComboboxList,
   ComboboxPopup,
-} from "@stll/ui/components/combobox";
+} from "@stll/ui/combobox";
 
 import { entitySummariesOptions } from "@/lib/workspaces/queries/entities";
 

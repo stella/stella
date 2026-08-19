@@ -1,6 +1,6 @@
 import type { SVGProps } from "react";
 
-import { StellaWordmarkLatin } from "@stll/ui/components/stella-wordmark";
+import { StellaWordmarkLatin } from "@stll/ui/stella-wordmark";
 
 import { useLocale } from "@/i18n/formatting-context";
 

@@ -7,13 +7,9 @@ import { useTranslations } from "use-intl";
 
 import { isTaskStatus } from "@stll/api-contract";
 import type { TaskStatus } from "@stll/api-contract";
-import {
-  Tooltip,
-  TooltipPopup,
-  TooltipTrigger,
-} from "@stll/ui/components/tooltip";
-import { containedHandler } from "@stll/ui/hooks/use-contained-handler";
-import { cn } from "@stll/ui/lib/utils";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
+import { containedHandler } from "@stll/ui/use-contained-handler";
+import { cn } from "@stll/ui/utils";
 
 import type { DragPreviewData } from "@/components/drag-preview";
 import { renderDragPreview } from "@/components/drag-preview";

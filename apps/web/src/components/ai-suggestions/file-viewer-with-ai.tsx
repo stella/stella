@@ -2,8 +2,8 @@ import { lazy, useCallback, useState } from "react";
 
 import { useTranslations } from "use-intl";
 
-import { Button } from "@stll/ui/components/button";
-import { cn } from "@stll/ui/lib/utils";
+import { Button } from "@stll/ui/button";
+import { cn } from "@stll/ui/utils";
 
 import { QuerySuspenseBoundary } from "@/components/query-suspense-boundary";
 import type { ChatThreadId } from "@/lib/chat-thread-ref";

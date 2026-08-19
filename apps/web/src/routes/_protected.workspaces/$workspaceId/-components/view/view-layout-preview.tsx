@@ -8,9 +8,9 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { DirectionalIcon } from "@stll/ui/components/directional-icon";
-import { PreviewPane } from "@stll/ui/components/preview-pane";
-import { cn } from "@stll/ui/lib/utils";
+import { DirectionalIcon } from "@stll/ui/directional-icon";
+import { PreviewPane } from "@stll/ui/preview-pane";
+import { cn } from "@stll/ui/utils";
 
 import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
 import type {

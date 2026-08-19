@@ -4,9 +4,9 @@ import type { Ref } from "react";
 import type { SuggestionOptions, SuggestionProps } from "@tiptap/suggestion";
 import { useTranslations } from "use-intl";
 
-import { Button } from "@stll/ui/components/button";
-import { Popover, PopoverPopup } from "@stll/ui/components/popover";
-import { cn } from "@stll/ui/lib/utils";
+import { Button } from "@stll/ui/button";
+import { Popover, PopoverPopup } from "@stll/ui/popover";
+import { cn } from "@stll/ui/utils";
 
 import type { MentionOption } from "@/components/workspaces/properties/property-input/custom-mention";
 

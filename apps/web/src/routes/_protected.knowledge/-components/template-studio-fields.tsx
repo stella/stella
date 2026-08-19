@@ -28,8 +28,8 @@ import { useTranslations } from "use-intl";
 
 import type { DirectiveRange } from "@stll/folio-react";
 import { isClauseSlotName } from "@stll/template-conditions";
-import { Button } from "@stll/ui/components/button";
-import { Checkbox } from "@stll/ui/components/checkbox";
+import { Button } from "@stll/ui/button";
+import { Checkbox } from "@stll/ui/checkbox";
 import {
   Dialog,
   DialogClose,
@@ -38,19 +38,14 @@ import {
   DialogPanel,
   DialogPopup,
   DialogTitle,
-} from "@stll/ui/components/dialog";
-import { DirectionalIcon } from "@stll/ui/components/directional-icon";
-import { Input } from "@stll/ui/components/input";
-import { Label } from "@stll/ui/components/label";
-import {
-  Menu,
-  MenuItem,
-  MenuPopup,
-  MenuTrigger,
-} from "@stll/ui/components/menu";
-import { ScrollArea } from "@stll/ui/components/scroll-area";
-import { stellaToast } from "@stll/ui/components/toast";
-import { cn } from "@stll/ui/lib/utils";
+} from "@stll/ui/dialog";
+import { DirectionalIcon } from "@stll/ui/directional-icon";
+import { Input } from "@stll/ui/input";
+import { Label } from "@stll/ui/label";
+import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
+import { ScrollArea } from "@stll/ui/scroll-area";
+import { stellaToast } from "@stll/ui/toast";
+import { cn } from "@stll/ui/utils";
 
 import { AIPromptInput } from "@/components/ai-prompt-input/ai-prompt-input";
 import { FormulaEditor } from "@/components/conditions/formula-editor";

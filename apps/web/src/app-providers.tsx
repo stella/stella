@@ -7,8 +7,8 @@ import type { QueryClient } from "@tanstack/react-query";
 import { useRouter, useRouterState } from "@tanstack/react-router";
 import { IntlProvider } from "use-intl";
 
-import { ToastProvider } from "@stll/ui/components/toast";
-import { TooltipProvider } from "@stll/ui/components/tooltip";
+import { ToastProvider } from "@stll/ui/toast";
+import { TooltipProvider } from "@stll/ui/tooltip";
 
 import { DefaultPendingComponent } from "@/components/route-components";
 import { ThemeProvider } from "@/components/theme-provider";

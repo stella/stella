@@ -2,13 +2,13 @@ import { useRef, useState } from "react";
 
 import { useTranslations } from "use-intl";
 
-import { BidiText } from "@stll/ui/components/bidi-text";
+import { BidiText } from "@stll/ui/bidi-text";
 import {
   PreviewCard,
   PreviewCardPopup,
   PreviewCardTrigger,
-} from "@stll/ui/components/preview-card";
-import { cn } from "@stll/ui/lib/utils";
+} from "@stll/ui/preview-card";
+import { cn } from "@stll/ui/utils";
 
 import { UserAvatar } from "@/components/user-avatar";
 import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";

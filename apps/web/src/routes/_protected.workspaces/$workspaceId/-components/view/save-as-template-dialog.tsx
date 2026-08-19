@@ -2,7 +2,7 @@ import { useState } from "react";
 
 import { useTranslations } from "use-intl";
 
-import { Button } from "@stll/ui/components/button";
+import { Button } from "@stll/ui/button";
 import {
   Dialog,
   DialogClose,
@@ -12,11 +12,11 @@ import {
   DialogPanel,
   DialogPopup,
   DialogTitle,
-} from "@stll/ui/components/dialog";
-import { Field, FieldLabel } from "@stll/ui/components/field";
-import { Form } from "@stll/ui/components/form";
-import { Input } from "@stll/ui/components/input";
-import { stellaToast } from "@stll/ui/components/toast";
+} from "@stll/ui/dialog";
+import { Field, FieldLabel } from "@stll/ui/field";
+import { Form } from "@stll/ui/form";
+import { Input } from "@stll/ui/input";
+import { stellaToast } from "@stll/ui/toast";
 
 import type { ViewLayout } from "@/lib/types";
 import { useCreateViewTemplate } from "@/routes/_protected.workspaces/$workspaceId/-mutations/view-templates";

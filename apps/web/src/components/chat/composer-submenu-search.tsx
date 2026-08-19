@@ -4,7 +4,7 @@ import {
   InputGroup,
   InputGroupAddon,
   InputGroupInput,
-} from "@stll/ui/components/input-group";
+} from "@stll/ui/input-group";
 
 import {
   isMenuNavigationKey,

@@ -6,7 +6,7 @@ import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
 import { parseDocumentAst } from "@stll/legal-ast/document-ast";
-import { OutlineRail } from "@stll/ui/components/outline-rail";
+import { OutlineRail } from "@stll/ui/outline-rail";
 
 import { DatePickerPopover } from "@/components/date-picker-popover";
 import { OutlineJumpField } from "@/components/legal-reader/outline-jump-field";

@@ -1,8 +1,8 @@
 import { useTranslations } from "use-intl";
 
-import { Button } from "@stll/ui/components/button";
-import { contentDir } from "@stll/ui/hooks/use-content-dir";
-import { cn } from "@stll/ui/lib/utils";
+import { Button } from "@stll/ui/button";
+import { contentDir } from "@stll/ui/use-content-dir";
+import { cn } from "@stll/ui/utils";
 
 type InlineEditProps = {
   value: string;

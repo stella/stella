@@ -5,8 +5,8 @@ import { useNavigate } from "@tanstack/react-router";
 import { Result } from "better-result";
 import { useFormatter, useTranslations } from "use-intl";
 
-import { Button } from "@stll/ui/components/button";
-import { stellaToast } from "@stll/ui/components/toast";
+import { Button } from "@stll/ui/button";
+import { stellaToast } from "@stll/ui/toast";
 
 import type { TranslationKey } from "@/i18n/types";
 import { useAnalytics } from "@/lib/analytics/provider";

@@ -1,7 +1,7 @@
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
-import { cn } from "@stll/ui/lib/utils";
+import { cn } from "@stll/ui/utils";
 
 import { getFormattingLocale } from "@/i18n/i18n-store";
 import { normalizeOptionalArray } from "@/lib/arrays";

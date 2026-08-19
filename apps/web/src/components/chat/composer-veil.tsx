@@ -1,4 +1,4 @@
-import { cn } from "@stll/ui/lib/utils";
+import { cn } from "@stll/ui/utils";
 
 /**
  * The one glass veil rendered behind a chat composer stack (input +

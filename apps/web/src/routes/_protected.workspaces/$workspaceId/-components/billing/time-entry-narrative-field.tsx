@@ -3,9 +3,9 @@ import { useState } from "react";
 import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
-import { Label } from "@stll/ui/components/label";
-import { Textarea } from "@stll/ui/components/textarea";
-import { stellaToast } from "@stll/ui/components/toast";
+import { Label } from "@stll/ui/label";
+import { Textarea } from "@stll/ui/textarea";
+import { stellaToast } from "@stll/ui/toast";
 
 import { AiRewriteControl } from "@/components/ai-rewrite-control";
 import { useLatestCallback } from "@/hooks/use-latest-callback";

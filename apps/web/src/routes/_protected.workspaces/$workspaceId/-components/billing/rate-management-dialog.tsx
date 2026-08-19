@@ -5,20 +5,20 @@ import { useMutation, useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { ArrowLeftIcon, PlusIcon, StarIcon, TrashIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { Button } from "@stll/ui/components/button";
-import { Checkbox } from "@stll/ui/components/checkbox";
-import { Dialog, DialogPopup } from "@stll/ui/components/dialog";
-import { DirectionalIcon } from "@stll/ui/components/directional-icon";
-import { Input } from "@stll/ui/components/input";
-import { Label } from "@stll/ui/components/label";
+import { Button } from "@stll/ui/button";
+import { Checkbox } from "@stll/ui/checkbox";
+import { Dialog, DialogPopup } from "@stll/ui/dialog";
+import { DirectionalIcon } from "@stll/ui/directional-icon";
+import { Input } from "@stll/ui/input";
+import { Label } from "@stll/ui/label";
 import {
   Select,
   SelectItem,
   SelectPopup,
   SelectTrigger,
   SelectValue,
-} from "@stll/ui/components/select";
-import { stellaToast } from "@stll/ui/components/toast";
+} from "@stll/ui/select";
+import { stellaToast } from "@stll/ui/toast";
 
 import { DatePickerPopover } from "@/components/date-picker-popover";
 import { UserIdentity } from "@/components/user-avatar";

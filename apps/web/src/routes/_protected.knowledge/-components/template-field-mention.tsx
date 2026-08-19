@@ -1,7 +1,7 @@
 import { NodeViewWrapper } from "@tiptap/react";
 import type { NodeViewProps } from "@tiptap/react";
 
-import { cn } from "@stll/ui/lib/utils";
+import { cn } from "@stll/ui/utils";
 
 export const TemplateFieldMentionNode = (props: NodeViewProps) => {
   const label =

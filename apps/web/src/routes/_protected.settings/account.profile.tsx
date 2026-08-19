@@ -10,12 +10,12 @@ import {
 import { createFileRoute } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
-import { BidiText } from "@stll/ui/components/bidi-text";
-import { Button } from "@stll/ui/components/button";
+import { BidiText } from "@stll/ui/bidi-text";
+import { Button } from "@stll/ui/button";
 import {
   DestructiveActionConfirmation,
   useDestructiveActionConfirmation,
-} from "@stll/ui/components/destructive-action-confirmation";
+} from "@stll/ui/destructive-action-confirmation";
 import {
   Dialog,
   DialogDescription,
@@ -24,25 +24,25 @@ import {
   DialogTitle,
   DialogPanel,
   DialogPopup,
-} from "@stll/ui/components/dialog";
+} from "@stll/ui/dialog";
 import {
   Frame,
   FrameDescription,
   FrameHeader,
   FramePanel,
   FrameTitle,
-} from "@stll/ui/components/frame";
-import { Input } from "@stll/ui/components/input";
-import { Label } from "@stll/ui/components/label";
+} from "@stll/ui/frame";
+import { Input } from "@stll/ui/input";
+import { Label } from "@stll/ui/label";
 import {
   Select,
   SelectItem,
   SelectPopup,
   SelectTrigger,
   SelectValue,
-} from "@stll/ui/components/select";
-import { Skeleton } from "@stll/ui/components/skeleton";
-import { stellaToast } from "@stll/ui/components/toast";
+} from "@stll/ui/select";
+import { Skeleton } from "@stll/ui/skeleton";
+import { stellaToast } from "@stll/ui/toast";
 
 import {
   LANG_ENDONYMS,

@@ -12,8 +12,8 @@ import {
 import { useTranslations } from "use-intl";
 
 import { MAX_EMAIL_TEXT_ATTACHMENT_PREVIEW_BYTES } from "@stll/api-contract";
-import { BidiText } from "@stll/ui/components/bidi-text";
-import { Button } from "@stll/ui/components/button";
+import { BidiText } from "@stll/ui/bidi-text";
+import { Button } from "@stll/ui/button";
 import {
   Dialog,
   DialogFooter,
@@ -21,17 +21,17 @@ import {
   DialogPanel,
   DialogPopup,
   DialogTitle,
-} from "@stll/ui/components/dialog";
-import { DirectionalIcon } from "@stll/ui/components/directional-icon";
+} from "@stll/ui/dialog";
+import { DirectionalIcon } from "@stll/ui/directional-icon";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@stll/ui/components/menu";
-import { Skeleton } from "@stll/ui/components/skeleton";
-import { stellaToast } from "@stll/ui/components/toast";
-import { cn } from "@stll/ui/lib/utils";
+} from "@stll/ui/menu";
+import { Skeleton } from "@stll/ui/skeleton";
+import { stellaToast } from "@stll/ui/toast";
+import { cn } from "@stll/ui/utils";
 
 import type { FileChatOverlayActivation } from "@/components/ai-suggestions/file-viewer-with-ai-config";
 import { DocumentIcon } from "@/components/document-icon";

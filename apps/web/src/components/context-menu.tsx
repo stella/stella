@@ -9,8 +9,8 @@ import {
   MenuSub,
   MenuSubPopup,
   MenuSubTrigger,
-} from "@stll/ui/components/menu";
-import { cn } from "@stll/ui/lib/utils";
+} from "@stll/ui/menu";
+import { cn } from "@stll/ui/utils";
 
 export type ContextMenuAction = {
   label: string;

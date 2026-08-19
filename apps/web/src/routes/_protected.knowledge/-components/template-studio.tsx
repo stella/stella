@@ -22,7 +22,7 @@ import {
 } from "@stll/folio-react";
 import { isClauseSlotName, isFieldPath } from "@stll/template-conditions";
 import "@stll/folio-react/editor.css";
-import { stellaToast } from "@stll/ui/components/toast";
+import { stellaToast } from "@stll/ui/toast";
 
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";

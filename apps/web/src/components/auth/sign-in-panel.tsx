@@ -8,13 +8,13 @@ import { useSelector } from "@tanstack/react-store";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
-import { Button } from "@stll/ui/components/button";
-import { Field, FieldError } from "@stll/ui/components/field";
-import { Form } from "@stll/ui/components/form";
-import { Input } from "@stll/ui/components/input";
-import { TextSeparator } from "@stll/ui/components/separator";
-import { stellaToast } from "@stll/ui/components/toast";
-import { cn } from "@stll/ui/lib/utils";
+import { Button } from "@stll/ui/button";
+import { Field, FieldError } from "@stll/ui/field";
+import { Form } from "@stll/ui/form";
+import { Input } from "@stll/ui/input";
+import { TextSeparator } from "@stll/ui/separator";
+import { stellaToast } from "@stll/ui/toast";
+import { cn } from "@stll/ui/utils";
 
 import { SecretInput } from "@/components/secret-input";
 import { env } from "@/env";

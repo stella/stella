@@ -4,17 +4,17 @@ import { useQuery } from "@tanstack/react-query";
 import { useDebounce } from "use-debounce";
 import { useTranslations } from "use-intl";
 
-import { Button } from "@stll/ui/components/button";
-import { Field, FieldLabel } from "@stll/ui/components/field";
-import { Frame, FramePanel } from "@stll/ui/components/frame";
-import { Input } from "@stll/ui/components/input";
+import { Button } from "@stll/ui/button";
+import { Field, FieldLabel } from "@stll/ui/field";
+import { Frame, FramePanel } from "@stll/ui/frame";
+import { Input } from "@stll/ui/input";
 import {
   Select,
   SelectItem,
   SelectPopup,
   SelectTrigger,
   SelectValue,
-} from "@stll/ui/components/select";
+} from "@stll/ui/select";
 
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";

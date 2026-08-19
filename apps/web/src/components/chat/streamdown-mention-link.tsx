@@ -15,8 +15,8 @@ import { useTranslations } from "use-intl";
 
 import { parseChatResourceHref, RESOURCE_TYPE } from "@stll/api-contract";
 import { isFolioBlockId } from "@stll/folio-react";
-import { stellaToast } from "@stll/ui/components/toast";
-import { cn } from "@stll/ui/lib/utils";
+import { stellaToast } from "@stll/ui/toast";
+import { cn } from "@stll/ui/utils";
 
 import { openCaseLawDecision } from "@/components/chat/case-law-open";
 import {

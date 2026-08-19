@@ -1,4 +1,4 @@
-import { cn } from "@stll/ui/lib/utils";
+import { cn } from "@stll/ui/utils";
 
 import { CONDITIONAL_KINDS } from "@/routes/_protected.knowledge/-components/directive-kinds";
 import type { BlockDirectiveKind } from "@/routes/_protected.knowledge/-components/directive-kinds";

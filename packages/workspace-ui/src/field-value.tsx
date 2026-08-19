@@ -2,8 +2,8 @@ import { Result } from "better-result";
 import { Loader2Icon, SquareMinusIcon } from "lucide-react";
 import { useFormatter, useTranslations } from "use-intl";
 
-import { BidiText } from "@stll/ui/components/bidi-text";
-import { Skeleton } from "@stll/ui/components/skeleton";
+import { BidiText } from "@stll/ui/bidi-text";
+import { Skeleton } from "@stll/ui/skeleton";
 import { emptyColor, resolveOptionColor } from "@stll/workspace-ui/colors";
 import { getClipFieldValueLabel } from "@stll/workspace-ui/field-value-logic";
 import type {

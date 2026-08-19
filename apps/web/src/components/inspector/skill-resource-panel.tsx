@@ -3,10 +3,10 @@ import { useState } from "react";
 import { PencilIcon, SaveIcon, XIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { Button } from "@stll/ui/components/button";
-import { ScrollArea } from "@stll/ui/components/scroll-area";
-import { Textarea } from "@stll/ui/components/textarea";
-import { stellaToast } from "@stll/ui/components/toast";
+import { Button } from "@stll/ui/button";
+import { ScrollArea } from "@stll/ui/scroll-area";
+import { Textarea } from "@stll/ui/textarea";
+import { stellaToast } from "@stll/ui/toast";
 
 import { MarkdownPreview } from "@/components/markdown-preview";
 import { MarkdownFolioEditor } from "@/components/markdown/markdown-folio-editor";

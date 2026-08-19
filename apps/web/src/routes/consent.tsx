@@ -10,15 +10,15 @@ import {
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
-import { Button } from "@stll/ui/components/button";
+import { Button } from "@stll/ui/button";
 import {
   Frame,
   FrameDescription,
   FrameHeader,
   FramePanel,
   FrameTitle,
-} from "@stll/ui/components/frame";
-import { stellaToast } from "@stll/ui/components/toast";
+} from "@stll/ui/frame";
+import { stellaToast } from "@stll/ui/toast";
 
 import { StellaMark } from "@/components/stella-mark";
 import { api } from "@/lib/api";

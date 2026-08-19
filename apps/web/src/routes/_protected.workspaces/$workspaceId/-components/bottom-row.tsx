@@ -1,7 +1,7 @@
 import { PlusIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { cn } from "@stll/ui/lib/utils";
+import { cn } from "@stll/ui/utils";
 
 import { getInternalColId } from "@/components/workspaces/entity-utils";
 import type { WorkspaceTable } from "@/components/workspaces/table/types";

@@ -20,18 +20,13 @@ import {
   AlertDialogPopup,
   AlertDialogTitle,
   AlertDialogTrigger,
-} from "@stll/ui/components/alert-dialog";
-import { Button } from "@stll/ui/components/button";
-import {
-  Menu,
-  MenuItem,
-  MenuPopup,
-  MenuSeparator,
-} from "@stll/ui/components/menu";
-import { ScrollArea } from "@stll/ui/components/scroll-area";
-import { stellaToast } from "@stll/ui/components/toast";
-import { useContentDir } from "@stll/ui/hooks/use-content-dir";
-import { cn } from "@stll/ui/lib/utils";
+} from "@stll/ui/alert-dialog";
+import { Button } from "@stll/ui/button";
+import { Menu, MenuItem, MenuPopup, MenuSeparator } from "@stll/ui/menu";
+import { ScrollArea } from "@stll/ui/scroll-area";
+import { stellaToast } from "@stll/ui/toast";
+import { useContentDir } from "@stll/ui/use-content-dir";
+import { cn } from "@stll/ui/utils";
 
 import { VersionList, VersionRow } from "@/components/versions/version-list";
 import type { VersionDiffSegment } from "@/components/versions/version-list";

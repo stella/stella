@@ -6,9 +6,9 @@ import { panic } from "better-result";
 import { Trash2Icon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { Button } from "@stll/ui/components/button";
-import { Frame, FramePanel } from "@stll/ui/components/frame";
-import { stellaToast } from "@stll/ui/components/toast";
+import { Button } from "@stll/ui/button";
+import { Frame, FramePanel } from "@stll/ui/frame";
+import { stellaToast } from "@stll/ui/toast";
 
 import { AIConfigProvidersEditor } from "@/components/ai-config-providers-editor";
 import { AIConfigRoleModelPicker } from "@/components/ai-config-role-model-picker";

@@ -5,8 +5,8 @@ import {
   InputGroupAddon,
   InputGroupInput,
   InputGroupText,
-} from "@stll/ui/components/input-group";
-import { cn } from "@stll/ui/lib/utils";
+} from "@stll/ui/input-group";
+import { cn } from "@stll/ui/utils";
 
 import {
   combineDurationParts,

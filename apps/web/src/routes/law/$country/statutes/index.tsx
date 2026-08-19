@@ -6,9 +6,9 @@ import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
-import { Button } from "@stll/ui/components/button";
-import { Input } from "@stll/ui/components/input";
-import { Skeleton } from "@stll/ui/components/skeleton";
+import { Button } from "@stll/ui/button";
+import { Input } from "@stll/ui/input";
+import { Skeleton } from "@stll/ui/skeleton";
 
 import { StatuteStatusPill } from "@/features/statutes/components/statute-status-pill";
 import { statutesInfiniteOptions } from "@/features/statutes/queries/statutes";

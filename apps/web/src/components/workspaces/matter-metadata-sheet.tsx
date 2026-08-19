@@ -5,8 +5,8 @@ import { useNavigate } from "@tanstack/react-router";
 import { CopyIcon, CopyPlusIcon, TrashIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { Button } from "@stll/ui/components/button";
-import { DestructiveConfirmDialog } from "@stll/ui/components/destructive-confirm-dialog";
+import { Button } from "@stll/ui/button";
+import { DestructiveConfirmDialog } from "@stll/ui/destructive-confirm-dialog";
 import {
   Dialog,
   DialogClose,
@@ -15,11 +15,11 @@ import {
   DialogHeader,
   DialogPopup,
   DialogTitle,
-} from "@stll/ui/components/dialog";
-import { Input } from "@stll/ui/components/input";
-import { Separator } from "@stll/ui/components/separator";
-import { stellaToast } from "@stll/ui/components/toast";
-import { cn } from "@stll/ui/lib/utils";
+} from "@stll/ui/dialog";
+import { Input } from "@stll/ui/input";
+import { Separator } from "@stll/ui/separator";
+import { stellaToast } from "@stll/ui/toast";
+import { cn } from "@stll/ui/utils";
 
 import { MatterNumberHint } from "@/components/matter-number-hint";
 import { LeadSection } from "@/components/workspaces/lead-section";

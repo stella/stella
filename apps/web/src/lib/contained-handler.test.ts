@@ -9,7 +9,7 @@ class FakeNode {
 Object.assign(globalThis, { Node: FakeNode });
 
 const { containedEventHandler, containedHandler } =
-  await import("@stll/ui/hooks/use-contained-handler");
+  await import("@stll/ui/use-contained-handler");
 
 type SyntheticLike = { target: unknown };
 

@@ -10,8 +10,8 @@ import {
   AlertDialogHeader,
   AlertDialogPopup,
   AlertDialogTitle,
-} from "@stll/ui/components/alert-dialog";
-import { Button } from "@stll/ui/components/button";
+} from "@stll/ui/alert-dialog";
+import { Button } from "@stll/ui/button";
 
 import { useMountEffect } from "@/hooks/use-effect";
 

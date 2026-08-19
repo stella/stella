@@ -3,11 +3,11 @@ import { useState } from "react";
 import { CheckIcon, XIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { BidiText } from "@stll/ui/components/bidi-text";
-import { Button } from "@stll/ui/components/button";
-import { Input } from "@stll/ui/components/input";
-import { Separator } from "@stll/ui/components/separator";
-import { cn } from "@stll/ui/lib/utils";
+import { BidiText } from "@stll/ui/bidi-text";
+import { Button } from "@stll/ui/button";
+import { Input } from "@stll/ui/input";
+import { Separator } from "@stll/ui/separator";
+import { cn } from "@stll/ui/utils";
 
 import { useLocale } from "@/i18n/formatting-context";
 import { compareByLocale } from "@/lib/collation";

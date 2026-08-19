@@ -18,23 +18,19 @@ import {
 import { useTranslations } from "use-intl";
 
 import { SKILL_RESOURCE_PATH_PATTERN } from "@stll/api-contract";
-import { Button } from "@stll/ui/components/button";
-import { Input } from "@stll/ui/components/input";
+import { Button } from "@stll/ui/button";
+import { Input } from "@stll/ui/input";
 import {
   Menu,
   MenuItem,
   MenuPopup,
   MenuSeparator,
   MenuTrigger,
-} from "@stll/ui/components/menu";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@stll/ui/components/popover";
-import { stellaToast } from "@stll/ui/components/toast";
-import { contentDir } from "@stll/ui/hooks/use-content-dir";
-import { cn } from "@stll/ui/lib/utils";
+} from "@stll/ui/menu";
+import { Popover, PopoverContent, PopoverTrigger } from "@stll/ui/popover";
+import { stellaToast } from "@stll/ui/toast";
+import { contentDir } from "@stll/ui/use-content-dir";
+import { cn } from "@stll/ui/utils";
 
 import { FileDropZone } from "@/components/file-drop-zone";
 import { FileTree } from "@/components/file-tree/file-tree";

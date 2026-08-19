@@ -5,7 +5,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
-import { Button } from "@stll/ui/components/button";
+import { Button } from "@stll/ui/button";
 import {
   Dialog,
   DialogClose,
@@ -14,11 +14,11 @@ import {
   DialogHeader,
   DialogPopup,
   DialogTitle,
-} from "@stll/ui/components/dialog";
-import { Field, FieldLabel } from "@stll/ui/components/field";
-import { Input } from "@stll/ui/components/input";
-import { Skeleton } from "@stll/ui/components/skeleton";
-import { stellaToast } from "@stll/ui/components/toast";
+} from "@stll/ui/dialog";
+import { Field, FieldLabel } from "@stll/ui/field";
+import { Input } from "@stll/ui/input";
+import { Skeleton } from "@stll/ui/skeleton";
+import { stellaToast } from "@stll/ui/toast";
 
 import { StyleSetEditorControls } from "@/features/style-sets/style-set-editor-controls";
 import type {

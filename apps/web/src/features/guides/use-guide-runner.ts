@@ -3,7 +3,7 @@ import { useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
-import { stellaToast } from "@stll/ui/components/toast";
+import { stellaToast } from "@stll/ui/toast";
 
 import { guideAnchorSelector } from "@/features/guides/guide-anchor";
 import {
