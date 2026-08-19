@@ -858,26 +858,25 @@ describe("cz-nss fetchPage", () => {
 // ── Per-item build ───────────────────────────────────────
 
 describe("cz-nss court from ECLI", () => {
+  // Stated here independently of the adapter's map, so a wrong name in the
+  // map fails this rather than being read back as the expectation.
+  const EXPECTED_COURTS = {
+    NSS: "Nejvyšší správní soud",
+    MSPH: "Městský soud v Praze",
+    KSBR: "Krajský soud v Brně",
+    KSCB: "Krajský soud v Českých Budějovicích",
+    KSHK: "Krajský soud v Hradci Králové",
+    KSOS: "Krajský soud v Ostravě",
+    KSPH: "Krajský soud v Praze",
+    KSPL: "Krajský soud v Plzni",
+    KSUL: "Krajský soud v Ústí nad Labem",
+  } as const;
+
   test("every declared court code resolves to its court, and nothing else does", () => {
-    // Driven from the map, so a code added to it is exercised here without
-    // anyone remembering to; the one non-member proves the lookup is closed.
-    for (const [code, court] of Object.entries(CZ_ECLI_COURTS)) {
+    expect(CZ_ECLI_COURTS).toEqual(EXPECTED_COURTS);
+    for (const [code, court] of Object.entries(EXPECTED_COURTS)) {
       expect(courtFromEcli(`ECLI:CZ:${code}:2021:52.Af.4.2020.66`)).toBe(court);
     }
-    expect(Object.keys(CZ_ECLI_COURTS).toSorted()).toEqual([
-      "KSBR",
-      "KSCB",
-      "KSHK",
-      "KSOS",
-      "KSPH",
-      "KSPL",
-      "KSUL",
-      "MSPH",
-      "NSS",
-    ]);
-    expect(courtFromEcli("ECLI:CZ:KSHK:2021:52.Af.4.2020.66")).toBe(
-      "Krajský soud v Hradci Králové",
-    );
   });
 
   test("no ECLI, or a code the map does not know, keeps the portal's label", () => {

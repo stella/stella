@@ -96,7 +96,8 @@ export const CZ_ECLI_COURTS = {
   KSUL: "Krajský soud v Ústí nad Labem",
 } as const satisfies Record<string, string>;
 
-const ECLI_COURT_CODE = /^ECLI:CZ:(?<code>[A-Z]+):/u;
+/** Codes are four letters at most; the bound keeps an odd ECLI out of the log. */
+const ECLI_COURT_CODE = /^ECLI:CZ:(?<code>[A-Z]{1,8}):/u;
 
 const isEcliCourtCode = (code: string): code is keyof typeof CZ_ECLI_COURTS =>
   Object.hasOwn(CZ_ECLI_COURTS, code);
@@ -113,7 +114,7 @@ export const courtFromEcli = (ecli: string | undefined): string => {
   if (isEcliCourtCode(code)) {
     return CZ_ECLI_COURTS[code];
   }
-  logger.warn("case_law.ingestion.cz_nss.unknown_ecli_court", { ecli, code });
+  logger.warn("case_law.ingestion.cz_nss.unknown_ecli_court", { code });
   return CZ_NSS_COURT;
 };
 
