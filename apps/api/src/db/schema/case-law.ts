@@ -943,6 +943,32 @@ export const caseLawProvisionCitations = p.pgTable(
         t.decisionId.desc(),
         t.spanStart.desc(),
       ),
+    // The same two walks keyed by the work's identifier instead of its
+    // display citation, for a reader arriving from the act itself. Partial:
+    // a reference to a work the corpus does not hold carries no ELI, and
+    // those rows are never a starting point for this walk.
+    p
+      .index("case_law_provision_citations_eli_idx")
+      .on(
+        t.jurisdiction,
+        t.workEli,
+        sql`(coalesce(${t.decisionDate}, '0001-01-01'::date)) DESC`,
+        t.decisionId.desc(),
+        t.spanStart.desc(),
+        t.anchor.desc(),
+      )
+      .where(isNotNull(t.workEli)),
+    p
+      .index("case_law_provision_citations_eli_anchor_idx")
+      .on(
+        t.jurisdiction,
+        t.workEli,
+        t.anchor,
+        sql`(coalesce(${t.decisionDate}, '0001-01-01'::date)) DESC`,
+        t.decisionId.desc(),
+        t.spanStart.desc(),
+      )
+      .where(isNotNull(t.workEli)),
     p.index("case_law_provision_citations_decision_idx").on(t.decisionId),
     p.check(
       "provision_citations_unit_values",

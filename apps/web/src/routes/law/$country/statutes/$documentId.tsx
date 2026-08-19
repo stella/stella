@@ -29,7 +29,6 @@ import {
   EM_DASH,
   formatValidityDate,
 } from "@/features/statutes/statute-format";
-import { workIdentifierFromEli } from "@/features/statutes/work-identifier";
 import { useFormatter } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
 import { pageTitleLiteral } from "@/lib/page-title";
@@ -127,14 +126,12 @@ function PublicStatuteRoute() {
   const visibleOutline = filterOutlineItems(outline, jump);
   const jumpAnchorId = findProvisionAnchorId(outline, jump);
 
-  // The work as case law cites it. Null for a work whose ELI does not state
-  // one, in which case the reader offers no incoming citations at all.
-  const workIdentifier = workIdentifierFromEli(statute.eli);
+  // The keys a provision's incoming citations are filed under. Both come off
+  // the document itself: nothing about the work is inferred here.
+  const eli = statute.eli.trim();
   const jurisdiction = statute.country?.trim().toUpperCase() ?? "";
   const citationWork =
-    workIdentifier === null || jurisdiction === ""
-      ? null
-      : { jurisdiction, work: workIdentifier };
+    eli === "" || jurisdiction === "" ? null : { eli, jurisdiction };
 
   const validFrom = formatValidityDate(statute.versionValidFrom, format);
   const validTo = formatValidityDate(statute.versionValidTo, format);

@@ -205,7 +205,7 @@ describe("StatuteText", () => {
         <FormattingProvider locale="en" timeZone="UTC">
           <StatuteText
             blocks={blocks}
-            citationWork={{ jurisdiction: "CZE", work: "89/2012" }}
+            citationWork={{ eli: "/eli/cz/sb/2012/89", jurisdiction: "CZE" }}
             fulltext={null}
             language="cs"
           />
@@ -227,7 +227,7 @@ describe("StatuteText", () => {
         <FormattingProvider locale="en" timeZone="UTC">
           <StatuteText
             blocks={blocks}
-            citationWork={{ jurisdiction: "CZE", work: "89/2012" }}
+            citationWork={{ eli: "/eli/cz/sb/2012/89", jurisdiction: "CZE" }}
             fulltext={null}
             language="cs"
           />

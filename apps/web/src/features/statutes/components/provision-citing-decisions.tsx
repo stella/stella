@@ -23,8 +23,8 @@ import { detached } from "@/lib/detached";
 type ProvisionCitingDecisionsProps = {
   /** The provision's anchor, the key its incoming citations are filed under. */
   anchorId: string;
+  eli: string;
   jurisdiction: string;
-  work: string;
 };
 
 /**
@@ -36,8 +36,8 @@ type ProvisionCitingDecisionsProps = {
  */
 export const ProvisionCitingDecisions = ({
   anchorId,
+  eli,
   jurisdiction,
-  work,
 }: ProvisionCitingDecisionsProps) => {
   const t = useTranslations();
   const format = useFormatter();
@@ -47,8 +47,8 @@ export const ProvisionCitingDecisions = ({
     useInfiniteQuery({
       ...citingDecisionsInfiniteOptions({
         anchor: anchorId,
+        eli,
         jurisdiction,
-        work,
       }),
       enabled: open,
     });

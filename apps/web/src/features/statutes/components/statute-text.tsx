@@ -12,13 +12,14 @@ import { parseProvisionDesignation } from "@/components/legal-reader/reader-outl
 import { ProvisionCitingDecisions } from "@/features/statutes/components/provision-citing-decisions";
 
 /**
- * What a provision's incoming citations are filed under. Absent when the
- * work's own identifier cannot be stated, in which case the reader offers no
- * citation affordance rather than one that asks about a different act.
+ * What a provision's incoming citations are filed under: the work's own
+ * identifier, which is what a statute knows itself by. Absent when the
+ * document states none, in which case the reader offers no citation
+ * affordance at all.
  */
 export type StatuteCitationWork = {
+  eli: string;
   jurisdiction: string;
-  work: string;
 };
 
 type StatuteTextProps = {
@@ -76,8 +77,8 @@ export const StatuteText = ({
             {citationWork !== null && isProvisionHeading(block) && (
               <ProvisionCitingDecisions
                 anchorId={block.anchorId}
+                eli={citationWork.eli}
                 jurisdiction={citationWork.jurisdiction}
-                work={citationWork.work}
               />
             )}
           </Fragment>

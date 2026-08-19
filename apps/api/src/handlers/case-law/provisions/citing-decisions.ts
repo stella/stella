@@ -20,15 +20,48 @@ import {
   isUuidPaginationCursorPart,
 } from "@/api/lib/pagination";
 
+/**
+ * The two keys a work is asked about by, and never both at once.
+ *
+ * `work` is the display citation the corpus records (`89/2012 Sb.`), which is
+ * what a decision's own text states. `eli` is the work's identifier, which is
+ * what a statute knows itself by — a reader coming from the act has no
+ * display citation to offer, and deriving one from the ELI would be guessing
+ * at another producer's formatting. Both are indexed keys on the citation
+ * table, so either answers from the same access path.
+ */
 export const listCitingDecisionsQuerySchema = t.Object({
   jurisdiction: t.String({ minLength: 2, maxLength: 3 }),
-  work: t.String({ minLength: 1, maxLength: 256 }),
+  work: t.Optional(t.String({ minLength: 1, maxLength: 256 })),
+  eli: t.Optional(t.String({ minLength: 1, maxLength: 512 })),
   anchor: t.Optional(t.String({ minLength: 1, maxLength: 256 })),
   limit: t.Optional(tPaginationLimit(LIMITS.caseLawSearchPageSizeMax)),
   cursor: t.Optional(tPaginationCursor()),
 });
 
 type ListCitingDecisionsQuery = Static<typeof listCitingDecisionsQuerySchema>;
+
+/**
+ * Which column the work filter reads, refused when the request names neither
+ * key or both: an unfiltered walk of a jurisdiction is not a page of one
+ * work's case law, and two filters at once is a request that does not know
+ * what it is asking.
+ */
+const workCondition = (query: ListCitingDecisionsQuery): SQL | null => {
+  if (query.work !== undefined && query.eli !== undefined) {
+    return null;
+  }
+
+  if (query.work !== undefined) {
+    return eq(caseLawProvisionCitations.workIdentifier, query.work);
+  }
+
+  if (query.eli !== undefined) {
+    return eq(caseLawProvisionCitations.workEli, query.eli);
+  }
+
+  return null;
+};
 
 /** A null date sorts last under the shared descending order. */
 const DECISION_DATE_FLOOR = "0001-01-01";
@@ -77,10 +110,16 @@ export const listCitingDecisionsHandler = async (
   query: ListCitingDecisionsQuery,
   caseLawDb: CaseLawPublicReadDb,
 ) => {
+  const work = workCondition(query);
+
+  if (work === null) {
+    return status(400, { message: "Name exactly one of work or eli" });
+  }
+
   const limit = query.limit ?? LIMITS.caseLawSearchPageSizeDefault;
   const conditions: SQL[] = [
     eq(caseLawProvisionCitations.jurisdiction, query.jurisdiction),
-    eq(caseLawProvisionCitations.workIdentifier, query.work),
+    work,
     redistributableCaseLawSource,
   ];
 

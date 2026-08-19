@@ -18,9 +18,9 @@ const PAGE_SIZE = 10;
 export type CitingDecisionsKey = {
   /** The provision's anchor in the statute text. */
   anchor: string;
+  /** The work's own identifier, which is what the act knows itself by. */
+  eli: string;
   jurisdiction: string;
-  /** The work as the corpus cites it, e.g. `141/1961`. */
-  work: string;
 };
 
 export const citingDecisionKeys = {
@@ -29,8 +29,8 @@ export const citingDecisionKeys = {
     ...citingDecisionKeys.all,
     {
       anchor: key.anchor,
+      eli: key.eli,
       jurisdiction: key.jurisdiction,
-      work: key.work,
     },
   ],
 };
@@ -42,9 +42,9 @@ export const citingDecisionsInfiniteOptions = (key: CitingDecisionsKey) =>
       const response = await api.case.provisions["citing-decisions"].get({
         query: {
           anchor: key.anchor,
+          eli: key.eli,
           jurisdiction: key.jurisdiction,
           limit: PAGE_SIZE,
-          work: key.work,
           ...(pageParam !== null && { cursor: pageParam }),
         },
         fetch: { signal },
