@@ -3258,6 +3258,7 @@
     "emptyState": "Nie znaleziono aktów prawnych.",
     "inForceSince": "Obowiązuje od {date}",
     "openEnded": "nadal",
+    "outline": "Spis treści",
     "searchPlaceholder": "Szukaj według tytułu lub numeru...",
     "status": {
       "current": "Obowiązujący",

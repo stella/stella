@@ -3258,6 +3258,7 @@
     "emptyState": "Tiesību akti nav atrasti.",
     "inForceSince": "Spēkā no {date}",
     "openEnded": "šobrīd",
+    "outline": "Saturs",
     "searchPlaceholder": "Meklēt pēc nosaukuma vai numura...",
     "status": {
       "current": "Spēkā",

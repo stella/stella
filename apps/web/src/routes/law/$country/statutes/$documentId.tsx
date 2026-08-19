@@ -1,9 +1,18 @@
-import { useCallback } from "react";
+import { useCallback, useRef } from "react";
 
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
+import { parseDocumentAst } from "@stll/legal-ast/document-ast";
+import { OutlineRail } from "@stll/ui/components/outline-rail";
+
+import {
+  jumpToAnchor,
+  outlineFromHeadings,
+  resolveAnchorPct,
+  STATUTE_OUTLINE_COLLAPSE_LEVEL,
+} from "@/components/legal-reader/reader-outline";
 import { StatuteStatusPill } from "@/features/statutes/components/statute-status-pill";
 import { StatuteText } from "@/features/statutes/components/statute-text";
 import { StatuteVersionSwitcher } from "@/features/statutes/components/statute-version-switcher";
@@ -101,54 +110,69 @@ function PublicStatuteRoute() {
     [navigate, statute.country],
   );
 
+  const readerRef = useRef<HTMLDivElement>(null);
+  const blocks = parseDocumentAst(statute.documentAst)?.blocks ?? [];
+  const outline = outlineFromHeadings(blocks);
+
   const validFrom = formatValidityDate(statute.versionValidFrom, format);
   const validTo = formatValidityDate(statute.versionValidTo, format);
   const sourceHref = statute.documentUrl ?? statute.sourceUrl;
 
   return (
-    <main className="flex min-h-0 flex-1 flex-col overflow-y-auto">
-      <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 px-4 py-6">
-        <header className="flex flex-col gap-3 border-b pb-4">
-          <h1 className="text-xl font-semibold">{statute.title}</h1>
-          <div className="text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-2 text-xs">
-            <span>{statute.eli}</span>
-            <StatuteStatusPill status={statute.status} />
-            <span>
-              {t("statutes.validity", {
-                from: validFrom ?? EM_DASH,
-                to: validTo ?? t("statutes.openEnded"),
-              })}
-            </span>
-            {sanitizeHref(sourceHref) !== undefined && (
-              <a
-                className="underline underline-offset-2"
-                href={sanitizeHref(sourceHref)}
-                rel="noopener noreferrer"
-                target="_blank"
-              >
-                {t("common.viewSource")}
-              </a>
-            )}
-          </div>
-          <StatuteVersionSwitcher
-            currentVersionId={statute.id}
-            onVersionChange={handleVersionChange}
-            versions={versions.items}
-          />
-          <Link
-            className="text-muted-foreground hover:text-foreground w-fit text-xs underline underline-offset-2"
-            params={{ country: toStatuteCountrySegment(statute.country) }}
-            to="/law/$country/statutes"
-          >
-            {t("statutes.backToList")}
-          </Link>
-        </header>
+    <main className="relative min-h-0 flex-1">
+      {/* The rail hides itself when a document has no outline to show. */}
+      <OutlineRail
+        ariaLabel={t("statutes.outline")}
+        collapsedFromLevel={STATUTE_OUTLINE_COLLAPSE_LEVEL}
+        items={outline}
+        onJump={jumpToAnchor}
+        resolvePct={resolveAnchorPct}
+        scrollContainerRef={readerRef}
+      />
+      <div className="reader-scroll h-full overflow-y-auto" ref={readerRef}>
+        <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 px-4 py-6">
+          <header className="flex flex-col gap-3 border-b pb-4">
+            <h1 className="text-xl font-semibold">{statute.title}</h1>
+            <div className="text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-2 text-xs">
+              <span>{statute.eli}</span>
+              <StatuteStatusPill status={statute.status} />
+              <span>
+                {t("statutes.validity", {
+                  from: validFrom ?? EM_DASH,
+                  to: validTo ?? t("statutes.openEnded"),
+                })}
+              </span>
+              {sanitizeHref(sourceHref) !== undefined && (
+                <a
+                  className="underline underline-offset-2"
+                  href={sanitizeHref(sourceHref)}
+                  rel="noopener noreferrer"
+                  target="_blank"
+                >
+                  {t("common.viewSource")}
+                </a>
+              )}
+            </div>
+            <StatuteVersionSwitcher
+              currentVersionId={statute.id}
+              onVersionChange={handleVersionChange}
+              versions={versions.items}
+            />
+            <Link
+              className="text-muted-foreground hover:text-foreground w-fit text-xs underline underline-offset-2"
+              params={{ country: toStatuteCountrySegment(statute.country) }}
+              to="/law/$country/statutes"
+            >
+              {t("statutes.backToList")}
+            </Link>
+          </header>
 
-        <StatuteText
-          documentAst={statute.documentAst}
-          fulltext={statute.fulltext}
-          language={statute.language}
-        />
+          <StatuteText
+            blocks={blocks}
+            fulltext={statute.fulltext}
+            language={statute.language}
+          />
+        </div>
       </div>
     </main>
   );

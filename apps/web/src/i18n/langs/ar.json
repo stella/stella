@@ -3258,6 +3258,7 @@
     "emptyState": "لم يُعثر على تشريعات.",
     "inForceSince": "نافذ منذ {date}",
     "openEnded": "الآن",
+    "outline": "المحتويات",
     "searchPlaceholder": "ابحث بالعنوان أو الرقم...",
     "status": {
       "current": "نافذ",

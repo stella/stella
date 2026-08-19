@@ -3258,6 +3258,7 @@
     "emptyState": "Õigusakte ei leitud.",
     "inForceSince": "Kehtib alates {date}",
     "openEnded": "praeguseni",
+    "outline": "Sisukord",
     "searchPlaceholder": "Otsi pealkirja või numbri järgi...",
     "status": {
       "current": "Kehtiv",

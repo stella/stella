@@ -3258,6 +3258,7 @@
     "emptyState": "Nenhuma norma encontrada.",
     "inForceSince": "Em vigor desde {date}",
     "openEnded": "hoje",
+    "outline": "Sumário",
     "searchPlaceholder": "Buscar por título ou número...",
     "status": {
       "current": "Em vigor",

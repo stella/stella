@@ -3258,6 +3258,7 @@
     "emptyState": "Nenašli sa žiadne predpisy.",
     "inForceSince": "Účinné od {date}",
     "openEnded": "súčasnosť",
+    "outline": "Obsah",
     "searchPlaceholder": "Hľadať podľa názvu alebo čísla...",
     "status": {
       "current": "Účinné",

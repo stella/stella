@@ -3258,6 +3258,7 @@
     "emptyState": "Keine Rechtsvorschriften gefunden.",
     "inForceSince": "In Kraft seit {date}",
     "openEnded": "heute",
+    "outline": "Inhalt",
     "searchPlaceholder": "Nach Titel oder Nummer suchen...",
     "status": {
       "current": "In Kraft",

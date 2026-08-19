@@ -82,13 +82,10 @@ const blocks = [
   },
 ] satisfies Block[];
 
-// The persisted shape legislation stores: a version and its blocks.
-const ast = { version: 1, blocks };
-
 describe("StatuteText", () => {
   test("every block carries its anchor id and the anchor scroll offset", () => {
     const markup = renderWithIntl(
-      <StatuteText documentAst={ast} fulltext={null} language="cs" />,
+      <StatuteText blocks={blocks} fulltext={null} language="cs" />,
     );
 
     for (const block of blocks) {
@@ -102,7 +99,7 @@ describe("StatuteText", () => {
 
   test("heading depth reaches the DOM as the matching heading element", () => {
     const markup = renderWithIntl(
-      <StatuteText documentAst={ast} fulltext={null} language="cs" />,
+      <StatuteText blocks={blocks} fulltext={null} language="cs" />,
     );
 
     expect(markup).toContain("<h1 class");
@@ -111,7 +108,7 @@ describe("StatuteText", () => {
 
   test("a heading's two lines stay one block, split by a break", () => {
     const markup = renderWithIntl(
-      <StatuteText documentAst={ast} fulltext={null} language="cs" />,
+      <StatuteText blocks={blocks} fulltext={null} language="cs" />,
     );
 
     // One block, two lines: the designation and the title it names. Run
@@ -122,7 +119,7 @@ describe("StatuteText", () => {
 
   test("structural headings are centred", () => {
     const markup = renderWithIntl(
-      <StatuteText documentAst={ast} fulltext={null} language="cs" />,
+      <StatuteText blocks={blocks} fulltext={null} language="cs" />,
     );
 
     // A statute is read by its containers, and the publisher centres every
@@ -136,7 +133,7 @@ describe("StatuteText", () => {
 
   test("every block offers exactly one permalink to its own anchor", () => {
     const markup = renderWithIntl(
-      <StatuteText documentAst={ast} fulltext={null} language="cs" />,
+      <StatuteText blocks={blocks} fulltext={null} language="cs" />,
     );
 
     // A statute is cited by provision, so every block is an address. One
@@ -150,7 +147,7 @@ describe("StatuteText", () => {
   test("falls back to the plain text when the document has no parsed blocks", () => {
     const markup = renderWithIntl(
       <StatuteText
-        documentAst={null}
+        blocks={[]}
         fulltext={"First paragraph.\n\nSecond paragraph."}
         language="cs"
       />,
@@ -162,7 +159,7 @@ describe("StatuteText", () => {
 
   test("says so when neither a parsed document nor plain text exists", () => {
     const markup = renderWithIntl(
-      <StatuteText documentAst={null} fulltext={null} language="cs" />,
+      <StatuteText blocks={[]} fulltext={null} language="cs" />,
     );
 
     expect(markup).toContain(messages.statutes.emptyDocument);

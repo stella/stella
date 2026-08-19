@@ -3258,6 +3258,7 @@
     "emptyState": "Nenalezeny žádné předpisy.",
     "inForceSince": "Účinné od {date}",
     "openEnded": "současnost",
+    "outline": "Obsah",
     "searchPlaceholder": "Hledat podle názvu nebo čísla...",
     "status": {
       "current": "Účinné",

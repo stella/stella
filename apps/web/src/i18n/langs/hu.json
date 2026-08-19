@@ -3258,6 +3258,7 @@
     "emptyState": "Nem található jogszabály.",
     "inForceSince": "Hatályos {date} óta",
     "openEnded": "jelenleg is",
+    "outline": "Tartalom",
     "searchPlaceholder": "Keresés cím vagy szám alapján...",
     "status": {
       "current": "Hatályos",

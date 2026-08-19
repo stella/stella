@@ -3261,6 +3261,7 @@ type Messages = {
     "emptyState": "No statutes found.";
     "inForceSince": "In force since {date}";
     "openEnded": "present";
+    "outline": "Contents";
     "searchPlaceholder": "Search by title or number...";
     "status": {
       "current": "In force";

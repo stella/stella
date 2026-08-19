@@ -3258,6 +3258,7 @@
     "emptyState": "Teisės aktų nerasta.",
     "inForceSince": "Galioja nuo {date}",
     "openEnded": "dabar",
+    "outline": "Turinys",
     "searchPlaceholder": "Ieškoti pagal pavadinimą arba numerį...",
     "status": {
       "current": "Galiojantis",

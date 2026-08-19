@@ -1,6 +1,6 @@
 import { useTranslations } from "use-intl";
 
-import { parseDocumentAst } from "@stll/legal-ast/document-ast";
+import type { Block } from "@stll/legal-ast/document-ast";
 
 import {
   BlockRenderer,
@@ -8,7 +8,8 @@ import {
 } from "@/components/legal-reader/document-ast-text";
 
 type StatuteTextProps = {
-  documentAst?: unknown;
+  /** Parsed blocks. The route owns the parse: it also builds the outline. */
+  blocks: readonly Block[];
   fulltext: string | null;
   language: string;
 };
@@ -30,13 +31,11 @@ const NO_ACTIVE_MATCH = -1;
  * is a stable deep-link target (`#<anchorId>`) that the router scrolls to.
  */
 export const StatuteText = ({
-  documentAst,
+  blocks,
   fulltext,
   language,
 }: StatuteTextProps) => {
   const t = useTranslations();
-  const ast = parseDocumentAst(documentAst);
-  const blocks = ast?.blocks ?? [];
 
   if (blocks.length > 0) {
     return (

@@ -3258,6 +3258,7 @@
     "emptyState": "Aucun texte trouvé.",
     "inForceSince": "En vigueur depuis le {date}",
     "openEnded": "aujourd’hui",
+    "outline": "Sommaire",
     "searchPlaceholder": "Rechercher par titre ou numéro...",
     "status": {
       "current": "En vigueur",
