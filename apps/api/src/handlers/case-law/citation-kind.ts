@@ -82,6 +82,49 @@ const AUTHORITY_REGISTRIES = new Set([
   // listed. Cited with a Roman chamber prefix that drifts as chambers are
   // reorganised ("III PZP 1/21"), so only the mark itself is keyed on.
   "pzp",
+  // Polish appellate courts ("sąd apelacyjny"), whose marks all carry the
+  // `A` prefix: civil (`ACa`), criminal (`AKa`), social-insurance (`AUa`),
+  // commercial (`AGa`) and labour (`APa`), each with a `z` sibling for the
+  // interlocutory register ("zażalenie"). Second instance, so the paragraph
+  // above would put them outside this set — but they are published in full
+  // and cited as authority, which is what the prior is asking about. Their
+  // own procedural history is the district and regional registers (`C`, `K`,
+  // `U`, `GC`, `P`), which stay unlisted and so still fall through.
+  //
+  // The cost of listing them is the supreme-court decision that names the
+  // appellate judgment it is reviewing: on the registry tier that now reads
+  // as authority. The Polish recital cues below are what catch it one tier
+  // earlier, which is where a statement about the case belongs.
+  "aca",
+  "aka",
+  "aua",
+  "aga",
+  "apa",
+  "acz",
+  "akz",
+  "auz",
+  "agz",
+  "apz",
+  // Polish Supreme Administrative Court (NSA): the cassation registers of
+  // its three chambers (`OSK` general-administrative, `FSK` financial, `GSK`
+  // commercial), the resolution registers those chambers use to unify
+  // practice (`OPS`, `FPS`, `GPS`), and `ONP` for the legal questions
+  // referred to it.
+  //
+  // The regional administrative courts (WSA) are deliberately absent. Their
+  // mark is two tokens, a register and a seat ("I SA/Wa 123/20"), and the
+  // reader below stops at the slash: what it would key on is the bare `sa`,
+  // the seat dropped, which is no longer the WSA mark at all. A two-letter
+  // token keyed without the half that identifies it is what this set cannot
+  // carry, because a wrong entry promotes silently and in bulk. WSA belongs
+  // here once `registryOf` reads the slash form.
+  "osk",
+  "fsk",
+  "gsk",
+  "ops",
+  "fps",
+  "gps",
+  "onp",
   // Slovak Supreme Court. `cdo` is shared with the Czech Supreme Court and
   // is listed once, above.
   "sžo",
@@ -101,11 +144,18 @@ const AUTHORITY_REGISTRIES = new Set([
 /**
  * Phrases that mark the recitals: the appeal, the judgment under review,
  * the court below. Deliberately morphological stems rather than whole
- * words — Czech and Slovak inflect heavily, and matching stems keeps one
- * list working across cases.
+ * words — Czech, Slovak and Polish all inflect heavily, and matching stems
+ * keeps one list working across cases.
+ *
+ * The Polish pair is `zaskarżon` (the judgment "under appeal", in whatever
+ * case the sentence puts it) and `od\s+wyroku` (what an appeal or a
+ * cassation is brought *from*). `sygn. akt` is not here and should not be:
+ * it is the citation prefix itself and appears on authority and recital
+ * alike, so it would push every Polish citation with a spelled-out prefix
+ * onto this side of the tie.
  */
 const PROCEDURAL_CUE =
-  /napaden|proti\s+(?:rozsudk|usnesen)|odvol[áa]n|dovol[áa]n[íi]\s+(?:žalovan|žalobc)|soud[ue]?\s+prvn[íi]ho\s+stupn|prvostupňov|potvrdil|zrušil\s+a\s+vr[áa]til|vedl[ei]?\s+u\s+|pobočka\s+v|v\s+konan[íi]\s+veden[oe]m|veden[eé]j\s+\p{L}+\s+s[úu]dom\s+pod|postupom\s+(?:okresn|krajsk|najvyšš)|a\s+takto\s+rozhodol/iu;
+  /napaden|proti\s+(?:rozsudk|usnesen)|odvol[áa]n|dovol[áa]n[íi]\s+(?:žalovan|žalobc)|soud[ue]?\s+prvn[íi]ho\s+stupn|prvostupňov|potvrdil|zrušil\s+a\s+vr[áa]til|vedl[ei]?\s+u\s+|pobočka\s+v|v\s+konan[íi]\s+veden[oe]m|veden[eé]j\s+\p{L}+\s+s[úu]dom\s+pod|postupom\s+(?:okresn|krajsk|najvyšš)|a\s+takto\s+rozhodol|zaskarżon|od\s+wyroku/iu;
 
 /**
  * Phrases that mark an authority being invoked. `srov.` (compare) and
@@ -113,9 +163,16 @@ const PROCEDURAL_CUE =
  * Slovak spells its verbs with `š` (`konštatoval`), so the stems are listed
  * per language; a recital cue next to one of these is a tie, and the
  * registry decides.
+ *
+ * Polish contributes its own two pointing abbreviations (`por.`, `zob.`),
+ * the three ways it says "likewise" (`tak też`, `podobnie`, `zgodnie z`),
+ * the coordinate that introduces a cited holding (`w wyroku z dnia`,
+ * `w uchwale`), and the two stems the settled-case-law formula is built on
+ * (`ugruntowan`, `utrwalon` — "ugruntowane orzecznictwo", "utrwalona linia
+ * orzecznicza"), the counterpart of the `ustálen` already listed for Czech.
  */
 const PRECEDENT_CUE =
-  /srov\.|srovnej|viz\s|judikat|ust[áa]len|pr[áa]vn[íi]\s+n[áa]zor|dovodil|vyslovil|kon[sš]tatoval|st[áa]l[áa]\s+praxe|ve\s+sv[ée]m\s+rozhodnut|porov\.|pozri|obdobne|vo\s+svojom\s+rozhodnut|v\s+s[úu]lade\s+s/iu;
+  /srov\.|srovnej|viz\s|judikat|ust[áa]len|pr[áa]vn[íi]\s+n[áa]zor|dovodil|vyslovil|kon[sš]tatoval|st[áa]l[áa]\s+praxe|ve\s+sv[ée]m\s+rozhodnut|porov\.|pozri|obdobne|vo\s+svojom\s+rozhodnut|v\s+s[úu]lade\s+s|por\.|zob\.|tak\s+też|podobnie|zgodnie\s+z|w\s+wyroku\s+z\s+dnia|w\s+uchwale|ugruntowan|utrwalon/iu;
 
 /**
  * Drop the citation prefix so the registry token is first. Spelled out
