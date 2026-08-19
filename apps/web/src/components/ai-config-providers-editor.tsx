@@ -1,15 +1,15 @@
 import { PlusIcon, Trash2Icon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { Button } from "@stll/ui/components/button";
-import { Field, FieldDescription, FieldLabel } from "@stll/ui/components/field";
+import { Button } from "@stll/ui/button";
+import { Field, FieldDescription, FieldLabel } from "@stll/ui/field";
 import {
   Select,
   SelectItem,
   SelectPopup,
   SelectTrigger,
   SelectValue,
-} from "@stll/ui/components/select";
+} from "@stll/ui/select";
 
 import {
   createProviderCredentialDraft,

@@ -5,8 +5,8 @@ import { Prism, useTokenize } from "prism-react-renderer";
 import type { PrismTheme, Token } from "prism-react-renderer";
 import { useTranslations } from "use-intl";
 
-import { Button } from "@stll/ui/components/button";
-import { stellaToast } from "@stll/ui/components/toast";
+import { Button } from "@stll/ui/button";
+import { stellaToast } from "@stll/ui/toast";
 
 import { getAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";

@@ -3,7 +3,7 @@ import type { ColumnPinningState } from "@tanstack/react-table";
 import { PinIcon, PinOffIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { Button } from "@stll/ui/components/button";
+import { Button } from "@stll/ui/button";
 
 import type { TableColumn } from "@/components/workspaces/table/types";
 

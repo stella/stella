@@ -6,8 +6,8 @@ import { mergeProps } from "@base-ui/react/merge-props";
 import { useRender } from "@base-ui/react/use-render";
 import { ChevronRight, MoreHorizontal } from "lucide-react";
 
-import { DirectionalIcon } from "@stll/ui/components/directional-icon";
-import { cn } from "@stll/ui/lib/utils";
+import { cn } from "../lib/utils";
+import { DirectionalIcon } from "./directional-icon";
 
 const Breadcrumb = ({ ...props }: React.ComponentProps<"nav">) => (
   <nav aria-label="Breadcrumb" data-slot="breadcrumb" {...props} />

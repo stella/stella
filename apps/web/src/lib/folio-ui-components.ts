@@ -3,10 +3,10 @@ import { createElement } from "react";
 import { useTranslations } from "use-intl";
 
 import type { FolioUIComponents } from "@stll/folio-react";
-import { Button } from "@stll/ui/components/button";
-import { Checkbox } from "@stll/ui/components/checkbox";
-import { ColorPicker } from "@stll/ui/components/color-picker";
-import type { ColorPickerProps } from "@stll/ui/components/color-picker";
+import { Button } from "@stll/ui/button";
+import { Checkbox } from "@stll/ui/checkbox";
+import { ColorPicker } from "@stll/ui/color-picker";
+import type { ColorPickerProps } from "@stll/ui/color-picker";
 import {
   Dialog,
   DialogBackdrop,
@@ -14,8 +14,8 @@ import {
   DialogPopup,
   DialogPortal,
   DialogTitle,
-} from "@stll/ui/components/dialog";
-import { Input } from "@stll/ui/components/input";
+} from "@stll/ui/dialog";
+import { Input } from "@stll/ui/input";
 import {
   Menu,
   MenuCheckboxItem,
@@ -25,21 +25,21 @@ import {
   MenuPopup,
   MenuSeparator,
   MenuTrigger,
-} from "@stll/ui/components/menu";
-import { OutlineRail } from "@stll/ui/components/outline-rail";
+} from "@stll/ui/menu";
+import { OutlineRail } from "@stll/ui/outline-rail";
 import {
   Popover,
   PopoverClose,
   PopoverPopup,
   PopoverTrigger,
-} from "@stll/ui/components/popover";
+} from "@stll/ui/popover";
 import {
   Select,
   SelectItem,
   SelectPopup,
   SelectTrigger,
   SelectValue,
-} from "@stll/ui/components/select";
+} from "@stll/ui/select";
 
 import { DatePickerPopover } from "@/components/date-picker-popover";
 

@@ -20,7 +20,12 @@ import {
   unwrapExpression,
 } from "./utils.ts";
 
-const CANONICAL_CN_MODULE = "@stll/ui/lib/utils";
+// The grouped alias (@stll/ui/lib/utils) is deprecated but still resolves to
+// this module, so both spellings import the canonical `cn`.
+const CANONICAL_CN_MODULES: readonly string[] = [
+  "@stll/ui/utils",
+  "@stll/ui/lib/utils",
+];
 const CANONICAL_CN_EXPORT = "cn";
 
 const isIdentifierReference = (
@@ -247,7 +252,7 @@ export default eslintCompatPlugin({
         type: "problem",
         messages: {
           requireCanonicalCn:
-            "Compose dynamic className values with cn imported from @stll/ui/lib/utils.",
+            "Compose dynamic className values with cn imported from @stll/ui/utils.",
         },
       },
       createOnce(context) {
@@ -293,7 +298,7 @@ export default eslintCompatPlugin({
                 isAstNode(definition.parent) &&
                 definition.parent.type === "ImportDeclaration" &&
                 isAstNode(definition.parent.source) &&
-                definition.parent.source.value === CANONICAL_CN_MODULE,
+                CANONICAL_CN_MODULES.includes(definition.parent.source.value),
             ) ?? false
           );
         };

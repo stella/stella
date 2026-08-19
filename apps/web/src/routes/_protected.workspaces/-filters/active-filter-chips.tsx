@@ -2,7 +2,7 @@ import { XIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/shallow";
 
-import { cn } from "@stll/ui/lib/utils";
+import { cn } from "@stll/ui/utils";
 
 import { getFormattingLocale } from "@/i18n/i18n-store";
 import type { Workspace } from "@/lib/workspaces/types";

@@ -1,7 +1,7 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
-import { Skeleton } from "@stll/ui/components/skeleton";
+import { Skeleton } from "@stll/ui/skeleton";
 
 import { env } from "@/env";
 import { getAnalytics } from "@/lib/analytics/provider";

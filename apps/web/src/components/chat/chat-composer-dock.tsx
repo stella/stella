@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { MessageSquarePlusIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { Button } from "@stll/ui/components/button";
+import { Button } from "@stll/ui/button";
 
 import {
   ChatContextMeter,

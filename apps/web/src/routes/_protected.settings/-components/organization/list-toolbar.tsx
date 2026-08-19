@@ -10,7 +10,7 @@ import {
   InputGroup,
   InputGroupAddon,
   InputGroupInput,
-} from "@stll/ui/components/input-group";
+} from "@stll/ui/input-group";
 
 import { InviteMemberDialog } from "@/components/organization/invite-member-dialog";
 import { detached } from "@/lib/detached";

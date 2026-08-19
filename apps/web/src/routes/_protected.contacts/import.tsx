@@ -28,17 +28,17 @@ import {
   type ContactImportTaxIdScheme,
   type ContactType,
 } from "@stll/api-contract";
-import { BidiText } from "@stll/ui/components/bidi-text";
-import { Button } from "@stll/ui/components/button";
-import { Checkbox } from "@stll/ui/components/checkbox";
-import { DirectionalIcon } from "@stll/ui/components/directional-icon";
+import { BidiText } from "@stll/ui/bidi-text";
+import { Button } from "@stll/ui/button";
+import { Checkbox } from "@stll/ui/checkbox";
+import { DirectionalIcon } from "@stll/ui/directional-icon";
 import {
   Select,
   SelectItem,
   SelectPopup,
   SelectTrigger,
   SelectValue,
-} from "@stll/ui/components/select";
+} from "@stll/ui/select";
 import {
   Table,
   TableBody,
@@ -46,9 +46,9 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@stll/ui/components/table";
-import { stellaToast } from "@stll/ui/components/toast";
-import { cn } from "@stll/ui/lib/utils";
+} from "@stll/ui/table";
+import { stellaToast } from "@stll/ui/toast";
+import { cn } from "@stll/ui/utils";
 
 import { useExternalFileDrop } from "@/hooks/use-external-file-drop";
 import { useFormatter } from "@/i18n/formatting-context";

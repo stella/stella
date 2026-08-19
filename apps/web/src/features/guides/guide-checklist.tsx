@@ -1,7 +1,7 @@
 import { CheckIcon, ClockIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { Button } from "@stll/ui/components/button";
+import { Button } from "@stll/ui/button";
 
 import { GuideTourPreview } from "@/features/guides/guide-tour-preview";
 import {

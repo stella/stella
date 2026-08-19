@@ -3,7 +3,7 @@ import { useState } from "react";
 import { XIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { Input } from "@stll/ui/components/input";
+import { Input } from "@stll/ui/input";
 
 // Free-text tag input for file extensions. @stll/ui has no dedicated tag input;
 // this keeps the create-on-Enter + chip-remove behaviour local to the flow

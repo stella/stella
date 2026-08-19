@@ -6,7 +6,7 @@ import {
   ZapIcon,
 } from "lucide-react";
 
-import { PreviewPane } from "@stll/ui/components/preview-pane";
+import { PreviewPane } from "@stll/ui/preview-pane";
 
 import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
 import {

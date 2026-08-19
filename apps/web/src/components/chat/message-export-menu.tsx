@@ -4,22 +4,22 @@ import { Result } from "better-result";
 import { DownloadIcon, Loader2Icon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { Button } from "@stll/ui/components/button";
-import { Checkbox } from "@stll/ui/components/checkbox";
+import { Button } from "@stll/ui/button";
+import { Checkbox } from "@stll/ui/checkbox";
 import {
   Popover,
   PopoverPopup,
   PopoverTitle,
   PopoverTrigger,
-} from "@stll/ui/components/popover";
+} from "@stll/ui/popover";
 import {
   Select,
   SelectItem,
   SelectPopup,
   SelectTrigger,
   SelectValue,
-} from "@stll/ui/components/select";
-import { stellaToast } from "@stll/ui/components/toast";
+} from "@stll/ui/select";
+import { stellaToast } from "@stll/ui/toast";
 
 import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
 import { prepareCreateDocumentDraft } from "@/components/chat/create-document-draft-runtime";

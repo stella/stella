@@ -5,9 +5,9 @@ import type { ComponentProps, ReactNode } from "react";
 import { ArrowDownIcon, DownloadIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { Button } from "@stll/ui/components/button";
-import { ScrollArea } from "@stll/ui/components/scroll-area";
-import { cn } from "@stll/ui/lib/utils";
+import { Button } from "@stll/ui/button";
+import { ScrollArea } from "@stll/ui/scroll-area";
+import { cn } from "@stll/ui/utils";
 
 import {
   StickToBottomContext,

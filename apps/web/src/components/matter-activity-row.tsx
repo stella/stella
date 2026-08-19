@@ -1,6 +1,6 @@
 import type * as React from "react";
 
-import { cn } from "@stll/ui/lib/utils";
+import { cn } from "@stll/ui/utils";
 
 import { SidebarMenuSubButton } from "@/components/sidebar";
 

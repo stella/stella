@@ -8,8 +8,8 @@ import type {
   DocxEditorRef,
   EditorMode,
 } from "@stll/folio-react";
-import { Button } from "@stll/ui/components/button";
-import { Separator } from "@stll/ui/components/separator";
+import { Button } from "@stll/ui/button";
+import { Separator } from "@stll/ui/separator";
 
 const ZOOM_MIN = 0.25;
 const ZOOM_MAX = 2;

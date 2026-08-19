@@ -14,7 +14,7 @@ import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import type { DocxEditorRef, FolioAIEditApplyMode } from "@stll/folio-react";
-import { stellaToast } from "@stll/ui/components/toast";
+import { stellaToast } from "@stll/ui/toast";
 
 import type { DocxResolveResult } from "@/components/ai-suggestions/docx-suggestion-persistence";
 import {

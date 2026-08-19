@@ -11,8 +11,8 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { Button } from "@stll/ui/components/button";
-import { cn } from "@stll/ui/lib/utils";
+import { Button } from "@stll/ui/button";
+import { cn } from "@stll/ui/utils";
 
 import { useReviewStore } from "@/components/ai-suggestions/review-store";
 import { AuthorNameRequiredDialog } from "@/components/chat/author-name-required-dialog";

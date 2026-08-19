@@ -11,7 +11,7 @@ import { createAuthClient } from "better-auth/react";
 import { Result } from "better-result";
 
 import { ac, roles } from "@stll/permissions";
-import { stellaToast } from "@stll/ui/components/toast";
+import { stellaToast } from "@stll/ui/toast";
 
 import {
   discardBootPrefetch,

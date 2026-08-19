@@ -9,7 +9,7 @@ import {
   DialogPanel,
   DialogPopup,
   DialogTitle,
-} from "@stll/ui/components/dialog";
+} from "@stll/ui/dialog";
 
 import { OTPPanel } from "@/components/auth/otp-panel";
 import { SignInPanel } from "@/components/auth/sign-in-panel";

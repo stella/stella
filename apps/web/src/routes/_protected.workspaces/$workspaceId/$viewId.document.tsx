@@ -28,7 +28,7 @@ import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
 import type { DocxEditorRef } from "@stll/folio-react";
-import { Button } from "@stll/ui/components/button";
+import { Button } from "@stll/ui/button";
 import {
   Dialog,
   DialogClose,
@@ -37,10 +37,10 @@ import {
   DialogHeader,
   DialogPopup,
   DialogTitle,
-} from "@stll/ui/components/dialog";
-import { stellaToast } from "@stll/ui/components/toast";
+} from "@stll/ui/dialog";
+import { stellaToast } from "@stll/ui/toast";
 import "@stll/folio-react/editor.css";
-import { cn, composeRefs } from "@stll/ui/lib/utils";
+import { cn, composeRefs } from "@stll/ui/utils";
 
 import { openEntityInInspector } from "@/components/chat/entity-open";
 import {

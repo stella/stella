@@ -1,6 +1,6 @@
 import type { ComponentProps } from "react";
 
-import { cn } from "@stll/ui/lib/utils";
+import { cn } from "@stll/ui/utils";
 
 import { MessageResponse } from "@/components/ai-elements/message";
 import type { MessageResponseProps } from "@/components/ai-elements/message-response";

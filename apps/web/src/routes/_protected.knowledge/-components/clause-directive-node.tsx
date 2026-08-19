@@ -2,7 +2,7 @@ import { NodeViewWrapper } from "@tiptap/react";
 import type { NodeViewProps } from "@tiptap/react";
 
 import { isBlockDirectiveKind } from "@stll/template-conditions";
-import { cn } from "@stll/ui/lib/utils";
+import { cn } from "@stll/ui/utils";
 
 import { CONDITIONAL_KINDS } from "@/routes/_protected.knowledge/-components/directive-kinds";
 import { DirectiveLabel } from "@/routes/_protected.knowledge/-components/paragraph-rendering";

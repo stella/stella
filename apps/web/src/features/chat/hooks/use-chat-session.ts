@@ -20,7 +20,7 @@ import {
   RESOURCE_TYPE,
   toChatResourceHref,
 } from "@stll/api-contract";
-import { stellaToast } from "@stll/ui/components/toast";
+import { stellaToast } from "@stll/ui/toast";
 
 import { useReviewStore } from "@/components/ai-suggestions/review-store";
 import { AnonymizedSpan } from "@/components/chat/anonymized-span";

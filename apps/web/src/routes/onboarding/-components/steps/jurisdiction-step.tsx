@@ -4,9 +4,9 @@ import createGlobe from "cobe";
 import { XIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { Button } from "@stll/ui/components/button";
-import { Form } from "@stll/ui/components/form";
-import { cn } from "@stll/ui/lib/utils";
+import { Button } from "@stll/ui/button";
+import { Form } from "@stll/ui/form";
+import { cn } from "@stll/ui/utils";
 
 import { JurisdictionPicker } from "@/components/jurisdiction-picker";
 import Tooltip from "@/components/tooltip";
@@ -133,7 +133,7 @@ type GlobeTheme = {
 const SPHERE_MID_GRAY: RGB = [0.5, 0.5, 0.5];
 
 // Stella brand blue from the favicon (#59a1d4). Not yet a design token;
-// inline here until we formalise --brand-blue in globals.css.
+// inline here until we formalise --brand-blue in the design-system theme.
 const STELLA_BRAND_BLUE: RGB = [0x59 / 255, 0xa1 / 255, 0xd4 / 255];
 
 const readGlobeTheme = (): GlobeTheme => {

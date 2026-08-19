@@ -6,7 +6,7 @@ import { useTranslations } from "use-intl";
 
 import type { ConditionNode } from "@stll/conditions";
 import { pruneIncomplete } from "@stll/conditions";
-import { Button } from "@stll/ui/components/button";
+import { Button } from "@stll/ui/button";
 import {
   Dialog,
   DialogHeader,
@@ -14,9 +14,9 @@ import {
   DialogPopup,
   DialogTitle,
   DialogTrigger,
-} from "@stll/ui/components/dialog";
-import { ScrollArea } from "@stll/ui/components/scroll-area";
-import { Separator } from "@stll/ui/components/separator";
+} from "@stll/ui/dialog";
+import { ScrollArea } from "@stll/ui/scroll-area";
+import { Separator } from "@stll/ui/separator";
 
 import { ConditionBuilder } from "@/components/conditions/condition-builder";
 import type { FieldOption } from "@/components/conditions/condition-builder-logic";

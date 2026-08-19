@@ -1,4 +1,4 @@
-import { stellaToast } from "@stll/ui/components/toast";
+import { stellaToast } from "@stll/ui/toast";
 
 import { isPublicLawPreviewEnabled } from "@/hooks/use-public-law-preview";
 import { getTranslator } from "@/i18n/i18n-store";

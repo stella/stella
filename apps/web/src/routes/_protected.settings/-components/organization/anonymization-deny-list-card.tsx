@@ -7,7 +7,7 @@ import { Trash2, UploadIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { DEFAULT_CHAT_ANON_ENTITY_LABELS } from "@stll/anonymize-chat";
-import { Button } from "@stll/ui/components/button";
+import { Button } from "@stll/ui/button";
 import {
   Combobox,
   ComboboxEmpty,
@@ -15,10 +15,10 @@ import {
   ComboboxItem,
   ComboboxList,
   ComboboxPopup,
-} from "@stll/ui/components/combobox";
-import { Frame, FramePanel } from "@stll/ui/components/frame";
-import { Input } from "@stll/ui/components/input";
-import { stellaToast } from "@stll/ui/components/toast";
+} from "@stll/ui/combobox";
+import { Frame, FramePanel } from "@stll/ui/frame";
+import { Input } from "@stll/ui/input";
+import { stellaToast } from "@stll/ui/toast";
 
 import type { TranslationKey } from "@/i18n/types";
 import { getAnalytics } from "@/lib/analytics/provider";

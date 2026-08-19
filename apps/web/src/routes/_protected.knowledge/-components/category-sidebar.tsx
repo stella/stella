@@ -17,8 +17,8 @@ import {
   AlertDialogHeader,
   AlertDialogPopup,
   AlertDialogTitle,
-} from "@stll/ui/components/alert-dialog";
-import { Button } from "@stll/ui/components/button";
+} from "@stll/ui/alert-dialog";
+import { Button } from "@stll/ui/button";
 import {
   Dialog,
   DialogClose,
@@ -27,15 +27,15 @@ import {
   DialogPanel,
   DialogPopup,
   DialogTitle,
-} from "@stll/ui/components/dialog";
-import { Input } from "@stll/ui/components/input";
+} from "@stll/ui/dialog";
+import { Input } from "@stll/ui/input";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@stll/ui/components/menu";
-import { cn } from "@stll/ui/lib/utils";
+} from "@stll/ui/menu";
+import { cn } from "@stll/ui/utils";
 
 import { ContextMenu } from "@/components/context-menu";
 import type { ContextMenuAction } from "@/components/context-menu";

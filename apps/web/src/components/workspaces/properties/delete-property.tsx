@@ -10,9 +10,9 @@ import {
   AlertDialogPopup,
   AlertDialogTitle,
   AlertDialogTrigger,
-} from "@stll/ui/components/alert-dialog";
-import { Button } from "@stll/ui/components/button";
-import { stellaToast } from "@stll/ui/components/toast";
+} from "@stll/ui/alert-dialog";
+import { Button } from "@stll/ui/button";
+import { stellaToast } from "@stll/ui/toast";
 
 import type { WorkspaceProperty } from "@/lib/types";
 import { useDeleteProperty } from "@/lib/workspaces/mutations/properties";

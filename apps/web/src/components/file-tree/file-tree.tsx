@@ -2,9 +2,9 @@ import type { ReactNode } from "react";
 
 import { ChevronRightIcon } from "lucide-react";
 
-import { BidiText } from "@stll/ui/components/bidi-text";
-import { DirectionalIcon } from "@stll/ui/components/directional-icon";
-import { cn } from "@stll/ui/lib/utils";
+import { BidiText } from "@stll/ui/bidi-text";
+import { DirectionalIcon } from "@stll/ui/directional-icon";
+import { cn } from "@stll/ui/utils";
 
 import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
 

@@ -10,7 +10,7 @@ import { panic } from "better-result";
 import { renderSVG } from "uqr";
 import { useTranslations } from "use-intl";
 
-import { Button } from "@stll/ui/components/button";
+import { Button } from "@stll/ui/button";
 import {
   Dialog,
   DialogClose,
@@ -19,21 +19,17 @@ import {
   DialogHeader,
   DialogPopup,
   DialogTitle,
-} from "@stll/ui/components/dialog";
+} from "@stll/ui/dialog";
 import {
   Frame,
   FrameDescription,
   FrameHeader,
   FramePanel,
   FrameTitle,
-} from "@stll/ui/components/frame";
-import {
-  InputOTP,
-  InputOTPGroup,
-  InputOTPSlot,
-} from "@stll/ui/components/input-otp";
-import { stellaToast } from "@stll/ui/components/toast";
-import { cn } from "@stll/ui/lib/utils";
+} from "@stll/ui/frame";
+import { InputOTP, InputOTPGroup, InputOTPSlot } from "@stll/ui/input-otp";
+import { stellaToast } from "@stll/ui/toast";
+import { cn } from "@stll/ui/utils";
 
 import { SecretInput } from "@/components/secret-input";
 import { getAnalytics, useAnalytics } from "@/lib/analytics/provider";

@@ -3,9 +3,9 @@ import { useNavigate } from "@tanstack/react-router";
 import { XIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { Button } from "@stll/ui/components/button";
-import { stellaToast } from "@stll/ui/components/toast";
-import { cn } from "@stll/ui/lib/utils";
+import { Button } from "@stll/ui/button";
+import { stellaToast } from "@stll/ui/toast";
+import { cn } from "@stll/ui/utils";
 
 import { CatalogueEntryIcon } from "@/components/catalogue/catalogue-entry-icon";
 import type { ActiveSkillChatContext } from "@/components/inspector/inspector-active-skill";

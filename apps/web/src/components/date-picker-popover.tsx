@@ -1,7 +1,7 @@
 import { useTranslations } from "use-intl";
 
-import { DatePickerPopover as UIDatePickerPopover } from "@stll/ui/components/date-picker-popover";
-import type { DatePickerPopoverProps } from "@stll/ui/components/date-picker-popover";
+import { DatePickerPopover as UIDatePickerPopover } from "@stll/ui/date-picker-popover";
+import type { DatePickerPopoverProps } from "@stll/ui/date-picker-popover";
 
 import { useLocale } from "@/i18n/formatting-context";
 

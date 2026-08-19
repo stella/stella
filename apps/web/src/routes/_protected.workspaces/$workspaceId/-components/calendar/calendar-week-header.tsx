@@ -1,4 +1,4 @@
-import { cn } from "@stll/ui/lib/utils";
+import { cn } from "@stll/ui/utils";
 
 type CalendarWeekHeaderProps = {
   weekdayLabels: string[];

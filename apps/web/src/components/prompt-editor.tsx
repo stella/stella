@@ -4,7 +4,7 @@ import type React from "react";
 import { EditorContent } from "@tiptap/react";
 import type { Editor } from "@tiptap/react";
 
-import { cn } from "@stll/ui/lib/utils";
+import { cn } from "@stll/ui/utils";
 
 export const PROMPT_EDITOR_SELECTION_CLASS = "prompt-editor-selection";
 

@@ -6,13 +6,13 @@ import { FileIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { DAY_IN_MS } from "@stll/time";
-import { BidiText } from "@stll/ui/components/bidi-text";
+import { BidiText } from "@stll/ui/bidi-text";
 import {
   PreviewCard,
   PreviewCardPopup,
   PreviewCardTrigger,
-} from "@stll/ui/components/preview-card";
-import { cn } from "@stll/ui/lib/utils";
+} from "@stll/ui/preview-card";
+import { cn } from "@stll/ui/utils";
 
 import { DocumentIcon } from "@/components/document-icon";
 import { InlineEdit } from "@/components/inline-edit";

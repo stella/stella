@@ -6,7 +6,7 @@ import {
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
-import { stellaToast } from "@stll/ui/components/toast";
+import { stellaToast } from "@stll/ui/toast";
 
 import { useStartWorkflow } from "@/components/workspaces/hooks/use-start-workflow";
 import { MAX_PARALLEL_FILE_UPLOADS } from "@/consts";

@@ -6,10 +6,10 @@ import type * as React from "react";
 import { Popover as PopoverPrimitive } from "@base-ui/react/popover";
 import { CheckIcon, ChevronDownIcon } from "lucide-react";
 
-import { cn } from "@stll/ui/lib/utils";
+import { cn } from "../lib/utils";
 
 const HexColorPicker = lazy(async () => {
-  const m = await import("@stll/ui/components/hex-color-picker");
+  const m = await import("./hex-color-picker");
   return { default: m.HexColorPicker };
 });
 

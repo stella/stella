@@ -4,12 +4,12 @@ import type * as React from "react";
 
 import { AlertDialog as AlertDialogPrimitive } from "@base-ui/react/alert-dialog";
 
-import { renderTooltipTrigger } from "@stll/ui/components/tooltip-trigger-helper";
 import {
   OVERLAY_LAYER_CLASS_NAMES,
   type OverlayLayer,
-} from "@stll/ui/lib/overlay-layer";
-import { cn } from "@stll/ui/lib/utils";
+} from "../lib/overlay-layer";
+import { cn } from "../lib/utils";
+import { renderTooltipTrigger } from "./tooltip-trigger-helper";
 
 const AlertDialogCreateHandle = AlertDialogPrimitive.createHandle;
 

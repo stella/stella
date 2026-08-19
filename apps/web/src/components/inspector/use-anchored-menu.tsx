@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { MouseEvent, ReactNode } from "react";
 
-import { Menu, MenuPopup, MenuTrigger } from "@stll/ui/components/menu";
+import { Menu, MenuPopup, MenuTrigger } from "@stll/ui/menu";
 
 type AnchorRect = {
   getBoundingClientRect: () => DOMRect;

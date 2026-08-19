@@ -1,7 +1,4 @@
-import {
-  BreadcrumbItem,
-  BreadcrumbSeparator,
-} from "@stll/ui/components/breadcrumb";
+import { BreadcrumbItem, BreadcrumbSeparator } from "@stll/ui/breadcrumb";
 
 import type { OpenDetail } from "@/components/breadcrumbs/detail-nav-store";
 import { BreadcrumbLink } from "@/components/breadcrumbs/shared";

@@ -27,8 +27,8 @@ import type {
 import { displayLanguageName } from "@stll/locales";
 import type { DeterministicFieldConfig } from "@stll/template-conditions";
 import { renderDeterministicFieldValue } from "@stll/template-conditions";
-import { Button } from "@stll/ui/components/button";
-import { Label } from "@stll/ui/components/label";
+import { Button } from "@stll/ui/button";
+import { Label } from "@stll/ui/label";
 import {
   Menu,
   MenuItem,
@@ -38,16 +38,12 @@ import {
   MenuSubPopup,
   MenuSubTrigger,
   MenuTrigger,
-} from "@stll/ui/components/menu";
-import {
-  Popover,
-  PopoverPopup,
-  PopoverTrigger,
-} from "@stll/ui/components/popover";
-import { ScrollArea } from "@stll/ui/components/scroll-area";
-import { Textarea } from "@stll/ui/components/textarea";
-import { stellaToast } from "@stll/ui/components/toast";
-import { cn } from "@stll/ui/lib/utils";
+} from "@stll/ui/menu";
+import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
+import { ScrollArea } from "@stll/ui/scroll-area";
+import { Textarea } from "@stll/ui/textarea";
+import { stellaToast } from "@stll/ui/toast";
+import { cn } from "@stll/ui/utils";
 
 import { FacetBar } from "@/components/inspector/inspector-facet-bar";
 import { InspectorTabHeader } from "@/components/inspector/inspector-tab-header";

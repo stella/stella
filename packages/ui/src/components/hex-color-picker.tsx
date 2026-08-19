@@ -18,8 +18,8 @@
 import type * as React from "react";
 import { useEffect, useRef, useState } from "react";
 
-import { containedHandler } from "@stll/ui/hooks/use-contained-handler";
-import { cn } from "@stll/ui/lib/utils";
+import { containedHandler } from "../hooks/use-contained-handler";
+import { cn } from "../lib/utils";
 
 // ---------------------------------------------------------------------------
 // Types

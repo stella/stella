@@ -5,12 +5,12 @@ import type { ComponentProps } from "react";
 
 import { Popover as PopoverPrimitive } from "@base-ui/react/popover";
 
-import { renderTooltipTrigger } from "@stll/ui/components/tooltip-trigger-helper";
 import {
   OVERLAY_LAYER_CLASS_NAMES,
   type OverlayLayer,
-} from "@stll/ui/lib/overlay-layer";
-import { cn } from "@stll/ui/lib/utils";
+} from "../lib/overlay-layer";
+import { cn } from "../lib/utils";
+import { renderTooltipTrigger } from "./tooltip-trigger-helper";
 
 const PopoverCreateHandle = PopoverPrimitive.createHandle;
 

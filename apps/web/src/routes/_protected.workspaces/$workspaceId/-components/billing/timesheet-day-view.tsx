@@ -6,10 +6,10 @@ import { PlusIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { prorateHourlyCents } from "@stll/money";
-import { Button } from "@stll/ui/components/button";
-import { Checkbox } from "@stll/ui/components/checkbox";
-import { Dialog, DialogPopup } from "@stll/ui/components/dialog";
-import { stellaToast } from "@stll/ui/components/toast";
+import { Button } from "@stll/ui/button";
+import { Checkbox } from "@stll/ui/checkbox";
+import { Dialog, DialogPopup } from "@stll/ui/dialog";
+import { stellaToast } from "@stll/ui/toast";
 
 import { timeEntriesOptions } from "@/lib/workspaces/queries/time-entries";
 import { BatchActionBar } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/batch-action-bar";

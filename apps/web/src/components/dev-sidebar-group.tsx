@@ -18,8 +18,8 @@ import {
   MenuSub,
   MenuSubPopup,
   MenuSubTrigger,
-} from "@stll/ui/components/menu";
-import { stellaToast } from "@stll/ui/components/toast";
+} from "@stll/ui/menu";
+import { stellaToast } from "@stll/ui/toast";
 
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";

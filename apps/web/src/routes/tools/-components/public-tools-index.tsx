@@ -20,15 +20,15 @@ import {
 import { useTranslations } from "use-intl";
 
 import type { LoadedCatalogueEntry } from "@stll/catalogue";
-import { BidiText } from "@stll/ui/components/bidi-text";
-import { Button } from "@stll/ui/components/button";
-import { DirectionalIcon } from "@stll/ui/components/directional-icon";
+import { BidiText } from "@stll/ui/bidi-text";
+import { Button } from "@stll/ui/button";
+import { DirectionalIcon } from "@stll/ui/directional-icon";
 import {
   InputGroup,
   InputGroupAddon,
   InputGroupInput,
-} from "@stll/ui/components/input-group";
-import { cn } from "@stll/ui/lib/utils";
+} from "@stll/ui/input-group";
+import { cn } from "@stll/ui/utils";
 
 import Tooltip from "@/components/tooltip";
 import type { TranslationKey } from "@/i18n/types";

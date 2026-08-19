@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { MenuItem, MenuSeparator } from "@stll/ui/components/menu";
+import { MenuItem, MenuSeparator } from "@stll/ui/menu";
 
 import { requestInspectorRename } from "@/components/inspector/inspector-actions";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";

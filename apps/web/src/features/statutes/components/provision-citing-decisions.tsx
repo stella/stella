@@ -4,14 +4,10 @@ import { useInfiniteQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
-import { BidiText } from "@stll/ui/components/bidi-text";
-import { Button } from "@stll/ui/components/button";
-import {
-  Popover,
-  PopoverPanel,
-  PopoverTrigger,
-} from "@stll/ui/components/popover";
-import { Skeleton } from "@stll/ui/components/skeleton";
+import { BidiText } from "@stll/ui/bidi-text";
+import { Button } from "@stll/ui/button";
+import { Popover, PopoverPanel, PopoverTrigger } from "@stll/ui/popover";
+import { Skeleton } from "@stll/ui/skeleton";
 
 import { citingDecisionsInfiniteOptions } from "@/features/statutes/queries/citing-decisions";
 import { formatValidityDate } from "@/features/statutes/statute-format";

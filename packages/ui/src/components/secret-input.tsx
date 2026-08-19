@@ -4,10 +4,10 @@ import { useState } from "react";
 
 import { EyeIcon, EyeOffIcon } from "lucide-react";
 
-import { Button } from "@stll/ui/components/button";
-import { Input } from "@stll/ui/components/input";
-import type { InputProps } from "@stll/ui/components/input";
-import { cn } from "@stll/ui/lib/utils";
+import { cn } from "../lib/utils";
+import { Button } from "./button";
+import { Input } from "./input";
+import type { InputProps } from "./input";
 
 type SecretInputProps = Omit<InputProps, "type"> & {
   hideValueLabel: string;

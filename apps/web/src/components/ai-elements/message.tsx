@@ -6,7 +6,7 @@ import type { HTMLAttributes, ReactNode } from "react";
 import type { UIMessage } from "@tanstack/ai-client";
 import { WandSparklesIcon } from "lucide-react";
 
-import { cn } from "@stll/ui/lib/utils";
+import { cn } from "@stll/ui/utils";
 
 import type { MessageResponseProps } from "@/components/ai-elements/message-response";
 import { SKILL_REF_HASH_PREFIX } from "@/components/chat/streamdown-mention-link";

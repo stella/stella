@@ -7,10 +7,10 @@ import {
   ColorPicker,
   ColorPickerContent,
   DEFAULT_PRESETS,
-} from "@stll/ui/components/color-picker";
-import { Popover, PopoverPopup } from "@stll/ui/components/popover";
-import { stellaToast } from "@stll/ui/components/toast";
-import { cn } from "@stll/ui/lib/utils";
+} from "@stll/ui/color-picker";
+import { Popover, PopoverPopup } from "@stll/ui/popover";
+import { stellaToast } from "@stll/ui/toast";
+import { cn } from "@stll/ui/utils";
 
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import {

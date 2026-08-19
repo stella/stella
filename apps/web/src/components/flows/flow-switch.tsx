@@ -1,4 +1,4 @@
-import { cn } from "@stll/ui/lib/utils";
+import { cn } from "@stll/ui/utils";
 
 // A minimal accessible switch. @stll/ui has no toggle primitive yet, so this
 // is a self-contained `role="switch"` button using semantic tokens. Keep it

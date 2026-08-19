@@ -9,15 +9,15 @@ import {
 import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 
-import { Button } from "@stll/ui/components/button";
-import { InputGroup, InputGroupInput } from "@stll/ui/components/input-group";
+import { Button } from "@stll/ui/button";
+import { InputGroup, InputGroupInput } from "@stll/ui/input-group";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@stll/ui/components/menu";
-import { stellaToast } from "@stll/ui/components/toast";
+} from "@stll/ui/menu";
+import { stellaToast } from "@stll/ui/toast";
 
 import {
   ResponsiveActionToolbar,

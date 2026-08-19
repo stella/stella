@@ -1,13 +1,13 @@
 import { useTranslations } from "use-intl";
 
-import { Button } from "@stll/ui/components/button";
+import { Button } from "@stll/ui/button";
 import {
   Popover,
   PopoverPopup,
   PopoverTitle,
   PopoverTrigger,
-} from "@stll/ui/components/popover";
-import { cn } from "@stll/ui/lib/utils";
+} from "@stll/ui/popover";
+import { cn } from "@stll/ui/utils";
 
 import { useFormatter } from "@/i18n/formatting-context";
 

@@ -4,8 +4,8 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { Tabs as TabsPrimitive } from "@base-ui/react/tabs";
 
-import { hasTabOrderChanged } from "@stll/ui/lib/tab-order";
-import { cn, composeRefs } from "@stll/ui/lib/utils";
+import { hasTabOrderChanged } from "../lib/tab-order";
+import { cn, composeRefs } from "../lib/utils";
 
 type TabsVariant = "default" | "underline";
 

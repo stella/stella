@@ -7,7 +7,7 @@
 // Lines without a disable directive must continue to pass — they cover
 // the allow-list (non-date input types, DatePickerPopover usage, etc.).
 
-import { Input } from "@stll/ui/components/input";
+import { Input } from "@stll/ui/input";
 
 const _nativeDate = () => (
   // oxlint-disable-next-line no-raw-date-input/no-raw-date-input

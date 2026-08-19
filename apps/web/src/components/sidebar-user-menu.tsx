@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { BidiText } from "@stll/ui/components/bidi-text";
+import { BidiText } from "@stll/ui/bidi-text";
 import {
   Menu,
   MenuGroup,
@@ -26,9 +26,9 @@ import {
   MenuSubPopup,
   MenuSubTrigger,
   MenuTrigger,
-} from "@stll/ui/components/menu";
-import { stellaToast } from "@stll/ui/components/toast";
-import { cn } from "@stll/ui/lib/utils";
+} from "@stll/ui/menu";
+import { stellaToast } from "@stll/ui/toast";
+import { cn } from "@stll/ui/utils";
 
 import { DevSidebarGroup } from "@/components/dev-sidebar-group";
 import { SidebarMenuItem, useSidebar } from "@/components/sidebar";

@@ -22,20 +22,20 @@ import {
   AlertDialogHeader,
   AlertDialogPopup,
   AlertDialogTitle,
-} from "@stll/ui/components/alert-dialog";
-import { BidiText } from "@stll/ui/components/bidi-text";
-import { Button } from "@stll/ui/components/button";
+} from "@stll/ui/alert-dialog";
+import { BidiText } from "@stll/ui/bidi-text";
+import { Button } from "@stll/ui/button";
 import {
   Dialog,
   DialogFooter,
   DialogHeader,
   DialogPopup,
   DialogTitle,
-} from "@stll/ui/components/dialog";
-import { Input } from "@stll/ui/components/input";
-import { stellaToast } from "@stll/ui/components/toast";
-import { contentDir } from "@stll/ui/hooks/use-content-dir";
-import type { OverlayLayer } from "@stll/ui/lib/overlay-layer";
+} from "@stll/ui/dialog";
+import { Input } from "@stll/ui/input";
+import type { OverlayLayer } from "@stll/ui/overlay-layer";
+import { stellaToast } from "@stll/ui/toast";
+import { contentDir } from "@stll/ui/use-content-dir";
 
 import {
   canSaveSearch,

@@ -1,4 +1,4 @@
-import { getFirstWeekday, getWeekendDays } from "@stll/ui/lib/week";
+import { getFirstWeekday, getWeekendDays } from "@stll/ui/week";
 
 export { getFirstWeekday, getWeekendDays };
 

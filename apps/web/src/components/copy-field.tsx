@@ -1,13 +1,13 @@
 import { CopyIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { Button } from "@stll/ui/components/button";
+import { Button } from "@stll/ui/button";
 import {
   InputGroup,
   InputGroupAddon,
   InputGroupInput,
-} from "@stll/ui/components/input-group";
-import { stellaToast } from "@stll/ui/components/toast";
+} from "@stll/ui/input-group";
+import { stellaToast } from "@stll/ui/toast";
 
 import { getAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";

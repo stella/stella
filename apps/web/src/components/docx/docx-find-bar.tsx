@@ -3,8 +3,8 @@ import { useRef } from "react";
 import { SearchIcon, XIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { Button } from "@stll/ui/components/button";
-import { Input } from "@stll/ui/components/input";
+import { Button } from "@stll/ui/button";
+import { Input } from "@stll/ui/input";
 
 import { SearchMatchControls } from "@/components/search-match-controls";
 import { useExternalSyncEffect } from "@/hooks/use-effect";

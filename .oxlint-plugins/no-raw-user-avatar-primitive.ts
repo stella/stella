@@ -17,7 +17,12 @@ import {
   isStringLiteral,
 } from "./utils.ts";
 
-const AVATAR_MODULE = "@stll/ui/components/avatar";
+// The grouped alias (@stll/ui/components/avatar) is deprecated but still
+// resolves to this module, so both spellings are the primitive.
+const AVATAR_MODULES: readonly string[] = [
+  "@stll/ui/avatar",
+  "@stll/ui/components/avatar",
+];
 const ALLOWED_FILES = [
   "apps/web/src/components/user-avatar.tsx",
   "apps/web/src/components/public-workspace-shell.tsx",
@@ -55,7 +60,7 @@ export default eslintCompatPlugin({
             const source = node.source;
             if (
               !isStringLiteral(source) ||
-              source.value !== AVATAR_MODULE ||
+              !AVATAR_MODULES.includes(source.value) ||
               !Array.isArray(node.specifiers)
             ) {
               return;

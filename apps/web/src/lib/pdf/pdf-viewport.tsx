@@ -7,10 +7,10 @@ import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/react/shallow";
 
-import { Button } from "@stll/ui/components/button";
-import { Field, FieldError, FieldLabel } from "@stll/ui/components/field";
-import { ScrollArea } from "@stll/ui/components/scroll-area";
-import { composeRefs } from "@stll/ui/lib/utils";
+import { Button } from "@stll/ui/button";
+import { Field, FieldError, FieldLabel } from "@stll/ui/field";
+import { ScrollArea } from "@stll/ui/scroll-area";
+import { composeRefs } from "@stll/ui/utils";
 
 import { SecretInput } from "@/components/secret-input";
 import { useTheme } from "@/components/theme-provider";

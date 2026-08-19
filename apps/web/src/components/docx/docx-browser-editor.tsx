@@ -36,16 +36,16 @@ import type {
   DocxEditorRef,
   EditorMode,
 } from "@stll/folio-react";
-import { Button } from "@stll/ui/components/button";
+import { Button } from "@stll/ui/button";
 import {
   Select as StSelect,
   SelectItem as StSelectItem,
   SelectPopup as StSelectPopup,
   SelectTrigger as StSelectTrigger,
   SelectValue as StSelectValue,
-} from "@stll/ui/components/select";
-import { stellaToast } from "@stll/ui/components/toast";
-import { composeRefs } from "@stll/ui/lib/utils";
+} from "@stll/ui/select";
+import { stellaToast } from "@stll/ui/toast";
+import { composeRefs } from "@stll/ui/utils";
 
 import { useActiveDocxStore } from "@/components/ai-suggestions/active-docx-store";
 import type { ActiveDocxRegistrationToken } from "@/components/ai-suggestions/active-docx-store";

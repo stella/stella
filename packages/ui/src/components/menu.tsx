@@ -5,10 +5,10 @@ import type * as React from "react";
 import { Menu as MenuPrimitive } from "@base-ui/react/menu";
 import { ChevronRightIcon } from "lucide-react";
 
-import { DirectionalIcon } from "@stll/ui/components/directional-icon";
-import { renderTooltipTrigger } from "@stll/ui/components/tooltip-trigger-helper";
-import { OVERLAY_LAYER_CLASS_NAMES } from "@stll/ui/lib/overlay-layer";
-import { cn } from "@stll/ui/lib/utils";
+import { OVERLAY_LAYER_CLASS_NAMES } from "../lib/overlay-layer";
+import { cn } from "../lib/utils";
+import { DirectionalIcon } from "./directional-icon";
+import { renderTooltipTrigger } from "./tooltip-trigger-helper";
 
 const MenuCreateHandle = MenuPrimitive.createHandle;
 

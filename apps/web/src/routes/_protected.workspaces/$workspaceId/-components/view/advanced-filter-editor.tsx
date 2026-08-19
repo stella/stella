@@ -1,7 +1,7 @@
 import { useTranslations } from "use-intl";
 
 import type { GroupNode } from "@stll/conditions";
-import { Button } from "@stll/ui/components/button";
+import { Button } from "@stll/ui/button";
 
 import { ConditionBuilder } from "@/components/conditions/condition-builder";
 import type { FieldOption } from "@/components/conditions/condition-builder-logic";

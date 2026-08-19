@@ -5,14 +5,11 @@ import { Link, useMatch } from "@tanstack/react-router";
 import type { ResolveParams } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
-import { BidiText } from "@stll/ui/components/bidi-text";
-import {
-  BreadcrumbItem,
-  BreadcrumbSeparator,
-} from "@stll/ui/components/breadcrumb";
-import { Input } from "@stll/ui/components/input";
-import { stellaToast } from "@stll/ui/components/toast";
-import { cn } from "@stll/ui/lib/utils";
+import { BidiText } from "@stll/ui/bidi-text";
+import { BreadcrumbItem, BreadcrumbSeparator } from "@stll/ui/breadcrumb";
+import { Input } from "@stll/ui/input";
+import { stellaToast } from "@stll/ui/toast";
+import { cn } from "@stll/ui/utils";
 
 import { BreadcrumbLink } from "@/components/breadcrumbs/shared";
 import { MatterIcon } from "@/components/matter-icon";

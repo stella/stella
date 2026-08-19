@@ -11,10 +11,10 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { Button } from "@stll/ui/components/button";
-import { Popover, PopoverPopup } from "@stll/ui/components/popover";
-import { Separator } from "@stll/ui/components/separator";
-import { stellaToast } from "@stll/ui/components/toast";
+import { Button } from "@stll/ui/button";
+import { Popover, PopoverPopup } from "@stll/ui/popover";
+import { Separator } from "@stll/ui/separator";
+import { stellaToast } from "@stll/ui/toast";
 
 import { CreateProperty } from "@/components/workspaces/create-property";
 import { useStartWorkflow } from "@/components/workspaces/hooks/use-start-workflow";

@@ -17,18 +17,14 @@ import type { ConditionNode, GroupNode, Operand } from "@stll/conditions";
 import { conditionHasFormula, conditionNodeSchema } from "@stll/conditions";
 import type { DirectiveRange } from "@stll/folio-react";
 import { serializeCondition } from "@stll/template-conditions";
-import { Button } from "@stll/ui/components/button";
-import { DirectionalIcon } from "@stll/ui/components/directional-icon";
-import { Input } from "@stll/ui/components/input";
-import { Label } from "@stll/ui/components/label";
-import {
-  Popover,
-  PopoverPopup,
-  PopoverTrigger,
-} from "@stll/ui/components/popover";
-import { ScrollArea } from "@stll/ui/components/scroll-area";
-import { TextSeparator } from "@stll/ui/components/separator";
-import { stellaToast } from "@stll/ui/components/toast";
+import { Button } from "@stll/ui/button";
+import { DirectionalIcon } from "@stll/ui/directional-icon";
+import { Input } from "@stll/ui/input";
+import { Label } from "@stll/ui/label";
+import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
+import { ScrollArea } from "@stll/ui/scroll-area";
+import { TextSeparator } from "@stll/ui/separator";
+import { stellaToast } from "@stll/ui/toast";
 
 import { AIPromptInput } from "@/components/ai-prompt-input/ai-prompt-input";
 import { ConditionGroupEditor } from "@/routes/_protected.knowledge/-components/condition-builder";

@@ -42,7 +42,9 @@ const DELIBERATE_NARROWINGS = [
   {
     rule: "no-restricted-imports",
     scope: "apps/web/src/components/date-picker-popover.tsx",
-    drops: ["pattern:@stll/ui/components/date-picker-popover"],
+    drops: [
+      "pattern:@stll/ui/date-picker-popover|@stll/ui/components/date-picker-popover",
+    ],
     reason:
       "This file is the locale-injecting wrapper around the UI primitive, so it is the one web module that has to import it.",
   },

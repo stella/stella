@@ -12,11 +12,11 @@ import {
   AlertDialogHeader,
   AlertDialogPopup,
   AlertDialogTitle,
-} from "@stll/ui/components/alert-dialog";
-import { Button } from "@stll/ui/components/button";
-import { Label } from "@stll/ui/components/label";
-import { Textarea } from "@stll/ui/components/textarea";
-import { stellaToast } from "@stll/ui/components/toast";
+} from "@stll/ui/alert-dialog";
+import { Button } from "@stll/ui/button";
+import { Label } from "@stll/ui/label";
+import { Textarea } from "@stll/ui/textarea";
+import { stellaToast } from "@stll/ui/toast";
 
 import { MessageResponse } from "@/components/ai-elements/message";
 import { openEntityInInspector } from "@/components/chat/entity-open";

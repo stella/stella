@@ -1,6 +1,6 @@
 // Enforce stella's single toast integration surface.
 //
-// Product code should use `stellaToast` from `@stll/ui/components/toast`.
+// Product code should use `stellaToast` from `@stll/ui/toast`.
 // That wrapper applies default timeouts and keeps app code away from
 // raw Base UI toast managers.
 
@@ -8,7 +8,12 @@ import { eslintCompatPlugin } from "@oxlint/plugins";
 
 import { getImportedName } from "./utils.ts";
 
-const STELLA_TOAST_MODULE = "@stll/ui/components/toast";
+// The grouped alias (@stll/ui/components/toast) is deprecated but still
+// resolves to this module, so both spellings are the toast entry point.
+const STELLA_TOAST_MODULES: readonly string[] = [
+  "@stll/ui/toast",
+  "@stll/ui/components/toast",
+];
 const RAW_TOAST_MODULE = "@base-ui/react/toast";
 
 const DISALLOWED_STELLA_IMPORTS = new Set([
@@ -26,9 +31,9 @@ export default eslintCompatPlugin({
         type: "problem",
         messages: {
           rawToast:
-            "Use `stellaToast` from `@stll/ui/components/toast` instead of raw Base UI toast APIs.",
+            "Use `stellaToast` from `@stll/ui/toast` instead of raw Base UI toast APIs.",
           restrictedStellaImport:
-            "Use `stellaToast` from `@stll/ui/components/toast`; `{{name}}` bypasses stella toast guarantees.",
+            "Use `stellaToast` from `@stll/ui/toast`; `{{name}}` bypasses stella toast guarantees.",
         },
       },
       createOnce(context) {
@@ -43,7 +48,7 @@ export default eslintCompatPlugin({
               return;
             }
 
-            if (node.source.value !== STELLA_TOAST_MODULE) {
+            if (!STELLA_TOAST_MODULES.includes(node.source.value)) {
               return;
             }
 

@@ -20,8 +20,8 @@ import {
 import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 
-import { BidiText } from "@stll/ui/components/bidi-text";
-import { Button } from "@stll/ui/components/button";
+import { BidiText } from "@stll/ui/bidi-text";
+import { Button } from "@stll/ui/button";
 import {
   Combobox,
   ComboboxEmpty,
@@ -29,7 +29,7 @@ import {
   ComboboxItem,
   ComboboxList,
   ComboboxPopup,
-} from "@stll/ui/components/combobox";
+} from "@stll/ui/combobox";
 import {
   Menu,
   MenuItem,
@@ -37,20 +37,16 @@ import {
   MenuRadioGroup,
   MenuRadioItem,
   MenuTrigger,
-} from "@stll/ui/components/menu";
-import {
-  Popover,
-  PopoverPanel,
-  PopoverTrigger,
-} from "@stll/ui/components/popover";
-import { SegmentedIconToggle } from "@stll/ui/components/segmented-icon-toggle";
+} from "@stll/ui/menu";
+import { Popover, PopoverPanel, PopoverTrigger } from "@stll/ui/popover";
+import { SegmentedIconToggle } from "@stll/ui/segmented-icon-toggle";
 import {
   Select,
   SelectItem,
   SelectPopup,
   SelectTrigger,
   SelectValue,
-} from "@stll/ui/components/select";
+} from "@stll/ui/select";
 import {
   Sheet,
   SheetClose,
@@ -60,9 +56,9 @@ import {
   SheetPanel,
   SheetPopup,
   SheetTitle,
-} from "@stll/ui/components/sheet";
-import { stellaToast } from "@stll/ui/components/toast";
-import { cn } from "@stll/ui/lib/utils";
+} from "@stll/ui/sheet";
+import { stellaToast } from "@stll/ui/toast";
+import { cn } from "@stll/ui/utils";
 
 import { DatePickerPopover } from "@/components/date-picker-popover";
 import { DocumentIcon } from "@/components/document-icon";

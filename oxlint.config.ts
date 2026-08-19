@@ -286,8 +286,31 @@ const webCrossWorkspaceImports = [
   },
 ];
 
+// The design system is published from its own source: it has to build,
+// test, and typecheck with nothing but its declared dependencies present.
+// Bans reaching sideways into an application, into a private workspace
+// package, and back into itself through the package name (the intra-package
+// graph is relative, so a self-reference would only survive in-repo).
+const uiStandaloneImports = [
+  {
+    group: ["@stll/*", "@stll/*/**"],
+    message:
+      "@stll/ui must build standalone; it may not import another workspace package, including itself by name.",
+  },
+  {
+    group: ["@/*", "@/**", "apps/*", "apps/**", "**/apps/**"],
+    message:
+      "@stll/ui must not reach into application code; move the shared part into the package or keep the component in the app.",
+  },
+];
+
 const webDatePickerImport = {
-  group: ["@stll/ui/components/date-picker-popover"],
+  // Both spellings: the grouped subpath is a deprecated alias of the flat one
+  // and still resolves, so banning only the flat one would leave a way around.
+  group: [
+    "@stll/ui/date-picker-popover",
+    "@stll/ui/components/date-picker-popover",
+  ],
   message:
     "Use '@/components/date-picker-popover' so locale labels are injected.",
 };
@@ -1597,18 +1620,19 @@ export default defineConfig({
       rules: {
         "no-restricted-imports": [
           "error",
-          {
-            paths: [noZodImport],
-            patterns: [
-              {
-                group: ["@stll/*", "@stll/*/**", "!@stll/ui", "!@stll/ui/**"],
-                message:
-                  "@stll/ui must stay workspace-pure; do not import other stella workspaces from UI source.",
-              },
-            ],
-          },
+          { paths: [noZodImport], patterns: uiStandaloneImports },
         ],
       },
+    },
+    {
+      // The package's convenience entry, and the one file that has to be a
+      // barrel: `exports["."]` needs a module, and a published package with no
+      // root export is one nobody can import by name. The per-module subpaths
+      // are the tree-shakeable path and are what in-repo code uses;
+      // `sideEffects: false` plus one output module per source module keeps a
+      // bundler from paying for re-exports it does not touch.
+      files: ["packages/ui/src/index.ts"],
+      rules: { "oxc/no-barrel-file": "off" },
     },
     {
       files: ["apps/web/src/hooks/use-effect.ts"],

@@ -1,12 +1,12 @@
 import { SettingsIcon, XIcon } from "lucide-react";
 
-import { Button } from "@stll/ui/components/button";
-import { MenuTrigger } from "@stll/ui/components/menu";
+import { Button } from "@stll/ui/button";
+import { MenuTrigger } from "@stll/ui/menu";
 import {
   Tooltip as TooltipRoot,
   TooltipPopup,
   TooltipTrigger,
-} from "@stll/ui/components/tooltip";
+} from "@stll/ui/tooltip";
 
 import Tooltip from "@/components/tooltip";
 

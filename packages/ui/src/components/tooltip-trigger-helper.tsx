@@ -2,13 +2,9 @@
 
 import type * as React from "react";
 
-import {
-  Tooltip,
-  TooltipPopup,
-  TooltipTrigger,
-} from "@stll/ui/components/tooltip";
-import type { OverlayLayer } from "@stll/ui/lib/overlay-layer";
-import { hasTooltipContent } from "@stll/ui/lib/tooltip-content";
+import type { OverlayLayer } from "../lib/overlay-layer";
+import { hasTooltipContent } from "../lib/tooltip-content";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "./tooltip";
 
 type TooltipTriggerOptions = {
   trigger: React.ReactElement;

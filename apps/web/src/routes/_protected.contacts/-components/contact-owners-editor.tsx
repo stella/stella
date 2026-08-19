@@ -8,8 +8,8 @@ import {
   SelectPopup,
   SelectTrigger,
   SelectValue,
-} from "@stll/ui/components/select";
-import { stellaToast } from "@stll/ui/components/toast";
+} from "@stll/ui/select";
+import { stellaToast } from "@stll/ui/toast";
 
 import { UserIdentity } from "@/components/user-avatar";
 import { useUpdateContact } from "@/lib/contacts/mutations";

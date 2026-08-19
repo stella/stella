@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { cn } from "@stll/ui/lib/utils";
+import { cn } from "@stll/ui/utils";
 
 import { PROVIDER_LABELS } from "@/components/ai-config-role-models.logic";
 import type {

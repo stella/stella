@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, getRouteApi, redirect } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
-import { Skeleton } from "@stll/ui/components/skeleton";
+import { Skeleton } from "@stll/ui/skeleton";
 
 import { workflowsRouteAvailable } from "@/hooks/use-workflows-preview";
 import { flowRunsOptions } from "@/lib/workspaces/queries/flow-runs";

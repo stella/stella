@@ -11,8 +11,8 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { Button } from "@stll/ui/components/button";
-import { Checkbox } from "@stll/ui/components/checkbox";
+import { Button } from "@stll/ui/button";
+import { Checkbox } from "@stll/ui/checkbox";
 import {
   Combobox,
   ComboboxEmpty,
@@ -20,21 +20,21 @@ import {
   ComboboxItem,
   ComboboxList,
   ComboboxPopup,
-} from "@stll/ui/components/combobox";
-import { DirectionalIcon } from "@stll/ui/components/directional-icon";
-import { Field, FieldControl, FieldLabel } from "@stll/ui/components/field";
-import { Input } from "@stll/ui/components/input";
+} from "@stll/ui/combobox";
+import { DirectionalIcon } from "@stll/ui/directional-icon";
+import { Field, FieldControl, FieldLabel } from "@stll/ui/field";
+import { Input } from "@stll/ui/input";
 import {
   Select,
   SelectItem,
   SelectPopup,
   SelectTrigger,
   SelectValue,
-} from "@stll/ui/components/select";
-import { Textarea } from "@stll/ui/components/textarea";
-import { stellaToast } from "@stll/ui/components/toast";
-import { contentDir } from "@stll/ui/hooks/use-content-dir";
-import { cn } from "@stll/ui/lib/utils";
+} from "@stll/ui/select";
+import { Textarea } from "@stll/ui/textarea";
+import { stellaToast } from "@stll/ui/toast";
+import { contentDir } from "@stll/ui/use-content-dir";
+import { cn } from "@stll/ui/utils";
 
 import {
   LOOKUP_REGISTRY_OPTIONS,

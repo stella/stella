@@ -13,9 +13,9 @@ import {
   type DocumentPropertyValue,
   isAuthoredDocumentPropertyKey,
 } from "@stll/api-contract";
-import { DirectionalIcon } from "@stll/ui/components/directional-icon";
-import { Input } from "@stll/ui/components/input";
-import { stellaToast } from "@stll/ui/components/toast";
+import { DirectionalIcon } from "@stll/ui/directional-icon";
+import { Input } from "@stll/ui/input";
+import { stellaToast } from "@stll/ui/toast";
 
 import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";

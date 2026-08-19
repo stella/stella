@@ -1,1 +1,1 @@
-export { StellaMark } from "@stll/ui/components/stella-mark";
+export { StellaMark } from "@stll/ui/stella-mark";

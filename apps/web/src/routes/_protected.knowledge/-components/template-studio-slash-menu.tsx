@@ -29,14 +29,11 @@ import {
   resetTemplateSlashQuery,
 } from "@stll/folio-react";
 import { isSafeFieldPath } from "@stll/template-conditions";
-import { DirectionalIcon } from "@stll/ui/components/directional-icon";
-import {
-  MenuPreviewLayout,
-  PreviewPane,
-} from "@stll/ui/components/preview-pane";
-import { stellaToast } from "@stll/ui/components/toast";
-import { containedHandler } from "@stll/ui/hooks/use-contained-handler";
-import { cn } from "@stll/ui/lib/utils";
+import { DirectionalIcon } from "@stll/ui/directional-icon";
+import { MenuPreviewLayout, PreviewPane } from "@stll/ui/preview-pane";
+import { stellaToast } from "@stll/ui/toast";
+import { containedHandler } from "@stll/ui/use-contained-handler";
+import { cn } from "@stll/ui/utils";
 
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import type { TranslationKey } from "@/i18n/types";

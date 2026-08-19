@@ -4,8 +4,8 @@ import type { ReactNode } from "react";
 
 import { useTranslations } from "use-intl";
 
-import { stellaToast } from "@stll/ui/components/toast";
-import { cn } from "@stll/ui/lib/utils";
+import { stellaToast } from "@stll/ui/toast";
+import { cn } from "@stll/ui/utils";
 
 import {
   ChatSubmitPreservedError,

@@ -41,9 +41,9 @@ import {
   type GlobalSearchResultType,
 } from "@stll/api-contract";
 import type { EntityKind, GlobalSearchHit } from "@stll/api/types";
-import { BidiText } from "@stll/ui/components/bidi-text";
-import { Button } from "@stll/ui/components/button";
-import { Checkbox } from "@stll/ui/components/checkbox";
+import { BidiText } from "@stll/ui/bidi-text";
+import { Button } from "@stll/ui/button";
+import { Checkbox } from "@stll/ui/checkbox";
 import {
   Command,
   CommandDialog,
@@ -51,14 +51,14 @@ import {
   CommandInput,
   CommandItem,
   CommandList,
-} from "@stll/ui/components/command";
-import { DirectionalIcon } from "@stll/ui/components/directional-icon";
-import { Input } from "@stll/ui/components/input";
-import { Skeleton } from "@stll/ui/components/skeleton";
-import { stellaToast } from "@stll/ui/components/toast";
-import { contentDir } from "@stll/ui/hooks/use-content-dir";
-import { useIsMobile } from "@stll/ui/hooks/use-mobile";
-import { cn } from "@stll/ui/lib/utils";
+} from "@stll/ui/command";
+import { DirectionalIcon } from "@stll/ui/directional-icon";
+import { Input } from "@stll/ui/input";
+import { Skeleton } from "@stll/ui/skeleton";
+import { stellaToast } from "@stll/ui/toast";
+import { contentDir } from "@stll/ui/use-content-dir";
+import { useIsMobile } from "@stll/ui/use-mobile";
+import { cn } from "@stll/ui/utils";
 
 import { openEntityInInspector } from "@/components/chat/entity-open";
 import { DatePickerPopover } from "@/components/date-picker-popover";

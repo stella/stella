@@ -8,7 +8,7 @@ import {
   BreadcrumbItem,
   BreadcrumbList,
   BreadcrumbSeparator,
-} from "@stll/ui/components/breadcrumb";
+} from "@stll/ui/breadcrumb";
 
 import { ChatBreadcrumb } from "@/components/breadcrumbs/chat-breadcrumb";
 import { ClausesBreadcrumb } from "@/components/breadcrumbs/clauses-breadcrumb";

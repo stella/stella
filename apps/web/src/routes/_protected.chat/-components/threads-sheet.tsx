@@ -16,13 +16,13 @@ import { MessageSquareIcon, SearchIcon, TrashIcon } from "lucide-react";
 import { useDebounce } from "use-debounce";
 import { useTranslations } from "use-intl";
 
-import { BidiText } from "@stll/ui/components/bidi-text";
-import { Button } from "@stll/ui/components/button";
+import { BidiText } from "@stll/ui/bidi-text";
+import { Button } from "@stll/ui/button";
 import {
   InputGroup,
   InputGroupAddon,
   InputGroupInput,
-} from "@stll/ui/components/input-group";
+} from "@stll/ui/input-group";
 import {
   Sheet,
   SheetHeader,
@@ -30,9 +30,9 @@ import {
   SheetPopup,
   SheetTitle,
   SheetTrigger,
-} from "@stll/ui/components/sheet";
-import { stellaToast } from "@stll/ui/components/toast";
-import { cn } from "@stll/ui/lib/utils";
+} from "@stll/ui/sheet";
+import { stellaToast } from "@stll/ui/toast";
+import { cn } from "@stll/ui/utils";
 
 import {
   ChatTitleRename,

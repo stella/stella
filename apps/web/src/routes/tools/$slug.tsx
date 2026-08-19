@@ -14,7 +14,7 @@ import {
   type LoadedCatalogueEntry,
   type LoadedEntryByKind,
 } from "@stll/catalogue";
-import { Button } from "@stll/ui/components/button";
+import { Button } from "@stll/ui/button";
 
 import {
   CostBadge,

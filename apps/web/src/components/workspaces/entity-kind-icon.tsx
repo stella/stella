@@ -8,7 +8,7 @@ import {
   MailIcon,
 } from "lucide-react";
 
-import { cn } from "@stll/ui/lib/utils";
+import { cn } from "@stll/ui/utils";
 
 import { DocumentIcon } from "@/components/document-icon";
 import {

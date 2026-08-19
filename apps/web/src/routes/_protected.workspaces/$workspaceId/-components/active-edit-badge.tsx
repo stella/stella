@@ -4,8 +4,8 @@ import {
   TooltipPopup,
   Tooltip as TooltipRoot,
   TooltipTrigger,
-} from "@stll/ui/components/tooltip";
-import { cn } from "@stll/ui/lib/utils";
+} from "@stll/ui/tooltip";
+import { cn } from "@stll/ui/utils";
 
 import { UserAvatar } from "@/components/user-avatar";
 

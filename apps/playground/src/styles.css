@@ -1,10 +1,14 @@
+/* Tailwind entry for the playground.
+ *
+ * The app owns its Tailwind build: the design system ships class names and
+ * tokens, not compiled CSS. `@stll/ui/theme.css` provides every semantic
+ * token the --doc-* vars in editor.css reference. */
 @import "tailwindcss";
+@import "@stll/ui/theme.css";
 
-/* Scan ui sources for Tailwind utility classes; the folio-react package is
- * scanned by the imported globals.css (its @source paths resolve relative to
- * that file). */
-@source "../../../packages/ui/src";
-
-/* Import Stella's actual globals — provides all semantic tokens.
- * The --doc-* vars in editor.css reference these via var(--background) etc. */
-@import "../../../packages/ui/src/styles/globals.css";
+/* The design system's components live outside this app's source tree, so
+ * their class names have to be scanned explicitly. */
+@source "../../../packages/ui/src/**/*.{ts,tsx}";
+/* The folio editor chrome uses Tailwind utilities but ships no utility CSS of
+ * its own, and node_modules is outside Tailwind's default source detection. */
+@source "../../../node_modules/@stll/folio-react/dist/**/*.js";

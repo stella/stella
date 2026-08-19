@@ -6,13 +6,8 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { Button } from "@stll/ui/components/button";
-import {
-  Menu,
-  MenuItem,
-  MenuPopup,
-  MenuTrigger,
-} from "@stll/ui/components/menu";
+import { Button } from "@stll/ui/button";
+import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
 
 import { PropertyIcon } from "@/components/workspaces/property-helpers";
 import type { ViewLayout, WorkspaceProperty } from "@/lib/types";

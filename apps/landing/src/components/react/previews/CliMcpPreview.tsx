@@ -8,8 +8,8 @@ import {
   useState,
 } from "react";
 
-import { StellaMark } from "@stll/ui/components/stella-mark";
-import { cn } from "@stll/ui/lib/utils";
+import { StellaMark } from "@stll/ui/stella-mark";
+import { cn } from "@stll/ui/utils";
 
 import { CLI_DEMO_TOOLS } from "../../../data/cli-demo";
 import {

@@ -4,9 +4,9 @@ import { useFormStatus } from "react-dom";
 import { PlusIcon, Trash2Icon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { Button } from "@stll/ui/components/button";
-import { Input } from "@stll/ui/components/input";
-import { stellaToast } from "@stll/ui/components/toast";
+import { Button } from "@stll/ui/button";
+import { Input } from "@stll/ui/input";
+import { stellaToast } from "@stll/ui/toast";
 
 import { normalizeOptionalArray } from "@/lib/arrays";
 import { detached } from "@/lib/detached";

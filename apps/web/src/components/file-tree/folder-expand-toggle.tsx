@@ -2,7 +2,7 @@ import type { ComponentProps } from "react";
 
 import { useTranslations } from "use-intl";
 
-import { Button } from "@stll/ui/components/button";
+import { Button } from "@stll/ui/button";
 
 import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
 

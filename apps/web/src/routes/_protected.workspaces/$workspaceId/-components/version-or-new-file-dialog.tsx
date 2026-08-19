@@ -1,6 +1,6 @@
 import { useTranslations } from "use-intl";
 
-import { Button } from "@stll/ui/components/button";
+import { Button } from "@stll/ui/button";
 import {
   Dialog,
   DialogDescription,
@@ -8,7 +8,7 @@ import {
   DialogHeader,
   DialogPopup,
   DialogTitle,
-} from "@stll/ui/components/dialog";
+} from "@stll/ui/dialog";
 
 import { extensionMatches, getExtension } from "./file-extension";
 

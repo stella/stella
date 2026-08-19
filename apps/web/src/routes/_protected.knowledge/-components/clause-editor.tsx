@@ -42,10 +42,10 @@ import {
   rejectAIEditRevision,
   rejectAllChanges,
 } from "@stll/folio-core/prosemirror/commands/comments";
-import { Button } from "@stll/ui/components/button";
-import { Textarea } from "@stll/ui/components/textarea";
-import { stellaToast } from "@stll/ui/components/toast";
-import { cn } from "@stll/ui/lib/utils";
+import { Button } from "@stll/ui/button";
+import { Textarea } from "@stll/ui/textarea";
+import { stellaToast } from "@stll/ui/toast";
+import { cn } from "@stll/ui/utils";
 
 import { AiRewriteControl } from "@/components/ai-rewrite-control";
 import type {

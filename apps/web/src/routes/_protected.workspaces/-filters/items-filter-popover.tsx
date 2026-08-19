@@ -1,9 +1,9 @@
 import { XIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { Button } from "@stll/ui/components/button";
-import { Input } from "@stll/ui/components/input";
-import { Separator } from "@stll/ui/components/separator";
+import { Button } from "@stll/ui/button";
+import { Input } from "@stll/ui/input";
+import { Separator } from "@stll/ui/separator";
 
 import type { NumericFilter } from "@/lib/workspaces/types";
 

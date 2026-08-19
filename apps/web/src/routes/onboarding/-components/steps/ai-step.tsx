@@ -2,9 +2,9 @@ import { useLayoutEffect, useRef, useState } from "react";
 
 import { useTranslations } from "use-intl";
 
-import { Button } from "@stll/ui/components/button";
-import { Form } from "@stll/ui/components/form";
-import { stellaToast } from "@stll/ui/components/toast";
+import { Button } from "@stll/ui/button";
+import { Form } from "@stll/ui/form";
+import { stellaToast } from "@stll/ui/toast";
 
 import { AIConfigProvidersEditor } from "@/components/ai-config-providers-editor";
 import type { ProviderRowStatus } from "@/components/ai-config-providers-editor";

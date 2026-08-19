@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
-import { Button } from "@stll/ui/components/button";
-import { cn } from "@stll/ui/lib/utils";
+import { Button } from "@stll/ui/button";
+import { cn } from "@stll/ui/utils";
 
 /**
  * Selected filter/toggle pill. Inverts to a solid `foreground` fill with

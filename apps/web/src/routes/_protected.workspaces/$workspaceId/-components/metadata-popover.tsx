@@ -2,13 +2,9 @@ import { EyeOffIcon } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { Button } from "@stll/ui/components/button";
-import {
-  Popover,
-  PopoverPopup,
-  PopoverTrigger,
-} from "@stll/ui/components/popover";
-import { Separator } from "@stll/ui/components/separator";
+import { Button } from "@stll/ui/button";
+import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
+import { Separator } from "@stll/ui/separator";
 
 import { PinProperty } from "@/components/workspaces/properties/pin-property";
 import { SortProperty } from "@/components/workspaces/properties/sort-property";

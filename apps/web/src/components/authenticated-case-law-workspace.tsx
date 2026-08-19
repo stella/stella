@@ -1,7 +1,7 @@
 import { Suspense, useRef, useState } from "react";
 import type { ComponentProps } from "react";
 
-import { TOAST_RIGHT_OFFSET_VAR } from "@stll/ui/components/toast";
+import { TOAST_RIGHT_OFFSET_VAR } from "@stll/ui/toast";
 
 import { ChatEditorProvider } from "@/components/chat-editor-provider";
 import { ChatMentionProviders } from "@/components/chat-mention-providers";

@@ -2,6 +2,7 @@ import { afterAll, describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, rm, symlink } from "node:fs/promises";
 import path from "node:path";
 
+import { isDistModuleEntry } from "./publish-manifest";
 import { stageWorkspacePackage } from "./stage-web-runtime";
 import { findExternalRuntimeWorkspacePaths } from "./web-runtime-closure";
 
@@ -179,7 +180,10 @@ describe("stageWorkspacePackage", () => {
 
     const stagedDir = path.join(workDir, "staged", "stage-fixture");
     const staged = await stageWorkspacePackage({ pkgDir, stagedDir });
-    expect(staged.exports["."]?.import).toBe("./dist/index.js");
+    const root = staged.exports["."];
+    expect(root !== undefined && isDistModuleEntry(root) && root.import).toBe(
+      "./dist/index.js",
+    );
     const stagedApp = path.join(workDir, "app-staged");
     await linkFixture(stagedApp, stagedDir);
     expect(await probe(stagedApp)).toBe(0);

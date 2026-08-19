@@ -5,17 +5,17 @@ import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
-import { Button } from "@stll/ui/components/button";
+import { Button } from "@stll/ui/button";
 import {
   Frame,
   FrameDescription,
   FrameHeader,
   FramePanel,
   FrameTitle,
-} from "@stll/ui/components/frame";
-import { Input } from "@stll/ui/components/input";
-import { Label } from "@stll/ui/components/label";
-import { stellaToast } from "@stll/ui/components/toast";
+} from "@stll/ui/frame";
+import { Input } from "@stll/ui/input";
+import { Label } from "@stll/ui/label";
+import { stellaToast } from "@stll/ui/toast";
 
 import { browserApiRootUrl } from "@/lib/api-url";
 import { authClient } from "@/lib/auth";

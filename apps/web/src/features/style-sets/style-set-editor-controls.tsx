@@ -2,17 +2,17 @@ import type { PropsWithChildren } from "react";
 
 import { useTranslations } from "use-intl";
 
-import { Checkbox } from "@stll/ui/components/checkbox";
-import { Field, FieldLabel } from "@stll/ui/components/field";
-import { Input } from "@stll/ui/components/input";
+import { Checkbox } from "@stll/ui/checkbox";
+import { Field, FieldLabel } from "@stll/ui/field";
+import { Input } from "@stll/ui/input";
 import {
   Select,
   SelectItem,
   SelectPopup,
   SelectTrigger,
   SelectValue,
-} from "@stll/ui/components/select";
-import { Tabs, TabsList, TabsPanel, TabsTab } from "@stll/ui/components/tabs";
+} from "@stll/ui/select";
+import { Tabs, TabsList, TabsPanel, TabsTab } from "@stll/ui/tabs";
 
 import type {
   NumberedParagraphStyleSettings,

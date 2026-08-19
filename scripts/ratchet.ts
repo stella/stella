@@ -411,10 +411,12 @@ const escapeRegExp = (value: string): string =>
 const countHandRolledUserIdentity = (content: string): number =>
   countMatches(stripComments(content), /<UserAvatar\b/gu);
 
+// Both the flat subpath and the deprecated grouped alias reach the same
+// module, so the metric counts either spelling.
 const countRawUserAvatarPrimitive = (content: string): number =>
   countMatches(
     stripComments(content),
-    /["']@stll\/ui\/components\/avatar["']/gu,
+    /["']@stll\/ui\/(?:components\/)?avatar["']/gu,
   );
 
 const countShadowedUserNameHelpers = (content: string): number =>
@@ -1206,7 +1208,7 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
   {
     id: "raw-user-avatar-primitive",
     description:
-      "imports of @stll/ui/components/avatar outside the shared owner and explicit non-user exceptions",
+      "imports of @stll/ui/avatar outside the shared owner and explicit non-user exceptions",
     include: ["apps/web/src/**/*.{ts,tsx}"],
     exclude: (file) =>
       isExcludedSource(file) ||
@@ -1874,7 +1876,7 @@ const SELF_TEST_ENTITY_GLYPHS = `${ENTITY_GLYPH_FIXTURE_LINES.join("\n")}\n`;
 const EXPECTED_ENTITY_GLYPHS = 8;
 
 const SHARED_WEB_HELPER_FIXTURE_LINES = [
-  'import { Avatar } from "@stll/ui/components/avatar";',
+  'import { Avatar } from "@stll/ui/avatar";',
   'import { UserIdentity } from "@/components/user-avatar";',
   'import { formatFullTimestamp as fullTimestamp } from "@/lib/relative-time";',
   "const avatar = <UserAvatar name={user.name} />;",
@@ -1890,7 +1892,7 @@ const SHARED_WEB_HELPER_FIXTURE_LINES = [
   "const quotePattern = /[\"']/u;",
   "const urlPattern = /https:\\/\\//u;",
   "// <UserAvatar /> and const getInitials = () => '?' must not count.",
-  '// import { Avatar } from "@stll/ui/components/avatar";',
+  '// import { Avatar } from "@stll/ui/avatar";',
   "// title={formatFullTimestamp(value)} must not count.",
 ];
 const SELF_TEST_SHARED_WEB_HELPERS = `${SHARED_WEB_HELPER_FIXTURE_LINES.join("\n")}\n`;

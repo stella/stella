@@ -7,8 +7,8 @@ import {
 } from "@tanstack/react-router";
 import * as v from "valibot";
 
-import { Skeleton } from "@stll/ui/components/skeleton";
-import { cn } from "@stll/ui/lib/utils";
+import { Skeleton } from "@stll/ui/skeleton";
+import { cn } from "@stll/ui/utils";
 
 import {
   getWeekStart,

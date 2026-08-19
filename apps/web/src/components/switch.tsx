@@ -2,7 +2,7 @@
 
 import { Switch as SwitchPrimitive } from "@base-ui/react/switch";
 
-import { cn } from "@stll/ui/lib/utils";
+import { cn } from "@stll/ui/utils";
 
 // Local Switch wrapper over the Base UI primitive. The shared @stll/ui package
 // does not ship a switch yet; this lives in apps/web so the playbook editor's

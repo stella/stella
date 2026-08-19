@@ -6,7 +6,7 @@ import { CalendarIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { isTaskStatus } from "@stll/api-contract";
-import { stellaToast } from "@stll/ui/components/toast";
+import { stellaToast } from "@stll/ui/toast";
 
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { useExternalSyncEffect } from "@/hooks/use-effect";

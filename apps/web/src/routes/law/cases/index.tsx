@@ -9,9 +9,9 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
-import { Button } from "@stll/ui/components/button";
-import { Skeleton } from "@stll/ui/components/skeleton";
-import { stellaToast } from "@stll/ui/components/toast";
+import { Button } from "@stll/ui/button";
+import { Skeleton } from "@stll/ui/skeleton";
+import { stellaToast } from "@stll/ui/toast";
 
 import { DecisionFilters } from "@/features/case-law/components/decision-filters";
 import { DecisionTable } from "@/features/case-law/components/decision-table";

@@ -5,14 +5,14 @@ import { PlusIcon, XIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import type { OptionColor } from "@stll/api/types";
-import { Button } from "@stll/ui/components/button";
+import { Button } from "@stll/ui/button";
 import {
   Popover,
   PopoverClose,
   PopoverPopup,
   PopoverTrigger,
-} from "@stll/ui/components/popover";
-import { contentDir } from "@stll/ui/hooks/use-content-dir";
+} from "@stll/ui/popover";
+import { contentDir } from "@stll/ui/use-content-dir";
 
 import { SelectFallback } from "@/components/workspaces/properties/select-fallback";
 import { SelectColorIcon } from "@/components/workspaces/properties/shared";

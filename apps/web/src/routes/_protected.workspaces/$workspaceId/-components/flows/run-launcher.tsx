@@ -5,18 +5,18 @@ import { PlayIcon } from "lucide-react";
 import { useFormatter, useTranslations } from "use-intl";
 
 import { FLOW_RUN_INPUT_ENTITIES_MAX } from "@stll/api-contract";
-import { Button } from "@stll/ui/components/button";
-import { Checkbox } from "@stll/ui/components/checkbox";
-import { Input } from "@stll/ui/components/input";
-import { Label } from "@stll/ui/components/label";
+import { Button } from "@stll/ui/button";
+import { Checkbox } from "@stll/ui/checkbox";
+import { Input } from "@stll/ui/input";
+import { Label } from "@stll/ui/label";
 import {
   Select,
   SelectItem,
   SelectPopup,
   SelectTrigger,
   SelectValue,
-} from "@stll/ui/components/select";
-import { stellaToast } from "@stll/ui/components/toast";
+} from "@stll/ui/select";
+import { stellaToast } from "@stll/ui/toast";
 
 import { RunSizeConfirmDialog } from "@/components/usage/run-size-confirm-dialog";
 import { runSizeConfirmationDetail } from "@/components/usage/run-size-confirmation";

@@ -8,14 +8,14 @@ import {
 import type { LucideIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { Button } from "@stll/ui/components/button";
+import { Button } from "@stll/ui/button";
 import {
   Popover,
   PopoverClose,
   PopoverPopup,
   PopoverTrigger,
-} from "@stll/ui/components/popover";
-import { cn } from "@stll/ui/lib/utils";
+} from "@stll/ui/popover";
+import { cn } from "@stll/ui/utils";
 
 import Tooltip from "@/components/tooltip";
 import { contentTypeValueKind, VALUE_TYPE_META } from "@/lib/value-types";

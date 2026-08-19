@@ -13,9 +13,9 @@ import {
   AlertDialogHeader,
   AlertDialogPopup,
   AlertDialogTitle,
-} from "@stll/ui/components/alert-dialog";
-import { Button } from "@stll/ui/components/button";
-import { stellaToast } from "@stll/ui/components/toast";
+} from "@stll/ui/alert-dialog";
+import { Button } from "@stll/ui/button";
+import { stellaToast } from "@stll/ui/toast";
 
 import { useClientAuthStatus } from "@/hooks/use-client-auth-status";
 import type { TranslationKey } from "@/i18n/types";

@@ -27,7 +27,7 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { Button } from "@stll/ui/components/button";
+import { Button } from "@stll/ui/button";
 import {
   Combobox,
   ComboboxEmpty,
@@ -35,17 +35,17 @@ import {
   ComboboxItem,
   ComboboxList,
   ComboboxPopup,
-} from "@stll/ui/components/combobox";
-import { Input } from "@stll/ui/components/input";
+} from "@stll/ui/combobox";
+import { Input } from "@stll/ui/input";
 import {
   Menu,
   MenuItem,
   MenuPopup,
   MenuPortal,
   MenuTrigger,
-} from "@stll/ui/components/menu";
-import { stellaToast } from "@stll/ui/components/toast";
-import { cn } from "@stll/ui/lib/utils";
+} from "@stll/ui/menu";
+import { stellaToast } from "@stll/ui/toast";
+import { cn } from "@stll/ui/utils";
 
 import { AnonymizationContextMenu } from "@/components/inspector/anonymization-context-menu";
 import {

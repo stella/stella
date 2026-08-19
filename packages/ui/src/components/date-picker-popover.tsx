@@ -11,23 +11,18 @@ import {
 
 import { CalendarIcon, ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 
-import { Button } from "@stll/ui/components/button";
-import { DirectionalIcon } from "@stll/ui/components/directional-icon";
-import {
-  Popover,
-  PopoverPopup,
-  PopoverTrigger,
-} from "@stll/ui/components/popover";
-import type { OverlayLayer } from "@stll/ui/lib/overlay-layer";
-import { cn } from "@stll/ui/lib/utils";
-import { getLocaleWeekInfo, getWeekendDays } from "@stll/ui/lib/week";
-
+import type { OverlayLayer } from "../lib/overlay-layer";
+import { cn } from "../lib/utils";
+import { getLocaleWeekInfo, getWeekendDays } from "../lib/week";
+import { Button } from "./button";
 import {
   localDateFromTimestamp,
   millisecondsUntilNextLocalDate,
   resolveCalendarViewMonth,
   type CalendarMonth,
 } from "./date-picker-popover.logic";
+import { DirectionalIcon } from "./directional-icon";
+import { Popover, PopoverPopup, PopoverTrigger } from "./popover";
 
 // ---------------------------------------------------------------------------
 // Calendar utilities

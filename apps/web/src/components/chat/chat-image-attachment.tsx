@@ -2,12 +2,7 @@ import { useState } from "react";
 
 import { useTranslations } from "use-intl";
 
-import {
-  Dialog,
-  DialogPanel,
-  DialogPopup,
-  DialogTitle,
-} from "@stll/ui/components/dialog";
+import { Dialog, DialogPanel, DialogPopup, DialogTitle } from "@stll/ui/dialog";
 
 type ChatImageAttachmentProps = {
   alt: string;

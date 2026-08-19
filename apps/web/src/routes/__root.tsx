@@ -20,7 +20,7 @@ import type { RouteErrorLifecycleController } from "@/lib/analytics/route-error-
 import { RouteErrorLifecycleProvider } from "@/lib/analytics/route-error-lifecycle-context";
 import "@/fonts.css";
 import { isPublicSsrPath } from "@/lib/public-ssr-paths";
-import "@stll/ui/globals.css";
+import "@/styles/app.css";
 
 const isDev = import.meta.env.DEV;
 const DevRoot = isDev

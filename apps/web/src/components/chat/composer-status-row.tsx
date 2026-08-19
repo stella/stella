@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-import { cn } from "@stll/ui/lib/utils";
+import { cn } from "@stll/ui/utils";
 
 type ComposerStatusRowProps = {
   /** Left cluster: matter picker, web-search / anonymize toggles, ... */

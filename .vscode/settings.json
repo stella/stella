@@ -1,6 +1,6 @@
 {
   "tailwindCSS.classFunctions": ["cva", "cn"],
-  "tailwindCSS.experimental.configFile": "packages/ui/src/styles/globals.css",
+  "tailwindCSS.experimental.configFile": "apps/web/src/styles/app.css",
   "editor.defaultFormatter": "oxc.oxc-vscode",
   "typescript.tsdk": "node_modules/typescript/lib",
   "editor.formatOnSave": true,

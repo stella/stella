@@ -2,8 +2,8 @@ import type { ReactNode } from "react";
 
 import type { Column, RowData, TableFeatures } from "@tanstack/react-table";
 
-import { Skeleton } from "@stll/ui/components/skeleton";
-import { TableCell, TableRow } from "@stll/ui/components/table";
+import { Skeleton } from "@stll/ui/skeleton";
+import { TableCell, TableRow } from "@stll/ui/table";
 
 // Stable keys so loading rows never fall back to array-index keys.
 const SKELETON_ROW_KEYS = [

@@ -1,6 +1,6 @@
 import { flexRender } from "@tanstack/react-table";
 
-import { cn } from "@stll/ui/lib/utils";
+import { cn } from "@stll/ui/utils";
 
 import type {
   TableCell,

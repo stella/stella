@@ -6,7 +6,7 @@ import {
   MenuRadioGroup,
   MenuRadioItem,
   MenuTrigger,
-} from "@stll/ui/components/menu";
+} from "@stll/ui/menu";
 
 import {
   LANG_ENDONYMS,

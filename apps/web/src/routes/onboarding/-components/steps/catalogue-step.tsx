@@ -17,20 +17,16 @@ import {
   recommendedSlugsForJurisdictions,
   type LoadedCatalogueEntry,
 } from "@stll/catalogue";
-import { Button } from "@stll/ui/components/button";
-import { Form } from "@stll/ui/components/form";
+import { Button } from "@stll/ui/button";
+import { Form } from "@stll/ui/form";
 import {
   InputGroup,
   InputGroupAddon,
   InputGroupInput,
-} from "@stll/ui/components/input-group";
-import {
-  Popover,
-  PopoverPopup,
-  PopoverTrigger,
-} from "@stll/ui/components/popover";
-import { TextSeparator } from "@stll/ui/components/separator";
-import { cn } from "@stll/ui/lib/utils";
+} from "@stll/ui/input-group";
+import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
+import { TextSeparator } from "@stll/ui/separator";
+import { cn } from "@stll/ui/utils";
 
 import {
   CatalogueRow,

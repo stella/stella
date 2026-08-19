@@ -4,8 +4,8 @@ import { Result } from "better-result";
 import { CheckIcon, CopyIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { Button } from "@stll/ui/components/button";
-import { stellaToast } from "@stll/ui/components/toast";
+import { Button } from "@stll/ui/button";
+import { stellaToast } from "@stll/ui/toast";
 
 import { getAnalytics } from "@/lib/analytics/provider";
 import { copyToClipboard } from "@/lib/copy-to-clipboard";

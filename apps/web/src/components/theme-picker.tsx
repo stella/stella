@@ -7,7 +7,7 @@ import {
   MenuRadioGroup,
   MenuRadioItem,
   MenuTrigger,
-} from "@stll/ui/components/menu";
+} from "@stll/ui/menu";
 
 import { THEMES, useTheme } from "@/components/theme-provider";
 

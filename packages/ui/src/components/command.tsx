@@ -6,9 +6,9 @@ import { Autocomplete as AutocompletePrimitive } from "@base-ui/react/autocomple
 import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
 import { SearchIcon } from "lucide-react";
 
-import { DialogPopup } from "@stll/ui/components/dialog";
-import { useContentDir } from "@stll/ui/hooks/use-content-dir";
-import { cn } from "@stll/ui/lib/utils";
+import { useContentDir } from "../hooks/use-content-dir";
+import { cn } from "../lib/utils";
+import { DialogPopup } from "./dialog";
 
 type CommandProps<ItemValue> = Omit<
   AutocompletePrimitive.Root.Props<ItemValue>,

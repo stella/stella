@@ -5,8 +5,8 @@ import { Result } from "better-result";
 import { AlertTriangleIcon, FileTextIcon, Loader2Icon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { stellaToast } from "@stll/ui/components/toast";
-import { cn } from "@stll/ui/lib/utils";
+import { stellaToast } from "@stll/ui/toast";
+import { cn } from "@stll/ui/utils";
 
 import { useExternalFileDrop } from "@/hooks/use-external-file-drop";
 import { getAnalytics } from "@/lib/analytics/provider";

@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
-import { Button } from "@stll/ui/components/button";
-import { cn } from "@stll/ui/lib/utils";
+import { Button } from "@stll/ui/button";
+import { cn } from "@stll/ui/utils";
 
 export type SuggestedAction = {
   id: string;

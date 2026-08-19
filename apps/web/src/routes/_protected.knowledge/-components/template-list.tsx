@@ -27,8 +27,8 @@ import {
   AlertDialogHeader,
   AlertDialogPopup,
   AlertDialogTitle,
-} from "@stll/ui/components/alert-dialog";
-import { Button } from "@stll/ui/components/button";
+} from "@stll/ui/alert-dialog";
+import { Button } from "@stll/ui/button";
 import {
   Combobox,
   ComboboxEmpty,
@@ -36,7 +36,7 @@ import {
   ComboboxItem,
   ComboboxList,
   ComboboxPopup,
-} from "@stll/ui/components/combobox";
+} from "@stll/ui/combobox";
 import {
   Dialog,
   DialogClose,
@@ -45,8 +45,8 @@ import {
   DialogPanel,
   DialogPopup,
   DialogTitle,
-} from "@stll/ui/components/dialog";
-import { Input } from "@stll/ui/components/input";
+} from "@stll/ui/dialog";
+import { Input } from "@stll/ui/input";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -56,11 +56,11 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
-} from "@stll/ui/components/menu";
-import { SegmentedIconToggle } from "@stll/ui/components/segmented-icon-toggle";
-import { Textarea } from "@stll/ui/components/textarea";
-import { stellaToast } from "@stll/ui/components/toast";
-import { cn } from "@stll/ui/lib/utils";
+} from "@stll/ui/menu";
+import { SegmentedIconToggle } from "@stll/ui/segmented-icon-toggle";
+import { Textarea } from "@stll/ui/textarea";
+import { stellaToast } from "@stll/ui/toast";
+import { cn } from "@stll/ui/utils";
 
 import { ContextMenu } from "@/components/context-menu";
 import type { ContextMenuAction } from "@/components/context-menu";

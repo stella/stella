@@ -4,7 +4,7 @@ import { revalidateLogic, useForm } from "@tanstack/react-form";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
-import { Button } from "@stll/ui/components/button";
+import { Button } from "@stll/ui/button";
 import {
   Dialog,
   DialogClose,
@@ -14,10 +14,10 @@ import {
   DialogPopup,
   DialogTitle,
   DialogTrigger,
-} from "@stll/ui/components/dialog";
-import { Field, FieldError, FieldLabel } from "@stll/ui/components/field";
-import { Form } from "@stll/ui/components/form";
-import { Input } from "@stll/ui/components/input";
+} from "@stll/ui/dialog";
+import { Field, FieldError, FieldLabel } from "@stll/ui/field";
+import { Form } from "@stll/ui/form";
+import { Input } from "@stll/ui/input";
 
 import { DatePickerPopover } from "@/components/date-picker-popover";
 import { FieldValueSelect } from "@/components/workspaces/field-value-select";

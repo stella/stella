@@ -5,9 +5,9 @@ import { ChevronRightIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/shallow";
 
-import { BidiText } from "@stll/ui/components/bidi-text";
-import { DirectionalIcon } from "@stll/ui/components/directional-icon";
-import { Frame } from "@stll/ui/components/frame";
+import { BidiText } from "@stll/ui/bidi-text";
+import { DirectionalIcon } from "@stll/ui/directional-icon";
+import { Frame } from "@stll/ui/frame";
 import {
   SortableHead,
   Table,
@@ -16,8 +16,8 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@stll/ui/components/table";
-import { cn } from "@stll/ui/lib/utils";
+} from "@stll/ui/table";
+import { cn } from "@stll/ui/utils";
 
 import { InlineEdit } from "@/components/inline-edit";
 import Tooltip from "@/components/tooltip";

@@ -5,7 +5,7 @@ import { InfoIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import type { ReasoningEffort } from "@stll/ai-catalog";
-import { BidiText } from "@stll/ui/components/bidi-text";
+import { BidiText } from "@stll/ui/bidi-text";
 import {
   MenuCheckboxItem,
   MenuRadioGroup,
@@ -14,12 +14,8 @@ import {
   MenuSub,
   MenuSubPopup,
   MenuSubTrigger,
-} from "@stll/ui/components/menu";
-import {
-  Popover,
-  PopoverPopup,
-  PopoverTrigger,
-} from "@stll/ui/components/popover";
+} from "@stll/ui/menu";
+import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 
 import {
   PROVIDER_LABELS,

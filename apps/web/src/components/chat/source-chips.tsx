@@ -6,8 +6,8 @@ import { ExternalLinkIcon } from "lucide-react";
 
 import { isEntityKind } from "@stll/api-contract";
 import type { ChatMessage, ChatSourceDocument } from "@stll/api/types";
-import { BidiText } from "@stll/ui/components/bidi-text";
-import { cn } from "@stll/ui/lib/utils";
+import { BidiText } from "@stll/ui/bidi-text";
+import { cn } from "@stll/ui/utils";
 
 import type { ChatToolCallPart } from "@/components/chat/chat-ui-tools";
 import { openEntityInInspector } from "@/components/chat/entity-open";

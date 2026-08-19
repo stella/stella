@@ -1,8 +1,8 @@
 import type { ComponentProps } from "react";
 
-import { Field, FieldError } from "@stll/ui/components/field";
-import { contentDir } from "@stll/ui/hooks/use-content-dir";
-import { cn } from "@stll/ui/lib/utils";
+import { Field, FieldError } from "@stll/ui/field";
+import { contentDir } from "@stll/ui/use-content-dir";
+import { cn } from "@stll/ui/utils";
 
 type PropertyFormFieldProps = ComponentProps<typeof Field>;
 

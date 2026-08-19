@@ -11,8 +11,8 @@ import type { RefObject, SyntheticEvent } from "react";
 import {
   containedEventHandler,
   containedHandler,
-} from "@stll/ui/hooks/use-contained-handler";
-import { PopoverPopup } from "@stll/ui/components/popover";
+} from "@stll/ui/use-contained-handler";
+import { PopoverPopup } from "@stll/ui/popover";
 
 const noop = (_event?: SyntheticEvent) => undefined;
 

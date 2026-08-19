@@ -1,6 +1,6 @@
 import { useTranslations } from "use-intl";
 
-import { cn } from "@stll/ui/lib/utils";
+import { cn } from "@stll/ui/utils";
 
 import {
   FLOW_STATUS_STYLES,

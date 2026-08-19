@@ -2,7 +2,7 @@ import type * as React from "react";
 
 import { ArrowDownIcon, ArrowUpIcon } from "lucide-react";
 
-import { cn } from "@stll/ui/lib/utils";
+import { cn } from "../lib/utils";
 
 const Table = ({ className, ...props }: React.ComponentProps<"table">) => (
   <div className="relative w-full overflow-x-auto" data-slot="table-container">

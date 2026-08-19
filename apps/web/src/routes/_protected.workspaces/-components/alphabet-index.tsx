@@ -9,7 +9,7 @@
 import { useCallback, useState } from "react";
 import type { RefObject } from "react";
 
-import { cn } from "@stll/ui/lib/utils";
+import { cn } from "@stll/ui/utils";
 
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import type { WorkspaceGroup } from "@/lib/workspaces/types";

@@ -8,14 +8,10 @@ import {
   evaluateNumericExpression,
   NUMERIC_FUNCTION_NAMES,
 } from "@stll/template-conditions";
-import { Button } from "@stll/ui/components/button";
-import { Input } from "@stll/ui/components/input";
-import {
-  Popover,
-  PopoverPopup,
-  PopoverTrigger,
-} from "@stll/ui/components/popover";
-import { cn } from "@stll/ui/lib/utils";
+import { Button } from "@stll/ui/button";
+import { Input } from "@stll/ui/input";
+import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
+import { cn } from "@stll/ui/utils";
 
 import { includesValue } from "@/lib/utils";
 

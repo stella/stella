@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
-import { Skeleton } from "@stll/ui/components/skeleton";
+import { Skeleton } from "@stll/ui/skeleton";
 
 import { externalApiOrigin } from "@/lib/api-origins";
 import { ensureRouteQueryData } from "@/lib/react-query";

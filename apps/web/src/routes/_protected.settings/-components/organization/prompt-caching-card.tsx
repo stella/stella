@@ -1,9 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
-import { Checkbox } from "@stll/ui/components/checkbox";
-import { Field, FieldLabel } from "@stll/ui/components/field";
-import { Frame, FramePanel } from "@stll/ui/components/frame";
+import { Checkbox } from "@stll/ui/checkbox";
+import { Field, FieldLabel } from "@stll/ui/field";
+import { Frame, FramePanel } from "@stll/ui/frame";
 
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";

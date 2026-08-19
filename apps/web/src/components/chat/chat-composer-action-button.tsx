@@ -3,8 +3,8 @@ import type { ComponentProps } from "react";
 import { ArrowUpIcon, RotateCcwIcon, SquareIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { Button } from "@stll/ui/components/button";
-import { cn } from "@stll/ui/lib/utils";
+import { Button } from "@stll/ui/button";
+import { cn } from "@stll/ui/utils";
 
 import { resolveChatComposerAction } from "@/components/chat/chat-composer-action-button.logic";
 import type { ChatComposerActionState } from "@/components/chat/chat-composer-action-button.logic";

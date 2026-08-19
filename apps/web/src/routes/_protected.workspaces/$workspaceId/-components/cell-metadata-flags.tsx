@@ -16,14 +16,14 @@ import {
 import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 
-import { BidiText } from "@stll/ui/components/bidi-text";
+import { BidiText } from "@stll/ui/bidi-text";
 import {
   MenuGroup,
   MenuGroupLabel,
   MenuItem,
   MenuSeparator,
-} from "@stll/ui/components/menu";
-import { stellaToast } from "@stll/ui/components/toast";
+} from "@stll/ui/menu";
+import { stellaToast } from "@stll/ui/toast";
 
 import Tooltip from "@/components/tooltip";
 import { UserAvatar } from "@/components/user-avatar";

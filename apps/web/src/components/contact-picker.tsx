@@ -7,7 +7,7 @@ import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 
 import type { ContactType } from "@stll/api-contract";
-import { BidiText } from "@stll/ui/components/bidi-text";
+import { BidiText } from "@stll/ui/bidi-text";
 import {
   Combobox,
   ComboboxEmpty,
@@ -15,7 +15,7 @@ import {
   ComboboxItem,
   ComboboxList,
   ComboboxPopup,
-} from "@stll/ui/components/combobox";
+} from "@stll/ui/combobox";
 
 import { contactPickerSearchOptions } from "@/components/contact-picker-queries";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";

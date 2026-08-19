@@ -6,7 +6,7 @@ import {
   SelectPopup,
   SelectTrigger,
   SelectValue,
-} from "@stll/ui/components/select";
+} from "@stll/ui/select";
 
 import { SelectColorIcon } from "@/components/workspaces/properties/shared";
 import type { WorkspacePropertyOption } from "@/lib/types";

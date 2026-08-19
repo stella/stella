@@ -2,7 +2,7 @@ import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { LandmarkIcon } from "lucide-react";
 
 import { parseChatResourceHref, RESOURCE_TYPE } from "@stll/api-contract";
-import { cn } from "@stll/ui/lib/utils";
+import { cn } from "@stll/ui/utils";
 
 import { openCaseLawDecision } from "@/components/chat/case-law-open";
 import {

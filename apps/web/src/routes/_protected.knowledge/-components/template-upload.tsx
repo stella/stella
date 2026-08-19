@@ -4,10 +4,10 @@ import { useMutation } from "@tanstack/react-query";
 import { SparklesIcon, UploadIcon, WandSparklesIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { Button } from "@stll/ui/components/button";
-import { TextSeparator } from "@stll/ui/components/separator";
-import { stellaToast } from "@stll/ui/components/toast";
-import { cn } from "@stll/ui/lib/utils";
+import { Button } from "@stll/ui/button";
+import { TextSeparator } from "@stll/ui/separator";
+import { stellaToast } from "@stll/ui/toast";
+import { cn } from "@stll/ui/utils";
 
 import { api } from "@/lib/api";
 import { DOCX_MIME, isDocxFile } from "@/lib/consts";

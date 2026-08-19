@@ -7,8 +7,8 @@ import {
 } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
-import { BidiText } from "@stll/ui/components/bidi-text";
-import { Button } from "@stll/ui/components/button";
+import { BidiText } from "@stll/ui/bidi-text";
+import { Button } from "@stll/ui/button";
 import {
   Dialog,
   DialogClose,
@@ -18,9 +18,9 @@ import {
   DialogPopup,
   DialogTitle,
   DialogTrigger,
-} from "@stll/ui/components/dialog";
-import { Frame } from "@stll/ui/components/frame";
-import { Skeleton } from "@stll/ui/components/skeleton";
+} from "@stll/ui/dialog";
+import { Frame } from "@stll/ui/frame";
+import { Skeleton } from "@stll/ui/skeleton";
 import {
   Table,
   TableBody,
@@ -28,8 +28,8 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@stll/ui/components/table";
-import { stellaToast } from "@stll/ui/components/toast";
+} from "@stll/ui/table";
+import { stellaToast } from "@stll/ui/toast";
 
 import Tooltip from "@/components/tooltip";
 import { useFormatter } from "@/i18n/formatting-context";

@@ -16,9 +16,9 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { Avatar, AvatarFallback } from "@stll/ui/components/avatar";
-import { Button } from "@stll/ui/components/button";
-import { cn } from "@stll/ui/lib/utils";
+import { Avatar, AvatarFallback } from "@stll/ui/avatar";
+import { Button } from "@stll/ui/button";
+import { cn } from "@stll/ui/utils";
 
 import { FeedbackDialog } from "@/components/feedback-dialog";
 import {

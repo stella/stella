@@ -16,8 +16,8 @@ import { useTranslations } from "use-intl";
 
 import type { ConditionNode, Operand } from "@stll/conditions";
 import { evaluateCondition, isSafeFieldPath } from "@stll/template-conditions";
-import { Button } from "@stll/ui/components/button";
-import { Checkbox } from "@stll/ui/components/checkbox";
+import { Button } from "@stll/ui/button";
+import { Checkbox } from "@stll/ui/checkbox";
 import {
   Dialog,
   DialogFooter,
@@ -25,25 +25,25 @@ import {
   DialogPanel,
   DialogPopup,
   DialogTitle,
-} from "@stll/ui/components/dialog";
-import { Field, FieldControl, FieldLabel } from "@stll/ui/components/field";
-import { Input } from "@stll/ui/components/input";
+} from "@stll/ui/dialog";
+import { Field, FieldControl, FieldLabel } from "@stll/ui/field";
+import { Input } from "@stll/ui/input";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@stll/ui/components/menu";
+} from "@stll/ui/menu";
 import {
   Select,
   SelectItem,
   SelectPopup,
   SelectTrigger,
   SelectValue,
-} from "@stll/ui/components/select";
-import { Textarea } from "@stll/ui/components/textarea";
-import { stellaToast } from "@stll/ui/components/toast";
-import { cn } from "@stll/ui/lib/utils";
+} from "@stll/ui/select";
+import { Textarea } from "@stll/ui/textarea";
+import { stellaToast } from "@stll/ui/toast";
+import { cn } from "@stll/ui/utils";
 
 import { DatePickerPopover } from "@/components/date-picker-popover";
 import { MatterTargetPicker } from "@/components/matter-target-picker";

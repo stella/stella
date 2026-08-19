@@ -1,4 +1,4 @@
-import { BidiText } from "@stll/ui/components/bidi-text";
+import { BidiText } from "@stll/ui/bidi-text";
 
 export const EmailLink = ({ address }: { address: string }) => (
   <a

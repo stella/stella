@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { Button } from "@stll/ui/components/button";
+import { Button } from "@stll/ui/button";
 import {
   Dialog,
   DialogClose,
@@ -21,8 +21,8 @@ import {
   DialogPopup,
   DialogTitle,
   DialogTrigger,
-} from "@stll/ui/components/dialog";
-import { cn } from "@stll/ui/lib/utils";
+} from "@stll/ui/dialog";
+import { cn } from "@stll/ui/utils";
 
 import type { TranslationKey } from "@/i18n/types";
 import { templateCheckOptions } from "@/lib/knowledge/queries";
