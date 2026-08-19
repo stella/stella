@@ -66,6 +66,7 @@
         "@stll/api-contract": "workspace:*",
         "@stll/boe": "workspace:*",
         "@stll/business-registries": "workspace:*",
+        "@stll/calculations": "workspace:*",
         "@stll/catalogue": "workspace:*",
         "@stll/chat-limits": "workspace:*",
         "@stll/conditions": "workspace:*",
@@ -492,6 +493,19 @@
         "@types/bun": "catalog:",
       },
     },
+    "packages/calculations": {
+      "name": "@stll/calculations",
+      "version": "0.0.0",
+      "dependencies": {
+        "@stll/money": "workspace:*",
+      },
+      "devDependencies": {
+        "@stll/property-testing": "workspace:*",
+        "@stll/typescript-config": "workspace:*",
+        "@types/bun": "catalog:",
+        "fast-check": "catalog:",
+      },
+    },
     "packages/catalogue": {
       "name": "@stll/catalogue",
       "version": "0.0.0",
@@ -773,6 +787,8 @@
       "name": "@stll/workspace-ui",
       "version": "0.0.0",
       "dependencies": {
+        "@stll/calculations": "workspace:*",
+        "@stll/money": "workspace:*",
         "@stll/ui": "workspace:*",
         "better-result": "catalog:",
         "lucide-react": "catalog:",
@@ -780,10 +796,12 @@
         "use-intl": "catalog:",
       },
       "devDependencies": {
+        "@stll/property-testing": "workspace:*",
         "@stll/typescript-config": "workspace:*",
         "@tanstack/react-table": "9.1.2",
         "@types/bun": "catalog:",
         "@types/react": "catalog:react19",
+        "fast-check": "catalog:",
         "tailwindcss": "catalog:",
       },
     },
@@ -2189,6 +2207,8 @@
     "@stll/boe": ["@stll/boe@workspace:packages/boe"],
 
     "@stll/business-registries": ["@stll/business-registries@workspace:packages/business-registries"],
+
+    "@stll/calculations": ["@stll/calculations@workspace:packages/calculations"],
 
     "@stll/catalogue": ["@stll/catalogue@workspace:packages/catalogue"],
 
