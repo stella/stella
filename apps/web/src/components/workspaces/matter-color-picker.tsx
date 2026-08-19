@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { ReactNode } from "react";
+import type { ReactNode, SyntheticEvent } from "react";
 
 import { useTranslations } from "use-intl";
 
@@ -53,8 +53,21 @@ type MatterColorPickerProps = {
 
 type MatterColorContextPickerProps = MatterColorPickerProps & {
   className?: string;
-  label: string;
-};
+} & (
+    | {
+        /** Focusable button: click, right-click, or keyboard opens the picker. */
+        trigger?: "button";
+        label: string;
+      }
+    | {
+        /**
+         * Right-click only. Renders an inert span so a parent link keeps
+         * left click (used where the icon is the whole clickable item).
+         */
+        trigger: "contextmenu";
+        label?: never;
+      }
+  );
 
 const MatterColorPicker = ({ children, matter }: MatterColorPickerProps) => {
   const { moreLabel, selectColor } = useMatterColorPicker(matter);
@@ -74,48 +87,60 @@ const MatterColorPicker = ({ children, matter }: MatterColorPickerProps) => {
 const MatterColorContextPicker = ({
   children,
   className,
-  label,
   matter,
+  ...trigger
 }: MatterColorContextPickerProps) => {
   const [open, setOpen] = useState(false);
   const [anchor, setAnchor] = useState<HTMLSpanElement | null>(null);
 
-  const openPicker = () => setOpen(true);
+  const openPicker = (event: SyntheticEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setOpen(true);
+  };
+
+  const triggerClassName = cn(
+    "relative flex shrink-0 items-center justify-center rounded",
+    className,
+  );
+  const content = (
+    <>
+      <span
+        aria-hidden
+        className={cn(
+          "pointer-events-none absolute -inset-1 rounded-md opacity-0 motion-reduce:animate-none",
+          open && "animate-attention-flash",
+        )}
+        style={{
+          backgroundColor: `color-mix(in srgb, ${resolveMatterColor(matter.id, matter.color)} 18%, transparent)`,
+        }}
+      />
+      <span className="relative flex" ref={setAnchor}>
+        {children}
+      </span>
+    </>
+  );
 
   return (
     <>
-      <button
-        aria-label={label}
-        className={cn(
-          "relative flex shrink-0 items-center justify-center rounded outline-hidden focus-visible:ring-2",
-          className,
-        )}
-        onClick={(event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          openPicker();
-        }}
-        onContextMenu={(event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          openPicker();
-        }}
-        type="button"
-      >
-        <span
-          aria-hidden
-          className={cn(
-            "pointer-events-none absolute -inset-1 rounded-md opacity-0 motion-reduce:animate-none",
-            open && "animate-attention-flash",
-          )}
-          style={{
-            backgroundColor: `color-mix(in srgb, ${resolveMatterColor(matter.id, matter.color)} 18%, transparent)`,
-          }}
-        />
-        <span className="relative flex" ref={setAnchor}>
-          {children}
+      {trigger.trigger === "contextmenu" ? (
+        <span className={triggerClassName} onContextMenu={openPicker}>
+          {content}
         </span>
-      </button>
+      ) : (
+        <button
+          aria-label={trigger.label}
+          className={cn(
+            triggerClassName,
+            "outline-hidden focus-visible:ring-2",
+          )}
+          onClick={openPicker}
+          onContextMenu={openPicker}
+          type="button"
+        >
+          {content}
+        </button>
+      )}
       <Popover onOpenChange={setOpen} open={open}>
         <PopoverPopup
           align="start"
