@@ -192,10 +192,14 @@ describe("resolveSelectedVersion", () => {
   });
 
   test("has nothing to resolve to on an empty history", () => {
+    // Sliced from the fixture so the element type is the real one; empty
+    // literals would infer away the return type this asserts on.
+    const empty = bothPages.slice(0, 0);
+
     expect(
       resolveSelectedVersion({
-        changed: [],
-        consolidations: [],
+        changed: empty,
+        consolidations: empty,
         selectedId: "current",
       }),
     ).toBeUndefined();
