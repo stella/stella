@@ -204,6 +204,7 @@ describe("StatuteText", () => {
     const markup = renderWithIntl(
       <StatuteText
         blocks={blocks}
+        citationWork={null}
         documentId={DOCUMENT_ID}
         fulltext={null}
         language="cs"
@@ -218,6 +219,7 @@ describe("StatuteText", () => {
     const markup = renderWithIntl(
       <StatuteText
         blocks={blocks}
+        citationWork={null}
         documentId={DOCUMENT_ID}
         fulltext={null}
         language="cs"

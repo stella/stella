@@ -18,6 +18,7 @@ import { cn } from "@stll/ui/lib/utils";
 
 import {
   diffProvisionText,
+  resolveSelectedVersion,
   selectChangedVersions,
 } from "@/features/statutes/provision-diff";
 import type { ProvisionDiffSegment } from "@/features/statutes/provision-diff";
@@ -121,14 +122,13 @@ const ProvisionHistoryBody = ({
     );
   }
 
-  const versions = selectChangedVersions(
-    data.pages.flatMap((page) => page.items),
-  );
-  const selectedIndex = Math.max(
-    0,
-    versions.findIndex((version) => version.documentId === selectedId),
-  );
-  const selected = versions.at(selectedIndex);
+  const consolidations = data.pages.flatMap((page) => page.items);
+  const versions = selectChangedVersions(consolidations);
+  const selected = resolveSelectedVersion({
+    changed: versions,
+    consolidations,
+    selectedId,
+  });
 
   if (selected === undefined) {
     return (
@@ -138,7 +138,7 @@ const ProvisionHistoryBody = ({
     );
   }
 
-  const previous = versions.at(selectedIndex + 1);
+  const previous = versions.at(versions.indexOf(selected) + 1);
   const label = (validFrom: string | null): string =>
     formatValidityDate(validFrom, format) ?? EM_DASH;
 

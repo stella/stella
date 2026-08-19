@@ -30,6 +30,8 @@ const blocks: Block[] = [
   paragraph("sec-1-a-1", "Nested rule."),
   heading("sec-2", 2, "Section 2"),
   paragraph("sec-2-1", "Second rule."),
+  heading("chapter-2", 1, "Chapter II"),
+  paragraph("chapter-2-1", "Rule of the next chapter."),
 ];
 
 describe("extractProvisionText", () => {
@@ -44,13 +46,18 @@ describe("extractProvisionText", () => {
   });
 
   test("stops at a shallower heading", () => {
+    // The fixture closes with a level-1 heading, so a rule that only stopped
+    // at same-level headings would swallow the next chapter.
     expect(extractProvisionText(blocks, "sec-2")).toBe(
       ["Section 2", "Second rule."].join("\n"),
     );
   });
 
   test("takes everything under a top-level heading", () => {
-    expect(extractProvisionText(blocks, "chapter-1")).toContain("Second rule.");
+    const chapter = extractProvisionText(blocks, "chapter-1");
+
+    expect(chapter).toContain("Second rule.");
+    expect(chapter).not.toContain("Rule of the next chapter.");
   });
 
   test("reads an unknown anchor as absent, not as empty", () => {

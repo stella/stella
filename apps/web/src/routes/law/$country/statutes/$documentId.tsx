@@ -369,7 +369,10 @@ const StatuteReader = ({
                 onVersionChange={handleVersionChange}
                 versions={versions}
               />
-              {versions.length > 1 && (
+              {/* Reachable whenever a date is set, or a single-version act
+                  opened with one would strand the reader on an empty text
+                  with no way to clear it. */}
+              {(versions.length > 1 || asOf !== undefined) && (
                 <div className="flex items-center gap-2">
                   <span
                     className="text-muted-foreground text-xs"
