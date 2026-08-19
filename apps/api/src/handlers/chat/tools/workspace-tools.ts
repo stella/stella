@@ -33,6 +33,10 @@ const formatFieldValue = (content: FieldContent): string => {
       return content.value;
     case "single-select":
       return content.value ?? "";
+    case "money":
+      return `${content.amountCents} ${content.currency}`;
+    case "person":
+      return content.name;
     case "multi-select":
       return content.value.join(", ");
     case "date": {
@@ -251,6 +255,12 @@ export const createWorkspaceTools = ({
             kind: "invalid-input",
             message:
               'Property is "file"; use the document creation or upload tools instead.',
+          });
+        case "money":
+        case "person":
+          throw new ChatToolError({
+            kind: "invalid-input",
+            message: `Property is "${propType}"; set it from the workspace UI.`,
           });
         case "text": {
           if (typeof value !== "string") {

@@ -65,6 +65,10 @@ const getFieldValue = (content: FieldContent | undefined): string => {
       return content.value ?? "";
     case "int":
       return String(content.value);
+    case "money":
+      return String(content.amountCents);
+    case "person":
+      return content.name;
     case "error":
     case "pending":
     case "unsupported":
@@ -83,6 +87,11 @@ const numericContentValue = (
 ): number | null => {
   if (content?.type === "int") {
     return content.value;
+  }
+  // Money sorts on its minor-unit amount, which is exact; comparing across
+  // currencies is the caller's problem, as it is in SQL.
+  if (content?.type === "money") {
+    return content.amountCents;
   }
   const raw = getFieldValue(content).trim();
   if (raw === "" || !NUMERIC_TEXT_RE.test(raw)) {

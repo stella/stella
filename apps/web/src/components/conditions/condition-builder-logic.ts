@@ -21,6 +21,8 @@ export type FieldValueType =
   | "multi-select"
   | "date"
   | "int"
+  | "money"
+  | "person"
   | "kind"
   | "status"
   | "priority";
@@ -167,7 +169,7 @@ export const operatorLabelKey = (
   valueType: FieldValueType,
   operator: ConditionOperator,
 ): OperatorLabelKey => {
-  if (valueType === "int") {
+  if (valueType === "int" || valueType === "money") {
     return labelFrom(INT_OPERATOR_LABEL_KEYS, operator);
   }
   if (valueType === "date") {
@@ -197,6 +199,10 @@ const OPERATORS_BY_VALUE_TYPE = {
   priority: ["eq", "neq", "in", "is_empty", "is_not_empty"],
   "multi-select": ["contains", "not_contains", "is_empty", "is_not_empty"],
   int: ["eq", "neq", "gt", "lt", "gte", "lte", "is_empty", "is_not_empty"],
+  // Money compares on its minor-unit amount, which is what the stored value
+  // holds and what SQL sorts on.
+  money: ["eq", "neq", "gt", "lt", "gte", "lte", "is_empty", "is_not_empty"],
+  person: ["eq", "neq", "contains", "not_contains", "is_empty", "is_not_empty"],
   date: ["eq", "neq", "gt", "lt", "gte", "lte", "is_empty", "is_not_empty"],
   kind: ["in"],
 } as const satisfies Record<FieldValueType, readonly ConditionOperator[]>;
@@ -224,7 +230,7 @@ export const valueEditorFor = (
   ) {
     return "select";
   }
-  if (valueType === "int") {
+  if (valueType === "int" || valueType === "money") {
     return "int";
   }
   if (valueType === "date") {

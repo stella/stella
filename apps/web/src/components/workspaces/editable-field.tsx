@@ -82,7 +82,13 @@ export const EditableField = ({
     content?.type === "error" ||
     content?.type === "pending" ||
     content?.type === "unsupported" ||
-    content?.type === "clip"
+    content?.type === "clip" ||
+    // Money and person render, filter, sort and calculate, but have no inline
+    // editor yet; they are not offered by the property composer either
+    // (isCreatableContentType), so a workspace only holds one if the API put
+    // it there.
+    type === "money" ||
+    type === "person"
   ) {
     return (
       <FieldValue

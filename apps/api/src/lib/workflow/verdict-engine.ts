@@ -65,6 +65,8 @@ export const askPresence = (
         ? "present"
         : "absent";
     case "int":
+    case "money":
+    case "person":
     case "file":
     case "clip":
       return "present";
@@ -107,6 +109,12 @@ export const extractedFromContent = (
         : value;
       return { value, text };
     }
+    case "money": {
+      const value = String(content.amountCents);
+      return { value, text: `${value} ${content.currency}` };
+    }
+    case "person":
+      return { value: content.name, text: content.name };
     case "file":
     case "clip":
     case "error":
@@ -138,6 +146,10 @@ export const askText = (content: FieldContent | undefined): string | null => {
       return content.currency
         ? `${content.value} ${content.currency}`
         : String(content.value);
+    case "money":
+      return `${content.amountCents} ${content.currency}`;
+    case "person":
+      return content.name;
     case "file":
     case "clip":
     case "error":

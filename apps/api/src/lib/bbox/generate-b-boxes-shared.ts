@@ -163,6 +163,10 @@ const getFieldContentAsString = (content?: FieldContent) => {
       return content.currency
         ? `${content.value} ${content.currency}`
         : String(content.value);
+    case "money":
+      return `${content.amountCents} ${content.currency}`;
+    case "person":
+      return content.name;
     case "error":
     case "pending":
     case "unsupported":

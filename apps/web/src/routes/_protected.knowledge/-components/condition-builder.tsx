@@ -77,6 +77,8 @@ const TEMPLATE_OPERATORS = {
   // The remaining value types never reach the template surface; fall back to
   // the safe serializable set.
   "multi-select": ["eq", "neq", "contains"],
+  money: ["eq", "neq", "contains"],
+  person: ["eq", "neq", "contains"],
   kind: ["eq", "neq", "contains"],
   status: ["eq", "neq", "contains"],
   priority: ["eq", "neq", "contains"],

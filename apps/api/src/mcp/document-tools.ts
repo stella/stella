@@ -133,6 +133,10 @@ const SETTABLE_VALUE_TYPES = [
 
 const PROPERTY_WRITE_METHODS = {
   file: "unsupported",
+  // Neither is settable through set_field_value: money needs a currency
+  // alongside the amount and a person needs resolving to a workspace member.
+  money: "unsupported",
+  person: "unsupported",
   text: "set_field_value",
   "single-select": "set_field_value",
   "multi-select": "set_field_value",

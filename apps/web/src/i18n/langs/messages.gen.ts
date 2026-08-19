@@ -4389,6 +4389,7 @@ type Messages = {
       "markThisGroupAsReviewed": "Mark this group as reviewed";
       "markedAsLocked": "{count, plural, one {# cell locked} other {# cells locked}}";
       "markedAsReviewed": "{count, plural, one {# cell marked as reviewed} other {# cells marked as reviewed}}";
+      "money": "Money";
       "multiSelect": "Multi Select";
       "nameProperty": "Name property";
       "newColumn": "New column";
@@ -4399,6 +4400,7 @@ type Messages = {
       "noPropertiesFound": "No properties found";
       "optionsHelp": "Define the values the AI may pick from.";
       "optionsLabel": "Options";
+      "person": "Person";
       "previewEmpty": "AI returned no value.";
       "previewMockNotice": "Mock preview — backend not yet wired.";
       "previewOnFirst": "Preview on {document}";

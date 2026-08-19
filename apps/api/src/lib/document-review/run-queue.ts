@@ -26,6 +26,7 @@ import { DAY_IN_MS } from "@stll/time";
 import { rootDb } from "@/api/db/root";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { documentReviewRuns, fields } from "@/api/db/schema";
+import { isAiExtractablePropertyContent } from "@/api/db/schema-validators";
 import type { FieldContent } from "@/api/db/schema-validators";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import {
@@ -636,7 +637,7 @@ const runPlaybookPass = async ({
     const content = ask.content;
     // `planReviewRun` already excluded file-typed and empty asks; this narrows
     // the content union for the extractor rather than re-deciding eligibility.
-    if (content.type === "file") {
+    if (!isAiExtractablePropertyContent(content)) {
       continue;
     }
     asks.push({

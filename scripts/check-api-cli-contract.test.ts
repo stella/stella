@@ -16,6 +16,7 @@ import {
   CLI_REQUIRED_CAPABILITIES,
   CLI_SUPPORTED_API_PROTOCOLS,
 } from "../packages/cli/src/generated/api-contract";
+import { loadChangesetPolicy } from "./changeset-guard";
 
 const SHARED_NPM_PACKAGES = [
   "business-registries",
@@ -24,6 +25,15 @@ const SHARED_NPM_PACKAGES = [
   "template-conditions",
   "docx-utils",
 ] as const;
+
+/**
+ * The release gate's pathspecs live in scripts/changeset-policy.json, and the
+ * workflow reads them from there rather than repeating them, so these
+ * assertions read the same file the gate does. `changeset-guard.test.ts` holds
+ * the other half of the contract: that the workflow consumes the policy and
+ * inlines no pathspecs of its own.
+ */
+const policy = loadChangesetPolicy();
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
@@ -85,10 +95,9 @@ describe("API and CLI release contract", () => {
   });
 
   test("automated versioning regenerates the baked CLI package version", async () => {
-    const [rootPackage, ciWorkflow] = await Promise.all([
-      Bun.file(new URL("../package.json", import.meta.url)).json(),
-      Bun.file(new URL("../.github/workflows/ci.yml", import.meta.url)).text(),
-    ]);
+    const rootPackage: unknown = await Bun.file(
+      new URL("../package.json", import.meta.url),
+    ).json();
     if (!isRecord(rootPackage)) {
       throw new TypeError("root package manifest is not an object");
     }
@@ -114,16 +123,9 @@ describe("API and CLI release contract", () => {
       "bun run src/codegen-version.ts",
     );
 
-    const generatedPathsStart = ciWorkflow.indexOf("generated-paths: |");
-    const packageFilesStart = ciWorkflow.indexOf(
-      "package-files: |",
-      generatedPathsStart,
-    );
-    const generatedPaths = ciWorkflow.slice(
-      generatedPathsStart,
-      packageFilesStart,
-    );
-    expect(generatedPaths).toContain(
+    // The baked version is written by `changeset version`, so a release that
+    // did not carry it would ship a CLI reporting the previous version.
+    expect(policy.generatedPaths).toContain(
       "packages/cli/src/generated/cli-version.ts",
     );
   });
@@ -194,9 +196,8 @@ describe("API and CLI release contract", () => {
   });
 
   test("shared package publishing uses Changesets release signals", async () => {
-    const [changesetConfig, ciWorkflow, publishWorkflow] = await Promise.all([
+    const [changesetConfig, publishWorkflow] = await Promise.all([
       Bun.file(new URL("../.changeset/config.json", import.meta.url)).text(),
-      Bun.file(new URL("../.github/workflows/ci.yml", import.meta.url)).text(),
       Bun.file(
         new URL("../.github/workflows/publish-npm.yml", import.meta.url),
       ).text(),
@@ -219,9 +220,16 @@ describe("API and CLI release contract", () => {
     for (const packageName of SHARED_NPM_PACKAGES) {
       expect(pushTrigger).toContain(`packages/${packageName}/CHANGELOG.md`);
       expect(pushTrigger).not.toContain(`packages/${packageName}/package.json`);
-      expect(ciWorkflow).toContain(`packages/${packageName}/src/**`);
-      expect(ciWorkflow).toContain(`packages/${packageName}/CHANGELOG.md`);
-      expect(ciWorkflow).toContain(`packages/${packageName}/package.json`);
+      // A released package missing from the gate is the failure this guards:
+      // its source would merge with no changeset, and its version bump would
+      // not be recognised as release metadata.
+      expect(policy.releasePaths).toContain(`packages/${packageName}/src/**`);
+      expect(policy.generatedPaths).toContain(
+        `packages/${packageName}/CHANGELOG.md`,
+      );
+      expect(policy.generatedPaths).toContain(
+        `packages/${packageName}/package.json`,
+      );
       expect(publishWorkflow).toContain(`- ${packageName}`);
       expect(publishWorkflow).toContain(`npm-tarball-${packageName}`);
       expect(changesetConfig).not.toContain(`"@stll/${packageName}"`);

@@ -5,10 +5,12 @@ import type { ConditionNode } from "@stll/conditions";
 import type { ScopedDb } from "@/api/db/safe-db";
 import type { PropertyStatus } from "@/api/db/schema";
 import type {
+  AiExtractablePropertyContent,
   AIModelTool,
   PlaybookVerdictTool,
   PropertyTool,
 } from "@/api/db/schema-validators";
+import { isAiExtractablePropertyContent } from "@/api/db/schema-validators";
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
 import { parseStoredCondition } from "@/api/lib/conditions/parse-stored";
@@ -49,7 +51,7 @@ export type BatchPropertyDependency = {
 type BatchPropertyBase = {
   id: SafeId<"property">;
   status: PropertyStatus;
-  content: Exclude<PropertyContent, { type: "file" }>;
+  content: AiExtractablePropertyContent;
   dependencies: BatchPropertyDependency[];
 };
 
@@ -236,7 +238,7 @@ export const buildLevelBatches = (
     }
 
     if (
-      property.content.type === "file" ||
+      !isAiExtractablePropertyContent(property.content) ||
       !needsComputation(property.status)
     ) {
       continue;

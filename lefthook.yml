@@ -31,6 +31,13 @@ pre-commit:
 pre-push:
   parallel: false
   commands:
+    # Runs before the slow checks (lefthook orders commands by name): CI
+    # rejects a release-gated change with no changeset, and learning that from
+    # a finished workflow costs a full round trip. Same rule, same pathspecs
+    # (scripts/changeset-policy.json), two git diffs. Skips silently on a
+    # branch that touches no released package, and with LEFTHOOK=0.
+    changeset:
+      run: bun scripts/changeset-guard.ts --base origin/main
     code-check:
       # Turbo caches lint and typecheck per affected workspace, including
       # reverse dependants. Global inputs fall back to the full repo.

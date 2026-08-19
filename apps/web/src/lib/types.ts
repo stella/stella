@@ -146,6 +146,16 @@ export type WorkspaceProperty = {
     | {
         version: 1;
         type: "int";
+      }
+    | {
+        version: 1;
+        type: "money";
+        /** Currency new values default to; null when each value carries its own. */
+        currency: string | null;
+      }
+    | {
+        version: 1;
+        type: "person";
       };
   tool: ManualInputTool | AIModelTool | PlaybookVerdictTool;
   // Structural role: identifies the document-type classifier by identity

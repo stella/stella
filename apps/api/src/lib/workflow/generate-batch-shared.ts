@@ -81,7 +81,10 @@ const isFieldContentEmpty = (content: FieldContentForAI): boolean => {
     case "date":
       return content.value === null || content.value.trim().length === 0;
     case "int":
+    case "money":
       return false;
+    case "person":
+      return content.name.trim().length === 0;
     default:
       throw new Unreachable({
         message: "Field type not matched",

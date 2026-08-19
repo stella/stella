@@ -109,6 +109,52 @@ export const CalculationPicker = ({
   );
 };
 
+export type CalculationKindPickerProps = {
+  /** Reductions this column's values allow. */
+  kinds: readonly CalculationKind[];
+  /** The reduction currently shown, or null for none. */
+  value: CalculationKind | null;
+  onChange: (kind: CalculationKind | null) => void;
+  /** Trigger content. Defaults to the calculation glyph. */
+  children?: ReactNode;
+};
+
+/**
+ * Choose one column's reduction. The board picks a property first (it shows one
+ * line for the whole board); a table column already is the property.
+ */
+export const CalculationKindPicker = ({
+  kinds,
+  value,
+  onChange,
+  children,
+}: CalculationKindPickerProps) => {
+  const t = useTranslations();
+
+  return (
+    <Menu>
+      <MenuTrigger
+        aria-label={t("workspaces.calculations.choose")}
+        render={<Button size="icon-xs" variant="ghost" />}
+      >
+        {children ?? <SigmaIcon />}
+      </MenuTrigger>
+      <MenuPopup>
+        <MenuItem onClick={() => onChange(null)}>
+          {value === null ? <CheckIcon /> : <span />}
+          {t("common.none")}
+        </MenuItem>
+        {kinds.map((kind) => (
+          <MenuItem key={kind} onClick={() => onChange(kind)}>
+            {value === kind ? <CheckIcon /> : <span />}
+            <CalculationKindLabel kind={kind} />
+          </MenuItem>
+        ))}
+      </MenuPopup>
+    </Menu>
+  );
+};
+
 export type CalculationSummaryProps = {
   calculation: FormattedCalculation;
 };

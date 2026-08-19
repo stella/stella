@@ -48,6 +48,8 @@ const singleSelectType = t.Literal("single-select");
 const multiSelectType = t.Literal("multi-select");
 const dateType = t.Literal("date");
 const intType = t.Literal("int");
+const moneyType = t.Literal("money");
+const personType = t.Literal("person");
 
 /**
  * ISO 4217 alphabetic code. Three *letters*, not three characters: a stored
@@ -71,6 +73,8 @@ export const propertyContentTypeSchema = t.Union([
   multiSelectType,
   dateType,
   intType,
+  moneyType,
+  personType,
 ]);
 
 export type PropertyContentType = Static<typeof propertyContentTypeSchema>;
@@ -104,9 +108,41 @@ export const propertyContentSchema = t.Union([
     version: v1,
     type: intType,
   }),
+  // Money is not an int with a currency label: it is stored in minor units, so
+  // the two cannot share a column without a 100x bug waiting in every sum. The
+  // property's currency is the default new values take; null means each value
+  // carries its own.
+  t.Object({
+    version: v1,
+    type: moneyType,
+    currency: t.Nullable(currencyCode),
+  }),
+  t.Object({
+    version: v1,
+    type: personType,
+  }),
 ]);
 
 export type PropertyContent = Static<typeof propertyContentSchema>;
+
+/**
+ * Property content an AI tool can produce a value for. A file is uploaded, a
+ * money amount needs a currency the model has no way to choose, and a person
+ * has to resolve to a workspace member; all three are entered by hand, so the
+ * execution plan never schedules them and the prompt/validator switches below
+ * have no branch for them.
+ */
+export type AiExtractablePropertyContent = Exclude<
+  PropertyContent,
+  { type: "file" | "money" | "person" }
+>;
+
+export const isAiExtractablePropertyContent = (
+  content: PropertyContent,
+): content is AiExtractablePropertyContent =>
+  content.type !== "file" &&
+  content.type !== "money" &&
+  content.type !== "person";
 
 export const aiModelToolSchema = t.Object({
   version: v1,
@@ -259,6 +295,21 @@ export const fieldContentSchema = t.Union([
     type: t.Literal("int"),
     value: t.Integer(),
     currency: t.Nullable(currencyCode),
+  }),
+  t.Object({
+    version: v1,
+    type: t.Literal("money"),
+    // Minor units ("cents"), so arithmetic stays exact.
+    amountCents: t.Integer(),
+    currency: currencyCode,
+  }),
+  t.Object({
+    version: v1,
+    type: t.Literal("person"),
+    // Null when the person is named but not a workspace member.
+    userId: t.Nullable(t.String({ maxLength: 128 })),
+    name: t.String({ minLength: 1, maxLength: 256 }),
+    image: t.Nullable(t.String({ maxLength: 2048 })),
   }),
   t.Object({
     version: v1,

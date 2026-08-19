@@ -1,5 +1,6 @@
 import {
   AlertCircleIcon,
+  BanknoteIcon,
   CalendarIcon,
   CircleDotIcon,
   FileIcon,
@@ -8,6 +9,7 @@ import {
   LinkIcon,
   ListChecksIcon,
   TextIcon,
+  UserIcon,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -22,7 +24,9 @@ type PropertyContentType =
   | "single-select"
   | "multi-select"
   | "date"
-  | "int";
+  | "int"
+  | "money"
+  | "person";
 
 type PropertyIconType = FieldTypeWithoutPending | PropertyContentType;
 
@@ -44,6 +48,14 @@ const propertyMap: Record<
   text: {
     icon: TextIcon,
     label: "Text",
+  },
+  money: {
+    icon: BanknoteIcon,
+    label: "Money",
+  },
+  person: {
+    icon: UserIcon,
+    label: "Person",
   },
   file: {
     icon: FileIcon,

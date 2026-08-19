@@ -23,6 +23,8 @@ const COUNTING_KINDS = [
   "percent-empty",
 ] as const satisfies readonly CalculationKind[];
 
+const NUMERIC_PROPERTY_TYPES = ["int", "money"] as const;
+
 /**
  * A share of the view's total needs the view's total, and a column only ever
  * holds its own page of rows, so it is not offered until something can supply
@@ -35,7 +37,7 @@ const OFFERED_NUMERIC_KINDS = NUMERIC_CALCULATION_KINDS.filter(
 export const calculationKindsForProperty = (
   property: WorkspaceProperty,
 ): readonly CalculationKind[] =>
-  property.content.type === "int"
+  NUMERIC_PROPERTY_TYPES.some((type) => type === property.content.type)
     ? [...COUNTING_KINDS, ...OFFERED_NUMERIC_KINDS]
     : COUNTING_KINDS;
 
@@ -58,8 +60,8 @@ export const toCalculationValue = (
       }
       // The cell renderer formats an int's value as major units and the money
       // reduction counts minor ones, so the amount is scaled by the currency's
-      // own exponent on the way in. Without it an int column holding two
-      // currencies would add up to a number in neither of them.
+      // own exponent on the way in. A money field needs no scaling: it already
+      // stores minor units, which is the point of it being its own type.
       return {
         type: "money",
         amountCents: unsafeCents(
@@ -68,6 +70,14 @@ export const toCalculationValue = (
         currency,
       };
     }
+    case "money":
+      return {
+        type: "money",
+        amountCents: unsafeCents(field.content.amountCents),
+        currency: field.content.currency,
+      };
+    case "person":
+      return textValue(field.content.name);
     case "text":
       return textValue(field.content.value);
     case "single-select":

@@ -55,6 +55,37 @@ wrapper. A card that opens something passes `onOpen` and gets the button role
 and the keyboard contract; a card that opens nothing gets neither, so it never
 lands in the tab order.
 
+## The table: a column schema
+
+Which columns a table view has, in what order, and what each may do is a
+`TableSchema`: a list of descriptors, each with an id, a label, a starting
+width, its capabilities (`sort`, `hide`, `resize`, `pin`), and an `emphasis`.
+
+The kit never looks inside a descriptor's `render`, which is why the workspace
+can keep an exhaustively checked union there — one arm per kind of column, from
+the selection checkbox to a property column carrying its property and the
+verdict column paired with it. `table-columns.tsx` turns each descriptor into
+the definition the table library wants; nothing else decides what the columns
+are.
+
+Two rules are the schema's, not the renderer's:
+
+- **A column that cannot be hidden stays visible**, whatever the stored hidden
+  list says. A column that lost its hide capability while it was hidden cannot
+  strand a table without its select column.
+- **A duplicate column id silently drops a column** — the table keys by id, so
+  the second declaration wins and the first vanishes with no error anywhere.
+  `duplicateColumnIds` is how a schema built from user data checks.
+
+## Where rows come from
+
+The table stack reads rows through four named entry points, in
+`apps/web/src/lib/workspaces/table-adapter.ts`: a flat window, a section window,
+the per-section counts that let an empty section skip its row query, and one row
+for a detail surface. Each is a query-options factory, so the table never
+fetches and the transport stays with the data layer. A contract test totals over
+the adapter's keys, so a fifth row source cannot land unnamed.
+
 ## Column calculations
 
 A view can say what each column adds up to. The choice lives on the view layout
@@ -85,10 +116,27 @@ Two rules are structural rather than conventional:
   money, and an average over no values are explicit `unsupported` results, not
   zeros.
 
-The board's column header and the table's footer run the same reducer over the
-same values, which is what makes them agree.
+The board's column header and the table's totals row run the same reducer over
+the same values, which is what makes them agree. Grouped table sections each
+total their own rows.
+
+Opting in per column is what makes a total meaningful: the earlier attempt
+summed every numeric column automatically, which is wrong for a column of days,
+and had been switched off by hard-coding its property list to the empty array.
 
 Mapping a workspace field onto a `CalculationValue` happens in one place,
-`apps/web/src/lib/workspaces/calculations.ts`. An `int` carrying a currency
-reduces as a plain number: the cell renderer formats its value as major units,
-which is not the minor units a money reduction takes.
+`apps/web/src/lib/workspaces/calculations.ts`. A `money` field reduces as money;
+an `int` carrying a currency reduces as a plain number, because an int's value
+is major units and money's is minor units — which is exactly why they are two
+property types and not one.
+
+## Property types
+
+`money` and `person` are display, filter, sort and calculation types. Neither
+has an inline editor and neither is offered by the property composer, so a
+workspace holds one only if the API put it there. Neither is AI-extractable
+either: an amount needs a currency a model cannot choose and a person has to
+resolve to a workspace member. That exclusion is one predicate,
+`isAiExtractablePropertyContent`, and the batch property's content type is bound
+to it, so the prompt builder, the answer validator and the mock are exhaustive
+by construction.

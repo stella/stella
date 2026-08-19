@@ -37,6 +37,8 @@ export const PropertyName = ({ type }: PropertyHelperProps) => {
     unsupported: t("workspaces.properties.unsupported"),
     date: t("common.date"),
     int: t("workspaces.properties.int"),
+    money: t("workspaces.properties.money"),
+    person: t("workspaces.properties.person"),
     clip: t("workspaces.properties.clip"),
   } as const satisfies Record<FieldTypeWithoutPending, string>;
 

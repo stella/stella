@@ -41,6 +41,7 @@
     "translate.settings.remove",
     "translate.settings.save",
     "workspaces.properties.optionsLabel",
+    "workspaces.properties.person",
     "workspaces.views.filter"
   ],
   "duplicateValues": [
@@ -1295,8 +1296,36 @@
     "workspaces.properties.documentsLabel": [
       "fr"
     ],
+    "workspaces.properties.money": [
+      "ar",
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
     "workspaces.properties.optionsLabel": [
       "fr"
+    ],
+    "workspaces.properties.person": [
+      "ar",
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
     ],
     "workspaces.properties.text": [
       "cs",
