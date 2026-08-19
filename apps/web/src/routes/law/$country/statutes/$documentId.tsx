@@ -380,7 +380,7 @@ const StatuteReader = ({
                   <DatePickerPopover
                     labelledBy={asOfLabelId}
                     onChange={handleAsOfChange}
-                    placeholderLabel={t("statutes.asOfToday")}
+                    placeholderLabel={t("common.today")}
                     value={asOf ?? null}
                   />
                 </div>
