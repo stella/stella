@@ -50,17 +50,17 @@ describe("versionCoversDate", () => {
 
 describe("pickVersionAt", () => {
   // Newest first, the order the versions read returns.
-  const versions = [
-    version("2016-01-01", null),
-    version("2014-01-01", "2016-01-01"),
-    version("2012-03-22", "2014-01-01"),
-  ];
+  const current = version("2016-01-01", null);
+  const middle = version("2014-01-01", "2016-01-01");
+  const oldest = version("2012-03-22", "2014-01-01");
+  const versions = [current, middle, oldest];
 
   test("takes the consolidation in force on the day, not the current one", () => {
-    expect(pickVersionAt(versions, "2015-06-01")).toBe(versions[1]);
-    // The fixture's current version is a different object, so the assertion
-    // above is about the match rather than about there being one version.
-    expect(pickVersionAt(versions, "2020-06-01")).toBe(versions[0]);
+    expect(pickVersionAt(versions, "2015-06-01")).toBe(middle);
+    // The current version is a different object, so the assertion above is
+    // about the match rather than about there being one version.
+    expect(pickVersionAt(versions, "2020-06-01")).toBe(current);
+    expect(pickVersionAt(versions, "2013-06-01")).toBe(oldest);
   });
 
   test("answers nothing for a date the corpus holds no version for", () => {

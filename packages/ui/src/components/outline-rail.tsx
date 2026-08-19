@@ -184,6 +184,7 @@ export const OutlineRail = ({
   const [toggled, setToggled] = useState<ReadonlySet<string>>(new Set());
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const panelId = useId();
+  const triggerId = useId();
   const panelOpen = hovered || pinned;
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const manualLockUntil = useRef(0);
@@ -564,6 +565,7 @@ export const OutlineRail = ({
         aria-controls={panelId}
         aria-expanded={panelOpen}
         className="focus-visible:ring-ring bg-popover text-popover-foreground sr-only absolute end-0 top-2 z-30 w-max -translate-x-6 rounded-md border px-2 py-1 text-xs focus:not-sr-only focus-visible:ring-2 focus-visible:outline-none"
+        id={triggerId}
         onClick={() => {
           if (pinned) {
             closePanel();
@@ -665,9 +667,18 @@ export const OutlineRail = ({
         }}
         onFocusCapture={openPanel}
         onKeyDown={(event) => {
-          if (event.key === "Escape") {
-            closePanel();
+          if (event.key !== "Escape") {
+            return;
           }
+          // Closing makes this panel inert, which would leave focus nowhere.
+          // Hand it back to the control that opened it, before that happens.
+          const trigger = event.currentTarget.ownerDocument.querySelector(
+            `#${CSS.escape(triggerId)}`,
+          );
+          if (trigger instanceof HTMLElement) {
+            trigger.focus();
+          }
+          closePanel();
         }}
         onMouseEnter={openPanel}
         onMouseLeave={scheduleClose}

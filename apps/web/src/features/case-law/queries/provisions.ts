@@ -11,9 +11,10 @@ const PROVISIONS_PAGE_SIZE = 50;
 /** One work resolves to one act; the extra rows absorb a loose title match. */
 const STATUTE_LOOKUP_PAGE_SIZE = 5;
 /**
- * Consolidations read in one request. An act amended more times than this is
- * a corpus outlier, and the reference then follows the current wording rather
- * than growing the read into a walk.
+ * Consolidations read in one request, the endpoint's own maximum. An act
+ * amended more times than this leaves its oldest versions unread, and a
+ * reference to one of those does not link at all: an unresolved version is a
+ * missing link, never a link to different wording.
  */
 const STATUTE_VERSIONS_PAGE_SIZE = 200;
 

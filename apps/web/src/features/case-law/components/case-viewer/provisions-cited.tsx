@@ -238,7 +238,16 @@ const WorkReferences = ({
     enabled: needsVersions,
   });
 
-  /** The consolidation a reference was made against, current wording last. */
+  /**
+   * The consolidation a reference was made against, or null while it is not
+   * known to be held.
+   *
+   * A reference that states a version has to reach that version: the current
+   * wording is a different text, and may not even carry the anchor. Until the
+   * matching consolidation resolves — the read is in flight, it failed, or
+   * the corpus does not hold that version — the reference reads as text
+   * rather than linking somewhere it does not belong.
+   */
   const documentFor = (row: ProvisionRow) => {
     if (statute === undefined || statute === null) {
       return null;
@@ -248,9 +257,13 @@ const WorkReferences = ({
       return statute;
     }
 
-    return (
-      pickVersionAt(optionalArray(versions), row.versionValidFrom) ?? statute
-    );
+    // The wording in force is itself the cited version for most references,
+    // which is why the versions read is not started for them.
+    if (versionCoversDate(statute, row.versionValidFrom)) {
+      return statute;
+    }
+
+    return pickVersionAt(optionalArray(versions), row.versionValidFrom);
   };
 
   return (
