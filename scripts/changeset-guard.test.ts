@@ -17,6 +17,8 @@ const REPO_ROOT = path.resolve(import.meta.dirname, "..");
 const POLICY_FILE = "scripts/changeset-policy.json";
 const WORKFLOW_FILE = ".github/workflows/ci.yml";
 const TREE_SUFFIX = "/**";
+/** Release metadata that belongs to the repository, not to one package. */
+const REPO_LEVEL_GENERATED = new Set(["bun.lock"]);
 
 const policy = loadChangesetPolicy();
 
@@ -266,6 +268,22 @@ describe("changeset policy file", () => {
       )
       .filter((candidate) => !existsSync(path.join(REPO_ROOT, candidate)));
     expect(missing).toEqual([]);
+  });
+
+  test("routes every generated path to a released package or the lockfile", () => {
+    // A version pull request may only carry release metadata, so anything
+    // listed here that no release can write is a hole in that check. Private
+    // workspaces are not versioned (`privatePackages.version: false`) and
+    // depend on the released packages through `workspace:*` ranges, so
+    // changesets never rewrites one.
+    const gated = gatedWorkspaces();
+    expect(
+      policy.generatedPaths.filter(
+        (generated) =>
+          !REPO_LEVEL_GENERATED.has(generated) &&
+          !gated.some((workspace) => generated.startsWith(`${workspace}/`)),
+      ),
+    ).toEqual([]);
   });
 
   test("gates every package changesets would release, and only those", () => {

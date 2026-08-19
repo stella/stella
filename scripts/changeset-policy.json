@@ -35,8 +35,6 @@
     "packages/ui/tsdown.config.ts"
   ],
   "generatedPaths": [
-    "apps/web/CHANGELOG.md",
-    "apps/web/package.json",
     "bun.lock",
     "packages/cli/CHANGELOG.md",
     "packages/cli/package.json",
