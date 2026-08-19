@@ -4,6 +4,7 @@ export type {
   DocumentAstMetadata,
   DocumentAstSource,
   HeadingBlock,
+  HeadingLevel,
   Inline,
   InlineBold,
   InlineItalic,

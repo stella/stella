@@ -29,6 +29,7 @@ export type {
   DocumentAstMetadata,
   DocumentAstSource,
   HeadingBlock,
+  HeadingLevel,
   ParagraphBlock,
   ParagraphRole,
   TableBlock,

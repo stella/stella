@@ -474,7 +474,7 @@ describe("structural budget", () => {
             id: "h0",
             anchorId: "h0-anchor",
             type: "heading",
-            level: 4,
+            level: 7,
             inlines: [],
             plainText: "Invalid heading",
           },
