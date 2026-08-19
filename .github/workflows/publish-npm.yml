@@ -25,6 +25,7 @@ on:
       - packages/conditions/CHANGELOG.md
       - packages/template-conditions/CHANGELOG.md
       - packages/docx-utils/CHANGELOG.md
+      - packages/ui/CHANGELOG.md
   workflow_run: # zizmor: ignore[dangerous-triggers] the release tag and SHA are revalidated before the release job receives id-token
     workflows: ["Release Artifacts"]
     types: [completed]
@@ -40,6 +41,7 @@ on:
           - conditions
           - template-conditions
           - docx-utils
+          - ui
           - cli
         default: all
       publish:
@@ -176,10 +178,10 @@ jobs:
           if [[ "$EVENT_NAME" == "workflow_run" ]]; then
             pkgs=(cli)
           elif [[ "$EVENT_NAME" == "push" ]]; then
-            pkgs=(country-codes business-registries conditions template-conditions docx-utils)
+            pkgs=(country-codes business-registries conditions template-conditions docx-utils ui)
           else
             case "$MANUAL_PACKAGE" in
-              all) pkgs=(country-codes business-registries conditions template-conditions docx-utils cli) ;;
+              all) pkgs=(country-codes business-registries conditions template-conditions docx-utils ui cli) ;;
               *) pkgs=("$MANUAL_PACKAGE") ;;
             esac
           fi
@@ -334,6 +336,15 @@ jobs:
         with:
           name: npm-tarball-docx-utils
           path: release-artifacts/docx-utils/
+          retention-days: 1
+          if-no-files-found: error
+
+      - name: Upload ui tarball
+        if: contains(fromJSON(steps.pack.outputs.packages), 'ui')
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: npm-tarball-ui
+          path: release-artifacts/ui/
           retention-days: 1
           if-no-files-found: error
 
