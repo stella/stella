@@ -2,11 +2,20 @@ import { Result } from "better-result";
 import Elysia, { t } from "elysia";
 
 import { env } from "@/api/env";
+import {
+  readStatuteByEliHandler,
+  readStatuteByEliQuerySchema,
+} from "@/api/handlers/legislation/by-eli";
 import { readPublicLegislationHandler } from "@/api/handlers/legislation/get";
 import {
   listStatutesHandler,
   listStatutesQuerySchema,
 } from "@/api/handlers/legislation/list";
+import {
+  provisionHistoryParamsSchema,
+  provisionHistoryQuerySchema,
+  readProvisionHistoryHandler,
+} from "@/api/handlers/legislation/provision-history";
 import {
   listStatuteVersionsHandler,
   listStatuteVersionsParamsSchema,
@@ -25,6 +34,23 @@ const listStatutes = createSafePublicHandler(
     const response = yield* Result.await(
       Result.tryPromise(
         async () => await listStatutesHandler(query, legislationPublicReadDb),
+      ),
+    );
+
+    return Result.ok(response);
+  },
+);
+
+const readStatuteByEli = createSafePublicHandler(
+  {
+    mcp: { type: "internal", reason: "public_indexing" },
+    query: readStatuteByEliQuerySchema,
+  },
+  async function* ({ query }) {
+    const response = yield* Result.await(
+      Result.tryPromise(
+        async () =>
+          await readStatuteByEliHandler(query, legislationPublicReadDb),
       ),
     );
 
@@ -74,6 +100,29 @@ const listStatuteVersions = createSafePublicHandler(
   },
 );
 
+const readProvisionHistory = createSafePublicHandler(
+  {
+    mcp: { type: "internal", reason: "public_indexing" },
+    params: provisionHistoryParamsSchema,
+    query: provisionHistoryQuerySchema,
+  },
+  async function* ({ params: { documentId, anchor }, query }) {
+    const response = yield* Result.await(
+      Result.tryPromise(
+        async () =>
+          await readProvisionHistoryHandler({
+            documentId,
+            anchor,
+            query,
+            legislationDb: legislationPublicReadDb,
+          }),
+      ),
+    );
+
+    return Result.ok(response);
+  },
+);
+
 /**
  * Public-read routes: no auth, no session, no organization context.
  * Only sources cleared for redistribution are readable.
@@ -92,10 +141,23 @@ export const publicLegislationRoute = new Elysia({
   .get("/statutes", listStatutes.handler, {
     query: listStatutes.config.query,
   })
+  // Ahead of `/statutes/:documentId`, or the literal segment would be read as
+  // a document id and rejected by the UUID schema.
+  .get("/statutes/by-eli", readStatuteByEli.handler, {
+    query: readStatuteByEli.config.query,
+  })
   .get("/statutes/:documentId", readStatute.handler, {
     params: readStatute.config.params,
   })
   .get("/statutes/:documentId/versions", listStatuteVersions.handler, {
     params: listStatuteVersions.config.params,
     query: listStatuteVersions.config.query,
-  });
+  })
+  .get(
+    "/statutes/:documentId/provisions/:anchor/history",
+    readProvisionHistory.handler,
+    {
+      params: readProvisionHistory.config.params,
+      query: readProvisionHistory.config.query,
+    },
+  );

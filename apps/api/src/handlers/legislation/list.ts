@@ -1,10 +1,14 @@
 import { and, asc, eq, gt, ilike, or, sql } from "drizzle-orm";
-import type { SQL, SQLWrapper } from "drizzle-orm";
+import type { SQL } from "drizzle-orm";
 import { status, t } from "elysia";
 import type { Static } from "elysia";
 
 import { legislationDocuments, legislationSources } from "@/api/db/schema";
 import { redistributableLegislationSource } from "@/api/handlers/legislation/redistribution";
+import {
+  inForceToday,
+  versionSortKey,
+} from "@/api/handlers/legislation/validity-window";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tPaginationCursor, tPaginationLimit } from "@/api/lib/custom-schema";
 import { escapeLike } from "@/api/lib/escape-like";
@@ -49,21 +53,6 @@ const decodeTitleIdCursor = (cursor: string): TitleIdCursor | null => {
   return { title, id: brandPersistedLegislationDocumentId(id) };
 };
 
-/** Works with no version window sort below every dated consolidation. */
-const UNVERSIONED_SORT_DATE = "0001-01-01";
-
-/**
- * A version window that has opened and has not closed. The window is the
- * corpus half-open interval `[version_valid_from, version_valid_to)`, so a
- * version whose successor opens today ends today and is already historical.
- * A null `version_valid_from` marks a work kept as a single unversioned text.
- */
-const inForceToday = (validFrom: SQLWrapper, validTo: SQLWrapper): SQL => sql`(
-  ${validFrom} IS NULL OR ${validFrom} <= CURRENT_DATE
-) AND (
-  ${validTo} IS NULL OR ${validTo} > CURRENT_DATE
-)`;
-
 /**
  * Keeps only the version in force for its work: no other in-force row of the
  * same work (source, ELI and language, the key the unique indexes use) has a
@@ -79,10 +68,10 @@ const isCurrentVersionOfWork = sql`NOT EXISTS (
     AND newer.id <> ${legislationDocuments.id}
     AND (${inForceToday(sql`newer.version_valid_from`, sql`newer.version_valid_to`)})
     AND (
-      coalesce(newer.version_valid_from, DATE '${sql.raw(UNVERSIONED_SORT_DATE)}'),
+      ${versionSortKey(sql`newer.version_valid_from`)},
       newer.id
     ) > (
-      coalesce(${legislationDocuments.versionValidFrom}, DATE '${sql.raw(UNVERSIONED_SORT_DATE)}'),
+      ${versionSortKey(legislationDocuments.versionValidFrom)},
       ${legislationDocuments.id}
     )
 )`;

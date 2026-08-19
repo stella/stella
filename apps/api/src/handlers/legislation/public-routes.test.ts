@@ -38,6 +38,34 @@ describe("public statute routes", () => {
     expect(response.status).toBe(422);
   });
 
+  test("rejects a point-in-time read with no identifier", async () => {
+    const response = await publicLegislationRoute.handle(
+      new Request("http://localhost/law/statutes/by-eli"),
+    );
+
+    expect(response.status).toBe(422);
+  });
+
+  test("rejects an asOf that is not a calendar date", async () => {
+    const response = await publicLegislationRoute.handle(
+      new Request(
+        "http://localhost/law/statutes/by-eli?eli=CZ%2F2012%2F89&asOf=yesterday",
+      ),
+    );
+
+    expect(response.status).toBe(422);
+  });
+
+  test("rejects a provision-history anchor on a non-UUID document", async () => {
+    const response = await publicLegislationRoute.handle(
+      new Request(
+        "http://localhost/law/statutes/not-a-uuid/provisions/p-1/history",
+      ),
+    );
+
+    expect(response.status).toBe(422);
+  });
+
   test("rejects a list cursor that is not a title/id pair", async () => {
     const response = await publicLegislationRoute.handle(
       new Request(

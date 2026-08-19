@@ -1,10 +1,17 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { status, t } from "elysia";
 import type { Static } from "elysia";
 
-import { legislationDocuments, legislationSources } from "@/api/db/schema";
-import { redistributableLegislationSource } from "@/api/handlers/legislation/redistribution";
+import { legislationDocuments } from "@/api/db/schema";
+import {
+  UNVERSIONED_SORT_DATE,
+  versionSortKey,
+} from "@/api/handlers/legislation/validity-window";
+import {
+  selectWorkKey,
+  workKeyConditions,
+} from "@/api/handlers/legislation/work-key";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   tPaginationCursor,
@@ -43,14 +50,6 @@ type VersionCursor = {
   validFrom: string;
   id: SafeId<"legislationDocument">;
 };
-
-/** Works with no version window sort below every dated consolidation. */
-const UNVERSIONED_SORT_DATE = "0001-01-01";
-
-const versionSortKey = sql`coalesce(
-  ${legislationDocuments.versionValidFrom},
-  DATE '${sql.raw(UNVERSIONED_SORT_DATE)}'
-)`;
 
 const decodeVersionCursor = (cursor: string): VersionCursor | null => {
   const parts = decodePaginationCursor(cursor);
@@ -93,38 +92,17 @@ export const listStatuteVersionsHandler = async ({
   }
 
   const rows = await legislationDb(async (tx) => {
-    const [work] = await tx
-      .select({
-        sourceId: legislationDocuments.sourceId,
-        eli: legislationDocuments.eli,
-        language: legislationDocuments.language,
-      })
-      .from(legislationDocuments)
-      .innerJoin(
-        legislationSources,
-        eq(legislationSources.id, legislationDocuments.sourceId),
-      )
-      .where(
-        and(
-          eq(legislationDocuments.id, documentId),
-          redistributableLegislationSource,
-        ),
-      )
-      .limit(1);
+    const work = await selectWorkKey(tx, documentId);
 
-    if (work === undefined) {
+    if (work === null) {
       return null;
     }
 
-    const conditions: SQL[] = [
-      eq(legislationDocuments.sourceId, work.sourceId),
-      eq(legislationDocuments.eli, work.eli),
-      eq(legislationDocuments.language, work.language),
-    ];
+    const conditions: SQL[] = workKeyConditions(work);
 
     if (cursor !== null) {
       conditions.push(
-        sql`(${versionSortKey}, ${legislationDocuments.id}) < (${cursor.validFrom}::date, ${cursor.id}::uuid)`,
+        sql`(${versionSortKey(legislationDocuments.versionValidFrom)}, ${legislationDocuments.id}) < (${cursor.validFrom}::date, ${cursor.id}::uuid)`,
       );
     }
 
@@ -146,7 +124,7 @@ export const listStatuteVersionsHandler = async ({
       .from(legislationDocuments)
       .where(and(...conditions))
       .orderBy(
-        sql`${versionSortKey} desc`,
+        sql`${versionSortKey(legislationDocuments.versionValidFrom)} desc`,
         sql`${legislationDocuments.id} desc`,
       )
       .limit(limit + 1);
