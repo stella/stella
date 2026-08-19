@@ -286,6 +286,24 @@ const webCrossWorkspaceImports = [
   },
 ];
 
+// The design system is published from its own source: it has to build,
+// test, and typecheck with nothing but its declared dependencies present.
+// Bans reaching sideways into an application, into a private workspace
+// package, and back into itself through the package name (the intra-package
+// graph is relative, so a self-reference would only survive in-repo).
+const uiStandaloneImports = [
+  {
+    group: ["@stll/*", "@stll/*/**"],
+    message:
+      "@stll/ui must build standalone; it may not import another workspace package, including itself by name.",
+  },
+  {
+    group: ["@/*", "@/**", "apps/*", "apps/**", "**/apps/**"],
+    message:
+      "@stll/ui must not reach into application code; move the shared part into the package or keep the component in the app.",
+  },
+];
+
 const webDatePickerImport = {
   group: ["@stll/ui/components/date-picker-popover"],
   message:
@@ -1597,16 +1615,7 @@ export default defineConfig({
       rules: {
         "no-restricted-imports": [
           "error",
-          {
-            paths: [noZodImport],
-            patterns: [
-              {
-                group: ["@stll/*", "@stll/*/**", "!@stll/ui", "!@stll/ui/**"],
-                message:
-                  "@stll/ui must stay workspace-pure; do not import other stella workspaces from UI source.",
-              },
-            ],
-          },
+          { paths: [noZodImport], patterns: uiStandaloneImports },
         ],
       },
     },
