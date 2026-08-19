@@ -360,12 +360,24 @@ export const applySorts = <T extends FilterableEntity>(
  * Covers text, single-select, date, int (via `value` key)
  * and file (via `fileName` key).
  */
+/**
+ * The scalar a field compares as, mirroring `getFieldValue` above key for key:
+ * a value, a file's name, a person's name, or a money amount in minor units.
+ * Each content type populates exactly one of them, so the COALESCE order is
+ * documentation rather than precedence.
+ */
 export const fieldValueExpr = (contentCol: typeof fields.content): SQL =>
-  sql`COALESCE(${contentCol}->>'value', ${contentCol}->>'fileName', '')`;
+  sql`COALESCE(
+    ${contentCol}->>'value',
+    ${contentCol}->>'fileName',
+    ${contentCol}->>'name',
+    ${contentCol}->>'amountCents',
+    ''
+  )`;
 
-const numericFieldValueExpr = (contentCol: typeof fields.content): SQL => {
-  const valueExpr = fieldValueExpr(contentCol);
-  const trimmed = sql`BTRIM(${valueExpr})`;
+/** A guarded cast: text that is not a number sorts as absent, never as zero. */
+const numericTextExpr = (textExpr: SQL): SQL => {
+  const trimmed = sql`BTRIM(${textExpr})`;
 
   return sql`CASE
     WHEN ${trimmed} ~ ${NUMERIC_TEXT_PATTERN}
@@ -373,6 +385,9 @@ const numericFieldValueExpr = (contentCol: typeof fields.content): SQL => {
     ELSE NULL
   END`;
 };
+
+const numericFieldValueExpr = (contentCol: typeof fields.content): SQL =>
+  numericTextExpr(fieldValueExpr(contentCol));
 
 /**
  * Wraps a per-field predicate in an EXISTS subquery against the
@@ -788,11 +803,33 @@ export const buildSortExpressions = (sorts: readonly ViewSort[]): SQL[] => {
       LIMIT 1
     )`;
 
+    // Money is ordered within its currency, never across one. Minor units are
+    // not comparable between currencies — they do not even share a scale, JPY
+    // having none — so 100 JPY beside 100 CZK is a comparison with no answer,
+    // the same judgement the calculation reducer makes when it refuses to add
+    // them. Grouping by currency code first gives a total order that is
+    // meaningful inside each currency and merely deterministic between them.
+    const currencySortKey = sql`(
+      SELECT CASE
+        WHEN ${fields.content}->>'type' = 'money'
+        THEN ${fields.content}->>'currency'
+        ELSE NULL
+      END
+      FROM ${fields}
+      WHERE ${fields.workspaceId} = ${entities.workspaceId}
+        AND ${fields.entityVersionId} = ${entities.currentVersionId}
+        AND ${fields.propertyId} = ${sort.propertyId}
+      LIMIT 1
+    )`;
+
     // Numeric sort key: `content->>'value'` is text, so a plain ORDER BY sorts
-    // "10" before "9". Use numeric mode for int fields and int properties
-    // with legacy text content, then break ties with the text key.
+    // "10" before "9". Use numeric mode for money amounts, for int fields, and
+    // for int properties with legacy text content, then break ties with the
+    // text key.
     const numericSortKey = sql`(
       SELECT CASE
+        WHEN ${fields.content}->>'type' = 'money'
+        THEN ${numericTextExpr(sql`${fields.content}->>'amountCents'`)}
         WHEN ${fields.content}->>'type' = 'int' OR ${propertyIsInt}
         THEN ${numericFieldValueExpr(fields.content)}
         ELSE NULL
@@ -803,12 +840,11 @@ export const buildSortExpressions = (sorts: readonly ViewSort[]): SQL[] => {
         AND ${fields.propertyId} = ${sort.propertyId}
       LIMIT 1
     )`;
+    // The same projection the filters compare against. It had been a second
+    // copy of the COALESCE, which is how sorting came to know about fewer
+    // content types than filtering did.
     const textSortKey = sql`(
-      SELECT COALESCE(
-        ${fields.content}->>'value',
-        ${fields.content}->>'fileName',
-        ''
-      )
+      SELECT ${fieldValueExpr(fields.content)}
       FROM ${fields}
       WHERE ${fields.workspaceId} = ${entities.workspaceId}
         AND ${fields.entityVersionId} = ${entities.currentVersionId}
@@ -816,6 +852,13 @@ export const buildSortExpressions = (sorts: readonly ViewSort[]): SQL[] => {
       LIMIT 1
     )`;
 
+    // Ahead of the amount, so a money column groups by currency; NULL for every
+    // other content type, which leaves their ordering untouched.
+    expressions.push(
+      sort.desc
+        ? sql`${currencySortKey} DESC NULLS LAST`
+        : sql`${currencySortKey} ASC NULLS LAST`,
+    );
     expressions.push(
       sort.desc
         ? sql`${numericSortKey} DESC NULLS LAST`
