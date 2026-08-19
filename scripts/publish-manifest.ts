@@ -12,7 +12,14 @@
 
 import { panic } from "better-result";
 
-type DistEntry = { types: string; import: string };
+/** A built module: types and implementation, both emitted from one source. */
+export type DistModuleEntry = { types: string; import: string };
+
+// An entry is either a built module or a file the build copies verbatim
+// (stylesheets: the design-system theme ships as source CSS, since the
+// consumer owns the Tailwind build that compiles it). The two are told apart
+// the way the exports field itself does it — an object versus a string.
+export type DistEntry = DistModuleEntry | string;
 
 export type PublishedManifest = Record<string, unknown> & {
   exports: Record<string, DistEntry>;
@@ -20,14 +27,37 @@ export type PublishedManifest = Record<string, unknown> & {
   version: string;
 };
 
+export const isDistModuleEntry = (entry: DistEntry): entry is DistModuleEntry =>
+  typeof entry !== "string";
+
+/** Files in the published tarball an export entry points at. */
+export const distEntryFiles = (entry: DistEntry): string[] =>
+  isDistModuleEntry(entry) ? [entry.types, entry.import] : [entry];
+
+// A module compiles to `.js` + `.d.ts`; a stylesheet is copied under its own
+// name. `.tsx` is a module: a React package's components are its modules.
+const MODULE_EXTENSIONS = [".ts", ".tsx"] as const;
+const COPIED_EXTENSIONS = [".css"] as const;
+
+const hasExtension = (target: string, extensions: readonly string[]): boolean =>
+  extensions.some((extension) => target.endsWith(extension));
+
 // "./src/model/document.ts" -> "./dist/model/document"
 const distBase = (srcPath: string): string =>
-  srcPath.replace(/^\.\/src\//u, "./dist/").replace(/\.ts$/u, "");
+  srcPath.replace(/^\.\/src\//u, "./dist/").replace(/\.tsx?$/u, "");
+
+// "./src/styles/theme.css" -> "./dist/styles/theme.css"
+const distAsset = (srcPath: string): string =>
+  srcPath.replace(/^\.\/src\//u, "./dist/");
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
-// Validated `exports` map of a source-shaped manifest: subpath -> ./src/*.ts.
+// Validated `exports` map of a source-shaped manifest: subpath -> a single
+// file under ./src. Wildcards are rejected along with everything else that is
+// not a concrete source path: the published map has to name every subpath, or
+// the checks below (and the export-resolution guard in CI) have nothing to
+// resolve.
 export const sourceExportTargets = (
   manifest: unknown,
 ): Record<string, string> => {
@@ -44,10 +74,13 @@ export const sourceExportTargets = (
     if (
       typeof target !== "string" ||
       !target.startsWith("./src/") ||
-      !target.endsWith(".ts")
+      !(
+        hasExtension(target, MODULE_EXTENSIONS) ||
+        hasExtension(target, COPIED_EXTENSIONS)
+      )
     ) {
       panic(
-        `${manifest["name"]}: expected source export "${subpath}" to be a ./src/*.ts string, got ${JSON.stringify(target)}`,
+        `${manifest["name"]}: expected source export "${subpath}" to be a ./src/*.{ts,tsx,css} string, got ${JSON.stringify(target)}`,
       );
     }
     targets[subpath] = target;
@@ -66,6 +99,10 @@ export const toPublishedManifest = (manifest: unknown): PublishedManifest => {
 
   const distExports: Record<string, DistEntry> = {};
   for (const [subpath, target] of Object.entries(sourceTargets)) {
+    if (hasExtension(target, COPIED_EXTENSIONS)) {
+      distExports[subpath] = distAsset(target);
+      continue;
+    }
     const base = distBase(target);
     distExports[subpath] = { types: `${base}.d.ts`, import: `${base}.js` };
   }
@@ -73,6 +110,9 @@ export const toPublishedManifest = (manifest: unknown): PublishedManifest => {
   const root =
     distExports["."] ??
     panic(`${manifest["name"]}: exports must include a "." entry`);
+  if (!isDistModuleEntry(root)) {
+    panic(`${manifest["name"]}: the "." export must be a module, not an asset`);
+  }
 
   // Ship built artifacts and the README; drop `src`. Carry over any non-`src`
   // asset dirs the source `files` allowlist opted in (e.g. TanStack Intent's

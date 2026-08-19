@@ -18,6 +18,7 @@ import { cp, mkdir, rm } from "node:fs/promises";
 import path from "node:path";
 
 import {
+  isDistModuleEntry,
   type PublishedManifest,
   sourceExportTargets,
   toPublishedManifest,
@@ -68,13 +69,16 @@ export const stageWorkspacePackage = async ({
   );
 
   // A package whose build config misses an exported entry must fail here,
-  // not on the first runtime import of the missing file.
+  // not on the first runtime import of the missing file. Only the runtime
+  // file matters: the runner image executes the package, it does not compile
+  // against it, so a build that emits no declarations still stages.
   await Promise.all(
     Object.entries(manifest.exports).map(async ([subpath, entry]) => {
-      const built = await Bun.file(path.join(stagedDir, entry.import)).exists();
+      const file = isDistModuleEntry(entry) ? entry.import : entry;
+      const built = await Bun.file(path.join(stagedDir, file)).exists();
       if (!built) {
         panic(
-          `${manifest.name}: staged export "${subpath}" is missing ${entry.import}`,
+          `${manifest.name}: staged export "${subpath}" is missing ${file}`,
         );
       }
     }),
