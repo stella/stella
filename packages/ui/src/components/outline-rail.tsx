@@ -53,6 +53,11 @@ export type OutlineRailProps = {
   onJump: (id: string, container: HTMLElement) => void;
   /** Controlled active id; when omitted, derived from `resolvePct`. */
   activeId?: string | null;
+  /** Pinned at the top of the panel, above the tree (e.g. a jump field).
+   *  Supplying one also keeps the panel mounted when `items` is short, so a
+   *  filter that narrows the tree to nothing cannot take its own control
+   *  away; the caller decides whether the document has an outline at all. */
+  header?: ReactNode;
   /** Depth from which entries start collapsed. Their ancestors still open on
    *  their own while one of their descendants is active, so a deep outline
    *  reads as the chain down to where the reader is rather than as every
@@ -159,6 +164,7 @@ export const OutlineRail = ({
   resolvePct,
   onJump,
   activeId,
+  header,
   collapsedFromLevel,
   topOffset = 0,
   panelWidth = 300,
@@ -505,7 +511,9 @@ export const OutlineRail = ({
   // Gate on the panel content (every heading), not the pruned tick count. An
   // outline with one shallow heading and many deeper ones leaves <2 ticks but
   // still has a full, navigable popover, so only hide when there is no outline.
-  if (items.length < 2) {
+  // A header keeps the panel: `items` is then the caller's filtered view, and
+  // a filter matching nothing must still leave the field that set it.
+  if (items.length < 2 && header === undefined) {
     return null;
   }
 
@@ -595,6 +603,12 @@ export const OutlineRail = ({
             ? "translate-x-0 opacity-100"
             : "pointer-events-none translate-x-2 opacity-0",
         )}
+        // A control in the header is reachable by keyboard once the panel is
+        // open, and typing in it moves the pointer nowhere: hold the panel
+        // open for as long as focus is inside it, or `inert` would take the
+        // focused control away mid-keystroke.
+        onBlurCapture={scheduleClose}
+        onFocusCapture={openPanel}
         onMouseEnter={openPanel}
         onMouseLeave={scheduleClose}
         ref={panelRef}
@@ -605,6 +619,11 @@ export const OutlineRail = ({
           maxHeight: "calc(100% - 24px)",
         }}
       >
+        {header !== undefined && (
+          <div className="bg-popover sticky top-0 z-50 border-b p-2">
+            {header}
+          </div>
+        )}
         <ul className="m-0 list-none p-0">{tree.map(renderNode)}</ul>
       </nav>
     </div>

@@ -312,6 +312,14 @@
       "searchPlaceholder": "Hledat podle spisové značky..."
     },
     "loadingMore": "Načítání dalších...",
+    "provision": {
+      "article": "čl. {value}",
+      "letter": "písm. {value})",
+      "openEnded": "a násl.",
+      "point": "bod {value}",
+      "sentence": "věta {value}",
+      "subsection": "odst. {value}"
+    },
     "seo": {
       "browse": "Procházet judikaturu",
       "countries": "Země",
@@ -325,6 +333,7 @@
       "legalSentence": "Právní věta",
       "nalusDisclaimer": "Zdroj: NALUS, Ústavní soud ČR. Bezplatné. Elektronická verze není autentická; autentické jsou pouze originály a stejnopisy se státním znakem a podpisem příslušné úřední osoby.",
       "popularName": "Populární název",
+      "provisionsCited": "Dotčená ustanovení",
       "sourceFields": {
         "decisionCategory": "Kategorie rozhodnutí",
         "publishedOnWeb": "Zveřejněno na webu"
@@ -3260,6 +3269,8 @@
     "inForceSince": "Účinné od {date}",
     "openEnded": "současnost",
     "outline": "Obsah",
+    "outlineJumpLabel": "Přejít na ustanovení",
+    "outlineJumpPlaceholder": "§ 10 nebo název",
     "searchLabel": "Hledat v právních předpisech",
     "searchPlaceholder": "Hledat podle názvu nebo čísla...",
     "status": {

@@ -312,6 +312,14 @@
       "searchPlaceholder": "Nach Aktenzeichen suchen..."
     },
     "loadingMore": "Weitere werden geladen…",
+    "provision": {
+      "article": "Artikel {value}",
+      "letter": "Buchst. {value})",
+      "openEnded": "ff.",
+      "point": "Nr. {value}",
+      "sentence": "Satz {value}",
+      "subsection": "Abs. {value}"
+    },
     "seo": {
       "browse": "Rechtsprechung durchsuchen",
       "countries": "Länder",
@@ -325,6 +333,7 @@
       "legalSentence": "Leitsatz",
       "nalusDisclaimer": "Source: NALUS, Constitutional Court of the Czech Republic. Free of charge. This electronic version is not authentic.",
       "popularName": "Populärer Name",
+      "provisionsCited": "Angeführte Vorschriften",
       "sourceFields": {
         "decisionCategory": "Entscheidungskategorie",
         "publishedOnWeb": "Im Web veröffentlicht"
@@ -3260,6 +3269,8 @@
     "inForceSince": "In Kraft seit {date}",
     "openEnded": "heute",
     "outline": "Inhalt",
+    "outlineJumpLabel": "Zu einer Vorschrift springen",
+    "outlineJumpPlaceholder": "§ 10 oder Überschrift",
     "searchLabel": "Rechtsvorschriften durchsuchen",
     "searchPlaceholder": "Nach Titel oder Nummer suchen...",
     "status": {

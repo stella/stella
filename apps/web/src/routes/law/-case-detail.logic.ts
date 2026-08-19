@@ -6,6 +6,8 @@ import {
   decisionBySlugOptions,
   decisionOptions,
 } from "@/features/case-law/queries/decisions";
+import { decisionProvisionsInfiniteOptions } from "@/features/case-law/queries/provisions";
+import { getAnalytics } from "@/lib/analytics/provider";
 import { createCaseLawLanguageAlternateLinks } from "@/lib/case-law-language-alternates";
 import {
   type CaseLawDecisionRouteParams,
@@ -14,6 +16,7 @@ import {
   extractLegacyCaseLawDecisionIdFromRouteParam,
   normalizeCaseLawLanguageSegment,
 } from "@/lib/case-law-route";
+import { detached } from "@/lib/detached";
 import { APIError } from "@/lib/errors/api";
 import { pageTitleLiteral } from "@/lib/page-title";
 import {
@@ -21,7 +24,11 @@ import {
   createPublicLawCanonicalUrl,
   createPublicLawHead,
 } from "@/lib/public-law-seo";
-import { ensureRouteQueryData } from "@/lib/react-query";
+import {
+  ensureRouteQueryData,
+  prefetchNonCriticalInfiniteQuery,
+  routeQueryOptions,
+} from "@/lib/react-query";
 import type { SafeId } from "@/lib/safe-id";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -96,6 +103,29 @@ type RedirectToCanonicalDecisionPathOptions = {
 
 export const extractId = (param: string): SafeId<"caseLawDecision"> =>
   toSafeId<"caseLawDecision">(param);
+
+/**
+ * Warm the decision's provision references alongside the decision itself.
+ *
+ * The panel that reads them is secondary to the text, so this never blocks
+ * the route: it starts during navigation and the panel takes whatever is
+ * warm by the time it renders.
+ */
+const primeDecisionProvisions = (
+  queryClient: QueryClient,
+  decisionId: string,
+): void => {
+  detached(
+    prefetchNonCriticalInfiniteQuery(
+      queryClient,
+      routeQueryOptions(decisionProvisionsInfiniteOptions(decisionId)),
+      (error: unknown) => {
+        getAnalytics().captureError(error);
+      },
+    ),
+    "case-law.provisions-prefetch",
+  );
+};
 
 const buildDescription = (decision: {
   caseNumber: string;
@@ -205,6 +235,8 @@ export const loadPublicCaseLawDecisionRoute = async ({
       redirectToCanonicalDecisionPath({ canonicalParams, search });
     }
 
+    primeDecisionProvisions(queryClient, decision.id);
+
     return decision;
   }
 
@@ -236,6 +268,8 @@ export const loadPublicCaseLawDecisionRoute = async ({
   if (currentPath !== canonicalPath) {
     redirectToCanonicalDecisionPath({ canonicalParams, search });
   }
+
+  primeDecisionProvisions(queryClient, decision.id);
 
   return decision;
 };

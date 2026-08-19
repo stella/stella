@@ -1,4 +1,4 @@
-import { useCallback, useRef } from "react";
+import { useCallback, useRef, useState } from "react";
 
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
@@ -7,11 +7,16 @@ import { useTranslations } from "use-intl";
 import { parseDocumentAst } from "@stll/legal-ast/document-ast";
 import { OutlineRail } from "@stll/ui/components/outline-rail";
 
+import { OutlineJumpField } from "@/components/legal-reader/outline-jump-field";
 import {
+  filterOutlineItems,
+  findProvisionAnchorId,
   jumpToAnchor,
   outlineFromHeadings,
+  parseOutlineJump,
   resolveAnchorPct,
   STATUTE_OUTLINE_COLLAPSE_LEVEL,
+  withProvisionRanges,
 } from "@/components/legal-reader/reader-outline";
 import { StatuteStatusPill } from "@/features/statutes/components/statute-status-pill";
 import { StatuteText } from "@/features/statutes/components/statute-text";
@@ -24,6 +29,7 @@ import {
   EM_DASH,
   formatValidityDate,
 } from "@/features/statutes/statute-format";
+import { workIdentifierFromEli } from "@/features/statutes/work-identifier";
 import { useFormatter } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
 import { pageTitleLiteral } from "@/lib/page-title";
@@ -111,11 +117,24 @@ function PublicStatuteRoute() {
   );
 
   const readerRef = useRef<HTMLDivElement>(null);
+  const [jumpValue, setJumpValue] = useState("");
   // An unparseable or absent AST is a real state: the reader then renders
   // the plain fulltext instead of blocks.
   const ast = parseDocumentAst(statute.documentAst);
   const blocks = ast ? ast.blocks : [];
-  const outline = outlineFromHeadings(blocks);
+  const outline = withProvisionRanges(outlineFromHeadings(blocks));
+  const jump = parseOutlineJump(jumpValue);
+  const visibleOutline = filterOutlineItems(outline, jump);
+  const jumpAnchorId = findProvisionAnchorId(outline, jump);
+
+  // The work as case law cites it. Null for a work whose ELI does not state
+  // one, in which case the reader offers no incoming citations at all.
+  const workIdentifier = workIdentifierFromEli(statute.eli);
+  const jurisdiction = statute.country?.trim().toUpperCase() ?? "";
+  const citationWork =
+    workIdentifier === null || jurisdiction === ""
+      ? null
+      : { jurisdiction, work: workIdentifier };
 
   const validFrom = formatValidityDate(statute.versionValidFrom, format);
   const validTo = formatValidityDate(statute.versionValidTo, format);
@@ -126,8 +145,29 @@ function PublicStatuteRoute() {
       {/* The rail hides itself when a document has no outline to show. */}
       <OutlineRail
         ariaLabel={t("statutes.outline")}
-        collapsedFromLevel={STATUTE_OUTLINE_COLLAPSE_LEVEL}
-        items={outline}
+        // A narrowed outline opens whole: the entries a reader searched for
+        // are the point, and folding them away again hides the answer.
+        {...(jump.type === "empty"
+          ? { collapsedFromLevel: STATUTE_OUTLINE_COLLAPSE_LEVEL }
+          : {})}
+        header={
+          outline.length < 2 ? undefined : (
+            <OutlineJumpField
+              onJump={() => {
+                const container = readerRef.current;
+
+                if (jumpAnchorId === null || container === null) {
+                  return;
+                }
+
+                jumpToAnchor(jumpAnchorId, container);
+              }}
+              onValueChange={setJumpValue}
+              value={jumpValue}
+            />
+          )
+        }
+        items={visibleOutline}
         onJump={jumpToAnchor}
         resolvePct={resolveAnchorPct}
         scrollContainerRef={readerRef}
@@ -172,6 +212,7 @@ function PublicStatuteRoute() {
 
           <StatuteText
             blocks={blocks}
+            citationWork={citationWork}
             fulltext={statute.fulltext}
             language={statute.language}
           />

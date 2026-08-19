@@ -312,6 +312,14 @@
       "searchPlaceholder": "Keresés ügyszám alapján..."
     },
     "loadingMore": "Betöltés folyamatban...",
+    "provision": {
+      "article": "{value}. cikk",
+      "letter": "{value}) pont",
+      "openEnded": "és köv.",
+      "point": "{value}. pont",
+      "sentence": "{value}. mondat",
+      "subsection": "({value}) bekezdés"
+    },
     "seo": {
       "browse": "Ítélkezési gyakorlat böngészése",
       "countries": "Országok",
@@ -325,6 +333,7 @@
       "legalSentence": "Elvi bírósági határozat",
       "nalusDisclaimer": "Source: NALUS, Constitutional Court of the Czech Republic. Free of charge. This electronic version is not authentic.",
       "popularName": "Népszerű név",
+      "provisionsCited": "Hivatkozott rendelkezések",
       "sourceFields": {
         "decisionCategory": "Döntés kategóriája",
         "publishedOnWeb": "Weben közzétéve"
@@ -3260,6 +3269,8 @@
     "inForceSince": "Hatályos {date} óta",
     "openEnded": "jelenleg is",
     "outline": "Tartalom",
+    "outlineJumpLabel": "Ugrás rendelkezéshez",
+    "outlineJumpPlaceholder": "§ 10 vagy cím",
     "searchLabel": "Keresés a jogszabályok között",
     "searchPlaceholder": "Keresés cím vagy szám alapján...",
     "status": {

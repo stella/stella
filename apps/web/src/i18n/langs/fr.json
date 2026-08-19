@@ -312,6 +312,14 @@
       "searchPlaceholder": "Rechercher par numéro d'affaire..."
     },
     "loadingMore": "Chargement en cours…",
+    "provision": {
+      "article": "art. {value}",
+      "letter": "let. {value})",
+      "openEnded": "et s.",
+      "point": "pt {value}",
+      "sentence": "phrase {value}",
+      "subsection": "al. {value}"
+    },
     "seo": {
       "browse": "Parcourir la jurisprudence",
       "countries": "Pays",
@@ -325,6 +333,7 @@
       "legalSentence": "Attendu",
       "nalusDisclaimer": "Source: NALUS, Constitutional Court of the Czech Republic. Free of charge. This electronic version is not authentic.",
       "popularName": "Nom courant",
+      "provisionsCited": "Dispositions citées",
       "sourceFields": {
         "decisionCategory": "Catégorie de décision",
         "publishedOnWeb": "Publié sur le web"
@@ -3260,6 +3269,8 @@
     "inForceSince": "En vigueur depuis le {date}",
     "openEnded": "aujourd’hui",
     "outline": "Sommaire",
+    "outlineJumpLabel": "Aller à une disposition",
+    "outlineJumpPlaceholder": "§ 10 ou un intitulé",
     "searchLabel": "Rechercher dans la législation",
     "searchPlaceholder": "Rechercher par titre ou numéro...",
     "status": {

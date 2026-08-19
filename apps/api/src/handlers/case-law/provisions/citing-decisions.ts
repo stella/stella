@@ -114,6 +114,9 @@ export const listCitingDecisionsHandler = async (
       .select({
         decisionId: caseLawProvisionCitations.decisionId,
         caseNumber: caseLawDecisions.caseNumber,
+        // The decision's own address, so a reader can follow the citation
+        // without a second read to resolve one.
+        slug: caseLawDecisions.slug,
         court: caseLawDecisions.court,
         country: caseLawDecisions.country,
         decisionDate: caseLawDecisions.decisionDate,

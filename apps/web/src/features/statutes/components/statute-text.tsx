@@ -1,3 +1,5 @@
+import { Fragment } from "react";
+
 import { useTranslations } from "use-intl";
 
 import type { Block } from "@stll/legal-ast/document-ast";
@@ -6,10 +8,23 @@ import {
   BlockRenderer,
   FulltextFallback,
 } from "@/components/legal-reader/document-ast-text";
+import { parseProvisionDesignation } from "@/components/legal-reader/reader-outline";
+import { ProvisionCitingDecisions } from "@/features/statutes/components/provision-citing-decisions";
+
+/**
+ * What a provision's incoming citations are filed under. Absent when the
+ * work's own identifier cannot be stated, in which case the reader offers no
+ * citation affordance rather than one that asks about a different act.
+ */
+export type StatuteCitationWork = {
+  jurisdiction: string;
+  work: string;
+};
 
 type StatuteTextProps = {
   /** Parsed blocks. The route owns the parse: it also builds the outline. */
   blocks: readonly Block[];
+  citationWork: StatuteCitationWork | null;
   fulltext: string | null;
   language: string;
 };
@@ -32,10 +47,16 @@ const NO_ACTIVE_MATCH = -1;
  */
 export const StatuteText = ({
   blocks,
+  citationWork,
   fulltext,
   language,
 }: StatuteTextProps) => {
   const t = useTranslations();
+
+  /** A heading that opens a provision is the unit case law cites. */
+  const isProvisionHeading = (block: Block): boolean =>
+    block.type === "heading" &&
+    parseProvisionDesignation(block.plainText) !== null;
 
   if (blocks.length > 0) {
     return (
@@ -45,13 +66,21 @@ export const StatuteText = ({
         style={READER_STYLE}
       >
         {blocks.map((block) => (
-          <BlockRenderer
-            activeMatchIndex={NO_ACTIVE_MATCH}
-            block={block}
-            key={block.id}
-            rangesByPieceId={NO_RANGES}
-            variant="statute"
-          />
+          <Fragment key={block.id}>
+            <BlockRenderer
+              activeMatchIndex={NO_ACTIVE_MATCH}
+              block={block}
+              rangesByPieceId={NO_RANGES}
+              variant="statute"
+            />
+            {citationWork !== null && isProvisionHeading(block) && (
+              <ProvisionCitingDecisions
+                anchorId={block.anchorId}
+                jurisdiction={citationWork.jurisdiction}
+                work={citationWork.work}
+              />
+            )}
+          </Fragment>
         ))}
       </article>
     );

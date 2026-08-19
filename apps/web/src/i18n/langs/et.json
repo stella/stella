@@ -312,6 +312,14 @@
       "searchPlaceholder": "Otsi kohtuasja numbri järgi..."
     },
     "loadingMore": "Laadib rohkem...",
+    "provision": {
+      "article": "art {value}",
+      "letter": "p {value})",
+      "openEnded": "jj",
+      "point": "punkt {value}",
+      "sentence": "lause {value}",
+      "subsection": "lg {value}"
+    },
     "seo": {
       "browse": "Sirvi kohtupraktikat",
       "countries": "Riigid",
@@ -325,6 +333,7 @@
       "legalSentence": "Õiguslause",
       "nalusDisclaimer": "Source: NALUS, Constitutional Court of the Czech Republic. Free of charge. This electronic version is not authentic.",
       "popularName": "Rahvanimi",
+      "provisionsCited": "Viidatud sätted",
       "sourceFields": {
         "decisionCategory": "Lahendi kategooria",
         "publishedOnWeb": "Veebis avaldatud"
@@ -3260,6 +3269,8 @@
     "inForceSince": "Kehtib alates {date}",
     "openEnded": "praeguseni",
     "outline": "Sisukord",
+    "outlineJumpLabel": "Liigu sättele",
+    "outlineJumpPlaceholder": "§ 10 või pealkiri",
     "searchLabel": "Otsi õigusaktidest",
     "searchPlaceholder": "Otsi pealkirja või numbri järgi...",
     "status": {

@@ -4,9 +4,14 @@ import type { Block } from "@stll/legal-ast/document-ast";
 
 import type { AnchorScrollContainer } from "@/components/legal-reader/reader-outline";
 import {
+  filterOutlineItems,
+  findProvisionAnchorId,
   jumpToAnchor,
   outlineFromHeadings,
+  parseOutlineJump,
+  parseProvisionDesignation,
   resolveAnchorPct,
+  withProvisionRanges,
 } from "@/components/legal-reader/reader-outline";
 
 const inlineText = (text: string) => [{ type: "text" as const, text }];
@@ -192,5 +197,243 @@ describe("anchor jump", () => {
 
     expect(resolveAnchorPct("top", container)).toBe(1);
     expect(resolveAnchorPct("bottom", container)).toBe(99);
+  });
+});
+
+const outlineItem = ({
+  id,
+  label,
+  level,
+  meta,
+}: {
+  id: string;
+  label: string;
+  level: number;
+  meta?: string;
+}) => ({ id, label, level, ...(meta === undefined ? {} : { meta }) });
+
+describe("parseProvisionDesignation", () => {
+  test("reads the designation a publisher prints, spacing and all", () => {
+    expect(parseProvisionDesignation("§ 265b")).toEqual({
+      marker: "§",
+      number: "265b",
+      unit: "section",
+    });
+    expect(parseProvisionDesignation("§265")).toEqual({
+      marker: "§",
+      number: "265",
+      unit: "section",
+    });
+  });
+
+  test("an article is its own unit, however it is spelled", () => {
+    expect(parseProvisionDesignation("Čl. 10")?.unit).toBe("article");
+    expect(parseProvisionDesignation("cl. 10")?.unit).toBe("article");
+    expect(parseProvisionDesignation("Art. 5a")?.unit).toBe("article");
+  });
+
+  test("`par.` is the section sign spelled out, not an article", () => {
+    expect(parseProvisionDesignation("par. 3")?.unit).toBe("section");
+  });
+
+  test("keeps the marker as printed, so a range reads back in its own act", () => {
+    expect(parseProvisionDesignation("Čl. 10")?.marker).toBe("Čl.");
+  });
+
+  test("a container heading is not a provision", () => {
+    expect(parseProvisionDesignation("ČÁST PRVNÍ")).toBeNull();
+    expect(parseProvisionDesignation("HLAVA I")).toBeNull();
+    expect(
+      parseProvisionDesignation("Zastoupení členem domácnosti"),
+    ).toBeNull();
+    // A designation with no number addresses nothing.
+    expect(parseProvisionDesignation("§")).toBeNull();
+  });
+});
+
+describe("withProvisionRanges", () => {
+  const items = [
+    outlineItem({ id: "cast-1", label: "ČÁST PRVNÍ", level: 0 }),
+    outlineItem({ id: "hlava-1", label: "HLAVA I", level: 1 }),
+    outlineItem({ id: "p-976", label: "§ 976", level: 2 }),
+    outlineItem({ id: "p-977", label: "§ 977", level: 2 }),
+    outlineItem({ id: "p-978", label: "§ 978", level: 2 }),
+    outlineItem({ id: "hlava-2", label: "HLAVA II", level: 1 }),
+    outlineItem({ id: "p-979", label: "§ 979", level: 2 }),
+  ];
+
+  test("states the span of provisions a container holds", () => {
+    const [, hlava] = withProvisionRanges(items);
+
+    expect(hlava?.label).toBe("HLAVA I (§ 976–978)");
+  });
+
+  test("a container reaches past its own children to the last provision under it", () => {
+    const [cast] = withProvisionRanges(items);
+
+    expect(cast?.label).toBe("ČÁST PRVNÍ (§ 976–979)");
+  });
+
+  test("a container holding one provision states it once, not as a range", () => {
+    expect(withProvisionRanges(items).at(-2)?.label).toBe("HLAVA II (§ 979)");
+  });
+
+  test("orders by the act, not by the number, so a suffix stays in place", () => {
+    const suffixed = withProvisionRanges([
+      outlineItem({ id: "hlava", label: "HLAVA I", level: 0 }),
+      outlineItem({ id: "a", label: "§ 265", level: 1 }),
+      outlineItem({ id: "b", label: "§ 265a", level: 1 }),
+      outlineItem({ id: "c", label: "§ 265b", level: 1 }),
+    ]);
+
+    expect(suffixed.at(0)?.label).toBe("HLAVA I (§ 265–265b)");
+  });
+
+  test("a provision is not a range of itself", () => {
+    expect(withProvisionRanges(items).at(2)?.label).toBe("§ 976");
+  });
+
+  test("a container with no provisions under it is left as the act states it", () => {
+    const ranged = withProvisionRanges([
+      outlineItem({ id: "cast", label: "ČÁST PRVNÍ", level: 0 }),
+      outlineItem({ id: "hlava", label: "HLAVA I", level: 1 }),
+    ]);
+
+    expect(ranged.map((item) => item.label)).toEqual(["ČÁST PRVNÍ", "HLAVA I"]);
+  });
+
+  test("carries the annotation through untouched", () => {
+    const [cast] = withProvisionRanges([
+      outlineItem({
+        id: "cast",
+        label: "ČÁST PRVNÍ",
+        level: 0,
+        meta: "OBECNÁ ČÁST",
+      }),
+      outlineItem({ id: "p", label: "§ 1", level: 1 }),
+    ]);
+
+    expect(cast?.meta).toBe("OBECNÁ ČÁST");
+  });
+});
+
+describe("parseOutlineJump", () => {
+  test("an empty field is its own state, not an empty filter", () => {
+    expect(parseOutlineJump("   ")).toEqual({ type: "empty" });
+  });
+
+  test("a designation is a jump", () => {
+    expect(parseOutlineJump("§10")).toEqual({
+      number: "10",
+      type: "provision",
+      unit: "section",
+    });
+    expect(parseOutlineJump("čl. 10")).toEqual({
+      number: "10",
+      type: "provision",
+      unit: "article",
+    });
+  });
+
+  test("anything else narrows the outline", () => {
+    expect(parseOutlineJump("zastoupení")).toEqual({
+      text: "zastoupení",
+      type: "filter",
+    });
+    // A bare number addresses no unit, so it reads as text.
+    expect(parseOutlineJump("10")).toEqual({ text: "10", type: "filter" });
+  });
+});
+
+describe("findProvisionAnchorId", () => {
+  const items = [
+    outlineItem({ id: "hlava", label: "HLAVA I", level: 0 }),
+    outlineItem({ id: "cl-10", label: "Čl. 10", level: 1 }),
+    outlineItem({ id: "par-10", label: "§ 10", level: 1 }),
+  ];
+
+  test("a section and an article numbered alike are different provisions", () => {
+    expect(findProvisionAnchorId(items, parseOutlineJump("§ 10"))).toBe(
+      "par-10",
+    );
+    expect(findProvisionAnchorId(items, parseOutlineJump("čl. 10"))).toBe(
+      "cl-10",
+    );
+  });
+
+  test("an act that has no such provision addresses nothing", () => {
+    expect(findProvisionAnchorId(items, parseOutlineJump("§ 99"))).toBeNull();
+  });
+
+  test("free text is not an address", () => {
+    expect(findProvisionAnchorId(items, parseOutlineJump("hlava"))).toBeNull();
+  });
+});
+
+describe("filterOutlineItems", () => {
+  const items = [
+    outlineItem({ id: "cast", label: "ČÁST PRVNÍ", level: 0 }),
+    outlineItem({ id: "hlava", label: "HLAVA I", level: 1 }),
+    outlineItem({
+      id: "zastoupeni",
+      label: "Zastoupení členem domácnosti",
+      level: 2,
+    }),
+    outlineItem({ id: "p-47", label: "§ 47", level: 3 }),
+    outlineItem({ id: "hlava-2", label: "HLAVA II", level: 1 }),
+  ];
+
+  test("an empty field leaves the outline whole", () => {
+    expect(filterOutlineItems(items, parseOutlineJump("")).length).toBe(
+      items.length,
+    );
+  });
+
+  test("keeps the chain down to a match, so the tree still nests", () => {
+    expect(
+      filterOutlineItems(items, parseOutlineJump("domácnosti")).map(
+        (item) => item.id,
+      ),
+    ).toEqual(["cast", "hlava", "zastoupeni"]);
+  });
+
+  test("matches across the diacritics a reader may not type", () => {
+    // The fixture is accented and the query is not: without the fold this
+    // search finds nothing.
+    expect(items.some((item) => item.label.includes("Zastoupení"))).toBe(true);
+    expect(
+      filterOutlineItems(items, parseOutlineJump("zastoupeni")).map(
+        (item) => item.id,
+      ),
+    ).toContain("zastoupeni");
+  });
+
+  test("narrows to a designation as well, so the jump target is visible", () => {
+    expect(
+      filterOutlineItems(items, parseOutlineJump("§ 47")).map(
+        (item) => item.id,
+      ),
+    ).toEqual(["cast", "hlava", "zastoupeni", "p-47"]);
+  });
+
+  test("searches the annotation as well as the designation", () => {
+    const annotated = [
+      outlineItem({
+        id: "cast",
+        label: "ČÁST PRVNÍ",
+        level: 0,
+        meta: "OBECNÁ ČÁST",
+      }),
+    ];
+
+    expect(
+      filterOutlineItems(annotated, parseOutlineJump("obecná")).map(
+        (item) => item.id,
+      ),
+    ).toEqual(["cast"]);
+  });
+
+  test("a query the act does not state leaves nothing", () => {
+    expect(filterOutlineItems(items, parseOutlineJump("zzz"))).toEqual([]);
   });
 });

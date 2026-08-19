@@ -315,6 +315,14 @@ type Messages = {
       "searchPlaceholder": "Search by case number...";
     };
     "loadingMore": "Loading more...";
+    "provision": {
+      "article": "Art. {value}";
+      "letter": "lit. {value})";
+      "openEnded": "et seq.";
+      "point": "point {value}";
+      "sentence": "sentence {value}";
+      "subsection": "para. {value}";
+    };
     "seo": {
       "browse": "Browse case law";
       "countries": "Countries";
@@ -328,6 +336,7 @@ type Messages = {
       "legalSentence": "Legal sentence";
       "nalusDisclaimer": "Source: NALUS, Constitutional Court of the Czech Republic. Free of charge. This electronic version is not authentic; only originals with the state emblem and signature of the authorized person are authentic.";
       "popularName": "Popular name";
+      "provisionsCited": "Provisions cited";
       "sourceFields": {
         "decisionCategory": "Decision category";
         "publishedOnWeb": "Published on web";
@@ -3263,6 +3272,8 @@ type Messages = {
     "inForceSince": "In force since {date}";
     "openEnded": "present";
     "outline": "Contents";
+    "outlineJumpLabel": "Jump to a provision";
+    "outlineJumpPlaceholder": "§ 10 or a heading";
     "searchLabel": "Search statutes";
     "searchPlaceholder": "Search by title or number...";
     "status": {
