@@ -199,16 +199,19 @@ const BENIGN: readonly RegExp[] = [
   // ("as above").
   /^(?:sp\.\s{0,3}zn\.|sen\.\s{0,3}zn\.|sygn\.(?:\s{1,3}akt)?|[čc]\.\s{0,3}j\.:?)[^\d]{0,45}$/iu,
   // Administrative-authority "č. j." reference (tax office, land registry):
-  // three or more purely numeric segments joined by slashes, e.g. "č. j.
-  // 11055/01/332960/2959" (Finanční úřad), "č.j. 27662/97/332960/2959". A
-  // real court docket always carries a letter registry between the chamber
-  // digit and the docket number (CASE_NUMBER_BODY in the extractor); an
-  // all-numeric multi-segment reference is never a court citation. The
-  // lookahead excludes a following letter, digit, or slash so a longer or
-  // mixed-format reference ("123/45/678/ABC", a 6-segment chain, or an
-  // oversized final segment beyond the 6-digit cap) is never silently
-  // truncated to a shorter benign-looking prefix.
-  /[čc]\.\s{0,3}j\.:?\s{0,3}\d{1,6}(?:\/\d{1,6}){2,4}(?![\p{L}\d/])/u,
+  // two or more purely numeric segments joined by slashes or hyphens, e.g.
+  // "č. j. 11055/01/332960/2959" (Finanční úřad), "č.j. 192859/07"
+  // (protocol number in a tax proceeding), "č.j. 11273/09-1200-700346"
+  // (Finanční ředitelství, trailing dash-joined department blocks), "č.j.
+  // 65050/08/305921704713" (dodatečný platební výměr, 12-digit final
+  // segment). A real court docket always carries a letter registry between
+  // the chamber digit and the docket number (CASE_NUMBER_BODY in the
+  // extractor); an all-numeric reference is never a court citation, whatever
+  // its segment count or separator. The lookahead excludes a following
+  // letter, digit, or slash so a longer or mixed-format reference
+  // ("123/45/678/ABC", a 7-segment chain, or a final segment beyond the
+  // digit cap) is never silently truncated to a benign-looking prefix.
+  /[čc]\.\s{0,3}j\.:?\s{0,3}\d{1,8}(?:[/-]\d{1,14}){1,5}(?![\p{L}\d/])/u,
   // The letter-segment form of the same administrative reference, where a
   // department code sits in one of the slash-joined segments: "č. j.
   // KK/547/DS/19-3" (regional authority), "č. j. 2194/OD/19-4/Rsz" (city
