@@ -20,6 +20,7 @@ import {
   STATUTE_OUTLINE_COLLAPSE_LEVEL,
   withProvisionRanges,
 } from "@/components/legal-reader/reader-outline";
+import "@/features/statutes/provision-inspector-registration";
 import { StatuteStatusPill } from "@/features/statutes/components/statute-status-pill";
 import { StatuteText } from "@/features/statutes/components/statute-text";
 import { StatuteVersionSwitcher } from "@/features/statutes/components/statute-version-switcher";
@@ -409,7 +410,9 @@ const StatuteReader = ({
               documentId={statute.id}
               fulltext={statute.fulltext}
               language={statute.language}
+              statuteTitle={statute.title}
               versionCount={versions.length}
+              versionValidFrom={statute.versionValidFrom}
             />
           )}
         </div>

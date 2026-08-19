@@ -892,6 +892,8 @@ type Messages = {
       "taxIdentificationNumber": "Tax identification number";
     };
     "archive": "Archive";
+    "ask": "Ask";
+    "askAI": "Ask AI";
     "author": "Author";
     "back": "Back";
     "cancel": "Cancel";
@@ -2989,7 +2991,6 @@ type Messages = {
   };
   "search": {
     "aiRefine": "Improve query with AI";
-    "askAI": "Ask AI";
     "continueInChat": "Continue in chat";
     "dateFrom": "From";
     "dateTo": "To";
@@ -3268,6 +3269,7 @@ type Messages = {
   "statutes": {
     "asOf": "Text in force on";
     "backToList": "All statutes";
+    "citingDecisionsFilterPlaceholder": "Filter loaded decisions";
     "diffInserted": "Inserted:";
     "diffRemoved": "Deleted:";
     "emptyDocument": "This version has no text available.";
@@ -3278,13 +3280,21 @@ type Messages = {
     "outline": "Contents";
     "outlineJumpLabel": "Jump to a provision";
     "outlineJumpPlaceholder": "§ 10 or a heading";
+    "provisionAskPlaceholder": "Ask about this provision";
+    "provisionAskQuestionPrompt": "About {subject}: {question}";
+    "provisionAskSignIn": "Sign in to ask about this provision.";
+    "provisionAskSummarize": "Summarize how courts apply this provision";
+    "provisionAskSummarizePrompt": "Summarize how courts apply {subject}, citing the decisions you rely on.";
+    "provisionDetailsFor": "Details of {provision}";
     "provisionHistoryEarliest": "Earliest wording on record.";
     "provisionHistoryEmpty": "No wording of this provision is on record.";
-    "provisionHistoryFor": "Change history: {provision}";
     "provisionHistoryLoadOlder": "Load older versions to compare wordings.";
     "provisionHistoryUnavailable": "This provision's history could not be loaded.";
+    "provisionPromptSubject": "{provision} of {statute} ({eli}), in the wording in force since {date}";
+    "provisionPromptSubjectUndated": "{provision} of {statute} ({eli})";
     "searchLabel": "Search statutes";
     "searchPlaceholder": "Search by title or number...";
+    "showInText": "Show in the text";
     "status": {
       "current": "In force";
       "draft": "Proposed";
