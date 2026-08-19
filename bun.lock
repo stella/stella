@@ -312,6 +312,7 @@
         "@stll/text-normalize": "workspace:*",
         "@stll/time": "workspace:*",
         "@stll/ui": "workspace:*",
+        "@stll/workspace-inspector": "workspace:*",
         "@stll/workspace-ui": "workspace:*",
         "@streamdown/cjk": "^1.0.2",
         "@streamdown/math": "^1.0.2",
@@ -756,6 +757,27 @@
         "@types/bun": "catalog:",
         "@types/react": "catalog:react19",
         "tailwindcss": "catalog:",
+      },
+    },
+    "packages/workspace-inspector": {
+      "name": "@stll/workspace-inspector",
+      "version": "0.1.0",
+      "dependencies": {
+        "clsx": "^2.1.1",
+        "tailwind-merge": "^3.6.0",
+      },
+      "devDependencies": {
+        "@stll/typescript-config": "workspace:*",
+        "@types/bun": "catalog:",
+        "@types/react": "catalog:react19",
+        "@types/react-dom": "catalog:react19",
+        "react": "catalog:react19",
+        "react-dom": "catalog:react19",
+        "tailwindcss": "catalog:",
+        "tsdown": "catalog:",
+      },
+      "peerDependencies": {
+        "react": ">=19",
       },
     },
     "packages/workspace-ui": {
@@ -2262,6 +2284,8 @@
     "@stll/ui": ["@stll/ui@workspace:packages/ui"],
 
     "@stll/web": ["@stll/web@workspace:apps/web"],
+
+    "@stll/workspace-inspector": ["@stll/workspace-inspector@workspace:packages/workspace-inspector"],
 
     "@stll/workspace-ui": ["@stll/workspace-ui@workspace:packages/workspace-ui"],
 

@@ -1,0 +1,63 @@
+{
+  "name": "@stll/workspace-inspector",
+  "version": "0.1.0",
+  "description": "Headless-chrome React primitives for a dockable, resizable workspace inspector pane: width arithmetic that never starves the content column, a spacer-backed fixed overlay with a drag handle, and fixed-height property rows.",
+  "keywords": [
+    "inspector",
+    "react",
+    "resizable",
+    "side-panel",
+    "tailwind"
+  ],
+  "homepage": "https://github.com/stella/stella/tree/main/packages/workspace-inspector",
+  "bugs": {
+    "url": "https://github.com/stella/stella/issues"
+  },
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/stella/stella.git",
+    "directory": "packages/workspace-inspector"
+  },
+  "files": [
+    "dist",
+    "src",
+    "README.md"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "clean": "git clean -xdf dist .cache .turbo node_modules",
+    "build": "tsdown",
+    "pack:dry-run": "bun pm pack --dry-run",
+    "test": "bun test src",
+    "typecheck": "bun ../../packages/scripts/src/tsc-native.ts --noEmit",
+    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --deny-warnings --type-aware packages/workspace-inspector",
+    "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/workspace-inspector",
+    "format": "oxfmt .",
+    "prepack": "bun run build"
+  },
+  "dependencies": {
+    "clsx": "^2.1.1",
+    "tailwind-merge": "^3.6.0"
+  },
+  "devDependencies": {
+    "@stll/typescript-config": "workspace:*",
+    "@types/bun": "catalog:",
+    "@types/react": "catalog:react19",
+    "@types/react-dom": "catalog:react19",
+    "react": "catalog:react19",
+    "react-dom": "catalog:react19",
+    "tailwindcss": "catalog:",
+    "tsdown": "catalog:"
+  },
+  "peerDependencies": {
+    "react": ">=19"
+  }
+}

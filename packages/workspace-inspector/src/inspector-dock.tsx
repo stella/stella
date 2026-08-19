@@ -1,0 +1,92 @@
+import type { ReactNode } from "react";
+
+import { cn } from "./cn";
+
+/**
+ * Docked inspector pane: an in-flow spacer plus a fixed overlay.
+ *
+ * Extracted from Stella's `WorkspaceInspectorSidePanel`
+ * (apps/web/src/routes/_protected.tsx). The spacer is what makes the
+ * content column reflow: the pane itself is `position: fixed`, so without
+ * a same-width sibling in the flow it would cover the content instead of
+ * displacing it. Keeping the pane fixed (rather than in the flow) is what
+ * lets it span the full viewport height regardless of the topbar.
+ */
+
+type InspectorResizeHandleProps = {
+  "aria-orientation": "vertical";
+  "aria-valuemax": number;
+  "aria-valuemin": number;
+  "aria-valuenow": number;
+  onKeyDown: (event: React.KeyboardEvent<HTMLElement>) => void;
+  onPointerDown: (event: React.PointerEvent<HTMLElement>) => void;
+  onPointerMove: (event: React.PointerEvent<HTMLElement>) => void;
+  onPointerUp: (event: React.PointerEvent<HTMLElement>) => void;
+  tabIndex: number;
+};
+
+type InspectorDockProps = {
+  children: ReactNode;
+  className?: string | undefined;
+  /** Accessible name for the drag handle. */
+  resizeHandleLabel: string;
+  /** Handlers and ARIA state from `useInspectorPaneWidth`. */
+  resizeHandleProps: InspectorResizeHandleProps;
+  /** Double-click affordance restoring the default width. */
+  onResetWidth?: (() => void) | undefined;
+  /** Whether the full pane is shown, as opposed to the bare rail. */
+  showPaneContent: boolean;
+  /** Inline size the dock reserves, in CSS pixels. */
+  width: number;
+};
+
+export const InspectorDock = ({
+  children,
+  className,
+  onResetWidth,
+  resizeHandleLabel,
+  resizeHandleProps,
+  showPaneContent,
+  width,
+}: InspectorDockProps) => {
+  const widthPx = `${width}px`;
+
+  return (
+    <div
+      className={cn("text-sidebar-foreground hidden md:block", className)}
+      data-side="inline-end"
+      data-slot="inspector-dock"
+      data-state={showPaneContent ? "expanded" : "collapsed"}
+    >
+      {/* In-flow spacer: the content column reflows against this, not
+          against the fixed pane. */}
+      <div
+        aria-hidden="true"
+        className="bg-sidebar relative"
+        data-slot="inspector-dock-spacer"
+        style={{ width: widthPx }}
+      />
+      <div
+        className="fixed inset-y-0 end-0 z-10 hidden h-svh md:flex"
+        data-slot="inspector-dock-pane"
+        style={{ width: widthPx }}
+      >
+        {showPaneContent && (
+          <div
+            aria-label={resizeHandleLabel}
+            className="hover:bg-border active:bg-border focus-visible:bg-primary focus-visible:outline-primary absolute inset-y-0 -start-px z-20 flex w-1 cursor-col-resize items-center justify-center border-s focus-visible:outline-2"
+            data-slot="inspector-resize-handle"
+            role="separator"
+            {...resizeHandleProps}
+            // Kept literal, not merged in from the spread: the a11y lint
+            // rules read static JSX, and a focusable separator is the whole
+            // reason the handle is operable without a pointer.
+            tabIndex={0}
+            onDoubleClick={onResetWidth}
+          />
+        )}
+        <div className="bg-sidebar flex h-full w-full flex-col">{children}</div>
+      </div>
+    </div>
+  );
+};
