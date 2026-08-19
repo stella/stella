@@ -28,6 +28,7 @@ import {
 } from "@/api/lib/corpus-index/chunking";
 import type {
   CorpusBackfillOutcome,
+  CorpusBackfillTiming,
   CorpusDocumentPayload,
   CorpusIndexAdapter,
   FencedRemoteEffect,
@@ -72,6 +73,7 @@ import {
   isCorpusIndexJurisdiction,
   tryCorpusIndexGeneration,
 } from "@/api/lib/legal-search/index-naming";
+import { logger } from "@/api/lib/observability/logger";
 
 /**
  * corpus index search-projection maintenance for the `case_law` family.
@@ -1211,6 +1213,7 @@ type GenerationBackfillDependencies = {
     options: GenerationProjectionGuards & {
       commit: CorpusIndexCommitMode;
       readConcurrency?: number;
+      onTiming?: (timing: CorpusBackfillTiming) => void;
     },
   ) => Promise<CorpusBackfillOutcome>;
   removeProjection: (
@@ -1623,6 +1626,56 @@ export const createCaseLawGenerationBackfill =
       options.readConcurrency === undefined
         ? {}
         : { readConcurrency: options.readConcurrency };
+    // Where the page spends its wall clock. A page is a chain of object
+    // reads, engine requests and short transactions, and which one it is
+    // waiting on is not visible from the indexed count or from timing the
+    // page as a whole. Every batch the page runs reports its own split; the
+    // page reports the sum next to its stage times, once, at the end.
+    const pageStartedAt = performance.now();
+    const sinceMs = (startedAt: number) =>
+      Math.round(performance.now() - startedAt);
+    const batchTimings: CorpusBackfillTiming[] = [];
+    const collectTiming = (timing: CorpusBackfillTiming): void => {
+      batchTimings.push(timing);
+    };
+    const totalOf = (read: (timing: CorpusBackfillTiming) => number): number =>
+      batchTimings.reduce((total, timing) => total + read(timing), 0);
+    const stageMs = { drain: 0, select: 0, index: 0 };
+    // One line per page, on the walking arm: the stage times say which
+    // stage the page is in, and the batch totals say what that stage was
+    // waiting on. Emitted however the page ends, so a failing page still
+    // says where its time went. Counts only, never document content.
+    const reportPage = ({
+      outcome,
+      selected,
+      indexed,
+      drainedIndexed,
+    }: {
+      outcome: "advanced" | "busy" | "failed";
+      selected: number;
+      indexed: number;
+      drainedIndexed: number;
+    }): void => {
+      logger.info("case_law.corpus_index.generation_page", {
+        generation,
+        batchSize,
+        outcome,
+        selected,
+        indexed,
+        drainedIndexed,
+        pageMs: sinceMs(pageStartedAt),
+        drainMs: stageMs.drain,
+        selectMs: stageMs.select,
+        indexMs: stageMs.index,
+        readMs: totalOf(({ readMs }) => readMs),
+        reserveMs: totalOf(({ reserveMs }) => reserveMs),
+        removeMs: totalOf(({ removeMs }) => removeMs),
+        ingestMs: totalOf(({ ingestMs }) => ingestMs),
+        markMs: totalOf(({ markMs }) => markMs),
+        engineRequests: totalOf(({ engineRequests }) => engineRequests),
+        documents: totalOf(({ documents }) => documents),
+      });
+    };
     const writerLease = await acquireCaseLawCorpusGenerationLease({
       generation,
       newLeaseToken,
@@ -1798,6 +1851,7 @@ export const createCaseLawGenerationBackfill =
               : await backfillRows(scopedDb, eligible, generation, {
                   ...guards,
                   ...readConcurrencyOption,
+                  onTiming: collectTiming,
                   // A source-wide re-index walks a whole source's corpus
                   // a page at a time, so it is bulk work with the same
                   // census behind it as the snapshot walk.
@@ -1910,6 +1964,7 @@ export const createCaseLawGenerationBackfill =
             : await backfillRows(scopedDb, eligible, generation, {
                 ...guards,
                 ...readConcurrencyOption,
+                onTiming: collectTiming,
                 commit: PENDING_DRAIN_COMMIT[status],
               });
         if (outcome.indexed !== eligible.length) {
@@ -2094,18 +2149,36 @@ export const createCaseLawGenerationBackfill =
       // walk pages that later reach the same rows.
       let drainedIndexed = 0;
       try {
-        const drained = await drainPendingProjections({
-          checkpoint: claimedCheckpoint,
-          leaseToken,
-          status: CASE_LAW_CORPUS_INDEX_BACKFILL_STATUS.RUNNING,
-        });
+        const drainStartedAt = performance.now();
+        let drained: CorpusIndexBackfillResult;
+        try {
+          drained = await drainPendingProjections({
+            checkpoint: claimedCheckpoint,
+            leaseToken,
+            status: CASE_LAW_CORPUS_INDEX_BACKFILL_STATUS.RUNNING,
+          });
+        } finally {
+          stageMs.drain = sinceMs(drainStartedAt);
+        }
         if (drained.status === BACKFILL_STATUS.BUSY) {
           await releaseRunningLease();
+          reportPage({
+            outcome: "busy",
+            selected: 0,
+            indexed: 0,
+            drainedIndexed: 0,
+          });
           return drained;
         }
         drainedIndexed = drained.indexed;
       } catch (error) {
         await releaseRunningLease();
+        reportPage({
+          outcome: "failed",
+          selected: 0,
+          indexed: 0,
+          drainedIndexed: 0,
+        });
         throw error;
       }
       // Reports this invocation's total durable movement: rows the drain
@@ -2124,10 +2197,12 @@ export const createCaseLawGenerationBackfill =
           : { indexed: drainedIndexed, status: BACKFILL_STATUS.ADVANCED };
       };
 
+      const selectStartedAt = performance.now();
       const page = await selectGenerationBackfillPage(scopedDb, {
         batchSize,
         checkpoint: claimedCheckpoint,
       });
+      stageMs.select = sinceMs(selectStartedAt);
       const last = page.at(-1);
       if (!last) {
         const completed = await scopedDb(async (tx) => {
@@ -2179,6 +2254,7 @@ export const createCaseLawGenerationBackfill =
           hasGenerationProjectionTargets({ generation, row }),
       );
       let indexed: number;
+      const indexStartedAt = performance.now();
       try {
         // The drain above may have brought every row on this page current, so
         // skip the indexer rather than hand it an empty batch.
@@ -2188,6 +2264,7 @@ export const createCaseLawGenerationBackfill =
             : await backfillRows(scopedDb, rows, generation, {
                 ...runningGuards,
                 ...readConcurrencyOption,
+                onTiming: collectTiming,
                 // Snapshot pages of the rebuild: bulk throughput, whose
                 // completeness the generation's census verifies rather
                 // than each request proving it for itself.
@@ -2214,7 +2291,15 @@ export const createCaseLawGenerationBackfill =
         // Keep the cursor intact, but do not make a transient search/S3 failure
         // wait for a stale lease before its durable retry.
         await releaseRunningLease();
+        reportPage({
+          outcome: "failed",
+          selected: rows.length,
+          indexed: 0,
+          drainedIndexed,
+        });
         throw error;
+      } finally {
+        stageMs.index = sinceMs(indexStartedAt);
       }
 
       const advanced = await scopedDb(async (tx) => {
@@ -2238,6 +2323,12 @@ export const createCaseLawGenerationBackfill =
           )
           .returning({ generation: caseLawCorpusIndexBackfills.generation });
         return advancedRows.at(0);
+      });
+      reportPage({
+        outcome: advanced ? "advanced" : "busy",
+        selected: rows.length,
+        indexed,
+        drainedIndexed,
       });
       return withDrained(
         advanced
