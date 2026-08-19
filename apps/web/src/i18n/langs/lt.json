@@ -312,6 +312,14 @@
       "searchPlaceholder": "Ieškoti pagal bylos numerį..."
     },
     "loadingMore": "Kraunama daugiau...",
+    "provision": {
+      "article": "{value} str.",
+      "letter": "{value} papunktis",
+      "openEnded": "ir kt.",
+      "point": "{value} p.",
+      "sentence": "{value} sakinys",
+      "subsection": "{value} d."
+    },
     "seo": {
       "browse": "Naršyti teismų praktiką",
       "countries": "Šalys",
@@ -325,6 +333,7 @@
       "legalSentence": "Teisinė tezė",
       "nalusDisclaimer": "Source: NALUS, Constitutional Court of the Czech Republic. Free of charge. This electronic version is not authentic.",
       "popularName": "Populiarus pavadinimas",
+      "provisionsCited": "Cituojamos nuostatos",
       "sourceFields": {
         "decisionCategory": "Sprendimo kategorija",
         "publishedOnWeb": "Paskelbta internete"
@@ -3260,6 +3269,8 @@
     "inForceSince": "Galioja nuo {date}",
     "openEnded": "dabar",
     "outline": "Turinys",
+    "outlineJumpLabel": "Pereiti prie nuostatos",
+    "outlineJumpPlaceholder": "§ 10 arba pavadinimas",
     "searchLabel": "Ieškoti teisės aktų",
     "searchPlaceholder": "Ieškoti pagal pavadinimą arba numerį...",
     "status": {

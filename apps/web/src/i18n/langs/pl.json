@@ -312,6 +312,14 @@
       "searchPlaceholder": "Szukaj po sygnaturze akt..."
     },
     "loadingMore": "Ładowanie kolejnych...",
+    "provision": {
+      "article": "art. {value}",
+      "letter": "litera {value})",
+      "openEnded": "i nast.",
+      "point": "pkt {value}",
+      "sentence": "zdanie {value}",
+      "subsection": "ust. {value}"
+    },
     "seo": {
       "browse": "Przeglądaj orzecznictwo",
       "countries": "Kraje",
@@ -325,6 +333,7 @@
       "legalSentence": "Teza orzeczenia",
       "nalusDisclaimer": "Źródło: NALUS, Trybunał Konstytucyjny Republiki Czeskiej. Bezpłatnie. Niniejsza wersja elektroniczna nie jest autentyczna; autentyczne są wyłącznie oryginały z godłem państwowym i podpisem upoważnionej osoby.",
       "popularName": "Nazwa potoczna",
+      "provisionsCited": "Powołane przepisy",
       "sourceFields": {
         "decisionCategory": "Kategoria orzeczenia",
         "publishedOnWeb": "Opublikowano w sieci"
@@ -3260,6 +3269,8 @@
     "inForceSince": "Obowiązuje od {date}",
     "openEnded": "nadal",
     "outline": "Spis treści",
+    "outlineJumpLabel": "Przejdź do przepisu",
+    "outlineJumpPlaceholder": "§ 10 lub tytuł",
     "searchLabel": "Szukaj w aktach prawnych",
     "searchPlaceholder": "Szukaj według tytułu lub numeru...",
     "status": {

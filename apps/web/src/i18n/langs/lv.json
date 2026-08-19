@@ -312,6 +312,14 @@
       "searchPlaceholder": "Meklēt pēc lietas numura..."
     },
     "loadingMore": "Ielādē vairāk...",
+    "provision": {
+      "article": "{value}. pants",
+      "letter": "{value}. apakšpunkts",
+      "openEnded": "un turpmāk",
+      "point": "{value}. punkts",
+      "sentence": "{value}. teikums",
+      "subsection": "{value}. daļa"
+    },
     "seo": {
       "browse": "Pārlūkot judikatūru",
       "countries": "Valstis",
@@ -325,6 +333,7 @@
       "legalSentence": "Tiesību tēze",
       "nalusDisclaimer": "Source: NALUS, Constitutional Court of the Czech Republic. Free of charge. This electronic version is not authentic.",
       "popularName": "Populārais nosaukums",
+      "provisionsCited": "Citētās normas",
       "sourceFields": {
         "decisionCategory": "Nolēmuma kategorija",
         "publishedOnWeb": "Publicēts tīmeklī"
@@ -3260,6 +3269,8 @@
     "inForceSince": "Spēkā no {date}",
     "openEnded": "šobrīd",
     "outline": "Saturs",
+    "outlineJumpLabel": "Pāriet uz normu",
+    "outlineJumpPlaceholder": "§ 10 vai virsraksts",
     "searchLabel": "Meklēt tiesību aktos",
     "searchPlaceholder": "Meklēt pēc nosaukuma vai numura...",
     "status": {

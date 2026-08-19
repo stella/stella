@@ -312,6 +312,14 @@
       "searchPlaceholder": "البحث برقم القضية..."
     },
     "loadingMore": "جارٍ تحميل المزيد...",
+    "provision": {
+      "article": "المادة {value}",
+      "letter": "البند {value}",
+      "openEnded": "وما بعدها",
+      "point": "النقطة {value}",
+      "sentence": "الجملة {value}",
+      "subsection": "الفقرة {value}"
+    },
     "seo": {
       "browse": "تصفّح الاجتهاد القضائي",
       "countries": "الدول",
@@ -325,6 +333,7 @@
       "legalSentence": "الجملة القانونية",
       "nalusDisclaimer": "المصدر: NALUS، المحكمة الدستورية للجمهورية التشيكية. مجانًا. هذه النسخة الإلكترونية غير رسمية؛ النسخ الأصلية المحمَّلة بشعار الدولة وتوقيع الشخص المخوَّل هي وحدها الرسمية.",
       "popularName": "الاسم الشائع",
+      "provisionsCited": "الأحكام المستشهد بها",
       "sourceFields": {
         "decisionCategory": "فئة القرار",
         "publishedOnWeb": "منشور على الويب"
@@ -3260,6 +3269,8 @@
     "inForceSince": "نافذ منذ {date}",
     "openEnded": "الآن",
     "outline": "المحتويات",
+    "outlineJumpLabel": "الانتقال إلى حكم",
+    "outlineJumpPlaceholder": "§ 10 أو عنوان",
     "searchLabel": "البحث في التشريعات",
     "searchPlaceholder": "ابحث بالعنوان أو الرقم...",
     "status": {

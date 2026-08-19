@@ -312,6 +312,14 @@
       "searchPlaceholder": "Pesquisar por número do processo..."
     },
     "loadingMore": "Carregando mais...",
+    "provision": {
+      "article": "art. {value}",
+      "letter": "alínea {value})",
+      "openEnded": "e ss.",
+      "point": "item {value}",
+      "sentence": "frase {value}",
+      "subsection": "par. {value}"
+    },
     "seo": {
       "browse": "Explorar jurisprudência",
       "countries": "Países",
@@ -325,6 +333,7 @@
       "legalSentence": "Tese jurídica",
       "nalusDisclaimer": "Fonte: NALUS, Tribunal Constitucional da República Checa. Gratuito. Esta versão eletrônica não é autêntica; somente os originais com o emblema do estado e assinatura da pessoa autorizada são autênticos.",
       "popularName": "Nome popular",
+      "provisionsCited": "Dispositivos citados",
       "sourceFields": {
         "decisionCategory": "Categoria da decisão",
         "publishedOnWeb": "Publicado na web"
@@ -3260,6 +3269,8 @@
     "inForceSince": "Em vigor desde {date}",
     "openEnded": "hoje",
     "outline": "Sumário",
+    "outlineJumpLabel": "Ir para um dispositivo",
+    "outlineJumpPlaceholder": "§ 10 ou um título",
     "searchLabel": "Buscar na legislação",
     "searchPlaceholder": "Buscar por título ou número...",
     "status": {

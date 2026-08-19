@@ -18,6 +18,7 @@ import {
 } from "@/features/case-law/components/case-viewer/analysis/types";
 import { useDecisionAnalysis } from "@/features/case-law/components/case-viewer/analysis/use-decision-analysis";
 import { DecisionText } from "@/features/case-law/components/case-viewer/decision-text";
+import { ProvisionsCited } from "@/features/case-law/components/case-viewer/provisions-cited";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useCaseSearchStore } from "@/lib/case-search-store";
 import { detached } from "@/lib/detached";
@@ -331,6 +332,7 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
             </aside>
 
             <main className="reader-paper min-w-0 px-4 py-8 max-sm:px-3">
+              <ProvisionsCited decisionId={decisionId} />
               <DecisionText
                 activeMatchIndex={activeMatchIndex}
                 decision={decision}

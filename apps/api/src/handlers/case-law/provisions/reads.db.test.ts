@@ -18,7 +18,11 @@ import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 const JURISDICTION = "CZE";
-const WORK = "89/2012";
+/** The display citation a decision's own text states. */
+const WORK = "89/2012 Sb.";
+const WORK_ELI = "/eli/cz/sb/2012/89";
+/** A work the corpus does not hold: cited by number, with no ELI to key on. */
+const UNHELD_WORK = "99/1963 Sb.";
 const ANCHOR_A = "s1";
 const ANCHOR_B = "s2";
 
@@ -60,11 +64,15 @@ const provisionRow = ({
   decisionDate,
   decisionId,
   spanStart,
+  workEli = WORK_ELI,
+  workIdentifier = WORK,
 }: {
   anchor: string;
   decisionDate: string | null;
   decisionId: SafeId<"caseLawDecision">;
   spanStart: number;
+  workEli?: string | null;
+  workIdentifier?: string;
 }): typeof caseLawProvisionCitations.$inferInsert => ({
   anchor,
   confidence: 0.9,
@@ -76,8 +84,9 @@ const provisionRow = ({
   spanEnd: spanStart + 10,
   spanStart,
   unit: "section",
-  workCollection: "sb",
-  workIdentifier: WORK,
+  workCollection: "Sb.",
+  workEli,
+  workIdentifier,
   workNumber: 89,
   workYear: 2012,
 });
@@ -167,6 +176,16 @@ beforeAll(
         decisionId: closedDecisionId,
         spanStart: 50,
       }),
+      // Cited by number only: the corpus does not hold this act, so the row
+      // carries no ELI and no reader can arrive at it from a statute page.
+      provisionRow({
+        anchor: ANCHOR_A,
+        decisionDate: "2025-01-01",
+        decisionId: lowAuthorityId,
+        spanStart: 60,
+        workEli: null,
+        workIdentifier: UNHELD_WORK,
+      }),
     ]);
   },
   { timeout: 120_000 },
@@ -189,24 +208,39 @@ const decisionProvisions = async (cursor?: string) => {
   throw new Error("expected a page");
 };
 
-const citingDecisions = async ({
-  anchor,
-  cursor,
-  limit,
-}: {
+type CitingDecisionsQuery = {
   anchor?: string;
   cursor?: string;
+  eli?: string;
   limit: number;
-}) => {
-  const page = await listCitingDecisionsHandler(
+  work?: string;
+};
+
+const readCitingDecisions = async ({
+  anchor,
+  cursor,
+  eli,
+  limit,
+  work,
+}: CitingDecisionsQuery) =>
+  await listCitingDecisionsHandler(
     {
       jurisdiction: JURISDICTION,
       limit,
-      work: WORK,
       ...(anchor === undefined ? {} : { anchor }),
       ...(cursor === undefined ? {} : { cursor }),
+      ...(eli === undefined ? {} : { eli }),
+      ...(work === undefined ? {} : { work }),
     },
     caseLawDb,
+  );
+
+/** Defaults to the display citation, the key a decision's own text states. */
+const citingDecisions = async (query: CitingDecisionsQuery) => {
+  const page = await readCitingDecisions(
+    query.eli === undefined && query.work === undefined
+      ? { ...query, work: WORK }
+      : query,
   );
 
   if ("items" in page) {
@@ -284,4 +318,72 @@ test("citing decisions filter by anchor", async () => {
   const page = await citingDecisions({ anchor: ANCHOR_B, limit: 10 });
 
   expect(page.items.map((item) => item.spanStart)).toEqual([30]);
+});
+
+test("citing decisions answer the same work by its identifier", async () => {
+  // A reader arriving from the act has the work's ELI and no display
+  // citation; both keys must reach the same references in the same order.
+  const [byWork, byEli] = await Promise.all([
+    citingDecisions({ limit: 10 }),
+    citingDecisions({ eli: WORK_ELI, limit: 10 }),
+  ]);
+
+  expect(byEli.items.map((item) => item.spanStart)).toEqual(
+    byWork.items.map((item) => item.spanStart),
+  );
+  expect(byEli.items.length).toBeGreaterThan(0);
+});
+
+test("citing decisions by identifier filter by anchor and page alike", async () => {
+  const anchored = await citingDecisions({
+    anchor: ANCHOR_B,
+    eli: WORK_ELI,
+    limit: 10,
+  });
+
+  expect(anchored.items.map((item) => item.spanStart)).toEqual([30]);
+
+  const first = await citingDecisions({ eli: WORK_ELI, limit: 1 });
+
+  expect(first.nextCursor).not.toBeNull();
+
+  const second = await citingDecisions({
+    eli: WORK_ELI,
+    limit: 1,
+    ...(first.nextCursor === null ? {} : { cursor: first.nextCursor }),
+  });
+
+  expect(second.items.map((item) => item.spanStart)).toEqual([30]);
+});
+
+test("a reference to a work the corpus does not hold is reachable only by number", async () => {
+  const byWork = await citingDecisions({ limit: 10, work: UNHELD_WORK });
+
+  // The fixture states this reference, so an empty answer below is the ELI
+  // key excluding it rather than the row being absent.
+  expect(byWork.items.map((item) => item.spanStart)).toEqual([60]);
+
+  const byEli = await citingDecisions({ eli: WORK_ELI, limit: 10 });
+
+  expect(byEli.items.map((item) => item.spanStart)).not.toContain(60);
+});
+
+test("citing decisions refuse a request that names neither key or both", async () => {
+  const neither = await readCitingDecisions({ limit: 10 });
+  const both = await readCitingDecisions({
+    eli: WORK_ELI,
+    limit: 10,
+    work: WORK,
+  });
+
+  // The status and the message are the contract a caller reads: an unrelated
+  // failure would also leave `items` absent.
+  expect(neither).toMatchObject({
+    code: 400,
+    response: { message: "Name exactly one of work or eli" },
+  });
+  expect(both).toMatchObject({
+    code: 400,
+    response: { message: "Name exactly one of work or eli" },
+  });
 });

@@ -312,6 +312,14 @@
       "searchPlaceholder": "Buscar por número de expediente..."
     },
     "loadingMore": "Cargando más...",
+    "provision": {
+      "article": "art. {value}",
+      "letter": "letra {value})",
+      "openEnded": "y ss.",
+      "point": "punto {value}",
+      "sentence": "frase {value}",
+      "subsection": "apdo. {value}"
+    },
     "seo": {
       "browse": "Explorar jurisprudencia",
       "countries": "Países",
@@ -325,6 +333,7 @@
       "legalSentence": "Fundamento jurídico",
       "nalusDisclaimer": "Source: NALUS, Constitutional Court of the Czech Republic. Free of charge. This electronic version is not authentic.",
       "popularName": "Nombre popular",
+      "provisionsCited": "Disposiciones citadas",
       "sourceFields": {
         "decisionCategory": "Categoría de la decisión",
         "publishedOnWeb": "Publicado en la web"
@@ -3260,6 +3269,8 @@
     "inForceSince": "En vigor desde el {date}",
     "openEnded": "actualidad",
     "outline": "Índice",
+    "outlineJumpLabel": "Ir a una disposición",
+    "outlineJumpPlaceholder": "§ 10 o un título",
     "searchLabel": "Buscar en la legislación",
     "searchPlaceholder": "Buscar por título o número...",
     "status": {

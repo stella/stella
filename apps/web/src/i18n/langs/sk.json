@@ -312,6 +312,14 @@
       "searchPlaceholder": "Hľadať podľa spisovej značky..."
     },
     "loadingMore": "Načítavajú sa ďalšie...",
+    "provision": {
+      "article": "čl. {value}",
+      "letter": "písm. {value})",
+      "openEnded": "a nasl.",
+      "point": "bod {value}",
+      "sentence": "veta {value}",
+      "subsection": "ods. {value}"
+    },
     "seo": {
       "browse": "Prehliadať judikatúru",
       "countries": "Krajiny",
@@ -325,6 +333,7 @@
       "legalSentence": "Právna veta",
       "nalusDisclaimer": "Zdroj: NALUS, Ústavný súd Českej republiky. Bezplatne. Táto elektronická verzia nie je autentická; autentické sú iba originály so štátnym znakom a podpisom oprávnenej osoby.",
       "popularName": "Populárny názov",
+      "provisionsCited": "Dotknuté ustanovenia",
       "sourceFields": {
         "decisionCategory": "Kategória rozhodnutia",
         "publishedOnWeb": "Zverejnené na webe"
@@ -3260,6 +3269,8 @@
     "inForceSince": "Účinné od {date}",
     "openEnded": "súčasnosť",
     "outline": "Obsah",
+    "outlineJumpLabel": "Prejsť na ustanovenie",
+    "outlineJumpPlaceholder": "§ 10 alebo názov",
     "searchLabel": "Hľadať v právnych predpisoch",
     "searchPlaceholder": "Hľadať podľa názvu alebo čísla...",
     "status": {
