@@ -2272,6 +2272,7 @@ export const backfillCorpusIndex = async (
       scopedDb,
       batchSize,
       generation,
+      options,
     );
     return result;
   }
