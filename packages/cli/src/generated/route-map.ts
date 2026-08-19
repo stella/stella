@@ -15158,6 +15158,102 @@ export const generatedRouteMap: RouteNode = {
                             },
                             {
                               type: "object",
+                              required: [
+                                "version",
+                                "type",
+                                "amountCents",
+                                "currency",
+                              ],
+                              properties: {
+                                version: {
+                                  const: 1,
+                                  type: "number",
+                                },
+                                type: {
+                                  description:
+                                    "Value type; must match the property's value type",
+                                  const: "money",
+                                  type: "string",
+                                },
+                                amountCents: {
+                                  description:
+                                    "Amount in the currency's minor units",
+                                  anyOf: [
+                                    {
+                                      format: "integer",
+                                      default: 0,
+                                      type: "string",
+                                    },
+                                    {
+                                      description:
+                                        "Amount in the currency's minor units",
+                                      type: "integer",
+                                    },
+                                  ],
+                                },
+                                currency: {
+                                  minLength: 3,
+                                  maxLength: 3,
+                                  pattern: "^[A-Za-z]{3}$",
+                                  description: "3-letter ISO currency code",
+                                  type: "string",
+                                },
+                              },
+                            },
+                            {
+                              type: "object",
+                              required: [
+                                "version",
+                                "type",
+                                "userId",
+                                "name",
+                                "image",
+                              ],
+                              properties: {
+                                version: {
+                                  const: 1,
+                                  type: "number",
+                                },
+                                type: {
+                                  description:
+                                    "Value type; must match the property's value type",
+                                  const: "person",
+                                  type: "string",
+                                },
+                                userId: {
+                                  nullable: true,
+                                  anyOf: [
+                                    {
+                                      minLength: 1,
+                                      maxLength: 128,
+                                      type: "string",
+                                    },
+                                    {
+                                      type: "null",
+                                    },
+                                  ],
+                                },
+                                name: {
+                                  minLength: 1,
+                                  maxLength: 256,
+                                  type: "string",
+                                },
+                                image: {
+                                  nullable: true,
+                                  anyOf: [
+                                    {
+                                      maxLength: 2048,
+                                      type: "string",
+                                    },
+                                    {
+                                      type: "null",
+                                    },
+                                  ],
+                                },
+                              },
+                            },
+                            {
+                              type: "object",
                               required: ["version", "type", "url"],
                               properties: {
                                 version: {
@@ -20624,7 +20720,7 @@ export const generatedRouteMap: RouteNode = {
                                             type: "string",
                                           },
                                           content: {
-                                            $ref: "#/$defs/s_fd92c17c0e57",
+                                            $ref: "#/$defs/s_451cd03abb88",
                                           },
                                         },
                                       },
@@ -21187,7 +21283,7 @@ export const generatedRouteMap: RouteNode = {
                                                     type: "string",
                                                   },
                                                   content: {
-                                                    $ref: "#/$defs/s_fd92c17c0e57",
+                                                    $ref: "#/$defs/s_451cd03abb88",
                                                   },
                                                   rulesHash: {
                                                     minLength: 1,
@@ -21215,7 +21311,7 @@ export const generatedRouteMap: RouteNode = {
                                                 type: "string",
                                               },
                                               content: {
-                                                $ref: "#/$defs/s_fd92c17c0e57",
+                                                $ref: "#/$defs/s_451cd03abb88",
                                               },
                                             },
                                           },
@@ -21261,6 +21357,187 @@ export const generatedRouteMap: RouteNode = {
                     },
                   },
                   $defs: {
+                    s_451cd03abb88: {
+                      anyOf: [
+                        {
+                          type: "object",
+                          required: ["version", "type"],
+                          properties: {
+                            version: {
+                              const: 1,
+                              type: "number",
+                            },
+                            type: {
+                              const: "file",
+                              type: "string",
+                            },
+                          },
+                        },
+                        {
+                          type: "object",
+                          required: ["version", "type"],
+                          properties: {
+                            version: {
+                              const: 1,
+                              type: "number",
+                            },
+                            type: {
+                              const: "text",
+                              type: "string",
+                            },
+                          },
+                        },
+                        {
+                          type: "object",
+                          required: ["version", "type", "options", "fallback"],
+                          properties: {
+                            version: {
+                              const: 1,
+                              type: "number",
+                            },
+                            type: {
+                              anyOf: [
+                                {
+                                  const: "single-select",
+                                  type: "string",
+                                },
+                                {
+                                  const: "multi-select",
+                                  type: "string",
+                                },
+                              ],
+                            },
+                            options: {
+                              type: "array",
+                              items: {
+                                type: "object",
+                                required: ["color", "value"],
+                                properties: {
+                                  color: {
+                                    anyOf: [
+                                      {
+                                        default: "red",
+                                        type: "string",
+                                        enum: [
+                                          "red",
+                                          "orange",
+                                          "amber",
+                                          "yellow",
+                                          "lime",
+                                          "green",
+                                          "emerald",
+                                          "teal",
+                                          "cyan",
+                                          "sky",
+                                          "blue",
+                                          "indigo",
+                                          "violet",
+                                          "purple",
+                                          "fuchsia",
+                                          "gray",
+                                        ],
+                                      },
+                                      {
+                                        pattern: "^[0-9A-Fa-f]{6}$",
+                                        type: "string",
+                                      },
+                                    ],
+                                  },
+                                  value: {
+                                    minLength: 1,
+                                    maxLength: 1000,
+                                    type: "string",
+                                  },
+                                },
+                              },
+                            },
+                            fallback: {
+                              nullable: true,
+                              anyOf: [
+                                {
+                                  minLength: 1,
+                                  maxLength: 1000,
+                                  type: "string",
+                                },
+                                {
+                                  type: "null",
+                                },
+                              ],
+                            },
+                          },
+                        },
+                        {
+                          type: "object",
+                          required: ["version", "type"],
+                          properties: {
+                            version: {
+                              const: 1,
+                              type: "number",
+                            },
+                            type: {
+                              const: "date",
+                              type: "string",
+                            },
+                          },
+                        },
+                        {
+                          type: "object",
+                          required: ["version", "type"],
+                          properties: {
+                            version: {
+                              const: 1,
+                              type: "number",
+                            },
+                            type: {
+                              const: "int",
+                              type: "string",
+                            },
+                          },
+                        },
+                        {
+                          type: "object",
+                          required: ["version", "type", "currency"],
+                          properties: {
+                            version: {
+                              const: 1,
+                              type: "number",
+                            },
+                            type: {
+                              const: "money",
+                              type: "string",
+                            },
+                            currency: {
+                              nullable: true,
+                              anyOf: [
+                                {
+                                  minLength: 3,
+                                  maxLength: 3,
+                                  pattern: "^[A-Za-z]{3}$",
+                                  type: "string",
+                                },
+                                {
+                                  type: "null",
+                                },
+                              ],
+                            },
+                          },
+                        },
+                        {
+                          type: "object",
+                          required: ["version", "type"],
+                          properties: {
+                            version: {
+                              const: 1,
+                              type: "number",
+                            },
+                            type: {
+                              const: "person",
+                              type: "string",
+                            },
+                          },
+                        },
+                      ],
+                    },
                     s_88402f3c68c1: {
                       type: "object",
                       required: ["type", "left", "op", "right"],
@@ -21411,145 +21688,6 @@ export const generatedRouteMap: RouteNode = {
                           ],
                         },
                       },
-                    },
-                    s_fd92c17c0e57: {
-                      anyOf: [
-                        {
-                          type: "object",
-                          required: ["version", "type"],
-                          properties: {
-                            version: {
-                              const: 1,
-                              type: "number",
-                            },
-                            type: {
-                              const: "file",
-                              type: "string",
-                            },
-                          },
-                        },
-                        {
-                          type: "object",
-                          required: ["version", "type"],
-                          properties: {
-                            version: {
-                              const: 1,
-                              type: "number",
-                            },
-                            type: {
-                              const: "text",
-                              type: "string",
-                            },
-                          },
-                        },
-                        {
-                          type: "object",
-                          required: ["version", "type", "options", "fallback"],
-                          properties: {
-                            version: {
-                              const: 1,
-                              type: "number",
-                            },
-                            type: {
-                              anyOf: [
-                                {
-                                  const: "single-select",
-                                  type: "string",
-                                },
-                                {
-                                  const: "multi-select",
-                                  type: "string",
-                                },
-                              ],
-                            },
-                            options: {
-                              type: "array",
-                              items: {
-                                type: "object",
-                                required: ["color", "value"],
-                                properties: {
-                                  color: {
-                                    anyOf: [
-                                      {
-                                        default: "red",
-                                        type: "string",
-                                        enum: [
-                                          "red",
-                                          "orange",
-                                          "amber",
-                                          "yellow",
-                                          "lime",
-                                          "green",
-                                          "emerald",
-                                          "teal",
-                                          "cyan",
-                                          "sky",
-                                          "blue",
-                                          "indigo",
-                                          "violet",
-                                          "purple",
-                                          "fuchsia",
-                                          "gray",
-                                        ],
-                                      },
-                                      {
-                                        pattern: "^[0-9A-Fa-f]{6}$",
-                                        type: "string",
-                                      },
-                                    ],
-                                  },
-                                  value: {
-                                    minLength: 1,
-                                    maxLength: 1000,
-                                    type: "string",
-                                  },
-                                },
-                              },
-                            },
-                            fallback: {
-                              nullable: true,
-                              anyOf: [
-                                {
-                                  minLength: 1,
-                                  maxLength: 1000,
-                                  type: "string",
-                                },
-                                {
-                                  type: "null",
-                                },
-                              ],
-                            },
-                          },
-                        },
-                        {
-                          type: "object",
-                          required: ["version", "type"],
-                          properties: {
-                            version: {
-                              const: 1,
-                              type: "number",
-                            },
-                            type: {
-                              const: "date",
-                              type: "string",
-                            },
-                          },
-                        },
-                        {
-                          type: "object",
-                          required: ["version", "type"],
-                          properties: {
-                            version: {
-                              const: 1,
-                              type: "number",
-                            },
-                            type: {
-                              const: "int",
-                              type: "string",
-                            },
-                          },
-                        },
-                      ],
                     },
                   },
                 },
@@ -22162,7 +22300,7 @@ export const generatedRouteMap: RouteNode = {
                                             type: "string",
                                           },
                                           content: {
-                                            $ref: "#/$defs/s_fd92c17c0e57",
+                                            $ref: "#/$defs/s_451cd03abb88",
                                           },
                                         },
                                       },
@@ -22725,7 +22863,7 @@ export const generatedRouteMap: RouteNode = {
                                                     type: "string",
                                                   },
                                                   content: {
-                                                    $ref: "#/$defs/s_fd92c17c0e57",
+                                                    $ref: "#/$defs/s_451cd03abb88",
                                                   },
                                                   rulesHash: {
                                                     minLength: 1,
@@ -22753,7 +22891,7 @@ export const generatedRouteMap: RouteNode = {
                                                 type: "string",
                                               },
                                               content: {
-                                                $ref: "#/$defs/s_fd92c17c0e57",
+                                                $ref: "#/$defs/s_451cd03abb88",
                                               },
                                             },
                                           },
@@ -22816,6 +22954,187 @@ export const generatedRouteMap: RouteNode = {
                     },
                   },
                   $defs: {
+                    s_451cd03abb88: {
+                      anyOf: [
+                        {
+                          type: "object",
+                          required: ["version", "type"],
+                          properties: {
+                            version: {
+                              const: 1,
+                              type: "number",
+                            },
+                            type: {
+                              const: "file",
+                              type: "string",
+                            },
+                          },
+                        },
+                        {
+                          type: "object",
+                          required: ["version", "type"],
+                          properties: {
+                            version: {
+                              const: 1,
+                              type: "number",
+                            },
+                            type: {
+                              const: "text",
+                              type: "string",
+                            },
+                          },
+                        },
+                        {
+                          type: "object",
+                          required: ["version", "type", "options", "fallback"],
+                          properties: {
+                            version: {
+                              const: 1,
+                              type: "number",
+                            },
+                            type: {
+                              anyOf: [
+                                {
+                                  const: "single-select",
+                                  type: "string",
+                                },
+                                {
+                                  const: "multi-select",
+                                  type: "string",
+                                },
+                              ],
+                            },
+                            options: {
+                              type: "array",
+                              items: {
+                                type: "object",
+                                required: ["color", "value"],
+                                properties: {
+                                  color: {
+                                    anyOf: [
+                                      {
+                                        default: "red",
+                                        type: "string",
+                                        enum: [
+                                          "red",
+                                          "orange",
+                                          "amber",
+                                          "yellow",
+                                          "lime",
+                                          "green",
+                                          "emerald",
+                                          "teal",
+                                          "cyan",
+                                          "sky",
+                                          "blue",
+                                          "indigo",
+                                          "violet",
+                                          "purple",
+                                          "fuchsia",
+                                          "gray",
+                                        ],
+                                      },
+                                      {
+                                        pattern: "^[0-9A-Fa-f]{6}$",
+                                        type: "string",
+                                      },
+                                    ],
+                                  },
+                                  value: {
+                                    minLength: 1,
+                                    maxLength: 1000,
+                                    type: "string",
+                                  },
+                                },
+                              },
+                            },
+                            fallback: {
+                              nullable: true,
+                              anyOf: [
+                                {
+                                  minLength: 1,
+                                  maxLength: 1000,
+                                  type: "string",
+                                },
+                                {
+                                  type: "null",
+                                },
+                              ],
+                            },
+                          },
+                        },
+                        {
+                          type: "object",
+                          required: ["version", "type"],
+                          properties: {
+                            version: {
+                              const: 1,
+                              type: "number",
+                            },
+                            type: {
+                              const: "date",
+                              type: "string",
+                            },
+                          },
+                        },
+                        {
+                          type: "object",
+                          required: ["version", "type"],
+                          properties: {
+                            version: {
+                              const: 1,
+                              type: "number",
+                            },
+                            type: {
+                              const: "int",
+                              type: "string",
+                            },
+                          },
+                        },
+                        {
+                          type: "object",
+                          required: ["version", "type", "currency"],
+                          properties: {
+                            version: {
+                              const: 1,
+                              type: "number",
+                            },
+                            type: {
+                              const: "money",
+                              type: "string",
+                            },
+                            currency: {
+                              nullable: true,
+                              anyOf: [
+                                {
+                                  minLength: 3,
+                                  maxLength: 3,
+                                  pattern: "^[A-Za-z]{3}$",
+                                  type: "string",
+                                },
+                                {
+                                  type: "null",
+                                },
+                              ],
+                            },
+                          },
+                        },
+                        {
+                          type: "object",
+                          required: ["version", "type"],
+                          properties: {
+                            version: {
+                              const: 1,
+                              type: "number",
+                            },
+                            type: {
+                              const: "person",
+                              type: "string",
+                            },
+                          },
+                        },
+                      ],
+                    },
                     s_88402f3c68c1: {
                       type: "object",
                       required: ["type", "left", "op", "right"],
@@ -22967,145 +23286,6 @@ export const generatedRouteMap: RouteNode = {
                         },
                       },
                     },
-                    s_fd92c17c0e57: {
-                      anyOf: [
-                        {
-                          type: "object",
-                          required: ["version", "type"],
-                          properties: {
-                            version: {
-                              const: 1,
-                              type: "number",
-                            },
-                            type: {
-                              const: "file",
-                              type: "string",
-                            },
-                          },
-                        },
-                        {
-                          type: "object",
-                          required: ["version", "type"],
-                          properties: {
-                            version: {
-                              const: 1,
-                              type: "number",
-                            },
-                            type: {
-                              const: "text",
-                              type: "string",
-                            },
-                          },
-                        },
-                        {
-                          type: "object",
-                          required: ["version", "type", "options", "fallback"],
-                          properties: {
-                            version: {
-                              const: 1,
-                              type: "number",
-                            },
-                            type: {
-                              anyOf: [
-                                {
-                                  const: "single-select",
-                                  type: "string",
-                                },
-                                {
-                                  const: "multi-select",
-                                  type: "string",
-                                },
-                              ],
-                            },
-                            options: {
-                              type: "array",
-                              items: {
-                                type: "object",
-                                required: ["color", "value"],
-                                properties: {
-                                  color: {
-                                    anyOf: [
-                                      {
-                                        default: "red",
-                                        type: "string",
-                                        enum: [
-                                          "red",
-                                          "orange",
-                                          "amber",
-                                          "yellow",
-                                          "lime",
-                                          "green",
-                                          "emerald",
-                                          "teal",
-                                          "cyan",
-                                          "sky",
-                                          "blue",
-                                          "indigo",
-                                          "violet",
-                                          "purple",
-                                          "fuchsia",
-                                          "gray",
-                                        ],
-                                      },
-                                      {
-                                        pattern: "^[0-9A-Fa-f]{6}$",
-                                        type: "string",
-                                      },
-                                    ],
-                                  },
-                                  value: {
-                                    minLength: 1,
-                                    maxLength: 1000,
-                                    type: "string",
-                                  },
-                                },
-                              },
-                            },
-                            fallback: {
-                              nullable: true,
-                              anyOf: [
-                                {
-                                  minLength: 1,
-                                  maxLength: 1000,
-                                  type: "string",
-                                },
-                                {
-                                  type: "null",
-                                },
-                              ],
-                            },
-                          },
-                        },
-                        {
-                          type: "object",
-                          required: ["version", "type"],
-                          properties: {
-                            version: {
-                              const: 1,
-                              type: "number",
-                            },
-                            type: {
-                              const: "date",
-                              type: "string",
-                            },
-                          },
-                        },
-                        {
-                          type: "object",
-                          required: ["version", "type"],
-                          properties: {
-                            version: {
-                              const: 1,
-                              type: "number",
-                            },
-                            type: {
-                              const: "int",
-                              type: "string",
-                            },
-                          },
-                        },
-                      ],
-                    },
                   },
                 },
               },
@@ -23157,6 +23337,7 @@ export const generatedRouteMap: RouteNode = {
                   "body.toolType",
                   "body.dependencies",
                   "body.options",
+                  "body.currency",
                   "body.fallback",
                 ],
                 paginated: false,
@@ -23199,6 +23380,14 @@ export const generatedRouteMap: RouteNode = {
                             },
                             {
                               const: "int",
+                              type: "string",
+                            },
+                            {
+                              const: "money",
+                              type: "string",
+                            },
+                            {
+                              const: "person",
                               type: "string",
                             },
                           ],
@@ -23567,6 +23756,19 @@ export const generatedRouteMap: RouteNode = {
                             },
                           },
                         },
+                        currency: {
+                          nullable: true,
+                          anyOf: [
+                            {
+                              minLength: 3,
+                              maxLength: 3,
+                              type: "string",
+                            },
+                            {
+                              type: "null",
+                            },
+                          ],
+                        },
                         fallback: {
                           nullable: true,
                           anyOf: [
@@ -23816,6 +24018,14 @@ export const generatedRouteMap: RouteNode = {
                                   },
                                   {
                                     const: "int",
+                                    type: "string",
+                                  },
+                                  {
+                                    const: "money",
+                                    type: "string",
+                                  },
+                                  {
+                                    const: "person",
                                     type: "string",
                                   },
                                 ],
@@ -24189,6 +24399,19 @@ export const generatedRouteMap: RouteNode = {
                                     },
                                   },
                                 },
+                              },
+                              currency: {
+                                nullable: true,
+                                anyOf: [
+                                  {
+                                    minLength: 3,
+                                    maxLength: 3,
+                                    type: "string",
+                                  },
+                                  {
+                                    type: "null",
+                                  },
+                                ],
                               },
                               fallback: {
                                 nullable: true,
@@ -24931,6 +25154,48 @@ export const generatedRouteMap: RouteNode = {
                                 },
                                 type: {
                                   const: "int",
+                                  type: "string",
+                                },
+                              },
+                            },
+                            {
+                              type: "object",
+                              required: ["version", "type", "currency"],
+                              properties: {
+                                version: {
+                                  const: 1,
+                                  type: "number",
+                                },
+                                type: {
+                                  const: "money",
+                                  type: "string",
+                                },
+                                currency: {
+                                  nullable: true,
+                                  anyOf: [
+                                    {
+                                      minLength: 3,
+                                      maxLength: 3,
+                                      pattern: "^[A-Za-z]{3}$",
+                                      type: "string",
+                                    },
+                                    {
+                                      type: "null",
+                                    },
+                                  ],
+                                },
+                              },
+                            },
+                            {
+                              type: "object",
+                              required: ["version", "type"],
+                              properties: {
+                                version: {
+                                  const: 1,
+                                  type: "number",
+                                },
+                                type: {
+                                  const: "person",
                                   type: "string",
                                 },
                               },
@@ -36428,6 +36693,48 @@ export const generatedRouteMap: RouteNode = {
                                       },
                                     },
                                   },
+                                  {
+                                    type: "object",
+                                    required: ["version", "type", "currency"],
+                                    properties: {
+                                      version: {
+                                        const: 1,
+                                        type: "number",
+                                      },
+                                      type: {
+                                        const: "money",
+                                        type: "string",
+                                      },
+                                      currency: {
+                                        nullable: true,
+                                        anyOf: [
+                                          {
+                                            minLength: 3,
+                                            maxLength: 3,
+                                            pattern: "^[A-Za-z]{3}$",
+                                            type: "string",
+                                          },
+                                          {
+                                            type: "null",
+                                          },
+                                        ],
+                                      },
+                                    },
+                                  },
+                                  {
+                                    type: "object",
+                                    required: ["version", "type"],
+                                    properties: {
+                                      version: {
+                                        const: 1,
+                                        type: "number",
+                                      },
+                                      type: {
+                                        const: "person",
+                                        type: "string",
+                                      },
+                                    },
+                                  },
                                 ],
                               },
                               tool: {
@@ -37775,6 +38082,48 @@ export const generatedRouteMap: RouteNode = {
                                       },
                                       type: {
                                         const: "int",
+                                        type: "string",
+                                      },
+                                    },
+                                  },
+                                  {
+                                    type: "object",
+                                    required: ["version", "type", "currency"],
+                                    properties: {
+                                      version: {
+                                        const: 1,
+                                        type: "number",
+                                      },
+                                      type: {
+                                        const: "money",
+                                        type: "string",
+                                      },
+                                      currency: {
+                                        nullable: true,
+                                        anyOf: [
+                                          {
+                                            minLength: 3,
+                                            maxLength: 3,
+                                            pattern: "^[A-Za-z]{3}$",
+                                            type: "string",
+                                          },
+                                          {
+                                            type: "null",
+                                          },
+                                        ],
+                                      },
+                                    },
+                                  },
+                                  {
+                                    type: "object",
+                                    required: ["version", "type"],
+                                    properties: {
+                                      version: {
+                                        const: 1,
+                                        type: "number",
+                                      },
+                                      type: {
+                                        const: "person",
                                         type: "string",
                                       },
                                     },

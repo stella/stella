@@ -78,6 +78,12 @@ const extractFieldText = (content: FieldContent): string => {
       return content.value ?? "";
     case "int":
       return String(content.value);
+    case "money":
+      // The amount is searchable in minor units; the currency code is what a
+      // reader is likely to type ("EUR").
+      return `${content.amountCents} ${content.currency}`;
+    case "person":
+      return content.name;
     case "file":
       return content.fileName ? fileNameSearchText(content.fileName) : "";
     case "error":

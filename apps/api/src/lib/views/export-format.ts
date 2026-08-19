@@ -82,6 +82,24 @@ const formatExportNumber = (
   return `${getExportNumberFormatter(locale).format(value)} ${currency}`;
 };
 
+/**
+ * Money is stored in minor units, and how many make a major one is a property
+ * of the currency, so the divisor comes from the resolved formatter rather than
+ * an assumed hundred.
+ */
+const formatExportMoney = (
+  amountCents: number,
+  currency: string,
+  locale: string,
+): string => {
+  const formatter = new Intl.NumberFormat(locale, {
+    style: "currency",
+    currency,
+  });
+  const digits = formatter.resolvedOptions().maximumFractionDigits ?? 2;
+  return formatter.format(amountCents / 10 ** digits);
+};
+
 export const formatFieldContent = (
   content: FieldContent | undefined,
   locale: string,
@@ -103,6 +121,10 @@ export const formatFieldContent = (
       return content.value ? formatExportDate(content.value, locale) : "";
     case "int":
       return formatExportNumber(content.value, content.currency, locale);
+    case "money":
+      return formatExportMoney(content.amountCents, content.currency, locale);
+    case "person":
+      return content.name;
     case "clip":
       return content.url;
     case "error":

@@ -40,6 +40,10 @@ const getValueFromInputFields = (
         return field.currency
           ? `${field.value} ${field.currency}`
           : String(field.value);
+      case "money":
+        return `${field.amountCents} ${field.currency}`;
+      case "person":
+        return field.name;
       default:
         throw new Unreachable({
           message: "Field type not matched",
@@ -112,6 +116,8 @@ export const generateBatchMock = async ({
         });
       }
 
+      // The mock only answers what the execution plan schedules, and money,
+      // person, and file properties are never scheduled.
       switch (content.type) {
         case "text": {
           const value = `${inputFieldValue} + ${faker.lorem.word()}`;

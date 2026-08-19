@@ -41,6 +41,8 @@ export const createPropertyBodySchema = t.Object({
     ),
   ),
   options: t.Optional(t.Array(selectOptionSchema)),
+  /** Money only: the currency new values default to, or null for per-value. */
+  currency: t.Optional(t.Nullable(t.String({ minLength: 3, maxLength: 3 }))),
   fallback: t.Optional(t.Nullable(t.String({ minLength: 1, maxLength: 1000 }))),
 });
 
@@ -204,6 +206,16 @@ export const buildPropertyParts = (
     case "int":
       content = { version: 1, type: body.contentType };
       tool = defaultTool();
+      break;
+    // Entered by hand, like a file: an amount needs a currency the model
+    // cannot choose, and a person has to resolve to a workspace member.
+    case "money":
+      content = { version: 1, type: "money", currency: body.currency ?? null };
+      tool = { version: 1, type: "manual-input" };
+      break;
+    case "person":
+      content = { version: 1, type: "person" };
+      tool = { version: 1, type: "manual-input" };
       break;
     default:
       return { status: 422, message: "Unsupported content type" };

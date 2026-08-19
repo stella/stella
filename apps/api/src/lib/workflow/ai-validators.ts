@@ -223,6 +223,9 @@ export const validateAIOutput = ({
     case "int":
       return validateIntResult({ answer, justification });
 
+    // "money", "person" and "file" are not AI-extractable (see
+    // isAiExtractablePropertyType): the execution plan never schedules them, so
+    // reaching the default is a bug, not a missing branch.
     default:
       throw new Unreachable({
         message: "Property type not matched",

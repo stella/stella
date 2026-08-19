@@ -43,9 +43,10 @@ export const prepareBatch = (
 };
 
 /**
- * Projects a field's content onto a concrete condition value. Content
- * types that cannot gate (file, clip, error, pending, unsupported)
- * resolve to `undefined`, which the evaluator treats as empty/absent.
+ * Projects a field's content onto a concrete condition value. Money gates on
+ * its minor-unit amount and a person on their name. Content types that cannot
+ * gate (file, clip, error, pending, unsupported) resolve to `undefined`, which
+ * the evaluator treats as empty/absent.
  */
 export const fieldContentToValue = (content: FieldContent): ConditionValue => {
   switch (content.type) {
@@ -57,6 +58,10 @@ export const fieldContentToValue = (content: FieldContent): ConditionValue => {
       return content.value;
     case "int":
       return content.value;
+    case "money":
+      return content.amountCents;
+    case "person":
+      return content.name;
     case "date":
       return content.value;
     case "file":

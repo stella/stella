@@ -1,7 +1,10 @@
 import { panic, Result } from "better-result";
 
 import type { JustificationContent } from "@/api/db/schema";
-import type { FieldContent, PropertyContent } from "@/api/db/schema-validators";
+import type {
+  AiExtractablePropertyContent,
+  FieldContent,
+} from "@/api/db/schema-validators";
 import type { AIRequestServiceTier, OrgAIConfig } from "@/api/lib/ai-config";
 import type { AIUsageMetering } from "@/api/lib/analytics/tanstack-ai";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -43,13 +46,13 @@ export type AskExtraction = {
 };
 
 // One eligible ASK prompt: a position whose `ask.question` is non-empty and
-// whose `ask.content` is not a file column (file columns hold the document, not
-// an extracted value). Narrowed to the AI content types `buildBatchSchema`
-// handles.
+// whose `ask.content` the model can produce a value for (a file column holds
+// the document, not an extracted value; see AiExtractablePropertyContent).
+// Narrowed to the content types `buildBatchSchema` handles.
 export type ReviewAsk = {
   sourceId: string;
   question: string;
-  content: Exclude<PropertyContent, { type: "file" }>;
+  content: AiExtractablePropertyContent;
 };
 
 export type ReviewExtractionResult = {

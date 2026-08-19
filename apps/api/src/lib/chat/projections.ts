@@ -368,6 +368,21 @@ const documentFieldContentProjection = v.variant("type", [
   }),
   v.strictObject({
     version: v.literal(1),
+    type: v.literal("money"),
+    amountCents: v.number(),
+    currency: v.string(),
+  }),
+  v.strictObject({
+    version: v.literal(1),
+    type: v.literal("person"),
+    // The workspace member handle is machinery chat cannot act on; the name is
+    // what a model reads.
+    userId: strippedField(),
+    name: v.string(),
+    image: strippedField(),
+  }),
+  v.strictObject({
+    version: v.literal(1),
     type: v.literal("clip"),
     url: v.string(),
     snippet: v.optional(v.string()),

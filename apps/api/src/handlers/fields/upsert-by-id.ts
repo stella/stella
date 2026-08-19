@@ -15,7 +15,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditAction, AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { acquireCellLock } from "@/api/lib/cell-lock";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { tSafeId, tUserId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   enqueueEntitySearchRepairs,
@@ -87,6 +87,30 @@ const config = {
                 "For int values only: 3-letter ISO currency code, or null",
             }),
           ),
+        }),
+        t.Object({
+          version: t.Literal(1),
+          type: t.Literal("money", {
+            description: "Value type; must match the property's value type",
+          }),
+          amountCents: t.Integer({
+            description: "Amount in the currency's minor units",
+          }),
+          currency: t.String({
+            minLength: 3,
+            maxLength: 3,
+            pattern: "^[A-Za-z]{3}$",
+            description: "3-letter ISO currency code",
+          }),
+        }),
+        t.Object({
+          version: t.Literal(1),
+          type: t.Literal("person", {
+            description: "Value type; must match the property's value type",
+          }),
+          userId: t.Nullable(tUserId),
+          name: t.String({ minLength: 1, maxLength: 256 }),
+          image: t.Nullable(t.String({ maxLength: 2048 })),
         }),
         t.Object({
           version: t.Literal(1),
@@ -223,14 +247,27 @@ export const upsertFieldHandler = async function* ({
     );
   }
 
-  // The clip variant has no `value`, but it cannot reach here: the property /
-  // body content-type match above narrows `body.content` to the five
-  // value-bearing variants (property content types never include clip), so
-  // `body.content.value` is always defined.
-  const isEmpty =
-    body.content.value === null ||
-    body.content.value === "" ||
-    (Array.isArray(body.content.value) && body.content.value.length === 0);
+  // What counts as an empty cell is per content type. A clip cannot reach here
+  // (property content types never include clip), and the variants that carry no
+  // `value` answer for themselves: a money amount of zero is an amount, and a
+  // person is empty only when unnamed.
+  const isEmpty = ((): boolean => {
+    switch (body.content.type) {
+      case "text":
+      case "single-select":
+      case "date":
+        return body.content.value === null || body.content.value === "";
+      case "multi-select":
+        return body.content.value.length === 0;
+      case "person":
+        return body.content.name === "";
+      case "int":
+      case "money":
+        return false;
+      default:
+        return false;
+    }
+  })();
 
   const reindex = () => {
     flushEntitySearchRepairs([body.entityId]).catch(captureError);
