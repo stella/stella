@@ -86,6 +86,31 @@ for a detail surface. Each is a query-options factory, so the table never
 fetches and the transport stays with the data layer. A contract test totals over
 the adapter's keys, so a fifth row source cannot land unnamed.
 
+## Filters and sorts
+
+The nested condition builder lives in `@stll/workspace-ui/conditions`, over the
+published `@stll/conditions` AST, which stays the only condition dialect.
+
+It resolves no strings. A host describes its operands as `FieldOption`s — whose
+`valueType` picks both the operator set and the value editor — and brings every
+label the builder draws, including how each operator reads for each value type.
+The message-key table stays in the app, where the guard proving every key exists
+in the catalogue still bites.
+
+Two things the builder cannot own are slots:
+
+- **The formula editor.** Its expression language belongs to the host, so the
+  builder hands it the expression and takes back either a new one or a request
+  to go back to an ordinary field. Rebuilding the leaf stays in the builder,
+  because that is AST work.
+- **Value editors.** A host with faceted values renders its own; returning null
+  falls back to the builder's built-in editor for that kind.
+
+`@stll/workspace-ui/sorts` is the same shape: a sort is a property id and a
+direction, and which properties a view may sort by is the caller's answer.
+`sortDirectionHint` is what says ascending means A→Z for words, 1→9 for numbers
+and money, and an arrow for dates.
+
 ## Column calculations
 
 A view can say what each column adds up to. The choice lives on the view layout
