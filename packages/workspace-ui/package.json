@@ -12,7 +12,8 @@
     "./calculation-format": "./src/calculation-format.ts",
     "./calculations": "./src/calculations.tsx",
     "./calculation-selection": "./src/calculation-selection.ts",
-    "./conditions": "./src/conditions/index.ts"
+    "./conditions": "./src/conditions/index.ts",
+    "./sorts": "./src/sorts.tsx"
   },
   "scripts": {
     "clean": "git clean -xdf .cache .turbo node_modules",
