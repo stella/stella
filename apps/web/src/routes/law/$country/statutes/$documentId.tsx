@@ -129,7 +129,7 @@ function PublicStatuteRoute() {
   // The keys a provision's incoming citations are filed under. Both come off
   // the document itself: nothing about the work is inferred here.
   const eli = statute.eli.trim();
-  const jurisdiction = statute.country?.trim().toUpperCase() ?? "";
+  const jurisdiction = statute.country.trim().toUpperCase();
   const citationWork =
     eli === "" || jurisdiction === "" ? null : { eli, jurisdiction };
 
