@@ -35,12 +35,14 @@ const DECISION_DATE_FLOOR = "0001-01-01";
 
 /**
  * Newest application first. The order is the keyset, so every key must be
- * immutable for the life of a cursor: authority is refreshed in place by the
- * citation sweep and stays out of it (it is still returned for display).
- * Rendered as ISO text explicitly, so the cursor does not depend on the
- * server's DateStyle.
+ * immutable for the life of a cursor and answerable from the citation
+ * table's own index: the date is the copy written on the row, not the
+ * joined decision's (authority, refreshed in place, stays out of it and is
+ * returned for display only). Rendered as ISO text explicitly, so the
+ * cursor does not depend on the server's DateStyle.
  */
-const decisionDateCursorSql = sql<string>`to_char(coalesce(${caseLawDecisions.decisionDate}, ${DECISION_DATE_FLOOR}::date), 'YYYY-MM-DD')`;
+const decisionDateKeySql = sql`coalesce(${caseLawProvisionCitations.decisionDate}, ${DECISION_DATE_FLOOR}::date)`;
+const decisionDateCursorSql = sql<string>`to_char(${decisionDateKeySql}, 'YYYY-MM-DD')`;
 
 type CitingDecisionsCursor = {
   decisionDate: string;
@@ -94,12 +96,12 @@ export const listCitingDecisionsHandler = async (
 
     conditions.push(
       sql`(
-        ${decisionDateCursorSql},
+        ${decisionDateKeySql},
         ${caseLawProvisionCitations.decisionId},
         ${caseLawProvisionCitations.spanStart},
         ${caseLawProvisionCitations.anchor}
       ) < (
-        ${cursor.decisionDate}::text,
+        ${cursor.decisionDate}::date,
         ${cursor.decisionId}::uuid,
         ${cursor.spanStart}::integer,
         ${cursor.anchor}::text
@@ -133,7 +135,7 @@ export const listCitingDecisionsHandler = async (
       )
       .where(and(...conditions))
       .orderBy(
-        desc(decisionDateCursorSql),
+        desc(decisionDateKeySql),
         desc(caseLawProvisionCitations.decisionId),
         desc(caseLawProvisionCitations.spanStart),
         desc(caseLawProvisionCitations.anchor),

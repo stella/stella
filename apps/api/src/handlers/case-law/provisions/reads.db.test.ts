@@ -57,15 +57,18 @@ const decisionRow = ({
 
 const provisionRow = ({
   anchor,
+  decisionDate,
   decisionId,
   spanStart,
 }: {
   anchor: string;
+  decisionDate: string | null;
   decisionId: SafeId<"caseLawDecision">;
   spanStart: number;
 }): typeof caseLawProvisionCitations.$inferInsert => ({
   anchor,
   confidence: 0.9,
+  decisionDate,
   decisionId,
   jurisdiction: JURISDICTION,
   section: 1,
@@ -136,26 +139,31 @@ beforeAll(
     await db.insert(caseLawProvisionCitations).values([
       provisionRow({
         anchor: ANCHOR_B,
+        decisionDate: "2024-01-01",
         decisionId: highAuthorityId,
         spanStart: 30,
       }),
       provisionRow({
         anchor: ANCHOR_A,
+        decisionDate: "2024-01-01",
         decisionId: highAuthorityId,
         spanStart: 10,
       }),
       provisionRow({
         anchor: ANCHOR_A,
+        decisionDate: "2024-01-01",
         decisionId: highAuthorityId,
         spanStart: 20,
       }),
       provisionRow({
         anchor: ANCHOR_A,
+        decisionDate: "2025-01-01",
         decisionId: lowAuthorityId,
         spanStart: 40,
       }),
       provisionRow({
         anchor: ANCHOR_A,
+        decisionDate: "2026-01-01",
         decisionId: closedDecisionId,
         spanStart: 50,
       }),

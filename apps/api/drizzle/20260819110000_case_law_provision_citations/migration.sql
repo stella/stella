@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS "case_law_provision_citations" (
   "open_ended" boolean DEFAULT false NOT NULL,
   "anchor" text NOT NULL,
   "version_valid_from" date,
+  "decision_date" date,
   "sentence_text" text NOT NULL,
   "span_start" integer NOT NULL,
   "span_end" integer NOT NULL,
@@ -64,8 +65,21 @@ ALTER TABLE "case_law_provision_citations"
 CREATE UNIQUE INDEX IF NOT EXISTS "case_law_provision_citations_decision_span_idx"
   ON "case_law_provision_citations" ("decision_id", "span_start", "anchor");--> statement-breakpoint
 
+-- Both reads of "who cites this provision" are keyset walks newest-first,
+-- so the date is on the row and in the index rather than on the joined
+-- decision: the index answers the page, and the cursor stays stable while
+-- the decision's own columns are refreshed.
 CREATE INDEX IF NOT EXISTS "case_law_provision_citations_work_idx"
-  ON "case_law_provision_citations" ("jurisdiction", "work_identifier", "anchor", "decision_id");--> statement-breakpoint
+  ON "case_law_provision_citations" (
+    "jurisdiction", "work_identifier",
+    (coalesce("decision_date", '0001-01-01'::date)) DESC, "decision_id" DESC, "span_start" DESC, "anchor" DESC
+  );--> statement-breakpoint
+
+CREATE INDEX IF NOT EXISTS "case_law_provision_citations_work_anchor_idx"
+  ON "case_law_provision_citations" (
+    "jurisdiction", "work_identifier", "anchor",
+    (coalesce("decision_date", '0001-01-01'::date)) DESC, "decision_id" DESC, "span_start" DESC
+  );--> statement-breakpoint
 
 CREATE INDEX IF NOT EXISTS "case_law_provision_citations_decision_idx"
   ON "case_law_provision_citations" ("decision_id");--> statement-breakpoint

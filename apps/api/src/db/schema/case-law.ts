@@ -897,6 +897,12 @@ export const caseLawProvisionCitations = p.pgTable(
     openEnded: p.boolean("open_ended").default(false).notNull(),
     anchor: p.text("anchor").notNull(),
     versionValidFrom: p.date("version_valid_from"),
+    /**
+     * The citing decision's date, copied at write time. The provision reads
+     * walk newest-first by keyset, so the key lives on the row and in its
+     * index rather than on the joined decision.
+     */
+    decisionDate: p.date("decision_date"),
     sentenceText: p.text("sentence_text").notNull(),
     spanStart: p.integer("span_start").notNull(),
     spanEnd: p.integer("span_end").notNull(),
@@ -919,7 +925,24 @@ export const caseLawProvisionCitations = p.pgTable(
       .on(t.decisionId, t.spanStart, t.anchor),
     p
       .index("case_law_provision_citations_work_idx")
-      .on(t.jurisdiction, t.workIdentifier, t.anchor, t.decisionId),
+      .on(
+        t.jurisdiction,
+        t.workIdentifier,
+        sql`(coalesce(${t.decisionDate}, '0001-01-01'::date)) DESC`,
+        t.decisionId.desc(),
+        t.spanStart.desc(),
+        t.anchor.desc(),
+      ),
+    p
+      .index("case_law_provision_citations_work_anchor_idx")
+      .on(
+        t.jurisdiction,
+        t.workIdentifier,
+        t.anchor,
+        sql`(coalesce(${t.decisionDate}, '0001-01-01'::date)) DESC`,
+        t.decisionId.desc(),
+        t.spanStart.desc(),
+      ),
     p.index("case_law_provision_citations_decision_idx").on(t.decisionId),
     p.check(
       "provision_citations_unit_values",
