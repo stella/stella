@@ -333,7 +333,6 @@ type Messages = {
         "publishedOnWeb": "Published on web";
       };
       "statutes": "Applicable statutes";
-      "viewOriginal": "View source";
     };
   };
   "catalogue": {
@@ -1100,6 +1099,7 @@ type Messages = {
     "verify": "Verify";
     "version": "Version";
     "versionLabel": "Version {version}";
+    "viewSource": "View source";
     "workflows": "Workflows";
   };
   "consent": {
@@ -3254,6 +3254,22 @@ type Messages = {
       "usageUnitsBalanceTemplate": "{remaining} units available";
       "usageUnitsThisPeriod": "Usage units this period";
     };
+  };
+  "statutes": {
+    "backToList": "All statutes";
+    "emptyDocument": "This version has no text available.";
+    "emptyState": "No statutes found.";
+    "inForceSince": "In force since {date}";
+    "openEnded": "present";
+    "searchPlaceholder": "Search by title or number...";
+    "status": {
+      "current": "In force";
+      "draft": "Proposed";
+      "historical": "Superseded";
+      "repealed": "Repealed";
+    };
+    "title": "Statutes";
+    "validity": "Valid from {from} to {to}";
   };
   "styleSets": {
     "create": "Create";

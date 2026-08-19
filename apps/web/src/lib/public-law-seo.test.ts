@@ -6,7 +6,7 @@ Object.assign(import.meta.env, {
 });
 
 const {
-  createCaseLawCollectionJsonLd,
+  createLegalCollectionJsonLd,
   createCaseLawDecisionJsonLd,
   createPublicLawCanonicalUrl,
   createPublicLawHead,
@@ -186,7 +186,8 @@ describe("public law SEO", () => {
 
   test("creates case-law collection JSON-LD", () => {
     expect(
-      createCaseLawCollectionJsonLd({
+      createLegalCollectionJsonLd({
+        aboutName: "Case-law decisions",
         canonicalUrl: "http://localhost:3000/law/cases",
         description: "Public case-law database.",
         name: "Case law | stella",
@@ -210,7 +211,8 @@ describe("public law SEO", () => {
 
   test("creates case-law collection JSON-LD with first-page decision links", () => {
     expect(
-      createCaseLawCollectionJsonLd({
+      createLegalCollectionJsonLd({
+        aboutName: "Case-law decisions",
         canonicalUrl: "http://localhost:3000/law/cases",
         items: [
           {

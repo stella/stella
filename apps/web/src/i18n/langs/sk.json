@@ -329,8 +329,7 @@
         "decisionCategory": "Kategória rozhodnutia",
         "publishedOnWeb": "Zverejnené na webe"
       },
-      "statutes": "Aplikované predpisy",
-      "viewOriginal": "Zobraziť zdroj"
+      "statutes": "Aplikované predpisy"
     }
   },
   "catalogue": {
@@ -1097,6 +1096,7 @@
     "verify": "Overiť",
     "version": "Verzia",
     "versionLabel": "Verzia {version}",
+    "viewSource": "Zobraziť zdroj",
     "workflows": "Pracovné postupy"
   },
   "consent": {
@@ -3251,6 +3251,22 @@
       "usageUnitsBalanceTemplate": "K dispozícii je {remaining} jednotiek",
       "usageUnitsThisPeriod": "Jednotky využitia za toto obdobie"
     }
+  },
+  "statutes": {
+    "backToList": "Všetky predpisy",
+    "emptyDocument": "Toto znenie nemá dostupný text.",
+    "emptyState": "Nenašli sa žiadne predpisy.",
+    "inForceSince": "Účinné od {date}",
+    "openEnded": "súčasnosť",
+    "searchPlaceholder": "Hľadať podľa názvu alebo čísla...",
+    "status": {
+      "current": "Účinné",
+      "draft": "Navrhované",
+      "historical": "Nahradené",
+      "repealed": "Zrušené"
+    },
+    "title": "Právne predpisy",
+    "validity": "Platné od {from} do {to}"
   },
   "styleSets": {
     "create": "Vytvoriť",

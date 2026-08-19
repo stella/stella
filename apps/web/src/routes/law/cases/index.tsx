@@ -34,7 +34,7 @@ import {
 import { detached } from "@/lib/detached";
 import { pageTitle } from "@/lib/page-title";
 import {
-  createCaseLawCollectionJsonLd,
+  createLegalCollectionJsonLd,
   createPublicLawCanonicalUrl,
   createPublicLawHead,
 } from "@/lib/public-law-seo";
@@ -144,7 +144,8 @@ export const Route = createFileRoute("/law/cases/")({
 
     return createPublicLawHead({
       description,
-      jsonLd: createCaseLawCollectionJsonLd({
+      jsonLd: createLegalCollectionJsonLd({
+        aboutName: "Case-law decisions",
         canonicalUrl: createPublicLawCanonicalUrl(path),
         description,
         items: loaderData

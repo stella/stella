@@ -329,8 +329,7 @@
         "decisionCategory": "Kategoria orzeczenia",
         "publishedOnWeb": "Opublikowano w sieci"
       },
-      "statutes": "Powołane przepisy",
-      "viewOriginal": "Zobacz źródło"
+      "statutes": "Powołane przepisy"
     }
   },
   "catalogue": {
@@ -1097,6 +1096,7 @@
     "verify": "Zweryfikuj",
     "version": "Wersja",
     "versionLabel": "Wersja {version}",
+    "viewSource": "Zobacz źródło",
     "workflows": "Przepływy pracy"
   },
   "consent": {
@@ -3251,6 +3251,22 @@
       "usageUnitsBalanceTemplate": "Dostępne jednostki: {remaining}",
       "usageUnitsThisPeriod": "Jednostki użycia w tym okresie"
     }
+  },
+  "statutes": {
+    "backToList": "Wszystkie akty prawne",
+    "emptyDocument": "Ta wersja nie ma dostępnego tekstu.",
+    "emptyState": "Nie znaleziono aktów prawnych.",
+    "inForceSince": "Obowiązuje od {date}",
+    "openEnded": "nadal",
+    "searchPlaceholder": "Szukaj według tytułu lub numeru...",
+    "status": {
+      "current": "Obowiązujący",
+      "draft": "Projektowany",
+      "historical": "Zastąpiony",
+      "repealed": "Uchylony"
+    },
+    "title": "Akty prawne",
+    "validity": "Obowiązuje od {from} do {to}"
   },
   "styleSets": {
     "create": "Utwórz",

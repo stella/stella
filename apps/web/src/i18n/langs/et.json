@@ -329,8 +329,7 @@
         "decisionCategory": "Lahendi kategooria",
         "publishedOnWeb": "Veebis avaldatud"
       },
-      "statutes": "Kohaldatavad õigusaktid",
-      "viewOriginal": "Vaata allikat"
+      "statutes": "Kohaldatavad õigusaktid"
     }
   },
   "catalogue": {
@@ -1097,6 +1096,7 @@
     "verify": "Kinnita",
     "version": "Versioon",
     "versionLabel": "Versioon {version}",
+    "viewSource": "Vaata allikat",
     "workflows": "Töövood"
   },
   "consent": {
@@ -3251,6 +3251,22 @@
       "usageUnitsBalanceTemplate": "Saadaval on {remaining} ühikut",
       "usageUnitsThisPeriod": "Selle perioodi kasutusühikud"
     }
+  },
+  "statutes": {
+    "backToList": "Kõik õigusaktid",
+    "emptyDocument": "Sellel redaktsioonil puudub tekst.",
+    "emptyState": "Õigusakte ei leitud.",
+    "inForceSince": "Kehtib alates {date}",
+    "openEnded": "praeguseni",
+    "searchPlaceholder": "Otsi pealkirja või numbri järgi...",
+    "status": {
+      "current": "Kehtiv",
+      "draft": "Eelnõus",
+      "historical": "Asendatud",
+      "repealed": "Kehtetu"
+    },
+    "title": "Õigusaktid",
+    "validity": "Kehtib {from} kuni {to}"
   },
   "styleSets": {
     "create": "Loo",

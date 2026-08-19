@@ -137,6 +137,11 @@ export const brandPersistedCaseLawSourceId = (
   caseLawSourceId: string,
 ): SafeId<"caseLawSource"> => toSafeId<"caseLawSource">(caseLawSourceId);
 
+export const brandPersistedLegislationDocumentId = (
+  legislationDocumentId: string,
+): SafeId<"legislationDocument"> =>
+  toSafeId<"legislationDocument">(legislationDocumentId);
+
 export const brandPersistedContactId = (contactId: string): SafeId<"contact"> =>
   toSafeId<"contact">(contactId);
 

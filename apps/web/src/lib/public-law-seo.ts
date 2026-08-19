@@ -25,7 +25,20 @@ type CaseLawDecisionJsonLdInput = {
   updatedAt?: Date | string | null;
 };
 
-type CaseLawCollectionJsonLdInput = {
+type StatuteJsonLdInput = {
+  canonicalUrl: string;
+  country: string;
+  documentType: string | null;
+  eli: string;
+  language: string;
+  sourceUrl?: string | null;
+  title: string;
+  versionValidFrom: string | null;
+};
+
+type LegalCollectionJsonLdInput = {
+  /** What the collection is a collection of, e.g. "Statutes". */
+  aboutName: string;
   canonicalUrl: string;
   description?: string | null;
   items?: readonly {
@@ -125,12 +138,44 @@ export const createCaseLawDecisionJsonLd = ({
   };
 };
 
-export const createCaseLawCollectionJsonLd = ({
+export const createStatuteJsonLd = ({
+  canonicalUrl,
+  country,
+  documentType,
+  eli,
+  language,
+  sourceUrl,
+  title,
+  versionValidFrom,
+}: StatuteJsonLdInput): JsonLdObject => {
+  const publishedDate = dateToIsoDate(versionValidFrom);
+  const officialSourceUrl = absoluteUrlOrNull(sourceUrl);
+
+  return {
+    "@context": "https://schema.org",
+    "@type": "Legislation",
+    inLanguage: language,
+    legislationIdentifier: eli,
+    legislationJurisdiction: country,
+    mainEntityOfPage: {
+      "@id": canonicalUrl,
+      "@type": "WebPage",
+    },
+    name: title,
+    url: canonicalUrl,
+    ...(publishedDate ? { legislationDate: publishedDate } : {}),
+    ...(documentType?.trim() ? { legislationType: documentType } : {}),
+    ...(officialSourceUrl ? { sameAs: officialSourceUrl } : {}),
+  };
+};
+
+export const createLegalCollectionJsonLd = ({
+  aboutName,
   canonicalUrl,
   description,
   items = [],
   name,
-}: CaseLawCollectionJsonLdInput): JsonLdObject => {
+}: LegalCollectionJsonLdInput): JsonLdObject => {
   const itemList: JsonLdObject = {
     "@type": "ItemList",
     name,
@@ -153,7 +198,7 @@ export const createCaseLawCollectionJsonLd = ({
     "@type": "CollectionPage",
     about: {
       "@type": "LegalDocument",
-      name: "Case-law decisions",
+      name: aboutName,
     },
     mainEntity: itemList,
     name,

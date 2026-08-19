@@ -329,8 +329,7 @@
         "decisionCategory": "Entscheidungskategorie",
         "publishedOnWeb": "Im Web veröffentlicht"
       },
-      "statutes": "Anwendbare Vorschriften",
-      "viewOriginal": "Quelle anzeigen"
+      "statutes": "Anwendbare Vorschriften"
     }
   },
   "catalogue": {
@@ -1097,6 +1096,7 @@
     "verify": "Bestätigen",
     "version": "Version",
     "versionLabel": "Version {version}",
+    "viewSource": "Quelle anzeigen",
     "workflows": "Workflows"
   },
   "consent": {
@@ -3251,6 +3251,22 @@
       "usageUnitsBalanceTemplate": "{remaining} Einheiten verfügbar",
       "usageUnitsThisPeriod": "Nutzungseinheiten in diesem Zeitraum"
     }
+  },
+  "statutes": {
+    "backToList": "Alle Rechtsvorschriften",
+    "emptyDocument": "Für diese Fassung ist kein Text verfügbar.",
+    "emptyState": "Keine Rechtsvorschriften gefunden.",
+    "inForceSince": "In Kraft seit {date}",
+    "openEnded": "heute",
+    "searchPlaceholder": "Nach Titel oder Nummer suchen...",
+    "status": {
+      "current": "In Kraft",
+      "draft": "Im Entwurf",
+      "historical": "Überholt",
+      "repealed": "Aufgehoben"
+    },
+    "title": "Rechtsvorschriften",
+    "validity": "Gültig von {from} bis {to}"
   },
   "styleSets": {
     "create": "Erstellen",
