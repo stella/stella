@@ -14,7 +14,10 @@ import {
   compileRules,
   selectRuleMatch,
 } from "@/api/handlers/case-law/polarity/rule-engine";
-import { SEED_RULES } from "@/api/handlers/case-law/polarity/seed-rules";
+import {
+  RETIRED_SEED_RULES,
+  SEED_RULES,
+} from "@/api/handlers/case-law/polarity/seed-rules";
 import { createSafeId } from "@/api/lib/branded-types";
 
 describe("extractContext", () => {
@@ -114,7 +117,6 @@ describe("seed rules", () => {
     const testCases = [
       "na rozdíl od předchozího rozhodnutí",
       "tento závěr byl překonán",
-      "nález byl zrušen",
     ];
 
     for (const text of testCases) {
@@ -166,6 +168,13 @@ describe("seed rules", () => {
         new RegExp(r.pattern, "iu").test(text),
       );
       expect(matched).toBe(true);
+    }
+  });
+
+  test("a retired rule is not also seeded", () => {
+    const seeded = new Set(SEED_RULES.map((r) => `${r.language}:${r.pattern}`));
+    for (const retired of RETIRED_SEED_RULES) {
+      expect(seeded.has(`${retired.language}:${retired.pattern}`)).toBe(false);
     }
   });
 
@@ -221,6 +230,26 @@ describe("rule precedence", () => {
     pattern,
     polarity,
     confidence: 1,
+  });
+
+  test("a quashed judgment under review does not turn a compare-cue negative", () => {
+    // The sentence reports what happened to the order below and points at
+    // authority for it. The withdrawn "byl zrušen" cue read the first half
+    // as the fate of the authority.
+    const context =
+      "Není totiž povolán rušit to, co již bylo zrušeno či změněno " +
+      "(srov. např. usnesení sp. zn. IV. ÚS 138/25).";
+    const rules = compileRules(
+      SEED_RULES.filter((r) => r.language === "cs").map((r) => rule(r)),
+    );
+    const retired = compileRules(
+      RETIRED_SEED_RULES.filter((r) => r.language === "cs").map((r) =>
+        rule({ pattern: r.pattern, polarity: POLARITY.NEGATIVE }),
+      ),
+    );
+
+    expect(selectRuleMatch(retired, context)?.polarity).toBe(POLARITY.NEGATIVE);
+    expect(selectRuleMatch(rules, context)?.polarity).toBe(POLARITY.SUPPORTIVE);
   });
 
   test("a rare specific negative rule beats a popular generic positive one", () => {

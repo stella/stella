@@ -3,15 +3,22 @@
  *
  * Idempotent: each rule is keyed on `(pattern, language)`, so re-running
  * updates the polarity a rule asserts rather than accumulating duplicates of
- * it. Run after changing `polarity/seed-rules.ts`; nothing else writes rows
- * with `source = 'manual'`.
+ * it, and rules listed as retired are marked so rather than deleted. Run after
+ * changing `polarity/seed-rules.ts`; nothing else writes rows with
+ * `source = 'manual'`.
  *
  *   bun apps/api/src/scripts/seed-polarity-rules.ts
  */
 
+import { and, eq } from "drizzle-orm";
+
 import { rootDb } from "@/api/db/root";
 import { caseLawPolarityRules } from "@/api/db/schema";
-import { SEED_RULES } from "@/api/handlers/case-law/polarity/seed-rules";
+import { RULE_SOURCE } from "@/api/handlers/case-law/polarity/consts";
+import {
+  RETIRED_SEED_RULES,
+  SEED_RULES,
+} from "@/api/handlers/case-law/polarity/seed-rules";
 
 console.log(`Seeding ${SEED_RULES.length} polarity rules...`);
 
@@ -38,6 +45,21 @@ for (const rule of SEED_RULES) {
     });
 }
 
-console.log(`Done. ${SEED_RULES.length} rules upserted.`);
+for (const rule of RETIRED_SEED_RULES) {
+  // oxlint-disable-next-line no-await-in-loop -- sequential, same as the upsert above
+  await rootDb
+    .update(caseLawPolarityRules)
+    .set({ source: RULE_SOURCE.RETIRED })
+    .where(
+      and(
+        eq(caseLawPolarityRules.pattern, rule.pattern),
+        eq(caseLawPolarityRules.language, rule.language),
+      ),
+    );
+}
+
+console.log(
+  `Done. ${SEED_RULES.length} rules upserted, ${RETIRED_SEED_RULES.length} retired.`,
+);
 
 process.exit(0);
