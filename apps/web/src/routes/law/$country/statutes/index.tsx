@@ -71,7 +71,9 @@ export const Route = createFileRoute("/law/$country/statutes/")({
       statutesInfiniteOptions(createStatuteFilters(params.country, deps)),
     );
 
-    return { statutes: pages.pages.at(0)?.items ?? [] };
+    const firstPage = pages.pages.at(0);
+
+    return { statutes: firstPage ? firstPage.items : [] };
   },
   head: ({ loaderData, match, params }) => {
     const title = pageTitle("statutes.title");

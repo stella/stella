@@ -111,7 +111,10 @@ function PublicStatuteRoute() {
   );
 
   const readerRef = useRef<HTMLDivElement>(null);
-  const blocks = parseDocumentAst(statute.documentAst)?.blocks ?? [];
+  // An unparseable or absent AST is a real state: the reader then renders
+  // the plain fulltext instead of blocks.
+  const ast = parseDocumentAst(statute.documentAst);
+  const blocks = ast ? ast.blocks : [];
   const outline = outlineFromHeadings(blocks);
 
   const validFrom = formatValidityDate(statute.versionValidFrom, format);
