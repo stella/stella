@@ -20,4 +20,19 @@ ALTER TABLE "case_law_polarity_rules"
 SET statement_timeout = '5s';--> statement-breakpoint
 SET lock_timeout = '1s';--> statement-breakpoint
 -- squawk-ignore transaction-nesting, ban-uncommitted-transaction
-BEGIN;
+BEGIN;--> statement-breakpoint
+
+-- Retire the withdrawn cues in place, and hand the citations they labelled
+-- back to the classifier. "byl zrušen" names the fate of the judgment under
+-- review, not of the authority cited next to it. Bounded by the rules'
+-- own match counts; deployments that never seeded rules touch no row.
+UPDATE "case_law_polarity_rules"
+   SET "source" = 'retired', "updated_at" = now()
+ WHERE ("pattern", "language") IN (('byl[aoyi]?\s+zrušen[aouy]?', 'cs'), ('bol[aoi]?\s+zrušen[áéý]?', 'sk'))
+   AND "source" <> 'retired';--> statement-breakpoint
+
+UPDATE "case_law_citations"
+   SET "polarity" = NULL, "polarity_rule_id" = NULL
+ WHERE "polarity_rule_id" IN (
+   SELECT "id" FROM "case_law_polarity_rules" WHERE "source" = 'retired'
+ );
