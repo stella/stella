@@ -54,11 +54,16 @@
         "e2e/**/*.ts"
       ],
       "ignore": ["public/prepaint-init.js", "src/routeTree.gen.ts"],
+      // tailwindcss: imported by the app's Tailwind entry and consumed by
+      // @tailwindcss/vite at build time, never at runtime, so the production
+      // gate must not read the CSS import as a runtime dependency (the same
+      // shape as apps/landing's @tailwindcss/postcss).
       "ignoreDependencies": [
         "react-grab",
         "@libpdf/core",
         "@stll/docx-core",
-        "@stll/docx-utils"
+        "@stll/docx-utils",
+        "tailwindcss"
       ]
     },
     "apps/landing": {
