@@ -426,6 +426,35 @@ export type GenerationRebuildBackfillOptions<
   TRow extends CorpusIndexRow<TBrand>,
 > = GenerationBackfillRowsOptions<TBrand, TRow> & {
   commit: CorpusIndexCommitMode;
+  /**
+   * Where a batch spent its wall clock, reported once per call. A rebuild
+   * page is a chain of object reads, engine requests and short
+   * transactions; which of them dominates is not derivable from the
+   * indexed count, and reading it from the outside means timing the whole
+   * page and guessing. Optional, so only the paths that report it pay for
+   * it.
+   */
+  onTiming?: (timing: CorpusBackfillTiming) => void;
+};
+
+/**
+ * Wall-clock split of one backfill call, in milliseconds. Phases are
+ * sequential, so they sum to roughly the call's own duration; `documents`
+ * and `engineRequests` are the units behind the ingest figure.
+ */
+export type CorpusBackfillTiming = {
+  /** Canonical object reads for the batch (bounded concurrency). */
+  readMs: number;
+  /** Durable append reservations and index existence checks. */
+  reserveMs: number;
+  /** Engine removal tasks: replay cleanup and unrecorded-copy cleanup. */
+  removeMs: number;
+  /** Engine ingest requests, including any wait the commit mode implies. */
+  ingestMs: number;
+  /** Compare-and-set marks and their audit rows. */
+  markMs: number;
+  engineRequests: number;
+  documents: number;
 };
 
 type FencedIncrementalBackfillOptions<
@@ -1122,6 +1151,21 @@ export const createCorpusIndexer = <
     // the rest still commit.
     const fetchFulltext: FetchFulltext<TBrand> = async (id) =>
       await adapter.fetchFulltext(scopedDb, id);
+    const timing: CorpusBackfillTiming = {
+      readMs: 0,
+      reserveMs: 0,
+      removeMs: 0,
+      ingestMs: 0,
+      markMs: 0,
+      engineRequests: 0,
+      documents: 0,
+    };
+    // Monotonic: a wall-clock step backwards would make a phase read
+    // negative, and the whole point of the split is that it is comparable
+    // across pages.
+    const elapsedSince = (startedAt: number) =>
+      Math.round(performance.now() - startedAt);
+    const readStartedAt = performance.now();
     const { built, readFailures } = await loadDocsForBatch(rows, {
       generation,
       fetchFulltext,
@@ -1129,6 +1173,7 @@ export const createCorpusIndexer = <
         ? {}
         : { readConcurrency: options.readConcurrency }),
     });
+    timing.readMs = elapsedSince(readStartedAt);
     await recordReadFailures(scopedDb, readFailures, generation);
 
     // Route each row's documents to its physical index (`corpusIndexId`: per
@@ -1158,6 +1203,7 @@ export const createCorpusIndexer = <
       indexId: string,
       group: typeof built,
     ) => {
+      const reserveStartedAt = performance.now();
       const reservedTargets =
         options.type === "incremental"
           ? null
@@ -1176,6 +1222,7 @@ export const createCorpusIndexer = <
           ? group
           : group.filter(({ row }) => reservedTargets.has(row.id));
       if (reservedGroup.length === 0) {
+        timing.reserveMs += elapsedSince(reserveStartedAt);
         return { ensured: null, reservedGroup, reservedTargets };
       }
       // A new generation may not have an index for this jurisdiction yet.
@@ -1187,6 +1234,7 @@ export const createCorpusIndexer = <
           : { beforeRemoteEffect: options.beforeRemoteEffect }),
         indexId,
       });
+      timing.reserveMs += elapsedSince(reserveStartedAt);
       return { ensured, reservedGroup, reservedTargets };
     };
 
@@ -1285,6 +1333,7 @@ export const createCorpusIndexer = <
           }
         }
         let staleError: CorpusIndexError | null = null;
+        const removeStartedAt = performance.now();
         for (const unit of deleteUnits) {
           // oxlint-disable-next-line no-await-in-loop -- one task per (index, chunk): bounded by the batch's distinct indexes, not by its rows; sequential so the first failure stops before the ingest below
           const removed = await removeManyWithOptions({
@@ -1308,6 +1357,8 @@ export const createCorpusIndexer = <
             break;
           }
         }
+        timing.removeMs += elapsedSince(removeStartedAt);
+        timing.engineRequests += deleteUnits.length;
         if (staleError) {
           firstError ??= staleError;
           continue;
@@ -1323,6 +1374,7 @@ export const createCorpusIndexer = <
           reservedGroup,
           LIMITS.corpusIndexIngestMaxBytes,
         )) {
+          const ingestStartedAt = performance.now();
           // oxlint-disable-next-line no-await-in-loop -- sequential ingest paces NDJSON pushes to the search backend
           const ingest = await ingestBatchWithGuard({
             // Both incremental shapes are the steady state: their whole
@@ -1347,6 +1399,11 @@ export const createCorpusIndexer = <
             indexId,
             ndjson,
           });
+          timing.ingestMs += elapsedSince(ingestStartedAt);
+          timing.engineRequests += 1;
+          for (const { docs } of entries) {
+            timing.documents += docs.length;
+          }
 
           if (ingest.isErr()) {
             firstError ??= ingest.error;
@@ -1358,6 +1415,7 @@ export const createCorpusIndexer = <
           }
 
           const casMissed = new Set<SafeId<TBrand>>();
+          const markStartedAt = performance.now();
           // oxlint-disable-next-line no-await-in-loop -- one CAS transaction per ingest request; sequential to keep index writes and audit rows consistent
           await scopedDb(async (tx) => {
             // audit: skip — search index maintenance; rebuilds derived state
@@ -1411,10 +1469,12 @@ export const createCorpusIndexer = <
               });
             }
           });
+          timing.markMs += elapsedSince(markStartedAt);
           // A missed CAS means a refresh outpaced this batch after the ingest
           // appended its documents: the row carries no generation pointer to
           // them, so delete the unrecorded copies now; the refreshed row is
           // re-indexed by a later cycle.
+          const missedStartedAt = performance.now();
           for (const missedId of casMissed) {
             // oxlint-disable-next-line no-await-in-loop -- sequential cleanup deletes of the unrecorded copies; matches this file's established sequential-vs-search-backend design (see ensureIndex/ingestBatch above)
             const removed = await removeWithOptions({
@@ -1437,6 +1497,8 @@ export const createCorpusIndexer = <
               firstError ??= removed.error;
             }
           }
+          timing.removeMs += elapsedSince(missedStartedAt);
+          timing.engineRequests += casMissed.size;
           indexed += entries.length - casMissed.size;
           refreshed += casMissed.size;
         }
@@ -1450,6 +1512,13 @@ export const createCorpusIndexer = <
           await adapter.recordJobs(scopedDb, groupFailures, indexId);
         }
       }
+    }
+
+    // Reported before the failure below, so a batch that ends in a retry
+    // still says where its time went — a page that gets slow and a page
+    // that starts failing are often the same page.
+    if (options.type === "generation-rebuild") {
+      options.onTiming?.(timing);
     }
 
     // Surface a failure so the daemon retries the un-indexed groups.

@@ -28,6 +28,7 @@ import {
 } from "@/api/lib/corpus-index/chunking";
 import type {
   CorpusBackfillOutcome,
+  CorpusBackfillTiming,
   CorpusDocumentPayload,
   CorpusIndexAdapter,
   FencedRemoteEffect,
@@ -72,6 +73,7 @@ import {
   isCorpusIndexJurisdiction,
   tryCorpusIndexGeneration,
 } from "@/api/lib/legal-search/index-naming";
+import { logger } from "@/api/lib/observability/logger";
 
 /**
  * corpus index search-projection maintenance for the `case_law` family.
@@ -1211,6 +1213,7 @@ type GenerationBackfillDependencies = {
     options: GenerationProjectionGuards & {
       commit: CorpusIndexCommitMode;
       readConcurrency?: number;
+      onTiming?: (timing: CorpusBackfillTiming) => void;
     },
   ) => Promise<CorpusBackfillOutcome>;
   removeProjection: (
@@ -1623,6 +1626,21 @@ export const createCaseLawGenerationBackfill =
       options.readConcurrency === undefined
         ? {}
         : { readConcurrency: options.readConcurrency };
+    // Where the page spends its wall clock. A page is a chain of object
+    // reads, engine requests and short transactions, and which one it is
+    // waiting on is not visible from the indexed count or from timing the
+    // page as a whole. Every batch the page runs reports its own split; the
+    // page reports the sum next to its stage times, once, at the end.
+    const pageStartedAt = performance.now();
+    const sinceMs = (startedAt: number) =>
+      Math.round(performance.now() - startedAt);
+    const batchTimings: CorpusBackfillTiming[] = [];
+    const collectTiming = (timing: CorpusBackfillTiming): void => {
+      batchTimings.push(timing);
+    };
+    const totalOf = (read: (timing: CorpusBackfillTiming) => number): number =>
+      batchTimings.reduce((total, timing) => total + read(timing), 0);
+    const stageMs = { drain: 0, select: 0, index: 0 };
     const writerLease = await acquireCaseLawCorpusGenerationLease({
       generation,
       newLeaseToken,
@@ -1798,6 +1816,7 @@ export const createCaseLawGenerationBackfill =
               : await backfillRows(scopedDb, eligible, generation, {
                   ...guards,
                   ...readConcurrencyOption,
+                  onTiming: collectTiming,
                   // A source-wide re-index walks a whole source's corpus
                   // a page at a time, so it is bulk work with the same
                   // census behind it as the snapshot walk.
@@ -1910,6 +1929,7 @@ export const createCaseLawGenerationBackfill =
             : await backfillRows(scopedDb, eligible, generation, {
                 ...guards,
                 ...readConcurrencyOption,
+                onTiming: collectTiming,
                 commit: PENDING_DRAIN_COMMIT[status],
               });
         if (outcome.indexed !== eligible.length) {
@@ -2094,11 +2114,13 @@ export const createCaseLawGenerationBackfill =
       // walk pages that later reach the same rows.
       let drainedIndexed = 0;
       try {
+        const drainStartedAt = performance.now();
         const drained = await drainPendingProjections({
           checkpoint: claimedCheckpoint,
           leaseToken,
           status: CASE_LAW_CORPUS_INDEX_BACKFILL_STATUS.RUNNING,
         });
+        stageMs.drain = sinceMs(drainStartedAt);
         if (drained.status === BACKFILL_STATUS.BUSY) {
           await releaseRunningLease();
           return drained;
@@ -2124,10 +2146,12 @@ export const createCaseLawGenerationBackfill =
           : { indexed: drainedIndexed, status: BACKFILL_STATUS.ADVANCED };
       };
 
+      const selectStartedAt = performance.now();
       const page = await selectGenerationBackfillPage(scopedDb, {
         batchSize,
         checkpoint: claimedCheckpoint,
       });
+      stageMs.select = sinceMs(selectStartedAt);
       const last = page.at(-1);
       if (!last) {
         const completed = await scopedDb(async (tx) => {
@@ -2179,6 +2203,7 @@ export const createCaseLawGenerationBackfill =
           hasGenerationProjectionTargets({ generation, row }),
       );
       let indexed: number;
+      const indexStartedAt = performance.now();
       try {
         // The drain above may have brought every row on this page current, so
         // skip the indexer rather than hand it an empty batch.
@@ -2188,6 +2213,7 @@ export const createCaseLawGenerationBackfill =
             : await backfillRows(scopedDb, rows, generation, {
                 ...runningGuards,
                 ...readConcurrencyOption,
+                onTiming: collectTiming,
                 // Snapshot pages of the rebuild: bulk throughput, whose
                 // completeness the generation's census verifies rather
                 // than each request proving it for itself.
@@ -2216,6 +2242,7 @@ export const createCaseLawGenerationBackfill =
         await releaseRunningLease();
         throw error;
       }
+      stageMs.index = sinceMs(indexStartedAt);
 
       const advanced = await scopedDb(async (tx) => {
         // audit: skip — cursor advancement is the durable audit trail for this derived rebuild
@@ -2238,6 +2265,27 @@ export const createCaseLawGenerationBackfill =
           )
           .returning({ generation: caseLawCorpusIndexBackfills.generation });
         return advancedRows.at(0);
+      });
+      // One line per page, on the walking arm: the stage times say which
+      // stage the page is in, and the batch totals say what that stage was
+      // waiting on. Counts only, never document content.
+      logger.info("case_law.corpus_index.generation_page", {
+        generation,
+        batchSize,
+        selected: rows.length,
+        indexed,
+        drainedIndexed,
+        pageMs: sinceMs(pageStartedAt),
+        drainMs: stageMs.drain,
+        selectMs: stageMs.select,
+        indexMs: stageMs.index,
+        readMs: totalOf(({ readMs }) => readMs),
+        reserveMs: totalOf(({ reserveMs }) => reserveMs),
+        removeMs: totalOf(({ removeMs }) => removeMs),
+        ingestMs: totalOf(({ ingestMs }) => ingestMs),
+        markMs: totalOf(({ markMs }) => markMs),
+        engineRequests: totalOf(({ engineRequests }) => engineRequests),
+        documents: totalOf(({ documents }) => documents),
       });
       return withDrained(
         advanced
