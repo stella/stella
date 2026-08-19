@@ -17,8 +17,24 @@ SET statement_timeout = 0;--> statement-breakpoint
 SET lock_timeout = 0;--> statement-breakpoint
 ALTER TABLE "case_law_polarity_rules"
   VALIDATE CONSTRAINT "polarity_rules_source_values";--> statement-breakpoint
-SET statement_timeout = '5s';--> statement-breakpoint
+
+-- Rule -> citations. The repair below and every later retirement walk this
+-- edge; without it each is a scan of the whole citation table, which on a
+-- corpus of millions does not finish inside a migration's statement budget.
+-- Partial: most citations carry no rule.
+-- stella-migration-safety: reviewed destructive-change - this retry cleanup
+-- targets only this migration's index; a cancelled concurrent build can leave
+-- an INVALID index that would otherwise block recreation by name.
+DROP INDEX CONCURRENTLY IF EXISTS "case_law_citations_polarity_rule_idx";--> statement-breakpoint
+-- squawk-ignore prefer-robust-stmts
+CREATE INDEX CONCURRENTLY "case_law_citations_polarity_rule_idx"
+  ON "case_law_citations" ("polarity_rule_id")
+  WHERE "polarity_rule_id" IS NOT NULL;--> statement-breakpoint
+
 SET lock_timeout = '1s';--> statement-breakpoint
+-- The repair touches as many rows as the retired rules matched; the index
+-- above makes that proportional to the matches, not to the table.
+SET statement_timeout = '10min';--> statement-breakpoint
 -- squawk-ignore transaction-nesting, ban-uncommitted-transaction
 BEGIN;--> statement-breakpoint
 
@@ -35,4 +51,5 @@ UPDATE "case_law_citations"
    SET "polarity" = NULL, "polarity_rule_id" = NULL
  WHERE "polarity_rule_id" IN (
    SELECT "id" FROM "case_law_polarity_rules" WHERE "source" = 'retired'
- );
+ );--> statement-breakpoint
+SET statement_timeout = '5s';
