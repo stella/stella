@@ -74,11 +74,6 @@
       background-position: -200% 0;
     }
   }
-  @keyframes skeleton-rtl {
-    to {
-      background-position: 200% 0;
-    }
-  }
   @keyframes caret-blink {
     0%,
     70%,
@@ -100,6 +95,20 @@
     100% {
       opacity: 0;
     }
+  }
+}
+
+/* The RTL counterpart of the skeleton sweep.
+ *
+ * Outside `@theme inline` on purpose: Tailwind emits a themed `@keyframes`
+ * only when a used `--animate-*` variable names it, and nothing declares
+ * `--animate-skeleton-rtl` — the RTL rules override `animation-name` on the
+ * shared `--animate-skeleton`. Declared here it always reaches the stylesheet,
+ * so the shimmer keeps sweeping toward the reader in RTL instead of silently
+ * animating nothing. */
+@keyframes skeleton-rtl {
+  to {
+    background-position: 200% 0;
   }
 }
 
@@ -304,7 +313,7 @@
 }
 
 /* Nord palette — light
- * Based on Arctic Ice Studio's Nord.
+ * Based on Nord by Arctic Ice Studio (https://www.nordtheme.com), MIT license.
  * nord0 #2e3440 .. nord3 #4c566a,
  * nord4 #d8dee9, nord5 #e5e9f0, nord6 #eceff4 */
 .palette-nord {
