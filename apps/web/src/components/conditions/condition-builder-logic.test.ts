@@ -57,6 +57,8 @@ describe("leafFromField", () => {
     "multi-select": { valueType: "multi-select", type: "multi-select" },
     date: { valueType: "date", type: "date" },
     int: { valueType: "int", type: "int" },
+    money: { valueType: "money", type: "money" },
+    person: { valueType: "person", type: "person" },
     kind: { valueType: "kind", type: "text" },
     status: { valueType: "status", type: "single-select" },
     priority: { valueType: "priority", type: "single-select" },

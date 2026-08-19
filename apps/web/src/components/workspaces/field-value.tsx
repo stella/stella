@@ -5,13 +5,14 @@ import { useTranslations } from "use-intl";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Skeleton } from "@stll/ui/skeleton";
 import { cn } from "@stll/ui/utils";
+import { formatMoneyCents } from "@stll/workspace-ui/calculation-format";
 import { getClipFieldValueLabel } from "@stll/workspace-ui/field-value-logic";
 
 import {
   emptyColor,
   resolveOptionColor,
 } from "@/components/workspaces/property-utils";
-import { useFormatter } from "@/i18n/formatting-context";
+import { useFormatter, useLocale } from "@/i18n/formatting-context";
 import type { WorkspaceFieldContent, WorkspaceProperty } from "@/lib/types";
 
 export type FieldValueVariant = "default" | "table" | "kanban";
@@ -77,6 +78,14 @@ export const FieldValue = ({
     return <IntFieldValue content={content} variant={resolvedVariant} />;
   }
 
+  if (content.type === "money") {
+    return <MoneyFieldValue content={content} variant={resolvedVariant} />;
+  }
+
+  if (content.type === "person") {
+    return <PersonFieldValue content={content} variant={resolvedVariant} />;
+  }
+
   if (content.type === "single-select") {
     return (
       <SelectFieldValue
@@ -131,6 +140,94 @@ export const IntFieldValue = ({
   }
 
   return <span className={cn(className)}>{formattedResult.value}</span>;
+};
+
+export const MoneyFieldValue = ({
+  content,
+  variant,
+}: {
+  content: Extract<WorkspaceFieldContent, { type: "money" }>;
+  variant?: FieldValueVariant;
+}) => {
+  const locale = useLocale();
+  const resolvedVariant = variant ?? "default";
+
+  return (
+    <span className={cn(getIntClassName(resolvedVariant))}>
+      {formatMoneyCents({
+        amountCents: content.amountCents,
+        currency: content.currency,
+        locale,
+      })}
+    </span>
+  );
+};
+
+export const PersonFieldValue = ({
+  content,
+  variant,
+}: {
+  content: Extract<WorkspaceFieldContent, { type: "person" }>;
+  variant?: FieldValueVariant;
+}) => {
+  const resolvedVariant = variant ?? "default";
+
+  return (
+    <span
+      className={cn(
+        "flex max-w-full min-w-0 items-center truncate",
+        resolvedVariant === "kanban"
+          ? "text-muted-foreground bg-muted/60 gap-1 rounded px-1.5 py-0.5 text-xs leading-none"
+          : "gap-1.5 text-sm",
+      )}
+    >
+      <PersonAvatar image={content.image} name={content.name} />
+      <span className="truncate">{content.name}</span>
+    </span>
+  );
+};
+
+/**
+ * The person's picture, or their initial when there is none. Deliberately not
+ * the app's user avatar: a person field names someone who may not be a
+ * workspace member at all, so there is no account to render.
+ */
+const PersonAvatar = ({
+  image,
+  name,
+}: {
+  image: string | null;
+  name: string;
+}) => {
+  if (image) {
+    return (
+      <img
+        alt=""
+        className="size-4 shrink-0 rounded-full object-cover"
+        src={image}
+      />
+    );
+  }
+
+  return (
+    <span
+      aria-hidden
+      className="bg-muted text-muted-foreground flex size-4 shrink-0 items-center justify-center rounded-full text-[9px] uppercase"
+    >
+      {firstGrapheme(name)}
+    </span>
+  );
+};
+
+/**
+ * The first character of a name, as a reader sees it: a spread over a string
+ * yields code points, which splits an emoji or a combining mark in half.
+ */
+const firstGrapheme = (value: string): string => {
+  const segmenter = new Intl.Segmenter(undefined, {
+    granularity: "grapheme",
+  });
+  return [...segmenter.segment(value)].at(0)?.segment ?? "?";
 };
 
 const EmptyFieldValue = ({ variant }: { variant: FieldValueVariant }) => {

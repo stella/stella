@@ -5,6 +5,18 @@ import type { WorkspaceProperty } from "@/lib/types";
 
 import { entitiesKeys, visibleEntityFieldIds } from "./entities.logic";
 
+const propertyContent = (
+  type: WorkspaceProperty["content"]["type"],
+): WorkspaceProperty["content"] => {
+  if (type === "single-select" || type === "multi-select") {
+    return { version: 1, type, options: [], fallback: null };
+  }
+  if (type === "money") {
+    return { version: 1, type, currency: null };
+  }
+  return { version: 1, type };
+};
+
 const property = (
   id: string,
   type: WorkspaceProperty["content"]["type"],
@@ -14,10 +26,7 @@ const property = (
   createdAt: new Date("2025-01-01T00:00:00.000Z"),
   workspaceId: toSafeId<"workspace">("workspace-1"),
   status: "fresh",
-  content:
-    type === "single-select" || type === "multi-select"
-      ? { version: 1, type, options: [], fallback: null }
-      : { version: 1, type },
+  content: propertyContent(type),
   tool: { version: 1, type: "manual-input" },
 });
 

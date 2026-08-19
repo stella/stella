@@ -1,5 +1,7 @@
+import { formatMoneyCents } from "@stll/workspace-ui/calculation-format";
+
 import type { TableTreeNode } from "@/components/workspaces/table/types";
-import { getFormatter } from "@/i18n/i18n-store";
+import { getFormatter, getFormattingLocale } from "@/i18n/i18n-store";
 import { startOfWeek } from "@/i18n/week";
 import type {
   WorkspaceEntity,
@@ -64,6 +66,14 @@ export const getFieldValue = (field: WorkspaceField | undefined) => {
       return field.content.currency
         ? `${field.content.value} ${field.content.currency}`
         : String(field.content.value);
+    case "money":
+      return formatMoneyCents({
+        amountCents: field.content.amountCents,
+        currency: field.content.currency,
+        locale: getFormattingLocale(),
+      });
+    case "person":
+      return field.content.name;
     case "clip":
       return field.content.url;
     case "error":

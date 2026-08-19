@@ -53,6 +53,25 @@ export type FieldContent =
       currency: string | null;
     }
   | {
+      /**
+       * A monetary amount. Separate from `int` because it is stored in minor
+       * units and carries its own currency: an int's value is major units, so
+       * one type for both is a 100x bug waiting in every total.
+       */
+      type: "money";
+      version: 1;
+      amountCents: number;
+      currency: string;
+    }
+  | {
+      type: "person";
+      version: 1;
+      /** Null when the person is named but not a workspace member. */
+      userId: string | null;
+      name: string;
+      image: string | null;
+    }
+  | {
       type: "clip";
       version: 1;
       url: string;
@@ -71,7 +90,7 @@ export type WorkspaceFieldContent = FieldContent;
  */
 export type GenericProperty = {
   content:
-    | { type: "file" | "text" | "date" | "int" }
+    | { type: "file" | "text" | "date" | "int" | "money" | "person" }
     | {
         type: "single-select" | "multi-select";
         options: { value: string; color: OptionColor }[];
