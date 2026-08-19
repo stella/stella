@@ -105,14 +105,17 @@ const AUTHORITY_REGISTRIES = new Set([
  * list working across cases.
  */
 const PROCEDURAL_CUE =
-  /napaden|proti\s+(?:rozsudk|usnesen)|odvol[áa]n|dovol[áa]n[íi]\s+(?:žalovan|žalobc)|soud[ue]?\s+prvn[íi]ho\s+stupn|prvostupňov|potvrdil|zrušil\s+a\s+vr[áa]til|vedl[ei]?\s+u\s+|pobočka\s+v/iu;
+  /napaden|proti\s+(?:rozsudk|usnesen)|odvol[áa]n|dovol[áa]n[íi]\s+(?:žalovan|žalobc)|soud[ue]?\s+prvn[íi]ho\s+stupn|prvostupňov|potvrdil|zrušil\s+a\s+vr[áa]til|vedl[ei]?\s+u\s+|pobočka\s+v|v\s+konan[íi]\s+veden[oe]m|veden[eé]j\s+\p{L}+\s+s[úu]dom\s+pod|postupom\s+(?:okresn|krajsk|najvyšš)|a\s+takto\s+rozhodol/iu;
 
 /**
  * Phrases that mark an authority being invoked. `srov.` (compare) and
  * `viz` (see) are the strongest: they exist only to point at precedent.
+ * Slovak spells its verbs with `š` (`konštatoval`), so the stems are listed
+ * per language; a recital cue next to one of these is a tie, and the
+ * registry decides.
  */
 const PRECEDENT_CUE =
-  /srov\.|srovnej|viz\s|judikat|ust[áa]len|pr[áa]vn[íi]\s+n[áa]zor|dovodil|vyslovil|konstatoval|st[áa]l[áa]\s+praxe|ve\s+sv[ée]m\s+rozhodnut/iu;
+  /srov\.|srovnej|viz\s|judikat|ust[áa]len|pr[áa]vn[íi]\s+n[áa]zor|dovodil|vyslovil|kon[sš]tatoval|st[áa]l[áa]\s+praxe|ve\s+sv[ée]m\s+rozhodnut|porov\.|pozri|obdobne|vo\s+svojom\s+rozhodnut|v\s+s[úu]lade\s+s/iu;
 
 /**
  * Drop the citation prefix so the registry token is first. Spelled out
