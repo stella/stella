@@ -16,6 +16,7 @@ export const PUBLIC_CASE_LAW_RELATIONS = [
   "case_law_citations",
   "case_law_corpus_index_projections",
   "case_law_decisions",
+  "case_law_provision_citations",
   "case_law_sources",
 ] as const;
 

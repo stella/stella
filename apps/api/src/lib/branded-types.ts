@@ -30,6 +30,7 @@ export type SafeIdType =
   | "caseLawIngestionFailure"
   | "caseLawMatterLink"
   | "caseLawPolarityRule"
+  | "caseLawProvisionCitation"
   | "caseLawReconciliationItem"
   | "caseLawSource"
   | "caseLawSourceIngestionLease"

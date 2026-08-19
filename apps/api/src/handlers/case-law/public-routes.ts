@@ -21,6 +21,14 @@ import {
   listSitemapShardsHandler,
   sitemapShardDecisionsQuerySchema,
 } from "@/api/handlers/case-law/decisions/sitemap";
+import {
+  listCitingDecisionsHandler,
+  listCitingDecisionsQuerySchema,
+} from "@/api/handlers/case-law/provisions/citing-decisions";
+import {
+  listDecisionProvisionsHandler,
+  listDecisionProvisionsQuerySchema,
+} from "@/api/handlers/case-law/provisions/list-for-decision";
 import { createSafePublicHandler } from "@/api/lib/api-handlers";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { tSafeId } from "@/api/lib/custom-schema";
@@ -103,6 +111,47 @@ const readDecisionBySlug = createSafePublicHandler(
   },
 );
 
+/** Provision references of a decision. */
+const listDecisionProvisions = createSafePublicHandler(
+  {
+    mcp: { type: "internal", reason: "public_indexing" },
+    params: t.Object({ decisionId: tSafeId("caseLawDecision") }),
+    query: listDecisionProvisionsQuerySchema,
+  },
+  async function* ({ params: { decisionId }, query }) {
+    const response = yield* Result.await(
+      Result.tryPromise(
+        async () =>
+          await listDecisionProvisionsHandler({
+            decisionId,
+            query,
+            caseLawDb: caseLawPublicReadDb,
+          }),
+      ),
+    );
+
+    return Result.ok(response);
+  },
+);
+
+/** Decisions citing a provision. */
+const listCitingDecisions = createSafePublicHandler(
+  {
+    mcp: { type: "internal", reason: "public_indexing" },
+    query: listCitingDecisionsQuerySchema,
+  },
+  async function* ({ query }) {
+    const response = yield* Result.await(
+      Result.tryPromise(
+        async () =>
+          await listCitingDecisionsHandler(query, caseLawPublicReadDb),
+      ),
+    );
+
+    return Result.ok(response);
+  },
+);
+
 const searchDecisions = createSafePublicHandler(
   {
     mcp: { type: "tool", name: "search_case_law" },
@@ -176,6 +225,13 @@ export const publicCaseLawRoute = new Elysia({
   })
   .get("/decisions/:decisionId", readDecision.handler, {
     params: readDecision.config.params,
+  })
+  .get("/decisions/:decisionId/provisions", listDecisionProvisions.handler, {
+    params: listDecisionProvisions.config.params,
+    query: listDecisionProvisions.config.query,
+  })
+  .get("/provisions/citing-decisions", listCitingDecisions.handler, {
+    query: listCitingDecisions.config.query,
   })
   .post("/decisions/search", searchDecisions.handler, {
     body: searchDecisions.config.body,

@@ -81,7 +81,7 @@ type ExposureType = (typeof EXPOSURE_TYPES)[number];
  * only enumeration into the ratchet is waived.
  */
 const INLINE_ENDPOINT_ALLOWLIST: Record<string, number> = {
-  "apps/api/src/handlers/case-law/public-routes.ts": 7,
+  "apps/api/src/handlers/case-law/public-routes.ts": 9,
   "apps/api/src/handlers/files/routes.ts": 4,
   "apps/api/src/handlers/search/routes.ts": 5,
   "apps/api/src/handlers/tasks/my-tasks-route.ts": 1,

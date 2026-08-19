@@ -41,6 +41,10 @@ const LANGUAGE_DECISIONS_FILE =
 const SITEMAP_DECISIONS_FILE =
   "apps/api/src/handlers/case-law/decisions/sitemap.ts";
 const PUBLIC_READ_DB_FILE = "apps/api/src/lib/case-law-public-read-db.ts";
+const DECISION_PROVISIONS_FILE =
+  "apps/api/src/handlers/case-law/provisions/list-for-decision.ts";
+const CITING_DECISIONS_FILE =
+  "apps/api/src/handlers/case-law/provisions/citing-decisions.ts";
 
 const repoRoot = nodePath.resolve(import.meta.dir, "../../../../..");
 const readSource = async (path: string) =>
@@ -185,6 +189,12 @@ describe("public case-law route boundary", () => {
     );
     expect(source).toContain(
       "const listSitemapShards = createSafePublicHandler",
+    );
+    expect(source).toContain(
+      "const listDecisionProvisions = createSafePublicHandler",
+    );
+    expect(source).toContain(
+      "const listCitingDecisions = createSafePublicHandler",
     );
   });
 
@@ -352,5 +362,12 @@ describe("public case-law route boundary", () => {
     expect(searchSource).toContain("redistributableSourceJoin");
     expect(searchSource).toContain("redistributableCaseLawSource");
     expect(sitemapSource).toContain("redistributableCaseLawSource");
+
+    const [decisionProvisionsSource, citingDecisionsSource] = await Promise.all(
+      [readSource(DECISION_PROVISIONS_FILE), readSource(CITING_DECISIONS_FILE)],
+    );
+
+    expect(decisionProvisionsSource).toContain("redistributableCaseLawSource");
+    expect(citingDecisionsSource).toContain("redistributableCaseLawSource");
   });
 });

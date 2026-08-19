@@ -110,6 +110,24 @@ const CITATION_RESOLUTION_STATUS_SQL_VALUES = CITATION_RESOLUTION_STATUSES.map(
   (status) => sql.raw(`'${status}'`),
 );
 
+export const PROVISION_UNITS = ["section", "article"] as const;
+
+export const PROVISION_WORK_SOURCES = [
+  "number",
+  "alias",
+  "title",
+  "definition",
+  "carry-over",
+] as const;
+
+const PROVISION_UNIT_SQL_VALUES = PROVISION_UNITS.map((unit) =>
+  sql.raw(`'${unit}'`),
+);
+
+const PROVISION_WORK_SOURCE_SQL_VALUES = PROVISION_WORK_SOURCES.map((source) =>
+  sql.raw(`'${source}'`),
+);
+
 const CITATION_RESOLUTION_SCOPE_SQL_VALUES = CITATION_RESOLUTION_SCOPES.map(
   (scope) => sql.raw(`'${scope}'`),
 );
@@ -854,6 +872,74 @@ export const caseLawCitations = p.pgTable(
       .index("case_law_citations_precedent_cited_idx")
       .on(t.citedDecisionId)
       .where(sql`${t.kind} = 'precedent' AND ${t.citedDecisionId} IS NOT NULL`),
+    ...globalCaseLawPolicies(),
+  ],
+);
+
+export const caseLawProvisionCitations = p.pgTable(
+  "case_law_provision_citations",
+  {
+    id: pUuid<"caseLawProvisionCitation">().primaryKey(),
+    decisionId: safeUuid<"caseLawDecision">("decision_id").notNull(),
+    jurisdiction: p.varchar("jurisdiction", { length: 3 }).notNull(),
+    workIdentifier: p.text("work_identifier").notNull(),
+    workNumber: p.integer("work_number").notNull(),
+    workYear: p.smallint("work_year").notNull(),
+    workCollection: p.text("work_collection").notNull(),
+    workEli: p.text("work_eli"),
+    unit: p.text("unit", { enum: PROVISION_UNITS }).notNull(),
+    section: p.integer("section").notNull(),
+    sectionSuffix: p.text("section_suffix"),
+    subsection: p.text("subsection"),
+    letter: p.text("letter"),
+    point: p.text("point"),
+    sentence: p.text("sentence"),
+    openEnded: p.boolean("open_ended").default(false).notNull(),
+    anchor: p.text("anchor").notNull(),
+    versionValidFrom: p.date("version_valid_from"),
+    sentenceText: p.text("sentence_text").notNull(),
+    spanStart: p.integer("span_start").notNull(),
+    spanEnd: p.integer("span_end").notNull(),
+    workSource: p.text("work_source", { enum: PROVISION_WORK_SOURCES }),
+    confidence: p
+      .numeric("confidence", { precision: 3, scale: 2, mode: "number" })
+      .notNull(),
+    createdAt: timestamptz("created_at").defaultNow().notNull(),
+  },
+  (t) => [
+    p
+      .foreignKey({
+        name: "case_law_provision_citations_decision_fk",
+        columns: [t.decisionId],
+        foreignColumns: [caseLawDecisions.id],
+      })
+      .onDelete("cascade"),
+    p
+      .uniqueIndex("case_law_provision_citations_decision_span_idx")
+      .on(t.decisionId, t.spanStart, t.anchor),
+    p
+      .index("case_law_provision_citations_work_idx")
+      .on(t.workIdentifier, t.anchor, t.decisionId),
+    p.index("case_law_provision_citations_decision_idx").on(t.decisionId),
+    p.check(
+      "provision_citations_unit_values",
+      sql`${t.unit} IN (${sql.join(PROVISION_UNIT_SQL_VALUES, sql.raw(","))})`,
+    ),
+    p.check(
+      "provision_citations_work_source_values",
+      sql`${t.workSource} IS NULL OR ${t.workSource} IN (${sql.join(
+        PROVISION_WORK_SOURCE_SQL_VALUES,
+        sql.raw(","),
+      )})`,
+    ),
+    p.check(
+      "provision_citations_span_order",
+      sql`${t.spanEnd} > ${t.spanStart}`,
+    ),
+    p.check(
+      "provision_citations_confidence_range",
+      sql`${t.confidence} > 0 AND ${t.confidence} <= 1`,
+    ),
     ...globalCaseLawPolicies(),
   ],
 );
