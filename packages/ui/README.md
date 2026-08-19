@@ -51,8 +51,10 @@ the custom utilities. The `@source` line is what makes Tailwind scan the
 shipped components for the utilities they use — node_modules is outside its
 default source detection.
 
-`@stll/ui/globals.css` is this repository's own Tailwind entry: the import
-above plus the source globs for the workspaces in this checkout.
+`theme.css` is the only stylesheet the package exports. Each application owns
+its own Tailwind entry (`apps/web/src/styles/app.css`,
+`apps/desktop/src/mainview/index.css`, `apps/playground/src/styles.css`), which
+is where the source globs for that application belong.
 
 ## Layout direction
 

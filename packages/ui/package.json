@@ -84,7 +84,6 @@
     "./week": "./src/lib/week.ts",
     "./inspector": "./src/inspector/index.ts",
     "./theme.css": "./src/styles/theme.css",
-    "./globals.css": "./src/styles/globals.css",
     "./components/accordion": "./src/components/accordion.tsx",
     "./components/alert-dialog": "./src/components/alert-dialog.tsx",
     "./components/avatar": "./src/components/avatar.tsx",

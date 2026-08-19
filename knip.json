@@ -101,7 +101,6 @@
         "src/hooks/*.ts",
         "src/inspector/*.{ts,tsx}",
         "src/lib/*.ts",
-        "src/styles/globals.css",
         "src/styles/theme.css",
         "tsdown.config.ts"
       ]

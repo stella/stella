@@ -5,7 +5,7 @@ This file documents the visual language of Stella's web application
 so that any tool producing UI (Claude Code, Cursor, Stitch, Copilot)
 generates consistent, on-brand output.
 
-> **Canonical source of truth:** `packages/ui/src/styles/globals.css`.
+> **Canonical source of truth:** `packages/ui/src/styles/theme.css`.
 > This file is a human-readable summary; when in doubt, read the CSS.
 
 ---

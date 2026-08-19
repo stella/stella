@@ -16,8 +16,9 @@ The grouped subpaths `@stll/ui/components/<name>`, `@stll/ui/hooks/<name>`, and
 `@stll/ui/lib/<name>` are deprecated. They still resolve to the same modules
 and will be removed after this minor.
 
-The theme moves out of the repository-specific Tailwind entry into
-`@stll/ui/theme.css`, which carries the token map, palettes, base layer, and
-custom utilities; no compiled CSS ships. The dockable inspector pane is a
+`@stll/ui/theme.css` is now the only stylesheet the package exports: the token
+map, the palettes, the base layer, and the custom utilities. No compiled CSS
+ships, and each application owns its own Tailwind entry rather than importing a
+repository-specific one from the package. The dockable inspector pane is a
 module of the package (`@stll/ui/inspector`) rather than markup and arithmetic
 spread across route files.

@@ -86,7 +86,8 @@ const COMMON_WATCHED_PATHS = [
   "apps/web/src/components/breadcrumbs",
   "apps/web/src/routes/__root.tsx",
   "apps/web/src/fonts.css",
-  "packages/ui/src/styles/globals.css",
+  "apps/web/src/styles/app.css",
+  "packages/ui/src/styles/theme.css",
 ] as const;
 
 // Per-scene product surfaces, deliberately whole feature slices
