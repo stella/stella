@@ -248,10 +248,17 @@ export const validateAst = (
   // ── 2. Structural checks ──────────────────────────────
 
   if (blocks.length === 0) {
+    // No blocks is loss only when there was something to lose. A source
+    // carrying no extractable text is represented faithfully by no
+    // blocks, and `retainedPct` already reads 100 for it; calling that an
+    // error reports content loss against a document whose emptiness the
+    // pipeline separately reports as `decision_empty`, sending whoever
+    // sweeps these logs after a parser bug that is not there. It stays an
+    // issue, so the parse still surfaces as structurally degraded.
     issues.push({
       code: "EMPTY_AST",
       message: "AST has no blocks",
-      severity: "error",
+      severity: originalText.length > 0 ? "error" : "warning",
     });
   }
 

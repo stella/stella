@@ -46,6 +46,16 @@ const makeHeading = (text: string, level: 1 | 2 | 3 = 2): HeadingBlock => {
 const wrapInHtml = (text: string): string =>
   `<html><body><p>${text}</p></body></html>`;
 
+/**
+ * A source that publishes no decision text, in the shape courts actually
+ * serve it: the document endpoint answers with a placeholder in the body
+ * rather than an error, so the fetch succeeds and the parser is handed a
+ * page with nothing to parse.
+ */
+const TEXTLESS_SOURCE =
+  `<!DOCTYPE html><html lang="cs"><head><title>39 A 1/2026-35 - text` +
+  `</title></head><body>N/A</body></html>`;
+
 // ── Content completeness ────────────────────────────────────
 
 describe("validateAst", () => {
@@ -246,6 +256,19 @@ describe("validateAst", () => {
 
       expect(result.ok).toBe(false);
       expect(result.issues.some((i) => i.code === "EMPTY_AST")).toBe(true);
+    });
+
+    test("empty AST over a text-less source is not content loss", () => {
+      const result = validateAst(TEXTLESS_SOURCE, []);
+
+      // The fixture has to reach the text-less branch for the rest to
+      // mean anything: bare body text sits outside the content selector,
+      // so nothing is extracted and there is nothing an AST could drop.
+      expect(result.stats.originalLength).toBe(0);
+      expect(result.stats.retainedPct).toBe(100);
+
+      expect(result.issues.some((i) => i.code === "EMPTY_AST")).toBe(true);
+      expect(result.ok).toBe(true);
     });
 
     test("warns when no headings present", () => {
@@ -502,6 +525,17 @@ describe("validationSignal", () => {
     // it must not compete with real loss for attention.
     const text = "Alpha bravo charlie delta echo foxtrot golf hotel india.";
     expect(signalFor(body(text), [makeBlock({ plainText: text })])).toEqual({
+      event: AST_STRUCTURE_DEGRADED,
+      level: "warn",
+    });
+  });
+
+  test("a text-less source parsed to nothing is a warning", () => {
+    // Both signals fire on the same document otherwise: the pipeline
+    // already reports the emptiness as `decision_empty`, so reporting it
+    // again as loss would put a parser defect on an operator's sweep for
+    // a document the parser handled correctly.
+    expect(signalFor(TEXTLESS_SOURCE, [])).toEqual({
       event: AST_STRUCTURE_DEGRADED,
       level: "warn",
     });
