@@ -919,7 +919,7 @@ export const caseLawProvisionCitations = p.pgTable(
       .on(t.decisionId, t.spanStart, t.anchor),
     p
       .index("case_law_provision_citations_work_idx")
-      .on(t.workIdentifier, t.anchor, t.decisionId),
+      .on(t.jurisdiction, t.workIdentifier, t.anchor, t.decisionId),
     p.index("case_law_provision_citations_decision_idx").on(t.decisionId),
     p.check(
       "provision_citations_unit_values",

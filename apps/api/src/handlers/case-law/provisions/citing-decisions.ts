@@ -33,10 +33,16 @@ type ListCitingDecisionsQuery = Static<typeof listCitingDecisionsQuerySchema>;
 /** A null date sorts last under the shared descending order. */
 const DECISION_DATE_FLOOR = "0001-01-01";
 
-const decisionDateCursorSql = sql<string>`coalesce(${caseLawDecisions.decisionDate}, ${DECISION_DATE_FLOOR}::date)::text`;
+/**
+ * Newest application first. The order is the keyset, so every key must be
+ * immutable for the life of a cursor: authority is refreshed in place by the
+ * citation sweep and stays out of it (it is still returned for display).
+ * Rendered as ISO text explicitly, so the cursor does not depend on the
+ * server's DateStyle.
+ */
+const decisionDateCursorSql = sql<string>`to_char(coalesce(${caseLawDecisions.decisionDate}, ${DECISION_DATE_FLOOR}::date), 'YYYY-MM-DD')`;
 
 type CitingDecisionsCursor = {
-  authority: number;
   decisionDate: string;
   decisionId: string;
   spanStart: number;
@@ -47,14 +53,12 @@ const decodeCitingDecisionsCursor = (
   cursor: string,
 ): CitingDecisionsCursor | null => {
   const parts = decodePaginationCursor(cursor);
-  if (parts?.length !== 5) {
+  if (parts?.length !== 4) {
     return null;
   }
 
-  const [authority, decisionDate, decisionId, spanStart, anchor] = parts;
+  const [decisionDate, decisionId, spanStart, anchor] = parts;
   if (
-    typeof authority !== "number" ||
-    !Number.isFinite(authority) ||
     !isDateOnlyPaginationCursorPart(decisionDate) ||
     !isUuidPaginationCursorPart(decisionId) ||
     typeof spanStart !== "number" ||
@@ -64,7 +68,7 @@ const decodeCitingDecisionsCursor = (
     return null;
   }
 
-  return { authority, decisionDate, decisionId, spanStart, anchor };
+  return { decisionDate, decisionId, spanStart, anchor };
 };
 
 export const listCitingDecisionsHandler = async (
@@ -90,13 +94,11 @@ export const listCitingDecisionsHandler = async (
 
     conditions.push(
       sql`(
-        ${caseLawDecisions.citationAuthority},
         ${decisionDateCursorSql},
         ${caseLawProvisionCitations.decisionId},
         ${caseLawProvisionCitations.spanStart},
         ${caseLawProvisionCitations.anchor}
       ) < (
-        ${cursor.authority}::double precision,
         ${cursor.decisionDate}::text,
         ${cursor.decisionId}::uuid,
         ${cursor.spanStart}::integer,
@@ -131,7 +133,6 @@ export const listCitingDecisionsHandler = async (
       )
       .where(and(...conditions))
       .orderBy(
-        desc(caseLawDecisions.citationAuthority),
         desc(decisionDateCursorSql),
         desc(caseLawProvisionCitations.decisionId),
         desc(caseLawProvisionCitations.spanStart),
@@ -145,7 +146,6 @@ export const listCitingDecisionsHandler = async (
     limit,
     cursorForItem: (item) =>
       encodePaginationCursor([
-        item.citationAuthority,
         item.decisionDateCursor,
         item.decisionId,
         item.spanStart,

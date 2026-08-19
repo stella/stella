@@ -65,7 +65,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS "case_law_provision_citations_decision_span_id
   ON "case_law_provision_citations" ("decision_id", "span_start", "anchor");--> statement-breakpoint
 
 CREATE INDEX IF NOT EXISTS "case_law_provision_citations_work_idx"
-  ON "case_law_provision_citations" ("work_identifier", "anchor", "decision_id");--> statement-breakpoint
+  ON "case_law_provision_citations" ("jurisdiction", "work_identifier", "anchor", "decision_id");--> statement-breakpoint
 
 CREATE INDEX IF NOT EXISTS "case_law_provision_citations_decision_idx"
   ON "case_law_provision_citations" ("decision_id");--> statement-breakpoint

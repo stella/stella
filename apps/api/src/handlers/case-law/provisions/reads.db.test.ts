@@ -231,17 +231,19 @@ test("decision provisions reject a malformed cursor", async () => {
   expect("items" in response).toBe(false);
 });
 
-test("citing decisions order by authority then decision date", async () => {
+test("citing decisions order by decision date, newest first", async () => {
+  // Authority is refreshed in place and so cannot be a keyset column; it is
+  // returned for display only.
   const page = await citingDecisions({ limit: 10 });
 
   expect(page.items.map((item) => item.caseNumber)).toEqual([
-    "high",
-    "high",
-    "high",
     "low",
+    "high",
+    "high",
+    "high",
   ]);
-  expect(page.items.at(0)?.citationAuthority).toBe(9);
-  expect(page.items.at(-1)?.decisionDate).toBe("2025-01-01");
+  expect(page.items.at(0)?.decisionDate).toBe("2025-01-01");
+  expect(page.items.at(0)?.citationAuthority).toBe(1);
   expect(page.items.map((item) => item.decisionId)).not.toContain(
     closedDecisionId,
   );
@@ -266,7 +268,7 @@ test("citing decisions page through a stable cursor", async () => {
     }
   }
 
-  expect(seen).toEqual([30, 20, 10, 40]);
+  expect(seen).toEqual([40, 30, 20, 10]);
   expect(cursor).toBeUndefined();
 });
 
