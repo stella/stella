@@ -32,9 +32,13 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from "./tooltip";
 export type OutlineItem = {
   id: string;
   label: string;
+  /** What the entry contains, after the label that names it. The label
+   *  stays whole; the title is what truncates when the row is narrow. */
+  title?: string;
   /** Nesting depth among included items; drives indent + tick taper. */
   level: number;
-  /** Optional trailing annotation in the panel (e.g. a page number). */
+  /** Optional trailing annotation in the panel (e.g. a page number or a
+   *  provision range); never truncated. */
   meta?: string;
   /** Optional CSS custom-property name colouring this entry's tick + chip
    *  (e.g. "--option-blue"). Defaults to the neutral foreground. */
@@ -78,6 +82,10 @@ const TICK_LEVEL_STEP = 2;
 const TICK_MAX_LEVEL = 5;
 // Cap visible ticks by pruning deeper levels; the popover still lists everything.
 const RAIL_MAX_TICKS = 40;
+
+/** The entry as one line of text: label, then its title when it has one. */
+const entryText = (item: OutlineItem): string =>
+  item.title === undefined ? item.label : `${item.label} ${item.title}`;
 
 const tickWidth = (level: number): number => {
   const clamped = Math.min(Math.max(level, 0), TICK_MAX_LEVEL);
@@ -500,7 +508,7 @@ export const OutlineRail = ({
               render={
                 <button
                   className={cn(
-                    "min-w-0 flex-1 truncate py-1.5 text-start text-[13px] leading-snug",
+                    "flex min-w-0 flex-1 items-baseline gap-1.5 py-1.5 text-start text-[13px] leading-snug",
                     rowTextClass(isActive, hasChildren),
                   )}
                   onClick={() => jumpTo(node.item.id)}
@@ -508,9 +516,20 @@ export const OutlineRail = ({
                 />
               }
             >
-              {node.item.label}
+              {node.item.title === undefined ? (
+                <span className="min-w-0 truncate">{node.item.label}</span>
+              ) : (
+                <>
+                  <span className="shrink-0 font-medium">
+                    {node.item.label}
+                  </span>
+                  <span className="min-w-0 truncate font-normal">
+                    {node.item.title}
+                  </span>
+                </>
+              )}
             </TooltipTrigger>
-            <TooltipPopup>{node.item.label}</TooltipPopup>
+            <TooltipPopup>{entryText(node.item)}</TooltipPopup>
           </Tooltip>
           {node.item.meta !== undefined && (
             <span className="text-foreground-placeholder shrink-0 ps-2 text-[11px] tabular-nums">

@@ -32,6 +32,36 @@ type HeadingLines = {
   secondary: string | undefined;
 };
 
+const ROMAN_NUMERAL_RE = /^[IVXLCDM]+$/u;
+
+/**
+ * A heading the publisher set in capitals, in sentence case: the outline
+ * lists hundreds of these in a narrow column, where capitals read heavier
+ * than the hierarchy they mark and truncate sooner. Mixed-case headings pass
+ * through untouched, and a Roman numeral keeps its capitals because it is
+ * a number, not a word.
+ */
+export const headingCase = (text: string): string => {
+  if (text !== text.toLocaleUpperCase() || !/\p{L}/u.test(text)) {
+    return text;
+  }
+
+  return text
+    .split(" ")
+    .map((word, index) => {
+      if (ROMAN_NUMERAL_RE.test(word)) {
+        return word;
+      }
+
+      const lower = word.toLocaleLowerCase();
+
+      return index === 0
+        ? lower.charAt(0).toLocaleUpperCase() + lower.slice(1)
+        : lower;
+    })
+    .join(" ");
+};
+
 const headingLines = (block: HeadingBlock): HeadingLines | null => {
   const lines = inlinesToPlainText(block.inlines)
     .split("\n")
@@ -69,9 +99,11 @@ export const outlineFromHeadings = (
 
     items.push({
       id: heading.anchorId,
-      label: lines.label,
+      label: headingCase(lines.label),
       level: depth,
-      ...(lines.secondary === undefined ? {} : { meta: lines.secondary }),
+      ...(lines.secondary === undefined
+        ? {}
+        : { title: headingCase(lines.secondary) }),
     });
   }
 
@@ -201,7 +233,7 @@ export const withProvisionRanges = (
       return item;
     }
 
-    return { ...item, label: `${item.label} (${spanOf(first, last)})` };
+    return { ...item, meta: spanOf(first, last) };
   });
 
 /**
@@ -294,7 +326,9 @@ export const filterOutlineItems = (
   const kept = new Set<number>();
 
   for (const [index, item] of items.entries()) {
-    const haystack = foldForMatch(`${item.label} ${item.meta ?? ""}`);
+    const haystack = foldForMatch(
+      `${item.label} ${item.title ?? ""} ${item.meta ?? ""}`,
+    );
 
     if (!haystack.includes(needle)) {
       continue;
