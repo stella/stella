@@ -1,14 +1,21 @@
 import { Fragment } from "react";
 import type { ReactNode } from "react";
 
+import { Result } from "better-result";
+import { useTranslations } from "use-intl";
+
 import type { Block, HeadingLevel, Inline } from "@stll/legal-ast/document-ast";
+import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
 import type {
   SearchMatchRange,
   SearchPiece,
 } from "@/components/legal-reader/reader-search";
+import { getAnalytics } from "@/lib/analytics/provider";
 import { normalizeOptionalArray } from "@/lib/arrays";
+import { copyToClipboard } from "@/lib/copy-to-clipboard";
+import { detached } from "@/lib/detached";
 import { sanitizeHref } from "@/lib/sanitize-href";
 
 import "./reader.css";
@@ -340,6 +347,43 @@ export const HEADING_CLASS = {
   },
 } as const satisfies Record<ReaderVariant, Record<HeadingLevel, string>>;
 
+/**
+ * A block's own address, as a link the reader can take with them.
+ *
+ * The `href` alone is what makes it work: following it is native anchor
+ * navigation, so the hash lands in the URL and `:target` flashes the block
+ * without a single line of script. The clipboard copy on top is the
+ * convenience, not the mechanism.
+ */
+const BlockPermalink = ({ anchorId }: { anchorId: string }) => {
+  const t = useTranslations();
+
+  const copyPermalink = async () => {
+    const url = new URL(window.location.href);
+    url.hash = anchorId;
+    const copied = await copyToClipboard(url.href);
+    if (Result.isError(copied)) {
+      getAnalytics().captureError(copied.error);
+      stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
+      return;
+    }
+    stellaToast.add({ title: t("common.copied"), type: "success" });
+  };
+
+  return (
+    <a
+      aria-label={t("common.copyLink")}
+      className="text-foreground-disabled hover:text-foreground focus-visible:ring-ring absolute end-full top-0 me-1 rounded-sm px-1 leading-[inherit] no-underline opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:outline-none print:hidden [@media(hover:none)]:opacity-100"
+      href={`#${anchorId}`}
+      onClick={() => {
+        detached(copyPermalink(), "legal-reader.permalink-copy");
+      }}
+    >
+      ¶
+    </a>
+  );
+};
+
 export const BlockRenderer = ({
   activeMatchIndex,
   block,
@@ -356,11 +400,13 @@ export const BlockRenderer = ({
     return (
       <Tag
         className={cn(
-          "scroll-mt-[var(--reader-anchor-offset)]",
+          "group relative scroll-mt-[var(--reader-anchor-offset)]",
           HEADING_CLASS[variant][block.level],
         )}
+        data-anchor={block.anchorId}
         id={block.anchorId}
       >
+        <BlockPermalink anchorId={block.anchorId} />
         <InlineContent
           activeMatchIndex={activeMatchIndex}
           inlines={block.inlines}
@@ -388,7 +434,7 @@ export const BlockRenderer = ({
     return (
       <p
         className={cn(
-          "mb-[var(--reader-paragraph-gap)] scroll-mt-[var(--reader-anchor-offset)] last:mb-0",
+          "group relative mb-[var(--reader-paragraph-gap)] scroll-mt-[var(--reader-anchor-offset)] last:mb-0",
           shouldJustify && "reader-justify",
           block.role === "holding" && "font-[520]",
           isRomanNumeralDivider &&
@@ -401,10 +447,12 @@ export const BlockRenderer = ({
           // Courts that number their paragraphs are cited by that
           // number, so it hangs in the margin rather than running into
           // the sentence, the way the published decision prints it.
-          block.number !== undefined && "relative ps-8",
+          block.number !== undefined && "ps-8",
         )}
+        data-anchor={block.anchorId}
         id={block.anchorId}
       >
+        <BlockPermalink anchorId={block.anchorId} />
         {block.number !== undefined && (
           <HighlightedText
             activeMatchIndex={activeMatchIndex}
@@ -427,40 +475,47 @@ export const BlockRenderer = ({
     );
   }
 
+  // The permalink is a link, and a link is not allowed inside `<table>`, so
+  // the wrapper carries it. The anchor id stays on the table itself: it is
+  // what every deep link already written points at.
   return (
-    <table
-      className="my-4 w-full border-collapse scroll-mt-[var(--reader-anchor-offset)] font-sans text-[0.88rem]"
-      id={block.anchorId}
-    >
-      <tbody>
-        {block.rows.map((row, rowIndex) => (
-          // eslint-disable-next-line react/no-array-index-key -- read-only case-law document table parsed once from source text; rows are positionally fixed (rowIndex feeds getTableCellPieceId's identity below) and never reordered/inserted by the reader UI.
-          <tr key={rowIndex}>
-            {row.map((cell, columnIndex) => {
-              const pieceId = getTableCellPieceId({
-                blockId: block.id,
-                rowIndex,
-                columnIndex,
-              });
+    <div className="group relative">
+      <BlockPermalink anchorId={block.anchorId} />
+      <table
+        className="my-4 w-full border-collapse scroll-mt-[var(--reader-anchor-offset)] font-sans text-[0.88rem]"
+        data-anchor={block.anchorId}
+        id={block.anchorId}
+      >
+        <tbody>
+          {block.rows.map((row, rowIndex) => (
+            // eslint-disable-next-line react/no-array-index-key -- read-only case-law document table parsed once from source text; rows are positionally fixed (rowIndex feeds getTableCellPieceId's identity below) and never reordered/inserted by the reader UI.
+            <tr key={rowIndex}>
+              {row.map((cell, columnIndex) => {
+                const pieceId = getTableCellPieceId({
+                  blockId: block.id,
+                  rowIndex,
+                  columnIndex,
+                });
 
-              return (
-                <td
-                  className="border-border/55 border-b px-3 py-1 align-top last:border-b-0"
-                  key={pieceId}
-                >
-                  <InlineContent
-                    activeMatchIndex={activeMatchIndex}
-                    inlines={cell.inlines}
-                    pieceId={pieceId}
-                    ranges={rangesForPiece(rangesByPieceId, pieceId)}
-                  />
-                </td>
-              );
-            })}
-          </tr>
-        ))}
-      </tbody>
-    </table>
+                return (
+                  <td
+                    className="border-border/55 border-b px-3 py-1 align-top last:border-b-0"
+                    key={pieceId}
+                  >
+                    <InlineContent
+                      activeMatchIndex={activeMatchIndex}
+                      inlines={cell.inlines}
+                      pieceId={pieceId}
+                      ranges={rangesForPiece(rangesByPieceId, pieceId)}
+                    />
+                  </td>
+                );
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 };
 

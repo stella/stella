@@ -33,6 +33,23 @@
   margin-top: var(--reader-heading-chain-gap);
 }
 
+/* The block a permalink was followed to, named for a moment. */
+@keyframes reader-target {
+  0%,
+  35% {
+    background-color: color-mix(in srgb, var(--color-primary) 14%, transparent);
+  }
+
+  100% {
+    background-color: transparent;
+  }
+}
+
+[data-anchor]:target {
+  animation: reader-target 2.4s ease-out;
+  border-radius: 0.25rem;
+}
+
 /* Justified body on desktop only. No hyphenation:
    the court's text must not be visually altered.
    text-align-last: left prevents short/single-line

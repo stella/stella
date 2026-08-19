@@ -118,6 +118,19 @@ describe("StatuteText", () => {
     }
   });
 
+  test("every block offers exactly one permalink to its own anchor", () => {
+    const markup = renderWithIntl(
+      <StatuteText documentAst={ast} fulltext={null} language="cs" />,
+    );
+
+    // A statute is cited by provision, so every block is an address. One
+    // link per block: two would make the same provision two targets.
+    for (const block of blocks) {
+      expect(markup.split(`href="#${block.anchorId}"`)).toHaveLength(2);
+      expect(markup).toContain(`data-anchor="${block.anchorId}"`);
+    }
+  });
+
   test("falls back to the plain text when the document has no parsed blocks", () => {
     const markup = renderWithIntl(
       <StatuteText
