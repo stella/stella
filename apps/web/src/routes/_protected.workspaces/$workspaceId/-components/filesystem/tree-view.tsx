@@ -67,7 +67,6 @@ import { toSafeId } from "@/lib/safe-id";
 import { readStoredJson, writeStoredJson } from "@/lib/stored-json";
 import { isFileDisplayable } from "@/lib/types";
 import type {
-  ViewLayout,
   WorkspaceEntity,
   WorkspaceProperty,
   WorkspaceView,
@@ -84,6 +83,7 @@ import {
 } from "@/lib/workspaces/queries/entities";
 import { propertiesOptions } from "@/lib/workspaces/queries/properties";
 import { useWorkspaceStore } from "@/lib/workspaces/store";
+import { mergeLayout } from "@/lib/workspaces/view-layout";
 import { ActiveEditBadge } from "@/routes/_protected.workspaces/$workspaceId/-components/active-edit-badge";
 import { AddEntityMenu } from "@/routes/_protected.workspaces/$workspaceId/-components/add-entity-menu";
 import { EmptyState } from "@/routes/_protected.workspaces/$workspaceId/-components/empty-state";
@@ -580,12 +580,6 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
   );
 
   const handleHideColumn = (propertyId: string) => {
-    // Generic helper preserves the union discriminant. A bare spread of
-    // `view.layout` plus an object literal would collapse the union.
-    const mergeLayout = <L extends ViewLayout>(
-      layout: L,
-      changes: Partial<L>,
-    ): L => ({ ...layout, ...changes });
     updateView.mutate({
       viewId: view.id,
       layout: mergeLayout(view.layout, {
