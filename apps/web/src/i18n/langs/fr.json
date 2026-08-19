@@ -3263,14 +3263,23 @@
     }
   },
   "statutes": {
+    "asOf": "Version en vigueur au",
     "backToList": "Tous les textes",
+    "diffInserted": "Ajouté :",
+    "diffRemoved": "Supprimé :",
     "emptyDocument": "Aucun texte disponible pour cette version.",
     "emptyState": "Aucun texte trouvé.",
     "inForceSince": "En vigueur depuis le {date}",
+    "noVersionInForce": "Aucune version de ce texte n'était en vigueur à la date choisie.",
     "openEnded": "aujourd’hui",
     "outline": "Sommaire",
     "outlineJumpLabel": "Aller à une disposition",
     "outlineJumpPlaceholder": "§ 10 ou un intitulé",
+    "provisionHistoryEarliest": "Version la plus ancienne disponible.",
+    "provisionHistoryEmpty": "Aucune version de cette disposition n'est disponible.",
+    "provisionHistoryFor": "Historique des modifications : {provision}",
+    "provisionHistoryLoadOlder": "Charger des versions antérieures pour les comparer.",
+    "provisionHistoryUnavailable": "Impossible de charger l'historique de cette disposition.",
     "searchLabel": "Rechercher dans la législation",
     "searchPlaceholder": "Rechercher par titre ou numéro...",
     "status": {

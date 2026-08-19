@@ -3263,14 +3263,23 @@
     }
   },
   "statutes": {
+    "asOf": "Tekst obowiązujący na dzień",
     "backToList": "Wszystkie akty prawne",
+    "diffInserted": "Dodano:",
+    "diffRemoved": "Usunięto:",
     "emptyDocument": "Ta wersja nie ma dostępnego tekstu.",
     "emptyState": "Nie znaleziono aktów prawnych.",
     "inForceSince": "Obowiązuje od {date}",
+    "noVersionInForce": "W wybranym dniu nie obowiązywała żadna wersja tego aktu.",
     "openEnded": "nadal",
     "outline": "Spis treści",
     "outlineJumpLabel": "Przejdź do przepisu",
     "outlineJumpPlaceholder": "§ 10 lub tytuł",
+    "provisionHistoryEarliest": "Najstarsza dostępna wersja.",
+    "provisionHistoryEmpty": "Brak zapisanych wersji tego przepisu.",
+    "provisionHistoryFor": "Historia zmian: {provision}",
+    "provisionHistoryLoadOlder": "Wczytaj starsze wersje, aby je porównać.",
+    "provisionHistoryUnavailable": "Nie udało się wczytać historii tego przepisu.",
     "searchLabel": "Szukaj w aktach prawnych",
     "searchPlaceholder": "Szukaj według tytułu lub numeru...",
     "status": {

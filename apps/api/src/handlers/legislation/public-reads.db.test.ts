@@ -1,12 +1,16 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { drizzle } from "drizzle-orm/pglite";
 
+import type { Block, DocumentAst } from "@stll/legal-ast/document-ast";
+
 import { legislationDocuments, legislationSources } from "@/api/db/schema";
+import { readStatuteByEliHandler } from "@/api/handlers/legislation/by-eli";
 import {
   readLegislationHandler,
   readPublicLegislationHandler,
 } from "@/api/handlers/legislation/get";
 import { listStatutesHandler } from "@/api/handlers/legislation/list";
+import { readProvisionHistoryHandler } from "@/api/handlers/legislation/provision-history";
 import { listStatuteVersionsHandler } from "@/api/handlers/legislation/versions";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -43,6 +47,7 @@ type DocumentSeed = {
   title: string;
   language?: string;
   metadata?: Record<string, unknown>;
+  documentAst?: DocumentAst;
   versionValidFrom: string | null;
   versionValidTo: string | null;
 };
@@ -54,6 +59,7 @@ const seedDocument = ({
   title,
   language = "cs",
   metadata,
+  documentAst,
   versionValidFrom,
   versionValidTo,
 }: DocumentSeed) => ({
@@ -68,7 +74,72 @@ const seedDocument = ({
   versionValidFrom,
   versionValidTo,
   ...(metadata === undefined ? {} : { metadata }),
+  ...(documentAst === undefined ? {} : { documentAst }),
 });
+
+const DELIVERY_ANCHOR = "sec-2079";
+const UNKNOWN_ANCHOR = "sec-9999";
+const SECTION_SIGN = "\u00a7";
+
+/**
+ * One consolidation's structure: the provision under test, a paragraph that
+ * belongs to it, and a sibling section that has to stay out of the extracted
+ * text. Passing null repeals the provision, leaving the anchor absent.
+ */
+const statuteAst = (deliveryText: string | null): DocumentAst => {
+  const provision: Block[] =
+    deliveryText === null
+      ? []
+      : [
+          {
+            id: "b-1",
+            anchorId: DELIVERY_ANCHOR,
+            type: "heading",
+            level: 2,
+            inlines: [{ type: "text", text: `${SECTION_SIGN} 2079` }],
+            plainText: `${SECTION_SIGN} 2079`,
+          },
+          {
+            id: "b-2",
+            anchorId: "p-2079-1",
+            type: "paragraph",
+            inlines: [{ type: "text", text: deliveryText }],
+            plainText: deliveryText,
+          },
+        ];
+
+  return {
+    version: 1,
+    source: { system: "test", documentId: "", webUrl: "", printUrl: "" },
+    metadata: {
+      caseNumber: null,
+      ecli: null,
+      court: null,
+      decisionDate: null,
+      decisionType: null,
+      keywords: [],
+      statutes: [],
+    },
+    blocks: [
+      ...provision,
+      {
+        id: "b-3",
+        anchorId: "sec-2080",
+        type: "heading",
+        level: 2,
+        inlines: [{ type: "text", text: `${SECTION_SIGN} 2080` }],
+        plainText: `${SECTION_SIGN} 2080`,
+      },
+      {
+        id: "b-4",
+        anchorId: "p-2080-1",
+        type: "paragraph",
+        inlines: [{ type: "text", text: "Unrelated neighbouring rule." }],
+        plainText: "Unrelated neighbouring rule.",
+      },
+    ],
+  };
+};
 
 beforeAll(
   async () => {
@@ -100,6 +171,7 @@ beforeAll(
         sourceId: openSourceId,
         eli: "CZ/2012/89",
         title: "Civil Code",
+        documentAst: statuteAst("The seller shall deliver within thirty days."),
         versionValidFrom: "2014-01-01",
         versionValidTo: "2019-12-31",
       }),
@@ -110,6 +182,9 @@ beforeAll(
         sourceId: openSourceId,
         eli: "CZ/2012/89",
         title: "Civil Code",
+        // Same provision text as its predecessor: a reader has to be able to
+        // tell "another consolidation" from "another wording".
+        documentAst: statuteAst("The seller shall deliver within thirty days."),
         versionValidFrom: "2016-01-01",
         versionValidTo: null,
       }),
@@ -119,6 +194,9 @@ beforeAll(
         eli: "CZ/2012/89",
         title: "Civil Code",
         metadata: { publisherNote: "not for public display" },
+        documentAst: statuteAst(
+          "The seller shall deliver within fourteen days.",
+        ),
         versionValidFrom: "2020-01-01",
         versionValidTo: null,
       }),
@@ -138,6 +216,9 @@ beforeAll(
         sourceId: openSourceId,
         eli: "CZ/2012/89",
         title: "Civil Code",
+        // The provision is repealed in this consolidation, so its anchor is
+        // simply not there.
+        documentAst: statuteAst(null),
         versionValidFrom: "2999-01-01",
         versionValidTo: null,
       }),
@@ -204,6 +285,53 @@ const expectPage = (result: unknown): StatutePage => {
   // eslint-disable-next-line typescript/no-unsafe-type-assertion -- narrowed by the guard above
   return result as StatutePage;
 };
+
+type ProvisionHistoryPage = {
+  items: {
+    documentId: string;
+    versionValidFrom: string | null;
+    versionValidTo: string | null;
+    text: string;
+  }[];
+  nextCursor: string | null;
+};
+
+const expectHistoryPage = (result: unknown): ProvisionHistoryPage => {
+  if (typeof result !== "object" || result === null || !("items" in result)) {
+    throw new Error(`expected a page, got ${JSON.stringify(result)}`);
+  }
+
+  // eslint-disable-next-line typescript/no-unsafe-type-assertion -- narrowed by the guard above
+  return result as ProvisionHistoryPage;
+};
+
+const expectDocumentId = (result: unknown): string => {
+  if (typeof result !== "object" || result === null || !("id" in result)) {
+    throw new Error(`expected a document, got ${JSON.stringify(result)}`);
+  }
+
+  return String(result.id);
+};
+
+const readEliAsOf = async (
+  eli: string,
+  asOf: string | undefined,
+  language?: string,
+) =>
+  await readStatuteByEliHandler(
+    {
+      eli,
+      ...(asOf === undefined ? {} : { asOf }),
+      ...(language === undefined ? {} : { language }),
+    },
+    legislationDb,
+  );
+
+const readAsOf = async (asOf: string | undefined, language?: string) =>
+  await readEliAsOf("CZ/2012/89", asOf, language);
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+const yesterday = new Date(Date.now() - DAY_MS).toISOString().slice(0, 10);
 
 describe("public statute list", () => {
   test("returns the version in force, not the superseded or future one", async () => {
@@ -428,5 +556,194 @@ describe("public statute read", () => {
       code: 404,
       response: { message: "Legislation document not found" },
     });
+  });
+});
+
+describe("point-in-time statute read", () => {
+  test("returns the version whose window covers the date", async () => {
+    expect(expectDocumentId(await readAsOf("2015-06-01"))).toBe(
+      civilCodeSuperseded,
+    );
+  });
+
+  test("counts the opening boundary as covered", async () => {
+    expect(expectDocumentId(await readAsOf("2014-01-01"))).toBe(
+      civilCodeSuperseded,
+    );
+  });
+
+  test("counts the closing boundary as already elapsed", async () => {
+    // Half-open validity: the closing date is the first day the version no
+    // longer applies. The Sunset Act has no successor, so nothing else can
+    // answer for it and the boundary alone decides.
+    expect(expectDocumentId(await readEliAsOf("CZ/1998/222", yesterday))).toBe(
+      sunsetAct,
+    );
+    expect(await readEliAsOf("CZ/1998/222", today)).toMatchObject({
+      code: 404,
+      response: {
+        message:
+          "No version of this legislation was in force on the given date",
+      },
+    });
+  });
+
+  test("prefers the latest opening when several windows cover the date", async () => {
+    // Both the 2016 and the 2020 consolidation are open-ended.
+    expect(expectDocumentId(await readAsOf("2021-01-01"))).toBe(
+      civilCodeCurrent,
+    );
+  });
+
+  test("reads the text in force today without a date", async () => {
+    expect(expectDocumentId(await readAsOf(undefined))).toBe(civilCodeCurrent);
+  });
+
+  test("reads as not found before the corpus covers the work", async () => {
+    expect(await readAsOf("2013-01-01")).toMatchObject({
+      code: 404,
+      response: {
+        message:
+          "No version of this legislation was in force on the given date",
+      },
+    });
+  });
+
+  test("narrows to one language", async () => {
+    expect(expectDocumentId(await readAsOf("2021-01-01", "en"))).toBe(
+      civilCodeEnglish,
+    );
+  });
+
+  test("reads as not found for an unknown identifier", async () => {
+    const result = await readStatuteByEliHandler(
+      { eli: "CZ/1900/1" },
+      legislationDb,
+    );
+
+    expect(result).toMatchObject({
+      code: 404,
+      response: { message: "Legislation document not found" },
+    });
+  });
+
+  test("reads as not found for a source not cleared for redistribution", async () => {
+    const result = await readStatuteByEliHandler(
+      { eli: "CZ/1999/111" },
+      legislationDb,
+    );
+
+    expect(result).toMatchObject({
+      code: 404,
+      response: { message: "Legislation document not found" },
+    });
+  });
+
+  test("keeps the stored publisher metadata off the response", async () => {
+    const result = await readAsOf("2021-01-01");
+
+    expect(expectDocumentId(result)).toBe(civilCodeCurrent);
+    expect(result).not.toHaveProperty("metadata");
+  });
+});
+
+describe("provision history", () => {
+  test("returns the provision's own text per version, newest window first", async () => {
+    const page = expectHistoryPage(
+      await readProvisionHistoryHandler({
+        documentId: civilCodeCurrent,
+        anchor: DELIVERY_ANCHOR,
+        query: {},
+        legislationDb,
+      }),
+    );
+
+    expect(page.items.map((item) => item.documentId)).toEqual([
+      civilCodeCurrent,
+      civilCodeOpenOlder,
+      civilCodeSuperseded,
+    ]);
+    // The neighbouring section is a sibling heading, so it ends the provision.
+    expect(page.items.map((item) => item.text)).toEqual([
+      `${SECTION_SIGN} 2079\nThe seller shall deliver within fourteen days.`,
+      `${SECTION_SIGN} 2079\nThe seller shall deliver within thirty days.`,
+      `${SECTION_SIGN} 2079\nThe seller shall deliver within thirty days.`,
+    ]);
+  });
+
+  test("drops the version in which the provision is repealed", async () => {
+    const page = expectHistoryPage(
+      await readProvisionHistoryHandler({
+        documentId: civilCodeCurrent,
+        anchor: DELIVERY_ANCHOR,
+        query: {},
+        legislationDb,
+      }),
+    );
+
+    // The future consolidation is in the walked version range and still has
+    // to be absent from the answer.
+    expect(page.items.map((item) => item.documentId)).not.toContain(
+      civilCodeFuture,
+    );
+  });
+
+  test("reads as not found for an anchor no version carries", async () => {
+    const result = await readProvisionHistoryHandler({
+      documentId: civilCodeCurrent,
+      anchor: UNKNOWN_ANCHOR,
+      query: {},
+      legislationDb,
+    });
+
+    expect(result).toMatchObject({
+      code: 404,
+      response: { message: "Provision not found" },
+    });
+  });
+
+  test("reads as not found for a source not cleared for redistribution", async () => {
+    const result = await readProvisionHistoryHandler({
+      documentId: withheldAct,
+      anchor: DELIVERY_ANCHOR,
+      query: {},
+      legislationDb,
+    });
+
+    expect(result).toMatchObject({
+      code: 404,
+      response: { message: "Legislation document not found" },
+    });
+  });
+
+  test("walks every carrying version exactly once across cursor pages", async () => {
+    const seen: string[] = [];
+    let cursor: string | null = null;
+
+    for (let request = 0; request < 6; request += 1) {
+      const page: ProvisionHistoryPage = expectHistoryPage(
+        // eslint-disable-next-line eslint/no-await-in-loop -- keyset walk
+        await readProvisionHistoryHandler({
+          documentId: civilCodeCurrent,
+          anchor: DELIVERY_ANCHOR,
+          query: { limit: 1, ...(cursor === null ? {} : { cursor }) },
+          legislationDb,
+        }),
+      );
+
+      seen.push(...page.items.map((item) => item.documentId));
+      cursor = page.nextCursor;
+
+      if (cursor === null) {
+        break;
+      }
+    }
+
+    expect(cursor).toBeNull();
+    expect(seen).toEqual([
+      civilCodeCurrent,
+      civilCodeOpenOlder,
+      civilCodeSuperseded,
+    ]);
   });
 });

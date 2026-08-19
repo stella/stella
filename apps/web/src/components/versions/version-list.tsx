@@ -28,6 +28,10 @@ import Tooltip from "@/components/tooltip";
 import { UserAvatar } from "@/components/user-avatar";
 import { detached } from "@/lib/detached";
 import { formatFullTimestamp, formatRelativeTime } from "@/lib/relative-time";
+import {
+  TRACKED_DELETION_STYLE,
+  TRACKED_INSERTION_STYLE,
+} from "@/lib/track-changes-style";
 
 export const VersionList = ({ children }: React.PropsWithChildren) => (
   <div className="flex flex-col gap-px p-1">{children}</div>
@@ -353,31 +357,6 @@ export const VersionDiffBlock = ({
   );
 };
 
-// Track-changes styling, matched to folio's suggestion preview
-// (.folio-ai-suggestion--focused-original/-replacement): deletions
-// read as dimmed muted strikethrough with a faint destructive tint,
-// insertions as a low-saturation success wash with an inset ring.
-// color-mix over semantic tokens keeps both theme-aware without
-// importing folio's stylesheet.
-const DEL_STYLE: React.CSSProperties = {
-  color: "color-mix(in oklch, var(--destructive) 35%, var(--muted-foreground))",
-  textDecorationLine: "line-through",
-  textDecorationThickness: "1px",
-  textDecorationColor:
-    "color-mix(in oklch, var(--destructive) 30%, var(--muted-foreground))",
-};
-
-const INS_STYLE: React.CSSProperties = {
-  borderRadius: "3px",
-  padding: "0 2px",
-  backgroundColor: "color-mix(in oklch, var(--success) 14%, transparent)",
-  boxShadow:
-    "inset 0 0 0 1px color-mix(in oklch, var(--success) 28%, transparent)",
-  textDecorationLine: "none",
-  boxDecorationBreak: "clone",
-  WebkitBoxDecorationBreak: "clone",
-};
-
 const DiffSegmentParagraph = ({ segment }: { segment: VersionDiffSegment }) => {
   if (segment.kind === "gap") {
     // The API elides long unchanged runs server-side and sends only the
@@ -404,14 +383,14 @@ const DiffSegmentParagraph = ({ segment }: { segment: VersionDiffSegment }) => {
   }
   if (segment.kind === "added") {
     return (
-      <ins style={INS_STYLE}>
+      <ins style={TRACKED_INSERTION_STYLE}>
         <MarkerAwareText text={segment.text} />
       </ins>
     );
   }
   if (segment.kind === "removed") {
     return (
-      <del style={DEL_STYLE}>
+      <del style={TRACKED_DELETION_STYLE}>
         <MarkerAwareText text={segment.text} />
       </del>
     );
@@ -426,14 +405,14 @@ const DiffSegmentParagraph = ({ segment }: { segment: VersionDiffSegment }) => {
 const DiffRunSpan = ({ run }: { run: VersionDiffRun }) => {
   if (run.kind === "del") {
     return (
-      <del style={DEL_STYLE}>
+      <del style={TRACKED_DELETION_STYLE}>
         <MarkerAwareText text={run.text} />
       </del>
     );
   }
   if (run.kind === "ins") {
     return (
-      <ins style={INS_STYLE}>
+      <ins style={TRACKED_INSERTION_STYLE}>
         <MarkerAwareText text={run.text} />
       </ins>
     );

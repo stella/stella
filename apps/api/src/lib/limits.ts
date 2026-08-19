@@ -315,6 +315,12 @@ export const LIMITS = {
   /** Consolidated versions of one work returned per page. */
   legislationVersionsPageSizeDefault: 50,
   legislationVersionsPageSizeMax: 200,
+  /**
+   * Versions inspected per page of one provision's history. Each one costs a
+   * document-AST read, so the page stays far below the version page size.
+   */
+  legislationProvisionHistoryPageSizeDefault: 5,
+  legislationProvisionHistoryPageSizeMax: 20,
   caseLawPolarityRulesPerLanguage: 500,
   // corpus index two-stage search: lexical candidates fetched per index window
   // before the citation-authority rerank.

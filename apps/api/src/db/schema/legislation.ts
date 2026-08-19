@@ -122,6 +122,12 @@ export const legislationDocuments = p.pgTable(
       .on(t.sourceId, t.eli, t.language)
       .where(isNull(t.versionValidFrom)),
     p.index("legislation_documents_eli_idx").on(t.eli),
+    // The point-in-time read seeks a Work by its identifier and takes the
+    // latest window that opened on or before the requested date, so the
+    // access path has to carry the language and the opening as well.
+    p
+      .index("legislation_documents_eli_lang_valid_from_idx")
+      .on(t.eli, t.language, t.versionValidFrom),
     p.index("legislation_documents_country_idx").on(t.country),
     // The public statute list, in its own order: the country seeks, the
     // title/id pair is both the sort and the cursor.

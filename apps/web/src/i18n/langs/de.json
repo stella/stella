@@ -3263,14 +3263,23 @@
     }
   },
   "statutes": {
+    "asOf": "Fassung gültig am",
     "backToList": "Alle Rechtsvorschriften",
+    "diffInserted": "Eingefügt:",
+    "diffRemoved": "Gestrichen:",
     "emptyDocument": "Für diese Fassung ist kein Text verfügbar.",
     "emptyState": "Keine Rechtsvorschriften gefunden.",
     "inForceSince": "In Kraft seit {date}",
+    "noVersionInForce": "Am gewählten Tag galt keine Fassung dieses Gesetzes.",
     "openEnded": "heute",
     "outline": "Inhalt",
     "outlineJumpLabel": "Zu einer Vorschrift springen",
     "outlineJumpPlaceholder": "§ 10 oder Überschrift",
+    "provisionHistoryEarliest": "Älteste überlieferte Fassung.",
+    "provisionHistoryEmpty": "Zu dieser Vorschrift liegt keine Fassung vor.",
+    "provisionHistoryFor": "Änderungsverlauf: {provision}",
+    "provisionHistoryLoadOlder": "Ältere Fassungen laden und vergleichen.",
+    "provisionHistoryUnavailable": "Der Verlauf dieser Vorschrift konnte nicht geladen werden.",
     "searchLabel": "Rechtsvorschriften durchsuchen",
     "searchPlaceholder": "Nach Titel oder Nummer suchen...",
     "status": {

@@ -35,6 +35,13 @@ delete process.env["GOOGLE_AUTH_CLIENT_SECRET"];
 delete process.env["MICROSOFT_AUTH_CLIENT_ID"];
 delete process.env["MICROSOFT_AUTH_CLIENT_SECRET"];
 delete process.env["MICROSOFT_AUTH_TENANT_ID"];
+// Same leak, different blast radius: a developer .env that turns corpus
+// object storage on sends ingestion tests down the real S3 write path, where
+// they fail against a bucket the test runner has never created. Tests assert
+// on the Postgres copy, so force the mode off rather than leaving hermeticity
+// to whatever each machine happens to have configured.
+delete process.env["CORPUS_STORAGE_MODE"];
+delete process.env["CORPUS_STORAGE_ENABLED"];
 
 process.env["REDIS_URL"] ??= "redis://localhost:6379";
 process.env["BETTER_AUTH_SECRET"] ??= "x".repeat(32);

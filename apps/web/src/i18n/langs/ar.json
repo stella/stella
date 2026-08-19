@@ -3263,14 +3263,23 @@
     }
   },
   "statutes": {
+    "asOf": "النص النافذ في",
     "backToList": "جميع التشريعات",
+    "diffInserted": "مُضاف:",
+    "diffRemoved": "محذوف:",
     "emptyDocument": "لا يتوفر نص لهذه النسخة.",
     "emptyState": "لم يُعثر على تشريعات.",
     "inForceSince": "نافذ منذ {date}",
+    "noVersionInForce": "لم تكن أي نسخة من هذا النص نافذة في التاريخ المحدد.",
     "openEnded": "الآن",
     "outline": "المحتويات",
     "outlineJumpLabel": "الانتقال إلى حكم",
     "outlineJumpPlaceholder": "§ 10 أو عنوان",
+    "provisionHistoryEarliest": "أقدم صيغة متاحة.",
+    "provisionHistoryEmpty": "لا توجد أي صيغة مسجَّلة لهذه المادة.",
+    "provisionHistoryFor": "سجل التعديلات: {provision}",
+    "provisionHistoryLoadOlder": "حمّل صيغًا أقدم للمقارنة.",
+    "provisionHistoryUnavailable": "تعذّر تحميل سجل هذه المادة.",
     "searchLabel": "البحث في التشريعات",
     "searchPlaceholder": "ابحث بالعنوان أو الرقم...",
     "status": {
