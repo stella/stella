@@ -126,10 +126,29 @@ unprefixed global names.
 - **Linting**: oxlint (ultracite preset). **Formatting**: oxfmt.
 - **Tests**: write tests for new functionality when applicable.
 
+## Changesets
+
+Touching a published package (`packages/ui`, `packages/conditions`,
+`packages/docx-utils`, `packages/business-registries`,
+`packages/country-codes`, `packages/template-conditions`, `packages/cli`)
+requires a changeset, and CI enforces it:
+
+```sh
+bun changeset            # pick the packages and the bump, describe the change
+bun changeset --empty    # refactor with no change to the public surface
+```
+
+An empty changeset is a deliberate statement, not a way around the check: it
+records that the change is internal — a rename behind the export map, a test,
+a comment — and produces no version bump. Anything a consumer of the package
+can observe needs a real bump.
+
 ## Pull Request Checklist
 
 - [ ] Code builds without errors or warnings
 - [ ] Changes are tested
+- [ ] A changeset is included when a published package changed (empty if the
+      public surface did not)
 - [ ] CLA is signed
 - [ ] Issue is linked
 

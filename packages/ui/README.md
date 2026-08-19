@@ -75,3 +75,10 @@ bun run lint
 `bun scripts/check-published-exports.ts packages/ui` (from the repository root)
 runs the publish path end to end: build, `prepare-publish`, `bun pm pack`, then
 resolves and imports every declared subpath from the built `dist`.
+
+This package is published, so a change here needs a changeset:
+
+```sh
+bun changeset            # anything a consumer of the package can observe
+bun changeset --empty    # internal refactor, no change to the public surface
+```
