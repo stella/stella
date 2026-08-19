@@ -1,12 +1,18 @@
 import { describe, expect, test } from "bun:test";
 
+import {
+  getKanbanGroups,
+  resolveKanbanGroupOptions,
+  selectKanbanRows,
+} from "@stll/ui/kanban";
+
 import { getInternalPropertyId } from "@/components/workspaces/entity-utils";
 import { toSafeId } from "@/lib/safe-id";
 import type { WorkspaceEntity, WorkspaceProperty } from "@/lib/types";
 
 import {
-  resolveKanbanGrouping,
-  selectKanbanEntitiesForGrouping,
+  resolveWorkspaceKanbanGrouping,
+  workspaceKanbanSchema,
 } from "./kanban-view.logic";
 
 const entity = (
@@ -68,10 +74,36 @@ const singleSelectProperty = (id: string): WorkspaceProperty => ({
   tool: { version: 1, type: "manual-input" },
 });
 
+const STATUS_LABELS = {
+  open: "Open",
+  in_progress: "In progress",
+  in_review: "In review",
+  done: "Done",
+  cancelled: "Cancelled",
+};
+
+const ENTITY_KIND_LABELS = {
+  document: "Document",
+  folder: "Folder",
+  task: "Task",
+  message: "Message",
+  link: "Link",
+};
+
+const schemaFor = (properties: WorkspaceProperty[] = []) =>
+  workspaceKanbanSchema({
+    properties,
+    statusLabels: STATUS_LABELS,
+    entityKindLabels: ENTITY_KIND_LABELS,
+  });
+
+const groupingFor = (groupBy: string, properties: WorkspaceProperty[] = []) =>
+  resolveWorkspaceKanbanGrouping(groupBy, schemaFor(properties));
+
 describe("kanban grouping entity scope", () => {
   test("kind grouping keeps matter documents and folders", () => {
-    const grouping = resolveKanbanGrouping(getInternalPropertyId("kind"), []);
-    const result = selectKanbanEntitiesForGrouping(
+    const grouping = groupingFor(getInternalPropertyId("kind"));
+    const result = selectKanbanRows(
       [
         entity("document-1", "document"),
         entity("folder-1", "folder"),
@@ -88,8 +120,8 @@ describe("kanban grouping entity scope", () => {
   });
 
   test("status grouping is task-only", () => {
-    const grouping = resolveKanbanGrouping(getInternalPropertyId("status"), []);
-    const result = selectKanbanEntitiesForGrouping(
+    const grouping = groupingFor(getInternalPropertyId("status"));
+    const result = selectKanbanRows(
       [entity("document-1", "document"), entity("task-1", "task")],
       grouping,
     );
@@ -98,15 +130,94 @@ describe("kanban grouping entity scope", () => {
   });
 
   test("custom property grouping keeps matter entities", () => {
-    const grouping = resolveKanbanGrouping("phase", [
-      singleSelectProperty("phase"),
-    ]);
-    const result = selectKanbanEntitiesForGrouping(
+    const grouping = groupingFor("phase", [singleSelectProperty("phase")]);
+    const result = selectKanbanRows(
       [entity("document-1", "document"), entity("task-1", "task")],
       grouping,
     );
 
     expect(grouping.type).toBe("property");
     expect(result.map((row) => row.kind)).toEqual(["document", "task"]);
+  });
+});
+
+describe("kanban column lists", () => {
+  test("a status board draws the five task statuses, then uncategorized", () => {
+    const grouping = groupingFor(getInternalPropertyId("status"));
+    const groups = getKanbanGroups(
+      resolveKanbanGroupOptions(grouping),
+      "Uncategorized",
+    );
+
+    expect(groups.map((group) => [group.value, group.label])).toEqual([
+      ["open", "Open"],
+      ["in_progress", "In progress"],
+      ["in_review", "In review"],
+      ["done", "Done"],
+      ["cancelled", "Cancelled"],
+      [null, "Uncategorized"],
+    ]);
+  });
+
+  test("status columns carry the palette colour their tier is defined with", () => {
+    const options = resolveKanbanGroupOptions(
+      groupingFor(getInternalPropertyId("status")),
+    );
+
+    expect(options.map((option) => option.optionColor)).toEqual([
+      "gray",
+      "blue",
+      "amber",
+      "green",
+      "red",
+    ]);
+  });
+
+  test("a kind board draws every entity kind", () => {
+    const options = resolveKanbanGroupOptions(
+      groupingFor(getInternalPropertyId("kind")),
+    );
+
+    expect(options.map((option) => option.value)).toEqual([
+      "document",
+      "folder",
+      "task",
+      "message",
+      "link",
+    ]);
+  });
+
+  test("a created-by board has no column list, so it cannot be drawn", () => {
+    const grouping = groupingFor(getInternalPropertyId("created-by"));
+
+    expect(grouping.type).toBe("built-in");
+    expect(resolveKanbanGroupOptions(grouping)).toEqual([]);
+  });
+
+  test("a select property's columns are its options, in the property's order", () => {
+    const property = singleSelectProperty("phase");
+    const withOptions: WorkspaceProperty = {
+      ...property,
+      content: {
+        version: 1,
+        type: "single-select",
+        options: [
+          { value: "draft", color: "gray" },
+          { value: "review", color: "amber" },
+        ],
+        fallback: null,
+      },
+    };
+
+    const options = resolveKanbanGroupOptions(
+      groupingFor("phase", [withOptions]),
+    );
+
+    expect(options.map((option) => [option.value, option.optionColor])).toEqual(
+      [
+        ["draft", "gray"],
+        ["review", "amber"],
+      ],
+    );
   });
 });

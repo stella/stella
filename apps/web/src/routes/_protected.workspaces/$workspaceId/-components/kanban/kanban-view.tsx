@@ -17,6 +17,13 @@ import { KanbanIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import type { OptionColor } from "@stll/api/types";
+import type { KanbanGroup } from "@stll/ui/kanban";
+import {
+  getKanbanGroupingPropertyId,
+  getKanbanGroups,
+  isKanbanGroupingRenderable,
+  resolveKanbanGroupOptions,
+} from "@stll/ui/kanban";
 import { stellaToast } from "@stll/ui/toast";
 
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
@@ -49,16 +56,8 @@ import { propertiesOptions } from "@/lib/workspaces/queries/properties";
 import { taskKeys } from "@/lib/workspaces/queries/tasks";
 import { EmptyState } from "@/routes/_protected.workspaces/$workspaceId/-components/empty-state";
 import { KanbanColumn } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-column";
-import {
-  getEntityGroups,
-  getKanbanGroupingPropertyId,
-  resolveGroupOptions,
-  resolveKanbanGrouping,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.logic";
-import type {
-  EntityGroup,
-  ResolveGroupOptionsParams,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.logic";
+import { resolveWorkspaceKanbanGrouping } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.logic";
+import { useWorkspaceKanbanSchema } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/use-kanban-schema";
 import {
   uploadFileEntitiesBatched,
   useBatchUploadLabels,
@@ -166,12 +165,15 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
     setLocalColumnOrder([]);
   }
 
+  const schema = useWorkspaceKanbanSchema(properties);
   const grouping = useMemo(
-    () => resolveKanbanGrouping(configuredGroupBy, properties),
-    [configuredGroupBy, properties],
+    () => resolveWorkspaceKanbanGrouping(configuredGroupBy, schema),
+    [configuredGroupBy, schema],
   );
   const groupByPropertyId = getKanbanGroupingPropertyId(grouping);
-  const isStatusGrouping = grouping.type === "status";
+  const isStatusGrouping =
+    grouping.type === "built-in" &&
+    grouping.group.id === getInternalPropertyId("status");
   const isBuiltInGrouping = grouping.type === "built-in";
   const groupByProperty =
     grouping.type === "property" ? grouping.property : null;
@@ -245,21 +247,9 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
     },
   });
 
-  // No group-by selected at all
-  if (grouping.type === "none" || groupByPropertyId === null) {
-    return (
-      <EmptyState
-        hint={t("workspaces.kanban.usePropertyHint")}
-        icon={KanbanIcon}
-        message={t("workspaces.kanban.selectPropertyHint")}
-      />
-    );
-  }
-
-  if (
-    grouping.type === "built-in" &&
-    groupByPropertyId !== getInternalPropertyId("kind")
-  ) {
+  // A grouping with no columns is not a board: no group-by at all, or a
+  // built-in grouping (created-by) that has no fixed column list to draw.
+  if (!isKanbanGroupingRenderable(grouping) || groupByPropertyId === null) {
     return (
       <EmptyState
         hint={t("workspaces.kanban.usePropertyHint")}
@@ -289,44 +279,9 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
 
   // -- Unified grouping: resolve options, then render one board --
 
-  const entityKindLabels = {
-    document: t("common.document"),
-    folder: t("search.kinds.folder"),
-    task: t("search.kinds.task"),
-    message: t("search.kinds.message"),
-    link: t("search.kinds.link"),
-  };
+  const options = resolveKanbanGroupOptions(grouping);
 
-  // Each arm carries only the labels its grouping reads, so the status
-  // board cannot be built without a complete set of status labels.
-  const groupParams = ((): ResolveGroupOptionsParams => {
-    if (grouping.type === "status") {
-      return {
-        type: "status",
-        propertyId: grouping.propertyId,
-        statusLabels: {
-          open: t("tasks.statusValues.open"),
-          in_progress: t("tasks.statusValues.in_progress"),
-          in_review: t("tasks.statusValues.in_review"),
-          done: t("tasks.statusValues.done"),
-          cancelled: t("tasks.statusValues.cancelled"),
-        },
-      };
-    }
-    if (grouping.type === "built-in") {
-      return {
-        type: "built-in",
-        propertyId: grouping.propertyId,
-        groupByPropertyId,
-        entityKindLabels,
-      };
-    }
-    return grouping;
-  })();
-
-  const options = resolveGroupOptions(groupParams);
-
-  const groups = getEntityGroups(options, t("common.uncategorized"));
+  const groups = getKanbanGroups(options, t("common.uncategorized"));
 
   const handleDrop = (targetValue: string | null, entityId: string) => {
     if (isStatusGrouping && targetValue !== null) {
@@ -577,7 +532,7 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
     localColumnOrder.length > 0
       ? localColumnOrder
           .map((v) => filteredGroups.find((g) => g.value === v))
-          .filter((g): g is EntityGroup => g !== undefined)
+          .filter((g): g is KanbanGroup => g !== undefined)
           .concat(
             filteredGroups.filter(
               (g) => g.value === null || !localColumnOrder.includes(g.value),
