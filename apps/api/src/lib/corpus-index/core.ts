@@ -415,9 +415,9 @@ type GenerationBackfillRowsOptions<
 
 /**
  * A generation rebuild runs two shapes of walk through one entry point,
- * and they need opposite commit semantics: the snapshot pages are bulk
- * (`auto`, verified by a census afterwards) while the pending queue
- * drained alongside them is the live path every newly ingested decision
+ * and they need different commit semantics: the snapshot pages are bulk
+ * (`auto`, verified by a census afterwards) while the pending queue of a
+ * completed generation is the live path every newly ingested decision
  * goes through (`wait_for`, because its acceptance is persisted). The
  * `type` discriminator cannot tell them apart, so the caller states it.
  */
