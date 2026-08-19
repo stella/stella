@@ -46,6 +46,22 @@ const blocks = [
     plainText: "Title I",
   },
   {
+    type: "heading",
+    id: "b-1a",
+    anchorId: "zastoupeni",
+    level: 5,
+    inlines: inlineText("Representation by a household member"),
+    plainText: "Representation by a household member",
+  },
+  {
+    type: "heading",
+    id: "b-1b",
+    anchorId: "paragraf-47",
+    level: 6,
+    inlines: inlineText("§ 47"),
+    plainText: "§ 47",
+  },
+  {
     type: "paragraph",
     id: "b-2",
     anchorId: "paragraf-1",

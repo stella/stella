@@ -331,19 +331,27 @@ export const HEADING_CLASS = {
     5: "mt-[var(--reader-section-gap-top)] mb-[var(--reader-section-gap-bottom)] text-sm leading-snug font-semibold",
     6: "mt-[var(--reader-section-gap-top)] mb-[var(--reader-section-gap-bottom)] text-sm leading-snug font-medium",
   },
-  // Every container is centred and bold, and the sizes step down only
-  // slightly: a `Díl` is not a smaller thing than a `HLAVA`, it is a nearer
-  // one. Nothing falls below the body size, so a section designation never
-  // reads as an aside. The rhythm — a large gap into a new container, a
-  // small one between a container and the container it opens — is in
-  // `reader.css`, where a sibling selector can see the chain.
+  // Levels 1 to 4 are the containers (Část, Hlava, Díl, Oddíl): centred and
+  // bold, stepping down only slightly, because a `Díl` is not a smaller
+  // thing than a `HLAVA`, it is a nearer one. They carry the hierarchy.
+  //
+  // Levels 5 and 6 are the section itself — the title of a group of
+  // sections, and the section designation that opens the provision. Both
+  // stay at reading weight: the designation is a marker the eye finds, not
+  // another rung of the hierarchy, so bolding it flattens the four levels
+  // above it. Level 6 keeps its own approach gap even though it is the
+  // deepest: it is a provision boundary rather than a container.
+  //
+  // The rhythm — a large gap into a new container, a small one between a
+  // container and the container it opens — is in `reader.css`, where a
+  // sibling selector can see the chain.
   statute: {
     1: "mt-[var(--reader-heading-gap-1)] mb-[var(--reader-heading-gap-bottom)] text-center text-[1.35rem] leading-tight font-bold tracking-widest first:mt-0",
     2: "mt-[var(--reader-heading-gap-2)] mb-[var(--reader-heading-gap-bottom)] text-center text-[1.25rem] leading-snug font-bold tracking-wide",
     3: "mt-[var(--reader-heading-gap-3)] mb-[var(--reader-heading-gap-bottom)] text-center text-[1.15rem] leading-snug font-bold",
     4: "mt-[var(--reader-heading-gap-4)] mb-[var(--reader-heading-gap-bottom)] text-center text-[1.15rem] leading-snug font-bold",
-    5: "mt-[var(--reader-heading-gap-5)] mb-[var(--reader-heading-gap-bottom)] text-center text-[1.1rem] leading-snug font-bold",
-    6: "mt-[var(--reader-heading-gap-6)] mb-[var(--reader-heading-gap-bottom)] text-center text-[1.1rem] leading-snug font-bold",
+    5: "mt-[var(--reader-heading-gap-5)] mb-[var(--reader-heading-gap-bottom)] text-center text-[1.05rem] leading-snug font-semibold",
+    6: "mt-[var(--reader-heading-gap-6)] mb-[var(--reader-heading-gap-bottom)] text-center text-[1rem] leading-snug font-semibold",
   },
 } as const satisfies Record<ReaderVariant, Record<HeadingLevel, string>>;
 
