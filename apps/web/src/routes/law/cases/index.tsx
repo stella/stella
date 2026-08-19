@@ -148,6 +148,7 @@ export const Route = createFileRoute("/law/cases/")({
         aboutName: "Case-law decisions",
         canonicalUrl: createPublicLawCanonicalUrl(path),
         description,
+        kind: "caseLaw",
         items: loaderData
           ? loaderData.decisions.map((decision) => ({
               name: decision.caseNumber,

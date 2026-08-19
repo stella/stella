@@ -1002,6 +1002,7 @@
       "ZH-HANS": "Ķīniešu (vienkāršotā)",
       "ZH-HANT": "Ķīniešu (tradicionālā)"
     },
+    "legalDatabase": "Juridiskā datubāze",
     "loadMore": "Ielādēt vairāk",
     "loading": "Ielādē",
     "logTime": "Reģistrēt laiku",
@@ -3259,6 +3260,7 @@
     "inForceSince": "Spēkā no {date}",
     "openEnded": "šobrīd",
     "outline": "Saturs",
+    "searchLabel": "Meklēt tiesību aktos",
     "searchPlaceholder": "Meklēt pēc nosaukuma vai numura...",
     "status": {
       "current": "Spēkā",

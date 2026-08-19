@@ -10,6 +10,7 @@ const {
   createCaseLawDecisionJsonLd,
   createPublicLawCanonicalUrl,
   createPublicLawHead,
+  createStatuteJsonLd,
 } = await import("@/lib/public-law-seo");
 
 describe("public law SEO", () => {
@@ -190,6 +191,7 @@ describe("public law SEO", () => {
         aboutName: "Case-law decisions",
         canonicalUrl: "http://localhost:3000/law/cases",
         description: "Public case-law database.",
+        kind: "caseLaw",
         name: "Case law | stella",
       }),
     ).toEqual({
@@ -220,6 +222,7 @@ describe("public law SEO", () => {
             url: "http://localhost:3000/law/cze/cases/court/date/decision",
           },
         ],
+        kind: "caseLaw",
         name: "Case law | stella",
       }),
     ).toMatchObject({
@@ -237,6 +240,99 @@ describe("public law SEO", () => {
           },
         ],
       },
+    });
+  });
+
+  test("creates statute JSON-LD carrying the consolidation's version date", () => {
+    expect(
+      createStatuteJsonLd({
+        canonicalUrl: "http://localhost:3000/law/cze/statutes/document",
+        country: "CZE",
+        documentType: "act",
+        eli: "CZ/2012/89",
+        language: "cs",
+        sourceUrl: "https://example.test/statute",
+        title: "Civil Code",
+        versionValidFrom: "2020-01-01",
+      }),
+    ).toEqual({
+      "@context": "https://schema.org",
+      "@type": "Legislation",
+      inLanguage: "cs",
+      // The window this consolidation is valid over, never the date the act
+      // was adopted: `legislationDate` would claim the latter.
+      legislationDateVersion: "2020-01-01",
+      legislationIdentifier: "CZ/2012/89",
+      legislationJurisdiction: "CZE",
+      legislationType: "act",
+      mainEntityOfPage: {
+        "@id": "http://localhost:3000/law/cze/statutes/document",
+        "@type": "WebPage",
+      },
+      name: "Civil Code",
+      sameAs: "https://example.test/statute",
+      url: "http://localhost:3000/law/cze/statutes/document",
+    });
+  });
+
+  test("omits statute fields the corpus has no value for", () => {
+    const jsonLd = createStatuteJsonLd({
+      canonicalUrl: "http://localhost:3000/law/cze/statutes/document",
+      country: "CZE",
+      documentType: null,
+      eli: "CZ/2012/89",
+      language: "cs",
+      sourceUrl: "not a url",
+      title: "Civil Code",
+      versionValidFrom: null,
+    });
+
+    expect(jsonLd).not.toHaveProperty("legislationDate");
+    expect(jsonLd).not.toHaveProperty("legislationDateVersion");
+    expect(jsonLd).not.toHaveProperty("legislationType");
+    expect(jsonLd).not.toHaveProperty("sameAs");
+  });
+
+  test("creates statute collection JSON-LD typed as legislation", () => {
+    expect(
+      createLegalCollectionJsonLd({
+        aboutName: "Statutes",
+        canonicalUrl: "http://localhost:3000/law/cze/statutes",
+        description: "Public statute database.",
+        items: [
+          {
+            name: "Civil Code",
+            url: "http://localhost:3000/law/cze/statutes/document",
+          },
+        ],
+        kind: "statutes",
+        name: "Statutes | stella",
+      }),
+    ).toEqual({
+      "@context": "https://schema.org",
+      "@type": "CollectionPage",
+      about: {
+        "@type": "Legislation",
+        name: "Statutes",
+      },
+      description: "Public statute database.",
+      mainEntity: {
+        "@type": "ItemList",
+        itemListElement: [
+          {
+            "@type": "ListItem",
+            position: 1,
+            item: {
+              "@type": "Legislation",
+              name: "Civil Code",
+              url: "http://localhost:3000/law/cze/statutes/document",
+            },
+          },
+        ],
+        name: "Statutes | stella",
+      },
+      name: "Statutes | stella",
+      url: "http://localhost:3000/law/cze/statutes",
     });
   });
 });

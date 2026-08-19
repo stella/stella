@@ -1,8 +1,27 @@
 import { describe, expect, test } from "bun:test";
 
+import { env } from "@/api/env";
 import { publicLegislationRoute } from "@/api/handlers/legislation/public-routes";
 
 describe("public statute routes", () => {
+  test("serves nothing while the public-law feature is off", async () => {
+    const previousIsDev = env.isDev;
+    const previousFeature = env.FEATURE_PUBLIC_LAW;
+    env.isDev = false;
+    env.FEATURE_PUBLIC_LAW = false;
+
+    try {
+      const response = await publicLegislationRoute.handle(
+        new Request("http://localhost/law/statutes?country=CZE"),
+      );
+
+      expect(response.status).toBe(404);
+    } finally {
+      env.isDev = previousIsDev;
+      env.FEATURE_PUBLIC_LAW = previousFeature;
+    }
+  });
+
   test("rejects a document id that is not a UUID before handler execution", async () => {
     const response = await publicLegislationRoute.handle(
       new Request("http://localhost/law/statutes/not-a-uuid"),

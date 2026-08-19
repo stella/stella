@@ -16,9 +16,10 @@ const STATUS_CLASS = {
 } as const satisfies Record<StatuteStatus, string>;
 
 /**
- * Lifecycle badge for one statute version. An unknown value is shown
- * verbatim: the corpus constrains the column, so it can only appear when
- * that constraint and this list have drifted apart.
+ * Lifecycle badge for one statute version. The label map is total over the
+ * lifecycle contract the database CHECK is built from, so a new status fails
+ * to compile here before it can reach a reader; the verbatim fallback covers
+ * only a value that reached the column without passing that constraint.
  */
 export const StatuteStatusPill = ({ status }: { status: string }) => {
   const t = useTranslations();

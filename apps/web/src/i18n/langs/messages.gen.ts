@@ -1005,6 +1005,7 @@ type Messages = {
       "ZH-HANS": "Chinese (simplified)";
       "ZH-HANT": "Chinese (traditional)";
     };
+    "legalDatabase": "Legal database";
     "loadMore": "Load more";
     "loading": "Loading";
     "logTime": "Log time";
@@ -3262,6 +3263,7 @@ type Messages = {
     "inForceSince": "In force since {date}";
     "openEnded": "present";
     "outline": "Contents";
+    "searchLabel": "Search statutes";
     "searchPlaceholder": "Search by title or number...";
     "status": {
       "current": "In force";

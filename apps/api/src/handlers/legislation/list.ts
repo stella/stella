@@ -53,13 +53,15 @@ const decodeTitleIdCursor = (cursor: string): TitleIdCursor | null => {
 const UNVERSIONED_SORT_DATE = "0001-01-01";
 
 /**
- * A version window that has opened and has not closed. A null
- * `version_valid_from` marks a work kept as a single unversioned text.
+ * A version window that has opened and has not closed. The window is the
+ * corpus half-open interval `[version_valid_from, version_valid_to)`, so a
+ * version whose successor opens today ends today and is already historical.
+ * A null `version_valid_from` marks a work kept as a single unversioned text.
  */
 const inForceToday = (validFrom: SQLWrapper, validTo: SQLWrapper): SQL => sql`(
   ${validFrom} IS NULL OR ${validFrom} <= CURRENT_DATE
 ) AND (
-  ${validTo} IS NULL OR ${validTo} >= CURRENT_DATE
+  ${validTo} IS NULL OR ${validTo} > CURRENT_DATE
 )`;
 
 /**

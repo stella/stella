@@ -159,7 +159,7 @@ function PublicStatuteRoute() {
             <StatuteVersionSwitcher
               currentVersionId={statute.id}
               onVersionChange={handleVersionChange}
-              versions={versions.items}
+              versions={versions}
             />
             <Link
               className="text-muted-foreground hover:text-foreground w-fit text-xs underline underline-offset-2"

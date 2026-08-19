@@ -36,6 +36,17 @@ type StatuteJsonLdInput = {
   versionValidFrom: string | null;
 };
 
+/**
+ * What the collection collects, as the schema.org type its subject and its
+ * entries carry: statutes are `Legislation`, decisions are `LegalDocument`.
+ */
+const LEGAL_COLLECTION_TYPES = {
+  caseLaw: "LegalDocument",
+  statutes: "Legislation",
+} as const;
+
+type LegalCollectionKind = keyof typeof LEGAL_COLLECTION_TYPES;
+
 type LegalCollectionJsonLdInput = {
   /** What the collection is a collection of, e.g. "Statutes". */
   aboutName: string;
@@ -45,6 +56,7 @@ type LegalCollectionJsonLdInput = {
     name: string;
     url: string;
   }[];
+  kind: LegalCollectionKind;
   name: string;
 };
 
@@ -148,7 +160,10 @@ export const createStatuteJsonLd = ({
   title,
   versionValidFrom,
 }: StatuteJsonLdInput): JsonLdObject => {
-  const publishedDate = dateToIsoDate(versionValidFrom);
+  // `version_valid_from` opens this consolidation's validity window, which is
+  // schema.org's `legislationDateVersion`. It is not the date the text was
+  // adopted or signed, so it must not be emitted as `legislationDate`.
+  const versionDate = dateToIsoDate(versionValidFrom);
   const officialSourceUrl = absoluteUrlOrNull(sourceUrl);
 
   return {
@@ -163,7 +178,7 @@ export const createStatuteJsonLd = ({
     },
     name: title,
     url: canonicalUrl,
-    ...(publishedDate ? { legislationDate: publishedDate } : {}),
+    ...(versionDate ? { legislationDateVersion: versionDate } : {}),
     ...(documentType?.trim() ? { legislationType: documentType } : {}),
     ...(officialSourceUrl ? { sameAs: officialSourceUrl } : {}),
   };
@@ -174,8 +189,10 @@ export const createLegalCollectionJsonLd = ({
   canonicalUrl,
   description,
   items = [],
+  kind,
   name,
 }: LegalCollectionJsonLdInput): JsonLdObject => {
+  const itemType = LEGAL_COLLECTION_TYPES[kind];
   const itemList: JsonLdObject = {
     "@type": "ItemList",
     name,
@@ -186,7 +203,7 @@ export const createLegalCollectionJsonLd = ({
       "@type": "ListItem",
       position: index + 1,
       item: {
-        "@type": "LegalDocument",
+        "@type": itemType,
         name: item.name,
         url: item.url,
       },
@@ -197,7 +214,7 @@ export const createLegalCollectionJsonLd = ({
     "@context": "https://schema.org",
     "@type": "CollectionPage",
     about: {
-      "@type": "LegalDocument",
+      "@type": itemType,
       name: aboutName,
     },
     mainEntity: itemList,

@@ -1002,6 +1002,7 @@
       "ZH-HANS": "Chino (simplificado)",
       "ZH-HANT": "Chino (tradicional)"
     },
+    "legalDatabase": "Base de datos jurídica",
     "loadMore": "Cargar más",
     "loading": "Cargando",
     "logTime": "Registrar tiempo",
@@ -3259,6 +3260,7 @@
     "inForceSince": "En vigor desde el {date}",
     "openEnded": "actualidad",
     "outline": "Índice",
+    "searchLabel": "Buscar en la legislación",
     "searchPlaceholder": "Buscar por título o número...",
     "status": {
       "current": "En vigor",

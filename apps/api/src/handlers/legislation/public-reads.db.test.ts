@@ -2,6 +2,10 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { drizzle } from "drizzle-orm/pglite";
 
 import { legislationDocuments, legislationSources } from "@/api/db/schema";
+import {
+  readLegislationHandler,
+  readPublicLegislationHandler,
+} from "@/api/handlers/legislation/get";
 import { listStatutesHandler } from "@/api/handlers/legislation/list";
 import { listStatuteVersionsHandler } from "@/api/handlers/legislation/versions";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -23,15 +27,22 @@ const civilCodeSuperseded = createSafeId<"legislationDocument">();
 const civilCodeOpenOlder = createSafeId<"legislationDocument">();
 const civilCodeCurrent = createSafeId<"legislationDocument">();
 const civilCodeFuture = createSafeId<"legislationDocument">();
+const civilCodeEnglish = createSafeId<"legislationDocument">();
 const labourCode = createSafeId<"legislationDocument">();
 const registerAct = createSafeId<"legislationDocument">();
+const sunsetAct = createSafeId<"legislationDocument">();
 const withheldAct = createSafeId<"legislationDocument">();
+
+/** The window boundary the half-open validity interval turns on. */
+const today = new Date().toISOString().slice(0, 10);
 
 type DocumentSeed = {
   id: SafeId<"legislationDocument">;
   sourceId: SafeId<"legislationSource">;
   eli: string;
   title: string;
+  language?: string;
+  metadata?: Record<string, unknown>;
   versionValidFrom: string | null;
   versionValidTo: string | null;
 };
@@ -41,6 +52,8 @@ const seedDocument = ({
   sourceId,
   eli,
   title,
+  language = "cs",
+  metadata,
   versionValidFrom,
   versionValidTo,
 }: DocumentSeed) => ({
@@ -49,11 +62,12 @@ const seedDocument = ({
   eli,
   title,
   country: "CZE",
-  language: "cs",
+  language,
   documentType: "act",
   status: "current",
   versionValidFrom,
   versionValidTo,
+  ...(metadata === undefined ? {} : { metadata }),
 });
 
 beforeAll(
@@ -104,6 +118,18 @@ beforeAll(
         sourceId: openSourceId,
         eli: "CZ/2012/89",
         title: "Civil Code",
+        metadata: { publisherNote: "not for public display" },
+        versionValidFrom: "2020-01-01",
+        versionValidTo: null,
+      }),
+      // Same work key except the language, so the list has a second language
+      // to narrow to.
+      seedDocument({
+        id: civilCodeEnglish,
+        sourceId: openSourceId,
+        eli: "CZ/2012/89",
+        title: "Civil Code (English)",
+        language: "en",
         versionValidFrom: "2020-01-01",
         versionValidTo: null,
       }),
@@ -130,6 +156,16 @@ beforeAll(
         title: "Public Registers Act",
         versionValidFrom: null,
         versionValidTo: null,
+      }),
+      // The window closes today and no successor opens: half-open validity
+      // makes it historical from today, not tomorrow.
+      seedDocument({
+        id: sunsetAct,
+        sourceId: openSourceId,
+        eli: "CZ/1998/222",
+        title: "Sunset Act",
+        versionValidFrom: "2000-01-01",
+        versionValidTo: today,
       }),
       seedDocument({
         id: withheldAct,
@@ -189,9 +225,38 @@ describe("public statute list", () => {
 
     expect(page.items.map((item) => item.title)).toEqual([
       "Civil Code",
+      "Civil Code (English)",
       "Labour Code",
       "Public Registers Act",
     ]);
+  });
+
+  test("drops a version whose validity window closes today", async () => {
+    const page = expectPage(
+      await listStatutesHandler({ country: "CZE" }, legislationDb),
+    );
+
+    expect(page.items.map((item) => item.id)).not.toContain(sunsetAct);
+  });
+
+  test("narrows the page to one language", async () => {
+    const inEnglish = expectPage(
+      await listStatutesHandler(
+        { country: "CZE", language: "en" },
+        legislationDb,
+      ),
+    );
+    const inCzech = expectPage(
+      await listStatutesHandler(
+        { country: "CZE", language: "cs" },
+        legislationDb,
+      ),
+    );
+
+    expect(inEnglish.items.map((item) => item.id)).toEqual([civilCodeEnglish]);
+    expect(inCzech.items.map((item) => item.id)).not.toContain(
+      civilCodeEnglish,
+    );
   });
 
   test("omits sources not cleared for redistribution", async () => {
@@ -248,7 +313,12 @@ describe("public statute list", () => {
     }
 
     expect(cursor).toBeNull();
-    expect(seen).toEqual([civilCodeCurrent, labourCode, registerAct]);
+    expect(seen).toEqual([
+      civilCodeCurrent,
+      civilCodeEnglish,
+      labourCode,
+      registerAct,
+    ]);
   });
 
   test("rejects a cursor that is not a title/id pair", async () => {
@@ -258,6 +328,10 @@ describe("public statute list", () => {
     );
 
     expect(result).not.toHaveProperty("items");
+    expect(result).toMatchObject({
+      code: 400,
+      response: { message: "Invalid cursor" },
+    });
   });
 });
 
@@ -318,5 +392,41 @@ describe("public statute versions", () => {
     });
 
     expect(result).not.toHaveProperty("items");
+    expect(result).toMatchObject({
+      code: 404,
+      response: { message: "Legislation document not found" },
+    });
+  });
+});
+
+describe("public statute read", () => {
+  test("keeps the stored publisher metadata off the public response", async () => {
+    const workspaceRead = await readLegislationHandler(
+      civilCodeCurrent,
+      legislationDb,
+    );
+    const publicRead = await readPublicLegislationHandler(
+      civilCodeCurrent,
+      legislationDb,
+    );
+
+    // The fixture must actually carry metadata, or the omission proves nothing.
+    expect(workspaceRead).toHaveProperty("metadata", {
+      publisherNote: "not for public display",
+    });
+    expect(publicRead).not.toHaveProperty("metadata");
+    expect(publicRead).toHaveProperty("title", "Civil Code");
+  });
+
+  test("reads as not found for a source not cleared for redistribution", async () => {
+    const result = await readPublicLegislationHandler(
+      withheldAct,
+      legislationDb,
+    );
+
+    expect(result).toMatchObject({
+      code: 404,
+      response: { message: "Legislation document not found" },
+    });
   });
 });

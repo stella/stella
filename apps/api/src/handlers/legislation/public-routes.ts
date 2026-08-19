@@ -2,7 +2,7 @@ import { Result } from "better-result";
 import Elysia, { t } from "elysia";
 
 import { env } from "@/api/env";
-import { readLegislationHandler } from "@/api/handlers/legislation/get";
+import { readPublicLegislationHandler } from "@/api/handlers/legislation/get";
 import {
   listStatutesHandler,
   listStatutesQuerySchema,
@@ -41,7 +41,10 @@ const readStatute = createSafePublicHandler(
     const response = yield* Result.await(
       Result.tryPromise(
         async () =>
-          await readLegislationHandler(documentId, legislationPublicReadDb),
+          await readPublicLegislationHandler(
+            documentId,
+            legislationPublicReadDb,
+          ),
       ),
     );
 

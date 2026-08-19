@@ -1002,6 +1002,7 @@
       "ZH-HANS": "Kínai (egyszerűsített)",
       "ZH-HANT": "kínai (hagyományos)"
     },
+    "legalDatabase": "Jogi adatbázis",
     "loadMore": "Több betöltése",
     "loading": "Betöltés",
     "logTime": "Idő rögzítése",
@@ -3259,6 +3260,7 @@
     "inForceSince": "Hatályos {date} óta",
     "openEnded": "jelenleg is",
     "outline": "Tartalom",
+    "searchLabel": "Keresés a jogszabályok között",
     "searchPlaceholder": "Keresés cím vagy szám alapján...",
     "status": {
       "current": "Hatályos",

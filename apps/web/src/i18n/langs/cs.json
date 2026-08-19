@@ -1002,6 +1002,7 @@
       "ZH-HANS": "čínština (zjednodušená)",
       "ZH-HANT": "čínština (tradiční)"
     },
+    "legalDatabase": "Právní databáze",
     "loadMore": "Načíst další",
     "loading": "Načítám",
     "logTime": "Zaznamenat čas",
@@ -3259,6 +3260,7 @@
     "inForceSince": "Účinné od {date}",
     "openEnded": "současnost",
     "outline": "Obsah",
+    "searchLabel": "Hledat v právních předpisech",
     "searchPlaceholder": "Hledat podle názvu nebo čísla...",
     "status": {
       "current": "Účinné",

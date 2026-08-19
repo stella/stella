@@ -1002,6 +1002,7 @@
       "ZH-HANS": "الصينية (المبسطة)",
       "ZH-HANT": "الصينية (التقليدية)"
     },
+    "legalDatabase": "قاعدة البيانات القانونية",
     "loadMore": "تحميل المزيد",
     "loading": "جارٍ التحميل",
     "logTime": "تسجيل الوقت",
@@ -3259,6 +3260,7 @@
     "inForceSince": "نافذ منذ {date}",
     "openEnded": "الآن",
     "outline": "المحتويات",
+    "searchLabel": "البحث في التشريعات",
     "searchPlaceholder": "ابحث بالعنوان أو الرقم...",
     "status": {
       "current": "نافذ",

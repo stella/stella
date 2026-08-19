@@ -1002,6 +1002,7 @@
       "ZH-HANS": "Hiina (lihtsustatud)",
       "ZH-HANT": "Hiina (traditsiooniline)"
     },
+    "legalDatabase": "Õigusandmebaas",
     "loadMore": "Laadi rohkem",
     "loading": "Laadimine",
     "logTime": "Salvesta aeg",
@@ -3259,6 +3260,7 @@
     "inForceSince": "Kehtib alates {date}",
     "openEnded": "praeguseni",
     "outline": "Sisukord",
+    "searchLabel": "Otsi õigusaktidest",
     "searchPlaceholder": "Otsi pealkirja või numbri järgi...",
     "status": {
       "current": "Kehtiv",

@@ -109,6 +109,26 @@ export const readLegislationHandler = async (
   return { ...rest, documentAst, fulltext };
 };
 
+/**
+ * The unauthenticated reader's projection. `metadata` is an open JSONB bag
+ * filled from whatever the publisher shipped, so it stays on the
+ * workspace-scoped read and never reaches a public response.
+ */
+export const readPublicLegislationHandler = async (
+  documentId: SafeId<"legislationDocument">,
+  legislationDb: LegislationReadDb,
+) => {
+  const document = await readLegislationHandler(documentId, legislationDb);
+
+  if (!("metadata" in document)) {
+    return document;
+  }
+
+  const { metadata: _metadata, ...publicFields } = document;
+
+  return publicFields;
+};
+
 const config = {
   description:
     "Read one legislation document from the stella corpus by id: its ELI, " +

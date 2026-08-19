@@ -52,7 +52,7 @@ function PublicLawTopBar() {
         </>
       )}
       <nav
-        aria-label={t("common.caseLaw")}
+        aria-label={t("common.legalDatabase")}
         className="flex min-w-0 items-center gap-1.5 text-sm"
       >
         <Link

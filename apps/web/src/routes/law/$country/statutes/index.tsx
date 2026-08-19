@@ -32,12 +32,15 @@ import {
   toStatuteCountrySegment,
 } from "@/lib/statute-route";
 
+/** What the route accepts in `q`, and therefore what the field may hold. */
+const MAX_QUERY_LENGTH = 256;
+
 const searchSchema = v.object({
   q: v.optional(
     v.pipe(
       v.string(),
       v.trim(),
-      v.maxLength(256),
+      v.maxLength(MAX_QUERY_LENGTH),
       v.transform((value) => (value.length > 0 ? value : undefined)),
     ),
   ),
@@ -87,6 +90,7 @@ export const Route = createFileRoute("/law/$country/statutes/")({
         aboutName: "Statutes",
         canonicalUrl: createPublicLawCanonicalUrl(path),
         description,
+        kind: "statutes",
         items: loaderData
           ? loaderData.statutes.map((statute) => ({
               name: statute.title,
@@ -133,6 +137,9 @@ function PublicStatutesIndex() {
   const navigate = Route.useNavigate();
 
   const [queryInput, setQueryInput] = useState(search.q ?? "");
+  // What the field last asked the URL to hold. A navigation that lands on
+  // this value is the field's own write coming back, not somebody else's.
+  const [requestedQuery, setRequestedQuery] = useState(search.q ?? "");
   const writeQuery = useDebouncedCallback((value: string) => {
     detached(
       navigate({
@@ -146,10 +153,24 @@ function PublicStatutesIndex() {
   const handleQueryChange = useCallback(
     (value: string) => {
       setQueryInput(value);
+      setRequestedQuery(value.trim());
       writeQuery(value);
     },
     [writeQuery],
   );
+
+  // Resync the field when the route query changes underneath it, e.g. the
+  // navigation back to this list drops `q`. Adjust state during render (the
+  // React-sanctioned pattern) instead of an effect so there is no extra
+  // commit/paint cycle.
+  const [syncedQuery, setSyncedQuery] = useState(search.q);
+  if (syncedQuery !== search.q) {
+    setSyncedQuery(search.q);
+
+    if ((search.q ?? "") !== requestedQuery) {
+      setQueryInput(search.q ?? "");
+    }
+  }
 
   const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading } =
     useInfiniteQuery({
@@ -163,7 +184,9 @@ function PublicStatutesIndex() {
     <main className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
       <h1 className="text-lg font-semibold">{t("statutes.title")}</h1>
       <Input
+        aria-label={t("statutes.searchLabel")}
         className="max-w-xs"
+        maxLength={MAX_QUERY_LENGTH}
         onChange={(event) => handleQueryChange(event.currentTarget.value)}
         placeholder={t("statutes.searchPlaceholder")}
         value={queryInput}

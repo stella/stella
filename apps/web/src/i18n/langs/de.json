@@ -1002,6 +1002,7 @@
       "ZH-HANS": "Chinesisch (vereinfacht)",
       "ZH-HANT": "Chinesisch (traditionell)"
     },
+    "legalDatabase": "Rechtsdatenbank",
     "loadMore": "Mehr laden",
     "loading": "Wird geladen …",
     "logTime": "Zeit erfassen",
@@ -3259,6 +3260,7 @@
     "inForceSince": "In Kraft seit {date}",
     "openEnded": "heute",
     "outline": "Inhalt",
+    "searchLabel": "Rechtsvorschriften durchsuchen",
     "searchPlaceholder": "Nach Titel oder Nummer suchen...",
     "status": {
       "current": "In Kraft",

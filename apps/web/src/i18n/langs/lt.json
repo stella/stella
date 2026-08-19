@@ -1002,6 +1002,7 @@
       "ZH-HANS": "Kinų (supaprastinta)",
       "ZH-HANT": "Kinų (tradicinė)"
     },
+    "legalDatabase": "Teisinė duomenų bazė",
     "loadMore": "Įkelti daugiau",
     "loading": "Įkeliama",
     "logTime": "Registruoti laiką",
@@ -3259,6 +3260,7 @@
     "inForceSince": "Galioja nuo {date}",
     "openEnded": "dabar",
     "outline": "Turinys",
+    "searchLabel": "Ieškoti teisės aktų",
     "searchPlaceholder": "Ieškoti pagal pavadinimą arba numerį...",
     "status": {
       "current": "Galiojantis",
