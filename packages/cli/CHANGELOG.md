@@ -1,5 +1,13 @@
 # @stll/cli
 
+## 0.6.2
+
+### Patch Changes
+
+- [#2101](https://github.com/stella/stella/pull/2101) [`440fc24`](https://github.com/stella/stella/commit/440fc24564fe59fbc38ad90bcb4e42ca6a24e50d) Thanks [@mirabatista](https://github.com/mirabatista)! - Refresh the generated capability catalog for the contact import endpoints.
+
+- [#2101](https://github.com/stella/stella/pull/2101) [`440fc24`](https://github.com/stella/stella/commit/440fc24564fe59fbc38ad90bcb4e42ca6a24e50d) Thanks [@mirabatista](https://github.com/mirabatista)! - Describe contact directory exports in the generated capability catalog.
+
 ## 0.6.1
 
 ### Patch Changes
