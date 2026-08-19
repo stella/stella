@@ -13,10 +13,6 @@ import {
 import type { LucideIcon } from "lucide-react";
 import { useFormatter, useTranslations } from "use-intl";
 
-import {
-  getInternalColId,
-  getInternalPropertyId,
-} from "@/components/workspaces/entity-utils";
 import type { SortHint } from "@/components/workspaces/properties/sort-property";
 import type {
   TableCellContext,
@@ -30,26 +26,21 @@ import {
   ITEM_TYPE_TRANSLATION_KEYS,
 } from "@/components/workspaces/tasks/task-detail-constants";
 import type { WorkspaceProperty, WorkspaceView } from "@/lib/types";
-import { pairPlaybookVerdicts } from "@/lib/workspaces/playbook-verdicts";
 import {
   AuthorCell,
   LastUpdatedCell,
   VersionCell,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/metadata-cells";
 import { MetadataPopover } from "@/routes/_protected.workspaces/$workspaceId/-components/metadata-popover";
-import { getPropertyColumn } from "@/routes/_protected.workspaces/$workspaceId/-components/table-column";
-import { includesListItems } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-kind-filters";
+import { getPropertyColumnRender } from "@/routes/_protected.workspaces/$workspaceId/-components/table-column";
+import type {
+  WorkspaceColumnDescriptor,
+  WorkspaceColumnRender,
+  WorkspaceTableSchema,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/table/table-schema";
+import { workspaceTableSchema } from "@/routes/_protected.workspaces/$workspaceId/-components/table/table-schema";
 
-const selectColId = getInternalColId("select");
-const addPropertyColId = getInternalColId("add-property");
-const ADD_PROPERTY_COLUMN_SIZE = 48;
-const listNameColId = getInternalPropertyId("name");
-const listItemTypeColId = getInternalPropertyId("list-item-type");
-const listStatusColId = getInternalPropertyId("status");
-const listPriorityColId = getInternalPropertyId("priority");
-const listDueDateColId = getInternalPropertyId("due-date");
-
-export const DEFAULT_TABLE_COLUMN_MIN_SIZE = 64;
+export { DEFAULT_TABLE_COLUMN_MIN_SIZE } from "@/routes/_protected.workspaces/$workspaceId/-components/table/table-schema";
 
 type UseTableColumnsOptions = {
   properties: WorkspaceProperty[];
@@ -57,187 +48,206 @@ type UseTableColumnsOptions = {
 };
 
 /**
- * Shared column definitions for the flat table and every grouped
- * section, so grouped sections render the exact same columns and cells.
+ * The table's schema, with the column labels resolved for the reader. The flat
+ * table and every grouped section read the same one, so a grouped section
+ * cannot drift from the flat table's columns.
+ */
+export const useWorkspaceTableSchema = ({
+  properties,
+  view,
+}: UseTableColumnsOptions): WorkspaceTableSchema => {
+  const t = useTranslations();
+
+  return useMemo(
+    () =>
+      workspaceTableSchema({
+        properties,
+        view,
+        labels: {
+          name: t("common.name"),
+          itemType: t("common.type"),
+          status: t("tasks.status"),
+          priority: t("tasks.priority"),
+          dueDate: t("tasks.dueDate"),
+          author: t("common.author"),
+          lastUpdated: t("workspaces.filesystem.lastUpdated"),
+          version: t("common.version"),
+        },
+      }),
+    [properties, t, view],
+  );
+};
+
+/**
+ * Shared column definitions for the flat table and every grouped section, so
+ * grouped sections render the exact same columns and cells.
+ *
+ * The column list itself is the schema's; this turns each of its descriptors
+ * into the definition the table library wants.
  */
 export const useTableColumns = ({
   properties,
   view,
 }: UseTableColumnsOptions): TableColumnDef[] => {
+  const schema = useWorkspaceTableSchema({ properties, view });
+  const toColumnDef = useColumnDefFactory(view);
+
+  return useMemo(
+    () => schema.columns.map(toColumnDef),
+    [schema.columns, toColumnDef],
+  );
+};
+
+/** The parts of a column definition the schema already decided. */
+type ColumnBase = {
+  id: string;
+  size: number;
+  minSize?: number;
+  enableSorting: boolean;
+  enableHiding: boolean;
+  enableResizing: boolean;
+  enablePinning: boolean;
+  meta?: { muted: boolean };
+};
+
+const columnBase = (column: WorkspaceColumnDescriptor): ColumnBase => ({
+  id: column.id,
+  size: column.size,
+  ...(column.minSize === undefined ? {} : { minSize: column.minSize }),
+  enableSorting: column.capabilities.sort,
+  enableHiding: column.capabilities.hide,
+  enableResizing: column.capabilities.resize,
+  enablePinning: column.capabilities.pin,
+  ...(column.emphasis === "metadata" ? { meta: { muted: true } } : {}),
+});
+
+type ColumnDefFactory = (column: WorkspaceColumnDescriptor) => TableColumnDef;
+
+const useColumnDefFactory = (
+  view: WorkspaceView<"table">,
+): ColumnDefFactory => {
   const t = useTranslations();
   const format = useFormatter();
 
-  return useMemo(() => {
-    const columnDefs: TableColumnDef[] = [
-      {
-        id: selectColId,
-        accessorKey: selectColId,
-        header: () => null,
-        enableResizing: false,
-        enableSorting: false,
-        enableHiding: false,
-        minSize: 48,
-        size: 48,
-      },
-    ];
+  return useMemo(
+    () =>
+      (column: WorkspaceColumnDescriptor): TableColumnDef => {
+        const base = columnBase(column);
+        const metadataHeader = (icon: LucideIcon, sortHint: SortHint) =>
+          createMetadataHeader({ icon, label: column.label, sortHint });
+        const { render } = column;
 
-    if (includesListItems(view.layout.filters)) {
-      columnDefs.push(
-        {
-          id: listNameColId,
-          accessorFn: (row) => row.name,
-          header: createMetadataHeader({
-            icon: TextIcon,
-            label: t("common.name"),
-            sortHint: "text",
-          }),
-          cell: ({ row }) => (
-            <span className="truncate font-medium" dir="auto">
-              {row.original.name}
-            </span>
-          ),
-          size: 260,
-        },
-        {
-          id: listItemTypeColId,
-          accessorFn: (row) => row.listItemType,
-          enableSorting: false,
-          header: createMetadataHeader({
-            icon: ShapesIcon,
-            label: t("common.type"),
-            sortHint: "text",
-          }),
-          cell: ({ row }) => {
-            const itemType = isListItemType(row.original.listItemType)
-              ? row.original.listItemType
-              : "task";
-            return t(ITEM_TYPE_TRANSLATION_KEYS[itemType]);
-          },
-          size: 140,
-        },
-        {
-          id: listStatusColId,
-          accessorFn: (row) => row.status,
-          header: createMetadataHeader({
-            icon: CircleDotIcon,
-            label: t("tasks.status"),
-            sortHint: "text",
-          }),
-          cell: ({ row }) =>
-            isTaskStatus(row.original.status)
-              ? t(`tasks.statusValues.${row.original.status}`)
-              : null,
-          size: 140,
-        },
-        {
-          id: listPriorityColId,
-          accessorFn: (row) => row.priority,
-          header: createMetadataHeader({
-            icon: FlagIcon,
-            label: t("tasks.priority"),
-            sortHint: "text",
-          }),
-          cell: ({ row }) =>
-            isTaskPriority(row.original.priority)
-              ? t(`tasks.priorityValues.${row.original.priority}`)
-              : null,
-          size: 120,
-        },
-        {
-          id: listDueDateColId,
-          accessorFn: (row) => row.dueDate,
-          header: createMetadataHeader({
-            icon: CalendarIcon,
-            label: t("tasks.dueDate"),
-            sortHint: "date",
-          }),
-          cell: ({ row }) => {
-            if (!row.original.dueDate) {
-              return null;
-            }
-            return format.dateTime(
-              new Date(`${row.original.dueDate}T00:00:00Z`),
-              {
-                year: "numeric",
-                month: "short",
-                day: "numeric",
-                timeZone: "UTC",
+        switch (render.type) {
+          case "select":
+            return { ...base, accessorKey: column.id, header: renderNothing };
+          case "add-property":
+            return {
+              ...base,
+              accessorKey: column.id,
+              header: renderNothing,
+              cell: renderNothing,
+            };
+          case "name":
+            return {
+              ...base,
+              accessorFn: (row) => row.name,
+              header: metadataHeader(TextIcon, "text"),
+              cell: ({ row }) => (
+                <span className="truncate font-medium" dir="auto">
+                  {row.original.name}
+                </span>
+              ),
+            };
+          case "list-item-type":
+            return {
+              ...base,
+              accessorFn: (row) => row.listItemType,
+              header: metadataHeader(ShapesIcon, "text"),
+              cell: ({ row }) => {
+                const itemType = isListItemType(row.original.listItemType)
+                  ? row.original.listItemType
+                  : "task";
+                return t(ITEM_TYPE_TRANSLATION_KEYS[itemType]);
               },
-            );
-          },
-          size: 140,
-        },
-      );
-    }
-
-    // Each ASK column renders one compliance-matrix cell; the pairing (and the
-    // rule that a verdict never gets a column of its own) lives in
-    // `pairPlaybookVerdicts`, so every surface listing properties inherits it.
-    for (const { property, verdictProperty } of pairPlaybookVerdicts(
-      properties,
-    )) {
-      const col = getPropertyColumn({
-        filters: view.layout.filters,
-        property,
-        verdictProperty,
-      });
-      columnDefs.push(col);
-    }
-
-    columnDefs.push({
-      id: getInternalPropertyId("created-by"),
-      accessorKey: getInternalPropertyId("created-by"),
-      meta: { muted: true },
-      header: createMetadataHeader({
-        icon: UserIcon,
-        label: t("common.author"),
-        sortHint: "text",
-      }),
-      cell: renderAuthorCell,
-      size: 160,
-    });
-
-    columnDefs.push({
-      id: getInternalPropertyId("updated-at"),
-      accessorKey: getInternalPropertyId("updated-at"),
-      meta: { muted: true },
-      header: createMetadataHeader({
-        icon: ClockIcon,
-        label: t("workspaces.filesystem.lastUpdated"),
-        sortHint: "date",
-      }),
-      cell: renderLastUpdatedCell,
-      size: 140,
-    });
-
-    columnDefs.push({
-      id: getInternalPropertyId("version"),
-      accessorKey: getInternalPropertyId("version"),
-      meta: { muted: true },
-      header: createMetadataHeader({
-        icon: HashIcon,
-        label: t("common.version"),
-        sortHint: "number",
-      }),
-      cell: renderVersionCell,
-      size: 80,
-    });
-
-    columnDefs.push({
-      id: addPropertyColId,
-      accessorKey: addPropertyColId,
-      header: () => null,
-      cell: () => null,
-      enableResizing: false,
-      enablePinning: false,
-      enableSorting: false,
-      enableHiding: false,
-      minSize: ADD_PROPERTY_COLUMN_SIZE,
-      size: ADD_PROPERTY_COLUMN_SIZE,
-    });
-
-    return columnDefs;
-  }, [format, properties, t, view.layout.filters]);
+            };
+          case "task-status":
+            return {
+              ...base,
+              accessorFn: (row) => row.status,
+              header: metadataHeader(CircleDotIcon, "text"),
+              cell: ({ row }) =>
+                isTaskStatus(row.original.status)
+                  ? t(`tasks.statusValues.${row.original.status}`)
+                  : null,
+            };
+          case "task-priority":
+            return {
+              ...base,
+              accessorFn: (row) => row.priority,
+              header: metadataHeader(FlagIcon, "text"),
+              cell: ({ row }) =>
+                isTaskPriority(row.original.priority)
+                  ? t(`tasks.priorityValues.${row.original.priority}`)
+                  : null,
+            };
+          case "task-due-date":
+            return {
+              ...base,
+              accessorFn: (row) => row.dueDate,
+              header: metadataHeader(CalendarIcon, "date"),
+              cell: ({ row }) => {
+                if (!row.original.dueDate) {
+                  return null;
+                }
+                return format.dateTime(
+                  new Date(`${row.original.dueDate}T00:00:00Z`),
+                  {
+                    year: "numeric",
+                    month: "short",
+                    day: "numeric",
+                    timeZone: "UTC",
+                  },
+                );
+              },
+            };
+          case "created-by":
+            return {
+              ...base,
+              accessorKey: column.id,
+              header: metadataHeader(UserIcon, "text"),
+              cell: renderAuthorCell,
+            };
+          case "updated-at":
+            return {
+              ...base,
+              accessorKey: column.id,
+              header: metadataHeader(ClockIcon, "date"),
+              cell: renderLastUpdatedCell,
+            };
+          case "version":
+            return {
+              ...base,
+              accessorKey: column.id,
+              header: metadataHeader(HashIcon, "number"),
+              cell: renderVersionCell,
+            };
+          case "property":
+            return {
+              ...base,
+              ...getPropertyColumnRender({
+                filters: view.layout.filters,
+                property: render.property,
+                verdictProperty: render.verdictProperty,
+              }),
+            };
+          default: {
+            const exhaustive: never = render;
+            return exhaustive;
+          }
+        }
+      },
+    [format, t, view.layout.filters],
+  );
 };
 
 type MetadataHeaderOptions = {
@@ -257,6 +267,8 @@ const createMetadataHeader =
     />
   );
 
+const renderNothing = () => null;
+
 const renderAuthorCell = ({ row }: TableCellContext) => (
   <AuthorCell entity={row.original} />
 );
@@ -268,3 +280,5 @@ const renderLastUpdatedCell = ({ row }: TableCellContext) => (
 const renderVersionCell = ({ row }: TableCellContext) => (
   <VersionCell entity={row.original} />
 );
+
+export type { WorkspaceColumnRender };

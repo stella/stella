@@ -15,12 +15,20 @@ type PropertyColumnOptions = {
   verdictProperty: WorkspaceProperty | undefined;
 };
 
-export const getPropertyColumn = ({
+/**
+ * How a property column draws. Its id, width and capabilities come from the
+ * table schema; only the accessor and the two renderers are property-specific.
+ */
+export type PropertyColumnRender = Required<
+  Pick<Extract<TableColumnDef, { accessorFn: unknown }>, "accessorFn">
+> &
+  Pick<TableColumnDef, "cell" | "header">;
+
+export const getPropertyColumnRender = ({
   filters,
   property,
   verdictProperty,
-}: PropertyColumnOptions): TableColumnDef => ({
-  id: property.id,
+}: PropertyColumnOptions): PropertyColumnRender => ({
   accessorFn: (row) => row.fields[property.id],
   header: (ctx) => (
     <PropertyPopover
@@ -29,7 +37,6 @@ export const getPropertyColumn = ({
       property={property}
     />
   ),
-  size: 200,
   cell: (props) => {
     const entity = props.row.original;
     if (!verdictProperty) {

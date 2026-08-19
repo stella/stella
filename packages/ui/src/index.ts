@@ -52,6 +52,7 @@ export * from "./components/tabs";
 export * from "./components/textarea";
 export * from "./components/toast";
 export * from "./components/tooltip";
+export * from "./data-table";
 export * from "./hooks/use-contained-handler";
 export * from "./hooks/use-content-dir";
 export * from "./hooks/use-mobile";
