@@ -293,6 +293,10 @@ jobs:
             packages/docx-utils/src/**
             packages/docx-utils/tsconfig.build.json
             packages/docx-utils/tsdown.config.ts
+            packages/ui/README.md
+            packages/ui/package.json
+            packages/ui/src/**
+            packages/ui/tsdown.config.ts
           generated-paths: |
             apps/web/CHANGELOG.md
             apps/web/package.json
@@ -310,6 +314,8 @@ jobs:
             packages/template-conditions/package.json
             packages/docx-utils/CHANGELOG.md
             packages/docx-utils/package.json
+            packages/ui/CHANGELOG.md
+            packages/ui/package.json
           package-files: |
             packages/cli/package.json
             packages/business-registries/package.json
@@ -317,6 +323,7 @@ jobs:
             packages/conditions/package.json
             packages/template-conditions/package.json
             packages/docx-utils/package.json
+            packages/ui/package.json
           version-file: bun.lock
 
   # The agent sandbox must be exercised before the standalone protected
@@ -867,6 +874,23 @@ jobs:
       - name: Test web runtime staging
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         run: bun test scripts/stage-web-runtime.test.ts
+
+      # The same transformation decides what every published tarball exports.
+      # Its unit coverage is what keeps a malformed source map — a wildcard, a
+      # conditions object, a target outside src, a missing root — out of a
+      # publishable package.
+      - name: Test publish manifest transformation
+        run: bun test scripts/publish-manifest.test.ts
+
+      # Nothing in ordinary development resolves a package the way an install
+      # does: in-repo consumers read `exports` pointing at ./src. This runs the
+      # real publish path for the design system — build, prepare-publish,
+      # pack — then resolves and imports every declared subpath from the built
+      # dist, so a missing build entry or an unshipped file fails here rather
+      # than in a consumer's install.
+      - name: Published export map guard
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        run: bun scripts/check-published-exports.ts packages/ui
 
       # Release ordering is a safety property. This test has no workspace
       # dependencies, so it remains runnable when a PR changes only workflows
