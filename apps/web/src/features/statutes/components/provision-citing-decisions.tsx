@@ -6,9 +6,10 @@ import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
-import { Popover, PopoverPanel, PopoverTrigger } from "@stll/ui/popover";
+import { Input } from "@stll/ui/input";
 import { Skeleton } from "@stll/ui/skeleton";
 
+import { filterCitingDecisions } from "@/features/statutes/provision-inspector.logic";
 import { citingDecisionsInfiniteOptions } from "@/features/statutes/queries/citing-decisions";
 import { formatValidityDate } from "@/features/statutes/statute-format";
 import { useFormatter } from "@/i18n/formatting-context";
@@ -24,11 +25,11 @@ type ProvisionCitingDecisionsProps = {
 };
 
 /**
- * The case law citing one provision, opened from the provision itself.
+ * The case law citing one provision, newest application first.
  *
- * A consolidated code renders thousands of provisions at once, so the read is
- * deliberately not started until a reader opens this one: the affordance costs
- * no request, and the answer is paged from there.
+ * Mounted only inside the provision's inspector tab, so the read starts when
+ * a reader asks about this one provision and is paged from there. The filter
+ * narrows what has been loaded; it does not ask the server for more.
  */
 export const ProvisionCitingDecisions = ({
   anchorId,
@@ -37,7 +38,7 @@ export const ProvisionCitingDecisions = ({
 }: ProvisionCitingDecisionsProps) => {
   const t = useTranslations();
   const format = useFormatter();
-  const [open, setOpen] = useState(false);
+  const [filter, setFilter] = useState("");
 
   const {
     data,
@@ -47,109 +48,121 @@ export const ProvisionCitingDecisions = ({
     isFetchingNextPage,
     isPending,
     refetch,
-  } = useInfiniteQuery({
-    ...citingDecisionsInfiniteOptions({
+  } = useInfiniteQuery(
+    citingDecisionsInfiniteOptions({
       anchor: anchorId,
       eli,
       jurisdiction,
     }),
-    enabled: open,
-  });
+  );
 
   const decisions = optionalArray(data?.pages).flatMap((page) => page.items);
-  const isLoading = open && isPending;
+  const visible = filterCitingDecisions(decisions, filter);
+
+  if (isPending) {
+    return <CitingDecisionsLoader />;
+  }
+
+  // A failed read is not an answer: saying "no results" here would state as
+  // legal fact that nothing cites this provision.
+  if (isError) {
+    return (
+      <div className="flex flex-col items-start gap-1">
+        <p className="text-muted-foreground text-xs">
+          {t("errors.actionFailed")}
+        </p>
+        <Button
+          className="text-xs"
+          onClick={() => {
+            detached(refetch(), "statutes.citing-decisions-retry");
+          }}
+          size="sm"
+          variant="ghost"
+        >
+          {t("common.retry")}
+        </Button>
+      </div>
+    );
+  }
+
+  if (decisions.length === 0) {
+    return (
+      <p className="text-muted-foreground text-xs">{t("common.noResults")}</p>
+    );
+  }
 
   return (
-    <Popover onOpenChange={setOpen} open={open}>
-      <PopoverTrigger className="text-muted-foreground hover:text-foreground hover:border-foreground-disabled focus-visible:ring-ring mx-auto mb-[var(--reader-heading-gap-bottom)] block rounded-full border px-2 py-0.5 font-sans text-[0.7rem] font-normal tracking-normal transition-colors focus-visible:ring-2 focus-visible:outline-none print:hidden">
-        {t("caseLaw.viewer.citedBy")}
-      </PopoverTrigger>
-      <PopoverPanel className="w-80" contentClassName="gap-1">
-        {isLoading && <CitingDecisionsLoader />}
-        {/* A failed read is not an answer: saying "no results" here would
-            state as legal fact that nothing cites this provision. */}
-        {isError && (
-          <div className="flex flex-col items-center gap-1 py-2">
-            <p className="text-muted-foreground text-xs">
-              {t("errors.actionFailed")}
-            </p>
-            <Button
-              className="text-xs"
-              onClick={() => {
-                detached(refetch(), "statutes.citing-decisions-retry");
-              }}
-              size="sm"
-              variant="ghost"
-            >
-              {t("common.retry")}
-            </Button>
-          </div>
-        )}
-        {!isLoading && !isError && decisions.length === 0 && (
-          <p className="text-muted-foreground py-2 text-center text-xs">
-            {t("common.noResults")}
-          </p>
-        )}
-        <ul className="m-0 flex list-none flex-col p-0">
-          {decisions.map((decision) => {
-            const params = createCaseLawDecisionRouteParams({
-              caseNumber: decision.caseNumber,
-              country: decision.country,
-              court: decision.court,
-              slug: decision.slug,
-            });
-            const decided = formatValidityDate(decision.decisionDate, format);
+    <div className="flex flex-col gap-2">
+      <Input
+        aria-label={t("common.filter")}
+        className="h-7 text-xs"
+        onChange={(event) => setFilter(event.target.value)}
+        placeholder={t("statutes.citingDecisionsFilterPlaceholder")}
+        type="search"
+        value={filter}
+      />
+      {visible.length === 0 && (
+        <p className="text-muted-foreground text-xs">{t("common.noResults")}</p>
+      )}
+      <ul className="m-0 flex list-none flex-col p-0">
+        {visible.map((decision) => {
+          const params = createCaseLawDecisionRouteParams({
+            caseNumber: decision.caseNumber,
+            country: decision.country,
+            court: decision.court,
+            slug: decision.slug,
+          });
+          const decided = formatValidityDate(decision.decisionDate, format);
 
-            return (
-              <li key={`${decision.decisionId}-${decision.spanStart}`}>
-                <Link
-                  className="hover:bg-accent flex flex-col gap-0.5 rounded-md px-2 py-1.5 no-underline"
-                  params={{
-                    country: params.country,
-                    court: params.court,
-                    slug: params.slug,
-                  }}
-                  to="/law/$country/cases/$court/$slug"
+          return (
+            <li key={`${decision.decisionId}-${decision.spanStart}`}>
+              <Link
+                className="hover:bg-accent -mx-2 flex flex-col gap-0.5 rounded-md px-2 py-1.5 no-underline"
+                params={{
+                  country: params.country,
+                  court: params.court,
+                  slug: params.slug,
+                }}
+                to="/law/$country/cases/$court/$slug"
+              >
+                <BidiText
+                  as="span"
+                  className="text-foreground text-xs font-medium"
                 >
-                  <BidiText
-                    as="span"
-                    className="text-foreground text-xs font-medium"
-                  >
-                    {decision.caseNumber}
-                  </BidiText>
-                  <span className="text-muted-foreground text-[0.7rem]">
-                    {decided === null
-                      ? decision.court
-                      : `${decision.court} · ${decided}`}
-                  </span>
-                  <span className="text-foreground-strong-muted line-clamp-3 text-[0.72rem] leading-snug">
-                    {decision.sentenceText}
-                  </span>
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
-        {hasNextPage && (
-          <Button
-            className="w-full text-xs"
-            disabled={isFetchingNextPage}
-            onClick={() => {
-              detached(fetchNextPage(), "statutes.citing-decisions-more");
-            }}
-            size="sm"
-            variant="ghost"
-          >
-            {t("common.loadMore")}
-          </Button>
-        )}
-      </PopoverPanel>
-    </Popover>
+                  {decision.caseNumber}
+                </BidiText>
+                <span className="text-muted-foreground text-[0.7rem]">
+                  {decided === null
+                    ? decision.court
+                    : `${decision.court} · ${decided}`}
+                </span>
+                <span className="text-foreground-strong-muted line-clamp-3 text-[0.72rem] leading-snug">
+                  {decision.sentenceText}
+                </span>
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
+      {hasNextPage && (
+        <Button
+          className="w-full text-xs"
+          disabled={isFetchingNextPage}
+          onClick={() => {
+            detached(fetchNextPage(), "statutes.citing-decisions-more");
+          }}
+          size="sm"
+          variant="ghost"
+        >
+          {t("common.loadMore")}
+        </Button>
+      )}
+    </div>
   );
 };
 
 const CitingDecisionsLoader = () => (
-  <div className="flex flex-col gap-2 py-1">
+  <div className="flex flex-col gap-2">
     {[0, 1, 2].map((row) => (
       <Skeleton className="h-8 w-full" key={row} />
     ))}

@@ -1,18 +1,9 @@
 import { useState } from "react";
 
 import { useInfiniteQuery } from "@tanstack/react-query";
-import { HistoryIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
-import {
-  Sheet,
-  SheetHeader,
-  SheetPanel,
-  SheetPopup,
-  SheetTitle,
-  SheetTrigger,
-} from "@stll/ui/sheet";
 import { Skeleton } from "@stll/ui/skeleton";
 import { cn } from "@stll/ui/utils";
 
@@ -39,66 +30,18 @@ type ProvisionHistoryProps = {
   anchorId: string;
   /** The consolidation on screen; the read resolves its Work from this. */
   documentId: string;
-  /** The heading's own text, so the panel names the provision it is about. */
-  provision: string;
 };
 
 /**
- * Opens one provision's drafting history: the consolidations in which it was
- * rewritten, and the word-level difference each rewrite made.
+ * One provision's drafting history: the consolidations in which it was
+ * rewritten, and the word-level difference each rewrite made. Mounted only
+ * inside the provision's inspector tab, so a page of provisions costs no
+ * requests until a reader asks about one of them.
  */
 export const ProvisionHistory = ({
   anchorId,
   documentId,
-  provision,
 }: ProvisionHistoryProps) => {
-  const t = useTranslations();
-  const [open, setOpen] = useState(false);
-
-  return (
-    <Sheet onOpenChange={setOpen} open={open}>
-      <SheetTrigger
-        render={
-          <Button
-            aria-label={t("statutes.provisionHistoryFor", { provision })}
-            className="text-muted-foreground hover:text-foreground -mt-1 mb-2 h-auto px-1 py-0.5 text-xs font-normal"
-            size="sm"
-            variant="ghost"
-          />
-        }
-      >
-        <HistoryIcon aria-hidden="true" className="size-3" />
-        {t("common.history")}
-      </SheetTrigger>
-      <SheetPopup side="inline-end" variant="inset">
-        <SheetHeader>
-          <SheetTitle>
-            {t("statutes.provisionHistoryFor", { provision })}
-          </SheetTitle>
-        </SheetHeader>
-        <SheetPanel className="flex flex-col gap-4">
-          {open && (
-            <ProvisionHistoryBody anchorId={anchorId} documentId={documentId} />
-          )}
-        </SheetPanel>
-      </SheetPopup>
-    </Sheet>
-  );
-};
-
-type ProvisionHistoryBodyProps = {
-  anchorId: string;
-  documentId: string;
-};
-
-/**
- * Rendered only while the panel is open, so a page of provisions costs no
- * requests until a reader asks about one of them.
- */
-const ProvisionHistoryBody = ({
-  anchorId,
-  documentId,
-}: ProvisionHistoryBodyProps) => {
   const t = useTranslations();
   const format = useFormatter();
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -143,7 +86,7 @@ const ProvisionHistoryBody = ({
     formatValidityDate(validFrom, format) ?? EM_DASH;
 
   return (
-    <>
+    <div className="flex flex-col gap-3">
       <ul className="flex flex-col gap-1" aria-label={t("common.version")}>
         {versions.map((version) => (
           <li key={version.documentId}>
@@ -192,7 +135,7 @@ const ProvisionHistoryBody = ({
             : t("statutes.provisionHistoryEarliest")}
         </p>
       )}
-    </>
+    </div>
   );
 };
 

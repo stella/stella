@@ -8,12 +8,7 @@ import {
   useNavigate,
   useRouterState,
 } from "@tanstack/react-router";
-import {
-  CircleUserRoundIcon,
-  MessageSquarePlusIcon,
-  PanelLeftIcon,
-  PanelRightIcon,
-} from "lucide-react";
+import { CircleUserRoundIcon, PanelLeftIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Avatar, AvatarFallback } from "@stll/ui/avatar";
@@ -21,6 +16,8 @@ import { Button } from "@stll/ui/button";
 import { cn } from "@stll/ui/utils";
 
 import { FeedbackDialog } from "@/components/feedback-dialog";
+import { PublicInspectorRail } from "@/components/public-inspector-rail";
+import { PublicSignInRequestContext } from "@/components/public-sign-in-request";
 import {
   Sidebar,
   SidebarContent,
@@ -36,18 +33,11 @@ import {
   useSidebar,
 } from "@/components/sidebar";
 import { StellaWordmark } from "@/components/stella-wordmark";
-import Tooltip from "@/components/tooltip";
 import { getWorkspacePrimaryNavItems } from "@/components/workspace-primary-nav";
 import { useClientAuthStatus } from "@/hooks/use-client-auth-status";
 import { useHydrationSafeHotkeyPlatform } from "@/hooks/use-hydration-safe-hotkey-platform";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { AuthenticatedUserProvider } from "@/lib/authenticated-user-context";
-import {
-  SIDE_RAIL_CONTAINER_CLASS,
-  SIDE_RAIL_ICON_BUTTON_SIZE,
-  SIDE_RAIL_WIDTH,
-  TOOLBAR_ROW_HEIGHT,
-} from "@/lib/consts";
 import { formatHotkeyForPlatform, HOTKEYS } from "@/lib/hotkeys";
 import { isPublicLawSsrRouteEnabled } from "@/lib/public-law-launch";
 import { isPublicToolsRouteEnabled } from "@/lib/public-tools-launch";
@@ -88,13 +78,26 @@ const SidebarUserMenu = lazy(async () => {
 const isPublicPrimaryNavRoute = (to: string): boolean =>
   to === "/law/cases" || to === "/tools";
 
+type PublicWorkspaceShellProps = {
+  /**
+   * The surface's own inspector dock. It replaces the anonymous rail, so a
+   * surface that supplies one owns the whole right column, sign-in
+   * affordances included.
+   */
+  inspector?: ReactNode;
+  topBar: ReactNode;
+};
+
 /**
  * Shared chrome for the public, selectively-SSR'd surfaces (`/law`,
  * `/tools`). Owns the sidebar, the anonymous inspector rail, the
  * sign-in round-trip, and the authenticated-user context; each surface
  * supplies its own breadcrumb `topBar`.
  */
-export const PublicWorkspaceShell = ({ topBar }: { topBar: ReactNode }) => {
+export const PublicWorkspaceShell = ({
+  inspector,
+  topBar,
+}: PublicWorkspaceShellProps) => {
   const authStatus = useClientAuthStatus();
   const createMatterDialogOpen = useCreateMatterStore(
     (state) => state.dialog.status === "open",
@@ -104,45 +107,52 @@ export const PublicWorkspaceShell = ({ topBar }: { topBar: ReactNode }) => {
     setAuthRedirectTo(redirectTo);
   };
 
+  const defaultInspector = authStatus.isAuthenticated ? null : (
+    <PublicInspectorRail requestSignIn={requestAuth} />
+  );
+
   const shell = (
-    <SidebarProvider>
-      {authStatus.isAuthenticated ? (
-        <Suspense
-          fallback={
-            <PublicSidebar authStatus={authStatus} requestAuth={requestAuth} />
-          }
-        >
-          <AppSidebar />
-        </Suspense>
-      ) : (
-        <PublicSidebar authStatus={authStatus} requestAuth={requestAuth} />
-      )}
-      <SidebarInset className="flex flex-col">
-        {topBar}
-        <Outlet />
-      </SidebarInset>
-      {!authStatus.isAuthenticated && (
-        <PublicInspectorRail requestAuth={requestAuth} />
-      )}
-      {authRedirectTo !== null && (
-        <Suspense fallback={null}>
-          <SignInDialog
-            onOpenChange={(open) => {
-              if (!open) {
-                setAuthRedirectTo(null);
-              }
-            }}
-            open
-            redirectTo={authRedirectTo}
-          />
-        </Suspense>
-      )}
-      {authStatus.isAuthenticated && createMatterDialogOpen && (
-        <Suspense fallback={null}>
-          <CreateMatterDialog />
-        </Suspense>
-      )}
-    </SidebarProvider>
+    <PublicSignInRequestContext value={requestAuth}>
+      <SidebarProvider>
+        {authStatus.isAuthenticated ? (
+          <Suspense
+            fallback={
+              <PublicSidebar
+                authStatus={authStatus}
+                requestAuth={requestAuth}
+              />
+            }
+          >
+            <AppSidebar />
+          </Suspense>
+        ) : (
+          <PublicSidebar authStatus={authStatus} requestAuth={requestAuth} />
+        )}
+        <SidebarInset className="flex flex-col">
+          {topBar}
+          <Outlet />
+        </SidebarInset>
+        {inspector ?? defaultInspector}
+        {authRedirectTo !== null && (
+          <Suspense fallback={null}>
+            <SignInDialog
+              onOpenChange={(open) => {
+                if (!open) {
+                  setAuthRedirectTo(null);
+                }
+              }}
+              open
+              redirectTo={authRedirectTo}
+            />
+          </Suspense>
+        )}
+        {authStatus.isAuthenticated && createMatterDialogOpen && (
+          <Suspense fallback={null}>
+            <CreateMatterDialog />
+          </Suspense>
+        )}
+      </SidebarProvider>
+    </PublicSignInRequestContext>
   );
 
   if (authStatus.isAuthenticated) {
@@ -341,85 +351,5 @@ const PublicSidebar = ({
         </Suspense>
       )}
     </Sidebar>
-  );
-};
-
-type RailButtonOptions = {
-  icon: ReactNode;
-  label: string;
-  edgeClass: string;
-};
-
-/** Anonymous twin of the inspector side rail: same geometry and chrome
- * as the authenticated rail, with every affordance routed to sign-in. */
-const PublicInspectorRail = ({
-  requestAuth,
-}: {
-  requestAuth: (redirectTo: string) => void;
-}) => {
-  const t = useTranslations();
-  const currentHref = useRouterState({
-    select: (state) => state.location.href,
-  });
-
-  const railButton = ({ icon, label, edgeClass }: RailButtonOptions) => (
-    <div
-      className={cn(
-        "flex w-full shrink-0 items-center justify-center",
-        edgeClass,
-        TOOLBAR_ROW_HEIGHT,
-      )}
-    >
-      <Tooltip
-        content={label}
-        render={
-          <button
-            aria-label={label}
-            className={cn(
-              "text-muted-foreground hover:bg-accent hover:text-foreground flex items-center justify-center rounded-md transition-colors",
-              SIDE_RAIL_ICON_BUTTON_SIZE,
-            )}
-            onClick={() => requestAuth(currentHref)}
-            type="button"
-          />
-        }
-      >
-        {icon}
-      </Tooltip>
-    </div>
-  );
-
-  return (
-    <div
-      className="text-sidebar-foreground hidden md:block"
-      data-side="right"
-      data-state="collapsed"
-    >
-      <div className={cn("bg-sidebar relative", SIDE_RAIL_WIDTH)} />
-      <div
-        className={cn(
-          "fixed inset-y-0 end-0 z-10 hidden h-svh md:flex",
-          SIDE_RAIL_WIDTH,
-        )}
-      >
-        <div className="bg-sidebar flex h-full w-full flex-col">
-          <div className="bg-background flex h-full shadow-lg">
-            <div className={SIDE_RAIL_CONTAINER_CLASS}>
-              {railButton({
-                icon: <PanelRightIcon className="size-4" />,
-                label: t("inspector.showPane"),
-                edgeClass: "border-b",
-              })}
-              <div className="flex-1" />
-              {railButton({
-                icon: <MessageSquarePlusIcon className="size-4" />,
-                label: t("inspector.openChat"),
-                edgeClass: "border-t",
-              })}
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
   );
 };

@@ -4,19 +4,19 @@ import { useTranslations } from "use-intl";
 
 import type { Block } from "@stll/legal-ast/document-ast";
 
+import { useInspectorView } from "@/components/inspector/use-inspector-view";
 import {
   BlockRenderer,
   FulltextFallback,
 } from "@/components/legal-reader/document-ast-text";
 import { parseProvisionDesignation } from "@/components/legal-reader/reader-outline";
-import { ProvisionCitingDecisions } from "@/features/statutes/components/provision-citing-decisions";
-import { ProvisionHistory } from "@/features/statutes/components/provision-history";
+import { createProvisionViewTab } from "@/features/statutes/provision-inspector.logic";
 
 /**
  * What a provision's incoming citations are filed under: the work's own
  * identifier, which is what a statute knows itself by. Absent when the
- * document states none, in which case the reader offers no citation
- * affordance at all.
+ * document states none, in which case the reader offers no provision tab at
+ * all: the tab is keyed by it.
  */
 export type StatuteCitationWork = {
   eli: string;
@@ -31,14 +31,16 @@ type StatuteTextProps = {
   documentId: string;
   fulltext: string | null;
   language: string;
+  statuteTitle: string;
   /** A Work with a single consolidation has no history to offer. */
   versionCount: number;
+  versionValidFrom: string | null;
 };
 
 /**
  * A heading that opens a provision. It is the unit case law cites and the
- * unit a drafting history is about, so both affordances key off the one
- * designation parser rather than each guessing at the shape of a heading.
+ * unit a drafting history is about, so the affordance keys off the one
+ * designation parser rather than guessing at the shape of a heading.
  */
 const isProvisionHeading = (block: Block): boolean =>
   block.type === "heading" &&
@@ -66,9 +68,12 @@ export const StatuteText = ({
   documentId,
   fulltext,
   language,
+  statuteTitle,
   versionCount,
+  versionValidFrom,
 }: StatuteTextProps) => {
   const t = useTranslations();
+  const { open } = useInspectorView();
 
   if (blocks.length > 0) {
     return (
@@ -85,18 +90,23 @@ export const StatuteText = ({
               rangesByPieceId={NO_RANGES}
               variant="statute"
             />
-            {isProvisionHeading(block) && versionCount > 1 && (
-              <ProvisionHistory
-                anchorId={block.anchorId}
-                documentId={documentId}
-                provision={block.plainText}
-              />
-            )}
             {isProvisionHeading(block) && citationWork !== null && (
-              <ProvisionCitingDecisions
-                anchorId={block.anchorId}
-                eli={citationWork.eli}
-                jurisdiction={citationWork.jurisdiction}
+              <ProvisionDetailsAction
+                onOpen={() => {
+                  open(
+                    createProvisionViewTab({
+                      anchorId: block.anchorId,
+                      documentId,
+                      eli: citationWork.eli,
+                      jurisdiction: citationWork.jurisdiction,
+                      provisionLabel: block.plainText,
+                      statuteTitle,
+                      versionCount,
+                      versionValidFrom,
+                    }),
+                  );
+                }}
+                provision={block.plainText}
               />
             )}
           </Fragment>
@@ -127,5 +137,33 @@ export const StatuteText = ({
         {t("statutes.emptyDocument")}
       </p>
     </div>
+  );
+};
+
+type ProvisionDetailsActionProps = {
+  onOpen: () => void;
+  /** The heading's own text, so the control names the provision it opens. */
+  provision: string;
+};
+
+/**
+ * Opens the provision's inspector tab. The inspector docks beside the reader
+ * on wide screens only, so the control is offered there only.
+ */
+const ProvisionDetailsAction = ({
+  onOpen,
+  provision,
+}: ProvisionDetailsActionProps) => {
+  const t = useTranslations();
+
+  return (
+    <button
+      aria-label={t("statutes.provisionDetailsFor", { provision })}
+      className="text-muted-foreground hover:text-foreground hover:border-foreground-disabled focus-visible:ring-ring mx-auto mb-[var(--reader-heading-gap-bottom)] hidden rounded-full border px-2 py-0.5 font-sans text-[0.7rem] font-normal tracking-normal transition-colors focus-visible:ring-2 focus-visible:outline-none md:block print:hidden"
+      onClick={onOpen}
+      type="button"
+    >
+      {t("common.details")}
+    </button>
   );
 };

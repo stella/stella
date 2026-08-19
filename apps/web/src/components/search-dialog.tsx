@@ -1790,7 +1790,7 @@ export const SearchDialog = ({
                     {/* Below `sm` there is no Tab key to press, so the
                         button carries a plain label; the hint wording is
                         keyboard-first. */}
-                    <span className="sm:hidden">{t("search.askAI")}</span>
+                    <span className="sm:hidden">{t("common.askAI")}</span>
                     <span className="hidden sm:inline">
                       <SearchFooterHintText translationKey="search.hintAskAI" />
                     </span>

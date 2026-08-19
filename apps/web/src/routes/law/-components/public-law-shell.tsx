@@ -6,9 +6,15 @@ import { Separator } from "@stll/ui/separator";
 import { PublicWorkspaceShell } from "@/components/public-workspace-shell";
 import { SidebarTrigger, useSidebar } from "@/components/sidebar";
 import { toStatuteCountrySegment } from "@/lib/statute-route";
+import { PublicLawInspector } from "@/routes/law/-components/public-law-inspector";
 
 export function PublicLawShell() {
-  return <PublicWorkspaceShell topBar={<PublicLawTopBar />} />;
+  return (
+    <PublicWorkspaceShell
+      inspector={<PublicLawInspector />}
+      topBar={<PublicLawTopBar />}
+    />
+  );
 }
 
 const readStringField = (value: unknown, field: string): string | null => {

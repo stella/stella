@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { ComponentProps, ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -26,6 +26,11 @@ const renderWithIntl = (children: ReactNode) =>
 const inlineText = (text: string) => [{ type: "text" as const, text }];
 
 const DOCUMENT_ID = "0198f4c1-2b3d-7a41-9c88-4a1c0e2f5d6b";
+const CITATION_WORK = {
+  eli: "/eli/cz/sb/2012/89",
+  jurisdiction: "CZE",
+};
+const STATUTE_TITLE = "Občanský zákoník";
 
 const blocks = [
   // The publisher states a division's designation and its title as two
@@ -87,18 +92,33 @@ const blocks = [
   },
 ] satisfies Block[];
 
+const renderStatute = (
+  overrides: Partial<ComponentProps<typeof StatuteText>> = {},
+) =>
+  renderWithIntl(
+    <StatuteText
+      blocks={blocks}
+      citationWork={null}
+      documentId={DOCUMENT_ID}
+      fulltext={null}
+      language="cs"
+      statuteTitle={STATUTE_TITLE}
+      versionCount={1}
+      versionValidFrom="2024-01-01"
+      {...overrides}
+    />,
+  );
+
+/** The fixture headings that are citable units; every other one is a container. */
+const PROVISION_HEADINGS = new Set(["§ 47"]);
+
+/** The action's own accessible name, derived from the message it renders. */
+const detailsActionFor = (provision: string) =>
+  messages.statutes.provisionDetailsFor.replace("{provision}", () => provision);
+
 describe("StatuteText", () => {
   test("every block carries its anchor id and the anchor scroll offset", () => {
-    const markup = renderWithIntl(
-      <StatuteText
-        blocks={blocks}
-        citationWork={null}
-        documentId={DOCUMENT_ID}
-        fulltext={null}
-        language="cs"
-        versionCount={1}
-      />,
-    );
+    const markup = renderStatute();
 
     for (const block of blocks) {
       expect(markup).toContain(`id="${block.anchorId}"`);
@@ -110,32 +130,14 @@ describe("StatuteText", () => {
   });
 
   test("heading depth reaches the DOM as the matching heading element", () => {
-    const markup = renderWithIntl(
-      <StatuteText
-        blocks={blocks}
-        citationWork={null}
-        documentId={DOCUMENT_ID}
-        fulltext={null}
-        language="cs"
-        versionCount={1}
-      />,
-    );
+    const markup = renderStatute();
 
     expect(markup).toContain("<h1 class");
     expect(markup).toContain("<h4 class");
   });
 
   test("a heading's two lines stay one block, split by a break", () => {
-    const markup = renderWithIntl(
-      <StatuteText
-        blocks={blocks}
-        citationWork={null}
-        documentId={DOCUMENT_ID}
-        fulltext={null}
-        language="cs"
-        versionCount={1}
-      />,
-    );
+    const markup = renderStatute();
 
     // One block, two lines: the designation and the title it names. Run
     // together on one line the title stops reading as what ČÁST PRVNÍ is,
@@ -144,16 +146,7 @@ describe("StatuteText", () => {
   });
 
   test("structural headings are centred", () => {
-    const markup = renderWithIntl(
-      <StatuteText
-        blocks={blocks}
-        citationWork={null}
-        documentId={DOCUMENT_ID}
-        fulltext={null}
-        language="cs"
-        versionCount={1}
-      />,
-    );
+    const markup = renderStatute();
 
     // A statute is read by its containers, and the publisher centres every
     // one of them — a section designation left-aligned at body size reads
@@ -165,16 +158,7 @@ describe("StatuteText", () => {
   });
 
   test("every block offers exactly one permalink to its own anchor", () => {
-    const markup = renderWithIntl(
-      <StatuteText
-        blocks={blocks}
-        citationWork={null}
-        documentId={DOCUMENT_ID}
-        fulltext={null}
-        language="cs"
-        versionCount={1}
-      />,
-    );
+    const markup = renderStatute();
 
     // A statute is cited by provision, so every block is an address. One
     // link per block: two would make the same provision two targets.
@@ -185,94 +169,47 @@ describe("StatuteText", () => {
   });
 
   test("falls back to the plain text when the document has no parsed blocks", () => {
-    const markup = renderWithIntl(
-      <StatuteText
-        blocks={[]}
-        citationWork={null}
-        documentId={DOCUMENT_ID}
-        fulltext={"First paragraph.\n\nSecond paragraph."}
-        language="cs"
-        versionCount={1}
-      />,
-    );
+    const markup = renderStatute({
+      blocks: [],
+      fulltext: "First paragraph.\n\nSecond paragraph.",
+    });
 
     expect(markup).toContain("First paragraph.");
     expect(markup).toContain("Second paragraph.");
   });
 
-  test("offers no drafting history while the work has one consolidation", () => {
-    const markup = renderWithIntl(
-      <StatuteText
-        blocks={blocks}
-        citationWork={null}
-        documentId={DOCUMENT_ID}
-        fulltext={null}
-        language="cs"
-        versionCount={1}
-      />,
-    );
-
-    expect(markup).not.toContain(messages.common.history);
-  });
-
-  test("offers a drafting history per provision, not per container", () => {
-    const markup = renderWithIntl(
-      <StatuteText
-        blocks={blocks}
-        citationWork={null}
-        documentId={DOCUMENT_ID}
-        fulltext={null}
-        language="cs"
-        versionCount={3}
-      />,
-    );
-
-    // Same rule as the citation affordance: of the fixture's four headings
-    // only `§ 47` opens a provision, and a container heading has no drafting
-    // history of its own.
-    expect(blocks.filter((block) => block.type === "heading")).toHaveLength(4);
-    expect(markup.split(messages.common.history)).toHaveLength(2);
-  });
-
   test("says so when neither a parsed document nor plain text exists", () => {
-    const markup = renderWithIntl(
-      <StatuteText
-        blocks={[]}
-        citationWork={null}
-        documentId={DOCUMENT_ID}
-        fulltext={null}
-        language="cs"
-        versionCount={1}
-      />,
-    );
+    const markup = renderStatute({ blocks: [] });
 
     expect(markup).toContain(messages.statutes.emptyDocument);
   });
 
-  test("offers incoming case law on the provisions, and only on those", () => {
-    const queryClient = new QueryClient();
-    const markup = renderWithIntl(
-      <QueryClientProvider client={queryClient}>
-        <FormattingProvider locale="en" timeZone="UTC">
-          <StatuteText
-            blocks={blocks}
-            citationWork={{ eli: "/eli/cz/sb/2012/89", jurisdiction: "CZE" }}
-            documentId={DOCUMENT_ID}
-            fulltext={null}
-            language="cs"
-            versionCount={1}
-          />
-        </FormattingProvider>
-      </QueryClientProvider>,
-    );
+  test("opens the inspector on the provisions, and only on those", () => {
+    const markup = renderStatute({ citationWork: CITATION_WORK });
 
     // The fixture states four headings and only one of them (`§ 47`) opens a
     // provision; a container heading is not a citable unit.
     expect(blocks.filter((block) => block.type === "heading")).toHaveLength(4);
-    expect(markup.split(messages.caseLaw.viewer.citedBy)).toHaveLength(2);
+    expect(markup.split(detailsActionFor("§ 47"))).toHaveLength(2);
+
+    // Derived from the fixture, not hand-listed: a heading added later is
+    // covered without anyone remembering to extend this.
+    for (const heading of blocks.filter((block) => block.type === "heading")) {
+      if (PROVISION_HEADINGS.has(heading.plainText)) {
+        continue;
+      }
+
+      expect(markup).not.toContain(detailsActionFor(heading.plainText));
+    }
   });
 
-  test("asks for nothing until a reader opens a provision's case law", () => {
+  test("offers no provision tab while the document states no identifier", () => {
+    // The tab is keyed by the work's own identifier, so without one there is
+    // nothing to open and no incoming citations to file.
+    expect(renderStatute()).not.toContain(detailsActionFor("§ 47"));
+  });
+
+  test("asks for nothing until a reader opens a provision", () => {
     const queryClient = new QueryClient();
 
     renderWithIntl(
@@ -280,29 +217,30 @@ describe("StatuteText", () => {
         <FormattingProvider locale="en" timeZone="UTC">
           <StatuteText
             blocks={blocks}
-            citationWork={{ eli: "/eli/cz/sb/2012/89", jurisdiction: "CZE" }}
+            citationWork={CITATION_WORK}
             documentId={DOCUMENT_ID}
             fulltext={null}
             language="cs"
-            versionCount={1}
+            statuteTitle={STATUTE_TITLE}
+            versionCount={3}
+            versionValidFrom="2024-01-01"
           />
         </FormattingProvider>
       </QueryClientProvider>,
     );
 
-    // The provision's read has to be the one this assertion is about, or an
-    // empty cache would pass it without anything having been rendered.
-    const provisionQuery = queryClient.getQueryCache().find({
-      queryKey: citingDecisionKeys.forProvision({
-        anchor: "paragraf-47",
-        eli: "/eli/cz/sb/2012/89",
-        jurisdiction: "CZE",
+    // A consolidated code renders thousands of provisions: a read per
+    // provision at mount would be one request per heading on the page. The
+    // reads live in the tab now, so the reader mounts none of them.
+    expect(
+      queryClient.getQueryCache().find({
+        queryKey: citingDecisionKeys.forProvision({
+          anchor: "paragraf-47",
+          eli: CITATION_WORK.eli,
+          jurisdiction: CITATION_WORK.jurisdiction,
+        }),
       }),
-    });
-
-    expect(provisionQuery).toBeDefined();
-    // A consolidated code renders thousands of provisions: one read per
-    // provision at mount would be one request per heading on the page.
-    expect(provisionQuery?.state.fetchStatus).toBe("idle");
+    ).toBeUndefined();
+    expect(queryClient.getQueryCache().getAll()).toHaveLength(0);
   });
 });
