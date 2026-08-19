@@ -82,8 +82,17 @@ export const POLARITY_PRECEDENCE = {
   unknown: 3,
 } as const satisfies Record<Polarity, number>;
 
-/** Rule source types, declared as the list the CHECK constraint derives from. */
-export const RULE_SOURCES = ["manual", "llm-proposed", "llm-promoted"] as const;
+/**
+ * Rule source types, declared as the list the CHECK constraint derives from.
+ * `retired` keeps a withdrawn rule's row (and its match telemetry) without
+ * the loader ever compiling it again.
+ */
+export const RULE_SOURCES = [
+  "manual",
+  "llm-proposed",
+  "llm-promoted",
+  "retired",
+] as const;
 
 export type RuleSource = (typeof RULE_SOURCES)[number];
 
@@ -91,6 +100,7 @@ export const RULE_SOURCE = {
   MANUAL: "manual",
   LLM_PROPOSED: "llm-proposed",
   LLM_PROMOTED: "llm-promoted",
+  RETIRED: "retired",
 } as const satisfies ConstantMap<RuleSource>;
 
 /**

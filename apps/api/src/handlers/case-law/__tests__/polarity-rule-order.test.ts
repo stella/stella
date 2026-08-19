@@ -5,6 +5,7 @@ import { QueryBuilder } from "drizzle-orm/pg-core";
 import {
   CLASSIFIABLE_POLARITIES,
   POLARITY,
+  RULE_SOURCE,
 } from "@/api/handlers/case-law/polarity/consts";
 import {
   rankPolarityRulesByTier,
@@ -55,6 +56,16 @@ describe("the polarity rule read caps each tier separately", () => {
     for (const polarity of CLASSIFIABLE_POLARITIES) {
       expect(rendered.params).toContain(polarity);
     }
+  });
+
+  test("reads hand-written and promoted rules, never proposed or retired ones", () => {
+    // A retired rule keeps its row for its telemetry; loading it would
+    // bring the withdrawn cue straight back.
+    expect(statement).toContain('"source" in (');
+    expect(rendered.params).toContain(RULE_SOURCE.MANUAL);
+    expect(rendered.params).toContain(RULE_SOURCE.LLM_PROMOTED);
+    expect(rendered.params).not.toContain(RULE_SOURCE.LLM_PROPOSED);
+    expect(rendered.params).not.toContain(RULE_SOURCE.RETIRED);
   });
 
   test("no ordering reads match_count", () => {

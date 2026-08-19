@@ -109,7 +109,7 @@ const compilePattern = (pattern: string): RegExp | null => {
   }
 };
 
-/** Active rule sources (proposed rules are excluded). */
+/** Active rule sources (proposed and retired rules are excluded). */
 const ACTIVE_SOURCES = [RULE_SOURCE.MANUAL, RULE_SOURCE.LLM_PROMOTED];
 
 /**

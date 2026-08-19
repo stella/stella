@@ -14,6 +14,8 @@ type SeedRule = {
   language: string;
 };
 
+type RetiredSeedRule = Pick<SeedRule, "pattern" | "language">;
+
 export const SEED_RULES: readonly SeedRule[] = [
   // -- Czech: positive -------------------------------------------
   { pattern: "v\\s+souladu\\s+s", polarity: "positive", language: "cs" },
@@ -58,11 +60,6 @@ export const SEED_RULES: readonly SeedRule[] = [
   // -- Czech: negative -------------------------------------------
   { pattern: "na\\s+rozdíl\\s+od", polarity: "negative", language: "cs" },
   { pattern: "překonán[aouy]?", polarity: "negative", language: "cs" },
-  {
-    pattern: "byl[aoyi]?\\s+zrušen[aouy]?",
-    polarity: "negative",
-    language: "cs",
-  },
   { pattern: "odchyluje\\s+se", polarity: "negative", language: "cs" },
   { pattern: "nelze\\s+aplikovat", polarity: "negative", language: "cs" },
   { pattern: "odlišuje\\s+se\\s+od", polarity: "negative", language: "cs" },
@@ -83,10 +80,18 @@ export const SEED_RULES: readonly SeedRule[] = [
   // -- Slovak: negative ------------------------------------------
   { pattern: "na\\s+rozdiel\\s+od", polarity: "negative", language: "sk" },
   { pattern: "prekonan[áéý]?", polarity: "negative", language: "sk" },
-  {
-    pattern: "bol[aoi]?\\s+zrušen[áéý]?",
-    polarity: "negative",
-    language: "sk",
-  },
   { pattern: "odlišuje\\s+sa\\s+od", polarity: "negative", language: "sk" },
+];
+
+/**
+ * Rules withdrawn from the seed. Seeding marks their rows `retired` rather
+ * than deleting them, so the match counts they accumulated stay readable.
+ *
+ * "byl zrušen" names the fate of a judgment under review far more often than
+ * a precedent being overruled, and it sits next to the citations of whatever
+ * quashed it, so as a negative cue it mislabelled the authority it invoked.
+ */
+export const RETIRED_SEED_RULES: readonly RetiredSeedRule[] = [
+  { pattern: "byl[aoyi]?\\s+zrušen[aouy]?", language: "cs" },
+  { pattern: "bol[aoi]?\\s+zrušen[áéý]?", language: "sk" },
 ];
