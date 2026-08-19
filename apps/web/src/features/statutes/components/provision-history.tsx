@@ -4,7 +4,7 @@ import { useInfiniteQuery } from "@tanstack/react-query";
 import { HistoryIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { Button } from "@stll/ui/components/button";
+import { Button } from "@stll/ui/button";
 import {
   Sheet,
   SheetHeader,
@@ -12,9 +12,9 @@ import {
   SheetPopup,
   SheetTitle,
   SheetTrigger,
-} from "@stll/ui/components/sheet";
-import { Skeleton } from "@stll/ui/components/skeleton";
-import { cn } from "@stll/ui/lib/utils";
+} from "@stll/ui/sheet";
+import { Skeleton } from "@stll/ui/skeleton";
+import { cn } from "@stll/ui/utils";
 
 import {
   diffProvisionText,

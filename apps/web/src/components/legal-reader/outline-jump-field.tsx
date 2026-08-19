@@ -1,6 +1,6 @@
 import { useTranslations } from "use-intl";
 
-import { Input } from "@stll/ui/components/input";
+import { Input } from "@stll/ui/input";
 
 type OutlineJumpFieldProps = {
   /** Submitted: the reader asked to go to whatever the field addresses. */
