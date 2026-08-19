@@ -1208,7 +1208,10 @@ type GenerationBackfillDependencies = {
     scopedDb: Parameters<typeof backfillIncrementalCorpusIndex>[0],
     rows: readonly IndexableRow[],
     generation: string,
-    options: GenerationProjectionGuards & { commit: CorpusIndexCommitMode },
+    options: GenerationProjectionGuards & {
+      commit: CorpusIndexCommitMode;
+      readConcurrency?: number;
+    },
   ) => Promise<CorpusBackfillOutcome>;
   removeProjection: (
     scopedDb: Parameters<typeof backfillIncrementalCorpusIndex>[0],
@@ -1590,8 +1593,16 @@ export const createCaseLawGenerationBackfill =
     scopedDb: Parameters<typeof backfillIncrementalCorpusIndex>[0],
     batchSize: number,
     generation: string,
+    // How many corpus objects a page reads at once. The generation walk is
+    // bound by object reads, so the caller's setting has to reach the rows
+    // here; left unset, the indexer's own default applies.
+    options: { readConcurrency?: number } = {},
   ): Promise<CorpusIndexBackfillResult> => {
     validateGenerationBoundary(generation);
+    const readConcurrencyOption =
+      options.readConcurrency === undefined
+        ? {}
+        : { readConcurrency: options.readConcurrency };
     const writerLease = await acquireCaseLawCorpusGenerationLease({
       generation,
       newLeaseToken,
@@ -1766,6 +1777,7 @@ export const createCaseLawGenerationBackfill =
               ? EMPTY_BACKFILL_OUTCOME
               : await backfillRows(scopedDb, eligible, generation, {
                   ...guards,
+                  ...readConcurrencyOption,
                   // A source-wide re-index walks a whole source's corpus
                   // a page at a time, so it is bulk work with the same
                   // census behind it as the snapshot walk.
@@ -1873,6 +1885,7 @@ export const createCaseLawGenerationBackfill =
             ? EMPTY_BACKFILL_OUTCOME
             : await backfillRows(scopedDb, eligible, generation, {
                 ...guards,
+                ...readConcurrencyOption,
                 // The live path: every newly ingested decision waits in
                 // this queue, and the mark taken on the way out is the
                 // last thing that would ever select it. Acceptance has
@@ -2155,6 +2168,7 @@ export const createCaseLawGenerationBackfill =
             ? EMPTY_BACKFILL_OUTCOME
             : await backfillRows(scopedDb, rows, generation, {
                 ...runningGuards,
+                ...readConcurrencyOption,
                 // Snapshot pages of the rebuild: bulk throughput, whose
                 // completeness the generation's census verifies rather
                 // than each request proving it for itself.
@@ -2258,6 +2272,7 @@ export const backfillCorpusIndex = async (
       scopedDb,
       batchSize,
       generation,
+      options,
     );
     return result;
   }
