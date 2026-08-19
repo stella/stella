@@ -1145,12 +1145,6 @@ export const createCorpusIndexer = <
     if (rows.length === 0) {
       return { indexed: 0, refreshed: 0, unread: 0 };
     }
-
-    // Load text (S3) with bounded concurrency, then ingest one NDJSON batch.
-    // A per-document read failure fails only that document; record it and let
-    // the rest still commit.
-    const fetchFulltext: FetchFulltext<TBrand> = async (id) =>
-      await adapter.fetchFulltext(scopedDb, id);
     const timing: CorpusBackfillTiming = {
       readMs: 0,
       reserveMs: 0,
@@ -1160,6 +1154,36 @@ export const createCorpusIndexer = <
       engineRequests: 0,
       documents: 0,
     };
+    try {
+      return await backfillSelectedRowsTimed(
+        scopedDb,
+        rows,
+        generation,
+        options,
+        timing,
+      );
+    } finally {
+      // Reported however the batch ends, so a batch that fails still says
+      // where its time went — a page that gets slow and a page that starts
+      // failing are often the same page.
+      if (options.type === "generation-rebuild") {
+        options.onTiming?.(timing);
+      }
+    }
+  };
+
+  const backfillSelectedRowsTimed = async (
+    scopedDb: ScopedDb,
+    rows: TRow[],
+    generation: string,
+    options: BackfillSelectedRowsOptions<TBrand, TRow>,
+    timing: CorpusBackfillTiming,
+  ): Promise<CorpusBackfillOutcome> => {
+    // Load text (S3) with bounded concurrency, then ingest one NDJSON batch.
+    // A per-document read failure fails only that document; record it and let
+    // the rest still commit.
+    const fetchFulltext: FetchFulltext<TBrand> = async (id) =>
+      await adapter.fetchFulltext(scopedDb, id);
     // Monotonic: a wall-clock step backwards would make a phase read
     // negative, and the whole point of the split is that it is comparable
     // across pages.
@@ -1335,6 +1359,7 @@ export const createCorpusIndexer = <
         let staleError: CorpusIndexError | null = null;
         const removeStartedAt = performance.now();
         for (const unit of deleteUnits) {
+          timing.engineRequests += 1;
           // oxlint-disable-next-line no-await-in-loop -- one task per (index, chunk): bounded by the batch's distinct indexes, not by its rows; sequential so the first failure stops before the ingest below
           const removed = await removeManyWithOptions({
             ...(options.type === "incremental"
@@ -1358,7 +1383,6 @@ export const createCorpusIndexer = <
           }
         }
         timing.removeMs += elapsedSince(removeStartedAt);
-        timing.engineRequests += deleteUnits.length;
         if (staleError) {
           firstError ??= staleError;
           continue;
@@ -1512,13 +1536,6 @@ export const createCorpusIndexer = <
           await adapter.recordJobs(scopedDb, groupFailures, indexId);
         }
       }
-    }
-
-    // Reported before the failure below, so a batch that ends in a retry
-    // still says where its time went — a page that gets slow and a page
-    // that starts failing are often the same page.
-    if (options.type === "generation-rebuild") {
-      options.onTiming?.(timing);
     }
 
     // Surface a failure so the daemon retries the un-indexed groups.

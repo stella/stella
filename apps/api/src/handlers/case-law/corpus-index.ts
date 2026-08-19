@@ -1641,6 +1641,41 @@ export const createCaseLawGenerationBackfill =
     const totalOf = (read: (timing: CorpusBackfillTiming) => number): number =>
       batchTimings.reduce((total, timing) => total + read(timing), 0);
     const stageMs = { drain: 0, select: 0, index: 0 };
+    // One line per page, on the walking arm: the stage times say which
+    // stage the page is in, and the batch totals say what that stage was
+    // waiting on. Emitted however the page ends, so a failing page still
+    // says where its time went. Counts only, never document content.
+    const reportPage = ({
+      outcome,
+      selected,
+      indexed,
+      drainedIndexed,
+    }: {
+      outcome: "advanced" | "busy" | "failed";
+      selected: number;
+      indexed: number;
+      drainedIndexed: number;
+    }): void => {
+      logger.info("case_law.corpus_index.generation_page", {
+        generation,
+        batchSize,
+        outcome,
+        selected,
+        indexed,
+        drainedIndexed,
+        pageMs: sinceMs(pageStartedAt),
+        drainMs: stageMs.drain,
+        selectMs: stageMs.select,
+        indexMs: stageMs.index,
+        readMs: totalOf(({ readMs }) => readMs),
+        reserveMs: totalOf(({ reserveMs }) => reserveMs),
+        removeMs: totalOf(({ removeMs }) => removeMs),
+        ingestMs: totalOf(({ ingestMs }) => ingestMs),
+        markMs: totalOf(({ markMs }) => markMs),
+        engineRequests: totalOf(({ engineRequests }) => engineRequests),
+        documents: totalOf(({ documents }) => documents),
+      });
+    };
     const writerLease = await acquireCaseLawCorpusGenerationLease({
       generation,
       newLeaseToken,
@@ -2115,12 +2150,16 @@ export const createCaseLawGenerationBackfill =
       let drainedIndexed = 0;
       try {
         const drainStartedAt = performance.now();
-        const drained = await drainPendingProjections({
-          checkpoint: claimedCheckpoint,
-          leaseToken,
-          status: CASE_LAW_CORPUS_INDEX_BACKFILL_STATUS.RUNNING,
-        });
-        stageMs.drain = sinceMs(drainStartedAt);
+        let drained: CorpusIndexBackfillResult;
+        try {
+          drained = await drainPendingProjections({
+            checkpoint: claimedCheckpoint,
+            leaseToken,
+            status: CASE_LAW_CORPUS_INDEX_BACKFILL_STATUS.RUNNING,
+          });
+        } finally {
+          stageMs.drain = sinceMs(drainStartedAt);
+        }
         if (drained.status === BACKFILL_STATUS.BUSY) {
           await releaseRunningLease();
           return drained;
@@ -2128,6 +2167,12 @@ export const createCaseLawGenerationBackfill =
         drainedIndexed = drained.indexed;
       } catch (error) {
         await releaseRunningLease();
+        reportPage({
+          outcome: "failed",
+          selected: 0,
+          indexed: 0,
+          drainedIndexed: 0,
+        });
         throw error;
       }
       // Reports this invocation's total durable movement: rows the drain
@@ -2240,9 +2285,16 @@ export const createCaseLawGenerationBackfill =
         // Keep the cursor intact, but do not make a transient search/S3 failure
         // wait for a stale lease before its durable retry.
         await releaseRunningLease();
+        reportPage({
+          outcome: "failed",
+          selected: rows.length,
+          indexed: 0,
+          drainedIndexed,
+        });
         throw error;
+      } finally {
+        stageMs.index = sinceMs(indexStartedAt);
       }
-      stageMs.index = sinceMs(indexStartedAt);
 
       const advanced = await scopedDb(async (tx) => {
         // audit: skip — cursor advancement is the durable audit trail for this derived rebuild
@@ -2266,26 +2318,11 @@ export const createCaseLawGenerationBackfill =
           .returning({ generation: caseLawCorpusIndexBackfills.generation });
         return advancedRows.at(0);
       });
-      // One line per page, on the walking arm: the stage times say which
-      // stage the page is in, and the batch totals say what that stage was
-      // waiting on. Counts only, never document content.
-      logger.info("case_law.corpus_index.generation_page", {
-        generation,
-        batchSize,
+      reportPage({
+        outcome: advanced ? "advanced" : "busy",
         selected: rows.length,
         indexed,
         drainedIndexed,
-        pageMs: sinceMs(pageStartedAt),
-        drainMs: stageMs.drain,
-        selectMs: stageMs.select,
-        indexMs: stageMs.index,
-        readMs: totalOf(({ readMs }) => readMs),
-        reserveMs: totalOf(({ reserveMs }) => reserveMs),
-        removeMs: totalOf(({ removeMs }) => removeMs),
-        ingestMs: totalOf(({ ingestMs }) => ingestMs),
-        markMs: totalOf(({ markMs }) => markMs),
-        engineRequests: totalOf(({ engineRequests }) => engineRequests),
-        documents: totalOf(({ documents }) => documents),
       });
       return withDrained(
         advanced
