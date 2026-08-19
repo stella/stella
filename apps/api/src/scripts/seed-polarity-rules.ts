@@ -10,7 +10,7 @@
  *   bun apps/api/src/scripts/seed-polarity-rules.ts
  */
 
-import { and, eq } from "drizzle-orm";
+import { and, eq, or } from "drizzle-orm";
 
 import { rootDb } from "@/api/db/root";
 import { caseLawPolarityRules } from "@/api/db/schema";
@@ -45,15 +45,18 @@ for (const rule of SEED_RULES) {
     });
 }
 
-for (const rule of RETIRED_SEED_RULES) {
-  // oxlint-disable-next-line no-await-in-loop -- sequential, same as the upsert above
+if (RETIRED_SEED_RULES.length > 0) {
   await rootDb
     .update(caseLawPolarityRules)
     .set({ source: RULE_SOURCE.RETIRED })
     .where(
-      and(
-        eq(caseLawPolarityRules.pattern, rule.pattern),
-        eq(caseLawPolarityRules.language, rule.language),
+      or(
+        ...RETIRED_SEED_RULES.map((rule) =>
+          and(
+            eq(caseLawPolarityRules.pattern, rule.pattern),
+            eq(caseLawPolarityRules.language, rule.language),
+          ),
+        ),
       ),
     );
 }
