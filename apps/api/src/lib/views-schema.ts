@@ -6,6 +6,7 @@ import {
   VIEW_LAYOUT_TYPES,
   type ViewLayoutType as ContractViewLayoutType,
 } from "@stll/api-contract";
+import { CALCULATION_KINDS } from "@stll/calculations";
 import { conditionHasFormula, conditionNodeSchema } from "@stll/conditions";
 
 import {
@@ -34,10 +35,34 @@ export const tViewSortSchema = t.Object(
   strictObjectOptions,
 );
 
+/**
+ * A calculation a view shows for one property: the board renders it in every
+ * column header, the table under the property's column. Optional, so a view
+ * that has never chosen one stores nothing.
+ */
+export const viewCalculationSchema = v.strictObject({
+  propertyId: v.pipe(v.string(), v.minLength(1)),
+  kind: v.picklist(CALCULATION_KINDS),
+});
+
+export type ViewCalculation = v.InferOutput<typeof viewCalculationSchema>;
+
+export const tViewCalculationSchema = t.Object(
+  {
+    propertyId: t.String({ minLength: 1 }),
+    kind: t.UnionEnum([...CALCULATION_KINDS]),
+  },
+  strictObjectOptions,
+);
+
 const baseLayoutSchema = {
   filters: v.array(conditionNodeSchema),
   sorts: v.array(viewSortSchema),
   hiddenProperties: v.array(v.string()),
+  // Defaulted at the parse boundary rather than at every read: a view with no
+  // calculations has an empty list, not an absent one, so nothing downstream
+  // has to decide what a missing field means.
+  calculations: v.optional(v.array(viewCalculationSchema), []),
 };
 
 export type ViewLayoutBase = v.InferOutput<
@@ -176,6 +201,7 @@ export const parseViewLayoutSafe = (value: unknown): ViewLayout => {
     filters: [],
     sorts: [],
     hiddenProperties: [],
+    calculations: [],
   };
 };
 
@@ -183,6 +209,7 @@ const tBaseLayoutSchema = {
   filters: t.Array(tConditionNode),
   sorts: t.Array(tViewSortSchema),
   hiddenProperties: t.Array(t.String()),
+  calculations: t.Optional(t.Array(tViewCalculationSchema)),
 };
 
 const tVersionedBaseLayoutSchema = {

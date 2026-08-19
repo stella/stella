@@ -82,6 +82,7 @@ const config = {
             t.String({
               minLength: 3,
               maxLength: 3,
+              pattern: "^[A-Za-z]{3}$",
               description:
                 "For int values only: 3-letter ISO currency code, or null",
             }),

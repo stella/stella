@@ -177,6 +177,7 @@ const tableLayout = (
   filters: [],
   sorts: [],
   hiddenProperties: [],
+  calculations: [],
   columnOrder: [],
   columnPinning: [],
   ...overrides,
@@ -189,6 +190,7 @@ describe("assembleReportData", () => {
     const layout = tableLayout({
       columnOrder: [ASK_TERM, ASK_LAW, NOTES],
       hiddenProperties: [NOTES],
+      calculations: [],
     });
     const columns = buildExportColumns(layout, properties);
     const entity = makeEntity(ENTITY_A, "NDA", [

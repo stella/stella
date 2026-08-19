@@ -155,6 +155,7 @@ export const convertLayout = (
     filters: source.filters,
     sorts: source.sorts,
     hiddenProperties: source.hiddenProperties,
+    calculations: [],
   };
 
   if (targetType === "table") {

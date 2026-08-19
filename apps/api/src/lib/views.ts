@@ -25,10 +25,14 @@ type DefaultViewTemplate = {
 };
 
 const emptyLayout = (type: RequiredViewLayoutType): ViewLayout => {
-  const base: Pick<ViewLayout, "filters" | "sorts" | "hiddenProperties"> = {
+  const base: Pick<
+    ViewLayout,
+    "filters" | "sorts" | "hiddenProperties" | "calculations"
+  > = {
     filters: [],
     sorts: [],
     hiddenProperties: [],
+    calculations: [],
   };
 
   if (type === "table") {
@@ -66,6 +70,7 @@ const listLayout = (): ViewLayout => ({
   ],
   sorts: [],
   hiddenProperties: [],
+  calculations: [],
   groupByPropertyId: "_status",
 });
 
@@ -206,6 +211,7 @@ const cloneDefaultLayout = (
     return {
       ...layout,
       hiddenProperties: [...layout.hiddenProperties],
+      calculations: [],
       filters: [...layout.filters],
       sorts: [...layout.sorts],
       columnOrder: [...layout.columnOrder],
@@ -218,6 +224,7 @@ const cloneDefaultLayout = (
   return {
     ...layout,
     hiddenProperties: [...layout.hiddenProperties],
+    calculations: [],
     filters: [...layout.filters],
     sorts: [...layout.sorts],
   };

@@ -38,6 +38,7 @@ const tableLayout: Extract<ViewLayout, { type: "table" }> = {
   filters: [],
   sorts: [],
   hiddenProperties: [],
+  calculations: [],
   columnOrder: [],
   columnPinning: [],
 };
