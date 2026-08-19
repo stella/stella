@@ -86,6 +86,7 @@ const ROLE_GRANT_STATEMENTS = [
       "case_law_sources",
       "case_law_decisions",
       "case_law_citations",
+      "case_law_provision_citations",
       "case_law_polarity_rules",
       "case_law_court_weights",
       "case_law_fts_configs",
@@ -100,6 +101,7 @@ const ROLE_GRANT_STATEMENTS = [
       "case_law_sources",
       "case_law_decisions",
       "case_law_citations",
+      "case_law_provision_citations",
       "case_law_polarity_rules",
       "case_law_court_weights",
       "case_law_fts_configs",
@@ -113,6 +115,7 @@ const ROLE_GRANT_STATEMENTS = [
     GRANT INSERT, UPDATE, DELETE ON TABLE
       "case_law_decisions",
       "case_law_citations",
+      "case_law_provision_citations",
       "case_law_polarity_rules",
       "case_law_court_weights",
       "case_law_fts_configs",

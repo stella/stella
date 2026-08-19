@@ -64,6 +64,9 @@ const POST_BOOTSTRAP_SELECT_ONLY_TABLES = new Set([
   // Where the citation-resolution walk had got to. Operational progress the
   // status rollup reads; only the resolution loop advances it.
   "case_law_citation_resolution_progress",
+  // Provision references extracted from decision text: global legal data read
+  // by the public case-law reads, written only by the extraction loop.
+  "case_law_provision_citations",
 ]);
 
 // Internal handoff tables whose scoped role needs INSERT but not table-wide

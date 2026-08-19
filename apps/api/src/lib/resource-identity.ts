@@ -58,6 +58,7 @@ export const RESOURCE_IDENTITY_DISPOSITION = {
   caseLawIngestionFailure: { type: "non_resource", reason: "event" },
   caseLawMatterLink: { type: "non_resource", reason: "association" },
   caseLawPolarityRule: { type: "non_resource", reason: "policy" },
+  caseLawProvisionCitation: { type: "non_resource", reason: "association" },
   caseLawReconciliationItem: { type: "non_resource", reason: "workflow" },
   caseLawSource: {
     type: "resource",
