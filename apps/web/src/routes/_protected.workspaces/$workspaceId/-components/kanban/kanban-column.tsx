@@ -46,17 +46,27 @@ import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 import { containedEventHandler } from "@stll/ui/use-contained-handler";
 import { cn } from "@stll/ui/utils";
+import type {
+  CalculationProperty,
+  CalculationSelection,
+} from "@stll/workspace-ui/calculations";
+import {
+  CalculationPicker,
+  ColumnCalculation,
+} from "@stll/workspace-ui/calculations";
 
 import { InlineEdit } from "@/components/inline-edit";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useExternalFileDrop } from "@/hooks/use-external-file-drop";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useFormatter } from "@/i18n/formatting-context";
+import { toSafeId } from "@/lib/safe-id";
 import type {
   EntityKind,
   WorkspaceEntity,
   WorkspaceProperty,
 } from "@/lib/types";
+import { toCalculationValue } from "@/lib/workspaces/calculations";
 import {
   COLUMN_DRAG_TYPE,
   ENTITY_DRAG_TYPE,
@@ -92,6 +102,13 @@ type KanbanColumnProps = {
     | undefined;
   /** When true, the column footer shows "+ New todo" instead of file upload. */
   taskOnly?: boolean | undefined;
+  /**
+   * What the view shows in every column header, and how a reader changes it.
+   * One object rather than three optional props: a selection list without a
+   * change handler, or either without the properties to choose from, is not a
+   * state this column can render.
+   */
+  calculations?: KanbanCalculations | undefined;
 };
 
 export const KanbanColumn = ({
@@ -117,6 +134,7 @@ export const KanbanColumn = ({
   onLoadMore,
   onReorderColumn,
   taskOnly,
+  calculations,
 }: KanbanColumnProps) => {
   const t = useTranslations();
   const format = useFormatter();
@@ -435,6 +453,17 @@ export const KanbanColumn = ({
             </div>
           ) : null
         }
+        calculation={
+          // Drawn whenever the view has something to show or something to
+          // choose: a saved total is visible to a reader who cannot change it.
+          calculations &&
+          (calculations.selections.length > 0 || calculations.onChange) ? (
+            <ColumnCalculations
+              calculations={calculations}
+              entities={entities}
+            />
+          ) : null
+        }
         meta={editing ? undefined : format.number(entities.length)}
         swatch={
           <ColumnSwatch
@@ -665,3 +694,54 @@ const ColumnSwatch = ({
     </ColorPicker>
   );
 };
+
+/**
+ * What a board's columns add up to, and how a reader changes it.
+ *
+ * `onChange` is optional because reading a total and choosing one are separate
+ * rights: someone who may not edit the view still sees what its columns add up
+ * to, and simply gets no picker.
+ */
+export type KanbanCalculations = {
+  selections: readonly CalculationSelection[];
+  properties: readonly CalculationProperty[];
+  onChange?: ((next: CalculationSelection[]) => void) | undefined;
+};
+
+type ColumnCalculationsProps = {
+  entities: WorkspaceEntity[];
+  calculations: KanbanCalculations;
+};
+
+/**
+ * What the column adds up to, plus the control that chooses it. The control
+ * stays out of the way until the column is hovered or something inside it takes
+ * focus, so the header reads as a heading rather than a toolbar.
+ */
+export const ColumnCalculations = ({
+  entities,
+  calculations: { selections, properties, onChange },
+}: ColumnCalculationsProps) => (
+  <span className="flex min-w-0 shrink-0 items-center gap-1">
+    {selections.map((selection) => (
+      <ColumnCalculation
+        key={selection.propertyId}
+        kind={selection.kind}
+        values={entities.map((entity) =>
+          toCalculationValue(
+            entity.fields[toSafeId<"property">(selection.propertyId)],
+          ),
+        )}
+      />
+    ))}
+    {onChange && (
+      <span className="opacity-0 transition-opacity group-hover/column:opacity-100 focus-within:opacity-100">
+        <CalculationPicker
+          onChange={onChange}
+          properties={properties}
+          selections={selections}
+        />
+      </span>
+    )}
+  </span>
+);

@@ -35,6 +35,10 @@ import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { toSafeId } from "@/lib/safe-id";
 import type { EntityKind, WorkspaceView } from "@/lib/types";
+import {
+  calculationKindsForProperty,
+  isCalculableProperty,
+} from "@/lib/workspaces/calculations";
 // -- Auto-scrolling board container with forgiving column drop --
 import { COLUMN_DRAG_TYPE } from "@/lib/workspaces/drag-constants";
 import {
@@ -54,14 +58,17 @@ import {
 } from "@/lib/workspaces/queries/entities";
 import { propertiesOptions } from "@/lib/workspaces/queries/properties";
 import { taskKeys } from "@/lib/workspaces/queries/tasks";
+import { mergeLayout } from "@/lib/workspaces/view-layout";
 import { EmptyState } from "@/routes/_protected.workspaces/$workspaceId/-components/empty-state";
 import { KanbanColumn } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-column";
+import type { KanbanCalculations } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-column";
 import { resolveWorkspaceKanbanGrouping } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.logic";
 import { useWorkspaceKanbanSchema } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/use-kanban-schema";
 import {
   uploadFileEntitiesBatched,
   useBatchUploadLabels,
 } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-create-file-entities";
+import { useUpdateView } from "@/routes/_protected.workspaces/$workspaceId/-mutations/views";
 
 type KanbanViewProps = {
   view: WorkspaceView;
@@ -82,6 +89,7 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
   const renameEntity = useRenameEntity();
   const updateProperty = useUpdateProperty();
   const createEntities = useCreateEntities();
+  const updateView = useUpdateView(workspaceId);
   const queryClient = useQueryClient();
   const [hiddenGroups, setHiddenGroups] = useState(new Set());
   const [localColumnOrder, setLocalColumnOrder] = useState<string[]>([]);
@@ -211,6 +219,27 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
   );
 
   const { filters, sorts } = view.layout;
+
+  const calculations: KanbanCalculations = {
+    selections: view.layout.calculations,
+    properties: properties
+      .filter(
+        (property) =>
+          isCalculableProperty(property) &&
+          !hiddenProperties.includes(property.id),
+      )
+      .map((property) => ({
+        id: property.id,
+        name: property.name,
+        kinds: calculationKindsForProperty(property),
+      })),
+    onChange: (next) => {
+      updateView.mutate({
+        viewId: view.id,
+        layout: mergeLayout(view.layout, { calculations: next }),
+      });
+    },
+  };
 
   // Mutation for changing task status via kanban drag-drop
   const updateTaskStatus = useMutation({
@@ -546,6 +575,7 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
         const { value } = group;
         return (
           <KanbanGroupColumn
+            calculations={calculations}
             cardFields={cardFields}
             color={group.color}
             colorBg={group.colorBg}

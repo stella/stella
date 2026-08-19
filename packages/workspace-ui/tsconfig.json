@@ -3,7 +3,8 @@
   "compilerOptions": {
     "paths": {
       "@stll/workspace-ui/*": ["./src/*"]
-    }
+    },
+    "types": ["bun"]
   },
   "include": ["."],
   "exclude": ["node_modules", "dist"]

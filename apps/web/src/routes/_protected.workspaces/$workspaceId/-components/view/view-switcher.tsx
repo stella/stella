@@ -121,6 +121,7 @@ const emptyLayout = (type: RequiredViewLayoutType): ViewLayout => {
     filters: [],
     sorts: [],
     hiddenProperties: [],
+    calculations: [],
   };
 
   if (type === "table") {
@@ -147,6 +148,7 @@ const defaultLayouts = {
     filters: [],
     sorts: [],
     hiddenProperties: [],
+    calculations: [],
     datePropertyId: "_start-date",
     mode: "month",
   },
@@ -156,6 +158,7 @@ const defaultLayouts = {
     filters: [],
     sorts: [],
     hiddenProperties: [],
+    calculations: [],
     startDatePropertyId: "_created-at",
     endDatePropertyId: "_created-at",
     zoom: "month",
