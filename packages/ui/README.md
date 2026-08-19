@@ -18,14 +18,22 @@ Every module has its own subpath, and the package declares `sideEffects: false`,
 so a bundler keeps only what is imported:
 
 ```tsx
-import { Button } from "@stll/ui/components/button";
-import { Dialog, DialogPopup } from "@stll/ui/components/dialog";
+import { Button } from "@stll/ui/button";
+import { Dialog, DialogPopup } from "@stll/ui/dialog";
 import { Inspector, InspectorDock } from "@stll/ui/inspector";
-import { cn } from "@stll/ui/lib/utils";
+import { cn } from "@stll/ui/utils";
 ```
 
-`@stll/ui` re-exports all of them under one specifier for convenience; the
-subpaths are the real surface, and in-repo code uses those.
+One flat subpath per module: `@stll/ui/<name>` for components, hooks, and
+helpers alike. `@stll/ui` re-exports all of them under one specifier for
+convenience; the subpaths are the real surface, and in-repo code uses those.
+
+### Deprecated grouped subpaths
+
+`@stll/ui/components/<name>`, `@stll/ui/hooks/<name>`, and
+`@stll/ui/lib/<name>` still resolve to the same modules and are kept for one
+minor. They will be removed after that; the export guard checks that both
+spellings land on the same module for as long as they both exist.
 
 ## Styles
 

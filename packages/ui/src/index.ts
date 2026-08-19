@@ -6,7 +6,6 @@
  * effects, so a bundler drops whatever a consumer does not reference.
  */
 
-// oxlint-disable-next-line oxc/no-barrel-file -- published package's convenience entry; the per-module subpaths (@stll/ui/components/<name>, @stll/ui/lib/<name>, @stll/ui/inspector) are the tree-shakeable import path, and in-repo code uses those
 export * from "./components/accordion";
 export * from "./components/alert-dialog";
 export * from "./components/avatar";

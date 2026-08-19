@@ -305,7 +305,12 @@ const uiStandaloneImports = [
 ];
 
 const webDatePickerImport = {
-  group: ["@stll/ui/components/date-picker-popover"],
+  // Both spellings: the grouped subpath is a deprecated alias of the flat one
+  // and still resolves, so banning only the flat one would leave a way around.
+  group: [
+    "@stll/ui/date-picker-popover",
+    "@stll/ui/components/date-picker-popover",
+  ],
   message:
     "Use '@/components/date-picker-popover' so locale labels are injected.",
 };
@@ -1618,6 +1623,16 @@ export default defineConfig({
           { paths: [noZodImport], patterns: uiStandaloneImports },
         ],
       },
+    },
+    {
+      // The package's convenience entry, and the one file that has to be a
+      // barrel: `exports["."]` needs a module, and a published package with no
+      // root export is one nobody can import by name. The per-module subpaths
+      // are the tree-shakeable path and are what in-repo code uses;
+      // `sideEffects: false` plus one output module per source module keeps a
+      // bundler from paying for re-exports it does not touch.
+      files: ["packages/ui/src/index.ts"],
+      rules: { "oxc/no-barrel-file": "off" },
     },
     {
       files: ["apps/web/src/hooks/use-effect.ts"],

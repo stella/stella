@@ -40,11 +40,13 @@ const run = async (cmd: string[], cwd: string): Promise<string> => {
 
 // `bun pm pack --dry-run` lists the tarball contents as "packed <size> <path>",
 // one per line, among the build output the pack's own prepack step produces.
+// Split on whitespace rather than matching a pattern: the path is everything
+// after the size, and a file name may contain spaces.
 const packedFiles = (output: string): string[] =>
-  output
-    .split("\n")
-    .map((line) => /^packed\s+\S+\s+(?<file>.+)$/u.exec(line)?.groups?.["file"])
-    .filter((file): file is string => file !== undefined);
+  output.split("\n").flatMap((line) => {
+    const [marker, , ...rest] = line.trim().split(/\s+/u);
+    return marker === "packed" && rest.length > 0 ? [rest.join(" ")] : [];
+  });
 
 const sourceManifest = await Bun.file(pkgPath).text();
 const published = toPublishedManifest(JSON.parse(sourceManifest));
@@ -52,6 +54,7 @@ const published = toPublishedManifest(JSON.parse(sourceManifest));
 await run([process.execPath, "run", "--bun", "build"], pkgDir);
 
 const failures: string[] = [];
+const resolvedBySubpath = new Map<string, string>();
 try {
   await run(
     [
@@ -97,6 +100,7 @@ try {
       if (!resolved.includes(`${path.sep}dist${path.sep}`)) {
         failures.push(`${subpath}: "${specifier}" resolved outside dist`);
       }
+      resolvedBySubpath.set(subpath, resolved);
 
       if (!isDistModuleEntry(entry)) {
         return;
@@ -107,6 +111,29 @@ try {
       }
     }),
   );
+
+  // A grouped subpath is a deprecated alias of the flat one, so the two have
+  // to land on the same module. Nothing else keeps them from drifting into two
+  // components with one name once the flat map is the one people edit.
+  for (const subpath of Object.keys(published.exports)) {
+    const segments = subpath.split("/");
+    const name = segments.at(-1);
+    if (segments.length < 3 || name === undefined) {
+      continue;
+    }
+    const flat = `./${name}`;
+    const aliased = resolvedBySubpath.get(subpath);
+    const primary = resolvedBySubpath.get(flat);
+    if (primary === undefined) {
+      failures.push(`${subpath}: no flat subpath "${flat}" to alias`);
+      continue;
+    }
+    if (aliased !== primary) {
+      failures.push(
+        `${subpath}: alias resolves to ${aliased}, but "${flat}" resolves to ${primary}`,
+      );
+    }
+  }
 } finally {
   await Bun.write(pkgPath, sourceManifest);
 }
