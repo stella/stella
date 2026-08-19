@@ -57,6 +57,7 @@ export * from "./hooks/use-content-dir";
 export * from "./hooks/use-mobile";
 export * from "./hooks/use-viewport-width";
 export * from "./inspector";
+export * from "./lib/option-color";
 export * from "./lib/overlay-layer";
 export * from "./lib/utils";
 export * from "./lib/week";

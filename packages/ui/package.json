@@ -57,6 +57,7 @@
     "./input-otp": "./src/components/input-otp.tsx",
     "./label": "./src/components/label.tsx",
     "./menu": "./src/components/menu.tsx",
+    "./option-color": "./src/lib/option-color.ts",
     "./outline-rail": "./src/components/outline-rail.tsx",
     "./overlay-layer": "./src/lib/overlay-layer.ts",
     "./pagination": "./src/components/pagination.tsx",

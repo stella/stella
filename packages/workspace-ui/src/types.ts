@@ -1,22 +1,6 @@
-/** Named preset or arbitrary 6-character hex color (e.g. "FF0000"). */
-export type OptionColor =
-  | "red"
-  | "orange"
-  | "amber"
-  | "yellow"
-  | "lime"
-  | "green"
-  | "emerald"
-  | "teal"
-  | "cyan"
-  | "sky"
-  | "blue"
-  | "indigo"
-  | "violet"
-  | "purple"
-  | "fuchsia"
-  | "gray"
-  | (string & Record<never, never>);
+import type { OptionColor } from "@stll/ui/option-color";
+
+export type { OptionColor } from "@stll/ui/option-color";
 
 export type FieldContent =
   | {
