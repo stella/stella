@@ -38,7 +38,7 @@ type ProvisionCursor = { spanStart: number; anchor: string };
 
 const decodeProvisionCursor = (cursor: string): ProvisionCursor | null => {
   const parts = decodePaginationCursor(cursor);
-  if (parts === null || parts.length !== 2) {
+  if (parts?.length !== 2) {
     return null;
   }
 

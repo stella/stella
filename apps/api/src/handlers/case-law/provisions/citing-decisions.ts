@@ -47,7 +47,7 @@ const decodeCitingDecisionsCursor = (
   cursor: string,
 ): CitingDecisionsCursor | null => {
   const parts = decodePaginationCursor(cursor);
-  if (parts === null || parts.length !== 5) {
+  if (parts?.length !== 5) {
     return null;
   }
 
