@@ -6,6 +6,7 @@ import type { AnchorScrollContainer } from "@/components/legal-reader/reader-out
 import {
   filterOutlineItems,
   findProvisionAnchorId,
+  headingCase,
   jumpToAnchor,
   outlineFromHeadings,
   parseOutlineJump,
@@ -88,20 +89,27 @@ describe("outlineFromHeadings", () => {
     expect(outline.map((item) => item.level)).toEqual([0, 1, 2, 3, 3, 1]);
   });
 
-  test("leads with the designation and annotates with the title", () => {
+  test("leads with the designation and annotates with the title, in sentence case", () => {
     const [part] = outlineFromHeadings(blocks);
 
-    expect(part?.label).toBe("ČÁST PRVNÍ");
-    expect(part?.meta).toBe("OBECNÁ ČÁST");
+    expect(part?.label).toBe("Část první");
+    expect(part?.title).toBe("Obecná část");
   });
 
-  test("a single-line heading carries no annotation", () => {
+  test("a single-line heading carries no title", () => {
     const section = outlineFromHeadings(blocks).find(
       (item) => item.id === "paragraf-47",
     );
 
     expect(section?.label).toBe("§ 47");
-    expect(section?.meta).toBeUndefined();
+    expect(section?.title).toBeUndefined();
+  });
+
+  test("sentence case keeps Roman numerals and mixed-case headings", () => {
+    expect(headingCase("HLAVA II")).toBe("Hlava II");
+    expect(headingCase("OBECNÁ ČÁST")).toBe("Obecná část");
+    expect(headingCase("Díl 4")).toBe("Díl 4");
+    expect(headingCase("§ 47")).toBe("§ 47");
   });
 
   test("a document with no headings yields no outline", () => {
@@ -205,12 +213,20 @@ const outlineItem = ({
   label,
   level,
   meta,
+  title,
 }: {
   id: string;
   label: string;
   level: number;
   meta?: string;
-}) => ({ id, label, level, ...(meta === undefined ? {} : { meta }) });
+  title?: string;
+}) => ({
+  id,
+  label,
+  level,
+  ...(meta === undefined ? {} : { meta }),
+  ...(title === undefined ? {} : { title }),
+});
 
 describe("parseProvisionDesignation", () => {
   test("reads the designation a publisher prints, spacing and all", () => {
@@ -265,17 +281,19 @@ describe("withProvisionRanges", () => {
   test("states the span of provisions a container holds", () => {
     const [, hlava] = withProvisionRanges(items);
 
-    expect(hlava?.label).toBe("HLAVA I (§ 976–978)");
+    expect(hlava?.label).toBe("HLAVA I");
+    expect(hlava?.meta).toBe("§ 976–978");
   });
 
   test("a container reaches past its own children to the last provision under it", () => {
     const [cast] = withProvisionRanges(items);
 
-    expect(cast?.label).toBe("ČÁST PRVNÍ (§ 976–979)");
+    expect(cast?.label).toBe("ČÁST PRVNÍ");
+    expect(cast?.meta).toBe("§ 976–979");
   });
 
   test("a container holding one provision states it once, not as a range", () => {
-    expect(withProvisionRanges(items).at(-2)?.label).toBe("HLAVA II (§ 979)");
+    expect(withProvisionRanges(items).at(-2)?.meta).toBe("§ 979");
   });
 
   test("orders by the act, not by the number, so a suffix stays in place", () => {
@@ -286,7 +304,7 @@ describe("withProvisionRanges", () => {
       outlineItem({ id: "c", label: "§ 265b", level: 1 }),
     ]);
 
-    expect(suffixed.at(0)?.label).toBe("HLAVA I (§ 265–265b)");
+    expect(suffixed.at(0)?.meta).toBe("§ 265–265b");
   });
 
   test("a provision is not a range of itself", () => {
@@ -301,7 +319,7 @@ describe("withProvisionRanges", () => {
     ]);
 
     // `§ 1–2` would state the article as a section, which it is not.
-    expect(mixed.at(0)?.label).toBe("HLAVA I (§ 1–Čl. 2)");
+    expect(mixed.at(0)?.meta).toBe("§ 1–Čl. 2");
   });
 
   test("a container with no provisions under it is left as the act states it", () => {
@@ -313,18 +331,19 @@ describe("withProvisionRanges", () => {
     expect(ranged.map((item) => item.label)).toEqual(["ČÁST PRVNÍ", "HLAVA I"]);
   });
 
-  test("carries the annotation through untouched", () => {
+  test("carries the title through and states the range beside it", () => {
     const [cast] = withProvisionRanges([
       outlineItem({
         id: "cast",
-        label: "ČÁST PRVNÍ",
+        label: "Část první",
         level: 0,
-        meta: "OBECNÁ ČÁST",
+        title: "Obecná část",
       }),
       outlineItem({ id: "p", label: "§ 1", level: 1 }),
     ]);
 
-    expect(cast?.meta).toBe("OBECNÁ ČÁST");
+    expect(cast?.title).toBe("Obecná část");
+    expect(cast?.meta).toBe("§ 1");
   });
 });
 
