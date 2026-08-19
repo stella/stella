@@ -105,7 +105,7 @@ const AUTHORITY_REGISTRIES = new Set([
  * list working across cases.
  */
 const PROCEDURAL_CUE =
-  /napaden|proti\s+(?:rozsudk|usnesen)|odvol[áa]n|dovol[áa]n[íi]\s+(?:žalovan|žalobc)|soud[ue]?\s+prvn[íi]ho\s+stupn|prvostupňov|potvrdil|zrušil\s+a\s+vr[áa]til|vedl[ei]?\s+u\s+|pobočka\s+v/iu;
+  /napaden|proti\s+(?:rozsudk|usnesen)|odvol[áa]n|dovol[áa]n[íi]\s+(?:žalovan|žalobc)|soud[ue]?\s+prvn[íi]ho\s+stupn|prvostupňov|potvrdil|zrušil\s+a\s+vr[áa]til|vedl[ei]?\s+u\s+|pobočka\s+v|v\s+konan[íi]\s+veden[oe]m|veden[eé]j\s+\p{L}+\s+s[úu]dom\s+pod|postupom\s+(?:okresn|krajsk|najvyšš)|a\s+takto\s+rozhodol/iu;
 
 /**
  * Phrases that mark an authority being invoked. `srov.` (compare) and

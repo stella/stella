@@ -2,7 +2,9 @@ import { describe, expect, test } from "bun:test";
 
 import {
   CITATION_KIND,
+  CITATION_KIND_EVIDENCE,
   classifyCitation,
+  classifyCitationVerdict,
   proceduralKeysFromMetadata,
 } from "@/api/handlers/case-law/citation-kind";
 
@@ -44,6 +46,29 @@ describe("context decides when it speaks", () => {
           "srov. shodně např. usnesení Nejvyššího soudu ze dne 29. 8. 2013, sp. zn. 29 Cdo 1983/2013",
       }),
     ).toBe(CITATION_KIND.PRECEDENT);
+  });
+
+  test("a constitutional-complaint recital is procedural even for a supreme-court registry", () => {
+    expect(
+      classifyCitation({
+        citationText: "sp. zn. 1 Tdo 4/2008",
+        context:
+          "postupom Najvyššieho súdu Slovenskej republiky v konaní vedenom pod sp. zn. 1 Tdo 4/2008 a jeho uznesením z 20. februára 2008 a takto",
+      }),
+    ).toBe(CITATION_KIND.PROCEDURAL);
+  });
+
+  test("a file kept by the court below is procedural on context, not registry", () => {
+    expect(
+      classifyCitationVerdict({
+        citationText: "sp. zn. 2 T 31/2006",
+        context:
+          "v trestnej veci vedenej okresným súdom pod sp. zn. 2 T 31/2006 (v nej bol sťažovateľovi uložený trest odňatia slobody)",
+      }),
+    ).toEqual({
+      kind: CITATION_KIND.PROCEDURAL,
+      evidence: CITATION_KIND_EVIDENCE.CONTEXT,
+    });
   });
 
   test("first-instance file references are procedural", () => {
