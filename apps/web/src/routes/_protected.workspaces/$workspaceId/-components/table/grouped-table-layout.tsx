@@ -36,21 +36,15 @@ import type {
   TableTreeNode,
 } from "@/components/workspaces/table/types";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
-import { useFormatter } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
-import type {
-  EntityKind,
-  PropertyId,
-  WorkspaceEntity,
-  WorkspaceProperty,
-  WorkspaceView,
-} from "@/lib/types";
+import type { EntityKind, WorkspaceView } from "@/lib/types";
 import {
   groupCountsOptions,
   useKanbanGroupOptions,
   visibleEntityFieldIds,
 } from "@/lib/workspaces/queries/entities";
 import { propertiesOptions } from "@/lib/workspaces/queries/properties";
+import { mergeLayout } from "@/lib/workspaces/view-layout";
 import { BottomRow } from "@/routes/_protected.workspaces/$workspaceId/-components/bottom-row";
 import { EmptyState } from "@/routes/_protected.workspaces/$workspaceId/-components/empty-state";
 import {
@@ -76,6 +70,7 @@ import {
 } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-grid";
 import { getOrderedColumns } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-grid-order";
 import { WorkspaceTable } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table";
+import type { TableCalculations } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table";
 import { RowEndFillerCell } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/end-fillers";
 import { HeaderEndFillerCell } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/header-cells";
 import {
@@ -92,6 +87,7 @@ import {
 import { useTableStore } from "@/routes/_protected.workspaces/$workspaceId/-hooks/table-store";
 import { useSyncSelectedEntities } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-sync-selected-entities";
 import { useTableState } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-table-state";
+import { useUpdateView } from "@/routes/_protected.workspaces/$workspaceId/-mutations/views";
 
 // Grouped views eager-load only the first few sections' rows upfront; every
 // later section rides its IntersectionObserver scroll-gate (400px lookahead)
@@ -159,6 +155,16 @@ export const GroupedTableLayout = ({
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const groupByConfig = view.layout.groupByPropertyId ?? "";
+  const updateView = useUpdateView(workspaceId);
+  const calculations: TableCalculations = {
+    selections: view.layout.calculations,
+    properties,
+    onChange: (selections) =>
+      updateView.mutate({
+        viewId: view.id,
+        layout: mergeLayout(view.layout, { calculations: selections }),
+      }),
+  };
   const schema = useWorkspaceKanbanSchema(properties);
   const grouping = useMemo(
     () => resolveWorkspaceKanbanGrouping(groupByConfig, schema),
@@ -188,11 +194,6 @@ export const GroupedTableLayout = ({
       }),
     [groupByProperty, view.layout.hiddenProperties, properties],
   );
-
-  // Auto-summing every int column per group is misleading for non-additive
-  // columns (e.g. "Splatnost faktur (dny)" — you don't add up days), so the
-  // per-group rollups are disabled until aggregation becomes opt-in per column.
-  const sumProperties = useMemo<WorkspaceProperty[]>(() => [], []);
 
   // When grouped by the workspace's "Document Type" classifier, each section
   // renders the common columns plus only the playbook columns scoped to that
@@ -341,6 +342,7 @@ export const GroupedTableLayout = ({
       <div className="flex w-max min-w-full flex-col" ref={scrollRef}>
         {groups.map((group) => (
           <GroupSection
+            calculations={calculations}
             columns={columns}
             count={
               countsLoaded ? (countByValue.get(group.value) ?? 0) : undefined
@@ -354,7 +356,6 @@ export const GroupedTableLayout = ({
             optionValues={optionValues}
             outerScrollRef={scrollRef}
             reportGroupTreeData={reportGroupTreeData}
-            sumProperties={sumProperties}
             tableState={tableState}
             view={view}
             workspaceId={workspaceId}
@@ -548,7 +549,9 @@ type GroupSectionProps = {
   // column selection when grouped by the "Document Type" classifier. Empty for
   // other groupings (every section then renders the full column set).
   gateLabelsByColumnId: Map<string, Set<string>>;
-  sumProperties: WorkspaceProperty[];
+  // Each section totals its own rows, with the same reducer the flat table and
+  // the board use.
+  calculations: TableCalculations;
   tableState: ReturnType<typeof useTableState>;
   outerScrollRef: RefObject<HTMLDivElement | null>;
   reportGroupTreeData: (groupKey: string, nodes: TableTreeNode[]) => void;
@@ -565,7 +568,7 @@ const GroupSection = ({
   fieldIds,
   columns,
   gateLabelsByColumnId,
-  sumProperties,
+  calculations,
   tableState,
   outerScrollRef,
   reportGroupTreeData,
@@ -699,12 +702,10 @@ const GroupSection = ({
       <GroupHeader
         collapsed={collapsed}
         empty={isEmpty}
-        entities={entities}
         group={group}
         loadedCount={loadedCount}
         loading={isLoadingCounts}
         onToggle={() => setCollapsed((prev) => !prev)}
-        sumProperties={sumProperties}
         totalCount={count ?? null}
       />
       {!collapsed && showSkeleton && (
@@ -731,6 +732,7 @@ const GroupSection = ({
             }}
           >
             <WorkspaceTable
+              calculations={calculations}
               contentMode={tableState.contentMode}
               fillHeight={false}
               hasNextPage={query.hasNextPage}
@@ -764,8 +766,6 @@ type GroupHeaderProps = {
   onToggle: () => void;
   loadedCount: number;
   totalCount: number | null;
-  entities: WorkspaceEntity[];
-  sumProperties: WorkspaceProperty[];
 };
 
 const GroupHeader = ({
@@ -776,18 +776,10 @@ const GroupHeader = ({
   onToggle,
   loadedCount,
   totalCount,
-  entities,
-  sumProperties,
 }: GroupHeaderProps) => {
   const t = useTranslations();
-  const format = useFormatter();
   const count = totalCount ?? loadedCount;
   const ChevronIcon = collapsed ? ChevronRightIcon : ChevronDownIcon;
-  // The per-group rollups sum only the rows loaded so far, while the count comes
-  // from the server and is always exact. Show the sums only once every row in
-  // the group is loaded, so a partially-scrolled large group never displays a
-  // misleading subtotal next to a complete count.
-  const sumsComplete = totalCount !== null && loadedCount >= totalCount;
 
   return (
     <div
@@ -842,35 +834,6 @@ const GroupHeader = ({
           </span>
         </span>
       </button>
-      {!empty &&
-        sumsComplete &&
-        sumProperties.map((property) => {
-          const sum = sumIntProperty(entities, property.id);
-          return (
-            <span
-              className="text-muted-foreground ms-1 text-xs tabular-nums"
-              key={property.id}
-            >
-              <span className="font-medium">{property.name}</span>
-              {": "}
-              {format.number(sum)}
-            </span>
-          );
-        })}
     </div>
   );
-};
-
-const sumIntProperty = (
-  entities: readonly WorkspaceEntity[],
-  propertyId: PropertyId,
-): number => {
-  let total = 0;
-  for (const entity of entities) {
-    const content = entity.fields[propertyId]?.content;
-    if (content?.type === "int") {
-      total += content.value;
-    }
-  }
-  return total;
 };

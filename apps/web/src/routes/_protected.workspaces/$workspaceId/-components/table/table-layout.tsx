@@ -21,6 +21,7 @@ import {
   visibleEntityFieldIds,
 } from "@/lib/workspaces/queries/entities";
 import { propertiesOptions } from "@/lib/workspaces/queries/properties";
+import { mergeLayout } from "@/lib/workspaces/view-layout";
 import {
   EmptyState,
   FilteredEmptyState,
@@ -172,7 +173,7 @@ const FlatTableLayout = ({ workspaceId, view }: TableLayoutProps) => {
           onClearFilters={() =>
             updateView.mutate({
               viewId: view.id,
-              layout: { ...view.layout, filters: [] },
+              layout: mergeLayout(view.layout, { filters: [] }),
             })
           }
         />
@@ -190,6 +191,15 @@ const FlatTableLayout = ({ workspaceId, view }: TableLayoutProps) => {
   return (
     <MobileTableOrientationGate>
       <WorkspaceTable
+        calculations={{
+          selections: view.layout.calculations,
+          properties,
+          onChange: (selections) =>
+            updateView.mutate({
+              viewId: view.id,
+              layout: mergeLayout(view.layout, { calculations: selections }),
+            }),
+        }}
         hasNextPage={hasNextPage}
         isFetchingNextPage={isFetchingNextPage}
         onLoadMore={() => {
