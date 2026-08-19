@@ -1,6 +1,6 @@
 import type * as React from "react";
 
-import { cn } from "@stll/ui/lib/utils";
+import { cn } from "../lib/utils";
 
 /**
  * Side-pane preview pattern: a list of options (menu items, rows) with a

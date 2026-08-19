@@ -2,7 +2,7 @@
 
 import { Form as FormPrimitive } from "@base-ui/react/form";
 
-import { cn } from "@stll/ui/lib/utils";
+import { cn } from "../lib/utils";
 
 const Form = ({ className, ...props }: FormPrimitive.Props) => (
   <FormPrimitive

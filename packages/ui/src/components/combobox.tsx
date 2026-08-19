@@ -5,11 +5,11 @@ import * as React from "react";
 import { Combobox as ComboboxPrimitive } from "@base-ui/react/combobox";
 import { ChevronsUpDownIcon, XIcon } from "lucide-react";
 
-import { Input } from "@stll/ui/components/input";
-import { ScrollArea } from "@stll/ui/components/scroll-area";
-import { containedHandler } from "@stll/ui/hooks/use-contained-handler";
-import { OVERLAY_LAYER_CLASS_NAMES } from "@stll/ui/lib/overlay-layer";
-import { cn } from "@stll/ui/lib/utils";
+import { containedHandler } from "../hooks/use-contained-handler";
+import { OVERLAY_LAYER_CLASS_NAMES } from "../lib/overlay-layer";
+import { cn } from "../lib/utils";
+import { Input } from "./input";
+import { ScrollArea } from "./scroll-area";
 
 const ComboboxContext = React.createContext<{
   chipsRef: React.RefObject<HTMLDivElement | null> | null;

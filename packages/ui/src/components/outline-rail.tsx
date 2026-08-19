@@ -26,12 +26,8 @@ import {
   useState,
 } from "react";
 
-import {
-  Tooltip,
-  TooltipPopup,
-  TooltipTrigger,
-} from "@stll/ui/components/tooltip";
-import { cn } from "@stll/ui/lib/utils";
+import { cn } from "../lib/utils";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "./tooltip";
 
 export type OutlineItem = {
   id: string;

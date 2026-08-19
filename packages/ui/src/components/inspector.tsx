@@ -1,7 +1,7 @@
 import type * as React from "react";
 
-import { Tabs, TabsList, TabsPanel, TabsTab } from "@stll/ui/components/tabs";
-import { cn } from "@stll/ui/lib/utils";
+import { cn } from "../lib/utils";
+import { Tabs, TabsList, TabsPanel, TabsTab } from "./tabs";
 
 type InspectorProps = React.ComponentProps<"aside">;
 

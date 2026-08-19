@@ -1,6 +1,6 @@
 import type { LucideIcon } from "lucide-react";
 
-import { cn } from "@stll/ui/lib/utils";
+import { cn } from "../lib/utils";
 
 type DirectionalIconProps = {
   /**

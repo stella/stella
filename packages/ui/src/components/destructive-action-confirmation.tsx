@@ -2,10 +2,10 @@
 
 import * as React from "react";
 
-import { Field, FieldDescription, FieldLabel } from "@stll/ui/components/field";
-import { Input } from "@stll/ui/components/input";
-import type { InputProps } from "@stll/ui/components/input";
-import { cn } from "@stll/ui/lib/utils";
+import { cn } from "../lib/utils";
+import { Field, FieldDescription, FieldLabel } from "./field";
+import { Input } from "./input";
+import type { InputProps } from "./input";
 
 type DestructiveActionConfirmationProps = Omit<
   InputProps,

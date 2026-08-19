@@ -2,13 +2,9 @@
 
 import type { ComponentType } from "react";
 
-import { Button } from "@stll/ui/components/button";
-import {
-  Tooltip,
-  TooltipPopup,
-  TooltipTrigger,
-} from "@stll/ui/components/tooltip";
-import { cn } from "@stll/ui/lib/utils";
+import { cn } from "../lib/utils";
+import { Button } from "./button";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "./tooltip";
 
 type SegmentedIconToggleOption<T extends string> = {
   value: T;

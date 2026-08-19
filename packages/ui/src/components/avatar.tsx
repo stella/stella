@@ -2,7 +2,7 @@
 
 import { Avatar as AvatarPrimitive } from "@base-ui/react/avatar";
 
-import { cn } from "@stll/ui/lib/utils";
+import { cn } from "../lib/utils";
 
 const Avatar = ({ className, ...props }: AvatarPrimitive.Root.Props) => (
   <AvatarPrimitive.Root

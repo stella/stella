@@ -5,11 +5,11 @@ import type * as React from "react";
 import { cva } from "class-variance-authority";
 import type { VariantProps } from "class-variance-authority";
 
-import { Input } from "@stll/ui/components/input";
-import type { InputProps } from "@stll/ui/components/input";
-import { Textarea } from "@stll/ui/components/textarea";
-import type { TextareaProps } from "@stll/ui/components/textarea";
-import { cn } from "@stll/ui/lib/utils";
+import { cn } from "../lib/utils";
+import { Input } from "./input";
+import type { InputProps } from "./input";
+import { Textarea } from "./textarea";
+import type { TextareaProps } from "./textarea";
 
 const InputGroup = ({ className, ...props }: React.ComponentProps<"div">) => (
   <div

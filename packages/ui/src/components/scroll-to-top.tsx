@@ -8,7 +8,7 @@
 
 import { type RefObject, useEffect, useState } from "react";
 
-import { cn } from "@stll/ui/lib/utils";
+import { cn } from "../lib/utils";
 
 export type ScrollToTopProps = {
   scrollContainerRef: RefObject<HTMLElement | null>;

@@ -8,18 +8,18 @@ import type { VariantProps } from "class-variance-authority";
 import { LoaderIcon } from "lucide-react";
 
 import {
-  buttonAccessibleDisabledClass,
-  buttonVariants,
-} from "@stll/ui/components/button-variants";
-import { renderTooltipTrigger } from "@stll/ui/components/tooltip-trigger-helper";
-import {
   BUTTON_DISPOSITION,
   blockDisabledActivation,
   blockDisabledKeyActivation,
   resolveButtonDisposition,
-} from "@stll/ui/lib/button-disposition";
-import type { OverlayLayer } from "@stll/ui/lib/overlay-layer";
-import { cn } from "@stll/ui/lib/utils";
+} from "../lib/button-disposition";
+import type { OverlayLayer } from "../lib/overlay-layer";
+import { cn } from "../lib/utils";
+import {
+  buttonAccessibleDisabledClass,
+  buttonVariants,
+} from "./button-variants";
+import { renderTooltipTrigger } from "./tooltip-trigger-helper";
 
 type ButtonProps = {
   variant?: VariantProps<typeof buttonVariants>["variant"];

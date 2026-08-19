@@ -3,8 +3,6 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import { describe, expect, test } from "bun:test";
 
-import type { Tabs, TabsList } from "@stll/ui/components/tabs";
-
 import type * as InspectorModule from "./inspector";
 import {
   Inspector,
@@ -25,6 +23,7 @@ import {
   InspectorTabs,
   InspectorTitle,
 } from "./inspector";
+import type { Tabs, TabsList } from "./tabs";
 
 // Total over the module's exports, so a new slot component cannot land without
 // being named here: `satisfies` fails to compile until it is, and the coverage

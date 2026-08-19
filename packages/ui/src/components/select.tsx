@@ -11,8 +11,8 @@ import {
   ChevronUpIcon,
 } from "lucide-react";
 
-import { OVERLAY_LAYER_CLASS_NAMES } from "@stll/ui/lib/overlay-layer";
-import { cn } from "@stll/ui/lib/utils";
+import { OVERLAY_LAYER_CLASS_NAMES } from "../lib/overlay-layer";
+import { cn } from "../lib/utils";
 
 type SelectItemProps = SelectPrimitive.Item.Props & {
   label?: string;

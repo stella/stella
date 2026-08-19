@@ -2,7 +2,7 @@ import type { PropsWithChildren } from "react";
 
 import { Separator as SeparatorPrimitive } from "@base-ui/react/separator";
 
-import { cn } from "@stll/ui/lib/utils";
+import { cn } from "../lib/utils";
 
 const Separator = ({
   className,

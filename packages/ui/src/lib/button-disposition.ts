@@ -1,6 +1,6 @@
 import type * as React from "react";
 
-import { hasTooltipContent } from "@stll/ui/lib/tooltip-content";
+import { hasTooltipContent } from "./tooltip-content";
 
 /**
  * How a button expresses "unavailable".

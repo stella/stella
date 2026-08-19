@@ -5,14 +5,14 @@ import type * as React from "react";
 import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
 import { XIcon } from "lucide-react";
 
-import { Button } from "@stll/ui/components/button";
-import { ScrollArea } from "@stll/ui/components/scroll-area";
-import { renderTooltipTrigger } from "@stll/ui/components/tooltip-trigger-helper";
 import {
   OVERLAY_LAYER_CLASS_NAMES,
   type OverlayLayer,
-} from "@stll/ui/lib/overlay-layer";
-import { cn } from "@stll/ui/lib/utils";
+} from "../lib/overlay-layer";
+import { cn } from "../lib/utils";
+import { Button } from "./button";
+import { ScrollArea } from "./scroll-area";
+import { renderTooltipTrigger } from "./tooltip-trigger-helper";
 
 const DialogCreateHandle = DialogPrimitive.createHandle;
 

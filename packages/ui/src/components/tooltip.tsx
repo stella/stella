@@ -5,8 +5,8 @@ import { Tooltip as TooltipPrimitive } from "@base-ui/react/tooltip";
 import {
   OVERLAY_LAYER_CLASS_NAMES,
   type OverlayLayer,
-} from "@stll/ui/lib/overlay-layer";
-import { cn } from "@stll/ui/lib/utils";
+} from "../lib/overlay-layer";
+import { cn } from "../lib/utils";
 
 const TooltipCreateHandle = TooltipPrimitive.createHandle;
 

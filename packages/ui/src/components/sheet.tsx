@@ -5,10 +5,10 @@ import type * as React from "react";
 import { Dialog as SheetPrimitive } from "@base-ui/react/dialog";
 import { XIcon } from "lucide-react";
 
-import { Button } from "@stll/ui/components/button";
-import { ScrollArea } from "@stll/ui/components/scroll-area";
-import { renderTooltipTrigger } from "@stll/ui/components/tooltip-trigger-helper";
-import { cn } from "@stll/ui/lib/utils";
+import { cn } from "../lib/utils";
+import { Button } from "./button";
+import { ScrollArea } from "./scroll-area";
+import { renderTooltipTrigger } from "./tooltip-trigger-helper";
 
 const Sheet = SheetPrimitive.Root;
 

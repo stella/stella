@@ -11,12 +11,12 @@ import {
   AlertDialogPanel,
   AlertDialogPopup,
   AlertDialogTitle,
-} from "@stll/ui/components/alert-dialog";
-import { Button } from "@stll/ui/components/button";
+} from "./alert-dialog";
+import { Button } from "./button";
 import {
   DestructiveActionConfirmation,
   useDestructiveActionConfirmation,
-} from "@stll/ui/components/destructive-action-confirmation";
+} from "./destructive-action-confirmation";
 
 type DestructiveConfirmDialogProps = {
   cancelLabel: React.ReactNode;

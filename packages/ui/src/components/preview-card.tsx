@@ -4,7 +4,7 @@ import type React from "react";
 
 import { PreviewCard as PreviewCardPrimitive } from "@base-ui/react/preview-card";
 
-import { cn } from "@stll/ui/lib/utils";
+import { cn } from "../lib/utils";
 
 export const PreviewCard: typeof PreviewCardPrimitive.Root =
   PreviewCardPrimitive.Root;
