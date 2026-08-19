@@ -66,19 +66,57 @@ const BASE_URL = "https://vyhledavac.nssoud.cz";
 const CZ_NSS_LANGUAGE = "cs";
 
 /**
- * The court every row is stored under.
+ * The court a row is stored under when nothing states a finer one.
  *
- * Coarser than the portal, which also carries the regional and city
- * administrative courts whose judgments the NSS reviews (a single day's
- * listing mixes `1 Az 4/2026` of the Městský soud v Praze with `52 Af 4/2026`
- * of the Krajský soud v Hradci Králové). Their decisions no longer share a row
- * — the identity is the portal's document id, see `czNssListingIdentity` — but
- * they are still all labelled with this court. Recording the deciding court is
- * a separate metadata migration: the row and the detail fields this adapter
- * reads state no court, so it would have to come from another field (the ECLI
- * carries a court code) and be rewritten across the rows already stored.
+ * The portal also carries the regional and city administrative courts whose
+ * judgments the NSS reviews (a single day's listing mixes `1 Az 4/2026` of the
+ * Městský soud v Praze with `52 Af 4/2026` of the Krajský soud v Hradci
+ * Králové). Neither the row nor the detail fields name the deciding court; the
+ * ECLI does, in its court code, so `courtFromEcli` reads it from there and this
+ * label covers only documents that carry no ECLI.
  */
 const CZ_NSS_COURT = "Nejvyšší správní soud";
+
+/**
+ * ECLI court codes the portal publishes under, to the court's name.
+ *
+ * The list is the one the corpus has shown so far; an unlisted code is
+ * reported rather than mapped, and the row keeps the fallback label so the
+ * document is still stored.
+ */
+export const CZ_ECLI_COURTS = {
+  NSS: CZ_NSS_COURT,
+  MSPH: "Městský soud v Praze",
+  KSBR: "Krajský soud v Brně",
+  KSCB: "Krajský soud v Českých Budějovicích",
+  KSHK: "Krajský soud v Hradci Králové",
+  KSOS: "Krajský soud v Ostravě",
+  KSPH: "Krajský soud v Praze",
+  KSPL: "Krajský soud v Plzni",
+  KSUL: "Krajský soud v Ústí nad Labem",
+} as const satisfies Record<string, string>;
+
+/** Codes are four letters at most; the bound keeps an odd ECLI out of the log. */
+const ECLI_COURT_CODE = /^ECLI:CZ:(?<code>[A-Z]{1,8}):/u;
+
+const isEcliCourtCode = (code: string): code is keyof typeof CZ_ECLI_COURTS =>
+  Object.hasOwn(CZ_ECLI_COURTS, code);
+
+/** The deciding court named by an ECLI, or the fallback label. */
+export const courtFromEcli = (ecli: string | undefined): string => {
+  if (ecli === undefined) {
+    return CZ_NSS_COURT;
+  }
+  const code = ECLI_COURT_CODE.exec(ecli)?.groups?.["code"];
+  if (code === undefined) {
+    return CZ_NSS_COURT;
+  }
+  if (isEcliCourtCode(code)) {
+    return CZ_ECLI_COURTS[code];
+  }
+  logger.warn("case_law.ingestion.cz_nss.unknown_ecli_court", { code });
+  return CZ_NSS_COURT;
+};
 
 /**
  * Rows the portal renders inline on the results page a search returns.
@@ -520,7 +558,7 @@ const fetchDecisionContent = async (
         const parsed = parseNssDecisionHtml({
           caseNumber: row.caseNumber,
           ecli: detail.ecli,
-          court: CZ_NSS_COURT,
+          court: courtFromEcli(detail.ecli),
           decisionDate: (() => {
             if (detail.decisionDate) {
               return parseCeDate(detail.decisionDate);
@@ -650,13 +688,25 @@ const EMPTY_DETAIL: DetailMetadata = {
   citation: undefined,
 };
 
+/**
+ * The detail page, or the fact that it could not be read.
+ *
+ * A portal that answers 404 has no metadata for the document, and the row is
+ * built without it. A timeout or a server error is not that: the metadata
+ * exists and was not read, and a row built from it would carry the fallback
+ * court and no ECLI for good, since the refresh hashes only listing fields.
+ * Such a row is reported as unavailable, which the reconciliation treats as
+ * a document not yet read and comes back for.
+ */
+type DetailFetch =
+  | { type: "fetched"; detail: DetailMetadata }
+  | { type: "unavailable" };
+
 const fetchDetailMetadata = async (
   documentId: string,
   session: SessionState,
   signal: AbortSignal,
-): Promise<DetailMetadata> => {
-  const empty = EMPTY_DETAIL;
-
+): Promise<DetailFetch> => {
   try {
     const response = await fetchWithTimeout(
       `${BASE_URL}/DokumentDetail/Index/${documentId}`,
@@ -669,28 +719,34 @@ const fetchDetailMetadata = async (
         timeoutMs: ADAPTER_TIMEOUT.REQUEST,
       },
     );
+    if (response.status === 404) {
+      return { type: "fetched", detail: EMPTY_DETAIL };
+    }
     if (!response.ok) {
-      return empty;
+      return { type: "unavailable" };
     }
 
     const html = await response.text();
 
     return {
-      ecli: extractDivText(html, "ecli"),
-      judge: extractDivText(html, "soudcezpravodaj"),
-      senate: extractDivText(html, "soudsenat"),
-      legalArea: extractDivText(html, "oblastupravy"),
-      decisionType: extractDivText(html, "druhdokumentuavyrokrozhodnuti"),
-      decisionDate: extractDivText(html, "datumvydanirozhodnuti"),
-      outcome: extractDivText(html, "vyrokrozhodnuti"),
-      caseType: extractDivText(html, "typrizeni"),
-      parties: extractDivText(html, "ucastnicirizeniz"),
-      caseStatus: extractDivText(html, "stavrizeni"),
-      administrativeAuthority: extractDivText(html, "nazevspravnihoorganu"),
-      citation: extractDivText(html, "citace"),
+      type: "fetched",
+      detail: {
+        ecli: extractDivText(html, "ecli"),
+        judge: extractDivText(html, "soudcezpravodaj"),
+        senate: extractDivText(html, "soudsenat"),
+        legalArea: extractDivText(html, "oblastupravy"),
+        decisionType: extractDivText(html, "druhdokumentuavyrokrozhodnuti"),
+        decisionDate: extractDivText(html, "datumvydanirozhodnuti"),
+        outcome: extractDivText(html, "vyrokrozhodnuti"),
+        caseType: extractDivText(html, "typrizeni"),
+        parties: extractDivText(html, "ucastnicirizeniz"),
+        caseStatus: extractDivText(html, "stavrizeni"),
+        administrativeAuthority: extractDivText(html, "nazevspravnihoorganu"),
+        citation: extractDivText(html, "citace"),
+      },
     };
   } catch {
-    return empty;
+    return { type: "unavailable" };
   }
 };
 
@@ -704,6 +760,7 @@ const rowToResult = (
   // network failures — never include fulltext in the hash.
   const raw = `${row.caseNumber}|${row.decisionDate ?? ""}|${row.decisionType ?? ""}`;
   const sourceDocumentId = czNssSourceDocumentId(row);
+  const court = courtFromEcli(detail.ecli);
 
   return {
     caseNumber: row.caseNumber,
@@ -720,7 +777,7 @@ const rowToResult = (
       ? {}
       : { legacySourceUrls: [detailUrl(sourceDocumentId)] }),
     ecli: detail.ecli,
-    court: CZ_NSS_COURT,
+    court,
     country: "CZE",
     language: CZ_NSS_LANGUAGE,
     decisionDate: (() => {
@@ -740,7 +797,7 @@ const rowToResult = (
     documentUrl: row.documentUrl,
     metadata: {
       caseNumber: row.caseNumber,
-      court: CZ_NSS_COURT,
+      court,
       ecli: detail.ecli,
       judge: detail.judge,
       senate: detail.senate,
@@ -1030,7 +1087,14 @@ export const buildCzNssDecision = async ({
     };
   }
 
-  const detail = await fetchDetailMetadata(documentId, session, signal);
+  const detailFetch = await fetchDetailMetadata(documentId, session, signal);
+  if (detailFetch.type === "unavailable") {
+    return {
+      type: "detail-unavailable",
+      decision: rowToResult(row, EMPTY_CONTENT, EMPTY_DETAIL),
+    };
+  }
+  const { detail } = detailFetch;
   const content = await fetchDecisionContent(
     documentId,
     row,
