@@ -371,7 +371,12 @@ export const OutlineRail = ({
   );
 
   const toggleCollapse = useCallback(
-    (id: string, level: number, rowEl: HTMLElement | null) => {
+    (id: string, rowEl: HTMLElement | null) => {
+      // Where the toggled row sits now. Content changes only below it, so the
+      // row moves only when the panel has to clamp its scroll offset (a branch
+      // folding away above the fold); compensate exactly that, and nothing
+      // when nothing moved.
+      const rowTop = rowEl?.getBoundingClientRect().top;
       setToggled((prev) => new Set(prev).add(id));
       setCollapsed((prev) => {
         const next = new Set(prev);
@@ -382,15 +387,12 @@ export const OutlineRail = ({
         }
         return next;
       });
-      // Keep the toggled header pinned at its sticky position so it doesn't
-      // jump out of view when the content below it grows or shrinks.
       requestAnimationFrame(() => {
         const panel = panelRef.current;
-        if (!panel || !rowEl) {
+        if (!panel || !rowEl || rowTop === undefined) {
           return;
         }
-        const target = panel.getBoundingClientRect().top + level * ROW_H;
-        panel.scrollTop += rowEl.getBoundingClientRect().top - target;
+        panel.scrollTop += rowEl.getBoundingClientRect().top - rowTop;
       });
     },
     [],
@@ -478,11 +480,7 @@ export const OutlineRail = ({
               aria-label={isCollapsed ? "Expand" : "Collapse"}
               className="text-muted-foreground hover:text-foreground flex size-5 shrink-0 items-center justify-center"
               onClick={(event) =>
-                toggleCollapse(
-                  node.item.id,
-                  node.item.level,
-                  event.currentTarget.parentElement,
-                )
+                toggleCollapse(node.item.id, event.currentTarget.parentElement)
               }
               style={{ marginInlineStart: indent - 4 }}
               type="button"
