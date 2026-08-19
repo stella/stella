@@ -267,3 +267,237 @@ describe("proceduralKeysFromMetadata", () => {
     ).toBe(0);
   });
 });
+
+/**
+ * Polish, where the registry prior used to be wrong for a whole court tier.
+ *
+ * Every test here asserts the evidence tier as well as the kind, which is
+ * what makes one cue per test mean something: `CONTEXT` is only returned
+ * when exactly one of the two cue lists matched, so a sentence that
+ * accidentally carried a second cue would report `REGISTRY` and fail rather
+ * than pass for the wrong reason. The cue tests all cite an unlisted
+ * register (`I C`, a district civil number) or a listed one (`II CSK`), so
+ * removing the cue under test flips the answer to the registry's default.
+ */
+describe("Polish cues and registries", () => {
+  /** Falls back to procedural: the district registers are not authority. */
+  const DISTRICT = "sygn. akt I C 1234/19";
+  /** Falls back to precedent: the Supreme Court's civil cassation register. */
+  const SUPREME = "sygn. akt II CSK 123/20";
+
+  const contextVerdict = (citationText: string, context: string) =>
+    classifyCitationVerdict({ citationText, context });
+
+  test("por. points at an authority", () => {
+    expect(
+      contextVerdict(
+        DISTRICT,
+        "Por. stanowisko Sądu Najwyższego przyjęte w sprawie sygn. akt I C 1234/19.",
+      ),
+    ).toEqual({
+      kind: CITATION_KIND.PRECEDENT,
+      evidence: CITATION_KIND_EVIDENCE.CONTEXT,
+    });
+  });
+
+  test("zob. points at an authority", () => {
+    expect(
+      contextVerdict(
+        DISTRICT,
+        "Zob. stanowisko Sądu Najwyższego przyjęte w sprawie sygn. akt I C 1234/19.",
+      ),
+    ).toEqual({
+      kind: CITATION_KIND.PRECEDENT,
+      evidence: CITATION_KIND_EVIDENCE.CONTEXT,
+    });
+  });
+
+  test("tak też marks agreement with a cited holding", () => {
+    expect(
+      contextVerdict(
+        DISTRICT,
+        "Tak też Sąd Najwyższy w sprawie sygn. akt I C 1234/19.",
+      ),
+    ).toEqual({
+      kind: CITATION_KIND.PRECEDENT,
+      evidence: CITATION_KIND_EVIDENCE.CONTEXT,
+    });
+  });
+
+  test("podobnie marks agreement with a cited holding", () => {
+    expect(
+      contextVerdict(
+        DISTRICT,
+        "Podobnie Sąd Najwyższy w sprawie sygn. akt I C 1234/19.",
+      ),
+    ).toEqual({
+      kind: CITATION_KIND.PRECEDENT,
+      evidence: CITATION_KIND_EVIDENCE.CONTEXT,
+    });
+  });
+
+  test("zgodnie z marks reliance on a cited holding", () => {
+    expect(
+      contextVerdict(
+        DISTRICT,
+        "Zgodnie z poglądem przyjętym w sprawie sygn. akt I C 1234/19 roszczenie nie wygasło.",
+      ),
+    ).toEqual({
+      kind: CITATION_KIND.PRECEDENT,
+      evidence: CITATION_KIND_EVIDENCE.CONTEXT,
+    });
+  });
+
+  test("w wyroku z dnia introduces a cited holding", () => {
+    expect(
+      contextVerdict(
+        DISTRICT,
+        "Sąd Najwyższy w wyroku z dnia 5 maja 2019 r., sygn. akt I C 1234/19, przyjął odmienne stanowisko.",
+      ),
+    ).toEqual({
+      kind: CITATION_KIND.PRECEDENT,
+      evidence: CITATION_KIND_EVIDENCE.CONTEXT,
+    });
+  });
+
+  test("w uchwale introduces a cited resolution", () => {
+    expect(
+      contextVerdict(
+        DISTRICT,
+        "Sąd Najwyższy w uchwale sygn. akt I C 1234/19 rozstrzygnął tę rozbieżność.",
+      ),
+    ).toEqual({
+      kind: CITATION_KIND.PRECEDENT,
+      evidence: CITATION_KIND_EVIDENCE.CONTEXT,
+    });
+  });
+
+  test("ugruntowan marks settled case law", () => {
+    expect(
+      contextVerdict(
+        DISTRICT,
+        "Pogląd ten jest ugruntowany w orzecznictwie, sygn. akt I C 1234/19.",
+      ),
+    ).toEqual({
+      kind: CITATION_KIND.PRECEDENT,
+      evidence: CITATION_KIND_EVIDENCE.CONTEXT,
+    });
+  });
+
+  test("utrwalon marks settled case law", () => {
+    expect(
+      contextVerdict(
+        DISTRICT,
+        "Utrwalona linia orzecznicza, sygn. akt I C 1234/19, przyjmuje inaczej.",
+      ),
+    ).toEqual({
+      kind: CITATION_KIND.PRECEDENT,
+      evidence: CITATION_KIND_EVIDENCE.CONTEXT,
+    });
+  });
+
+  test("zaskarżon names the judgment under appeal", () => {
+    expect(
+      contextVerdict(
+        SUPREME,
+        "Sąd oddalił apelację od zaskarżonego wyroku, sygn. akt II CSK 123/20.",
+      ),
+    ).toEqual({
+      kind: CITATION_KIND.PROCEDURAL,
+      evidence: CITATION_KIND_EVIDENCE.CONTEXT,
+    });
+  });
+
+  test("od wyroku names what the appeal was brought from", () => {
+    expect(
+      contextVerdict(
+        SUPREME,
+        "Skarga kasacyjna od wyroku Sądu Apelacyjnego, sygn. akt II CSK 123/20.",
+      ),
+    ).toEqual({
+      kind: CITATION_KIND.PROCEDURAL,
+      evidence: CITATION_KIND_EVIDENCE.CONTEXT,
+    });
+  });
+
+  test("sygn. akt alone decides nothing", () => {
+    // The citation prefix is not a cue and must never become one: it stands
+    // in front of an authority and a recital alike, so a list carrying it
+    // would push every Polish citation onto whichever side it was added to.
+    expect(
+      contextVerdict(
+        "sygn. akt I ACa 1234/20",
+        "wyrok Sądu Apelacyjnego w Warszawie, sygn. akt I ACa 1234/20",
+      ),
+    ).toEqual({
+      kind: CITATION_KIND.PRECEDENT,
+      evidence: CITATION_KIND_EVIDENCE.REGISTRY,
+    });
+  });
+
+  test("an appellate mark is authority on the registry alone", () => {
+    // One assertion per register, so dropping any single entry fails here.
+    // The `z` marks are the interlocutory register of the same courts.
+    for (const citationText of [
+      "sygn. akt I ACa 1234/20",
+      "sygn. akt II AKa 210/19",
+      "sygn. akt III AUa 55/21",
+      "sygn. akt I AGa 88/22",
+      "sygn. akt III APa 12/18",
+      "sygn. akt I ACz 431/17",
+      "sygn. akt II AKz 902/20",
+      "sygn. akt III AUz 71/21",
+      "sygn. akt I AGz 64/22",
+      "sygn. akt III APz 9/19",
+    ]) {
+      expect(classifyCitationVerdict({ citationText, context: null })).toEqual({
+        kind: CITATION_KIND.PRECEDENT,
+        evidence: CITATION_KIND_EVIDENCE.REGISTRY,
+      });
+    }
+  });
+
+  test("a supreme-administrative mark is authority on the registry alone", () => {
+    for (const citationText of [
+      "sygn. akt II OSK 1234/19",
+      "sygn. akt I FSK 456/18",
+      "sygn. akt II GSK 789/20",
+      "sygn. akt I OPS 3/19",
+      "sygn. akt I FPS 2/18",
+      "sygn. akt II GPS 1/17",
+      "sygn. akt I ONP 4/06",
+    ]) {
+      expect(classifyCitationVerdict({ citationText, context: null })).toEqual({
+        kind: CITATION_KIND.PRECEDENT,
+        evidence: CITATION_KIND_EVIDENCE.REGISTRY,
+      });
+    }
+  });
+
+  test("a regional administrative mark is still not authority", () => {
+    // WSA is knowingly absent: `registryOf` stops at the slash and would key
+    // on the bare `sa`, the seat that identifies the court dropped. This
+    // pins the gap so that adding WSA is a deliberate edit here, not a
+    // silent side effect of loosening the reader.
+    expect(
+      classifyCitationVerdict({
+        citationText: "sygn. akt I SA/Wa 123/20",
+        context: null,
+      }),
+    ).toEqual({
+      kind: CITATION_KIND.PROCEDURAL,
+      evidence: CITATION_KIND_EVIDENCE.REGISTRY,
+    });
+  });
+
+  test("a district mark is not authority", () => {
+    // The other half of the appellate entries: what a Polish appellate
+    // judgment names as its own history stays procedural.
+    expect(
+      classifyCitationVerdict({ citationText: DISTRICT, context: null }),
+    ).toEqual({
+      kind: CITATION_KIND.PROCEDURAL,
+      evidence: CITATION_KIND_EVIDENCE.REGISTRY,
+    });
+  });
+});
