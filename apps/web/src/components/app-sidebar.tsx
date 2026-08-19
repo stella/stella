@@ -1250,16 +1250,18 @@ const MatterItem = ({
             />
           </Tooltip>
         )}
-        <MatterColorContextPicker
-          className="absolute start-2 top-2 z-10 size-4"
-          label={t("common.changeColor")}
-          matter={ws}
-        >
-          <MatterIcon
-            className="size-4 shrink-0"
-            matter={{ id: ws.id, color: ws.color }}
-          />
-        </MatterColorContextPicker>
+        {!isCollapsed && (
+          <MatterColorContextPicker
+            className="absolute start-2 top-2 z-10 size-4"
+            label={t("common.changeColor")}
+            matter={ws}
+          >
+            <MatterIcon
+              className="size-4 shrink-0"
+              matter={{ id: ws.id, color: ws.color }}
+            />
+          </MatterColorContextPicker>
+        )}
         <SidebarMenuButton
           asChild
           className={cn(
@@ -1275,6 +1277,21 @@ const MatterItem = ({
             .join(" — ")}
         >
           <Link data-active={isActive || undefined} {...navigationTarget}>
+            {/* Collapsed rail: the icon is the whole item, so it stays
+                inside the link (left click navigates) and only right
+                click opens the colour picker. */}
+            {isCollapsed && (
+              <MatterColorContextPicker
+                className="size-4"
+                matter={ws}
+                trigger="contextmenu"
+              >
+                <MatterIcon
+                  className="size-4 shrink-0"
+                  matter={{ id: ws.id, color: ws.color }}
+                />
+              </MatterColorContextPicker>
+            )}
             <span className="flex min-w-0 flex-col">
               <BidiText as="span" className="truncate">
                 {ws.name}
