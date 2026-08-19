@@ -66,19 +66,56 @@ const BASE_URL = "https://vyhledavac.nssoud.cz";
 const CZ_NSS_LANGUAGE = "cs";
 
 /**
- * The court every row is stored under.
+ * The court a row is stored under when nothing states a finer one.
  *
- * Coarser than the portal, which also carries the regional and city
- * administrative courts whose judgments the NSS reviews (a single day's
- * listing mixes `1 Az 4/2026` of the Městský soud v Praze with `52 Af 4/2026`
- * of the Krajský soud v Hradci Králové). Their decisions no longer share a row
- * — the identity is the portal's document id, see `czNssListingIdentity` — but
- * they are still all labelled with this court. Recording the deciding court is
- * a separate metadata migration: the row and the detail fields this adapter
- * reads state no court, so it would have to come from another field (the ECLI
- * carries a court code) and be rewritten across the rows already stored.
+ * The portal also carries the regional and city administrative courts whose
+ * judgments the NSS reviews (a single day's listing mixes `1 Az 4/2026` of the
+ * Městský soud v Praze with `52 Af 4/2026` of the Krajský soud v Hradci
+ * Králové). Neither the row nor the detail fields name the deciding court; the
+ * ECLI does, in its court code, so `courtFromEcli` reads it from there and this
+ * label covers only documents that carry no ECLI.
  */
 const CZ_NSS_COURT = "Nejvyšší správní soud";
+
+/**
+ * ECLI court codes the portal publishes under, to the court's name.
+ *
+ * The list is the one the corpus has shown so far; an unlisted code is
+ * reported rather than mapped, and the row keeps the fallback label so the
+ * document is still stored.
+ */
+const CZ_ECLI_COURTS = {
+  NSS: CZ_NSS_COURT,
+  MSPH: "Městský soud v Praze",
+  KSBR: "Krajský soud v Brně",
+  KSCB: "Krajský soud v Českých Budějovicích",
+  KSHK: "Krajský soud v Hradci Králové",
+  KSOS: "Krajský soud v Ostravě",
+  KSPH: "Krajský soud v Praze",
+  KSPL: "Krajský soud v Plzni",
+  KSUL: "Krajský soud v Ústí nad Labem",
+} as const satisfies Record<string, string>;
+
+const ECLI_COURT_CODE = /^ECLI:CZ:(?<code>[A-Z]+):/u;
+
+const isEcliCourtCode = (code: string): code is keyof typeof CZ_ECLI_COURTS =>
+  Object.hasOwn(CZ_ECLI_COURTS, code);
+
+/** The deciding court named by an ECLI, or the fallback label. */
+export const courtFromEcli = (ecli: string | undefined): string => {
+  const code =
+    ecli === undefined
+      ? undefined
+      : ECLI_COURT_CODE.exec(ecli)?.groups?.["code"];
+  if (code === undefined) {
+    return CZ_NSS_COURT;
+  }
+  if (isEcliCourtCode(code)) {
+    return CZ_ECLI_COURTS[code];
+  }
+  logger.warn("case_law.ingestion.cz_nss.unknown_ecli_court", { ecli, code });
+  return CZ_NSS_COURT;
+};
 
 /**
  * Rows the portal renders inline on the results page a search returns.
@@ -520,7 +557,7 @@ const fetchDecisionContent = async (
         const parsed = parseNssDecisionHtml({
           caseNumber: row.caseNumber,
           ecli: detail.ecli,
-          court: CZ_NSS_COURT,
+          court: courtFromEcli(detail.ecli),
           decisionDate: (() => {
             if (detail.decisionDate) {
               return parseCeDate(detail.decisionDate);
@@ -704,6 +741,7 @@ const rowToResult = (
   // network failures — never include fulltext in the hash.
   const raw = `${row.caseNumber}|${row.decisionDate ?? ""}|${row.decisionType ?? ""}`;
   const sourceDocumentId = czNssSourceDocumentId(row);
+  const court = courtFromEcli(detail.ecli);
 
   return {
     caseNumber: row.caseNumber,
@@ -720,7 +758,7 @@ const rowToResult = (
       ? {}
       : { legacySourceUrls: [detailUrl(sourceDocumentId)] }),
     ecli: detail.ecli,
-    court: CZ_NSS_COURT,
+    court,
     country: "CZE",
     language: CZ_NSS_LANGUAGE,
     decisionDate: (() => {
@@ -740,7 +778,7 @@ const rowToResult = (
     documentUrl: row.documentUrl,
     metadata: {
       caseNumber: row.caseNumber,
-      court: CZ_NSS_COURT,
+      court,
       ecli: detail.ecli,
       judge: detail.judge,
       senate: detail.senate,

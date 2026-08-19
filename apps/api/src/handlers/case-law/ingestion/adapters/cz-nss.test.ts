@@ -20,6 +20,7 @@ import {
 
 import {
   buildCzNssDecision,
+  courtFromEcli,
   czNssAdapter,
   czNssExpectedRows,
   czNssListingIdentity,
@@ -222,7 +223,7 @@ const installStub = ({
         }
         if (url.pathname.startsWith("/DokumentDetail/Index/")) {
           return documentStatus === 200
-            ? htmlResponse(detailPage("ECLI:CZ:NSS:2026:1.Az.4.2026.79"))
+            ? htmlResponse(detailPage("ECLI:CZ:MSPH:2026:1.Az.4.2026.79"))
             : htmlResponse("", documentStatus);
         }
         if (url.pathname.startsWith("/DokumentOriginal/Html/")) {
@@ -852,6 +853,27 @@ describe("cz-nss fetchPage", () => {
 
 // ── Per-item build ───────────────────────────────────────
 
+describe("cz-nss court from ECLI", () => {
+  test("each published court code names its court", () => {
+    expect(courtFromEcli("ECLI:CZ:NSS:2020:1.As.1.2020.20")).toBe(
+      "Nejvyšší správní soud",
+    );
+    expect(courtFromEcli("ECLI:CZ:KSHK:2021:52.Af.4.2020.66")).toBe(
+      "Krajský soud v Hradci Králové",
+    );
+    expect(courtFromEcli("ECLI:CZ:MSPH:2026:1.Az.4.2026.79")).toBe(
+      "Městský soud v Praze",
+    );
+  });
+
+  test("no ECLI, or a code the map does not know, keeps the portal's label", () => {
+    expect(courtFromEcli(undefined)).toBe("Nejvyšší správní soud");
+    expect(courtFromEcli("ECLI:CZ:XXXX:2026:1.Az.4.2026.79")).toBe(
+      "Nejvyšší správní soud",
+    );
+  });
+});
+
 describe("cz-nss buildDecision", () => {
   const originalFetch = globalThis.fetch;
 
@@ -886,8 +908,10 @@ describe("cz-nss buildDecision", () => {
     }
     expect(built.decision.caseNumber).toBe("1 Az 4/2026");
     expect(built.decision.language).toBe("cs");
-    expect(built.decision.court).toBe("Nejvyšší správní soud");
-    expect(built.decision.ecli).toBe("ECLI:CZ:NSS:2026:1.Az.4.2026.79");
+    // The portal lists the city court's decision; the ECLI names the court,
+    // so the row is stored under it rather than under the portal's own.
+    expect(built.decision.court).toBe("Městský soud v Praze");
+    expect(built.decision.ecli).toBe("ECLI:CZ:MSPH:2026:1.Az.4.2026.79");
     expect(built.decision.fulltext ?? "").not.toBe("");
     // Silent drift here is the whole failure mode: a walk that keys a row one
     // way and a build that stores it another leaves the slice permanently
