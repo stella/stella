@@ -103,10 +103,10 @@ const isEcliCourtCode = (code: string): code is keyof typeof CZ_ECLI_COURTS =>
 
 /** The deciding court named by an ECLI, or the fallback label. */
 export const courtFromEcli = (ecli: string | undefined): string => {
-  const code =
-    ecli === undefined
-      ? undefined
-      : ECLI_COURT_CODE.exec(ecli)?.groups?.["code"];
+  if (ecli === undefined) {
+    return CZ_NSS_COURT;
+  }
+  const code = ECLI_COURT_CODE.exec(ecli)?.groups?.["code"];
   if (code === undefined) {
     return CZ_NSS_COURT;
   }
