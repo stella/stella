@@ -23,13 +23,19 @@ const renderWithIntl = (children: ReactNode) =>
 const inlineText = (text: string) => [{ type: "text" as const, text }];
 
 const blocks = [
+  // The publisher states a division's designation and its title as two
+  // lines of one heading, joined by a line break.
   {
     type: "heading",
     id: "b-0",
     anchorId: "cast-prvni",
     level: 1,
-    inlines: inlineText("Part One"),
-    plainText: "Part One",
+    inlines: [
+      { type: "text", text: "ČÁST PRVNÍ" },
+      { type: "line-break" },
+      { type: "text", text: "OBECNÁ ČÁST" },
+    ],
+    plainText: "ČÁST PRVNÍ\nOBECNÁ ČÁST",
   },
   {
     type: "heading",
@@ -85,6 +91,31 @@ describe("StatuteText", () => {
 
     expect(markup).toContain("<h1 class");
     expect(markup).toContain("<h4 class");
+  });
+
+  test("a heading's two lines stay one block, split by a break", () => {
+    const markup = renderWithIntl(
+      <StatuteText documentAst={ast} fulltext={null} language="cs" />,
+    );
+
+    // One block, two lines: the designation and the title it names. Run
+    // together on one line the title stops reading as what ČÁST PRVNÍ is,
+    // so the break the parser states has to survive into the DOM.
+    expect(markup).toContain("ČÁST PRVNÍ<br/>OBECNÁ ČÁST");
+  });
+
+  test("structural headings are centred", () => {
+    const markup = renderWithIntl(
+      <StatuteText documentAst={ast} fulltext={null} language="cs" />,
+    );
+
+    // A statute is read by its containers, and the publisher centres every
+    // one of them — a section designation left-aligned at body size reads
+    // as an aside rather than as the provision it opens.
+    for (const tag of ["h1", "h4"]) {
+      const opening = markup.slice(markup.indexOf(`<${tag} class="`));
+      expect(opening.slice(0, opening.indexOf(">"))).toContain("text-center");
+    }
   });
 
   test("falls back to the plain text when the document has no parsed blocks", () => {

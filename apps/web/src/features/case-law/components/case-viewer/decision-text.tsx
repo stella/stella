@@ -200,6 +200,7 @@ const renderBlocksWithHoldingZone = ({
                 activeMatchIndex={activeMatchIndex}
                 block={block}
                 rangesByPieceId={rangesByPieceId}
+                variant="case-law"
               />
             </div>
           ) : (
@@ -208,6 +209,7 @@ const renderBlocksWithHoldingZone = ({
               block={block}
               key={block.id}
               rangesByPieceId={rangesByPieceId}
+              variant="case-law"
             />
           ),
         )}

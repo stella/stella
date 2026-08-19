@@ -302,26 +302,54 @@ export const HighlightedText = ({
 );
 
 /**
- * Class per heading depth. Total over `HeadingLevel`, so a depth the AST can
- * carry cannot reach the reader with no styling of its own.
+ * Which corpus a reader is rendering.
+ *
+ * The blocks are the same; the typography is not. A decision's headings are
+ * the court's own section breaks, while a statute's are a nested chain of
+ * containers the reader navigates by, and the publisher sets them centred
+ * and heavier for exactly that reason.
+ */
+export type ReaderVariant = "case-law" | "statute";
+
+/**
+ * Class per variant and heading depth. Total over both, so neither a new
+ * reader nor a depth the AST can carry reaches the page with no styling.
  */
 export const HEADING_CLASS = {
-  1: "mt-4 mb-5 text-center text-lg leading-tight font-bold tracking-widest first:mt-0",
-  2: "mt-[var(--reader-section-gap-top)] mb-[var(--reader-section-gap-bottom)] text-center text-[0.95rem] leading-snug font-bold tracking-wider",
-  3: "mt-[var(--reader-section-gap-top)] mb-[var(--reader-section-gap-bottom)] text-center text-sm leading-snug font-semibold",
-  4: "mt-[var(--reader-section-gap-top)] mb-[var(--reader-section-gap-bottom)] text-center text-sm leading-snug font-medium",
-  5: "mt-[var(--reader-section-gap-top)] mb-[var(--reader-section-gap-bottom)] text-sm leading-snug font-semibold",
-  6: "mt-[var(--reader-section-gap-top)] mb-[var(--reader-section-gap-bottom)] text-sm leading-snug font-medium",
-} as const satisfies Record<HeadingLevel, string>;
+  "case-law": {
+    1: "mt-4 mb-5 text-center text-lg leading-tight font-bold tracking-widest first:mt-0",
+    2: "mt-[var(--reader-section-gap-top)] mb-[var(--reader-section-gap-bottom)] text-center text-[0.95rem] leading-snug font-bold tracking-wider",
+    3: "mt-[var(--reader-section-gap-top)] mb-[var(--reader-section-gap-bottom)] text-center text-sm leading-snug font-semibold",
+    4: "mt-[var(--reader-section-gap-top)] mb-[var(--reader-section-gap-bottom)] text-center text-sm leading-snug font-medium",
+    5: "mt-[var(--reader-section-gap-top)] mb-[var(--reader-section-gap-bottom)] text-sm leading-snug font-semibold",
+    6: "mt-[var(--reader-section-gap-top)] mb-[var(--reader-section-gap-bottom)] text-sm leading-snug font-medium",
+  },
+  // Every container is centred and bold, and the sizes step down only
+  // slightly: a `Díl` is not a smaller thing than a `HLAVA`, it is a nearer
+  // one. Nothing falls below the body size, so a section designation never
+  // reads as an aside. The rhythm — a large gap into a new container, a
+  // small one between a container and the container it opens — is in
+  // `reader.css`, where a sibling selector can see the chain.
+  statute: {
+    1: "mt-[var(--reader-heading-gap-1)] mb-[var(--reader-heading-gap-bottom)] text-center text-[1.35rem] leading-tight font-bold tracking-widest first:mt-0",
+    2: "mt-[var(--reader-heading-gap-2)] mb-[var(--reader-heading-gap-bottom)] text-center text-[1.25rem] leading-snug font-bold tracking-wide",
+    3: "mt-[var(--reader-heading-gap-3)] mb-[var(--reader-heading-gap-bottom)] text-center text-[1.15rem] leading-snug font-bold",
+    4: "mt-[var(--reader-heading-gap-4)] mb-[var(--reader-heading-gap-bottom)] text-center text-[1.15rem] leading-snug font-bold",
+    5: "mt-[var(--reader-heading-gap-5)] mb-[var(--reader-heading-gap-bottom)] text-center text-[1.1rem] leading-snug font-bold",
+    6: "mt-[var(--reader-heading-gap-6)] mb-[var(--reader-heading-gap-bottom)] text-center text-[1.1rem] leading-snug font-bold",
+  },
+} as const satisfies Record<ReaderVariant, Record<HeadingLevel, string>>;
 
 export const BlockRenderer = ({
   activeMatchIndex,
   block,
   rangesByPieceId,
+  variant,
 }: {
   activeMatchIndex: number;
   block: Block;
   rangesByPieceId: Record<string, SearchMatchRange[]>;
+  variant: ReaderVariant;
 }) => {
   if (block.type === "heading") {
     const Tag = `h${block.level}` as const;
@@ -329,7 +357,7 @@ export const BlockRenderer = ({
       <Tag
         className={cn(
           "scroll-mt-[var(--reader-anchor-offset)]",
-          HEADING_CLASS[block.level],
+          HEADING_CLASS[variant][block.level],
         )}
         id={block.anchorId}
       >

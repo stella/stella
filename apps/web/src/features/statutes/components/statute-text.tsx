@@ -41,7 +41,7 @@ export const StatuteText = ({
   if (blocks.length > 0) {
     return (
       <article
-        className="text-card-foreground text-start"
+        className="reader-statute text-card-foreground text-start"
         lang={language}
         style={READER_STYLE}
       >
@@ -51,6 +51,7 @@ export const StatuteText = ({
             block={block}
             key={block.id}
             rangesByPieceId={NO_RANGES}
+            variant="statute"
           />
         ))}
       </article>
@@ -60,7 +61,7 @@ export const StatuteText = ({
   if (fulltext) {
     return (
       <article
-        className="text-card-foreground text-start"
+        className="reader-statute text-card-foreground text-start"
         lang={language}
         style={READER_STYLE}
       >
