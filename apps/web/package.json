@@ -149,6 +149,7 @@
     "babel-plugin-react-compiler": "^1.0.0",
     "react-grab": "^0.1.50",
     "rollup-plugin-visualizer": "^7.0.1",
+    "tailwindcss": "catalog:",
     "unified": "^11.0.5"
   },
   "crawlPosture": "mixed"
