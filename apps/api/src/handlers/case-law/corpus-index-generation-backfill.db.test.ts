@@ -444,6 +444,7 @@ test(
       },
     ]);
     let writes = 0;
+    const readConcurrencies: (number | undefined)[] = [];
     const backfill = createCaseLawGenerationBackfill({
       backfillRows: async (_runnerDb, rows, _generation, options) => {
         await options.beforeRemoteEffect({
@@ -451,6 +452,7 @@ test(
           onLeaseLost: noRemoteEffectCompensation,
         });
         writes += 1;
+        readConcurrencies.push(options.readConcurrency);
         return indexedOutcome(rows.length);
       },
       newLeaseToken: () => "00000000-0000-4000-8000-000000000060",
@@ -458,7 +460,9 @@ test(
     });
 
     try {
-      expect(await backfill(scopedDb, 1, rebuildGeneration)).toEqual({
+      expect(
+        await backfill(scopedDb, 1, rebuildGeneration, { readConcurrency: 32 }),
+      ).toEqual({
         indexed: 1,
         status: "advanced",
       });
@@ -467,6 +471,9 @@ test(
         status: "advanced",
       });
       expect(writes).toBe(2);
+      // The caller's read concurrency reaches the rows; unset stays unset so
+      // the indexer's default applies.
+      expect(readConcurrencies).toEqual([32, undefined]);
     } finally {
       await db
         .delete(caseLawCorpusIndexBackfills)
