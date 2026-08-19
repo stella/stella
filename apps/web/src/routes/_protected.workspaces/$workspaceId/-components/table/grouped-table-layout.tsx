@@ -38,12 +38,9 @@ import type {
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { detached } from "@/lib/detached";
 import type { EntityKind, WorkspaceView } from "@/lib/types";
-import {
-  groupCountsOptions,
-  useKanbanGroupOptions,
-  visibleEntityFieldIds,
-} from "@/lib/workspaces/queries/entities";
+import { visibleEntityFieldIds } from "@/lib/workspaces/queries/entities";
 import { propertiesOptions } from "@/lib/workspaces/queries/properties";
+import { workspaceTableAdapter } from "@/lib/workspaces/table-adapter";
 import { mergeLayout } from "@/lib/workspaces/view-layout";
 import { BottomRow } from "@/routes/_protected.workspaces/$workspaceId/-components/bottom-row";
 import { EmptyState } from "@/routes/_protected.workspaces/$workspaceId/-components/empty-state";
@@ -242,7 +239,7 @@ export const GroupedTableLayout = ({
   // One query for every group's count, so a group only fires its row query
   // when it actually has rows (empty groups never round-trip).
   const groupCounts = useQuery({
-    ...groupCountsOptions({
+    ...workspaceTableAdapter.sectionCounts({
       workspaceId,
       filters: view.layout.filters,
       groupByPropertyId: groupByPropertyId ?? "",
@@ -618,7 +615,7 @@ const GroupSection = ({
   }, [eager, hasScrolledIntoView, hasRows]);
 
   const query = useInfiniteQuery({
-    ...useKanbanGroupOptions({
+    ...workspaceTableAdapter.useSectionPage({
       workspaceId,
       filters: view.layout.filters,
       sorts: view.layout.sorts,

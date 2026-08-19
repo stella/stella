@@ -39,10 +39,10 @@ import type {
 export { DEFAULT_ENTITY_WINDOW_SIZE, entitiesKeys, visibleEntityFieldIds };
 
 type EntitiesOptionsInput = QueryOptionsInput<EntitiesPageKey>;
-type EntitiesWindowOptionsInput = QueryOptionsInput<EntitiesWindowKey>;
+export type EntitiesWindowOptionsInput = QueryOptionsInput<EntitiesWindowKey>;
 type FilesystemEntitiesOptionsInput = QueryOptionsInput<FilesystemEntitiesKey>;
-type KanbanGroupOptionsInput = QueryOptionsInput<KanbanGroupKey>;
-type GroupCountsOptionsInput = QueryOptionsInput<GroupCountsKey>;
+export type KanbanGroupOptionsInput = QueryOptionsInput<KanbanGroupKey>;
+export type GroupCountsOptionsInput = QueryOptionsInput<GroupCountsKey>;
 
 type RawWorkspaceEntity = Omit<
   WorkspaceEntity,

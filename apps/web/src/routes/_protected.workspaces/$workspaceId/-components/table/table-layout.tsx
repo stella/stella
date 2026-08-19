@@ -17,10 +17,10 @@ import { detached } from "@/lib/detached";
 import type { EntityKind, WorkspaceView } from "@/lib/types";
 import {
   DEFAULT_ENTITY_WINDOW_SIZE,
-  useEntitiesWindowOptions,
   visibleEntityFieldIds,
 } from "@/lib/workspaces/queries/entities";
 import { propertiesOptions } from "@/lib/workspaces/queries/properties";
+import { workspaceTableAdapter } from "@/lib/workspaces/table-adapter";
 import { mergeLayout } from "@/lib/workspaces/view-layout";
 import {
   EmptyState,
@@ -113,7 +113,7 @@ const FlatTableLayout = ({ workspaceId, view }: TableLayoutProps) => {
 
   const { data, fetchNextPage, hasNextPage, isFetchingNextPage } =
     useSuspenseInfiniteQuery(
-      useEntitiesWindowOptions({
+      workspaceTableAdapter.useListPage({
         workspaceId,
         filters: view.layout.filters,
         sorts: view.layout.sorts,
