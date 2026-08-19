@@ -28,7 +28,11 @@ import {
   caseLawCorpusProjectionJoin,
   currentCaseLawCorpusProjection,
 } from "@/api/lib/legal-search/case-law-corpus-projection";
-import { CorpusIndexError } from "@/api/lib/legal-search/corpus-index-client";
+import {
+  CORPUS_INDEX_COMMIT,
+  CorpusIndexError,
+} from "@/api/lib/legal-search/corpus-index-client";
+import type { CorpusIndexCommitMode } from "@/api/lib/legal-search/corpus-index-client";
 import { corpusIndexId } from "@/api/lib/legal-search/index-naming";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
@@ -663,6 +667,7 @@ test(
   "replays the snapshot once and reconciles pending rows after completion",
   async () => {
     const sent: SafeId<"caseLawDecision">[][] = [];
+    const commits: CorpusIndexCommitMode[] = [];
     let guardedPages = 0;
     let lease = 0;
     const backfill = createCaseLawGenerationBackfill({
@@ -672,6 +677,7 @@ test(
           onLeaseLost: noRemoteEffectCompensation,
         });
         sent.push(rows.map((row) => row.id));
+        commits.push(options.commit);
         guardedPages += 1;
         await runnerDb(async (tx) => {
           await options.beforeDatabaseMark(tx);
@@ -715,12 +721,38 @@ test(
       indexed: 0,
       status: "complete",
     });
+    // A row queued after completion drains through the completed path.
+    await db.insert(caseLawCorpusIndexProjections).values({
+      decisionId: publicLastId,
+      generation: GENERATION,
+      pendingAction: "index",
+      pendingHash: "last",
+      pendingIndexIds: [corpusIndexId(GENERATION, "CZE")],
+    });
+    expect(await backfill(scopedDb, 2, GENERATION)).toEqual({
+      indexed: 1,
+      status: "advanced",
+    });
 
     // Same-timestamp rows are visited in UUID order, exactly once. Restricted
     // and incomplete records advance the keyset cursor as terminal skips but
     // never cross the index boundary.
-    expect(sent).toEqual([[publicFirstId], [publicLastId], [publicFirstId]]);
-    expect(guardedPages).toBe(3);
+    expect(sent).toEqual([
+      [publicFirstId],
+      [publicLastId],
+      [publicFirstId],
+      [publicLastId],
+    ]);
+    expect(guardedPages).toBe(4);
+    // Snapshot pages and the running drain are bulk, verified by the census;
+    // the completed generation's drain is the live path and must not be
+    // marked on acceptance alone.
+    expect(commits).toEqual([
+      CORPUS_INDEX_COMMIT.auto,
+      CORPUS_INDEX_COMMIT.auto,
+      CORPUS_INDEX_COMMIT.auto,
+      CORPUS_INDEX_COMMIT.waitFor,
+    ]);
     const checkpoint = await readCheckpoint(GENERATION);
     expect(checkpoint).toMatchObject({
       cursorId: publicLastId,
@@ -2941,6 +2973,7 @@ test(
     });
 
     const sent: SafeId<"caseLawDecision">[][] = [];
+    const commits: CorpusIndexCommitMode[] = [];
     const backfill = createCaseLawGenerationBackfill({
       backfillRows: async (runnerDb, rows, rebuildGeneration, options) => {
         await options.beforeRemoteEffect({
@@ -2948,6 +2981,7 @@ test(
           onLeaseLost: noRemoteEffectCompensation,
         });
         sent.push(rows.map((row) => row.id));
+        commits.push(options.commit);
         await runnerDb(async (tx) => {
           await options.beforeDatabaseMark(tx);
           await tx
@@ -2970,6 +3004,12 @@ test(
         status: "advanced",
       });
       expect(sent.at(0)).toEqual([publicLastId]);
+      // A running generation's census is the backstop for the drain as much
+      // as for the walk, so neither page waits for the engine's commit.
+      expect(commits).toEqual([
+        CORPUS_INDEX_COMMIT.auto,
+        CORPUS_INDEX_COMMIT.auto,
+      ]);
       expect(await readCheckpoint(generation)).toMatchObject({
         leaseExpiresAt: null,
         leaseToken: null,

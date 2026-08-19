@@ -1230,6 +1230,26 @@ const EMPTY_BACKFILL_OUTCOME = {
   unread: 0,
 } as const satisfies CorpusBackfillOutcome;
 
+/**
+ * Commit mode for the pending-queue drain, by the generation's status.
+ *
+ * A completed generation's drain is the live path: every newly ingested
+ * decision waits in that queue, and the mark taken on the way out is the
+ * last thing that would ever select it, so acceptance has to mean
+ * committed or the row goes permanently missing while Postgres reads
+ * indexed. A running generation is still being built: a shortfall there
+ * is what its census reports and the repair re-projects, the same
+ * backstop that already licenses `auto` on its snapshot pages, while
+ * `wait_for` would hold every page for the engine's commit interval.
+ */
+const PENDING_DRAIN_COMMIT = {
+  [CASE_LAW_CORPUS_INDEX_BACKFILL_STATUS.COMPLETE]: CORPUS_INDEX_COMMIT.waitFor,
+  [CASE_LAW_CORPUS_INDEX_BACKFILL_STATUS.RUNNING]: CORPUS_INDEX_COMMIT.auto,
+} as const satisfies Record<
+  CaseLawCorpusIndexBackfillStatus,
+  CorpusIndexCommitMode
+>;
+
 const FIXED_POINT_STAGE = {
   generationBackfillPage: "generation backfill page",
   generationReconciliation: "generation reconciliation",
@@ -1827,7 +1847,7 @@ export const createCaseLawGenerationBackfill =
             : { indexed: 0, status: BACKFILL_STATUS.BUSY };
         }
 
-        return await reconcilePendingPage(guards);
+        return await reconcilePendingPage({ guards, status });
       };
 
       // The pending queue is the live path: every newly ingested decision
@@ -1836,9 +1856,13 @@ export const createCaseLawGenerationBackfill =
       // walk. A queued source repair can span the whole corpus of a source;
       // routing the live drain behind it would recreate the wedge this
       // ordering exists to prevent.
-      const reconcilePendingPage = async (
-        guards: ReturnType<typeof createLeaseGuards>,
-      ): Promise<CorpusIndexBackfillResult> => {
+      const reconcilePendingPage = async ({
+        guards,
+        status,
+      }: {
+        guards: ReturnType<typeof createLeaseGuards>;
+        status: CaseLawCorpusIndexBackfillStatus;
+      }): Promise<CorpusIndexBackfillResult> => {
         const pendingPage = await selectGenerationPendingPage(scopedDb, {
           generation,
           limit: batchSize,
@@ -1886,12 +1910,7 @@ export const createCaseLawGenerationBackfill =
             : await backfillRows(scopedDb, eligible, generation, {
                 ...guards,
                 ...readConcurrencyOption,
-                // The live path: every newly ingested decision waits in
-                // this queue, and the mark taken on the way out is the
-                // last thing that would ever select it. Acceptance has
-                // to mean committed here or the row goes permanently
-                // missing from the index while Postgres reads indexed.
-                commit: CORPUS_INDEX_COMMIT.waitFor,
+                commit: PENDING_DRAIN_COMMIT[status],
               });
         if (outcome.indexed !== eligible.length) {
           throw fixedPointError({
@@ -1956,7 +1975,7 @@ export const createCaseLawGenerationBackfill =
           effect: completeRemoteEffect,
           onLeaseLost: async () => await Promise.resolve(),
         });
-        return await reconcilePendingPage(guards);
+        return await reconcilePendingPage({ guards, status });
       };
 
       if (
