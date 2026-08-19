@@ -10,6 +10,13 @@ import { cn } from "../lib/utils";
  * cover the content instead of displacing it. Keeping the pane fixed
  * (rather than in the flow) is what lets it span the full viewport height
  * regardless of the topbar above the content.
+ *
+ * The root carries the reserved inline size itself rather than leaving it to
+ * the spacer alone: a block-level root in a plain block host would otherwise
+ * take the full containing width and push the content column off-screen,
+ * which is exactly the failure the spacer exists to prevent. With the width
+ * on the root, the dock reserves the same footprint in a flex row, a grid
+ * track, or a plain block.
  */
 
 type InspectorResizeHandleProps = {
@@ -18,6 +25,8 @@ type InspectorResizeHandleProps = {
   "aria-valuemin": number;
   "aria-valuenow": number;
   onKeyDown: (event: React.KeyboardEvent<HTMLElement>) => void;
+  onLostPointerCapture: (event: React.PointerEvent<HTMLElement>) => void;
+  onPointerCancel: (event: React.PointerEvent<HTMLElement>) => void;
   onPointerDown: (event: React.PointerEvent<HTMLElement>) => void;
   onPointerMove: (event: React.PointerEvent<HTMLElement>) => void;
   onPointerUp: (event: React.PointerEvent<HTMLElement>) => void;
@@ -52,18 +61,21 @@ export const InspectorDock = ({
 
   return (
     <div
-      className={cn("text-sidebar-foreground hidden md:block", className)}
+      className={cn(
+        "text-sidebar-foreground hidden shrink-0 md:block",
+        className,
+      )}
       data-side="inline-end"
       data-slot="inspector-dock"
       data-state={showPaneContent ? "expanded" : "collapsed"}
+      style={{ width: widthPx }}
     >
       {/* In-flow spacer: the content column reflows against this, not
           against the fixed pane. */}
       <div
         aria-hidden="true"
-        className="bg-sidebar relative"
+        className="bg-sidebar relative w-full"
         data-slot="inspector-dock-spacer"
-        style={{ width: widthPx }}
       />
       <div
         className="fixed inset-y-0 end-0 z-10 hidden h-svh md:flex"

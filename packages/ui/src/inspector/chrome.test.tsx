@@ -41,6 +41,8 @@ const noopHandlers = {
   "aria-valuemin": 320,
   "aria-valuenow": 512,
   onKeyDown: () => undefined,
+  onLostPointerCapture: () => undefined,
+  onPointerCancel: () => undefined,
   onPointerDown: () => undefined,
   onPointerMove: () => undefined,
   onPointerUp: () => undefined,
@@ -150,6 +152,19 @@ describe("dock", () => {
     expect(markup).toContain('aria-valuenow="512"');
     expect(markup).toContain('aria-valuemin="320"');
     expect(markup).toContain('aria-valuemax="800"');
+  });
+
+  // The regression this guards: the root was a bare block with the width on
+  // the spacer alone, so a plain block host stretched it to the full
+  // containing width and the content column it exists to preserve was pushed
+  // off-screen.
+  test("reserves its own inline size on the root, not only on the spacer", () => {
+    const markup = renderDock(true);
+    const root = /<[^>]*data-slot="inspector-dock"[^>]*>/u.exec(markup)?.[0];
+
+    expect(root).toContain("width:512px");
+    expect(classesOf(markup, "inspector-dock")).toContain("shrink-0");
+    expect(classesOf(markup, "inspector-dock-spacer")).toContain("w-full");
   });
 
   test("is desktop-only; the pane becomes a sheet below the breakpoint", () => {

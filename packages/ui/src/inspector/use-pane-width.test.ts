@@ -5,7 +5,12 @@ import {
   INSPECTOR_PANE_MAX_WIDTH,
   INSPECTOR_PANE_MIN_WIDTH,
 } from "./pane-width";
-import { parsePersistedPaneWidth, resolveDragWidth } from "./use-pane-width";
+import {
+  parsePersistedPaneWidth,
+  readStoredWidth,
+  resolveDragWidth,
+  writeStoredWidth,
+} from "./use-pane-width";
 
 describe("parsePersistedPaneWidth", () => {
   test("returns the default when nothing was persisted", () => {
@@ -54,5 +59,64 @@ describe("resolveDragWidth", () => {
     });
     const rtl = resolveDragWidth({ clientX: 400, isRtl: true, viewportWidth });
     expect(ltr).toBe(rtl);
+  });
+});
+
+describe("stored width", () => {
+  // `window.localStorage` is a getter that throws where storage is blocked, so
+  // a pane that persists its width must not take the surrounding UI down with
+  // it. The fake below throws from the property itself, the way a sandboxed
+  // iframe does.
+  const withWindow = (localStorage: unknown, run: () => void) => {
+    const globals: { window?: unknown } = globalThis;
+    const had = "window" in globals;
+    const previous = globals.window;
+    globals.window = Object.defineProperty({}, "localStorage", {
+      get: () => localStorage,
+    });
+    try {
+      run();
+    } finally {
+      if (had) {
+        globals.window = previous;
+      } else {
+        delete globals.window;
+      }
+    }
+  };
+
+  const blockedStorage = () => {
+    throw new Error("storage is disabled");
+  };
+
+  test("falls back to the default when storage throws", () => {
+    withWindow(undefined, () => {
+      expect(readStoredWidth("inspector-pane-width")).toBe(
+        INSPECTOR_PANE_DEFAULT_WIDTH,
+      );
+    });
+  });
+
+  test("reads a persisted width when storage works", () => {
+    withWindow({ getItem: () => "640", setItem: () => undefined }, () => {
+      expect(readStoredWidth("inspector-pane-width")).toBe(640);
+    });
+  });
+
+  test("writing to blocked storage is not an error", () => {
+    withWindow(
+      {
+        getItem: blockedStorage,
+        setItem: blockedStorage,
+      },
+      () => {
+        expect(readStoredWidth("inspector-pane-width")).toBe(
+          INSPECTOR_PANE_DEFAULT_WIDTH,
+        );
+        expect(() => {
+          writeStoredWidth("inspector-pane-width", 640);
+        }).not.toThrow();
+      },
+    );
   });
 });

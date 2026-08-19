@@ -95,6 +95,36 @@ export const resolveKeyboardWidth = ({
   }
 };
 
+/**
+ * Reads and writes are wrapped because `window.localStorage` is a getter that
+ * *throws* where storage is blocked — a sandboxed iframe, a hardened privacy
+ * mode, a full quota. The `typeof window` check does not cover that, and a
+ * throw in the state initializer takes the whole pane down on mount. A pane
+ * that forgets its width is a smaller failure than a pane that does not
+ * render, so both directions degrade to in-memory.
+ */
+export const readStoredWidth = (storageKey: string): number => {
+  if (typeof window === "undefined") {
+    return INSPECTOR_PANE_DEFAULT_WIDTH;
+  }
+  try {
+    return parsePersistedPaneWidth(window.localStorage.getItem(storageKey));
+  } catch {
+    return INSPECTOR_PANE_DEFAULT_WIDTH;
+  }
+};
+
+export const writeStoredWidth = (storageKey: string, width: number): void => {
+  if (typeof window === "undefined") {
+    return;
+  }
+  try {
+    window.localStorage.setItem(storageKey, String(width));
+  } catch {
+    // Storage is unavailable; the width stays in memory for this session.
+  }
+};
+
 type UseInspectorPaneWidthOptions = {
   /** Inline size the sidebar takes out of the same layout row. */
   sidebarWidth: number;
@@ -119,6 +149,8 @@ type UseInspectorPaneWidthResult = {
     "aria-valuemin": number;
     "aria-valuenow": number;
     onKeyDown: (event: ReactKeyboardEvent<HTMLElement>) => void;
+    onLostPointerCapture: (event: ReactPointerEvent<HTMLElement>) => void;
+    onPointerCancel: (event: ReactPointerEvent<HTMLElement>) => void;
     onPointerDown: (event: ReactPointerEvent<HTMLElement>) => void;
     onPointerMove: (event: ReactPointerEvent<HTMLElement>) => void;
     onPointerUp: (event: ReactPointerEvent<HTMLElement>) => void;
@@ -147,19 +179,18 @@ export const useInspectorPaneWidth = ({
   storageKey,
   viewportWidth,
 }: UseInspectorPaneWidthOptions): UseInspectorPaneWidthResult => {
-  const [desiredWidth, setDesiredWidth] = useState(() => {
-    if (storageKey === undefined || typeof window === "undefined") {
-      return INSPECTOR_PANE_DEFAULT_WIDTH;
-    }
-    return parsePersistedPaneWidth(window.localStorage.getItem(storageKey));
-  });
+  const [desiredWidth, setDesiredWidth] = useState(() =>
+    storageKey === undefined
+      ? INSPECTOR_PANE_DEFAULT_WIDTH
+      : readStoredWidth(storageKey),
+  );
   const isDragging = useRef(false);
 
   useEffect(() => {
-    if (storageKey === undefined || typeof window === "undefined") {
+    if (storageKey === undefined) {
       return;
     }
-    window.localStorage.setItem(storageKey, String(desiredWidth));
+    writeStoredWidth(storageKey, desiredWidth);
   }, [desiredWidth, storageKey]);
 
   const handlePointerDown = (event: ReactPointerEvent<HTMLElement>) => {
@@ -181,7 +212,13 @@ export const useInspectorPaneWidth = ({
     );
   };
 
-  const handlePointerUp = (event: ReactPointerEvent<HTMLElement>) => {
+  /**
+   * Ends the drag however the pointer stream ended. `pointerup` is only one of
+   * the ways: a touch taken over by scrolling, a context menu, or the handle
+   * losing capture mid-drag all end it without one, and a drag flag left set
+   * would resize the pane on the next pointer movement with no button held.
+   */
+  const endDrag = (event: ReactPointerEvent<HTMLElement>) => {
     isDragging.current = false;
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
@@ -224,9 +261,11 @@ export const useInspectorPaneWidth = ({
       "aria-valuemin": INSPECTOR_PANE_MIN_WIDTH,
       "aria-valuenow": width,
       onKeyDown: handleKeyDown,
+      onLostPointerCapture: endDrag,
+      onPointerCancel: endDrag,
       onPointerDown: handlePointerDown,
       onPointerMove: handlePointerMove,
-      onPointerUp: handlePointerUp,
+      onPointerUp: endDrag,
       tabIndex: 0,
     },
     width,
