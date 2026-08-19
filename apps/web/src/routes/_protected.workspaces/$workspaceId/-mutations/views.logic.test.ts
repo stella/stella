@@ -16,6 +16,7 @@ const TABLE_LAYOUT = {
   filters: [],
   sorts: [],
   hiddenProperties: [],
+  calculations: [],
   columnOrder: [],
   columnPinning: [],
 } as const satisfies ViewLayout;

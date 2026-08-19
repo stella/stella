@@ -10,6 +10,12 @@ import { ChevronDownIcon, ChevronRightIcon, TableIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { ENTITY_KINDS } from "@stll/api-contract";
+import type { KanbanGroup } from "@stll/ui/kanban";
+import {
+  getKanbanGroupingPropertyId,
+  getKanbanGroups,
+  resolveKanbanGroupOptions,
+} from "@stll/ui/kanban";
 import { Skeleton } from "@stll/ui/skeleton";
 import { cn } from "@stll/ui/utils";
 
@@ -48,13 +54,10 @@ import { propertiesOptions } from "@/lib/workspaces/queries/properties";
 import { BottomRow } from "@/routes/_protected.workspaces/$workspaceId/-components/bottom-row";
 import { EmptyState } from "@/routes/_protected.workspaces/$workspaceId/-components/empty-state";
 import {
-  getEntityGroups,
-  getKanbanGroupingPropertyId,
   isGroupableProperty,
-  resolveGroupOptions,
-  resolveKanbanGrouping,
+  resolveWorkspaceKanbanGrouping,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.logic";
-import type { EntityGroup } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.logic";
+import { useWorkspaceKanbanSchema } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/use-kanban-schema";
 import { GroupScopeProvider } from "@/routes/_protected.workspaces/$workspaceId/-components/table/group-scope";
 import {
   getGroupSkeletonLayout,
@@ -121,7 +124,7 @@ const groupKeyFor = (value: string | null): string =>
   value === null ? "uncategorized" : `value:${value}`;
 
 const getEagerGroupValues = (
-  groups: EntityGroup[],
+  groups: KanbanGroup[],
   countByValue: Map<string | null, number>,
 ) => {
   const values = new Set<string | null>();
@@ -156,9 +159,10 @@ export const GroupedTableLayout = ({
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const groupByConfig = view.layout.groupByPropertyId ?? "";
+  const schema = useWorkspaceKanbanSchema(properties);
   const grouping = useMemo(
-    () => resolveKanbanGrouping(groupByConfig, properties),
-    [groupByConfig, properties],
+    () => resolveWorkspaceKanbanGrouping(groupByConfig, schema),
+    [groupByConfig, schema],
   );
   const groupByPropertyId = getKanbanGroupingPropertyId(grouping);
 
@@ -230,9 +234,8 @@ export const GroupedTableLayout = ({
   // the id) would bucket every distinct scalar into an unbounded set of groups.
   // All fall back to a flat selection prompt, matching the kanban view.
   const isUnsupportedGrouping =
-    grouping.type === "status" ||
     (grouping.type === "built-in" &&
-      groupByPropertyId !== getInternalPropertyId("kind")) ||
+      grouping.group.id !== getInternalPropertyId("kind")) ||
     (grouping.type === "property" && !isGroupableProperty(grouping.property));
 
   // One query for every group's count, so a group only fires its row query
@@ -316,31 +319,11 @@ export const GroupedTableLayout = ({
     );
   }
 
-  const entityKindLabels = {
-    document: t("common.document"),
-    folder: t("search.kinds.folder"),
-    task: t("search.kinds.task"),
-    message: t("search.kinds.message"),
-    link: t("search.kinds.link"),
-  };
-
-  // Status grouping is rejected above (isUnsupportedGrouping), so this
-  // layout never supplies status labels; the params union means it cannot
-  // hand over an empty set by accident either.
-  const options = resolveGroupOptions(
-    grouping.type === "built-in"
-      ? {
-          type: "built-in",
-          propertyId: grouping.propertyId,
-          groupByPropertyId,
-          entityKindLabels,
-        }
-      : grouping,
-  );
+  const options = resolveKanbanGroupOptions(grouping);
   // Cells whose value is no longer a current option fold into the uncategorized
   // group server-side (the row/count queries treat "no current-option value" as
   // uncategorized), so the sections are just the option groups plus uncategorized.
-  const groups = getEntityGroups(options, t("common.uncategorized"));
+  const groups = getKanbanGroups(options, t("common.uncategorized"));
   const eagerGroupValues = countsLoaded
     ? getEagerGroupValues(groups, countByValue)
     : null;
@@ -551,7 +534,7 @@ const GroupSkeleton = ({
 type GroupSectionProps = {
   workspaceId: string;
   view: WorkspaceView<"table">;
-  group: EntityGroup;
+  group: KanbanGroup;
   groupByPropertyId: string;
   optionValues: string[] | undefined;
   // Authoritative row count from the one upfront group-counts query;
@@ -774,7 +757,7 @@ const GroupSection = ({
 };
 
 type GroupHeaderProps = {
-  group: EntityGroup;
+  group: KanbanGroup;
   collapsed: boolean;
   empty: boolean;
   loading: boolean;
@@ -844,7 +827,7 @@ const GroupHeader = ({
           ) : (
             <ChevronIcon className="text-muted-foreground size-3.5 shrink-0" />
           )}
-          {group.optionColor && (
+          {group.optionColor !== undefined && (
             <SelectColorIcon className="size-3.5" color={group.optionColor} />
           )}
           <span className="text-foreground text-sm font-medium">

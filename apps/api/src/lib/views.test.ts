@@ -56,6 +56,7 @@ describe("getDefaultViews", () => {
       filters: [],
       sorts: [],
       hiddenProperties: [],
+      calculations: [],
       groupByPropertyId: "_status",
     } satisfies Extract<ViewLayout, { type: "kanban" }>;
 
@@ -80,6 +81,7 @@ describe("getDefaultViews", () => {
       filters: [],
       sorts: [],
       hiddenProperties: [],
+      calculations: [],
       groupByPropertyId: "_status",
     } satisfies Extract<ViewLayout, { type: "kanban" }>;
 
@@ -119,6 +121,7 @@ describe("getDefaultViews", () => {
       ],
       sorts: [],
       hiddenProperties: [],
+      calculations: [],
       groupByPropertyId: "_status",
     } satisfies Extract<ViewLayout, { type: "kanban" }>;
 

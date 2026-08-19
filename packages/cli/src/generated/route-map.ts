@@ -8195,6 +8195,7 @@ export const generatedRouteMap: RouteNode = {
                               currency: {
                                 minLength: 3,
                                 maxLength: 3,
+                                pattern: "^[A-Za-z]{3}$",
                                 type: "string",
                               },
                             },
@@ -9204,6 +9205,7 @@ export const generatedRouteMap: RouteNode = {
                                   currency: {
                                     minLength: 3,
                                     maxLength: 3,
+                                    pattern: "^[A-Za-z]{3}$",
                                     type: "string",
                                   },
                                 },
@@ -15142,6 +15144,7 @@ export const generatedRouteMap: RouteNode = {
                                     {
                                       minLength: 3,
                                       maxLength: 3,
+                                      pattern: "^[A-Za-z]{3}$",
                                       description:
                                         "For int values only: 3-letter ISO currency code, or null",
                                       type: "string",
@@ -34759,6 +34762,9 @@ export const generatedRouteMap: RouteNode = {
                                     type: "string",
                                   },
                                 },
+                                calculations: {
+                                  $ref: "#/$defs/s_d21ba6521546",
+                                },
                               },
                             },
                             {
@@ -34820,6 +34826,9 @@ export const generatedRouteMap: RouteNode = {
                                     type: "string",
                                   },
                                 },
+                                calculations: {
+                                  $ref: "#/$defs/s_d21ba6521546",
+                                },
                                 groupByPropertyId: {
                                   minLength: 1,
                                   type: "string",
@@ -34871,6 +34880,9 @@ export const generatedRouteMap: RouteNode = {
                                     type: "string",
                                   },
                                 },
+                                calculations: {
+                                  $ref: "#/$defs/s_d21ba6521546",
+                                },
                               },
                             },
                             {
@@ -34917,6 +34929,9 @@ export const generatedRouteMap: RouteNode = {
                                   items: {
                                     type: "string",
                                   },
+                                },
+                                calculations: {
+                                  $ref: "#/$defs/s_d21ba6521546",
                                 },
                                 groupByPropertyId: {
                                   minLength: 1,
@@ -34970,6 +34985,9 @@ export const generatedRouteMap: RouteNode = {
                                   items: {
                                     type: "string",
                                   },
+                                },
+                                calculations: {
+                                  $ref: "#/$defs/s_d21ba6521546",
                                 },
                                 datePropertyId: {
                                   minLength: 1,
@@ -35052,6 +35070,9 @@ export const generatedRouteMap: RouteNode = {
                                   items: {
                                     type: "string",
                                   },
+                                },
+                                calculations: {
+                                  $ref: "#/$defs/s_d21ba6521546",
                                 },
                                 startDatePropertyId: {
                                   minLength: 1,
@@ -35211,6 +35232,39 @@ export const generatedRouteMap: RouteNode = {
                           },
                         },
                       ],
+                    },
+                    s_d21ba6521546: {
+                      type: "array",
+                      items: {
+                        additionalProperties: false,
+                        type: "object",
+                        required: ["propertyId", "kind"],
+                        properties: {
+                          propertyId: {
+                            minLength: 1,
+                            type: "string",
+                          },
+                          kind: {
+                            default: "count",
+                            type: "string",
+                            enum: [
+                              "count",
+                              "count-unique",
+                              "count-empty",
+                              "count-filled",
+                              "percent-empty",
+                              "percent-filled",
+                              "sum",
+                              "average",
+                              "median",
+                              "min",
+                              "max",
+                              "range",
+                              "percent-of-total",
+                            ],
+                          },
+                        },
+                      },
                     },
                     s_db9cd85a47d3: {
                       type: "object",
@@ -35854,6 +35908,9 @@ export const generatedRouteMap: RouteNode = {
                                     type: "string",
                                   },
                                 },
+                                calculations: {
+                                  $ref: "#/$defs/s_d21ba6521546",
+                                },
                               },
                             },
                             {
@@ -35915,6 +35972,9 @@ export const generatedRouteMap: RouteNode = {
                                     type: "string",
                                   },
                                 },
+                                calculations: {
+                                  $ref: "#/$defs/s_d21ba6521546",
+                                },
                                 groupByPropertyId: {
                                   minLength: 1,
                                   type: "string",
@@ -35966,6 +36026,9 @@ export const generatedRouteMap: RouteNode = {
                                     type: "string",
                                   },
                                 },
+                                calculations: {
+                                  $ref: "#/$defs/s_d21ba6521546",
+                                },
                               },
                             },
                             {
@@ -36012,6 +36075,9 @@ export const generatedRouteMap: RouteNode = {
                                   items: {
                                     type: "string",
                                   },
+                                },
+                                calculations: {
+                                  $ref: "#/$defs/s_d21ba6521546",
                                 },
                                 groupByPropertyId: {
                                   minLength: 1,
@@ -36065,6 +36131,9 @@ export const generatedRouteMap: RouteNode = {
                                   items: {
                                     type: "string",
                                   },
+                                },
+                                calculations: {
+                                  $ref: "#/$defs/s_d21ba6521546",
                                 },
                                 datePropertyId: {
                                   minLength: 1,
@@ -36147,6 +36216,9 @@ export const generatedRouteMap: RouteNode = {
                                   items: {
                                     type: "string",
                                   },
+                                },
+                                calculations: {
+                                  $ref: "#/$defs/s_d21ba6521546",
                                 },
                                 startDatePropertyId: {
                                   minLength: 1,
@@ -36831,6 +36903,39 @@ export const generatedRouteMap: RouteNode = {
                           },
                         },
                       ],
+                    },
+                    s_d21ba6521546: {
+                      type: "array",
+                      items: {
+                        additionalProperties: false,
+                        type: "object",
+                        required: ["propertyId", "kind"],
+                        properties: {
+                          propertyId: {
+                            minLength: 1,
+                            type: "string",
+                          },
+                          kind: {
+                            default: "count",
+                            type: "string",
+                            enum: [
+                              "count",
+                              "count-unique",
+                              "count-empty",
+                              "count-filled",
+                              "percent-empty",
+                              "percent-filled",
+                              "sum",
+                              "average",
+                              "median",
+                              "min",
+                              "max",
+                              "range",
+                              "percent-of-total",
+                            ],
+                          },
+                        },
+                      },
                     },
                     s_db9cd85a47d3: {
                       type: "object",
@@ -37154,6 +37259,9 @@ export const generatedRouteMap: RouteNode = {
                                     type: "string",
                                   },
                                 },
+                                calculations: {
+                                  $ref: "#/$defs/s_d21ba6521546",
+                                },
                               },
                             },
                             {
@@ -37215,6 +37323,9 @@ export const generatedRouteMap: RouteNode = {
                                     type: "string",
                                   },
                                 },
+                                calculations: {
+                                  $ref: "#/$defs/s_d21ba6521546",
+                                },
                                 groupByPropertyId: {
                                   minLength: 1,
                                   type: "string",
@@ -37266,6 +37377,9 @@ export const generatedRouteMap: RouteNode = {
                                     type: "string",
                                   },
                                 },
+                                calculations: {
+                                  $ref: "#/$defs/s_d21ba6521546",
+                                },
                               },
                             },
                             {
@@ -37312,6 +37426,9 @@ export const generatedRouteMap: RouteNode = {
                                   items: {
                                     type: "string",
                                   },
+                                },
+                                calculations: {
+                                  $ref: "#/$defs/s_d21ba6521546",
                                 },
                                 groupByPropertyId: {
                                   minLength: 1,
@@ -37365,6 +37482,9 @@ export const generatedRouteMap: RouteNode = {
                                   items: {
                                     type: "string",
                                   },
+                                },
+                                calculations: {
+                                  $ref: "#/$defs/s_d21ba6521546",
                                 },
                                 datePropertyId: {
                                   minLength: 1,
@@ -37447,6 +37567,9 @@ export const generatedRouteMap: RouteNode = {
                                   items: {
                                     type: "string",
                                   },
+                                },
+                                calculations: {
+                                  $ref: "#/$defs/s_d21ba6521546",
                                 },
                                 startDatePropertyId: {
                                   minLength: 1,
@@ -38142,6 +38265,39 @@ export const generatedRouteMap: RouteNode = {
                           },
                         },
                       ],
+                    },
+                    s_d21ba6521546: {
+                      type: "array",
+                      items: {
+                        additionalProperties: false,
+                        type: "object",
+                        required: ["propertyId", "kind"],
+                        properties: {
+                          propertyId: {
+                            minLength: 1,
+                            type: "string",
+                          },
+                          kind: {
+                            default: "count",
+                            type: "string",
+                            enum: [
+                              "count",
+                              "count-unique",
+                              "count-empty",
+                              "count-filled",
+                              "percent-empty",
+                              "percent-filled",
+                              "sum",
+                              "average",
+                              "median",
+                              "min",
+                              "max",
+                              "range",
+                              "percent-of-total",
+                            ],
+                          },
+                        },
+                      },
                     },
                     s_db9cd85a47d3: {
                       type: "object",

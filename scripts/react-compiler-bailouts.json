@@ -52,7 +52,6 @@
   "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/cell-metadata-flags.tsx::useCellMetadataFlags": 3,
   "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/existing-file-organizer-dialog.tsx::ExistingFileOrganizerDialog": 6,
   "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view.tsx::FilesystemView": 18,
-  "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-card.tsx::KanbanCard": 0,
   "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-column.tsx::KanbanColumn": 0,
   "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/property-popover.tsx::PropertyPopover": 0,
   "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/row-actions.tsx::RowActions": 0,

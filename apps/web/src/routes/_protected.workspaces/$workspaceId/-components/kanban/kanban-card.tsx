@@ -6,7 +6,7 @@ import { setCustomNativeDragPreview } from "@atlaskit/pragmatic-drag-and-drop/el
 import { CalendarIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { containedHandler } from "@stll/ui/use-contained-handler";
+import { KanbanCardShell, selectKanbanCardFieldIds } from "@stll/ui/kanban";
 import { cn } from "@stll/ui/utils";
 
 import { InlineEdit } from "@/components/inline-edit";
@@ -163,24 +163,17 @@ export const KanbanCard = ({
 
   const isTask = entity.kind === "task";
   const visibleCardFields = normalizeOptionalArray(cardFields);
-  const valueFields = visibleCardFields.filter((fieldId) => {
-    if (
-      fieldId === getInternalPropertyId("created-by") ||
-      fieldId === getInternalPropertyId("updated-at") ||
-      fieldId === getInternalPropertyId("version") ||
-      fieldId === getInternalPropertyId("status") ||
-      fieldId === getInternalPropertyId("priority") ||
-      fieldId === getInternalPropertyId("due-date") ||
-      fieldId === getInternalPropertyId("kind")
-    ) {
-      return false;
-    }
+  const valueFields = selectKanbanCardFieldIds(visibleCardFields, {
+    // The card draws these itself: as the kind icon, the badge row, or the
+    // footer. Repeating them as property values would show each one twice.
+    reservedFieldIds: CARD_RESERVED_FIELD_IDS,
     // Verdict tiers render as unlabeled compliant/deviation tags that clutter
     // the card and can't be toggled off (verdict properties are excluded from
     // the visibility menu). The tier is already conveyed by the column when
     // grouping by a verdict, so keep verdict tiers off kanban cards.
-    const property = properties?.find((p) => p.id === fieldId);
-    return property?.tool.type !== "playbook-verdict";
+    isRenderable: (fieldId) =>
+      properties?.find((p) => p.id === fieldId)?.tool.type !==
+      "playbook-verdict",
   });
   const showAuthor = visibleCardFields.includes(
     getInternalPropertyId("created-by"),
@@ -274,107 +267,56 @@ export const KanbanCard = ({
     return tab?.type === "task" && tab.id === entity.entityId;
   });
 
-  // SAFETY: the ref is attached to either a <div> (task) or <button>
-  // (navigable file); both extend HTMLElement which useInspectorFlash needs.
   const cardRef = useRef<HTMLDivElement>(null);
   useInspectorFlash(entity.entityId, cardRef);
 
-  if (isTask) {
-    return (
-      <div className="group/card" ref={dragRef}>
-        <div
-          className={cn(
-            "bg-card relative block w-full cursor-pointer rounded-lg border p-3 text-start shadow-xs transition-shadow hover:shadow-md",
-            isActiveTask && "ring-primary/30 ring-2",
-          )}
-          // eslint-disable-next-line react/react-compiler -- containedHandler house pattern; cardRef is handed to the helper, not read for rendered output
-          onClick={containedHandler(cardRef, () =>
-            useInspectorTabsStore.getState().openTask({
-              taskId: entity.entityId,
-              workspaceId,
-              label: name,
-            }),
-          )}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === " ") {
-              useInspectorTabsStore.getState().openTask({
-                taskId: entity.entityId,
-                workspaceId,
-                label: name,
-              });
-            }
-          }}
-          ref={cardRef}
-          role="button"
-          tabIndex={0}
-        >
-          {content}
-          {actionsButton}
-        </div>
-      </div>
-    );
-  }
-
-  if (navigable) {
-    return (
-      <div className="group/card" ref={dragRef}>
-        <div
-          className={cn(
-            "bg-card relative block w-full cursor-pointer rounded-lg border p-3 text-start shadow-xs transition-shadow hover:shadow-md",
-            isActivePeek && "ring-primary/30 ring-2",
-          )}
-          // eslint-disable-next-line react/react-compiler -- containedHandler house pattern; cardRef is handed to the helper, not read for rendered output
-          onClick={containedHandler(cardRef, () =>
-            useInspectorTabsStore.getState().openFile({
-              id: file.fieldId,
-              entityId: file.entityId,
-              label: name,
-              fileName: file.fileName,
-              mimeType: file.mimeType,
-              pdfFileId: file.pdfFileId,
-              propertyId: file.propertyId,
-              workspaceId,
-            }),
-          )}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === " ") {
-              useInspectorTabsStore.getState().openFile({
-                id: file.fieldId,
-                entityId: file.entityId,
-                label: name,
-                fileName: file.fileName,
-                mimeType: file.mimeType,
-                pdfFileId: file.pdfFileId,
-                propertyId: file.propertyId,
-                workspaceId,
-              });
-            }
-          }}
-          ref={cardRef}
-          role="button"
-          tabIndex={0}
-        >
-          {content}
-          {actionsButton}
-        </div>
-      </div>
-    );
-  }
+  const openCard = (() => {
+    if (isTask) {
+      return () =>
+        useInspectorTabsStore.getState().openTask({
+          taskId: entity.entityId,
+          workspaceId,
+          label: name,
+        });
+    }
+    if (navigable) {
+      return () =>
+        useInspectorTabsStore.getState().openFile({
+          id: file.fieldId,
+          entityId: file.entityId,
+          label: name,
+          fileName: file.fileName,
+          mimeType: file.mimeType,
+          pdfFileId: file.pdfFileId,
+          propertyId: file.propertyId,
+          workspaceId,
+        });
+    }
+    return undefined;
+  })();
 
   return (
-    <div className="group/card" ref={dragRef}>
-      <div
-        className={cn(
-          "bg-card relative rounded-lg border p-3 shadow-xs",
-          isActivePeek && "ring-primary/30 ring-2",
-        )}
-      >
-        {content}
-        {actionsButton}
-      </div>
-    </div>
+    <KanbanCardShell
+      actions={actionsButton}
+      active={isTask ? isActiveTask : isActivePeek}
+      bodyRef={cardRef}
+      dragRef={dragRef}
+      onOpen={openCard}
+    >
+      {content}
+    </KanbanCardShell>
   );
 };
+
+const CARD_RESERVED_FIELD_IDS = [
+  getInternalPropertyId("created-by"),
+  getInternalPropertyId("updated-at"),
+  getInternalPropertyId("version"),
+  getInternalPropertyId("status"),
+  getInternalPropertyId("priority"),
+  getInternalPropertyId("due-date"),
+  getInternalPropertyId("kind"),
+];
 
 type KanbanEntityMetadataBadgesProps = {
   entity: WorkspaceEntity;

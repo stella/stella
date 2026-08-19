@@ -8,16 +8,23 @@
     "./*": "./src/*.tsx",
     "./types": "./src/types.ts",
     "./colors": "./src/colors.ts",
-    "./field-value-logic": "./src/field-value-logic.ts"
+    "./field-value-logic": "./src/field-value-logic.ts",
+    "./calculation-format": "./src/calculation-format.ts",
+    "./calculations": "./src/calculations.tsx",
+    "./calculation-selection": "./src/calculation-selection.ts"
   },
   "scripts": {
     "clean": "git clean -xdf .cache .turbo node_modules",
+    "test": "bun test src",
     "typecheck": "bun ../../packages/scripts/src/tsc-native.ts --noEmit",
     "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --deny-warnings --type-aware packages/workspace-ui",
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/workspace-ui",
-    "format": "oxfmt ."
+    "format": "oxfmt .",
+    "test:property": "bun test $(grep -rlF 'fc.assert' src)"
   },
   "dependencies": {
+    "@stll/calculations": "workspace:*",
+    "@stll/money": "workspace:*",
     "@stll/ui": "workspace:*",
     "better-result": "catalog:",
     "lucide-react": "catalog:",
@@ -25,10 +32,12 @@
     "use-intl": "catalog:"
   },
   "devDependencies": {
+    "@stll/property-testing": "workspace:*",
     "@stll/typescript-config": "workspace:*",
     "@tanstack/react-table": "9.1.2",
     "@types/bun": "catalog:",
     "@types/react": "catalog:react19",
+    "fast-check": "catalog:",
     "tailwindcss": "catalog:"
   }
 }

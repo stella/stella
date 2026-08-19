@@ -24,6 +24,7 @@ const tableLayout = (propertyId: string): ViewLayout => ({
   filters: [],
   sorts: [],
   hiddenProperties: [],
+  calculations: [],
   columnOrder: [propertyId],
   columnPinning: [],
 });
@@ -236,6 +237,7 @@ describe("collectTemplateProperties", () => {
       filters: [],
       sorts: [],
       hiddenProperties: [dependencyProperty.id, unrelatedHiddenProperty.id],
+      calculations: [],
       columnOrder: [aiProperty.id],
       columnPinning: [],
     };
@@ -612,6 +614,7 @@ describe("resolveTemplateProperties", () => {
       filters: [],
       sorts: [],
       hiddenProperties: [],
+      calculations: [],
       columnOrder: [firstProperty.sourceId, secondProperty.sourceId],
       columnPinning: [],
     };
@@ -659,6 +662,7 @@ describe("resolveTemplateProperties", () => {
       filters: [],
       sorts: [],
       hiddenProperties: [],
+      calculations: [],
       columnOrder: [templateProperty.sourceId],
       columnPinning: [],
     };
@@ -1341,6 +1345,7 @@ describe("resolveTemplateProperties", () => {
       filters: [],
       sorts: [],
       hiddenProperties: [],
+      calculations: [],
       columnOrder: [explicitClassifier.sourceId, legacyDuplicate.sourceId],
       columnPinning: [],
     };
@@ -1396,6 +1401,7 @@ describe("resolveTemplateProperties", () => {
       filters: [],
       sorts: [],
       hiddenProperties: [],
+      calculations: [],
       columnOrder: [templateProperty.sourceId],
       columnPinning: [],
     };

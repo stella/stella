@@ -14,6 +14,7 @@ const originalFetch = globalThis.fetch;
 const OVERVIEW_LAYOUT = {
   filters: [],
   hiddenProperties: [],
+  calculations: [],
   sorts: [],
   type: "overview",
   version: 1,

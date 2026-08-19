@@ -148,6 +148,7 @@ const layout: Extract<ViewLayout, { type: "table" }> = {
   filters: [],
   sorts: [],
   hiddenProperties: [],
+  calculations: [],
   columnOrder: [ASK_LAW, ASK_TERM, ASK_CAP],
   columnPinning: [],
 };
@@ -400,6 +401,7 @@ describe("Due Diligence Report built-in template", () => {
       filters: [],
       sorts: [],
       hiddenProperties: [],
+      calculations: [],
       columnOrder: [ASK_LAW, ASK_TERM, ASK_CAP],
       columnPinning: [],
     };

@@ -86,6 +86,7 @@ import {
   propertiesOptions,
 } from "@/lib/workspaces/queries/properties";
 import { useWorkspaceStore } from "@/lib/workspaces/store";
+import { mergeLayout } from "@/lib/workspaces/view-layout";
 import { BulkAddColumns } from "@/routes/_protected.workspaces/$workspaceId/-components/bulk-add-columns";
 import { ExistingFileOrganizerDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/existing-file-organizer-dialog";
 import { ExtractionRunProgress } from "@/routes/_protected.workspaces/$workspaceId/-components/extraction-run-progress";
@@ -99,16 +100,6 @@ import { useTableStore } from "@/routes/_protected.workspaces/$workspaceId/-hook
 import { useUpdateView } from "@/routes/_protected.workspaces/$workspaceId/-mutations/views";
 
 const protectedRouteApi = getRouteApi("/_protected");
-
-// Generic helper preserves the union discriminant. A bare
-// `{ ...layout, ...partial }` would collapse to an invalid union.
-const mergeLayout = <L extends ViewLayout>(
-  layout: L,
-  changes: Partial<L>,
-): L => ({
-  ...layout,
-  ...changes,
-});
 
 type ViewToolbarProps = {
   view: WorkspaceView;

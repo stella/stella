@@ -44,6 +44,7 @@ const emptyLayout: ViewLayout = {
   filters: [],
   sorts: [],
   hiddenProperties: [],
+  calculations: [],
 };
 
 const seedView = async (

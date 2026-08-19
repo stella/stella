@@ -49,6 +49,18 @@ const multiSelectType = t.Literal("multi-select");
 const dateType = t.Literal("date");
 const intType = t.Literal("int");
 
+/**
+ * ISO 4217 alphabetic code. Three *letters*, not three characters: a stored
+ * "A1C" satisfies a length check and then makes Intl.NumberFormat throw the
+ * moment a column formats it. An unknown-but-well-formed code ("ZZZ") is
+ * accepted, because Intl accepts it too.
+ */
+const currencyCode = t.String({
+  minLength: 3,
+  maxLength: 3,
+  pattern: "^[A-Za-z]{3}$",
+});
+
 export const entityKindSchema = t.UnionEnum(ENTITY_KINDS);
 export type { EntityKind } from "@stll/api-contract";
 
@@ -246,7 +258,7 @@ export const fieldContentSchema = t.Union([
     version: v1,
     type: t.Literal("int"),
     value: t.Integer(),
-    currency: t.Nullable(t.String({ minLength: 3, maxLength: 3 })),
+    currency: t.Nullable(currencyCode),
   }),
   t.Object({
     version: v1,
@@ -312,7 +324,7 @@ export const bankAccountSchema = t.Object({
   bic: t.Optional(t.String({ maxLength: 11 })),
   accountNumber: t.Optional(t.String({ maxLength: 64 })),
   bankName: t.Optional(t.String({ maxLength: 256 })),
-  currency: t.Optional(t.String({ minLength: 3, maxLength: 3 })),
+  currency: t.Optional(currencyCode),
 });
 
 export type BankAccount = Static<typeof bankAccountSchema>;

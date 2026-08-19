@@ -3857,6 +3857,26 @@
     }
   },
   "workspaces": {
+    "calculations": {
+      "choose": "Calculate",
+      "kinds": {
+        "average": "Average",
+        "count": "Count",
+        "countEmpty": "Count empty",
+        "countFilled": "Count not empty",
+        "countUnique": "Count unique",
+        "max": "Max",
+        "median": "Median",
+        "min": "Min",
+        "percentEmpty": "Percent empty",
+        "percentFilled": "Percent not empty",
+        "percentOfTotal": "Percent of total",
+        "range": "Range",
+        "sum": "Sum"
+      },
+      "noProperties": "No property to calculate",
+      "unavailable": "—"
+    },
     "copyToMatter": {
       "copied": "Copiado al asunto",
       "copyOption": "Copiar (mantener original)",

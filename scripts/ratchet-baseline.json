@@ -236,7 +236,7 @@
     "files": {}
   },
   "lint-suppression-directives": {
-    "count": 765,
+    "count": 764,
     "files": {
       "apps/api/scripts/ai-provider-canary-config.ts": 1,
       "apps/api/scripts/ai-provider-canary.ts": 4,
@@ -527,7 +527,6 @@
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/cell-metadata-flags.tsx": 1,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/existing-file-organizer-dialog.tsx": 3,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view.tsx": 1,
-      "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-card.tsx": 2,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/overview-view.tsx": 2,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/property-popover.tsx": 1,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/row-actions.tsx": 3,
@@ -572,6 +571,7 @@
       "packages/ui/src/components/input-group.tsx": 1,
       "packages/ui/src/components/outline-rail.tsx": 1,
       "packages/ui/src/components/select.tsx": 1,
+      "packages/ui/src/kanban/card-shell.tsx": 1,
       "scripts/check-api-deployment.ts": 2,
       "scripts/check-railway-smoke.ts": 3,
       "scripts/env-tool.ts": 1,

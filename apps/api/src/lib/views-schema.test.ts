@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 import * as v from "valibot";
 
+import { CALCULATION_KINDS } from "@stll/calculations";
 import { conditionNodeSchema } from "@stll/conditions";
 import { propertyConfig } from "@stll/property-testing";
 
@@ -24,6 +25,7 @@ describe("parseViewLayout", () => {
       filters: [],
       sorts: [],
       hiddenProperties: [],
+      calculations: [],
       columnOrder: ["name"],
       columnPinning: [],
     } satisfies ViewLayout;
@@ -37,6 +39,7 @@ describe("parseViewLayout", () => {
       filters: [],
       sorts: [],
       hiddenProperties: [],
+      calculations: [],
       datePropertyId: "_created-at",
       mode: "month",
     };
@@ -55,6 +58,7 @@ describe("parseViewLayoutSafe", () => {
       filters: [],
       sorts: [],
       hiddenProperties: [],
+      calculations: [],
       columnOrder: ["name"],
       columnPinning: [],
     } satisfies ViewLayout;
@@ -71,6 +75,7 @@ describe("parseViewLayoutSafe", () => {
       filters: [{ id: "f1", field: "kind", op: "in", value: ["document"] }],
       sorts: [],
       hiddenProperties: [],
+      calculations: [],
       columnOrder: ["name"],
       columnPinning: ["name"],
     };
@@ -83,6 +88,7 @@ describe("parseViewLayoutSafe", () => {
       filters: [],
       sorts: [],
       hiddenProperties: [],
+      calculations: [],
       columnOrder: ["name"],
       columnPinning: ["name"],
     });
@@ -95,6 +101,7 @@ describe("parseViewLayoutSafe", () => {
       filters: [],
       sorts: [],
       hiddenProperties: [],
+      calculations: [],
       columnOrder: ["name"],
       columnPinning: ["name"],
     });
@@ -122,6 +129,7 @@ describe("parseViewLayoutSafe", () => {
       ],
       sorts: [],
       hiddenProperties: [],
+      calculations: [],
       columnOrder: ["name"],
       columnPinning: [],
     };
@@ -137,6 +145,7 @@ describe("parseViewLayoutSafe", () => {
       filters: [],
       sorts: [],
       hiddenProperties: [],
+      calculations: [],
     });
     expect(() => parseViewLayoutSafe(null)).not.toThrow();
     expect(() => parseViewLayoutSafe("not a layout")).not.toThrow();
@@ -237,11 +246,17 @@ const arbSort = fc.record({
   desc: fc.boolean(),
 });
 
+const arbCalculation = fc.record({
+  propertyId: arbPropertyId,
+  kind: fc.constantFrom(...CALCULATION_KINDS),
+});
+
 const baseLayoutFields = {
   version: fc.constant(1 as const),
   filters: fc.array(arbFilter, { maxLength: 4 }),
   sorts: fc.array(arbSort, { maxLength: 4 }),
   hiddenProperties: arbHiddenProperties,
+  calculations: fc.array(arbCalculation, { maxLength: 3 }),
 };
 
 const arbLayout = fc.oneof(
@@ -263,7 +278,14 @@ const arbLayout = fc.oneof(
       groupByPropertyId: arbPropertyId,
     },
     {
-      requiredKeys: ["type", "version", "filters", "sorts", "hiddenProperties"],
+      requiredKeys: [
+        "type",
+        "version",
+        "filters",
+        "sorts",
+        "hiddenProperties",
+        "calculations",
+      ],
     },
   ),
   fc.record(
@@ -282,6 +304,7 @@ const arbLayout = fc.oneof(
         "filters",
         "sorts",
         "hiddenProperties",
+        "calculations",
         "datePropertyId",
         "mode",
       ],
@@ -304,6 +327,7 @@ const arbLayout = fc.oneof(
         "filters",
         "sorts",
         "hiddenProperties",
+        "calculations",
         "startDatePropertyId",
         "endDatePropertyId",
         "zoom",
@@ -404,10 +428,49 @@ describe("viewLayoutSchema — properties", () => {
       filters: [],
       sorts: [],
       hiddenProperties: [],
+      calculations: [],
       groupByPropertyId: "x",
       valueOf: "junk",
     };
     expect(v.is(viewLayoutSchema, polluted)).toBe(true);
     expect(Value.Check(tViewLayoutSchema, polluted)).toBe(false);
+  });
+});
+
+describe("view calculations", () => {
+  const kanbanLayout = {
+    version: 1,
+    type: "kanban",
+    filters: [],
+    sorts: [],
+    hiddenProperties: [],
+    calculations: [],
+  } satisfies ViewLayout;
+
+  test("a layout that omits calculations reads back as an empty list", () => {
+    const { calculations: _omitted, ...withoutCalculations } = kanbanLayout;
+
+    expect(parseViewLayout(withoutCalculations).calculations).toEqual([]);
+  });
+
+  test("a chosen calculation round-trips", () => {
+    const layout = {
+      ...kanbanLayout,
+      calculations: [{ propertyId: "fee", kind: "sum" }],
+    } satisfies ViewLayout;
+
+    expect(parseViewLayout(layout).calculations).toEqual([
+      { propertyId: "fee", kind: "sum" },
+    ]);
+    expect(Value.Check(tViewLayoutSchema, layout)).toBe(true);
+  });
+
+  test("a calculation the reducer does not implement is rejected", () => {
+    expect(() =>
+      parseViewLayout({
+        ...kanbanLayout,
+        calculations: [{ propertyId: "fee", kind: "geometric-mean" }],
+      }),
+    ).toThrow(v.ValiError);
   });
 });

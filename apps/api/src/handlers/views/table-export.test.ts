@@ -103,6 +103,7 @@ const tableLayout = (
   filters: [],
   sorts: [],
   hiddenProperties: [],
+  calculations: [],
   columnOrder: [],
   columnPinning: [],
   ...partial,
@@ -211,6 +212,7 @@ describe("table export", () => {
     const columns = buildExportColumns(
       tableLayout({
         hiddenProperties: ["p3", "_updated-at"],
+        calculations: [],
         columnOrder: ["_version", "p2", "missing", "p1"],
       }),
       [

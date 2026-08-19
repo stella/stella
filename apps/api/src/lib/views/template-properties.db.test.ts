@@ -118,6 +118,7 @@ const tableLayout = (): ViewLayout => ({
   columnOrder: templateColumns.map((column) => column.sourceId),
   columnPinning: [],
   hiddenProperties: [],
+  calculations: [],
   filters: [],
   sorts: [],
 });
