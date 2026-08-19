@@ -7,6 +7,7 @@ import type { GroupNode } from "@stll/conditions";
 
 import type { FieldOption } from "@/components/conditions/condition-builder-logic";
 import { leafFromField } from "@/components/conditions/condition-builder-logic";
+import { FormattingProvider } from "@/i18n/formatting-context";
 import messages from "@/i18n/langs/en.json";
 
 import {
@@ -30,12 +31,16 @@ const FILTER = {
 const renderEditor = () =>
   renderToStaticMarkup(
     <IntlProvider locale="en" messages={messages} timeZone="UTC">
-      <AdvancedFilterEditor
-        fields={[FIELD]}
-        node={FILTER}
-        onChange={() => undefined}
-        onRemove={() => undefined}
-      />
+      {/* The builder reads the formatting locale for its date editor, so it
+          renders under the same provider the app mounts it in. */}
+      <FormattingProvider locale="en" timeZone="UTC">
+        <AdvancedFilterEditor
+          fields={[FIELD]}
+          node={FILTER}
+          onChange={() => undefined}
+          onRemove={() => undefined}
+        />
+      </FormattingProvider>
     </IntlProvider>,
   );
 

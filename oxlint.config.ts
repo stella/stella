@@ -578,9 +578,10 @@ export default defineConfig({
     "react_perf/jsx-no-new-function-as-prop": "off",
 
     "react/hook-use-state": "off",
-    // Enabled ("error") only for apps/web/src via the override below; other
-    // React surfaces (folio, ui, desktop, landing, playground) are not swept
-    // yet.
+    // `react/jsx-key` and `react/no-array-index-key` are enabled ("error") for
+    // apps/web/src and packages/workspace-ui/src via the overrides below. The
+    // other React surfaces (folio, ui, desktop, landing, playground) are not
+    // swept yet, and `react/hook-use-state` above is off everywhere.
     "react/no-array-index-key": "off",
     "react/no-children-prop": "off",
     "react/no-danger": "off",
@@ -1633,6 +1634,17 @@ export default defineConfig({
       // bundler from paying for re-exports it does not touch.
       files: ["packages/ui/src/index.ts"],
       rules: { "oxc/no-barrel-file": "off" },
+    },
+    {
+      // The workspace kit's components came out of apps/web and keep its key
+      // hygiene: a list keyed by index is the same bug here. Only `jsx-key` and
+      // `no-array-index-key`, so the package is not swept for the rest of the
+      // app's set.
+      files: ["packages/workspace-ui/src/**/*.{ts,tsx}"],
+      rules: {
+        "react/jsx-key": "error",
+        "react/no-array-index-key": "error",
+      },
     },
     {
       files: ["apps/web/src/hooks/use-effect.ts"],

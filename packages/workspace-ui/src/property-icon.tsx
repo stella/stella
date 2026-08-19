@@ -28,7 +28,7 @@ type PropertyContentType =
   | "money"
   | "person";
 
-type PropertyIconType = FieldTypeWithoutPending | PropertyContentType;
+export type PropertyIconType = FieldTypeWithoutPending | PropertyContentType;
 
 type PropertyHelperProps = {
   type: PropertyIconType;
