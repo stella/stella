@@ -1116,6 +1116,18 @@
             "location": "apps/web/src/routes/_protected.contacts/-components/contact-notes-editor.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/_protected.contacts/-import-review.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.contacts/-procuracao-extraction.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.contacts/import.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.contacts/import.tsx#2"
+          },
+          {
             "location": "apps/web/src/routes/_protected.contacts/index.tsx#1"
           },
           {
@@ -2977,7 +2989,7 @@
           "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/client-cloudwatch@3.1108.0",
+      "bom-ref": "pkg:npm/@aws-sdk/client-cloudwatch@3.1109.0",
       "description": "AWS SDK for JavaScript Cloudwatch Client for Node.js, Browser and React Native",
       "evidence": {
         "identity": [
@@ -3026,13 +3038,13 @@
           "value": "node_modules/@aws-sdk/client-cloudwatch/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/client-cloudwatch@3.1108.0",
+      "purl": "pkg:npm/%40aws-sdk/client-cloudwatch@3.1109.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1108.0"
+      "version": "3.1109.0"
     },
     {
       "authors": [
@@ -3040,7 +3052,7 @@
           "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/client-s3@3.1108.0",
+      "bom-ref": "pkg:npm/@aws-sdk/client-s3@3.1109.0",
       "description": "AWS SDK for JavaScript S3 Client for Node.js, Browser and React Native",
       "evidence": {
         "identity": [
@@ -3092,13 +3104,13 @@
           "value": "node_modules/@aws-sdk/client-s3/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/client-s3@3.1108.0",
+      "purl": "pkg:npm/%40aws-sdk/client-s3@3.1109.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1108.0"
+      "version": "3.1109.0"
     },
     {
       "authors": [
@@ -3106,7 +3118,7 @@
           "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/client-sesv2@3.1108.0",
+      "bom-ref": "pkg:npm/@aws-sdk/client-sesv2@3.1109.0",
       "description": "AWS SDK for JavaScript Sesv2 Client for Node.js, Browser and React Native",
       "evidence": {
         "identity": [
@@ -3155,13 +3167,13 @@
           "value": "node_modules/@aws-sdk/client-sesv2/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/client-sesv2@3.1108.0",
+      "purl": "pkg:npm/%40aws-sdk/client-sesv2@3.1109.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1108.0"
+      "version": "3.1109.0"
     },
     {
       "authors": [
@@ -3169,7 +3181,7 @@
           "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/client-sts@3.1108.0",
+      "bom-ref": "pkg:npm/@aws-sdk/client-sts@3.1109.0",
       "description": "AWS SDK for JavaScript Sts Client for Node.js, Browser and React Native",
       "evidence": {
         "identity": [
@@ -3218,13 +3230,13 @@
           "value": "node_modules/@aws-sdk/client-sts/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/client-sts@3.1108.0",
+      "purl": "pkg:npm/%40aws-sdk/client-sts@3.1109.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1108.0"
+      "version": "3.1109.0"
     },
     {
       "authors": [
@@ -3232,7 +3244,7 @@
           "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/s3-request-presigner@3.1108.0",
+      "bom-ref": "pkg:npm/@aws-sdk/s3-request-presigner@3.1109.0",
       "evidence": {
         "identity": [
           {
@@ -3280,13 +3292,13 @@
           "value": "node_modules/@aws-sdk/s3-request-presigner/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/s3-request-presigner@3.1108.0",
+      "purl": "pkg:npm/%40aws-sdk/s3-request-presigner@3.1109.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1108.0"
+      "version": "3.1109.0"
     },
     {
       "authors": [
@@ -4466,6 +4478,18 @@
           },
           {
             "location": "apps/web/src/routes/_protected.contacts/-components/contact-notes-editor.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.contacts/-import-review.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.contacts/-procuracao-extraction.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.contacts/import.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.contacts/import.tsx#2"
           },
           {
             "location": "apps/web/src/routes/_protected.contacts/index.tsx#1"
@@ -6244,6 +6268,18 @@
             "location": "apps/web/src/routes/_protected.contacts/-components/contact-notes-editor.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/_protected.contacts/-import-review.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.contacts/-procuracao-extraction.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.contacts/import.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.contacts/import.tsx#2"
+          },
+          {
             "location": "apps/web/src/routes/_protected.contacts/index.tsx#1"
           },
           {
@@ -7485,7 +7521,7 @@
       "version": "2.15.0"
     },
     {
-      "bom-ref": "pkg:npm/@google/genai@2.16.0",
+      "bom-ref": "pkg:npm/@google/genai@2.17.0",
       "evidence": {
         "identity": [
           {
@@ -7533,10 +7569,10 @@
           "value": "node_modules/@google/genai/package.json"
         }
       ],
-      "purl": "pkg:npm/%40google/genai@2.16.0",
+      "purl": "pkg:npm/%40google/genai@2.17.0",
       "scope": "required",
       "type": "library",
-      "version": "2.16.0"
+      "version": "2.17.0"
     },
     {
       "bom-ref": "pkg:npm/@hocuspocus/provider@4.6.0",
@@ -7597,7 +7633,7 @@
       "version": "4.6.0"
     },
     {
-      "bom-ref": "pkg:npm/@hocuspocus/server@4.5.0",
+      "bom-ref": "pkg:npm/@hocuspocus/server@4.6.0",
       "description": "plug & play collaboration backend",
       "evidence": {
         "identity": [
@@ -7649,10 +7685,10 @@
           "value": "node_modules/@hocuspocus/server/package.json"
         }
       ],
-      "purl": "pkg:npm/%40hocuspocus/server@4.5.0",
+      "purl": "pkg:npm/%40hocuspocus/server@4.6.0",
       "scope": "required",
       "type": "library",
-      "version": "4.5.0"
+      "version": "4.6.0"
     },
     {
       "authors": [
@@ -9378,6 +9414,18 @@
           },
           {
             "location": "apps/web/src/routes/_protected.contacts/-components/contact-notes-editor.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.contacts/-import-review.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.contacts/-procuracao-extraction.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.contacts/import.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.contacts/import.tsx#2"
           },
           {
             "location": "apps/web/src/routes/_protected.contacts/index.tsx#1"
@@ -12054,7 +12102,7 @@
             "location": "apps/api/src/lib/agent-skills/skill-tools.ts#1"
           },
           {
-            "location": "apps/api/src/lib/analytics/tanstack-ai.ts#1"
+            "location": "apps/api/src/lib/analytics/tanstack-ai.ts#5"
           },
           {
             "location": "apps/api/src/lib/bbox/ai-generate-b-boxes.ts#1"
@@ -13161,7 +13209,10 @@
             "location": "apps/web/src/routes/_protected.contacts/-components/editable-row.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.contacts/index.tsx#5"
+            "location": "apps/web/src/routes/_protected.contacts/-procuracao-extraction.tsx#3"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.contacts/index.tsx#9"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/blueprint-gallery-sheet.tsx#3"
@@ -13652,7 +13703,7 @@
           "name": "Tanner Linsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/react-router@1.170.25",
+      "bom-ref": "pkg:npm/@tanstack/react-router@1.170.27",
       "description": "Modern and scalable routing for React applications",
       "evidence": {
         "identity": [
@@ -13917,7 +13968,13 @@
             "location": "apps/web/src/routes/_protected.contacts/-components/editable-row.tsx#2"
           },
           {
-            "location": "apps/web/src/routes/_protected.contacts/index.tsx#11"
+            "location": "apps/web/src/routes/_protected.contacts/-import-review.tsx#3"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.contacts/import.tsx#4"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.contacts/index.tsx#15"
           },
           {
             "location": "apps/web/src/routes/_protected.dev_.autocomplete.tsx#3"
@@ -14280,10 +14337,10 @@
           "value": "node_modules/@tanstack/react-router/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/react-router@1.170.25",
+      "purl": "pkg:npm/%40tanstack/react-router@1.170.27",
       "scope": "required",
       "type": "library",
-      "version": "1.170.25"
+      "version": "1.170.27"
     },
     {
       "authors": [
@@ -14291,7 +14348,7 @@
           "name": "Tanner Linsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/react-start@1.168.42",
+      "bom-ref": "pkg:npm/@tanstack/react-start@1.168.44",
       "description": "Modern and scalable routing for React applications",
       "evidence": {
         "identity": [
@@ -14316,7 +14373,7 @@
             "location": "apps/web/src/lib/public-tools-github-content.ts#1"
           },
           {
-            "location": "apps/web/src/routeTree.gen.ts#1936"
+            "location": "apps/web/src/routeTree.gen.ts#1957"
           },
           {
             "location": "apps/web/src/lib/beta-features.ts#2"
@@ -14355,10 +14412,10 @@
           "value": "node_modules/@tanstack/react-start/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/react-start@1.168.42",
+      "purl": "pkg:npm/%40tanstack/react-start@1.168.44",
       "scope": "required",
       "type": "library",
-      "version": "1.168.42"
+      "version": "1.168.44"
     },
     {
       "authors": [
@@ -14394,7 +14451,7 @@
             "location": "apps/web/src/components/workspaces/properties/pin-property.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.contacts/index.tsx#12"
+            "location": "apps/web/src/routes/_protected.contacts/index.tsx#16"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/profile-card.tsx#5"
@@ -14481,7 +14538,7 @@
             "location": "apps/web/src/components/workspaces/properties/pin-property.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.contacts/index.tsx#12"
+            "location": "apps/web/src/routes/_protected.contacts/index.tsx#16"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/profile-card.tsx#5"
@@ -14643,10 +14700,10 @@
             "location": "apps/web/src/components/workspaces/properties/pin-property.tsx#2"
           },
           {
-            "location": "apps/web/src/routes/_protected.contacts/index.tsx#19"
+            "location": "apps/web/src/routes/_protected.contacts/index.tsx#23"
           },
           {
-            "location": "apps/web/src/routes/_protected.contacts/index.tsx#20"
+            "location": "apps/web/src/routes/_protected.contacts/index.tsx#24"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/grouped-table-layout.tsx#8"
@@ -16704,6 +16761,18 @@
             "location": "apps/web/src/routes/_protected.contacts/-components/contact-notes-editor.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/_protected.contacts/-import-review.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.contacts/-procuracao-extraction.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.contacts/import.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.contacts/import.tsx#2"
+          },
+          {
             "location": "apps/web/src/routes/_protected.contacts/index.tsx#1"
           },
           {
@@ -18058,6 +18127,9 @@
             "location": "apps/api/src/handlers/case-law/decisions/get.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/case-law/erasure.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/case-law/ingestion/adapters/adapter-registry-lazy.ts#9"
           },
           {
@@ -18385,16 +18457,40 @@
             "location": "apps/api/src/handlers/contacts/business-registries-lookup.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/contacts/contact-import-file.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/contacts/create.ts#1"
           },
           {
             "location": "apps/api/src/handlers/contacts/delete.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/contacts/export.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/contacts/extract-procuracao.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/contacts/get.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/contacts/import-inspect.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/contacts/import-preview.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/contacts/import-validate.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/contacts/import.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/contacts/list.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/contacts/presign-procuracao.ts#1"
           },
           {
             "location": "apps/api/src/handlers/contacts/search.ts#1"
@@ -19645,7 +19741,7 @@
             "location": "apps/api/src/lib/ai-provider-probe.ts#8"
           },
           {
-            "location": "apps/api/src/lib/analytics/tanstack-ai.ts#2"
+            "location": "apps/api/src/lib/analytics/tanstack-ai.ts#6"
           },
           {
             "location": "apps/api/src/lib/anonymization-blacklist.ts#1"
@@ -19729,7 +19825,7 @@
             "location": "apps/api/src/lib/corpus-index/backfill-pacing.ts#5"
           },
           {
-            "location": "apps/api/src/lib/corpus-index/census.ts#28"
+            "location": "apps/api/src/lib/corpus-index/census.ts#34"
           },
           {
             "location": "apps/api/src/lib/corpus-index/chunking.ts#1"
@@ -19915,10 +20011,19 @@
             "location": "apps/api/src/lib/legal-search/case-law-corpus-upload-intents.ts#1"
           },
           {
+            "location": "apps/api/src/lib/legal-search/case-law-index-groups.ts#17"
+          },
+          {
             "location": "apps/api/src/lib/legal-search/corpus-index-client.ts#1"
           },
           {
             "location": "apps/api/src/lib/legal-search/corpus-index-facets.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/legal-search/corpus-location.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/legal-search/corpus-pack.ts#1"
           },
           {
             "location": "apps/api/src/lib/legal-search/corpus-storage.ts#1"
@@ -19934,6 +20039,9 @@
           },
           {
             "location": "apps/api/src/lib/legal-search/ingestion-types.ts#2"
+          },
+          {
+            "location": "apps/api/src/lib/legal-search/legislation-ingestion-types.ts#1"
           },
           {
             "location": "apps/api/src/lib/legal-search/morphology/slovak.ts#78"
@@ -20287,7 +20395,10 @@
             "location": "apps/api/src/scripts/prepare-spa-template.ts#1"
           },
           {
-            "location": "apps/api/src/scripts/repair-corpus-index-jurisdiction.ts#25"
+            "location": "apps/api/src/scripts/redact-case-law-decision.ts#1"
+          },
+          {
+            "location": "apps/api/src/scripts/repair-corpus-index-jurisdiction.ts#29"
           },
           {
             "location": "apps/api/src/scripts/repair-decision-dates-plan.ts#13"
@@ -20468,6 +20579,9 @@
           },
           {
             "location": "apps/web/src/lib/workspaces/queries/time-entries.ts#2"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.contacts/-contact-import-request.ts#1"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/clause-import-dialog.logic.ts#1"
@@ -20822,6 +20936,18 @@
           },
           {
             "location": "apps/web/src/routes/_protected.chat/index.tsx#16"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.contacts/-import-review.tsx#4"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.contacts/-procuracao-extraction.tsx#4"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.contacts/import.tsx#5"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.contacts/index.tsx#25"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/template-studio-chat.tsx#20"
@@ -21120,6 +21246,9 @@
             "location": "apps/api/src/handlers/case-law/decisions/get.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/case-law/erasure.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/case-law/ingestion/adapters/adapter-registry-lazy.ts#9"
           },
           {
@@ -21447,16 +21576,40 @@
             "location": "apps/api/src/handlers/contacts/business-registries-lookup.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/contacts/contact-import-file.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/contacts/create.ts#1"
           },
           {
             "location": "apps/api/src/handlers/contacts/delete.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/contacts/export.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/contacts/extract-procuracao.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/contacts/get.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/contacts/import-inspect.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/contacts/import-preview.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/contacts/import-validate.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/contacts/import.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/contacts/list.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/contacts/presign-procuracao.ts#1"
           },
           {
             "location": "apps/api/src/handlers/contacts/search.ts#1"
@@ -22707,7 +22860,7 @@
             "location": "apps/api/src/lib/ai-provider-probe.ts#8"
           },
           {
-            "location": "apps/api/src/lib/analytics/tanstack-ai.ts#2"
+            "location": "apps/api/src/lib/analytics/tanstack-ai.ts#6"
           },
           {
             "location": "apps/api/src/lib/anonymization-blacklist.ts#1"
@@ -22791,7 +22944,7 @@
             "location": "apps/api/src/lib/corpus-index/backfill-pacing.ts#5"
           },
           {
-            "location": "apps/api/src/lib/corpus-index/census.ts#28"
+            "location": "apps/api/src/lib/corpus-index/census.ts#34"
           },
           {
             "location": "apps/api/src/lib/corpus-index/chunking.ts#1"
@@ -22977,10 +23130,19 @@
             "location": "apps/api/src/lib/legal-search/case-law-corpus-upload-intents.ts#1"
           },
           {
+            "location": "apps/api/src/lib/legal-search/case-law-index-groups.ts#17"
+          },
+          {
             "location": "apps/api/src/lib/legal-search/corpus-index-client.ts#1"
           },
           {
             "location": "apps/api/src/lib/legal-search/corpus-index-facets.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/legal-search/corpus-location.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/legal-search/corpus-pack.ts#1"
           },
           {
             "location": "apps/api/src/lib/legal-search/corpus-storage.ts#1"
@@ -22996,6 +23158,9 @@
           },
           {
             "location": "apps/api/src/lib/legal-search/ingestion-types.ts#2"
+          },
+          {
+            "location": "apps/api/src/lib/legal-search/legislation-ingestion-types.ts#1"
           },
           {
             "location": "apps/api/src/lib/legal-search/morphology/slovak.ts#78"
@@ -23349,7 +23514,10 @@
             "location": "apps/api/src/scripts/prepare-spa-template.ts#1"
           },
           {
-            "location": "apps/api/src/scripts/repair-corpus-index-jurisdiction.ts#25"
+            "location": "apps/api/src/scripts/redact-case-law-decision.ts#1"
+          },
+          {
+            "location": "apps/api/src/scripts/repair-corpus-index-jurisdiction.ts#29"
           },
           {
             "location": "apps/api/src/scripts/repair-decision-dates-plan.ts#13"
@@ -23530,6 +23698,9 @@
           },
           {
             "location": "apps/web/src/lib/workspaces/queries/time-entries.ts#2"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.contacts/-contact-import-request.ts#1"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/clause-import-dialog.logic.ts#1"
@@ -23884,6 +24055,18 @@
           },
           {
             "location": "apps/web/src/routes/_protected.chat/index.tsx#16"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.contacts/-import-review.tsx#4"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.contacts/-procuracao-extraction.tsx#4"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.contacts/import.tsx#5"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.contacts/index.tsx#25"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/template-studio-chat.tsx#20"
@@ -24174,6 +24357,9 @@
             "location": "apps/api/src/handlers/case-law/decisions/get.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/case-law/erasure.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/case-law/ingestion/adapters/adapter-registry-lazy.ts#9"
           },
           {
@@ -24501,16 +24687,40 @@
             "location": "apps/api/src/handlers/contacts/business-registries-lookup.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/contacts/contact-import-file.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/contacts/create.ts#1"
           },
           {
             "location": "apps/api/src/handlers/contacts/delete.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/contacts/export.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/contacts/extract-procuracao.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/contacts/get.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/contacts/import-inspect.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/contacts/import-preview.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/contacts/import-validate.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/contacts/import.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/contacts/list.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/contacts/presign-procuracao.ts#1"
           },
           {
             "location": "apps/api/src/handlers/contacts/search.ts#1"
@@ -25761,7 +25971,7 @@
             "location": "apps/api/src/lib/ai-provider-probe.ts#8"
           },
           {
-            "location": "apps/api/src/lib/analytics/tanstack-ai.ts#2"
+            "location": "apps/api/src/lib/analytics/tanstack-ai.ts#6"
           },
           {
             "location": "apps/api/src/lib/anonymization-blacklist.ts#1"
@@ -25845,7 +26055,7 @@
             "location": "apps/api/src/lib/corpus-index/backfill-pacing.ts#5"
           },
           {
-            "location": "apps/api/src/lib/corpus-index/census.ts#28"
+            "location": "apps/api/src/lib/corpus-index/census.ts#34"
           },
           {
             "location": "apps/api/src/lib/corpus-index/chunking.ts#1"
@@ -26031,10 +26241,19 @@
             "location": "apps/api/src/lib/legal-search/case-law-corpus-upload-intents.ts#1"
           },
           {
+            "location": "apps/api/src/lib/legal-search/case-law-index-groups.ts#17"
+          },
+          {
             "location": "apps/api/src/lib/legal-search/corpus-index-client.ts#1"
           },
           {
             "location": "apps/api/src/lib/legal-search/corpus-index-facets.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/legal-search/corpus-location.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/legal-search/corpus-pack.ts#1"
           },
           {
             "location": "apps/api/src/lib/legal-search/corpus-storage.ts#1"
@@ -26050,6 +26269,9 @@
           },
           {
             "location": "apps/api/src/lib/legal-search/ingestion-types.ts#2"
+          },
+          {
+            "location": "apps/api/src/lib/legal-search/legislation-ingestion-types.ts#1"
           },
           {
             "location": "apps/api/src/lib/legal-search/morphology/slovak.ts#78"
@@ -26403,7 +26625,10 @@
             "location": "apps/api/src/scripts/prepare-spa-template.ts#1"
           },
           {
-            "location": "apps/api/src/scripts/repair-corpus-index-jurisdiction.ts#25"
+            "location": "apps/api/src/scripts/redact-case-law-decision.ts#1"
+          },
+          {
+            "location": "apps/api/src/scripts/repair-corpus-index-jurisdiction.ts#29"
           },
           {
             "location": "apps/api/src/scripts/repair-decision-dates-plan.ts#13"
@@ -26584,6 +26809,9 @@
           },
           {
             "location": "apps/web/src/lib/workspaces/queries/time-entries.ts#2"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.contacts/-contact-import-request.ts#1"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/clause-import-dialog.logic.ts#1"
@@ -26938,6 +27166,18 @@
           },
           {
             "location": "apps/web/src/routes/_protected.chat/index.tsx#16"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.contacts/-import-review.tsx#4"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.contacts/-procuracao-extraction.tsx#4"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.contacts/import.tsx#5"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.contacts/index.tsx#25"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/template-studio-chat.tsx#20"
@@ -28250,7 +28490,7 @@
             "location": "apps/api/src/handlers/case-law/decisions/slug-backfill.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/case-law/erasure.ts#1"
+            "location": "apps/api/src/handlers/case-law/erasure.ts#2"
           },
           {
             "location": "apps/api/src/handlers/case-law/ingestion/coverage-ledger.ts#15"
@@ -28262,7 +28502,7 @@
             "location": "apps/api/src/handlers/case-law/ingestion/reconciliation-engine.ts#27"
           },
           {
-            "location": "apps/api/src/handlers/case-law/ingestion/reconciliation-engine.ts#37"
+            "location": "apps/api/src/handlers/case-law/ingestion/reconciliation-engine.ts#38"
           },
           {
             "location": "apps/api/src/handlers/case-law/ingestion/replay.ts#2"
@@ -28409,13 +28649,25 @@
             "location": "apps/api/src/handlers/clauses/versions-restore.ts#2"
           },
           {
+            "location": "apps/api/src/handlers/contacts/contact-capacity.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/contacts/create.ts#2"
           },
           {
             "location": "apps/api/src/handlers/contacts/delete.ts#2"
           },
           {
+            "location": "apps/api/src/handlers/contacts/export.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/contacts/extract-procuracao.ts#2"
+          },
+          {
             "location": "apps/api/src/handlers/contacts/get.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/contacts/import.ts#2"
           },
           {
             "location": "apps/api/src/handlers/contacts/list-query.ts#1"
@@ -29321,7 +29573,7 @@
             "location": "apps/api/src/lib/confirmation-otp.ts#3"
           },
           {
-            "location": "apps/api/src/lib/corpus-index/census.ts#29"
+            "location": "apps/api/src/lib/corpus-index/census.ts#35"
           },
           {
             "location": "apps/api/src/lib/corpus-ingestion-checkpoint.ts#1"
@@ -29343,6 +29595,12 @@
           },
           {
             "location": "apps/api/src/lib/db-query-counter.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/decision-date-bounds-sql.ts#24"
+          },
+          {
+            "location": "apps/api/src/lib/decision-date-bounds-sql.ts#25"
           },
           {
             "location": "apps/api/src/lib/delete-account.ts#2"
@@ -29507,6 +29765,9 @@
             "location": "apps/api/src/lib/infosoud/agenda-import.ts#1"
           },
           {
+            "location": "apps/api/src/lib/legal-search/authority-sql.ts#18"
+          },
+          {
             "location": "apps/api/src/lib/legal-search/backfill-statement-timeout.ts#1"
           },
           {
@@ -29517,6 +29778,12 @@
           },
           {
             "location": "apps/api/src/lib/legal-search/case-law-corpus-upload-intents.ts#2"
+          },
+          {
+            "location": "apps/api/src/lib/legal-search/case-law-index-groups.ts#18"
+          },
+          {
+            "location": "apps/api/src/lib/legal-search/case-law-index-groups.ts#19"
           },
           {
             "location": "apps/api/src/lib/legal-search/case-law-search-index.ts#1"
@@ -30401,6 +30668,12 @@
             "location": "apps/api/src/handlers/contacts/business-registries-lookup.ts#2"
           },
           {
+            "location": "apps/api/src/handlers/contacts/contact-import-schema.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/contacts/contact-import-schema.ts#2"
+          },
+          {
             "location": "apps/api/src/handlers/contacts/create.ts#3"
           },
           {
@@ -30410,10 +30683,31 @@
             "location": "apps/api/src/handlers/contacts/delete.ts#3"
           },
           {
+            "location": "apps/api/src/handlers/contacts/export.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/contacts/extract-procuracao.ts#3"
+          },
+          {
             "location": "apps/api/src/handlers/contacts/get.ts#3"
           },
           {
+            "location": "apps/api/src/handlers/contacts/import-inspect.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/contacts/import-preview.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/contacts/import-validate.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/contacts/import.ts#3"
+          },
+          {
             "location": "apps/api/src/handlers/contacts/list.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/contacts/presign-procuracao.ts#2"
           },
           {
             "location": "apps/api/src/handlers/contacts/routes.ts#1"
@@ -31593,6 +31887,9 @@
           },
           {
             "location": "apps/api/src/lib/entities/kanban-group-condition.ts#4"
+          },
+          {
+            "location": "apps/api/src/lib/multipart-form-parser.ts#21"
           },
           {
             "location": "apps/api/src/lib/observability/response-status.ts#1"
@@ -32855,7 +33152,16 @@
             "location": "apps/web/src/routes/_protected.contacts/-components/contact-custom-fields-editor.tsx#4"
           },
           {
-            "location": "apps/web/src/routes/_protected.contacts/index.tsx#27"
+            "location": "apps/web/src/routes/_protected.contacts/-import-review.tsx#5"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.contacts/-procuracao-extraction.tsx#5"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.contacts/import.tsx#14"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.contacts/index.tsx#34"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/blueprint-gallery-sheet.tsx#9"
@@ -33560,7 +33866,7 @@
           "name": "Andris Reinman"
         }
       ],
-      "bom-ref": "pkg:npm/postal-mime@2.7.6",
+      "bom-ref": "pkg:npm/postal-mime@3.0.0",
       "description": "Email parser for Node.js and browser environments",
       "evidence": {
         "identity": [
@@ -33609,10 +33915,10 @@
           "value": "node_modules/postal-mime/package.json"
         }
       ],
-      "purl": "pkg:npm/postal-mime@2.7.6",
+      "purl": "pkg:npm/postal-mime@3.0.0",
       "scope": "required",
       "type": "library",
-      "version": "2.7.6"
+      "version": "3.0.0"
     },
     {
       "authors": [
@@ -33620,7 +33926,7 @@
           "name": "engineering@posthog.com"
         }
       ],
-      "bom-ref": "pkg:npm/posthog-js@1.415.6",
+      "bom-ref": "pkg:npm/posthog-js@1.416.0",
       "description": "Posthog-js allows you to automatically capture usage and send events to PostHog.",
       "evidence": {
         "identity": [
@@ -33679,10 +33985,10 @@
           "value": "node_modules/posthog-js/lib/package.json"
         }
       ],
-      "purl": "pkg:npm/posthog-js@1.415.6",
+      "purl": "pkg:npm/posthog-js@1.416.0",
       "scope": "required",
       "type": "library",
-      "version": "1.415.6"
+      "version": "1.416.0"
     },
     {
       "authors": [
@@ -33690,7 +33996,7 @@
           "name": "PostHog <engineering@posthog.com> (https://posthog.com)"
         }
       ],
-      "bom-ref": "pkg:npm/posthog-node@5.48.1",
+      "bom-ref": "pkg:npm/posthog-node@5.48.2",
       "description": "PostHog Node.js integration",
       "evidence": {
         "identity": [
@@ -33735,10 +34041,10 @@
           "value": "node_modules/posthog-node/package.json"
         }
       ],
-      "purl": "pkg:npm/posthog-node@5.48.1",
+      "purl": "pkg:npm/posthog-node@5.48.2",
       "scope": "required",
       "type": "library",
-      "version": "5.48.1"
+      "version": "5.48.2"
     },
     {
       "bom-ref": "pkg:npm/prism-react-renderer@2.4.1",
@@ -35612,6 +35918,18 @@
             "location": "apps/web/src/routes/_protected.contacts/-components/contact-notes-editor.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/_protected.contacts/-import-review.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.contacts/-procuracao-extraction.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.contacts/import.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.contacts/import.tsx#2"
+          },
+          {
             "location": "apps/web/src/routes/_protected.contacts/index.tsx#1"
           },
           {
@@ -36738,7 +37056,7 @@
           "name": "Jakub Antalik"
         }
       ],
-      "bom-ref": "pkg:npm/thinking-orbs@0.2.0",
+      "bom-ref": "pkg:npm/thinking-orbs@0.3.1",
       "description": "Dotted thought-orb loading indicators for AI & agent UIs — nine tuned states, two sizes, auto dark/light",
       "evidence": {
         "identity": [
@@ -36793,13 +37111,13 @@
           "value": "node_modules/thinking-orbs/package.json"
         }
       ],
-      "purl": "pkg:npm/thinking-orbs@0.2.0",
+      "purl": "pkg:npm/thinking-orbs@0.3.1",
       "scope": "required",
       "tags": [
         "ai"
       ],
       "type": "library",
-      "version": "0.2.0"
+      "version": "0.3.1"
     },
     {
       "authors": [
@@ -37122,6 +37440,9 @@
             "location": "apps/web/src/components/chat/composer-plus-menu.tsx#19"
           },
           {
+            "location": "apps/web/src/components/chat/create-document-draft-inspector-editor.tsx#4"
+          },
+          {
             "location": "apps/web/src/components/chat-editor-provider.tsx#30"
           },
           {
@@ -37143,7 +37464,10 @@
             "location": "apps/web/src/routes/_protected.chat/-components/threads-sheet.tsx#16"
           },
           {
-            "location": "apps/web/src/routes/_protected.contacts/index.tsx#28"
+            "location": "apps/web/src/routes/_protected.contacts/-import-review.tsx#6"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.contacts/index.tsx#35"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/clause-detail.tsx#15"
@@ -37443,7 +37767,7 @@
             "location": "apps/web/src/components/chat/composer-plus-menu.tsx#20"
           },
           {
-            "location": "apps/web/src/components/chat/create-document-draft-inspector-editor.tsx#4"
+            "location": "apps/web/src/components/chat/create-document-draft-inspector-editor.tsx#5"
           },
           {
             "location": "apps/web/src/components/chat/create-document-draft-inspector-view.tsx#3"
@@ -37674,6 +37998,9 @@
             "location": "apps/web/src/components/translate-document-dialog.tsx#15"
           },
           {
+            "location": "apps/web/src/components/usage/run-size-confirm-dialog.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/usage/usage-fallback-notice.tsx#2"
           },
           {
@@ -37866,7 +38193,16 @@
             "location": "apps/web/src/routes/_protected.contacts/-components/party-matter-row.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.contacts/index.tsx#29"
+            "location": "apps/web/src/routes/_protected.contacts/-import-review.tsx#7"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.contacts/-procuracao-extraction.tsx#6"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.contacts/import.tsx#15"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.contacts/index.tsx#36"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/blueprint-gallery-sheet.tsx#10"
@@ -38763,6 +39099,12 @@
             "location": "apps/api/src/handlers/clauses/rewrite.ts#18"
           },
           {
+            "location": "apps/api/src/handlers/contacts/contact-import-file.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/contacts/extract-procuracao.ts#4"
+          },
+          {
             "location": "apps/api/src/handlers/document-reviews/reference-topics.ts#2"
           },
           {
@@ -38872,6 +39214,9 @@
           },
           {
             "location": "apps/api/src/lib/hosted-usage-provider/event-schemas.ts#14"
+          },
+          {
+            "location": "apps/api/src/lib/legal-search/corpus-pack.ts#2"
           },
           {
             "location": "apps/api/src/lib/legal-search/corpus-storage.ts#2"
@@ -39066,6 +39411,9 @@
             "location": "packages/anonymize-chat/src/index.ts#1"
           },
           {
+            "location": "packages/api-contract/src/contact-import.ts#1"
+          },
+          {
             "location": "packages/api-contract/src/document-properties.ts#1"
           },
           {
@@ -39159,7 +39507,7 @@
             "location": "apps/web/src/routes/_protected.contacts/-components/contact-communication-editor.tsx#7"
           },
           {
-            "location": "apps/web/src/routes/_protected.contacts/index.tsx#30"
+            "location": "apps/web/src/routes/_protected.contacts/index.tsx#37"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/template-studio-conditions.tsx#14"
@@ -39384,6 +39732,12 @@
             "location": "apps/api/src/handlers/clauses/rewrite.ts#18"
           },
           {
+            "location": "apps/api/src/handlers/contacts/contact-import-file.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/contacts/extract-procuracao.ts#4"
+          },
+          {
             "location": "apps/api/src/handlers/document-reviews/reference-topics.ts#2"
           },
           {
@@ -39493,6 +39847,9 @@
           },
           {
             "location": "apps/api/src/lib/hosted-usage-provider/event-schemas.ts#14"
+          },
+          {
+            "location": "apps/api/src/lib/legal-search/corpus-pack.ts#2"
           },
           {
             "location": "apps/api/src/lib/legal-search/corpus-storage.ts#2"
@@ -39687,6 +40044,9 @@
             "location": "packages/anonymize-chat/src/index.ts#1"
           },
           {
+            "location": "packages/api-contract/src/contact-import.ts#1"
+          },
+          {
             "location": "packages/api-contract/src/document-properties.ts#1"
           },
           {
@@ -39780,7 +40140,7 @@
             "location": "apps/web/src/routes/_protected.contacts/-components/contact-communication-editor.tsx#7"
           },
           {
-            "location": "apps/web/src/routes/_protected.contacts/index.tsx#30"
+            "location": "apps/web/src/routes/_protected.contacts/index.tsx#37"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/template-studio-conditions.tsx#14"
@@ -40016,7 +40376,7 @@
           "name": "Paul Henschel"
         }
       ],
-      "bom-ref": "pkg:npm/zustand@5.0.14",
+      "bom-ref": "pkg:npm/zustand@5.0.15",
       "description": "🐻 Bear necessities for state management in React",
       "evidence": {
         "identity": [
@@ -40365,13 +40725,13 @@
           "value": "node_modules/zustand/package.json"
         }
       ],
-      "purl": "pkg:npm/zustand@5.0.14",
+      "purl": "pkg:npm/zustand@5.0.15",
       "scope": "required",
       "tags": [
         "middleware"
       ],
       "type": "library",
-      "version": "5.0.14"
+      "version": "5.0.15"
     }
   ],
   "compositions": [
