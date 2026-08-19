@@ -822,6 +822,11 @@ export const caseLawCitations = p.pgTable(
       .index("case_law_citations_polarity_null_idx")
       .on(t.polarity)
       .where(isNull(t.polarity)),
+    // Rule -> citations, for retiring a rule and for its telemetry.
+    p
+      .index("case_law_citations_polarity_rule_idx")
+      .on(t.polarityRuleId)
+      .where(isNotNull(t.polarityRuleId)),
     // The burn-down index: the walk's keyset axis, restricted to the rows it
     // still has to examine. Ordered by citing decision because both id
     // families are uuidv7, so walking citations in that order reads the
