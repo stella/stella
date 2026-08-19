@@ -158,7 +158,7 @@ jobs:
 
       # Cross-repo reference resolves regardless of which release tag this
       # job checks out, unlike a workspace-local action.
-      - uses: stella/.github/actions/setup-bun-cached@2b8697f04b39187c934afc04f7b04ad1a18bd827
+      - uses: stella/.github/actions/setup-bun-cached@48aacae31829ce15216a6b766b03a92fd2e84da3
 
       # --ignore-scripts: the package builds run tsc/tsdown only and do not
       # depend on install lifecycle scripts; other CI jobs build the same

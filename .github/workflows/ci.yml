@@ -961,7 +961,7 @@ jobs:
           submodules: true
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@2b8697f04b39187c934afc04f7b04ad1a18bd827
+        uses: stella/.github/actions/setup-bun-cached@48aacae31829ce15216a6b766b03a92fd2e84da3
 
       - name: Install dependencies
         run: bash scripts/bun-ci-retry.sh --ignore-scripts
@@ -1044,7 +1044,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@2b8697f04b39187c934afc04f7b04ad1a18bd827
+        uses: stella/.github/actions/setup-bun-cached@48aacae31829ce15216a6b766b03a92fd2e84da3
 
       - name: Install dependencies
         run: bash scripts/bun-ci-retry.sh --ignore-scripts
@@ -1084,7 +1084,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@2b8697f04b39187c934afc04f7b04ad1a18bd827
+        uses: stella/.github/actions/setup-bun-cached@48aacae31829ce15216a6b766b03a92fd2e84da3
 
       - name: Install dependencies
         run: bash scripts/bun-ci-retry.sh --ignore-scripts
@@ -1127,7 +1127,7 @@ jobs:
           submodules: true
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@2b8697f04b39187c934afc04f7b04ad1a18bd827
+        uses: stella/.github/actions/setup-bun-cached@48aacae31829ce15216a6b766b03a92fd2e84da3
 
       - name: Install dependencies
         run: bash scripts/bun-ci-retry.sh --ignore-scripts
@@ -1172,7 +1172,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@2b8697f04b39187c934afc04f7b04ad1a18bd827
+        uses: stella/.github/actions/setup-bun-cached@48aacae31829ce15216a6b766b03a92fd2e84da3
 
       - name: Install dependencies
         run: bash scripts/bun-ci-retry.sh --ignore-scripts
@@ -1326,7 +1326,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@2b8697f04b39187c934afc04f7b04ad1a18bd827
+        uses: stella/.github/actions/setup-bun-cached@48aacae31829ce15216a6b766b03a92fd2e84da3
 
       - name: Install dependencies
         run: bash scripts/bun-ci-retry.sh --ignore-scripts
@@ -1362,7 +1362,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@2b8697f04b39187c934afc04f7b04ad1a18bd827
+        uses: stella/.github/actions/setup-bun-cached@48aacae31829ce15216a6b766b03a92fd2e84da3
 
       - name: Install dependencies
         run: bash scripts/bun-ci-retry.sh --ignore-scripts
@@ -1400,7 +1400,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@2b8697f04b39187c934afc04f7b04ad1a18bd827
+        uses: stella/.github/actions/setup-bun-cached@48aacae31829ce15216a6b766b03a92fd2e84da3
 
       - name: Install dependencies
         run: bash scripts/bun-ci-retry.sh --ignore-scripts
@@ -1552,7 +1552,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@2b8697f04b39187c934afc04f7b04ad1a18bd827
+        uses: stella/.github/actions/setup-bun-cached@48aacae31829ce15216a6b766b03a92fd2e84da3
 
       - name: Install dependencies
         run: bash scripts/bun-ci-retry.sh --ignore-scripts
@@ -1666,7 +1666,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@2b8697f04b39187c934afc04f7b04ad1a18bd827
+        uses: stella/.github/actions/setup-bun-cached@48aacae31829ce15216a6b766b03a92fd2e84da3
 
       - name: Install dependencies
         run: bash scripts/bun-ci-retry.sh --ignore-scripts
@@ -1766,7 +1766,7 @@ jobs:
           (needs.e2e-production-shard.result == 'failure'
            || needs.e2e-vite-canary.result == 'failure')
           && needs.ci-plan.outputs.e2e_core_required == 'true'
-        uses: stella/.github/actions/setup-bun-cached@2b8697f04b39187c934afc04f7b04ad1a18bd827
+        uses: stella/.github/actions/setup-bun-cached@48aacae31829ce15216a6b766b03a92fd2e84da3
 
       - name: Install dependencies
         if: >-
@@ -1856,7 +1856,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@2b8697f04b39187c934afc04f7b04ad1a18bd827
+        uses: stella/.github/actions/setup-bun-cached@48aacae31829ce15216a6b766b03a92fd2e84da3
 
       - name: Install turbo
         # Turbo is only used for pruned source overlays.
@@ -2016,7 +2016,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@2b8697f04b39187c934afc04f7b04ad1a18bd827
+        uses: stella/.github/actions/setup-bun-cached@48aacae31829ce15216a6b766b03a92fd2e84da3
 
       - name: Install scripts workspace dependencies
         run: bun install --frozen-lockfile --ignore-scripts --filter @stll/scripts
