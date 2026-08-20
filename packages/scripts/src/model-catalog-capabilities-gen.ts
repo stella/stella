@@ -1,8 +1,8 @@
 import { panic } from "better-result";
 /**
  * Generates `packages/ai-catalog/src/capabilities.gen.ts` — the
- * per-model reasoning-effort and temperature emission policy maps from
- * models.dev plus reviewed provider policy cutovers.
+ * per-model document-input, reasoning-effort, and temperature policy maps
+ * from models.dev plus reviewed provider corrections and policy cutovers.
  *
  * Rules enforced here (each one turns a class of catalog mistakes
  * into a loud generation failure):
@@ -10,6 +10,9 @@ import { panic } from "better-result";
  *    an explicit dated override (`capabilities-overrides.ts`);
  *  - an override for a model the upstream source covers is rejected,
  *    so manual data can never shadow sourced data;
+ *  - document-input support follows live modality metadata unless a dated
+ *    source correction exists, and a correction is rejected once upstream
+ *    agrees;
  *  - an upstream effort keyword outside the `REASONING_EFFORTS`
  *    ladder is rejected, forcing a reviewed ladder extension.
  *
@@ -27,11 +30,14 @@ import path from "node:path";
 import {
   BYOK_MODEL_OPTIONS,
   CAPABILITY_OVERRIDES,
+  DOCUMENT_INPUT_OVERRIDES,
   REASONING_EFFORTS,
   TANSTACK_AI_PROVIDERS,
 } from "@stll/ai-catalog";
 import type {
+  BYOKProvider,
   CapabilityOverride,
+  DocumentInputOverride,
   ReasoningEffort,
   TemperaturePolicy,
 } from "@stll/ai-catalog";
@@ -72,10 +78,16 @@ const isReasoningEffort = (value: string): value is ReasoningEffort =>
 // Widened views for runtime-string lookups.
 const OVERRIDE_BY_ID: Partial<Record<string, CapabilityOverride>> =
   CAPABILITY_OVERRIDES;
+const DOCUMENT_INPUT_OVERRIDE_BY_ID: Partial<
+  Record<string, DocumentInputOverride>
+> = DOCUMENT_INPUT_OVERRIDES;
 
 export type CapabilityRow = {
   defaultReasoningEffort: ReasoningEffort | null;
+  documentInput: boolean;
+  documentInputOverrideReason: string | null;
   modelId: string;
+  provider: BYOKProvider;
   efforts: readonly ReasoningEffort[] | null;
   temperaturePolicy: TemperaturePolicy;
   overrideReason: string | null;
@@ -103,6 +115,7 @@ export const buildCapabilityRows = ({
     for (const modelId of BYOK_MODEL_OPTIONS[provider]) {
       const record = upstream.get(`${mdKey}:${modelId}`);
       const override = OVERRIDE_BY_ID[modelId];
+      const documentInputOverride = DOCUMENT_INPUT_OVERRIDE_BY_ID[modelId];
       if (record !== undefined && override !== undefined) {
         panic(
           `${provider}/${modelId}: override present but models.dev covers ` +
@@ -119,7 +132,10 @@ export const buildCapabilityRows = ({
         }
         rows.push({
           defaultReasoningEffort: null,
+          documentInput: override.documentInput,
+          documentInputOverrideReason: override.documentInputReason,
           modelId,
+          provider,
           efforts: override.reasoningEfforts,
           temperaturePolicy: override.temperatureSupported ? "emit" : "omit",
           overrideReason: override.reason,
@@ -145,6 +161,27 @@ export const buildCapabilityRows = ({
         return panic(
           `${provider}/${modelId}: models.dev record lacks the temperature ` +
             "field; investigate upstream before regenerating",
+        );
+      }
+      if (
+        record.inputModalities === null &&
+        documentInputOverride === undefined
+      ) {
+        return panic(
+          `${provider}/${modelId}: models.dev record lacks modalities.input; ` +
+            "add a dated DOCUMENT_INPUT_OVERRIDES entry before regenerating",
+        );
+      }
+      const upstreamDocumentInput =
+        record.inputModalities?.includes("pdf") ?? false;
+      if (
+        documentInputOverride !== undefined &&
+        record.inputModalities !== null &&
+        documentInputOverride.supported === upstreamDocumentInput
+      ) {
+        return panic(
+          `${provider}/${modelId}: document-input override now agrees with ` +
+            "models.dev; delete the override so sourced data wins",
         );
       }
       const openRouterDefault =
@@ -179,7 +216,11 @@ export const buildCapabilityRows = ({
       }
       rows.push({
         defaultReasoningEffort: openRouterDefault ?? null,
+        documentInput:
+          documentInputOverride?.supported ?? upstreamDocumentInput,
+        documentInputOverrideReason: documentInputOverride?.reason ?? null,
         modelId,
+        provider,
         efforts,
         temperaturePolicy: resolveTemperaturePolicy({
           modelId,
@@ -218,20 +259,49 @@ export const renderCapabilitiesModule = (rows: CapabilityRow[]): string => {
     (row) =>
       `  "${row.modelId}": ${renderDefaultEffort(row.defaultReasoningEffort)},`,
   );
+  const documentInputProviderLines = TANSTACK_AI_PROVIDERS.map((provider) => {
+    const modelLines = rows
+      .filter((row) => row.provider === provider && row.documentInput)
+      .map((row) => {
+        const comment =
+          row.documentInputOverrideReason === null
+            ? ""
+            : `    // override: ${row.documentInputOverrideReason}\n`;
+        return `${comment}    "${row.modelId}",`;
+      });
+    if (modelLines.length === 0) {
+      return `  ${provider}: [],`;
+    }
+    return `  ${provider}: [\n${modelLines.join("\n")}\n  ],`;
+  });
   return `// AUTO-GENERATED by packages/scripts/src/model-catalog-capabilities-gen.ts.
 // Do not edit by hand: regenerate with
 // \`bun --filter @stll/ai-catalog gen:capabilities\`.
 //
-// Sources: models.dev per-model \`reasoning_options\`, \`temperature\`, and
-// release dates (first-party, openrouter, and amazon-bedrock catalogs);
+// Sources: models.dev per-model \`reasoning_options\`, \`temperature\`,
+// \`modalities.input\`, and release dates (first-party, openrouter, and
+// amazon-bedrock catalogs);
 // OpenRouter's public per-model \`default_effort\`; plus reviewed provider
-// policies and dated entries from capabilities-overrides.ts.
+// policies and dated entries from capabilities-overrides.ts and
+// document-input-overrides.ts.
 // The nightly \`model-catalog-upstream\` check fails CI on unsafe drift.
 import type {
+  BYOKModelIdByProvider,
+  BYOKProvider,
   OfferedBYOKModelId,
   ReasoningEffort,
   TemperaturePolicy,
 } from "./index";
+
+/**
+ * Offered models whose provider API accepts PDF/file content. Generated from
+ * live input-modality metadata plus reviewed source corrections.
+ */
+export const MODEL_DOCUMENT_INPUT_OPTIONS = {
+${documentInputProviderLines.join("\n")}
+} as const satisfies {
+  [TProvider in BYOKProvider]: readonly BYOKModelIdByProvider[TProvider][];
+};
 
 /**
  * Reasoning-effort values each offered model accepts, \`null\` when the

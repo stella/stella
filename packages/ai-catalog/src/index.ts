@@ -22,11 +22,11 @@
 import * as v from "valibot";
 
 import {
+  MODEL_DOCUMENT_INPUT_OPTIONS,
   MODEL_DEFAULT_REASONING_EFFORTS,
   MODEL_REASONING_EFFORTS,
   MODEL_TEMPERATURE_POLICIES,
 } from "./capabilities.gen";
-import { TANSTACK_DOCUMENT_INPUT_MODEL_OPTIONS } from "./document-input-model-options";
 
 /**
  * Logical model roles. Call sites declare *what* they need, not
@@ -282,8 +282,10 @@ export type BYOKProvider = keyof typeof BYOK_MODEL_OPTIONS;
 // (packages/scripts/src/model-catalog-capabilities-gen.ts).
 export { CAPABILITY_OVERRIDES } from "./capabilities-overrides";
 export type { CapabilityOverride } from "./capabilities-overrides";
+export { DOCUMENT_INPUT_OVERRIDES } from "./document-input-overrides";
+export type { DocumentInputOverride } from "./document-input-overrides";
 
-type BYOKModelIdByProvider = {
+export type BYOKModelIdByProvider = {
   [TProvider in BYOKProvider]: (typeof BYOK_MODEL_OPTIONS)[TProvider][number];
 };
 
@@ -492,56 +494,12 @@ export const getModelDisplayMetadata = (
 ): ModelDisplayMetadata | null =>
   MODEL_DISPLAY_METADATA_BY_ID[normalizeModelCatalogId(modelId)] ?? null;
 
-const STELLA_EXTENDED_DOCUMENT_INPUT_MODEL_OPTIONS = {
-  anthropic: [
-    "claude-fable-5",
-    "claude-opus-5",
-    "claude-opus-4-8",
-    "claude-opus-4-7",
-    "claude-opus-4-6",
-    "claude-haiku-4-5-20251001",
-  ],
-  google: ["gemini-3.7-flash", "gemini-3.6-flash", "gemini-3.5-flash-lite"],
-  openai: [
-    "gpt-5.6",
-    "gpt-5.6-luna",
-    "gpt-5.5",
-    "gpt-5.4",
-    "gpt-5.4-mini",
-    "gpt-5.4-nano",
-    "gpt-5.2",
-  ],
-  openrouter: [
-    "openai/gpt-5.6-luna",
-    "openai/gpt-5.6-terra",
-    "google/gemini-3.7-flash",
-    "google/gemini-3.6-flash",
-    "google/gemini-3.5-flash-lite",
-    "anthropic/claude-opus-5",
-  ],
-} as const satisfies Partial<{
-  [TProvider in BYOKProvider]: readonly BYOKModelIdByProvider[TProvider][];
-}>;
-
-export const BYOK_DOCUMENT_INPUT_MODEL_OPTIONS = {
-  anthropic: [
-    ...TANSTACK_DOCUMENT_INPUT_MODEL_OPTIONS.anthropic,
-    ...STELLA_EXTENDED_DOCUMENT_INPUT_MODEL_OPTIONS.anthropic,
-  ],
-  bedrock: TANSTACK_DOCUMENT_INPUT_MODEL_OPTIONS.bedrock,
-  google: [
-    ...TANSTACK_DOCUMENT_INPUT_MODEL_OPTIONS.google,
-    ...STELLA_EXTENDED_DOCUMENT_INPUT_MODEL_OPTIONS.google,
-  ],
-  mistral: [],
-  openai: STELLA_EXTENDED_DOCUMENT_INPUT_MODEL_OPTIONS.openai,
-  openrouter: [
-    ...TANSTACK_DOCUMENT_INPUT_MODEL_OPTIONS.openrouter,
-    ...STELLA_EXTENDED_DOCUMENT_INPUT_MODEL_OPTIONS.openrouter,
-  ],
-} as const satisfies {
-  [TProvider in BYOKProvider]: readonly BYOKModelIdByProvider[TProvider][];
-};
+/**
+ * Offered models whose provider API accepts PDF/file content. Generated from
+ * live models.dev input modalities plus dated, reviewed source corrections;
+ * the nightly upstream check rejects drift.
+ */
+export const BYOK_DOCUMENT_INPUT_MODEL_OPTIONS = MODEL_DOCUMENT_INPUT_OPTIONS;
 
 export const isBYOKProviderRoleSupported = ({
   provider,

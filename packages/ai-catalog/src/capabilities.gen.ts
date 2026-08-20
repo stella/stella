@@ -2,16 +2,84 @@
 // Do not edit by hand: regenerate with
 // `bun --filter @stll/ai-catalog gen:capabilities`.
 //
-// Sources: models.dev per-model `reasoning_options`, `temperature`, and
-// release dates (first-party, openrouter, and amazon-bedrock catalogs);
+// Sources: models.dev per-model `reasoning_options`, `temperature`,
+// `modalities.input`, and release dates (first-party, openrouter, and
+// amazon-bedrock catalogs);
 // OpenRouter's public per-model `default_effort`; plus reviewed provider
-// policies and dated entries from capabilities-overrides.ts.
+// policies and dated entries from capabilities-overrides.ts and
+// document-input-overrides.ts.
 // The nightly `model-catalog-upstream` check fails CI on unsafe drift.
 import type {
+  BYOKModelIdByProvider,
+  BYOKProvider,
   OfferedBYOKModelId,
   ReasoningEffort,
   TemperaturePolicy,
 } from "./index";
+
+/**
+ * Offered models whose provider API accepts PDF/file content. Generated from
+ * live input-modality metadata plus reviewed source corrections.
+ */
+export const MODEL_DOCUMENT_INPUT_OPTIONS = {
+  google: [
+    "gemini-3.7-flash",
+    "gemini-3.6-flash",
+    "gemini-3.5-flash-lite",
+    "gemini-3.1-pro-preview",
+    "gemini-3.5-flash",
+    "gemini-3.1-flash-lite",
+  ],
+  openrouter: [
+    "openai/gpt-5.6-luna",
+    "openai/gpt-5.6-terra",
+    "google/gemini-3.7-flash",
+    "google/gemini-3.6-flash",
+    "google/gemini-3.5-flash-lite",
+    "google/gemini-3.1-pro-preview",
+    "google/gemini-3.5-flash",
+    "google/gemini-3.1-flash-lite",
+    "anthropic/claude-sonnet-5",
+    "anthropic/claude-opus-5",
+    "anthropic/claude-opus-4.8",
+    "anthropic/claude-sonnet-4.6",
+    "openai/gpt-5.5",
+    "openai/gpt-5.4-mini",
+  ],
+  openai: [
+    "gpt-5.6",
+    "gpt-5.6-luna",
+    "gpt-5.5",
+    "gpt-5.4",
+    // override: 2026-08-20: OpenAI Responses accepts input_file PDF content for this vision-capable model; models.dev currently omits the pdf modality
+    "gpt-5.4-mini",
+    // override: 2026-08-20: OpenAI Responses accepts input_file PDF content for this vision-capable model; models.dev currently omits the pdf modality
+    "gpt-5.4-nano",
+    // override: 2026-08-20: OpenAI Responses accepts input_file PDF content for this vision-capable model; models.dev currently omits the pdf modality
+    "gpt-5.2",
+  ],
+  anthropic: [
+    "claude-sonnet-5",
+    "claude-fable-5",
+    "claude-opus-5",
+    "claude-opus-4-8",
+    "claude-opus-4-7",
+    "claude-sonnet-4-6",
+    "claude-opus-4-6",
+    "claude-haiku-4-5-20251001",
+  ],
+  bedrock: [
+    "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
+    "us.anthropic.claude-haiku-4-5-20251001-v1:0",
+    // override: 2026-08-20: AWS documents PDF input for Nova Pro through Bedrock Converse
+    "us.amazon.nova-pro-v1:0",
+    // override: 2026-08-20: AWS documents PDF input for Nova Lite through Bedrock Converse
+    "us.amazon.nova-lite-v1:0",
+  ],
+  mistral: [],
+} as const satisfies {
+  [TProvider in BYOKProvider]: readonly BYOKModelIdByProvider[TProvider][];
+};
 
 /**
  * Reasoning-effort values each offered model accepts, `null` when the

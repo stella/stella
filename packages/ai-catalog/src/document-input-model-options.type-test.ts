@@ -3,8 +3,10 @@ import type { BedrockModelInputModalitiesByName } from "@tanstack/ai-bedrock";
 import type { GeminiModelInputModalitiesByName } from "@tanstack/ai-gemini";
 import type { OpenRouterModelInputModalitiesByName } from "@tanstack/ai-openrouter";
 
-import type { TANSTACK_DOCUMENT_INPUT_MODEL_OPTIONS } from "./document-input-model-options";
-import type { BYOK_MODEL_OPTIONS } from "./index";
+import type {
+  BYOK_DOCUMENT_INPUT_MODEL_OPTIONS,
+  BYOKModelIdByProvider,
+} from "./index";
 
 type ModelInputModalitiesByName = Record<string, readonly string[]>;
 
@@ -36,36 +38,42 @@ type TanStackDocumentInputModelByProvider = {
   >;
 };
 
-type BYOKModelIdByProvider = {
-  [TProvider in keyof typeof BYOK_MODEL_OPTIONS]: (typeof BYOK_MODEL_OPTIONS)[TProvider][number];
+type TanStackModelInputModalitiesByProvider = {
+  anthropic: AnthropicModelInputModalitiesByName;
+  bedrock: BedrockModelInputModalitiesByName;
+  google: GeminiModelInputModalitiesByName;
+  openrouter: OpenRouterModelInputModalitiesByName;
 };
 
-type DocumentInputModelOptionsContract = {
-  [TProvider in keyof TanStackDocumentInputModelByProvider]: readonly Extract<
-    BYOKModelIdByProvider[TProvider],
-    TanStackDocumentInputModelByProvider[TProvider]
-  >[];
-};
-
-type DocumentInputModelOptions = typeof TANSTACK_DOCUMENT_INPUT_MODEL_OPTIONS;
+type DocumentInputModelOptions = typeof BYOK_DOCUMENT_INPUT_MODEL_OPTIONS;
 
 type Assert<T extends true> = T;
 type Extends<T, U> = [T] extends [U] ? true : false;
 
-export type EveryDocumentInputOptionIsOfferedAndSupported = Assert<
-  Extends<DocumentInputModelOptions, DocumentInputModelOptionsContract>
+type EveryKnownDocumentInputOptionIsSupported = {
+  [TProvider in keyof TanStackDocumentInputModelByProvider]: Extends<
+    Extract<
+      DocumentInputModelOptions[TProvider][number],
+      keyof TanStackModelInputModalitiesByProvider[TProvider]
+    >,
+    TanStackDocumentInputModelByProvider[TProvider]
+  >;
+}[keyof TanStackDocumentInputModelByProvider];
+
+type EveryOfferedTanStackDocumentModelIsIncluded = {
+  [TProvider in keyof TanStackDocumentInputModelByProvider]: Extends<
+    Extract<
+      BYOKModelIdByProvider[TProvider],
+      TanStackDocumentInputModelByProvider[TProvider]
+    >,
+    DocumentInputModelOptions[TProvider][number]
+  >;
+}[keyof TanStackDocumentInputModelByProvider];
+
+export type EveryKnownDocumentInputOptionRemainsAdapterSupported = Assert<
+  Extends<EveryKnownDocumentInputOptionIsSupported, true>
 >;
 
-export type NoDocumentInputProviderIsMissing = Assert<
-  Extends<
-    keyof DocumentInputModelOptionsContract,
-    keyof DocumentInputModelOptions
-  >
->;
-
-export type NoUnknownDocumentInputProviderIsPresent = Assert<
-  Extends<
-    keyof DocumentInputModelOptions,
-    keyof DocumentInputModelOptionsContract
-  >
+export type EveryOfferedAdapterDocumentModelRemainsIncluded = Assert<
+  Extends<EveryOfferedTanStackDocumentModelIsIncluded, true>
 >;

@@ -3,8 +3,9 @@ name: Model Catalog Upstream Check
 # Providers retire and rename models on their own schedules. This
 # nightly job compares stella's picker (@stll/ai-catalog) bidirectionally
 # with live, public, keyless listings (OpenRouter + models.dev). It fails
-# when an eligible new model has no reviewed disposition, or when an offered
-# model is deprecated or gone upstream.
+# when an eligible new model has no reviewed disposition, an offered model is
+# deprecated or gone upstream, or request capabilities drift from live model
+# metadata.
 
 on:
   schedule:

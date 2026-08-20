@@ -15,9 +15,18 @@ const CHECKABLE = {
 } as const;
 
 const upstreamOf = (
-  entries: Record<string, UpstreamCapabilities>,
+  entries: Record<
+    string,
+    Omit<UpstreamCapabilities, "inputModalities"> &
+      Partial<Pick<UpstreamCapabilities, "inputModalities">>
+  >,
 ): ReadonlyMap<string, UpstreamCapabilities> =>
-  new Map(Object.entries(entries));
+  new Map(
+    Object.entries(entries).map(([key, value]) => [
+      key,
+      { inputModalities: ["text"], ...value },
+    ]),
+  );
 
 const DECLARED_EFFORTS: Record<string, readonly ReasoningEffort[] | null> = {
   "gemini-3.5-flash": ["minimal", "low", "medium", "high"],
@@ -29,6 +38,11 @@ const DECLARED_TEMPERATURE_POLICIES: Record<string, TemperaturePolicy> = {
   "gemini-3.5-flash": "emit",
   "openai/gpt-5.5": "omit",
   "magistral-medium-latest": "emit",
+};
+
+const DECLARED_DOCUMENT_INPUT_MODELS: Record<string, readonly string[]> = {
+  google: [],
+  openrouter: [],
 };
 
 describe("parseOpenRouterReasoningDefaults", () => {
@@ -74,6 +88,7 @@ describe("parseUpstreamCapabilities", () => {
       releaseDate: "2026-07-21",
       reasoning: true,
       effortValues: ["minimal", "low", "medium", "high"],
+      inputModalities: null,
       temperature: false,
     });
   });
@@ -88,6 +103,7 @@ describe("parseUpstreamCapabilities", () => {
       releaseDate: null,
       reasoning: true,
       effortValues: null,
+      inputModalities: null,
       temperature: null,
     });
     expect(
@@ -96,6 +112,7 @@ describe("parseUpstreamCapabilities", () => {
       releaseDate: null,
       reasoning: false,
       effortValues: null,
+      inputModalities: null,
       temperature: true,
     });
   });
@@ -103,6 +120,15 @@ describe("parseUpstreamCapabilities", () => {
   test("returns null for records without reasoning metadata", () => {
     expect(parseUpstreamCapabilities({})).toBeNull();
     expect(parseUpstreamCapabilities("not-an-object")).toBeNull();
+  });
+
+  test("extracts only string input modalities", () => {
+    expect(
+      parseUpstreamCapabilities({
+        modalities: { input: ["text", "image", "pdf", 42] },
+        reasoning: false,
+      }),
+    ).toMatchObject({ inputModalities: ["text", "image", "pdf"] });
   });
 
   test("folds a toggle option into the effort set as none", () => {
@@ -121,6 +147,7 @@ describe("parseUpstreamCapabilities", () => {
       releaseDate: null,
       reasoning: true,
       effortValues: ["none", "low", "medium", "high"],
+      inputModalities: null,
       temperature: null,
     });
     // Toggle-only models have no effort vocabulary to send.
@@ -133,6 +160,7 @@ describe("parseUpstreamCapabilities", () => {
       releaseDate: null,
       reasoning: true,
       effortValues: null,
+      inputModalities: null,
       temperature: null,
     });
     // No duplicate "none" when the effort list already has it.
@@ -148,6 +176,7 @@ describe("parseUpstreamCapabilities", () => {
       releaseDate: null,
       reasoning: true,
       effortValues: ["none", "high"],
+      inputModalities: null,
       temperature: null,
     });
   });
@@ -178,6 +207,7 @@ describe("validateCapabilities", () => {
       checkableProviders: CHECKABLE,
       upstream: validUpstream,
       declaredEfforts: DECLARED_EFFORTS,
+      declaredDocumentInputModels: DECLARED_DOCUMENT_INPUT_MODELS,
       declaredTemperaturePolicies: DECLARED_TEMPERATURE_POLICIES,
     });
     expect(result.failures).toEqual([]);
@@ -199,6 +229,7 @@ describe("validateCapabilities", () => {
         },
       }),
       declaredEfforts: DECLARED_EFFORTS,
+      declaredDocumentInputModels: DECLARED_DOCUMENT_INPUT_MODELS,
       declaredTemperaturePolicies: DECLARED_TEMPERATURE_POLICIES,
     });
     expect(result.failures).toHaveLength(1);
@@ -218,6 +249,7 @@ describe("validateCapabilities", () => {
         },
       }),
       declaredEfforts: DECLARED_EFFORTS,
+      declaredDocumentInputModels: DECLARED_DOCUMENT_INPUT_MODELS,
       declaredTemperaturePolicies: DECLARED_TEMPERATURE_POLICIES,
     });
     expect(result.failures).toHaveLength(1);
@@ -237,6 +269,7 @@ describe("validateCapabilities", () => {
         },
       }),
       declaredEfforts: DECLARED_EFFORTS,
+      declaredDocumentInputModels: DECLARED_DOCUMENT_INPUT_MODELS,
       declaredTemperaturePolicies: DECLARED_TEMPERATURE_POLICIES,
     });
     expect(result.failures).toHaveLength(1);
@@ -274,6 +307,7 @@ describe("validateCapabilities", () => {
         "gemini-3.6-flash": null,
         "google/gemini-3.6-flash": null,
       },
+      declaredDocumentInputModels: DECLARED_DOCUMENT_INPUT_MODELS,
       declaredTemperaturePolicies,
     });
     expect(result.failures.map(({ label }) => label)).toEqual([
@@ -295,6 +329,7 @@ describe("validateCapabilities", () => {
         },
       }),
       declaredEfforts: DECLARED_EFFORTS,
+      declaredDocumentInputModels: DECLARED_DOCUMENT_INPUT_MODELS,
       declaredTemperaturePolicies: DECLARED_TEMPERATURE_POLICIES,
     });
     expect(result.failures).toEqual([]);
@@ -313,9 +348,104 @@ describe("validateCapabilities", () => {
         },
       }),
       declaredEfforts: DECLARED_EFFORTS,
+      declaredDocumentInputModels: DECLARED_DOCUMENT_INPUT_MODELS,
       declaredTemperaturePolicies: DECLARED_TEMPERATURE_POLICIES,
     });
     expect(result.failures.at(0)?.label).toBe("UNSAFE TEMPERATURE POLICY");
+  });
+
+  test("flags document-input drift in both directions", () => {
+    for (const [inputModalities, declaredDocumentInputModels] of [
+      [["text", "pdf"], DECLARED_DOCUMENT_INPUT_MODELS],
+      [
+        ["text"],
+        { ...DECLARED_DOCUMENT_INPUT_MODELS, google: ["gemini-3.5-flash"] },
+      ],
+    ] as const) {
+      const result = validateCapabilities({
+        entries: [{ provider: "google", modelId: "gemini-3.5-flash" }],
+        checkableProviders: CHECKABLE,
+        upstream: upstreamOf({
+          "google:gemini-3.5-flash": {
+            releaseDate: "2026-05-01",
+            reasoning: true,
+            effortValues: ["minimal", "low", "medium", "high"],
+            inputModalities,
+            temperature: true,
+          },
+        }),
+        declaredEfforts: DECLARED_EFFORTS,
+        declaredDocumentInputModels,
+        declaredTemperaturePolicies: DECLARED_TEMPERATURE_POLICIES,
+      });
+      expect(result.failures.map(({ label }) => label)).toContain(
+        "DOCUMENT INPUT DRIFT",
+      );
+    }
+  });
+
+  test("accepts a reviewed document-input correction", () => {
+    const result = validateCapabilities({
+      entries: [{ provider: "google", modelId: "gemini-3.5-flash" }],
+      checkableProviders: CHECKABLE,
+      upstream: validUpstream,
+      declaredEfforts: DECLARED_EFFORTS,
+      declaredDocumentInputModels: {
+        ...DECLARED_DOCUMENT_INPUT_MODELS,
+        google: ["gemini-3.5-flash"],
+      },
+      declaredTemperaturePolicies: DECLARED_TEMPERATURE_POLICIES,
+      documentInputOverrides: new Map([["gemini-3.5-flash", true]]),
+    });
+    expect(result.failures).toEqual([]);
+  });
+
+  test("requires a reviewed correction when input metadata is absent", () => {
+    const result = validateCapabilities({
+      entries: [{ provider: "google", modelId: "gemini-3.5-flash" }],
+      checkableProviders: CHECKABLE,
+      upstream: upstreamOf({
+        "google:gemini-3.5-flash": {
+          releaseDate: "2026-05-01",
+          reasoning: true,
+          effortValues: ["minimal", "low", "medium", "high"],
+          inputModalities: null,
+          temperature: true,
+        },
+      }),
+      declaredEfforts: DECLARED_EFFORTS,
+      declaredDocumentInputModels: DECLARED_DOCUMENT_INPUT_MODELS,
+      declaredTemperaturePolicies: DECLARED_TEMPERATURE_POLICIES,
+    });
+    expect(result.failures.map(({ label }) => label)).toContain(
+      "NO INPUT MODALITY METADATA",
+    );
+  });
+
+  test("rejects a correction once live metadata agrees", () => {
+    const result = validateCapabilities({
+      entries: [{ provider: "google", modelId: "gemini-3.5-flash" }],
+      checkableProviders: CHECKABLE,
+      upstream: upstreamOf({
+        "google:gemini-3.5-flash": {
+          releaseDate: "2026-05-01",
+          reasoning: true,
+          effortValues: ["minimal", "low", "medium", "high"],
+          inputModalities: ["text", "pdf"],
+          temperature: true,
+        },
+      }),
+      declaredEfforts: DECLARED_EFFORTS,
+      declaredDocumentInputModels: {
+        ...DECLARED_DOCUMENT_INPUT_MODELS,
+        google: ["gemini-3.5-flash"],
+      },
+      declaredTemperaturePolicies: DECLARED_TEMPERATURE_POLICIES,
+      documentInputOverrides: new Map([["gemini-3.5-flash", true]]),
+    });
+    expect(result.failures.map(({ label }) => label)).toContain(
+      "REDUNDANT DOCUMENT INPUT OVERRIDE",
+    );
   });
 
   test("fails coverage for offered models missing either declaration", () => {
@@ -324,6 +454,7 @@ describe("validateCapabilities", () => {
       checkableProviders: CHECKABLE,
       upstream: upstreamOf({}),
       declaredEfforts: DECLARED_EFFORTS,
+      declaredDocumentInputModels: DECLARED_DOCUMENT_INPUT_MODELS,
       declaredTemperaturePolicies: DECLARED_TEMPERATURE_POLICIES,
     });
     expect(efforts.failures.at(0)?.label).toBe("NO REASONING CAPABILITY");
@@ -333,6 +464,7 @@ describe("validateCapabilities", () => {
       checkableProviders: CHECKABLE,
       upstream: validUpstream,
       declaredEfforts: DECLARED_EFFORTS,
+      declaredDocumentInputModels: DECLARED_DOCUMENT_INPUT_MODELS,
       declaredTemperaturePolicies: {},
     });
     expect(temperature.failures.at(0)?.label).toBe("NO TEMPERATURE POLICY");
@@ -347,6 +479,7 @@ describe("validateCapabilities", () => {
       checkableProviders: CHECKABLE,
       upstream: upstreamOf({}),
       declaredEfforts: DECLARED_EFFORTS,
+      declaredDocumentInputModels: DECLARED_DOCUMENT_INPUT_MODELS,
       declaredTemperaturePolicies: DECLARED_TEMPERATURE_POLICIES,
     });
     expect(result.failures).toEqual([]);
@@ -361,6 +494,7 @@ describe("validateCapabilities", () => {
       checkableProviders: CHECKABLE,
       upstream: upstreamOf({}),
       declaredEfforts: DECLARED_EFFORTS,
+      declaredDocumentInputModels: DECLARED_DOCUMENT_INPUT_MODELS,
       declaredTemperaturePolicies: DECLARED_TEMPERATURE_POLICIES,
       overriddenIds: new Set(["gemini-3.5-flash"]),
     });

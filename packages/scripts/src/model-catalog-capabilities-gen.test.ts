@@ -1,6 +1,29 @@
 import { describe, expect, test } from "bun:test";
 
 import { resolveTemperaturePolicy } from "./model-catalog-capabilities";
+import { renderCapabilitiesModule } from "./model-catalog-capabilities-gen";
+
+describe("capability module generation", () => {
+  test("emits document-input models, source corrections, and empty providers", () => {
+    const source = renderCapabilitiesModule([
+      {
+        defaultReasoningEffort: null,
+        documentInput: true,
+        documentInputOverrideReason: "2026-08-20: reviewed source correction",
+        efforts: null,
+        modelId: "gpt-test",
+        overrideReason: null,
+        provider: "openai",
+        temperaturePolicy: "omit",
+      },
+    ]);
+
+    expect(source).toContain(
+      '// override: 2026-08-20: reviewed source correction\n    "gpt-test",',
+    );
+    expect(source).toContain("mistral: []");
+  });
+});
 
 describe("temperature emission policy", () => {
   test("omits deprecated sampling parameters for the Gemini cutoff and future releases", () => {
