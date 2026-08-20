@@ -160,6 +160,7 @@ const pgSearch = async (
       ON legislation_sources.id = d.source_id
      AND ${redistributableLegislationSource}
     WHERE ${ftsSearch.predicate}
+      AND sd.retry_after IS NULL
       ${filters}
       ${cursorFilter}
     ORDER BY score DESC, sd.document_id DESC

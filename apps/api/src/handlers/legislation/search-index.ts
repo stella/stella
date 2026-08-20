@@ -1,5 +1,16 @@
 import { Result, TaggedError, UnhandledException } from "better-result";
-import { and, asc, eq, gt, notExists, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  eq,
+  gt,
+  isNotNull,
+  isNull,
+  lte,
+  notExists,
+  or,
+  sql,
+} from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
@@ -24,6 +35,7 @@ import { logger } from "@/api/lib/observability/logger";
  */
 
 const SEARCH_INDEX_CONCURRENCY = 4;
+const CORPUS_READ_RETRY_DELAY_MS = 5 * 60_000;
 
 class LegislationCorpusReadError extends TaggedError(
   "LegislationCorpusReadError",
@@ -119,13 +131,17 @@ export const indexLegislationDocument = async (
     ? sql`unaccent(arabic_normalize(coalesce(${document.title}, '') || ' ' || coalesce(${searchableText}, '')))`
     : sql`arabic_normalize(coalesce(${document.title}, '') || ' ' || coalesce(${searchableText}, ''))`;
   const tsvExpr = sql`to_tsvector(${fts.regconfig}, ${textExpr})`;
+  const retryAfterExpr =
+    corpusReadFailure === undefined
+      ? sql`NULL`
+      : sql`now() + (${CORPUS_READ_RETRY_DELAY_MS} * interval '1 millisecond')`;
 
   await scopedDb(async (tx) => {
     await setCorpusBackfillStatementTimeout(tx);
     await tx.execute(sql`
     INSERT INTO legislation_search_documents (
       document_id, title, searchable_text,
-      language, regconfig, updated_at, tsv
+      language, regconfig, updated_at, retry_after, tsv
     ) VALUES (
       ${document.id},
       ${document.title},
@@ -133,6 +149,7 @@ export const indexLegislationDocument = async (
       ${document.language},
       ${fts.regconfig},
       now(),
+      ${retryAfterExpr},
       ${tsvExpr}
     )
     ON CONFLICT (document_id) DO UPDATE SET
@@ -141,6 +158,7 @@ export const indexLegislationDocument = async (
       language = EXCLUDED.language,
       regconfig = EXCLUDED.regconfig,
       updated_at = EXCLUDED.updated_at,
+      retry_after = EXCLUDED.retry_after,
       tsv = EXCLUDED.tsv
   `);
   });
@@ -210,10 +228,19 @@ export const backfillLegislationSearchIndex = async (
       .where(
         and(
           redistributableLegislationSource,
-          gt(
-            legislationDocuments.updatedAt,
-            // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- column-to-column comparison evaluated in Postgres; no JS Date is bound
-            legislationSearchDocuments.updatedAt,
+          or(
+            and(
+              isNull(legislationSearchDocuments.retryAfter),
+              gt(
+                legislationDocuments.updatedAt,
+                // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- column-to-column comparison evaluated in Postgres; no JS Date is bound
+                legislationSearchDocuments.updatedAt,
+              ),
+            ),
+            and(
+              isNotNull(legislationSearchDocuments.retryAfter),
+              lte(legislationSearchDocuments.retryAfter, sql`now()`),
+            ),
           ),
         ),
       )

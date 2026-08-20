@@ -11,13 +11,13 @@ import {
 import {
   backfillLegislationSearchIndex,
   indexLegislationDocument,
-  removeLegislationFromIndex,
 } from "@/api/handlers/legislation/search-index";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { formatCorpusLocation } from "@/api/lib/legal-search/corpus-location";
 import { packKey } from "@/api/lib/legal-search/corpus-pack";
 import type { DecisionSection } from "@/api/lib/legal-search/document-types";
+import { brandPersistedLegislationDocumentId } from "@/api/lib/safe-id-boundaries";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 let client: Awaited<ReturnType<typeof createTestPglite>> | undefined;
@@ -27,8 +27,18 @@ const sourceId = createSafeId<"legislationSource">();
 const fulltextId = createSafeId<"legislationDocument">();
 const sectionsId = createSafeId<"legislationDocument">();
 const corpusId = createSafeId<"legislationDocument">();
-const unavailableCorpusId = createSafeId<"legislationDocument">();
-const laterCorpusId = createSafeId<"legislationDocument">();
+const unavailableCorpusId = brandPersistedLegislationDocumentId(
+  "0198cb55-8e8b-7b95-83bf-c9e219c70001",
+);
+const laterCorpusId = brandPersistedLegislationDocumentId(
+  "0198cb55-8e8b-7b95-83bf-c9e219c70002",
+);
+const firstStaleCorpusId = brandPersistedLegislationDocumentId(
+  "0198cb55-8e8b-7b95-83bf-c9e219c70003",
+);
+const laterStaleCorpusId = brandPersistedLegislationDocumentId(
+  "0198cb55-8e8b-7b95-83bf-c9e219c70004",
+);
 const corpusKey = formatCorpusLocation({
   type: "packed",
   packKey: packKey({
@@ -117,7 +127,7 @@ beforeAll(
         sections: null,
         textS3Key: "legal-corpus/documents/later/text.zst",
         createdAt: new Date("2026-01-01T00:00:00.000Z"),
-        updatedAt: new Date("2026-01-02T00:00:00.000Z"),
+        updatedAt: new Date("2026-01-01T00:00:00.000Z"),
       }),
       seedDocument({
         id: unavailableCorpusId,
@@ -186,16 +196,25 @@ test("an unreadable corpus row does not block the bounded missing scan", async (
   const unavailableKey = "legal-corpus/documents/unavailable/text.zst";
   const laterKey = "legal-corpus/documents/later/text.zst";
   const readKeys: string[] = [];
+  let unavailableAttempts = 0;
   const dependencies: Parameters<typeof backfillLegislationSearchIndex>[2] = {
     readText: async (storedKey) => {
       readKeys.push(storedKey);
       if (storedKey === unavailableKey) {
-        throw new Error("unavailable corpus fixture");
+        unavailableAttempts += 1;
+        if (unavailableAttempts === 1) {
+          throw new Error("unavailable corpus fixture");
+        }
+        return "repaired corpus sentinel";
       }
       return "later corpus sentinel";
     },
     resolveConfig: async () => ({ regconfig: "simple", useUnaccent: false }),
   };
+  await indexLegislationDocument(fulltextId, scopedDb, dependencies);
+  await indexLegislationDocument(sectionsId, scopedDb, dependencies);
+  await indexLegislationDocument(corpusId, scopedDb, dependencies);
+  readKeys.length = 0;
 
   expect(
     await backfillLegislationSearchIndex(scopedDb, 1, dependencies),
@@ -204,27 +223,84 @@ test("an unreadable corpus row does not block the bounded missing scan", async (
     await backfillLegislationSearchIndex(scopedDb, 1, dependencies),
   ).toEqual({ found: 1, indexed: 1 });
   expect(readKeys).toEqual([unavailableKey, laterKey]);
+  expect(unavailableCorpusId < laterCorpusId).toBe(true);
 
-  const projected = await db
+  const [failedProjection] = await db
     .select({
-      documentId: legislationSearchDocuments.documentId,
       searchableText: legislationSearchDocuments.searchableText,
+      retryAfter: legislationSearchDocuments.retryAfter,
     })
     .from(legislationSearchDocuments)
     .where(eq(legislationSearchDocuments.documentId, unavailableCorpusId));
-  expect(projected.at(0)?.searchableText).not.toContain(
-    "later corpus sentinel",
-  );
+  expect(failedProjection?.searchableText).not.toContain("corpus sentinel");
+  expect(failedProjection?.retryAfter).not.toBeNull();
 
-  await removeLegislationFromIndex(unavailableCorpusId, scopedDb);
-  await backfillLegislationSearchIndex(scopedDb, 1, {
-    readText: async () => "repaired corpus sentinel",
-    resolveConfig: dependencies.resolveConfig,
-  });
+  await db
+    .update(legislationSearchDocuments)
+    .set({ retryAfter: new Date("2025-01-01T00:00:00.000Z") })
+    .where(eq(legislationSearchDocuments.documentId, unavailableCorpusId));
+  expect(
+    await backfillLegislationSearchIndex(scopedDb, 1, dependencies),
+  ).toEqual({ found: 1, indexed: 1 });
+  expect(readKeys).toEqual([unavailableKey, laterKey, unavailableKey]);
 
   const [repaired] = await db
-    .select({ searchableText: legislationSearchDocuments.searchableText })
+    .select({
+      searchableText: legislationSearchDocuments.searchableText,
+      retryAfter: legislationSearchDocuments.retryAfter,
+    })
     .from(legislationSearchDocuments)
     .where(eq(legislationSearchDocuments.documentId, unavailableCorpusId));
   expect(repaired?.searchableText).toContain("repaired corpus sentinel");
+  expect(repaired?.retryAfter).toBeNull();
+});
+
+test("the stale scan breaks equal update timestamps by document id", async () => {
+  const firstKey = "legal-corpus/documents/stale-first/text.zst";
+  const laterKey = "legal-corpus/documents/stale-later/text.zst";
+  await db.insert(legislationDocuments).values([
+    seedDocument({
+      id: laterStaleCorpusId,
+      fulltext: null,
+      sections: null,
+      textS3Key: laterKey,
+    }),
+    seedDocument({
+      id: firstStaleCorpusId,
+      fulltext: null,
+      sections: null,
+      textS3Key: firstKey,
+    }),
+  ]);
+
+  const readKeys: string[] = [];
+  const dependencies: Parameters<typeof backfillLegislationSearchIndex>[2] = {
+    readText: async (storedKey) => {
+      readKeys.push(storedKey);
+      return "stale corpus sentinel";
+    },
+    resolveConfig: async () => ({ regconfig: "simple", useUnaccent: false }),
+  };
+  await indexLegislationDocument(fulltextId, scopedDb, dependencies);
+  await indexLegislationDocument(sectionsId, scopedDb, dependencies);
+  await indexLegislationDocument(corpusId, scopedDb, dependencies);
+  await indexLegislationDocument(unavailableCorpusId, scopedDb, dependencies);
+  await indexLegislationDocument(laterCorpusId, scopedDb, dependencies);
+  await indexLegislationDocument(laterStaleCorpusId, scopedDb, dependencies);
+  await indexLegislationDocument(firstStaleCorpusId, scopedDb, dependencies);
+  readKeys.length = 0;
+
+  const staleAt = new Date("2027-01-01T00:00:00.000Z");
+  await db
+    .update(legislationDocuments)
+    .set({ updatedAt: staleAt })
+    .where(
+      sql`${legislationDocuments.id} IN (${firstStaleCorpusId}, ${laterStaleCorpusId})`,
+    );
+
+  expect(
+    await backfillLegislationSearchIndex(scopedDb, 1, dependencies),
+  ).toEqual({ found: 1, indexed: 1 });
+  expect(firstStaleCorpusId < laterStaleCorpusId).toBe(true);
+  expect(readKeys).toEqual([firstKey]);
 });
