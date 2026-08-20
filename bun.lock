@@ -801,6 +801,10 @@
     "packages/workspace-model": {
       "name": "@stll/workspace-model",
       "version": "0.0.0",
+      "dependencies": {
+        "@stll/calculations": "workspace:^",
+        "@stll/conditions": "workspace:^",
+      },
       "devDependencies": {
         "@stll/typescript-config": "workspace:*",
         "@types/bun": "catalog:",

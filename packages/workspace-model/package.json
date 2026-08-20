@@ -28,7 +28,8 @@
   "sideEffects": false,
   "exports": {
     ".": "./src/properties.ts",
-    "./properties": "./src/properties.ts"
+    "./properties": "./src/properties.ts",
+    "./views": "./src/views.ts"
   },
   "publishConfig": {
     "access": "public"
@@ -43,6 +44,10 @@
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/workspace-model",
     "format": "oxfmt .",
     "prepack": "bun run build"
+  },
+  "dependencies": {
+    "@stll/calculations": "workspace:^",
+    "@stll/conditions": "workspace:^"
   },
   "devDependencies": {
     "@stll/typescript-config": "workspace:*",
