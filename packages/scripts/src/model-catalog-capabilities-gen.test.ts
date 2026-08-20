@@ -16,11 +16,22 @@ describe("capability module generation", () => {
         provider: "openai",
         temperaturePolicy: "omit",
       },
+      {
+        defaultReasoningEffort: null,
+        documentInput: false,
+        documentInputOverrideReason: null,
+        efforts: null,
+        modelId: "gpt-text-only",
+        overrideReason: null,
+        provider: "openai",
+        temperaturePolicy: "omit",
+      },
     ]);
 
     expect(source).toContain(
       '// override: 2026-08-20: reviewed source correction\n    "gpt-test",',
     );
+    expect(source).not.toContain('    "gpt-text-only",');
     expect(source).toContain("mistral: []");
   });
 });

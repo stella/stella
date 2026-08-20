@@ -468,6 +468,18 @@ describe("validateCapabilities", () => {
       declaredTemperaturePolicies: {},
     });
     expect(temperature.failures.at(0)?.label).toBe("NO TEMPERATURE POLICY");
+
+    const documentInput = validateCapabilities({
+      entries: [{ provider: "google", modelId: "gemini-3.5-flash" }],
+      checkableProviders: CHECKABLE,
+      upstream: validUpstream,
+      declaredEfforts: DECLARED_EFFORTS,
+      declaredDocumentInputModels: { openrouter: [] },
+      declaredTemperaturePolicies: DECLARED_TEMPERATURE_POLICIES,
+    });
+    expect(documentInput.failures.at(0)?.label).toBe(
+      "NO DOCUMENT INPUT CAPABILITY",
+    );
   });
 
   test("skips models without upstream metadata and uncheckable providers", () => {

@@ -130,6 +130,13 @@ export const buildCapabilityRows = ({
               "the model",
           );
         }
+        if (documentInputOverride !== undefined) {
+          return panic(
+            `${provider}/${modelId}: CAPABILITY_OVERRIDES and ` +
+              "DOCUMENT_INPUT_OVERRIDES both cover a model absent from " +
+              "models.dev; delete the shadowed document-input override",
+          );
+        }
         rows.push({
           defaultReasoningEffort: null,
           documentInput: override.documentInput,

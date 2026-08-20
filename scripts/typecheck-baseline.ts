@@ -313,6 +313,12 @@ const pct = (current: number, baseline: number): string => {
 
 const n = (value: number): string => value.toLocaleString("en-US");
 
+const formatCheckMeasurement = (m: Measured, baseline: Baseline): string =>
+  `typecheck-baseline: ${m.id} types ${n(m.counters.types)} ` +
+  `(${pct(m.counters.types, baseline[m.id].types)}), instantiations ` +
+  `${n(m.counters.instantiations)} ` +
+  `(${pct(m.counters.instantiations, baseline[m.id].instantiations)})`;
+
 // --- Modes --------------------------------------------------------------------
 
 const runReport = (): number => {
@@ -380,12 +386,7 @@ const runCheck = (): number => {
   const drops = diffs.filter((d) => d.status === "dropped");
 
   for (const m of result.measured) {
-    console.log(
-      `typecheck-baseline: ${m.id} types ${n(m.counters.types)} ` +
-        `(${pct(m.counters.types, baseline[m.id].types)}), instantiations ` +
-        `${n(m.counters.instantiations)} ` +
-        `(${pct(m.counters.instantiations, baseline[m.id].instantiations)})`,
-    );
+    console.log(formatCheckMeasurement(m, baseline));
   }
 
   for (const d of drops) {
@@ -572,6 +573,25 @@ const runSelfTest = (): number => {
       `diffAll did not isolate the exploding field (got ${regressed
         .map((d) => `${d.id}.${d.field}`)
         .join(", ")})`,
+    );
+  }
+
+  const measurementLines = measured.map((m) =>
+    formatCheckMeasurement(m, baseline),
+  );
+  const expectedMeasurementLines = [
+    "typecheck-baseline: api types 1,010,000 (+1.0%), instantiations 9,100,000 (+1.1%)",
+    "typecheck-baseline: web types 2,010,000 (+0.5%), instantiations 44,000,000 (+120.0%)",
+    "typecheck-baseline: web-e2e types 101,000 (+1.0%), instantiations 505,000 (+1.0%)",
+  ];
+  if (
+    measurementLines.length !== expectedMeasurementLines.length ||
+    measurementLines.some(
+      (line, index) => line !== expectedMeasurementLines.at(index),
+    )
+  ) {
+    failures.push(
+      `check measurement output mismatch (got ${measurementLines.join(" | ")})`,
     );
   }
 
