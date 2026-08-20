@@ -30,7 +30,7 @@
   "dependencies": {
     "@atlaskit/pragmatic-drag-and-drop": "^2.0.2",
     "@atlaskit/pragmatic-drag-and-drop-auto-scroll": "^3.0.0",
-    "@atlaskit/pragmatic-drag-and-drop-hitbox": "^2.0.0",
+    "@atlaskit/pragmatic-drag-and-drop-hitbox": "^2.0.1",
     "@base-ui/react": "catalog:",
     "@better-auth/oauth-provider": "catalog:",
     "@fontsource-variable/source-serif-4": "^5.3.0",
