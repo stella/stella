@@ -40,11 +40,11 @@ type PermissionMap = {
   [K in keyof typeof statements]: (typeof statements)[K][number][];
 };
 
-type RequireAtLeastOne<T> = {
-  [K in keyof T]-?: Required<Pick<T, K>> & Partial<Omit<T, K>>;
+type RequireAtLeastOne<T> = Partial<T> & {
+  [K in keyof T]-?: Pick<T, K>;
 }[keyof T];
 
-export type PermissionInput = RequireAtLeastOne<Partial<PermissionMap>>;
+export type PermissionInput = RequireAtLeastOne<PermissionMap>;
 
 export const ac = createAccessControl(statements);
 
