@@ -374,9 +374,19 @@ const runCheck = (): number => {
     return 1;
   }
 
-  const diffs = diffAll(result.measured, readBaseline());
+  const baseline = readBaseline();
+  const diffs = diffAll(result.measured, baseline);
   const regressions = diffs.filter((d) => d.status === "regressed");
   const drops = diffs.filter((d) => d.status === "dropped");
+
+  for (const m of result.measured) {
+    console.log(
+      `typecheck-baseline: ${m.id} types ${n(m.counters.types)} ` +
+        `(${pct(m.counters.types, baseline[m.id].types)}), instantiations ` +
+        `${n(m.counters.instantiations)} ` +
+        `(${pct(m.counters.instantiations, baseline[m.id].instantiations)})`,
+    );
+  }
 
   for (const d of drops) {
     console.log(
