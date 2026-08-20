@@ -1,46 +1,88 @@
 {
   "name": "@stll/workspace-ui",
   "version": "0.0.0",
-  "private": true,
+  "description": "Reusable workspace presentation components and view helpers for Stella.",
+  "keywords": [
+    "calculations",
+    "filters",
+    "react",
+    "tables",
+    "ui",
+    "workspace"
+  ],
+  "homepage": "https://github.com/stella/stella/tree/main/packages/workspace-ui",
+  "bugs": {
+    "url": "https://github.com/stella/stella/issues"
+  },
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/stella/stella.git",
+    "directory": "packages/workspace-ui"
+  },
+  "files": [
+    "dist",
+    "src",
+    "README.md"
+  ],
   "type": "module",
+  "sideEffects": false,
   "exports": {
-    "./*": "./src/*.tsx",
-    "./types": "./src/types.ts",
-    "./colors": "./src/colors.ts",
-    "./field-value-logic": "./src/field-value-logic.ts",
-    "./calculation-format": "./src/calculation-format.ts",
+    ".": "./src/index.ts",
     "./calculations": "./src/calculations.tsx",
+    "./calculation-format": "./src/calculation-format.ts",
     "./calculation-selection": "./src/calculation-selection.ts",
+    "./colors": "./src/colors.ts",
     "./conditions": "./src/conditions/index.ts",
-    "./sorts": "./src/sorts.tsx"
+    "./field-value": "./src/field-value.tsx",
+    "./field-value-logic": "./src/field-value-logic.ts",
+    "./property-icon": "./src/property-icon.tsx",
+    "./sorts": "./src/sorts.tsx",
+    "./table-skeleton-rows": "./src/table-skeleton-rows.tsx",
+    "./types": "./src/types.ts"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "scripts": {
-    "clean": "git clean -xdf .cache .turbo node_modules",
+    "clean": "git clean -xdf dist .cache .turbo node_modules",
+    "build": "tsdown",
+    "pack:dry-run": "bun pm pack --dry-run",
     "test": "bun test src",
     "typecheck": "bun ../../packages/scripts/src/tsc-native.ts --noEmit",
     "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --deny-warnings --type-aware packages/workspace-ui",
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/workspace-ui",
     "format": "oxfmt .",
-    "test:property": "bun test $(grep -rlF 'fc.assert' src)"
+    "prepack": "bun run build",
+    "test:property": "bun test $(grep -rlF 'fc.assert' src --include='*.test.ts')"
   },
   "dependencies": {
-    "@stll/calculations": "workspace:*",
-    "@stll/conditions": "workspace:*",
-    "@stll/money": "workspace:*",
-    "@stll/ui": "workspace:*",
+    "@stll/calculations": "workspace:^",
+    "@stll/conditions": "workspace:^",
+    "@stll/money": "workspace:^",
+    "@stll/ui": "workspace:^",
     "better-result": "catalog:",
     "lucide-react": "catalog:",
-    "react": "catalog:react19",
     "use-intl": "catalog:"
   },
   "devDependencies": {
+    "@base-ui/react": "catalog:",
     "@stll/property-testing": "workspace:*",
     "@stll/typescript-config": "workspace:*",
     "@tanstack/react-table": "9.1.2",
     "@types/bun": "catalog:",
     "@types/react": "catalog:react19",
+    "@types/react-dom": "catalog:react19",
     "fast-check": "catalog:",
-    "tailwindcss": "catalog:"
+    "react": "catalog:react19",
+    "react-dom": "catalog:react19",
+    "tailwindcss": "catalog:",
+    "tsdown": "catalog:"
+  },
+  "peerDependencies": {
+    "@base-ui/react": "^1.7.0",
+    "react": ">=19",
+    "react-dom": ">=19",
+    "tailwindcss": "^4.3.0"
   }
 }

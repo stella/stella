@@ -14,7 +14,8 @@ import {
 import type { LucideIcon } from "lucide-react";
 
 import { cn } from "@stll/ui/utils";
-import type { FieldContent } from "@stll/workspace-ui/types";
+
+import type { FieldContent } from "./types";
 
 type FieldTypeWithoutPending = Exclude<FieldContent["type"], "pending">;
 

@@ -2,6 +2,22 @@ import type { OptionColor } from "@stll/ui/option-color";
 
 export type { OptionColor } from "@stll/ui/option-color";
 
+/** Runtime names for the content arms the field renderer understands. */
+export const FIELD_CONTENT_TYPES = [
+  "error",
+  "pending",
+  "unsupported",
+  "text",
+  "single-select",
+  "multi-select",
+  "file",
+  "date",
+  "int",
+  "money",
+  "person",
+  "clip",
+] as const;
+
 export type FieldContent =
   | {
       type: "error";
