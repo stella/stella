@@ -136,30 +136,28 @@ export const CalculationKindPicker = ({
   value,
   onChange,
   children,
-}: CalculationKindPickerProps) => 
-  (
-    <Menu>
-      <MenuTrigger
-        aria-label={labels.choose}
-        render={<Button size="icon-xs" variant="ghost" />}
-      >
-        {children ?? <SigmaIcon />}
-      </MenuTrigger>
-      <MenuPopup>
-        <MenuItem onClick={() => onChange(null)}>
-          {value === null ? <CheckIcon /> : <span />}
-          {labels.none}
+}: CalculationKindPickerProps) => (
+  <Menu>
+    <MenuTrigger
+      aria-label={labels.choose}
+      render={<Button size="icon-xs" variant="ghost" />}
+    >
+      {children ?? <SigmaIcon />}
+    </MenuTrigger>
+    <MenuPopup>
+      <MenuItem onClick={() => onChange(null)}>
+        {value === null ? <CheckIcon /> : <span />}
+        {labels.none}
+      </MenuItem>
+      {kinds.map((kind) => (
+        <MenuItem key={kind} onClick={() => onChange(kind)}>
+          {value === kind ? <CheckIcon /> : <span />}
+          {labels.kinds[kind]}
         </MenuItem>
-        {kinds.map((kind) => (
-          <MenuItem key={kind} onClick={() => onChange(kind)}>
-            {value === kind ? <CheckIcon /> : <span />}
-            {labels.kinds[kind]}
-          </MenuItem>
-        ))}
-      </MenuPopup>
-    </Menu>
-  )
-;
+      ))}
+    </MenuPopup>
+  </Menu>
+);
 
 export type CalculationSummaryProps = {
   calculation: FormattedCalculation;
