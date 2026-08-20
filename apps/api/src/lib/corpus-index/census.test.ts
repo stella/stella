@@ -37,6 +37,7 @@ const originalFetch = globalThis.fetch;
 
 /** Index ids the engine was asked to count, in request order. */
 let countedIndexIds: string[];
+let countedMaxHits: unknown[];
 
 const indexIdOfCountRequest = (url: string): string | undefined =>
   /\/api\/v1\/(?<indexId>[^/]+)\/search/u.exec(url)?.groups?.["indexId"];
@@ -49,7 +50,10 @@ const engineHolding = (numHits: number, ok = true): void => {
     }
     return input instanceof URL ? input.href : input.url;
   };
-  const stub = async (input: Parameters<typeof fetch>[0]) => {
+  const stub = async (
+    input: Parameters<typeof fetch>[0],
+    init?: Parameters<typeof fetch>[1],
+  ) => {
     const url = resolveUrl(input);
     if (!ok) {
       return new Response("index not found", { status: 404 });
@@ -59,8 +63,15 @@ const engineHolding = (numHits: number, ok = true): void => {
       if (indexId !== undefined) {
         countedIndexIds.push(indexId);
       }
+      const body: Record<string, unknown> = JSON.parse(
+        typeof init?.body === "string" ? init.body : "{}",
+      );
+      countedMaxHits.push(body["max_hits"]);
       return new Response(
-        JSON.stringify({ num_hits: numHits, hits: [], snippets: [] }),
+        JSON.stringify({
+          num_hits: numHits,
+          hits: [{ document_id: "count-hit" }],
+        }),
         { status: 200 },
       );
     }
@@ -104,6 +115,7 @@ const databaseHolding = (
 
 beforeEach(() => {
   countedIndexIds = [];
+  countedMaxHits = [];
 });
 
 afterEach(() => {
@@ -145,6 +157,7 @@ describe("index census", () => {
     );
     expect(census.isOk() && census.value.indexId).toBe(INDEX_ID);
     expect(countedIndexIds).toEqual([INDEX_ID]);
+    expect(countedMaxHits).toEqual([1]);
   });
 
   test("an engine holding more than Postgres claims is a surplus, not silence", async () => {
