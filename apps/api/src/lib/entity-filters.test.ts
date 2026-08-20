@@ -573,15 +573,69 @@ describe("buildSortExpressions", () => {
     }
   });
 
+  test("a money column orders by currency first, then by its minor-unit amount", () => {
+    const dialect = new PgDialect();
+    const [currencyExpr, numericExpr] = buildSortExpressions([
+      { propertyId: "fee", desc: false },
+    ]);
+    if (!currencyExpr || !numericExpr) {
+      throw new Error("expected currency and numeric sort expressions");
+    }
+
+    // Minor units are not comparable between currencies, so the amount only
+    // ever discriminates inside one: the currency code is the leading key.
+    const currencySql = dialect.sqlToQuery(currencyExpr).sql;
+    expect(currencySql).toContain("'money'");
+    expect(currencySql).toContain("->>'currency'");
+    expect(currencySql).toContain("NULLS LAST");
+
+    // The money branch has to be its own arm of the numeric key: the shared
+    // text projection also mentions amountCents, so asserting only on that
+    // string would still pass with the arm deleted.
+    const numericSql = dialect.sqlToQuery(numericExpr).sql;
+    expect(numericSql).toContain("'money'");
+    expect(numericSql).toContain("->>'amountCents'");
+    expect(numericSql).toContain("::numeric");
+    expect(numericSql).toContain("BTRIM");
+  });
+
+  test("a person column orders by name, not by the entity id tie-breaker", () => {
+    const dialect = new PgDialect();
+    const textExpr = buildSortExpressions([
+      { propertyId: "owner", desc: false },
+    ])[2];
+    if (!textExpr) {
+      throw new Error("expected a text sort expression");
+    }
+
+    expect(dialect.sqlToQuery(textExpr).sql).toContain("->>'name'");
+  });
+
+  test("every content type a field can hold reaches a sort key", () => {
+    const dialect = new PgDialect();
+    const expressions = buildSortExpressions([
+      { propertyId: "p1", desc: false },
+    ]);
+    const rendered = expressions
+      .map((expression) => dialect.sqlToQuery(expression).sql)
+      .join("\n");
+
+    // A content type absent from every key sorts as "" and collapses onto the
+    // id tie-breaker, which reads as an ordering that silently does nothing.
+    for (const jsonKey of ["value", "fileName", "name", "amountCents"]) {
+      expect(rendered).toContain(`->>'${jsonKey}'`);
+    }
+  });
+
   test("property sort emits a numeric key so int fields order numerically", () => {
     const dialect = new PgDialect();
     const expressions = buildSortExpressions([
       { propertyId: "p1", desc: false },
     ]);
 
-    // A guarded numeric cast, ordered before the text key.
-    const numericExpr = expressions[0];
-    const textExpr = expressions[1];
+    // Currency, then a guarded numeric cast, then the text key.
+    const numericExpr = expressions[1];
+    const textExpr = expressions[2];
     if (!numericExpr || !textExpr) {
       throw new Error("expected numeric and text sort expressions");
     }

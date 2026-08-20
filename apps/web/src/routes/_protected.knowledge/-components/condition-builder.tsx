@@ -1,3 +1,5 @@
+import { useTranslations } from "use-intl";
+
 import type { GroupNode } from "@stll/template-conditions";
 
 import {
@@ -174,6 +176,7 @@ export const ConditionGroupEditor = ({
   group: GroupNode;
   onChange: (group: GroupNode) => void;
 }) => {
+  const t = useTranslations();
   const fieldOptions = fields.map(toFieldOption);
   const formulaNumberFields: { path: string; label: string }[] = [];
   for (const f of fields) {
@@ -187,16 +190,18 @@ export const ConditionGroupEditor = ({
     allowNesting: true,
     allowFormula: true,
     formulaNumberFields,
-    addConditionLabel: "templates.conditionAddRule",
     operatorsFor: templateOperatorsFor,
-    operatorLabelKey: templateOperatorLabelKey,
     valueEditorFor: templateValueEditorFor,
   };
 
   return (
     <ConditionBuilder
+      addConditionLabel={t("templates.conditionAddRule")}
       capabilities={capabilities}
       onChange={onChange}
+      operatorLabel={(valueType, operator) =>
+        t(templateOperatorLabelKey(valueType, operator))
+      }
       value={group}
     />
   );

@@ -3,8 +3,8 @@ import { describe, expect, test } from "bun:test";
 import type { RefOperand } from "@stll/conditions";
 import { pruneIncomplete } from "@stll/conditions";
 
-import type { FieldOption, FieldValueType } from "./condition-builder-logic";
-import { leafFromField, operandsEqual } from "./condition-builder-logic";
+import type { FieldOption, FieldValueType } from "./logic";
+import { leafFromField, operandsEqual } from "./logic";
 
 describe("operandsEqual", () => {
   test("two distinct path operands are not equal", () => {

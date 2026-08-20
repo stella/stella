@@ -11,7 +11,9 @@
     "./field-value-logic": "./src/field-value-logic.ts",
     "./calculation-format": "./src/calculation-format.ts",
     "./calculations": "./src/calculations.tsx",
-    "./calculation-selection": "./src/calculation-selection.ts"
+    "./calculation-selection": "./src/calculation-selection.ts",
+    "./conditions": "./src/conditions/index.ts",
+    "./sorts": "./src/sorts.tsx"
   },
   "scripts": {
     "clean": "git clean -xdf .cache .turbo node_modules",
@@ -24,6 +26,7 @@
   },
   "dependencies": {
     "@stll/calculations": "workspace:*",
+    "@stll/conditions": "workspace:*",
     "@stll/money": "workspace:*",
     "@stll/ui": "workspace:*",
     "better-result": "catalog:",
