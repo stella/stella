@@ -69,6 +69,14 @@ try {
       await run([process.execPath, "pm", "pack", "--dry-run"], pkgDir),
     ),
   );
+  const embeddedDependencyFiles = [...packed].filter((file) =>
+    file.startsWith("dist/node_modules/"),
+  );
+  if (embeddedDependencyFiles.length > 0) {
+    failures.push(
+      `tarball embeds ${embeddedDependencyFiles.length} dependency file(s) under dist/node_modules; declare the dependency in runtime or peer metadata (first: ${embeddedDependencyFiles.at(0)})`,
+    );
+  }
 
   // One check per subpath, run together: each pushes its own findings, so the
   // report names every broken entry rather than the first one.

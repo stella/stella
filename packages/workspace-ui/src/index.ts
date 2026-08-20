@@ -13,6 +13,7 @@ export type {
   CalculationSelection,
   CalculationSummaryProps,
   UseCalculationParams,
+  WorkspaceCalculationLabels,
 } from "./calculations";
 export {
   currencyMinorUnitDigits,

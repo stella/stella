@@ -81,6 +81,7 @@
   },
   "peerDependencies": {
     "@base-ui/react": "^1.7.0",
+    "@tanstack/react-table": "^9.1.2",
     "react": ">=19",
     "react-dom": ">=19",
     "tailwindcss": "^4.3.0"

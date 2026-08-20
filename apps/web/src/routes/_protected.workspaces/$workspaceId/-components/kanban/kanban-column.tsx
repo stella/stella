@@ -76,6 +76,7 @@ import {
   ENTITY_DRAG_TYPE,
 } from "@/lib/workspaces/drag-constants";
 import { KanbanCard } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-card";
+import { useWorkspaceCalculationLabels } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-workspace-calculation-labels";
 
 const KANBAN_CARD_ESTIMATE_PX = 128;
 const KANBAN_CARD_OVERSCAN = 8;
@@ -739,27 +740,33 @@ type ColumnCalculationsProps = {
 export const ColumnCalculations = ({
   entities,
   calculations: { selections, properties, onChange },
-}: ColumnCalculationsProps) => (
-  <span className="flex min-w-0 shrink-0 items-center gap-1">
-    {selections.map((selection) => (
-      <ColumnCalculation
-        key={selection.propertyId}
-        kind={selection.kind}
-        values={entities.map((entity) =>
-          toCalculationValue(
-            entity.fields[toSafeId<"property">(selection.propertyId)],
-          ),
-        )}
-      />
-    ))}
-    {onChange && (
-      <span className="opacity-0 transition-opacity group-hover/column:opacity-100 focus-within:opacity-100">
-        <CalculationPicker
-          onChange={onChange}
-          properties={properties}
-          selections={selections}
+}: ColumnCalculationsProps) => {
+  const labels = useWorkspaceCalculationLabels();
+
+  return (
+    <span className="flex min-w-0 shrink-0 items-center gap-1">
+      {selections.map((selection) => (
+        <ColumnCalculation
+          key={selection.propertyId}
+          kind={selection.kind}
+          labels={labels}
+          values={entities.map((entity) =>
+            toCalculationValue(
+              entity.fields[toSafeId<"property">(selection.propertyId)],
+            ),
+          )}
         />
-      </span>
-    )}
-  </span>
-);
+      ))}
+      {onChange && (
+        <span className="opacity-0 transition-opacity group-hover/column:opacity-100 focus-within:opacity-100">
+          <CalculationPicker
+            labels={labels}
+            onChange={onChange}
+            properties={properties}
+            selections={selections}
+          />
+        </span>
+      )}
+    </span>
+  );
+};

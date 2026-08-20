@@ -1,5 +1,8 @@
 import { cn } from "@stll/ui/utils";
-import type { CalculationSelection } from "@stll/workspace-ui/calculations";
+import type {
+  CalculationSelection,
+  WorkspaceCalculationLabels,
+} from "@stll/workspace-ui/calculations";
 import {
   CalculationKindPicker,
   ColumnCalculation,
@@ -25,6 +28,7 @@ import {
   getGridPinningStyles,
   isPinnedBoundaryColumn,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/internals-helpers";
+import { useWorkspaceCalculationLabels } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-workspace-calculation-labels";
 
 type TableCalculationsRowProps = {
   renderColumns: TableColumn[];
@@ -49,48 +53,54 @@ export const TableCalculationsRow = ({
   properties,
   calculations,
   onChange,
-}: TableCalculationsRowProps) => (
-  <WorkspaceGridRow
-    className={cn("bg-background sticky bottom-0 z-20", TOOLBAR_ROW_HEIGHT)}
-  >
-    {renderColumns.map((column, index) => (
+}: TableCalculationsRowProps) => {
+  const labels = useWorkspaceCalculationLabels();
+
+  return (
+    <WorkspaceGridRow
+      className={cn("bg-background sticky bottom-0 z-20", TOOLBAR_ROW_HEIGHT)}
+    >
+      {renderColumns.map((column, index) => (
+        <WorkspaceGridCell
+          className={cn(
+            "flex items-center justify-end gap-1 border-t border-b-0",
+            isPinnedBoundaryColumn(column) && "border-e-0",
+          )}
+          key={column.id}
+          role="presentation"
+          style={{ gridColumn: index + 1, ...getGridPinningStyles(column) }}
+        >
+          <CalculationCell
+            calculations={calculations}
+            columnId={column.id}
+            labels={labels}
+            onChange={onChange}
+            properties={properties}
+            rows={rows}
+          />
+        </WorkspaceGridCell>
+      ))}
       <WorkspaceGridCell
+        aria-hidden="true"
         className={cn(
-          "flex items-center justify-end gap-1 border-t border-b-0",
-          isPinnedBoundaryColumn(column) && "border-e-0",
+          "border-t border-b-0 p-0",
+          addPropertyColumn && "border-e-0",
         )}
-        key={column.id}
         role="presentation"
-        style={{ gridColumn: index + 1, ...getGridPinningStyles(column) }}
-      >
-        <CalculationCell
-          calculations={calculations}
-          columnId={column.id}
-          onChange={onChange}
-          properties={properties}
-          rows={rows}
-        />
-      </WorkspaceGridCell>
-    ))}
-    <WorkspaceGridCell
-      aria-hidden="true"
-      className={cn(
-        "border-t border-b-0 p-0",
-        addPropertyColumn && "border-e-0",
-      )}
-      role="presentation"
-      style={{
-        gridColumn: getEndFillerGridColumn({
-          renderColumns,
-          addPropertyColumn,
-        }),
-      }}
-    />
-  </WorkspaceGridRow>
-);
+        style={{
+          gridColumn: getEndFillerGridColumn({
+            renderColumns,
+            addPropertyColumn,
+          }),
+        }}
+      />
+    </WorkspaceGridRow>
+  );
+};
 
 type CalculationCellProps = {
   columnId: string;
+  labels: WorkspaceCalculationLabels;
   rows: readonly TableTreeNode[];
   properties: readonly WorkspaceProperty[];
   calculations: readonly CalculationSelection[];
@@ -99,6 +109,7 @@ type CalculationCellProps = {
 
 const CalculationCell = ({
   columnId,
+  labels,
   rows,
   properties,
   calculations,
@@ -124,6 +135,7 @@ const CalculationCell = ({
       {selected && (
         <ColumnCalculation
           kind={selected.kind}
+          labels={labels}
           values={rows.map((row) =>
             toCalculationValue(row.fields[toSafeId<"property">(columnId)]),
           )}
@@ -132,6 +144,7 @@ const CalculationCell = ({
       <span className="opacity-0 transition-opacity group-hover/row:opacity-100 focus-within:opacity-100">
         <CalculationKindPicker
           kinds={calculationKindsForProperty(property)}
+          labels={labels}
           onChange={select}
           value={selected?.kind ?? null}
         />

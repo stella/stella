@@ -2,22 +2,6 @@ import type { OptionColor } from "@stll/ui/option-color";
 
 export type { OptionColor } from "@stll/ui/option-color";
 
-/** Runtime names for the content arms the field renderer understands. */
-export const FIELD_CONTENT_TYPES = [
-  "error",
-  "pending",
-  "unsupported",
-  "text",
-  "single-select",
-  "multi-select",
-  "file",
-  "date",
-  "int",
-  "money",
-  "person",
-  "clip",
-] as const;
-
 export type FieldContent =
   | {
       type: "error";
@@ -96,6 +80,30 @@ export type FieldContent =
       jurisdiction?: string;
       sourceType?: string;
     };
+
+const fieldContentTypes = [
+  "error",
+  "pending",
+  "unsupported",
+  "text",
+  "single-select",
+  "multi-select",
+  "file",
+  "date",
+  "int",
+  "money",
+  "person",
+  "clip",
+] as const;
+
+type CompleteFieldContentTypes<T extends readonly FieldContent["type"][]> =
+  Exclude<FieldContent["type"], T[number]> extends never ? T : never;
+
+/** Runtime names for every content arm the field renderer understands. */
+export const FIELD_CONTENT_TYPES =
+  fieldContentTypes satisfies CompleteFieldContentTypes<
+    typeof fieldContentTypes
+  >;
 
 export type WorkspaceFieldContent = FieldContent;
 

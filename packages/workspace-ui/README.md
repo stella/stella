@@ -31,8 +31,18 @@ bun run typecheck
 bun run lint
 ```
 
-Peer dependencies: `react`, `react-dom`, `@base-ui/react`, and Tailwind CSS
-v4. The package's components use Tailwind utility classes; the host owns the
-Tailwind entry point and token configuration.
+Peer dependencies: `react`, `react-dom`, `@base-ui/react`, TanStack React Table,
+and Tailwind CSS v4. The package's components use Tailwind utility classes; the
+host owns the Tailwind entry point and token configuration.
+
+Include both published component packages in that entry point so Tailwind scans
+their shipped class names:
+
+```css
+@import "tailwindcss";
+@import "@stll/ui/theme.css";
+@source "../node_modules/@stll/ui/dist";
+@source "../node_modules/@stll/workspace-ui/dist";
+```
 
 This package is published, so public API changes need a changeset.
