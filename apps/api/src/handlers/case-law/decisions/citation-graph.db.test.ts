@@ -8,6 +8,7 @@ import {
 } from "@/api/db/schema";
 import { CITATION_KIND } from "@/api/handlers/case-law/citation-kind";
 import {
+  CITATION_TIMELINE_MAX_YEARS,
   CITATION_TREATMENTS,
   listDecisionCitationsHandler,
   summarizeDecisionCitationsHandler,
@@ -305,4 +306,22 @@ test("citation pages reject malformed cursors", async () => {
   });
 
   expect("items" in page).toBe(false);
+});
+
+test("incoming citations roll up by the citing decision's year within the bounded span", async () => {
+  const summary = await summarizeDecisionCitationsHandler({
+    caseLawDb,
+    currentYear: 2026,
+    decisionId: subjectId,
+  });
+  // Every visible citing row comes from one decision dated 2020.
+  expect(summary.incomingByYear).toEqual([{ ...summary.incoming, year: 2020 }]);
+
+  const beyondSpan = await summarizeDecisionCitationsHandler({
+    caseLawDb,
+    currentYear: 2020 + CITATION_TIMELINE_MAX_YEARS,
+    decisionId: subjectId,
+  });
+  expect(beyondSpan.incoming).toEqual(summary.incoming);
+  expect(beyondSpan.incomingByYear).toEqual([]);
 });
