@@ -9,11 +9,11 @@ import {
   useSyncExternalStore,
 } from "react";
 
-import { combine } from "@atlaskit/pragmatic-drag-and-drop/combine";
 import {
   draggable,
   dropTargetForElements,
-} from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
+} from "@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter";
+import { combine } from "@atlaskit/pragmatic-drag-and-drop/utils/combine";
 import { useHotkey } from "@tanstack/react-hotkeys";
 import {
   hashKey,

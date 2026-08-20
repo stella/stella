@@ -1,8 +1,8 @@
 import { useCallback, useRef, useState } from "react";
 import type React from "react";
 
-import { draggable } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
-import { setCustomNativeDragPreview } from "@atlaskit/pragmatic-drag-and-drop/element/set-custom-native-drag-preview";
+import { draggable } from "@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter";
+import { setCustomNativeDragPreview } from "@atlaskit/pragmatic-drag-and-drop/utils/set-custom-native-drag-preview";
 import { flexRender, type RowSelectionState } from "@tanstack/react-table";
 import {
   row_getIsExpanded,
