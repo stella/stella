@@ -4,6 +4,7 @@ import { dropTargetForElements } from "@atlaskit/pragmatic-drag-and-drop/adapter
 import { PlusIcon, SquareCheckIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { CalendarCell } from "@stll/ui/calendar";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
 import { containedEventHandler } from "@stll/ui/use-contained-handler";
 import { cn } from "@stll/ui/utils";
@@ -117,11 +118,11 @@ export const CalendarDayCell = ({
   }, [announcementDate, isEditable, handleEntityDrop]);
 
   return (
-    <div
+    <CalendarCell
       ref={dropRef}
       className={cn(
         "group/day relative flex flex-col gap-0.5",
-        "overflow-hidden border-e border-b p-1",
+        "overflow-hidden p-1",
         !day.isCurrentMonth && "bg-muted/30",
         day.monthTone === "muted" && "bg-muted/10",
         day.isWeekend && day.isCurrentMonth && "bg-muted/15",
@@ -218,6 +219,6 @@ export const CalendarDayCell = ({
           </MenuPopup>
         </Menu>
       )}
-    </div>
+    </CalendarCell>
   );
 };

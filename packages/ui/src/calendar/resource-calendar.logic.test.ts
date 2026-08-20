@@ -1,0 +1,75 @@
+import { describe, expect, test } from "bun:test";
+
+import {
+  assertConsecutiveCalendarDates,
+  getResourceCalendarPlacement,
+} from "./resource-calendar.logic";
+
+describe("resource calendar placement", () => {
+  const visibleRange = {
+    endDateExclusive: "2026-08-08",
+    startDate: "2026-08-01",
+  };
+
+  test("clips half-open entries to the visible columns", () => {
+    expect(
+      getResourceCalendarPlacement({
+        entry: {
+          endDateExclusive: "2026-08-04",
+          startDate: "2026-07-30",
+        },
+        visibleRange,
+      }),
+    ).toEqual({ columnStart: 2, span: 3 });
+    expect(
+      getResourceCalendarPlacement({
+        entry: {
+          endDateExclusive: "2026-08-10",
+          startDate: "2026-08-06",
+        },
+        visibleRange,
+      }),
+    ).toEqual({ columnStart: 7, span: 2 });
+  });
+
+  test("does not place adjacent or disjoint entries", () => {
+    expect(
+      getResourceCalendarPlacement({
+        entry: {
+          endDateExclusive: visibleRange.startDate,
+          startDate: "2026-07-30",
+        },
+        visibleRange,
+      }),
+    ).toBeNull();
+    expect(
+      getResourceCalendarPlacement({
+        entry: {
+          endDateExclusive: "2026-08-10",
+          startDate: visibleRange.endDateExclusive,
+        },
+        visibleRange,
+      }),
+    ).toBeNull();
+  });
+
+  test("rejects empty ranges and nonconsecutive columns", () => {
+    expect(() =>
+      getResourceCalendarPlacement({
+        entry: {
+          endDateExclusive: "2026-08-02",
+          startDate: "2026-08-02",
+        },
+        visibleRange,
+      }),
+    ).toThrow("Calendar date ranges must be non-empty and half-open");
+    expect(() =>
+      assertConsecutiveCalendarDates(["2026-08-01", "2026-08-03"]),
+    ).toThrow(
+      "Resource calendar date columns must be consecutive normalized dates",
+    );
+    expect(() => assertConsecutiveCalendarDates(["2026-02-30"])).toThrow(
+      "Resource calendar date columns must be consecutive normalized dates",
+    );
+  });
+});

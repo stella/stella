@@ -1,3 +1,4 @@
+import { CalendarHeaderCell, CalendarHeaderRow } from "@stll/ui/calendar";
 import { cn } from "@stll/ui/utils";
 
 type CalendarWeekHeaderProps = {
@@ -11,22 +12,18 @@ export const CalendarWeekHeader = ({
   firstWeekday,
   weekend,
 }: CalendarWeekHeaderProps) => (
-  <div className="grid grid-cols-7 border-b">
+  <CalendarHeaderRow className="grid-cols-7">
     {weekdayLabels.map((label, i) => {
       const dayOfWeek = (firstWeekday + i) % 7;
       const isWeekend = weekend.has(dayOfWeek);
       return (
-        <div
-          className={cn(
-            "px-2 py-1 text-center text-xs font-medium",
-            "text-muted-foreground",
-            isWeekend && "bg-muted/20",
-          )}
+        <CalendarHeaderCell
+          className={cn("border-e-0 py-1", isWeekend && "bg-muted/20")}
           key={label}
         >
           {label}
-        </div>
+        </CalendarHeaderCell>
       );
     })}
-  </div>
+  </CalendarHeaderRow>
 );
