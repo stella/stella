@@ -1,5 +1,5 @@
 {
-  "apps/web/src/components/ai-suggestions/file-chat-overlay.tsx::FileChatOverlayInner": 1,
+  "apps/web/src/components/ai-suggestions/file-chat-overlay.tsx::FileChatOverlayInner": 2,
   "apps/web/src/components/autocomplete/use-autocomplete-stream.ts::useAutocompleteStream": 0,
   "apps/web/src/components/chat-editor-provider.tsx::useChatEditor": 12,
   "apps/web/src/components/chat-mention-list.tsx::ChatMentionList": 1,
@@ -20,15 +20,12 @@
   "apps/web/src/components/pdf/versions-sidebar.tsx::VersionsSidebar": 0,
   "apps/web/src/components/search-dialog.tsx::SearchDialog": 4,
   "apps/web/src/components/search-dialog.tsx::SearchableFacetGroup": 0,
-  "apps/web/src/components/selfhost-update-banner.tsx::SelfhostUpdateBanner": 0,
   "apps/web/src/components/templates/template-form.tsx::TemplateForm": 11,
   "apps/web/src/components/workspaces/hooks/use-create-b-boxes.ts::useCreateBBoxes": 1,
-  "apps/web/src/components/workspaces/hooks/use-start-workflow.ts::useStartWorkflow": 0,
   "apps/web/src/components/workspaces/hooks/use-sync-justifications.ts::useSyncJustificationChunks": 3,
   "apps/web/src/components/workspaces/workflow-start-confirmation-prompt.tsx::WorkflowStartConfirmationPromptProvider": 1,
   "apps/web/src/features/case-law/components/decision-filters.tsx::DecisionFilters": 5,
   "apps/web/src/features/chat/hooks/use-chat-session.ts::useChatSession": 25,
-  "apps/web/src/features/chat/hooks/use-workspace-chat-mention-registration.ts::useWorkspaceChatMentionRegistration": 4,
   "apps/web/src/features/guides/use-guide-runner.ts::useGuideRunner": 0,
   "apps/web/src/hooks/use-effect.ts::useExternalSyncEffect": 0,
   "apps/web/src/hooks/use-effect.ts::useMountEffect": 0,
@@ -50,8 +47,7 @@
   "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-entity-chip.tsx::CalendarEntityChip": 0,
   "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-view.tsx::CalendarView": 0,
   "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/cell-metadata-flags.tsx::useCellMetadataFlags": 3,
-  "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/existing-file-organizer-dialog.tsx::ExistingFileOrganizerDialog": 6,
-  "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view.tsx::FilesystemView": 18,
+  "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view.tsx::FilesystemView": 19,
   "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-column.tsx::KanbanColumn": 0,
   "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/property-popover.tsx::PropertyPopover": 0,
   "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/row-actions.tsx::RowActions": 0,
@@ -59,6 +55,5 @@
   "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/row-cells.tsx::DraggableRow": 1,
   "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/row-cells.tsx::SelectRowContent": 0,
   "apps/web/src/routes/_protected.workspaces/-components/pdf-viewer-controls.tsx::PdfViewerControls": 0,
-  "apps/web/src/routes/auth/organization.tsx::OrganizationList": 0,
-  "apps/web/src/routes/onboarding/-components/onboarding-wizard.tsx::OnboardingWizard": 2
+  "apps/web/src/routes/auth/organization.tsx::OrganizationList": 0
 }

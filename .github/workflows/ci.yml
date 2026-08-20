@@ -584,7 +584,8 @@ jobs:
         # render — loops that lint and typecheck do not catch. Fails when a
         # baseline bailout file loses memoization or a new bailout component
         # appears untracked. CI-only: it runs the JS compiler, too slow for the
-        # local loop. Regenerate: `bun scripts/rc-bailouts.ts --write-baseline`.
+        # normal lint output. Regenerate:
+        # `bun scripts/rc-bailouts.ts --write-baseline`.
         run: bun scripts/rc-bailouts.ts --check
 
       - name: Oxlint override union guard

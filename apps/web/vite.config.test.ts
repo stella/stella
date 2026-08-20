@@ -1,7 +1,7 @@
-import { describe, expect, test } from "bun:test";
-import type { ConfigEnv, UserConfig } from "vite";
+import { describe, expect, mock, test } from "bun:test";
+import { createLogger, type ConfigEnv, type UserConfig } from "vite";
 
-import config, { rewriteBrowserApiPath } from "./vite.config";
+import config, { capViteLogger, rewriteBrowserApiPath } from "./vite.config";
 
 describe("vite config", () => {
   test("matches the deployed browser API prefix contract", () => {
@@ -20,7 +20,22 @@ describe("vite config", () => {
 
     const pluginNames = plugins.map((plugin) => plugin.name);
     expect(pluginNames).toContain("vite:react-babel");
-    expect(pluginNames).toContain("@rolldown/plugin-babel");
+    expect(pluginNames).toContain("vite:react-compiler");
+    expect(pluginNames).not.toContain("@rolldown/plugin-babel");
+  });
+
+  test("forwards React Compiler warnings through the bounded logger", () => {
+    const logger = createLogger("silent");
+    const warn = mock(() => {});
+    logger.warn = warn;
+
+    capViteLogger(logger);
+    logger.warn("[plugin vite:react-compiler] skipped component");
+
+    expect(warn).toHaveBeenCalledWith(
+      "[plugin vite:react-compiler] skipped component",
+      undefined,
+    );
   });
 
   test("proxies every public API surface through one dev origin when requested", () => {

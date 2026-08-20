@@ -1,15 +1,21 @@
-import babel from "@rolldown/plugin-babel";
 import tailwindcss from "@tailwindcss/vite";
 import { devtools } from "@tanstack/devtools-vite";
 import { tanstackStart } from "@tanstack/react-start/plugin/vite";
-import react, { reactCompilerPreset } from "@vitejs/plugin-react";
+import react from "@vitejs/plugin-react";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { visualizer } from "rollup-plugin-visualizer";
-import { defineConfig, type Plugin, type PluginOption } from "vite";
+import {
+  defineConfig,
+  type Logger,
+  type Plugin,
+  type PluginOption,
+} from "vite";
 
 import stllAnonymizeWasm from "@stll/anonymize-wasm/vite";
+
+import { REACT_COMPILER_OPTIONS } from "./react-compiler-options.ts";
 
 const APP_ROOT = import.meta.dirname;
 const ANALYZE_MODE = "analyze";
@@ -80,23 +86,26 @@ const versionManifestPlugin = (): Plugin => ({
 // every logged line at the one chokepoint so no single message, from any plugin
 // or component, can ever do that again.
 const MAX_LOG_CHARS = 4000;
+export const capViteLogger = (logger: Logger): void => {
+  const cap = (message: string) =>
+    message.length > MAX_LOG_CHARS
+      ? `${message.slice(0, MAX_LOG_CHARS)}… [${message.length - MAX_LOG_CHARS} chars truncated]`
+      : message;
+  const info = logger.info.bind(logger);
+  const warn = logger.warn.bind(logger);
+  const warnOnce = logger.warnOnce.bind(logger);
+  const error = logger.error.bind(logger);
+  logger.info = (message, options) => info(cap(message), options);
+  logger.warn = (message, options) => warn(cap(message), options);
+  logger.warnOnce = (message, options) => warnOnce(cap(message), options);
+  logger.error = (message, options) => error(cap(message), options);
+};
+
 const logCapPlugin = (): Plugin => ({
   name: "stella-log-cap",
   enforce: "pre",
   configResolved(config) {
-    const { logger } = config;
-    const cap = (message: string) =>
-      message.length > MAX_LOG_CHARS
-        ? `${message.slice(0, MAX_LOG_CHARS)}… [${message.length - MAX_LOG_CHARS} chars truncated]`
-        : message;
-    const info = logger.info.bind(logger);
-    const warn = logger.warn.bind(logger);
-    const warnOnce = logger.warnOnce.bind(logger);
-    const error = logger.error.bind(logger);
-    logger.info = (message, options) => info(cap(message), options);
-    logger.warn = (message, options) => warn(cap(message), options);
-    logger.warnOnce = (message, options) => warnOnce(cap(message), options);
-    logger.error = (message, options) => error(cap(message), options);
+    capViteLogger(config.logger);
   },
 });
 
@@ -270,16 +279,9 @@ export default defineConfig(({ mode }) => {
       }),
       "@tanstack/react-start",
     ),
-    ensurePluginOption(react(), "@vitejs/plugin-react"),
     ensurePluginOption(
-      babel({
-        // `apps/web` imports TSX from workspace packages such as `@stll/ui`.
-        // Be explicit so Babel parses TS/JSX outside the app CWD before the
-        // React Compiler preset runs.
-        parserOpts: { plugins: ["typescript", "jsx"] },
-        presets: [reactCompilerPreset()],
-      }),
-      "@rolldown/plugin-babel",
+      react({ compiler: REACT_COMPILER_OPTIONS }),
+      "@vitejs/plugin-react with Oxc React Compiler",
     ),
     shouldAnalyze &&
       ensurePluginOption(
