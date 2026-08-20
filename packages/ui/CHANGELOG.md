@@ -1,5 +1,47 @@
 # @stll/ui
 
+## 0.3.0
+
+### Minor Changes
+
+- [#2266](https://github.com/stella/stella/pull/2266) [`5388db6`](https://github.com/stella/stella/commit/5388db63ae1c431da728845f4ae5d1f89f927e18) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Export the kanban board's grouping and the option-colour token.
+
+  `@stll/ui/kanban` carries the board's column resolution and its two pieces of
+  chrome. A board's columns come from a schema the caller supplies: the properties
+  it may group by, plus built-in group resolvers for columns that come from
+  somewhere other than a property. The module reads nothing off a row, so what a
+  row is stays entirely with the caller. Alongside it, `KanbanCardShell` holds the
+  card's border, hover lift, active ring and drag wrapper, and
+  `KanbanColumnHeader` holds the header row's rhythm; a card that opens nothing
+  gets neither a button role nor a tab stop.
+
+  `@stll/ui/option-color` is the colour token user-chosen options are stored as:
+  one of sixteen named presets resolving to the theme's `--option-*` custom
+  properties, or a hex string resolving to a `color-mix` against the current
+  background. The indirection is what keeps a stored colour theme-aware, and the
+  resolver had been written out twice outside the package.
+
+- [#2276](https://github.com/stella/stella/pull/2276) [`2f7f773`](https://github.com/stella/stella/commit/2f7f773f8b9c0a14511a796a40821a35943b3b13) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Export the data table's column schema.
+
+  `@stll/ui/data-table` describes what a table's columns are, independent of how
+  they draw: an ordered list of descriptors, each with an id, a label, a starting
+  width, its capabilities (sort, hide, resize, pin) and an emphasis. Nothing in it
+  looks inside a descriptor's render payload, so a caller keeps its own
+  exhaustively checked union there and the schema stays free of any idea about
+  what a row holds.
+
+  Two rules belong to the schema rather than to a renderer: a column that cannot
+  be hidden stays visible whatever the stored hidden list says, so a stale list
+  cannot strand a table without its selection column; and `duplicateColumnIds`
+  reports a repeated id, which would otherwise drop a column silently because the
+  table keys by id.
+
+### Patch Changes
+
+- [#2272](https://github.com/stella/stella/pull/2272) [`794eca0`](https://github.com/stella/stella/commit/794eca0b7d4d615d78f899b1629eff21831bd530) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Outline rail entries take an optional `title`, rendered after a non-truncating label; `meta` stays right-pinned. The tooltip shows both.
+
+- [#2271](https://github.com/stella/stella/pull/2271) [`314a468`](https://github.com/stella/stella/commit/314a4685593298e63f017c466125b7348f9f9858) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Toggling an outline rail branch keeps the toggled row where it was instead of re-pinning it to its sticky offset.
+
 ## 0.2.0
 
 ### Minor Changes
