@@ -88,12 +88,29 @@ const trimNonLetters = (word: string): string => {
 // handled in validateAst: make the boundary a separator. Only a group
 // whose content is itself skippable becomes one, because anonymization
 // markers are mid-word ("[o]rganizace") and must stay joined.
-const BRACKET_GROUP = /\[([^\]]*)\]/gu;
-
-const separateSkipMarkers = (text: string): string =>
-  text.replace(BRACKET_GROUP, (group, inner: string) =>
-    SKIP_WORDS.has(trimNonLetters(inner.toLowerCase())) ? " " : group,
-  );
+//
+// Scanned rather than matched with `/\[([^\]]*)\]/gu`: that literal is
+// super-linear under scslre (the `super-linear-regexes` ratchet is at 0
+// and stays there), and a court document is exactly the oversized input
+// that turns the backtracking into blocking CPU. Both indexOf cursors
+// only ever advance, so this is one pass over the text.
+const separateSkipMarkers = (text: string): string => {
+  let separated = "";
+  let index = 0;
+  while (index < text.length) {
+    const open = text.indexOf("[", index);
+    const close = open === -1 ? -1 : text.indexOf("]", open + 1);
+    if (close === -1) {
+      return separated + text.slice(index);
+    }
+    const marker = trimNonLetters(text.slice(open + 1, close).toLowerCase());
+    separated +=
+      text.slice(index, open) +
+      (SKIP_WORDS.has(marker) ? " " : text.slice(open, close + 1));
+    index = close + 1;
+  }
+  return separated;
+};
 
 const extractWords = (text: string): Set<string> => {
   const words = new Set<string>();

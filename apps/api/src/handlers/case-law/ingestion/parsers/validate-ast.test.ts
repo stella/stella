@@ -199,8 +199,10 @@ describe("validateAst", () => {
     test("keeps a mid-word anonymization marker joined", () => {
       // "[o]rganizace" anonymizes one letter inside a word: the
       // brackets are removed, not treated as a boundary, or the
-      // remainder ("rganizace") becomes a phantom missing word.
-      const html = wrapInHtml("[o]rganizace podala kasační stížnost");
+      // remainder ("rganizace") becomes a phantom missing word. The
+      // leading decorative marker puts both kinds of group in one
+      // token, so only the skippable one may become a boundary.
+      const html = wrapInHtml("[OBRÁZEK][o]rganizace podala kasační stížnost");
       const blocks: Block[] = [
         makeHeading("H"),
         makeBlock({ plainText: "podala kasační stížnost" }),
