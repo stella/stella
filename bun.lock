@@ -13,6 +13,7 @@
         "@tanstack/eslint-plugin-query": "catalog:",
         "@tanstack/eslint-plugin-router": "catalog:",
         "@typescript/native": "npm:typescript@7.0.2",
+        "bun-types": "catalog:",
         "eslint": "catalog:",
         "eslint-plugin-drizzle": "catalog:",
         "i18n-unused": "^0.20.0",
@@ -178,6 +179,7 @@
         "@types/react": "catalog:react19",
         "@types/react-dom": "catalog:react19",
         "@vitejs/plugin-react": "catalog:",
+        "bun-types": "catalog:",
         "tailwindcss": "catalog:",
         "vite": "catalog:",
       },
@@ -213,6 +215,7 @@
         "@astrojs/check": "^0.9.9",
         "@types/react": "catalog:react19",
         "@types/react-dom": "catalog:react19",
+        "bun-types": "catalog:",
       },
     },
     "apps/legal-atlas-runner": {
@@ -395,6 +398,7 @@
         "@types/react": "catalog:react19",
         "@types/react-dom": "catalog:react19",
         "@vitejs/plugin-react": "catalog:",
+        "bun-types": "catalog:",
         "oxc-transform-react": "0.145.0",
         "react-grab": "^0.1.50",
         "rollup-plugin-visualizer": "^7.1.1",
@@ -527,6 +531,7 @@
       "version": "0.0.0",
       "devDependencies": {
         "@stll/typescript-config": "workspace:*",
+        "bun-types": "catalog:",
       },
     },
     "packages/cli": {
@@ -751,6 +756,7 @@
       "version": "0.0.0",
       "devDependencies": {
         "@stll/typescript-config": "workspace:*",
+        "bun-types": "catalog:",
       },
     },
     "packages/transactional": {
@@ -765,6 +771,7 @@
       "devDependencies": {
         "@stll/typescript-config": "workspace:*",
         "@types/react": "catalog:react19",
+        "bun-types": "catalog:",
       },
     },
     "packages/typescript-config": {

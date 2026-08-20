@@ -146,6 +146,31 @@ describe("workspace hygiene", () => {
     expect(validateWorkspaceRoot(rootDir)).toEqual([]);
   });
 
+  test("requires workspaces to own the Bun types named by their tsconfig", () => {
+    const rootDir = createWorkspaceRoot({
+      rootPackageJson: {
+        devDependencies: {
+          turbo: "2.10.3",
+        },
+      },
+      webPackageJson: {
+        dependencies: {},
+        name: "@stll/web",
+      },
+    });
+
+    writeFileSync(
+      path.join(rootDir, "apps/web/tsconfig.json"),
+      JSON.stringify({ compilerOptions: { types: ["bun-types"] } }),
+    );
+
+    expect(validateWorkspaceRoot(rootDir)).toContainEqual({
+      message:
+        "bun-types is named by this TypeScript project but is not declared in the workspace package.json",
+      path: "apps/web/tsconfig.json",
+    });
+  });
+
   test("rejects a stale workspace-local package that shadows an exact catalog pin", () => {
     const rootDir = createWorkspaceRoot({
       rootPackageJson: {

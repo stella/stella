@@ -16,6 +16,7 @@
     "format": "oxfmt ."
   },
   "devDependencies": {
-    "@stll/typescript-config": "workspace:*"
+    "@stll/typescript-config": "workspace:*",
+    "bun-types": "catalog:"
   }
 }

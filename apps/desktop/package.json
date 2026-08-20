@@ -32,6 +32,7 @@
     "@types/react": "catalog:react19",
     "@types/react-dom": "catalog:react19",
     "@vitejs/plugin-react": "catalog:",
+    "bun-types": "catalog:",
     "tailwindcss": "catalog:",
     "vite": "catalog:"
   },

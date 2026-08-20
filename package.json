@@ -89,6 +89,7 @@
     "@tanstack/eslint-plugin-query": "catalog:",
     "@tanstack/eslint-plugin-router": "catalog:",
     "@typescript/native": "npm:typescript@7.0.2",
+    "bun-types": "catalog:",
     "eslint": "catalog:",
     "eslint-plugin-drizzle": "catalog:",
     "i18n-unused": "^0.20.0",

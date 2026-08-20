@@ -44,7 +44,8 @@
   "devDependencies": {
     "@astrojs/check": "^0.9.9",
     "@types/react": "catalog:react19",
-    "@types/react-dom": "catalog:react19"
+    "@types/react-dom": "catalog:react19",
+    "bun-types": "catalog:"
   },
   "crawlPosture": "public"
 }
