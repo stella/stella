@@ -23,9 +23,12 @@ on:
       - packages/business-registries/CHANGELOG.md
       - packages/country-codes/CHANGELOG.md
       - packages/conditions/CHANGELOG.md
+      - packages/money/CHANGELOG.md
+      - packages/calculations/CHANGELOG.md
       - packages/template-conditions/CHANGELOG.md
       - packages/docx-utils/CHANGELOG.md
       - packages/ui/CHANGELOG.md
+      - packages/workspace-ui/CHANGELOG.md
   workflow_run: # zizmor: ignore[dangerous-triggers] the release tag and SHA are revalidated before the release job receives id-token
     workflows: ["Release Artifacts"]
     types: [completed]
@@ -39,9 +42,12 @@ on:
           - business-registries
           - country-codes
           - conditions
+          - money
+          - calculations
           - template-conditions
           - docx-utils
           - ui
+          - workspace-ui
           - cli
         default: all
       publish:
@@ -178,10 +184,10 @@ jobs:
           if [[ "$EVENT_NAME" == "workflow_run" ]]; then
             pkgs=(cli)
           elif [[ "$EVENT_NAME" == "push" ]]; then
-            pkgs=(country-codes business-registries conditions template-conditions docx-utils ui)
+            pkgs=(country-codes business-registries conditions template-conditions docx-utils ui money calculations workspace-ui)
           else
             case "$MANUAL_PACKAGE" in
-              all) pkgs=(country-codes business-registries conditions template-conditions docx-utils ui cli) ;;
+              all) pkgs=(country-codes business-registries conditions template-conditions docx-utils ui money calculations workspace-ui cli) ;;
               *) pkgs=("$MANUAL_PACKAGE") ;;
             esac
           fi
@@ -345,6 +351,33 @@ jobs:
         with:
           name: npm-tarball-ui
           path: release-artifacts/ui/
+          retention-days: 1
+          if-no-files-found: error
+
+      - name: Upload money tarball
+        if: contains(fromJSON(steps.pack.outputs.packages), 'money')
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: npm-tarball-money
+          path: release-artifacts/money/
+          retention-days: 1
+          if-no-files-found: error
+
+      - name: Upload calculations tarball
+        if: contains(fromJSON(steps.pack.outputs.packages), 'calculations')
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: npm-tarball-calculations
+          path: release-artifacts/calculations/
+          retention-days: 1
+          if-no-files-found: error
+
+      - name: Upload workspace-ui tarball
+        if: contains(fromJSON(steps.pack.outputs.packages), 'workspace-ui')
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: npm-tarball-workspace-ui
+          path: release-artifacts/workspace-ui/
           retention-days: 1
           if-no-files-found: error
 

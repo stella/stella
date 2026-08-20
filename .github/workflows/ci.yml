@@ -851,13 +851,17 @@ jobs:
 
       # Nothing in ordinary development resolves a package the way an install
       # does: in-repo consumers read `exports` pointing at ./src. This runs the
-      # real publish path for the design system — build, prepare-publish,
-      # pack — then resolves and imports every declared subpath from the built
-      # dist, so a missing build entry or an unshipped file fails here rather
-      # than in a consumer's install.
+      # real publish path for each source-exported package — build,
+      # prepare-publish, pack — then resolves and imports every declared
+      # subpath from the built dist, so a missing build entry or an unshipped
+      # file fails here rather than after publication.
       - name: Published export map guard
         if: needs.ci-plan.outputs.package_checks_required == 'true'
-        run: bun scripts/check-published-exports.ts packages/ui
+        run: |
+          bun scripts/check-published-exports.ts packages/ui
+          bun scripts/check-published-exports.ts packages/money
+          bun scripts/check-published-exports.ts packages/calculations
+          bun scripts/check-published-exports.ts packages/workspace-ui
 
       # Release ordering is a safety property. This test has no workspace
       # dependencies, so it remains runnable when a PR changes only workflows
