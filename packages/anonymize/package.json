@@ -74,6 +74,10 @@
   },
   "homepage": "https://github.com/stella/anonymize",
   "license": "Apache-2.0",
+  "engines": {
+    "bun": ">=1.4.0",
+    "node": ">=20"
+  },
   "scripts": {
     "build": "bun run build:native-wasm && tsdown && bun scripts/build-native-node.mjs && bun run build:wasm-assets",
     "prepublishOnly": "bun run build",
@@ -86,6 +90,7 @@
     "perf:native-default:summary": "ANONYMIZE_NATIVE_DEFAULT_SDK_PERF_OUTPUT=summary bun scripts/native-default-sdk-perf.mjs",
     "check:v1-native": "bun scripts/native-v1-readiness.mjs",
     "check:v1-native:full": "ANONYMIZE_V1_READINESS_MODE=full bun scripts/native-v1-readiness.mjs",
+    "check:native-install-footprint": "node scripts/check-native-install-footprint.mjs",
     "smoke:dist": "bun scripts/dist-smoke.mjs",
     "build:native-wasm": "node scripts/build-native-wasm.mjs",
     "build:wasm-assets": "node scripts/build-native-wasm-assets.mjs",
@@ -105,7 +110,6 @@
     }
   },
   "optionalDependencies": {
-    "@stll/anonymize-wasm": "2.7.8",
     "@stll/anonymize-darwin-arm64": "2.7.8",
     "@stll/anonymize-darwin-x64": "2.7.8",
     "@stll/anonymize-linux-arm64-gnu": "2.7.8",

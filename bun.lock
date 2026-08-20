@@ -40,7 +40,6 @@
         "@stll/anonymize-darwin-x64": "2.7.8",
         "@stll/anonymize-linux-arm64-gnu": "2.7.8",
         "@stll/anonymize-linux-x64-gnu": "2.7.8",
-        "@stll/anonymize-wasm": "2.7.8",
         "@stll/anonymize-win32-x64-msvc": "2.7.8",
       },
       "peerDependencies": {

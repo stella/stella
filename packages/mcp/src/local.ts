@@ -6,7 +6,6 @@ import {
   type NativeTextReplacement,
   type PreparedNativePipeline,
 } from "@stll/anonymize";
-import { preloadNativeBinding } from "@stll/anonymize/native-runtime";
 import {
   AnonymizeSurfaceError,
   classifyToEnvelope,
@@ -793,11 +792,6 @@ export class LocalAnonymizeService {
     }
     this.#activeOperations += 1;
     try {
-      // Count the operation before the asynchronous preload so close() cannot
-      // pass its drain barrier while this call is waiting for the binding.
-      // The preload installs wasm under Bun before any inline native load in
-      // the docx or pdf package; it is a no-op on Node.
-      await preloadNativeBinding();
       return await operation();
     } finally {
       this.#activeOperations -= 1;
@@ -1492,7 +1486,6 @@ const guard = async (
 const capabilitiesResult = async (
   service: LocalAnonymizeService,
 ): Promise<CallToolResult> => {
-  await preloadNativeBinding();
   const value = {
     capabilityManifest: CAPABILITY_MANIFEST,
     runtimeVersion: nativeNodeSurface.native_package_version(),
@@ -1555,8 +1548,8 @@ export const createAnonymizeMcpServer = (
   service: LocalAnonymizeService,
 ): McpServer => {
   // Synchronous by contract (public factory). The server version comes from the
-  // package manifest, not a native call, so construction touches no binding; the
-  // wasm binding is preloaded lazily on the first operation (see `#runOperation`).
+  // package manifest, not a native call, so construction touches no binding.
+  // Operations that need the native runtime load its platform N-API package.
   const server = new McpServer(
     {
       name: "stella-anonymize-local",

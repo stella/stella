@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import process from "node:process";
 
@@ -11,7 +11,6 @@ const rootPackage = readJson(join(ROOT_PACKAGE, "package.json"));
 const releaseWorkflow = readFileSync(".github/workflows/release.yml", "utf8");
 const packlistTool = readFileSync(".github/tools/check-packlist.mjs", "utf8");
 const sidecars = discoverSidecars();
-const nestedRuntimeVariants = discoverNestedRuntimeVariants();
 
 let failed = false;
 
@@ -19,10 +18,9 @@ if (sidecars.length === 0) {
   fail("No native sidecar packages found");
 }
 
-const expectedOptionalDependencies = Object.fromEntries([
-  ...sidecars.map((sidecar) => [sidecar.packageJson.name, rootPackage.version]),
-  ...nestedRuntimeVariants.map((variant) => [variant.name, variant.version]),
-]);
+const expectedOptionalDependencies = Object.fromEntries(
+  sidecars.map((sidecar) => [sidecar.packageJson.name, rootPackage.version]),
+);
 
 assertExactObject(
   rootPackage.optionalDependencies ?? {},
@@ -58,15 +56,6 @@ function discoverSidecars() {
       };
     })
     .sort((left, right) => left.directory.localeCompare(right.directory));
-}
-
-function discoverNestedRuntimeVariants() {
-  return readdirSync(ROOT_PACKAGE, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => join(ROOT_PACKAGE, entry.name, "package.json"))
-    .filter((packagePath) => existsSync(packagePath))
-    .map((packagePath) => readJson(packagePath))
-    .sort((left, right) => left.name.localeCompare(right.name));
 }
 
 function assertSidecarPackage(sidecar) {

@@ -378,7 +378,9 @@ jobs:
         run: bun run check:exports
       - name: Verify package tarballs
         run: node .github/tools/check-packlist.mjs
-      - name: Smoke test built artifact
+      - name: Enforce native install footprint
+        run: bun run --cwd packages/anonymize check:native-install-footprint
+      - name: Smoke test native addon under Bun
         run: bun run --cwd packages/anonymize smoke:dist
       - name: Smoke test wasm binding + package entry across runtimes
         run: bun run --cwd packages/anonymize smoke:wasm-runtimes

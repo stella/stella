@@ -26,6 +26,7 @@ import {
   redact_text_stream_json as redactTextStreamJsonWithBinding,
   summary_diagnostics_json as summaryDiagnosticsJsonWithBinding,
 } from "./native";
+import { assertSupportedBunRuntime } from "./bun-version";
 
 export * from "./native";
 export {
@@ -118,11 +119,8 @@ const defaultNativePipelineInflightCache = new WeakMap<
 export { DEFAULT_NATIVE_PIPELINE_CONFIG } from "./native-default-config";
 
 /**
- * A binding installed by the runtime layer to override the NAPI loader. Used to
- * route every `loadNativeAnonymizeBinding()` caller (including the docx and pdf
- * packages, which load the binding inline) to the portable wasm binding under
- * Bun, where the NAPI addon cannot run. Undefined on Node, so the NAPI path is
- * unaffected. See `native-runtime.ts` (`preloadNativeBinding`).
+ * An explicit binding override for embedded runtimes and tests. Undefined by
+ * default, so Node.js and Bun load their platform N-API package.
  */
 let nativeBindingOverride: NativeAnonymizeBinding | undefined;
 
@@ -135,6 +133,7 @@ export const setNativeBindingOverride = (
 export const loadNativeAnonymizeBinding = (
   options: LoadNativeBindingOptions = {},
 ): NativeAnonymizeBinding => {
+  assertSupportedBunRuntime();
   if (nativeBindingOverride !== undefined) {
     if (options.expectedVersion !== undefined) {
       assertNativeBindingVersion({

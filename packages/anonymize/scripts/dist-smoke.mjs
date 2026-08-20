@@ -17,6 +17,9 @@ import {
   loadNativeAnonymizeBinding,
 } from "../dist/native-node.mjs";
 
+if (typeof globalThis.Bun === "undefined") {
+  throw new Error("dist native smoke must run under Bun");
+}
 if (typeof createNativeAnonymizerFromPackage !== "function") {
   throw new TypeError("dist native entrypoint is missing its package loader");
 }
@@ -46,6 +49,12 @@ if (
   CAPABILITY_MANIFEST.entities.length === 0
 ) {
   throw new TypeError("dist capability manifest is missing or invalid");
+}
+
+const binding = loadNativeAnonymizeBinding();
+const nativePackageVersion = binding.nativePackageVersion();
+if (nativePackageVersion.length === 0) {
+  throw new Error("native binding did not report its package version");
 }
 
 const nativePipeline = createNativePipelineFromDefaultPackage();
@@ -92,6 +101,8 @@ if (lifecycleSession.inspect().status !== "deleted") {
 console.log(
   JSON.stringify({
     event: "dist-smoke",
+    javascriptRuntime: `Bun ${globalThis.Bun.version}`,
+    nativePackageVersion,
     ok: true,
     nativeEntityCount: nativeResult.resolvedEntities.length,
     sessionMappingCount: session.mappingCount(),

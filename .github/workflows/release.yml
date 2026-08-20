@@ -223,6 +223,9 @@ jobs:
           # the wasm32-unknown-unknown build on the platform matrix runners.
           STELLA_ANONYMIZE_SKIP_WASM_BUILD: "1"
 
+      - name: Enforce native install footprint
+        run: node packages/anonymize/scripts/check-native-install-footprint.mjs "${{ matrix.package }}"
+
       - name: Read package metadata
         id: package
         working-directory: ${{ matrix.package }}

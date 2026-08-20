@@ -35,7 +35,6 @@ import {
   exitCodeForError,
   isAnonymizeSurfaceError,
 } from "@stll/anonymize/agent-surface";
-import { preloadNativeBinding } from "@stll/anonymize/native-runtime";
 
 import type { CliOptions } from "./args";
 import {
@@ -1004,9 +1003,6 @@ const dispatch = async (engine: CliEngine): Promise<void> => {
  */
 export const runCli = async (engine: CliEngine): Promise<void> => {
   try {
-    // Install the runtime binding (wasm under Bun) before any native call.
-    // A no-op on Node, where the CLI ships to run.
-    await preloadNativeBinding();
     await dispatch(engine);
   } catch (err) {
     const surface = isAnonymizeSurfaceError(err) ? err : mapFsError(err);

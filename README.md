@@ -236,10 +236,11 @@ package graph and parity boundaries.
 | [`crates/document-rules-core`](crates/document-rules-core/README.md) | Structured document rule engine                     |
 
 Platform-specific Node.js binary packages are installed automatically as
-optional dependencies of `@stll/anonymize`. A clean macOS arm64 npm install of
-2.7.8 uses about 106 MB on disk: it includes the prepared language data, the
-native binary used by Node.js, and the WASM fallback used by Bun. Install the
-browser package separately only when you need the browser runtime.
+optional dependencies of `@stll/anonymize`. Node.js and Bun use the same native
+binding; Bun 1.4 or newer is required. A clean macOS arm64 npm install from the
+packed artifacts uses about 63 MiB on disk; CI caps the packed SDK plus every
+native sidecar at 70 MiB. Install `@stll/anonymize-wasm` separately only when
+you need the browser runtime.
 
 ## Benchmarks
 
