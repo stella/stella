@@ -238,10 +238,9 @@ export const ResourceCalendar = ({
 
 const RESOURCE_CALENDAR_ENTRY_TONES = {
   accent: "bg-primary text-primary-foreground",
-  destructive:
-    "border-destructive/32 bg-destructive/12 text-destructive border",
+  destructive: "border-destructive/32 bg-destructive/12 text-foreground border",
   neutral: "border-border bg-muted text-foreground border",
-  warning: "border-warning/30 bg-warning/15 text-warning-foreground border",
+  warning: "border-warning/30 bg-warning/15 text-foreground border",
 } as const satisfies Record<ResourceCalendarEntryTone, string>;
 
 const ResourceCalendarEntryView = ({

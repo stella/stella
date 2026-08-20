@@ -110,8 +110,8 @@ describe("ResourceCalendar", () => {
     expect(markup.match(/block-size:50%/gu)).toHaveLength(2);
     expect(markup.match(/role="gridcell"/gu)).toHaveLength(columns.length);
     expect(markup.match(/<button/gu)).toHaveLength(2);
-    expect(markup).toContain("bg-warning/15 text-warning-foreground");
-    expect(markup).toContain("bg-destructive/12 text-destructive");
+    expect(markup).toContain("bg-warning/15 text-foreground");
+    expect(markup).toContain("bg-destructive/12 text-foreground");
   });
 
   test("rejects entries whose resource is absent", () => {
