@@ -11,7 +11,11 @@ declare module "@atlaskit/pragmatic-drag-and-drop/dist/cjs/entry-point/combine.j
 }
 
 declare module "@atlaskit/pragmatic-drag-and-drop/dist/cjs/entry-point/element/adapter.js" {
-  export { draggable } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
+  export {
+    draggable,
+    dropTargetForElements,
+    monitorForElements,
+  } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
 }
 
 declare module "@atlaskit/pragmatic-drag-and-drop/dist/cjs/entry-point/element/center-under-pointer.js" {

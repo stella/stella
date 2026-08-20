@@ -3,8 +3,7 @@ import type { ComponentProps, ReactNode } from "react";
 
 import { extractClosestEdge } from "@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge";
 import type { Edge } from "@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge";
-import { monitorForElements } from "@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter";
-import { combine } from "@atlaskit/pragmatic-drag-and-drop/utils/combine";
+import { combine } from "@atlaskit/pragmatic-drag-and-drop/combine";
 import {
   useMutation,
   useInfiniteQuery,
@@ -21,6 +20,7 @@ import {
   getKanbanGroups,
   isKanbanGroupingRenderable,
   KANBAN_BOARD_AUTO_SCROLL_SOURCES,
+  monitorKanbanDrags,
   registerKanbanBoardAutoScroll,
   resolveKanbanGroupOptions,
 } from "@stll/ui/kanban";
@@ -720,7 +720,7 @@ const KanbanBoard = ({ children, onReorderColumn }: KanbanBoardProps) => {
         element: el,
         sources: KANBAN_BOARD_AUTO_SCROLL_SOURCES.elementsAndExternal,
       }),
-      monitorForElements({
+      monitorKanbanDrags({
         canMonitor: ({ source }) => source.data["type"] === COLUMN_DRAG_TYPE,
         onDragStart: () => {
           lastPosition.current = null;

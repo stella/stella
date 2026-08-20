@@ -1,7 +1,11 @@
 import { autoScrollForElements } from "@atlaskit/pragmatic-drag-and-drop-auto-scroll/dist/cjs/entry-point/element.js";
 import { autoScrollForExternal } from "@atlaskit/pragmatic-drag-and-drop-auto-scroll/dist/cjs/entry-point/external.js";
 import { combine } from "@atlaskit/pragmatic-drag-and-drop/dist/cjs/entry-point/combine.js";
-import { draggable } from "@atlaskit/pragmatic-drag-and-drop/dist/cjs/entry-point/element/adapter.js";
+import {
+  draggable,
+  dropTargetForElements,
+  monitorForElements,
+} from "@atlaskit/pragmatic-drag-and-drop/dist/cjs/entry-point/element/adapter.js";
 import { centerUnderPointer } from "@atlaskit/pragmatic-drag-and-drop/dist/cjs/entry-point/element/center-under-pointer.js";
 import { setCustomNativeDragPreview } from "@atlaskit/pragmatic-drag-and-drop/dist/cjs/entry-point/element/set-custom-native-drag-preview.js";
 
@@ -17,6 +21,22 @@ export type RegisterKanbanCardDragOptions = {
 };
 
 /**
+ * Register every kanban element against the package's shared drag adapter.
+ *
+ * Drag sources, drop targets, and monitors must use these exports together.
+ * Mixing module formats creates separate adapter registries in some bundlers.
+ */
+export const registerKanbanDraggable: typeof draggable = (options) =>
+  draggable(options);
+
+export const registerKanbanDropTarget: typeof dropTargetForElements = (
+  options,
+) => dropTargetForElements(options);
+
+export const monitorKanbanDrags: typeof monitorForElements = (options) =>
+  monitorForElements(options);
+
+/**
  * Register the standard kanban card drag source and native preview.
  *
  * Movement remains with the caller: the package does not inspect the drag data
@@ -30,7 +50,7 @@ export const registerKanbanCardDrag = ({
   onDragStart,
   onDrop,
 }: RegisterKanbanCardDragOptions): (() => void) =>
-  draggable({
+  registerKanbanDraggable({
     element,
     getInitialData,
     ...(canDrag === undefined ? {} : { canDrag }),
