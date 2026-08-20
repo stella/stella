@@ -21,18 +21,24 @@ import {
 import type { EmptyAst } from "@/api/lib/legal-search/document-types";
 import type { LegislationReadDb } from "@/api/lib/legislation-public-read-db";
 
-type LegislationTextMode = "always" | "fallback";
+const LEGISLATION_TEXT_MODE = {
+  ALWAYS: "always",
+  FALLBACK: "fallback",
+} as const;
+
+type LegislationTextMode =
+  (typeof LEGISLATION_TEXT_MODE)[keyof typeof LEGISLATION_TEXT_MODE];
 
 type ReadLegislationOptions = {
   textMode: LegislationTextMode;
 };
 
 const DEFAULT_READ_OPTIONS = {
-  textMode: "always",
+  textMode: LEGISLATION_TEXT_MODE.ALWAYS,
 } as const satisfies ReadLegislationOptions;
 
 const PUBLIC_READ_OPTIONS = {
-  textMode: "fallback",
+  textMode: LEGISLATION_TEXT_MODE.FALLBACK,
 } as const satisfies ReadLegislationOptions;
 
 /**
@@ -112,7 +118,10 @@ export const readLegislationHandler = async (
       : parsePersistedCorpusAst(pgAst);
 
   let fulltext: string | null = null;
-  if (options.textMode === "always" || !hasUsableAst(documentAst)) {
+  if (
+    options.textMode === LEGISLATION_TEXT_MODE.ALWAYS ||
+    !hasUsableAst(documentAst)
+  ) {
     fulltext = pgText;
     if (corpus && textS3Key !== null) {
       fulltext = await readCorpusPayloadOrFallback({
