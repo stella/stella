@@ -19,7 +19,8 @@ export const workspacePropertyTypes = [
 
 export type WorkspacePropertyType = (typeof workspacePropertyTypes)[number];
 
-export type WorkspacePropertyIdentifier = string | number;
+export type WorkspaceIdentifier = string | number;
+export type WorkspacePropertyIdentifier = WorkspaceIdentifier;
 
 export type WorkspacePropertyOption<
   OptionId extends WorkspacePropertyIdentifier = WorkspacePropertyIdentifier,
