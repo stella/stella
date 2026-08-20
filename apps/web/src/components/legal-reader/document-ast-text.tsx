@@ -35,8 +35,29 @@ export const rangesForPiece = (
   return normalizeOptionalArray(ranges);
 };
 
+/**
+ * A span of a piece's plain text that a reader wraps in its own element: a
+ * link to a cited decision, for instance. Offsets index `plainText`, the
+ * same axis as search ranges; anchors within one piece must not overlap.
+ */
+export type TextAnchor = {
+  end: number;
+  key: string;
+  render: (children: ReactNode) => ReactNode;
+  start: number;
+};
+
+export const anchorsForPiece = (
+  anchorsByPieceId: Record<string, TextAnchor[]> | undefined,
+  pieceId: string,
+): TextAnchor[] =>
+  anchorsByPieceId === undefined
+    ? []
+    : normalizeOptionalArray(anchorsByPieceId[pieceId]);
+
 type HighlightContext = {
   activeMatchIndex: number;
+  anchors: TextAnchor[];
   pieceId: string;
   ranges: SearchMatchRange[];
 };
@@ -91,16 +112,14 @@ export const getTableCellPieceId = ({
   rowIndex: number;
 }): string => `table:${blockId}:${rowIndex}:${columnIndex}`;
 
-const renderTextSegment = ({
+const renderHighlightedSlice = ({
   activeMatchIndex,
-  anonymized,
   pieceId,
   ranges,
   segmentStart,
   text,
 }: {
   activeMatchIndex: number;
-  anonymized?: boolean | undefined;
   pieceId: string;
   ranges: SearchMatchRange[];
   segmentStart: number;
@@ -112,13 +131,6 @@ const renderTextSegment = ({
   );
 
   if (relevantRanges.length === 0) {
-    if (anonymized) {
-      return (
-        <span className="bg-muted/60 text-muted-foreground rounded-sm px-0.5">
-          [{text}]
-        </span>
-      );
-    }
     return text;
   }
 
@@ -155,15 +167,88 @@ const renderTextSegment = ({
     children.push(text.slice(cursor - segmentStart));
   }
 
+  return children;
+};
+
+/**
+ * One text node's worth of plain text: split at anchor boundaries, each
+ * slice highlighted on its own, anchored slices wrapped by their anchor.
+ * A search match crossing an anchor boundary is drawn as two marks that
+ * share a match index, so the find bar still lands on it.
+ */
+const renderTextSegment = ({
+  activeMatchIndex,
+  anchors,
+  anonymized,
+  pieceId,
+  ranges,
+  segmentStart,
+  text,
+}: {
+  activeMatchIndex: number;
+  anchors: TextAnchor[];
+  anonymized?: boolean | undefined;
+  pieceId: string;
+  ranges: SearchMatchRange[];
+  segmentStart: number;
+  text: string;
+}): SynchronousNode => {
+  const segmentEnd = segmentStart + text.length;
+  const relevantAnchors = anchors.filter(
+    (anchor) => anchor.end > segmentStart && anchor.start < segmentEnd,
+  );
+
+  const highlight = (sliceStart: number, sliceEnd: number) =>
+    renderHighlightedSlice({
+      activeMatchIndex,
+      pieceId,
+      ranges,
+      segmentStart: sliceStart,
+      text: text.slice(sliceStart - segmentStart, sliceEnd - segmentStart),
+    });
+
+  let content: SynchronousNode;
+  if (relevantAnchors.length === 0) {
+    content = highlight(segmentStart, segmentEnd);
+  } else {
+    const children: ReactNode[] = [];
+    let cursor = segmentStart;
+    for (const anchor of relevantAnchors) {
+      const anchorStart = Math.max(anchor.start, segmentStart);
+      const anchorEnd = Math.min(anchor.end, segmentEnd);
+      if (anchorStart > cursor) {
+        children.push(
+          <Fragment key={`plain-${String(cursor)}`}>
+            {highlight(cursor, anchorStart)}
+          </Fragment>,
+        );
+      }
+      children.push(
+        <Fragment key={`${anchor.key}-${String(anchorStart)}`}>
+          {anchor.render(highlight(anchorStart, anchorEnd))}
+        </Fragment>,
+      );
+      cursor = anchorEnd;
+    }
+    if (cursor < segmentEnd) {
+      children.push(
+        <Fragment key={`plain-${String(cursor)}`}>
+          {highlight(cursor, segmentEnd)}
+        </Fragment>,
+      );
+    }
+    content = children;
+  }
+
   if (anonymized) {
     return (
       <span className="bg-muted/60 text-muted-foreground rounded-sm px-0.5">
-        [{children}]
+        [{content}]
       </span>
     );
   }
 
-  return children;
+  return content;
 };
 
 const renderInline = ({
@@ -185,6 +270,7 @@ const renderInline = ({
       <Fragment key={key}>
         {renderTextSegment({
           activeMatchIndex: context.activeMatchIndex,
+          anchors: context.anchors,
           anonymized: node.anonymized,
           pieceId: context.pieceId,
           ranges: context.ranges,
@@ -220,15 +306,21 @@ const renderInline = ({
   }
 
   const safeHref = sanitizeHref(node.href);
+  if (!safeHref) {
+    return (
+      <Fragment key={key}>
+        {renderInlineChildren({ children: node.children, context, offset })}
+      </Fragment>
+    );
+  }
+
+  // Inside a source link the source wins: an anchor nested in an anchor is
+  // invalid HTML and sends the click to whichever element the browser picks.
   const children = renderInlineChildren({
     children: node.children,
-    context,
+    context: { ...context, anchors: [] },
     offset,
   });
-
-  if (!safeHref) {
-    return <Fragment key={key}>{children}</Fragment>;
-  }
 
   return (
     <a
@@ -263,19 +355,24 @@ const renderInlineChildren = ({
   return renderedChildren;
 };
 
+const NO_ANCHORS: TextAnchor[] = [];
+
 export const InlineContent = ({
   activeMatchIndex,
+  anchors = NO_ANCHORS,
   inlines,
   pieceId,
   ranges,
 }: {
   activeMatchIndex: number;
+  anchors?: TextAnchor[] | undefined;
   inlines: Inline[];
   pieceId: string;
   ranges: SearchMatchRange[];
 }) => {
   const offset: OffsetRef = { value: 0 };
   const context: HighlightContext = {
+    anchors,
     pieceId,
     ranges,
     activeMatchIndex,
@@ -298,7 +395,7 @@ export const HighlightedText = ({
   text: string;
 }) => (
   <span className={className}>
-    {renderTextSegment({
+    {renderHighlightedSlice({
       activeMatchIndex,
       pieceId,
       ranges,
@@ -394,11 +491,13 @@ const BlockPermalink = ({ anchorId }: { anchorId: string }) => {
 
 export const BlockRenderer = ({
   activeMatchIndex,
+  anchorsByPieceId,
   block,
   rangesByPieceId,
   variant,
 }: {
   activeMatchIndex: number;
+  anchorsByPieceId?: Record<string, TextAnchor[]> | undefined;
   block: Block;
   rangesByPieceId: Record<string, SearchMatchRange[]>;
   variant: ReaderVariant;
@@ -417,6 +516,7 @@ export const BlockRenderer = ({
         <BlockPermalink anchorId={block.anchorId} />
         <InlineContent
           activeMatchIndex={activeMatchIndex}
+          anchors={anchorsForPiece(anchorsByPieceId, block.id)}
           inlines={block.inlines}
           pieceId={block.id}
           ranges={rangesForPiece(rangesByPieceId, block.id)}
@@ -475,6 +575,7 @@ export const BlockRenderer = ({
         )}
         <InlineContent
           activeMatchIndex={activeMatchIndex}
+          anchors={anchorsForPiece(anchorsByPieceId, block.id)}
           inlines={block.inlines}
           pieceId={block.id}
           ranges={rangesForPiece(rangesByPieceId, block.id)}

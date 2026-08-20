@@ -301,6 +301,22 @@
       }
     },
     "analyzing": "Analyzuji...",
+    "citation": {
+      "citedSummary": "{count, plural, =0 {Necitováno} one {Citováno jednou} few {Citováno #krát} other {Citováno #krát}}",
+      "decisionCount": "{count, plural, =0 {Žádná rozhodnutí} one {# rozhodnutí} few {# rozhodnutí} other {# rozhodnutí}}",
+      "lastNegative": "poslední negativní citace v roce {year}",
+      "negativeCount": "{count, plural, one {# negativní} few {# negativní} many {# negativních} other {# negativních}}",
+      "stripLabel": "Citace podle let",
+      "treatment": {
+        "negative": "Negativní",
+        "neutral": "Zmíněno",
+        "positive": "Potvrzeno",
+        "supportive": "Následováno",
+        "unclassified": "Neklasifikováno"
+      },
+      "unresolved": "Nepřiřazeno k rozhodnutí",
+      "yearTitle": "{year}: {count, plural, one {# citace} few {# citace} other {# citací}}"
+    },
     "columns": {
       "caseNumber": "Spisová značka",
       "court": "Soud"

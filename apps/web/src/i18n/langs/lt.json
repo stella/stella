@@ -301,6 +301,22 @@
       }
     },
     "analyzing": "Analizuojama...",
+    "citation": {
+      "citedSummary": "{count, plural, =0 {Necituota} one {Cituota kartą} few {Cituota # kartus} many {Cituota # karto} other {Cituota # kartų}}",
+      "decisionCount": "{count, plural, =0 {Sprendimų nėra} one {# sprendimas} few {# sprendimai} many {# sprendimo} other {# sprendimų}}",
+      "lastNegative": "paskutinė neigiama citata {year} m.",
+      "negativeCount": "{count, plural, one {# neigiama} few {# neigiamos} many {# neigiamos} other {# neigiamų}}",
+      "stripLabel": "Citatos pagal metus",
+      "treatment": {
+        "negative": "Neigiamas",
+        "neutral": "Paminėtas",
+        "positive": "Patvirtintas",
+        "supportive": "Sekama",
+        "unclassified": "Neklasifikuota"
+      },
+      "unresolved": "Nesusieta su sprendimu",
+      "yearTitle": "{year}: {count, plural, one {# citata} few {# citatos} many {# citatos} other {# citatų}}"
+    },
     "columns": {
       "caseNumber": "Bylos numeris",
       "court": "Teismas"

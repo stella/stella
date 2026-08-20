@@ -301,6 +301,22 @@
       }
     },
     "analyzing": "Analyse läuft...",
+    "citation": {
+      "citedSummary": "{count, plural, =0 {Nicht zitiert} one {Einmal zitiert} other {#-mal zitiert}}",
+      "decisionCount": "{count, plural, =0 {Keine Entscheidungen} one {# Entscheidung} other {# Entscheidungen}}",
+      "lastNegative": "zuletzt ablehnend zitiert {year}",
+      "negativeCount": "{count, plural, one {# ablehnend} other {# ablehnend}}",
+      "stripLabel": "Zitate nach Jahr",
+      "treatment": {
+        "negative": "Ablehnend",
+        "neutral": "Erwähnt",
+        "positive": "Gebilligt",
+        "supportive": "Gefolgt",
+        "unclassified": "Nicht eingeordnet"
+      },
+      "unresolved": "Keiner Entscheidung zugeordnet",
+      "yearTitle": "{year}: {count, plural, one {# Zitat} other {# Zitate}}"
+    },
     "columns": {
       "caseNumber": "Aktenzeichen",
       "court": "Gericht"

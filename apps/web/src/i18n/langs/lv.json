@@ -301,6 +301,22 @@
       }
     },
     "analyzing": "Analizē...",
+    "citation": {
+      "citedSummary": "{count, plural, =0 {Nav citēts} zero {Citēts # reižu} one {Citēts vienu reizi} other {Citēts # reizes}}",
+      "decisionCount": "{count, plural, =0 {Nav nolēmumu} zero {# nolēmumu} one {# nolēmums} other {# nolēmumi}}",
+      "lastNegative": "pēdējā negatīvā atsauce {year}. gadā",
+      "negativeCount": "{count, plural, zero {# negatīvu} one {# negatīva} other {# negatīvas}}",
+      "stripLabel": "Atsauces pa gadiem",
+      "treatment": {
+        "negative": "Negatīvs",
+        "neutral": "Pieminēts",
+        "positive": "Apstiprināts",
+        "supportive": "Sekots",
+        "unclassified": "Neklasificēts"
+      },
+      "unresolved": "Nav piesaistīts nolēmumam",
+      "yearTitle": "{year}: {count, plural, zero {# atsauču} one {# atsauce} other {# atsauces}}"
+    },
     "columns": {
       "caseNumber": "Lietas numurs",
       "court": "Tiesa"

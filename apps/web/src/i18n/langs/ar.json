@@ -301,6 +301,22 @@
       }
     },
     "analyzing": "جارٍ التحليل...",
+    "citation": {
+      "citedSummary": "{count, plural, =0 {لم يُستشهد به} zero {لم يُستشهد به} one {استُشهد به مرة واحدة} two {استُشهد به مرتين} few {استُشهد به # مرات} many {استُشهد به # مرة} other {استُشهد به # مرة}}",
+      "decisionCount": "{count, plural, =0 {لا توجد أحكام} zero {لا توجد أحكام} one {حكم واحد} two {حكمان} few {# أحكام} many {# حكمًا} other {# حكم}}",
+      "lastNegative": "آخر استشهاد سلبي في {year}",
+      "negativeCount": "{count, plural, zero {لا سلبية} one {سلبي واحد} two {سلبيان} few {# سلبية} many {# سلبيًا} other {# سلبي}}",
+      "stripLabel": "الاستشهادات حسب السنة",
+      "treatment": {
+        "negative": "سلبي",
+        "neutral": "مذكور",
+        "positive": "مُقرّ",
+        "supportive": "متَّبع",
+        "unclassified": "غير مصنَّف"
+      },
+      "unresolved": "غير مرتبط بحكم",
+      "yearTitle": "{year}: {count, plural, zero {لا استشهادات} one {استشهاد واحد} two {استشهادان} few {# استشهادات} many {# استشهادًا} other {# استشهاد}}"
+    },
     "columns": {
       "caseNumber": "رقم القضية",
       "court": "المحكمة"
