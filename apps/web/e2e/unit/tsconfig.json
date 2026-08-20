@@ -1,7 +1,7 @@
 {
   "extends": "../../../../packages/typescript-config/base.json",
   "compilerOptions": {
-    "types": ["bun", "node"],
+    "types": ["bun-types", "node"],
     "tsBuildInfoFile": "${configDir}/.cache/tsbuildinfo.json"
   },
   "include": ["**/*.ts"],

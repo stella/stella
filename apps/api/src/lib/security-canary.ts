@@ -134,14 +134,16 @@ export const createSecurityCanaryAlertDeduplicator = ({
           redisConnection = null;
           throw error;
         });
-        await redisConnection;
         const reply = await withCommandTimeout({
-          command: client.send("EVAL", [
-            CLAIM_ALERT_SCRIPT,
-            "1",
-            ALERT_DEDUP_KEY,
-            String(ALERT_DEDUP_WINDOW_MS),
-          ]),
+          command: redisConnection.then(
+            async () =>
+              await client.send("EVAL", [
+                CLAIM_ALERT_SCRIPT,
+                "1",
+                ALERT_DEDUP_KEY,
+                String(ALERT_DEDUP_WINDOW_MS),
+              ]),
+          ),
           commandTimeoutMs,
           label: "security-canary-redis-command",
         });

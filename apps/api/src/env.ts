@@ -29,14 +29,16 @@ if (invariantViolation !== null) {
   panic(invariantViolation);
 }
 
-export const env = {
+const validatedEnv = {
   ...envDocumentProcessingWorker,
   ...envApi,
   EMAIL_PROVIDER: emailProvider,
 };
 
-// Prevent accidental mutation of env vars at runtime.
-// Must run AFTER createEnv has consumed process.env.
+// Bun owns process.env and may expose it through a runtime proxy. Freeze the
+// validated application boundary instead of mutating the runtime object.
 if (process.env.NODE_ENV === "production") {
-  Object.freeze(process.env);
+  Object.freeze(validatedEnv);
 }
+
+export const env = validatedEnv;

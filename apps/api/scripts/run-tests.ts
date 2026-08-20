@@ -7,6 +7,7 @@ import {
   readModuleMockMetadata,
   type ModuleMockTest,
 } from "../src/tests/module-mock-batching";
+import { maxRssBytesToMb } from "./resource-usage";
 import { partitionRunnerArguments, selectTestPaths } from "./test-path-filters";
 
 const PROPERTY_FLAG = "--property";
@@ -80,7 +81,6 @@ const MAX_LOGIC_BATCH_PEAK_RSS_MB = 2048;
 // before the 1 MB guest limit aborts it. Its dedicated process may peak above
 // the ordinary logic ceiling, but remains bounded below the hosted 4 GB limit.
 const MAX_HEAVY_LOGIC_BATCH_PEAK_RSS_MB = 3072;
-const BYTES_PER_MB = 1024 * 1024;
 
 const apiRoot = path.resolve(import.meta.dir, "..");
 
@@ -316,13 +316,10 @@ const runTests = async ({
 
   const usage = child.resourceUsage();
   if (usage) {
-    // getrusage semantics pass straight through Bun: ru_maxrss is bytes on
-    // macOS but kibibytes on Linux. Normalize before comparing, or the
-    // budget can never trip on the hosted runners.
-    const peakMb =
-      process.platform === "darwin"
-        ? Math.round(usage.maxRSS / BYTES_PER_MB)
-        : Math.round(usage.maxRSS / 1024);
+    // Bun exposes Subprocess.resourceUsage().maxRSS in bytes on every
+    // platform. Normalizing it as Linux getrusage kibibytes turns a 394 MB
+    // process into an impossible 403,796 MB reading under Bun 1.4.
+    const peakMb = maxRssBytesToMb(usage.maxRSS);
     console.log(
       `${executionMode} batch (${testFiles.length} files) peak RSS: ` +
         `${peakMb} MB (budget ${maxPeakRssMb} MB)`,

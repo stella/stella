@@ -1,7 +1,7 @@
 {
   "extends": "@stll/typescript-config/react-library.json",
   "compilerOptions": {
-    "types": ["vite/client"],
+    "types": ["bun-types", "vite/client"],
     "verbatimModuleSyntax": false,
     "paths": {
       "@/*": ["./src/*"],

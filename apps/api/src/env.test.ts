@@ -58,7 +58,7 @@ const bootApiEnvironment = (env: Record<string, string | undefined>) =>
     cmd: [
       process.execPath,
       "-e",
-      `await import(${JSON.stringify(envModuleUrl)});`,
+      `const { env } = await import(${JSON.stringify(envModuleUrl)}); console.log(String(Object.isFrozen(env)));`,
     ],
     cwd: repoRoot,
     env,
@@ -117,6 +117,7 @@ describe("API environment", () => {
     });
 
     expect(result.exitCode).toBe(0);
+    expect(result.stdout.toString().trim()).toBe("true");
   });
 
   test("rejects static credential placeholders for the env provider", () => {

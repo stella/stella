@@ -652,36 +652,12 @@ const OBJECT_READ_PRESIGN_TTL_SECONDS = 300;
 export const OBJECT_READ_TIMEOUT_MS = 5 * 60 * 1000;
 
 /**
- * Fetch an object body over a presigned URL.
+ * Fetch an object body over a presigned URL when the caller needs response
+ * metadata or real cancellation. Bun 1.4's native S3 body reads do not accept
+ * an AbortSignal, so bounded and signal-bearing reads retain this path.
  *
- * Every object read in this codebase goes through here rather than through
- * Bun's `S3Client.file(key).bytes()` / `.arrayBuffer()`. Up to and including
- * Bun 1.3.14, those calls never free the native buffer the HTTP thread
- * accumulates the body into: the handler receives the bytes with `.clone`
- * lifetime, JS gets its own copy, and the original allocation is stranded
- * (oven-sh/bun#29083, fixed by oven-sh/bun#29086 and #29923). Because the
- * leaked allocation is outside the JS heap it is invisible to heap snapshots
- * and survives a forced GC — only RSS moves — so any process that reads a
- * steady stream of objects grows by roughly the object size per read until it
- * is killed.
- *
- * Measured on linux/arm64, 4000 reads of a 256 KiB object at the corpus
- * indexing loop's read concurrency: the native call grew 48MB -> 1100MB and
- * never plateaued, while this path stayed flat.
- *
- * `no-native-s3-object-read` (tools/oxlint-rules) keeps new call sites off the
- * native reads, because a single missed one silently reintroduces the leak.
- *
- * TODO(bun-s3-native-read): once every runtime image is on a stable Bun
- * containing those fixes (the first stable AFTER 1.3.14 — they are not in
- * 1.3.14 itself), delete these helpers and the lint rule and go back to
- * `.bytes()` / `.arrayBuffer()`. The native path is zero-copy after the fix,
- * so it should then be faster than this one.
- *
- * The signed URL carries the caller's credentials in its query string, so it
- * is passed straight to `fetch` and never logged or stored. Unlike the native
- * calls, `fetch` honours an abort signal, so a read that outlives its ceiling
- * is genuinely cancelled rather than merely abandoned.
+ * The signed URL carries the caller's credentials in its query string. Pass
+ * it straight to `fetch`; never log or store it.
  */
 const fetchObject = async (
   client: S3Client,
@@ -838,7 +814,13 @@ export const readCorpusS3Range = async ({
   return bytes;
 };
 
-/** Read a documents-bucket object. See `fetchObject`. */
+/**
+ * Read a documents-bucket object with a hard deadline.
+ *
+ * Bun 1.4 fixes the native reader's retained-buffer bug, but its body reads do
+ * not yet accept an AbortSignal. Keep production reads on the cancellable
+ * transport until the native API can preserve this boundary's deadline.
+ */
 export const readS3ArrayBuffer = async (
   key: string,
   signal?: AbortSignal,

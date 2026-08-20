@@ -26,6 +26,7 @@ const TURBO_INSTALL_PATTERN =
   /\bbun\s+install\s+-g\s+turbo@(?<version>\d+\.\d+\.\d+)\b/gu;
 const TURBO_VERSION_PATTERN = /^(?<version>\d+\.\d+\.\d+)$/u;
 const BABEL_CORE_DEPENDENCY = "@babel/core";
+const BUN_TYPES_DEPENDENCY = "bun-types";
 const BABEL_MAJOR_PATTERN = /^[~^]?(?<major>\d+)\./u;
 const EXACT_PACKAGE_VERSION_PATTERN =
   /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/u;
@@ -605,6 +606,30 @@ const findFiles = (
   return files;
 };
 
+const validateBunTypeOwnership = (
+  workspacePath: string,
+  relativeWorkspacePath: string,
+  dependencyNames: ReadonlySet<string>,
+): WorkspaceIssue[] => {
+  if (dependencyNames.has(BUN_TYPES_DEPENDENCY)) {
+    return [];
+  }
+
+  return findFiles(
+    workspacePath,
+    (filePath) =>
+      path.basename(filePath).startsWith("tsconfig") &&
+      filePath.endsWith(".json"),
+  )
+    .filter((filePath) =>
+      readFileSync(filePath, "utf-8").includes(`"${BUN_TYPES_DEPENDENCY}"`),
+    )
+    .map((filePath) => ({
+      message: `${BUN_TYPES_DEPENDENCY} is named by this TypeScript project but is not declared in the workspace package.json`,
+      path: `${relativeWorkspacePath}/${path.relative(workspacePath, filePath)}`,
+    }));
+};
+
 const findTurboInstallPinFiles = (rootDir: string) => [
   ...findFiles(path.resolve(rootDir, "apps"), (filePath) =>
     filePath.endsWith("Dockerfile"),
@@ -702,6 +727,11 @@ export const validateWorkspaceRoot = (rootDir: string): WorkspaceIssue[] => {
       }
 
       issues.push(
+        ...validateBunTypeOwnership(
+          path.resolve(parentPath, entry.name),
+          relativePath,
+          dependencyNames,
+        ),
         ...validateCssImportOwnership(
           path.resolve(parentPath, entry.name),
           relativePath,

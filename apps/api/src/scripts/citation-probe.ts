@@ -324,10 +324,8 @@ const probeKey = async (
   jurisdiction: string,
   key: string,
 ): Promise<ProbedDoc> => {
-  // Presigned GET rather than `s3.file(key).bytes()`: the native read strands
-  // its download buffer on every call (see `no-native-s3-object-read`). This
-  // probe is short-lived enough not to care, but reading the same way as the
-  // rest of the codebase keeps one path to revert when the runtime is fixed.
+  // Keep the presigned fetch here because the probe requires a hard request
+  // timeout; Bun's native S3 body reads do not yet accept an AbortSignal.
   const response = await fetchWithTimeout(s3.presign(key, { expiresIn: 300 }), {
     timeoutMs: 30_000,
   });

@@ -6,6 +6,9 @@ minimumReleaseAge = 432_000
 minimumReleaseAgeExcludes = [
   # Temporary third-party exceptions must carry the exact instant at which
   # the normal five-day quarantine admits the currently pinned release.
+  # bun-types 1.4.0 keeps the compiler contract aligned with Bun 1.4.0.
+  # Remove this exception once the normal quarantine admits it.
+  "bun-types", # quarantine-expires: 2026-08-25T14:11:33.785Z
   # anydoc 0.1.9 bounds resource use for adversarial PDFs (pdf-inspector
   # 1.14.2); waived early to unblock the PDF extraction work. Listed with its
   # napi platform subpackages (see the @stll/stdnum note below).

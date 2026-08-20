@@ -38,6 +38,6 @@
   "devDependencies": {
     "@stll/skills": "workspace:*",
     "@stll/typescript-config": "workspace:*",
-    "@types/bun": "catalog:"
+    "bun-types": "catalog:"
   }
 }

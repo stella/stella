@@ -32,6 +32,6 @@
     "@tanstack/ai-gemini": "catalog:",
     "@tanstack/ai-mistral": "catalog:",
     "@tanstack/ai-openrouter": "catalog:",
-    "@types/bun": "catalog:"
+    "bun-types": "catalog:"
   }
 }

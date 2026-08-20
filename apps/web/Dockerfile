@@ -1,11 +1,11 @@
-# Pin to digest for supply-chain integrity (oven/bun:1.3.14-slim).
+# Pin to digest for supply-chain integrity (oven/bun:1.4.0-slim).
 # Run the JavaScript toolchain on the native build host. Cross-platform
 # installs select the target's optional native packages explicitly; the final
 # image alone belongs to the deployment target.
-FROM --platform=$BUILDPLATFORM oven/bun:1.3.14-slim@sha256:d56a2534ffd262e92c12fd3249d3924d296d97086da773f821d7d0477435ea04 AS build-base
+FROM --platform=$BUILDPLATFORM oven/bun:1.4.0-slim@sha256:e0ee68d16ccb9927bf02aa7dd8fd4bf3369ee6d46da04faa72b05ce8bfd135f6 AS build-base
 WORKDIR /app
 
-FROM --platform=$TARGETPLATFORM oven/bun:1.3.14-slim@sha256:d56a2534ffd262e92c12fd3249d3924d296d97086da773f821d7d0477435ea04 AS runtime-base
+FROM --platform=$TARGETPLATFORM oven/bun:1.4.0-slim@sha256:e0ee68d16ccb9927bf02aa7dd8fd4bf3369ee6d46da04faa72b05ce8bfd135f6 AS runtime-base
 WORKDIR /app
 
 FROM build-base AS install-inputs

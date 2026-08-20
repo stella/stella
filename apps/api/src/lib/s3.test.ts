@@ -5,6 +5,7 @@ import {
   isMissingS3ObjectError,
   isS3Stale,
   readCorpusS3Range,
+  readS3ArrayBuffer,
   resolveS3Credentials,
   writeS3ObjectWithRetry,
 } from "@/api/lib/s3";
@@ -522,5 +523,32 @@ describe("readCorpusS3Range", () => {
     expect(rejection).toMatchObject({
       message: expect.stringContaining("expected 8"),
     });
+  });
+});
+
+describe("readS3ArrayBuffer", () => {
+  const originalFetch = globalThis.fetch;
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  test("installs a deadline when the caller supplies no signal", async () => {
+    let requestSignal: AbortSignal | null | undefined;
+    const stub = async (
+      _input: string | URL | Request,
+      init?: RequestInit,
+    ): Promise<Response> => {
+      requestSignal = init?.signal;
+      return await Promise.resolve(new Response(new Uint8Array([1, 2, 3])));
+    };
+    globalThis.fetch = Object.assign(stub, {
+      preconnect: originalFetch.preconnect,
+    });
+
+    const bytes = new Uint8Array(await readS3ArrayBuffer("documents/test"));
+
+    expect(requestSignal).toBeInstanceOf(AbortSignal);
+    expect(bytes).toEqual(new Uint8Array([1, 2, 3]));
   });
 });

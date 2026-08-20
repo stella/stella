@@ -26,6 +26,7 @@
   },
   "devDependencies": {
     "@stll/typescript-config": "workspace:*",
-    "@types/react": "catalog:react19"
+    "@types/react": "catalog:react19",
+    "bun-types": "catalog:"
   }
 }

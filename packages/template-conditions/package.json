@@ -53,7 +53,7 @@
   "devDependencies": {
     "@stll/property-testing": "workspace:*",
     "@stll/typescript-config": "workspace:*",
-    "@types/bun": "catalog:",
+    "bun-types": "catalog:",
     "fast-check": "catalog:",
     "tsdown": "catalog:"
   }

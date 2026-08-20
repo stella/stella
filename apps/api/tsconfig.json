@@ -33,7 +33,7 @@
       "@/api/*": ["./src/*"]
     },
     "jsx": "react-jsx",
-    "types": ["bun"]
+    "types": ["bun-types"]
   },
   "include": ["src", "drizzle.config.ts", "../../types"],
   "exclude": ["src/mcp/apps"]

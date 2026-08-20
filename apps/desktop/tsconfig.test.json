@@ -1,7 +1,7 @@
 {
   "extends": "@stll/typescript-config/react-library.json",
   "compilerOptions": {
-    "types": ["bun"],
+    "types": ["bun-types"],
     "tsBuildInfoFile": "${configDir}/.cache/tsbuildinfo.test.json"
   },
   "include": ["tests/**/*.test.ts", "tests/**/*.test.tsx"],
