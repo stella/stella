@@ -815,21 +815,17 @@ export const readCorpusS3Range = async ({
 };
 
 /**
- * Read a documents-bucket object.
+ * Read a documents-bucket object with a hard deadline.
  *
- * The ordinary path uses Bun 1.4's native S3 reader. A caller that supplies a
- * signal keeps the presigned-fetch path because native S3 reads cannot yet be
- * cancelled.
+ * Bun 1.4 fixes the native reader's retained-buffer bug, but its body reads do
+ * not yet accept an AbortSignal. Keep production reads on the cancellable
+ * transport until the native API can preserve this boundary's deadline.
  */
 export const readS3ArrayBuffer = async (
   key: string,
   signal?: AbortSignal,
-): Promise<ArrayBuffer> => {
-  if (signal) {
-    return await (await fetchObject(getS3(), key, signal)).arrayBuffer();
-  }
-  return await getS3().file(key).arrayBuffer();
-};
+): Promise<ArrayBuffer> =>
+  await (await fetchObject(getS3(), key, signal)).arrayBuffer();
 
 /** Publish into the legal-corpus bucket with an abortable AWS SDK request. */
 export const putCorpusS3ObjectWithSignal = async (

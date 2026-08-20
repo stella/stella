@@ -10,7 +10,7 @@ import {
   test,
 } from "bun:test";
 
-import { getS3, readS3ArrayBuffer } from "@/api/lib/s3";
+import { getS3 } from "@/api/lib/s3";
 import {
   copyObject,
   createTenantS3RequestSignal,
@@ -587,7 +587,12 @@ describe.skipIf(!rustfsReachable)(
       expect(head.value.contentLength).toBe(HELLO_BYTES.byteLength);
       expect(head.value.checksumSHA256).toBe(HELLO_SHA256_BASE64);
 
-      const downloaded = new Uint8Array(await readS3ArrayBuffer(probeKey));
+      // Bun 1.4's Rust S3 rewrite fixes the retained-buffer bug. Exercise the
+      // native reader here; production reads still use the cancellable helper
+      // until Bun's native API accepts an AbortSignal.
+      const nativeFile = getS3().file(probeKey);
+      // oxlint-disable-next-line no-native-s3-object-read/no-native-s3-object-read -- Bun 1.4 native-reader integration smoke.
+      const downloaded = new Uint8Array(await nativeFile.arrayBuffer());
       expect(downloaded).toEqual(HELLO_BYTES);
     });
 

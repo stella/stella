@@ -2,10 +2,10 @@ import { eslintCompatPlugin } from "@oxlint/plugins";
 import type { ESTree } from "@oxlint/plugins";
 // Confine S3 object-body reads to the owned storage boundary.
 //
-// `apps/api/src/lib/s3.ts` chooses between Bun's native S3 reader and a
-// presigned fetch according to the caller's cancellation, size, range, and
-// response-validation requirements. A direct read elsewhere bypasses those
-// decisions along with credential refresh and shared error semantics.
+// `apps/api/src/lib/s3.ts` owns cancellation, size, range, credential refresh,
+// and response-validation requirements. A direct read elsewhere bypasses
+// those decisions and shared error semantics. Bun 1.4 fixes the native
+// reader's retained-buffer bug, but native body reads still have no deadline.
 
 import { isAstNode, isIdentifier } from "./utils.ts";
 
