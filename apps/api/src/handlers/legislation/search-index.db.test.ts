@@ -3,6 +3,7 @@ import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import type { Transaction } from "@/api/db/root";
+import type { ScopedDb } from "@/api/db/safe-db";
 import {
   legislationDocuments,
   legislationSearchDocuments,
@@ -19,6 +20,25 @@ import { packKey } from "@/api/lib/legal-search/corpus-pack";
 import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 import { brandPersistedLegislationDocumentId } from "@/api/lib/safe-id-boundaries";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
+
+process.env["REDIS_URL"] ??= "redis://localhost:6379";
+process.env["GOTENBERG_URL"] ??= "http://localhost:3003";
+process.env["GOTENBERG_USERNAME"] ??= "test";
+process.env["GOTENBERG_PASSWORD"] ??= "test";
+
+const { searchLegislationHandler } =
+  await import("@/api/handlers/legislation/search");
+
+const searchDependencies = {
+  loadSearchConfigs: async () => [
+    {
+      regconfig: "simple",
+      useUnaccent: false,
+      includeDefault: true,
+      languages: [],
+    },
+  ],
+} satisfies NonNullable<Parameters<typeof searchLegislationHandler>[2]>;
 
 let client: Awaited<ReturnType<typeof createTestPglite>> | undefined;
 let db: ReturnType<typeof drizzle>;
@@ -57,6 +77,22 @@ const scopedDb: Parameters<typeof indexLegislationDocument>[1] = async (
   // eslint-disable-next-line typescript/no-unsafe-type-assertion -- test transaction shim
   await callback(db as unknown as Transaction);
 
+const searchScopedDb: ScopedDb = async (callback) => {
+  const tx = new Proxy(db, {
+    get: (target, property, receiver) => {
+      if (property !== "execute") {
+        return Reflect.get(target, property, receiver);
+      }
+      return async (...args: Parameters<typeof db.execute>) =>
+        (await db.execute(...args)).rows;
+    },
+  });
+  // SAFETY: the proxy preserves the PGlite DB and adapts only execute's result
+  // shape to match the production driver used by this search boundary.
+  // eslint-disable-next-line typescript/no-unsafe-type-assertion -- test transaction shim
+  return await callback(tx as unknown as Transaction);
+};
+
 const seedDocument = ({
   id,
   fulltext,
@@ -89,6 +125,12 @@ beforeAll(
   async () => {
     client = await createTestPglite();
     db = drizzle({ client });
+    await db.execute(
+      sql`CREATE FUNCTION public.unaccent(input text) RETURNS text LANGUAGE sql IMMUTABLE STRICT AS 'SELECT input'`,
+    );
+    await db.execute(
+      sql`CREATE TEXT SEARCH CONFIGURATION public.stella_unaccent (COPY = pg_catalog.simple)`,
+    );
 
     await db.insert(legislationSources).values({
       id: sourceId,
@@ -183,12 +225,14 @@ test("the FTS rebuild reads canonical text only when inline payloads are absent"
     "canonical corpus sentinel",
   );
 
-  const [match] = await db
-    .select({
-      matches: sql<boolean>`${legislationSearchDocuments.tsv} @@ plainto_tsquery('simple', 'canonical corpus sentinel')`,
-    })
-    .from(legislationSearchDocuments)
-    .where(eq(legislationSearchDocuments.documentId, corpusId));
+  const match = (
+    await db
+      .select({
+        matches: sql<boolean>`${legislationSearchDocuments.tsv} @@ plainto_tsquery('simple', 'canonical corpus sentinel')`,
+      })
+      .from(legislationSearchDocuments)
+      .where(eq(legislationSearchDocuments.documentId, corpusId))
+  ).at(0);
   expect(match?.matches).toBe(true);
 });
 
@@ -225,15 +269,31 @@ test("an unreadable corpus row does not block the bounded missing scan", async (
   expect(readKeys).toEqual([unavailableKey, laterKey]);
   expect(unavailableCorpusId < laterCorpusId).toBe(true);
 
-  const [failedProjection] = await db
-    .select({
-      searchableText: legislationSearchDocuments.searchableText,
-      retryAfter: legislationSearchDocuments.retryAfter,
-    })
-    .from(legislationSearchDocuments)
-    .where(eq(legislationSearchDocuments.documentId, unavailableCorpusId));
+  const failedProjection = (
+    await db
+      .select({
+        searchableText: legislationSearchDocuments.searchableText,
+        retryAfter: legislationSearchDocuments.retryAfter,
+      })
+      .from(legislationSearchDocuments)
+      .where(eq(legislationSearchDocuments.documentId, unavailableCorpusId))
+  ).at(0);
   expect(failedProjection?.searchableText).not.toContain("corpus sentinel");
   expect(failedProjection?.retryAfter).not.toBeNull();
+  await db
+    .update(legislationSearchDocuments)
+    .set({
+      searchableText: "retry pending sentinel",
+      tsv: sql`to_tsvector('simple', 'retry pending sentinel')`,
+    })
+    .where(eq(legislationSearchDocuments.documentId, unavailableCorpusId));
+  expect(
+    await searchLegislationHandler(
+      { query: "retry pending sentinel" },
+      searchScopedDb,
+      searchDependencies,
+    ),
+  ).toMatchObject({ hits: [] });
 
   await db
     .update(legislationSearchDocuments)
@@ -244,15 +304,24 @@ test("an unreadable corpus row does not block the bounded missing scan", async (
   ).toEqual({ found: 1, indexed: 1 });
   expect(readKeys).toEqual([unavailableKey, laterKey, unavailableKey]);
 
-  const [repaired] = await db
-    .select({
-      searchableText: legislationSearchDocuments.searchableText,
-      retryAfter: legislationSearchDocuments.retryAfter,
-    })
-    .from(legislationSearchDocuments)
-    .where(eq(legislationSearchDocuments.documentId, unavailableCorpusId));
+  const repaired = (
+    await db
+      .select({
+        searchableText: legislationSearchDocuments.searchableText,
+        retryAfter: legislationSearchDocuments.retryAfter,
+      })
+      .from(legislationSearchDocuments)
+      .where(eq(legislationSearchDocuments.documentId, unavailableCorpusId))
+  ).at(0);
   expect(repaired?.searchableText).toContain("repaired corpus sentinel");
   expect(repaired?.retryAfter).toBeNull();
+  expect(
+    await searchLegislationHandler(
+      { query: "repaired corpus sentinel" },
+      searchScopedDb,
+      searchDependencies,
+    ),
+  ).toMatchObject({ hits: [{ documentId: unavailableCorpusId }] });
 });
 
 test("the stale scan breaks equal update timestamps by document id", async () => {

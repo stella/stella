@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { getTableConfig } from "drizzle-orm/pg-core";
+import { getTableConfig, PgDialect } from "drizzle-orm/pg-core";
 import { readFileSync } from "node:fs";
 import nodePath from "node:path";
 
@@ -13,9 +13,10 @@ const MIGRATION = nodePath.resolve(
 
 test("the legislation search retry trail matches its migration", () => {
   const config = getTableConfig(legislationSearchDocuments);
-  expect(config.columns.some((column) => column.name === "retry_after")).toBe(
-    true,
+  const retryAfter = config.columns.find(
+    (column) => column.name === "retry_after",
   );
+  expect(retryAfter?.notNull).toBe(false);
   const index = config.indexes.find(
     (candidate) => candidate.config.name === INDEX_NAME,
   );
@@ -24,6 +25,11 @@ test("the legislation search retry trail matches its migration", () => {
       "name" in column ? column.name : undefined,
     ),
   ).toEqual(["retry_after", "document_id"]);
+  expect(
+    index?.config.where === undefined
+      ? undefined
+      : new PgDialect().sqlToQuery(index.config.where).sql,
+  ).toBe('("legislation_search_documents"."retry_after" is not null)');
 
   const migration = readFileSync(MIGRATION, "utf-8").replaceAll(/\s+/gu, " ");
   expect(migration).toContain(
