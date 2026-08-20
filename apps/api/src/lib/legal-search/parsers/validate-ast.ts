@@ -80,9 +80,24 @@ const trimNonLetters = (word: string): string => {
   return word.slice(start, end);
 };
 
+// A decorative marker sits flush against its neighbour in some source
+// HTML ("[OBRÁZEK]ČESKÁ", "[OBRÁZEK][OBRÁZEK]"). Deleting the brackets
+// alone fuses the marker to that neighbour, and the fused token
+// ("obrázekčeská") matches no SKIP_WORDS entry, so a marker the AST is
+// right to drop is reported missing. Same failure as the <br> gluing
+// handled in validateAst: make the boundary a separator. Only a group
+// whose content is itself skippable becomes one, because anonymization
+// markers are mid-word ("[o]rganizace") and must stay joined.
+const BRACKET_GROUP = /\[([^\]]*)\]/gu;
+
+const separateSkipMarkers = (text: string): string =>
+  text.replace(BRACKET_GROUP, (group, inner: string) =>
+    SKIP_WORDS.has(trimNonLetters(inner.toLowerCase())) ? " " : group,
+  );
+
 const extractWords = (text: string): Set<string> => {
   const words = new Set<string>();
-  for (const w of text.split(/\s+/u)) {
+  for (const w of separateSkipMarkers(text).split(/\s+/u)) {
     // Strip brackets first (anonymization markers like
     // "[o]rganizace" or "[OBRÁZEK]"), then trim remaining
     // non-letter chars from edges.
