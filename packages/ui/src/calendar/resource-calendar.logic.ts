@@ -120,7 +120,13 @@ export const nextCalendarDate = (value: string): string => {
     );
   }
   date.setUTCDate(date.getUTCDate() + 1);
-  return date.toISOString().slice(0, 10);
+  const nextDate = date.toISOString().slice(0, 10);
+  if (toUTCDate(nextDate) === null) {
+    throw new RangeError(
+      "Calendar dates must have a following normalized YYYY-MM-DD value",
+    );
+  }
+  return nextDate;
 };
 
 export const layoutResourceCalendarEntries = (

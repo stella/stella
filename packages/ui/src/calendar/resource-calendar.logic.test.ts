@@ -4,6 +4,7 @@ import {
   assertConsecutiveCalendarDates,
   getResourceCalendarPlacement,
   layoutResourceCalendarEntries,
+  nextCalendarDate,
 } from "./resource-calendar.logic";
 
 describe("resource calendar placement", () => {
@@ -85,6 +86,12 @@ describe("resource calendar placement", () => {
     expect(() =>
       assertConsecutiveCalendarDates(["2026-12-31", "2027-01-01"]),
     ).not.toThrow();
+  });
+
+  test("rejects a date whose following day exceeds the normalized range", () => {
+    expect(() => nextCalendarDate("9999-12-31")).toThrow(
+      "Calendar dates must have a following normalized YYYY-MM-DD value",
+    );
   });
 
   test("puts overlapping entries in separate lanes and reuses adjacent lanes", () => {
