@@ -284,14 +284,11 @@ export default defineConfig(({ mode }) => {
       "@vitejs/plugin-react with Oxc React Compiler",
     ),
     shouldAnalyze &&
-      ensurePluginOption(
-        visualizer({
-          filename: "stats.html",
-          gzipSize: true,
-          brotliSize: true,
-        }),
-        "rollup-plugin-visualizer",
-      ),
+      visualizer({
+        filename: "stats.html",
+        gzipSize: true,
+        brotliSize: true,
+      }),
   ];
 
   return {
