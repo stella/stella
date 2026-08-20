@@ -1201,7 +1201,7 @@ export const SEARCH_CASE_LAW_PROJECTION = v.strictObject({
  * while the UUID backstop still guards every string inside, unlicensed.
  */
 export const READ_CASE_LAW_DECISION_PROJECTION = v.strictObject({
-  // Opaque compound `[textOffset, fromOffset, toOffset]` cursor.
+  // Opaque compound `[textOffset, fromCursor, toCursor]` cursor.
   nextCursor: v.nullable(passthroughId()),
   decision: v.strictObject({
     // Nullable for the same reason as search_case_law's `results[].appUrl`.
@@ -1215,7 +1215,6 @@ export const READ_CASE_LAW_DECISION_PROJECTION = v.strictObject({
         sectionIndex: v.nullable(v.number()),
       }),
     ),
-    citationsFromTotal: v.number(),
     citationsTo: v.array(
       v.strictObject({
         id: passthroughId(),
@@ -1224,7 +1223,6 @@ export const READ_CASE_LAW_DECISION_PROJECTION = v.strictObject({
         sectionIndex: v.nullable(v.number()),
       }),
     ),
-    citationsToTotal: v.number(),
     country: v.string(),
     court: v.string(),
     decisionDate: v.nullable(v.string()),

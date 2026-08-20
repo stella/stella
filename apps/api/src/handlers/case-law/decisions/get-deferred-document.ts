@@ -99,6 +99,8 @@ export type ReadDecisionWithDocumentOptions = {
   decisionId: SafeId<"caseLawDecision">;
   caseLawDb: CaseLawPublicReadDb;
   caller: DecisionReadCaller;
+  citationsFromCursor?: string | null | undefined;
+  citationsToCursor?: string | null | undefined;
 };
 
 export type ReadDecisionBySlugWithDocumentOptions = {
@@ -112,9 +114,16 @@ export const readDecisionWithDocumentHandler = async ({
   decisionId,
   caseLawDb,
   caller,
+  citationsFromCursor,
+  citationsToCursor,
 }: ReadDecisionWithDocumentOptions): Promise<DecisionRead> =>
   await withDeferredDocument(
-    await readDecisionHandler(decisionId, caseLawDb),
+    await readDecisionHandler({
+      caseLawDb,
+      citationsFromCursor,
+      citationsToCursor,
+      decisionId,
+    }),
     caller === "attributed",
   );
 

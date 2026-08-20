@@ -133,6 +133,10 @@ export const brandPersistedCaseLawDecisionId = (
   caseLawDecisionId: string,
 ): SafeId<"caseLawDecision"> => toSafeId<"caseLawDecision">(caseLawDecisionId);
 
+export const brandPersistedCaseLawCitationId = (
+  caseLawCitationId: string,
+): SafeId<"caseLawCitation"> => toSafeId<"caseLawCitation">(caseLawCitationId);
+
 export const brandPersistedCaseLawSourceId = (
   caseLawSourceId: string,
 ): SafeId<"caseLawSource"> => toSafeId<"caseLawSource">(caseLawSourceId);

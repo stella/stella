@@ -1,17 +1,22 @@
 import { panic, Result, UnhandledException } from "better-result";
-import { and, asc, eq, inArray, sql } from "drizzle-orm";
-import { status } from "elysia";
+import { and, asc, eq, sql } from "drizzle-orm";
+import { status, t } from "elysia";
 
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import { corpusStorageMode } from "@/api/env-base";
+import {
+  listIncomingDecisionCitations,
+  listOutgoingDecisionCitations,
+} from "@/api/handlers/case-law/decisions/citations";
 import { hasUsableAst } from "@/api/handlers/case-law/document-ast";
 import { corpusCarriesDocument } from "@/api/handlers/case-law/stored-payload";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
+import { tPaginationCursor } from "@/api/lib/custom-schema";
 import { CorpusPayloadUnavailableError } from "@/api/lib/errors/tagged-errors";
 import {
   allowsDerivedAi,
@@ -119,10 +124,30 @@ const listPublicDecisionLanguageAlternates = async ({
 
 const corpusReadEnabled = (): boolean => corpusStorageMode !== "off";
 
-export const readDecisionHandler = async (
-  decisionId: SafeId<"caseLawDecision">,
-  caseLawDb: CaseLawPublicReadDb,
-) => {
+export const readDecisionQuerySchema = t.Object({
+  citationsFromCursor: t.Optional(tPaginationCursor()),
+  citationsToCursor: t.Optional(tPaginationCursor()),
+});
+
+export type ReadDecisionOptions = {
+  caseLawDb: CaseLawPublicReadDb;
+  citationsFromCursor?: string | null | undefined;
+  citationsToCursor?: string | null | undefined;
+  decisionId: SafeId<"caseLawDecision">;
+};
+
+const emptyCitationPage = () => ({
+  items: [],
+  limit: LIMITS.caseLawDecisionCitationPageSize,
+  nextCursor: null,
+});
+
+export const readDecisionHandler = async ({
+  caseLawDb,
+  citationsFromCursor,
+  citationsToCursor,
+  decisionId,
+}: ReadDecisionOptions) => {
   const decision = await caseLawDb((tx) =>
     tx.query.caseLawDecisions.findFirst({
       where: { id: { eq: decisionId } },
@@ -158,22 +183,6 @@ export const readDecisionHandler = async (
           // never returned to the client.
           columns: { id: true, name: true, adapterKey: true, descriptor: true },
         },
-        citationsFrom: {
-          columns: {
-            id: true,
-            citationText: true,
-            citedDecisionId: true,
-            sectionIndex: true,
-          },
-        },
-        citationsTo: {
-          columns: {
-            id: true,
-            citationText: true,
-            citingDecisionId: true,
-            sectionIndex: true,
-          },
-        },
       },
     }),
   );
@@ -188,49 +197,34 @@ export const readDecisionHandler = async (
     return status(404, { message: "Decision not found" });
   }
 
-  const languageAlternates = await listPublicDecisionLanguageAlternates({
-    caseLawDb,
-    languageGroupKey: decision.languageGroupKey,
-  });
+  const [languageAlternates, citationsFromPage, citationsToPage] =
+    await Promise.all([
+      listPublicDecisionLanguageAlternates({
+        caseLawDb,
+        languageGroupKey: decision.languageGroupKey,
+      }),
+      citationsFromCursor === null
+        ? emptyCitationPage()
+        : listOutgoingDecisionCitations({
+            caseLawDb,
+            cursor: citationsFromCursor,
+            decisionId,
+          }),
+      citationsToCursor === null
+        ? emptyCitationPage()
+        : listIncomingDecisionCitations({
+            caseLawDb,
+            cursor: citationsToCursor,
+            decisionId,
+          }),
+    ]);
 
-  // Citations may point at decisions from non-redistributable sources;
-  // drop those so the response cannot leak restricted decisions' ids.
-  // Unresolved citations (null citedDecisionId) carry only text and stay.
-  const relatedIdCandidates = decision.citationsFrom
-    .map((citation) => citation.citedDecisionId)
-    .concat(decision.citationsTo.map((citation) => citation.citingDecisionId));
-  const relatedDecisionIds = [
-    ...new Set(relatedIdCandidates.filter((value) => value !== null)),
-  ];
-  const redistributableRelatedIds = new Set(
-    relatedDecisionIds.length === 0
-      ? []
-      : (
-          await caseLawDb((tx) =>
-            tx
-              .select({ id: caseLawDecisions.id })
-              .from(caseLawDecisions)
-              .innerJoin(
-                caseLawSources,
-                eq(caseLawSources.id, caseLawDecisions.sourceId),
-              )
-              .where(
-                and(
-                  inArray(caseLawDecisions.id, relatedDecisionIds),
-                  redistributableCaseLawSource,
-                ),
-              ),
-          )
-        ).map((row) => row.id),
-  );
-  const citationsFrom = decision.citationsFrom.filter(
-    (citation) =>
-      citation.citedDecisionId === null ||
-      redistributableRelatedIds.has(citation.citedDecisionId),
-  );
-  const citationsTo = decision.citationsTo.filter((citation) =>
-    redistributableRelatedIds.has(citation.citingDecisionId),
-  );
+  if (!("items" in citationsFromPage)) {
+    return citationsFromPage;
+  }
+  if (!("items" in citationsToPage)) {
+    return citationsToPage;
+  }
 
   // Prefer canonical AST from object storage when corpus storage is
   // enabled; fall back to the Postgres column so a read is never harder
@@ -325,8 +319,10 @@ export const readDecisionHandler = async (
       // must not feed the full text to a model when this is false.
       allowsDerivedAi: allowsDerivedAi(source.descriptor),
     },
-    citationsFrom,
-    citationsTo,
+    citationsFrom: citationsFromPage.items,
+    citationsFromNextCursor: citationsFromPage.nextCursor,
+    citationsTo: citationsToPage.items,
+    citationsToNextCursor: citationsToPage.nextCursor,
     languageAlternates,
     fulltext,
   };
@@ -362,7 +358,10 @@ export const readDecisionBySlugHandler = async (
     return status(404, { message: "Decision not found" });
   }
 
-  return await readDecisionHandler(firstDecision.id, caseLawDb);
+  return await readDecisionHandler({
+    caseLawDb,
+    decisionId: firstDecision.id,
+  });
 };
 
 /**

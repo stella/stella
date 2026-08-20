@@ -105,9 +105,6 @@ import {
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 const MCP_CONTENT_MAX_CHARS = 8000;
-// Page size for each citation list on read_case_law_decision. The decision
-// text and both citation lists are paged together by a single compound cursor.
-const MCP_CASE_LAW_CITATIONS_PER_DECISION = 50;
 type StellaToolName =
   | "list_matters"
   | "read_case_law_decision"
@@ -1714,15 +1711,19 @@ const handleSearchCaseLawTool: McpToolHandler = async ({ args, context }) => {
   });
 };
 
-type DecisionCursorOffsets = { text: number; from: number; to: number };
+type DecisionCursorState = {
+  text: number;
+  from: string | null | undefined;
+  to: string | null | undefined;
+};
 
 // read_case_law_decision pages the decision text and both citation lists with
-// a single compound cursor encoding [textOffset, fromOffset, toOffset].
+// a single compound cursor encoding [textOffset, fromCursor, toCursor].
 const decodeDecisionCursor = (
   cursor: string | undefined,
-): DecisionCursorOffsets | null => {
+): DecisionCursorState | null => {
   if (cursor === undefined) {
-    return { text: 0, from: 0, to: 0 };
+    return { text: 0, from: undefined, to: undefined };
   }
   const parts = decodePaginationCursor(cursor);
   if (!parts || parts.length !== 3) {
@@ -1733,12 +1734,8 @@ const decodeDecisionCursor = (
     typeof text !== "number" ||
     !Number.isInteger(text) ||
     text < 0 ||
-    typeof from !== "number" ||
-    !Number.isInteger(from) ||
-    from < 0 ||
-    typeof to !== "number" ||
-    !Number.isInteger(to) ||
-    to < 0
+    (from !== null && typeof from !== "string") ||
+    (to !== null && typeof to !== "string")
   ) {
     return null;
   }
@@ -1768,6 +1765,8 @@ const handleReadCaseLawDecisionTool: McpToolHandler = async ({ args }) => {
   const result = await readDecisionWithDocumentHandler({
     decisionId: brandPersistedCaseLawDecisionId(decisionId),
     caseLawDb: caseLawPublicReadDb,
+    citationsFromCursor: offsets.from,
+    citationsToCursor: offsets.to,
     // An agent holding a token is a reader we can attribute, so its
     // interest counts as demand.
     caller: "attributed",
@@ -1802,25 +1801,16 @@ const handleReadCaseLawDecisionTool: McpToolHandler = async ({ args }) => {
     offsets.text,
     MCP_CONTENT_MAX_CHARS,
   );
-  const fromBounds = resolveWindowBounds(
-    result.citationsFrom.length,
-    offsets.from,
-    MCP_CASE_LAW_CITATIONS_PER_DECISION,
-  );
-  const toBounds = resolveWindowBounds(
-    result.citationsTo.length,
-    offsets.to,
-    MCP_CASE_LAW_CITATIONS_PER_DECISION,
-  );
-
-  // One compound cursor advances all three streams together; it resolves to
-  // null only once the text and both citation lists are fully consumed.
   const hasMore =
     textBounds.nextOffset !== null ||
-    fromBounds.nextOffset !== null ||
-    toBounds.nextOffset !== null;
+    result.citationsFromNextCursor !== null ||
+    result.citationsToNextCursor !== null;
   const nextCursor = hasMore
-    ? encodePaginationCursor([textBounds.end, fromBounds.end, toBounds.end])
+    ? encodePaginationCursor([
+        textBounds.end,
+        result.citationsFromNextCursor,
+        result.citationsToNextCursor,
+      ])
     : null;
 
   return textResult({
@@ -1835,13 +1825,8 @@ const handleReadCaseLawDecisionTool: McpToolHandler = async ({ args }) => {
         slug: result.slug,
       }),
       caseNumber: result.caseNumber,
-      citationsFrom: result.citationsFrom.slice(
-        fromBounds.start,
-        fromBounds.end,
-      ),
-      citationsFromTotal: result.citationsFrom.length,
-      citationsTo: result.citationsTo.slice(toBounds.start, toBounds.end),
-      citationsToTotal: result.citationsTo.length,
+      citationsFrom: result.citationsFrom,
+      citationsTo: result.citationsTo,
       country: result.country,
       court: result.court,
       decisionDate: toIsoDateString(result.decisionDate),

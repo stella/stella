@@ -60,7 +60,10 @@ if (!databaseUrl || !runPostgresTests) {
     };
 
     const readState = async (id: SafeId<"caseLawDecision">) => {
-      const decision = await readDecisionHandler(id, caseLawPublicReadDb);
+      const decision = await readDecisionHandler({
+        caseLawDb: caseLawPublicReadDb,
+        decisionId: id,
+      });
       if (!("documentPending" in decision)) {
         throw new Error("expected a readable decision");
       }
