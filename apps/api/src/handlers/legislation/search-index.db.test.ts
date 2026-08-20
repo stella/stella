@@ -8,7 +8,11 @@ import {
   legislationSearchDocuments,
   legislationSources,
 } from "@/api/db/schema";
-import { indexLegislationDocument } from "@/api/handlers/legislation/search-index";
+import {
+  backfillLegislationSearchIndex,
+  indexLegislationDocument,
+  removeLegislationFromIndex,
+} from "@/api/handlers/legislation/search-index";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { formatCorpusLocation } from "@/api/lib/legal-search/corpus-location";
@@ -23,6 +27,8 @@ const sourceId = createSafeId<"legislationSource">();
 const fulltextId = createSafeId<"legislationDocument">();
 const sectionsId = createSafeId<"legislationDocument">();
 const corpusId = createSafeId<"legislationDocument">();
+const unavailableCorpusId = createSafeId<"legislationDocument">();
+const laterCorpusId = createSafeId<"legislationDocument">();
 const corpusKey = formatCorpusLocation({
   type: "packed",
   packKey: packKey({
@@ -46,11 +52,15 @@ const seedDocument = ({
   fulltext,
   sections,
   textS3Key,
+  createdAt,
+  updatedAt,
 }: {
   id: SafeId<"legislationDocument">;
   fulltext: string | null;
   sections: DecisionSection[] | null;
   textS3Key: string;
+  createdAt?: Date;
+  updatedAt?: Date;
 }) => ({
   id,
   sourceId,
@@ -61,6 +71,8 @@ const seedDocument = ({
   fulltext,
   sections,
   textS3Key,
+  createdAt,
+  updatedAt,
 });
 
 beforeAll(
@@ -98,6 +110,22 @@ beforeAll(
         fulltext: null,
         sections: null,
         textS3Key: corpusKey,
+      }),
+      seedDocument({
+        id: laterCorpusId,
+        fulltext: null,
+        sections: null,
+        textS3Key: "legal-corpus/documents/later/text.zst",
+        createdAt: new Date("2026-01-01T00:00:00.000Z"),
+        updatedAt: new Date("2026-01-02T00:00:00.000Z"),
+      }),
+      seedDocument({
+        id: unavailableCorpusId,
+        fulltext: null,
+        sections: null,
+        textS3Key: "legal-corpus/documents/unavailable/text.zst",
+        createdAt: new Date("2026-01-02T00:00:00.000Z"),
+        updatedAt: new Date("2026-01-01T00:00:00.000Z"),
       }),
     ]);
   },
@@ -152,4 +180,51 @@ test("the FTS rebuild reads canonical text only when inline payloads are absent"
     .from(legislationSearchDocuments)
     .where(eq(legislationSearchDocuments.documentId, corpusId));
   expect(match?.matches).toBe(true);
+});
+
+test("an unreadable corpus row does not block the bounded missing scan", async () => {
+  const unavailableKey = "legal-corpus/documents/unavailable/text.zst";
+  const laterKey = "legal-corpus/documents/later/text.zst";
+  const readKeys: string[] = [];
+  const dependencies: Parameters<typeof backfillLegislationSearchIndex>[2] = {
+    readText: async (storedKey) => {
+      readKeys.push(storedKey);
+      if (storedKey === unavailableKey) {
+        throw new Error("unavailable corpus fixture");
+      }
+      return "later corpus sentinel";
+    },
+    resolveConfig: async () => ({ regconfig: "simple", useUnaccent: false }),
+  };
+
+  expect(
+    await backfillLegislationSearchIndex(scopedDb, 1, dependencies),
+  ).toEqual({ found: 1, indexed: 0 });
+  expect(
+    await backfillLegislationSearchIndex(scopedDb, 1, dependencies),
+  ).toEqual({ found: 1, indexed: 1 });
+  expect(readKeys).toEqual([unavailableKey, laterKey]);
+
+  const projected = await db
+    .select({
+      documentId: legislationSearchDocuments.documentId,
+      searchableText: legislationSearchDocuments.searchableText,
+    })
+    .from(legislationSearchDocuments)
+    .where(eq(legislationSearchDocuments.documentId, unavailableCorpusId));
+  expect(projected.at(0)?.searchableText).not.toContain(
+    "later corpus sentinel",
+  );
+
+  await removeLegislationFromIndex(unavailableCorpusId, scopedDb);
+  await backfillLegislationSearchIndex(scopedDb, 1, {
+    readText: async () => "repaired corpus sentinel",
+    resolveConfig: dependencies.resolveConfig,
+  });
+
+  const [repaired] = await db
+    .select({ searchableText: legislationSearchDocuments.searchableText })
+    .from(legislationSearchDocuments)
+    .where(eq(legislationSearchDocuments.documentId, unavailableCorpusId));
+  expect(repaired?.searchableText).toContain("repaired corpus sentinel");
 });

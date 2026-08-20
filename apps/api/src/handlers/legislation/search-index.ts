@@ -1,3 +1,4 @@
+import { Result, TaggedError, UnhandledException } from "better-result";
 import { and, asc, eq, gt, notExists, sql } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -23,6 +24,13 @@ import { logger } from "@/api/lib/observability/logger";
  */
 
 const SEARCH_INDEX_CONCURRENCY = 4;
+
+class LegislationCorpusReadError extends TaggedError(
+  "LegislationCorpusReadError",
+)<{
+  message: string;
+  cause: unknown;
+}> {}
 
 const sectionsToPlainText = (
   sections: readonly DecisionSection[] | null,
@@ -77,12 +85,26 @@ export const indexLegislationDocument = async (
   }
 
   let bodyText: string;
+  let corpusReadFailure: { cause: unknown } | undefined;
   if (document.fulltext !== null) {
     bodyText = document.fulltext;
   } else if (document.sections !== null) {
     bodyText = sectionsToPlainText(document.sections);
   } else if (document.textS3Key !== null) {
-    bodyText = await readText(document.textS3Key);
+    const textS3Key = document.textS3Key;
+    const corpusRead = await Result.tryPromise(
+      async () => await readText(textS3Key),
+    );
+    if (Result.isOk(corpusRead)) {
+      bodyText = corpusRead.value;
+    } else {
+      bodyText = "";
+      const cause =
+        corpusRead.error instanceof UnhandledException
+          ? corpusRead.error.cause
+          : corpusRead.error;
+      corpusReadFailure = { cause };
+    }
   } else {
     bodyText = "";
   }
@@ -122,6 +144,13 @@ export const indexLegislationDocument = async (
       tsv = EXCLUDED.tsv
   `);
   });
+
+  if (corpusReadFailure !== undefined) {
+    throw new LegislationCorpusReadError({
+      message: "Canonical legislation corpus payload is unavailable",
+      cause: corpusReadFailure.cause,
+    });
+  }
 };
 
 type LegislationSearchIndexBackfillResult = { found: number; indexed: number };
@@ -129,6 +158,7 @@ type LegislationSearchIndexBackfillResult = { found: number; indexed: number };
 export const backfillLegislationSearchIndex = async (
   scopedDb: ScopedDb,
   batchSize: number,
+  dependencies: LegislationSearchIndexDependencies = DEFAULT_DEPENDENCIES,
 ): Promise<LegislationSearchIndexBackfillResult> => {
   const staleReserved = Math.max(1, Math.floor(batchSize / 4));
   const missingLimit = Math.max(1, batchSize - staleReserved);
@@ -157,7 +187,10 @@ export const backfillLegislationSearchIndex = async (
           ),
         ),
       )
-      .orderBy(asc(legislationDocuments.createdAt))
+      .orderBy(
+        asc(legislationDocuments.updatedAt),
+        asc(legislationDocuments.id),
+      )
       .limit(missingLimit),
   );
 
@@ -184,7 +217,10 @@ export const backfillLegislationSearchIndex = async (
           ),
         ),
       )
-      .orderBy(asc(legislationDocuments.createdAt))
+      .orderBy(
+        asc(legislationDocuments.updatedAt),
+        asc(legislationDocuments.id),
+      )
       .limit(staleLimit),
   );
 
@@ -194,7 +230,7 @@ export const backfillLegislationSearchIndex = async (
     id: SafeId<"legislationDocument">;
   }): Promise<number> => {
     try {
-      await indexLegislationDocument(row.id, scopedDb);
+      await indexLegislationDocument(row.id, scopedDb, dependencies);
       return 1;
     } catch (error) {
       captureError(error, {
