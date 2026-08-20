@@ -28,6 +28,7 @@ on:
       - packages/template-conditions/CHANGELOG.md
       - packages/docx-utils/CHANGELOG.md
       - packages/ui/CHANGELOG.md
+      - packages/workspace-model/CHANGELOG.md
       - packages/workspace-ui/CHANGELOG.md
   workflow_run: # zizmor: ignore[dangerous-triggers] the release tag and SHA are revalidated before the release job receives id-token
     workflows: ["Release Artifacts"]
@@ -47,6 +48,7 @@ on:
           - template-conditions
           - docx-utils
           - ui
+          - workspace-model
           - workspace-ui
           - cli
         default: all
@@ -184,10 +186,10 @@ jobs:
           if [[ "$EVENT_NAME" == "workflow_run" ]]; then
             pkgs=(cli)
           elif [[ "$EVENT_NAME" == "push" ]]; then
-            pkgs=(country-codes business-registries conditions template-conditions docx-utils ui money calculations workspace-ui)
+            pkgs=(country-codes business-registries conditions template-conditions docx-utils ui money calculations workspace-model workspace-ui)
           else
             case "$MANUAL_PACKAGE" in
-              all) pkgs=(country-codes business-registries conditions template-conditions docx-utils ui money calculations workspace-ui cli) ;;
+              all) pkgs=(country-codes business-registries conditions template-conditions docx-utils ui money calculations workspace-model workspace-ui cli) ;;
               *) pkgs=("$MANUAL_PACKAGE") ;;
             esac
           fi
@@ -378,6 +380,15 @@ jobs:
         with:
           name: npm-tarball-workspace-ui
           path: release-artifacts/workspace-ui/
+          retention-days: 1
+          if-no-files-found: error
+
+      - name: Upload workspace-model tarball
+        if: contains(fromJSON(steps.pack.outputs.packages), 'workspace-model')
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: npm-tarball-workspace-model
+          path: release-artifacts/workspace-model/
           retention-days: 1
           if-no-files-found: error
 

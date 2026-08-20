@@ -798,6 +798,15 @@
         "tailwindcss": "^4.3.0",
       },
     },
+    "packages/workspace-model": {
+      "name": "@stll/workspace-model",
+      "version": "0.0.0",
+      "devDependencies": {
+        "@stll/typescript-config": "workspace:*",
+        "@types/bun": "catalog:",
+        "tsdown": "catalog:",
+      },
+    },
     "packages/workspace-ui": {
       "name": "@stll/workspace-ui",
       "version": "0.0.0",
@@ -2360,6 +2369,8 @@
     "@stll/ui": ["@stll/ui@workspace:packages/ui"],
 
     "@stll/web": ["@stll/web@workspace:apps/web"],
+
+    "@stll/workspace-model": ["@stll/workspace-model@workspace:packages/workspace-model"],
 
     "@stll/workspace-ui": ["@stll/workspace-ui@workspace:packages/workspace-ui"],
 

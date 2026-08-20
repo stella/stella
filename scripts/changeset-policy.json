@@ -43,6 +43,11 @@
     "packages/ui/src/**",
     "packages/ui/tsconfig.json",
     "packages/ui/tsdown.config.ts",
+    "packages/workspace-model/README.md",
+    "packages/workspace-model/package.json",
+    "packages/workspace-model/src/**",
+    "packages/workspace-model/tsconfig.json",
+    "packages/workspace-model/tsdown.config.ts",
     "packages/workspace-ui/README.md",
     "packages/workspace-ui/package.json",
     "packages/workspace-ui/src/**",
@@ -70,6 +75,8 @@
     "packages/docx-utils/package.json",
     "packages/ui/CHANGELOG.md",
     "packages/ui/package.json",
+    "packages/workspace-model/CHANGELOG.md",
+    "packages/workspace-model/package.json",
     "packages/workspace-ui/CHANGELOG.md",
     "packages/workspace-ui/package.json"
   ],
@@ -83,6 +90,7 @@
     "packages/template-conditions/package.json",
     "packages/docx-utils/package.json",
     "packages/ui/package.json",
+    "packages/workspace-model/package.json",
     "packages/workspace-ui/package.json"
   ]
 }

@@ -26,6 +26,7 @@ const SHARED_NPM_PACKAGES = [
   "docx-utils",
   "money",
   "template-conditions",
+  "workspace-model",
   "workspace-ui",
 ] as const;
 
