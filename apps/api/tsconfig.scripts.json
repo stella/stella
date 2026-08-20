@@ -3,5 +3,8 @@
   "compilerOptions": {
     "tsBuildInfoFile": "${configDir}/.cache/tsbuildinfo.scripts.json"
   },
-  "include": ["src", "scripts", "drizzle.config.ts", "../../types"]
+  // The main project already checks src and drizzle.config.ts. Imports from
+  // scripts remain part of this project through normal traversal; shared
+  // ambient asset declarations must stay rooted here.
+  "include": ["scripts", "../../types"]
 }
