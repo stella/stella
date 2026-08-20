@@ -1,7 +1,3 @@
-import type { AnthropicModelInputModalitiesByName } from "@tanstack/ai-anthropic";
-import type { BedrockModelInputModalitiesByName } from "@tanstack/ai-bedrock";
-import type { GeminiModelInputModalitiesByName } from "@tanstack/ai-gemini";
-import type { OpenRouterModelInputModalitiesByName } from "@tanstack/ai-openrouter";
 /**
  * Canonical AI provider and model catalog.
  *
@@ -30,6 +26,7 @@ import {
   MODEL_REASONING_EFFORTS,
   MODEL_TEMPERATURE_POLICIES,
 } from "./capabilities.gen";
+import { TANSTACK_DOCUMENT_INPUT_MODEL_OPTIONS } from "./document-input-model-options";
 
 /**
  * Logical model roles. Call sites declare *what* they need, not
@@ -286,36 +283,6 @@ export type BYOKProvider = keyof typeof BYOK_MODEL_OPTIONS;
 export { CAPABILITY_OVERRIDES } from "./capabilities-overrides";
 export type { CapabilityOverride } from "./capabilities-overrides";
 
-type ModelInputModalitiesByName = Record<string, readonly string[]>;
-
-type ModelWithInputModality<
-  TModels extends ModelInputModalitiesByName,
-  TModality extends string,
-> = Extract<
-  {
-    [TModel in keyof TModels]: TModality extends TModels[TModel][number]
-      ? TModel
-      : never;
-  }[keyof TModels],
-  string
->;
-
-type TanStackDocumentInputModelByProvider = {
-  anthropic: ModelWithInputModality<
-    AnthropicModelInputModalitiesByName,
-    "document"
-  >;
-  bedrock: ModelWithInputModality<
-    BedrockModelInputModalitiesByName,
-    "document"
-  >;
-  google: ModelWithInputModality<GeminiModelInputModalitiesByName, "document">;
-  openrouter: ModelWithInputModality<
-    OpenRouterModelInputModalitiesByName,
-    "document"
-  >;
-};
-
 type BYOKModelIdByProvider = {
   [TProvider in BYOKProvider]: (typeof BYOK_MODEL_OPTIONS)[TProvider][number];
 };
@@ -524,36 +491,6 @@ export const getModelDisplayMetadata = (
   modelId: string,
 ): ModelDisplayMetadata | null =>
   MODEL_DISPLAY_METADATA_BY_ID[normalizeModelCatalogId(modelId)] ?? null;
-
-const TANSTACK_DOCUMENT_INPUT_MODEL_OPTIONS = {
-  anthropic: ["claude-sonnet-5", "claude-sonnet-4-6"],
-  bedrock: [
-    "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
-    "us.anthropic.claude-haiku-4-5-20251001-v1:0",
-    "us.amazon.nova-pro-v1:0",
-    "us.amazon.nova-lite-v1:0",
-  ],
-  google: [
-    "gemini-3.1-pro-preview",
-    "gemini-3.5-flash",
-    "gemini-3.1-flash-lite",
-  ],
-  openrouter: [
-    "google/gemini-3.1-pro-preview",
-    "google/gemini-3.5-flash",
-    "google/gemini-3.1-flash-lite",
-    "anthropic/claude-sonnet-5",
-    "anthropic/claude-opus-4.8",
-    "anthropic/claude-sonnet-4.6",
-    "openai/gpt-5.5",
-    "openai/gpt-5.4-mini",
-  ],
-} as const satisfies {
-  [TProvider in keyof TanStackDocumentInputModelByProvider]: readonly Extract<
-    BYOKModelIdByProvider[TProvider],
-    TanStackDocumentInputModelByProvider[TProvider]
-  >[];
-};
 
 const STELLA_EXTENDED_DOCUMENT_INPUT_MODEL_OPTIONS = {
   anthropic: [
