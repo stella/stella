@@ -1,47 +1,22 @@
-/// <reference path="./atlaskit-cjs.d.ts" />
+import { autoScrollForElements } from "@atlaskit/pragmatic-drag-and-drop-auto-scroll/element";
+import { autoScrollForExternal } from "@atlaskit/pragmatic-drag-and-drop-auto-scroll/external";
+import { combine } from "@atlaskit/pragmatic-drag-and-drop/combine";
+import { draggable } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
+import { centerUnderPointer } from "@atlaskit/pragmatic-drag-and-drop/element/center-under-pointer";
+import { setCustomNativeDragPreview } from "@atlaskit/pragmatic-drag-and-drop/element/set-custom-native-drag-preview";
 
-import type {
-  draggable as atlaskitDraggable,
-  dropTargetForElements as atlaskitDropTargetForElements,
-  monitorForElements as atlaskitMonitorForElements,
-} from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
-import { autoScrollForElements } from "@atlaskit/pragmatic-drag-and-drop-auto-scroll/dist/cjs/entry-point/element.js";
-import { autoScrollForExternal } from "@atlaskit/pragmatic-drag-and-drop-auto-scroll/dist/cjs/entry-point/external.js";
-import { combine } from "@atlaskit/pragmatic-drag-and-drop/dist/cjs/entry-point/combine.js";
-import {
-  draggable,
-  dropTargetForElements,
-  monitorForElements,
-} from "@atlaskit/pragmatic-drag-and-drop/dist/cjs/entry-point/element/adapter.js";
-import { centerUnderPointer } from "@atlaskit/pragmatic-drag-and-drop/dist/cjs/entry-point/element/center-under-pointer.js";
-import { setCustomNativeDragPreview } from "@atlaskit/pragmatic-drag-and-drop/dist/cjs/entry-point/element/set-custom-native-drag-preview.js";
+type AtlaskitDraggableOptions = Parameters<typeof draggable>[0];
 
 export type RegisterKanbanCardDragOptions = {
   /** The drag wrapper rendered by `KanbanCardShell`. */
-  element: HTMLElement;
+  element: AtlaskitDraggableOptions["element"];
   /** Domain data read by the board's drop monitor. */
-  getInitialData: () => Record<string | symbol, unknown>;
+  getInitialData: NonNullable<AtlaskitDraggableOptions["getInitialData"]>;
   /** Omit when every rendered card may move. */
-  canDrag?: (() => boolean) | undefined;
-  onDragStart?: (() => void) | undefined;
-  onDrop?: (() => void) | undefined;
+  canDrag?: AtlaskitDraggableOptions["canDrag"];
+  onDragStart?: AtlaskitDraggableOptions["onDragStart"];
+  onDrop?: AtlaskitDraggableOptions["onDrop"];
 };
-
-/**
- * Register every kanban element against the package's shared drag adapter.
- *
- * Drag sources, drop targets, and monitors must use these exports together.
- * Mixing module formats creates separate adapter registries in some bundlers.
- */
-export const registerKanbanDraggable: typeof atlaskitDraggable = (options) =>
-  draggable(options);
-
-export const registerKanbanDropTarget: typeof atlaskitDropTargetForElements = (
-  options,
-) => dropTargetForElements(options);
-
-export const monitorKanbanDrags: typeof atlaskitMonitorForElements = (options) =>
-  monitorForElements(options);
 
 /**
  * Register the standard kanban card drag source and native preview.
@@ -57,7 +32,7 @@ export const registerKanbanCardDrag = ({
   onDragStart,
   onDrop,
 }: RegisterKanbanCardDragOptions): (() => void) =>
-  registerKanbanDraggable({
+  draggable({
     element,
     getInitialData,
     ...(canDrag === undefined ? {} : { canDrag }),

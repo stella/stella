@@ -7,6 +7,10 @@ import {
 } from "@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge";
 import type { Edge } from "@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge";
 import { combine } from "@atlaskit/pragmatic-drag-and-drop/combine";
+import {
+  draggable,
+  dropTargetForElements,
+} from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   EllipsisVerticalIcon,
@@ -37,11 +41,7 @@ import {
   ColorPickerContent,
   DEFAULT_PRESETS,
 } from "@stll/ui/color-picker";
-import {
-  KanbanColumnHeader,
-  registerKanbanDraggable,
-  registerKanbanDropTarget,
-} from "@stll/ui/kanban";
+import { KanbanColumnHeader } from "@stll/ui/kanban";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 import { containedEventHandler } from "@stll/ui/use-contained-handler";
@@ -219,7 +219,7 @@ export const KanbanColumn = ({
 
     const cleanups = [
       // Drop target for entity cards and column reorder
-      registerKanbanDropTarget({
+      dropTargetForElements({
         element: el,
         canDrop: ({ source }) => {
           if (source.data["type"] === ENTITY_DRAG_TYPE) {
@@ -298,7 +298,7 @@ export const KanbanColumn = ({
     // grip icon is the drag handle (Trello-style).
     if (isDraggable && handle) {
       cleanups.push(
-        registerKanbanDraggable({
+        draggable({
           element: el,
           dragHandle: handle,
           getInitialData: () =>
