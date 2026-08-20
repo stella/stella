@@ -7,6 +7,7 @@ import { useTranslations } from "use-intl";
 
 import { isTaskStatus } from "@stll/api-contract";
 import type { TaskStatus } from "@stll/api-contract";
+import { CalendarEntryButton } from "@stll/ui/calendar";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
 import { containedHandler } from "@stll/ui/use-contained-handler";
 import { cn } from "@stll/ui/utils";
@@ -102,7 +103,7 @@ export const CalendarEntityChip = ({
   });
 
   const card = (
-    <button
+    <CalendarEntryButton
       ref={dragRef}
       className={cn(
         "bg-card w-full rounded border border-s-2 px-1.5 py-0.5",
@@ -115,12 +116,11 @@ export const CalendarEntityChip = ({
       )}
       // eslint-disable-next-line react/react-compiler -- containedHandler house pattern; dragRef is handed to the helper, not read for rendered output
       onClick={containedHandler(dragRef, handleClick)}
-      type="button"
     >
       <span className="flex min-w-0 items-center gap-1">
         <span className="truncate">{name}</span>
       </span>
-    </button>
+    </CalendarEntryButton>
   );
 
   return (
