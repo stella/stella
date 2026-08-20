@@ -3,6 +3,13 @@ import { createLogger, type ConfigEnv, type UserConfig } from "vite";
 
 import config, { capViteLogger, rewriteBrowserApiPath } from "./vite.config";
 
+const KANBAN_DRAG_DEPENDENCY_ENTRY_POINTS = [
+  "@atlaskit/pragmatic-drag-and-drop/combine",
+  "@atlaskit/pragmatic-drag-and-drop/element/adapter",
+  "@atlaskit/pragmatic-drag-and-drop/element/center-under-pointer",
+  "@atlaskit/pragmatic-drag-and-drop/element/set-custom-native-drag-preview",
+] as const;
+
 describe("vite config", () => {
   test("matches the deployed browser API prefix contract", () => {
     expect(rewriteBrowserApiPath("/api/v1/me")).toBe("/v1/me");
@@ -107,6 +114,12 @@ describe("vite config", () => {
   test("serves the PDF.js worker outside the dependency optimizer", () => {
     expect(resolveConfig("test").optimizeDeps?.exclude).toContain(
       "pdfjs-dist/build/pdf.worker.mjs",
+    );
+  });
+
+  test("prebundles the kanban drag runtime before lazy-route navigation", () => {
+    expect(resolveConfig("test").optimizeDeps?.include).toEqual(
+      expect.arrayContaining(Array.from(KANBAN_DRAG_DEPENDENCY_ENTRY_POINTS)),
     );
   });
 
