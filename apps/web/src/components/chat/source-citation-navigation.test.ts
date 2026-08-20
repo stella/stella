@@ -1,17 +1,23 @@
 import { describe, expect, mock, test } from "bun:test";
 
+import type { ChatSourceCitationTarget } from "@stll/api-contract";
+
 import { activateSourceCitation } from "@/components/chat/source-citation-navigation";
 import { toSafeId } from "@/lib/safe-id";
 
 const identity = {
   workspaceId: toSafeId<"workspace">("workspace-1"),
   entityId: toSafeId<"entity">("entity-1"),
+  entityVersionId: toSafeId<"entityVersion">("version-1"),
   fieldId: toSafeId<"field">("field-cited"),
 };
 
 const createDeps = (opened = true) => ({
   dispatchBlockScroll: mock(() => undefined),
-  openSource: mock(async () => opened),
+  openSource: mock(
+    async (_target: ChatSourceCitationTarget, _isCurrent: () => boolean) =>
+      opened,
+  ),
   requestBlockScroll: mock(() => undefined),
   requestPdfPageScroll: mock(() => undefined),
 });
@@ -28,7 +34,7 @@ describe("source-bound chat citation navigation", () => {
 
     await activateSourceCitation({ deps, target });
 
-    expect(deps.openSource).toHaveBeenCalledWith(target);
+    expect(deps.openSource).toHaveBeenCalledWith(target, expect.any(Function));
     expect(deps.requestPdfPageScroll).toHaveBeenCalledWith({
       tabId: identity.fieldId,
       pageNumber: 9,
@@ -80,5 +86,44 @@ describe("source-bound chat citation navigation", () => {
     expect(deps.requestPdfPageScroll).not.toHaveBeenCalled();
     expect(deps.requestBlockScroll).not.toHaveBeenCalled();
     expect(deps.dispatchBlockScroll).not.toHaveBeenCalled();
+  });
+
+  test("ignores a citation whose source resolves after a newer activation", async () => {
+    let finishFirst: ((opened: boolean) => void) | undefined;
+    const firstOpened = new Promise<boolean>((resolve) => {
+      finishFirst = resolve;
+    });
+    const deps = createDeps();
+    deps.openSource = mock(async (target: ChatSourceCitationTarget) =>
+      target.fieldId === identity.fieldId ? await firstOpened : true,
+    );
+    const first = activateSourceCitation({
+      deps,
+      target: {
+        ...identity,
+        type: "pdf-bates",
+        pageNumber: 2,
+        bates: "F0-0002",
+      },
+    });
+    const newerTarget = {
+      ...identity,
+      entityId: toSafeId<"entity">("entity-2"),
+      entityVersionId: toSafeId<"entityVersion">("version-2"),
+      fieldId: toSafeId<"field">("field-newer"),
+      type: "pdf-bates" as const,
+      pageNumber: 8,
+      bates: "F1-0008",
+    };
+
+    await activateSourceCitation({ deps, target: newerTarget });
+    finishFirst?.(true);
+    await first;
+
+    expect(deps.requestPdfPageScroll).toHaveBeenCalledTimes(1);
+    expect(deps.requestPdfPageScroll).toHaveBeenCalledWith({
+      tabId: newerTarget.fieldId,
+      pageNumber: newerTarget.pageNumber,
+    });
   });
 });

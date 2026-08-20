@@ -69,6 +69,7 @@ const createSourceCitationRefKey = (target: ChatSourceCitationTarget) => {
         target.type,
         target.workspaceId,
         target.entityId,
+        target.entityVersionId,
         target.fieldId,
         target.blockId,
         target.text,
@@ -78,6 +79,7 @@ const createSourceCitationRefKey = (target: ChatSourceCitationTarget) => {
         target.type,
         target.workspaceId,
         target.entityId,
+        target.entityVersionId,
         target.fieldId,
         target.pageNumber,
         target.bates,
@@ -370,6 +372,14 @@ export const createChatRefRegistry = (): ChatRefRegistry => {
   };
 
   const resolveAssistantTextRefs = (text: string) => {
+    // Only opaque refs minted by this registry are trusted on live model
+    // output. Reject any canonical locator the model wrote directly before
+    // resolving legitimate refs into canonical persisted links.
+    const withoutDirectSourceCitations =
+      replaceCanonicalChatSourceCitationHrefs(
+        text,
+        () => CHAT_UNRESOLVED_REF_HREF,
+      );
     const withSourceCitationRefs = replaceRefLinks({
       regex: SOURCE_CITATION_REF_LINK_REGEX,
       resolve: (ref) => {
@@ -380,7 +390,7 @@ export const createChatRefRegistry = (): ChatRefRegistry => {
         }
         return toChatSourceCitationHref(target);
       },
-      text,
+      text: withoutDirectSourceCitations,
     });
 
     const withWorkspaceRefs = replaceRefLinks({

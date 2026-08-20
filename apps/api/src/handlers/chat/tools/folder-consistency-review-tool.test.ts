@@ -58,25 +58,25 @@ const createFileContent = (index: number) => ({
   pdfFileId: null,
 });
 
-const createSafeDb = (): SafeDb => {
+const createSafeDb = (
+  fileContentAt: (
+    index: number,
+  ) => ReturnType<typeof createFileContent> = createFileContent,
+): SafeDb => {
   const tx = {
     execute: async () => documentRows,
     query: {
       entities: {
         findFirst: async () => ({ kind: "folder", name: "Loan security" }),
         findMany: async () =>
-          documentRows
-            .slice(0, LIMITS.folderConsistencyReviewDocumentsMax)
-            .map((row, index) => ({
-              id: toSafeId<"entity">(row.id),
-              name: row.name,
-              currentVersion: {
-                id: toSafeId<"entityVersion">(indexedId(index + 100)),
-                fields: [
-                  { id: fieldIdAt(index), content: createFileContent(index) },
-                ],
-              },
-            })),
+          documentRows.map((row, index) => ({
+            id: toSafeId<"entity">(row.id),
+            name: row.name,
+            currentVersion: {
+              id: toSafeId<"entityVersion">(indexedId(index + 100)),
+              fields: [{ id: fieldIdAt(index), content: fileContentAt(index) }],
+            },
+          })),
       },
     },
   };
@@ -208,6 +208,73 @@ describe("review_folder_consistency", () => {
         blockId: "A1B2C3D4",
       },
     ]);
+  });
+
+  test("fills the review cap after excluding unsupported documents", async () => {
+    const refRegistry = createChatRefRegistry();
+    const folderRef = refRegistry.toEntityRef({
+      entityId: folderId,
+      workspaceId,
+    });
+    const tools = createFolderConsistencyReviewTools({
+      createAbortSignal: () => new AbortController().signal,
+      extractAskContentsFn: async ({ resolvedFiles }) => {
+        expect(resolvedFiles).toHaveLength(
+          LIMITS.folderConsistencyReviewDocumentsMax,
+        );
+        return Result.ok({
+          lastBlockId: null,
+          contentBySourceId: new Map([
+            [
+              "cross-document-consistency",
+              {
+                content: { type: "text", version: 1, value: "No conflict." },
+                citations: [],
+              },
+            ],
+          ]),
+        });
+      },
+      organizationId,
+      orgAIConfig: null,
+      promptCachingEnabled: false,
+      refRegistry,
+      safeDb: createSafeDb((index) =>
+        index === 0
+          ? {
+              ...createFileContent(index),
+              mimeType: "application/vnd.ms-excel",
+            }
+          : createFileContent(index),
+      ),
+      toolWorkspaceIds: resolveToolWorkspaceIds({
+        pinnedIds: [],
+        accessibleWorkspaceIds: [workspaceId],
+      }),
+      userId,
+    });
+    const execute = tools[REVIEW_FOLDER_CONSISTENCY_TOOL_NAME]?.execute;
+    if (!execute) {
+      throw new Error("review_folder_consistency must be server-executed");
+    }
+
+    const output = await execute(
+      { folderRef },
+      asTestRaw<Parameters<typeof execute>[1]>({}),
+    );
+
+    expect(output.documentsReviewed).toHaveLength(20);
+    expect(output.documentsReviewed.at(0)?.name).toBe("Document 2");
+    expect(output.documentsReviewed.at(-1)?.name).toBe("Document 21");
+    expect(output.documentsSkipped).toEqual([
+      {
+        documentRef: "ent_22",
+        name: "Document 1",
+        reason:
+          "No citable PDF, DOCX, or PDF-converted Office file was available.",
+      },
+    ]);
+    expect(output.documentsNotChecked).toEqual([]);
   });
 
   test("does not register without an authorized matter", () => {

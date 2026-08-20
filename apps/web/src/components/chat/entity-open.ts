@@ -229,7 +229,9 @@ export const openEntityInInspector = async (
 
 type OpenSourceBoundEntityFileArgs = {
   entityId: string;
+  entityVersionId: string;
   fieldId: string;
+  isCurrent?: (() => boolean) | undefined;
   workspaceId: string;
 };
 
@@ -239,23 +241,36 @@ type OpenSourceBoundEntityFileArgs = {
  * file, because that would make a valid citation land on the wrong source. */
 export const openSourceBoundEntityFile = async ({
   entityId,
+  entityVersionId,
   fieldId,
+  isCurrent = () => true,
   workspaceId,
 }: OpenSourceBoundEntityFileArgs): Promise<boolean> => {
   try {
     const response = await api
       .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
       .entity({ entityId: toSafeId<"entity">(entityId) })
-      .get();
+      .field({ fieldId: toSafeId<"field">(fieldId) })
+      .file.get();
     const data = unwrapEden(response);
-    const opened = openEntityFileFieldInInspector({
-      entityId,
-      fieldId,
-      fields: data.fields,
-      label: data.name,
-      workspaceId,
-    });
-    if (opened) {
+    if (
+      isCurrent() &&
+      data.entityVersionId === entityVersionId &&
+      data.file !== null &&
+      isFileDisplayable(data.file)
+    ) {
+      const inspector = useInspectorTabsStore.getState();
+      inspector.openFile({
+        id: fieldId,
+        entityId,
+        label: data.file.fileName,
+        fileName: data.file.fileName,
+        mimeType: data.file.mimeType,
+        pdfFileId: data.file.pdfFileId,
+        propertyId: data.file.propertyId,
+        workspaceId,
+      });
+      inspector.setFileFacet(fieldId, "preview");
       return true;
     }
 

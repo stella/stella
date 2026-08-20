@@ -7,6 +7,7 @@ import { t } from "elysia";
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import {
   CHAT_EDIT_APPLY_MODE,
+  CHAT_RICH_PART_LIMITS,
   CHAT_RUN_MODE,
   CHAT_TURN_INTENT,
   DEFAULT_CHAT_EDIT_APPLY_MODE,
@@ -1020,7 +1021,11 @@ const parseAnonRestorationsMetadata = (
 const parseMentionsMetadata = (
   value: unknown,
 ): ChatMessageMetadata["mentions"] | null => {
-  if (!isJsonRecord(value) || !Array.isArray(value["mentions"])) {
+  if (
+    !isJsonRecord(value) ||
+    !Array.isArray(value["mentions"]) ||
+    value["mentions"].length > CHAT_RICH_PART_LIMITS.mentionsMax
+  ) {
     return null;
   }
 
@@ -1571,7 +1576,13 @@ export const parseMessage = ({
         accessibleWorkspaceIds,
       );
 
-      mentions.push(...normalizedText.mentions);
+      const remainingMentionCapacity =
+        CHAT_RICH_PART_LIMITS.mentionsMax - mentions.length;
+      if (remainingMentionCapacity > 0) {
+        mentions.push(
+          ...normalizedText.mentions.slice(0, remainingMentionCapacity),
+        );
+      }
       normalizedParts.push({
         ...part,
         content: normalizedText.text,

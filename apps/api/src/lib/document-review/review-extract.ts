@@ -194,6 +194,24 @@ export const collectReviewCitations = (
   return citations;
 };
 
+export const keepNavigableReviewCitations = (
+  citations: readonly ReviewCitation[],
+  preparedFiles: readonly PreparedInputFile[],
+): ReviewCitation[] => {
+  const pdfPageCounts = new Map(
+    preparedFiles.flatMap((file) =>
+      file.kind === "pdf" ? [[file.fileFieldId, file.pageCount] as const] : [],
+    ),
+  );
+  return citations.filter((citation) => {
+    if (citation.kind !== "pdf-bates") {
+      return true;
+    }
+    const pageCount = pdfPageCounts.get(citation.fileFieldId);
+    return pageCount !== undefined && citation.pageNumber <= pageCount;
+  });
+};
+
 const lastDocxBlockId = (files: PreparedInputFile[]): string | null => {
   for (const file of files) {
     if (file.kind === "docx") {
@@ -313,7 +331,10 @@ export const extractAskContents = async ({
         filenames,
       });
       const citations = Result.isOk(justification)
-        ? collectReviewCitations(justification.value?.content ?? null)
+        ? keepNavigableReviewCitations(
+            collectReviewCitations(justification.value?.content ?? null),
+            preparedFiles,
+          )
         : [];
 
       contentBySourceId.set(sourceId, {

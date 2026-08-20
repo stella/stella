@@ -49,7 +49,7 @@ export { isAISupportedFile };
 const addBatesNumbers = async (
   pdfBuffer: ArrayBuffer,
   simplifiedName: string,
-): Promise<Uint8Array> => {
+): Promise<{ content: Uint8Array; pageCount: number }> => {
   const pdfDocument = await PDF.load(new Uint8Array(pdfBuffer));
   const font = Standard14Font.of(StandardFonts.Helvetica);
   const pages = pdfDocument.getPages();
@@ -89,7 +89,10 @@ const addBatesNumbers = async (
     }
   }
 
-  return await pdfDocument.save();
+  return {
+    content: await pdfDocument.save(),
+    pageCount: pages.length,
+  };
 };
 
 export type PreparedPdfFile = {
@@ -97,6 +100,7 @@ export type PreparedPdfFile = {
   fileFieldId: SafeId<"field">;
   fileId: string;
   content: Uint8Array;
+  pageCount: number;
   mimeType: typeof PDF_MIME_TYPE;
   simplifiedName: string;
 };
@@ -197,7 +201,8 @@ export const fetchAndPrepareFiles = async (
         kind: "pdf",
         fileFieldId: meta.fileFieldId,
         fileId: meta.fileId,
-        content: preparedPdf,
+        content: preparedPdf.content,
+        pageCount: preparedPdf.pageCount,
         mimeType: PDF_MIME_TYPE,
         simplifiedName,
       };

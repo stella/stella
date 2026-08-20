@@ -668,6 +668,7 @@ export const CHAT_RICH_PART_LIMITS = {
   inlineMediaMaxChars: 4 * 1024 * 1024,
   mediaMimeTypeMaxChars: 255,
   mediaUrlMaxChars: 2048,
+  mentionsMax: 100,
   uiResourceContentMaxChars: 1024 * 1024,
   uiResourceUriMaxChars: 2048,
 } as const;

@@ -6,7 +6,10 @@ type SourceCitationNavigationDeps = {
     fieldId: string;
     text?: string | undefined;
   }) => void;
-  openSource: (target: ChatSourceCitationTarget) => Promise<boolean>;
+  openSource: (
+    target: ChatSourceCitationTarget,
+    isCurrent: () => boolean,
+  ) => Promise<boolean>;
   requestBlockScroll: (request: {
     tabId: string;
     blockId: string;
@@ -16,6 +19,14 @@ type SourceCitationNavigationDeps = {
     tabId: string;
     pageNumber: number;
   }) => void;
+};
+
+let latestSourceCitationActivation = 0;
+
+const beginSourceCitationActivation = (): (() => boolean) => {
+  latestSourceCitationActivation += 1;
+  const activation = latestSourceCitationActivation;
+  return () => activation === latestSourceCitationActivation;
 };
 
 /** Open a verified source before delivering its locator to the exact viewer.
@@ -28,7 +39,8 @@ export const activateSourceCitation = async ({
   deps: SourceCitationNavigationDeps;
   target: ChatSourceCitationTarget;
 }): Promise<void> => {
-  if (!(await deps.openSource(target))) {
+  const isCurrent = beginSourceCitationActivation();
+  if (!(await deps.openSource(target, isCurrent)) || !isCurrent()) {
     return;
   }
 

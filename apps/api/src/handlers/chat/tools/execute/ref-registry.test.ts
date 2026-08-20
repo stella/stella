@@ -167,6 +167,7 @@ describe("chat ref registry", () => {
       type: "pdf-bates" as const,
       workspaceId: toSafeId<"workspace">("matter:eu-west-1"),
       entityId: toSafeId<"entity">("loan-agreement"),
+      entityVersionId: toSafeId<"entityVersion">("loan-agreement-v1"),
       fieldId: toSafeId<"field">("signed-pdf"),
       pageNumber: 7,
       bates: "F0-0007",
@@ -194,6 +195,11 @@ describe("chat ref registry", () => {
         "[Fabricated](#stella-source-ref=src_99)",
       ),
     ).toBe(`[Fabricated](${CHAT_UNRESOLVED_REF_HREF})`);
+    expect(
+      createChatRefRegistry().resolveAssistantTextRefs(
+        `[Direct canonical](${canonicalHref})`,
+      ),
+    ).toBe(`[Direct canonical](${CHAT_UNRESOLVED_REF_HREF})`);
   });
 
   test("does not accept raw UUIDs as refs", () => {

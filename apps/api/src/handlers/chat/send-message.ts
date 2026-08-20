@@ -77,6 +77,7 @@ import {
 import type { ChatTurnExecution } from "@/api/handlers/chat/chat-turn-persistence";
 import type { ChatTurnFailureCode } from "@/api/handlers/chat/chat-turn-state";
 import {
+  COMPACTION_SUMMARY_MESSAGE_ID,
   compactChatMessagesForModel,
   chatThreadNeedsCompaction,
 } from "@/api/handlers/chat/compaction";
@@ -2830,6 +2831,13 @@ const hydrateAssistantMessageRefs = ({
         }
       : part;
 
+  const hydrateCompactionPart = (
+    part: ChatMessage["parts"][number],
+  ): ChatMessage["parts"][number] =>
+    part.type === "text"
+      ? { ...part, content: refRegistry.hydrateAssistantTextRefs(part.content) }
+      : part;
+
   const hydratedMessages: ChatMessage[] = [];
   for (const message of messages) {
     if (message.role === "assistant") {
@@ -2900,7 +2908,11 @@ const hydrateAssistantMessageRefs = ({
     if (message.role === "user") {
       hydratedMessages.push({
         ...message,
-        parts: message.parts.map(hydrateUserPart),
+        parts: message.parts.map(
+          message.id === COMPACTION_SUMMARY_MESSAGE_ID
+            ? hydrateCompactionPart
+            : hydrateUserPart,
+        ),
       });
       continue;
     }

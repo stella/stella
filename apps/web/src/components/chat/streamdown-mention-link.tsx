@@ -682,10 +682,12 @@ const SourceCitationChip = ({
                 activateSourceCitation({
                   target,
                   deps: {
-                    openSource: async (source) =>
+                    openSource: async (source, isCurrent) =>
                       await openSourceBoundEntityFile({
                         entityId: source.entityId,
+                        entityVersionId: source.entityVersionId,
                         fieldId: source.fieldId,
+                        isCurrent,
                         workspaceId: source.workspaceId,
                       }),
                     requestBlockScroll: (request) => {

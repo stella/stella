@@ -680,17 +680,23 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
     organizationId,
     scopedDb,
   });
-  const folderConsistencyReviewTools = createFolderConsistencyReviewTools({
-    createAbortSignal: createAIAbortSignal,
-    organizationId,
-    orgAIConfig,
-    promptCachingEnabled,
-    refRegistry,
-    safeDb,
-    toolWorkspaceIds,
-    userId,
-    usageLane,
-  });
+  // The nested review request sends the selected documents to the configured
+  // model. Until that request accepts the chat anonymization boundary, do not
+  // advertise a tool whose raw file reads would contradict anonymized mode.
+  const folderConsistencyReviewTools =
+    thirdPartyBoundary.type === "raw"
+      ? createFolderConsistencyReviewTools({
+          createAbortSignal: createAIAbortSignal,
+          organizationId,
+          orgAIConfig,
+          promptCachingEnabled,
+          refRegistry,
+          safeDb,
+          toolWorkspaceIds,
+          userId,
+          usageLane,
+        })
+      : {};
   const webResearchAvailable = areWebResearchToolsRegistered({
     webSearchEnabled,
     webSearchProviders,

@@ -10,6 +10,7 @@ import { toSafeId } from "./safe-id";
 const identity = {
   workspaceId: toSafeId<"workspace">("matter:eu-west-1"),
   entityId: toSafeId<"entity">("document:facility-agreement"),
+  entityVersionId: toSafeId<"entityVersion">("version:executed-copy"),
   fieldId: toSafeId<"field">("field:executed-copy"),
 };
 
@@ -52,8 +53,14 @@ describe("chat source citation hrefs", () => {
     ).toBe("See [the repayment date](#source-ref=pdf-bates).");
     expect(parseCanonicalChatSourceCitationHref(`${href}:extra`)).toBeNull();
     expect(
+      replaceCanonicalChatSourceCitationHrefs(
+        `${href}:extra`,
+        () => "replaced",
+      ),
+    ).toBe(`${href}:extra`);
+    expect(
       parseCanonicalChatSourceCitationHref(
-        "#stella-source=pdf-bates:workspace:entity:field:0:F0-0000",
+        "#stella-source=pdf-bates:workspace:entity:version:field:0:F0-0000",
       ),
     ).toBeNull();
   });

@@ -5,6 +5,7 @@ import * as v from "valibot";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import {
+  CHAT_RICH_PART_LIMITS,
   CHAT_TURN_INTENT,
   resourceRef,
   RESOURCE_TYPE,
@@ -21,6 +22,7 @@ import {
   activeFileSchema,
   activeDraftSchema,
   agUiSendMessageBodySchema,
+  parseMessage,
   sendMessageBodySchema,
   validateMessage as validateMessageWithPersistence,
 } from "@/api/handlers/chat/chat-schema";
@@ -347,6 +349,33 @@ describe("validateChatFileParts", () => {
     expect(result.error.status).toBe(400);
     expect(result.error.message).toBe(
       "Chat attachments must use base64 data URLs or stella user-file URLs",
+    );
+  });
+});
+
+describe("parseMessage", () => {
+  test("caps mentions accumulated across text parts", () => {
+    const accessibleWorkspaceId = toSafeId<"workspace">("workspace_1");
+    const parts = Array.from(
+      { length: CHAT_RICH_PART_LIMITS.mentionsMax + 1 },
+      (_, index) => ({
+        type: "text" as const,
+        content: `<entity-mention data-id="entity_${index}" data-label="Document ${index}" data-category="entity" data-source-workspace-id="${accessibleWorkspaceId}"></entity-mention>`,
+      }),
+    );
+
+    const parsed = parseMessage({
+      accessibleWorkspaceIds: [accessibleWorkspaceId],
+      message: toPersistableChatMessage({
+        id: chatMessageId("msg_many_mentions"),
+        role: "user",
+        parts,
+      }),
+    });
+
+    expect(parsed.mentions).toHaveLength(CHAT_RICH_PART_LIMITS.mentionsMax);
+    expect(parsed.mentions.at(-1)?.id).toBe(
+      `entity_${CHAT_RICH_PART_LIMITS.mentionsMax - 1}`,
     );
   });
 });

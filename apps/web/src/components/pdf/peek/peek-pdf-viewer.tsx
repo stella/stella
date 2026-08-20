@@ -181,26 +181,6 @@ const PeekPdfViewerContent = ({
   const clearPendingPdfPageScroll = useInspectorCommandStore(
     (state) => state.clearPendingPdfPageScroll,
   );
-  const citationPageId = usePDFStore((state) =>
-    resolvePendingPdfCitationPageId({
-      fieldId,
-      pages: state.pages,
-      request: pendingPdfPageScroll,
-    }),
-  );
-  const setScrollTo = usePDFStore((state) => state.setScrollTo);
-
-  // A chat citation may activate a file before its lazy PDF viewer exists.
-  // Keep the field-targeted request in the inspector command store until this
-  // exact viewer has loaded its page map, then hand it to the existing PDF
-  // scroll path. Other mounted viewers ignore the request by construction.
-  useExternalSyncEffect(() => {
-    if (citationPageId === undefined) {
-      return;
-    }
-    setScrollTo({ pageId: citationPageId });
-    clearPendingPdfPageScroll();
-  }, [citationPageId, clearPendingPdfPageScroll, setScrollTo]);
 
   const fileQuery = useQuery(
     fileOptions({ workspaceId, fieldId, purpose: filePurpose }),
@@ -251,21 +231,28 @@ const PeekPdfViewerContent = ({
   }
 
   const viewport = (
-    <PDFViewport
-      buffer={file.buffer}
-      className="document-preview-surface h-full"
-      contentClassName="relative space-y-2 px-2 pt-2"
-      fileId={fieldId}
-      invertColors={isImageOrigin ? false : undefined}
-      scaleOffset={scaleOffset}
-      activeSearchMatchIndex={activeSearchMatchIndex}
-      onSearchMatchSummaryChange={onSearchMatchSummaryChange}
-      onWheelZoom={onWheelZoom}
-      searchText={searchText}
-      renderPage={(props) => (
-        <PDFPage {...props} renderOverlay={renderPageOverlay} />
-      )}
-    />
+    <>
+      <PeekPdfCitationNavigation
+        clearPendingPdfPageScroll={clearPendingPdfPageScroll}
+        fieldId={fieldId}
+        pendingPdfPageScroll={pendingPdfPageScroll}
+      />
+      <PDFViewport
+        buffer={file.buffer}
+        className="document-preview-surface h-full"
+        contentClassName="relative space-y-2 px-2 pt-2"
+        fileId={fieldId}
+        invertColors={isImageOrigin ? false : undefined}
+        scaleOffset={scaleOffset}
+        activeSearchMatchIndex={activeSearchMatchIndex}
+        onSearchMatchSummaryChange={onSearchMatchSummaryChange}
+        onWheelZoom={onWheelZoom}
+        searchText={searchText}
+        renderPage={(props) => (
+          <PDFPage {...props} renderOverlay={renderPageOverlay} />
+        )}
+      />
+    </>
   );
 
   if (interactionMode === "preview-only") {
@@ -280,6 +267,38 @@ const PeekPdfViewerContent = ({
       {viewport}
     </FileViewerWithAI>
   );
+};
+
+const PeekPdfCitationNavigation = ({
+  clearPendingPdfPageScroll,
+  fieldId,
+  pendingPdfPageScroll,
+}: {
+  clearPendingPdfPageScroll: () => void;
+  fieldId: string;
+  pendingPdfPageScroll: { tabId: string; pageNumber: number } | null;
+}) => {
+  const citationPageId = usePDFStore((state) =>
+    resolvePendingPdfCitationPageId({
+      fieldId,
+      pages: state.pages,
+      request: pendingPdfPageScroll,
+    }),
+  );
+  const setScrollTo = usePDFStore((state) => state.setScrollTo);
+
+  // A chat citation may activate a file before its lazy PDF viewer exists.
+  // This consumer renders only on the PDF branch, below PDFProvider; native
+  // DOCX previews never read the PDF store.
+  useExternalSyncEffect(() => {
+    if (citationPageId === undefined) {
+      return;
+    }
+    setScrollTo({ pageId: citationPageId });
+    clearPendingPdfPageScroll();
+  }, [citationPageId, clearPendingPdfPageScroll, setScrollTo]);
+
+  return null;
 };
 
 const defaultPeekViewerErrorFallback = ({ reset }: { reset: () => void }) => (

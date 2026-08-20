@@ -17,7 +17,9 @@ describe("queued PDF citation navigation", () => {
     ).toBeUndefined();
 
     const citedPageId = getPageId("field-cited", 6);
+    const otherPageId = getPageId("field-other", 6);
     pages.set(citedPageId, {});
+    pages.set(otherPageId, {});
     expect(
       resolvePendingPdfCitationPageId({
         fieldId: "field-cited",

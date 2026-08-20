@@ -188,19 +188,15 @@ const loadFolderReviewSnapshot = async ({
     const documentRows = descendants.filter(
       (descendant) => descendant.kind === "document",
     );
-    const selectedRows = documentRows.slice(
-      0,
-      LIMITS.folderConsistencyReviewDocumentsMax,
-    );
-    const selectedIds = selectedRows.map(({ id }) =>
+    const documentIds = documentRows.map(({ id }) =>
       brandPersistedEntityId(id),
     );
     const selectedEntities =
-      selectedIds.length === 0
+      documentIds.length === 0
         ? []
         : await tx.query.entities.findMany({
             where: {
-              id: { in: selectedIds },
+              id: { in: documentIds },
               workspaceId: { eq: workspaceId },
             },
             columns: { id: true, name: true },
@@ -216,15 +212,16 @@ const loadFolderReviewSnapshot = async ({
                 },
               },
             },
-            limit: LIMITS.folderConsistencyReviewDocumentsMax,
+            limit: documentIds.length,
           });
     const selectedById = new Map(
       selectedEntities.map((entity) => [entity.id, entity]),
     );
     const reviewDocuments: ReviewDocument[] = [];
     const skippedDocuments: SkippedDocument[] = [];
+    const notCheckedDocuments: FolderReviewSnapshot["notCheckedDocuments"] = [];
 
-    for (const row of selectedRows) {
+    for (const row of documentRows) {
       const entityId = brandPersistedEntityId(row.id);
       const entity = selectedById.get(entityId);
       if (!entity?.currentVersion) {
@@ -256,6 +253,12 @@ const loadFolderReviewSnapshot = async ({
         });
         continue;
       }
+      if (
+        reviewDocuments.length >= LIMITS.folderConsistencyReviewDocumentsMax
+      ) {
+        notCheckedDocuments.push({ entityId, name: row.name });
+        continue;
+      }
       reviewDocuments.push({
         entityId,
         entityVersionId: brandPersistedEntityVersionId(
@@ -274,12 +277,7 @@ const loadFolderReviewSnapshot = async ({
       snapshotLimitReached,
       reviewDocuments,
       skippedDocuments,
-      notCheckedDocuments: documentRows
-        .slice(LIMITS.folderConsistencyReviewDocumentsMax)
-        .map(({ id, name }) => ({
-          entityId: brandPersistedEntityId(id),
-          name,
-        })),
+      notCheckedDocuments,
       snapshotDocumentCount: documentRows.length,
     };
   });
@@ -342,6 +340,7 @@ const mapCitation = ({
           type: citation.kind,
           workspaceId,
           entityId: document.entityId,
+          entityVersionId: document.entityVersionId,
           fieldId: citation.fileFieldId,
           blockId: citation.blockId,
           text: citation.text,
@@ -359,6 +358,7 @@ const mapCitation = ({
           type: citation.kind,
           workspaceId,
           entityId: document.entityId,
+          entityVersionId: document.entityVersionId,
           fieldId: citation.fileFieldId,
           pageNumber: citation.pageNumber,
           bates: citation.bates,

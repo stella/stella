@@ -2,7 +2,10 @@ import { describe, expect, test } from "bun:test";
 
 import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
-import { collectReviewCitations } from "@/api/lib/document-review/review-extract";
+import {
+  collectReviewCitations,
+  keepNavigableReviewCitations,
+} from "@/api/lib/document-review/review-extract";
 import type {
   AIJustificationOutput,
   JustificationFilenames,
@@ -87,6 +90,11 @@ describe("review extraction citations", () => {
                     text: "Paragraph",
                   },
                   {
+                    citationStatus: "verified",
+                    blockId: "AAAA0001",
+                    text: "Paragraph",
+                  },
+                  {
                     citationStatus: "unverified",
                     text: "model hint",
                   },
@@ -120,6 +128,48 @@ describe("review extraction citations", () => {
         blockId: "AAAA0001",
         text: "Paragraph",
         statement: "claim two",
+      },
+    ]);
+  });
+
+  test("rejects PDF locators beyond the prepared file page count", () => {
+    expect(
+      keepNavigableReviewCitations(
+        [
+          {
+            kind: "pdf-bates",
+            fileFieldId: field("f-pdf"),
+            bates: "F0-0002",
+            pageNumber: 2,
+            statement: "inside",
+          },
+          {
+            kind: "pdf-bates",
+            fileFieldId: field("f-pdf"),
+            bates: "F0-9999",
+            pageNumber: 9999,
+            statement: "outside",
+          },
+        ],
+        [
+          {
+            kind: "pdf",
+            fileFieldId: field("f-pdf"),
+            fileId: "pdf-file",
+            content: new Uint8Array(),
+            mimeType: "application/pdf",
+            pageCount: 2,
+            simplifiedName: "F0",
+          },
+        ],
+      ),
+    ).toEqual([
+      {
+        kind: "pdf-bates",
+        fileFieldId: field("f-pdf"),
+        bates: "F0-0002",
+        pageNumber: 2,
+        statement: "inside",
       },
     ]);
   });

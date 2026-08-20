@@ -6,6 +6,7 @@ export const CHAT_SOURCE_CITATION_HREF_PREFIX = "#stella-source=";
 
 type SourceIdentity = {
   entityId: SafeId<"entity">;
+  entityVersionId: SafeId<"entityVersion">;
   fieldId: SafeId<"field">;
   workspaceId: SafeId<"workspace">;
 };
@@ -34,6 +35,7 @@ export const toChatSourceCitationHref = (
     target.type,
     encode(target.workspaceId),
     encode(target.entityId),
+    encode(target.entityVersionId),
     encode(target.fieldId),
   ];
 
@@ -58,13 +60,16 @@ const decode = (value: string): string | null => {
 const parseIdentity = (parts: readonly string[]): SourceIdentity | null => {
   const workspaceId = decode(parts[1] ?? "");
   const entityId = decode(parts[2] ?? "");
-  const fieldId = decode(parts[3] ?? "");
+  const entityVersionId = decode(parts[3] ?? "");
+  const fieldId = decode(parts[4] ?? "");
   if (
     workspaceId === null ||
     entityId === null ||
+    entityVersionId === null ||
     fieldId === null ||
     !isSafeIdValue(workspaceId) ||
     !isSafeIdValue(entityId) ||
+    !isSafeIdValue(entityVersionId) ||
     !isSafeIdValue(fieldId)
   ) {
     return null;
@@ -73,6 +78,7 @@ const parseIdentity = (parts: readonly string[]): SourceIdentity | null => {
   return {
     workspaceId: toSafeId<"workspace">(workspaceId),
     entityId: toSafeId<"entity">(entityId),
+    entityVersionId: toSafeId<"entityVersion">(entityVersionId),
     fieldId: toSafeId<"field">(fieldId),
   };
 };
@@ -91,9 +97,9 @@ export const parseChatSourceCitationHref = (
   }
 
   const type = parts[0];
-  if (type === "docx-folio" && parts.length === 6) {
-    const blockId = decode(parts[4] ?? "");
-    const text = decode(parts[5] ?? "");
+  if (type === "docx-folio" && parts.length === 7) {
+    const blockId = decode(parts[5] ?? "");
+    const text = decode(parts[6] ?? "");
     return blockId === null ||
       blockId.length === 0 ||
       text === null ||
@@ -102,9 +108,9 @@ export const parseChatSourceCitationHref = (
       : { ...identity, type, blockId, text };
   }
 
-  if (type === "pdf-bates" && parts.length === 6) {
-    const pageNumber = Number(parts[4]);
-    const bates = decode(parts[5] ?? "");
+  if (type === "pdf-bates" && parts.length === 7) {
+    const pageNumber = Number(parts[5]);
+    const bates = decode(parts[6] ?? "");
     return !Number.isInteger(pageNumber) ||
       pageNumber < 1 ||
       bates === null ||
@@ -129,7 +135,7 @@ const CANONICAL_COMPONENT = "(?:[A-Za-z0-9._~-]|%[0-9A-Fa-f]{2})+";
 const CANONICAL_HREF_BOUNDARY =
   "(?=$|[\\s()!\"',.;?`*>\\[\\]{}]|(?=(?![\\x00-\\x7F])\\p{P}))";
 const CHAT_SOURCE_CITATION_CANDIDATE_REGEX = new RegExp(
-  `${CHAT_SOURCE_CITATION_HREF_PREFIX}(?:docx-folio:${CANONICAL_COMPONENT}:${CANONICAL_COMPONENT}:${CANONICAL_COMPONENT}:${CANONICAL_COMPONENT}:${CANONICAL_COMPONENT}|pdf-bates:${CANONICAL_COMPONENT}:${CANONICAL_COMPONENT}:${CANONICAL_COMPONENT}:[1-9][0-9]*:${CANONICAL_COMPONENT})${CANONICAL_HREF_BOUNDARY}`,
+  `${CHAT_SOURCE_CITATION_HREF_PREFIX}(?:docx-folio:${CANONICAL_COMPONENT}:${CANONICAL_COMPONENT}:${CANONICAL_COMPONENT}:${CANONICAL_COMPONENT}:${CANONICAL_COMPONENT}:${CANONICAL_COMPONENT}|pdf-bates:${CANONICAL_COMPONENT}:${CANONICAL_COMPONENT}:${CANONICAL_COMPONENT}:${CANONICAL_COMPONENT}:[1-9][0-9]*:${CANONICAL_COMPONENT})${CANONICAL_HREF_BOUNDARY}`,
   "gu",
 );
 

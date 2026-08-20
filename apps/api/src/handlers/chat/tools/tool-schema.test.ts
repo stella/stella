@@ -22,6 +22,7 @@ import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
+import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
 import { APPLY_ACTIVE_DOCX_EDITS_TOOL_NAME } from "@/api/handlers/chat/tools/active-docx-edit-tool";
 import { resolveToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
 import {
@@ -31,6 +32,7 @@ import {
 import { getChatTools as getChatToolsWithPin } from "@/api/handlers/chat/tools/chat-tools";
 import { CREATE_WORKSPACE_DOCUMENT_TOOL_NAME } from "@/api/handlers/chat/tools/create-workspace-document-tools";
 import { EDIT_WORKSPACE_DOCUMENT_TOOL_NAME } from "@/api/handlers/chat/tools/edit-workspace-document-tools";
+import { REVIEW_FOLDER_CONSISTENCY_TOOL_NAME } from "@/api/handlers/chat/tools/folder-consistency-review-tool";
 import {
   ADD_COMMENT_TOOL_NAME,
   FIND_TEXT_TOOL_NAME,
@@ -60,6 +62,7 @@ import {
 import { projectSchemaInputJsonSchema } from "@/api/lib/tanstack-ai-schema";
 import type { UrlFetcher, WebSearchProvider } from "@/api/lib/web-search/types";
 import { DEFAULT_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import { createOrgTools } from "./org-tools";
 import { toTanStackToolSchema } from "./tanstack-tool-schema";
@@ -78,6 +81,9 @@ const workspaceId = toSafeId<"workspace">(
 const entityId = toSafeId<"entity">("44444444-4444-4444-8444-444444444444");
 const threadId = toSafeId<"chatThread">("55555555-5555-4555-8555-555555555555");
 const skillId = toSafeId<"agentSkill">("66666666-6666-4666-8666-666666666666");
+const rawThirdPartyBoundary = {
+  type: "raw",
+} as const satisfies ChatThirdPartyBoundary;
 
 const unusedScopedDb: ScopedDb = async () => {
   throw new Error("This test only constructs tool schemas.");
@@ -152,7 +158,9 @@ const requireArray = (value: unknown, description: string): unknown[] => {
 // docx edit client, web search enabled with a resolved provider, and an
 // editable active skill context. BOE, infosoud, and business-registry tools
 // register by default (no disabled slugs).
-const buildFullCoverageChatTools = () => {
+const buildFullCoverageChatTools = (
+  thirdPartyBoundary: ChatThirdPartyBoundary = rawThirdPartyBoundary,
+) => {
   const webSearchProvider: WebSearchProvider = {
     name: "tavily",
     search: async () => ({ results: [] }),
@@ -172,7 +180,7 @@ const buildFullCoverageChatTools = () => {
     memberRole: "owner",
     organizationId,
     requestWorkspaceId: workspaceId,
-    thirdPartyBoundary: { type: "raw" },
+    thirdPartyBoundary,
     refRegistry: createChatRefRegistry(),
     toolDefectMemo: createChatToolDefectMemo(),
     safeDb: unusedSafeDb,
@@ -1055,6 +1063,14 @@ describe("chat tool schemas", () => {
       needsApproval: false,
       requiresAnonymization: false,
     });
+  });
+
+  test("does not expose raw folder review in anonymized mode", () => {
+    const tools = buildFullCoverageChatTools(
+      asTestRaw<ChatThirdPartyBoundary>({ type: "anonymized" }),
+    );
+
+    expect(tools).not.toHaveProperty(REVIEW_FOLDER_CONSISTENCY_TOOL_NAME);
   });
 
   test("every registered chat tool serializes to a provider-safe JSON schema", () => {

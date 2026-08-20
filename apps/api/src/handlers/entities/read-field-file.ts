@@ -38,6 +38,7 @@ const readFieldFileHandler = async function* ({
         },
         columns: {
           id: true,
+          entityVersionId: true,
           propertyId: true,
           content: true,
         },
@@ -84,10 +85,12 @@ const readFieldFileHandler = async function* ({
           fileName: content.fileName,
           mimeType: content.mimeType,
           sizeBytes: content.sizeBytes,
+          encrypted: content.encrypted,
+          pdfFileId: content.pdfFileId,
         }
       : null;
 
-  return Result.ok({ file });
+  return Result.ok({ entityVersionId: field.entityVersionId, file });
 };
 
 const config = {

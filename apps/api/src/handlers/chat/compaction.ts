@@ -36,7 +36,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
 
-const COMPACTION_SUMMARY_MESSAGE_ID = "stella-chat-compaction-summary";
+export const COMPACTION_SUMMARY_MESSAGE_ID = "stella-chat-compaction-summary";
 
 type TanStackCompactionAIAnalytics = Pick<
   TanStackAIAnalyticsCallbacks,
