@@ -15,6 +15,7 @@ import {
   listDecisionsHandler,
   listDecisionsQuerySchema,
 } from "@/api/handlers/case-law/decisions/list";
+import listDecisionCitations from "@/api/handlers/case-law/decisions/list-citations";
 import { searchDecisionsHandler } from "@/api/handlers/case-law/decisions/search";
 import { searchDecisionsBodySchema } from "@/api/handlers/case-law/decisions/search-schema";
 import {
@@ -22,6 +23,7 @@ import {
   listSitemapShardsHandler,
   sitemapShardDecisionsQuerySchema,
 } from "@/api/handlers/case-law/decisions/sitemap";
+import summarizeDecisionCitations from "@/api/handlers/case-law/decisions/summarize-citations";
 import {
   listCitingDecisionsHandler,
   listCitingDecisionsQuerySchema,
@@ -234,6 +236,15 @@ export const publicCaseLawRoute = new Elysia({
     params: readDecision.config.params,
     query: readDecision.config.query,
   })
+  .get("/decisions/:decisionId/citations", listDecisionCitations.handler, {
+    params: listDecisionCitations.config.params,
+    query: listDecisionCitations.config.query,
+  })
+  .get(
+    "/decisions/:decisionId/citations/summary",
+    summarizeDecisionCitations.handler,
+    { params: summarizeDecisionCitations.config.params },
+  )
   .get("/decisions/:decisionId/provisions", listDecisionProvisions.handler, {
     params: listDecisionProvisions.config.params,
     query: listDecisionProvisions.config.query,
