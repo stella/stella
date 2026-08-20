@@ -37,6 +37,11 @@ describe("ResourceCalendar", () => {
     expect(markup).toContain("grid-column:2 / span 2");
     expect(markup).toContain("min-width:28rem");
     expect(markup).toContain("sticky start-0 z-20");
+    expect(markup).toContain('role="table"');
+    expect(markup).toContain('role="columnheader"');
+    expect(markup).toContain('role="rowheader"');
+    expect(markup).toContain('role="gridcell"');
+    expect(markup).toContain("aria-labelledby");
     expect(markup).toContain("<article");
     expect(markup).not.toContain("disabled");
   });

@@ -8,6 +8,16 @@ export type ResourceCalendarPlacement = {
   span: number;
 };
 
+export type ResourceCalendarLanePlacement = ResourceCalendarPlacement & {
+  entryId: string;
+  rowStart: number;
+};
+
+export type ResourceCalendarLaneLayout = {
+  placements: ResourceCalendarLanePlacement[];
+  rowCount: number;
+};
+
 const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/u;
 const DAY_IN_MS = 86_400_000;
 
@@ -111,4 +121,60 @@ export const nextCalendarDate = (value: string): string => {
   }
   date.setUTCDate(date.getUTCDate() + 1);
   return date.toISOString().slice(0, 10);
+};
+
+export const layoutResourceCalendarEntries = (
+  entries: readonly (CalendarDateRange & { id: string })[],
+  visibleRange: CalendarDateRange,
+): ResourceCalendarLaneLayout => {
+  const visibleEntries: (ResourceCalendarPlacement & {
+    entryId: string;
+    inputOrder: number;
+  })[] = [];
+  const entryIds = new Set<string>();
+  for (const [inputOrder, entry] of entries.entries()) {
+    if (entryIds.has(entry.id)) {
+      throw new TypeError("Resource calendar entry ids must be unique");
+    }
+    entryIds.add(entry.id);
+    const placement = getResourceCalendarPlacement({ entry, visibleRange });
+    if (placement === null) {
+      continue;
+    }
+    visibleEntries.push({
+      columnStart: placement.columnStart,
+      entryId: entry.id,
+      inputOrder,
+      span: placement.span,
+    });
+  }
+  visibleEntries.sort((left, right) => {
+    const startDifference = left.columnStart - right.columnStart;
+    if (startDifference !== 0) {
+      return startDifference;
+    }
+    return left.inputOrder - right.inputOrder;
+  });
+
+  const laneEnds: number[] = [];
+  const placements: ResourceCalendarLanePlacement[] = [];
+  for (const entry of visibleEntries) {
+    const firstAvailableLane = laneEnds.findIndex(
+      (laneEnd) => laneEnd <= entry.columnStart,
+    );
+    const lane =
+      firstAvailableLane === -1 ? laneEnds.length : firstAvailableLane;
+    laneEnds[lane] = entry.columnStart + entry.span;
+    placements.push({
+      columnStart: entry.columnStart,
+      entryId: entry.entryId,
+      rowStart: lane + 1,
+      span: entry.span,
+    });
+  }
+
+  return {
+    placements,
+    rowCount: Math.max(1, laneEnds.length),
+  };
 };

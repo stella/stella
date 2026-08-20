@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   assertConsecutiveCalendarDates,
   getResourceCalendarPlacement,
+  layoutResourceCalendarEntries,
 } from "./resource-calendar.logic";
 
 describe("resource calendar placement", () => {
@@ -84,5 +85,35 @@ describe("resource calendar placement", () => {
     expect(() =>
       assertConsecutiveCalendarDates(["2026-12-31", "2027-01-01"]),
     ).not.toThrow();
+  });
+
+  test("puts overlapping entries in separate lanes and reuses adjacent lanes", () => {
+    const layout = layoutResourceCalendarEntries(
+      [
+        {
+          endDateExclusive: "2026-08-04",
+          id: "first",
+          startDate: "2026-08-01",
+        },
+        {
+          endDateExclusive: "2026-08-03",
+          id: "overlap",
+          startDate: "2026-08-02",
+        },
+        {
+          endDateExclusive: "2026-08-05",
+          id: "adjacent",
+          startDate: "2026-08-04",
+        },
+      ],
+      visibleRange,
+    );
+
+    expect(layout.rowCount).toBe(2);
+    expect(layout.placements).toEqual([
+      { columnStart: 2, entryId: "first", rowStart: 1, span: 3 },
+      { columnStart: 3, entryId: "overlap", rowStart: 2, span: 1 },
+      { columnStart: 5, entryId: "adjacent", rowStart: 1, span: 1 },
+    ]);
   });
 });
