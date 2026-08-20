@@ -1712,34 +1712,32 @@ const handleSearchCaseLawTool: McpToolHandler = async ({ args, context }) => {
 };
 
 type DecisionCursorState = {
+  citations: string | null | undefined;
   text: number;
-  from: string | null | undefined;
-  to: string | null | undefined;
 };
 
 // read_case_law_decision pages the decision text and both citation lists with
-// a single compound cursor encoding [textOffset, fromCursor, toCursor].
+// a single compound cursor encoding [textOffset, citationsCursor].
 const decodeDecisionCursor = (
   cursor: string | undefined,
 ): DecisionCursorState | null => {
   if (cursor === undefined) {
-    return { text: 0, from: undefined, to: undefined };
+    return { citations: undefined, text: 0 };
   }
   const parts = decodePaginationCursor(cursor);
-  if (!parts || parts.length !== 3) {
+  if (!parts || parts.length !== 2) {
     return null;
   }
-  const [text, from, to] = parts;
+  const [text, citations] = parts;
   if (
     typeof text !== "number" ||
     !Number.isInteger(text) ||
     text < 0 ||
-    (from !== null && typeof from !== "string") ||
-    (to !== null && typeof to !== "string")
+    (citations !== null && typeof citations !== "string")
   ) {
     return null;
   }
-  return { text, from, to };
+  return { citations, text };
 };
 
 const handleReadCaseLawDecisionTool: McpToolHandler = async ({ args }) => {
@@ -1765,8 +1763,7 @@ const handleReadCaseLawDecisionTool: McpToolHandler = async ({ args }) => {
   const result = await readDecisionWithDocumentHandler({
     decisionId: brandPersistedCaseLawDecisionId(decisionId),
     caseLawDb: caseLawPublicReadDb,
-    citationsFromCursor: offsets.from,
-    citationsToCursor: offsets.to,
+    citationsCursor: offsets.citations,
     // An agent holding a token is a reader we can attribute, so its
     // interest counts as demand.
     caller: "attributed",
@@ -1802,15 +1799,9 @@ const handleReadCaseLawDecisionTool: McpToolHandler = async ({ args }) => {
     MCP_CONTENT_MAX_CHARS,
   );
   const hasMore =
-    textBounds.nextOffset !== null ||
-    result.citationsFromNextCursor !== null ||
-    result.citationsToNextCursor !== null;
+    textBounds.nextOffset !== null || result.citationsNextCursor !== null;
   const nextCursor = hasMore
-    ? encodePaginationCursor([
-        textBounds.end,
-        result.citationsFromNextCursor,
-        result.citationsToNextCursor,
-      ])
+    ? encodePaginationCursor([textBounds.end, result.citationsNextCursor])
     : null;
 
   return textResult({

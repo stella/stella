@@ -324,9 +324,8 @@ const createReadDecisionResult = () => ({
   analysis: null,
   caseNumber: "29 Cdo 123/2024",
   citationsFrom: [{ citationText: "29 Odo 1/2001", id: "c_1" }],
-  citationsFromNextCursor: null,
   citationsTo: [{ citationText: "31 Cdo 2/2025", id: "c_2" }],
-  citationsToNextCursor: null,
+  citationsNextCursor: null,
   country: "CZE",
   court: "Nejvyšší soud",
   decisionDate: new Date("2024-02-01T00:00:00.000Z"),
@@ -1446,8 +1445,7 @@ describe("OpenAI-compatible MCP tools", () => {
       decisionId: "dec_123",
       caseLawDb: caseLawPublicReadDb,
       caller: "attributed",
-      citationsFromCursor: undefined,
-      citationsToCursor: undefined,
+      citationsCursor: undefined,
     });
 
     expect(parseToolPayload(result)).toEqual({
@@ -1548,8 +1546,8 @@ describe("OpenAI-compatible MCP tools", () => {
   test("read_case_law_decision pages citation lists via the compound cursor", async () => {
     const base = createReadDecisionResult();
     readDecisionHandlerMock.mockImplementation(
-      async ({ citationsFromCursor }: { citationsFromCursor?: string }) => {
-        const page = citationsFromCursor === undefined ? 0 : 1;
+      async ({ citationsCursor }: { citationsCursor?: string }) => {
+        const page = citationsCursor === undefined ? 0 : 1;
         const fromStart = page * 50;
         const toStart = page * 50;
         return {
@@ -1561,7 +1559,6 @@ describe("OpenAI-compatible MCP tools", () => {
               id: `cf_${String(fromStart + i)}`,
             }),
           ),
-          citationsFromNextCursor: page === 0 ? "from-next" : null,
           citationsTo: Array.from(
             { length: page === 0 ? 50 : 20 },
             (_unused, i) => ({
@@ -1569,7 +1566,7 @@ describe("OpenAI-compatible MCP tools", () => {
               id: `ct_${String(toStart + i)}`,
             }),
           ),
-          citationsToNextCursor: page === 0 ? "to-next" : null,
+          citationsNextCursor: page === 0 ? "citations-next" : null,
         };
       },
     );
@@ -1613,8 +1610,7 @@ describe("OpenAI-compatible MCP tools", () => {
       decisionId: "dec_123",
       caseLawDb: caseLawPublicReadDb,
       caller: "attributed",
-      citationsFromCursor: "from-next",
-      citationsToCursor: "to-next",
+      citationsCursor: "citations-next",
     });
   });
 

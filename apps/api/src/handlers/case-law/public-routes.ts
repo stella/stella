@@ -70,18 +70,14 @@ const readDecision = createSafePublicHandler(
     params: t.Object({ decisionId: tSafeId("caseLawDecision") }),
     query: readDecisionQuerySchema,
   },
-  async function* ({
-    params: { decisionId },
-    query: { citationsFromCursor, citationsToCursor },
-  }) {
+  async function* ({ params: { decisionId }, query: { citationsCursor } }) {
     const response = yield* Result.await(
       Result.tryPromise(
         async () =>
           await readDecisionWithDocumentHandler({
             decisionId,
             caseLawDb: caseLawPublicReadDb,
-            citationsFromCursor,
-            citationsToCursor,
+            citationsCursor,
             // Unauthenticated: hydrates when a slot is free, but never
             // persists demand — see `recordDemand`.
             caller: "anonymous",
@@ -97,17 +93,21 @@ const readDecisionBySlug = createSafePublicHandler(
   {
     mcp: { type: "covered", by: "read_case_law_decision" },
     params: t.Object({ slug: t.String({ minLength: 1, maxLength: 256 }) }),
-    query: t.Object({
-      language: t.Optional(t.String({ minLength: 2, maxLength: 8 })),
-    }),
+    query: t.Composite([
+      readDecisionQuerySchema,
+      t.Object({
+        language: t.Optional(t.String({ minLength: 2, maxLength: 8 })),
+      }),
+    ]),
   },
-  async function* ({ params: { slug }, query: { language } }) {
+  async function* ({ params: { slug }, query: { citationsCursor, language } }) {
     const response = yield* Result.await(
       Result.tryPromise(
         async () =>
           await readDecisionBySlugWithDocumentHandler({
             slug,
             caseLawDb: caseLawPublicReadDb,
+            citationsCursor,
             language,
             caller: "anonymous",
           }),

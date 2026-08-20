@@ -10,7 +10,7 @@ import {
   listIncomingDecisionCitations,
   listOutgoingDecisionCitations,
 } from "@/api/handlers/case-law/decisions/citations";
-import { createSafeId } from "@/api/lib/branded-types";
+import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import type {
   CaseLawPublicReadDb,
@@ -24,6 +24,11 @@ const closedSourceId = createSafeId<"caseLawSource">();
 const subjectId = createSafeId<"caseLawDecision">();
 const openRelatedId = createSafeId<"caseLawDecision">();
 const closedRelatedId = createSafeId<"caseLawDecision">();
+
+const citationId = (value: number): SafeId<"caseLawCitation"> =>
+  toSafeId<"caseLawCitation">(
+    `00000000-0000-7000-8000-${String(value).padStart(12, "0")}`,
+  );
 
 let client: Awaited<ReturnType<typeof createTestPglite>>;
 let db: ReturnType<typeof drizzle>;
@@ -92,38 +97,40 @@ beforeAll(
       }),
     ]);
 
+    const restrictedOutgoing = Array.from({ length: 55 }, (_unused, index) => ({
+      citedDecisionId: closedRelatedId,
+      citingDecisionId: subjectId,
+      citationText: `restricted-outgoing-${String(index)}`,
+      id: citationId(index),
+    }));
     const outgoing = Array.from({ length: 55 }, (_unused, index) => ({
       citedDecisionId: openRelatedId,
       citingDecisionId: subjectId,
       citationText: `outgoing-${String(index)}`,
-      id: createSafeId<"caseLawCitation">(),
+      id: citationId(100 + index),
+    }));
+    const restrictedIncoming = Array.from({ length: 55 }, (_unused, index) => ({
+      citedDecisionId: subjectId,
+      citingDecisionId: closedRelatedId,
+      citationText: `restricted-incoming-${String(index)}`,
+      id: citationId(200 + index),
     }));
     const incoming = Array.from({ length: 55 }, (_unused, index) => ({
       citedDecisionId: subjectId,
       citingDecisionId: openRelatedId,
       citationText: `incoming-${String(index)}`,
-      id: createSafeId<"caseLawCitation">(),
+      id: citationId(300 + index),
     }));
     await db.insert(caseLawCitations).values([
+      ...restrictedOutgoing,
       ...outgoing,
+      ...restrictedIncoming,
       ...incoming,
       {
         citedDecisionId: null,
         citingDecisionId: subjectId,
         citationText: "unresolved",
-        id: createSafeId<"caseLawCitation">(),
-      },
-      {
-        citedDecisionId: closedRelatedId,
-        citingDecisionId: subjectId,
-        citationText: "restricted-target",
-        id: createSafeId<"caseLawCitation">(),
-      },
-      {
-        citedDecisionId: subjectId,
-        citingDecisionId: closedRelatedId,
-        citationText: "restricted-source",
-        id: createSafeId<"caseLawCitation">(),
+        id: citationId(155),
       },
     ]);
   },
@@ -157,6 +164,24 @@ const collect = async (
 };
 
 test("citation reads traverse bounded pages without leaking restricted decisions", async () => {
+  const firstOutgoing = await listOutgoingDecisionCitations({
+    caseLawDb,
+    cursor: undefined,
+    decisionId: subjectId,
+  });
+  const firstIncoming = await listIncomingDecisionCitations({
+    caseLawDb,
+    cursor: undefined,
+    decisionId: subjectId,
+  });
+  if (!("items" in firstOutgoing) || !("items" in firstIncoming)) {
+    throw new Error("expected first citation pages");
+  }
+  expect(firstOutgoing.items).toEqual([]);
+  expect(firstOutgoing.nextCursor).not.toBeNull();
+  expect(firstIncoming.items).toEqual([]);
+  expect(firstIncoming.nextCursor).not.toBeNull();
+
   const outgoing = await collect(async (cursor) => {
     const page = await listOutgoingDecisionCitations({
       caseLawDb,
@@ -185,11 +210,15 @@ test("citation reads traverse bounded pages without leaking restricted decisions
   expect(outgoing.items).toHaveLength(56);
   expect(new Set(outgoing.items).size).toBe(56);
   expect(outgoing.items).toContain("unresolved");
-  expect(outgoing.items).not.toContain("restricted-target");
+  expect(
+    outgoing.items.some((item) => item.startsWith("restricted-outgoing-")),
+  ).toBe(false);
   expect(outgoing.cursor).toBeUndefined();
   expect(incoming.items).toHaveLength(55);
   expect(new Set(incoming.items).size).toBe(55);
-  expect(incoming.items).not.toContain("restricted-source");
+  expect(
+    incoming.items.some((item) => item.startsWith("restricted-incoming-")),
+  ).toBe(false);
   expect(incoming.cursor).toBeUndefined();
 });
 

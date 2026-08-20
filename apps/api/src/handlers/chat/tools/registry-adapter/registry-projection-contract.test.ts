@@ -1223,7 +1223,6 @@ const CONTRACT_CORPUS = {
               sectionIndex: 0,
             },
           ],
-          citationsFromNextCursor: null,
           citationsTo: [
             {
               id: toSafeId<"caseLawCitation">(uid(57)),
@@ -1232,7 +1231,7 @@ const CONTRACT_CORPUS = {
               sectionIndex: 1,
             },
           ],
-          citationsToNextCursor: null,
+          citationsNextCursor: null,
           country: "CZ",
           court: "Nejvyšší soud",
           // `decisionDate` is a plain `date`-mode column (a "YYYY-MM-DD"

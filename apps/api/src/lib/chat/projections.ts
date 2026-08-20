@@ -1201,7 +1201,7 @@ export const SEARCH_CASE_LAW_PROJECTION = v.strictObject({
  * while the UUID backstop still guards every string inside, unlicensed.
  */
 export const READ_CASE_LAW_DECISION_PROJECTION = v.strictObject({
-  // Opaque compound `[textOffset, fromCursor, toCursor]` cursor.
+  // Opaque compound `[textOffset, citationsCursor]` cursor.
   nextCursor: v.nullable(passthroughId()),
   decision: v.strictObject({
     // Nullable for the same reason as search_case_law's `results[].appUrl`.
