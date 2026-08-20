@@ -1,5 +1,11 @@
 # @stll/cli
 
+## 0.6.3
+
+### Patch Changes
+
+- [#2275](https://github.com/stella/stella/pull/2275) [`07bc505`](https://github.com/stella/stella/commit/07bc50550c4368d7872ee3b4579e5be9b2dd3fb5) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add the bundled template-pack capabilities to the generated capability surface: list and read a pack, install its templates, and set whether the catalogue is offered.
+
 ## 0.6.2
 
 ### Patch Changes
