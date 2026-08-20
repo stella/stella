@@ -64,8 +64,8 @@ const listNotifications = createSafeRootHandler(
           .select({
             id: notifications.id,
             userId: notifications.userId,
-            title: notifications.title,
-            message: notifications.message,
+            kind: notifications.kind,
+            metadata: notifications.metadata,
             isRead: notifications.isRead,
             readAt: notifications.readAt,
             entityType: notifications.entityType,

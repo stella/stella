@@ -3,23 +3,21 @@ import { BellIcon, CheckCheckIcon } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@stll/ui/components/button";
 import { Popover, PopoverTrigger, PopoverPanel, PopoverTitle } from "@stll/ui/components/popover";
+import { Link } from "@tanstack/react-router";
+import { api } from "@/lib/api";
+import { getAnalytics } from "@/lib/analytics/provider";
+import { stellaToast } from "@stll/ui/components/toast";
 
 import { useTranslations } from "use-intl";
-import { apiUrl } from "@/lib/api-url";
 
 type Notification = {
   id: string;
-  title: string;
-  message: string;
+  kind: string;
+  metadata: Record<string, string | number | boolean | null>;
   isRead: boolean;
   createdAt: string;
   entityType: string | null;
   entityId: string | null;
-};
-
-type NotificationPage = {
-  items: Notification[];
-  nextCursor?: string;
 };
 
 // Hook to dynamically update the favicon when unread status changes
@@ -47,27 +45,54 @@ export const NotificationBell = () => {
   const t = useTranslations();
   const queryClient = useQueryClient();
 
-  const { data } = useQuery<NotificationPage>({
+  const { data } = useQuery<Notification[]>({
     queryKey: ["notifications"],
     queryFn: async () => {
-      const res = await fetch(apiUrl("/notifications"), { credentials: "include" });
-      if (!res.ok) throw new Error("Failed to fetch notifications");
-      return res.json();
+      let allItems: Notification[] = [];
+      let cursor: string | undefined = undefined;
+      let hasMore = true;
+
+      while (hasMore) {
+        const res = await api.notifications.get({
+          query: {
+            limit: 100,
+            ...(cursor ? { cursor } : {}),
+          },
+        });
+
+        if (res.error) {
+          getAnalytics().captureError(res.error);
+          stellaToast.error(t("common.unexpectedError"));
+          throw res.error;
+        }
+
+        const page = res.data;
+        if (!page) {
+          break;
+        }
+
+        allItems = [...allItems, ...(page.items as unknown as Notification[])];
+        cursor = page.nextCursor;
+        hasMore = !!page.nextCursor;
+      }
+
+      return allItems;
     },
   });
 
-  const notificationsList = data?.items ?? [];
+  const notificationsList = data ?? [];
   const unreadCount = notificationsList.filter((n) => !n.isRead).length;
 
   useFaviconBadge(unreadCount > 0);
 
   const markReadMutation = useMutation({
     mutationFn: async (id: string) => {
-      const res = await fetch(apiUrl(`/notifications/${id}/read`), {
-        method: "PATCH",
-        credentials: "include",
-      });
-      if (!res.ok) throw new Error("Failed to mark notification read");
+      const res = await api.notifications({ notificationId: id }).read.patch();
+      if (res.error) {
+        getAnalytics().captureError(res.error);
+        stellaToast.error(t("common.unexpectedError"));
+        throw res.error;
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["notifications"] });
@@ -76,16 +101,23 @@ export const NotificationBell = () => {
 
   const markAllReadMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch(apiUrl("/notifications/read-all"), {
-        method: "POST",
-        credentials: "include",
-      });
-      if (!res.ok) throw new Error("Failed to mark all notifications read");
+      const res = await api.notifications["read-all"].post();
+      if (res.error) {
+        getAnalytics().captureError(res.error);
+        stellaToast.error(t("common.unexpectedError"));
+        throw res.error;
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["notifications"] });
     },
   });
+
+  const handleNotificationClick = (notification: Notification) => {
+    if (!notification.isRead) {
+      markReadMutation.mutate(notification.id);
+    }
+  };
 
   return (
     <Popover>
@@ -120,31 +152,92 @@ export const NotificationBell = () => {
               {t("common.noNotifications")}
             </div>
           ) : (
-            notificationsList.map((notification) => (
-              <div
-                key={notification.id}
-                className={`flex flex-col gap-1 border-b px-4 py-3 text-xs transition-colors hover:bg-muted/40 ${
-                  !notification.isRead ? "bg-muted/10 font-medium cursor-pointer" : ""
-                }`}
-                onClick={() => {
-                  if (!notification.isRead) {
-                    markReadMutation.mutate(notification.id);
-                  }
-                }}
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <span className="font-semibold">{notification.title}</span>
-                  <span className="text-[10px] text-muted-foreground">
-                    {new Date(notification.createdAt).toLocaleTimeString([], {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                  </span>
-                </div>
-                <p className="text-muted-foreground">{notification.message}</p>
+            notificationsList.map((notification) => {
+              const title = t(`${notification.kind}.title` as any, notification.metadata as any);
+              const message = t(`${notification.kind}.message` as any, notification.metadata as any);
 
-              </div>
-            ))
+              const workspaceId = notification.metadata["workspaceId"] as string | undefined;
+              const entityId = notification.entityId;
+
+              const isReport =
+                notification.kind.startsWith("notifications.reportExport") ||
+                notification.entityType === "report_export";
+              const isWorkflow =
+                notification.kind.startsWith("notifications.workflow") ||
+                notification.entityType === "flow_run";
+
+              const commonClassName = `flex w-full flex-col gap-1 border-b px-4 py-3 text-start text-xs transition-colors hover:bg-muted/40 ${
+                !notification.isRead ? "bg-muted/10 font-medium cursor-pointer" : ""
+              }`;
+
+              const content = (
+                <>
+                  <div className="flex items-start justify-between gap-2">
+                    <span className="font-semibold">{title}</span>
+                    <span className="text-[10px] text-muted-foreground">
+                      {new Date(notification.createdAt).toLocaleTimeString([], {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </span>
+                  </div>
+                  <p className="text-muted-foreground">{message}</p>
+                </>
+              );
+
+              if (isReport && workspaceId && entityId) {
+                return (
+                  <Link
+                    key={notification.id}
+                    to="/workspaces/$workspaceId/reports/$exportId"
+                    params={{ workspaceId, exportId: entityId }}
+                    className={commonClassName}
+                    onClick={() => handleNotificationClick(notification)}
+                  >
+                    {content}
+                  </Link>
+                );
+              }
+
+              if (isWorkflow && workspaceId) {
+                return (
+                  <Link
+                    key={notification.id}
+                    to="/workspaces/$workspaceId/workflows"
+                    params={{ workspaceId }}
+                    className={commonClassName}
+                    onClick={() => handleNotificationClick(notification)}
+                  >
+                    {content}
+                  </Link>
+                );
+              }
+
+              if (workspaceId) {
+                return (
+                  <Link
+                    key={notification.id}
+                    to="/workspaces/$workspaceId"
+                    params={{ workspaceId }}
+                    className={commonClassName}
+                    onClick={() => handleNotificationClick(notification)}
+                  >
+                    {content}
+                  </Link>
+                );
+              }
+
+              return (
+                <button
+                  key={notification.id}
+                  type="button"
+                  className={commonClassName}
+                  onClick={() => handleNotificationClick(notification)}
+                >
+                  {content}
+                </button>
+              );
+            })
           )}
         </div>
       </PopoverPanel>

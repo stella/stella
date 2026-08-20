@@ -317,6 +317,8 @@ function ProtectedPendingSkeleton() {
   );
 }
 
+import { useUserSSE } from "@/lib/sse";
+
 function ProtectedComponent() {
   const analyticsUser = Route.useRouteContext({ select: (ctx) => ctx.user });
   const inspectorBroadcastUserId = Route.useRouteContext({
@@ -338,6 +340,8 @@ function ProtectedComponent() {
     inspectorPaneOpen,
     viewportWidth,
   });
+
+  useUserSSE();
 
   useExternalSyncEffect(
     () =>

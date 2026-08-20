@@ -56,6 +56,7 @@ type RedisPayload =
       id: string;
       event: WorkspaceRealtimeEvent;
       originInstanceId?: string | undefined;
+      deliveredInline?: boolean | undefined;
     };
 
 /**
@@ -127,15 +128,15 @@ export const parseRedisPayload = (raw: string): RedisPayload | null => {
     return event ? { scope, id: parsed.id, event, originInstanceId } : null;
   }
 
-  if (scope === "user") {
-    const event = parseWorkspaceRealtimeEvent(parsed.event);
-    return event ? { scope, id: parsed.id, event, originInstanceId } : null;
-  }
-
   const deliveredInline =
     "deliveredInline" in parsed && typeof parsed.deliveredInline === "boolean"
       ? parsed.deliveredInline
       : undefined;
+
+  if (scope === "user") {
+    const event = parseWorkspaceRealtimeEvent(parsed.event);
+    return event ? { scope, id: parsed.id, event, originInstanceId, deliveredInline } : null;
+  }
 
   if (scope === "organization") {
     const event = parseOrganizationRealtimeEvent(parsed.event);
@@ -263,5 +264,6 @@ export const publishUserNotification = async (
     id: userId,
     event,
     originInstanceId: options.originInstanceId,
+    deliveredInline: options.deliveredInline,
   });
 };

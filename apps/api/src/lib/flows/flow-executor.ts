@@ -1,6 +1,8 @@
 import { panic, Result, TaggedError } from "better-result";
 import { and, asc, eq, inArray, lt } from "drizzle-orm";
 import { createNotification } from "@/api/lib/notifications";
+import { broadcastUserNotification } from "@/api/lib/sse";
+import type { WorkspaceRealtimeEvent } from "@stll/api-contract";
 
 import { compileLegalSourceToDocx } from "@stll/docx-core";
 
@@ -635,6 +637,7 @@ const completeStepAndAdvance = async ({
   const advance = advanceAfterStep({ stepIndex, stepCount });
   const now = new Date();
 
+  let eventToBroadcast: WorkspaceRealtimeEvent | null = null;
   const payload = await scopedDb(async (tx) => {
     await tx
       .update(flowRunSteps)
@@ -648,12 +651,13 @@ const completeStepAndAdvance = async ({
         .update(flowRuns)
         .set({ status: "completed", finishedAt: now })
         .where(eq(flowRuns.id, runId));
-      await createNotification(tx, {
+      eventToBroadcast = await createNotification(tx, {
         userId: actorUserId,
-        title: "Workflow Run Completed",
-        message: "Your workflow run has completed successfully.",
+        kind: "notifications.workflowCompleted",
+        metadata: { workspaceId },
         entityType: "flow_run",
         entityId: runId,
+        idempotencyKey: `flow-complete:${runId}`,
       });
     } else {
       await tx
@@ -663,6 +667,10 @@ const completeStepAndAdvance = async ({
     }
     return await readRunProgress(tx, runId);
   });
+
+  if (eventToBroadcast) {
+    broadcastUserNotification(actorUserId, eventToBroadcast);
+  }
 
   broadcastFlowRunUpdate(workspaceId, payload);
 
@@ -684,6 +692,7 @@ const pauseAtReviewGate = async ({
   scopedDb: ReturnType<typeof createRootScopedDb>;
   actorUserId: SafeId<"user">;
 }): Promise<void> => {
+  let eventToBroadcast: WorkspaceRealtimeEvent | null = null;
   const payload = await scopedDb(async (tx) => {
     await tx
       .update(flowRunSteps)
@@ -695,15 +704,19 @@ const pauseAtReviewGate = async ({
       .update(flowRuns)
       .set({ status: "awaiting_review" })
       .where(eq(flowRuns.id, runId));
-    await createNotification(tx, {
+    eventToBroadcast = await createNotification(tx, {
       userId: actorUserId,
-      title: "Workflow Run Awaiting Approval",
-      message: `A workflow run is waiting on your approval (review-gate at step ${stepIndex + 1}).`,
+      kind: "notifications.workflowAwaitingApproval",
+      metadata: { stepIndex, workspaceId },
       entityType: "flow_run",
       entityId: runId,
+      idempotencyKey: `flow-review-gate:${runId}:${stepIndex}`,
     });
     return await readRunProgress(tx, runId);
   });
+  if (eventToBroadcast) {
+    broadcastUserNotification(actorUserId, eventToBroadcast);
+  }
   broadcastFlowRunUpdate(workspaceId, payload);
 };
 
@@ -760,6 +773,7 @@ export const failFlowRunFromWorker = async (
   const message = errorMessage(error);
   const now = new Date();
 
+  let eventToBroadcast: WorkspaceRealtimeEvent | null = null;
   const writeFailure = async (
     tx: Transaction,
   ): Promise<FlowRunUpdatePayload> => {
@@ -774,12 +788,13 @@ export const failFlowRunFromWorker = async (
       .set({ status: "failed", error: message, finishedAt: now })
       .where(eq(flowRuns.id, runId));
     if (scope.actorUserId !== null) {
-      await createNotification(tx, {
+      eventToBroadcast = await createNotification(tx, {
         userId: scope.actorUserId,
-        title: "Workflow Run Failed",
-        message: `Your workflow run has failed: ${message}`,
+        kind: "notifications.workflowFailed",
+        metadata: { workspaceId: run.workspaceId },
         entityType: "flow_run",
         entityId: runId,
+        idempotencyKey: `flow-failure:${runId}`,
       });
     }
     return await readRunProgress(tx, runId);
@@ -796,6 +811,10 @@ export const failFlowRunFromWorker = async (
           userId: scope.actorUserId,
           workspaceIds: [run.workspaceId],
         })(writeFailure);
+
+  if (eventToBroadcast && scope.actorUserId !== null) {
+    broadcastUserNotification(scope.actorUserId, eventToBroadcast);
+  }
   broadcastFlowRunUpdate(run.workspaceId, payload);
 };
 

@@ -173,7 +173,6 @@ function RouteComponent() {
       case REALTIME_EVENT_TYPE.FLOW_RUN_UPDATE:
         return;
       case REALTIME_EVENT_TYPE.NEW_NOTIFICATION:
-        queryClient.invalidateQueries({ queryKey: ["notifications"] });
         return;
       case REALTIME_EVENT_TYPE.WORKFLOW_EXTRACTION_PREVIEW:
         break;

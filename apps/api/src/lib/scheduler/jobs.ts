@@ -298,8 +298,10 @@ export const DECLARED_SCHEDULER_JOBS = [
     id: "checkDeadlines.daily",
     mode: "recurring",
     schedule: {
-      type: "interval",
-      everyMs: 24 * 60 * 60 * 1000,
+      type: "daily",
+      hour: 9,
+      minute: 0,
+      timeZone: "Europe/Prague",
     },
     task: CHECK_DEADLINES_TASK,
   },

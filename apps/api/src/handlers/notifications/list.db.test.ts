@@ -26,7 +26,7 @@ import { eq } from "drizzle-orm";
 
 import { user as authUser } from "@/api/db/auth-schema";
 import { notifications } from "@/api/db/schema";
-import { toSafeId } from "@/api/lib/branded-types";
+import { toSafeId, type SafeId } from "@/api/lib/branded-types";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import { createSafeDb } from "@/api/db/scoped";
@@ -85,15 +85,20 @@ afterAll(async () => {
 describe("notifications backend logic", () => {
   test("creates notifications and lists them for the authenticated user", async () => {
     // 1. Create a notification
-    const notifId = (await createNotification(activeTestDb, {
+    const notifEvent = (await createNotification(activeTestDb, {
       userId,
-      title: "Test Alert",
-      message: "This is a test notification",
-      entityType: "document",
+      kind: "notifications.newMention",
+      metadata: { actorName: "Notif User 1", itemName: "Test Item" },
+      entityType: "entity",
       entityId: "doc-123",
     }))!;
 
-    expect(notifId).toBeDefined();
+    expect(notifEvent).toBeDefined();
+    expect(notifEvent.type).toBe("new-notification");
+    if (notifEvent.type !== "new-notification") {
+      throw new Error("Expected new-notification event");
+    }
+    const notifId = notifEvent.data.id as SafeId<"notification">;
 
     // 2. List notifications for user
     const page = await listNotifications.handler(
@@ -112,21 +117,26 @@ describe("notifications backend logic", () => {
       expect(item).toBeDefined();
       if (item) {
         expect(item.id).toBe(notifId);
-        expect(item.title).toBe("Test Alert");
-        expect(item.message).toBe("This is a test notification");
+        expect(item.kind).toBe("notifications.newMention");
+        expect(item.metadata).toEqual({ actorName: "Notif User 1", itemName: "Test Item" });
         expect(item.isRead).toBe(false);
-        expect(item.entityType).toBe("document");
+        expect(item.entityType).toBe("entity");
         expect(item.entityId).toBe("doc-123");
       }
     }
   });
 
   test("marks a single notification as read", async () => {
-    const notifId = (await createNotification(activeTestDb, {
+    const notifEvent = (await createNotification(activeTestDb, {
       userId,
-      title: "Mark Read Alert",
-      message: "Unread message",
+      kind: "notifications.newMention",
+      metadata: { actorName: "Notif User 1", itemName: "Unread message" },
     }))!;
+    expect(notifEvent.type).toBe("new-notification");
+    if (notifEvent.type !== "new-notification") {
+      throw new Error("Expected new-notification event");
+    }
+    const notifId = notifEvent.data.id as SafeId<"notification">;
 
     const readResult = await markNotificationRead.handler(
       createTestHandlerContext<MarkReadCtx>({
@@ -157,13 +167,13 @@ describe("notifications backend logic", () => {
   test("marks all notifications as read", async () => {
     await createNotification(activeTestDb, {
       userId,
-      title: "Bulk Alert 1",
-      message: "Message 1",
+      kind: "notifications.newMention",
+      metadata: { actorName: "Notif User 1", itemName: "Message 1" },
     });
     await createNotification(activeTestDb, {
       userId,
-      title: "Bulk Alert 2",
-      message: "Message 2",
+      kind: "notifications.newMention",
+      metadata: { actorName: "Notif User 1", itemName: "Message 2" },
     });
 
     const readAllResult = await markAllNotificationsRead.handler(
@@ -222,13 +232,15 @@ describe("notifications backend logic", () => {
     );
 
     if ("items" in userPage && "items" in otherPage) {
-      const userNews = userPage.items.find((n: any) => n.title === "Product Launch");
-      const otherNews = otherPage.items.find((n: any) => n.title === "Product Launch");
+      const userNews = userPage.items.find((n: any) => n.kind === "notifications.productNews");
+      const otherNews = otherPage.items.find((n: any) => n.kind === "notifications.productNews");
 
       expect(userNews).toBeDefined();
       expect(otherNews).toBeDefined();
-      expect(userNews?.message).toBe("Stella v2.0 is live!");
-      expect(otherNews?.message).toBe("Stella v2.0 is live!");
+      expect(userNews?.metadata?.["title"]).toBe("Product Launch");
+      expect(otherNews?.metadata?.["title"]).toBe("Product Launch");
+      expect(userNews?.metadata?.["message"]).toBe("Stella v2.0 is live!");
+      expect(otherNews?.metadata?.["message"]).toBe("Stella v2.0 is live!");
     }
   });
 });

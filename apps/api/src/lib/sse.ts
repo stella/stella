@@ -351,6 +351,9 @@ const handleMessage = (message: string): void => {
         broadcastLocal(workspaceId, parsed.event),
       );
     } else if (parsed.scope === "user") {
+      if (isOwnInlineDelivery(parsed)) {
+        return;
+      }
       const userId = brandPersistedUserId(parsed.id);
       broadcastLocalToUser(userId, parsed.event);
     } else if (parsed.scope === "organization") {

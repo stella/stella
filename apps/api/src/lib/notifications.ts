@@ -1,58 +1,63 @@
-import { and, eq, or } from "drizzle-orm";
+import { and, eq, inArray, ne } from "drizzle-orm";
+import { Result } from "better-result";
+import type { WorkspaceRealtimeEvent } from "@stll/api-contract";
 import { user } from "@/api/db/auth-schema";
-import { notifications, workspaceMembers } from "@/api/db/schema";
+import { notifications, workspaceMembers, NOTIFICATION_ENTITY_TYPES } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import { broadcastUserNotification } from "@/api/lib/sse";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import type { Transaction } from "@/api/db/root";
 import { rootDb } from "@/api/db/root";
+import { LIMITS } from "@/api/lib/limits";
 
 export const createNotification = async (
   tx: Transaction,
   args: {
     userId: SafeId<"user">;
-    title: string;
-    message: string;
-    entityType?: string;
+    kind: string;
+    metadata: Record<string, string | number | boolean | null>;
+    entityType?: typeof NOTIFICATION_ENTITY_TYPES[number];
     entityId?: string;
     idempotencyKey?: string;
   }
-): Promise<SafeId<"notification"> | null> => {
+): Promise<WorkspaceRealtimeEvent | null> => {
   const id = createSafeId<"notification">();
   const inserted = await tx
     .insert(notifications)
     .values({
       id,
       userId: args.userId,
-      title: args.title,
-      message: args.message,
+      kind: args.kind,
+      metadata: args.metadata,
       entityType: args.entityType ?? null,
       entityId: args.entityId ?? null,
       idempotencyKey: args.idempotencyKey ?? null,
     })
     .onConflictDoNothing()
-    .returning({ id: notifications.id });
+    .returning({ id: notifications.id, createdAt: notifications.createdAt });
 
   if (inserted.length === 0) {
     return null;
   }
 
-  const event = {
+  const insertedRow = inserted[0];
+  if (!insertedRow) {
+    return null;
+  }
+
+  return {
     type: "new-notification" as const,
     data: {
-      id,
-      title: args.title,
-      message: args.message,
+      id: insertedRow.id,
+      kind: args.kind,
+      metadata: args.metadata,
       isRead: false,
-      createdAt: new Date().toISOString(),
+      createdAt: insertedRow.createdAt.toISOString(),
       entityType: args.entityType ?? null,
       entityId: args.entityId ?? null,
     },
   };
-
-  broadcastUserNotification(args.userId, event);
-  return id;
 };
 
 export type MentionDetectionResult = {
@@ -66,11 +71,14 @@ export const detectMentionTargets = async (
   authorId: SafeId<"user">,
   workspaceId: SafeId<"workspace">
 ): Promise<MentionDetectionResult> => {
-  const matches = text.match(/@([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,4}|[a-zA-Z0-9._-]+)/g);
+  const matches = text.match(/@([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/g);
   if (!matches) {
     return { authorName: "A colleague", targets: [] };
   }
-  const usernamesOrEmails = matches.map((m) => m.slice(1));
+  
+  // Deduplicate and limit to mentionTargetsMax
+  const matchedEmails = Array.from(new Set(matches.map((m) => m.slice(1).toLowerCase())))
+    .slice(0, LIMITS.mentionTargetsMax);
 
   const authorRows = await tx
     .select({ name: user.name })
@@ -79,82 +87,93 @@ export const detectMentionTargets = async (
     .limit(1);
   const authorName = authorRows.at(0)?.name ?? "A colleague";
 
-  const targets: SafeId<"user">[] = [];
-
-  for (const key of usernamesOrEmails) {
-    const targetRows = await tx
-      .select({ id: user.id })
-      .from(user)
-      .where(or(eq(user.email, key), eq(user.name, key)))
-      .limit(1);
-    const targetUser = targetRows.at(0);
-
-    if (targetUser && targetUser.id !== authorId) {
-      // Prove that the recipient can access the comment's workspace before sending
-      const isMember = await tx
-        .select({ id: workspaceMembers.id })
-        .from(workspaceMembers)
-        .where(
-          and(
-            eq(workspaceMembers.workspaceId, workspaceId),
-            eq(workspaceMembers.userId, targetUser.id)
-          )
-        )
-        .limit(1);
-
-      if (isMember.length > 0) {
-        targets.push(brandPersistedUserId(targetUser.id));
-      }
-    }
+  if (matchedEmails.length === 0) {
+    return { authorName, targets: [] };
   }
 
+  // Single query to match all users by email, excluding author
+  const targetUsers = await tx
+    .select({ id: user.id })
+    .from(user)
+    .where(and(inArray(user.email, matchedEmails), ne(user.id, authorId)));
+
+  if (targetUsers.length === 0) {
+    return { authorName, targets: [] };
+  }
+
+  const targetIds = targetUsers.map((u) => u.id);
+
+  // Check workspace memberships in a single query
+  const members = await tx
+    .select({ userId: workspaceMembers.userId })
+    .from(workspaceMembers)
+    .where(
+      and(
+        eq(workspaceMembers.workspaceId, workspaceId),
+        inArray(workspaceMembers.userId, targetIds)
+      )
+    );
+
+  const targets = members.map((m) => brandPersistedUserId(m.userId));
   return { authorName, targets };
 };
 
 export const createAndBroadcastNotifications = async (
   userIds: SafeId<"user">[],
   args: {
-    title: string;
-    message: string;
-    entityType?: string;
+    kind: string;
+    metadata: Record<string, string | number | boolean | null>;
+    entityType?: typeof NOTIFICATION_ENTITY_TYPES[number];
     entityId?: string;
     idempotencyKey?: string;
   }
 ): Promise<void> => {
   if (userIds.length === 0) return;
 
-  const rows = userIds.map((userId) => ({
+  const uniqueUserIds = Array.from(new Set(userIds));
+
+  const rows = uniqueUserIds.map((userId) => ({
     id: createSafeId<"notification">(),
     userId,
-    title: args.title,
-    message: args.message,
+    kind: args.kind,
+    metadata: args.metadata,
     entityType: args.entityType ?? null,
     entityId: args.entityId ?? null,
     idempotencyKey: args.idempotencyKey ?? null,
   }));
 
-  // Perform bulk insert on rootDb to bypass caller RLS policies
-  const inserted = await rootDb.transaction(async (tx) => {
-    return await tx
-      .insert(notifications)
-      .values(rows)
-      .onConflictDoNothing()
-      .returning({ id: notifications.id, userId: notifications.userId });
+  // Perform bulk insert on rootDb to bypass caller RLS policies, wrapped in tryPromise
+  const insertedResult = await Result.tryPromise(async () => {
+    return await rootDb.transaction(async (tx) => {
+      return await tx
+        .insert(notifications)
+        .values(rows)
+        .onConflictDoNothing()
+        .returning({ id: notifications.id, createdAt: notifications.createdAt });
+    });
   });
 
-  const insertedUserIds = new Set(inserted.map((row) => row.userId));
+  if (Result.isError(insertedResult)) {
+    return;
+  }
+
+  const insertedRows = insertedResult.value;
+  const insertedMap = new Map<string, Date>(
+    insertedRows.map((r: { id: string; createdAt: Date }) => [r.id, r.createdAt])
+  );
 
   // Broadcast to each user post-commit only if successfully inserted
   for (const row of rows) {
-    if (insertedUserIds.has(row.userId)) {
+    const createdAt = insertedMap.get(row.id);
+    if (createdAt) {
       const event = {
         type: "new-notification" as const,
         data: {
           id: row.id,
-          title: row.title,
-          message: row.message,
+          kind: row.kind,
+          metadata: row.metadata,
           isRead: false,
-          createdAt: new Date().toISOString(),
+          createdAt: createdAt.toISOString(),
           entityType: row.entityType,
           entityId: row.entityId,
         },

@@ -1,8 +1,8 @@
 CREATE TABLE IF NOT EXISTS "notifications" (
   "id" uuid PRIMARY KEY NOT NULL,
   "user_id" text NOT NULL REFERENCES "user"("id") ON DELETE CASCADE,
-  "title" text NOT NULL,
-  "message" text NOT NULL,
+  "kind" text NOT NULL,
+  "metadata" jsonb,
   "is_read" boolean DEFAULT false NOT NULL,
   "read_at" timestamp with time zone,
   "entity_type" text,
@@ -10,10 +10,9 @@ CREATE TABLE IF NOT EXISTS "notifications" (
   "idempotency_key" text,
   "created_at" timestamp with time zone DEFAULT now() NOT NULL,
   "updated_at" timestamp with time zone DEFAULT now() NOT NULL,
-  CONSTRAINT "notifications_idempotency_key_unique" UNIQUE("idempotency_key")
+  CONSTRAINT "notifications_user_id_idempotency_key_unique" UNIQUE("user_id", "idempotency_key")
 );--> statement-breakpoint
 
-CREATE INDEX IF NOT EXISTS "notifications_user_id_idx" ON "notifications" ("user_id");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "notifications_user_id_created_at_idx" ON "notifications" ("user_id", "created_at" DESC);--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "notifications_user_id_is_read_idx" ON "notifications" ("user_id", "is_read");--> statement-breakpoint
 

@@ -102,13 +102,13 @@ const flowRunUpdateEventSchema = v.object({
 });
 
 const newNotificationEventSchema = v.object({
-  type: v.literal("new-notification"),
+  type: v.literal(REALTIME_EVENT_TYPE.NEW_NOTIFICATION),
   data: v.object({
     id: nonEmptyStringSchema,
-    title: nonEmptyStringSchema,
-    message: nonEmptyStringSchema,
+    kind: nonEmptyStringSchema,
+    metadata: v.nullable(v.record(v.string(), v.nullable(v.union([v.string(), v.number(), v.boolean()])))),
     isRead: v.boolean(),
-    createdAt: nonEmptyStringSchema,
+    createdAt: v.pipe(v.string(), v.isoTimestamp()),
     entityType: v.nullable(v.string()),
     entityId: v.nullable(v.string()),
   }),

@@ -5,17 +5,26 @@ import { createNotification } from "@/api/lib/notifications";
 import type { SchedulerTask } from "@/api/lib/scheduler/types";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import type { SafeId } from "@/api/lib/branded-types";
+import { LIMITS } from "@/api/lib/limits";
+import { broadcastUserNotification } from "@/api/lib/sse";
 
 export const CHECK_DEADLINES_TASK = "scheduler.checkDeadlines";
 
 export const checkDeadlines: SchedulerTask = async ({ logger }) => {
   logger.info("scheduler.checkDeadlines starting");
-  const tomorrow = new Date();
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  const tomorrowString = tomorrow.toISOString().split("T")[0]; // YYYY-MM-DD
+  
+  // Calculate tomorrow in Europe/Prague timezone
+  const nowInPrague = new Date(new Date().toLocaleString("en-US", { timeZone: "Europe/Prague" }));
+  const tomorrowInPrague = new Date(nowInPrague);
+  tomorrowInPrague.setDate(tomorrowInPrague.getDate() + 1);
+  
+  const year = tomorrowInPrague.getFullYear();
+  const month = String(tomorrowInPrague.getMonth() + 1).padStart(2, "0");
+  const day = String(tomorrowInPrague.getDate()).padStart(2, "0");
+  const tomorrowString = `${year}-${month}-${day}`; // YYYY-MM-DD
 
   let nextWorkspaceCursor: SafeId<"workspace"> | undefined = undefined;
-  const batchSize = 50;
+  const batchSize = LIMITS.deadlineWorkspacesBatchSize ?? 50;
   let hasMoreWorkspaces = true;
 
   while (hasMoreWorkspaces) {
@@ -89,16 +98,24 @@ export const checkDeadlines: SchedulerTask = async ({ logger }) => {
         // Deterministic idempotency key to prevent duplicate alerts
         const idempotencyKey = `deadline-reminder:${task.id}:${userId}:${task.dueDate}`;
 
-        await rootDb.transaction(async (tx) => {
-          await createNotification(tx, {
+        const event = await rootDb.transaction(async (tx) => {
+          return await createNotification(tx, {
             userId: brandPersistedUserId(userId),
-            title: "Task Deadline Approaching",
-            message: `The task "${task.name}" is due tomorrow (${task.dueDate}).`,
+            kind: "notifications.taskDeadline",
+            metadata: {
+              taskName: task.name,
+              dueDate: task.dueDate ?? "",
+              workspaceId: task.workspaceId,
+            },
             entityType: "entity",
             entityId: task.id,
             idempotencyKey,
           });
         });
+
+        if (event) {
+          broadcastUserNotification(brandPersistedUserId(userId), event);
+        }
       }
     }
   }

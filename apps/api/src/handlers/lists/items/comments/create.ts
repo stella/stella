@@ -65,12 +65,20 @@ const createItemComment = createSafeHandler(
       );
     }
     if (result.mentionResult.targets.length > 0) {
-      const preview = body.body.substring(0, 50) + (body.body.length > 50 ? "..." : "");
-      await createAndBroadcastNotifications(result.mentionResult.targets, {
-        title: "New Mention",
-        message: `${result.mentionResult.authorName} @-mentioned you: "${preview}"`,
-        entityType: "entity",
-        entityId: body.itemEntityId,
+      queueMicrotask(async () => {
+        const preview = body.body.substring(0, 50) + (body.body.length > 50 ? "..." : "");
+        await Result.tryPromise(async () => {
+          await createAndBroadcastNotifications(result.mentionResult.targets, {
+            kind: "notifications.newMention",
+            metadata: {
+              authorName: result.mentionResult.authorName,
+              preview,
+              workspaceId,
+            },
+            entityType: "entity",
+            entityId: body.itemEntityId,
+          });
+        });
       });
     }
     return Result.ok({ id: result.id });

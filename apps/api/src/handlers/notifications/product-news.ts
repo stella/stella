@@ -62,8 +62,11 @@ const publishProductNews = createSafeRootHandler(
     const rows = allUsers.map((u) => ({
       id: createSafeId<"notification">(),
       userId: brandPersistedUserId(u.id),
-      title: body["title"],
-      message: body["message"],
+      kind: "notifications.productNews",
+      metadata: {
+        title: body.title,
+        message: body.message,
+      },
       entityType: "announcement" as const,
       entityId: null,
     }));
@@ -77,8 +80,11 @@ const publishProductNews = createSafeRootHandler(
       type: "new-notification" as const,
       data: {
         id: rows[0]!.id,
-        title: body["title"],
-        message: body["message"],
+        kind: "notifications.productNews",
+        metadata: {
+          title: body.title,
+          message: body.message,
+        },
         isRead: false,
         createdAt: new Date().toISOString(),
         entityType: "announcement",
