@@ -24,8 +24,9 @@
  *     OpenRouter's routing API; future non-first-party providers can
  *     fall back to the full upstream model set.
  *  4. Request capabilities — the per-model `MODEL_REASONING_EFFORTS`
- *     and `MODEL_TEMPERATURE_POLICIES` declarations are compared
- *     against models.dev `reasoning_options` and `temperature`
+ *     `MODEL_TEMPERATURE_POLICIES`, and document-input declarations are
+ *     compared against models.dev `reasoning_options`, `temperature`, and
+ *     `modalities.input`
  *     (first-party and openrouter catalogs), so a model that starts
  *     requiring reasoning, changes effort tiers, or flips temperature
  *     support fails CI before a stale declaration lets request
@@ -39,9 +40,11 @@
  * Usage: bun packages/scripts/src/model-catalog-upstream.ts
  */
 import {
+  BYOK_DOCUMENT_INPUT_MODEL_OPTIONS,
   BYOK_MODEL_OPTIONS,
   CAPABILITY_OVERRIDES,
   DEFAULT_MODELS,
+  DOCUMENT_INPUT_OVERRIDES,
   FIRST_PARTY_MODEL_PROVIDERS,
   MODEL_RATES,
   MODEL_REASONING_EFFORTS,
@@ -297,9 +300,9 @@ const loadUpstream = async (): Promise<Upstream> => {
           providerKey === "openrouter" ||
           providerKey === "amazon-bedrock"
         ) {
-          const reasoning = parseUpstreamCapabilities(modelVal);
-          if (reasoning !== null) {
-            capabilityMeta.set(`${providerKey}:${modelId}`, reasoning);
+          const capabilities = parseUpstreamCapabilities(modelVal);
+          if (capabilities !== null) {
+            capabilityMeta.set(`${providerKey}:${modelId}`, capabilities);
           }
         }
         if (!isFirstParty) {
@@ -512,8 +515,15 @@ const main = async (): Promise<void> => {
       checkableProviders: CAPABILITY_CHECK_PROVIDERS,
       upstream: upstream.capabilityMeta,
       declaredEfforts: MODEL_REASONING_EFFORTS,
+      declaredDocumentInputModels: BYOK_DOCUMENT_INPUT_MODEL_OPTIONS,
       declaredTemperaturePolicies: MODEL_TEMPERATURE_POLICIES,
       overriddenIds: new Set(Object.keys(CAPABILITY_OVERRIDES)),
+      documentInputOverrides: new Map(
+        Object.entries(DOCUMENT_INPUT_OVERRIDES).map(([modelId, override]) => [
+          modelId,
+          override.supported,
+        ]),
+      ),
     });
     for (const failure of capabilityCheck.failures) {
       // ACKNOWLEDGED is intentionally empty by default — see the note

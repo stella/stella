@@ -12,19 +12,14 @@ import fr from "./messages/fr.json";
 import hu from "./messages/hu.json";
 import lt from "./messages/lt.json";
 import lv from "./messages/lv.json";
-import type Messages from "./messages/messages.gen";
 import pl from "./messages/pl.json";
 import ptBR from "./messages/pt-BR.json";
 import sk from "./messages/sk.json";
 
-// Locale catalogs share en's key structure (from messages.gen) with arbitrary
-// string values. Mirrors the web app so createTranslator infers the precise
-// key union and t("...") keys are type-checked. A drifted catalog also fails
-// assignment here, on top of the runtime i18n check.
-type LocalizedMessages<T> = {
-  [K in keyof T]: T[K] extends string ? string : LocalizedMessages<T[K]>;
-};
-type LocaleMessages = LocalizedMessages<Messages>;
+// Locale catalogs share en's exact key structure with arbitrary string values.
+// The use-intl AppConfig keeps messages.gen's source literals separately so
+// translators still infer ICU arguments.
+type LocaleMessages = typeof en;
 
 export const catalogs: Record<Locale, LocaleMessages> = {
   ar,

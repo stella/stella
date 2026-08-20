@@ -12,16 +12,11 @@ import type { UiLocale } from "@stll/locales";
 
 import { getStorageKey } from "@/consts";
 import en from "@/i18n/langs/en.json";
-import type Messages from "@/i18n/langs/messages.gen";
 import { resolveAppTimeZone, SERVER_I18N_TIME_ZONE } from "@/i18n/time-zone";
 import { detached } from "@/lib/detached";
 import { isPublicSsrPath } from "@/lib/public-ssr-paths";
 
 export type { TextDirection } from "@stll/locales";
-
-type LocalizedMessages<T> = {
-  [K in keyof T]: T[K] extends string ? string : LocalizedMessages<T[K]>;
-};
 
 // UI presentation order for language pickers. The membership is enforced
 // against the shared `UiLocale` set (a stale entry fails typecheck); only the
@@ -50,7 +45,7 @@ type MissingSupportedLanguage = Exclude<
 true satisfies MissingSupportedLanguage extends never ? true : never;
 
 export type SupportedLanguage = UiLocale;
-export type LocaleMessages = LocalizedMessages<Messages>;
+export type LocaleMessages = typeof en;
 type MessageLoader = () => LocaleMessages | Promise<LocaleMessages>;
 
 const messageLoaders = {

@@ -145,9 +145,14 @@ const renderOutputs = (entries: readonly GeneratedEntry[]): RenderedOutputs => {
 
 ${lines.join("\n")}
 
-export const GENERATED_ENTRIES = [
+type GeneratedCatalogueInput = {
+  readonly icon: string | null;
+  readonly manifest: unknown;
+};
+
+export const GENERATED_ENTRIES: readonly GeneratedCatalogueInput[] = [
 ${formatRows(entryRows)}
-] as const;
+];
 
 export const GENERATED_RECOMMENDED = recommended;
 `;

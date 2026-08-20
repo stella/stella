@@ -428,6 +428,7 @@
         "@tanstack/ai-anthropic": "catalog:",
         "@tanstack/ai-bedrock": "catalog:",
         "@tanstack/ai-gemini": "catalog:",
+        "@tanstack/ai-mistral": "catalog:",
         "@tanstack/ai-openrouter": "catalog:",
         "@types/bun": "catalog:",
       },

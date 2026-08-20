@@ -8,15 +8,17 @@
  *    this exists for: a provider makes reasoning mandatory on a model
  *    ("none" disappears from the published values), and a request
  *    built from the stale declaration starts 4xx/5xx-ing.
+ *  - Document input (`MODEL_DOCUMENT_INPUT_OPTIONS`): the generated model
+ *    lists must match upstream `modalities.input`, except for dated source
+ *    corrections. Corrections are rejected once upstream catches up.
  *  - Temperature policy (`MODEL_TEMPERATURE_POLICIES`): `"emit"` is
  *    allowed only while upstream positively reports support. `"omit"`
  *    is always safe because providers may accept but ignore a deprecated
  *    parameter before eventually rejecting it.
  *
- * Both invariants are CI-enforced along with coverage: every
- * checkable offered model must carry entries in both maps. Models
- * whose upstream record lacks the relevant metadata are skipped and
- * reported as a warning by the caller.
+ * All invariants are CI-enforced along with coverage: every checkable offered
+ * model must carry complete generated declarations. Models missing entirely
+ * from upstream are skipped and reported as a warning by the caller.
  *
  * Extracted from the nightly script so the drift logic is
  * unit-testable; every AI feature's request construction depends on
@@ -85,6 +87,8 @@ export type UpstreamCapabilities = {
    * effort-style control (budget-only, always-on, or non-reasoning).
    */
   effortValues: readonly string[] | null;
+  /** models.dev `modalities.input`, or null when absent/malformed. */
+  inputModalities: readonly string[] | null;
   /**
    * models.dev `temperature`: whether the model accepts a temperature
    * override; `null` when the record does not publish it.
@@ -162,6 +166,8 @@ export const parseUpstreamCapabilities = (
   if (hasToggle && effortValues !== null && !effortValues.includes("none")) {
     effortValues = ["none", ...effortValues];
   }
+  const modalities = modelVal["modalities"];
+  const inputModalities = isObject(modalities) ? modalities["input"] : null;
   return {
     releaseDate:
       typeof modelVal["release_date"] === "string"
@@ -169,6 +175,11 @@ export const parseUpstreamCapabilities = (
         : null,
     reasoning: modelVal["reasoning"],
     effortValues,
+    inputModalities: Array.isArray(inputModalities)
+      ? inputModalities.filter(
+          (modality): modality is string => typeof modality === "string",
+        )
+      : null,
     temperature:
       typeof modelVal["temperature"] === "boolean"
         ? modelVal["temperature"]
@@ -198,6 +209,7 @@ export type ValidateCapabilitiesOptions = {
   /** `${modelsDevProvider}:${modelId}` → upstream capability metadata. */
   upstream: ReadonlyMap<string, UpstreamCapabilities>;
   declaredEfforts: Readonly<Record<string, readonly ReasoningEffort[] | null>>;
+  declaredDocumentInputModels: Readonly<Record<string, readonly string[]>>;
   declaredTemperaturePolicies: Readonly<Record<string, TemperaturePolicy>>;
   /**
    * Model ids declared via `CAPABILITY_OVERRIDES` because the upstream
@@ -205,6 +217,8 @@ export type ValidateCapabilitiesOptions = {
    * reported as unverifiable every night.
    */
   overriddenIds?: ReadonlySet<string>;
+  /** Model id → reviewed correction to live document-input metadata. */
+  documentInputOverrides?: ReadonlyMap<string, boolean>;
 };
 
 const formatValues = (values: readonly string[] | null): string =>
@@ -215,8 +229,10 @@ export const validateCapabilities = ({
   checkableProviders,
   upstream,
   declaredEfforts,
+  declaredDocumentInputModels,
   declaredTemperaturePolicies,
   overriddenIds,
+  documentInputOverrides,
 }: ValidateCapabilitiesOptions): CapabilityCheckResult => {
   const failures: CapabilityFailure[] = [];
   const skipped: CatalogEntry[] = [];
@@ -247,6 +263,15 @@ export const validateCapabilities = ({
       });
       continue;
     }
+    const providerDocumentModels = declaredDocumentInputModels[entry.provider];
+    if (providerDocumentModels === undefined) {
+      failures.push({
+        entry,
+        label: "NO DOCUMENT INPUT CAPABILITY",
+        detail: "provider has no generated document-input model declaration",
+      });
+      continue;
+    }
     const upstreamCapabilities = upstream.get(`${mdProvider}:${entry.modelId}`);
     if (upstreamCapabilities === undefined) {
       skipped.push(entry);
@@ -270,6 +295,48 @@ export const validateCapabilities = ({
           `publishes ${formatValues(upstreamValues)}; a stale declaration ` +
           "lets request construction send an effort the model rejects",
       });
+    }
+
+    const inputModalities = upstreamCapabilities.inputModalities;
+    const documentInputOverride = documentInputOverrides?.get(entry.modelId);
+    if (inputModalities === null && documentInputOverride === undefined) {
+      failures.push({
+        entry,
+        label: "NO INPUT MODALITY METADATA",
+        detail:
+          "models.dev record lacks modalities.input; add a reviewed " +
+          "document-input override before declaring support",
+      });
+    } else {
+      const upstreamDocumentInput = inputModalities?.includes("pdf") ?? false;
+      if (
+        documentInputOverride !== undefined &&
+        inputModalities !== null &&
+        documentInputOverride === upstreamDocumentInput
+      ) {
+        failures.push({
+          entry,
+          label: "REDUNDANT DOCUMENT INPUT OVERRIDE",
+          detail:
+            "models.dev now agrees with the reviewed correction; delete the " +
+            "override so sourced data takes ownership",
+        });
+      }
+      const declaredDocumentInput = providerDocumentModels.includes(
+        entry.modelId,
+      );
+      const expectedDocumentInput =
+        documentInputOverride ?? upstreamDocumentInput;
+      if (declaredDocumentInput !== expectedDocumentInput) {
+        failures.push({
+          entry,
+          label: "DOCUMENT INPUT DRIFT",
+          detail:
+            `declared document input ${declaredDocumentInput} but the ` +
+            `reviewed source says ${expectedDocumentInput}; regenerate the ` +
+            "capability catalogue",
+        });
+      }
     }
 
     const expectedTemperaturePolicy = resolveTemperaturePolicy({

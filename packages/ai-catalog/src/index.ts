@@ -1,7 +1,3 @@
-import type { AnthropicModelInputModalitiesByName } from "@tanstack/ai-anthropic";
-import type { BedrockModelInputModalitiesByName } from "@tanstack/ai-bedrock";
-import type { GeminiModelInputModalitiesByName } from "@tanstack/ai-gemini";
-import type { OpenRouterModelInputModalitiesByName } from "@tanstack/ai-openrouter";
 /**
  * Canonical AI provider and model catalog.
  *
@@ -26,6 +22,7 @@ import type { OpenRouterModelInputModalitiesByName } from "@tanstack/ai-openrout
 import * as v from "valibot";
 
 import {
+  MODEL_DOCUMENT_INPUT_OPTIONS,
   MODEL_DEFAULT_REASONING_EFFORTS,
   MODEL_REASONING_EFFORTS,
   MODEL_TEMPERATURE_POLICIES,
@@ -285,38 +282,10 @@ export type BYOKProvider = keyof typeof BYOK_MODEL_OPTIONS;
 // (packages/scripts/src/model-catalog-capabilities-gen.ts).
 export { CAPABILITY_OVERRIDES } from "./capabilities-overrides";
 export type { CapabilityOverride } from "./capabilities-overrides";
+export { DOCUMENT_INPUT_OVERRIDES } from "./document-input-overrides";
+export type { DocumentInputOverride } from "./document-input-overrides";
 
-type ModelInputModalitiesByName = Record<string, readonly string[]>;
-
-type ModelWithInputModality<
-  TModels extends ModelInputModalitiesByName,
-  TModality extends string,
-> = Extract<
-  {
-    [TModel in keyof TModels]: TModality extends TModels[TModel][number]
-      ? TModel
-      : never;
-  }[keyof TModels],
-  string
->;
-
-type TanStackDocumentInputModelByProvider = {
-  anthropic: ModelWithInputModality<
-    AnthropicModelInputModalitiesByName,
-    "document"
-  >;
-  bedrock: ModelWithInputModality<
-    BedrockModelInputModalitiesByName,
-    "document"
-  >;
-  google: ModelWithInputModality<GeminiModelInputModalitiesByName, "document">;
-  openrouter: ModelWithInputModality<
-    OpenRouterModelInputModalitiesByName,
-    "document"
-  >;
-};
-
-type BYOKModelIdByProvider = {
+export type BYOKModelIdByProvider = {
   [TProvider in BYOKProvider]: (typeof BYOK_MODEL_OPTIONS)[TProvider][number];
 };
 
@@ -525,86 +494,12 @@ export const getModelDisplayMetadata = (
 ): ModelDisplayMetadata | null =>
   MODEL_DISPLAY_METADATA_BY_ID[normalizeModelCatalogId(modelId)] ?? null;
 
-const TANSTACK_DOCUMENT_INPUT_MODEL_OPTIONS = {
-  anthropic: ["claude-sonnet-5", "claude-sonnet-4-6"],
-  bedrock: [
-    "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
-    "us.anthropic.claude-haiku-4-5-20251001-v1:0",
-    "us.amazon.nova-pro-v1:0",
-    "us.amazon.nova-lite-v1:0",
-  ],
-  google: [
-    "gemini-3.1-pro-preview",
-    "gemini-3.5-flash",
-    "gemini-3.1-flash-lite",
-  ],
-  openrouter: [
-    "google/gemini-3.1-pro-preview",
-    "google/gemini-3.5-flash",
-    "google/gemini-3.1-flash-lite",
-    "anthropic/claude-sonnet-5",
-    "anthropic/claude-opus-4.8",
-    "anthropic/claude-sonnet-4.6",
-    "openai/gpt-5.5",
-    "openai/gpt-5.4-mini",
-  ],
-} as const satisfies {
-  [TProvider in keyof TanStackDocumentInputModelByProvider]: readonly Extract<
-    BYOKModelIdByProvider[TProvider],
-    TanStackDocumentInputModelByProvider[TProvider]
-  >[];
-};
-
-const STELLA_EXTENDED_DOCUMENT_INPUT_MODEL_OPTIONS = {
-  anthropic: [
-    "claude-fable-5",
-    "claude-opus-5",
-    "claude-opus-4-8",
-    "claude-opus-4-7",
-    "claude-opus-4-6",
-    "claude-haiku-4-5-20251001",
-  ],
-  google: ["gemini-3.7-flash", "gemini-3.6-flash", "gemini-3.5-flash-lite"],
-  openai: [
-    "gpt-5.6",
-    "gpt-5.6-luna",
-    "gpt-5.5",
-    "gpt-5.4",
-    "gpt-5.4-mini",
-    "gpt-5.4-nano",
-    "gpt-5.2",
-  ],
-  openrouter: [
-    "openai/gpt-5.6-luna",
-    "openai/gpt-5.6-terra",
-    "google/gemini-3.7-flash",
-    "google/gemini-3.6-flash",
-    "google/gemini-3.5-flash-lite",
-    "anthropic/claude-opus-5",
-  ],
-} as const satisfies Partial<{
-  [TProvider in BYOKProvider]: readonly BYOKModelIdByProvider[TProvider][];
-}>;
-
-export const BYOK_DOCUMENT_INPUT_MODEL_OPTIONS = {
-  anthropic: [
-    ...TANSTACK_DOCUMENT_INPUT_MODEL_OPTIONS.anthropic,
-    ...STELLA_EXTENDED_DOCUMENT_INPUT_MODEL_OPTIONS.anthropic,
-  ],
-  bedrock: TANSTACK_DOCUMENT_INPUT_MODEL_OPTIONS.bedrock,
-  google: [
-    ...TANSTACK_DOCUMENT_INPUT_MODEL_OPTIONS.google,
-    ...STELLA_EXTENDED_DOCUMENT_INPUT_MODEL_OPTIONS.google,
-  ],
-  mistral: [],
-  openai: STELLA_EXTENDED_DOCUMENT_INPUT_MODEL_OPTIONS.openai,
-  openrouter: [
-    ...TANSTACK_DOCUMENT_INPUT_MODEL_OPTIONS.openrouter,
-    ...STELLA_EXTENDED_DOCUMENT_INPUT_MODEL_OPTIONS.openrouter,
-  ],
-} as const satisfies {
-  [TProvider in BYOKProvider]: readonly BYOKModelIdByProvider[TProvider][];
-};
+/**
+ * Offered models whose provider API accepts PDF/file content. Generated from
+ * live models.dev input modalities plus dated, reviewed source corrections;
+ * the nightly upstream check rejects drift.
+ */
+export const BYOK_DOCUMENT_INPUT_MODEL_OPTIONS = MODEL_DOCUMENT_INPUT_OPTIONS;
 
 export const isBYOKProviderRoleSupported = ({
   provider,
