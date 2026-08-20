@@ -857,6 +857,7 @@
     "@tanstack/ai-anthropic@0.16.4": "patches/@tanstack%2Fai-anthropic@0.16.4.patch",
   },
   "overrides": {
+    "@atlaskit/pragmatic-drag-and-drop": "3.0.0",
     "@emnapi/core": "1.9.1",
     "@emnapi/runtime": "1.9.1",
     "@expo/cli": "57.0.13",

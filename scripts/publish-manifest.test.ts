@@ -3,6 +3,7 @@ import { realpathSync } from "node:fs";
 import path from "node:path";
 
 import webManifest from "../apps/web/package.json" with { type: "json" };
+import rootManifest from "../package.json" with { type: "json" };
 import uiManifest from "../packages/ui/package.json" with { type: "json" };
 import {
   distEntryFiles,
@@ -15,8 +16,11 @@ const ATLASKIT_AUTO_SCROLL_PACKAGE =
   "@atlaskit/pragmatic-drag-and-drop-auto-scroll";
 const ATLASKIT_DRAG_RANGE = "^3.0.0";
 const ATLASKIT_AUTO_SCROLL_RANGE = "^3.0.1";
+const ATLASKIT_DRAG_VERSION = "3.0.0";
 const ATLASKIT_ELEMENT_ADAPTER =
   "@atlaskit/pragmatic-drag-and-drop/element/adapter";
+const ATLASKIT_AUTO_SCROLL_ELEMENT =
+  "@atlaskit/pragmatic-drag-and-drop-auto-scroll/element";
 const REPO_ROOT = path.resolve(import.meta.dir, "..");
 
 const manifest = (exports: Record<string, unknown>) => ({
@@ -129,12 +133,15 @@ describe("toPublishedManifest", () => {
     expect(webManifest.dependencies[ATLASKIT_AUTO_SCROLL_PACKAGE]).toBe(
       ATLASKIT_AUTO_SCROLL_RANGE,
     );
+    expect(rootManifest.resolutions[ATLASKIT_DRAG_PACKAGE]).toBe(
+      ATLASKIT_DRAG_VERSION,
+    );
     expect(publishedUi["peerDependencies"]).toEqual(
       uiManifest.peerDependencies,
     );
   });
 
-  test("resolves one element adapter for the UI package and web workspace", () => {
+  test("resolves one element adapter across the UI, web, and auto-scroll", () => {
     const uiAdapter = Bun.resolveSync(
       ATLASKIT_ELEMENT_ADAPTER,
       path.join(REPO_ROOT, "packages/ui"),
@@ -143,8 +150,17 @@ describe("toPublishedManifest", () => {
       ATLASKIT_ELEMENT_ADAPTER,
       path.join(REPO_ROOT, "apps/web"),
     );
+    const autoScrollElement = Bun.resolveSync(
+      ATLASKIT_AUTO_SCROLL_ELEMENT,
+      REPO_ROOT,
+    );
+    const autoScrollAdapter = Bun.resolveSync(
+      ATLASKIT_ELEMENT_ADAPTER,
+      path.dirname(autoScrollElement),
+    );
 
     expect(realpathSync(uiAdapter)).toBe(realpathSync(webAdapter));
+    expect(realpathSync(autoScrollAdapter)).toBe(realpathSync(webAdapter));
   });
 });
 
