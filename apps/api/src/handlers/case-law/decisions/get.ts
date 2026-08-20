@@ -132,51 +132,126 @@ export const readDecisionQuerySchema = t.Object({
   citationsCursor: t.Optional(tPaginationCursor()),
 });
 
-export type ReadDecisionOptions = {
+type ReadDecisionOptions = {
   caseLawDb: CaseLawPublicReadDb;
   citationsCursor?: string | null | undefined;
   decisionId: SafeId<"caseLawDecision">;
 };
 
+const CITATION_STREAM_CURSOR_STATUS = {
+  CONTINUE: "continue",
+  EXHAUSTED: "exhausted",
+  START: "start",
+} as const;
+
+type CitationStreamCursor =
+  | { status: typeof CITATION_STREAM_CURSOR_STATUS.START }
+  | { status: typeof CITATION_STREAM_CURSOR_STATUS.EXHAUSTED }
+  | {
+      after: string;
+      status: typeof CITATION_STREAM_CURSOR_STATUS.CONTINUE;
+    };
+
 type DecisionCitationCursorState = {
-  from: string | null | undefined;
-  to: string | null | undefined;
+  from: CitationStreamCursor;
+  to: CitationStreamCursor;
 };
 
+type CitationStreamNextCursor = Exclude<
+  CitationStreamCursor,
+  { status: typeof CITATION_STREAM_CURSOR_STATUS.START }
+>;
+
 type DecisionCitationNextCursorState = {
-  from: string | null;
-  to: string | null;
+  from: CitationStreamNextCursor;
+  to: CitationStreamNextCursor;
+};
+
+const decodeCitationStreamCursor = (
+  value: unknown,
+): CitationStreamNextCursor | null => {
+  if (value === null) {
+    return { status: CITATION_STREAM_CURSOR_STATUS.EXHAUSTED };
+  }
+  if (typeof value === "string") {
+    return { after: value, status: CITATION_STREAM_CURSOR_STATUS.CONTINUE };
+  }
+  return null;
 };
 
 export const decodeDecisionCitationCursor = (
   cursor: string | null | undefined,
 ): DecisionCitationCursorState | null => {
   if (cursor === undefined) {
-    return { from: undefined, to: undefined };
+    return {
+      from: { status: CITATION_STREAM_CURSOR_STATUS.START },
+      to: { status: CITATION_STREAM_CURSOR_STATUS.START },
+    };
   }
   if (cursor === null) {
-    return { from: null, to: null };
+    return {
+      from: { status: CITATION_STREAM_CURSOR_STATUS.EXHAUSTED },
+      to: { status: CITATION_STREAM_CURSOR_STATUS.EXHAUSTED },
+    };
   }
 
   const parts = decodePaginationCursor(cursor);
-  const from = parts?.at(0);
-  const to = parts?.at(1);
-  if (
-    parts?.length !== 2 ||
-    (from !== null && typeof from !== "string") ||
-    (to !== null && typeof to !== "string")
-  ) {
+  if (parts?.length !== 2) {
     return null;
   }
 
+  const from = decodeCitationStreamCursor(parts.at(0));
+  const to = decodeCitationStreamCursor(parts.at(1));
+  if (from === null || to === null) {
+    return null;
+  }
   return { from, to };
 };
+
+const encodeCitationStreamCursor = (
+  cursor: CitationStreamNextCursor,
+): string | null => {
+  switch (cursor.status) {
+    case CITATION_STREAM_CURSOR_STATUS.CONTINUE:
+      return cursor.after;
+    case CITATION_STREAM_CURSOR_STATUS.EXHAUSTED:
+      return null;
+    default: {
+      const exhaustive: never = cursor;
+      return exhaustive;
+    }
+  }
+};
+
+const citationStreamCursorFromNext = (
+  cursor: string | null,
+): CitationStreamNextCursor =>
+  cursor === null
+    ? { status: CITATION_STREAM_CURSOR_STATUS.EXHAUSTED }
+    : { after: cursor, status: CITATION_STREAM_CURSOR_STATUS.CONTINUE };
+
+const citationPageCursor = (
+  cursor: CitationStreamCursor,
+): string | undefined =>
+  cursor.status === CITATION_STREAM_CURSOR_STATUS.CONTINUE
+    ? cursor.after
+    : undefined;
 
 export const encodeDecisionCitationCursor = ({
   from,
   to,
-}: DecisionCitationNextCursorState): string | null =>
-  from === null && to === null ? null : encodePaginationCursor([from, to]);
+}: DecisionCitationNextCursorState): string | null => {
+  if (
+    from.status === CITATION_STREAM_CURSOR_STATUS.EXHAUSTED &&
+    to.status === CITATION_STREAM_CURSOR_STATUS.EXHAUSTED
+  ) {
+    return null;
+  }
+  return encodePaginationCursor([
+    encodeCitationStreamCursor(from),
+    encodeCitationStreamCursor(to),
+  ]);
+};
 
 const emptyCitationPage = () => ({
   items: [],
@@ -249,18 +324,18 @@ export const readDecisionHandler = async ({
         caseLawDb,
         languageGroupKey: decision.languageGroupKey,
       }),
-      citationCursors.from === null
+      citationCursors.from.status === CITATION_STREAM_CURSOR_STATUS.EXHAUSTED
         ? emptyCitationPage()
         : listOutgoingDecisionCitations({
             caseLawDb,
-            cursor: citationCursors.from,
+            cursor: citationPageCursor(citationCursors.from),
             decisionId,
           }),
-      citationCursors.to === null
+      citationCursors.to.status === CITATION_STREAM_CURSOR_STATUS.EXHAUSTED
         ? emptyCitationPage()
         : listIncomingDecisionCitations({
             caseLawDb,
-            cursor: citationCursors.to,
+            cursor: citationPageCursor(citationCursors.to),
             decisionId,
           }),
     ]);
@@ -272,8 +347,8 @@ export const readDecisionHandler = async ({
     return citationsToPage;
   }
   const citationsNextCursor = encodeDecisionCitationCursor({
-    from: citationsFromPage.nextCursor,
-    to: citationsToPage.nextCursor,
+    from: citationStreamCursorFromNext(citationsFromPage.nextCursor),
+    to: citationStreamCursorFromNext(citationsToPage.nextCursor),
   });
 
   // Prefer canonical AST from object storage when corpus storage is

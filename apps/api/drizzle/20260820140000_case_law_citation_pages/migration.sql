@@ -26,6 +26,13 @@ CREATE INDEX CONCURRENTLY "case_law_citations_cited_page_idx"
   WHERE "cited_decision_id" IS NOT NULL;
 --> statement-breakpoint
 
+-- stella-migration-safety: reviewed destructive-change - the composite index above replaces this prefix index.
+DROP INDEX CONCURRENTLY IF EXISTS "case_law_citations_citing_idx";
+--> statement-breakpoint
+-- stella-migration-safety: reviewed destructive-change - the partial composite index above replaces this partial prefix index.
+DROP INDEX CONCURRENTLY IF EXISTS "case_law_citations_cited_idx";
+--> statement-breakpoint
+
 SET statement_timeout = '5s';
 --> statement-breakpoint
 SET lock_timeout = '1s';

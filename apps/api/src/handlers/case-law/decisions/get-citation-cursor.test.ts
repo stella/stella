@@ -9,19 +9,24 @@ import { encodePaginationCursor } from "@/api/lib/pagination";
 describe("decision citation cursor", () => {
   test("preserves an exhausted stream while the other stream continues", () => {
     const cursor = encodeDecisionCitationCursor({
-      from: null,
-      to: "incoming-next",
+      from: { status: "exhausted" },
+      to: { after: "incoming-next", status: "continue" },
     });
 
     expect(cursor).not.toBeNull();
     expect(decodeDecisionCitationCursor(cursor)).toEqual({
-      from: null,
-      to: "incoming-next",
+      from: { status: "exhausted" },
+      to: { after: "incoming-next", status: "continue" },
     });
   });
 
   test("ends only after both streams are exhausted", () => {
-    expect(encodeDecisionCitationCursor({ from: null, to: null })).toBeNull();
+    expect(
+      encodeDecisionCitationCursor({
+        from: { status: "exhausted" },
+        to: { status: "exhausted" },
+      }),
+    ).toBeNull();
   });
 
   test("rejects malformed compound state", () => {
@@ -41,8 +46,8 @@ describe("decision citation cursor", () => {
 
   test("seeds both streams when no cursor is supplied", () => {
     expect(decodeDecisionCitationCursor(undefined)).toEqual({
-      from: undefined,
-      to: undefined,
+      from: { status: "start" },
+      to: { status: "start" },
     });
   });
 });

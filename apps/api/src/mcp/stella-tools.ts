@@ -1831,7 +1831,7 @@ const handleReadCaseLawDecisionTool: McpToolHandler = async ({ args }) => {
       source: result.source,
       sourceUrl: result.sourceUrl,
       text:
-        plainText === null
+        plainText === null || textBounds.start >= textBounds.end
           ? null
           : plainText.slice(textBounds.start, textBounds.end),
       charCount: plainText === null ? null : textLength,

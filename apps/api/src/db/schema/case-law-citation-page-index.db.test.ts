@@ -20,6 +20,9 @@ const pageIndexNames = new Set([
 const pageIndexes = getTableConfig(caseLawCitations).indexes.filter(
   ({ config }) => config.name !== undefined && pageIndexNames.has(config.name),
 );
+const citationIndexNames = getTableConfig(caseLawCitations).indexes.map(
+  ({ config }) => config.name,
+);
 
 test("citation page indexes match the migration", () => {
   expect(
@@ -49,5 +52,13 @@ test("citation page indexes match the migration", () => {
   );
   expect(migration).toContain(
     '"case_law_citations_cited_page_idx"\n  ON "case_law_citations" ("cited_decision_id", "id")\n  WHERE "cited_decision_id" IS NOT NULL',
+  );
+  expect(citationIndexNames).not.toContain("case_law_citations_citing_idx");
+  expect(citationIndexNames).not.toContain("case_law_citations_cited_idx");
+  expect(migration).toContain(
+    'DROP INDEX CONCURRENTLY IF EXISTS "case_law_citations_citing_idx"',
+  );
+  expect(migration).toContain(
+    'DROP INDEX CONCURRENTLY IF EXISTS "case_law_citations_cited_idx"',
   );
 });

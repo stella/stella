@@ -1576,6 +1576,7 @@ describe("OpenAI-compatible MCP tools", () => {
       decision: {
         citationsFrom: { id: string }[];
         citationsTo: { id: string }[];
+        text: string | null;
       };
     };
 
@@ -1605,6 +1606,7 @@ describe("OpenAI-compatible MCP tools", () => {
     expect(page2.decision.citationsTo).toHaveLength(20);
     expect(page2.decision.citationsFrom.at(0)?.id).toBe("cf_50");
     expect(page2.decision.citationsTo.at(0)?.id).toBe("ct_50");
+    expect(page2.decision.text).toBeNull();
     expect(page2.nextCursor).toBeNull();
     expect(readDecisionHandlerMock).toHaveBeenLastCalledWith({
       decisionId: "dec_123",
