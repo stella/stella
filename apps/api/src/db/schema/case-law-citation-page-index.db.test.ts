@@ -48,6 +48,6 @@ test("citation page indexes match the migration", () => {
     '"case_law_citations_citing_page_idx"\n  ON "case_law_citations" ("citing_decision_id", "id")',
   );
   expect(migration).toContain(
-    '"case_law_citations_cited_page_idx"\n  ON "case_law_citations" ("cited_decision_id", "id")',
+    '"case_law_citations_cited_page_idx"\n  ON "case_law_citations" ("cited_decision_id", "id")\n  WHERE "cited_decision_id" IS NOT NULL',
   );
 });
