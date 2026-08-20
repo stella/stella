@@ -1,12 +1,13 @@
 import { useRef } from "react";
 
-import { draggable } from "@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter";
-import { centerUnderPointer } from "@atlaskit/pragmatic-drag-and-drop/utils/center-under-pointer";
-import { setCustomNativeDragPreview } from "@atlaskit/pragmatic-drag-and-drop/utils/set-custom-native-drag-preview";
 import { CalendarIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { KanbanCardShell, selectKanbanCardFieldIds } from "@stll/ui/kanban";
+import {
+  KanbanCardShell,
+  registerKanbanCardDrag,
+  selectKanbanCardFieldIds,
+} from "@stll/ui/kanban";
 import { cn } from "@stll/ui/utils";
 
 import { withDragAnnouncementData } from "@/components/drag-and-drop-live-region.logic";
@@ -91,7 +92,7 @@ export const KanbanCard = ({
     if (!el) {
       return undefined;
     }
-    return draggable({
+    return registerKanbanCardDrag({
       element: el,
       getInitialData: () =>
         withDragAnnouncementData(
@@ -114,26 +115,6 @@ export const KanbanCard = ({
           },
           name,
         ),
-      onGenerateDragPreview: ({ nativeSetDragImage }) => {
-        setCustomNativeDragPreview({
-          nativeSetDragImage,
-          getOffset: centerUnderPointer,
-          render: ({ container }) => {
-            // Clone the styled inner card (button or div)
-            const inner = el.firstElementChild;
-            if (!inner) {
-              return;
-            }
-            const clone = inner.cloneNode(true);
-            if (!(clone instanceof HTMLElement)) {
-              return;
-            }
-            const rect = inner.getBoundingClientRect();
-            clone.style.width = `${rect.width}px`;
-            container.append(clone);
-          },
-        });
-      },
     });
   }, [entity.entityId, name, entity.kind, file?.mimeType, entity.parentId]);
 

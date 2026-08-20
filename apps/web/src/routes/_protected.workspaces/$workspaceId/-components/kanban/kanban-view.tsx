@@ -1,8 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import type { ComponentProps, ReactNode } from "react";
 
-import { autoScrollForElements } from "@atlaskit/pragmatic-drag-and-drop-auto-scroll/element";
-import { autoScrollForExternal } from "@atlaskit/pragmatic-drag-and-drop-auto-scroll/external";
 import { extractClosestEdge } from "@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge";
 import type { Edge } from "@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge";
 import { monitorForElements } from "@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter";
@@ -22,6 +20,8 @@ import {
   getKanbanGroupingPropertyId,
   getKanbanGroups,
   isKanbanGroupingRenderable,
+  KANBAN_BOARD_AUTO_SCROLL_SOURCES,
+  registerKanbanBoardAutoScroll,
   resolveKanbanGroupOptions,
 } from "@stll/ui/kanban";
 import { stellaToast } from "@stll/ui/toast";
@@ -716,13 +716,9 @@ const KanbanBoard = ({ children, onReorderColumn }: KanbanBoardProps) => {
       return undefined;
     }
     return combine(
-      autoScrollForElements({
+      registerKanbanBoardAutoScroll({
         element: el,
-        getAllowedAxis: () => "horizontal",
-      }),
-      autoScrollForExternal({
-        element: el,
-        getAllowedAxis: () => "horizontal",
+        sources: KANBAN_BOARD_AUTO_SCROLL_SOURCES.elementsAndExternal,
       }),
       monitorForElements({
         canMonitor: ({ source }) => source.data["type"] === COLUMN_DRAG_TYPE,
