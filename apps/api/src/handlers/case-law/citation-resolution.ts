@@ -21,6 +21,15 @@
  *   an ambiguous link is worse than none: it puts a wrong edge in the
  *   citation graph and thus a wrong number in the authority ranking. Those
  *   rows are recorded as `ambiguous` for the adjudication tier to pick up.
+ * - **One file, one merits decision.** The first adjudication rule, and the
+ *   one structural exception to uniqueness. A constitutional court keeps one
+ *   docket number for a whole file, so the nález on the merits and the
+ *   procedural orders issued along the way all canonicalize to the same key.
+ *   A citation of that key means the nález: nobody cites an interim order by
+ *   the file number alone. When every time-valid candidate sits at one court
+ *   and exactly one of them is a merits decision while all the others are
+ *   procedural orders, the link goes to the merits decision. Any other mix
+ *   (two nálezy, an untyped candidate, a second court) stays ambiguous.
  *
  * The outcome lands in `resolution_status`, not in the nullability of
  * `cited_decision_id`. A null foreign key cannot distinguish "not examined
@@ -29,8 +38,9 @@
  * forever. With the outcome recorded, the pending set burns down.
  *
  * Two structural bounds keep one batch's cost independent of how popular a
- * key is: candidates are counted through a `LATERAL (… LIMIT 2)` (two is all
- * uniqueness needs to know), and the walk is a strict keyset over
+ * key is: candidates are read through a `LATERAL (… LIMIT cap)` (a handful is
+ * all uniqueness and the one-file rule need to know; a key held by more is
+ * ambiguous without looking further), and the walk is a strict keyset over
  * `(citing_decision_id, id)`. The citing-side axis is deliberate: citation
  * ids and decision ids are both uuidv7, so walking citations in citing-
  * decision order reads the decisions table in insertion order rather than at
@@ -67,12 +77,48 @@ type CitationResolutionTx = {
   execute: (query: SQL) => Promise<unknown>;
 };
 
+/**
+ * The decision types the one-file rule tells apart, as the adapters store
+ * them: lowercase, in the court's own language. Only courts whose types fall
+ * into these two sets can satisfy the rule; a court that files under
+ * `rozsudek`, `judgment` or leaves the type empty never matches, which is the
+ * jurisdiction safety of the rule rather than a list of court names.
+ *
+ * `nález` is the merits decision of both constitutional courts the corpus
+ * holds (CZE Ústavní soud, SVK Ústavný súd SR); their procedural orders are
+ * `usnesení` and `uznesenie`.
+ */
+export const MERITS_DECISION_TYPES = ["nález"] as const;
+export const PROCEDURAL_DECISION_TYPES = ["usnesení", "uznesenie"] as const;
+
+/**
+ * How many candidates the resolver reads per key before declaring the key too
+ * crowded to adjudicate. Uniqueness needs two; the one-file rule needs every
+ * candidate, and a constitutional file rarely carries more than a few orders.
+ * A key that reaches the cap is ambiguous without looking further, so the
+ * lookup cost per citation is this constant, whatever the corpus holds.
+ */
+export const CITATION_CANDIDATE_SCAN_CAP = 8;
+
+const decisionTypeArray = (types: readonly string[]): SQL =>
+  sql`ARRAY[${sql.join(
+    types.map((type) => sql`${type}`),
+    sql`, `,
+  )}]::varchar[]`;
+
 /** What one statement settled, in the terms the runner reports. */
 export type CitationResolutionCounts = {
   /** Rows the batch examined. Zero means the scan reached the end. */
   scanned: number;
-  /** Rows linked to exactly one decision. */
+  /** Rows linked to exactly one decision, the adjudicated ones included. */
   resolved: number;
+  /**
+   * The subset of `resolved` that the one-file rule decided: the key had
+   * several holders and the merits decision among them took the link.
+   * Reported apart so a rule that starts firing unexpectedly is visible in the
+   * walk's telemetry rather than folded into the ordinary count.
+   */
+  adjudicated: number;
   /** Rows with no surviving candidate. A later decision can revive them. */
   unmatched: number;
   /** Rows with more than one surviving candidate; left unlinked on purpose. */
@@ -181,6 +227,7 @@ export const lockCitationGraph = async (
 const EMPTY_COUNTS: CitationResolutionCounts = {
   scanned: 0,
   resolved: 0,
+  adjudicated: 0,
   unmatched: 0,
   ambiguous: 0,
   jurisdictionBlocked: 0,
@@ -239,19 +286,43 @@ const resolutionStatement = (selection: SQL): SQL => sql`
      })}
        ${selection}
   ),
-  classified AS (
+  candidates AS (
     SELECT b.id,
            b.citing_decision_id,
            pol.resolves_to,
-           m.decision_id,
            m.n,
-           j.blocked
+           m.sole_id,
+           m.merits_id,
+           j.blocked,
+           -- The one-file rule, as a predicate over the bounded candidate
+           -- set: one court, exactly one merits decision, every other
+           -- candidate a procedural order. The strict upper bound is load
+           -- bearing: at the cap the set may be truncated, and a rule judged
+           -- on a partial set is a guess.
+           (
+                 m.n > 1
+             AND m.n < ${CITATION_CANDIDATE_SCAN_CAP}
+             AND m.courts = 1
+             AND m.merits_n = 1
+             AND m.procedural_n = m.n - 1
+           ) AS one_file
       FROM batch b
       LEFT JOIN policy pol ON pol.citing_country = b.citing_country
       LEFT JOIN LATERAL (
-        SELECT (array_agg(k.id))[1] AS decision_id, count(*)::int AS n
+        SELECT count(*)::int AS n,
+               (array_agg(k.id))[1] AS sole_id,
+               count(DISTINCT k.court)::int AS courts,
+               count(*) FILTER (
+                 WHERE k.decision_type = ANY (${decisionTypeArray(MERITS_DECISION_TYPES)})
+               )::int AS merits_n,
+               (array_agg(k.id) FILTER (
+                 WHERE k.decision_type = ANY (${decisionTypeArray(MERITS_DECISION_TYPES)})
+               ))[1] AS merits_id,
+               count(*) FILTER (
+                 WHERE k.decision_type = ANY (${decisionTypeArray(PROCEDURAL_DECISION_TYPES)})
+               )::int AS procedural_n
           FROM (
-            SELECT cited.id
+            SELECT cited.id, cited.court, cited.decision_type
               FROM ${caseLawDecisions} cited
              WHERE cited.citation_key = b.citation_key
                AND cited.country = ANY (pol.resolves_to)
@@ -261,7 +332,7 @@ const resolutionStatement = (selection: SQL): SQL => sql`
                   OR b.citing_date IS NULL
                   OR b.citing_date >= cited.decision_date
                    )
-             LIMIT 2
+             LIMIT ${CITATION_CANDIDATE_SCAN_CAP}
           ) k
       ) m ON true
       LEFT JOIN LATERAL (
@@ -278,19 +349,36 @@ const resolutionStatement = (selection: SQL): SQL => sql`
          LIMIT 1
       ) j ON true
   ),
+  classified AS (
+    -- Target and status come from one CASE chain each, in the same order, so
+    -- a resolved row always carries its target and an unresolved one never
+    -- carries a stale target from an earlier attempt.
+    SELECT c.id,
+           c.citing_decision_id,
+           c.resolves_to,
+           c.blocked,
+           c.one_file,
+           CASE
+             WHEN c.n = 1 THEN c.sole_id
+             WHEN c.one_file THEN c.merits_id
+           END AS decision_id,
+           CASE
+             WHEN c.n = 1 OR c.one_file
+               THEN ${CITATION_RESOLUTION_STATUS.RESOLVED}::text
+             WHEN c.n > 1 THEN ${CITATION_RESOLUTION_STATUS.AMBIGUOUS}::text
+             ELSE ${CITATION_RESOLUTION_STATUS.UNMATCHED}::text
+           END AS status
+      FROM candidates c
+  ),
   updated AS (
     UPDATE ${caseLawCitations} target
-       SET cited_decision_id = CASE WHEN cls.n = 1 THEN cls.decision_id END,
-           resolution_status = CASE
-             WHEN cls.n = 1 THEN ${CITATION_RESOLUTION_STATUS.RESOLVED}::text
-             WHEN cls.n > 1 THEN ${CITATION_RESOLUTION_STATUS.AMBIGUOUS}::text
-             ELSE ${CITATION_RESOLUTION_STATUS.UNMATCHED}::text
-           END,
+       SET cited_decision_id = cls.decision_id,
+           resolution_status = cls.status,
            resolution_attempted_at = now()
       FROM classified cls
      WHERE target.id = cls.id
        AND cls.resolves_to IS NOT NULL
-    RETURNING target.resolution_status AS status, cls.blocked
+    RETURNING target.resolution_status AS status, cls.blocked, cls.one_file
   )
   SELECT (SELECT count(*)::int FROM batch) AS scanned,
          (SELECT count(*)::int FROM classified WHERE resolves_to IS NULL)
@@ -304,6 +392,10 @@ const resolutionStatement = (selection: SQL): SQL => sql`
          count(*) FILTER (
            WHERE u.status = ${CITATION_RESOLUTION_STATUS.RESOLVED}
          )::int AS resolved,
+         count(*) FILTER (
+           WHERE u.status = ${CITATION_RESOLUTION_STATUS.RESOLVED}
+             AND u.one_file
+         )::int AS adjudicated,
          count(*) FILTER (
            WHERE u.status = ${CITATION_RESOLUTION_STATUS.UNMATCHED}
          )::int AS unmatched,
@@ -320,6 +412,7 @@ const resolutionStatement = (selection: SQL): SQL => sql`
 const countsOf = (row: Record<string, unknown>): CitationResolutionCounts => ({
   scanned: toCount(row["scanned"]),
   resolved: toCount(row["resolved"]),
+  adjudicated: toCount(row["adjudicated"]),
   unmatched: toCount(row["unmatched"]),
   ambiguous: toCount(row["ambiguous"]),
   jurisdictionBlocked: toCount(row["jurisdiction_blocked"]),
@@ -775,6 +868,98 @@ export const reopenCitations = async (
   const row: unknown = firstRow(result);
   return isRecord(row) ? toCount(row["reopened"]) : 0;
 };
+
+export type ReadjudicateAmbiguousCitationsOptions = {
+  limit: number;
+  /** Cursor from the previous batch; null starts at the beginning. */
+  after: CitationResolutionCursor | null;
+};
+
+export type ReadjudicateAmbiguousCitationsBatch = CitationResolutionCounts & {
+  /** Where to continue; null when the batch reached the end of the walk. */
+  cursor: CitationResolutionCursor | null;
+};
+
+/**
+ * Ask the resolver again about one bounded slice of the `ambiguous` rows.
+ *
+ * The adjudication tier's door into the queue. A new rule changes the answer
+ * for rows the walk has already settled, and settled rows leave the walk's
+ * predicate, so nothing revisits them unless something puts them back. This
+ * reopens a keyset batch of ambiguous rows and resolves them in the same
+ * transaction, under the same lock, so the rows never sit pending where the
+ * standing walk could race for them.
+ *
+ * Idempotent: a row the rule cannot decide comes back `ambiguous` with a new
+ * attempt time and nothing else changed, so a second pass over the same range
+ * finds the same rows and rewrites the same answers.
+ */
+export const readjudicateAmbiguousCitations = async (
+  scopedDb: ScopedDb,
+  { limit, after }: ReadjudicateAmbiguousCitationsOptions,
+): Promise<ReadjudicateAmbiguousCitationsBatch> =>
+  await scopedDb(async (tx) => {
+    await lockCitationGraph(tx);
+    // audit: skip — derived citation graph, not a user action
+    const picked: unknown = await tx.execute(sql`
+      WITH slice AS (
+        SELECT c.id, c.citing_decision_id
+          FROM ${caseLawCitations} c
+         WHERE c.resolution_status = ${CITATION_RESOLUTION_STATUS.AMBIGUOUS}
+           AND c.citation_key IS NOT NULL
+           ${
+             after === null
+               ? sql``
+               : sql`AND (c.citing_decision_id, c.id) > (${after.citingDecisionId}::uuid, ${after.citationId}::uuid)`
+           }
+         ORDER BY c.citing_decision_id, c.id
+         LIMIT ${limit}
+      ),
+      reopened AS (
+        UPDATE ${caseLawCitations} target
+           SET resolution_status = ${CITATION_RESOLUTION_STATUS.PENDING}::text
+          FROM slice
+         WHERE target.id = slice.id
+        RETURNING target.id
+      )
+      SELECT (SELECT count(*)::int FROM reopened) AS reopened,
+             (SELECT citing_decision_id::text
+                FROM slice ORDER BY citing_decision_id DESC, id DESC LIMIT 1)
+               AS last_citing_decision_id,
+             (SELECT id::text
+                FROM slice ORDER BY citing_decision_id DESC, id DESC LIMIT 1)
+               AS last_citation_id,
+             (SELECT array_agg(id::text) FROM slice) AS ids
+    `);
+    const pickedRow: unknown = firstRow(picked);
+    if (!isRecord(pickedRow) || !Array.isArray(pickedRow["ids"])) {
+      return { ...EMPTY_COUNTS, cursor: null };
+    }
+    const ids = pickedRow["ids"].filter(
+      (id): id is string => typeof id === "string",
+    );
+    if (ids.length === 0) {
+      return { ...EMPTY_COUNTS, cursor: null };
+    }
+    const citingDecisionId = pickedRow["last_citing_decision_id"];
+    const citationId = pickedRow["last_citation_id"];
+    const cursor =
+      typeof citingDecisionId === "string" && typeof citationId === "string"
+        ? { citingDecisionId, citationId }
+        : null;
+
+    // audit: skip — derived citation graph, not a user action
+    const result: unknown = await tx.execute(
+      resolutionStatement(sql`
+        AND c.id = ANY (ARRAY[${sql.join(
+          ids.map((id) => sql`${id}`),
+          sql`, `,
+        )}]::uuid[])
+      `),
+    );
+    const row: unknown = firstRow(result);
+    return { ...(isRecord(row) ? countsOf(row) : EMPTY_COUNTS), cursor };
+  });
 
 /**
  * How much work the walk has left. Read on the summary interval rather than
