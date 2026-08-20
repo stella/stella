@@ -60,6 +60,17 @@ export type {
   ChatReferenceHrefPrefix,
 } from "./chat-references";
 export {
+  CHAT_SOURCE_CITATION_HREF_PREFIX,
+  parseCanonicalChatSourceCitationHref,
+  parseChatSourceCitationHref,
+  replaceCanonicalChatSourceCitationHrefs,
+  toChatSourceCitationHref,
+} from "./chat-source-citations";
+export type {
+  ChatSourceCitationHref,
+  ChatSourceCitationTarget,
+} from "./chat-source-citations";
+export {
   CONTACT_IMPORT_CUSTOM_FIELD_DESTINATION,
   CONTACT_IMPORT_FIELDS,
   CONTACT_IMPORT_IGNORE_DESTINATION,
@@ -657,6 +668,7 @@ export const CHAT_RICH_PART_LIMITS = {
   inlineMediaMaxChars: 4 * 1024 * 1024,
   mediaMimeTypeMaxChars: 255,
   mediaUrlMaxChars: 2048,
+  mentionsMax: 100,
   uiResourceContentMaxChars: 1024 * 1024,
   uiResourceUriMaxChars: 2048,
 } as const;

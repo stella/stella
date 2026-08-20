@@ -715,6 +715,7 @@
       "remember": "Guardando en la memoria",
       "reply_comment": "Respondiendo al comentario",
       "resolve_comment": "Resolviendo comentario",
+      "review_folder_consistency": "Revisando la coherencia de la carpeta",
       "run-stella-query": "Leyendo datos del asunto",
       "run_playbook": "Ejecutar playbook",
       "save_clause": "Guardar cláusula",

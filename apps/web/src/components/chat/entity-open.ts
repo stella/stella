@@ -33,11 +33,13 @@ const openDisplayableFile = ({
   fields,
   label,
   workspaceId,
+  openInPreview = false,
 }: {
   entityId: string;
   fields: Iterable<EntityFileField>;
   label: string;
   workspaceId: string;
+  openInPreview?: boolean | undefined;
 }) => {
   const sameAsMainRoute = isEntityActiveInMainRoute(entityId, workspaceId);
 
@@ -59,11 +61,50 @@ const openDisplayableFile = ({
       // it — open the inspector to its metadata view so the
       // mention click reveals fields/properties instead of
       // re-rendering the same document.
-      ...(sameAsMainRoute ? { metadataLane: "expanded" as const } : {}),
+      ...(sameAsMainRoute && !openInPreview
+        ? { metadataLane: "expanded" as const }
+        : {}),
     });
     return true;
   }
 
+  return false;
+};
+
+type OpenEntityFileFieldArgs = {
+  entityId: string;
+  fieldId: string;
+  fields: Iterable<EntityFileField>;
+  label: string;
+  workspaceId: string;
+};
+
+/** Open one exact file field instead of falling back to an entity's first
+ * displayable file. Source-bound citations rely on this distinction when an
+ * entity carries several attachments or representations. */
+export const openEntityFileFieldInInspector = ({
+  entityId,
+  fieldId,
+  fields,
+  label,
+  workspaceId,
+}: OpenEntityFileFieldArgs): boolean => {
+  for (const field of fields) {
+    if (field.id !== fieldId) {
+      continue;
+    }
+    const opened = openDisplayableFile({
+      entityId,
+      fields: [field],
+      label,
+      openInPreview: true,
+      workspaceId,
+    });
+    if (opened) {
+      useInspectorTabsStore.getState().setFileFacet(fieldId, "preview");
+    }
+    return opened;
+  }
   return false;
 };
 
@@ -183,6 +224,70 @@ export const openEntityInInspector = async (
       type: "error",
     });
     return { type: "unsupported" };
+  }
+};
+
+type OpenSourceBoundEntityFileArgs = {
+  entityId: string;
+  entityVersionId: string;
+  fieldId: string;
+  isCurrent?: (() => boolean) | undefined;
+  workspaceId: string;
+};
+
+/** Resolve a server-minted citation target against the current workspace and
+ * open the exact field it names. The entity read is the authorization and
+ * ownership check; a stale or mismatched field never falls back to a sibling
+ * file, because that would make a valid citation land on the wrong source. */
+export const openSourceBoundEntityFile = async ({
+  entityId,
+  entityVersionId,
+  fieldId,
+  isCurrent = () => true,
+  workspaceId,
+}: OpenSourceBoundEntityFileArgs): Promise<boolean> => {
+  try {
+    const response = await api
+      .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
+      .entity({ entityId: toSafeId<"entity">(entityId) })
+      .field({ fieldId: toSafeId<"field">(fieldId) })
+      .file.get();
+    const data = unwrapEden(response);
+    if (
+      isCurrent() &&
+      data.entityVersionId === entityVersionId &&
+      data.file !== null &&
+      isFileDisplayable(data.file)
+    ) {
+      const inspector = useInspectorTabsStore.getState();
+      inspector.openFile({
+        id: fieldId,
+        entityId,
+        label: data.file.fileName,
+        fileName: data.file.fileName,
+        mimeType: data.file.mimeType,
+        pdfFileId: data.file.pdfFileId,
+        propertyId: data.file.propertyId,
+        workspaceId,
+      });
+      inspector.setFileFacet(fieldId, "preview");
+      return true;
+    }
+
+    const t = getTranslator();
+    stellaToast.add({
+      title: t("errors.actionFailed"),
+      type: "error",
+    });
+    return false;
+  } catch (error) {
+    getAnalytics().captureError(error);
+    const t = getTranslator();
+    stellaToast.add({
+      title: userErrorFromThrown(error, t("errors.actionFailed")),
+      type: "error",
+    });
+    return false;
   }
 };
 

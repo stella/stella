@@ -5,6 +5,7 @@ import fc from "fast-check";
 import {
   resourceRef,
   RESOURCE_TYPE,
+  toChatSourceCitationHref,
   toChatResourceHref,
 } from "@stll/api-contract";
 import { propertyConfig } from "@stll/property-testing";
@@ -158,6 +159,47 @@ describe("chat ref registry", () => {
         "[Ghost matter](#stella-workspace-ref=mat_42)",
       ),
     ).toBe(`[Ghost matter](${CHAT_UNRESOLVED_REF_HREF})`);
+  });
+
+  test("round trips only server-minted source citations", () => {
+    const registry = createChatRefRegistry();
+    const target = {
+      type: "pdf-bates" as const,
+      workspaceId: toSafeId<"workspace">("matter:eu-west-1"),
+      entityId: toSafeId<"entity">("loan-agreement"),
+      entityVersionId: toSafeId<"entityVersion">("loan-agreement-v1"),
+      fieldId: toSafeId<"field">("signed-pdf"),
+      pageNumber: 7,
+      bates: "F0-0007",
+    };
+    const modelHref = registry.toSourceCitationHref(target);
+    const canonicalHref = toChatSourceCitationHref(target);
+
+    expect(modelHref).toBe("#stella-source-ref=src_1");
+    expect(registry.resolveAssistantTextRefs(`[F0-0007](${modelHref})`)).toBe(
+      `[F0-0007](${canonicalHref})`,
+    );
+    expect(registry.getRegisteredWorkspaceIds()).toEqual([target.workspaceId]);
+
+    const reloaded = createChatRefRegistry();
+    expect(
+      reloaded.hydrateAssistantTextRefs(`[F0-0007](${canonicalHref})`),
+    ).toBe("[F0-0007](#stella-source-ref=src_1)");
+    expect(
+      createChatRefRegistry().hydrateUserTextRefs(
+        `[Untrusted source](${canonicalHref})`,
+      ),
+    ).toBe(`[Untrusted source](${CHAT_UNRESOLVED_REF_HREF})`);
+    expect(
+      reloaded.resolveAssistantTextRefs(
+        "[Fabricated](#stella-source-ref=src_99)",
+      ),
+    ).toBe(`[Fabricated](${CHAT_UNRESOLVED_REF_HREF})`);
+    expect(
+      createChatRefRegistry().resolveAssistantTextRefs(
+        `[Direct canonical](${canonicalHref})`,
+      ),
+    ).toBe(`[Direct canonical](${CHAT_UNRESOLVED_REF_HREF})`);
   });
 
   test("does not accept raw UUIDs as refs", () => {

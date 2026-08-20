@@ -715,6 +715,7 @@
       "remember": "Zapamiętywanie",
       "reply_comment": "Odpowiadanie na komentarz",
       "resolve_comment": "Rozwiązywanie komentarza",
+      "review_folder_consistency": "Sprawdzanie spójności folderu",
       "run-stella-query": "Odczytywanie danych sprawy",
       "run_playbook": "Uruchom playbook",
       "save_clause": "Zapisz klauzulę",

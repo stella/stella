@@ -10,6 +10,7 @@ export const createInspectorCommandSlice = (
   desktopOpenAttention: null,
   pendingRenameTabId: null,
   pendingBlockScroll: null,
+  pendingPdfPageScroll: null,
   pendingDocxEditTabId: null,
 
   requestDesktopOpenAttention: (fieldId) =>
@@ -57,6 +58,16 @@ export const createInspectorCommandSlice = (
       state.pendingBlockScroll = null;
     }),
 
+  requestPdfPageScroll: ({ tabId, pageNumber }) =>
+    set((state) => {
+      state.pendingPdfPageScroll = { tabId, pageNumber };
+    }),
+
+  clearPendingPdfPageScroll: () =>
+    set((state) => {
+      state.pendingPdfPageScroll = null;
+    }),
+
   clearCommandsForMissingTabs: (tabIds) =>
     set((state) => {
       if (
@@ -76,6 +87,12 @@ export const createInspectorCommandSlice = (
         !tabIds.has(state.pendingBlockScroll.tabId)
       ) {
         state.pendingBlockScroll = null;
+      }
+      if (
+        state.pendingPdfPageScroll !== null &&
+        !tabIds.has(state.pendingPdfPageScroll.tabId)
+      ) {
+        state.pendingPdfPageScroll = null;
       }
       if (
         state.desktopOpenAttention !== null &&

@@ -77,6 +77,7 @@ import {
 import type { ChatTurnExecution } from "@/api/handlers/chat/chat-turn-persistence";
 import type { ChatTurnFailureCode } from "@/api/handlers/chat/chat-turn-state";
 import {
+  COMPACTION_SUMMARY_MESSAGE_ID,
   compactChatMessagesForModel,
   chatThreadNeedsCompaction,
 } from "@/api/handlers/chat/compaction";
@@ -144,11 +145,13 @@ import {
   scopeAllowsTool,
 } from "@/api/handlers/chat/tools/tool-scope";
 import type {
+  ChatMention,
   ChatMessage,
   PersistableChatMessage,
 } from "@/api/handlers/chat/types";
 import { createRawChatFilePart } from "@/api/handlers/chat/upload-files";
 import type { UploadedChatFile } from "@/api/handlers/chat/upload-files";
+import { attachVerifiedEntityMentionKinds } from "@/api/handlers/chat/verified-mention-kinds";
 import {
   resolveActiveChatSkillContext,
   type ActiveChatSkillContext,
@@ -1424,6 +1427,8 @@ const sendMessage = createSafeRootHandler(
         activeTemplate: body.activeTemplate,
         contextMatterIds: effectiveContextMatterIds,
         memberRole,
+        latestMentions: parsedMessage.mentions,
+        latestUserMessageId: parsedMessage.message.id,
         messageWindow: messagesForContextResult.value,
         organizationId: session.activeOrganizationId,
         safeDb,
@@ -1499,9 +1504,12 @@ const sendMessage = createSafeRootHandler(
       // still — `hasActiveDocxFileClient` only, since Template Studio
       // mounts no watcher to resolve them.
       const chatTools = getChatTools({
+        createAIAbortSignal: createMeteredAIAbortSignal,
         organizationId: session.activeOrganizationId,
         memberRole: memberRole.role,
         orgAIConfig,
+        promptCachingEnabled,
+        usageLane: turnLane.lane,
         pinServerValidatedWorkspaceId,
         requestWorkspaceId: workspaceId,
         refRegistry,
@@ -2131,6 +2139,8 @@ type PrepareChatContextProps = {
   activeTemplate: IncomingActiveTemplate | undefined;
   contextMatterIds: SafeId<"workspace">[];
   memberRole: { role: string };
+  latestMentions: readonly ChatMention[];
+  latestUserMessageId: string;
   messageWindow: ChatMessage[];
   organizationId: SafeId<"organization">;
   refRegistry: ReturnType<typeof createChatRefRegistry>;
@@ -2172,6 +2182,8 @@ const prepareChatContext = async ({
   activeTemplate,
   contextMatterIds,
   memberRole,
+  latestMentions,
+  latestUserMessageId,
   messageWindow,
   organizationId,
   refRegistry,
@@ -2246,6 +2258,15 @@ const prepareChatContext = async ({
       messages: messagesWithActiveFileFallback,
       refRegistry,
     });
+    const messagesWithMentionKinds = yield* Result.await(
+      attachVerifiedEntityMentionKinds({
+        latestMentions,
+        latestUserMessageId,
+        messages: messagesWithHydratedRefs,
+        refRegistry,
+        safeDb,
+      }),
+    );
 
     return Result.ok({
       promptCacheKey: buildChatPromptCacheKey(systemPrompt.cacheStablePrefix),
@@ -2253,7 +2274,7 @@ const prepareChatContext = async ({
       systemUntrusted: systemPrompt.untrustedSuffix,
       skillMetadata: systemPrompt.skillMetadata,
       activeSkillContext: systemPrompt.activeSkillContext,
-      hydratedMessages: messagesWithHydratedRefs,
+      hydratedMessages: messagesWithMentionKinds,
     });
   });
 
@@ -2797,7 +2818,7 @@ const hydrateAssistantMessageRefs = ({
     part.type === "text"
       ? {
           ...part,
-          content: refRegistry.hydrateAssistantTextRefs(
+          content: refRegistry.hydrateUserTextRefs(
             // Pasted workspace URLs first: "Copy link" and the URL bar give
             // the user a raw workspace UUID the ingress guard would redact;
             // rewriting to a mention keeps the pointing intent as a ref.
@@ -2808,6 +2829,13 @@ const hydrateAssistantMessageRefs = ({
             }),
           ),
         }
+      : part;
+
+  const hydrateCompactionPart = (
+    part: ChatMessage["parts"][number],
+  ): ChatMessage["parts"][number] =>
+    part.type === "text"
+      ? { ...part, content: refRegistry.hydrateAssistantTextRefs(part.content) }
       : part;
 
   const hydratedMessages: ChatMessage[] = [];
@@ -2880,7 +2908,11 @@ const hydrateAssistantMessageRefs = ({
     if (message.role === "user") {
       hydratedMessages.push({
         ...message,
-        parts: message.parts.map(hydrateUserPart),
+        parts: message.parts.map(
+          message.id === COMPACTION_SUMMARY_MESSAGE_ID
+            ? hydrateCompactionPart
+            : hydrateUserPart,
+        ),
       });
       continue;
     }

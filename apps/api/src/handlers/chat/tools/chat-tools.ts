@@ -2,6 +2,7 @@ import { roles } from "@stll/permissions";
 import type { SkillMetadata } from "@stll/skills";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
+import type { UsageEventLane } from "@/api/db/schema";
 import { env } from "@/api/env";
 import {
   CHAT_EDIT_APPLY_MODE,
@@ -42,6 +43,10 @@ import {
   buildChatCodeModeTools,
   type ChatCodeModeToolMap,
 } from "@/api/handlers/chat/tools/execute/chat-code-mode";
+import {
+  createFolderConsistencyReviewTools,
+  REVIEW_FOLDER_CONSISTENCY_TOOL_NAME,
+} from "@/api/handlers/chat/tools/folder-consistency-review-tool";
 import {
   ADD_COMMENT_TOOL_NAME,
   createFolioAgentDocTools,
@@ -254,6 +259,9 @@ type CurrentSkillEditTools = Partial<
 type TemplateTools = ReturnType<typeof createTemplateTools>;
 type TemplateAuthoringTools = ReturnType<typeof createTemplateAuthoringTools>;
 type VersionCompareTools = ReturnType<typeof createVersionCompareTools>;
+type FolderConsistencyReviewTools = ReturnType<
+  typeof createFolderConsistencyReviewTools
+>;
 type RegistryWriteTools = ChatRegistryWriteToolMap;
 type SubagentTools = ReturnType<typeof createSpawnSubagentsTool>;
 type RememberTools = ReturnType<typeof createRememberTools>;
@@ -276,6 +284,7 @@ type BuiltInChatTools = OrgTools &
   TemplateTools &
   TemplateAuthoringTools &
   VersionCompareTools &
+  FolderConsistencyReviewTools &
   RegistryWriteTools &
   SubagentTools &
   RememberTools;
@@ -467,6 +476,11 @@ type GetChatToolsProps = {
    * the tool.
    */
   includeRememberToolForValidation?: boolean | undefined;
+  /** Fresh abort budget for server-side tools that make their own AI request. */
+  createAIAbortSignal?: (() => AbortSignal) | undefined;
+  /** Preserve the request's provider prompt-cache setting in nested review. */
+  promptCachingEnabled?: boolean | undefined;
+  usageLane?: UsageEventLane | undefined;
 };
 
 const createActiveDocxEditTools = () => ({
@@ -521,6 +535,7 @@ const BUILT_IN_CHAT_TOOL_POLICY_KINDS = {
   // buffers under the caller's authorized workspaces and returns text, so it
   // runs immediately without per-call approval.
   [COMPARE_VERSIONS_TOOL_NAME]: CHAT_TOOL_POLICY_KIND.internal,
+  [REVIEW_FOLDER_CONSISTENCY_TOOL_NAME]: CHAT_TOOL_POLICY_KIND.internal,
   "create-document": CHAT_TOOL_POLICY_KIND.internal,
   "create-current-skill-resource": CHAT_TOOL_POLICY_KIND.mutation,
   // Renders Markdown into a Stella-styled DOCX and creates a new entity in
@@ -656,12 +671,32 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
     docxEditRepresentation = DEFAULT_DOCX_EDIT_REPRESENTATION,
     includeAllDocxEditToolsForValidation = false,
     includeRememberToolForValidation = false,
+    createAIAbortSignal = () => AbortSignal.timeout(120_000),
+    promptCachingEnabled = false,
+    usageLane,
   } = props;
   const orgTools = createOrgTools({
     accessibleWorkspaceIds: toolWorkspaceIds,
     organizationId,
     scopedDb,
   });
+  // The nested review request sends the selected documents to the configured
+  // model. Until that request accepts the chat anonymization boundary, do not
+  // advertise a tool whose raw file reads would contradict anonymized mode.
+  const folderConsistencyReviewTools =
+    thirdPartyBoundary.type === "raw"
+      ? createFolderConsistencyReviewTools({
+          createAbortSignal: createAIAbortSignal,
+          organizationId,
+          orgAIConfig,
+          promptCachingEnabled,
+          refRegistry,
+          safeDb,
+          toolWorkspaceIds,
+          userId,
+          usageLane,
+        })
+      : {};
   const webResearchAvailable = areWebResearchToolsRegistered({
     webSearchEnabled,
     webSearchProviders,
@@ -1017,6 +1052,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
       ...activeDocxEditTools,
       ...folioAgentDocTools,
       ...versionCompareTools,
+      ...folderConsistencyReviewTools,
       ...webSearchTools,
       ...registryWriteTools,
       ...externalChatTools,

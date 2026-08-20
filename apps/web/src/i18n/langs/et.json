@@ -715,6 +715,7 @@
       "remember": "Mällu salvestamine",
       "reply_comment": "Kommentaarile vastamine",
       "resolve_comment": "Kommentaari lahendamine",
+      "review_folder_consistency": "Kausta kooskõla kontrollimine",
       "run-stella-query": "Toimiku andmete lugemine",
       "run_playbook": "Käivita playbook",
       "save_clause": "Salvesta klausel",

@@ -21,6 +21,7 @@ const BUILT_IN_CHAT_TOOL_ACTIVITY_CATEGORIES = {
   borme_get_summary: "research",
   business_registry_lookup: "research",
   compare_versions: "research",
+  review_folder_consistency: "research",
   "create-current-skill-resource": "mutation",
   "create-document": "user-input",
   create_workspace_document: "artifact",
