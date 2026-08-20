@@ -20,7 +20,8 @@ describe("vite config", () => {
 
     const pluginNames = plugins.map((plugin) => plugin.name);
     expect(pluginNames).toContain("vite:react-babel");
-    expect(pluginNames).toContain("@rolldown/plugin-babel");
+    expect(pluginNames).toContain("vite:react-compiler");
+    expect(pluginNames).not.toContain("@rolldown/plugin-babel");
   });
 
   test("proxies every public API surface through one dev origin when requested", () => {

@@ -138,16 +138,14 @@
     "zustand": "^5.0.15"
   },
   "devDependencies": {
-    "@babel/core": "^8.0.1",
     "@playwright/test": "^1.62.0",
-    "@rolldown/plugin-babel": "^0.2.2",
     "@stll/typescript-config": "workspace:*",
     "@tailwindcss/vite": "catalog:",
     "@types/hast": "^3.0.5",
     "@types/react": "catalog:react19",
     "@types/react-dom": "catalog:react19",
     "@vitejs/plugin-react": "catalog:",
-    "babel-plugin-react-compiler": "^1.0.0",
+    "oxc-transform-react": "0.145.0",
     "react-grab": "^0.1.50",
     "rollup-plugin-visualizer": "^7.0.1",
     "tailwindcss": "catalog:",

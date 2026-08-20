@@ -31,7 +31,6 @@ const EXACT_PACKAGE_VERSION_PATTERN =
   /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/u;
 const BABEL_TOOLCHAINS = [
   { expectedMajor: 7, packagePath: "apps/mobile/package.json" },
-  { expectedMajor: 8, packagePath: "apps/web/package.json" },
 ] as const;
 const TYPESCRIPT_TOOLCHAIN = {
   native: "npm:typescript@7.0.2",

@@ -228,7 +228,7 @@ describe("workspace hygiene", () => {
     expect(validateWorkspaceRoot(rootDir)).toEqual([]);
   });
 
-  test("accepts the deliberate Babel major split between native and web", () => {
+  test("accepts Babel 7 in the native mobile toolchain", () => {
     const rootDir = createWorkspaceRoot({
       mobilePackageJson: {
         devDependencies: { "@babel/core": "^7.29.0" },
@@ -239,7 +239,7 @@ describe("workspace hygiene", () => {
       },
       webPackageJson: {
         dependencies: {},
-        devDependencies: { "@babel/core": "^8.0.1" },
+        devDependencies: {},
         name: "@stll/web",
       },
     });
@@ -258,7 +258,7 @@ describe("workspace hygiene", () => {
       },
       webPackageJson: {
         dependencies: {},
-        devDependencies: { "@babel/core": "^8.0.1" },
+        devDependencies: {},
         name: "@stll/web",
       },
     });

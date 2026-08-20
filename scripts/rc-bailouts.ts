@@ -17,146 +17,238 @@
 //   bun scripts/rc-bailouts.ts --check          CI gate (exit 1 on regression)
 //   bun scripts/rc-bailouts.ts --self-test      prove component attribution
 //
-// CI-only by design: it runs the JS compiler, so it is too slow for the local
-// lint/pre-commit loop. Wired into .github/workflows/ci.yml, not oxlint.config.
-import { transformSync } from "@babel/core";
-import reactCompiler, { type LoggerEvent } from "babel-plugin-react-compiler";
+// Wired into .github/workflows/ci.yml, not oxlint.config: this guards every
+// compiler skip, including unsupported syntax that is valid React.
 import { readFileSync, writeFileSync } from "node:fs";
+import { transformSync, type OxcError } from "oxc-transform-react";
+import ts from "typescript";
+
+import { REACT_COMPILER_OPTIONS } from "../apps/web/react-compiler-options.ts";
 
 const BASELINE_PATH = "scripts/react-compiler-bailouts.json";
 /** Cap the stale list so a large prune stays readable in CI logs. */
 const STALE_PREVIEW = 10;
 const MEMO_HOOK = /\buseMemo\(|\buseCallback\(/gu;
-const FUNCTION_DECLARATION =
-  /^(?:async\s+)?function\*?\s+([A-Za-z_$][\w$]*)\b/u;
-const ASSIGNED_FUNCTION =
-  /\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*(?::[^=]+)?=\s*$/u;
-
-type SourcePosition = {
-  readonly line: number;
-  readonly column: number;
-  readonly index?: number;
-};
-
-type SourceLocation = {
-  readonly start: SourcePosition;
-  readonly end: SourcePosition;
-};
+const OPT_OUT_DIRECTIVES = new Set(["use no forget", "use no memo"]);
 
 type BailoutRecord = { reasons: Set<string>; memos: number };
 type Baseline = Record<string, number>;
-type BailoutEvent = Extract<
-  LoggerEvent,
-  { kind: "CompileError" | "CompileSkip" | "PipelineError" }
->;
 
-const sourceIndex = (code: string, position: SourcePosition): number => {
-  if (position.index !== undefined) {
-    return position.index;
-  }
-  const lines = code.split("\n");
-  let index = 0;
-  for (let line = 1; line < position.line; line += 1) {
-    index += (lines[line - 1]?.length ?? 0) + 1;
-  }
-  return index + position.column;
+type FunctionLocation = {
+  end: number;
+  name: string;
+  start: number;
 };
 
-const functionName = (code: string, location: SourceLocation): string => {
-  const start = sourceIndex(code, location.start);
-  const end = sourceIndex(code, location.end);
-  const source = code.slice(start, end);
-  const declarationName = FUNCTION_DECLARATION.exec(source)?.[1];
-  if (declarationName !== undefined) {
-    return declarationName;
+const isFunctionLikeDeclaration = (
+  node: ts.Node,
+): node is ts.FunctionLikeDeclaration =>
+  ts.isArrowFunction(node) ||
+  ts.isConstructorDeclaration(node) ||
+  ts.isFunctionDeclaration(node) ||
+  ts.isFunctionExpression(node) ||
+  ts.isGetAccessorDeclaration(node) ||
+  ts.isMethodDeclaration(node) ||
+  ts.isSetAccessorDeclaration(node);
+
+const scriptKind = (file: string): ts.ScriptKind =>
+  file.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS;
+
+const sourceFileFor = (file: string, code: string): ts.SourceFile =>
+  ts.createSourceFile(
+    file,
+    code,
+    ts.ScriptTarget.Latest,
+    true,
+    scriptKind(file),
+  );
+
+const functionName = (
+  sourceFile: ts.SourceFile,
+  node: ts.FunctionLikeDeclaration,
+): string => {
+  if (node.name !== undefined && ts.isIdentifier(node.name)) {
+    return node.name.text;
   }
 
-  const lineStart = code.lastIndexOf("\n", Math.max(0, start - 1)) + 1;
-  const leftOfFunction = code.slice(lineStart, start);
-  const assignedName = ASSIGNED_FUNCTION.exec(leftOfFunction)?.[1];
-  if (assignedName !== undefined) {
-    return assignedName;
+  let current: ts.Node = node;
+  while (!ts.isSourceFile(current.parent)) {
+    const { parent } = current;
+    if (ts.isVariableDeclaration(parent) && ts.isIdentifier(parent.name)) {
+      return parent.name.text;
+    }
+    current = parent;
   }
 
-  return `<anonymous@${location.start.line}:${location.start.column}>`;
+  const { line, character } = sourceFile.getLineAndCharacterOfPosition(
+    node.getStart(sourceFile),
+  );
+  return `<anonymous@${String(line + 1)}:${String(character)}>`;
 };
 
-const bailoutKey = (
+const functionLocation = (
+  sourceFile: ts.SourceFile,
+  node: ts.FunctionLikeDeclaration,
+): FunctionLocation => ({
+  end: node.getEnd(),
+  name: functionName(sourceFile, node),
+  start: node.getStart(sourceFile),
+});
+
+const enclosingFunction = (
+  sourceFile: ts.SourceFile,
+  position: number,
+): ts.FunctionLikeDeclaration | undefined => {
+  const find = (node: ts.Node): ts.FunctionLikeDeclaration | undefined => {
+    if (position < node.getFullStart() || position >= node.getEnd()) {
+      return undefined;
+    }
+    if (isFunctionLikeDeclaration(node)) {
+      return node;
+    }
+
+    let match: ts.FunctionLikeDeclaration | undefined;
+    node.forEachChild((child) => {
+      match ??= find(child);
+    });
+    return match;
+  };
+
+  return find(sourceFile);
+};
+
+// Oxc reports UTF-8 byte offsets while TypeScript's AST uses UTF-16 code-unit
+// offsets. Convert at the boundary so a non-ASCII prefix cannot attribute a
+// bailout to the wrong function.
+const codeUnitIndex = (code: string, byteOffset: number): number =>
+  Buffer.from(code).subarray(0, byteOffset).toString("utf-8").length;
+
+const countMemos = (code: string, location: FunctionLocation): number =>
+  (code.slice(location.start, location.end).match(MEMO_HOOK) ?? []).length;
+
+const addBailout = (
+  bailouts: Map<string, BailoutRecord>,
   file: string,
   code: string,
-  location: SourceLocation,
-): string => `${file}::${functionName(code, location)}`;
-
-const countMemos = (code: string, location: SourceLocation): number => {
-  const start = sourceIndex(code, location.start);
-  const end = sourceIndex(code, location.end);
-  return (code.slice(start, end).match(MEMO_HOOK) ?? []).length;
+  location: FunctionLocation | undefined,
+  reason: string,
+): void => {
+  const key = `${file}::${location?.name ?? "<module-transform>"}`;
+  const record = bailouts.get(key) ?? {
+    reasons: new Set<string>(),
+    memos:
+      location === undefined
+        ? (code.match(MEMO_HOOK) ?? []).length
+        : countMemos(code, location),
+  };
+  record.reasons.add(reason);
+  bailouts.set(key, record);
 };
 
-const bailoutReason = (event: BailoutEvent): string => {
-  if (event.kind === "CompileSkip") {
-    return event.reason;
+const diagnosticLocation = (
+  sourceFile: ts.SourceFile,
+  code: string,
+  error: OxcError,
+): FunctionLocation | undefined => {
+  const label = error.labels.at(0);
+  if (label === undefined) {
+    return undefined;
   }
-  if (event.kind === "PipelineError") {
-    return event.data;
-  }
-  return event.detail.category;
+  const node = enclosingFunction(sourceFile, codeUnitIndex(code, label.start));
+  return node === undefined ? undefined : functionLocation(sourceFile, node);
 };
 
-const isBailoutEvent = (event: LoggerEvent): event is BailoutEvent =>
-  event.kind === "CompileError" ||
-  event.kind === "CompileSkip" ||
-  event.kind === "PipelineError";
+const addExplicitOptOuts = (
+  sourceFile: ts.SourceFile,
+  file: string,
+  code: string,
+  bailouts: Map<string, BailoutRecord>,
+): void => {
+  for (const statement of sourceFile.statements) {
+    if (
+      !ts.isExpressionStatement(statement) ||
+      !ts.isStringLiteral(statement.expression)
+    ) {
+      break;
+    }
+    if (OPT_OUT_DIRECTIVES.has(statement.expression.text)) {
+      addBailout(
+        bailouts,
+        file,
+        code,
+        undefined,
+        `explicit module opt-out: ${statement.expression.text}`,
+      );
+    }
+  }
+
+  const visit = (node: ts.Node): void => {
+    if (
+      isFunctionLikeDeclaration(node) &&
+      node.body !== undefined &&
+      ts.isBlock(node.body)
+    ) {
+      for (const statement of node.body.statements) {
+        if (
+          !ts.isExpressionStatement(statement) ||
+          !ts.isStringLiteral(statement.expression)
+        ) {
+          break;
+        }
+        if (OPT_OUT_DIRECTIVES.has(statement.expression.text)) {
+          addBailout(
+            bailouts,
+            file,
+            code,
+            functionLocation(sourceFile, node),
+            `explicit opt-out: ${statement.expression.text}`,
+          );
+        }
+      }
+    }
+    node.forEachChild(visit);
+  };
+  sourceFile.forEachChild(visit);
+};
 
 const scanFile = (
   file: string,
   code: string,
   bailouts: Map<string, BailoutRecord>,
 ): void => {
-  const logger = {
-    logEvent(_file: string | null, event: LoggerEvent) {
-      if (!isBailoutEvent(event)) {
-        return;
-      }
-      const location = event.fnLoc;
-      if (location === null) {
-        const key = `${file}::<module-transform>`;
-        const record = bailouts.get(key) ?? {
-          reasons: new Set<string>(),
-          memos: (code.match(MEMO_HOOK) ?? []).length,
-        };
-        record.reasons.add(bailoutReason(event));
-        bailouts.set(key, record);
-        return;
-      }
-
-      const key = bailoutKey(file, code, location);
-      const record = bailouts.get(key) ?? {
-        reasons: new Set<string>(),
-        memos: countMemos(code, location),
-      };
-      record.reasons.add(bailoutReason(event));
-      bailouts.set(key, record);
-    },
-  };
+  const sourceFile = sourceFileFor(file, code);
+  addExplicitOptOuts(sourceFile, file, code, bailouts);
 
   try {
-    transformSync(code, {
-      filename: file,
-      babelrc: false,
-      configFile: false,
-      code: false,
-      ast: false,
-      parserOpts: { plugins: ["typescript", "jsx"] },
-      plugins: [[reactCompiler, { panicThreshold: "none", logger }]],
+    const result = transformSync(file, code, {
+      lang: file.endsWith(".tsx") ? "tsx" : "ts",
+      jsx: "preserve",
+      reactCompiler: {
+        ...REACT_COMPILER_OPTIONS,
+        outputMode: "lint",
+      },
     });
+    for (const error of result.errors) {
+      addBailout(
+        bailouts,
+        file,
+        code,
+        diagnosticLocation(sourceFile, code, error),
+        error.message,
+      );
+    }
+    if (result.fatal) {
+      addBailout(bailouts, file, code, undefined, "fatal transform");
+    }
   } catch (error: unknown) {
-    const key = `${file}::<module-transform>`;
     const message = error instanceof Error ? error.message : "throw";
-    bailouts.set(key, {
-      reasons: new Set([`transform-threw: ${message.slice(0, 60)}`]),
-      memos: (code.match(MEMO_HOOK) ?? []).length,
-    });
+    addBailout(
+      bailouts,
+      file,
+      code,
+      undefined,
+      `transform-threw: ${message.slice(0, 60)}`,
+    );
   }
 };
 
@@ -211,33 +303,81 @@ const diffBaseline = (current: Baseline, baseline: Baseline): BaselineDiff => {
 
 const runSelfTest = (): number => {
   const code = [
-    "export const First = () => {",
+    "export const Outer = () => {",
+    '  const unicodePrefix = "😀";',
+    "  const Inner = () => ref.current;",
     "  useMemo(() => 1, []);",
+    "  return Inner();",
     "};",
     "export function Second() {",
     "  useCallback(() => {}, []);",
     "}",
   ].join("\n");
-  const firstStart = code.indexOf("() =>");
-  const firstEnd = code.indexOf("};") + 1;
-  const secondStart = code.indexOf("function Second");
-  const secondEnd = code.length;
-  const firstLocation: SourceLocation = {
-    start: { line: 1, column: firstStart, index: firstStart },
-    end: { line: 3, column: 1, index: firstEnd },
-  };
-  const secondLocation: SourceLocation = {
-    start: { line: 4, column: 7, index: secondStart },
-    end: { line: 6, column: 1, index: secondEnd },
-  };
-
-  const firstKey = bailoutKey("fixture.tsx", code, firstLocation);
-  const secondKey = bailoutKey("fixture.tsx", code, secondLocation);
+  const sourceFile = sourceFileFor("fixture.tsx", code);
+  const refCodeUnitIndex = code.indexOf("ref.current");
+  const refByteOffset = Buffer.byteLength(code.slice(0, refCodeUnitIndex));
+  const outerNode = enclosingFunction(
+    sourceFile,
+    codeUnitIndex(code, refByteOffset),
+  );
+  const secondNode = enclosingFunction(sourceFile, code.indexOf("useCallback"));
+  const outerLocation =
+    outerNode === undefined
+      ? undefined
+      : functionLocation(sourceFile, outerNode);
+  const secondLocation =
+    secondNode === undefined
+      ? undefined
+      : functionLocation(sourceFile, secondNode);
+  const firstKey = `fixture.tsx::${outerLocation?.name ?? "missing"}`;
+  const secondKey = `fixture.tsx::${secondLocation?.name ?? "missing"}`;
   const identityWorks =
-    firstKey === "fixture.tsx::First" && secondKey === "fixture.tsx::Second";
+    firstKey === "fixture.tsx::Outer" && secondKey === "fixture.tsx::Second";
   const memoCountsWork =
-    countMemos(code, firstLocation) === 1 &&
+    outerLocation !== undefined &&
+    secondLocation !== undefined &&
+    countMemos(code, outerLocation) === 1 &&
     countMemos(code, secondLocation) === 1;
+  const byteOffsetsWork =
+    refByteOffset > refCodeUnitIndex &&
+    codeUnitIndex(code, refByteOffset) === refCodeUnitIndex;
+
+  const optOutCode = [
+    "export const Skipped = () => {",
+    '  "use no memo";',
+    "  useMemo(() => 1, []);",
+    "  return null;",
+    "};",
+  ].join("\n");
+  const optOuts = new Map<string, BailoutRecord>();
+  scanFile("opt-out.tsx", optOutCode, optOuts);
+  const optOut = optOuts.get("opt-out.tsx::Skipped");
+  const optOutWorks =
+    optOut?.memos === 1 && optOut.reasons.has("explicit opt-out: use no memo");
+
+  const moduleOptOutCode = [
+    '"use no forget";',
+    "export function ModuleSkipped() {",
+    "  return null;",
+    "}",
+  ].join("\n");
+  const moduleOptOuts = new Map<string, BailoutRecord>();
+  scanFile("module-opt-out.tsx", moduleOptOutCode, moduleOptOuts);
+  const moduleOptOutWorks = moduleOptOuts
+    .get("module-opt-out.tsx::<module-transform>")
+    ?.reasons.has("explicit module opt-out: use no forget");
+
+  const compilerCode = [
+    "export function RefReader() {",
+    "  const ref = useRef(null);",
+    "  return ref.current;",
+    "}",
+  ].join("\n");
+  const compilerBailouts = new Map<string, BailoutRecord>();
+  scanFile("compiler.tsx", compilerCode, compilerBailouts);
+  const compilerDiagnosticWorks = compilerBailouts.has(
+    "compiler.tsx::RefReader",
+  );
   const diff = diffBaseline(
     { [firstKey]: 0, "fixture.tsx::Third": 1 },
     { [firstKey]: 1, [secondKey]: 0 },
@@ -255,6 +395,10 @@ const runSelfTest = (): number => {
   if (
     identityWorks &&
     memoCountsWork &&
+    byteOffsetsWork &&
+    optOutWorks &&
+    moduleOptOutWorks &&
+    compilerDiagnosticWorks &&
     isolationWorks &&
     staleDetectionWorks
   ) {
@@ -264,8 +408,16 @@ const runSelfTest = (): number => {
   console.error("rc-bailouts --self-test: FAIL", {
     firstKey,
     secondKey,
-    firstMemos: countMemos(code, firstLocation),
-    secondMemos: countMemos(code, secondLocation),
+    firstMemos:
+      outerLocation === undefined ? undefined : countMemos(code, outerLocation),
+    secondMemos:
+      secondLocation === undefined
+        ? undefined
+        : countMemos(code, secondLocation),
+    byteOffsetsWork,
+    optOutWorks,
+    moduleOptOutWorks,
+    compilerDiagnosticWorks,
     diff,
   });
   return 1;
