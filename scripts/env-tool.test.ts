@@ -30,8 +30,6 @@ import {
   validateDoctorEnvironment,
 } from "./env-tool";
 
-const BUN_ENV_REJECTION_TEST_TIMEOUT_MS = 15_000;
-
 describe("generated environment examples", () => {
   test("contain every documented schema entry exactly once", () => {
     const examples = {
@@ -138,17 +136,13 @@ describe("environment file parsing", () => {
     });
   });
 
-  test(
-    "fails closed when Bun rejects nested fallbacks",
-    () => {
-      expect(() =>
-        parseEnvText(`DB_PORT=\${MISSING_PORT:-\${PGPORT:-5432}}`, {
-          PGPORT: "6432",
-        }),
-      ).toThrow("Bun failed to load environment layers.");
-    },
-    BUN_ENV_REJECTION_TEST_TIMEOUT_MS,
-  );
+  test("matches Bun nested fallback expansion", () => {
+    expect(
+      parseEnvText(`DB_PORT=\${MISSING_PORT:-\${PGPORT:-5432}}`, {
+        PGPORT: "6432",
+      }),
+    ).toEqual({ DB_PORT: "6432" });
+  });
 
   test("matches Bun consecutive-dollar expansion", () => {
     const dollars = String.fromCodePoint(36);
@@ -164,10 +158,10 @@ describe("environment file parsing", () => {
         {},
       ),
     ).toEqual({
-      ESCAPED: "$resolved",
-      PREFIX: "resolved",
-      RUN: "$",
-      SUFFIX: "resolved$",
+      ESCAPED: "$$resolved",
+      PREFIX: "$$resolved",
+      RUN: dollars.repeat(32),
+      SUFFIX: `resolved${dollars.repeat(4)}`,
       VALUE: "resolved",
     });
   });
@@ -175,7 +169,7 @@ describe("environment file parsing", () => {
   test("delegates punctuation expansion to Bun", () => {
     expect(
       parseEnvText(`SECRET=${`${String.fromCodePoint(36)}-`.repeat(16)}`, {}),
-    ).toEqual({ SECRET: "-".repeat(16) });
+    ).toEqual({ SECRET: `${String.fromCodePoint(36)}-`.repeat(16) });
   });
 
   test("matches runtime dotenv precedence and final-value expansion", () => {

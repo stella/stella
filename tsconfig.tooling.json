@@ -3,7 +3,7 @@
   "compilerOptions": {
     "allowImportingTsExtensions": true,
     "tsBuildInfoFile": "${configDir}/.cache/tsbuildinfo.tooling.json",
-    "types": ["bun"]
+    "types": ["bun-types"]
   },
   "include": [
     ".claude/mcp/**/*.ts",

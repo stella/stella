@@ -68,7 +68,7 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 
 const dockerUrl = (path: string): string => `http://docker${path}`;
 
-// bun's fetch accepts a `unix` socket path; the types ship with @types/bun.
+// bun's fetch accepts a `unix` socket path; the types ship with bun-types.
 type BunFetchInit = RequestInit & { unix?: string };
 
 type SendOptions = {

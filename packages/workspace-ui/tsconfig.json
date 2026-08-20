@@ -4,7 +4,7 @@
     "paths": {
       "@stll/workspace-ui/*": ["./src/*"]
     },
-    "types": ["bun"]
+    "types": ["bun-types"]
   },
   "include": ["."],
   "exclude": ["node_modules", "dist"]

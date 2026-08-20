@@ -3,7 +3,7 @@
   "compilerOptions": {
     "lib": ["DOM", "DOM.Iterable", "ESNext"],
     "module": "ESNext",
-    "types": ["bun"]
+    "types": ["bun-types"]
   },
   "include": ["."],
   "exclude": ["node_modules"]

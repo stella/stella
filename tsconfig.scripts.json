@@ -5,7 +5,7 @@
     "paths": {
       "@/api/*": ["./apps/api/src/*"]
     },
-    "types": ["bun"]
+    "types": ["bun-types"]
   },
   "include": ["scripts/**/*.ts"]
 }

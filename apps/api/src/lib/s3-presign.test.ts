@@ -10,7 +10,7 @@ import {
   test,
 } from "bun:test";
 
-import { getS3 } from "@/api/lib/s3";
+import { getS3, readS3ArrayBuffer } from "@/api/lib/s3";
 import {
   copyObject,
   createTenantS3RequestSignal,
@@ -558,7 +558,7 @@ describe.skipIf(!rustfsReachable)(
       expect(response.status).toBeLessThan(500);
     });
 
-    test("S3 accepts a PUT whose body sha256 matches; HEAD reports it back", async () => {
+    test("S3 accepts a matching PUT and Bun's native reader returns its bytes", async () => {
       const presign = await presignUploadUrl({
         key: probeKey,
         expiresIn: 60,
@@ -586,6 +586,9 @@ describe.skipIf(!rustfsReachable)(
       }
       expect(head.value.contentLength).toBe(HELLO_BYTES.byteLength);
       expect(head.value.checksumSHA256).toBe(HELLO_SHA256_BASE64);
+
+      const downloaded = new Uint8Array(await readS3ArrayBuffer(probeKey));
+      expect(downloaded).toEqual(HELLO_BYTES);
     });
 
     test("copyObject promotes a tmp object to its final key without API transit", async () => {

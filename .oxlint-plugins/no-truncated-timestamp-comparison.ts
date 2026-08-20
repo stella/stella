@@ -154,8 +154,32 @@ const stripSqlComments = (raw: string): string => raw.replace(SQL_COMMENT, " ");
 // A comparison operator immediately before the interpolation, optionally
 // followed by an opening paren (`= (`). Longest spellings first so `>=` is
 // not read as a `>` followed by an `=` operand.
-const COMPARISON_OPERATOR =
-  /(?:<>|!=|>=|<=|=|>|<|\bis\s+(?:not\s+)?distinct\s+from)\s*\(?\s*$/iu;
+const SYMBOL_COMPARISON_OPERATORS = ["<>", "!=", ">=", "<=", "=", ">", "<"];
+const DISTINCT_FROM_OPERATOR = /\bis\s+(?:not\s+)?distinct\s+from$/iu;
+
+type ComparisonOperatorMatch = {
+  index: number;
+  operator: string;
+};
+
+const findComparisonOperator = (
+  text: string,
+): ComparisonOperatorMatch | undefined => {
+  const trimmed = text.trimEnd();
+  const candidate = trimmed.endsWith("(")
+    ? trimmed.slice(0, -1).trimEnd()
+    : trimmed;
+  for (const operator of SYMBOL_COMPARISON_OPERATORS) {
+    if (candidate.endsWith(operator)) {
+      return { index: candidate.length - operator.length, operator };
+    }
+  }
+  const distinctFrom = DISTINCT_FROM_OPERATOR.exec(candidate);
+  if (distinctFrom === null) {
+    return undefined;
+  }
+  return { index: distinctFrom.index, operator: distinctFrom[0] };
+};
 
 // The whole quasi between two row tuples: `) > (`. Anything else between the
 // tuples (a subselect, a function call) is not this shape and is left alone —
@@ -188,12 +212,19 @@ const isAssignmentClause = (precedingSql: string): boolean =>
 
 // The trailing SQL identifier before a comparison operator, quoted or not, so
 // `created_at > ${x}` is recognised without an interpolated column.
-const TRAILING_IDENTIFIER = /(?:"(?<quoted>[^"]+)"|(?<bare>[\w$]+))\s*$/u;
+const IDENTIFIER_CHARACTER = /[\w$]/u;
 
 const trailingNameIsTimestampColumn = (head: string): boolean => {
-  const match = TRAILING_IDENTIFIER.exec(head);
-  const name = match?.groups?.["quoted"] ?? match?.groups?.["bare"];
-  return typeof name === "string" && isTimestampColumnName(name);
+  const trimmed = head.trimEnd();
+  if (trimmed.endsWith('"')) {
+    const start = trimmed.lastIndexOf('"', trimmed.length - 2);
+    return start !== -1 && isTimestampColumnName(trimmed.slice(start + 1, -1));
+  }
+  let start = trimmed.length;
+  while (start > 0 && IDENTIFIER_CHARACTER.test(trimmed.at(start - 1) ?? "")) {
+    start -= 1;
+  }
+  return start < trimmed.length && isTimestampColumnName(trimmed.slice(start));
 };
 
 // An explicit cast that keeps the operand at the column's precision:
@@ -563,13 +594,13 @@ export default eslintCompatPlugin({
             );
           }
 
-          const match = COMPARISON_OPERATOR.exec(before);
-          if (match === null) {
+          const match = findComparisonOperator(before);
+          if (match === undefined) {
             return false;
           }
           // `SET indexed_at = ${value}` writes the column; it does not read it
           // back, so nothing is truncated.
-          if (match[0].startsWith("=") && isAssignmentClause(precedingSql)) {
+          if (match.operator === "=" && isAssignmentClause(precedingSql)) {
             return false;
           }
           const head = before.slice(0, match.index);
@@ -618,13 +649,13 @@ export default eslintCompatPlugin({
               // interpolation. The normal slot check below covers the common
               // column-on-the-left form.
               const before = stripSqlComments(rawTextOf(quasis[index]));
-              const reversedMatch = COMPARISON_OPERATOR.exec(before);
+              const reversedMatch = findComparisonOperator(before);
               const reversedHead =
-                reversedMatch === null
+                reversedMatch === undefined
                   ? ""
                   : before.slice(0, reversedMatch.index);
               const reversedOperand =
-                reversedMatch !== null &&
+                reversedMatch !== undefined &&
                 reversedHead.trim() === "" &&
                 isTimestampColumnExpression(expression) &&
                 !isTimestampColumnExpression(expressions[index - 1])

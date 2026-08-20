@@ -29,7 +29,7 @@
       "@stll/transactional/*": ["../../packages/transactional/*"],
       "@/api/*": ["../api/src/*"]
     },
-    "types": ["bun"]
+    "types": ["bun-types"]
   },
   "include": ["src", "../api/src", "../../types"],
   "exclude": ["node_modules", "../api/src/mcp/apps"]

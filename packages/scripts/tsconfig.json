@@ -3,7 +3,7 @@
   "compilerOptions": {
     "lib": ["ESNext"],
     "module": "ESNext",
-    "types": ["bun"],
+    "types": ["bun-types"],
     "paths": {
       "@stll/ai-catalog": ["../ai-catalog/src/index.ts"],
       "@stll/locales": ["../locales/src/index.ts"]

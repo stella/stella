@@ -1,7 +1,7 @@
 {
   "extends": "@stll/typescript-config/base.json",
   "compilerOptions": {
-    "types": ["bun"]
+    "types": ["bun-types"]
   },
   "include": ["src"],
   "exclude": ["node_modules"]

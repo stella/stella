@@ -132,8 +132,8 @@
         "@modelcontextprotocol/ext-apps": "^1.7.0",
         "@stll/property-testing": "workspace:*",
         "@stll/typescript-config": "workspace:*",
-        "@types/bun": "catalog:",
         "@types/nodemailer": "^8.0.1",
+        "bun-types": "catalog:",
         "drizzle-kit": "catalog:",
         "expect-type": "^1.4.0",
         "fast-check": "catalog:",
@@ -156,7 +156,7 @@
       "devDependencies": {
         "@hocuspocus/provider": "^4.6.0",
         "@stll/typescript-config": "workspace:*",
-        "@types/bun": "catalog:",
+        "bun-types": "catalog:",
       },
     },
     "apps/desktop": {
@@ -226,7 +226,7 @@
       },
       "devDependencies": {
         "@stll/typescript-config": "workspace:*",
-        "@types/bun": "catalog:",
+        "bun-types": "catalog:",
       },
     },
     "apps/mobile": {
@@ -414,7 +414,7 @@
       },
       "devDependencies": {
         "@stll/typescript-config": "workspace:*",
-        "@types/bun": "catalog:",
+        "bun-types": "catalog:",
       },
     },
     "packages/ai-catalog": {
@@ -430,7 +430,7 @@
         "@tanstack/ai-gemini": "catalog:",
         "@tanstack/ai-mistral": "catalog:",
         "@tanstack/ai-openrouter": "catalog:",
-        "@types/bun": "catalog:",
+        "bun-types": "catalog:",
       },
     },
     "packages/anonymize-chat": {
@@ -443,7 +443,7 @@
       "devDependencies": {
         "@stll/property-testing": "workspace:*",
         "@stll/typescript-config": "workspace:*",
-        "@types/bun": "catalog:",
+        "bun-types": "catalog:",
         "fast-check": "catalog:",
       },
     },
@@ -455,7 +455,7 @@
       },
       "devDependencies": {
         "@stll/typescript-config": "workspace:*",
-        "@types/bun": "catalog:",
+        "bun-types": "catalog:",
         "elysia": "catalog:",
       },
     },
@@ -469,7 +469,7 @@
       "devDependencies": {
         "@stll/property-testing": "workspace:*",
         "@stll/typescript-config": "workspace:*",
-        "@types/bun": "catalog:",
+        "bun-types": "catalog:",
         "fast-check": "catalog:",
       },
     },
@@ -479,7 +479,7 @@
       "devDependencies": {
         "@stll/property-testing": "workspace:*",
         "@stll/typescript-config": "workspace:*",
-        "@types/bun": "catalog:",
+        "bun-types": "catalog:",
         "fast-check": "catalog:",
       },
     },
@@ -492,7 +492,7 @@
       },
       "devDependencies": {
         "@stll/typescript-config": "workspace:*",
-        "@types/bun": "catalog:",
+        "bun-types": "catalog:",
       },
     },
     "packages/calculations": {
@@ -504,7 +504,7 @@
       "devDependencies": {
         "@stll/property-testing": "workspace:*",
         "@stll/typescript-config": "workspace:*",
-        "@types/bun": "catalog:",
+        "bun-types": "catalog:",
         "fast-check": "catalog:",
         "tsdown": "catalog:",
       },
@@ -519,7 +519,7 @@
       "devDependencies": {
         "@stll/skills": "workspace:*",
         "@stll/typescript-config": "workspace:*",
-        "@types/bun": "catalog:",
+        "bun-types": "catalog:",
       },
     },
     "packages/chat-limits": {
@@ -544,7 +544,7 @@
       },
       "devDependencies": {
         "@stll/typescript-config": "workspace:*",
-        "@types/bun": "catalog:",
+        "bun-types": "catalog:",
       },
     },
     "packages/conditions": {
@@ -557,7 +557,7 @@
       "devDependencies": {
         "@stll/property-testing": "workspace:*",
         "@stll/typescript-config": "workspace:*",
-        "@types/bun": "catalog:",
+        "bun-types": "catalog:",
         "fast-check": "catalog:",
         "tsdown": "catalog:",
       },
@@ -567,7 +567,7 @@
       "version": "0.1.1",
       "devDependencies": {
         "@stll/typescript-config": "workspace:*",
-        "@types/bun": "catalog:",
+        "bun-types": "catalog:",
       },
     },
     "packages/docx-utils": {
@@ -578,7 +578,7 @@
       },
       "devDependencies": {
         "@stll/typescript-config": "workspace:*",
-        "@types/bun": "catalog:",
+        "bun-types": "catalog:",
         "tsdown": "catalog:",
       },
     },
@@ -590,7 +590,7 @@
       },
       "devDependencies": {
         "@stll/typescript-config": "workspace:*",
-        "@types/bun": "catalog:",
+        "bun-types": "catalog:",
       },
     },
     "packages/fetch": {
@@ -598,7 +598,7 @@
       "version": "0.0.0",
       "devDependencies": {
         "@stll/typescript-config": "workspace:*",
-        "@types/bun": "catalog:",
+        "bun-types": "catalog:",
       },
     },
     "packages/infosoud": {
@@ -612,7 +612,7 @@
       },
       "devDependencies": {
         "@stll/typescript-config": "workspace:*",
-        "@types/bun": "catalog:",
+        "bun-types": "catalog:",
       },
     },
     "packages/legal-ast": {
@@ -623,7 +623,7 @@
       },
       "devDependencies": {
         "@stll/typescript-config": "workspace:*",
-        "@types/bun": "catalog:",
+        "bun-types": "catalog:",
       },
     },
     "packages/legal-atlas": {
@@ -635,7 +635,7 @@
       },
       "devDependencies": {
         "@stll/typescript-config": "workspace:*",
-        "@types/bun": "catalog:",
+        "bun-types": "catalog:",
       },
     },
     "packages/locales": {
@@ -643,7 +643,7 @@
       "version": "0.1.0",
       "devDependencies": {
         "@stll/typescript-config": "workspace:*",
-        "@types/bun": "catalog:",
+        "bun-types": "catalog:",
       },
     },
     "packages/money": {
@@ -651,7 +651,7 @@
       "version": "0.1.0",
       "devDependencies": {
         "@stll/typescript-config": "workspace:*",
-        "@types/bun": "catalog:",
+        "bun-types": "catalog:",
         "tsdown": "catalog:",
       },
     },
@@ -663,7 +663,7 @@
       },
       "devDependencies": {
         "@stll/typescript-config": "workspace:*",
-        "@types/bun": "catalog:",
+        "bun-types": "catalog:",
       },
     },
     "packages/property-testing": {
@@ -674,7 +674,7 @@
       },
       "devDependencies": {
         "@stll/typescript-config": "workspace:*",
-        "@types/bun": "catalog:",
+        "bun-types": "catalog:",
       },
     },
     "packages/scripts": {
@@ -695,7 +695,7 @@
       "devDependencies": {
         "@stll/property-testing": "workspace:*",
         "@stll/typescript-config": "workspace:*",
-        "@types/bun": "catalog:",
+        "bun-types": "catalog:",
         "fast-check": "catalog:",
         "typescript": "catalog:",
       },
@@ -708,7 +708,7 @@
       },
       "devDependencies": {
         "@stll/typescript-config": "workspace:*",
-        "@types/bun": "catalog:",
+        "bun-types": "catalog:",
       },
     },
     "packages/template-conditions": {
@@ -721,7 +721,7 @@
       "devDependencies": {
         "@stll/property-testing": "workspace:*",
         "@stll/typescript-config": "workspace:*",
-        "@types/bun": "catalog:",
+        "bun-types": "catalog:",
         "fast-check": "catalog:",
         "tsdown": "catalog:",
       },
@@ -735,7 +735,7 @@
       },
       "devDependencies": {
         "@stll/typescript-config": "workspace:*",
-        "@types/bun": "catalog:",
+        "bun-types": "catalog:",
       },
     },
     "packages/text-normalize": {
@@ -743,7 +743,7 @@
       "version": "0.1.0",
       "devDependencies": {
         "@stll/typescript-config": "workspace:*",
-        "@types/bun": "catalog:",
+        "bun-types": "catalog:",
       },
     },
     "packages/time": {
@@ -786,9 +786,9 @@
         "@atlaskit/pragmatic-drag-and-drop-auto-scroll": "^3.0.1",
         "@base-ui/react": "catalog:",
         "@stll/typescript-config": "workspace:*",
-        "@types/bun": "catalog:",
         "@types/react": "catalog:react19",
         "@types/react-dom": "catalog:react19",
+        "bun-types": "catalog:",
         "react": "catalog:react19",
         "react-dom": "catalog:react19",
         "tailwindcss": "catalog:",
@@ -812,7 +812,7 @@
       },
       "devDependencies": {
         "@stll/typescript-config": "workspace:*",
-        "@types/bun": "catalog:",
+        "bun-types": "catalog:",
         "tsdown": "catalog:",
       },
     },
@@ -833,9 +833,9 @@
         "@stll/property-testing": "workspace:*",
         "@stll/typescript-config": "workspace:*",
         "@tanstack/react-table": "9.1.2",
-        "@types/bun": "catalog:",
         "@types/react": "catalog:react19",
         "@types/react-dom": "catalog:react19",
+        "bun-types": "catalog:",
         "fast-check": "catalog:",
         "react": "catalog:react19",
         "react-dom": "catalog:react19",
@@ -915,10 +915,10 @@
     "@tanstack/ai-sandbox": "0.3.0",
     "@tanstack/eslint-plugin-query": "5.101.4",
     "@tanstack/eslint-plugin-router": "1.162.0",
-    "@types/bun": "1.3.14",
     "@vitejs/plugin-react": "^6.1.0",
     "better-auth": "1.6.26",
     "better-result": "3.0.0",
+    "bun-types": "1.4.0",
     "diff": "9.0.0",
     "disposable-email-domains-js": "1.25.0",
     "drizzle-kit": "1.0.0-rc.4",
@@ -1613,8 +1613,6 @@
     "@img/sharp-win32-ia32": ["@img/sharp-win32-ia32@0.35.3", "", { "os": "win32", "cpu": "ia32" }, "sha512-r53mXsBN6lFUDiST764SvgwUdHAqM4rPAiDzAmf4fLoB6X/rkfyTrLCg6+g17wJJiCmB3JYgHuUldCWUIRFSXw=="],
 
     "@img/sharp-win32-x64": ["@img/sharp-win32-x64@0.35.3", "", { "os": "win32", "cpu": "x64" }, "sha512-D4y1vNeZrIIJCN+uHaWVtH86B+aCrdMYYjicy9pXHvbGZeGYLLSd3wdVuC37FxVXlU1ARsk84eKWfWMXGYEqvA=="],
-
-    "@ioredis/commands": ["@ioredis/commands@1.10.0", "", {}, "sha512-UmeW7z4LfctwoQ5wkhVzgq8tXkreED2xZGpX+Bg+zA+WJFZCT6c062AfCK/Dfk81xZnnwdhJCUMkitihRaoC2Q=="],
 
     "@isaacs/ttlcache": ["@isaacs/ttlcache@1.4.1", "", {}, "sha512-RQgQ4uQ+pLbqXfOmieB91ejmLwvSgv9nLx6sT6sD83s7umBypgg+OIBOBbEUiJXrfpnp9j0mRhYYdzp9uqq3lA=="],
 
@@ -2650,8 +2648,6 @@
 
     "@types/babel__traverse": ["@types/babel__traverse@7.28.0", "", { "dependencies": { "@babel/types": "^7.28.2" } }, "sha512-8PvcXf70gTDZBgt9ptxJ8elBeBjcLOAcOtoO/mPJjtji1+CdGbHgm77om1GrsPxsiE+uXIpNSK64UYaIwQXd4Q=="],
 
-    "@types/bun": ["@types/bun@1.3.14", "", { "dependencies": { "bun-types": "1.3.14" } }, "sha512-h1hFqFVcvAvD9j9K7ZW7vd82aSA+rTdznZa+5bwvCwqSB1jmmfLcbIWhOLx1/+boy/xmjgCs/OMUL8hRJSmnPw=="],
-
     "@types/d3": ["@types/d3@7.4.3", "", { "dependencies": { "@types/d3-array": "*", "@types/d3-axis": "*", "@types/d3-brush": "*", "@types/d3-chord": "*", "@types/d3-color": "*", "@types/d3-contour": "*", "@types/d3-delaunay": "*", "@types/d3-dispatch": "*", "@types/d3-drag": "*", "@types/d3-dsv": "*", "@types/d3-ease": "*", "@types/d3-fetch": "*", "@types/d3-force": "*", "@types/d3-format": "*", "@types/d3-geo": "*", "@types/d3-hierarchy": "*", "@types/d3-interpolate": "*", "@types/d3-path": "*", "@types/d3-polygon": "*", "@types/d3-quadtree": "*", "@types/d3-random": "*", "@types/d3-scale": "*", "@types/d3-scale-chromatic": "*", "@types/d3-selection": "*", "@types/d3-shape": "*", "@types/d3-time": "*", "@types/d3-time-format": "*", "@types/d3-timer": "*", "@types/d3-transition": "*", "@types/d3-zoom": "*" } }, "sha512-lZXZ9ckh5R8uiFVt8ogUNf+pIrK4EsWrx2Np75WvF/eTpJ0FMHNhjXk8CKEx/+gpHbNQyJWehbFaTvqmHWB3ww=="],
 
     "@types/d3-array": ["@types/d3-array@3.2.2", "", {}, "sha512-hOLWVbm7uRza0BYXpIIW5pxfrKe0W+D5lrFiAEYR+pb6w3N2SwSMaJbXdUfSEv+dT4MfHBLtn5js0LAWaO6otw=="],
@@ -3036,7 +3032,7 @@
 
     "bullmq": ["bullmq@6.1.1", "", { "dependencies": { "cron-parser": "5.8.1", "msgpackr": "2.0.5", "node-abort-controller": "3.1.1", "semver": "7.8.5", "tslib": "2.8.1" }, "peerDependencies": { "bullmq-otel": ">=2.0.0", "ioredis": ">=5.0.0", "pg": ">=8.0.0", "redis": ">=5.0.0" }, "optionalPeers": ["bullmq-otel", "ioredis", "pg", "redis"] }, "sha512-LOJfFyuzRqRqdz+ZaOLdduYQKSnbkwbMmLXwZViTrfTLbeAF5MpmEk1Pr6uTmGYQ2+e6rjGc0dMOUvSp9+4swg=="],
 
-    "bun-types": ["bun-types@1.3.14", "", { "dependencies": { "@types/node": "*" } }, "sha512-4N0ig0fEomHt5R0KCFWjovxow98rIoRwKolrYdCcknNwMekCXRnWEUvgu5soYV8QXtVsrUD8B95MBOZGPvr6KQ=="],
+    "bun-types": ["bun-types@1.4.0", "", { "dependencies": { "@types/node": "*" } }, "sha512-iIKw23BspnQQYd3prITOBxeUsxBHnwzX6YJfGMuNOZzeNcMmVqzIIVGRm1l69ogaPQmb4wB6BN8mA5bE9YuC5Q=="],
 
     "bundle-name": ["bundle-name@4.1.0", "", { "dependencies": { "run-applescript": "^7.0.0" } }, "sha512-tjwM5exMg6BGRI+kNmTntNsvdZS1X8BFYS6tnJ2hdH0kVxM6/eVZ2xy+FqStSWvYmtfFMDLIxurorHwDKfDz5Q=="],
 
@@ -3095,8 +3091,6 @@
     "clone": ["clone@1.0.4", "", {}, "sha512-JQHZ2QMW6l3aH/j6xCqQThY/9OH4D/9ls34cgkUBiEeocRTU04tHfKPBsUK1PqZCUQM7GiA0IIXJSuXHI64Kbg=="],
 
     "clsx": ["clsx@2.1.1", "", {}, "sha512-eYm0QWBtUrBWZWG0d386OGAw16Z995PiOVo2B7bjWSbHedGl5e0ZWaq65kOGgUSNesEIDkB9ISbTg/JK9dhCZA=="],
-
-    "cluster-key-slot": ["cluster-key-slot@1.1.1", "", {}, "sha512-rwHwUfXL40Chm1r08yrhU3qpUvdVlgkKNeyeGPOxnW8/SyVDvgRaed/Uz54AqWNaTCAThlj6QAs3TZcKI0xDEw=="],
 
     "cobe": ["cobe@2.0.1", "", {}, "sha512-aaa6vcIlaC8C1SF50LDH0Anybo/EAXnrxqe+bwvr4+YUtZydqjeBjTTD7ziCCkbRrRGSns3I3F6cZsf3W+L+ag=="],
 
@@ -3273,8 +3267,6 @@
     "defu": ["defu@6.1.7", "", {}, "sha512-7z22QmUWiQ/2d0KkdYmANbRUVABpZ9SNYyH5vx6PZ+nE5bcC0l7uFvEfHlyld/HcGBFTL536ClDt3DEcSlEJAQ=="],
 
     "delaunator": ["delaunator@5.1.0", "", { "dependencies": { "robust-predicates": "^3.0.2" } }, "sha512-AGrQ4QSgssa1NGmWmLPqN5NY2KajF5MqxetNEO+o0n3ZwZZeTmt7bBnvzHWrmkZFxGgr4HdyFgelzgi06otLuQ=="],
-
-    "denque": ["denque@2.1.0", "", {}, "sha512-HVQE3AAb/pxF8fQAoiqpvg9i3evqug3hoiwakOyZAwJm+6vZehbkYXZ0l4JxS+I3QxM97v5aaRNhj8v5oBhekw=="],
 
     "depd": ["depd@2.0.0", "", {}, "sha512-g7nH6P6dyDioJogAAGprGpCtVImJhpPk/roCzdb3fIh61/s/nPsfR6onyMwkCAR/OlC3yBC0lESvUoQEAssIrw=="],
 
@@ -3731,8 +3723,6 @@
     "intl-messageformat": ["intl-messageformat@11.2.13", "", { "dependencies": { "@formatjs/fast-memoize": "3.1.7", "@formatjs/icu-messageformat-parser": "3.5.16" } }, "sha512-JaPaE6TIX+TAS5XLhDUh41geLw4QfBHX4s5pW8Km+L9fVC8HzB9yOuhbh4EMR/F1+8C6b9qk4763Cv+LdOG1kg=="],
 
     "invariant": ["invariant@2.2.4", "", { "dependencies": { "loose-envify": "^1.0.0" } }, "sha512-phJfQVBuaJM5raOpJjSfkiD6BpbCE4Ns//LaXl6wGYtUBY83nWS6Rf9tXm2e8VaK60JEjYldbPif/A2B1C2gNA=="],
-
-    "ioredis": ["ioredis@5.11.1", "", { "dependencies": { "@ioredis/commands": "1.10.0", "cluster-key-slot": "1.1.1", "debug": "4.4.3", "denque": "2.1.0", "redis-errors": "1.2.0", "redis-parser": "3.0.0", "standard-as-callback": "2.1.0" } }, "sha512-ehuGcf94bQXhfagULNXrJdfnWO38v070jxSx/qE87Kjzmu2fU7ro5EFAb+OPituLqgfyuQaym5DlrNydW2sJ9A=="],
 
     "ip-address": ["ip-address@10.5.0", "", {}, "sha512-R5SnVLJmgYYvf2F2ZgwSBnelz5G4q5AxIC277GDfUaNbrZKNANcBC7RHqYYePlszf4kBolVkJauG0ZjHHFh55g=="],
 
@@ -4494,10 +4484,6 @@
 
     "redent": ["redent@3.0.0", "", { "dependencies": { "indent-string": "^4.0.0", "strip-indent": "^3.0.0" } }, "sha512-6tDA8g98We0zd0GvVeMT9arEOnTw9qM03L9cJXaCjrip1OO764RDBLBfrB4cwzNGDj5OA5ioymC9GkizgWJDUg=="],
 
-    "redis-errors": ["redis-errors@1.2.0", "", {}, "sha512-1qny3OExCf0UvUV/5wpYKf2YwPcOqXzkwKKSmKHiE6ZMQs5heeE/c8eXK+PNllPvmjgAbfnsbpkGZWy8cBpn9w=="],
-
-    "redis-parser": ["redis-parser@3.0.0", "", { "dependencies": { "redis-errors": "^1.0.0" } }, "sha512-DJnGAeenTdpMEH6uAJRK/uiyEIH9WVsUmoLwzudwGJUwZPp80PDBWPHXSAGNPwNvIXAbe7MSUB1zQFugFml66A=="],
-
     "refa": ["refa@0.12.1", "", { "dependencies": { "@eslint-community/regexpp": "^4.8.0" } }, "sha512-J8rn6v4DBb2nnFqkqwy6/NnTYMcgLA+sLr0iIO41qpv0n+ngb7ksag2tMRl0inb1bbO/esUwzW1vbJi7K0sI0g=="],
 
     "regenerate": ["regenerate@1.4.2", "", {}, "sha512-zrceR/XhGYU/d/opr2EKO7aRHUeiBI8qjtfHqADTwZd6Szfy16la6kqD0MIUs5z5hx6AaKa+PixpPrR289+I0A=="],
@@ -4723,8 +4709,6 @@
     "stackframe": ["stackframe@1.3.4", "", {}, "sha512-oeVtt7eWQS+Na6F//S4kJ2K2VbRlS9D43mAlMyVpVWovy9o+jfgH8O9agzANzaiLjclA0oYzUXEM4PurhSUChw=="],
 
     "stacktrace-parser": ["stacktrace-parser@0.1.11", "", { "dependencies": { "type-fest": "^0.7.1" } }, "sha512-WjlahMgHmCJpqzU8bIBy4qtsZdU9lRlcZE3Lvyej6t4tuOuv1vk57OW3MBrj6hXBFx/nNoC9MPMTcr5YA7NQbg=="],
-
-    "standard-as-callback": ["standard-as-callback@2.1.0", "", {}, "sha512-qoRRSyROncaz1z0mvYqIE4lCd9p2R90i6GxW3uZv5ucSu8tU7B5HXUP1gG8pVZsYNVaXjk8ClXHPttLyxAL48A=="],
 
     "standard-navigation": ["standard-navigation@0.0.5", "", {}, "sha512-YAmzwAiiQVocZxO/VGPFiQHcu5pKiz09QIGC0MK6aRMoa3E0QkoTQgcqJr7ZZ3OMiNhu4DkaGElFI5htjOIDbw=="],
 

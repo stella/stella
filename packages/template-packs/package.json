@@ -34,6 +34,6 @@
   },
   "devDependencies": {
     "@stll/typescript-config": "workspace:*",
-    "@types/bun": "catalog:"
+    "bun-types": "catalog:"
   }
 }

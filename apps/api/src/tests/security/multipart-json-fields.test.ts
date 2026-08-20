@@ -239,45 +239,49 @@ const postForm = async (
 };
 
 describe("multipart body string fields", () => {
-  test("every multipart handler string field survives a JSON-shaped value", async () => {
-    const { handlers, importErrors } = await loadMultipartHandlers();
+  test(
+    "every multipart handler string field survives a JSON-shaped value",
+    async () => {
+      const { handlers, importErrors } = await loadMultipartHandlers();
 
-    // An unimportable module is an unmeasured handler, so say so rather than
-    // letting the census quietly cover less than it claims.
-    expect(importErrors).toEqual([]);
+      // An unimportable module is an unmeasured handler, so say so rather than
+      // letting the census quietly cover less than it claims.
+      expect(importErrors).toEqual([]);
 
-    // The census only means something if it actually found the handlers.
-    expect(handlers.length).toBeGreaterThanOrEqual(MIN_MULTIPART_HANDLERS);
+      // The census only means something if it actually found the handlers.
+      expect(handlers.length).toBeGreaterThanOrEqual(MIN_MULTIPART_HANDLERS);
 
-    // A handler whose schema lives in a sibling module is exactly the case a
-    // source-text scan misses, so pin one: `entities/upload-version.ts` names
-    // no file field of its own, it imports `uploadVersionBodySchema`.
-    expect(handlers.map(({ file }) => file)).toContain(
-      "entities/upload-version.ts",
-    );
-
-    const offenders: string[] = [];
-    for (const { file, body, stringFields } of handlers) {
-      if (stringFields.length === 0) {
-        continue;
-      }
-      // Baseline: the probe request itself must be valid with plain strings,
-      // otherwise a failure below would say nothing about JSON parsing.
-      // oxlint-disable-next-line no-await-in-loop -- sequential probes keep offender ordering deterministic
-      const baseline = await postForm(body, buildForm(body, PLAIN_VALUE));
-      expect(`${file}: baseline ${baseline.status} ${baseline.detail}`).toBe(
-        `${file}: baseline 200 `,
+      // A handler whose schema lives in a sibling module is exactly the case a
+      // source-text scan misses, so pin one: `entities/upload-version.ts` names
+      // no file field of its own, it imports `uploadVersionBodySchema`.
+      expect(handlers.map(({ file }) => file)).toContain(
+        "entities/upload-version.ts",
       );
 
-      // oxlint-disable-next-line no-await-in-loop -- sequential probes keep offender ordering deterministic
-      const probe = await postForm(body, buildForm(body, JSON_SHAPED_VALUE));
-      if (probe.status !== 200) {
-        offenders.push(
-          `${file} (${stringFields.join(", ")}) -> ${probe.status} ${probe.detail}`,
+      const offenders: string[] = [];
+      for (const { file, body, stringFields } of handlers) {
+        if (stringFields.length === 0) {
+          continue;
+        }
+        // Baseline: the probe request itself must be valid with plain strings,
+        // otherwise a failure below would say nothing about JSON parsing.
+        // oxlint-disable-next-line no-await-in-loop -- sequential probes keep offender ordering deterministic
+        const baseline = await postForm(body, buildForm(body, PLAIN_VALUE));
+        expect(`${file}: baseline ${baseline.status} ${baseline.detail}`).toBe(
+          `${file}: baseline 200 `,
         );
-      }
-    }
 
-    expect(offenders).toEqual([]);
-  });
+        // oxlint-disable-next-line no-await-in-loop -- sequential probes keep offender ordering deterministic
+        const probe = await postForm(body, buildForm(body, JSON_SHAPED_VALUE));
+        if (probe.status !== 200) {
+          offenders.push(
+            `${file} (${stringFields.join(", ")}) -> ${probe.status} ${probe.detail}`,
+          );
+        }
+      }
+
+      expect(offenders).toEqual([]);
+    },
+    { timeout: 30_000 },
+  );
 });

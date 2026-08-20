@@ -1,25 +1,11 @@
 import { eslintCompatPlugin } from "@oxlint/plugins";
 import type { ESTree } from "@oxlint/plugins";
-// Ban Bun's native S3 object-body reads.
+// Confine S3 object-body reads to the owned storage boundary.
 //
-// Up to and including Bun 1.3.14, `S3Client.file(key).bytes()` /
-// `.arrayBuffer()` / `.text()` / `.json()` never free the native buffer the
-// HTTP thread accumulates the response body into: the handler is invoked with
-// `.clone` lifetime, JS receives its own copy, and the original allocation is
-// stranded (oven-sh/bun#29083, fixed upstream by #29086 and #29923). The
-// leaked allocation lives outside the JS heap, so it is invisible to heap
-// snapshots and survives a forced GC — only RSS moves. Any process that reads
-// a steady stream of objects grows by roughly the object size per read until
-// the runtime kills it.
-//
-// One missed call site silently reintroduces that, and the symptom (RSS climb
-// with a flat heap) is expensive to trace back, so this is a rule rather than
-// a convention. Read through `readS3ArrayBuffer` / `readCorpusS3Bytes` in
-// apps/api/src/lib/s3.ts, which fetch over a presigned URL instead.
-//
-// Remove this rule together with those helpers once every runtime image is on
-// a stable Bun containing the fixes (the first stable AFTER 1.3.14 — they are
-// not in 1.3.14 itself). See TODO(bun-s3-native-read).
+// `apps/api/src/lib/s3.ts` chooses between Bun's native S3 reader and a
+// presigned fetch according to the caller's cancellation, size, range, and
+// response-validation requirements. A direct read elsewhere bypasses those
+// decisions along with credential refresh and shared error semantics.
 
 import { isAstNode, isIdentifier } from "./utils.ts";
 
@@ -70,10 +56,10 @@ export default eslintCompatPlugin({
         type: "problem",
         messages: {
           noNativeS3ObjectRead:
-            "Do not read an S3 object body with .{{method}}(); Bun 1.3.14 " +
-            "leaks the native download buffer (oven-sh/bun#29083). Use " +
-            "readS3ArrayBuffer() or readCorpusS3Bytes() from " +
-            "@/api/lib/s3 instead.",
+            "Do not read an S3 object body with .{{method}}() outside the " +
+            "owned storage boundary. Use the appropriate read helper from " +
+            "@/api/lib/s3 so cancellation, bounds, credentials, and errors " +
+            "remain consistent.",
         },
       },
       createOnce(context) {

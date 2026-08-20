@@ -10,7 +10,7 @@
     "noPropertyAccessFromIndexSignature": false,
     "strict": true,
     "strictNullChecks": true,
-    "types": ["bun"],
+    "types": ["bun-types"],
     "useUnknownInCatchVariables": true
   },
   "include": [".oxlint-plugins/**/*.ts", "oxlint.config.ts"],

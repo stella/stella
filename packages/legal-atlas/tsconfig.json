@@ -5,7 +5,7 @@
       "@stll/legal-ast": ["../legal-ast/src/index.ts"],
       "@stll/legal-ast/*": ["../legal-ast/src/*.ts"]
     },
-    "types": ["bun"]
+    "types": ["bun-types"]
   },
   "include": ["src"],
   "exclude": ["node_modules"]

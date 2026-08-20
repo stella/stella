@@ -32,7 +32,7 @@ export const DOC_SOURCES = {
     dependency: "@tiptap/core",
     url: "https://tiptap.dev/llms.txt",
   },
-  Bun: { dependency: "@types/bun", url: "https://bun.sh/llms.txt" },
+  Bun: { dependency: "bun-types", url: "https://bun.sh/llms.txt" },
   BetterAuth: {
     dependency: "better-auth",
     url: "https://better-auth.com/llms.txt",

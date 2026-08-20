@@ -7,7 +7,7 @@
     "paths": {
       "@stll/errors": ["../../packages/errors/src/index.ts"]
     },
-    "types": ["bun"]
+    "types": ["bun-types"]
   },
   "include": ["src"]
 }
