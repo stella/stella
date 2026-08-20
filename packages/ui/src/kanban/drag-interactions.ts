@@ -1,3 +1,10 @@
+/// <reference path="./atlaskit-cjs.d.ts" />
+
+import type {
+  draggable as atlaskitDraggable,
+  dropTargetForElements as atlaskitDropTargetForElements,
+  monitorForElements as atlaskitMonitorForElements,
+} from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
 import { autoScrollForElements } from "@atlaskit/pragmatic-drag-and-drop-auto-scroll/dist/cjs/entry-point/element.js";
 import { autoScrollForExternal } from "@atlaskit/pragmatic-drag-and-drop-auto-scroll/dist/cjs/entry-point/external.js";
 import { combine } from "@atlaskit/pragmatic-drag-and-drop/dist/cjs/entry-point/combine.js";
@@ -26,14 +33,14 @@ export type RegisterKanbanCardDragOptions = {
  * Drag sources, drop targets, and monitors must use these exports together.
  * Mixing module formats creates separate adapter registries in some bundlers.
  */
-export const registerKanbanDraggable: typeof draggable = (options) =>
+export const registerKanbanDraggable: typeof atlaskitDraggable = (options) =>
   draggable(options);
 
-export const registerKanbanDropTarget: typeof dropTargetForElements = (
+export const registerKanbanDropTarget: typeof atlaskitDropTargetForElements = (
   options,
 ) => dropTargetForElements(options);
 
-export const monitorKanbanDrags: typeof monitorForElements = (options) =>
+export const monitorKanbanDrags: typeof atlaskitMonitorForElements = (options) =>
   monitorForElements(options);
 
 /**
