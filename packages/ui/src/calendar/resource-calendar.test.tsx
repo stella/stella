@@ -88,6 +88,7 @@ describe("ResourceCalendar", () => {
             label: "First hearing",
             resourceId: "room-a",
             startDate: "2026-08-01",
+            tone: "warning",
           },
           {
             accessibleLabel: "Second hearing in Room A",
@@ -96,6 +97,7 @@ describe("ResourceCalendar", () => {
             label: "Second hearing",
             resourceId: "room-a",
             startDate: "2026-08-01",
+            tone: "destructive",
           },
         ]}
         onSelectEntry={() => undefined}
@@ -108,6 +110,8 @@ describe("ResourceCalendar", () => {
     expect(markup.match(/block-size:50%/gu)).toHaveLength(2);
     expect(markup.match(/role="gridcell"/gu)).toHaveLength(columns.length);
     expect(markup.match(/<button/gu)).toHaveLength(2);
+    expect(markup).toContain("bg-warning/15 text-warning-foreground");
+    expect(markup).toContain("bg-destructive/12 text-destructive");
   });
 
   test("rejects entries whose resource is absent", () => {
