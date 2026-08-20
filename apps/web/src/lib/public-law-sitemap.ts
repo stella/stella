@@ -120,6 +120,7 @@ const createCaseLawDecisionSitemapUrl = (
     caseNumber: decision.caseNumber,
     country: decision.country,
     court: decision.court,
+    decisionId: decision.id,
     language: decision.language,
     languageAlternates: decision.languageAlternates,
     slug: decision.slug,

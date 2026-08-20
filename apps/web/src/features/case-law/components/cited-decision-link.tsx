@@ -36,6 +36,7 @@ export const CitedDecisionLink = ({
     caseNumber: decision.caseNumber,
     country: decision.country,
     court: decision.court,
+    decisionId: decision.id,
     slug: decision.slug,
   });
   const decided = formatDecisionDate(decision.decisionDate, format);

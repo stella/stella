@@ -17,7 +17,7 @@ import {
   type CaseLawDecisionRouteParams,
   createCaseLawDecisionPath,
   createCaseLawDecisionRouteParams,
-  extractLegacyCaseLawDecisionIdFromRouteParam,
+  extractCaseLawDecisionIdFromIdRouteParam,
   normalizeCaseLawLanguageSegment,
 } from "@/lib/case-law-route";
 import { detached } from "@/lib/detached";
@@ -230,6 +230,7 @@ const createDecisionAlternateLinks = (
         caseNumber: alternate.caseNumber,
         country: alternate.country,
         court: alternate.court,
+        decisionId: alternate.id,
         language: alternate.language,
         languageAlternates: decision.languageAlternates,
         slug: alternate.slug,
@@ -244,21 +245,22 @@ export const loadPublicCaseLawDecisionRoute = async ({
   queryClient,
   search,
 }: PublicDecisionRouteLoaderOptions): Promise<PublicCaseLawDecision> => {
-  const legacyDecisionId = extractLegacyCaseLawDecisionIdFromRouteParam(
-    params.slug,
-  );
-  if (legacyDecisionId) {
+  const routeDecisionId = extractCaseLawDecisionIdFromIdRouteParam(params.slug);
+  if (routeDecisionId) {
     const decision = await ensurePublicDecision(
       async () =>
         await ensureRouteQueryData(
           queryClient,
-          decisionOptions(extractId(legacyDecisionId)),
+          decisionOptions(extractId(routeDecisionId)),
         ),
     );
+    // A decision with a stored slug canonicalises to it; without one the
+    // id form is canonical and no redirect happens.
     const canonicalParams = createCaseLawDecisionRouteParams({
       caseNumber: decision.caseNumber,
       country: decision.country,
       court: decision.court,
+      decisionId: decision.id,
       language: decision.language,
       languageAlternates: decision.languageAlternates,
       slug: decision.slug,
@@ -293,6 +295,7 @@ export const loadPublicCaseLawDecisionRoute = async ({
     caseNumber: decision.caseNumber,
     country: decision.country,
     court: decision.court,
+    decisionId: decision.id,
     language: decision.language,
     languageAlternates: decision.languageAlternates,
     slug: decision.slug,

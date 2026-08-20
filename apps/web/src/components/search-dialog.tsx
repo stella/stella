@@ -1001,6 +1001,7 @@ export const SearchDialog = ({
             caseNumber: hit.caseNumber,
             country: hit.country,
             court: hit.court,
+            decisionId: hit.decisionId,
             slug,
           }),
           search: {
