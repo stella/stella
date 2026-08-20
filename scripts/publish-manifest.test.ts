@@ -2,9 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { realpathSync } from "node:fs";
 import path from "node:path";
 
-import uiManifest from "../packages/ui/package.json" with { type: "json" };
 import webManifest from "../apps/web/package.json" with { type: "json" };
-
+import uiManifest from "../packages/ui/package.json" with { type: "json" };
 import {
   distEntryFiles,
   sourceExportTargets,
