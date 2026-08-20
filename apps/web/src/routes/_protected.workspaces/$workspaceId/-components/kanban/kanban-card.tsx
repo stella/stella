@@ -9,6 +9,7 @@ import { useTranslations } from "use-intl";
 import { KanbanCardShell, selectKanbanCardFieldIds } from "@stll/ui/kanban";
 import { cn } from "@stll/ui/utils";
 
+import { withDragAnnouncementData } from "@/components/drag-and-drop-live-region.logic";
 import { InlineEdit } from "@/components/inline-edit";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { UserIdentity } from "@/components/user-avatar";
@@ -92,23 +93,27 @@ export const KanbanCard = ({
     }
     return draggable({
       element: el,
-      getInitialData: () => ({
-        type: ENTITY_DRAG_TYPE,
-        entityId: entity.entityId,
-        entityIds: [entity.entityId],
-        entities: [
+      getInitialData: () =>
+        withDragAnnouncementData(
           {
+            type: ENTITY_DRAG_TYPE,
             entityId: entity.entityId,
+            entityIds: [entity.entityId],
+            entities: [
+              {
+                entityId: entity.entityId,
+                name,
+                kind: entity.kind,
+                mimeType: file?.mimeType ?? null,
+                parentId: entity.parentId ?? null,
+              },
+            ],
             name,
             kind: entity.kind,
             mimeType: file?.mimeType ?? null,
-            parentId: entity.parentId ?? null,
           },
-        ],
-        name,
-        kind: entity.kind,
-        mimeType: file?.mimeType ?? null,
-      }),
+          name,
+        ),
       onGenerateDragPreview: ({ nativeSetDragImage }) => {
         setCustomNativeDragPreview({
           nativeSetDragImage,

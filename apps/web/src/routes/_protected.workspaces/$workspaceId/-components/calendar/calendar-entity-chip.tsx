@@ -11,6 +11,7 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
 import { containedHandler } from "@stll/ui/use-contained-handler";
 import { cn } from "@stll/ui/utils";
 
+import { withDragAnnouncementData } from "@/components/drag-and-drop-live-region.logic";
 import type { DragPreviewData } from "@/components/drag-preview";
 import { renderDragPreview } from "@/components/drag-preview";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
@@ -63,13 +64,17 @@ export const CalendarEntityChip = ({
     }
     return draggable({
       element: el,
-      getInitialData: () => ({
-        type: ENTITY_DRAG_TYPE,
-        entityId: entity.taskId,
-        name,
-        kind: "task",
-        mimeType: null,
-      }),
+      getInitialData: () =>
+        withDragAnnouncementData(
+          {
+            type: ENTITY_DRAG_TYPE,
+            entityId: entity.taskId,
+            name,
+            kind: "task",
+            mimeType: null,
+          },
+          name,
+        ),
       onGenerateDragPreview: ({ nativeSetDragImage }) => {
         setCustomNativeDragPreview({
           nativeSetDragImage,

@@ -280,6 +280,7 @@
         "@atlaskit/pragmatic-drag-and-drop": "^3.0.0",
         "@atlaskit/pragmatic-drag-and-drop-auto-scroll": "^3.0.1",
         "@atlaskit/pragmatic-drag-and-drop-hitbox": "^2.0.1",
+        "@atlaskit/pragmatic-drag-and-drop-live-region": "^2.0.0",
         "@base-ui/react": "catalog:",
         "@better-auth/oauth-provider": "catalog:",
         "@fontsource-variable/source-serif-4": "^5.3.0",
@@ -982,6 +983,8 @@
     "@atlaskit/pragmatic-drag-and-drop-auto-scroll": ["@atlaskit/pragmatic-drag-and-drop-auto-scroll@3.0.1", "", { "dependencies": { "@atlaskit/pragmatic-drag-and-drop": "^3.0.0", "@babel/runtime": "^7.0.0" } }, "sha512-JgVNhb3CMkxzAU87k8+9fpWy67kaZkALIDgyqT34rkgpWWYM5nCQpQwDLJBeYzlyt/lvlUyWfyaaSGuDfSbbNA=="],
 
     "@atlaskit/pragmatic-drag-and-drop-hitbox": ["@atlaskit/pragmatic-drag-and-drop-hitbox@2.0.1", "", { "dependencies": { "@atlaskit/pragmatic-drag-and-drop": "^3.0.0", "@babel/runtime": "^7.0.0" } }, "sha512-S8451pCqJ2XBeu2StsGw0W1RlcjwzzCIBP5uq89RQ3TXDFo+Qy3obCj5Bh3vvRTb7zSw9D9rnY/yqnw0rBYbaA=="],
+
+    "@atlaskit/pragmatic-drag-and-drop-live-region": ["@atlaskit/pragmatic-drag-and-drop-live-region@2.0.0", "", { "dependencies": { "@babel/runtime": "^7.0.0" } }, "sha512-GrlZdZQSw4yegSrU8EDcaO6IBDEAYbSMgv3tTTfkbdmOjpEnwXmNGHe7CiA3GR9LgUNiKpERR9tlfa+viXIGvA=="],
 
     "@aws-crypto/sha256-js": ["@aws-crypto/sha256-js@5.2.0", "", { "dependencies": { "@aws-crypto/util": "^5.2.0", "@aws-sdk/types": "^3.222.0", "tslib": "^2.6.2" } }, "sha512-FFQQyu7edu4ufvIZ+OadFpHHOt+eSTBaYaki44c+akjg7qZg9oOQeLlk77F6tSYqjDAFClrHJk9tMf0HdVyOvA=="],
 

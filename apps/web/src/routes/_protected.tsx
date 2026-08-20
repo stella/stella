@@ -31,6 +31,7 @@ import { AppSidebar } from "@/components/app-sidebar";
 import { AppBreadcrumbs } from "@/components/breadcrumbs/app-breadcrumbs";
 import { ChatEditorProvider } from "@/components/chat-editor-provider";
 import { ChatMentionProviders } from "@/components/chat-mention-providers";
+import { DragAndDropLiveRegion } from "@/components/drag-and-drop-live-region";
 import {
   initializeInspectorTabBroadcast,
   useInspectorTabsStore,
@@ -374,6 +375,7 @@ function ProtectedComponent() {
           <AIAvailabilityProvider>
             <ChatEditorProvider>
               <GlobalChatMentionRegistration />
+              <DragAndDropLiveRegion />
               <AppSidebar />
               <CreateMatterDialog />
               <ProtectedContent />

@@ -62,6 +62,10 @@ import { cn } from "@stll/ui/utils";
 
 import { ConditionBuilder } from "@/components/conditions/condition-builder";
 import type { FieldOption } from "@/components/conditions/condition-builder-logic";
+import {
+  withDragAnnouncementData,
+  withDropAnnouncementData,
+} from "@/components/drag-and-drop-live-region.logic";
 import { Switch } from "@/components/switch";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
@@ -247,6 +251,8 @@ export const PositionEditor = ({
   const [cardRef, setCardRef] = useState<HTMLElement | null>(null);
   const [gripRef, setGripRef] = useState<HTMLButtonElement | null>(null);
   const { sourceId } = position;
+  const announcementName =
+    position.issue.trim() || t("knowledge.playbooks.untitledPosition");
   const bodyId = `position-body-${sourceId}`;
   const handleReorder = useLatestCallback(onReorder);
 
@@ -258,7 +264,11 @@ export const PositionEditor = ({
       draggable({
         element: cardRef,
         dragHandle: gripRef,
-        getInitialData: () => ({ type: POSITION_DRAG_TYPE, sourceId }),
+        getInitialData: () =>
+          withDragAnnouncementData(
+            { type: POSITION_DRAG_TYPE, sourceId },
+            announcementName,
+          ),
         onGenerateDragPreview: ({ location, nativeSetDragImage }) => {
           setCustomNativeDragPreview({
             nativeSetDragImage,
@@ -286,6 +296,11 @@ export const PositionEditor = ({
         canDrop: ({ source }) =>
           source.data["type"] === POSITION_DRAG_TYPE &&
           source.data["sourceId"] !== sourceId,
+        getData: () =>
+          withDropAnnouncementData(
+            {},
+            { type: "reorder", name: announcementName },
+          ),
         onDragEnter: () => setIsDropTarget(true),
         onDragLeave: () => setIsDropTarget(false),
         onDrop: ({ source }) => {
@@ -297,7 +312,7 @@ export const PositionEditor = ({
         },
       }),
     );
-  }, [cardRef, gripRef, sourceId, handleReorder]);
+  }, [announcementName, cardRef, gripRef, sourceId, handleReorder]);
 
   const handleGripKeyDown = (event: React.KeyboardEvent) => {
     if (event.key === "ArrowUp") {

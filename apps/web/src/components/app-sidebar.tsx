@@ -66,6 +66,10 @@ import {
 } from "@/components/app-sidebar.logic";
 import { openEntityInInspector } from "@/components/chat/entity-open";
 import { navigateToWorkspaceFolder } from "@/components/chat/folder-navigation";
+import {
+  withDragAnnouncementData,
+  withDropAnnouncementData,
+} from "@/components/drag-and-drop-live-region.logic";
 import { FeedbackDialog } from "@/components/feedback-dialog";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { MatterActivityRow } from "@/components/matter-activity-row";
@@ -1090,8 +1094,21 @@ const MatterItem = ({
           // array (e.g. calendar chips) must not highlight as valid targets.
           return toCopyToMatterEntities(source.data["entities"]).length > 0;
         }
-        return canDrag && type === MATTER_DRAG_TYPE;
+        return (
+          canDrag &&
+          type === MATTER_DRAG_TYPE &&
+          source.data["matterId"] !== ws.id
+        );
       },
+      getData: ({ source }) =>
+        withDropAnnouncementData(
+          {},
+          {
+            type:
+              source.data["type"] === MATTER_DRAG_TYPE ? "reorder" : "action",
+            name: ws.name,
+          },
+        ),
       onDragEnter: ({ source }) => {
         if (source.data["type"] === ENTITY_DRAG_TYPE) {
           setIsEntityDropTarget(true);
@@ -1133,13 +1150,14 @@ const MatterItem = ({
       dropTarget,
       draggable({
         element: el,
-        getInitialData: () => ({
-          type: MATTER_DRAG_TYPE,
-          matterId: ws.id,
-        }),
+        getInitialData: () =>
+          withDragAnnouncementData(
+            { type: MATTER_DRAG_TYPE, matterId: ws.id },
+            ws.name,
+          ),
       }),
     );
-  }, [ws.id, canDrag, handleReorder, handleEntityDrop]);
+  }, [ws.id, ws.name, canDrag, handleReorder, handleEntityDrop]);
 
   const relTime = formatRelativeTime(ws.lastActivityAt);
   const navigationTarget = resolveMatterNavigationTarget(ws);

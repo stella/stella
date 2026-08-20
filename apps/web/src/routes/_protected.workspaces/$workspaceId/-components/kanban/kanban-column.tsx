@@ -55,6 +55,10 @@ import {
   ColumnCalculation,
 } from "@stll/workspace-ui/calculations";
 
+import {
+  withDragAnnouncementData,
+  withDropAnnouncementData,
+} from "@/components/drag-and-drop-live-region.logic";
 import { InlineEdit } from "@/components/inline-edit";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useExternalFileDrop } from "@/hooks/use-external-file-drop";
@@ -216,13 +220,26 @@ export const KanbanColumn = ({
       // Drop target for entity cards and column reorder
       dropTargetForElements({
         element: el,
-        canDrop: ({ source }) =>
-          source.data["type"] === ENTITY_DRAG_TYPE ||
-          source.data["type"] === COLUMN_DRAG_TYPE,
+        canDrop: ({ source }) => {
+          if (source.data["type"] === ENTITY_DRAG_TYPE) {
+            return true;
+          }
+          return (
+            source.data["type"] === COLUMN_DRAG_TYPE &&
+            source.data["columnValue"] !== columnValue
+          );
+        },
         getData: ({ input, element, source }) => {
-          const data: Record<string | symbol, unknown> = {
-            columnValue,
-          };
+          const data = withDropAnnouncementData(
+            { columnValue },
+            {
+              type:
+                source.data["type"] === COLUMN_DRAG_TYPE
+                  ? "reorder"
+                  : "container",
+              name: title,
+            },
+          );
           if (source.data["type"] === COLUMN_DRAG_TYPE) {
             return attachClosestEdge(data, {
               input,
@@ -283,10 +300,11 @@ export const KanbanColumn = ({
         draggable({
           element: el,
           dragHandle: handle,
-          getInitialData: () => ({
-            type: COLUMN_DRAG_TYPE,
-            columnValue,
-          }),
+          getInitialData: () =>
+            withDragAnnouncementData(
+              { type: COLUMN_DRAG_TYPE, columnValue },
+              title,
+            ),
           onDragStart: () => setIsDragging(true),
           onDrop: () => setIsDragging(false),
         }),
@@ -294,7 +312,7 @@ export const KanbanColumn = ({
     }
 
     return combine(...cleanups);
-  }, [columnValue, isDraggable, handleEntityDrop]);
+  }, [columnValue, title, isDraggable, handleEntityDrop]);
 
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;

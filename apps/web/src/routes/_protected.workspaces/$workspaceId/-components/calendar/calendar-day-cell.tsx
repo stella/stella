@@ -8,8 +8,10 @@ import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
 import { containedEventHandler } from "@stll/ui/use-contained-handler";
 import { cn } from "@stll/ui/utils";
 
+import { withDropAnnouncementData } from "@/components/drag-and-drop-live-region.logic";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
+import { useFormatter } from "@/i18n/formatting-context";
 import type { EntityKind } from "@/lib/types";
 import { ENTITY_DRAG_TYPE } from "@/lib/workspaces/drag-constants";
 import type { CalendarTask } from "@/lib/workspaces/queries/calendar-tasks";
@@ -48,6 +50,7 @@ export const CalendarDayCell = ({
   onCreate,
 }: CalendarDayCellProps) => {
   const t = useTranslations();
+  const format = useFormatter();
   const maxVisible = mode === "month" ? MAX_VISIBLE_MONTH : MAX_VISIBLE_WEEK;
   const visible = entries.slice(0, maxVisible);
   const overflow = entries.length - maxVisible;
@@ -55,6 +58,10 @@ export const CalendarDayCell = ({
   const displayEntries = expanded ? entries : visible;
 
   const dayNum = Number.parseInt(day.date.slice(8), 10);
+  const announcementDate = format.dateTime(new Date(`${day.date}T00:00:00Z`), {
+    dateStyle: "long",
+    timeZone: "UTC",
+  });
 
   // Context menu state
   const [ctxOpen, setCtxOpen] = useState(false);
@@ -88,6 +95,11 @@ export const CalendarDayCell = ({
     return dropTargetForElements({
       element: el,
       canDrop: ({ source }) => source.data["type"] === ENTITY_DRAG_TYPE,
+      getData: () =>
+        withDropAnnouncementData(
+          {},
+          { type: "container", name: announcementDate },
+        ),
       onDragEnter: () => setIsDropTarget(true),
       onDragLeave: () => setIsDropTarget(false),
       onDrop: ({ source }) => {
@@ -102,7 +114,7 @@ export const CalendarDayCell = ({
         }
       },
     });
-  }, [isEditable, handleEntityDrop]);
+  }, [announcementDate, isEditable, handleEntityDrop]);
 
   return (
     <div

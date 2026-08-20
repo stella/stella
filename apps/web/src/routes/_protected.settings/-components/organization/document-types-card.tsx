@@ -24,6 +24,10 @@ import { Button } from "@stll/ui/button";
 import { Input } from "@stll/ui/input";
 import { cn } from "@stll/ui/utils";
 
+import {
+  withDragAnnouncementData,
+  withDropAnnouncementData,
+} from "@/components/drag-and-drop-live-region.logic";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { api } from "@/lib/api";
@@ -172,7 +176,11 @@ const DocumentTypeRow = ({ type, onReorder }: DocumentTypeRowProps) => {
       draggable({
         element: rowRef,
         dragHandle: gripRef,
-        getInitialData: () => ({ type: DOCUMENT_TYPE_DRAG_TYPE, id: type.id }),
+        getInitialData: () =>
+          withDragAnnouncementData(
+            { type: DOCUMENT_TYPE_DRAG_TYPE, id: type.id },
+            type.label,
+          ),
         onGenerateDragPreview: ({ location, nativeSetDragImage }) => {
           setCustomNativeDragPreview({
             nativeSetDragImage,
@@ -196,6 +204,8 @@ const DocumentTypeRow = ({ type, onReorder }: DocumentTypeRowProps) => {
         canDrop: ({ source }) =>
           source.data["type"] === DOCUMENT_TYPE_DRAG_TYPE &&
           source.data["id"] !== type.id,
+        getData: () =>
+          withDropAnnouncementData({}, { type: "reorder", name: type.label }),
         onDragEnter: () => setIsDropTarget(true),
         onDragLeave: () => setIsDropTarget(false),
         onDrop: ({ source }) => {
@@ -207,7 +217,7 @@ const DocumentTypeRow = ({ type, onReorder }: DocumentTypeRowProps) => {
         },
       }),
     );
-  }, [rowRef, gripRef, type.id, handleReorder]);
+  }, [rowRef, gripRef, type.id, type.label, handleReorder]);
 
   const renameMutation = useSettingsMutation({
     mutationFn: async (label: string) =>

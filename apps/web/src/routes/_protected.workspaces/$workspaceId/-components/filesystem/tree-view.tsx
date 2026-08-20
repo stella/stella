@@ -37,6 +37,11 @@ import { cn } from "@stll/ui/utils";
 
 import { DocumentIcon } from "@/components/document-icon";
 import {
+  formatSelectedItemsAnnouncement,
+  withDragAnnouncementData,
+  withDropAnnouncementData,
+} from "@/components/drag-and-drop-live-region.logic";
+import {
   renderDragPreview,
   renderMultiDragPreview,
 } from "@/components/drag-preview";
@@ -667,6 +672,7 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
   const [isRootDropTarget, setIsRootDropTarget] = useState(false);
   const [isDragActive, setIsDragActive] = useState(false);
   const rootBarRef = useRef<HTMLDivElement>(null);
+  const rootFolderAnnouncementName = t("workspaces.copyToMatter.rootFolder");
   const handleMoveEntitiesToRoot = useLatestCallback((entityIds: string[]) => {
     for (const entityId of entityIds) {
       moveEntity.mutate(
@@ -718,6 +724,11 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
     return dropTargetForElements({
       element: el,
       canDrop: ({ source }) => source.data["type"] === ENTITY_DRAG_TYPE,
+      getData: () =>
+        withDropAnnouncementData(
+          {},
+          { type: "container", name: rootFolderAnnouncementName },
+        ),
       onDragEnter: () => setIsRootDropTarget(true),
       onDragLeave: () => setIsRootDropTarget(false),
       onDrop: ({ source }) => {
@@ -729,7 +740,7 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
         handleMoveEntitiesToRoot(entityIds);
       },
     });
-  }, [handleMoveEntitiesToRoot]);
+  }, [handleMoveEntitiesToRoot, rootFolderAnnouncementName]);
 
   if (data.length === 0) {
     return (
@@ -1349,16 +1360,19 @@ const FilesystemRow = ({
                   ancestorIds: getCurrentAncestorIds(node.entityId),
                 },
               ];
-          return {
-            type: ENTITY_DRAG_TYPE,
-            entityId: node.entityId,
-            entityIds,
-            entities,
-            parentId: node.parentId ?? null,
-            name,
-            kind: node.kind,
-            mimeType: file?.mimeType ?? null,
-          };
+          return withDragAnnouncementData(
+            {
+              type: ENTITY_DRAG_TYPE,
+              entityId: node.entityId,
+              entityIds,
+              entities,
+              parentId: node.parentId ?? null,
+              name,
+              kind: node.kind,
+              mimeType: file?.mimeType ?? null,
+            },
+            isMulti ? formatSelectedItemsAnnouncement(entityIds.length) : name,
+          );
         },
         onGenerateDragPreview: ({ nativeSetDragImage }) => {
           setCustomNativeDragPreview({
@@ -1395,7 +1409,11 @@ const FilesystemRow = ({
                   !isAncestor(entityId)
                 );
               },
-              getData: () => ({ entityId: node.entityId }),
+              getData: () =>
+                withDropAnnouncementData(
+                  { entityId: node.entityId },
+                  { type: "container", name },
+                ),
               onDragEnter: () => {
                 setIsFolderDropTarget(true);
                 if (!isExpanded()) {
@@ -1431,7 +1449,6 @@ const FilesystemRow = ({
     file?.mimeType,
     isFolder,
     workspaceId,
-    t,
     scheduleAutoExpand,
     getCurrentSelectedDragItems,
     getCurrentSelectedEntities,
