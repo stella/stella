@@ -487,8 +487,11 @@ const AUDIT_IGNORE_FILES = new Set([
   "scripts/env-tool.test.ts",
 ]);
 const AUDIT_IGNORE_PATH_SEGMENTS = new Set([".cache", "node_modules"]);
+/** Submodules: other repositories, with their own configuration surface. */
+const AUDIT_IGNORE_PATH_PREFIXES = ["packages/template-packs/content/"];
 
 export const isIgnoredAuditPath = (file: string) =>
+  AUDIT_IGNORE_PATH_PREFIXES.some((prefix) => file.startsWith(prefix)) ||
   file.split("/").some((segment) => AUDIT_IGNORE_PATH_SEGMENTS.has(segment));
 
 type EnvUsage = { file: string; line: number; name: string };

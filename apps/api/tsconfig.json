@@ -20,6 +20,15 @@
       "@stll/money": ["../../packages/money/src/index.ts"],
       "@stll/permissions": ["../../packages/permissions/src/index.ts"],
       "@stll/skills": ["../../packages/skills/src/index.ts"],
+      "@stll/template-packs": [
+        "../../packages/template-packs/src/catalogue.ts"
+      ],
+      "@stll/template-packs/fixtures": [
+        "../../packages/template-packs/src/fixtures/catalogue.ts"
+      ],
+      "@stll/template-packs/schema": [
+        "../../packages/template-packs/src/schema.ts"
+      ],
       "@stll/time": ["../../packages/time/src/index.ts"],
       "@/api/*": ["./src/*"]
     },

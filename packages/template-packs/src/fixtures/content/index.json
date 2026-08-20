@@ -1,0 +1,56 @@
+[
+  {
+    "id": "sample-pack",
+    "name": "Sample employment pack",
+    "version": "1.0.0",
+    "license": "CC-BY-4.0",
+    "jurisdictions": [{ "country": "CZ" }],
+    "languages": ["en"],
+    "legalAreas": ["employment"],
+    "authors": [
+      {
+        "name": "Fixture Drafter",
+        "organization": "Example Org",
+        "role": "drafter",
+        "date": "2025-11-01"
+      },
+      { "name": "Fixture Reviewer", "role": "reviewer", "date": "2026-01-10" },
+      {
+        "name": "Fixture Converter",
+        "role": "converter",
+        "url": "https://example.invalid/converter"
+      }
+    ],
+    "templateCount": 1,
+    "templates": [
+      {
+        "slug": "employment-agreement",
+        "title": "Employment agreement",
+        "languages": ["en"],
+        "legalArea": "employment",
+        "fields": [
+          "department",
+          "effective_date",
+          "employee_address",
+          "employee_birth_date",
+          "employee_name",
+          "employer_address",
+          "employer_id",
+          "employer_name",
+          "governing_law",
+          "has_non_compete",
+          "has_probation",
+          "job_title",
+          "non_compete_months",
+          "non_compete_territory",
+          "probation_months",
+          "probation_notice_days",
+          "salary_amount",
+          "salary_currency",
+          "supervisor_name"
+        ],
+        "sha256": "4e8127401372485dd168f74d9766d4b86e349cc1965b45e8ef0fcf0df7775861"
+      }
+    ]
+  }
+]

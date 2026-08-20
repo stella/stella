@@ -665,6 +665,15 @@ export default defineConfig({
     // scripts/generate-snowball-stemmers.ts.
     "apps/api/src/lib/legal-search/morphology/snowball/*.gen.ts",
     "apps/api/src/lib/legal-search/morphology/snowball/base-stemmer.ts",
+    // The template-pack content repository is a submodule with its own
+    // toolchain and lint setup; this repo neither authors nor formats it.
+    "packages/template-packs/content/**",
+    // Template-pack manifests: generated verbatim from the content
+    // repository, down to author names and descriptions. Prose rules would
+    // rewrite quoted upstream text, and every --fix would be undone by the
+    // next regeneration. Bound instead by scripts/generate-manifest.ts
+    // --check and the per-template content hashes.
+    "packages/template-packs/src/**/packs.gen.ts",
   ],
 
   jsPlugins: [

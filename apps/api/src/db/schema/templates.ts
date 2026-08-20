@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 
 import { CONTACT_TYPES } from "@stll/api-contract";
+import type { TemplatePackAuthor } from "@stll/template-packs/schema";
 
 import {
   ENTITY_KINDS,
@@ -62,6 +63,33 @@ export const templateCategories = p.pgTable(
   ],
 );
 
+export const TEMPLATE_ORIGIN_TYPES = ["authored", "bundled-pack"] as const;
+export type TemplateOriginType = (typeof TEMPLATE_ORIGIN_TYPES)[number];
+
+const TEMPLATE_ORIGIN_TYPE_SQL_VALUES = TEMPLATE_ORIGIN_TYPES.map((value) =>
+  sql.raw(`'${value}'`),
+);
+
+/**
+ * Where a template's first version came from. `authored` covers every
+ * in-app path (upload, studio, AI preparation, report clone); `bundled-pack`
+ * records the pack template it was installed from, with the content hash of
+ * the bytes copied and the attribution the pack carried at that time.
+ */
+export type TemplateOrigin =
+  | { type: "authored" }
+  | {
+      type: "bundled-pack";
+      packId: string;
+      packVersion: string;
+      slug: string;
+      contentHash: string;
+      license: string;
+      authors: TemplatePackAuthor[];
+    };
+
+export const AUTHORED_TEMPLATE_ORIGIN = { type: "authored" } as const;
+
 export const templates = p.pgTable(
   "templates",
   {
@@ -94,6 +122,16 @@ export const templates = p.pgTable(
     whenNotToUse: p.text("when_not_to_use"),
     useCount: p.integer("use_count").notNull().default(0),
     lastUsedAt: timestamptz("last_used_at"),
+    /** Discriminator of `origin`, duplicated as a column so it can be
+     *  filtered and constrained without JSONB operators. */
+    originType: p
+      .text("origin_type", { enum: TEMPLATE_ORIGIN_TYPES })
+      .notNull()
+      .default("authored"),
+    origin: jsonb()
+      .$type<TemplateOrigin>()
+      .notNull()
+      .default(AUTHORED_TEMPLATE_ORIGIN),
     createdBy: p
       .text("created_by")
       .notNull()
@@ -113,6 +151,29 @@ export const templates = p.pgTable(
       .index("templates_org_category_idx")
       .on(table.organizationId, table.categoryId),
     p.unique("templates_id_org_unq").on(table.id, table.organizationId),
+    p.check(
+      "templates_origin_type_values_check",
+      sql`${table.originType} IN (${sql.join(TEMPLATE_ORIGIN_TYPE_SQL_VALUES, sql`, `)})`,
+    ),
+    // The column and the JSON discriminator cannot disagree, and a pack
+    // origin carries every field `TemplateOrigin` declares, so no write can
+    // persist provenance that a typed reader assumes is complete. COALESCE
+    // is load-bearing: a missing key makes its comparison NULL, and a CHECK
+    // admits NULL, so without it an absent member would pass.
+    p.check(
+      "templates_origin_shape_check",
+      sql`COALESCE((${table.originType} = 'authored' AND ${table.origin} = '{"type":"authored"}'::jsonb) OR (${table.originType} = 'bundled-pack' AND ${table.origin}->>'type' = 'bundled-pack' AND ${table.origin}->>'packId' IS NOT NULL AND ${table.origin}->>'packVersion' IS NOT NULL AND ${table.origin}->>'slug' IS NOT NULL AND ${table.origin}->>'contentHash' IS NOT NULL AND ${table.origin}->>'license' IS NOT NULL AND jsonb_typeof(${table.origin}->'authors') = 'array'), false)`,
+    ),
+    // One copy of a pack template per organization: a repeat install is a
+    // no-op at the database, not only at the handler.
+    p
+      .uniqueIndex("templates_org_pack_template_uidx")
+      .on(
+        table.organizationId,
+        sql`(${table.origin}->>'packId')`,
+        sql`(${table.origin}->>'slug')`,
+      )
+      .where(sql`${table.originType} = 'bundled-pack'`),
     ...orgPolicies(),
   ],
 );

@@ -54,6 +54,7 @@ const getTemplate = createSafeRootHandler(
             whenNotToUse: true,
             useCount: true,
             lastUsedAt: true,
+            origin: true,
             createdBy: true,
             createdAt: true,
             updatedAt: true,

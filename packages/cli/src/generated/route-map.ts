@@ -31047,6 +31047,285 @@ export const generatedRouteMap: RouteNode = {
             },
           },
         },
+        "template-packs": {
+          kind: "route",
+          children: {
+            get: {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "template-packs", "get"],
+                capabilityId: "template-packs.get",
+                description:
+                  "Read one bundled template pack: attribution (drafters, reviewers, converters), license and license URL, source, disclaimer, review date, jurisdictions, languages, and every template with its README, field list and, when already installed in the organization, the installed template id. Also reports whether the organization hides pack offers.",
+                access: "read",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--pack-id",
+                    prop: "packId",
+                    required: true,
+                    part: "params",
+                    partPath: "packId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    description:
+                      "BCP-47 tag of the caller's interface language",
+                    flag: "--locale",
+                    prop: "locale",
+                    required: false,
+                    part: "query",
+                    partPath: "locale",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "templates",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    params: {
+                      type: "object",
+                      required: ["packId"],
+                      properties: {
+                        packId: {
+                          minLength: 1,
+                          maxLength: 64,
+                          pattern: "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+                          type: "string",
+                        },
+                      },
+                    },
+                    query: {
+                      type: "object",
+                      properties: {
+                        locale: {
+                          minLength: 2,
+                          maxLength: 35,
+                          type: "string",
+                          description:
+                            "BCP-47 tag of the caller's interface language",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "installs-create": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: [
+                  "capability",
+                  "template-packs",
+                  "installs-create",
+                ],
+                capabilityId: "template-packs.installs.create",
+                description:
+                  "Copy templates from a bundled pack into the organization's template library as ordinary templates with a first version; each records the pack, version, slug, content hash, license and authors it came from. Pass the pack id and the template slugs. A template already installed from the same pack is reported as such and not copied again, so a request that failed part way through can simply be repeated. Owners and admins only.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--pack-id",
+                    prop: "packId",
+                    required: true,
+                    part: "params",
+                    partPath: "packId",
+                  },
+                  {
+                    kind: "string-array",
+                    repeatable: true,
+                    description:
+                      "Slugs of the pack templates to copy into the organization's library",
+                    flag: "--template-slugs",
+                    prop: "templateSlugs",
+                    required: true,
+                    part: "body",
+                    partPath: "templateSlugs",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--category-id",
+                    prop: "categoryId",
+                    required: false,
+                    part: "body",
+                    partPath: "categoryId",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "templates",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      required: ["templateSlugs"],
+                      properties: {
+                        templateSlugs: {
+                          minItems: 1,
+                          maxItems: 50,
+                          type: "array",
+                          items: {
+                            minLength: 1,
+                            maxLength: 64,
+                            pattern: "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+                            type: "string",
+                          },
+                          description:
+                            "Slugs of the pack templates to copy into the organization's library",
+                        },
+                        categoryId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                    params: {
+                      type: "object",
+                      required: ["packId"],
+                      properties: {
+                        packId: {
+                          minLength: 1,
+                          maxLength: 64,
+                          pattern: "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            list: {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "template-packs", "list"],
+                capabilityId: "template-packs.list",
+                description:
+                  "List the template packs bundled with this deployment, ranked for the organization: packs covering one of its practice jurisdictions first, then jurisdiction-agnostic packs, then the rest, with packs in the caller's language ahead within each group. Each pack carries its attribution, license, jurisdictions, languages, template list and how many of its templates are already installed. Also reports whether the organization hides pack offers and whether the caller may install.",
+                access: "read",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    description:
+                      "BCP-47 tag of the caller's interface language; packs in that language rank first",
+                    flag: "--locale",
+                    prop: "locale",
+                    required: false,
+                    part: "query",
+                    partPath: "locale",
+                  },
+                ],
+                inputOnly: [],
+                paginated: true,
+                paginationPart: "query",
+                itemsKey: "items",
+                destructive: false,
+                scope: "templates",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    query: {
+                      type: "object",
+                      properties: {
+                        limit: {
+                          minimum: 1,
+                          maximum: 100,
+                          anyOf: [
+                            {
+                              format: "integer",
+                              default: 0,
+                              type: "string",
+                            },
+                            {
+                              minimum: 1,
+                              maximum: 100,
+                              type: "integer",
+                            },
+                          ],
+                        },
+                        cursor: {
+                          maxLength: 128,
+                          type: "string",
+                        },
+                        locale: {
+                          minLength: 2,
+                          maxLength: 35,
+                          type: "string",
+                          description:
+                            "BCP-47 tag of the caller's interface language; packs in that language rank first",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "visibility-update": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: [
+                  "capability",
+                  "template-packs",
+                  "visibility-update",
+                ],
+                capabilityId: "template-packs.visibility.update",
+                description:
+                  "Hide or show the bundled template-pack catalogue for the organization. Pass hidden true to stop offering packs in the template library; templates already installed are unaffected. Owners and admins only.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "boolean",
+                    repeatable: false,
+                    description:
+                      "true hides the bundled pack catalogue from the organization's template library; installed templates stay",
+                    flag: "--hidden",
+                    prop: "hidden",
+                    required: true,
+                    part: "body",
+                    partPath: "hidden",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "templates",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      required: ["hidden"],
+                      properties: {
+                        hidden: {
+                          type: "boolean",
+                          description:
+                            "true hides the bundled pack catalogue from the organization's template library; installed templates stay",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
         "template-recipes": {
           kind: "route",
           children: {

@@ -1,3 +1,6 @@
 [submodule ".ai/shared"]
 	path = .ai/shared
 	url = https://github.com/stella/ai-shared.git
+[submodule "packages/template-packs/content"]
+	path = packages/template-packs/content
+	url = https://github.com/stella/template-packs.git

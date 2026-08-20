@@ -346,6 +346,15 @@ here as its CLI form). Projected from the same handler enumeration that builds
 | `tasks.get`                 | read               | stella:read          | —       | covered by `list_tasks`  |
 | `tasks.update`              | write              | stella:matters_write | —       | covered by `save_task`   |
 
+## template-packs
+
+| Capability                         | Access | Scope            | Feature                | Reachable via                                                         |
+| ---------------------------------- | ------ | ---------------- | ---------------------- | --------------------------------------------------------------------- |
+| `template-packs.get`               | read   | stella:templates | FEATURE_TEMPLATE_PACKS | generic invoke → `stella capability template-packs get`               |
+| `template-packs.installs.create`   | write  | stella:templates | FEATURE_TEMPLATE_PACKS | generic invoke → `stella capability template-packs installs-create`   |
+| `template-packs.list`              | read   | stella:templates | FEATURE_TEMPLATE_PACKS | generic invoke → `stella capability template-packs list`              |
+| `template-packs.visibility.update` | write  | stella:templates | FEATURE_TEMPLATE_PACKS | generic invoke → `stella capability template-packs visibility-update` |
+
 ## template-recipes
 
 | Capability                | Access             | Scope            | Feature | Reachable via                                                |

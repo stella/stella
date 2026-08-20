@@ -119,6 +119,7 @@ const INTERNAL_SERVER_KEYS = new Set([
   "FEATURE_PUBLIC_LAW",
   "FEATURE_PUBLIC_TOOLS",
   "FEATURE_SHAREPOINT",
+  "FEATURE_TEMPLATE_PACKS",
   "FEATURE_TIME_BILLING",
   "FEATURE_TODOS",
   "FEATURE_USAGE",
@@ -163,6 +164,7 @@ const INTERNAL_SERVER_KEYS = new Set([
   "STELLA_USAGE_POLICY_SEEDS",
   "STELLA_VERSION",
   "STELLA_WORKER_DIR",
+  "TEMPLATE_PACKS_CONTENT_DIR",
   "USAGE_ENFORCEMENT_ENABLED",
   "USE_MOCK_AI",
   "WEB_FETCH_PROVIDER",
@@ -300,6 +302,8 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Enable first-class legal lists across REST, agents, and task UI.",
   FEATURE_PUBLIC_TOOLS:
     "Enable GitHub-sourced public skills in the authenticated catalogue.",
+  FEATURE_TEMPLATE_PACKS:
+    "Offer the bundled template-pack catalogue. Off until a deployment opts in; its routes do not exist while off.",
   FEEDBACK_EMAIL_TO:
     "Destination for MCP and public-intake feedback email. Unset disables local email delivery.",
   FEEDBACK_INTAKE_URL:
@@ -365,6 +369,8 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     'Client-IP source for signup limits. Use "direct" without a proxy and "trusted_proxy" behind configured proxies.',
   STELLA_TRUSTED_PROXY_CIDRS:
     "Comma-separated CIDRs for proxies directly in front of the API. Never trust public client ranges.",
+  TEMPLATE_PACKS_CONTENT_DIR:
+    "Directory holding the template-pack content. Set by the container image; unset in a source tree.",
   TRANSACTIONAL_EMAIL_FROM:
     "Verified sender address used for every transactional email.",
   USE_MOCK_AI:

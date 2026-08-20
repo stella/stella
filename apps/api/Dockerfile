@@ -147,6 +147,7 @@ ENV STELLA_WORKER_DIR=/\$bunfs/root/workers
 ENV STELLA_OCR_PDF_FONT_PATH=/\$bunfs/root/fonts/CabinetGrotesk-Regular.otf
 ENV DOCUMENT_OCR_MODEL_DIR=/app/ocr-models
 ENV STLL_ANONYMIZE_ASSET_DIR=/app/anonymize-native
+ENV TEMPLATE_PACKS_CONTENT_DIR=/app/template-packs-content
 RUN groupadd --system --gid 1001 stella && \
     useradd --system --uid 1001 --gid stella --no-create-home stella
 COPY --chown=stella:stella --from=builder /app/server /app/server
@@ -180,6 +181,13 @@ COPY --chown=stella:stella --from=builder /app/apps/api/src/lib/file-scan/yara /
 COPY --chown=stella:stella --from=deps \
     /app/node_modules/@stll/anonymize-wasm/dist/native/ \
     /app/anonymize-native/
+# Bundled template packs: the manifest is compiled into the binary, the DOCX
+# bytes are read from TEMPLATE_PACKS_CONTENT_DIR when a pack is installed.
+# Copied from the unpruned context stage. A build whose context has no content
+# submodule copies the empty mount point, and the catalogue is then empty.
+COPY --chown=stella:stella --from=install-inputs \
+    /app/packages/template-packs/content/ \
+    /app/template-packs-content/
 # quickjs-emscripten loads this WASM file at runtime from the
 # compiled Bun binary's `$bunfs/root` asset directory.
 COPY --chown=stella:stella --from=deps \

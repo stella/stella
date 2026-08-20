@@ -696,6 +696,20 @@ export const CAPABILITY_DISPATCH = {
   "tasks.update": {
     load: async () => await import("@/api/handlers/tasks/update"),
   },
+  "template-packs.get": {
+    load: async () => await import("@/api/handlers/template-packs/get"),
+  },
+  "template-packs.installs.create": {
+    load: async () =>
+      await import("@/api/handlers/template-packs/installs/create"),
+  },
+  "template-packs.list": {
+    load: async () => await import("@/api/handlers/template-packs/list"),
+  },
+  "template-packs.visibility.update": {
+    load: async () =>
+      await import("@/api/handlers/template-packs/visibility/update"),
+  },
   "template-recipes.create": {
     load: async () => await import("@/api/handlers/template-recipes/create"),
   },

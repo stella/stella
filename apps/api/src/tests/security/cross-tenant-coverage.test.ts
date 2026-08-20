@@ -41,6 +41,14 @@ const WAIVER_REASON = {
    * Isolation must instead be covered by a dedicated test, named here.
    */
   isolatedOutsideRlsHarness: "isolated outside the RLS harness, covered",
+  /**
+   * The domain's tenant-scoped reads only return rows once optional bundled
+   * content is present, which the matrix harness cannot guarantee: a matrix
+   * case would pass vacuously wherever that content is absent. Isolation must
+   * instead be covered by a test that binds its own fixture content, named
+   * here.
+   */
+  contentConditionedRead: "read conditioned on bundled content, covered",
 } as const;
 
 type WaiverReason = (typeof WAIVER_REASON)[keyof typeof WAIVER_REASON];
@@ -83,6 +91,14 @@ const CROSS_TENANT_WAIVERS: Record<string, WaiverReason> = {
   skills: WAIVER_REASON.preExistingGap,
   "style-sets": WAIVER_REASON.preExistingGap,
   tasks: WAIVER_REASON.preExistingGap,
+  // The pack catalogue itself is deployment content, not tenant data; the
+  // only tenant-scoped read is which of a pack's templates the organization
+  // has already installed, and that is empty until the content submodule is
+  // checked out. Covered by
+  // `handlers/template-packs/installs/create.db.test.ts`, which binds the
+  // committed fixture content and asserts one organization neither sees nor
+  // reuses another's copy.
+  "template-packs": WAIVER_REASON.contentConditionedRead,
   "template-recipes": WAIVER_REASON.preExistingGap,
   usage: WAIVER_REASON.preExistingGap,
   "user-files": WAIVER_REASON.preExistingGap,

@@ -1,0 +1,42 @@
+{
+  "id": "sample-pack",
+  "name": "Sample employment pack",
+  "version": "1.0.0",
+  "description": "Test fixture pack with one employment agreement template.",
+  "license": "CC-BY-4.0",
+  "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+  "source": {
+    "name": "Fixture source",
+    "url": "https://example.invalid/source",
+    "retrievedAt": "2026-01-15"
+  },
+  "authors": [
+    {
+      "name": "Fixture Drafter",
+      "organization": "Example Org",
+      "role": "drafter",
+      "date": "2025-11-01"
+    },
+    { "name": "Fixture Reviewer", "role": "reviewer", "date": "2026-01-10" },
+    {
+      "name": "Fixture Converter",
+      "role": "converter",
+      "url": "https://example.invalid/converter"
+    }
+  ],
+  "jurisdictions": [{ "country": "CZ" }],
+  "languages": ["en"],
+  "legalAreas": ["employment"],
+  "lastReviewedAt": "2026-01-10",
+  "disclaimer": "Fixture content for tests; not legal advice.",
+  "templates": [
+    {
+      "slug": "employment-agreement",
+      "title": "Employment agreement",
+      "file": "templates/employment-agreement/template.docx",
+      "readme": "templates/employment-agreement/README.md",
+      "languages": ["en"],
+      "legalArea": "employment"
+    }
+  ]
+}

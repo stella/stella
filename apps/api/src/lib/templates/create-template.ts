@@ -12,11 +12,15 @@
  */
 
 import { Result } from "better-result";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 
 import type { SafeDb } from "@/api/db/safe-db";
-import { templates, templateVersions } from "@/api/db/schema";
-import type { TemplateKind } from "@/api/db/schema";
+import {
+  AUTHORED_TEMPLATE_ORIGIN,
+  templates,
+  templateVersions,
+} from "@/api/db/schema";
+import type { TemplateKind, TemplateOrigin } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeHandlerGenerator } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -72,6 +76,10 @@ export type CreateStoredTemplateOptions = {
   /** Template kind; defaults to `document`. Report templates (cloned from a
    *  built-in report layout) set `report` so the report picker can filter. */
   kind?: TemplateKind | undefined;
+  /** Provenance of the first version; defaults to `authored`. A pack origin
+   *  is also an identity: a second copy of the same pack template in the
+   *  organization is refused with a 409 under the same lock as the insert. */
+  origin?: TemplateOrigin | undefined;
   recordAuditEvent: AuditRecorder;
 };
 
@@ -86,6 +94,7 @@ export const createStoredTemplate = async function* ({
   clientManifest,
   manifest,
   kind = "document",
+  origin = AUTHORED_TEMPLATE_ORIGIN,
   recordAuditEvent,
 }: CreateStoredTemplateOptions): SafeHandlerGenerator<CreatedTemplate> {
   if (categoryId) {
@@ -211,7 +220,25 @@ export const createStoredTemplate = async function* ({
       );
 
       if (existingCount >= LIMITS.templatesCount) {
-        return { ok: false as const };
+        return { ok: false as const, reason: "limit" as const };
+      }
+
+      if (origin.type === "bundled-pack") {
+        const installed = await tx
+          .select({ id: templates.id })
+          .from(templates)
+          .where(
+            and(
+              eq(templates.organizationId, organizationId),
+              eq(templates.originType, "bundled-pack"),
+              eq(sql`${templates.origin}->>'packId'`, origin.packId),
+              eq(sql`${templates.origin}->>'slug'`, origin.slug),
+            ),
+          )
+          .limit(1);
+        if (installed.length > 0) {
+          return { ok: false as const, reason: "duplicate_origin" as const };
+        }
       }
 
       const [row] = await tx
@@ -229,6 +256,8 @@ export const createStoredTemplate = async function* ({
           fieldCount,
           currentVersion: 1,
           languages: detectedLanguages,
+          originType: origin.type,
+          origin,
           createdBy: userId,
         })
         .returning({
@@ -265,6 +294,7 @@ export const createStoredTemplate = async function* ({
               fileName: row?.fileName ?? null,
               fieldCount,
               currentVersion: 1,
+              origin,
             },
           },
         },
@@ -280,10 +310,15 @@ export const createStoredTemplate = async function* ({
   if (!txResult.ok) {
     getS3().delete(s3Key).catch(captureError);
     return Result.err(
-      new HandlerError({
-        status: 400,
-        message: "Templates limit reached",
-      }),
+      txResult.reason === "duplicate_origin"
+        ? new HandlerError({
+            status: 409,
+            message: "This pack template is already installed",
+          })
+        : new HandlerError({
+            status: 400,
+            message: "Templates limit reached",
+          }),
     );
   }
   if (!txResult.row) {
