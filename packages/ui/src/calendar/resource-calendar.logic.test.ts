@@ -72,4 +72,17 @@ describe("resource calendar placement", () => {
       "Resource calendar date columns must be consecutive normalized dates",
     );
   });
+
+  test("keeps leap-day and year boundaries consecutive in UTC", () => {
+    expect(() =>
+      assertConsecutiveCalendarDates([
+        "2024-02-28",
+        "2024-02-29",
+        "2024-03-01",
+      ]),
+    ).not.toThrow();
+    expect(() =>
+      assertConsecutiveCalendarDates(["2026-12-31", "2027-01-01"]),
+    ).not.toThrow();
+  });
 });

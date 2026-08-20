@@ -35,8 +35,37 @@ describe("ResourceCalendar", () => {
     expect(markup).toContain("Room A");
     expect(markup).toContain("Hearing");
     expect(markup).toContain("grid-column:2 / span 2");
+    expect(markup).toContain("min-width:28rem");
+    expect(markup).toContain("sticky start-0 z-20");
     expect(markup).toContain("<article");
     expect(markup).not.toContain("disabled");
+  });
+
+  test("renders selectable entries as non-submitting keyboard controls", () => {
+    const markup = renderToStaticMarkup(
+      <ResourceCalendar
+        ariaLabel="Room schedule"
+        columns={columns}
+        entries={[
+          {
+            accessibleLabel: "Hearing in Room A",
+            endDateExclusive: "2026-08-02",
+            id: "hearing-1",
+            label: "Hearing",
+            resourceId: "room-a",
+            startDate: "2026-08-01",
+          },
+        ]}
+        onSelectEntry={() => undefined}
+        resourceHeader="Room"
+        resources={resources}
+      />,
+    );
+
+    expect(markup).toContain("<button");
+    expect(markup).toContain('aria-label="Hearing in Room A"');
+    expect(markup).toContain('type="button"');
+    expect(markup).toContain("focus-visible:ring-2");
   });
 
   test("rejects entries whose resource is absent", () => {

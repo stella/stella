@@ -71,6 +71,9 @@ export const ResourceCalendar = ({
   const gridStyle = {
     gridTemplateColumns: `14rem repeat(${String(columns.length)}, minmax(7rem, 1fr))`,
   } satisfies CSSProperties;
+  const calendarWidthStyle = {
+    minWidth: `${String(14 + columns.length * 7)}rem`,
+  } satisfies CSSProperties;
   const visibleRange = {
     endDateExclusive: nextCalendarDate(columns.at(-1)?.date ?? ""),
     startDate: columns.at(0)?.date ?? "",
@@ -91,9 +94,9 @@ export const ResourceCalendar = ({
       className="border-border bg-card overflow-x-auto rounded-xl border"
       data-slot="resource-calendar"
     >
-      <div className="min-w-max">
+      <div className="w-full" style={calendarWidthStyle}>
         <CalendarHeaderRow style={gridStyle}>
-          <CalendarHeaderCell className="text-start font-semibold tracking-wide uppercase">
+          <CalendarHeaderCell className="bg-card sticky start-0 z-20 text-start font-semibold tracking-wide uppercase">
             {resourceHeader}
           </CalendarHeaderCell>
           {columns.map((column) => (

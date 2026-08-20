@@ -51,7 +51,7 @@ export const CalendarEntryButton = ({
 }: React.ComponentProps<"button">) => (
   <button
     className={cn(
-      "focus-visible:ring-ring min-w-0 rounded-md text-start text-xs outline-none focus-visible:ring-2",
+      "focus-visible:ring-ring min-w-0 rounded-md text-start text-xs outline-none focus-visible:ring-2 focus-visible:ring-offset-1",
       className,
     )}
     data-slot="calendar-entry"
