@@ -129,10 +129,9 @@ export const layoutResourceCalendarEntries = (
 ): ResourceCalendarLaneLayout => {
   const visibleEntries: (ResourceCalendarPlacement & {
     entryId: string;
-    inputOrder: number;
   })[] = [];
   const entryIds = new Set<string>();
-  for (const [inputOrder, entry] of entries.entries()) {
+  for (const entry of entries) {
     if (entryIds.has(entry.id)) {
       throw new TypeError("Resource calendar entry ids must be unique");
     }
@@ -144,7 +143,6 @@ export const layoutResourceCalendarEntries = (
     visibleEntries.push({
       columnStart: placement.columnStart,
       entryId: entry.id,
-      inputOrder,
       span: placement.span,
     });
   }
@@ -153,7 +151,13 @@ export const layoutResourceCalendarEntries = (
     if (startDifference !== 0) {
       return startDifference;
     }
-    return left.inputOrder - right.inputOrder;
+    if (left.entryId < right.entryId) {
+      return -1;
+    }
+    if (left.entryId > right.entryId) {
+      return 1;
+    }
+    return 0;
   });
 
   const laneEnds: number[] = [];

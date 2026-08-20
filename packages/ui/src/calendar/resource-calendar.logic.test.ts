@@ -88,26 +88,24 @@ describe("resource calendar placement", () => {
   });
 
   test("puts overlapping entries in separate lanes and reuses adjacent lanes", () => {
-    const layout = layoutResourceCalendarEntries(
-      [
-        {
-          endDateExclusive: "2026-08-04",
-          id: "first",
-          startDate: "2026-08-01",
-        },
-        {
-          endDateExclusive: "2026-08-03",
-          id: "overlap",
-          startDate: "2026-08-02",
-        },
-        {
-          endDateExclusive: "2026-08-05",
-          id: "adjacent",
-          startDate: "2026-08-04",
-        },
-      ],
-      visibleRange,
-    );
+    const entries = [
+      {
+        endDateExclusive: "2026-08-04",
+        id: "first",
+        startDate: "2026-08-01",
+      },
+      {
+        endDateExclusive: "2026-08-03",
+        id: "overlap",
+        startDate: "2026-08-02",
+      },
+      {
+        endDateExclusive: "2026-08-05",
+        id: "adjacent",
+        startDate: "2026-08-04",
+      },
+    ] as const;
+    const layout = layoutResourceCalendarEntries(entries, visibleRange);
 
     expect(layout.rowCount).toBe(2);
     expect(layout.placements).toEqual([
@@ -115,5 +113,8 @@ describe("resource calendar placement", () => {
       { columnStart: 3, entryId: "overlap", rowStart: 2, span: 1 },
       { columnStart: 5, entryId: "adjacent", rowStart: 1, span: 1 },
     ]);
+    expect(
+      layoutResourceCalendarEntries(entries.toReversed(), visibleRange),
+    ).toEqual(layout);
   });
 });
