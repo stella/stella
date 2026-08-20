@@ -1,5 +1,17 @@
 # @stll/ui
 
+## 0.4.0
+
+### Minor Changes
+
+- [#2300](https://github.com/stella/stella/pull/2300) [`77825df`](https://github.com/stella/stella/commit/77825dfdee54a9d3b065afa3b5504aaa55050bd8) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Export entity-agnostic calendar primitives and a resource calendar with half-open date-range placement.
+
+- [#2297](https://github.com/stella/stella/pull/2297) [`d2dcd0f`](https://github.com/stella/stella/commit/d2dcd0f1df22dffc91ba779e6c278b18825f1932) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Export the kanban card drag lifecycle and horizontal board auto-scroll from
+  `@stll/ui/kanban`. Card payloads and drop persistence stay with the application;
+  the package owns the shared drag preview and overflow-boundary behaviour. The
+  Atlaskit v3 is a peer contract, so drag sources, targets, and monitors share one
+  adapter instance.
+
 ## 0.3.0
 
 ### Minor Changes
