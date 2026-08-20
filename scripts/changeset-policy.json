@@ -18,6 +18,16 @@
     "packages/conditions/src/**",
     "packages/conditions/tsconfig.build.json",
     "packages/conditions/tsdown.config.ts",
+    "packages/money/README.md",
+    "packages/money/package.json",
+    "packages/money/src/**",
+    "packages/money/tsconfig.json",
+    "packages/money/tsdown.config.ts",
+    "packages/calculations/README.md",
+    "packages/calculations/package.json",
+    "packages/calculations/src/**",
+    "packages/calculations/tsconfig.json",
+    "packages/calculations/tsdown.config.ts",
     "packages/template-conditions/README.md",
     "packages/template-conditions/package.json",
     "packages/template-conditions/src/**",
@@ -32,7 +42,12 @@
     "packages/ui/package.json",
     "packages/ui/src/**",
     "packages/ui/tsconfig.json",
-    "packages/ui/tsdown.config.ts"
+    "packages/ui/tsdown.config.ts",
+    "packages/workspace-ui/README.md",
+    "packages/workspace-ui/package.json",
+    "packages/workspace-ui/src/**",
+    "packages/workspace-ui/tsconfig.json",
+    "packages/workspace-ui/tsdown.config.ts"
   ],
   "generatedPaths": [
     "bun.lock",
@@ -45,20 +60,29 @@
     "packages/country-codes/package.json",
     "packages/conditions/CHANGELOG.md",
     "packages/conditions/package.json",
+    "packages/money/CHANGELOG.md",
+    "packages/money/package.json",
+    "packages/calculations/CHANGELOG.md",
+    "packages/calculations/package.json",
     "packages/template-conditions/CHANGELOG.md",
     "packages/template-conditions/package.json",
     "packages/docx-utils/CHANGELOG.md",
     "packages/docx-utils/package.json",
     "packages/ui/CHANGELOG.md",
-    "packages/ui/package.json"
+    "packages/ui/package.json",
+    "packages/workspace-ui/CHANGELOG.md",
+    "packages/workspace-ui/package.json"
   ],
   "packageFiles": [
     "packages/cli/package.json",
     "packages/business-registries/package.json",
     "packages/country-codes/package.json",
     "packages/conditions/package.json",
+    "packages/money/package.json",
+    "packages/calculations/package.json",
     "packages/template-conditions/package.json",
     "packages/docx-utils/package.json",
-    "packages/ui/package.json"
+    "packages/ui/package.json",
+    "packages/workspace-ui/package.json"
   ]
 }

@@ -20,10 +20,13 @@ import { loadChangesetPolicy } from "./changeset-guard";
 
 const SHARED_NPM_PACKAGES = [
   "business-registries",
+  "calculations",
   "country-codes",
   "conditions",
-  "template-conditions",
   "docx-utils",
+  "money",
+  "template-conditions",
+  "workspace-ui",
 ] as const;
 
 /**
@@ -249,7 +252,7 @@ describe("API and CLI release contract", () => {
         if (typeof target !== "string") {
           throw new TypeError(`${packageName} has a non-string export target`);
         }
-        expect(target).toMatch(/^\.\/src\/.*\.ts$/u);
+        expect(target).toMatch(/^\.\/src\/.*\.tsx?$/u);
       }
     }
   });

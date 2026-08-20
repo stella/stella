@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
 import { CheckIcon, SigmaIcon } from "lucide-react";
-import { useFormatter, useLocale, useTranslations } from "use-intl";
+import { useFormatter, useLocale } from "use-intl";
 
 import type {
   CalculationKind,
@@ -40,7 +40,16 @@ export type CalculationProperty = {
   kinds: readonly CalculationKind[];
 };
 
+export type WorkspaceCalculationLabels = {
+  choose: string;
+  kinds: Record<CalculationKind, string>;
+  noProperties: string;
+  none: string;
+  unavailable: string;
+};
+
 export type CalculationPickerProps = {
+  labels: WorkspaceCalculationLabels;
   properties: readonly CalculationProperty[];
   selections: readonly CalculationSelection[];
   onChange: (selections: CalculationSelection[]) => void;
@@ -53,13 +62,12 @@ export type CalculationPickerProps = {
  * menu item, so the whole choice is reachable from the keyboard.
  */
 export const CalculationPicker = ({
+  labels,
   properties,
   selections,
   onChange,
   children,
 }: CalculationPickerProps) => {
-  const t = useTranslations();
-
   const select = (propertyId: string, kind: CalculationKind | null) => {
     onChange(applyCalculationSelection({ selections, propertyId, kind }));
   };
@@ -67,16 +75,14 @@ export const CalculationPicker = ({
   return (
     <Menu>
       <MenuTrigger
-        aria-label={t("workspaces.calculations.choose")}
+        aria-label={labels.choose}
         render={<Button size="icon-xs" variant="ghost" />}
       >
         {children ?? <SigmaIcon />}
       </MenuTrigger>
       <MenuPopup>
         {properties.length === 0 && (
-          <MenuItem disabled>
-            {t("workspaces.calculations.noProperties")}
-          </MenuItem>
+          <MenuItem disabled>{labels.noProperties}</MenuItem>
         )}
         {properties.map((property) => {
           const selected = selections.find(
@@ -89,7 +95,7 @@ export const CalculationPicker = ({
               <MenuSubPopup>
                 <MenuItem onClick={() => select(property.id, null)}>
                   {selected === undefined ? <CheckIcon /> : <span />}
-                  {t("common.none")}
+                  {labels.none}
                 </MenuItem>
                 {property.kinds.map((kind) => (
                   <MenuItem
@@ -97,7 +103,7 @@ export const CalculationPicker = ({
                     onClick={() => select(property.id, kind)}
                   >
                     {selected?.kind === kind ? <CheckIcon /> : <span />}
-                    <CalculationKindLabel kind={kind} />
+                    {labels.kinds[kind]}
                   </MenuItem>
                 ))}
               </MenuSubPopup>
@@ -110,6 +116,7 @@ export const CalculationPicker = ({
 };
 
 export type CalculationKindPickerProps = {
+  labels: WorkspaceCalculationLabels;
   /** Reductions this column's values allow. */
   kinds: readonly CalculationKind[];
   /** The reduction currently shown, or null for none. */
@@ -124,36 +131,33 @@ export type CalculationKindPickerProps = {
  * line for the whole board); a table column already is the property.
  */
 export const CalculationKindPicker = ({
+  labels,
   kinds,
   value,
   onChange,
   children,
-}: CalculationKindPickerProps) => {
-  const t = useTranslations();
-
-  return (
-    <Menu>
-      <MenuTrigger
-        aria-label={t("workspaces.calculations.choose")}
-        render={<Button size="icon-xs" variant="ghost" />}
-      >
-        {children ?? <SigmaIcon />}
-      </MenuTrigger>
-      <MenuPopup>
-        <MenuItem onClick={() => onChange(null)}>
-          {value === null ? <CheckIcon /> : <span />}
-          {t("common.none")}
+}: CalculationKindPickerProps) => (
+  <Menu>
+    <MenuTrigger
+      aria-label={labels.choose}
+      render={<Button size="icon-xs" variant="ghost" />}
+    >
+      {children ?? <SigmaIcon />}
+    </MenuTrigger>
+    <MenuPopup>
+      <MenuItem onClick={() => onChange(null)}>
+        {value === null ? <CheckIcon /> : <span />}
+        {labels.none}
+      </MenuItem>
+      {kinds.map((kind) => (
+        <MenuItem key={kind} onClick={() => onChange(kind)}>
+          {value === kind ? <CheckIcon /> : <span />}
+          {labels.kinds[kind]}
         </MenuItem>
-        {kinds.map((kind) => (
-          <MenuItem key={kind} onClick={() => onChange(kind)}>
-            {value === kind ? <CheckIcon /> : <span />}
-            <CalculationKindLabel kind={kind} />
-          </MenuItem>
-        ))}
-      </MenuPopup>
-    </Menu>
-  );
-};
+      ))}
+    </MenuPopup>
+  </Menu>
+);
 
 export type CalculationSummaryProps = {
   calculation: FormattedCalculation;
@@ -196,6 +200,7 @@ export const CalculationSummary = ({
 
 export type UseCalculationParams = {
   kind: CalculationKind;
+  labels: WorkspaceCalculationLabels;
   values: readonly CalculationValue[];
   /** Every value in the view, for a reduction relative to the whole. */
   scopeValues?: readonly CalculationValue[] | undefined;
@@ -204,16 +209,18 @@ export type UseCalculationParams = {
 /** Reduce a column's values and format the answer for the reader's locale. */
 export const useCalculation = ({
   kind,
+  labels,
   values,
   scopeValues,
 }: UseCalculationParams): FormattedCalculation => {
   const formatters = useCalculationFormatters();
-  const labels = useCalculationLabels(kind);
-
   return formatCalculationResult({
     result: runCalculation({ kind, values, scopeValues }),
     formatters,
-    labels,
+    labels: {
+      kind: labels.kinds[kind],
+      unavailable: labels.unavailable,
+    },
   });
 };
 
@@ -235,58 +242,4 @@ const useCalculationFormatters = (): CalculationFormatters => {
       formatMoneyCents({ amountCents, currency, locale }),
     percent: (ratio) => format.number(ratio, { style: "percent" }),
   };
-};
-
-const useCalculationLabels = (kind: CalculationKind) => {
-  const t = useTranslations();
-
-  return {
-    kind: useCalculationKindLabel(kind),
-    unavailable: t("workspaces.calculations.unavailable"),
-  };
-};
-
-const CalculationKindLabel = ({ kind }: { kind: CalculationKind }) => (
-  <>{useCalculationKindLabel(kind)}</>
-);
-
-/**
- * One arm per kind rather than a key map, so a new reduction cannot ship
- * without its label.
- */
-const useCalculationKindLabel = (kind: CalculationKind): string => {
-  const t = useTranslations();
-
-  switch (kind) {
-    case "count":
-      return t("workspaces.calculations.kinds.count");
-    case "count-unique":
-      return t("workspaces.calculations.kinds.countUnique");
-    case "count-empty":
-      return t("workspaces.calculations.kinds.countEmpty");
-    case "count-filled":
-      return t("workspaces.calculations.kinds.countFilled");
-    case "percent-empty":
-      return t("workspaces.calculations.kinds.percentEmpty");
-    case "percent-filled":
-      return t("workspaces.calculations.kinds.percentFilled");
-    case "sum":
-      return t("workspaces.calculations.kinds.sum");
-    case "average":
-      return t("workspaces.calculations.kinds.average");
-    case "median":
-      return t("workspaces.calculations.kinds.median");
-    case "min":
-      return t("workspaces.calculations.kinds.min");
-    case "max":
-      return t("workspaces.calculations.kinds.max");
-    case "range":
-      return t("workspaces.calculations.kinds.range");
-    case "percent-of-total":
-      return t("workspaces.calculations.kinds.percentOfTotal");
-    default: {
-      const exhaustive: never = kind;
-      return exhaustive;
-    }
-  }
 };

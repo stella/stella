@@ -5,13 +5,11 @@ import { useFormatter, useLocale, useTranslations } from "use-intl";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Skeleton } from "@stll/ui/skeleton";
 import { cn } from "@stll/ui/utils";
-import { formatMoneyCents } from "@stll/workspace-ui/calculation-format";
-import { emptyColor, resolveOptionColor } from "@stll/workspace-ui/colors";
-import { getClipFieldValueLabel } from "@stll/workspace-ui/field-value-logic";
-import type {
-  GenericProperty,
-  WorkspaceFieldContent,
-} from "@stll/workspace-ui/types";
+
+import { formatMoneyCents } from "./calculation-format";
+import { emptyColor, resolveOptionColor } from "./colors";
+import { getClipFieldValueLabel } from "./field-value-logic";
+import type { GenericProperty, WorkspaceFieldContent } from "./types";
 
 type FieldValueVariant = "default" | "table" | "kanban";
 
