@@ -108,6 +108,7 @@
     "vite": "catalog:"
   },
   "resolutions": {
+    "@atlaskit/pragmatic-drag-and-drop": "3.0.0",
     "@emnapi/core": "1.9.1",
     "@emnapi/runtime": "1.9.1",
     "@expo/cli": "57.0.15",

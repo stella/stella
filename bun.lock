@@ -782,6 +782,8 @@
         "tailwind-merge": "^3.6.0",
       },
       "devDependencies": {
+        "@atlaskit/pragmatic-drag-and-drop": "^3.0.0",
+        "@atlaskit/pragmatic-drag-and-drop-auto-scroll": "^3.0.1",
         "@base-ui/react": "catalog:",
         "@stll/typescript-config": "workspace:*",
         "@types/bun": "catalog:",
@@ -793,6 +795,8 @@
         "tsdown": "catalog:",
       },
       "peerDependencies": {
+        "@atlaskit/pragmatic-drag-and-drop": "^3.0.0",
+        "@atlaskit/pragmatic-drag-and-drop-auto-scroll": "^3.0.1",
         "@base-ui/react": "^1.7.0",
         "react": ">=19",
         "react-dom": ">=19",
@@ -854,6 +858,7 @@
     "@tanstack/ai-anthropic@0.16.4": "patches/@tanstack%2Fai-anthropic@0.16.4.patch",
   },
   "overrides": {
+    "@atlaskit/pragmatic-drag-and-drop": "3.0.0",
     "@emnapi/core": "1.9.1",
     "@emnapi/runtime": "1.9.1",
     "@expo/cli": "57.0.15",

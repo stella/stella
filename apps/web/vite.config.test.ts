@@ -1,7 +1,16 @@
 import { describe, expect, mock, test } from "bun:test";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { createLogger, type ConfigEnv, type UserConfig } from "vite";
 
 import config, { capViteLogger, rewriteBrowserApiPath } from "./vite.config";
+
+const KANBAN_DRAG_INTERACTIONS_PATH = path.resolve(
+  import.meta.dirname,
+  "../../packages/ui/src/kanban/drag-interactions.ts",
+);
+const ATLASKIT_DRAG_IMPORT =
+  /from "(@atlaskit\/pragmatic-drag-and-drop[^"]+)";/gu;
 
 describe("vite config", () => {
   test("matches the deployed browser API prefix contract", () => {
@@ -107,6 +116,19 @@ describe("vite config", () => {
   test("serves the PDF.js worker outside the dependency optimizer", () => {
     expect(resolveConfig("test").optimizeDeps?.exclude).toContain(
       "pdfjs-dist/build/pdf.worker.mjs",
+    );
+  });
+
+  test("prebundles the kanban drag runtime before lazy-route navigation", () => {
+    const runtimeSource = readFileSync(KANBAN_DRAG_INTERACTIONS_PATH, "utf-8");
+    const runtimeImports = Array.from(
+      runtimeSource.matchAll(ATLASKIT_DRAG_IMPORT),
+      (match) => match[1],
+    );
+
+    expect(runtimeImports).not.toHaveLength(0);
+    expect(resolveConfig("test").optimizeDeps?.include).toEqual(
+      expect.arrayContaining(runtimeImports),
     );
   });
 

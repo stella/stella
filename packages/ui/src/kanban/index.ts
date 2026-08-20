@@ -15,6 +15,15 @@ export { KanbanCardShell } from "./card-shell";
 export type { KanbanColumnHeaderProps } from "./column-header";
 export { KanbanColumnHeader } from "./column-header";
 export type {
+  RegisterKanbanBoardAutoScrollOptions,
+  RegisterKanbanCardDragOptions,
+} from "./drag-interactions";
+export {
+  KANBAN_BOARD_AUTO_SCROLL_SOURCES,
+  registerKanbanBoardAutoScroll,
+  registerKanbanCardDrag,
+} from "./drag-interactions";
+export type {
   KanbanBuiltInGroup,
   KanbanGroup,
   KanbanGrouping,
