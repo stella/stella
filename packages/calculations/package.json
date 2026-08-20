@@ -1,29 +1,57 @@
 {
   "name": "@stll/calculations",
   "version": "0.0.0",
-  "private": true,
+  "description": "Typed, unit-safe reducers for workspace column calculations.",
+  "keywords": [
+    "calculations",
+    "columns",
+    "money",
+    "reductions",
+    "workspace"
+  ],
+  "homepage": "https://github.com/stella/stella/tree/main/packages/calculations",
+  "bugs": {
+    "url": "https://github.com/stella/stella/issues"
+  },
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/stella/stella.git",
+    "directory": "packages/calculations"
+  },
+  "files": [
+    "dist",
+    "src",
+    "README.md"
+  ],
   "type": "module",
   "sideEffects": false,
   "exports": {
     ".": "./src/index.ts"
   },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
-    "clean": "git clean -xdf .cache .turbo node_modules",
+    "clean": "git clean -xdf dist .cache .turbo node_modules",
+    "build": "tsdown",
+    "pack:dry-run": "bun pm pack --dry-run",
     "test": "bun test src",
     "test:property": "bun test $(grep -rlF 'fc.assert' src)",
     "typecheck": "bun ../../packages/scripts/src/tsc-native.ts --noEmit",
     "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --deny-warnings --type-aware packages/calculations",
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/calculations",
-    "format": "oxfmt ."
+    "format": "oxfmt .",
+    "prepack": "bun run build"
   },
   "dependencies": {
-    "@stll/money": "workspace:*"
+    "@stll/money": "workspace:^"
   },
   "devDependencies": {
     "@stll/property-testing": "workspace:*",
     "@stll/typescript-config": "workspace:*",
     "@types/bun": "catalog:",
-    "fast-check": "catalog:"
+    "fast-check": "catalog:",
+    "tsdown": "catalog:"
   }
 }
