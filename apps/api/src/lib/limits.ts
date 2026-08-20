@@ -39,6 +39,18 @@ export const LIMITS = {
   entitiesWindowSizeDefault: 200,
   entitiesWindowSizeMax: 500,
   workflowEntityBatchSize: 500,
+  /** Documents one chat cross-document consistency review may send to the
+   *  review model. Larger folders remain explicit in coverage as not checked. */
+  folderConsistencyReviewDocumentsMax: 20,
+  /** Named not-checked documents returned to the chat model. The full count
+   *  remains available without allowing a large folder to flood context. */
+  folderConsistencyCoverageDocumentsMax: 100,
+  /** Descendant rows retained in one folder review snapshot. This mirrors the
+   *  workspace's enforced entity cap; the query reads one extra sentinel. */
+  folderConsistencySnapshotEntitiesMax: ENTITIES_PER_WORKSPACE_MAX,
+  /** Maximum nesting the folder review snapshot follows. A deeper tree is
+   *  reported as incomplete instead of turning recursion into an open bound. */
+  folderConsistencyTraversalDepthMax: 32,
   /** Per-replica concurrency for the legacy workflow worker. The topology
    *  expansion preserves today's budget while every tier still routes here. */
   workflowStandardWorkerConcurrency: 10,

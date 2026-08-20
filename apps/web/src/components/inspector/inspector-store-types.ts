@@ -161,6 +161,10 @@ export type InspectorCommandState = {
     blockId: string;
     text?: string | undefined;
   } | null;
+  pendingPdfPageScroll: {
+    tabId: string;
+    pageNumber: number;
+  } | null;
   pendingDocxEditTabId: string | null;
 };
 
@@ -282,9 +286,14 @@ export type InspectorCommandActions = {
   requestBlockScroll: (request: {
     tabId: string;
     blockId: string;
-    text?: string;
+    text?: string | undefined;
   }) => void;
   clearPendingBlockScroll: () => void;
+  requestPdfPageScroll: (request: {
+    tabId: string;
+    pageNumber: number;
+  }) => void;
+  clearPendingPdfPageScroll: () => void;
   clearCommandsForMissingTabs: (tabIds: ReadonlySet<string>) => void;
 };
 

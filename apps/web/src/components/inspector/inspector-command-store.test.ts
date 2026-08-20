@@ -9,6 +9,7 @@ beforeEach(() => {
     desktopOpenAttention: null,
     pendingRenameTabId: null,
     pendingBlockScroll: null,
+    pendingPdfPageScroll: null,
     pendingDocxEditTabId: null,
   });
   useInspectorTabsStore.setState({
@@ -39,6 +40,7 @@ describe("inspector commands", () => {
     commands.requestDocxEdit("missing-tab");
     commands.requestDesktopOpenAttention("missing-tab");
     commands.requestBlockScroll({ tabId: "open-tab", blockId: "block-1" });
+    commands.requestPdfPageScroll({ tabId: "open-tab", pageNumber: 7 });
 
     commands.clearCommandsForMissingTabs(new Set(["open-tab"]));
 
@@ -50,6 +52,23 @@ describe("inspector commands", () => {
       blockId: "block-1",
       text: undefined,
     });
+    expect(useInspectorCommandStore.getState().pendingPdfPageScroll).toEqual({
+      tabId: "open-tab",
+      pageNumber: 7,
+    });
+  });
+
+  test("a PDF page request remains bound to its exact file tab", () => {
+    const commands = useInspectorCommandStore.getState();
+    commands.requestPdfPageScroll({ tabId: "field-2", pageNumber: 12 });
+
+    expect(useInspectorCommandStore.getState().pendingPdfPageScroll).toEqual({
+      tabId: "field-2",
+      pageNumber: 12,
+    });
+
+    commands.clearPendingPdfPageScroll();
+    expect(useInspectorCommandStore.getState().pendingPdfPageScroll).toBeNull();
   });
 
   test("desktop-open attention clears only the matching pulse", () => {

@@ -11,7 +11,7 @@ export const FOLIO_SCROLL_EVENT = "folio:scroll-to-block";
 export type FolioScrollEventDetail = {
   blockId: string;
   fieldId?: string;
-  text?: string;
+  text?: string | undefined;
 };
 
 declare global {

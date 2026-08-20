@@ -715,6 +715,7 @@
       "remember": "Mentés a memóriába",
       "reply_comment": "Megjegyzés megválaszolása",
       "resolve_comment": "Megjegyzés megoldása",
+      "review_folder_consistency": "Mappa konzisztenciájának ellenőrzése",
       "run-stella-query": "Ügyadatok olvasása",
       "run_playbook": "Playbook futtatása",
       "save_clause": "Kikötés mentése",

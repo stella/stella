@@ -1,10 +1,13 @@
 import { Result } from "better-result";
 
 import {
+  type ChatSourceCitationTarget,
   isSafeIdValue,
+  replaceCanonicalChatSourceCitationHrefs,
   replaceCanonicalChatResourceHrefs,
   resourceRef,
   RESOURCE_TYPE,
+  toChatSourceCitationHref,
   toChatResourceHref,
 } from "@stll/api-contract";
 
@@ -26,6 +29,7 @@ import {
 
 export const CHAT_ENTITY_REF_PREFIX = "#stella-entity-ref=";
 export const CHAT_WORKSPACE_REF_PREFIX = "#stella-workspace-ref=";
+export const CHAT_SOURCE_CITATION_REF_PREFIX = "#stella-source-ref=";
 /**
  * Replacement href for a ref the model cited but this turn never minted — a
  * fabricated or mangled citation. The web renderer shows the link label as
@@ -48,12 +52,40 @@ const createRefLinkRegex = (prefix: string) =>
 
 const ENTITY_REF_LINK_REGEX = createRefLinkRegex(CHAT_ENTITY_REF_PREFIX);
 const WORKSPACE_REF_LINK_REGEX = createRefLinkRegex(CHAT_WORKSPACE_REF_PREFIX);
+const SOURCE_CITATION_REF_LINK_REGEX = createRefLinkRegex(
+  CHAT_SOURCE_CITATION_REF_PREFIX,
+);
 
 const escapeMarkdownLinkLabel = (label: string) =>
   label.replaceAll("\\", "\\\\").replaceAll("[", "\\[").replaceAll("]", "\\]");
 
 const createEntityRefKey = ({ entityId, workspaceId }: EntityTarget) =>
   JSON.stringify([workspaceId, entityId]);
+
+const createSourceCitationRefKey = (target: ChatSourceCitationTarget) => {
+  switch (target.type) {
+    case "docx-folio":
+      return JSON.stringify([
+        target.type,
+        target.workspaceId,
+        target.entityId,
+        target.fieldId,
+        target.blockId,
+        target.text,
+      ]);
+    case "pdf-bates":
+      return JSON.stringify([
+        target.type,
+        target.workspaceId,
+        target.entityId,
+        target.fieldId,
+        target.pageNumber,
+        target.bates,
+      ]);
+    default:
+      return target satisfies never;
+  }
+};
 
 const toWorkspaceResource = (workspaceId: SafeId<"workspace">) =>
   resourceRef({ type: RESOURCE_TYPE.WORKSPACE, id: workspaceId });
@@ -213,6 +245,7 @@ export type ChatRefRegistry = {
    */
   getRegisteredWorkspaceIds: () => SafeId<"workspace">[];
   hydrateAssistantTextRefs: (text: string) => string;
+  hydrateUserTextRefs: (text: string) => string;
   hydrateAssistantValueRefs: (value: unknown) => unknown;
   /**
    * Mint (or reuse) this turn's ref for one already-resolved id, chosen by
@@ -258,6 +291,7 @@ export type ChatRefRegistry = {
   }) => string;
   toMatterRef: (workspaceId: SafeId<"workspace">) => string;
   toPropertyRef: (propertyId: SafeId<"property">) => string;
+  toSourceCitationHref: (target: ChatSourceCitationTarget) => string;
 };
 
 export const createChatRefRegistry = (): ChatRefRegistry => {
@@ -273,6 +307,7 @@ export const createChatRefRegistry = (): ChatRefRegistry => {
   const entityState = createRefState<EntityTarget>(
     CHAT_REF_TOKEN_PREFIX.entity,
   );
+  const sourceCitationState = createRefState<ChatSourceCitationTarget>("src");
 
   const toMatterRef = (workspaceId: SafeId<"workspace">) =>
     getOrCreateRef({
@@ -305,6 +340,24 @@ export const createChatRefRegistry = (): ChatRefRegistry => {
       },
     });
 
+  const toSourceCitationRef = (target: ChatSourceCitationTarget) => {
+    // Source citations necessarily disclose content from their owning matter.
+    // Register the entity as well so thread-scope persistence cannot omit that
+    // workspace when the final answer contains only passage citations.
+    toEntityRef({
+      entityId: target.entityId,
+      workspaceId: target.workspaceId,
+    });
+    return getOrCreateRef({
+      key: createSourceCitationRefKey(target),
+      state: sourceCitationState,
+      target,
+    });
+  };
+
+  const toSourceCitationRefHref = (target: ChatSourceCitationTarget) =>
+    `${CHAT_SOURCE_CITATION_REF_PREFIX}${toSourceCitationRef(target)}`;
+
   const reportUnknownAssistantRef = (kind: string, ref: string) => {
     // The ref itself is a per-turn opaque token (never a tenant id), so it is
     // safe context; a hallucinated citation should be visible in telemetry.
@@ -317,6 +370,19 @@ export const createChatRefRegistry = (): ChatRefRegistry => {
   };
 
   const resolveAssistantTextRefs = (text: string) => {
+    const withSourceCitationRefs = replaceRefLinks({
+      regex: SOURCE_CITATION_REF_LINK_REGEX,
+      resolve: (ref) => {
+        const target = sourceCitationState.refToTarget.get(ref);
+        if (!target) {
+          reportUnknownAssistantRef("source-citation", ref);
+          return CHAT_UNRESOLVED_REF_HREF;
+        }
+        return toChatSourceCitationHref(target);
+      },
+      text,
+    });
+
     const withWorkspaceRefs = replaceRefLinks({
       regex: WORKSPACE_REF_LINK_REGEX,
       resolve: (ref) => {
@@ -330,7 +396,7 @@ export const createChatRefRegistry = (): ChatRefRegistry => {
           resource: toWorkspaceResource(workspaceId),
         });
       },
-      text,
+      text: withSourceCitationRefs,
     });
 
     return replaceRefLinks({
@@ -347,29 +413,73 @@ export const createChatRefRegistry = (): ChatRefRegistry => {
     });
   };
 
-  const hydrateAssistantTextRefs = (text: string) =>
-    replaceCanonicalChatResourceHrefs(text, ({ href, target }) => {
-      switch (target.type) {
-        case RESOURCE_TYPE.WORKSPACE:
-          return `${CHAT_WORKSPACE_REF_PREFIX}${toMatterRef(
-            brandPersistedWorkspaceId(target.resource.id),
-          )}`;
-        case RESOURCE_TYPE.ENTITY:
-          if (target.location.type !== "workspace") {
+  const hydrateAssistantTextRefs = (text: string) => {
+    const withSourceCitationRefs = replaceCanonicalChatSourceCitationHrefs(
+      text,
+      toSourceCitationRefHref,
+    );
+    return replaceCanonicalChatResourceHrefs(
+      withSourceCitationRefs,
+      ({ href, target }) => {
+        switch (target.type) {
+          case RESOURCE_TYPE.WORKSPACE:
+            return `${CHAT_WORKSPACE_REF_PREFIX}${toMatterRef(
+              brandPersistedWorkspaceId(target.resource.id),
+            )}`;
+          case RESOURCE_TYPE.ENTITY:
+            if (target.location.type !== "workspace") {
+              return href;
+            }
+            return `${CHAT_ENTITY_REF_PREFIX}${toEntityRef({
+              entityId: brandPersistedEntityId(target.resource.id),
+              workspaceId: brandPersistedWorkspaceId(
+                target.location.workspace.id,
+              ),
+            })}`;
+          case RESOURCE_TYPE.CASE_LAW_DECISION:
             return href;
-          }
-          return `${CHAT_ENTITY_REF_PREFIX}${toEntityRef({
-            entityId: brandPersistedEntityId(target.resource.id),
-            workspaceId: brandPersistedWorkspaceId(
-              target.location.workspace.id,
-            ),
-          })}`;
-        case RESOURCE_TYPE.CASE_LAW_DECISION:
-          return href;
-        default:
-          return target satisfies never;
-      }
-    });
+          default:
+            return target satisfies never;
+        }
+      },
+    );
+  };
+
+  const hydrateUserTextRefs = (text: string) => {
+    // A user may paste a durable source href, but only normalized review
+    // output may mint a model-facing source ref. Strip the locator's raw ids
+    // while preserving ordinary entity and matter mentions.
+    const withoutUntrustedSourceCitations =
+      replaceCanonicalChatSourceCitationHrefs(
+        text,
+        () => CHAT_UNRESOLVED_REF_HREF,
+      );
+    return replaceCanonicalChatResourceHrefs(
+      withoutUntrustedSourceCitations,
+      ({ href, target }) => {
+        switch (target.type) {
+          case RESOURCE_TYPE.WORKSPACE:
+            return `${CHAT_WORKSPACE_REF_PREFIX}${toMatterRef(
+              brandPersistedWorkspaceId(target.resource.id),
+            )}`;
+          case RESOURCE_TYPE.ENTITY:
+            if (target.location.type !== "workspace") {
+              return href;
+            }
+            return `${CHAT_ENTITY_REF_PREFIX}${toEntityRef({
+              entityId: brandPersistedEntityId(target.resource.id),
+              workspaceId: brandPersistedWorkspaceId(
+                target.location.workspace.id,
+              ),
+            })}`;
+          case RESOURCE_TYPE.CASE_LAW_DECISION:
+            return href;
+          default:
+            return target satisfies never;
+        }
+      },
+    );
+  };
 
   const resolveRefId = ({ kind, value }: ResolveRefIdProps): unknown => {
     if (typeof value !== "string") {
@@ -520,6 +630,7 @@ export const createChatRefRegistry = (): ChatRefRegistry => {
   return {
     getRegisteredWorkspaceIds,
     hydrateAssistantTextRefs,
+    hydrateUserTextRefs,
     hydrateAssistantValueRefs,
     hydrateRefId,
     resolveAssistantTextRefs,
@@ -583,6 +694,7 @@ export const createChatRefRegistry = (): ChatRefRegistry => {
     toContactRef,
     toMatterRef,
     toPropertyRef,
+    toSourceCitationHref: toSourceCitationRefHref,
     toEntityMention: ({
       entityId,
       label,

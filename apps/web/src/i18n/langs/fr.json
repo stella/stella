@@ -715,6 +715,7 @@
       "remember": "Mémorisation",
       "reply_comment": "Réponse au commentaire",
       "resolve_comment": "Résolution du commentaire",
+      "review_folder_consistency": "Vérification de la cohérence du dossier",
       "run-stella-query": "Lecture des données du dossier",
       "run_playbook": "Exécuter le playbook",
       "save_clause": "Enregistrer la clause",

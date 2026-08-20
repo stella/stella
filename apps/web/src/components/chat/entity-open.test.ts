@@ -11,12 +11,16 @@
 
 import { afterEach, describe, expect, test } from "bun:test";
 
-import { openEmailCitationSource } from "@/components/chat/entity-open";
+import {
+  openEmailCitationSource,
+  openEntityFileFieldInInspector,
+} from "@/components/chat/entity-open";
 import {
   isEntityActiveInMainRoute,
   isFileActiveInMainRoute,
 } from "@/components/chat/entity-route-detect";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
+import { toSafeId } from "@/lib/safe-id";
 
 afterEach(() => {
   useInspectorTabsStore.setState({
@@ -172,4 +176,52 @@ test("opening an email citation switches an existing tab to preview", () => {
         .tabs.find((tab) => tab.id === source.fieldId),
     ).toMatchObject({ facet: "preview", type: "pdf" });
   }
+});
+
+test("a source-bound citation opens its exact field, not the first file", () => {
+  const firstFieldId = toSafeId<"field">("field-first");
+  const citedFieldId = toSafeId<"field">("field-cited");
+  const fileContent = (id: string, fileName: string) => ({
+    version: 1 as const,
+    type: "file" as const,
+    id,
+    fileName,
+    mimeType: "application/pdf",
+    sizeBytes: 128,
+    encrypted: false,
+    sha256Hex: "a".repeat(64),
+    pdfFileId: null,
+  });
+  const fields = [
+    {
+      id: firstFieldId,
+      propertyId: toSafeId<"property">("property-first"),
+      content: fileContent("file-first", "first.pdf"),
+    },
+    {
+      id: citedFieldId,
+      propertyId: toSafeId<"property">("property-cited"),
+      content: fileContent("file-cited", "cited.pdf"),
+    },
+  ];
+
+  expect(
+    openEntityFileFieldInInspector({
+      entityId: "entity-1",
+      fieldId: citedFieldId,
+      fields,
+      label: "Loan agreement",
+      workspaceId: "workspace-1",
+    }),
+  ).toBe(true);
+
+  const state = useInspectorTabsStore.getState();
+  expect(state.activeId).toBe(citedFieldId);
+  expect(state.tabs).toHaveLength(1);
+  expect(state.tabs.at(0)).toMatchObject({
+    type: "pdf",
+    id: citedFieldId,
+    fileName: "cited.pdf",
+    facet: "preview",
+  });
 });

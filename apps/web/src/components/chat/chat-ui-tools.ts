@@ -122,6 +122,7 @@ const CHAT_TOOL_TITLE_KEYS = {
   borme_get_summary: "chat.tool.borme_get_summary",
   business_registry_lookup: "chat.tool.business_registry_lookup",
   compare_versions: "chat.tool.compare_versions",
+  review_folder_consistency: "chat.tool.review_folder_consistency",
   "create-document": "chat.tool.create-document",
   create_workspace_document: "chat.tool.create_workspace_document",
   "create-current-skill-resource": "common.edit",

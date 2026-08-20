@@ -718,6 +718,7 @@ type Messages = {
       "remember": "Remembering";
       "reply_comment": "Replying to comment";
       "resolve_comment": "Resolving comment";
+      "review_folder_consistency": "Reviewing folder consistency";
       "run-stella-query": "Reading workspace data";
       "run_playbook": "Run playbook";
       "save_clause": "Save clause";

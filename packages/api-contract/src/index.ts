@@ -60,6 +60,17 @@ export type {
   ChatReferenceHrefPrefix,
 } from "./chat-references";
 export {
+  CHAT_SOURCE_CITATION_HREF_PREFIX,
+  parseCanonicalChatSourceCitationHref,
+  parseChatSourceCitationHref,
+  replaceCanonicalChatSourceCitationHrefs,
+  toChatSourceCitationHref,
+} from "./chat-source-citations";
+export type {
+  ChatSourceCitationHref,
+  ChatSourceCitationTarget,
+} from "./chat-source-citations";
+export {
   CONTACT_IMPORT_CUSTOM_FIELD_DESTINATION,
   CONTACT_IMPORT_FIELDS,
   CONTACT_IMPORT_IGNORE_DESTINATION,

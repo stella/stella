@@ -27,22 +27,41 @@ import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 // Non-persisting ASK extraction for the single-doc playbook review. It runs the
 // SAME AI extraction the batch workflow uses (file prep, batch schema, model
-// call, justification parsing) but returns the answers + docx-folio citations in
-// memory — no `fields`/`justifications` rows are written. Citations carry folio
-// block ids (`deriveBlockId`: a `w14:paraId` verbatim, or a `seq-NNNN`
-// fallback) so the frontend can scroll/highlight the cited paragraph.
+// call, justification parsing) but returns the answers + verified citations in
+// memory — no `fields`/`justifications` rows are written. Citations retain the
+// source field id so callers can resolve the cited document before rendering a
+// source link.
 
-// A folio block citation: the cited paragraph's block id plus its literal text
-// (captured at extraction time so the client renders the quote with no
-// re-parse). Mirrors `DocxFolioJustificationBlock` statement citations.
+// A folio block citation's navigable payload. This shape remains compatible
+// with the persisted review finding contract; `ReviewDocxFolioCitation` adds
+// the source ownership needed by non-persisting extraction callers.
 export type DocxFolioCitation = {
   blockId: string;
   text: string;
 };
 
+export type ReviewDocxFolioCitation = DocxFolioCitation & {
+  kind: "docx-folio";
+  fileFieldId: SafeId<"field">;
+  statement: string;
+};
+
+// Bates citations are already validated by `normalizeJustification`, which
+// checks the file-specific Bates prefix and positive page number. Keep that
+// trusted locator together with its owning field for source resolution.
+export type PdfBatesCitation = {
+  kind: "pdf-bates";
+  fileFieldId: SafeId<"field">;
+  bates: string;
+  pageNumber: number;
+  statement: string;
+};
+
+export type ReviewCitation = PdfBatesCitation | ReviewDocxFolioCitation;
+
 export type AskExtraction = {
   content: FieldContent;
-  citations: DocxFolioCitation[];
+  citations: ReviewCitation[];
 };
 
 // One eligible ASK prompt: a position whose `ask.question` is non-empty and
@@ -120,31 +139,56 @@ const validatedToFieldContent = (validated: ValidatedResult): FieldContent => {
   }
 };
 
-const collectDocxCitations = (
+export const collectReviewCitations = (
   content: JustificationContent | null,
-): DocxFolioCitation[] => {
+): ReviewCitation[] => {
   if (!content) {
     return [];
   }
   const seen = new Set<string>();
-  const citations: DocxFolioCitation[] = [];
+  const citations: ReviewCitation[] = [];
   for (const block of content.blocks) {
-    if (block.kind !== "docx-folio") {
-      continue;
-    }
-    for (const statement of block.statements) {
-      for (const cite of statement.citations) {
-        // Only verified citations carry a navigable block id; unverified
-        // hints have no anchor for scroll or one-click fix.
-        if (cite.citationStatus === "unverified") {
-          continue;
+    switch (block.kind) {
+      case "pdf-bates":
+        for (const statement of block.statements) {
+          for (const cite of statement.citations) {
+            citations.push({
+              kind: "pdf-bates",
+              fileFieldId: block.fileFieldId,
+              bates: cite.bates,
+              pageNumber: cite.pageNumber,
+              statement: statement.text,
+            });
+          }
         }
-        if (seen.has(cite.blockId)) {
-          continue;
+        break;
+      case "docx-folio":
+        for (const statement of block.statements) {
+          for (const cite of statement.citations) {
+            // Only verified citations carry a navigable block id; unverified
+            // hints have no anchor for scroll or one-click fix.
+            if (cite.citationStatus === "unverified") {
+              continue;
+            }
+            const citationKey = `${block.fileFieldId}:${cite.blockId}:${statement.text}`;
+            if (seen.has(citationKey)) {
+              continue;
+            }
+            seen.add(citationKey);
+            citations.push({
+              kind: "docx-folio",
+              fileFieldId: block.fileFieldId,
+              blockId: cite.blockId,
+              text: cite.text,
+              statement: statement.text,
+            });
+          }
         }
-        seen.add(cite.blockId);
-        citations.push({ blockId: cite.blockId, text: cite.text });
-      }
+        break;
+      case "playbook-verdict":
+        break;
+      default:
+        block satisfies never;
     }
   }
   return citations;
@@ -269,7 +313,7 @@ export const extractAskContents = async ({
         filenames,
       });
       const citations = Result.isOk(justification)
-        ? collectDocxCitations(justification.value?.content ?? null)
+        ? collectReviewCitations(justification.value?.content ?? null)
         : [];
 
       contentBySourceId.set(sourceId, {

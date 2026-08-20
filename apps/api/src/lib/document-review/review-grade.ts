@@ -206,7 +206,12 @@ export const buildFindings = async ({
     const extraction = contentBySourceId.get(position.sourceId);
     const askContent = extraction?.content;
     const tiers = tiersBySourceId.get(position.sourceId);
-    const citations = arrayOrEmpty(extraction?.citations);
+    // Persisted findings keep the folio-only citation shape used by the
+    // inspector. The ephemeral extractor also retains PDF citations, which
+    // chat consumers read directly before this compatibility projection.
+    const citations = arrayOrEmpty(extraction?.citations)
+      .filter((citation) => citation.kind === "docx-folio")
+      .map(({ blockId, text }): DocxFolioCitation => ({ blockId, text }));
 
     const { verdict, rationale, matchedRef } = await gradePosition({
       position,

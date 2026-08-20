@@ -13,7 +13,12 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { parseChatResourceHref, RESOURCE_TYPE } from "@stll/api-contract";
+import {
+  parseCanonicalChatSourceCitationHref,
+  parseChatResourceHref,
+  RESOURCE_TYPE,
+  type ChatSourceCitationTarget,
+} from "@stll/api-contract";
 import { isFolioBlockId } from "@stll/folio-react";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
@@ -28,9 +33,11 @@ import {
   openEmailCitationSource,
   openEntityInInspector,
   openOfficeCitationSource,
+  openSourceBoundEntityFile,
 } from "@/components/chat/entity-open";
 import { useExternalSourceStore } from "@/components/chat/external-source-store";
 import { navigateToWorkspaceFolder } from "@/components/chat/folder-navigation";
+import { activateSourceCitation } from "@/components/chat/source-citation-navigation";
 import { InlinePill } from "@/components/inline-pill";
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
@@ -50,7 +57,10 @@ import {
   OFFICE_CITATION_HREF_PREFIX,
   requestOfficeCitationNavigation,
 } from "@/lib/files/office-citations";
-import { FOLIO_SCROLL_EVENT } from "@/lib/folio-scroll-event";
+import {
+  FOLIO_SCROLL_EVENT,
+  type FolioScrollEventDetail,
+} from "@/lib/folio-scroll-event";
 import { sanitizeHref } from "@/lib/sanitize-href";
 
 const ENTITY_REF_HASH_PREFIX = "#stella-entity-ref=";
@@ -548,6 +558,15 @@ export const StreamdownMentionLink = ({
     return <span {...props}>{children}</span>;
   }
 
+  const sourceCitation = parseCanonicalChatSourceCitationHref(href);
+  if (sourceCitation) {
+    return (
+      <SourceCitationChip interactive={interactive} target={sourceCitation}>
+        {children}
+      </SourceCitationChip>
+    );
+  }
+
   if (href.startsWith(FOLIO_BLOCK_PREFIX)) {
     const rawBlockId = href.slice(FOLIO_BLOCK_PREFIX.length);
     // The AI rendered a `#folio:<id>` href into its answer; refuse
@@ -636,6 +655,68 @@ export const StreamdownMentionLink = ({
     >
       {children}
     </a>
+  );
+};
+
+const SourceCitationChip = ({
+  children,
+  interactive,
+  target,
+}: {
+  children: React.ReactNode;
+  interactive: boolean;
+  target: ChatSourceCitationTarget;
+}) => {
+  const visibleText = getPlainText(children)?.trim();
+  const fallbackLabel =
+    target.type === "pdf-bates" ? target.bates : target.blockId;
+
+  return (
+    <InlinePill
+      data-block-id={target.type === "docx-folio" ? target.blockId : undefined}
+      leadingIcon={<FileTextIcon className="size-3 shrink-0" />}
+      onActivate={
+        interactive
+          ? () => {
+              detached(
+                activateSourceCitation({
+                  target,
+                  deps: {
+                    openSource: async (source) =>
+                      await openSourceBoundEntityFile({
+                        entityId: source.entityId,
+                        fieldId: source.fieldId,
+                        workspaceId: source.workspaceId,
+                      }),
+                    requestBlockScroll: (request) => {
+                      useInspectorCommandStore
+                        .getState()
+                        .requestBlockScroll(request);
+                    },
+                    requestPdfPageScroll: (request) => {
+                      useInspectorCommandStore
+                        .getState()
+                        .requestPdfPageScroll(request);
+                    },
+                    dispatchBlockScroll: (detail) => {
+                      window.dispatchEvent(
+                        new CustomEvent<FolioScrollEventDetail>(
+                          FOLIO_SCROLL_EVENT,
+                          { detail },
+                        ),
+                      );
+                    },
+                  },
+                }),
+                "streamdown-mention-link.open-source-citation",
+              );
+            }
+          : undefined
+      }
+      truncate
+    >
+      {visibleText ? children : fallbackLabel}
+    </InlinePill>
   );
 };
 

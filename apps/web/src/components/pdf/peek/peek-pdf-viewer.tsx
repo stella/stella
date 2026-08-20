@@ -36,8 +36,10 @@ import {
   useDocxWheelZoom,
 } from "@/components/docx-preview-zoom";
 import { useDocxBlockScroll } from "@/components/docx/use-docx-block-scroll";
+import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
 import { PageAnonymization } from "@/components/pdf/page-anonymization";
 import { PageCitation } from "@/components/pdf/page-citation";
+import { resolvePendingPdfCitationPageId } from "@/components/pdf/peek/pdf-citation-navigation.logic";
 import {
   fetchPrintPdf,
   printPdfBuffer,
@@ -173,6 +175,32 @@ const PeekPdfViewerContent = ({
   docxFitMode = "text-area",
 }: PeekPdfViewerProps) => {
   const isImageOrigin = mimeType?.startsWith("image/") ?? false;
+  const pendingPdfPageScroll = useInspectorCommandStore(
+    (state) => state.pendingPdfPageScroll,
+  );
+  const clearPendingPdfPageScroll = useInspectorCommandStore(
+    (state) => state.clearPendingPdfPageScroll,
+  );
+  const citationPageId = usePDFStore((state) =>
+    resolvePendingPdfCitationPageId({
+      fieldId,
+      pages: state.pages,
+      request: pendingPdfPageScroll,
+    }),
+  );
+  const setScrollTo = usePDFStore((state) => state.setScrollTo);
+
+  // A chat citation may activate a file before its lazy PDF viewer exists.
+  // Keep the field-targeted request in the inspector command store until this
+  // exact viewer has loaded its page map, then hand it to the existing PDF
+  // scroll path. Other mounted viewers ignore the request by construction.
+  useExternalSyncEffect(() => {
+    if (citationPageId === undefined) {
+      return;
+    }
+    setScrollTo({ pageId: citationPageId });
+    clearPendingPdfPageScroll();
+  }, [citationPageId, clearPendingPdfPageScroll, setScrollTo]);
 
   const fileQuery = useQuery(
     fileOptions({ workspaceId, fieldId, purpose: filePurpose }),
