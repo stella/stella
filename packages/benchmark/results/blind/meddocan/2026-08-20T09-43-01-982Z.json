@@ -1,0 +1,142 @@
+{
+  "schemaVersion": 4,
+  "createdAt": "2026-08-20T09:43:01.982Z",
+  "sourceGitSha": "22e52184b3ad6ea06a224b4278e574a9abc930cf",
+  "runtime": "Bun 1.3.14",
+  "policy": "evaluation-only",
+  "corpus": {
+    "id": "meddocan",
+    "source": "https://zenodo.org/records/4279323",
+    "version": "4279323",
+    "file": "meddocan.zip",
+    "sha256": "d0e4708b58689bc1440ede6f89e017e58d667827d927827622d73810cd68eac3",
+    "license": "CC-BY-4.0",
+    "split": "test",
+    "documentCount": 250,
+    "selection": {
+      "type": "full-test-split"
+    }
+  },
+  "libraries": [
+    {
+      "name": "stella",
+      "version": "2.7.8",
+      "status": "ok",
+      "timing": {
+        "initSeconds": 0.10765745900000001,
+        "coldSeconds": 1.5133452080000003,
+        "warmSeconds": 1.2518857090000006,
+        "totalChars": 710577
+      },
+      "adapterWallSeconds": 2.873607040999999,
+      "metrics": {
+        "type": "label-agnostic-span-redaction",
+        "spanRecall": 0.5089206853912737,
+        "characterRecall": 0.6371291297241072,
+        "characterPrecision": 0.8083836098541981,
+        "goldSpans": 5661
+      }
+    },
+    {
+      "name": "openredaction",
+      "version": "1.1.5",
+      "status": "ok",
+      "timing": {
+        "initSeconds": 0.04560475000000042,
+        "coldSeconds": 2.5599081670000006,
+        "warmSeconds": 2.0996264169999996,
+        "totalChars": 710577
+      },
+      "adapterWallSeconds": 4.705872457999999,
+      "metrics": {
+        "type": "label-agnostic-span-redaction",
+        "spanRecall": 0.4092916445857622,
+        "characterRecall": 0.6022586557036009,
+        "characterPrecision": 0.24638963565378327,
+        "goldSpans": 5661
+      }
+    },
+    {
+      "name": "presidio",
+      "version": "2.2.360",
+      "status": "ok",
+      "timing": {
+        "initSeconds": 4.511377791999621,
+        "coldSeconds": 27.786840875000053,
+        "warmSeconds": 30.465954708000027,
+        "totalChars": 710577
+      },
+      "adapterWallSeconds": 64.336576292,
+      "metrics": {
+        "type": "label-agnostic-span-redaction",
+        "spanRecall": 0.525172231054584,
+        "characterRecall": 0.690161308963627,
+        "characterPrecision": 0.5966542485619264,
+        "goldSpans": 5661
+      }
+    },
+    {
+      "name": "scrubadub",
+      "version": "2.0.1",
+      "status": "ok",
+      "timing": {
+        "initSeconds": 0.00025158300013572443,
+        "coldSeconds": 0.2684554580000622,
+        "warmSeconds": 0.22597462500016263,
+        "totalChars": 710577
+      },
+      "adapterWallSeconds": 2.186995584000004,
+      "metrics": {
+        "type": "label-agnostic-span-redaction",
+        "spanRecall": 0.04451510333863275,
+        "characterRecall": 0.09037924942625522,
+        "characterPrecision": 0.9896944494666425,
+        "goldSpans": 5661
+      }
+    },
+    {
+      "name": "datafog",
+      "version": "4.8.0",
+      "status": "ok",
+      "timing": {
+        "initSeconds": 0,
+        "coldSeconds": 0.15778504100035207,
+        "warmSeconds": 0.1597483329996976,
+        "totalChars": 710577
+      },
+      "adapterWallSeconds": 0.47169787499999805,
+      "metrics": {
+        "type": "label-agnostic-span-redaction",
+        "spanRecall": 0.14679385267620562,
+        "characterRecall": 0.17100070995756766,
+        "characterPrecision": 0.9919547936021453,
+        "goldSpans": 5661
+      }
+    },
+    {
+      "name": "redact-pii",
+      "version": "3.4.0",
+      "status": "ok",
+      "timing": {
+        "initSeconds": 0.01113695899999584,
+        "coldSeconds": 17.648054334,
+        "warmSeconds": 18.857138458999994,
+        "totalChars": 710577
+      },
+      "adapterWallSeconds": 36.516593542,
+      "metrics": {
+        "type": "label-agnostic-span-redaction",
+        "spanRecall": 0.25790496378731675,
+        "characterRecall": 0.4077467928079647,
+        "characterPrecision": 0.769249937702467,
+        "goldSpans": 5661
+      }
+    },
+    {
+      "name": "pii-shield",
+      "version": "unknown",
+      "status": "unavailable",
+      "reasonCode": "adapter-unavailable"
+    }
+  ]
+}

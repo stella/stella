@@ -6,6 +6,7 @@ import {
   mkdir,
   mkdtemp,
   readFile,
+  stat,
   symlink,
   unlink,
   writeFile,
@@ -103,30 +104,71 @@ test("replaces PII from stdin with placeholders", async () => {
   expect(out).toContain("[IBAN_1]");
 });
 
-test("redaction key round-trips losslessly", async () => {
-  const dir = await mkdtemp(join(tmpdir(), "anonymize-cli-"));
-  const inputPath = join(dir, "input.txt");
-  const outputPath = join(dir, "output.txt");
-  const keyPath = join(dir, "key.json");
-  await writeFile(inputPath, SAMPLE, "utf8");
+test.skipIf(process.platform !== "linux")(
+  "redaction key round-trips losslessly",
+  async () => {
+    const dir = await mkdtemp(join(tmpdir(), "anonymize-cli-"));
+    const inputPath = join(dir, "input.txt");
+    const outputPath = join(dir, "output.txt");
+    const keyPath = join(dir, "key.json");
+    await writeFile(inputPath, SAMPLE, "utf8");
 
-  const anon = await run([
-    ...SCOPE,
-    "--quiet",
-    "-o",
-    outputPath,
-    "-k",
-    keyPath,
-    inputPath,
-  ]);
-  expect(anon.code).toBe(0);
-  const redacted = await readFile(outputPath, "utf8");
-  expect(redacted).not.toContain("jan.novak@example.com");
+    const anon = await run([
+      ...SCOPE,
+      "--quiet",
+      "-o",
+      outputPath,
+      "-k",
+      keyPath,
+      inputPath,
+    ]);
+    expect(anon.code).toBe(0);
+    const redacted = await readFile(outputPath, "utf8");
+    expect(redacted).not.toContain("jan.novak@example.com");
 
-  const restored = await run(["--quiet", "-d", keyPath, outputPath]);
-  expect(restored.code).toBe(0);
-  expect(restored.out).toBe(SAMPLE);
-});
+    const restored = await run(["--quiet", "-d", keyPath, outputPath]);
+    expect(restored.code).toBe(0);
+    expect(restored.out).toBe(SAMPLE);
+  },
+);
+
+test.skipIf(process.platform !== "linux")(
+  "does not commit a key before stdout completes",
+  async () => {
+    const dir = await mkdtemp(join(tmpdir(), "anonymize-cli-"));
+    const inputPath = join(dir, "input.txt");
+    const keyPath = join(dir, "key.json");
+    await writeFile(inputPath, "x".repeat(2 * 1024 * 1024), "utf8");
+
+    const proc = Bun.spawn(
+      [
+        "bash",
+        "-o",
+        "pipefail",
+        "-c",
+        'exec "$@" | head -c 0',
+        "anonymize-stdout-test",
+        "bun",
+        CLI,
+        ...SCOPE,
+        "--quiet",
+        "-k",
+        keyPath,
+        inputPath,
+      ],
+      { stdout: "ignore", stderr: "pipe" },
+    );
+    const [code] = await Promise.all([
+      proc.exited,
+      new Response(proc.stderr).text(),
+    ]);
+
+    expect(code).not.toBe(0);
+    const key = await stat(keyPath);
+    expect(key.size).toBe(0);
+    expect(key.mode & 0o777).toBe(0o000);
+  },
+);
 
 test("redact mode is irreversible and uses the redact string", async () => {
   const { out, code } = await run(
@@ -191,6 +233,34 @@ test("refuses a key path that collides with the output", async () => {
   expect(code).toBe(2);
   expect(err).toContain("collides");
 });
+
+test.skipIf(process.platform !== "linux")(
+  "refuses an occupied key path before replacing output",
+  async () => {
+    const dir = await mkdtemp(join(tmpdir(), "anonymize-cli-"));
+    const inputPath = join(dir, "input.txt");
+    const outputPath = join(dir, "output.txt");
+    const keyPath = join(dir, "key.json");
+    await writeFile(inputPath, SAMPLE, "utf8");
+    await writeFile(outputPath, "existing output", "utf8");
+    await writeFile(keyPath, "existing key", { mode: 0o600 });
+
+    const { code, err } = await run([
+      ...SCOPE,
+      "--quiet",
+      "-o",
+      outputPath,
+      "-k",
+      keyPath,
+      inputPath,
+    ]);
+
+    expect(code).toBe(2);
+    expect(err).toContain("refuses to overwrite");
+    expect(await readFile(outputPath, "utf8")).toBe("existing output");
+    expect(await readFile(keyPath, "utf8")).toBe("existing key");
+  },
+);
 
 test("refuses batch inputs with colliding basenames", async () => {
   const dir = await mkdtemp(join(tmpdir(), "anonymize-cli-"));
@@ -399,103 +469,112 @@ test("batch reports a nonzero exit when a file fails", async () => {
   expect(await Bun.file(join(out, "good.txt")).exists()).toBe(true);
 });
 
-test("--revert restores only the named placeholder", async () => {
-  const dir = await mkdtemp(join(tmpdir(), "anonymize-cli-"));
-  const inputPath = join(dir, "input.txt");
-  const redactedPath = join(dir, "redacted.txt");
-  const keyPath = join(dir, "key.json");
-  await writeFile(inputPath, SAMPLE, "utf8");
+test.skipIf(process.platform !== "linux")(
+  "--revert restores only the named placeholder",
+  async () => {
+    const dir = await mkdtemp(join(tmpdir(), "anonymize-cli-"));
+    const inputPath = join(dir, "input.txt");
+    const redactedPath = join(dir, "redacted.txt");
+    const keyPath = join(dir, "key.json");
+    await writeFile(inputPath, SAMPLE, "utf8");
 
-  const anon = await run([
-    ...SCOPE,
-    "--quiet",
-    "-o",
-    redactedPath,
-    "-k",
-    keyPath,
-    inputPath,
-  ]);
-  expect(anon.code).toBe(0);
+    const anon = await run([
+      ...SCOPE,
+      "--quiet",
+      "-o",
+      redactedPath,
+      "-k",
+      keyPath,
+      inputPath,
+    ]);
+    expect(anon.code).toBe(0);
 
-  // Restore only the person; the email stays a placeholder.
-  const reverted = await run([
-    "--quiet",
-    "-d",
-    keyPath,
-    "--revert",
-    "[PERSON_1]",
-    redactedPath,
-  ]);
-  expect(reverted.code).toBe(0);
-  expect(reverted.out).toContain("Jan Novák");
-  expect(reverted.out).toContain("[EMAIL_ADDRESS_1]");
-  expect(reverted.out).not.toContain("jan.novak@example.com");
-});
+    // Restore only the person; the email stays a placeholder.
+    const reverted = await run([
+      "--quiet",
+      "-d",
+      keyPath,
+      "--revert",
+      "[PERSON_1]",
+      redactedPath,
+    ]);
+    expect(reverted.code).toBe(0);
+    expect(reverted.out).toContain("Jan Novák");
+    expect(reverted.out).toContain("[EMAIL_ADDRESS_1]");
+    expect(reverted.out).not.toContain("jan.novak@example.com");
+  },
+);
 
-test("--revert matches an original value and is repeatable", async () => {
-  const dir = await mkdtemp(join(tmpdir(), "anonymize-cli-"));
-  const inputPath = join(dir, "input.txt");
-  const redactedPath = join(dir, "redacted.txt");
-  const keyPath = join(dir, "key.json");
-  await writeFile(inputPath, SAMPLE, "utf8");
+test.skipIf(process.platform !== "linux")(
+  "--revert matches an original value and is repeatable",
+  async () => {
+    const dir = await mkdtemp(join(tmpdir(), "anonymize-cli-"));
+    const inputPath = join(dir, "input.txt");
+    const redactedPath = join(dir, "redacted.txt");
+    const keyPath = join(dir, "key.json");
+    await writeFile(inputPath, SAMPLE, "utf8");
 
-  await run([
-    ...SCOPE,
-    "--quiet",
-    "-o",
-    redactedPath,
-    "-k",
-    keyPath,
-    inputPath,
-  ]);
+    await run([
+      ...SCOPE,
+      "--quiet",
+      "-o",
+      redactedPath,
+      "-k",
+      keyPath,
+      inputPath,
+    ]);
 
-  // Match by original text for the person, by placeholder for
-  // the email: both come back. The IBAN, named by neither, stays
-  // redacted.
-  const reverted = await run([
-    "--quiet",
-    "-d",
-    keyPath,
-    "--revert",
-    "Jan Novák",
-    "--revert",
-    "[EMAIL_ADDRESS_1]",
-    redactedPath,
-  ]);
-  expect(reverted.code).toBe(0);
-  expect(reverted.out).toContain("Jan Novák");
-  expect(reverted.out).toContain("jan.novak@example.com");
-  expect(reverted.out).toContain("[IBAN_1]");
-});
+    // Match by original text for the person, by placeholder for
+    // the email: both come back. The IBAN, named by neither, stays
+    // redacted.
+    const reverted = await run([
+      "--quiet",
+      "-d",
+      keyPath,
+      "--revert",
+      "Jan Novák",
+      "--revert",
+      "[EMAIL_ADDRESS_1]",
+      redactedPath,
+    ]);
+    expect(reverted.code).toBe(0);
+    expect(reverted.out).toContain("Jan Novák");
+    expect(reverted.out).toContain("jan.novak@example.com");
+    expect(reverted.out).toContain("[IBAN_1]");
+  },
+);
 
-test("--revert errors and lists placeholders on no match", async () => {
-  const dir = await mkdtemp(join(tmpdir(), "anonymize-cli-"));
-  const inputPath = join(dir, "input.txt");
-  const redactedPath = join(dir, "redacted.txt");
-  const keyPath = join(dir, "key.json");
-  await writeFile(inputPath, SAMPLE, "utf8");
+test.skipIf(process.platform !== "linux")(
+  "--revert errors and lists placeholders on no match",
+  async () => {
+    const dir = await mkdtemp(join(tmpdir(), "anonymize-cli-"));
+    const inputPath = join(dir, "input.txt");
+    const redactedPath = join(dir, "redacted.txt");
+    const keyPath = join(dir, "key.json");
+    await writeFile(inputPath, SAMPLE, "utf8");
 
-  await run([
-    ...SCOPE,
-    "--quiet",
-    "-o",
-    redactedPath,
-    "-k",
-    keyPath,
-    inputPath,
-  ]);
+    await run([
+      ...SCOPE,
+      "--quiet",
+      "-o",
+      redactedPath,
+      "-k",
+      keyPath,
+      inputPath,
+    ]);
 
-  const { code, err } = await run([
-    "-d",
-    keyPath,
-    "--revert",
-    "Nobody Here",
-    redactedPath,
-  ]);
-  expect(code).toBe(2);
-  expect(err).toContain("matched no placeholder or original");
-  expect(err).toContain("[PERSON_1]");
-});
+    const { code, err } = await run([
+      "-d",
+      keyPath,
+      "--revert",
+      "Nobody Here",
+      redactedPath,
+    ]);
+    expect(code).toBe(2);
+    expect(err).toContain("matched no placeholder or original");
+    expect(err).toContain("[PERSON_1]");
+  },
+);
 
 test("--revert without --deanonymise is a usage error", async () => {
   const { code, err } = await run([...SCOPE, "--revert", "[PERSON_1]"], SAMPLE);

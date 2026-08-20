@@ -24,8 +24,8 @@
 
 stella anonymize is an open-source PII redaction toolkit for applications that
 need to process sensitive text locally. It is designed with contracts, court
-filings, correspondence, and other legal documents in mind, while remaining a
-general-purpose library.
+filings, correspondence, and other legal documents in mind. Coverage varies by
+language, entity type, and document structure.
 
 Detection and replacement live in one Rust core. Node.js, Python, and browser
 bindings call that same implementation; the repository tests their public
@@ -34,6 +34,10 @@ deterministic and does not call a model or remote service.
 
 No detector catches everything. Review coverage reports and output when a miss
 would matter, especially with OCR or partially supported document formats.
+
+Reversible placeholder replacement is pseudonymization, not anonymization.
+Redaction can support anonymization, but whether output is anonymous depends on
+the remaining information, its context, and applicable law.
 
 ## Quickstart
 
@@ -121,6 +125,9 @@ reversible keys and DOCX/PDF workflows:
 npx @stll/anonymize-cli -k contract.key.json -o contract.anon.txt contract.txt
 npx @stll/anonymize-cli -d contract.key.json contract.anon.txt
 ```
+
+Raw `--key` export is Linux-only and fails closed on other platforms because
+the CLI cannot verify owner-only filesystem ACLs.
 
 See the [CLI reference](packages/cli/README.md) for batch processing, selective
 restoration, document commands, JSON output, and exit codes.
@@ -229,17 +236,20 @@ package graph and parity boundaries.
 | [`crates/document-rules-core`](crates/document-rules-core/README.md) | Structured document rule engine                     |
 
 Platform-specific Node.js binary packages are installed automatically as
-optional dependencies of `@stll/anonymize`.
+optional dependencies of `@stll/anonymize`. A clean macOS arm64 npm install of
+2.7.8 uses about 106 MB on disk: it includes the prepared language data, the
+native binary used by Node.js, and the WASM fallback used by Bun. Install the
+browser package separately only when you need the browser runtime.
 
 ## Benchmarks
 
-The sealed suite compares stella with Presidio, base scrubadub, DataFog's
-model-free regex engine, and redact-pii on TAB-ECHR, RedactionBench, MEDDOCAN,
-and German Legal Entity Recognition. Each corpus keeps its own task and metrics;
-German LER is reported as legal-entity coverage, not PII recall. Holdout reports
-contain aggregate values only. PII-Shield is included when its external CLI and
-model are installed, and the German runner can also report an optional pinned
-Nym ONNX model as an assisted stella lane.
+The held-out public-test suite compares stella with OpenRedaction, Presidio,
+base scrubadub, DataFog's model-free regex engine, and redact-pii on TAB-ECHR,
+RedactionBench, MEDDOCAN, and German Legal Entity Recognition. Each corpus keeps
+its own task and metrics; German LER is reported as legal-entity coverage, not
+PII recall. Holdout reports contain aggregate values only. PII-Shield is
+included when its external CLI and model are installed, and the German runner
+can also report an optional pinned Nym ONNX model as an assisted stella lane.
 
 Quality-suite timings are one-shot corpus passes, so they are directional
 rather than speed rankings. The separate cross-provider harness runs stella's
@@ -252,7 +262,8 @@ Read the [benchmark methodology](packages/benchmark/README.md), browse the
 [committed aggregate results](packages/benchmark/results/), or follow the
 [reproduction guide](packages/benchmark/REPRODUCING.md). Results describe
 particular datasets and versions; they are not a guarantee of performance on
-your documents.
+your documents. The project-authored synthetic fixture is a regression test.
+Its scores are not necessarily representative.
 
 ## Development
 
@@ -270,5 +281,7 @@ raw personal data or non-public fixtures. A CLA check runs on pull requests.
 
 ## License
 
-Apache-2.0. See [`LICENSE`](LICENSE). Third-party runtime attributions, including
-the browser build, are listed in [`ATTRIBUTION.md`](ATTRIBUTION.md).
+Apache-2.0. See [`LICENSE`](LICENSE). Third-party attributions are recorded with
+the relevant packages, including the [core and browser runtime](packages/anonymize/ATTRIBUTION.md),
+[data](packages/data/ATTRIBUTION.md), [DOCX](packages/document-docx/ATTRIBUTION.md),
+and [PDF](packages/document-pdf/ATTRIBUTION.md).

@@ -1,0 +1,154 @@
+{
+  "schemaVersion": 4,
+  "createdAt": "2026-08-20T09:47:54.417Z",
+  "sourceGitSha": "22e52184b3ad6ea06a224b4278e574a9abc930cf",
+  "runtime": "Bun 1.3.14",
+  "policy": "evaluation-only",
+  "corpus": {
+    "id": "german-ler",
+    "source": "https://huggingface.co/datasets/elenanereiss/german-ler",
+    "version": "405b6923dfd2299da3d76a68220ee15a95bc1eab",
+    "file": "data/test-00000-of-00001.parquet",
+    "sha256": "78e36e4c297e95d755e2a80c8a98f988efee23c2f27e3dfb8c6c28872a57a7e6",
+    "license": "CC-BY-4.0",
+    "split": "test",
+    "documentCount": 6673,
+    "selection": {
+      "type": "full-test-split"
+    }
+  },
+  "libraries": [
+    {
+      "name": "stella",
+      "version": "2.7.8",
+      "status": "ok",
+      "timing": {
+        "initSeconds": 0.04672491699999998,
+        "coldSeconds": 0.6433975,
+        "warmSeconds": 0.6198087500000001,
+        "totalChars": 1383026
+      },
+      "adapterWallSeconds": 1.310824875,
+      "metrics": {
+        "type": "german-legal-entity-coverage",
+        "documents": 6673,
+        "entityRecall": 0.047538519353626456,
+        "characterRecall": 0.13779790109157278,
+        "characterPrecision": 0.4901006166828952,
+        "goldEntities": 5322,
+        "predictedSpans": 3419
+      }
+    },
+    {
+      "name": "openredaction",
+      "version": "1.1.5",
+      "status": "ok",
+      "timing": {
+        "initSeconds": 0.022601041000000124,
+        "coldSeconds": 4.0530553330000005,
+        "warmSeconds": 4.053305834,
+        "totalChars": 1383026
+      },
+      "adapterWallSeconds": 8.129866167,
+      "metrics": {
+        "type": "german-legal-entity-coverage",
+        "documents": 6673,
+        "entityRecall": 0.10879368658399098,
+        "characterRecall": 0.3110526131058931,
+        "characterPrecision": 0.06742268856928967,
+        "goldEntities": 5322,
+        "predictedSpans": 61507
+      }
+    },
+    {
+      "name": "presidio",
+      "version": "2.2.360",
+      "status": "ok",
+      "timing": {
+        "initSeconds": 3.543084375000035,
+        "coldSeconds": 72.37986674999956,
+        "warmSeconds": 69.08371045900003,
+        "totalChars": 1383026
+      },
+      "adapterWallSeconds": 146.197321791,
+      "metrics": {
+        "type": "german-legal-entity-coverage",
+        "documents": 6673,
+        "entityRecall": 0.19767004885381437,
+        "characterRecall": 0.22057491839528273,
+        "characterPrecision": 0.5384536294468435,
+        "goldEntities": 5322,
+        "predictedSpans": 5739
+      }
+    },
+    {
+      "name": "scrubadub",
+      "version": "2.0.1",
+      "status": "ok",
+      "timing": {
+        "initSeconds": 0.000565916999221372,
+        "coldSeconds": 1.3789909580000312,
+        "warmSeconds": 0.9675074999995559,
+        "totalChars": 1383026
+      },
+      "adapterWallSeconds": 5.193543124999996,
+      "metrics": {
+        "type": "german-legal-entity-coverage",
+        "documents": 6673,
+        "entityRecall": 0,
+        "characterRecall": 0.0005826401319714997,
+        "characterPrecision": 0.16338582677165353,
+        "goldEntities": 5322,
+        "predictedSpans": 20
+      }
+    },
+    {
+      "name": "datafog",
+      "version": "4.8.0",
+      "status": "ok",
+      "timing": {
+        "initSeconds": 0,
+        "coldSeconds": 0.847643041000083,
+        "warmSeconds": 0.7762716249999357,
+        "totalChars": 1383026
+      },
+      "adapterWallSeconds": 1.865050667000003,
+      "metrics": {
+        "type": "german-legal-entity-coverage",
+        "documents": 6673,
+        "entityRecall": 0,
+        "characterRecall": 0.00071601558386859,
+        "characterPrecision": 0.6144578313253012,
+        "goldEntities": 5322,
+        "predictedSpans": 30
+      }
+    },
+    {
+      "name": "redact-pii",
+      "version": "3.4.0",
+      "status": "ok",
+      "timing": {
+        "initSeconds": 0.006623542000015732,
+        "coldSeconds": 51.396233583,
+        "warmSeconds": 77.977293125,
+        "totalChars": 1383026
+      },
+      "adapterWallSeconds": 129.381037458,
+      "metrics": {
+        "type": "german-legal-entity-coverage",
+        "documents": 6673,
+        "entityRecall": 0.008455467869222097,
+        "characterRecall": 0.07671896388333158,
+        "characterPrecision": 0.505855126128211,
+        "goldEntities": 5322,
+        "predictedSpans": 4998
+      }
+    },
+    {
+      "name": "pii-shield",
+      "version": "unknown",
+      "status": "unavailable",
+      "reasonCode": "adapter-unavailable"
+    }
+  ]
+}

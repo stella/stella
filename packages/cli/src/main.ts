@@ -57,6 +57,11 @@ import {
   type PdfPipelineRequest,
   runPdfCommand,
 } from "./pdf";
+import type { FileIdentity } from "./private-file";
+import {
+  publishNewPrivateFile,
+  writeFileWithoutIdentityCollision,
+} from "./private-file";
 
 /**
  * The pipeline functions the CLI needs, backed by the
@@ -418,12 +423,37 @@ const buildOperatorConfig = (opts: CliOptions): NativeOperatorConfig => {
   return { operators, redactString: opts.redactString };
 };
 
-const writeOutput = async (
-  path: string | undefined,
-  content: string,
-): Promise<void> => {
+type WriteOutputOptions = {
+  path: string | undefined;
+  content: string;
+  forbiddenIdentity?: FileIdentity;
+};
+
+const writeOutput = async ({
+  path,
+  content,
+  forbiddenIdentity,
+}: WriteOutputOptions): Promise<void> => {
   if (path === undefined) {
-    process.stdout.write(content);
+    await new Promise<void>((complete, reject) => {
+      process.stdout.write(content, (error) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+        complete();
+      });
+    });
+    return;
+  }
+  if (forbiddenIdentity !== undefined) {
+    await writeFileWithoutIdentityCollision({
+      target: path,
+      content,
+      targetFlag: "--output",
+      forbiddenFlag: "--key",
+      forbiddenIdentity,
+    });
     return;
   }
   await writeFile(path, content, "utf8");
@@ -562,7 +592,10 @@ const runDeanonymise = async (
       { path: opts.output, flag: "--output" },
     ]);
   }
-  await writeOutput(opts.output, api.deanonymise(input.text, redactionMap));
+  await writeOutput({
+    path: opts.output,
+    content: api.deanonymise(input.text, redactionMap),
+  });
 };
 
 /**
@@ -627,6 +660,7 @@ const runAnonymiseSingle = async (
     buildOperatorConfig(opts),
   );
 
+  let outputContent: string;
   if (opts.json) {
     // In redact mode the user chose irreversibility, so the
     // JSON must not carry any detected text. Whitelist the
@@ -648,20 +682,28 @@ const runAnonymiseSingle = async (
       entities: jsonEntities,
       redactedText: redaction.redactedText,
     };
-    await writeOutput(
-      input.outputPath,
-      `${JSON.stringify(payload, null, 2)}\n`,
-    );
+    outputContent = `${JSON.stringify(payload, null, 2)}\n`;
   } else {
-    await writeOutput(input.outputPath, redaction.redactedText);
+    outputContent = redaction.redactedText;
   }
 
   if (opts.keyPath !== undefined) {
-    await writeFile(
-      opts.keyPath,
-      api.exportRedactionKey(redaction.redactionMap, redaction.operatorMap),
-      "utf8",
-    );
+    await publishNewPrivateFile({
+      target: opts.keyPath,
+      content: api.exportRedactionKey(
+        redaction.redactionMap,
+        redaction.operatorMap,
+      ),
+      flag: "--key",
+      afterPublish: (identity) =>
+        writeOutput({
+          path: input.outputPath,
+          content: outputContent,
+          forbiddenIdentity: identity,
+        }),
+    });
+  } else {
+    await writeOutput({ path: input.outputPath, content: outputContent });
   }
 
   if (!opts.quiet) {

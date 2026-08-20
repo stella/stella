@@ -2,7 +2,9 @@
 
 Command-line PII detection and anonymization powered by
 [`@stll/anonymize`](https://github.com/stella/anonymize).
-Fully offline: no network calls, ever.
+Processing is local and makes no network calls. `bunx` and `npx` may contact a
+package registry to download the CLI; use an existing local or global install
+when the invocation itself must remain offline.
 
 ## Usage
 
@@ -43,6 +45,9 @@ anonymize -d key.json reply.txt
 | `--json`                  | Emit entities + redacted text as JSON            |
 | `--capabilities`          | Emit the versioned capability manifest as JSON   |
 | `--quiet`                 | Suppress the stderr summary                      |
+
+`--key` export is supported on Linux. It fails closed on other platforms
+because the CLI cannot verify owner-only filesystem ACLs.
 
 Run `anonymize --help` for the full reference, including the
 `--json` schema and exit codes.

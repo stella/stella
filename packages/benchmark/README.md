@@ -1,13 +1,14 @@
 # @stll/anonymize-benchmark
 
-Reproducible comparison of `@stll/anonymize` (stella) against other open-source
-PII redaction libraries on recall, precision, and throughput. The development
-track includes a public synthetic legal-domain corpus (en/cs/de) and a declared
-TAB development split. The evaluation-only suite unifies independently
-published corpora without flattening their different task semantics into one
-misleading score.
+Reproducible evaluation of `@stll/anonymize` (stella) and other open-source PII
+redaction libraries. Independently published held-out corpora retain their
+different task semantics rather than being flattened into one score.
 
-The package also has a separate evaluation-only blind track based on the pinned
+The project-authored synthetic legal fixture (en/cs/de) and declared TAB
+development split exist for regression and harness development. Its scores are
+not necessarily representative.
+
+The package also has a separate evaluation-only track based on the pinned
 test split of the third-party Text Anonymization Benchmark (TAB). TAB contains
 real English ECHR decisions with human direct/quasi-identifier annotations. Its
 test data is never used for detector development or tuning.
@@ -17,7 +18,7 @@ test data is never used for detector development or tuning.
 ```text
 fixtures/                 public-safe synthetic ground truth, per language (en/cs/de)
 python/                   Python adapter scripts and pinned requirements
-results/                  committed, date-stamped JSON + Markdown reports (+ latest.md)
+results/                  date-stamped reports (+ development-latest.md for the synthetic fixture)
 vendor/                   pinned third-party benchmark detector assets and licenses
 src/
   taxonomy.ts             common 8-label taxonomy + per-library mapping tables
@@ -37,18 +38,18 @@ REPRODUCING.md            exact versions, models, hardware, mapping decisions
 bun install && bun run build
 
 # from packages/benchmark, set up the Python competitors (see REPRODUCING.md):
-uv venv .venv-presidio  --python 3.11 && uv pip install --python .venv-presidio  -r python/requirements-presidio.txt   # + model wheels
-uv venv .venv-scrubadub --python 3.11 && uv pip install --python .venv-scrubadub -r python/requirements-scrubadub.txt
-uv venv .venv-datafog   --python 3.11 && uv pip install --python .venv-datafog   -r python/requirements-datafog.txt
+uv venv .venv-presidio  --python 3.11 && uv pip install --python .venv-presidio  -r python/requirements-presidio.lock   # + model wheels
+uv venv .venv-scrubadub --python 3.11 && uv pip install --python .venv-scrubadub -r python/requirements-scrubadub.lock
+uv venv .venv-datafog   --python 3.11 && uv pip install --python .venv-datafog   -r python/requirements-datafog.lock
 
 # run:
 bun run bench:compare
 
-# Aggregate-only blind evaluation over a deterministic 12-document TAB sample.
+# Aggregate-only held-out evaluation over a deterministic 12-document TAB sample.
 # Add --full for the entire 127-document test split.
 bun run bench:blind
 
-# Run every executable sealed corpus.
+# Run every executable held-out public corpus.
 bun run bench:sealed
 
 # Or run one complete public test split.
@@ -71,10 +72,10 @@ scrubadub, and DataFog use the same optional virtual environments as
 PII-Shield is included when its CLI and GLiNER model are installed; set
 `PII_SHIELD_BIN` when the executable is not on `PATH`.
 
-Blind results can reject a release, but must not be used to inspect examples or
+Held-out results can reject a release, but must not be used to inspect examples or
 tune behavior. See the repository instructions in `AGENTS.md`.
 
-All sealed runners use the same versioned JSON contract in
+All held-out runners use the same versioned JSON contract in
 `src/sealed-report.ts`. The contract has exact fields and task-discriminated
 aggregate metrics; unknown fields fail closed. The shared serializer and
 Markdown renderer cannot accept document text, examples, categories,
@@ -83,7 +84,8 @@ fixed reason code so subprocess output cannot enter a persisted report.
 
 Performance is reported by phase: adapter initialization, the first (cold)
 complete corpus pass, and the second (warm) complete corpus pass. Warm
-characters per second is the steady-state throughput figure. Parent-observed
+characters per second describes that second pass; it is not proof that the
+provider reached steady state. Parent-observed
 adapter wall time is retained only as diagnostic metadata because it combines
 initialization, two passes, and—in subprocess adapters—runtime startup, imports,
 serialization, and protocol overhead. Timings are one-shot and machine-load
@@ -100,7 +102,7 @@ plus median, median absolute deviation, and p95 for process startup, pipeline
 initialization, cold detection, warm detection, and warm characters per second.
 Output span count and a digest over offsets and labels must remain identical in
 every process. This harness is development-only and never reads a sealed
-evaluation corpus.
+held-out evaluation corpus.
 
 Local runs accept smaller counts for quick verification:
 
@@ -119,7 +121,7 @@ unpinned. See `REPRODUCING.md` for
 the host profile contract.
 
 Each loader verifies the pinned artifact digest before invoking JSON, Parquet,
-ZIP, or BRAT parsing. Only the public test split is reachable from the sealed
+ZIP, or BRAT parsing. Only the public test split is reachable from the held-out
 commands. Corpus attribution and pinned digests are recorded in
 `ATTRIBUTION.md`.
 
@@ -160,11 +162,10 @@ that exists but is missing its dependencies is likewise skipped with a
 reinstall hint; any _other_ non-zero exit from a Python adapter is a real crash
 and fails the run loudly instead of being hidden as `unavailable`.)
 
-## Unseen-document mode (anti-overfitting escape hatch)
+## Unseen-document comparison
 
-The committed corpus is curated, so good scores on it could in principle reflect
-tuning to these fixtures. To check behaviour on text the benchmark has never
-seen, run every available library over your own files with no ground truth:
+To compare behaviour outside the committed fixtures, run every available
+library over your own files with no ground truth:
 
 ```sh
 bun run bench:compare --input path/to/file.txt
@@ -186,13 +187,11 @@ the aligned regions. Paste any previously unseen file and compare directly.
 > Markdown file), which is git-ignored precisely so these reports are never
 > committed. Do not commit or share them if the input was sensitive.
 
-## Honesty
+## Reporting principles
 
 - Ground truth is independent of stella: the repo's `.snapshot.json` fixtures
   are stella's own output and are not used here.
-- Every label is reported, including those where stella loses.
-- The bundled synthetic development corpus is legal-domain and multilingual,
-  which favours stella; this caveat is stated in every generated report. It is
-  never presented as the sealed multi-corpus suite.
+- Development reports include all eight labels in the declared taxonomy,
+  including labels where stella does not lead.
 - Competitor versions are pinned and quoted; taxonomy mappings are deliberately
   generous to competitors. See `REPRODUCING.md`.

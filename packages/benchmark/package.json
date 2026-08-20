@@ -1,7 +1,7 @@
 {
   "name": "@stll/anonymize-benchmark",
   "version": "0.0.0",
-  "description": "Reproducible comparison of stella/anonymize against open-source PII redaction libraries across public development and sealed evaluation corpora",
+  "description": "Reproducible comparison of stella/anonymize against open-source PII redaction libraries across public development and held-out evaluation corpora",
   "private": true,
   "type": "module",
   "license": "Apache-2.0",

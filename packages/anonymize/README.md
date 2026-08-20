@@ -31,7 +31,8 @@ const languages = availableDefaultNativePipelineLanguages();
 const anonymizer = getDefaultNativePipeline(
   languages.includes("en") ? { language: "en" } : {},
 );
-const result = anonymizer.redact_text(text);
+const text = "Contact Alice Smith at alice@example.com.";
+const result = anonymizer.redactText(text);
 
 console.log(result.redaction.redactedText);
 ```
@@ -258,6 +259,7 @@ languages = anonymize.available_default_native_pipeline_languages()
 prepared = anonymize.preload_default_native_pipeline(
     language="en" if "en" in languages else None
 )
+text = "Contact Alice Smith at alice@example.com."
 result = prepared.redact_text(text, redact_string="***")
 
 session = prepared.create_redaction_session("opaque_case_1")

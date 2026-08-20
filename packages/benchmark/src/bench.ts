@@ -259,7 +259,7 @@ const run = async (): Promise<void> => {
   const date = result.createdAt.slice(0, 10);
   const jsonPath = join(RESULTS_DIR, `${date}.json`);
   const mdPath = join(RESULTS_DIR, `${date}.md`);
-  const latestPath = join(RESULTS_DIR, "latest.md");
+  const latestPath = join(RESULTS_DIR, "development-latest.md");
   const markdown = renderMarkdown(result);
 
   await Bun.write(jsonPath, `${JSON.stringify(result, null, 2)}\n`);

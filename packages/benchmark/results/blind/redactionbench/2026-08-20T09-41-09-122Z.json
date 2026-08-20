@@ -1,0 +1,154 @@
+{
+  "schemaVersion": 4,
+  "createdAt": "2026-08-20T09:41:09.122Z",
+  "sourceGitSha": "22e52184b3ad6ea06a224b4278e574a9abc930cf",
+  "runtime": "Bun 1.3.14",
+  "policy": "evaluation-only",
+  "corpus": {
+    "id": "redactionbench",
+    "source": "https://huggingface.co/datasets/RedactionBench/RedactionBench",
+    "version": "d45e9cec89bc49c69355e252fec29cc0229982f6",
+    "file": "data/test-00000-of-00001.parquet",
+    "sha256": "17ea0b577344917ce6e265667dd833cbf18e4f2cc07aa230d55f1e151219f5f0",
+    "license": "CC-BY-4.0",
+    "split": "test",
+    "documentCount": 200,
+    "selection": {
+      "type": "full-test-split"
+    }
+  },
+  "libraries": [
+    {
+      "name": "stella",
+      "version": "2.7.8",
+      "status": "ok",
+      "timing": {
+        "initSeconds": 0.12204862500000008,
+        "coldSeconds": 2.60840475,
+        "warmSeconds": 2.624283,
+        "totalChars": 2663769
+      },
+      "adapterWallSeconds": 5.35528625,
+      "metrics": {
+        "type": "redactionbench-transparent-interim",
+        "documents": 200,
+        "mandatorySpans": 16993,
+        "mandatorySpanRecall": 0.20802683457894428,
+        "mandatoryCharacterRecall": 0.15205058431934693,
+        "acceptedCharacterPrecision": 0.6411226857116863,
+        "predictedSpans": 7182
+      }
+    },
+    {
+      "name": "openredaction",
+      "version": "1.1.5",
+      "status": "ok",
+      "timing": {
+        "initSeconds": 0.07396004100000027,
+        "coldSeconds": 24.758224583,
+        "warmSeconds": 21.428585459,
+        "totalChars": 2663769
+      },
+      "adapterWallSeconds": 46.263201458,
+      "metrics": {
+        "type": "redactionbench-transparent-interim",
+        "documents": 200,
+        "mandatorySpans": 16993,
+        "mandatorySpanRecall": 0.6800447242982405,
+        "mandatoryCharacterRecall": 0.5984110401127335,
+        "acceptedCharacterPrecision": 0.3264075986086728,
+        "predictedSpans": 48613
+      }
+    },
+    {
+      "name": "presidio",
+      "version": "2.2.360",
+      "status": "ok",
+      "timing": {
+        "initSeconds": 8.840129374999378,
+        "coldSeconds": 216.40372520799974,
+        "warmSeconds": 125.27030920900052,
+        "totalChars": 2663769
+      },
+      "adapterWallSeconds": 353.19370549999996,
+      "metrics": {
+        "type": "redactionbench-transparent-interim",
+        "documents": 200,
+        "mandatorySpans": 16993,
+        "mandatorySpanRecall": 0.7405990702053787,
+        "mandatoryCharacterRecall": 0.4281870307830608,
+        "acceptedCharacterPrecision": 0.37350208102496296,
+        "predictedSpans": 40503
+      }
+    },
+    {
+      "name": "scrubadub",
+      "version": "2.0.1",
+      "status": "ok",
+      "timing": {
+        "initSeconds": 0.00029841699961252743,
+        "coldSeconds": 1.899629291000565,
+        "warmSeconds": 1.817842916999325,
+        "totalChars": 2663769
+      },
+      "adapterWallSeconds": 6.129398583999952,
+      "metrics": {
+        "type": "redactionbench-transparent-interim",
+        "documents": 200,
+        "mandatorySpans": 16993,
+        "mandatorySpanRecall": 0.14641322897663744,
+        "mandatoryCharacterRecall": 0.09508855900289123,
+        "acceptedCharacterPrecision": 0.5095078715755548,
+        "predictedSpans": 2930
+      }
+    },
+    {
+      "name": "datafog",
+      "version": "4.8.0",
+      "status": "ok",
+      "timing": {
+        "initSeconds": 0,
+        "coldSeconds": 0.7233853750003618,
+        "warmSeconds": 0.7218296250002822,
+        "totalChars": 2663769
+      },
+      "adapterWallSeconds": 1.6612338330000056,
+      "metrics": {
+        "type": "redactionbench-transparent-interim",
+        "documents": 200,
+        "mandatorySpans": 16993,
+        "mandatorySpanRecall": 0.5444594833166598,
+        "mandatoryCharacterRecall": 0.1969374863334872,
+        "acceptedCharacterPrecision": 0.7525576991817294,
+        "predictedSpans": 8832
+      }
+    },
+    {
+      "name": "redact-pii",
+      "version": "3.4.0",
+      "status": "ok",
+      "timing": {
+        "initSeconds": 0.006373958999989555,
+        "coldSeconds": 57.29974933299999,
+        "warmSeconds": 84.78557916599995,
+        "totalChars": 2663769
+      },
+      "adapterWallSeconds": 142.09192120799992,
+      "metrics": {
+        "type": "redactionbench-transparent-interim",
+        "documents": 200,
+        "mandatorySpans": 16993,
+        "mandatorySpanRecall": 0.6505031483552051,
+        "mandatoryCharacterRecall": 0.3569510921062222,
+        "acceptedCharacterPrecision": 0.5140633239816905,
+        "predictedSpans": 21973
+      }
+    },
+    {
+      "name": "pii-shield",
+      "version": "unknown",
+      "status": "unavailable",
+      "reasonCode": "adapter-unavailable"
+    }
+  ]
+}

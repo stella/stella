@@ -512,7 +512,7 @@ export const renderSealedAggregateMarkdown = (
       ? { headers: ["Aggregate metrics"], values: ["unavailable"] }
       : tableDefinition(available.metrics);
   const lines = [
-    "# Sealed aggregate benchmark evaluation",
+    "# Held-out aggregate benchmark evaluation",
     "",
     "Evaluation-only results on a checksum-pinned public test split.",
     "This report is generated exclusively from the aggregate report contract.",
@@ -571,7 +571,7 @@ export const renderSealedAggregateMarkdown = (
           "The source decisions were already anonymized before annotation, so this corpus cannot measure de-identification recall.",
         ]
       : []),
-    "Warm chars/s is the steady-state throughput headline and covers one complete second pass over the corpus.",
+    "Warm chars/s covers one complete second pass over the corpus; it is not proof that the provider reached steady state.",
     "These are one-shot wall-clock measurements and are sensitive to machine load; compare controlled repeated runs before drawing performance conclusions.",
     "Adapter wall time is diagnostic only. It includes init plus two corpus passes and may include subprocess startup, imports, and protocol overhead; adapter init/import boundaries differ.",
   );

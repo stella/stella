@@ -1,15 +1,18 @@
 # Reproducing the benchmark
 
-This document records the exact toolchain, library versions, models, and
-taxonomy-mapping decisions behind the numbers in `results/`. The goal is that
-anyone can re-run the comparison and get the same shape of result on comparable
-hardware.
+This document records the toolchain, library versions, models, and
+taxonomy-mapping decisions for the benchmark harness. The latest held-out
+reports were generated from release commit
+`22e52184b3ad6ea06a224b4278e574a9abc930cf` with stella 2.7.8. The development
+fixture report remains a historical 2.4.1 regression result. Its scores are not
+necessarily representative.
 
-## What is measured
+## Development regression fixture
 
-The development comparison is configured to run `@stll/anonymize` (stella)
-and five other open-source PII libraries on a public, synthetic, legal-domain
-corpus (en/cs/de):
+The development comparison runs `@stll/anonymize` (stella) and five other
+open-source PII libraries on a public, project-authored synthetic legal fixture
+(en/cs/de). It exists to exercise the harness and track regressions. Its scores
+are not necessarily representative.
 
 - **OpenRedaction** 1.1.5 (stateless local regex engine; learning and optional
   NER disabled).
@@ -21,9 +24,9 @@ corpus (en/cs/de):
 Metrics: per-label and overall precision / recall / F1 with span-overlap
 matching, plus throughput (chars/sec, cold and warm). See `src/metrics.ts`.
 
-## Sealed public test runners
+## Held-out public test runners
 
-The sealed suite uses public tools and credential-free public artifacts:
+The held-out suite uses public tools and credential-free public artifacts:
 
 | Runner         | Public source             | Parser                   | Pinned test artifact           |
 | -------------- | ------------------------- | ------------------------ | ------------------------------ |
@@ -52,10 +55,12 @@ suite-wide score. See `ATTRIBUTION.md` for public provenance and licenses.
 
 ## Hardware / runtime note
 
-The committed run under `results/` was produced on Apple M3 (8 cores), 24 GiB
-RAM, macOS, with Bun 1.3.14 and CPython 3.11.12. Throughput is a single run on
-one machine; treat it as order-of-magnitude, not a precise micro-benchmark.
-Recall/precision are deterministic and machine-independent.
+The latest held-out reports were produced on Apple M3 (8 cores), 24 GiB RAM,
+macOS, with Bun 1.3.14. The latest development report was produced on Apple M4
+(10 cores), 16 GiB RAM. Older reports used other hosts; each development report
+records its own hardware. Quality-suite throughput comes from a single run and
+is directional, not a speed ranking. Recall and precision are deterministic for
+a fixed commit, corpus, and dependency set.
 
 ### Canonical performance host
 
@@ -151,22 +156,23 @@ input bytes, denominator, and SHA-256 independently. Python virtualenvs default 
 
 ## Pinned toolchain versions
 
-| Component                             | Version |
-| ------------------------------------- | ------- |
-| Bun                                   | 1.3.14  |
-| stella (`@stll/anonymize`)            | 2.7.3   |
-| OpenRedaction (`@openredaction/core`) | 1.1.5   |
-| redact-pii (npm)                      | 3.4.0   |
-| Python                                | 3.11.12 |
-| presidio-analyzer                     | 2.2.360 |
-| presidio-anonymizer                   | 2.2.360 |
-| spaCy                                 | 3.8.7   |
-| en_core_web_lg                        | 3.8.0   |
-| de_core_news_lg                       | 3.8.0   |
-| es_core_news_lg                       | 3.8.0   |
-| xx_ent_wiki_sm (used for Czech)       | 3.8.0   |
-| scrubadub                             | 2.0.1   |
-| phonenumbers                          | 8.13.55 |
+| Component                             | Version                           |
+| ------------------------------------- | --------------------------------- |
+| Bun                                   | 1.3.14                            |
+| stella (`@stll/anonymize`)            | 2.7.8 (current workspace release) |
+| OpenRedaction (`@openredaction/core`) | 1.1.5                             |
+| redact-pii (npm)                      | 3.4.0                             |
+| Python                                | 3.11.12                           |
+| presidio-analyzer                     | 2.2.360                           |
+| presidio-anonymizer                   | 2.2.360                           |
+| spaCy                                 | 3.8.7                             |
+| en_core_web_lg                        | 3.8.0                             |
+| de_core_news_lg                       | 3.8.0                             |
+| es_core_news_lg                       | 3.8.0                             |
+| xx_ent_wiki_sm (used for Czech)       | 3.8.0                             |
+| scrubadub                             | 2.0.1                             |
+| phonenumbers (scrubadub)              | 8.13.55                           |
+| phonenumbers (Presidio)               | 9.0.37                            |
 
 ## Steps
 
@@ -193,12 +199,12 @@ Uses [uv](https://github.com/astral-sh/uv). From `packages/benchmark`:
 
 ```sh
 uv venv .venv-presidio --python 3.11
-uv pip install --python .venv-presidio -r python/requirements-presidio.txt
+uv pip install --python .venv-presidio -r python/requirements-presidio.lock
 uv pip install --python .venv-presidio \
-  "https://github.com/explosion/spacy-models/releases/download/en_core_web_lg-3.8.0/en_core_web_lg-3.8.0-py3-none-any.whl" \
-  "https://github.com/explosion/spacy-models/releases/download/de_core_news_lg-3.8.0/de_core_news_lg-3.8.0-py3-none-any.whl" \
-  "https://github.com/explosion/spacy-models/releases/download/es_core_news_lg-3.8.0/es_core_news_lg-3.8.0-py3-none-any.whl" \
-  "https://github.com/explosion/spacy-models/releases/download/xx_ent_wiki_sm-3.8.0/xx_ent_wiki_sm-3.8.0-py3-none-any.whl"
+  "https://github.com/explosion/spacy-models/releases/download/en_core_web_lg-3.8.0/en_core_web_lg-3.8.0-py3-none-any.whl#sha256=293e9547a655b25499198ab15a525b05b9407a75f10255e405e8c3854329ab63" \
+  "https://github.com/explosion/spacy-models/releases/download/de_core_news_lg-3.8.0/de_core_news_lg-3.8.0-py3-none-any.whl#sha256=36fda650e476b54d5e87803635e36dadd1e8e034c4b5962088586d684f4c9fed" \
+  "https://github.com/explosion/spacy-models/releases/download/es_core_news_lg-3.8.0/es_core_news_lg-3.8.0-py3-none-any.whl#sha256=7c6c212715a12f31aacde3361754436945ff7376fb24cde57d0c277c9c9b050b" \
+  "https://github.com/explosion/spacy-models/releases/download/xx_ent_wiki_sm-3.8.0/xx_ent_wiki_sm-3.8.0-py3-none-any.whl#sha256=6f3c4b853852ea9e9d2dc76cc950dddb10a7e4c42d813308caefe6c5e8be2f0a"
 ```
 
 If the venv is missing, the runner reports Presidio as `unavailable` and
@@ -208,7 +214,7 @@ continues with the other libraries rather than failing.
 
 ```sh
 uv venv .venv-scrubadub --python 3.11
-uv pip install --python .venv-scrubadub -r python/requirements-scrubadub.txt
+uv pip install --python .venv-scrubadub -r python/requirements-scrubadub.lock
 ```
 
 ### 4. DataFog virtualenv (Python, model-free)
@@ -218,7 +224,7 @@ It does not install the `nlp` or `nlp-advanced` extras.
 
 ```sh
 uv venv .venv-datafog --python 3.11
-uv pip install --python .venv-datafog -r python/requirements-datafog.txt
+uv pip install --python .venv-datafog -r python/requirements-datafog.lock
 ```
 
 ### 5. Optional German PII-assisted lane (local ONNX)
@@ -280,7 +286,8 @@ never shipped with stella packages.
 bun run bench:compare
 ```
 
-Writes `results/<date>.json`, `results/<date>.md`, and `results/latest.md`.
+Writes `results/<date>.json`, `results/<date>.md`, and
+`results/development-latest.md`.
 
 ## Corpus and ground truth
 

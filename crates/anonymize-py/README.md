@@ -33,6 +33,7 @@ languages = anonymize.available_default_native_pipeline_languages()
 prepared = anonymize.preload_default_native_pipeline(
     language="en" if "en" in languages else None
 )
+text = "Contact Alice Smith at alice@example.com."
 result = prepared.redact_text(text, redact_string="***")
 
 print(result.redaction.redacted_text)

@@ -193,6 +193,8 @@ jobs:
       - uses: ./.github/actions/setup-bun-workspace
         with:
           repository-checks: "true"
+      - name: Audit Bun dependencies
+        run: bun audit
       - uses: ./.github/actions/setup-rust-ci
         with:
           profile: build

@@ -18,7 +18,7 @@ export type Timing = {
   readonly initSeconds: number;
   /** First full pass over the corpus (includes any lazy first-use cost). */
   readonly coldSeconds: number;
-  /** Second full pass over the corpus (steady state). */
+  /** Second full pass over the corpus; not a steady-state guarantee. */
   readonly warmSeconds: number;
   /** Total UTF-16 code units processed in one pass (the scorer's offset unit). */
   readonly totalChars: number;

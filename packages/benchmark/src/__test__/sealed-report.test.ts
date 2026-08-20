@@ -14,6 +14,7 @@ import {
 } from "../sealed-report";
 import { parseVerifiedArtifact } from "../verified-artifact";
 import { runSealedBoundary } from "../sealed-boundary";
+import { BENCHMARK_CORPORA } from "../suite/registry";
 
 const report = (): SealedAggregateReport => ({
   schemaVersion: SEALED_AGGREGATE_REPORT_SCHEMA_VERSION,
@@ -223,6 +224,112 @@ describe("sealed aggregate report contract", () => {
     }
     // A schema bump intentionally precedes regeneration of sealed results.
     expect(aggregateReportCount).toBeGreaterThan(0);
+  });
+
+  test("latest held-out reports measure the current stella release", () => {
+    const rootResult = Bun.spawnSync(["git", "rev-parse", "--show-toplevel"]);
+    if (!rootResult.success || rootResult.exitCode !== 0) {
+      throw new Error("benchmark tests must run inside a Git repository");
+    }
+    const root = rootResult.stdout.toString().trim();
+    const packageJson: unknown = JSON.parse(
+      readFileSync(join(root, "packages/anonymize/package.json"), "utf8"),
+    );
+    if (
+      packageJson === null ||
+      typeof packageJson !== "object" ||
+      Array.isArray(packageJson) ||
+      !("version" in packageJson) ||
+      typeof packageJson.version !== "string"
+    ) {
+      throw new Error("anonymize package version is invalid");
+    }
+
+    const reportsResult = Bun.spawnSync(
+      [
+        "git",
+        "ls-files",
+        "-z",
+        "--cached",
+        "--others",
+        "--exclude-standard",
+        "--",
+        "packages/benchmark/results/blind/*.json",
+        "packages/benchmark/results/blind/**/*.json",
+      ],
+      { cwd: root },
+    );
+    if (!reportsResult.success || reportsResult.exitCode !== 0) {
+      throw new Error("could not enumerate held-out benchmark reports");
+    }
+
+    const latestByCorpus = new Map<string, SealedAggregateReport>();
+    for (const jsonPath of reportsResult.stdout
+      .toString()
+      .split("\0")
+      .filter((path) => path !== "")) {
+      const parsed: unknown = JSON.parse(
+        readFileSync(join(root, jsonPath), "utf8"),
+      );
+      if (
+        parsed === null ||
+        typeof parsed !== "object" ||
+        Array.isArray(parsed) ||
+        !("schemaVersion" in parsed) ||
+        parsed.schemaVersion !== SEALED_AGGREGATE_REPORT_SCHEMA_VERSION
+      ) {
+        continue;
+      }
+      assertSealedAggregateReport(parsed);
+      if (parsed.corpus.selection.type !== "full-test-split") {
+        continue;
+      }
+      const previous = latestByCorpus.get(parsed.corpus.id);
+      if (previous === undefined || previous.createdAt < parsed.createdAt) {
+        latestByCorpus.set(parsed.corpus.id, parsed);
+      }
+    }
+
+    const expectedCorpora = BENCHMARK_CORPORA.filter(
+      ({ execution, policy, runnable }) =>
+        runnable && policy === "evaluation-only" && execution !== undefined,
+    );
+    const expectedByCorpus = new Map(
+      expectedCorpora.map((corpus) => [corpus.id, corpus]),
+    );
+    const expectedCorpusIds = [...expectedByCorpus.keys()].toSorted();
+    expect([...latestByCorpus.keys()].toSorted()).toEqual(expectedCorpusIds);
+
+    for (const corpusId of expectedCorpusIds) {
+      const current = latestByCorpus.get(corpusId);
+      const expected = expectedByCorpus.get(corpusId);
+      if (expected?.artifact === undefined) {
+        throw new Error(`${corpusId} has no pinned registry artifact`);
+      }
+      if (expected.artifact.split !== "test") {
+        throw new Error(`${corpusId} does not pin the evaluation test split`);
+      }
+      expect(current?.corpus.source, `${corpusId} uses a stale source`).toBe(
+        expected.source,
+      );
+      expect(current?.corpus.version, `${corpusId} uses a stale version`).toBe(
+        expected.version,
+      );
+      expect(current?.corpus.file, `${corpusId} uses a stale artifact`).toBe(
+        expected.artifact.file,
+      );
+      expect(current?.corpus.sha256, `${corpusId} uses a stale checksum`).toBe(
+        expected.artifact.sha256,
+      );
+      expect(current?.corpus.split, `${corpusId} uses a stale split`).toBe(
+        expected.artifact.split,
+      );
+      const stella = current?.libraries.find(({ name }) => name === "stella");
+      expect(stella?.status, `${corpusId} must include stella`).toBe("ok");
+      expect(stella?.version, `${corpusId} uses a stale stella version`).toBe(
+        packageJson.version,
+      );
+    }
   });
 
   test("rejects text, examples, predictions, and per-document fields at every report boundary", () => {
