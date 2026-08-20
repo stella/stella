@@ -145,6 +145,7 @@ export const legislationDocuments = p.pgTable(
     p.index("legislation_documents_status_idx").on(t.status),
     p.index("legislation_documents_effective_date_idx").on(t.effectiveDate),
     p.index("legislation_documents_created_at_idx").on(t.createdAt),
+    p.index("legislation_documents_updated_id_idx").on(t.updatedAt, t.id),
     p
       .index("legislation_documents_citation_authority_idx")
       .on(t.citationAuthority),

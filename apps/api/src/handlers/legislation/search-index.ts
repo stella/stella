@@ -10,6 +10,7 @@ import { redistributableLegislationSource } from "@/api/handlers/legislation/red
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { setCorpusBackfillStatementTimeout } from "@/api/lib/legal-search/backfill-statement-timeout";
+import { readCorpusText } from "@/api/lib/legal-search/corpus-storage";
 import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 import { resolveFtsConfig } from "@/api/lib/legal-search/fts-config";
 import { logger } from "@/api/lib/observability/logger";
@@ -27,9 +28,23 @@ const sectionsToPlainText = (
   sections: readonly DecisionSection[] | null,
 ): string => sections?.map((s) => s.text).join(" ") ?? "";
 
+type LegislationSearchIndexDependencies = {
+  readText: typeof readCorpusText;
+  resolveConfig: typeof resolveFtsConfig;
+};
+
+const DEFAULT_DEPENDENCIES: LegislationSearchIndexDependencies = {
+  readText: readCorpusText,
+  resolveConfig: resolveFtsConfig,
+};
+
 export const indexLegislationDocument = async (
   documentId: SafeId<"legislationDocument">,
   scopedDb: ScopedDb,
+  {
+    readText,
+    resolveConfig,
+  }: LegislationSearchIndexDependencies = DEFAULT_DEPENDENCIES,
 ): Promise<void> => {
   const [document] = await scopedDb((tx) =>
     tx
@@ -40,6 +55,7 @@ export const indexLegislationDocument = async (
         language: legislationDocuments.language,
         fulltext: legislationDocuments.fulltext,
         sections: legislationDocuments.sections,
+        textS3Key: legislationDocuments.textS3Key,
       })
       .from(legislationDocuments)
       .innerJoin(
@@ -60,17 +76,22 @@ export const indexLegislationDocument = async (
     return;
   }
 
-  const bodyText =
-    document.fulltext ??
-    // SAFETY: sections is typed unknown in Drizzle's JSONB column but is
-    // always DecisionSection[] | null when set by ingestion.
-    sectionsToPlainText(document.sections);
+  let bodyText: string;
+  if (document.fulltext !== null) {
+    bodyText = document.fulltext;
+  } else if (document.sections !== null) {
+    bodyText = sectionsToPlainText(document.sections);
+  } else if (document.textS3Key !== null) {
+    bodyText = await readText(document.textS3Key);
+  } else {
+    bodyText = "";
+  }
 
   const searchableText = [document.eli, document.title, bodyText]
     .filter(Boolean)
     .join(" ");
 
-  const fts = await resolveFtsConfig(document.language);
+  const fts = await resolveConfig(document.language);
 
   const textExpr = fts.useUnaccent
     ? sql`unaccent(arabic_normalize(coalesce(${document.title}, '') || ' ' || coalesce(${searchableText}, '')))`
