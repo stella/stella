@@ -14,6 +14,7 @@ import {
   layoutResourceCalendarEntries,
   nextCalendarDate,
 } from "./resource-calendar.logic";
+import type { ResourceCalendarLanePlacement } from "./resource-calendar.logic";
 
 export type ResourceCalendarColumn = {
   date: string;
@@ -52,6 +53,11 @@ type ResourceCalendarProps = {
   onSelectEntry?: (entry: ResourceCalendarEntry) => void;
   resourceHeader: ReactNode;
   resources: readonly ResourceCalendarResource[];
+};
+
+type PlacedResourceCalendarEntry = {
+  entry: ResourceCalendarEntry;
+  placement: ResourceCalendarLanePlacement;
 };
 
 export const ResourceCalendar = ({
@@ -133,15 +139,33 @@ export const ResourceCalendar = ({
             resourceEntries,
             visibleRange,
           );
-          const placementsByEntryId = new Map(
-            layout.placements.map((placement) => [
-              placement.entryId,
-              placement,
-            ]),
+          const resourceEntryById = new Map(
+            resourceEntries.map((entry) => [entry.id, entry]),
           );
+          const visibleEntriesByColumn = new Map<
+            number,
+            PlacedResourceCalendarEntry[]
+          >();
+          for (const placement of layout.placements) {
+            const entry = resourceEntryById.get(placement.entryId);
+            if (entry === undefined) {
+              throw new TypeError(
+                `Resource calendar layout references unknown entry ${placement.entryId}`,
+              );
+            }
+            const existing = visibleEntriesByColumn.get(placement.columnStart);
+            if (existing === undefined) {
+              visibleEntriesByColumn.set(placement.columnStart, [
+                { entry, placement },
+              ]);
+              continue;
+            }
+            existing.push({ entry, placement });
+          }
           const resourceHeaderId = `${calendarId}-resource-${String(resourceIndex)}`;
-          const spanningCellStyle = {
-            gridRow: `1 / span ${String(layout.rowCount)}`,
+          const resourceRowStyle = {
+            ...gridStyle,
+            minHeight: `${String(Math.max(5, layout.rowCount * 3.75))}rem`,
           } satisfies CSSProperties;
 
           return (
@@ -150,7 +174,7 @@ export const ResourceCalendar = ({
               data-slot="resource-calendar-row"
               key={resource.id}
               role="row"
-              style={gridStyle}
+              style={resourceRowStyle}
             >
               <CalendarCell
                 aria-colindex={1}
@@ -158,7 +182,6 @@ export const ResourceCalendar = ({
                 className="bg-card sticky start-0 z-20 border-b-0 px-4 py-3"
                 id={resourceHeaderId}
                 role="rowheader"
-                style={spanningCellStyle}
               >
                 <span className="block truncate text-sm font-semibold">
                   {resource.label}
@@ -169,38 +192,40 @@ export const ResourceCalendar = ({
                   </span>
                 )}
               </CalendarCell>
-              {columns.map((column, columnIndex) => (
-                <CalendarCell
-                  aria-colindex={columnIndex + 2}
-                  aria-labelledby={`${resourceHeaderId} ${getColumnHeaderId(columnIndex)}`}
-                  aria-rowindex={resourceIndex + 2}
-                  className="bg-background/40 border-b-0 last:border-e-0"
-                  key={column.date}
-                  role="gridcell"
-                  style={spanningCellStyle}
-                />
-              ))}
-              {resourceEntries.map((entry) => {
-                const placement = placementsByEntryId.get(entry.id);
-                if (placement === undefined) {
-                  return null;
-                }
-                const firstColumnIndex = placement.columnStart - 2;
-                const labelledBy = [
-                  resourceHeaderId,
-                  ...Array.from({ length: placement.span }, (_, index) =>
-                    getColumnHeaderId(firstColumnIndex + index),
-                  ),
-                ].join(" ");
+              {columns.map((column, columnIndex) => {
+                const columnStart = columnIndex + 2;
+                const visibleEntries =
+                  visibleEntriesByColumn.get(columnStart) ?? [];
 
                 return (
-                  <ResourceCalendarEntryView
-                    entry={entry}
-                    key={entry.id}
-                    labelledBy={labelledBy}
-                    onSelectEntry={onSelectEntry}
-                    placement={placement}
-                  />
+                  <CalendarCell
+                    aria-colindex={columnStart}
+                    aria-labelledby={`${resourceHeaderId} ${getColumnHeaderId(columnIndex)}`}
+                    aria-rowindex={resourceIndex + 2}
+                    className="bg-background/40 relative border-b-0 last:border-e-0"
+                    key={column.date}
+                    role="gridcell"
+                  >
+                    {visibleEntries.map(({ entry, placement }) => {
+                      const labelledBy = [
+                        resourceHeaderId,
+                        ...Array.from({ length: placement.span }, (_, index) =>
+                          getColumnHeaderId(columnIndex + index),
+                        ),
+                      ].join(" ");
+
+                      return (
+                        <ResourceCalendarEntryView
+                          entry={entry}
+                          key={entry.id}
+                          labelledBy={labelledBy}
+                          onSelectEntry={onSelectEntry}
+                          placement={placement}
+                          rowCount={layout.rowCount}
+                        />
+                      );
+                    })}
+                  </CalendarCell>
                 );
               })}
             </div>
@@ -223,19 +248,23 @@ const ResourceCalendarEntryView = ({
   labelledBy,
   onSelectEntry,
   placement,
+  rowCount,
 }: {
   entry: ResourceCalendarEntry;
   labelledBy: string;
   onSelectEntry: ResourceCalendarProps["onSelectEntry"];
-  placement: { columnStart: number; rowStart: number; span: number };
+  placement: ResourceCalendarLanePlacement;
+  rowCount: number;
 }) => {
   const className = cn(
     "h-full w-full px-3 py-2 font-medium shadow-sm",
     RESOURCE_CALENDAR_ENTRY_TONES[entry.tone ?? "accent"],
   );
   const style = {
-    gridColumn: `${String(placement.columnStart)} / span ${String(placement.span)}`,
-    gridRow: placement.rowStart,
+    blockSize: `${String(100 / rowCount)}%`,
+    insetBlockStart: `${String(((placement.rowStart - 1) * 100) / rowCount)}%`,
+    insetInlineStart: 0,
+    inlineSize: `calc(${String(placement.span)} * 100%)`,
   } satisfies CSSProperties;
   const content = (
     <>
@@ -247,14 +276,10 @@ const ResourceCalendarEntryView = ({
   );
 
   return (
-    <div
-      aria-labelledby={labelledBy}
-      className="z-10 m-2 min-w-0"
-      role="gridcell"
-      style={style}
-    >
+    <div className="absolute z-10 min-w-0 p-2" style={style}>
       {onSelectEntry === undefined ? (
         <CalendarEntrySurface
+          aria-describedby={labelledBy}
           aria-label={entry.accessibleLabel}
           className={className}
         >
@@ -262,6 +287,7 @@ const ResourceCalendarEntryView = ({
         </CalendarEntrySurface>
       ) : (
         <CalendarEntryButton
+          aria-describedby={labelledBy}
           aria-label={entry.accessibleLabel}
           className={className}
           onClick={() => onSelectEntry(entry)}
