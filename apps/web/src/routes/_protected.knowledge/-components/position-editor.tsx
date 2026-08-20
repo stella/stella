@@ -1,12 +1,12 @@
 import { useState } from "react";
 
-import { combine } from "@atlaskit/pragmatic-drag-and-drop/combine";
 import {
   draggable,
   dropTargetForElements,
-} from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
-import { preserveOffsetOnSource } from "@atlaskit/pragmatic-drag-and-drop/element/preserve-offset-on-source";
-import { setCustomNativeDragPreview } from "@atlaskit/pragmatic-drag-and-drop/element/set-custom-native-drag-preview";
+} from "@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter";
+import { combine } from "@atlaskit/pragmatic-drag-and-drop/utils/combine";
+import { preserveOffsetOnSource } from "@atlaskit/pragmatic-drag-and-drop/utils/preserve-offset-on-source";
+import { setCustomNativeDragPreview } from "@atlaskit/pragmatic-drag-and-drop/utils/set-custom-native-drag-preview";
 import { useQuery } from "@tanstack/react-query";
 import {
   ChevronDownIcon,
@@ -62,6 +62,10 @@ import { cn } from "@stll/ui/utils";
 
 import { ConditionBuilder } from "@/components/conditions/condition-builder";
 import type { FieldOption } from "@/components/conditions/condition-builder-logic";
+import {
+  withDragAnnouncementData,
+  withDropAnnouncementData,
+} from "@/components/drag-and-drop-live-region.logic";
 import { Switch } from "@/components/switch";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
@@ -247,6 +251,8 @@ export const PositionEditor = ({
   const [cardRef, setCardRef] = useState<HTMLElement | null>(null);
   const [gripRef, setGripRef] = useState<HTMLButtonElement | null>(null);
   const { sourceId } = position;
+  const announcementName =
+    position.issue.trim() || t("knowledge.playbooks.untitledPosition");
   const bodyId = `position-body-${sourceId}`;
   const handleReorder = useLatestCallback(onReorder);
 
@@ -258,7 +264,11 @@ export const PositionEditor = ({
       draggable({
         element: cardRef,
         dragHandle: gripRef,
-        getInitialData: () => ({ type: POSITION_DRAG_TYPE, sourceId }),
+        getInitialData: () =>
+          withDragAnnouncementData(
+            { type: POSITION_DRAG_TYPE, sourceId },
+            announcementName,
+          ),
         onGenerateDragPreview: ({ location, nativeSetDragImage }) => {
           setCustomNativeDragPreview({
             nativeSetDragImage,
@@ -286,6 +296,11 @@ export const PositionEditor = ({
         canDrop: ({ source }) =>
           source.data["type"] === POSITION_DRAG_TYPE &&
           source.data["sourceId"] !== sourceId,
+        getData: () =>
+          withDropAnnouncementData(
+            {},
+            { type: "reorder", name: announcementName },
+          ),
         onDragEnter: () => setIsDropTarget(true),
         onDragLeave: () => setIsDropTarget(false),
         onDrop: ({ source }) => {
@@ -297,7 +312,7 @@ export const PositionEditor = ({
         },
       }),
     );
-  }, [cardRef, gripRef, sourceId, handleReorder]);
+  }, [announcementName, cardRef, gripRef, sourceId, handleReorder]);
 
   const handleGripKeyDown = (event: React.KeyboardEvent) => {
     if (event.key === "ArrowUp") {

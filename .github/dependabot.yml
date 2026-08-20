@@ -186,6 +186,9 @@ updates:
       tiptap:
         patterns:
           - "@tiptap/*"
+      atlaskit:
+        patterns:
+          - "@atlaskit/*"
       drizzle:
         patterns:
           - "drizzle-orm"

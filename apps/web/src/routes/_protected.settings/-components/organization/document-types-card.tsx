@@ -8,13 +8,13 @@
 
 import { useState } from "react";
 
-import { combine } from "@atlaskit/pragmatic-drag-and-drop/combine";
 import {
   draggable,
   dropTargetForElements,
-} from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
-import { preserveOffsetOnSource } from "@atlaskit/pragmatic-drag-and-drop/element/preserve-offset-on-source";
-import { setCustomNativeDragPreview } from "@atlaskit/pragmatic-drag-and-drop/element/set-custom-native-drag-preview";
+} from "@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter";
+import { combine } from "@atlaskit/pragmatic-drag-and-drop/utils/combine";
+import { preserveOffsetOnSource } from "@atlaskit/pragmatic-drag-and-drop/utils/preserve-offset-on-source";
+import { setCustomNativeDragPreview } from "@atlaskit/pragmatic-drag-and-drop/utils/set-custom-native-drag-preview";
 import { useQuery } from "@tanstack/react-query";
 import { useRouteContext } from "@tanstack/react-router";
 import { GripVerticalIcon, PlusIcon, Trash2Icon } from "lucide-react";
@@ -24,6 +24,10 @@ import { Button } from "@stll/ui/button";
 import { Input } from "@stll/ui/input";
 import { cn } from "@stll/ui/utils";
 
+import {
+  withDragAnnouncementData,
+  withDropAnnouncementData,
+} from "@/components/drag-and-drop-live-region.logic";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { api } from "@/lib/api";
@@ -172,7 +176,11 @@ const DocumentTypeRow = ({ type, onReorder }: DocumentTypeRowProps) => {
       draggable({
         element: rowRef,
         dragHandle: gripRef,
-        getInitialData: () => ({ type: DOCUMENT_TYPE_DRAG_TYPE, id: type.id }),
+        getInitialData: () =>
+          withDragAnnouncementData(
+            { type: DOCUMENT_TYPE_DRAG_TYPE, id: type.id },
+            type.label,
+          ),
         onGenerateDragPreview: ({ location, nativeSetDragImage }) => {
           setCustomNativeDragPreview({
             nativeSetDragImage,
@@ -196,6 +204,8 @@ const DocumentTypeRow = ({ type, onReorder }: DocumentTypeRowProps) => {
         canDrop: ({ source }) =>
           source.data["type"] === DOCUMENT_TYPE_DRAG_TYPE &&
           source.data["id"] !== type.id,
+        getData: () =>
+          withDropAnnouncementData({}, { type: "reorder", name: type.label }),
         onDragEnter: () => setIsDropTarget(true),
         onDragLeave: () => setIsDropTarget(false),
         onDrop: ({ source }) => {
@@ -207,7 +217,7 @@ const DocumentTypeRow = ({ type, onReorder }: DocumentTypeRowProps) => {
         },
       }),
     );
-  }, [rowRef, gripRef, type.id, handleReorder]);
+  }, [rowRef, gripRef, type.id, type.label, handleReorder]);
 
   const renameMutation = useSettingsMutation({
     mutationFn: async (label: string) =>

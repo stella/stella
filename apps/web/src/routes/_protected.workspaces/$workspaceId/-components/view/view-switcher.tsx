@@ -4,11 +4,11 @@ import {
   attachClosestEdge,
   extractClosestEdge,
 } from "@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge";
-import { combine } from "@atlaskit/pragmatic-drag-and-drop/combine";
 import {
   draggable,
   dropTargetForElements,
-} from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
+} from "@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter";
+import { combine } from "@atlaskit/pragmatic-drag-and-drop/utils/combine";
 import { useQuery } from "@tanstack/react-query";
 import {
   BookmarkIcon,
@@ -58,6 +58,10 @@ import { Tabs, TabsList, TabsTab } from "@stll/ui/tabs";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
+import {
+  withDragAnnouncementData,
+  withDropAnnouncementData,
+} from "@/components/drag-and-drop-live-region.logic";
 import { InlineEdit } from "@/components/inline-edit";
 import { useAnchoredMenu } from "@/components/inspector/use-anchored-menu";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
@@ -459,10 +463,11 @@ const ViewTab = ({
             draggable({
               element: tabContainer,
               canDrag: canDragTab,
-              getInitialData: () => ({
-                type: VIEW_DRAG_TYPE,
-                viewId: id,
-              }),
+              getInitialData: () =>
+                withDragAnnouncementData(
+                  { type: VIEW_DRAG_TYPE, viewId: id },
+                  name,
+                ),
             }),
           ]
         : []),
@@ -473,7 +478,7 @@ const ViewTab = ({
           source.data["viewId"] !== id,
         getData: ({ input, element }) =>
           attachClosestEdge(
-            { viewId: id },
+            withDropAnnouncementData({ viewId: id }, { type: "reorder", name }),
             { element, input, allowedEdges: ["left", "right"] },
           ),
         // Hold the target while the pointer crosses the gap to the next tab so
@@ -493,7 +498,15 @@ const ViewTab = ({
         },
       }),
     );
-  }, [id, canUpdateView, canDragTab, direction, handleReorder, tabContainer]);
+  }, [
+    id,
+    name,
+    canUpdateView,
+    canDragTab,
+    direction,
+    handleReorder,
+    tabContainer,
+  ]);
 
   const handleRename = () => {
     const trimmed = renameValue.trim();

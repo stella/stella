@@ -7,11 +7,9 @@ import {
   useState,
 } from "react";
 
-import { dropTargetForExternal } from "@atlaskit/pragmatic-drag-and-drop/external/adapter";
-import {
-  containsFiles,
-  getFiles,
-} from "@atlaskit/pragmatic-drag-and-drop/external/file";
+import { dropTargetForExternal } from "@atlaskit/pragmatic-drag-and-drop/adapter/drop-target-for-external";
+import { containsFiles } from "@atlaskit/pragmatic-drag-and-drop/utils/contains-files";
+import { getFiles } from "@atlaskit/pragmatic-drag-and-drop/utils/get-files";
 import {
   keepPreviousData,
   useQuery,

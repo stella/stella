@@ -1,8 +1,8 @@
 import { useCallback, useRef, useState } from "react";
 import type React from "react";
 
-import { draggable } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
-import { setCustomNativeDragPreview } from "@atlaskit/pragmatic-drag-and-drop/element/set-custom-native-drag-preview";
+import { draggable } from "@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter";
+import { setCustomNativeDragPreview } from "@atlaskit/pragmatic-drag-and-drop/utils/set-custom-native-drag-preview";
 import { flexRender, type RowSelectionState } from "@tanstack/react-table";
 import {
   row_getIsExpanded,
@@ -20,6 +20,7 @@ import {
 } from "@stll/ui/use-contained-handler";
 import { cn } from "@stll/ui/utils";
 
+import { withDragAnnouncementData } from "@/components/drag-and-drop-live-region.logic";
 import { renderDragPreview } from "@/components/drag-preview";
 import { InlineEdit } from "@/components/inline-edit";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
@@ -398,20 +399,24 @@ export const DraggableRow = ({
 
     return draggable({
       element: el,
-      getInitialData: () => ({
-        type: ENTITY_DRAG_TYPE,
-        entityId: entity.entityId,
-        entityIds: [entity.entityId],
-        entities: [
+      getInitialData: () =>
+        withDragAnnouncementData(
           {
+            type: ENTITY_DRAG_TYPE,
             entityId: entity.entityId,
-            name,
-            kind: entity.kind,
-            mimeType: file?.mimeType ?? null,
-            parentId: entity.parentId ?? null,
+            entityIds: [entity.entityId],
+            entities: [
+              {
+                entityId: entity.entityId,
+                name,
+                kind: entity.kind,
+                mimeType: file?.mimeType ?? null,
+                parentId: entity.parentId ?? null,
+              },
+            ],
           },
-        ],
-      }),
+          name,
+        ),
       onGenerateDragPreview: ({ nativeSetDragImage }) => {
         setCustomNativeDragPreview({
           nativeSetDragImage,

@@ -1,8 +1,8 @@
 import { useRef } from "react";
 
-import { draggable } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
-import { centerUnderPointer } from "@atlaskit/pragmatic-drag-and-drop/element/center-under-pointer";
-import { setCustomNativeDragPreview } from "@atlaskit/pragmatic-drag-and-drop/element/set-custom-native-drag-preview";
+import { draggable } from "@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter";
+import { centerUnderPointer } from "@atlaskit/pragmatic-drag-and-drop/utils/center-under-pointer";
+import { setCustomNativeDragPreview } from "@atlaskit/pragmatic-drag-and-drop/utils/set-custom-native-drag-preview";
 import { useTranslations } from "use-intl";
 
 import { isTaskStatus } from "@stll/api-contract";
@@ -11,6 +11,7 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
 import { containedHandler } from "@stll/ui/use-contained-handler";
 import { cn } from "@stll/ui/utils";
 
+import { withDragAnnouncementData } from "@/components/drag-and-drop-live-region.logic";
 import type { DragPreviewData } from "@/components/drag-preview";
 import { renderDragPreview } from "@/components/drag-preview";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
@@ -63,13 +64,17 @@ export const CalendarEntityChip = ({
     }
     return draggable({
       element: el,
-      getInitialData: () => ({
-        type: ENTITY_DRAG_TYPE,
-        entityId: entity.taskId,
-        name,
-        kind: "task",
-        mimeType: null,
-      }),
+      getInitialData: () =>
+        withDragAnnouncementData(
+          {
+            type: ENTITY_DRAG_TYPE,
+            entityId: entity.taskId,
+            name,
+            kind: "task",
+            mimeType: null,
+          },
+          name,
+        ),
       onGenerateDragPreview: ({ nativeSetDragImage }) => {
         setCustomNativeDragPreview({
           nativeSetDragImage,

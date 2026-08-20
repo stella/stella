@@ -1,0 +1,158 @@
+const DRAG_ANNOUNCEMENT_KEY = "stella/drag-announcement";
+
+type DragAnnouncementItem = {
+  type: "item";
+  name: string;
+};
+
+export type DragAnnouncementDestination = {
+  type: "action" | "container" | "reorder";
+  name: string;
+};
+
+export type DragAnnouncementPhase = "moved" | "moving";
+
+const MESSAGE_KEY_BY_PHASE = {
+  moved: {
+    action: "droppedOn",
+    container: "movedTo",
+    reorder: "movedNear",
+  },
+  moving: {
+    action: "movingTo",
+    container: "movingTo",
+    reorder: "movingNear",
+  },
+} as const satisfies Record<
+  DragAnnouncementPhase,
+  Record<DragAnnouncementDestination["type"], string>
+>;
+
+export const getDragAnnouncementMessageKey = (
+  phase: DragAnnouncementPhase,
+  destinationType: DragAnnouncementDestination["type"],
+) => MESSAGE_KEY_BY_PHASE[phase][destinationType];
+
+type FormatDestinationAnnouncementOptions = {
+  destination: DragAnnouncementDestination;
+  itemName: string;
+  phase: DragAnnouncementPhase;
+};
+
+export const formatDragDestinationAnnouncement = ({
+  destination,
+  itemName,
+  phase,
+}: FormatDestinationAnnouncementOptions): string => {
+  const messageKey = getDragAnnouncementMessageKey(phase, destination.type);
+  switch (messageKey) {
+    case "movingTo":
+      return `Moving ${itemName} to ${destination.name}.`;
+    case "movingNear":
+      return `Moving ${itemName} near ${destination.name}.`;
+    case "droppedOn":
+      return `Dropped ${itemName} on ${destination.name}.`;
+    case "movedTo":
+      return `Moved ${itemName} to ${destination.name}.`;
+    case "movedNear":
+      return `Moved ${itemName} near ${destination.name}.`;
+    default:
+      return messageKey satisfies never;
+  }
+};
+
+export const formatDragCancellationAnnouncement = (itemName: string): string =>
+  `Move cancelled. ${itemName} was not moved.`;
+
+export const formatDragPickupAnnouncement = (itemName: string): string =>
+  `Picked up ${itemName}.`;
+
+export const formatSelectedItemsAnnouncement = (count: number): string =>
+  `${count} selected items`;
+
+type DragAnnouncementData = DragAnnouncementItem | DragAnnouncementDestination;
+type DragDataRecord = Record<string, unknown>;
+type DropDataRecord = Record<string | symbol, unknown>;
+
+export const withDragAnnouncementData = (
+  data: DragDataRecord,
+  name: string,
+): DragDataRecord => {
+  data[DRAG_ANNOUNCEMENT_KEY] = { type: "item", name };
+  return data;
+};
+
+export const withDropAnnouncementData = (
+  data: DropDataRecord,
+  destination: DragAnnouncementDestination,
+): DropDataRecord => {
+  data[DRAG_ANNOUNCEMENT_KEY] = destination;
+  return data;
+};
+
+const readAnnouncementData = (
+  data: Record<string | symbol, unknown>,
+): DragAnnouncementData | null => {
+  const value = data[DRAG_ANNOUNCEMENT_KEY];
+  if (typeof value !== "object" || value === null) {
+    return null;
+  }
+  if (!("type" in value) || !("name" in value)) {
+    return null;
+  }
+
+  const { name, type } = value;
+  if (typeof name !== "string" || name.length === 0) {
+    return null;
+  }
+  if (type === "item") {
+    return { type, name };
+  }
+  if (type === "action" || type === "container" || type === "reorder") {
+    return { type, name };
+  }
+  return null;
+};
+
+export const getDragAnnouncementName = (
+  data: Record<string | symbol, unknown>,
+): string | null => {
+  const announcement = readAnnouncementData(data);
+  if (!announcement) {
+    return null;
+  }
+  switch (announcement.type) {
+    case "item":
+      return announcement.name;
+    case "action":
+    case "container":
+    case "reorder":
+      return null;
+    default:
+      return announcement satisfies never;
+  }
+};
+
+type DropTargetWithData = {
+  data: Record<string | symbol, unknown>;
+};
+
+export const getDropAnnouncementDestination = (
+  dropTargets: readonly DropTargetWithData[],
+): DragAnnouncementDestination | null => {
+  for (const target of dropTargets) {
+    const announcement = readAnnouncementData(target.data);
+    if (!announcement) {
+      continue;
+    }
+    switch (announcement.type) {
+      case "action":
+      case "container":
+      case "reorder":
+        return announcement;
+      case "item":
+        continue;
+    }
+  }
+  return null;
+};

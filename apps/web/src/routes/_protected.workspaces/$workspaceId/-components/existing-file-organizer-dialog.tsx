@@ -1,10 +1,10 @@
 import { useMemo, useRef, useState } from "react";
 
-import { combine } from "@atlaskit/pragmatic-drag-and-drop/combine";
 import {
   draggable,
   dropTargetForElements,
-} from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
+} from "@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter";
+import { combine } from "@atlaskit/pragmatic-drag-and-drop/utils/combine";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   ChevronDownIcon,
@@ -36,8 +36,12 @@ import { Textarea } from "@stll/ui/textarea";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
+import {
+  withDragAnnouncementData,
+  withDropAnnouncementData,
+} from "@/components/drag-and-drop-live-region.logic";
 import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
-import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useFormatter } from "@/i18n/formatting-context";
 import { useI18nStore } from "@/i18n/i18n-store";
@@ -976,8 +980,9 @@ const OrganizerTreePreview = ({
   const [isRootOver, setIsRootOver] = useState(false);
   const handleMoveFile = useLatestCallback(onMoveFile);
   const handleMoveFolder = useLatestCallback(onMoveFolder);
+  const rootFolderAnnouncementName = t("workspaces.copyToMatter.rootFolder");
 
-  useMountEffect(() => {
+  useExternalSyncEffect(() => {
     const el = containerRef.current;
     if (!el) {
       return undefined;
@@ -985,7 +990,14 @@ const OrganizerTreePreview = ({
     return dropTargetForElements({
       element: el,
       canDrop: ({ source }) => isOrganizerDragData(source.data),
-      getData: () => ({ folderPath: "" }),
+      getData: () =>
+        withDropAnnouncementData(
+          { folderPath: "" },
+          {
+            type: "container",
+            name: rootFolderAnnouncementName,
+          },
+        ),
       onDragEnter: ({ location }) => {
         if (location.current.dropTargets[0]?.element === el) {
           setIsRootOver(true);
@@ -1011,7 +1023,7 @@ const OrganizerTreePreview = ({
         }
       },
     });
-  });
+  }, [handleMoveFile, handleMoveFolder, rootFolderAnnouncementName]);
 
   if (rows.length === 0) {
     return (
@@ -1091,11 +1103,15 @@ const OrganizerFolderNode = ({
       draggable({
         element: el,
         dragHandle: handle,
-        getInitialData: () => ({
-          type: ORGANIZER_DRAG_TYPE,
-          kind: "folder",
-          folderPath: folder.path,
-        }),
+        getInitialData: () =>
+          withDragAnnouncementData(
+            {
+              type: ORGANIZER_DRAG_TYPE,
+              kind: "folder",
+              folderPath: folder.path,
+            },
+            folder.name,
+          ),
       }),
       dropTargetForElements({
         element: el,
@@ -1114,7 +1130,11 @@ const OrganizerFolderNode = ({
           }
           return true;
         },
-        getData: () => ({ folderPath: folder.path }),
+        getData: () =>
+          withDropAnnouncementData(
+            { folderPath: folder.path },
+            { type: "container", name: folder.name },
+          ),
         onDragEnter: () => setIsDropTarget(true),
         onDragLeave: () => setIsDropTarget(false),
         onDrop: ({ source }) => {
@@ -1131,7 +1151,7 @@ const OrganizerFolderNode = ({
         },
       }),
     );
-  }, [folder.path, handleMoveFolder, handleMoveFile]);
+  }, [folder.name, folder.path, handleMoveFolder, handleMoveFile]);
 
   const hasChildren = folder.children.size + folder.rows.length > 0;
 
@@ -1237,6 +1257,10 @@ const OrganizerFileNode = ({
   const t = useTranslations();
   const liRef = useRef<HTMLLIElement>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const targetName = normalizeSuggestedFileName(
+    row.suggestedName,
+    row.originalName,
+  );
 
   useExternalSyncEffect(() => {
     const el = liRef.current;
@@ -1245,20 +1269,15 @@ const OrganizerFileNode = ({
     }
     return draggable({
       element: el,
-      getInitialData: () => ({
-        type: ORGANIZER_DRAG_TYPE,
-        kind: "file",
-        rowId: row.id,
-      }),
+      getInitialData: () =>
+        withDragAnnouncementData(
+          { type: ORGANIZER_DRAG_TYPE, kind: "file", rowId: row.id },
+          targetName,
+        ),
       onDragStart: () => setIsDragging(true),
       onDrop: () => setIsDragging(false),
     });
-  }, [row.id]);
-
-  const targetName = normalizeSuggestedFileName(
-    row.suggestedName,
-    row.originalName,
-  );
+  }, [row.id, targetName]);
   const isRenamed = targetName !== row.originalName;
   const secondaryParts: string[] = [];
   if (isRenamed) {
