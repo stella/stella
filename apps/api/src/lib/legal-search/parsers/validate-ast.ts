@@ -80,9 +80,41 @@ const trimNonLetters = (word: string): string => {
   return word.slice(start, end);
 };
 
+// A decorative marker sits flush against its neighbour in some source
+// HTML ("[OBRÁZEK]ČESKÁ", "[OBRÁZEK][OBRÁZEK]"). Deleting the brackets
+// alone fuses the marker to that neighbour, and the fused token
+// ("obrázekčeská") matches no SKIP_WORDS entry, so a marker the AST is
+// right to drop is reported missing. Same failure as the <br> gluing
+// handled in validateAst: make the boundary a separator. Only a group
+// whose content is itself skippable becomes one, because anonymization
+// markers are mid-word ("[o]rganizace") and must stay joined.
+//
+// Scanned rather than matched with `/\[([^\]]*)\]/gu`: that literal is
+// super-linear under scslre (the `super-linear-regexes` ratchet is at 0
+// and stays there), and a court document is exactly the oversized input
+// that turns the backtracking into blocking CPU. Both indexOf cursors
+// only ever advance, so this is one pass over the text.
+const separateSkipMarkers = (text: string): string => {
+  let separated = "";
+  let index = 0;
+  while (index < text.length) {
+    const open = text.indexOf("[", index);
+    const close = open === -1 ? -1 : text.indexOf("]", open + 1);
+    if (close === -1) {
+      return separated + text.slice(index);
+    }
+    const marker = trimNonLetters(text.slice(open + 1, close).toLowerCase());
+    separated +=
+      text.slice(index, open) +
+      (SKIP_WORDS.has(marker) ? " " : text.slice(open, close + 1));
+    index = close + 1;
+  }
+  return separated;
+};
+
 const extractWords = (text: string): Set<string> => {
   const words = new Set<string>();
-  for (const w of text.split(/\s+/u)) {
+  for (const w of separateSkipMarkers(text).split(/\s+/u)) {
     // Strip brackets first (anonymization markers like
     // "[o]rganizace" or "[OBRÁZEK]"), then trim remaining
     // non-letter chars from edges.

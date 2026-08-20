@@ -178,6 +178,42 @@ describe("validateAst", () => {
       }
     });
 
+    test("treats a decorative marker as a word boundary, not glue", () => {
+      // Real NSS pattern: image placeholders run flush against the
+      // heading text and against each other, with no whitespace
+      // between them. The space-separated form above cannot reach this
+      // path, because splitting on whitespace already separates it.
+      const html = wrapInHtml(
+        "[OBRÁZEK]ČESKÁ REPUBLIKA [OBRÁZEK][OBRÁZEK] rozsudek",
+      );
+      const blocks: Block[] = [
+        makeHeading("H"),
+        makeBlock({ plainText: "rozsudek" }),
+      ];
+
+      const result = validateAst(html, blocks);
+
+      expect(result.stats.missingWords).toEqual([]);
+    });
+
+    test("keeps a mid-word anonymization marker joined", () => {
+      // "[o]rganizace" anonymizes one letter inside a word: the
+      // brackets are removed, not treated as a boundary, or the
+      // remainder ("rganizace") becomes a phantom missing word. The
+      // leading decorative marker puts both kinds of group in one
+      // token, so only the skippable one may become a boundary.
+      const html = wrapInHtml("[OBRÁZEK][o]rganizace podala kasační stížnost");
+      const blocks: Block[] = [
+        makeHeading("H"),
+        makeBlock({ plainText: "podala kasační stížnost" }),
+      ];
+
+      const result = validateAst(html, blocks);
+
+      expect(result.stats.missingWords).toContain("organizace");
+      expect(result.stats.missingWords).not.toContain("rganizace");
+    });
+
     test("respects custom maxMissingWords threshold", () => {
       const words = Array.from(
         { length: 30 },
