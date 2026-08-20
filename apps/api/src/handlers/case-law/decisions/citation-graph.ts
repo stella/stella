@@ -1,6 +1,6 @@
 import { and, asc, eq, gt, sql } from "drizzle-orm";
 import type { SQL, SQLWrapper } from "drizzle-orm";
-import { alias } from "drizzle-orm/pg-core";
+import { alias, unionAll } from "drizzle-orm/pg-core";
 import { status, t } from "elysia";
 import type { Static } from "elysia";
 
@@ -310,16 +310,18 @@ type SummarizeDecisionCitationsOptions = {
   currentYear?: number;
 };
 
-type PolarityCountRow = { polarity: string | null; count: number };
-
-const foldTreatments = (
-  rows: readonly PolarityCountRow[],
-): CitationTreatmentCounts => {
-  const counts = emptyTreatmentCounts();
-  for (const row of rows) {
-    counts[treatmentOf(row.polarity)] += row.count;
-  }
-  return counts;
+type SummaryRow = {
+  direction: CitationDirection;
+  /**
+   * The citing decision's year for an incoming row inside the timeline span;
+   * null for an outgoing row, and for an incoming row whose citing decision
+   * is undated or older than the span. Such rows still count toward the
+   * direction's totals, so the totals and the list agree even when the
+   * timeline cannot place them.
+   */
+  year: number | null;
+  polarity: string | null;
+  count: number;
 };
 
 /**
@@ -328,7 +330,9 @@ const foldTreatments = (
  *
  * Counts only what the list would show, so the rollup and the rows agree:
  * a citation whose far end may not be redistributed is absent from both.
- * Each figure is one indexed aggregate; never a walk over pages.
+ * One statement serves all three figures: each side of the graph is one
+ * indexed aggregate, and the incoming side is walked once for both its
+ * totals and its years; never a walk over pages.
  */
 export const summarizeDecisionCitationsHandler = async ({
   caseLawDb,
@@ -347,72 +351,78 @@ export const summarizeDecisionCitationsHandler = async ({
     );
   };
 
-  const countFor = async (direction: CitationDirection) =>
-    await caseLawDb((tx) =>
-      tx
-        .select({
-          polarity: caseLawCitations.polarity,
-          count: sql<number>`count(*)::int`,
-        })
-        .from(caseLawCitations)
-        .leftJoin(
-          relatedDecision,
-          eq(relatedDecision.id, DIRECTION_SPECS[direction].related),
-        )
-        .leftJoin(relatedSource, eq(relatedSource.id, relatedDecision.sourceId))
-        .where(scopeFor(direction))
-        .groupBy(caseLawCitations.polarity),
-    );
-
   const firstYear = currentYear - (CITATION_TIMELINE_MAX_YEARS - 1);
-  const citingYear = sql<number>`extract(year from ${relatedDecision.decisionDate})::int`;
-  const countIncomingByYear = async () =>
-    await caseLawDb((tx) =>
-      tx
-        .select({
-          year: citingYear,
-          polarity: caseLawCitations.polarity,
-          count: sql<number>`count(*)::int`,
-        })
-        .from(caseLawCitations)
-        .innerJoin(
-          relatedDecision,
-          eq(relatedDecision.id, DIRECTION_SPECS.incoming.related),
-        )
-        .leftJoin(relatedSource, eq(relatedSource.id, relatedDecision.sourceId))
-        .where(
-          and(
-            scopeFor("incoming"),
-            sql`${relatedDecision.decisionDate} >= make_date(${firstYear}::int, 1, 1)`,
-            sql`${relatedDecision.decisionDate} < make_date(${currentYear + 1}::int, 1, 1)`,
-          ),
-        )
-        .groupBy(citingYear, caseLawCitations.polarity)
-        .orderBy(asc(citingYear))
-        // One row per (year, stored polarity) inside the span: the date
-        // bounds above already cap it, this states the cap.
-        .limit(CITATION_TIMELINE_MAX_YEARS * (POLARITIES.length + 1)),
+  const citingYearInSpan = sql<number | null>`CASE
+    WHEN ${relatedDecision.decisionDate} >= make_date(${firstYear}::int, 1, 1)
+     AND ${relatedDecision.decisionDate} < make_date(${currentYear + 1}::int, 1, 1)
+    THEN extract(year from ${relatedDecision.decisionDate})::int
+  END`;
+  const count = sql<number>`count(*)::int`;
+
+  const rows = await caseLawDb((tx) => {
+    const incoming = tx
+      .select({
+        direction: sql<CitationDirection>`'incoming'`.as("direction"),
+        year: citingYearInSpan.as("year"),
+        polarity: caseLawCitations.polarity,
+        count: count.as("count"),
+      })
+      .from(caseLawCitations)
+      .innerJoin(
+        relatedDecision,
+        eq(relatedDecision.id, DIRECTION_SPECS.incoming.related),
+      )
+      .leftJoin(relatedSource, eq(relatedSource.id, relatedDecision.sourceId))
+      .where(scopeFor("incoming"))
+      // By ordinal: the year expression binds its bounds as parameters, and
+      // a second rendering would bind fresh ones the planner cannot match.
+      .groupBy(sql`2`, caseLawCitations.polarity);
+
+    const outgoing = tx
+      .select({
+        direction: sql<CitationDirection>`'outgoing'`.as("direction"),
+        year: sql<number | null>`NULL::int`.as("year"),
+        polarity: caseLawCitations.polarity,
+        count: count.as("count"),
+      })
+      .from(caseLawCitations)
+      .leftJoin(
+        relatedDecision,
+        eq(relatedDecision.id, DIRECTION_SPECS.outgoing.related),
+      )
+      .leftJoin(relatedSource, eq(relatedSource.id, relatedDecision.sourceId))
+      .where(scopeFor("outgoing"))
+      .groupBy(caseLawCitations.polarity);
+
+    // One row per (direction, year-or-null, stored polarity): the span and
+    // the polarity check constraint already cap it, this states the cap.
+    return unionAll(incoming, outgoing).limit(
+      (CITATION_TIMELINE_MAX_YEARS + 2) * (POLARITIES.length + 1),
     );
+  });
 
-  const [incomingRows, outgoingRows, yearRows] = await Promise.all([
-    countFor("incoming"),
-    countFor("outgoing"),
-    countIncomingByYear(),
-  ]);
-
+  const totals: Record<CitationDirection, CitationTreatmentCounts> = {
+    incoming: emptyTreatmentCounts(),
+    outgoing: emptyTreatmentCounts(),
+  };
   const byYear = new Map<number, CitationYearCounts>();
-  for (const row of yearRows) {
+  for (const row of rows satisfies readonly SummaryRow[]) {
+    const treatment = treatmentOf(row.polarity);
+    totals[row.direction][treatment] += row.count;
+    if (row.year === null) {
+      continue;
+    }
     const counts = byYear.get(row.year) ?? {
       ...emptyTreatmentCounts(),
       year: row.year,
     };
-    counts[treatmentOf(row.polarity)] += row.count;
+    counts[treatment] += row.count;
     byYear.set(row.year, counts);
   }
 
   return {
-    incoming: foldTreatments(incomingRows),
-    outgoing: foldTreatments(outgoingRows),
-    incomingByYear: [...byYear.values()],
+    incoming: totals.incoming,
+    outgoing: totals.outgoing,
+    incomingByYear: [...byYear.values()].sort((a, b) => a.year - b.year),
   };
 };
