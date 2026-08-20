@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 import { status, t } from "elysia";
 
+import { hasUsableAst } from "@stll/legal-ast/document-ast";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import { legislationDocuments, legislationSources } from "@/api/db/schema";
@@ -20,6 +21,20 @@ import {
 import type { EmptyAst } from "@/api/lib/legal-search/document-types";
 import type { LegislationReadDb } from "@/api/lib/legislation-public-read-db";
 
+type LegislationTextMode = "always" | "fallback";
+
+type ReadLegislationOptions = {
+  textMode: LegislationTextMode;
+};
+
+const DEFAULT_READ_OPTIONS = {
+  textMode: "always",
+} as const satisfies ReadLegislationOptions;
+
+const PUBLIC_READ_OPTIONS = {
+  textMode: "fallback",
+} as const satisfies ReadLegislationOptions;
+
 /**
  * Read one legislation document for display. Prefers canonical text/AST
  * from object storage when enabled, falling back to the Postgres columns
@@ -30,6 +45,7 @@ import type { LegislationReadDb } from "@/api/lib/legislation-public-read-db";
 export const readLegislationHandler = async (
   documentId: SafeId<"legislationDocument">,
   legislationDb: LegislationReadDb,
+  options: ReadLegislationOptions = DEFAULT_READ_OPTIONS,
 ) => {
   const [document] = await legislationDb(
     async (tx) =>
@@ -95,16 +111,19 @@ export const readLegislationHandler = async (
         })
       : parsePersistedCorpusAst(pgAst);
 
-  const fulltext =
-    corpus && textS3Key !== null
-      ? await readCorpusPayloadOrFallback({
-          documentId,
-          key: textS3Key,
-          step: "readLegislation.corpusText",
-          read: async () => await readCorpusText(textS3Key),
-          fallback: () => pgText,
-        })
-      : pgText;
+  let fulltext: string | null = null;
+  if (options.textMode === "always" || !hasUsableAst(documentAst)) {
+    fulltext = pgText;
+    if (corpus && textS3Key !== null) {
+      fulltext = await readCorpusPayloadOrFallback({
+        documentId,
+        key: textS3Key,
+        step: "readLegislation.corpusText",
+        read: async () => await readCorpusText(textS3Key),
+        fallback: () => pgText,
+      });
+    }
+  }
 
   return { ...rest, documentAst, fulltext };
 };
@@ -118,7 +137,11 @@ export const readPublicLegislationHandler = async (
   documentId: SafeId<"legislationDocument">,
   legislationDb: LegislationReadDb,
 ) => {
-  const document = await readLegislationHandler(documentId, legislationDb);
+  const document = await readLegislationHandler(
+    documentId,
+    legislationDb,
+    PUBLIC_READ_OPTIONS,
+  );
 
   if (!("metadata" in document)) {
     return document;
