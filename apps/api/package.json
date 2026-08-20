@@ -116,7 +116,7 @@
     "elysia": "catalog:",
     "elysia-rate-limit": "^4.6.2",
     "ip-address": "^10.5.0",
-    "jose": "^6.2.8",
+    "jose": "^6.2.9",
     "jszip": "catalog:",
     "nodemailer": "^9.0.5",
     "onnxruntime-node": "1.27.0",
