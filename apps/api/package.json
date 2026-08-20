@@ -88,6 +88,7 @@
     "@stll/permissions": "workspace:*",
     "@stll/skills": "workspace:*",
     "@stll/template-conditions": "workspace:*",
+    "@stll/template-packs": "workspace:*",
     "@stll/text-normalize": "workspace:*",
     "@stll/time": "workspace:*",
     "@stll/transactional": "workspace:*",

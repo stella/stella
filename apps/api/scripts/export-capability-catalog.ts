@@ -222,6 +222,7 @@ const DOMAIN_SCOPE: Record<string, string> = {
   skills: "stella:skills",
   "style-sets": "stella:templates",
   tasks: "stella:matters_write",
+  "template-packs": "stella:templates",
   "template-recipes": "stella:templates",
   templates: "stella:templates",
   "time-entries": "stella:billing_write",
@@ -402,6 +403,7 @@ const DOMAIN_FEATURE: Record<string, string> = {
   legislation: "FEATURE_PUBLIC_LAW",
   lists: "FEATURE_LEGAL_LISTS",
   rates: "FEATURE_TIME_BILLING",
+  "template-packs": "FEATURE_TEMPLATE_PACKS",
   "time-entries": "FEATURE_TIME_BILLING",
   "work-obligations": "FEATURE_GOVERNED_WORKFLOW",
 };

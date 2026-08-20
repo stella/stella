@@ -1,0 +1,39 @@
+{
+  "name": "@stll/template-packs",
+  "version": "0.0.0",
+  "private": true,
+  "license": "Apache-2.0",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./src/catalogue.ts",
+      "import": "./src/catalogue.ts"
+    },
+    "./schema": {
+      "types": "./src/schema.ts",
+      "import": "./src/schema.ts"
+    },
+    "./fixtures": {
+      "types": "./src/fixtures/catalogue.ts",
+      "import": "./src/fixtures/catalogue.ts"
+    }
+  },
+  "scripts": {
+    "clean": "git clean -xdf .cache .turbo node_modules",
+    "generate": "bun scripts/generate-manifest.ts && bun scripts/generate-manifest.ts --fixtures",
+    "test": "bun scripts/generate-manifest.ts --check && bun scripts/generate-manifest.ts --check --fixtures && bun test src",
+    "typecheck": "bun ../../packages/scripts/src/tsc-native.ts --noEmit",
+    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --deny-warnings --type-aware packages/template-packs",
+    "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/template-packs",
+    "format": "oxfmt scripts src"
+  },
+  "dependencies": {
+    "better-result": "catalog:",
+    "valibot": "catalog:"
+  },
+  "devDependencies": {
+    "@stll/typescript-config": "workspace:*",
+    "@types/bun": "catalog:"
+  }
+}

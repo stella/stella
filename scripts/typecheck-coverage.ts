@@ -82,6 +82,10 @@ const OXC_PROJECT_PROXIES = [
     config: "packages/skills/scripts/tsconfig.json",
     target: "tsconfig.tooling.json",
   },
+  {
+    config: "packages/template-packs/scripts/tsconfig.json",
+    target: "tsconfig.tooling.json",
+  },
 ] as const satisfies readonly OxcProjectProxy[];
 
 const OXC_NATIVE_ONLY_PROJECTS = [

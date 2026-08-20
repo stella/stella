@@ -84,6 +84,7 @@
         "@stll/permissions": "workspace:*",
         "@stll/skills": "workspace:*",
         "@stll/template-conditions": "workspace:*",
+        "@stll/template-packs": "workspace:*",
         "@stll/text-normalize": "workspace:*",
         "@stll/time": "workspace:*",
         "@stll/transactional": "workspace:*",
@@ -723,6 +724,18 @@
         "tsdown": "catalog:",
       },
     },
+    "packages/template-packs": {
+      "name": "@stll/template-packs",
+      "version": "0.0.0",
+      "dependencies": {
+        "better-result": "catalog:",
+        "valibot": "catalog:",
+      },
+      "devDependencies": {
+        "@stll/typescript-config": "workspace:*",
+        "@types/bun": "catalog:",
+      },
+    },
     "packages/text-normalize": {
       "name": "@stll/text-normalize",
       "version": "0.1.0",
@@ -789,6 +802,7 @@
       "version": "0.0.0",
       "dependencies": {
         "@stll/calculations": "workspace:*",
+        "@stll/conditions": "workspace:*",
         "@stll/money": "workspace:*",
         "@stll/ui": "workspace:*",
         "better-result": "catalog:",
@@ -2282,6 +2296,8 @@
     "@stll/stdnum-win32-x64-msvc": ["@stll/stdnum-win32-x64-msvc@2.3.1", "", { "os": "win32", "cpu": "x64" }, "sha512-nROrzvHoctQL6v1/GGMq7k5Tv/9EayszgycICnj9PystcajvOvuesWlKkTYokdTP3XBbvD86oQWefswnFqqz3g=="],
 
     "@stll/template-conditions": ["@stll/template-conditions@workspace:packages/template-conditions"],
+
+    "@stll/template-packs": ["@stll/template-packs@workspace:packages/template-packs"],
 
     "@stll/text-normalize": ["@stll/text-normalize@workspace:packages/text-normalize"],
 

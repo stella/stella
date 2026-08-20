@@ -73,6 +73,7 @@ import { styleSetsRoute } from "@/api/handlers/style-sets/routes";
 import { isStyleSetUploadRateLimitedRequest } from "@/api/handlers/style-sets/upload-rate-limit";
 import { myTasksRoute } from "@/api/handlers/tasks/my-tasks-route";
 import { tasksRoute } from "@/api/handlers/tasks/routes";
+import { templatePacksRoute } from "@/api/handlers/template-packs/routes";
 import { templateRecipesRoute } from "@/api/handlers/template-recipes/routes";
 import {
   templateCategoriesRoute,
@@ -610,6 +611,7 @@ const api = new Elysia()
       .use(templatesRoute)
       .use(styleSetsRoute)
       .use(templateCategoriesRoute)
+      .use(templatePacksRoute)
       .use(templateRecipesRoute)
       .use(timeEntriesRoute)
       .use(billingCodesRoute)

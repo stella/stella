@@ -258,6 +258,8 @@ export const envApiServerSchema = {
   FEATURE_GOVERNED_WORKFLOW: featureFlagSchema,
   /** Enables reviewed GitHub-sourced skills in the authenticated catalogue. */
   FEATURE_PUBLIC_TOOLS: featureFlagSchema,
+  /** Offers the bundled template-pack catalogue; off hides its routes. */
+  FEATURE_TEMPLATE_PACKS: featureFlagSchema,
   FEATURE_WEB_SEARCH: featureFlagSchema,
   // Delegated Microsoft Graph connection: per-user, read-only SharePoint /
   // OneDrive access for future workspace import. Default-off; a deployment
@@ -382,6 +384,13 @@ export const envApiServerSchema = {
 
   /** Enables agent-sandbox chat runs when true. */
   AGENT_SANDBOX_RUNS_ENABLED: featureFlagSchema,
+
+  /**
+   * Directory holding the template-pack content (`packs/<id>/…`). The image
+   * copies the checked-out submodule there; a source tree leaves this unset
+   * and the package falls back to its own `content/` mount.
+   */
+  TEMPLATE_PACKS_CONTENT_DIR: v.optional(v.string()),
 
   /**
    * Agent-sandbox engine config. The schema keeps these optional

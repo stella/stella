@@ -114,6 +114,10 @@ export const LIMITS = {
   agentSkillsPerUser: 100,
   agentSkillsPageSizeDefault: 100,
   agentSkillsPageSizeMax: 250,
+  templatePacksPageSizeDefault: 50,
+  templatePacksPageSizeMax: 100,
+  /** Templates one install request may copy from a pack. */
+  templatePackInstallTemplatesMax: 50,
   /** Flat skill catalogue injected into the chat system prompt: team skills
    *  (org-wide) plus the caller's private skills. Kept >=
    *  agentSkillsTeamPerOrganization + agentSkillsPerUser so the catalogue never

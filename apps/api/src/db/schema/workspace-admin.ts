@@ -171,6 +171,15 @@ export const organizationSettings = p.pgTable(
       .boolean("memory_extraction_enabled")
       .notNull()
       .default(false),
+    /**
+     * Whether the bundled template-pack catalogue is offered in this
+     * organization's template library. Off hides the offer; installed
+     * templates stay.
+     */
+    templatePacksHidden: p
+      .boolean("template_packs_hidden")
+      .notNull()
+      .default(false),
     /** Start of the current opt-in window; null while extraction is off. */
     memoryExtractionEnabledAt: timestamptz("memory_extraction_enabled_at"),
     /**
