@@ -3,8 +3,9 @@
 Pull requests that change the shipped source of `@stll/cli`,
 `@stll/business-registries`, `@stll/calculations`, `@stll/conditions`,
 `@stll/country-codes`, `@stll/docx-utils`, `@stll/money`,
-`@stll/template-conditions`, `@stll/ui`, or `@stll/workspace-ui` must include a
-Changeset describing the user-visible change and its semver impact.
+`@stll/template-conditions`, `@stll/ui`, `@stll/workspace-model`, or
+`@stll/workspace-ui` must include a Changeset describing the user-visible change
+and its semver impact.
 
 Run `bun run changeset`, select the affected package(s), and commit the generated
 Markdown file. Changes that do not alter a published package do not need one.

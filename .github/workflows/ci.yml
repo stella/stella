@@ -861,6 +861,7 @@ jobs:
           bun scripts/check-published-exports.ts packages/ui
           bun scripts/check-published-exports.ts packages/money
           bun scripts/check-published-exports.ts packages/calculations
+          bun scripts/check-published-exports.ts packages/workspace-model
           bun scripts/check-published-exports.ts packages/workspace-ui
 
       # Release ordering is a safety property. This test has no workspace

@@ -1,0 +1,52 @@
+{
+  "name": "@stll/workspace-model",
+  "version": "0.0.0",
+  "description": "Portable typed property definitions and values for entity workspaces.",
+  "keywords": [
+    "entities",
+    "metadata",
+    "properties",
+    "typescript",
+    "workspace"
+  ],
+  "homepage": "https://github.com/stella/stella/tree/main/packages/workspace-model",
+  "bugs": {
+    "url": "https://github.com/stella/stella/issues"
+  },
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/stella/stella.git",
+    "directory": "packages/workspace-model"
+  },
+  "files": [
+    "dist",
+    "src",
+    "README.md"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/properties.ts",
+    "./properties": "./src/properties.ts"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "clean": "git clean -xdf dist .cache .turbo node_modules",
+    "build": "tsdown",
+    "pack:dry-run": "bun pm pack --dry-run",
+    "test": "bun test src",
+    "typecheck": "bun ../../packages/scripts/src/tsc-native.ts --noEmit",
+    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --deny-warnings --type-aware packages/workspace-model",
+    "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/workspace-model",
+    "format": "oxfmt .",
+    "prepack": "bun run build"
+  },
+  "devDependencies": {
+    "@stll/typescript-config": "workspace:*",
+    "@types/bun": "catalog:",
+    "tsdown": "catalog:"
+  }
+}
