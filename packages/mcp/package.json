@@ -34,6 +34,7 @@
     "build": "tsdown",
     "typecheck": "bun ../../scripts/tsc-native.ts --noEmit -p tsconfig.json && bun ../../scripts/tsc-native.ts --noEmit -p tsconfig.test.json",
     "test": "bun test src/__test__/local.test.ts src/__test__/server.test.ts src/__test__/instructions.test.ts && bun run test:node-runtime",
+    "pretest:node-runtime": "test -f dist/server-entry.mjs || bun run build",
     "test:node-runtime": "node --import tsx --test src/__test__/durable-sessions.test.ts && node scripts/test-packed-bin.mjs",
     "format": "oxfmt ."
   },
@@ -47,7 +48,7 @@
   },
   "devDependencies": {
     "@types/node": "^26.2.0",
-    "bun-types": "^1.3.14",
+    "bun-types": "1.4.0",
     "expect": "^30.2.0",
     "fflate": "^0.8.3",
     "tsdown": "0.22.14",

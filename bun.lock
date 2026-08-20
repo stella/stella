@@ -27,7 +27,7 @@
       "devDependencies": {
         "@napi-rs/cli": "^3.8.5",
         "@stll/anonymize-data": "workspace:*",
-        "bun-types": "^1.3.14",
+        "bun-types": "1.4.0",
         "fast-check": "^4.9.0",
         "fflate": "^0.8.3",
         "puppeteer-core": "25.5.0",
@@ -40,7 +40,7 @@
         "@stll/anonymize-darwin-x64": "2.7.8",
         "@stll/anonymize-linux-arm64-gnu": "2.7.8",
         "@stll/anonymize-linux-x64-gnu": "2.7.8",
-        "@stll/anonymize-wasm": "2.7.6",
+        "@stll/anonymize-wasm": "2.7.8",
         "@stll/anonymize-win32-x64-msvc": "2.7.8",
       },
       "peerDependencies": {
@@ -92,7 +92,7 @@
       },
       "devDependencies": {
         "@types/node": "^26.2.0",
-        "bun-types": "^1.3.14",
+        "bun-types": "1.4.0",
         "typescript": "7.0.2",
       },
     },
@@ -110,7 +110,7 @@
       },
       "devDependencies": {
         "@types/node": "^26.2.0",
-        "bun-types": "^1.3.14",
+        "bun-types": "1.4.0",
         "fflate": "^0.8.3",
         "tsdown": "0.22.14",
         "typescript": "7.0.2",
@@ -125,7 +125,7 @@
       },
       "devDependencies": {
         "@types/node": "^26.2.0",
-        "bun-types": "^1.3.14",
+        "bun-types": "1.4.0",
         "typescript": "7.0.2",
       },
     },
@@ -147,7 +147,7 @@
       },
       "devDependencies": {
         "@types/node": "^26.2.0",
-        "bun-types": "^1.3.14",
+        "bun-types": "1.4.0",
         "fflate": "^0.8.3",
         "tsdown": "0.22.14",
         "typescript": "7.0.2",
@@ -161,7 +161,7 @@
       },
       "devDependencies": {
         "@types/node": "^26.2.0",
-        "bun-types": "^1.3.14",
+        "bun-types": "1.4.0",
         "tsdown": "0.22.14",
         "typescript": "7.0.2",
       },
@@ -182,7 +182,7 @@
       },
       "devDependencies": {
         "@types/node": "^26.2.0",
-        "bun-types": "^1.3.14",
+        "bun-types": "1.4.0",
         "expect": "^30.2.0",
         "fflate": "^0.8.3",
         "tsdown": "0.22.14",
@@ -798,7 +798,7 @@
 
     "braces": ["braces@3.0.3", "", { "dependencies": { "fill-range": "^7.1.1" } }, "sha512-yQbXgO/OSZVD2IsiLlro+7Hf6Q18EJrKSEsdoMzKePKXct3gvD8oLcOQdIzGupr5Fj+EDe8gO/lxc1BzfMpxvA=="],
 
-    "bun-types": ["bun-types@1.3.14", "", { "dependencies": { "@types/node": "*" } }, "sha512-4N0ig0fEomHt5R0KCFWjovxow98rIoRwKolrYdCcknNwMekCXRnWEUvgu5soYV8QXtVsrUD8B95MBOZGPvr6KQ=="],
+    "bun-types": ["bun-types@1.4.0", "", { "dependencies": { "@types/node": "*" } }, "sha512-iIKw23BspnQQYd3prITOBxeUsxBHnwzX6YJfGMuNOZzeNcMmVqzIIVGRm1l69ogaPQmb4wB6BN8mA5bE9YuC5Q=="],
 
     "bytes": ["bytes@3.1.2", "", {}, "sha512-/Nf7TyzTx6S3yRJObOAV7956r8cr2+Oj8AC5dt8wSP3BQAoeX58NoHyCU8P8zGkNXStjTSi6fzO6F0pBdcYbEg=="],
 
@@ -1353,8 +1353,6 @@
     "@stll/anonymize-benchmark/fflate": ["fflate@0.8.2", "", {}, "sha512-cPJU47OaAoCbg0pBvzsgpTPhmhqI5eJjh/JIu8tPj5q+T7iLvW/JAYUqmE7KOB4R1ZyEhzBaIQpQpardBF5z8A=="],
 
     "body-parser/content-type": ["content-type@2.0.0", "", {}, "sha512-j/O/d7GcZCyNl7/hwZAb606rzqkyvaDctLmckbxLzHvFBzTJHuGEdodATcP3yIRoDrLHkIATJuvzbFlp/ki2cQ=="],
-
-    "bun-types/@types/node": ["@types/node@26.1.1", "", { "dependencies": { "undici-types": "~8.3.0" } }, "sha512-nxAkRSVkN1Y0JC1W8ky/fTfkGsMmcrRsbx+3XoZE+rMOX71kLYTV7fLXpqud1GpbpP5TuffXFqfX7fH2GgZREw=="],
 
     "chromium-bidi/zod": ["zod@3.25.76", "", {}, "sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ=="],
 
