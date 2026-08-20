@@ -15,11 +15,11 @@ Project: root
 - @atlaskit/pragmatic-drag-and-drop 2.0.2 — Apache-2.0
 - @atlaskit/pragmatic-drag-and-drop-auto-scroll 3.0.0 — Apache-2.0
 - @atlaskit/pragmatic-drag-and-drop-hitbox 2.0.0 — Apache-2.0
-- @aws-sdk/client-cloudwatch 3.1109.0 — Apache-2.0
-- @aws-sdk/client-s3 3.1109.0 — Apache-2.0
-- @aws-sdk/client-sesv2 3.1109.0 — Apache-2.0
-- @aws-sdk/client-sts 3.1109.0 — Apache-2.0
-- @aws-sdk/s3-request-presigner 3.1109.0 — Apache-2.0
+- @aws-sdk/client-cloudwatch 3.1110.0 — Apache-2.0
+- @aws-sdk/client-s3 3.1110.0 — Apache-2.0
+- @aws-sdk/client-sesv2 3.1110.0 — Apache-2.0
+- @aws-sdk/client-sts 3.1110.0 — Apache-2.0
+- @aws-sdk/s3-request-presigner 3.1110.0 — Apache-2.0
 - @babel/core 7.29.7 — MIT
 - @babel/core 8.0.1 — MIT
 - @base-ui/react 1.6.0 — MIT
@@ -32,7 +32,7 @@ Project: root
 - @floating-ui/react-dom 2.1.9 — MIT
 - @formatjs/icu-messageformat-parser 3.5.16 — MIT
 - @google/genai 2.15.0 — Apache-2.0
-- @google/genai 2.17.0 — Apache-2.0
+- @google/genai 2.17.1 — Apache-2.0
 - @hocuspocus/provider 4.6.0 — MIT
 - @hocuspocus/server 4.6.0 — MIT
 - @hyzyla/pdfium 2.1.13 — MIT
@@ -89,30 +89,30 @@ Project: root
 - @tanstack/react-table-devtools 9.1.2 — MIT
 - @tanstack/react-virtual 3.14.9 — MIT
 - @tauri-apps/api 2.11.1 — Apache-2.0 OR MIT
-- @tiptap/core 3.30.0 — MIT
-- @tiptap/extension-bold 3.30.0 — MIT
-- @tiptap/extension-document 3.30.0 — MIT
-- @tiptap/extension-hard-break 3.30.0 — MIT
-- @tiptap/extension-heading 3.30.0 — MIT
-- @tiptap/extension-history 3.30.0 — MIT
-- @tiptap/extension-italic 3.30.0 — MIT
-- @tiptap/extension-list 3.30.0 — MIT
-- @tiptap/extension-mention 3.30.0 — MIT
-- @tiptap/extension-paragraph 3.30.0 — MIT
-- @tiptap/extension-placeholder 3.30.0 — MIT
-- @tiptap/extension-text 3.30.0 — MIT
-- @tiptap/pm 3.30.0 — MIT
-- @tiptap/react 3.30.0 — MIT
-- @tiptap/suggestion 3.30.0 — MIT
+- @tiptap/core 3.30.1 — MIT
+- @tiptap/extension-bold 3.30.1 — MIT
+- @tiptap/extension-document 3.30.1 — MIT
+- @tiptap/extension-hard-break 3.30.1 — MIT
+- @tiptap/extension-heading 3.30.1 — MIT
+- @tiptap/extension-history 3.30.1 — MIT
+- @tiptap/extension-italic 3.30.1 — MIT
+- @tiptap/extension-list 3.30.1 — MIT
+- @tiptap/extension-mention 3.30.1 — MIT
+- @tiptap/extension-paragraph 3.30.1 — MIT
+- @tiptap/extension-placeholder 3.30.1 — MIT
+- @tiptap/extension-text 3.30.1 — MIT
+- @tiptap/pm 3.30.1 — MIT
+- @tiptap/react 3.30.1 — MIT
+- @tiptap/suggestion 3.30.1 — MIT
 - @valibot/to-json-schema 1.7.1 — MIT
 - @volar/typescript 2.4.28 — MIT
-- astro 7.2.1 — MIT
+- astro 7.2.2 — MIT
 - babel-plugin-react-compiler 1.0.0 — MIT
 - better-auth 1.6.26 — MIT
 - better-result 2.10.0 — MIT
 - better-result 2.9.2 — MIT
 - better-result 3.0.0 — MIT
-- bullmq 6.1.0 — MIT
+- bullmq 6.1.1 — MIT
 - cheerio 1.2.0 — MIT
 - class-variance-authority 0.7.1 — Apache-2.0
 - client-zip 2.5.0 — MIT
@@ -135,7 +135,7 @@ Project: root
 - fast-check 4.9.0 — MIT
 - immer 11.1.16 — MIT
 - input-otp 1.4.2 — MIT
-- ip-address 10.4.0 — MIT
+- ip-address 10.5.0 — MIT
 - jose 6.2.7 — MIT
 - jose 6.2.8 — MIT
 - jszip 3.10.1 — (MIT OR GPL-3.0-or-later)
@@ -144,8 +144,8 @@ Project: root
 - onnxruntime-node 1.27.0 — MIT
 - pdfjs-dist 6.2.108 — Apache-2.0
 - postal-mime 3.0.0 — MIT-0
-- posthog-js 1.416.0 — (Apache-2.0 AND MIT)
-- posthog-node 5.48.2 — MIT
+- posthog-js 1.417.0 — (Apache-2.0 AND MIT)
+- posthog-node 5.49.0 — MIT
 - prism-react-renderer 2.4.1 — MIT
 - prosemirror-commands 1.7.2 — MIT
 - prosemirror-history 1.5.0 — MIT
