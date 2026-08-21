@@ -74,7 +74,7 @@ describe("case-law adapter nullish optionals", () => {
             OgdDocumentResults: {
               Hits: {
                 "@pageNumber": "1",
-                "@pageSize": "20",
+                "@pageSize": "100",
                 "#text": "1",
               },
               OgdDocumentReference: {
@@ -125,8 +125,8 @@ describe("case-law adapter nullish optionals", () => {
     const decision = result.unwrap().decisions[0];
     expect(decision?.caseNumber).toBe("1 Ob 2/24d");
     expect(decision?.metadata).toMatchObject({
-      normen: [],
-      rechtsgebiete: [],
+      statutes: [],
+      legalAreas: [],
     });
   });
 
