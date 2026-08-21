@@ -24,8 +24,13 @@ const signalClient = (signalId: string): SignalClient =>
 
 type InvalidateArgs = { queryClient: QueryClient; organizationId: string };
 
-const invalidateInbox = ({ queryClient, organizationId }: InvalidateArgs) =>
-  queryClient.invalidateQueries({ queryKey: inboxKeys.all(organizationId) });
+const invalidateInbox = async ({
+  queryClient,
+  organizationId,
+}: InvalidateArgs) =>
+  await queryClient.invalidateQueries({
+    queryKey: inboxKeys.all(organizationId),
+  });
 
 export type SignalMutationArgs = InvalidateArgs & { signalId: string };
 
