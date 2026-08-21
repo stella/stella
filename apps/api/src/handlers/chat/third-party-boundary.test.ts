@@ -198,9 +198,9 @@ describe("chat third-party anonymization boundary", () => {
       `ref_${organizationId}`,
       `scope:${scopeId}`,
     ]);
-    expect(
-      anonymizeIds.mock.calls.at(0)?.[0].forcedSensitiveValues,
-    ).toContain(organizationId.toUpperCase());
+    expect(anonymizeIds.mock.calls.at(0)?.[0].forcedSensitiveValues).toContain(
+      organizationId.toUpperCase(),
+    );
   });
 
   test("forces boundary IDs through structured object keys", async () => {
@@ -872,12 +872,13 @@ describe("chat third-party anonymization boundary", () => {
     });
 
     const [preparedTool] = await source.tools();
+    if (!preparedTool) {
+      throw new TypeError("Expected an MCP tool");
+    }
     const description: unknown = Reflect.get(preparedTool, "description");
     const inputSchema: unknown = Reflect.get(preparedTool, "inputSchema");
 
-    expect(description).toBe(
-      "Preserve literal [LITERAL_PLACEHOLDER_1].",
-    );
+    expect(description).toBe("Preserve literal [LITERAL_PLACEHOLDER_1].");
     expect(inputSchema).toEqual({
       type: "object",
       properties: {

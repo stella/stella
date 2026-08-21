@@ -662,9 +662,7 @@ export const prepareTextForThirdParty = async ({
       await anonymizeFields({
         context: boundary.pipelineContext,
         fields: protectedInput.fields,
-        forcedSensitiveValues: forcedSensitiveValuesForFields(boundary, [
-          text,
-        ]),
+        forcedSensitiveValues: forcedSensitiveValuesForFields(boundary, [text]),
         gazetteerEntries: await boundary.gazetteerEntries,
         excludedCanonicals: await boundary.excludedCanonicals,
         organizationId: boundary.organizationId,
@@ -708,10 +706,7 @@ const prepareTextBatchForThirdParty = async ({
       await anonymizeFields({
         context: boundary.pipelineContext,
         fields: protectedInput.fields,
-        forcedSensitiveValues: forcedSensitiveValuesForFields(
-          boundary,
-          fields,
-        ),
+        forcedSensitiveValues: forcedSensitiveValuesForFields(boundary, fields),
         gazetteerEntries: await boundary.gazetteerEntries,
         excludedCanonicals: await boundary.excludedCanonicals,
         organizationId: boundary.organizationId,
@@ -959,8 +954,7 @@ const TECHNICAL_IDENTIFIER_PATTERN =
 const containsForcedBoundaryValue = (
   boundary: Extract<ChatThirdPartyBoundary, { type: "anonymized" }>,
   value: string,
-): boolean =>
-  boundarySensitiveSurfaces(boundary, value).length > 0;
+): boolean => boundarySensitiveSurfaces(boundary, value).length > 0;
 
 const shouldPreserveStructuredString = (
   key: string,
@@ -1253,9 +1247,7 @@ const anonymizeToolResultContent = ({
   }
 
   if (
-    content.some(
-      (part) => part.type !== "text" && part.source.type === "data",
-    )
+    content.some((part) => part.type !== "text" && part.source.type === "data")
   ) {
     return Result.err(
       new HandlerError({
