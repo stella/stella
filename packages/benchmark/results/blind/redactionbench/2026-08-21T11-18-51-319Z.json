@@ -1,0 +1,109 @@
+{
+  "schemaVersion": 4,
+  "createdAt": "2026-08-21T11:18:51.319Z",
+  "sourceGitSha": "c09298433723081512de7e81cf60742464f8e29d",
+  "runtime": "Bun 1.4.0",
+  "policy": "evaluation-only",
+  "corpus": {
+    "id": "redactionbench",
+    "source": "https://huggingface.co/datasets/RedactionBench/RedactionBench",
+    "version": "d45e9cec89bc49c69355e252fec29cc0229982f6",
+    "file": "data/test-00000-of-00001.parquet",
+    "sha256": "17ea0b577344917ce6e265667dd833cbf18e4f2cc07aa230d55f1e151219f5f0",
+    "license": "CC-BY-4.0",
+    "split": "test",
+    "documentCount": 200,
+    "selection": {
+      "type": "full-test-split"
+    }
+  },
+  "libraries": [
+    {
+      "name": "stella",
+      "version": "2.8.0",
+      "status": "ok",
+      "timing": {
+        "initSeconds": 0.15139250000000015,
+        "coldSeconds": 2.9827017500000004,
+        "warmSeconds": 4.715422916999999,
+        "totalChars": 2663769
+      },
+      "adapterWallSeconds": 7.850415832999999,
+      "metrics": {
+        "type": "redactionbench-transparent-interim",
+        "documents": 200,
+        "mandatorySpans": 16993,
+        "mandatorySpanRecall": 0.20820337786147236,
+        "mandatoryCharacterRecall": 0.1521781384387376,
+        "acceptedCharacterPrecision": 0.6411329197969913,
+        "predictedSpans": 7183
+      }
+    },
+    {
+      "name": "openredaction",
+      "version": "1.1.5",
+      "status": "ok",
+      "timing": {
+        "initSeconds": 0.05768254100000013,
+        "coldSeconds": 18.343237333,
+        "warmSeconds": 22.218240291999997,
+        "totalChars": 2663769
+      },
+      "adapterWallSeconds": 40.61988208300001,
+      "metrics": {
+        "type": "redactionbench-transparent-interim",
+        "documents": 200,
+        "mandatorySpans": 16993,
+        "mandatorySpanRecall": 0.6800447242982405,
+        "mandatoryCharacterRecall": 0.5984110401127335,
+        "acceptedCharacterPrecision": 0.3264075986086728,
+        "predictedSpans": 48613
+      }
+    },
+    {
+      "name": "presidio",
+      "version": "unknown",
+      "status": "unavailable",
+      "reasonCode": "adapter-unavailable"
+    },
+    {
+      "name": "scrubadub",
+      "version": "unknown",
+      "status": "unavailable",
+      "reasonCode": "adapter-unavailable"
+    },
+    {
+      "name": "datafog",
+      "version": "unknown",
+      "status": "unavailable",
+      "reasonCode": "adapter-unavailable"
+    },
+    {
+      "name": "redact-pii",
+      "version": "3.4.0",
+      "status": "ok",
+      "timing": {
+        "initSeconds": 0.014269833999998809,
+        "coldSeconds": 363.61515804199996,
+        "warmSeconds": 1683.8371275830002,
+        "totalChars": 2663769
+      },
+      "adapterWallSeconds": 2047.6062925410001,
+      "metrics": {
+        "type": "redactionbench-transparent-interim",
+        "documents": 200,
+        "mandatorySpans": 16993,
+        "mandatorySpanRecall": 0.6505031483552051,
+        "mandatoryCharacterRecall": 0.3569510921062222,
+        "acceptedCharacterPrecision": 0.5140633239816905,
+        "predictedSpans": 21973
+      }
+    },
+    {
+      "name": "pii-shield",
+      "version": "unknown",
+      "status": "unavailable",
+      "reasonCode": "adapter-unavailable"
+    }
+  ]
+}

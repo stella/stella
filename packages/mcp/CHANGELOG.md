@@ -1,5 +1,16 @@
 # @stll/anonymize-mcp
 
+## 2.8.0
+
+### Patch Changes
+
+- [#460](https://github.com/stella/anonymize/pull/460) [`c634939`](https://github.com/stella/anonymize/commit/c6349393e77438f99a18e81c8c27de3a329b3316) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Require Bun 1.4 or newer, use its native N-API binding, and stop installing the
+  browser WASM runtime with Node.js and Bun packages.
+- Updated dependencies [[`aa921dc`](https://github.com/stella/anonymize/commit/aa921dcbc29c97d30b8bee8ea1904c4baf89949a), [`40a3bff`](https://github.com/stella/anonymize/commit/40a3bff127df2016b7a05cd16949ef2bd127b542), [`c634939`](https://github.com/stella/anonymize/commit/c6349393e77438f99a18e81c8c27de3a329b3316)]:
+  - @stll/anonymize@2.8.0
+  - @stll/anonymize-pdf@2.8.0
+  - @stll/anonymize-docx@2.8.0
+
 ## 2.7.8
 
 ### Patch Changes

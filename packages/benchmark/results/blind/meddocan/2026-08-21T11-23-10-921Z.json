@@ -1,0 +1,103 @@
+{
+  "schemaVersion": 4,
+  "createdAt": "2026-08-21T11:23:10.921Z",
+  "sourceGitSha": "c09298433723081512de7e81cf60742464f8e29d",
+  "runtime": "Bun 1.4.0",
+  "policy": "evaluation-only",
+  "corpus": {
+    "id": "meddocan",
+    "source": "https://zenodo.org/records/4279323",
+    "version": "4279323",
+    "file": "meddocan.zip",
+    "sha256": "d0e4708b58689bc1440ede6f89e017e58d667827d927827622d73810cd68eac3",
+    "license": "CC-BY-4.0",
+    "split": "test",
+    "documentCount": 250,
+    "selection": {
+      "type": "full-test-split"
+    }
+  },
+  "libraries": [
+    {
+      "name": "stella",
+      "version": "2.8.0",
+      "status": "ok",
+      "timing": {
+        "initSeconds": 2.409386542,
+        "coldSeconds": 6.9539477499999975,
+        "warmSeconds": 1.6136841659999992,
+        "totalChars": 710577
+      },
+      "adapterWallSeconds": 10.981514583,
+      "metrics": {
+        "type": "label-agnostic-span-redaction",
+        "spanRecall": 0.5089206853912737,
+        "characterRecall": 0.6371291297241072,
+        "characterPrecision": 0.8123486937667095,
+        "goldSpans": 5661
+      }
+    },
+    {
+      "name": "openredaction",
+      "version": "1.1.5",
+      "status": "ok",
+      "timing": {
+        "initSeconds": 0.14118829200000255,
+        "coldSeconds": 3.9327048749999993,
+        "warmSeconds": 19.802685083,
+        "totalChars": 710577
+      },
+      "adapterWallSeconds": 23.882453291999997,
+      "metrics": {
+        "type": "label-agnostic-span-redaction",
+        "spanRecall": 0.4092916445857622,
+        "characterRecall": 0.6022586557036009,
+        "characterPrecision": 0.24638963565378327,
+        "goldSpans": 5661
+      }
+    },
+    {
+      "name": "presidio",
+      "version": "unknown",
+      "status": "unavailable",
+      "reasonCode": "adapter-unavailable"
+    },
+    {
+      "name": "scrubadub",
+      "version": "unknown",
+      "status": "unavailable",
+      "reasonCode": "adapter-unavailable"
+    },
+    {
+      "name": "datafog",
+      "version": "unknown",
+      "status": "unavailable",
+      "reasonCode": "adapter-unavailable"
+    },
+    {
+      "name": "redact-pii",
+      "version": "3.4.0",
+      "status": "ok",
+      "timing": {
+        "initSeconds": 0.2768629999999975,
+        "coldSeconds": 133.900532917,
+        "warmSeconds": 72.47119583400001,
+        "totalChars": 710577
+      },
+      "adapterWallSeconds": 206.71724625,
+      "metrics": {
+        "type": "label-agnostic-span-redaction",
+        "spanRecall": 0.25790496378731675,
+        "characterRecall": 0.4077467928079647,
+        "characterPrecision": 0.769249937702467,
+        "goldSpans": 5661
+      }
+    },
+    {
+      "name": "pii-shield",
+      "version": "unknown",
+      "status": "unavailable",
+      "reasonCode": "adapter-unavailable"
+    }
+  ]
+}

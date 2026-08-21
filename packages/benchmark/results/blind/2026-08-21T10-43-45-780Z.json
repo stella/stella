@@ -1,0 +1,121 @@
+{
+  "schemaVersion": 4,
+  "createdAt": "2026-08-21T10:43:45.780Z",
+  "sourceGitSha": "c09298433723081512de7e81cf60742464f8e29d",
+  "runtime": "Bun 1.4.0",
+  "policy": "evaluation-only",
+  "corpus": {
+    "id": "tab-echr",
+    "source": "https://github.com/NorskRegnesentral/text-anonymization-benchmark",
+    "version": "558e09e26d6b36f5f78440074e6a233946d98bd9",
+    "file": "echr_test.json",
+    "sha256": "cd0f0f15f84a8739654c7cf30c6be8ce27b051ef73974d39d792a0cb8c846379",
+    "license": "MIT",
+    "split": "test",
+    "documentCount": 127,
+    "selection": {
+      "type": "full-test-split"
+    }
+  },
+  "libraries": [
+    {
+      "name": "stella",
+      "version": "2.8.0",
+      "status": "ok",
+      "timing": {
+        "initSeconds": 0.07492745800000011,
+        "coldSeconds": 0.3331803749999999,
+        "warmSeconds": 0.3525215420000002,
+        "totalChars": 647638
+      },
+      "adapterWallSeconds": 0.76098675,
+      "metrics": {
+        "type": "tab-independent-annotator-span-redaction",
+        "documents": 127,
+        "directMentions": 1612,
+        "quasiMentions": 19197,
+        "directMentionRecall": 0.5198511166253101,
+        "quasiMentionRecall": 0.5849872375892067,
+        "allMentionRecall": 0.5799413715219376,
+        "entityRecall": 0.5941655204034847,
+        "characterPrecision": 0.5621523312635485,
+        "characterRecall": 0.6315257231541408,
+        "predictedSpans": 4613
+      }
+    },
+    {
+      "name": "openredaction",
+      "version": "1.1.5",
+      "status": "ok",
+      "timing": {
+        "initSeconds": 0.016876416999999946,
+        "coldSeconds": 2.107281208,
+        "warmSeconds": 3.674181458,
+        "totalChars": 647638
+      },
+      "adapterWallSeconds": 5.798740041,
+      "metrics": {
+        "type": "tab-independent-annotator-span-redaction",
+        "documents": 127,
+        "directMentions": 1612,
+        "quasiMentions": 19197,
+        "directMentionRecall": 0.04218362282878412,
+        "quasiMentionRecall": 0.4013127051101735,
+        "allMentionRecall": 0.37349223893507616,
+        "entityRecall": 0.3808459422283356,
+        "characterPrecision": 0.25122835434553803,
+        "characterRecall": 0.5941008453308678,
+        "predictedSpans": 13356
+      }
+    },
+    {
+      "name": "presidio",
+      "version": "unknown",
+      "status": "unavailable",
+      "reasonCode": "adapter-unavailable"
+    },
+    {
+      "name": "scrubadub",
+      "version": "unknown",
+      "status": "unavailable",
+      "reasonCode": "adapter-unavailable"
+    },
+    {
+      "name": "datafog",
+      "version": "unknown",
+      "status": "unavailable",
+      "reasonCode": "adapter-unavailable"
+    },
+    {
+      "name": "redact-pii",
+      "version": "3.4.0",
+      "status": "ok",
+      "timing": {
+        "initSeconds": 0.03626379199999974,
+        "coldSeconds": 28.695164292,
+        "warmSeconds": 37.327491959,
+        "totalChars": 647638
+      },
+      "adapterWallSeconds": 66.059150125,
+      "metrics": {
+        "type": "tab-independent-annotator-span-redaction",
+        "documents": 127,
+        "directMentions": 1612,
+        "quasiMentions": 19197,
+        "directMentionRecall": 0.009305210918114143,
+        "quasiMentionRecall": 0.0806375996249414,
+        "allMentionRecall": 0.07511173050122544,
+        "entityRecall": 0.07777395690050436,
+        "characterPrecision": 0.7459809495124431,
+        "characterRecall": 0.2453523312640338,
+        "predictedSpans": 3570
+      }
+    },
+    {
+      "name": "pii-shield",
+      "version": "unknown",
+      "status": "unavailable",
+      "reasonCode": "adapter-unavailable"
+    }
+  ]
+}

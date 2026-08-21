@@ -1,5 +1,12 @@
 # @stll/anonymize-docx
 
+## 2.8.0
+
+### Patch Changes
+
+- Updated dependencies [[`aa921dc`](https://github.com/stella/anonymize/commit/aa921dcbc29c97d30b8bee8ea1904c4baf89949a), [`40a3bff`](https://github.com/stella/anonymize/commit/40a3bff127df2016b7a05cd16949ef2bd127b542), [`c634939`](https://github.com/stella/anonymize/commit/c6349393e77438f99a18e81c8c27de3a329b3316)]:
+  - @stll/anonymize@2.8.0
+
 ## 2.7.8
 
 ### Patch Changes

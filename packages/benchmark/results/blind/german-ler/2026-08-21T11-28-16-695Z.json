@@ -1,0 +1,109 @@
+{
+  "schemaVersion": 4,
+  "createdAt": "2026-08-21T11:28:16.695Z",
+  "sourceGitSha": "c09298433723081512de7e81cf60742464f8e29d",
+  "runtime": "Bun 1.4.0",
+  "policy": "evaluation-only",
+  "corpus": {
+    "id": "german-ler",
+    "source": "https://huggingface.co/datasets/elenanereiss/german-ler",
+    "version": "405b6923dfd2299da3d76a68220ee15a95bc1eab",
+    "file": "data/test-00000-of-00001.parquet",
+    "sha256": "78e36e4c297e95d755e2a80c8a98f988efee23c2f27e3dfb8c6c28872a57a7e6",
+    "license": "CC-BY-4.0",
+    "split": "test",
+    "documentCount": 6673,
+    "selection": {
+      "type": "full-test-split"
+    }
+  },
+  "libraries": [
+    {
+      "name": "stella",
+      "version": "2.8.0",
+      "status": "ok",
+      "timing": {
+        "initSeconds": 0.1227995420000002,
+        "coldSeconds": 4.574776207999999,
+        "warmSeconds": 4.179101249999999,
+        "totalChars": 1383026
+      },
+      "adapterWallSeconds": 8.882274334,
+      "metrics": {
+        "type": "german-legal-entity-coverage",
+        "documents": 6673,
+        "entityRecall": 0.047538519353626456,
+        "characterRecall": 0.13779790109157278,
+        "characterPrecision": 0.4901006166828952,
+        "goldEntities": 5322,
+        "predictedSpans": 3419
+      }
+    },
+    {
+      "name": "openredaction",
+      "version": "1.1.5",
+      "status": "ok",
+      "timing": {
+        "initSeconds": 0.21279566700000033,
+        "coldSeconds": 11.1822025,
+        "warmSeconds": 4.470752457999999,
+        "totalChars": 1383026
+      },
+      "adapterWallSeconds": 15.871253166999999,
+      "metrics": {
+        "type": "german-legal-entity-coverage",
+        "documents": 6673,
+        "entityRecall": 0.10879368658399098,
+        "characterRecall": 0.3110526131058931,
+        "characterPrecision": 0.06742268856928967,
+        "goldEntities": 5322,
+        "predictedSpans": 61507
+      }
+    },
+    {
+      "name": "presidio",
+      "version": "unknown",
+      "status": "unavailable",
+      "reasonCode": "adapter-unavailable"
+    },
+    {
+      "name": "scrubadub",
+      "version": "unknown",
+      "status": "unavailable",
+      "reasonCode": "adapter-unavailable"
+    },
+    {
+      "name": "datafog",
+      "version": "unknown",
+      "status": "unavailable",
+      "reasonCode": "adapter-unavailable"
+    },
+    {
+      "name": "redact-pii",
+      "version": "3.4.0",
+      "status": "ok",
+      "timing": {
+        "initSeconds": 0.16363099999999758,
+        "coldSeconds": 78.652793,
+        "warmSeconds": 183.17149749999996,
+        "totalChars": 1383026
+      },
+      "adapterWallSeconds": 262.228561042,
+      "metrics": {
+        "type": "german-legal-entity-coverage",
+        "documents": 6673,
+        "entityRecall": 0.008455467869222097,
+        "characterRecall": 0.07671896388333158,
+        "characterPrecision": 0.505855126128211,
+        "goldEntities": 5322,
+        "predictedSpans": 4998
+      }
+    },
+    {
+      "name": "pii-shield",
+      "version": "unknown",
+      "status": "unavailable",
+      "reasonCode": "adapter-unavailable"
+    }
+  ]
+}

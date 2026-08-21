@@ -1,5 +1,20 @@
 # Changelog
 
+## 2.8.0
+
+### Minor Changes
+
+- [#461](https://github.com/stella/anonymize/pull/461) [`aa921dc`](https://github.com/stella/anonymize/commit/aa921dcbc29c97d30b8bee8ea1904c4baf89949a) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Detect bounded defined-term aliases and language-scoped legal-notice person fields,
+  and improve resolver and multilingual address-boundary scaling.
+
+### Patch Changes
+
+- [#457](https://github.com/stella/anonymize/pull/457) [`40a3bff`](https://github.com/stella/anonymize/commit/40a3bff127df2016b7a05cd16949ef2bd127b542) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Publish reversible CLI key files with owner-only permissions on Linux and fail
+  closed on platforms where filesystem ACLs cannot be verified.
+
+- [#460](https://github.com/stella/anonymize/pull/460) [`c634939`](https://github.com/stella/anonymize/commit/c6349393e77438f99a18e81c8c27de3a329b3316) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Require Bun 1.4 or newer, use its native N-API binding, and stop installing the
+  browser WASM runtime with Node.js and Bun packages.
+
 ## 2.7.8
 
 ### Patch Changes
