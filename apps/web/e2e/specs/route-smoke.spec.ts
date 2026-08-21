@@ -154,8 +154,6 @@ const SMOKE_ROUTE_DEFS: readonly SmokeRouteDef[] = [
   staticRoute("/settings/organization/matter-numbering"),
   staticRoute("/settings/organization/members"),
   staticRoute("/settings/organization/usage"),
-  staticRoute("/todos"),
-  staticRoute("/inbox"),
   staticRoute("/workspaces"),
   {
     template: "/chat/workspaces/$workspaceId/$threadId",
@@ -244,6 +242,11 @@ const resolveRoute = (def: SmokeRouteDef, world: SmokeWorld): SmokeRoute => {
 // Keeping them explicit means a newly added authenticated route fails the
 // coverage assertion until it is either smoked or deliberately placed here.
 const INTENTIONALLY_NOT_SMOKED = new Set([
+  // Seed its network baseline (E2E_NETWORK_BASELINE=write) on an idle machine,
+  // then move it into SMOKE_ROUTE_DEFS: baseline keys must equal the smoked
+  // set, and merging a run from a loaded host only widens every other route's
+  // budgets.
+  "/inbox",
   "/knowledge/tools/$skillId",
   "/workspaces/$workspaceId/invoices/$invoiceId",
   "/workspaces/$workspaceId/reports/$exportId",

@@ -7,12 +7,19 @@ import {
   test,
 } from "bun:test";
 
+import {
+  SIGNAL_KIND,
+  SIGNAL_KIND_ORIGIN,
+  SIGNAL_SEVERITY,
+} from "@stll/api-contract/signals";
+
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   documentTranslationRuns,
   entities,
   legalLists,
   savedSearches,
+  signals,
   workObligations,
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
@@ -35,6 +42,7 @@ import listLegalLists from "@/api/handlers/lists/list";
 import listMemories from "@/api/handlers/memories/list";
 import readRateEntries from "@/api/handlers/rates/entries-read";
 import listSavedSearches from "@/api/handlers/saved-searches/list";
+import listSignals from "@/api/handlers/signals/list";
 import getTemplate from "@/api/handlers/templates/get";
 import readTimeEntryById from "@/api/handlers/time-entries/get";
 import readUserFileContent from "@/api/handlers/user-files/read-content";
@@ -107,10 +115,10 @@ const savedSearchA = toSafeId<"savedSearch">(
 const savedSearchB = toSafeId<"savedSearch">(
   "22222222-2222-4222-8222-222222222245",
 );
-const foreignOwnedTaskB = toSafeId<"entity">(
+const foreignSignalB = toSafeId<"signal">(
   "22222222-2222-4222-8222-222222222246",
 );
-const visibleOwnedTaskB = toSafeId<"entity">(
+const visibleSignalB = toSafeId<"signal">(
   "22222222-2222-4222-8222-222222222247",
 );
 const legalListA = toSafeId<"legalList">(
@@ -505,19 +513,21 @@ const isolationCases: IsolationCase[] = [
       expectRecordFieldEquals(result, "id", testIds.templateB),
   },
   {
-    name: "governed work queue",
+    name: "inbox signals",
     runAAgainstB: async ({ workspaceA }) =>
-      await runHandler(listWorkObligations, workspaceA, {
-        query: { queue: "upcoming", asOf: "2026-08-01", limit: 100 },
-      }),
+      await runHandler(listSignals, workspaceA, { query: { limit: 100 } }),
     runBPositive: async ({ workspaceB }) =>
-      await runHandler(listWorkObligations, workspaceB, {
-        query: { queue: "upcoming", asOf: "2026-08-01", limit: 100 },
-      }),
-    expectDenied: (result) =>
-      expectPageExcludesField(result, "entityId", foreignOwnedTaskB),
-    expectPositive: (result) =>
-      expectPageContainsField(result, "entityId", visibleOwnedTaskB),
+      await runHandler(listSignals, workspaceB, { query: { limit: 100 } }),
+    expectDenied: (result) => {
+      expectPageExcludesField(result, "id", visibleSignalB);
+      // The unscoped (triage) row is the riskiest path: it carries no
+      // workspace to filter on, so only the org boundary keeps it out.
+      expectPageExcludesField(result, "id", foreignSignalB);
+    },
+    expectPositive: (result) => {
+      expectPageContainsField(result, "id", visibleSignalB);
+      expectPageContainsField(result, "id", foreignSignalB);
+    },
   },
 ];
 
@@ -555,34 +565,44 @@ beforeAll(async () => {
       criteria: savedSearchCriteria(ids.wsB1),
     },
   ]);
-  await testDb.insert(entities).values([
+  await testDb.insert(signals).values([
     {
-      id: foreignOwnedTaskB,
+      id: visibleSignalB,
+      organizationId: ids.orgB,
       workspaceId: ids.wsB1,
-      kind: "task",
-      name: "foreign-owned task B",
+      kind: SIGNAL_KIND.REQUEST_SUBMITTED,
+      origin: SIGNAL_KIND_ORIGIN[SIGNAL_KIND.REQUEST_SUBMITTED],
+      scoutKey: "manual.request",
+      severity: SIGNAL_SEVERITY.NOTICE,
+      title: "matter-scoped request B",
+      summary: "matter-scoped request B",
+      subject: { type: "workspace", workspaceId: ids.wsB1 },
+      evidence: {
+        kind: SIGNAL_KIND.REQUEST_SUBMITTED,
+        description: "matter-scoped request B",
+        attachments: [],
+      },
+      suggestions: [],
+      dedupeKey: `cross-tenant:${visibleSignalB}`,
     },
     {
-      id: visibleOwnedTaskB,
-      workspaceId: ids.wsB1,
-      kind: "task",
-      name: "visible-owned task B",
-    },
-  ]);
-  await testDb.insert(workObligations).values([
-    {
-      entityId: foreignOwnedTaskB,
-      workspaceId: ids.wsB1,
-      status: "awaiting_acknowledgement",
-      ownerUserId: ids.userA1,
-      createdByUserId: ids.userB1,
-    },
-    {
-      entityId: visibleOwnedTaskB,
-      workspaceId: ids.wsB1,
-      status: "awaiting_acknowledgement",
-      ownerUserId: ids.userB1,
-      createdByUserId: ids.userB1,
+      id: foreignSignalB,
+      organizationId: ids.orgB,
+      workspaceId: null,
+      kind: SIGNAL_KIND.REQUEST_SUBMITTED,
+      origin: SIGNAL_KIND_ORIGIN[SIGNAL_KIND.REQUEST_SUBMITTED],
+      scoutKey: "manual.request",
+      severity: SIGNAL_SEVERITY.NOTICE,
+      title: "unscoped triage request B",
+      summary: "unscoped triage request B",
+      subject: { type: "none" },
+      evidence: {
+        kind: SIGNAL_KIND.REQUEST_SUBMITTED,
+        description: "unscoped triage request B",
+        attachments: [],
+      },
+      suggestions: [],
+      dedupeKey: `cross-tenant:${foreignSignalB}`,
     },
   ]);
   await testDb.insert(documentTranslationRuns).values({

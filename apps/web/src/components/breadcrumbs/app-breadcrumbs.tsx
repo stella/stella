@@ -107,10 +107,6 @@ export const AppBreadcrumbs = () => {
       renderPdfBreadcrumb,
     ),
     defineBreadcrumb(
-      ["/todos/"],
-      <BreadcrumbLink to="/todos">{t("navigation.myTodos")}</BreadcrumbLink>,
-    ),
-    defineBreadcrumb(
       ["/inbox/"],
       <BreadcrumbLink to="/inbox">{t("navigation.inbox")}</BreadcrumbLink>,
     ),
