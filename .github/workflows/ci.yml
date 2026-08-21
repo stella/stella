@@ -969,6 +969,12 @@ jobs:
       - name: Setup Bun
         uses: stella/.github/actions/setup-bun-cached@48aacae31829ce15216a6b766b03a92fd2e84da3
 
+      - name: Turbo remote cache
+        # code-quality runs cacheable workspace and root checks. Restore the
+        # same artifact store as ci-checks instead of rebuilding on every
+        # ephemeral runner; the job is restricted to trusted code above.
+        uses: rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7 # v2.5.1
+
       - name: Install dependencies
         run: bash scripts/bun-ci-retry.sh --ignore-scripts
         env:
