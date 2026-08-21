@@ -20,7 +20,7 @@
 import { expect, test } from "bun:test";
 
 import type { CitationResolutionCounts } from "@/api/handlers/case-law/citation-resolution";
-import { countsByRule } from "@/api/lib/case-law/citation-resolution-status";
+import { countsByRule } from "@/api/handlers/case-law/citation-resolution-status";
 
 import {
   CITATION_RESOLUTION_STEP,

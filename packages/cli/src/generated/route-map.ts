@@ -4959,7 +4959,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "case-law", "ingestion-status"],
                 capabilityId: "case-law.ingestion.status",
                 description:
-                  "Report case-law corpus ingestion health for operators. Per source: adapter key and whether an adapter is still registered for it, enabled flag, sync cursor, decisions held against the total the publisher reports, decisions inserted in the last hour and last day, failures and the top error types in the last day, the last ingestion event, and standing reconciliation counts (slices surveyed, short slices, parked and terminal items). Also the latest citation-resolution census: precedent citations by resolution status, resolved ones by rule, ambiguous ones by the shape of their key's holders, and the largest groups among shapes no rule owns. Requires organization audit-log access.",
+                  "Report case-law corpus ingestion health for operators. Per source: adapter key and whether an adapter is still registered for it, enabled flag, sync cursor, decisions held against the total the publisher reports, decisions inserted in the last hour and last day, failures and the top error types in the last day, the last ingestion event, and standing reconciliation counts (slices surveyed, short slices, parked and terminal items). Requires organization audit-log access.",
                 access: "read",
                 flags: [],
                 inputOnly: [],

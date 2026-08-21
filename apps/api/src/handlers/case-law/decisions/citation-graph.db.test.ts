@@ -6,6 +6,7 @@ import {
   caseLawDecisions,
   caseLawSources,
 } from "@/api/db/schema";
+import { CITATION_KIND } from "@/api/handlers/case-law/citation-kind";
 import {
   CITATION_TIMELINE_MAX_YEARS,
   CITATION_TREATMENTS,
@@ -24,7 +25,6 @@ import type {
   CaseLawPublicReadDb,
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
-import { CITATION_KIND } from "@/api/lib/case-law/citation-kind";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 

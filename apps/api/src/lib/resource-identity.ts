@@ -46,10 +46,6 @@ export const RESOURCE_IDENTITY_DISPOSITION = {
     resourceType: RESOURCE_TYPE.BILLING_CODE,
   },
   caseLawCitation: { type: "non_resource", reason: "association" },
-  caseLawCitationResolutionCensusRun: {
-    type: "non_resource",
-    reason: "projection",
-  },
   caseLawCoverageSlice: { type: "non_resource", reason: "projection" },
   caseLawCourtWeight: { type: "non_resource", reason: "policy" },
   caseLawDecision: {

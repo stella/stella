@@ -1,11 +1,11 @@
 import { expect, test } from "bun:test";
 
-import { listAdapters } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
 import {
   CITATION_RESOLUTION_JURISDICTION_POLICY,
   citationResolutionPolicyRows,
   resolvableJurisdictionsFrom,
-} from "@/api/lib/case-law/citation-jurisdiction-policy";
+} from "@/api/handlers/case-law/citation-jurisdiction-policy";
+import { listAdapters } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
 import { CASE_LAW_JURISDICTIONS } from "@/api/lib/legal-search/ingestion-constants";
 
 /**
@@ -52,6 +52,16 @@ test("a jurisdiction never declares itself as its own supranational reach", () =
       CITATION_RESOLUTION_JURISDICTION_POLICY[jurisdiction].alsoResolvesTo,
     ).not.toContain(jurisdiction);
   }
+});
+
+test("the declared cross-jurisdiction reach is exact", () => {
+  expect(CITATION_RESOLUTION_JURISDICTION_POLICY).toEqual({
+    AUT: { alsoResolvesTo: ["EU"] },
+    CZE: { alsoResolvesTo: ["EU"] },
+    EU: { alsoResolvesTo: [] },
+    POL: { alsoResolvesTo: ["EU"] },
+    SVK: { alsoResolvesTo: ["EU"] },
+  });
 });
 
 test("the SQL policy rows cover exactly the declared jurisdictions", () => {

@@ -11,10 +11,10 @@ import {
   caseLawDecisions,
   caseLawSources,
 } from "@/api/db/schema";
+import { CITATION_KIND } from "@/api/handlers/case-law/citation-kind";
 import { POLARITIES, POLARITY } from "@/api/handlers/case-law/polarity/consts";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
-import { CITATION_KIND } from "@/api/lib/case-law/citation-kind";
 import { redistributableCaseLawSourceFor } from "@/api/lib/case-law/redistribution";
 import { tPaginationCursor } from "@/api/lib/custom-schema";
 import { isRedistributable } from "@/api/lib/legal-search/corpus-source";
