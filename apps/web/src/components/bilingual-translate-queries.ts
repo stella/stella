@@ -210,7 +210,7 @@ export const BILINGUAL_GLOSSARY_ORIGIN_LABEL_KEYS = {
  */
 export const annotatedOriginLabelKey = (
   origin: BilingualPreparedRow["dispositionOrigin"],
-): TranslationKey | null => {
+) => {
   switch (origin) {
     case "model":
       return "bilingualTranslate.origins.model";
@@ -238,7 +238,7 @@ const BILINGUAL_ERROR_CODE_KEYS = {
 
 export const bilingualErrorCodeKey = (
   errorCode: BilingualRunErrorCode | null,
-): TranslationKey =>
+) =>
   errorCode === null
     ? "bilingualTranslate.errorCodes.unknown"
     : BILINGUAL_ERROR_CODE_KEYS[errorCode];

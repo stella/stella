@@ -142,9 +142,9 @@ export const bilingualTranslationRows = p.pgTable(
     workspaceId: safeWorkspaceId("workspace_id")
       .notNull()
       .references(() => workspaces.id, { onDelete: "cascade" }),
-    runId: safeUuid<"bilingualTranslationRun">("run_id")
-      .notNull()
-      .references(() => bilingualTranslationRuns.id, { onDelete: "cascade" }),
+    // Named explicitly: the generated name would exceed Postgres's 63-byte
+    // identifier limit and be truncated.
+    runId: safeUuid<"bilingualTranslationRun">("run_id").notNull(),
     // The folio row handle: the right-column paragraph's `w14:paraId`, or the
     // paragraph's own id for a paragraph inside a kept table.
     rowId: p.varchar("row_id", { length: 64 }).notNull(),
@@ -196,6 +196,13 @@ export const bilingualTranslationRows = p.pgTable(
       "bilingual_translation_rows_status_values_check",
       sql`${table.status} IN (${ROW_STATUS_SQL_VALUES})`,
     ),
+    p
+      .foreignKey({
+        columns: [table.runId],
+        foreignColumns: [bilingualTranslationRuns.id],
+        name: "bilingual_translation_rows_run_id_fk",
+      })
+      .onDelete("cascade"),
     p
       .foreignKey({
         columns: [table.workspaceId, table.organizationId],

@@ -94,7 +94,7 @@ ALTER TABLE "bilingual_translation_rows"
   FOREIGN KEY ("workspace_id") REFERENCES "public"."workspaces"("id")
   ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "bilingual_translation_rows"
-  ADD CONSTRAINT "bilingual_translation_rows_run_id_bilingual_translation_runs_id_fk"
+  ADD CONSTRAINT "bilingual_translation_rows_run_id_fk"
   FOREIGN KEY ("run_id") REFERENCES "public"."bilingual_translation_runs"("id")
   ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "bilingual_translation_rows"

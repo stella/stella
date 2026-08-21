@@ -99,7 +99,10 @@ const RunProgress = ({ detail }: { detail: BilingualRunDetail }) => {
           />
         </div>
         <p className="text-muted-foreground text-xs tabular-nums">
-          {t("bilingualTranslate.run.progress", { completed, total })}
+          {t("bilingualTranslate.run.progress", {
+            completed: String(completed),
+            total: String(total),
+          })}
         </p>
         <p className="text-muted-foreground text-xs">
           {t("bilingualTranslate.run.hint")}

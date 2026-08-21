@@ -26,9 +26,7 @@ export const glossaryEntrySchema = t.Object({
   target: termSchema,
   sourceForms: t.Array(termSchema, { maxItems: BILINGUAL_LIMITS.formsMax }),
   targetForms: t.Array(termSchema, { maxItems: BILINGUAL_LIMITS.formsMax }),
-  origin: t.Union(
-    BILINGUAL_GLOSSARY_ORIGINS.map((origin) => t.Literal(origin)),
-  ),
+  origin: t.UnionEnum(BILINGUAL_GLOSSARY_ORIGINS),
 });
 
 export const prepareBilingualTranslationBodySchema = t.Object({
@@ -50,9 +48,7 @@ export const createBilingualRunBodySchema = t.Object({
   rows: t.Array(
     t.Object({
       rowId: t.String({ minLength: 1, maxLength: 64 }),
-      disposition: t.Union(
-        BILINGUAL_ROW_DISPOSITIONS.map((value) => t.Literal(value)),
-      ),
+      disposition: t.UnionEnum(BILINGUAL_ROW_DISPOSITIONS),
     }),
     { minItems: 1, maxItems: BILINGUAL_LIMITS.rowsMax },
   ),

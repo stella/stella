@@ -401,7 +401,7 @@ const BilingualReviewStep = ({
             {issue === "incomplete"
               ? t("bilingualTranslate.glossary.incomplete")
               : t("bilingualTranslate.glossary.tooManyForms", {
-                  max: BILINGUAL_FORMS_MAX,
+                  max: String(BILINGUAL_FORMS_MAX),
                 })}
           </p>
         )}
