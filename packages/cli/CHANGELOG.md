@@ -1,5 +1,11 @@
 # @stll/cli
 
+## 0.6.4
+
+### Patch Changes
+
+- [#2319](https://github.com/stella/stella/pull/2319) [`abc9956`](https://github.com/stella/stella/commit/abc9956c2500d573daac99eb0141ef852724d334) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Expose citation-resolution census counts in the case-law ingestion status.
+
 ## 0.6.3
 
 ### Patch Changes
