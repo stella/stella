@@ -55,7 +55,6 @@ import { Route as ProtectedKnowledgeToolsRouteImport } from './routes/_protected
 import { Route as ProtectedKnowledgeWorkflowsRouteImport } from './routes/_protected.knowledge/workflows'
 import { Route as ProtectedSettingsIndexRouteImport } from './routes/_protected.settings/index'
 import { Route as ProtectedSettingsOrganizationRouteRouteImport } from './routes/_protected.settings/organization.route'
-import { Route as ProtectedTodosIndexRouteImport } from './routes/_protected.todos/index'
 import { Route as ProtectedWorkspacesIndexRouteImport } from './routes/_protected.workspaces/index'
 import { Route as ProtectedWorkspacesWorkspaceIdRouteRouteImport } from './routes/_protected.workspaces/$workspaceId/route'
 import { Route as AuthAcceptInvitationInvitationIdRouteImport } from './routes/auth/accept-invitation.$invitationId'
@@ -335,11 +334,6 @@ const ProtectedSettingsOrganizationRouteRoute =
     path: '/organization',
     getParentRoute: () => ProtectedSettingsRouteRoute,
   } as any)
-const ProtectedTodosIndexRoute = ProtectedTodosIndexRouteImport.update({
-  id: '/todos/',
-  path: '/todos/',
-  getParentRoute: () => ProtectedRoute,
-} as any)
 const ProtectedWorkspacesIndexRoute =
   ProtectedWorkspacesIndexRouteImport.update({
     id: '/workspaces/',
@@ -621,7 +615,6 @@ export interface FileRoutesByFullPath {
   '/inbox/': typeof ProtectedInboxIndexRoute
   '/knowledge/': typeof ProtectedKnowledgeIndexRoute
   '/settings/': typeof ProtectedSettingsIndexRoute
-  '/todos/': typeof ProtectedTodosIndexRoute
   '/workspaces/': typeof ProtectedWorkspacesIndexRoute
   '/law/cases/': typeof LawCasesIndexRoute
   '/workspaces/$workspaceId/$viewId': typeof ProtectedWorkspacesWorkspaceIdViewIdRouteRouteWithChildren
@@ -700,7 +693,6 @@ export interface FileRoutesByTo {
   '/inbox': typeof ProtectedInboxIndexRoute
   '/knowledge': typeof ProtectedKnowledgeIndexRoute
   '/settings': typeof ProtectedSettingsIndexRoute
-  '/todos': typeof ProtectedTodosIndexRoute
   '/workspaces': typeof ProtectedWorkspacesIndexRoute
   '/law/cases': typeof LawCasesIndexRoute
   '/knowledge/tools/$skillId': typeof ProtectedKnowledgeToolsSkillIdRoute
@@ -788,7 +780,6 @@ export interface FileRoutesById {
   '/_protected/inbox/': typeof ProtectedInboxIndexRoute
   '/_protected/knowledge/': typeof ProtectedKnowledgeIndexRoute
   '/_protected/settings/': typeof ProtectedSettingsIndexRoute
-  '/_protected/todos/': typeof ProtectedTodosIndexRoute
   '/_protected/workspaces/': typeof ProtectedWorkspacesIndexRoute
   '/law/cases/': typeof LawCasesIndexRoute
   '/_protected/workspaces/$workspaceId/$viewId': typeof ProtectedWorkspacesWorkspaceIdViewIdRouteRouteWithChildren
@@ -877,7 +868,6 @@ export interface FileRouteTypes {
     | '/inbox/'
     | '/knowledge/'
     | '/settings/'
-    | '/todos/'
     | '/workspaces/'
     | '/law/cases/'
     | '/workspaces/$workspaceId/$viewId'
@@ -956,7 +946,6 @@ export interface FileRouteTypes {
     | '/inbox'
     | '/knowledge'
     | '/settings'
-    | '/todos'
     | '/workspaces'
     | '/law/cases'
     | '/knowledge/tools/$skillId'
@@ -1043,7 +1032,6 @@ export interface FileRouteTypes {
     | '/_protected/inbox/'
     | '/_protected/knowledge/'
     | '/_protected/settings/'
-    | '/_protected/todos/'
     | '/_protected/workspaces/'
     | '/law/cases/'
     | '/_protected/workspaces/$workspaceId/$viewId'
@@ -1424,13 +1412,6 @@ declare module '@tanstack/react-router' {
       fullPath: '/settings/organization'
       preLoaderRoute: typeof ProtectedSettingsOrganizationRouteRouteImport
       parentRoute: typeof ProtectedSettingsRouteRoute
-    }
-    '/_protected/todos/': {
-      id: '/_protected/todos/'
-      path: '/todos'
-      fullPath: '/todos/'
-      preLoaderRoute: typeof ProtectedTodosIndexRouteImport
-      parentRoute: typeof ProtectedRoute
     }
     '/_protected/workspaces/': {
       id: '/_protected/workspaces/'
@@ -1969,7 +1950,6 @@ interface ProtectedRouteChildren {
   ProtectedDevAutocompleteRoute: typeof ProtectedDevAutocompleteRoute
   ProtectedContactsIndexRoute: typeof ProtectedContactsIndexRoute
   ProtectedInboxIndexRoute: typeof ProtectedInboxIndexRoute
-  ProtectedTodosIndexRoute: typeof ProtectedTodosIndexRoute
   ProtectedWorkspacesIndexRoute: typeof ProtectedWorkspacesIndexRoute
 }
 
@@ -1985,7 +1965,6 @@ const ProtectedRouteChildren: ProtectedRouteChildren = {
   ProtectedDevAutocompleteRoute: ProtectedDevAutocompleteRoute,
   ProtectedContactsIndexRoute: ProtectedContactsIndexRoute,
   ProtectedInboxIndexRoute: ProtectedInboxIndexRoute,
-  ProtectedTodosIndexRoute: ProtectedTodosIndexRoute,
   ProtectedWorkspacesIndexRoute: ProtectedWorkspacesIndexRoute,
 }
 
