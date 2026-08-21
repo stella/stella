@@ -1667,7 +1667,7 @@
       "inputDocuments": "Eingabedokumente",
       "launch": "Workflow ausführen",
       "loadFailed": "Diese Ausführung konnte nicht geladen werden.",
-      "noEnabledFlows": "Keine aktivierten Workflows. Erstellen Sie einen unter Wissen › Workflows.",
+      "noEnabledFlows": "Keine aktivierten Workflows. Erstellen Sie einen unter {sectionName} › Workflows.",
       "openDocument": "Dokument öffnen",
       "review": {
         "approve": "Genehmigen",

@@ -1667,7 +1667,7 @@
       "inputDocuments": "Vstupní dokumenty",
       "launch": "Spustit pracovní postup",
       "loadFailed": "Tento běh se nepodařilo načíst.",
-      "noEnabledFlows": "Žádné povolené pracovní postupy. Vytvořte jej v Znalosti › Pracovní postupy.",
+      "noEnabledFlows": "Žádné povolené pracovní postupy. Vytvořte jej v {sectionName} › Pracovní postupy.",
       "openDocument": "Otevřít dokument",
       "review": {
         "approve": "Schválit",

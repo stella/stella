@@ -1667,7 +1667,7 @@
       "inputDocuments": "Sisenddokumendid",
       "launch": "Käivita töövoog",
       "loadFailed": "Seda käivitust ei õnnestunud laadida.",
-      "noEnabledFlows": "Lubatud töövoogusid pole. Loo see jaotises Teadmus › Töövood.",
+      "noEnabledFlows": "Lubatud töövoogusid pole. Loo see jaotises {sectionName} › Töövood.",
       "openDocument": "Ava dokument",
       "review": {
         "approve": "Kinnita",

@@ -1667,7 +1667,7 @@
       "inputDocuments": "Bemeneti dokumentumok",
       "launch": "Munkafolyamat futtatása",
       "loadFailed": "Ezt a futtatást nem sikerült betölteni.",
-      "noEnabledFlows": "Nincsenek engedélyezett munkafolyamatok. Hozzon létre egyet itt: Tudásbázis › Munkafolyamatok.",
+      "noEnabledFlows": "Nincsenek engedélyezett munkafolyamatok. Hozzon létre egyet itt: {sectionName} › Munkafolyamatok.",
       "openDocument": "Dokumentum megnyitása",
       "review": {
         "approve": "Jóváhagyás",

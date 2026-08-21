@@ -1670,7 +1670,7 @@ type Messages = {
       "inputDocuments": "Input documents";
       "launch": "Run a workflow";
       "loadFailed": "Couldn't load this run.";
-      "noEnabledFlows": "No enabled workflows. Create one in Knowledge › Workflows.";
+      "noEnabledFlows": "No enabled workflows. Create one in {sectionName} › Workflows.";
       "openDocument": "Open document";
       "review": {
         "approve": "Approve";
@@ -2619,7 +2619,7 @@ type Messages = {
   "navigation": {
     "chat": "Chat";
     "contacts": "Contacts";
-    "knowledge": "Knowledge";
+    "knowledge": "Intelligence";
     "myTodos": "My tasks";
     "pinned": "Pinned";
     "recentMatters": "Recent matters";
