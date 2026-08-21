@@ -4564,7 +4564,7 @@
       },
       "saveAsTemplate": "Enregistrer comme préréglage…",
       "selectProperty": "Sélectionner une propriété",
-      "switcherLabel": "Saved views",
+      "switcherLabel": "Vues enregistrées",
       "templates": {
         "created": "Préréglage enregistré",
         "delete": "Supprimer le préréglage",
