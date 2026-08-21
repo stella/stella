@@ -66,7 +66,17 @@ const MISMATCHED_PACKAGE_VERSION =
   PACKAGE_VERSION === "0.0.0" ? "999.999.999" : "0.0.0";
 
 describe("native node loader", () => {
-  test("loads the bundled native loader", () => {
+  test("uses the embedded loader for explicit host target values", () => {
+    const loaded = loadNativeAnonymizeBinding({
+      arch: process.arch,
+      expectedVersion: PACKAGE_VERSION,
+      platform: process.platform,
+    });
+
+    expect(loaded.nativePackageVersion()).toBe(PACKAGE_VERSION);
+  });
+
+  test("unwraps the selected platform package", () => {
     const calls: string[] = [];
     const binding = fakeNativeBinding(PACKAGE_VERSION);
     const loaded = loadNativeAnonymizeBinding({
@@ -76,15 +86,15 @@ describe("native node loader", () => {
       env: {},
       requireModule: (specifier) => {
         calls.push(specifier);
-        if (specifier === "../index.cjs") {
-          return binding;
+        if (specifier === "@stll/anonymize-darwin-arm64") {
+          return { default: binding };
         }
         throw new Error("not found");
       },
     });
 
     expect(loaded).toBe(binding);
-    expect(calls).toEqual(["../index.cjs"]);
+    expect(calls).toEqual(["@stll/anonymize-darwin-arm64"]);
   });
 
   for (const member of NATIVE_BINDING_PARITY_MEMBERS.root) {
@@ -98,7 +108,7 @@ describe("native node loader", () => {
           arch: "arm64",
           env: {},
           requireModule: (specifier) => {
-            if (specifier === "../index.cjs") {
+            if (specifier === "@stll/anonymize-darwin-arm64") {
               return incomplete;
             }
             throw new Error("not found");
@@ -125,7 +135,7 @@ describe("native node loader", () => {
           arch: "arm64",
           env: {},
           requireModule: (specifier) => {
-            if (specifier === "../index.cjs") {
+            if (specifier === "@stll/anonymize-darwin-arm64") {
               return incomplete;
             }
             throw new Error("not found");
@@ -153,7 +163,7 @@ describe("native node loader", () => {
     });
 
     expect(loaded).toBe(binding);
-    expect(calls).toEqual(["../index.cjs", "@stll/anonymize-darwin-arm64"]);
+    expect(calls).toEqual(["@stll/anonymize-darwin-arm64"]);
   });
 
   test("selects the Linux GNU platform package", () => {
@@ -175,7 +185,7 @@ describe("native node loader", () => {
     });
 
     expect(loaded).toBe(binding);
-    expect(calls).toEqual(["../index.cjs", "@stll/anonymize-linux-x64-gnu"]);
+    expect(calls).toEqual(["@stll/anonymize-linux-x64-gnu"]);
   });
 
   test("reports unsupported native targets with an actionable error", () => {
@@ -198,8 +208,8 @@ describe("native node loader", () => {
     );
     expect(attempt).toThrow("linux-x64-gnu");
     expect(attempt).toThrow("STELLA_ANONYMIZE_NATIVE_LIBRARY_PATH");
-    // musl resolves to no published sidecar, so only the local loader is tried.
-    expect(calls).toEqual(["../index.cjs", "../index.cjs", "../index.cjs"]);
+    // musl resolves to no published sidecar, so no module is loaded.
+    expect(calls).toEqual([]);
   });
 
   test("prefers an explicit native library path on unsupported targets", () => {
@@ -252,7 +262,7 @@ describe("native node loader", () => {
       env: {},
       requireModule: (specifier) => {
         calls.push(specifier);
-        if (specifier === "../index.cjs") {
+        if (specifier === "@stll/anonymize-darwin-arm64") {
           return binding;
         }
         throw new Error("not found");
@@ -270,7 +280,7 @@ describe("native node loader", () => {
         arch: "arm64",
         env: {},
         requireModule: (specifier) => {
-          if (specifier === "../index.cjs") {
+          if (specifier === "@stll/anonymize-darwin-arm64") {
             return fakeNativeBinding(MISMATCHED_PACKAGE_VERSION);
           }
           throw new Error("not found");

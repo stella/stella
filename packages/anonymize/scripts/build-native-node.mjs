@@ -52,7 +52,7 @@ if (!existsSync(source)) {
   throw new Error(`Native build output is missing: ${source}`);
 }
 
-copyFileSync(source, join(packageRoot, "stella_anonymize_napi.node"));
+rmSync(join(packageRoot, "stella_anonymize_napi.node"), { force: true });
 const sidecarRoot = nativeSidecarPackageRoot({
   arch: process.arch,
   libc: detectNativeLibc(process.platform),

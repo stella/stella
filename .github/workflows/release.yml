@@ -143,6 +143,9 @@ jobs:
       - name: Build
         run: bun run build
 
+      - name: Smoke built native package
+        run: bun run --cwd packages/anonymize smoke:dist
+
       - name: Lint
         run: bun run lint
 
@@ -222,6 +225,9 @@ jobs:
           # Native sidecar packs only need the platform .node binding; skip
           # the wasm32-unknown-unknown build on the platform matrix runners.
           STELLA_ANONYMIZE_SKIP_WASM_BUILD: "1"
+
+      - name: Smoke native binding inside a compiled Bun executable
+        run: bun run --cwd packages/anonymize smoke:dist
 
       - name: Enforce native install footprint
         run: node packages/anonymize/scripts/check-native-install-footprint.mjs "${{ matrix.package }}"

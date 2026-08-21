@@ -65,23 +65,17 @@ const platformPackageDirectory = () => {
 
 const preparePlatformPackage = async (destination) => {
   const nativeBinding = "stella_anonymize_napi.node";
-  const cachedNativeBinding = join(
-    repositoryRoot,
-    "packages",
-    "anonymize",
-    nativeBinding,
-  );
-  await access(cachedNativeBinding).catch(() => {
+  const packageDirectory = platformPackageDirectory();
+  const sidecarNativeBinding = join(packageDirectory, nativeBinding);
+  await access(sidecarNativeBinding).catch(() => {
     throw new Error(
-      `Canonical native binding is missing: ${cachedNativeBinding}. Build @stll/anonymize before running the packed MCP smoke test.`,
+      `Native sidecar binding is missing: ${sidecarNativeBinding}. Build @stll/anonymize before running the packed MCP smoke test.`,
     );
   });
-  await cp(platformPackageDirectory(), destination, {
-    filter: (source) =>
-      basename(source) !== "node_modules" && basename(source) !== nativeBinding,
+  await cp(packageDirectory, destination, {
+    filter: (source) => basename(source) !== "node_modules",
     recursive: true,
   });
-  await cp(cachedNativeBinding, join(destination, nativeBinding));
 };
 
 const prepareCargoWorkspace = async (destination) => {

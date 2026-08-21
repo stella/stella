@@ -215,9 +215,6 @@ jobs:
           rm -rf "$target"
           mkdir -p "$target"
           cp packages/anonymize/native-pipeline*.stlanonpkg "$target/"
-          cp \
-            packages/anonymize/stella_anonymize_napi.node \
-            packages/anonymize-linux-x64-gnu/stella_anonymize_napi.node
       - name: Archive build outputs
         shell: bash
         run: |
@@ -226,7 +223,6 @@ jobs:
           required=(
             packages/anonymize/dist
             packages/anonymize/native-wasm-dist
-            packages/anonymize/stella_anonymize_napi.node
             packages/anonymize/wasm/dist
             packages/cli/dist
             packages/data/dist
@@ -266,7 +262,6 @@ jobs:
             packages/*/dist
             packages/anonymize/wasm/dist
             packages/anonymize/native-wasm-dist
-            packages/anonymize/stella_anonymize_napi.node
             packages/anonymize/native-pipeline*.stlanonpkg
             packages/anonymize-*/stella_anonymize_napi.node
             crates/anonymize-py/python/stella_anonymize/native_packages/*.stlanonpkg

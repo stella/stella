@@ -8,7 +8,15 @@
  *
  * Run after `bun run build`: `bun run smoke:dist`.
  */
-import { getDefaultNativePipeline, redactDefaultText } from "../dist/index.mjs";
+import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+
+import {
+  createPipelineContext,
+  getDefaultNativePipeline,
+  redactDefaultText,
+} from "../dist/index.mjs";
 import { CAPABILITY_MANIFEST } from "../dist/capabilities.mjs";
 import { createNativeAnonymizerFromPackage } from "../dist/native.mjs";
 import {
@@ -43,6 +51,12 @@ if (typeof redactDefaultText !== "function") {
   throw new TypeError(
     "dist root entrypoint is missing native redaction helper",
   );
+}
+if (typeof createPipelineContext !== "function") {
+  throw new TypeError("dist root entrypoint is missing its pipeline context");
+}
+if (createPipelineContext().nativePipelinePackage !== null) {
+  throw new TypeError("dist pipeline context did not start empty");
 }
 if (
   CAPABILITY_MANIFEST.schemaVersion !== 2 ||
@@ -108,3 +122,195 @@ console.log(
     sessionMappingCount: session.mappingCount(),
   }),
 );
+
+const runStandaloneSmoke = async () => {
+  const buildDir = mkdtempSync(path.join(tmpdir(), "anonymize-bun-build-"));
+  const runDir = mkdtempSync(path.join(tmpdir(), "anonymize-bun-run-"));
+
+  try {
+    const entrypoint = path.join(buildDir, "entry.mjs");
+    const executable = path.join(
+      buildDir,
+      process.platform === "win32" ? "anonymize-smoke.exe" : "anonymize-smoke",
+    );
+    const distEntrypoint = path.resolve(
+      import.meta.dirname,
+      "../dist/index.mjs",
+    );
+
+    writeFileSync(
+      entrypoint,
+      `
+        import {
+          createPipelineContext,
+          loadNativeAnonymizeBinding,
+        } from ${JSON.stringify(distEntrypoint)};
+
+        const context = createPipelineContext();
+        const version = loadNativeAnonymizeBinding().nativePackageVersion();
+        if (context.nativePipelinePackage !== null || version.length === 0) {
+          throw new Error("standalone native contract failed");
+        }
+        console.log(version);
+      `,
+    );
+
+    const standaloneBuild = await Bun.build({
+      compile: { outfile: executable },
+      entrypoints: [entrypoint],
+      target: "bun",
+    });
+    if (!standaloneBuild.success) {
+      throw new Error(
+        `standalone compile failed: ${standaloneBuild.logs.join("\n")}`,
+      );
+    }
+
+    const subprocess = Bun.spawn([executable], {
+      cwd: runDir,
+      env: childEnvironment(),
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const [stdout, stderr, exitCode] = await Promise.all([
+      new Response(subprocess.stdout).text(),
+      new Response(subprocess.stderr).text(),
+      subprocess.exited,
+    ]);
+    if (exitCode !== 0) {
+      throw new Error(`standalone native smoke failed: ${stderr.trim()}`);
+    }
+    if (stdout.trim() !== nativePackageVersion) {
+      throw new Error(
+        `standalone native smoke returned ${stdout.trim()}; expected ${nativePackageVersion}`,
+      );
+    }
+    console.log(`Bun standalone native smoke ok: ${stdout.trim()}`);
+  } finally {
+    cleanupTemporaryDirectories([buildDir, runDir]);
+  }
+};
+
+const runPrunedBundleSmoke = async () => {
+  const buildDir = mkdtempSync(path.join(tmpdir(), "anonymize-bun-bundle-"));
+  const runDir = mkdtempSync(path.join(tmpdir(), "anonymize-bun-run-"));
+
+  try {
+    const packageRoot = path.resolve(import.meta.dirname, "..");
+    const scopeRoot = path.join(buildDir, "node_modules", "@stll");
+    const installedPackage = path.join(scopeRoot, "anonymize");
+    const sidecarDirectory = hostSidecarDirectory();
+    const installedSidecar = path.join(scopeRoot, sidecarDirectory);
+    mkdirSync(installedPackage, { recursive: true });
+    mkdirSync(installedSidecar, { recursive: true });
+    for (const entry of ["dist", "index.cjs", "package.json"]) {
+      cpSync(
+        path.join(packageRoot, entry),
+        path.join(installedPackage, entry),
+        {
+          recursive: true,
+        },
+      );
+    }
+    const sidecarRoot = path.resolve(packageRoot, "..", sidecarDirectory);
+    for (const entry of [
+      "index.cjs",
+      "package.json",
+      "stella_anonymize_napi.node",
+    ]) {
+      cpSync(path.join(sidecarRoot, entry), path.join(installedSidecar, entry));
+    }
+
+    const entrypoint = path.join(buildDir, "entry.mjs");
+    const outputDirectory = path.join(buildDir, "output");
+    writeFileSync(
+      entrypoint,
+      `
+        import { loadNativeAnonymizeBinding } from "@stll/anonymize/native-node";
+
+        console.log(loadNativeAnonymizeBinding().nativePackageVersion());
+      `,
+    );
+    const bundleBuild = await Bun.build({
+      entrypoints: [entrypoint],
+      outdir: outputDirectory,
+      target: "bun",
+    });
+    if (!bundleBuild.success) {
+      throw new Error(`ordinary bundle failed: ${bundleBuild.logs.join("\n")}`);
+    }
+
+    const subprocess = Bun.spawn(
+      [process.execPath, path.join(outputDirectory, "entry.js")],
+      {
+        cwd: runDir,
+        env: childEnvironment(),
+        stdout: "pipe",
+        stderr: "pipe",
+      },
+    );
+    const [stdout, stderr, exitCode] = await Promise.all([
+      new Response(subprocess.stdout).text(),
+      new Response(subprocess.stderr).text(),
+      subprocess.exited,
+    ]);
+    if (exitCode !== 0) {
+      throw new Error(`ordinary bundle smoke failed: ${stderr.trim()}`);
+    }
+    if (stdout.trim() !== nativePackageVersion) {
+      throw new Error(
+        `ordinary bundle returned ${stdout.trim()}; expected ${nativePackageVersion}`,
+      );
+    }
+    console.log(`Bun pruned-install bundle smoke ok: ${stdout.trim()}`);
+  } finally {
+    cleanupTemporaryDirectories([buildDir, runDir]);
+  }
+};
+
+const hostSidecarDirectory = () => {
+  if (process.platform === "darwin" && process.arch === "arm64") {
+    return "anonymize-darwin-arm64";
+  }
+  if (process.platform === "darwin" && process.arch === "x64") {
+    return "anonymize-darwin-x64";
+  }
+  if (process.platform === "linux" && process.arch === "arm64") {
+    return "anonymize-linux-arm64-gnu";
+  }
+  if (process.platform === "linux" && process.arch === "x64") {
+    return "anonymize-linux-x64-gnu";
+  }
+  if (process.platform === "win32" && process.arch === "x64") {
+    return "anonymize-win32-x64-msvc";
+  }
+  throw new Error(
+    `No native anonymize sidecar exists for ${process.platform}-${process.arch}`,
+  );
+};
+
+const childEnvironment = () => {
+  const environment = { ...process.env };
+  delete environment.STELLA_ANONYMIZE_NATIVE_LIBRARY_PATH;
+  return environment;
+};
+
+const cleanupTemporaryDirectories = (directories) => {
+  for (const directory of directories) {
+    try {
+      rmSync(directory, {
+        force: true,
+        maxRetries: 10,
+        recursive: true,
+        retryDelay: 100,
+      });
+    } catch (error) {
+      console.warn(
+        `Could not remove temporary directory ${directory}: ${String(error)}`,
+      );
+    }
+  }
+};
+
+await runStandaloneSmoke();
+await runPrunedBundleSmoke();

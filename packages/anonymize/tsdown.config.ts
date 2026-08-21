@@ -15,6 +15,7 @@ export default defineConfig([
     ],
     outDir: "dist",
     format: ["esm"],
+    deps: { neverBundle: ["../index.cjs"] },
     dts: true,
     clean: true,
     sourcemap: true,

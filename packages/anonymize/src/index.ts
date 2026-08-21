@@ -25,6 +25,8 @@ export {
   prepareNativePipelineConfig,
   prepareNativePipelinePackage,
 } from "./native-pipeline";
+export { createPipelineContext } from "./context";
+export type { PipelineContext } from "./context";
 export type {
   NativePipelineBuildOptions,
   NativePipelineCompatibility,
