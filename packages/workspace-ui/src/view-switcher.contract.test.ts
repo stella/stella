@@ -24,3 +24,10 @@ test("drag interactions use one published Pragmatic DnD v3 contract", () => {
     "@atlaskit/pragmatic-drag-and-drop-hitbox": "^2.0.1",
   });
 });
+
+test("drag targets accept only their own switcher instance", () => {
+  expect(source).toContain("[VIEW_DRAG_INSTANCE]: instanceId");
+  expect(
+    source.match(/source\.data\[VIEW_DRAG_INSTANCE\] === instanceId/gu),
+  ).toHaveLength(2);
+});

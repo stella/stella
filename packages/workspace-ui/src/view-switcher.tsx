@@ -24,6 +24,7 @@ import {
 
 const VIEW_DRAG_TYPE = "@stll/workspace-ui/view-switcher/drag-type";
 const VIEW_DRAG_ID = "@stll/workspace-ui/view-switcher/view-id";
+const VIEW_DRAG_INSTANCE = "@stll/workspace-ui/view-switcher/instance";
 
 const useLatestCallback = <Args extends unknown[], Result>(
   callback: (...args: Args) => Result,
@@ -91,6 +92,7 @@ export const WorkspaceViewSwitcher = <View extends WorkspaceViewSwitcherItem>({
   renderIcon,
 }: WorkspaceViewSwitcherProps<View>) => {
   const canReorder = reorder !== null;
+  const [instanceId] = useState(Symbol);
   const [stripContainer, setStripContainer] = useState<HTMLDivElement | null>(
     null,
   );
@@ -102,9 +104,11 @@ export const WorkspaceViewSwitcher = <View extends WorkspaceViewSwitcherItem>({
 
     return dropTargetForElements({
       element: stripContainer,
-      canDrop: ({ source }) => source.data[VIEW_DRAG_TYPE] === true,
+      canDrop: ({ source }) =>
+        source.data[VIEW_DRAG_TYPE] === true &&
+        source.data[VIEW_DRAG_INSTANCE] === instanceId,
     });
-  }, [canReorder, stripContainer]);
+  }, [canReorder, instanceId, stripContainer]);
 
   const handleReorder = (
     draggedId: string,
@@ -158,6 +162,7 @@ export const WorkspaceViewSwitcher = <View extends WorkspaceViewSwitcherItem>({
                   getDragData={reorder?.getDragData}
                   getDropData={reorder?.getDropData}
                   isDragBlocked={reorder?.isBlocked ?? false}
+                  instanceId={instanceId}
                   key={view.id}
                   onContextMenu={onViewContextMenu}
                   onDoubleClick={onViewDoubleClick}
@@ -182,6 +187,7 @@ type WorkspaceViewTabProps<View extends WorkspaceViewSwitcherItem> = {
   getDragData: ((view: View) => Record<string | symbol, unknown>) | undefined;
   getDropData: ((view: View) => Record<string | symbol, unknown>) | undefined;
   isDragBlocked: boolean;
+  instanceId: symbol;
   onContextMenu:
     | ((view: View, event: React.MouseEvent<HTMLElement>) => void)
     | undefined;
@@ -204,6 +210,7 @@ const WorkspaceViewTab = <View extends WorkspaceViewSwitcherItem>({
   getDragData,
   getDropData,
   isDragBlocked,
+  instanceId,
   onContextMenu,
   onDoubleClick,
   onReorder,
@@ -218,6 +225,7 @@ const WorkspaceViewTab = <View extends WorkspaceViewSwitcherItem>({
     ...getDragData?.(view),
     [VIEW_DRAG_TYPE]: true,
     [VIEW_DRAG_ID]: view.id,
+    [VIEW_DRAG_INSTANCE]: instanceId,
   }));
   const dropData = useLatestCallback(() => ({
     ...getDropData?.(view),
@@ -245,6 +253,7 @@ const WorkspaceViewTab = <View extends WorkspaceViewSwitcherItem>({
         canDrop: ({ source }) =>
           canReorder &&
           source.data[VIEW_DRAG_TYPE] === true &&
+          source.data[VIEW_DRAG_INSTANCE] === instanceId &&
           source.data[VIEW_DRAG_ID] !== view.id,
         getData: ({ input, element }) =>
           attachClosestEdge(dropData(), {
@@ -280,6 +289,7 @@ const WorkspaceViewTab = <View extends WorkspaceViewSwitcherItem>({
     canDrag,
     dropData,
     initialData,
+    instanceId,
     reorder,
     tabContainer,
     view.id,
