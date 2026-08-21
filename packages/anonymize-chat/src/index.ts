@@ -561,9 +561,13 @@ const assertForcedSensitiveValuesRedacted = ({
     let offset = sourceText.indexOf(forcedValue);
     while (offset !== -1) {
       const end = offset + forcedValue.length;
-      const isRedacted = resolvedEntities.some(
-        (entity) => entity.start <= offset && entity.end >= end,
-      );
+      let isRedacted = false;
+      for (const entity of resolvedEntities) {
+        if (entity.start <= offset && entity.end >= end) {
+          isRedacted = true;
+          break;
+        }
+      }
       if (!isRedacted) {
         panic("forced sensitive value remained after anonymization");
       }
