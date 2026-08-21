@@ -52,7 +52,7 @@ for p in "${packages[@]}"; do
   require_placeholder_version "$p"
 done
 
-staging_dir="$(mktemp -d "${TMPDIR:-/tmp}/stella-bootstrap-publish.XXXXXX")"
+staging_dir="$(mktemp -d)"
 
 cleanup() {
   git checkout -- "${manifests[@]}"
