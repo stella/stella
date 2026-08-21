@@ -33,6 +33,7 @@ describe("DataTable", () => {
     expect(markup).toContain('aria-sort="ascending"');
     expect(markup).toContain("focus-visible:not-sr-only");
     expect(markup).toContain("focus-visible:ring-2");
+    expect(markup).toContain('data-slot="button"');
     expect(markup).toContain("Open Northwind</button>");
     expect(markup).toContain("caller-row");
     expect(markup).not.toContain('role="button"');
@@ -76,6 +77,23 @@ describe("DataTable", () => {
     expect(loading.match(/data-slot="skeleton"/gu)).toHaveLength(4);
     expect(loading).not.toContain("colSpan");
     expect(loading).not.toContain("No matters");
+  });
+
+  test("keeps at least one loading row after rounding", () => {
+    const loading = renderToStaticMarkup(
+      <DataTable
+        columns={columns}
+        emptyLabel="No matters"
+        isLoading
+        loadingLabel="Loading"
+        loadingRowCount={0.5}
+        rowKey={(row: { id: string }) => row.id}
+        rows={[]}
+      />,
+    );
+
+    expect(loading.match(/data-slot="skeleton"/gu)).toHaveLength(1);
+    expect(loading).toContain("Loading");
   });
 
   test("row selection ignores every nested interactive target", () => {

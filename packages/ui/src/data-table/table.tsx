@@ -1,5 +1,6 @@
 import type { HTMLAttributes, ReactNode } from "react";
 
+import { Button } from "../components/button";
 import { Skeleton } from "../components/skeleton";
 import {
   Table,
@@ -60,13 +61,14 @@ export const DataTable = <TItem,>({
               key={column.id}
             >
               {rowAction !== undefined && columnIndex === 0 ? (
-                <button
+                <Button
                   className="focus-visible:bg-background focus-visible:ring-ring sr-only focus-visible:not-sr-only focus-visible:absolute focus-visible:inset-2 focus-visible:z-10 focus-visible:flex focus-visible:items-center focus-visible:rounded-md focus-visible:px-2 focus-visible:text-sm focus-visible:ring-2"
                   onClick={() => rowAction.onSelect(item)}
-                  type="button"
+                  size="xs"
+                  variant="ghost"
                 >
                   {rowAction.getAriaLabel(item)}
-                </button>
+                </Button>
               ) : null}
               {column.render(item)}
             </TableCell>
@@ -148,7 +150,7 @@ export type DataTableRowAction<TItem> = {
 };
 
 export type DataTableProps<TItem> = {
-  columns: readonly DataTableColumn<TItem>[];
+  columns: readonly [DataTableColumn<TItem>, ...DataTableColumn<TItem>[]];
   emptyLabel: string;
   getRowProps?: (item: TItem) => RowProps;
   isLoading?: boolean;
@@ -183,7 +185,7 @@ const LoadingRows = <TItem,>({
 
 const resolveLoadingRowCount = (rowCount: number) =>
   Number.isFinite(rowCount) && rowCount > 0
-    ? Math.floor(rowCount)
+    ? Math.max(1, Math.floor(rowCount))
     : DEFAULT_LOADING_ROW_COUNT;
 
 const StatusRow = ({ colSpan, label }: { colSpan: number; label: string }) => (
