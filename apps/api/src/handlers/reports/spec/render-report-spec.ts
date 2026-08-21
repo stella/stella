@@ -613,8 +613,11 @@ const renderFindings = (
   scope: Scope,
 ): Block[] => {
   const suppressed = new Set(section.suppressVerdicts);
+  const severities = section.severity ? new Set(section.severity) : null;
   const findings = scopeFindings(ctx, scope).filter(
-    (finding) => !suppressed.has(finding.verdict),
+    (finding) =>
+      !suppressed.has(finding.verdict) &&
+      (severities === null || severities.has(finding.severity)),
   );
   const blocks: Block[] = [];
   for (const contract of scopeContracts(ctx, scope)) {

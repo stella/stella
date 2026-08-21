@@ -144,6 +144,9 @@ const findingsTableSection = v.strictObject({
 
 const findingsSection = v.strictObject({
   kind: v.literal("findings"),
+  severity: v.optional(
+    v.pipe(v.array(v.picklist(SEVERITY_ORDER)), v.minLength(1)),
+  ),
   include: v.array(v.picklist(FINDING_PARTS)),
   citations: v.picklist(CITATION_MODES),
   suppressVerdicts: v.optional(v.array(v.string())),
