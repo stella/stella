@@ -18,7 +18,7 @@
  * address one member's rows and leave the others marked.
  */
 
-import { beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { and, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
@@ -73,6 +73,7 @@ const decisionId = (fixture: keyof typeof ID_PREFIX, index: number) =>
     `00000000-0000-4000-8000-${ID_PREFIX[fixture]}00000000${String(index).padStart(3, "0")}`,
   );
 
+let client: Awaited<ReturnType<typeof createTestPglite>>;
 let db: ReturnType<typeof drizzle>;
 let scopedDb: ScopedDb;
 
@@ -106,7 +107,7 @@ const enqueuedProjections = async () =>
     .where(eq(caseLawCorpusIndexProjections.pendingAction, "index"));
 
 beforeAll(async () => {
-  const client = await createTestPglite();
+  client = await createTestPglite();
   db = drizzle({ client });
   const handle = async (callback: (tx: Transaction) => Promise<unknown>) =>
     // SAFETY: pglite's drizzle instance satisfies the transaction surface
@@ -162,6 +163,10 @@ beforeAll(async () => {
   // so the repair is only meaningful with it installed. The test snapshot
   // carries the tables but not the migrations' functions.
   await installCaseLawProjectionTrigger(db);
+});
+
+afterAll(async () => {
+  await client.close();
 });
 
 test("the repair reaches rows marked only through the generation projection", async () => {

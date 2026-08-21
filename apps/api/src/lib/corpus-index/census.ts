@@ -194,7 +194,7 @@ export const censusIndex = async ({
   const counted = await getCorpusIndexClient().search({
     indexId,
     query: DOCUMENT_COUNT_QUERY,
-    maxHits: 0,
+    maxHits: 1,
   });
   if (Result.isError(counted)) {
     return Result.err(counted.error);
