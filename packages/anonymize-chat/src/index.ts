@@ -301,22 +301,42 @@ const protectLiteralPlaceholders = (
   text: string;
   restore: (value: string) => string;
 } => {
+  const overlapsForcedSensitiveValue = (
+    placeholderOffset: number,
+    placeholderLength: number,
+  ): boolean => {
+    const placeholderEnd = placeholderOffset + placeholderLength;
+    for (const value of forcedSensitiveValues) {
+      const valueOffset = text.lastIndexOf(value, placeholderEnd - 1);
+      if (
+        valueOffset !== -1 &&
+        valueOffset + value.length > placeholderOffset
+      ) {
+        return true;
+      }
+    }
+    return false;
+  };
+
   const restoreMap = new Map<string, string>();
   let index = 0;
-  const protectedText = text.replaceAll(PLACEHOLDER_TOKEN, (placeholder) => {
-    if (forcedSensitiveValues.has(placeholder)) {
-      return placeholder;
-    }
+  const protectedText = text.replaceAll(
+    PLACEHOLDER_TOKEN,
+    (placeholder, offset: number) => {
+      if (overlapsForcedSensitiveValue(offset, placeholder.length)) {
+        return placeholder;
+      }
 
-    let sentinel = `\uE000CHAT_PLACEHOLDER_${index}\uE001`;
-    while (text.includes(sentinel) || restoreMap.has(sentinel)) {
+      let sentinel = `\uE000CHAT_PLACEHOLDER_${index}\uE001`;
+      while (text.includes(sentinel) || restoreMap.has(sentinel)) {
+        index += 1;
+        sentinel = `\uE000CHAT_PLACEHOLDER_${index}\uE001`;
+      }
+      restoreMap.set(sentinel, placeholder);
       index += 1;
-      sentinel = `\uE000CHAT_PLACEHOLDER_${index}\uE001`;
-    }
-    restoreMap.set(sentinel, placeholder);
-    index += 1;
-    return sentinel;
-  });
+      return sentinel;
+    },
+  );
 
   return {
     text: protectedText,

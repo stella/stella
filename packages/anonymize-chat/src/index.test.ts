@@ -264,6 +264,22 @@ describe("runChatAnonPipeline excludedCanonicals", () => {
     expect(result.redactionMap).toEqual(new Map([["[MISC_1]", forcedValue]]));
   });
 
+  test("preserves forced values containing placeholder-shaped substrings", async () => {
+    const forcedValue = "Matter [CASE_123]";
+    const runtime = buildRuntime([makeEntity(forcedValue, "misc")]);
+
+    const result = await runChatAnonPipeline({
+      runtime,
+      dictionaries,
+      text: forcedValue,
+      workspaceId: "ws-1",
+      forcedSensitiveValues: [forcedValue],
+    });
+
+    expect(result.redactedText).toBe("[MISC_1]");
+    expect(result.redactionMap).toEqual(new Map([["[MISC_1]", forcedValue]]));
+  });
+
   test("bounds caller-supplied forced values before building a pipeline", async () => {
     const runtime = buildRuntime([]);
 
