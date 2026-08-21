@@ -1,4 +1,11 @@
-import { Suspense, useCallback, useMemo, useRef, useState } from "react";
+import {
+  Suspense,
+  useCallback,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 import { useSuspenseQuery } from "@tanstack/react-query";
 import type { Editor } from "@tiptap/react";
@@ -327,10 +334,19 @@ const BulkBody = ({ workspaceId, onClose, dirtyRef }: BulkBodyProps) => {
   );
   const canSubmit = validDrafts.length > 0 && !batch.isPending;
 
-  // eslint-disable-next-line react/react-compiler -- latest-value mirror; read only in the dialog's onOpenChange close guard, never for rendered output
-  dirtyRef.current = drafts.some(
-    (d) => d.name.trim().length > 0 || d.prompt.trim().length > 0,
+  // The dialog's onOpenChange close guard reads dirtiness off the
+  // parent-owned ref at close time; mirror it after commit so the
+  // compiler can model this component.
+  const isDirty = useMemo(
+    () =>
+      drafts.some(
+        (d) => d.name.trim().length > 0 || d.prompt.trim().length > 0,
+      ),
+    [drafts],
   );
+  useLayoutEffect(() => {
+    dirtyRef.current = isDirty;
+  });
 
   const handleSubmit = async () => {
     if (!canSubmit) {

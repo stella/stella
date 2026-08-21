@@ -15,6 +15,7 @@ import { Button } from "@stll/ui/button";
 import { Popover, PopoverPopup } from "@stll/ui/popover";
 import { Separator } from "@stll/ui/separator";
 import { stellaToast } from "@stll/ui/toast";
+import { useLatest } from "@stll/ui/use-latest";
 
 import { CreateProperty } from "@/components/workspaces/create-property";
 import { useStartWorkflow } from "@/components/workspaces/hooks/use-start-workflow";
@@ -195,12 +196,7 @@ export const PropertyPopover = ({
     PropertyDependency[] | null
   >(null);
   const displayedDependencies = immediateDeps ?? optimisticDeps;
-  const latestDependenciesRef = useRef(displayedDependencies);
-  // Mirror the latest render value into the ref during render. Read
-  // only from event handlers (replaceDependency), so this is the
-  // sanctioned latest-value pattern.
-  // eslint-disable-next-line react/react-compiler -- sanctioned latest-value mirror; read only from event handlers (replaceDependency), never for rendered output
-  latestDependenciesRef.current = displayedDependencies;
+  const latestDependenciesRef = useLatest(displayedDependencies);
   const dependencyGenerationRef = useRef(0);
   const [, startDepsTransition] = useTransition();
 

@@ -11,10 +11,7 @@ import {
 import { useTranslations } from "use-intl";
 
 import { ScrollArea } from "@stll/ui/scroll-area";
-import {
-  containedEventHandler,
-  containedHandler,
-} from "@stll/ui/use-contained-handler";
+import { containedEventHandler } from "@stll/ui/use-contained-handler";
 import { cn } from "@stll/ui/utils";
 
 import { DocumentIcon } from "@/components/document-icon";
@@ -540,8 +537,7 @@ const VerticalTab = ({
                 onClose();
               }
             }}
-            // eslint-disable-next-line react/react-compiler -- containedHandler reads tabRef.current only at event time, not during render; passing the ref here is the portal-safety pattern mandated by the require-contained-handler rule
-            onClick={containedHandler(tabRef, onActivate)}
+            onClick={containedEventHandler(onActivate)}
             onContextMenu={containedEventHandler(contextMenu.openAt)}
             type="button"
           />

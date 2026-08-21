@@ -1,6 +1,6 @@
 import type { ReactNode, RefObject } from "react";
 
-import { containedHandler } from "../hooks/use-contained-handler";
+import { containedEventHandler } from "../hooks/use-contained-handler";
 import { cn } from "../lib/utils";
 
 export type KanbanCardShellProps = {
@@ -69,8 +69,7 @@ export const KanbanCardShell = ({
           active && ACTIVE_CLASS,
           className,
         )}
-        // eslint-disable-next-line react/react-compiler -- containedHandler house pattern; bodyRef is handed to the helper, not read for rendered output
-        onClick={containedHandler(bodyRef, onOpen)}
+        onClick={containedEventHandler(onOpen)}
         onKeyDown={(event) => {
           if (event.key !== "Enter" && event.key !== " ") {
             return;

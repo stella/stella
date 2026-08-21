@@ -16,9 +16,10 @@
 "use client";
 
 import type * as React from "react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { containedHandler } from "../hooks/use-contained-handler";
+import { useLatest } from "../hooks/use-latest";
 import { cn } from "../lib/utils";
 
 // ---------------------------------------------------------------------------
@@ -179,14 +180,13 @@ const equalHex = (a: string, b: string): boolean => {
 const useEventCallback = <T,>(
   handler?: (value: T) => void,
 ): ((value: T) => void) => {
-  const callbackRef = useRef(handler);
-  const fn = useRef((value: T) => {
-    callbackRef.current?.(value);
-  });
-  // eslint-disable-next-line react/react-compiler -- sanctioned useEventCallback: latest handler kept in a ref so `fn` stays referentially stable (its identity is a dependency of downstream effects)
-  callbackRef.current = handler;
-  // eslint-disable-next-line react/react-compiler -- sanctioned useEventCallback: returns the stable, lazily-created dispatcher held in the ref
-  return fn.current;
+  const callbackRef = useLatest(handler);
+  return useCallback(
+    (value: T) => {
+      callbackRef.current?.(value);
+    },
+    [callbackRef],
+  );
 };
 
 // ---------------------------------------------------------------------------

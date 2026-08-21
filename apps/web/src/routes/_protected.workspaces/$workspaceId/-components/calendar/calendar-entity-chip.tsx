@@ -9,7 +9,7 @@ import { isTaskStatus } from "@stll/api-contract";
 import type { TaskStatus } from "@stll/api-contract";
 import { CalendarEntryButton } from "@stll/ui/calendar";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
-import { containedHandler } from "@stll/ui/use-contained-handler";
+import { containedEventHandler } from "@stll/ui/use-contained-handler";
 import { cn } from "@stll/ui/utils";
 
 import { withDragAnnouncementData } from "@/components/drag-and-drop-live-region.logic";
@@ -114,8 +114,7 @@ export const CalendarEntityChip = ({
           ? TASK_STATUS_BORDER_COLORS.open
           : TASK_STATUS_BORDER_COLORS[status],
       )}
-      // eslint-disable-next-line react/react-compiler -- containedHandler house pattern; dragRef is handed to the helper, not read for rendered output
-      onClick={containedHandler(dragRef, handleClick)}
+      onClick={containedEventHandler(handleClick)}
     >
       <span className="flex min-w-0 items-center gap-1">
         <span className="truncate">{name}</span>

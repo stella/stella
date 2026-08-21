@@ -32,7 +32,7 @@ import { isSafeFieldPath } from "@stll/template-conditions";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { MenuPreviewLayout, PreviewPane } from "@stll/ui/preview-pane";
 import { stellaToast } from "@stll/ui/toast";
-import { containedHandler } from "@stll/ui/use-contained-handler";
+import { containedEventHandler } from "@stll/ui/use-contained-handler";
 import { cn } from "@stll/ui/utils";
 
 import { useExternalSyncEffect } from "@/hooks/use-effect";
@@ -138,6 +138,33 @@ const SLASH_MENU_WIDTH_PX =
 const SLASH_MENU_PREVIEW_BREAKPOINT_PX = 640;
 const SLASH_MENU_MAX_FIELDS = 50;
 const SLASH_MENU_CLAUSE_LIMIT = 50;
+
+/** Frames to wait for the browser to lay out a freshly moved caret. */
+const SLASH_MENU_CARET_POLL_FRAMES = 10;
+
+const nextFrame = async (): Promise<void> =>
+  new Promise<void>((resolve) => {
+    requestAnimationFrame(() => {
+      resolve();
+    });
+  });
+
+// The PM selection exists before the browser has laid out the new caret
+// position, so the rect is polled across a few animation frames.
+const pollForCaretRect = async (
+  read: () => DOMRect | null,
+): Promise<DOMRect | null> => {
+  for (let attempt = 0; attempt < SLASH_MENU_CARET_POLL_FRAMES; attempt += 1) {
+    const rect = read();
+    if (rect !== null) {
+      return rect;
+    }
+    // One animation frame per iteration, not I/O.
+    // eslint-disable-next-line no-await-in-loop -- frame-gated layout polling
+    await nextFrame();
+  }
+  return null;
+};
 
 type SlashMenu = {
   from: number;
@@ -351,54 +378,52 @@ export const useTemplateStudioSlashMenu = ({
       if (!host) {
         return;
       }
-      let attempts = 0;
-      const read = () => {
-        const liveView = editorViewRef.current;
-        const live = liveView ? getTemplateSlashMenu(liveView.state) : null;
-        if (
-          liveView === null ||
-          live === null ||
-          !live.active ||
-          live.from !== from
-        ) {
-          return;
-        }
-        const rect = getFolioCaretViewportRect(liveView);
-        if (!rect) {
-          attempts += 1;
-          if (attempts < 10) {
-            // eslint-disable-next-line react/react-compiler -- recursive local function is not a reactive dependency
-            requestAnimationFrame(read);
+      detached(
+        (async () => {
+          const rect = await pollForCaretRect(() => {
+            const liveView = editorViewRef.current;
+            const live = liveView ? getTemplateSlashMenu(liveView.state) : null;
+            if (
+              !liveView ||
+              live === null ||
+              !live.active ||
+              live.from !== from
+            ) {
+              return null;
+            }
+            return getFolioCaretViewportRect(liveView);
+          });
+          if (rect === null) {
+            return;
           }
-          return;
-        }
-        const hostRect = host.getBoundingClientRect();
-        const caretLeft = rect.left - hostRect.left;
-        const caretTop = rect.top - hostRect.top;
-        const caretBottom = rect.bottom - hostRect.top;
-        const fitsAbove =
-          caretTop - SLASH_MENU_OFFSET_PX - SLASH_MENU_EST_HEIGHT_PX >= 0;
-        const placement = fitsAbove ? "above" : "below";
-        const renderedWidth =
-          window.innerWidth >= SLASH_MENU_PREVIEW_BREAKPOINT_PX
-            ? SLASH_MENU_WIDTH_PX
-            : SLASH_MENU_LIST_WIDTH_PX;
-        const left = Math.max(
-          0,
-          Math.min(caretLeft, host.clientWidth - renderedWidth),
-        );
-        setSlashState((previous) =>
-          previous === null
-            ? previous
-            : {
-                ...previous,
-                left,
-                top: placement === "below" ? caretBottom : caretTop,
-                placement,
-              },
-        );
-      };
-      requestAnimationFrame(read);
+          const hostRect = host.getBoundingClientRect();
+          const caretLeft = rect.left - hostRect.left;
+          const caretTop = rect.top - hostRect.top;
+          const caretBottom = rect.bottom - hostRect.top;
+          const fitsAbove =
+            caretTop - SLASH_MENU_OFFSET_PX - SLASH_MENU_EST_HEIGHT_PX >= 0;
+          const placement = fitsAbove ? "above" : "below";
+          const renderedWidth =
+            window.innerWidth >= SLASH_MENU_PREVIEW_BREAKPOINT_PX
+              ? SLASH_MENU_WIDTH_PX
+              : SLASH_MENU_LIST_WIDTH_PX;
+          const left = Math.max(
+            0,
+            Math.min(caretLeft, host.clientWidth - renderedWidth),
+          );
+          setSlashState((previous) =>
+            previous === null
+              ? previous
+              : {
+                  ...previous,
+                  left,
+                  top: placement === "below" ? caretBottom : caretTop,
+                  placement,
+                },
+          );
+        })(),
+        "template-studio-slash-menu.position",
+      );
     },
     [editorViewRef, overlayHostRef],
   );
@@ -912,10 +937,8 @@ const SlashMenuRow = ({
         "flex w-full items-center gap-2 rounded-sm px-2 py-1 text-start",
         selected ? "bg-accent text-accent-foreground" : "text-foreground",
       )}
-      // eslint-disable-next-line react/react-compiler -- containedHandler defers the ref read into the click handler
-      onClick={containedHandler(rowRef, onSelect)}
-      // eslint-disable-next-line react/react-compiler -- containedHandler defers the ref read into the mousedown handler
-      onMouseDown={containedHandler(rowRef, (event: ReactMouseEvent) =>
+      onClick={containedEventHandler(onSelect)}
+      onMouseDown={containedEventHandler((event: ReactMouseEvent) =>
         event.preventDefault(),
       )}
       onMouseEnter={onHighlight}

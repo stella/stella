@@ -24,6 +24,7 @@ import {
   MenuSeparator,
 } from "@stll/ui/menu";
 import { stellaToast } from "@stll/ui/toast";
+import { useLatest } from "@stll/ui/use-latest";
 
 import Tooltip from "@/components/tooltip";
 import { UserAvatar } from "@/components/user-avatar";
@@ -553,9 +554,7 @@ export const useCellMetadataFlags = ({
 
   // Refs let the debounced flush read the latest server snapshot
   // without re-creating the callback on every prop change.
-  const serverBaseRef = useRef(metadataManualFlags);
-  // eslint-disable-next-line react/react-compiler -- latest-value mirror; read only in the debounced flush, never for rendered output
-  serverBaseRef.current = metadataManualFlags;
+  const serverBaseRef = useLatest(metadataManualFlags);
   // Tracks the flag set most recently sent to the server. Used as
   // the merge base for the next flush so a rapid add-then-remove
   // diffs against the in-flight value rather than the now-stale
