@@ -841,8 +841,6 @@ const ingestListedItem = async ({
 
 type WalkSliceOptions = {
   adapterKey: string;
-  /** Epoch ms after which the walk fetches no further document. */
-  ingestEndsAtMs: number;
   fetchDelayMs: number;
   ingestBudget: number;
   lease: CaseLawSourceIngestionLease;
@@ -865,7 +863,6 @@ type WalkSliceOptions = {
  */
 const walkSlice = async ({
   adapterKey,
-  ingestEndsAtMs,
   fetchDelayMs,
   ingestBudget,
   lease,
@@ -930,6 +927,7 @@ const walkSlice = async ({
 
   const items = [...keyed.values()];
   summary.keyable = items.length;
+  const ingestEndsAtMs = now().getTime() + RECONCILIATION_INGEST_BUDGET_MS;
   const held = await selectHeldIdentityKeys(scopedDb, {
     sourceId,
     identities: items.map(({ identity }) => identity),
@@ -1009,8 +1007,6 @@ const walkSlice = async ({
 
 type RetryParkedOptions = {
   adapterKey: string;
-  /** Epoch ms after which the retry starts no further fetch. */
-  ingestEndsAtMs: number;
   fetchDelayMs: number;
   lease: CaseLawSourceIngestionLease;
   now: () => Date;
@@ -1031,7 +1027,6 @@ type RetryParkedOptions = {
  */
 const retryParkedItems = async ({
   adapterKey,
-  ingestEndsAtMs,
   fetchDelayMs,
   lease,
   now,
@@ -1077,6 +1072,7 @@ const retryParkedItems = async ({
   const unheld = outstanding.filter(
     ({ identityKey }) => !held.has(identityKey),
   );
+  const ingestEndsAtMs = now().getTime() + RECONCILIATION_INGEST_BUDGET_MS;
   let fetched = 0;
   for (const [index, item] of unheld.entries()) {
     if (fetched > 0) {
@@ -1136,10 +1132,6 @@ export const runReconciliationWorkUnit = async ({
     );
   }
   const startedAt = now();
-  // Measured from the unit's start rather than from the ingest phase itself,
-  // so the selection reads and the listing that precede it are charged to the
-  // same budget the caller's deadline is derived from.
-  const ingestEndsAtMs = startedAt.getTime() + RECONCILIATION_INGEST_BUDGET_MS;
   const tipSlices = tipWindowSlices(reconciliation, startedAt);
   const staleBefore = new Date(
     startedAt.getTime() - RECONCILIATION_SLICE_STALE_MS,
@@ -1261,7 +1253,6 @@ export const runReconciliationWorkUnit = async ({
           type: "worked",
           summary: await retryParkedItems({
             adapterKey,
-            ingestEndsAtMs,
             fetchDelayMs,
             lease,
             now,
@@ -1276,7 +1267,6 @@ export const runReconciliationWorkUnit = async ({
           type: "worked",
           summary: await walkSlice({
             adapterKey,
-            ingestEndsAtMs,
             fetchDelayMs,
             ingestBudget: sliceIngestBudget,
             lease,

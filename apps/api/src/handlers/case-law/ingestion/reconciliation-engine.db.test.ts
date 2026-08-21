@@ -600,15 +600,15 @@ test("a slow multi-page listing still completes instead of restarting forever", 
     },
   });
 
-  // Both pages walked, and the ingest that follows defers rather than the
-  // listing throwing: the slice is owed exactly as much as before, from a row
-  // this walk is authoritative for.
+  // Both pages walk, then ingestion gets its own full phase budget. Starting
+  // that clock before listing would defer both misses and repeat the same
+  // listing forever.
   expect(listed).toHaveLength(2);
   expect(outcome).toMatchObject({
     type: "worked",
-    summary: { slice: OWED_SLICE, listed: 4, keyable: 2, deferred: 2 },
+    summary: { slice: OWED_SLICE, listed: 4, keyable: 2, deferred: 0 },
   });
-  expect(builds).toHaveLength(0);
+  expect(builds).toHaveLength(2);
   const [coverage] = await db
     .select()
     .from(caseLawCoverageSlices)
