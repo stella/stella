@@ -9585,6 +9585,131 @@ export const generatedRouteMap: RouteNode = {
         entities: {
           kind: "route",
           children: {
+            "bilingual-create": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "entities", "bilingual-create"],
+                capabilityId: "entities.bilingual.create",
+                description:
+                  "Create a two-column bilingual copy of a DOCX document (source text on the left, a copy to translate on the right) as a new document.",
+                access: "write",
+                flags: [
+                  {
+                    flag: "--workspace",
+                    prop: "workspace",
+                    kind: "string",
+                    required: true,
+                    repeatable: false,
+                    part: "params",
+                    partPath: "workspaceId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--entity-id",
+                    prop: "entityId",
+                    required: true,
+                    part: "body",
+                    partPath: "entityId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--field-id",
+                    prop: "fieldId",
+                    required: true,
+                    part: "body",
+                    partPath: "fieldId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--source-lang",
+                    prop: "sourceLang",
+                    required: true,
+                    part: "body",
+                    partPath: "sourceLang",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--target-lang",
+                    prop: "targetLang",
+                    required: true,
+                    part: "body",
+                    partPath: "targetLang",
+                  },
+                ],
+                inputOnly: ["body.borders"],
+                paginated: false,
+                destructive: false,
+                scope: "matters_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      required: [
+                        "entityId",
+                        "fieldId",
+                        "sourceLang",
+                        "targetLang",
+                      ],
+                      properties: {
+                        entityId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        fieldId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        sourceLang: {
+                          minLength: 2,
+                          maxLength: 16,
+                          pattern: "^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$",
+                          type: "string",
+                        },
+                        targetLang: {
+                          minLength: 2,
+                          maxLength: 16,
+                          pattern: "^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$",
+                          type: "string",
+                        },
+                        borders: {
+                          anyOf: [
+                            {
+                              const: "none",
+                              type: "string",
+                            },
+                            {
+                              const: "grid",
+                              type: "string",
+                            },
+                          ],
+                        },
+                      },
+                    },
+                    params: {
+                      type: "object",
+                      properties: {
+                        workspaceId: {
+                          type: "string",
+                        },
+                      },
+                      required: ["workspaceId"],
+                    },
+                  },
+                },
+              },
+            },
             clip: {
               kind: "capability-leaf",
               spec: {
