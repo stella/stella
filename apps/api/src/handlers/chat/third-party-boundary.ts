@@ -1070,9 +1070,11 @@ const anonymizeUnknownStrings = ({
  */
 export const prepareUnknownForThirdParty = async ({
   boundary,
+  encodeClaimedPlaceholders = false,
   value,
 }: {
   boundary: ChatThirdPartyBoundary;
+  encodeClaimedPlaceholders?: boolean;
   value: unknown;
 }): Promise<Result<unknown, BoundaryRefusal>> => {
   if (boundary.type === "raw") {
@@ -1088,6 +1090,7 @@ export const prepareUnknownForThirdParty = async ({
       preparedValue = next;
     },
     boundary,
+    encodeClaimedPlaceholders,
     replacements,
     value,
   });
@@ -1466,11 +1469,41 @@ export const prepareMcpToolSourceForThirdParty = ({
     ...source,
     tools: async (options) => {
       const tools = await source.tools(options);
-      return await Promise.all(
-        tools.map((tool) => prepareMcpServerToolForThirdParty(boundary, tool)),
-      );
+      return await prepareMcpServerToolsForThirdParty({ boundary, tools });
     },
   };
+};
+
+const MCP_PROVIDER_METADATA_FIELDS = [
+  "name",
+  "description",
+  "inputSchema",
+  "outputSchema",
+] as const;
+
+const prepareMcpServerToolsForThirdParty = async ({
+  boundary,
+  index = 0,
+  prepared = [],
+  tools,
+}: {
+  boundary: Extract<ChatThirdPartyBoundary, { type: "anonymized" }>;
+  index?: number;
+  prepared?: AnyServerTool[];
+  tools: AnyServerTool[];
+}): Promise<AnyServerTool[]> => {
+  const tool = tools.at(index);
+  if (tool === undefined) {
+    return prepared;
+  }
+
+  prepared.push(await prepareMcpServerToolForThirdParty(boundary, tool));
+  return await prepareMcpServerToolsForThirdParty({
+    boundary,
+    index: index + 1,
+    prepared,
+    tools,
+  });
 };
 
 const prepareMcpServerToolForThirdParty = async (
@@ -1479,24 +1512,31 @@ const prepareMcpServerToolForThirdParty = async (
 ): Promise<AnyServerTool> => {
   reserveThirdPartyBoundarySourcePlaceholders({ boundary, value: tool });
   const prepared = { ...tool };
-  for (const field of [
-    "name",
-    "description",
-    "inputSchema",
-    "outputSchema",
-  ] as const) {
+  const providerMetadata: Record<string, unknown> = {};
+  for (const field of MCP_PROVIDER_METADATA_FIELDS) {
     const providerValue: unknown = Reflect.get(prepared, field);
-    if (providerValue === undefined) {
-      continue;
+    if (providerValue !== undefined) {
+      Reflect.set(providerMetadata, field, providerValue);
     }
-    const preparedValue = await prepareUnknownForThirdParty({
-      boundary,
-      value: providerValue,
-    });
-    if (Result.isError(preparedValue)) {
-      throw preparedValue.error;
+  }
+  const preparedMetadata = await prepareUnknownForThirdParty({
+    boundary,
+    encodeClaimedPlaceholders: true,
+    value: providerMetadata,
+  });
+  if (Result.isError(preparedMetadata)) {
+    throw preparedMetadata.error;
+  }
+  if (
+    typeof preparedMetadata.value !== "object" ||
+    preparedMetadata.value === null
+  ) {
+    throw new TypeError("MCP provider metadata preparation changed its shape");
+  }
+  for (const field of MCP_PROVIDER_METADATA_FIELDS) {
+    if (Reflect.has(preparedMetadata.value, field)) {
+      Reflect.set(prepared, field, Reflect.get(preparedMetadata.value, field));
     }
-    Reflect.set(prepared, field, preparedValue.value);
   }
 
   const execute = prepared.execute;
