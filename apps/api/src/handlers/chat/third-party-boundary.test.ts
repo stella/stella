@@ -672,6 +672,46 @@ describe("chat third-party anonymization boundary", () => {
     });
   });
 
+  test("reserves aliases across a structured runtime output", async () => {
+    const { deanonymizeUnknownStringsFromBoundary } =
+      await import("@/api/handlers/chat/third-party-boundary");
+    const boundary = createBoundary();
+    await prepareTextForThirdParty({
+      boundary,
+      text: "Jan Novák prepared the memo.",
+    });
+    const tools = {
+      literal_output: applyChatToolPolicy(
+        toolDefinition({
+          name: "literal_output",
+          description: "Return a structured placeholder collision fixture.",
+        }).server(async () => ({
+          literal: "[LITERAL_PLACEHOLDER_1]",
+          claimed: "[PERSON_1]",
+        })),
+        CHAT_TOOL_POLICY_KIND.internal,
+      ),
+    };
+    const prepared = prepareToolsForThirdParty({
+      boundary,
+      tools: asTestToolSet(tools),
+    });
+    const executable = asTestExecutable<unknown, unknown>(
+      prepared["literal_output"],
+    );
+
+    const output = await executable?.execute?.(undefined);
+
+    expect(output).toEqual({
+      literal: "[LITERAL_PLACEHOLDER_1]",
+      claimed: "[LITERAL_PLACEHOLDER_2]",
+    });
+    expect(deanonymizeUnknownStringsFromBoundary(boundary, output)).toEqual({
+      literal: "[LITERAL_PLACEHOLDER_1]",
+      claimed: "[PERSON_1]",
+    });
+  });
+
   test("allows approved external tools to inherit raw mode", async () => {
     const boundary = createRawBoundary();
     const tools = {

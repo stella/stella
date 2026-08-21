@@ -1356,6 +1356,10 @@ const anonymizeToolOutputForThirdParty = async ({
   boundary: Extract<ChatThirdPartyBoundary, { type: "anonymized" }>;
   outputValue: unknown;
 }): Promise<unknown> => {
+  reserveThirdPartyBoundarySourcePlaceholders({
+    boundary,
+    value: outputValue,
+  });
   const replacements: TextReplacement[] = [];
   let preparedOutput: unknown;
   const anonymizedOutput = anonymizeUnknownStrings({
