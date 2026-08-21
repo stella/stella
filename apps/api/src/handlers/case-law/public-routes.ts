@@ -6,6 +6,7 @@ import {
   listDecisionFacetsHandler,
   listDecisionFacetsQuerySchema,
 } from "@/api/handlers/case-law/decisions/facets";
+import { readDecisionQuerySchema } from "@/api/handlers/case-law/decisions/get";
 import {
   readDecisionBySlugWithDocumentHandler,
   readDecisionWithDocumentHandler,
@@ -67,14 +68,16 @@ const readDecision = createSafePublicHandler(
   {
     mcp: { type: "tool", name: "read_case_law_decision" },
     params: t.Object({ decisionId: tSafeId("caseLawDecision") }),
+    query: readDecisionQuerySchema,
   },
-  async function* ({ params: { decisionId } }) {
+  async function* ({ params: { decisionId }, query: { citationsCursor } }) {
     const response = yield* Result.await(
       Result.tryPromise(
         async () =>
           await readDecisionWithDocumentHandler({
             decisionId,
             caseLawDb: caseLawPublicReadDb,
+            citationsCursor,
             // Unauthenticated: hydrates when a slot is free, but never
             // persists demand — see `recordDemand`.
             caller: "anonymous",
@@ -90,17 +93,21 @@ const readDecisionBySlug = createSafePublicHandler(
   {
     mcp: { type: "covered", by: "read_case_law_decision" },
     params: t.Object({ slug: t.String({ minLength: 1, maxLength: 256 }) }),
-    query: t.Object({
-      language: t.Optional(t.String({ minLength: 2, maxLength: 8 })),
-    }),
+    query: t.Composite([
+      readDecisionQuerySchema,
+      t.Object({
+        language: t.Optional(t.String({ minLength: 2, maxLength: 8 })),
+      }),
+    ]),
   },
-  async function* ({ params: { slug }, query: { language } }) {
+  async function* ({ params: { slug }, query: { citationsCursor, language } }) {
     const response = yield* Result.await(
       Result.tryPromise(
         async () =>
           await readDecisionBySlugWithDocumentHandler({
             slug,
             caseLawDb: caseLawPublicReadDb,
+            citationsCursor,
             language,
             caller: "anonymous",
           }),
@@ -225,6 +232,7 @@ export const publicCaseLawRoute = new Elysia({
   })
   .get("/decisions/:decisionId", readDecision.handler, {
     params: readDecision.config.params,
+    query: readDecision.config.query,
   })
   .get("/decisions/:decisionId/provisions", listDecisionProvisions.handler, {
     params: listDecisionProvisions.config.params,

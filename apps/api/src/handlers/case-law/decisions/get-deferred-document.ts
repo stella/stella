@@ -99,12 +99,14 @@ export type ReadDecisionWithDocumentOptions = {
   decisionId: SafeId<"caseLawDecision">;
   caseLawDb: CaseLawPublicReadDb;
   caller: DecisionReadCaller;
+  citationsCursor?: string | null | undefined;
 };
 
 export type ReadDecisionBySlugWithDocumentOptions = {
   slug: string;
   caseLawDb: CaseLawPublicReadDb;
   caller: DecisionReadCaller;
+  citationsCursor?: string | null | undefined;
   language: string | undefined;
 };
 
@@ -112,9 +114,14 @@ export const readDecisionWithDocumentHandler = async ({
   decisionId,
   caseLawDb,
   caller,
+  citationsCursor,
 }: ReadDecisionWithDocumentOptions): Promise<DecisionRead> =>
   await withDeferredDocument(
-    await readDecisionHandler(decisionId, caseLawDb),
+    await readDecisionHandler({
+      caseLawDb,
+      citationsCursor,
+      decisionId,
+    }),
     caller === "attributed",
   );
 
@@ -122,9 +129,15 @@ export const readDecisionBySlugWithDocumentHandler = async ({
   slug,
   caseLawDb,
   caller,
+  citationsCursor,
   language,
 }: ReadDecisionBySlugWithDocumentOptions): Promise<DecisionRead> =>
   await withDeferredDocument(
-    await readDecisionBySlugHandler(slug, caseLawDb, language),
+    await readDecisionBySlugHandler({
+      caseLawDb,
+      citationsCursor,
+      language,
+      slug,
+    }),
     caller === "attributed",
   );

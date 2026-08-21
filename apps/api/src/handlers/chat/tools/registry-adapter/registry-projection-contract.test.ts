@@ -1231,6 +1231,7 @@ const CONTRACT_CORPUS = {
               sectionIndex: 1,
             },
           ],
+          citationsNextCursor: null,
           country: "CZ",
           court: "Nejvyšší soud",
           // `decisionDate` is a plain `date`-mode column (a "YYYY-MM-DD"

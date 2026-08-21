@@ -325,6 +325,7 @@ const createReadDecisionResult = () => ({
   caseNumber: "29 Cdo 123/2024",
   citationsFrom: [{ citationText: "29 Odo 1/2001", id: "c_1" }],
   citationsTo: [{ citationText: "31 Cdo 2/2025", id: "c_2" }],
+  citationsNextCursor: null,
   country: "CZE",
   court: "Nejvyšší soud",
   decisionDate: new Date("2024-02-01T00:00:00.000Z"),
@@ -1444,6 +1445,7 @@ describe("OpenAI-compatible MCP tools", () => {
       decisionId: "dec_123",
       caseLawDb: caseLawPublicReadDb,
       caller: "attributed",
+      citationsCursor: undefined,
     });
 
     expect(parseToolPayload(result)).toEqual({
@@ -1452,9 +1454,7 @@ describe("OpenAI-compatible MCP tools", () => {
         appUrl: `${APP_BASE_URL}/law/cze/cases/nejvyssi-soud/stable-official-slug`,
         caseNumber: "29 Cdo 123/2024",
         citationsFrom: [{ citationText: "29 Odo 1/2001", id: "c_1" }],
-        citationsFromTotal: 1,
         citationsTo: [{ citationText: "31 Cdo 2/2025", id: "c_2" }],
-        citationsToTotal: 1,
         country: "CZE",
         court: "Nejvyšší soud",
         decisionDate: "2024-02-01",
@@ -1517,9 +1517,7 @@ describe("OpenAI-compatible MCP tools", () => {
         appUrl: `${APP_BASE_URL}/law/cze/cases/nejvyssi-soud/stable-official-slug`,
         caseNumber: "29 Cdo 123/2024",
         citationsFrom: [{ citationText: "29 Odo 1/2001", id: "c_1" }],
-        citationsFromTotal: 1,
         citationsTo: [{ citationText: "31 Cdo 2/2025", id: "c_2" }],
-        citationsToTotal: 1,
         country: "CZE",
         court: "Nejvyšší soud",
         decisionDate: "2024-02-01",
@@ -1547,25 +1545,38 @@ describe("OpenAI-compatible MCP tools", () => {
 
   test("read_case_law_decision pages citation lists via the compound cursor", async () => {
     const base = createReadDecisionResult();
-    readDecisionHandlerMock.mockResolvedValue({
-      ...base,
-      citationsFrom: Array.from({ length: 60 }, (_unused, i) => ({
-        citationText: `from-${i}`,
-        id: `cf_${i}`,
-      })),
-      citationsTo: Array.from({ length: 70 }, (_unused, i) => ({
-        citationText: `to-${i}`,
-        id: `ct_${i}`,
-      })),
-    });
+    readDecisionHandlerMock.mockImplementation(
+      async ({ citationsCursor }: { citationsCursor?: string }) => {
+        const page = citationsCursor === undefined ? 0 : 1;
+        const fromStart = page * 50;
+        const toStart = page * 50;
+        return {
+          ...base,
+          citationsFrom: Array.from(
+            { length: page === 0 ? 50 : 10 },
+            (_unused, i) => ({
+              citationText: `from-${String(fromStart + i)}`,
+              id: `cf_${String(fromStart + i)}`,
+            }),
+          ),
+          citationsTo: Array.from(
+            { length: page === 0 ? 50 : 20 },
+            (_unused, i) => ({
+              citationText: `to-${String(toStart + i)}`,
+              id: `ct_${String(toStart + i)}`,
+            }),
+          ),
+          citationsNextCursor: page === 0 ? "citations-next" : null,
+        };
+      },
+    );
 
     type DecisionPage = {
       nextCursor: string | null;
       decision: {
         citationsFrom: { id: string }[];
-        citationsFromTotal: number;
         citationsTo: { id: string }[];
-        citationsToTotal: number;
+        text: string | null;
       };
     };
 
@@ -1579,9 +1590,7 @@ describe("OpenAI-compatible MCP tools", () => {
       ),
     );
     expect(page1.decision.citationsFrom).toHaveLength(50);
-    expect(page1.decision.citationsFromTotal).toBe(60);
     expect(page1.decision.citationsTo).toHaveLength(50);
-    expect(page1.decision.citationsToTotal).toBe(70);
     expect(page1.nextCursor).not.toBeNull();
 
     const page2 = asTestRaw<DecisionPage>(
@@ -1597,7 +1606,14 @@ describe("OpenAI-compatible MCP tools", () => {
     expect(page2.decision.citationsTo).toHaveLength(20);
     expect(page2.decision.citationsFrom.at(0)?.id).toBe("cf_50");
     expect(page2.decision.citationsTo.at(0)?.id).toBe("ct_50");
+    expect(page2.decision.text).toBeNull();
     expect(page2.nextCursor).toBeNull();
+    expect(readDecisionHandlerMock).toHaveBeenLastCalledWith({
+      decisionId: "dec_123",
+      caseLawDb: caseLawPublicReadDb,
+      caller: "attributed",
+      citationsCursor: "citations-next",
+    });
   });
 
   test("fetch rejects documents outside the MCP workspace allowlist", async () => {

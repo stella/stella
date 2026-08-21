@@ -313,6 +313,7 @@ export const LIMITS = {
   clauseImportBatchLimit: 200,
   templateFillsRetentionDays: 365,
   caseLawMatterLinksPerWorkspace: 1000,
+  caseLawDecisionCitationPageSize: 50,
   caseLawSearchPageSizeDefault: 20,
   caseLawSearchPageSizeMax: 100,
   /** Max language variants for one decision's languageGroupKey. Bounds the

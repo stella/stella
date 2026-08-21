@@ -1,12 +1,16 @@
-import { sql } from "drizzle-orm";
+import { sql, type SQLWrapper } from "drizzle-orm";
 
 import { caseLawSources } from "@/api/db/schema";
 
 // null descriptor = legacy public-record source, treated as redistributable.
-export const redistributableCaseLawSource = sql`(
-  ${caseLawSources.descriptor} IS NULL
-  OR (${caseLawSources.descriptor} ->> 'allowsRedistribution') = 'true'
+export const redistributableCaseLawSourceFor = (descriptor: SQLWrapper) => sql`(
+  ${descriptor} IS NULL
+  OR (${descriptor} ->> 'allowsRedistribution') = 'true'
 )`;
+
+export const redistributableCaseLawSource = redistributableCaseLawSourceFor(
+  caseLawSources.descriptor,
+);
 
 /**
  * The same predicate as raw SQL for sites that join `case_law_sources`

@@ -1,17 +1,22 @@
 import { panic, Result, UnhandledException } from "better-result";
-import { and, asc, eq, inArray, sql } from "drizzle-orm";
-import { status } from "elysia";
+import { and, asc, eq, sql } from "drizzle-orm";
+import { status, t } from "elysia";
 
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import { corpusStorageMode } from "@/api/env-base";
+import {
+  listIncomingDecisionCitations,
+  listOutgoingDecisionCitations,
+} from "@/api/handlers/case-law/decisions/citations";
 import { hasUsableAst } from "@/api/handlers/case-law/document-ast";
 import { corpusCarriesDocument } from "@/api/handlers/case-law/stored-payload";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
+import { tPaginationCursor } from "@/api/lib/custom-schema";
 import { CorpusPayloadUnavailableError } from "@/api/lib/errors/tagged-errors";
 import {
   allowsDerivedAi,
@@ -25,6 +30,10 @@ import {
 } from "@/api/lib/legal-search/corpus-storage";
 import type { EmptyAst } from "@/api/lib/legal-search/document-types";
 import { LIMITS } from "@/api/lib/limits";
+import {
+  decodePaginationCursor,
+  encodePaginationCursor,
+} from "@/api/lib/pagination";
 
 type PublicDecisionLanguageAlternate = {
   caseNumber: string;
@@ -119,10 +128,147 @@ const listPublicDecisionLanguageAlternates = async ({
 
 const corpusReadEnabled = (): boolean => corpusStorageMode !== "off";
 
-export const readDecisionHandler = async (
-  decisionId: SafeId<"caseLawDecision">,
-  caseLawDb: CaseLawPublicReadDb,
-) => {
+export const readDecisionQuerySchema = t.Object({
+  citationsCursor: t.Optional(tPaginationCursor()),
+});
+
+type ReadDecisionOptions = {
+  caseLawDb: CaseLawPublicReadDb;
+  citationsCursor?: string | null | undefined;
+  decisionId: SafeId<"caseLawDecision">;
+};
+
+const CITATION_STREAM_CURSOR_STATUS = {
+  CONTINUE: "continue",
+  EXHAUSTED: "exhausted",
+  START: "start",
+} as const;
+
+type CitationStreamCursor =
+  | { status: typeof CITATION_STREAM_CURSOR_STATUS.START }
+  | { status: typeof CITATION_STREAM_CURSOR_STATUS.EXHAUSTED }
+  | {
+      after: string;
+      status: typeof CITATION_STREAM_CURSOR_STATUS.CONTINUE;
+    };
+
+type DecisionCitationCursorState = {
+  from: CitationStreamCursor;
+  to: CitationStreamCursor;
+};
+
+type CitationStreamNextCursor = Exclude<
+  CitationStreamCursor,
+  { status: typeof CITATION_STREAM_CURSOR_STATUS.START }
+>;
+
+type DecisionCitationNextCursorState = {
+  from: CitationStreamNextCursor;
+  to: CitationStreamNextCursor;
+};
+
+const decodeCitationStreamCursor = (
+  value: unknown,
+): CitationStreamNextCursor | null => {
+  if (value === null) {
+    return { status: CITATION_STREAM_CURSOR_STATUS.EXHAUSTED };
+  }
+  if (typeof value === "string") {
+    return { after: value, status: CITATION_STREAM_CURSOR_STATUS.CONTINUE };
+  }
+  return null;
+};
+
+export const decodeDecisionCitationCursor = (
+  cursor: string | null | undefined,
+): DecisionCitationCursorState | null => {
+  if (cursor === undefined) {
+    return {
+      from: { status: CITATION_STREAM_CURSOR_STATUS.START },
+      to: { status: CITATION_STREAM_CURSOR_STATUS.START },
+    };
+  }
+  if (cursor === null) {
+    return {
+      from: { status: CITATION_STREAM_CURSOR_STATUS.EXHAUSTED },
+      to: { status: CITATION_STREAM_CURSOR_STATUS.EXHAUSTED },
+    };
+  }
+
+  const parts = decodePaginationCursor(cursor);
+  if (parts?.length !== 2) {
+    return null;
+  }
+
+  const from = decodeCitationStreamCursor(parts.at(0));
+  const to = decodeCitationStreamCursor(parts.at(1));
+  if (from === null || to === null) {
+    return null;
+  }
+  return { from, to };
+};
+
+const encodeCitationStreamCursor = (
+  cursor: CitationStreamNextCursor,
+): string | null => {
+  switch (cursor.status) {
+    case CITATION_STREAM_CURSOR_STATUS.CONTINUE:
+      return cursor.after;
+    case CITATION_STREAM_CURSOR_STATUS.EXHAUSTED:
+      return null;
+    default: {
+      const exhaustive: never = cursor;
+      return exhaustive;
+    }
+  }
+};
+
+const citationStreamCursorFromNext = (
+  cursor: string | null,
+): CitationStreamNextCursor =>
+  cursor === null
+    ? { status: CITATION_STREAM_CURSOR_STATUS.EXHAUSTED }
+    : { after: cursor, status: CITATION_STREAM_CURSOR_STATUS.CONTINUE };
+
+const citationPageCursor = (
+  cursor: CitationStreamCursor,
+): string | undefined =>
+  cursor.status === CITATION_STREAM_CURSOR_STATUS.CONTINUE
+    ? cursor.after
+    : undefined;
+
+export const encodeDecisionCitationCursor = ({
+  from,
+  to,
+}: DecisionCitationNextCursorState): string | null => {
+  if (
+    from.status === CITATION_STREAM_CURSOR_STATUS.EXHAUSTED &&
+    to.status === CITATION_STREAM_CURSOR_STATUS.EXHAUSTED
+  ) {
+    return null;
+  }
+  return encodePaginationCursor([
+    encodeCitationStreamCursor(from),
+    encodeCitationStreamCursor(to),
+  ]);
+};
+
+const emptyCitationPage = () => ({
+  items: [],
+  limit: LIMITS.caseLawDecisionCitationPageSize,
+  nextCursor: null,
+});
+
+export const readDecisionHandler = async ({
+  caseLawDb,
+  citationsCursor,
+  decisionId,
+}: ReadDecisionOptions) => {
+  const citationCursors = decodeDecisionCitationCursor(citationsCursor);
+  if (citationCursors === null) {
+    return status(400, { message: "Invalid cursor" });
+  }
+
   const decision = await caseLawDb((tx) =>
     tx.query.caseLawDecisions.findFirst({
       where: { id: { eq: decisionId } },
@@ -158,22 +304,6 @@ export const readDecisionHandler = async (
           // never returned to the client.
           columns: { id: true, name: true, adapterKey: true, descriptor: true },
         },
-        citationsFrom: {
-          columns: {
-            id: true,
-            citationText: true,
-            citedDecisionId: true,
-            sectionIndex: true,
-          },
-        },
-        citationsTo: {
-          columns: {
-            id: true,
-            citationText: true,
-            citingDecisionId: true,
-            sectionIndex: true,
-          },
-        },
       },
     }),
   );
@@ -188,49 +318,38 @@ export const readDecisionHandler = async (
     return status(404, { message: "Decision not found" });
   }
 
-  const languageAlternates = await listPublicDecisionLanguageAlternates({
-    caseLawDb,
-    languageGroupKey: decision.languageGroupKey,
-  });
+  const [languageAlternates, citationsFromPage, citationsToPage] =
+    await Promise.all([
+      listPublicDecisionLanguageAlternates({
+        caseLawDb,
+        languageGroupKey: decision.languageGroupKey,
+      }),
+      citationCursors.from.status === CITATION_STREAM_CURSOR_STATUS.EXHAUSTED
+        ? emptyCitationPage()
+        : listOutgoingDecisionCitations({
+            caseLawDb,
+            cursor: citationPageCursor(citationCursors.from),
+            decisionId,
+          }),
+      citationCursors.to.status === CITATION_STREAM_CURSOR_STATUS.EXHAUSTED
+        ? emptyCitationPage()
+        : listIncomingDecisionCitations({
+            caseLawDb,
+            cursor: citationPageCursor(citationCursors.to),
+            decisionId,
+          }),
+    ]);
 
-  // Citations may point at decisions from non-redistributable sources;
-  // drop those so the response cannot leak restricted decisions' ids.
-  // Unresolved citations (null citedDecisionId) carry only text and stay.
-  const relatedIdCandidates = decision.citationsFrom
-    .map((citation) => citation.citedDecisionId)
-    .concat(decision.citationsTo.map((citation) => citation.citingDecisionId));
-  const relatedDecisionIds = [
-    ...new Set(relatedIdCandidates.filter((value) => value !== null)),
-  ];
-  const redistributableRelatedIds = new Set(
-    relatedDecisionIds.length === 0
-      ? []
-      : (
-          await caseLawDb((tx) =>
-            tx
-              .select({ id: caseLawDecisions.id })
-              .from(caseLawDecisions)
-              .innerJoin(
-                caseLawSources,
-                eq(caseLawSources.id, caseLawDecisions.sourceId),
-              )
-              .where(
-                and(
-                  inArray(caseLawDecisions.id, relatedDecisionIds),
-                  redistributableCaseLawSource,
-                ),
-              ),
-          )
-        ).map((row) => row.id),
-  );
-  const citationsFrom = decision.citationsFrom.filter(
-    (citation) =>
-      citation.citedDecisionId === null ||
-      redistributableRelatedIds.has(citation.citedDecisionId),
-  );
-  const citationsTo = decision.citationsTo.filter((citation) =>
-    redistributableRelatedIds.has(citation.citingDecisionId),
-  );
+  if (!("items" in citationsFromPage)) {
+    return citationsFromPage;
+  }
+  if (!("items" in citationsToPage)) {
+    return citationsToPage;
+  }
+  const citationsNextCursor = encodeDecisionCitationCursor({
+    from: citationStreamCursorFromNext(citationsFromPage.nextCursor),
+    to: citationStreamCursorFromNext(citationsToPage.nextCursor),
+  });
 
   // Prefer canonical AST from object storage when corpus storage is
   // enabled; fall back to the Postgres column so a read is never harder
@@ -325,18 +444,27 @@ export const readDecisionHandler = async (
       // must not feed the full text to a model when this is false.
       allowsDerivedAi: allowsDerivedAi(source.descriptor),
     },
-    citationsFrom,
-    citationsTo,
+    citationsFrom: citationsFromPage.items,
+    citationsTo: citationsToPage.items,
+    citationsNextCursor,
     languageAlternates,
     fulltext,
   };
 };
 
-export const readDecisionBySlugHandler = async (
-  slug: string,
-  caseLawDb: CaseLawPublicReadDb,
-  language?: string,
-) => {
+type ReadDecisionBySlugOptions = {
+  caseLawDb: CaseLawPublicReadDb;
+  citationsCursor?: string | null | undefined;
+  language?: string | undefined;
+  slug: string;
+};
+
+export const readDecisionBySlugHandler = async ({
+  caseLawDb,
+  citationsCursor,
+  language,
+  slug,
+}: ReadDecisionBySlugOptions) => {
   const normalizedLanguage = normalizePublicDecisionLanguage(language);
   if (language !== undefined && normalizedLanguage === null) {
     return status(404, { message: "Decision not found" });
@@ -362,7 +490,11 @@ export const readDecisionBySlugHandler = async (
     return status(404, { message: "Decision not found" });
   }
 
-  return await readDecisionHandler(firstDecision.id, caseLawDb);
+  return await readDecisionHandler({
+    caseLawDb,
+    citationsCursor,
+    decisionId: firstDecision.id,
+  });
 };
 
 /**

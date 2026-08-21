@@ -813,10 +813,10 @@ export const caseLawCitations = p.pgTable(
     createdAt: timestamptz("created_at").defaultNow().notNull(),
   },
   (t) => [
-    p.index("case_law_citations_citing_idx").on(t.citingDecisionId),
+    p.index("case_law_citations_citing_page_idx").on(t.citingDecisionId, t.id),
     p
-      .index("case_law_citations_cited_idx")
-      .on(t.citedDecisionId)
+      .index("case_law_citations_cited_page_idx")
+      .on(t.citedDecisionId, t.id)
       .where(isNotNull(t.citedDecisionId)),
     p
       .index("case_law_citations_polarity_null_idx")
