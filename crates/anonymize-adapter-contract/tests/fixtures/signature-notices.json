@@ -1,0 +1,82 @@
+{
+  "cases": [
+    {
+      "language": "cs",
+      "text": "K rukám: Jan Novák; Eva Svobodová Email: kontakt@example.test",
+      "expectedNames": ["Jan Novák", "Eva Svobodová"]
+    },
+    {
+      "language": "de",
+      "text": "Zu Händen von: Anna Müller; Lukas Weber E-Mail: kontakt@example.test",
+      "expectedNames": ["Anna Müller", "Lukas Weber"]
+    },
+    {
+      "language": "en",
+      "text": "Attention: Steven Patch; Spencer Ho Email: contact@example.test",
+      "expectedNames": ["Steven Patch", "Spencer Ho"]
+    },
+    {
+      "language": "en",
+      "text": "Attention: Ryan Goepel\n\nTel: +1 555 0100\nEmail: contact@example.test",
+      "expectedNames": ["Ryan Goepel"]
+    },
+    {
+      "language": "es",
+      "text": "A la atención de: Ana García; Luis Romero Correo electrónico: contacto@example.test",
+      "expectedNames": ["Ana García", "Luis Romero"]
+    },
+    {
+      "language": "fr",
+      "text": "À l'attention de: Marie Dupont; Luc Bernard Courriel: contact@example.test",
+      "expectedNames": ["Marie Dupont", "Luc Bernard"]
+    },
+    {
+      "language": "hu",
+      "text": "Figyelmébe: Kovács Anna; Nagy Béla E-mail: kapcsolat@example.test",
+      "expectedNames": ["Kovács Anna", "Nagy Béla"]
+    },
+    {
+      "language": "it",
+      "text": "All'attenzione di: Giulia Rossi; Marco Bianchi E-mail: contatto@example.test",
+      "expectedNames": ["Giulia Rossi", "Marco Bianchi"]
+    },
+    {
+      "language": "pl",
+      "text": "Do rąk własnych: Anna Kowalska; Piotr Nowak E-mail: kontakt@example.test",
+      "expectedNames": ["Anna Kowalska", "Piotr Nowak"]
+    },
+    {
+      "language": "pt-br",
+      "text": "À atenção de: Ana Silva; Paulo Santos E-mail: contato@example.test",
+      "expectedNames": ["Ana Silva", "Paulo Santos"]
+    },
+    {
+      "language": "ro",
+      "text": "În atenția: Ana Popescu; Mihai Ionescu E-mail: contact@example.test",
+      "expectedNames": ["Ana Popescu", "Mihai Ionescu"]
+    },
+    {
+      "language": "sk",
+      "text": "K rukám: Jana Nováková; Peter Horváth Email: kontakt@example.test",
+      "expectedNames": ["Jana Nováková", "Peter Horváth"]
+    }
+  ],
+  "negativeCases": [
+    {
+      "language": "en",
+      "text": "Attention: General Terms\nTitle: Standard provisions"
+    },
+    {
+      "language": "en",
+      "text": "Attention: General Terms Title: Standard provisions"
+    },
+    {
+      "language": "en",
+      "text": "Customer Service Tel: +1 555 0100"
+    },
+    {
+      "language": "sv",
+      "text": "Att: Anna Lindberg; Erik Nilsson E-post: kontakt@example.test"
+    }
+  ]
+}

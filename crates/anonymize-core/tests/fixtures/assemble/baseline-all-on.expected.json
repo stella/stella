@@ -16,6 +16,19 @@
   },
   "signature_data": {
     "labels": ["by", "name"],
+    "person_list_labels": [
+      "k rukám",
+      "zu händen von",
+      "zu händen",
+      "attention",
+      "a la atención de",
+      "l'attention de",
+      "figyelmébe",
+      "all'attenzione di",
+      "do rąk własnych",
+      "atenção de",
+      "atenția"
+    ],
     "witness_phrases": ["in witness whereof"],
     "name_particles": [
       "d'",
@@ -175,6 +188,26 @@
       "priezvisko",
       "funkcia",
       "dátum"
+    ],
+    "contact_field_labels": [
+      "e-mail",
+      "email",
+      "tel",
+      "tel.",
+      "telefon",
+      "telefonní číslo",
+      "telephone",
+      "correo electrónico",
+      "teléfono",
+      "courriel",
+      "tél",
+      "tél.",
+      "téléphone",
+      "telefono",
+      "telefone",
+      "telefón",
+      "e-post",
+      "epost"
     ],
     "signature_stamp_phrases": [
       "digitally signed by",
@@ -17308,7 +17341,7 @@
       "kind": "regex",
       "pattern": "(?i)(?<![\\p{L}\\p{N}\\p{M}_!#$%&'*+/=?^`{|}~.\\-])[\\p{L}\\p{N}_!#$%&'*+/=?^`{|}~-][\\p{L}\\p{N}\\p{M}_!#$%&'*+/=?^`{|}~-]*(?:\\.[\\p{L}\\p{N}_!#$%&'*+/=?^`{|}~-][\\p{L}\\p{N}\\p{M}_!#$%&'*+/=?^`{|}~-]*)*[^\\S\\n]+(?:at)[^\\S\\n]+[\\p{L}\\p{N}](?:[\\p{L}\\p{N}\\p{M}-]{0,61}[\\p{L}\\p{N}\\p{M}])?(?:[^\\S\\n]+(?:dot)[^\\S\\n]+[\\p{L}\\p{N}](?:[\\p{L}\\p{N}\\p{M}-]{0,61}[\\p{L}\\p{N}\\p{M}])?)+\\b",
       "lazy": true,
-      "prefilter_regex": "(?i)[^\\S\\n](?:at)[^\\S\\n]"
+      "prefilter_regex": "(?i)[^\\S\\n](?:at)[^\\S\\n]+[\\p{L}\\p{N}](?:[\\p{L}\\p{N}\\p{M}-]{0,61}[\\p{L}\\p{N}\\p{M}])?[^\\S\\n]+(?:dot)[^\\S\\n]"
     },
     {
       "kind": "regex",
@@ -56745,6 +56778,10 @@
       },
       {
         "pattern": "(?:nachfolgend|im\\s+Folgenden)\\s+[„\"'‚]([^\"'\"\"]+)[\"\"']",
+        "flags": "gi"
+      },
+      {
+        "pattern": "\\((?:(?:together\\s+with\\s+its\\s+affiliates,\\s+)?the|hereinafter)\\s+[\"'“‘]\\s*([^\"'”’]+?)\\s*[\"'”’]\\s+or\\s+[\"'“‘]\\s*([^\"'”’]+?)\\s*[\"'”’]\\s*\\)",
         "flags": "gi"
       },
       {

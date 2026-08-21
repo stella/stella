@@ -1,4 +1,4 @@
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use web_time::Instant;
 
 use regex::Regex;
@@ -241,7 +241,7 @@ struct PreparedStandaloneStreetData {
 
 pub(crate) struct PreparedAddressSeedData {
   boundary_search: Option<SearchIndex>,
-  boundary_phrase_re: Option<Regex>,
+  boundary_phrase_search: Option<BoundaryPhraseSearch>,
   br_cep_cue_search: Option<SearchIndex>,
   unit_abbreviations: BTreeSet<String>,
   standalone_street: Option<PreparedStandaloneStreetData>,
@@ -251,6 +251,23 @@ pub(crate) struct PreparedAddressSeedData {
   us_state_before_zip_re: Option<Regex>,
   house_number_before_street_re: Regex,
   house_number_after_street_re: Regex,
+}
+
+struct BoundaryPhraseSearch {
+  first_token_search: SearchIndex,
+  patterns_by_first_token: Vec<BoundaryPhrasePattern>,
+  word_character_re: Regex,
+}
+
+struct BoundaryPhrasePattern {
+  requires_leading_boundary: bool,
+  anchored_re: Regex,
+}
+
+struct BoundaryPhraseSearchResult {
+  starts: Vec<usize>,
+  #[cfg(test)]
+  candidate_checks: usize,
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -291,7 +308,7 @@ impl PreparedAddressSeedData {
     data: AddressSeedData,
     state_abbreviations: Vec<String>,
   ) -> Result<Self> {
-    let (boundary_search, boundary_phrase_re) =
+    let (boundary_search, boundary_phrase_search) =
       boundary_searches(data.boundary_words)?;
     let us_state_abbreviations =
       state_abbreviations.into_iter().collect::<BTreeSet<_>>();
@@ -303,7 +320,7 @@ impl PreparedAddressSeedData {
       .transpose()?;
     Ok(Self {
       boundary_search,
-      boundary_phrase_re,
+      boundary_phrase_search,
       br_cep_cue_search: literal_search(data.br_cep_cue_words)?,
       unit_abbreviations: lowercased_set(data.unit_abbreviations),
       standalone_street,
@@ -384,7 +401,7 @@ impl PreparedAddressSeedData {
       let boundary_starts = if growth == SpanGrowth::ToAddressBoundary {
         if boundary_starts.is_none() {
           let boundary_start = Instant::now();
-          let starts = self.boundary_starts(full_text);
+          let starts = self.boundary_starts(full_text)?;
           profile.boundary_elapsed_us = elapsed_us(boundary_start);
           profile.boundary_count = starts.len();
           boundary_starts = Some(starts);
@@ -868,23 +885,23 @@ impl PreparedAddressSeedData {
     trim_address_tail(full_text, right_pos, end)
   }
 
-  fn boundary_starts(&self, full_text: &str) -> Vec<usize> {
+  fn boundary_starts(&self, full_text: &str) -> Result<Vec<usize>> {
     let literal_starts = self
       .boundary_search
       .as_ref()
-      .and_then(|search| search.find_iter(full_text).ok())
+      .map(|search| search.find_iter(full_text))
+      .transpose()?
+      .unwrap_or_default()
       .into_iter()
-      .flatten()
       .filter_map(|found| usize::try_from(found.start()).ok())
       .collect::<Vec<_>>();
     let phrase_starts = self
-      .boundary_phrase_re
+      .boundary_phrase_search
       .as_ref()
-      .into_iter()
-      .flat_map(|phrase_re| phrase_re.find_iter(full_text))
-      .map(|found| found.start())
-      .collect::<Vec<_>>();
-    merge_sorted_starts(literal_starts, phrase_starts)
+      .map(|search| search.find_starts(full_text))
+      .transpose()?
+      .map_or_else(Vec::new, |result| result.starts);
+    Ok(merge_sorted_starts(literal_starts, phrase_starts))
   }
 
   fn nearest_boundary_word(
@@ -1160,13 +1177,14 @@ fn literal_search(patterns: Vec<String>) -> Result<Option<SearchIndex>> {
   Ok(Some(SearchIndex::new(patterns, SearchOptions::default())?))
 }
 
-/// Keep single-token boundary words on the literal index, while compiling
-/// multi-token phrases into one automaton whose separators accept one or more
-/// Unicode whitespace characters. Regex matches retain byte offsets into the
-/// original text, so wrapped legal prose needs no normalized text copy.
+/// Keep single-token boundary words on the whole-word literal index. For
+/// multi-token phrases, one literal index finds first-token candidates and
+/// anchored regexes verify only those offsets with flexible Unicode
+/// whitespace. Matches retain byte offsets into the original text, so wrapped
+/// legal prose needs no normalized text copy.
 fn boundary_searches(
   patterns: Vec<String>,
-) -> Result<(Option<SearchIndex>, Option<Regex>)> {
+) -> Result<(Option<SearchIndex>, Option<BoundaryPhraseSearch>)> {
   let mut literals = Vec::new();
   let mut phrases = Vec::new();
   for pattern in patterns.into_iter().filter(|pattern| !pattern.is_empty()) {
@@ -1176,9 +1194,171 @@ fn boundary_searches(
       literals.push(pattern);
     }
   }
-  Ok((literal_search(literals)?, flexible_phrase_regex(&phrases)?))
+  Ok((
+    literal_search(literals)?,
+    BoundaryPhraseSearch::new(phrases)?,
+  ))
 }
 
+impl BoundaryPhraseSearch {
+  fn new(patterns: Vec<String>) -> Result<Option<Self>> {
+    let mut patterns_by_first_token = BTreeMap::<String, Vec<String>>::new();
+    for pattern in patterns {
+      let Some(first_token) = pattern.split_whitespace().next() else {
+        continue;
+      };
+      patterns_by_first_token
+        .entry(first_token.to_lowercase())
+        .or_default()
+        .push(pattern);
+    }
+    if patterns_by_first_token.is_empty() {
+      return Ok(None);
+    }
+
+    let prepared = patterns_by_first_token
+      .into_iter()
+      .map(|(first_token, bucket_patterns)| {
+        boundary_phrase_pattern(&bucket_patterns)
+          .map(|pattern| (first_token, pattern))
+      })
+      .collect::<Result<Vec<_>>>()?;
+    let first_tokens = prepared
+      .iter()
+      .map(|(first_token, _)| first_token.clone())
+      .map(|pattern| SearchPattern::LiteralWithOptions {
+        pattern,
+        case_insensitive: Some(true),
+        whole_words: Some(false),
+      })
+      .collect();
+    Ok(Some(Self {
+      first_token_search: SearchIndex::new(
+        first_tokens,
+        SearchOptions::default(),
+      )?,
+      patterns_by_first_token: prepared
+        .into_iter()
+        .map(|(_, pattern)| pattern)
+        .collect(),
+      word_character_re: compile_regex(r"(?u)\A\w\z")?,
+    }))
+  }
+
+  fn find_starts(&self, full_text: &str) -> Result<BoundaryPhraseSearchResult> {
+    let candidates = self.first_token_search.find_iter(full_text)?;
+    let mut starts = Vec::new();
+    #[cfg(test)]
+    let mut candidate_checks = 0_usize;
+    for candidate in candidates {
+      let pattern_index =
+        usize::try_from(candidate.pattern()).map_err(|_| Error::Search {
+          engine: SearchEngine::Literal,
+          reason: String::from("boundary phrase pattern index overflow"),
+        })?;
+      let start =
+        usize::try_from(candidate.start()).map_err(|_| Error::Search {
+          engine: SearchEngine::Literal,
+          reason: String::from("boundary phrase offset overflow"),
+        })?;
+      let Some(pattern) = self.patterns_by_first_token.get(pattern_index)
+      else {
+        return Err(Error::Search {
+          engine: SearchEngine::Literal,
+          reason: String::from("boundary phrase pattern index is invalid"),
+        });
+      };
+      let Some(suffix) = full_text.get(start..) else {
+        return Err(Error::Search {
+          engine: SearchEngine::Literal,
+          reason: String::from(
+            "boundary phrase offset is not a UTF-8 boundary",
+          ),
+        });
+      };
+      #[cfg(test)]
+      {
+        candidate_checks = candidate_checks.saturating_add(1);
+      }
+      if pattern.requires_leading_boundary
+        && !self.has_leading_word_boundary(full_text, start)
+      {
+        continue;
+      }
+      if pattern.anchored_re.is_match(suffix) {
+        starts.push(start);
+      }
+    }
+    starts.sort_unstable();
+    starts.dedup();
+    Ok(BoundaryPhraseSearchResult {
+      starts,
+      #[cfg(test)]
+      candidate_checks,
+    })
+  }
+
+  fn has_leading_word_boundary(&self, full_text: &str, start: usize) -> bool {
+    let Some(prefix) = full_text.get(..start) else {
+      return false;
+    };
+    let Some(previous) = prefix.chars().next_back() else {
+      return true;
+    };
+    let mut encoded = [0_u8; 4];
+    !self
+      .word_character_re
+      .is_match(previous.encode_utf8(&mut encoded))
+  }
+}
+
+fn boundary_phrase_pattern(
+  patterns: &[String],
+) -> Result<BoundaryPhrasePattern> {
+  let Some(first) = patterns
+    .first()
+    .and_then(|pattern| pattern.split_whitespace().next())
+    .and_then(|token| token.chars().next())
+  else {
+    return Err(Error::Search {
+      engine: SearchEngine::Regex,
+      reason: String::from("boundary phrase bucket is empty"),
+    });
+  };
+  let alternatives = patterns
+    .iter()
+    .filter_map(|pattern| {
+      let tokens = pattern.split_whitespace().collect::<Vec<_>>();
+      let last = tokens.last()?.chars().next_back()?;
+      let body = tokens
+        .into_iter()
+        .map(regex::escape)
+        .collect::<Vec<_>>()
+        .join(r"\s+");
+      let trailing_boundary = if is_regex_word_character(last) {
+        r"\b"
+      } else {
+        r"(?:$|[^\w])"
+      };
+      Some(format!(r"(?:{body}){trailing_boundary}"))
+    })
+    .collect::<Vec<_>>();
+  if alternatives.is_empty() {
+    return Err(Error::Search {
+      engine: SearchEngine::Regex,
+      reason: String::from("boundary phrase bucket has no valid patterns"),
+    });
+  }
+  Ok(BoundaryPhrasePattern {
+    requires_leading_boundary: is_regex_word_character(first),
+    anchored_re: compile_regex(&format!(
+      r"(?iu)\A(?:{})",
+      alternatives.join("|")
+    ))?,
+  })
+}
+
+#[cfg(test)]
 fn flexible_phrase_regex(patterns: &[String]) -> Result<Option<Regex>> {
   let mut groups: [Vec<String>; 4] = std::array::from_fn(|_| Vec::new());
   for pattern in patterns {
@@ -2774,9 +2954,9 @@ mod tests {
       "or  \t emailed\u{2003}to",
     ] {
       let full_text = format!("§ {phrase} recipient");
-      assert_eq!(data.boundary_starts(&full_text), vec!["§ ".len()]);
+      assert_eq!(data.boundary_starts(&full_text)?, vec!["§ ".len()]);
     }
-    assert_eq!(data.boundary_starts("stop here"), vec![0]);
+    assert_eq!(data.boundary_starts("stop here")?, vec![0]);
     for phrase in [
       "con C.I.F.",
       "con N.I.F.",
@@ -2785,18 +2965,102 @@ mod tests {
       "sp. zn.",
     ] {
       assert_eq!(
-        data.boundary_starts(&format!("{phrase} recipient")),
+        data.boundary_starts(&format!("{phrase} recipient"))?,
         vec![0]
       );
-      assert_eq!(data.boundary_starts(&phrase.replace(' ', "\n")), vec![0]);
-      assert!(data.boundary_starts(&format!("{phrase}foo")).is_empty());
+      assert_eq!(data.boundary_starts(&phrase.replace(' ', "\n"))?, vec![0]);
+      assert!(data.boundary_starts(&format!("{phrase}foo"))?.is_empty());
     }
     assert!(
       data
         .boundary_starts(
           "nonstop xor emailed to recipient or emailed toxin or sentry xcon C.I.F.",
-        )
+        )?
         .is_empty()
+    );
+    Ok(())
+  }
+
+  proptest! {
+    #[test]
+    fn indexed_boundary_phrases_match_regex_reference(
+      fragments in proptest::collection::vec(
+        prop_oneof![
+          Just(String::from("ordinary prose ")),
+          Just(String::from("or emailed to ")),
+          Just(String::from("OR\temailed\nto ")),
+          Just(String::from("xor emailed to ")),
+          Just(String::from("con C.I.F. ")),
+          Just(String::from("con\u{2003}N.I.F. ")),
+          Just(String::from("sp.\r\nzn. ")),
+          Just(String::from("número de identificación fiscal ")),
+          Just(String::from("NÚMERO\tDE\nIDENTIFICACIÓN FISCAL ")),
+          "[A-Za-z0-9_. ]{0,24}",
+        ],
+        0..64,
+      ),
+    ) {
+      let patterns = [
+        "or emailed to",
+        "con C.I.F.",
+        "con N.I.F.",
+        "sp. zn.",
+        "número de identificación fiscal",
+      ]
+      .into_iter()
+      .map(String::from)
+      .collect::<Vec<_>>();
+      let full_text = fragments.concat();
+      let reference_re = flexible_phrase_regex(&patterns)?
+        .ok_or_else(|| TestCaseError::fail("reference regex was empty"))?;
+      let reference = reference_re
+        .find_iter(&full_text)
+        .map(|found| found.start())
+        .collect::<Vec<_>>();
+      let indexed = BoundaryPhraseSearch::new(patterns)?
+        .ok_or_else(|| TestCaseError::fail("phrase index was empty"))?
+        .find_starts(&full_text)?
+        .starts;
+
+      prop_assert_eq!(indexed, reference);
+    }
+  }
+
+  #[test]
+  fn boundary_phrase_candidate_checks_scale_with_candidates() -> Result<()> {
+    let shared_prefix_patterns = (0..128)
+      .map(|index| format!("marker {index} terminus"))
+      .collect::<Vec<_>>();
+    let shared_prefix_search =
+      BoundaryPhraseSearch::new(shared_prefix_patterns)?.ok_or_else(|| {
+        Error::Search {
+          engine: SearchEngine::Literal,
+          reason: String::from("missing boundary phrase index"),
+        }
+      })?;
+    let single_pattern_search =
+      BoundaryPhraseSearch::new(vec![String::from("marker 127 terminus")])?
+        .ok_or_else(|| Error::Search {
+          engine: SearchEngine::Literal,
+          reason: String::from("missing boundary phrase index"),
+        })?;
+    let fixture = "ordinary legal prose marker\r\n127\tterminus follows.\n";
+    let small = fixture.repeat(64);
+    let large = fixture.repeat(256);
+    let small_result = shared_prefix_search.find_starts(&small)?;
+    let large_result = shared_prefix_search.find_starts(&large)?;
+    let single_pattern_result = single_pattern_search.find_starts(&small)?;
+
+    assert_eq!(small_result.starts.len(), 64);
+    assert_eq!(large_result.starts.len(), 256);
+    assert_eq!(small_result.candidate_checks, 64);
+    assert_eq!(
+      large_result.candidate_checks,
+      small_result.candidate_checks.saturating_mul(4)
+    );
+    assert_eq!(
+      small_result.candidate_checks,
+      single_pattern_result.candidate_checks
     );
     Ok(())
   }
@@ -2810,8 +3074,8 @@ mod tests {
         .collect(),
       ..AddressSeedData::default()
     })?;
-    let small = boundary_phrase_sample(&data, 64 * 1024);
-    let large = boundary_phrase_sample(&data, 1024 * 1024);
+    let small = boundary_phrase_sample(&data, 64 * 1024)?;
+    let large = boundary_phrase_sample(&data, 1024 * 1024)?;
     let samples = [&small, &large];
     assert!(
       large
@@ -2835,20 +3099,20 @@ mod tests {
   fn boundary_phrase_sample(
     data: &PreparedAddressSeedData,
     target_bytes: usize,
-  ) -> (usize, std::time::Duration) {
+  ) -> Result<(usize, std::time::Duration)> {
     let fixture = "ordinary legal prose marker\r\n127\tterminus follows.\n";
     let repeats = target_bytes.div_ceil(fixture.len());
     let full_text = fixture.repeat(repeats);
     let expected = repeats;
-    assert_eq!(data.boundary_starts(&full_text).len(), expected);
+    assert_eq!(data.boundary_starts(&full_text)?.len(), expected);
     let mut best = std::time::Duration::MAX;
     for _ in 0..5 {
       let start = Instant::now();
-      let starts = data.boundary_starts(&full_text);
+      let starts = data.boundary_starts(&full_text)?;
       best = best.min(start.elapsed());
       assert_eq!(starts.len(), expected);
     }
-    (full_text.len(), best)
+    Ok((full_text.len(), best))
   }
 
   #[test]

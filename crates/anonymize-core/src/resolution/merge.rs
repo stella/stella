@@ -6,16 +6,19 @@ use super::{DetectionSource, PipelineEntity, SourceDetail};
 
 #[must_use]
 pub fn merge_and_dedup(entities: &[PipelineEntity]) -> Vec<PipelineEntity> {
-  if entities.is_empty() {
+  let Some(merged) = merge_frontier(entities) else {
     return Vec::new();
-  }
+  };
 
+  let merged = merged.into_entities();
+  resolve_same_span_label_conflicts(&sanitize_entities(&merged))
+}
+
+fn merge_frontier(entities: &[PipelineEntity]) -> Option<MergeFrontier> {
   let mut sorted = entities.to_vec();
   sorted.sort_by_key(|entity| entity.start);
 
-  let Some(first) = sorted.first().cloned() else {
-    return Vec::new();
-  };
+  let first = sorted.first().cloned()?;
   let mut merged = MergeFrontier::new(first);
 
   for entity in sorted.into_iter().skip(1) {
@@ -41,7 +44,7 @@ pub fn merge_and_dedup(entities: &[PipelineEntity]) -> Vec<PipelineEntity> {
 
       let Some(index) = same_label_index else {
         merged.push(entity);
-        merged.sort_by_start();
+        merged.sort_by_start_if_needed();
         continue;
       };
 
@@ -68,8 +71,7 @@ pub fn merge_and_dedup(entities: &[PipelineEntity]) -> Vec<PipelineEntity> {
     merged.replace_overlaps(insert_at, &overlaps, entity);
   }
 
-  let merged = merged.into_entities();
-  resolve_same_span_label_conflicts(&sanitize_entities(&merged))
+  Some(merged)
 }
 
 /// Retained entities in their legacy vector positions, plus the subset whose
@@ -81,8 +83,11 @@ struct MergeFrontier {
   slots: Vec<Option<PipelineEntity>>,
   active_ends: BTreeMap<u32, BTreeSet<usize>>,
   active_slots: BTreeSet<usize>,
+  starts_sorted: bool,
   #[cfg(test)]
   candidate_checks: std::cell::Cell<usize>,
+  #[cfg(test)]
+  index_updates: std::cell::Cell<usize>,
 }
 
 impl MergeFrontier {
@@ -92,8 +97,11 @@ impl MergeFrontier {
       slots: vec![Some(entity)],
       active_ends: BTreeMap::from([(end, BTreeSet::from([0]))]),
       active_slots: BTreeSet::from([0]),
+      starts_sorted: true,
       #[cfg(test)]
       candidate_checks: std::cell::Cell::new(0),
+      #[cfg(test)]
+      index_updates: std::cell::Cell::new(1),
     }
   }
 
@@ -107,7 +115,14 @@ impl MergeFrontier {
     self.activate(slot);
   }
 
-  fn sort_by_start(&mut self) {
+  // Partial-overlap replacement can move a later-starting candidate into an
+  // earlier slot. The legacy algorithm repairs that order only when a new
+  // label is retained for an exact span. Track the exceptional state so the
+  // repair remains exact without rebuilding an already ordered frontier.
+  fn sort_by_start_if_needed(&mut self) {
+    if self.starts_sorted {
+      return;
+    }
     let mut entities = std::mem::take(&mut self.slots)
       .into_iter()
       .flatten()
@@ -119,9 +134,16 @@ impl MergeFrontier {
     for slot in 0..self.slots.len() {
       self.activate(slot);
     }
+    self.starts_sorted = true;
   }
 
   fn replace(&mut self, slot: usize, entity: PipelineEntity) {
+    if self
+      .get(slot)
+      .is_some_and(|existing| existing.start != entity.start)
+    {
+      self.starts_sorted = false;
+    }
     self.deactivate(slot);
     let Some(entry) = self.slots.get_mut(slot) else {
       return;
@@ -136,6 +158,12 @@ impl MergeFrontier {
     overlaps: &[usize],
     entity: PipelineEntity,
   ) {
+    if self
+      .get(insert_at)
+      .is_some_and(|existing| existing.start != entity.start)
+    {
+      self.starts_sorted = false;
+    }
     for slot in overlaps {
       self.deactivate(*slot);
       if let Some(entry) = self.slots.get_mut(*slot) {
@@ -151,6 +179,10 @@ impl MergeFrontier {
     };
     self.active_slots.insert(slot);
     self.active_ends.entry(end).or_default().insert(slot);
+    #[cfg(test)]
+    self
+      .index_updates
+      .set(self.index_updates.get().saturating_add(1));
   }
 
   fn deactivate(&mut self, slot: usize) {
@@ -165,6 +197,10 @@ impl MergeFrontier {
       self.active_ends.remove(&end);
     }
     self.active_slots.remove(&slot);
+    #[cfg(test)]
+    self
+      .index_updates
+      .set(self.index_updates.get().saturating_add(1));
   }
 
   fn retire_ended(&mut self, next_start: u32) {
@@ -878,15 +914,31 @@ mod tests {
   }
 
   fn frontier_candidate_checks(entities: &[PipelineEntity]) -> usize {
-    let Some(first) = entities.first().cloned() else {
-      return 0;
-    };
-    let mut frontier = MergeFrontier::new(first);
-    for entity in entities.iter().skip(1).cloned() {
-      assert!(frontier.overlapping_slots(&entity).is_empty());
-      frontier.push(entity);
+    merge_frontier(entities)
+      .map_or(0, |frontier| frontier.candidate_checks.get())
+  }
+
+  fn frontier_index_updates(entities: &[PipelineEntity]) -> usize {
+    merge_frontier(entities).map_or(0, |frontier| frontier.index_updates.get())
+  }
+
+  fn dense_same_span_entities(groups: usize) -> Vec<PipelineEntity> {
+    const LABELS: [&str; 3] = ["person", "address", "organization"];
+    let mut entities = Vec::with_capacity(groups.saturating_mul(LABELS.len()));
+    for group in 0..groups {
+      let start = u32::try_from(group.saturating_mul(2)).unwrap_or(u32::MAX);
+      for label in LABELS {
+        entities.push(PipelineEntity::detected(
+          start,
+          start.saturating_add(1),
+          label,
+          "x",
+          0.9,
+          DetectionSource::Regex,
+        ));
+      }
     }
-    frontier.candidate_checks.get()
+    entities
   }
 
   fn output_digest(entities: &[PipelineEntity]) -> String {
@@ -930,5 +982,55 @@ mod tests {
       "ceca76ca0c2d23ab459a0bc3ec3d532b21ccf00d509479d1b98f33e635713c85",
     );
     std::hint::black_box(elapsed);
+  }
+
+  #[test]
+  fn dense_same_span_conflicts_have_linear_index_work() {
+    const SMALL_GROUPS: usize = 1_024;
+    const LARGE_GROUPS: usize = 4_096;
+    let small = dense_same_span_entities(SMALL_GROUPS);
+    let large = dense_same_span_entities(LARGE_GROUPS);
+
+    let small_updates = frontier_index_updates(&small);
+    let large_updates = frontier_index_updates(&large);
+    assert_eq!(small_updates, small.len());
+    assert_eq!(large_updates, large.len());
+    assert_eq!(large_updates, small_updates.saturating_mul(4));
+    assert_eq!(merge_and_dedup(&small), legacy_merge_and_dedup(&small));
+
+    let resolved = merge_and_dedup(&large);
+    assert_eq!(resolved.len(), LARGE_GROUPS.saturating_mul(2));
+    assert!(resolved.windows(2).all(|pair| {
+      pair
+        .first()
+        .zip(pair.get(1))
+        .is_some_and(|(left, right)| left.start <= right.start)
+    }));
+  }
+
+  #[test]
+  fn exact_span_conflict_repairs_legacy_order_after_partial_replacement() {
+    let entity = |start, end, label, source| {
+      PipelineEntity::detected(
+        start,
+        end,
+        label,
+        "x".repeat(usize::try_from(end.saturating_sub(start)).unwrap_or(0)),
+        0.1,
+        source,
+      )
+    };
+    let entities = vec![
+      entity(37, 45, "person", DetectionSource::Caller),
+      entity(5, 16, "person", DetectionSource::Caller),
+      entity(15, 26, "person", DetectionSource::Trigger),
+      entity(37, 45, "address", DetectionSource::Caller),
+      entity(5, 0, "person", DetectionSource::Caller),
+    ];
+
+    assert_eq!(
+      merge_and_dedup(&entities),
+      legacy_merge_and_dedup(&entities)
+    );
   }
 }

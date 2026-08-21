@@ -891,13 +891,13 @@
         },
         {
           "type": "copy",
-          "start": 11,
-          "end": 16
+          "start": 12,
+          "end": 17
         },
         {
           "type": "copy",
-          "start": 20,
-          "end": 24
+          "start": 21,
+          "end": 25
         }
       ]
     },
@@ -2010,6 +2010,31 @@
         { "type": "copy", "start": 1, "end": 2 },
         { "type": "copy", "start": 4, "end": 5 },
         { "type": "copy", "start": 6, "end": 7 }
+      ]
+    },
+    {
+      "type": "set",
+      "path": ["signature_data", "person_list_labels"],
+      "value": [
+        "zu händen von",
+        "zu händen",
+        "l'attention de",
+        "do rąk własnych"
+      ]
+    },
+    {
+      "type": "set",
+      "path": ["signature_data", "contact_field_labels"],
+      "value": [
+        "e-mail",
+        "email",
+        "tel",
+        "tel.",
+        "telefon",
+        "courriel",
+        "tél",
+        "tél.",
+        "téléphone"
       ]
     }
   ]

@@ -160,6 +160,8 @@ pub struct BindingSignatureData {
   #[serde(default)]
   pub labels: Vec<String>,
   #[serde(default)]
+  pub person_list_labels: Vec<String>,
+  #[serde(default)]
   pub witness_phrases: Vec<String>,
   #[serde(default)]
   pub name_particles: Vec<String>,
@@ -168,6 +170,8 @@ pub struct BindingSignatureData {
   #[serde(default)]
   pub organization_suffixes: Vec<String>,
   pub form_field_labels: Vec<String>,
+  #[serde(default)]
+  pub contact_field_labels: Vec<String>,
   pub signature_stamp_phrases: Vec<String>,
   pub image_stub_prefixes: Vec<String>,
 }

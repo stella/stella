@@ -425,11 +425,13 @@ fn name_corpus_data_from_binding(
 fn signature_data_from_binding(data: BindingSignatureData) -> SignatureData {
   SignatureData {
     labels: data.labels,
+    person_list_labels: data.person_list_labels,
     witness_phrases: data.witness_phrases,
     name_particles: data.name_particles,
     post_nominal_suffixes: data.post_nominal_suffixes,
     organization_suffixes: data.organization_suffixes,
     form_field_labels: data.form_field_labels,
+    contact_field_labels: data.contact_field_labels,
     signature_stamp_phrases: data.signature_stamp_phrases,
     image_stub_prefixes: data.image_stub_prefixes,
   }

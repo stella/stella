@@ -9,6 +9,8 @@ const SEARCH_WINDOW: u32 = 200;
 const COREFERENCE_SCORE: f64 = 0.95;
 const ORG_PROPAGATION_SCORE: f64 = 0.9;
 const ORG_DETERMINER_LOOKBACK: usize = 40;
+const MAX_ALIASES_PER_DEFINITION: usize = 2;
+const MAX_COMPACT_ORG_ALIAS_UNITS: usize = 8;
 
 #[derive(
   Clone, Debug, Default, Eq, PartialEq, serde::Deserialize, serde::Serialize,
@@ -125,22 +127,6 @@ impl PreparedCoreferenceData {
 
     for pattern in &self.definition_patterns {
       for captures in pattern.captures_iter(full_text) {
-        let Some(alias_match) = captures.get(1) else {
-          continue;
-        };
-        let alias = alias_match.as_str().trim();
-        if alias.chars().count() < 2 {
-          continue;
-        }
-        if self.role_stop_terms.contains(&alias.to_lowercase()) {
-          continue;
-        }
-        if normalized_legal_form_alias(alias).is_some_and(|normalized| {
-          self.legal_form_aliases.contains(&normalized)
-        }) {
-          continue;
-        }
-
         let Some(full_match) = captures.get(0) else {
           continue;
         };
@@ -155,20 +141,43 @@ impl PreparedCoreferenceData {
         if has_clause_boundary(&gap) {
           continue;
         }
-        if !has_entity_similarity(alias, &source.text) {
-          continue;
-        }
 
-        let key = format!("{}::{}", alias.to_lowercase(), source.label);
-        if !seen.insert(key) {
-          continue;
-        }
+        for alias_match in captures
+          .iter()
+          .skip(1)
+          .flatten()
+          .take(MAX_ALIASES_PER_DEFINITION)
+        {
+          let alias = alias_match.as_str().trim();
+          if alias.chars().count() < 2 {
+            continue;
+          }
+          if self.role_stop_terms.contains(&alias.to_lowercase()) {
+            continue;
+          }
+          if normalized_legal_form_alias(alias).is_some_and(|normalized| {
+            self.legal_form_aliases.contains(&normalized)
+          }) {
+            continue;
+          }
+          let has_similarity = has_entity_similarity(alias, &source.text)
+            || (source.label == "organization"
+              && has_compact_organization_similarity(alias, &source.text));
+          if !has_similarity {
+            continue;
+          }
 
-        terms.push(DefinedTerm {
-          alias: alias.to_owned(),
-          label: source.label.clone(),
-          source_text: source.text.clone(),
-        });
+          let key = format!("{}::{}", alias.to_lowercase(), source.label);
+          if !seen.insert(key) {
+            continue;
+          }
+
+          terms.push(DefinedTerm {
+            alias: alias.to_owned(),
+            label: source.label.clone(),
+            source_text: source.text.clone(),
+          });
+        }
       }
     }
 
@@ -472,6 +481,55 @@ fn has_entity_similarity(alias: &str, entity_text: &str) -> bool {
   }
 
   false
+}
+
+fn has_compact_organization_similarity(alias: &str, entity_text: &str) -> bool {
+  let alias_units = alias.chars().count();
+  if !(3..=MAX_COMPACT_ORG_ALIAS_UNITS).contains(&alias_units)
+    || !alias
+      .chars()
+      .all(|ch| ch.is_alphabetic() && ch.is_uppercase())
+  {
+    return false;
+  }
+
+  let alias_chars = alias.to_lowercase().chars().collect::<Vec<_>>();
+  let entity_lower = entity_text.to_lowercase();
+  let entity_words = split_similarity_words(&entity_lower);
+  let mut states = BTreeSet::from([(0_usize, 0_usize)]);
+  for word in entity_words {
+    let word_chars = word.chars().collect::<Vec<_>>();
+    let mut next = states.clone();
+    for (consumed, contributing_words) in &states {
+      let Some(expected_first) = alias_chars.get(*consumed) else {
+        continue;
+      };
+      if word_chars.first() != Some(expected_first) {
+        continue;
+      }
+      let mut matched = 1_usize;
+      next.insert((
+        consumed.saturating_add(matched),
+        contributing_words.saturating_add(1),
+      ));
+      for word_char in word_chars.iter().skip(1) {
+        if alias_chars.get(consumed.saturating_add(matched)) != Some(word_char)
+        {
+          continue;
+        }
+        matched = matched.saturating_add(1);
+        next.insert((
+          consumed.saturating_add(matched),
+          contributing_words.saturating_add(1),
+        ));
+      }
+    }
+    states = next;
+  }
+
+  states.iter().any(|(consumed, contributing_words)| {
+    *consumed == alias_chars.len() && *contributing_words >= 2
+  })
 }
 
 fn split_similarity_words(text: &str) -> Vec<String> {

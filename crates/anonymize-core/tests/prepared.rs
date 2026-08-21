@@ -19,9 +19,9 @@ use stella_anonymize_core::{
   PreparedEngineSlices, PreparedSessionCallerRedactionOptions,
   PreparedSessionRedactionOptions, RedactionSession, RegexMatchMeta,
   RegexSearchOptions, SearchOptions, SearchPattern, SessionId,
-  SessionLifecycle, SessionTimestamp, SourceDetail, TriggerData, TriggerRule,
-  TriggerStrategy, TriggerValidation, WrittenAmountPatternData, ZoneData,
-  ZonePatternData, ZoneSigningClauseData,
+  SessionLifecycle, SessionTimestamp, SignatureData, SourceDetail, TriggerData,
+  TriggerRule, TriggerStrategy, TriggerValidation, WrittenAmountPatternData,
+  ZoneData, ZonePatternData, ZoneSigningClauseData,
 };
 use support::prepared_config;
 
@@ -555,11 +555,19 @@ fn zone_data() -> ZoneData {
 
 fn coreference_data() -> CoreferenceData {
   CoreferenceData {
-    definition_patterns: vec![CoreferencePatternData {
-      pattern: String::from(r#"\((?:hereinafter|the)\s+["']([^"']+)["']\)"#),
-      flags: String::from("gi"),
-    }],
-    role_stop_terms: vec![String::from("seller")],
+    definition_patterns: vec![
+      CoreferencePatternData {
+        pattern: String::from(
+          r#"\((?:(?:together\s+with\s+its\s+affiliates,\s+)?the|hereinafter)\s+["'“‘]\s*([^"'”’]+?)\s*["'”’]\s+or\s+["'“‘]\s*([^"'”’]+?)\s*["'”’]\s*\)"#,
+        ),
+        flags: String::from("gi"),
+      },
+      CoreferencePatternData {
+        pattern: String::from(r#"\((?:hereinafter|the)\s+["']([^"']+)["']\)"#),
+        flags: String::from("gi"),
+      },
+    ],
+    role_stop_terms: vec![String::from("seller"), String::from("company")],
     legal_form_aliases: vec![String::from("LLC")],
     organization_suffixes: vec![String::from("LLC")],
     organization_determiners: vec![String::from(
@@ -1196,6 +1204,131 @@ fn prepared_engine_adds_coreference_aliases_with_source_placeholder() {
     result.redaction.redacted_text,
     r#"[ORGANIZATION_1] (the "[ORGANIZATION_1]") signed. [ORGANIZATION_1] later paid."#,
   );
+}
+
+#[test]
+fn prepared_engine_accepts_validated_second_alias_and_rejects_generic_role() {
+  let prepared = PreparedEngine::new(prepared_config! {
+    regex_patterns: vec![SearchPattern::Regex(String::from(
+      r"Acme Holdings, Inc\.",
+    ))],
+    regex_meta: vec![RegexMatchMeta::new("organization", 1.0)],
+    slices: PreparedEngineSlices {
+      regex: PatternSlice { start: 0, end: 1 },
+      ..PreparedEngineSlices::default()
+    },
+    threshold: 0.5,
+    allowed_labels: vec![String::from("organization")],
+    coreference_data: Some(coreference_data()),
+    name_corpus_data: None,
+    ..empty_config(PreparedEngineSlices::default())
+  })
+  .unwrap();
+
+  let result = prepared
+    .redact_static_entities(
+      "Acme Holdings, Inc., a Delaware corporation (together with its affiliates, the “ Company ” or “ AHI ”), signed. AHI filed; Company remained.",
+      &OperatorConfig::default(),
+    )
+    .unwrap();
+
+  assert!(result.resolved_entities.iter().any(|entity| {
+    let EntityKind::Coreference { source_text } = &entity.kind else {
+      return false;
+    };
+    entity.text == "AHI" && source_text == "Acme Holdings, Inc."
+  }));
+  assert!(!result.resolved_entities.iter().any(|entity| {
+    entity.source == DetectionSource::Coreference && entity.text == "Company"
+  }));
+  assert_eq!(
+    result.redaction.redacted_text,
+    "[ORGANIZATION_1], a Delaware corporation (together with its affiliates, the “ Company ” or “ [ORGANIZATION_1] ”), signed. [ORGANIZATION_1] filed; Company remained.",
+  );
+}
+
+#[test]
+fn prepared_engine_requires_compact_aliases_to_follow_word_initials() {
+  let prepared = PreparedEngine::new(prepared_config! {
+    regex_patterns: vec![SearchPattern::Regex(String::from(
+      r"Intercontinental Exchange, Inc\.|Acme Corporation|The Acme Manufacturing Company",
+    ))],
+    regex_meta: vec![RegexMatchMeta::new("organization", 1.0)],
+    slices: PreparedEngineSlices {
+      regex: PatternSlice { start: 0, end: 1 },
+      ..PreparedEngineSlices::default()
+    },
+    threshold: 0.5,
+    allowed_labels: vec![String::from("organization")],
+    coreference_data: Some(coreference_data()),
+    name_corpus_data: None,
+    ..empty_config(PreparedEngineSlices::default())
+  })
+  .unwrap();
+
+  let result = prepared
+    .redact_static_entities(
+      "Intercontinental Exchange, Inc. (the \"ICE\") filed. ICE responded. \
+       Acme Corporation licensed a painting (the \"Artwork\" or \"ART\"). \
+       ART remained on display. The Acme Manufacturing Company (the \"AMC\") \
+       signed. AMC performed.",
+      &OperatorConfig::default(),
+    )
+    .unwrap();
+
+  assert!(result.resolved_entities.iter().any(|entity| {
+    entity.source == DetectionSource::Coreference && entity.text == "ICE"
+  }));
+  assert!(!result.resolved_entities.iter().any(|entity| {
+    entity.source == DetectionSource::Coreference && entity.text == "ART"
+  }));
+  assert!(result.resolved_entities.iter().any(|entity| {
+    entity.source == DetectionSource::Coreference && entity.text == "AMC"
+  }));
+}
+
+#[test]
+fn prepared_engine_bounds_aliases_extracted_from_one_definition() {
+  let mut data = coreference_data();
+  data.definition_patterns = vec![CoreferencePatternData {
+    pattern: String::from(
+      r#"\(the\s+["']([^"']+)["']\s+or\s+["']([^"']+)["']\s+or\s+["']([^"']+)["']\)"#,
+    ),
+    flags: String::from("gi"),
+  }];
+  let prepared = PreparedEngine::new(prepared_config! {
+    regex_patterns: vec![SearchPattern::Regex(String::from(
+      r"Acme Corporation",
+    ))],
+    regex_meta: vec![RegexMatchMeta::new("organization", 1.0)],
+    slices: PreparedEngineSlices {
+      regex: PatternSlice { start: 0, end: 1 },
+      ..PreparedEngineSlices::default()
+    },
+    threshold: 0.5,
+    allowed_labels: vec![String::from("organization")],
+    coreference_data: Some(data),
+    name_corpus_data: None,
+    ..empty_config(PreparedEngineSlices::default())
+  })
+  .unwrap();
+
+  let result = prepared
+    .redact_static_entities(
+      r#"Acme Corporation (the "Acme" or "AC" or "ACME") signed. Acme and AC filed; ACME remained."#,
+      &OperatorConfig::default(),
+    )
+    .unwrap();
+
+  assert!(result.resolved_entities.iter().any(|entity| {
+    entity.source == DetectionSource::Coreference && entity.text == "Acme"
+  }));
+  assert!(result.resolved_entities.iter().any(|entity| {
+    entity.source == DetectionSource::Coreference && entity.text == "AC"
+  }));
+  assert!(!result.resolved_entities.iter().any(|entity| {
+    entity.source == DetectionSource::Coreference && entity.text == "ACME"
+  }));
 }
 
 #[test]
@@ -2466,6 +2599,43 @@ fn prepared_engine_applies_header_zone_boost_before_threshold() {
       && event.kind == DiagnosticEventKind::StageSummary
       && event.count == Some(1)
   }));
+}
+
+#[test]
+fn notice_person_list_outranks_an_overlapping_address_candidate() {
+  let prepared = PreparedEngine::new(prepared_config! {
+    regex_patterns: vec![SearchPattern::Regex(String::from("Spencer Ho"))],
+    regex_meta: vec![RegexMatchMeta::new("address", 0.8)],
+    allowed_labels: vec![String::from("person"), String::from("address")],
+    threshold: 0.5,
+    slices: PreparedEngineSlices {
+      regex: PatternSlice { start: 0, end: 1 },
+      ..PreparedEngineSlices::default()
+    },
+    signature_data: Some(SignatureData {
+      person_list_labels: vec![String::from("attention")],
+      contact_field_labels: vec![String::from("email")],
+      ..SignatureData::default()
+    }),
+    ..empty_config(PreparedEngineSlices::default())
+  })
+  .unwrap();
+
+  let result = prepared
+    .redact_static_entities(
+      "Attention: Steven Patch; Spencer Ho Email: contact@example.test",
+      &OperatorConfig::default(),
+    )
+    .unwrap();
+
+  assert_eq!(
+    result
+      .resolved_entities
+      .iter()
+      .map(|entity| (entity.text.as_str(), entity.label.as_str()))
+      .collect::<Vec<_>>(),
+    vec![("Steven Patch", "person"), ("Spencer Ho", "person")]
+  );
 }
 
 #[test]

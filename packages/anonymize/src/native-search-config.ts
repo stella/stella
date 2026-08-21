@@ -306,11 +306,13 @@ export type NativeHotwordRuleData = {
 
 export type NativeSignatureData = {
   labels: string[];
+  person_list_labels: string[];
   witness_phrases: string[];
   name_particles: string[];
   post_nominal_suffixes: string[];
   organization_suffixes: string[];
   form_field_labels: string[];
+  contact_field_labels: string[];
   signature_stamp_phrases: string[];
   image_stub_prefixes: string[];
 };

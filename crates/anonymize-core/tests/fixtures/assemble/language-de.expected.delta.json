@@ -1562,6 +1562,16 @@
       "type": "array",
       "path": ["monetary_data", "amount_words", "share_quantity_terms"],
       "segments": [{ "type": "copy", "start": 1, "end": 2 }]
+    },
+    {
+      "type": "set",
+      "path": ["signature_data", "person_list_labels"],
+      "value": ["zu händen von", "zu händen"]
+    },
+    {
+      "type": "set",
+      "path": ["signature_data", "contact_field_labels"],
+      "value": ["e-mail", "email", "tel", "tel.", "telefon"]
     }
   ]
 }

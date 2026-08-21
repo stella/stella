@@ -1,5 +1,10 @@
 [
   {
+    "label": "(the \"X\" or \"Y\"): bounded multi-alias definition",
+    "pattern": "\\((?:(?:together\\s+with\\s+its\\s+affiliates,\\s+)?the|hereinafter)\\s+[\"'“‘]\\s*([^\"'”’]+?)\\s*[\"'”’]\\s+or\\s+[\"'“‘]\\s*([^\"'”’]+?)\\s*[\"'”’]\\s*\\)",
+    "flags": "gi"
+  },
+  {
     "label": "(hereinafter \"X\") or (the \"X\")",
     "pattern": "\\((?:hereinafter|the)\\s+[\"'\"']([^\"'\"']+)[\"'\"']\\)",
     "flags": "gi"

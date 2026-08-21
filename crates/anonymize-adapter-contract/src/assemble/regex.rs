@@ -303,7 +303,15 @@ fn build_obfuscated_email_patterns(
       lazy: Some(true),
       prefilter_any: None,
       prefilter_case_insensitive: None,
-      prefilter_regex: Some(format!(r"(?i)[^\S\n](?:{at_tokens})[^\S\n]")),
+      prefilter_regex: Some(format!(
+        concat!(
+          r"(?i)[^\S\n](?:{})[^\S\n]+",
+          r"[\p{{L}}\p{{N}}](?:[\p{{L}}\p{{N}}\p{{M}}-]{{0,61}}",
+          r"[\p{{L}}\p{{N}}\p{{M}}])?",
+          r"[^\S\n]+(?:{})[^\S\n]"
+        ),
+        at_tokens, dot_tokens
+      )),
       prefilter_window_bytes: None,
       prepared_artifact_policy: None,
     });

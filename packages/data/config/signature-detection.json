@@ -1,7 +1,23 @@
 {
-  "_comment": "Signature-block detection terms, organized by concept and language. `und` is reserved for structural markers or name/legal tokens that are not tied to the document language. `signatureStampPhrases` are the fixed strings PDF signing software stamps onto a page; a person span must never extend across one.",
+  "_comment": "Signature-block detection terms, organized by concept and language. `und` is reserved for structural markers or name/legal tokens that are not tied to the document language. `signatureStampPhrases` are the fixed strings PDF signing software stamps onto a page; a person span must never extend across one. `personListLabels`, `personListLabelOmissions`, and `contactFieldLabels` form the reviewed coverage matrix for every manifest language. Labels are native legal notice or procurement conventions, not translated guesses. A person-list label activates only beside a semicolon-delimited list or a configured contact field.",
   "labels": {
     "en": ["by", "name"]
+  },
+  "personListLabels": {
+    "cs": ["k rukám"],
+    "de": ["zu händen von", "zu händen"],
+    "en": ["attention"],
+    "es": ["a la atención de"],
+    "fr": ["l'attention de"],
+    "hu": ["figyelmébe"],
+    "it": ["all'attenzione di"],
+    "pl": ["do rąk własnych"],
+    "pt-br": ["atenção de"],
+    "ro": ["atenția"],
+    "sk": ["k rukám"]
+  },
+  "personListLabelOmissions": {
+    "sv": "Reviewed Swedish government forms use explicit recipient/name fields; `att` is also the common infinitive marker, so it is not safe as a person-list trigger."
   },
   "witnessPhrases": {
     "en": ["in witness whereof"]
@@ -66,6 +82,20 @@
       "ičo",
       "dič"
     ]
+  },
+  "contactFieldLabels": {
+    "cs": ["e-mail", "email", "tel", "tel.", "telefon", "telefonní číslo"],
+    "de": ["e-mail", "email", "tel", "tel.", "telefon"],
+    "en": ["e-mail", "email", "tel", "tel.", "telephone"],
+    "es": ["correo electrónico", "e-mail", "email", "tel", "tel.", "teléfono"],
+    "fr": ["courriel", "e-mail", "email", "tél", "tél.", "téléphone"],
+    "hu": ["e-mail", "email", "tel", "tel.", "telefon"],
+    "it": ["e-mail", "email", "tel", "tel.", "telefono"],
+    "pl": ["e-mail", "email", "tel", "tel.", "telefon"],
+    "pt-br": ["e-mail", "email", "tel", "tel.", "telefone"],
+    "ro": ["e-mail", "email", "tel", "tel.", "telefon"],
+    "sk": ["e-mail", "email", "tel", "tel.", "telefón"],
+    "sv": ["e-post", "epost", "e-mail", "email", "tel", "tel.", "telefon"]
   },
   "signatureStampPhrases": {
     "en": ["digitally signed by", "digitally signed"],

@@ -677,8 +677,8 @@
         },
         {
           "type": "copy",
-          "start": 24,
-          "end": 28
+          "start": 25,
+          "end": 29
         }
       ]
     },
@@ -1494,6 +1494,24 @@
       "segments": [
         { "type": "copy", "start": 0, "end": 1 },
         { "type": "copy", "start": 8, "end": 9 }
+      ]
+    },
+    {
+      "type": "set",
+      "path": ["signature_data", "person_list_labels"],
+      "value": ["k rukám"]
+    },
+    {
+      "type": "set",
+      "path": ["signature_data", "contact_field_labels"],
+      "value": [
+        "e-mail",
+        "email",
+        "tel",
+        "tel.",
+        "telefon",
+        "telefonní číslo",
+        "telefón"
       ]
     }
   ]

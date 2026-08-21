@@ -525,7 +525,7 @@
         {
           "type": "copy",
           "start": 4,
-          "end": 6
+          "end": 7
         }
       ]
     },
@@ -1411,6 +1411,16 @@
       "type": "array",
       "path": ["monetary_data", "amount_words", "share_quantity_terms"],
       "segments": [{ "type": "copy", "start": 2, "end": 3 }]
+    },
+    {
+      "type": "set",
+      "path": ["signature_data", "person_list_labels"],
+      "value": ["attention"]
+    },
+    {
+      "type": "set",
+      "path": ["signature_data", "contact_field_labels"],
+      "value": ["e-mail", "email", "tel", "tel.", "telephone"]
     }
   ]
 }

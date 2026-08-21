@@ -66,12 +66,42 @@ fn detects_rfcish_idn_and_written_emails() {
 }
 
 #[test]
+fn detects_written_email_at_input_end_and_before_punctuation() {
+  let engine = prepared("en");
+  for (text, expected) in [
+    (
+      "legal.notices at example dot test",
+      "legal.notices at example dot test",
+    ),
+    (
+      "legal.notices at example dot test.",
+      "legal.notices at example dot test",
+    ),
+  ] {
+    assert_eq!(texts(&engine, text, "email address"), [expected]);
+  }
+}
+
+#[test]
 fn written_email_vocabulary_is_language_scoped() {
   let engine = prepared("cs");
   assert!(
     texts(
       &engine,
       "Reference legal.notices at example dot test remains prose.",
+      "email address"
+    )
+    .is_empty()
+  );
+}
+
+#[test]
+fn ordinary_at_prose_does_not_activate_written_email_detection() {
+  let engine = prepared("en");
+  assert!(
+    texts(
+      &engine,
+      "The tenant may resume at reasonable times after written notice.",
       "email address"
     )
     .is_empty()
