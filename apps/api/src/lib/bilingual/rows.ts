@@ -76,9 +76,24 @@ export const flattenBilingualRows = (
 
 const LETTER = /\p{L}/u;
 const ONLY_PUNCTUATION = /^[\s\p{P}\p{S}\d]*$/u;
-/** "NÁJEMNÍ SMLOUVA / TENANCY AGREEMENT": a spaced slash between two lettered
- *  halves. "a/nebo" and "km/h" have no spaces and are prose. */
-const ALREADY_BILINGUAL = /^\s*[^/]*\p{L}[^/]*\s\/\s[^/]*\p{L}[^/]*\s*$/u;
+const BILINGUAL_SEPARATOR = " / ";
+/** Longest line still read as a bilingual heading rather than prose. */
+const BILINGUAL_LINE_MAX = 200;
+
+/**
+ * "NÁJEMNÍ SMLOUVA / TENANCY AGREEMENT": exactly one spaced slash with letters
+ * on both sides. Split rather than matched: the regex for this shape needs
+ * repeated unbounded classes around the separator, which backtracks
+ * super-linearly on a long line. "a/nebo" and "km/h" have no spaces, so they
+ * stay prose.
+ */
+const isAlreadyBilingual = (text: string): boolean => {
+  const halves = text.split(BILINGUAL_SEPARATOR);
+  return (
+    halves.length === 2 &&
+    halves.every((half) => LETTER.test(half) && !half.includes("/"))
+  );
+};
 
 /**
  * Dispositions no model needs to decide: a row with no letters (amounts,
@@ -92,7 +107,7 @@ export const ruleDisposition = (
   if (!LETTER.test(text) || ONLY_PUNCTUATION.test(text)) {
     return BILINGUAL_ROW_DISPOSITION.KEEP;
   }
-  if (ALREADY_BILINGUAL.test(text) && text.length <= 200) {
+  if (text.length <= BILINGUAL_LINE_MAX && isAlreadyBilingual(text)) {
     return BILINGUAL_ROW_DISPOSITION.KEEP;
   }
   return null;
@@ -181,9 +196,25 @@ const containsForm = (haystack: string, form: string): boolean => {
   return pattern.test(haystack);
 };
 
-// Two or more digits, or a decimal: single digits are too often re-expressed
-// by grammar ("7. 2018" -> "July 2018") to be a dependable signal.
-const NUMBER_TOKEN = /\d{2,}(?:[.,]\d+)*|\d+[.,]\d+/gu;
+// Digit runs, with any separator inside a number splitting it ("1 250,00" ->
+// "1", "250", "00"). One alternation-free pattern on purpose: alternating a
+// `{2,}` run with a decimal form re-walks the same digits on every retry.
+const DIGIT_RUN = /\d+/gu;
+
+/**
+ * The numeric tokens a translation must preserve. Single digits are dropped:
+ * grammar re-expresses them too often ("7. 2018" -> "July 2018") to be a
+ * dependable signal.
+ */
+const numberTokens = (text: string): Set<string> => {
+  const tokens = new Set<string>();
+  for (const [run] of text.matchAll(DIGIT_RUN)) {
+    if (run.length > 1) {
+      tokens.add(run);
+    }
+  }
+  return tokens;
+};
 
 export type ConsistencyCheckInput = {
   sourceText: string;
@@ -214,12 +245,9 @@ export const checkTranslationConsistency = ({
       );
     }
   }
-  const targetNumbers = new Set(targetText.match(NUMBER_TOKEN));
-  for (const number of new Set(sourceText.match(NUMBER_TOKEN))) {
-    if (
-      !targetNumbers.has(number) &&
-      !targetNumbers.has(number.replace(",", "."))
-    ) {
+  const targetNumbers = numberTokens(targetText);
+  for (const number of numberTokens(sourceText)) {
+    if (!targetNumbers.has(number)) {
       warnings.push(`Number "${number}" is missing from the translation`);
     }
   }
