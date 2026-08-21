@@ -104,11 +104,12 @@ const PARKED_RETRY_BATCH = 25;
  */
 export const DEFAULT_SLICE_INGEST_BUDGET = 50;
 /**
- * The most a unit may be asked to ingest. One walk holds the source lease
- * for its whole run and the runner's hard deadline ends an overrun by
- * exiting the process, so the option is bounded here rather than trusted:
- * a thousand sequential fetches at the loop's politeness gap stay well
- * inside that deadline.
+ * The most a unit may be asked to ingest. One walk holds the source lease for
+ * its whole run, so the option is bounded here rather than trusted.
+ *
+ * A count is not a clock: this bounds how many documents a unit fetches, not
+ * how long they take. `RECONCILIATION_UNIT_BUDGET_MS` is what keeps a unit
+ * inside the caller's deadline.
  */
 export const MAX_SLICE_INGEST_BUDGET = 1000;
 /** Identity lookups per query, matching the publishers' own page size. */
@@ -127,16 +128,42 @@ const LIST_TIMEOUT_MS = 60_000;
  *
  * `totalPages` is the publisher's number and the response validators only
  * require it to be a number at all. Without a ceiling one wrong value turns a
- * single work unit into an unbounded request sequence against that publisher,
- * which the runner's hard deadline only ends by killing the process — and the
- * replacement starts the same walk again. Far above any real slice, so
- * reaching it means the listing is not walkable rather than merely large.
+ * single work unit into an unbounded request sequence against that publisher.
+ * Far above any real slice, so reaching it means the listing is not walkable
+ * rather than merely large.
  */
 const MAX_SLICE_PAGES = 200;
 /** Terminal rows examined when pruning a walked slice. */
 const PRUNE_ROW_LIMIT = 1000;
 /** One document; nothing in an item's build should take longer. */
 const ITEM_FETCH_TIMEOUT_MS = 2 * 60_000;
+/**
+ * Wall-clock a unit may spend before it stops taking on new work.
+ *
+ * The count ceilings above bound requests, not time, and every request may
+ * spend its own timeout before settling: `MAX_SLICE_PAGES` listing pages at
+ * `LIST_TIMEOUT_MS` and `MAX_SLICE_INGEST_BUDGET` documents at
+ * `ITEM_FETCH_TIMEOUT_MS` are hours of lawful work, not the minutes the
+ * politeness gaps alone suggest. The caller runs a unit under a hard deadline
+ * that exits the process on the theory that anything slower than it is wedged,
+ * so a unit that can outlast that deadline while making progress is
+ * indistinguishable from a hang, and the walk that would have finished is
+ * killed along with every other loop sharing the process.
+ *
+ * So the unit bounds its own clock and returns what it has. Misses it did not
+ * reach are `deferred` exactly as when the ingest budget runs out: the slice
+ * records short, is selected again, and the next unit resumes the work.
+ * `RECONCILIATION_UNIT_SETTLE_MS` is the headroom the caller must add on top
+ * to reach a deadline only a genuine wedge can cross.
+ */
+export const RECONCILIATION_UNIT_BUDGET_MS = 30 * 60_000;
+/**
+ * Headroom between a unit's own budget and the caller's hard deadline: the
+ * request already in flight when the budget runs out, plus the ledger writes
+ * that close the unit. Comfortably above `ITEM_FETCH_TIMEOUT_MS`, which is the
+ * longest of them.
+ */
+export const RECONCILIATION_UNIT_SETTLE_MS = 15 * 60_000;
 
 export type ReconciliationUnitSummary = {
   unit: ReconciliationWorkUnit["type"];
@@ -802,6 +829,8 @@ const ingestListedItem = async ({
 
 type WalkSliceOptions = {
   adapterKey: string;
+  /** Epoch ms after which the walk starts no further request. */
+  budgetEndsAtMs: number;
   fetchDelayMs: number;
   ingestBudget: number;
   lease: CaseLawSourceIngestionLease;
@@ -824,6 +853,7 @@ type WalkSliceOptions = {
  */
 const walkSlice = async ({
   adapterKey,
+  budgetEndsAtMs,
   fetchDelayMs,
   ingestBudget,
   lease,
@@ -881,6 +911,17 @@ const walkSlice = async ({
         cursor: slice,
       });
     }
+    if (now().getTime() >= budgetEndsAtMs) {
+      // Refused for the same reason as the page ceiling, and not deferred like
+      // the ingest phase below: a walk is authoritative about the slice only
+      // once it has seen every page, so a listing stopped part way cannot
+      // write coverage at all. The slice is held for retry and walked again.
+      throw new AdapterFetchError({
+        message: `Slice listing exceeded the ${RECONCILIATION_UNIT_BUDGET_MS}ms unit budget`,
+        adapterKey,
+        cursor: slice,
+      });
+    }
   }
 
   const items = [...keyed.values()];
@@ -911,6 +952,13 @@ const walkSlice = async ({
   const fillable = untracked.slice(0, ingestBudget);
   summary.deferred = untracked.length - fillable.length;
   for (const [index, item] of fillable.entries()) {
+    if (now().getTime() >= budgetEndsAtMs) {
+      // Out of clock rather than out of count, and owed the same way: what is
+      // left stays an untracked miss, so `collected` records short below and
+      // the next unit resumes the walk here.
+      summary.deferred += fillable.length - index;
+      break;
+    }
     if (index > 0) {
       // oxlint-disable-next-line no-await-in-loop -- politeness pause between decisions, matching the crawl
       await sleep(fetchDelayMs);
@@ -955,6 +1003,8 @@ const walkSlice = async ({
 
 type RetryParkedOptions = {
   adapterKey: string;
+  /** Epoch ms after which the retry starts no further fetch. */
+  budgetEndsAtMs: number;
   fetchDelayMs: number;
   lease: CaseLawSourceIngestionLease;
   now: () => Date;
@@ -975,6 +1025,7 @@ type RetryParkedOptions = {
  */
 const retryParkedItems = async ({
   adapterKey,
+  budgetEndsAtMs,
   fetchDelayMs,
   lease,
   now,
@@ -1021,7 +1072,13 @@ const retryParkedItems = async ({
     ({ identityKey }) => !held.has(identityKey),
   );
   let fetched = 0;
-  for (const item of unheld) {
+  for (const [index, item] of unheld.entries()) {
+    if (now().getTime() >= budgetEndsAtMs) {
+      // Their backoff already decides when each is asked again, so the ones
+      // this unit did not reach simply stay due for the next.
+      summary.deferred += unheld.length - index;
+      break;
+    }
     if (fetched > 0) {
       // oxlint-disable-next-line no-await-in-loop -- politeness pause between decisions, matching the crawl
       await sleep(fetchDelayMs);
@@ -1072,6 +1129,10 @@ export const runReconciliationWorkUnit = async ({
     );
   }
   const startedAt = now();
+  // Measured from the unit's start, so the reads above and the walk below
+  // share one clock: the caller's deadline covers the whole call, not just
+  // the part that talks to the publisher.
+  const budgetEndsAtMs = startedAt.getTime() + RECONCILIATION_UNIT_BUDGET_MS;
   const tipSlices = tipWindowSlices(reconciliation, startedAt);
   const staleBefore = new Date(
     startedAt.getTime() - RECONCILIATION_SLICE_STALE_MS,
@@ -1193,6 +1254,7 @@ export const runReconciliationWorkUnit = async ({
           type: "worked",
           summary: await retryParkedItems({
             adapterKey,
+            budgetEndsAtMs,
             fetchDelayMs,
             lease,
             now,
@@ -1207,6 +1269,7 @@ export const runReconciliationWorkUnit = async ({
           type: "worked",
           summary: await walkSlice({
             adapterKey,
+            budgetEndsAtMs,
             fetchDelayMs,
             ingestBudget: sliceIngestBudget,
             lease,

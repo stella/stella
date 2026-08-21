@@ -39,7 +39,11 @@ import {
 import { getAdapter } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
 import { runIngestionPipeline } from "@/api/handlers/case-law/ingestion/pipeline";
 import type { SliceRetrySchedule } from "@/api/handlers/case-law/ingestion/reconciliation-engine";
-import { runReconciliationWorkUnit } from "@/api/handlers/case-law/ingestion/reconciliation-engine";
+import {
+  RECONCILIATION_UNIT_BUDGET_MS,
+  RECONCILIATION_UNIT_SETTLE_MS,
+  runReconciliationWorkUnit,
+} from "@/api/handlers/case-law/ingestion/reconciliation-engine";
 import {
   readSourceReportedTotals,
   setSourceReportedTotal,
@@ -358,6 +362,13 @@ const SEARCH_INDEX_HARD_DEADLINE_MS = Math.max(
     (LEGAL_ATLAS_RUNNER_ENV.dbBackfillTransactionTimeoutMs +
       BACKFILL_DEADLINE_TRANSACTION_GRACE_MS),
 );
+// A reconciliation unit bounds its own wall clock, so its backstop is that
+// budget plus the engine's settle headroom rather than the backfill batch's
+// figure. Derived rather than restated: the two numbers move together, so
+// raising the unit's budget cannot leave the deadline underneath it, where a
+// walk that is merely large reads as a wedge and takes the process down.
+const RECONCILIATION_HARD_DEADLINE_MS =
+  RECONCILIATION_UNIT_BUDGET_MS + RECONCILIATION_UNIT_SETTLE_MS;
 
 type Semaphore = {
   acquire: (signal?: AbortSignal) => Promise<void>;
@@ -1654,7 +1665,7 @@ export const runCaseLawIngest = async (
         runWorkUnit: async () => {
           const outcome = await runWithHardDeadline(
             "case-law-reconciliation",
-            BACKFILL_HARD_DEADLINE_MS,
+            RECONCILIATION_HARD_DEADLINE_MS,
             async () =>
               await runReconciliationWorkUnit({
                 adapterKey,

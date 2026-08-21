@@ -18,6 +18,7 @@ import {
 import type { SliceRetrySchedule } from "@/api/handlers/case-law/ingestion/reconciliation-engine";
 import {
   MAX_SLICE_INGEST_BUDGET,
+  RECONCILIATION_UNIT_BUDGET_MS,
   runReconciliationWorkUnit,
 } from "@/api/handlers/case-law/ingestion/reconciliation-engine";
 import {
@@ -294,9 +295,12 @@ type RunUnitOptions = {
   sliceIngestBudget?: number;
   /** Shared across turns only where a test is about what a failure leaves. */
   sliceRetries?: SliceRetrySchedule;
+  /** Frozen unless a test is about the unit's own wall-clock budget. */
+  now?: () => Date;
 };
 
 const runUnitWith = async ({
+  now = () => NOW,
   reconciliation = stubReconciliation,
   sliceIngestBudget,
   sliceRetries = new Map(),
@@ -307,7 +311,7 @@ const runUnitWith = async ({
     sourceId,
     reconciliation,
     scopedDb,
-    now: () => NOW,
+    now,
     fetchDelayMs: 0,
     sleep: async () => {
       await Promise.resolve();
@@ -439,6 +443,133 @@ test("a walk ingests no more than the unit's slice budget and defers the rest", 
     summary: { slice: OWED_SLICE, keyable: 2, parked: 1, deferred: 1 },
   });
   expect(builds).toHaveLength(1);
+});
+
+/**
+ * A clock the publisher moves: the unit's budget is wall-clock, and only a
+ * publisher that takes time to answer can exhaust it. Each response ages the
+ * clock by `stepMs`, so a test places the expiry at an exact point in the walk
+ * instead of guessing at real durations.
+ */
+const publisherPacedClock = (stepMs: number) => {
+  let atMs = NOW.getTime();
+  return {
+    now: () => new Date(atMs),
+    age: () => {
+      atMs += stepMs;
+    },
+  };
+};
+
+test("a walk out of clock defers the rest of its budget rather than overrunning", async () => {
+  // The count budget is untouched here: two listed misses and room for fifty.
+  // What stops the walk is the unit's own wall clock, and the miss it did not
+  // reach has to be owed exactly as a count-deferred one is, or the slice
+  // records collected as if it had been fully walked.
+  const sourceId = await seedSource();
+  await seedSlice({
+    sourceId,
+    slice: OWED_SLICE,
+    reported: 2,
+    collected: 0,
+    checkedAt: addUtcDays(NOW, -2),
+  });
+  for (const offset of [0, -1]) {
+    // oxlint-disable-next-line no-await-in-loop -- fixture seeding, sequential on one pglite handle
+    await seedSlice({
+      sourceId,
+      slice: day(offset),
+      reported: 0,
+      collected: 0,
+      checkedAt: NOW,
+    });
+  }
+
+  // One document costs the whole budget, so the walk has the clock for the
+  // first miss and not for the second.
+  const clock = publisherPacedClock(RECONCILIATION_UNIT_BUDGET_MS + 1);
+  const outcome = await runUnitWith({
+    sourceId,
+    now: clock.now,
+    reconciliation: {
+      ...stubReconciliation,
+      buildDecision: async (payload) => {
+        builds.push(payload);
+        clock.age();
+        return await Promise.resolve({ type: "detail-unavailable" });
+      },
+    },
+  });
+
+  expect(outcome).toMatchObject({
+    type: "worked",
+    summary: { slice: OWED_SLICE, keyable: 2, deferred: 1 },
+  });
+  expect(builds).toHaveLength(1);
+});
+
+test("a listing out of clock is refused rather than recorded short", async () => {
+  // The other half of the budget, and deliberately not symmetric with the one
+  // above: a walk vouches for a slice only once it has seen every page, so a
+  // listing cut off part way must write no coverage at all. Recording what it
+  // managed to list would read as a genuinely small slice, and the rest of it
+  // would never be hunted again.
+  const sourceId = await seedSource();
+  await seedSlice({
+    sourceId,
+    slice: OWED_SLICE,
+    reported: 2,
+    collected: 0,
+    checkedAt: addUtcDays(NOW, -2),
+  });
+  for (const offset of [0, -1]) {
+    // oxlint-disable-next-line no-await-in-loop -- fixture seeding, sequential on one pglite handle
+    await seedSlice({
+      sourceId,
+      slice: day(offset),
+      reported: 0,
+      collected: 0,
+      checkedAt: NOW,
+    });
+  }
+  listing.totalPages = 2;
+
+  const clock = publisherPacedClock(RECONCILIATION_UNIT_BUDGET_MS + 1);
+  const rejection: unknown = await runUnitWith({
+    sourceId,
+    now: clock.now,
+    reconciliation: {
+      ...stubReconciliation,
+      // Delegating rather than re-listing: the stub already records the call,
+      // so this only ages the clock around it.
+      listSlicePage: async (options): Promise<ReconciliationSlicePage> => {
+        const page = await stubReconciliation.listSlicePage(options);
+        clock.age();
+        return page;
+      },
+    },
+  }).then(
+    () => null,
+    (error: unknown) => error,
+  );
+
+  expect(rejection).toBeInstanceOf(AdapterFetchError);
+  expect(rejection).toMatchObject({
+    message: expect.stringContaining("unit budget"),
+  });
+  // Listing stopped at the page that spent the budget, and the ledger row is
+  // the one seeded: untouched, so the slice is still owed in full.
+  expect(listed).toHaveLength(1);
+  const [coverage] = await db
+    .select()
+    .from(caseLawCoverageSlices)
+    .where(
+      and(
+        eq(caseLawCoverageSlices.sourceId, sourceId),
+        eq(caseLawCoverageSlices.slice, OWED_SLICE),
+      ),
+    );
+  expect(coverage).toMatchObject({ reported: 2, collected: 0 });
 });
 
 test("a slice budget outside 1..MAX is refused before any work", async () => {
