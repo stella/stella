@@ -25,6 +25,7 @@ Use the explicit subpaths for focused modules:
 import { ConditionBuilder } from "@stll/workspace-ui/conditions";
 import { FieldValue } from "@stll/workspace-ui/field-value";
 import { SortChips } from "@stll/workspace-ui/sorts";
+import { WorkspaceViewSwitcher } from "@stll/workspace-ui/view-switcher";
 ```
 
 The package also exposes a root entry for code that uses several workspace
@@ -40,9 +41,10 @@ bun run typecheck
 bun run lint
 ```
 
-Peer dependencies: `react`, `react-dom`, `@base-ui/react`, TanStack React Table,
-and Tailwind CSS v4. The package's components use Tailwind utility classes; the
-host owns the Tailwind entry point and token configuration.
+Peer dependencies: `react`, `react-dom`, `@base-ui/react`, Pragmatic Drag and
+Drop v3 with its hitbox package, TanStack React Table, and Tailwind CSS v4. The
+package's components use Tailwind utility classes; the host owns the Tailwind
+entry point and token configuration.
 
 Include both published component packages in that entry point so Tailwind scans
 their shipped class names:
