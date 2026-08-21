@@ -628,7 +628,7 @@ describe("chat third-party anonymization boundary", () => {
           value: "https://example.test/[MISC_1]/image.png",
           mimeType: "image/png",
         },
-        metadata: { traceId: "[MISC_1]" },
+        metadata: { traceId: "ref_[MISC_1]" },
       },
       {
         type: "audio",
