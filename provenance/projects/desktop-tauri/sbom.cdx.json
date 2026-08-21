@@ -8263,7 +8263,7 @@
       "version": "0.18.2"
     },
     {
-      "bom-ref": "pkg:cargo/h2@0.4.15",
+      "bom-ref": "pkg:cargo/h2@0.4.17",
       "evidence": {
         "identity": [
           {
@@ -8284,7 +8284,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "6cb093c84e8bd9b188d4c4a8cb6579fc016968d14c99882163cd3ff402a4f155"
+          "content": "9f877e75f39e9827ec50a572dd592684ac28c029578726c85f1b2aa6ab807449"
         }
       ],
       "licenses": [
@@ -8301,9 +8301,9 @@
           "value": "Cargo.lock"
         }
       ],
-      "purl": "pkg:cargo/h2@0.4.15",
+      "purl": "pkg:cargo/h2@0.4.17",
       "type": "library",
-      "version": "0.4.15"
+      "version": "0.4.17"
     },
     {
       "bom-ref": "pkg:cargo/half@2.7.1",
@@ -23983,7 +23983,7 @@
       "version": "1.0.4"
     },
     {
-      "bom-ref": "pkg:cargo/uuid@1.24.0",
+      "bom-ref": "pkg:cargo/uuid@1.24.1",
       "evidence": {
         "identity": [
           {
@@ -24004,7 +24004,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "bf3923a6f5c4c6382e0b653c4117f48d631ea17f38ed86e2a828e6f7412f5239"
+          "content": "2cefc03fd367c0c6d4305de1b312cf00248c4114f4a0418ce6a6af769e3b0bd9"
         }
       ],
       "licenses": [
@@ -24026,9 +24026,9 @@
           "value": "Cargo.lock"
         }
       ],
-      "purl": "pkg:cargo/uuid@1.24.0",
+      "purl": "pkg:cargo/uuid@1.24.1",
       "type": "library",
-      "version": "1.24.0"
+      "version": "1.24.1"
     },
     {
       "bom-ref": "pkg:cargo/valuable@0.1.1",
@@ -28777,7 +28777,7 @@
       "version": "5.18.0"
     },
     {
-      "bom-ref": "pkg:cargo/zbus-secret-service-keyring-store@1.0.0",
+      "bom-ref": "pkg:cargo/zbus-secret-service-keyring-store@1.0.1",
       "evidence": {
         "identity": [
           {
@@ -28798,7 +28798,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "4ccede190ba363386a24e8021c7f3848393976609ec9f5d1f8c6c09ef37075b4"
+          "content": "74801d001b9e7729adb4f1825b67b398185fed424749aa3d8bacf70417137d9a"
         }
       ],
       "licenses": [
@@ -28820,9 +28820,9 @@
           "value": "Cargo.lock"
         }
       ],
-      "purl": "pkg:cargo/zbus-secret-service-keyring-store@1.0.0",
+      "purl": "pkg:cargo/zbus-secret-service-keyring-store@1.0.1",
       "type": "library",
-      "version": "1.0.0"
+      "version": "1.0.1"
     },
     {
       "bom-ref": "pkg:cargo/zbus_macros@5.18.0",
@@ -30084,7 +30084,7 @@
       "dependsOn": [
         "pkg:cargo/byteorder@1.5.0",
         "pkg:cargo/fnv@1.0.7",
-        "pkg:cargo/uuid@1.24.0"
+        "pkg:cargo/uuid@1.24.1"
       ],
       "ref": "pkg:cargo/cfb@0.7.3"
     },
@@ -30907,7 +30907,7 @@
         "pkg:cargo/tokio@1.53.1",
         "pkg:cargo/tracing@0.1.44"
       ],
-      "ref": "pkg:cargo/h2@0.4.15"
+      "ref": "pkg:cargo/h2@0.4.17"
     },
     {
       "dependsOn": [
@@ -30996,7 +30996,7 @@
         "pkg:cargo/bytes@1.12.1",
         "pkg:cargo/futures-channel@0.3.33",
         "pkg:cargo/futures-core@0.3.34",
-        "pkg:cargo/h2@0.4.15",
+        "pkg:cargo/h2@0.4.17",
         "pkg:cargo/http-body@1.1.0",
         "pkg:cargo/http@1.5.0",
         "pkg:cargo/httparse@1.10.1",
@@ -31405,7 +31405,7 @@
         "pkg:cargo/objc2-foundation@0.3.2",
         "pkg:cargo/objc2@0.6.4",
         "pkg:cargo/time@0.3.55",
-        "pkg:cargo/uuid@1.24.0"
+        "pkg:cargo/uuid@1.24.1"
       ],
       "ref": "pkg:cargo/mac-notification-sys@0.6.15"
     },
@@ -32196,7 +32196,7 @@
         "pkg:cargo/encoding_rs@0.8.35",
         "pkg:cargo/futures-core@0.3.34",
         "pkg:cargo/futures-util@0.3.34",
-        "pkg:cargo/h2@0.4.15",
+        "pkg:cargo/h2@0.4.17",
         "pkg:cargo/http-body-util@0.1.4",
         "pkg:cargo/http-body@1.1.0",
         "pkg:cargo/http@1.5.0",
@@ -32684,9 +32684,9 @@
         "pkg:cargo/tower@0.5.3",
         "pkg:cargo/tracing-subscriber@0.3.23",
         "pkg:cargo/tracing@0.1.44",
-        "pkg:cargo/uuid@1.24.0",
+        "pkg:cargo/uuid@1.24.1",
         "pkg:cargo/windows-native-keyring-store@1.1.0",
-        "pkg:cargo/zbus-secret-service-keyring-store@1.0.0",
+        "pkg:cargo/zbus-secret-service-keyring-store@1.0.1",
         "pkg:cargo/zip@8.6.0"
       ],
       "ref": "pkg:cargo/stella-desktop@0.0.1"
@@ -32921,7 +32921,7 @@
         "pkg:cargo/thiserror@2.0.20",
         "pkg:cargo/time@0.3.55",
         "pkg:cargo/url@2.5.8",
-        "pkg:cargo/uuid@1.24.0",
+        "pkg:cargo/uuid@1.24.1",
         "pkg:cargo/walkdir@2.5.0"
       ],
       "ref": "pkg:cargo/tauri-codegen@2.6.3"
@@ -33152,7 +33152,7 @@
         "pkg:cargo/toml@1.1.4+spec-1.1.0",
         "pkg:cargo/url@2.5.8",
         "pkg:cargo/urlpattern@0.3.0",
-        "pkg:cargo/uuid@1.24.0",
+        "pkg:cargo/uuid@1.24.1",
         "pkg:cargo/walkdir@2.5.0"
       ],
       "ref": "pkg:cargo/tauri-utils@2.9.3"
@@ -33550,7 +33550,7 @@
         "pkg:cargo/serde_core@1.0.229",
         "pkg:cargo/wasm-bindgen@0.2.127"
       ],
-      "ref": "pkg:cargo/uuid@1.24.0"
+      "ref": "pkg:cargo/uuid@1.24.1"
     },
     {
       "dependsOn": [],
@@ -34140,7 +34140,7 @@
         "pkg:cargo/serde_repr@0.1.21",
         "pkg:cargo/tracing@0.1.44",
         "pkg:cargo/uds_windows@1.2.1",
-        "pkg:cargo/uuid@1.24.0",
+        "pkg:cargo/uuid@1.24.1",
         "pkg:cargo/windows-sys@0.61.2",
         "pkg:cargo/winnow@1.0.4",
         "pkg:cargo/zbus_macros@5.18.0",
@@ -34155,7 +34155,7 @@
         "pkg:cargo/secret-service@5.1.0",
         "pkg:cargo/zbus@5.18.0"
       ],
-      "ref": "pkg:cargo/zbus-secret-service-keyring-store@1.0.0"
+      "ref": "pkg:cargo/zbus-secret-service-keyring-store@1.0.1"
     },
     {
       "dependsOn": [

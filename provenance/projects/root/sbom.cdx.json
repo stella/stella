@@ -654,6 +654,9 @@
             "location": "apps/web/src/components/docx/docx-find-bar.tsx#1"
           },
           {
+            "location": "apps/web/src/components/drag-and-drop-live-region.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/drag-preview-content.tsx#1"
           },
           {
@@ -1743,6 +1746,15 @@
             "location": "apps/web/src/routes/tools/contribute.tsx#2"
           },
           {
+            "location": "packages/ui/src/calendar/primitives.tsx#1"
+          },
+          {
+            "location": "packages/ui/src/calendar/resource-calendar.tsx#1"
+          },
+          {
+            "location": "packages/ui/src/calendar/resource-calendar.tsx#2"
+          },
+          {
             "location": "packages/ui/src/components/alert-dialog.tsx#3"
           },
           {
@@ -2058,7 +2070,7 @@
         ],
         "occurrences": [
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.tsx#4"
+            "location": "packages/ui/src/kanban/drag-interactions.ts#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/index.tsx#10"
@@ -2097,7 +2109,7 @@
         ],
         "occurrences": [
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.tsx#5"
+            "location": "packages/ui/src/kanban/drag-interactions.ts#2"
           }
         ]
       },
@@ -2120,7 +2132,7 @@
           "name": "Atlassian Pty Ltd"
         }
       ],
-      "bom-ref": "pkg:npm/@atlaskit/pragmatic-drag-and-drop-auto-scroll@3.0.0",
+      "bom-ref": "pkg:npm/@atlaskit/pragmatic-drag-and-drop-auto-scroll@3.0.1",
       "description": "An optional Pragmatic drag and drop package that enables automatic scrolling during a drag operation",
       "evidence": {
         "identity": [
@@ -2139,13 +2151,13 @@
         ],
         "occurrences": [
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.tsx#4"
+            "location": "packages/ui/src/kanban/drag-interactions.ts#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/index.tsx#10"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.tsx#5"
+            "location": "packages/ui/src/kanban/drag-interactions.ts#2"
           }
         ]
       },
@@ -2171,10 +2183,10 @@
           "value": "node_modules/@atlaskit/pragmatic-drag-and-drop-auto-scroll/package.json"
         }
       ],
-      "purl": "pkg:npm/%40atlaskit/pragmatic-drag-and-drop-auto-scroll@3.0.0",
+      "purl": "pkg:npm/%40atlaskit/pragmatic-drag-and-drop-auto-scroll@3.0.1",
       "scope": "required",
       "type": "library",
-      "version": "3.0.0"
+      "version": "3.0.1"
     },
     {
       "bom-ref": "pkg:npm/@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge",
@@ -2207,10 +2219,10 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-column.tsx#8"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.tsx#6"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.tsx#4"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.tsx#7"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.tsx#5"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/header-cells.tsx#7"
@@ -2242,7 +2254,7 @@
           "name": "Atlassian Pty Ltd"
         }
       ],
-      "bom-ref": "pkg:npm/@atlaskit/pragmatic-drag-and-drop-hitbox@2.0.0",
+      "bom-ref": "pkg:npm/@atlaskit/pragmatic-drag-and-drop-hitbox@2.0.1",
       "description": "An optional package for Pragmatic drag and drop that enables the attaching of interaction information to a drop target",
       "evidence": {
         "identity": [
@@ -2273,10 +2285,10 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-column.tsx#8"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.tsx#6"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.tsx#4"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.tsx#7"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.tsx#5"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/header-cells.tsx#7"
@@ -2311,10 +2323,174 @@
           "value": "node_modules/@atlaskit/pragmatic-drag-and-drop-hitbox/package.json"
         }
       ],
-      "purl": "pkg:npm/%40atlaskit/pragmatic-drag-and-drop-hitbox@2.0.0",
+      "purl": "pkg:npm/%40atlaskit/pragmatic-drag-and-drop-hitbox@2.0.1",
+      "scope": "required",
+      "type": "library",
+      "version": "2.0.1"
+    },
+    {
+      "authors": [
+        {
+          "name": "Atlassian Pty Ltd"
+        }
+      ],
+      "bom-ref": "pkg:npm/@atlaskit/pragmatic-drag-and-drop-live-region@2.0.0",
+      "description": "An optional package for Pragmatic drag and drop that enables screen reader messaging for alternative flows",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "node_modules/@atlaskit/pragmatic-drag-and-drop-live-region/package.json",
+            "confidence": 0.7,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.7,
+                "technique": "manifest-analysis",
+                "value": "node_modules/@atlaskit/pragmatic-drag-and-drop-live-region/package.json"
+              }
+            ]
+          }
+        ],
+        "occurrences": [
+          {
+            "location": "apps/web/src/components/drag-and-drop-live-region.tsx#6"
+          }
+        ]
+      },
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://atlassian.design/components/pragmatic-drag-and-drop/"
+        }
+      ],
+      "group": "@atlaskit",
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0",
+            "url": "https://opensource.org/licenses/Apache-2.0"
+          }
+        }
+      ],
+      "name": "pragmatic-drag-and-drop-live-region",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "node_modules/@atlaskit/pragmatic-drag-and-drop-live-region/package.json"
+        }
+      ],
+      "purl": "pkg:npm/%40atlaskit/pragmatic-drag-and-drop-live-region@2.0.0",
       "scope": "required",
       "type": "library",
       "version": "2.0.0"
+    },
+    {
+      "bom-ref": "pkg:npm/@atlaskit/pragmatic-drag-and-drop/adapter/drop-target-for-external",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "node_modules/@atlaskit/pragmatic-drag-and-drop/adapter/drop-target-for-external/package.json",
+            "confidence": 0.7,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.7,
+                "technique": "manifest-analysis",
+                "value": "node_modules/@atlaskit/pragmatic-drag-and-drop/adapter/drop-target-for-external/package.json"
+              }
+            ]
+          }
+        ],
+        "occurrences": [
+          {
+            "location": "apps/web/src/hooks/use-external-file-drop.ts#3"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#10"
+          }
+        ]
+      },
+      "group": "@atlaskit",
+      "name": "pragmatic-drag-and-drop/adapter/drop-target-for-external",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "node_modules/@atlaskit/pragmatic-drag-and-drop/adapter/drop-target-for-external/package.json"
+        }
+      ],
+      "purl": "pkg:npm/%40atlaskit/pragmatic-drag-and-drop%2Fadapter%2Fdrop-target-for-external",
+      "scope": "required",
+      "type": "library",
+      "version": ""
+    },
+    {
+      "bom-ref": "pkg:npm/@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "node_modules/@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter/package.json",
+            "confidence": 0.7,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.7,
+                "technique": "manifest-analysis",
+                "value": "node_modules/@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter/package.json"
+              }
+            ]
+          }
+        ],
+        "occurrences": [
+          {
+            "location": "apps/web/src/components/app-sidebar.tsx#15"
+          },
+          {
+            "location": "apps/web/src/components/drag-and-drop-live-region.tsx#7"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/-components/position-editor.tsx#6"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/-components/organization/document-types-card.tsx#14"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-day-cell.tsx#3"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-entity-chip.tsx#3"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/existing-file-organizer-dialog.tsx#6"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view.tsx#14"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/header-cells.tsx#11"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/index.tsx#12"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/row-cells.tsx#4"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher.tsx#10"
+          }
+        ]
+      },
+      "group": "@atlaskit",
+      "name": "pragmatic-drag-and-drop/adapter/element-adapter",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "node_modules/@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter/package.json"
+        }
+      ],
+      "purl": "pkg:npm/%40atlaskit/pragmatic-drag-and-drop%2Fadapter%2Felement-adapter",
+      "scope": "required",
+      "type": "library",
+      "version": ""
     },
     {
       "bom-ref": "pkg:npm/@atlaskit/pragmatic-drag-and-drop/combine",
@@ -2335,48 +2511,19 @@
         ],
         "occurrences": [
           {
-            "location": "apps/web/src/components/app-sidebar.tsx#12"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/position-editor.tsx#3"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/document-types-card.tsx#11"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/existing-file-organizer-dialog.tsx#3"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view.tsx#10"
+            "location": "packages/ui/src/kanban/drag-interactions.ts#3"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-column.tsx#9"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.tsx#8"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/header-cells.tsx#8"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/index.tsx#12"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher.tsx#7"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.tsx#6"
           }
         ]
       },
       "group": "@atlaskit",
       "name": "pragmatic-drag-and-drop/combine",
       "properties": [
-        {
-          "name": "SrcFile",
-          "value": "node_modules/@atlaskit/pragmatic-drag-and-drop-hitbox/node_modules/@atlaskit/pragmatic-drag-and-drop/combine/package.json"
-        },
-        {
-          "name": "SrcFile",
-          "value": "node_modules/@atlaskit/pragmatic-drag-and-drop-auto-scroll/node_modules/@atlaskit/pragmatic-drag-and-drop/combine/package.json"
-        },
         {
           "name": "SrcFile",
           "value": "node_modules/@atlaskit/pragmatic-drag-and-drop/combine/package.json"
@@ -2406,60 +2553,19 @@
         ],
         "occurrences": [
           {
-            "location": "apps/web/src/components/app-sidebar.tsx#16"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/position-editor.tsx#7"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/document-types-card.tsx#15"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-day-cell.tsx#3"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-entity-chip.tsx#3"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/existing-file-organizer-dialog.tsx#7"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view.tsx#15"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-card.tsx#3"
+            "location": "packages/ui/src/kanban/drag-interactions.ts#4"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-column.tsx#13"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.tsx#9"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/header-cells.tsx#12"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/index.tsx#13"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/row-cells.tsx#4"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher.tsx#11"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.tsx#7"
           }
         ]
       },
       "group": "@atlaskit",
       "name": "pragmatic-drag-and-drop/element/adapter",
       "properties": [
-        {
-          "name": "SrcFile",
-          "value": "node_modules/@atlaskit/pragmatic-drag-and-drop-hitbox/node_modules/@atlaskit/pragmatic-drag-and-drop/element/adapter/package.json"
-        },
-        {
-          "name": "SrcFile",
-          "value": "node_modules/@atlaskit/pragmatic-drag-and-drop-auto-scroll/node_modules/@atlaskit/pragmatic-drag-and-drop/element/adapter/package.json"
-        },
         {
           "name": "SrcFile",
           "value": "node_modules/@atlaskit/pragmatic-drag-and-drop/element/adapter/package.json"
@@ -2489,10 +2595,7 @@
         ],
         "occurrences": [
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-entity-chip.tsx#4"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-card.tsx#4"
+            "location": "packages/ui/src/kanban/drag-interactions.ts#5"
           }
         ]
       },
@@ -2501,65 +2604,10 @@
       "properties": [
         {
           "name": "SrcFile",
-          "value": "node_modules/@atlaskit/pragmatic-drag-and-drop-hitbox/node_modules/@atlaskit/pragmatic-drag-and-drop/element/center-under-pointer/package.json"
-        },
-        {
-          "name": "SrcFile",
-          "value": "node_modules/@atlaskit/pragmatic-drag-and-drop-auto-scroll/node_modules/@atlaskit/pragmatic-drag-and-drop/element/center-under-pointer/package.json"
-        },
-        {
-          "name": "SrcFile",
           "value": "node_modules/@atlaskit/pragmatic-drag-and-drop/element/center-under-pointer/package.json"
         }
       ],
       "purl": "pkg:npm/%40atlaskit/pragmatic-drag-and-drop%2Felement%2Fcenter-under-pointer",
-      "scope": "required",
-      "type": "library",
-      "version": ""
-    },
-    {
-      "bom-ref": "pkg:npm/@atlaskit/pragmatic-drag-and-drop/element/preserve-offset-on-source",
-      "evidence": {
-        "identity": [
-          {
-            "concludedValue": "node_modules/@atlaskit/pragmatic-drag-and-drop/element/preserve-offset-on-source/package.json",
-            "confidence": 0.7,
-            "field": "purl",
-            "methods": [
-              {
-                "confidence": 0.7,
-                "technique": "manifest-analysis",
-                "value": "node_modules/@atlaskit/pragmatic-drag-and-drop/element/preserve-offset-on-source/package.json"
-              }
-            ]
-          }
-        ],
-        "occurrences": [
-          {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/position-editor.tsx#8"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/document-types-card.tsx#16"
-          }
-        ]
-      },
-      "group": "@atlaskit",
-      "name": "pragmatic-drag-and-drop/element/preserve-offset-on-source",
-      "properties": [
-        {
-          "name": "SrcFile",
-          "value": "node_modules/@atlaskit/pragmatic-drag-and-drop-hitbox/node_modules/@atlaskit/pragmatic-drag-and-drop/element/preserve-offset-on-source/package.json"
-        },
-        {
-          "name": "SrcFile",
-          "value": "node_modules/@atlaskit/pragmatic-drag-and-drop-auto-scroll/node_modules/@atlaskit/pragmatic-drag-and-drop/element/preserve-offset-on-source/package.json"
-        },
-        {
-          "name": "SrcFile",
-          "value": "node_modules/@atlaskit/pragmatic-drag-and-drop/element/preserve-offset-on-source/package.json"
-        }
-      ],
-      "purl": "pkg:npm/%40atlaskit/pragmatic-drag-and-drop%2Felement%2Fpreserve-offset-on-source",
       "scope": "required",
       "type": "library",
       "version": ""
@@ -2583,36 +2631,13 @@
         ],
         "occurrences": [
           {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/position-editor.tsx#9"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/document-types-card.tsx#17"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-entity-chip.tsx#5"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view.tsx#16"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-card.tsx#5"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/row-cells.tsx#5"
+            "location": "packages/ui/src/kanban/drag-interactions.ts#6"
           }
         ]
       },
       "group": "@atlaskit",
       "name": "pragmatic-drag-and-drop/element/set-custom-native-drag-preview",
       "properties": [
-        {
-          "name": "SrcFile",
-          "value": "node_modules/@atlaskit/pragmatic-drag-and-drop-hitbox/node_modules/@atlaskit/pragmatic-drag-and-drop/element/set-custom-native-drag-preview/package.json"
-        },
-        {
-          "name": "SrcFile",
-          "value": "node_modules/@atlaskit/pragmatic-drag-and-drop-auto-scroll/node_modules/@atlaskit/pragmatic-drag-and-drop/element/set-custom-native-drag-preview/package.json"
-        },
         {
           "name": "SrcFile",
           "value": "node_modules/@atlaskit/pragmatic-drag-and-drop/element/set-custom-native-drag-preview/package.json"
@@ -2627,165 +2652,59 @@
       "version": ""
     },
     {
-      "bom-ref": "pkg:npm/@atlaskit/pragmatic-drag-and-drop/external/adapter",
+      "bom-ref": "pkg:npm/@atlaskit/pragmatic-drag-and-drop/utils/center-under-pointer",
       "evidence": {
         "identity": [
           {
-            "concludedValue": "node_modules/@atlaskit/pragmatic-drag-and-drop/external/adapter/package.json",
+            "concludedValue": "node_modules/@atlaskit/pragmatic-drag-and-drop/utils/center-under-pointer/package.json",
             "confidence": 0.7,
             "field": "purl",
             "methods": [
               {
                 "confidence": 0.7,
                 "technique": "manifest-analysis",
-                "value": "node_modules/@atlaskit/pragmatic-drag-and-drop/external/adapter/package.json"
+                "value": "node_modules/@atlaskit/pragmatic-drag-and-drop/utils/center-under-pointer/package.json"
               }
             ]
           }
         ],
         "occurrences": [
           {
-            "location": "apps/web/src/hooks/use-external-file-drop.ts#3"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#10"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-entity-chip.tsx#4"
           }
         ]
       },
       "group": "@atlaskit",
-      "name": "pragmatic-drag-and-drop/external/adapter",
+      "name": "pragmatic-drag-and-drop/utils/center-under-pointer",
       "properties": [
         {
           "name": "SrcFile",
-          "value": "node_modules/@atlaskit/pragmatic-drag-and-drop-hitbox/node_modules/@atlaskit/pragmatic-drag-and-drop/external/adapter/package.json"
-        },
-        {
-          "name": "SrcFile",
-          "value": "node_modules/@atlaskit/pragmatic-drag-and-drop-auto-scroll/node_modules/@atlaskit/pragmatic-drag-and-drop/external/adapter/package.json"
-        },
-        {
-          "name": "SrcFile",
-          "value": "node_modules/@atlaskit/pragmatic-drag-and-drop/external/adapter/package.json"
+          "value": "node_modules/@atlaskit/pragmatic-drag-and-drop/utils/center-under-pointer/package.json"
         }
       ],
-      "purl": "pkg:npm/%40atlaskit/pragmatic-drag-and-drop%2Fexternal%2Fadapter",
+      "purl": "pkg:npm/%40atlaskit/pragmatic-drag-and-drop%2Futils%2Fcenter-under-pointer",
       "scope": "required",
       "type": "library",
       "version": ""
     },
     {
-      "bom-ref": "pkg:npm/@atlaskit/pragmatic-drag-and-drop/external/file",
+      "bom-ref": "pkg:npm/@atlaskit/pragmatic-drag-and-drop/utils/combine",
       "evidence": {
         "identity": [
           {
-            "concludedValue": "node_modules/@atlaskit/pragmatic-drag-and-drop/external/file/package.json",
+            "concludedValue": "node_modules/@atlaskit/pragmatic-drag-and-drop/utils/combine/package.json",
             "confidence": 0.7,
             "field": "purl",
             "methods": [
               {
                 "confidence": 0.7,
                 "technique": "manifest-analysis",
-                "value": "node_modules/@atlaskit/pragmatic-drag-and-drop/external/file/package.json"
+                "value": "node_modules/@atlaskit/pragmatic-drag-and-drop/utils/combine/package.json"
               }
             ]
           }
         ],
         "occurrences": [
-          {
-            "location": "apps/web/src/hooks/use-external-file-drop.ts#4"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#14"
-          }
-        ]
-      },
-      "group": "@atlaskit",
-      "name": "pragmatic-drag-and-drop/external/file",
-      "properties": [
-        {
-          "name": "SrcFile",
-          "value": "node_modules/@atlaskit/pragmatic-drag-and-drop-hitbox/node_modules/@atlaskit/pragmatic-drag-and-drop/external/file/package.json"
-        },
-        {
-          "name": "SrcFile",
-          "value": "node_modules/@atlaskit/pragmatic-drag-and-drop-auto-scroll/node_modules/@atlaskit/pragmatic-drag-and-drop/external/file/package.json"
-        },
-        {
-          "name": "SrcFile",
-          "value": "node_modules/@atlaskit/pragmatic-drag-and-drop/external/file/package.json"
-        }
-      ],
-      "purl": "pkg:npm/%40atlaskit/pragmatic-drag-and-drop%2Fexternal%2Ffile",
-      "scope": "required",
-      "type": "library",
-      "version": ""
-    },
-    {
-      "authors": [
-        {
-          "name": "Atlassian Pty Ltd"
-        }
-      ],
-      "bom-ref": "pkg:npm/@atlaskit/pragmatic-drag-and-drop@2.0.1",
-      "description": "The core package for Pragmatic drag and drop - enabling fast drag and drop for any experience on any tech stack",
-      "evidence": {
-        "identity": [
-          {
-            "concludedValue": "node_modules/@atlaskit/pragmatic-drag-and-drop-auto-scroll/node_modules/@atlaskit/pragmatic-drag-and-drop/package.json",
-            "confidence": 0.7,
-            "field": "purl",
-            "methods": [
-              {
-                "confidence": 0.7,
-                "technique": "manifest-analysis",
-                "value": "node_modules/@atlaskit/pragmatic-drag-and-drop-auto-scroll/node_modules/@atlaskit/pragmatic-drag-and-drop/package.json"
-              }
-            ]
-          }
-        ],
-        "occurrences": [
-          {
-            "location": "apps/web/src/hooks/use-external-file-drop.ts#3"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#10"
-          },
-          {
-            "location": "apps/web/src/hooks/use-external-file-drop.ts#4"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#14"
-          },
-          {
-            "location": "apps/web/src/components/app-sidebar.tsx#12"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/position-editor.tsx#3"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/document-types-card.tsx#11"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/existing-file-organizer-dialog.tsx#3"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view.tsx#10"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-column.tsx#9"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.tsx#8"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/header-cells.tsx#8"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/index.tsx#12"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher.tsx#7"
-          },
           {
             "location": "apps/web/src/components/app-sidebar.tsx#16"
           },
@@ -2796,25 +2715,10 @@
             "location": "apps/web/src/routes/_protected.settings/-components/organization/document-types-card.tsx#15"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-day-cell.tsx#3"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-entity-chip.tsx#3"
-          },
-          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/existing-file-organizer-dialog.tsx#7"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view.tsx#15"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-card.tsx#3"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-column.tsx#13"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.tsx#9"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/header-cells.tsx#12"
@@ -2823,17 +2727,155 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/index.tsx#13"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/row-cells.tsx#4"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher.tsx#11"
+          }
+        ]
+      },
+      "group": "@atlaskit",
+      "name": "pragmatic-drag-and-drop/utils/combine",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "node_modules/@atlaskit/pragmatic-drag-and-drop/utils/combine/package.json"
+        }
+      ],
+      "purl": "pkg:npm/%40atlaskit/pragmatic-drag-and-drop%2Futils%2Fcombine",
+      "scope": "required",
+      "type": "library",
+      "version": ""
+    },
+    {
+      "bom-ref": "pkg:npm/@atlaskit/pragmatic-drag-and-drop/utils/contains-files",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "node_modules/@atlaskit/pragmatic-drag-and-drop/utils/contains-files/package.json",
+            "confidence": 0.7,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.7,
+                "technique": "manifest-analysis",
+                "value": "node_modules/@atlaskit/pragmatic-drag-and-drop/utils/contains-files/package.json"
+              }
+            ]
+          }
+        ],
+        "occurrences": [
+          {
+            "location": "apps/web/src/hooks/use-external-file-drop.ts#4"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher.tsx#11"
-          },
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#11"
+          }
+        ]
+      },
+      "group": "@atlaskit",
+      "name": "pragmatic-drag-and-drop/utils/contains-files",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "node_modules/@atlaskit/pragmatic-drag-and-drop/utils/contains-files/package.json"
+        }
+      ],
+      "purl": "pkg:npm/%40atlaskit/pragmatic-drag-and-drop%2Futils%2Fcontains-files",
+      "scope": "required",
+      "type": "library",
+      "version": ""
+    },
+    {
+      "bom-ref": "pkg:npm/@atlaskit/pragmatic-drag-and-drop/utils/get-files",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "node_modules/@atlaskit/pragmatic-drag-and-drop/utils/get-files/package.json",
+            "confidence": 0.7,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.7,
+                "technique": "manifest-analysis",
+                "value": "node_modules/@atlaskit/pragmatic-drag-and-drop/utils/get-files/package.json"
+              }
+            ]
+          }
+        ],
+        "occurrences": [
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#12"
+          }
+        ]
+      },
+      "group": "@atlaskit",
+      "name": "pragmatic-drag-and-drop/utils/get-files",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "node_modules/@atlaskit/pragmatic-drag-and-drop/utils/get-files/package.json"
+        }
+      ],
+      "purl": "pkg:npm/%40atlaskit/pragmatic-drag-and-drop%2Futils%2Fget-files",
+      "scope": "required",
+      "type": "library",
+      "version": ""
+    },
+    {
+      "bom-ref": "pkg:npm/@atlaskit/pragmatic-drag-and-drop/utils/preserve-offset-on-source",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "node_modules/@atlaskit/pragmatic-drag-and-drop/utils/preserve-offset-on-source/package.json",
+            "confidence": 0.7,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.7,
+                "technique": "manifest-analysis",
+                "value": "node_modules/@atlaskit/pragmatic-drag-and-drop/utils/preserve-offset-on-source/package.json"
+              }
+            ]
+          }
+        ],
+        "occurrences": [
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/position-editor.tsx#8"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/document-types-card.tsx#16"
-          },
+          }
+        ]
+      },
+      "group": "@atlaskit",
+      "name": "pragmatic-drag-and-drop/utils/preserve-offset-on-source",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "node_modules/@atlaskit/pragmatic-drag-and-drop/utils/preserve-offset-on-source/package.json"
+        }
+      ],
+      "purl": "pkg:npm/%40atlaskit/pragmatic-drag-and-drop%2Futils%2Fpreserve-offset-on-source",
+      "scope": "required",
+      "type": "library",
+      "version": ""
+    },
+    {
+      "bom-ref": "pkg:npm/@atlaskit/pragmatic-drag-and-drop/utils/set-custom-native-drag-preview",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "node_modules/@atlaskit/pragmatic-drag-and-drop/utils/set-custom-native-drag-preview/package.json",
+            "confidence": 0.7,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.7,
+                "technique": "manifest-analysis",
+                "value": "node_modules/@atlaskit/pragmatic-drag-and-drop/utils/set-custom-native-drag-preview/package.json"
+              }
+            ]
+          }
+        ],
+        "occurrences": [
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/position-editor.tsx#9"
           },
@@ -2847,49 +2889,25 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view.tsx#16"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-card.tsx#5"
-          },
-          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/row-cells.tsx#5"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-entity-chip.tsx#4"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-card.tsx#4"
           }
         ]
       },
-      "externalReferences": [
-        {
-          "type": "website",
-          "url": "https://atlassian.design/components/pragmatic-drag-and-drop/"
-        }
-      ],
       "group": "@atlaskit",
-      "licenses": [
-        {
-          "license": {
-            "id": "Apache-2.0",
-            "url": "https://opensource.org/licenses/Apache-2.0"
-          }
-        }
-      ],
-      "name": "pragmatic-drag-and-drop",
+      "name": "pragmatic-drag-and-drop/utils/set-custom-native-drag-preview",
       "properties": [
         {
           "name": "SrcFile",
-          "value": "node_modules/@atlaskit/pragmatic-drag-and-drop-hitbox/node_modules/@atlaskit/pragmatic-drag-and-drop/package.json"
-        },
-        {
-          "name": "SrcFile",
-          "value": "node_modules/@atlaskit/pragmatic-drag-and-drop-auto-scroll/node_modules/@atlaskit/pragmatic-drag-and-drop/package.json"
+          "value": "node_modules/@atlaskit/pragmatic-drag-and-drop/utils/set-custom-native-drag-preview/package.json"
         }
       ],
-      "purl": "pkg:npm/%40atlaskit/pragmatic-drag-and-drop@2.0.1",
+      "purl": "pkg:npm/%40atlaskit/pragmatic-drag-and-drop%2Futils%2Fset-custom-native-drag-preview",
       "scope": "required",
+      "tags": [
+        "native"
+      ],
       "type": "library",
-      "version": "2.0.1"
+      "version": ""
     },
     {
       "authors": [
@@ -2897,7 +2915,7 @@
           "name": "Atlassian Pty Ltd"
         }
       ],
-      "bom-ref": "pkg:npm/@atlaskit/pragmatic-drag-and-drop@2.0.2",
+      "bom-ref": "pkg:npm/@atlaskit/pragmatic-drag-and-drop@3.0.0",
       "description": "The core package for Pragmatic drag and drop - enabling fast drag and drop for any experience on any tech stack",
       "evidence": {
         "identity": [
@@ -2925,37 +2943,67 @@
             "location": "apps/web/src/hooks/use-external-file-drop.ts#4"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#14"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#11"
           },
           {
-            "location": "apps/web/src/components/app-sidebar.tsx#12"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/position-editor.tsx#3"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/document-types-card.tsx#11"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/existing-file-organizer-dialog.tsx#3"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view.tsx#10"
+            "location": "packages/ui/src/kanban/drag-interactions.ts#3"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-column.tsx#9"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.tsx#8"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.tsx#6"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/header-cells.tsx#8"
+            "location": "packages/ui/src/kanban/drag-interactions.ts#4"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-column.tsx#13"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.tsx#7"
+          },
+          {
+            "location": "packages/ui/src/kanban/drag-interactions.ts#5"
+          },
+          {
+            "location": "packages/ui/src/kanban/drag-interactions.ts#6"
+          },
+          {
+            "location": "apps/web/src/components/app-sidebar.tsx#15"
+          },
+          {
+            "location": "apps/web/src/components/drag-and-drop-live-region.tsx#7"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/-components/position-editor.tsx#6"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/-components/organization/document-types-card.tsx#14"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-day-cell.tsx#3"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-entity-chip.tsx#3"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/existing-file-organizer-dialog.tsx#6"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view.tsx#14"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/header-cells.tsx#11"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/index.tsx#12"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher.tsx#7"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/row-cells.tsx#4"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher.tsx#10"
           },
           {
             "location": "apps/web/src/components/app-sidebar.tsx#16"
@@ -2967,34 +3015,16 @@
             "location": "apps/web/src/routes/_protected.settings/-components/organization/document-types-card.tsx#15"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-day-cell.tsx#3"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-entity-chip.tsx#3"
-          },
-          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/existing-file-organizer-dialog.tsx#7"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view.tsx#15"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-card.tsx#3"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-column.tsx#13"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.tsx#9"
-          },
-          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/header-cells.tsx#12"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/index.tsx#13"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/row-cells.tsx#4"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher.tsx#11"
@@ -3018,16 +3048,13 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view.tsx#16"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-card.tsx#5"
-          },
-          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/row-cells.tsx#5"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-entity-chip.tsx#4"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#12"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-card.tsx#4"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-entity-chip.tsx#4"
           }
         ]
       },
@@ -3053,10 +3080,10 @@
           "value": "node_modules/@atlaskit/pragmatic-drag-and-drop/package.json"
         }
       ],
-      "purl": "pkg:npm/%40atlaskit/pragmatic-drag-and-drop@2.0.2",
+      "purl": "pkg:npm/%40atlaskit/pragmatic-drag-and-drop@3.0.0",
       "scope": "required",
       "type": "library",
-      "version": "2.0.2"
+      "version": "3.0.0"
     },
     {
       "authors": [
@@ -3064,7 +3091,7 @@
           "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/client-cloudwatch@3.1110.0",
+      "bom-ref": "pkg:npm/@aws-sdk/client-cloudwatch@3.1111.0",
       "description": "AWS SDK for JavaScript Cloudwatch Client for Node.js, Browser and React Native",
       "evidence": {
         "identity": [
@@ -3113,13 +3140,13 @@
           "value": "node_modules/@aws-sdk/client-cloudwatch/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/client-cloudwatch@3.1110.0",
+      "purl": "pkg:npm/%40aws-sdk/client-cloudwatch@3.1111.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1110.0"
+      "version": "3.1111.0"
     },
     {
       "authors": [
@@ -3127,7 +3154,7 @@
           "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/client-s3@3.1110.0",
+      "bom-ref": "pkg:npm/@aws-sdk/client-s3@3.1111.0",
       "description": "AWS SDK for JavaScript S3 Client for Node.js, Browser and React Native",
       "evidence": {
         "identity": [
@@ -3179,13 +3206,13 @@
           "value": "node_modules/@aws-sdk/client-s3/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/client-s3@3.1110.0",
+      "purl": "pkg:npm/%40aws-sdk/client-s3@3.1111.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1110.0"
+      "version": "3.1111.0"
     },
     {
       "authors": [
@@ -3193,7 +3220,7 @@
           "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/client-sesv2@3.1110.0",
+      "bom-ref": "pkg:npm/@aws-sdk/client-sesv2@3.1111.0",
       "description": "AWS SDK for JavaScript Sesv2 Client for Node.js, Browser and React Native",
       "evidence": {
         "identity": [
@@ -3242,13 +3269,13 @@
           "value": "node_modules/@aws-sdk/client-sesv2/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/client-sesv2@3.1110.0",
+      "purl": "pkg:npm/%40aws-sdk/client-sesv2@3.1111.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1110.0"
+      "version": "3.1111.0"
     },
     {
       "authors": [
@@ -3256,7 +3283,7 @@
           "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/client-sts@3.1110.0",
+      "bom-ref": "pkg:npm/@aws-sdk/client-sts@3.1111.0",
       "description": "AWS SDK for JavaScript Sts Client for Node.js, Browser and React Native",
       "evidence": {
         "identity": [
@@ -3305,13 +3332,13 @@
           "value": "node_modules/@aws-sdk/client-sts/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/client-sts@3.1110.0",
+      "purl": "pkg:npm/%40aws-sdk/client-sts@3.1111.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1110.0"
+      "version": "3.1111.0"
     },
     {
       "authors": [
@@ -3319,7 +3346,7 @@
           "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/s3-request-presigner@3.1110.0",
+      "bom-ref": "pkg:npm/@aws-sdk/s3-request-presigner@3.1111.0",
       "evidence": {
         "identity": [
           {
@@ -3367,133 +3394,13 @@
           "value": "node_modules/@aws-sdk/s3-request-presigner/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/s3-request-presigner@3.1110.0",
+      "purl": "pkg:npm/%40aws-sdk/s3-request-presigner@3.1111.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1110.0"
-    },
-    {
-      "authors": [
-        {
-          "name": "The Babel Team (https://babel.dev/team)"
-        }
-      ],
-      "bom-ref": "pkg:npm/@babel/core@7.29.7",
-      "description": "Babel compiler core.",
-      "evidence": {
-        "identity": [
-          {
-            "concludedValue": "node_modules/@babel/core/package.json",
-            "confidence": 0.7,
-            "field": "purl",
-            "methods": [
-              {
-                "confidence": 0.7,
-                "technique": "manifest-analysis",
-                "value": "node_modules/@babel/core/package.json"
-              }
-            ]
-          }
-        ],
-        "occurrences": [
-          {
-            "location": "scripts/rc-bailouts.ts#22"
-          }
-        ]
-      },
-      "externalReferences": [
-        {
-          "type": "website",
-          "url": "https://babel.dev/docs/en/next/babel-core"
-        },
-        {
-          "type": "vcs",
-          "url": "https://github.com/babel/babel.git"
-        }
-      ],
-      "group": "@babel",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT",
-            "url": "https://opensource.org/licenses/MIT"
-          }
-        }
-      ],
-      "name": "core",
-      "properties": [
-        {
-          "name": "SrcFile",
-          "value": "node_modules/@babel/core/package.json"
-        }
-      ],
-      "purl": "pkg:npm/%40babel/core@7.29.7",
-      "scope": "required",
-      "type": "library",
-      "version": "7.29.7"
-    },
-    {
-      "authors": [
-        {
-          "name": "The Babel Team (https://babel.dev/team)"
-        }
-      ],
-      "bom-ref": "pkg:npm/@babel/core@8.0.1",
-      "description": "Babel compiler core.",
-      "evidence": {
-        "identity": [
-          {
-            "concludedValue": "apps/web/node_modules/@babel/core/package.json",
-            "confidence": 0.7,
-            "field": "purl",
-            "methods": [
-              {
-                "confidence": 0.7,
-                "technique": "manifest-analysis",
-                "value": "apps/web/node_modules/@babel/core/package.json"
-              }
-            ]
-          }
-        ],
-        "occurrences": [
-          {
-            "location": "scripts/rc-bailouts.ts#22"
-          }
-        ]
-      },
-      "externalReferences": [
-        {
-          "type": "website",
-          "url": "https://babel.dev/docs/en/next/babel-core"
-        },
-        {
-          "type": "vcs",
-          "url": "https://github.com/babel/babel.git"
-        }
-      ],
-      "group": "@babel",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT",
-            "url": "https://opensource.org/licenses/MIT"
-          }
-        }
-      ],
-      "name": "core",
-      "properties": [
-        {
-          "name": "SrcFile",
-          "value": "apps/web/node_modules/@babel/core/package.json"
-        }
-      ],
-      "purl": "pkg:npm/%40babel/core@8.0.1",
-      "scope": "required",
-      "type": "library",
-      "version": "8.0.1"
+      "version": "3.1111.0"
     },
     {
       "authors": [
@@ -4093,6 +4000,9 @@
             "location": "apps/web/src/components/docx/docx-find-bar.tsx#1"
           },
           {
+            "location": "apps/web/src/components/drag-and-drop-live-region.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/drag-preview-content.tsx#1"
           },
           {
@@ -5180,6 +5090,15 @@
           },
           {
             "location": "apps/web/src/routes/tools/contribute.tsx#2"
+          },
+          {
+            "location": "packages/ui/src/calendar/primitives.tsx#1"
+          },
+          {
+            "location": "packages/ui/src/calendar/resource-calendar.tsx#1"
+          },
+          {
+            "location": "packages/ui/src/calendar/resource-calendar.tsx#2"
           },
           {
             "location": "packages/ui/src/components/alert-dialog.tsx#3"
@@ -5956,6 +5875,9 @@
             "location": "apps/web/src/components/docx/docx-find-bar.tsx#1"
           },
           {
+            "location": "apps/web/src/components/drag-and-drop-live-region.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/drag-preview-content.tsx#1"
           },
           {
@@ -7043,6 +6965,15 @@
           },
           {
             "location": "apps/web/src/routes/tools/contribute.tsx#2"
+          },
+          {
+            "location": "packages/ui/src/calendar/primitives.tsx#1"
+          },
+          {
+            "location": "packages/ui/src/calendar/resource-calendar.tsx#1"
+          },
+          {
+            "location": "packages/ui/src/calendar/resource-calendar.tsx#2"
           },
           {
             "location": "packages/ui/src/components/alert-dialog.tsx#3"
@@ -9179,6 +9110,9 @@
             "location": "apps/web/src/components/docx/docx-find-bar.tsx#1"
           },
           {
+            "location": "apps/web/src/components/drag-and-drop-live-region.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/drag-preview-content.tsx#1"
           },
           {
@@ -10266,6 +10200,15 @@
           },
           {
             "location": "apps/web/src/routes/tools/contribute.tsx#2"
+          },
+          {
+            "location": "packages/ui/src/calendar/primitives.tsx#1"
+          },
+          {
+            "location": "packages/ui/src/calendar/resource-calendar.tsx#1"
+          },
+          {
+            "location": "packages/ui/src/calendar/resource-calendar.tsx#2"
           },
           {
             "location": "packages/ui/src/components/alert-dialog.tsx#3"
@@ -11547,9 +11490,6 @@
           },
           {
             "location": "apps/api/src/lib/workflow/ai-generate-batch.ts#5"
-          },
-          {
-            "location": "packages/ai-catalog/src/index.ts#1"
           }
         ]
       },
@@ -11611,9 +11551,6 @@
           },
           {
             "location": "apps/api/src/lib/tanstack-ai-models.ts#8"
-          },
-          {
-            "location": "packages/ai-catalog/src/index.ts#2"
           }
         ]
       },
@@ -11887,9 +11824,6 @@
           },
           {
             "location": "apps/api/src/lib/tanstack-ai-models.ts#10"
-          },
-          {
-            "location": "packages/ai-catalog/src/index.ts#3"
           }
         ]
       },
@@ -12151,9 +12085,6 @@
           },
           {
             "location": "apps/api/src/lib/tanstack-ai-models.ts#15"
-          },
-          {
-            "location": "packages/ai-catalog/src/index.ts#4"
           }
         ]
       },
@@ -12361,6 +12292,9 @@
           },
           {
             "location": "apps/api/src/handlers/chat/tools/external-mcp-tools.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/tools/folder-consistency-review-tool.ts#1"
           },
           {
             "location": "apps/api/src/handlers/chat/tools/folio-agent-tools.ts#1"
@@ -13710,7 +13644,7 @@
             "location": "apps/web/src/routes/_protected.todos/index.tsx#7"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#20"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#18"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.index.tsx#1"
@@ -13773,7 +13707,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/flows/run-launcher.tsx#3"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.tsx#15"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.tsx#13"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/new-document-from-template-dialog.tsx#3"
@@ -14030,7 +13964,7 @@
           "name": "Tanner Linsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/react-router@1.170.27",
+      "bom-ref": "pkg:npm/@tanstack/react-router@1.170.29",
       "description": "Modern and scalable routing for React applications",
       "evidence": {
         "identity": [
@@ -14475,7 +14409,7 @@
             "location": "apps/web/src/routes/_protected.tsx#10"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#25"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#23"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.index.tsx#2"
@@ -14685,10 +14619,10 @@
           "value": "node_modules/@tanstack/react-router/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/react-router@1.170.27",
+      "purl": "pkg:npm/%40tanstack/react-router@1.170.29",
       "scope": "required",
       "type": "library",
-      "version": "1.170.27"
+      "version": "1.170.29"
     },
     {
       "authors": [
@@ -14696,7 +14630,7 @@
           "name": "Tanner Linsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/react-start@1.168.44",
+      "bom-ref": "pkg:npm/@tanstack/react-start@1.168.46",
       "description": "Modern and scalable routing for React applications",
       "evidence": {
         "identity": [
@@ -14760,10 +14694,10 @@
           "value": "node_modules/@tanstack/react-start/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/react-start@1.168.44",
+      "purl": "pkg:npm/%40tanstack/react-start@1.168.46",
       "scope": "required",
       "type": "library",
-      "version": "1.168.44"
+      "version": "1.168.46"
     },
     {
       "authors": [
@@ -14945,7 +14879,7 @@
           "name": "Tanner Linsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/react-table-devtools@9.1.2",
+      "bom-ref": "pkg:npm/@tanstack/react-table-devtools@9.2.0",
       "description": "React devtools for TanStack Table.",
       "evidence": {
         "identity": [
@@ -14997,10 +14931,10 @@
           "value": "node_modules/@tanstack/react-table-devtools/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/react-table-devtools@9.1.2",
+      "purl": "pkg:npm/%40tanstack/react-table-devtools@9.2.0",
       "scope": "required",
       "type": "library",
-      "version": "9.1.2"
+      "version": "9.2.0"
     },
     {
       "authors": [
@@ -16647,6 +16581,9 @@
             "location": "apps/web/src/components/docx/docx-find-bar.tsx#1"
           },
           {
+            "location": "apps/web/src/components/drag-and-drop-live-region.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/drag-preview-content.tsx#1"
           },
           {
@@ -17736,6 +17673,15 @@
             "location": "apps/web/src/routes/tools/contribute.tsx#2"
           },
           {
+            "location": "packages/ui/src/calendar/primitives.tsx#1"
+          },
+          {
+            "location": "packages/ui/src/calendar/resource-calendar.tsx#1"
+          },
+          {
+            "location": "packages/ui/src/calendar/resource-calendar.tsx#2"
+          },
+          {
             "location": "packages/ui/src/components/alert-dialog.tsx#3"
           },
           {
@@ -18082,6 +18028,9 @@
             "location": "scripts/ratchet.ts#45"
           },
           {
+            "location": "scripts/rc-bailouts.ts#24"
+          },
+          {
             "location": "scripts/typecheck-coverage.ts#21"
           }
         ]
@@ -18187,57 +18136,6 @@
       ],
       "type": "library",
       "version": "7.2.2"
-    },
-    {
-      "bom-ref": "pkg:npm/babel-plugin-react-compiler@1.0.0",
-      "description": "Babel plugin for React Compiler.",
-      "evidence": {
-        "identity": [
-          {
-            "concludedValue": "node_modules/babel-plugin-react-compiler/package.json",
-            "confidence": 0.7,
-            "field": "purl",
-            "methods": [
-              {
-                "confidence": 0.7,
-                "technique": "manifest-analysis",
-                "value": "node_modules/babel-plugin-react-compiler/package.json"
-              }
-            ]
-          }
-        ],
-        "occurrences": [
-          {
-            "location": "scripts/rc-bailouts.ts#23"
-          }
-        ]
-      },
-      "externalReferences": [
-        {
-          "type": "vcs",
-          "url": "git+https://github.com/facebook/react.git"
-        }
-      ],
-      "group": "",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT",
-            "url": "https://opensource.org/licenses/MIT"
-          }
-        }
-      ],
-      "name": "babel-plugin-react-compiler",
-      "properties": [
-        {
-          "name": "SrcFile",
-          "value": "node_modules/babel-plugin-react-compiler/package.json"
-        }
-      ],
-      "purl": "pkg:npm/babel-plugin-react-compiler@1.0.0",
-      "scope": "required",
-      "type": "library",
-      "version": "1.0.0"
     },
     {
       "bom-ref": "pkg:npm/better-auth@1.6.26",
@@ -18790,6 +18688,9 @@
             "location": "apps/api/src/handlers/chat/tools/execute/sandbox/transpile.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/chat/tools/folder-consistency-review-tool.ts#2"
+          },
+          {
             "location": "apps/api/src/handlers/chat/tools/folio-agent-tools.ts#2"
           },
           {
@@ -18833,6 +18734,9 @@
           },
           {
             "location": "apps/api/src/handlers/chat/upload-files.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/verified-mention-kinds.ts#1"
           },
           {
             "location": "apps/api/src/handlers/clauses/categories.ts#1"
@@ -21196,7 +21100,7 @@
             "location": "packages/scripts/src/model-catalog-capabilities-gen.ts#1"
           },
           {
-            "location": "packages/scripts/src/model-catalog-capabilities.ts#27"
+            "location": "packages/scripts/src/model-catalog-capabilities.ts#29"
           },
           {
             "location": "packages/scripts/src/result-consumption.ts#1"
@@ -21948,6 +21852,9 @@
             "location": "apps/api/src/handlers/chat/tools/execute/sandbox/transpile.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/chat/tools/folder-consistency-review-tool.ts#2"
+          },
+          {
             "location": "apps/api/src/handlers/chat/tools/folio-agent-tools.ts#2"
           },
           {
@@ -21991,6 +21898,9 @@
           },
           {
             "location": "apps/api/src/handlers/chat/upload-files.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/verified-mention-kinds.ts#1"
           },
           {
             "location": "apps/api/src/handlers/clauses/categories.ts#1"
@@ -24354,7 +24264,7 @@
             "location": "packages/scripts/src/model-catalog-capabilities-gen.ts#1"
           },
           {
-            "location": "packages/scripts/src/model-catalog-capabilities.ts#27"
+            "location": "packages/scripts/src/model-catalog-capabilities.ts#29"
           },
           {
             "location": "packages/scripts/src/result-consumption.ts#1"
@@ -25098,6 +25008,9 @@
             "location": "apps/api/src/handlers/chat/tools/execute/sandbox/transpile.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/chat/tools/folder-consistency-review-tool.ts#2"
+          },
+          {
             "location": "apps/api/src/handlers/chat/tools/folio-agent-tools.ts#2"
           },
           {
@@ -25141,6 +25054,9 @@
           },
           {
             "location": "apps/api/src/handlers/chat/upload-files.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/verified-mention-kinds.ts#1"
           },
           {
             "location": "apps/api/src/handlers/clauses/categories.ts#1"
@@ -27504,7 +27420,7 @@
             "location": "packages/scripts/src/model-catalog-capabilities-gen.ts#1"
           },
           {
-            "location": "packages/scripts/src/model-catalog-capabilities.ts#27"
+            "location": "packages/scripts/src/model-catalog-capabilities.ts#29"
           },
           {
             "location": "packages/scripts/src/result-consumption.ts#1"
@@ -29157,6 +29073,9 @@
           },
           {
             "location": "apps/api/src/handlers/chat/tools/chat-history-tools.ts#4"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/tools/folder-consistency-review-tool.ts#3"
           },
           {
             "location": "apps/api/src/handlers/chat/tools/workspace-tools.ts#3"
@@ -32734,7 +32653,7 @@
           "name": " Inc."
         }
       ],
-      "bom-ref": "pkg:npm/expo-router@57.0.11",
+      "bom-ref": "pkg:npm/expo-router@57.0.13",
       "description": "Expo Router is a file-based router for React Native and web applications.",
       "evidence": {
         "identity": [
@@ -32786,13 +32705,13 @@
           "value": "node_modules/expo-router/package.json"
         }
       ],
-      "purl": "pkg:npm/expo-router@57.0.11",
+      "purl": "pkg:npm/expo-router@57.0.13",
       "scope": "required",
       "tags": [
         "web"
       ],
       "type": "library",
-      "version": "57.0.11"
+      "version": "57.0.13"
     },
     {
       "authors": [
@@ -33200,6 +33119,81 @@
       "evidence": {
         "identity": [
           {
+            "concludedValue": "node_modules/@better-auth/oauth-provider/node_modules/jose/package.json",
+            "confidence": 0.7,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.7,
+                "technique": "manifest-analysis",
+                "value": "node_modules/@better-auth/oauth-provider/node_modules/jose/package.json"
+              }
+            ]
+          }
+        ],
+        "occurrences": [
+          {
+            "location": "apps/api/src/agent-auth/id-jag.ts#3"
+          },
+          {
+            "location": "apps/api/src/agent-auth/id-jag.ts#4"
+          },
+          {
+            "location": "apps/api/src/lib/agent-auth-idjag.ts#9"
+          },
+          {
+            "location": "apps/api/src/lib/agent-auth-idjag.ts#10"
+          },
+          {
+            "location": "apps/api/src/mcp/auth.ts#2"
+          }
+        ]
+      },
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/panva/jose"
+        }
+      ],
+      "group": "",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "url": "https://opensource.org/licenses/MIT"
+          }
+        }
+      ],
+      "name": "jose",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "node_modules/better-auth/node_modules/jose/package.json"
+        },
+        {
+          "name": "SrcFile",
+          "value": "node_modules/@better-auth/oauth-provider/node_modules/jose/package.json"
+        }
+      ],
+      "purl": "pkg:npm/jose@6.2.8",
+      "scope": "required",
+      "tags": [
+        "security"
+      ],
+      "type": "library",
+      "version": "6.2.8"
+    },
+    {
+      "authors": [
+        {
+          "name": "Filip Skokan <panva.ip@gmail.com>"
+        }
+      ],
+      "bom-ref": "pkg:npm/jose@6.2.9",
+      "description": "JWA, JWS, JWE, JWT, JWK, JWKS for Node.js, Browser, Cloudflare Workers, Deno, Bun, and other Web-interoperable runtimes",
+      "evidence": {
+        "identity": [
+          {
             "concludedValue": "node_modules/jose/package.json",
             "confidence": 0.7,
             "field": "purl",
@@ -33252,13 +33246,13 @@
           "value": "node_modules/jose/package.json"
         }
       ],
-      "purl": "pkg:npm/jose@6.2.8",
+      "purl": "pkg:npm/jose@6.2.9",
       "scope": "required",
       "tags": [
         "security"
       ],
       "type": "library",
-      "version": "6.2.8"
+      "version": "6.2.9"
     },
     {
       "authors": [
@@ -33989,7 +33983,7 @@
             "location": "apps/web/src/routes/_protected.tsx#17"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#26"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#24"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/active-edit-badge.tsx#1"
@@ -34076,13 +34070,13 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/flows/runs-list.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-card.tsx#6"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-card.tsx#3"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-column.tsx#24"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.tsx#16"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.tsx#14"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/metadata-popover.tsx#1"
@@ -34462,6 +34456,69 @@
       "version": "1.27.0"
     },
     {
+      "authors": [
+        {
+          "name": "Boshen and oxc contributors"
+        }
+      ],
+      "bom-ref": "pkg:npm/oxc-transform-react@0.145.0",
+      "description": "Oxc React Compiler Node API",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "node_modules/oxc-transform-react/package.json",
+            "confidence": 0.7,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.7,
+                "technique": "manifest-analysis",
+                "value": "node_modules/oxc-transform-react/package.json"
+              }
+            ]
+          }
+        ],
+        "occurrences": [
+          {
+            "location": "apps/web/react-compiler-options.ts#1"
+          },
+          {
+            "location": "scripts/rc-bailouts.ts#23"
+          }
+        ]
+      },
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://oxc.rs"
+        },
+        {
+          "type": "vcs",
+          "url": "git+https://github.com/oxc-project/oxc.git"
+        }
+      ],
+      "group": "",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "url": "https://opensource.org/licenses/MIT"
+          }
+        }
+      ],
+      "name": "oxc-transform-react",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "node_modules/oxc-transform-react/package.json"
+        }
+      ],
+      "purl": "pkg:npm/oxc-transform-react@0.145.0",
+      "scope": "required",
+      "type": "library",
+      "version": "0.145.0"
+    },
+    {
       "bom-ref": "pkg:npm/pdfjs-dist@6.2.108",
       "description": "Generic build of Mozilla's PDF.js library.",
       "evidence": {
@@ -34598,7 +34655,7 @@
           "name": "engineering@posthog.com"
         }
       ],
-      "bom-ref": "pkg:npm/posthog-js@1.417.0",
+      "bom-ref": "pkg:npm/posthog-js@1.417.1",
       "description": "Posthog-js allows you to automatically capture usage and send events to PostHog.",
       "evidence": {
         "identity": [
@@ -34657,10 +34714,10 @@
           "value": "node_modules/posthog-js/lib/package.json"
         }
       ],
-      "purl": "pkg:npm/posthog-js@1.417.0",
+      "purl": "pkg:npm/posthog-js@1.417.1",
       "scope": "required",
       "type": "library",
-      "version": "1.417.0"
+      "version": "1.417.1"
     },
     {
       "authors": [
@@ -34668,7 +34725,7 @@
           "name": "PostHog <engineering@posthog.com> (https://posthog.com)"
         }
       ],
-      "bom-ref": "pkg:npm/posthog-node@5.49.0",
+      "bom-ref": "pkg:npm/posthog-node@5.49.1",
       "description": "PostHog Node.js integration",
       "evidence": {
         "identity": [
@@ -34713,10 +34770,10 @@
           "value": "node_modules/posthog-node/package.json"
         }
       ],
-      "purl": "pkg:npm/posthog-node@5.49.0",
+      "purl": "pkg:npm/posthog-node@5.49.1",
       "scope": "required",
       "type": "library",
-      "version": "5.49.0"
+      "version": "5.49.1"
     },
     {
       "bom-ref": "pkg:npm/prism-react-renderer@2.4.1",
@@ -36128,6 +36185,9 @@
             "location": "apps/web/src/components/docx/docx-find-bar.tsx#1"
           },
           {
+            "location": "apps/web/src/components/drag-and-drop-live-region.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/drag-preview-content.tsx#1"
           },
           {
@@ -37217,6 +37277,15 @@
             "location": "apps/web/src/routes/tools/contribute.tsx#2"
           },
           {
+            "location": "packages/ui/src/calendar/primitives.tsx#1"
+          },
+          {
+            "location": "packages/ui/src/calendar/resource-calendar.tsx#1"
+          },
+          {
+            "location": "packages/ui/src/calendar/resource-calendar.tsx#2"
+          },
+          {
             "location": "packages/ui/src/components/alert-dialog.tsx#3"
           },
           {
@@ -37903,6 +37972,9 @@
             "location": "scripts/ratchet.ts#45"
           },
           {
+            "location": "scripts/rc-bailouts.ts#24"
+          },
+          {
             "location": "scripts/typecheck-coverage.ts#21"
           }
         ]
@@ -37973,6 +38045,9 @@
           },
           {
             "location": "scripts/ratchet.ts#45"
+          },
+          {
+            "location": "scripts/rc-bailouts.ts#24"
           },
           {
             "location": "scripts/typecheck-coverage.ts#21"
@@ -38380,6 +38455,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-upload-version.ts#2"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-workspace-calculation-labels.ts#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/-hooks/use-column-labels.ts#1"
@@ -39255,7 +39333,7 @@
             "location": "apps/web/src/routes/_protected.tsx#18"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#27"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#25"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/activity/activity-panel.tsx#21"
@@ -39363,13 +39441,13 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/flows/runs-list.tsx#2"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-card.tsx#7"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-card.tsx#4"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-column.tsx#25"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.tsx#17"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.tsx#15"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/metadata-popover.tsx#3"
@@ -39879,6 +39957,9 @@
             "location": "apps/api/src/handlers/chat/tools/execute/execute-tool-function.ts#3"
           },
           {
+            "location": "apps/api/src/handlers/chat/tools/folder-consistency-review-tool.ts#4"
+          },
+          {
             "location": "apps/api/src/handlers/chat/tools/infosoud-tools.ts#2"
           },
           {
@@ -40212,7 +40293,7 @@
             "location": "apps/web/src/routes/tools/-components/contribute.logic.ts#7"
           },
           {
-            "location": "packages/ai-catalog/src/index.ts#26"
+            "location": "packages/ai-catalog/src/index.ts#22"
           },
           {
             "location": "packages/anonymize-chat/src/index.ts#1"
@@ -40338,7 +40419,7 @@
             "location": "apps/web/src/routes/_protected.settings/organization.route.tsx#2"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#28"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#26"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.route.tsx#8"
@@ -40524,6 +40605,9 @@
             "location": "apps/api/src/handlers/chat/tools/execute/execute-tool-function.ts#3"
           },
           {
+            "location": "apps/api/src/handlers/chat/tools/folder-consistency-review-tool.ts#4"
+          },
+          {
             "location": "apps/api/src/handlers/chat/tools/infosoud-tools.ts#2"
           },
           {
@@ -40857,7 +40941,7 @@
             "location": "apps/web/src/routes/tools/-components/contribute.logic.ts#7"
           },
           {
-            "location": "packages/ai-catalog/src/index.ts#26"
+            "location": "packages/ai-catalog/src/index.ts#22"
           },
           {
             "location": "packages/anonymize-chat/src/index.ts#1"
@@ -40983,7 +41067,7 @@
             "location": "apps/web/src/routes/_protected.settings/organization.route.tsx#2"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#28"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#26"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.route.tsx#8"
