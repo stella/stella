@@ -852,7 +852,7 @@ const initSession = async (signal: AbortSignal): Promise<SessionState> => {
     signal,
     redirect: "follow",
     headers: COMMON_HEADERS,
-    timeoutMs: ADAPTER_TIMEOUT.REQUEST,
+    timeoutMs: CZ_NSS_LISTING_TIMEOUT_MS,
   });
 
   if (!response.ok) {
@@ -952,7 +952,7 @@ const executeSearch = async (
     },
     body: formData.toString(),
     redirect: "follow",
-    timeoutMs: ADAPTER_TIMEOUT.REQUEST,
+    timeoutMs: CZ_NSS_LISTING_TIMEOUT_MS,
   });
 
   if (!response.ok) {
@@ -1020,7 +1020,7 @@ const fetchResultPage = async ({
       "X-Requested-With": "XMLHttpRequest",
     },
     body: formData.toString(),
-    timeoutMs: ADAPTER_TIMEOUT.REQUEST,
+    timeoutMs: CZ_NSS_LISTING_TIMEOUT_MS,
   });
 
   if (!response.ok) {

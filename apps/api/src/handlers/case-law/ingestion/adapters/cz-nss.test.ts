@@ -15,6 +15,7 @@ import {
   describe,
   expect,
   setSystemTime,
+  spyOn,
   test,
 } from "bun:test";
 
@@ -273,6 +274,46 @@ const throughJsonb = (value: unknown): unknown =>
   JSON.parse(JSON.stringify(value));
 
 const SLICE = "2026-06-10";
+
+test("allows the NSS listing endpoints to use their source-specific budget", async () => {
+  installStub({ search: [htmlResponse("", 503)] });
+  const invalidation = await czNssAdapter.fetchPage("2026-08-20:0", {});
+  expect(invalidation.isErr()).toBe(true);
+
+  const originalTimeout = AbortSignal.timeout;
+  const timeouts: number[] = [];
+  const timeoutSpy = spyOn(AbortSignal, "timeout").mockImplementation(
+    (milliseconds) => {
+      timeouts.push(milliseconds);
+      return originalTimeout(milliseconds);
+    },
+  );
+  try {
+    installStub({ search: [htmlResponse("", 503)] });
+    const failed = await czNssAdapter.fetchPage("2026-08-20:0", {});
+    expect(failed.isErr()).toBe(true);
+    expect(timeouts).toEqual([120_000, 60_000, 60_000]);
+    timeouts.length = 0;
+
+    installStub({
+      search: [
+        htmlResponse(
+          searchPage({
+            statedCount: CZ_NSS_FIRST_PAGE_ROWS + 1,
+            rows: fullPageRows(CZ_NSS_FIRST_PAGE_ROWS),
+          }),
+        ),
+      ],
+      continuation: [htmlResponse(rowBlock(REGIONAL_ROW))],
+    });
+    const page = await czNssAdapter.fetchPage(`${SLICE}:1`, {});
+
+    expect(page.isOk()).toBe(true);
+    expect(timeouts.slice(0, 4)).toEqual([120_000, 60_000, 60_000, 60_000]);
+  } finally {
+    timeoutSpy.mockRestore();
+  }
+});
 
 // ── Slice arithmetic ─────────────────────────────────────
 
