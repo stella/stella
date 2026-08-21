@@ -1,5 +1,11 @@
 # @stll/workspace-ui
 
+## 0.2.0
+
+### Minor Changes
+
+- [#2322](https://github.com/stella/stella/pull/2322) [`2b1e874`](https://github.com/stella/stella/commit/2b1e87435afbcc9ebdf1aa2e2e46d2ca4a07cf5f) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Publish a controlled, accessible saved-view switcher with bidi-aware reordering.
+
 ## 0.1.0
 
 ### Minor Changes
