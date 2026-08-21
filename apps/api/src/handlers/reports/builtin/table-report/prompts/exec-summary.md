@@ -1,0 +1,1 @@
+Write a concise executive summary (3-5 sentences) of this due-diligence review for a partner. Ground it strictly in the provided report data: the number of contracts reviewed, the count and severity of red flags, and the most material recurring issues. Do not invent facts not present in the data.

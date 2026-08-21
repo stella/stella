@@ -520,12 +520,17 @@ describe("assembleReportData", () => {
       "Notes",
     ]);
     expect(data.grid.rows.map((row) => row.name)).toEqual(["NDA", "MSA"]);
-    // Verdict folds into the cell value as a suffix; the summary pre-joins them.
+    // The cell keeps verdict and value apart; the summary folds the verdict in
+    // as a suffix.
     expect(data.grid.rows[0]?.cells[0]).toEqual({
       label: "Governing law",
-      value: "Czech law (deviation)",
+      value: "Czech law",
+      verdict: "deviation",
+      severity: "high",
     });
-    expect(data.grid.rows[0]?.summary).toContain("Governing law: Czech law");
+    expect(data.grid.rows[0]?.summary).toContain(
+      "Governing law: Czech law (deviation)",
+    );
   });
 });
 

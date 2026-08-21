@@ -19,7 +19,10 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
-import { getBuiltinReportTemplate } from "@/api/handlers/reports/builtin-templates";
+import {
+  getBuiltinReportTemplate,
+  isCloneableBuiltin,
+} from "@/api/handlers/reports/builtin-templates";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { workspaceParams } from "@/api/lib/custom-schema";
@@ -48,6 +51,15 @@ const cloneBuiltinReportTemplate = createSafeHandler(
         new HandlerError({
           status: 400,
           message: `Unknown built-in report template: ${body.key}`,
+        }),
+      );
+    }
+    // A spec built-in has no DOCX to copy into Template Studio.
+    if (!isCloneableBuiltin(builtin)) {
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: `Built-in report template "${body.key}" cannot be customized.`,
         }),
       );
     }

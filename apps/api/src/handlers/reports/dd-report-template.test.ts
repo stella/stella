@@ -19,9 +19,21 @@ import { buildExportColumns } from "@/api/lib/views/export-columns";
 import type { ReportJustification } from "./build-report-data";
 import { assembleReportData } from "./build-report-data";
 import {
+  DD_REPORT_KEY,
   DD_REPORT_MANIFEST,
   getBuiltinReportTemplate,
+  initBuiltinReportTemplates,
 } from "./builtin-templates";
+
+await initBuiltinReportTemplates();
+
+const loadDdReportBuffer = async (): Promise<Buffer> => {
+  const builtin = getBuiltinReportTemplate(DD_REPORT_KEY);
+  if (builtin?.kind !== "docx") {
+    throw new Error("dd-report built-in template not found");
+  }
+  return await builtin.loadBuffer();
+};
 
 /** Wrap justification content as the row shape the assembler reads. */
 const justification = (
@@ -268,10 +280,7 @@ describe("Due Diligence Report built-in template", () => {
       throw new Error("assembled report data is not fillable template data");
     }
 
-    const buffer = await getBuiltinReportTemplate("dd-report")?.loadBuffer();
-    if (!buffer) {
-      throw new Error("dd-report built-in template not found");
-    }
+    const buffer = await loadDdReportBuffer();
 
     const result = await fillTemplate(buffer, record);
 
@@ -360,10 +369,7 @@ describe("Due Diligence Report built-in template", () => {
       throw new Error("assembled report data is not fillable template data");
     }
 
-    const buffer = await getBuiltinReportTemplate("dd-report")?.loadBuffer();
-    if (!buffer) {
-      throw new Error("dd-report built-in template not found");
-    }
+    const buffer = await loadDdReportBuffer();
 
     const result = await fillTemplate(buffer, record);
 
@@ -449,10 +455,7 @@ describe("Due Diligence Report built-in template", () => {
       throw new Error("assembled report data is not fillable template data");
     }
 
-    const buffer = await getBuiltinReportTemplate("dd-report")?.loadBuffer();
-    if (!buffer) {
-      throw new Error("dd-report built-in template not found");
-    }
+    const buffer = await loadDdReportBuffer();
 
     const result = await fillTemplate(buffer, data);
 

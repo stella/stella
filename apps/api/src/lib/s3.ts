@@ -2,6 +2,7 @@ import {
   DeleteObjectCommand,
   GetObjectCommand,
   HeadObjectCommand,
+  ListObjectsV2Command,
   PutObjectCommand,
   S3Client as AwsS3Client,
 } from "@aws-sdk/client-s3";
@@ -621,6 +622,93 @@ export const putS3ObjectWithSignal = async (
     }),
     { abortSignal: signal },
   );
+};
+
+type ListS3ObjectKeysOptions = {
+  bucket: string;
+  prefix: string;
+  /** Ceiling on the keys returned; one more than it signals overflow. */
+  maxKeys: number;
+  signal: AbortSignal;
+};
+
+/**
+ * Keys under `prefix`, at most `maxKeys + 1` of them so a caller can tell a
+ * full page from an overflow without listing the whole prefix. Pages through
+ * continuation tokens only as far as that ceiling requires.
+ */
+export const listS3ObjectKeys = async ({
+  bucket,
+  prefix,
+  maxKeys,
+  signal,
+}: ListS3ObjectKeysOptions): Promise<string[]> => {
+  _abortableClient ??= buildAbortableS3Client(staticCredentialsFromEnv());
+  const keys: string[] = [];
+  let continuationToken: string | undefined;
+  do {
+    // oxlint-disable-next-line no-await-in-loop -- each page names the next one
+    const page = await _abortableClient.send(
+      new ListObjectsV2Command({
+        Bucket: bucket,
+        Prefix: prefix,
+        MaxKeys: maxKeys + 1 - keys.length,
+        ContinuationToken: continuationToken,
+      }),
+      { abortSignal: signal },
+    );
+    for (const object of page.Contents ?? []) {
+      if (object.Key !== undefined) {
+        keys.push(object.Key);
+      }
+    }
+    continuationToken = page.IsTruncated
+      ? page.NextContinuationToken
+      : undefined;
+  } while (continuationToken !== undefined && keys.length <= maxKeys);
+  return keys;
+};
+
+type BoundedS3ReadOptions = {
+  bucket: string;
+  key: string;
+  maxBytes: number;
+  signal: AbortSignal;
+};
+
+/**
+ * Read one object of at most `maxBytes`, refusing before the body is read
+ * when the store declares a larger (or no) length. See
+ * {@link readCorpusS3BytesBounded} for why the declared length is the bound.
+ */
+export const readS3ObjectBounded = async ({
+  bucket,
+  key,
+  maxBytes,
+  signal,
+}: BoundedS3ReadOptions): Promise<Uint8Array> => {
+  _abortableClient ??= buildAbortableS3Client(staticCredentialsFromEnv());
+  const response = await _abortableClient.send(
+    new GetObjectCommand({ Bucket: bucket, Key: key }),
+    { abortSignal: signal },
+  );
+  const declared = response.ContentLength;
+  if (declared === undefined) {
+    throw new S3ObjectReadError({
+      message: `Object read for ${key} declared no usable length; refusing an unbounded read`,
+    });
+  }
+  if (declared > maxBytes) {
+    throw new S3ObjectReadError({
+      message: `Object read for ${key} declares ${declared} bytes, past the ${maxBytes}-byte ceiling`,
+    });
+  }
+  if (!response.Body) {
+    throw new S3ObjectReadError({
+      message: "S3 returned an object without a response body",
+    });
+  }
+  return await response.Body.transformToByteArray();
 };
 
 /** True when credentials are older than 50 minutes (or not yet built). */

@@ -142,6 +142,8 @@ const INTERNAL_SERVER_KEYS = new Set([
   "POSTHOG_LOCAL_DEBUG",
   "PUBLIC_URL",
   "QUERY_EXPANSION_MODE",
+  "REPORT_SPECS_DIR",
+  "REPORT_SPECS_S3_PREFIX",
   "REQUIRE_PERSONAL_AI_KEY",
   "S3_BUCKET",
   "S3_CREDENTIALS_PROVIDER",
@@ -369,6 +371,10 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     'Client-IP source for signup limits. Use "direct" without a proxy and "trusted_proxy" behind configured proxies.',
   STELLA_TRUSTED_PROXY_CIDRS:
     "Comma-separated CIDRs for proxies directly in front of the API. Never trust public client ranges.",
+  REPORT_SPECS_DIR:
+    "Absolute directory of extra report specs (one <key>/spec.json per subdirectory). A key here overrides the bundled spec of the same name.",
+  REPORT_SPECS_S3_PREFIX:
+    "s3://bucket/prefix/ of extra report specs in the REPORT_SPECS_DIR layout, read once at boot. Exclusive with REPORT_SPECS_DIR.",
   TEMPLATE_PACKS_CONTENT_DIR:
     "Directory holding the template-pack content. Set by the container image; unset in a source tree.",
   TRANSACTIONAL_EMAIL_FROM:

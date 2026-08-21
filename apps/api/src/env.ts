@@ -1,5 +1,6 @@
 import { createEnv } from "@t3-oss/env-core";
 import { panic } from "better-result";
+import { existsSync, statSync } from "node:fs";
 
 import { envDocumentProcessingWorker } from "@/api/env-document-processing-worker";
 import {
@@ -27,6 +28,17 @@ const invariantViolation = envApiInvariantViolation({
 });
 if (invariantViolation !== null) {
   panic(invariantViolation);
+}
+if (
+  envApi.REPORT_SPECS_DIR !== undefined &&
+  !(
+    existsSync(envApi.REPORT_SPECS_DIR) &&
+    statSync(envApi.REPORT_SPECS_DIR).isDirectory()
+  )
+) {
+  panic(
+    `REPORT_SPECS_DIR does not point at a directory: ${envApi.REPORT_SPECS_DIR}`,
+  );
 }
 
 const validatedEnv = {

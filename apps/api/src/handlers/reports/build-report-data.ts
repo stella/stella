@@ -168,9 +168,15 @@ export type ReportStats = {
  *  them). */
 export type ReportGridColumn = { label: string };
 
-/** One contract's value under a single review column. `value` folds the verdict
- *  tier in as a suffix, mirroring how the per-contract field table surfaces it. */
-export type ReportGridCell = { label: string; value: string };
+/** One contract's value under a single review column. `verdict`/`severity`
+ *  are "" for a column that is not a graded position, so a renderer can tell a
+ *  graded cell apart without parsing the value. */
+export type ReportGridCell = {
+  label: string;
+  value: string;
+  verdict: string;
+  severity: string;
+};
 
 export type ReportGridRow = {
   name: string;
@@ -585,9 +591,17 @@ const buildReviewGrid = (
   const rows: ReportGridRow[] = contracts.map((contract) => {
     const cells: ReportGridCell[] = contract.fields.map((field) => ({
       label: field.label,
-      value: field.verdict ? `${field.value} (${field.verdict})` : field.value,
+      value: field.value,
+      verdict: field.verdict,
+      severity: field.severity,
     }));
-    const segments = cells.map((cell) => `${cell.label}: ${cell.value}`);
+    // The summary folds the verdict tier in as a suffix, mirroring how the
+    // per-contract field table surfaces it.
+    const segments = cells.map((cell) =>
+      cell.verdict
+        ? `${cell.label}: ${cell.value} (${cell.verdict})`
+        : `${cell.label}: ${cell.value}`,
+    );
     if (contract.hasDocumentType) {
       segments.unshift(`Type: ${contract.documentType}`);
     }

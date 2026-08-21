@@ -20,9 +20,17 @@ import { and, eq, inArray } from "drizzle-orm";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { reportExports } from "@/api/db/schema";
 import type { ReportTemplateRef } from "@/api/db/schema";
+import { env } from "@/api/env";
+import type { AssembledReport } from "@/api/handlers/reports/build-report-data";
 import { buildReportData } from "@/api/handlers/reports/build-report-data";
+import type { BuiltinReportTemplate } from "@/api/handlers/reports/builtin-templates";
 import { getBuiltinReportTemplate } from "@/api/handlers/reports/builtin-templates";
 import { notifyReportExportStatus } from "@/api/handlers/reports/report-export-notification";
+import type { ReportLinkBase } from "@/api/handlers/reports/spec/render-report-spec";
+import {
+  hasNarrativeSection,
+  renderReportSpec,
+} from "@/api/handlers/reports/spec/render-report-spec";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { loadOrgAIConfig } from "@/api/lib/ai-config-loader";
 import { captureError } from "@/api/lib/analytics/capture";
@@ -306,7 +314,13 @@ const processReportExportJob = async (
         id: { eq: exportId },
         workspaceId: { eq: actor.workspaceId },
       },
-      columns: { status: true, mode: true, templateRef: true, layout: true },
+      columns: {
+        status: true,
+        mode: true,
+        templateRef: true,
+        layout: true,
+        viewId: true,
+      },
     }),
   );
 
@@ -344,6 +358,9 @@ type ExportRow = {
   mode: "workspace" | "download";
   templateRef: ReportTemplateRef;
   layout: unknown;
+  /** Source view; null once the view is deleted (citation links then have no
+   *  route to point at and are omitted). */
+  viewId: SafeId<"workspaceView"> | null;
 };
 
 /** Delivery artifact: the bytes to store plus the mime + extension that name
@@ -453,9 +470,17 @@ const runExport = async ({
   const filled = await fillReport({
     actor,
     templateRef: row.templateRef,
-    reportData: dataResult.value.data,
+    report: dataResult.value,
     orgAIConfig,
     aiNarrative,
+    linkBase:
+      row.viewId === null
+        ? undefined
+        : {
+            appUrl: env.FRONTEND_URL.replace(/\/$/u, ""),
+            workspaceId: actor.workspaceId,
+            viewId: row.viewId,
+          },
   });
 
   if ("usageRejection" in filled) {
@@ -544,15 +569,17 @@ type FillReportResult =
 const fillReport = async ({
   actor,
   templateRef,
-  reportData,
+  report,
   orgAIConfig,
   aiNarrative,
+  linkBase,
 }: {
   actor: ExportActor;
   templateRef: ReportTemplateRef;
-  reportData: Record<string, unknown>;
+  report: AssembledReport;
   orgAIConfig: OrgAIConfig | null;
   aiNarrative: boolean;
+  linkBase: ReportLinkBase | undefined;
 }): Promise<FillReportResult> => {
   // Deterministic export: no generators (resolveAiFields is a no-op without a
   // generator) and no usage preflight. The template's {{#if aiNarrative}}
@@ -562,12 +589,69 @@ const fillReport = async ({
     ? buildReportAiGenerators({ actor, orgAIConfig })
     : {};
 
+  if (templateRef.type === "builtin") {
+    const builtin = getBuiltinReportTemplate(templateRef.key);
+    if (builtin?.kind === "spec") {
+      return await renderSpecReport({
+        builtin,
+        report,
+        generators,
+        aiNarrative,
+        linkBase,
+      });
+    }
+  }
+
   return await fillReportDocx({
     actor,
     templateRef,
-    values: reportData,
+    // The AI-visible object only; `links` never reaches the fill pipeline.
+    values: report.data,
     generators,
   });
+};
+
+/** Render a spec built-in. The usage preflight runs only when a narrative
+ *  section can actually call the generator, mirroring the DOCX fill's gate. */
+const renderSpecReport = async ({
+  builtin,
+  report,
+  generators,
+  aiNarrative,
+  linkBase,
+}: {
+  builtin: Extract<BuiltinReportTemplate, { kind: "spec" }>;
+  report: AssembledReport;
+  generators: ReportAiGenerators;
+  aiNarrative: boolean;
+  linkBase: ReportLinkBase | undefined;
+}): Promise<FillReportResult> => {
+  if (
+    aiNarrative &&
+    generators.assertUsageAvailable &&
+    hasNarrativeSection(builtin.spec.sections)
+  ) {
+    const usageRejection = await generators.assertUsageAvailable();
+    if (usageRejection !== null) {
+      return { usageRejection };
+    }
+  }
+  const rendered = await renderReportSpec({
+    spec: builtin.spec,
+    report,
+    prompts: builtin.prompts,
+    generateAiValue: generators.generateAiValue,
+    aiNarrative,
+    linkBase,
+  });
+  if (Result.isError(rendered)) {
+    return { error: rendered.error.message };
+  }
+  return {
+    templateName: builtin.name,
+    fileName: `${builtin.name}.docx`,
+    buffer: rendered.value,
+  };
 };
 
 /** The AI generator bundle passed into the fill pipeline; every field is
@@ -673,6 +757,10 @@ const fillReportDocx = async ({
   const builtin = getBuiltinReportTemplate(templateRef.key);
   if (!builtin) {
     return { error: `Unknown built-in report template: ${templateRef.key}` };
+  }
+  if (builtin.kind === "spec") {
+    // fillReport routes spec built-ins to renderSpecReport before reaching here.
+    return { error: `Report template "${templateRef.key}" is not a DOCX.` };
   }
   const buffer = await builtin.loadBuffer();
   return await fillTemplateDocx({

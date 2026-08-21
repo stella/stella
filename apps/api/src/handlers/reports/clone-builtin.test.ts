@@ -32,8 +32,13 @@ void mock.module("@/api/lib/templates/create-template", () => ({
 }));
 
 const { default: cloneBuiltinReportTemplate } = await import("./clone-builtin");
-const { DD_REPORT_KEY, DD_REPORT_MANIFEST, getBuiltinReportTemplate } =
-  await import("./builtin-templates");
+const {
+  DD_REPORT_KEY,
+  DD_REPORT_MANIFEST,
+  getBuiltinReportTemplate,
+  initBuiltinReportTemplates,
+} = await import("./builtin-templates");
+await initBuiltinReportTemplates();
 
 const workspaceId = toSafeId<"workspace">("workspace_1");
 const userId = toSafeId<"user">("user_1");

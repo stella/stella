@@ -294,11 +294,17 @@ const ExportReportDialogBody = ({
     onStarted(result.value.data.exportId, mode);
   };
 
-  // "Customize" is offered only for a built-in: cloning it into the org's
-  // templates is the one way to see and edit the layout in Template Studio.
-  const selectedBuiltinKey = resolvedValue?.startsWith(BUILTIN_PREFIX)
-    ? resolvedValue.slice(BUILTIN_PREFIX.length)
-    : null;
+  // "Customize" is offered only for a cloneable built-in: cloning it into the
+  // org's templates is the one way to see and edit the layout in Template
+  // Studio. The server marks which built-ins have a DOCX to clone.
+  const selectedBuiltinKey = (() => {
+    if (!resolvedValue?.startsWith(BUILTIN_PREFIX)) {
+      return null;
+    }
+    const key = resolvedValue.slice(BUILTIN_PREFIX.length);
+    const builtin = builtins.find((candidate) => candidate.key === key);
+    return builtin?.cloneable ? key : null;
+  })();
 
   const handleCustomize = async () => {
     if (selectedBuiltinKey === null) {

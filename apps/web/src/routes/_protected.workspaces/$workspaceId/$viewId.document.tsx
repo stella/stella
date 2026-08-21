@@ -47,6 +47,7 @@ import {
 } from "@/components/docx-preview-zoom";
 import { shouldUseDocxBrowserEditor } from "@/components/docx/docx-browser-editor.logic";
 import { DocxLoadingShell } from "@/components/docx/docx-loading-shell";
+import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import PdfViewer, { PDFSuspenseFallback } from "@/components/pdf/pdf-viewer";
 import Tooltip from "@/components/tooltip";
@@ -122,6 +123,9 @@ export const Route = createFileRoute(
       v.pipe(v.number(), v.integer(), v.minValue(1)),
     ),
     pdfPage: v.optional(v.pipe(v.number(), v.integer(), v.minValue(1))),
+    // Folio block to land on in a DOCX (report citation links). Consumed once
+    // on mount through the inspector's pending block scroll.
+    block: v.optional(v.string()),
     panel: v.optional(v.picklist(["versions"])),
     editing: v.optional(v.boolean()),
   }),
@@ -468,6 +472,17 @@ function RouteComponentInner({
     select: (s) => s.editing ?? false,
   });
   const pageNumber = Route.useSearch({ select: (s) => s.pdfPage ?? 1 });
+  const initialBlockId = Route.useSearch({ select: (s) => s.block });
+  const requestBlockScroll = useInspectorCommandStore(
+    (s) => s.requestBlockScroll,
+  );
+  // A `block` deep link scrolls the DOCX editor once it mounts; the editor's
+  // block-scroll hook retries until the block resolves and then clears it.
+  useMountEffect(() => {
+    if (initialBlockId) {
+      requestBlockScroll({ tabId: initialFieldId, blockId: initialBlockId });
+    }
+  });
   const { data: entity, error: entityError } = useSuspenseQuery(
     entityOptions(workspaceId, entityId),
   );
