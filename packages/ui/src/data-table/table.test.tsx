@@ -180,14 +180,15 @@ describe("DataTable", () => {
   });
 
   test("row selection stops interactive matching at the row boundary", () => {
+    const selector = "[tabindex]:not([tabindex='-1'])";
     const focusableWrapper = new EventTarget();
-    const cell = new ClosestTarget(
-      "[tabindex]:not([tabindex='-1'])",
-      focusableWrapper,
-    );
+    const cell = new ClosestTarget(selector, focusableWrapper);
     const row = new ContainmentTarget([cell]);
+    const cellInsideFocusableRow = new ClosestTarget(selector, row);
+    row.add(cellInsideFocusableRow);
 
     expect(isDataTableRowActionTarget(row, cell)).toBe(true);
+    expect(isDataTableRowActionTarget(row, cellInsideFocusableRow)).toBe(true);
   });
 });
 
@@ -217,7 +218,7 @@ class ContainmentTarget extends EventTarget {
   }
 
   contains(target: EventTarget | null) {
-    return target !== null && this.targets.has(target);
+    return target === this || (target !== null && this.targets.has(target));
   }
 }
 

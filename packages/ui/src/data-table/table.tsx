@@ -267,7 +267,11 @@ export const isDataTableRowActionTarget = (
     return true;
   }
   const interactiveTarget = target.closest(INTERACTIVE_DESCENDANT_SELECTOR);
-  return interactiveTarget === null || !row.contains(interactiveTarget);
+  return (
+    interactiveTarget === null ||
+    interactiveTarget === row ||
+    !row.contains(interactiveTarget)
+  );
 };
 
 const mergeHandlers = <TElement,>(
