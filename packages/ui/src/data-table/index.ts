@@ -20,3 +20,10 @@ export {
   tableColumnSizing,
   visibleColumnIds,
 } from "./schema";
+export { DataTable } from "./table";
+export type {
+  DataTableAriaSort,
+  DataTableColumn,
+  DataTableProps,
+  DataTableRowAction,
+} from "./table";

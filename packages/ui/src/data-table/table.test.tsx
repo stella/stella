@@ -1,0 +1,243 @@
+import { renderToStaticMarkup } from "react-dom/server";
+
+import { describe, expect, test } from "bun:test";
+
+import {
+  DATA_TABLE_INTERACTIVE_DESCENDANT_SELECTORS,
+  DataTable,
+  isDataTableRowActionTarget,
+} from "./table";
+
+const expectedInteractiveDescendantSelectors = [
+  "a[href]",
+  "audio[controls]",
+  "button",
+  "input",
+  "select",
+  "textarea",
+  "video[controls]",
+  "summary",
+  "label",
+  "[contenteditable]:not([contenteditable='false'])",
+  "[role='button']",
+  "[role='checkbox']",
+  "[role='combobox']",
+  "[role='link']",
+  "[role='listbox']",
+  "[role='menuitem']",
+  "[role='menuitemcheckbox']",
+  "[role='menuitemradio']",
+  "[role='option']",
+  "[role='radio']",
+  "[role='searchbox']",
+  "[role='slider']",
+  "[role='spinbutton']",
+  "[role='switch']",
+  "[role='tab']",
+  "[role='textbox']",
+  "[role='treeitem']",
+  "[tabindex]:not([tabindex='-1'])",
+  "[data-data-table-stop-row-action]",
+] as const;
+
+const columns = [
+  {
+    ariaSort: "ascending",
+    header: "Matter",
+    id: "name",
+    render: (row: { id: string; name: string }) => row.name,
+  },
+] as const;
+
+describe("DataTable", () => {
+  test("renders entity-agnostic columns and accessible row actions", () => {
+    const markup = renderToStaticMarkup(
+      <DataTable
+        columns={columns}
+        emptyLabel="No matters"
+        getRowProps={() => ({ className: "caller-row" })}
+        loadingLabel="Loading"
+        rowAction={{
+          getAriaLabel: (row) => `Open ${row.name}`,
+          onSelect: () => undefined,
+        }}
+        rowKey={(row) => row.id}
+        rows={[{ id: "matter-1", name: "Northwind" }]}
+      />,
+    );
+
+    expect(markup).toContain('aria-sort="ascending"');
+    expect(markup).toContain("focus-visible:not-sr-only");
+    expect(markup).toContain("focus-visible:ring-2");
+    expect(markup).toContain("pointer-coarse:h-11");
+    expect(markup).toContain('data-slot="button"');
+    expect(markup).toContain("Open Northwind</button>");
+    expect(markup).toContain("caller-row");
+    expect(markup).not.toContain('role="button"');
+    expect(markup).not.toContain('tabindex="0"');
+    expect(markup).toContain("Northwind");
+  });
+
+  test("renders a spanning empty row and column-aligned loading skeletons", () => {
+    const empty = renderToStaticMarkup(
+      <DataTable
+        columns={columns}
+        emptyLabel="No matters"
+        loadingLabel="Loading"
+        rowKey={(row: { id: string }) => row.id}
+        rows={[]}
+      />,
+    );
+    const loading = renderToStaticMarkup(
+      <DataTable
+        columns={[
+          ...columns,
+          {
+            cellClassName: "text-right",
+            header: "Status",
+            id: "status",
+            render: () => "Open",
+          },
+        ]}
+        emptyLabel="No matters"
+        isLoading
+        loadingLabel="Loading"
+        loadingRowCount={2}
+        rowAction={{
+          getAriaLabel: (row) => `Open ${row.name}`,
+          onSelect: () => undefined,
+        }}
+        rowKey={(row: { id: string }) => row.id}
+        rows={[]}
+      />,
+    );
+
+    expect(empty).toContain('colSpan="1"');
+    expect(empty).toContain("No matters");
+    expect(loading).toContain('aria-busy="true"');
+    expect(loading).toContain('role="status"');
+    expect(loading.indexOf('role="status"')).toBeLessThan(
+      loading.indexOf('data-slot="table"'),
+    );
+    expect(loading).toContain("Loading");
+    expect(loading).toContain("text-right");
+    expect(loading).toContain("pointer-coarse:h-11");
+    expect(loading.match(/data-slot="skeleton"/gu)).toHaveLength(4);
+    expect(loading).not.toContain("colSpan");
+    expect(loading).not.toContain("No matters");
+    expect(empty).toContain('role="status"');
+  });
+
+  test("keeps at least one loading row after rounding", () => {
+    const loading = renderToStaticMarkup(
+      <DataTable
+        columns={columns}
+        emptyLabel="No matters"
+        isLoading
+        loadingLabel="Loading"
+        loadingRowCount={0.5}
+        rowKey={(row: { id: string }) => row.id}
+        rows={[]}
+      />,
+    );
+
+    expect(loading.match(/data-slot="skeleton"/gu)).toHaveLength(1);
+    expect(loading).toContain("Loading");
+  });
+
+  test("bounds invalid and extreme loading row counts", () => {
+    for (const rowCount of [0, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
+      const loading = renderLoadingTable(rowCount);
+      expect(loading.match(/data-slot="skeleton"/gu)).toHaveLength(3);
+    }
+
+    const extreme = renderLoadingTable(10_000);
+    expect(extreme.match(/data-slot="skeleton"/gu)).toHaveLength(20);
+  });
+
+  test("row selection ignores every nested interactive target", () => {
+    const cell = new ClosestTarget("[role='presentation']");
+    const row = new ContainmentTarget([cell]);
+
+    expect(DATA_TABLE_INTERACTIVE_DESCENDANT_SELECTORS).toEqual(
+      expectedInteractiveDescendantSelectors,
+    );
+
+    expect(isDataTableRowActionTarget(row, row)).toBe(true);
+    expect(isDataTableRowActionTarget(row, cell)).toBe(true);
+    for (const selector of expectedInteractiveDescendantSelectors) {
+      const target = new ClosestTarget(selector);
+      row.add(target);
+      expect(isDataTableRowActionTarget(row, target)).toBe(false);
+    }
+  });
+
+  test("row selection ignores React-bubbled targets outside the row", () => {
+    const row = new ContainmentTarget([]);
+    const portaledPopup = new ClosestTarget("[role='presentation']");
+
+    expect(isDataTableRowActionTarget(row, portaledPopup)).toBe(false);
+  });
+
+  test("row selection stops interactive matching at the row boundary", () => {
+    const selector = "[tabindex]:not([tabindex='-1'])";
+    const focusableWrapper = new EventTarget();
+    const cell = new ClosestTarget(selector, focusableWrapper);
+    const row = new ContainmentTarget([cell]);
+    const cellInsideFocusableRow = new ClosestTarget(selector, row);
+    row.add(cellInsideFocusableRow);
+
+    expect(isDataTableRowActionTarget(row, cell)).toBe(true);
+    expect(isDataTableRowActionTarget(row, cellInsideFocusableRow)).toBe(true);
+  });
+});
+
+const renderLoadingTable = (loadingRowCount: number) =>
+  renderToStaticMarkup(
+    <DataTable
+      columns={columns}
+      emptyLabel="No matters"
+      isLoading
+      loadingLabel="Loading"
+      loadingRowCount={loadingRowCount}
+      rowKey={(row: { id: string }) => row.id}
+      rows={[]}
+    />,
+  );
+
+class ContainmentTarget extends EventTarget {
+  private readonly targets: Set<EventTarget>;
+
+  constructor(targets: readonly EventTarget[]) {
+    super();
+    this.targets = new Set(targets);
+  }
+
+  add(target: EventTarget) {
+    this.targets.add(target);
+  }
+
+  contains(target: EventTarget | null) {
+    return target === this || (target !== null && this.targets.has(target));
+  }
+}
+
+class ClosestTarget extends EventTarget {
+  private readonly matchingSelector: string;
+  private readonly matchTarget: EventTarget;
+
+  seenSelector = "";
+
+  constructor(matchingSelector: string, matchTarget?: EventTarget) {
+    super();
+    this.matchingSelector = matchingSelector;
+    this.matchTarget = matchTarget ?? this;
+  }
+
+  closest(selector: string) {
+    this.seenSelector = selector;
+    return selector.split(",").includes(this.matchingSelector)
+      ? this.matchTarget
+      : null;
+  }
+}
