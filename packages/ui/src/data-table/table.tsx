@@ -1,5 +1,6 @@
 import type { HTMLAttributes, ReactNode } from "react";
 
+import { Skeleton } from "../components/skeleton";
 import {
   Table,
   TableBody,
@@ -10,7 +11,94 @@ import {
 } from "../components/table";
 import { cn } from "../lib/utils";
 
+export const DataTable = <TItem,>({
+  columns,
+  emptyLabel,
+  getRowProps,
+  isLoading = false,
+  loadingLabel,
+  loadingRowCount = DEFAULT_LOADING_ROW_COUNT,
+  rowAction,
+  rowKey,
+  rows,
+}: DataTableProps<TItem>) => {
+  let content: ReactNode;
+  if (isLoading) {
+    content = (
+      <LoadingRows
+        columns={columns}
+        label={loadingLabel}
+        rowCount={loadingRowCount}
+      />
+    );
+  } else if (rows.length === 0) {
+    content = <StatusRow colSpan={columns.length} label={emptyLabel} />;
+  } else {
+    content = rows.map((item) => {
+      const rowProps = getRowProps?.(item);
+      const interactiveProps =
+        rowAction === undefined
+          ? undefined
+          : interactiveRowProps(item, rowAction);
+
+      return (
+        <TableRow
+          key={rowKey(item)}
+          {...rowProps}
+          {...interactiveProps}
+          className={cn(interactiveProps?.className, rowProps?.className)}
+          onClick={mergeHandlers(interactiveProps?.onClick, rowProps?.onClick)}
+        >
+          {columns.map((column, columnIndex) => (
+            <TableCell
+              className={cn(
+                rowAction !== undefined && columnIndex === 0
+                  ? "relative"
+                  : undefined,
+                resolveClassName(column.cellClassName, item),
+              )}
+              key={column.id}
+            >
+              {rowAction !== undefined && columnIndex === 0 ? (
+                <button
+                  className="focus-visible:bg-background focus-visible:ring-ring sr-only focus-visible:not-sr-only focus-visible:absolute focus-visible:inset-2 focus-visible:z-10 focus-visible:flex focus-visible:items-center focus-visible:rounded-md focus-visible:px-2 focus-visible:text-sm focus-visible:ring-2"
+                  onClick={() => rowAction.onSelect(item)}
+                  type="button"
+                >
+                  {rowAction.getAriaLabel(item)}
+                </button>
+              ) : null}
+              {column.render(item)}
+            </TableCell>
+          ))}
+        </TableRow>
+      );
+    });
+  }
+
+  return (
+    <Table aria-busy={isLoading}>
+      <TableHeader>
+        <TableRow>
+          {columns.map((column) => (
+            <TableHead
+              aria-sort={column.ariaSort}
+              className={column.headClassName}
+              key={column.id}
+            >
+              {column.header}
+            </TableHead>
+          ))}
+        </TableRow>
+      </TableHeader>
+      <TableBody>{content}</TableBody>
+    </Table>
+  );
+};
+
 type RowProps = Omit<HTMLAttributes<HTMLTableRowElement>, "children">;
+
+const DEFAULT_LOADING_ROW_COUNT = 3;
 
 const INTERACTIVE_DESCENDANT_SELECTOR = [
   "a[href]",
@@ -65,88 +153,38 @@ export type DataTableProps<TItem> = {
   getRowProps?: (item: TItem) => RowProps;
   isLoading?: boolean;
   loadingLabel: string;
+  loadingRowCount?: number;
   rowAction?: DataTableRowAction<TItem>;
   rowKey: (item: TItem) => string | number;
   rows: readonly TItem[];
 };
 
-export const DataTable = <TItem,>({
+const LoadingRows = <TItem,>({
   columns,
-  emptyLabel,
-  getRowProps,
-  isLoading = false,
-  loadingLabel,
-  rowAction,
-  rowKey,
-  rows,
-}: DataTableProps<TItem>) => {
-  let content: ReactNode;
-  if (isLoading) {
-    content = <StatusRow colSpan={columns.length} label={loadingLabel} />;
-  } else if (rows.length === 0) {
-    content = <StatusRow colSpan={columns.length} label={emptyLabel} />;
-  } else {
-    content = rows.map((item) => {
-      const rowProps = getRowProps?.(item);
-      const interactiveProps =
-        rowAction === undefined
-          ? undefined
-          : interactiveRowProps(item, rowAction);
+  label,
+  rowCount,
+}: {
+  columns: readonly DataTableColumn<TItem>[];
+  label: string;
+  rowCount: number;
+}) =>
+  Array.from({ length: resolveLoadingRowCount(rowCount) }, (_, rowIndex) => (
+    <TableRow key={rowIndex}>
+      {columns.map((column, columnIndex) => (
+        <TableCell key={column.id}>
+          {rowIndex === 0 && columnIndex === 0 ? (
+            <span className="sr-only">{label}</span>
+          ) : null}
+          <Skeleton aria-hidden="true" className="h-4 w-full" />
+        </TableCell>
+      ))}
+    </TableRow>
+  ));
 
-      return (
-        <TableRow
-          key={rowKey(item)}
-          {...rowProps}
-          {...interactiveProps}
-          className={cn(interactiveProps?.className, rowProps?.className)}
-          onClick={mergeHandlers(interactiveProps?.onClick, rowProps?.onClick)}
-        >
-          {columns.map((column, columnIndex) => (
-            <TableCell
-              className={cn(
-                rowAction !== undefined && columnIndex === 0
-                  ? "relative"
-                  : undefined,
-                resolveClassName(column.cellClassName, item),
-              )}
-              key={column.id}
-            >
-              {rowAction !== undefined && columnIndex === 0 ? (
-                <button
-                  className="focus-visible:bg-background focus-visible:ring-ring sr-only focus-visible:not-sr-only focus-visible:absolute focus-visible:inset-2 focus-visible:z-10 focus-visible:flex focus-visible:items-center focus-visible:rounded-md focus-visible:px-2 focus-visible:text-sm focus-visible:ring-2"
-                  onClick={() => rowAction.onSelect(item)}
-                  type="button"
-                >
-                  {rowAction.getAriaLabel(item)}
-                </button>
-              ) : null}
-              {column.render(item)}
-            </TableCell>
-          ))}
-        </TableRow>
-      );
-    });
-  }
-
-  return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          {columns.map((column) => (
-            <TableHead
-              aria-sort={column.ariaSort}
-              className={column.headClassName}
-              key={column.id}
-            >
-              {column.header}
-            </TableHead>
-          ))}
-        </TableRow>
-      </TableHeader>
-      <TableBody>{content}</TableBody>
-    </Table>
-  );
-};
+const resolveLoadingRowCount = (rowCount: number) =>
+  Number.isFinite(rowCount) && rowCount > 0
+    ? Math.floor(rowCount)
+    : DEFAULT_LOADING_ROW_COUNT;
 
 const StatusRow = ({ colSpan, label }: { colSpan: number; label: string }) => (
   <TableRow>

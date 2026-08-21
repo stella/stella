@@ -40,7 +40,7 @@ describe("DataTable", () => {
     expect(markup).toContain("Northwind");
   });
 
-  test("renders one spanning empty or loading row", () => {
+  test("renders a spanning empty row and column-aligned loading skeletons", () => {
     const empty = renderToStaticMarkup(
       <DataTable
         columns={columns}
@@ -52,10 +52,18 @@ describe("DataTable", () => {
     );
     const loading = renderToStaticMarkup(
       <DataTable
-        columns={columns}
+        columns={[
+          ...columns,
+          {
+            header: "Status",
+            id: "status",
+            render: () => "Open",
+          },
+        ]}
         emptyLabel="No matters"
         isLoading
         loadingLabel="Loading"
+        loadingRowCount={2}
         rowKey={(row: { id: string }) => row.id}
         rows={[]}
       />,
@@ -63,7 +71,10 @@ describe("DataTable", () => {
 
     expect(empty).toContain('colSpan="1"');
     expect(empty).toContain("No matters");
+    expect(loading).toContain('aria-busy="true"');
     expect(loading).toContain("Loading");
+    expect(loading.match(/data-slot="skeleton"/gu)).toHaveLength(4);
+    expect(loading).not.toContain("colSpan");
     expect(loading).not.toContain("No matters");
   });
 
