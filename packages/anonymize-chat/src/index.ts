@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import * as v from "valibot";
 
 import type {
@@ -293,9 +294,9 @@ const normalizeEntityLabelForPlaceholder = (label: string): string =>
   label.trim().toUpperCase().replaceAll(/\s+/gu, "_");
 
 const LITERAL_PLACEHOLDER_SENTINEL_RANGES = [
-  { end: 0xf8ff, start: 0xe000 },
-  { end: 0xffffd, start: 0xf0000 },
-  { end: 0x10fffd, start: 0x100000 },
+  { end: 0xf8_ff, start: 0xe0_00 },
+  { end: 0xf_ff_fd, start: 0xf_00_00 },
+  { end: 0x10_ff_fd, start: 0x10_00_00 },
 ] as const;
 
 type LiteralPlaceholderSentinelCursor = {
@@ -472,7 +473,7 @@ const assertForcedSensitiveValuesRedacted = (
 ): void => {
   for (const forcedValue of forcedSensitiveValues) {
     if (redactedText.includes(forcedValue)) {
-      throw new Error("forced sensitive value remained after anonymization");
+      panic("forced sensitive value remained after anonymization");
     }
   }
 };

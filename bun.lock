@@ -456,6 +456,7 @@
       "version": "0.0.0",
       "dependencies": {
         "@stll/anonymize-wasm": "catalog:",
+        "better-result": "catalog:",
         "valibot": "catalog:",
       },
       "devDependencies": {

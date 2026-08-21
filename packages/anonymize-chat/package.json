@@ -45,6 +45,7 @@
   },
   "dependencies": {
     "@stll/anonymize-wasm": "catalog:",
+    "better-result": "catalog:",
     "valibot": "catalog:"
   },
   "devDependencies": {
