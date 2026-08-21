@@ -68,8 +68,8 @@ describe("DataTable", () => {
   });
 
   test("row selection ignores every nested interactive target", () => {
-    const row = new EventTarget();
     const cell = new ClosestTarget("[role='presentation']");
+    const row = new ContainmentTarget([cell]);
     const interactiveSelectors = [
       "button",
       "label",
@@ -86,12 +86,36 @@ describe("DataTable", () => {
     expect(isDataTableRowActionTarget(row, row)).toBe(true);
     expect(isDataTableRowActionTarget(row, cell)).toBe(true);
     for (const selector of interactiveSelectors) {
-      expect(isDataTableRowActionTarget(row, new ClosestTarget(selector))).toBe(
-        false,
-      );
+      const target = new ClosestTarget(selector);
+      row.add(target);
+      expect(isDataTableRowActionTarget(row, target)).toBe(false);
     }
   });
+
+  test("row selection ignores React-bubbled targets outside the row", () => {
+    const row = new ContainmentTarget([]);
+    const portaledPopup = new ClosestTarget("[role='presentation']");
+
+    expect(isDataTableRowActionTarget(row, portaledPopup)).toBe(false);
+  });
 });
+
+class ContainmentTarget extends EventTarget {
+  private readonly targets: Set<EventTarget>;
+
+  constructor(targets: readonly EventTarget[]) {
+    super();
+    this.targets = new Set(targets);
+  }
+
+  add(target: EventTarget) {
+    this.targets.add(target);
+  }
+
+  contains(target: EventTarget | null) {
+    return target !== null && this.targets.has(target);
+  }
+}
 
 class ClosestTarget extends EventTarget {
   private readonly matchingSelector: string;

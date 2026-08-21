@@ -181,14 +181,27 @@ type ClosestEventTarget = EventTarget & {
   closest: (selector: string) => unknown;
 };
 
+type ContainsEventTarget = EventTarget & {
+  contains: (target: EventTarget | null) => boolean;
+};
+
 const hasClosest = (target: EventTarget): target is ClosestEventTarget =>
   "closest" in target && typeof target.closest === "function";
+
+const hasContains = (target: EventTarget): target is ContainsEventTarget =>
+  "contains" in target && typeof target.contains === "function";
 
 export const isDataTableRowActionTarget = (
   row: EventTarget,
   target: EventTarget | null,
 ) => {
-  if (target === row || target === null || !hasClosest(target)) {
+  if (target === row) {
+    return true;
+  }
+  if (target === null || !hasContains(row) || !row.contains(target)) {
+    return false;
+  }
+  if (!hasClosest(target)) {
     return true;
   }
   return target.closest(INTERACTIVE_DESCENDANT_SELECTOR) === null;
