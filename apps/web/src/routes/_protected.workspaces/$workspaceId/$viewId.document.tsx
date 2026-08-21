@@ -41,6 +41,7 @@ import "@stll/folio-react/editor.css";
 import { cn, composeRefs } from "@stll/ui/utils";
 
 import { BilingualDocumentDialog } from "@/components/bilingual-document-dialog";
+import { BilingualTranslateDialog } from "@/components/bilingual-translate-dialog";
 import { openEntityInInspector } from "@/components/chat/entity-open";
 import {
   useDocxFitZoom,
@@ -745,6 +746,12 @@ function RouteComponentInner({
                       fieldId={fieldId}
                       workspaceId={workspaceId}
                     />
+                    <BilingualTranslateDialog
+                      disabled={!isDocxFile}
+                      entityId={entityId}
+                      fieldId={fieldId}
+                      workspaceId={workspaceId}
+                    />
                   </>
                 }
                 fieldId={fieldId}
@@ -800,6 +807,11 @@ function RouteComponentInner({
                                   workspaceId={workspaceId}
                                 />
                                 <BilingualDocumentDialog
+                                  entityId={entityId}
+                                  fieldId={fieldId}
+                                  workspaceId={workspaceId}
+                                />
+                                <BilingualTranslateDialog
                                   entityId={entityId}
                                   fieldId={fieldId}
                                   workspaceId={workspaceId}

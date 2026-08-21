@@ -168,6 +168,85 @@
       "title": "Version bilingue créée"
     }
   },
+  "bilingualTranslate": {
+    "dialog": {
+      "description": "Remplit la colonne de traduction de ce document sur deux colonnes. Vérifiez ce qui arrive à chaque ligne et la façon dont les termes définis sont rendus, puis lancez la traduction.",
+      "prepare": "Préparer",
+      "preparing": "Lecture du document…",
+      "preparingHint": "Lire l'intégralité du document et évaluer chaque ligne prend jusqu'à deux minutes.",
+      "title": "Traduire la version bilingue"
+    },
+    "dispositions": {
+      "inline": "Les deux langues",
+      "keep": "Laisser tel quel"
+    },
+    "error": {
+      "prepareTitle": "Le document n'a pas pu être préparé",
+      "startTitle": "La traduction n'a pas pu être lancée"
+    },
+    "errorCodes": {
+      "aiUnavailable": "Aucun modèle d'IA n'est disponible pour la traduction.",
+      "applyFailed": "Les traductions n'ont pas pu être réécrites dans le document.",
+      "documentChanged": "Le document a changé pendant la traduction. Préparez-le à nouveau.",
+      "documentUnresolved": "Le document ou son fichier n'est plus disponible.",
+      "enqueueFailed": "La traduction n'a pas pu être mise en file d'attente.",
+      "internal": "La traduction s'est arrêtée de façon inattendue.",
+      "notBilingual": "Ce document ne contient pas de tableau bilingue.",
+      "translationFailed": "Un lot de lignes n'a pas pu être traduit.",
+      "unknown": "La traduction s'est arrêtée de façon inattendue."
+    },
+    "glossary": {
+      "add": "Ajouter un terme",
+      "description": "Ces rendus s'appliquent à toutes les lignes. Un terme sans traduction doit être complété ou supprimé.",
+      "empty": "Aucun terme défini trouvé.",
+      "formsHint": "Séparez les autres formes par des virgules.",
+      "formsSource": "Autres formes du terme",
+      "formsTarget": "Autres formes de la traduction",
+      "incomplete": "Complétez les traductions manquantes ou supprimez ces termes.",
+      "origins": {
+        "detected": "Détecté",
+        "user": "Le vôtre"
+      },
+      "term": "Terme",
+      "title": "Termes définis",
+      "tooManyForms": "Un terme peut compter au maximum {max} autres formes.",
+      "translation": "Traduction"
+    },
+    "kinds": {
+      "heading": "Titre",
+      "listItem": "Élément de liste",
+      "paragraph": "Paragraphe",
+      "table": "Tableau entier"
+    },
+    "origins": {
+      "default": "Non évalué",
+      "model": "IA"
+    },
+    "review": {
+      "droppedRows": "{count, plural, one {# ligne a été ignorée} other {# lignes ont été ignorées}} : elles ne contiennent aucun texte traduisible.",
+      "start": "Lancer la traduction",
+      "starting": "Lancement…"
+    },
+    "rows": {
+      "description": "Choisissez ce qui arrive à chaque ligne de la colonne de traduction.",
+      "ordinal": "#",
+      "sourceText": "Texte source",
+      "title": "Lignes",
+      "whatToDo": "Que faire"
+    },
+    "run": {
+      "cancelled": "La traduction a été annulée.",
+      "doneSummary": "{count, plural, one {# ligne traduite} other {# lignes traduites}}.",
+      "doneTitle": "Traduction terminée",
+      "failedRows": "{count, plural, one {# ligne n'a pas pu être traduite} other {# lignes n'ont pas pu être traduites}}.",
+      "failedTitle": "Traduction interrompue",
+      "hint": "La traduction s'exécute sur le serveur. Gardez cette fenêtre ouverte pour la suivre.",
+      "moreRows": "{count, plural, one {# ligne de plus} other {# lignes de plus}}",
+      "progress": "{completed} lignes traduites sur {total}",
+      "title": "Traduction en cours…",
+      "warningsTitle": "Lignes à vérifier"
+    }
+  },
   "billing": {
     "addEntry": "Ajouter une entrée",
     "amount": "Montant",

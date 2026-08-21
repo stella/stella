@@ -168,6 +168,85 @@
       "title": "Dvojjazyčná verzia vytvorená"
     }
   },
+  "bilingualTranslate": {
+    "dialog": {
+      "description": "Doplní stĺpec s prekladom v tomto dvojstĺpcovom dokumente. Skontrolujte, čo sa stane s každým riadkom a ako sa prekladajú definované pojmy, a potom spustite preklad.",
+      "prepare": "Pripraviť",
+      "preparing": "Načítava sa dokument…",
+      "preparingHint": "Načítanie celého dokumentu a posúdenie každého riadka trvá až dve minúty.",
+      "title": "Preložiť dvojjazyčnú verziu"
+    },
+    "dispositions": {
+      "inline": "Oba jazyky",
+      "keep": "Ponechať bez zmeny"
+    },
+    "error": {
+      "prepareTitle": "Dokument sa nepodarilo pripraviť",
+      "startTitle": "Preklad sa nepodarilo spustiť"
+    },
+    "errorCodes": {
+      "aiUnavailable": "Na preklad nie je dostupný žiadny model AI.",
+      "applyFailed": "Preklady sa nepodarilo zapísať späť do dokumentu.",
+      "documentChanged": "Dokument sa počas prekladu zmenil. Pripravte ho znova.",
+      "documentUnresolved": "Dokument alebo jeho súbor už nie je dostupný.",
+      "enqueueFailed": "Preklad sa nepodarilo zaradiť do frontu.",
+      "internal": "Preklad bol nečakane prerušený.",
+      "notBilingual": "Tento dokument neobsahuje dvojjazyčnú tabuľku.",
+      "translationFailed": "Dávku riadkov sa nepodarilo preložiť.",
+      "unknown": "Preklad bol nečakane prerušený."
+    },
+    "glossary": {
+      "add": "Pridať pojem",
+      "description": "Tieto preklady sa použijú vo všetkých riadkoch. Pojem bez prekladu treba doplniť alebo odstrániť.",
+      "empty": "Nenašli sa žiadne definované pojmy.",
+      "formsHint": "Ďalšie tvary oddeľte čiarkami.",
+      "formsSource": "Ďalšie tvary pojmu",
+      "formsTarget": "Ďalšie tvary prekladu",
+      "incomplete": "Doplňte chýbajúce preklady alebo tieto pojmy odstráňte.",
+      "origins": {
+        "detected": "Nájdené",
+        "user": "Vlastné"
+      },
+      "term": "Pojem",
+      "title": "Definované pojmy",
+      "tooManyForms": "Pojem môže mať najviac {max} ďalších tvarov.",
+      "translation": "Preklad"
+    },
+    "kinds": {
+      "heading": "Nadpis",
+      "listItem": "Položka zoznamu",
+      "paragraph": "Odsek",
+      "table": "Celá tabuľka"
+    },
+    "origins": {
+      "default": "Neposúdené",
+      "model": "AI"
+    },
+    "review": {
+      "droppedRows": "{count, plural, one {# riadok bol vynechaný} few {# riadky boli vynechané} other {# riadkov bolo vynechaných}}: neobsahujú text, ktorý sa dá preložiť.",
+      "start": "Spustiť preklad",
+      "starting": "Spúšťa sa…"
+    },
+    "rows": {
+      "description": "Zvoľte, čo sa stane s každým riadkom stĺpca s prekladom.",
+      "ordinal": "#",
+      "sourceText": "Zdrojový text",
+      "title": "Riadky",
+      "whatToDo": "Čo urobiť"
+    },
+    "run": {
+      "cancelled": "Preklad bol zrušený.",
+      "doneSummary": "{count, plural, one {Preložený # riadok} few {Preložené # riadky} other {Preložených # riadkov}}.",
+      "doneTitle": "Preklad dokončený",
+      "failedRows": "{count, plural, one {# riadok sa nepodarilo preložiť} few {# riadky sa nepodarilo preložiť} other {# riadkov sa nepodarilo preložiť}}.",
+      "failedTitle": "Preklad bol zastavený",
+      "hint": "Preklad beží na serveri. Nechajte toto okno otvorené, aby ste ho mohli sledovať.",
+      "moreRows": "{count, plural, one {ďalší # riadok} few {ďalšie # riadky} other {ďalších # riadkov}}",
+      "progress": "Preložených {completed} z {total} riadkov",
+      "title": "Prebieha preklad…",
+      "warningsTitle": "Riadky na kontrolu"
+    }
+  },
   "billing": {
     "addEntry": "Pridať záznam",
     "amount": "Čiastka",

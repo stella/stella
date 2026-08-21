@@ -168,6 +168,85 @@
       "title": "Divvalodu versija izveidota"
     }
   },
+  "bilingualTranslate": {
+    "dialog": {
+      "description": "Aizpilda šī divu kolonnu dokumenta tulkojuma kolonnu. Pārskatiet, kas notiks ar katru rindu un kā tiek atveidoti definētie termini, un pēc tam sāciet tulkošanu.",
+      "prepare": "Sagatavot",
+      "preparing": "Notiek dokumenta lasīšana…",
+      "preparingHint": "Visa dokumenta izlasīšana un katras rindas novērtēšana aizņem līdz divām minūtēm.",
+      "title": "Tulkot divvalodu versiju"
+    },
+    "dispositions": {
+      "inline": "Abas valodas",
+      "keep": "Atstāt nemainītu"
+    },
+    "error": {
+      "prepareTitle": "Neizdevās sagatavot dokumentu",
+      "startTitle": "Neizdevās sākt tulkošanu"
+    },
+    "errorCodes": {
+      "aiUnavailable": "Tulkošanai nav pieejams neviens MI modelis.",
+      "applyFailed": "Tulkojumus neizdevās ierakstīt atpakaļ dokumentā.",
+      "documentChanged": "Dokuments tulkošanas laikā mainījās. Sagatavojiet to vēlreiz.",
+      "documentUnresolved": "Dokuments vai tā fails vairs nav pieejams.",
+      "enqueueFailed": "Tulkošanu neizdevās ievietot rindā.",
+      "internal": "Tulkošana negaidīti apstājās.",
+      "notBilingual": "Šajā dokumentā nav divvalodu tabulas.",
+      "translationFailed": "Neizdevās iztulkot rindu partiju.",
+      "unknown": "Tulkošana negaidīti apstājās."
+    },
+    "glossary": {
+      "add": "Pievienot terminu",
+      "description": "Šie atveidojumi attiecas uz visām rindām. Termins bez tulkojuma ir jāaizpilda vai jānoņem.",
+      "empty": "Definēti termini nav atrasti.",
+      "formsHint": "Citas formas atdaliet ar komatiem.",
+      "formsSource": "Citas termina formas",
+      "formsTarget": "Citas tulkojuma formas",
+      "incomplete": "Aizpildiet trūkstošos tulkojumus vai noņemiet šos terminus.",
+      "origins": {
+        "detected": "Atrasts",
+        "user": "Jūsu"
+      },
+      "term": "Termins",
+      "title": "Definētie termini",
+      "tooManyForms": "Terminam var būt ne vairāk kā {max} citas formas.",
+      "translation": "Tulkojums"
+    },
+    "kinds": {
+      "heading": "Virsraksts",
+      "listItem": "Saraksta punkts",
+      "paragraph": "Rindkopa",
+      "table": "Visa tabula"
+    },
+    "origins": {
+      "default": "Nav novērtēts",
+      "model": "MI"
+    },
+    "review": {
+      "droppedRows": "{count, plural, zero {Izlaistas # rindas} one {Izlaista # rinda} other {Izlaistas # rindas}}: tajās nav tulkojama teksta.",
+      "start": "Sākt tulkošanu",
+      "starting": "Sāk…"
+    },
+    "rows": {
+      "description": "Izvēlieties, kas notiks ar katru tulkojuma kolonnas rindu.",
+      "ordinal": "#",
+      "sourceText": "Avota teksts",
+      "title": "Rindas",
+      "whatToDo": "Ko darīt"
+    },
+    "run": {
+      "cancelled": "Tulkošana tika atcelta.",
+      "doneSummary": "{count, plural, zero {Iztulkotas # rindas} one {Iztulkota # rinda} other {Iztulkotas # rindas}}.",
+      "doneTitle": "Tulkošana pabeigta",
+      "failedRows": "{count, plural, zero {Neizdevās iztulkot # rindas} one {Neizdevās iztulkot # rindu} other {Neizdevās iztulkot # rindas}}.",
+      "failedTitle": "Tulkošana apturēta",
+      "hint": "Tulkošana notiek serverī. Lai sekotu norisei, atstājiet šo logu atvērtu.",
+      "moreRows": "{count, plural, zero {vēl # rindas} one {vēl # rinda} other {vēl # rindas}}",
+      "progress": "Iztulkotas {completed} no {total} rindām",
+      "title": "Notiek tulkošana…",
+      "warningsTitle": "Pārbaudāmās rindas"
+    }
+  },
   "billing": {
     "addEntry": "Pievienot ierakstu",
     "amount": "Summa",

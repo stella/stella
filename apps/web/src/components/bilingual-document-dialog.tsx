@@ -15,14 +15,6 @@ import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import {
-  Combobox,
-  ComboboxEmpty,
-  ComboboxInput,
-  ComboboxItem,
-  ComboboxList,
-  ComboboxPopup,
-} from "@stll/ui/combobox";
-import {
   Dialog,
   DialogClose,
   DialogDescription,
@@ -35,14 +27,15 @@ import {
 } from "@stll/ui/dialog";
 import { stellaToast } from "@stll/ui/toast";
 
+import {
+  DEFAULT_TARGET_LANG,
+  defaultSourceLang,
+  DocumentLanguagePicker,
+} from "@/components/document-language-picker";
 import { useLocale } from "@/i18n/formatting-context";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
-import { compareByLocale } from "@/lib/collation";
-import {
-  DEEPL_TARGET_LANGUAGES,
-  type DeepLTargetLanguageCode,
-} from "@/lib/deepl/languages";
+import type { DeepLTargetLanguageCode } from "@/lib/deepl/languages";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
@@ -55,26 +48,6 @@ type BilingualDocumentDialogProps = {
   fieldId: string;
   /** Disable when the underlying field is missing or not a DOCX. */
   disabled?: boolean | undefined;
-};
-
-type LanguageOption = {
-  code: DeepLTargetLanguageCode;
-  label: string;
-};
-
-const DEFAULT_TARGET_LANG: DeepLTargetLanguageCode = "EN-GB";
-const FALLBACK_SOURCE_LANG: DeepLTargetLanguageCode = "CS";
-
-const isLanguageCode = (value: string): value is DeepLTargetLanguageCode =>
-  DEEPL_TARGET_LANGUAGES.some((lang) => lang.code === value);
-
-/** The UI locale is the best guess for the document's language. */
-const defaultSourceLang = (locale: string): DeepLTargetLanguageCode => {
-  const upper = locale.toUpperCase();
-  if (isLanguageCode(upper)) {
-    return upper === DEFAULT_TARGET_LANG ? FALLBACK_SOURCE_LANG : upper;
-  }
-  return FALLBACK_SOURCE_LANG;
 };
 
 export const BilingualDocumentDialog = ({
@@ -95,18 +68,6 @@ export const BilingualDocumentDialog = ({
   );
   const [targetLang, setTargetLang] =
     useState<DeepLTargetLanguageCode>(DEFAULT_TARGET_LANG);
-
-  const localizedLanguages: LanguageOption[] = (() => {
-    const items: LanguageOption[] = DEEPL_TARGET_LANGUAGES.map((lang) => ({
-      code: lang.code,
-      label: t(`common.languages.${lang.code}`),
-    }));
-    const compareLabel = compareByLocale(locale);
-    return items.sort((a, b) => compareLabel(a.label, b.label));
-  })();
-
-  const findOption = (code: DeepLTargetLanguageCode) =>
-    localizedLanguages.find((l) => l.code === code) ?? null;
 
   const createMutation = useMutation({
     mutationFn: async () => {
@@ -187,23 +148,17 @@ export const BilingualDocumentDialog = ({
 
         <DialogPanel>
           <div className="flex flex-col gap-4">
-            <LanguagePicker
-              emptyLabel={t("translate.dialog.noLanguagesFound")}
+            <DocumentLanguagePicker
               id="bilingual-source"
               label={t("bilingual.dialog.sourceLanguage")}
               onChange={setSourceLang}
-              options={localizedLanguages}
-              placeholder={t("translate.dialog.selectPlaceholder")}
-              value={findOption(sourceLang)}
+              value={sourceLang}
             />
-            <LanguagePicker
-              emptyLabel={t("translate.dialog.noLanguagesFound")}
+            <DocumentLanguagePicker
               id="bilingual-target"
               label={t("translate.dialog.targetLanguage")}
               onChange={setTargetLang}
-              options={localizedLanguages}
-              placeholder={t("translate.dialog.selectPlaceholder")}
-              value={findOption(targetLang)}
+              value={targetLang}
             />
             {sameLanguage && (
               <p className="text-destructive text-sm">
@@ -234,53 +189,3 @@ export const BilingualDocumentDialog = ({
     </Dialog>
   );
 };
-
-type LanguagePickerProps = {
-  id: string;
-  label: string;
-  options: LanguageOption[];
-  value: LanguageOption | null;
-  onChange: (code: DeepLTargetLanguageCode) => void;
-  placeholder: string;
-  emptyLabel: string;
-};
-
-const LanguagePicker = ({
-  id,
-  label,
-  options,
-  value,
-  onChange,
-  placeholder,
-  emptyLabel,
-}: LanguagePickerProps) => (
-  <div className="flex flex-col gap-2">
-    <label className="text-sm font-medium" htmlFor={id}>
-      {label}
-    </label>
-    <Combobox<LanguageOption>
-      autoHighlight
-      isItemEqualToValue={(a, b) => a.code === b.code}
-      items={options}
-      itemToStringLabel={(item) => item.label}
-      onValueChange={(option) => {
-        if (option) {
-          onChange(option.code);
-        }
-      }}
-      value={value}
-    >
-      <ComboboxInput id={id} placeholder={placeholder} />
-      <ComboboxPopup>
-        <ComboboxList>
-          {(item: LanguageOption) => (
-            <ComboboxItem key={item.code} value={item}>
-              {item.label}
-            </ComboboxItem>
-          )}
-        </ComboboxList>
-        <ComboboxEmpty>{emptyLabel}</ComboboxEmpty>
-      </ComboboxPopup>
-    </Combobox>
-  </div>
-);

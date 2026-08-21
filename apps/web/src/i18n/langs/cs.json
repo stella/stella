@@ -168,6 +168,85 @@
       "title": "Dvojjazyčná verze vytvořena"
     }
   },
+  "bilingualTranslate": {
+    "dialog": {
+      "description": "Doplní sloupec s překladem v tomto dvousloupcovém dokumentu. Zkontrolujte, co se stane s každým řádkem a jak se překládají definované pojmy, a poté spusťte překlad.",
+      "prepare": "Připravit",
+      "preparing": "Načítání dokumentu…",
+      "preparingHint": "Načtení celého dokumentu a posouzení každého řádku trvá až dvě minuty.",
+      "title": "Přeložit dvojjazyčnou verzi"
+    },
+    "dispositions": {
+      "inline": "Oba jazyky",
+      "keep": "Ponechat beze změny"
+    },
+    "error": {
+      "prepareTitle": "Dokument se nepodařilo připravit",
+      "startTitle": "Překlad se nepodařilo spustit"
+    },
+    "errorCodes": {
+      "aiUnavailable": "Pro překlad není dostupný žádný model AI.",
+      "applyFailed": "Překlady se nepodařilo zapsat zpět do dokumentu.",
+      "documentChanged": "Dokument se během překladu změnil. Připravte jej znovu.",
+      "documentUnresolved": "Dokument nebo jeho soubor už není dostupný.",
+      "enqueueFailed": "Překlad se nepodařilo zařadit do fronty.",
+      "internal": "Překlad byl neočekávaně přerušen.",
+      "notBilingual": "Tento dokument neobsahuje dvojjazyčnou tabulku.",
+      "translationFailed": "Dávku řádků se nepodařilo přeložit.",
+      "unknown": "Překlad byl neočekávaně přerušen."
+    },
+    "glossary": {
+      "add": "Přidat pojem",
+      "description": "Tyto překlady se použijí ve všech řádcích. Pojem bez překladu je nutné doplnit, nebo odebrat.",
+      "empty": "Nebyly nalezeny žádné definované pojmy.",
+      "formsHint": "Další tvary oddělte čárkami.",
+      "formsSource": "Další tvary pojmu",
+      "formsTarget": "Další tvary překladu",
+      "incomplete": "Doplňte chybějící překlady, nebo tyto pojmy odeberte.",
+      "origins": {
+        "detected": "Nalezeno",
+        "user": "Vlastní"
+      },
+      "term": "Pojem",
+      "title": "Definované pojmy",
+      "tooManyForms": "Pojem může mít nejvýše {max} dalších tvarů.",
+      "translation": "Překlad"
+    },
+    "kinds": {
+      "heading": "Nadpis",
+      "listItem": "Položka seznamu",
+      "paragraph": "Odstavec",
+      "table": "Celá tabulka"
+    },
+    "origins": {
+      "default": "Neposouzeno",
+      "model": "AI"
+    },
+    "review": {
+      "droppedRows": "{count, plural, one {# řádek byl vynechán} few {# řádky byly vynechány} other {# řádků bylo vynecháno}}: neobsahují text, který lze přeložit.",
+      "start": "Spustit překlad",
+      "starting": "Spouštění…"
+    },
+    "rows": {
+      "description": "Zvolte, co se stane s každým řádkem sloupce s překladem.",
+      "ordinal": "#",
+      "sourceText": "Zdrojový text",
+      "title": "Řádky",
+      "whatToDo": "Co udělat"
+    },
+    "run": {
+      "cancelled": "Překlad byl zrušen.",
+      "doneSummary": "{count, plural, one {Přeložen # řádek} few {Přeloženy # řádky} other {Přeloženo # řádků}}.",
+      "doneTitle": "Překlad dokončen",
+      "failedRows": "{count, plural, one {# řádek se nepodařilo přeložit} few {# řádky se nepodařilo přeložit} other {# řádků se nepodařilo přeložit}}.",
+      "failedTitle": "Překlad byl zastaven",
+      "hint": "Překlad běží na serveru. Nechte toto okno otevřené, abyste ho mohli sledovat.",
+      "moreRows": "{count, plural, one {a další # řádek} few {a další # řádky} other {a dalších # řádků}}",
+      "progress": "Přeloženo {completed} z {total} řádků",
+      "title": "Probíhá překlad…",
+      "warningsTitle": "Řádky ke kontrole"
+    }
+  },
   "billing": {
     "addEntry": "Přidat záznam",
     "amount": "Částka",
