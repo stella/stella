@@ -104,6 +104,7 @@ import {
 } from "./properties";
 import { reportExports } from "./reports";
 import { savedSearches } from "./saved-searches";
+import { scoutRuns, signalEvents, signals } from "./signals";
 import { agentSkillResources, agentSkills } from "./skills";
 import { styleSets } from "./style-sets";
 import {
@@ -148,6 +149,9 @@ export const relations = defineRelations(
     flowDefinitions,
     flowRuns,
     flowRunSteps,
+    signals,
+    signalEvents,
+    scoutRuns,
     entities,
     taskAssignees,
     entityLinks,
@@ -309,6 +313,34 @@ export const relations = defineRelations(
       run: r.one.flowRuns({
         from: r.flowRunSteps.runId,
         to: r.flowRuns.id,
+      }),
+    },
+    signals: {
+      workspace: r.one.workspaces({
+        from: r.signals.workspaceId,
+        to: r.workspaces.id,
+      }),
+      assignee: r.one.user({
+        from: r.signals.assigneeUserId,
+        to: r.user.id,
+      }),
+      createdByUser: r.one.user({
+        from: r.signals.createdByUserId,
+        to: r.user.id,
+      }),
+      events: r.many.signalEvents({
+        from: r.signals.id,
+        to: r.signalEvents.signalId,
+      }),
+    },
+    signalEvents: {
+      signal: r.one.signals({
+        from: r.signalEvents.signalId,
+        to: r.signals.id,
+      }),
+      actor: r.one.user({
+        from: r.signalEvents.actorUserId,
+        to: r.user.id,
       }),
     },
     contactRelationships: {

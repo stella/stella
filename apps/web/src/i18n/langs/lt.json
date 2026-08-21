@@ -2148,6 +2148,70 @@
     "unavailable": "Šis vadovas šiuo metu nepasiekiamas",
     "whenLabel": "Kada naudoti:"
   },
+  "inbox": {
+    "ask": "Paklausti apie tai",
+    "askPrompt": "Papasakok daugiau apie šį gautųjų įrašą ir ką turėčiau daryti toliau.\n\n{title}\n{summary}",
+    "assignTo": "Priskirti",
+    "confidence": "Patikimumas {percent}%",
+    "dismissReason": "Priežastis (neprivaloma)",
+    "empty": "Šiuo metu nieko nelaukia. Sukurkite užklausą mygtuku viršuje.",
+    "evidence": {
+      "current": "Dabar",
+      "dueAt": "Terminas",
+      "findings": "Išvados",
+      "hearingType": "Posėdžio tipas",
+      "noAttachments": "Priedų nėra",
+      "previous": "Anksčiau",
+      "quote": "Cituojama ištrauka",
+      "title": "Įrodymai",
+      "verdict": "Išvada"
+    },
+    "filter": {
+      "any": "Bet kuris",
+      "mine": "Mano"
+    },
+    "newRequest": "Nauja užklausa",
+    "openMatter": "Atidaryti bylą",
+    "origin": {
+      "manual": "Kolega",
+      "model": "DI",
+      "source": "Išorinis šaltinis"
+    },
+    "request": {
+      "created": "Užklausa pateikta",
+      "description": "Aprašykite, ką turėtų peržiūrėti teisės komanda. Užklausa pateks į gautuosius rūšiavimui.",
+      "submit": "Pateikti užklausą"
+    },
+    "scout": {
+      "documentDeadlines": "Dokumento terminai",
+      "documentReview": "Peržiūra pagal playbook",
+      "manualRequest": "Užklausa"
+    },
+    "severity": {
+      "info": "Informacija",
+      "notice": "Pranešimas",
+      "warning": "Įspėjimas"
+    },
+    "snooze": "Atidėti",
+    "snoozeNextWeek": "Iki kitos savaitės",
+    "snoozeTomorrow": "Iki rytojaus",
+    "snoozedUntil": "Atidėta iki {date}",
+    "suggestion": {
+      "assign": "Priskirti",
+      "createDeadline": "Sukurti terminą",
+      "createTask": "Sukurti užduotį",
+      "fileToWorkspace": "Priskirti bylai",
+      "runReview": "Paleisti peržiūrą"
+    },
+    "unassigned": "Nepriskirta",
+    "verdict": {
+      "safe": "Saugu"
+    },
+    "view": {
+      "resolved": "Išspręsti",
+      "snoozed": "Atidėti"
+    }
+  },
   "inspector": {
     "anonymization": {
       "addPlaceholder": "Anonimizuotinas terminas",
@@ -2758,6 +2822,7 @@
   "navigation": {
     "chat": "Pokalbis",
     "contacts": "Kontaktai",
+    "inbox": "Gautieji",
     "knowledge": "Žinios",
     "myTodos": "Mano užduotys",
     "pinned": "Prisegti",

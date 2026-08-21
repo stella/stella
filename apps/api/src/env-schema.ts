@@ -267,6 +267,8 @@ export const envApiServerSchema = {
   FEATURE_LEGAL_LISTS: featureFlagSchema,
   /** Dark-launch governed work obligations and compatibility task behavior. */
   FEATURE_GOVERNED_WORKFLOW: featureFlagSchema,
+  /** Opt-in model-backed inbox producers (deadline and review scouts); they spend AI usage per processed document. */
+  FEATURE_INBOX_DOCUMENT_SCOUTS: featureFlagSchema,
   /** Enables reviewed GitHub-sourced skills in the authenticated catalogue. */
   FEATURE_PUBLIC_TOOLS: featureFlagSchema,
   /** Offers the bundled template-pack catalogue; off hides its routes. */

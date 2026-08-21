@@ -130,6 +130,11 @@ export const LIMITS = {
   flowRunsPageSizeMax: 100,
   /** Max input documents a single flow run may be launched against. */
   flowRunInputEntitiesMax: FLOW_RUN_INPUT_ENTITIES_MAX,
+  /** Inbox feed page sizes. */
+  signalsPageSizeDefault: 30,
+  signalsPageSizeMax: 100,
+  /** Attachments per manual request. */
+  signalRequestAttachmentsMax: 10,
   /** Per-org cap on the editable document-type taxonomy. The taxonomy is
    *  inherently bounded (a few dozen contract categories), so the list
    *  endpoint returns a plain ordered array rather than a paginated page. */

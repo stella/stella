@@ -2,6 +2,7 @@ import type { ComponentType } from "react";
 
 import {
   BlocksIcon,
+  InboxIcon,
   LibraryBigIcon,
   MessageSquareIcon,
   ScaleIcon,
@@ -15,6 +16,7 @@ import type { TranslationKey } from "@/i18n/types";
 type WorkspacePrimaryRoute =
   | "/chat"
   | "/contacts"
+  | "/inbox"
   | "/knowledge"
   | "/law/cases"
   | "/tools"
@@ -47,6 +49,13 @@ export const WORKSPACE_PRIMARY_NAV_ITEMS = [
     kind: "route",
     labelKey: "navigation.chat",
     to: "/chat",
+  },
+  {
+    icon: InboxIcon,
+    id: "inbox",
+    kind: "route",
+    labelKey: "navigation.inbox",
+    to: "/inbox",
   },
   {
     icon: MattersNavIcon,

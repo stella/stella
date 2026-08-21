@@ -155,6 +155,7 @@ const SMOKE_ROUTE_DEFS: readonly SmokeRouteDef[] = [
   staticRoute("/settings/organization/members"),
   staticRoute("/settings/organization/usage"),
   staticRoute("/todos"),
+  staticRoute("/inbox"),
   staticRoute("/workspaces"),
   {
     template: "/chat/workspaces/$workspaceId/$threadId",

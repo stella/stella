@@ -1,0 +1,221 @@
+import {
+  SIGNAL_KINDS,
+  SIGNAL_ORIGINS,
+  SIGNAL_SEVERITIES,
+  SIGNAL_STATUSES,
+} from "@stll/api-contract/signals";
+import type {
+  SignalEvidence,
+  SignalSubject,
+  SignalSuggestion,
+  SuggestionKind,
+} from "@stll/api-contract/signals";
+
+import {
+  jsonb,
+  organization,
+  organizationCheck,
+  orgPolicies,
+  p,
+  pUuid,
+  safeOrganizationId,
+  safeUuid,
+  safeWorkspaceId,
+  sql,
+  stella,
+  timestamptz,
+  user,
+} from "./common";
+import { workspaces } from "./contacts";
+
+export const SIGNAL_EVENT_TYPE = {
+  CREATED: "created",
+  SNOOZED: "snoozed",
+  UNSNOOZED: "unsnoozed",
+  ACCEPTED: "accepted",
+  DISMISSED: "dismissed",
+  ASSIGNED: "assigned",
+} as const;
+export type SignalEventType =
+  (typeof SIGNAL_EVENT_TYPE)[keyof typeof SIGNAL_EVENT_TYPE];
+export const SIGNAL_EVENT_TYPES = [
+  SIGNAL_EVENT_TYPE.CREATED,
+  SIGNAL_EVENT_TYPE.SNOOZED,
+  SIGNAL_EVENT_TYPE.UNSNOOZED,
+  SIGNAL_EVENT_TYPE.ACCEPTED,
+  SIGNAL_EVENT_TYPE.DISMISSED,
+  SIGNAL_EVENT_TYPE.ASSIGNED,
+] as const satisfies readonly SignalEventType[];
+
+/** What an accepted suggestion produced, for provenance from the result back. */
+export type SignalAcceptedResult =
+  | { suggestionKind: SuggestionKind; entityId: string; workspaceId: string }
+  | { suggestionKind: SuggestionKind };
+
+export const SCOUT_RUN_STATUS = {
+  RUNNING: "running",
+  SUCCEEDED: "succeeded",
+  FAILED: "failed",
+} as const;
+export type ScoutRunStatus =
+  (typeof SCOUT_RUN_STATUS)[keyof typeof SCOUT_RUN_STATUS];
+export const SCOUT_RUN_STATUSES = [
+  SCOUT_RUN_STATUS.RUNNING,
+  SCOUT_RUN_STATUS.SUCCEEDED,
+  SCOUT_RUN_STATUS.FAILED,
+] as const satisfies readonly ScoutRunStatus[];
+
+/**
+ * Org-scoped inbox signal. `workspaceId` NULL means unscoped (triage):
+ * visible only to members with the `signal:triage` permission. RLS is
+ * org-only; workspace visibility is enforced in the list query because a
+ * nullable column cannot carry the workspace policy.
+ *
+ * `dedupeKey` makes scouts replay-safe: re-emitting the same observation is
+ * an `ON CONFLICT DO NOTHING`.
+ */
+export const signals = p.pgTable(
+  "signals",
+  {
+    id: pUuid<"signal">().primaryKey(),
+    organizationId: safeOrganizationId("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    workspaceId: safeWorkspaceId("workspace_id").references(
+      () => workspaces.id,
+      { onDelete: "cascade" },
+    ),
+    kind: p.text({ enum: SIGNAL_KINDS }).notNull(),
+    origin: p.text({ enum: SIGNAL_ORIGINS }).notNull(),
+    scoutKey: p.text("scout_key").notNull(),
+    severity: p.text({ enum: SIGNAL_SEVERITIES }).notNull(),
+    /** 0..1, model origin only. */
+    confidence: p.real(),
+    title: p.varchar({ length: 512 }).notNull(),
+    summary: p.text().notNull(),
+    subject: jsonb().$type<SignalSubject>().notNull(),
+    evidence: jsonb().$type<SignalEvidence>().notNull(),
+    suggestions: jsonb().$type<SignalSuggestion[]>().notNull(),
+    dedupeKey: p.text("dedupe_key").notNull(),
+    status: p.text({ enum: SIGNAL_STATUSES }).notNull().default("new"),
+    snoozedUntil: timestamptz("snoozed_until"),
+    assigneeUserId: p
+      .text("assignee_user_id")
+      .references(() => user.id, { onDelete: "set null" }),
+    createdByUserId: p
+      .text("created_by_user_id")
+      .references(() => user.id, { onDelete: "set null" }),
+    dismissReason: p.text("dismiss_reason"),
+    acceptedResult: jsonb("accepted_result").$type<SignalAcceptedResult>(),
+    resolvedAt: timestamptz("resolved_at"),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    p
+      .foreignKey({
+        columns: [table.workspaceId, table.organizationId],
+        foreignColumns: [workspaces.id, workspaces.organizationId],
+        name: "signals_workspace_organization_fk",
+      })
+      .onDelete("cascade"),
+    p.unique("signals_id_org_unq").on(table.id, table.organizationId),
+    p
+      .uniqueIndex("signals_org_dedupe_uidx")
+      .on(table.organizationId, table.dedupeKey),
+    p
+      .index("signals_org_status_created_idx")
+      .on(table.organizationId, table.status, table.createdAt.desc(), table.id),
+    p
+      .index("signals_ws_status_created_idx")
+      .on(table.workspaceId, table.status, table.createdAt.desc(), table.id),
+    p.index("signals_assignee_idx").on(table.assigneeUserId, table.status),
+    p.check(
+      "signals_confidence_range",
+      sql`${table.confidence} is null or (${table.confidence} >= 0 and ${table.confidence} <= 1)`,
+    ),
+    p.check(
+      "signals_model_has_confidence",
+      sql`${table.origin} <> 'model' or ${table.confidence} is not null`,
+    ),
+    ...orgPolicies(),
+  ],
+);
+
+/** Append-only lifecycle audit for a signal. */
+export const signalEvents = p.pgTable(
+  "signal_events",
+  {
+    id: pUuid<"signalEvent">().primaryKey(),
+    organizationId: safeOrganizationId("organization_id").notNull(),
+    signalId: safeUuid<"signal">("signal_id").notNull(),
+    type: p.text({ enum: SIGNAL_EVENT_TYPES }).notNull(),
+    actorUserId: p
+      .text("actor_user_id")
+      .references(() => user.id, { onDelete: "set null" }),
+    payload: jsonb().$type<Record<string, unknown>>(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    p
+      .foreignKey({
+        columns: [table.signalId, table.organizationId],
+        foreignColumns: [signals.id, signals.organizationId],
+        name: "signal_events_signal_fk",
+      })
+      .onDelete("cascade"),
+    p
+      .index("signal_events_signal_created_idx")
+      .on(table.signalId, table.createdAt),
+    p.pgPolicy("signal_events_select", {
+      for: "select",
+      to: stella,
+      using: organizationCheck,
+    }),
+    p.pgPolicy("signal_events_insert", {
+      for: "insert",
+      to: stella,
+      withCheck: organizationCheck,
+    }),
+    p.pgPolicy("signal_events_no_update", {
+      as: "restrictive",
+      for: "update",
+      to: stella,
+      using: sql`false`,
+    }),
+    p.pgPolicy("signal_events_no_delete", {
+      as: "restrictive",
+      for: "delete",
+      to: stella,
+      using: sql`false`,
+    }),
+  ],
+);
+
+/**
+ * Census of scout executions: proves a scout ran and how many signals it
+ * emitted vs. deduplicated, so "no signals" is distinguishable from "never
+ * ran".
+ */
+export const scoutRuns = p.pgTable(
+  "scout_runs",
+  {
+    id: pUuid<"scoutRun">().primaryKey(),
+    organizationId: safeOrganizationId("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    scoutKey: p.text("scout_key").notNull(),
+    status: p.text({ enum: SCOUT_RUN_STATUSES }).notNull(),
+    emittedCount: p.integer("emitted_count").notNull().default(0),
+    insertedCount: p.integer("inserted_count").notNull().default(0),
+    error: p.text(),
+    startedAt: timestamptz("started_at").notNull().defaultNow(),
+    finishedAt: timestamptz("finished_at"),
+  },
+  (table) => [
+    p
+      .index("scout_runs_org_scout_started_idx")
+      .on(table.organizationId, table.scoutKey, table.startedAt.desc()),
+    ...orgPolicies(),
+  ],
+);

@@ -101,7 +101,11 @@ import {
   readTenantS3ArrayBuffer,
   writeTenantS3Object,
 } from "@/api/lib/s3-presign";
-import { brandPersistedFieldId } from "@/api/lib/safe-id-boundaries";
+import {
+  brandPersistedFieldId,
+  brandPersistedUserId,
+} from "@/api/lib/safe-id-boundaries";
+import { maybeRunDocumentDeadlineScout } from "@/api/lib/scouts/document-deadlines";
 import {
   executeNativeExtraction,
   requiresDurableNativeExtraction,
@@ -651,6 +655,14 @@ const completeDocumentProcessingRun = async ({
     run.workspaceId,
     resourceRef({ type: RESOURCE_TYPE.ENTITY, id: run.entityId }),
   );
+  // Text is persisted at this point; the inbox scout reads it detached so a
+  // model failure never touches the processing run's outcome.
+  maybeRunDocumentDeadlineScout({
+    entityId: run.entityId,
+    workspaceId: run.workspaceId,
+    organizationId: run.organizationId,
+    requestedBy: run.requestedBy ? brandPersistedUserId(run.requestedBy) : null,
+  });
   return true;
 };
 

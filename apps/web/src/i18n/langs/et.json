@@ -2148,6 +2148,70 @@
     "unavailable": "See juhend ei ole praegu saadaval",
     "whenLabel": "Millal kasutada:"
   },
+  "inbox": {
+    "ask": "Küsi selle kohta",
+    "askPrompt": "Räägi mulle sellest postkasti kirjest lähemalt ja mida peaksin järgmisena tegema.\n\n{title}\n{summary}",
+    "assignTo": "Määra",
+    "confidence": "Kindlus {percent}%",
+    "dismissReason": "Põhjus (valikuline)",
+    "empty": "Praegu ei oota miski. Lisa taotlus ülalolevast nupust.",
+    "evidence": {
+      "current": "Nüüd",
+      "dueAt": "Tähtaeg",
+      "findings": "Leiud",
+      "hearingType": "Istungi liik",
+      "noAttachments": "Manuseid pole",
+      "previous": "Varem",
+      "quote": "Tsiteeritud lõik",
+      "title": "Tõendid",
+      "verdict": "Otsus"
+    },
+    "filter": {
+      "any": "Kõik",
+      "mine": "Minu"
+    },
+    "newRequest": "Uus taotlus",
+    "openMatter": "Ava toimik",
+    "origin": {
+      "manual": "Kolleeg",
+      "model": "AI",
+      "source": "Väline allikas"
+    },
+    "request": {
+      "created": "Taotlus saadetud",
+      "description": "Kirjelda, mida õigusmeeskond peaks vaatama. Taotlus jõuab postkasti sorteerimiseks.",
+      "submit": "Saada taotlus"
+    },
+    "scout": {
+      "documentDeadlines": "Dokumendi tähtajad",
+      "documentReview": "Playbooki ülevaatus",
+      "manualRequest": "Taotlus"
+    },
+    "severity": {
+      "info": "Teave",
+      "notice": "Teade",
+      "warning": "Hoiatus"
+    },
+    "snooze": "Lükka edasi",
+    "snoozeNextWeek": "Järgmise nädalani",
+    "snoozeTomorrow": "Homseni",
+    "snoozedUntil": "Edasi lükatud kuni {date}",
+    "suggestion": {
+      "assign": "Määra",
+      "createDeadline": "Loo tähtaeg",
+      "createTask": "Loo ülesanne",
+      "fileToWorkspace": "Lisa toimikusse",
+      "runReview": "Käivita ülevaatus"
+    },
+    "unassigned": "Määramata",
+    "verdict": {
+      "safe": "Ohutu"
+    },
+    "view": {
+      "resolved": "Lahendatud",
+      "snoozed": "Edasi lükatud"
+    }
+  },
   "inspector": {
     "anonymization": {
       "addPlaceholder": "Anonüümitav termin",
@@ -2758,6 +2822,7 @@
   "navigation": {
     "chat": "Vestlus",
     "contacts": "Kontaktid",
+    "inbox": "Postkast",
     "knowledge": "Teadmus",
     "myTodos": "Minu ülesanded",
     "pinned": "Kinnitatud",

@@ -68,6 +68,7 @@ import { reportsRoute } from "@/api/handlers/reports/routes";
 import { savedSearchesRoute } from "@/api/handlers/saved-searches/routes";
 import { searchRoute } from "@/api/handlers/search/routes";
 import { sharepointRoute } from "@/api/handlers/sharepoint/routes";
+import { signalsRoute } from "@/api/handlers/signals/routes";
 import { skillsRoute } from "@/api/handlers/skills/routes";
 import { isSkillSourceRateLimitedRequest } from "@/api/handlers/skills/source-rate-limit";
 import { smokeRoute } from "@/api/handlers/smoke/routes";
@@ -606,6 +607,7 @@ const api = new Elysia()
       .use(bilingualTranslationsRoute)
       .use(reportsRoute)
       .use(flowsRoute)
+      .use(signalsRoute)
       .use(flowRunsRoute)
       .use(documentTypesRoute)
       .use(propertiesRoute)

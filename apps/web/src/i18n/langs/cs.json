@@ -2148,6 +2148,70 @@
     "unavailable": "Tento průvodce nyní není k dispozici",
     "whenLabel": "Kdy to použít:"
   },
+  "inbox": {
+    "ask": "Zeptat se",
+    "askPrompt": "Řekni mi více o této položce doručených a co mám udělat dál.\n\n{title}\n{summary}",
+    "assignTo": "Přiřadit",
+    "confidence": "Jistota {percent} %",
+    "dismissReason": "Důvod (nepovinné)",
+    "empty": "Teď vás nic nečeká. Založte požadavek tlačítkem výše.",
+    "evidence": {
+      "current": "Nově",
+      "dueAt": "Lhůta",
+      "findings": "Zjištění",
+      "hearingType": "Druh jednání",
+      "noAttachments": "Bez příloh",
+      "previous": "Původně",
+      "quote": "Citovaná pasáž",
+      "title": "Podklady",
+      "verdict": "Výsledek"
+    },
+    "filter": {
+      "any": "Jakýkoli",
+      "mine": "Moje"
+    },
+    "newRequest": "Nový požadavek",
+    "openMatter": "Otevřít spis",
+    "origin": {
+      "manual": "Kolega",
+      "model": "AI",
+      "source": "Externí zdroj"
+    },
+    "request": {
+      "created": "Požadavek odeslán",
+      "description": "Popište, na co se má právní tým podívat. Požadavek se objeví v doručených k roztřídění.",
+      "submit": "Odeslat požadavek"
+    },
+    "scout": {
+      "documentDeadlines": "Lhůty z dokumentu",
+      "documentReview": "Kontrola podle playbooku",
+      "manualRequest": "Požadavek"
+    },
+    "severity": {
+      "info": "Informace",
+      "notice": "Upozornění",
+      "warning": "Varování"
+    },
+    "snooze": "Odložit na později",
+    "snoozeNextWeek": "Do příštího týdne",
+    "snoozeTomorrow": "Do zítřka",
+    "snoozedUntil": "Odloženo do {date}",
+    "suggestion": {
+      "assign": "Přiřadit",
+      "createDeadline": "Vytvořit lhůtu",
+      "createTask": "Vytvořit úkol",
+      "fileToWorkspace": "Založit do spisu",
+      "runReview": "Spustit kontrolu"
+    },
+    "unassigned": "Nepřiřazeno",
+    "verdict": {
+      "safe": "Bez rizika"
+    },
+    "view": {
+      "resolved": "Vyřízené",
+      "snoozed": "Odložené"
+    }
+  },
   "inspector": {
     "anonymization": {
       "addPlaceholder": "Výraz k anonymizaci",
@@ -2758,6 +2822,7 @@
   "navigation": {
     "chat": "Chat",
     "contacts": "Kontakty",
+    "inbox": "Doručené",
     "knowledge": "Znalosti",
     "myTodos": "Moje úkoly",
     "pinned": "Připnuté",

@@ -29,6 +29,7 @@ const infosoudImportAgenda = createSafeHandler(
     body,
     request,
     safeDb,
+    session,
     user,
     workspaceId,
     recordAuditEvent,
@@ -65,11 +66,24 @@ const infosoudImportAgenda = createSafeHandler(
 
     const result = yield* Result.await(
       safeDb(async (tx) => {
+        // Only a re-import of an already tracked case feeds the inbox; the
+        // first import would otherwise surface every historical hearing.
+        const alreadyTracked = await tx.query.infoSoudTrackedCases.findFirst({
+          where: {
+            workspaceId: { eq: workspaceId },
+            courtCode: { eq: courtCode },
+            spisZn: { eq: spisZn },
+          },
+          columns: { id: true },
+        });
         const importResult = await importInfoSoudAgendaItems({
           actorUserId: user.id,
           agendaItems,
           tx,
           workspaceId,
+          signals: alreadyTracked
+            ? { organizationId: session.activeOrganizationId }
+            : undefined,
         });
 
         if (!importResult.ok) {

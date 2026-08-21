@@ -258,4 +258,7 @@ export const RESOURCE_IDENTITY_DISPOSITION = {
   entityLink: { type: "non_resource", reason: "association" },
   folioCollabContribution: { type: "non_resource", reason: "association" },
   folioCollabPublication: { type: "non_resource", reason: "workflow" },
+  signal: { type: "non_resource", reason: "workflow" },
+  signalEvent: { type: "non_resource", reason: "event" },
+  scoutRun: { type: "non_resource", reason: "workflow" },
 } as const satisfies Record<SafeIdType, IdentityDisposition>;

@@ -116,6 +116,7 @@ const INTERNAL_SERVER_KEYS = new Set([
   "FEATURE_CONTACTS",
   "FEATURE_DESKTOP_EDITING",
   "FEATURE_GOVERNED_WORKFLOW",
+  "FEATURE_INBOX_DOCUMENT_SCOUTS",
   "FEATURE_KNOWLEDGE_TEMPLATES",
   "FEATURE_LEGAL_LISTS",
   "FEATURE_MCP",
@@ -310,6 +311,8 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     'Transactional email transport: "ses" or "smtp". Leave unset when email is not configured.',
   FEATURE_AI_MEMORY:
     "Enable tenant-scoped AI memory APIs, prompt retrieval, tools, and workers.",
+  FEATURE_INBOX_DOCUMENT_SCOUTS:
+    "Enable model-backed inbox producers that read processed documents and review runs.",
   FEATURE_GOVERNED_WORKFLOW:
     "Enable governed work obligations, My Work, and task workflow semantics.",
   FEATURE_LEGAL_LISTS:

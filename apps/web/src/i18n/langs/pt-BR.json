@@ -2148,6 +2148,70 @@
     "unavailable": "Este guia não está disponível no momento",
     "whenLabel": "Quando usar:"
   },
+  "inbox": {
+    "ask": "Perguntar sobre isto",
+    "askPrompt": "Conte-me mais sobre este item da caixa de entrada e o que devo fazer a seguir.\n\n{title}\n{summary}",
+    "assignTo": "Atribuir a",
+    "confidence": "{percent}% de confiança",
+    "dismissReason": "Motivo (opcional)",
+    "empty": "Nada aguarda você agora. Crie uma solicitação pelo botão acima.",
+    "evidence": {
+      "current": "Agora",
+      "dueAt": "Prazo",
+      "findings": "Constatações",
+      "hearingType": "Tipo de audiência",
+      "noAttachments": "Sem anexos",
+      "previous": "Anteriormente",
+      "quote": "Trecho citado",
+      "title": "Evidências",
+      "verdict": "Veredito"
+    },
+    "filter": {
+      "any": "Qualquer",
+      "mine": "Meus"
+    },
+    "newRequest": "Nova solicitação",
+    "openMatter": "Abrir caso",
+    "origin": {
+      "manual": "Colega",
+      "model": "IA",
+      "source": "Fonte externa"
+    },
+    "request": {
+      "created": "Solicitação enviada",
+      "description": "Descreva o que a equipe jurídica deve analisar. A solicitação chega à caixa de entrada para triagem.",
+      "submit": "Enviar solicitação"
+    },
+    "scout": {
+      "documentDeadlines": "Prazos do documento",
+      "documentReview": "Revisão por playbook",
+      "manualRequest": "Solicitação"
+    },
+    "severity": {
+      "info": "Informação",
+      "notice": "Aviso",
+      "warning": "Alerta"
+    },
+    "snooze": "Adiar",
+    "snoozeNextWeek": "Até a próxima semana",
+    "snoozeTomorrow": "Até amanhã",
+    "snoozedUntil": "Adiado até {date}",
+    "suggestion": {
+      "assign": "Atribuir",
+      "createDeadline": "Criar prazo",
+      "createTask": "Criar tarefa",
+      "fileToWorkspace": "Arquivar no caso",
+      "runReview": "Executar revisão"
+    },
+    "unassigned": "Não atribuído",
+    "verdict": {
+      "safe": "Seguro"
+    },
+    "view": {
+      "resolved": "Resolvidos",
+      "snoozed": "Adiados"
+    }
+  },
   "inspector": {
     "anonymization": {
       "addPlaceholder": "Termo a anonimizar",
@@ -2758,6 +2822,7 @@
   "navigation": {
     "chat": "Bate-papo",
     "contacts": "Contatos",
+    "inbox": "Caixa de entrada",
     "knowledge": "Conhecimento",
     "myTodos": "Minhas tarefas",
     "pinned": "Fixado",
