@@ -4564,6 +4564,7 @@
       },
       "saveAsTemplate": "الحفظ كإعداد مسبق…",
       "selectProperty": "اختر الخاصية",
+      "switcherLabel": "طرق العرض المحفوظة",
       "templates": {
         "created": "تم حفظ الإعداد المسبق",
         "delete": "حذف الإعداد المسبق",

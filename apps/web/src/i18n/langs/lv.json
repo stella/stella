@@ -4564,6 +4564,7 @@
       },
       "saveAsTemplate": "Saglabāt kā iepriekšiestatījumu…",
       "selectProperty": "Izvēlieties rekvizītu",
+      "switcherLabel": "Saglabātie skati",
       "templates": {
         "created": "Iepriekšiestatījums saglabāts",
         "delete": "Dzēst iepriekšiestatījumu",

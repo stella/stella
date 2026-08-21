@@ -87,3 +87,18 @@ export type {
   WorkspaceFieldContent,
 } from "./types";
 export { FIELD_CONTENT_TYPES } from "./types";
+export { WorkspaceViewSwitcher } from "./view-switcher";
+export type {
+  WorkspaceViewSwitcherEditing,
+  WorkspaceViewSwitcherItem,
+  WorkspaceViewSwitcherProps,
+  WorkspaceViewSwitcherReorder,
+} from "./view-switcher";
+export {
+  reorderWorkspaceViewIds,
+  toWorkspaceViewDropPosition,
+} from "./view-switcher.logic";
+export type {
+  WorkspaceViewDirection,
+  WorkspaceViewDropPosition,
+} from "./view-switcher.logic";

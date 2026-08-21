@@ -4564,6 +4564,7 @@
       },
       "saveAsTemplate": "Uložiť ako predvoľbu…",
       "selectProperty": "Vybrať vlastnosť",
+      "switcherLabel": "Uložené zobrazenia",
       "templates": {
         "created": "Predvoľba uložená",
         "delete": "Vymazať predvoľbu",

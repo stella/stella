@@ -4564,6 +4564,7 @@
       },
       "saveAsTemplate": "Als Voreinstellung speichern…",
       "selectProperty": "Eigenschaft auswählen",
+      "switcherLabel": "Gespeicherte Ansichten",
       "templates": {
         "created": "Voreinstellung gespeichert",
         "delete": "Voreinstellung löschen",

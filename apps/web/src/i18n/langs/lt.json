@@ -4564,6 +4564,7 @@
       },
       "saveAsTemplate": "Išsaugoti kaip išankstinį nustatymą…",
       "selectProperty": "Pasirinkti savybę",
+      "switcherLabel": "Įrašyti rodiniai",
       "templates": {
         "created": "Išankstinis nustatymas išsaugotas",
         "delete": "Ištrinti išankstinį nustatymą",

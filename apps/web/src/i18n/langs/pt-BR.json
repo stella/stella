@@ -4564,6 +4564,7 @@
       },
       "saveAsTemplate": "Salvar como predefinição…",
       "selectProperty": "Selecione a propriedade",
+      "switcherLabel": "Visualizações salvas",
       "templates": {
         "created": "Predefinição salva",
         "delete": "Excluir predefinição",
