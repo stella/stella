@@ -787,12 +787,6 @@ export const runChatAnonPipeline = async <
     text,
     workspaceId,
   });
-  const forcedCanonicals = new Set(
-    forcedEntries.map(({ canonical }) => normalizeForExclusion(canonical)),
-  );
-  const effectiveExcludedCanonicals = excludedCanonicals?.filter(
-    (canonical) => !forcedCanonicals.has(normalizeForExclusion(canonical)),
-  );
   const effectiveGazetteerEntries = [...gazetteerEntries, ...forcedEntries];
 
   const context = providedContext ?? runtime.createPipelineContext();
@@ -839,7 +833,7 @@ export const runChatAnonPipeline = async <
 
   const result = applyExcludedCanonicals({
     deanonymiseText: runtime.deanonymise,
-    excludedCanonicals: effectiveExcludedCanonicals,
+    excludedCanonicals,
     forcedSensitiveValues: forcedSensitiveSet,
     resolvedEntities,
     redaction,

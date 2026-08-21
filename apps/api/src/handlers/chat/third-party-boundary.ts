@@ -66,6 +66,8 @@ export type ChatThirdPartyBoundary =
       pipelineContext: PipelineContext;
       /** Highest placeholder index seen per label after boundary-local rewrites. */
       placeholderOffsets: Map<string, number>;
+      /** Claimed generated token → provider-visible alias for late literal input. */
+      literalPlaceholderAliases: Map<string, string>;
       /** Indexed placeholder tokens present literally in provider-bound source text. */
       sourcePlaceholders: Set<string>;
       /**
@@ -124,6 +126,7 @@ export const createChatThirdPartyBoundary = ({
         organizationId,
         pipelineContext: createPipelineContext(),
         placeholderOffsets: new Map<string, number>(),
+        literalPlaceholderAliases: new Map<string, string>(),
         redactionMap: new Map<string, string>(),
         scopedDb,
         sourcePlaceholders: new Set<string>(),
@@ -180,6 +183,36 @@ const reserveSourcePlaceholders = (
       boundary.sourcePlaceholders.add(match[0]);
     }
   }
+};
+
+const encodeLateLiteralPlaceholders = (
+  boundary: Extract<ChatThirdPartyBoundary, { type: "anonymized" }>,
+  text: string,
+): string => {
+  const replacements = new Map<string, string>();
+  const claimedPlaceholders = [...boundary.redactionMap.keys()];
+  for (const placeholder of claimedPlaceholders) {
+    if (!text.includes(placeholder)) {
+      continue;
+    }
+    let alias = boundary.literalPlaceholderAliases.get(placeholder);
+    if (alias === undefined) {
+      let index = boundary.literalPlaceholderAliases.size + 1;
+      alias = `[LITERAL_PLACEHOLDER_${String(index)}]`;
+      while (
+        boundary.redactionMap.has(alias) ||
+        boundary.sourcePlaceholders.has(alias)
+      ) {
+        index += 1;
+        alias = `[LITERAL_PLACEHOLDER_${String(index)}]`;
+      }
+      boundary.literalPlaceholderAliases.set(placeholder, alias);
+      boundary.sourcePlaceholders.add(alias);
+    }
+    replacements.set(placeholder, alias);
+    boundary.sourcePlaceholders.add(placeholder);
+  }
+  return rewritePlaceholders(text, replacements);
 };
 
 export const reserveThirdPartyBoundarySourcePlaceholders = ({
@@ -339,6 +372,16 @@ const mergeRedactionMap = (
   }
 };
 
+const literalPlaceholderRestoreMap = (
+  boundary: Extract<ChatThirdPartyBoundary, { type: "anonymized" }>,
+): Map<string, string> =>
+  new Map(
+    [...boundary.literalPlaceholderAliases].map(([placeholder, alias]) => [
+      alias,
+      placeholder,
+    ]),
+  );
+
 /**
  * Reverse the anonymization for outgoing assistant content. No-op
  * for raw boundaries and for placeholders not seen on the way in
@@ -352,10 +395,17 @@ export const deanonymizeFromBoundary = ({
   boundary: ChatThirdPartyBoundary;
   text: string;
 }): string => {
-  if (boundary.type === "raw" || boundary.redactionMap.size === 0) {
+  if (boundary.type === "raw") {
     return text;
   }
-  return deanonymise(text, boundary.redactionMap);
+  const deanonymized =
+    boundary.redactionMap.size === 0
+      ? text
+      : deanonymise(text, boundary.redactionMap);
+  return rewritePlaceholders(
+    deanonymized,
+    literalPlaceholderRestoreMap(boundary),
+  );
 };
 
 const PLACEHOLDER_LIKE = /\[[A-Z][A-Z0-9_]*\]/u;
@@ -382,17 +432,20 @@ export const deanonymizeUnknownStringsFromBoundary = (
   value: unknown,
   mode: "strict" | "lenient" = "strict",
 ): unknown => {
-  if (boundary.type === "raw" || boundary.redactionMap.size === 0) {
+  if (boundary.type === "raw") {
     return value;
   }
+  const literalRestorations = literalPlaceholderRestoreMap(boundary);
   if (mode === "strict") {
-    return walkStrict(value, boundary.redactionMap);
+    const deanonymized = walkStrict(value, boundary.redactionMap);
+    return walkStrict(deanonymized, literalRestorations);
   }
   const lenient = buildLenientReplacer(boundary.redactionMap);
-  if (lenient === null) {
-    return value;
-  }
-  return walkLenient(value, lenient);
+  const deanonymized = lenient === null ? value : walkLenient(value, lenient);
+  const literalLenient = buildLenientReplacer(literalRestorations);
+  return literalLenient === null
+    ? deanonymized
+    : walkLenient(deanonymized, literalLenient);
 };
 
 const walkStrict = (value: unknown, map: Map<string, string>): unknown => {
@@ -692,7 +745,7 @@ const preparePartForThirdParty = ({
   }
 
   if (part.type === "tool-call" || part.type === "tool-result") {
-    return anonymizeToolPart({ part, replacements });
+    return anonymizeToolPart({ boundary, part, replacements });
   }
 
   return Result.ok(part);
@@ -822,22 +875,36 @@ const shouldPreserveStructuredString = (
 
 const anonymizeUnknownStrings = ({
   apply,
+  boundary,
+  encodeClaimedPlaceholders = false,
   key,
   replacements,
   value,
 }: {
   apply?: ((value: unknown) => void) | undefined;
+  boundary: Extract<ChatThirdPartyBoundary, { type: "anonymized" }>;
+  encodeClaimedPlaceholders?: boolean | undefined;
   key?: string | undefined;
   replacements: TextReplacement[];
   value: unknown;
 }): Result<unknown, BoundaryRefusal> => {
   if (typeof value === "string") {
-    if (key && shouldPreserveStructuredString(key, value)) {
-      return Result.ok(value);
+    const sourceValue = encodeClaimedPlaceholders
+      ? encodeLateLiteralPlaceholders(boundary, value)
+      : value;
+    const isForcedBoundaryValue =
+      value === boundary.organizationId ||
+      value === boundary.anonymizationScopeId;
+    if (
+      key &&
+      shouldPreserveStructuredString(key, value) &&
+      !isForcedBoundaryValue
+    ) {
+      return Result.ok(sourceValue);
     }
 
-    let prepared = value;
-    queueTextReplacement(replacements, value, (next) => {
+    let prepared = sourceValue;
+    queueTextReplacement(replacements, sourceValue, (next) => {
       prepared = next;
       apply?.(prepared);
     });
@@ -856,6 +923,8 @@ const anonymizeUnknownStrings = ({
             output[index] = next;
             apply?.(output);
           },
+          boundary,
+          encodeClaimedPlaceholders,
           key,
           replacements,
           value: item,
@@ -879,6 +948,8 @@ const anonymizeUnknownStrings = ({
           Object.assign(output, { [nestedKey]: next });
           apply?.(output);
         },
+        boundary,
+        encodeClaimedPlaceholders,
         key: nestedKey,
         replacements,
         value: nestedValue,
@@ -912,6 +983,7 @@ export const prepareUnknownForThirdParty = async ({
     apply: (next) => {
       preparedValue = next;
     },
+    boundary,
     replacements,
     value,
   });
@@ -936,9 +1008,11 @@ type ToolResultPart = Extract<
   { type: "tool-result" }
 >;
 const anonymizeToolPart = ({
+  boundary,
   part,
   replacements,
 }: {
+  boundary: Extract<ChatThirdPartyBoundary, { type: "anonymized" }>;
   part: ToolLikePart;
   replacements: TextReplacement[];
 }): Result<ToolLikePart, BoundaryRefusal> =>
@@ -951,6 +1025,7 @@ const anonymizeToolPart = ({
         apply: (value) => {
           Reflect.set(prepared, "arguments", safeStringifyToolArguments(value));
         },
+        boundary,
         replacements,
         value: parsedArguments,
       });
@@ -966,6 +1041,7 @@ const anonymizeToolPart = ({
         apply: (value) => {
           Reflect.set(prepared, "content", value);
         },
+        boundary,
         content: part.content,
         replacements,
       });
@@ -977,6 +1053,7 @@ const anonymizeToolPart = ({
         apply: (value) => {
           Reflect.set(prepared, "input", value);
         },
+        boundary,
         replacements,
         value: part.input,
       });
@@ -988,6 +1065,7 @@ const anonymizeToolPart = ({
         apply: (value) => {
           Reflect.set(prepared, "output", value);
         },
+        boundary,
         replacements,
         value: part.output,
       });
@@ -1026,15 +1104,22 @@ const anonymizeToolPart = ({
 
 const anonymizeToolResultContent = ({
   apply,
+  boundary,
   content,
   replacements,
 }: {
   apply: (value: ToolResultPart["content"]) => void;
+  boundary: Extract<ChatThirdPartyBoundary, { type: "anonymized" }>;
   content: ToolResultPart["content"];
   replacements: TextReplacement[];
 }): Result<ToolResultPart["content"], BoundaryRefusal> => {
   if (typeof content === "string") {
-    return anonymizeToolResultTextContent({ apply, content, replacements });
+    return anonymizeToolResultTextContent({
+      apply,
+      boundary,
+      content,
+      replacements,
+    });
   }
 
   const prepared = content.map((part) => {
@@ -1055,10 +1140,12 @@ const anonymizeToolResultContent = ({
 
 const anonymizeToolResultTextContent = ({
   apply,
+  boundary,
   content,
   replacements,
 }: {
   apply: (value: string) => void;
+  boundary: Extract<ChatThirdPartyBoundary, { type: "anonymized" }>;
   content: string;
   replacements: TextReplacement[];
 }): Result<string, BoundaryRefusal> => {
@@ -1082,6 +1169,7 @@ const anonymizeToolResultTextContent = ({
       prepared = safeStringifyToolResultContent({ fallback: content, value });
       apply(prepared);
     },
+    boundary,
     replacements,
     value: parsed.value,
   });
@@ -1277,6 +1365,8 @@ const anonymizeToolOutputForThirdParty = async ({
     apply: (value) => {
       preparedOutput = value;
     },
+    boundary,
+    encodeClaimedPlaceholders: true,
     replacements,
     value: outputValue,
   });
