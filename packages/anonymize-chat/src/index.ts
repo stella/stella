@@ -282,6 +282,72 @@ const normalizeForExclusion = (value: string): string =>
   value.normalize("NFKC").toLowerCase().replaceAll(/\s+/gu, " ").trim();
 
 const PLACEHOLDER_TOKEN = /\[[A-Z][A-Z0-9_]*_\d+\]/gu;
+const PLACEHOLDER_LABEL = /^\[(?<label>[A-Z][A-Z0-9_]*)_\d+\]$/u;
+
+const parsePlaceholderLabel = (placeholder: string): string | null => {
+  const match = PLACEHOLDER_LABEL.exec(placeholder);
+  return match?.groups?.["label"] ?? null;
+};
+
+const normalizeEntityLabelForPlaceholder = (label: string): string =>
+  label.trim().toUpperCase().replaceAll(/\s+/gu, "_");
+
+const LITERAL_PLACEHOLDER_SENTINEL_RANGES = [
+  { end: 0xf8ff, start: 0xe000 },
+  { end: 0xffffd, start: 0xf0000 },
+  { end: 0x10fffd, start: 0x100000 },
+] as const;
+
+type LiteralPlaceholderSentinelCursor = {
+  codePoint: number;
+  rangeIndex: number;
+};
+
+const allocateLiteralPlaceholderSentinel = ({
+  cursor,
+  forcedSensitiveValues,
+  text,
+}: {
+  cursor: LiteralPlaceholderSentinelCursor;
+  forcedSensitiveValues: ReadonlySet<string>;
+  text: string;
+}): string => {
+  while (cursor.rangeIndex < LITERAL_PLACEHOLDER_SENTINEL_RANGES.length) {
+    const range = LITERAL_PLACEHOLDER_SENTINEL_RANGES.at(cursor.rangeIndex);
+    if (range === undefined) {
+      break;
+    }
+    if (cursor.codePoint > range.end) {
+      cursor.rangeIndex += 1;
+      const nextRange = LITERAL_PLACEHOLDER_SENTINEL_RANGES.at(
+        cursor.rangeIndex,
+      );
+      if (nextRange !== undefined) {
+        cursor.codePoint = nextRange.start;
+      }
+      continue;
+    }
+
+    const sentinel = String.fromCodePoint(cursor.codePoint);
+    cursor.codePoint += 1;
+    if (text.includes(sentinel)) {
+      continue;
+    }
+
+    let overlapsForcedValue = false;
+    for (const forcedValue of forcedSensitiveValues) {
+      if (forcedValue.includes(sentinel) || sentinel.includes(forcedValue)) {
+        overlapsForcedValue = true;
+        break;
+      }
+    }
+    if (!overlapsForcedValue) {
+      return sentinel;
+    }
+  }
+
+  throw new RangeError("literal placeholder sentinel space exhausted");
+};
 
 const restoreLiteralPlaceholders = (
   text: string,
@@ -322,7 +388,10 @@ const protectLiteralPlaceholders = (
   restore: (value: string) => string;
 } => {
   const restoreMap = new Map<string, string>();
-  let index = 0;
+  const cursor: LiteralPlaceholderSentinelCursor = {
+    codePoint: LITERAL_PLACEHOLDER_SENTINEL_RANGES[0].start,
+    rangeIndex: 0,
+  };
   const protectedText = text.replaceAll(
     PLACEHOLDER_TOKEN,
     (placeholder, offset: number) => {
@@ -337,13 +406,12 @@ const protectLiteralPlaceholders = (
         return placeholder;
       }
 
-      let sentinel = `\uE000CHAT_PLACEHOLDER_${index}\uE001`;
-      while (text.includes(sentinel) || restoreMap.has(sentinel)) {
-        index += 1;
-        sentinel = `\uE000CHAT_PLACEHOLDER_${index}\uE001`;
-      }
+      const sentinel = allocateLiteralPlaceholderSentinel({
+        cursor,
+        forcedSensitiveValues,
+        text,
+      });
       restoreMap.set(sentinel, placeholder);
-      index += 1;
       return sentinel;
     },
   );
@@ -383,15 +451,30 @@ const forcedSensitiveGazetteerEntries = ({
 
   return [...values]
     .toSorted((left, right) => right.length - left.length)
-    .map((canonical, index) => ({
-      id: `forced-sensitive-${String(index + 1)}`,
-      canonical,
-      label: "misc",
-      variants: [],
-      workspaceId,
-      createdAt: 0,
-      source: "manual",
-    }));
+    .map((canonical, index) => {
+      const label =
+        parsePlaceholderLabel(canonical) === "MISC" ? "case number" : "misc";
+      return {
+        id: `forced-sensitive-${String(index + 1)}`,
+        canonical,
+        label,
+        variants: [],
+        workspaceId,
+        createdAt: 0,
+        source: "manual",
+      };
+    });
+};
+
+const assertForcedSensitiveValuesRedacted = (
+  redactedText: string,
+  forcedSensitiveValues: ReadonlySet<string>,
+): void => {
+  for (const forcedValue of forcedSensitiveValues) {
+    if (redactedText.includes(forcedValue)) {
+      throw new Error("forced sensitive value remained after anonymization");
+    }
+  }
 };
 
 type NativeRedaction = {
@@ -400,16 +483,6 @@ type NativeRedaction = {
   operatorMap: Map<string, OperatorType>;
   entityCount: number;
 };
-
-const PLACEHOLDER_LABEL = /^\[(?<label>[A-Z][A-Z0-9_]*)_\d+\]$/u;
-
-const parsePlaceholderLabel = (placeholder: string): string | null => {
-  const match = PLACEHOLDER_LABEL.exec(placeholder);
-  return match?.groups?.["label"] ?? null;
-};
-
-const normalizeEntityLabelForPlaceholder = (label: string): string =>
-  label.trim().toUpperCase().replaceAll(/\s+/gu, "_");
 
 /**
  * Build the public {@link ChatAnonResult} from a (possibly already
@@ -641,8 +714,10 @@ export const runChatAnonPipeline = async <
     redaction,
     sourceText: protectedInput.text,
   });
+  const redactedText = protectedInput.restore(result.redactedText);
+  assertForcedSensitiveValuesRedacted(redactedText, forcedSensitiveSet);
   return {
     ...result,
-    redactedText: protectedInput.restore(result.redactedText),
+    redactedText,
   };
 };

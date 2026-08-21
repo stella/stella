@@ -107,7 +107,11 @@ describe("runChatAnonPipeline excludedCanonicals", () => {
           const operatorMap = new Map<string, "replace">();
           let redactedText = fullText;
           for (const [idx, entity] of entities.entries()) {
-            const placeholder = `[${entity.label.toUpperCase()}_${idx + 1}]`;
+            const placeholderLabel = entity.label
+              .trim()
+              .toUpperCase()
+              .replaceAll(/\s+/gu, "_");
+            const placeholder = `[${placeholderLabel}_${idx + 1}]`;
             redactedText = redactedText.replaceAll(
               entity.text,
               () => placeholder,
@@ -245,9 +249,9 @@ describe("runChatAnonPipeline excludedCanonicals", () => {
     expect(result.redactionMap).toEqual(new Map([["[MISC_1]", forcedValue]]));
   });
 
-  test("forced values override matching exclusions and literal protection", async () => {
-    const forcedValue = "[PERSON_1]";
-    const runtime = buildRuntime([makeEntity(forcedValue, "misc")]);
+  test("forced values override exclusions without becoming their own placeholder", async () => {
+    const forcedValue = "[MISC_1]";
+    const runtime = buildRuntime([makeEntity(forcedValue, "case number")]);
 
     const result = await runChatAnonPipeline({
       runtime,
@@ -258,8 +262,10 @@ describe("runChatAnonPipeline excludedCanonicals", () => {
       forcedSensitiveValues: [forcedValue],
     });
 
-    expect(result.redactedText).toBe("[MISC_1]");
-    expect(result.redactionMap).toEqual(new Map([["[MISC_1]", forcedValue]]));
+    expect(result.redactedText).toBe("[CASE_NUMBER_1]");
+    expect(result.redactionMap).toEqual(
+      new Map([["[CASE_NUMBER_1]", forcedValue]]),
+    );
   });
 
   test("preserves forced values containing placeholder-shaped substrings", async () => {
@@ -296,6 +302,37 @@ describe("runChatAnonPipeline excludedCanonicals", () => {
     expect(result.redactionMap).toEqual(
       new Map([["[ORGANIZATION_1]", excludedValue]]),
     );
+  });
+
+  test("keeps forced values from colliding with literal-placeholder sentinels", async () => {
+    const forcedValue = "CHAT_PLACEHOLDER_0";
+    const runtime = buildRuntime([makeEntity(forcedValue, "misc")]);
+
+    const result = await runChatAnonPipeline({
+      runtime,
+      dictionaries,
+      text: `[PERSON_1] ${forcedValue}`,
+      workspaceId: "ws-1",
+      forcedSensitiveValues: [forcedValue],
+    });
+
+    expect(result.redactedText).toBe("[PERSON_1] [MISC_1]");
+    expect(result.redactionMap).toEqual(new Map([["[MISC_1]", forcedValue]]));
+  });
+
+  test("fails closed when native redaction leaves a forced value", () => {
+    const forcedValue = "ORDER-123";
+    const runtime = buildRuntime([]);
+
+    expect(
+      runChatAnonPipeline({
+        runtime,
+        dictionaries,
+        text: forcedValue,
+        workspaceId: "ws-1",
+        forcedSensitiveValues: [forcedValue],
+      }),
+    ).rejects.toThrow("forced sensitive value remained after anonymization");
   });
 
   test("bounds caller-supplied forced values before building a pipeline", () => {
