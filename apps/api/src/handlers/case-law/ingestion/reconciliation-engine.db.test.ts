@@ -18,7 +18,7 @@ import {
 import type { SliceRetrySchedule } from "@/api/handlers/case-law/ingestion/reconciliation-engine";
 import {
   MAX_SLICE_INGEST_BUDGET,
-  RECONCILIATION_UNIT_BUDGET_MS,
+  RECONCILIATION_INGEST_BUDGET_MS,
   runReconciliationWorkUnit,
 } from "@/api/handlers/case-law/ingestion/reconciliation-engine";
 import {
@@ -487,7 +487,7 @@ test("a walk out of clock defers the rest of its budget rather than overrunning"
 
   // One document costs the whole budget, so the walk has the clock for the
   // first miss and not for the second.
-  const clock = publisherPacedClock(RECONCILIATION_UNIT_BUDGET_MS + 1);
+  const clock = publisherPacedClock(RECONCILIATION_INGEST_BUDGET_MS + 1);
   const outcome = await runUnitWith({
     sourceId,
     now: clock.now,
@@ -508,18 +508,21 @@ test("a walk out of clock defers the rest of its budget rather than overrunning"
   expect(builds).toHaveLength(1);
 });
 
-test("a listing out of clock is refused rather than recorded short", async () => {
-  // The other half of the budget, and deliberately not symmetric with the one
-  // above: a walk vouches for a slice only once it has seen every page, so a
-  // listing cut off part way must write no coverage at all. Recording what it
-  // managed to list would read as a genuinely small slice, and the rest of it
-  // would never be hunted again.
+test("a slow multi-page listing still completes instead of restarting forever", async () => {
+  // The budget deliberately does NOT cut listing off. A listing has nowhere to
+  // resume from -- `walkSlice` always starts at page 0 and no page cursor is
+  // persisted -- so refusing one on a clock would make a slice that merely
+  // lists slowly restart, fail at the same page, and never reconcile at all.
+  // Regression guard: this walk spends the whole ingest budget before its
+  // second page and must still finish the listing and write coverage.
   const sourceId = await seedSource();
+  // Seeded counts differ from what the stub lists, so a coverage row matching
+  // the listing proves this walk wrote it rather than leaving the old one.
   await seedSlice({
     sourceId,
     slice: OWED_SLICE,
-    reported: 2,
-    collected: 0,
+    reported: 5,
+    collected: 3,
     checkedAt: addUtcDays(NOW, -2),
   });
   for (const offset of [0, -1]) {
@@ -534,8 +537,8 @@ test("a listing out of clock is refused rather than recorded short", async () =>
   }
   listing.totalPages = 2;
 
-  const clock = publisherPacedClock(RECONCILIATION_UNIT_BUDGET_MS + 1);
-  const rejection: unknown = await runUnitWith({
+  const clock = publisherPacedClock(RECONCILIATION_INGEST_BUDGET_MS + 1);
+  const outcome = await runUnitWith({
     sourceId,
     now: clock.now,
     reconciliation: {
@@ -548,18 +551,17 @@ test("a listing out of clock is refused rather than recorded short", async () =>
         return page;
       },
     },
-  }).then(
-    () => null,
-    (error: unknown) => error,
-  );
-
-  expect(rejection).toBeInstanceOf(AdapterFetchError);
-  expect(rejection).toMatchObject({
-    message: expect.stringContaining("unit budget"),
   });
-  // Listing stopped at the page that spent the budget, and the ledger row is
-  // the one seeded: untouched, so the slice is still owed in full.
-  expect(listed).toHaveLength(1);
+
+  // Both pages walked, and the ingest that follows defers rather than the
+  // listing throwing: the slice is owed exactly as much as before, from a row
+  // this walk is authoritative for.
+  expect(listed).toHaveLength(2);
+  expect(outcome).toMatchObject({
+    type: "worked",
+    summary: { slice: OWED_SLICE, listed: 4, keyable: 2, deferred: 2 },
+  });
+  expect(builds).toHaveLength(0);
   const [coverage] = await db
     .select()
     .from(caseLawCoverageSlices)

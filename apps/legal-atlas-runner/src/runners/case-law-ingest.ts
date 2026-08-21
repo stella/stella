@@ -40,7 +40,8 @@ import { getAdapter } from "@/api/handlers/case-law/ingestion/adapters/adapter-r
 import { runIngestionPipeline } from "@/api/handlers/case-law/ingestion/pipeline";
 import type { SliceRetrySchedule } from "@/api/handlers/case-law/ingestion/reconciliation-engine";
 import {
-  RECONCILIATION_UNIT_BUDGET_MS,
+  RECONCILIATION_INGEST_BUDGET_MS,
+  RECONCILIATION_LISTING_WORST_CASE_MS,
   RECONCILIATION_UNIT_SETTLE_MS,
   runReconciliationWorkUnit,
 } from "@/api/handlers/case-law/ingestion/reconciliation-engine";
@@ -362,13 +363,17 @@ const SEARCH_INDEX_HARD_DEADLINE_MS = Math.max(
     (LEGAL_ATLAS_RUNNER_ENV.dbBackfillTransactionTimeoutMs +
       BACKFILL_DEADLINE_TRANSACTION_GRACE_MS),
 );
-// A reconciliation unit bounds its own wall clock, so its backstop is that
-// budget plus the engine's settle headroom rather than the backfill batch's
-// figure. Derived rather than restated: the two numbers move together, so
-// raising the unit's budget cannot leave the deadline underneath it, where a
-// walk that is merely large reads as a wedge and takes the process down.
+// Summed from the engine's own phase bounds rather than restated, so this can
+// never drift underneath what a healthy unit does — which is the whole failure
+// this backstop had: a merely-large walk read as a wedge and took the process
+// down with it. Listing dominates, and cannot be given a clock of its own (it
+// has nowhere to resume from), so the deadline clears its worst case instead.
+// Large, and correctly so: a backstop that fires before healthy work finishes
+// is not a safety net, it is the fault.
 const RECONCILIATION_HARD_DEADLINE_MS =
-  RECONCILIATION_UNIT_BUDGET_MS + RECONCILIATION_UNIT_SETTLE_MS;
+  RECONCILIATION_LISTING_WORST_CASE_MS +
+  RECONCILIATION_INGEST_BUDGET_MS +
+  RECONCILIATION_UNIT_SETTLE_MS;
 
 type Semaphore = {
   acquire: (signal?: AbortSignal) => Promise<void>;
