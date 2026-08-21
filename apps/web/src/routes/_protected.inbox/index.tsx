@@ -146,9 +146,13 @@ function InboxPage() {
             </MenuTrigger>
             <MenuPopup>
               <MenuRadioGroup
-                onValueChange={(value) =>
-                  update({ workspaceId: value === "" ? null : value })
-                }
+                onValueChange={(value) => {
+                  // The radio group hands back an unknown-typed value.
+                  if (typeof value !== "string") {
+                    return;
+                  }
+                  update({ workspaceId: value === "" ? null : value });
+                }}
                 value={filters.workspaceId ?? ""}
               >
                 <MenuRadioItem value="">

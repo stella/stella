@@ -118,9 +118,9 @@ export const SignalCard = ({
     );
   };
 
-  const accept = (suggestionKind: SignalSuggestion["kind"]) =>
-    run(
-      () => acceptSignal({ ...mutationArgs, suggestionKind }),
+  const accept = async (suggestionKind: SignalSuggestion["kind"]) =>
+    await run(
+      async () => await acceptSignal({ ...mutationArgs, suggestionKind }),
       t("inspector.review.decisions.accepted"),
     );
 
@@ -218,8 +218,8 @@ export const SignalCard = ({
               disabled={busy}
               key={suggestion.kind}
               onAccept={accept}
-              onAssign={(assigneeUserId) =>
-                run(async () => {
+              onAssign={async (assigneeUserId) =>
+                await run(async () => {
                   const assigned = await assignSignal({
                     ...mutationArgs,
                     assigneeUserId,
@@ -269,8 +269,8 @@ export const SignalCard = ({
                   onClick={() => {
                     detached(
                       run(
-                        () =>
-                          snoozeSignal({
+                        async () =>
+                          await snoozeSignal({
                             ...mutationArgs,
                             until: snoozeUntil("tomorrow"),
                           }),
@@ -286,8 +286,8 @@ export const SignalCard = ({
                   onClick={() => {
                     detached(
                       run(
-                        () =>
-                          snoozeSignal({
+                        async () =>
+                          await snoozeSignal({
                             ...mutationArgs,
                             until: snoozeUntil("next-week"),
                           }),
@@ -304,8 +304,11 @@ export const SignalCard = ({
           </Menu>
           <DismissPopover
             disabled={busy}
-            onDismiss={(reason) =>
-              run(() => dismissSignal({ ...mutationArgs, reason }), null)
+            onDismiss={async (reason) =>
+              await run(
+                async () => await dismissSignal({ ...mutationArgs, reason }),
+                null,
+              )
             }
           />
         </div>
@@ -427,7 +430,7 @@ const SuggestionButton = ({
         <MatterMenu
           disabled={disabled}
           label={label}
-          onPick={() => onAccept(suggestion.kind)}
+          onPick={async () => await onAccept(suggestion.kind)}
           organizationId={organizationId}
         />
       );
