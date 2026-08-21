@@ -626,6 +626,52 @@ describe("chat third-party anonymization boundary", () => {
     ).toBe("Jan Novák; Keep [PERSON_1] literal");
   });
 
+  test("chooses late aliases absent from the complete runtime output", async () => {
+    const { deanonymizeUnknownStringsFromBoundary } =
+      await import("@/api/handlers/chat/third-party-boundary");
+    const boundary = createBoundary();
+    await prepareTextForThirdParty({
+      boundary,
+      text: "Jan Novák prepared the memo.",
+    });
+    const outputs = [
+      "[PERSON_1] [LITERAL_PLACEHOLDER_1]",
+      "[PERSON_1] [LITERAL_PLACEHOLDER_2]",
+    ];
+    const tools = {
+      literal_output: applyChatToolPolicy(
+        toolDefinition({
+          name: "literal_output",
+          description: "Return colliding literal placeholder fixtures.",
+        }).server(async () => ({ text: outputs.shift() })),
+        CHAT_TOOL_POLICY_KIND.internal,
+      ),
+    };
+    const prepared = prepareToolsForThirdParty({
+      boundary,
+      tools: asTestToolSet(tools),
+    });
+    const executable = asTestExecutable<unknown, unknown>(
+      prepared["literal_output"],
+    );
+
+    const first = await executable?.execute?.(undefined);
+    const second = await executable?.execute?.(undefined);
+
+    expect(first).toEqual({
+      text: "[LITERAL_PLACEHOLDER_2] [LITERAL_PLACEHOLDER_1]",
+    });
+    expect(second).toEqual({
+      text: "[LITERAL_PLACEHOLDER_3] [LITERAL_PLACEHOLDER_4]",
+    });
+    expect(deanonymizeUnknownStringsFromBoundary(boundary, first)).toEqual({
+      text: "[PERSON_1] [LITERAL_PLACEHOLDER_1]",
+    });
+    expect(deanonymizeUnknownStringsFromBoundary(boundary, second)).toEqual({
+      text: "[PERSON_1] [LITERAL_PLACEHOLDER_2]",
+    });
+  });
+
   test("allows approved external tools to inherit raw mode", async () => {
     const boundary = createRawBoundary();
     const tools = {

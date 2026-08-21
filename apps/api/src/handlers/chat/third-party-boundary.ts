@@ -66,7 +66,7 @@ export type ChatThirdPartyBoundary =
       pipelineContext: PipelineContext;
       /** Highest placeholder index seen per label after boundary-local rewrites. */
       placeholderOffsets: Map<string, number>;
-      /** Claimed generated token → provider-visible alias for late literal input. */
+      /** Provider-visible alias → late literal token restored at the boundary. */
       literalPlaceholderAliases: Map<string, string>;
       /** Indexed placeholder tokens present literally in provider-bound source text. */
       sourcePlaceholders: Set<string>;
@@ -190,27 +190,30 @@ const encodeLateLiteralPlaceholders = (
   text: string,
 ): string => {
   const replacements = new Map<string, string>();
-  const claimedPlaceholders = [...boundary.redactionMap.keys()];
-  for (const placeholder of claimedPlaceholders) {
-    if (!text.includes(placeholder)) {
+  const restorableTokens = [
+    ...boundary.redactionMap.keys(),
+    ...boundary.literalPlaceholderAliases.keys(),
+  ];
+  for (const token of restorableTokens) {
+    if (!text.includes(token)) {
       continue;
     }
-    let alias = boundary.literalPlaceholderAliases.get(placeholder);
-    if (alias === undefined) {
-      let index = boundary.literalPlaceholderAliases.size + 1;
+
+    let index = boundary.literalPlaceholderAliases.size + 1;
+    let alias = `[LITERAL_PLACEHOLDER_${String(index)}]`;
+    while (
+      text.includes(alias) ||
+      boundary.redactionMap.has(alias) ||
+      boundary.literalPlaceholderAliases.has(alias) ||
+      boundary.sourcePlaceholders.has(alias)
+    ) {
+      index += 1;
       alias = `[LITERAL_PLACEHOLDER_${String(index)}]`;
-      while (
-        boundary.redactionMap.has(alias) ||
-        boundary.sourcePlaceholders.has(alias)
-      ) {
-        index += 1;
-        alias = `[LITERAL_PLACEHOLDER_${String(index)}]`;
-      }
-      boundary.literalPlaceholderAliases.set(placeholder, alias);
-      boundary.sourcePlaceholders.add(alias);
     }
-    replacements.set(placeholder, alias);
-    boundary.sourcePlaceholders.add(placeholder);
+    boundary.literalPlaceholderAliases.set(alias, token);
+    replacements.set(token, alias);
+    boundary.sourcePlaceholders.add(token);
+    boundary.sourcePlaceholders.add(alias);
   }
   return rewritePlaceholders(text, replacements);
 };
@@ -374,13 +377,7 @@ const mergeRedactionMap = (
 
 const literalPlaceholderRestoreMap = (
   boundary: Extract<ChatThirdPartyBoundary, { type: "anonymized" }>,
-): Map<string, string> =>
-  new Map(
-    [...boundary.literalPlaceholderAliases].map(([placeholder, alias]) => [
-      alias,
-      placeholder,
-    ]),
-  );
+): Map<string, string> => new Map(boundary.literalPlaceholderAliases);
 
 /**
  * Reverse the anonymization for outgoing assistant content. No-op
