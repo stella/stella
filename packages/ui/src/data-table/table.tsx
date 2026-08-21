@@ -102,7 +102,7 @@ type RowProps = Omit<HTMLAttributes<HTMLTableRowElement>, "children">;
 const DEFAULT_LOADING_ROW_COUNT = 3;
 const MAX_LOADING_ROW_COUNT = 20;
 
-const INTERACTIVE_DESCENDANT_SELECTOR = [
+export const DATA_TABLE_INTERACTIVE_DESCENDANT_SELECTORS = [
   "a[href]",
   "audio[controls]",
   "button",
@@ -132,7 +132,10 @@ const INTERACTIVE_DESCENDANT_SELECTOR = [
   "[role='treeitem']",
   "[tabindex]:not([tabindex='-1'])",
   "[data-data-table-stop-row-action]",
-].join(",");
+] as const;
+
+const INTERACTIVE_DESCENDANT_SELECTOR =
+  DATA_TABLE_INTERACTIVE_DESCENDANT_SELECTORS.join(",");
 
 export type DataTableAriaSort = "ascending" | "descending" | "none";
 
@@ -173,7 +176,14 @@ const LoadingRows = <TItem,>({
   Array.from({ length: resolveLoadingRowCount(rowCount) }, (_, rowIndex) => (
     <TableRow key={rowIndex}>
       {columns.map((column) => (
-        <TableCell key={column.id}>
+        <TableCell
+          className={
+            typeof column.cellClassName === "string"
+              ? column.cellClassName
+              : undefined
+          }
+          key={column.id}
+        >
           <Skeleton aria-hidden="true" className="h-4 w-full" />
         </TableCell>
       ))}

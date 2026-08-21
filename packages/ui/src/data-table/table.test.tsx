@@ -2,7 +2,43 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import { describe, expect, test } from "bun:test";
 
-import { DataTable, isDataTableRowActionTarget } from "./table";
+import {
+  DATA_TABLE_INTERACTIVE_DESCENDANT_SELECTORS,
+  DataTable,
+  isDataTableRowActionTarget,
+} from "./table";
+
+const expectedInteractiveDescendantSelectors = [
+  "a[href]",
+  "audio[controls]",
+  "button",
+  "input",
+  "select",
+  "textarea",
+  "video[controls]",
+  "summary",
+  "label",
+  "[contenteditable]:not([contenteditable='false'])",
+  "[role='button']",
+  "[role='checkbox']",
+  "[role='combobox']",
+  "[role='link']",
+  "[role='listbox']",
+  "[role='menuitem']",
+  "[role='menuitemcheckbox']",
+  "[role='menuitemradio']",
+  "[role='option']",
+  "[role='radio']",
+  "[role='searchbox']",
+  "[role='slider']",
+  "[role='spinbutton']",
+  "[role='switch']",
+  "[role='tab']",
+  "[role='textbox']",
+  "[role='treeitem']",
+  "[tabindex]:not([tabindex='-1'])",
+  "[data-data-table-stop-row-action]",
+] as const;
 
 const columns = [
   {
@@ -57,6 +93,7 @@ describe("DataTable", () => {
         columns={[
           ...columns,
           {
+            cellClassName: "text-right",
             header: "Status",
             id: "status",
             render: () => "Open",
@@ -79,6 +116,7 @@ describe("DataTable", () => {
       loading.indexOf('data-slot="table"'),
     );
     expect(loading).toContain("Loading");
+    expect(loading).toContain("text-right");
     expect(loading.match(/data-slot="skeleton"/gu)).toHaveLength(4);
     expect(loading).not.toContain("colSpan");
     expect(loading).not.toContain("No matters");
@@ -115,24 +153,14 @@ describe("DataTable", () => {
   test("row selection ignores every nested interactive target", () => {
     const cell = new ClosestTarget("[role='presentation']");
     const row = new ContainmentTarget([cell]);
-    const interactiveSelectors = [
-      "audio[controls]",
-      "button",
-      "label",
-      "[contenteditable]:not([contenteditable='false'])",
-      "[role='checkbox']",
-      "[role='combobox']",
-      "[role='menuitem']",
-      "[role='radio']",
-      "[role='switch']",
-      "[role='tab']",
-      "[data-data-table-stop-row-action]",
-      "video[controls]",
-    ];
+
+    expect(DATA_TABLE_INTERACTIVE_DESCENDANT_SELECTORS).toEqual(
+      expectedInteractiveDescendantSelectors,
+    );
 
     expect(isDataTableRowActionTarget(row, row)).toBe(true);
     expect(isDataTableRowActionTarget(row, cell)).toBe(true);
-    for (const selector of interactiveSelectors) {
+    for (const selector of expectedInteractiveDescendantSelectors) {
       const target = new ClosestTarget(selector);
       row.add(target);
       expect(isDataTableRowActionTarget(row, target)).toBe(false);
@@ -189,6 +217,6 @@ class ClosestTarget extends EventTarget {
 
   closest(selector: string) {
     this.seenSelector = selector;
-    return selector.includes(this.matchingSelector) ? {} : null;
+    return selector.split(",").includes(this.matchingSelector) ? {} : null;
   }
 }
