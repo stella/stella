@@ -2185,6 +2185,9 @@ export default defineConfig({
               "apps/api/src/env-document-processing-worker.ts",
               "apps/api/src/db-url.ts",
               "apps/api/src/handlers/case-law/ingestion/adapters/utils.ts",
+              // Publisher pacing must distinguish deployed runtimes without
+              // importing the eager Redis environment schema at module load.
+              "apps/api/src/handlers/case-law/ingestion/adapters/publisher-request-gate.ts",
               "apps/api/src/handlers/health/routes.ts",
               "apps/api/src/server.ts",
               "apps/api/src/lib/analytics/posthog.ts",

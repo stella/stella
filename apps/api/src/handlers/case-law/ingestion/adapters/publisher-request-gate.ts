@@ -1,5 +1,4 @@
-import { envBase } from "@/api/env-base";
-import { createRedisClient } from "@/api/lib/redis-client";
+import { DEPLOYED_NODE_ENVS } from "@/api/env-base-schema";
 
 const RESERVE_SLOT_SCRIPT = `
 local clock = redis.call("TIME")
@@ -22,7 +21,7 @@ type PublisherRequestGateConfig = {
 };
 
 export type PublisherRequestGateDependencies = {
-  redis: () => PublisherGateClient;
+  redis: () => PublisherGateClient | Promise<PublisherGateClient>;
   sleep: (durationMs: number, signal?: AbortSignal) => Promise<void>;
 };
 
@@ -77,10 +76,11 @@ const defaultDependencies = (
     },
   };
   return {
-    redis: () => {
-      if (envBase.isDev) {
+    redis: async () => {
+      if (!DEPLOYED_NODE_ENVS.has(process.env.NODE_ENV ?? "")) {
         return localRedis;
       }
+      const { createRedisClient } = await import("@/api/lib/redis-client");
       redis ??= createRedisClient({ enableOfflineQueue: false });
       return redis;
     },
@@ -94,9 +94,13 @@ export const createPublisherRequestSlot =
     dependencies = defaultDependencies(intervalMs),
   ): ((signal?: AbortSignal) => Promise<void>) =>
   async (signal) => {
-    const rawWait = await dependencies
-      .redis()
-      .send("EVAL", [RESERVE_SLOT_SCRIPT, "1", key, String(intervalMs)]);
+    const redis = await dependencies.redis();
+    const rawWait = await redis.send("EVAL", [
+      RESERVE_SLOT_SCRIPT,
+      "1",
+      key,
+      String(intervalMs),
+    ]);
     const waitMs = Number(rawWait);
     if (!Number.isFinite(waitMs) || waitMs < 0) {
       throw new TypeError(
