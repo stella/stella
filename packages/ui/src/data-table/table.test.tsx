@@ -116,6 +116,7 @@ describe("DataTable", () => {
     const cell = new ClosestTarget("[role='presentation']");
     const row = new ContainmentTarget([cell]);
     const interactiveSelectors = [
+      "audio[controls]",
       "button",
       "label",
       "[contenteditable]:not([contenteditable='false'])",
@@ -126,6 +127,7 @@ describe("DataTable", () => {
       "[role='switch']",
       "[role='tab']",
       "[data-data-table-stop-row-action]",
+      "video[controls]",
     ];
 
     expect(isDataTableRowActionTarget(row, row)).toBe(true);

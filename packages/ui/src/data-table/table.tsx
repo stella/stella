@@ -104,10 +104,12 @@ const MAX_LOADING_ROW_COUNT = 20;
 
 const INTERACTIVE_DESCENDANT_SELECTOR = [
   "a[href]",
+  "audio[controls]",
   "button",
   "input",
   "select",
   "textarea",
+  "video[controls]",
   "summary",
   "label",
   "[contenteditable]:not([contenteditable='false'])",
