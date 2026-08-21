@@ -101,6 +101,7 @@ export const DataTable = <TItem,>({
 type RowProps = Omit<HTMLAttributes<HTMLTableRowElement>, "children">;
 
 const DEFAULT_LOADING_ROW_COUNT = 3;
+const MAX_LOADING_ROW_COUNT = 20;
 
 const INTERACTIVE_DESCENDANT_SELECTOR = [
   "a[href]",
@@ -185,7 +186,7 @@ const LoadingRows = <TItem,>({
 
 const resolveLoadingRowCount = (rowCount: number) =>
   Number.isFinite(rowCount) && rowCount > 0
-    ? Math.max(1, Math.floor(rowCount))
+    ? Math.min(MAX_LOADING_ROW_COUNT, Math.max(1, Math.floor(rowCount)))
     : DEFAULT_LOADING_ROW_COUNT;
 
 const StatusRow = ({ colSpan, label }: { colSpan: number; label: string }) => (

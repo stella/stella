@@ -96,6 +96,16 @@ describe("DataTable", () => {
     expect(loading).toContain("Loading");
   });
 
+  test("bounds invalid and extreme loading row counts", () => {
+    for (const rowCount of [0, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
+      const loading = renderLoadingTable(rowCount);
+      expect(loading.match(/data-slot="skeleton"/gu)).toHaveLength(3);
+    }
+
+    const extreme = renderLoadingTable(10_000);
+    expect(extreme.match(/data-slot="skeleton"/gu)).toHaveLength(20);
+  });
+
   test("row selection ignores every nested interactive target", () => {
     const cell = new ClosestTarget("[role='presentation']");
     const row = new ContainmentTarget([cell]);
@@ -128,6 +138,19 @@ describe("DataTable", () => {
     expect(isDataTableRowActionTarget(row, portaledPopup)).toBe(false);
   });
 });
+
+const renderLoadingTable = (loadingRowCount: number) =>
+  renderToStaticMarkup(
+    <DataTable
+      columns={columns}
+      emptyLabel="No matters"
+      isLoading
+      loadingLabel="Loading"
+      loadingRowCount={loadingRowCount}
+      rowKey={(row: { id: string }) => row.id}
+      rows={[]}
+    />,
+  );
 
 class ContainmentTarget extends EventTarget {
   private readonly targets: Set<EventTarget>;
