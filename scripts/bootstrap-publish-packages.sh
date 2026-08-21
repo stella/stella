@@ -8,9 +8,9 @@
 # settings -> Publishing) pointing at this repo + .github/workflows/publish-npm.yml,
 # and use the workflow for every release thereafter.
 #
-# Per package: build, transform the package.json to its published dist shape,
-# `bun publish` (Bun rewrites catalog:/workspace: deps; npm would not), then
-# restore the source-shaped package.json.
+# All packages are authenticated, validated, built, transformed, and packed
+# before the first registry write. `bun publish` rewrites catalog:/workspace:
+# dependencies; npm would not. A trap restores every source-shaped manifest.
 #
 # Requires npm auth (`npm whoami` must succeed) and a clean git tree.
 # Run from the repo root.
@@ -27,14 +27,48 @@ fi
 # after each package exists. `template-conditions` depends on `conditions`;
 # `anonymize-chat` depends on the already-published `anonymize-wasm` package.
 packages=(auth-model ai-catalog anonymize-chat conditions template-conditions docx-utils)
+manifests=()
+
+npm whoami >/dev/null
 
 for p in "${packages[@]}"; do
-  echo "==> publishing @stll/${p}"
+  manifest="packages/${p}/package.json"
+  manifests+=("$manifest")
+  version="$(jq -er '.version | strings' "$manifest")"
+  if [[ "$version" != "0.0.0" ]]; then
+    echo "error: @stll/${p} is ${version}; bootstrap only publishes the 0.0.0 placeholder." >&2
+    exit 1
+  fi
+  if registry_result="$(npm view "@stll/${p}" version 2>&1)"; then
+    echo "error: @stll/${p} already exists on npm; refusing a bootstrap publish." >&2
+    exit 1
+  fi
+  if [[ "$registry_result" != *"E404"* ]]; then
+    echo "error: could not verify that @stll/${p} is absent from npm." >&2
+    echo "$registry_result" >&2
+    exit 1
+  fi
+done
+
+cleanup() {
+  git checkout -- "${manifests[@]}"
+}
+trap cleanup EXIT
+
+for p in "${packages[@]}"; do
+  echo "==> preparing @stll/${p}@0.0.0"
   (cd "packages/${p}" && bun run build)
   bun scripts/prepare-publish.ts "packages/${p}"
-  (cd "packages/${p}" && bun publish --access public)
-  git checkout -- "packages/${p}/package.json"
+  (cd "packages/${p}" && bun pm pack --dry-run)
 done
+
+for p in "${packages[@]}"; do
+  echo "==> publishing @stll/${p}@0.0.0"
+  (cd "packages/${p}" && bun publish --access public)
+done
+
+cleanup
+trap - EXIT
 
 echo
 echo "Published. Next: add an npm trusted publisher for each package on npmjs.com,"
