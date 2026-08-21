@@ -126,7 +126,7 @@ void mock.module("@/api/lib/analytics/capture", () => ({
   captureError: captureErrorMock,
 }));
 
-const createBilingualEntity = (await import("./create-bilingual")).default;
+const createBilingualEntity = (await import("./create")).default;
 
 type Ctx = Parameters<typeof createBilingualEntity.handler>[0];
 

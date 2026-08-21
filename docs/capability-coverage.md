@@ -108,6 +108,7 @@ here as its CLI form). Projected from the same handler enumeration that builds
 
 | Capability                            | Access             | Scope                  | Feature | Reachable via                                                                                                                                                                                                                                                                   |
 | ------------------------------------- | ------------------ | ---------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `entities.bilingual.create`           | write              | stella:matters_write   | —       | generic invoke → `stella capability entities bilingual-create`                                                                                                                                                                                                                  |
 | `entities.check-stamp`                | read               | stella:read            | —       | not runnable over the generic transport: requires a file in `file`, which JSON cannot carry. No JSON-transport alternative: the lookup reads a stamp out of the supplied document's bytes; no capability accepts the stamp on its own                                           |
 | `entities.clip`                       | write              | stella:matters_write   | —       | generic invoke → `stella capability entities clip`                                                                                                                                                                                                                              |
 | `entities.compare-versions`           | read               | stella:read            | —       | generic invoke → `stella capability entities compare-versions`                                                                                                                                                                                                                  |
@@ -509,7 +510,7 @@ mechanics, and similar), not gaps in coverage.
 | chat_thread_ui         | 2     |
 | compound_consent       | 1     |
 | deploy_mechanics       | 1     |
-| document_processing    | 17    |
+| document_processing    | 20    |
 | health_infra           | 1     |
 | hosted_billing         | 6     |
 | mcp_transport          | 11    |
@@ -523,4 +524,4 @@ mechanics, and similar), not gaps in coverage.
 | upload_mechanics       | 14    |
 | url_preview            | 2     |
 
-Total: 136
+Total: 139

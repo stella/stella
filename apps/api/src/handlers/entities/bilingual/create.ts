@@ -13,7 +13,7 @@ import { t } from "elysia";
 
 import { createBilingualDocx } from "@stll/folio-core/server";
 
-import { buildBilingualFileName } from "@/api/handlers/entities/bilingual-output";
+import { buildBilingualFileName } from "@/api/handlers/entities/bilingual/output";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";

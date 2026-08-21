@@ -181,6 +181,9 @@ export const CAPABILITY_DISPATCH = {
   "document-types.update": {
     load: async () => await import("@/api/handlers/document-types/update"),
   },
+  "entities.bilingual.create": {
+    load: async () => await import("@/api/handlers/entities/bilingual/create"),
+  },
   "entities.check-stamp": {
     load: async () => await import("@/api/handlers/entities/check-stamp"),
   },

@@ -3,12 +3,12 @@ import { rateLimit } from "elysia-rate-limit";
 
 import { RESOURCE_TYPE } from "@stll/api-contract";
 
+import createBilingualEntity from "@/api/handlers/entities/bilingual/create";
 import checkStamp from "@/api/handlers/entities/check-stamp";
 import clipEndpoint from "@/api/handlers/entities/clip";
 import compareVersions from "@/api/handlers/entities/compare-versions";
 import copyToWorkspace from "@/api/handlers/entities/copy-to-workspace";
 import createEntities from "@/api/handlers/entities/create";
-import createBilingualEntity from "@/api/handlers/entities/create-bilingual";
 import createBlankDocument from "@/api/handlers/entities/create-blank-document";
 import createDocumentFromStyleSet from "@/api/handlers/entities/create-document-from-style-set";
 import createFromLegalSource from "@/api/handlers/entities/create-from-legal-source";
