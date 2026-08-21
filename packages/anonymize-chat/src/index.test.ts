@@ -78,10 +78,7 @@ describe("chat anonymization pipeline contract", () => {
     const sourcePlaceholders = findChatAnonPlaceholders(
       "Keep literal [CASE_NUMBER_7].",
     );
-    const allowedPlaceholders = new Set([
-      ...sourcePlaceholders,
-      "[PERSON_1]",
-    ]);
+    const allowedPlaceholders = new Set([...sourcePlaceholders, "[PERSON_1]"]);
     const responsePlaceholders = findChatAnonPlaceholders(
       "[CASE_NUMBER_7] [PERSON_1] [LOCATION_2] [LOCATION_2] [not_a_token]",
     );
