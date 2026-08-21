@@ -62,7 +62,7 @@ describe("Austrian RIS publisher gate", () => {
       },
     });
 
-    expect(reserve()).rejects.toThrow("invalid wait");
+    await expect(reserve()).rejects.toThrow("invalid wait");
   });
 
   it("abandons a Redis reservation when the ingestion signal aborts", async () => {
@@ -77,6 +77,6 @@ describe("Austrian RIS publisher gate", () => {
     const pending = reserve(controller.signal);
     controller.abort(new DOMException("Stopped", "AbortError"));
 
-    expect(pending).rejects.toThrow("Stopped");
+    await expect(pending).rejects.toThrow("Stopped");
   });
 });

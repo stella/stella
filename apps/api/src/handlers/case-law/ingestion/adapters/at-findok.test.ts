@@ -5,6 +5,7 @@ import {
   atFindokNextSlice,
   atFindokPreviousSlice,
   createAtFindokAdapter,
+  parseFindokManifest,
 } from "@/api/handlers/case-law/ingestion/adapters/at-findok";
 
 const DOCUMENT_ID = "b68202a0-55e4-4dea-9e93-971f0b71ae32";
@@ -36,10 +37,7 @@ const manifestResponse = (
 ): Response =>
   new Response(
     Bun.gzipSync(
-      JSON.stringify({
-        generierungsdatum: "07.08.2026 06:16",
-        data: items,
-      }),
+      JSON.stringify({ generierungsdatum: "07.08.2026 06:16", data: items }),
     ),
   );
 
@@ -118,6 +116,32 @@ describe("Austrian Findok adapter", () => {
       sleep: async () => {},
     });
     expect((await adapter.fetchPage(null, {})).isErr()).toBe(true);
+  });
+
+  it("ignores malformed rows the publisher marks outside its active inventory", () => {
+    const manifest = parseFindokManifest(
+      "bfg",
+      JSON.stringify({
+        generierungsdatum: "07.08.2026 06:16",
+        data: [{ gueltig: false }, MANIFEST_ITEM],
+      }),
+    );
+
+    expect(manifest.items.map(({ dokumentId }) => dokumentId)).toEqual([
+      DOCUMENT_ID,
+    ]);
+  });
+
+  it("rejects malformed active rows instead of silently under-ingesting", () => {
+    expect(() =>
+      parseFindokManifest(
+        "bfg",
+        JSON.stringify({
+          generierungsdatum: "07.08.2026 06:16",
+          data: [{ gueltig: true }, MANIFEST_ITEM],
+        }),
+      ),
+    ).toThrow("invalid item at 0");
   });
 
   it("quarantines an invalid publisher UUID without hiding later documents", async () => {

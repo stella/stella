@@ -114,6 +114,8 @@ describe("Austrian RIS adapter", () => {
     expect(adapter.country).toBe("AUT");
     expect(adapter.language).toBe("de");
     expect(adapter.minRequestIntervalMs).toBe(5000);
+    expect(adapter.pageTimeoutMs).toBe(25 * 60_000);
+    expect(adapter.maxCycleMs).toBe(30 * 60_000);
     expect(adapter.maxSyncPages).toBe(1);
     const reconciliation = requireReconciliation(adapter);
     expect(reconciliation.firstSlice).toBe("1925-04");
@@ -164,7 +166,7 @@ describe("Austrian RIS adapter", () => {
     expect(decision?.documentAst).not.toEqual({});
     expect(decision?.sourceRaw).toContain('"documentXml"');
     expect(decision?.sourceRawContentType).toBe("application/json");
-    expect(delays).toEqual([5000]);
+    expect(delays).toEqual([]);
     expect(new URL(urls[0] ?? "").searchParams.get("Applikation")).toBe(
       "Justiz",
     );
@@ -290,7 +292,7 @@ describe("Austrian RIS adapter", () => {
 
     expect((await adapter.fetchPage(null, {})).isErr()).toBe(true);
     const reconciliation = requireReconciliation(adapter);
-    expect(
+    await expect(
       reconciliation.listSlicePage({ slice: "2026-01", page: 0 }),
     ).rejects.toThrow("exceeds 200 pages");
   });

@@ -276,6 +276,11 @@ export const parseFindokManifest = (
   const items: FindokManifestItem[] = [];
   const identities = new Set<string>();
   for (const [index, raw] of value["data"].entries()) {
+    // Rows the publisher explicitly marks invalid are outside its active
+    // inventory, even when their optional document fields are incomplete.
+    if (isRecord(raw) && raw["gueltig"] === false) {
+      continue;
+    }
     const item = manifestItem(raw);
     if (item === undefined) {
       throw new TypeError(

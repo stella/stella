@@ -44,6 +44,13 @@ const START_DIGEST = "start";
 const FOREIGN_ORGAN_PREFIX = "AUSL";
 const TIP_WINDOW_MONTHS = 3;
 const MAX_SLICE_PAGES = 200;
+// The runner admits two adapter cycles by default. At 100 details per RIS page,
+// the shared five-second publisher gate can therefore hold a healthy page for
+// almost 17 minutes. Keep the page budget above that contention envelope and
+// the cycle budget above the page budget, while remaining below the runner's
+// 45-minute hard deadline.
+const PAGE_TIMEOUT_MS = 25 * 60_000;
+const CYCLE_TIMEOUT_MS = 30 * 60_000;
 
 const CURSOR_PHASE = {
   COLLECT: "collect",
@@ -696,7 +703,6 @@ const buildDecision = async ({
     });
   }
 
-  await dependencies.sleep(REQUEST_INTERVAL_MS);
   const xmlUrl = constructedDocumentUrl(source, sourceDocumentId, "xml");
   const response = await dependencies.request(
     xmlUrl,
@@ -979,8 +985,8 @@ const createAdapter = <const TKey extends AdapterKey>(
     country: COUNTRY,
     language: LANGUAGE,
     minRequestIntervalMs: REQUEST_INTERVAL_MS,
-    pageTimeoutMs: 15 * 60_000,
-    maxCycleMs: 20 * 60_000,
+    pageTimeoutMs: PAGE_TIMEOUT_MS,
+    maxCycleMs: CYCLE_TIMEOUT_MS,
     maxSyncPages: 1,
 
     reconciliation: {
