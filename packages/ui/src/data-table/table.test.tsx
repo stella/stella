@@ -73,6 +73,7 @@ describe("DataTable", () => {
     const interactiveSelectors = [
       "button",
       "label",
+      "[contenteditable]:not([contenteditable='false'])",
       "[role='checkbox']",
       "[role='combobox']",
       "[role='menuitem']",

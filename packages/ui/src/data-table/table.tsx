@@ -20,7 +20,7 @@ const INTERACTIVE_DESCENDANT_SELECTOR = [
   "textarea",
   "summary",
   "label",
-  "[contenteditable='true']",
+  "[contenteditable]:not([contenteditable='false'])",
   "[role='button']",
   "[role='checkbox']",
   "[role='combobox']",
