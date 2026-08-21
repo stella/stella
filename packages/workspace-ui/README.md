@@ -1,5 +1,14 @@
 # @stll/workspace-ui
 
+Reusable workspace presentation components and view helpers for Stella.
+
+## Saved views
+
+`@stll/workspace-ui/view-switcher` exports a controlled saved-view strip with
+keyboard selection, horizontal overflow, inline editing slots, and bidi-aware
+Pragmatic Drag and Drop reordering. Hosts retain ownership of persistence,
+permissions, translations, menus, and layout rendering.
+
 Reusable React presentation modules for Stella workspaces: field values,
 property icons, sorting chips, condition builders, table loading rows, and
 column calculations.

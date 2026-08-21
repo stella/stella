@@ -4564,6 +4564,7 @@
       },
       "saveAsTemplate": "Guardar como preajuste…",
       "selectProperty": "Seleccionar propiedad",
+      "switcherLabel": "Saved views",
       "templates": {
         "created": "Preajuste guardado",
         "delete": "Eliminar preajuste",

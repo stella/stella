@@ -4564,6 +4564,7 @@
       },
       "saveAsTemplate": "Zapisz jako ustawienie wstępne…",
       "selectProperty": "Wybierz właściwość",
+      "switcherLabel": "Saved views",
       "templates": {
         "created": "Ustawienie wstępne zapisane",
         "delete": "Usuń ustawienie wstępne",

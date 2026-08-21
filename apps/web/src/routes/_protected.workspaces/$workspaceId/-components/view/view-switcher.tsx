@@ -1,14 +1,5 @@
 import { useState } from "react";
 
-import {
-  attachClosestEdge,
-  extractClosestEdge,
-} from "@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge";
-import {
-  draggable,
-  dropTargetForElements,
-} from "@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter";
-import { combine } from "@atlaskit/pragmatic-drag-and-drop/utils/combine";
 import { useQuery } from "@tanstack/react-query";
 import {
   BookmarkIcon,
@@ -54,9 +45,8 @@ import {
   MenuTrigger,
 } from "@stll/ui/menu";
 import { MenuPreviewLayout } from "@stll/ui/preview-pane";
-import { Tabs, TabsList, TabsTab } from "@stll/ui/tabs";
 import { stellaToast } from "@stll/ui/toast";
-import { cn } from "@stll/ui/utils";
+import { WorkspaceViewSwitcher } from "@stll/workspace-ui/view-switcher";
 
 import {
   withDragAnnouncementData,
@@ -64,10 +54,7 @@ import {
 } from "@/components/drag-and-drop-live-region.logic";
 import { InlineEdit } from "@/components/inline-edit";
 import { useAnchoredMenu } from "@/components/inspector/use-anchored-menu";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
-import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { usePermissions } from "@/hooks/use-permissions";
-import type { TextDirection } from "@/i18n/i18n-store";
 import { getLangDir, useI18nStore } from "@/i18n/i18n-store";
 import type { TranslationKey } from "@/i18n/types";
 import type { WorkspaceView } from "@/lib/types";
@@ -76,11 +63,6 @@ import { SaveAsTemplateDialog } from "@/routes/_protected.workspaces/$workspaceI
 import { TemplatePickerDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/view/template-picker-dialog";
 import type { ViewLayoutPreviewKind } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-layout-preview";
 import { ViewLayoutPreview } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-layout-preview";
-import type { ViewDropPosition } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher.logic";
-import {
-  reorderViewIds,
-  toViewDropPosition,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher.logic";
 import {
   useConvertView,
   useCreateView,
@@ -88,19 +70,6 @@ import {
   useReorderViews,
   useUpdateView,
 } from "@/routes/_protected.workspaces/$workspaceId/-mutations/views";
-
-const VIEW_DRAG_TYPE = "stella/view-id";
-
-type ViewDropTarget = {
-  data: Record<string | symbol, unknown>;
-};
-
-// The strip mirrors under RTL, so the nearest physical edge only names a
-// position once read against the writing direction.
-const resolveDropPosition = (
-  { data }: ViewDropTarget,
-  direction: TextDirection,
-) => toViewDropPosition(extractClosestEdge(data), direction);
 
 const layoutIcons = {
   overview: LayoutDashboardIcon,
@@ -185,6 +154,8 @@ export const ViewSwitcher = ({
 }: ViewSwitcherProps) => {
   const t = useTranslations();
   const canCreateView = usePermissions({ view: ["create"] });
+  const canUpdateView = usePermissions({ view: ["update"] });
+  const direction = useI18nStore((state) => getLangDir(state.lang));
   const { data: views = [] } = useQuery(viewsOptions(workspaceId));
   const createView = useCreateView(workspaceId);
   const reorderViews = useReorderViews(workspaceId);
@@ -205,41 +176,7 @@ export const ViewSwitcher = ({
   const disallowedTemplateLayouts = new Set<ViewLayoutType>(
     hasOverviewView ? ["overview"] : [],
   );
-  const [stripContainer, setStripContainer] = useState<HTMLDivElement | null>(
-    null,
-  );
-
-  // Bounds the tabs' stickiness: a sticky target survives the pointer leaving
-  // it only while its parent target is unchanged. Without this the tabs stay
-  // sticky page-wide, keeping the insertion line lit over unrelated chrome and
-  // reordering on release there. Not sticky itself, so leaving the strip
-  // clears the tab with it.
-  useExternalSyncEffect(() => {
-    if (!stripContainer) {
-      return undefined;
-    }
-    return dropTargetForElements({
-      element: stripContainer,
-      canDrop: ({ source }) => source.data["type"] === VIEW_DRAG_TYPE,
-    });
-  }, [stripContainer]);
-
-  const handleReorder = (
-    draggedId: string,
-    targetId: string,
-    position: ViewDropPosition,
-  ) => {
-    const reordered = reorderViewIds({
-      ids: views.map((view) => view.id),
-      draggedId,
-      targetId,
-      position,
-    });
-
-    if (!reordered) {
-      return;
-    }
-
+  const handleReorder = (reordered: string[]) => {
     reorderViews.mutate(
       { viewIds: reordered },
       {
@@ -253,134 +190,164 @@ export const ViewSwitcher = ({
     );
   };
 
-  return (
-    <div
-      className="flex min-w-0 flex-1 [scrollbar-width:none] items-center gap-1 overflow-x-auto px-2 [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
-      ref={setStripContainer}
+  const addControl = canCreateView ? (
+    <Menu
+      onOpenChange={() => {
+        setPreviewKind(defaultPreviewKind);
+      }}
     >
-      <Tabs value={activeViewId}>
-        <TabsList variant="underline">
-          {views.map((view) => {
-            const isLastOfLayout =
-              isRequiredViewLayout(view.layout.type) &&
-              views.filter((v) => v.layout.type === view.layout.type).length <=
-                1;
-
+      <MenuTrigger
+        aria-label={t("common.add")}
+        render={
+          <Button
+            disabled={createView.isPending}
+            size="icon-xs"
+            variant="ghost"
+          />
+        }
+      >
+        <PlusIcon />
+      </MenuTrigger>
+      <MenuPopup>
+        <MenuPreviewLayout
+          preview={
+            <ViewLayoutPreview kind={previewKind} workspaceId={workspaceId} />
+          }
+        >
+          {createLayoutOptions.map((layoutType) => {
+            const Icon = layoutIcons[layoutType];
             return (
-              <ViewTab
-                actions={
-                  view.id === activeViewId
-                    ? viewActions.renderActions({
-                        view,
-                        canDelete: !isLastOfLayout,
-                      })
-                    : null
-                }
-                isAnyMenuOpen={viewActions.isAnyMenuOpen}
-                isRenaming={renamingViewId === view.id}
-                key={view.id}
-                onOpenContextMenu={(event) =>
-                  viewActions.openFor({
-                    view,
-                    canDelete: !isLastOfLayout,
-                    event,
-                  })
-                }
-                onReorder={handleReorder}
-                onSelect={() => onViewChange(view.id)}
-                onStartRename={() => setRenamingViewId(view.id)}
-                onStopRename={() =>
-                  setRenamingViewId((current) =>
-                    current === view.id ? null : current,
-                  )
-                }
-                view={view}
-                workspaceId={workspaceId}
-              />
+              <MenuItem
+                key={layoutType}
+                onClick={() => {
+                  const viewId = crypto.randomUUID();
+                  createView.mutate(
+                    {
+                      id: viewId,
+                      // `layoutType` lets each locale inflect "New {layout}"
+                      // for the layout noun's gender (ICU select); the name
+                      // stays distinct from the default-view-name set.
+                      name: t("workspaces.views.newView", {
+                        layout: t(LAYOUT_LABEL_KEYS[layoutType]),
+                        layoutType,
+                      }),
+                      layout: defaultLayouts[layoutType],
+                    },
+                    {
+                      onSuccess: () => {
+                        onViewChange(viewId);
+                      },
+                      onError: () => {
+                        stellaToast.add({
+                          title: t("errors.failedToCreateView"),
+                          type: "error",
+                        });
+                      },
+                    },
+                  );
+                }}
+                onFocus={() => setPreviewKind(layoutType)}
+                onMouseEnter={() => setPreviewKind(layoutType)}
+              >
+                <Icon />
+                {t(LAYOUT_LABEL_KEYS[layoutType])}
+              </MenuItem>
             );
           })}
-        </TabsList>
-      </Tabs>
-      {canCreateView && (
-        <Menu
-          onOpenChange={() => {
-            setPreviewKind(defaultPreviewKind);
-          }}
-        >
-          <MenuTrigger
-            aria-label={t("common.add")}
-            render={
-              <Button
-                disabled={createView.isPending}
-                size="icon-xs"
-                variant="ghost"
-              />
-            }
+          <MenuSeparator />
+          <MenuItem
+            onClick={() => setIsTemplatePickerOpen(true)}
+            onFocus={() => setPreviewKind("template")}
+            onMouseEnter={() => setPreviewKind("template")}
           >
-            <PlusIcon />
-          </MenuTrigger>
-          <MenuPopup>
-            <MenuPreviewLayout
-              preview={
-                <ViewLayoutPreview
-                  kind={previewKind}
-                  workspaceId={workspaceId}
-                />
+            <BookmarkIcon />
+            {t("workspaces.views.useTemplate")}
+          </MenuItem>
+        </MenuPreviewLayout>
+      </MenuPopup>
+    </Menu>
+  ) : null;
+
+  return (
+    <>
+      <WorkspaceViewSwitcher
+        activeViewId={activeViewId}
+        addControl={addControl}
+        ariaLabel={t("workspaces.views.switcherLabel")}
+        direction={direction}
+        editing={
+          renamingViewId
+            ? {
+                viewId: renamingViewId,
+                renderLabel: (view) => (
+                  <ViewRenameEditor
+                    key={view.id}
+                    onStop={() =>
+                      setRenamingViewId((current) =>
+                        current === view.id ? null : current,
+                      )
+                    }
+                    view={view}
+                    workspaceId={workspaceId}
+                  />
+                ),
               }
-            >
-              {createLayoutOptions.map((layoutType) => {
-                const Icon = layoutIcons[layoutType];
-                return (
-                  <MenuItem
-                    key={layoutType}
-                    onClick={() => {
-                      const viewId = crypto.randomUUID();
-                      createView.mutate(
-                        {
-                          id: viewId,
-                          // `layoutType` lets each locale inflect "New {layout}"
-                          // for the layout noun's gender (ICU select); the name
-                          // stays distinct from the default-view-name set.
-                          name: t("workspaces.views.newView", {
-                            layout: t(LAYOUT_LABEL_KEYS[layoutType]),
-                            layoutType,
-                          }),
-                          layout: defaultLayouts[layoutType],
-                        },
-                        {
-                          onSuccess: () => {
-                            onViewChange(viewId);
-                          },
-                          onError: () => {
-                            stellaToast.add({
-                              title: t("errors.failedToCreateView"),
-                              type: "error",
-                            });
-                          },
-                        },
-                      );
-                    }}
-                    onFocus={() => setPreviewKind(layoutType)}
-                    onMouseEnter={() => setPreviewKind(layoutType)}
-                  >
-                    <Icon />
-                    {t(LAYOUT_LABEL_KEYS[layoutType])}
-                  </MenuItem>
-                );
-              })}
-              <MenuSeparator />
-              <MenuItem
-                onClick={() => setIsTemplatePickerOpen(true)}
-                onFocus={() => setPreviewKind("template")}
-                onMouseEnter={() => setPreviewKind("template")}
-              >
-                <BookmarkIcon />
-                {t("workspaces.views.useTemplate")}
-              </MenuItem>
-            </MenuPreviewLayout>
-          </MenuPopup>
-        </Menu>
-      )}
+            : null
+        }
+        onViewChange={onViewChange}
+        onViewContextMenu={(view, event) => {
+          const isLastOfLayout =
+            isRequiredViewLayout(view.layout.type) &&
+            views.filter(
+              (candidate) => candidate.layout.type === view.layout.type,
+            ).length <= 1;
+          viewActions.openFor({
+            view,
+            canDelete: !isLastOfLayout,
+            event,
+          });
+        }}
+        onViewDoubleClick={(view, event) => {
+          if (!canUpdateView) {
+            return;
+          }
+          event.preventDefault();
+          setRenamingViewId(view.id);
+        }}
+        renderActions={(view) => {
+          if (view.id !== activeViewId) {
+            return null;
+          }
+          const isLastOfLayout =
+            isRequiredViewLayout(view.layout.type) &&
+            views.filter(
+              (candidate) => candidate.layout.type === view.layout.type,
+            ).length <= 1;
+          return viewActions.renderActions({
+            view,
+            canDelete: !isLastOfLayout,
+          });
+        }}
+        renderIcon={(view) => {
+          const Icon = layoutIcons[view.layout.type];
+          return <Icon className="size-3.5 shrink-0" />;
+        }}
+        reorder={
+          canUpdateView
+            ? {
+                getDragData: (view) => withDragAnnouncementData({}, view.name),
+                getDropData: (view) =>
+                  withDropAnnouncementData(
+                    {},
+                    { type: "reorder", name: view.name },
+                  ),
+                isBlocked: viewActions.isAnyMenuOpen,
+                onReorder: handleReorder,
+              }
+            : null
+        }
+        views={views}
+      />
       {canCreateView && (
         <TemplatePickerDialog
           disallowedLayoutTypes={disallowedTemplateLayouts}
@@ -391,127 +358,30 @@ export const ViewSwitcher = ({
         />
       )}
       {viewActions.overlays}
-    </div>
+    </>
   );
 };
 
-type ViewTabProps = {
+type ViewRenameEditorProps = {
   workspaceId: string;
   view: WorkspaceView;
-  isRenaming: boolean;
-  isAnyMenuOpen: boolean;
-  actions: React.ReactNode;
-  onSelect: () => void;
-  onReorder: (
-    draggedId: string,
-    targetId: string,
-    position: ViewDropPosition,
-  ) => void;
-  onStartRename: () => void;
-  onStopRename: () => void;
-  onOpenContextMenu: (event: React.MouseEvent<HTMLElement>) => void;
+  onStop: () => void;
 };
 
-const ViewTab = ({
+const ViewRenameEditor = ({
   workspaceId,
   view,
-  isRenaming,
-  isAnyMenuOpen,
-  actions,
-  onSelect,
-  onReorder,
-  onStartRename,
-  onStopRename,
-  onOpenContextMenu,
-}: ViewTabProps) => {
-  const { id, name, layout } = view;
+  onStop,
+}: ViewRenameEditorProps) => {
+  const { id, name } = view;
   const t = useTranslations();
-  const canUpdateView = usePermissions({ view: ["update"] });
   const [renameValue, setRenameValue] = useState(name);
-  const [wasRenaming, setWasRenaming] = useState(isRenaming);
-  const [dropPosition, setDropPosition] = useState<ViewDropPosition | null>(
-    null,
-  );
   const updateView = useUpdateView(workspaceId);
-  // Held as state rather than a ref so registration follows the node: the
-  // wrapper is replaced whenever the tab enters or leaves rename mode.
-  const [tabContainer, setTabContainer] = useState<HTMLDivElement | null>(null);
-  const handleReorder = useLatestCallback(onReorder);
-  // Read at drag start so opening a menu does not re-register the draggable.
-  // A press on the menu's dismiss layer still reaches the tab, and the drag it
-  // starts previews that layer instead of the tab. The layer spans the strip,
-  // so any open menu gates every tab.
-  const canDragTab = useLatestCallback(() => !isAnyMenuOpen);
-  const direction = useI18nStore((state) => getLangDir(state.lang));
-
-  // Seed the draft from the current name each time rename begins,
-  // since the trigger now lives in the parent (menu or double-click).
-  if (isRenaming !== wasRenaming) {
-    setWasRenaming(isRenaming);
-    if (isRenaming) {
-      setRenameValue(name);
-    }
-  }
-
-  useExternalSyncEffect(() => {
-    if (!tabContainer) {
-      return undefined;
-    }
-    return combine(
-      ...(canUpdateView
-        ? [
-            draggable({
-              element: tabContainer,
-              canDrag: canDragTab,
-              getInitialData: () =>
-                withDragAnnouncementData(
-                  { type: VIEW_DRAG_TYPE, viewId: id },
-                  name,
-                ),
-            }),
-          ]
-        : []),
-      dropTargetForElements({
-        element: tabContainer,
-        canDrop: ({ source }) =>
-          source.data["type"] === VIEW_DRAG_TYPE &&
-          source.data["viewId"] !== id,
-        getData: ({ input, element }) =>
-          attachClosestEdge(
-            withDropAnnouncementData({ viewId: id }, { type: "reorder", name }),
-            { element, input, allowedEdges: ["left", "right"] },
-          ),
-        // Hold the target while the pointer crosses the gap to the next tab so
-        // the insertion line does not flicker. The strip's target bounds it.
-        getIsSticky: () => true,
-        onDrag: ({ self }) =>
-          setDropPosition(resolveDropPosition(self, direction)),
-        onDragLeave: () => setDropPosition(null),
-        onDrop: ({ source, self }) => {
-          setDropPosition(null);
-          const draggedViewId = source.data["viewId"];
-          const position = resolveDropPosition(self, direction);
-          if (typeof draggedViewId !== "string" || position === null) {
-            return;
-          }
-          handleReorder(draggedViewId, id, position);
-        },
-      }),
-    );
-  }, [
-    id,
-    name,
-    canUpdateView,
-    canDragTab,
-    direction,
-    handleReorder,
-    tabContainer,
-  ]);
 
   const handleRename = () => {
     const trimmed = renameValue.trim();
     if (trimmed.length === 0 || trimmed === name) {
-      onStopRename();
+      onStop();
       setRenameValue(name);
       return;
     }
@@ -519,73 +389,30 @@ const ViewTab = ({
     updateView.mutate(
       { viewId: id, name: trimmed },
       {
-        onSuccess: () => onStopRename(),
+        onSuccess: onStop,
         onError: () => {
           stellaToast.add({
             title: t("errors.failedToRenameView"),
             type: "error",
           });
-          onStopRename();
+          onStop();
           setRenameValue(name);
         },
       },
     );
   };
 
-  const Icon = layoutIcons[layout.type];
-
-  if (isRenaming) {
-    return (
-      <TabsTab nativeButton={false} render={<div />} value={id}>
-        <Icon className="size-3.5" />
-        <InlineEdit
-          inputClassName="w-24"
-          onCancel={() => {
-            onStopRename();
-            setRenameValue(name);
-          }}
-          onChange={setRenameValue}
-          onCommit={handleRename}
-          value={renameValue}
-        />
-      </TabsTab>
-    );
-  }
-
   return (
-    <div className="relative" ref={setTabContainer}>
-      {dropPosition !== null && (
-        <span
-          aria-hidden="true"
-          // Drawn inside the tab's box rather than in the gap beside it: the
-          // tab list is a scroll container, and anything painted outside the
-          // box is ink overflow, which the container clips instead of
-          // scrolling to. At the strip's ends that would drop the line
-          // entirely.
-          className={cn(
-            "bg-primary pointer-events-none absolute inset-y-1 z-20 w-0.5 rounded-full",
-            dropPosition === "before" ? "start-0" : "end-0",
-          )}
-        />
-      )}
-      <TabsTab
-        className="pe-6.5"
-        onClick={onSelect}
-        onContextMenu={onOpenContextMenu}
-        onDoubleClick={(e) => {
-          if (!canUpdateView) {
-            return;
-          }
-          e.preventDefault();
-          onStartRename();
-        }}
-        value={id}
-      >
-        <Icon className="size-3.5 shrink-0" />
-        <span className="max-w-36 truncate">{name}</span>
-      </TabsTab>
-      {actions}
-    </div>
+    <InlineEdit
+      inputClassName="w-24"
+      onCancel={() => {
+        onStop();
+        setRenameValue(name);
+      }}
+      onChange={setRenameValue}
+      onCommit={handleRename}
+      value={renameValue}
+    />
   );
 };
 

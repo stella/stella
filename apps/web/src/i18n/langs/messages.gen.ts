@@ -4567,6 +4567,7 @@ type Messages = {
       };
       "saveAsTemplate": "Save as preset…";
       "selectProperty": "Select property";
+      "switcherLabel": "Saved views";
       "templates": {
         "created": "Preset saved";
         "delete": "Delete preset";

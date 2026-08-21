@@ -4564,6 +4564,7 @@
       },
       "saveAsTemplate": "Salvesta eelseadena…",
       "selectProperty": "Valige omadus",
+      "switcherLabel": "Saved views",
       "templates": {
         "created": "Eelseade salvestatud",
         "delete": "Kustuta eelseade",
