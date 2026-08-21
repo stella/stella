@@ -15,6 +15,7 @@ import {
   workObligations,
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
+import readBilingualRun from "@/api/handlers/bilingual-translations/read-run";
 import readBillingCodes from "@/api/handlers/billing-codes/list";
 import readContactById from "@/api/handlers/contacts/get";
 import listDocumentReviewSources from "@/api/handlers/document-reviews/list-sources";
@@ -266,6 +267,26 @@ const isolationCases: IsolationCase[] = [
       expectSourcePageExcludesEntityId(result, testIds.entityB1),
     expectPositive: (result, { ids: testIds }) =>
       expectSourcePageContainsEntityId(result, testIds.entityB1),
+  },
+  {
+    name: "bilingual translation run read by id",
+    runAAgainstB: async ({ ids: testIds, workspaceA }) =>
+      await runHandler(readBilingualRun, workspaceA, {
+        params: {
+          workspaceId: testIds.wsA1,
+          runId: testIds.bilingualRunB1,
+        },
+      }),
+    runBPositive: async ({ ids: testIds, workspaceB }) =>
+      await runHandler(readBilingualRun, workspaceB, {
+        params: {
+          workspaceId: testIds.wsB1,
+          runId: testIds.bilingualRunB1,
+        },
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: (result, { ids: testIds }) =>
+      expectBilingualRunIdEquals(result, testIds.bilingualRunB1),
   },
   {
     name: "invoice read by id",
@@ -694,6 +715,14 @@ function expectRecordFieldEquals(
     throw new Error("Expected an object response");
   }
   expect(result[field]).toBe(expectedValue);
+}
+
+function expectBilingualRunIdEquals(result: unknown, expectedId: string): void {
+  expect(getStatusCode(result)).toBeNull();
+  if (!isRecord(result) || !isRecord(result["run"])) {
+    throw new Error("Expected a bilingual translation run response");
+  }
+  expect(result["run"]["id"]).toBe(expectedId);
 }
 
 function expectVersionsContainId(result: unknown, expectedId: string): void {
