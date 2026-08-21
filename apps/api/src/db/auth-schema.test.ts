@@ -135,32 +135,85 @@ const normalizeDefault = (
   return { kind: "runtime" };
 };
 
+type RuntimeFieldConfig = {
+  defaultValue?: unknown;
+  index?: boolean;
+  input?: boolean;
+  onUpdate?: unknown;
+  references?: unknown;
+  required?: boolean;
+  returned?: boolean;
+  sortable?: boolean;
+  type: string;
+  unique?: boolean;
+};
+
+const normalizeRuntimeFieldType = (type: string): BetterAuthFieldType => {
+  if (type === "boolean" || type === "date" || type === "string") {
+    return type;
+  }
+  throw new Error(`Unsupported host auth field type: ${type}`);
+};
+
+const normalizeRuntimeFields = (
+  fields: Readonly<Record<string, RuntimeFieldConfig>>,
+  databaseOptions: Record<string, HostFieldOptions> = {},
+): Record<string, BetterAuthFieldContract> => {
+  const result: Record<string, BetterAuthFieldContract> = {};
+  for (const [name, config] of Object.entries(fields)) {
+    if (config.references !== undefined) {
+      throw new Error(`Unsupported host auth field reference: ${name}`);
+    }
+    const contract = hostField(
+      name,
+      normalizeRuntimeFieldType(config.type),
+      databaseOptions[name],
+    );
+    result[name] = {
+      ...contract,
+      logical: {
+        default: normalizeDefault(config.defaultValue),
+        indexed: config.index ?? false,
+        input: config.input === false ? "server-managed" : "allowed",
+        onUpdate: config.onUpdate !== undefined,
+        reference: null,
+        required: config.required ?? false,
+        returned: config.returned !== false,
+        sortable: config.sortable ?? false,
+        type: normalizeRuntimeFieldType(config.type),
+        unique: config.unique ?? false,
+      },
+    };
+  }
+  return result;
+};
+
+const TWO_FACTOR_ENABLED_FIELD = betterAuthTwoFactor({
+  issuer: "Stella",
+}).schema.user.fields.twoFactorEnabled;
+
 const HOST_USER_FIELDS = {
-  timezoneId: hostField("timezoneId", "string", {
-    databaseDefault: { kind: "literal", value: "UTC" },
-    databaseNotNull: true,
-    default: { kind: "literal", value: "UTC" },
-  }),
-  preferredName: hostField("preferredName", "string"),
-  wordEditShortcut: hostField("wordEditShortcut", "string"),
-  userShortcuts: hostField("userShortcuts", "string"),
-  guideProgress: hostField("guideProgress", "string", {
-    input: "server-managed",
-  }),
-  detectedCountry: hostField("detectedCountry", "string", {
-    input: "server-managed",
-  }),
-  twoFactorEnabled: hostField("twoFactorEnabled", "boolean", {
-    databaseDefault: { kind: "literal", value: false },
-    databaseNotNull: true,
-    default: { kind: "literal", value: false },
-    input: "server-managed",
-  }),
+  ...normalizeRuntimeFields(
+    {
+      ...AUTH_USER_ADDITIONAL_FIELDS,
+      twoFactorEnabled: TWO_FACTOR_ENABLED_FIELD,
+    },
+    {
+      timezoneId: {
+        databaseDefault: { kind: "literal", value: "UTC" },
+        databaseNotNull: true,
+      },
+      twoFactorEnabled: {
+        databaseDefault: { kind: "literal", value: false },
+        databaseNotNull: true,
+      },
+    },
+  ),
   deletedAt: hostField("deletedAt", "date", {
     input: "server-managed",
     returned: false,
   }),
-} as const;
+};
 
 const HOST_MEMBER_FIELDS = {
   lastActiveWorkspaceId: hostField("lastActiveWorkspaceId", "string", {
@@ -283,27 +336,6 @@ const PRODUCT_MODEL_PLACEHOLDER = {
 
 describe("auth schema", () => {
   test("normalized Better Auth core matches the shared contract", () => {
-    expect(AUTH_USER_ADDITIONAL_FIELDS).toEqual({
-      timezoneId: {
-        type: "string",
-        required: false,
-        defaultValue: "UTC",
-      },
-      preferredName: { type: "string", required: false },
-      wordEditShortcut: { type: "string", required: false },
-      userShortcuts: { type: "string", required: false },
-      guideProgress: { type: "string", required: false, input: false },
-      detectedCountry: { type: "string", required: false, input: false },
-    });
-    expect(
-      betterAuthTwoFactor({ issuer: "Stella" }).schema.user.fields
-        .twoFactorEnabled,
-    ).toEqual({
-      type: "boolean",
-      required: false,
-      defaultValue: false,
-      input: false,
-    });
     expect(
       Object.keys(authSchema)
         .filter(
