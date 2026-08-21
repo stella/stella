@@ -17,6 +17,7 @@
     "noUncheckedSideEffectImports": true,
     "module": "Preserve",
     "moduleResolution": "Bundler",
+    "preserveSymlinks": true,
     "incremental": true,
     "tsBuildInfoFile": "${configDir}/.cache/tsbuildinfo.json",
     "noEmit": true,

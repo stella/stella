@@ -4,6 +4,7 @@ import { tanstackStart } from "@tanstack/react-start/plugin/vite";
 import react from "@vitejs/plugin-react";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
+import { homedir } from "node:os";
 import path from "node:path";
 import { visualizer } from "rollup-plugin-visualizer";
 import {
@@ -18,6 +19,11 @@ import stllAnonymizeWasm from "@stll/anonymize-wasm/vite";
 import { REACT_COMPILER_OPTIONS } from "./react-compiler-options.ts";
 
 const APP_ROOT = import.meta.dirname;
+const BUN_GLOBAL_STORE_ROOT = path.resolve(
+  process.env["BUN_INSTALL_CACHE_DIR"] ??
+    path.join(homedir(), ".bun/install/cache"),
+  "links",
+);
 const ANALYZE_MODE = "analyze";
 const DEV_API_PROXY_PATHS = [
   "/api",
@@ -321,21 +327,16 @@ export default defineConfig(({ mode }) => {
         "Cross-Origin-Opener-Policy": "same-origin",
         "Cross-Origin-Embedder-Policy": "credentialless",
       },
-      // Vite's fs allowlist covers the workspace root only. When a dependency
-      // is bun-linked to a local checkout (e.g. developing @stll/folio-*
-      // against the app), its out-of-root source must be allowed explicitly;
-      // pass the checkout root(s), colon-separated, via
-      // DEV_LINKED_PACKAGE_ROOTS.
-      ...(process.env["DEV_LINKED_PACKAGE_ROOTS"]
-        ? {
-            fs: {
-              allow: [
-                path.resolve(APP_ROOT, "../.."),
-                ...process.env["DEV_LINKED_PACKAGE_ROOTS"].split(":"),
-              ],
-            },
-          }
-        : {}),
+      // Vite follows package real paths when serving assets. Keep the
+      // workspace, Bun's package-only global store, and explicit linked
+      // checkouts inside the development filesystem boundary.
+      fs: {
+        allow: [
+          path.resolve(APP_ROOT, "../.."),
+          BUN_GLOBAL_STORE_ROOT,
+          ...(process.env["DEV_LINKED_PACKAGE_ROOTS"]?.split(":") ?? []),
+        ],
+      },
     },
     // Default worker output is "iife", which forbids top-level await.
     // The @stll/*-wasm packages we own emit a loader with top-level

@@ -1,5 +1,11 @@
 [install]
-linker = "hoisted"
+# Bun 1.4 fixed the catalog and stale-entry bugs that blocked isolated installs.
+# Share immutable package installations across local checkouts and worktrees.
+linker = "isolated"
+globalStore = true
+# Preserve the monorepo's existing root-level resolution while each workspace
+# declares the dependencies that hoisted installs previously supplied.
+publicHoistPattern = ["*"]
 # 5-day quarantine: reject package versions published
 # less than 5 days ago to mitigate supply chain attacks.
 minimumReleaseAge = 432_000

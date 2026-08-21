@@ -185,6 +185,22 @@ CMD ["bun", "--port", "3001", "src/index.ts"]
 
 ## Open Questions
 
-- **Isolated linker.** Revisit when
-  [bun#23615](https://github.com/oven-sh/bun/issues/23615) is
-  fixed. The hoisted linker works but doesn't catch phantom deps.
+- **Isolated linker (resolved 2026-08-21).** Bun 1.4 fixed
+  [bun#23615](https://github.com/oven-sh/bun/issues/23615). Stella now uses
+  isolated installs with Bun's global virtual store, sharing immutable package
+  installations across local checkouts and worktrees. A public hoist pattern
+  preserves the monorepo's existing root-level resolution during the cutover;
+  remove it after every workspace and root script declares its dependencies.
+  TypeScript preserves symlink paths so package imports resolve through the
+  project graph instead of the shared cache's real paths. The cutover also
+  declares the root-script dependencies that isolation exposed and patches
+  `eslint-plugin-drizzle`'s undeclared runtime import. Vite allows Bun's
+  package-only store subtree inside its development filesystem boundary so
+  linked assets remain servable without changing production resolution.
+  Container installs opt out of the global store because their BuildKit cache
+  mount is detached after the install layer; they retain the isolated linker
+  and materialize its store inside the image. Expo Doctor currently reports
+  Bun's peer-context store entries as duplicate native modules; Stella accepts
+  only the documented same-version store shape while leaving every other
+  Doctor failure fatal (see
+  [expo#46429](https://github.com/expo/expo/issues/46429)).

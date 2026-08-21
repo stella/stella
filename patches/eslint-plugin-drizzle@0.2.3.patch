@@ -1,0 +1,14 @@
+diff --git a/package.json b/package.json
+index c36739460f94fc75186e1cfd2077926e265abe0b..77b8208cbd5740af1bfd8585cf7c4ed504803373 100644
+--- a/package.json
++++ b/package.json
+@@ -21,6 +21,9 @@
+         "url": "git+https://github.com/drizzle-team/drizzle-orm/tree/main/eslint-plugin-drizzle.git"
+     },
+     "license": "Apache-2.0",
++    "dependencies": {
++        "@typescript-eslint/utils": "^6.10.0 || ^8.0.0"
++    },
+     "devDependencies": {
+         "@types/node": "^20.10.1",
+         "@typescript-eslint/parser": "^6.10.0",
