@@ -164,7 +164,7 @@
       "title": "Nepavyko sukurti dvikalbės versijos"
     },
     "success": {
-      "description": "{fileName} paruoštas, versti reikia {rowCount, plural, one {# eilutę} few {# eilutes} many {# eilutės} other {# eilučių}}.",
+      "description": "<bdi>{fileName}</bdi> paruoštas, versti reikia {rowCount, plural, one {# eilutę} few {# eilutes} many {# eilutės} other {# eilučių}}.",
       "title": "Dvikalbė versija sukurta"
     }
   },

@@ -164,7 +164,7 @@
       "title": "Dvojjazyčnú verziu sa nepodarilo vytvoriť"
     },
     "success": {
-      "description": "{fileName} je pripravený, na preklad {rowCount, plural, one {je # riadok} few {sú # riadky} other {je # riadkov}}.",
+      "description": "<bdi>{fileName}</bdi> je pripravený, na preklad {rowCount, plural, one {je # riadok} few {sú # riadky} other {je # riadkov}}.",
       "title": "Dvojjazyčná verzia vytvorená"
     }
   },

@@ -167,7 +167,7 @@ type Messages = {
       "title": "Bilingual version failed";
     };
     "success": {
-      "description": "{fileName} is ready with {rowCount, plural, one {# row} other {# rows}} to translate.";
+      "description": "<bdi>{fileName}</bdi> is ready with {rowCount, plural, one {# row} other {# rows}} to translate.";
       "title": "Bilingual version created";
     };
   };

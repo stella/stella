@@ -9,10 +9,11 @@
 import { useState } from "react";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useNavigate } from "@tanstack/react-router";
+import { useNavigate, useParams } from "@tanstack/react-router";
 import { ColumnsIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import {
   Dialog,
@@ -28,8 +29,7 @@ import {
 import { stellaToast } from "@stll/ui/toast";
 
 import {
-  DEFAULT_TARGET_LANG,
-  defaultSourceLang,
+  defaultLanguagePair,
   DocumentLanguagePicker,
 } from "@/components/document-language-picker";
 import { useLocale } from "@/i18n/formatting-context";
@@ -61,13 +61,19 @@ export const BilingualDocumentDialog = ({
   const analytics = useAnalytics();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  // The dialogs live on the document route; the view stays, the document changes.
+  const viewId = useParams({
+    strict: false,
+    select: (params) => params.viewId ?? "all",
+  });
 
   const [open, setOpen] = useState(false);
-  const [sourceLang, setSourceLang] = useState<DeepLTargetLanguageCode>(() =>
-    defaultSourceLang(locale),
+  const [sourceLang, setSourceLang] = useState<DeepLTargetLanguageCode>(
+    () => defaultLanguagePair(locale).source,
   );
-  const [targetLang, setTargetLang] =
-    useState<DeepLTargetLanguageCode>(DEFAULT_TARGET_LANG);
+  const [targetLang, setTargetLang] = useState<DeepLTargetLanguageCode>(
+    () => defaultLanguagePair(locale).target,
+  );
 
   const createMutation = useMutation({
     mutationFn: async () => {
@@ -85,7 +91,8 @@ export const BilingualDocumentDialog = ({
     onSuccess: async (data) => {
       stellaToast.add({
         title: t("bilingual.success.title"),
-        description: t("bilingual.success.description", {
+        description: t.rich("bilingual.success.description", {
+          bdi: (chunks) => <BidiText>{chunks}</BidiText>,
           fileName: data.fileName,
           rowCount: data.rowCount,
         }),
@@ -97,7 +104,7 @@ export const BilingualDocumentDialog = ({
             detached(
               navigate({
                 to: "/workspaces/$workspaceId/$viewId/document",
-                params: { workspaceId, viewId: data.entityId },
+                params: { workspaceId, viewId },
                 search: { entity: data.entityId, field: data.fieldId },
               }),
               "bilingual-document-dialog.navigate",

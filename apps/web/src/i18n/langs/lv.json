@@ -164,7 +164,7 @@
       "title": "Neizdevās izveidot divvalodu versiju"
     },
     "success": {
-      "description": "{fileName} ir gatavs, jātulko {rowCount, plural, zero {# rindu} one {# rinda} other {# rindas}}.",
+      "description": "<bdi>{fileName}</bdi> ir gatavs, jātulko {rowCount, plural, zero {# rindu} one {# rinda} other {# rindas}}.",
       "title": "Divvalodu versija izveidota"
     }
   },
@@ -223,7 +223,7 @@
       "model": "MI"
     },
     "review": {
-      "droppedRows": "{count, plural, zero {Izlaistas # rindas} one {Izlaista # rinda} other {Izlaistas # rindas}}: tajās nav tulkojama teksta.",
+      "droppedRows": "{count, plural, zero {Izlaistas # rindu} one {Izlaista # rinda} other {Izlaistas # rindas}}: tajās nav tulkojama teksta.",
       "start": "Sākt tulkošanu",
       "starting": "Sāk…"
     },
@@ -236,12 +236,12 @@
     },
     "run": {
       "cancelled": "Tulkošana tika atcelta.",
-      "doneSummary": "{count, plural, zero {Iztulkotas # rindas} one {Iztulkota # rinda} other {Iztulkotas # rindas}}.",
+      "doneSummary": "{count, plural, zero {Iztulkotas # rindu} one {Iztulkota # rinda} other {Iztulkotas # rindas}}.",
       "doneTitle": "Tulkošana pabeigta",
-      "failedRows": "{count, plural, zero {Neizdevās iztulkot # rindas} one {Neizdevās iztulkot # rindu} other {Neizdevās iztulkot # rindas}}.",
+      "failedRows": "{count, plural, zero {Neizdevās iztulkot # rindu} one {Neizdevās iztulkot # rindu} other {Neizdevās iztulkot # rindas}}.",
       "failedTitle": "Tulkošana apturēta",
       "hint": "Tulkošana notiek serverī. Lai sekotu norisei, atstājiet šo logu atvērtu.",
-      "moreRows": "{count, plural, zero {vēl # rindas} one {vēl # rinda} other {vēl # rindas}}",
+      "moreRows": "{count, plural, zero {vēl # rindu} one {vēl # rinda} other {vēl # rindas}}",
       "progress": "Iztulkotas {completed} no {total} rindām",
       "title": "Notiek tulkošana…",
       "warningsTitle": "Pārbaudāmās rindas"

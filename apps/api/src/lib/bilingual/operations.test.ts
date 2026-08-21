@@ -70,11 +70,18 @@ describe("buildOperations applied to a bilingual document", () => {
       "inline",
       "keep",
     ] as const;
+    const rowIdAt = (index: number): string => {
+      const unit = units[index];
+      if (!unit) {
+        throw new Error(`fixture has no row ${index}`);
+      }
+      return unit.rowId;
+    };
     const translations = new Map<string, string>([
-      [units[0]!.rowId, "Subject matter"],
-      [units[1]!.rowId, "The Agreement is concluded for 24 months."],
-      [units[2]!.rowId, "Signature:"],
-      [units[3]!.rowId, "Name:"],
+      [rowIdAt(0), "Subject matter"],
+      [rowIdAt(1), "The Agreement is concluded for 24 months."],
+      [rowIdAt(2), "Signature:"],
+      [rowIdAt(3), "Name:"],
     ]);
     const rows: StoredRow[] = [];
     for (const [index, unit] of units.entries()) {

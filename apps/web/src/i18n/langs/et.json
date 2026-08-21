@@ -164,7 +164,7 @@
       "title": "Kakskeelse versiooni loomine ebaõnnestus"
     },
     "success": {
-      "description": "{fileName} on valmis, tõlkida on {rowCount, plural, one {# rida} other {# rida}}.",
+      "description": "<bdi>{fileName}</bdi> on valmis, tõlkida on {rowCount, plural, one {# rida} other {# rida}}.",
       "title": "Kakskeelne versioon loodud"
     }
   },

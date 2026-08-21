@@ -164,7 +164,7 @@
       "title": "A kétnyelvű változat létrehozása nem sikerült"
     },
     "success": {
-      "description": "A(z) {fileName} készen áll, {rowCount, plural, one {# sor} other {# sor}} vár fordításra.",
+      "description": "A(z) <bdi>{fileName}</bdi> készen áll, {rowCount, plural, one {# sor} other {# sor}} vár fordításra.",
       "title": "Kétnyelvű változat létrehozva"
     }
   },

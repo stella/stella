@@ -502,6 +502,15 @@ const executeRun = async (
   if (translationOutcome !== null) {
     return translationOutcome;
   }
+  // Rows the model skipped are stored as failed and left as the source copy.
+  // No translated row at all means there is nothing to write: fail the run
+  // rather than publish an untouched version as "completed".
+  const translatedCount = rows.filter(
+    (row) => needsTranslation(row) && translated.has(row.rowId),
+  ).length;
+  if (translatedCount === 0) {
+    return "translation_failed";
+  }
 
   const operations = buildOperations(rows, translated);
   const applied = await Result.tryPromise({

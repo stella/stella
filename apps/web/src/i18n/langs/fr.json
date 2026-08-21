@@ -164,7 +164,7 @@
       "title": "Échec de la version bilingue"
     },
     "success": {
-      "description": "{fileName} est prêt avec {rowCount, plural, one {# ligne} other {# lignes}} à traduire.",
+      "description": "<bdi>{fileName}</bdi> est prêt avec {rowCount, plural, one {# ligne} other {# lignes}} à traduire.",
       "title": "Version bilingue créée"
     }
   },

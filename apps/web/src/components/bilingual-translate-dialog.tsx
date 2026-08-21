@@ -10,7 +10,7 @@
 import { useState, type ReactNode } from "react";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useNavigate } from "@tanstack/react-router";
+import { useNavigate, useParams } from "@tanstack/react-router";
 import { BookOpenCheckIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -45,8 +45,7 @@ import {
   type BilingualRowDisposition,
 } from "@/components/bilingual-translate-queries";
 import {
-  DEFAULT_TARGET_LANG,
-  defaultSourceLang,
+  defaultLanguagePair,
   DocumentLanguagePicker,
 } from "@/components/document-language-picker";
 import { useLocale } from "@/i18n/formatting-context";
@@ -94,13 +93,19 @@ export const BilingualTranslateDialog = ({
   const analytics = useAnalytics();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  // The dialogs live on the document route; the view stays, the document changes.
+  const viewId = useParams({
+    strict: false,
+    select: (params) => params.viewId ?? "all",
+  });
 
   const [open, setOpen] = useState(false);
-  const [sourceLang, setSourceLang] = useState<DeepLTargetLanguageCode>(() =>
-    defaultSourceLang(locale),
+  const [sourceLang, setSourceLang] = useState<DeepLTargetLanguageCode>(
+    () => defaultLanguagePair(locale).source,
   );
-  const [targetLang, setTargetLang] =
-    useState<DeepLTargetLanguageCode>(DEFAULT_TARGET_LANG);
+  const [targetLang, setTargetLang] = useState<DeepLTargetLanguageCode>(
+    () => defaultLanguagePair(locale).target,
+  );
   const [state, setState] = useState<BilingualTranslateState>({ step: "pick" });
 
   const reportFailure = (error: unknown, title: string) => {
@@ -170,7 +175,7 @@ export const BilingualTranslateDialog = ({
     detached(
       navigate({
         to: "/workspaces/$workspaceId/$viewId/document",
-        params: { workspaceId, viewId: entityId },
+        params: { workspaceId, viewId },
         search: { entity: entityId, field: fieldId },
       }),
       "bilingual-translate-dialog.navigate",

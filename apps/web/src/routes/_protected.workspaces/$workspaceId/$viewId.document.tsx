@@ -458,6 +458,8 @@ function RouteComponentInner({
   const fieldId = activeFieldId;
   const t = useTranslations();
   const canUpdateEntity = usePermissions({ entity: ["update"] });
+  // Both bilingual actions create a document or a new version of one.
+  const canCreateEntity = usePermissions({ entity: ["create"] });
   useSyncJustifications({ workspaceId, entityIds: [entityId] });
   const scaleOffset = useWorkspaceStore((s) => s.pdfViewer.scaleOffset);
   const justificationId = Route.useSearch({
@@ -741,13 +743,13 @@ function RouteComponentInner({
                       workspaceId={workspaceId}
                     />
                     <BilingualDocumentDialog
-                      disabled={!isDocxFile}
+                      disabled={!isDocxFile || !canCreateEntity}
                       entityId={entityId}
                       fieldId={fieldId}
                       workspaceId={workspaceId}
                     />
                     <BilingualTranslateDialog
-                      disabled={!isDocxFile}
+                      disabled={!isDocxFile || !canCreateEntity}
                       entityId={entityId}
                       fieldId={fieldId}
                       workspaceId={workspaceId}
@@ -807,11 +809,13 @@ function RouteComponentInner({
                                   workspaceId={workspaceId}
                                 />
                                 <BilingualDocumentDialog
+                                  disabled={!canCreateEntity}
                                   entityId={entityId}
                                   fieldId={fieldId}
                                   workspaceId={workspaceId}
                                 />
                                 <BilingualTranslateDialog
+                                  disabled={!canCreateEntity}
                                   entityId={entityId}
                                   fieldId={fieldId}
                                   workspaceId={workspaceId}

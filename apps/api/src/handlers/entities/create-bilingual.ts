@@ -81,6 +81,8 @@ const createBilingualEntity = createSafeHandler(
         workspaceId,
         entityId: body.entityId,
         fileFieldId: body.fieldId,
+        // Only the bytes are read; the copy becomes a separate document.
+        allowReadOnly: true,
       }),
     );
 

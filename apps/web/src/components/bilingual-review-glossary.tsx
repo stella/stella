@@ -63,6 +63,7 @@ export const BilingualReviewGlossary = ({
               key={draft.id}
             >
               <Input
+                aria-invalid={draft.source.trim().length === 0}
                 aria-label={t("bilingualTranslate.glossary.term")}
                 disabled={disabled}
                 maxLength={BILINGUAL_TERM_MAX}

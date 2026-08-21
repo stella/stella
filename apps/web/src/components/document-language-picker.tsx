@@ -94,17 +94,37 @@ type LanguageOption = {
   label: string;
 };
 
-export const DEFAULT_TARGET_LANG: DeepLTargetLanguageCode = "EN-GB";
+const DEFAULT_TARGET_LANG: DeepLTargetLanguageCode = "EN-GB";
 const FALLBACK_SOURCE_LANG: DeepLTargetLanguageCode = "CS";
+
+/** UI locales whose code differs from the document-language code. */
+const LOCALE_TO_LANGUAGE = {
+  en: "EN-GB",
+} as const satisfies Record<string, DeepLTargetLanguageCode>;
+
+const isMappedLocale = (
+  locale: string,
+): locale is keyof typeof LOCALE_TO_LANGUAGE =>
+  Object.hasOwn(LOCALE_TO_LANGUAGE, locale);
 
 const isLanguageCode = (value: string): value is DeepLTargetLanguageCode =>
   DEEPL_TARGET_LANGUAGES.some((lang) => lang.code === value);
 
-/** The UI locale is the best guess for the document's language. */
-export const defaultSourceLang = (locale: string): DeepLTargetLanguageCode => {
-  const upper = locale.toUpperCase();
-  if (isLanguageCode(upper)) {
-    return upper === DEFAULT_TARGET_LANG ? FALLBACK_SOURCE_LANG : upper;
-  }
-  return FALLBACK_SOURCE_LANG;
+export type DefaultLanguagePair = {
+  source: DeepLTargetLanguageCode;
+  target: DeepLTargetLanguageCode;
+};
+
+/**
+ * The UI locale is the best guess for the document's language; the target
+ * defaults to English unless the source already is.
+ */
+export const defaultLanguagePair = (locale: string): DefaultLanguagePair => {
+  const mapped = isMappedLocale(locale)
+    ? LOCALE_TO_LANGUAGE[locale]
+    : locale.toUpperCase();
+  const source = isLanguageCode(mapped) ? mapped : FALLBACK_SOURCE_LANG;
+  const target =
+    source === DEFAULT_TARGET_LANG ? FALLBACK_SOURCE_LANG : DEFAULT_TARGET_LANG;
+  return { source, target };
 };

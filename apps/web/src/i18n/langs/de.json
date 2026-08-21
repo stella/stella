@@ -164,7 +164,7 @@
       "title": "Zweisprachige Fassung fehlgeschlagen"
     },
     "success": {
-      "description": "{fileName} ist bereit, {rowCount, plural, one {# Zeile} other {# Zeilen}} zu übersetzen.",
+      "description": "<bdi>{fileName}</bdi> ist bereit, {rowCount, plural, one {# Zeile} other {# Zeilen}} zu übersetzen.",
       "title": "Zweisprachige Fassung erstellt"
     }
   },

@@ -185,9 +185,12 @@ describe("createBilingualEntity", () => {
     });
     expect(createEntityFromBufferMock).toHaveBeenCalledTimes(1);
     const written = createEntityFromBufferMock.mock.calls.at(0)?.[0];
-    expect(written?.mimeType).toBe(DOCX_MIME_TYPE);
-    expect(written?.fileName).toBe("Smlouva (CS-EN).docx");
-    expect(await validateDocxBuffer(written!.buffer)).toEqual({ valid: true });
+    if (!written) {
+      throw new Error("createEntityFromBuffer was not called");
+    }
+    expect(written.mimeType).toBe(DOCX_MIME_TYPE);
+    expect(written.fileName).toBe("Smlouva (CS-EN).docx");
+    expect(await validateDocxBuffer(written.buffer)).toEqual({ valid: true });
     expect(scanFileMock.mock.calls.at(0)?.[0]).toMatchObject({
       declaredMimeType: DOCX_MIME_TYPE,
       fileName: "Smlouva (CS-EN).docx",

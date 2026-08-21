@@ -164,7 +164,7 @@
       "title": "Nie udało się utworzyć wersji dwujęzycznej"
     },
     "success": {
-      "description": "{fileName} jest gotowy, do przetłumaczenia {rowCount, plural, one {jest # wiersz} few {są # wiersze} many {jest # wierszy} other {jest # wiersza}}.",
+      "description": "<bdi>{fileName}</bdi> jest gotowy, do przetłumaczenia {rowCount, plural, one {jest # wiersz} few {są # wiersze} many {jest # wierszy} other {jest # wiersza}}.",
       "title": "Utworzono wersję dwujęzyczną"
     }
   },

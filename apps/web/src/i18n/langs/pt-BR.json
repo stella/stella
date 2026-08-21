@@ -164,7 +164,7 @@
       "title": "Falha ao criar a versão bilíngue"
     },
     "success": {
-      "description": "{fileName} está pronto com {rowCount, plural, one {# linha} other {# linhas}} para traduzir.",
+      "description": "<bdi>{fileName}</bdi> está pronto com {rowCount, plural, one {# linha} other {# linhas}} para traduzir.",
       "title": "Versão bilíngue criada"
     }
   },

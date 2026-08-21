@@ -164,7 +164,7 @@
       "title": "No se pudo crear la versión bilingüe"
     },
     "success": {
-      "description": "{fileName} está listo con {rowCount, plural, one {# fila} other {# filas}} por traducir.",
+      "description": "<bdi>{fileName}</bdi> está listo con {rowCount, plural, one {# fila} other {# filas}} por traducir.",
       "title": "Versión bilingüe creada"
     }
   },
