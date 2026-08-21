@@ -1,24 +1,27 @@
 import { panic } from "better-result";
 import { SQL } from "bun";
 import { sql } from "drizzle-orm";
+import type { SQL as SqlFragment } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/bun-sql";
 
 import { databaseRelations } from "@/api/db/database-relations";
 import { rootDb } from "@/api/db/root";
 import type { Transaction } from "@/api/db/root";
 import { envBase } from "@/api/env-base";
+import {
+  PUBLIC_CASE_LAW_RELATIONS,
+  PUBLIC_CASE_LAW_SOURCE_COLUMNS,
+  PUBLIC_CASE_LAW_SOURCE_TABLE,
+  PUBLIC_CASE_LAW_TABLES,
+} from "@/api/lib/case-law/public-relations";
 import { queryCountLogger } from "@/api/lib/db-query-counter";
 
 const CASE_LAW_PUBLIC_READ_DB = Symbol("caseLawPublicReadDb");
 const EXTERNAL_CASE_LAW_CONNECTION_TIMEOUT_SECONDS = 10;
 
-export const PUBLIC_CASE_LAW_RELATIONS = [
-  "case_law_citations",
-  "case_law_corpus_index_projections",
-  "case_law_decisions",
-  "case_law_provision_citations",
-  "case_law_sources",
-] as const;
+// The grant set of the reader role is these same lists; see
+// `apps/api/src/lib/case-law/public-relations.ts`.
+export { PUBLIC_CASE_LAW_RELATIONS };
 
 type CaseLawQueryKey = Extract<keyof Transaction["query"], "caseLawDecisions">;
 
@@ -63,18 +66,23 @@ type ExternalCaseLawDatabase = {
 
 let externalCaseLawDatabase: ExternalCaseLawDatabase | null = null;
 
-const validateExternalCaseLawDatabase = async (
-  database: Pick<Transaction, "execute">,
-): Promise<void> => {
-  const publicRelations = sql.join(
-    PUBLIC_CASE_LAW_RELATIONS.map((name) => sql`${name}`),
+/**
+ * What `current_user` may do, in the three terms the validator judges.
+ * Exported so the role a migration defines can be held to the same query.
+ */
+export const caseLawDatabaseRolePermissionsSql = (): SqlFragment => {
+  const publicTables = sql.join(
+    PUBLIC_CASE_LAW_TABLES.map((name) => sql`${name}`),
     sql.raw(","),
   );
-  const [permissions] = await database.execute<CaseLawDatabaseRolePermissions>(
-    sql`
+  const sourceColumns = sql.join(
+    PUBLIC_CASE_LAW_SOURCE_COLUMNS.map((name) => sql`${name}`),
+    sql.raw(","),
+  );
+  return sql`
       SELECT
         (
-          SELECT count(*) = ${PUBLIC_CASE_LAW_RELATIONS.length}
+          SELECT count(*) = ${PUBLIC_CASE_LAW_TABLES.length}
             AND bool_and(
               has_table_privilege(current_user, tables.oid, 'SELECT')
             )
@@ -83,17 +91,52 @@ const validateExternalCaseLawDatabase = async (
             ON schemas.oid = tables.relnamespace
           WHERE schemas.nspname = 'public'
             AND tables.relkind IN ('r', 'p', 'v', 'm', 'f')
-            AND tables.relname IN (${publicRelations})
+            AND tables.relname IN (${publicTables})
+        ) AND (
+          -- The source table is read column by column; every listed column
+          -- must be readable, and nothing else on it (checked below).
+          SELECT count(*) = ${PUBLIC_CASE_LAW_SOURCE_COLUMNS.length}
+            AND bool_and(
+              has_column_privilege(
+                current_user,
+                columns.attrelid,
+                columns.attnum,
+                'SELECT'
+              )
+            )
+          FROM pg_attribute AS columns
+          INNER JOIN pg_class AS tables ON tables.oid = columns.attrelid
+          INNER JOIN pg_namespace AS schemas
+            ON schemas.oid = tables.relnamespace
+          WHERE schemas.nspname = 'public'
+            AND tables.relname = ${PUBLIC_CASE_LAW_SOURCE_TABLE}
+            AND columns.attnum > 0
+            AND NOT columns.attisdropped
+            AND columns.attname IN (${sourceColumns})
         ) AS "canReadCaseLaw",
         EXISTS (
+          -- Any column readable outside the public set: a whole table
+          -- elsewhere, or a column of the source table beyond its list.
           SELECT 1
-          FROM pg_class AS tables
+          FROM pg_attribute AS columns
+          INNER JOIN pg_class AS tables ON tables.oid = columns.attrelid
           INNER JOIN pg_namespace AS schemas
             ON schemas.oid = tables.relnamespace
           WHERE schemas.nspname = 'public'
             AND tables.relkind IN ('r', 'p', 'v', 'm', 'f')
-            AND tables.relname NOT IN (${publicRelations})
-            AND has_table_privilege(current_user, tables.oid, 'SELECT')
+            AND tables.relname NOT IN (${publicTables})
+            AND columns.attnum > 0
+            AND NOT columns.attisdropped
+            AND NOT (
+              tables.relname = ${PUBLIC_CASE_LAW_SOURCE_TABLE}
+              AND columns.attname IN (${sourceColumns})
+            )
+            AND has_column_privilege(
+              current_user,
+              columns.attrelid,
+              columns.attnum,
+              'SELECT'
+            )
         ) AS "canReadOtherData",
         EXISTS (
           SELECT 1
@@ -108,7 +151,14 @@ const validateExternalCaseLawDatabase = async (
               'INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER'
             )
         ) AS "canWriteCaseLaw"
-    `,
+    `;
+};
+
+const validateExternalCaseLawDatabase = async (
+  database: Pick<Transaction, "execute">,
+): Promise<void> => {
+  const [permissions] = await database.execute<CaseLawDatabaseRolePermissions>(
+    caseLawDatabaseRolePermissionsSql(),
   );
 
   if (permissions === undefined) {
