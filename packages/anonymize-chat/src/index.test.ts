@@ -79,15 +79,23 @@ describe("runChatAnonPipeline excludedCanonicals", () => {
     redactText: (fullText: string) => NativeStaticRedactionResult;
   };
 
+  type BuildRuntimeOptions = {
+    inspectGazetteerEntries?: (entries: readonly GazetteerEntry[]) => void;
+    inspectRedactionInput?: (text: string) => void;
+  };
+
   /**
-   * Build a `ChatAnonRuntime` test double whose `redactText` performs
-   * a naive, entity-order text replacement - good enough to exercise
-   * the post-hoc excluded-canonicals revert without a real wasm
-   * binding.
+   * Build a `ChatAnonRuntime` test double whose `redactText` splices
+   * entity spans right-to-left, matching the native offset contract
+   * closely enough to exercise exclusion and placeholder invariants
+   * without a real wasm binding.
    */
   const buildRuntime = (
     entities: NativePipelineEntity[],
-    inspectGazetteerEntries?: (entries: readonly GazetteerEntry[]) => void,
+    {
+      inspectGazetteerEntries,
+      inspectRedactionInput,
+    }: BuildRuntimeOptions = {},
   ): ChatAnonRuntime => ({
     // SAFETY: the mock binding value is opaque plumbing - the fake
     // `createNativePipelineFromConfig` below never inspects it, it
@@ -103,6 +111,7 @@ describe("runChatAnonPipeline excludedCanonicals", () => {
       inspectGazetteerEntries?.(gazetteerEntries ?? []);
       const pipeline: FakePipeline = {
         redactText: (fullText) => {
+          inspectRedactionInput?.(fullText);
           const redactionMap = new Map<string, string>();
           const operatorMap = new Map<string, "replace">();
           const resolvedEntities = entities.map((entity) => {
@@ -241,12 +250,11 @@ describe("runChatAnonPipeline excludedCanonicals", () => {
   test("forces exact values through the native placeholder allocation", async () => {
     const forcedValue = "ORDER-123";
     let receivedEntries: readonly GazetteerEntry[] = [];
-    const runtime = buildRuntime(
-      [makeEntity(forcedValue, "misc")],
-      (entries) => {
+    const runtime = buildRuntime([makeEntity(forcedValue, "misc")], {
+      inspectGazetteerEntries: (entries) => {
         receivedEntries = entries;
       },
-    );
+    });
 
     const result = await runChatAnonPipeline({
       runtime,
@@ -338,6 +346,38 @@ describe("runChatAnonPipeline excludedCanonicals", () => {
 
     expect(result.redactedText).toBe("[PERSON_1] [MISC_1]");
     expect(result.redactionMap).toEqual(new Map([["[MISC_1]", forcedValue]]));
+  });
+
+  test("keeps gazetteer terms from colliding with literal-placeholder sentinels", async () => {
+    const gazetteerVariant = "\uE000";
+    let receivedInput = "";
+    const runtime = buildRuntime([], {
+      inspectRedactionInput: (text) => {
+        receivedInput = text;
+      },
+    });
+
+    const result = await runChatAnonPipeline({
+      runtime,
+      dictionaries,
+      text: "[PERSON_1]",
+      workspaceId: "ws-1",
+      gazetteerEntries: [
+        {
+          id: "term-1",
+          canonical: "other",
+          label: "misc",
+          variants: [gazetteerVariant],
+          workspaceId: "ws-1",
+          createdAt: 0,
+          source: "manual",
+        },
+      ],
+    });
+
+    expect(receivedInput).not.toContain(gazetteerVariant);
+    expect(result.redactedText).toBe("[PERSON_1]");
+    expect(result.redactionMap).toEqual(new Map());
   });
 
   test("rekeys generated placeholders reserved by literal source text", async () => {

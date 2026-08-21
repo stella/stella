@@ -309,12 +309,12 @@ type LiteralPlaceholderSentinelCursor = {
 };
 
 const allocateLiteralPlaceholderSentinel = ({
+  blockedValues,
   cursor,
-  forcedSensitiveValues,
   text,
 }: {
+  blockedValues: ReadonlySet<string>;
   cursor: LiteralPlaceholderSentinelCursor;
-  forcedSensitiveValues: ReadonlySet<string>;
   text: string;
 }): string => {
   while (cursor.rangeIndex < LITERAL_PLACEHOLDER_SENTINEL_RANGES.length) {
@@ -339,14 +339,14 @@ const allocateLiteralPlaceholderSentinel = ({
       continue;
     }
 
-    let overlapsForcedValue = false;
-    for (const forcedValue of forcedSensitiveValues) {
-      if (forcedValue.includes(sentinel) || sentinel.includes(forcedValue)) {
-        overlapsForcedValue = true;
+    let overlapsBlockedValue = false;
+    for (const blockedValue of blockedValues) {
+      if (blockedValue.includes(sentinel) || sentinel.includes(blockedValue)) {
+        overlapsBlockedValue = true;
         break;
       }
     }
-    if (!overlapsForcedValue) {
+    if (!overlapsBlockedValue) {
       return sentinel;
     }
   }
@@ -385,10 +385,15 @@ const spanOverlapsLiteralValue = ({
   return false;
 };
 
-const protectLiteralPlaceholders = (
-  text: string,
-  forcedSensitiveValues: ReadonlySet<string>,
-): {
+const protectLiteralPlaceholders = ({
+  detectorVisibleValues,
+  forcedSensitiveValues,
+  text,
+}: {
+  detectorVisibleValues: ReadonlySet<string>;
+  forcedSensitiveValues: ReadonlySet<string>;
+  text: string;
+}): {
   sourcePlaceholders: ReadonlySet<string>;
   text: string;
   restore: (value: string) => string;
@@ -415,8 +420,8 @@ const protectLiteralPlaceholders = (
       }
 
       const sentinel = allocateLiteralPlaceholderSentinel({
+        blockedValues: detectorVisibleValues,
         cursor,
-        forcedSensitiveValues,
         text,
       });
       restoreMap.set(sentinel, placeholder);
@@ -476,6 +481,23 @@ const forcedSensitiveGazetteerEntries = ({
         source: "manual",
       };
     });
+};
+
+const gazetteerExactValues = (
+  entries: readonly GazetteerEntry[],
+): ReadonlySet<string> => {
+  const values = new Set<string>();
+  for (const entry of entries) {
+    if (entry.canonical.length > 0) {
+      values.add(entry.canonical);
+    }
+    for (const variant of entry.variants) {
+      if (variant.length > 0) {
+        values.add(variant);
+      }
+    }
+  }
+  return values;
 };
 
 type NativeRedaction = {
@@ -793,7 +815,11 @@ export const runChatAnonPipeline = async <
   const forcedSensitiveSet = new Set(
     forcedEntries.map(({ canonical }) => canonical),
   );
-  const protectedInput = protectLiteralPlaceholders(text, forcedSensitiveSet);
+  const protectedInput = protectLiteralPlaceholders({
+    detectorVisibleValues: gazetteerExactValues(effectiveGazetteerEntries),
+    forcedSensitiveValues: forcedSensitiveSet,
+    text,
+  });
   const { resolvedEntities, redaction: nativeRedaction } = pipeline.redactText(
     protectedInput.text,
   );
