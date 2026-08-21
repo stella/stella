@@ -252,6 +252,10 @@ export const reserveThirdPartyBoundarySourcePlaceholders = ({
   }
 };
 
+const boundaryForcedSensitiveValues = (
+  boundary: Extract<ChatThirdPartyBoundary, { type: "anonymized" }>,
+): string[] => [boundary.organizationId, boundary.anonymizationScopeId];
+
 const rewritePlaceholders = (
   text: string,
   replacements: Map<string, string>,
@@ -552,10 +556,7 @@ export const prepareTextForThirdParty = async ({
       await anonymizeFields({
         context: boundary.pipelineContext,
         fields: protectedInput.fields,
-        forcedSensitiveValues: [
-          boundary.organizationId,
-          boundary.anonymizationScopeId,
-        ],
+        forcedSensitiveValues: boundaryForcedSensitiveValues(boundary),
         gazetteerEntries: await boundary.gazetteerEntries,
         excludedCanonicals: await boundary.excludedCanonicals,
         organizationId: boundary.organizationId,
@@ -599,10 +600,7 @@ const prepareTextBatchForThirdParty = async ({
       await anonymizeFields({
         context: boundary.pipelineContext,
         fields: protectedInput.fields,
-        forcedSensitiveValues: [
-          boundary.organizationId,
-          boundary.anonymizationScopeId,
-        ],
+        forcedSensitiveValues: boundaryForcedSensitiveValues(boundary),
         gazetteerEntries: await boundary.gazetteerEntries,
         excludedCanonicals: await boundary.excludedCanonicals,
         organizationId: boundary.organizationId,
@@ -889,13 +887,13 @@ const anonymizeUnknownStrings = ({
     const sourceValue = encodeClaimedPlaceholders
       ? encodeLateLiteralPlaceholders(boundary, value)
       : value;
-    const isForcedBoundaryValue =
-      value === boundary.organizationId ||
-      value === boundary.anonymizationScopeId;
+    const containsForcedBoundaryValue = boundaryForcedSensitiveValues(
+      boundary,
+    ).some((forcedValue) => value.includes(forcedValue));
     if (
       key &&
       shouldPreserveStructuredString(key, value) &&
-      !isForcedBoundaryValue
+      !containsForcedBoundaryValue
     ) {
       return Result.ok(sourceValue);
     }

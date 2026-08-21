@@ -164,7 +164,12 @@ describe("chat third-party anonymization boundary", () => {
 
     const prepared = await prepareUnknownForThirdParty({
       boundary,
-      value: { organizationId, id: scopeId, documentId: "doc_123" },
+      value: {
+        organizationId,
+        id: `ref_${organizationId}`,
+        scopeId: `scope:${scopeId}`,
+        documentId: "doc_123",
+      },
     });
 
     expect(Result.isOk(prepared)).toBe(true);
@@ -174,11 +179,13 @@ describe("chat third-party anonymization boundary", () => {
     expect(prepared.value).toEqual({
       organizationId: "[MISC_1]",
       id: "[MISC_2]",
+      scopeId: "[MISC_3]",
       documentId: "doc_123",
     });
     expect(anonymizeIds.mock.calls.at(0)?.[0].fields).toEqual([
       organizationId,
-      scopeId,
+      `ref_${organizationId}`,
+      `scope:${scopeId}`,
     ]);
   });
 
