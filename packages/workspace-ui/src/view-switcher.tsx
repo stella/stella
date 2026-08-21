@@ -128,7 +128,10 @@ export const WorkspaceViewSwitcher = <View extends WorkspaceViewSwitcherItem>({
   };
 
   return (
-    <div className="flex min-w-0 flex-1 items-center gap-1 px-2">
+    <div
+      className="flex min-w-0 flex-1 items-center gap-1 px-2"
+      dir={direction}
+    >
       <div className="min-w-0 flex-1" ref={setStripContainer}>
         <Tabs
           onValueChange={(value) => {

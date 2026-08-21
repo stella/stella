@@ -28,10 +28,27 @@ describe("WorkspaceViewSwitcher", () => {
     );
 
     expect(markup).toContain("Saved views");
+    expect(markup).toContain('dir="ltr"');
     expect(markup).toContain("All matters");
     expect(markup).toContain("Deadlines");
     expect(markup).toContain("Add view");
     expect(markup).toContain("Actions");
+  });
+
+  test("applies the drop direction to the rendered switcher", () => {
+    const markup = renderToStaticMarkup(
+      <WorkspaceViewSwitcher
+        activeViewId="table"
+        ariaLabel="Saved views"
+        direction="rtl"
+        onViewChange={() => undefined}
+        reorder={null}
+        renderIcon={() => null}
+        views={VIEWS}
+      />,
+    );
+
+    expect(markup).toContain('dir="rtl"');
   });
 
   test("renders the editing branch without the normal label or actions", () => {
