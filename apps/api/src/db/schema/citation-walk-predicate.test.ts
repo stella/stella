@@ -9,7 +9,7 @@ import { caseLawCitations } from "@/api/db/schema";
 import {
   citationReopenableByKeySql,
   unsettledCitationSql,
-} from "@/api/handlers/case-law/citation-resolution-status";
+} from "@/api/lib/case-law/citation-resolution-status";
 
 /**
  * The walk's WHERE clause, the burn-down index in the schema, and the DDL that

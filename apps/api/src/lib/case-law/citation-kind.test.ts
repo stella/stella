@@ -6,7 +6,7 @@ import {
   classifyCitation,
   classifyCitationVerdict,
   proceduralKeysFromMetadata,
-} from "@/api/handlers/case-law/citation-kind";
+} from "@/api/lib/case-law/citation-kind";
 
 /**
  * The contexts below are the shapes real decisions use, because the

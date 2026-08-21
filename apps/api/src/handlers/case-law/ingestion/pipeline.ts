@@ -14,11 +14,6 @@ import {
 import { corpusStorageMode } from "@/api/env-base";
 import type { CitationDecisionTypeHint } from "@/api/handlers/case-law/citation-decision-type-hint";
 import {
-  classifyCitation,
-  proceduralKeysFromMetadata,
-} from "@/api/handlers/case-law/citation-kind";
-import type { ProceduralKeys } from "@/api/handlers/case-law/citation-kind";
-import {
   reopenCitationsForDecisionKey,
   reopenCitationsForKeys,
   reopenCitationsFrom,
@@ -51,6 +46,11 @@ import { pgPayloadCarriesDocument } from "@/api/handlers/case-law/stored-payload
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
+import {
+  classifyCitation,
+  proceduralKeysFromMetadata,
+} from "@/api/lib/case-law/citation-kind";
+import type { ProceduralKeys } from "@/api/lib/case-law/citation-kind";
 import {
   advanceCorpusIngestionCheckpoint,
   CORPUS_SOURCE_TYPE,

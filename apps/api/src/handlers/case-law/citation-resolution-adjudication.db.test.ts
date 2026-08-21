@@ -15,15 +15,15 @@ import {
   reopenCitations,
   resolveCitationsForDecision,
 } from "@/api/handlers/case-law/citation-resolution";
+import { createSafeId } from "@/api/lib/branded-types";
+import type { SafeId } from "@/api/lib/branded-types";
 import {
   CITATION_CANDIDATE_SCAN_CAP,
   CITATION_RESOLUTION_RULE,
   MERITS_DECISION_TYPES,
   PROCEDURAL_DECISION_TYPES,
   CITATION_RESOLUTION_STATUS,
-} from "@/api/handlers/case-law/citation-resolution-status";
-import { createSafeId } from "@/api/lib/branded-types";
-import type { SafeId } from "@/api/lib/branded-types";
+} from "@/api/lib/case-law/citation-resolution-status";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 /**

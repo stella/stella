@@ -18,9 +18,9 @@ import {
   resolveCitationsForDecision,
   tryResolveCitationBatch,
 } from "@/api/handlers/case-law/citation-resolution";
-import { CITATION_RESOLUTION_STATUS } from "@/api/handlers/case-law/citation-resolution-status";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { CITATION_RESOLUTION_STATUS } from "@/api/lib/case-law/citation-resolution-status";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 /**

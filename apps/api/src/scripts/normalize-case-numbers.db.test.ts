@@ -7,8 +7,8 @@ import {
   caseLawDecisions,
   caseLawSources,
 } from "@/api/db/schema";
-import { CITATION_RESOLUTION_STATUS } from "@/api/handlers/case-law/citation-resolution-status";
 import { createSafeId } from "@/api/lib/branded-types";
+import { CITATION_RESOLUTION_STATUS } from "@/api/lib/case-law/citation-resolution-status";
 import { isRecord } from "@/api/lib/type-guards";
 import {
   normalizeSheetNumbersStatement,

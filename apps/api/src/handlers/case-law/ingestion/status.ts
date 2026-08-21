@@ -16,6 +16,14 @@ import {
 import type { SourceTotalOrigin } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import {
+  type CitationResolutionCensusReport,
+  readCitationResolutionCensus,
+} from "@/api/lib/case-law/citation-resolution-census";
+import {
+  CITATION_CENSUS_RUN_STATUS,
+  type CitationCensusRunStatus,
+} from "@/api/lib/case-law/citation-resolution-census-consts";
 import { boundedAll } from "@/api/lib/db/bounded-all";
 import {
   CASE_LAW_SOURCE_ROWS_BOUND,
@@ -83,12 +91,55 @@ type SourceStatus = {
   reconciliation: SourceReconciliationStatus | null;
 };
 
+/** Unruled (country, court, shape) groups the status carries, by citations. */
+const CITATION_CENSUS_STATUS_GROUP_LIMIT = 25;
+
+type CitationResolutionStatusSection = Omit<
+  CitationResolutionCensusReport,
+  "latest" | "previous"
+> & {
+  latest: CensusRunView | null;
+  previous: CensusRunView | null;
+};
+
+type CensusRunView = {
+  id: string;
+  /** Which walk the run is in; `complete` once both reached the end. */
+  status: CitationCensusRunStatus;
+  /** True once both walks covered their population. */
+  complete: boolean;
+  startedAt: string;
+  finishedAt: string | null;
+  keysScanned: number;
+};
+
 type IngestionStatus = {
   sources: SourceStatus[];
   totalDecisions: number;
   totalEvents: number;
   failures24h: number;
+  /**
+   * Where citation resolution stands, from the latest census snapshot:
+   * precedent citations by status, resolved ones by rule, ambiguous ones by
+   * the shape of their key's holders, and the largest groups among shapes no
+   * rule owns with their change against the previous complete snapshot.
+   */
+  citationResolution: CitationResolutionStatusSection;
 };
+
+const censusRunView = (
+  run: CitationResolutionCensusReport["latest"],
+): CensusRunView | null =>
+  run === null
+    ? null
+    : {
+        id: run.id,
+        status: run.status,
+        complete: run.status === CITATION_CENSUS_RUN_STATUS.COMPLETE,
+        startedAt: run.startedAt.toISOString(),
+        finishedAt: run.finishedAt?.toISOString() ?? null,
+        keysScanned: run.keysScanned,
+      };
 
 export const getIngestionStatus = async (
   scopedDb: ScopedDb,
@@ -277,11 +328,22 @@ export const getIngestionStatus = async (
       .from(caseLawIngestionFailures)
       .where(gte(caseLawIngestionFailures.createdAt, oneDayAgo));
 
+    const census = await readCitationResolutionCensus({
+      // Already inside the scoped transaction: reuse it rather than open one.
+      db: async (fn) => await fn(db),
+      limit: CITATION_CENSUS_STATUS_GROUP_LIMIT,
+    });
+
     return {
       sources: sourceStatuses,
       totalDecisions: totalDecisions?.total ?? 0,
       totalEvents: totalEvents?.total ?? 0,
       failures24h: totalFailures?.total ?? 0,
+      citationResolution: {
+        ...census,
+        latest: censusRunView(census.latest),
+        previous: censusRunView(census.previous),
+      },
     };
   });
 };
@@ -294,7 +356,10 @@ const config = {
     "reports, decisions inserted in the last hour and last day, failures and " +
     "the top error types in the last day, the last ingestion event, and " +
     "standing reconciliation counts (slices surveyed, short slices, parked " +
-    "and terminal items). Requires organization audit-log access.",
+    "and terminal items). Also the latest citation-resolution census: " +
+    "precedent citations by resolution status, resolved ones by rule, " +
+    "ambiguous ones by the shape of their key's holders, and the largest " +
+    "groups among shapes no rule owns. Requires organization audit-log access.",
   // Operator-only ingestion observability: `auditLog: ["read"]` is held solely
   // by owner/admin (see `packages/permissions`), matching the admin/owner gate
   // this route used to carry as a route-level `onBeforeHandle`. Declaring it in
