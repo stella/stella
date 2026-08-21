@@ -21,7 +21,9 @@ export const BETTER_AUTH_ORGANIZATION_STATEMENTS = {
 } as const;
 
 type OrganizationPermissionMap = {
-  [Resource in keyof typeof BETTER_AUTH_ORGANIZATION_STATEMENTS]: (typeof BETTER_AUTH_ORGANIZATION_STATEMENTS)[Resource][number][];
+  [
+    Resource in keyof typeof BETTER_AUTH_ORGANIZATION_STATEMENTS
+  ]: (typeof BETTER_AUTH_ORGANIZATION_STATEMENTS)[Resource][number][];
 };
 
 export type BetterAuthOrganizationRoleGrants = Record<
@@ -216,7 +218,7 @@ const field = (
 });
 
 const toSnakeCase = (value: string): string =>
-  value.replaceAll(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
+  value.replaceAll(/[A-Z]/gu, (letter) => `_${letter.toLowerCase()}`);
 
 const databaseColumnType = (
   type: BetterAuthFieldType,
@@ -537,7 +539,7 @@ const canonicalize = (value: unknown): unknown => {
 };
 
 const canonical = (value: unknown): string =>
-  JSON.stringify(canonicalize(value)) ?? "undefined";
+  JSON.stringify(canonicalize(value));
 
 const sortIndexes = (
   indexes: readonly BetterAuthIndexContract[],

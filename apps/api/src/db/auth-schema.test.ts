@@ -78,7 +78,7 @@ const hostField = (
 ): BetterAuthFieldContract => ({
   database: {
     columnName: name.replaceAll(
-      /[A-Z]/g,
+      /[A-Z]/gu,
       (letter) => `_${letter.toLowerCase()}`,
     ),
     columnType: databaseColumnType(type),

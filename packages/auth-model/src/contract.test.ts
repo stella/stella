@@ -13,6 +13,8 @@ import {
 import type {
   BetterAuthFieldDefault,
   BetterAuthFieldContract,
+  BetterAuthFieldReference,
+  BetterAuthFieldType,
   BetterAuthModelContract,
 } from "./contract";
 
@@ -69,6 +71,49 @@ const normalizeDependencyDefault = (value: unknown): BetterAuthFieldDefault => {
   throw new Error("Unsupported Better Auth logical default");
 };
 
+const normalizeDependencyType = (value: string): BetterAuthFieldType => {
+  if (value === "boolean" || value === "date" || value === "string") {
+    return value;
+  }
+  throw new Error(`Unsupported Better Auth core field type: ${value}`);
+};
+
+const normalizeReferenceModel = (
+  value: string | undefined,
+): BetterAuthFieldReference["model"] | null => {
+  if (value === undefined) {
+    return null;
+  }
+  if (value === "organization" || value === "user") {
+    return value;
+  }
+  throw new Error(`Unsupported Better Auth core reference model: ${value}`);
+};
+
+const normalizeReferenceField = (
+  value: string | undefined,
+): BetterAuthFieldReference["field"] | null => {
+  if (value === undefined) {
+    return null;
+  }
+  if (value === "id") {
+    return value;
+  }
+  throw new Error(`Unsupported Better Auth core reference field: ${value}`);
+};
+
+const normalizeReferenceDelete = (
+  value: string | undefined,
+): BetterAuthFieldReference["onDelete"] => {
+  if (value === undefined) {
+    return null;
+  }
+  if (value === "cascade") {
+    return value;
+  }
+  throw new Error(`Unsupported Better Auth core reference action: ${value}`);
+};
+
 describe("Better Auth core contract", () => {
   test("pins the dependency version that defines the schema", async () => {
     const rootPackage: unknown = await Bun.file(
@@ -111,7 +156,9 @@ describe("Better Auth core contract", () => {
         BETTER_AUTH_CORE_SCHEMA[model];
       for (const [fieldName, dependency] of Object.entries(dependencyFields)) {
         const contract = contractModel.fields[fieldName];
-        expect(contract?.logical.type).toBe(dependency.type);
+        expect(contract?.logical.type).toBe(
+          normalizeDependencyType(dependency.type),
+        );
         expect(contract?.logical.required).toBe(dependency.required);
         expect(contract?.logical.default).toEqual(
           normalizeDependencyDefault(dependency.defaultValue),
@@ -127,13 +174,13 @@ describe("Better Auth core contract", () => {
           dependency.onUpdate !== undefined,
         );
         expect(contract?.logical.reference?.model ?? null).toBe(
-          dependency.references?.model ?? null,
+          normalizeReferenceModel(dependency.references?.model),
         );
         expect(contract?.logical.reference?.field ?? null).toBe(
-          dependency.references?.field ?? null,
+          normalizeReferenceField(dependency.references?.field),
         );
         expect(contract?.logical.reference?.onDelete ?? null).toBe(
-          dependency.references?.onDelete ?? null,
+          normalizeReferenceDelete(dependency.references?.onDelete),
         );
       }
     }
