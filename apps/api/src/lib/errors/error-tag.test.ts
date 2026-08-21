@@ -65,6 +65,14 @@ describe("errorClassName", () => {
     );
   });
 
+  test("rejects writable names that are not tied to the constructor", () => {
+    const error = new Error("upstream failure");
+    error.name = "PrivilegedClientNameError";
+
+    expect(errorClassName(error)).toBe("Error");
+    expect(errorTag(error)).toBe("Error");
+  });
+
   test("never throws on hostile accessors", () => {
     const error = new Error("boom");
     Object.defineProperties(error, {

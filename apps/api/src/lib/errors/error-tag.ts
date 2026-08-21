@@ -8,9 +8,17 @@
  * `errors/utils` re-exports these, so existing callers are unaffected.
  */
 
-import { isTaggedError } from "better-result";
+import { isTaggedError, Result } from "better-result";
 
 const GENERIC_ERROR_NAME = "Error";
+
+const safeReflectGet = (target: object, key: PropertyKey): unknown =>
+  Result.try((): unknown => Reflect.get(target, key)).unwrapOr(undefined);
+
+const taggedErrorName = (error: unknown): string | undefined =>
+  Result.try(() => (isTaggedError(error) ? error._tag : undefined)).unwrapOr(
+    undefined,
+  );
 
 /**
  * The name an error class assigns to itself, when it assigns one.
@@ -21,31 +29,30 @@ const GENERIC_ERROR_NAME = "Error";
  * the more specific of the two.
  */
 const declaredErrorName = (error: Error): string | undefined => {
-  try {
-    const name: unknown = Reflect.get(error, "name");
-    if (typeof name === "string" && name && name !== GENERIC_ERROR_NAME) {
-      return name;
-    }
-  } catch {
-    return undefined;
-  }
-  return undefined;
+  const name = safeReflectGet(error, "name");
+  return typeof name === "string" && name && name !== GENERIC_ERROR_NAME
+    ? name
+    : undefined;
 };
 
 const constructorIdentifier = (error: Error): string => {
-  try {
-    const constructorValue: unknown = Reflect.get(error, "constructor");
-    if (typeof constructorValue !== "function") {
-      return GENERIC_ERROR_NAME;
-    }
-    const name: unknown = Reflect.get(constructorValue, "name");
-    if (typeof name === "string" && name) {
-      return name;
-    }
-  } catch {
+  const constructorValue = safeReflectGet(error, "constructor");
+  if (typeof constructorValue !== "function") {
     return GENERIC_ERROR_NAME;
   }
-  return GENERIC_ERROR_NAME;
+  const name = safeReflectGet(constructorValue, "name");
+  return typeof name === "string" && name ? name : GENERIC_ERROR_NAME;
+};
+
+const hasNumericSuffix = (value: string, prefix: string): boolean => {
+  if (!value.startsWith(prefix)) {
+    return false;
+  }
+  const suffix = value.slice(prefix.length);
+  return (
+    suffix.length > 0 &&
+    Array.from(suffix).every((char) => char >= "0" && char <= "9")
+  );
 };
 
 /**
@@ -64,10 +71,29 @@ const constructorIdentifier = (error: Error): string => {
  *
  * Every such name is local to one build of one bundle, so none of them
  * identifies the class across builds, and none of them can be grepped for.
- * The declared name survives all three.
+ * The declared name survives all three. Because `Error.name` is writable, a
+ * declared name is used only when a tagged error vouches for it or the
+ * constructor identifier proves the same name, optionally with the numeric
+ * suffix emitted by the bundler. This keeps caller-controlled values out of
+ * telemetry and persisted error codes.
  */
-export const errorClassName = (error: Error): string =>
-  declaredErrorName(error) ?? constructorIdentifier(error);
+export const errorClassName = (error: Error): string => {
+  const taggedName = taggedErrorName(error);
+  if (taggedName !== undefined) {
+    return taggedName;
+  }
+
+  const declaredName = declaredErrorName(error);
+  const constructorName = constructorIdentifier(error);
+  if (
+    declaredName !== undefined &&
+    (declaredName === constructorName ||
+      hasNumericSuffix(constructorName, declaredName))
+  ) {
+    return declaredName;
+  }
+  return constructorName;
+};
 
 /**
  * Extract a safe, structural error identifier for observability.
@@ -78,8 +104,9 @@ export const errorClassName = (error: Error): string =>
  * names, or client data that must not reach analytics dashboards.
  */
 export const errorTag = (error: unknown): string => {
-  if (isTaggedError(error)) {
-    return error._tag;
+  const taggedName = taggedErrorName(error);
+  if (taggedName !== undefined) {
+    return taggedName;
   }
   if (error instanceof Error) {
     return errorClassName(error);
