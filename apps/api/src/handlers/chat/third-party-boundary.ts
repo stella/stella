@@ -1118,13 +1118,18 @@ const anonymizeToolResultContent = ({
   }
 
   const prepared = content.map((part) => {
-    if (part.type !== "text") {
-      return part;
+    if (part.type === "text") {
+      const preparedPart = { ...part };
+      queueTextReplacement(replacements, part.content, (value) => {
+        preparedPart.content = value;
+        apply(prepared);
+      });
+      return preparedPart;
     }
 
-    const preparedPart = { ...part };
-    queueTextReplacement(replacements, part.content, (value) => {
-      preparedPart.content = value;
+    const preparedPart = { ...part, source: { ...part.source } };
+    queueTextReplacement(replacements, part.source.value, (value) => {
+      preparedPart.source.value = value;
       apply(prepared);
     });
     return preparedPart;

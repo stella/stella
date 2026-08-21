@@ -532,6 +532,135 @@ describe("chat third-party anonymization boundary", () => {
     });
   });
 
+  test("anonymizes every rich tool-result source before provider replay", async () => {
+    const organizationId = toSafeId<"organization">(
+      "11111111-1111-4111-8111-111111111111",
+    );
+    const anonymizeIds = mock(async ({ fields }: { fields: string[] }) => ({
+      entityCount: 1,
+      fields: fields.map((field) =>
+        field.replaceAll(organizationId, () => "[MISC_1]"),
+      ),
+      redactionMap: new Map([["[MISC_1]", organizationId]]),
+    }));
+    const { scopedDb } = createScopedDbMock({});
+    const boundary = createChatThirdPartyBoundary({
+      anonymizeFields: anonymizeIds,
+      anonymizationScopeId: "workspace-A",
+      organizationId,
+      scopedDb,
+      sendMode: CHAT_SEND_MODE.anonymized,
+    });
+    const messages: ChatMessage[] = [
+      {
+        id: "msg_1",
+        role: "assistant",
+        parts: [
+          {
+            type: "tool-call",
+            id: "call_1",
+            name: "mcp__test__read_rich_result",
+            arguments: "{}",
+            state: "complete",
+          },
+          {
+            type: "tool-result",
+            toolCallId: "call_1",
+            content: [
+              {
+                type: "image",
+                source: {
+                  type: "url",
+                  value: `https://example.test/${organizationId}/image.png`,
+                  mimeType: "image/png",
+                },
+              },
+              {
+                type: "audio",
+                source: {
+                  type: "url",
+                  value: `https://example.test/${organizationId}/audio.mp3`,
+                  mimeType: "audio/mpeg",
+                },
+              },
+              {
+                type: "video",
+                source: {
+                  type: "url",
+                  value: `https://example.test/${organizationId}/video.mp4`,
+                  mimeType: "video/mp4",
+                },
+              },
+              {
+                type: "document",
+                source: {
+                  type: "url",
+                  value: `https://example.test/${organizationId}/document.pdf`,
+                  mimeType: "application/pdf",
+                },
+              },
+            ],
+            state: "complete",
+          },
+        ],
+      },
+    ];
+
+    const prepared = await prepareMessagesForThirdParty({
+      boundary,
+      messages,
+    });
+
+    expect(Result.isOk(prepared)).toBe(true);
+    if (Result.isError(prepared)) {
+      throw prepared.error;
+    }
+    const resultPart = prepared.value.at(0)?.parts.at(1);
+    if (!resultPart || resultPart.type !== "tool-result") {
+      throw new TypeError("Expected prepared tool-result part");
+    }
+    expect(resultPart.content).toEqual([
+      {
+        type: "image",
+        source: {
+          type: "url",
+          value: "https://example.test/[MISC_1]/image.png",
+          mimeType: "image/png",
+        },
+      },
+      {
+        type: "audio",
+        source: {
+          type: "url",
+          value: "https://example.test/[MISC_1]/audio.mp3",
+          mimeType: "audio/mpeg",
+        },
+      },
+      {
+        type: "video",
+        source: {
+          type: "url",
+          value: "https://example.test/[MISC_1]/video.mp4",
+          mimeType: "video/mp4",
+        },
+      },
+      {
+        type: "document",
+        source: {
+          type: "url",
+          value: "https://example.test/[MISC_1]/document.pdf",
+          mimeType: "application/pdf",
+        },
+      },
+    ]);
+    expect(anonymizeIds.mock.calls.at(0)?.[0].fields).toEqual([
+      `https://example.test/${organizationId}/image.png`,
+      `https://example.test/${organizationId}/audio.mp3`,
+      `https://example.test/${organizationId}/video.mp4`,
+      `https://example.test/${organizationId}/document.pdf`,
+    ]);
+  });
+
   test("returns anonymized live tool output values", async () => {
     const boundary = createBoundary();
     const tools = {
