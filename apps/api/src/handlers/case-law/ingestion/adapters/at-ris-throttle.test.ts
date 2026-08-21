@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 
 import { createAtRisRequestSlot } from "@/api/handlers/case-law/ingestion/adapters/at-ris-throttle";
+import { rejectionOf } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
 
 describe("Austrian RIS publisher gate", () => {
   it("does not validate Redis configuration until a deployed request", () => {
@@ -62,7 +63,11 @@ describe("Austrian RIS publisher gate", () => {
       },
     });
 
-    await expect(reserve()).rejects.toThrow("invalid wait");
+    const rejection = await rejectionOf(reserve());
+    expect(rejection).toBeInstanceOf(Error);
+    expect(rejection).toMatchObject({
+      message: expect.stringContaining("invalid wait"),
+    });
   });
 
   it("abandons a Redis reservation when the ingestion signal aborts", async () => {
@@ -77,6 +82,10 @@ describe("Austrian RIS publisher gate", () => {
     const pending = reserve(controller.signal);
     controller.abort(new DOMException("Stopped", "AbortError"));
 
-    await expect(pending).rejects.toThrow("Stopped");
+    const rejection = await rejectionOf(pending);
+    expect(rejection).toBeInstanceOf(Error);
+    expect(rejection).toMatchObject({
+      message: expect.stringContaining("Stopped"),
+    });
   });
 });

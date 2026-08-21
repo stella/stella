@@ -7,7 +7,7 @@ import {
   atRisPreviousMonth,
   createAtCourtsAdapter,
 } from "./at-courts";
-import { requireReconciliation } from "./test-utils";
+import { rejectionOf, requireReconciliation } from "./test-utils";
 
 const SOURCE_ID = "JJT_20260115_OGH0002_0010OB00001_26A0000_000";
 const SECOND_SOURCE_ID = "JJT_20260115_OGH0002_0010OB00001_26A0000_001";
@@ -292,9 +292,13 @@ describe("Austrian RIS adapter", () => {
 
     expect((await adapter.fetchPage(null, {})).isErr()).toBe(true);
     const reconciliation = requireReconciliation(adapter);
-    await expect(
+    const rejection = await rejectionOf(
       reconciliation.listSlicePage({ slice: "2026-01", page: 0 }),
-    ).rejects.toThrow("exceeds 200 pages");
+    );
+    expect(rejection).toBeInstanceOf(Error);
+    expect(rejection).toMatchObject({
+      message: expect.stringContaining("exceeds 200 pages"),
+    });
   });
 
   it("quarantines an identity-less row without blocking later documents", async () => {

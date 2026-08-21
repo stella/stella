@@ -181,3 +181,15 @@ export const recordFixture = async (
 export const requireReconciliation = (
   adapter: SourceAdapter,
 ): SourceReconciliation => adapter.reconciliation;
+
+/**
+ * Bun declares `.rejects.toThrow` as void. Capture a rejection explicitly so
+ * async assertions remain observable without violating type-aware lint.
+ */
+export const rejectionOf = async (
+  promise: Promise<unknown>,
+): Promise<unknown> =>
+  await promise.then(
+    () => null,
+    (error: unknown) => error,
+  );
