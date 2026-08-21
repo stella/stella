@@ -38,7 +38,7 @@ const PROMPT_EXTENSION = ".md";
 /** Ceilings for the object-store source; a prefix past them is a boot error. */
 export const MAX_S3_SPECS = 50;
 export const MAX_S3_SPEC_FILE_BYTES = 64 * 1024;
-const MAX_S3_PROMPTS_PER_SPEC = 20;
+export const MAX_S3_PROMPTS_PER_SPEC = 20;
 const MAX_S3_OBJECTS = MAX_S3_SPECS * (1 + MAX_S3_PROMPTS_PER_SPEC);
 const S3_LOAD_TIMEOUT_MS = 60_000;
 const S3_PREFIX_PATTERN =
@@ -301,6 +301,13 @@ export const readReportSpecSourcesFromS3 = async ({
         const prompts =
           promptKeys.get(file.specKey) ?? new Map<string, string>();
         prompts.set(file.ref, key);
+        if (prompts.size > MAX_S3_PROMPTS_PER_SPEC) {
+          return Result.err(
+            new ConfigurationError({
+              message: `Report spec "${file.specKey}": more than ${MAX_S3_PROMPTS_PER_SPEC} prompt files under s3://${bucket}/${prefix}${file.specKey}/${PROMPTS_DIRNAME}/.`,
+            }),
+          );
+        }
         promptKeys.set(file.specKey, prompts);
         break;
       }

@@ -98,6 +98,20 @@ describe("parseReportSpec", () => {
     ).toBe(true);
   });
 
+  test("rejects reversed or out-of-range TOC levels", () => {
+    const parse = (levels: unknown) =>
+      parseReportSpec(minimal([{ kind: "toc", levels }]));
+    expect(Result.isOk(parse({ from: 2, to: 3 }))).toBe(true);
+    expect(Result.isOk(parse({ from: 1, to: 1 }))).toBe(true);
+    const reversed = parse({ from: 3, to: 1 });
+    expect(Result.isError(reversed)).toBe(true);
+    if (Result.isError(reversed)) {
+      expect(reversed.error.message).toContain("from <= to");
+    }
+    expect(Result.isError(parse({ from: 1, to: 4 }))).toBe(true);
+    expect(Result.isError(parse({ from: 0, to: 2 }))).toBe(true);
+  });
+
   test("rejects a nested appendix", () => {
     const parsed = parseReportSpec(
       minimal([

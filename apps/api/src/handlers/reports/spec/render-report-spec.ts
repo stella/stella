@@ -36,6 +36,7 @@ import type {
   ReportFinding,
   ReportGrid,
   ReportGridCell,
+  ReportGridColumn,
   ReportGroup,
   ReportStats,
 } from "@/api/handlers/reports/build-report-data";
@@ -332,6 +333,9 @@ const citationUrl = (
   url.searchParams.set("justification", link.justificationId);
   switch (citation.kind) {
     case "pdf":
+      // The document route highlights the justification only when both
+      // `justification` and `justificationPage` are set; `pdfPage` scrolls.
+      url.searchParams.set("justificationPage", String(citation.pageNumber));
       url.searchParams.set("pdfPage", String(citation.pageNumber));
       break;
     case "docx":
@@ -701,12 +705,20 @@ const contractFieldsTable = (
         ]),
       });
 
-const renderContract = (
-  contract: ReportContract,
-  hasVerdicts: boolean,
-): Block[] => {
+type RenderContractOptions = {
+  contract: ReportContract;
+  hasVerdicts: boolean;
+  /** Level of the contract heading; its "Risks" heading sits one deeper. */
+  level: HeadingLevel;
+};
+
+const renderContract = ({
+  contract,
+  hasVerdicts,
+  level,
+}: RenderContractOptions): Block[] => {
   const blocks: Block[] = [
-    heading({ text: `${contract.index}. ${contract.name}`, level: 2 }),
+    heading({ text: `${contract.index}. ${contract.name}`, level }),
   ];
   if (contract.hasDocumentType) {
     blocks.push(captionParagraph(`Document type: ${contract.documentType}`));
@@ -718,7 +730,7 @@ const renderContract = (
   if (!contract.hasRisks) {
     return blocks;
   }
-  blocks.push(heading({ text: "Risks", level: 3 }));
+  blocks.push(heading({ text: "Risks", level: deeper(level) }));
   for (const risk of contract.risks) {
     blocks.push(
       paragraph([
@@ -743,24 +755,38 @@ const renderPerContract = (
   scope: Scope,
 ): Block[] => [
   ...optionalHeading(section.heading, scope.headingLevel),
+  // Contracts sit one level below the scope's heading (the group heading
+  // inside `grouped`, the document title at root), capped at the deepest
+  // styled level.
   ...scopeContracts(ctx, scope).flatMap((contract) =>
-    renderContract(contract, ctx.report.data.hasVerdicts),
+    renderContract({
+      contract,
+      hasVerdicts: ctx.report.data.hasVerdicts,
+      level: deeper(scope.headingLevel),
+    }),
   ),
 ];
 
 const matrixCellParagraph = (text: string): Paragraph =>
   paragraph([run(text, { fontSize: MATRIX_CELL_FONT_SIZE })]);
 
-/** A graded cell shows only its verdict tier, shaded; any other cell shows
- *  the truncated value. A verdict outside the known tiers (a hand-edited
- *  option) renders as plain text rather than a guessed fill. */
-const matrixCell = (cell: ReportGridCell): TableCellSpec => {
-  if (cell.verdict.length === 0) {
+/** A graded cell shows only its verdict tier, shaded, or stays blank while
+ *  the verdict is unset (the extracted clause text is not a grade); any other
+ *  cell shows the truncated value. A verdict outside the known tiers (a
+ *  hand-edited option) renders as plain text rather than a guessed fill. */
+const matrixCell = (
+  column: ReportGridColumn,
+  cell: ReportGridCell,
+): TableCellSpec => {
+  if (column.kind === "field") {
     return {
       content: [
         matrixCellParagraph(truncate(cell.value, MATRIX_VALUE_MAX_CHARS)),
       ],
     };
+  }
+  if (cell.verdict.length === 0) {
+    return "";
   }
   if (!isVerdictTier(cell.verdict)) {
     return { content: [matrixCellParagraph(cell.verdict)] };
@@ -771,8 +797,8 @@ const matrixCell = (cell: ReportGridCell): TableCellSpec => {
   };
 };
 
-/** Indexes of the grid columns the section keeps. A column is graded when any
- *  row holds a verdict under it (cells mirror the columns by position). */
+/** Indexes of the grid columns the section keeps. Graded-ness is a property
+ *  of the column, so a graded column stays even while every verdict is unset. */
 const matrixColumnIndexes = (
   grid: ReportGrid,
   columns: MatrixColumns,
@@ -782,11 +808,7 @@ const matrixColumnIndexes = (
     case "all":
       return all;
     case "graded":
-      return all.filter((index) =>
-        grid.rows.some(
-          (row) => (row.cells.at(index)?.verdict ?? "").length > 0,
-        ),
-      );
+      return all.filter((index) => grid.columns.at(index)?.kind === "graded");
     default: {
       const exhaustive: never = columns;
       return exhaustive;
@@ -817,8 +839,13 @@ const renderMatrix = (
         { content: [matrixCellParagraph(row.name)] },
       ];
       for (const index of indexes) {
+        const column = grid.columns.at(index);
         const cell = row.cells.at(index);
-        cells.push(cell === undefined ? "" : matrixCell(cell));
+        cells.push(
+          column === undefined || cell === undefined
+            ? ""
+            : matrixCell(column, cell),
+        );
       }
       return cells;
     }),

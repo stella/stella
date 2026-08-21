@@ -8,6 +8,7 @@ import type { ReportSpecObjectStore } from "./load-report-specs";
 import {
   bundledReportSpecSources,
   loadReportSpecs,
+  MAX_S3_PROMPTS_PER_SPEC,
   MAX_S3_SPEC_FILE_BYTES,
   MAX_S3_SPECS,
   parseS3SpecPrefix,
@@ -301,6 +302,31 @@ describe("readReportSpecSourcesFromS3", () => {
     });
     expect(Result.isError(read) && read.error.message).toContain(
       `more than the ${MAX_S3_SPECS} allowed`,
+    );
+    expect(store.reads).toEqual([]);
+  });
+
+  test("more prompts than the per-spec ceiling is a typed boot error before any read", async () => {
+    const objects: Record<string, string> = {
+      [`${PREFIX}many/spec.json`]: specJson("Many", []),
+    };
+    for (let index = 0; index <= MAX_S3_PROMPTS_PER_SPEC; index += 1) {
+      objects[`${PREFIX}many/prompts/p-${String(index).padStart(3, "0")}.md`] =
+        `Prompt ${index}`;
+    }
+    const store = memoryStore(objects);
+    const read = await readReportSpecSourcesFromS3({
+      store,
+      location: LOCATION,
+    });
+    expect(Result.isError(read)).toBe(true);
+    if (!Result.isError(read)) {
+      return;
+    }
+    expect(read.error._tag).toBe("ConfigurationError");
+    expect(read.error.message).toContain('Report spec "many"');
+    expect(read.error.message).toContain(
+      `more than ${MAX_S3_PROMPTS_PER_SPEC} prompt files`,
     );
     expect(store.reads).toEqual([]);
   });

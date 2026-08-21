@@ -167,6 +167,14 @@ const gridRow = (c: ReportContract) => ({
     })),
     // A plain ASK column: no verdict, long free text.
     { label: "Notes", value: LONG_NOTE, verdict: "", severity: "" },
+    // A graded column whose verdict is not set yet: the clause text is
+    // extracted, the severity comes from the column, the tier is blank.
+    {
+      label: "Liability cap",
+      value: "Capped at fees paid.",
+      verdict: "",
+      severity: "medium",
+    },
   ],
   summary: "",
 });
@@ -207,9 +215,10 @@ const report = (): AssembledReport => ({
     },
     grid: {
       columns: [
-        { label: "Governing law" },
-        { label: "Term" },
-        { label: "Notes" },
+        { label: "Governing law", kind: "graded" },
+        { label: "Term", kind: "graded" },
+        { label: "Notes", kind: "field" },
+        { label: "Liability cap", kind: "graded" },
       ],
       rows: [nda, msa, lease].map(gridRow),
     },
@@ -519,16 +528,35 @@ describe("renderReportSpec", () => {
     expect(cellText(plain)?.endsWith("…")).toBe(true);
     expect(plain?.formatting?.shading).toBeUndefined();
     expect(cellFontSize(plain)).toBe(16);
+
+    // A graded cell with no verdict yet stays blank: neither the extracted
+    // clause text nor a shading is a grade.
+    const unset = grid.rows.at(0)?.cells.at(3);
+    expect(unset?.value.length).toBeGreaterThan(0);
+    expect(unset?.verdict).toBe("");
+    const pending = ndaRow?.cells.at(4);
+    expect(cellText(pending)).toBe("");
+    expect(pending?.formatting?.shading).toBeUndefined();
   });
 
-  test("matrix columns: graded drops the plain columns, keeps the contract name", async () => {
+  test("matrix columns: graded drops the plain columns, keeps the contract name and unset graded columns", async () => {
     const parsed = await render([{ kind: "matrix", columns: "graded" }]);
     const { grid } = report().data;
-    const gradedColumns = grid.columns.filter((_column, index) =>
-      grid.rows.some((row) => (row.cells.at(index)?.verdict ?? "").length > 0),
+    const gradedColumns = grid.columns.filter(
+      (column) => column.kind === "graded",
     );
     expect(gradedColumns.length).toBeGreaterThan(0);
     expect(gradedColumns.length).not.toBe(grid.columns.length);
+    // The unset graded column has no verdict in any row yet is still graded.
+    const unsetIndex = grid.columns.findIndex(
+      (column) => column.label === "Liability cap",
+    );
+    expect(
+      grid.rows.every((row) => row.cells.at(unsetIndex)?.verdict === ""),
+    ).toBe(true);
+    expect(gradedColumns.map((column) => column.label)).toContain(
+      "Liability cap",
+    );
     const matrix = tables(parsed).at(0);
     expect(matrix?.rows.at(0)?.cells.map(cellText)).toEqual([
       "Contract",
@@ -615,10 +643,12 @@ describe("renderReportSpec", () => {
       justification: JUSTIFICATION_ID,
       block: "b7",
     });
+    // `justificationPage` activates the highlight, `pdfPage` scrolls there.
     expect(Object.fromEntries(pdfLink?.searchParams ?? [])).toEqual({
       entity: ENTITY_B,
       field: FILE_FIELD_ID,
       justification: JUSTIFICATION_ID,
+      justificationPage: "4",
       pdfPage: "4",
     });
 
@@ -629,6 +659,45 @@ describe("renderReportSpec", () => {
     );
     expect(unlinked.package.endnotes).toHaveLength(2);
     expect(endnoteHrefs(unlinked)).toEqual([]);
+  });
+
+  test("per-contract inside grouped nests contracts below the group heading", async () => {
+    const parsed = await render([
+      {
+        kind: "grouped",
+        by: "documentType",
+        order: "name",
+        heading: "{{group.documentType}}",
+        level: 2,
+        children: [{ kind: "per-contract" }],
+      },
+    ]);
+    expect(headings(parsed)).toEqual([
+      ["Heading2", "MSA"],
+      ["Heading3", "2. MSA"],
+      ["Heading3", "Risks"],
+      ["Heading2", "NDA"],
+      ["Heading3", "1. NDA"],
+      ["Heading3", "Risks"],
+      ["Heading2", "Unclassified"],
+      ["Heading3", "3. Lease"],
+    ]);
+
+    const withHeading = await render([
+      {
+        kind: "grouped",
+        by: "documentType",
+        order: "name",
+        heading: "{{group.documentType}}",
+        children: [{ kind: "per-contract", heading: "Contracts" }],
+      },
+    ]);
+    expect(headings(withHeading).slice(0, 4)).toEqual([
+      ["Heading1", "MSA"],
+      ["Heading2", "Contracts"],
+      ["Heading3", "2. MSA"],
+      ["Heading3", "Risks"],
+    ]);
   });
 
   test("narrative off: no heading, no generator call", async () => {

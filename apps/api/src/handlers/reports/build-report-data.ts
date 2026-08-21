@@ -18,12 +18,13 @@
  */
 
 import { Result } from "better-result";
-import { and, desc, eq, inArray, isNotNull } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import type { JustificationContent, PropertyRole } from "@/api/db/schema";
 import {
   documentReviewFindings,
+  documentReviewRuns,
   entities as entitiesTable,
 } from "@/api/db/schema";
 import type { PropertyContent, PropertyTool } from "@/api/db/schema-validators";
@@ -166,7 +167,12 @@ export type ReportStats = {
 /** One column header of the review-matrix annex (one per visible property
  *  column, ASK/verdict paired the same way the per-contract field table pairs
  *  them). */
-export type ReportGridColumn = { label: string };
+export type ReportGridColumn = {
+  label: string;
+  /** `graded` when the column is an ASK/verdict pair, regardless of whether
+   *  any row holds a verdict yet. */
+  kind: "field" | "graded";
+};
 
 /** One contract's value under a single review column. `verdict`/`severity`
  *  are "" for a column that is not a graded position, so a renderer can tell a
@@ -587,6 +593,7 @@ const buildReviewGrid = (
 ): ReportGrid => {
   const columns: ReportGridColumn[] = reportColumns.map((column) => ({
     label: column.header,
+    kind: column.verdictPropertyId === undefined ? "field" : "graded",
   }));
   const rows: ReportGridRow[] = contracts.map((contract) => {
     const cells: ReportGridCell[] = contract.fields.map((field) => ({
@@ -749,8 +756,10 @@ export const buildReportData = async ({
     // Justifications annotate the report: the verdict's rationale and the ASK
     // extraction's citation. Load both for every ASK/verdict column.
     const commentPropertyIds = new Set<string>();
+    const verdictPropertyIds = new Set<string>();
     for (const column of propertyColumns) {
       if (column.verdictPropertyId) {
+        verdictPropertyIds.add(column.verdictPropertyId);
         commentPropertyIds.add(column.propertyId);
         commentPropertyIds.add(column.verdictPropertyId);
       }
@@ -826,6 +835,13 @@ export const buildReportData = async ({
             workspaceId,
             entityIds: queryResult.entities.map((entity) =>
               toSafeId<"entity">(entity.entityId),
+            ),
+            // The ledger keys findings by the position's stable `sourceId`.
+            positionIds: properties.flatMap((property) =>
+              verdictPropertyIds.has(property.id) &&
+              property.playbookSourceId !== null
+                ? [property.playbookSourceId]
+                : [],
             ),
           }),
         )
@@ -907,20 +923,30 @@ type LoadReviewDecisionsArgs = {
   safeDb: SafeDb;
   workspaceId: SafeId<"workspace">;
   entityIds: SafeId<"entity">[];
+  /** Playbook position ids (`sourceId`) behind the visible verdict columns;
+   *  filters the ledger and bounds the rows per entity. */
+  positionIds: string[];
 };
 
 /** Reviewer decisions of the playbook findings graded against each entity's
  *  CURRENT version, keyed by {@link reviewDecisionKey}. Only DOCX review runs
- *  write this ledger, so most contracts have no row and read as "none". Rows
- *  are newest-run first so the latest run's decision wins per position. */
-const loadReviewDecisions = async ({
+ *  write this ledger, so most contracts have no row and read as "none".
+ *
+ *  Only completed runs count: findings are persisted before a run is
+ *  finalized and before decisions carry over, so a running or failed run's
+ *  `open` rows must not shadow the last completed review. One row per
+ *  `(entity, position)` is selected in SQL (`DISTINCT ON`, newest completed
+ *  run first), so the limit bounds current rows and can never cut them off
+ *  behind stale reruns. */
+export const loadReviewDecisions = async ({
   safeDb,
   workspaceId,
   entityIds,
+  positionIds,
 }: LoadReviewDecisionsArgs) =>
   await Result.gen(async function* () {
     const byKey = new Map<string, DocumentReviewDecision>();
-    if (entityIds.length === 0) {
+    if (entityIds.length === 0 || positionIds.length === 0) {
       return Result.ok(byKey);
     }
     const rows = yield* Result.await(
@@ -941,12 +967,25 @@ const loadReviewDecisions = async ({
           );
           // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop, no-await-in-loop -- sequential reads on one tx connection; the batch caps each `IN (...)` below the bound-parameter limit
           const batchRows = await tx
-            .select({
-              entityId: documentReviewFindings.entityId,
-              positionId: documentReviewFindings.positionId,
-              decision: documentReviewFindings.decision,
-            })
+            .selectDistinctOn(
+              [
+                documentReviewFindings.entityId,
+                documentReviewFindings.positionId,
+              ],
+              {
+                entityId: documentReviewFindings.entityId,
+                positionId: documentReviewFindings.positionId,
+                decision: documentReviewFindings.decision,
+              },
+            )
             .from(documentReviewFindings)
+            .innerJoin(
+              documentReviewRuns,
+              and(
+                eq(documentReviewRuns.id, documentReviewFindings.runId),
+                eq(documentReviewRuns.status, "completed"),
+              ),
+            )
             .innerJoin(
               entitiesTable,
               and(
@@ -965,11 +1004,21 @@ const loadReviewDecisions = async ({
                   documentReviewFindings.checkKind,
                   DOCUMENT_REVIEW_CHECK_KIND.PLAYBOOK,
                 ),
-                isNotNull(documentReviewFindings.positionId),
+                inArray(documentReviewFindings.positionId, positionIds),
               ),
             )
-            .orderBy(desc(documentReviewFindings.createdAt))
-            .limit(batch.length * LIMITS.propertiesCount);
+            // Runs on one document are serialized (one active run at a time),
+            // so creation order is completion order; the same key the
+            // decision carry-over uses to find the superseded run.
+            .orderBy(
+              documentReviewFindings.entityId,
+              documentReviewFindings.positionId,
+              desc(documentReviewRuns.createdAt),
+              desc(documentReviewRuns.id),
+            )
+            // `DISTINCT ON` yields at most one row per (entity, visible
+            // position); stating it as a limit keeps the bound visible.
+            .limit(batch.length * positionIds.length);
           out.push(...batchRows);
         }
         return out;
@@ -979,10 +1028,7 @@ const loadReviewDecisions = async ({
       if (row.positionId === null) {
         continue;
       }
-      const key = reviewDecisionKey(row.entityId, row.positionId);
-      if (!byKey.has(key)) {
-        byKey.set(key, row.decision);
-      }
+      byKey.set(reviewDecisionKey(row.entityId, row.positionId), row.decision);
     }
     return Result.ok(byKey);
   });

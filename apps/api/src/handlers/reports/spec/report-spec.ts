@@ -104,9 +104,16 @@ const coverSection = v.strictObject({
   notice: v.optional(rootString),
 });
 
+/** Heading styles exist for TOC1..TOC3 only, so a TOC range outside 1..3
+ *  (or reversed) could never match a generated heading. */
+const tocLevels = v.pipe(
+  v.strictObject({ from: headingLevel, to: headingLevel }),
+  v.check(({ from, to }) => from <= to, "TOC levels must satisfy from <= to"),
+);
+
 const tocSection = v.strictObject({
   kind: v.literal("toc"),
-  levels: v.optional(v.strictObject({ from: positiveInt, to: positiveInt })),
+  levels: v.optional(tocLevels),
 });
 
 const pageBreakSection = v.strictObject({ kind: v.literal("page-break") });
