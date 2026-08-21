@@ -71,11 +71,11 @@ const normalizeDependencyDefault = (value: unknown): BetterAuthFieldDefault => {
   throw new Error("Unsupported Better Auth logical default");
 };
 
-const normalizeDependencyType = (value: string): BetterAuthFieldType => {
+const normalizeDependencyType = (value: unknown): BetterAuthFieldType => {
   if (value === "boolean" || value === "date" || value === "string") {
     return value;
   }
-  throw new Error(`Unsupported Better Auth core field type: ${value}`);
+  throw new Error(`Unsupported Better Auth core field type: ${String(value)}`);
 };
 
 const normalizeReferenceModel = (
