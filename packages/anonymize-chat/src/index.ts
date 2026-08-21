@@ -467,22 +467,43 @@ const forcedSensitiveGazetteerEntries = ({
     });
 };
 
-const assertForcedSensitiveValuesRedacted = (
-  redactedText: string,
-  forcedSensitiveValues: ReadonlySet<string>,
-): void => {
-  for (const forcedValue of forcedSensitiveValues) {
-    if (redactedText.includes(forcedValue)) {
-      panic("forced sensitive value remained after anonymization");
-    }
-  }
-};
-
 type NativeRedaction = {
   redactedText: string;
   redactionMap: Map<string, string>;
   operatorMap: Map<string, OperatorType>;
   entityCount: number;
+};
+
+const assertForcedSensitiveValuesRedacted = ({
+  forcedSensitiveValues,
+  redaction,
+  resolvedEntities,
+  sourceText,
+}: {
+  forcedSensitiveValues: ReadonlySet<string>;
+  redaction: Pick<NativeRedaction, "redactionMap">;
+  resolvedEntities: readonly NativePipelineEntity[];
+  sourceText: string;
+}): void => {
+  for (const forcedValue of forcedSensitiveValues) {
+    let offset = sourceText.indexOf(forcedValue);
+    while (offset !== -1) {
+      const end = offset + forcedValue.length;
+      const isRedacted = resolvedEntities.some(
+        (entity) => entity.start < end && entity.end > offset,
+      );
+      if (!isRedacted) {
+        panic("forced sensitive value remained after anonymization");
+      }
+      offset = sourceText.indexOf(forcedValue, offset + 1);
+    }
+  }
+
+  for (const placeholder of redaction.redactionMap.keys()) {
+    if (forcedSensitiveValues.has(placeholder)) {
+      panic("forced sensitive value became its own placeholder");
+    }
+  }
 };
 
 /**
@@ -706,6 +727,12 @@ export const runChatAnonPipeline = async <
   const { resolvedEntities, redaction } = pipeline.redactText(
     protectedInput.text,
   );
+  assertForcedSensitiveValuesRedacted({
+    forcedSensitiveValues: forcedSensitiveSet,
+    redaction,
+    resolvedEntities,
+    sourceText: protectedInput.text,
+  });
 
   const result = applyExcludedCanonicals({
     deanonymiseText: runtime.deanonymise,
@@ -716,7 +743,6 @@ export const runChatAnonPipeline = async <
     sourceText: protectedInput.text,
   });
   const redactedText = protectedInput.restore(result.redactedText);
-  assertForcedSensitiveValuesRedacted(redactedText, forcedSensitiveSet);
   return {
     ...result,
     redactedText,

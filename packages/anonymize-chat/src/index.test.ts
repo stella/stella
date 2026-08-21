@@ -105,8 +105,19 @@ describe("runChatAnonPipeline excludedCanonicals", () => {
         redactText: (fullText) => {
           const redactionMap = new Map<string, string>();
           const operatorMap = new Map<string, "replace">();
+          const resolvedEntities = entities.map((entity) => {
+            const start = fullText.indexOf(entity.text);
+            return {
+              end: start + entity.text.length,
+              label: entity.label,
+              score: entity.score,
+              source: entity.source,
+              start,
+              text: entity.text,
+            };
+          });
           let redactedText = fullText;
-          for (const [idx, entity] of entities.entries()) {
+          for (const [idx, entity] of resolvedEntities.entries()) {
             const placeholderLabel = entity.label
               .trim()
               .toUpperCase()
@@ -120,7 +131,7 @@ describe("runChatAnonPipeline excludedCanonicals", () => {
             operatorMap.set(placeholder, "replace");
           }
           return {
-            resolvedEntities: entities,
+            resolvedEntities,
             redaction: {
               redactedText,
               redactionMap,
@@ -333,6 +344,22 @@ describe("runChatAnonPipeline excludedCanonicals", () => {
         forcedSensitiveValues: [forcedValue],
       }),
     ).rejects.toThrow("forced sensitive value remained after anonymization");
+  });
+
+  test("accepts forced source text contained only in generated placeholders", async () => {
+    const forcedValue = "MISC";
+    const runtime = buildRuntime([makeEntity(forcedValue, "misc")]);
+
+    const result = await runChatAnonPipeline({
+      runtime,
+      dictionaries,
+      text: forcedValue,
+      workspaceId: "ws-1",
+      forcedSensitiveValues: [forcedValue],
+    });
+
+    expect(result.redactedText).toBe("[MISC_1]");
+    expect(result.redactionMap).toEqual(new Map([["[MISC_1]", forcedValue]]));
   });
 
   test("bounds caller-supplied forced values before building a pipeline", () => {
