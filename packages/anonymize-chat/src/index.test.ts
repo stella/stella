@@ -116,19 +116,28 @@ describe("runChatAnonPipeline excludedCanonicals", () => {
               text: entity.text,
             };
           });
-          let redactedText = fullText;
-          for (const [idx, entity] of resolvedEntities.entries()) {
+          const replacements = resolvedEntities.map((entity, idx) => {
             const placeholderLabel = entity.label
               .trim()
               .toUpperCase()
               .replaceAll(/\s+/gu, "_");
             const placeholder = `[${placeholderLabel}_${idx + 1}]`;
-            redactedText = redactedText.replaceAll(
-              entity.text,
-              () => placeholder,
-            );
             redactionMap.set(placeholder, entity.text);
             operatorMap.set(placeholder, "replace");
+            return {
+              end: entity.end,
+              placeholder,
+              start: entity.start,
+            };
+          });
+          let redactedText = fullText;
+          for (const replacement of replacements.toSorted(
+            (left, right) => right.start - left.start,
+          )) {
+            redactedText =
+              redactedText.slice(0, replacement.start) +
+              replacement.placeholder +
+              redactedText.slice(replacement.end);
           }
           return {
             resolvedEntities,
@@ -396,8 +405,8 @@ describe("runChatAnonPipeline excludedCanonicals", () => {
     expect(result.redactionMap).toEqual(new Map([["[MISC_1]", forcedValue]]));
   });
 
-  test("accepts distinct forced values that match each other's placeholders", async () => {
-    const firstForcedValue = "[MISC_1]";
+  test("rekeys cyclic forced-placeholder allocations without breaking round trips", async () => {
+    const firstForcedValue = "[MISC_2]";
     const secondForcedValue = "[CASE_NUMBER_1]";
     const runtime = buildRuntime([
       makeEntity(firstForcedValue, "case number"),
@@ -412,8 +421,16 @@ describe("runChatAnonPipeline excludedCanonicals", () => {
       forcedSensitiveValues: [firstForcedValue, secondForcedValue],
     });
 
-    expect(result.entityCount).toBe(2);
-    expect(result.redactionMap.size).toBe(2);
+    expect(result.redactedText).toBe("[CASE_NUMBER_2] [MISC_1]");
+    expect(result.redactionMap).toEqual(
+      new Map([
+        ["[CASE_NUMBER_2]", firstForcedValue],
+        ["[MISC_1]", secondForcedValue],
+      ]),
+    );
+    expect(runtime.deanonymise(result.redactedText, result.redactionMap)).toBe(
+      `${firstForcedValue} ${secondForcedValue}`,
+    );
   });
 
   test("bounds caller-supplied forced values before building a pipeline", () => {

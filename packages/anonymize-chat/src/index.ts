@@ -389,13 +389,11 @@ const protectLiteralPlaceholders = (
   text: string,
   forcedSensitiveValues: ReadonlySet<string>,
 ): {
-  protectedPlaceholders: ReadonlySet<string>;
   sourcePlaceholders: ReadonlySet<string>;
   text: string;
   restore: (value: string) => string;
 } => {
   const restoreMap = new Map<string, string>();
-  const protectedPlaceholders = new Set<string>();
   const sourcePlaceholders = new Set<string>();
   const cursor: LiteralPlaceholderSentinelCursor = {
     codePoint: LITERAL_PLACEHOLDER_SENTINEL_RANGES[0].start,
@@ -422,13 +420,11 @@ const protectLiteralPlaceholders = (
         text,
       });
       restoreMap.set(sentinel, placeholder);
-      protectedPlaceholders.add(placeholder);
       return sentinel;
     },
   );
 
   return {
-    protectedPlaceholders,
     sourcePlaceholders,
     text: protectedText,
     restore: (value) => restoreLiteralPlaceholders(value, restoreMap),
@@ -489,25 +485,23 @@ type NativeRedaction = {
   entityCount: number;
 };
 
-const rekeyProtectedPlaceholderCollisions = ({
-  blockedPlaceholders,
-  protectedPlaceholders,
+const rekeyReservedPlaceholderCollisions = ({
   redaction,
+  reservedPlaceholders,
 }: {
-  blockedPlaceholders: ReadonlySet<string>;
-  protectedPlaceholders: ReadonlySet<string>;
   redaction: NativeRedaction;
+  reservedPlaceholders: ReadonlySet<string>;
 }): NativeRedaction => {
   if (
     ![...redaction.redactionMap.keys()].some((placeholder) =>
-      protectedPlaceholders.has(placeholder),
+      reservedPlaceholders.has(placeholder),
     )
   ) {
     return redaction;
   }
 
   const blocked = new Set([
-    ...blockedPlaceholders,
+    ...reservedPlaceholders,
     ...redaction.redactionMap.keys(),
   ]);
   const redactionMap = new Map<string, string>();
@@ -516,7 +510,7 @@ const rekeyProtectedPlaceholderCollisions = ({
 
   for (const [placeholder, original] of redaction.redactionMap) {
     let replacement = placeholder;
-    if (protectedPlaceholders.has(placeholder)) {
+    if (reservedPlaceholders.has(placeholder)) {
       const label =
         parsePlaceholderLabel(placeholder) ??
         panic("native redaction emitted an invalid placeholder");
@@ -803,10 +797,9 @@ export const runChatAnonPipeline = async <
   const { resolvedEntities, redaction: nativeRedaction } = pipeline.redactText(
     protectedInput.text,
   );
-  const redaction = rekeyProtectedPlaceholderCollisions({
-    blockedPlaceholders: protectedInput.sourcePlaceholders,
-    protectedPlaceholders: protectedInput.protectedPlaceholders,
+  const redaction = rekeyReservedPlaceholderCollisions({
     redaction: nativeRedaction,
+    reservedPlaceholders: protectedInput.sourcePlaceholders,
   });
   assertForcedSensitiveValuesRedacted({
     forcedSensitiveValues: forcedSensitiveSet,
