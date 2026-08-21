@@ -1135,6 +1135,25 @@ const anonymizeToolResultContent = ({
     return preparedPart;
   });
 
+  for (const preparedPart of prepared) {
+    if (preparedPart.type === "text" || preparedPart.metadata === undefined) {
+      continue;
+    }
+    const metadata = anonymizeUnknownStrings({
+      apply: (value) => {
+        preparedPart.metadata = value;
+        apply(prepared);
+      },
+      boundary,
+      replacements,
+      value: preparedPart.metadata,
+    });
+    if (Result.isError(metadata)) {
+      return Result.err(metadata.error);
+    }
+    preparedPart.metadata = metadata.value;
+  }
+
   return Result.ok(prepared);
 };
 

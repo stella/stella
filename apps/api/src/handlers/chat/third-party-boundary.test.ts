@@ -574,6 +574,7 @@ describe("chat third-party anonymization boundary", () => {
                   value: `https://example.test/${organizationId}/image.png`,
                   mimeType: "image/png",
                 },
+                metadata: { traceId: `ref_${organizationId}` },
               },
               {
                 type: "audio",
@@ -627,6 +628,7 @@ describe("chat third-party anonymization boundary", () => {
           value: "https://example.test/[MISC_1]/image.png",
           mimeType: "image/png",
         },
+        metadata: { traceId: "[MISC_1]" },
       },
       {
         type: "audio",
@@ -658,6 +660,7 @@ describe("chat third-party anonymization boundary", () => {
       `https://example.test/${organizationId}/audio.mp3`,
       `https://example.test/${organizationId}/video.mp4`,
       `https://example.test/${organizationId}/document.pdf`,
+      `ref_${organizationId}`,
     ]);
   });
 
