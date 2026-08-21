@@ -4,8 +4,12 @@ import { createAtRisRequestSlot } from "@/api/handlers/case-law/ingestion/adapte
 
 describe("Austrian RIS publisher gate", () => {
   it("does not validate Redis configuration until a deployed request", () => {
-    const environment = { ...process.env, NODE_ENV: "production" };
-    delete environment["REDIS_URL"];
+    const environment = {
+      ...Object.fromEntries(
+        Object.entries(process.env).filter(([key]) => key !== "REDIS_URL"),
+      ),
+      NODE_ENV: "production",
+    };
     const moduleUrl = new URL("publisher-request-gate.ts", import.meta.url)
       .href;
     const imported = Bun.spawnSync({
