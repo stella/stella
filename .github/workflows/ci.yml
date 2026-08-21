@@ -1937,6 +1937,14 @@ jobs:
             --target bun \
             --outfile /tmp/image-smoke \
             apps/api/src/scripts/image-smoke.ts
+          # Stage the native runtime assets the way the image builder does:
+          # every asset resolves through Bun's resolver from this install, or
+          # the step fails here instead of in the release image smoke.
+          rm -rf /tmp/runtime-native
+          bun apps/api/src/scripts/stage-runtime-assets.ts /tmp/runtime-native
+          test -d /tmp/runtime-native/bin
+          test -d /tmp/runtime-native/node_modules/@img
+          test -z "$(find /tmp/runtime-native -type l | head -n 1)"
         env:
           NPM_TOKEN: ""
 
