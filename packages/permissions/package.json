@@ -16,6 +16,7 @@
     "format": "oxfmt ."
   },
   "dependencies": {
+    "@stll/auth-model": "workspace:*",
     "better-auth": "catalog:"
   },
   "devDependencies": {

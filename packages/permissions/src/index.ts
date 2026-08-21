@@ -1,5 +1,11 @@
 import { createAccessControl } from "better-auth/plugins/access";
 
+import {
+  BETTER_AUTH_ORGANIZATION_ROLE_GRANTS,
+  BETTER_AUTH_ORGANIZATION_STATEMENTS,
+} from "@stll/auth-model";
+import type { OrganizationRoleName } from "@stll/auth-model";
+
 /**
  * Statement-based permission definitions for Stella.
  *
@@ -8,11 +14,7 @@ import { createAccessControl } from "better-auth/plugins/access";
  * these actions per resource.
  */
 export const statements = {
-  organization: ["update", "delete"],
-  member: ["create", "update", "delete"],
-  invitation: ["create", "cancel"],
-  team: ["create", "update", "delete"],
-  ac: ["create", "read", "update", "delete"],
+  ...BETTER_AUTH_ORGANIZATION_STATEMENTS,
   workspace: ["read", "create", "update", "delete"],
   contact: ["create", "update", "delete"],
   invoice: ["create", "update", "delete"],
@@ -50,11 +52,7 @@ export type PermissionInput = RequireAtLeastOne<PermissionMap>;
 export const ac = createAccessControl(statements);
 
 const memberAc = ac.newRole({
-  organization: [],
-  member: [],
-  invitation: [],
-  team: [],
-  ac: ["read"],
+  ...BETTER_AUTH_ORGANIZATION_ROLE_GRANTS.member,
   workspace: ["read", "create", "update", "delete"],
   contact: ["create", "update", "delete"],
   invoice: ["create", "update", "delete"],
@@ -79,11 +77,7 @@ const memberAc = ac.newRole({
 
 export const roles = {
   owner: ac.newRole({
-    organization: ["update", "delete"],
-    member: ["create", "update", "delete"],
-    invitation: ["create", "cancel"],
-    team: ["create", "update", "delete"],
-    ac: ["create", "read", "update", "delete"],
+    ...BETTER_AUTH_ORGANIZATION_ROLE_GRANTS.owner,
     workspace: ["read", "create", "update", "delete"],
     contact: ["create", "update", "delete"],
     invoice: ["create", "update", "delete"],
@@ -106,11 +100,7 @@ export const roles = {
     firmMemory: ["create", "update"],
   }),
   admin: ac.newRole({
-    organization: ["update"],
-    member: ["create", "update", "delete"],
-    invitation: ["create", "cancel"],
-    team: ["create", "update", "delete"],
-    ac: ["create", "read", "update", "delete"],
+    ...BETTER_AUTH_ORGANIZATION_ROLE_GRANTS.admin,
     workspace: ["read", "create", "update", "delete"],
     contact: ["create", "update", "delete"],
     invoice: ["create", "update", "delete"],
@@ -134,11 +124,7 @@ export const roles = {
   }),
   member: memberAc,
   intern: ac.newRole({
-    organization: [],
-    member: [],
-    invitation: [],
-    team: [],
-    ac: [],
+    ...BETTER_AUTH_ORGANIZATION_ROLE_GRANTS.intern,
     workspace: ["read"],
     contact: [],
     invoice: [],
@@ -161,11 +147,7 @@ export const roles = {
     firmMemory: [],
   }),
   external: ac.newRole({
-    organization: [],
-    member: [],
-    invitation: [],
-    team: [],
-    ac: [],
+    ...BETTER_AUTH_ORGANIZATION_ROLE_GRANTS.external,
     workspace: ["read"],
     contact: [],
     invoice: [],
@@ -187,4 +169,4 @@ export const roles = {
     agentSkill: [],
     firmMemory: [],
   }),
-};
+} satisfies Record<OrganizationRoleName, unknown>;

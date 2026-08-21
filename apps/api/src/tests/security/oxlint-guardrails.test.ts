@@ -345,12 +345,12 @@ describe("custom oxlint guardrails", () => {
     expect(organizationQuerySource).toContain(
       "staleTime: ROUTE_QUERY_STALE_TIME_MS",
     );
-    expect(limitsSource).toContain("organizationMembersCount: 500");
-    expect(authSource).toContain(
-      "membershipLimit: LIMITS.organizationMembersCount",
+    expect(limitsSource).toContain(
+      "BETTER_AUTH_ORGANIZATION_OPTIONS.membershipLimit",
     );
+    expect(authSource).toContain("...BETTER_AUTH_ORGANIZATION_OPTIONS");
     expect(organizationConstsSource).toContain(
-      "ORGANIZATION_MEMBERS_LIMIT = 500",
+      "BETTER_AUTH_ORGANIZATION_OPTIONS.membershipLimit",
     );
     expect(organizationQuerySource).toContain(
       "membersLimit: ORGANIZATION_MEMBERS_LIMIT",

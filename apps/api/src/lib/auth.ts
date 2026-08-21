@@ -23,6 +23,10 @@ import type { InferSelectModel } from "drizzle-orm";
 import Elysia, { t } from "elysia";
 import type { Context as RateLimitContext } from "elysia-rate-limit";
 
+import {
+  BETTER_AUTH_ADAPTER_OPTIONS,
+  BETTER_AUTH_ORGANIZATION_OPTIONS,
+} from "@stll/auth-model";
 import { ac, roles } from "@stll/permissions";
 import type { PermissionInput } from "@stll/permissions";
 
@@ -47,6 +51,7 @@ import {
   OAUTH_UI_LOGIN_PATH,
   OAUTH_UI_ORGANIZATION_PATH,
 } from "@/api/lib/auth-paths";
+import { AUTH_USER_ADDITIONAL_FIELDS } from "@/api/lib/auth-user-additional-fields";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { verifyConfirmationOtp } from "@/api/lib/confirmation-otp";
@@ -795,42 +800,7 @@ const createAuth = () => {
       "/unlink-account",
     ],
     user: {
-      additionalFields: {
-        timezoneId: {
-          type: "string",
-          required: false,
-          defaultValue: "UTC",
-        },
-        preferredName: {
-          type: "string",
-          required: false,
-        },
-        wordEditShortcut: {
-          type: "string",
-          required: false,
-        },
-        // Per-user keyboard-shortcut rebindings, serialized as JSON. Structural
-        // validation + length cap happen in the create/update hooks below.
-        userShortcuts: {
-          type: "string",
-          required: false,
-        },
-        // Server-owned: the authenticated /me/guide-progress endpoint merges
-        // one closed tour/status pair at a time without exposing a full-map
-        // replacement through Better Auth.
-        guideProgress: {
-          type: "string",
-          required: false,
-          input: false,
-        },
-        // Server-owned: captured from the edge's viewer-country header in
-        // the user-create hook below; client input is ignored.
-        detectedCountry: {
-          type: "string",
-          required: false,
-          input: false,
-        },
-      },
+      additionalFields: AUTH_USER_ADDITIONAL_FIELDS,
     },
     session: {
       expiresIn: SESSION_LIFETIME_SECONDS,
@@ -905,6 +875,9 @@ const createAuth = () => {
         "/two-factor/disable": AUTH_RATE_LIMITS.signIn,
       },
     },
+    verification: {
+      storeInDatabase: true,
+    },
     emailAndPassword: isSelfhostLocalPasswordAuthEnabled()
       ? {
           enabled: true,
@@ -945,9 +918,8 @@ const createAuth = () => {
       },
     },
     database: drizzleAdapter(rootDb, {
-      provider: "pg",
       schema: authSchema,
-      transaction: true,
+      ...BETTER_AUTH_ADAPTER_OPTIONS,
     }),
     socialProviders: {
       ...(env.GOOGLE_AUTH_CLIENT_ID && env.GOOGLE_AUTH_CLIENT_SECRET
@@ -1097,13 +1069,9 @@ const createAuth = () => {
       // runs after the two-factor hook has set the pending-challenge response.
       socialSignInTwoFactorRedirectPlugin,
       organization({
+        ...BETTER_AUTH_ORGANIZATION_OPTIONS,
         ac,
         roles,
-        membershipLimit: LIMITS.organizationMembersCount,
-        // Pin the invitation lifetime explicitly (48h) so a dependency
-        // upgrade cannot silently extend how long an invite token stays
-        // valid. Single-use is enforced by the plugin's invitation status.
-        invitationExpiresIn: 60 * 60 * 48,
         organizationHooks: {
           ...organizationLifecycleHooks,
           async beforeDeleteOrganization({ organization: org }) {

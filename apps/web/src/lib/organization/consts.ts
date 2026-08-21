@@ -1,9 +1,12 @@
+import { BETTER_AUTH_ORGANIZATION_OPTIONS } from "@stll/auth-model";
+
 import type { TranslationKey } from "@/i18n/types";
 import type { Role } from "@/lib/auth";
 
 export const managementRoles: readonly Role[] = ["owner", "admin"];
 
-export const ORGANIZATION_MEMBERS_LIMIT = 500;
+export const ORGANIZATION_MEMBERS_LIMIT =
+  BETTER_AUTH_ORGANIZATION_OPTIONS.membershipLimit;
 
 export const roleTranslationKeys = [
   {

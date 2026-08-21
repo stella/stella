@@ -76,6 +76,7 @@
         "@stll/anonymize-chat": "workspace:*",
         "@stll/anonymize-data": "catalog:",
         "@stll/api-contract": "workspace:*",
+        "@stll/auth-model": "workspace:*",
         "@stll/boe": "workspace:*",
         "@stll/business-registries": "workspace:*",
         "@stll/calculations": "workspace:*",
@@ -309,6 +310,7 @@
         "@stll/api": "workspace:*",
         "@stll/api-client": "workspace:*",
         "@stll/api-contract": "workspace:*",
+        "@stll/auth-model": "workspace:*",
         "@stll/calculations": "workspace:*",
         "@stll/catalogue": "workspace:*",
         "@stll/chat-limits": "workspace:*",
@@ -486,6 +488,16 @@
         "@stll/typescript-config": "workspace:*",
         "bun-types": "catalog:",
         "fast-check": "catalog:",
+      },
+    },
+    "packages/auth-model": {
+      "name": "@stll/auth-model",
+      "version": "0.0.0",
+      "devDependencies": {
+        "@stll/typescript-config": "workspace:*",
+        "better-auth": "catalog:",
+        "bun-types": "catalog:",
+        "tsdown": "catalog:",
       },
     },
     "packages/boe": {
@@ -675,6 +687,7 @@
       "name": "@stll/permissions",
       "version": "0.0.0",
       "dependencies": {
+        "@stll/auth-model": "workspace:*",
         "better-auth": "catalog:",
       },
       "devDependencies": {
@@ -2323,6 +2336,8 @@
     "@stll/api-client": ["@stll/api-client@workspace:packages/api-client"],
 
     "@stll/api-contract": ["@stll/api-contract@workspace:packages/api-contract"],
+
+    "@stll/auth-model": ["@stll/auth-model@workspace:packages/auth-model"],
 
     "@stll/boe": ["@stll/boe@workspace:packages/boe"],
 

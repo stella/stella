@@ -20,6 +20,7 @@ on:
     paths:
       # Changesets owns these files, so ordinary manifest maintenance cannot
       # accidentally start a release transaction.
+      - packages/auth-model/CHANGELOG.md
       - packages/business-registries/CHANGELOG.md
       - packages/country-codes/CHANGELOG.md
       - packages/conditions/CHANGELOG.md
@@ -40,6 +41,7 @@ on:
         type: choice
         options:
           - all
+          - auth-model
           - business-registries
           - country-codes
           - conditions
@@ -186,10 +188,10 @@ jobs:
           if [[ "$EVENT_NAME" == "workflow_run" ]]; then
             pkgs=(cli)
           elif [[ "$EVENT_NAME" == "push" ]]; then
-            pkgs=(country-codes business-registries conditions template-conditions docx-utils ui money calculations workspace-model workspace-ui)
+            pkgs=(auth-model country-codes business-registries conditions template-conditions docx-utils ui money calculations workspace-model workspace-ui)
           else
             case "$MANUAL_PACKAGE" in
-              all) pkgs=(country-codes business-registries conditions template-conditions docx-utils ui money calculations workspace-model workspace-ui cli) ;;
+              all) pkgs=(auth-model country-codes business-registries conditions template-conditions docx-utils ui money calculations workspace-model workspace-ui cli) ;;
               *) pkgs=("$MANUAL_PACKAGE") ;;
             esac
           fi
@@ -308,6 +310,15 @@ jobs:
         with:
           name: npm-tarball-conditions
           path: release-artifacts/conditions/
+          retention-days: 1
+          if-no-files-found: error
+
+      - name: Upload auth-model tarball
+        if: contains(fromJSON(steps.pack.outputs.packages), 'auth-model')
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: npm-tarball-auth-model
+          path: release-artifacts/auth-model/
           retention-days: 1
           if-no-files-found: error
 
