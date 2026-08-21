@@ -1,15 +1,6 @@
 import { eq } from "drizzle-orm";
 
 import { CITATION_DECISION_TYPE_HINTS } from "@/api/handlers/case-law/citation-decision-type-hint";
-import { CITATION_KINDS } from "@/api/handlers/case-law/citation-kind";
-import {
-  CITATION_RESOLUTION_RULES,
-  CITATION_RESOLUTION_SCOPES,
-  CITATION_RESOLUTION_STATUS,
-  CITATION_RESOLUTION_STATUSES,
-  citationReopenableByKeySql,
-  unsettledCitationSql,
-} from "@/api/handlers/case-law/citation-resolution-status";
 import {
   POLARITIES,
   RULE_SOURCE,
@@ -19,6 +10,21 @@ import type {
   Polarity,
   RuleSource,
 } from "@/api/handlers/case-law/polarity/consts";
+import { CITATION_KINDS } from "@/api/lib/case-law/citation-kind";
+import {
+  CITATION_AMBIGUITY_SHAPES,
+  CITATION_CENSUS_ROW_KINDS,
+  CITATION_CENSUS_RULE_BUCKETS,
+  CITATION_CENSUS_RUN_STATUSES,
+} from "@/api/lib/case-law/citation-resolution-census-consts";
+import {
+  CITATION_RESOLUTION_RULES,
+  CITATION_RESOLUTION_SCOPES,
+  CITATION_RESOLUTION_STATUS,
+  CITATION_RESOLUTION_STATUSES,
+  citationReopenableByKeySql,
+  unsettledCitationSql,
+} from "@/api/lib/case-law/citation-resolution-status";
 import type { ConstantMap } from "@/api/lib/constant-map";
 import {
   CASE_LAW_DECISION_DATE_BOUNDS_CONSTRAINT,
@@ -1081,6 +1087,131 @@ export const caseLawCitationResolutionProgress = p.pgTable(
     p.check(
       "case_law_citation_resolution_progress_cursor_pair",
       sql`(${t.cursorCitingDecisionId} IS NULL) = (${t.cursorCitationId} IS NULL)`,
+    ),
+    ...globalCaseLawPolicies(),
+  ],
+);
+
+/**
+ * One pass of the citation-resolution census: a snapshot of the resolver's
+ * populations, taken in bounded steps.
+ *
+ * The walk over ambiguous keys is keyset-ordered by key and resumes from
+ * `cursor_key`, so a run that stops at its per-run bound is continued by the
+ * next invocation rather than restarted; `status` says which case a reader
+ * is looking at, because a partial count compared with a full one reads as
+ * a drop that never happened.
+ */
+export const caseLawCitationResolutionCensusRuns = p.pgTable(
+  "case_law_citation_resolution_census_runs",
+  {
+    id: pUuid<"caseLawCitationResolutionCensusRun">().primaryKey(),
+    status: p.text({ enum: CITATION_CENSUS_RUN_STATUSES }).notNull(),
+    startedAt: timestamptz("started_at").defaultNow().notNull(),
+    finishedAt: timestamptz("finished_at"),
+    /** Ambiguous keys classified so far, over every batch of the run. */
+    keysScanned: p.integer("keys_scanned").default(0).notNull(),
+    /**
+     * Where the baseline walk over precedent citations stands: the last
+     * `(citing_decision_id, id)` counted, the resolver's own keyset axis.
+     * Null before the first batch.
+     */
+    cursorCitingDecisionId: safeUuid<"caseLawDecision">(
+      "cursor_citing_decision_id",
+    ),
+    cursorCitationId: safeUuid<"caseLawCitation">("cursor_citation_id"),
+    /** The last ambiguous key classified; null before the first batch. */
+    cursorKey: p.varchar("cursor_key", { length: 128 }),
+    updatedAt: timestamptz("updated_at")
+      .defaultNow()
+      .notNull()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => [
+    p
+      .index("case_law_citation_resolution_census_runs_started_idx")
+      .on(t.startedAt),
+    p.check(
+      "case_law_citation_resolution_census_runs_status_values",
+      sql`${t.status} IN (${sql.join(
+        CITATION_CENSUS_RUN_STATUSES.map((status) => sql`${status}`),
+        sql.raw(","),
+      )})`,
+    ),
+    // A finished run is a complete one and a complete run is finished.
+    p.check(
+      "case_law_citation_resolution_census_runs_finished_pair",
+      sql`(${t.finishedAt} IS NULL) = (${t.status} <> 'complete')`,
+    ),
+    // The baseline keyset is a pair: half of one names no citation.
+    p.check(
+      "case_law_citation_resolution_census_runs_cursor_pair",
+      sql`(${t.cursorCitingDecisionId} IS NULL) = (${t.cursorCitationId} IS NULL)`,
+    ),
+    // At most one open run, so overlapping invocations share one walk.
+    p
+      .uniqueIndex("case_law_citation_resolution_census_runs_open_uidx")
+      .on(sql`(true)`)
+      .where(sql`${t.status} <> 'complete'`),
+    ...globalCaseLawPolicies(),
+  ],
+);
+
+/**
+ * One counted population of one run: precedent citations from decisions of
+ * (`country`, `court`), split by `kind` into a status, the rule that
+ * resolved them, or the shape of an ambiguous key's holders. `keys` is the
+ * number of distinct citation keys behind the count and is only meaningful
+ * for shapes.
+ */
+export const caseLawCitationResolutionCensus = p.pgTable(
+  "case_law_citation_resolution_census",
+  {
+    runId: safeUuid<"caseLawCitationResolutionCensusRun">("run_id").notNull(),
+    country: p.varchar("country", { length: 3 }).notNull(),
+    court: p.text("court").notNull(),
+    kind: p.text({ enum: CITATION_CENSUS_ROW_KINDS }).notNull(),
+    /** A status, a rule id or a shape, as `kind` says. */
+    bucket: p.varchar("bucket", { length: 32 }).notNull(),
+    keys: p.integer("keys").default(0).notNull(),
+    citations: p.integer("citations").default(0).notNull(),
+  },
+  (t) => [
+    p.primaryKey({
+      name: "case_law_citation_resolution_census_pk",
+      columns: [t.runId, t.country, t.court, t.kind, t.bucket],
+    }),
+    // Named by hand: the generated names exceed Postgres's 63-byte limit.
+    p
+      .foreignKey({
+        name: "case_law_citation_resolution_census_run_fk",
+        columns: [t.runId],
+        foreignColumns: [caseLawCitationResolutionCensusRuns.id],
+      })
+      .onDelete("cascade"),
+    p.check(
+      "case_law_citation_resolution_census_kind_values",
+      sql`${t.kind} IN (${sql.join(
+        CITATION_CENSUS_ROW_KINDS.map((kind) => sql`${kind}`),
+        sql.raw(","),
+      )})`,
+    ),
+    // The bucket vocabulary follows the kind; a shape name under `status`
+    // or a status under `shape` is a writer bug the table should refuse.
+    p.check(
+      "case_law_citation_resolution_census_bucket_values",
+      sql`(${t.kind} = 'status' AND ${t.bucket} IN (${sql.join(
+        CITATION_RESOLUTION_STATUS_SQL_VALUES,
+        sql.raw(","),
+      )}))
+        OR (${t.kind} = 'rule' AND ${t.bucket} IN (${sql.join(
+          CITATION_CENSUS_RULE_BUCKETS.map((bucket) => sql`${bucket}`),
+          sql.raw(","),
+        )}))
+        OR (${t.kind} = 'shape' AND ${t.bucket} IN (${sql.join(
+          CITATION_AMBIGUITY_SHAPES.map((shape) => sql`${shape}`),
+          sql.raw(","),
+        )}))`,
     ),
     ...globalCaseLawPolicies(),
   ],

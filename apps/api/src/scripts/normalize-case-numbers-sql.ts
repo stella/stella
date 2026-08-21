@@ -16,7 +16,7 @@ import { sql } from "drizzle-orm";
 import {
   CITATION_RESOLUTION_STATUS,
   citationReopenableByKeySql,
-} from "@/api/handlers/case-law/citation-resolution-status";
+} from "@/api/lib/case-law/citation-resolution-status";
 
 /**
  * Trailing `-<digits>` on a docket that already carries a year — the same

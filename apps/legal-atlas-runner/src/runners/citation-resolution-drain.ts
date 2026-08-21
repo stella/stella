@@ -30,7 +30,7 @@ import type { CitationResolutionCounts } from "@/api/handlers/case-law/citation-
 import {
   CITATION_RESOLUTION_RULES,
   countsByRule,
-} from "@/api/handlers/case-law/citation-resolution-status";
+} from "@/api/lib/case-law/citation-resolution-status";
 
 /** How one turn ended. */
 export const CITATION_RESOLUTION_STEP = {

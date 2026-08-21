@@ -1,11 +1,11 @@
 import { expect, test } from "bun:test";
 
+import { listAdapters } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
 import {
   CITATION_RESOLUTION_JURISDICTION_POLICY,
   citationResolutionPolicyRows,
   resolvableJurisdictionsFrom,
-} from "@/api/handlers/case-law/citation-jurisdiction-policy";
-import { listAdapters } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
+} from "@/api/lib/case-law/citation-jurisdiction-policy";
 import { CASE_LAW_JURISDICTIONS } from "@/api/lib/legal-search/ingestion-constants";
 
 /**
