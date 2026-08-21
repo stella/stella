@@ -4376,6 +4376,7 @@
       "defaultPromptPropertyName": "معلومات",
       "deleteProperty": "حذف الخاصية",
       "deletePropertyConfirmDescription": "هل أنت متأكد من رغبتك في حذف الخاصية «{propertyName}»؟ لا يمكن التراجع عن هذا الإجراء.",
+      "dependencyLimit": "حتى {max} مدخلاً لكل عمود",
       "documentsLabel": "المستندات",
       "editColumn": "تعديل العمود",
       "editConditions": "تعديل الشروط",

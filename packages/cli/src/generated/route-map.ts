@@ -14331,6 +14331,7 @@ export const generatedRouteMap: RouteNode = {
                           enum: ["verified", "locked"],
                         },
                         filters: {
+                          maxItems: 32,
                           type: "array",
                           items: {
                             anyOf: [
@@ -25283,7 +25284,7 @@ export const generatedRouteMap: RouteNode = {
                                   required: ["dependencies"],
                                   properties: {
                                     dependencies: {
-                                      maxItems: 16,
+                                      maxItems: 299,
                                       type: "array",
                                       items: {
                                         type: "object",
@@ -36990,6 +36991,7 @@ export const generatedRouteMap: RouteNode = {
                                 type: "boolean",
                               },
                               dependencies: {
+                                maxItems: 299,
                                 type: "array",
                                 items: {
                                   additionalProperties: false,
@@ -38324,6 +38326,7 @@ export const generatedRouteMap: RouteNode = {
                                 type: "boolean",
                               },
                               dependencies: {
+                                maxItems: 299,
                                 type: "array",
                                 items: {
                                   additionalProperties: false,

@@ -21,6 +21,7 @@ import {
 import { buildFilterConditions } from "@/api/lib/entity-filters";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { groupableSql } from "@/api/lib/groupable-sql";
+import { LIMITS } from "@/api/lib/limits";
 
 const STATUS_GROUP_ID = "_status";
 const KIND_GROUP_ID = "_kind";
@@ -46,7 +47,9 @@ const readGroupCountsBodySchema = t.Object({
     t.Literal(KIND_GROUP_ID),
     tSafeId("property"),
   ]),
-  filters: t.Optional(t.Array(tConditionNode)),
+  filters: t.Optional(
+    t.Array(tConditionNode, { maxItems: LIMITS.viewFiltersCount }),
+  ),
 });
 
 const config = {

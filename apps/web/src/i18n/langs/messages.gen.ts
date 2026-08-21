@@ -4379,6 +4379,7 @@ type Messages = {
       "defaultPromptPropertyName": "information";
       "deleteProperty": "Delete property";
       "deletePropertyConfirmDescription": "Are you sure you want to delete the \"{propertyName}\" property? This action cannot be undone.";
+      "dependencyLimit": "Up to {max} inputs per column";
       "documentsLabel": "Documents";
       "editColumn": "Edit column";
       "editConditions": "Edit conditions";

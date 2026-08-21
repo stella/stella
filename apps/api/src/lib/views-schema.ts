@@ -18,6 +18,7 @@ import {
 import { tConditionNode } from "@/api/lib/conditions/contract";
 import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
 import { logger } from "@/api/lib/observability/logger";
+import { PROPERTY_DEPENDENCY_LIMITS } from "@/api/lib/properties/dependency-limits";
 
 const v1 = v.literal(1);
 
@@ -380,6 +381,7 @@ export const tViewTemplatePropertySchema = t.Object(
           },
           strictObjectOptions,
         ),
+        { maxItems: PROPERTY_DEPENDENCY_LIMITS.perProperty },
       ),
     ),
   },

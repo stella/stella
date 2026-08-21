@@ -4376,6 +4376,7 @@
       "defaultPromptPropertyName": "informations",
       "deleteProperty": "Supprimer la propriété",
       "deletePropertyConfirmDescription": "Voulez-vous vraiment supprimer la propriété « {propertyName} » ? Cette action est irréversible.",
+      "dependencyLimit": "Au plus {max} entrées par colonne",
       "documentsLabel": "Documents",
       "editColumn": "Modifier la colonne",
       "editConditions": "Modifier les conditions",

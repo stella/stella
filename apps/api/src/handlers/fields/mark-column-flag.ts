@@ -30,6 +30,7 @@ import {
 } from "@/api/lib/entities/kanban-group-condition";
 import { buildFilterConditions } from "@/api/lib/entity-filters";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { LIMITS } from "@/api/lib/limits";
 
 import {
   buildColumnFlagMutation,
@@ -66,7 +67,7 @@ const config = {
       COLUMN_METADATA_FLAG.verified,
       COLUMN_METADATA_FLAG.locked,
     ]),
-    filters: t.Array(tConditionNode),
+    filters: t.Array(tConditionNode, { maxItems: LIMITS.viewFiltersCount }),
     set: t.Optional(t.Boolean()),
     // Undo of a prior mark: only remove flags stamped with this operation
     // timestamp (returned as `addedAt` from the original mark).

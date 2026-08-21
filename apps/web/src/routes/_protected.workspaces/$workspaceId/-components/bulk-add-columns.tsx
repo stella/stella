@@ -3,8 +3,9 @@ import { Suspense, useCallback, useMemo, useRef, useState } from "react";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import type { Editor } from "@tiptap/react";
 import { KeyboardIcon, PlusIcon, RouteIcon, XIcon } from "lucide-react";
-import { useTranslations } from "use-intl";
+import { useFormatter, useTranslations } from "use-intl";
 
+import { PROPERTY_DEPENDENCIES_PER_PROPERTY_MAX } from "@stll/api-contract";
 import { Button } from "@stll/ui/button";
 import {
   Dialog,
@@ -74,6 +75,34 @@ type Draft = {
   tool: DraftTool;
   options: WorkspacePropertyOption[];
   fallback: string | null;
+};
+
+type DraftScopeGate = {
+  classifier: { id: string } | null;
+  scopeDocType: string | null;
+};
+
+/**
+ * The dependency list one AI draft creates. The scope gate owns the classifier
+ * slot only when a specific document type is selected: drop the classifier
+ * there and append the gate. With scope "All" an explicit classifier mention
+ * stays a normal dependency.
+ */
+const draftDependencies = (
+  draft: Pick<Draft, "fileIds" | "mentions">,
+  { classifier, scopeDocType }: DraftScopeGate,
+): PropertyDependency[] => {
+  const dependencyIds = [
+    ...new Set([...draft.fileIds, ...draft.mentions]),
+  ].filter((id) => scopeDocType === null || id !== classifier?.id);
+  const dependencies: PropertyDependency[] = dependencyIds.map((id) => ({
+    dependsOnPropertyId: toSafeId<"property">(id),
+    condition: null,
+  }));
+  if (classifier && scopeDocType !== null) {
+    dependencies.push(buildDocTypeGate(classifier.id, scopeDocType));
+  }
+  return dependencies;
 };
 
 const makeEmptyDraft = (id: number, defaultFileIds: string[]): Draft => ({
@@ -325,7 +354,16 @@ const BulkBody = ({ workspaceId, onClose, dirtyRef }: BulkBodyProps) => {
     () => drafts.filter((d) => d.name.trim().length > 0),
     [drafts],
   );
-  const canSubmit = validDrafts.length > 0 && !batch.isPending;
+  const dependencyCountOf = (draft: Draft) =>
+    draft.tool === "ai-model"
+      ? draftDependencies(draft, { classifier, scopeDocType }).length
+      : 0;
+  const withinDependencyCap = validDrafts.every(
+    (draft) =>
+      dependencyCountOf(draft) <= PROPERTY_DEPENDENCIES_PER_PROPERTY_MAX,
+  );
+  const canSubmit =
+    validDrafts.length > 0 && withinDependencyCap && !batch.isPending;
 
   // eslint-disable-next-line react/react-compiler -- latest-value mirror; read only in the dialog's onOpenChange close guard, never for rendered output
   dirtyRef.current = drafts.some(
@@ -347,20 +385,7 @@ const BulkBody = ({ workspaceId, onClose, dirtyRef }: BulkBodyProps) => {
       };
       if (d.tool === "ai-model") {
         item.prompt = d.prompt;
-        // The scope gate owns the classifier slot only when a specific
-        // document type is selected: drop the classifier there and append the
-        // gate below. With scope "All" an explicit classifier mention stays a
-        // normal dependency.
-        const dependencyIds = [
-          ...new Set([...d.fileIds, ...d.mentions]),
-        ].filter((id) => scopeDocType === null || id !== classifier?.id);
-        const dependencies: PropertyDependency[] = dependencyIds.map((id) => ({
-          dependsOnPropertyId: toSafeId<"property">(id),
-          condition: null,
-        }));
-        if (classifier && scopeDocType !== null) {
-          dependencies.push(buildDocTypeGate(classifier.id, scopeDocType));
-        }
+        const dependencies = draftDependencies(d, { classifier, scopeDocType });
         if (dependencies.length > 0) {
           item.dependencies = dependencies;
         }
@@ -411,6 +436,7 @@ const BulkBody = ({ workspaceId, onClose, dirtyRef }: BulkBodyProps) => {
           <DraftCard
             allProperties={allProperties}
             canRemove={drafts.length > 1}
+            dependencyCount={dependencyCountOf(draft)}
             draft={draft}
             key={draft.id}
             onChange={(patch) => updateDraft(draft.id, patch)}
@@ -497,6 +523,8 @@ const useNextId = (initial: number) => {
 type DraftCardProps = {
   draft: Draft;
   canRemove: boolean;
+  /** Dependencies this draft would create, scope gate included. */
+  dependencyCount: number;
   workspaceId: string;
   allProperties: FileChip[];
   onChange: (patch: Partial<Draft>) => void;
@@ -506,12 +534,14 @@ type DraftCardProps = {
 const DraftCard = ({
   draft,
   canRemove,
+  dependencyCount,
   workspaceId,
   allProperties,
   onChange,
   onRemove,
 }: DraftCardProps) => {
   const t = useTranslations();
+  const format = useFormatter();
   const chipDefs = useChipDefinitions();
   const suggestPrompt = useSuggestPrompt();
   const editorRef = useRef<Editor | null>(null);
@@ -641,10 +671,13 @@ const DraftCard = ({
       {isAi && (
         <>
           <ReadingFromRow
-            addFile={(id: string) =>
-              onChange({ fileIds: [...draft.fileIds, id] })
-            }
-            availableFiles={availableFiles}
+            {...(dependencyCount < PROPERTY_DEPENDENCIES_PER_PROPERTY_MAX
+              ? {
+                  addFile: (id: string) =>
+                    onChange({ fileIds: [...draft.fileIds, id] }),
+                  availableFiles,
+                }
+              : {})}
             fileChips={selectedFiles}
             onRemoveFile={(id) =>
               onChange({
@@ -653,6 +686,13 @@ const DraftCard = ({
               })
             }
           />
+          {dependencyCount > PROPERTY_DEPENDENCIES_PER_PROPERTY_MAX && (
+            <p className="text-destructive text-xs" role="alert">
+              {t("workspaces.properties.dependencyLimit", {
+                max: format.number(PROPERTY_DEPENDENCIES_PER_PROPERTY_MAX),
+              })}
+            </p>
+          )}
 
           <PropertyPromptInput
             aiEditAction={{

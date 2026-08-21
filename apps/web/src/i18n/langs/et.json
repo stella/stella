@@ -4376,6 +4376,7 @@
       "defaultPromptPropertyName": "teave",
       "deleteProperty": "Kustuta omadus",
       "deletePropertyConfirmDescription": "Kas olete kindel, et soovite kustutada omaduse \"{propertyName}\"? Seda toimingut ei saa tagasi võtta.",
+      "dependencyLimit": "Kuni {max} sisendit veeru kohta",
       "documentsLabel": "Dokumendid",
       "editColumn": "Muuda veergu",
       "editConditions": "Muuda tingimusi",

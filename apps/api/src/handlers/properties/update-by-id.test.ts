@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import type { PropertyContent, PropertyTool } from "@/api/db/schema-validators";
 import { toSafeId } from "@/api/lib/branded-types";
+import { LIMITS } from "@/api/lib/limits";
 import { DOCUMENT_TYPE_CLASSIFIER_ROLE } from "@/api/lib/properties/create-schema";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
@@ -627,5 +628,104 @@ describe("updateProperty", () => {
 
     expect(result).toEqual({});
     expect(updatePatch).toMatchObject({ role: DOCUMENT_TYPE_CLASSIFIER_ROLE });
+  });
+
+  describe("dependency cap on a list stored past it", () => {
+    const storedCount = LIMITS.propertyDependenciesPerProperty + 4;
+    const dependencyAt = (index: number) => ({
+      dependsOnPropertyId: toSafeId<"property">(`input_${index}`),
+      condition: null,
+    });
+    const storedDependencies = Array.from({ length: storedCount }, (_, index) =>
+      dependencyAt(index),
+    );
+    const content = { version: 1, type: "text" } satisfies PropertyContent;
+    const tool = {
+      version: 1,
+      type: "ai-model",
+      prompt: "summarise",
+    } satisfies PropertyTool;
+
+    const mockDb = () => {
+      let insertedCount: number | null = null;
+      const { safeDb, scopedDb } = createScopedDbMock({
+        select: () => ({
+          from: () => ({
+            where: () => ({
+              for: async () => [
+                {
+                  id: toSafeId<"property">("property_test"),
+                  name: "Summary",
+                  content,
+                  tool,
+                  role: null,
+                  status: "fresh",
+                  playbookSourceId: null,
+                },
+              ],
+            }),
+          }),
+        }),
+        query: {
+          propertyDependencies: { findMany: async () => storedDependencies },
+          properties: { findMany: async () => [] },
+        },
+        update: () => ({
+          set: () => ({ where: async () => undefined }),
+        }),
+        delete: () => ({ where: async () => undefined }),
+        insert: () => ({
+          values: async (rows: unknown[]) => {
+            insertedCount = rows.length;
+          },
+        }),
+      });
+      return { safeDb, scopedDb, insertedCount: () => insertedCount };
+    };
+
+    test("keeps a stored list at its size", async () => {
+      const db = mockDb();
+      const result = await updateProperty.handler(
+        createContext({
+          safeDb: db.safeDb,
+          scopedDb: db.scopedDb,
+          body: {
+            name: "Summary",
+            content,
+            tool: { ...tool, dependencies: storedDependencies },
+          },
+        }),
+      );
+
+      expect(storedCount).toBeGreaterThan(
+        LIMITS.propertyDependenciesPerProperty,
+      );
+      expect(result).toEqual({});
+      expect(db.insertedCount()).toBe(storedCount);
+    });
+
+    test("rejects growing a stored list past the cap", async () => {
+      const db = mockDb();
+      const result = await updateProperty.handler(
+        createContext({
+          safeDb: db.safeDb,
+          scopedDb: db.scopedDb,
+          body: {
+            name: "Summary",
+            content,
+            tool: {
+              ...tool,
+              dependencies: [...storedDependencies, dependencyAt(storedCount)],
+            },
+          },
+        }),
+      );
+
+      expect(result).toEqual({
+        code: 422,
+        response: { message: "Too many dependencies" },
+      });
+      expect(db.insertedCount()).toBeNull();
+    });
   });
 });

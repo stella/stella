@@ -4376,6 +4376,7 @@
       "defaultPromptPropertyName": "informaciją",
       "deleteProperty": "Ištrinti savybę",
       "deletePropertyConfirmDescription": "Ar tikrai norite ištrinti savybę \"{propertyName}\"? Šio veiksmo negalima atšaukti.",
+      "dependencyLimit": "Iki {max} įvesčių viename stulpelyje",
       "documentsLabel": "Dokumentai",
       "editColumn": "Redaguoti stulpelį",
       "editConditions": "Redaguoti sąlygas",

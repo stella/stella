@@ -4376,6 +4376,7 @@
       "defaultPromptPropertyName": "informace",
       "deleteProperty": "Smazat sloupec",
       "deletePropertyConfirmDescription": "Opravdu chcete smazat sloupec \"{propertyName}\"? Tuto akci nelze vrátit.",
+      "dependencyLimit": "Nejvýše {max} vstupů na sloupec",
       "documentsLabel": "Dokumenty",
       "editColumn": "Upravit sloupec",
       "editConditions": "Upravit podmínky",

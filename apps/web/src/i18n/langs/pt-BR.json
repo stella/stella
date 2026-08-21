@@ -4376,6 +4376,7 @@
       "defaultPromptPropertyName": "informação",
       "deleteProperty": "Excluir propriedade",
       "deletePropertyConfirmDescription": "Tem certeza de que deseja excluir a propriedade \"{propertyName}\"? Esta ação não pode ser desfeita.",
+      "dependencyLimit": "No máximo {max} entradas por coluna",
       "documentsLabel": "Documentos",
       "editColumn": "Editar coluna",
       "editConditions": "Editar condições",
