@@ -337,7 +337,7 @@ export const streamChat = async ({
   }
   reserveThirdPartyBoundarySourcePlaceholders({
     boundary: thirdPartyBoundary,
-    value: [systemSafe, systemUntrusted, messages, resume],
+    value: [systemSafe, systemUntrusted, messages, resume, tools],
   });
   const preparedUntrusted = await prepareTextForThirdParty({
     boundary: thirdPartyBoundary,

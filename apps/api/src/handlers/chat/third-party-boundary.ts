@@ -218,65 +218,6 @@ const encodeLateLiteralPlaceholders = (
   return rewritePlaceholders(text, replacements);
 };
 
-const encodeLateLiteralPlaceholdersInUnknown = ({
-  boundary,
-  seen = new WeakMap<object, unknown>(),
-  value,
-}: {
-  boundary: Extract<ChatThirdPartyBoundary, { type: "anonymized" }>;
-  seen?: WeakMap<object, unknown>;
-  value: unknown;
-}): unknown => {
-  if (typeof value === "string") {
-    return encodeLateLiteralPlaceholders(boundary, value);
-  }
-  if (
-    typeof value !== "object" ||
-    value === null ||
-    ArrayBuffer.isView(value)
-  ) {
-    return value;
-  }
-
-  const existing = seen.get(value);
-  if (existing !== undefined) {
-    return existing;
-  }
-
-  if (Array.isArray(value)) {
-    const output: unknown[] = [];
-    seen.set(value, output);
-    for (const nested of value) {
-      output.push(
-        encodeLateLiteralPlaceholdersInUnknown({
-          boundary,
-          seen,
-          value: nested,
-        }),
-      );
-    }
-    return output;
-  }
-
-  const output: Record<string, unknown> = {};
-  seen.set(value, output);
-  for (const [key, nested] of Object.entries(value)) {
-    const encodedKey = encodeLateLiteralPlaceholders(boundary, key);
-    const encodedValue = encodeLateLiteralPlaceholdersInUnknown({
-      boundary,
-      seen,
-      value: nested,
-    });
-    Object.defineProperty(output, encodedKey, {
-      configurable: true,
-      enumerable: true,
-      value: encodedValue,
-      writable: true,
-    });
-  }
-  return output;
-};
-
 export const reserveThirdPartyBoundarySourcePlaceholders = ({
   boundary,
   value,
@@ -638,10 +579,17 @@ const walkLenient = (value: unknown, replacer: LenientReplacer): unknown => {
 
 type BoundaryRefusal = HandlerError<422 | 500>;
 
-type TextReplacement = {
-  text: string;
-  apply: (value: string) => void;
-};
+type TextReplacement =
+  | {
+      type: "replace";
+      text: string;
+      apply: (value: string) => void;
+    }
+  | {
+      type: "reject-if-changed";
+      text: string;
+      message: string;
+    };
 
 export const prepareTextForThirdParty = async ({
   boundary,
@@ -726,12 +674,28 @@ const prepareTextBatchForThirdParty = async ({
   }
 
   const rewritten = rewriteBoundaryPlaceholders(boundary, anonymized.value);
-  mergeRedactionMap(boundary.redactionMap, rewritten.redactionMap);
   const restoredFields = protectedInput.restore(rewritten.fields);
 
   for (let index = 0; index < replacements.length; index += 1) {
-    const replacement = replacements[index];
-    if (replacement === undefined) {
+    const replacement = replacements.at(index);
+    if (
+      replacement?.type === "reject-if-changed" &&
+      restoredFields.at(index) !== replacement.text
+    ) {
+      return Result.err(
+        new HandlerError({
+          code: CHAT_TRANSPORT_ERROR_CODE.thirdPartyBoundaryRefusal,
+          status: 422,
+          message: replacement.message,
+        }),
+      );
+    }
+  }
+
+  mergeRedactionMap(boundary.redactionMap, rewritten.redactionMap);
+  for (let index = 0; index < replacements.length; index += 1) {
+    const replacement = replacements.at(index);
+    if (replacement?.type !== "replace") {
       continue;
     }
 
@@ -750,7 +714,23 @@ const queueTextReplacement = (
     return;
   }
 
-  replacements.push({ text, apply });
+  replacements.push({ type: "replace", text, apply });
+};
+
+const queueOpaqueTextCheck = ({
+  message,
+  replacements,
+  text,
+}: {
+  message: string;
+  replacements: TextReplacement[];
+  text: string;
+}) => {
+  if (text.length === 0) {
+    return;
+  }
+
+  replacements.push({ type: "reject-if-changed", text, message });
 };
 
 const anonymizePlainTextFile = ({
@@ -1268,12 +1248,13 @@ const anonymizeToolResultContent = ({
       return preparedPart;
     }
 
-    const preparedPart = { ...part, source: { ...part.source } };
-    queueTextReplacement(replacements, part.source.value, (value) => {
-      preparedPart.source.value = value;
-      apply(prepared);
+    queueOpaqueTextCheck({
+      message:
+        "Rich-media URLs that contain sensitive data cannot cross an anonymized third-party boundary.",
+      replacements,
+      text: part.source.value,
     });
-    return preparedPart;
+    return { ...part, source: { ...part.source } };
   });
 
   for (const preparedPart of prepared) {
@@ -1485,38 +1466,37 @@ export const prepareMcpToolSourceForThirdParty = ({
     ...source,
     tools: async (options) => {
       const tools = await source.tools(options);
-      return tools.map((tool) =>
-        prepareMcpServerToolForThirdParty(boundary, tool),
+      return await Promise.all(
+        tools.map((tool) => prepareMcpServerToolForThirdParty(boundary, tool)),
       );
     },
   };
 };
 
-const prepareMcpServerToolForThirdParty = (
+const prepareMcpServerToolForThirdParty = async (
   boundary: Extract<ChatThirdPartyBoundary, { type: "anonymized" }>,
   tool: AnyServerTool,
-): AnyServerTool => {
+): Promise<AnyServerTool> => {
   reserveThirdPartyBoundarySourcePlaceholders({ boundary, value: tool });
   const prepared = { ...tool };
-  for (const field of ["name", "description"] as const) {
-    const providerText: unknown = Reflect.get(prepared, field);
-    if (typeof providerText === "string") {
-      Reflect.set(
-        prepared,
-        field,
-        encodeLateLiteralPlaceholders(boundary, providerText),
-      );
+  for (const field of [
+    "name",
+    "description",
+    "inputSchema",
+    "outputSchema",
+  ] as const) {
+    const providerValue: unknown = Reflect.get(prepared, field);
+    if (providerValue === undefined) {
+      continue;
     }
-  }
-  for (const field of ["inputSchema", "outputSchema"] as const) {
-    const schema: unknown = Reflect.get(prepared, field);
-    if (schema !== undefined) {
-      Reflect.set(
-        prepared,
-        field,
-        encodeLateLiteralPlaceholdersInUnknown({ boundary, value: schema }),
-      );
+    const preparedValue = await prepareUnknownForThirdParty({
+      boundary,
+      value: providerValue,
+    });
+    if (Result.isError(preparedValue)) {
+      throw preparedValue.error;
     }
+    Reflect.set(prepared, field, preparedValue.value);
   }
 
   const execute = prepared.execute;
