@@ -11,6 +11,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Result } from "better-result";
 import { useDebouncedCallback } from "use-debounce";
 
+import { useLatest } from "@stll/ui/use-latest";
+
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { getAnalytics } from "@/lib/analytics/provider";
@@ -150,9 +152,7 @@ export const useEditSession = ({
   } | null>(null);
   const checkpointQueueRef = useRef<Promise<void> | null>(null);
   checkpointQueueRef.current ??= Promise.resolve();
-  const releaseContextRef = useRef({ workspaceId, entityId, propertyId });
-  // eslint-disable-next-line react/react-compiler -- latest-props mirror; read only in the async open/release paths, never during render
-  releaseContextRef.current = { workspaceId, entityId, propertyId };
+  const releaseContextRef = useLatest({ workspaceId, entityId, propertyId });
   const isMountedRef = useRef(true);
   const isMounted = () => isMountedRef.current;
 
@@ -168,8 +168,11 @@ export const useEditSession = ({
   }, [isDirty]);
 
   const open = async (force?: boolean) => {
-    const releaseContext = { workspaceId, entityId, propertyId };
-    releaseContextRef.current = releaseContext;
+    const releaseContext: EditSessionReleaseContext = {
+      workspaceId,
+      entityId,
+      propertyId,
+    };
     setState({ status: "opening" });
 
     const response = await api

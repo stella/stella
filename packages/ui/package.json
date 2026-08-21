@@ -83,6 +83,7 @@
     "./tooltip": "./src/components/tooltip.tsx",
     "./use-contained-handler": "./src/hooks/use-contained-handler.ts",
     "./use-content-dir": "./src/hooks/use-content-dir.ts",
+    "./use-latest": "./src/hooks/use-latest.ts",
     "./use-mobile": "./src/hooks/use-mobile.ts",
     "./use-viewport-width": "./src/hooks/use-viewport-width.ts",
     "./utils": "./src/lib/utils.ts",

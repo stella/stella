@@ -1719,16 +1719,6 @@ export default defineConfig({
                   "Form refs bridge synchronous onChange/onBlur ordering before React commits, so validation reads the latest field values and touched state inside ordinary event handlers.",
               },
               {
-                path: "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/cell-metadata-flags.tsx",
-                reason:
-                  "Debounced metadata flush needs the latest server base and in-flight mutation base; the callback is scheduled from user input, not installed by an effect.",
-              },
-              {
-                path: "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/property-popover.tsx",
-                reason:
-                  "Rapid dependency edits compose against latest optimistic state during event handlers and transitions; this is mutable optimistic state, not stale effect callback plumbing.",
-              },
-              {
                 path: "apps/web/src/components/workspaces/hooks/use-create-b-boxes.ts",
                 reason:
                   "Returned callback identity must stay stable for downstream effect deps while reading latest pending mutation count; callers invoke it directly, not from an effect-installed callback.",

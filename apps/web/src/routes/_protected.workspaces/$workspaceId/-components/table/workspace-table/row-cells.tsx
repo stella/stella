@@ -14,10 +14,7 @@ import { useTranslations } from "use-intl";
 
 import { Checkbox } from "@stll/ui/checkbox";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
-import {
-  containedEventHandler,
-  containedHandler,
-} from "@stll/ui/use-contained-handler";
+import { containedEventHandler } from "@stll/ui/use-contained-handler";
 import { cn } from "@stll/ui/utils";
 
 import { withDragAnnouncementData } from "@/components/drag-and-drop-live-region.logic";
@@ -470,8 +467,7 @@ export const DraggableRow = ({
         data-index={virtualIndex}
         data-state={row_getIsSelected(row) ? "selected" : undefined}
         key={row.id}
-        // eslint-disable-next-line react/react-compiler -- containedHandler house pattern; rowRef is handed to the helper, not read for rendered output
-        onClick={containedHandler(rowRef, handleRowClick)}
+        onClick={containedEventHandler(handleRowClick)}
         onContextMenu={containedEventHandler(handleContextMenu)}
         ref={setRowRef}
       >

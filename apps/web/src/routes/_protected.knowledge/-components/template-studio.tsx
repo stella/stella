@@ -1,4 +1,13 @@
-import { lazy, Suspense, useCallback, useMemo, useRef, useState } from "react";
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import type { RefObject } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { BracesIcon, RepeatIcon, SplitIcon } from "lucide-react";
@@ -83,6 +92,37 @@ const DocxEditor = lazy(async () => {
 const MAKE_FIELD_CONTEXT_ID = "make-field";
 const WRAP_IF_CONTEXT_ID = "wrap-if";
 const WRAP_EACH_CONTEXT_ID = "wrap-each";
+
+// Folio creates the editing PM view lazily (on first interaction). Ensure
+// it exists, then poll a few frames before giving up, so the chat apply
+// path doesn't report "document not editable" on a doc the user never
+// clicked into.
+const AWAIT_EDITOR_VIEW_MAX_FRAMES = 12;
+
+const awaitEditorViewWithin = async ({
+  editor,
+  view,
+}: {
+  editor: RefObject<DocxEditorRef | null>;
+  view: RefObject<EditorView | null>;
+}): Promise<EditorView | null> => {
+  if (view.current) {
+    return view.current;
+  }
+  editor.current?.ensureEditorView({ focus: false });
+  return await new Promise<EditorView | null>((resolve) => {
+    let frames = 0;
+    const poll = (): void => {
+      if (view.current || frames >= AWAIT_EDITOR_VIEW_MAX_FRAMES) {
+        resolve(view.current);
+        return;
+      }
+      frames += 1;
+      requestAnimationFrame(poll);
+    };
+    requestAnimationFrame(poll);
+  });
+};
 
 /** Replay Folio's outline-jump flash (`folio-outline-flash`) on the directive
  *  covering `pos`: scan the painted runs (`span[data-pm-start..data-pm-end]`)
@@ -283,30 +323,14 @@ export const TemplateStudioPage = ({
   );
 
   const getEditorView = useCallback(() => editorViewRef.current, []);
-  // Folio creates the editing PM view lazily (on first interaction), so a
-  // freshly opened template has no view until something forces it. Resolve
-  // it asynchronously: ensure, then poll a few frames before giving up, so
-  // the chat apply path doesn't report "document not editable" on a doc the
-  // user never clicked into.
-  const awaitEditorView = useCallback(async (): Promise<EditorView | null> => {
-    if (editorViewRef.current) {
-      return editorViewRef.current;
-    }
-    editorRef.current?.ensureEditorView({ focus: false });
-    return await new Promise<EditorView | null>((resolve) => {
-      let frames = 0;
-      const poll = () => {
-        if (editorViewRef.current || frames >= 12) {
-          resolve(editorViewRef.current);
-          return;
-        }
-        frames += 1;
-        // eslint-disable-next-line react/react-compiler -- recursive local function is not a reactive dependency
-        requestAnimationFrame(poll);
-      };
-      requestAnimationFrame(poll);
-    });
-  }, []);
+  const awaitEditorView = useCallback(
+    async (): Promise<EditorView | null> =>
+      awaitEditorViewWithin({
+        editor: editorRef,
+        view: editorViewRef,
+      }),
+    [],
+  );
   const forceEditorView = useCallback(() => {
     editorRef.current?.ensureEditorView({ focus: false });
   }, []);
@@ -1352,8 +1376,10 @@ export const TemplateStudioPage = ({
     return result !== null;
   };
 
-  // eslint-disable-next-line react/react-compiler -- latest-value store action relay, read only outside render by the registered handlers
-  actionsRef.current = {
+  // The studio store registry (mounted once above) holds stable trampolines
+  // that dereference actionsRef at call time, so this per-render handler set
+  // is pushed into it after commit rather than during render.
+  const actions: StudioActions = {
     toggleDirectives: () => setShowDirectives((visible) => !visible),
     deleteField: (path) => {
       const view = editorViewRef.current;
@@ -1650,6 +1676,9 @@ export const TemplateStudioPage = ({
       setSelected(null);
     },
   };
+  useLayoutEffect(() => {
+    actionsRef.current = actions;
+  });
 
   if (isError) {
     return (
