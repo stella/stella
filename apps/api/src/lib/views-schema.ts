@@ -3,6 +3,7 @@ import { t } from "elysia";
 import * as v from "valibot";
 
 import {
+  VIEW_FILTERS_MAX,
   VIEW_LAYOUT_TYPES,
   type ViewLayoutType as ContractViewLayoutType,
   VIEW_SORTS_MAX,
@@ -17,6 +18,7 @@ import {
 import { tConditionNode } from "@/api/lib/conditions/contract";
 import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
 import { logger } from "@/api/lib/observability/logger";
+import { PROPERTY_DEPENDENCY_LIMITS } from "@/api/lib/properties/dependency-limits";
 
 const v1 = v.literal(1);
 
@@ -58,7 +60,10 @@ export const tViewCalculationSchema = t.Object(
 );
 
 const baseLayoutSchema = {
-  filters: v.array(conditionNodeSchema),
+  // Bounded here as well as at the request boundary: a stored layout is
+  // re-parsed on every read, and parseViewLayoutSafe recovers from an
+  // oversized list by keeping the leading filters rather than failing the view.
+  filters: v.pipe(v.array(conditionNodeSchema), v.maxLength(VIEW_FILTERS_MAX)),
   // Hard ceiling for incoming layouts. Stored rows go through
   // parseStoredViewLayout, which trims an oversized list before this check
   // so a layout written before the cap existed still reads.
@@ -185,6 +190,21 @@ const hasSortsField = (value: unknown): value is { sorts: unknown } =>
  * and report the trim once per layout read, so the residue stays visible
  * until the migration that rewrites those rows has run everywhere.
  */
+/** Same normalisation for a persisted filter list over `VIEW_FILTERS_MAX`. */
+const withBoundedFilters = (value: unknown): unknown => {
+  if (!hasFiltersField(value) || !Array.isArray(value.filters)) {
+    return value;
+  }
+  if (value.filters.length <= VIEW_FILTERS_MAX) {
+    return value;
+  }
+  logger.warn("views.layout.filters_truncated", {
+    filter_count: value.filters.length,
+    filter_limit: VIEW_FILTERS_MAX,
+  });
+  return { ...value, filters: value.filters.slice(0, VIEW_FILTERS_MAX) };
+};
+
 const withBoundedSorts = (value: unknown): unknown => {
   if (!hasSortsField(value) || !Array.isArray(value.sorts)) {
     return value;
@@ -212,7 +232,10 @@ export const parseViewLayout = (value: unknown): ViewLayout =>
  * rather than rejected: a row that was valid when written must stay readable.
  */
 export const parseStoredViewLayout = (value: unknown): ViewLayout =>
-  v.parse(viewLayoutSchema, withBoundedSorts(withValidFilters(value)));
+  v.parse(
+    viewLayoutSchema,
+    withBoundedSorts(withBoundedFilters(withValidFilters(value))),
+  );
 
 // Recovers a stored layout that fails strict parsing: older views can carry a
 // filter grammar the current schema rejects. Drop the unparseable filters/sorts
@@ -221,7 +244,7 @@ export const parseStoredViewLayout = (value: unknown): ViewLayout =>
 export const parseViewLayoutSafe = (value: unknown): ViewLayout => {
   const direct = v.safeParse(
     viewLayoutSchema,
-    withBoundedSorts(withValidFilters(value)),
+    withBoundedSorts(withBoundedFilters(withValidFilters(value))),
   );
   if (direct.success) {
     return direct.output;
@@ -249,7 +272,7 @@ export const parseViewLayoutSafe = (value: unknown): ViewLayout => {
 };
 
 const tBaseLayoutSchema = {
-  filters: t.Array(tConditionNode),
+  filters: t.Array(tConditionNode, { maxItems: VIEW_FILTERS_MAX }),
   sorts: t.Array(tViewSortSchema, { maxItems: VIEW_SORTS_MAX }),
   hiddenProperties: t.Array(t.String()),
   calculations: t.Optional(t.Array(tViewCalculationSchema)),
@@ -358,6 +381,7 @@ export const tViewTemplatePropertySchema = t.Object(
           },
           strictObjectOptions,
         ),
+        { maxItems: PROPERTY_DEPENDENCY_LIMITS.perProperty },
       ),
     ),
   },

@@ -3,8 +3,9 @@ import { Suspense, useState } from "react";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import type { Editor } from "@tiptap/react";
 import { PlusIcon, RouteIcon } from "lucide-react";
-import { useTranslations } from "use-intl";
+import { useFormatter, useTranslations } from "use-intl";
 
+import { PROPERTY_DEPENDENCIES_PER_PROPERTY_MAX } from "@stll/api-contract";
 import { Button } from "@stll/ui/button";
 import {
   Dialog,
@@ -331,6 +332,7 @@ const PropertyComposerBody = ({
   onCreated,
 }: DialogBodyProps) => {
   const t = useTranslations();
+  const format = useFormatter();
   const suggestPrompt = useSuggestPrompt();
   const startWorkflow = useStartWorkflow(workspaceId);
   const { data: properties } = useSuspenseQuery(propertiesOptions(workspaceId));
@@ -505,10 +507,44 @@ const PropertyComposerBody = ({
     (p) => !effectiveSelectedFileIds.includes(p.id),
   );
 
+  // The dependency list the save sends, derived on every render so the cap
+  // below sees the same count the server will. Per-dependency conditions
+  // configured via the conditions sub-modal are preserved; new mentions
+  // default to null. The "Applies to" scope owns the classifier slot: drop
+  // the classifier dependency only when it is (or was) a scope gate, then
+  // re-add the gate below for the chosen document type. A plain classifier
+  // mention with no scope is preserved with its condition.
+  const dependencies: PropertyDependency[] = [];
+  for (const id of dependencyIds) {
+    const isScopeGate =
+      id === classifier?.id &&
+      !(scopeDocType === null && initialScopeDocType === null);
+    if (isScopeGate) {
+      continue;
+    }
+    dependencies.push({
+      dependsOnPropertyId: toSafeId<"property">(id),
+      condition: initialDependencyConditions.get(id) ?? null,
+    });
+  }
+  if (classifier && scopeDocType !== null) {
+    dependencies.push(buildDocTypeGate(classifier.id, scopeDocType));
+  }
+
+  // Mirrors the server rule: a list stored under an earlier, larger cap may
+  // be kept or shrunk, never grown past the cap.
+  const dependencyCap = Math.max(
+    PROPERTY_DEPENDENCIES_PER_PROPERTY_MAX,
+    editingTool?.type === "ai-model" ? editingTool.dependencies.length : 0,
+  );
+  const canAddDependency = dependencies.length < dependencyCap;
+  const overDependencyCap = dependencies.length > dependencyCap;
+
   // Manual properties skip the prompt + dependency requirements; the
   // user fills values by hand. Select-type rules still apply.
   const aiRequirementsMet =
-    !showAiSections || (promptText.length > 0 && dependencyIds.length > 0);
+    !showAiSections ||
+    (promptText.length > 0 && dependencyIds.length > 0 && !overDependencyCap);
   const canSubmit =
     trimmedName.length > 0 &&
     aiRequirementsMet &&
@@ -525,28 +561,6 @@ const PropertyComposerBody = ({
   const handleSubmit = () => {
     if (!canSubmit) {
       return;
-    }
-
-    // Preserve any per-dependency conditions configured via the conditions
-    // sub-modal. New mentions default to null. The "Applies to" scope owns the
-    // classifier slot: drop the classifier dependency only when it is (or was)
-    // a scope gate, then re-add the gate below for the chosen document type. A
-    // plain classifier mention with no scope is preserved with its condition.
-    const dependencies: PropertyDependency[] = [];
-    for (const id of dependencyIds) {
-      const isScopeGate =
-        id === classifier?.id &&
-        !(scopeDocType === null && initialScopeDocType === null);
-      if (isScopeGate) {
-        continue;
-      }
-      dependencies.push({
-        dependsOnPropertyId: toSafeId<"property">(id),
-        condition: initialDependencyConditions.get(id) ?? null,
-      });
-    }
-    if (classifier && scopeDocType !== null) {
-      dependencies.push(buildDocTypeGate(classifier.id, scopeDocType));
     }
 
     if (isEditMode && editingProperty) {
@@ -752,7 +766,7 @@ const PropertyComposerBody = ({
             promptField={promptField}
             propertyName={trimmedName}
             typeChanged={typeChanged}
-            {...(availableFileToAdd.length > 0
+            {...(availableFileToAdd.length > 0 && canAddDependency
               ? {
                   addFile: (id: string) =>
                     setSelectedFileIds((prev) => [...prev, id]),
@@ -768,6 +782,14 @@ const PropertyComposerBody = ({
             onContentTypeChange={setContentType}
             typeChanged={typeChanged}
           />
+        )}
+
+        {showAiSections && overDependencyCap && (
+          <p className="text-destructive px-1 text-xs" role="alert">
+            {t("workspaces.properties.dependencyLimit", {
+              max: format.number(dependencyCap),
+            })}
+          </p>
         )}
 
         {showAiSections && classifier && docTypeOptions.length > 0 && (

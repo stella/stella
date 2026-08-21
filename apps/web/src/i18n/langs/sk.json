@@ -4376,6 +4376,7 @@
       "defaultPromptPropertyName": "informácie",
       "deleteProperty": "Vymazať vlastnosť",
       "deletePropertyConfirmDescription": "Naozaj chcete vymazať vlastnosť \"{propertyName}\"? Túto akciu nemožno vrátiť.",
+      "dependencyLimit": "Najviac {max} vstupov na stĺpec",
       "documentsLabel": "Dokumenty",
       "editColumn": "Upraviť stĺpec",
       "editConditions": "Upraviť podmienky",

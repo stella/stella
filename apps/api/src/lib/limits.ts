@@ -4,6 +4,8 @@ import {
   ENTITIES_PER_WORKSPACE_MAX,
   FLOW_RUN_INPUT_ENTITIES_MAX,
   PROPERTIES_PER_WORKSPACE_MAX,
+  PROPERTY_DEPENDENCIES_PER_PROPERTY_MAX,
+  VIEW_FILTERS_MAX,
   VIEW_SORTS_MAX,
   WORKSPACES_PER_ORGANIZATION_MAX,
 } from "@stll/api-contract";
@@ -47,6 +49,13 @@ export const LIMITS = {
   entitiesPageSizeMax: 500,
   entitiesWindowSizeDefault: 200,
   entitiesWindowSizeMax: 500,
+  /** Top-level filters one view layout or one list/window request may carry;
+   *  also the fan-out of any one condition group. Together with the condition
+   *  contract's nesting depth this bounds the size of one filter tree. */
+  viewFiltersCount: VIEW_FILTERS_MAX,
+  /** AI-column inputs one property may depend on: the cap on a create body
+   *  and on an update that grows the stored list. */
+  propertyDependenciesPerProperty: PROPERTY_DEPENDENCIES_PER_PROPERTY_MAX,
   workflowEntityBatchSize: 500,
   /** Documents one chat cross-document consistency review may send to the
    *  review model. Larger folders remain explicit in coverage as not checked. */

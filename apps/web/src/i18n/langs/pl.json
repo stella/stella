@@ -4376,6 +4376,7 @@
       "defaultPromptPropertyName": "informacje",
       "deleteProperty": "Usuń właściwość",
       "deletePropertyConfirmDescription": "Czy na pewno chcesz usunąć właściwość \"{propertyName}\"? Tej operacji nie można cofnąć.",
+      "dependencyLimit": "Maksymalnie {max} źródeł na kolumnę",
       "documentsLabel": "Dokumenty",
       "editColumn": "Edytuj kolumnę",
       "editConditions": "Edytuj warunki",

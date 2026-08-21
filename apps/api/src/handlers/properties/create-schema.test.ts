@@ -1,12 +1,12 @@
 import { Value } from "@sinclair/typebox/value";
 import { describe, expect, test } from "bun:test";
 
+import { LIMITS } from "@/api/lib/limits";
 import {
   DOCUMENT_TYPE_CLASSIFIER_ROLE,
   buildPropertyParts,
   createPropertyBodySchema,
 } from "@/api/lib/properties/create-schema";
-import { PROPERTY_DEPENDENCY_LIMITS } from "@/api/lib/properties/dependency-limits";
 
 describe("property creation schema", () => {
   test("tags AI single-select Document Type columns as classifiers", () => {
@@ -49,7 +49,7 @@ describe("property creation schema", () => {
       name: "Bounded property",
       contentType: "text",
       dependencies: Array.from(
-        { length: PROPERTY_DEPENDENCY_LIMITS.perProperty },
+        { length: LIMITS.propertyDependenciesPerProperty },
         () => dependency,
       ),
     };

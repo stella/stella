@@ -28,7 +28,9 @@ const calendarTasksBodySchema = t.Object({
     maxItems: LIMITS.propertiesCount + BUILT_IN_DATE_IDS.length,
   }),
   endDatePropertyId: t.Optional(t.String({ minLength: 1 })),
-  filters: t.Optional(t.Array(tConditionNode)),
+  filters: t.Optional(
+    t.Array(tConditionNode, { maxItems: LIMITS.viewFiltersCount }),
+  ),
   sorts: t.Optional(
     t.Array(tViewSortSchema, { maxItems: LIMITS.viewSortsCount }),
   ),

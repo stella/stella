@@ -4376,6 +4376,7 @@
       "defaultPromptPropertyName": "információ",
       "deleteProperty": "Tulajdonság törlése",
       "deletePropertyConfirmDescription": "Biztosan törölni szeretné a(z) \"{propertyName}\" tulajdonságot? Ez a művelet nem vonható vissza.",
+      "dependencyLimit": "Oszloponként legfeljebb {max} bemenet",
       "documentsLabel": "Dokumentumok",
       "editColumn": "Oszlop szerkesztése",
       "editConditions": "Feltételek szerkesztése",

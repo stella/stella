@@ -104,6 +104,12 @@ export type ConditionCapabilities = {
   fields: FieldOption[];
   /** Allow nested groups (the "+ Add group" affordance + bordered subgroups). */
   allowNesting?: boolean;
+  /**
+   * How many children the caller's backend accepts in one group. The add
+   * affordances are disabled at the cap, so a tree cannot be edited into a
+   * shape the server would reject. Omitted means no cap.
+   */
+  maxChildren?: number | undefined;
   /** Offer a "ƒ Calculated value…" item that switches a leaf's left operand to
    *  a formula edited via `FormulaCell`. */
   allowFormula?: boolean;
@@ -192,8 +198,11 @@ const ConditionBuilderTree = ({
 }: ConditionBuilderTreeProps) => {
   const labels = useLabels();
   const group = asGroup(value);
-  const { fields, allowNesting = false } = capabilities;
+  const { fields, allowNesting = false, maxChildren } = capabilities;
   const firstField = fields.at(0);
+  const atChildCap =
+    maxChildren !== undefined && group.children.length >= maxChildren;
+  const canAdd = firstField !== undefined && !atChildCap;
 
   return (
     <div className="flex flex-col gap-2">
@@ -237,9 +246,9 @@ const ConditionBuilderTree = ({
       <div className="ms-[5.375rem] flex flex-wrap gap-1">
         <Button
           className="w-fit justify-start"
-          disabled={!firstField}
+          disabled={!canAdd}
           onClick={() => {
-            if (firstField) {
+            if (firstField && !atChildCap) {
               onChange(appendChild(group, leafFromField(firstField)));
             }
           }}
@@ -253,9 +262,9 @@ const ConditionBuilderTree = ({
         {allowNesting && (
           <Button
             className="w-fit justify-start"
-            disabled={!firstField}
+            disabled={!canAdd}
             onClick={() => {
-              if (firstField) {
+              if (firstField && !atChildCap) {
                 onChange(
                   appendChild(group, {
                     type: "group",

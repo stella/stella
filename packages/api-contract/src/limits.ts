@@ -36,6 +36,15 @@ export const WORKSPACES_PER_ORGANIZATION_MAX = 1000;
 export const PROPERTIES_PER_WORKSPACE_MAX = 300;
 
 /**
+ * Max inputs one AI column may depend on. Independent of the properties cap:
+ * a prompt reads a hand-picked set of columns, not every column. The client
+ * disables the add-input affordances at the cap and keeps Save disabled past
+ * it; the server rejects a create past it and an update that grows a stored
+ * list past it.
+ */
+export const PROPERTY_DEPENDENCIES_PER_PROPERTY_MAX = 16;
+
+/**
  * Max sorts one view layout or one list/window request may carry. Deliberately
  * independent of the properties cap: a sort tuple is a hand-picked ordering, a
  * handful of keys deep, not one entry per column. It also sizes the entity
@@ -43,6 +52,15 @@ export const PROPERTIES_PER_WORKSPACE_MAX = 300;
  * not grow with the column cap.
  */
 export const VIEW_SORTS_MAX = 8;
+
+/**
+ * Max top-level filter conditions one view layout or one list/window request
+ * may carry, and the max children of any one condition group. Independent of
+ * the properties cap: a filter set is a hand-built predicate list, not one
+ * entry per column. The client disables the add-filter affordances at the
+ * cap; the server rejects past it.
+ */
+export const VIEW_FILTERS_MAX = 32;
 
 /**
  * Max entities (rows) one matter may hold. The client disables the

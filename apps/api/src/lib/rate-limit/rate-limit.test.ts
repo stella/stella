@@ -108,6 +108,40 @@ describe("RedisRateLimitContext", () => {
     context.kill();
   });
 
+  test("connects the client at construction and reports a failed connect", async () => {
+    const operations: string[] = [];
+    let connectCalls = 0;
+    let rejectConnect: (error: Error) => void = () => undefined;
+    const context = new RedisRateLimitContext({
+      createRedis: () => ({
+        connect: async () => {
+          connectCalls += 1;
+          await new Promise<void>((_resolve, reject) => {
+            rejectConnect = reject;
+          });
+        },
+        send: async () => [1, WINDOW_MS],
+      }),
+      failurePolicy: "fail_open_local",
+      onRedisError: (_error, operation) => {
+        operations.push(operation);
+      },
+    });
+    // The connect starts before any request, so the first increment finds a
+    // client that is already connecting rather than one it has to create.
+    expect(connectCalls).toBe(1);
+    context.init(RATE_LIMIT_OPTIONS);
+    expect((await context.increment("api:client", WINDOW_MS, 1000)).count).toBe(
+      1,
+    );
+    expect(connectCalls).toBe(1);
+
+    rejectConnect(new Error("connect ECONNREFUSED"));
+    await Bun.sleep(0);
+    expect(operations).toEqual(["connect"]);
+    context.kill();
+  });
+
   test("bounds a stalled command and cancels its timer", async () => {
     let clientClosed = false;
     let lateMutationApplied = false;

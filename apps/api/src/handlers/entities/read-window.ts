@@ -19,7 +19,9 @@ import { createCursorPage } from "@/api/lib/pagination";
 import { tViewSortSchema } from "@/api/lib/views-schema";
 
 const readEntitiesWindowBodySchema = t.Object({
-  filters: t.Optional(t.Array(tConditionNode)),
+  filters: t.Optional(
+    t.Array(tConditionNode, { maxItems: LIMITS.viewFiltersCount }),
+  ),
   sorts: t.Optional(
     t.Array(tViewSortSchema, { maxItems: LIMITS.viewSortsCount }),
   ),

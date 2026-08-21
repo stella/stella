@@ -4376,6 +4376,7 @@
       "defaultPromptPropertyName": "informāciju",
       "deleteProperty": "Dzēst rekvizītu",
       "deletePropertyConfirmDescription": "Vai tiešām vēlaties dzēst rekvizītu \"{propertyName}\"? Šo darbību nevar atsaukt.",
+      "dependencyLimit": "Ne vairāk kā {max} ievades vienā kolonnā",
       "documentsLabel": "Dokumenti",
       "editColumn": "Rediģēt kolonnu",
       "editConditions": "Rediģēt nosacījumus",

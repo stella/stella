@@ -32,6 +32,7 @@ import {
 } from "@/api/lib/properties/create-schema";
 import {
   assertPropertyDependencyReadWithinLimit,
+  dependencyCountExceedsCap,
   PROPERTY_DEPENDENCY_LIMITS,
   propertyDependencyReadLimit,
 } from "@/api/lib/properties/dependency-limits";
@@ -212,6 +213,9 @@ const updatePropertyBodySchema = t.Object({
     t.Intersect([
       aiModelToolSchema,
       t.Object({
+        // Bounded by the structural ceiling, not the write cap: a list stored
+        // under an earlier, larger cap must round-trip. The handler rejects a
+        // list that grows past the cap once it knows the stored count.
         dependencies: t.Array(
           t.Object({
             dependsOnPropertyId: tSafeId("property"),
@@ -336,6 +340,19 @@ const updateProperty = createSafeHandler(
           oldDependencies.length,
           "perProperty",
         );
+
+        if (
+          dependencyCountExceedsCap({
+            incoming: dependencies.length,
+            stored: oldDependencies.length,
+          })
+        ) {
+          return {
+            ok: false as const,
+            status: 422 as const,
+            message: "Too many dependencies",
+          };
+        }
 
         const isStale = comparePropertiesForStale({
           oldProperty: {
