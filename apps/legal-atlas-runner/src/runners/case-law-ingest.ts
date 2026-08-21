@@ -39,7 +39,12 @@ import {
 import { getAdapter } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
 import { runIngestionPipeline } from "@/api/handlers/case-law/ingestion/pipeline";
 import type { SliceRetrySchedule } from "@/api/handlers/case-law/ingestion/reconciliation-engine";
-import { runReconciliationWorkUnit } from "@/api/handlers/case-law/ingestion/reconciliation-engine";
+import {
+  RECONCILIATION_INGEST_BUDGET_MS,
+  RECONCILIATION_LISTING_WORST_CASE_MS,
+  RECONCILIATION_UNIT_SETTLE_MS,
+  runReconciliationWorkUnit,
+} from "@/api/handlers/case-law/ingestion/reconciliation-engine";
 import {
   readSourceReportedTotals,
   setSourceReportedTotal,
@@ -358,6 +363,17 @@ const SEARCH_INDEX_HARD_DEADLINE_MS = Math.max(
     (LEGAL_ATLAS_RUNNER_ENV.dbBackfillTransactionTimeoutMs +
       BACKFILL_DEADLINE_TRANSACTION_GRACE_MS),
 );
+// Summed from the engine's own phase bounds rather than restated, so this can
+// never drift underneath what a healthy unit does — which is the whole failure
+// this backstop had: a merely-large walk read as a wedge and took the process
+// down with it. Listing dominates, and cannot be given a clock of its own (it
+// has nowhere to resume from), so the deadline clears its worst case instead.
+// Large, and correctly so: a backstop that fires before healthy work finishes
+// is not a safety net, it is the fault.
+const RECONCILIATION_HARD_DEADLINE_MS =
+  RECONCILIATION_LISTING_WORST_CASE_MS +
+  RECONCILIATION_INGEST_BUDGET_MS +
+  RECONCILIATION_UNIT_SETTLE_MS;
 
 type Semaphore = {
   acquire: (signal?: AbortSignal) => Promise<void>;
@@ -1654,7 +1670,7 @@ export const runCaseLawIngest = async (
         runWorkUnit: async () => {
           const outcome = await runWithHardDeadline(
             "case-law-reconciliation",
-            BACKFILL_HARD_DEADLINE_MS,
+            RECONCILIATION_HARD_DEADLINE_MS,
             async () =>
               await runReconciliationWorkUnit({
                 adapterKey,

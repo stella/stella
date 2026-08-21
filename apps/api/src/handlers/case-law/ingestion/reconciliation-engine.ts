@@ -104,11 +104,12 @@ const PARKED_RETRY_BATCH = 25;
  */
 export const DEFAULT_SLICE_INGEST_BUDGET = 50;
 /**
- * The most a unit may be asked to ingest. One walk holds the source lease
- * for its whole run and the runner's hard deadline ends an overrun by
- * exiting the process, so the option is bounded here rather than trusted:
- * a thousand sequential fetches at the loop's politeness gap stay well
- * inside that deadline.
+ * The most a unit may be asked to ingest. One walk holds the source lease for
+ * its whole run, so the option is bounded here rather than trusted.
+ *
+ * A count is not a clock: this bounds how many documents a unit fetches, not
+ * how long they take. `RECONCILIATION_INGEST_BUDGET_MS` is what keeps a unit
+ * inside the caller's deadline.
  */
 export const MAX_SLICE_INGEST_BUDGET = 1000;
 /** Identity lookups per query, matching the publishers' own page size. */
@@ -127,16 +128,54 @@ const LIST_TIMEOUT_MS = 60_000;
  *
  * `totalPages` is the publisher's number and the response validators only
  * require it to be a number at all. Without a ceiling one wrong value turns a
- * single work unit into an unbounded request sequence against that publisher,
- * which the runner's hard deadline only ends by killing the process — and the
- * replacement starts the same walk again. Far above any real slice, so
- * reaching it means the listing is not walkable rather than merely large.
+ * single work unit into an unbounded request sequence against that publisher.
+ * Far above any real slice, so reaching it means the listing is not walkable
+ * rather than merely large.
  */
 const MAX_SLICE_PAGES = 200;
 /** Terminal rows examined when pruning a walked slice. */
 const PRUNE_ROW_LIMIT = 1000;
 /** One document; nothing in an item's build should take longer. */
 const ITEM_FETCH_TIMEOUT_MS = 2 * 60_000;
+/**
+ * Wall-clock the INGEST phase may spend before it stops fetching documents.
+ *
+ * The count ceilings above bound requests, not time: every document may spend
+ * `ITEM_FETCH_TIMEOUT_MS` before it settles, so a budget's worth of them is
+ * hours of lawful work, not the minutes the politeness gap alone suggests. The
+ * caller runs a unit under a hard deadline that exits the process on the theory
+ * that anything slower is wedged, so work that can outlast that deadline while
+ * progressing is indistinguishable from a hang, and the walk that would have
+ * finished is killed along with every other loop sharing the process.
+ *
+ * Bounding the ingest phase is safe because stopping is already a modelled
+ * state: what it did not reach is `deferred` exactly as when the count budget
+ * runs out, the slice records short, and the next unit resumes there.
+ *
+ * The LISTING phase deliberately has no such budget. It has nowhere to resume
+ * from: `walkSlice` always starts at page 0, no page cursor is persisted, and a
+ * partial listing may not be written (see the page ceiling). Cutting listing
+ * off on a clock would turn a slice that lists slowly into one that restarts,
+ * throws at the same page, and is never reconciled at all -- strictly worse
+ * than letting it finish. So listing is bounded by `MAX_SLICE_PAGES` alone, and
+ * the caller's deadline is derived to sit above that, not underneath it.
+ */
+export const RECONCILIATION_INGEST_BUDGET_MS = 30 * 60_000;
+/**
+ * The longest a lawful listing can take: every page may spend its timeout, and
+ * the politeness pause separates them. Exported because the caller's hard
+ * deadline has to clear it -- a backstop for a wedged await must sit above
+ * everything a healthy unit can do, and a complete listing of a large slice is
+ * the slowest of those things.
+ */
+export const RECONCILIATION_LISTING_WORST_CASE_MS =
+  MAX_SLICE_PAGES * (LIST_DELAY_MS + LIST_TIMEOUT_MS);
+/**
+ * Headroom on top of the phases above: the request already in flight when the
+ * ingest budget runs out, plus the ledger writes that close the unit.
+ * Comfortably above `ITEM_FETCH_TIMEOUT_MS`, which is the longest of them.
+ */
+export const RECONCILIATION_UNIT_SETTLE_MS = 15 * 60_000;
 
 export type ReconciliationUnitSummary = {
   unit: ReconciliationWorkUnit["type"];
@@ -881,10 +920,14 @@ const walkSlice = async ({
         cursor: slice,
       });
     }
+    // No clock here on purpose; see RECONCILIATION_INGEST_BUDGET_MS. A listing
+    // has nowhere to resume from, so cutting one off on time would make a
+    // slowly-listing slice unreconcilable rather than merely slow.
   }
 
   const items = [...keyed.values()];
   summary.keyable = items.length;
+  const ingestEndsAtMs = now().getTime() + RECONCILIATION_INGEST_BUDGET_MS;
   const held = await selectHeldIdentityKeys(scopedDb, {
     sourceId,
     identities: items.map(({ identity }) => identity),
@@ -914,6 +957,15 @@ const walkSlice = async ({
     if (index > 0) {
       // oxlint-disable-next-line no-await-in-loop -- politeness pause between decisions, matching the crawl
       await sleep(fetchDelayMs);
+    }
+    // After the pause, not before it: the pause can itself carry the unit past
+    // the budget, and what has to stay inside it is the request, not the
+    // decision to wait. Out of clock rather than out of count, and owed the
+    // same way: what is left stays an untracked miss, so `collected` records
+    // short below and the next unit resumes the walk here.
+    if (now().getTime() >= ingestEndsAtMs) {
+      summary.deferred += fillable.length - index;
+      break;
     }
     // oxlint-disable-next-line no-await-in-loop -- rate-limited publisher traffic and one pipeline write per decision stay sequential
     await ingestListedItem({
@@ -1020,11 +1072,19 @@ const retryParkedItems = async ({
   const unheld = outstanding.filter(
     ({ identityKey }) => !held.has(identityKey),
   );
+  const ingestEndsAtMs = now().getTime() + RECONCILIATION_INGEST_BUDGET_MS;
   let fetched = 0;
-  for (const item of unheld) {
+  for (const [index, item] of unheld.entries()) {
     if (fetched > 0) {
       // oxlint-disable-next-line no-await-in-loop -- politeness pause between decisions, matching the crawl
       await sleep(fetchDelayMs);
+    }
+    // After the pause, for the reason given in `walkSlice`. Their backoff
+    // already decides when each is asked again, so the ones this unit did not
+    // reach simply stay due for the next.
+    if (now().getTime() >= ingestEndsAtMs) {
+      summary.deferred += unheld.length - index;
+      break;
     }
     fetched += 1;
     // oxlint-disable-next-line no-await-in-loop -- rate-limited publisher traffic and one pipeline write per decision stay sequential
