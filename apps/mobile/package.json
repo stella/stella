@@ -10,14 +10,14 @@
     "build": "expo export --platform all",
     "clean": "git clean -xdf .cache .expo .turbo dist node_modules",
     "dev": "expo start",
-    "doctor": "EXPO_OFFLINE=1 expo-doctor .",
+    "doctor": "bun scripts/expo-doctor.ts .",
     "format": "oxfmt -c ../../.oxfmtrc.json .",
     "ios": "expo start --ios",
     "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --deny-warnings --type-aware apps/mobile",
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix apps/mobile",
     "start": "expo start",
     "test": "bun test --pass-with-no-tests",
-    "typecheck": "bun ../../packages/scripts/src/tsc-native.ts --noEmit",
+    "typecheck": "bun ../../packages/scripts/src/tsc-native.ts --noEmit && bun ../../packages/scripts/src/tsc-native.ts --noEmit -p tsconfig.scripts.json",
     "web": "expo start --web"
   },
   "dependencies": {
@@ -38,6 +38,7 @@
     "@babel/core": "^7.29.0",
     "@stll/typescript-config": "workspace:*",
     "@types/react": "catalog:react19",
+    "bun-types": "catalog:",
     "expo-doctor": "1.20.2"
   },
   "crawlPosture": "unserved",

@@ -194,4 +194,13 @@ CMD ["bun", "--port", "3001", "src/index.ts"]
   TypeScript preserves symlink paths so package imports resolve through the
   project graph instead of the shared cache's real paths. The cutover also
   declares the root-script dependencies that isolation exposed and patches
-  `eslint-plugin-drizzle`'s undeclared runtime import.
+  `eslint-plugin-drizzle`'s undeclared runtime import. Vite allows Bun's
+  package-only store subtree inside its development filesystem boundary so
+  linked assets remain servable without changing production resolution.
+  Container installs opt out of the global store because their BuildKit cache
+  mount is detached after the install layer; they retain the isolated linker
+  and materialize its store inside the image. Expo Doctor currently reports
+  Bun's peer-context store entries as duplicate native modules; Stella accepts
+  only the documented same-version store shape while leaving every other
+  Doctor failure fatal (see
+  [expo#46429](https://github.com/expo/expo/issues/46429)).

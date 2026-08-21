@@ -36,8 +36,10 @@ RUN turbo prune @stll/web --docker
 
 FROM build-base AS deps
 COPY --from=install-inputs /json/ .
+# A BuildKit cache mount is not part of the resulting layer. Materialize the
+# isolated store in /app so node_modules never points into the detached mount.
 RUN --mount=type=cache,target=/root/.bun/install/cache \
-    bun install --filter @stll/web --frozen-lockfile --ignore-scripts --network-concurrency=8
+    BUN_INSTALL_GLOBAL_STORE=0 bun install --filter @stll/web --frozen-lockfile --ignore-scripts --network-concurrency=8
 
 # Runtime install: the SSR server bundle (dist/server/server.js) externalises
 # its imports, so they must resolve from `dependencies` alone with
@@ -53,7 +55,7 @@ RUN --mount=type=cache,target=/root/.bun/install/cache \
       arm64) target_cpu=arm64 ;; \
       *) echo "unsupported web runtime architecture: ${TARGETARCH}" >&2; exit 1 ;; \
     esac && \
-    bun install --filter @stll/web --production --frozen-lockfile --ignore-scripts \
+    BUN_INSTALL_GLOBAL_STORE=0 bun install --filter @stll/web --production --frozen-lockfile --ignore-scripts \
       --network-concurrency=8 --cpu="${target_cpu}" --os=linux
 
 FROM deps AS builder
