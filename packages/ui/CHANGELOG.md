@@ -1,5 +1,11 @@
 # @stll/ui
 
+## 0.5.0
+
+### Minor Changes
+
+- [#2327](https://github.com/stella/stella/pull/2327) [`f43667b`](https://github.com/stella/stella/commit/f43667bfa8dccca5f4c4e622bf6f80972ed349d6) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add an entity-agnostic data-table renderer with empty, loading, and accessible row-action states.
+
 ## 0.4.0
 
 ### Minor Changes
