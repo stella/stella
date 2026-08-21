@@ -29,9 +29,17 @@ const failedChecks = (output: string) =>
     line.startsWith("✖ ") ? [line.slice(2)] : [],
   );
 
-const isAsciiDigits = (value: string) =>
-  value.length > 0 &&
-  [...value].every((character) => character >= "0" && character <= "9");
+const isAsciiDigits = (value: string) => {
+  if (value.length === 0) {
+    return false;
+  }
+  for (const character of value) {
+    if (character < "0" || character > "9") {
+      return false;
+    }
+  }
+  return true;
+};
 
 const reportsExactlyOneFailedCheck = (output: string) => {
   const summary = " checks passed. 1 checks failed.";
