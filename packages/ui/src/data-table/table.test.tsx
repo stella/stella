@@ -73,6 +73,7 @@ describe("DataTable", () => {
     expect(empty).toContain('colSpan="1"');
     expect(empty).toContain("No matters");
     expect(loading).toContain('aria-busy="true"');
+    expect(loading).toContain('role="status"');
     expect(loading).toContain("Loading");
     expect(loading.match(/data-slot="skeleton"/gu)).toHaveLength(4);
     expect(loading).not.toContain("colSpan");

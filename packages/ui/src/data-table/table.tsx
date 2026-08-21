@@ -176,7 +176,9 @@ const LoadingRows = <TItem,>({
       {columns.map((column, columnIndex) => (
         <TableCell key={column.id}>
           {rowIndex === 0 && columnIndex === 0 ? (
-            <span className="sr-only">{label}</span>
+            <span className="sr-only" role="status">
+              {label}
+            </span>
           ) : null}
           <Skeleton aria-hidden="true" className="h-4 w-full" />
         </TableCell>
