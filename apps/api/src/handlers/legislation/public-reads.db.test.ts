@@ -48,6 +48,7 @@ type DocumentSeed = {
   language?: string;
   metadata?: Record<string, unknown>;
   documentAst?: DocumentAst;
+  fulltext?: string;
   versionValidFrom: string | null;
   versionValidTo: string | null;
 };
@@ -60,6 +61,7 @@ const seedDocument = ({
   language = "cs",
   metadata,
   documentAst,
+  fulltext,
   versionValidFrom,
   versionValidTo,
 }: DocumentSeed) => ({
@@ -75,6 +77,7 @@ const seedDocument = ({
   versionValidTo,
   ...(metadata === undefined ? {} : { metadata }),
   ...(documentAst === undefined ? {} : { documentAst }),
+  ...(fulltext === undefined ? {} : { fulltext }),
 });
 
 const DELIVERY_ANCHOR = "sec-2079";
@@ -194,6 +197,7 @@ beforeAll(
         eli: "CZ/2012/89",
         title: "Civil Code",
         metadata: { publisherNote: "not for public display" },
+        fulltext: "The duplicate plain-text consolidation.",
         documentAst: statuteAst(
           "The seller shall deliver within fourteen days.",
         ),
@@ -208,6 +212,7 @@ beforeAll(
         eli: "CZ/2012/89",
         title: "Civil Code (English)",
         language: "en",
+        fulltext: "The English plain-text consolidation.",
         versionValidFrom: "2020-01-01",
         versionValidTo: null,
       }),
@@ -544,6 +549,31 @@ describe("public statute read", () => {
     });
     expect(publicRead).not.toHaveProperty("metadata");
     expect(publicRead).toHaveProperty("title", "Civil Code");
+  });
+
+  test("returns full text only as the AST fallback", async () => {
+    const workspaceRead = await readLegislationHandler(
+      civilCodeCurrent,
+      legislationDb,
+    );
+    const structuredPublicRead = await readPublicLegislationHandler(
+      civilCodeCurrent,
+      legislationDb,
+    );
+    const plainPublicRead = await readPublicLegislationHandler(
+      civilCodeEnglish,
+      legislationDb,
+    );
+
+    expect(workspaceRead).toHaveProperty(
+      "fulltext",
+      "The duplicate plain-text consolidation.",
+    );
+    expect(structuredPublicRead).toHaveProperty("fulltext", null);
+    expect(plainPublicRead).toHaveProperty(
+      "fulltext",
+      "The English plain-text consolidation.",
+    );
   });
 
   test("reads as not found for a source not cleared for redistribution", async () => {
