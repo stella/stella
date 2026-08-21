@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import { describe, expect, test } from "bun:test";
 
-import { DataTable } from "./table";
+import { DataTable, isDataTableRowActionTarget } from "./table";
 
 const columns = [
   {
@@ -19,12 +19,7 @@ describe("DataTable", () => {
       <DataTable
         columns={columns}
         emptyLabel="No matters"
-        getRowProps={() => ({
-          "aria-label": "Caller label",
-          className: "caller-row",
-          role: "row",
-          tabIndex: -1,
-        })}
+        getRowProps={() => ({ className: "caller-row" })}
         loadingLabel="Loading"
         rowAction={{
           getAriaLabel: (row) => `Open ${row.name}`,
@@ -36,11 +31,11 @@ describe("DataTable", () => {
     );
 
     expect(markup).toContain('aria-sort="ascending"');
-    expect(markup).toContain('aria-label="Open Northwind"');
-    expect(markup).toContain('role="button"');
-    expect(markup).toContain('tabindex="0"');
+    expect(markup).toContain('<button class="sr-only" type="button">');
+    expect(markup).toContain("Open Northwind</button>");
     expect(markup).toContain("caller-row");
-    expect(markup).not.toContain("Caller label");
+    expect(markup).not.toContain('role="button"');
+    expect(markup).not.toContain('tabindex="0"');
     expect(markup).toContain("Northwind");
   });
 
@@ -70,4 +65,34 @@ describe("DataTable", () => {
     expect(loading).toContain("Loading");
     expect(loading).not.toContain("No matters");
   });
+
+  test("row selection ignores every nested interactive target", () => {
+    const row = new EventTarget();
+    const cell = new ClosestTarget(null);
+    const nestedControl = new ClosestTarget({});
+
+    expect(isDataTableRowActionTarget(row, row)).toBe(true);
+    expect(isDataTableRowActionTarget(row, cell)).toBe(true);
+    expect(isDataTableRowActionTarget(row, nestedControl)).toBe(false);
+    expect(nestedControl.seenSelector).toContain("button");
+    expect(nestedControl.seenSelector).toContain(
+      "[data-data-table-stop-row-action]",
+    );
+  });
 });
+
+class ClosestTarget extends EventTarget {
+  private readonly match: unknown;
+
+  seenSelector = "";
+
+  constructor(match: unknown) {
+    super();
+    this.match = match;
+  }
+
+  closest(selector: string) {
+    this.seenSelector = selector;
+    return this.match;
+  }
+}

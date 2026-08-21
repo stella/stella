@@ -12,6 +12,20 @@ import { cn } from "../lib/utils";
 
 type RowProps = Omit<HTMLAttributes<HTMLTableRowElement>, "children">;
 
+const INTERACTIVE_DESCENDANT_SELECTOR = [
+  "a[href]",
+  "button",
+  "input",
+  "select",
+  "textarea",
+  "summary",
+  "[contenteditable='true']",
+  "[role='button']",
+  "[role='link']",
+  "[tabindex]:not([tabindex='-1'])",
+  "[data-data-table-stop-row-action]",
+].join(",");
+
 export type DataTableAriaSort = "ascending" | "descending" | "none";
 
 export type DataTableColumn<TItem> = {
@@ -70,16 +84,21 @@ export const DataTable = <TItem,>({
           {...interactiveProps}
           className={cn(interactiveProps?.className, rowProps?.className)}
           onClick={mergeHandlers(interactiveProps?.onClick, rowProps?.onClick)}
-          onKeyDown={mergeHandlers(
-            interactiveProps?.onKeyDown,
-            rowProps?.onKeyDown,
-          )}
         >
-          {columns.map((column) => (
+          {columns.map((column, columnIndex) => (
             <TableCell
               className={resolveClassName(column.cellClassName, item)}
               key={column.id}
             >
+              {rowAction !== undefined && columnIndex === 0 ? (
+                <button
+                  className="sr-only"
+                  onClick={() => rowAction.onSelect(item)}
+                  type="button"
+                >
+                  {rowAction.getAriaLabel(item)}
+                </button>
+              ) : null}
               {column.render(item)}
             </TableCell>
           ))}
@@ -128,22 +147,31 @@ const interactiveRowProps = <TItem,>(
   item: TItem,
   rowAction: DataTableRowAction<TItem>,
 ): RowProps => ({
-  "aria-label": rowAction.getAriaLabel(item),
-  className: cn(
-    "focus-visible:outline-ring cursor-pointer focus-visible:outline focus-visible:outline-2",
-    rowAction.getClassName?.(item),
-  ),
-  onClick: () => rowAction.onSelect(item),
-  onKeyDown: (event) => {
-    if (event.key !== "Enter" && event.key !== " ") {
+  className: cn("cursor-pointer", rowAction.getClassName?.(item)),
+  onClick: (event) => {
+    if (!isDataTableRowActionTarget(event.currentTarget, event.target)) {
       return;
     }
-    event.preventDefault();
     rowAction.onSelect(item);
   },
-  role: "button",
-  tabIndex: 0,
 });
+
+type ClosestEventTarget = EventTarget & {
+  closest: (selector: string) => unknown;
+};
+
+const hasClosest = (target: EventTarget): target is ClosestEventTarget =>
+  "closest" in target && typeof target.closest === "function";
+
+export const isDataTableRowActionTarget = (
+  row: EventTarget,
+  target: EventTarget | null,
+) => {
+  if (target === row || target === null || !hasClosest(target)) {
+    return true;
+  }
+  return target.closest(INTERACTIVE_DESCENDANT_SELECTOR) === null;
+};
 
 const mergeHandlers = <TElement,>(
   first: ((event: TElement) => void) | undefined,
