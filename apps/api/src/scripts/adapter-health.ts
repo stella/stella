@@ -17,7 +17,6 @@
 import { panic } from "better-result";
 import { count, eq, gt, sql } from "drizzle-orm";
 
-import { rootDb } from "@/api/db/root";
 import {
   caseLawCitations,
   caseLawDecisions,
@@ -28,6 +27,7 @@ import {
   listAdapterKeys,
   loadAdapterByKey,
 } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry-lazy";
+import { openCaseLawReadOnlySession } from "@/api/lib/case-law/maintenance-lane";
 import { boundedAll } from "@/api/lib/db/bounded-all";
 import {
   CASE_LAW_SOURCE_ROWS_BOUND,
@@ -40,6 +40,9 @@ import {
 } from "@/api/lib/legal-search/source-registry-membership";
 import { isRecord } from "@/api/lib/type-guards";
 
+// This tool only reads; the read-only session makes that a property of every
+// transaction rather than a promise, and takes no maintenance lane.
+const { rootDb } = await openCaseLawReadOnlySession();
 // ── Types ───────────────────────────────────────────────
 
 type FieldCoverage = {
@@ -259,83 +262,93 @@ const getSources = async () =>
     invariant: CASE_LAW_SOURCE_ROWS_INVARIANT,
     max: CASE_LAW_SOURCE_ROWS_BOUND,
     table: "case_law_sources",
-    query: (limit) =>
-      rootDb
-        .select({
-          id: caseLawSources.id,
-          adapterKey: caseLawSources.adapterKey,
-          name: caseLawSources.name,
-          enabled: caseLawSources.enabled,
-          syncCursor: caseLawSources.syncCursor,
-          lastSyncAt: caseLawSources.lastSyncAt,
-        })
-        .from(caseLawSources)
-        .orderBy(caseLawSources.adapterKey)
-        .limit(limit),
+    query: async (limit) =>
+      await rootDb.transaction(async (tx) =>
+        tx
+          .select({
+            id: caseLawSources.id,
+            adapterKey: caseLawSources.adapterKey,
+            name: caseLawSources.name,
+            enabled: caseLawSources.enabled,
+            syncCursor: caseLawSources.syncCursor,
+            lastSyncAt: caseLawSources.lastSyncAt,
+          })
+          .from(caseLawSources)
+          .orderBy(caseLawSources.adapterKey)
+          .limit(limit),
+      ),
   });
 
-const getDecisionCounts = () =>
-  rootDb
-    .select({
-      sourceId: caseLawDecisions.sourceId,
-      total: count(),
-    })
-    .from(caseLawDecisions)
-    .groupBy(caseLawDecisions.sourceId);
+const getDecisionCounts = async () =>
+  await rootDb.transaction(async (tx) =>
+    tx
+      .select({
+        sourceId: caseLawDecisions.sourceId,
+        total: count(),
+      })
+      .from(caseLawDecisions)
+      .groupBy(caseLawDecisions.sourceId),
+  );
 
-const getGrowthCounts = (sinceDate: Date) =>
-  rootDb
-    .select({
-      sourceId: caseLawDecisions.sourceId,
-      inserted: count(),
-    })
-    .from(caseLawDecisions)
-    // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- caller-supplied filter bound, never round-tripped through the database
-    .where(gt(caseLawDecisions.createdAt, sinceDate))
-    .groupBy(caseLawDecisions.sourceId);
+const getGrowthCounts = async (sinceDate: Date) =>
+  await rootDb.transaction(async (tx) =>
+    tx
+      .select({
+        sourceId: caseLawDecisions.sourceId,
+        inserted: count(),
+      })
+      .from(caseLawDecisions)
+      // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- caller-supplied filter bound, never round-tripped through the database
+      .where(gt(caseLawDecisions.createdAt, sinceDate))
+      .groupBy(caseLawDecisions.sourceId),
+  );
 
-const getSearchIndexCoverage = () =>
-  rootDb
-    .select({
-      sourceId: caseLawDecisions.sourceId,
-      isIndexed:
-        sql<boolean>`${caseLawSearchDocuments.decisionId} IS NOT NULL`.as(
-          "is_indexed",
-        ),
-      cnt: count(),
-    })
-    .from(caseLawDecisions)
-    .leftJoin(
-      caseLawSearchDocuments,
-      eq(caseLawDecisions.id, caseLawSearchDocuments.decisionId),
-    )
-    .groupBy(
-      caseLawDecisions.sourceId,
-      sql`${caseLawSearchDocuments.decisionId} IS NOT NULL`,
-    );
+const getSearchIndexCoverage = async () =>
+  await rootDb.transaction(async (tx) =>
+    tx
+      .select({
+        sourceId: caseLawDecisions.sourceId,
+        isIndexed:
+          sql<boolean>`${caseLawSearchDocuments.decisionId} IS NOT NULL`.as(
+            "is_indexed",
+          ),
+        cnt: count(),
+      })
+      .from(caseLawDecisions)
+      .leftJoin(
+        caseLawSearchDocuments,
+        eq(caseLawDecisions.id, caseLawSearchDocuments.decisionId),
+      )
+      .groupBy(
+        caseLawDecisions.sourceId,
+        sql`${caseLawSearchDocuments.decisionId} IS NOT NULL`,
+      ),
+  );
 
-const getCitationStats = () =>
-  rootDb
-    .select({
-      sourceId: caseLawDecisions.sourceId,
-      total: count(),
-      resolved:
-        sql<number>`COUNT(*) FILTER (WHERE ${caseLawCitations.citedDecisionId} IS NOT NULL)`.as(
-          "resolved",
-        ),
-    })
-    .from(caseLawCitations)
-    .innerJoin(
-      caseLawDecisions,
-      eq(caseLawCitations.citingDecisionId, caseLawDecisions.id),
-    )
-    .groupBy(caseLawDecisions.sourceId);
+const getCitationStats = async () =>
+  await rootDb.transaction(async (tx) =>
+    tx
+      .select({
+        sourceId: caseLawDecisions.sourceId,
+        total: count(),
+        resolved:
+          sql<number>`COUNT(*) FILTER (WHERE ${caseLawCitations.citedDecisionId} IS NOT NULL)`.as(
+            "resolved",
+          ),
+      })
+      .from(caseLawCitations)
+      .innerJoin(
+        caseLawDecisions,
+        eq(caseLawCitations.citingDecisionId, caseLawDecisions.id),
+      )
+      .groupBy(caseLawDecisions.sourceId),
+  );
 
 /**
  * Single query: counts non-null/non-empty values for all
  * checked fields per source, avoiding N+1 per-field queries.
  */
-const getAllFieldCoverage = () => {
+const getAllFieldCoverage = async () => {
   const fieldColumns = Object.fromEntries(
     CHECKED_FIELDS.map((field) => {
       const col = FIELD_COLUMN_MAP[field];
@@ -348,14 +361,16 @@ const getAllFieldCoverage = () => {
     }),
   );
 
-  return rootDb
-    .select({
-      sourceId: caseLawDecisions.sourceId,
-      total: count(),
-      ...fieldColumns,
-    })
-    .from(caseLawDecisions)
-    .groupBy(caseLawDecisions.sourceId);
+  return await rootDb.transaction(async (tx) =>
+    tx
+      .select({
+        sourceId: caseLawDecisions.sourceId,
+        total: count(),
+        ...fieldColumns,
+      })
+      .from(caseLawDecisions)
+      .groupBy(caseLawDecisions.sourceId),
+  );
 };
 
 const parseFieldCoverage = (

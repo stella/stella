@@ -1,6 +1,5 @@
 import { eq } from "drizzle-orm";
 
-import { rlsDb } from "@/api/db/root";
 import { caseLawSources } from "@/api/db/schema";
 /**
  * Read and un-retire the items the standing reconciliation loop is carrying.
@@ -39,13 +38,17 @@ import { caseLawSources } from "@/api/db/schema";
  * documents already proved unservable, so it runs under an operator who read
  * the listing and fixed the cause.
  */
-import { createIngestionDb } from "@/api/db/scoped";
 import { listAdapterKeys } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
+import { enterCaseLawMaintenanceLane } from "@/api/lib/case-law/maintenance-lane";
 import {
   countReconciliationItems,
   listReconciliationItems,
   resetTerminalReconciliationItems,
 } from "@/api/lib/legal-search/reconciliation-store";
+
+// Hold the maintenance lane before the first statement: operator passes over
+// the case-law tables serialize here instead of deadlocking on row locks.
+const { ingestionDb } = await enterCaseLawMaintenanceLane();
 
 /** Bounded by default: both modes read, and neither should scan a corpus. */
 const DEFAULT_LIMIT = 50;
@@ -136,8 +139,6 @@ const limit = (() => {
   }
   return parsed;
 })();
-
-const ingestionDb = createIngestionDb(rlsDb);
 
 const source = (
   await ingestionDb((tx) =>

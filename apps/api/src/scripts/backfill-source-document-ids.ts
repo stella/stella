@@ -23,8 +23,12 @@
 
 import { sql } from "drizzle-orm";
 
-import { rootDb } from "@/api/db/root";
+import { enterCaseLawMaintenanceLane } from "@/api/lib/case-law/maintenance-lane";
 import { isRecord } from "@/api/lib/type-guards";
+
+// Hold the maintenance lane before the first statement: operator passes over
+// the case-law tables serialize here instead of deadlocking on row locks.
+const { rootDb } = await enterCaseLawMaintenanceLane();
 
 const BATCH = 2000;
 

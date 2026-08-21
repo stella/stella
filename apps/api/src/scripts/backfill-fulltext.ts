@@ -11,12 +11,16 @@
 
 import { eq, sql } from "drizzle-orm";
 
-import { rootDb } from "@/api/db/root";
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import { stripHtml } from "@/api/handlers/case-law/ingestion/adapters/utils";
+import { enterCaseLawMaintenanceLane } from "@/api/lib/case-law/maintenance-lane";
 import { fetchWithTimeout } from "@/api/lib/fetch";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
+
+// Hold the maintenance lane before the first statement: operator passes over
+// the case-law tables serialize here instead of deadlocking on row locks.
+const { rootDb } = await enterCaseLawMaintenanceLane();
 
 const BATCH_SIZE = 50;
 

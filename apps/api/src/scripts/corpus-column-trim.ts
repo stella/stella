@@ -51,13 +51,15 @@ import type { SQL } from "drizzle-orm";
  */
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
-import { rlsDb } from "@/api/db/root";
 import { caseLawDecisions, caseLawSearchDocuments } from "@/api/db/schema";
-import { createIngestionDb } from "@/api/db/scoped";
 import { corpusStorageMode } from "@/api/env-base";
 import { payloadCarriesDocument } from "@/api/handlers/case-law/stored-payload";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  enterCaseLawMaintenanceLane,
+  openCaseLawReadOnlySession,
+} from "@/api/lib/case-law/maintenance-lane";
 import {
   timestampCasToken,
   type TimestampCasToken,
@@ -143,7 +145,11 @@ if (gate.type === "refused") {
   process.exit(2);
 }
 
-const ingestionDb = createIngestionDb(rlsDb);
+// A dry run only reads, so it takes no lane and cannot block a writer; the
+// read-only session makes that a property of the connection, not a promise.
+const { ingestionDb } = dryRun
+  ? await openCaseLawReadOnlySession()
+  : await enterCaseLawMaintenanceLane();
 
 await refreshS3();
 await refreshCorpusS3();

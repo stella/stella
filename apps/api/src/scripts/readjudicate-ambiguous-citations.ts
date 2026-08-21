@@ -15,13 +15,17 @@
 
 import { panic } from "better-result";
 
-import { rootDb } from "@/api/db/root";
 import {
   type CitationResolutionCursor,
   readjudicateAmbiguousCitations,
 } from "@/api/handlers/case-law/citation-resolution";
 import { CITATION_RESOLUTION_RULE } from "@/api/handlers/case-law/citation-resolution-status";
+import { enterCaseLawMaintenanceLane } from "@/api/lib/case-law/maintenance-lane";
 import { isUuid } from "@/api/lib/custom-schema";
+
+// Hold the maintenance lane before the first statement: operator passes over
+// the case-law tables serialize here instead of deadlocking on row locks.
+const { rootDb } = await enterCaseLawMaintenanceLane();
 
 const BATCH = 2000;
 

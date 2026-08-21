@@ -1,6 +1,5 @@
 import { panic } from "better-result";
 
-import { rlsDb } from "@/api/db/root";
 /**
  * GDPR redaction / takedown for a single case-law decision: strips
  * personal text from corpus index, the pg-fts index, object storage, and the
@@ -8,11 +7,15 @@ import { rlsDb } from "@/api/db/root";
  *
  *   bun run src/scripts/redact-case-law-decision.ts <decisionId>
  */
-import { createIngestionDb } from "@/api/db/scoped";
 import { redactCaseLawDecision } from "@/api/handlers/case-law/erasure";
 // eslint-disable-next-line no-restricted-imports -- CLI boundary: brands the decision id parsed from argv
 import { toSafeId } from "@/api/lib/branded-types";
+import { enterCaseLawMaintenanceLane } from "@/api/lib/case-law/maintenance-lane";
 import { refreshCorpusS3, refreshS3 } from "@/api/lib/s3";
+
+// Hold the maintenance lane before the first statement: operator passes over
+// the case-law tables serialize here instead of deadlocking on row locks.
+const { ingestionDb } = await enterCaseLawMaintenanceLane();
 
 const decisionIdArg = process.argv[2];
 if (decisionIdArg === undefined || decisionIdArg.length === 0) {
@@ -22,7 +25,6 @@ if (decisionIdArg === undefined || decisionIdArg.length === 0) {
   process.exit(1);
 }
 
-const ingestionDb = createIngestionDb(rlsDb);
 await refreshS3();
 await refreshCorpusS3();
 

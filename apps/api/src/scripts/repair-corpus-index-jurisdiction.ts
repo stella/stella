@@ -28,9 +28,8 @@
  */
 import { panic } from "better-result";
 
-import { rlsDb } from "@/api/db/root";
-import { createIngestionDb } from "@/api/db/scoped";
 import { envBase } from "@/api/env-base";
+import { enterCaseLawMaintenanceLane } from "@/api/lib/case-law/maintenance-lane";
 import {
   censusIndex,
   clearIndexMarks,
@@ -40,6 +39,10 @@ import {
   corpusIndexId,
   isCorpusIndexJurisdiction,
 } from "@/api/lib/legal-search/index-naming";
+
+// Hold the maintenance lane before the first statement: operator passes over
+// the case-law tables serialize here instead of deadlocking on row locks.
+const { ingestionDb } = await enterCaseLawMaintenanceLane();
 
 const jurisdiction = process.argv[2];
 if (jurisdiction === undefined || !isCorpusIndexJurisdiction(jurisdiction)) {
@@ -62,7 +65,6 @@ if (!Number.isSafeInteger(limit) || limit <= 0 || limit > MAX_REPAIR_SLICE) {
 
 const generation = envBase.LEGAL_SEARCH_INDEX_GENERATION;
 const indexId = corpusIndexId(generation, jurisdiction);
-const ingestionDb = createIngestionDb(rlsDb);
 
 // Reported before and after so the operator sees the shortfall the repair
 // was pointed at, rather than trusting the alert that sent them here.

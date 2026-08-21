@@ -1,7 +1,6 @@
 import { Result } from "better-result";
 import { eq } from "drizzle-orm";
 
-import { rlsDb } from "@/api/db/root";
 import { caseLawSources } from "@/api/db/schema";
 /**
  * Re-parse decisions a source already ingested, from the raw payload stored
@@ -29,7 +28,6 @@ import { caseLawSources } from "@/api/db/schema";
  * Not a scheduled job: it runs when a parser changes, under an operator who
  * reads the report.
  */
-import { createIngestionDb } from "@/api/db/scoped";
 import { getAdapter } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
 import {
   countReplayability,
@@ -38,6 +36,7 @@ import {
   replayCaseLawSource,
 } from "@/api/handlers/case-law/ingestion/replay";
 import type { StoredRawReader } from "@/api/handlers/case-law/ingestion/replay";
+import { enterCaseLawMaintenanceLane } from "@/api/lib/case-law/maintenance-lane";
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import {
   readS3ObjectIfPresent,
@@ -45,6 +44,10 @@ import {
   refreshS3,
 } from "@/api/lib/s3";
 import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
+
+// Hold the maintenance lane before the first statement: operator passes over
+// the case-law tables serialize here instead of deadlocking on row locks.
+const { ingestionDb } = await enterCaseLawMaintenanceLane();
 
 const DEFAULT_LIMIT = 100;
 const DEFAULT_PAGE_SIZE = 25;
@@ -135,7 +138,6 @@ if (capability.type === "unsupported") {
   process.exit(1);
 }
 
-const ingestionDb = createIngestionDb(rlsDb);
 await refreshS3();
 await refreshCorpusS3();
 

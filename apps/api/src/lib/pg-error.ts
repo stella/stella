@@ -63,6 +63,7 @@ export const PG_ERROR = {
   SERIALIZATION_FAILURE: "40001",
   UNIQUE_VIOLATION: "23505",
   INSUFFICIENT_PRIVILEGE: "42501",
+  READ_ONLY_SQL_TRANSACTION: "25006",
 } as const;
 
 // A SQLSTATE is exactly five characters from the class/subclass alphabet

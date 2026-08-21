@@ -22,13 +22,17 @@
  *   bun apps/api/src/scripts/normalize-case-numbers.ts --dry-run
  */
 
-import { rootDb } from "@/api/db/root";
 import { lockCitationGraph } from "@/api/handlers/case-law/citation-resolution";
+import { enterCaseLawMaintenanceLane } from "@/api/lib/case-law/maintenance-lane";
 import { isRecord } from "@/api/lib/type-guards";
 import {
   normalizeSheetNumbersStatement,
   sheetNumberSurveyStatement,
 } from "@/api/scripts/normalize-case-numbers-sql";
+
+// Hold the maintenance lane before the first statement: operator passes over
+// the case-law tables serialize here instead of deadlocking on row locks.
+const { rootDb } = await enterCaseLawMaintenanceLane();
 
 const BATCH = 2000;
 const DRY_RUN = process.argv.includes("--dry-run");
