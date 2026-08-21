@@ -11,7 +11,7 @@ import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { broadcastWorkspaceResourceDeleted } from "@/api/lib/resource-realtime";
 import { isRequiredViewLayout } from "@/api/lib/views";
-import { parseViewLayout } from "@/api/lib/views-schema";
+import { parseStoredViewLayout } from "@/api/lib/views-schema";
 
 const config = {
   description:
@@ -62,10 +62,10 @@ const deleteView = createSafeHandler(
       );
     }
 
-    const targetLayoutType = parseViewLayout(target.layoutType).type;
+    const targetLayoutType = parseStoredViewLayout(target.layoutType).type;
     if (isRequiredViewLayout(targetLayoutType)) {
       const sameLayoutCount = allViews.filter(
-        (v) => parseViewLayout(v.layoutType).type === targetLayoutType,
+        (v) => parseStoredViewLayout(v.layoutType).type === targetLayoutType,
       ).length;
 
       if (sameLayoutCount <= 1) {

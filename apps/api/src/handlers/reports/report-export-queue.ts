@@ -56,7 +56,7 @@ import {
   fillStoredTemplateDocx,
   fillTemplateDocx,
 } from "@/api/lib/templates/template-fill-service";
-import { parseViewLayout } from "@/api/lib/views-schema";
+import { parseStoredViewLayout } from "@/api/lib/views-schema";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 
 const QUEUE_NAME = "report-exports";
@@ -412,7 +412,7 @@ const runExport = async ({
   format: ReportExportFormat;
   aiNarrative: boolean;
 }): Promise<void> => {
-  const layout = parseViewLayout(row.layout);
+  const layout = parseStoredViewLayout(row.layout);
   if (layout.type !== "table") {
     await markExportFailedRow(
       actor,

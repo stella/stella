@@ -3,12 +3,14 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 import * as v from "valibot";
 
+import { VIEW_SORTS_MAX } from "@stll/api-contract";
 import { CALCULATION_KINDS } from "@stll/calculations";
 import { conditionNodeSchema } from "@stll/conditions";
 import { propertyConfig } from "@stll/property-testing";
 
 import { tConditionNode } from "@/api/lib/conditions/contract";
 import {
+  parseStoredViewLayout,
   parseViewLayout,
   parseViewLayoutSafe,
   tViewLayoutSchema,
@@ -149,6 +151,48 @@ describe("parseViewLayoutSafe", () => {
     });
     expect(() => parseViewLayoutSafe(null)).not.toThrow();
     expect(() => parseViewLayoutSafe("not a layout")).not.toThrow();
+  });
+});
+
+describe("sort cap", () => {
+  const oversizedSorts = Array.from({ length: VIEW_SORTS_MAX + 1 }, (_, i) => ({
+    propertyId: `prop-${i}`,
+    desc: i % 2 === 0,
+  }));
+  const oversizedLayout = {
+    version: 1,
+    type: "table",
+    filters: [],
+    sorts: oversizedSorts,
+    hiddenProperties: [],
+    calculations: [],
+    columnOrder: [],
+    columnPinning: [],
+  } as const;
+
+  test("fixture exceeds the cap", () => {
+    expect(oversizedSorts.length).toBeGreaterThan(VIEW_SORTS_MAX);
+  });
+
+  test("a stored layout over the cap reads back with the leading sorts kept", () => {
+    const parsed = parseStoredViewLayout(oversizedLayout);
+    expect(parsed.sorts).toEqual(oversizedSorts.slice(0, VIEW_SORTS_MAX));
+    expect(parseViewLayoutSafe(oversizedLayout).sorts).toEqual(
+      oversizedSorts.slice(0, VIEW_SORTS_MAX),
+    );
+  });
+
+  test("an incoming layout over the cap is rejected by both schemas", () => {
+    expect(() => parseViewLayout(oversizedLayout)).toThrow(
+      `Invalid length: Expected <=${VIEW_SORTS_MAX} but received ${oversizedSorts.length}`,
+    );
+    expect(Value.Check(tViewLayoutSchema, oversizedLayout)).toBe(false);
+    expect(
+      Value.Check(tViewLayoutSchema, {
+        ...oversizedLayout,
+        sorts: oversizedSorts.slice(0, VIEW_SORTS_MAX),
+      }),
+    ).toBe(true);
   });
 });
 

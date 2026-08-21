@@ -13,6 +13,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
 import {
+  parseStoredViewLayout,
   parseViewLayout,
   tCreateViewInputSchema,
 } from "@/api/lib/views-schema";
@@ -67,7 +68,7 @@ const createView = createSafeHandler(
           .for("update");
 
         const hasOverviewView = existing.some(
-          (view) => parseViewLayout(view.layout).type === "overview",
+          (view) => parseStoredViewLayout(view.layout).type === "overview",
         );
 
         if (layout.type === "overview" && hasOverviewView) {
