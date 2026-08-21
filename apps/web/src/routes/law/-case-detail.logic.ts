@@ -3,6 +3,10 @@ import { redirect } from "@tanstack/react-router";
 import * as v from "valibot";
 
 import {
+  decisionCitationsInfiniteOptions,
+  decisionCitationSummaryOptions,
+} from "@/features/case-law/queries/citations";
+import {
   decisionBySlugOptions,
   decisionOptions,
 } from "@/features/case-law/queries/decisions";
@@ -13,7 +17,7 @@ import {
   type CaseLawDecisionRouteParams,
   createCaseLawDecisionPath,
   createCaseLawDecisionRouteParams,
-  extractLegacyCaseLawDecisionIdFromRouteParam,
+  extractCaseLawDecisionIdFromIdRouteParam,
   normalizeCaseLawLanguageSegment,
 } from "@/lib/case-law-route";
 import { detached } from "@/lib/detached";
@@ -27,6 +31,7 @@ import {
 import {
   ensureRouteQueryData,
   prefetchNonCriticalInfiniteQuery,
+  prefetchNonCriticalQuery,
   routeQueryOptions,
 } from "@/lib/react-query";
 import type { SafeId } from "@/lib/safe-id";
@@ -105,25 +110,55 @@ export const extractId = (param: string): SafeId<"caseLawDecision"> =>
   toSafeId<"caseLawDecision">(param);
 
 /**
- * Warm the decision's provision references alongside the decision itself.
+ * Warm the decision's provision references and citation graph alongside
+ * the decision itself.
  *
- * The panel that reads them is secondary to the text, so this never blocks
- * the route: it starts during navigation and the panel takes whatever is
- * warm by the time it renders.
+ * The panels that read them are secondary to the text, so none of this
+ * blocks the route: it starts during navigation and each panel takes
+ * whatever is warm by the time it renders.
  */
 const primeDecisionProvisions = (
   queryClient: QueryClient,
   decisionId: string,
 ): void => {
+  const captureError = (error: unknown) => {
+    getAnalytics().captureError(error);
+  };
   detached(
     prefetchNonCriticalInfiniteQuery(
       queryClient,
       routeQueryOptions(decisionProvisionsInfiniteOptions(decisionId)),
-      (error: unknown) => {
-        getAnalytics().captureError(error);
-      },
+      captureError,
     ),
     "case-law.provisions-prefetch",
+  );
+  detached(
+    prefetchNonCriticalQuery(
+      queryClient,
+      routeQueryOptions(decisionCitationSummaryOptions(decisionId)),
+      captureError,
+    ),
+    "case-law.citation-summary-prefetch",
+  );
+  detached(
+    prefetchNonCriticalInfiniteQuery(
+      queryClient,
+      routeQueryOptions(
+        decisionCitationsInfiniteOptions(decisionId, "incoming"),
+      ),
+      captureError,
+    ),
+    "case-law.citations-incoming-prefetch",
+  );
+  detached(
+    prefetchNonCriticalInfiniteQuery(
+      queryClient,
+      routeQueryOptions(
+        decisionCitationsInfiniteOptions(decisionId, "outgoing"),
+      ),
+      captureError,
+    ),
+    "case-law.citations-outgoing-prefetch",
   );
 };
 
@@ -195,6 +230,7 @@ const createDecisionAlternateLinks = (
         caseNumber: alternate.caseNumber,
         country: alternate.country,
         court: alternate.court,
+        decisionId: alternate.id,
         language: alternate.language,
         languageAlternates: decision.languageAlternates,
         slug: alternate.slug,
@@ -209,21 +245,22 @@ export const loadPublicCaseLawDecisionRoute = async ({
   queryClient,
   search,
 }: PublicDecisionRouteLoaderOptions): Promise<PublicCaseLawDecision> => {
-  const legacyDecisionId = extractLegacyCaseLawDecisionIdFromRouteParam(
-    params.slug,
-  );
-  if (legacyDecisionId) {
+  const routeDecisionId = extractCaseLawDecisionIdFromIdRouteParam(params.slug);
+  if (routeDecisionId) {
     const decision = await ensurePublicDecision(
       async () =>
         await ensureRouteQueryData(
           queryClient,
-          decisionOptions(extractId(legacyDecisionId)),
+          decisionOptions(extractId(routeDecisionId)),
         ),
     );
+    // A decision with a stored slug canonicalises to it; without one the
+    // id form is canonical and no redirect happens.
     const canonicalParams = createCaseLawDecisionRouteParams({
       caseNumber: decision.caseNumber,
       country: decision.country,
       court: decision.court,
+      decisionId: decision.id,
       language: decision.language,
       languageAlternates: decision.languageAlternates,
       slug: decision.slug,
@@ -258,6 +295,7 @@ export const loadPublicCaseLawDecisionRoute = async ({
     caseNumber: decision.caseNumber,
     country: decision.country,
     court: decision.court,
+    decisionId: decision.id,
     language: decision.language,
     languageAlternates: decision.languageAlternates,
     slug: decision.slug,

@@ -170,41 +170,80 @@ export const normalizeCaseLawStoredSlug = (
   return slugifyCaseLawPathSegment(slug);
 };
 
-export const createStableCaseLawSlug = ({
-  caseNumber,
-  slug,
-}: {
-  caseNumber: string;
-  slug?: string | null | undefined;
-}): string =>
-  normalizeCaseLawStoredSlug(slug) ?? slugifyCaseLawCaseNumber(caseNumber);
+/**
+ * The identity a decision's public route carries. Stored slugs are the
+ * canonical form; a decision without one routes by id, because slugifying
+ * its case number produces a segment `by-slug` cannot resolve.
+ */
+export type CaseLawDecisionRouteIdentity =
+  | { kind: "slug"; slug: string }
+  | { kind: "id"; caseNumber: string; decisionId: string };
 
-export const createCaseLawDecisionRouteParam = ({
+export const resolveCaseLawDecisionRouteIdentity = ({
   caseNumber,
+  decisionId,
   slug,
 }: {
   caseNumber: string;
+  decisionId: string;
   slug?: string | null | undefined;
-}): string => createStableCaseLawSlug({ caseNumber, slug });
+}): CaseLawDecisionRouteIdentity => {
+  const storedSlug = normalizeCaseLawStoredSlug(slug);
+  return storedSlug === null
+    ? { kind: "id", caseNumber, decisionId }
+    : { kind: "slug", slug: storedSlug };
+};
+
+const ID_ROUTE_PARAM_SEPARATOR = "--";
+
+const createIdRouteParam = ({
+  caseNumber,
+  decisionId,
+}: {
+  caseNumber: string;
+  decisionId: string;
+}): string =>
+  `${slugifyCaseLawCaseNumber(caseNumber)}${ID_ROUTE_PARAM_SEPARATOR}${encodeCaseLawDecisionIdForRoute(decisionId)}`;
+
+export const createCaseLawDecisionRouteParam = (input: {
+  caseNumber: string;
+  decisionId: string;
+  slug?: string | null | undefined;
+}): string => {
+  const identity = resolveCaseLawDecisionRouteIdentity(input);
+  switch (identity.kind) {
+    case "slug":
+      return identity.slug;
+    case "id":
+      return createIdRouteParam(identity);
+    default: {
+      const exhaustive: never = identity;
+      return exhaustive;
+    }
+  }
+};
 
 export const extractCaseLawDecisionIdFromRouteParam = (
   param: string,
 ): string => {
-  const sep = param.lastIndexOf("--");
+  const sep = param.lastIndexOf(ID_ROUTE_PARAM_SEPARATOR);
   return decodeCaseLawDecisionIdFromRoute(
-    sep === -1 ? param : param.slice(sep + 2),
+    sep === -1 ? param : param.slice(sep + ID_ROUTE_PARAM_SEPARATOR.length),
   );
 };
 
-export const extractLegacyCaseLawDecisionIdFromRouteParam = (
+/** The decision id carried by an id-form route param, null for slug params. */
+export const extractCaseLawDecisionIdFromIdRouteParam = (
   param: string,
 ): string | null => {
-  const sep = param.lastIndexOf("--");
+  const sep = param.lastIndexOf(ID_ROUTE_PARAM_SEPARATOR);
   if (sep === -1) {
     return null;
   }
 
-  const decoded = decodeCaseLawDecisionIdFromRoute(param.slice(sep + 2));
+  const decoded = decodeCaseLawDecisionIdFromRoute(
+    param.slice(sep + ID_ROUTE_PARAM_SEPARATOR.length),
+  );
   return isCaseLawDecisionId(decoded) ? decoded : null;
 };
 
@@ -215,6 +254,7 @@ export const createCaseLawDecisionRouteParams = ({
   caseNumber,
   country,
   court,
+  decisionId,
   language,
   languageAlternateCount,
   languageAlternates,
@@ -223,6 +263,7 @@ export const createCaseLawDecisionRouteParams = ({
   caseNumber: string;
   country: string;
   court: string;
+  decisionId: string;
   language?: string | null | undefined;
   languageAlternateCount?: number | null | undefined;
   languageAlternates?: readonly unknown[] | null | undefined;
@@ -235,7 +276,7 @@ export const createCaseLawDecisionRouteParams = ({
       court.trim().length > 0
         ? slugifyCaseLawPathSegment(court)
         : UNKNOWN_COURT_SEGMENT,
-    slug: createCaseLawDecisionRouteParam({ caseNumber, slug }),
+    slug: createCaseLawDecisionRouteParam({ caseNumber, decisionId, slug }),
   };
 
   if (

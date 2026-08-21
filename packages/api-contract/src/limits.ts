@@ -38,3 +38,10 @@ export const PROPERTIES_PER_WORKSPACE_MAX = 20;
  * add-row affordances at the cap; the server rejects past it.
  */
 export const ENTITIES_PER_WORKSPACE_MAX = 10_000;
+
+/**
+ * Years covered by a decision's incoming-citation timeline, ending with the
+ * current year. The server aggregates only this span; the client draws only
+ * this span, so an old decision does not stretch the strip back to its date.
+ */
+export const CASE_LAW_CITATION_TIMELINE_MAX_YEARS = 60;

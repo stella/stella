@@ -301,6 +301,22 @@
       }
     },
     "analyzing": "Elemzés folyamatban...",
+    "citation": {
+      "citedSummary": "{count, plural, =0 {Nem hivatkozták} one {Egyszer hivatkozták} other {#-szor hivatkozták}}",
+      "decisionCount": "{count, plural, =0 {Nincs határozat} one {# határozat} other {# határozat}}",
+      "lastNegative": "utolsó elutasító hivatkozás: {year}",
+      "negativeCount": "{count, plural, one {# elutasító} other {# elutasító}}",
+      "stripLabel": "Hivatkozások évenként",
+      "treatment": {
+        "negative": "Elutasító",
+        "neutral": "Említett",
+        "positive": "Megerősített",
+        "supportive": "Követett",
+        "unclassified": "Besorolatlan"
+      },
+      "unresolved": "Nincs határozathoz rendelve",
+      "yearTitle": "{year}: {count, plural, one {# hivatkozás} other {# hivatkozás}}"
+    },
     "columns": {
       "caseNumber": "Ügyszám",
       "court": "Bíróság"

@@ -15,11 +15,15 @@ import {
   buildFulltextSearchPieces,
   rangesForPiece,
 } from "@/components/legal-reader/document-ast-text";
+import type { TextAnchor } from "@/components/legal-reader/document-ast-text";
 import type {
   SearchMatchRange,
   SearchPiece,
 } from "@/components/legal-reader/reader-search";
 import { buildSearchResults } from "@/components/legal-reader/reader-search";
+import { locateCitationAnchors } from "@/features/case-law/citation-anchors";
+import type { CitationAnchorSource } from "@/features/case-law/citation-anchors";
+import { CitedDecisionLink } from "@/features/case-law/components/cited-decision-link";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 
 type Decision = {
@@ -33,6 +37,8 @@ type Decision = {
 
 type DecisionTextProps = {
   activeMatchIndex: number;
+  /** Resolved citations whose mentions in the text become links. */
+  citationAnchors?: readonly CitationAnchorSource[] | undefined;
   decision: Decision;
   onMatchCountChange?: ((count: number) => void) | undefined;
   searchQuery: string;
@@ -138,13 +144,39 @@ const EditorialSupplement = ({
   );
 };
 
+const buildAnchorsByPieceId = ({
+  blocks,
+  citations,
+}: {
+  blocks: readonly Block[];
+  citations: readonly CitationAnchorSource[];
+}): Record<string, TextAnchor[]> => {
+  const located = locateCitationAnchors({ blocks, citations });
+  const anchorsByPieceId: Record<string, TextAnchor[]> = {};
+  for (const [blockId, spans] of Object.entries(located)) {
+    anchorsByPieceId[blockId] = spans.map((span) => ({
+      end: span.end,
+      key: span.source.id,
+      render: (children) => (
+        <CitedDecisionLink decision={span.source.decision}>
+          {children}
+        </CitedDecisionLink>
+      ),
+      start: span.start,
+    }));
+  }
+  return anchorsByPieceId;
+};
+
 const renderBlocksWithHoldingZone = ({
   activeMatchIndex,
+  anchorsByPieceId,
   blocks,
   rangesByPieceId,
   sectionMap,
 }: {
   activeMatchIndex: number;
+  anchorsByPieceId: Record<string, TextAnchor[]>;
   blocks: Block[];
   rangesByPieceId: Record<string, SearchMatchRange[]>;
   sectionMap?: Map<string, { cssVar: string; headingId: string }> | undefined;
@@ -198,6 +230,7 @@ const renderBlocksWithHoldingZone = ({
             <div className="font-[520]" key={block.id}>
               <BlockRenderer
                 activeMatchIndex={activeMatchIndex}
+                anchorsByPieceId={anchorsByPieceId}
                 block={block}
                 rangesByPieceId={rangesByPieceId}
                 variant="case-law"
@@ -206,6 +239,7 @@ const renderBlocksWithHoldingZone = ({
           ) : (
             <BlockRenderer
               activeMatchIndex={activeMatchIndex}
+              anchorsByPieceId={anchorsByPieceId}
               block={block}
               key={block.id}
               rangesByPieceId={rangesByPieceId}
@@ -220,8 +254,11 @@ const renderBlocksWithHoldingZone = ({
   return result;
 };
 
+const NO_CITATION_ANCHORS: readonly CitationAnchorSource[] = [];
+
 export const DecisionText = ({
   activeMatchIndex,
+  citationAnchors = NO_CITATION_ANCHORS,
   decision,
   onMatchCountChange,
   searchQuery,
@@ -347,6 +384,10 @@ export const DecisionText = ({
         )}
         {renderBlocksWithHoldingZone({
           activeMatchIndex,
+          anchorsByPieceId: buildAnchorsByPieceId({
+            blocks: visibleBlocks,
+            citations: citationAnchors,
+          }),
           blocks: visibleBlocks,
           rangesByPieceId: searchResults.rangesByPieceId,
           sectionMap,

@@ -5,16 +5,16 @@ import {
   createCaseLawDecisionRouteParams,
   createCaseLawDecisionRouteParam,
   createCaseLawDecisionPath,
-  createStableCaseLawSlug,
   decodeCaseLawDecisionRef,
   decodeCaseLawDecisionIdFromRoute,
   encodeCaseLawDecisionIdForRoute,
+  extractCaseLawDecisionIdFromIdRouteParam,
   extractCaseLawDecisionIdFromRouteParam,
-  extractLegacyCaseLawDecisionIdFromRouteParam,
   isCaseLawDecisionId,
   normalizeCaseLawLanguageSegment,
   normalizeCaseLawStoredSlug,
   pickCaseLawDecisionHit,
+  resolveCaseLawDecisionRouteIdentity,
   shouldUseCaseLawLanguageSegment,
   slugifyCaseLawCaseNumber,
 } from "@/lib/case-law-route";
@@ -38,13 +38,14 @@ const caseLawHit = ({
 });
 
 describe("case-law decision routes", () => {
-  test("creates stable slugged route params", () => {
+  test("routes a decision without a stored slug by id, never by case number", () => {
     expect(slugifyCaseLawCaseNumber("20 Cdo 470/2017")).toBe("20-cdo-470-2017");
     expect(
       createCaseLawDecisionRouteParam({
         caseNumber: "20 Cdo 470/2017",
+        decisionId: DECISION_ID,
       }),
-    ).toBe("20-cdo-470-2017");
+    ).toBe(`20-cdo-470-2017--${COMPACT_DECISION_ID}`);
   });
 
   test("decodes legacy UUID route suffixes compactly for redirects", () => {
@@ -64,14 +65,9 @@ describe("case-law decision routes", () => {
       "nejaky-pravni-nazev",
     );
     expect(
-      createStableCaseLawSlug({
-        caseNumber: "22 Azs 285/2025",
-        slug: "Nao 66 2026",
-      }),
-    ).toBe("nao-66-2026");
-    expect(
       createCaseLawDecisionRouteParam({
         caseNumber: "22 Azs 285/2025",
+        decisionId: DECISION_ID,
         slug: "Nao 66 2026",
       }),
     ).toBe("nao-66-2026");
@@ -80,6 +76,7 @@ describe("case-law decision routes", () => {
   test("creates structured public route params", () => {
     expect(
       createCaseLawDecisionRouteParams({
+        decisionId: DECISION_ID,
         caseNumber: "20 Cdo 470/2017",
         country: "CZE",
         court: "Nejvyšší soud",
@@ -94,6 +91,7 @@ describe("case-law decision routes", () => {
 
   test("does not add language route params for ordinary single-language decisions", () => {
     const params = createCaseLawDecisionRouteParams({
+      decisionId: DECISION_ID,
       caseNumber: "20 Cdo 470/2017",
       country: "CZE",
       court: "Nejvyšší soud",
@@ -114,6 +112,7 @@ describe("case-law decision routes", () => {
 
   test("adds language route params for official multilingual decisions", () => {
     const params = createCaseLawDecisionRouteParams({
+      decisionId: DECISION_ID,
       caseNumber: "C-123/22",
       country: "EUR",
       court: "Court of Justice",
@@ -166,6 +165,7 @@ describe("case-law decision routes", () => {
 
     expect(
       createCaseLawDecisionRouteParams({
+        decisionId: DECISION_ID,
         caseNumber: "C-123/22",
         country: "EUR",
         court: "Court of Justice",
@@ -187,6 +187,7 @@ describe("case-law decision routes", () => {
   test("uses explicit case-law language alternate counts from public APIs", () => {
     expect(
       createCaseLawDecisionRouteParams({
+        decisionId: DECISION_ID,
         caseNumber: "C-123/22",
         country: "EUR",
         court: "Court of Justice",
@@ -205,6 +206,7 @@ describe("case-law decision routes", () => {
   test("uses stable fallbacks for missing public route metadata", () => {
     expect(
       createCaseLawDecisionRouteParams({
+        decisionId: DECISION_ID,
         caseNumber: "20 Cdo 470/2017",
         country: "SVK",
         court: "",
@@ -225,13 +227,84 @@ describe("case-law decision routes", () => {
       DECISION_ID,
     );
     expect(
-      extractLegacyCaseLawDecisionIdFromRouteParam(
+      extractCaseLawDecisionIdFromIdRouteParam(
         `20-cdo-470-2017--${COMPACT_DECISION_ID}`,
       ),
     ).toBe(DECISION_ID);
-    expect(
-      extractLegacyCaseLawDecisionIdFromRouteParam("20-cdo-470-2017"),
-    ).toBe(null);
+    expect(extractCaseLawDecisionIdFromIdRouteParam("20-cdo-470-2017")).toBe(
+      null,
+    );
+  });
+
+  test("every decision's route param round-trips to its own identity", () => {
+    // The input class the route layer must survive: case numbers of every
+    // shape the corpus holds, with and without a stored slug.
+    const caseNumbers = [
+      "20 Cdo 470/2017",
+      "III.ÚS 4129/18",
+      "Pl.ÚS-st. 45/16",
+      "C-123/22",
+      "8 Azs 10/2024 - 35",
+      "   ",
+      "--",
+      "1 T 5/2020--x",
+    ];
+    const slugs = [null, undefined, "", "  ", "stored-slug", "Nao 66 2026"];
+    const ids = [
+      DECISION_ID,
+      "0198f8a3-2c1d-7a4b-8f2e-1b7c9d3e5a61",
+      "00000000-0000-7000-8000-000000000000",
+    ];
+
+    for (const caseNumber of caseNumbers) {
+      for (const slug of slugs) {
+        for (const decisionId of ids) {
+          const identity = resolveCaseLawDecisionRouteIdentity({
+            caseNumber,
+            decisionId,
+            slug,
+          });
+          // The expected branch comes from the fixture, not the resolver:
+          // only a stored, non-blank slug may route by slug.
+          const expectedKind =
+            typeof slug === "string" && slug.trim() !== "" ? "slug" : "id";
+          expect(identity.kind).toBe(expectedKind);
+          const param = createCaseLawDecisionRouteParam({
+            caseNumber,
+            decisionId,
+            slug,
+          });
+          const idFromParam = extractCaseLawDecisionIdFromIdRouteParam(param);
+
+          switch (identity.kind) {
+            case "slug": {
+              // A stored slug is the route param; the loader resolves it
+              // by slug and must not mistake it for an id form.
+              expect(param).toBe(identity.slug);
+              expect(idFromParam).toBe(null);
+              break;
+            }
+            case "id": {
+              // No stored slug: the param carries the id, so the loader
+              // resolves by id and finds the canonical param unchanged.
+              expect(idFromParam).toBe(decisionId);
+              expect(
+                createCaseLawDecisionRouteParam({
+                  caseNumber,
+                  decisionId,
+                  slug: null,
+                }),
+              ).toBe(param);
+              break;
+            }
+            default: {
+              const exhaustive: never = identity;
+              throw new Error(String(exhaustive));
+            }
+          }
+        }
+      }
+    }
   });
 
   test("decodes markdown href payloads that contain case numbers", () => {

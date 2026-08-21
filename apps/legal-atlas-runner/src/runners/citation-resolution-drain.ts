@@ -27,6 +27,10 @@
 import { panic } from "better-result";
 
 import type { CitationResolutionCounts } from "@/api/handlers/case-law/citation-resolution";
+import {
+  CITATION_RESOLUTION_RULES,
+  countsByRule,
+} from "@/api/handlers/case-law/citation-resolution-status";
 
 /** How one turn ended. */
 export const CITATION_RESOLUTION_STEP = {
@@ -149,6 +153,7 @@ export type CitationResolutionDrainOptions = {
 const emptySummary = (): CitationResolutionDrainSummary => ({
   scanned: 0,
   resolved: 0,
+  resolvedByRule: countsByRule(() => 0),
   unmatched: 0,
   ambiguous: 0,
   jurisdictionBlocked: 0,
@@ -168,6 +173,9 @@ const addCounts = (
 ): void => {
   summary.scanned += counts.scanned;
   summary.resolved += counts.resolved;
+  for (const rule of CITATION_RESOLUTION_RULES) {
+    summary.resolvedByRule[rule] += counts.resolvedByRule[rule];
+  }
   summary.unmatched += counts.unmatched;
   summary.ambiguous += counts.ambiguous;
   summary.jurisdictionBlocked += counts.jurisdictionBlocked;

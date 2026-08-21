@@ -50,6 +50,7 @@ const resolveCaseLawDecisionRouteParams = async (
       caseNumber: data.caseNumber,
       country: data.country,
       court: data.court,
+      decisionId: data.id,
       slug: data.slug,
     });
   }
@@ -71,6 +72,7 @@ const resolveCaseLawDecisionRouteParams = async (
     caseNumber: hit.caseNumber,
     country: hit.country,
     court: hit.court,
+    decisionId: hit.decisionId,
     slug: hit.slug,
   };
 

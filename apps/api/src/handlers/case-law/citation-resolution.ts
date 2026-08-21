@@ -21,6 +21,23 @@
  *   an ambiguous link is worse than none: it puts a wrong edge in the
  *   citation graph and thus a wrong number in the authority ranking. Those
  *   rows are recorded as `ambiguous` for the adjudication tier to pick up.
+ * - **The text names the type.** The first adjudication rule. A citation is
+ *   usually introduced with the decision's type ("nález sp. zn. …",
+ *   "usnesením … č. j. …"); the extractor keeps that word as
+ *   `cited_decision_type_hint`. When the key has several time-valid holders
+ *   and exactly one is of the named type, the link goes there: no inference,
+ *   the citing court said so. A hint that names none of them is a word the
+ *   corpus cannot use and the next rule applies; one that names several
+ *   leaves the row ambiguous, since the next rule would contradict the text.
+ * - **One file, one merits decision.** The second adjudication rule, and the
+ *   one structural exception to uniqueness. A constitutional court keeps one
+ *   docket number for a whole file, so the nález on the merits and the
+ *   procedural orders issued along the way all canonicalize to the same key.
+ *   A citation of that key means the nález: nobody cites an interim order by
+ *   the file number alone. When every time-valid candidate sits at one court
+ *   and exactly one of them is a merits decision while all the others are
+ *   procedural orders, the link goes to the merits decision. Any other mix
+ *   (two nálezy, an untyped candidate, a second court) stays ambiguous.
  *
  * The outcome lands in `resolution_status`, not in the nullability of
  * `cited_decision_id`. A null foreign key cannot distinguish "not examined
@@ -29,8 +46,9 @@
  * forever. With the outcome recorded, the pending set burns down.
  *
  * Two structural bounds keep one batch's cost independent of how popular a
- * key is: candidates are counted through a `LATERAL (… LIMIT 2)` (two is all
- * uniqueness needs to know), and the walk is a strict keyset over
+ * key is: candidates are read through a `LATERAL (… LIMIT cap)` (a handful is
+ * all uniqueness and the one-file rule need to know; a key held by more is
+ * ambiguous without looking further), and the walk is a strict keyset over
  * `(citing_decision_id, id)`. The citing-side axis is deliberate: citation
  * ids and decision ids are both uuidv7, so walking citations in citing-
  * decision order reads the decisions table in insertion order rather than at
@@ -46,11 +64,22 @@ import {
   caseLawCitations,
   caseLawDecisions,
 } from "@/api/db/schema";
+import {
+  CITATION_DECISION_TYPE_HINT_FAMILIES,
+  CITATION_DECISION_TYPE_HINTS,
+} from "@/api/handlers/case-law/citation-decision-type-hint";
 import { citationResolutionPolicyRows } from "@/api/handlers/case-law/citation-jurisdiction-policy";
 import {
+  CITATION_RESOLUTION_RULE,
+  CITATION_RESOLUTION_RULES,
   CITATION_RESOLUTION_SCOPE,
   CITATION_RESOLUTION_STATUS,
+  type CitationResolutionRule,
+  CITATION_CANDIDATE_SCAN_CAP,
   citationReopenableByKeySql,
+  countsByRule,
+  MERITS_DECISION_TYPES,
+  PROCEDURAL_DECISION_TYPES,
   unsettledCitationSql,
 } from "@/api/handlers/case-law/citation-resolution-status";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -67,12 +96,41 @@ type CitationResolutionTx = {
   execute: (query: SQL) => Promise<unknown>;
 };
 
+const decisionTypeArray = (types: readonly string[]): SQL =>
+  sql`ARRAY[${sql.join(
+    types.map((type) => sql`${type}`),
+    sql`, `,
+  )}]::varchar[]`;
+
+/**
+ * The hint vocabulary as a CTE, one row per family: which stored
+ * `decision_type` spellings a citation's hint names. Built per call from the
+ * same constants the extractor writes, so the two cannot drift.
+ */
+const hintFamilyCte = (): SQL =>
+  sql`hint_family(hint, decision_types) AS (VALUES ${sql.join(
+    CITATION_DECISION_TYPE_HINTS.map(
+      (hint) =>
+        sql`(${hint}::varchar, ${decisionTypeArray(
+          CITATION_DECISION_TYPE_HINT_FAMILIES[hint],
+        )})`,
+    ),
+    sql`, `,
+  )})`;
+
 /** What one statement settled, in the terms the runner reports. */
 export type CitationResolutionCounts = {
   /** Rows the batch examined. Zero means the scan reached the end. */
   scanned: number;
-  /** Rows linked to exactly one decision. */
+  /** Rows linked to exactly one decision, whichever rule drew the edge. */
   resolved: number;
+  /**
+   * `resolved` split by the rule that decided each row. Total over the rule
+   * list, so a rule added without a counter fails typecheck, and reported
+   * apart so a rule that starts firing unexpectedly is visible in the walk's
+   * telemetry rather than folded into the ordinary count.
+   */
+  resolvedByRule: Record<CitationResolutionRule, number>;
   /** Rows with no surviving candidate. A later decision can revive them. */
   unmatched: number;
   /** Rows with more than one surviving candidate; left unlinked on purpose. */
@@ -178,9 +236,14 @@ export const lockCitationGraph = async (
   await tx.execute(sql`SELECT pg_advisory_xact_lock(${CITATION_GRAPH_LOCK})`);
 };
 
+/** The SQL column name a rule's counter is read from: `unique-key` → `by_rule_unique_key`. */
+const ruleCountColumn = (rule: CitationResolutionRule): string =>
+  `by_rule_${rule.replaceAll("-", "_")}`;
+
 const EMPTY_COUNTS: CitationResolutionCounts = {
   scanned: 0,
   resolved: 0,
+  resolvedByRule: countsByRule(() => 0),
   unmatched: 0,
   ambiguous: 0,
   jurisdictionBlocked: 0,
@@ -224,10 +287,12 @@ const policyCte = (): SQL =>
  */
 const resolutionStatement = (selection: SQL): SQL => sql`
   WITH ${policyCte()},
+  ${hintFamilyCte()},
   batch AS (
     SELECT c.id,
            c.citation_key,
            c.citing_decision_id,
+           c.cited_decision_type_hint,
            citing.country AS citing_country,
            citing.decision_date AS citing_date
       FROM ${caseLawCitations} c
@@ -239,19 +304,65 @@ const resolutionStatement = (selection: SQL): SQL => sql`
      })}
        ${selection}
   ),
-  classified AS (
+  candidates AS (
     SELECT b.id,
            b.citing_decision_id,
            pol.resolves_to,
-           m.decision_id,
            m.n,
-           j.blocked
+           m.sole_id,
+           m.merits_id,
+           m.hinted_id,
+           j.blocked,
+           -- The text said which decision it meant, and exactly one
+           -- candidate is of that type: the link goes there, whatever the
+           -- rest of the file looks like. Bounded like the one-file rule,
+           -- and for the same reason: a type counted on a truncated set may
+           -- have a second holder the scan never reached.
+           (
+                 m.n > 1
+             AND m.n < ${CITATION_CANDIDATE_SCAN_CAP}
+             AND m.hinted_n = 1
+           ) AS hinted,
+           -- The one-file rule, as a predicate over the bounded candidate
+           -- set: one court, exactly one merits decision, every other
+           -- candidate a procedural order. The strict upper bound is load
+           -- bearing: at the cap the set may be truncated, and a rule judged
+           -- on a partial set is a guess. A hint that names several holders
+           -- withholds the rule too: the text said "usnesení", so linking
+           -- the nález would contradict it. A hint naming none is a word
+           -- the corpus cannot use and the structural rule still applies.
+           (
+                 m.n > 1
+             AND m.n < ${CITATION_CANDIDATE_SCAN_CAP}
+             AND m.hinted_n <= 1
+             AND m.courts = 1
+             AND m.merits_n = 1
+             AND m.procedural_n = m.n - 1
+           ) AS one_file
       FROM batch b
       LEFT JOIN policy pol ON pol.citing_country = b.citing_country
+      LEFT JOIN hint_family hf ON hf.hint = b.cited_decision_type_hint
       LEFT JOIN LATERAL (
-        SELECT (array_agg(k.id))[1] AS decision_id, count(*)::int AS n
+        SELECT count(*)::int AS n,
+               (array_agg(k.id))[1] AS sole_id,
+               count(DISTINCT k.court)::int AS courts,
+               count(*) FILTER (
+                 WHERE lower(k.decision_type) = ANY (hf.decision_types)
+               )::int AS hinted_n,
+               (array_agg(k.id) FILTER (
+                 WHERE lower(k.decision_type) = ANY (hf.decision_types)
+               ))[1] AS hinted_id,
+               count(*) FILTER (
+                 WHERE lower(k.decision_type) = ANY (${decisionTypeArray(MERITS_DECISION_TYPES)})
+               )::int AS merits_n,
+               (array_agg(k.id) FILTER (
+                 WHERE lower(k.decision_type) = ANY (${decisionTypeArray(MERITS_DECISION_TYPES)})
+               ))[1] AS merits_id,
+               count(*) FILTER (
+                 WHERE lower(k.decision_type) = ANY (${decisionTypeArray(PROCEDURAL_DECISION_TYPES)})
+               )::int AS procedural_n
           FROM (
-            SELECT cited.id
+            SELECT cited.id, cited.court, cited.decision_type
               FROM ${caseLawDecisions} cited
              WHERE cited.citation_key = b.citation_key
                AND cited.country = ANY (pol.resolves_to)
@@ -261,7 +372,7 @@ const resolutionStatement = (selection: SQL): SQL => sql`
                   OR b.citing_date IS NULL
                   OR b.citing_date >= cited.decision_date
                    )
-             LIMIT 2
+             LIMIT ${CITATION_CANDIDATE_SCAN_CAP}
           ) k
       ) m ON true
       LEFT JOIN LATERAL (
@@ -278,19 +389,47 @@ const resolutionStatement = (selection: SQL): SQL => sql`
          LIMIT 1
       ) j ON true
   ),
+  classified AS (
+    -- Target and status come from one CASE chain each, in the same order, so
+    -- a resolved row always carries its target and an unresolved one never
+    -- carries a stale target from an earlier attempt.
+    SELECT c.id,
+           c.citing_decision_id,
+           c.resolves_to,
+           c.blocked,
+           CASE
+             WHEN c.n = 1 THEN c.sole_id
+             WHEN c.hinted THEN c.hinted_id
+             WHEN c.one_file THEN c.merits_id
+           END AS decision_id,
+           -- The rule is the same chain a third time: a resolved row names
+           -- the arm that drew its edge, an unresolved row names none.
+           CASE
+             WHEN c.n = 1 THEN ${CITATION_RESOLUTION_RULE.UNIQUE_KEY}::text
+             WHEN c.hinted THEN ${CITATION_RESOLUTION_RULE.TYPE_HINT}::text
+             WHEN c.one_file
+               THEN ${CITATION_RESOLUTION_RULE.ONE_FILE_MERITS}::text
+           END AS rule_id,
+           CASE
+             WHEN c.n = 1 OR c.hinted OR c.one_file
+               THEN ${CITATION_RESOLUTION_STATUS.RESOLVED}::text
+             WHEN c.n > 1 THEN ${CITATION_RESOLUTION_STATUS.AMBIGUOUS}::text
+             ELSE ${CITATION_RESOLUTION_STATUS.UNMATCHED}::text
+           END AS status
+      FROM candidates c
+  ),
   updated AS (
     UPDATE ${caseLawCitations} target
-       SET cited_decision_id = CASE WHEN cls.n = 1 THEN cls.decision_id END,
-           resolution_status = CASE
-             WHEN cls.n = 1 THEN ${CITATION_RESOLUTION_STATUS.RESOLVED}::text
-             WHEN cls.n > 1 THEN ${CITATION_RESOLUTION_STATUS.AMBIGUOUS}::text
-             ELSE ${CITATION_RESOLUTION_STATUS.UNMATCHED}::text
-           END,
+       SET cited_decision_id = cls.decision_id,
+           resolution_status = cls.status,
+           resolution_rule_id = cls.rule_id,
            resolution_attempted_at = now()
       FROM classified cls
      WHERE target.id = cls.id
        AND cls.resolves_to IS NOT NULL
-    RETURNING target.resolution_status AS status, cls.blocked
+    RETURNING target.resolution_status AS status,
+              target.resolution_rule_id AS rule_id,
+              cls.blocked
   )
   SELECT (SELECT count(*)::int FROM batch) AS scanned,
          (SELECT count(*)::int FROM classified WHERE resolves_to IS NULL)
@@ -304,6 +443,16 @@ const resolutionStatement = (selection: SQL): SQL => sql`
          count(*) FILTER (
            WHERE u.status = ${CITATION_RESOLUTION_STATUS.RESOLVED}
          )::int AS resolved,
+         ${sql.join(
+           CITATION_RESOLUTION_RULES.map(
+             (rule) =>
+               sql`count(*) FILTER (
+                 WHERE u.status = ${CITATION_RESOLUTION_STATUS.RESOLVED}
+                   AND u.rule_id = ${rule}
+               )::int AS ${sql.raw(ruleCountColumn(rule))}`,
+           ),
+           sql`, `,
+         )},
          count(*) FILTER (
            WHERE u.status = ${CITATION_RESOLUTION_STATUS.UNMATCHED}
          )::int AS unmatched,
@@ -320,6 +469,7 @@ const resolutionStatement = (selection: SQL): SQL => sql`
 const countsOf = (row: Record<string, unknown>): CitationResolutionCounts => ({
   scanned: toCount(row["scanned"]),
   resolved: toCount(row["resolved"]),
+  resolvedByRule: countsByRule((rule) => toCount(row[ruleCountColumn(rule)])),
   unmatched: toCount(row["unmatched"]),
   ambiguous: toCount(row["ambiguous"]),
   jurisdictionBlocked: toCount(row["jurisdiction_blocked"]),
@@ -574,7 +724,8 @@ export const reopenCitationsForDecisionKey = async (
   const result: unknown = await tx.execute(sql`
     WITH revived AS (
       UPDATE ${caseLawCitations} c
-         SET resolution_status = ${CITATION_RESOLUTION_STATUS.PENDING}
+         SET resolution_status = ${CITATION_RESOLUTION_STATUS.PENDING},
+             resolution_rule_id = NULL
         FROM ${caseLawDecisions} citing
        WHERE citing.id = c.citing_decision_id
          AND c.citation_key = ${citationKey}
@@ -585,7 +736,8 @@ export const reopenCitationsForDecisionKey = async (
     contested AS (
       UPDATE ${caseLawCitations} c
          SET resolution_status = ${CITATION_RESOLUTION_STATUS.PENDING},
-             cited_decision_id = NULL
+             cited_decision_id = NULL,
+             resolution_rule_id = NULL
         FROM ${caseLawDecisions} citing, ${caseLawDecisions} cited
        WHERE citing.id = c.citing_decision_id
          AND cited.id = c.cited_decision_id
@@ -641,7 +793,8 @@ export const reopenCitationsForKeys = async (
   const result: unknown = await tx.execute(sql`
     WITH revived AS (
       UPDATE ${caseLawCitations} c
-         SET resolution_status = ${CITATION_RESOLUTION_STATUS.PENDING}
+         SET resolution_status = ${CITATION_RESOLUTION_STATUS.PENDING},
+             resolution_rule_id = NULL
        WHERE c.citation_key = ANY (${keys})
          AND ${citationReopenableByKeySql(sql.raw("c.resolution_status"))}
       RETURNING c.id
@@ -649,7 +802,8 @@ export const reopenCitationsForKeys = async (
     contested AS (
       UPDATE ${caseLawCitations} c
          SET resolution_status = ${CITATION_RESOLUTION_STATUS.PENDING},
-             cited_decision_id = NULL
+             cited_decision_id = NULL,
+             resolution_rule_id = NULL
         FROM ${caseLawDecisions} cited
        WHERE cited.id = c.cited_decision_id
          AND cited.citation_key = ANY (${keys})
@@ -687,7 +841,8 @@ export const reopenCitationsResolvedTo = async (
     WITH retracted AS (
       UPDATE ${caseLawCitations}
          SET resolution_status = ${CITATION_RESOLUTION_STATUS.PENDING}::text,
-             cited_decision_id = NULL
+             cited_decision_id = NULL,
+             resolution_rule_id = NULL
        WHERE cited_decision_id = ${decisionId}::uuid
          AND resolution_status = ${CITATION_RESOLUTION_STATUS.RESOLVED}
       RETURNING id
@@ -727,7 +882,8 @@ export const reopenCitationsFrom = async (
     WITH requeued AS (
       UPDATE ${caseLawCitations}
          SET resolution_status = ${CITATION_RESOLUTION_STATUS.PENDING}::text,
-             cited_decision_id = NULL
+             cited_decision_id = NULL,
+             resolution_rule_id = NULL
        WHERE citing_decision_id = ${decisionId}::uuid
          AND resolution_status <> ${CITATION_RESOLUTION_STATUS.PENDING}
       RETURNING id
@@ -762,7 +918,8 @@ export const reopenCitations = async (
     WITH reopened AS (
       UPDATE ${caseLawCitations}
          SET resolution_status = ${CITATION_RESOLUTION_STATUS.PENDING}::text,
-             cited_decision_id = NULL
+             cited_decision_id = NULL,
+             resolution_rule_id = NULL
        WHERE id = ANY (ARRAY[${sql.join(
          citationIds.map((id) => sql`${id}`),
          sql`, `,
@@ -775,6 +932,99 @@ export const reopenCitations = async (
   const row: unknown = firstRow(result);
   return isRecord(row) ? toCount(row["reopened"]) : 0;
 };
+
+export type ReadjudicateAmbiguousCitationsOptions = {
+  limit: number;
+  /** Cursor from the previous batch; null starts at the beginning. */
+  after: CitationResolutionCursor | null;
+};
+
+export type ReadjudicateAmbiguousCitationsBatch = CitationResolutionCounts & {
+  /** Where to continue; null when the batch reached the end of the walk. */
+  cursor: CitationResolutionCursor | null;
+};
+
+/**
+ * Ask the resolver again about one bounded slice of the `ambiguous` rows.
+ *
+ * The adjudication tier's door into the queue. A new rule changes the answer
+ * for rows the walk has already settled, and settled rows leave the walk's
+ * predicate, so nothing revisits them unless something puts them back. This
+ * reopens a keyset batch of ambiguous rows and resolves them in the same
+ * transaction, under the same lock, so the rows never sit pending where the
+ * standing walk could race for them.
+ *
+ * Idempotent: a row the rule cannot decide comes back `ambiguous` with a new
+ * attempt time and nothing else changed, so a second pass over the same range
+ * finds the same rows and rewrites the same answers.
+ */
+export const readjudicateAmbiguousCitations = async (
+  scopedDb: ScopedDb,
+  { limit, after }: ReadjudicateAmbiguousCitationsOptions,
+): Promise<ReadjudicateAmbiguousCitationsBatch> =>
+  await scopedDb(async (tx) => {
+    await lockCitationGraph(tx);
+    // audit: skip — derived citation graph, not a user action
+    const picked: unknown = await tx.execute(sql`
+      WITH slice AS (
+        SELECT c.id, c.citing_decision_id
+          FROM ${caseLawCitations} c
+         WHERE c.resolution_status = ${CITATION_RESOLUTION_STATUS.AMBIGUOUS}
+           AND c.citation_key IS NOT NULL
+           ${
+             after === null
+               ? sql``
+               : sql`AND (c.citing_decision_id, c.id) > (${after.citingDecisionId}::uuid, ${after.citationId}::uuid)`
+           }
+         ORDER BY c.citing_decision_id, c.id
+         LIMIT ${limit}
+      ),
+      reopened AS (
+        UPDATE ${caseLawCitations} target
+           SET resolution_status = ${CITATION_RESOLUTION_STATUS.PENDING}::text,
+               resolution_rule_id = NULL
+          FROM slice
+         WHERE target.id = slice.id
+        RETURNING target.id
+      )
+      SELECT (SELECT count(*)::int FROM reopened) AS reopened,
+             (SELECT citing_decision_id::text
+                FROM slice ORDER BY citing_decision_id DESC, id DESC LIMIT 1)
+               AS last_citing_decision_id,
+             (SELECT id::text
+                FROM slice ORDER BY citing_decision_id DESC, id DESC LIMIT 1)
+               AS last_citation_id,
+             (SELECT array_agg(id::text) FROM slice) AS ids
+    `);
+    const pickedRow: unknown = firstRow(picked);
+    if (!isRecord(pickedRow) || !Array.isArray(pickedRow["ids"])) {
+      return { ...EMPTY_COUNTS, cursor: null };
+    }
+    const ids = pickedRow["ids"].filter(
+      (id): id is string => typeof id === "string",
+    );
+    if (ids.length === 0) {
+      return { ...EMPTY_COUNTS, cursor: null };
+    }
+    const citingDecisionId = pickedRow["last_citing_decision_id"];
+    const citationId = pickedRow["last_citation_id"];
+    const cursor =
+      typeof citingDecisionId === "string" && typeof citationId === "string"
+        ? { citingDecisionId, citationId }
+        : null;
+
+    // audit: skip — derived citation graph, not a user action
+    const result: unknown = await tx.execute(
+      resolutionStatement(sql`
+        AND c.id = ANY (ARRAY[${sql.join(
+          ids.map((id) => sql`${id}`),
+          sql`, `,
+        )}]::uuid[])
+      `),
+    );
+    const row: unknown = firstRow(result);
+    return { ...(isRecord(row) ? countsOf(row) : EMPTY_COUNTS), cursor };
+  });
 
 /**
  * How much work the walk has left. Read on the summary interval rather than

@@ -301,6 +301,22 @@
       }
     },
     "analyzing": "Analizowanie...",
+    "citation": {
+      "citedSummary": "{count, plural, =0 {Niecytowane} one {Cytowane raz} few {Cytowane # razy} many {Cytowane # razy} other {Cytowane # razy}}",
+      "decisionCount": "{count, plural, =0 {Brak orzeczeń} one {# orzeczenie} few {# orzeczenia} many {# orzeczeń} other {# orzeczenia}}",
+      "lastNegative": "ostatnie negatywne powołanie w {year} r.",
+      "negativeCount": "{count, plural, one {# negatywne} few {# negatywne} many {# negatywnych} other {# negatywnych}}",
+      "stripLabel": "Powołania według lat",
+      "treatment": {
+        "negative": "Negatywne",
+        "neutral": "Wzmiankowane",
+        "positive": "Zaaprobowane",
+        "supportive": "Podzielone",
+        "unclassified": "Niesklasyfikowane"
+      },
+      "unresolved": "Nieprzypisane do orzeczenia",
+      "yearTitle": "{year}: {count, plural, one {# powołanie} few {# powołania} many {# powołań} other {# powołania}}"
+    },
     "columns": {
       "caseNumber": "Sygnatura akt",
       "court": "Sąd"

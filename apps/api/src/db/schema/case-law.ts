@@ -1,7 +1,9 @@
 import { eq } from "drizzle-orm";
 
+import { CITATION_DECISION_TYPE_HINTS } from "@/api/handlers/case-law/citation-decision-type-hint";
 import { CITATION_KINDS } from "@/api/handlers/case-law/citation-kind";
 import {
+  CITATION_RESOLUTION_RULES,
   CITATION_RESOLUTION_SCOPES,
   CITATION_RESOLUTION_STATUS,
   CITATION_RESOLUTION_STATUSES,
@@ -106,8 +108,16 @@ const CITATION_KIND_SQL_VALUES = CITATION_KINDS.map((kind) =>
   sql.raw(`'${kind}'`),
 );
 
+const CITATION_DECISION_TYPE_HINT_SQL_VALUES = CITATION_DECISION_TYPE_HINTS.map(
+  (hint) => sql.raw(`'${hint}'`),
+);
+
 const CITATION_RESOLUTION_STATUS_SQL_VALUES = CITATION_RESOLUTION_STATUSES.map(
   (status) => sql.raw(`'${status}'`),
+);
+
+const CITATION_RESOLUTION_RULE_SQL_VALUES = CITATION_RESOLUTION_RULES.map(
+  (rule) => sql.raw(`'${rule}'`),
 );
 
 export const PROVISION_UNITS = ["section", "article"] as const;
@@ -791,6 +801,17 @@ export const caseLawCitations = p.pgTable(
      */
     kind: p.varchar({ length: 16 }).default("precedent").notNull(),
     /**
+     * The decision-type word the citing text introduced the number with
+     * ("nález sp. zn. …", "usnesením … č. j. …"), as a family from
+     * `citation-decision-type-hint.ts`; null when the text did not say. The
+     * resolver prefers a candidate of that type over any inference about
+     * the file, which is what tells the nález from the orders that share
+     * its docket number. Plain string for the same reason `kind` is.
+     */
+    citedDecisionTypeHint: p.varchar("cited_decision_type_hint", {
+      length: 16,
+    }),
+    /**
      * Outcome of the last resolution attempt. Split from the nullability of
      * `citedDecisionId` because a null foreign key cannot tell "not examined"
      * from "examined, nothing honest to link to": with both meanings on one
@@ -803,6 +824,13 @@ export const caseLawCitations = p.pgTable(
       .default(CITATION_RESOLUTION_STATUS.PENDING),
     /** When that outcome was decided; null until the row is first examined. */
     resolutionAttemptedAt: timestamptz("resolution_attempted_at"),
+    /**
+     * The rule that drew the edge of a `resolved` row; null otherwise, and
+     * cleared whenever the row is reopened. A constant, not a foreign key:
+     * the rules are code, and the column exists so each one's output can be
+     * counted and audited. See `CITATION_RESOLUTION_RULES`.
+     */
+    resolutionRuleId: p.varchar("resolution_rule_id", { length: 32 }),
     sectionIndex: p.integer("section_index"),
     polarity: p.varchar("polarity", { length: 16 }),
     polarityRuleId: safeUuid<"caseLawPolarityRule">(
@@ -860,9 +888,23 @@ export const caseLawCitations = p.pgTable(
       sql`${t.kind} IN (${sql.join(CITATION_KIND_SQL_VALUES, sql.raw(","))})`,
     ),
     p.check(
+      "citations_cited_decision_type_hint_values",
+      sql`${t.citedDecisionTypeHint} IN (${sql.join(
+        CITATION_DECISION_TYPE_HINT_SQL_VALUES,
+        sql.raw(","),
+      )})`,
+    ),
+    p.check(
       "citations_resolution_status_values",
       sql`${t.resolutionStatus} IN (${sql.join(
         CITATION_RESOLUTION_STATUS_SQL_VALUES,
+        sql.raw(","),
+      )})`,
+    ),
+    p.check(
+      "citations_resolution_rule_id_values",
+      sql`${t.resolutionRuleId} IN (${sql.join(
+        CITATION_RESOLUTION_RULE_SQL_VALUES,
         sql.raw(","),
       )})`,
     ),

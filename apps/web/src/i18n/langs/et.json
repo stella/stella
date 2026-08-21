@@ -301,6 +301,22 @@
       }
     },
     "analyzing": "Analüüsin...",
+    "citation": {
+      "citedSummary": "{count, plural, =0 {Viitamata} one {Viidatud üks kord} other {Viidatud # korda}}",
+      "decisionCount": "{count, plural, =0 {Lahendeid pole} one {# lahend} other {# lahendit}}",
+      "lastNegative": "viimane negatiivne viide aastal {year}",
+      "negativeCount": "{count, plural, one {# negatiivne} other {# negatiivset}}",
+      "stripLabel": "Viited aastate kaupa",
+      "treatment": {
+        "negative": "Negatiivne",
+        "neutral": "Mainitud",
+        "positive": "Heaks kiidetud",
+        "supportive": "Järgitud",
+        "unclassified": "Liigitamata"
+      },
+      "unresolved": "Lahendiga sidumata",
+      "yearTitle": "{year}: {count, plural, one {# viide} other {# viidet}}"
+    },
     "columns": {
       "caseNumber": "Kohtuasja number",
       "court": "Kohus"

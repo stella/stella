@@ -110,6 +110,7 @@ export const ProvisionCitingDecisions = ({
             caseNumber: decision.caseNumber,
             country: decision.country,
             court: decision.court,
+            decisionId: decision.decisionId,
             slug: decision.slug,
           });
           const decided = formatValidityDate(decision.decisionDate, format);

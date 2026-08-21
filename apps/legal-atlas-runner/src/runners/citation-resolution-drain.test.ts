@@ -20,6 +20,7 @@
 import { expect, test } from "bun:test";
 
 import type { CitationResolutionCounts } from "@/api/handlers/case-law/citation-resolution";
+import { countsByRule } from "@/api/handlers/case-law/citation-resolution-status";
 
 import {
   CITATION_RESOLUTION_STEP,
@@ -44,6 +45,7 @@ const counts = (
 ): CitationResolutionCounts => ({
   scanned: 0,
   resolved: 0,
+  resolvedByRule: countsByRule(() => 0),
   unmatched: 0,
   ambiguous: 0,
   jurisdictionBlocked: 0,
