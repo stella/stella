@@ -28,7 +28,13 @@ import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 import { richChatParts } from "./__fixtures__/rich-chat-parts";
 
 const anonymizeTextFieldsMock = mock(
-  async ({ fields }: { fields: string[]; workspaceId: string }) => {
+  async ({
+    fields,
+  }: {
+    fields: string[];
+    forcedSensitiveValues?: readonly string[];
+    workspaceId: string;
+  }) => {
     const swaps: [string, string][] = [
       ["[PERSON_1]", "Jan Novák"],
       ["[CUSTOM_1]", "Secret"],
@@ -122,6 +128,9 @@ describe("chat third-party anonymization boundary", () => {
     expect(anonymizeTextFieldsMock.mock.calls.at(0)?.[0].workspaceId).toBe(
       scopeId,
     );
+    expect(
+      anonymizeTextFieldsMock.mock.calls.at(0)?.[0].forcedSensitiveValues,
+    ).toEqual(["11111111-1111-4111-8111-111111111111", scopeId]);
   });
 
   test("omits UI-only rich output before every provider boundary", async () => {

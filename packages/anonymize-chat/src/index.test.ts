@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import type {
+  GazetteerEntry,
   NativeAnonymizeBinding,
   NativePipelineEntity,
   NativeStaticRedactionResult,
@@ -13,6 +14,8 @@ import {
   CHAT_TRANSPORT_ERROR_CODE,
   DEFAULT_CHAT_ANON_ENTITY_LABELS,
   createThirdPartyBoundaryRefusalPayload,
+  FORCED_SENSITIVE_VALUES_MAX,
+  FORCED_SENSITIVE_VALUE_MAX_LENGTH,
   getPreferredChatSendMode,
   isThirdPartyBoundaryRefusalError,
   isThirdPartyBoundaryRefusalPayload,
@@ -82,7 +85,12 @@ describe("runChatAnonPipeline excludedCanonicals", () => {
    * the post-hoc excluded-canonicals revert without a real wasm
    * binding.
    */
-  const buildRuntime = (entities: NativePipelineEntity[]): ChatAnonRuntime => ({
+  const buildRuntime = (
+    entities: NativePipelineEntity[],
+    inspectGazetteerEntries?:
+      | ((entries: readonly GazetteerEntry[]) => void)
+      | undefined,
+  ): ChatAnonRuntime => ({
     // SAFETY: the mock binding value is opaque plumbing - the fake
     // `createNativePipelineFromConfig` below never inspects it, it
     // only forwards it to `redactText`'s closure over `entities`.
@@ -93,7 +101,8 @@ describe("runChatAnonPipeline excludedCanonicals", () => {
       nativePipelinePackageKey: "",
       nativePipelinePackagePromise: null,
     }),
-    createNativePipelineFromConfig: async () => {
+    createNativePipelineFromConfig: async ({ gazetteerEntries }) => {
+      inspectGazetteerEntries?.(gazetteerEntries ?? []);
       const pipeline: FakePipeline = {
         redactText: (fullText) => {
           const redactionMap = new Map<string, string>();
@@ -205,6 +214,87 @@ describe("runChatAnonPipeline excludedCanonicals", () => {
     expect(result.pairs).toEqual([]);
     expect(result.entityCount).toBe(0);
     expect(result.redactedText).toBe("[PERSON_1] and Alice");
+  });
+
+  test("forces exact values through the native placeholder allocation", async () => {
+    const forcedValue = "ORDER-123";
+    let receivedEntries: readonly GazetteerEntry[] = [];
+    const runtime = buildRuntime(
+      [makeEntity(forcedValue, "misc")],
+      (entries) => {
+        receivedEntries = entries;
+      },
+    );
+
+    const result = await runChatAnonPipeline({
+      runtime,
+      dictionaries,
+      text: `${forcedValue} is selected`,
+      workspaceId: "ws-1",
+      forcedSensitiveValues: [forcedValue],
+    });
+
+    expect(receivedEntries).toContainEqual({
+      id: "forced-sensitive-1",
+      canonical: forcedValue,
+      label: "misc",
+      variants: [],
+      workspaceId: "ws-1",
+      createdAt: 0,
+      source: "manual",
+    });
+    expect(result.redactedText).toBe("[MISC_1] is selected");
+    expect(result.redactionMap).toEqual(
+      new Map([["[MISC_1]", forcedValue]]),
+    );
+  });
+
+  test("forced values override matching exclusions and literal protection", async () => {
+    const forcedValue = "[PERSON_1]";
+    const runtime = buildRuntime([makeEntity(forcedValue, "misc")]);
+
+    const result = await runChatAnonPipeline({
+      runtime,
+      dictionaries,
+      text: forcedValue,
+      workspaceId: "ws-1",
+      excludedCanonicals: [forcedValue],
+      forcedSensitiveValues: [forcedValue],
+    });
+
+    expect(result.redactedText).toBe("[MISC_1]");
+    expect(result.redactionMap).toEqual(
+      new Map([["[MISC_1]", forcedValue]]),
+    );
+  });
+
+  test("bounds caller-supplied forced values before building a pipeline", async () => {
+    const runtime = buildRuntime([]);
+
+    await expect(
+      runChatAnonPipeline({
+        runtime,
+        dictionaries,
+        text: "sensitive",
+        workspaceId: "ws-1",
+        forcedSensitiveValues: Array.from(
+          { length: FORCED_SENSITIVE_VALUES_MAX + 1 },
+          (_, index) => `sensitive-${String(index)}`,
+        ),
+      }),
+    ).rejects.toBeInstanceOf(RangeError);
+
+    await expect(
+      runChatAnonPipeline({
+        runtime,
+        dictionaries,
+        text: "sensitive",
+        workspaceId: "ws-1",
+        forcedSensitiveValues: [
+          "x".repeat(FORCED_SENSITIVE_VALUE_MAX_LENGTH + 1),
+        ],
+      }),
+    ).rejects.toBeInstanceOf(RangeError);
   });
 
   test("passes all entities through when no exclusions are provided", async () => {

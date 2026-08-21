@@ -23,9 +23,10 @@ if [[ -n "$(git status --porcelain)" ]]; then
   exit 1
 fi
 
-# auth-model, conditions, and docx-utils are independent. Publish conditions
-# before template-conditions, which depends on it.
-packages=(auth-model conditions template-conditions docx-utils)
+# First publication needs an npm token; trusted publishing can only be configured
+# after each package exists. `template-conditions` depends on `conditions`;
+# `anonymize-chat` depends on the already-published `anonymize-wasm` package.
+packages=(auth-model ai-catalog anonymize-chat conditions template-conditions docx-utils)
 
 for p in "${packages[@]}"; do
   echo "==> publishing @stll/${p}"

@@ -440,6 +440,10 @@ export const prepareTextForThirdParty = async ({
       await anonymizeFields({
         context: boundary.pipelineContext,
         fields: protectedInput.fields,
+        forcedSensitiveValues: [
+          boundary.organizationId,
+          boundary.anonymizationScopeId,
+        ],
         gazetteerEntries: await boundary.gazetteerEntries,
         excludedCanonicals: await boundary.excludedCanonicals,
         organizationId: boundary.organizationId,
@@ -482,6 +486,10 @@ const prepareTextBatchForThirdParty = async ({
       await anonymizeFields({
         context: boundary.pipelineContext,
         fields: protectedInput.fields,
+        forcedSensitiveValues: [
+          boundary.organizationId,
+          boundary.anonymizationScopeId,
+        ],
         gazetteerEntries: await boundary.gazetteerEntries,
         excludedCanonicals: await boundary.excludedCanonicals,
         organizationId: boundary.organizationId,

@@ -448,6 +448,7 @@
         "@tanstack/ai-mistral": "catalog:",
         "@tanstack/ai-openrouter": "catalog:",
         "bun-types": "catalog:",
+        "tsdown": "catalog:",
       },
     },
     "packages/anonymize-chat": {
@@ -462,6 +463,7 @@
         "@stll/typescript-config": "workspace:*",
         "bun-types": "catalog:",
         "fast-check": "catalog:",
+        "tsdown": "catalog:",
       },
     },
     "packages/api-client": {

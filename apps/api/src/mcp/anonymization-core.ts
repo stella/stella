@@ -17,6 +17,8 @@ import { buildFieldMarkers } from "@/api/mcp/field-markers";
 
 export type AnonymizeTextFieldsInput = {
   fields: string[];
+  /** Exact identifiers or terms that must be redacted in this batch. */
+  forcedSensitiveValues?: readonly string[] | undefined;
   gazetteerEntries?: GazetteerEntry[] | undefined;
   /**
    * Canonicals the user has flagged as false positives. The
@@ -117,6 +119,7 @@ const splitRedactedFields = ({
 export const anonymizeTextFieldsWithDependencies = async ({
   dependencies,
   fields,
+  forcedSensitiveValues,
   gazetteerEntries,
   excludedCanonicals,
   organizationId,
@@ -168,6 +171,7 @@ export const anonymizeTextFieldsWithDependencies = async ({
     dictionaries,
     text: combinedText,
     workspaceId,
+    forcedSensitiveValues,
     gazetteerEntries: entries,
     excludedCanonicals: allowlist,
     context,

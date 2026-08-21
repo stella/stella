@@ -1,21 +1,47 @@
 {
   "name": "@stll/anonymize-chat",
   "version": "0.0.0",
-  "private": true,
+  "description": "Placeholder-safe, reversible anonymization contracts for provider-bound text.",
+  "keywords": [
+    "anonymization",
+    "privacy",
+    "redaction",
+    "typescript"
+  ],
+  "homepage": "https://github.com/stella/stella/tree/main/packages/anonymize-chat",
+  "bugs": {
+    "url": "https://github.com/stella/stella/issues"
+  },
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/stella/stella.git",
+    "directory": "packages/anonymize-chat"
+  },
+  "files": [
+    "dist",
+    "src",
+    "README.md"
+  ],
   "type": "module",
   "sideEffects": false,
   "exports": {
     ".": "./src/index.ts"
   },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
-    "clean": "git clean -xdf .cache .turbo node_modules",
+    "clean": "git clean -xdf dist .cache .turbo node_modules",
+    "build": "tsdown",
+    "pack:dry-run": "bun pm pack --dry-run",
     "test": "bun test",
     "test:property": "bun test $(grep -rlF 'fc.assert' src --include='*.test.ts')",
     "typecheck": "bun ../../packages/scripts/src/tsc-native.ts --noEmit",
     "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --deny-warnings --type-aware packages/anonymize-chat",
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/anonymize-chat",
-    "format": "oxfmt ."
+    "format": "oxfmt .",
+    "prepack": "bun run build"
   },
   "dependencies": {
     "@stll/anonymize-wasm": "catalog:",
@@ -25,6 +51,7 @@
     "@stll/property-testing": "workspace:*",
     "@stll/typescript-config": "workspace:*",
     "bun-types": "catalog:",
-    "fast-check": "catalog:"
+    "fast-check": "catalog:",
+    "tsdown": "catalog:"
   }
 }

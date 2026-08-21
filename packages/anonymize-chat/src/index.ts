@@ -57,6 +57,12 @@ true satisfies MissingDefaultChatAnonEntityLabel extends never ? true : never;
 export const DEFAULT_CHAT_ANON_ENTITY_LABELS =
   DEFAULT_CHAT_ANON_ENTITY_LABEL_VALUES;
 
+/** Maximum exact values one anonymization call may force into detection. */
+export const FORCED_SENSITIVE_VALUES_MAX = 256;
+
+/** Maximum UTF-16 length of one forced sensitive value. */
+export const FORCED_SENSITIVE_VALUE_MAX_LENGTH = 4096;
+
 export type ChatAnonPair = {
   placeholder: string;
   original: string;
@@ -290,6 +296,7 @@ const restoreLiteralPlaceholders = (
 
 const protectLiteralPlaceholders = (
   text: string,
+  forcedSensitiveValues: ReadonlySet<string>,
 ): {
   text: string;
   restore: (value: string) => string;
@@ -297,7 +304,15 @@ const protectLiteralPlaceholders = (
   const restoreMap = new Map<string, string>();
   let index = 0;
   const protectedText = text.replaceAll(PLACEHOLDER_TOKEN, (placeholder) => {
-    const sentinel = `\uE000CHAT_PLACEHOLDER_${index}\uE001`;
+    if (forcedSensitiveValues.has(placeholder)) {
+      return placeholder;
+    }
+
+    let sentinel = `\uE000CHAT_PLACEHOLDER_${index}\uE001`;
+    while (text.includes(sentinel) || restoreMap.has(sentinel)) {
+      index += 1;
+      sentinel = `\uE000CHAT_PLACEHOLDER_${index}\uE001`;
+    }
     restoreMap.set(sentinel, placeholder);
     index += 1;
     return sentinel;
@@ -307,6 +322,46 @@ const protectLiteralPlaceholders = (
     text: protectedText,
     restore: (value) => restoreLiteralPlaceholders(value, restoreMap),
   };
+};
+
+const forcedSensitiveGazetteerEntries = ({
+  forcedSensitiveValues,
+  text,
+  workspaceId,
+}: {
+  forcedSensitiveValues: readonly string[];
+  text: string;
+  workspaceId: string;
+}): GazetteerEntry[] => {
+  if (forcedSensitiveValues.length > FORCED_SENSITIVE_VALUES_MAX) {
+    throw new RangeError(
+      `forcedSensitiveValues exceeds ${String(FORCED_SENSITIVE_VALUES_MAX)} entries`,
+    );
+  }
+
+  const values = new Set<string>();
+  for (const value of forcedSensitiveValues) {
+    if (value.length > FORCED_SENSITIVE_VALUE_MAX_LENGTH) {
+      throw new RangeError(
+        `forced sensitive value exceeds ${String(FORCED_SENSITIVE_VALUE_MAX_LENGTH)} characters`,
+      );
+    }
+    if (value.length > 0 && text.includes(value)) {
+      values.add(value);
+    }
+  }
+
+  return [...values]
+    .toSorted((left, right) => right.length - left.length)
+    .map((canonical, index) => ({
+      id: `forced-sensitive-${String(index + 1)}`,
+      canonical,
+      label: "misc",
+      variants: [],
+      workspaceId,
+      createdAt: 0,
+      source: "manual",
+    }));
 };
 
 type NativeRedaction = {
@@ -438,6 +493,7 @@ export const runChatAnonPipeline = async <
   context: providedContext,
   dictionaries,
   excludedCanonicals,
+  forcedSensitiveValues = [],
   gazetteerEntries = [],
   runtime,
   text,
@@ -454,6 +510,12 @@ export const runChatAnonPipeline = async <
   workspaceId: string;
   gazetteerEntries?: GazetteerEntry[] | undefined;
   context?: TPipelineContext | undefined;
+  /**
+   * Exact non-empty values that must be detected even when the probabilistic
+   * pipeline would not classify them. They share the native pipeline's single
+   * placeholder allocation and override a matching allowlist entry.
+   */
+  forcedSensitiveValues?: readonly string[] | undefined;
   /** Opt in to deny-list detection; see {@link buildChatAnonPipelineConfig}. */
   enableDenyList?: boolean | undefined;
   /** Country codes whose deny-list/city dictionaries are loaded. */
@@ -478,10 +540,23 @@ export const runChatAnonPipeline = async <
     };
   }
 
+  const forcedEntries = forcedSensitiveGazetteerEntries({
+    forcedSensitiveValues,
+    text,
+    workspaceId,
+  });
+  const forcedCanonicals = new Set(
+    forcedEntries.map(({ canonical }) => normalizeForExclusion(canonical)),
+  );
+  const effectiveExcludedCanonicals = excludedCanonicals?.filter(
+    (canonical) => !forcedCanonicals.has(normalizeForExclusion(canonical)),
+  );
+  const effectiveGazetteerEntries = [...gazetteerEntries, ...forcedEntries];
+
   const context = providedContext ?? runtime.createPipelineContext();
   const config: PipelineConfig = {
     ...buildChatAnonPipelineConfig({
-      hasGazetteer: gazetteerEntries.length > 0,
+      hasGazetteer: effectiveGazetteerEntries.length > 0,
       locale,
       workspaceId,
       enableDenyList,
@@ -495,17 +570,20 @@ export const runChatAnonPipeline = async <
   const pipeline = await runtime.createNativePipelineFromConfig({
     binding,
     config,
-    gazetteerEntries,
+    gazetteerEntries: effectiveGazetteerEntries,
     context,
   });
-  const protectedInput = protectLiteralPlaceholders(text);
+  const protectedInput = protectLiteralPlaceholders(
+    text,
+    new Set(forcedEntries.map(({ canonical }) => canonical)),
+  );
   const { resolvedEntities, redaction } = pipeline.redactText(
     protectedInput.text,
   );
 
   const result = applyExcludedCanonicals({
     deanonymiseText: runtime.deanonymise,
-    excludedCanonicals,
+    excludedCanonicals: effectiveExcludedCanonicals,
     resolvedEntities,
     redaction,
   });
