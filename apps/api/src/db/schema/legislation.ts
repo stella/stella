@@ -145,6 +145,7 @@ export const legislationDocuments = p.pgTable(
     p.index("legislation_documents_status_idx").on(t.status),
     p.index("legislation_documents_effective_date_idx").on(t.effectiveDate),
     p.index("legislation_documents_created_at_idx").on(t.createdAt),
+    p.index("legislation_documents_updated_id_idx").on(t.updatedAt, t.id),
     p
       .index("legislation_documents_citation_authority_idx")
       .on(t.citationAuthority),
@@ -183,9 +184,14 @@ export const legislationSearchDocuments = p.pgTable(
     regconfig: p.varchar({ length: 64 }).notNull().default("simple"),
     tsv: tsvector(),
     updatedAt: timestamptz("updated_at").notNull().defaultNow(),
+    retryAfter: timestamptz("retry_after"),
   },
   (table) => [
     p.index("legislation_search_docs_tsv_idx").using("gin", table.tsv),
+    p
+      .index("legislation_search_docs_retry_idx")
+      .on(table.retryAfter, table.documentId)
+      .where(isNotNull(table.retryAfter)),
     ...globalCaseLawPolicies(),
   ],
 );

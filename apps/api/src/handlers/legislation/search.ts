@@ -80,6 +80,14 @@ type LegislationHit = {
 
 type RawRow = Record<string, unknown>;
 
+type SearchLegislationDependencies = {
+  loadSearchConfigs: typeof loadFtsSearchConfigs;
+};
+
+const defaultSearchLegislationDependencies: SearchLegislationDependencies = {
+  loadSearchConfigs: loadFtsSearchConfigs,
+};
+
 const toNullableString = (x: unknown): string | null => {
   if (x === null || x === undefined) {
     return null;
@@ -106,10 +114,11 @@ const pgSearch = async (
   body: SearchLegislationBody,
   parsedCursor: { score: number; id: string } | null,
   scopedDb: ScopedDb,
+  dependencies: SearchLegislationDependencies,
 ): Promise<{ hits: LegislationHit[]; nextCursor: string | null }> => {
   const limit = body.limit ?? LIMITS.caseLawSearchPageSizeDefault;
   const ftsSearch = buildPgFtsSearchSql({
-    configs: await loadFtsSearchConfigs(),
+    configs: await dependencies.loadSearchConfigs(),
     query: body.query,
     refs: {
       language: sql`sd.language`,
@@ -160,6 +169,7 @@ const pgSearch = async (
       ON legislation_sources.id = d.source_id
      AND ${redistributableLegislationSource}
     WHERE ${ftsSearch.predicate}
+      AND sd.retry_after IS NULL
       ${filters}
       ${cursorFilter}
     ORDER BY score DESC, sd.document_id DESC
@@ -394,6 +404,7 @@ const corpusIndexSearch = async (
 export const searchLegislationHandler = async (
   body: SearchLegislationBody,
   scopedDb: ScopedDb,
+  dependencies = defaultSearchLegislationDependencies,
 ) => {
   // source_id and the cursor id reach Postgres as UUID comparisons in the
   // pg-fts path; reject malformed values at the boundary so a bad filter
@@ -420,7 +431,7 @@ export const searchLegislationHandler = async (
   const { hits, nextCursor } =
     envBase.LEGAL_SEARCH_PROVIDER === "corpus-index"
       ? await corpusIndexSearch(body, parsedCursor, scopedDb)
-      : await pgSearch(body, parsedCursor, scopedDb);
+      : await pgSearch(body, parsedCursor, scopedDb, dependencies);
 
   return { hits, nextCursor, totalCount: null };
 };

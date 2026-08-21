@@ -1,4 +1,16 @@
-import { and, asc, eq, gt, notExists, sql } from "drizzle-orm";
+import { Result, TaggedError, UnhandledException } from "better-result";
+import {
+  and,
+  asc,
+  eq,
+  gt,
+  isNotNull,
+  isNull,
+  lte,
+  notExists,
+  or,
+  sql,
+} from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
@@ -10,6 +22,7 @@ import { redistributableLegislationSource } from "@/api/handlers/legislation/red
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { setCorpusBackfillStatementTimeout } from "@/api/lib/legal-search/backfill-statement-timeout";
+import { readCorpusText } from "@/api/lib/legal-search/corpus-storage";
 import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 import { resolveFtsConfig } from "@/api/lib/legal-search/fts-config";
 import { logger } from "@/api/lib/observability/logger";
@@ -22,14 +35,36 @@ import { logger } from "@/api/lib/observability/logger";
  */
 
 const SEARCH_INDEX_CONCURRENCY = 4;
+const CORPUS_READ_RETRY_DELAY_MS = 5 * 60_000;
+
+class LegislationCorpusReadError extends TaggedError(
+  "LegislationCorpusReadError",
+)<{
+  message: string;
+  cause: unknown;
+}> {}
 
 const sectionsToPlainText = (
   sections: readonly DecisionSection[] | null,
 ): string => sections?.map((s) => s.text).join(" ") ?? "";
 
+type LegislationSearchIndexDependencies = {
+  readText: typeof readCorpusText;
+  resolveConfig: typeof resolveFtsConfig;
+};
+
+const DEFAULT_DEPENDENCIES: LegislationSearchIndexDependencies = {
+  readText: readCorpusText,
+  resolveConfig: resolveFtsConfig,
+};
+
 export const indexLegislationDocument = async (
   documentId: SafeId<"legislationDocument">,
   scopedDb: ScopedDb,
+  {
+    readText,
+    resolveConfig,
+  }: LegislationSearchIndexDependencies = DEFAULT_DEPENDENCIES,
 ): Promise<void> => {
   const [document] = await scopedDb((tx) =>
     tx
@@ -40,6 +75,7 @@ export const indexLegislationDocument = async (
         language: legislationDocuments.language,
         fulltext: legislationDocuments.fulltext,
         sections: legislationDocuments.sections,
+        textS3Key: legislationDocuments.textS3Key,
       })
       .from(legislationDocuments)
       .innerJoin(
@@ -60,29 +96,52 @@ export const indexLegislationDocument = async (
     return;
   }
 
-  const bodyText =
-    document.fulltext ??
-    // SAFETY: sections is typed unknown in Drizzle's JSONB column but is
-    // always DecisionSection[] | null when set by ingestion.
-    sectionsToPlainText(document.sections);
+  let bodyText: string;
+  let corpusReadFailure: { cause: unknown } | undefined;
+  if (document.fulltext !== null) {
+    bodyText = document.fulltext;
+  } else if (document.sections !== null) {
+    bodyText = sectionsToPlainText(document.sections);
+  } else if (document.textS3Key !== null) {
+    const textS3Key = document.textS3Key;
+    const corpusRead = await Result.tryPromise(
+      async () => await readText(textS3Key),
+    );
+    if (Result.isOk(corpusRead)) {
+      bodyText = corpusRead.value;
+    } else {
+      bodyText = "";
+      const cause =
+        corpusRead.error instanceof UnhandledException
+          ? corpusRead.error.cause
+          : corpusRead.error;
+      corpusReadFailure = { cause };
+    }
+  } else {
+    bodyText = "";
+  }
 
   const searchableText = [document.eli, document.title, bodyText]
     .filter(Boolean)
     .join(" ");
 
-  const fts = await resolveFtsConfig(document.language);
+  const fts = await resolveConfig(document.language);
 
   const textExpr = fts.useUnaccent
     ? sql`unaccent(arabic_normalize(coalesce(${document.title}, '') || ' ' || coalesce(${searchableText}, '')))`
     : sql`arabic_normalize(coalesce(${document.title}, '') || ' ' || coalesce(${searchableText}, ''))`;
   const tsvExpr = sql`to_tsvector(${fts.regconfig}, ${textExpr})`;
+  const retryAfterExpr =
+    corpusReadFailure === undefined
+      ? sql`NULL`
+      : sql`now() + (${CORPUS_READ_RETRY_DELAY_MS} * interval '1 millisecond')`;
 
   await scopedDb(async (tx) => {
     await setCorpusBackfillStatementTimeout(tx);
     await tx.execute(sql`
     INSERT INTO legislation_search_documents (
       document_id, title, searchable_text,
-      language, regconfig, updated_at, tsv
+      language, regconfig, updated_at, retry_after, tsv
     ) VALUES (
       ${document.id},
       ${document.title},
@@ -90,6 +149,7 @@ export const indexLegislationDocument = async (
       ${document.language},
       ${fts.regconfig},
       now(),
+      ${retryAfterExpr},
       ${tsvExpr}
     )
     ON CONFLICT (document_id) DO UPDATE SET
@@ -98,9 +158,17 @@ export const indexLegislationDocument = async (
       language = EXCLUDED.language,
       regconfig = EXCLUDED.regconfig,
       updated_at = EXCLUDED.updated_at,
+      retry_after = EXCLUDED.retry_after,
       tsv = EXCLUDED.tsv
   `);
   });
+
+  if (corpusReadFailure !== undefined) {
+    throw new LegislationCorpusReadError({
+      message: "Canonical legislation corpus payload is unavailable",
+      cause: corpusReadFailure.cause,
+    });
+  }
 };
 
 type LegislationSearchIndexBackfillResult = { found: number; indexed: number };
@@ -108,6 +176,7 @@ type LegislationSearchIndexBackfillResult = { found: number; indexed: number };
 export const backfillLegislationSearchIndex = async (
   scopedDb: ScopedDb,
   batchSize: number,
+  dependencies: LegislationSearchIndexDependencies = DEFAULT_DEPENDENCIES,
 ): Promise<LegislationSearchIndexBackfillResult> => {
   const staleReserved = Math.max(1, Math.floor(batchSize / 4));
   const missingLimit = Math.max(1, batchSize - staleReserved);
@@ -136,7 +205,10 @@ export const backfillLegislationSearchIndex = async (
           ),
         ),
       )
-      .orderBy(asc(legislationDocuments.createdAt))
+      .orderBy(
+        asc(legislationDocuments.updatedAt),
+        asc(legislationDocuments.id),
+      )
       .limit(missingLimit),
   );
 
@@ -156,14 +228,26 @@ export const backfillLegislationSearchIndex = async (
       .where(
         and(
           redistributableLegislationSource,
-          gt(
-            legislationDocuments.updatedAt,
-            // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- column-to-column comparison evaluated in Postgres; no JS Date is bound
-            legislationSearchDocuments.updatedAt,
+          or(
+            and(
+              isNull(legislationSearchDocuments.retryAfter),
+              gt(
+                legislationDocuments.updatedAt,
+                // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- column-to-column comparison evaluated in Postgres; no JS Date is bound
+                legislationSearchDocuments.updatedAt,
+              ),
+            ),
+            and(
+              isNotNull(legislationSearchDocuments.retryAfter),
+              lte(legislationSearchDocuments.retryAfter, sql`now()`),
+            ),
           ),
         ),
       )
-      .orderBy(asc(legislationDocuments.createdAt))
+      .orderBy(
+        asc(legislationDocuments.updatedAt),
+        asc(legislationDocuments.id),
+      )
       .limit(staleLimit),
   );
 
@@ -173,7 +257,7 @@ export const backfillLegislationSearchIndex = async (
     id: SafeId<"legislationDocument">;
   }): Promise<number> => {
     try {
-      await indexLegislationDocument(row.id, scopedDb);
+      await indexLegislationDocument(row.id, scopedDb, dependencies);
       return 1;
     } catch (error) {
       captureError(error, {
