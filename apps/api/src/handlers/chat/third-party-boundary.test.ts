@@ -166,6 +166,7 @@ describe("chat third-party anonymization boundary", () => {
       boundary,
       value: {
         organizationId,
+        legacyId: organizationId.toUpperCase(),
         id: `ref_${organizationId}`,
         scopeId: `scope:${scopeId}`,
         documentId: "doc_123",
@@ -178,12 +179,14 @@ describe("chat third-party anonymization boundary", () => {
     }
     expect(prepared.value).toEqual({
       organizationId: "[MISC_1]",
-      id: "[MISC_2]",
-      scopeId: "[MISC_3]",
+      legacyId: "[MISC_2]",
+      id: "[MISC_3]",
+      scopeId: "[MISC_4]",
       documentId: "doc_123",
     });
     expect(anonymizeIds.mock.calls.at(0)?.[0].fields).toEqual([
       organizationId,
+      organizationId.toUpperCase(),
       `ref_${organizationId}`,
       `scope:${scopeId}`,
     ]);

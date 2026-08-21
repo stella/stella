@@ -839,6 +839,19 @@ const TECHNICAL_IDENTIFIER_KEYS = new Set([
 
 const TECHNICAL_IDENTIFIER_PATTERN =
   /^(?:[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}|[a-z][a-z0-9]*_[A-Za-z0-9-]+)$/iu;
+const UUID_IDENTIFIER_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
+
+const containsForcedBoundaryValue = (
+  boundary: Extract<ChatThirdPartyBoundary, { type: "anonymized" }>,
+  value: string,
+): boolean =>
+  boundaryForcedSensitiveValues(boundary).some(
+    (forcedValue) =>
+      value.includes(forcedValue) ||
+      (UUID_IDENTIFIER_PATTERN.test(forcedValue) &&
+        value.toLowerCase().includes(forcedValue.toLowerCase())),
+  );
 
 const shouldPreserveStructuredString = (
   key: string,
@@ -887,13 +900,10 @@ const anonymizeUnknownStrings = ({
     const sourceValue = encodeClaimedPlaceholders
       ? encodeLateLiteralPlaceholders(boundary, value)
       : value;
-    const containsForcedBoundaryValue = boundaryForcedSensitiveValues(
-      boundary,
-    ).some((forcedValue) => value.includes(forcedValue));
     if (
       key &&
       shouldPreserveStructuredString(key, value) &&
-      !containsForcedBoundaryValue
+      !containsForcedBoundaryValue(boundary, value)
     ) {
       return Result.ok(sourceValue);
     }
