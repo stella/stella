@@ -57,6 +57,11 @@ export const brandPersistedDocxSuggestionId = (
   docxSuggestionId: string,
 ): SafeId<"docxSuggestion"> => toSafeId<"docxSuggestion">(docxSuggestionId);
 
+export const brandPersistedBilingualTranslationRunId = (
+  runId: string,
+): SafeId<"bilingualTranslationRun"> =>
+  toSafeId<"bilingualTranslationRun">(runId);
+
 export const brandPersistedDocumentReviewRunId = (
   runId: string,
 ): SafeId<"documentReviewRun"> => toSafeId<"documentReviewRun">(runId);

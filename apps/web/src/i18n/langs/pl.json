@@ -151,6 +151,102 @@
     "useDifferentEmail": "Użyj innego adresu e-mail",
     "weSentCodeTo": "Wysłaliśmy kod na adres <email>{emailAddress}</email>"
   },
+  "bilingual": {
+    "dialog": {
+      "create": "Utwórz wersję dwujęzyczną",
+      "creating": "Tworzenie…",
+      "description": "Tworzy kopię tego dokumentu w dwóch kolumnach: po lewej tekst oryginalny, po prawej kopia do przetłumaczenia z własną numeracją. Kopia zostanie zapisana w tej sprawie jako nowy dokument.",
+      "sameLanguage": "Wybierz dwa różne języki.",
+      "sourceLanguage": "Język źródłowy",
+      "title": "Wersja dwujęzyczna"
+    },
+    "error": {
+      "title": "Nie udało się utworzyć wersji dwujęzycznej"
+    },
+    "success": {
+      "description": "<bdi>{fileName}</bdi> jest gotowy, do przetłumaczenia {rowCount, plural, one {jest # wiersz} few {są # wiersze} many {jest # wierszy} other {jest # wiersza}}.",
+      "title": "Utworzono wersję dwujęzyczną"
+    }
+  },
+  "bilingualTranslate": {
+    "dialog": {
+      "description": "Uzupełnia kolumnę z tłumaczeniem w tym dwukolumnowym dokumencie. Sprawdź, co stanie się z każdym wierszem i jak oddawane są zdefiniowane pojęcia, a następnie rozpocznij tłumaczenie.",
+      "prepare": "Przygotuj",
+      "preparing": "Odczytywanie dokumentu…",
+      "preparingHint": "Odczytanie całego dokumentu i ocena każdego wiersza trwa do dwóch minut.",
+      "title": "Przetłumacz wersję dwujęzyczną"
+    },
+    "dispositions": {
+      "inline": "Oba języki",
+      "keep": "Pozostaw bez zmian"
+    },
+    "error": {
+      "prepareTitle": "Nie udało się przygotować dokumentu",
+      "startTitle": "Nie udało się rozpocząć tłumaczenia"
+    },
+    "errorCodes": {
+      "aiUnavailable": "Brak dostępnego modelu AI do tłumaczenia.",
+      "applyFailed": "Nie udało się zapisać tłumaczeń z powrotem w dokumencie.",
+      "documentChanged": "Dokument zmienił się w trakcie tłumaczenia. Przygotuj go ponownie.",
+      "documentUnresolved": "Dokument lub jego plik nie jest już dostępny.",
+      "enqueueFailed": "Nie udało się dodać tłumaczenia do kolejki.",
+      "internal": "Tłumaczenie zostało nieoczekiwanie przerwane.",
+      "notBilingual": "Ten dokument nie zawiera tabeli dwujęzycznej.",
+      "translationFailed": "Nie udało się przetłumaczyć partii wierszy.",
+      "unknown": "Tłumaczenie zostało nieoczekiwanie przerwane."
+    },
+    "glossary": {
+      "add": "Dodaj pojęcie",
+      "description": "Te tłumaczenia obowiązują we wszystkich wierszach. Pojęcie bez tłumaczenia trzeba uzupełnić lub usunąć.",
+      "empty": "Nie znaleziono zdefiniowanych pojęć.",
+      "formsHint": "Kolejne formy oddziel przecinkami.",
+      "formsSource": "Inne formy pojęcia",
+      "formsTarget": "Inne formy tłumaczenia",
+      "incomplete": "Uzupełnij brakujące tłumaczenia lub usuń te pojęcia.",
+      "origins": {
+        "detected": "Znalezione",
+        "user": "Własne"
+      },
+      "term": "Pojęcie",
+      "title": "Zdefiniowane pojęcia",
+      "tooManyForms": "Pojęcie może mieć najwyżej {max} innych form.",
+      "translation": "Tłumaczenie"
+    },
+    "kinds": {
+      "heading": "Nagłówek",
+      "listItem": "Element listy",
+      "paragraph": "Akapit",
+      "table": "Cała tabela"
+    },
+    "origins": {
+      "default": "Nieocenione",
+      "model": "AI"
+    },
+    "review": {
+      "droppedRows": "{count, plural, one {Pominięto # wiersz} few {Pominięto # wiersze} many {Pominięto # wierszy} other {Pominięto # wiersza}}: nie zawierają tekstu do przetłumaczenia.",
+      "start": "Rozpocznij tłumaczenie",
+      "starting": "Rozpoczynanie…"
+    },
+    "rows": {
+      "description": "Wybierz, co stanie się z każdym wierszem kolumny z tłumaczeniem.",
+      "ordinal": "#",
+      "sourceText": "Tekst źródłowy",
+      "title": "Wiersze",
+      "whatToDo": "Co zrobić"
+    },
+    "run": {
+      "cancelled": "Tłumaczenie zostało anulowane.",
+      "doneSummary": "{count, plural, one {Przetłumaczono # wiersz} few {Przetłumaczono # wiersze} many {Przetłumaczono # wierszy} other {Przetłumaczono # wiersza}}.",
+      "doneTitle": "Tłumaczenie zakończone",
+      "failedRows": "{count, plural, one {Nie udało się przetłumaczyć # wiersza} few {Nie udało się przetłumaczyć # wierszy} many {Nie udało się przetłumaczyć # wierszy} other {Nie udało się przetłumaczyć # wiersza}}.",
+      "failedTitle": "Tłumaczenie zatrzymane",
+      "hint": "Tłumaczenie działa na serwerze. Zostaw to okno otwarte, aby je śledzić.",
+      "moreRows": "{count, plural, one {jeszcze # wiersz} few {jeszcze # wiersze} many {jeszcze # wierszy} other {jeszcze # wiersza}}",
+      "progress": "Przetłumaczono {completed} z {total} wierszy",
+      "title": "Trwa tłumaczenie…",
+      "warningsTitle": "Wiersze do sprawdzenia"
+    }
+  },
   "billing": {
     "addEntry": "Dodaj wpis",
     "amount": "Kwota",

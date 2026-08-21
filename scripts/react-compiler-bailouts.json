@@ -1,6 +1,7 @@
 {
   "apps/web/src/components/ai-suggestions/file-chat-overlay.tsx::FileChatOverlayInner": 2,
   "apps/web/src/components/autocomplete/use-autocomplete-stream.ts::useAutocompleteStream": 0,
+  "apps/web/src/components/bilingual-review-rows.tsx::BilingualReviewRows": 0,
   "apps/web/src/components/chat-editor-provider.tsx::useChatEditor": 12,
   "apps/web/src/components/chat-mention-list.tsx::ChatMentionList": 1,
   "apps/web/src/components/chat/chat-thread-messages.tsx::ChatThreadMessages": 2,

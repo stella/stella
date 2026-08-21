@@ -3,6 +3,7 @@ import { rateLimit } from "elysia-rate-limit";
 
 import { RESOURCE_TYPE } from "@stll/api-contract";
 
+import createBilingualEntity from "@/api/handlers/entities/bilingual/create";
 import checkStamp from "@/api/handlers/entities/check-stamp";
 import clipEndpoint from "@/api/handlers/entities/clip";
 import compareVersions from "@/api/handlers/entities/compare-versions";
@@ -334,4 +335,9 @@ export const entitiesRoute = new Elysia({
     body: translateEntity.config.body,
     resourceSetUpdated: entityFileRealtimeUpdates,
     permissions: translateEntity.config.permissions,
+  })
+  .post("/bilingual", createBilingualEntity.handler, {
+    body: createBilingualEntity.config.body,
+    resourceSetUpdated: entityFileRealtimeUpdates,
+    permissions: createBilingualEntity.config.permissions,
   });

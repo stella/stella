@@ -151,6 +151,102 @@
     "useDifferentEmail": "Naudoti kitą el. pašto adresą",
     "weSentCodeTo": "Išsiuntėme kodą adresu <email>{emailAddress}</email>"
   },
+  "bilingual": {
+    "dialog": {
+      "create": "Sukurti dvikalbę versiją",
+      "creating": "Kuriama…",
+      "description": "Sukuria šio dokumento kopiją dviem stulpeliais: kairėje originalus tekstas, dešinėje verčiama kopija su atskira numeracija. Kopija išsaugoma šioje byloje kaip naujas dokumentas.",
+      "sameLanguage": "Pasirinkite dvi skirtingas kalbas.",
+      "sourceLanguage": "Šaltinio kalba",
+      "title": "Dvikalbė versija"
+    },
+    "error": {
+      "title": "Nepavyko sukurti dvikalbės versijos"
+    },
+    "success": {
+      "description": "<bdi>{fileName}</bdi> paruoštas, versti reikia {rowCount, plural, one {# eilutę} few {# eilutes} many {# eilutės} other {# eilučių}}.",
+      "title": "Dvikalbė versija sukurta"
+    }
+  },
+  "bilingualTranslate": {
+    "dialog": {
+      "description": "Užpildo šio dviejų stulpelių dokumento vertimo stulpelį. Peržiūrėkite, kas nutiks kiekvienai eilutei ir kaip verčiami apibrėžti terminai, tada pradėkite vertimą.",
+      "prepare": "Paruošti",
+      "preparing": "Skaitomas dokumentas…",
+      "preparingHint": "Perskaityti visą dokumentą ir įvertinti kiekvieną eilutę trunka iki dviejų minučių.",
+      "title": "Versti dvikalbę versiją"
+    },
+    "dispositions": {
+      "inline": "Abi kalbos",
+      "keep": "Palikti nepakeistą"
+    },
+    "error": {
+      "prepareTitle": "Nepavyko paruošti dokumento",
+      "startTitle": "Nepavyko pradėti vertimo"
+    },
+    "errorCodes": {
+      "aiUnavailable": "Vertimui nėra prieinamo DI modelio.",
+      "applyFailed": "Vertimų nepavyko įrašyti atgal į dokumentą.",
+      "documentChanged": "Dokumentas pasikeitė vykstant vertimui. Paruoškite jį iš naujo.",
+      "documentUnresolved": "Dokumentas arba jo failas nebepasiekiamas.",
+      "enqueueFailed": "Vertimo nepavyko įtraukti į eilę.",
+      "internal": "Vertimas netikėtai nutrūko.",
+      "notBilingual": "Šiame dokumente nėra dvikalbės lentelės.",
+      "translationFailed": "Nepavyko išversti eilučių paketo.",
+      "unknown": "Vertimas netikėtai nutrūko."
+    },
+    "glossary": {
+      "add": "Pridėti terminą",
+      "description": "Šie atitikmenys taikomi visoms eilutėms. Terminą be vertimo reikia užpildyti arba pašalinti.",
+      "empty": "Apibrėžtų terminų nerasta.",
+      "formsHint": "Kitas formas atskirkite kableliais.",
+      "formsSource": "Kitos termino formos",
+      "formsTarget": "Kitos vertimo formos",
+      "incomplete": "Užpildykite trūkstamus vertimus arba pašalinkite šiuos terminus.",
+      "origins": {
+        "detected": "Rasta",
+        "user": "Jūsų"
+      },
+      "term": "Terminas",
+      "title": "Apibrėžti terminai",
+      "tooManyForms": "Terminas gali turėti ne daugiau kaip {max} kitų formų.",
+      "translation": "Vertimas"
+    },
+    "kinds": {
+      "heading": "Antraštė",
+      "listItem": "Sąrašo elementas",
+      "paragraph": "Pastraipa",
+      "table": "Visa lentelė"
+    },
+    "origins": {
+      "default": "Neįvertinta",
+      "model": "DI"
+    },
+    "review": {
+      "droppedRows": "{count, plural, one {Praleista # eilutė} few {Praleistos # eilutės} many {Praleista # eilutės} other {Praleista # eilučių}}: jose nėra verstino teksto.",
+      "start": "Pradėti vertimą",
+      "starting": "Pradedama…"
+    },
+    "rows": {
+      "description": "Pasirinkite, kas nutiks kiekvienai vertimo stulpelio eilutei.",
+      "ordinal": "#",
+      "sourceText": "Šaltinio tekstas",
+      "title": "Eilutės",
+      "whatToDo": "Ką daryti"
+    },
+    "run": {
+      "cancelled": "Vertimas buvo atšauktas.",
+      "doneSummary": "{count, plural, one {Išversta # eilutė} few {Išverstos # eilutės} many {Išversta # eilutės} other {Išversta # eilučių}}.",
+      "doneTitle": "Vertimas baigtas",
+      "failedRows": "{count, plural, one {Nepavyko išversti # eilutės} few {Nepavyko išversti # eilučių} many {Nepavyko išversti # eilutės} other {Nepavyko išversti # eilučių}}.",
+      "failedTitle": "Vertimas sustabdytas",
+      "hint": "Vertimas vykdomas serveryje. Kad galėtumėte jį stebėti, palikite šį langą atidarytą.",
+      "moreRows": "{count, plural, one {dar # eilutė} few {dar # eilutės} many {dar # eilutės} other {dar # eilučių}}",
+      "progress": "Išversta {completed} iš {total} eilučių",
+      "title": "Vyksta vertimas…",
+      "warningsTitle": "Tikrintinos eilutės"
+    }
+  },
   "billing": {
     "addEntry": "Pridėti įrašą",
     "amount": "Suma",

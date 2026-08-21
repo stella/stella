@@ -151,6 +151,102 @@
     "useDifferentEmail": "Use um e-mail diferente",
     "weSentCodeTo": "Enviamos um código para <email>{emailAddress}</email>"
   },
+  "bilingual": {
+    "dialog": {
+      "create": "Criar versão bilíngue",
+      "creating": "Criando…",
+      "description": "Cria uma cópia deste documento em duas colunas: o texto original à esquerda e uma cópia para traduzir à direita, com numeração independente. A cópia é salva neste caso como um novo documento.",
+      "sameLanguage": "Escolha dois idiomas diferentes.",
+      "sourceLanguage": "Idioma de origem",
+      "title": "Versão bilíngue"
+    },
+    "error": {
+      "title": "Falha ao criar a versão bilíngue"
+    },
+    "success": {
+      "description": "<bdi>{fileName}</bdi> está pronto com {rowCount, plural, one {# linha} other {# linhas}} para traduzir.",
+      "title": "Versão bilíngue criada"
+    }
+  },
+  "bilingualTranslate": {
+    "dialog": {
+      "description": "Preenche a coluna de tradução deste documento em duas colunas. Revise o que acontece com cada linha e como os termos definidos são traduzidos e, em seguida, inicie a tradução.",
+      "prepare": "Preparar",
+      "preparing": "Lendo o documento…",
+      "preparingHint": "Ler o documento inteiro e avaliar cada linha leva até dois minutos.",
+      "title": "Traduzir a versão bilíngue"
+    },
+    "dispositions": {
+      "inline": "Os dois idiomas",
+      "keep": "Manter como está"
+    },
+    "error": {
+      "prepareTitle": "Não foi possível preparar o documento",
+      "startTitle": "Não foi possível iniciar a tradução"
+    },
+    "errorCodes": {
+      "aiUnavailable": "Nenhum modelo de IA está disponível para tradução.",
+      "applyFailed": "Não foi possível gravar as traduções de volta no documento.",
+      "documentChanged": "O documento mudou durante a tradução. Prepare-o novamente.",
+      "documentUnresolved": "O documento ou seu arquivo não está mais disponível.",
+      "enqueueFailed": "Não foi possível enfileirar a tradução.",
+      "internal": "A tradução parou inesperadamente.",
+      "notBilingual": "Este documento não tem uma tabela bilíngue.",
+      "translationFailed": "Não foi possível traduzir um lote de linhas.",
+      "unknown": "A tradução parou inesperadamente."
+    },
+    "glossary": {
+      "add": "Adicionar termo",
+      "description": "Estas traduções valem para todas as linhas. Um termo sem tradução precisa ser preenchido ou removido.",
+      "empty": "Nenhum termo definido encontrado.",
+      "formsHint": "Separe as outras formas por vírgulas.",
+      "formsSource": "Outras formas do termo",
+      "formsTarget": "Outras formas da tradução",
+      "incomplete": "Preencha as traduções que faltam ou remova esses termos.",
+      "origins": {
+        "detected": "Encontrado",
+        "user": "Seu"
+      },
+      "term": "Termo",
+      "title": "Termos definidos",
+      "tooManyForms": "Um termo pode ter no máximo {max} outras formas.",
+      "translation": "Tradução"
+    },
+    "kinds": {
+      "heading": "Título",
+      "listItem": "Item de lista",
+      "paragraph": "Parágrafo",
+      "table": "Tabela inteira"
+    },
+    "origins": {
+      "default": "Não avaliado",
+      "model": "IA"
+    },
+    "review": {
+      "droppedRows": "{count, plural, one {# linha foi ignorada} other {# linhas foram ignoradas}}: não contêm texto traduzível.",
+      "start": "Iniciar tradução",
+      "starting": "Iniciando…"
+    },
+    "rows": {
+      "description": "Escolha o que acontece com cada linha da coluna de tradução.",
+      "ordinal": "#",
+      "sourceText": "Texto de origem",
+      "title": "Linhas",
+      "whatToDo": "O que fazer"
+    },
+    "run": {
+      "cancelled": "A tradução foi cancelada.",
+      "doneSummary": "{count, plural, one {# linha traduzida} other {# linhas traduzidas}}.",
+      "doneTitle": "Tradução concluída",
+      "failedRows": "{count, plural, one {Não foi possível traduzir # linha} other {Não foi possível traduzir # linhas}}.",
+      "failedTitle": "Tradução interrompida",
+      "hint": "A tradução é executada no servidor. Mantenha esta janela aberta para acompanhá-la.",
+      "moreRows": "{count, plural, one {mais # linha} other {mais # linhas}}",
+      "progress": "{completed} de {total} linhas traduzidas",
+      "title": "Tradução em andamento…",
+      "warningsTitle": "Linhas para conferir"
+    }
+  },
   "billing": {
     "addEntry": "Adicionar entrada",
     "amount": "Valor",

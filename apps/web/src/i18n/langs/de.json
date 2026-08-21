@@ -151,6 +151,102 @@
     "useDifferentEmail": "Andere E-Mail verwenden",
     "weSentCodeTo": "Wir haben einen Code an <email>{emailAddress}</email> gesendet"
   },
+  "bilingual": {
+    "dialog": {
+      "create": "Zweisprachige Fassung erstellen",
+      "creating": "Wird erstellt…",
+      "description": "Erstellt eine Kopie dieses Dokuments in zwei Spalten: links der Originaltext, rechts eine Kopie zum Übersetzen mit eigener Nummerierung. Die Kopie wird in dieser Akte als neues Dokument abgelegt.",
+      "sameLanguage": "Wählen Sie zwei verschiedene Sprachen.",
+      "sourceLanguage": "Ausgangssprache",
+      "title": "Zweisprachige Fassung"
+    },
+    "error": {
+      "title": "Zweisprachige Fassung fehlgeschlagen"
+    },
+    "success": {
+      "description": "<bdi>{fileName}</bdi> ist bereit, {rowCount, plural, one {# Zeile} other {# Zeilen}} zu übersetzen.",
+      "title": "Zweisprachige Fassung erstellt"
+    }
+  },
+  "bilingualTranslate": {
+    "dialog": {
+      "description": "Füllt die Übersetzungsspalte dieses zweispaltigen Dokuments. Prüfen Sie, was mit jeder Zeile geschieht und wie die definierten Begriffe wiedergegeben werden, und starten Sie dann die Übersetzung.",
+      "prepare": "Vorbereiten",
+      "preparing": "Dokument wird gelesen…",
+      "preparingHint": "Das gesamte Dokument zu lesen und jede Zeile zu bewerten dauert bis zu zwei Minuten.",
+      "title": "Zweisprachige Fassung übersetzen"
+    },
+    "dispositions": {
+      "inline": "Beide Sprachen",
+      "keep": "Unverändert lassen"
+    },
+    "error": {
+      "prepareTitle": "Das Dokument konnte nicht vorbereitet werden",
+      "startTitle": "Die Übersetzung konnte nicht gestartet werden"
+    },
+    "errorCodes": {
+      "aiUnavailable": "Für die Übersetzung ist kein KI-Modell verfügbar.",
+      "applyFailed": "Die Übersetzungen konnten nicht in das Dokument zurückgeschrieben werden.",
+      "documentChanged": "Das Dokument hat sich während der Übersetzung geändert. Bereiten Sie es erneut vor.",
+      "documentUnresolved": "Das Dokument oder seine Datei ist nicht mehr verfügbar.",
+      "enqueueFailed": "Die Übersetzung konnte nicht in die Warteschlange gestellt werden.",
+      "internal": "Die Übersetzung wurde unerwartet beendet.",
+      "notBilingual": "Dieses Dokument enthält keine zweisprachige Tabelle.",
+      "translationFailed": "Ein Stapel von Zeilen konnte nicht übersetzt werden.",
+      "unknown": "Die Übersetzung wurde unerwartet beendet."
+    },
+    "glossary": {
+      "add": "Begriff hinzufügen",
+      "description": "Diese Wiedergaben gelten für alle Zeilen. Ein Begriff ohne Übersetzung muss ergänzt oder entfernt werden.",
+      "empty": "Keine definierten Begriffe gefunden.",
+      "formsHint": "Weitere Formen durch Kommas trennen.",
+      "formsSource": "Weitere Formen des Begriffs",
+      "formsTarget": "Weitere Formen der Übersetzung",
+      "incomplete": "Ergänzen Sie die fehlenden Übersetzungen oder entfernen Sie diese Begriffe.",
+      "origins": {
+        "detected": "Gefunden",
+        "user": "Eigene"
+      },
+      "term": "Begriff",
+      "title": "Definierte Begriffe",
+      "tooManyForms": "Ein Begriff kann höchstens {max} weitere Formen haben.",
+      "translation": "Übersetzung"
+    },
+    "kinds": {
+      "heading": "Überschrift",
+      "listItem": "Listenpunkt",
+      "paragraph": "Absatz",
+      "table": "Ganze Tabelle"
+    },
+    "origins": {
+      "default": "Nicht bewertet",
+      "model": "KI"
+    },
+    "review": {
+      "droppedRows": "{count, plural, one {# Zeile wurde übersprungen} other {# Zeilen wurden übersprungen}}: Sie enthalten keinen übersetzbaren Text.",
+      "start": "Übersetzung starten",
+      "starting": "Wird gestartet…"
+    },
+    "rows": {
+      "description": "Wählen Sie, was mit jeder Zeile der Übersetzungsspalte geschieht.",
+      "ordinal": "#",
+      "sourceText": "Ausgangstext",
+      "title": "Zeilen",
+      "whatToDo": "Was tun"
+    },
+    "run": {
+      "cancelled": "Die Übersetzung wurde abgebrochen.",
+      "doneSummary": "{count, plural, one {# Zeile} other {# Zeilen}} übersetzt.",
+      "doneTitle": "Übersetzung abgeschlossen",
+      "failedRows": "{count, plural, one {# Zeile konnte nicht übersetzt werden} other {# Zeilen konnten nicht übersetzt werden}}.",
+      "failedTitle": "Übersetzung gestoppt",
+      "hint": "Die Übersetzung läuft auf dem Server. Lassen Sie dieses Fenster offen, um sie zu verfolgen.",
+      "moreRows": "{count, plural, one {# weitere Zeile} other {# weitere Zeilen}}",
+      "progress": "{completed} von {total} Zeilen übersetzt",
+      "title": "Übersetzung läuft…",
+      "warningsTitle": "Zu prüfende Zeilen"
+    }
+  },
   "billing": {
     "addEntry": "Eintrag hinzufügen",
     "amount": "Betrag",

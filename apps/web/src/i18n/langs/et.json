@@ -151,6 +151,102 @@
     "useDifferentEmail": "Kasuta teist e-posti aadressi",
     "weSentCodeTo": "Saatsime koodi aadressile <email>{emailAddress}</email>"
   },
+  "bilingual": {
+    "dialog": {
+      "create": "Loo kakskeelne versioon",
+      "creating": "Loomine…",
+      "description": "Loob dokumendist kahe veeruga koopia: vasakul algtekst, paremal tõlkimiseks mõeldud koopia eraldi nummerdusega. Koopia salvestatakse sellesse toimikusse uue dokumendina.",
+      "sameLanguage": "Valige kaks erinevat keelt.",
+      "sourceLanguage": "Lähtekeel",
+      "title": "Kakskeelne versioon"
+    },
+    "error": {
+      "title": "Kakskeelse versiooni loomine ebaõnnestus"
+    },
+    "success": {
+      "description": "<bdi>{fileName}</bdi> on valmis, tõlkida on {rowCount, plural, one {# rida} other {# rida}}.",
+      "title": "Kakskeelne versioon loodud"
+    }
+  },
+  "bilingualTranslate": {
+    "dialog": {
+      "description": "Täidab selle kaheveerulise dokumendi tõlkeveeru. Vaadake üle, mis iga reaga toimub ja kuidas määratletud termineid tõlgitakse, ning käivitage siis tõlge.",
+      "prepare": "Valmista ette",
+      "preparing": "Dokumendi lugemine…",
+      "preparingHint": "Kogu dokumendi lugemine ja iga rea hindamine võtab kuni kaks minutit.",
+      "title": "Tõlgi kakskeelne versioon"
+    },
+    "dispositions": {
+      "inline": "Mõlemad keeled",
+      "keep": "Jäta muutmata"
+    },
+    "error": {
+      "prepareTitle": "Dokumendi ettevalmistamine ebaõnnestus",
+      "startTitle": "Tõlke käivitamine ebaõnnestus"
+    },
+    "errorCodes": {
+      "aiUnavailable": "Tõlkimiseks pole ühtegi tehisintellekti mudelit saadaval.",
+      "applyFailed": "Tõlkeid ei õnnestunud dokumenti tagasi kirjutada.",
+      "documentChanged": "Dokument muutus tõlkimise ajal. Valmistage see uuesti ette.",
+      "documentUnresolved": "Dokument või selle fail ei ole enam saadaval.",
+      "enqueueFailed": "Tõlget ei õnnestunud järjekorda lisada.",
+      "internal": "Tõlge katkes ootamatult.",
+      "notBilingual": "Sellel dokumendil ei ole kakskeelset tabelit.",
+      "translationFailed": "Ridade partii tõlkimine ebaõnnestus.",
+      "unknown": "Tõlge katkes ootamatult."
+    },
+    "glossary": {
+      "add": "Lisa termin",
+      "description": "Neid vasteid kasutatakse kõigil ridadel. Vasteta termin tuleb täita või eemaldada.",
+      "empty": "Määratletud termineid ei leitud.",
+      "formsHint": "Eraldage muud vormid komadega.",
+      "formsSource": "Termini muud vormid",
+      "formsTarget": "Tõlke muud vormid",
+      "incomplete": "Täitke puuduvad tõlked või eemaldage need terminid.",
+      "origins": {
+        "detected": "Leitud",
+        "user": "Teie oma"
+      },
+      "term": "Termin",
+      "title": "Määratletud terminid",
+      "tooManyForms": "Terminil võib olla kuni {max} muud vormi.",
+      "translation": "Tõlge"
+    },
+    "kinds": {
+      "heading": "Pealkiri",
+      "listItem": "Loendipunkt",
+      "paragraph": "Lõik",
+      "table": "Terve tabel"
+    },
+    "origins": {
+      "default": "Hindamata",
+      "model": "TI"
+    },
+    "review": {
+      "droppedRows": "{count, plural, one {# rida jäeti vahele} other {# rida jäeti vahele}}: need ei sisalda tõlgitavat teksti.",
+      "start": "Käivita tõlge",
+      "starting": "Käivitamine…"
+    },
+    "rows": {
+      "description": "Valige, mis juhtub tõlkeveeru iga reaga.",
+      "ordinal": "#",
+      "sourceText": "Lähtetekst",
+      "title": "Read",
+      "whatToDo": "Mida teha"
+    },
+    "run": {
+      "cancelled": "Tõlge tühistati.",
+      "doneSummary": "Tõlgitud {count, plural, one {# rida} other {# rida}}.",
+      "doneTitle": "Tõlge on valmis",
+      "failedRows": "{count, plural, one {# rida jäi tõlkimata} other {# rida jäi tõlkimata}}.",
+      "failedTitle": "Tõlge peatus",
+      "hint": "Tõlge töötab serveris. Jälgimiseks hoidke see aken avatuna.",
+      "moreRows": "{count, plural, one {veel # rida} other {veel # rida}}",
+      "progress": "Tõlgitud {completed} rida {total}-st",
+      "title": "Tõlkimine on pooleli…",
+      "warningsTitle": "Ülevaatamist vajavad read"
+    }
+  },
   "billing": {
     "addEntry": "Lisa kanne",
     "amount": "Summa",

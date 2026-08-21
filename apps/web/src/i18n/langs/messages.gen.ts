@@ -154,6 +154,102 @@ type Messages = {
     "useDifferentEmail": "Use a different email";
     "weSentCodeTo": "We sent a code to <email>{emailAddress}</email>";
   };
+  "bilingual": {
+    "dialog": {
+      "create": "Create bilingual version";
+      "creating": "Creating…";
+      "description": "Create a copy of this document laid out in two columns: the original text on the left and a copy to translate on the right, numbered independently. The copy lands in this matter as a new document.";
+      "sameLanguage": "Choose two different languages.";
+      "sourceLanguage": "Source language";
+      "title": "Bilingual version";
+    };
+    "error": {
+      "title": "Bilingual version failed";
+    };
+    "success": {
+      "description": "<bdi>{fileName}</bdi> is ready with {rowCount, plural, one {# row} other {# rows}} to translate.";
+      "title": "Bilingual version created";
+    };
+  };
+  "bilingualTranslate": {
+    "dialog": {
+      "description": "Fill the translation column of this two-column document. Review what happens to each row and how the defined terms are rendered, then start the translation.";
+      "prepare": "Prepare";
+      "preparing": "Reading the document…";
+      "preparingHint": "Reading the whole document and assessing every row takes up to two minutes.";
+      "title": "Translate bilingual version";
+    };
+    "dispositions": {
+      "inline": "Both languages";
+      "keep": "Keep as is";
+    };
+    "error": {
+      "prepareTitle": "The document could not be prepared";
+      "startTitle": "The translation could not be started";
+    };
+    "errorCodes": {
+      "aiUnavailable": "No AI model is available for translation.";
+      "applyFailed": "The translations could not be written back into the document.";
+      "documentChanged": "The document changed while the translation was running. Prepare it again.";
+      "documentUnresolved": "The document or its file is no longer available.";
+      "enqueueFailed": "The translation could not be queued.";
+      "internal": "The translation stopped unexpectedly.";
+      "notBilingual": "This document has no bilingual table.";
+      "translationFailed": "A batch of rows could not be translated.";
+      "unknown": "The translation stopped unexpectedly.";
+    };
+    "glossary": {
+      "add": "Add term";
+      "description": "These renderings apply to every row. A term without a translation must be filled in or removed.";
+      "empty": "No defined terms found.";
+      "formsHint": "Separate other forms with commas.";
+      "formsSource": "Other forms of the term";
+      "formsTarget": "Other forms of the translation";
+      "incomplete": "Fill in the missing translations, or remove those terms.";
+      "origins": {
+        "detected": "Found";
+        "user": "Yours";
+      };
+      "term": "Term";
+      "title": "Defined terms";
+      "tooManyForms": "A term can list at most {max} other forms.";
+      "translation": "Translation";
+    };
+    "kinds": {
+      "heading": "Heading";
+      "listItem": "List item";
+      "paragraph": "Paragraph";
+      "table": "Whole table";
+    };
+    "origins": {
+      "default": "Not assessed";
+      "model": "AI";
+    };
+    "review": {
+      "droppedRows": "{count, plural, one {# row was skipped} other {# rows were skipped}}: they hold no text that can be translated.";
+      "start": "Start translation";
+      "starting": "Starting…";
+    };
+    "rows": {
+      "description": "Choose what happens to each row of the translation column.";
+      "ordinal": "#";
+      "sourceText": "Source text";
+      "title": "Rows";
+      "whatToDo": "What to do";
+    };
+    "run": {
+      "cancelled": "The translation was cancelled.";
+      "doneSummary": "{count, plural, one {# row} other {# rows}} translated.";
+      "doneTitle": "Translation finished";
+      "failedRows": "{count, plural, one {# row could not be translated} other {# rows could not be translated}}.";
+      "failedTitle": "Translation stopped";
+      "hint": "The translation runs on the server. Keep this window open to follow it.";
+      "moreRows": "{count, plural, one {# more row} other {# more rows}}";
+      "progress": "{completed} of {total} rows translated";
+      "title": "Translation in progress…";
+      "warningsTitle": "Rows to check";
+    };
+  };
   "billing": {
     "addEntry": "Add entry";
     "amount": "Amount";

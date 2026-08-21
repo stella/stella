@@ -58,6 +58,8 @@ export type SafeIdType =
   | "usageEvent"
   | "desktopEditHandoff"
   | "desktopEditSession"
+  | "bilingualTranslationRun"
+  | "bilingualTranslationRow"
   | "docxSuggestion"
   | "document"
   | "documentCounter"

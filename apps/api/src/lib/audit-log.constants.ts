@@ -31,6 +31,7 @@ export const AUDIT_RESOURCE_TYPE = {
   USAGE_ENTITLEMENT: "usage_entitlement",
   USAGE_EVENT: "usage_event",
   DESKTOP_EDIT_SESSION: "desktop_edit_session",
+  BILINGUAL_TRANSLATION_RUN: "bilingual_translation_run",
   DOCUMENT_REVIEW_RUN: "document_review_run",
   ENTITY: "entity",
   ENTITY_VERSION: "entity_version",

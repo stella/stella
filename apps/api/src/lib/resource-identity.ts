@@ -118,6 +118,8 @@ export const RESOURCE_IDENTITY_DISPOSITION = {
   // A review run is background execution provenance, like `extractionRun` and
   // `documentProcessingRun`; a finding is only ever addressed through the run
   // that produced it, so it is that run's subresource rather than a noun.
+  bilingualTranslationRow: { type: "non_resource", reason: "subresource" },
+  bilingualTranslationRun: { type: "non_resource", reason: "job" },
   documentReviewFinding: { type: "non_resource", reason: "subresource" },
   documentReviewRun: { type: "non_resource", reason: "job" },
   documentType: {

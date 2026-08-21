@@ -25,6 +25,12 @@ type LoadEntityVersionDocxBufferOptions = {
   organizationId: SafeId<"organization">;
   entityId: SafeId<"entity">;
   fileFieldId: SafeId<"field">;
+  /**
+   * Read-only entities are rejected by default because callers write a new
+   * version back. A caller that only reads the bytes (to derive a separate
+   * document) opts in here.
+   */
+  allowReadOnly?: boolean | undefined;
 };
 
 export type EntityVersionDocxBufferSource = {
@@ -67,6 +73,7 @@ export const loadEntityVersionDocxBuffer = async ({
   organizationId,
   entityId,
   fileFieldId,
+  allowReadOnly = false,
 }: LoadEntityVersionDocxBufferOptions): Promise<
   Result<EntityVersionDocxBufferSource, HandlerError>
 > => {
@@ -90,7 +97,7 @@ export const loadEntityVersionDocxBuffer = async ({
       new HandlerError({ status: 404, message: "Document not found" }),
     );
   }
-  if (entity.value.readOnly) {
+  if (entity.value.readOnly && !allowReadOnly) {
     return Result.err(
       new HandlerError({ status: 409, message: "Document is read-only" }),
     );
