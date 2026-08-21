@@ -34,6 +34,17 @@ const subjectId = createSafeId<"caseLawDecision">();
 const openRelatedId = createSafeId<"caseLawDecision">();
 const closedRelatedId = createSafeId<"caseLawDecision">();
 
+/** The summary of a visible decision; a 404 here is a test failure. */
+const summaryOf = async (
+  options: Parameters<typeof summarizeDecisionCitationsHandler>[0],
+) => {
+  const result = await summarizeDecisionCitationsHandler(options);
+  if (!("incoming" in result)) {
+    throw new Error("expected a citation summary, got a status response");
+  }
+  return result;
+};
+
 const citationId = (value: number): SafeId<"caseLawCitation"> =>
   toSafeId<"caseLawCitation">(
     `00000000-0000-7000-8000-${String(value).padStart(12, "0")}`,
@@ -98,6 +109,8 @@ beforeAll(
         country: "CZE",
         court: "Related court",
         decisionDate: "2020-02-03",
+        decisionType: "nález",
+        ecli: "ECLI:CZ:US:2020:1.US.1.20.2",
         id: openRelatedId,
         language: "cs",
         slug: "open-related",
@@ -250,6 +263,8 @@ test("incoming pages carry treatment and the citing decision, and the rollup mat
       country: "CZE",
       court: "Related court",
       decisionDate: "2020-02-03",
+      decisionType: "nález",
+      ecli: "ECLI:CZ:US:2020:1.US.1.20.2",
       language: "cs",
       slug: "open-related",
     });
@@ -259,7 +274,7 @@ test("incoming pages carry treatment and the citing decision, and the rollup mat
   for (const item of incoming.items) {
     counted.set(item.treatment, (counted.get(item.treatment) ?? 0) + 1);
   }
-  const summary = await summarizeDecisionCitationsHandler({
+  const summary = await summaryOf({
     caseLawDb,
     decisionId: subjectId,
   });
@@ -285,7 +300,7 @@ test("outgoing keeps unresolved text, drops restricted and procedural rows", asy
   expect(outgoing.items.at(1)?.decision).toBeNull();
   expect(outgoing.items.at(1)?.treatment).toBe("unclassified");
 
-  const summary = await summarizeDecisionCitationsHandler({
+  const summary = await summaryOf({
     caseLawDb,
     decisionId: subjectId,
   });
@@ -309,7 +324,7 @@ test("citation pages reject malformed cursors", async () => {
 });
 
 test("incoming citations roll up by the citing decision's year within the bounded span", async () => {
-  const summary = await summarizeDecisionCitationsHandler({
+  const summary = await summaryOf({
     caseLawDb,
     currentYear: 2026,
     decisionId: subjectId,
@@ -317,11 +332,34 @@ test("incoming citations roll up by the citing decision's year within the bounde
   // Every visible citing row comes from one decision dated 2020.
   expect(summary.incomingByYear).toEqual([{ ...summary.incoming, year: 2020 }]);
 
-  const beyondSpan = await summarizeDecisionCitationsHandler({
+  const beyondSpan = await summaryOf({
     caseLawDb,
     currentYear: 2020 + CITATION_TIMELINE_MAX_YEARS,
     decisionId: subjectId,
   });
   expect(beyondSpan.incoming).toEqual(summary.incoming);
   expect(beyondSpan.incomingByYear).toEqual([]);
+});
+
+test("a restricted subject decision has no citation reads, in either direction or summary", async () => {
+  // The closed decision cites the subject, so it has an outgoing edge that
+  // would otherwise be served; the gate must answer before the edge walk.
+  const outgoing = await listDecisionCitationsHandler({
+    caseLawDb,
+    decisionId: closedRelatedId,
+    query: { direction: "outgoing" },
+  });
+  const incoming = await listDecisionCitationsHandler({
+    caseLawDb,
+    decisionId: closedRelatedId,
+    query: { direction: "incoming" },
+  });
+  const summary = await summarizeDecisionCitationsHandler({
+    caseLawDb,
+    decisionId: closedRelatedId,
+  });
+
+  expect("items" in outgoing).toBe(false);
+  expect("items" in incoming).toBe(false);
+  expect("incoming" in summary).toBe(false);
 });

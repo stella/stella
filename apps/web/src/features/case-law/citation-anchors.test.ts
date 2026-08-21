@@ -21,6 +21,8 @@ const source = (id: string, citationText: string): CitationAnchorSource => ({
     country: "CZE",
     court: "Court",
     decisionDate: null,
+    decisionType: null,
+    ecli: null,
     id: toSafeId<"caseLawDecision">(
       `00000000-0000-7000-8000-${id.padStart(12, "0")}`,
     ),

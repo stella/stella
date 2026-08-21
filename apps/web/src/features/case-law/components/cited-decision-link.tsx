@@ -11,6 +11,7 @@ import {
 import { cn } from "@stll/ui/utils";
 
 import type { CitedDecision } from "@/features/case-law/citation-treatment";
+import { citedDecisionLabel } from "@/features/case-law/cited-decision-label";
 import { formatDecisionDate } from "@/features/case-law/decision-date";
 import { useFormatter } from "@/i18n/formatting-context";
 import { createCaseLawDecisionRouteParams } from "@/lib/case-law-route";
@@ -63,7 +64,7 @@ export const CitedDecisionLink = ({
       </PreviewCardTrigger>
       <PreviewCardPopup className="w-auto max-w-72 flex-col gap-0.5 p-3 font-sans">
         <BidiText as="span" className="text-foreground text-sm font-medium">
-          {decision.caseNumber}
+          {citedDecisionLabel(decision)}
         </BidiText>
         <span className="text-muted-foreground text-xs">
           {decided === null ? decision.court : `${decision.court} · ${decided}`}

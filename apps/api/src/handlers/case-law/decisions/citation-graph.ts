@@ -4,6 +4,8 @@ import { alias, unionAll } from "drizzle-orm/pg-core";
 import { status, t } from "elysia";
 import type { Static } from "elysia";
 
+import { CASE_LAW_CITATION_TIMELINE_MAX_YEARS } from "@stll/api-contract";
+
 import {
   caseLawCitations,
   caseLawDecisions,
@@ -15,6 +17,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { redistributableCaseLawSourceFor } from "@/api/lib/case-law/redistribution";
 import { tPaginationCursor } from "@/api/lib/custom-schema";
+import { isRedistributable } from "@/api/lib/legal-search/corpus-source";
 import { LIMITS } from "@/api/lib/limits";
 import {
   decodePaginationCursor,
@@ -72,6 +75,12 @@ type RelatedDecision = {
   country: string;
   court: string;
   decisionDate: string | null;
+  /**
+   * Type and ECLI distinguish the documents that share one docket number
+   * (a nález and the orders in its file); without them two rows read alike.
+   */
+  decisionType: string | null;
+  ecli: string | null;
   language: string;
   slug: string | null;
 };
@@ -206,6 +215,32 @@ const visibleFor = ({
  */
 const precedentOnly = eq(caseLawCitations.kind, CITATION_KIND.PRECEDENT);
 
+/**
+ * Whether the subject decision may be shown at all. The far-end gate in
+ * `visibleFor` protects the other side of every edge; this protects the
+ * decision the request names, whose outgoing citation texts and graph
+ * counts are as much its content as its full text is. Same answer as the
+ * decision read: a restricted subject does not exist.
+ */
+const subjectIsRedistributable = async (
+  caseLawDb: CaseLawPublicReadDb,
+  decisionId: SafeId<"caseLawDecision">,
+): Promise<boolean> => {
+  const subject = await caseLawDb((tx) =>
+    tx
+      .select({ descriptor: caseLawSources.descriptor })
+      .from(caseLawDecisions)
+      .innerJoin(
+        caseLawSources,
+        eq(caseLawSources.id, caseLawDecisions.sourceId),
+      )
+      .where(eq(caseLawDecisions.id, decisionId))
+      .limit(1),
+  );
+  const row = subject.at(0);
+  return row !== undefined && isRedistributable(row.descriptor);
+};
+
 type ListDecisionCitationsOptions = {
   caseLawDb: CaseLawPublicReadDb;
   decisionId: SafeId<"caseLawDecision">;
@@ -220,6 +255,9 @@ export const listDecisionCitationsHandler = async ({
   const cursorId = decodeCitationCursor(query.cursor);
   if (cursorId === null) {
     return status(400, { message: "Invalid cursor" });
+  }
+  if (!(await subjectIsRedistributable(caseLawDb, decisionId))) {
+    return status(404, { message: "Decision not found" });
   }
   const spec = DIRECTION_SPECS[query.direction];
 
@@ -262,6 +300,8 @@ export const listDecisionCitationsHandler = async ({
           country: relatedDecision.country,
           court: relatedDecision.court,
           decisionDate: relatedDecision.decisionDate,
+          decisionType: relatedDecision.decisionType,
+          ecli: relatedDecision.ecli,
           language: relatedDecision.language,
           slug: relatedDecision.slug,
         },
@@ -293,7 +333,7 @@ export type DecisionCitationSummary = Record<
 };
 
 /** How far back the per-year rollup reaches, counted to the current year. */
-export const CITATION_TIMELINE_MAX_YEARS = 60;
+export const CITATION_TIMELINE_MAX_YEARS = CASE_LAW_CITATION_TIMELINE_MAX_YEARS;
 
 const emptyTreatmentCounts = (): CitationTreatmentCounts => ({
   negative: 0,
@@ -338,7 +378,10 @@ export const summarizeDecisionCitationsHandler = async ({
   caseLawDb,
   decisionId,
   currentYear = new Date().getUTCFullYear(),
-}: SummarizeDecisionCitationsOptions): Promise<DecisionCitationSummary> => {
+}: SummarizeDecisionCitationsOptions) => {
+  if (!(await subjectIsRedistributable(caseLawDb, decisionId))) {
+    return status(404, { message: "Decision not found" });
+  }
   const scopeFor = (direction: CitationDirection) => {
     const spec = DIRECTION_SPECS[direction];
     return and(

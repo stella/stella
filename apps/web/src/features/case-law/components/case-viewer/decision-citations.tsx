@@ -19,6 +19,7 @@ import type {
   CitationTreatmentCounts,
   DecisionCitation,
 } from "@/features/case-law/citation-treatment";
+import { citedDecisionLabel } from "@/features/case-law/cited-decision-label";
 import { CitedDecisionLink } from "@/features/case-law/components/cited-decision-link";
 import { formatDecisionDate } from "@/features/case-law/decision-date";
 import {
@@ -299,7 +300,7 @@ const CitationRow = ({ item }: { item: DecisionCitation }) => {
   return (
     <li className="flex flex-wrap items-baseline gap-x-2 text-xs">
       <CitedDecisionLink decision={item.decision}>
-        <BidiText as="span">{item.decision.caseNumber}</BidiText>
+        <BidiText as="span">{citedDecisionLabel(item.decision)}</BidiText>
       </CitedDecisionLink>
       <span className="text-muted-foreground text-[0.7rem]">
         {decided === null
