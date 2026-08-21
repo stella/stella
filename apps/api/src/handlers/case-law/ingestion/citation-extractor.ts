@@ -1,3 +1,8 @@
+import {
+  type CitationDecisionTypeHint,
+  detectCitationDecisionTypeHint,
+} from "@/api/handlers/case-law/citation-decision-type-hint";
+
 /**
  * Extracted citation reference found in decision text.
  */
@@ -6,6 +11,12 @@ type ExtractedCitation = {
   citationText: string;
   /** Section index where the citation was found. */
   sectionIndex: number | null;
+  /**
+   * The decision-type word the text introduced the number with, when one
+   * binds to it; see `citation-decision-type-hint.ts`. Null is "the text did
+   * not say", never "unknown type".
+   */
+  citedDecisionTypeHint: CitationDecisionTypeHint | null;
 };
 
 /**
@@ -675,6 +686,10 @@ export const extractCitations = (
   sections: { index: number; text: string }[],
 ): ExtractedCitation[] => {
   const byKey = new Map<string, ExtractedCitation>();
+  // Keys whose occurrences named two different types. One text calling the
+  // same docket both a nález and an usnesení is naming two documents, and a
+  // single hint would pick one of them by occurrence order.
+  const conflictingHints = new Set<string>();
 
   for (const section of sections) {
     for (const pattern of CITATION_PATTERNS) {
@@ -702,15 +717,28 @@ export const extractCitations = (
           match.groups?.["caseNumber"]?.trim() ?? citationText,
         );
 
+        const citedDecisionTypeHint = detectCitationDecisionTypeHint(
+          section.text,
+          match.index,
+        );
+
         const existing = byKey.get(dedupKey);
         if (!existing) {
-          byKey.set(dedupKey, { citationText, sectionIndex: section.index });
+          byKey.set(dedupKey, {
+            citationText,
+            sectionIndex: section.index,
+            citedDecisionTypeHint,
+          });
           continue;
         }
         // Prefer a later occurrence over an earlier one: a case is often
         // listed bare in the header (low section index) and then discussed
         // in the reasoning. The discussion carries the polarity signal, so
-        // record the later section's context, not the header's.
+        // record the later section's context, not the header's. The type
+        // hint is the exception: any occurrence that names the type is
+        // better than one that does not, so a hint, once seen, stays;
+        // unless a later occurrence names a different type, which leaves
+        // the key without a hint for the resolver to treat as ambiguous.
         if (
           existing.sectionIndex === null ||
           section.index > existing.sectionIndex
@@ -718,6 +746,18 @@ export const extractCitations = (
           existing.citationText = citationText;
           existing.sectionIndex = section.index;
         }
+        if (citedDecisionTypeHint === null || conflictingHints.has(dedupKey)) {
+          continue;
+        }
+        if (
+          existing.citedDecisionTypeHint !== null &&
+          existing.citedDecisionTypeHint !== citedDecisionTypeHint
+        ) {
+          conflictingHints.add(dedupKey);
+          existing.citedDecisionTypeHint = null;
+          continue;
+        }
+        existing.citedDecisionTypeHint = citedDecisionTypeHint;
       }
     }
   }

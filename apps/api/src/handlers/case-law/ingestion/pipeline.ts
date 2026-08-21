@@ -12,6 +12,7 @@ import {
   caseLawSources,
 } from "@/api/db/schema";
 import { corpusStorageMode } from "@/api/env-base";
+import type { CitationDecisionTypeHint } from "@/api/handlers/case-law/citation-decision-type-hint";
 import {
   classifyCitation,
   proceduralKeysFromMetadata,
@@ -328,7 +329,11 @@ const uploadSourceRaw = async (
  */
 const citationRow = (
   citingDecisionId: SafeId<"caseLawDecision">,
-  citation: { citationText: string; sectionIndex: number | null },
+  citation: {
+    citationText: string;
+    sectionIndex: number | null;
+    citedDecisionTypeHint: CitationDecisionTypeHint | null;
+  },
   sections: { index: number; text: string }[],
   proceduralKeys: ProceduralKeys,
 ) => {
@@ -337,6 +342,7 @@ const citationRow = (
     citingDecisionId,
     citationText: citation.citationText,
     citationKey,
+    citedDecisionTypeHint: citation.citedDecisionTypeHint,
     kind: classifyCitation({
       citationText: citation.citationText,
       citationKey,

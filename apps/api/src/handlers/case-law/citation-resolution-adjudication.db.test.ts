@@ -8,6 +8,7 @@ import {
   caseLawDecisions,
   caseLawSources,
 } from "@/api/db/schema";
+import { CITATION_DECISION_TYPE_HINT } from "@/api/handlers/case-law/citation-decision-type-hint";
 import {
   CITATION_CANDIDATE_SCAN_CAP,
   type CitationResolutionCursor,
@@ -44,6 +45,8 @@ const nsSource = createSafeId<"caseLawSource">();
 
 const citing = createSafeId<"caseLawDecision">();
 const lateCiting = createSafeId<"caseLawDecision">();
+// Cites with the decision type spelled out in the text.
+const hintCiting = createSafeId<"caseLawDecision">();
 
 // One file: a nález preceded by two orders.
 const fileNalez = createSafeId<"caseLawDecision">();
@@ -61,6 +64,9 @@ const crossOrder = createSafeId<"caseLawDecision">();
 // The Slovak spelling of the same structure.
 const skNalez = createSafeId<"caseLawDecision">();
 const skOrder = createSafeId<"caseLawDecision">();
+// One nález and one order: the shape the type hint tells apart.
+const pairNalez = createSafeId<"caseLawDecision">();
+const pairOrder = createSafeId<"caseLawDecision">();
 // A file with more holders than the resolver reads.
 const crowdedIds = Array.from({ length: CITATION_CANDIDATE_SCAN_CAP }, () =>
   createSafeId<"caseLawDecision">(),
@@ -73,6 +79,11 @@ const crossCourtCitation = createSafeId<"caseLawCitation">();
 const skCitation = createSafeId<"caseLawCitation">();
 const crowdedCitation = createSafeId<"caseLawCitation">();
 const beforeNalezCitation = createSafeId<"caseLawCitation">();
+const hintOrderCitation = createSafeId<"caseLawCitation">();
+const hintNalezCitation = createSafeId<"caseLawCitation">();
+const hintTwoOrdersCitation = createSafeId<"caseLawCitation">();
+const hintTwinCitation = createSafeId<"caseLawCitation">();
+const hintNoneCitation = createSafeId<"caseLawCitation">();
 
 // The pglite handle stands in for a transaction, matching the pattern the
 // other case-law database tests use for their fakes.
@@ -136,6 +147,25 @@ beforeAll(
         citationKey: "iús2/14",
         decisionDate: "2014-12-01",
         decisionType: MERITS,
+      }),
+      decision(hintCiting, {
+        caseNumber: "Pl. ÚS 3/21",
+        citationKey: "plús3/21",
+        decisionDate: "2021-06-01",
+        decisionType: MERITS,
+      }),
+      decision(pairNalez, {
+        caseNumber: "I. ÚS 60/16",
+        citationKey: "iús60/16",
+        decisionDate: "2016-09-01",
+        decisionType: MERITS,
+      }),
+      decision(pairOrder, {
+        caseNumber: "I. ÚS 60/16",
+        citationKey: "iús60/16",
+        decisionDate: "2016-02-01",
+        // Stored with the adapter's capitalisation: the match is case-blind.
+        decisionType: "Usnesení",
       }),
       decision(fileOrderA, {
         caseNumber: "II. ÚS 2766/14",
@@ -255,6 +285,43 @@ beforeAll(
         citingDecisionId: lateCiting,
         citationText: "II. ÚS 2766/14",
         citationKey: "iiús2766/14",
+      },
+      {
+        id: hintOrderCitation,
+        citingDecisionId: hintCiting,
+        citationText: "I. ÚS 60/16",
+        citationKey: "iús60/16",
+        citedDecisionTypeHint: CITATION_DECISION_TYPE_HINT.ORDER,
+      },
+      {
+        id: hintNalezCitation,
+        citingDecisionId: hintCiting,
+        citationText: "I. ÚS 60/16",
+        citationKey: "iús60/16",
+        citedDecisionTypeHint: CITATION_DECISION_TYPE_HINT.MERITS,
+        sectionIndex: 2,
+      },
+      {
+        id: hintTwoOrdersCitation,
+        citingDecisionId: hintCiting,
+        citationText: "II. ÚS 2766/14",
+        citationKey: "iiús2766/14",
+        citedDecisionTypeHint: CITATION_DECISION_TYPE_HINT.ORDER,
+      },
+      {
+        id: hintTwinCitation,
+        citingDecisionId: hintCiting,
+        citationText: "III. ÚS 10/16",
+        citationKey: "iiiús10/16",
+        citedDecisionTypeHint: CITATION_DECISION_TYPE_HINT.MERITS,
+      },
+      {
+        id: hintNoneCitation,
+        citingDecisionId: hintCiting,
+        citationText: "I. ÚS 60/16",
+        citationKey: "iús60/16",
+        citedDecisionTypeHint: CITATION_DECISION_TYPE_HINT.JUDGMENT,
+        sectionIndex: 3,
       },
     ]);
   },
@@ -413,5 +480,42 @@ test("re-adjudication reopens settled ambiguous rows and is idempotent", async (
     resolved: 0,
     adjudicated: 0,
     ambiguous: 4,
+  });
+});
+
+test("a hint names the order or the nález of a pair, whichever the text said", async () => {
+  const counts = await resolveCitationsForDecision(asTx(), hintCiting);
+  // The two pair citations and the no-match fallback are adjudicated; the
+  // two-orders and twin cases are not.
+  expect(counts.adjudicated).toBe(3);
+  expect(counts.ambiguous).toBe(2);
+
+  expect(await rowOf(hintOrderCitation)).toEqual({
+    cited: pairOrder,
+    status: CITATION_RESOLUTION_STATUS.RESOLVED,
+  });
+  expect(await rowOf(hintNalezCitation)).toEqual({
+    cited: pairNalez,
+    status: CITATION_RESOLUTION_STATUS.RESOLVED,
+  });
+});
+
+test("a hint that several holders satisfy leaves the row ambiguous, one-file rule withheld", async () => {
+  // Without the hint this key resolves to its nález (first test); the text
+  // said "usnesení" and two orders fit, so no rule may pick the nález.
+  expect(await rowOf(hintTwoOrdersCitation)).toEqual({
+    cited: null,
+    status: CITATION_RESOLUTION_STATUS.AMBIGUOUS,
+  });
+  expect(await rowOf(hintTwinCitation)).toEqual({
+    cited: null,
+    status: CITATION_RESOLUTION_STATUS.AMBIGUOUS,
+  });
+});
+
+test("a hint no holder satisfies falls back to the one-file rule", async () => {
+  expect(await rowOf(hintNoneCitation)).toEqual({
+    cited: pairNalez,
+    status: CITATION_RESOLUTION_STATUS.RESOLVED,
   });
 });

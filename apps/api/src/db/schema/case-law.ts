@@ -1,5 +1,6 @@
 import { eq } from "drizzle-orm";
 
+import { CITATION_DECISION_TYPE_HINTS } from "@/api/handlers/case-law/citation-decision-type-hint";
 import { CITATION_KINDS } from "@/api/handlers/case-law/citation-kind";
 import {
   CITATION_RESOLUTION_SCOPES,
@@ -104,6 +105,10 @@ const POLARITY_SQL_VALUES = POLARITIES.map((polarity) =>
 
 const CITATION_KIND_SQL_VALUES = CITATION_KINDS.map((kind) =>
   sql.raw(`'${kind}'`),
+);
+
+const CITATION_DECISION_TYPE_HINT_SQL_VALUES = CITATION_DECISION_TYPE_HINTS.map(
+  (hint) => sql.raw(`'${hint}'`),
 );
 
 const CITATION_RESOLUTION_STATUS_SQL_VALUES = CITATION_RESOLUTION_STATUSES.map(
@@ -791,6 +796,17 @@ export const caseLawCitations = p.pgTable(
      */
     kind: p.varchar({ length: 16 }).default("precedent").notNull(),
     /**
+     * The decision-type word the citing text introduced the number with
+     * ("nález sp. zn. …", "usnesením … č. j. …"), as a family from
+     * `citation-decision-type-hint.ts`; null when the text did not say. The
+     * resolver prefers a candidate of that type over any inference about
+     * the file, which is what tells the nález from the orders that share
+     * its docket number. Plain string for the same reason `kind` is.
+     */
+    citedDecisionTypeHint: p.varchar("cited_decision_type_hint", {
+      length: 16,
+    }),
+    /**
      * Outcome of the last resolution attempt. Split from the nullability of
      * `citedDecisionId` because a null foreign key cannot tell "not examined"
      * from "examined, nothing honest to link to": with both meanings on one
@@ -858,6 +874,13 @@ export const caseLawCitations = p.pgTable(
     p.check(
       "citations_kind_values",
       sql`${t.kind} IN (${sql.join(CITATION_KIND_SQL_VALUES, sql.raw(","))})`,
+    ),
+    p.check(
+      "citations_cited_decision_type_hint_values",
+      sql`${t.citedDecisionTypeHint} IN (${sql.join(
+        CITATION_DECISION_TYPE_HINT_SQL_VALUES,
+        sql.raw(","),
+      )})`,
     ),
     p.check(
       "citations_resolution_status_values",

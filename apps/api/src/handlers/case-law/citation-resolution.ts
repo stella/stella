@@ -21,7 +21,15 @@
  *   an ambiguous link is worse than none: it puts a wrong edge in the
  *   citation graph and thus a wrong number in the authority ranking. Those
  *   rows are recorded as `ambiguous` for the adjudication tier to pick up.
- * - **One file, one merits decision.** The first adjudication rule, and the
+ * - **The text names the type.** The first adjudication rule. A citation is
+ *   usually introduced with the decision's type ("nález sp. zn. …",
+ *   "usnesením … č. j. …"); the extractor keeps that word as
+ *   `cited_decision_type_hint`. When the key has several time-valid holders
+ *   and exactly one is of the named type, the link goes there: no inference,
+ *   the citing court said so. A hint that names none of them is a word the
+ *   corpus cannot use and the next rule applies; one that names several
+ *   leaves the row ambiguous, since the next rule would contradict the text.
+ * - **One file, one merits decision.** The second adjudication rule, and the
  *   one structural exception to uniqueness. A constitutional court keeps one
  *   docket number for a whole file, so the nález on the merits and the
  *   procedural orders issued along the way all canonicalize to the same key.
@@ -56,6 +64,10 @@ import {
   caseLawCitations,
   caseLawDecisions,
 } from "@/api/db/schema";
+import {
+  CITATION_DECISION_TYPE_HINT_FAMILIES,
+  CITATION_DECISION_TYPE_HINTS,
+} from "@/api/handlers/case-law/citation-decision-type-hint";
 import { citationResolutionPolicyRows } from "@/api/handlers/case-law/citation-jurisdiction-policy";
 import {
   CITATION_RESOLUTION_SCOPE,
@@ -106,6 +118,22 @@ const decisionTypeArray = (types: readonly string[]): SQL =>
     sql`, `,
   )}]::varchar[]`;
 
+/**
+ * The hint vocabulary as a CTE, one row per family: which stored
+ * `decision_type` spellings a citation's hint names. Built per call from the
+ * same constants the extractor writes, so the two cannot drift.
+ */
+const hintFamilyCte = (): SQL =>
+  sql`hint_family(hint, decision_types) AS (VALUES ${sql.join(
+    CITATION_DECISION_TYPE_HINTS.map(
+      (hint) =>
+        sql`(${hint}::varchar, ${decisionTypeArray(
+          CITATION_DECISION_TYPE_HINT_FAMILIES[hint],
+        )})`,
+    ),
+    sql`, `,
+  )})`;
+
 /** What one statement settled, in the terms the runner reports. */
 export type CitationResolutionCounts = {
   /** Rows the batch examined. Zero means the scan reached the end. */
@@ -113,8 +141,9 @@ export type CitationResolutionCounts = {
   /** Rows linked to exactly one decision, the adjudicated ones included. */
   resolved: number;
   /**
-   * The subset of `resolved` that the one-file rule decided: the key had
-   * several holders and the merits decision among them took the link.
+   * The subset of `resolved` that a rule decided rather than uniqueness:
+   * the key had several holders and the one the text named, or the merits
+   * decision among them, took the link.
    * Reported apart so a rule that starts firing unexpectedly is visible in the
    * walk's telemetry rather than folded into the ordinary count.
    */
@@ -271,10 +300,12 @@ const policyCte = (): SQL =>
  */
 const resolutionStatement = (selection: SQL): SQL => sql`
   WITH ${policyCte()},
+  ${hintFamilyCte()},
   batch AS (
     SELECT c.id,
            c.citation_key,
            c.citing_decision_id,
+           c.cited_decision_type_hint,
            citing.country AS citing_country,
            citing.decision_date AS citing_date
       FROM ${caseLawCitations} c
@@ -293,33 +324,55 @@ const resolutionStatement = (selection: SQL): SQL => sql`
            m.n,
            m.sole_id,
            m.merits_id,
+           m.hinted_id,
            j.blocked,
+           -- The text said which decision it meant, and exactly one
+           -- candidate is of that type: the link goes there, whatever the
+           -- rest of the file looks like. Bounded like the one-file rule,
+           -- and for the same reason: a type counted on a truncated set may
+           -- have a second holder the scan never reached.
+           (
+                 m.n > 1
+             AND m.n < ${CITATION_CANDIDATE_SCAN_CAP}
+             AND m.hinted_n = 1
+           ) AS hinted,
            -- The one-file rule, as a predicate over the bounded candidate
            -- set: one court, exactly one merits decision, every other
            -- candidate a procedural order. The strict upper bound is load
            -- bearing: at the cap the set may be truncated, and a rule judged
-           -- on a partial set is a guess.
+           -- on a partial set is a guess. A hint that names several holders
+           -- withholds the rule too: the text said "usnesení", so linking
+           -- the nález would contradict it. A hint naming none is a word
+           -- the corpus cannot use and the structural rule still applies.
            (
                  m.n > 1
              AND m.n < ${CITATION_CANDIDATE_SCAN_CAP}
+             AND m.hinted_n <= 1
              AND m.courts = 1
              AND m.merits_n = 1
              AND m.procedural_n = m.n - 1
            ) AS one_file
       FROM batch b
       LEFT JOIN policy pol ON pol.citing_country = b.citing_country
+      LEFT JOIN hint_family hf ON hf.hint = b.cited_decision_type_hint
       LEFT JOIN LATERAL (
         SELECT count(*)::int AS n,
                (array_agg(k.id))[1] AS sole_id,
                count(DISTINCT k.court)::int AS courts,
                count(*) FILTER (
-                 WHERE k.decision_type = ANY (${decisionTypeArray(MERITS_DECISION_TYPES)})
+                 WHERE lower(k.decision_type) = ANY (hf.decision_types)
+               )::int AS hinted_n,
+               (array_agg(k.id) FILTER (
+                 WHERE lower(k.decision_type) = ANY (hf.decision_types)
+               ))[1] AS hinted_id,
+               count(*) FILTER (
+                 WHERE lower(k.decision_type) = ANY (${decisionTypeArray(MERITS_DECISION_TYPES)})
                )::int AS merits_n,
                (array_agg(k.id) FILTER (
-                 WHERE k.decision_type = ANY (${decisionTypeArray(MERITS_DECISION_TYPES)})
+                 WHERE lower(k.decision_type) = ANY (${decisionTypeArray(MERITS_DECISION_TYPES)})
                ))[1] AS merits_id,
                count(*) FILTER (
-                 WHERE k.decision_type = ANY (${decisionTypeArray(PROCEDURAL_DECISION_TYPES)})
+                 WHERE lower(k.decision_type) = ANY (${decisionTypeArray(PROCEDURAL_DECISION_TYPES)})
                )::int AS procedural_n
           FROM (
             SELECT cited.id, cited.court, cited.decision_type
@@ -357,13 +410,14 @@ const resolutionStatement = (selection: SQL): SQL => sql`
            c.citing_decision_id,
            c.resolves_to,
            c.blocked,
-           c.one_file,
+           (c.hinted OR c.one_file) AS adjudicated,
            CASE
              WHEN c.n = 1 THEN c.sole_id
+             WHEN c.hinted THEN c.hinted_id
              WHEN c.one_file THEN c.merits_id
            END AS decision_id,
            CASE
-             WHEN c.n = 1 OR c.one_file
+             WHEN c.n = 1 OR c.hinted OR c.one_file
                THEN ${CITATION_RESOLUTION_STATUS.RESOLVED}::text
              WHEN c.n > 1 THEN ${CITATION_RESOLUTION_STATUS.AMBIGUOUS}::text
              ELSE ${CITATION_RESOLUTION_STATUS.UNMATCHED}::text
@@ -378,7 +432,7 @@ const resolutionStatement = (selection: SQL): SQL => sql`
       FROM classified cls
      WHERE target.id = cls.id
        AND cls.resolves_to IS NOT NULL
-    RETURNING target.resolution_status AS status, cls.blocked, cls.one_file
+    RETURNING target.resolution_status AS status, cls.blocked, cls.adjudicated
   )
   SELECT (SELECT count(*)::int FROM batch) AS scanned,
          (SELECT count(*)::int FROM classified WHERE resolves_to IS NULL)
@@ -394,7 +448,7 @@ const resolutionStatement = (selection: SQL): SQL => sql`
          )::int AS resolved,
          count(*) FILTER (
            WHERE u.status = ${CITATION_RESOLUTION_STATUS.RESOLVED}
-             AND u.one_file
+             AND u.adjudicated
          )::int AS adjudicated,
          count(*) FILTER (
            WHERE u.status = ${CITATION_RESOLUTION_STATUS.UNMATCHED}
