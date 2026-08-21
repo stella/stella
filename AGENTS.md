@@ -120,42 +120,9 @@ details unless they are already public in the repository.
 - AI is a tool, not a persona. No anthropomorphizing.
 - Performance is non-negotiable. Batch operations, minimize round-trips, lazy-load
   aggressively.
-- **Vertical slices over horizontal layers.** Features are independent end-to-end
-  slices (own routes, components, handlers). New capabilities land in their own slice;
-  existing code stays untouched.
-
-## Scalability
-
-Never paint yourself into a corner. Architecture must support Magic Circle scale
-without a rewrite. Never return unbounded result sets; keep the API stateless; filter
-by tenant ID in the query. Full guidelines in `/conventions-scale`.
-
-List endpoints should use cursor pagination and return the standard `Page<T>` envelope
-from `apps/api/src/lib/pagination.ts`:
-`{ items, nextCursor, limit }`. Offset pagination, `totalCount`, and unbounded lists
-require explicit justification.
-
-## Performance
-
-Performance regressions are guarded by committed baselines: a regression surfaces as
-a CI failure or a reviewable diff, never silently. The guards:
-
-- Per-route network baseline (`apps/web/e2e/network-baseline.json`): API request
-  manifest, waterfall depth, and per-endpoint DB query budgets, checked by the
-  route-smoke e2e suite.
-- Bundle-size budgets (`scripts/bundle-baseline.json`), enforced after the web build.
-- `require-loader-prefetch` oxlint rule: route suspense queries must start in the
-  route loader, not on component mount.
-- `x-db-queries` response header (dev/CI only): per-request DB query counter that
-  feeds the network baseline's query budgets.
-
-Fix the regression first. Reseeding a baseline (the route-smoke e2e suite run with
-`E2E_NETWORK_BASELINE=write` set, or `bun scripts/bundle-baseline.ts
---write-baseline`) is a product decision that must
-be justified in the PR description; it is not a mechanical way to make CI green.
-Start route data in loaders (`ensureRouteQueryData`), batch DB work instead of
-growing a query budget, and tighten baselines after a perf fix. Full guidelines,
-failure playbook, and the current hotspot burn-down list in `/conventions-perf`.
+- **Vertical slices over horizontal layers.** Features have one owning end-to-end
+  slice (routes, components, handlers). Keep cross-slice changes minimal; change
+  existing code when the end-to-end contract requires it.
 
 ## Coding Conventions
 
@@ -247,38 +214,19 @@ Record<Union, T>`, never `Partial<Record<...>>`; `Partial` lets a new union
   failures through the shared analytics or logging helpers so observability stays
   structured.
 
-## Testing
-
-Only test what can actually go wrong: bugs the type system, framework, or linter would
-miss. Prefer invariants over examples when the input space is large. Full conventions
-in `/conventions-testing`.
-
-A test guarding a detector or backstop must use inputs the detector can actually
-match: production-shaped ids and payloads, not shortened stand-ins a UUID or
-pattern guard can never trip; an "asserts nothing bad happened" test over such
-fixtures is vacuous. Where a map declares paths or cases, assert declared set
-equals exercised set in both directions, and pin fixture literals that stand in
-for a producer's output with `satisfies` against the producer's return type.
-
-## Internationalization (i18n)
-
-`use-intl` runtime. Source language: en. Check `apps/web/src/i18n/langs/` for
-supported languages. Prefer reusable `common.*` keys over feature-scoped duplicates.
-When storing translation keys in constants, maps, props, helper return types, or
-similar indirection, type them with `TranslationKey` from `apps/web/src/i18n/types`
-instead of `string` so stale or missing translation keys fail typecheck.
-Full translation flow and key naming rules in `/conventions-i18n`.
-
-## Linting
-
-oxlint (ultracite preset) + oxfmt. To suppress a rule:
-`// eslint-disable-next-line rule-name`
-
 ## Project Overview
 
 **Monorepo:** runnable services and clients live in `apps/` (`api`, `web`, desktop,
 mobile, landing, collaboration, playground, and focused runners); shared or
 publishable code lives in `packages/`. Use Glob/Grep to explore.
+
+## Convention Routing
+
+Before changing a convention-governed domain, read and apply the matching
+`.agents/skills/conventions-*/SKILL.md`. This includes AI, databases, i18n and
+user-facing strings, ingestion, performance guard failures and hot paths,
+architecture and scale, auth and data access, files and external APIs, tests,
+`apps/web` React effects, and user-facing UI. The skills own the detailed rules.
 
 ## Workspace Layout
 
@@ -292,8 +240,10 @@ publishable code lives in `packages/`. Use Glob/Grep to explore.
 ## Commands
 
 `bun run dev` | `dev:web` (3000) | `dev:api` (3001) |
-`build` | `lint` | `format` | `typecheck` | `test` |
-`db:push`
+`build` | `lint` | `format` | `typecheck` | `test`
+
+Database deployments use committed migrations via
+`bun --filter @stll/api db:migrate`; `db:push` is local schema sync only.
 
 `bun run verify` runs the same checks as the required CI job
 (`ci-checks` in `.github/workflows/ci.yml`); use it to self-verify a
@@ -345,45 +295,13 @@ only the non-obvious caveats for this environment.
   prod). Use the log line to complete sign-in/sign-up when testing.
 - **Mock AI is on by default** (`USE_MOCK_AI="true"` in `apps/api/.env.example`), so no
   AI provider key is needed for local runs.
-- **`bun run verify` / `sync-ai:check` need the `.ai/shared` submodule.** It is not part
-  of the base checkout; run `git submodule update --init .ai/shared` first, otherwise
-  the "AI skill sync" step errors out.
+- **`sync-ai:check` needs the `.ai/shared` submodule.** Local `bun run verify` warns
+  and skips only that step when it is absent. Run
+  `git submodule update --init .ai/shared` for CI-equivalent verification.
 - Optional demo data: `bun --filter @stll/api db:seed-test-user` and `db:seed-dev`.
-
-## Test Doctrine
-
-Full conventions in `/conventions-testing`; these three are the ones most often
-skipped.
-
-- **Mutation check.** A test guarding behavior X is finished only once reverting X
-  makes it fail; until then it may be passing for an unrelated reason. When the test
-  is the evidence for a fix, state in the PR that you ran the mutation. A test whose
-  fixture cannot express the fault is the common failure: assert the fixture DIFFERS
-  before asserting the equivalence, for example `expect(NFD(word)).not.toBe(NFC(word))`
-  before asserting both normalize alike.
-- **Cross-runtime contracts.** Where a rule lives in two runtimes at once
-  (JavaScript, Postgres, the search engine), prove parity by DERIVING the other
-  side's rules executably: query the live extension, render the SQL the query layer
-  emits, read the analyzer's configuration tuple. A hand-maintained mirror list of
-  the other side's behavior is not evidence of parity; it is the drift, written down.
-- **Projection census.** Any "marked done" flag that mirrors state in an external
-  system (search index, object store, queue) ships with a reconciler that compares
-  both sides and reports the difference. Acceptance by the remote system is not
-  durability, so the flag alone can never prove the projection landed.
 
 ## Convention & Type-Cost Guards
 
-- Whole-repo convention metrics that may only decrease live in
-  `scripts/ratchet.ts` (`RATCHET_METRICS`); this includes cross-slice imports
-  (API handler domains, route-private `-` paths, web features), which
-  structurally enforce the vertical-slice principle.
-- Lint suppressions are budgeted per rule, not in aggregate: each rule in
-  `TRACKED_SUPPRESSION_RULES` (`scripts/lint-suppressions.ts`) has its own
-  decrease-only ratchet, and security-tier suppressions additionally need an
-  entry in `scripts/suppression-waivers.json`. Policy in
-  `.oxlint-plugins/README.md`.
-- Typecheck cost is guarded by `scripts/typecheck-baseline.ts`: per-project
-  tsc `--extendedDiagnostics` Types/Instantiations counters with headroom,
-  checked in the CI typecheck job. Reseeding either baseline
-  (`--write` / `--write-baseline`) must be justified in the PR description;
-  it is not a mechanical way to make CI green.
+Convention and suppression ratchets may only tighten. Every lint suppression names
+a rule and reason; security-tier suppressions also need a waiver. Type-cost baseline
+increases require PR justification and are never a mechanical way to pass CI.

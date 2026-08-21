@@ -5,13 +5,8 @@
     "modules": [
       "stella-public-repo",
       "engineering",
-      "scalability",
-      "performance",
       "typescript",
-      "error-handling",
-      "testing",
-      "i18n",
-      "linting"
+      "error-handling"
     ],
     "local": ".ai/local/agents.md",
     "scopes": [
