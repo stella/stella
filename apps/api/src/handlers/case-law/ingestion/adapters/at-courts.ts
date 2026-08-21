@@ -1,3 +1,5 @@
+import { panic, Result } from "better-result";
+
 import {
   ADAPTER_KEYS,
   ADAPTER_TIMEOUT,
@@ -6,539 +8,1192 @@ import {
 import {
   defineSourceAdapter,
   EMPTY_AST,
+  isPersistableSourceDocumentId,
   SOURCE_TOTAL_PROBE_FAILURE,
   sourceTotalProbeFailed,
   sourceTotalRead,
 } from "@/api/handlers/case-law/ingestion/adapter";
-import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
-import { createPagePaginatedFetch } from "@/api/handlers/case-law/ingestion/adapters/pagination";
+import type {
+  IngestionResult,
+  ReconciliationBuildOutcome,
+  ReconciliationSlicePage,
+  ReconciliationSlicePageOptions,
+  SourceAdapter,
+} from "@/api/handlers/case-law/ingestion/adapter";
+import { fetchAtRisWithRetry } from "@/api/handlers/case-law/ingestion/adapters/at-ris-throttle";
+import type { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import {
-  isArrayOf,
-  isNullishOneOrArrayOf,
-  isNullishString,
-  isNullishValue,
+  adapterCatch,
   hashContent,
-  stripHtml,
-  toOptionalValue,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
+import { parseRisDecisionXml } from "@/api/handlers/case-law/ingestion/parsers/at-ris";
+import { sectionsFromAst } from "@/api/handlers/case-law/ingestion/sections-from-ast";
+import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
-import { fetchWithTimeout } from "@/api/lib/fetch";
-import { logger } from "@/api/lib/observability/logger";
-import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
+import type { AdapterKey } from "@/api/lib/legal-search/ingestion-constants";
 import { isRecord } from "@/api/lib/type-guards";
 
-/**
- * Austrian Courts adapter (RIS Judikatur).
- *
- * Fetches court decisions from the RIS Open Government
- * Data API (data.bka.gv.at). The API returns JSON with
- * structured metadata and direct links to fulltext in
- * HTML, XML, RTF, and PDF formats. No authentication
- * required.
- *
- * Cursor format: item offset as string (e.g. "offset:20").
- * Each page fetches PAGE_SIZE items.
- */
-
 const API_URL = "https://data.bka.gv.at/ris/api/v2.6/Judikatur";
-const RIS_DOCUMENT_HOST_POLICY = {
-  type: "https-host-suffix" as const,
-  suffixes: ["ris.bka.gv.at"],
-};
-/** RIS API enforces a maximum page size of 20. */
-const PAGE_SIZE = 20;
+const DOCUMENT_ORIGIN = "https://www.ris.bka.gv.at";
+const COUNTRY = "AUT";
+const LANGUAGE = "de";
+const PAGE_SIZE = 100;
+const REQUEST_INTERVAL_MS = 5000;
+const MIN_DOCUMENT_LENGTH = 100;
+const START_DIGEST = "start";
+const FOREIGN_ORGAN_PREFIX = "AUSL";
+const TIP_WINDOW_MONTHS = 3;
+const MAX_SLICE_PAGES = 200;
+// The runner admits two adapter cycles by default. At 100 details per RIS page,
+// the shared five-second publisher gate can therefore hold a healthy page for
+// almost 17 minutes. Keep the page budget above that contention envelope and
+// the cycle budget above the page budget, while remaining below the runner's
+// 45-minute hard deadline.
+const PAGE_TIMEOUT_MS = 25 * 60_000;
+const CYCLE_TIMEOUT_MS = 30 * 60_000;
 
-/**
- * RIS numbers `Seitennummer` from one, which is also what the count probe
- * below asks for. Stated once, so the crawl's page arithmetic and every direct
- * request agree about where the collection starts.
- */
-const FIRST_PAGE = 1;
+const CURSOR_PHASE = {
+  COLLECT: "collect",
+  VERIFY: "verify",
+} as const;
 
-type RisContentUrl = {
-  DataType?: string | null;
-  Url?: string | null;
-};
-
-type RisEntscheidungstext = {
-  Geschaeftszahl?: string | null;
-  Dokumenttyp?: string | null;
-  Gericht?: string | null;
-  Entscheidungsart?: string | null;
-  Entscheidungsdatum?: string | null;
-  DokumentUrl?: string | null;
-};
-
-type RisJustiz = {
-  Rechtsgebiete?: { item?: string | string[] | null } | null;
-  Gericht?: string | null;
-  Rechtssatznummern?: {
-    item?: string | string[] | null;
-  } | null;
-  Entscheidungstexte?: {
-    item?: RisEntscheidungstext | RisEntscheidungstext[] | null;
-  } | null;
+type CrawlCursorBase = {
+  slice: string;
+  page: number;
+  digest: string;
+  foreign: number;
+  collected: number;
+  total: number | null;
 };
 
-type RisJudikatur = {
-  Dokumenttyp?: string | null;
-  Geschaeftszahl?: { item?: string | string[] | null } | null;
-  Normen?: { item?: string | string[] | null } | null;
-  Entscheidungsdatum?: string | null;
-  EuropeanCaseLawIdentifier?: string | null;
-  Justiz?: RisJustiz | null;
-};
-
-type RisMetadaten = {
-  Technisch?: {
-    ID?: string | null;
-    Applikation?: string | null;
-    Organ?: string | null;
-  } | null;
-  Allgemein?: {
-    Veroeffentlicht?: string | null;
-    Geaendert?: string | null;
-    DokumentUrl?: string | null;
-  } | null;
-  Judikatur?: RisJudikatur | null;
-};
-
-type RisDocumentReference = {
-  Data?: {
-    Metadaten?: RisMetadaten | null;
-    Dokumentliste?: {
-      ContentReference?: {
-        Urls?: {
-          ContentUrl?: RisContentUrl[] | RisContentUrl | null;
-        } | null;
-      } | null;
-    } | null;
-  } | null;
-};
-
-type RisApiResponse = {
-  OgdSearchResult?: {
-    OgdDocumentResults?: {
-      Hits?: {
-        "@pageNumber"?: string | null;
-        "@pageSize"?: string | null;
-        "#text"?: string | null;
-      } | null;
-      OgdDocumentReference?:
-        | RisDocumentReference[]
-        | RisDocumentReference
-        | null;
-    } | null;
-  } | null;
-};
-
-const isOptionalStringList = (
-  value: unknown,
-): value is string | string[] | null | undefined =>
-  value === undefined ||
-  value === null ||
-  typeof value === "string" ||
-  isArrayOf(value, (item): item is string => typeof item === "string");
-
-const isRisContentUrl = (value: unknown): value is RisContentUrl =>
-  isRecord(value) &&
-  isNullishString(value["DataType"]) &&
-  isNullishString(value["Url"]);
-
-const isRisEntscheidungstext = (
-  value: unknown,
-): value is RisEntscheidungstext =>
-  isRecord(value) &&
-  isNullishString(value["Geschaeftszahl"]) &&
-  isNullishString(value["Dokumenttyp"]) &&
-  isNullishString(value["Gericht"]) &&
-  isNullishString(value["Entscheidungsart"]) &&
-  isNullishString(value["Entscheidungsdatum"]) &&
-  isNullishString(value["DokumentUrl"]);
-
-const isRisStringItems = (
-  value: unknown,
-): value is { item?: string | string[] | null } =>
-  isRecord(value) && isOptionalStringList(value["item"]);
-
-const isRisEntscheidungstextItems = (
-  value: unknown,
-): value is {
-  item?: RisEntscheidungstext | RisEntscheidungstext[] | null;
-} =>
-  isRecord(value) &&
-  isNullishOneOrArrayOf(value["item"], isRisEntscheidungstext);
-
-const isRisJustiz = (value: unknown): value is RisJustiz =>
-  isRecord(value) &&
-  isNullishValue(value["Rechtsgebiete"], isRisStringItems) &&
-  isNullishString(value["Gericht"]) &&
-  isNullishValue(value["Rechtssatznummern"], isRisStringItems) &&
-  isNullishValue(value["Entscheidungstexte"], isRisEntscheidungstextItems);
-
-const isRisJudikatur = (value: unknown): value is RisJudikatur =>
-  isRecord(value) &&
-  isNullishString(value["Dokumenttyp"]) &&
-  isNullishValue(value["Geschaeftszahl"], isRisStringItems) &&
-  isNullishValue(value["Normen"], isRisStringItems) &&
-  isNullishString(value["Entscheidungsdatum"]) &&
-  isNullishString(value["EuropeanCaseLawIdentifier"]) &&
-  isNullishValue(value["Justiz"], isRisJustiz);
-
-const isRisMetadaten = (value: unknown): value is RisMetadaten =>
-  isRecord(value) &&
-  isNullishValue(
-    value["Technisch"],
-    (technical): technical is NonNullable<RisMetadaten["Technisch"]> =>
-      isRecord(technical) &&
-      isNullishString(technical["ID"]) &&
-      isNullishString(technical["Applikation"]) &&
-      isNullishString(technical["Organ"]),
-  ) &&
-  isNullishValue(
-    value["Allgemein"],
-    (general): general is NonNullable<RisMetadaten["Allgemein"]> =>
-      isRecord(general) &&
-      isNullishString(general["Veroeffentlicht"]) &&
-      isNullishString(general["Geaendert"]) &&
-      isNullishString(general["DokumentUrl"]),
-  ) &&
-  isNullishValue(value["Judikatur"], isRisJudikatur);
-
-const isRisUrls = (
-  value: unknown,
-): value is { ContentUrl?: RisContentUrl[] | RisContentUrl | null } =>
-  isRecord(value) &&
-  isNullishOneOrArrayOf(value["ContentUrl"], isRisContentUrl);
-
-const isRisContentReference = (
-  value: unknown,
-): value is {
-  Urls?: { ContentUrl?: RisContentUrl[] | RisContentUrl | null } | null;
-} => isRecord(value) && isNullishValue(value["Urls"], isRisUrls);
-
-const isRisDokumentliste = (
-  value: unknown,
-): value is {
-  ContentReference?: {
-    Urls?: {
-      ContentUrl?: RisContentUrl[] | RisContentUrl | null;
-    } | null;
-  } | null;
-} =>
-  isRecord(value) &&
-  isNullishValue(value["ContentReference"], isRisContentReference);
-
-const isRisData = (
-  value: unknown,
-): value is {
-  Metadaten?: RisMetadaten | null;
-  Dokumentliste?: {
-    ContentReference?: {
-      Urls?: {
-        ContentUrl?: RisContentUrl[] | RisContentUrl | null;
-      } | null;
-    } | null;
-  } | null;
-} =>
-  isRecord(value) &&
-  isNullishValue(value["Metadaten"], isRisMetadaten) &&
-  isNullishValue(value["Dokumentliste"], isRisDokumentliste);
-
-const isRisDocumentReference = (
-  value: unknown,
-): value is RisDocumentReference =>
-  isRecord(value) && isNullishValue(value["Data"], isRisData);
-
-const isRisApiResponse = (value: unknown): value is RisApiResponse =>
-  isRecord(value) &&
-  isNullishValue(
-    value["OgdSearchResult"],
-    (
-      searchResult,
-    ): searchResult is NonNullable<RisApiResponse["OgdSearchResult"]> =>
-      isRecord(searchResult) &&
-      isNullishValue(
-        searchResult["OgdDocumentResults"],
-        (
-          documentResults,
-        ): documentResults is NonNullable<
-          NonNullable<RisApiResponse["OgdSearchResult"]>["OgdDocumentResults"]
-        > =>
-          isRecord(documentResults) &&
-          isNullishValue(
-            documentResults["Hits"],
-            (
-              hits,
-            ): hits is NonNullable<
-              NonNullable<
-                NonNullable<
-                  RisApiResponse["OgdSearchResult"]
-                >["OgdDocumentResults"]
-              >["Hits"]
-            > =>
-              isRecord(hits) &&
-              isNullishString(hits["@pageNumber"]) &&
-              isNullishString(hits["@pageSize"]) &&
-              isNullishString(hits["#text"]),
-          ) &&
-          isNullishOneOrArrayOf(
-            documentResults["OgdDocumentReference"],
-            isRisDocumentReference,
-          ),
-      ),
-  );
-
-/** Normalize item fields that can be string or string[]. */
-const toArray = (
-  val: string | readonly string[] | undefined | null,
-): string[] => {
-  if (val === undefined || val === null) {
-    return [];
-  }
-  if (typeof val === "string") {
-    return [val];
-  }
-  return [...val];
-};
-
-/** Find the HTML fulltext URL from content URLs. */
-const findHtmlUrl = (doc: RisDocumentReference): string | undefined => {
-  const raw = doc.Data?.Dokumentliste?.ContentReference?.Urls?.ContentUrl;
-  if (!raw) {
-    return undefined;
-  }
-  const urls = Array.isArray(raw) ? raw : [raw];
-  return toOptionalValue(urls.find((u) => u.DataType === "Html")?.Url);
-};
-
-/** Fetch fulltext HTML and strip to plain text. */
-const fetchFulltext = async (
-  htmlUrl: string,
-  signal?: AbortSignal,
-): Promise<string | undefined> => {
-  const target = restrictOutboundUrl({
-    rawUrl: htmlUrl,
-    hostPolicy: RIS_DOCUMENT_HOST_POLICY,
-  });
-  if (target === null) {
-    return undefined;
-  }
-
-  try {
-    const response = await fetchWithTimeout(target, {
-      redirect: "error",
-      signal,
-      timeoutMs: ADAPTER_TIMEOUT.REQUEST,
+type CrawlCursor =
+  | (CrawlCursorBase & {
+      phase: typeof CURSOR_PHASE.COLLECT;
+      expectedDigest: null;
+      expectedForeign: null;
+    })
+  | (CrawlCursorBase & {
+      phase: typeof CURSOR_PHASE.VERIFY;
+      expectedDigest: string;
+      expectedForeign: number;
     });
 
-    if (!response.ok) {
-      logger.warn("case_law.ingestion.fulltext_fetch_failed", {
-        adapterKey: ADAPTER_KEYS.AT_COURTS,
-        httpStatus: response.status,
-        url: target.toString(),
-      });
+type RisListingItem = Record<string, unknown>;
+
+type RisListingPage = {
+  items: RisListingItem[];
+  pageNumber: number;
+  pageSize: number;
+  total: number;
+};
+
+export type AtRisSourceDefinition = {
+  application: string;
+  excludeForeignCourts: boolean;
+  firstSlice: string;
+  key: AdapterKey;
+  lastSlice?: string | undefined;
+  name: string;
+};
+
+export type AtRisDependencies = {
+  now: () => Date;
+  request: typeof fetchWithRetry;
+  sleep: (ms: number) => Promise<void>;
+};
+
+const JUSTIZ_SOURCE = {
+  application: "Justiz",
+  excludeForeignCourts: true,
+  firstSlice: "1925-04",
+  key: ADAPTER_KEYS.AT_COURTS,
+  name: "Austrian Courts (RIS Justiz)",
+} as const satisfies AtRisSourceDefinition;
+
+const DEFAULT_DEPENDENCIES: AtRisDependencies = {
+  now: () => new Date(),
+  request: fetchAtRisWithRetry,
+  sleep: Bun.sleep,
+};
+
+const asRecord = (value: unknown): Record<string, unknown> | undefined =>
+  isRecord(value) ? value : undefined;
+
+const nestedRecord = (
+  value: unknown,
+  ...keys: readonly string[]
+): Record<string, unknown> | undefined => {
+  let current = asRecord(value);
+  for (const key of keys) {
+    current = asRecord(current?.[key]);
+    if (current === undefined) {
       return undefined;
     }
-
-    const html = await response.text();
-    return stripHtml(html);
-  } catch (error) {
-    // Re-throw abort/timeout so pipeline detects
-    // cancellation.
-    if (error instanceof DOMException) {
-      throw error;
-    }
-    return undefined;
   }
+  return current;
 };
 
-/** Extract Entscheidungsart from the first Entscheidungstext. */
-const extractEntscheidungsart = (
-  justiz: RisJustiz | null | undefined,
-): string | undefined => {
-  if (!justiz?.Entscheidungstexte?.item) {
-    return undefined;
+const optionalString = (value: unknown): string | undefined =>
+  typeof value === "string" && value.trim() !== "" ? value : undefined;
+
+const stringList = (value: unknown): string[] => {
+  if (typeof value === "string") {
+    return value.trim() === "" ? [] : [value];
   }
-  const items = Array.isArray(justiz.Entscheidungstexte.item)
-    ? justiz.Entscheidungstexte.item
-    : [justiz.Entscheidungstexte.item];
-  return toOptionalValue(items[0]?.Entscheidungsart);
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.filter((item): item is string => typeof item === "string");
 };
 
-const parseRisItem = async (
-  raw: unknown,
-  signal?: AbortSignal,
-): Promise<IngestionResult | null> => {
-  if (!isRisDocumentReference(raw)) {
-    return null;
-  }
-  const doc = raw;
+const itemValues = (value: unknown): string[] =>
+  stringList(asRecord(value)?.["item"]);
 
-  const meta = doc.Data?.Metadaten;
-  const jud = meta?.Judikatur;
-  const justiz = jud?.Justiz;
-
-  const caseNumbers = toArray(jud?.Geschaeftszahl?.item);
-  const caseNumber = caseNumbers.at(0);
-  const court =
-    toOptionalValue(justiz?.Gericht) ?? toOptionalValue(meta?.Technisch?.Organ);
-
-  if (!caseNumber || !court) {
-    return null;
-  }
-
-  const rawHtmlUrl = findHtmlUrl(doc);
-  const htmlUrl = rawHtmlUrl
-    ? restrictOutboundUrl({
-        rawUrl: rawHtmlUrl,
-        hostPolicy: RIS_DOCUMENT_HOST_POLICY,
-      })
-    : null;
-  if (rawHtmlUrl && htmlUrl === null) {
-    logger.warn("case_law.ingestion.outbound_url_rejected", {
-      adapterKey: ADAPTER_KEYS.AT_COURTS,
-      caseNumber,
-    });
-  }
-  const fulltext = htmlUrl
-    ? await fetchFulltext(htmlUrl.toString(), signal)
+const monthParts = (
+  slice: string,
+): { year: number; month: number } | undefined => {
+  const match = /^(?<year>\d{4})-(?<month>\d{2})$/u.exec(slice);
+  const year = Number(match?.groups?.["year"]);
+  const month = Number(match?.groups?.["month"]);
+  return Number.isInteger(year) && month >= 1 && month <= 12
+    ? { year, month }
     : undefined;
+};
 
-  const raw_ = JSON.stringify(doc.Data?.Metadaten);
+const formatMonth = (year: number, month: number): string =>
+  `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}`;
 
+export const atRisNextMonth = (slice: string): string | null => {
+  const parts = monthParts(slice);
+  if (parts === undefined) {
+    return null;
+  }
+  return parts.month === 12
+    ? formatMonth(parts.year + 1, 1)
+    : formatMonth(parts.year, parts.month + 1);
+};
+
+const previousMonth = (firstSlice: string, slice: string): string | null => {
+  const parts = monthParts(slice);
+  if (parts === undefined || slice <= firstSlice) {
+    return null;
+  }
+  const previous =
+    parts.month === 1
+      ? formatMonth(parts.year - 1, 12)
+      : formatMonth(parts.year, parts.month - 1);
+  return previous < firstSlice ? null : previous;
+};
+
+export const atRisPreviousMonth = (slice: string): string | null =>
+  previousMonth(JUSTIZ_SOURCE.firstSlice, slice);
+
+export const atRisMonthOf = (date: Date): string =>
+  formatMonth(date.getUTCFullYear(), date.getUTCMonth() + 1);
+
+export const atRisLastCompleteMonth = (date: Date): string =>
+  previousMonth("0001-01", atRisMonthOf(date)) ?? "0001-01";
+
+const tipSlice = (source: AtRisSourceDefinition, now: Date): string => {
+  const complete = atRisLastCompleteMonth(now);
+  return source.lastSlice !== undefined && source.lastSlice < complete
+    ? source.lastSlice
+    : complete;
+};
+
+const monthDateRange = (
+  slice: string,
+): { from: string; to: string } | undefined => {
+  const parts = monthParts(slice);
+  if (parts === undefined) {
+    return undefined;
+  }
+  const lastDay = new Date(Date.UTC(parts.year, parts.month, 0))
+    .getUTCDate()
+    .toString()
+    .padStart(2, "0");
   return {
-    caseNumber,
-    ecli: toOptionalValue(jud?.EuropeanCaseLawIdentifier),
-    court,
-    country: "AUT",
-    language: "de",
-    decisionDate: toOptionalValue(jud?.Entscheidungsdatum),
-    decisionType: toOptionalValue(jud?.Dokumenttyp),
-    fulltext,
-    sourceUrl: toOptionalValue(meta?.Allgemein?.DokumentUrl),
-    documentUrl: htmlUrl?.toString(),
-    metadata: {
-      risId: toOptionalValue(meta?.Technisch?.ID),
-      applikation: toOptionalValue(meta?.Technisch?.Applikation),
-      normen: toArray(jud?.Normen?.item),
-      rechtsgebiete: toArray(justiz?.Rechtsgebiete?.item),
-      entscheidungsart: extractEntscheidungsart(justiz),
-      additionalCaseNumbers:
-        caseNumbers.length > 1 ? caseNumbers.slice(1) : undefined,
-      published: toOptionalValue(meta?.Allgemein?.Veroeffentlicht),
-      modified: toOptionalValue(meta?.Allgemein?.Geaendert),
-    },
-    rawHash: hashContent(raw_),
-    parserVersion: PARSER_VERSION,
-    // Court-specific AST parsing is not available for RIS yet.
-    documentAst: EMPTY_AST,
-    sourceRaw: undefined,
-    sourceRawContentType: "text/html",
+    from: `${slice}-01`,
+    to: `${slice}-${lastDay}`,
   };
 };
 
-export const atCourtsAdapter = defineSourceAdapter({
-  key: ADAPTER_KEYS.AT_COURTS,
-  name: "Austrian Courts (RIS)",
-  country: "AUT",
-  language: "de",
-  minRequestIntervalMs: 1000,
-  pageTimeoutMs: 220_000,
-
-  /**
-   * The search envelope carries the total hit count on every page, so the
-   * source's own total is one minimal request with the same query the crawl
-   * uses — the benchmark then measures exactly the universe the crawl sees.
-   */
-  async getTotalCount(signal) {
-    try {
-      const response = await fetchWithTimeout(
-        `${API_URL}?${new URLSearchParams({
-          Seitennummer: String(FIRST_PAGE),
-          Seitengroesse: String(PAGE_SIZE),
-          Sortierung: "Aenderungsdatum",
-          Aufsteigend: "false",
-        }).toString()}`,
-        {
-          signal,
-          headers: { Accept: "application/json" },
-          timeoutMs: ADAPTER_TIMEOUT.REQUEST,
-        },
-      );
-      if (!response.ok) {
-        return sourceTotalProbeFailed(SOURCE_TOTAL_PROBE_FAILURE.HTTP_STATUS);
-      }
-      const json: unknown = await response.json();
-      if (!isRisApiResponse(json)) {
-        return sourceTotalProbeFailed(
-          SOURCE_TOTAL_PROBE_FAILURE.UNREADABLE_PAYLOAD,
-        );
-      }
-      const raw = json.OgdSearchResult?.OgdDocumentResults?.Hits?.["#text"];
-      return typeof raw === "string"
-        ? sourceTotalRead(Number.parseInt(raw, 10))
-        : sourceTotalProbeFailed(SOURCE_TOTAL_PROBE_FAILURE.UNREADABLE_PAYLOAD);
-    } catch (error) {
-      return { type: "probe-failed", errorTag: errorTag(error) };
-    }
-  },
-
-  reconciliation: {
-    type: "unsupported",
-    reason:
-      "adapter exists but has not been validated in production yet, so it " +
-      "runs no crawl for a reconciliation loop to reconcile against",
-  },
-
-  fetchPage: createPagePaginatedFetch<RisApiResponse>({
-    adapterKey: ADAPTER_KEYS.AT_COURTS,
-    pageSize: PAGE_SIZE,
-    legacyPageSize: PAGE_SIZE,
-    firstPage: FIRST_PAGE,
-
-    buildRequest: (page) => ({
-      url: `${API_URL}?${new URLSearchParams({
-        Seitennummer: String(page),
-        Seitengroesse: String(PAGE_SIZE),
-        Sortierung: "Aenderungsdatum",
-        Aufsteigend: "false",
-      }).toString()}`,
-      init: {
-        headers: { Accept: "application/json" },
-      },
-    }),
-
-    parseResponse: async (response) => {
-      const json: unknown = await response.json();
-      return isRisApiResponse(json) ? json : {};
-    },
-
-    extractItems: (data) => {
-      const results = data.OgdSearchResult?.OgdDocumentResults;
-      const rawTotal = results?.Hits?.["#text"]
-        ? Number.parseInt(results.Hits["#text"], 10)
-        : undefined;
-      // Guard against NaN from malformed API response
-      const total =
-        rawTotal !== undefined && !Number.isNaN(rawTotal)
-          ? rawTotal
-          : undefined;
-      // XML-to-JSON may return a single object instead
-      // of an array when there's only one result.
-      const ref = results?.OgdDocumentReference;
-      const items = (() => {
-        if (ref === null || ref === undefined) {
-          return [];
-        }
-        if (Array.isArray(ref)) {
-          return ref;
-        }
-        return [ref];
-      })();
-      return { items, total };
-    },
-
-    parseItem: parseRisItem,
-  }),
+const cursorForSlice = (slice: string): CrawlCursor => ({
+  slice,
+  phase: CURSOR_PHASE.COLLECT,
+  page: 1,
+  digest: START_DIGEST,
+  foreign: 0,
+  collected: 0,
+  total: null,
+  expectedDigest: null,
+  expectedForeign: null,
 });
+
+const encodeCursor = ({
+  slice,
+  phase,
+  page,
+  digest,
+  foreign,
+  collected,
+  total,
+  expectedDigest,
+  expectedForeign,
+}: CrawlCursor): string =>
+  [
+    slice,
+    phase,
+    page,
+    digest,
+    foreign,
+    collected,
+    total ?? "unset",
+    expectedDigest ?? "unset",
+    expectedForeign ?? "unset",
+  ].join("|");
+
+const parseCount = (value: string): number | undefined => {
+  if (!/^\d+$/u.test(value)) {
+    return undefined;
+  }
+  const count = Number(value);
+  return Number.isSafeInteger(count) ? count : undefined;
+};
+
+const parseNullableCount = (
+  value: string | undefined,
+): number | null | undefined => {
+  if (value === "unset") {
+    return null;
+  }
+  return value === undefined ? undefined : parseCount(value);
+};
+
+const decodeCursor = (
+  cursor: string | null,
+  now: Date,
+  source: AtRisSourceDefinition,
+): CrawlCursor | undefined => {
+  const lastCompleteMonth = tipSlice(source, now);
+  if (cursor === null) {
+    return cursorForSlice(lastCompleteMonth);
+  }
+  const [
+    slice,
+    phase,
+    rawPage,
+    digest,
+    rawForeign,
+    rawCollected,
+    rawTotal,
+    rawExpectedDigest,
+    rawExpectedForeign,
+  ] = cursor.split("|");
+  const page = rawPage === undefined ? undefined : parseCount(rawPage);
+  const foreign = rawForeign === undefined ? undefined : parseCount(rawForeign);
+  const collected =
+    rawCollected === undefined ? undefined : parseCount(rawCollected);
+  const total = parseNullableCount(rawTotal);
+  const expectedDigest =
+    rawExpectedDigest === "unset" ? null : rawExpectedDigest;
+  const expectedForeign = parseNullableCount(rawExpectedForeign);
+  if (
+    slice === undefined ||
+    monthParts(slice) === undefined ||
+    slice < source.firstSlice ||
+    slice > lastCompleteMonth ||
+    (phase !== CURSOR_PHASE.COLLECT && phase !== CURSOR_PHASE.VERIFY) ||
+    page === undefined ||
+    page < 1 ||
+    digest === undefined ||
+    digest === "" ||
+    foreign === undefined ||
+    collected === undefined ||
+    total === undefined ||
+    expectedDigest === undefined ||
+    expectedForeign === undefined
+  ) {
+    return undefined;
+  }
+  const base = {
+    slice,
+    page,
+    digest,
+    foreign,
+    collected,
+    total,
+  };
+  if (phase === CURSOR_PHASE.COLLECT) {
+    return expectedDigest === null && expectedForeign === null
+      ? {
+          ...base,
+          phase,
+          expectedDigest,
+          expectedForeign,
+        }
+      : undefined;
+  }
+  return expectedDigest !== null && expectedForeign !== null
+    ? {
+        ...base,
+        phase,
+        expectedDigest,
+        expectedForeign,
+      }
+    : undefined;
+};
+
+const listingQuery = (
+  source: AtRisSourceDefinition,
+  slice: string | undefined,
+  page: number,
+  court?: string,
+): string => {
+  const params = new URLSearchParams({
+    Applikation: source.application,
+    "Dokumenttyp.SucheInEntscheidungstexten": "true",
+    DokumenteProSeite: "OneHundred",
+    Seitennummer: String(page),
+    "Sortierung.SortDirection": "Ascending",
+    "Sortierung.SortedByColumn": "Datum",
+  });
+  if (slice !== undefined) {
+    const range = monthDateRange(slice);
+    if (range === undefined) {
+      panic(`Invalid RIS month slice: ${slice}`);
+    }
+    params.set("EntscheidungsdatumVon", range.from);
+    params.set("EntscheidungsdatumBis", range.to);
+  }
+  if (court !== undefined) {
+    params.set("Gericht", court);
+  }
+  return `${API_URL}?${params.toString()}`;
+};
+
+const listingItems = (value: unknown): RisListingItem[] | undefined => {
+  if (value === undefined || value === null) {
+    return [];
+  }
+  if (Array.isArray(value)) {
+    return value.every(isRecord) ? value : undefined;
+  }
+  return isRecord(value) ? [value] : undefined;
+};
+
+const parseListingPage = (value: unknown): RisListingPage | undefined => {
+  const results = nestedRecord(value, "OgdSearchResult", "OgdDocumentResults");
+  const hits = asRecord(results?.["Hits"]);
+  const rawTotal = optionalString(hits?.["#text"]);
+  const total = rawTotal === undefined ? undefined : parseCount(rawTotal);
+  const rawPageNumber = optionalString(hits?.["@pageNumber"]);
+  const pageNumber =
+    rawPageNumber === undefined ? undefined : parseCount(rawPageNumber);
+  const rawPageSize = optionalString(hits?.["@pageSize"]);
+  const pageSize =
+    rawPageSize === undefined ? undefined : parseCount(rawPageSize);
+  const items = listingItems(results?.["OgdDocumentReference"]);
+  if (
+    total === undefined ||
+    pageNumber === undefined ||
+    pageNumber < 1 ||
+    pageSize === undefined ||
+    pageSize < 1 ||
+    items === undefined ||
+    items.some((item) => nestedRecord(item, "Data", "Metadaten") === undefined)
+  ) {
+    return undefined;
+  }
+  if (
+    (total === 0 && items.length !== 0) ||
+    (total > 0 && items.length === 0)
+  ) {
+    return undefined;
+  }
+  return { items, pageNumber, pageSize, total };
+};
+
+const rawSourceDocumentIdOf = (item: RisListingItem): string | undefined =>
+  optionalString(nestedRecord(item, "Data", "Metadaten", "Technisch")?.["ID"]);
+
+const sourceDocumentIdOf = (item: RisListingItem): string | undefined => {
+  const id = rawSourceDocumentIdOf(item);
+  return id !== undefined && isPersistableSourceDocumentId(id) ? id : undefined;
+};
+
+const organOf = (item: RisListingItem): string | undefined =>
+  optionalString(
+    nestedRecord(item, "Data", "Metadaten", "Technisch")?.["Organ"],
+  );
+
+const isForeignItem = (item: RisListingItem): boolean =>
+  organOf(item)?.startsWith(FOREIGN_ORGAN_PREFIX) ?? false;
+
+const isExcludedItem = (
+  source: AtRisSourceDefinition,
+  item: RisListingItem,
+): boolean => source.excludeForeignCourts && isForeignItem(item);
+
+const contentUrls = (item: RisListingItem): Record<string, string> => {
+  const raw = nestedRecord(
+    item,
+    "Data",
+    "Dokumentliste",
+    "ContentReference",
+    "Urls",
+  )?.["ContentUrl"];
+  let entries: unknown[] = [];
+  if (Array.isArray(raw)) {
+    entries = raw;
+  } else if (raw !== undefined) {
+    entries = [raw];
+  }
+  const urls: Record<string, string> = {};
+  for (const entry of entries) {
+    const record = asRecord(entry);
+    const dataType = optionalString(record?.["DataType"]);
+    const url = optionalString(record?.["Url"]);
+    if (dataType !== undefined && url !== undefined) {
+      urls[dataType] = url;
+    }
+  }
+  return urls;
+};
+
+const constructedDocumentUrl = (
+  source: AtRisSourceDefinition,
+  sourceDocumentId: string,
+  extension: "html" | "xml",
+): string => {
+  const id = encodeURIComponent(sourceDocumentId);
+  return `${DOCUMENT_ORIGIN}/Dokumente/${source.application}/${id}/${id}.${extension}`;
+};
+
+const listedFormatMatches = (
+  source: AtRisSourceDefinition,
+  item: RisListingItem,
+  sourceDocumentId: string,
+  dataType: "Html" | "Xml",
+  extension: "html" | "xml",
+): boolean =>
+  contentUrls(item)[dataType] ===
+  constructedDocumentUrl(source, sourceDocumentId, extension);
+
+const readDecisionMetadata = (
+  source: AtRisSourceDefinition,
+  item: RisListingItem,
+) => {
+  const metadata = nestedRecord(item, "Data", "Metadaten");
+  const technical = asRecord(metadata?.["Technisch"]);
+  const general = asRecord(metadata?.["Allgemein"]);
+  const judicature = asRecord(metadata?.["Judikatur"]);
+  const sourceMetadata = asRecord(judicature?.[source.application]);
+  const caseNumbers = itemValues(judicature?.["Geschaeftszahl"]);
+  const decisionTexts = asRecord(sourceMetadata?.["Entscheidungstexte"])?.[
+    "item"
+  ];
+  const firstDecisionText = asRecord(
+    Array.isArray(decisionTexts) ? decisionTexts.at(0) : decisionTexts,
+  );
+  const decisionType =
+    optionalString(sourceMetadata?.["Entscheidungsart"]) ??
+    optionalString(firstDecisionText?.["Entscheidungsart"]);
+  return {
+    metadata,
+    general,
+    judicature,
+    sourceMetadata,
+    caseNumbers,
+    decisionType: decisionType?.toLocaleLowerCase("de-AT"),
+    caseNumber: caseNumbers.at(0),
+    court:
+      optionalString(sourceMetadata?.["Gericht"]) ??
+      optionalString(sourceMetadata?.["EntscheidendeBehoerde"]) ??
+      optionalString(technical?.["Organ"]),
+    decisionDate: optionalString(judicature?.["Entscheidungsdatum"]),
+    ecli: optionalString(judicature?.["EuropeanCaseLawIdentifier"]),
+    sourceUrl: optionalString(general?.["DokumentUrl"]),
+    published: optionalString(general?.["Veroeffentlicht"]),
+    modified: optionalString(general?.["Geaendert"]),
+    statutes: itemValues(judicature?.["Normen"]),
+    legalAreas: itemValues(sourceMetadata?.["Rechtsgebiete"]),
+    headnoteNumbers: itemValues(sourceMetadata?.["Rechtssatznummern"]),
+  };
+};
+
+const quarantineSourceDocumentIds = (
+  source: AtRisSourceDefinition,
+  item: RisListingItem,
+): string[] => {
+  const data = readDecisionMetadata(source, item);
+  const rawId = rawSourceDocumentIdOf(item);
+  const sibling =
+    rawId !== undefined && rawId.length <= 1024
+      ? /_(?<sibling>\d{3})$/u.exec(rawId)?.groups?.["sibling"]
+      : undefined;
+  const siblings = sibling === undefined ? [undefined] : [sibling, undefined];
+  return siblings.map((stableSibling) => {
+    const fingerprint = JSON.stringify({
+      organ: organOf(item),
+      caseNumbers: data.caseNumbers,
+      court: data.court,
+      decisionDate: data.decisionDate,
+      decisionType: data.decisionType,
+      statutes: data.statutes,
+      legalAreas: data.legalAreas,
+      headnoteNumbers: data.headnoteNumbers,
+      sourceMetadata: data.sourceMetadata,
+      sibling: stableSibling,
+    });
+    return `ris-quarantine:${hashContent(fingerprint)}`;
+  });
+};
+
+type RisIdentity = {
+  sourceDocumentId: string;
+  sourceDocumentIdRepairAliases: readonly string[] | undefined;
+  type: "publisher" | "quarantine";
+};
+
+const identityOf = (
+  source: AtRisSourceDefinition,
+  item: RisListingItem,
+): RisIdentity => {
+  const quarantineIds = quarantineSourceDocumentIds(source, item);
+  const quarantineId = quarantineIds[0];
+  if (quarantineId === undefined) {
+    panic("RIS quarantine identity construction failed");
+  }
+  const sourceDocumentId = sourceDocumentIdOf(item);
+  return sourceDocumentId === undefined
+    ? {
+        sourceDocumentId: quarantineId,
+        sourceDocumentIdRepairAliases: undefined,
+        type: "quarantine",
+      }
+    : {
+        sourceDocumentId,
+        sourceDocumentIdRepairAliases: quarantineIds,
+        type: "publisher",
+      };
+};
+
+const itemDigest = (
+  source: AtRisSourceDefinition,
+  previous: string,
+  items: readonly RisListingItem[],
+): string =>
+  hashContent(
+    [
+      previous,
+      ...items.map((item) => identityOf(source, item).sourceDocumentId),
+    ].join("\n"),
+  );
+
+type BuildListingOnlyOptions = {
+  identity: RisIdentity;
+  item: RisListingItem;
+  reason: string;
+  source: AtRisSourceDefinition;
+  rawDetail?: string | undefined;
+};
+
+const buildListingOnly = ({
+  identity,
+  item,
+  reason,
+  source,
+  rawDetail,
+}: BuildListingOnlyOptions): IngestionResult => {
+  const { sourceDocumentId, sourceDocumentIdRepairAliases } = identity;
+  const data = readDecisionMetadata(source, item);
+  const caseNumber = data.caseNumber ?? `RIS ${sourceDocumentId}`;
+  const court = data.court ?? `RIS ${source.application}`;
+  const sourceRaw = JSON.stringify({
+    listing: item,
+    ...(rawDetail === undefined ? {} : { documentXml: rawDetail }),
+  });
+  return {
+    sourceDocumentId,
+    sourceDocumentIdRepairAliases,
+    caseNumber,
+    ...(data.caseNumber === undefined ? { caseNumberIsPlaceholder: true } : {}),
+    isListingOnly: true,
+    ecli: data.ecli,
+    court,
+    country: COUNTRY,
+    language: LANGUAGE,
+    decisionDate: data.decisionDate,
+    decisionType: data.decisionType,
+    sourceUrl: data.sourceUrl,
+    documentUrl: listedFormatMatches(
+      source,
+      item,
+      sourceDocumentId,
+      "Html",
+      "html",
+    )
+      ? constructedDocumentUrl(source, sourceDocumentId, "html")
+      : undefined,
+    metadata: {
+      ecli: data.ecli,
+      court,
+      decisionDate: data.decisionDate,
+      decisionType: data.decisionType,
+      ris: data.metadata,
+      statutes: data.statutes,
+      legalAreas: data.legalAreas,
+      headnoteNumbers: data.headnoteNumbers,
+      additionalCaseNumbers: data.caseNumbers.slice(1),
+      published: data.published,
+      modified: data.modified,
+      contentFormats: Object.keys(contentUrls(item)),
+      detailStatus: reason,
+      sourceAttribution: "RIS, Austrian Federal Chancellery, CC BY 4.0",
+    },
+    rawHash: hashContent(sourceRaw),
+    documentAst: EMPTY_AST,
+    parserVersion: PARSER_VERSION,
+    sourceRaw,
+    sourceRawContentType: "application/json",
+  };
+};
+
+type BuildDecisionOptions = {
+  cursor: string | null;
+  dependencies: AtRisDependencies;
+  item: RisListingItem;
+  source: AtRisSourceDefinition;
+  signal?: AbortSignal | undefined;
+};
+
+const buildDecision = async ({
+  cursor,
+  dependencies,
+  item,
+  source,
+  signal,
+}: BuildDecisionOptions): Promise<IngestionResult> => {
+  const identity = identityOf(source, item);
+  const { sourceDocumentId, sourceDocumentIdRepairAliases } = identity;
+  if (identity.type === "quarantine") {
+    return buildListingOnly({
+      identity,
+      item,
+      reason: "publisher-id-unavailable",
+      source,
+    });
+  }
+  const data = readDecisionMetadata(source, item);
+  if (data.caseNumber === undefined || data.court === undefined) {
+    return buildListingOnly({
+      identity,
+      item,
+      reason: "listing-metadata-incomplete",
+      source,
+    });
+  }
+  if (!listedFormatMatches(source, item, sourceDocumentId, "Xml", "xml")) {
+    return buildListingOnly({
+      identity,
+      item,
+      reason: "xml-not-listed",
+      source,
+    });
+  }
+
+  const xmlUrl = constructedDocumentUrl(source, sourceDocumentId, "xml");
+  const response = await dependencies.request(
+    xmlUrl,
+    { headers: { Accept: "application/xml" }, redirect: "error" },
+    {
+      adapterKey: source.key,
+      baseDelayMs: REQUEST_INTERVAL_MS,
+      signal,
+      timeoutMs: ADAPTER_TIMEOUT.REQUEST,
+    },
+  );
+  if (response.status === 404 || response.status === 410) {
+    return buildListingOnly({
+      identity,
+      item,
+      reason: `detail-http-${response.status}`,
+      source,
+    });
+  }
+  if (!response.ok) {
+    throw new AdapterFetchError({
+      message: `RIS detail request failed: ${response.status}`,
+      adapterKey: source.key,
+      cursor,
+      httpStatus: response.status,
+    });
+  }
+  const xml = await response.text();
+  if (xml.length < MIN_DOCUMENT_LENGTH) {
+    return buildListingOnly({
+      identity,
+      item,
+      reason: "detail-body-too-short",
+      source,
+      rawDetail: xml,
+    });
+  }
+
+  let parsed: ReturnType<typeof parseRisDecisionXml>;
+  try {
+    parsed = parseRisDecisionXml({
+      sourceDocumentId,
+      caseNumber: data.caseNumber,
+      ecli: data.ecli,
+      court: data.court,
+      decisionDate: data.decisionDate,
+      decisionType: data.decisionType,
+      sourceUrl: data.sourceUrl,
+      xml,
+    });
+  } catch {
+    return buildListingOnly({
+      identity,
+      item,
+      reason: "detail-xml-unparseable",
+      source,
+      rawDetail: xml,
+    });
+  }
+
+  const sourceRaw = JSON.stringify({ listing: item, documentXml: xml });
+  const documentUrl = listedFormatMatches(
+    source,
+    item,
+    sourceDocumentId,
+    "Html",
+    "html",
+  )
+    ? constructedDocumentUrl(source, sourceDocumentId, "html")
+    : undefined;
+  return {
+    sourceDocumentId,
+    sourceDocumentIdRepairAliases,
+    caseNumber: data.caseNumber,
+    ecli: data.ecli,
+    court: data.court,
+    country: COUNTRY,
+    language: LANGUAGE,
+    decisionDate: data.decisionDate,
+    decisionType: data.decisionType,
+    fulltext: parsed.fulltext,
+    sourceUrl: data.sourceUrl,
+    documentUrl,
+    metadata: {
+      ecli: data.ecli,
+      court: data.court,
+      decisionDate: data.decisionDate,
+      decisionType: data.decisionType,
+      ris: data.metadata,
+      statutes: data.statutes,
+      legalAreas: data.legalAreas,
+      headnoteNumbers: data.headnoteNumbers,
+      additionalCaseNumbers: data.caseNumbers.slice(1),
+      published: data.published,
+      modified: data.modified,
+      contentFormats: Object.keys(contentUrls(item)),
+      sourceAttribution: "RIS, Austrian Federal Chancellery, CC BY 4.0",
+    },
+    rawHash: hashContent(sourceRaw),
+    documentAst: parsed.documentAst,
+    sections: sectionsFromAst(parsed.documentAst.blocks),
+    parserVersion: PARSER_VERSION,
+    sourceRaw,
+    sourceRawContentType: "application/json",
+  };
+};
+
+type FetchListingOptions = {
+  cursor: string | null;
+  dependencies: AtRisDependencies;
+  page: number;
+  source: AtRisSourceDefinition;
+  signal?: AbortSignal | undefined;
+  slice?: string | undefined;
+  court?: string | undefined;
+};
+
+const fetchListing = async ({
+  cursor,
+  dependencies,
+  page,
+  source,
+  signal,
+  slice,
+  court,
+}: FetchListingOptions): Promise<RisListingPage> => {
+  const response = await dependencies.request(
+    listingQuery(source, slice, page, court),
+    { headers: { Accept: "application/json" }, redirect: "error" },
+    {
+      adapterKey: source.key,
+      baseDelayMs: REQUEST_INTERVAL_MS,
+      signal,
+      timeoutMs: ADAPTER_TIMEOUT.LIST,
+    },
+  );
+  if (!response.ok) {
+    throw new AdapterFetchError({
+      message: `RIS listing request failed: ${response.status}`,
+      adapterKey: source.key,
+      cursor,
+      httpStatus: response.status,
+    });
+  }
+  const json: unknown = await response.json();
+  const parsed = parseListingPage(json);
+  if (
+    parsed === undefined ||
+    parsed.pageNumber !== page ||
+    parsed.pageSize !== PAGE_SIZE
+  ) {
+    throw new AdapterFetchError({
+      message: "RIS listing returned an invalid payload",
+      adapterKey: source.key,
+      cursor,
+    });
+  }
+  return parsed;
+};
+
+const nextSliceCursor = (
+  source: AtRisSourceDefinition,
+  slice: string,
+  now: Date,
+): CrawlCursor => {
+  const current = tipSlice(source, now);
+  const candidate = atRisNextMonth(slice);
+  return {
+    ...cursorForSlice(current),
+    slice: candidate !== null && candidate <= current ? candidate : current,
+  };
+};
+
+const restartSliceCursor = (slice: string): CrawlCursor => ({
+  ...cursorForSlice(slice),
+});
+
+const listReconciliationSlicePage = async (
+  source: AtRisSourceDefinition,
+  dependencies: AtRisDependencies,
+  { slice, page, signal }: ReconciliationSlicePageOptions,
+): Promise<ReconciliationSlicePage> => {
+  if (
+    monthParts(slice) === undefined ||
+    slice < source.firstSlice ||
+    slice > tipSlice(source, dependencies.now()) ||
+    !Number.isSafeInteger(page) ||
+    page < 0
+  ) {
+    throw new AdapterFetchError({
+      message: `Invalid RIS reconciliation page: ${slice}/${page}`,
+      adapterKey: source.key,
+      cursor: slice,
+    });
+  }
+  await dependencies.sleep(REQUEST_INTERVAL_MS);
+  const listing = await fetchListing({
+    cursor: `reconciliation:${slice}:${page}`,
+    dependencies,
+    page: page + 1,
+    source,
+    signal,
+    slice,
+  });
+  const totalPages =
+    listing.total === 0 ? 0 : Math.ceil(listing.total / PAGE_SIZE);
+  if (totalPages > MAX_SLICE_PAGES) {
+    throw new AdapterFetchError({
+      message: `RIS reconciliation slice exceeds ${MAX_SLICE_PAGES} pages`,
+      adapterKey: source.key,
+      cursor: slice,
+    });
+  }
+  return {
+    items: listing.items
+      .filter((item) => !isExcludedItem(source, item))
+      .map((item) => ({
+        identity: {
+          type: "document",
+          sourceDocumentId: identityOf(source, item).sourceDocumentId,
+        },
+        payload: item,
+      })),
+    totalPages,
+  };
+};
+
+const buildReconciliationDecision = async (
+  source: AtRisSourceDefinition,
+  dependencies: AtRisDependencies,
+  payload: unknown,
+  signal?: AbortSignal,
+): Promise<ReconciliationBuildOutcome> => {
+  if (
+    !isRecord(payload) ||
+    nestedRecord(payload, "Data", "Metadaten") === undefined
+  ) {
+    return { type: "unkeyable" };
+  }
+  const identity = identityOf(source, payload);
+  if (identity.type === "quarantine") {
+    return { type: "detail-unavailable" };
+  }
+  const decision = await buildDecision({
+    cursor: null,
+    dependencies,
+    item: payload,
+    signal,
+    source,
+  });
+  if (decision.isListingOnly !== true) {
+    return { type: "built", decision };
+  }
+  const detailStatus = decision.metadata["detailStatus"];
+  if (
+    detailStatus === "xml-not-listed" ||
+    detailStatus === "detail-http-404" ||
+    detailStatus === "detail-http-410"
+  ) {
+    return { type: "detail-unavailable" };
+  }
+  throw new AdapterFetchError({
+    message: `RIS reconciliation could not build detail: ${String(detailStatus)}`,
+    adapterKey: source.key,
+    cursor: null,
+  });
+};
+
+type AtRisSourceAdapter<TKey extends AdapterKey> = SourceAdapter & {
+  readonly key: TKey;
+};
+
+const createAdapter = <const TKey extends AdapterKey>(
+  source: AtRisSourceDefinition & { readonly key: TKey },
+  dependencies: AtRisDependencies,
+): AtRisSourceAdapter<TKey> =>
+  defineSourceAdapter({
+    key: source.key,
+    name: source.name,
+    country: COUNTRY,
+    language: LANGUAGE,
+    minRequestIntervalMs: REQUEST_INTERVAL_MS,
+    pageTimeoutMs: PAGE_TIMEOUT_MS,
+    maxCycleMs: CYCLE_TIMEOUT_MS,
+    maxSyncPages: 1,
+
+    reconciliation: {
+      firstSlice: source.firstSlice,
+      sliceOf: (now) => tipSlice(source, now),
+      nextSlice: (slice) => {
+        const next = atRisNextMonth(slice);
+        return next !== null && next <= tipSlice(source, dependencies.now())
+          ? next
+          : null;
+      },
+      previousSlice: (slice) => previousMonth(source.firstSlice, slice),
+      // The engine's legacy field counts opaque slices; RIS slices are months.
+      tipWindowDays: TIP_WINDOW_MONTHS,
+      listSlicePage: async (options) =>
+        await listReconciliationSlicePage(source, dependencies, options),
+      buildDecision: async (payload, signal) =>
+        await buildReconciliationDecision(
+          source,
+          dependencies,
+          payload,
+          signal,
+        ),
+    },
+
+    async getTotalCount(signal) {
+      try {
+        const all = await fetchListing({
+          cursor: null,
+          dependencies,
+          page: 1,
+          signal,
+          source,
+        });
+        if (!source.excludeForeignCourts) {
+          return sourceTotalRead(all.total);
+        }
+        await dependencies.sleep(REQUEST_INTERVAL_MS);
+        const excluded = await fetchListing({
+          cursor: null,
+          court: "AUSL",
+          dependencies,
+          page: 1,
+          signal,
+          source,
+        });
+        return excluded.total <= all.total
+          ? sourceTotalRead(all.total - excluded.total)
+          : sourceTotalProbeFailed(
+              SOURCE_TOTAL_PROBE_FAILURE.UNREADABLE_PAYLOAD,
+            );
+      } catch (error) {
+        return { type: "probe-failed", errorTag: errorTag(error) };
+      }
+    },
+
+    fetchPage: async (cursor, _config, signal) =>
+      await Result.tryPromise({
+        try: async () => {
+          const state = decodeCursor(cursor, dependencies.now(), source);
+          if (state === undefined) {
+            throw new AdapterFetchError({
+              message: `Invalid RIS cursor: ${cursor}`,
+              adapterKey: source.key,
+              cursor,
+            });
+          }
+          const page = await fetchListing({
+            cursor,
+            dependencies,
+            page: state.page,
+            signal,
+            slice: state.slice,
+            source,
+          });
+          const expectedTotal = state.total ?? page.total;
+          if (page.total !== expectedTotal) {
+            return {
+              decisions: [],
+              nextCursor: encodeCursor(restartSliceCursor(state.slice)),
+            };
+          }
+          if (page.total === 0) {
+            const next = nextSliceCursor(
+              source,
+              state.slice,
+              dependencies.now(),
+            );
+            return {
+              decisions: [],
+              nextCursor: encodeCursor(next),
+            };
+          }
+
+          const totalPages = Math.ceil(page.total / PAGE_SIZE);
+          if (totalPages > MAX_SLICE_PAGES) {
+            throw new AdapterFetchError({
+              message: `RIS crawl slice exceeds ${MAX_SLICE_PAGES} pages`,
+              adapterKey: source.key,
+              cursor,
+            });
+          }
+          if (state.page > totalPages) {
+            throw new AdapterFetchError({
+              message: "RIS cursor points past the publisher's last page",
+              adapterKey: source.key,
+              cursor,
+            });
+          }
+          const digest = itemDigest(source, state.digest, page.items);
+          const foreignOnPage = page.items.filter((item) =>
+            isExcludedItem(source, item),
+          ).length;
+          const foreign = state.foreign + foreignOnPage;
+
+          if (state.phase === CURSOR_PHASE.VERIFY) {
+            if (state.page < totalPages) {
+              return {
+                decisions: [],
+                nextCursor: encodeCursor({
+                  ...state,
+                  page: state.page + 1,
+                  digest,
+                  foreign,
+                  total: expectedTotal,
+                }),
+              };
+            }
+            if (
+              digest !== state.expectedDigest ||
+              foreign !== state.expectedForeign
+            ) {
+              return {
+                decisions: [],
+                nextCursor: encodeCursor(restartSliceCursor(state.slice)),
+              };
+            }
+            const next = nextSliceCursor(
+              source,
+              state.slice,
+              dependencies.now(),
+            );
+            return {
+              decisions: [],
+              nextCursor: encodeCursor(next),
+            };
+          }
+
+          const decisions = await Array.fromAsync(
+            page.items.filter((item) => !isExcludedItem(source, item)),
+            async (item) =>
+              await buildDecision({
+                cursor,
+                dependencies,
+                item,
+                signal,
+                source,
+              }),
+          );
+          const collected = state.collected + decisions.length;
+          if (state.page < totalPages) {
+            return {
+              decisions,
+              nextCursor: encodeCursor({
+                ...state,
+                page: state.page + 1,
+                digest,
+                foreign,
+                collected,
+                total: expectedTotal,
+              }),
+            };
+          }
+          if (collected !== expectedTotal - foreign) {
+            return {
+              decisions: [],
+              nextCursor: encodeCursor(restartSliceCursor(state.slice)),
+            };
+          }
+          return {
+            decisions,
+            nextCursor: encodeCursor({
+              slice: state.slice,
+              phase: CURSOR_PHASE.VERIFY,
+              page: 1,
+              digest: START_DIGEST,
+              foreign: 0,
+              collected,
+              total: expectedTotal,
+              expectedDigest: digest,
+              expectedForeign: foreign,
+            }),
+          };
+        },
+        catch: adapterCatch(source.key, cursor),
+      }),
+  });
+
+export const createAtCourtsAdapter = (
+  dependencies: Partial<AtRisDependencies> = {},
+): AtRisSourceAdapter<typeof ADAPTER_KEYS.AT_COURTS> =>
+  createAdapter(JUSTIZ_SOURCE, { ...DEFAULT_DEPENDENCIES, ...dependencies });
+
+export const createAtRisSourceAdapter = <const TKey extends AdapterKey>(
+  source: AtRisSourceDefinition & { readonly key: TKey },
+  dependencies: Partial<AtRisDependencies> = {},
+): AtRisSourceAdapter<TKey> =>
+  createAdapter(source, { ...DEFAULT_DEPENDENCIES, ...dependencies });
+
+export const atCourtsAdapter = createAtCourtsAdapter();

@@ -107,8 +107,17 @@ const stubAdapter = (
     throw new Error("a replay must never fetch from the publisher");
   },
   reconciliation: {
-    type: "unsupported",
-    reason: "replay stub: a replay never contacts the publisher",
+    firstSlice: "1970-01-01",
+    sliceOf: () => "1970-01-01",
+    nextSlice: () => null,
+    previousSlice: () => null,
+    tipWindowDays: 1,
+    listSlicePage: async () => {
+      throw new Error("a replay must never list the publisher");
+    },
+    buildDecision: async () => {
+      throw new Error("a replay must never build from publisher data");
+    },
   },
   reparseStoredRaw: reparse,
 });

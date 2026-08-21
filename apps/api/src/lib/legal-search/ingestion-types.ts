@@ -343,9 +343,10 @@ export type ReconciliationBuildOutcome =
  */
 export type SourceSliceWalk = {
   /**
-   * The discriminant against `ReconciliationUnsupported`, absent here so an
-   * implemented capability is written plainly rather than wrapped. Declared so
-   * every reader narrows on one field instead of probing for another.
+   * The discriminant against a corpus-family-specific unsupported marker,
+   * absent here so an implemented capability is written plainly rather than
+   * wrapped. Declared so every reader narrows on one field instead of probing
+   * for another.
    */
   type?: undefined;
   /** First slice the publisher can list (e.g. the feed's first day). */
@@ -455,21 +456,6 @@ export const sourceTotalRead = (value: number): SourceTotalCount =>
     : sourceTotalProbeFailed(SOURCE_TOTAL_PROBE_FAILURE.UNREADABLE_PAYLOAD);
 
 /**
- * An adapter that declares reconciliation and cannot do it.
- *
- * The capability is required rather than optional so that a new adapter has to
- * answer for it: an omitted field is a decision nobody made, while this one is
- * a decision written down with its reason. Discriminated against
- * `SourceReconciliation`, which carries no `type`, so an implemented
- * capability pays no wrapper and every reader narrows on the same field.
- */
-export type ReconciliationUnsupported = {
-  type: "unsupported";
-  /** Why this source cannot be reconciled. Printed to operators. */
-  reason: string;
-};
-
-/**
  * Interface for court data source adapters.
  *
  * Each adapter knows how to paginate through a specific
@@ -544,13 +530,11 @@ export type SourceAdapter = {
    * reconciliation loop can compare that against what is held and ingest the
    * difference.
    *
-   * Required, and answerable with `ReconciliationUnsupported`: it exists only
-   * for sources that publish a listing addressable independently of the crawl
-   * cursor, and where the only way to reach a decision is to walk the cursor
-   * forward there is nothing to reconcile against. Declaring that explicitly
-   * is what keeps "cannot" apart from "nobody looked".
+   * Required. Every registered case-law source publishes an independently
+   * addressable listing, so unsupported reconciliation is not a valid adapter
+   * state.
    */
-  reconciliation: SourceReconciliation | ReconciliationUnsupported;
+  reconciliation: SourceReconciliation;
 };
 
 /** Preserve an adapter's literal registry key while contextualizing its API. */

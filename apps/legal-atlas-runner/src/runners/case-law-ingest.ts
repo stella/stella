@@ -633,8 +633,6 @@ const DISABLED_ADAPTER_KEYS = new Set(
   }),
 );
 
-// AT_COURTS excluded: adapter exists but has not been
-// validated in production yet.
 const ALL_SOURCES: SourceDef[] = [
   {
     adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
@@ -663,6 +661,54 @@ const ALL_SOURCES: SourceDef[] = [
   {
     adapterKey: ADAPTER_KEYS.PL_COURTS,
     name: "Polish Courts (SAOS)",
+  },
+  {
+    adapterKey: ADAPTER_KEYS.AT_COURTS,
+    name: "Austrian Courts (RIS Justiz)",
+  },
+  {
+    adapterKey: ADAPTER_KEYS.AT_VFGH,
+    name: "Austrian Constitutional Court (RIS VfGH)",
+  },
+  {
+    adapterKey: ADAPTER_KEYS.AT_VWGH,
+    name: "Austrian Administrative Court (RIS VwGH)",
+  },
+  {
+    adapterKey: ADAPTER_KEYS.AT_BVWG,
+    name: "Austrian Federal Administrative Court (RIS BVwG)",
+  },
+  {
+    adapterKey: ADAPTER_KEYS.AT_LVWG,
+    name: "Austrian State Administrative Courts (RIS LVwG)",
+  },
+  {
+    adapterKey: ADAPTER_KEYS.AT_ASYLGH,
+    name: "Austrian Asylum Court (RIS AsylGH)",
+  },
+  {
+    adapterKey: ADAPTER_KEYS.AT_UBAS,
+    name: "Austrian Federal Asylum Senate (RIS UBAS)",
+  },
+  {
+    adapterKey: ADAPTER_KEYS.AT_UVS,
+    name: "Austrian Independent Administrative Senates (RIS UVS)",
+  },
+  {
+    adapterKey: ADAPTER_KEYS.AT_VERG,
+    name: "Austrian Procurement Review Bodies (RIS Verg)",
+  },
+  {
+    adapterKey: ADAPTER_KEYS.AT_UMSE,
+    name: "Austrian Environmental Senate (RIS Umweltsenat)",
+  },
+  {
+    adapterKey: ADAPTER_KEYS.AT_BKS,
+    name: "Austrian Federal Communications Senate (RIS BKS)",
+  },
+  {
+    adapterKey: ADAPTER_KEYS.AT_FINDOK,
+    name: "Austrian Fiscal Courts (Findok BFG and UFS)",
   },
   {
     adapterKey: ADAPTER_KEYS.EU_ECJ,
@@ -1649,14 +1695,9 @@ export const runCaseLawIngest = async (
     const reconcilable: ReconciliationSource[] = [];
     for (const { adapterKey, name } of SOURCES) {
       const reconciliation = getAdapter(adapterKey)?.reconciliation;
-      // Every adapter declares the capability, so the gate reads the
-      // declaration rather than the field's presence: a source that states it
-      // cannot be reconciled is skipped, and one that forgot to state anything
-      // no longer compiles.
-      if (
-        reconciliation === undefined ||
-        reconciliation.type === "unsupported"
-      ) {
+      // Every case-law adapter implements the capability. Absence here means
+      // the configured source key has no registered adapter.
+      if (reconciliation === undefined) {
         continue;
       }
       // oxlint-disable-next-line no-await-in-loop -- one bounded source lookup per configured source, at startup

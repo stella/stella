@@ -35,8 +35,17 @@ const adapter = (
   },
   getTotalCount,
   reconciliation: {
-    type: "unsupported",
-    reason: "fixture: outcome selection never reconciles",
+    firstSlice: "1970-01-01",
+    sliceOf: () => "1970-01-01",
+    nextSlice: () => null,
+    previousSlice: () => null,
+    tipWindowDays: 1,
+    listSlicePage: async () => {
+      throw new Error("outcome selection must never list a source");
+    },
+    buildDecision: async () => {
+      throw new Error("outcome selection must never build a decision");
+    },
   },
 });
 

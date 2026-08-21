@@ -49,8 +49,17 @@ const adapter = (
   },
   getTotalCount,
   reconciliation: {
-    type: "unsupported",
-    reason: "fixture: the totals poll never reconciles",
+    firstSlice: "1970-01-01",
+    sliceOf: () => "1970-01-01",
+    nextSlice: () => null,
+    previousSlice: () => null,
+    tipWindowDays: 1,
+    listSlicePage: async () => {
+      throw new Error("the totals poll must never list a source");
+    },
+    buildDecision: async () => {
+      throw new Error("the totals poll must never build a decision");
+    },
   },
 });
 

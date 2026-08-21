@@ -8,6 +8,17 @@ export const ADAPTER_KEYS = {
   SK_US: "sk-us",
   PL_COURTS: "pl-courts",
   AT_COURTS: "at-courts",
+  AT_VFGH: "at-vfgh",
+  AT_VWGH: "at-vwgh",
+  AT_BVWG: "at-bvwg",
+  AT_LVWG: "at-lvwg",
+  AT_ASYLGH: "at-asylgh",
+  AT_UBAS: "at-ubas",
+  AT_UVS: "at-uvs",
+  AT_VERG: "at-verg",
+  AT_UMSE: "at-umse",
+  AT_BKS: "at-bks",
+  AT_FINDOK: "at-findok",
   EU_ECJ: "eu-ecj",
 } as const;
 
