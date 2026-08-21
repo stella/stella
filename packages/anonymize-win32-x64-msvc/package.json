@@ -9,6 +9,8 @@
   ],
   "main": "index.cjs",
   "files": [
+    "LICENSE",
+    "NOTICE",
     "index.cjs",
     "stella_anonymize_napi.node"
   ],

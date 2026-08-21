@@ -43,7 +43,7 @@
         "@stll/anonymize-win32-x64-msvc": "2.8.0",
       },
       "peerDependencies": {
-        "@stll/anonymize-data": "^0.0.9",
+        "@stll/anonymize-data": "^0.0.10",
       },
       "optionalPeers": [
         "@stll/anonymize-data",
@@ -85,7 +85,7 @@
       "dependencies": {
         "@openredaction/core": "1.1.5",
         "@stll/anonymize": "workspace:^",
-        "@stll/anonymize-data": "^0.0.9",
+        "@stll/anonymize-data": "^0.0.10",
         "fflate": "0.8.2",
         "hyparquet": "1.28.1",
       },
@@ -103,7 +103,7 @@
       },
       "dependencies": {
         "@stll/anonymize": "^2.8.0",
-        "@stll/anonymize-data": "^0.0.9",
+        "@stll/anonymize-data": "^0.0.10",
         "@stll/anonymize-docx": "^2.8.0",
         "@stll/anonymize-pdf": "^2.8.0",
       },
@@ -120,7 +120,7 @@
       "version": "0.0.0",
       "dependencies": {
         "@stll/anonymize": "workspace:^",
-        "@stll/anonymize-data": "^0.0.9",
+        "@stll/anonymize-data": "^0.0.10",
       },
       "devDependencies": {
         "@types/node": "^26.2.0",
@@ -130,7 +130,7 @@
     },
     "packages/data": {
       "name": "@stll/anonymize-data",
-      "version": "0.0.9",
+      "version": "0.0.10",
       "devDependencies": {
         "stopwords-iso": "1.1.0",
         "tsdown": "0.22.14",

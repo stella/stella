@@ -270,19 +270,21 @@ Its scores are not necessarily representative.
 
 ```bash
 bun install --frozen-lockfile
+bun run build
 bun run lint
+bun run format:check
 bun run typecheck
 bun run test
-bun run build
+bun run check:version
 ```
 
-Contributions are welcome. Please keep language-dependent data in its
-per-language vocabulary, make generated data reproducible, and do not commit
-raw personal data or non-public fixtures. A CLA check runs on pull requests.
+Read the [contributor guide](CONTRIBUTING.md) for prerequisites, focused checks,
+architecture pointers, changesets, and the sensitive-fixture policy. A CLA
+check runs on pull requests.
 
 ## License
 
-Apache-2.0. See [`LICENSE`](LICENSE). Third-party attributions are recorded with
-the relevant packages, including the [core and browser runtime](packages/anonymize/ATTRIBUTION.md),
+Apache-2.0. See [`LICENSE`](LICENSE) and [`NOTICE`](NOTICE). Third-party
+attributions are recorded with the relevant packages, including the [core and browser runtime](packages/anonymize/ATTRIBUTION.md),
 [data](packages/data/ATTRIBUTION.md), [DOCX](packages/document-docx/ATTRIBUTION.md),
 and [PDF](packages/document-pdf/ATTRIBUTION.md).

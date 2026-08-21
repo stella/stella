@@ -20,6 +20,7 @@ const profile = process.env.ANONYMIZE_PYTHON_WHEEL_PROFILE ?? "ci";
 const prebuiltWheel = process.env.ANONYMIZE_PYTHON_WHEEL_PATH?.trim();
 const nativePackagePattern =
   /^native-pipeline(?:\.[a-z0-9]+(?:-[a-z0-9]+)*)?\.stlanonpkg$/u;
+const legalFiles = ["LICENSE", "NOTICE"];
 const nativePackageSourceDir = join("packages", "anonymize");
 const attributionSource = join(nativePackageSourceDir, "ATTRIBUTION.md");
 const pythonNativePackageDir = join(
@@ -131,6 +132,16 @@ function assertWheelContents(wheelPath) {
   if (![...files].some(isNativeExtension)) {
     throw new Error("wheel is missing the native _native extension");
   }
+  for (const file of legalFiles) {
+    const suffix = `.dist-info/licenses/${file}`;
+    const entry = [...files].find((path) => path.endsWith(suffix));
+    if (entry === undefined) {
+      throw new Error(`wheel is missing ${suffix}`);
+    }
+    if (readWheelEntry(wheelPath, entry) !== readFileSync(file, "utf8")) {
+      throw new Error(`wheel ${file} must match the repository root ${file}`);
+    }
+  }
 }
 
 function syncNativePipelinePackages() {
@@ -182,6 +193,23 @@ function readWheelFiles(wheelPath) {
         "    print(json.dumps(wheel.namelist()))",
       ].join("\n"),
       wheelPath,
+    ],
+    { encoding: "utf8" },
+  );
+}
+
+function readWheelEntry(wheelPath, entry) {
+  return execFileSync(
+    "python3",
+    [
+      "-c",
+      [
+        "import sys, zipfile",
+        "with zipfile.ZipFile(sys.argv[1]) as wheel:",
+        "    sys.stdout.write(wheel.read(sys.argv[2]).decode('utf-8'))",
+      ].join("\n"),
+      wheelPath,
+      entry,
     ],
     { encoding: "utf8" },
   );

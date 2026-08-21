@@ -17,6 +17,8 @@
     "anonymize": "./dist/cli.mjs"
   },
   "files": [
+    "LICENSE",
+    "NOTICE",
     "dist"
   ],
   "publishConfig": {
@@ -37,7 +39,7 @@
   },
   "dependencies": {
     "@stll/anonymize": "^2.8.0",
-    "@stll/anonymize-data": "^0.0.9",
+    "@stll/anonymize-data": "^0.0.10",
     "@stll/anonymize-docx": "^2.8.0",
     "@stll/anonymize-pdf": "^2.8.0"
   },

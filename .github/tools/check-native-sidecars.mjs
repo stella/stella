@@ -7,6 +7,7 @@ const ROOT_PACKAGE = "packages/anonymize";
 const NATIVE_BINARY = "stella_anonymize_napi.node";
 const SIDECAR_PREFIX = "anonymize-";
 const SIDECAR_SCOPE = "@stll/anonymize-";
+const LEGAL_FILES = ["LICENSE", "NOTICE"];
 
 const rootPackage = readJson(join(ROOT_PACKAGE, "package.json"));
 const rootTurboConfig = readJson("turbo.json");
@@ -74,9 +75,16 @@ function assertSidecarPackage(sidecar) {
   assertEqual(packageJson.main, "index.cjs", `${directory} main`);
   assertArrayEqual(
     packageJson.files,
-    ["index.cjs", NATIVE_BINARY],
+    [...LEGAL_FILES, "index.cjs", NATIVE_BINARY],
     `${directory} files`,
   );
+  for (const file of LEGAL_FILES) {
+    assertEqual(
+      readFileSync(join("packages", directory, file), "utf8"),
+      readFileSync(file, "utf8"),
+      `${directory}/${file}`,
+    );
+  }
   assertArrayEqual(packageJson.os, [target.os], `${directory} os`);
   assertArrayEqual(packageJson.cpu, [target.cpu], `${directory} cpu`);
   if (target.libc === undefined) {

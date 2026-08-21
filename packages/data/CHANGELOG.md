@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.0.10 (2026-08-21)
+
+### Fixes
+
+- Ship the canonical Apache-2.0 license and NOTICE in the package.
+
 ## 0.0.9 (2026-07-27)
 
 ### Breaking

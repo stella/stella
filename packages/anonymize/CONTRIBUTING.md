@@ -1,25 +1,19 @@
 # Contributing
 
-Thank you for your interest in contributing to
-@stll/anonymize.
-
-## Development
-
-```bash
-bun install
-bun test
-```
+Start with the repository-wide [contributor guide](../../CONTRIBUTING.md). It
+covers prerequisites, setup, quality gates, changesets, and the policy for
+sensitive fixtures.
 
 ## Adding a new detector
 
 New detector behavior belongs in the Rust core. Do not add product detector
 logic to `src/detectors/*.ts` or wire new behavior through `src/pipeline.ts`.
 
-1. Add or update language/concept data under `packages/data/config` or
-   `packages/anonymize/src/data` when the rule is data-driven.
+1. Add or update language/concept data under `packages/data` when the rule is
+   data-driven.
 2. Add the Rust detector or support logic under `crates/anonymize-core/src`.
 3. Register detector modules through the module-owned `static_detector_rules!`
-   shape described in `AGENTS.md`.
+   shape described in `../../docs/rule-architecture.md`.
 4. Add focused Rust tests and, when SDK behavior changes, TS/Python native
    parity coverage.
 5. Run the native readiness/perf checks when package shape or runtime cost
@@ -29,8 +23,3 @@ logic to `src/detectors/*.ts` or wire new behavior through `src/pipeline.ts`.
 
 Edit `config/triggers.{lang}.json` in the
 @stll/anonymize-data package.
-
-## Pull Requests
-
-- One feature per PR
-- Add tests for new functionality
