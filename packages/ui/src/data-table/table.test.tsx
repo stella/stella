@@ -75,10 +75,14 @@ describe("DataTable", () => {
     expect(empty).toContain("No matters");
     expect(loading).toContain('aria-busy="true"');
     expect(loading).toContain('role="status"');
+    expect(loading.indexOf('role="status"')).toBeLessThan(
+      loading.indexOf('data-slot="table"'),
+    );
     expect(loading).toContain("Loading");
     expect(loading.match(/data-slot="skeleton"/gu)).toHaveLength(4);
     expect(loading).not.toContain("colSpan");
     expect(loading).not.toContain("No matters");
+    expect(empty).toContain('role="status"');
   });
 
   test("keeps at least one loading row after rounding", () => {

@@ -25,13 +25,7 @@ export const DataTable = <TItem,>({
 }: DataTableProps<TItem>) => {
   let content: ReactNode;
   if (isLoading) {
-    content = (
-      <LoadingRows
-        columns={columns}
-        label={loadingLabel}
-        rowCount={loadingRowCount}
-      />
-    );
+    content = <LoadingRows columns={columns} rowCount={loadingRowCount} />;
   } else if (rows.length === 0) {
     content = <StatusRow colSpan={columns.length} label={emptyLabel} />;
   } else {
@@ -79,22 +73,27 @@ export const DataTable = <TItem,>({
   }
 
   return (
-    <Table aria-busy={isLoading}>
-      <TableHeader>
-        <TableRow>
-          {columns.map((column) => (
-            <TableHead
-              aria-sort={column.ariaSort}
-              className={column.headClassName}
-              key={column.id}
-            >
-              {column.header}
-            </TableHead>
-          ))}
-        </TableRow>
-      </TableHeader>
-      <TableBody>{content}</TableBody>
-    </Table>
+    <>
+      <span className="sr-only" role="status">
+        {isLoading ? loadingLabel : ""}
+      </span>
+      <Table aria-busy={isLoading}>
+        <TableHeader>
+          <TableRow>
+            {columns.map((column) => (
+              <TableHead
+                aria-sort={column.ariaSort}
+                className={column.headClassName}
+                key={column.id}
+              >
+                {column.header}
+              </TableHead>
+            ))}
+          </TableRow>
+        </TableHeader>
+        <TableBody>{content}</TableBody>
+      </Table>
+    </>
   );
 };
 
@@ -164,22 +163,15 @@ export type DataTableProps<TItem> = {
 
 const LoadingRows = <TItem,>({
   columns,
-  label,
   rowCount,
 }: {
   columns: readonly DataTableColumn<TItem>[];
-  label: string;
   rowCount: number;
 }) =>
   Array.from({ length: resolveLoadingRowCount(rowCount) }, (_, rowIndex) => (
     <TableRow key={rowIndex}>
-      {columns.map((column, columnIndex) => (
+      {columns.map((column) => (
         <TableCell key={column.id}>
-          {rowIndex === 0 && columnIndex === 0 ? (
-            <span className="sr-only" role="status">
-              {label}
-            </span>
-          ) : null}
           <Skeleton aria-hidden="true" className="h-4 w-full" />
         </TableCell>
       ))}
