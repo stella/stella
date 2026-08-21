@@ -151,6 +151,23 @@
     "useDifferentEmail": "Másik e-mail-cím használata",
     "weSentCodeTo": "Kódot küldtünk a következő címre: <email>{emailAddress}</email>"
   },
+  "bilingual": {
+    "dialog": {
+      "create": "Kétnyelvű változat létrehozása",
+      "creating": "Létrehozás…",
+      "description": "Két oszlopos másolatot készít a dokumentumról: balra az eredeti szöveg, jobbra a fordítandó másolat, külön számozással. A másolat új dokumentumként kerül ebbe az ügybe.",
+      "sameLanguage": "Válasszon két különböző nyelvet.",
+      "sourceLanguage": "Forrásnyelv",
+      "title": "Kétnyelvű változat"
+    },
+    "error": {
+      "title": "A kétnyelvű változat létrehozása nem sikerült"
+    },
+    "success": {
+      "description": "A(z) {fileName} készen áll, {rowCount, plural, one {# sor} other {# sor}} vár fordításra.",
+      "title": "Kétnyelvű változat létrehozva"
+    }
+  },
   "billing": {
     "addEntry": "Bejegyzés hozzáadása",
     "amount": "Összeg",

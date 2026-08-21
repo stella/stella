@@ -151,6 +151,23 @@
     "useDifferentEmail": "Naudoti kitą el. pašto adresą",
     "weSentCodeTo": "Išsiuntėme kodą adresu <email>{emailAddress}</email>"
   },
+  "bilingual": {
+    "dialog": {
+      "create": "Sukurti dvikalbę versiją",
+      "creating": "Kuriama…",
+      "description": "Sukuria šio dokumento kopiją dviem stulpeliais: kairėje originalus tekstas, dešinėje verčiama kopija su atskira numeracija. Kopija išsaugoma šioje byloje kaip naujas dokumentas.",
+      "sameLanguage": "Pasirinkite dvi skirtingas kalbas.",
+      "sourceLanguage": "Šaltinio kalba",
+      "title": "Dvikalbė versija"
+    },
+    "error": {
+      "title": "Nepavyko sukurti dvikalbės versijos"
+    },
+    "success": {
+      "description": "{fileName} paruoštas, versti reikia {rowCount, plural, one {# eilutę} few {# eilutes} many {# eilutės} other {# eilučių}}.",
+      "title": "Dvikalbė versija sukurta"
+    }
+  },
   "billing": {
     "addEntry": "Pridėti įrašą",
     "amount": "Suma",

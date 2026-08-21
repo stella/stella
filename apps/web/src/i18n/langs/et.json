@@ -151,6 +151,23 @@
     "useDifferentEmail": "Kasuta teist e-posti aadressi",
     "weSentCodeTo": "Saatsime koodi aadressile <email>{emailAddress}</email>"
   },
+  "bilingual": {
+    "dialog": {
+      "create": "Loo kakskeelne versioon",
+      "creating": "Loomine…",
+      "description": "Loob dokumendist kahe veeruga koopia: vasakul algtekst, paremal tõlkimiseks mõeldud koopia eraldi nummerdusega. Koopia salvestatakse sellesse toimikusse uue dokumendina.",
+      "sameLanguage": "Valige kaks erinevat keelt.",
+      "sourceLanguage": "Lähtekeel",
+      "title": "Kakskeelne versioon"
+    },
+    "error": {
+      "title": "Kakskeelse versiooni loomine ebaõnnestus"
+    },
+    "success": {
+      "description": "{fileName} on valmis, tõlkida on {rowCount, plural, one {# rida} other {# rida}}.",
+      "title": "Kakskeelne versioon loodud"
+    }
+  },
   "billing": {
     "addEntry": "Lisa kanne",
     "amount": "Summa",

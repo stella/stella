@@ -8,6 +8,7 @@ import clipEndpoint from "@/api/handlers/entities/clip";
 import compareVersions from "@/api/handlers/entities/compare-versions";
 import copyToWorkspace from "@/api/handlers/entities/copy-to-workspace";
 import createEntities from "@/api/handlers/entities/create";
+import createBilingualEntity from "@/api/handlers/entities/create-bilingual";
 import createBlankDocument from "@/api/handlers/entities/create-blank-document";
 import createDocumentFromStyleSet from "@/api/handlers/entities/create-document-from-style-set";
 import createFromLegalSource from "@/api/handlers/entities/create-from-legal-source";
@@ -334,4 +335,9 @@ export const entitiesRoute = new Elysia({
     body: translateEntity.config.body,
     resourceSetUpdated: entityFileRealtimeUpdates,
     permissions: translateEntity.config.permissions,
+  })
+  .post("/bilingual", createBilingualEntity.handler, {
+    body: createBilingualEntity.config.body,
+    resourceSetUpdated: entityFileRealtimeUpdates,
+    permissions: createBilingualEntity.config.permissions,
   });

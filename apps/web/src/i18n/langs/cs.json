@@ -151,6 +151,23 @@
     "useDifferentEmail": "Použít jiný e-mail",
     "weSentCodeTo": "Kód jsme odeslali na <email>{emailAddress}</email>"
   },
+  "bilingual": {
+    "dialog": {
+      "create": "Vytvořit dvojjazyčnou verzi",
+      "creating": "Vytváření…",
+      "description": "Vytvoří kopii dokumentu ve dvou sloupcích: vlevo původní text, vpravo kopie k překladu s vlastním číslováním. Kopie se uloží do tohoto spisu jako nový dokument.",
+      "sameLanguage": "Zvolte dva různé jazyky.",
+      "sourceLanguage": "Zdrojový jazyk",
+      "title": "Dvojjazyčná verze"
+    },
+    "error": {
+      "title": "Dvojjazyčnou verzi se nepodařilo vytvořit"
+    },
+    "success": {
+      "description": "{fileName} je připraven, k překladu {rowCount, plural, one {je # řádek} few {jsou # řádky} other {je # řádků}}.",
+      "title": "Dvojjazyčná verze vytvořena"
+    }
+  },
   "billing": {
     "addEntry": "Přidat záznam",
     "amount": "Částka",

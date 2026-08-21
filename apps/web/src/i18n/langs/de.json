@@ -151,6 +151,23 @@
     "useDifferentEmail": "Andere E-Mail verwenden",
     "weSentCodeTo": "Wir haben einen Code an <email>{emailAddress}</email> gesendet"
   },
+  "bilingual": {
+    "dialog": {
+      "create": "Zweisprachige Fassung erstellen",
+      "creating": "Wird erstellt…",
+      "description": "Erstellt eine Kopie dieses Dokuments in zwei Spalten: links der Originaltext, rechts eine Kopie zum Übersetzen mit eigener Nummerierung. Die Kopie wird in dieser Akte als neues Dokument abgelegt.",
+      "sameLanguage": "Wählen Sie zwei verschiedene Sprachen.",
+      "sourceLanguage": "Ausgangssprache",
+      "title": "Zweisprachige Fassung"
+    },
+    "error": {
+      "title": "Zweisprachige Fassung fehlgeschlagen"
+    },
+    "success": {
+      "description": "{fileName} ist bereit, {rowCount, plural, one {# Zeile} other {# Zeilen}} zu übersetzen.",
+      "title": "Zweisprachige Fassung erstellt"
+    }
+  },
   "billing": {
     "addEntry": "Eintrag hinzufügen",
     "amount": "Betrag",

@@ -151,6 +151,23 @@
     "useDifferentEmail": "Usar otro correo",
     "weSentCodeTo": "Hemos enviado un código a <email>{emailAddress}</email>"
   },
+  "bilingual": {
+    "dialog": {
+      "create": "Crear versión bilingüe",
+      "creating": "Creando…",
+      "description": "Crea una copia de este documento en dos columnas: el texto original a la izquierda y una copia para traducir a la derecha, con numeración independiente. La copia se guarda en este asunto como un documento nuevo.",
+      "sameLanguage": "Elija dos idiomas distintos.",
+      "sourceLanguage": "Idioma de origen",
+      "title": "Versión bilingüe"
+    },
+    "error": {
+      "title": "No se pudo crear la versión bilingüe"
+    },
+    "success": {
+      "description": "{fileName} está listo con {rowCount, plural, one {# fila} other {# filas}} por traducir.",
+      "title": "Versión bilingüe creada"
+    }
+  },
   "billing": {
     "addEntry": "Añadir entrada",
     "amount": "Importe",

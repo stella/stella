@@ -151,6 +151,23 @@
     "useDifferentEmail": "Izmantot citu e-pasta adresi",
     "weSentCodeTo": "Mēs nosūtījām kodu uz <email>{emailAddress}</email>"
   },
+  "bilingual": {
+    "dialog": {
+      "create": "Izveidot divvalodu versiju",
+      "creating": "Veido…",
+      "description": "Izveido šī dokumenta kopiju divās kolonnās: pa kreisi oriģinālteksts, pa labi tulkojamā kopija ar atsevišķu numerāciju. Kopija tiek saglabāta šajā lietā kā jauns dokuments.",
+      "sameLanguage": "Izvēlieties divas dažādas valodas.",
+      "sourceLanguage": "Avota valoda",
+      "title": "Divvalodu versija"
+    },
+    "error": {
+      "title": "Neizdevās izveidot divvalodu versiju"
+    },
+    "success": {
+      "description": "{fileName} ir gatavs, jātulko {rowCount, plural, zero {# rindu} one {# rinda} other {# rindas}}.",
+      "title": "Divvalodu versija izveidota"
+    }
+  },
   "billing": {
     "addEntry": "Pievienot ierakstu",
     "amount": "Summa",

@@ -151,6 +151,23 @@
     "useDifferentEmail": "Użyj innego adresu e-mail",
     "weSentCodeTo": "Wysłaliśmy kod na adres <email>{emailAddress}</email>"
   },
+  "bilingual": {
+    "dialog": {
+      "create": "Utwórz wersję dwujęzyczną",
+      "creating": "Tworzenie…",
+      "description": "Tworzy kopię tego dokumentu w dwóch kolumnach: po lewej tekst oryginalny, po prawej kopia do przetłumaczenia z własną numeracją. Kopia zostanie zapisana w tej sprawie jako nowy dokument.",
+      "sameLanguage": "Wybierz dwa różne języki.",
+      "sourceLanguage": "Język źródłowy",
+      "title": "Wersja dwujęzyczna"
+    },
+    "error": {
+      "title": "Nie udało się utworzyć wersji dwujęzycznej"
+    },
+    "success": {
+      "description": "{fileName} jest gotowy, do przetłumaczenia {rowCount, plural, one {jest # wiersz} few {są # wiersze} many {jest # wierszy} other {jest # wiersza}}.",
+      "title": "Utworzono wersję dwujęzyczną"
+    }
+  },
   "billing": {
     "addEntry": "Dodaj wpis",
     "amount": "Kwota",
