@@ -69,8 +69,7 @@ for p in "${packages[@]}"; do
   (
     cd "packages/${p}"
     bun pm pack \
-      --destination "$staging_dir" \
-      --filename "$packed_filename" \
+      --filename "${staging_dir}/${packed_filename}" \
       --ignore-scripts \
       --quiet >/dev/null
   )
