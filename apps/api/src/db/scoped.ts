@@ -206,7 +206,15 @@ const toSafeDbError = (cause: unknown): SafeDbError => {
     });
   }
 
-  if (cause instanceof DrizzleQueryError) {
+  // A SQLSTATE is proof the database rejected the work, whether or not the
+  // driver error reached here inside a `DrizzleQueryError`: only failures
+  // raised during prepared-query execution are wrapped, while the transaction
+  // lifecycle rejects with the bare driver error. Classifying on the wrapper
+  // alone files a `COMMIT`-time serialization failure or deadlock as an
+  // unhandled exception, which then never matches the retry predicate in
+  // `safe-db.ts` that exists for exactly those codes. The wrapper still
+  // classifies a query failure that carries no SQLSTATE.
+  if (code !== undefined || cause instanceof DrizzleQueryError) {
     return new DatabaseError({
       message: "Database query failed",
       cause,
