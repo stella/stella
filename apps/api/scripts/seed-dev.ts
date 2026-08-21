@@ -84,7 +84,11 @@ import { cents } from "@/api/lib/money";
 import { writeS3ObjectWithRetry } from "@/api/lib/s3";
 import { upsertSearchDocument } from "@/api/lib/search/index-entity";
 import { buildDefaultViewRows } from "@/api/lib/views";
-import type { PlaybookPositions } from "@/api/lib/workflow/playbook-positions";
+import type {
+  PlaybookPositions,
+  Position,
+  PositionSeverity,
+} from "@/api/lib/workflow/playbook-positions";
 
 import { seedCaseLaw } from "./seed-case-law";
 import { seedTemplates } from "./seed-templates";
@@ -4847,6 +4851,289 @@ const MORE_WORKSPACES = [
 
 // ─── Playbooks (knowledge base) ─────────────────────────
 
+type DdPositionInput = {
+  /** Stable seedId label suffix; keys the sourceId and every tier id. */
+  key: string;
+  issue: string;
+  severity: PositionSeverity;
+  ideal: string;
+  fallback: { label: string; text: string };
+  redLine: string;
+  guidance: string;
+  negotiation: {
+    rationale: string;
+    talkingPoints: string[];
+    escalation: string;
+  };
+};
+
+// An English, unscoped (no documentTypeKey) graded playbook for the Project
+// Atlas data room: `POST /workspaces/:id/playbooks/:playbookId/run` with
+// `{ projection: "columns" }` grades every document in the matter. Sample
+// standards only; not legal advice.
+const DD_GENERAL_POSITIONS: DdPositionInput[] = [
+  {
+    key: "governing-law",
+    issue: "Governing law",
+    severity: "high",
+    ideal:
+      "This Agreement is governed by the laws of the Czech Republic, without regard to its conflict-of-laws rules.",
+    fallback: {
+      label: "Other EU member state",
+      text: "This Agreement is governed by the laws of another EU member state.",
+    },
+    redLine: "Governing law of a jurisdiction outside the EU or the EEA.",
+    guidance:
+      "Target-group contracts should sit under Czech or EU law so post-closing disputes run in a familiar forum.",
+    negotiation: {
+      rationale:
+        "Non-EU law raises enforcement cost and uncertainty for the buyer's post-closing risk model.",
+      talkingPoints: [
+        "Offer the law of the counterparty's EU member state as a compromise.",
+        "Pair any concession with an EU court or arbitration seat.",
+      ],
+      escalation:
+        "Escalate to deal counsel when the counterparty insists on non-EU law.",
+    },
+  },
+  {
+    key: "limitation-of-liability",
+    issue: "Limitation of liability",
+    severity: "blocker",
+    ideal:
+      "Each party's aggregate liability under this Agreement is capped at the fees paid or payable in the twelve months preceding the claim, excluding liability for wilful misconduct, gross negligence and breach of confidentiality.",
+    fallback: {
+      label: "Cap at 200% of annual fees",
+      text: "Aggregate liability is capped at twice the fees paid or payable in the preceding twelve months.",
+    },
+    redLine:
+      "Uncapped liability of the target, or a cap applying to the counterparty only.",
+    guidance:
+      "Asymmetric or uncapped exposure of the target is a valuation item; flag it for the SPA indemnity schedule.",
+    negotiation: {
+      rationale:
+        "Uncapped target exposure passes straight through to the buyer after closing.",
+      talkingPoints: [
+        "Ask for a mutual cap at 100-200% of annual fees.",
+        "Carve out only the customary exceptions (wilful misconduct, confidentiality, IP infringement).",
+      ],
+      escalation: "Escalate when the counterparty refuses any mutual cap.",
+    },
+  },
+  {
+    key: "change-of-control",
+    issue: "Change of control",
+    severity: "blocker",
+    ideal:
+      "A change of control of either party does not require the other party's consent and does not give rise to a termination right.",
+    fallback: {
+      label: "Notice only",
+      text: "The affected party notifies the other party of a change of control within 30 days; no consent or termination right arises.",
+    },
+    redLine:
+      "The counterparty may terminate, or must consent, upon a change of control of the target.",
+    guidance:
+      "Consent or termination rights triggered by the acquisition must be listed as closing conditions or consents to obtain.",
+    negotiation: {
+      rationale:
+        "A change-of-control trigger lets the counterparty walk away or re-price at closing.",
+      talkingPoints: [
+        "Replace consent with a notice obligation.",
+        "Limit any termination right to a change of control in favour of a named competitor.",
+      ],
+      escalation:
+        "Escalate every consent requirement to the transaction team for the consents schedule.",
+    },
+  },
+  {
+    key: "assignment",
+    issue: "Assignment",
+    severity: "medium",
+    ideal:
+      "Either party may assign this Agreement to an affiliate or to a successor of all or substantially all of its business without the other party's consent.",
+    fallback: {
+      label: "Consent not unreasonably withheld",
+      text: "Assignment requires the other party's prior written consent, not to be unreasonably withheld, conditioned or delayed.",
+    },
+    redLine:
+      "Assignment prohibited outright, including to affiliates and successors.",
+    guidance:
+      "Free assignability to affiliates and successors keeps post-closing restructuring simple.",
+    negotiation: {
+      rationale:
+        "An absolute ban blocks intra-group reorganisations after closing.",
+      talkingPoints: [
+        "Ask for an affiliate and successor carve-out.",
+        "Accept a consent requirement for assignments to unrelated third parties.",
+      ],
+      escalation:
+        "Escalate only when the contract is material to the business plan.",
+    },
+  },
+  {
+    key: "termination-for-convenience",
+    issue: "Termination for convenience",
+    severity: "high",
+    ideal:
+      "Neither party may terminate this Agreement for convenience during the initial term; thereafter either party may terminate on six months' written notice.",
+    fallback: {
+      label: "Mutual short notice",
+      text: "Either party may terminate for convenience on at least three months' written notice.",
+    },
+    redLine:
+      "The counterparty may terminate for convenience on less than 30 days' notice while the target may not.",
+    guidance:
+      "A one-sided walk-away right undermines revenue visibility assumed in the valuation.",
+    negotiation: {
+      rationale:
+        "Revenue from a contract the counterparty can end at will cannot be treated as recurring.",
+      talkingPoints: [
+        "Ask for a mutual convenience right with equal notice periods.",
+        "Trade a longer notice period for a termination fee covering unrecovered costs.",
+      ],
+      escalation: "Escalate for top-ten customer and supplier contracts.",
+    },
+  },
+  {
+    key: "non-compete-exclusivity",
+    issue: "Non-compete and exclusivity",
+    severity: "high",
+    ideal:
+      "This Agreement contains no non-compete, exclusivity or most-favoured-customer obligation binding the target or its affiliates.",
+    fallback: {
+      label: "Narrow product or territory exclusivity",
+      text: "Exclusivity is limited to a named product line or territory and expires with the initial term.",
+    },
+    redLine:
+      "A non-compete or exclusivity obligation that binds the target's affiliates or survives termination.",
+    guidance:
+      "Restrictions that extend to affiliates would bind the buyer group after closing.",
+    negotiation: {
+      rationale:
+        "Group-wide or surviving restrictions can conflict with the buyer's existing business.",
+      talkingPoints: [
+        "Limit the restriction to the contracting entity and the contract term.",
+        "Replace exclusivity with a volume commitment or a right of first offer.",
+      ],
+      escalation:
+        "Escalate any restriction reaching affiliates to antitrust counsel.",
+    },
+  },
+  {
+    key: "confidentiality",
+    issue: "Confidentiality",
+    severity: "medium",
+    ideal:
+      "Each party keeps the other party's confidential information confidential for the term and five years thereafter, subject to customary carve-outs and a permitted disclosure to advisers and prospective acquirers under equivalent obligations.",
+    fallback: {
+      label: "Mutual, no acquirer carve-out",
+      text: "Mutual confidentiality obligations with customary carve-outs but no express disclosure right towards prospective acquirers.",
+    },
+    redLine:
+      "No confidentiality obligation on the counterparty, or an obligation binding the target only.",
+    guidance:
+      "Check that sharing the contract in the data room is itself permitted; note any breach to disclose in the SPA.",
+    negotiation: {
+      rationale:
+        "A one-way duty leaves the target's know-how unprotected after closing.",
+      talkingPoints: [
+        "Ask for mutual obligations with an adviser and acquirer carve-out.",
+        "Cap the survival period at three to five years.",
+      ],
+      escalation:
+        "Escalate if data-room disclosure itself breaches the clause.",
+    },
+  },
+  {
+    key: "indemnity",
+    issue: "Indemnity",
+    severity: "low",
+    ideal:
+      "Indemnities are mutual, limited to third-party claims for IP infringement, breach of confidentiality and breach of law, and are subject to the liability cap.",
+    fallback: {
+      label: "Mutual, outside the cap",
+      text: "Mutual third-party-claim indemnities that sit outside the general liability cap.",
+    },
+    redLine:
+      "A broad first-party indemnity from the target covering all losses, including indirect and consequential loss.",
+    guidance:
+      "Broad first-party indemnities are disguised uncapped liability; read them together with the liability clause.",
+    negotiation: {
+      rationale:
+        "A broad indemnity bypasses the negotiated liability cap and the exclusion of indirect loss.",
+      talkingPoints: [
+        "Restrict indemnities to third-party claims.",
+        "Bring the indemnity under the general cap or agree a separate sub-cap.",
+      ],
+      escalation: "Escalate when combined with uncapped liability.",
+    },
+  },
+];
+
+const buildDdGeneralPosition = (input: DdPositionInput): Position => ({
+  mode: "graded",
+  sourceId: seedId(`playbook-dd-general-pos-${input.key}`),
+  issue: input.issue,
+  severity: input.severity,
+  ask: {
+    mode: "manual",
+    question: `What does the agreement provide regarding the following issue: ${input.issue}? Quote the operative wording.`,
+    content: { version: 1, type: "text" },
+  },
+  tiers: {
+    acceptable: {
+      rules: [],
+      ideal: { source: "inline", text: input.ideal },
+    },
+    fallback: {
+      entries: [
+        {
+          id: seedId(`playbook-dd-general-fb-${input.key}`),
+          label: input.fallback.label,
+          text: input.fallback.text,
+        },
+      ],
+    },
+    notAcceptable: {
+      rules: [
+        {
+          id: seedId(`playbook-dd-general-rl-${input.key}`),
+          text: input.redLine,
+        },
+      ],
+    },
+  },
+  guidance: input.guidance,
+  negotiation: input.negotiation,
+  enabled: true,
+});
+
+const seedDdGeneralPlaybook = async (
+  organizationId: SafeId<"organization">,
+): Promise<void> => {
+  const definitionId = seedId("playbook-dd-general");
+  // Same delete-then-insert as the Czech playbook: reruns pick up position
+  // changes and materialized columns re-adopt by deterministic sourceId.
+  await rootDb
+    .delete(playbookDefinitions)
+    .where(eq(playbookDefinitions.id, definitionId));
+  await rootDb
+    .insert(playbookDefinitions)
+    .values({
+      id: definitionId,
+      organizationId,
+      name: "Due Diligence Review (General)",
+      description:
+        "Buyer-side red-flag review of target contracts; applies to every document type.",
+      scope: { perspective: "buyer" },
+      positions: {
+        version: 2,
+        items: DD_GENERAL_POSITIONS.map(buildDdGeneralPosition),
+      } satisfies PlaybookPositions,
+    })
+    .onConflictDoNothing();
+};
+
 export const seedPlaybooks = async (
   organizationId: SafeId<"organization">,
 ): Promise<void> => {
@@ -5081,7 +5368,9 @@ export const seedPlaybooks = async (
     })
     .onConflictDoNothing();
 
-  console.log("  Playbooks: 1");
+  await seedDdGeneralPlaybook(organizationId);
+
+  console.log("  Playbooks: 2");
 };
 
 // ─── Main ───────────────────────────────────────────────

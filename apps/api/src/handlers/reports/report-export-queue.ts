@@ -453,7 +453,7 @@ const runExport = async ({
   const filled = await fillReport({
     actor,
     templateRef: row.templateRef,
-    reportData: dataResult.value,
+    reportData: dataResult.value.data,
     orgAIConfig,
     aiNarrative,
   });
