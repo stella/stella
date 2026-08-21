@@ -61,6 +61,7 @@ import { playbooksRoute } from "@/api/handlers/playbooks/routes";
 import { playbookRunsRoute } from "@/api/handlers/playbooks/run-route";
 import { propertiesRoute } from "@/api/handlers/properties/routes";
 import { ratesRoute } from "@/api/handlers/rates/routes";
+import { initBuiltinReportTemplates } from "@/api/handlers/reports/builtin-templates";
 import { initReportExportWorker } from "@/api/handlers/reports/report-export-queue";
 import { reportsRoute } from "@/api/handlers/reports/routes";
 import { savedSearchesRoute } from "@/api/handlers/saved-searches/routes";
@@ -724,6 +725,11 @@ const startServer = async (): Promise<void> => {
 
   await Promise.all([refreshS3(), refreshCorpusS3()]);
   startS3RefreshLoop();
+
+  // Config fail-fast: an invalid bundled or runtime report spec must stop the
+  // boot, not fail the first export that picks it. After the S3 refresh so a
+  // REPORT_SPECS_S3_PREFIX read uses resolved credentials.
+  await initBuiltinReportTemplates();
 
   // BullMQ worker for asynchronous file derivatives.
   const fileDerivativeWorker = initFileDerivativeWorker();

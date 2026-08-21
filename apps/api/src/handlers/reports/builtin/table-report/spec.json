@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "name": "Table report",
+  "description": "Executive summary, findings by severity, one section per contract, and a review-matrix appendix.",
+  "sections": [
+    {
+      "kind": "narrative",
+      "heading": "Executive summary",
+      "level": 1,
+      "prompt": { "ref": "exec-summary" }
+    },
+    { "kind": "stats", "heading": "Findings by severity", "by": "severity" },
+    { "kind": "per-contract", "heading": "Contract review" },
+    {
+      "kind": "appendix",
+      "heading": "Review matrix",
+      "children": [{ "kind": "matrix" }]
+    }
+  ]
+}

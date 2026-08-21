@@ -1,3 +1,4 @@
+import path from "node:path";
 import * as v from "valibot";
 
 import { DEPLOYED_NODE_ENVS } from "@/api/env-base-schema";
@@ -432,6 +433,33 @@ export const envApiServerSchema = {
    * encode an operator policy.
    */
   STELLA_USAGE_POLICY_SEEDS: v.optional(v.string(), "[]"),
+
+  /**
+   * Absolute path of a directory holding additional report specs, one
+   * `<key>/spec.json` (plus `prompts/*.md`) per subdirectory. A key found
+   * here overrides the bundled spec of the same name. Must exist at boot.
+   */
+  REPORT_SPECS_DIR: v.optional(
+    v.pipe(
+      v.string(),
+      v.check(path.isAbsolute, "REPORT_SPECS_DIR must be an absolute path."),
+    ),
+  ),
+
+  /**
+   * `s3://bucket/prefix/` holding additional report specs in the same
+   * `<key>/spec.json` + `<key>/prompts/*.md` layout as REPORT_SPECS_DIR, read
+   * once at boot. Exclusive with REPORT_SPECS_DIR.
+   */
+  REPORT_SPECS_S3_PREFIX: v.optional(
+    v.pipe(
+      v.string(),
+      v.regex(
+        /^s3:\/\/[^/\s]+\/(?:[^/\s]+\/)*$/u,
+        "REPORT_SPECS_S3_PREFIX must look like s3://bucket/prefix/ (trailing slash).",
+      ),
+    ),
+  ),
 };
 
 type EnvApiInvariantInput = {
@@ -443,6 +471,8 @@ type EnvApiInvariantInput = {
   MICROSOFT_AUTH_CLIENT_SECRET?: string | undefined;
   MICROSOFT_AUTH_TENANT_ID?: string | undefined;
   PUBLIC_URL?: string | undefined;
+  REPORT_SPECS_DIR?: string | undefined;
+  REPORT_SPECS_S3_PREFIX?: string | undefined;
   SES_REGION?: string | undefined;
   SMTP_HOST?: string | undefined;
   SMTP_PORT?: number | undefined;
@@ -460,6 +490,8 @@ export const envApiInvariantViolation = ({
   MICROSOFT_AUTH_CLIENT_SECRET,
   MICROSOFT_AUTH_TENANT_ID,
   PUBLIC_URL,
+  REPORT_SPECS_DIR,
+  REPORT_SPECS_S3_PREFIX,
   SES_REGION,
   SMTP_HOST,
   SMTP_PORT,
@@ -467,6 +499,9 @@ export const envApiInvariantViolation = ({
   USE_MOCK_AI,
   nodeEnv,
 }: EnvApiInvariantInput): string | null => {
+  if (REPORT_SPECS_DIR !== undefined && REPORT_SPECS_S3_PREFIX !== undefined) {
+    return "REPORT_SPECS_DIR and REPORT_SPECS_S3_PREFIX are exclusive; set one.";
+  }
   if (DEPLOYED_NODE_ENVS.has(nodeEnv ?? "")) {
     const insecurePublicOrigin = [
       { name: "BETTER_AUTH_URL", value: BETTER_AUTH_URL },

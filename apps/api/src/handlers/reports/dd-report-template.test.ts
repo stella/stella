@@ -16,11 +16,30 @@ import type { QueryEntityResult } from "@/api/lib/entities/query-entities";
 import type { ViewLayout } from "@/api/lib/views-schema";
 import { buildExportColumns } from "@/api/lib/views/export-columns";
 
+import type { ReportJustification } from "./build-report-data";
 import { assembleReportData } from "./build-report-data";
 import {
+  DD_REPORT_KEY,
   DD_REPORT_MANIFEST,
   getBuiltinReportTemplate,
+  initBuiltinReportTemplates,
 } from "./builtin-templates";
+
+await initBuiltinReportTemplates();
+
+const loadDdReportBuffer = async (): Promise<Buffer> => {
+  const builtin = getBuiltinReportTemplate(DD_REPORT_KEY);
+  if (builtin?.kind !== "docx") {
+    throw new Error("dd-report built-in template not found");
+  }
+  return await builtin.loadBuffer();
+};
+
+/** Wrap justification content as the row shape the assembler reads. */
+const justification = (
+  id: string,
+  content: JustificationContent,
+): ReportJustification => ({ id, content });
 
 const ASK_LAW = "11111111-1111-4111-8111-111111111111";
 const VERDICT_LAW = "22222222-2222-4222-8222-222222222222";
@@ -48,6 +67,7 @@ const properties = [
     name: "Governing law",
     content: textPropertyContent,
     role: null,
+    playbookSourceId: null,
     tool: aiTool,
   },
   {
@@ -55,6 +75,7 @@ const properties = [
     name: "Governing law verdict",
     content: textPropertyContent,
     role: null,
+    playbookSourceId: null,
     tool: verdictTool(ASK_LAW, "high"),
   },
   {
@@ -62,6 +83,7 @@ const properties = [
     name: "Term",
     content: textPropertyContent,
     role: null,
+    playbookSourceId: null,
     tool: aiTool,
   },
   {
@@ -69,6 +91,7 @@ const properties = [
     name: "Term verdict",
     content: textPropertyContent,
     role: null,
+    playbookSourceId: null,
     tool: verdictTool(ASK_TERM, "blocker"),
   },
   {
@@ -76,6 +99,7 @@ const properties = [
     name: "Liability cap",
     content: textPropertyContent,
     role: null,
+    playbookSourceId: null,
     tool: aiTool,
   },
 ];
@@ -208,10 +232,10 @@ describe("Due Diligence Report built-in template", () => {
 
     // Only the NDA's Governing-law risk carries a quoted citation; the MSA's
     // two risks have none — proving the per-risk {{#if hasCitation}} gate.
-    const justifications = new Map<string, JustificationContent>([
+    const justifications = new Map<string, ReportJustification>([
       [
         "a-law",
-        {
+        justification("j-a-law", {
           version: 1,
           blocks: [
             {
@@ -231,11 +255,11 @@ describe("Due Diligence Report built-in template", () => {
               ],
             },
           ],
-        },
+        }),
       ],
     ]);
 
-    const data = assembleReportData({
+    const { data } = assembleReportData({
       entities,
       columns,
       properties,
@@ -256,10 +280,7 @@ describe("Due Diligence Report built-in template", () => {
       throw new Error("assembled report data is not fillable template data");
     }
 
-    const buffer = await getBuiltinReportTemplate("dd-report")?.loadBuffer();
-    if (!buffer) {
-      throw new Error("dd-report built-in template not found");
-    }
+    const buffer = await loadDdReportBuffer();
 
     const result = await fillTemplate(buffer, record);
 
@@ -320,7 +341,7 @@ describe("Due Diligence Report built-in template", () => {
       ),
     ];
 
-    const data = assembleReportData({
+    const { data } = assembleReportData({
       entities,
       columns,
       properties,
@@ -348,10 +369,7 @@ describe("Due Diligence Report built-in template", () => {
       throw new Error("assembled report data is not fillable template data");
     }
 
-    const buffer = await getBuiltinReportTemplate("dd-report")?.loadBuffer();
-    if (!buffer) {
-      throw new Error("dd-report built-in template not found");
-    }
+    const buffer = await loadDdReportBuffer();
 
     const result = await fillTemplate(buffer, record);
 
@@ -378,6 +396,7 @@ describe("Due Diligence Report built-in template", () => {
         name: "Governing law",
         content: textPropertyContent,
         role: null,
+        playbookSourceId: null,
         tool: aiTool,
       },
       {
@@ -385,6 +404,7 @@ describe("Due Diligence Report built-in template", () => {
         name: "Term",
         content: textPropertyContent,
         role: null,
+        playbookSourceId: null,
         tool: aiTool,
       },
       {
@@ -392,6 +412,7 @@ describe("Due Diligence Report built-in template", () => {
         name: "Liability cap",
         content: textPropertyContent,
         role: null,
+        playbookSourceId: null,
         tool: aiTool,
       },
     ];
@@ -418,7 +439,7 @@ describe("Due Diligence Report built-in template", () => {
       ),
     ];
 
-    const data = assembleReportData({
+    const { data } = assembleReportData({
       entities,
       columns,
       properties: bareProps,
@@ -434,10 +455,7 @@ describe("Due Diligence Report built-in template", () => {
       throw new Error("assembled report data is not fillable template data");
     }
 
-    const buffer = await getBuiltinReportTemplate("dd-report")?.loadBuffer();
-    if (!buffer) {
-      throw new Error("dd-report built-in template not found");
-    }
+    const buffer = await loadDdReportBuffer();
 
     const result = await fillTemplate(buffer, data);
 

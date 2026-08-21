@@ -82,7 +82,7 @@
         "@stll/chat-limits": "workspace:*",
         "@stll/conditions": "workspace:*",
         "@stll/country-codes": "workspace:*",
-        "@stll/docx-core": "^0.14.0",
+        "@stll/docx-core": "^0.15.0",
         "@stll/docx-utils": "workspace:*",
         "@stll/errors": "workspace:*",
         "@stll/fetch": "workspace:*",
@@ -315,7 +315,7 @@
         "@stll/chat-limits": "workspace:*",
         "@stll/conditions": "workspace:*",
         "@stll/country-codes": "workspace:*",
-        "@stll/docx-core": "^0.14.0",
+        "@stll/docx-core": "^0.15.0",
         "@stll/docx-utils": "workspace:*",
         "@stll/errors": "workspace:*",
         "@stll/fetch": "workspace:*",
@@ -888,7 +888,7 @@
     "@expo/cli": "57.0.15",
     "@expo/router-server": "57.0.6",
     "@expo/ui": "57.0.11",
-    "@stll/folio-core": "0.20.0",
+    "@stll/folio-core": "0.21.0",
     "adm-zip": "0.6.0",
     "brace-expansion": "5.0.9",
     "expo-constants": "57.0.11",
@@ -918,9 +918,9 @@
     "@silurus/ooxml": "0.76.2",
     "@stll/anonymize-data": "0.0.9",
     "@stll/anonymize-wasm": "2.7.6",
-    "@stll/folio-agents": "0.8.7",
-    "@stll/folio-core": "0.20.0",
-    "@stll/folio-react": "0.15.0",
+    "@stll/folio-agents": "0.8.8",
+    "@stll/folio-core": "0.21.0",
+    "@stll/folio-react": "0.15.1",
     "@t3-oss/env-core": "0.13.11",
     "@tailwindcss/postcss": "4.3.3",
     "@tailwindcss/vite": "4.3.3",
@@ -2333,7 +2333,7 @@
 
     "@stll/desktop": ["@stll/desktop@workspace:apps/desktop"],
 
-    "@stll/docx-core": ["@stll/docx-core@0.14.0", "", { "dependencies": { "better-result": "2.10.0", "jszip": "3.10.1" } }, "sha512-m58G3/Vg+Jxme1QDRDdCAbZdQUl6SUFpnJ7RR6r/TL9y0AU05iDHtiILv6oGHwdlNQ87SkziZb+ukqUS6MVPeQ=="],
+    "@stll/docx-core": ["@stll/docx-core@0.15.0", "", { "dependencies": { "better-result": "2.10.0", "jszip": "3.10.1" } }, "sha512-PCTfoIdFWetcUliZi+sv5G/34OvVVsqS+eTbUYZtvYttr+bpVWKsnqPZPpCJjS7O3JUNx/AncsLWb9D3uRsARA=="],
 
     "@stll/docx-utils": ["@stll/docx-utils@workspace:packages/docx-utils"],
 
@@ -2341,11 +2341,11 @@
 
     "@stll/fetch": ["@stll/fetch@workspace:packages/fetch"],
 
-    "@stll/folio-agents": ["@stll/folio-agents@0.8.7", "", { "dependencies": { "@stll/folio-core": "^0.20.0" } }, "sha512-n3i006h3jwo6BCsPIu4cig7wBd57C4+FYuukH2awBJGnwhlkKAakSGcVFgfzSvc9BUBv25lEEkFdxZOtwZj08g=="],
+    "@stll/folio-agents": ["@stll/folio-agents@0.8.8", "", { "dependencies": { "@stll/folio-core": "^0.21.0" } }, "sha512-NlS5Yb945TBPVoQ8eQLrFZ8ZLoixtn+o0CW/lZMi1nuiOgR7ApkGqw8yiEB7hCbadUVUrV9UL+vuv9IlUM2qtw=="],
 
-    "@stll/folio-core": ["@stll/folio-core@0.20.0", "", { "dependencies": { "@stll/docx-core": "^0.14.0", "@stll/docx-utils": "^0.1.0", "@stll/template-conditions": "^0.1.0", "better-result": "2.10.0", "csstype": "^3.1.3", "dompurify": "^3.4.13", "fast-xml-parser": "^5.9.3", "hyphen": "1.14.1", "jszip": "3.10.1", "marked": "^18.0.5", "prosemirror-commands": "^1.7.1", "prosemirror-dropcursor": "^1.8.2", "prosemirror-gapcursor": "^1.4.1", "prosemirror-history": "^1.5.0", "prosemirror-keymap": "^1.2.3", "prosemirror-model": "^1.25.9", "prosemirror-state": "^1.4.4", "prosemirror-tables": "^1.8.5", "prosemirror-transform": "^1.12.0", "prosemirror-view": "^1.41.8", "utif2": "^4.1.0", "valibot": "1.4.2", "y-prosemirror": "^1.3.7", "yjs": "^13.6.31" } }, "sha512-NtXIcBQxp1cMdKpoFiUXMXO8KUMRJ7LwDg1Y0SXXKKRXIV1MW7EVd/vNj0NVu+MbfbU2RWZ+g3Az3l/d6XwTiw=="],
+    "@stll/folio-core": ["@stll/folio-core@0.21.0", "", { "dependencies": { "@stll/docx-core": "^0.15.0", "@stll/docx-utils": "^0.1.0", "@stll/template-conditions": "^0.1.0", "better-result": "2.10.0", "csstype": "^3.1.3", "dompurify": "^3.4.13", "fast-xml-parser": "^5.9.3", "hyphen": "1.14.1", "jszip": "3.10.1", "marked": "^18.0.5", "prosemirror-commands": "^1.7.1", "prosemirror-dropcursor": "^1.8.2", "prosemirror-gapcursor": "^1.4.1", "prosemirror-history": "^1.5.0", "prosemirror-keymap": "^1.2.3", "prosemirror-model": "^1.25.9", "prosemirror-state": "^1.4.4", "prosemirror-tables": "^1.8.5", "prosemirror-transform": "^1.12.0", "prosemirror-view": "^1.41.8", "utif2": "^4.1.0", "valibot": "1.4.2", "y-prosemirror": "^1.3.7", "yjs": "^13.6.31" } }, "sha512-B8SHc8dJUkfnkMyq5ckC7MSUxaukyPaHApIu2W4q0n+RcVY42rWyWY80G2X0JoZZZpUhivQLPj/ctP5c3gv+SQ=="],
 
-    "@stll/folio-react": ["@stll/folio-react@0.15.0", "", { "dependencies": { "@base-ui/react": "1.6.0", "@fontsource/arimo": "^5.2.8", "@fontsource/caladea": "^5.2.8", "@fontsource/carlito": "^5.2.8", "@fontsource/cousine": "^5.2.7", "@fontsource/lato": "^5.2.7", "@fontsource/noto-sans-arabic": "^5.2.7", "@fontsource/source-sans-3": "^5.2.9", "@fontsource/tinos": "^5.2.7", "@stll/folio-core": "^0.20.0", "better-result": "2.10.0", "lucide-react": "1.24.0", "prosemirror-history": "^1.5.0", "prosemirror-model": "^1.25.9", "prosemirror-state": "^1.4.4", "prosemirror-tables": "^1.8.5", "prosemirror-view": "^1.41.8", "react-compiler-runtime": "^1.0.0", "yjs": "^13.6.31" }, "peerDependencies": { "react": "^18.0.0 || ^19.0.0", "react-dom": "^18.0.0 || ^19.0.0", "use-intl": ">=4.0.0" } }, "sha512-4a5lbAjLnpERqFq/hEcKkmEfVlcnZIS2wJCdwhQru5CpEXh99esOAxADLXQONtHMwfdcsYwY8DcDxURwT4KvkQ=="],
+    "@stll/folio-react": ["@stll/folio-react@0.15.1", "", { "dependencies": { "@base-ui/react": "1.6.0", "@fontsource/arimo": "^5.2.8", "@fontsource/caladea": "^5.2.8", "@fontsource/carlito": "^5.2.8", "@fontsource/cousine": "^5.2.7", "@fontsource/lato": "^5.2.7", "@fontsource/noto-sans-arabic": "^5.2.7", "@fontsource/source-sans-3": "^5.2.9", "@fontsource/tinos": "^5.2.7", "@stll/folio-core": "^0.21.0", "better-result": "2.10.0", "lucide-react": "1.24.0", "prosemirror-history": "^1.5.0", "prosemirror-model": "^1.25.9", "prosemirror-state": "^1.4.4", "prosemirror-tables": "^1.8.5", "prosemirror-view": "^1.41.8", "react-compiler-runtime": "^1.0.0", "yjs": "^13.6.31" }, "peerDependencies": { "react": "^18.0.0 || ^19.0.0", "react-dom": "^18.0.0 || ^19.0.0", "use-intl": ">=4.0.0" } }, "sha512-m8Kt/55+yqKVlaR1BFsdSWjW/XaeA/HsaMx90jPoX3c07kHIpLRL2MWwEOuFHj2PxTKo94M6kTw7HHDI37k4Vw=="],
 
     "@stll/infosoud": ["@stll/infosoud@workspace:packages/infosoud"],
 

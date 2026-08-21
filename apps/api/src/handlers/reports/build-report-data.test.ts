@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
-import type { JustificationContent } from "@/api/db/schema";
+import type { JustificationContent, VerdictMatchedRef } from "@/api/db/schema";
 import type {
   FieldContent,
   PropertyContent,
@@ -13,15 +13,19 @@ import { isStuckReportExport } from "@/api/lib/report-export-recovery";
 import type { ViewLayout } from "@/api/lib/views-schema";
 import { buildExportColumns } from "@/api/lib/views/export-columns";
 
+import type { ReportJustification } from "./build-report-data";
 import {
   assembleReportData,
   findDocTypePropertyId,
   isReportRowCountOverCap,
+  reportCitationKey,
+  reviewDecisionKey,
 } from "./build-report-data";
 import {
   buildReportDelivery,
   toExportErrorMessage,
 } from "./report-export-queue";
+import type { GradedPosition } from "./report-findings";
 
 // ── Fixture ids (real UUID shape; the no-UUID test asserts none leak) ────────
 const ASK_LAW = "11111111-1111-4111-8111-111111111111";
@@ -32,6 +36,11 @@ const DOC_TYPE = "55555555-5555-4555-8555-555555555555";
 const NOTES = "66666666-6666-4666-8666-666666666666";
 const ENTITY_A = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const ENTITY_B = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+const FILE_FIELD_ID = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
+const JUSTIFICATION_ID = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
+const SOURCE_LAW = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee";
+const SOURCE_TERM = "ffffffff-ffff-4fff-8fff-ffffffffffff";
+const UUID_PATTERN = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}/iu;
 
 const aiTool: PropertyTool = {
   version: 1,
@@ -66,6 +75,7 @@ const properties = [
     name: "Governing law",
     content: textPropertyContent,
     role: null,
+    playbookSourceId: null,
     tool: aiTool,
   },
   {
@@ -73,6 +83,7 @@ const properties = [
     name: "Governing law verdict",
     content: docTypePropertyContent,
     role: null,
+    playbookSourceId: null,
     tool: verdictTool(ASK_LAW, "high"),
   },
   {
@@ -80,6 +91,7 @@ const properties = [
     name: "Term",
     content: textPropertyContent,
     role: null,
+    playbookSourceId: null,
     tool: aiTool,
   },
   {
@@ -87,6 +99,7 @@ const properties = [
     name: "Term verdict",
     content: docTypePropertyContent,
     role: null,
+    playbookSourceId: null,
     tool: verdictTool(ASK_TERM, "blocker"),
   },
   {
@@ -94,6 +107,7 @@ const properties = [
     name: "Document Type",
     content: docTypePropertyContent,
     role: null,
+    playbookSourceId: null,
     tool: aiTool,
   },
   {
@@ -101,6 +115,7 @@ const properties = [
     name: "Notes",
     content: textPropertyContent,
     role: null,
+    playbookSourceId: null,
     tool: manualTool,
   },
 ];
@@ -128,6 +143,7 @@ const makeEntity = (
   entityId: string,
   name: string,
   fields: QueryEntityResult["fields"],
+  cellMetadata: QueryEntityResult["cellMetadata"] = [],
 ): QueryEntityResult => ({
   entityId,
   kind: "document",
@@ -166,7 +182,14 @@ const makeEntity = (
   sortOrder: null,
   activeEditBy: null,
   fields,
-  cellMetadata: [],
+  cellMetadata,
+});
+
+const lockedCell = (
+  propertyId: string,
+): QueryEntityResult["cellMetadata"][number] => ({
+  propertyId,
+  metadata: { version: 1, manualFlags: [], locked: true },
 });
 
 const tableLayout = (
@@ -182,6 +205,12 @@ const tableLayout = (
   columnPinning: [],
   ...overrides,
 });
+
+/** Wrap justification content as the row shape the assembler reads. */
+const justification = (
+  id: string,
+  content: JustificationContent,
+): ReportJustification => ({ id, content });
 
 const NOW = new Date("2026-07-02T10:00:00.000Z");
 
@@ -202,7 +231,7 @@ describe("assembleReportData", () => {
       field("f6", NOTES, text("hidden note")),
     ]);
 
-    const data = assembleReportData({
+    const { data } = assembleReportData({
       entities: [entity],
       columns,
       properties,
@@ -260,6 +289,7 @@ describe("assembleReportData", () => {
       name: "Type de document",
       content: textPropertyContent,
       role: "document-type-classifier" as const,
+      playbookSourceId: null,
       tool: aiTool,
     };
     const fallback = {
@@ -267,6 +297,7 @@ describe("assembleReportData", () => {
       name: "Document Type",
       content: docTypePropertyContent,
       role: null,
+      playbookSourceId: null,
       tool: aiTool,
     };
 
@@ -276,10 +307,10 @@ describe("assembleReportData", () => {
   test("derives risks from deviation/missing verdicts with rationale + citation", () => {
     const layout = tableLayout({ columnOrder: [ASK_LAW, ASK_TERM] });
     const columns = buildExportColumns(layout, properties);
-    const justifications = new Map<string, JustificationContent>([
+    const justifications = new Map<string, ReportJustification>([
       [
         "vf-law",
-        {
+        justification("j-vf-law", {
           version: 1,
           blocks: [
             {
@@ -287,11 +318,11 @@ describe("assembleReportData", () => {
               rationale: "Non-standard forum.",
             },
           ],
-        },
+        }),
       ],
       [
         "af-law",
-        {
+        justification("j-af-law", {
           version: 1,
           blocks: [
             {
@@ -311,7 +342,7 @@ describe("assembleReportData", () => {
               ],
             },
           ],
-        },
+        }),
       ],
     ]);
     const entity = makeEntity(ENTITY_A, "MSA", [
@@ -321,7 +352,7 @@ describe("assembleReportData", () => {
       field("vf-term", VERDICT_TERM, select("missing")),
     ]);
 
-    const data = assembleReportData({
+    const { data } = assembleReportData({
       entities: [entity],
       columns,
       properties,
@@ -366,6 +397,7 @@ describe("assembleReportData", () => {
         name: "Governing law",
         content: textPropertyContent,
         role: null,
+        playbookSourceId: null,
         tool: aiTool,
       },
     ];
@@ -374,7 +406,7 @@ describe("assembleReportData", () => {
       field("f1", ASK_LAW, text("Czech law")),
     ]);
 
-    const data = assembleReportData({
+    const { data } = assembleReportData({
       entities: [entity],
       columns,
       properties: bare,
@@ -416,20 +448,66 @@ describe("assembleReportData", () => {
       ]),
     ];
 
-    const data = assembleReportData({
+    const { data, links } = assembleReportData({
       entities,
       columns,
       properties,
-      justificationByFieldId: new Map(),
+      justificationByFieldId: new Map([
+        [
+          "af-law",
+          justification(JUSTIFICATION_ID, {
+            version: 1,
+            blocks: [
+              {
+                kind: "docx-folio",
+                fileFieldId: toSafeId<"field">(FILE_FIELD_ID),
+                statements: [
+                  {
+                    text: "stmt",
+                    citations: [
+                      {
+                        citationStatus: "verified",
+                        blockId: "b1",
+                        text: "Clause 12.1 quoted.",
+                      },
+                    ],
+                  },
+                ],
+              },
+            ],
+          }),
+        ],
+      ]),
       docTypePropertyId: DOC_TYPE,
       workspaceName: "WS",
       now: NOW,
     });
 
     const serialized = JSON.stringify(data);
-    expect(serialized).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}/iu);
+    expect(serialized).not.toMatch(UUID_PATTERN);
     // Contracts are identified positionally.
     expect(data.contracts.map((c) => c.index)).toEqual([1, 2]);
+
+    // The link index is the ONLY place the source ids live: the NDA's one
+    // finding (contract 1, finding 1) has one citation, and its link resolves
+    // to the entity, the cited file field and the justification row.
+    expect(data.findings).toHaveLength(1);
+    expect(data.findings[0]?.citations).toHaveLength(1);
+    expect([...links.citations.keys()]).toEqual([
+      reportCitationKey({
+        contractIndex: 1,
+        findingIndex: 1,
+        citationIndex: 1,
+      }),
+    ]);
+    expect(links.citations.get("1:1:1")).toEqual({
+      entityId: ENTITY_A,
+      fileFieldId: FILE_FIELD_ID,
+      justificationId: JUSTIFICATION_ID,
+    });
+    for (const id of [ENTITY_A, FILE_FIELD_ID, JUSTIFICATION_ID]) {
+      expect(id).toMatch(UUID_PATTERN);
+    }
 
     // The review-matrix annex is built from the same visible columns/rows and
     // must likewise carry no UUIDs (the serialized check above covers `grid`
@@ -442,12 +520,360 @@ describe("assembleReportData", () => {
       "Notes",
     ]);
     expect(data.grid.rows.map((row) => row.name)).toEqual(["NDA", "MSA"]);
-    // Verdict folds into the cell value as a suffix; the summary pre-joins them.
+    // The cell keeps verdict and value apart; the summary folds the verdict in
+    // as a suffix.
     expect(data.grid.rows[0]?.cells[0]).toEqual({
       label: "Governing law",
-      value: "Czech law (deviation)",
+      value: "Czech law",
+      verdict: "deviation",
+      severity: "high",
     });
-    expect(data.grid.rows[0]?.summary).toContain("Governing law: Czech law");
+    expect(data.grid.rows[0]?.summary).toContain(
+      "Governing law: Czech law (deviation)",
+    );
+  });
+});
+
+describe("assembleReportData findings", () => {
+  // Verdict columns bound to playbook positions (the ASK side carries the same
+  // sourceId in production; only the verdict side is read).
+  const lawVerdictTool: PropertyTool = {
+    version: 1,
+    type: "playbook-verdict",
+    askPropertyId: ASK_LAW,
+    rule: { kind: "positionMatch" },
+    severity: "high",
+    tiers: {
+      ideal: "Governed by Czech law.",
+      fallbacks: [],
+      acceptableRules: [],
+      notAcceptableRules: [],
+    },
+  };
+  const gradedProperties = properties.map((property) => {
+    switch (property.id) {
+      case VERDICT_LAW:
+        return {
+          id: property.id,
+          name: property.name,
+          content: property.content,
+          role: property.role,
+          playbookSourceId: SOURCE_LAW,
+          tool: lawVerdictTool,
+        };
+      case VERDICT_TERM:
+        return {
+          id: property.id,
+          name: property.name,
+          content: property.content,
+          role: property.role,
+          playbookSourceId: SOURCE_TERM,
+          tool: property.tool,
+        };
+      default:
+        return property;
+    }
+  });
+
+  const lawPosition: GradedPosition = {
+    mode: "graded",
+    sourceId: SOURCE_LAW,
+    issue: "Governing law",
+    severity: "high",
+    ask: { mode: "auto" },
+    tiers: {
+      acceptable: { rules: [] },
+      fallback: { entries: [] },
+      notAcceptable: { rules: [] },
+    },
+    guidance: "Prefer Czech law.",
+    negotiation: {
+      rationale: "Forum risk.",
+      talkingPoints: ["Offer EU-member law."],
+    },
+    enabled: true,
+  };
+
+  const verdictJustification = (
+    rationale: string,
+    matchedRef?: VerdictMatchedRef,
+  ): ReportJustification =>
+    justification("j-verdict", {
+      version: 1,
+      blocks: [
+        matchedRef
+          ? { kind: "playbook-verdict", rationale, matchedRef }
+          : { kind: "playbook-verdict", rationale },
+      ],
+    });
+
+  const assemble = (
+    entities: QueryEntityResult[],
+    justificationByFieldId: Map<string, ReportJustification>,
+    reviewDecisionByKey = new Map<string, "open" | "accepted" | "dismissed">(),
+  ) =>
+    assembleReportData({
+      entities,
+      columns: buildExportColumns(
+        tableLayout({ columnOrder: [ASK_LAW, ASK_TERM] }),
+        gradedProperties,
+      ),
+      properties: gradedProperties,
+      justificationByFieldId,
+      positionBySourceId: new Map([[SOURCE_LAW, lawPosition]]),
+      reviewDecisionByKey,
+      docTypePropertyId: DOC_TYPE,
+      workspaceName: "WS",
+      now: NOW,
+    });
+
+  test("orders findings blocker→low then by contract, and groups worst type first", () => {
+    // NDA (contract 1): high law deviation. MSA (2): blocker term missing +
+    // high law deviation. Lease (3, unclassified): low nothing; term missing.
+    const entities = [
+      makeEntity(ENTITY_A, "NDA", [
+        field("a-law", ASK_LAW, text("NY law")),
+        field("a-vlaw", VERDICT_LAW, select("deviation")),
+        field("a-term", ASK_TERM, text("2y")),
+        field("a-vterm", VERDICT_TERM, select("compliant")),
+        field("a-type", DOC_TYPE, select("NDA")),
+      ]),
+      makeEntity(ENTITY_B, "MSA", [
+        field("b-law", ASK_LAW, text("NY law")),
+        field("b-vlaw", VERDICT_LAW, select("deviation")),
+        field("b-vterm", VERDICT_TERM, select("missing")),
+        field("b-type", DOC_TYPE, select("MSA")),
+      ]),
+      makeEntity("cccccccc-0000-4000-8000-000000000003", "Lease", [
+        field("c-vterm", VERDICT_TERM, select("missing")),
+      ]),
+    ];
+    const { data } = assemble(entities, new Map());
+
+    expect(
+      data.findings.map((f) => [f.severity, f.contractIndex, f.issue]),
+    ).toEqual([
+      ["blocker", 2, "Term"],
+      ["blocker", 3, "Term"],
+      ["high", 1, "Governing law"],
+      ["high", 2, "Governing law"],
+    ]);
+    // MSA (2 flags) before NDA and the unclassified Lease (1 each); ties break
+    // on the raw type, "" sorting first and left raw for the renderer.
+    expect(data.groups.map((g) => [g.documentType, g.stats.redFlags])).toEqual([
+      ["MSA", 2],
+      ["", 1],
+      ["NDA", 1],
+    ]);
+    expect(data.groups[0]?.contracts.map((c) => c.index)).toEqual([2]);
+    expect(data.groups[0]?.findings.map((f) => f.severity)).toEqual([
+      "blocker",
+      "high",
+    ]);
+    expect(data.groups[0]?.stats).toEqual({
+      total: 1,
+      redFlags: 2,
+      bySeverity: { blocker: 1, high: 1, medium: 0, low: 0 },
+    });
+    // Position enrichment + tier snapshot; the Term position is unknown → "".
+    const law = data.findings.find((f) => f.issue === "Governing law");
+    expect(law?.guidance).toBe("Prefer Czech law.");
+    expect(law?.idealText).toBe("Governed by Czech law.");
+    expect(law?.negotiation).toEqual({
+      rationale: "Forum risk.",
+      talkingPoints: ["Offer EU-member law."],
+      escalation: "",
+    });
+    expect(law?.hasNegotiation).toBe(true);
+    const term = data.findings.find((f) => f.issue === "Term");
+    expect(term?.guidance).toBe("");
+    expect(term?.idealText).toBe("");
+    expect(term?.hasNegotiation).toBe(false);
+    // Every contract's risks are the projection of its findings (risks keep
+    // column order, which is the finding's index within the contract).
+    for (const contract of data.contracts) {
+      const own = data.findings
+        .filter((f) => f.contractIndex === contract.index)
+        .sort((a, b) => a.findingIndex - b.findingIndex);
+      expect(contract.risks.map((r) => r.issue)).toEqual(
+        own.map((f) => f.issue),
+      );
+    }
+  });
+
+  test("maps the verdict's matchedRef for fallback and red line", () => {
+    const entities = [
+      makeEntity(ENTITY_A, "NDA", [
+        field("a-vlaw", VERDICT_LAW, select("deviation")),
+        field("a-vterm", VERDICT_TERM, select("missing")),
+      ]),
+    ];
+    const { data } = assemble(
+      entities,
+      new Map([
+        [
+          "a-vlaw",
+          verdictJustification("Violates red line.", {
+            kind: "redLine",
+            ruleId: "rule-1",
+            text: "No non-EU law.",
+          }),
+        ],
+        [
+          "a-vterm",
+          verdictJustification("Matches alt.", {
+            kind: "fallback",
+            label: "Alt B",
+            text: "3-year term.",
+          }),
+        ],
+      ]),
+    );
+    const law = data.findings.find((f) => f.issue === "Governing law");
+    expect(law?.rationale).toBe("Violates red line.");
+    expect(law?.matchedRef).toEqual({
+      kind: "redLine",
+      label: "",
+      text: "No non-EU law.",
+    });
+    const term = data.findings.find((f) => f.issue === "Term");
+    expect(term?.matchedRef).toEqual({
+      kind: "fallback",
+      label: "Alt B",
+      text: "3-year term.",
+    });
+  });
+
+  test("keeps unverified docx citations ungrounded and never quotes them", () => {
+    const entities = [
+      makeEntity(ENTITY_A, "NDA", [
+        field("a-law", ASK_LAW, text("NY law")),
+        field("a-vlaw", VERDICT_LAW, select("deviation")),
+      ]),
+    ];
+    const { data } = assemble(
+      entities,
+      new Map([
+        [
+          "a-law",
+          justification(JUSTIFICATION_ID, {
+            version: 1,
+            blocks: [
+              {
+                kind: "docx-folio",
+                fileFieldId: toSafeId<"field">(FILE_FIELD_ID),
+                statements: [
+                  {
+                    text: "stmt",
+                    citations: [
+                      { citationStatus: "unverified", text: "Model guess." },
+                      {
+                        citationStatus: "verified",
+                        blockId: "b7",
+                        text: "Clause 9 quoted.",
+                      },
+                    ],
+                  },
+                ],
+              },
+            ],
+          }),
+        ],
+      ]),
+    );
+    const finding = data.findings[0];
+    expect(finding?.citations).toEqual([
+      { kind: "docx", blockId: "", text: "Model guess.", grounded: false },
+      { kind: "docx", blockId: "b7", text: "Clause 9 quoted.", grounded: true },
+    ]);
+    // The risk projection skips the ungrounded hint (mirrors the old skip).
+    expect(data.contracts[0]?.risks[0]?.citation).toBe("Clause 9 quoted.");
+  });
+
+  test("preserves the pdf bates/page locator with the statement text", () => {
+    const entities = [
+      makeEntity(ENTITY_A, "Scan", [
+        field("a-law", ASK_LAW, text("NY law")),
+        field("a-vlaw", VERDICT_LAW, select("deviation")),
+      ]),
+    ];
+    const { data } = assemble(
+      entities,
+      new Map([
+        [
+          "a-law",
+          justification(JUSTIFICATION_ID, {
+            version: 1,
+            blocks: [
+              {
+                kind: "pdf-bates",
+                fileFieldId: toSafeId<"field">(FILE_FIELD_ID),
+                statements: [
+                  {
+                    text: "Governed by the laws of New York.",
+                    citations: [{ bates: "ATLAS-000123", pageNumber: 4 }],
+                  },
+                ],
+              },
+            ],
+          }),
+        ],
+      ]),
+    );
+    expect(data.findings[0]?.citations).toEqual([
+      {
+        kind: "pdf",
+        pageNumber: 4,
+        bates: "ATLAS-000123",
+        text: "Governed by the laws of New York.",
+      },
+    ]);
+    expect(data.contracts[0]?.risks[0]?.citation).toBe(
+      "Governed by the laws of New York.",
+    );
+  });
+
+  test("rolls up reviewer state: lock from cell metadata, decision from the ledger", () => {
+    const entities = [
+      makeEntity(
+        ENTITY_A,
+        "NDA",
+        [
+          field("a-vlaw", VERDICT_LAW, select("deviation")),
+          field("a-vterm", VERDICT_TERM, select("compliant")),
+        ],
+        [lockedCell(VERDICT_LAW)],
+      ),
+      makeEntity(ENTITY_B, "MSA", [
+        field("b-vlaw", VERDICT_LAW, select("deviation")),
+        field("b-vterm", VERDICT_TERM, select("missing")),
+      ]),
+    ];
+    const { data } = assemble(
+      entities,
+      new Map(),
+      new Map([
+        [reviewDecisionKey(ENTITY_A, SOURCE_LAW), "accepted"],
+        [reviewDecisionKey(ENTITY_B, SOURCE_LAW), "open"],
+        [reviewDecisionKey(ENTITY_B, SOURCE_TERM), "dismissed"],
+      ]),
+    );
+    // Four verdict cells (2 contracts × 2 graded columns); one is locked.
+    expect(data.review).toEqual({
+      openFindings: 1,
+      acceptedFindings: 1,
+      dismissedFindings: 1,
+      lockedCells: 1,
+      unlockedVerdictCells: 3,
+    });
+    const nda = data.findings.find((f) => f.contractIndex === 1);
+    expect(nda?.review).toEqual({ locked: true, decision: "accepted" });
+    // A finding without a ledger row reads as "none" (counted nowhere).
+    const { data: undecided } = assemble(entities, new Map());
+    expect(undecided.findings.every((f) => f.review.decision === "none")).toBe(
+      true,
+    );
+    expect(undecided.review.openFindings).toBe(0);
   });
 });
 
