@@ -64,6 +64,10 @@ const POST_BOOTSTRAP_SELECT_ONLY_TABLES = new Set([
   // Where the citation-resolution walk had got to. Operational progress the
   // status rollup reads; only the resolution loop advances it.
   "case_law_citation_resolution_progress",
+  // Dormant compatibility tables retained until the rolling-deploy and
+  // rollback window closes; their existing migration grants SELECT only.
+  "case_law_citation_resolution_census_runs",
+  "case_law_citation_resolution_census",
   // Provision references extracted from decision text: global legal data read
   // by the public case-law reads, written only by the extraction loop.
   "case_law_provision_citations",
