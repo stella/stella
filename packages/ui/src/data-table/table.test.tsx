@@ -33,6 +33,7 @@ describe("DataTable", () => {
     expect(markup).toContain('aria-sort="ascending"');
     expect(markup).toContain("focus-visible:not-sr-only");
     expect(markup).toContain("focus-visible:ring-2");
+    expect(markup).toContain("pointer-coarse:h-11");
     expect(markup).toContain('data-slot="button"');
     expect(markup).toContain("Open Northwind</button>");
     expect(markup).toContain("caller-row");

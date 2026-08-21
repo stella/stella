@@ -211,7 +211,10 @@ const interactiveRowProps = <TItem,>(
   item: TItem,
   rowAction: DataTableRowAction<TItem>,
 ): RowProps => ({
-  className: cn("cursor-pointer", rowAction.getClassName?.(item)),
+  className: cn(
+    "cursor-pointer pointer-coarse:h-11",
+    rowAction.getClassName?.(item),
+  ),
   onClick: (event) => {
     if (!isDataTableRowActionTarget(event.currentTarget, event.target)) {
       return;
