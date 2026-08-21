@@ -20,7 +20,7 @@ import { extractFormattingLocale } from "@/api/lib/locale";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { secureDocumentResponse } from "@/api/lib/secure-document-response";
 import { excludedEntityKindsForView } from "@/api/lib/views";
-import { parseViewLayout } from "@/api/lib/views-schema";
+import { parseStoredViewLayout } from "@/api/lib/views-schema";
 import {
   buildExportColumns,
   type ExportColumn,
@@ -624,7 +624,7 @@ const exportTableView = createSafeHandler(
       );
     }
 
-    const layout = parseViewLayout(view.layout);
+    const layout = parseStoredViewLayout(view.layout);
     if (layout.type !== "table") {
       return Result.err(
         new HandlerError({

@@ -5,7 +5,7 @@ import { workspaceViewTemplates } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { LIMITS } from "@/api/lib/limits";
-import { parseViewLayout } from "@/api/lib/views-schema";
+import { parseStoredViewLayout } from "@/api/lib/views-schema";
 
 const config = {
   description:
@@ -18,7 +18,7 @@ const config = {
 } satisfies HandlerConfig;
 
 const toResponse = (template: typeof workspaceViewTemplates.$inferSelect) => {
-  const layout = parseViewLayout(template.layout);
+  const layout = parseStoredViewLayout(template.layout);
   return {
     version: 1 as const,
     id: template.id,

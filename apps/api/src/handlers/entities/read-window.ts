@@ -21,7 +21,7 @@ import { tViewSortSchema } from "@/api/lib/views-schema";
 const readEntitiesWindowBodySchema = t.Object({
   filters: t.Optional(t.Array(tConditionNode)),
   sorts: t.Optional(
-    t.Array(tViewSortSchema, { maxItems: LIMITS.propertiesCount }),
+    t.Array(tViewSortSchema, { maxItems: LIMITS.viewSortsCount }),
   ),
   search: t.Optional(t.String({ maxLength: LIMITS.searchQueryMaxLength })),
   limit: t.Optional(

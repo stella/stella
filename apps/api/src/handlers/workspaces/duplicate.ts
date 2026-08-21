@@ -63,7 +63,7 @@ import {
   flushWorkspaceSearchRepairs,
 } from "@/api/lib/search/projection-repair-queue";
 import type { ViewLayout } from "@/api/lib/views-schema";
-import { parseViewLayout } from "@/api/lib/views-schema";
+import { parseStoredViewLayout } from "@/api/lib/views-schema";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 const config = {
@@ -99,7 +99,7 @@ const remapLayout = (
   storedLayout: unknown,
   propertyIdMap: Map<string, SafeId<"property">>,
 ): ViewLayout => {
-  const layout = parseViewLayout(storedLayout);
+  const layout = parseStoredViewLayout(storedLayout);
   const remapFilters = layout.filters.map((node) =>
     remapNodePropertyIds(node, (id) => remapPropertyId(id, propertyIdMap)),
   );

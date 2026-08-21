@@ -29,7 +29,9 @@ const calendarTasksBodySchema = t.Object({
   }),
   endDatePropertyId: t.Optional(t.String({ minLength: 1 })),
   filters: t.Optional(t.Array(tConditionNode)),
-  sorts: t.Optional(t.Array(tViewSortSchema)),
+  sorts: t.Optional(
+    t.Array(tViewSortSchema, { maxItems: LIMITS.viewSortsCount }),
+  ),
 });
 
 const config = {

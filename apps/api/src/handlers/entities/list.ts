@@ -21,7 +21,7 @@ import { tViewSortSchema } from "@/api/lib/views-schema";
 const readEntitiesBodySchema = t.Object({
   filters: t.Optional(t.Array(tConditionNode)),
   sorts: t.Optional(
-    t.Array(tViewSortSchema, { maxItems: LIMITS.propertiesCount }),
+    t.Array(tViewSortSchema, { maxItems: LIMITS.viewSortsCount }),
   ),
   cursor: t.Optional(tPaginationCursor(ENTITIES_WINDOW_CURSOR_MAX_LENGTH)),
   search: t.Optional(t.String({ maxLength: LIMITS.searchQueryMaxLength })),

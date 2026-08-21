@@ -36,13 +36,29 @@ describe("entities window cursor", () => {
     }
   });
 
-  test("keeps the worst-case escaped sort tuple within its request bound", () => {
-    const values = Array.from({ length: LIMITS.propertiesCount }, () =>
+  const worstCaseSortValues = (count: number) =>
+    Array.from({ length: count }, () =>
       "\u0001".repeat(ENTITY_SORTABLE_FIELD_VALUE_MAX_LENGTH),
     );
-    const cursor = encodeEntitiesWindowCursor([...values, "entity_1"]);
+
+  test("keeps the worst-case escaped sort tuple within its request bound", () => {
+    const cursor = encodeEntitiesWindowCursor([
+      ...worstCaseSortValues(LIMITS.viewSortsCount),
+      "entity_1",
+    ]);
 
     expect(cursor.length).toBeLessThan(ENTITIES_WINDOW_CURSOR_MAX_LENGTH);
+  });
+
+  // The budget is sized from viewSortsCount, not from the property cap: one
+  // sort beyond the cap must overflow it, or the bound tracks nothing.
+  test("does not fit one sort more than the sorts cap allows", () => {
+    const cursor = encodeEntitiesWindowCursor([
+      ...worstCaseSortValues(LIMITS.viewSortsCount + 1),
+      "entity_1",
+    ]);
+
+    expect(cursor.length).toBeGreaterThan(ENTITIES_WINDOW_CURSOR_MAX_LENGTH);
   });
 
   test("rejects tampered cursor values", () => {

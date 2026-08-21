@@ -10824,7 +10824,7 @@ export const generatedRouteMap: RouteNode = {
                           },
                         },
                         sorts: {
-                          maxItems: 20,
+                          maxItems: 8,
                           type: "array",
                           items: {
                             additionalProperties: false,
@@ -10842,7 +10842,7 @@ export const generatedRouteMap: RouteNode = {
                           },
                         },
                         cursor: {
-                          maxLength: 161368,
+                          maxLength: 65368,
                           description:
                             "Opaque cursor from a previous page to fetch the next page",
                           type: "string",
@@ -10882,7 +10882,7 @@ export const generatedRouteMap: RouteNode = {
                           ],
                         },
                         fieldIds: {
-                          maxItems: 20,
+                          maxItems: 300,
                           type: "array",
                           items: {
                             minLength: 36,
@@ -11834,6 +11834,7 @@ export const generatedRouteMap: RouteNode = {
                           },
                         },
                         sorts: {
+                          maxItems: 8,
                           type: "array",
                           items: {
                             additionalProperties: false,
@@ -11867,7 +11868,7 @@ export const generatedRouteMap: RouteNode = {
                           ],
                         },
                         fieldIds: {
-                          maxItems: 20,
+                          maxItems: 300,
                           type: "array",
                           items: {
                             minLength: 36,
@@ -12673,7 +12674,7 @@ export const generatedRouteMap: RouteNode = {
                           },
                         },
                         sorts: {
-                          maxItems: 20,
+                          maxItems: 8,
                           type: "array",
                           items: {
                             additionalProperties: false,
@@ -12711,7 +12712,7 @@ export const generatedRouteMap: RouteNode = {
                           ],
                         },
                         cursor: {
-                          maxLength: 161368,
+                          maxLength: 65368,
                           description:
                             "Opaque cursor from a previous page to fetch the next page",
                           type: "string",
@@ -12744,7 +12745,7 @@ export const generatedRouteMap: RouteNode = {
                           ],
                         },
                         fieldIds: {
-                          maxItems: 20,
+                          maxItems: 300,
                           type: "array",
                           items: {
                             minLength: 36,
@@ -23409,7 +23410,7 @@ export const generatedRouteMap: RouteNode = {
                           type: "string",
                         },
                         dependencies: {
-                          maxItems: 19,
+                          maxItems: 299,
                           type: "array",
                           items: {
                             type: "object",
@@ -24047,7 +24048,7 @@ export const generatedRouteMap: RouteNode = {
                                 type: "string",
                               },
                               dependencies: {
-                                maxItems: 19,
+                                maxItems: 299,
                                 type: "array",
                                 items: {
                                   type: "object",
@@ -24806,7 +24807,7 @@ export const generatedRouteMap: RouteNode = {
                           },
                         },
                         dependencies: {
-                          maxItems: 20,
+                          maxItems: 300,
                           type: "array",
                           items: {
                             type: "object",
@@ -25231,7 +25232,7 @@ export const generatedRouteMap: RouteNode = {
                                   required: ["dependencies"],
                                   properties: {
                                     dependencies: {
-                                      maxItems: 19,
+                                      maxItems: 299,
                                       type: "array",
                                       items: {
                                         type: "object",
@@ -29262,7 +29263,7 @@ export const generatedRouteMap: RouteNode = {
                         },
                         datePropertyIds: {
                           minItems: 1,
-                          maxItems: 24,
+                          maxItems: 304,
                           type: "array",
                           items: {
                             minLength: 1,
@@ -29566,6 +29567,7 @@ export const generatedRouteMap: RouteNode = {
                           },
                         },
                         sorts: {
+                          maxItems: 8,
                           type: "array",
                           items: {
                             additionalProperties: false,
@@ -35284,21 +35286,7 @@ export const generatedRouteMap: RouteNode = {
                                   $ref: "#/$defs/s_f07d3ae510a0",
                                 },
                                 sorts: {
-                                  type: "array",
-                                  items: {
-                                    additionalProperties: false,
-                                    type: "object",
-                                    required: ["propertyId", "desc"],
-                                    properties: {
-                                      propertyId: {
-                                        minLength: 1,
-                                        type: "string",
-                                      },
-                                      desc: {
-                                        type: "boolean",
-                                      },
-                                    },
-                                  },
+                                  $ref: "#/$defs/s_a2912d7bfae3",
                                 },
                                 hiddenProperties: {
                                   type: "array",
@@ -35348,21 +35336,7 @@ export const generatedRouteMap: RouteNode = {
                                   $ref: "#/$defs/s_f07d3ae510a0",
                                 },
                                 sorts: {
-                                  type: "array",
-                                  items: {
-                                    additionalProperties: false,
-                                    type: "object",
-                                    required: ["propertyId", "desc"],
-                                    properties: {
-                                      propertyId: {
-                                        minLength: 1,
-                                        type: "string",
-                                      },
-                                      desc: {
-                                        type: "boolean",
-                                      },
-                                    },
-                                  },
+                                  $ref: "#/$defs/s_a2912d7bfae3",
                                 },
                                 hiddenProperties: {
                                   type: "array",
@@ -35402,21 +35376,7 @@ export const generatedRouteMap: RouteNode = {
                                   $ref: "#/$defs/s_f07d3ae510a0",
                                 },
                                 sorts: {
-                                  type: "array",
-                                  items: {
-                                    additionalProperties: false,
-                                    type: "object",
-                                    required: ["propertyId", "desc"],
-                                    properties: {
-                                      propertyId: {
-                                        minLength: 1,
-                                        type: "string",
-                                      },
-                                      desc: {
-                                        type: "boolean",
-                                      },
-                                    },
-                                  },
+                                  $ref: "#/$defs/s_a2912d7bfae3",
                                 },
                                 hiddenProperties: {
                                   type: "array",
@@ -35452,21 +35412,7 @@ export const generatedRouteMap: RouteNode = {
                                   $ref: "#/$defs/s_f07d3ae510a0",
                                 },
                                 sorts: {
-                                  type: "array",
-                                  items: {
-                                    additionalProperties: false,
-                                    type: "object",
-                                    required: ["propertyId", "desc"],
-                                    properties: {
-                                      propertyId: {
-                                        minLength: 1,
-                                        type: "string",
-                                      },
-                                      desc: {
-                                        type: "boolean",
-                                      },
-                                    },
-                                  },
+                                  $ref: "#/$defs/s_a2912d7bfae3",
                                 },
                                 hiddenProperties: {
                                   type: "array",
@@ -35508,21 +35454,7 @@ export const generatedRouteMap: RouteNode = {
                                   $ref: "#/$defs/s_f07d3ae510a0",
                                 },
                                 sorts: {
-                                  type: "array",
-                                  items: {
-                                    additionalProperties: false,
-                                    type: "object",
-                                    required: ["propertyId", "desc"],
-                                    properties: {
-                                      propertyId: {
-                                        minLength: 1,
-                                        type: "string",
-                                      },
-                                      desc: {
-                                        type: "boolean",
-                                      },
-                                    },
-                                  },
+                                  $ref: "#/$defs/s_a2912d7bfae3",
                                 },
                                 hiddenProperties: {
                                   type: "array",
@@ -35593,21 +35525,7 @@ export const generatedRouteMap: RouteNode = {
                                   $ref: "#/$defs/s_f07d3ae510a0",
                                 },
                                 sorts: {
-                                  type: "array",
-                                  items: {
-                                    additionalProperties: false,
-                                    type: "object",
-                                    required: ["propertyId", "desc"],
-                                    properties: {
-                                      propertyId: {
-                                        minLength: 1,
-                                        type: "string",
-                                      },
-                                      desc: {
-                                        type: "boolean",
-                                      },
-                                    },
-                                  },
+                                  $ref: "#/$defs/s_a2912d7bfae3",
                                 },
                                 hiddenProperties: {
                                   type: "array",
@@ -35776,6 +35694,24 @@ export const generatedRouteMap: RouteNode = {
                           },
                         },
                       ],
+                    },
+                    s_a2912d7bfae3: {
+                      maxItems: 8,
+                      type: "array",
+                      items: {
+                        additionalProperties: false,
+                        type: "object",
+                        required: ["propertyId", "desc"],
+                        properties: {
+                          propertyId: {
+                            minLength: 1,
+                            type: "string",
+                          },
+                          desc: {
+                            type: "boolean",
+                          },
+                        },
+                      },
                     },
                     s_d21ba6521546: {
                       type: "array",
@@ -36430,21 +36366,7 @@ export const generatedRouteMap: RouteNode = {
                                   $ref: "#/$defs/s_f07d3ae510a0",
                                 },
                                 sorts: {
-                                  type: "array",
-                                  items: {
-                                    additionalProperties: false,
-                                    type: "object",
-                                    required: ["propertyId", "desc"],
-                                    properties: {
-                                      propertyId: {
-                                        minLength: 1,
-                                        type: "string",
-                                      },
-                                      desc: {
-                                        type: "boolean",
-                                      },
-                                    },
-                                  },
+                                  $ref: "#/$defs/s_a2912d7bfae3",
                                 },
                                 hiddenProperties: {
                                   type: "array",
@@ -36494,21 +36416,7 @@ export const generatedRouteMap: RouteNode = {
                                   $ref: "#/$defs/s_f07d3ae510a0",
                                 },
                                 sorts: {
-                                  type: "array",
-                                  items: {
-                                    additionalProperties: false,
-                                    type: "object",
-                                    required: ["propertyId", "desc"],
-                                    properties: {
-                                      propertyId: {
-                                        minLength: 1,
-                                        type: "string",
-                                      },
-                                      desc: {
-                                        type: "boolean",
-                                      },
-                                    },
-                                  },
+                                  $ref: "#/$defs/s_a2912d7bfae3",
                                 },
                                 hiddenProperties: {
                                   type: "array",
@@ -36548,21 +36456,7 @@ export const generatedRouteMap: RouteNode = {
                                   $ref: "#/$defs/s_f07d3ae510a0",
                                 },
                                 sorts: {
-                                  type: "array",
-                                  items: {
-                                    additionalProperties: false,
-                                    type: "object",
-                                    required: ["propertyId", "desc"],
-                                    properties: {
-                                      propertyId: {
-                                        minLength: 1,
-                                        type: "string",
-                                      },
-                                      desc: {
-                                        type: "boolean",
-                                      },
-                                    },
-                                  },
+                                  $ref: "#/$defs/s_a2912d7bfae3",
                                 },
                                 hiddenProperties: {
                                   type: "array",
@@ -36598,21 +36492,7 @@ export const generatedRouteMap: RouteNode = {
                                   $ref: "#/$defs/s_f07d3ae510a0",
                                 },
                                 sorts: {
-                                  type: "array",
-                                  items: {
-                                    additionalProperties: false,
-                                    type: "object",
-                                    required: ["propertyId", "desc"],
-                                    properties: {
-                                      propertyId: {
-                                        minLength: 1,
-                                        type: "string",
-                                      },
-                                      desc: {
-                                        type: "boolean",
-                                      },
-                                    },
-                                  },
+                                  $ref: "#/$defs/s_a2912d7bfae3",
                                 },
                                 hiddenProperties: {
                                   type: "array",
@@ -36654,21 +36534,7 @@ export const generatedRouteMap: RouteNode = {
                                   $ref: "#/$defs/s_f07d3ae510a0",
                                 },
                                 sorts: {
-                                  type: "array",
-                                  items: {
-                                    additionalProperties: false,
-                                    type: "object",
-                                    required: ["propertyId", "desc"],
-                                    properties: {
-                                      propertyId: {
-                                        minLength: 1,
-                                        type: "string",
-                                      },
-                                      desc: {
-                                        type: "boolean",
-                                      },
-                                    },
-                                  },
+                                  $ref: "#/$defs/s_a2912d7bfae3",
                                 },
                                 hiddenProperties: {
                                   type: "array",
@@ -36739,21 +36605,7 @@ export const generatedRouteMap: RouteNode = {
                                   $ref: "#/$defs/s_f07d3ae510a0",
                                 },
                                 sorts: {
-                                  type: "array",
-                                  items: {
-                                    additionalProperties: false,
-                                    type: "object",
-                                    required: ["propertyId", "desc"],
-                                    properties: {
-                                      propertyId: {
-                                        minLength: 1,
-                                        type: "string",
-                                      },
-                                      desc: {
-                                        type: "boolean",
-                                      },
-                                    },
-                                  },
+                                  $ref: "#/$defs/s_a2912d7bfae3",
                                 },
                                 hiddenProperties: {
                                   type: "array",
@@ -37489,6 +37341,24 @@ export const generatedRouteMap: RouteNode = {
                           },
                         },
                       ],
+                    },
+                    s_a2912d7bfae3: {
+                      maxItems: 8,
+                      type: "array",
+                      items: {
+                        additionalProperties: false,
+                        type: "object",
+                        required: ["propertyId", "desc"],
+                        properties: {
+                          propertyId: {
+                            minLength: 1,
+                            type: "string",
+                          },
+                          desc: {
+                            type: "boolean",
+                          },
+                        },
+                      },
                     },
                     s_d21ba6521546: {
                       type: "array",
@@ -37823,21 +37693,7 @@ export const generatedRouteMap: RouteNode = {
                                   $ref: "#/$defs/s_f07d3ae510a0",
                                 },
                                 sorts: {
-                                  type: "array",
-                                  items: {
-                                    additionalProperties: false,
-                                    type: "object",
-                                    required: ["propertyId", "desc"],
-                                    properties: {
-                                      propertyId: {
-                                        minLength: 1,
-                                        type: "string",
-                                      },
-                                      desc: {
-                                        type: "boolean",
-                                      },
-                                    },
-                                  },
+                                  $ref: "#/$defs/s_a2912d7bfae3",
                                 },
                                 hiddenProperties: {
                                   type: "array",
@@ -37887,21 +37743,7 @@ export const generatedRouteMap: RouteNode = {
                                   $ref: "#/$defs/s_f07d3ae510a0",
                                 },
                                 sorts: {
-                                  type: "array",
-                                  items: {
-                                    additionalProperties: false,
-                                    type: "object",
-                                    required: ["propertyId", "desc"],
-                                    properties: {
-                                      propertyId: {
-                                        minLength: 1,
-                                        type: "string",
-                                      },
-                                      desc: {
-                                        type: "boolean",
-                                      },
-                                    },
-                                  },
+                                  $ref: "#/$defs/s_a2912d7bfae3",
                                 },
                                 hiddenProperties: {
                                   type: "array",
@@ -37941,21 +37783,7 @@ export const generatedRouteMap: RouteNode = {
                                   $ref: "#/$defs/s_f07d3ae510a0",
                                 },
                                 sorts: {
-                                  type: "array",
-                                  items: {
-                                    additionalProperties: false,
-                                    type: "object",
-                                    required: ["propertyId", "desc"],
-                                    properties: {
-                                      propertyId: {
-                                        minLength: 1,
-                                        type: "string",
-                                      },
-                                      desc: {
-                                        type: "boolean",
-                                      },
-                                    },
-                                  },
+                                  $ref: "#/$defs/s_a2912d7bfae3",
                                 },
                                 hiddenProperties: {
                                   type: "array",
@@ -37991,21 +37819,7 @@ export const generatedRouteMap: RouteNode = {
                                   $ref: "#/$defs/s_f07d3ae510a0",
                                 },
                                 sorts: {
-                                  type: "array",
-                                  items: {
-                                    additionalProperties: false,
-                                    type: "object",
-                                    required: ["propertyId", "desc"],
-                                    properties: {
-                                      propertyId: {
-                                        minLength: 1,
-                                        type: "string",
-                                      },
-                                      desc: {
-                                        type: "boolean",
-                                      },
-                                    },
-                                  },
+                                  $ref: "#/$defs/s_a2912d7bfae3",
                                 },
                                 hiddenProperties: {
                                   type: "array",
@@ -38047,21 +37861,7 @@ export const generatedRouteMap: RouteNode = {
                                   $ref: "#/$defs/s_f07d3ae510a0",
                                 },
                                 sorts: {
-                                  type: "array",
-                                  items: {
-                                    additionalProperties: false,
-                                    type: "object",
-                                    required: ["propertyId", "desc"],
-                                    properties: {
-                                      propertyId: {
-                                        minLength: 1,
-                                        type: "string",
-                                      },
-                                      desc: {
-                                        type: "boolean",
-                                      },
-                                    },
-                                  },
+                                  $ref: "#/$defs/s_a2912d7bfae3",
                                 },
                                 hiddenProperties: {
                                   type: "array",
@@ -38132,21 +37932,7 @@ export const generatedRouteMap: RouteNode = {
                                   $ref: "#/$defs/s_f07d3ae510a0",
                                 },
                                 sorts: {
-                                  type: "array",
-                                  items: {
-                                    additionalProperties: false,
-                                    type: "object",
-                                    required: ["propertyId", "desc"],
-                                    properties: {
-                                      propertyId: {
-                                        minLength: 1,
-                                        type: "string",
-                                      },
-                                      desc: {
-                                        type: "boolean",
-                                      },
-                                    },
-                                  },
+                                  $ref: "#/$defs/s_a2912d7bfae3",
                                 },
                                 hiddenProperties: {
                                   type: "array",
@@ -38893,6 +38679,24 @@ export const generatedRouteMap: RouteNode = {
                           },
                         },
                       ],
+                    },
+                    s_a2912d7bfae3: {
+                      maxItems: 8,
+                      type: "array",
+                      items: {
+                        additionalProperties: false,
+                        type: "object",
+                        required: ["propertyId", "desc"],
+                        properties: {
+                          propertyId: {
+                            minLength: 1,
+                            type: "string",
+                          },
+                          desc: {
+                            type: "boolean",
+                          },
+                        },
+                      },
                     },
                     s_d21ba6521546: {
                       type: "array",
@@ -40648,7 +40452,7 @@ export const generatedRouteMap: RouteNode = {
                           },
                         },
                         propertyIds: {
-                          maxItems: 20,
+                          maxItems: 300,
                           type: "array",
                           items: {
                             minLength: 36,

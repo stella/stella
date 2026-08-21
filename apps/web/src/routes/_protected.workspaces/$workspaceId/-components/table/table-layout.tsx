@@ -8,6 +8,8 @@ import { useTable } from "@tanstack/react-table";
 import { TableIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { VIEW_SORTS_MAX } from "@stll/api-contract";
+
 import { useAIKeyGate } from "@/components/require-ai-key";
 import { toTableEntities } from "@/components/workspaces/entity-utils";
 import { useSyncJustificationChunks } from "@/components/workspaces/hooks/use-sync-justifications";
@@ -159,6 +161,7 @@ const FlatTableLayout = ({ workspaceId, view }: TableLayoutProps) => {
       minSize: DEFAULT_TABLE_COLUMN_MIN_SIZE,
     },
     manualSorting: true,
+    maxMultiSortColCount: VIEW_SORTS_MAX,
     enableSortingRemoval: false,
     enableSubRowSelection: true,
     getRowId: (row) => row.entityId,

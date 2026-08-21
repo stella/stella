@@ -13,7 +13,11 @@ import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
 import type { ViewLayout } from "@/api/lib/views-schema";
-import { parseViewLayout, tUpdateViewBodySchema } from "@/api/lib/views-schema";
+import {
+  parseStoredViewLayout,
+  parseViewLayout,
+  tUpdateViewBodySchema,
+} from "@/api/lib/views-schema";
 import { resolveTemplateProperties } from "@/api/lib/views/template-properties";
 import {
   cleanStalePropertyIds,
@@ -81,7 +85,7 @@ const updateView = createSafeHandler(
           }),
         );
       }
-      const existingLayout = parseViewLayout(existing.layout);
+      const existingLayout = parseStoredViewLayout(existing.layout);
       if (existingLayout.type !== parsedLayout.type) {
         return Result.err(
           new HandlerError({
@@ -141,7 +145,7 @@ const updateView = createSafeHandler(
         }
         if (updates.layout !== undefined) {
           changes["layout"] = {
-            old: parseViewLayout(existing.layout),
+            old: parseStoredViewLayout(existing.layout),
             new: updates.layout,
           };
         }

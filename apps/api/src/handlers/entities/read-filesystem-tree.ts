@@ -15,7 +15,9 @@ import { tViewSortSchema } from "@/api/lib/views-schema";
 
 const readFilesystemTreeBodySchema = t.Object({
   filters: t.Optional(t.Array(tConditionNode)),
-  sorts: t.Optional(t.Array(tViewSortSchema)),
+  sorts: t.Optional(
+    t.Array(tViewSortSchema, { maxItems: LIMITS.viewSortsCount }),
+  ),
   search: t.Optional(t.String({ maxLength: LIMITS.searchQueryMaxLength })),
   fieldMode: t.Optional(t.Union([t.Literal("full"), t.Literal("visible")])),
   fieldIds: t.Optional(

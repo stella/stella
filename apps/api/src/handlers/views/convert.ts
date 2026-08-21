@@ -12,7 +12,7 @@ import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
 import { normalizeDefaultViewLayout } from "@/api/lib/views";
-import { parseViewLayout } from "@/api/lib/views-schema";
+import { parseStoredViewLayout } from "@/api/lib/views-schema";
 import { convertLayout } from "@/api/lib/views/utils";
 
 const VIEW_LAYOUT_TYPES = [
@@ -75,7 +75,7 @@ const convertView = createSafeHandler(
     }
 
     const existingLayout = normalizeDefaultViewLayout({
-      layout: parseViewLayout(existing.layout),
+      layout: parseStoredViewLayout(existing.layout),
       name: existing.name,
     });
     if (existingLayout.type === targetType) {

@@ -31,7 +31,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { extractLangFromRequest } from "@/api/lib/locale";
 import { excludedEntityKindsForView } from "@/api/lib/views";
-import { parseViewLayout } from "@/api/lib/views-schema";
+import { parseStoredViewLayout } from "@/api/lib/views-schema";
 
 const templateRefSchema = t.Union([
   t.Object({ type: t.Literal("builtin"), key: t.String({ minLength: 1 }) }),
@@ -94,7 +94,7 @@ const exportViewReport = createSafeHandler(
       );
     }
 
-    const layout = parseViewLayout(view.layout);
+    const layout = parseStoredViewLayout(view.layout);
     if (layout.type !== "table") {
       return Result.err(
         new HandlerError({

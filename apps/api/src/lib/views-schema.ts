@@ -5,6 +5,7 @@ import * as v from "valibot";
 import {
   VIEW_LAYOUT_TYPES,
   type ViewLayoutType as ContractViewLayoutType,
+  VIEW_SORTS_MAX,
 } from "@stll/api-contract";
 import { CALCULATION_KINDS } from "@stll/calculations";
 import { conditionHasFormula, conditionNodeSchema } from "@stll/conditions";
@@ -15,6 +16,7 @@ import {
 } from "@/api/db/schema-validators";
 import { tConditionNode } from "@/api/lib/conditions/contract";
 import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
+import { logger } from "@/api/lib/observability/logger";
 
 const v1 = v.literal(1);
 
@@ -57,7 +59,10 @@ export const tViewCalculationSchema = t.Object(
 
 const baseLayoutSchema = {
   filters: v.array(conditionNodeSchema),
-  sorts: v.array(viewSortSchema),
+  // Hard ceiling for incoming layouts. Stored rows go through
+  // parseStoredViewLayout, which trims an oversized list before this check
+  // so a layout written before the cap existed still reads.
+  sorts: v.pipe(v.array(viewSortSchema), v.maxLength(VIEW_SORTS_MAX)),
   hiddenProperties: v.array(v.string()),
   // Defaulted at the parse boundary rather than at every read: a view with no
   // calculations has an empty list, not an absent one, so nothing downstream
@@ -171,15 +176,53 @@ const withValidFilters = (value: unknown): unknown => {
   return { ...value, filters };
 };
 
+const hasSortsField = (value: unknown): value is { sorts: unknown } =>
+  typeof value === "object" && value !== null && "sorts" in value;
+
+/**
+ * Stored layouts written before the sort cap existed can carry more sorts
+ * than `VIEW_SORTS_MAX`. Keep the leading sorts (the order the user chose)
+ * and report the trim once per layout read, so the residue stays visible
+ * until the migration that rewrites those rows has run everywhere.
+ */
+const withBoundedSorts = (value: unknown): unknown => {
+  if (!hasSortsField(value) || !Array.isArray(value.sorts)) {
+    return value;
+  }
+  if (value.sorts.length <= VIEW_SORTS_MAX) {
+    return value;
+  }
+  logger.warn("views.layout.sorts_truncated", {
+    sort_count: value.sorts.length,
+    sort_limit: VIEW_SORTS_MAX,
+  });
+  return { ...value, sorts: value.sorts.slice(0, VIEW_SORTS_MAX) };
+};
+
+/**
+ * Strict parse for a layout arriving in a request body: an oversized sort
+ * list is a client error, never silently shortened.
+ */
 export const parseViewLayout = (value: unknown): ViewLayout =>
   v.parse(viewLayoutSchema, withValidFilters(value));
+
+/**
+ * Parse a layout read back from the database. Same schema as
+ * `parseViewLayout`, but a persisted sort list over the cap is normalised
+ * rather than rejected: a row that was valid when written must stay readable.
+ */
+export const parseStoredViewLayout = (value: unknown): ViewLayout =>
+  v.parse(viewLayoutSchema, withBoundedSorts(withValidFilters(value)));
 
 // Recovers a stored layout that fails strict parsing: older views can carry a
 // filter grammar the current schema rejects. Drop the unparseable filters/sorts
 // and retry so a single legacy view can't fail the whole views response; fall
 // back to a minimal filesystem layout only if the row is otherwise unrecoverable.
 export const parseViewLayoutSafe = (value: unknown): ViewLayout => {
-  const direct = v.safeParse(viewLayoutSchema, withValidFilters(value));
+  const direct = v.safeParse(
+    viewLayoutSchema,
+    withBoundedSorts(withValidFilters(value)),
+  );
   if (direct.success) {
     return direct.output;
   }
@@ -207,7 +250,7 @@ export const parseViewLayoutSafe = (value: unknown): ViewLayout => {
 
 const tBaseLayoutSchema = {
   filters: t.Array(tConditionNode),
-  sorts: t.Array(tViewSortSchema),
+  sorts: t.Array(tViewSortSchema, { maxItems: VIEW_SORTS_MAX }),
   hiddenProperties: t.Array(t.String()),
   calculations: t.Optional(t.Array(tViewCalculationSchema)),
 };
