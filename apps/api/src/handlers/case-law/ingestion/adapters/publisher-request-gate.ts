@@ -1,4 +1,7 @@
 import { DEPLOYED_NODE_ENVS } from "@/api/env-base-schema";
+import { withTimeout } from "@/api/lib/with-timeout";
+
+const PUBLISHER_GATE_COMMAND_TIMEOUT_MS = 5000;
 
 const RESERVE_SLOT_SCRIPT = `
 local clock = redis.call("TIME")
@@ -95,12 +98,20 @@ export const createPublisherRequestSlot =
   ): ((signal?: AbortSignal) => Promise<void>) =>
   async (signal) => {
     const redis = await dependencies.redis();
-    const rawWait = await redis.send("EVAL", [
-      RESERVE_SLOT_SCRIPT,
-      "1",
-      key,
-      String(intervalMs),
-    ]);
+    const rawWait = await withTimeout(
+      async () =>
+        await redis.send("EVAL", [
+          RESERVE_SLOT_SCRIPT,
+          "1",
+          key,
+          String(intervalMs),
+        ]),
+      {
+        label: `${publisher} publisher gate reservation`,
+        signal,
+        timeoutMs: PUBLISHER_GATE_COMMAND_TIMEOUT_MS,
+      },
+    );
     const waitMs = Number(rawWait);
     if (!Number.isFinite(waitMs) || waitMs < 0) {
       throw new TypeError(

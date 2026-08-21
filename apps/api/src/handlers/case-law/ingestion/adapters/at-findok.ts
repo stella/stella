@@ -29,6 +29,7 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { parseFindokDecisionXml } from "@/api/handlers/case-law/ingestion/parsers/at-findok";
 import { sectionsFromAst } from "@/api/handlers/case-law/ingestion/sections-from-ast";
+import { isUuid } from "@/api/lib/custom-schema";
 import { loadDocxArchive } from "@/api/lib/docx-archive";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
@@ -204,6 +205,7 @@ const manifestItem = (value: unknown): FindokManifestItem | undefined => {
   const publisherId =
     item.dokumentId !== undefined &&
     !item.dokumentId.startsWith(QUARANTINE_ID_PREFIX) &&
+    isUuid(item.dokumentId) &&
     isPersistableSourceDocumentId(item.dokumentId)
       ? item.dokumentId
       : undefined;

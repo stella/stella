@@ -60,4 +60,19 @@ describe("Austrian RIS publisher gate", () => {
 
     expect(reserve()).rejects.toThrow("invalid wait");
   });
+
+  it("abandons a Redis reservation when the ingestion signal aborts", async () => {
+    const controller = new AbortController();
+    const reserve = createAtRisRequestSlot({
+      redis: () => ({ send: async () => await new Promise(() => {}) }),
+      sleep: async () => {
+        throw new Error("an unreserved request must not sleep");
+      },
+    });
+
+    const pending = reserve(controller.signal);
+    controller.abort(new DOMException("Stopped", "AbortError"));
+
+    expect(pending).rejects.toThrow("Stopped");
+  });
 });

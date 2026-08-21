@@ -1147,6 +1147,12 @@ const createAdapter = <const TKey extends AdapterKey>(
               }),
             };
           }
+          if (collected !== expectedTotal - foreign) {
+            return {
+              decisions: [],
+              nextCursor: encodeCursor(restartSliceCursor(state.slice)),
+            };
+          }
           return {
             decisions,
             nextCursor: encodeCursor({

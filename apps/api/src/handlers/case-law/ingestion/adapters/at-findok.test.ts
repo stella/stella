@@ -120,18 +120,18 @@ describe("Austrian Findok adapter", () => {
     expect((await adapter.fetchPage(null, {})).isErr()).toBe(true);
   });
 
-  it("quarantines an identity-less row without hiding later documents", async () => {
-    const identityLess = {
+  it("quarantines an invalid publisher UUID without hiding later documents", async () => {
+    const invalidIdentity = {
       ...MANIFEST_ITEM,
       stammNr: 152_256,
       pathZip: "152/152256/152256.zip",
       pathPdf: "152/152256/152256.1.pdf",
       gz: "RV/4100260/2026",
-      dokumentId: "",
+      dokumentId: "not-a-uuid",
     };
     const adapter = createAtFindokAdapter({
       now: () => new Date("2026-08-12T00:00:00Z"),
-      request: async () => manifestResponse([identityLess, MANIFEST_ITEM]),
+      request: async () => manifestResponse([invalidIdentity, MANIFEST_ITEM]),
       sleep: async () => {},
     });
     const reconciliation = reconciliationOf(adapter);

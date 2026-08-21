@@ -237,9 +237,36 @@ describe("Austrian RIS adapter", () => {
     expect(verified.decisions).toEqual([]);
     expect(
       urls
-        .filter((url) => url.startsWith("https://data.bka.gv.at"))
+        .filter((url) => new URL(url).origin === "https://data.bka.gv.at")
         .map((url) => new URL(url).searchParams.get("Seitennummer")),
     ).toEqual(["1", "2", "1", "2"]);
+  });
+
+  it("restarts a stable slice whose pages contain fewer items than its total", async () => {
+    const xml = await fixtureXml();
+    const foreignItem = listingItem(undefined, "AUSL EKMR");
+    const { request, urls } = queuedRequest([
+      listingResponse([foreignItem], 101, 1),
+      listingResponse([foreignItem], 101, 2),
+      listingResponse([listingItem()], 101, 1),
+      new Response(xml),
+    ]);
+    const adapter = createAtCourtsAdapter({
+      now: () => new Date("2026-02-01T00:00:00Z"),
+      request,
+      sleep: async () => {},
+    });
+
+    const first = (await adapter.fetchPage(null, {})).unwrap();
+    const second = (await adapter.fetchPage(first.nextCursor, {})).unwrap();
+    const restarted = (await adapter.fetchPage(second.nextCursor, {})).unwrap();
+
+    expect(restarted.decisions).toHaveLength(1);
+    expect(
+      urls
+        .filter((url) => new URL(url).origin === "https://data.bka.gv.at")
+        .map((url) => new URL(url).searchParams.get("Seitennummer")),
+    ).toEqual(["1", "2", "1"]);
   });
 
   it("rejects a listing body for a different publisher page", async () => {
