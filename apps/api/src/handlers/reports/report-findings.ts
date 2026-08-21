@@ -288,11 +288,10 @@ export const negotiationFromPosition = (
   if (!negotiation) {
     return EMPTY_NEGOTIATION;
   }
-  return {
-    rationale: negotiation.rationale ?? "",
-    talkingPoints: negotiation.talkingPoints ?? [],
-    escalation: negotiation.escalation ?? "",
-  };
+  // Every negotiation field is optional in the playbook schema; an absent
+  // field renders as empty text.
+  const { rationale = "", talkingPoints = [], escalation = "" } = negotiation;
+  return { rationale, talkingPoints, escalation };
 };
 
 export const hasNegotiationText = ({

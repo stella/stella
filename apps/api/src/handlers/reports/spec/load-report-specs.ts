@@ -17,7 +17,7 @@
  * resolve; an invalid spec is a boot error, never a per-export failure.
  */
 
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 
@@ -41,6 +41,8 @@ export const MAX_S3_SPEC_FILE_BYTES = 64 * 1024;
 export const MAX_S3_PROMPTS_PER_SPEC = 20;
 const MAX_S3_OBJECTS = MAX_S3_SPECS * (1 + MAX_S3_PROMPTS_PER_SPEC);
 const S3_LOAD_TIMEOUT_MS = 60_000;
+/** Object reads in flight at once during the boot load. */
+const S3_READ_CONCURRENCY = 8;
 const S3_PREFIX_PATTERN =
   /^s3:\/\/(?<bucket>[^/\s]+)\/(?<prefix>(?:[^/\s]+\/)*)$/u;
 
@@ -221,6 +223,28 @@ export type ReportSpecObjectStore = {
   }) => Promise<Uint8Array>;
 };
 
+type S3SpecRead =
+  | { kind: "spec"; specKey: string; key: string }
+  | { kind: "prompt"; specKey: string; key: string; ref: string };
+
+/** `fn` over `items`, at most `size` in flight at once, results in item order. */
+const mapInChunks = async <T, R>(
+  items: readonly T[],
+  size: number,
+  fn: (item: T) => Promise<R>,
+): Promise<R[]> => {
+  const results: R[] = [];
+  const mapFrom = async (index: number): Promise<R[]> => {
+    if (index >= items.length) {
+      return results;
+    }
+    const chunk = items.slice(index, index + size);
+    results.push(...(await Promise.all(chunk.map(fn))));
+    return await mapFrom(index + size);
+  };
+  return await mapFrom(0);
+};
+
 type S3SpecFile =
   | { kind: "spec"; specKey: string }
   | { kind: "prompt"; specKey: string; ref: string };
@@ -346,34 +370,61 @@ export const readReportSpecSourcesFromS3 = async ({
         }),
     });
 
-  const sources = new Map<string, ReportSpecSource>();
+  // One read per listed object, in listing order (spec.json first, then its
+  // prompts), so the first failure reported is the first in that order.
+  const reads: S3SpecRead[] = [];
   for (const [specKey, key] of specKeys) {
-    // oxlint-disable-next-line no-await-in-loop -- one spec at a time keeps the boot read bounded
-    const specText = await readObjectText(specKey, key);
-    if (Result.isError(specText)) {
-      return Result.err(specText.error);
+    reads.push({ kind: "spec", specKey, key });
+    // A spec without a prompts directory has no entry here.
+    const specPromptKeys = promptKeys.get(specKey);
+    if (!specPromptKeys) {
+      continue;
     }
-    const json = Result.try({
-      try: (): unknown => JSON.parse(specText.value),
-      catch: (cause) =>
-        new ConfigurationError({
-          message: `Report spec "${specKey}": ${SPEC_FILENAME} is not valid JSON.`,
-          cause,
-        }),
-    });
-    if (Result.isError(json)) {
-      return Result.err(json.error);
+    for (const [ref, promptKey] of specPromptKeys) {
+      reads.push({ kind: "prompt", specKey, key: promptKey, ref });
     }
-    const prompts = new Map<string, string>();
-    for (const [ref, promptKey] of promptKeys.get(specKey) ?? []) {
-      // oxlint-disable-next-line no-await-in-loop -- see above
-      const text = await readObjectText(specKey, promptKey);
-      if (Result.isError(text)) {
-        return Result.err(text.error);
+  }
+  const texts = await mapInChunks(reads, S3_READ_CONCURRENCY, async (read) => ({
+    read,
+    text: await readObjectText(read.specKey, read.key),
+  }));
+
+  const sources = new Map<string, ReportSpecSource>();
+  for (const { read, text } of texts) {
+    if (Result.isError(text)) {
+      return Result.err(text.error);
+    }
+    switch (read.kind) {
+      case "spec": {
+        const json = Result.try({
+          try: (): unknown => JSON.parse(text.value),
+          catch: (cause) =>
+            new ConfigurationError({
+              message: `Report spec "${read.specKey}": ${SPEC_FILENAME} is not valid JSON.`,
+              cause,
+            }),
+        });
+        if (Result.isError(json)) {
+          return Result.err(json.error);
+        }
+        sources.set(read.specKey, { spec: json.value, prompts: new Map() });
+        break;
       }
-      prompts.set(ref, text.value);
+      case "prompt": {
+        const source = sources.get(read.specKey);
+        if (!source) {
+          return panic(
+            `Prompt "${read.ref}" read before its spec "${read.specKey}"`,
+          );
+        }
+        source.prompts.set(read.ref, text.value);
+        break;
+      }
+      default: {
+        const exhaustive: never = read;
+        return exhaustive;
+      }
     }
-    sources.set(specKey, { spec: json.value, prompts });
   }
   return Result.ok(sources);
 };

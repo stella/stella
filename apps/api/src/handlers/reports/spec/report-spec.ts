@@ -29,12 +29,14 @@ export const GROUP_INTERPOLATION_KEYS = [
 export type RootInterpolationKey = (typeof ROOT_INTERPOLATION_KEYS)[number];
 export type GroupInterpolationKey = (typeof GROUP_INTERPOLATION_KEYS)[number];
 
-const PLACEHOLDER_PATTERN = /\{\{\s*(?<key>[^{}]*?)\s*\}\}/gu;
+/** `{{ key }}`; the key is trimmed in code rather than by `\s*` in the
+ *  pattern, which would make the match backtrack quadratically. */
+const PLACEHOLDER_PATTERN = /\{\{(?<key>[^{}]*)\}\}/gu;
 
 /** Every `{{key}}` in `text`, trimmed; a renderer substitutes these. */
 export const placeholderKeys = (text: string): string[] =>
-  [...text.matchAll(PLACEHOLDER_PATTERN)].map(
-    (match) => match.groups?.["key"] ?? "",
+  [...text.matchAll(PLACEHOLDER_PATTERN)].map((match) =>
+    (match.groups?.["key"] ?? "").trim(),
   );
 
 /** Substitute the allowlisted placeholders; a key outside `values` was
@@ -45,7 +47,7 @@ export const interpolate = (
 ): string =>
   text.replaceAll(
     PLACEHOLDER_PATTERN,
-    (_match, key: string) => values[key] ?? "",
+    (_match, key: string) => values[key.trim()] ?? "",
   );
 
 const interpolatedString = (allowed: readonly string[]) =>
@@ -252,13 +254,12 @@ export const parseReportSpec = (
   if (parsed.success) {
     return Result.ok(parsed.output);
   }
-  const issues = v.flatten(parsed.issues);
-  const details = [
-    ...(issues.root ?? []),
-    ...Object.entries(issues.nested ?? {}).map(
-      ([path, messages]) => `${path}: ${(messages ?? []).join("; ")}`,
-    ),
-  ].join("\n");
+  const details = parsed.issues
+    .map((issue) => {
+      const path = v.getDotPath(issue);
+      return path === null ? issue.message : `${path}: ${issue.message}`;
+    })
+    .join("\n");
   return Result.err(
     new ConfigurationError({ message: `Invalid report spec:\n${details}` }),
   );

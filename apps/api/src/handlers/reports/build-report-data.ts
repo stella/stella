@@ -17,7 +17,7 @@
  * draft them at fill time; this builder never calls a model.
  */
 
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { and, desc, eq, inArray } from "drizzle-orm";
 
 import type { SafeDb } from "@/api/db/safe-db";
@@ -949,24 +949,18 @@ export const loadReviewDecisions = async ({
     if (entityIds.length === 0 || positionIds.length === 0) {
       return Result.ok(byKey);
     }
+    // The entity list is the report's row page (LIMITS.reportExportMaxRows
+    // plus the overflow sentinel), so one `IN (...)` always fits; a longer
+    // list is a caller bug, not a case to page through.
+    if (entityIds.length > JUSTIFICATION_FIELD_ID_BATCH) {
+      return panic(
+        `loadReviewDecisions: ${entityIds.length} entity ids exceed the single-query bound ${JUSTIFICATION_FIELD_ID_BATCH}`,
+      );
+    }
     const rows = yield* Result.await(
-      safeDb(async (tx) => {
-        const out: {
-          entityId: string;
-          positionId: string | null;
-          decision: DocumentReviewDecision;
-        }[] = [];
-        for (
-          let index = 0;
-          index < entityIds.length;
-          index += JUSTIFICATION_FIELD_ID_BATCH
-        ) {
-          const batch = entityIds.slice(
-            index,
-            index + JUSTIFICATION_FIELD_ID_BATCH,
-          );
-          // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop, no-await-in-loop -- sequential reads on one tx connection; the batch caps each `IN (...)` below the bound-parameter limit
-          const batchRows = await tx
+      safeDb(
+        async (tx) =>
+          await tx
             .selectDistinctOn(
               [
                 documentReviewFindings.entityId,
@@ -999,7 +993,7 @@ export const loadReviewDecisions = async ({
             .where(
               and(
                 eq(documentReviewFindings.workspaceId, workspaceId),
-                inArray(documentReviewFindings.entityId, batch),
+                inArray(documentReviewFindings.entityId, entityIds),
                 eq(
                   documentReviewFindings.checkKind,
                   DOCUMENT_REVIEW_CHECK_KIND.PLAYBOOK,
@@ -1018,11 +1012,8 @@ export const loadReviewDecisions = async ({
             )
             // `DISTINCT ON` yields at most one row per (entity, visible
             // position); stating it as a limit keeps the bound visible.
-            .limit(batch.length * positionIds.length);
-          out.push(...batchRows);
-        }
-        return out;
-      }),
+            .limit(entityIds.length * positionIds.length),
+      ),
     );
     for (const row of rows) {
       if (row.positionId === null) {

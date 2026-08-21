@@ -643,12 +643,16 @@ export const listS3ObjectKeys = async ({
   maxKeys,
   signal,
 }: ListS3ObjectKeysOptions): Promise<string[]> => {
-  _abortableClient ??= buildAbortableS3Client(staticCredentialsFromEnv());
+  const client = (_abortableClient ??= buildAbortableS3Client(
+    staticCredentialsFromEnv(),
+  ));
   const keys: string[] = [];
-  let continuationToken: string | undefined;
-  do {
-    // oxlint-disable-next-line no-await-in-loop -- each page names the next one
-    const page = await _abortableClient.send(
+  // Each page names the next one, so the walk recurses instead of looping;
+  // depth is bounded by the ceiling.
+  const collectFrom = async (
+    continuationToken: string | undefined,
+  ): Promise<string[]> => {
+    const page = await client.send(
       new ListObjectsV2Command({
         Bucket: bucket,
         Prefix: prefix,
@@ -657,16 +661,21 @@ export const listS3ObjectKeys = async ({
       }),
       { abortSignal: signal },
     );
-    for (const object of page.Contents ?? []) {
-      if (object.Key !== undefined) {
-        keys.push(object.Key);
+    // The SDK omits `Contents` on an empty page.
+    if (page.Contents) {
+      for (const object of page.Contents) {
+        if (object.Key !== undefined) {
+          keys.push(object.Key);
+        }
       }
     }
-    continuationToken = page.IsTruncated
-      ? page.NextContinuationToken
-      : undefined;
-  } while (continuationToken !== undefined && keys.length <= maxKeys);
-  return keys;
+    const next = page.IsTruncated ? page.NextContinuationToken : undefined;
+    if (next === undefined || keys.length > maxKeys) {
+      return keys;
+    }
+    return await collectFrom(next);
+  };
+  return await collectFrom(undefined);
 };
 
 type BoundedS3ReadOptions = {

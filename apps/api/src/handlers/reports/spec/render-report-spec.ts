@@ -875,45 +875,70 @@ const orderedGroups = (
   }
 };
 
+/** `render` over `items` one at a time, in order, blocks concatenated.
+ *  Narrative sections call the model, and those drafts are metered one at a
+ *  time in document order by design, so this never fans out. */
+const renderInOrder = async <T>(
+  items: readonly T[],
+  render: (item: T) => Promise<Block[]>,
+): Promise<Block[]> => {
+  const blocks: Block[] = [];
+  const renderFrom = async (index: number): Promise<Block[]> => {
+    const item = items.at(index);
+    if (item === undefined) {
+      return blocks;
+    }
+    blocks.push(...(await render(item)));
+    return await renderFrom(index + 1);
+  };
+  return await renderFrom(0);
+};
+
 const renderGrouped = async (
   section: SectionOf<"grouped">,
   ctx: RenderContext,
 ): Promise<Block[]> => {
   const level = section.level ?? 1;
-  const blocks: Block[] = [];
-  for (const group of orderedGroups(ctx.report.data.groups, section.order)) {
-    blocks.push(
-      heading({
-        text: interpolate(section.heading, {
-          ...rootInterpolationValues(ctx),
-          "group.documentType": documentTypeLabel(group.documentType),
+  return await renderInOrder(
+    orderedGroups(ctx.report.data.groups, section.order),
+    async (group) => {
+      const scope: Scope = {
+        type: "group",
+        group,
+        headingLevel: deeper(level),
+      };
+      const children = await renderInOrder(
+        section.children,
+        async (child) => await renderSection(child, ctx, scope),
+      );
+      return [
+        heading({
+          text: interpolate(section.heading, {
+            ...rootInterpolationValues(ctx),
+            "group.documentType": documentTypeLabel(group.documentType),
+          }),
+          level,
         }),
-        level,
-      }),
-    );
-    const scope: Scope = { type: "group", group, headingLevel: deeper(level) };
-    for (const child of section.children) {
-      // oxlint-disable-next-line no-await-in-loop -- narrative calls run sequentially by design (one metered draft at a time, document order)
-      blocks.push(...(await renderSection(child, ctx, scope)));
-    }
-  }
-  return blocks;
+        ...children,
+      ];
+    },
+  );
 };
 
 const renderAppendix = async (
   section: SectionOf<"appendix">,
   ctx: RenderContext,
 ): Promise<Block[]> => {
-  const blocks: Block[] = [
+  const scope: Scope = { type: "root", headingLevel: 2 };
+  const children = await renderInOrder(
+    section.children,
+    async (child) => await renderSection(child, ctx, scope),
+  );
+  return [
     pageBreak(),
     heading({ text: section.heading, level: 1 }),
+    ...children,
   ];
-  const scope: Scope = { type: "root", headingLevel: 2 };
-  for (const child of section.children) {
-    // oxlint-disable-next-line no-await-in-loop -- sequential by design, see renderGrouped
-    blocks.push(...(await renderSection(child, ctx, scope)));
-  }
-  return blocks;
 };
 
 const renderSection = async (
@@ -1055,11 +1080,10 @@ export const renderReportSpec = async ({
     narrativeCount: 0,
   };
   const scope: Scope = { type: "root", headingLevel: 1 };
-  const blocks: Block[] = [];
-  for (const section of spec.sections) {
-    // oxlint-disable-next-line no-await-in-loop -- sequential by design, see renderGrouped
-    blocks.push(...(await renderSection(section, ctx, scope)));
-  }
+  const blocks = await renderInOrder(
+    spec.sections,
+    async (section) => await renderSection(section, ctx, scope),
+  );
   // A body must end with a paragraph (Word rejects a trailing table).
   if (blocks.at(-1)?.type === "table") {
     blocks.push(paragraph(""));
