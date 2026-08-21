@@ -1,5 +1,6 @@
 import { useTranslations } from "use-intl";
 
+import { VIEW_SORTS_MAX } from "@stll/api-contract";
 import { SortChips as WorkspaceSortChips } from "@stll/workspace-ui/sorts";
 
 import type { ViewLayout, WorkspaceProperty } from "@/lib/types";
@@ -17,6 +18,7 @@ export const SortChips = ({ sorts, properties, onUpdate }: SortChipsProps) => {
   return (
     <WorkspaceSortChips
       labels={{ add: t("common.add"), remove: t("common.remove") }}
+      maxSorts={VIEW_SORTS_MAX}
       onUpdate={onUpdate}
       properties={properties.map((property) => ({
         id: property.id,

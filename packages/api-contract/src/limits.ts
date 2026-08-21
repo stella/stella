@@ -29,9 +29,20 @@ export const WORKSPACES_PER_ORGANIZATION_MAX = 1000;
 
 /**
  * Max properties (columns) one matter may define. The client disables the
- * add-column affordances at the cap; the server rejects past it.
+ * add-column affordances at the cap; the server rejects past it. Sized for a
+ * graded playbook grid: a graded position materialises two columns (its ASK
+ * column and its verdict column), so this covers 150 graded positions.
  */
-export const PROPERTIES_PER_WORKSPACE_MAX = 20;
+export const PROPERTIES_PER_WORKSPACE_MAX = 300;
+
+/**
+ * Max sorts one view layout or one list/window request may carry. Deliberately
+ * independent of the properties cap: a sort tuple is a hand-picked ordering, a
+ * handful of keys deep, not one entry per column. It also sizes the entity
+ * window cursor's byte budget (one projected value per sort key), which must
+ * not grow with the column cap.
+ */
+export const VIEW_SORTS_MAX = 8;
 
 /**
  * Max entities (rows) one matter may hold. The client disables the

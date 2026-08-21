@@ -9,7 +9,7 @@ import { useTable } from "@tanstack/react-table";
 import { ChevronDownIcon, ChevronRightIcon, TableIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { ENTITY_KINDS } from "@stll/api-contract";
+import { ENTITY_KINDS, VIEW_SORTS_MAX } from "@stll/api-contract";
 import type { KanbanGroup } from "@stll/ui/kanban";
 import {
   getKanbanGroupingPropertyId,
@@ -384,6 +384,7 @@ const useGroupGridGeometry = (
     columns,
     defaultColumn: { minSize: DEFAULT_TABLE_COLUMN_MIN_SIZE },
     manualSorting: true,
+    maxMultiSortColCount: VIEW_SORTS_MAX,
     enableSortingRemoval: false,
     enableSubRowSelection: true,
     getRowId: (row) => row.entityId,
@@ -676,6 +677,7 @@ const GroupSection = ({
       minSize: DEFAULT_TABLE_COLUMN_MIN_SIZE,
     },
     manualSorting: true,
+    maxMultiSortColCount: VIEW_SORTS_MAX,
     enableSortingRemoval: false,
     enableSubRowSelection: true,
     getRowId: (row) => row.entityId,

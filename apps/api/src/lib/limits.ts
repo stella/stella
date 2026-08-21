@@ -4,6 +4,7 @@ import {
   ENTITIES_PER_WORKSPACE_MAX,
   FLOW_RUN_INPUT_ENTITIES_MAX,
   PROPERTIES_PER_WORKSPACE_MAX,
+  VIEW_SORTS_MAX,
   WORKSPACES_PER_ORGANIZATION_MAX,
 } from "@stll/api-contract";
 import {
@@ -11,6 +12,10 @@ import {
   CHAT_CONTEXT_FILE_MAX_MEGABYTES,
 } from "@stll/chat-limits";
 import { SKILL_PACKAGE_LIMITS } from "@stll/skills/package-limits";
+
+/** Hoisted so `versionFieldsScanLimit` can derive from it inside the same
+ *  object literal instead of restating the page size. */
+const VERSIONS_PAGE_SIZE_DEFAULT = 50;
 
 export const LIMITS = {
   legalListsPageSizeDefault: 50,
@@ -33,6 +38,10 @@ export const LIMITS = {
   workspaceNavigationPageSizeDefault: 100,
   workspaceNavigationPageSizeMax: 1000,
   propertiesCount: PROPERTIES_PER_WORKSPACE_MAX,
+  /** Sorts one view layout or one list/window request may carry. Deliberately
+   *  separate from `propertiesCount`: it also sizes the entity window cursor's
+   *  byte budget, which must not grow with the column cap. */
+  viewSortsCount: VIEW_SORTS_MAX,
   entitiesCount: ENTITIES_PER_WORKSPACE_MAX,
   entitiesPageSizeDefault: 100,
   entitiesPageSizeMax: 500,
@@ -69,10 +78,12 @@ export const LIMITS = {
    *  The reader loads the most recent page first and walks older pages via
    *  the `before` cursor, so a heavily-revised entity never loses access to
    *  older versions. */
-  versionsPageSizeDefault: 50,
-  /** Worst-case file fields scanned across one entity's versions
-   *  (versionsPerEntity * propertiesCount). */
-  versionFieldsScanLimit: 20_000,
+  versionsPageSizeDefault: VERSIONS_PAGE_SIZE_DEFAULT,
+  /** Worst-case file fields scanned for one page of an entity's version
+   *  history (versionsPageSizeDefault * propertiesCount). The reader pages
+   *  versions, so the scan follows the page size, not versionsPerEntity. */
+  versionFieldsScanLimit:
+    VERSIONS_PAGE_SIZE_DEFAULT * PROPERTIES_PER_WORKSPACE_MAX,
   calendarTasksMax: 200,
   /** Default page size for the signed-in user's assigned tasks. */
   myTasksPageSizeDefault: 50,

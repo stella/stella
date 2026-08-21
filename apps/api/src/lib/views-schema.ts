@@ -5,6 +5,7 @@ import * as v from "valibot";
 import {
   VIEW_LAYOUT_TYPES,
   type ViewLayoutType as ContractViewLayoutType,
+  VIEW_SORTS_MAX,
 } from "@stll/api-contract";
 import { CALCULATION_KINDS } from "@stll/calculations";
 import { conditionHasFormula, conditionNodeSchema } from "@stll/conditions";
@@ -57,7 +58,10 @@ export const tViewCalculationSchema = t.Object(
 
 const baseLayoutSchema = {
   filters: v.array(conditionNodeSchema),
-  sorts: v.array(viewSortSchema),
+  // Bounded here as well as at the request boundary: a stored layout is
+  // re-parsed on every read, and parseViewLayoutSafe recovers from an
+  // oversized list by dropping sorts rather than failing the view.
+  sorts: v.pipe(v.array(viewSortSchema), v.maxLength(VIEW_SORTS_MAX)),
   hiddenProperties: v.array(v.string()),
   // Defaulted at the parse boundary rather than at every read: a view with no
   // calculations has an empty list, not an absent one, so nothing downstream
@@ -207,7 +211,7 @@ export const parseViewLayoutSafe = (value: unknown): ViewLayout => {
 
 const tBaseLayoutSchema = {
   filters: t.Array(tConditionNode),
-  sorts: t.Array(tViewSortSchema),
+  sorts: t.Array(tViewSortSchema, { maxItems: VIEW_SORTS_MAX }),
   hiddenProperties: t.Array(t.String()),
   calculations: t.Optional(t.Array(tViewCalculationSchema)),
 };

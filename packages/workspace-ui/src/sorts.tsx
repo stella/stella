@@ -36,6 +36,12 @@ export type SortChipsProps = {
   properties: readonly SortableProperty[];
   onUpdate: (sorts: SortDescriptor[]) => void;
   labels: SortChipsLabels;
+  /**
+   * How many sorts the caller's backend accepts. The add-sort trigger is
+   * disabled at the cap, so a view cannot be edited into a layout the server
+   * would reject. Omitted means no cap.
+   */
+  maxSorts?: number | undefined;
 };
 
 /**
@@ -50,6 +56,7 @@ export const SortChips = ({
   properties,
   onUpdate,
   labels,
+  maxSorts,
 }: SortChipsProps) => (
   <>
     {sorts.map((sort) => {
@@ -88,6 +95,7 @@ export const SortChips = ({
       );
     })}
     <AddSortButton
+      disabled={maxSorts !== undefined && sorts.length >= maxSorts}
       labels={labels}
       onAdd={(sort) => onUpdate([...sorts, sort])}
       properties={properties}
@@ -170,6 +178,7 @@ type AddSortButtonProps = {
   sortedPropertyIds: Set<string>;
   onAdd: (sort: SortDescriptor) => void;
   labels: SortChipsLabels;
+  disabled: boolean;
 };
 
 const AddSortButton = ({
@@ -177,10 +186,12 @@ const AddSortButton = ({
   sortedPropertyIds,
   onAdd,
   labels,
+  disabled,
 }: AddSortButtonProps) => (
   <Menu>
     <MenuTrigger
       aria-label={labels.add}
+      disabled={disabled}
       render={<Button size="icon-xs" variant="ghost" />}
     >
       <ArrowUpDownIcon />
