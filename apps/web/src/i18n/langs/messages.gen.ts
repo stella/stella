@@ -2619,7 +2619,7 @@ type Messages = {
   "navigation": {
     "chat": "Chat";
     "contacts": "Contacts";
-    "knowledge": "Knowledge";
+    "knowledge": "Intelligence";
     "myTodos": "My tasks";
     "pinned": "Pinned";
     "recentMatters": "Recent matters";

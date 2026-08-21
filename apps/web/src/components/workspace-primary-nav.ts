@@ -2,7 +2,7 @@ import type { ComponentType } from "react";
 
 import {
   BlocksIcon,
-  BookOpenIcon,
+  LibraryBigIcon,
   MessageSquareIcon,
   ScaleIcon,
   SearchIcon,
@@ -71,7 +71,7 @@ export const WORKSPACE_PRIMARY_NAV_ITEMS = [
     to: "/tools",
   },
   {
-    icon: BookOpenIcon,
+    icon: LibraryBigIcon,
     id: "knowledge",
     kind: "route",
     labelKey: "navigation.knowledge",

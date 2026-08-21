@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { useState } from "react";
 
 import {
-  BookOpenIcon,
+  LibraryBigIcon,
   MessageSquareIcon,
   SearchIcon,
   UsersIcon,
@@ -150,7 +150,7 @@ export const SidebarPreview = ({
           icon={MattersNavIcon}
           label={t("common.matters")}
         />
-        <NavItem icon={BookOpenIcon} label={t("navigation.knowledge")} />
+        <NavItem icon={LibraryBigIcon} label={t("navigation.knowledge")} />
       </div>
 
       {/* Documents section — placeholder skeleton when no matter exists */}
