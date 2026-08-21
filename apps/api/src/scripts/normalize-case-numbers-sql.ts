@@ -16,7 +16,7 @@ import { sql } from "drizzle-orm";
 import {
   CITATION_RESOLUTION_STATUS,
   citationReopenableByKeySql,
-} from "@/api/lib/case-law/citation-resolution-status";
+} from "@/api/handlers/case-law/citation-resolution-status";
 
 /**
  * Trailing `-<digits>` on a docket that already carries a year — the same
@@ -63,7 +63,8 @@ export const normalizeSheetNumbersStatement = (limit: number): SQL => sql`
   retracted AS (
     UPDATE case_law_citations c
        SET resolution_status = ${CITATION_RESOLUTION_STATUS.PENDING},
-           cited_decision_id = NULL
+           cited_decision_id = NULL,
+           resolution_rule_id = NULL
      WHERE c.cited_decision_id IN (SELECT id FROM batch)
        AND c.resolution_status = ${CITATION_RESOLUTION_STATUS.RESOLVED}
     RETURNING c.id
@@ -76,7 +77,8 @@ export const normalizeSheetNumbersStatement = (limit: number): SQL => sql`
   -- old one, so this is the only place those rows are reachable.
   requeued AS (
     UPDATE case_law_citations c
-       SET resolution_status = ${CITATION_RESOLUTION_STATUS.PENDING}
+       SET resolution_status = ${CITATION_RESOLUTION_STATUS.PENDING},
+           resolution_rule_id = NULL
      WHERE c.citation_key IN (
              SELECT old_key FROM batch WHERE old_key IS NOT NULL
            )

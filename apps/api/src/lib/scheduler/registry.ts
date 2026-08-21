@@ -4,10 +4,6 @@ import {
   reconcileBufferIntents,
 } from "@/api/lib/scheduler/tasks/buffer-intent-reconciliation";
 import {
-  CENSUS_CITATION_RESOLUTION_TASK,
-  censusCitationResolutionTask,
-} from "@/api/lib/scheduler/tasks/case-law-citation-resolution-census";
-import {
   RECONCILE_CASE_LAW_CORPUS_UPLOAD_INTENTS_TASK,
   reconcileCaseLawCorpusUploadIntentsTask,
 } from "@/api/lib/scheduler/tasks/case-law-corpus-upload-cleanup";
@@ -91,7 +87,6 @@ const SCHEDULER_TASKS = {
     backfillCaseLawRedactionTombstones,
   [RECONCILE_CASE_LAW_CORPUS_UPLOAD_INTENTS_TASK]:
     reconcileCaseLawCorpusUploadIntentsTask,
-  [CENSUS_CITATION_RESOLUTION_TASK]: censusCitationResolutionTask,
   [RECONCILE_BUFFER_INTENTS_TASK]: reconcileBufferIntents,
   [REPAIR_CHAT_SEARCH_INDEX_TASK]: repairChatSearchIndex,
   [REPAIR_SEARCH_PROJECTIONS_TASK]: repairSearchProjections,

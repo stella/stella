@@ -20,7 +20,7 @@ import {
   type CitationResolutionCursor,
   readjudicateAmbiguousCitations,
 } from "@/api/handlers/case-law/citation-resolution";
-import { CITATION_RESOLUTION_RULE } from "@/api/lib/case-law/citation-resolution-status";
+import { CITATION_RESOLUTION_RULE } from "@/api/handlers/case-law/citation-resolution-status";
 import { isUuid } from "@/api/lib/custom-schema";
 
 const BATCH = 2000;

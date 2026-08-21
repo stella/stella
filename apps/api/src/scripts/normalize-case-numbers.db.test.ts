@@ -7,8 +7,11 @@ import {
   caseLawDecisions,
   caseLawSources,
 } from "@/api/db/schema";
+import {
+  CITATION_RESOLUTION_RULE,
+  CITATION_RESOLUTION_STATUS,
+} from "@/api/handlers/case-law/citation-resolution-status";
 import { createSafeId } from "@/api/lib/branded-types";
-import { CITATION_RESOLUTION_STATUS } from "@/api/lib/case-law/citation-resolution-status";
 import { isRecord } from "@/api/lib/type-guards";
 import {
   normalizeSheetNumbersStatement,
@@ -31,6 +34,7 @@ const withSheet = createSafeId<"caseLawDecision">();
 const withoutIdentity = createSafeId<"caseLawDecision">();
 const citing = createSafeId<"caseLawDecision">();
 const edge = createSafeId<"caseLawCitation">();
+const ambiguous = createSafeId<"caseLawCitation">();
 
 const base = {
   sourceId,
@@ -82,14 +86,25 @@ beforeAll(
       },
     ]);
 
-    await db.insert(caseLawCitations).values({
-      id: edge,
-      citingDecisionId: citing,
-      citedDecisionId: withSheet,
-      citationText: "11 C 153/2025-28",
-      citationKey: "11c/153/2025-28",
-      resolutionStatus: CITATION_RESOLUTION_STATUS.RESOLVED,
-    });
+    await db.insert(caseLawCitations).values([
+      {
+        id: edge,
+        citingDecisionId: citing,
+        citedDecisionId: withSheet,
+        citationText: "11 C 153/2025-28",
+        citationKey: "11c/153/2025-28",
+        resolutionStatus: CITATION_RESOLUTION_STATUS.RESOLVED,
+        resolutionRuleId: CITATION_RESOLUTION_RULE.UNIQUE_KEY,
+      },
+      {
+        id: ambiguous,
+        citingDecisionId: citing,
+        citationText: "11 C 153/2025-28",
+        citationKey: "11c/153/2025-28",
+        resolutionStatus: CITATION_RESOLUTION_STATUS.AMBIGUOUS,
+        resolutionRuleId: CITATION_RESOLUTION_RULE.TYPE_HINT,
+      },
+    ]);
   },
   { timeout: 120_000 },
 );
@@ -131,7 +146,7 @@ test("the normalization splits the docket and retracts its edges", async () => {
   expect(row["normalized"]).toBe(1);
   // Clearing the key retracts the edge drawn to it: what the citation matched
   // was a docket carrying a sheet number, which was never the docket.
-  expect(row["reopened"]).toBe(1);
+  expect(row["reopened"]).toBe(2);
 
   const [split] = await db
     .select({
@@ -150,12 +165,26 @@ test("the normalization splits the docket and retracts its edges", async () => {
   const [reopened] = await db
     .select({
       cited: caseLawCitations.citedDecisionId,
+      rule: caseLawCitations.resolutionRuleId,
       status: caseLawCitations.resolutionStatus,
     })
     .from(caseLawCitations)
     .where(eq(caseLawCitations.id, edge));
   expect(reopened).toEqual({
     cited: null,
+    rule: null,
+    status: CITATION_RESOLUTION_STATUS.PENDING,
+  });
+
+  const [requeued] = await db
+    .select({
+      rule: caseLawCitations.resolutionRuleId,
+      status: caseLawCitations.resolutionStatus,
+    })
+    .from(caseLawCitations)
+    .where(eq(caseLawCitations.id, ambiguous));
+  expect(requeued).toEqual({
+    rule: null,
     status: CITATION_RESOLUTION_STATUS.PENDING,
   });
 

@@ -1,6 +1,21 @@
 import { eq } from "drizzle-orm";
 
 import { CITATION_DECISION_TYPE_HINTS } from "@/api/handlers/case-law/citation-decision-type-hint";
+import { CITATION_KINDS } from "@/api/handlers/case-law/citation-kind";
+import {
+  CITATION_AMBIGUITY_SHAPES,
+  CITATION_CENSUS_ROW_KINDS,
+  CITATION_CENSUS_RULE_BUCKETS,
+  CITATION_CENSUS_RUN_STATUSES,
+} from "@/api/handlers/case-law/citation-resolution-census-consts";
+import {
+  CITATION_RESOLUTION_RULES,
+  CITATION_RESOLUTION_SCOPES,
+  CITATION_RESOLUTION_STATUS,
+  CITATION_RESOLUTION_STATUSES,
+  citationReopenableByKeySql,
+  unsettledCitationSql,
+} from "@/api/handlers/case-law/citation-resolution-status";
 import {
   POLARITIES,
   RULE_SOURCE,
@@ -10,21 +25,6 @@ import type {
   Polarity,
   RuleSource,
 } from "@/api/handlers/case-law/polarity/consts";
-import { CITATION_KINDS } from "@/api/lib/case-law/citation-kind";
-import {
-  CITATION_AMBIGUITY_SHAPES,
-  CITATION_CENSUS_ROW_KINDS,
-  CITATION_CENSUS_RULE_BUCKETS,
-  CITATION_CENSUS_RUN_STATUSES,
-} from "@/api/lib/case-law/citation-resolution-census-consts";
-import {
-  CITATION_RESOLUTION_RULES,
-  CITATION_RESOLUTION_SCOPES,
-  CITATION_RESOLUTION_STATUS,
-  CITATION_RESOLUTION_STATUSES,
-  citationReopenableByKeySql,
-  unsettledCitationSql,
-} from "@/api/lib/case-law/citation-resolution-status";
 import type { ConstantMap } from "@/api/lib/constant-map";
 import {
   CASE_LAW_DECISION_DATE_BOUNDS_CONSTRAINT,

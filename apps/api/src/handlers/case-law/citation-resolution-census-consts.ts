@@ -1,5 +1,5 @@
 /**
- * The closed vocabularies of the citation-resolution census, kept apart from
+ * Dormant closed vocabularies of the citation-resolution census, kept apart from
  * the census itself so the schema can declare its CHECKs from them without
  * importing the module that reads the schema.
  */
@@ -8,7 +8,7 @@ import {
   CITATION_RESOLUTION_RULE,
   CITATION_RESOLUTION_RULES,
   type CitationResolutionRule,
-} from "@/api/lib/case-law/citation-resolution-status";
+} from "@/api/handlers/case-law/citation-resolution-status";
 import type { ConstantMap } from "@/api/lib/constant-map";
 
 /**

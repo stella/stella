@@ -68,12 +68,7 @@ import {
   CITATION_DECISION_TYPE_HINT_FAMILIES,
   CITATION_DECISION_TYPE_HINTS,
 } from "@/api/handlers/case-law/citation-decision-type-hint";
-import type { SafeId } from "@/api/lib/branded-types";
-import {
-  candidateHoldersSql,
-  policyCte,
-  varcharArray,
-} from "@/api/lib/case-law/citation-candidates";
+import { citationResolutionPolicyRows } from "@/api/handlers/case-law/citation-jurisdiction-policy";
 import {
   CITATION_RESOLUTION_RULE,
   CITATION_RESOLUTION_RULES,
@@ -86,7 +81,8 @@ import {
   MERITS_DECISION_TYPES,
   PROCEDURAL_DECISION_TYPES,
   unsettledCitationSql,
-} from "@/api/lib/case-law/citation-resolution-status";
+} from "@/api/handlers/case-law/citation-resolution-status";
+import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawJurisdiction } from "@/api/lib/legal-search/ingestion-constants";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -100,6 +96,12 @@ type CitationResolutionTx = {
   execute: (query: SQL) => Promise<unknown>;
 };
 
+const decisionTypeArray = (types: readonly string[]): SQL =>
+  sql`ARRAY[${sql.join(
+    types.map((type) => sql`${type}`),
+    sql`, `,
+  )}]::varchar[]`;
+
 /**
  * The hint vocabulary as a CTE, one row per family: which stored
  * `decision_type` spellings a citation's hint names. Built per call from the
@@ -109,7 +111,7 @@ const hintFamilyCte = (): SQL =>
   sql`hint_family(hint, decision_types) AS (VALUES ${sql.join(
     CITATION_DECISION_TYPE_HINTS.map(
       (hint) =>
-        sql`(${hint}::varchar, ${varcharArray(
+        sql`(${hint}::varchar, ${decisionTypeArray(
           CITATION_DECISION_TYPE_HINT_FAMILIES[hint],
         )})`,
     ),
@@ -248,6 +250,59 @@ const EMPTY_COUNTS: CitationResolutionCounts = {
   undeclaredJurisdiction: 0,
 };
 
+const jurisdictionArray = (
+  jurisdictions: readonly CaseLawJurisdiction[],
+): SQL =>
+  sql`ARRAY[${sql.join(
+    jurisdictions.map((jurisdiction) => sql`${jurisdiction}`),
+    sql`, `,
+  )}]::varchar[]`;
+
+/**
+ * The declared reach of every jurisdiction as `(citing, allowed[])` rows.
+ *
+ * The whole map travels with the statement rather than one row's entry,
+ * because a batch spans jurisdictions and each row picks up its own reach by
+ * joining on its citing decision's country. Built per call: it is five rows of
+ * constants, and caching it would only add a second place for the policy to be
+ * stale.
+ */
+const policyCte = (): SQL =>
+  sql`policy(citing_country, resolves_to) AS (VALUES ${sql.join(
+    citationResolutionPolicyRows().map(
+      ({ jurisdiction, resolvesTo }) =>
+        sql`(${jurisdiction}::varchar, ${jurisdictionArray(resolvesTo)})`,
+    ),
+    sql`, `,
+  )})`;
+
+type CitationCandidateHoldersSqlOptions = {
+  holder: SQL;
+  citationKey: SQL;
+  citingDecisionId: SQL;
+  citingDate: SQL;
+  resolvesTo: SQL;
+};
+
+export const citationCandidateHoldersSql = ({
+  holder,
+  citationKey,
+  citingDecisionId,
+  citingDate,
+  resolvesTo,
+}: CitationCandidateHoldersSqlOptions): SQL => sql`
+  SELECT ${holder}.id, ${holder}.court, ${holder}.decision_type
+    FROM ${caseLawDecisions} ${holder}
+   WHERE ${holder}.citation_key = ${citationKey}
+     AND ${holder}.country = ANY (${resolvesTo})
+     AND ${holder}.id <> ${citingDecisionId}
+     AND (
+           ${holder}.decision_date IS NULL
+        OR ${citingDate} IS NULL
+        OR ${citingDate} >= ${holder}.decision_date
+         )
+   LIMIT ${CITATION_CANDIDATE_SCAN_CAP}`;
+
 /**
  * The one statement. `selection` names which pending rows this call settles;
  * everything after it is the doctrine, shared so the walk and the ingest-time
@@ -325,16 +380,16 @@ const resolutionStatement = (selection: SQL): SQL => sql`
                  WHERE lower(k.decision_type) = ANY (hf.decision_types)
                ))[1] AS hinted_id,
                count(*) FILTER (
-                 WHERE lower(k.decision_type) = ANY (${varcharArray(MERITS_DECISION_TYPES)})
+                 WHERE lower(k.decision_type) = ANY (${decisionTypeArray(MERITS_DECISION_TYPES)})
                )::int AS merits_n,
                (array_agg(k.id) FILTER (
-                 WHERE lower(k.decision_type) = ANY (${varcharArray(MERITS_DECISION_TYPES)})
+                 WHERE lower(k.decision_type) = ANY (${decisionTypeArray(MERITS_DECISION_TYPES)})
                ))[1] AS merits_id,
                count(*) FILTER (
-                 WHERE lower(k.decision_type) = ANY (${varcharArray(PROCEDURAL_DECISION_TYPES)})
+                 WHERE lower(k.decision_type) = ANY (${decisionTypeArray(PROCEDURAL_DECISION_TYPES)})
                )::int AS procedural_n
           FROM (
-            ${candidateHoldersSql({
+            ${citationCandidateHoldersSql({
               holder: sql.raw("cited"),
               citationKey: sql.raw("b.citation_key"),
               citingDecisionId: sql.raw("b.citing_decision_id"),
@@ -661,9 +716,14 @@ export const reopenCitationsForDecisionKey = async (
 ): Promise<number> => {
   await lockCitationGraph(tx);
   const reachedFrom = sql`(
-    WITH ${policyCte()}
     SELECT pol.citing_country
-      FROM policy pol
+      FROM (VALUES ${sql.join(
+        citationResolutionPolicyRows().map(
+          ({ jurisdiction: citing, resolvesTo }) =>
+            sql`(${citing}::varchar, ${jurisdictionArray(resolvesTo)})`,
+        ),
+        sql`, `,
+      )}) AS pol(citing_country, resolves_to)
      WHERE ${jurisdiction}::varchar = ANY (pol.resolves_to)
   )`;
 

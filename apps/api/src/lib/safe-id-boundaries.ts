@@ -137,11 +137,6 @@ export const brandPersistedCaseLawCitationId = (
   caseLawCitationId: string,
 ): SafeId<"caseLawCitation"> => toSafeId<"caseLawCitation">(caseLawCitationId);
 
-export const brandPersistedCaseLawCitationResolutionCensusRunId = (
-  runId: string,
-): SafeId<"caseLawCitationResolutionCensusRun"> =>
-  toSafeId<"caseLawCitationResolutionCensusRun">(runId);
-
 export const brandPersistedCaseLawSourceId = (
   caseLawSourceId: string,
 ): SafeId<"caseLawSource"> => toSafeId<"caseLawSource">(caseLawSourceId);

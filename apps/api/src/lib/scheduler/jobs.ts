@@ -13,7 +13,6 @@ import {
 } from "@/api/lib/scheduler/registry";
 import { computeNextRunAt } from "@/api/lib/scheduler/schedule";
 import { RECONCILE_BUFFER_INTENTS_TASK } from "@/api/lib/scheduler/tasks/buffer-intent-reconciliation";
-import { CENSUS_CITATION_RESOLUTION_TASK } from "@/api/lib/scheduler/tasks/case-law-citation-resolution-census";
 import { RECONCILE_CASE_LAW_CORPUS_UPLOAD_INTENTS_TASK } from "@/api/lib/scheduler/tasks/case-law-corpus-upload-cleanup";
 import { BACKFILL_CASE_LAW_REDACTION_TOMBSTONES_TASK } from "@/api/lib/scheduler/tasks/case-law-redaction-tombstone-backfill";
 import { CHAT_THREAD_COMPACTOR_TASK } from "@/api/lib/scheduler/tasks/chat-thread-compactor";
@@ -174,19 +173,6 @@ export const DECLARED_SCHEDULER_JOBS = [
     mode: "recurring",
     schedule: { type: "interval", everyMs: 60 * 1000 },
     task: RECONCILE_CASE_LAW_CORPUS_UPLOAD_INTENTS_TASK,
-  },
-  {
-    description:
-      "Count case-law citation resolution by status, rule and ambiguity shape",
-    id: "caseLaw.censusCitationResolution.nightly",
-    mode: "recurring",
-    schedule: {
-      type: "daily",
-      hour: 4,
-      minute: 30,
-      timeZone: "Europe/Prague",
-    },
-    task: CENSUS_CITATION_RESOLUTION_TASK,
   },
   {
     description:
