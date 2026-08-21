@@ -73,7 +73,6 @@ import { isSkillSourceRateLimitedRequest } from "@/api/handlers/skills/source-ra
 import { smokeRoute } from "@/api/handlers/smoke/routes";
 import { styleSetsRoute } from "@/api/handlers/style-sets/routes";
 import { isStyleSetUploadRateLimitedRequest } from "@/api/handlers/style-sets/upload-rate-limit";
-import { myTasksRoute } from "@/api/handlers/tasks/my-tasks-route";
 import { tasksRoute } from "@/api/handlers/tasks/routes";
 import { templatePacksRoute } from "@/api/handlers/template-packs/routes";
 import { templateRecipesRoute } from "@/api/handlers/template-recipes/routes";
@@ -89,7 +88,6 @@ import { verifyAuthRoute, verifyRoute } from "@/api/handlers/verify/routes";
 import { viewTemplatesRoute } from "@/api/handlers/view-templates/routes";
 import { viewsRoute } from "@/api/handlers/views/routes";
 import { wellKnownRoute } from "@/api/handlers/well-known/routes";
-import { myWorkRoute } from "@/api/handlers/work-obligations/my-work-route";
 import { workObligationsRoute } from "@/api/handlers/work-obligations/routes";
 import { workspaceEventsRoute } from "@/api/handlers/workspaces/events";
 import { workspacesRoute } from "@/api/handlers/workspaces/routes";
@@ -647,8 +645,6 @@ const api = new Elysia()
       .use(listsRoute)
       .use(tasksRoute)
       .use(workObligationsRoute)
-      .use(myWorkRoute)
-      .use(myTasksRoute)
       .use(meRoute)
       .use(devRoute)
       .use(verifyAuthRoute),

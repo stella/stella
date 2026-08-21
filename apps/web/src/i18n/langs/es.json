@@ -2682,7 +2682,6 @@
     "contacts": "Contactos",
     "inbox": "Bandeja de entrada",
     "knowledge": "Conocimiento",
-    "myTodos": "Mis tareas",
     "pinned": "Fijados",
     "recentMatters": "Asuntos recientes",
     "recents": "Recientes",
@@ -3517,16 +3516,12 @@
     "hardDeadlineOverdue": "Fecha límite firme vencida",
     "linkEntity": "Vincular elemento",
     "linkedEntities": "Elementos vinculados",
-    "myTasksTitle": "Mis tareas",
-    "myWorkTitle": "Mi trabajo",
     "newTask": "Nueva tarea",
     "noActivity": "Aún no hay actividad",
     "noAssignees": "Sin asignados",
     "noLinks": "Sin elementos vinculados",
     "noOwner": "Sin responsable",
     "noSubtasks": "Sin subtareas",
-    "noTasksAssigned": "No tienes tareas asignadas",
-    "noWorkInQueue": "No hay trabajo en esta cola",
     "notFound": "Tarea no encontrada",
     "overdue": "Vencida",
     "owner": "Responsable",
@@ -3537,12 +3532,6 @@
       "medium": "Media",
       "none": "Ninguna",
       "urgent": "Urgente"
-    },
-    "queue": {
-      "atRisk": "En riesgo",
-      "completed": "Completado",
-      "inbox": "Bandeja de entrada",
-      "upcoming": "Próximo"
     },
     "reopenWork": "Reabrir trabajo",
     "sourceTypeValues": {

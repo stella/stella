@@ -2682,7 +2682,6 @@
     "contacts": "Kontaktid",
     "inbox": "Postkast",
     "knowledge": "Teadmus",
-    "myTodos": "Minu ülesanded",
     "pinned": "Kinnitatud",
     "recentMatters": "Hiljutised toimikud",
     "recents": "Hiljutised",
@@ -3517,16 +3516,12 @@
     "hardDeadlineOverdue": "Siduv tähtaeg on möödunud",
     "linkEntity": "Seo kirje",
     "linkedEntities": "Seotud kirjed",
-    "myTasksTitle": "Minu ülesanded",
-    "myWorkTitle": "Minu töö",
     "newTask": "Uus ülesanne",
     "noActivity": "Tegevusi veel pole",
     "noAssignees": "Kedagi pole määratud",
     "noLinks": "Seotud kirjed puuduvad",
     "noOwner": "Vastutaja puudub",
     "noSubtasks": "Alamülesanded puuduvad",
-    "noTasksAssigned": "Sulle pole ülesandeid määratud",
-    "noWorkInQueue": "Selles järjekorras pole tööd",
     "notFound": "Ülesannet ei leitud",
     "overdue": "Tähtaeg ületatud",
     "owner": "Vastutaja",
@@ -3537,12 +3532,6 @@
       "medium": "Keskmine",
       "none": "Puudub",
       "urgent": "Kiire"
-    },
-    "queue": {
-      "atRisk": "Ohus",
-      "completed": "Lõpetatud",
-      "inbox": "Sisendkaust",
-      "upcoming": "Tulekul"
     },
     "reopenWork": "Ava töö uuesti",
     "sourceTypeValues": {

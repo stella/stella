@@ -2682,7 +2682,6 @@
     "contacts": "Kontakti",
     "inbox": "Iesūtne",
     "knowledge": "Zināšanas",
-    "myTodos": "Mani uzdevumi",
     "pinned": "Piesprausts",
     "recentMatters": "Nesenās lietas",
     "recents": "Nesenie",
@@ -3517,16 +3516,12 @@
     "hardDeadlineOverdue": "Saistošais termiņš nokavēts",
     "linkEntity": "Saistīt ierakstu",
     "linkedEntities": "Saistītie ieraksti",
-    "myTasksTitle": "Mani uzdevumi",
-    "myWorkTitle": "Mans darbs",
     "newTask": "Jauns uzdevums",
     "noActivity": "Aktivitāšu vēl nav",
     "noAssignees": "Nav atbildīgo",
     "noLinks": "Nav saistīto ierakstu",
     "noOwner": "Nav atbildīgās personas",
     "noSubtasks": "Nav apakšuzdevumu",
-    "noTasksAssigned": "Jums nav piešķirtu uzdevumu",
-    "noWorkInQueue": "Šajā rindā nav darba",
     "notFound": "Uzdevums nav atrasts",
     "overdue": "Nokavēts",
     "owner": "Atbildīgā persona",
@@ -3537,12 +3532,6 @@
       "medium": "Vidēja",
       "none": "Nav",
       "urgent": "Steidzams"
-    },
-    "queue": {
-      "atRisk": "Apdraudēti",
-      "completed": "Pabeigti",
-      "inbox": "Iesūtne",
-      "upcoming": "Gaidāmi"
     },
     "reopenWork": "Atkārtoti atvērt darbu",
     "sourceTypeValues": {

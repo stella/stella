@@ -2682,7 +2682,6 @@
     "contacts": "Kontakte",
     "inbox": "Posteingang",
     "knowledge": "Wissen",
-    "myTodos": "Meine Aufgaben",
     "pinned": "Angeheftet",
     "recentMatters": "Zuletzt verwendete Akten",
     "recents": "Zuletzt verwendet",
@@ -3517,16 +3516,12 @@
     "hardDeadlineOverdue": "Verbindliche Frist überschritten",
     "linkEntity": "Eintrag verknüpfen",
     "linkedEntities": "Verknüpfte Einträge",
-    "myTasksTitle": "Meine Aufgaben",
-    "myWorkTitle": "Meine Arbeit",
     "newTask": "Neue Aufgabe",
     "noActivity": "Noch keine Aktivität",
     "noAssignees": "Keine Zuweisungen",
     "noLinks": "Keine verknüpften Einträge",
     "noOwner": "Keine verantwortliche Person",
     "noSubtasks": "Keine Unteraufgaben",
-    "noTasksAssigned": "Keine Aufgaben zugewiesen",
-    "noWorkInQueue": "Keine Arbeit in dieser Warteschlange",
     "notFound": "Aufgabe nicht gefunden",
     "overdue": "Überfällig",
     "owner": "Verantwortlich",
@@ -3537,12 +3532,6 @@
       "medium": "Mittel",
       "none": "Keine",
       "urgent": "Dringend"
-    },
-    "queue": {
-      "atRisk": "Gefährdet",
-      "completed": "Abgeschlossen",
-      "inbox": "Eingang",
-      "upcoming": "Anstehend"
     },
     "reopenWork": "Arbeit wieder öffnen",
     "sourceTypeValues": {

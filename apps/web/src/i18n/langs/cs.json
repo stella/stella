@@ -2682,7 +2682,6 @@
     "contacts": "Kontakty",
     "inbox": "Doručené",
     "knowledge": "Znalosti",
-    "myTodos": "Moje úkoly",
     "pinned": "Připnuté",
     "recentMatters": "Nedávné spisy",
     "recents": "Nedávné",
@@ -3517,16 +3516,12 @@
     "hardDeadlineOverdue": "Pevná lhůta překročena",
     "linkEntity": "Propojit položku",
     "linkedEntities": "Propojené položky",
-    "myTasksTitle": "Moje úkoly",
-    "myWorkTitle": "Moje práce",
     "newTask": "Nový úkol",
     "noActivity": "Zatím žádná aktivita",
     "noAssignees": "Žádní přiřazení",
     "noLinks": "Žádné propojené položky",
     "noOwner": "Bez odpovědné osoby",
     "noSubtasks": "Žádné podúkoly",
-    "noTasksAssigned": "Nemáte přiřazené žádné úkoly",
-    "noWorkInQueue": "V této frontě není žádná práce",
     "notFound": "Úkol nenalezen",
     "overdue": "Po termínu",
     "owner": "Odpovědná osoba",
@@ -3537,12 +3532,6 @@
       "medium": "Střední",
       "none": "Žádná",
       "urgent": "Urgentní"
-    },
-    "queue": {
-      "atRisk": "Ohrožené",
-      "completed": "Dokončené",
-      "inbox": "Schránka",
-      "upcoming": "Nadcházející"
     },
     "reopenWork": "Znovu otevřít práci",
     "sourceTypeValues": {

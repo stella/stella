@@ -69,8 +69,6 @@ import { toSafeId } from "@/lib/safe-id";
 import { workspacesKeys } from "@/lib/workspaces/queries";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
 import { legalListKeys } from "@/lib/workspaces/queries/legal-lists";
-import { myTasksKeys } from "@/lib/workspaces/queries/my-tasks";
-import { myWorkKeys } from "@/lib/workspaces/queries/my-work";
 import { taskDetailOptions, taskKeys } from "@/lib/workspaces/queries/tasks";
 
 import type {
@@ -155,8 +153,6 @@ const TaskDetailPanelContent = ({
         queryClient.invalidateQueries({
           queryKey: workspacesKeys.overview(workspaceId),
         }),
-        queryClient.invalidateQueries({ queryKey: myWorkKeys.all }),
-        queryClient.invalidateQueries({ queryKey: myTasksKeys.all }),
         queryClient.invalidateQueries({
           queryKey: legalListKeys.all(workspaceId),
         }),
@@ -173,8 +169,6 @@ const TaskDetailPanelContent = ({
       queryClient.invalidateQueries({
         queryKey: taskKeys.detail(workspaceId, taskId),
       }),
-      queryClient.invalidateQueries({ queryKey: myWorkKeys.all }),
-      queryClient.invalidateQueries({ queryKey: myTasksKeys.all }),
       queryClient.invalidateQueries({
         queryKey: entitiesKeys.all(workspaceId),
       }),
@@ -278,9 +272,6 @@ const TaskDetailPanelContent = ({
                   queryClient.invalidateQueries({
                     queryKey: workspacesKeys.overview(workspaceId),
                   }),
-                  queryClient.invalidateQueries({
-                    queryKey: myTasksKeys.all,
-                  }),
                 ]);
               } catch (error: unknown) {
                 analytics.captureError(error);
@@ -293,11 +284,6 @@ const TaskDetailPanelContent = ({
               }
             })(),
             "task-detail-panel.auto-assign",
-          );
-        } else {
-          detached(
-            queryClient.invalidateQueries({ queryKey: myTasksKeys.all }),
-            "task-detail-panel.invalidate",
           );
         }
       }

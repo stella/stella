@@ -2682,7 +2682,6 @@
     "contacts": "Contacts",
     "inbox": "Boîte de réception",
     "knowledge": "Connaissances",
-    "myTodos": "Mes tâches",
     "pinned": "Épinglés",
     "recentMatters": "Dossiers récents",
     "recents": "Récents",
@@ -3517,16 +3516,12 @@
     "hardDeadlineOverdue": "Échéance ferme dépassée",
     "linkEntity": "Lier un élément",
     "linkedEntities": "Éléments liés",
-    "myTasksTitle": "Mes tâches",
-    "myWorkTitle": "Mon travail",
     "newTask": "Nouvelle tâche",
     "noActivity": "Aucune activité pour le moment",
     "noAssignees": "Aucun assigné",
     "noLinks": "Aucun élément lié",
     "noOwner": "Aucun responsable",
     "noSubtasks": "Aucune sous-tâche",
-    "noTasksAssigned": "Aucune tâche ne vous est assignée",
-    "noWorkInQueue": "Aucun travail dans cette file",
     "notFound": "Tâche introuvable",
     "overdue": "En retard",
     "owner": "Responsable",
@@ -3537,12 +3532,6 @@
       "medium": "Moyenne",
       "none": "Aucune",
       "urgent": "Urgent"
-    },
-    "queue": {
-      "atRisk": "À risque",
-      "completed": "Terminé",
-      "inbox": "Boîte de réception",
-      "upcoming": "À venir"
     },
     "reopenWork": "Rouvrir le travail",
     "sourceTypeValues": {

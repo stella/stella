@@ -2685,7 +2685,6 @@ type Messages = {
     "contacts": "Contacts";
     "inbox": "Inbox";
     "knowledge": "Intelligence";
-    "myTodos": "My tasks";
     "pinned": "Pinned";
     "recentMatters": "Recent matters";
     "recents": "Recents";
@@ -3520,16 +3519,12 @@ type Messages = {
     "hardDeadlineOverdue": "Hard deadline overdue";
     "linkEntity": "Link item";
     "linkedEntities": "Linked items";
-    "myTasksTitle": "My tasks";
-    "myWorkTitle": "My work";
     "newTask": "New task";
     "noActivity": "No activity yet";
     "noAssignees": "No assignees";
     "noLinks": "No linked items";
     "noOwner": "No accountable owner";
     "noSubtasks": "No subtasks";
-    "noTasksAssigned": "No tasks assigned to you";
-    "noWorkInQueue": "No work in this queue";
     "notFound": "Task not found";
     "overdue": "Overdue";
     "owner": "Owner";
@@ -3540,12 +3535,6 @@ type Messages = {
       "medium": "Medium";
       "none": "None";
       "urgent": "Urgent";
-    };
-    "queue": {
-      "atRisk": "At risk";
-      "completed": "Completed";
-      "inbox": "Inbox";
-      "upcoming": "Upcoming";
     };
     "reopenWork": "Reopen work";
     "sourceTypeValues": {

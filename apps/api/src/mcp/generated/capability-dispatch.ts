@@ -945,10 +945,6 @@ export const CAPABILITY_DISPATCH = {
     load: async () =>
       await import("@/api/handlers/work-obligations/acknowledgements/create"),
   },
-  "work-obligations.queues.list": {
-    load: async () =>
-      await import("@/api/handlers/work-obligations/queues/list"),
-  },
   "work-obligations.transition": {
     load: async () =>
       await import("@/api/handlers/work-obligations/transition"),

@@ -475,7 +475,6 @@ here as its CLI form). Projected from the same handler enumeration that builds
 | Capability                                 | Access | Scope                | Feature                   | Reachable via                                                                 |
 | ------------------------------------------ | ------ | -------------------- | ------------------------- | ----------------------------------------------------------------------------- |
 | `work-obligations.acknowledgements.create` | write  | stella:matters_write | FEATURE_GOVERNED_WORKFLOW | generic invoke → `stella capability work-obligations acknowledgements-create` |
-| `work-obligations.queues.list`             | read   | stella:read          | FEATURE_GOVERNED_WORKFLOW | generic invoke → `stella capability work-obligations queues-list`             |
 | `work-obligations.transition`              | write  | stella:matters_write | FEATURE_GOVERNED_WORKFLOW | generic invoke → `stella capability work-obligations transition`              |
 | `work-obligations.update`                  | write  | stella:matters_write | FEATURE_GOVERNED_WORKFLOW | generic invoke → `stella capability work-obligations update`                  |
 
