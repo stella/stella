@@ -874,6 +874,10 @@ describe("chat third-party anonymization boundary", () => {
             "Enter Jan Novák or preserve literal [PERSON_1] in the example.",
           type: "string",
         },
+        "Jan Novák": {
+          description: "A sensitive schema property name.",
+          type: "string",
+        },
       },
     });
     const source = prepareMcpToolSourceForThirdParty({
@@ -902,6 +906,10 @@ describe("chat third-party anonymization boundary", () => {
             "Enter [PERSON_1] or preserve literal [LITERAL_PLACEHOLDER_3] in the example.",
           type: "string",
         },
+        "[PERSON_1]": {
+          description: "A sensitive schema property name.",
+          type: "string",
+        },
       },
     });
     expect(
@@ -914,8 +922,48 @@ describe("chat third-party anonymization boundary", () => {
             "Enter Jan Novák or preserve literal [PERSON_1] in the example.",
           type: "string",
         },
+        "Jan Novák": {
+          description: "A sensitive schema property name.",
+          type: "string",
+        },
       },
     });
+  });
+
+  test("rejects sensitive MCP tool names instead of corrupting identifiers", () => {
+    const organizationId = toSafeId<"organization">(
+      "11111111-1111-4111-8111-111111111111",
+    );
+    const anonymizeIds = mock(async ({ fields }: { fields: string[] }) => ({
+      entityCount: 1,
+      fields: fields.map((field) =>
+        field.replaceAll(organizationId, () => "[MISC_1]"),
+      ),
+      redactionMap: new Map([["[MISC_1]", organizationId]]),
+    }));
+    const { scopedDb } = createScopedDbMock({});
+    const boundary = createChatThirdPartyBoundary({
+      anonymizeFields: anonymizeIds,
+      anonymizationScopeId: "workspace-A",
+      organizationId,
+      scopedDb,
+      sendMode: CHAT_SEND_MODE.anonymized,
+    });
+    const sourceTool = toolDefinition({
+      name: `mcp__crm__${organizationId}`,
+      description: "Read a record.",
+    }).server(async () => undefined);
+    const source = prepareMcpToolSourceForThirdParty({
+      boundary,
+      source: {
+        close: async () => {},
+        tools: async () => [sourceTool],
+      },
+    });
+
+    expect(source.tools()).rejects.toThrow(
+      "MCP tool names that contain sensitive data cannot cross an anonymized third-party boundary.",
+    );
   });
 
   test("aliases late literal placeholders in runtime tool output", async () => {

@@ -733,6 +733,20 @@ const queueOpaqueTextCheck = ({
   replacements.push({ type: "reject-if-changed", text, message });
 };
 
+const validateOpaqueTextForThirdParty = async ({
+  boundary,
+  message,
+  text,
+}: {
+  boundary: Extract<ChatThirdPartyBoundary, { type: "anonymized" }>;
+  message: string;
+  text: string;
+}): Promise<Result<void, BoundaryRefusal>> => {
+  const replacements: TextReplacement[] = [];
+  queueOpaqueTextCheck({ message, replacements, text });
+  return await prepareTextBatchForThirdParty({ boundary, replacements });
+};
+
 const anonymizePlainTextFile = ({
   part,
   replacements,
@@ -965,6 +979,7 @@ const shouldPreserveStructuredString = (
 };
 
 const anonymizeUnknownStrings = ({
+  anonymizeStructuredKeys = false,
   apply,
   boundary,
   encodeClaimedPlaceholders = false,
@@ -972,6 +987,7 @@ const anonymizeUnknownStrings = ({
   replacements,
   value,
 }: {
+  anonymizeStructuredKeys?: boolean | undefined;
   apply?: ((value: unknown) => void) | undefined;
   boundary: Extract<ChatThirdPartyBoundary, { type: "anonymized" }>;
   encodeClaimedPlaceholders?: boolean | undefined;
@@ -1011,6 +1027,7 @@ const anonymizeUnknownStrings = ({
             output[index] = next;
             apply?.(output);
           },
+          anonymizeStructuredKeys,
           boundary,
           encodeClaimedPlaceholders,
           key,
@@ -1035,7 +1052,10 @@ const anonymizeUnknownStrings = ({
         ? encodeLateLiteralPlaceholders(boundary, nestedKey)
         : nestedKey;
       let preparedValue: unknown;
-      if (containsForcedBoundaryValue(boundary, nestedKey)) {
+      if (
+        anonymizeStructuredKeys ||
+        containsForcedBoundaryValue(boundary, nestedKey)
+      ) {
         queueTextReplacement(replacements, preparedKey, (next) => {
           Reflect.deleteProperty(output, preparedKey);
           preparedKey = next;
@@ -1044,6 +1064,7 @@ const anonymizeUnknownStrings = ({
         });
       }
       const nestedPrepared = yield* anonymizeUnknownStrings({
+        anonymizeStructuredKeys,
         apply: (next) => {
           preparedValue = next;
           Object.assign(output, { [preparedKey]: next });
@@ -1069,10 +1090,12 @@ const anonymizeUnknownStrings = ({
  * technical identifiers retain the same preservation rules as tool payloads.
  */
 export const prepareUnknownForThirdParty = async ({
+  anonymizeStructuredKeys = false,
   boundary,
   encodeClaimedPlaceholders = false,
   value,
 }: {
+  anonymizeStructuredKeys?: boolean;
   boundary: ChatThirdPartyBoundary;
   encodeClaimedPlaceholders?: boolean;
   value: unknown;
@@ -1086,6 +1109,7 @@ export const prepareUnknownForThirdParty = async ({
   const replacements: TextReplacement[] = [];
   let preparedValue: unknown;
   const anonymized = anonymizeUnknownStrings({
+    anonymizeStructuredKeys,
     apply: (next) => {
       preparedValue = next;
     },
@@ -1475,7 +1499,6 @@ export const prepareMcpToolSourceForThirdParty = ({
 };
 
 const MCP_PROVIDER_METADATA_FIELDS = [
-  "name",
   "description",
   "inputSchema",
   "outputSchema",
@@ -1512,6 +1535,18 @@ const prepareMcpServerToolForThirdParty = async (
 ): Promise<AnyServerTool> => {
   reserveThirdPartyBoundarySourcePlaceholders({ boundary, value: tool });
   const prepared = { ...tool };
+  const providerName: unknown = Reflect.get(prepared, "name");
+  if (typeof providerName === "string") {
+    const nameCheck = await validateOpaqueTextForThirdParty({
+      boundary,
+      message:
+        "MCP tool names that contain sensitive data cannot cross an anonymized third-party boundary.",
+      text: providerName,
+    });
+    if (Result.isError(nameCheck)) {
+      throw nameCheck.error;
+    }
+  }
   const providerMetadata: Record<string, unknown> = {};
   for (const field of MCP_PROVIDER_METADATA_FIELDS) {
     const providerValue: unknown = Reflect.get(prepared, field);
@@ -1520,6 +1555,7 @@ const prepareMcpServerToolForThirdParty = async (
     }
   }
   const preparedMetadata = await prepareUnknownForThirdParty({
+    anonymizeStructuredKeys: true,
     boundary,
     encodeClaimedPlaceholders: true,
     value: providerMetadata,
