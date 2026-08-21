@@ -17,11 +17,9 @@ import {
   readThroughDeferredDocument,
 } from "@/api/handlers/case-law/decisions/document-on-demand";
 import { onDemandDocumentDeps } from "@/api/handlers/case-law/decisions/document-on-demand-deps";
-import {
-  readDecisionBySlugHandler,
-  readDecisionHandler,
-} from "@/api/handlers/case-law/decisions/get";
-import type { SafeId } from "@/api/lib/branded-types";
+import { readDecisionHandler } from "@/api/handlers/case-law/decisions/get";
+import type { DecisionSubjectLocator } from "@/api/handlers/case-law/decisions/public-subject";
+import { withRedistributableSubject } from "@/api/handlers/case-law/decisions/public-subject";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 
 type DecisionRead = Awaited<ReturnType<typeof readDecisionHandler>>;
@@ -82,7 +80,12 @@ const hydrate = async (
   };
 };
 
-const withDeferredDocument = async (
+/**
+ * The read's second phase: fetch the document when a reader arrives before
+ * the ingestion queue does. A publisher fetch and an ingestion write, so it
+ * runs after the gated read transaction has closed, never inside it.
+ */
+export const hydrateDeferredDocument = async (
   read: DecisionRead,
   recordDemand: boolean,
 ): Promise<DecisionRead> =>
@@ -95,49 +98,37 @@ const withDeferredDocument = async (
  */
 export type DecisionReadCaller = "anonymous" | "attributed";
 
-export type ReadDecisionWithDocumentOptions = {
-  decisionId: SafeId<"caseLawDecision">;
+export type ReadGatedDecisionOptions = {
   caseLawDb: CaseLawPublicReadDb;
+  locator: DecisionSubjectLocator;
   caller: DecisionReadCaller;
   citationsCursor?: string | null | undefined;
 };
 
-export type ReadDecisionBySlugWithDocumentOptions = {
-  slug: string;
-  caseLawDb: CaseLawPublicReadDb;
-  caller: DecisionReadCaller;
-  citationsCursor?: string | null | undefined;
-  language: string | undefined;
+/**
+ * Gate, read, then hydrate — in that order and for that reason.
+ *
+ * The gate and every row of the read share one transaction, so the content
+ * cannot come from a state the gate did not approve. Hydration is a
+ * publisher fetch and an ingestion write, which must not hold a read-only
+ * transaction open, so it runs once that transaction has closed.
+ *
+ * Null is "no such decision for the public": it does not exist, or its
+ * source may not be redistributed.
+ */
+export const readGatedDecisionWithDocument = async ({
+  caseLawDb,
+  locator,
+  caller,
+  citationsCursor,
+}: ReadGatedDecisionOptions): Promise<DecisionRead | null> => {
+  const read = await withRedistributableSubject(
+    caseLawDb,
+    locator,
+    async (subject) => await readDecisionHandler({ citationsCursor, subject }),
+  );
+
+  return read === null
+    ? null
+    : await hydrateDeferredDocument(read, caller === "attributed");
 };
-
-export const readDecisionWithDocumentHandler = async ({
-  decisionId,
-  caseLawDb,
-  caller,
-  citationsCursor,
-}: ReadDecisionWithDocumentOptions): Promise<DecisionRead> =>
-  await withDeferredDocument(
-    await readDecisionHandler({
-      caseLawDb,
-      citationsCursor,
-      decisionId,
-    }),
-    caller === "attributed",
-  );
-
-export const readDecisionBySlugWithDocumentHandler = async ({
-  slug,
-  caseLawDb,
-  caller,
-  citationsCursor,
-  language,
-}: ReadDecisionBySlugWithDocumentOptions): Promise<DecisionRead> =>
-  await withDeferredDocument(
-    await readDecisionBySlugHandler({
-      caseLawDb,
-      citationsCursor,
-      language,
-      slug,
-    }),
-    caller === "attributed",
-  );

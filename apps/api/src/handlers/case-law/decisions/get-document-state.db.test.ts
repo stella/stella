@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 /**
  * The read reports whether a decision's document is still to come or is
  * not coming, and only the first may be fetched for the reader. The
@@ -8,7 +9,6 @@
  *
  * Runs in the nightly Postgres job; skipped elsewhere.
  */
-
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { inArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/bun-sql";
@@ -17,6 +17,7 @@ import { authRelationsPart } from "@/api/db/auth-schema";
 import { caseLawDecisions, caseLawSources, relations } from "@/api/db/schema";
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import { readDecisionHandler } from "@/api/handlers/case-law/decisions/get";
+import { withRedistributableSubject } from "@/api/handlers/case-law/decisions/public-subject";
 import type { SafeId } from "@/api/lib/branded-types";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 
@@ -60,10 +61,16 @@ if (!databaseUrl || !runPostgresTests) {
     };
 
     const readState = async (id: SafeId<"caseLawDecision">) => {
-      const decision = await readDecisionHandler({
-        caseLawDb: caseLawPublicReadDb,
-        decisionId: id,
-      });
+      const subject =
+        (await withRedistributableSubject(
+          caseLawPublicReadDb,
+          {
+            kind: "id",
+            id,
+          },
+          async (gated) => gated,
+        )) ?? panic("expected a redistributable subject");
+      const decision = await readDecisionHandler({ subject });
       if (!("documentPending" in decision)) {
         throw new Error("expected a readable decision");
       }

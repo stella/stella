@@ -3,6 +3,9 @@ import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
 import JSZip from "jszip";
 
 import { env } from "@/api/env";
+// Imported for the double below: only the resolver is replaced, and the rest
+// of the module keeps its real behaviour rather than being dropped.
+import * as publicSubject from "@/api/handlers/case-law/decisions/public-subject";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
@@ -142,6 +145,10 @@ const searchProviderSearchMock = mock(
 );
 const searchDecisionsHandlerMock = mock();
 const readDecisionHandlerMock = mock();
+/** The gate-and-read the tool calls; null is a denied or missing subject. */
+const readGatedDecisionMock = mock();
+/** The subject gate: passes whatever id it is given as redistributable. */
+const withRedistributableSubjectMock = mock();
 const APP_BASE_URL = env.FRONTEND_URL.replace(/\/$/u, "");
 
 type AnonymizationBlacklistEntryInput = {
@@ -234,10 +241,27 @@ void mock.module("@/api/handlers/case-law/decisions/search", () => ({
 void mock.module(
   "@/api/handlers/case-law/decisions/get-deferred-document",
   () => ({
-    readDecisionBySlugWithDocumentHandler: mock(),
-    readDecisionWithDocumentHandler: readDecisionHandlerMock,
+    hydrateDeferredDocument: async (read: unknown) => read,
+    readGatedDecisionWithDocument: readGatedDecisionMock,
   }),
 );
+
+// The subject gate runs before the read; the double stands in for the
+// database lookup and hands back the id as an already-gated subject.
+// Every export is declared: the module builds the public routes at import
+// time, so dropping the factory here would leave them unhandled, and the
+// spread idiom deadlocks on a module that imports the handler factories.
+void mock.module("@/api/handlers/case-law/decisions/public-subject", () => ({
+  DECISION_NOT_FOUND: publicSubject.DECISION_NOT_FOUND,
+  createSafePublicSubjectHandler: publicSubject.createSafePublicSubjectHandler,
+  createSafePublicSubjectFollowUpHandler:
+    publicSubject.createSafePublicSubjectFollowUpHandler,
+  isSubjectGatedHandler: publicSubject.isSubjectGatedHandler,
+  normalizePublicDecisionLanguage:
+    publicSubject.normalizePublicDecisionLanguage,
+  withRedistributableSubject: withRedistributableSubjectMock,
+  subjectGatedHandlers: publicSubject.subjectGatedHandlers,
+}));
 
 void mock.module("@/api/handlers/workspaces/get", () => ({
   readWorkspaceHandler: mock(),
@@ -741,6 +765,21 @@ describe("OpenAI-compatible MCP tools", () => {
     decryptContentMock.mockResolvedValue("Full document text");
     searchDecisionsHandlerMock.mockReset();
     readDecisionHandlerMock.mockReset();
+    readGatedDecisionMock.mockReset();
+    // The gate passes by default and the read answers; a denied subject is
+    // set up per test by resolving the gate to null.
+    readGatedDecisionMock.mockImplementation(
+      async ({ locator, ...rest }: { locator: { kind: "id"; id: string } }) =>
+        await readDecisionHandlerMock({ subject: { id: locator.id }, ...rest }),
+    );
+    withRedistributableSubjectMock.mockReset();
+    withRedistributableSubjectMock.mockImplementation(
+      async (
+        _db: unknown,
+        locator: { kind: "id"; id: string },
+        read: (subject: { id: string }) => Promise<unknown>,
+      ) => await read({ id: locator.id }),
+    );
     s3FileMock.mockClear();
     s3ArrayBufferMock.mockClear();
     withTimeoutMock.mockClear();
@@ -1441,8 +1480,10 @@ describe("OpenAI-compatible MCP tools", () => {
 
     // An agent read is attributable, so it may queue demand for a
     // decision whose document has not been fetched yet.
-    expect(readDecisionHandlerMock).toHaveBeenCalledWith({
-      decisionId: "dec_123",
+    // The gate and the read are one call, so the tool names the decision
+    // by locator and never holds an ungated id.
+    expect(readGatedDecisionMock).toHaveBeenCalledWith({
+      locator: { kind: "id", id: "dec_123" },
       caseLawDb: caseLawPublicReadDb,
       caller: "attributed",
       citationsCursor: undefined,
@@ -1477,6 +1518,40 @@ describe("OpenAI-compatible MCP tools", () => {
         truncated: false,
       },
     });
+  });
+
+  test("read_case_law_decision answers not found for a subject the gate denies", async () => {
+    // A restricted or missing decision does not exist for any caller, and
+    // the reader must not run for it: the gate answers before there is
+    // anything to read.
+    readGatedDecisionMock.mockImplementation(
+      async ({
+        caseLawDb,
+        locator,
+      }: {
+        caseLawDb: unknown;
+        locator: { kind: "id"; id: string };
+      }) =>
+        await withRedistributableSubjectMock(
+          caseLawDb,
+          locator,
+          async (subject: { id: string }) =>
+            await readDecisionHandlerMock({ subject }),
+        ),
+    );
+    withRedistributableSubjectMock.mockResolvedValue(null);
+
+    const result = await handleMcpToolCall({
+      args: { decision_id: "dec_123" },
+      context: createContext(),
+      toolName: "read_case_law_decision",
+    });
+
+    expectErrorEnvelope(result, {
+      code: "not_found",
+      message: "Decision not found",
+    });
+    expect(readDecisionHandlerMock).not.toHaveBeenCalled();
   });
 
   test("read_case_law_decision withholds text when the source bars AI use", async () => {
@@ -1608,8 +1683,8 @@ describe("OpenAI-compatible MCP tools", () => {
     expect(page2.decision.citationsTo.at(0)?.id).toBe("ct_50");
     expect(page2.decision.text).toBeNull();
     expect(page2.nextCursor).toBeNull();
-    expect(readDecisionHandlerMock).toHaveBeenLastCalledWith({
-      decisionId: "dec_123",
+    expect(readGatedDecisionMock).toHaveBeenLastCalledWith({
+      locator: { kind: "id", id: "dec_123" },
       caseLawDb: caseLawPublicReadDb,
       caller: "attributed",
       citationsCursor: "citations-next",

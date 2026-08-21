@@ -10,18 +10,20 @@ import {
   listIncomingDecisionCitations,
   listOutgoingDecisionCitations,
 } from "@/api/handlers/case-law/decisions/citations";
+import {
+  DECISION_NOT_FOUND,
+  normalizePublicDecisionLanguage,
+  type RedistributableDecisionSubject,
+} from "@/api/handlers/case-law/decisions/public-subject";
 import { hasUsableAst } from "@/api/handlers/case-law/document-ast";
 import { corpusCarriesDocument } from "@/api/handlers/case-law/stored-payload";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
-import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
+import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
 import { tPaginationCursor } from "@/api/lib/custom-schema";
 import { CorpusPayloadUnavailableError } from "@/api/lib/errors/tagged-errors";
-import {
-  allowsDerivedAi,
-  isRedistributable,
-} from "@/api/lib/legal-search/corpus-source";
+import { allowsDerivedAi } from "@/api/lib/legal-search/corpus-source";
 import {
   readCorpusAst,
   readCorpusPayloadOrFallback,
@@ -46,19 +48,6 @@ type PublicDecisionLanguageAlternate = {
   updatedAt: Date;
 };
 
-const LANGUAGE_SEGMENT_REGEX = /^[a-z]{2,3}(?:-[a-z0-9]{2,8})*$/u;
-
-const normalizePublicDecisionLanguage = (
-  language: string | undefined,
-): string | null => {
-  const normalized = language?.trim().toLowerCase().replace(/_/gu, "-");
-  if (!normalized) {
-    return null;
-  }
-
-  return LANGUAGE_SEGMENT_REGEX.test(normalized) ? normalized : null;
-};
-
 const dedupeAlternatesByLanguage = (
   alternates: readonly PublicDecisionLanguageAlternate[],
 ): PublicDecisionLanguageAlternate[] => {
@@ -81,46 +70,41 @@ const dedupeAlternatesByLanguage = (
 };
 
 const listPublicDecisionLanguageAlternates = async ({
-  caseLawDb,
+  tx,
   languageGroupKey,
 }: {
-  caseLawDb: CaseLawPublicReadDb;
+  tx: CaseLawPublicReadTransaction;
   languageGroupKey: string | null;
 }): Promise<PublicDecisionLanguageAlternate[]> => {
   if (languageGroupKey === null) {
     return [];
   }
 
-  const alternates = await caseLawDb((tx) =>
-    tx
-      .select({
-        id: caseLawDecisions.id,
-        caseNumber: caseLawDecisions.caseNumber,
-        slug: caseLawDecisions.slug,
-        country: caseLawDecisions.country,
-        court: caseLawDecisions.court,
-        decisionDate: caseLawDecisions.decisionDate,
-        language: caseLawDecisions.language,
-        updatedAt: caseLawDecisions.updatedAt,
-      })
-      .from(caseLawDecisions)
-      .innerJoin(
-        caseLawSources,
-        eq(caseLawSources.id, caseLawDecisions.sourceId),
-      )
-      .where(
-        and(
-          eq(caseLawDecisions.languageGroupKey, languageGroupKey),
-          redistributableCaseLawSource,
-        ),
-      )
-      .orderBy(asc(caseLawDecisions.language), asc(caseLawDecisions.id))
-      // Bound the per-group read: a languageGroupKey normally holds only this
-      // decision's language variants, but a malformed/over-merged key could
-      // match many rows and make this public read unbounded — the sitemap path
-      // caps the same read for the same reason. Capped variants still dedupe.
-      .limit(LIMITS.caseLawLanguageAlternatesPerGroupMax),
-  );
+  const alternates = await tx
+    .select({
+      id: caseLawDecisions.id,
+      caseNumber: caseLawDecisions.caseNumber,
+      slug: caseLawDecisions.slug,
+      country: caseLawDecisions.country,
+      court: caseLawDecisions.court,
+      decisionDate: caseLawDecisions.decisionDate,
+      language: caseLawDecisions.language,
+      updatedAt: caseLawDecisions.updatedAt,
+    })
+    .from(caseLawDecisions)
+    .innerJoin(caseLawSources, eq(caseLawSources.id, caseLawDecisions.sourceId))
+    .where(
+      and(
+        eq(caseLawDecisions.languageGroupKey, languageGroupKey),
+        redistributableCaseLawSource,
+      ),
+    )
+    .orderBy(asc(caseLawDecisions.language), asc(caseLawDecisions.id))
+    // Bound the per-group read: a languageGroupKey normally holds only this
+    // decision's language variants, but a malformed/over-merged key could
+    // match many rows and make this public read unbounded — the sitemap path
+    // caps the same read for the same reason. Capped variants still dedupe.
+    .limit(LIMITS.caseLawLanguageAlternatesPerGroupMax);
   const dedupedAlternates = dedupeAlternatesByLanguage(alternates);
 
   return dedupedAlternates.length > 1 ? dedupedAlternates : [];
@@ -133,9 +117,12 @@ export const readDecisionQuerySchema = t.Object({
 });
 
 type ReadDecisionOptions = {
-  caseLawDb: CaseLawPublicReadDb;
   citationsCursor?: string | null | undefined;
-  decisionId: SafeId<"caseLawDecision">;
+  /**
+   * Gated upstream, and the only database handle this read gets: its rows
+   * come from the transaction that approved it.
+   */
+  subject: RedistributableDecisionSubject;
 };
 
 const CITATION_STREAM_CURSOR_STATUS = {
@@ -260,81 +247,77 @@ const emptyCitationPage = () => ({
 });
 
 export const readDecisionHandler = async ({
-  caseLawDb,
   citationsCursor,
-  decisionId,
+  subject: { id: decisionId, tx },
 }: ReadDecisionOptions) => {
   const citationCursors = decodeDecisionCitationCursor(citationsCursor);
   if (citationCursors === null) {
     return status(400, { message: "Invalid cursor" });
   }
 
-  const decision = await caseLawDb((tx) =>
-    tx.query.caseLawDecisions.findFirst({
-      where: { id: { eq: decisionId } },
-      columns: {
-        id: true,
-        caseNumber: true,
-        slug: true,
-        ecli: true,
-        court: true,
-        country: true,
-        language: true,
-        languageGroupKey: true,
-        decisionDate: true,
-        decisionType: true,
-        documentAst: true,
-        sourceUrl: true,
-        documentUrl: true,
-        metadata: true,
-        createdAt: true,
-        updatedAt: true,
-        // Object-storage keys: never returned to the client, only used
-        // to fetch canonical payloads when corpus storage is enabled.
-        astS3Key: true,
-        textS3Key: true,
-        contentHash: true,
-        redactedAt: true,
-        // fulltext: only as fallback when no AST
-        // sections: frontend doesn't use these
+  const decision = await tx.query.caseLawDecisions.findFirst({
+    where: { id: { eq: decisionId } },
+    columns: {
+      id: true,
+      caseNumber: true,
+      slug: true,
+      ecli: true,
+      court: true,
+      country: true,
+      language: true,
+      languageGroupKey: true,
+      decisionDate: true,
+      decisionType: true,
+      documentAst: true,
+      sourceUrl: true,
+      documentUrl: true,
+      metadata: true,
+      createdAt: true,
+      updatedAt: true,
+      // Object-storage keys: never returned to the client, only used
+      // to fetch canonical payloads when corpus storage is enabled.
+      astS3Key: true,
+      textS3Key: true,
+      contentHash: true,
+      redactedAt: true,
+      // fulltext: only as fallback when no AST
+      // sections: frontend doesn't use these
+    },
+    with: {
+      source: {
+        // descriptor: only for `allowsDerivedAi` below, never returned to
+        // the client. Redistribution was decided when the subject was
+        // resolved.
+        columns: { id: true, name: true, adapterKey: true, descriptor: true },
       },
-      with: {
-        source: {
-          // descriptor: only for the redistribution gate below,
-          // never returned to the client.
-          columns: { id: true, name: true, adapterKey: true, descriptor: true },
-        },
-      },
-    }),
-  );
+    },
+  });
 
   if (!decision) {
-    return status(404, { message: "Decision not found" });
+    // The subject existed moments ago; a redaction can race the read.
+    return status(404, DECISION_NOT_FOUND);
   }
 
   const source =
     decision.source ?? panic("Case-law decision has no source relation");
-  if (!isRedistributable(source.descriptor)) {
-    return status(404, { message: "Decision not found" });
-  }
 
   const [languageAlternates, citationsFromPage, citationsToPage] =
     await Promise.all([
       listPublicDecisionLanguageAlternates({
-        caseLawDb,
+        tx,
         languageGroupKey: decision.languageGroupKey,
       }),
       citationCursors.from.status === CITATION_STREAM_CURSOR_STATUS.EXHAUSTED
         ? emptyCitationPage()
         : listOutgoingDecisionCitations({
-            caseLawDb,
+            tx,
             cursor: citationPageCursor(citationCursors.from),
             decisionId,
           }),
       citationCursors.to.status === CITATION_STREAM_CURSOR_STATUS.EXHAUSTED
         ? emptyCitationPage()
         : listIncomingDecisionCitations({
-            caseLawDb,
+            tx,
             cursor: citationPageCursor(citationCursors.to),
             decisionId,
           }),
@@ -370,7 +353,7 @@ export const readDecisionHandler = async ({
       textS3Key: decision.textS3Key,
       contentHash: decision.contentHash,
       decisionId,
-      caseLawDb,
+      tx,
     });
     fulltext = textRead.payload;
     corpusPayloadUnavailable = corpusPayloadUnavailable || textRead.unavailable;
@@ -398,15 +381,13 @@ export const readDecisionHandler = async ({
           pgAstPresent: decision.documentAst !== null,
           resolvedFulltext: fulltext,
           readTextColumnWritten: async () => {
-            const [row] = await caseLawDb((tx) =>
-              tx
-                .select({
-                  written: sql<boolean>`${caseLawDecisions.fulltext} IS NOT NULL`,
-                })
-                .from(caseLawDecisions)
-                .where(eq(caseLawDecisions.id, decisionId))
-                .limit(1),
-            );
+            const [row] = await tx
+              .select({
+                written: sql<boolean>`${caseLawDecisions.fulltext} IS NOT NULL`,
+              })
+              .from(caseLawDecisions)
+              .where(eq(caseLawDecisions.id, decisionId))
+              .limit(1);
             return row?.written ?? null;
           },
         })
@@ -450,51 +431,6 @@ export const readDecisionHandler = async ({
     languageAlternates,
     fulltext,
   };
-};
-
-type ReadDecisionBySlugOptions = {
-  caseLawDb: CaseLawPublicReadDb;
-  citationsCursor?: string | null | undefined;
-  language?: string | undefined;
-  slug: string;
-};
-
-export const readDecisionBySlugHandler = async ({
-  caseLawDb,
-  citationsCursor,
-  language,
-  slug,
-}: ReadDecisionBySlugOptions) => {
-  const normalizedLanguage = normalizePublicDecisionLanguage(language);
-  if (language !== undefined && normalizedLanguage === null) {
-    return status(404, { message: "Decision not found" });
-  }
-
-  const decision = await caseLawDb((tx) =>
-    tx
-      .select({ id: caseLawDecisions.id })
-      .from(caseLawDecisions)
-      .where(
-        normalizedLanguage
-          ? and(
-              eq(caseLawDecisions.slug, slug),
-              sql`replace(lower(${caseLawDecisions.language}), '_', '-') = ${normalizedLanguage}`,
-            )
-          : eq(caseLawDecisions.slug, slug),
-      )
-      .limit(1),
-  );
-
-  const firstDecision = decision.at(0);
-  if (!firstDecision) {
-    return status(404, { message: "Decision not found" });
-  }
-
-  return await readDecisionHandler({
-    caseLawDb,
-    citationsCursor,
-    decisionId: firstDecision.id,
-  });
 };
 
 /**
@@ -721,22 +657,20 @@ type ResolveFulltextInput = {
   textS3Key: string | null;
   contentHash: string | null;
   decisionId: SafeId<"caseLawDecision">;
-  caseLawDb: CaseLawPublicReadDb;
+  tx: CaseLawPublicReadTransaction;
 };
 
 const resolveFulltext = async ({
   textS3Key,
   contentHash,
   decisionId,
-  caseLawDb,
+  tx,
 }: ResolveFulltextInput): Promise<CorpusReadOutcome<string>> => {
   const postgresFulltext = async (): Promise<string | null> => {
-    const fallback = await caseLawDb((tx) =>
-      tx.query.caseLawDecisions.findFirst({
-        where: { id: { eq: decisionId } },
-        columns: { fulltext: true },
-      }),
-    );
+    const fallback = await tx.query.caseLawDecisions.findFirst({
+      where: { id: { eq: decisionId } },
+      columns: { fulltext: true },
+    });
     return fallback?.fulltext ?? null;
   };
 

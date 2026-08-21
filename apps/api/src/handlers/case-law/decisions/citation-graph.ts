@@ -12,12 +12,11 @@ import {
   caseLawSources,
 } from "@/api/db/schema";
 import { CITATION_KIND } from "@/api/handlers/case-law/citation-kind";
+import type { RedistributableDecisionSubject } from "@/api/handlers/case-law/decisions/public-subject";
 import { POLARITIES, POLARITY } from "@/api/handlers/case-law/polarity/consts";
 import type { SafeId } from "@/api/lib/branded-types";
-import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { redistributableCaseLawSourceFor } from "@/api/lib/case-law/redistribution";
 import { tPaginationCursor } from "@/api/lib/custom-schema";
-import { isRedistributable } from "@/api/lib/legal-search/corpus-source";
 import { LIMITS } from "@/api/lib/limits";
 import {
   decodePaginationCursor,
@@ -215,103 +214,71 @@ const visibleFor = ({
  */
 const precedentOnly = eq(caseLawCitations.kind, CITATION_KIND.PRECEDENT);
 
-/**
- * Whether the subject decision may be shown at all. The far-end gate in
- * `visibleFor` protects the other side of every edge; this protects the
- * decision the request names, whose outgoing citation texts and graph
- * counts are as much its content as its full text is. Same answer as the
- * decision read: a restricted subject does not exist.
- */
-const subjectIsRedistributable = async (
-  caseLawDb: CaseLawPublicReadDb,
-  decisionId: SafeId<"caseLawDecision">,
-): Promise<boolean> => {
-  const subject = await caseLawDb((tx) =>
-    tx
-      .select({ descriptor: caseLawSources.descriptor })
-      .from(caseLawDecisions)
-      .innerJoin(
-        caseLawSources,
-        eq(caseLawSources.id, caseLawDecisions.sourceId),
-      )
-      .where(eq(caseLawDecisions.id, decisionId))
-      .limit(1),
-  );
-  const row = subject.at(0);
-  return row !== undefined && isRedistributable(row.descriptor);
-};
-
 type ListDecisionCitationsOptions = {
-  caseLawDb: CaseLawPublicReadDb;
-  decisionId: SafeId<"caseLawDecision">;
+  /**
+   * Gated upstream, and the only database handle this read gets: its rows
+   * come from the transaction that approved it.
+   */
+  subject: RedistributableDecisionSubject;
   query: ListDecisionCitationsQuery;
 };
 
 export const listDecisionCitationsHandler = async ({
-  caseLawDb,
-  decisionId,
+  subject: { id: decisionId, tx },
   query,
 }: ListDecisionCitationsOptions) => {
   const cursorId = decodeCitationCursor(query.cursor);
   if (cursorId === null) {
     return status(400, { message: "Invalid cursor" });
   }
-  if (!(await subjectIsRedistributable(caseLawDb, decisionId))) {
-    return status(404, { message: "Decision not found" });
-  }
   const spec = DIRECTION_SPECS[query.direction];
 
-  const rows = await caseLawDb((tx) => {
-    const candidates = tx
-      .select({
-        id: caseLawCitations.id,
-        citationText: caseLawCitations.citationText,
-        relatedId: spec.related,
-        sectionIndex: caseLawCitations.sectionIndex,
-        polarity: caseLawCitations.polarity,
-      })
-      .from(caseLawCitations)
-      .where(
-        and(
-          eq(spec.anchor, decisionId),
-          precedentOnly,
-          cursorId === undefined
-            ? undefined
-            : gt(caseLawCitations.id, cursorId),
-        ),
-      )
-      .orderBy(asc(caseLawCitations.id))
-      .limit(LIMITS.caseLawDecisionCitationPageSize + 1)
-      .as("citation_graph_candidates");
-
-    return tx
-      .select({
-        id: candidates.id,
-        citationText: candidates.citationText,
-        sectionIndex: candidates.sectionIndex,
-        polarity: candidates.polarity,
-        visible: visibleFor({
-          keepsUnresolved: spec.keepsUnresolved,
-          related: candidates.relatedId,
-        }),
-        decision: {
-          id: relatedDecision.id,
-          caseNumber: relatedDecision.caseNumber,
-          country: relatedDecision.country,
-          court: relatedDecision.court,
-          decisionDate: relatedDecision.decisionDate,
-          decisionType: relatedDecision.decisionType,
-          ecli: relatedDecision.ecli,
-          language: relatedDecision.language,
-          slug: relatedDecision.slug,
-        },
-      })
-      .from(candidates)
-      .leftJoin(relatedDecision, eq(relatedDecision.id, candidates.relatedId))
-      .leftJoin(relatedSource, eq(relatedSource.id, relatedDecision.sourceId))
-      .orderBy(asc(candidates.id))
-      .limit(LIMITS.caseLawDecisionCitationPageSize + 1);
-  });
+  const candidates = tx
+    .select({
+      id: caseLawCitations.id,
+      citationText: caseLawCitations.citationText,
+      relatedId: spec.related,
+      sectionIndex: caseLawCitations.sectionIndex,
+      polarity: caseLawCitations.polarity,
+    })
+    .from(caseLawCitations)
+    .where(
+      and(
+        eq(spec.anchor, decisionId),
+        precedentOnly,
+        cursorId === undefined ? undefined : gt(caseLawCitations.id, cursorId),
+      ),
+    )
+    .orderBy(asc(caseLawCitations.id))
+    .limit(LIMITS.caseLawDecisionCitationPageSize + 1)
+    .as("citation_graph_candidates");
+  const rows = await tx
+    .select({
+      id: candidates.id,
+      citationText: candidates.citationText,
+      sectionIndex: candidates.sectionIndex,
+      polarity: candidates.polarity,
+      visible: visibleFor({
+        keepsUnresolved: spec.keepsUnresolved,
+        related: candidates.relatedId,
+      }),
+      decision: {
+        id: relatedDecision.id,
+        caseNumber: relatedDecision.caseNumber,
+        country: relatedDecision.country,
+        court: relatedDecision.court,
+        decisionDate: relatedDecision.decisionDate,
+        decisionType: relatedDecision.decisionType,
+        ecli: relatedDecision.ecli,
+        language: relatedDecision.language,
+        slug: relatedDecision.slug,
+      },
+    })
+    .from(candidates)
+    .leftJoin(relatedDecision, eq(relatedDecision.id, candidates.relatedId))
+    .leftJoin(relatedSource, eq(relatedSource.id, relatedDecision.sourceId))
+    .orderBy(asc(candidates.id))
+    .limit(LIMITS.caseLawDecisionCitationPageSize + 1);
 
   return createScannedPage(rows);
 };
@@ -344,8 +311,11 @@ const emptyTreatmentCounts = (): CitationTreatmentCounts => ({
 });
 
 type SummarizeDecisionCitationsOptions = {
-  caseLawDb: CaseLawPublicReadDb;
-  decisionId: SafeId<"caseLawDecision">;
+  /**
+   * Gated upstream, and the only database handle this read gets: its rows
+   * come from the transaction that approved it.
+   */
+  subject: RedistributableDecisionSubject;
   /** The year the timeline ends; injectable so a test can pin it. */
   currentYear?: number;
 };
@@ -375,13 +345,9 @@ type SummaryRow = {
  * totals and its years; never a walk over pages.
  */
 export const summarizeDecisionCitationsHandler = async ({
-  caseLawDb,
-  decisionId,
+  subject: { id: decisionId, tx },
   currentYear = new Date().getUTCFullYear(),
 }: SummarizeDecisionCitationsOptions) => {
-  if (!(await subjectIsRedistributable(caseLawDb, decisionId))) {
-    return status(404, { message: "Decision not found" });
-  }
   const scopeFor = (direction: CitationDirection) => {
     const spec = DIRECTION_SPECS[direction];
     return and(
@@ -402,47 +368,45 @@ export const summarizeDecisionCitationsHandler = async ({
   END`;
   const count = sql<number>`count(*)::int`;
 
-  const rows = await caseLawDb((tx) => {
-    const incoming = tx
-      .select({
-        direction: sql<CitationDirection>`'incoming'`.as("direction"),
-        year: citingYearInSpan.as("year"),
-        polarity: caseLawCitations.polarity,
-        count: count.as("count"),
-      })
-      .from(caseLawCitations)
-      .innerJoin(
-        relatedDecision,
-        eq(relatedDecision.id, DIRECTION_SPECS.incoming.related),
-      )
-      .leftJoin(relatedSource, eq(relatedSource.id, relatedDecision.sourceId))
-      .where(scopeFor("incoming"))
-      // By ordinal: the year expression binds its bounds as parameters, and
-      // a second rendering would bind fresh ones the planner cannot match.
-      .groupBy(sql`2`, caseLawCitations.polarity);
+  const incoming = tx
+    .select({
+      direction: sql<CitationDirection>`'incoming'`.as("direction"),
+      year: citingYearInSpan.as("year"),
+      polarity: caseLawCitations.polarity,
+      count: count.as("count"),
+    })
+    .from(caseLawCitations)
+    .innerJoin(
+      relatedDecision,
+      eq(relatedDecision.id, DIRECTION_SPECS.incoming.related),
+    )
+    .leftJoin(relatedSource, eq(relatedSource.id, relatedDecision.sourceId))
+    .where(scopeFor("incoming"))
+    // By ordinal: the year expression binds its bounds as parameters, and
+    // a second rendering would bind fresh ones the planner cannot match.
+    .groupBy(sql`2`, caseLawCitations.polarity);
 
-    const outgoing = tx
-      .select({
-        direction: sql<CitationDirection>`'outgoing'`.as("direction"),
-        year: sql<number | null>`NULL::int`.as("year"),
-        polarity: caseLawCitations.polarity,
-        count: count.as("count"),
-      })
-      .from(caseLawCitations)
-      .leftJoin(
-        relatedDecision,
-        eq(relatedDecision.id, DIRECTION_SPECS.outgoing.related),
-      )
-      .leftJoin(relatedSource, eq(relatedSource.id, relatedDecision.sourceId))
-      .where(scopeFor("outgoing"))
-      .groupBy(caseLawCitations.polarity);
+  const outgoing = tx
+    .select({
+      direction: sql<CitationDirection>`'outgoing'`.as("direction"),
+      year: sql<number | null>`NULL::int`.as("year"),
+      polarity: caseLawCitations.polarity,
+      count: count.as("count"),
+    })
+    .from(caseLawCitations)
+    .leftJoin(
+      relatedDecision,
+      eq(relatedDecision.id, DIRECTION_SPECS.outgoing.related),
+    )
+    .leftJoin(relatedSource, eq(relatedSource.id, relatedDecision.sourceId))
+    .where(scopeFor("outgoing"))
+    .groupBy(caseLawCitations.polarity);
 
-    // One row per (direction, year-or-null, stored polarity): the span and
-    // the polarity check constraint already cap it, this states the cap.
-    return unionAll(incoming, outgoing).limit(
-      (CITATION_TIMELINE_MAX_YEARS + 2) * (POLARITIES.length + 1),
-    );
-  });
+  // One row per (direction, year-or-null, stored polarity): the span and
+  // the polarity check constraint already cap it, this states the cap.
+  const rows = await unionAll(incoming, outgoing).limit(
+    (CITATION_TIMELINE_MAX_YEARS + 2) * (POLARITIES.length + 1),
+  );
 
   const totals: Record<CitationDirection, CitationTreatmentCounts> = {
     incoming: emptyTreatmentCounts(),

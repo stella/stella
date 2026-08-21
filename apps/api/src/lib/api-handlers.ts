@@ -1142,9 +1142,20 @@ export type PublicHandlerConfig = InputSchema &
     mcp: McpExposure;
   };
 
-type PublicHandlerContext<
+export type PublicHandlerContext<
   TConfig extends PublicHandlerConfig = PublicHandlerConfig,
 > = Context<UnwrapRoute<Omit<TConfig, "mcp" | "description" | "access">>>;
+
+/**
+ * Handlers this factory produced. A public route census asserts that every
+ * mounted handler is in here, which a naming convention cannot guarantee:
+ * a raw function passed to `.get()` reads the same at the call site.
+ */
+const safePublicHandlers = new WeakSet<object>();
+
+/** Whether a mounted route handler came out of `createSafePublicHandler`. */
+export const isSafePublicHandler = (handler: unknown): boolean =>
+  typeof handler === "function" && safePublicHandlers.has(handler);
 
 /**
  * For unauthenticated routes that intentionally expose public data.
@@ -1157,8 +1168,11 @@ export const createSafePublicHandler = <
 >(
   config: TConfig,
   handler: SafeHandlerFn<PublicHandlerContext<TConfig>, TResult>,
-): SafeHandlerDefinition<TConfig, PublicHandlerContext<TConfig>, TResult> =>
-  createSafeDirectHandler(config, handler);
+): SafeHandlerDefinition<TConfig, PublicHandlerContext<TConfig>, TResult> => {
+  const definition = createSafeDirectHandler(config, handler);
+  safePublicHandlers.add(definition.handler);
+  return definition;
+};
 
 type LogAndCaptureSafeErrorProps = {
   request: Request;

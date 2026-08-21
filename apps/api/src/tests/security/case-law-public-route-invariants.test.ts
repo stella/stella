@@ -2,6 +2,8 @@ import { describe, expect, test } from "bun:test";
 import nodePath from "node:path";
 
 import type { ScopedDb } from "@/api/db/safe-db";
+import { publicCaseLawRoute } from "@/api/handlers/case-law/public-routes";
+import { isSafePublicHandler } from "@/api/lib/api-handlers";
 import type {
   CaseLawPublicReadDb,
   CaseLawPublicReadTransaction,
@@ -18,6 +20,8 @@ void scopedDbIsPublicReadDb;
 const ROUTES_FILE = "apps/api/src/handlers/case-law/public-routes.ts";
 const LIST_DECISIONS_FILE = "apps/api/src/handlers/case-law/decisions/list.ts";
 const READ_DECISION_FILE = "apps/api/src/handlers/case-law/decisions/get.ts";
+const PUBLIC_SUBJECT_FILE =
+  "apps/api/src/handlers/case-law/decisions/public-subject.ts";
 const DEFERRED_DOCUMENT_FILE =
   "apps/api/src/handlers/case-law/decisions/get-deferred-document.ts";
 const FACETS_DECISIONS_FILE =
@@ -46,6 +50,29 @@ const DECISION_PROVISIONS_FILE =
 const CITING_DECISIONS_FILE =
   "apps/api/src/handlers/case-law/provisions/citing-decisions.ts";
 
+/**
+ * Every route this slice mounts, sorted.
+ *
+ * The factory census below filters Elysia's internal entries out before it
+ * asks which handlers carry the stamp. Pinning the surviving set here is what
+ * stops that filter from excusing the census: a filter that dropped real
+ * routes, or a route that quietly disappeared, fails this list rather than
+ * passing an empty check.
+ */
+const PUBLIC_CASE_LAW_ROUTES = [
+  "GET /case/decisions",
+  "GET /case/decisions/:decisionId",
+  "GET /case/decisions/:decisionId/citations",
+  "GET /case/decisions/:decisionId/citations/summary",
+  "GET /case/decisions/:decisionId/provisions",
+  "GET /case/decisions/by-slug/:slug",
+  "GET /case/decisions/facets",
+  "GET /case/provisions/citing-decisions",
+  "GET /case/sitemap/decisions/shard",
+  "GET /case/sitemap/shards",
+  "POST /case/decisions/search",
+] as const;
+
 const repoRoot = nodePath.resolve(import.meta.dir, "../../../../..");
 const readSource = async (path: string) =>
   await Bun.file(nodePath.resolve(repoRoot, path)).text();
@@ -53,6 +80,8 @@ const readSource = async (path: string) =>
 const readRoutesSource = async () => await readSource(ROUTES_FILE);
 const readListSource = async () => await readSource(LIST_DECISIONS_FILE);
 const readDecisionSource = async () => await readSource(READ_DECISION_FILE);
+const readPublicSubjectSource = async () =>
+  await readSource(PUBLIC_SUBJECT_FILE);
 const readDeferredDocumentSource = async () =>
   await readSource(DEFERRED_DOCUMENT_FILE);
 const readFacetsSource = async () => await readSource(FACETS_DECISIONS_FILE);
@@ -172,30 +201,27 @@ describe("public case-law route boundary", () => {
     expect(block).not.toContain("permissions:");
   });
 
-  test("public read handlers use the public-safe handler factory", async () => {
-    const source = await readRoutesSource();
+  test("public read handlers use the public-safe handler factory", () => {
+    // Was a grep for nine `const x = createSafePublicHandler` lines, which
+    // could not see a tenth route or a handler renamed around it. The factory
+    // now stamps what it produces, so the census covers every mounted route
+    // and cannot be satisfied by naming.
+    //
+    // Elysia mounts internal entries (HEAD, error pages) whose handler is not
+    // one of ours; they carry no stamp and would read as ungoverned. The
+    // filter below drops them, and the path census that follows keeps the
+    // filter from becoming the escape hatch: dropping everything fails there.
+    const declared = publicCaseLawRoute.routes.filter(
+      (route) => typeof route.handler === "function",
+    );
+    const ungoverned = declared
+      .filter((route) => !isSafePublicHandler(route.handler))
+      .map((route) => `${route.method} ${route.path}`);
 
-    expect(source).toContain("const listDecisions = createSafePublicHandler");
-    expect(source).toContain(
-      "const listDecisionFacets = createSafePublicHandler",
-    );
-    expect(source).toContain("const readDecision = createSafePublicHandler");
-    expect(source).toContain(
-      "const readDecisionBySlug = createSafePublicHandler",
-    );
-    expect(source).toContain("const searchDecisions = createSafePublicHandler");
-    expect(source).toContain(
-      "const listSitemapShardDecisions = createSafePublicHandler",
-    );
-    expect(source).toContain(
-      "const listSitemapShards = createSafePublicHandler",
-    );
-    expect(source).toContain(
-      "const listDecisionProvisions = createSafePublicHandler",
-    );
-    expect(source).toContain(
-      "const listCitingDecisions = createSafePublicHandler",
-    );
+    expect(ungoverned).toEqual([]);
+    expect(
+      declared.map((route) => `${route.method} ${route.path}`).sort(),
+    ).toEqual([...PUBLIC_CASE_LAW_ROUTES]);
   });
 
   test("public decision payload does not expose persisted AI analysis", async () => {
@@ -206,17 +232,24 @@ describe("public case-law route boundary", () => {
   });
 
   test("public decision payload is an explicit allowlist", async () => {
-    const source = await readDecisionSource();
+    const [source, subjectSource] = await Promise.all([
+      readDecisionSource(),
+      readPublicSubjectSource(),
+    ]);
 
     expect(source).not.toContain("...decision");
     expect(source).toContain("id: decision.id");
     expect(source).toContain("caseNumber: decision.caseNumber");
     expect(source).toContain("slug: decision.slug");
     expect(source).toContain("languageAlternates,");
-    expect(source).toContain("normalizePublicDecisionLanguage");
-    expect(source).toContain("replace(lower(");
     expect(source).toContain("caseLawDecisions.language");
     expect(source).toContain("fulltext,");
+    // Slug lookup and its language matching moved into the gate module, which
+    // resolves every subject. Both halves of the normalisation are pinned
+    // here; `public-subject.db.test.ts` drives them against Postgres.
+    expect(subjectSource).toContain("normalizePublicDecisionLanguage");
+    expect(subjectSource).toContain("replace(lower(");
+    expect(subjectSource).toContain("'_', '-'");
   });
 
   test("public facets payload is aggregate public data only", async () => {
@@ -337,7 +370,15 @@ describe("public case-law route boundary", () => {
 
     expect(listSource).toContain("redistributableCaseLawSource");
     expect(decisionSource).toContain("redistributableCaseLawSource");
-    expect(decisionSource).toContain("isRedistributable");
+    // The per-subject gate moved out of the handler and into the factory that
+    // mints its subject, so it is enforced for every subject route at once;
+    // `public-subject.test.ts` censuses those routes in both directions.
+    // The call, not the import: a gate reduced to an unused import still reads
+    // as present. `public-subject.db.test.ts` drives a restricted subject to
+    // 404 for the behaviour itself.
+    expect(await readPublicSubjectSource()).toContain(
+      "!isRedistributable(row.descriptor)",
+    );
     expect(pgFtsFacetsSource).toContain("redistributableCaseLawSource");
     // The corpus-index facets aggregate the index rather than the table, so
     // the gate is two-sided. Projection keeps ineligible sources out of the
@@ -367,7 +408,14 @@ describe("public case-law route boundary", () => {
       [readSource(DECISION_PROVISIONS_FILE), readSource(CITING_DECISIONS_FILE)],
     );
 
-    expect(decisionProvisionsSource).toContain("redistributableCaseLawSource");
+    // Provisions read one decision's rows, so the gate is the subject they
+    // require rather than a join they must remember: the handler cannot be
+    // called with a bare id. Citing decisions still span sources and keep
+    // their per-row join.
+    expect(decisionProvisionsSource).toContain(
+      "subject: RedistributableDecisionSubject",
+    );
+    expect(decisionProvisionsSource).not.toContain("decisionId: SafeId");
     expect(citingDecisionsSource).toContain("redistributableCaseLawSource");
   });
 });
