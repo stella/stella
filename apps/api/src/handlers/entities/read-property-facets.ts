@@ -22,7 +22,7 @@ const config = {
   body: t.Object({
     propertyId: tSafeId("property"),
     filters: t.Optional(
-      t.Array(tConditionNode, { maxItems: LIMITS.propertiesCount }),
+      t.Array(tConditionNode, { maxItems: LIMITS.viewFiltersCount }),
     ),
   }),
 } satisfies HandlerConfig;

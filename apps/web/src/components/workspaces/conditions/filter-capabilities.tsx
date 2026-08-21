@@ -1,3 +1,5 @@
+import { VIEW_FILTERS_MAX } from "@stll/api-contract";
+
 import type { ConditionCapabilities } from "@/components/conditions/condition-builder";
 import {
   isMultiValue,
@@ -31,6 +33,9 @@ export const filterCapabilities = ({
 }: FilterCapabilitiesArgs): ConditionCapabilities => ({
   fields,
   allowNesting,
+  // Every filter surface posts its tree through the API's condition contract,
+  // which caps one group's children at this bound.
+  maxChildren: VIEW_FILTERS_MAX,
   renderValueEditor: ({ editorKind, field, node, operator, emit }) => {
     // Only the select editor is facet-aware; every other kind falls through to
     // the shared built-ins (text / int / date / none) by returning null.

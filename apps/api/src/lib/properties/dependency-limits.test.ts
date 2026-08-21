@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import { LIMITS } from "@/api/lib/limits";
 import {
   assertPropertyDependencyReadWithinLimit,
   PROPERTY_DEPENDENCY_LIMITS,
@@ -24,4 +25,19 @@ describe("property dependency read limits", () => {
       ).toThrow(`Property dependency ${scope} invariant exceeded`);
     });
   }
+
+  test("the workspace read is the linear product of the write-time caps", () => {
+    // The per-property cap is a fixed fan-in, not derived from the column
+    // cap, so raising the column cap grows this read linearly.
+    expect(PROPERTY_DEPENDENCY_LIMITS.perProperty).toBe(
+      LIMITS.propertyDependenciesPerProperty,
+    );
+    expect(PROPERTY_DEPENDENCY_LIMITS.perProperty).toBeLessThan(
+      LIMITS.propertiesCount - 1,
+    );
+    expect(PROPERTY_DEPENDENCY_LIMITS.perWorkspace).toBe(
+      PROPERTY_DEPENDENCY_LIMITS.ownersPerWorkspace *
+        PROPERTY_DEPENDENCY_LIMITS.perProperty,
+    );
+  });
 });

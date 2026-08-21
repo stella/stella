@@ -45,6 +45,15 @@ export const PROPERTIES_PER_WORKSPACE_MAX = 300;
 export const VIEW_SORTS_MAX = 8;
 
 /**
+ * Max top-level filter conditions one view layout or one list/window request
+ * may carry, and the max children of any one condition group. Independent of
+ * the properties cap: a filter set is a hand-built predicate list, not one
+ * entry per column. The client disables the add-filter affordances at the
+ * cap; the server rejects past it.
+ */
+export const VIEW_FILTERS_MAX = 32;
+
+/**
  * Max entities (rows) one matter may hold. The client disables the
  * add-row affordances at the cap; the server rejects past it.
  */

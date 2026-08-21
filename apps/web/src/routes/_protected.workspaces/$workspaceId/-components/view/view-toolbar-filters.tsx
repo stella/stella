@@ -13,6 +13,7 @@ import { useTranslations } from "use-intl";
 import {
   ENTITY_PRIORITIES as PRIORITY_VALUES,
   TASK_STATUSES as STATUS_VALUES,
+  VIEW_FILTERS_MAX,
 } from "@stll/api-contract";
 import type { ConditionNode, GroupNode } from "@stll/conditions";
 import { Button } from "@stll/ui/button";
@@ -119,6 +120,9 @@ export const FilterChips = ({
   const pickerFields = hasKindFilter
     ? fields.filter((field) => field.operand.type !== "kind")
     : fields;
+  // The backend caps a layout's top-level filters; disable the add trigger at
+  // the cap so a view cannot be edited into a layout the server rejects.
+  const atFilterCap = filters.length >= VIEW_FILTERS_MAX;
 
   // The seeded group lands at the current end, so open the chip at that index.
   const addAdvanced = () => {
@@ -141,6 +145,7 @@ export const FilterChips = ({
           <Button
             aria-label={t("workspaces.views.filter")}
             className="gap-1.5"
+            disabled={atFilterCap}
             size="xs"
             title={t("workspaces.views.filter")}
             variant="ghost"
@@ -195,6 +200,7 @@ export const FilterChips = ({
           <Button
             aria-label={t("workspaces.views.filter")}
             className="gap-1.5"
+            disabled={atFilterCap}
             size="xs"
             title={t("workspaces.views.filter")}
             variant="ghost"

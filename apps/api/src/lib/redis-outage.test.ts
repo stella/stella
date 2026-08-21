@@ -62,6 +62,8 @@ const SETTLE_BUDGET_MS = 5000;
 
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_MAX = 10;
+// Time for a connect rejected by `kill()` to reach its handler.
+const CONNECT_SETTLE_MS = 100;
 const RATE_LIMIT_OPTIONS = {
   countFailedRequest: false,
   duration: RATE_LIMIT_WINDOW_MS,
@@ -172,6 +174,33 @@ describe("rate limiting during a Valkey outage", () => {
       RATE_LIMIT_MAX,
     );
     context.kill();
+  });
+
+  test("the eager connect neither throws at construction nor leaks past kill", async () => {
+    const operations: string[] = [];
+    const context = new RedisRateLimitContext({
+      failurePolicy: "fail_open_local",
+      onRedisError: (_error, operation) => {
+        operations.push(operation);
+      },
+    });
+    context.init(RATE_LIMIT_OPTIONS);
+
+    // Requests issued while the client is still trying to connect take the
+    // same fail-open path as any other outage.
+    const first = await settle(
+      context.increment("outage-cold", RATE_LIMIT_WINDOW_MS),
+    );
+    expect(first.status === "ok" ? first.value.count : null).toBe(1);
+    expect(operations).toContain("increment");
+
+    // Closing the context rejects the pending connect. That rejection belongs
+    // to a client the context no longer owns: it must neither be reported as
+    // a connect failure nor escape as an unhandled rejection, which would fail
+    // this file.
+    context.kill();
+    await Bun.sleep(CONNECT_SETTLE_MS);
+    expect(operations).not.toContain("connect");
   });
 
   test("auth rate limiting keeps limiting from its per-process fallback", async () => {

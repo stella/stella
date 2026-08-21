@@ -1,8 +1,9 @@
 import { Result, TaggedError } from "better-result";
 import type { Context, Generator, Options } from "elysia-rate-limit";
 
+import { detached } from "@/api/lib/detached";
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
-import { errorTag } from "@/api/lib/errors/utils";
+import { connectionErrorFields, errorTag } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
 import {
   InMemoryRateLimitContext,
@@ -66,10 +67,18 @@ type RedisRateLimitFailurePolicy =
 
 type RedisRateLimitClient = {
   close?: () => void;
+  /**
+   * Opens the socket ahead of the first command. The client runs with the
+   * offline queue disabled, so a command issued before the socket is up
+   * rejects at once instead of waiting; connecting at construction keeps the
+   * first requests after a process start on Redis rather than on the
+   * per-process fallback.
+   */
+  connect?: () => Promise<void>;
   send: (command: string, args: string[]) => Promise<unknown>;
 };
 
-type RedisRateLimitOperation = "decrement" | "increment" | "reset";
+type RedisRateLimitOperation = "connect" | "decrement" | "increment" | "reset";
 
 type RedisRateLimitContextOptions = {
   commandTimeoutMs?: number;
@@ -151,7 +160,12 @@ export class RedisRateLimitContext implements Context {
     this.onRedisError =
       onRedisError ??
       ((error, operation) => {
+        // This sink only ever sees connection, timeout, and reply-shape
+        // errors, so the message is safe to surface (see
+        // connectionErrorFields); the key is `error.msg` to survive the
+        // logger's attribute sanitizer.
         logger.warn("api.rate_limit.redis_failed", {
+          ...connectionErrorFields(error),
           "error.type": errorTag(error),
           failurePolicy,
           operation,
@@ -163,6 +177,7 @@ export class RedisRateLimitContext implements Context {
       REFUND_PROVENANCE_CLEANUP_INTERVAL_MS,
     );
     this.refundProvenanceCleanupTimer.unref();
+    this.openRedis();
   }
 
   init(options: Omit<Options, "context">): void {
@@ -289,8 +304,12 @@ export class RedisRateLimitContext implements Context {
     this.fallback.kill();
     clearInterval(this.refundProvenanceCleanupTimer);
     this.refundProvenanceByRequest.clear();
-    this.redis?.close?.();
+    // Disown before closing: closing rejects a still-pending connect, and the
+    // client may settle that promise within the close call itself, so the
+    // handler must already see this client as replaced.
+    const redis = this.redis;
     this.redis = null;
+    redis?.close?.();
   }
 
   private evictExpiredRefundProvenance(): void {
@@ -310,9 +329,37 @@ export class RedisRateLimitContext implements Context {
     }
   }
 
+  /**
+   * Builds the client and starts connecting it without waiting: construction
+   * and the request path never block on the socket. Commands issued before
+   * the socket is up reject and take the failure policy, exactly as during an
+   * outage. The client reconnects on its own while the peer refuses, so the
+   * promise settles only once a connection exists, the client's own retries
+   * run out, or the client is closed; a rejection is reported through
+   * `onRedisError` rather than the cold-start retry ladder, whose per-attempt
+   * rejection this client never produces.
+   */
+  private openRedis(): RedisRateLimitClient {
+    const redis = this.createRedis();
+    this.redis = redis;
+    if (redis.connect === undefined) {
+      return redis;
+    }
+    detached(
+      redis.connect().catch((error: unknown) => {
+        // A client replaced or closed while still connecting is not this
+        // context's connection any more; its outcome is nobody's news.
+        if (this.redis === redis) {
+          this.onRedisError(error, "connect");
+        }
+      }),
+      "rate-limit.redis-connect",
+    );
+    return redis;
+  }
+
   private async sendCommand(command: string, args: string[]): Promise<unknown> {
-    this.redis ??= this.createRedis();
-    const redis = this.redis;
+    const redis = this.redis ?? this.openRedis();
     const result = await Result.tryPromise({
       try: async () =>
         await withCommandTimeout({
@@ -325,10 +372,10 @@ export class RedisRateLimitContext implements Context {
     });
     if (Result.isError(result)) {
       if (TimeoutError.is(result.error)) {
-        redis.close?.();
         if (this.redis === redis) {
           this.redis = null;
         }
+        redis.close?.();
       }
       throw result.error;
     }

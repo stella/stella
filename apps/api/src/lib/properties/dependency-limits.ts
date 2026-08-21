@@ -2,9 +2,16 @@ import { panic } from "better-result";
 
 import { LIMITS } from "@/api/lib/limits";
 
+/**
+ * Read bounds for the property dependency table, each the product of the
+ * write-time caps that feed it. `perProperty` is enforced on every create and
+ * update body, so a workspace holds at most `propertiesCount` owners with
+ * `perProperty` rows each: the workspace read grows linearly with the column
+ * cap, not quadratically.
+ */
 export const PROPERTY_DEPENDENCY_LIMITS = {
-  perProperty: LIMITS.propertiesCount - 1,
-  perWorkspace: LIMITS.propertiesCount * (LIMITS.propertiesCount - 1),
+  perProperty: LIMITS.propertyDependenciesPerProperty,
+  perWorkspace: LIMITS.propertiesCount * LIMITS.propertyDependenciesPerProperty,
   ownersPerWorkspace: LIMITS.propertiesCount,
 } as const;
 

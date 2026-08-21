@@ -11,6 +11,7 @@ import { Type } from "@sinclair/typebox";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
+import { VIEW_FILTERS_MAX } from "@stll/api-contract";
 import {
   BUILTIN_FIELDS,
   COMBINATORS,
@@ -52,12 +53,19 @@ const tPredicate = t.Object({
 
 const tLeaf = t.Union([tCompare, tPredicate]);
 
+/**
+ * Children one group may hold. The depth bound below limits nesting only; a
+ * single group could otherwise fan out to an unbounded list, so the total
+ * size of one tree is bounded by this per-level cap raised to the depth.
+ */
+const MAX_GROUP_CHILDREN = VIEW_FILTERS_MAX;
+
 const tGroupWith = <C extends TSchema>(children: C) =>
   t.Object({
     type: t.Literal("group"),
     combinator: t.UnionEnum([...COMBINATORS]),
     negated: t.Optional(t.Union([t.Boolean(), t.Undefined()])),
-    children: t.Array(children),
+    children: t.Array(children, { maxItems: MAX_GROUP_CHILDREN }),
   });
 
 /**
@@ -101,7 +109,7 @@ export const tCondition = t.Object({
   type: t.Literal("group"),
   combinator: t.UnionEnum([...COMBINATORS]),
   negated: t.Optional(t.Boolean()),
-  children: t.Array(tConditionNode),
+  children: t.Array(tConditionNode, { maxItems: MAX_GROUP_CHILDREN }),
 });
 
 // Fails typecheck if the TypeBox mirror admits a shape outside the canonical
