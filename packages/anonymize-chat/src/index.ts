@@ -294,6 +294,26 @@ const restoreLiteralPlaceholders = (
   return result;
 };
 
+const spanOverlapsLiteralValue = ({
+  end,
+  start,
+  text,
+  values,
+}: {
+  end: number;
+  start: number;
+  text: string;
+  values: ReadonlySet<string>;
+}): boolean => {
+  for (const value of values) {
+    const valueOffset = text.lastIndexOf(value, end - 1);
+    if (valueOffset !== -1 && valueOffset + value.length > start) {
+      return true;
+    }
+  }
+  return false;
+};
+
 const protectLiteralPlaceholders = (
   text: string,
   forcedSensitiveValues: ReadonlySet<string>,
@@ -301,29 +321,19 @@ const protectLiteralPlaceholders = (
   text: string;
   restore: (value: string) => string;
 } => {
-  const overlapsForcedSensitiveValue = (
-    placeholderOffset: number,
-    placeholderLength: number,
-  ): boolean => {
-    const placeholderEnd = placeholderOffset + placeholderLength;
-    for (const value of forcedSensitiveValues) {
-      const valueOffset = text.lastIndexOf(value, placeholderEnd - 1);
-      if (
-        valueOffset !== -1 &&
-        valueOffset + value.length > placeholderOffset
-      ) {
-        return true;
-      }
-    }
-    return false;
-  };
-
   const restoreMap = new Map<string, string>();
   let index = 0;
   const protectedText = text.replaceAll(
     PLACEHOLDER_TOKEN,
     (placeholder, offset: number) => {
-      if (overlapsForcedSensitiveValue(offset, placeholder.length)) {
+      if (
+        spanOverlapsLiteralValue({
+          end: offset + placeholder.length,
+          start: offset,
+          text,
+          values: forcedSensitiveValues,
+        })
+      ) {
         return placeholder;
       }
 
@@ -457,19 +467,41 @@ const toChatAnonResult = (
 const applyExcludedCanonicals = ({
   deanonymiseText,
   excludedCanonicals,
+  forcedSensitiveValues,
   resolvedEntities,
   redaction,
+  sourceText,
 }: {
   deanonymiseText: typeof deanonymise;
   excludedCanonicals: readonly string[] | undefined;
+  forcedSensitiveValues: ReadonlySet<string>;
   resolvedEntities: readonly NativePipelineEntity[];
   redaction: NativeRedaction;
+  sourceText: string;
 }): ChatAnonResult => {
   if (excludedCanonicals === undefined || excludedCanonicals.length === 0) {
     return toChatAnonResult(resolvedEntities, redaction);
   }
 
   const excludedSet = new Set(excludedCanonicals.map(normalizeForExclusion));
+  for (const entity of resolvedEntities) {
+    const canonical = normalizeForExclusion(entity.text);
+    if (
+      excludedSet.has(canonical) &&
+      spanOverlapsLiteralValue({
+        end: entity.end,
+        start: entity.start,
+        text: sourceText,
+        values: forcedSensitiveValues,
+      })
+    ) {
+      excludedSet.delete(canonical);
+    }
+  }
+  if (excludedSet.size === 0) {
+    return toChatAnonResult(resolvedEntities, redaction);
+  }
+
   const revertMap = new Map<string, string>();
   for (const [placeholder, original] of redaction.redactionMap) {
     if (excludedSet.has(normalizeForExclusion(original))) {
@@ -593,10 +625,10 @@ export const runChatAnonPipeline = async <
     gazetteerEntries: effectiveGazetteerEntries,
     context,
   });
-  const protectedInput = protectLiteralPlaceholders(
-    text,
-    new Set(forcedEntries.map(({ canonical }) => canonical)),
+  const forcedSensitiveSet = new Set(
+    forcedEntries.map(({ canonical }) => canonical),
   );
+  const protectedInput = protectLiteralPlaceholders(text, forcedSensitiveSet);
   const { resolvedEntities, redaction } = pipeline.redactText(
     protectedInput.text,
   );
@@ -604,8 +636,10 @@ export const runChatAnonPipeline = async <
   const result = applyExcludedCanonicals({
     deanonymiseText: runtime.deanonymise,
     excludedCanonicals: effectiveExcludedCanonicals,
+    forcedSensitiveValues: forcedSensitiveSet,
     resolvedEntities,
     redaction,
+    sourceText: protectedInput.text,
   });
   return {
     ...result,

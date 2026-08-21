@@ -280,6 +280,26 @@ describe("runChatAnonPipeline excludedCanonicals", () => {
     expect(result.redactionMap).toEqual(new Map([["[MISC_1]", forcedValue]]));
   });
 
+  test("does not restore an excluded entity containing a forced value", async () => {
+    const forcedValue = "ORDER-123";
+    const excludedValue = `Matter ${forcedValue}`;
+    const runtime = buildRuntime([makeEntity(excludedValue, "organization")]);
+
+    const result = await runChatAnonPipeline({
+      runtime,
+      dictionaries,
+      text: excludedValue,
+      workspaceId: "ws-1",
+      excludedCanonicals: [excludedValue],
+      forcedSensitiveValues: [forcedValue],
+    });
+
+    expect(result.redactedText).toBe("[ORGANIZATION_1]");
+    expect(result.redactionMap).toEqual(
+      new Map([["[ORGANIZATION_1]", excludedValue]]),
+    );
+  });
+
   test("bounds caller-supplied forced values before building a pipeline", async () => {
     const runtime = buildRuntime([]);
 
