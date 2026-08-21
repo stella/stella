@@ -64,6 +64,12 @@ enforcement, branded types) live in
 - Verify a new regression test fails against the known-bad behavior before
   trusting it. A test that never reaches the fault, or matches zero tests, is
   not a guard.
+- Detector and backstop tests use production-shaped inputs the detector can
+  actually match. Assert the fixture reaches or differs on the fault boundary
+  before asserting the protected outcome.
+- Where a map declares paths or cases, assert the declared and exercised sets
+  are equal in both directions. Pin fixture literals that stand in for producer
+  output with `satisfies` against the producer's return type.
 - For systemic bugs, test the class: fixed points for replay, matrices for
   tenant isolation, properties for parsers/normalizers, state-machine
   transitions for lifecycle code, and round trips for serialization.

@@ -44,6 +44,11 @@ are only justified when the wording truly differs from the
 generic version (e.g., a confirmation message that mentions
 the resource by name).
 
+When a translation key crosses indirection through a constant, map, prop, or
+helper return type, type it with `TranslationKey` from
+`apps/web/src/i18n/types` instead of `string`. Missing or stale keys must fail
+typecheck at the point where they are stored.
+
 Prefer complete translatable sentences over fragments assembled in JSX. Keep
 interpolation variables semantic (`{documentName}`, not `{value}`), use ICU
 plural/select branches for grammatical variation, and never concatenate
