@@ -956,16 +956,18 @@ const walkSlice = async ({
   const fillable = untracked.slice(0, ingestBudget);
   summary.deferred = untracked.length - fillable.length;
   for (const [index, item] of fillable.entries()) {
-    if (now().getTime() >= ingestEndsAtMs) {
-      // Out of clock rather than out of count, and owed the same way: what is
-      // left stays an untracked miss, so `collected` records short below and
-      // the next unit resumes the walk here.
-      summary.deferred += fillable.length - index;
-      break;
-    }
     if (index > 0) {
       // oxlint-disable-next-line no-await-in-loop -- politeness pause between decisions, matching the crawl
       await sleep(fetchDelayMs);
+    }
+    // After the pause, not before it: the pause can itself carry the unit past
+    // the budget, and what has to stay inside it is the request, not the
+    // decision to wait. Out of clock rather than out of count, and owed the
+    // same way: what is left stays an untracked miss, so `collected` records
+    // short below and the next unit resumes the walk here.
+    if (now().getTime() >= ingestEndsAtMs) {
+      summary.deferred += fillable.length - index;
+      break;
     }
     // oxlint-disable-next-line no-await-in-loop -- rate-limited publisher traffic and one pipeline write per decision stay sequential
     await ingestListedItem({
@@ -1077,15 +1079,16 @@ const retryParkedItems = async ({
   );
   let fetched = 0;
   for (const [index, item] of unheld.entries()) {
-    if (now().getTime() >= ingestEndsAtMs) {
-      // Their backoff already decides when each is asked again, so the ones
-      // this unit did not reach simply stay due for the next.
-      summary.deferred += unheld.length - index;
-      break;
-    }
     if (fetched > 0) {
       // oxlint-disable-next-line no-await-in-loop -- politeness pause between decisions, matching the crawl
       await sleep(fetchDelayMs);
+    }
+    // After the pause, for the reason given in `walkSlice`. Their backoff
+    // already decides when each is asked again, so the ones this unit did not
+    // reach simply stay due for the next.
+    if (now().getTime() >= ingestEndsAtMs) {
+      summary.deferred += unheld.length - index;
+      break;
     }
     fetched += 1;
     // oxlint-disable-next-line no-await-in-loop -- rate-limited publisher traffic and one pipeline write per decision stay sequential

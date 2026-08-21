@@ -297,11 +297,16 @@ type RunUnitOptions = {
   sliceRetries?: SliceRetrySchedule;
   /** Frozen unless a test is about the unit's own wall-clock budget. */
   now?: () => Date;
+  /** Instant unless a test needs the politeness pause to consume the budget. */
+  sleep?: (ms: number) => Promise<void>;
 };
 
 const runUnitWith = async ({
   now = () => NOW,
   reconciliation = stubReconciliation,
+  sleep = async () => {
+    await Promise.resolve();
+  },
   sliceIngestBudget,
   sliceRetries = new Map(),
   sourceId,
@@ -313,9 +318,7 @@ const runUnitWith = async ({
     scopedDb,
     now,
     fetchDelayMs: 0,
-    sleep: async () => {
-      await Promise.resolve();
-    },
+    sleep,
     sliceIngestBudget,
     sliceRetries,
   });
@@ -498,6 +501,50 @@ test("a walk out of clock defers the rest of its budget rather than overrunning"
         clock.age();
         return await Promise.resolve({ type: "detail-unavailable" });
       },
+    },
+  });
+
+  expect(outcome).toMatchObject({
+    type: "worked",
+    summary: { slice: OWED_SLICE, keyable: 2, deferred: 1 },
+  });
+  expect(builds).toHaveLength(1);
+});
+
+test("the politeness pause cannot carry a fetch past the budget", async () => {
+  // The budget has to guard the request, not the decision to wait: the pause
+  // between documents runs on the same clock, so a check taken before it can
+  // approve a fetch that only starts after the budget is spent. Two misses and
+  // room for fifty, so only the clock can stop this walk -- and it is the
+  // pause, not the fetch, that spends it.
+  const sourceId = await seedSource();
+  await seedSlice({
+    sourceId,
+    slice: OWED_SLICE,
+    reported: 2,
+    collected: 0,
+    checkedAt: addUtcDays(NOW, -2),
+  });
+  for (const offset of [0, -1]) {
+    // oxlint-disable-next-line no-await-in-loop -- fixture seeding, sequential on one pglite handle
+    await seedSlice({
+      sourceId,
+      slice: day(offset),
+      reported: 0,
+      collected: 0,
+      checkedAt: NOW,
+    });
+  }
+
+  const clock = publisherPacedClock(RECONCILIATION_INGEST_BUDGET_MS + 1);
+  const outcome = await runUnitWith({
+    sourceId,
+    now: clock.now,
+    // Only the pause moves the clock here. The first document is fetched
+    // inside the budget; the pause before the second exhausts it.
+    sleep: async () => {
+      clock.age();
+      await Promise.resolve();
     },
   });
 
