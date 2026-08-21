@@ -14,6 +14,7 @@ import {
   CHAT_TRANSPORT_ERROR_CODE,
   DEFAULT_CHAT_ANON_ENTITY_LABELS,
   createThirdPartyBoundaryRefusalPayload,
+  findChatAnonPlaceholders,
   FORCED_SENSITIVE_VALUES_MAX,
   FORCED_SENSITIVE_VALUE_MAX_LENGTH,
   getPreferredChatSendMode,
@@ -71,6 +72,26 @@ describe("chat anonymization pipeline contract", () => {
   test("models raw override as a first-class send mode", () => {
     expect(getPreferredChatSendMode(false)).toBe(CHAT_SEND_MODE.rawOverride);
     expect(getPreferredChatSendMode(true)).toBe(CHAT_SEND_MODE.anonymized);
+  });
+
+  test("distinguishes allowed source placeholders from unknown response tokens", () => {
+    const sourcePlaceholders = findChatAnonPlaceholders(
+      "Keep literal [CASE_NUMBER_7].",
+    );
+    const allowedPlaceholders = new Set([
+      ...sourcePlaceholders,
+      "[PERSON_1]",
+    ]);
+    const responsePlaceholders = findChatAnonPlaceholders(
+      "[CASE_NUMBER_7] [PERSON_1] [LOCATION_2] [LOCATION_2] [not_a_token]",
+    );
+
+    expect(sourcePlaceholders).toEqual(["[CASE_NUMBER_7]"]);
+    expect(
+      responsePlaceholders.filter(
+        (placeholder) => !allowedPlaceholders.has(placeholder),
+      ),
+    ).toEqual(["[LOCATION_2]"]);
   });
 });
 

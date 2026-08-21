@@ -8,7 +8,10 @@ tokens, supports caller-supplied exact sensitive values, and returns one
 placeholder-to-original map for controlled restoration.
 
 ```ts
-import { runChatAnonPipeline } from "@stll/anonymize-chat";
+import {
+  findChatAnonPlaceholders,
+  runChatAnonPipeline,
+} from "@stll/anonymize-chat";
 
 const result = await runChatAnonPipeline({
   runtime,
@@ -17,10 +20,19 @@ const result = await runChatAnonPipeline({
   workspaceId,
   forcedSensitiveValues: [internalReference],
 });
+
+const allowedResponsePlaceholders = new Set([
+  ...result.redactionMap.keys(),
+  ...findChatAnonPlaceholders(text),
+]);
 ```
 
 Runtime bindings and dictionaries are dependency-injected so browser workers,
 servers, and tests can own their loading strategy.
+
+Before restoring provider responses, hosts can scan them with
+`findChatAnonPlaceholders` and reject tokens absent from the allowed set. Source
+placeholders belong in that set because the pipeline preserves literal tokens.
 
 ## Install
 

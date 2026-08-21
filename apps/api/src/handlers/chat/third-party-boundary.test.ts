@@ -137,7 +137,7 @@ describe("chat third-party anonymization boundary", () => {
 
   test("forces boundary IDs through structured technical keys", async () => {
     const organizationId = toSafeId<"organization">(
-      "11111111-1111-4111-8111-111111111111",
+      "0198f3e8-75f2-7c11-8af0-111111111111",
     );
     const scopeId = "22222222-2222-4222-8222-222222222222";
     const anonymizeIds = mock(async ({ fields }: { fields: string[] }) => {
@@ -189,6 +189,37 @@ describe("chat third-party anonymization boundary", () => {
       organizationId.toUpperCase(),
       `ref_${organizationId}`,
       `scope:${scopeId}`,
+    ]);
+  });
+
+  test("forces boundary IDs through structured object keys", async () => {
+    const organizationId = "11111111-1111-4111-8111-111111111111";
+    const anonymizeIds = mock(async ({ fields }: { fields: string[] }) => ({
+      entityCount: fields.length,
+      fields: fields.map(() => "[MISC_1]"),
+      redactionMap: new Map([["[MISC_1]", fields.at(0) ?? ""]]),
+    }));
+    const { scopedDb } = createScopedDbMock({});
+    const boundary = createChatThirdPartyBoundary({
+      anonymizeFields: anonymizeIds,
+      anonymizationScopeId: "workspace-A",
+      organizationId: toSafeId<"organization">(organizationId),
+      scopedDb,
+      sendMode: CHAT_SEND_MODE.anonymized,
+    });
+
+    const prepared = await prepareUnknownForThirdParty({
+      boundary,
+      value: { [`tenant:${organizationId}`]: 7 },
+    });
+
+    expect(Result.isOk(prepared)).toBe(true);
+    if (Result.isError(prepared)) {
+      throw prepared.error;
+    }
+    expect(prepared.value).toEqual({ "[MISC_1]": 7 });
+    expect(anonymizeIds.mock.calls.at(0)?.[0].fields).toEqual([
+      `tenant:${organizationId}`,
     ]);
   });
 

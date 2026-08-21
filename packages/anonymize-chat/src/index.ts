@@ -289,6 +289,15 @@ const normalizeForExclusion = (value: string): string =>
 const PLACEHOLDER_TOKEN = /\[[A-Z][A-Z0-9_]*_\d+\]/gu;
 const PLACEHOLDER_LABEL = /^\[(?<label>[A-Z][A-Z0-9_]*)_\d+\]$/u;
 
+/**
+ * Return the distinct anonymization placeholders found in text, in first-seen
+ * order. Hosts can combine placeholders from source text and a redaction map
+ * to reject unknown tokens before restoring a provider response.
+ */
+export const findChatAnonPlaceholders = (text: string): string[] => [
+  ...new Set(text.match(PLACEHOLDER_TOKEN) ?? []),
+];
+
 const parsePlaceholderLabel = (placeholder: string): string | null => {
   const match = PLACEHOLDER_LABEL.exec(placeholder);
   return match?.groups?.["label"] ?? null;

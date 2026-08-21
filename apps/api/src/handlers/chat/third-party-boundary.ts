@@ -839,8 +839,6 @@ const TECHNICAL_IDENTIFIER_KEYS = new Set([
 
 const TECHNICAL_IDENTIFIER_PATTERN =
   /^(?:[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}|[a-z][a-z0-9]*_[A-Za-z0-9-]+)$/iu;
-const UUID_IDENTIFIER_PATTERN =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 
 const containsForcedBoundaryValue = (
   boundary: Extract<ChatThirdPartyBoundary, { type: "anonymized" }>,
@@ -849,8 +847,7 @@ const containsForcedBoundaryValue = (
   boundaryForcedSensitiveValues(boundary).some(
     (forcedValue) =>
       value.includes(forcedValue) ||
-      (UUID_IDENTIFIER_PATTERN.test(forcedValue) &&
-        value.toLowerCase().includes(forcedValue.toLowerCase())),
+      value.toLowerCase().includes(forcedValue.toLowerCase()),
   );
 
 const shouldPreserveStructuredString = (
@@ -948,9 +945,21 @@ const anonymizeUnknownStrings = ({
     const output = {};
 
     for (const [nestedKey, nestedValue] of Object.entries(value)) {
+      let preparedKey = encodeClaimedPlaceholders
+        ? encodeLateLiteralPlaceholders(boundary, nestedKey)
+        : nestedKey;
+      if (containsForcedBoundaryValue(boundary, nestedKey)) {
+        queueTextReplacement(replacements, preparedKey, (next) => {
+          const currentValue = Reflect.get(output, preparedKey);
+          Reflect.deleteProperty(output, preparedKey);
+          preparedKey = next;
+          Object.assign(output, { [preparedKey]: currentValue });
+          apply?.(output);
+        });
+      }
       const nestedPrepared = yield* anonymizeUnknownStrings({
         apply: (next) => {
-          Object.assign(output, { [nestedKey]: next });
+          Object.assign(output, { [preparedKey]: next });
           apply?.(output);
         },
         boundary,
@@ -959,7 +968,7 @@ const anonymizeUnknownStrings = ({
         replacements,
         value: nestedValue,
       });
-      Object.assign(output, { [nestedKey]: nestedPrepared });
+      Object.assign(output, { [preparedKey]: nestedPrepared });
     }
 
     return Result.ok(output);
