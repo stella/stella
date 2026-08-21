@@ -1,8 +1,6 @@
 import { panic } from "better-result";
 
-import { rlsDb } from "@/api/db/root";
 import { SOURCE_TOTAL_ORIGIN } from "@/api/db/schema";
-import { createIngestionDb } from "@/api/db/scoped";
 import {
   getAdapter,
   listAdapterKeys,
@@ -11,6 +9,10 @@ import {
   readSourceReportedTotals,
   setSourceReportedTotal,
 } from "@/api/handlers/case-law/ingestion/source-totals";
+import {
+  enterCaseLawMaintenanceLane,
+  openCaseLawReadOnlySession,
+} from "@/api/lib/case-law/maintenance-lane";
 import { isoCalendarDay } from "@/api/lib/dates";
 
 /**
@@ -125,7 +127,11 @@ const asOf = (() => {
   return new Date(`${day}T00:00:00.000Z`);
 })();
 
-const ingestionDb = createIngestionDb(rlsDb);
+// --list only reads, so it takes no lane; --total and --poll record a figure
+// and serialize with every other writing pass.
+const { ingestionDb } = list
+  ? await openCaseLawReadOnlySession()
+  : await enterCaseLawMaintenanceLane();
 
 if (list) {
   const rows = await readSourceReportedTotals(ingestionDb);

@@ -26,9 +26,13 @@
  */
 import { panic } from "better-result";
 
-import { rootDb } from "@/api/db/root";
 import { recomputeCitationAuthorityBatch } from "@/api/handlers/case-law/citation-authority";
 import { loadCourtWeightEntriesForSql } from "@/api/handlers/case-law/court-weights";
+import { enterCaseLawMaintenanceLane } from "@/api/lib/case-law/maintenance-lane";
+
+// Hold the maintenance lane before the first statement: operator passes over
+// the case-law tables serialize here instead of deadlocking on row locks.
+const { rootDb } = await enterCaseLawMaintenanceLane();
 
 /**
  * A flag's value, or undefined when the flag is absent.

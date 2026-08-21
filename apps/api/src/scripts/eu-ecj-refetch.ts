@@ -1,8 +1,6 @@
 import { eq } from "drizzle-orm";
 
-import { rlsDb } from "@/api/db/root";
 import { caseLawSources } from "@/api/db/schema";
-import { createIngestionDb } from "@/api/db/scoped";
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import {
   ECJ_LISTING_TIMEOUT_MS,
@@ -16,8 +14,13 @@ import {
   PROCESS_DECISION_STATUS,
   processDecision,
 } from "@/api/handlers/case-law/ingestion/pipeline";
+import { enterCaseLawMaintenanceLane } from "@/api/lib/case-law/maintenance-lane";
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import { refreshCorpusS3, refreshS3 } from "@/api/lib/s3";
+
+// Hold the maintenance lane before the first statement: operator passes over
+// the case-law tables serialize here instead of deadlocking on row locks.
+const { ingestionDb } = await enterCaseLawMaintenanceLane();
 
 /**
  * Re-fetch named CJEU decisions from Cellar and run them through the
@@ -200,7 +203,6 @@ if (!apply) {
   process.exit(0);
 }
 
-const ingestionDb = createIngestionDb(rlsDb);
 await refreshS3();
 await refreshCorpusS3();
 

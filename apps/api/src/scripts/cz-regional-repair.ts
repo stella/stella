@@ -1,9 +1,7 @@
 import { panic } from "better-result";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 
-import { rlsDb } from "@/api/db/root";
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
-import { createIngestionDb } from "@/api/db/scoped";
 import type {
   CzRegionalApiItem,
   CzRegionalDayPage,
@@ -18,6 +16,10 @@ import {
   PROCESS_DECISION_STATUS,
   processDecision,
 } from "@/api/handlers/case-law/ingestion/pipeline";
+import {
+  enterCaseLawMaintenanceLane,
+  openCaseLawReadOnlySession,
+} from "@/api/lib/case-law/maintenance-lane";
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
@@ -251,7 +253,11 @@ if (suppliedItems === null) {
   console.log(`items file:  ${itemsFilePath} (${suppliedItems.length} items)`);
 }
 
-const ingestionDb = createIngestionDb(rlsDb);
+// A plan run only reads, so it takes no lane and cannot block a writer; the
+// read-only session makes that a property of the connection, not a promise.
+const { ingestionDb } = apply
+  ? await enterCaseLawMaintenanceLane()
+  : await openCaseLawReadOnlySession();
 
 const source = (
   await ingestionDb((tx) =>

@@ -35,14 +35,13 @@ import type { SQL } from "drizzle-orm";
  */
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
-import { rlsDb } from "@/api/db/root";
 import {
   CASE_LAW_CORPUS_MIRROR_STATUS,
   caseLawDecisions,
 } from "@/api/db/schema";
-import { createIngestionDb } from "@/api/db/scoped";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
+import { enterCaseLawMaintenanceLane } from "@/api/lib/case-law/maintenance-lane";
 import {
   timestampCasToken,
   type TimestampCasToken,
@@ -64,6 +63,10 @@ import type {
   EmptyAst,
 } from "@/api/lib/legal-search/document-types";
 import { refreshCorpusS3, refreshS3 } from "@/api/lib/s3";
+
+// Hold the maintenance lane before the first statement: operator passes over
+// the case-law tables serialize here instead of deadlocking on row locks.
+const { ingestionDb } = await enterCaseLawMaintenanceLane();
 
 const BATCH_SIZE = 50;
 const CONCURRENCY = 4;
@@ -105,8 +108,6 @@ const eligibleForBackfill = and(
   rowsToBackfill,
   isNull(caseLawDecisions.redactedAt),
 );
-
-const ingestionDb = createIngestionDb(rlsDb);
 
 await refreshS3();
 await refreshCorpusS3();

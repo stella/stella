@@ -1,14 +1,13 @@
 import { and, eq, gt, sql } from "drizzle-orm";
 
-import { rlsDb } from "@/api/db/root";
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
-import { createIngestionDb } from "@/api/db/scoped";
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import {
   ECJ_LISTING_TIMEOUT_MS,
   listCelexVariants,
 } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj";
 import type { SafeId } from "@/api/lib/branded-types";
+import { openCaseLawReadOnlySession } from "@/api/lib/case-law/maintenance-lane";
 
 /**
  * Classify every stored eu-ecj decision against Cellar's own listing.
@@ -101,7 +100,9 @@ const sparqlChunk = Math.min(
   MAX_SPARQL_CHUNK,
 );
 
-const ingestionDb = createIngestionDb(rlsDb);
+// This tool only reads; the read-only session makes that a property of every
+// transaction rather than a promise, and takes no maintenance lane.
+const { ingestionDb } = await openCaseLawReadOnlySession();
 
 const source = (
   await ingestionDb((tx) =>

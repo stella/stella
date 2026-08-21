@@ -18,10 +18,14 @@
 
 import { sql } from "drizzle-orm";
 
-import { rootDb } from "@/api/db/root";
 import { reopenCitationsForKeys } from "@/api/handlers/case-law/citation-resolution";
 import { citationKeyOf } from "@/api/handlers/case-law/ingestion/citation-extractor";
+import { enterCaseLawMaintenanceLane } from "@/api/lib/case-law/maintenance-lane";
 import { isRecord } from "@/api/lib/type-guards";
+
+// Hold the maintenance lane before the first statement: operator passes over
+// the case-law tables serialize here instead of deadlocking on row locks.
+const { rootDb } = await enterCaseLawMaintenanceLane();
 
 const BATCH = 5000;
 

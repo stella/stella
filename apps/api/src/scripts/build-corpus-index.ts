@@ -1,4 +1,3 @@
-import { rlsDb } from "@/api/db/root";
 /**
  * Full backfill of the legal corpus into corpus index. Per-jurisdiction
  * indexes (`case_law_v1_<country>`) are created on demand by the indexer,
@@ -24,9 +23,9 @@ import { rlsDb } from "@/api/db/root";
  *   CORPUS_INDEX_ENDPOINT=... CORPUS_STORAGE_MODE=dual-write \
  *     bun run src/scripts/build-corpus-index.ts [generation]
  */
-import { createIngestionDb } from "@/api/db/scoped";
 import { envBase } from "@/api/env-base";
 import { backfillCorpusIndexGenerationPage } from "@/api/handlers/case-law/corpus-index";
+import { enterCaseLawMaintenanceLane } from "@/api/lib/case-law/maintenance-lane";
 import {
   createBackfillPacer,
   createCloudWatchBackpressureSampler,
@@ -36,8 +35,11 @@ import { CorpusIndexError } from "@/api/lib/legal-search/corpus-index-client";
 import { LIMITS } from "@/api/lib/limits";
 import { refreshCorpusS3, refreshS3 } from "@/api/lib/s3";
 
+// Hold the maintenance lane before the first statement: operator passes over
+// the case-law tables serialize here instead of deadlocking on row locks.
+const { ingestionDb } = await enterCaseLawMaintenanceLane();
+
 const generation = process.argv[2] ?? envBase.LEGAL_SEARCH_INDEX_GENERATION;
-const ingestionDb = createIngestionDb(rlsDb);
 
 await refreshS3();
 await refreshCorpusS3();

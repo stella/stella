@@ -12,13 +12,17 @@
 
 import { and, eq, or } from "drizzle-orm";
 
-import { rootDb } from "@/api/db/root";
 import { caseLawPolarityRules } from "@/api/db/schema";
 import { RULE_SOURCE } from "@/api/handlers/case-law/polarity/consts";
 import {
   RETIRED_SEED_RULES,
   SEED_RULES,
 } from "@/api/handlers/case-law/polarity/seed-rules";
+import { enterCaseLawMaintenanceLane } from "@/api/lib/case-law/maintenance-lane";
+
+// Hold the maintenance lane before the first statement: operator passes over
+// the case-law tables serialize here instead of deadlocking on row locks.
+const { rootDb } = await enterCaseLawMaintenanceLane();
 
 console.log(`Seeding ${SEED_RULES.length} polarity rules...`);
 

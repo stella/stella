@@ -24,8 +24,7 @@
  */
 import { sql } from "drizzle-orm";
 
-import { rlsDb } from "@/api/db/root";
-import { createIngestionDb } from "@/api/db/scoped";
+import { openCaseLawReadOnlySession } from "@/api/lib/case-law/maintenance-lane";
 import { zstdCompress } from "@/api/lib/compression";
 import {
   type ExpansionBucket,
@@ -144,7 +143,9 @@ const maxVocabulary = positiveInteger(
   "max-vocabulary",
 );
 
-const ingestionDb = createIngestionDb(rlsDb);
+// This tool only reads; the read-only session makes that a property of every
+// transaction rather than a promise, and takes no maintenance lane.
+const { ingestionDb } = await openCaseLawReadOnlySession();
 
 /** The keyset floor: uuids order lexically, so the nil uuid precedes them all. */
 const NIL_UUID = "00000000-0000-0000-0000-000000000000";

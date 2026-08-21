@@ -65,7 +65,6 @@
 
 import { panic } from "better-result";
 
-import { rootDb } from "@/api/db/root";
 import {
   lockCitationGraph,
   reopenCitationsForDecisionKey,
@@ -73,6 +72,10 @@ import {
   reopenCitationsFrom,
   reopenCitationsResolvedTo,
 } from "@/api/handlers/case-law/citation-resolution";
+import {
+  enterCaseLawMaintenanceLane,
+  openCaseLawReadOnlySession,
+} from "@/api/lib/case-law/maintenance-lane";
 import { isCaseLawJurisdiction } from "@/api/lib/legal-search/ingestion-constants";
 import { isRecord } from "@/api/lib/type-guards";
 import type {
@@ -141,6 +144,12 @@ if (apply && hasFlag("dry-run")) {
   console.error(USAGE);
   process.exit(1);
 }
+
+// A report run only reads, so it takes no lane and cannot block a writer; the
+// read-only session makes that a property of the connection, not a promise.
+const { rootDb } = apply
+  ? await enterCaseLawMaintenanceLane()
+  : await openCaseLawReadOnlySession();
 const limit = flagInteger("limit", DEFAULT_LIMIT);
 
 /** Rows from `execute` under either driver shape (bare array or `{ rows }`). */
