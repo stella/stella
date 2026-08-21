@@ -21,9 +21,7 @@ export const BETTER_AUTH_ORGANIZATION_STATEMENTS = {
 } as const;
 
 type OrganizationPermissionMap = {
-  [
-    Resource in keyof typeof BETTER_AUTH_ORGANIZATION_STATEMENTS
-  ]: (typeof BETTER_AUTH_ORGANIZATION_STATEMENTS)[Resource][number][];
+  [Resource in keyof typeof BETTER_AUTH_ORGANIZATION_STATEMENTS]: (typeof BETTER_AUTH_ORGANIZATION_STATEMENTS)[Resource][number][];
 };
 
 export type BetterAuthOrganizationRoleGrants = Record<
