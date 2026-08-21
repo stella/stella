@@ -189,7 +189,7 @@ export const unredactedErrorFields = (
 /**
  * Non-PII structural fingerprint for diagnosing 5xx without shipping
  * any user data. Three signals, all code-level, never content:
- *  - `error.class`: the constructor name (e.g. "Panic", "TypeError").
+ *  - `error.class`: the class name (e.g. "Panic", "TypeError").
  *  - `error.code`: a stable code — a `.code` string when present
  *    (HandlerError code, ECONNRESET, …), otherwise the structural tag.
  *  - `error.frame`: the top stack frame as `file:line:col`, plus the
