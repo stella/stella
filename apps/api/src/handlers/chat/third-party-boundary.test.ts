@@ -779,6 +779,42 @@ describe("chat third-party anonymization boundary", () => {
     );
   });
 
+  test("keeps literal source placeholders distinct from new redactions", async () => {
+    const anonymizeSecret = mock(async ({ fields }: { fields: string[] }) => ({
+      entityCount: 1,
+      fields: fields.map((field) =>
+        field.replaceAll("Secret", () => "[MISC_2]"),
+      ),
+      redactionMap: new Map([["[MISC_2]", "Secret"]]),
+    }));
+    const { deanonymizeFromBoundary } =
+      await import("@/api/handlers/chat/third-party-boundary");
+    const { scopedDb } = createScopedDbMock({});
+    const boundary = createChatThirdPartyBoundary({
+      anonymizeFields: anonymizeSecret,
+      anonymizationScopeId: "workspace-A",
+      organizationId: toSafeId<"organization">(
+        "11111111-1111-4111-8111-111111111111",
+      ),
+      scopedDb,
+      sendMode: CHAT_SEND_MODE.anonymized,
+    });
+
+    const prepared = await prepareTextForThirdParty({
+      boundary,
+      text: "Keep [MISC_1] literal; redact Secret.",
+    });
+
+    expect(Result.isOk(prepared)).toBe(true);
+    if (Result.isError(prepared)) {
+      throw prepared.error;
+    }
+    expect(prepared.value).toBe("Keep [MISC_1] literal; redact [MISC_2].");
+    expect(deanonymizeFromBoundary({ boundary, text: prepared.value })).toBe(
+      "Keep [MISC_1] literal; redact Secret.",
+    );
+  });
+
   test("round-trip helpers are no-ops on raw boundaries", async () => {
     const { deanonymizeFromBoundary } =
       await import("@/api/handlers/chat/third-party-boundary");

@@ -134,6 +134,8 @@ type AnonymizedTextFieldsResult = {
 };
 
 const INDEXED_PLACEHOLDER = /^\[(?<label>[A-Z][A-Z0-9_]*)_(?<index>\d+)\]$/u;
+const INDEXED_PLACEHOLDER_OCCURRENCE =
+  /\[(?<label>[A-Z][A-Z0-9_]*)_(?<index>\d+)\]/gu;
 
 const parseIndexedPlaceholder = (
   placeholder: string,
@@ -164,6 +166,24 @@ const findExistingPlaceholder = (
   }
 
   return null;
+};
+
+const reserveSourcePlaceholders = (
+  boundary: Extract<ChatThirdPartyBoundary, { type: "anonymized" }>,
+  fields: string[],
+) => {
+  for (const field of fields) {
+    for (const match of field.matchAll(INDEXED_PLACEHOLDER_OCCURRENCE)) {
+      const parsed = parseIndexedPlaceholder(match[0]);
+      if (parsed === null) {
+        continue;
+      }
+      const currentOffset = boundary.placeholderOffsets.get(parsed.label) ?? 0;
+      if (parsed.index > currentOffset) {
+        boundary.placeholderOffsets.set(parsed.label, parsed.index);
+      }
+    }
+  }
 };
 
 const rewritePlaceholders = (
@@ -434,6 +454,7 @@ export const prepareTextForThirdParty = async ({
   }
 
   const anonymizeFields = boundary.anonymizeFields ?? anonymizeTextFields;
+  reserveSourcePlaceholders(boundary, [text]);
   const protectedInput = protectBoundaryPlaceholders(boundary, [text]);
   const anonymized = await Result.tryPromise({
     try: async () =>
@@ -480,6 +501,7 @@ const prepareTextBatchForThirdParty = async ({
   }
 
   const anonymizeFields = boundary.anonymizeFields ?? anonymizeTextFields;
+  reserveSourcePlaceholders(boundary, fields);
   const protectedInput = protectBoundaryPlaceholders(boundary, fields);
   const anonymized = await Result.tryPromise({
     try: async () =>
