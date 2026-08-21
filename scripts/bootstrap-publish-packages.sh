@@ -29,16 +29,23 @@ fi
 packages=(auth-model ai-catalog anonymize-chat conditions template-conditions docx-utils)
 manifests=()
 
+require_placeholder_version() {
+  local package_name="$1"
+  local manifest="packages/${package_name}/package.json"
+  local version
+  version="$(jq -er '.version | strings' "$manifest")"
+  if [[ "$version" != "0.0.0" ]]; then
+    echo "error: @stll/${package_name} is ${version}; bootstrap only publishes the 0.0.0 placeholder." >&2
+    exit 1
+  fi
+}
+
 npm whoami >/dev/null
 
 for p in "${packages[@]}"; do
   manifest="packages/${p}/package.json"
   manifests+=("$manifest")
-  version="$(jq -er '.version | strings' "$manifest")"
-  if [[ "$version" != "0.0.0" ]]; then
-    echo "error: @stll/${p} is ${version}; bootstrap only publishes the 0.0.0 placeholder." >&2
-    exit 1
-  fi
+  require_placeholder_version "$p"
   if registry_result="$(npm view "@stll/${p}" version 2>&1)"; then
     echo "error: @stll/${p} already exists on npm; refusing a bootstrap publish." >&2
     exit 1
@@ -59,11 +66,13 @@ for p in "${packages[@]}"; do
   echo "==> preparing @stll/${p}@0.0.0"
   (cd "packages/${p}" && bun run build)
   bun scripts/prepare-publish.ts "packages/${p}"
+  require_placeholder_version "$p"
   (cd "packages/${p}" && bun pm pack --dry-run)
 done
 
 for p in "${packages[@]}"; do
   echo "==> publishing @stll/${p}@0.0.0"
+  require_placeholder_version "$p"
   (cd "packages/${p}" && bun publish --access public)
 done
 
