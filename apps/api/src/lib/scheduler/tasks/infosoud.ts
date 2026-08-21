@@ -70,11 +70,20 @@ export const syncInfoSoudTrackedCases: SchedulerTask = async ({
 
         // oxlint-disable-next-line no-await-in-loop -- per-case import transaction commits before the next case is processed
         const importResult = await rootDb.transaction(async (tx) => {
+          const workspace = await tx.query.workspaces.findFirst({
+            where: { id: { eq: trackedCase.workspaceId } },
+            columns: { organizationId: true },
+          });
           const result = await importInfoSoudAgendaItems({
             actorUserId: trackedCase.createdBy,
             agendaItems,
             tx,
             workspaceId: trackedCase.workspaceId,
+            // A tracked case has been imported before, so every new hearing
+            // is a change worth surfacing.
+            signals: workspace
+              ? { organizationId: workspace.organizationId }
+              : undefined,
           });
 
           if (!result.ok) {

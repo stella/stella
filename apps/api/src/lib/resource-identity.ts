@@ -237,4 +237,7 @@ export const RESOURCE_IDENTITY_DISPOSITION = {
   },
   workObligationEvent: { type: "non_resource", reason: "event" },
   entityLink: { type: "non_resource", reason: "association" },
+  signal: { type: "non_resource", reason: "workflow" },
+  signalEvent: { type: "non_resource", reason: "event" },
+  scoutRun: { type: "non_resource", reason: "workflow" },
 } as const satisfies Record<SafeIdType, IdentityDisposition>;

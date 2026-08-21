@@ -253,6 +253,7 @@ const activityCategoryForEvent = (event: AuditEvent): AuditActivityCategory => {
     case "report_export":
     case "rate_table":
     case "saved_search":
+    case "signal":
     case "style_set":
     case "template":
     case "time_entry":

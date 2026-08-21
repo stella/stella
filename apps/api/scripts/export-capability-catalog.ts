@@ -200,6 +200,7 @@ const DOMAIN_SCOPE: Record<string, string> = {
   // automations that read and write workspace matter content, so they reuse the
   // workspace write bucket rather than a dedicated read scope.
   flows: "stella:matters_write",
+  signals: "stella:matters_write",
   // Now carries invoice create/delete/transition capabilities, not just the
   // read tool, so it reuses the billing write bucket.
   invoices: "stella:billing_write",

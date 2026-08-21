@@ -42,6 +42,7 @@ import { Route as ProtectedContactsIndexRouteImport } from './routes/_protected.
 import { Route as ProtectedContactsContactIdRouteImport } from './routes/_protected.contacts/$contactId'
 import { Route as ProtectedContactsImportRouteImport } from './routes/_protected.contacts/import'
 import { Route as ProtectedDevAutocompleteRouteImport } from './routes/_protected.dev_.autocomplete'
+import { Route as ProtectedInboxIndexRouteImport } from './routes/_protected.inbox/index'
 import { Route as ProtectedKnowledgeIndexRouteImport } from './routes/_protected.knowledge/index'
 import { Route as ProtectedKnowledgeClausesRouteImport } from './routes/_protected.knowledge/clauses'
 import { Route as ProtectedKnowledgeMcpRouteImport } from './routes/_protected.knowledge/mcp'
@@ -261,6 +262,11 @@ const ProtectedDevAutocompleteRoute =
     path: '/dev/autocomplete',
     getParentRoute: () => ProtectedRoute,
   } as any)
+const ProtectedInboxIndexRoute = ProtectedInboxIndexRouteImport.update({
+  id: '/inbox/',
+  path: '/inbox/',
+  getParentRoute: () => ProtectedRoute,
+} as any)
 const ProtectedKnowledgeIndexRoute = ProtectedKnowledgeIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -612,6 +618,7 @@ export interface FileRoutesByFullPath {
   '/tools/$slug/download': typeof ToolsSlugDownloadRoute
   '/chat/': typeof ProtectedChatIndexRoute
   '/contacts/': typeof ProtectedContactsIndexRoute
+  '/inbox/': typeof ProtectedInboxIndexRoute
   '/knowledge/': typeof ProtectedKnowledgeIndexRoute
   '/settings/': typeof ProtectedSettingsIndexRoute
   '/todos/': typeof ProtectedTodosIndexRoute
@@ -690,6 +697,7 @@ export interface FileRoutesByTo {
   '/tools/$slug/download': typeof ToolsSlugDownloadRoute
   '/chat': typeof ProtectedChatIndexRoute
   '/contacts': typeof ProtectedContactsIndexRoute
+  '/inbox': typeof ProtectedInboxIndexRoute
   '/knowledge': typeof ProtectedKnowledgeIndexRoute
   '/settings': typeof ProtectedSettingsIndexRoute
   '/todos': typeof ProtectedTodosIndexRoute
@@ -777,6 +785,7 @@ export interface FileRoutesById {
   '/tools/$slug_/download': typeof ToolsSlugDownloadRoute
   '/_protected/chat/': typeof ProtectedChatIndexRoute
   '/_protected/contacts/': typeof ProtectedContactsIndexRoute
+  '/_protected/inbox/': typeof ProtectedInboxIndexRoute
   '/_protected/knowledge/': typeof ProtectedKnowledgeIndexRoute
   '/_protected/settings/': typeof ProtectedSettingsIndexRoute
   '/_protected/todos/': typeof ProtectedTodosIndexRoute
@@ -865,6 +874,7 @@ export interface FileRouteTypes {
     | '/tools/$slug/download'
     | '/chat/'
     | '/contacts/'
+    | '/inbox/'
     | '/knowledge/'
     | '/settings/'
     | '/todos/'
@@ -943,6 +953,7 @@ export interface FileRouteTypes {
     | '/tools/$slug/download'
     | '/chat'
     | '/contacts'
+    | '/inbox'
     | '/knowledge'
     | '/settings'
     | '/todos'
@@ -1029,6 +1040,7 @@ export interface FileRouteTypes {
     | '/tools/$slug_/download'
     | '/_protected/chat/'
     | '/_protected/contacts/'
+    | '/_protected/inbox/'
     | '/_protected/knowledge/'
     | '/_protected/settings/'
     | '/_protected/todos/'
@@ -1320,6 +1332,13 @@ declare module '@tanstack/react-router' {
       path: '/dev/autocomplete'
       fullPath: '/dev/autocomplete'
       preLoaderRoute: typeof ProtectedDevAutocompleteRouteImport
+      parentRoute: typeof ProtectedRoute
+    }
+    '/_protected/inbox/': {
+      id: '/_protected/inbox/'
+      path: '/inbox'
+      fullPath: '/inbox/'
+      preLoaderRoute: typeof ProtectedInboxIndexRouteImport
       parentRoute: typeof ProtectedRoute
     }
     '/_protected/knowledge/': {
@@ -1949,6 +1968,7 @@ interface ProtectedRouteChildren {
   ProtectedContactsImportRoute: typeof ProtectedContactsImportRoute
   ProtectedDevAutocompleteRoute: typeof ProtectedDevAutocompleteRoute
   ProtectedContactsIndexRoute: typeof ProtectedContactsIndexRoute
+  ProtectedInboxIndexRoute: typeof ProtectedInboxIndexRoute
   ProtectedTodosIndexRoute: typeof ProtectedTodosIndexRoute
   ProtectedWorkspacesIndexRoute: typeof ProtectedWorkspacesIndexRoute
 }
@@ -1964,6 +1984,7 @@ const ProtectedRouteChildren: ProtectedRouteChildren = {
   ProtectedContactsImportRoute: ProtectedContactsImportRoute,
   ProtectedDevAutocompleteRoute: ProtectedDevAutocompleteRoute,
   ProtectedContactsIndexRoute: ProtectedContactsIndexRoute,
+  ProtectedInboxIndexRoute: ProtectedInboxIndexRoute,
   ProtectedTodosIndexRoute: ProtectedTodosIndexRoute,
   ProtectedWorkspacesIndexRoute: ProtectedWorkspacesIndexRoute,
 }
