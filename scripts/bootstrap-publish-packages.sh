@@ -73,7 +73,7 @@ done
 for p in "${packages[@]}"; do
   echo "==> publishing @stll/${p}@0.0.0"
   require_placeholder_version "$p"
-  (cd "packages/${p}" && bun publish --access public)
+  (cd "packages/${p}" && bun publish --ignore-scripts --access public)
 done
 
 cleanup

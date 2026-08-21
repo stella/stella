@@ -331,6 +331,25 @@ describe("runChatAnonPipeline excludedCanonicals", () => {
     expect(result.redactionMap).toEqual(new Map([["[MISC_1]", forcedValue]]));
   });
 
+  test("rekeys generated placeholders reserved by literal source text", async () => {
+    const forcedValue = "Alice";
+    const runtime = buildRuntime([makeEntity(forcedValue, "misc")]);
+
+    const result = await runChatAnonPipeline({
+      runtime,
+      dictionaries,
+      text: `[MISC_1] ${forcedValue}`,
+      workspaceId: "ws-1",
+      forcedSensitiveValues: [forcedValue],
+    });
+
+    expect(result.redactedText).toBe("[MISC_1] [MISC_2]");
+    expect(result.redactionMap).toEqual(new Map([["[MISC_2]", forcedValue]]));
+    expect(runtime.deanonymise(result.redactedText, result.redactionMap)).toBe(
+      `[MISC_1] ${forcedValue}`,
+    );
+  });
+
   test("fails closed when native redaction leaves a forced value", () => {
     const forcedValue = "ORDER-123";
     const runtime = buildRuntime([]);
@@ -340,6 +359,21 @@ describe("runChatAnonPipeline excludedCanonicals", () => {
         runtime,
         dictionaries,
         text: forcedValue,
+        workspaceId: "ws-1",
+        forcedSensitiveValues: [forcedValue],
+      }),
+    ).rejects.toThrow("forced sensitive value remained after anonymization");
+  });
+
+  test("fails closed when a resolved entity covers only part of a forced value", () => {
+    const forcedValue = "ORDER-123";
+    const runtime = buildRuntime([makeEntity("XORDER", "misc")]);
+
+    expect(
+      runChatAnonPipeline({
+        runtime,
+        dictionaries,
+        text: `X${forcedValue}`,
         workspaceId: "ws-1",
         forcedSensitiveValues: [forcedValue],
       }),

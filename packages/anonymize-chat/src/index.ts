@@ -389,10 +389,14 @@ const protectLiteralPlaceholders = (
   text: string,
   forcedSensitiveValues: ReadonlySet<string>,
 ): {
+  protectedPlaceholders: ReadonlySet<string>;
+  sourcePlaceholders: ReadonlySet<string>;
   text: string;
   restore: (value: string) => string;
 } => {
   const restoreMap = new Map<string, string>();
+  const protectedPlaceholders = new Set<string>();
+  const sourcePlaceholders = new Set<string>();
   const cursor: LiteralPlaceholderSentinelCursor = {
     codePoint: LITERAL_PLACEHOLDER_SENTINEL_RANGES[0].start,
     rangeIndex: 0,
@@ -400,6 +404,7 @@ const protectLiteralPlaceholders = (
   const protectedText = text.replaceAll(
     PLACEHOLDER_TOKEN,
     (placeholder, offset: number) => {
+      sourcePlaceholders.add(placeholder);
       if (
         spanOverlapsLiteralValue({
           end: offset + placeholder.length,
@@ -417,11 +422,14 @@ const protectLiteralPlaceholders = (
         text,
       });
       restoreMap.set(sentinel, placeholder);
+      protectedPlaceholders.add(placeholder);
       return sentinel;
     },
   );
 
   return {
+    protectedPlaceholders,
+    sourcePlaceholders,
     text: protectedText,
     restore: (value) => restoreLiteralPlaceholders(value, restoreMap),
   };
@@ -481,6 +489,63 @@ type NativeRedaction = {
   entityCount: number;
 };
 
+const rekeyProtectedPlaceholderCollisions = ({
+  blockedPlaceholders,
+  protectedPlaceholders,
+  redaction,
+}: {
+  blockedPlaceholders: ReadonlySet<string>;
+  protectedPlaceholders: ReadonlySet<string>;
+  redaction: NativeRedaction;
+}): NativeRedaction => {
+  if (
+    ![...redaction.redactionMap.keys()].some((placeholder) =>
+      protectedPlaceholders.has(placeholder),
+    )
+  ) {
+    return redaction;
+  }
+
+  const blocked = new Set([
+    ...blockedPlaceholders,
+    ...redaction.redactionMap.keys(),
+  ]);
+  const redactionMap = new Map<string, string>();
+  const operatorMap = new Map(redaction.operatorMap);
+  let redactedText = redaction.redactedText;
+
+  for (const [placeholder, original] of redaction.redactionMap) {
+    let replacement = placeholder;
+    if (protectedPlaceholders.has(placeholder)) {
+      const label =
+        parsePlaceholderLabel(placeholder) ??
+        panic("native redaction emitted an invalid placeholder");
+      let index = 1;
+      replacement = `[${label}_${String(index)}]`;
+      while (blocked.has(replacement)) {
+        index += 1;
+        replacement = `[${label}_${String(index)}]`;
+      }
+      blocked.add(replacement);
+      redactedText = redactedText.replaceAll(placeholder, () => replacement);
+      const operator = operatorMap.get(placeholder);
+      operatorMap.delete(placeholder);
+      if (operator !== undefined) {
+        operatorMap.set(replacement, operator);
+      }
+    }
+
+    redactionMap.set(replacement, original);
+  }
+
+  return {
+    entityCount: redaction.entityCount,
+    operatorMap,
+    redactedText,
+    redactionMap,
+  };
+};
+
 const assertForcedSensitiveValuesRedacted = ({
   forcedSensitiveValues,
   redaction,
@@ -497,7 +562,7 @@ const assertForcedSensitiveValuesRedacted = ({
     while (offset !== -1) {
       const end = offset + forcedValue.length;
       const isRedacted = resolvedEntities.some(
-        (entity) => entity.start < end && entity.end > offset,
+        (entity) => entity.start <= offset && entity.end >= end,
       );
       if (!isRedacted) {
         panic("forced sensitive value remained after anonymization");
@@ -731,9 +796,14 @@ export const runChatAnonPipeline = async <
     forcedEntries.map(({ canonical }) => canonical),
   );
   const protectedInput = protectLiteralPlaceholders(text, forcedSensitiveSet);
-  const { resolvedEntities, redaction } = pipeline.redactText(
+  const { resolvedEntities, redaction: nativeRedaction } = pipeline.redactText(
     protectedInput.text,
   );
+  const redaction = rekeyProtectedPlaceholderCollisions({
+    blockedPlaceholders: protectedInput.sourcePlaceholders,
+    protectedPlaceholders: protectedInput.protectedPlaceholders,
+    redaction: nativeRedaction,
+  });
   assertForcedSensitiveValuesRedacted({
     forcedSensitiveValues: forcedSensitiveSet,
     redaction,
