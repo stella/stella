@@ -20,6 +20,8 @@ import {
   type CitationResolutionCursor,
   readjudicateAmbiguousCitations,
 } from "@/api/handlers/case-law/citation-resolution";
+import { CITATION_RESOLUTION_RULE } from "@/api/handlers/case-law/citation-resolution-status";
+import { isUuid } from "@/api/lib/custom-schema";
 
 const BATCH = 2000;
 
@@ -31,37 +33,64 @@ const parseCursor = (
     return null;
   }
   const value = argv.at(index + 1);
-  const [citingDecisionId, citationId] = value?.split(":") ?? [];
-  if (citingDecisionId === undefined || citationId === undefined) {
+  if (value === undefined) {
     panic("--after expects <citingDecisionId>:<citationId>");
+  }
+  const separator = value.indexOf(":");
+  if (separator === -1) {
+    panic("--after expects <citingDecisionId>:<citationId>");
+  }
+  const citingDecisionId = value.slice(0, separator);
+  const citationId = value.slice(separator + 1);
+  if (!isUuid(citingDecisionId) || !isUuid(citationId)) {
+    panic("--after expects two UUIDs: <citingDecisionId>:<citationId>");
   }
   return { citingDecisionId, citationId };
 };
 
-let after = parseCursor(process.argv);
-const totals = { scanned: 0, resolved: 0, adjudicated: 0, ambiguous: 0 };
+type Totals = {
+  scanned: number;
+  resolved: number;
+  uniqueKey: number;
+  ambiguous: number;
+};
 
-while (true) {
-  // oxlint-disable-next-line no-await-in-loop -- keyset walk: each batch's cursor comes from the previous one
+const describe = (totals: Totals): string =>
+  `${totals.scanned} re-examined, ${totals.resolved} resolved (${totals.resolved - totals.uniqueKey} by adjudication), ${totals.ambiguous} still ambiguous`;
+
+// One batch per step; the next step starts from the cursor this one returned.
+const walk = async (
+  after: CitationResolutionCursor | null,
+  totals: Totals,
+): Promise<Totals> => {
   const batch = await readjudicateAmbiguousCitations(
     async (fn) => await rootDb.transaction(fn),
     { limit: BATCH, after },
   );
   if (batch.scanned === 0 || batch.cursor === null) {
-    break;
+    return totals;
   }
-  totals.scanned += batch.scanned;
-  totals.resolved += batch.resolved;
-  totals.adjudicated += batch.adjudicated;
-  totals.ambiguous += batch.ambiguous;
-  after = batch.cursor;
+  const next: Totals = {
+    scanned: totals.scanned + batch.scanned,
+    resolved: totals.resolved + batch.resolved,
+    uniqueKey:
+      totals.uniqueKey +
+      batch.resolvedByRule[CITATION_RESOLUTION_RULE.UNIQUE_KEY],
+    ambiguous: totals.ambiguous + batch.ambiguous,
+  };
   console.log(
-    `  ${totals.scanned} re-examined, ${totals.resolved} resolved (${totals.adjudicated} by adjudication), ${totals.ambiguous} still ambiguous; cursor=${after.citingDecisionId}:${after.citationId}`,
+    `  ${describe(next)}; cursor=${batch.cursor.citingDecisionId}:${batch.cursor.citationId}`,
   );
-}
+  return await walk(batch.cursor, next);
+};
 
-console.log(
-  `Done. ${totals.scanned} re-examined, ${totals.resolved} resolved (${totals.adjudicated} by adjudication), ${totals.ambiguous} still ambiguous.`,
-);
+const totals = await walk(parseCursor(process.argv), {
+  scanned: 0,
+  resolved: 0,
+  uniqueKey: 0,
+  ambiguous: 0,
+});
+
+console.log(`Done. ${describe(totals)}.`);
 
 process.exit(0);

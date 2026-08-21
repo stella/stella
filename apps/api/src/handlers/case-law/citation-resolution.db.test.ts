@@ -279,7 +279,6 @@ const drain = async () => {
   const totals = {
     scanned: 0,
     resolved: 0,
-    adjudicated: 0,
     unmatched: 0,
     ambiguous: 0,
     jurisdictionBlocked: 0,
@@ -294,7 +293,6 @@ const drain = async () => {
     }
     totals.scanned += batch.scanned;
     totals.resolved += batch.resolved;
-    totals.adjudicated += batch.adjudicated;
     totals.unmatched += batch.unmatched;
     totals.ambiguous += batch.ambiguous;
     totals.jurisdictionBlocked += batch.jurisdictionBlocked;

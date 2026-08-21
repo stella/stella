@@ -10,14 +10,18 @@ import {
 } from "@/api/db/schema";
 import { CITATION_DECISION_TYPE_HINT } from "@/api/handlers/case-law/citation-decision-type-hint";
 import {
-  CITATION_CANDIDATE_SCAN_CAP,
   type CitationResolutionCursor,
-  MERITS_DECISION_TYPES,
-  PROCEDURAL_DECISION_TYPES,
   readjudicateAmbiguousCitations,
+  reopenCitations,
   resolveCitationsForDecision,
 } from "@/api/handlers/case-law/citation-resolution";
-import { CITATION_RESOLUTION_STATUS } from "@/api/handlers/case-law/citation-resolution-status";
+import {
+  CITATION_CANDIDATE_SCAN_CAP,
+  CITATION_RESOLUTION_RULE,
+  MERITS_DECISION_TYPES,
+  PROCEDURAL_DECISION_TYPES,
+  CITATION_RESOLUTION_STATUS,
+} from "@/api/handlers/case-law/citation-resolution-status";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
@@ -337,6 +341,7 @@ const rowOf = async (id: SafeId<"caseLawCitation">) => {
     .select({
       cited: caseLawCitations.citedDecisionId,
       status: caseLawCitations.resolutionStatus,
+      rule: caseLawCitations.resolutionRuleId,
     })
     .from(caseLawCitations)
     .where(eq(caseLawCitations.id, id))
@@ -344,12 +349,25 @@ const rowOf = async (id: SafeId<"caseLawCitation">) => {
   return rows.at(0) ?? null;
 };
 
+const byRule = (counts: {
+  uniqueKey?: number;
+  typeHint?: number;
+  oneFileMerits?: number;
+}) => ({
+  [CITATION_RESOLUTION_RULE.UNIQUE_KEY]: counts.uniqueKey ?? 0,
+  [CITATION_RESOLUTION_RULE.TYPE_HINT]: counts.typeHint ?? 0,
+  [CITATION_RESOLUTION_RULE.ONE_FILE_MERITS]: counts.oneFileMerits ?? 0,
+});
+
 test("a key held by one nález and its procedural orders resolves to the nález", async () => {
   const counts = await resolveCitationsForDecision(asTx(), citing);
-  expect(counts.adjudicated).toBe(1);
+  expect(counts.resolvedByRule[CITATION_RESOLUTION_RULE.ONE_FILE_MERITS]).toBe(
+    1,
+  );
 
   expect(await rowOf(oneFileCitation)).toEqual({
     cited: fileNalez,
+    rule: CITATION_RESOLUTION_RULE.ONE_FILE_MERITS,
     status: CITATION_RESOLUTION_STATUS.RESOLVED,
   });
 });
@@ -357,6 +375,7 @@ test("a key held by one nález and its procedural orders resolves to the nález"
 test("two nálezy under one key stay ambiguous", async () => {
   expect(await rowOf(twinCitation)).toEqual({
     cited: null,
+    rule: null,
     status: CITATION_RESOLUTION_STATUS.AMBIGUOUS,
   });
 });
@@ -364,6 +383,7 @@ test("two nálezy under one key stay ambiguous", async () => {
 test("a candidate without a recorded type keeps the key ambiguous", async () => {
   expect(await rowOf(untypedCitation)).toEqual({
     cited: null,
+    rule: null,
     status: CITATION_RESOLUTION_STATUS.AMBIGUOUS,
   });
 });
@@ -371,6 +391,7 @@ test("a candidate without a recorded type keeps the key ambiguous", async () => 
 test("a nález and an order at different courts stay ambiguous", async () => {
   expect(await rowOf(crossCourtCitation)).toEqual({
     cited: null,
+    rule: null,
     status: CITATION_RESOLUTION_STATUS.AMBIGUOUS,
   });
 });
@@ -386,6 +407,7 @@ test("a key with as many holders as the resolver reads stays ambiguous", async (
 
   expect(await rowOf(crowdedCitation)).toEqual({
     cited: null,
+    rule: null,
     status: CITATION_RESOLUTION_STATUS.AMBIGUOUS,
   });
 });
@@ -394,9 +416,13 @@ test("a citation older than the nález never takes it", async () => {
   // Only the first order predates the citing decision, so the time rule
   // leaves one candidate and uniqueness, not the one-file rule, links it.
   const counts = await resolveCitationsForDecision(asTx(), lateCiting);
-  expect(counts).toMatchObject({ resolved: 1, adjudicated: 0 });
+  expect(counts).toMatchObject({
+    resolved: 1,
+    resolvedByRule: byRule({ uniqueKey: 1 }),
+  });
   expect(await rowOf(beforeNalezCitation)).toEqual({
     cited: fileOrderA,
+    rule: CITATION_RESOLUTION_RULE.UNIQUE_KEY,
     status: CITATION_RESOLUTION_STATUS.RESOLVED,
   });
 });
@@ -421,9 +447,12 @@ test("the Slovak spelling of the file structure resolves the same way", async ()
   });
 
   const counts = await resolveCitationsForDecision(asTx(), skCiting);
-  expect(counts.adjudicated).toBe(1);
+  expect(counts.resolvedByRule[CITATION_RESOLUTION_RULE.ONE_FILE_MERITS]).toBe(
+    1,
+  );
   expect(await rowOf(skCitation)).toEqual({
     cited: skNalez,
+    rule: CITATION_RESOLUTION_RULE.ONE_FILE_MERITS,
     status: CITATION_RESOLUTION_STATUS.RESOLVED,
   });
 });
@@ -440,7 +469,7 @@ test("re-adjudication reopens settled ambiguous rows and is idempotent", async (
     .where(eq(caseLawCitations.id, oneFileCitation));
 
   const drain = async () => {
-    const totals = { scanned: 0, resolved: 0, adjudicated: 0, ambiguous: 0 };
+    const totals = { scanned: 0, resolved: 0, oneFileMerits: 0, ambiguous: 0 };
     let after: CitationResolutionCursor | null = null;
     for (let turn = 0; turn < 20; turn += 1) {
       // oxlint-disable-next-line no-await-in-loop -- keyset walk: each batch's cursor comes from the previous one
@@ -453,7 +482,8 @@ test("re-adjudication reopens settled ambiguous rows and is idempotent", async (
       }
       totals.scanned += batch.scanned;
       totals.resolved += batch.resolved;
-      totals.adjudicated += batch.adjudicated;
+      totals.oneFileMerits +=
+        batch.resolvedByRule[CITATION_RESOLUTION_RULE.ONE_FILE_MERITS];
       totals.ambiguous += batch.ambiguous;
       after = batch.cursor;
     }
@@ -466,11 +496,12 @@ test("re-adjudication reopens settled ambiguous rows and is idempotent", async (
   expect(first).toEqual({
     scanned: 5,
     resolved: 1,
-    adjudicated: 1,
+    oneFileMerits: 1,
     ambiguous: 4,
   });
   expect(await rowOf(oneFileCitation)).toEqual({
     cited: fileNalez,
+    rule: CITATION_RESOLUTION_RULE.ONE_FILE_MERITS,
     status: CITATION_RESOLUTION_STATUS.RESOLVED,
   });
 
@@ -478,7 +509,7 @@ test("re-adjudication reopens settled ambiguous rows and is idempotent", async (
   expect(second).toEqual({
     scanned: 4,
     resolved: 0,
-    adjudicated: 0,
+    oneFileMerits: 0,
     ambiguous: 4,
   });
 });
@@ -487,15 +518,19 @@ test("a hint names the order or the nález of a pair, whichever the text said", 
   const counts = await resolveCitationsForDecision(asTx(), hintCiting);
   // The two pair citations and the no-match fallback are adjudicated; the
   // two-orders and twin cases are not.
-  expect(counts.adjudicated).toBe(3);
+  expect(counts.resolvedByRule).toEqual(
+    byRule({ typeHint: 2, oneFileMerits: 1 }),
+  );
   expect(counts.ambiguous).toBe(2);
 
   expect(await rowOf(hintOrderCitation)).toEqual({
     cited: pairOrder,
+    rule: CITATION_RESOLUTION_RULE.TYPE_HINT,
     status: CITATION_RESOLUTION_STATUS.RESOLVED,
   });
   expect(await rowOf(hintNalezCitation)).toEqual({
     cited: pairNalez,
+    rule: CITATION_RESOLUTION_RULE.TYPE_HINT,
     status: CITATION_RESOLUTION_STATUS.RESOLVED,
   });
 });
@@ -505,10 +540,12 @@ test("a hint that several holders satisfy leaves the row ambiguous, one-file rul
   // said "usnesení" and two orders fit, so no rule may pick the nález.
   expect(await rowOf(hintTwoOrdersCitation)).toEqual({
     cited: null,
+    rule: null,
     status: CITATION_RESOLUTION_STATUS.AMBIGUOUS,
   });
   expect(await rowOf(hintTwinCitation)).toEqual({
     cited: null,
+    rule: null,
     status: CITATION_RESOLUTION_STATUS.AMBIGUOUS,
   });
 });
@@ -516,6 +553,40 @@ test("a hint that several holders satisfy leaves the row ambiguous, one-file rul
 test("a hint no holder satisfies falls back to the one-file rule", async () => {
   expect(await rowOf(hintNoneCitation)).toEqual({
     cited: pairNalez,
+    rule: CITATION_RESOLUTION_RULE.ONE_FILE_MERITS,
     status: CITATION_RESOLUTION_STATUS.RESOLVED,
   });
+});
+
+test("reopening a resolved row clears the rule that drew its edge", async () => {
+  expect((await rowOf(hintNalezCitation))?.rule).toBe(
+    CITATION_RESOLUTION_RULE.TYPE_HINT,
+  );
+  await scopedDb(async (tx) => {
+    await reopenCitations(tx, [hintNalezCitation]);
+  });
+  expect(await rowOf(hintNalezCitation)).toEqual({
+    cited: null,
+    rule: null,
+    status: CITATION_RESOLUTION_STATUS.PENDING,
+  });
+});
+
+test("every resolved row names a rule and no other row does", async () => {
+  // The census invariant the rule column exists for, over everything the
+  // tests above settled: a resolved edge with no rule cannot be audited, and
+  // a rule on an unresolved row would be counted against a link that is not
+  // there.
+  const rows = await db
+    .select({
+      status: caseLawCitations.resolutionStatus,
+      rule: caseLawCitations.resolutionRuleId,
+    })
+    .from(caseLawCitations);
+  expect(rows.length).toBeGreaterThan(5);
+  for (const row of rows) {
+    expect(row.rule === null).toBe(
+      row.status !== CITATION_RESOLUTION_STATUS.RESOLVED,
+    );
+  }
 });

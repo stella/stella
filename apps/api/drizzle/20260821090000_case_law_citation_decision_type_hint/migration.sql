@@ -1,10 +1,13 @@
+SET lock_timeout = '1s';--> statement-breakpoint
+SET statement_timeout = '5s';--> statement-breakpoint
+
 -- The decision-type word a citing text introduced the number with ("nález
 -- sp. zn. …", "usnesením … č. j. …"), kept from extraction so the resolver
 -- can tell the nález from the orders that share its docket number without
 -- inferring it from the file's structure. Null means the text did not say.
 -- Rows extracted before this column exist get a hint only when their
 -- decision is re-extracted.
-ALTER TABLE "case_law_citations" ADD COLUMN IF NOT EXISTS "cited_decision_type_hint" varchar(16);
+ALTER TABLE "case_law_citations" ADD COLUMN IF NOT EXISTS "cited_decision_type_hint" varchar(16);--> statement-breakpoint
 
 -- NOT VALID: every existing row is null, so there is nothing to scan, and
 -- the constraint applies to every later INSERT and UPDATE. Dropped by name
@@ -16,4 +19,19 @@ ALTER TABLE "case_law_citations" ADD COLUMN IF NOT EXISTS "cited_decision_type_h
 ALTER TABLE "case_law_citations"
   DROP CONSTRAINT IF EXISTS "citations_cited_decision_type_hint_values",
   ADD CONSTRAINT "citations_cited_decision_type_hint_values"
-  CHECK ("cited_decision_type_hint" IN ('nález', 'usnesení', 'rozsudek', 'stanovisko')) NOT VALID;
+  CHECK ("cited_decision_type_hint" IN ('nález', 'usnesení', 'rozsudek', 'stanovisko')) NOT VALID;--> statement-breakpoint
+
+-- Which rule drew a resolved row's edge (unique key, the text's type word, or
+-- the one merits decision in a file); null while a row is not resolved, and
+-- cleared on reopen. Lets each rule's output be counted and audited rather
+-- than trusted. Rows resolved before this column exist stay null until the
+-- resolver next visits them.
+ALTER TABLE "case_law_citations" ADD COLUMN IF NOT EXISTS "resolution_rule_id" varchar(32);--> statement-breakpoint
+
+-- stella-migration-safety: reviewed destructive-change - drops only this
+-- migration's own check constraint by name immediately before re-adding
+-- it; no row data is touched.
+ALTER TABLE "case_law_citations"
+  DROP CONSTRAINT IF EXISTS "citations_resolution_rule_id_values",
+  ADD CONSTRAINT "citations_resolution_rule_id_values"
+  CHECK ("resolution_rule_id" IN ('unique-key', 'type-hint', 'one-file-merits')) NOT VALID;

@@ -46,6 +46,70 @@ export const CITATION_RESOLUTION_STATUS = {
   AMBIGUOUS: "ambiguous",
 } as const satisfies ConstantMap<CitationResolutionStatus>;
 
+/**
+ * Which rule drew a resolved row's edge. Null while a row is not resolved.
+ *
+ * Declared so each rule's output can be audited as a population rather than
+ * trusted as code: a rule is a hypothesis about how a court's citations
+ * behave, and a measured error rate per rule is what lets a wrong one be
+ * switched off and its rows reopened.
+ */
+export const CITATION_RESOLUTION_RULES = [
+  "unique-key",
+  "type-hint",
+  "one-file-merits",
+] as const;
+
+export type CitationResolutionRule = (typeof CITATION_RESOLUTION_RULES)[number];
+
+export const CITATION_RESOLUTION_RULE = {
+  /** The key matched exactly one decision that passed every rule. */
+  UNIQUE_KEY: "unique-key",
+  /** Several holders; the text named the type, and one holder had it. */
+  TYPE_HINT: "type-hint",
+  /** Several holders in one file; the single merits decision took the link. */
+  ONE_FILE_MERITS: "one-file-merits",
+} as const satisfies ConstantMap<CitationResolutionRule>;
+
+// Listed by name rather than looped so the return type proves every rule has
+// a counter; a rule added to the list without a line here fails typecheck.
+export const countsByRule = (
+  read: (rule: CitationResolutionRule) => number,
+): Record<CitationResolutionRule, number> => ({
+  [CITATION_RESOLUTION_RULE.UNIQUE_KEY]: read(
+    CITATION_RESOLUTION_RULE.UNIQUE_KEY,
+  ),
+  [CITATION_RESOLUTION_RULE.TYPE_HINT]: read(
+    CITATION_RESOLUTION_RULE.TYPE_HINT,
+  ),
+  [CITATION_RESOLUTION_RULE.ONE_FILE_MERITS]: read(
+    CITATION_RESOLUTION_RULE.ONE_FILE_MERITS,
+  ),
+});
+
+/**
+ * The decision types the one-file rule tells apart, as the adapters store
+ * them: lowercase, in the court's own language. Only courts whose types fall
+ * into these two sets can satisfy the rule; a court that files under
+ * `rozsudek`, `judgment` or leaves the type empty never matches, which is the
+ * jurisdiction safety of the rule rather than a list of court names.
+ *
+ * `nález` is the merits decision of both constitutional courts the corpus
+ * holds (CZE Ústavní soud, SVK Ústavný súd SR); their procedural orders are
+ * `usnesení` and `uznesenie`.
+ */
+export const MERITS_DECISION_TYPES = ["nález"] as const;
+export const PROCEDURAL_DECISION_TYPES = ["usnesení", "uznesenie"] as const;
+
+/**
+ * How many candidates the resolver reads per key before declaring the key too
+ * crowded to adjudicate. Uniqueness needs two; the one-file rule needs every
+ * candidate, and a constitutional file rarely carries more than a few orders.
+ * A key that reaches the cap is ambiguous without looking further, so the
+ * lookup cost per citation is this constant, whatever the corpus holds.
+ */
+export const CITATION_CANDIDATE_SCAN_CAP = 8;
+
 export type UnsettledCitationColumns = {
   resolutionStatus: SQLWrapper;
   citedDecisionId: SQLWrapper;
