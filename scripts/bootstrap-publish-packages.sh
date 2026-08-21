@@ -9,8 +9,9 @@
 # and use the workflow for every release thereafter.
 #
 # All packages are authenticated, validated, built, transformed, and packed
-# before the first registry write. `bun publish` rewrites catalog:/workspace:
-# dependencies; npm would not. A trap restores every source-shaped manifest.
+# before the first registry write. The transform rewrites catalog:/workspace:
+# dependencies; npm then publishes the exact preflighted archives. A trap
+# restores every source-shaped manifest.
 #
 # Requires npm auth (`npm whoami` must succeed) and a clean git tree.
 # Run from the repo root.
@@ -28,6 +29,9 @@ fi
 # `anonymize-chat` depends on the already-published `anonymize-wasm` package.
 packages=(auth-model ai-catalog anonymize-chat conditions template-conditions docx-utils)
 manifests=()
+integrities=()
+publish_modes=()
+tarballs=()
 
 require_placeholder_version() {
   local package_name="$1"
@@ -46,19 +50,13 @@ for p in "${packages[@]}"; do
   manifest="packages/${p}/package.json"
   manifests+=("$manifest")
   require_placeholder_version "$p"
-  if registry_result="$(npm view "@stll/${p}" version 2>&1)"; then
-    echo "error: @stll/${p} already exists on npm; refusing a bootstrap publish." >&2
-    exit 1
-  fi
-  if [[ "$registry_result" != *"E404"* ]]; then
-    echo "error: could not verify that @stll/${p} is absent from npm." >&2
-    echo "$registry_result" >&2
-    exit 1
-  fi
 done
+
+staging_dir="$(mktemp -d "${TMPDIR:-/tmp}/stella-bootstrap-publish.XXXXXX")"
 
 cleanup() {
   git checkout -- "${manifests[@]}"
+  rm -rf -- "$staging_dir"
 }
 trap cleanup EXIT
 
@@ -67,13 +65,55 @@ for p in "${packages[@]}"; do
   (cd "packages/${p}" && bun run build)
   bun scripts/prepare-publish.ts "packages/${p}"
   require_placeholder_version "$p"
-  (cd "packages/${p}" && bun pm pack --dry-run)
+  pack_json="$(
+    cd "packages/${p}"
+    npm pack --json --ignore-scripts --pack-destination "$staging_dir"
+  )"
+  packed_name="$(jq -er '.[0].name | strings' <<<"$pack_json")"
+  packed_version="$(jq -er '.[0].version | strings' <<<"$pack_json")"
+  packed_filename="$(jq -er '.[0].filename | strings' <<<"$pack_json")"
+  packed_integrity="$(jq -er '.[0].integrity | strings' <<<"$pack_json")"
+  if [[ "$packed_name" != "@stll/${p}" || "$packed_version" != "0.0.0" ]]; then
+    echo "error: packed artifact identity is ${packed_name}@${packed_version}; expected @stll/${p}@0.0.0." >&2
+    exit 1
+  fi
+  tarballs+=("${staging_dir}/${packed_filename}")
+  integrities+=("$packed_integrity")
 done
 
-for p in "${packages[@]}"; do
+for index in "${!packages[@]}"; do
+  p="${packages[$index]}"
+  package_name="@stll/${p}"
+  if registry_result="$(npm view "$package_name" version 2>&1)"; then
+    if ! registry_integrity="$(npm view "${package_name}@0.0.0" dist.integrity 2>&1)"; then
+      echo "error: ${package_name} exists, but its 0.0.0 artifact could not be verified." >&2
+      echo "$registry_integrity" >&2
+      exit 1
+    fi
+    if [[ "$registry_integrity" != "${integrities[$index]}" ]]; then
+      echo "error: ${package_name}@0.0.0 exists with an unexpected artifact; refusing to continue." >&2
+      exit 1
+    fi
+    publish_modes+=(skip)
+    continue
+  fi
+  if [[ "$registry_result" != *"E404"* ]]; then
+    echo "error: could not verify that ${package_name} is absent from npm." >&2
+    echo "$registry_result" >&2
+    exit 1
+  fi
+  publish_modes+=(publish)
+done
+
+for index in "${!packages[@]}"; do
+  p="${packages[$index]}"
+  if [[ "${publish_modes[$index]}" == "skip" ]]; then
+    echo "==> @stll/${p}@0.0.0 already matches the preflighted artifact; skipping"
+    continue
+  fi
   echo "==> publishing @stll/${p}@0.0.0"
   require_placeholder_version "$p"
-  (cd "packages/${p}" && bun publish --ignore-scripts --access public)
+  npm publish "${tarballs[$index]}" --ignore-scripts --access public
 done
 
 cleanup

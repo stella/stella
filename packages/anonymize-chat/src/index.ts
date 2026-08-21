@@ -574,20 +574,27 @@ const assertForcedSensitiveValuesRedacted = ({
   sourceText: string;
 }): void => {
   for (const forcedValue of forcedSensitiveValues) {
+    const occurrences: { end: number; start: number }[] = [];
     let offset = sourceText.indexOf(forcedValue);
     while (offset !== -1) {
-      const end = offset + forcedValue.length;
-      let isRedacted = false;
-      for (const entity of resolvedEntities) {
-        if (entity.start <= offset && entity.end >= end) {
-          isRedacted = true;
-          break;
-        }
-      }
-      if (!isRedacted) {
+      occurrences.push({ end: offset + forcedValue.length, start: offset });
+      offset = sourceText.indexOf(forcedValue, offset + 1);
+    }
+
+    const fullyCovered = occurrences.filter((occurrence) =>
+      resolvedEntities.some(
+        (entity) =>
+          entity.start <= occurrence.start && entity.end >= occurrence.end,
+      ),
+    );
+    for (const occurrence of occurrences) {
+      const overlapsCoveredOccurrence = fullyCovered.some(
+        (covered) =>
+          covered.start < occurrence.end && occurrence.start < covered.end,
+      );
+      if (!overlapsCoveredOccurrence) {
         panic("forced sensitive value remained after anonymization");
       }
-      offset = sourceText.indexOf(forcedValue, offset + 1);
     }
   }
 

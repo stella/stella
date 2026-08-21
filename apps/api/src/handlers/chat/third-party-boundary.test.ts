@@ -815,6 +815,48 @@ describe("chat third-party anonymization boundary", () => {
     );
   });
 
+  test("does not let extreme literal indices collapse new placeholders", async () => {
+    const anonymizeSecrets = mock(async ({ fields }: { fields: string[] }) => ({
+      entityCount: 2,
+      fields: fields.map((field) =>
+        field
+          .replaceAll("First", () => "[MISC_1]")
+          .replaceAll("Second", () => "[MISC_2]"),
+      ),
+      redactionMap: new Map([
+        ["[MISC_1]", "First"],
+        ["[MISC_2]", "Second"],
+      ]),
+    }));
+    const { deanonymizeFromBoundary } =
+      await import("@/api/handlers/chat/third-party-boundary");
+    const { scopedDb } = createScopedDbMock({});
+    const boundary = createChatThirdPartyBoundary({
+      anonymizeFields: anonymizeSecrets,
+      anonymizationScopeId: "workspace-A",
+      organizationId: toSafeId<"organization">(
+        "11111111-1111-4111-8111-111111111111",
+      ),
+      scopedDb,
+      sendMode: CHAT_SEND_MODE.anonymized,
+    });
+    const literal = "[MISC_9007199254740991]";
+
+    const prepared = await prepareTextForThirdParty({
+      boundary,
+      text: `${literal} First Second`,
+    });
+
+    expect(Result.isOk(prepared)).toBe(true);
+    if (Result.isError(prepared)) {
+      throw prepared.error;
+    }
+    expect(prepared.value).toBe(`${literal} [MISC_1] [MISC_2]`);
+    expect(deanonymizeFromBoundary({ boundary, text: prepared.value })).toBe(
+      `${literal} First Second`,
+    );
+  });
+
   test("round-trip helpers are no-ops on raw boundaries", async () => {
     const { deanonymizeFromBoundary } =
       await import("@/api/handlers/chat/third-party-boundary");

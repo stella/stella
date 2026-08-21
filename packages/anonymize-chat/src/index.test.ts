@@ -429,6 +429,37 @@ describe("runChatAnonPipeline excludedCanonicals", () => {
     ).rejects.toThrow("forced sensitive value remained after anonymization");
   });
 
+  test("accepts self-overlapping forced occurrences removed by one full span", async () => {
+    const forcedValue = "aaa";
+    const runtime = buildRuntime([makeEntity(forcedValue, "misc")]);
+
+    const result = await runChatAnonPipeline({
+      runtime,
+      dictionaries,
+      text: "aaaa",
+      workspaceId: "ws-1",
+      forcedSensitiveValues: [forcedValue],
+    });
+
+    expect(result.redactedText).toBe("[MISC_1]a");
+    expect(result.redactionMap).toEqual(new Map([["[MISC_1]", forcedValue]]));
+  });
+
+  test("rejects a self-overlapping forced run with an uncovered occurrence", () => {
+    const forcedValue = "aaa";
+    const runtime = buildRuntime([makeEntity(forcedValue, "misc")]);
+
+    expect(
+      runChatAnonPipeline({
+        runtime,
+        dictionaries,
+        text: "aaaaaa",
+        workspaceId: "ws-1",
+        forcedSensitiveValues: [forcedValue],
+      }),
+    ).rejects.toThrow("forced sensitive value remained after anonymization");
+  });
+
   test("accepts forced source text contained only in generated placeholders", async () => {
     const forcedValue = "MISC";
     const runtime = buildRuntime([makeEntity(forcedValue, "misc")]);

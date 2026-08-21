@@ -66,6 +66,8 @@ export type ChatThirdPartyBoundary =
       pipelineContext: PipelineContext;
       /** Highest placeholder index seen per label after boundary-local rewrites. */
       placeholderOffsets: Map<string, number>;
+      /** Indexed placeholder tokens present literally in provider-bound source text. */
+      sourcePlaceholders: Set<string>;
       /**
        * Cumulative placeholder → original map across every
        * anonymization call on this boundary. Mutated as the request
@@ -124,6 +126,7 @@ export const createChatThirdPartyBoundary = ({
         placeholderOffsets: new Map<string, number>(),
         redactionMap: new Map<string, string>(),
         scopedDb,
+        sourcePlaceholders: new Set<string>(),
       }
     : { type: "raw" };
 
@@ -174,14 +177,7 @@ const reserveSourcePlaceholders = (
 ) => {
   for (const field of fields) {
     for (const match of field.matchAll(INDEXED_PLACEHOLDER_OCCURRENCE)) {
-      const parsed = parseIndexedPlaceholder(match[0]);
-      if (parsed === null) {
-        continue;
-      }
-      const currentOffset = boundary.placeholderOffsets.get(parsed.label) ?? 0;
-      if (parsed.index > currentOffset) {
-        boundary.placeholderOffsets.set(parsed.label, parsed.index);
-      }
+      boundary.sourcePlaceholders.add(match[0]);
     }
   }
 };
@@ -262,10 +258,21 @@ const rewriteBoundaryPlaceholders = (
       continue;
     }
 
-    const nextIndex =
+    let nextIndex =
       nextIndexByLabel.get(parsed.label) ??
       (boundary.placeholderOffsets.get(parsed.label) ?? 0) + 1;
-    const nextPlaceholder = `[${parsed.label}_${nextIndex}]`;
+    let nextPlaceholder = `[${parsed.label}_${String(nextIndex)}]`;
+    while (
+      boundary.sourcePlaceholders.has(nextPlaceholder) ||
+      boundary.redactionMap.has(nextPlaceholder) ||
+      redactionMap.has(nextPlaceholder)
+    ) {
+      nextIndex += 1;
+      if (!Number.isSafeInteger(nextIndex)) {
+        throw new TypeError("placeholder index exceeds the safe integer range");
+      }
+      nextPlaceholder = `[${parsed.label}_${String(nextIndex)}]`;
+    }
     replacements.set(placeholder, nextPlaceholder);
     redactionMap.set(nextPlaceholder, original);
     nextIndexByLabel.set(parsed.label, nextIndex + 1);

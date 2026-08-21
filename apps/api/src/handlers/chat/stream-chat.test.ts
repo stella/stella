@@ -2161,6 +2161,7 @@ const createBoundary = (
   placeholderOffsets: new Map<string, number>(),
   redactionMap: new Map(pairs),
   scopedDb,
+  sourcePlaceholders: new Set<string>(),
   type: "anonymized",
 });
 
