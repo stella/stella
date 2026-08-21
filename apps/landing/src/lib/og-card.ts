@@ -5,7 +5,6 @@
 // site-wide fallback — so a layout change lands on all of them at once.
 import { Resvg } from "@resvg/resvg-js";
 import { readFileSync } from "node:fs";
-import sharp from "sharp";
 
 import {
   CARD_FACES,
@@ -43,11 +42,10 @@ export const renderOgCard = async (options: OgCardOptions): Promise<Buffer> => {
     font: { fontFiles: [face.path], loadSystemFonts: false },
   }).render();
 
-  return sharp(Buffer.from(rendered.pixels), {
-    raw: { width: WIDTH, height: HEIGHT, channels: 4 },
-  })
-    .png({ palette: true, colours: CARD_PALETTE_COLOURS })
-    .toBuffer();
+  Bun.Image.backend = "bun";
+  return await new Bun.Image(rendered.asPng())
+    .png({ palette: true, colors: CARD_PALETTE_COLOURS })
+    .buffer();
 };
 
 const cardSvg = ({

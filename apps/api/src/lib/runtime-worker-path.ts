@@ -31,17 +31,20 @@ export const RUNTIME_WORKER_SIDECAR_FILES = [
 
 /**
  * Native lookups the bundled workers perform at runtime through paths the
- * bundler cannot rewrite: bare `require`s of platform packages and
- * bundle-relative directory walks. The Dockerfile ships each entry into
- * the runner filesystem, and the image-layout test reproduces the same
- * layout with Bun's install cache disabled — so a newly introduced hidden
- * lookup fails a local test run before it can fail an image build.
+ * bundler cannot rewrite: bundle-relative directory walks. The Dockerfile
+ * ships each entry into the runner filesystem, and the image-layout test
+ * reproduces the same layout with Bun's install cache disabled — so a newly
+ * introduced hidden lookup fails a local test run before it can fail an image
+ * build.
  */
 export const RUNTIME_WORKER_NATIVE_LOOKUPS = {
-  /** npm scopes materialized as a node_modules beside the worker bundles. */
-  nodeModuleDirs: ["@img"],
   /** node_modules paths shipped as siblings of the workers directory. */
-  siblingDirs: [{ source: "onnxruntime-node/bin", target: "bin" }],
+  siblingDirs: [
+    {
+      source: `onnxruntime-node/bin/napi-v6/${process.platform}/${process.arch}`,
+      target: `bin/napi-v6/${process.platform}/${process.arch}`,
+    },
+  ],
 } as const;
 
 export const runtimeWorkerDir = (): string | undefined =>

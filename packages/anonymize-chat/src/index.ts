@@ -10,7 +10,6 @@ import type {
   NativePipelineEntity,
   OperatorType,
   PipelineConfig,
-  PipelineContext,
 } from "@stll/anonymize-wasm";
 
 /**
@@ -164,18 +163,39 @@ export const isThirdPartyBoundaryRefusalError = (error: Error): boolean =>
     parseChatTransportErrorMessage(error.message),
   );
 
+type ChatAnonPipeline = Pick<
+  Awaited<ReturnType<typeof createNativePipelineFromConfig>>,
+  "redactText"
+>;
+
+type ChatAnonPipelineOptions<TBinding, TPipelineContext> = Omit<
+  Parameters<typeof createNativePipelineFromConfig>[0],
+  "binding" | "context"
+> & {
+  binding: TBinding;
+  context: TPipelineContext;
+};
+
 /**
- * Runtime seam the wasm entry (main thread or worker) injects into
+ * Runtime seam the browser WASM or server-native entry injects into
  * {@link runChatAnonPipeline}. `createNativePipelineFromConfig`
  * assembles (or reuses, via `context`) a prepared native pipeline
  * for a config + gazetteer; `redactText` on the resulting pipeline
  * runs detection and redaction as ONE combined call — there is no
  * separate detect-then-redact step anymore.
  */
-export type ChatAnonRuntime = {
-  getBinding: typeof getBinding;
-  createNativePipelineFromConfig: typeof createNativePipelineFromConfig;
-  createPipelineContext: typeof createPipelineContext;
+export type ChatAnonRuntime<
+  TBinding = Awaited<ReturnType<typeof getBinding>>,
+  TPipelineContext = ReturnType<typeof createPipelineContext>,
+  TPipeline extends ChatAnonPipeline = Awaited<
+    ReturnType<typeof createNativePipelineFromConfig>
+  >,
+> = {
+  getBinding: () => Promise<TBinding> | TBinding;
+  createNativePipelineFromConfig: (
+    options: ChatAnonPipelineOptions<TBinding, TPipelineContext>,
+  ) => Promise<TPipeline> | TPipeline;
+  createPipelineContext: () => TPipelineContext;
   deanonymise: typeof deanonymise;
 };
 
@@ -410,7 +430,11 @@ const applyExcludedCanonicals = ({
   });
 };
 
-export const runChatAnonPipeline = async ({
+export const runChatAnonPipeline = async <
+  TBinding,
+  TPipelineContext,
+  TPipeline extends ChatAnonPipeline,
+>({
   context: providedContext,
   dictionaries,
   excludedCanonicals,
@@ -423,13 +447,13 @@ export const runChatAnonPipeline = async ({
   denyListCountries,
   standaloneStreetDetection,
 }: {
-  runtime: ChatAnonRuntime;
+  runtime: ChatAnonRuntime<TBinding, TPipelineContext, TPipeline>;
   dictionaries: NonNullable<PipelineConfig["dictionaries"]>;
   text: string;
   locale?: string | undefined;
   workspaceId: string;
   gazetteerEntries?: GazetteerEntry[] | undefined;
-  context?: PipelineContext | undefined;
+  context?: TPipelineContext | undefined;
   /** Opt in to deny-list detection; see {@link buildChatAnonPipelineConfig}. */
   enableDenyList?: boolean | undefined;
   /** Country codes whose deny-list/city dictionaries are loaded. */

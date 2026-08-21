@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import { and, asc, eq, isNull, or } from "drizzle-orm";
 
-import type { GazetteerEntry } from "@stll/anonymize-wasm";
+import type { GazetteerEntry } from "@stll/anonymize";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { anonymizationBlacklistEntries } from "@/api/db/schema";
@@ -157,5 +157,5 @@ export const loadAnonymizationGazetteerEntries = async ({
   }));
 };
 
-// Org-wide custom regex rules belong here once @stll/anonymize-wasm exposes a
+// Org-wide custom regex rules belong here once @stll/anonymize exposes a
 // safe first-class custom regex detector API.

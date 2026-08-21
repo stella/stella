@@ -21,7 +21,6 @@
 import { PDFiumLibrary } from "@hyzyla/pdfium";
 import path from "node:path";
 import * as ort from "onnxruntime-node";
-import sharp from "sharp";
 
 import {
   OCR_LOCAL_MODEL_FILES,
@@ -43,6 +42,7 @@ import {
   REC_MAX_INPUT_WIDTH,
   type TextBox,
 } from "@/api/lib/ocr-local/ppocr-pipeline";
+import { resizeRgbRegion, rgbaToRgb } from "@/api/lib/ocr-local/rgb-image";
 
 /** Render at 300dpi, capped so an oversized page cannot balloon memory. */
 const RENDER_TARGET_SCALE = 300 / 72;
@@ -56,7 +56,6 @@ const die = (message: string): never => {
 
 const modelDir = process.argv[2] ?? die("model directory argument is required");
 
-sharp.cache(false);
 const sessionOptions: ort.InferenceSession.SessionOptions = {
   enableCpuMemArena: false,
   enableMemPattern: false,
@@ -87,14 +86,15 @@ type RenderedPage = {
 
 const detect = async (page: RenderedPage): Promise<TextBox[]> => {
   const size = detInputSize({ width: page.width, height: page.height });
-  const resized = await sharp(page.data, {
-    raw: { width: page.width, height: page.height, channels: 3 },
-  })
-    .resize(size.width, size.height, { fit: "fill" })
-    .raw()
-    .toBuffer();
+  const resized = resizeRgbRegion({
+    data: page.data,
+    width: page.width,
+    height: page.height,
+    targetWidth: size.width,
+    targetHeight: size.height,
+  });
   const pixelCount = size.width * size.height;
-  const input = normalizeDetInput(new Uint8Array(resized), pixelCount);
+  const input = normalizeDetInput(resized, pixelCount);
   const output = await detSession.run({
     [detSession.inputNames[0] ?? "x"]: new ort.Tensor("float32", input, [
       1,
@@ -153,22 +153,21 @@ const recognize = async (
         batchWidth,
         Math.max(1, Math.round(REC_INPUT_HEIGHT * (ratios[boxIndex] ?? 1))),
       );
-      const crop = await sharp(page.data, {
-        raw: { width: page.width, height: page.height, channels: 3 },
-      })
-        .extract({
-          left: box.x0,
-          top: box.y0,
-          width: box.x1 - box.x0,
-          height: box.y1 - box.y0,
-        })
-        .resize(cropWidth, REC_INPUT_HEIGHT, { fit: "fill" })
-        .raw()
-        .toBuffer();
+      const crop = resizeRgbRegion({
+        data: page.data,
+        width: page.width,
+        height: page.height,
+        left: box.x0,
+        top: box.y0,
+        regionWidth: box.x1 - box.x0,
+        regionHeight: box.y1 - box.y0,
+        targetWidth: cropWidth,
+        targetHeight: REC_INPUT_HEIGHT,
+      });
       packRecCrop({
         batchIndex: bi,
         batchWidth,
-        crop: new Uint8Array(crop),
+        crop,
         cropWidth,
         tensor,
       });
@@ -262,14 +261,13 @@ try {
       RENDER_MAX_SIDE_PIXELS / Math.max(pointWidth, pointHeight),
     );
     const render = await page.render({ scale });
-    const rgb = await sharp(render.data, {
-      raw: { width: render.width, height: render.height, channels: 4 },
-    })
-      .removeAlpha()
-      .raw()
-      .toBuffer();
+    const rgb = rgbaToRgb({
+      data: render.data,
+      width: render.width,
+      height: render.height,
+    });
     const rendered: RenderedPage = {
-      data: new Uint8Array(rgb),
+      data: rgb,
       width: render.width,
       height: render.height,
       scaleX: render.width / pointWidth,

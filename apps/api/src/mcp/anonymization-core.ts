@@ -1,12 +1,14 @@
 import { panic } from "better-result";
 
-import { runChatAnonPipeline } from "@stll/anonymize-chat";
-import type { ChatAnonRuntime } from "@stll/anonymize-chat";
 import type {
   GazetteerEntry,
+  NativeAnonymizeBinding,
   PipelineConfig,
   PipelineContext,
-} from "@stll/anonymize-wasm";
+  PreparedNativePipeline,
+} from "@stll/anonymize";
+import { runChatAnonPipeline } from "@stll/anonymize-chat";
+import type { ChatAnonRuntime } from "@stll/anonymize-chat";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -45,7 +47,11 @@ export type AnonymizeTextFieldsInput = {
   context?: PipelineContext | undefined;
 };
 
-export type AnonymizeTextFieldsDependencies = ChatAnonRuntime & {
+export type AnonymizeTextFieldsDependencies = ChatAnonRuntime<
+  NativeAnonymizeBinding,
+  PipelineContext,
+  PreparedNativePipeline
+> & {
   loadAnonymizationGazetteerEntries: (input: {
     organizationId: SafeId<"organization">;
     scopedDb: ScopedDb;

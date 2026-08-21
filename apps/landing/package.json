@@ -36,7 +36,6 @@
     "lucide-react": "catalog:",
     "react": "catalog:react19",
     "react-dom": "catalog:react19",
-    "sharp": "0.35.3",
     "tailwindcss": "catalog:",
     "use-debounce": "^10.1.1",
     "use-intl": "catalog:"

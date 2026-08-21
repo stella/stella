@@ -15,11 +15,11 @@ import { Result } from "better-result";
 import { describe, expect, spyOn, test } from "bun:test";
 import * as v from "valibot";
 
+import { createPipelineContext } from "@stll/anonymize";
 import {
   CHAT_SEND_MODE,
   CHAT_TRANSPORT_ERROR_CODE,
 } from "@stll/anonymize-chat";
-import { createPipelineContext } from "@stll/anonymize-wasm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import {

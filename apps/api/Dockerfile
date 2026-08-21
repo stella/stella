@@ -40,6 +40,7 @@ RUN --mount=type=cache,target=/root/.bun/install/cache \
 # is baked as `true` in the compiled binary, and the resulting
 # image runs as if it were dev (e.g. OTP emails are skipped).
 FROM deps AS builder
+ARG TARGETARCH
 ENV NODE_ENV=production
 COPY --from=pruner /app/out/full/ .
 # Build the server unminified: `bun build --minify` can break Elysia's AOT
@@ -80,8 +81,7 @@ RUN bun build \
 # one output. The whole directory is copied into the runtime image below, so the
 # sidecar travels with the bundle. The same-stage `cp` calls below copy regular
 # files whose path may traverse a package symlink under an isolated install;
-# cp follows it. Only a cross-stage COPY of a symlink breaks, and those assets
-# go through stage-runtime-assets.ts instead.
+# cp follows it and materializes each asset before the cross-stage COPY.
 RUN mkdir -p /app/runtime-workers && \
     bun build \
       --target bun \
@@ -115,17 +115,23 @@ RUN mkdir -p /app/runtime-workers && \
 # native binding, which the bundled worker resolves relative to its own
 # location (`../bin/...`), so the directory must sit beside the workers.
 RUN cd apps/api && bun src/scripts/fetch-ocr-models.ts /app/ocr-models
-# Native runtime assets (onnxruntime binding, sharp platform packages,
-# anonymize native glue, quickjs wasm) are located through Bun's resolver and
-# copied with symlinks dereferenced, so the runner stage never reads
-# node_modules and the install's layout (hoisted or isolated) cannot leak into
-# the image. A package that does not resolve fails the build here.
-RUN bun apps/api/src/scripts/stage-runtime-assets.ts /app/runtime-native
+# Materialize only this image's ONNX Runtime closure. The package contains
+# binaries for every supported OS and architecture; copying its whole `bin`
+# directory adds more than 200 MB of unreachable files. `cp -L` also resolves
+# Bun's isolated-install symlink before the cross-stage COPY below.
+RUN case "$TARGETARCH" in \
+      amd64) onnx_arch=x64 ;; \
+      arm64) onnx_arch=arm64 ;; \
+      *) echo "unsupported ONNX Runtime architecture: $TARGETARCH" >&2; exit 1 ;; \
+    esac && \
+    mkdir -p "/app/runtime-onnx/bin/napi-v6/linux/$onnx_arch" && \
+    cp -RL \
+      "apps/api/node_modules/onnxruntime-node/bin/napi-v6/linux/$onnx_arch/." \
+      "/app/runtime-onnx/bin/napi-v6/linux/$onnx_arch/"
 RUN bun --filter @stll/legal-atlas-runner build
-# Runtime-asset smoke probe: initializes every lazily loaded asset the runner
-# stage copies by hand (anonymize engine, quickjs wasm, yara rules, worker
-# bundles, OCR font). Compiled like the server so its bundled asset URLs
-# resolve under $bunfs/root the same way; run by the verification stage below.
+# Runtime-asset smoke probe: initializes the compiled anonymize and QuickJS
+# runtimes, plus the external YARA rules, worker bundles, OCR model, and font.
+# Compiled like the server and run by the verification stage below.
 RUN bun build \
     --compile \
     --target bun \
@@ -157,7 +163,6 @@ ENV REQUIRE_PERSONAL_AI_KEY=true
 ENV STELLA_WORKER_DIR=/\$bunfs/root/workers
 ENV STELLA_OCR_PDF_FONT_PATH=/\$bunfs/root/fonts/CabinetGrotesk-Regular.otf
 ENV DOCUMENT_OCR_MODEL_DIR=/app/ocr-models
-ENV STLL_ANONYMIZE_ASSET_DIR=/app/anonymize-native
 ENV TEMPLATE_PACKS_CONTENT_DIR=/app/template-packs-content
 RUN groupadd --system --gid 1001 stella && \
     useradd --system --uid 1001 --gid stella --no-create-home stella
@@ -172,24 +177,16 @@ COPY --chown=stella:stella --from=builder /app/apps/api/src/db/migrate.js /app/a
 COPY --chown=stella:stella --from=builder /app/apps/api/drizzle /app/apps/api/drizzle
 RUN mkdir -p '/$bunfs/root'
 COPY --chown=stella:stella --from=builder /app/runtime-workers /\$bunfs/root/workers
-# Native runtime assets come from the resolver-staged directory, never from
-# node_modules (see stage-runtime-assets.ts). The bundled OCR worker dlopens
-# onnxruntime from `../bin` relative to the workers directory; sharp's platform
-# packages resolve through bare `@img/...` requires against a node_modules
-# directory beside the worker bundles. The image smoke spawns the worker, so a
-# missing binding fails the build, not the first run.
-COPY --chown=stella:stella --from=builder /app/runtime-native/bin /\$bunfs/root/bin
-COPY --chown=stella:stella --from=builder /app/runtime-native/node_modules/@img /\$bunfs/root/workers/node_modules/@img
+# ONNX Runtime is the one native exception: its binding dynamically links a
+# sibling shared library, so Bun cannot embed it as one standalone asset. The
+# bundled worker resolves this package-owned directory as `../bin`; the image
+# smoke executes a real model so a broken native closure fails the build.
+COPY --chown=stella:stella --from=builder /app/runtime-onnx/bin /\$bunfs/root/bin
 COPY --chown=stella:stella --from=builder /app/ocr-models /app/ocr-models
 COPY --chown=stella:stella --from=install-inputs \
     /app/apps/landing/public/fonts/CabinetGrotesk-Regular.otf \
     /\$bunfs/root/fonts/CabinetGrotesk-Regular.otf
 COPY --chown=stella:stella --from=builder /app/apps/api/src/lib/file-scan/yara /\$bunfs/root/yara
-# @stll/anonymize-wasm loads its native glue via ESM import(), which a
-# compiled binary resolves against its embedded filesystem only — fs APIs
-# fall back to disk, import() does not. STLL_ANONYMIZE_ASSET_DIR points the
-# loader at a real directory instead.
-COPY --chown=stella:stella --from=builder /app/runtime-native/anonymize-native/ /app/anonymize-native/
 # Bundled template packs: the manifest is compiled into the binary, the DOCX
 # bytes are read from TEMPLATE_PACKS_CONTENT_DIR when a pack is installed.
 # Copied from the unpruned context stage. A build whose context has no content
@@ -197,9 +194,6 @@ COPY --chown=stella:stella --from=builder /app/runtime-native/anonymize-native/ 
 COPY --chown=stella:stella --from=install-inputs \
     /app/packages/template-packs/content/ \
     /app/template-packs-content/
-# quickjs-emscripten loads this WASM file at runtime from the
-# compiled Bun binary's `$bunfs/root` asset directory.
-COPY --chown=stella:stella --from=builder /app/runtime-native/quickjs/emscripten-module.wasm /\$bunfs/root/
 WORKDIR /app/apps/api
 
 USER stella
