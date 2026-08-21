@@ -7,6 +7,7 @@ import {
   atRisPreviousMonth,
   createAtCourtsAdapter,
 } from "./at-courts";
+import { requireReconciliation } from "./test-utils";
 
 const SOURCE_ID = "JJT_20260115_OGH0002_0010OB00001_26A0000_000";
 const SECOND_SOURCE_ID = "JJT_20260115_OGH0002_0010OB00001_26A0000_001";
@@ -114,8 +115,9 @@ describe("Austrian RIS adapter", () => {
     expect(adapter.language).toBe("de");
     expect(adapter.minRequestIntervalMs).toBe(5000);
     expect(adapter.maxSyncPages).toBe(1);
-    expect(adapter.reconciliation?.firstSlice).toBe("1925-04");
-    expect(adapter.reconciliation?.tipWindowDays).toBe(3);
+    const reconciliation = requireReconciliation(adapter);
+    expect(reconciliation.firstSlice).toBe("1925-04");
+    expect(reconciliation.tipWindowDays).toBe(3);
   });
 
   it("uses inverse, lexicographically ordered UTC month slices", () => {
@@ -175,11 +177,7 @@ describe("Austrian RIS adapter", () => {
 
     const verified = await adapter.fetchPage(firstPage.nextCursor, {});
     expect(verified.isOk()).toBe(true);
-    expect(verified.unwrap().coverage).toEqual({
-      slice: "2026-01",
-      reported: 1,
-      collected: 1,
-    });
+    expect(verified.unwrap().decisions).toEqual([]);
   });
 
   it("keeps distinct publisher documents that share a docket", async () => {
@@ -236,11 +234,7 @@ describe("Austrian RIS adapter", () => {
       await adapter.fetchPage(verifyFirst.nextCursor, {})
     ).unwrap();
 
-    expect(verified.coverage).toEqual({
-      slice: "2026-01",
-      reported: 1,
-      collected: 1,
-    });
+    expect(verified.decisions).toEqual([]);
     expect(
       urls
         .filter((url) => url.startsWith("https://data.bka.gv.at"))
@@ -268,8 +262,9 @@ describe("Austrian RIS adapter", () => {
     });
 
     expect((await adapter.fetchPage(null, {})).isErr()).toBe(true);
+    const reconciliation = requireReconciliation(adapter);
     expect(
-      adapter.reconciliation?.listSlicePage({ slice: "2026-01", page: 0 }),
+      reconciliation.listSlicePage({ slice: "2026-01", page: 0 }),
     ).rejects.toThrow("exceeds 200 pages");
   });
 
@@ -339,11 +334,7 @@ describe("Austrian RIS adapter", () => {
     const emptyResult = await empty.fetchPage(null, {});
     expect(emptyResult.isOk()).toBe(true);
     expect(emptyResult.unwrap().decisions).toEqual([]);
-    expect(emptyResult.unwrap().coverage).toEqual({
-      slice: "2026-02",
-      reported: 0,
-      collected: 0,
-    });
+    expect(emptyResult.unwrap().nextCursor).not.toBeNull();
   });
 
   it("subtracts the publisher's foreign-court subset from its total", async () => {
@@ -359,8 +350,8 @@ describe("Austrian RIS adapter", () => {
       },
     });
 
-    const count = await adapter.getTotalCount?.(new AbortController().signal);
-    expect(count).toBe(170_013);
+    const count = await adapter.getTotalCount(new AbortController().signal);
+    expect(count).toEqual({ type: "count", total: 170_013 });
     expect(delays).toEqual([5000]);
     expect(new URL(urls[1] ?? "").searchParams.get("Gericht")).toBe("AUSL");
   });
@@ -390,10 +381,7 @@ describe("Austrian RIS adapter", () => {
         delays.push(delay);
       },
     });
-    const reconciliation = adapter.reconciliation;
-    if (reconciliation === undefined) {
-      throw new Error("at-courts must declare reconciliation");
-    }
+    const reconciliation = requireReconciliation(adapter);
 
     const listed = await reconciliation.listSlicePage({
       slice: "2026-01",
@@ -427,10 +415,7 @@ describe("Austrian RIS adapter", () => {
       request,
       sleep: async () => {},
     });
-    const reconciliation = adapter.reconciliation;
-    if (reconciliation === undefined) {
-      throw new Error("at-courts must declare reconciliation");
-    }
+    const reconciliation = requireReconciliation(adapter);
 
     const built = await reconciliation.buildDecision(listingItem());
     expect(built.type).toBe("built");
@@ -453,10 +438,7 @@ describe("Austrian RIS adapter", () => {
     const adapter = createAtCourtsAdapter({
       now: () => new Date("2026-02-15T12:00:00Z"),
     });
-    const reconciliation = adapter.reconciliation;
-    if (reconciliation === undefined) {
-      throw new Error("at-courts must declare reconciliation");
-    }
+    const reconciliation = requireReconciliation(adapter);
 
     expect(reconciliation.sliceOf(new Date("2026-02-15T12:00:00Z"))).toBe(
       "2026-01",

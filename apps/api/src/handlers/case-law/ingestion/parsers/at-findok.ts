@@ -91,6 +91,45 @@ export const parseFindokDecisionXml = (
     });
   };
 
+  const appendNode = (node: AnyNode, document: cheerio.CheerioAPI): void => {
+    if (!isTag(node)) {
+      if (isText(node)) {
+        appendParagraph(normalizedText(node.data));
+      }
+      return;
+    }
+    const text = normalizedText(document(node).text());
+    if (text === "") {
+      return;
+    }
+    if (/^h[1-6]$/u.test(node.tagName)) {
+      blockIndex += 1;
+      blocks.push({
+        id: `b${blockIndex}`,
+        anchorId: `h-${blockIndex}`,
+        type: "heading",
+        level: headingLevel(node),
+        role: blockIndex === 1 ? "decision-title" : "section-heading",
+        inlines: [{ type: "text", text }],
+        plainText: text,
+      });
+      return;
+    }
+    if (node.tagName === "p" || node.tagName === "li") {
+      appendParagraph(text);
+      return;
+    }
+    if (document(node).find("h1, h2, h3, h4, h5, h6, p, li").length === 0) {
+      appendParagraph(text);
+      return;
+    }
+    document(node)
+      .contents()
+      .each((_, child) => {
+        appendNode(child, document);
+      });
+  };
+
   for (const xhtml of xhtmlSegments) {
     const document = cheerio.load(xhtml);
     const body = document("body").first();
@@ -103,47 +142,8 @@ export const parseFindokDecisionXml = (
     }
     validationParts.push(validationText);
 
-    const appendNode = (node: AnyNode): void => {
-      if (!isTag(node)) {
-        if (isText(node)) {
-          appendParagraph(normalizedText(node.data));
-        }
-        return;
-      }
-      const text = normalizedText(document(node).text());
-      if (text === "") {
-        return;
-      }
-      if (/^h[1-6]$/u.test(node.tagName)) {
-        blockIndex += 1;
-        blocks.push({
-          id: `b${blockIndex}`,
-          anchorId: `h-${blockIndex}`,
-          type: "heading",
-          level: headingLevel(node),
-          role: blockIndex === 1 ? "decision-title" : "section-heading",
-          inlines: [{ type: "text", text }],
-          plainText: text,
-        });
-        return;
-      }
-      if (node.tagName === "p" || node.tagName === "li") {
-        appendParagraph(text);
-        return;
-      }
-      if (document(node).find("h1, h2, h3, h4, h5, h6, p, li").length === 0) {
-        appendParagraph(text);
-        return;
-      }
-      document(node)
-        .contents()
-        .each((_, child) => {
-          appendNode(child);
-        });
-    };
-
     body.contents().each((_, node) => {
-      appendNode(node);
+      appendNode(node, document);
     });
   }
 

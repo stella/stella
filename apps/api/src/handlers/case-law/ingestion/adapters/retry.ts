@@ -95,19 +95,17 @@ export const fetchWithRetry = async (
     if (signal?.aborted) {
       throw signal.reason ?? new DOMException("Aborted", "AbortError");
     }
-    if (beforeAttempt !== undefined) {
-      // oxlint-disable-next-line no-await-in-loop -- every retry must reserve its own publisher-rate slot
-      await beforeAttempt();
-    }
-
     try {
       // oxlint-disable-next-line no-await-in-loop -- retry-with-backoff: each attempt must await the previous attempt's outcome
-      const response = await fetchWithTimeout(url, {
-        ...init,
-        headers,
-        timeoutMs,
-        signal,
-      });
+      const response = await (beforeAttempt?.() ?? Promise.resolve()).then(
+        async () =>
+          await fetchWithTimeout(url, {
+            ...init,
+            headers,
+            timeoutMs,
+            signal,
+          }),
+      );
 
       if (!isRetryableStatus(response.status) || attempt >= maxRetries) {
         return response;

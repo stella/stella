@@ -9,6 +9,7 @@ import {
   defineSourceAdapter,
   EMPTY_AST,
   isPersistableSourceDocumentId,
+  sourceTotalRead,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import type {
   IngestionResult,
@@ -21,7 +22,7 @@ import {
   fetchAtFindokWithRetry,
   FINDOK_REQUEST_INTERVAL_MS,
 } from "@/api/handlers/case-law/ingestion/adapters/at-findok-throttle";
-import { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
+import type { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import {
   adapterCatch,
   hashContent,
@@ -30,6 +31,7 @@ import { parseFindokDecisionXml } from "@/api/handlers/case-law/ingestion/parser
 import { sectionsFromAst } from "@/api/handlers/case-law/ingestion/sections-from-ast";
 import { loadDocxArchive } from "@/api/lib/docx-archive";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
+import { errorTag } from "@/api/lib/errors/utils";
 import { isRecord } from "@/api/lib/type-guards";
 
 const FINDOK_ORIGIN = "https://findok.bmf.gv.at";
@@ -168,6 +170,7 @@ const manifestItem = (value: unknown): FindokManifestItem | undefined => {
     dokumentId: optionalString(value["dokumentId"]),
   };
   if (
+    typeof stammNr !== "number" ||
     !Number.isSafeInteger(stammNr) ||
     stammNr < 1 ||
     typeof gueltig !== "boolean" ||
@@ -228,22 +231,12 @@ const readStreamBounded = async (
 ): Promise<Uint8Array> => {
   const chunks: Uint8Array[] = [];
   let total = 0;
-  const reader = stream.getReader();
-  try {
-    while (true) {
-      // oxlint-disable-next-line no-await-in-loop -- response streams must be pulled sequentially and are byte-bounded
-      const chunk = await reader.read();
-      if (chunk.done) {
-        break;
-      }
-      total += chunk.value.byteLength;
-      if (total > maxBytes) {
-        throw new TypeError(`Findok response exceeded ${maxBytes} bytes`);
-      }
-      chunks.push(chunk.value);
+  for await (const chunk of stream) {
+    total += chunk.byteLength;
+    if (total > maxBytes) {
+      throw new TypeError(`Findok response exceeded ${maxBytes} bytes`);
     }
-  } finally {
-    reader.releaseLock();
+    chunks.push(chunk);
   }
   const bytes = new Uint8Array(total);
   let offset = 0;
@@ -295,7 +288,12 @@ export const parseFindokManifest = (
       items.push(item);
     }
   }
-  items.sort((left, right) => left.dokumentId.localeCompare(right.dokumentId));
+  items.sort((left, right) => {
+    if (left.dokumentId === right.dokumentId) {
+      return 0;
+    }
+    return left.dokumentId < right.dokumentId ? -1 : 1;
+  });
   return {
     collection,
     generatedAt,
@@ -468,12 +466,17 @@ const decodeCursor = (
     sliceParts(slice) === undefined ||
     slice > tipSlice(now) ||
     (phase !== CURSOR_PHASE.COLLECT && phase !== CURSOR_PHASE.VERIFY) ||
+    typeof page !== "number" ||
     !Number.isSafeInteger(page) ||
     page < 0 ||
     digest === undefined ||
+    typeof collected !== "number" ||
     !Number.isSafeInteger(collected) ||
     collected < 0 ||
-    (total !== null && (!Number.isSafeInteger(total) || total < 0)) ||
+    (total !== null &&
+      (typeof total !== "number" ||
+        !Number.isSafeInteger(total) ||
+        total < 0)) ||
     (snapshotId !== null && typeof snapshotId !== "string") ||
     (expectedDigest !== null && typeof expectedDigest !== "string") ||
     (phase === CURSOR_PHASE.COLLECT && expectedDigest !== null) ||
@@ -482,9 +485,13 @@ const decodeCursor = (
     return undefined;
   }
   const base = { collected, digest, page, slice, snapshotId, total };
-  return phase === CURSOR_PHASE.COLLECT
-    ? { ...base, expectedDigest: null, phase }
-    : { ...base, expectedDigest, phase };
+  if (phase === CURSOR_PHASE.COLLECT) {
+    return { ...base, expectedDigest: null, phase };
+  }
+  if (typeof expectedDigest !== "string") {
+    return undefined;
+  }
+  return { ...base, expectedDigest, phase };
 };
 
 const listingDigest = (
@@ -688,7 +695,7 @@ const parseListingPayload = (
 
 export const createAtFindokAdapter = (
   dependencyOverrides: Partial<AtFindokDependencies> = {},
-): SourceAdapter => {
+): SourceAdapter & { readonly key: typeof ADAPTER_KEYS.AT_FINDOK } => {
   const dependencies = { ...DEFAULT_DEPENDENCIES, ...dependencyOverrides };
   const loadManifest = createManifestLoader(dependencies);
   return defineSourceAdapter({
@@ -745,9 +752,9 @@ export const createAtFindokAdapter = (
       try {
         const ufs = await loadManifest("ufs", signal);
         const bfg = await loadManifest("bfg", signal);
-        return ufs.items.length + bfg.items.length;
-      } catch {
-        return null;
+        return sourceTotalRead(ufs.items.length + bfg.items.length);
+      } catch (error) {
+        return { type: "probe-failed", errorTag: errorTag(error) };
       }
     },
 
@@ -792,7 +799,6 @@ export const createAtFindokAdapter = (
             return {
               decisions: [],
               nextCursor: encodeCursor(nextState),
-              coverage: { slice: state.slice, reported: 0, collected: 0 },
             };
           }
           const totalPages = Math.ceil(allItems.length / CRAWL_PAGE_SIZE);
@@ -833,26 +839,19 @@ export const createAtFindokAdapter = (
               nextCursor: encodeCursor(
                 cursorForSlice(next ?? tipSlice(dependencies.now())),
               ),
-              coverage: {
-                slice: state.slice,
-                reported: expectedTotal,
-                collected: state.collected,
-              },
             };
           }
 
-          const decisions: IngestionResult[] = [];
-          for (const item of pageItems) {
-            decisions.push(
-              // oxlint-disable-next-line no-await-in-loop -- publisher artifact requests are deliberately paced and sequential
+          const decisions = await Array.fromAsync(
+            pageItems,
+            async (item) =>
               await buildDecision({
                 cursor,
                 dependencies,
                 payload: { collection: parts.collection, item },
                 signal,
               }),
-            );
-          }
+          );
           const collected = state.collected + decisions.length;
           if (state.page + 1 < totalPages) {
             return {

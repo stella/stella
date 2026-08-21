@@ -9,7 +9,6 @@ import type {
   EmptyAst,
 } from "@/api/lib/legal-search/document-types";
 import type {
-  ReconciliationUnsupported,
   SliceCoverage,
   SourceSliceWalk,
   SourceTotalCount,
@@ -126,6 +125,13 @@ export type LegislationSyncPage = {
  */
 export type LegislationSourceReconciliation = SourceSliceWalk;
 
+/** A legislation source whose forward-only cursor cannot be reconciled. */
+export type LegislationReconciliationUnsupported = {
+  type: "unsupported";
+  /** Why this source cannot be reconciled. Printed to operators. */
+  reason: string;
+};
+
 /**
  * Every legislation source that may be registered.
  *
@@ -206,14 +212,16 @@ export type LegislationSourceAdapter = {
   getTotalCount: (signal: AbortSignal) => Promise<SourceTotalCount>;
   /**
    * How this source's history divides into slices the census can address,
-   * or `ReconciliationUnsupported` where a forward-only cursor is the only
-   * way to reach a document.
+   * or `LegislationReconciliationUnsupported` where a forward-only cursor is
+   * the only way to reach a document.
    *
    * Required, and answerable with the unsupported marker: an omitted field is
    * a decision nobody made, while the marker is a decision written down with
    * its reason.
    */
-  reconciliation: LegislationSourceReconciliation | ReconciliationUnsupported;
+  reconciliation:
+    | LegislationSourceReconciliation
+    | LegislationReconciliationUnsupported;
 };
 
 /** Preserve an adapter's literal registry key while contextualizing its API. */

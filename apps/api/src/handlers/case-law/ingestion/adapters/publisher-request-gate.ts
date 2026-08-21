@@ -1,4 +1,4 @@
-import { DEPLOYED_NODE_ENVS } from "@/api/env-base-schema";
+import { envBase } from "@/api/env-base";
 import { createRedisClient } from "@/api/lib/redis-client";
 
 const RESERVE_SLOT_SCRIPT = `
@@ -12,7 +12,7 @@ return slot - now
 `;
 
 export type PublisherGateClient = {
-  send: (command: string, args: string[]) => Promise<unknown>;
+  send: (command: string, args: string[]) => unknown;
 };
 
 type PublisherRequestGateConfig = {
@@ -34,19 +34,33 @@ const abortableSleep = async (
     return;
   }
   if (signal?.aborted) {
-    throw signal.reason ?? new DOMException("Aborted", "AbortError");
+    throw signal.reason instanceof Error
+      ? signal.reason
+      : new DOMException("Aborted", "AbortError");
   }
-  await new Promise<void>((resolve, reject) => {
-    const sleep = Bun.sleep(durationMs);
-    const onAbort = () => {
-      reject(signal?.reason ?? new DOMException("Aborted", "AbortError"));
+  if (signal === undefined) {
+    await Bun.sleep(durationMs);
+    return;
+  }
+
+  let onAbort: (() => void) | undefined;
+  const aborted = new Promise<never>((_resolve, reject) => {
+    onAbort = () => {
+      reject(
+        signal.reason instanceof Error
+          ? signal.reason
+          : new DOMException("Aborted", "AbortError"),
+      );
     };
-    void sleep.then(() => {
-      signal?.removeEventListener("abort", onAbort);
-      resolve();
-    });
-    signal?.addEventListener("abort", onAbort, { once: true });
+    signal.addEventListener("abort", onAbort, { once: true });
   });
+  try {
+    await Promise.race([Bun.sleep(durationMs), aborted]);
+  } finally {
+    if (onAbort !== undefined) {
+      signal.removeEventListener("abort", onAbort);
+    }
+  }
 };
 
 const defaultDependencies = (
@@ -55,7 +69,7 @@ const defaultDependencies = (
   let redis: PublisherGateClient | undefined;
   let localNextRequestAt = 0;
   const localRedis: PublisherGateClient = {
-    send: async () => {
+    send: () => {
       const now = Date.now();
       const slot = Math.max(now, localNextRequestAt);
       localNextRequestAt = slot + intervalMs;
@@ -64,7 +78,7 @@ const defaultDependencies = (
   };
   return {
     redis: () => {
-      if (!DEPLOYED_NODE_ENVS.has(process.env.NODE_ENV ?? "")) {
+      if (envBase.isDev) {
         return localRedis;
       }
       redis ??= createRedisClient({ enableOfflineQueue: false });

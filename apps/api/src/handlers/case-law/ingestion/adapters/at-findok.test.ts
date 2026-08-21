@@ -9,7 +9,7 @@ import {
 
 const DOCUMENT_ID = "b68202a0-55e4-4dea-9e93-971f0b71ae32";
 const MANIFEST_ITEM = {
-  stammNr: 152257,
+  stammNr: 152_257,
   pathZip: "152/152257/152257.zip",
   pathPdf: "152/152257/152257.1.pdf",
   dokumenttyp: "Bescheidbeschwerde - Einzel - Erkenntnis",
@@ -24,12 +24,16 @@ const MANIFEST_ITEM = {
   dokumentId: DOCUMENT_ID,
 } as const;
 
+type ManifestFixture = Record<string, unknown>;
+
 const xmlFixture = async (): Promise<string> =>
   await Bun.file(
     new URL("../parsers/__fixtures__/at-findok-bfg-2026.xml", import.meta.url),
   ).text();
 
-const manifestResponse = (items = [MANIFEST_ITEM]): Response =>
+const manifestResponse = (
+  items: readonly ManifestFixture[] = [MANIFEST_ITEM],
+): Response =>
   new Response(
     Bun.gzipSync(
       JSON.stringify({
@@ -44,6 +48,9 @@ const detailResponse = async (): Promise<Response> => {
   zip.file("Gesamt/152257.Entscheidungstext.xml", await xmlFixture());
   return new Response(await zip.generateAsync({ type: "uint8array" }));
 };
+
+const reconciliationOf = (adapter: ReturnType<typeof createAtFindokAdapter>) =>
+  adapter.reconciliation;
 
 describe("Austrian Findok adapter", () => {
   it("walks the UFS to BFG successor chain in lexical order", () => {
@@ -88,11 +95,7 @@ describe("Austrian Findok adapter", () => {
     ]);
 
     const verified = await adapter.fetchPage(page.nextCursor, {});
-    expect(verified.unwrap().coverage).toEqual({
-      slice: "2026-bfg",
-      reported: 1,
-      collected: 1,
-    });
+    expect(verified.unwrap().decisions).toEqual([]);
   });
 
   it("reports the two publisher inventories as one source total", async () => {
@@ -101,7 +104,10 @@ describe("Austrian Findok adapter", () => {
       request: async () => manifestResponse(),
       sleep: async () => {},
     });
-    expect(await adapter.getTotalCount?.(new AbortController().signal)).toBe(2);
+    expect(await adapter.getTotalCount(new AbortController().signal)).toEqual({
+      type: "count",
+      total: 2,
+    });
   });
 
   it("throws on a malformed manifest rather than banking an empty source", async () => {
@@ -128,27 +134,34 @@ describe("Austrian Findok adapter", () => {
       request: async () => manifestResponse([identityLess, MANIFEST_ITEM]),
       sleep: async () => {},
     });
-    const listing = await adapter.reconciliation?.listSlicePage({
+    const reconciliation = reconciliationOf(adapter);
+    const listing = await reconciliation.listSlicePage({
       slice: "2026-bfg",
       page: 0,
     });
-    expect(listing?.items).toHaveLength(2);
+    expect(listing.items).toHaveLength(2);
     expect(
-      listing?.items.some(({ identity }) =>
+      listing.items.some(
+        ({ identity }) =>
+          identity.type === "document" &&
+          identity.sourceDocumentId.startsWith("findok-quarantine:"),
+      ),
+    ).toBe(true);
+    expect(
+      listing.items.some(
+        ({ identity }) =>
+          identity.type === "document" &&
+          identity.sourceDocumentId === DOCUMENT_ID,
+      ),
+    ).toBe(true);
+    const quarantine = listing.items.find(
+      ({ identity }) =>
+        identity.type === "document" &&
         identity.sourceDocumentId.startsWith("findok-quarantine:"),
-      ),
-    ).toBe(true);
-    expect(
-      listing?.items.some(
-        ({ identity }) => identity.sourceDocumentId === DOCUMENT_ID,
-      ),
-    ).toBe(true);
-    const quarantine = listing?.items.find(({ identity }) =>
-      identity.sourceDocumentId.startsWith("findok-quarantine:"),
     );
-    expect(
-      await adapter.reconciliation?.buildDecision(quarantine?.payload),
-    ).toEqual({ type: "detail-unavailable" });
+    expect(await reconciliation.buildDecision(quarantine?.payload)).toEqual({
+      type: "detail-unavailable",
+    });
   });
 
   it("lists year slices with the crawl identity and parks absent detail", async () => {
@@ -164,18 +177,17 @@ describe("Austrian Findok adapter", () => {
       },
       sleep: async () => {},
     });
-    const listing = await adapter.reconciliation?.listSlicePage({
+    const reconciliation = reconciliationOf(adapter);
+    const listing = await reconciliation.listSlicePage({
       slice: "2026-bfg",
       page: 0,
     });
-    expect(listing?.items.at(0)?.identity).toEqual({
+    expect(listing.items.at(0)?.identity).toEqual({
       type: "document",
       sourceDocumentId: DOCUMENT_ID,
     });
     expect(
-      await adapter.reconciliation?.buildDecision(
-        listing?.items.at(0)?.payload,
-      ),
+      await reconciliation.buildDecision(listing.items.at(0)?.payload),
     ).toEqual({ type: "detail-unavailable" });
   });
 });

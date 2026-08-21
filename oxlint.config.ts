@@ -2388,6 +2388,10 @@ export default defineConfig({
               "apps/api/src/agent-auth/id-jag.ts",
               "apps/api/src/handlers/case-law/ingestion/adapters/pagination.ts",
               "apps/api/src/handlers/case-law/ingestion/adapters/retry.ts",
+              // These wrappers restrict every target to exact Austrian
+              // publisher origins and paths, then force redirect rejection.
+              "apps/api/src/handlers/case-law/ingestion/adapters/at-findok-throttle.ts",
+              "apps/api/src/handlers/case-law/ingestion/adapters/at-ris-throttle.ts",
               "apps/api/src/handlers/case-law/ingestion/adapters/cz-us.ts",
               "apps/api/src/handlers/case-law/ingestion/adapters/eu-ecj.ts",
               "apps/api/src/handlers/sharepoint/graph-oauth.ts",
@@ -2584,6 +2588,10 @@ export default defineConfig({
               "apps/api/src/lib/workflow/root-run-state-store.ts",
               // Liveness probe: PINGs the connection it is reporting on.
               "apps/api/src/lib/health/readiness.ts",
+              // Publisher pacing: uses an expiring shared reservation,
+              // fails closed on a deployed outage to protect the publisher,
+              // and uses a process-local gate outside deployed environments.
+              "apps/api/src/handlers/case-law/ingestion/adapters/publisher-request-gate.ts",
             ],
           },
         ],

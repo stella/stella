@@ -10,22 +10,7 @@ import {
   listAdapterKeys as listLazyAdapterKeys,
   loadAdapterByKey,
 } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry-lazy";
-import {
-  ADAPTER_KEYS,
-  type AdapterKey,
-} from "@/api/lib/legal-search/ingestion-constants";
-
-/**
- * The adapters allowed to answer `reconciliation` with `unsupported`, as an
- * exact list rather than a ceiling.
- *
- * Exact in both directions on purpose. A name appearing here that nobody put
- * there means a new adapter shipped without the capability, and a name here
- * that no longer declares `unsupported` means the capability landed and the
- * exemption outlived it. Neither may pass quietly, so the test compares sets
- * and prints the remedy for whichever side moved.
- */
-const RECONCILIATION_UNSUPPORTED_ADAPTERS = [ADAPTER_KEYS.AT_COURTS] as const;
+import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 
 describe("case-law adapter capabilities", () => {
   test("every registered adapter exposes a total count", () => {
@@ -42,38 +27,9 @@ describe("case-law adapter capabilities", () => {
     expect(missing).toEqual([]);
   });
 
-  test("only the pinned adapters answer reconciliation with unsupported", () => {
-    const declaredUnsupported = listAdapters().flatMap((adapter) =>
-      adapter.reconciliation.type === "unsupported" ? [adapter.key] : [],
-    );
-    const pinned: readonly AdapterKey[] = RECONCILIATION_UNSUPPORTED_ADAPTERS;
-
-    const unexpected = declaredUnsupported.flatMap((key) =>
-      pinned.includes(key)
-        ? []
-        : [
-            `${key} declares reconciliation unsupported; a new adapter must implement the capability, not join this list`,
-          ],
-    );
-    expect(unexpected).toEqual([]);
-
-    const stale = pinned.flatMap((key) =>
-      declaredUnsupported.includes(key)
-        ? []
-        : [
-            `${key} now implements reconciliation; remove ${key} from this list and delete ReconciliationUnsupported if the list is empty`,
-          ],
-    );
-    expect(stale).toEqual([]);
-  });
-
-  test("every reconcilable adapter states a walkable slice order", () => {
+  test("every adapter states a walkable slice order", () => {
     for (const adapter of listAdapters()) {
       const { reconciliation } = adapter;
-      if (reconciliation.type === "unsupported") {
-        expect(reconciliation.reason.length).toBeGreaterThan(0);
-        continue;
-      }
       // Exercised, not merely present: a capability whose first slice does not
       // sort before its tip has no walk order for the ledger to compare on.
       expect(reconciliation.firstSlice.length).toBeGreaterThan(0);

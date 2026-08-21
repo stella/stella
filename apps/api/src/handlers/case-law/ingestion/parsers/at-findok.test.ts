@@ -4,7 +4,7 @@ import { parseFindokDecisionXml } from "@/api/handlers/case-law/ingestion/parser
 
 const fixture = async (): Promise<string> =>
   await Bun.file(
-    new URL("./__fixtures__/at-findok-bfg-2026.xml", import.meta.url),
+    new URL("__fixtures__/at-findok-bfg-2026.xml", import.meta.url),
   ).text();
 
 describe("Austrian Findok XML parser", () => {

@@ -12,6 +12,8 @@ import { AT_VERG_SOURCE } from "@/api/handlers/case-law/ingestion/adapters/at-ve
 import { AT_VFGH_SOURCE } from "@/api/handlers/case-law/ingestion/adapters/at-vfgh";
 import { AT_VWGH_SOURCE } from "@/api/handlers/case-law/ingestion/adapters/at-vwgh";
 
+import { requireReconciliation } from "./test-utils";
+
 const SOURCES = [
   {
     source: AT_VFGH_SOURCE,
@@ -218,7 +220,8 @@ describe("Austrian official RIS court sources", () => {
     const adapter = createAtRisSourceAdapter(AT_ASYLGH_SOURCE, {
       now: () => new Date("2026-08-12T00:00:00Z"),
     });
-    expect(adapter.reconciliation?.sliceOf(new Date())).toBe("2013-12");
-    expect(adapter.reconciliation?.nextSlice("2013-12")).toBeNull();
+    const reconciliation = requireReconciliation(adapter);
+    expect(reconciliation.sliceOf(new Date())).toBe("2013-12");
+    expect(reconciliation.nextSlice("2013-12")).toBeNull();
   });
 });

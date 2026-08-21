@@ -21,7 +21,7 @@ import type {
   SourceAdapter,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import { fetchAtRisWithRetry } from "@/api/handlers/case-law/ingestion/adapters/at-ris-throttle";
-import { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
+import type { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import {
   adapterCatch,
   hashContent,
@@ -958,10 +958,14 @@ const buildReconciliationDecision = async (
   });
 };
 
-const createAdapter = (
-  source: AtRisSourceDefinition,
+type AtRisSourceAdapter<TKey extends AdapterKey> = SourceAdapter & {
+  readonly key: TKey;
+};
+
+const createAdapter = <const TKey extends AdapterKey>(
+  source: AtRisSourceDefinition & { readonly key: TKey },
   dependencies: AtRisDependencies,
-): SourceAdapter =>
+): AtRisSourceAdapter<TKey> =>
   defineSourceAdapter({
     key: source.key,
     name: source.name,
@@ -1005,7 +1009,7 @@ const createAdapter = (
           source,
         });
         if (!source.excludeForeignCourts) {
-          return all.total;
+          return sourceTotalRead(all.total);
         }
         await dependencies.sleep(REQUEST_INTERVAL_MS);
         const excluded = await fetchListing({
@@ -1016,9 +1020,13 @@ const createAdapter = (
           signal,
           source,
         });
-        return excluded.total <= all.total ? all.total - excluded.total : null;
-      } catch {
-        return null;
+        return excluded.total <= all.total
+          ? sourceTotalRead(all.total - excluded.total)
+          : sourceTotalProbeFailed(
+              SOURCE_TOTAL_PROBE_FAILURE.UNREADABLE_PAYLOAD,
+            );
+      } catch (error) {
+        return { type: "probe-failed", errorTag: errorTag(error) };
       }
     },
 
@@ -1057,7 +1065,6 @@ const createAdapter = (
             return {
               decisions: [],
               nextCursor: encodeCursor(next),
-              coverage: { slice: state.slice, reported: 0, collected: 0 },
             };
           }
 
@@ -1112,21 +1119,12 @@ const createAdapter = (
             return {
               decisions: [],
               nextCursor: encodeCursor(next),
-              coverage: {
-                slice: state.slice,
-                reported: expectedTotal - foreign,
-                collected: state.collected,
-              },
             };
           }
 
-          const decisions: IngestionResult[] = [];
-          for (const item of page.items) {
-            if (isExcludedItem(source, item)) {
-              continue;
-            }
-            decisions.push(
-              // eslint-disable-next-line no-await-in-loop -- RIS requires a five-second gap between document requests
+          const decisions = await Array.fromAsync(
+            page.items.filter((item) => !isExcludedItem(source, item)),
+            async (item) =>
               await buildDecision({
                 cursor,
                 dependencies,
@@ -1134,8 +1132,7 @@ const createAdapter = (
                 signal,
                 source,
               }),
-            );
-          }
+          );
           const collected = state.collected + decisions.length;
           if (state.page < totalPages) {
             return {
@@ -1171,13 +1168,13 @@ const createAdapter = (
 
 export const createAtCourtsAdapter = (
   dependencies: Partial<AtRisDependencies> = {},
-): SourceAdapter =>
+): AtRisSourceAdapter<typeof ADAPTER_KEYS.AT_COURTS> =>
   createAdapter(JUSTIZ_SOURCE, { ...DEFAULT_DEPENDENCIES, ...dependencies });
 
-export const createAtRisSourceAdapter = (
-  source: AtRisSourceDefinition,
+export const createAtRisSourceAdapter = <const TKey extends AdapterKey>(
+  source: AtRisSourceDefinition & { readonly key: TKey },
   dependencies: Partial<AtRisDependencies> = {},
-): SourceAdapter =>
+): AtRisSourceAdapter<TKey> =>
   createAdapter(source, { ...DEFAULT_DEPENDENCIES, ...dependencies });
 
 export const atCourtsAdapter = createAtCourtsAdapter();

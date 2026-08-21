@@ -26,8 +26,6 @@
  * ```
  */
 
-import { panic } from "better-result";
-
 import type {
   SourceAdapter,
   SourceReconciliation,
@@ -176,16 +174,10 @@ export const recordFixture = async (
 /**
  * The reconciliation capability an adapter's own tests exist to exercise.
  *
- * Every adapter declares the field, so reaching the implementation means
- * narrowing past `unsupported`. Shared rather than restated per adapter: a
- * test that reached for the capability and found the source exempted is a
- * broken test file, not a case to handle, and it should say so once.
+ * Every case-law adapter implements the capability; this helper preserves the
+ * narrower return type for tests whose factory is contextualized as the shared
+ * adapter contract.
  */
 export const requireReconciliation = (
   adapter: SourceAdapter,
-): SourceReconciliation =>
-  adapter.reconciliation.type === "unsupported"
-    ? panic(
-        `${adapter.key} declares reconciliation unsupported: ${adapter.reconciliation.reason}`,
-      )
-    : adapter.reconciliation;
+): SourceReconciliation => adapter.reconciliation;
