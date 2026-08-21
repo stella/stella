@@ -87,9 +87,7 @@ describe("runChatAnonPipeline excludedCanonicals", () => {
    */
   const buildRuntime = (
     entities: NativePipelineEntity[],
-    inspectGazetteerEntries?:
-      | ((entries: readonly GazetteerEntry[]) => void)
-      | undefined,
+    inspectGazetteerEntries?: (entries: readonly GazetteerEntry[]) => void,
   ): ChatAnonRuntime => ({
     // SAFETY: the mock binding value is opaque plumbing - the fake
     // `createNativePipelineFromConfig` below never inspects it, it
@@ -300,10 +298,10 @@ describe("runChatAnonPipeline excludedCanonicals", () => {
     );
   });
 
-  test("bounds caller-supplied forced values before building a pipeline", async () => {
+  test("bounds caller-supplied forced values before building a pipeline", () => {
     const runtime = buildRuntime([]);
 
-    await expect(
+    expect(
       runChatAnonPipeline({
         runtime,
         dictionaries,
@@ -316,7 +314,7 @@ describe("runChatAnonPipeline excludedCanonicals", () => {
       }),
     ).rejects.toBeInstanceOf(RangeError);
 
-    await expect(
+    expect(
       runChatAnonPipeline({
         runtime,
         dictionaries,
