@@ -1,12 +1,12 @@
 import { Result } from "better-result";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
+import type { Paragraph } from "@stll/docx-core/model";
 import {
   createDocx,
   createEmptyDocument,
   createStellaStyleDocumentPreset,
 } from "@stll/folio-core";
-import type { Paragraph } from "@stll/folio-core";
 
 import { toSafeId } from "@/api/lib/branded-types";
 import { validateDocxBuffer } from "@/api/lib/entity-versions/validate-docx-buffer";

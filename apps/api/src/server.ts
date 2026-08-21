@@ -19,6 +19,7 @@ import {
   authMetadataRoute,
 } from "@/api/handlers/auth/routes";
 import { authUiRoute } from "@/api/handlers/auth/ui-routes";
+import { bilingualTranslationsRoute } from "@/api/handlers/bilingual-translations/routes";
 import { billingCodesRoute } from "@/api/handlers/billing-codes/routes";
 import { caseLawRoute } from "@/api/handlers/case-law/routes";
 import { catalogueRoute } from "@/api/handlers/catalogue/routes";
@@ -96,6 +97,7 @@ import { initAccountDeletionCleanupWorker } from "@/api/lib/account-deletion-cle
 import { captureRequestError } from "@/api/lib/analytics/capture";
 import { getAnalytics } from "@/api/lib/analytics/client";
 import { getAuth, resolveWorkspaceRealtimeAudience } from "@/api/lib/auth";
+import { initBilingualRunWorker } from "@/api/lib/bilingual/run-queue";
 import { shouldRejectBrowserMutation } from "@/api/lib/browser-origin-guard";
 import {
   resolveClientIp,
@@ -579,6 +581,7 @@ const api = new Elysia()
       .use(playbooksRoute)
       .use(playbookRunsRoute)
       .use(documentReviewsRoute)
+      .use(bilingualTranslationsRoute)
       .use(reportsRoute)
       .use(flowsRoute)
       .use(flowRunsRoute)
@@ -755,6 +758,9 @@ const startServer = async (): Promise<void> => {
   // BullMQ worker for durable document review runs.
   const documentReviewRunWorker = initDocumentReviewRunWorker();
 
+  // BullMQ worker for durable bilingual translation runs.
+  const bilingualRunWorker = initBilingualRunWorker();
+
   scopeRequestAsyncStores();
 
   api.listen({
@@ -811,6 +817,7 @@ const startServer = async (): Promise<void> => {
         styleSetPackageCleanupWorker.close(),
         reportExportWorker.close(),
         documentReviewRunWorker.close(),
+        bilingualRunWorker.close(),
       ]),
       Bun.sleep(WORKER_SHUTDOWN_TIMEOUT_MS),
     ]);
