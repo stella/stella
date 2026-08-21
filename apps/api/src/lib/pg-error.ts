@@ -106,13 +106,12 @@ export const isPgConstraintError = (
   error: unknown,
   code: string,
   constraint: string,
-): boolean => {
-  const found = pgErrorNodes(error).at(0);
-  if (found === undefined || found.sqlState !== code) {
-    return false;
-  }
-  return readNonEmptyString(found.node, "constraint") === constraint;
-};
+): boolean =>
+  pgErrorNodes(error).some(
+    ({ node, sqlState }) =>
+      sqlState === code &&
+      readNonEmptyString(node, "constraint") === constraint,
+  );
 
 export const PG_ERROR = {
   DEADLOCK_DETECTED: "40P01",

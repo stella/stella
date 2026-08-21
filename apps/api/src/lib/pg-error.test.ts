@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { DrizzleQueryError } from "drizzle-orm";
 
+import { DatabaseError } from "./errors/tagged-errors";
 import {
   getPgErrorCode,
   isPgConstraintError,
@@ -63,6 +64,23 @@ describe("isPgConstraintError", () => {
         PG_ERROR.UNIQUE_VIOLATION,
         "case_law_decisions_source_document_idx",
       ),
+    ).toBe(true);
+  });
+
+  it("matches the constraint on an inner driver error", () => {
+    const constraint = "case_law_decisions_slug_uidx";
+    const driver = Object.assign(new Error("database error"), {
+      errno: PG_ERROR.UNIQUE_VIOLATION,
+      constraint,
+    });
+    const error = new DatabaseError({
+      message: "Database query failed",
+      code: PG_ERROR.UNIQUE_VIOLATION,
+      cause: driver,
+    });
+
+    expect(
+      isPgConstraintError(error, PG_ERROR.UNIQUE_VIOLATION, constraint),
     ).toBe(true);
   });
 });
