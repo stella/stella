@@ -1,5 +1,7 @@
 # @stll/anonymize-darwin-arm64
 
+## 2.8.1
+
 ## 2.8.0
 
 ## 2.7.8
