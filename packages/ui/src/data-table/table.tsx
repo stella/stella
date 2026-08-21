@@ -25,7 +25,15 @@ export const DataTable = <TItem,>({
 }: DataTableProps<TItem>) => {
   let content: ReactNode;
   if (isLoading) {
-    content = <LoadingRows columns={columns} rowCount={loadingRowCount} />;
+    content = (
+      <LoadingRows
+        columns={columns}
+        rowClassName={
+          rowAction === undefined ? undefined : COARSE_POINTER_ROW_CLASS_NAME
+        }
+        rowCount={loadingRowCount}
+      />
+    );
   } else if (rows.length === 0) {
     content = <StatusRow colSpan={columns.length} label={emptyLabel} />;
   } else {
@@ -101,6 +109,7 @@ type RowProps = Omit<HTMLAttributes<HTMLTableRowElement>, "children">;
 
 const DEFAULT_LOADING_ROW_COUNT = 3;
 const MAX_LOADING_ROW_COUNT = 20;
+const COARSE_POINTER_ROW_CLASS_NAME = "pointer-coarse:h-11";
 
 export const DATA_TABLE_INTERACTIVE_DESCENDANT_SELECTORS = [
   "a[href]",
@@ -168,13 +177,15 @@ export type DataTableProps<TItem> = {
 
 const LoadingRows = <TItem,>({
   columns,
+  rowClassName,
   rowCount,
 }: {
   columns: readonly DataTableColumn<TItem>[];
+  rowClassName: string | undefined;
   rowCount: number;
 }) =>
   Array.from({ length: resolveLoadingRowCount(rowCount) }, (_, rowIndex) => (
-    <TableRow key={rowIndex}>
+    <TableRow className={rowClassName} key={rowIndex}>
       {columns.map((column) => (
         <TableCell
           className={
@@ -216,7 +227,8 @@ const interactiveRowProps = <TItem,>(
   rowAction: DataTableRowAction<TItem>,
 ): RowProps => ({
   className: cn(
-    "cursor-pointer pointer-coarse:h-11",
+    "cursor-pointer",
+    COARSE_POINTER_ROW_CLASS_NAME,
     rowAction.getClassName?.(item),
   ),
   onClick: (event) => {
@@ -228,7 +240,7 @@ const interactiveRowProps = <TItem,>(
 });
 
 type ClosestEventTarget = EventTarget & {
-  closest: (selector: string) => unknown;
+  closest: (selector: string) => EventTarget | null;
 };
 
 type ContainsEventTarget = EventTarget & {
@@ -254,7 +266,8 @@ export const isDataTableRowActionTarget = (
   if (!hasClosest(target)) {
     return true;
   }
-  return target.closest(INTERACTIVE_DESCENDANT_SELECTOR) === null;
+  const interactiveTarget = target.closest(INTERACTIVE_DESCENDANT_SELECTOR);
+  return interactiveTarget === null || !row.contains(interactiveTarget);
 };
 
 const mergeHandlers = <TElement,>(

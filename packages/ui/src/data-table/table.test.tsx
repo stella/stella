@@ -103,6 +103,10 @@ describe("DataTable", () => {
         isLoading
         loadingLabel="Loading"
         loadingRowCount={2}
+        rowAction={{
+          getAriaLabel: (row) => `Open ${row.name}`,
+          onSelect: () => undefined,
+        }}
         rowKey={(row: { id: string }) => row.id}
         rows={[]}
       />,
@@ -117,6 +121,7 @@ describe("DataTable", () => {
     );
     expect(loading).toContain("Loading");
     expect(loading).toContain("text-right");
+    expect(loading).toContain("pointer-coarse:h-11");
     expect(loading.match(/data-slot="skeleton"/gu)).toHaveLength(4);
     expect(loading).not.toContain("colSpan");
     expect(loading).not.toContain("No matters");
@@ -173,6 +178,17 @@ describe("DataTable", () => {
 
     expect(isDataTableRowActionTarget(row, portaledPopup)).toBe(false);
   });
+
+  test("row selection stops interactive matching at the row boundary", () => {
+    const focusableWrapper = new EventTarget();
+    const cell = new ClosestTarget(
+      "[tabindex]:not([tabindex='-1'])",
+      focusableWrapper,
+    );
+    const row = new ContainmentTarget([cell]);
+
+    expect(isDataTableRowActionTarget(row, cell)).toBe(true);
+  });
 });
 
 const renderLoadingTable = (loadingRowCount: number) =>
@@ -207,16 +223,20 @@ class ContainmentTarget extends EventTarget {
 
 class ClosestTarget extends EventTarget {
   private readonly matchingSelector: string;
+  private readonly matchTarget: EventTarget;
 
   seenSelector = "";
 
-  constructor(matchingSelector: string) {
+  constructor(matchingSelector: string, matchTarget?: EventTarget) {
     super();
     this.matchingSelector = matchingSelector;
+    this.matchTarget = matchTarget ?? this;
   }
 
   closest(selector: string) {
     this.seenSelector = selector;
-    return selector.split(",").includes(this.matchingSelector) ? {} : null;
+    return selector.split(",").includes(this.matchingSelector)
+      ? this.matchTarget
+      : null;
   }
 }
