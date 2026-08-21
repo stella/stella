@@ -221,24 +221,27 @@ describe("chat third-party anonymization boundary", () => {
 
     const prepared = await prepareUnknownForThirdParty({
       boundary,
-      value: { [`tenant:${organizationId}`]: 7 },
+      value: {
+        [`tenant:${organizationId}`]: 7,
+        "[MISC_1]": 8,
+      },
     });
 
     expect(Result.isOk(prepared)).toBe(true);
     if (Result.isError(prepared)) {
       throw prepared.error;
     }
-    expect(prepared.value).toEqual({ "[MISC_1]": 7 });
+    expect(prepared.value).toEqual({ "[MISC_2]": 7, "[MISC_1]": 8 });
     expect(
       deanonymizeUnknownStringsFromBoundary(boundary, prepared.value),
-    ).toEqual({ [`tenant:${organizationId}`]: 7 });
+    ).toEqual({ [`tenant:${organizationId}`]: 7, "[MISC_1]": 8 });
     expect(
       deanonymizeUnknownStringsFromBoundary(
         boundary,
-        { MISC_1: 7 },
+        { MISC_2: 7, "[MISC_1]": 8 },
         "lenient",
       ),
-    ).toEqual({ [`tenant:${organizationId}`]: 7 });
+    ).toEqual({ [`tenant:${organizationId}`]: 7, "[MISC_1]": 8 });
     expect(anonymizeIds.mock.calls.at(0)?.[0].fields).toEqual([
       `tenant:${organizationId}`,
     ]);
@@ -814,6 +817,86 @@ describe("chat third-party anonymization boundary", () => {
       documentId: "doc_123",
       participants: ["[PERSON_1]", "[CUSTOM_1]"],
       text: "[CUSTOM_1] notes for [PERSON_1]",
+    });
+  });
+
+  test("reserves literal placeholders in static tool metadata", async () => {
+    const boundary = createBoundary();
+    prepareToolsForThirdParty({
+      boundary,
+      tools: asTestToolSet({
+        literal_metadata: toolDefinition({
+          name: "literal_metadata",
+          description: "Preserve literal [PERSON_1].",
+        }).server(async () => undefined),
+      }),
+    });
+
+    const prepared = await prepareTextForThirdParty({
+      boundary,
+      text: "Jan Novák prepared the memo.",
+    });
+
+    expect(Result.isOk(prepared)).toBe(true);
+    if (Result.isError(prepared)) {
+      throw prepared.error;
+    }
+    expect(prepared.value).toBe("[PERSON_2] prepared the memo.");
+  });
+
+  test("aliases claimed placeholders in late MCP tool metadata", async () => {
+    const boundary = createBoundary();
+    await prepareTextForThirdParty({
+      boundary,
+      text: "Jan Novák prepared the memo.",
+    });
+    const sourceTool = toolDefinition({
+      name: "mcp__test__literal_metadata",
+      description: "Preserve literal [PERSON_1].",
+    }).server(async () => undefined);
+    Reflect.set(sourceTool, "inputSchema", {
+      type: "object",
+      properties: {
+        "[PERSON_1]": {
+          description: "Enter literal [PERSON_1].",
+          type: "string",
+        },
+      },
+    });
+    const source = prepareMcpToolSourceForThirdParty({
+      boundary,
+      source: {
+        close: async () => {},
+        tools: async () => [sourceTool],
+      },
+    });
+
+    const [preparedTool] = await source.tools();
+    const description: unknown = Reflect.get(preparedTool, "description");
+    const inputSchema: unknown = Reflect.get(preparedTool, "inputSchema");
+
+    expect(description).toBe(
+      "Preserve literal [LITERAL_PLACEHOLDER_1].",
+    );
+    expect(inputSchema).toEqual({
+      type: "object",
+      properties: {
+        "[LITERAL_PLACEHOLDER_2]": {
+          description: "Enter literal [LITERAL_PLACEHOLDER_3].",
+          type: "string",
+        },
+      },
+    });
+    expect(
+      deanonymizeUnknownStringsFromBoundary(boundary, inputSchema),
+    ).toEqual({
+      type: "object",
+      properties: {
+        "[PERSON_1]": {
+          description: "Enter literal [PERSON_1].",
+          type: "string",
+        },
+      },
     });
   });
 

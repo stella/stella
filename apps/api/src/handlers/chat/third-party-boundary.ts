@@ -218,6 +218,65 @@ const encodeLateLiteralPlaceholders = (
   return rewritePlaceholders(text, replacements);
 };
 
+const encodeLateLiteralPlaceholdersInUnknown = ({
+  boundary,
+  seen = new WeakMap<object, unknown>(),
+  value,
+}: {
+  boundary: Extract<ChatThirdPartyBoundary, { type: "anonymized" }>;
+  seen?: WeakMap<object, unknown>;
+  value: unknown;
+}): unknown => {
+  if (typeof value === "string") {
+    return encodeLateLiteralPlaceholders(boundary, value);
+  }
+  if (
+    typeof value !== "object" ||
+    value === null ||
+    ArrayBuffer.isView(value)
+  ) {
+    return value;
+  }
+
+  const existing = seen.get(value);
+  if (existing !== undefined) {
+    return existing;
+  }
+
+  if (Array.isArray(value)) {
+    const output: unknown[] = [];
+    seen.set(value, output);
+    for (const nested of value) {
+      output.push(
+        encodeLateLiteralPlaceholdersInUnknown({
+          boundary,
+          seen,
+          value: nested,
+        }),
+      );
+    }
+    return output;
+  }
+
+  const output: Record<string, unknown> = {};
+  seen.set(value, output);
+  for (const [key, nested] of Object.entries(value)) {
+    const encodedKey = encodeLateLiteralPlaceholders(boundary, key);
+    const encodedValue = encodeLateLiteralPlaceholdersInUnknown({
+      boundary,
+      seen,
+      value: nested,
+    });
+    Object.defineProperty(output, encodedKey, {
+      configurable: true,
+      enumerable: true,
+      value: encodedValue,
+      writable: true,
+    });
+  }
+  return output;
+};
+
 export const reserveThirdPartyBoundarySourcePlaceholders = ({
   boundary,
   value,
@@ -246,6 +305,9 @@ export const reserveThirdPartyBoundarySourcePlaceholders = ({
       continue;
     }
     seen.add(current);
+    for (const key of Object.keys(current)) {
+      pending.push(key);
+    }
     for (const nested of Object.values(current)) {
       pending.push(nested);
     }
@@ -845,6 +907,11 @@ export const prepareMessagesForThirdParty = async ({
     return Result.ok(providerVisibleMessages);
   }
 
+  reserveThirdPartyBoundarySourcePlaceholders({
+    boundary,
+    value: providerVisibleMessages,
+  });
+
   return await Result.gen(async function* () {
     const prepared: ChatMessage[] = [];
     const replacements: TextReplacement[] = [];
@@ -1037,6 +1104,8 @@ export const prepareUnknownForThirdParty = async ({
   if (boundary.type === "raw") {
     return Result.ok(value);
   }
+
+  reserveThirdPartyBoundarySourcePlaceholders({ boundary, value });
 
   const replacements: TextReplacement[] = [];
   let preparedValue: unknown;
@@ -1339,6 +1408,7 @@ export const prepareToolsForThirdParty = ({
   boundary: ChatThirdPartyBoundary;
   tools: ChatToolMap;
 }): ChatToolMap => {
+  reserveThirdPartyBoundarySourcePlaceholders({ boundary, value: tools });
   const hasExternalTool = Object.values(tools).some(
     (toolDefinition) =>
       toolDefinition !== undefined &&
@@ -1434,13 +1504,36 @@ const prepareMcpServerToolForThirdParty = (
   boundary: Extract<ChatThirdPartyBoundary, { type: "anonymized" }>,
   tool: AnyServerTool,
 ): AnyServerTool => {
-  const execute = tool.execute;
+  reserveThirdPartyBoundarySourcePlaceholders({ boundary, value: tool });
+  const prepared = { ...tool };
+  for (const field of ["name", "description"] as const) {
+    const providerText: unknown = Reflect.get(prepared, field);
+    if (typeof providerText === "string") {
+      Reflect.set(
+        prepared,
+        field,
+        encodeLateLiteralPlaceholders(boundary, providerText),
+      );
+    }
+  }
+  for (const field of ["inputSchema", "outputSchema"] as const) {
+    const schema: unknown = Reflect.get(prepared, field);
+    if (schema !== undefined) {
+      Reflect.set(
+        prepared,
+        field,
+        encodeLateLiteralPlaceholdersInUnknown({ boundary, value: schema }),
+      );
+    }
+  }
+
+  const execute = prepared.execute;
   if (!execute) {
-    return tool;
+    return prepared;
   }
 
   return {
-    ...tool,
+    ...prepared,
     execute: async (input, context) => {
       const outputValue: unknown = await execute(input, context);
       return await anonymizeToolOutputForThirdParty({
