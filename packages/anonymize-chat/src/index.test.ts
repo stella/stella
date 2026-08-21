@@ -362,6 +362,26 @@ describe("runChatAnonPipeline excludedCanonicals", () => {
     expect(result.redactionMap).toEqual(new Map([["[MISC_1]", forcedValue]]));
   });
 
+  test("accepts distinct forced values that match each other's placeholders", async () => {
+    const firstForcedValue = "[MISC_1]";
+    const secondForcedValue = "[CASE_NUMBER_1]";
+    const runtime = buildRuntime([
+      makeEntity(firstForcedValue, "case number"),
+      makeEntity(secondForcedValue, "misc"),
+    ]);
+
+    const result = await runChatAnonPipeline({
+      runtime,
+      dictionaries,
+      text: `${firstForcedValue} ${secondForcedValue}`,
+      workspaceId: "ws-1",
+      forcedSensitiveValues: [firstForcedValue, secondForcedValue],
+    });
+
+    expect(result.entityCount).toBe(2);
+    expect(result.redactionMap.size).toBe(2);
+  });
+
   test("bounds caller-supplied forced values before building a pipeline", () => {
     const runtime = buildRuntime([]);
 

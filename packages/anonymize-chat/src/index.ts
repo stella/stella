@@ -64,6 +64,10 @@ export const FORCED_SENSITIVE_VALUES_MAX = 256;
 /** Maximum UTF-16 length of one forced sensitive value. */
 export const FORCED_SENSITIVE_VALUE_MAX_LENGTH = 4096;
 
+const FORCED_SENSITIVE_DEFAULT_LABEL = "misc" satisfies DefaultEntityLabel;
+const FORCED_SENSITIVE_PLACEHOLDER_ESCAPE_LABEL =
+  "case number" satisfies DefaultEntityLabel;
+
 export type ChatAnonPair = {
   placeholder: string;
   original: string;
@@ -454,7 +458,10 @@ const forcedSensitiveGazetteerEntries = ({
     .toSorted((left, right) => right.length - left.length)
     .map((canonical, index) => {
       const label =
-        parsePlaceholderLabel(canonical) === "MISC" ? "case number" : "misc";
+        parsePlaceholderLabel(canonical) ===
+        normalizeEntityLabelForPlaceholder(FORCED_SENSITIVE_DEFAULT_LABEL)
+          ? FORCED_SENSITIVE_PLACEHOLDER_ESCAPE_LABEL
+          : FORCED_SENSITIVE_DEFAULT_LABEL;
       return {
         id: `forced-sensitive-${String(index + 1)}`,
         canonical,
@@ -499,8 +506,8 @@ const assertForcedSensitiveValuesRedacted = ({
     }
   }
 
-  for (const placeholder of redaction.redactionMap.keys()) {
-    if (forcedSensitiveValues.has(placeholder)) {
+  for (const [placeholder, original] of redaction.redactionMap) {
+    if (placeholder === original && forcedSensitiveValues.has(original)) {
       panic("forced sensitive value became its own placeholder");
     }
   }
