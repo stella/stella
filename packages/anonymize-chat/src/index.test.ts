@@ -332,6 +332,29 @@ describe("runChatAnonPipeline excludedCanonicals", () => {
     );
   });
 
+  test("applies forced precedence per normalized exclusion occurrence", async () => {
+    const forcedValue = "ORDER-123";
+    const exact = `Matter ${forcedValue}`;
+    const caseVariant = "matter order-123";
+    const runtime = buildRuntime([
+      makeEntity(exact, "organization"),
+      makeEntity(caseVariant, "organization"),
+    ]);
+
+    const result = await runChatAnonPipeline({
+      runtime,
+      dictionaries,
+      text: `${exact}; ${caseVariant}`,
+      workspaceId: "ws-1",
+      excludedCanonicals: [exact],
+      forcedSensitiveValues: [forcedValue],
+    });
+
+    expect(result.redactedText).toBe(`[ORGANIZATION_1]; ${caseVariant}`);
+    expect(result.redactionMap).toEqual(new Map([["[ORGANIZATION_1]", exact]]));
+    expect(result.entityCount).toBe(1);
+  });
+
   test("keeps forced values from colliding with literal-placeholder sentinels", async () => {
     const forcedValue = "CHAT_PLACEHOLDER_0";
     const runtime = buildRuntime([makeEntity(forcedValue, "misc")]);

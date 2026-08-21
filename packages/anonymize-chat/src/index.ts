@@ -678,27 +678,21 @@ const applyExcludedCanonicals = ({
   }
 
   const excludedSet = new Set(excludedCanonicals.map(normalizeForExclusion));
-  for (const entity of resolvedEntities) {
-    const canonical = normalizeForExclusion(entity.text);
-    if (
-      excludedSet.has(canonical) &&
-      spanOverlapsLiteralValue({
-        end: entity.end,
-        start: entity.start,
-        text: sourceText,
-        values: forcedSensitiveValues,
-      })
-    ) {
-      excludedSet.delete(canonical);
-    }
-  }
-  if (excludedSet.size === 0) {
-    return toChatAnonResult(resolvedEntities, redaction);
-  }
+  const isForcedEntity = (entity: NativePipelineEntity) =>
+    spanOverlapsLiteralValue({
+      end: entity.end,
+      start: entity.start,
+      text: sourceText,
+      values: forcedSensitiveValues,
+    });
 
   const revertMap = new Map<string, string>();
   for (const [placeholder, original] of redaction.redactionMap) {
-    if (excludedSet.has(normalizeForExclusion(original))) {
+    const isExcluded = excludedSet.has(normalizeForExclusion(original));
+    const hasForcedOccurrence = resolvedEntities.some(
+      (entity) => entity.text === original && isForcedEntity(entity),
+    );
+    if (isExcluded && !hasForcedOccurrence) {
       revertMap.set(placeholder, original);
     }
   }
@@ -714,7 +708,9 @@ const applyExcludedCanonicals = ({
     ),
   );
   const remainingEntities = resolvedEntities.filter(
-    (entity) => !excludedSet.has(normalizeForExclusion(entity.text)),
+    (entity) =>
+      !excludedSet.has(normalizeForExclusion(entity.text)) ||
+      isForcedEntity(entity),
   );
   // Occurrence-based approximation: `entityCount` reports redacted
   // *occurrences*, while `revertMap` is keyed per distinct

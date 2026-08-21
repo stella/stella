@@ -182,6 +182,40 @@ const reserveSourcePlaceholders = (
   }
 };
 
+export const reserveThirdPartyBoundarySourcePlaceholders = ({
+  boundary,
+  value,
+}: {
+  boundary: ChatThirdPartyBoundary;
+  value: unknown;
+}) => {
+  if (boundary.type === "raw") {
+    return;
+  }
+
+  const pending: unknown[] = [value];
+  const seen = new WeakSet<object>();
+  while (pending.length > 0) {
+    const current = pending.pop();
+    if (typeof current === "string") {
+      reserveSourcePlaceholders(boundary, [current]);
+      continue;
+    }
+    if (
+      typeof current !== "object" ||
+      current === null ||
+      ArrayBuffer.isView(current) ||
+      seen.has(current)
+    ) {
+      continue;
+    }
+    seen.add(current);
+    for (const nested of Object.values(current)) {
+      pending.push(nested);
+    }
+  }
+};
+
 const rewritePlaceholders = (
   text: string,
   replacements: Map<string, string>,

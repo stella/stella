@@ -11,6 +11,7 @@ import {
   prepareMessagesForThirdParty,
   prepareTextForThirdParty,
   prepareToolsForThirdParty,
+  reserveThirdPartyBoundarySourcePlaceholders,
 } from "@/api/handlers/chat/third-party-boundary";
 import type { ChatMessage } from "@/api/handlers/chat/types";
 import type { AIRequestServiceTier, OrgAIConfig } from "@/api/lib/ai-config";
@@ -149,6 +150,11 @@ export const runSubagent = async (
     promptCachingEnabled: false,
     role: options.role,
     scopeKey: null,
+  });
+
+  reserveThirdPartyBoundarySourcePlaceholders({
+    boundary: options.thirdPartyBoundary,
+    value: [options.system, options.messages],
   });
 
   const preparedSystem = await prepareTextForThirdParty({

@@ -68,6 +68,7 @@ const {
   prepareMessagesForThirdParty,
   prepareTextForThirdParty,
   prepareToolsForThirdParty,
+  reserveThirdPartyBoundarySourcePlaceholders,
 } = await import("@/api/handlers/chat/third-party-boundary");
 
 const createBoundary = () => {
@@ -777,6 +778,45 @@ describe("chat third-party anonymization boundary", () => {
         ["[PERSON_2]", "Alice"],
       ]),
     );
+  });
+
+  test("reserves later source placeholders before an earlier allocation", async () => {
+    const { deanonymizeFromBoundary } =
+      await import("@/api/handlers/chat/third-party-boundary");
+    const boundary = createBoundary();
+    reserveThirdPartyBoundarySourcePlaceholders({
+      boundary,
+      value: ["Jan Novák", "Keep [PERSON_1] literal"],
+    });
+
+    const first = await prepareTextForThirdParty({
+      boundary,
+      text: "Jan Novák prepared the memo.",
+    });
+    const second = await prepareTextForThirdParty({
+      boundary,
+      text: "Keep [PERSON_1] literal",
+    });
+
+    expect(Result.isOk(first)).toBe(true);
+    expect(Result.isOk(second)).toBe(true);
+    if (Result.isError(first) || Result.isError(second)) {
+      throw new TypeError("Expected anonymization to succeed");
+    }
+    expect(first.value).toBe("[PERSON_2] prepared the memo.");
+    expect(second.value).toBe("Keep [PERSON_1] literal");
+    if (boundary.type !== "anonymized") {
+      throw new TypeError("Expected anonymized boundary");
+    }
+    expect(boundary.redactionMap).toEqual(
+      new Map([["[PERSON_2]", "Jan Novák"]]),
+    );
+    expect(
+      deanonymizeFromBoundary({
+        boundary,
+        text: `${first.value} Keep [PERSON_1] literal`,
+      }),
+    ).toBe("Jan Novák prepared the memo. Keep [PERSON_1] literal");
   });
 
   test("keeps literal source placeholders distinct from new redactions", async () => {

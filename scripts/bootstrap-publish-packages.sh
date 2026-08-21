@@ -9,7 +9,7 @@
 # and use the workflow for every release thereafter.
 #
 # All packages are authenticated, validated, built, transformed, and packed
-# before the first registry write. The transform rewrites catalog:/workspace:
+# before the first registry write. Bun's packer rewrites catalog:/workspace:
 # dependencies; npm then publishes the exact preflighted archives. A trap
 # restores every source-shaped manifest.
 #
@@ -65,19 +65,33 @@ for p in "${packages[@]}"; do
   (cd "packages/${p}" && bun run build)
   bun scripts/prepare-publish.ts "packages/${p}"
   require_placeholder_version "$p"
-  pack_json="$(
+  packed_filename="stll-${p}-0.0.0.tgz"
+  (
     cd "packages/${p}"
-    npm pack --json --ignore-scripts --pack-destination "$staging_dir"
-  )"
-  packed_name="$(jq -er '.[0].name | strings' <<<"$pack_json")"
-  packed_version="$(jq -er '.[0].version | strings' <<<"$pack_json")"
-  packed_filename="$(jq -er '.[0].filename | strings' <<<"$pack_json")"
-  packed_integrity="$(jq -er '.[0].integrity | strings' <<<"$pack_json")"
+    bun pm pack \
+      --destination "$staging_dir" \
+      --filename "$packed_filename" \
+      --ignore-scripts \
+      --quiet >/dev/null
+  )
+  tarball="${staging_dir}/${packed_filename}"
+  if [[ ! -f "$tarball" ]]; then
+    echo "error: Bun did not create the expected archive for @stll/${p}." >&2
+    exit 1
+  fi
+  packed_manifest="$(tar -xOf "$tarball" package/package.json)"
+  packed_name="$(jq -er '.name | strings' <<<"$packed_manifest")"
+  packed_version="$(jq -er '.version | strings' <<<"$packed_manifest")"
   if [[ "$packed_name" != "@stll/${p}" || "$packed_version" != "0.0.0" ]]; then
     echo "error: packed artifact identity is ${packed_name}@${packed_version}; expected @stll/${p}@0.0.0." >&2
     exit 1
   fi
-  tarballs+=("${staging_dir}/${packed_filename}")
+  if ! jq -e '[.. | strings | select(startswith("catalog:") or startswith("workspace:"))] | length == 0' >/dev/null <<<"$packed_manifest"; then
+    echo "error: packed @stll/${p}@0.0.0 still contains an unresolved dependency protocol." >&2
+    exit 1
+  fi
+  packed_integrity="sha512-$(openssl dgst -sha512 -binary "$tarball" | openssl base64 -A)"
+  tarballs+=("$tarball")
   integrities+=("$packed_integrity")
 done
 
