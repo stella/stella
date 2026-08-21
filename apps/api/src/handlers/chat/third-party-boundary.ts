@@ -256,6 +256,42 @@ const boundaryForcedSensitiveValues = (
   boundary: Extract<ChatThirdPartyBoundary, { type: "anonymized" }>,
 ): string[] => [boundary.organizationId, boundary.anonymizationScopeId];
 
+const boundarySensitiveSurfaces = (
+  boundary: Extract<ChatThirdPartyBoundary, { type: "anonymized" }>,
+  text: string,
+): string[] => {
+  const normalizedText = text.toLowerCase();
+  const surfaces = new Set<string>();
+  for (const forcedValue of boundaryForcedSensitiveValues(boundary)) {
+    if (forcedValue.length === 0) {
+      continue;
+    }
+    const normalizedForcedValue = forcedValue.toLowerCase();
+    let offset = normalizedText.indexOf(normalizedForcedValue);
+    while (offset !== -1) {
+      surfaces.add(text.slice(offset, offset + forcedValue.length));
+      offset = normalizedText.indexOf(
+        normalizedForcedValue,
+        offset + forcedValue.length,
+      );
+    }
+  }
+  return [...surfaces];
+};
+
+const forcedSensitiveValuesForFields = (
+  boundary: Extract<ChatThirdPartyBoundary, { type: "anonymized" }>,
+  fields: readonly string[],
+): string[] => {
+  const values = new Set(boundaryForcedSensitiveValues(boundary));
+  for (const field of fields) {
+    for (const surface of boundarySensitiveSurfaces(boundary, field)) {
+      values.add(surface);
+    }
+  }
+  return [...values];
+};
+
 const rewritePlaceholders = (
   text: string,
   replacements: Map<string, string>,
@@ -460,7 +496,11 @@ const walkStrict = (value: unknown, map: Map<string, string>): unknown => {
     return value;
   }
   const entries = Object.entries(value).map(
-    ([key, nested]) => [key, walkStrict(nested, map)] as const,
+    ([key, nested]) =>
+      [
+        PLACEHOLDER_LIKE.test(key) ? deanonymise(key, map) : key,
+        walkStrict(nested, map),
+      ] as const,
   );
   return Object.fromEntries(entries);
 };
@@ -511,12 +551,15 @@ const buildLenientReplacer = (
   return { pattern: new RegExp(parts.join("|"), "gu"), lookup };
 };
 
+const replaceLenient = (value: string, replacer: LenientReplacer): string =>
+  value.replaceAll(
+    replacer.pattern,
+    (token) => replacer.lookup.get(token) ?? token,
+  );
+
 const walkLenient = (value: unknown, replacer: LenientReplacer): unknown => {
   if (typeof value === "string") {
-    return value.replaceAll(
-      replacer.pattern,
-      (token) => replacer.lookup.get(token) ?? token,
-    );
+    return replaceLenient(value, replacer);
   }
   if (Array.isArray(value)) {
     return value.map((item: unknown) => walkLenient(item, replacer));
@@ -525,7 +568,8 @@ const walkLenient = (value: unknown, replacer: LenientReplacer): unknown => {
     return value;
   }
   const entries = Object.entries(value).map(
-    ([key, nested]) => [key, walkLenient(nested, replacer)] as const,
+    ([key, nested]) =>
+      [replaceLenient(key, replacer), walkLenient(nested, replacer)] as const,
   );
   return Object.fromEntries(entries);
 };
@@ -556,7 +600,9 @@ export const prepareTextForThirdParty = async ({
       await anonymizeFields({
         context: boundary.pipelineContext,
         fields: protectedInput.fields,
-        forcedSensitiveValues: boundaryForcedSensitiveValues(boundary),
+        forcedSensitiveValues: forcedSensitiveValuesForFields(boundary, [
+          text,
+        ]),
         gazetteerEntries: await boundary.gazetteerEntries,
         excludedCanonicals: await boundary.excludedCanonicals,
         organizationId: boundary.organizationId,
@@ -600,7 +646,10 @@ const prepareTextBatchForThirdParty = async ({
       await anonymizeFields({
         context: boundary.pipelineContext,
         fields: protectedInput.fields,
-        forcedSensitiveValues: boundaryForcedSensitiveValues(boundary),
+        forcedSensitiveValues: forcedSensitiveValuesForFields(
+          boundary,
+          fields,
+        ),
         gazetteerEntries: await boundary.gazetteerEntries,
         excludedCanonicals: await boundary.excludedCanonicals,
         organizationId: boundary.organizationId,
@@ -844,11 +893,7 @@ const containsForcedBoundaryValue = (
   boundary: Extract<ChatThirdPartyBoundary, { type: "anonymized" }>,
   value: string,
 ): boolean =>
-  boundaryForcedSensitiveValues(boundary).some(
-    (forcedValue) =>
-      value.includes(forcedValue) ||
-      value.toLowerCase().includes(forcedValue.toLowerCase()),
-  );
+  boundarySensitiveSurfaces(boundary, value).length > 0;
 
 const shouldPreserveStructuredString = (
   key: string,
@@ -1136,6 +1181,20 @@ const anonymizeToolResultContent = ({
       content,
       replacements,
     });
+  }
+
+  if (
+    content.some(
+      (part) => part.type !== "text" && part.source.type === "data",
+    )
+  ) {
+    return Result.err(
+      new HandlerError({
+        status: 422,
+        message:
+          "Inline rich-media data cannot cross an anonymized third-party boundary.",
+      }),
+    );
   }
 
   const prepared = content.map((part) => {

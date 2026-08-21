@@ -64,6 +64,7 @@ const anonymizeTextFieldsMock = mock(
 
 const {
   createChatThirdPartyBoundary,
+  deanonymizeUnknownStringsFromBoundary,
   prepareMcpToolSourceForThirdParty,
   prepareMessagesForThirdParty,
   prepareTextForThirdParty,
@@ -140,19 +141,26 @@ describe("chat third-party anonymization boundary", () => {
       "0198f3e8-75f2-7c11-8af0-111111111111",
     );
     const scopeId = "22222222-2222-4222-8222-222222222222";
-    const anonymizeIds = mock(async ({ fields }: { fields: string[] }) => {
-      const redactionMap = new Map<string, string>();
-      const anonymized = fields.map((field, index) => {
-        const placeholder = `[MISC_${String(index + 1)}]`;
-        redactionMap.set(placeholder, field);
-        return placeholder;
-      });
-      return {
-        entityCount: fields.length,
-        fields: anonymized,
-        redactionMap,
-      };
-    });
+    const anonymizeIds = mock(
+      async ({
+        fields,
+      }: {
+        fields: string[];
+        forcedSensitiveValues?: readonly string[] | undefined;
+      }) => {
+        const redactionMap = new Map<string, string>();
+        const anonymized = fields.map((field, index) => {
+          const placeholder = `[MISC_${String(index + 1)}]`;
+          redactionMap.set(placeholder, field);
+          return placeholder;
+        });
+        return {
+          entityCount: fields.length,
+          fields: anonymized,
+          redactionMap,
+        };
+      },
+    );
     const { scopedDb } = createScopedDbMock({});
     const boundary = createChatThirdPartyBoundary({
       anonymizeFields: anonymizeIds,
@@ -190,6 +198,9 @@ describe("chat third-party anonymization boundary", () => {
       `ref_${organizationId}`,
       `scope:${scopeId}`,
     ]);
+    expect(
+      anonymizeIds.mock.calls.at(0)?.[0].forcedSensitiveValues,
+    ).toContain(organizationId.toUpperCase());
   });
 
   test("forces boundary IDs through structured object keys", async () => {
@@ -218,6 +229,16 @@ describe("chat third-party anonymization boundary", () => {
       throw prepared.error;
     }
     expect(prepared.value).toEqual({ "[MISC_1]": 7 });
+    expect(
+      deanonymizeUnknownStringsFromBoundary(boundary, prepared.value),
+    ).toEqual({ [`tenant:${organizationId}`]: 7 });
+    expect(
+      deanonymizeUnknownStringsFromBoundary(
+        boundary,
+        { MISC_1: 7 },
+        "lenient",
+      ),
+    ).toEqual({ [`tenant:${organizationId}`]: 7 });
     expect(anonymizeIds.mock.calls.at(0)?.[0].fields).toEqual([
       `tenant:${organizationId}`,
     ]);
@@ -696,6 +717,43 @@ describe("chat third-party anonymization boundary", () => {
       `https://example.test/${organizationId}/document.pdf`,
       `ref_${organizationId}`,
     ]);
+  });
+
+  test("refuses opaque inline rich-media tool results", async () => {
+    const boundary = createBoundary();
+    const prepared = await prepareMessagesForThirdParty({
+      boundary,
+      messages: [
+        {
+          id: "msg_1",
+          role: "assistant",
+          parts: [
+            {
+              type: "tool-result",
+              toolCallId: "call_1",
+              content: [
+                {
+                  type: "image",
+                  source: {
+                    type: "data",
+                    value: "AliceAAA",
+                    mimeType: "image/png",
+                  },
+                },
+              ],
+              state: "complete",
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(Result.isError(prepared)).toBe(true);
+    if (Result.isOk(prepared)) {
+      throw new TypeError("Expected inline rich-media refusal");
+    }
+    expect(prepared.error.status).toBe(422);
+    expect(anonymizeTextFieldsMock).not.toHaveBeenCalled();
   });
 
   test("returns anonymized live tool output values", async () => {
