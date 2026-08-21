@@ -150,18 +150,20 @@ const nextFrame = async (): Promise<void> =>
   });
 
 // The PM selection exists before the browser has laid out the new caret
-// position, so the rect is polled across a few animation frames.
+// position, so the rect is polled across a few animation frames. The first
+// read is frame-gated too: a rect measured before the layout settles would
+// position the menu at the previous caret.
 const pollForCaretRect = async (
   read: () => DOMRect | null,
 ): Promise<DOMRect | null> => {
   for (let attempt = 0; attempt < SLASH_MENU_CARET_POLL_FRAMES; attempt += 1) {
+    // One animation frame per iteration, not I/O.
+    // eslint-disable-next-line no-await-in-loop -- frame-gated layout polling
+    await nextFrame();
     const rect = read();
     if (rect !== null) {
       return rect;
     }
-    // One animation frame per iteration, not I/O.
-    // eslint-disable-next-line no-await-in-loop -- frame-gated layout polling
-    await nextFrame();
   }
   return null;
 };
