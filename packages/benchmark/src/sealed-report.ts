@@ -108,6 +108,136 @@ export type SealedAggregateReport = {
   readonly libraries: readonly SealedLibraryResult[];
 };
 
+type SealedReportVersionFreshnessOptions = {
+  readonly currentVersion: string;
+  readonly reportVersion: string;
+};
+
+export type SealedReportVersionFreshness =
+  | { readonly status: "current" }
+  | {
+      readonly status: "stale";
+      readonly currentVersion: string;
+      readonly reportVersion: string;
+    }
+  | {
+      readonly status: "blocked";
+      readonly reason:
+        | "invalid-current-version"
+        | "invalid-report-version"
+        | "newer-report-version";
+      readonly currentVersion: string;
+      readonly reportVersion: string;
+    };
+
+const RELEASE_VERSION =
+  /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-(alpha|beta|rc)\.(0|[1-9]\d*))?$/u;
+
+type ReleaseCore = readonly [bigint, bigint, bigint];
+type PrereleaseStage = "alpha" | "beta" | "rc";
+
+type ParsedReleaseVersion =
+  | { readonly type: "stable"; readonly core: ReleaseCore }
+  | {
+      readonly type: "prerelease";
+      readonly core: ReleaseCore;
+      readonly stage: PrereleaseStage;
+      readonly iteration: bigint;
+    };
+
+const PRERELEASE_STAGE_ORDER = {
+  alpha: 0,
+  beta: 1,
+  rc: 2,
+} as const satisfies Record<PrereleaseStage, number>;
+
+const parseReleaseVersion = (
+  version: string,
+): ParsedReleaseVersion | undefined => {
+  const match = RELEASE_VERSION.exec(version);
+  if (match === null) return undefined;
+  const major = match.at(1);
+  const minor = match.at(2);
+  const patch = match.at(3);
+  if (major === undefined || minor === undefined || patch === undefined) {
+    return undefined;
+  }
+  const core = [BigInt(major), BigInt(minor), BigInt(patch)] as const;
+  const stage = match.at(4);
+  const iteration = match.at(5);
+  if (stage === undefined && iteration === undefined) {
+    return { type: "stable", core };
+  }
+  if (
+    (stage !== "alpha" && stage !== "beta" && stage !== "rc") ||
+    iteration === undefined
+  ) {
+    return undefined;
+  }
+  return { type: "prerelease", core, stage, iteration: BigInt(iteration) };
+};
+
+const compareReleaseCores = (
+  left: ReleaseCore,
+  right: ReleaseCore,
+): -1 | 0 | 1 => {
+  for (const index of [0, 1, 2] as const) {
+    if (left[index] < right[index]) return -1;
+    if (left[index] > right[index]) return 1;
+  }
+  return 0;
+};
+
+const compareReleaseVersions = (
+  left: ParsedReleaseVersion,
+  right: ParsedReleaseVersion,
+): -1 | 0 | 1 => {
+  const coreOrder = compareReleaseCores(left.core, right.core);
+  if (coreOrder !== 0) return coreOrder;
+  if (left.type === "stable") return right.type === "stable" ? 0 : 1;
+  if (right.type === "stable") return -1;
+  const stageOrder =
+    PRERELEASE_STAGE_ORDER[left.stage] - PRERELEASE_STAGE_ORDER[right.stage];
+  if (stageOrder < 0) return -1;
+  if (stageOrder > 0) return 1;
+  if (left.iteration < right.iteration) return -1;
+  if (left.iteration > right.iteration) return 1;
+  return 0;
+};
+
+export const assessSealedReportVersionFreshness = ({
+  currentVersion,
+  reportVersion,
+}: SealedReportVersionFreshnessOptions): SealedReportVersionFreshness => {
+  const current = parseReleaseVersion(currentVersion);
+  if (current === undefined) {
+    return {
+      status: "blocked",
+      reason: "invalid-current-version",
+      currentVersion,
+      reportVersion,
+    };
+  }
+  const report = parseReleaseVersion(reportVersion);
+  if (report === undefined) {
+    return {
+      status: "blocked",
+      reason: "invalid-report-version",
+      currentVersion,
+      reportVersion,
+    };
+  }
+  const order = compareReleaseVersions(report, current);
+  if (order === 0) return { status: "current" };
+  if (order === -1) return { status: "stale", currentVersion, reportVersion };
+  return {
+    status: "blocked",
+    reason: "newer-report-version",
+    currentVersion,
+    reportVersion,
+  };
+};
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === "object" && !Array.isArray(value);
 

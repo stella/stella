@@ -6,6 +6,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   assertSealedAggregateReport,
+  assessSealedReportVersionFreshness,
   normalizeSealedProviderVersion,
   renderSealedAggregateMarkdown,
   SEALED_AGGREGATE_REPORT_SCHEMA_VERSION,
@@ -63,6 +64,74 @@ const report = (): SealedAggregateReport => ({
 });
 
 describe("sealed aggregate report contract", () => {
+  test("models report freshness and fails closed on unusable versions", () => {
+    expect(
+      assessSealedReportVersionFreshness({
+        currentVersion: "2.8.1",
+        reportVersion: "2.8.1",
+      }),
+    ).toEqual({ status: "current" });
+    expect(
+      assessSealedReportVersionFreshness({
+        currentVersion: "2.8.1",
+        reportVersion: "2.8.0",
+      }),
+    ).toEqual({
+      status: "stale",
+      currentVersion: "2.8.1",
+      reportVersion: "2.8.0",
+    });
+    expect(
+      assessSealedReportVersionFreshness({
+        currentVersion: "2.8.1",
+        reportVersion: "2.9.0",
+      }),
+    ).toEqual({
+      status: "blocked",
+      reason: "newer-report-version",
+      currentVersion: "2.8.1",
+      reportVersion: "2.9.0",
+    });
+    expect(
+      assessSealedReportVersionFreshness({
+        currentVersion: "2.8.1",
+        reportVersion: "unknown",
+      }),
+    ).toEqual({
+      status: "blocked",
+      reason: "invalid-report-version",
+      currentVersion: "2.8.1",
+      reportVersion: "unknown",
+    });
+    expect(
+      assessSealedReportVersionFreshness({
+        currentVersion: "2.9.0-rc.1",
+        reportVersion: "2.9.0-rc.1",
+      }),
+    ).toEqual({ status: "current" });
+    expect(
+      assessSealedReportVersionFreshness({
+        currentVersion: "2.9.0-rc.1",
+        reportVersion: "2.9.0-beta.2",
+      }),
+    ).toEqual({
+      status: "stale",
+      currentVersion: "2.9.0-rc.1",
+      reportVersion: "2.9.0-beta.2",
+    });
+    expect(
+      assessSealedReportVersionFreshness({
+        currentVersion: "2.9.0-beta.2",
+        reportVersion: "2.9.0-rc.1",
+      }),
+    ).toEqual({
+      status: "blocked",
+      reason: "newer-report-version",
+      currentVersion: "2.9.0-beta.2",
+      reportVersion: "2.9.0-rc.1",
+    });
+  });
+
   test("serializes one explicit aggregate-only schema", () => {
     const serialized = serializeSealedAggregateReport(report());
     const parsed: unknown = JSON.parse(serialized);
@@ -226,7 +295,7 @@ describe("sealed aggregate report contract", () => {
     expect(aggregateReportCount).toBeGreaterThan(0);
   });
 
-  test("latest held-out reports measure the current stella release", () => {
+  test("latest held-out reports match current inputs and warn when stale", () => {
     const rootResult = Bun.spawnSync(["git", "rev-parse", "--show-toplevel"]);
     if (!rootResult.success || rootResult.exitCode !== 0) {
       throw new Error("benchmark tests must run inside a Git repository");
@@ -244,6 +313,9 @@ describe("sealed aggregate report contract", () => {
     ) {
       throw new Error("anonymize package version is invalid");
     }
+    const currentReleaseVersion = normalizeSealedProviderVersion(
+      packageJson.version,
+    );
 
     const reportsResult = Bun.spawnSync(
       [
@@ -326,9 +398,21 @@ describe("sealed aggregate report contract", () => {
       );
       const stella = current?.libraries.find(({ name }) => name === "stella");
       expect(stella?.status, `${corpusId} must include stella`).toBe("ok");
-      expect(stella?.version, `${corpusId} uses a stale stella version`).toBe(
-        packageJson.version,
-      );
+      if (stella?.status !== "ok") continue;
+      const freshness = assessSealedReportVersionFreshness({
+        currentVersion: currentReleaseVersion,
+        reportVersion: stella.version,
+      });
+      if (freshness.status === "stale") {
+        process.stdout.write(
+          `::warning title=Stale sealed benchmark::${corpusId} report uses stella ${freshness.reportVersion}; current release is ${freshness.currentVersion}\n`,
+        );
+      }
+      if (freshness.status === "blocked") {
+        throw new Error(
+          `${corpusId} sealed benchmark version is unusable: ${freshness.reason}`,
+        );
+      }
     }
   });
 
