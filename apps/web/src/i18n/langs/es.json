@@ -1667,7 +1667,7 @@
       "inputDocuments": "Documentos de entrada",
       "launch": "Ejecutar un flujo de trabajo",
       "loadFailed": "No se pudo cargar esta ejecución.",
-      "noEnabledFlows": "No hay flujos de trabajo activados. Crea uno en Conocimiento › Flujos de trabajo.",
+      "noEnabledFlows": "No hay flujos de trabajo activados. Crea uno en {sectionName} › Flujos de trabajo.",
       "openDocument": "Abrir documento",
       "review": {
         "approve": "Aprobar",

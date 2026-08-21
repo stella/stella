@@ -1667,7 +1667,7 @@
       "inputDocuments": "Dokumenty wejściowe",
       "launch": "Uruchom przepływ pracy",
       "loadFailed": "Nie udało się załadować tego uruchomienia.",
-      "noEnabledFlows": "Brak włączonych przepływów pracy. Utwórz go w Wiedza › Przepływy pracy.",
+      "noEnabledFlows": "Brak włączonych przepływów pracy. Utwórz go w {sectionName} › Przepływy pracy.",
       "openDocument": "Otwórz dokument",
       "review": {
         "approve": "Zatwierdź",

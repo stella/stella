@@ -1667,7 +1667,7 @@
       "inputDocuments": "Ievades dokumenti",
       "launch": "Palaist darbplūsmu",
       "loadFailed": "Neizdevās ielādēt šo izpildi.",
-      "noEnabledFlows": "Nav iespējotu darbplūsmu. Izveidojiet to sadaļā Zināšanas › Darbplūsmas.",
+      "noEnabledFlows": "Nav iespējotu darbplūsmu. Izveidojiet to sadaļā {sectionName} › Darbplūsmas.",
       "openDocument": "Atvērt dokumentu",
       "review": {
         "approve": "Apstiprināt",

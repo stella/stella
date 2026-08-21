@@ -1667,7 +1667,7 @@
       "inputDocuments": "Įvesties dokumentai",
       "launch": "Paleisti darbo eigą",
       "loadFailed": "Nepavyko įkelti šio vykdymo.",
-      "noEnabledFlows": "Nėra įjungtų darbo eigų. Sukurkite ją skiltyje Žinios › Darbo eigos.",
+      "noEnabledFlows": "Nėra įjungtų darbo eigų. Sukurkite ją skiltyje {sectionName} › Darbo eigos.",
       "openDocument": "Atidaryti dokumentą",
       "review": {
         "approve": "Patvirtinti",

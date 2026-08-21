@@ -1667,7 +1667,7 @@
       "inputDocuments": "Vstupné dokumenty",
       "launch": "Spustiť pracovný postup",
       "loadFailed": "Toto spustenie sa nepodarilo načítať.",
-      "noEnabledFlows": "Žiadne povolené pracovné postupy. Vytvorte ho v Znalosti › Pracovné postupy.",
+      "noEnabledFlows": "Žiadne povolené pracovné postupy. Vytvorte ho v {sectionName} › Pracovné postupy.",
       "openDocument": "Otvoriť dokument",
       "review": {
         "approve": "Schváliť",

@@ -126,7 +126,9 @@ export const RunLauncher = ({
     return (
       <div className="rounded-lg border p-4">
         <p className="text-muted-foreground text-sm">
-          {t("flows.runs.noEnabledFlows")}
+          {t("flows.runs.noEnabledFlows", {
+            sectionName: t("navigation.knowledge"),
+          })}
         </p>
       </div>
     );
