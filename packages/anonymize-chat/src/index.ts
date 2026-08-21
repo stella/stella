@@ -294,9 +294,13 @@ const PLACEHOLDER_LABEL = /^\[(?<label>[A-Z][A-Z0-9_]*)_\d+\]$/u;
  * order. Hosts can combine placeholders from source text and a redaction map
  * to reject unknown tokens before restoring a provider response.
  */
-export const findChatAnonPlaceholders = (text: string): string[] => [
-  ...new Set(text.match(PLACEHOLDER_TOKEN) ?? []),
-];
+export const findChatAnonPlaceholders = (text: string): string[] => {
+  const placeholders = text.match(PLACEHOLDER_TOKEN);
+  if (placeholders === null) {
+    return [];
+  }
+  return [...new Set(placeholders)];
+};
 
 const parsePlaceholderLabel = (placeholder: string): string | null => {
   const match = PLACEHOLDER_LABEL.exec(placeholder);

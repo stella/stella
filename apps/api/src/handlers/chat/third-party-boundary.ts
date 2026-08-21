@@ -948,17 +948,18 @@ const anonymizeUnknownStrings = ({
       let preparedKey = encodeClaimedPlaceholders
         ? encodeLateLiteralPlaceholders(boundary, nestedKey)
         : nestedKey;
+      let preparedValue: unknown;
       if (containsForcedBoundaryValue(boundary, nestedKey)) {
         queueTextReplacement(replacements, preparedKey, (next) => {
-          const currentValue = Reflect.get(output, preparedKey);
           Reflect.deleteProperty(output, preparedKey);
           preparedKey = next;
-          Object.assign(output, { [preparedKey]: currentValue });
+          Object.assign(output, { [preparedKey]: preparedValue });
           apply?.(output);
         });
       }
       const nestedPrepared = yield* anonymizeUnknownStrings({
         apply: (next) => {
+          preparedValue = next;
           Object.assign(output, { [preparedKey]: next });
           apply?.(output);
         },
@@ -968,6 +969,7 @@ const anonymizeUnknownStrings = ({
         replacements,
         value: nestedValue,
       });
+      preparedValue = nestedPrepared;
       Object.assign(output, { [preparedKey]: nestedPrepared });
     }
 
