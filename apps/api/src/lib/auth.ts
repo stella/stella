@@ -23,14 +23,11 @@ import type { InferSelectModel } from "drizzle-orm";
 import Elysia, { t } from "elysia";
 import type { Context as RateLimitContext } from "elysia-rate-limit";
 
-import {
-  BETTER_AUTH_ADAPTER_OPTIONS,
-  BETTER_AUTH_ORGANIZATION_OPTIONS,
-} from "@stll/auth-model";
+import { BETTER_AUTH_ORGANIZATION_OPTIONS } from "@stll/auth-model";
 import { ac, roles } from "@stll/permissions";
 import type { PermissionInput } from "@stll/permissions";
 
-import { authSchema, member, user as authUser } from "@/api/db/auth-schema";
+import { member, user as authUser } from "@/api/db/auth-schema";
 import { rootDb, rlsDb } from "@/api/db/root";
 import { workspaceMembers, workspaces } from "@/api/db/schema";
 import {
@@ -43,6 +40,12 @@ import { captureError } from "@/api/lib/analytics/capture";
 import { getAnalytics } from "@/api/lib/analytics/client";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import type { AuditExecutionContext } from "@/api/lib/audit-log";
+import {
+  AUTH_DATABASE_ADAPTER_OPTIONS,
+  AUTH_DATABASE_ID_OPTIONS,
+  AUTH_SESSION_STORAGE_OPTIONS,
+  AUTH_VERIFICATION_STORAGE_OPTIONS,
+} from "@/api/lib/auth-adapter-options";
 import { revokeOrganizationMemberAuthArtifacts } from "@/api/lib/auth-artifacts";
 import { authCookiePolicy } from "@/api/lib/auth-cookie-name";
 import {
@@ -805,7 +808,7 @@ const createAuth = () => {
     session: {
       expiresIn: SESSION_LIFETIME_SECONDS,
       updateAge: SESSION_UPDATE_AGE_SECONDS,
-      storeSessionInDatabase: true,
+      ...AUTH_SESSION_STORAGE_OPTIONS,
       // Short-lived signed cookie cache for session resolution. Every API
       // request runs `getSession` through `sessionAuthMacro` /
       // `getSessionAndMemberAuthorization`, and without this cache each of
@@ -845,6 +848,7 @@ const createAuth = () => {
     },
     advanced: {
       cookiePrefix,
+      database: AUTH_DATABASE_ID_OPTIONS,
       useSecureCookies,
     },
     rateLimit: {
@@ -875,9 +879,7 @@ const createAuth = () => {
         "/two-factor/disable": AUTH_RATE_LIMITS.signIn,
       },
     },
-    verification: {
-      storeInDatabase: true,
-    },
+    verification: AUTH_VERIFICATION_STORAGE_OPTIONS,
     emailAndPassword: isSelfhostLocalPasswordAuthEnabled()
       ? {
           enabled: true,
@@ -917,10 +919,7 @@ const createAuth = () => {
         },
       },
     },
-    database: drizzleAdapter(rootDb, {
-      schema: authSchema,
-      ...BETTER_AUTH_ADAPTER_OPTIONS,
-    }),
+    database: drizzleAdapter(rootDb, AUTH_DATABASE_ADAPTER_OPTIONS),
     socialProviders: {
       ...(env.GOOGLE_AUTH_CLIENT_ID && env.GOOGLE_AUTH_CLIENT_SECRET
         ? {

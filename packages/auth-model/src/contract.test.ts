@@ -18,10 +18,12 @@ import type {
   BetterAuthModelContract,
 } from "./contract";
 
-const exactModels: Record<string, BetterAuthModelContract> = {};
-for (const model of BETTER_AUTH_CORE_MODEL_NAMES) {
-  exactModels[model] = BETTER_AUTH_CORE_SCHEMA[model];
-}
+const exactModels: Record<string, BetterAuthModelContract> = Object.fromEntries(
+  BETTER_AUTH_CORE_MODEL_NAMES.map((model) => [
+    model,
+    BETTER_AUTH_CORE_SCHEMA[model],
+  ]),
+);
 
 const exactCandidate = {
   adapter: BETTER_AUTH_ADAPTER_INVARIANTS,
@@ -156,30 +158,37 @@ describe("Better Auth core contract", () => {
         BETTER_AUTH_CORE_SCHEMA[model];
       for (const [fieldName, dependency] of Object.entries(dependencyFields)) {
         const contract = contractModel.fields[fieldName];
-        expect(contract?.logical.type).toBe(
+        expect(
+          contract,
+          `${model}.${fieldName} missing from contract`,
+        ).toBeDefined();
+        if (!contract) {
+          throw new Error(`${model}.${fieldName} missing from contract`);
+        }
+        expect(contract.logical.type).toBe(
           normalizeDependencyType(dependency.type),
         );
-        expect(contract?.logical.required).toBe(dependency.required);
-        expect(contract?.logical.default).toEqual(
+        expect(contract.logical.required).toBe(dependency.required ?? false);
+        expect(contract.logical.default).toEqual(
           normalizeDependencyDefault(dependency.defaultValue),
         );
-        expect(contract?.logical.unique).toBe(dependency.unique ?? false);
-        expect(contract?.logical.input).toBe(
+        expect(contract.logical.unique).toBe(dependency.unique ?? false);
+        expect(contract.logical.input).toBe(
           dependency.input === false ? "server-managed" : "allowed",
         );
-        expect(contract?.logical.returned).toBe(dependency.returned !== false);
-        expect(contract?.logical.sortable).toBe(dependency.sortable ?? false);
-        expect(contract?.logical.indexed).toBe(dependency.index ?? false);
-        expect(contract?.logical.onUpdate).toBe(
+        expect(contract.logical.returned).toBe(dependency.returned !== false);
+        expect(contract.logical.sortable).toBe(dependency.sortable ?? false);
+        expect(contract.logical.indexed).toBe(dependency.index ?? false);
+        expect(contract.logical.onUpdate).toBe(
           dependency.onUpdate !== undefined,
         );
-        expect(contract?.logical.reference?.model ?? null).toBe(
+        expect(contract.logical.reference?.model ?? null).toBe(
           normalizeReferenceModel(dependency.references?.model),
         );
-        expect(contract?.logical.reference?.field ?? null).toBe(
+        expect(contract.logical.reference?.field ?? null).toBe(
           normalizeReferenceField(dependency.references?.field),
         );
-        expect(contract?.logical.reference?.onDelete ?? null).toBe(
+        expect(contract.logical.reference?.onDelete ?? null).toBe(
           normalizeReferenceDelete(dependency.references?.onDelete),
         );
       }
@@ -251,6 +260,22 @@ describe("schema parity", () => {
         models,
       }).status,
     ).toBe("incompatible");
+
+    expect(
+      compareBetterAuthSchema(exactCandidate, {
+        fields: { member: { staleField: optionalString } },
+      }).status,
+    ).toBe("incompatible");
+
+    expect(
+      compareBetterAuthSchema({
+        adapter: {
+          ...BETTER_AUTH_ADAPTER_INVARIANTS,
+          transaction: false,
+        },
+        models: exactModels,
+      }).status,
+    ).toBe("incompatible");
   });
 
   test("does not allow an extension to redefine a core field", () => {
@@ -271,12 +296,11 @@ describe("schema parity", () => {
   });
 
   test("reports a missing core model directly", () => {
-    const models: Record<string, BetterAuthModelContract> = {};
-    for (const model of BETTER_AUTH_CORE_MODEL_NAMES) {
-      if (model !== "invitation") {
-        models[model] = BETTER_AUTH_CORE_SCHEMA[model];
-      }
-    }
+    const models: Record<string, BetterAuthModelContract> = Object.fromEntries(
+      BETTER_AUTH_CORE_MODEL_NAMES.filter(
+        (model) => model !== "invitation",
+      ).map((model) => [model, BETTER_AUTH_CORE_SCHEMA[model]]),
+    );
 
     const result = compareBetterAuthSchema({
       adapter: BETTER_AUTH_ADAPTER_INVARIANTS,

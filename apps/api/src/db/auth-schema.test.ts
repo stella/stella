@@ -5,7 +5,6 @@ import { getTableConfig, PgDialect } from "drizzle-orm/pg-core";
 import type { AnyPgTable } from "drizzle-orm/pg-core";
 
 import {
-  BETTER_AUTH_ADAPTER_OPTIONS,
   BETTER_AUTH_CORE_SCHEMA,
   compareBetterAuthSchema,
 } from "@stll/auth-model";
@@ -31,6 +30,12 @@ import {
   user,
   verification,
 } from "@/api/db/auth-schema";
+import {
+  AUTH_DATABASE_ADAPTER_OPTIONS,
+  AUTH_DATABASE_ID_OPTIONS,
+  AUTH_SESSION_STORAGE_OPTIONS,
+  AUTH_VERIFICATION_STORAGE_OPTIONS,
+} from "@/api/lib/auth-adapter-options";
 import { AUTH_USER_ADDITIONAL_FIELDS } from "@/api/lib/auth-user-additional-fields";
 
 const PRODUCT_AUTH_MODEL_NAMES = [
@@ -42,6 +47,38 @@ const PRODUCT_AUTH_MODEL_NAMES = [
   "oauthRefreshToken",
   "oauthConsent",
 ] as const;
+
+const CORE_AUTH_MODEL_NAMES: readonly string[] = Object.keys(
+  BETTER_AUTH_CORE_SCHEMA,
+);
+
+const normalizeDateStorage = (
+  storage: BetterAuthFieldContract["database"]["storage"] | undefined,
+): "timestamp-with-time-zone" => {
+  if (storage !== "timestamp-with-time-zone") {
+    throw new Error(`Unsupported auth date storage: ${String(storage)}`);
+  }
+  return storage;
+};
+
+const normalizeIdGeneration = (
+  databaseOptions: Readonly<Record<string, unknown>>,
+): "application-string" => {
+  if ("generateId" in databaseOptions) {
+    throw new Error("Auth IDs must use Better Auth's string generator");
+  }
+  return "application-string";
+};
+
+const normalizeDatabaseStorage = (
+  enabled: boolean,
+  name: string,
+): "database" => {
+  if (!enabled) {
+    throw new Error(`${name} must use database storage`);
+  }
+  return "database";
+};
 
 const databaseColumnType = (
   type: BetterAuthFieldType,
@@ -63,6 +100,11 @@ type HostFieldOptions = {
   required?: boolean;
   returned?: boolean;
 };
+
+type HostFieldDatabaseOptions = Pick<
+  HostFieldOptions,
+  "databaseDefault" | "databaseNotNull"
+>;
 
 const hostField = (
   name: string,
@@ -157,7 +199,7 @@ const normalizeRuntimeFieldType = (type: string): BetterAuthFieldType => {
 
 const normalizeRuntimeFields = (
   fields: Readonly<Record<string, RuntimeFieldConfig>>,
-  databaseOptions: Record<string, HostFieldOptions> = {},
+  databaseOptions: Record<string, HostFieldDatabaseOptions> = {},
 ): Record<string, BetterAuthFieldContract> => {
   const result: Record<string, BetterAuthFieldContract> = {};
   for (const [name, config] of Object.entries(fields)) {
@@ -338,18 +380,7 @@ describe("auth schema", () => {
   test("normalized Better Auth core matches the shared contract", () => {
     expect(
       Object.keys(authSchema)
-        .filter(
-          (modelName) =>
-            ![
-              "user",
-              "session",
-              "account",
-              "verification",
-              "organization",
-              "member",
-              "invitation",
-            ].includes(modelName),
-        )
+        .filter((modelName) => !CORE_AUTH_MODEL_NAMES.includes(modelName))
         .toSorted(),
     ).toEqual(PRODUCT_AUTH_MODEL_NAMES.toSorted());
 
@@ -392,12 +423,16 @@ describe("auth schema", () => {
       models[modelName] = PRODUCT_MODEL_PLACEHOLDER;
     }
 
+    expect(AUTH_DATABASE_ADAPTER_OPTIONS.schema).toBe(authSchema);
+
     const result = compareBetterAuthSchema(
       {
         adapter: {
-          ...BETTER_AUTH_ADAPTER_OPTIONS,
-          dateStorage: "timestamp-with-time-zone",
-          idGeneration: "application-string",
+          camelCase: AUTH_DATABASE_ADAPTER_OPTIONS.camelCase,
+          dateStorage: normalizeDateStorage(
+            models["user"]?.fields["createdAt"]?.database.storage,
+          ),
+          idGeneration: normalizeIdGeneration(AUTH_DATABASE_ID_OPTIONS),
           modelNames: {
             user: getTableConfig(user).name,
             session: getTableConfig(session).name,
@@ -407,8 +442,17 @@ describe("auth schema", () => {
             member: getTableConfig(member).name,
             invitation: getTableConfig(invitation).name,
           },
-          sessionStorage: "database",
-          verificationStorage: "database",
+          provider: AUTH_DATABASE_ADAPTER_OPTIONS.provider,
+          sessionStorage: normalizeDatabaseStorage(
+            AUTH_SESSION_STORAGE_OPTIONS.storeSessionInDatabase,
+            "Session",
+          ),
+          transaction: AUTH_DATABASE_ADAPTER_OPTIONS.transaction,
+          usePlural: AUTH_DATABASE_ADAPTER_OPTIONS.usePlural,
+          verificationStorage: normalizeDatabaseStorage(
+            AUTH_VERIFICATION_STORAGE_OPTIONS.storeInDatabase,
+            "Verification",
+          ),
         },
         models,
       },

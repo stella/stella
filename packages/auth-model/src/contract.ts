@@ -522,6 +522,13 @@ export type BetterAuthSchemaParityResult =
   | { status: "compatible" }
   | { issues: BetterAuthSchemaParityIssue[]; status: "incompatible" };
 
+const compareCodeUnits = (left: string, right: string): number => {
+  if (left === right) {
+    return 0;
+  }
+  return left < right ? -1 : 1;
+};
+
 const canonicalize = (value: unknown): unknown => {
   if (Array.isArray(value)) {
     return value.map(canonicalize);
@@ -531,7 +538,7 @@ const canonicalize = (value: unknown): unknown => {
   }
   return Object.fromEntries(
     Object.entries(value)
-      .toSorted(([left], [right]) => left.localeCompare(right))
+      .toSorted(([left], [right]) => compareCodeUnits(left, right))
       .map(([key, child]) => [key, canonicalize(child)]),
   );
 };
@@ -543,7 +550,7 @@ const sortIndexes = (
   indexes: readonly BetterAuthIndexContract[],
 ): readonly BetterAuthIndexContract[] =>
   indexes.toSorted((left, right) =>
-    canonical(left).localeCompare(canonical(right)),
+    compareCodeUnits(canonical(left), canonical(right)),
   );
 
 const compare = (
