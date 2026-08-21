@@ -31,7 +31,8 @@ describe("DataTable", () => {
     );
 
     expect(markup).toContain('aria-sort="ascending"');
-    expect(markup).toContain('<button class="sr-only" type="button">');
+    expect(markup).toContain("focus-visible:not-sr-only");
+    expect(markup).toContain("focus-visible:ring-2");
     expect(markup).toContain("Open Northwind</button>");
     expect(markup).toContain("caller-row");
     expect(markup).not.toContain('role="button"');
@@ -68,31 +69,41 @@ describe("DataTable", () => {
 
   test("row selection ignores every nested interactive target", () => {
     const row = new EventTarget();
-    const cell = new ClosestTarget(null);
-    const nestedControl = new ClosestTarget({});
+    const cell = new ClosestTarget("[role='presentation']");
+    const interactiveSelectors = [
+      "button",
+      "label",
+      "[role='checkbox']",
+      "[role='combobox']",
+      "[role='menuitem']",
+      "[role='radio']",
+      "[role='switch']",
+      "[role='tab']",
+      "[data-data-table-stop-row-action]",
+    ];
 
     expect(isDataTableRowActionTarget(row, row)).toBe(true);
     expect(isDataTableRowActionTarget(row, cell)).toBe(true);
-    expect(isDataTableRowActionTarget(row, nestedControl)).toBe(false);
-    expect(nestedControl.seenSelector).toContain("button");
-    expect(nestedControl.seenSelector).toContain(
-      "[data-data-table-stop-row-action]",
-    );
+    for (const selector of interactiveSelectors) {
+      expect(isDataTableRowActionTarget(row, new ClosestTarget(selector))).toBe(
+        false,
+      );
+    }
   });
 });
 
 class ClosestTarget extends EventTarget {
-  private readonly match: unknown;
+  private readonly matchingSelector: string;
 
   seenSelector = "";
 
-  constructor(match: unknown) {
+  constructor(matchingSelector: string) {
     super();
-    this.match = match;
+    this.matchingSelector = matchingSelector;
   }
 
   closest(selector: string) {
     this.seenSelector = selector;
-    return this.match;
+    return selector.includes(this.matchingSelector) ? {} : null;
   }
 }

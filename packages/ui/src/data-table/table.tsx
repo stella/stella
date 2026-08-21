@@ -19,9 +19,25 @@ const INTERACTIVE_DESCENDANT_SELECTOR = [
   "select",
   "textarea",
   "summary",
+  "label",
   "[contenteditable='true']",
   "[role='button']",
+  "[role='checkbox']",
+  "[role='combobox']",
   "[role='link']",
+  "[role='listbox']",
+  "[role='menuitem']",
+  "[role='menuitemcheckbox']",
+  "[role='menuitemradio']",
+  "[role='option']",
+  "[role='radio']",
+  "[role='searchbox']",
+  "[role='slider']",
+  "[role='spinbutton']",
+  "[role='switch']",
+  "[role='tab']",
+  "[role='textbox']",
+  "[role='treeitem']",
   "[tabindex]:not([tabindex='-1'])",
   "[data-data-table-stop-row-action]",
 ].join(",");
@@ -87,12 +103,17 @@ export const DataTable = <TItem,>({
         >
           {columns.map((column, columnIndex) => (
             <TableCell
-              className={resolveClassName(column.cellClassName, item)}
+              className={cn(
+                rowAction !== undefined && columnIndex === 0
+                  ? "relative"
+                  : undefined,
+                resolveClassName(column.cellClassName, item),
+              )}
               key={column.id}
             >
               {rowAction !== undefined && columnIndex === 0 ? (
                 <button
-                  className="sr-only"
+                  className="focus-visible:bg-background focus-visible:ring-ring sr-only focus-visible:not-sr-only focus-visible:absolute focus-visible:inset-2 focus-visible:z-10 focus-visible:flex focus-visible:items-center focus-visible:rounded-md focus-visible:px-2 focus-visible:text-sm focus-visible:ring-2"
                   onClick={() => rowAction.onSelect(item)}
                   type="button"
                 >
