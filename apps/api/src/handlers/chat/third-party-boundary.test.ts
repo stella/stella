@@ -32,7 +32,7 @@ const anonymizeTextFieldsMock = mock(
     fields,
   }: {
     fields: string[];
-    forcedSensitiveValues?: readonly string[];
+    forcedSensitiveValues?: readonly string[] | undefined;
     workspaceId: string;
   }) => {
     const swaps: [string, string][] = [

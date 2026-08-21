@@ -244,9 +244,7 @@ describe("runChatAnonPipeline excludedCanonicals", () => {
       source: "manual",
     });
     expect(result.redactedText).toBe("[MISC_1] is selected");
-    expect(result.redactionMap).toEqual(
-      new Map([["[MISC_1]", forcedValue]]),
-    );
+    expect(result.redactionMap).toEqual(new Map([["[MISC_1]", forcedValue]]));
   });
 
   test("forced values override matching exclusions and literal protection", async () => {
@@ -263,9 +261,7 @@ describe("runChatAnonPipeline excludedCanonicals", () => {
     });
 
     expect(result.redactedText).toBe("[MISC_1]");
-    expect(result.redactionMap).toEqual(
-      new Map([["[MISC_1]", forcedValue]]),
-    );
+    expect(result.redactionMap).toEqual(new Map([["[MISC_1]", forcedValue]]));
   });
 
   test("bounds caller-supplied forced values before building a pipeline", async () => {
