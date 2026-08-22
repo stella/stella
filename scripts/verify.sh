@@ -198,7 +198,8 @@ run_capability_description_ledger() {
 run_knip() {
   local workspace
   for workspace in apps/api apps/legal-atlas-runner apps/web; do
-    MCP_APP_INPUT=app.html bun run knip --production --strict --no-progress \
+    DATABASE_URL=postgresql://invalid MCP_APP_INPUT=app.html \
+      bun --no-env-file run knip --production --strict --no-progress \
       --include unlisted,unresolved --workspace "$workspace" || return 1
   done
 }

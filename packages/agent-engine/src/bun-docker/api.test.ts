@@ -173,4 +173,44 @@ describe("Docker container isolation", () => {
 
     expect(timeouts).toEqual([30_000, 600_000]);
   });
+
+  test("surfaces a pull error split across UTF-8 response chunks", async () => {
+    const progress = new TextEncoder().encode(
+      '{"status":"pulling","detail":"žluťoučký"}\nnoise\n{"error":"denied"}\n',
+    );
+    globalThis.fetch = Object.assign(
+      mock(
+        async () =>
+          new Response(
+            streamChunks([
+              progress.slice(0, 31),
+              progress.slice(31, 37),
+              progress.slice(37, 49),
+              progress.slice(49),
+            ]),
+          ),
+      ),
+      { preconnect: originalFetch.preconnect.bind(originalFetch) },
+    );
+
+    expect(
+      pullImage({ socketPath: "/var/run/docker.sock" }, "sandbox:test"),
+    ).rejects.toThrow("Docker pull failed for sandbox:test: denied");
+  });
+
+  test("bounds an unterminated pull progress line", async () => {
+    globalThis.fetch = Object.assign(
+      mock(
+        async () =>
+          new Response("x".repeat(1024 * 1024 + 1), {
+            headers: { "Content-Type": "application/x-ndjson" },
+          }),
+      ),
+      { preconnect: originalFetch.preconnect.bind(originalFetch) },
+    );
+
+    expect(
+      pullImage({ socketPath: "/var/run/docker.sock" }, "sandbox:test"),
+    ).rejects.toThrow("Docker pull progress line exceeded");
+  });
 });

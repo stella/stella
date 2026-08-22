@@ -28,6 +28,7 @@ export type DockerConn = { socketPath: string };
 const DOCKER_REQUEST_TIMEOUT_MS = 30_000;
 const DOCKER_EXEC_TIMEOUT_MS = 15 * 60_000;
 const DOCKER_IMAGE_PULL_TIMEOUT_MS = 10 * 60_000;
+const MAX_DOCKER_PROGRESS_LINE_CHARS = 1024 * 1024;
 
 const UNSAFE_DOCKER_NETWORK_MODES: ReadonlySet<string> = new Set([
   "bridge",
@@ -413,6 +414,31 @@ const parseProgressLine = (line: string): unknown => {
   }
 };
 
+type InspectProgressLineOptions = {
+  image: string;
+  line: string;
+};
+
+const inspectProgressLine = ({
+  image,
+  line,
+}: InspectProgressLineOptions): void => {
+  if (line.length > MAX_DOCKER_PROGRESS_LINE_CHARS) {
+    throw new DockerApiError({
+      message: `Docker pull progress line exceeded ${MAX_DOCKER_PROGRESS_LINE_CHARS} characters for ${image}`,
+    });
+  }
+  if (line.trim() === "") {
+    return;
+  }
+  const parsed = parseProgressLine(line);
+  if (isRecord(parsed) && typeof parsed["error"] === "string") {
+    throw new DockerApiError({
+      message: `Docker pull failed for ${image}: ${parsed["error"]}`,
+    });
+  }
+};
+
 /** Pull an image, draining the progress stream and surfacing pull errors. */
 export const pullImage = async (
   conn: DockerConn,
@@ -433,16 +459,20 @@ export const pullImage = async (
   // JSON progress. A pull failure (auth, rate limit, missing tag) arrives as
   // an `{ "error": … }` object IN that body, not as a non-2xx status — so
   // draining without inspecting would silently succeed. Scan for the error.
-  const body = await res.text();
-  for (const line of body.split("\n")) {
-    if (line.trim() === "") {
-      continue;
+  let pending = "";
+  for await (const chunk of res.textStream()) {
+    pending += chunk;
+    for (;;) {
+      const newlineIndex = pending.indexOf("\n");
+      if (newlineIndex === -1) {
+        break;
+      }
+      inspectProgressLine({ image, line: pending.slice(0, newlineIndex) });
+      pending = pending.slice(newlineIndex + 1);
     }
-    const parsed = parseProgressLine(line);
-    if (isRecord(parsed) && typeof parsed["error"] === "string") {
-      throw new DockerApiError({
-        message: `Docker pull failed for ${image}: ${parsed["error"]}`,
-      });
+    if (pending.length > MAX_DOCKER_PROGRESS_LINE_CHARS) {
+      inspectProgressLine({ image, line: pending });
     }
   }
+  inspectProgressLine({ image, line: pending });
 };

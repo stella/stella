@@ -3,7 +3,7 @@
 // endpoint. `Bun.spawn` (async) is used, not `spawnSync`, so the in-process
 // `Bun.serve` can answer requests concurrently. No real network origin is hit.
 
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, setDefaultTimeout, test } from "bun:test";
 import { createHash } from "node:crypto";
 import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -13,6 +13,10 @@ import { respondToMcpLifecycle } from "../tests/mcp-test-lifecycle.js";
 import { EXIT_CODES } from "./mcp-constants.js";
 
 const CLI_ENTRYPOINT = path.join(import.meta.dirname, "cli.ts");
+
+// These tests start a fresh Bun process for each real CLI invocation. Startup
+// can exceed Bun's 5-second default while the repository suite is contended.
+setDefaultTimeout(15_000);
 
 const base64url = (value: object): string =>
   Buffer.from(JSON.stringify(value)).toString("base64url");

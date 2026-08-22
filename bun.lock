@@ -890,8 +890,12 @@
       },
     },
   },
+  "trustedDependencies": [
+    "lefthook",
+  ],
   "patchedDependencies": {
     "eslint-plugin-drizzle@0.2.3": "patches/eslint-plugin-drizzle@0.2.3.patch",
+    "drizzle-kit@1.0.0-rc.4": "patches/drizzle-kit@1.0.0-rc.4.patch",
   },
   "overrides": {
     "@atlaskit/pragmatic-drag-and-drop": "3.0.0",

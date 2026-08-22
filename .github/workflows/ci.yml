@@ -755,7 +755,7 @@ jobs:
         # boot/compile smoke.
         run: |
           for workspace in apps/api apps/legal-atlas-runner apps/web; do
-            bun run knip --production --strict --no-progress --include unlisted,unresolved --workspace "$workspace"
+            DATABASE_URL=postgresql://invalid bun --no-env-file run knip --production --strict --no-progress --include unlisted,unresolved --workspace "$workspace"
           done
 
       - name: Knip unused-dependency checks
@@ -774,7 +774,7 @@ jobs:
         # is a deliberate follow-up, not a silent flip.
         run: |
           for workspace in apps/api apps/legal-atlas-runner apps/web; do
-            bun run knip --no-progress --include dependencies --workspace "$workspace"
+            DATABASE_URL=postgresql://invalid bun --no-env-file run knip --no-progress --include dependencies --workspace "$workspace"
           done
 
       - name: Catalogue pinned-content check
@@ -1916,6 +1916,7 @@ jobs:
           export NODE_ENV=production
           bun build \
             --compile \
+            --no-compile-autoload-dotenv \
             --minify-whitespace \
             --minify-syntax \
             --target bun \
@@ -1948,6 +1949,7 @@ jobs:
           # inside the image build, where the hand-copied assets exist.
           bun build \
             --compile \
+            --no-compile-autoload-dotenv \
             --target bun \
             --outfile /tmp/image-smoke \
             apps/api/src/scripts/image-smoke.ts

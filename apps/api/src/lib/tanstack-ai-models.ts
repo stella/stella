@@ -994,6 +994,13 @@ export const validateTanStackDevModelOverride = (
 
 const byokCache = new Map<string, TanStackTextAdapterFactory>();
 
+/** Drop reconstructible provider adapters when the runtime reports memory pressure. */
+export const clearByokAdapterCache = (): number => {
+  const evictedEntries = byokCache.size;
+  byokCache.clear();
+  return evictedEntries;
+};
+
 const byokCacheKey = (config: OrgAIProviderConfig): string => {
   const hasher = new Bun.CryptoHasher("sha256");
   hasher.update(config.provider);

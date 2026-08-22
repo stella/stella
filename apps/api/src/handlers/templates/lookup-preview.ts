@@ -46,6 +46,13 @@ const config = {
 const LOOKUP_PREVIEW_CACHE_MAX = 500;
 const outcomeCache = new Map<string, LookupOutcome>();
 
+/** Drop reconstructible registry results when the runtime reports memory pressure. */
+export const clearLookupPreviewCache = (): number => {
+  const evictedEntries = outcomeCache.size;
+  outcomeCache.clear();
+  return evictedEntries;
+};
+
 const rememberOutcome = (key: string, outcome: LookupOutcome): void => {
   if (outcome.type === "error") {
     return;

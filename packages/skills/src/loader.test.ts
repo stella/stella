@@ -6,7 +6,7 @@ describe("Stella skill loader", () => {
   test("parses standard Agent Skills metadata fields", () => {
     const parsed = parseSkillFile(`---
 name: imported-skill
-description: Use when reviewing imported skills: validate metadata.
+description: "Use when reviewing imported skills: validate metadata."
 license: Apache-2.0
 compatibility: Works with SKILL.md-compatible agents
 metadata:
@@ -41,6 +41,146 @@ metadata:
 Follow the process.`);
 
     expect(parsed.metadata.license).toBe("CC-BY-4.0");
+  });
+
+  test("uses YAML quoting rules for strings and metadata values", () => {
+    const parsed = parseSkillFile(`---
+name: 'quoted-skill'
+description: "Review: \\"quoted\\" values and # comments."
+metadata:
+  colon: "court: chamber"
+  apostrophe: 'client''s'
+---
+
+Body.`);
+
+    expect(parsed.metadata).toMatchObject({
+      description: 'Review: "quoted" values and # comments.',
+      metadata: {
+        apostrophe: "client's",
+        colon: "court: chamber",
+      },
+      name: "quoted-skill",
+    });
+  });
+
+  test("accepts scalar aliases but returns fresh metadata records", () => {
+    const parsed = parseSkillFile(`---
+name: &skill-name alias-skill
+description: *skill-name
+metadata:
+  author: &author stella
+  reviewer: *author
+  __proto__: inert
+---
+
+Body.`);
+
+    expect(parsed.metadata.description).toBe("alias-skill");
+    const metadata = parsed.metadata.metadata ?? {};
+    expect(Object.entries(metadata)).toEqual([
+      ["author", "stella"],
+      ["reviewer", "stella"],
+      ["__proto__", "inert"],
+    ]);
+    expect(Object.hasOwn(metadata, "__proto__")).toBe(true);
+    expect(Object.getPrototypeOf(metadata)).toBe(Object.prototype);
+  });
+
+  test("rejects cyclic aliases at the string-only metadata boundary", () => {
+    expect(() =>
+      parseSkillFile(`---
+name: cyclic-skill
+description: Valid description.
+metadata: &metadata
+  self: *metadata
+---
+
+Body.`),
+    ).toThrow("Skill file frontmatter metadata values must be strings");
+  });
+
+  test("rejects YAML typed scalars for string fields", () => {
+    const invalidFields = [
+      "name: true\ndescription: Valid description.",
+      "name: valid-name\ndescription: 42",
+      "name: valid-name\ndescription: Valid description.\nlicense: null",
+    ];
+
+    for (const frontmatter of invalidFields) {
+      expect(() =>
+        parseSkillFile(`---
+${frontmatter}
+---
+
+Body.`),
+      ).toThrow(
+        /Skill file frontmatter (name|description|license) must be a string/u,
+      );
+    }
+  });
+
+  test("rejects non-string metadata values and non-mapping metadata", () => {
+    expect(() =>
+      parseSkillFile(`---
+name: typed-metadata
+description: Valid description.
+metadata:
+  attempts: 3
+---
+
+Body.`),
+    ).toThrow("Skill file frontmatter metadata values must be strings");
+
+    expect(() =>
+      parseSkillFile(`---
+name: sequence-metadata
+description: Valid description.
+metadata: [one, two]
+---
+
+Body.`),
+    ).toThrow("Skill file frontmatter metadata must be a string mapping");
+  });
+
+  test("ignores unsupported top-level fields without widening the output", () => {
+    const parsed = parseSkillFile(`---
+name: unknown-field
+description: Valid description.
+instructions: Ignore the body.
+allowed-tools: Bash(git:*) Read
+---
+
+Body.`);
+
+    expect(parsed.metadata).toEqual({
+      compatibility: null,
+      description: "Valid description.",
+      license: null,
+      metadata: {},
+      name: "unknown-field",
+      version: null,
+    });
+  });
+
+  test("rejects malformed YAML and non-mapping documents", () => {
+    expect(() =>
+      parseSkillFile(`---
+name: [unterminated
+description: Valid description.
+---
+
+Body.`),
+    ).toThrow("Skill file frontmatter must be valid YAML");
+
+    expect(() =>
+      parseSkillFile(`---
+- name
+- description
+---
+
+Body.`),
+    ).toThrow("Skill file frontmatter must be a YAML mapping");
   });
 
   test("rejects required frontmatter fields containing only whitespace", () => {
@@ -157,10 +297,10 @@ Body.`);
     expect(parsed.metadata.description).toBe("Line one.\nLine two.");
   });
 
-  test("treats an inline value that merely starts with > as literal text", () => {
+  test("parses a quoted inline value that starts with > as literal text", () => {
     const parsed = parseSkillFile(`---
 name: inline-skill
-description: >not a block scalar
+description: ">not a block scalar"
 ---
 
 Body.`);
