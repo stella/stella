@@ -160,7 +160,16 @@ describe("model catalog discovery invariants", () => {
   });
 
   test("default reviewed exclusions cover unversioned Google aliases", () => {
-    const googleAliases: UpstreamDiscoveryModel[] = [
+    const googleFlashLiteAlias = {
+      provider: "google",
+      modelId: "gemini-flash-lite-latest",
+      releaseDate: "2026-07-21",
+      status: null,
+      toolCall: true,
+      structuredOutput: true,
+      outputModalities: ["text"],
+    } satisfies UpstreamDiscoveryModel;
+    const googleAliases = [
       {
         provider: "google",
         modelId: "gemini-flash-latest",
@@ -170,16 +179,8 @@ describe("model catalog discovery invariants", () => {
         structuredOutput: true,
         outputModalities: ["text"],
       },
-      {
-        provider: "google",
-        modelId: "gemini-flash-lite-latest",
-        releaseDate: "2026-07-21",
-        status: null,
-        toolCall: true,
-        structuredOutput: true,
-        outputModalities: ["text"],
-      },
-    ];
+      googleFlashLiteAlias,
+    ] satisfies UpstreamDiscoveryModel[];
 
     expect(
       findUnreviewedModels({
@@ -196,6 +197,6 @@ describe("model catalog discovery invariants", () => {
           "google:gemini-flash-latest": "2026-08-22: property-test disposition",
         },
       }),
-    ).toEqual([googleAliases[1]]);
+    ).toEqual([googleFlashLiteAlias]);
   });
 });

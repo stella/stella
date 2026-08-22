@@ -26,6 +26,11 @@ import {
   TANSTACK_AI_PROVIDERS,
 } from "./index";
 
+const FLOATING_GOOGLE_MODEL_POINTERS = [
+  "gemini-flash-latest",
+  "gemini-flash-lite-latest",
+] as const;
+
 describe("BYOK provider role support", () => {
   test("does not route PDF flows through Mistral document-unsupported models", () => {
     expect(
@@ -242,16 +247,21 @@ describe("MODEL_RATES economic ordering", () => {
   }
 
   test("canonical provider aliases share one rate schedule", () => {
-    expect(getModelRate("gemini-flash-latest")).toBe(
-      getModelRate("gemini-3.7-flash"),
-    );
-    expect(getModelRate("gemini-flash-lite-latest")).toBe(
-      getModelRate("gemini-3.5-flash-lite"),
-    );
     expect(getModelRate("gpt-5.6-sol")).toBe(getModelRate("gpt-5.6"));
     expect(getModelRate("google/gemini-3.7-flash")).toBe(
       getModelRate("gemini-3.7-flash"),
     );
+  });
+
+  test("floating provider pointers do not inherit fixed-model metadata", () => {
+    for (const modelId of FLOATING_GOOGLE_MODEL_POINTERS) {
+      expect(getModelRate(modelId)).toBeUndefined();
+      expect(getContextWindowTokens(modelId)).toBe(
+        DEFAULT_CONTEXT_WINDOW_TOKENS,
+      );
+      expect(getModelReasoningEfforts(modelId)).toBeNull();
+      expect(shouldEmitTemperature(modelId)).toBe(false);
+    }
   });
 
   test("canonical model rates match expected amounts", () => {
@@ -281,12 +291,6 @@ describe("CONTEXT_WINDOW_TOKENS", () => {
   });
 
   test("canonical provider aliases share context metadata", () => {
-    expect(getContextWindowTokens("gemini-flash-latest")).toBe(
-      getContextWindowTokens("gemini-3.7-flash"),
-    );
-    expect(getContextWindowTokens("gemini-flash-lite-latest")).toBe(
-      getContextWindowTokens("gemini-3.5-flash-lite"),
-    );
     expect(getContextWindowTokens("gpt-5.6-sol")).toBe(
       getContextWindowTokens("gpt-5.6"),
     );
@@ -295,12 +299,6 @@ describe("CONTEXT_WINDOW_TOKENS", () => {
 
 describe("MODEL_REASONING_EFFORTS", () => {
   test("canonical provider aliases share reasoning metadata", () => {
-    expect(getModelReasoningEfforts("gemini-flash-latest")).toEqual(
-      getModelReasoningEfforts("gemini-3.7-flash"),
-    );
-    expect(getModelReasoningEfforts("gemini-flash-lite-latest")).toEqual(
-      getModelReasoningEfforts("gemini-3.5-flash-lite"),
-    );
     expect(getModelReasoningEfforts("gpt-5.6-sol")).toEqual(
       getModelReasoningEfforts("gpt-5.6"),
     );
