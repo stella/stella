@@ -225,6 +225,30 @@ describe("providerStatusFields", () => {
     });
   });
 
+  test("reports a status reached through a wrapper's cause", () => {
+    // `classifyAIError` walks the cause chain, so a wrapper around an unmapped
+    // provider response is still logged as `unknown`. Reading only the outer
+    // error would report no status for it, which is the shape this field
+    // exists to tell apart from a failure that carried none.
+    const wrapped = new Error("adapter call failed", {
+      cause: providerErrorBody(403, "PERMISSION_DENIED"),
+    });
+
+    expect(classifyAIError(wrapped)).toBe("unknown");
+    expect(providerStatusFields(wrapped)).toEqual({
+      "error.provider.status": "403",
+    });
+  });
+
+  test("ignores an integer outside the HTTP status range", () => {
+    // A top-level `status` was previously taken on `Number.isInteger` alone,
+    // so a sentinel zero was reported as though it were a real status.
+    for (const status of [0, 600, -1]) {
+      expect(providerStatusFields({ status })).toEqual({});
+      expect(providerStatusFields({ statusCode: status })).toEqual({});
+    }
+  });
+
   test("reports nothing when the failure carries no status", () => {
     expect(providerStatusFields(new Error("stream ended"))).toEqual({});
     expect(providerStatusFields("boom")).toEqual({});

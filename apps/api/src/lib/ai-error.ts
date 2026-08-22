@@ -39,13 +39,17 @@ const providerStatusCode = (error: unknown): number | null => {
     return null;
   }
 
+  // Range-checked like the nested body fields below: an integer outside the
+  // HTTP range is not a status, and treating one as one both mis-names the
+  // failure (>= 500 would read as a provider outage) and puts a meaningless
+  // number in the failure log.
   const statusCode = error["statusCode"];
-  if (typeof statusCode === "number" && Number.isInteger(statusCode)) {
+  if (isHttpStatus(statusCode)) {
     return statusCode;
   }
 
   const status = error["status"];
-  if (typeof status === "number" && Number.isInteger(status)) {
+  if (isHttpStatus(status)) {
     return status;
   }
 
@@ -74,34 +78,23 @@ const isApiCallError = (error: unknown): boolean =>
   typeof error === "object" &&
   providerStatusCode(error) !== null;
 
-/**
- * The provider HTTP status a failure carries, as fingerprint fields.
- *
- * `classifyAIError` names a failure from this status and returns `unknown`
- * when it maps none, so the status is what separates "the provider answered
- * with a status this code does not map" from "the failure carried no status
- * at all". A failure sink needs that distinction: an adapter forwards the
- * provider's structured error body as a plain object rather than an `Error`,
- * and `errorFingerprint` reduces any non-`Error` to a bare `UnknownError`,
- * leaving the two indistinguishable in the log.
- *
- * An integer status is structural, so it ships under the same non-PII
- * contract as `error.class`. The body it was read from is never logged: a
- * provider message can echo request content. The key avoids the logger's
- * redaction regex so it survives `sanitizeLogAttributes`.
- */
-export const providerStatusFields = (
-  error: unknown,
-): Record<string, string> => {
-  const status = providerStatusCode(error);
-  return status === null ? {} : { "error.provider.status": String(status) };
-};
-
 const errorCause = (error: unknown): unknown => {
   if (!isRecord(error)) {
     return undefined;
   }
   return error["cause"];
+};
+
+// The first provider status in the cause chain, walked exactly as
+// `classifyAIError` walks it so the status a failure is logged with is the
+// one the classifier judged it by.
+const providerStatusInChain = (error: unknown): number | null => {
+  const status = providerStatusCode(error);
+  if (status !== null) {
+    return status;
+  }
+  const cause = errorCause(error);
+  return cause === undefined ? null : providerStatusInChain(cause);
 };
 
 export const classifyAIError = (error: unknown): AIErrorKind => {
@@ -143,6 +136,35 @@ export const classifyAIError = (error: unknown): AIErrorKind => {
     return classifyAIError(cause);
   }
   return "unknown";
+};
+
+/**
+ * The provider HTTP status a failure carries, as fingerprint fields.
+ *
+ * `classifyAIError` names a failure from this status and returns `unknown`
+ * when it maps none, so the status is what separates "the provider answered
+ * with a status this code does not map" from "the failure carried no status
+ * at all". A failure sink needs that distinction: an adapter forwards the
+ * provider's structured error body as a plain object rather than an `Error`,
+ * and `errorFingerprint` reduces any non-`Error` to a bare `UnknownError`,
+ * leaving the two indistinguishable in the log.
+ *
+ * The walk mirrors `classifyAIError`'s: a status reached only through a
+ * wrapper's `cause` is the same evidence, and reading just the outer error
+ * would report nothing for the shapes the classifier looked hardest at. A
+ * status found here is always one the classifier could not map, because a
+ * mapped one makes the failure anticipated and it is never logged.
+ *
+ * An integer status is structural, so it ships under the same non-PII
+ * contract as `error.class`. The body it was read from is never logged: a
+ * provider message can echo request content. The key avoids the logger's
+ * redaction regex so it survives `sanitizeLogAttributes`.
+ */
+export const providerStatusFields = (
+  error: unknown,
+): Record<string, string> => {
+  const status = providerStatusInChain(error);
+  return status === null ? {} : { "error.provider.status": String(status) };
 };
 
 // Total over `ChatTerminalError`, so a new terminal outcome cannot be added to
