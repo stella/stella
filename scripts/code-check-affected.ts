@@ -20,18 +20,34 @@ const REPO_ROOT = path.resolve(import.meta.dirname, "..");
 const DEFAULT_BASE = "origin/main";
 const WORKSPACE_PARENTS = ["apps", "packages"] as const;
 
-export const ALL_WORKSPACE_CACHE_INPUTS = [
+export const DEPENDENCY_CACHE_INPUTS = [
   "$TURBO_ROOT$/.npmrc",
   "$TURBO_ROOT$/bun.lock",
   "$TURBO_ROOT$/bunfig.toml",
   "$TURBO_ROOT$/package.json",
-  "$TURBO_ROOT$/packages/typescript-config/**",
   "$TURBO_ROOT$/patches/**",
+] as const;
+export const SHARED_COMPILER_CACHE_INPUTS = [
+  "$TURBO_ROOT$/packages/typescript-config/**",
   "$TURBO_ROOT$/types/**",
+] as const;
+export const ALL_WORKSPACE_CACHE_INPUTS = [
+  ...DEPENDENCY_CACHE_INPUTS,
+  ...SHARED_COMPILER_CACHE_INPUTS,
 ] as const;
 export const LINT_ONLY_CACHE_INPUTS = [
   "$TURBO_ROOT$/oxlint.config.ts",
   "$TURBO_ROOT$/.oxlint-plugins/**",
+] as const;
+export const PLUGIN_FIXTURE_INPUTS = [
+  ...DEPENDENCY_CACHE_INPUTS,
+  ...LINT_ONLY_CACHE_INPUTS,
+  "$TURBO_ROOT$/scripts/lint-oxlint-fixtures.sh",
+  "$TURBO_ROOT$/tsconfig.oxlint-plugins.json",
+] as const;
+export const PLUGIN_REGISTRY_INPUTS = [
+  ...LINT_ONLY_CACHE_INPUTS,
+  "$TURBO_ROOT$/scripts/check-oxlint-plugin-registry.ts",
 ] as const;
 export const ROOT_SCRIPT_LINT_INPUTS = [
   ...ALL_WORKSPACE_CACHE_INPUTS,
@@ -114,19 +130,11 @@ const invalidatesRootScriptLint = (file: string): boolean =>
 
 const rootChecksForPath = (file: string): readonly RootCheck[] => {
   const rootChecks: RootCheck[] = [];
-  if (file === "package.json") {
-    rootChecks.push(ROOT_CHECKS.pluginRegistry, ROOT_CHECKS.pluginFixtures);
-  } else if (
-    file === "oxlint.config.ts" ||
-    file.startsWith(".oxlint-plugins/")
-  ) {
-    rootChecks.push(ROOT_CHECKS.pluginRegistry, ROOT_CHECKS.pluginFixtures);
+  if (PLUGIN_REGISTRY_INPUTS.some((input) => matchesTurboInput(file, input))) {
+    rootChecks.push(ROOT_CHECKS.pluginRegistry);
   }
-  if (file === "scripts/lint-oxlint-fixtures.sh") {
+  if (PLUGIN_FIXTURE_INPUTS.some((input) => matchesTurboInput(file, input))) {
     rootChecks.push(ROOT_CHECKS.pluginFixtures);
-  }
-  if (file === "tsconfig.oxlint-plugins.json") {
-    rootChecks.push(ROOT_CHECKS.pluginRegistry, ROOT_CHECKS.pluginFixtures);
   }
   if (invalidatesRootScriptLint(file)) {
     rootChecks.push(ROOT_CHECKS.rootScriptLint);

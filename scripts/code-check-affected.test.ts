@@ -3,8 +3,11 @@ import { readFileSync } from "node:fs";
 
 import {
   ALL_WORKSPACE_CACHE_INPUTS,
+  DEPENDENCY_CACHE_INPUTS,
   LINT_ONLY_CACHE_INPUTS,
   planCheck,
+  PLUGIN_FIXTURE_INPUTS,
+  PLUGIN_REGISTRY_INPUTS,
   ROOT_SCRIPT_LINT_INPUTS,
   scopedCommands,
 } from "./code-check-affected";
@@ -155,6 +158,7 @@ describe("affected code-check planning", () => {
   );
 
   test.each([
+    ["scripts/check-oxlint-plugin-registry.ts", "plugin-registry"],
     ["scripts/lint-oxlint-fixtures.sh", "plugin-fixtures"],
     ["scripts/lint-root-scripts.sh", "root-script-lint"],
     ["scripts/tsconfig.json", "root-script-lint"],
@@ -283,6 +287,21 @@ describe("changed lint path selection", () => {
 });
 
 describe("Turbo cache input contract", () => {
+  test("each plugin check invalidates on its own implementation", () => {
+    expect(PLUGIN_REGISTRY_INPUTS).toContain(
+      "$TURBO_ROOT$/scripts/check-oxlint-plugin-registry.ts",
+    );
+    expect(PLUGIN_FIXTURE_INPUTS).toContain(
+      "$TURBO_ROOT$/scripts/lint-oxlint-fixtures.sh",
+    );
+  });
+
+  test("plugin fixtures cover every dependency-resolution input", () => {
+    for (const input of DEPENDENCY_CACHE_INPUTS) {
+      expect(PLUGIN_FIXTURE_INPUTS).toContain(input);
+    }
+  });
+
   test("root script lint covers every shared workspace input", () => {
     for (const input of ALL_WORKSPACE_CACHE_INPUTS) {
       expect(ROOT_SCRIPT_LINT_INPUTS).toContain(input);
