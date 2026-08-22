@@ -61,7 +61,9 @@ const props = {
   entityVersionId: toSafeId<"entityVersion">("entity_version_test"),
   organizationId: toSafeId<"organization">("org_test"),
   workspaceId: toSafeId<"workspace">("workspace_test"),
-  scopedDb: asTestRaw<ScopedDb>(async () => []),
+  scopedDb: asTestRaw<ScopedDb>(async () => {
+    throw new Error("unexpected database access");
+  }),
   orgAIConfig: null,
   promptCachingEnabled: false,
   serviceTier: "standard",
