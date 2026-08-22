@@ -1,5 +1,15 @@
 # @stll/cli
 
+## 0.6.5
+
+### Patch Changes
+
+- [#2328](https://github.com/stella/stella/pull/2328) [`cd0f66c`](https://github.com/stella/stella/commit/cd0f66c62f815f8e351829aaba63429e6127f2a0) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add the `entities bilingual-create` capability leaf: create a two-column bilingual copy of a DOCX document.
+
+- [#2338](https://github.com/stella/stella/pull/2338) [`f9dc04a`](https://github.com/stella/stella/commit/f9dc04afa5045c757a57a31938554a32bde6f984) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add an optional `maxChildren` cap to the condition builder's capabilities; refresh the capability catalog with the bounded request filter arrays.
+
+- [#2333](https://github.com/stella/stella/pull/2333) [`60a11f4`](https://github.com/stella/stella/commit/60a11f4d18e38870f02882ef41a6d39b925eb343) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add an optional `maxSorts` cap to `SortChips`; refresh the capability catalog with the separate view-sort bound and the raised property cap.
+
 ## 0.6.4
 
 ### Patch Changes
