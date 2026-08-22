@@ -12,7 +12,11 @@ import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
 import { detached } from "@/api/lib/detached";
-import { connectionErrorFields, errorTag } from "@/api/lib/errors/utils";
+import {
+  connectionErrorFields,
+  errorSystemFields,
+  errorTag,
+} from "@/api/lib/errors/utils";
 import { deleteS3Keys } from "@/api/lib/files/utils";
 import { logger } from "@/api/lib/observability/logger";
 import { createBullMqConnection } from "@/api/lib/redis-client";
@@ -196,9 +200,10 @@ export const initAccountDeletionCleanupWorker = () => {
           });
         } catch (error) {
           captureError(error);
-          logger.error("account_deletion_cleanup.reconcile_failed", {
-            "error.type": errorTag(error),
-          });
+          logger.error(
+            "account_deletion_cleanup.reconcile_failed",
+            errorSystemFields(error),
+          );
         }
       })(),
       "account-deletion-cleanup.reconcile",
