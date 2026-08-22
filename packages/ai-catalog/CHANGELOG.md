@@ -1,5 +1,11 @@
 # @stll/ai-catalog
 
+## 0.1.1
+
+### Patch Changes
+
+- [#2351](https://github.com/stella/stella/pull/2351) [`cd9f59f`](https://github.com/stella/stella/commit/cd9f59fab6d4630aed50f982826d41a4671eb8ed) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Update Gemini 3.6 Flash promotional rates and keep floating Google aliases outside fixed-model metadata.
+
 ## 0.1.0
 
 ### Minor Changes
