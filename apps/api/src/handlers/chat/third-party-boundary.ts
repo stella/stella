@@ -1504,6 +1504,9 @@ const MCP_PROVIDER_METADATA_FIELDS = [
   "outputSchema",
 ] as const;
 
+const unknownObjectEntries = (value: object): [string, unknown][] =>
+  Object.keys(value).map((key) => [key, Reflect.get(value, key)]);
+
 const collectMcpInputKeyRestorations = ({
   original,
   prepared,
@@ -1540,8 +1543,8 @@ const collectMcpInputKeyRestorations = ({
     return;
   }
 
-  const originalEntries = Object.entries(original);
-  const preparedEntries = Object.entries(prepared);
+  const originalEntries = unknownObjectEntries(original);
+  const preparedEntries = unknownObjectEntries(prepared);
   if (originalEntries.length !== preparedEntries.length) {
     throw new TypeError(
       "MCP input schema preparation changed its object shape",
@@ -1630,7 +1633,7 @@ const prepareMcpProviderMetadataForThirdParty = async ({
     }
     Reflect.set(prepared, field, preparedMetadata.value);
   }
-  return await prepareMcpProviderMetadataForThirdParty({
+  await prepareMcpProviderMetadataForThirdParty({
     boundary,
     index: index + 1,
     inputKeyRestorations,
