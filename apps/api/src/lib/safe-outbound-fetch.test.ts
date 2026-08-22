@@ -36,6 +36,31 @@ describe("fetchWithResolvedAddress", () => {
     );
   });
 
+  test("falls back when the first resolved address is unreachable", async () => {
+    await withHttpServer(
+      (_request, response) => {
+        response.end("ready");
+      },
+      async (port) => {
+        const result = await fetchWithResolvedAddress({
+          addresses: [
+            { address: "::1", family: 6 },
+            { address: "127.0.0.1", family: 4 },
+          ],
+          maxBytes: 1024,
+          timeoutMs: 1000,
+          url: new URL(`http://example.test:${port}/probe`),
+        });
+
+        expect(Result.isOk(result)).toBe(true);
+        if (Result.isError(result)) {
+          throw result.error;
+        }
+        expect(new TextDecoder().decode(result.value.body)).toBe("ready");
+      },
+    );
+  });
+
   test("stops reading when the response exceeds the byte cap", async () => {
     await withHttpServer(
       (_request, response) => {
@@ -108,6 +133,40 @@ describe("fetchWithResolvedAddress", () => {
       async (port) => {
         const result = await fetchStreamWithResolvedAddress({
           addresses: [{ address: "127.0.0.1", family: 4 }],
+          maxBytes: 1024,
+          timeoutMs: 1000,
+          url: new URL(`http://example.test:${port}/events`),
+        });
+
+        expect(Result.isOk(result)).toBe(true);
+        if (Result.isError(result)) {
+          throw result.error;
+        }
+
+        const reader = result.value.body.getReader();
+        const firstChunk = await reader.read();
+        await reader.cancel();
+
+        expect(firstChunk.done).toBe(false);
+        expect(new TextDecoder().decode(firstChunk.value)).toContain(
+          "data: ready",
+        );
+      },
+    );
+  });
+
+  test("streams through a reachable fallback address", async () => {
+    await withHttpServer(
+      (_request, response) => {
+        response.writeHead(200, { "Content-Type": "text/event-stream" });
+        response.write("event: ping\ndata: ready\n\n");
+      },
+      async (port) => {
+        const result = await fetchStreamWithResolvedAddress({
+          addresses: [
+            { address: "::1", family: 6 },
+            { address: "127.0.0.1", family: 4 },
+          ],
           maxBytes: 1024,
           timeoutMs: 1000,
           url: new URL(`http://example.test:${port}/events`),
