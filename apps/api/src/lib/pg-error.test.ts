@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { DrizzleQueryError } from "drizzle-orm";
 
+import { DatabaseError } from "./errors/tagged-errors";
 import {
   getPgErrorCode,
   isPgConstraintError,
@@ -38,7 +39,7 @@ describe("getPgErrorCode", () => {
     expect(getPgErrorCode(drizzleError({}))).toBeUndefined();
   });
 
-  it("returns undefined when error is not a DrizzleQueryError", () => {
+  it("returns undefined when the cause chain carries no SQLSTATE", () => {
     expect(getPgErrorCode(new Error("plain"))).toBeUndefined();
   });
 });
@@ -63,6 +64,23 @@ describe("isPgConstraintError", () => {
         PG_ERROR.UNIQUE_VIOLATION,
         "case_law_decisions_source_document_idx",
       ),
+    ).toBe(true);
+  });
+
+  it("matches the constraint on an inner driver error", () => {
+    const constraint = "case_law_decisions_slug_uidx";
+    const driver = Object.assign(new Error("database error"), {
+      errno: PG_ERROR.UNIQUE_VIOLATION,
+      constraint,
+    });
+    const error = new DatabaseError({
+      message: "Database query failed",
+      code: PG_ERROR.UNIQUE_VIOLATION,
+      cause: driver,
+    });
+
+    expect(
+      isPgConstraintError(error, PG_ERROR.UNIQUE_VIOLATION, constraint),
     ).toBe(true);
   });
 });
@@ -96,6 +114,62 @@ describe("isPgError", () => {
 // Structural object mirroring the runtime shape of a Bun/pg PostgresError.
 const pgCause = (fields: Record<string, string>): Error =>
   Object.assign(new Error("database error"), fields);
+
+// The transaction lifecycle runs through the client's own `begin`, so a
+// failure acquiring a connection or running BEGIN/COMMIT/ROLLBACK never
+// passes through the prepared-query wrapper and arrives in this shape.
+describe("driver errors that reached the caller unwrapped", () => {
+  it("reads the SQLSTATE Bun reports in `errno`", () => {
+    const error = pgCause({
+      errno: PG_ERROR.SERIALIZATION_FAILURE,
+      code: "ERR_POSTGRES_SERVER_ERROR",
+    });
+
+    expect(getPgErrorCode(error)).toBe(PG_ERROR.SERIALIZATION_FAILURE);
+    expect(isPgError(error, PG_ERROR.SERIALIZATION_FAILURE)).toBe(true);
+  });
+
+  it("matches a constraint alongside the SQLSTATE", () => {
+    const error = pgCause({
+      errno: PG_ERROR.UNIQUE_VIOLATION,
+      constraint: "case_law_decisions_slug_uidx",
+    });
+
+    expect(
+      isPgConstraintError(
+        error,
+        PG_ERROR.UNIQUE_VIOLATION,
+        "case_law_decisions_slug_uidx",
+      ),
+    ).toBe(true);
+    expect(
+      isPgConstraintError(
+        error,
+        PG_ERROR.UNIQUE_VIOLATION,
+        "case_law_decisions_source_document_idx",
+      ),
+    ).toBe(false);
+  });
+
+  it("reads through a wrapper that is not a DrizzleQueryError", () => {
+    const error = Object.assign(new Error("transaction failed"), {
+      cause: pgCause({ code: PG_ERROR.DEADLOCK_DETECTED }),
+    });
+
+    expect(getPgErrorCode(error)).toBe(PG_ERROR.DEADLOCK_DETECTED);
+  });
+
+  it("still ignores a connection error carrying no SQLSTATE", () => {
+    const error = Object.assign(new Error("socket"), {
+      code: "ECONNRESET",
+      errno: -54,
+      syscall: "read",
+    });
+
+    expect(getPgErrorCode(error)).toBeUndefined();
+    expect(isPgError(error, PG_ERROR.UNIQUE_VIOLATION)).toBe(false);
+  });
+});
 
 describe("pgErrorFields", () => {
   it("surfaces the SQLSTATE from a DrizzleQueryError-wrapped PostgresError", () => {
