@@ -74,6 +74,29 @@ const isApiCallError = (error: unknown): boolean =>
   typeof error === "object" &&
   providerStatusCode(error) !== null;
 
+/**
+ * The provider HTTP status a failure carries, as fingerprint fields.
+ *
+ * `classifyAIError` names a failure from this status and returns `unknown`
+ * when it maps none, so the status is what separates "the provider answered
+ * with a status this code does not map" from "the failure carried no status
+ * at all". A failure sink needs that distinction: an adapter forwards the
+ * provider's structured error body as a plain object rather than an `Error`,
+ * and `errorFingerprint` reduces any non-`Error` to a bare `UnknownError`,
+ * leaving the two indistinguishable in the log.
+ *
+ * An integer status is structural, so it ships under the same non-PII
+ * contract as `error.class`. The body it was read from is never logged: a
+ * provider message can echo request content. The key avoids the logger's
+ * redaction regex so it survives `sanitizeLogAttributes`.
+ */
+export const providerStatusFields = (
+  error: unknown,
+): Record<string, string> => {
+  const status = providerStatusCode(error);
+  return status === null ? {} : { "error.provider.status": String(status) };
+};
+
 const errorCause = (error: unknown): unknown => {
   if (!isRecord(error)) {
     return undefined;

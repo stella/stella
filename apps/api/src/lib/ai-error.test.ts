@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
-import { classifyAIError, isAnticipatedAIFailure } from "@/api/lib/ai-error";
+import {
+  classifyAIError,
+  isAnticipatedAIFailure,
+  providerStatusFields,
+} from "@/api/lib/ai-error";
 import {
   ChatEmptyCompletionError,
   ChatLoopDetectedError,
@@ -203,5 +207,39 @@ describe("isAnticipatedAIFailure", () => {
     const error = new Error("stream ended before completion");
 
     expect(isAnticipatedAIFailure(error, classifyAIError(error))).toBe(false);
+  });
+});
+
+describe("providerStatusFields", () => {
+  test("reports the status behind a failure the classifier cannot name", () => {
+    // A 403 is a status the classifier reads but maps to no kind, so it falls
+    // to `unknown` and is logged as a defect. The body arrives as a plain
+    // object, which `errorFingerprint` reduces to a bare `UnknownError`, so
+    // this status is the only thing separating it from a failure that carried
+    // no status at all.
+    const error = providerErrorBody(403, "PERMISSION_DENIED");
+
+    expect(classifyAIError(error)).toBe("unknown");
+    expect(providerStatusFields(error)).toEqual({
+      "error.provider.status": "403",
+    });
+  });
+
+  test("reports nothing when the failure carries no status", () => {
+    expect(providerStatusFields(new Error("stream ended"))).toEqual({});
+    expect(providerStatusFields("boom")).toEqual({});
+    expect(providerStatusFields(undefined)).toEqual({});
+  });
+
+  test("never carries the provider message", () => {
+    for (const error of [
+      apiCallError(503),
+      tanStackProviderError(429),
+      providerErrorBody(404, "NOT_FOUND"),
+    ]) {
+      expect(Object.values(providerStatusFields(error))).not.toContain(
+        expect.stringContaining("provider responded"),
+      );
+    }
   });
 });
