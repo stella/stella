@@ -181,31 +181,6 @@
               </OfficeTab>
             </ExtensionPoint>
           </DesktopFormFactor>
-          <MobileFormFactor>
-            <FunctionFile resid="Commands.Url" />
-            <ExtensionPoint xsi:type="MobileMessageReadCommandSurface">
-              <Group id="Stella.MobileReadGroup">
-                <Label resid="Group.Label" />
-                <Control xsi:type="MobileButton" id="Stella.MobileReadTaskpaneButton">
-                  <Label resid="TaskpaneButton.Label" />
-                  <Icon xsi:type="bt:MobileIconList">
-                    <bt:Image size="25" scale="1" resid="Icon.25x25" />
-                    <bt:Image size="25" scale="2" resid="Icon.25x25" />
-                    <bt:Image size="25" scale="3" resid="Icon.25x25" />
-                    <bt:Image size="32" scale="1" resid="Icon.32x32" />
-                    <bt:Image size="32" scale="2" resid="Icon.32x32" />
-                    <bt:Image size="32" scale="3" resid="Icon.32x32" />
-                    <bt:Image size="48" scale="1" resid="Icon.48x48" />
-                    <bt:Image size="48" scale="2" resid="Icon.48x48" />
-                    <bt:Image size="48" scale="3" resid="Icon.48x48" />
-                  </Icon>
-                  <Action xsi:type="ShowTaskpane">
-                    <SourceLocation resid="Taskpane.Url" />
-                  </Action>
-                </Control>
-              </Group>
-            </ExtensionPoint>
-          </MobileFormFactor>
         </Host>
       </Hosts>
     </VersionOverrides>

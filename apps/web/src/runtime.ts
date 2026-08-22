@@ -1,4 +1,4 @@
-import { env } from "bun";
+import { env as runtimeEnv } from "bun";
 
 import {
   createStartRuntime,
@@ -6,14 +6,15 @@ import {
   verifyServerModuleGraph,
 } from "@stll/start-runtime";
 
+import { env } from "@/env";
+
+import { withCrossOriginIsolationHeaders } from "../cross-origin-isolation.js";
+
 const DEFAULT_PORT = 3002;
 const DEFAULT_HOST = "0.0.0.0";
 const SERVER_DIRECTORY_URL = new URL("server/", import.meta.url);
 const CLIENT_DIRECTORY_URL = new URL("client/", import.meta.url);
-const CROSS_ORIGIN_ISOLATION_HEADERS = {
-  "Cross-Origin-Opener-Policy": "same-origin",
-  "Cross-Origin-Embedder-Policy": "credentialless",
-} as const;
+const outlookOrigin = new URL(env.VITE_OUTLOOK_ORIGIN).origin;
 
 const serverEntry: unknown = await import(
   new URL("server/server.js", import.meta.url).href
@@ -27,7 +28,6 @@ const handler =
 const runtime = createStartRuntime({
   clientDirectoryUrl: CLIENT_DIRECTORY_URL,
   handler,
-  responseHeaders: CROSS_ORIGIN_ISOLATION_HEADERS,
 });
 
 const verification = await verifyServerModuleGraph({
@@ -47,10 +47,15 @@ if (process.argv.includes("--smoke")) {
 }
 
 serveStartRuntime({
-  fetch: runtime.fetch,
-  hostname: env["HOST"] ?? DEFAULT_HOST,
+  fetch: async (request) =>
+    withCrossOriginIsolationHeaders(
+      new URL(request.url),
+      await runtime.fetch(request),
+      outlookOrigin,
+    ),
+  hostname: runtimeEnv["HOST"] ?? DEFAULT_HOST,
   // Longer than the load balancer's 60 s idle timeout. The server must not
   // close an idle backend connection before the balancer may reuse it.
   idleTimeout: 75,
-  port: Number.parseInt(env["PORT"] ?? String(DEFAULT_PORT), 10),
+  port: Number.parseInt(runtimeEnv["PORT"] ?? String(DEFAULT_PORT), 10),
 });
