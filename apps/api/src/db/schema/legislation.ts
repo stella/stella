@@ -69,7 +69,9 @@ export const legislationDocuments = p.pgTable(
     // European Legislation Identifier / national statute id — the work key
     // shared across consolidations.
     eli: p.varchar({ length: 512 }).notNull(),
-    title: p.varchar({ length: 1024 }).notNull(),
+    // Official titles can enumerate every amended act and have no bounded
+    // maximum in the publisher's domain.
+    title: p.text().notNull(),
     country: p.varchar({ length: 3 }).notNull(),
     language: p.varchar({ length: 8 }).notNull(),
     documentType: p.varchar("document_type", { length: 128 }),
