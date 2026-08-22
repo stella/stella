@@ -748,6 +748,8 @@ export const FALLBACK_CHAT_MODEL_BY_PROVIDER = {
 } as const satisfies Record<AIProvider, string | null>;
 
 export const MODEL_CATALOG_ID_ALIASES = {
+  "gemini-flash-latest": "gemini-3.7-flash",
+  "gemini-flash-lite-latest": "gemini-3.5-flash-lite",
   "gpt-5.6-sol": "gpt-5.6",
   // Aggregator listings use the dotted marketing forms; the catalog's
   // canonical ids are the dashed API forms.
@@ -955,9 +957,9 @@ export const MODEL_RATES = {
   },
   "gemini-3.6-flash": {
     kind: "flat",
-    inputPerMTok: 150_000,
-    outputPerMTok: 750_000,
-    cachedInputPerMTok: 15_000,
+    inputPerMTok: 75_000,
+    outputPerMTok: 375_000,
+    cachedInputPerMTok: 7500,
   },
   "gemini-3.7-flash": {
     kind: "flat",
