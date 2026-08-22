@@ -186,7 +186,7 @@ export const getOutlookDeploymentHeaderRules = (
     },
     {
       headers: { "Cache-Control": NO_CACHE_HEADER },
-      path: "/assets/icon-*.png",
+      path: "/assets/stella-icon-*.png",
     },
   ];
 };
@@ -238,6 +238,16 @@ export const getHtmlAssetPaths = (html: string): string[] =>
   [...html.matchAll(/(?:href|src)="(\/assets\/[^"?#]+)"/gu)].map(
     (match) => match[1] ?? "",
   );
+
+export const getManifestIconPaths = (manifest: string): string[] => [
+  ...new Set(
+    [
+      ...manifest.matchAll(
+        /DefaultValue="[^"]+(\/assets\/stella-icon-[^"]+\.png)"/gu,
+      ),
+    ].map((match) => match[1] ?? ""),
+  ),
+];
 
 export const isContentHashedCodeAsset = (assetPath: string): boolean =>
   /^\/assets\/[a-z-]+\.[a-f0-9]{16}\.(?:css|js)$/u.test(assetPath);

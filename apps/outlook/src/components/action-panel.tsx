@@ -130,7 +130,7 @@ const SummaryOutput = ({
   }
   if (state.type === "error") {
     return (
-      <Notice title={t("aiUnavailable")} tone="risk">
+      <Notice role="alert" title={t("aiUnavailable")} tone="risk">
         {state.message}
       </Notice>
     );
@@ -186,7 +186,7 @@ const DraftSection = ({
       {t("draftReply")}
     </Button>
     {state.type === "error" ? (
-      <Notice title={t("aiUnavailable")} tone="risk">
+      <Notice role="alert" title={t("aiUnavailable")} tone="risk">
         {state.message}
       </Notice>
     ) : null}
@@ -208,7 +208,7 @@ const DraftSection = ({
       ) : null}
     </div>
     {draftPlacementError ? (
-      <Notice title={t("draftPlacementError")} tone="risk">
+      <Notice role="alert" title={t("draftPlacementError")} tone="risk">
         {draftPlacementError}
       </Notice>
     ) : null}

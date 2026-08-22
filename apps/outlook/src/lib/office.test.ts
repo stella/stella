@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
-import { isOfficeDialogApi, toOfficeAttachmentMetadata } from "@/lib/office";
+import {
+  isOfficeDialogApi,
+  supportsOfficeRequirement,
+  toOfficeAttachmentMetadata,
+} from "@/lib/office";
 
 const readAttachment = {
   contentType: "application/pdf",
@@ -37,6 +41,46 @@ describe("Office dialog capability", () => {
     expect(isOfficeDialogApi({ displayDialogAsync: () => undefined })).toBe(
       true,
     );
+  });
+
+  test("requires the secure cross-origin dialog contract", () => {
+    const requests: string[] = [];
+    const requirements = {
+      isSetSupported: (name: string, version: string) => {
+        requests.push(`${name}:${version}`);
+        return name === "DialogOrigin" && version === "1.1";
+      },
+    };
+
+    expect(
+      supportsOfficeRequirement({
+        name: "DialogOrigin",
+        requirements,
+        version: "1.1",
+      }),
+    ).toBe(true);
+    expect(requests).toEqual(["DialogOrigin:1.1"]);
+  });
+
+  test("treats missing or failing requirement APIs as unsupported", () => {
+    expect(
+      supportsOfficeRequirement({
+        name: "DialogOrigin",
+        requirements: undefined,
+        version: "1.1",
+      }),
+    ).toBe(false);
+    expect(
+      supportsOfficeRequirement({
+        name: "DialogOrigin",
+        requirements: {
+          isSetSupported: () => {
+            throw new Error("Office runtime failure");
+          },
+        },
+        version: "1.1",
+      }),
+    ).toBe(false);
   });
 });
 

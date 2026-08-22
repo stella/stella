@@ -23,6 +23,7 @@ import { useMailSnapshot } from "@/hooks/use-mail-snapshot";
 import { useWorkspaceSelection } from "@/hooks/use-workspace-selection";
 import { useWorkspaces } from "@/hooks/use-workspaces";
 import type { PendingEmailUpload } from "@/ingestion-state";
+import { selectedOrdinaryAttachmentIds } from "@/lib/attachment-selection";
 import { getAuthToken, signInViaDialog, subscribeAuthToken } from "@/lib/auth";
 import { placeDraft } from "@/outlook";
 import type { DraftPlacement } from "@/outlook";
@@ -40,6 +41,7 @@ export const App = () => {
     signInViaDialog({
       signInOrigin: env.signInOrigin,
       taskpaneOrigin: env.taskpaneOrigin,
+      unsupportedDialogOriginMessage: t("dialogOriginUnsupported"),
     })
       .then(() => setSignInState({ type: "idle" }))
       .catch((error: unknown) => {
@@ -59,7 +61,7 @@ export const App = () => {
   return <AuthedApp t={t} />;
 };
 
-type AttachmentSelection = {
+type AttachmentExclusions = {
   ids: Set<string>;
   source: string;
 };
@@ -119,7 +121,7 @@ const AuthedApp = ({ t }: { t: Translate }) => {
           </div>
         ) : null}
         {loadState.type === "error" ? (
-          <Notice title={t("loadError")} tone="risk">
+          <Notice role="alert" title={t("loadError")} tone="risk">
             {loadState.message}
           </Notice>
         ) : null}
@@ -180,22 +182,21 @@ const MessageApp = ({
     setPendingEmailUpload,
   });
 
-  const [attachmentSelection, setAttachmentSelection] =
-    useState<AttachmentSelection | null>(null);
+  const [attachmentExclusions, setAttachmentExclusions] =
+    useState<AttachmentExclusions | null>(null);
   const [draftIntent, setDraftIntent] = useState("");
   const [draftEdit, setDraftEdit] = useState<DraftEdit | null>(null);
   const [placementState, setPlacementState] =
     useState<DraftPlacementState | null>(null);
 
-  const defaultAttachmentIds = new Set(
-    snapshot.attachments
-      .filter((attachment) => !attachment.isInline)
-      .map((attachment) => attachment.id),
+  const excludedAttachmentIds =
+    attachmentExclusions?.source === snapshot.itemInstanceKey
+      ? attachmentExclusions.ids
+      : new Set<string>();
+  const selectedAttachmentIds = selectedOrdinaryAttachmentIds(
+    snapshot.attachments,
+    excludedAttachmentIds,
   );
-  const selectedAttachmentIds =
-    attachmentSelection?.source === snapshot.itemInstanceKey
-      ? attachmentSelection.ids
-      : defaultAttachmentIds;
   const draftSource = aiDraft.state.type === "ready" ? aiDraft.state : null;
   const draft =
     draftEdit?.source === draftSource
@@ -236,9 +237,9 @@ const MessageApp = ({
     ingest.save({
       isCurrent,
       loadLatest,
-      selectedAttachmentIds:
-        attachmentSelection?.source === snapshot.itemInstanceKey
-          ? attachmentSelection.ids
+      excludedAttachmentIds:
+        attachmentExclusions?.source === snapshot.itemInstanceKey
+          ? attachmentExclusions.ids
           : null,
       snapshot,
       workspaceId: selectedWorkspaceId,
@@ -246,13 +247,13 @@ const MessageApp = ({
   };
 
   const toggleAttachment = (attachmentId: string) => {
-    const ids = new Set(selectedAttachmentIds);
-    if (ids.has(attachmentId)) {
-      ids.delete(attachmentId);
-    } else {
+    const ids = new Set(excludedAttachmentIds);
+    if (selectedAttachmentIds.has(attachmentId)) {
       ids.add(attachmentId);
+    } else {
+      ids.delete(attachmentId);
     }
-    setAttachmentSelection({ ids, source: snapshot.itemInstanceKey });
+    setAttachmentExclusions({ ids, source: snapshot.itemInstanceKey });
   };
 
   return (

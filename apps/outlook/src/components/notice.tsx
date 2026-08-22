@@ -7,13 +7,15 @@ import { cn } from "@stll/ui/lib/utils";
 type NoticeTone = "info" | "risk" | "success" | "warning";
 
 type NoticeProps = PropsWithChildren<{
+  role?: "alert" | "status";
   title: string;
   tone: NoticeTone;
 }>;
 
-export const Notice = ({ children, title, tone }: NoticeProps) => (
+export const Notice = ({ children, role, title, tone }: NoticeProps) => (
   <div
     className={cn("rounded-lg border p-2.5 text-xs/4.5", TONE_SURFACE[tone])}
+    role={role}
   >
     <div className="mb-1 flex items-center gap-1.5 font-bold">
       <ToneIcon tone={tone} />

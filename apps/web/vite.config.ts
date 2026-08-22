@@ -16,6 +16,7 @@ import {
 
 import stllAnonymizeWasm from "@stll/anonymize-wasm/vite";
 
+import { crossOriginIsolationHeadersForRequest } from "./cross-origin-isolation.js";
 import { REACT_COMPILER_OPTIONS } from "./react-compiler-options.ts";
 
 const APP_ROOT = import.meta.dirname;
@@ -119,6 +120,24 @@ const logCapPlugin = (): Plugin => ({
   enforce: "pre",
   configResolved(config) {
     capViteLogger(config.logger);
+  },
+});
+
+const crossOriginIsolationHeadersPlugin = (
+  allowedParentOrigin: string,
+): Plugin => ({
+  name: "stella-cross-origin-isolation-headers",
+  apply: "serve",
+  configureServer(server) {
+    server.middlewares.use((request, response, next) => {
+      const url = new URL(request.url ?? "/", "http://localhost");
+      for (const [name, value] of Object.entries(
+        crossOriginIsolationHeadersForRequest(url, allowedParentOrigin),
+      )) {
+        response.setHeader(name, value);
+      }
+      next();
+    });
   },
 });
 
@@ -260,8 +279,11 @@ const isPromiseLikePluginOption = (
 export default defineConfig(({ mode }) => {
   const shouldAnalyze = mode === ANALYZE_MODE || process.env["ANALYZE"] === "1";
   const devApiProxyTarget = process.env["DEV_API_PROXY_TARGET"];
+  const outlookOrigin =
+    process.env["VITE_OUTLOOK_ORIGIN"] ?? "https://outlook.stll.app";
   const plugins: PluginOption[] = [
     logCapPlugin(),
+    crossOriginIsolationHeadersPlugin(new URL(outlookOrigin).origin),
     ensurePluginOption(
       devtools({ consolePiping: { enabled: false } }),
       "@tanstack/devtools-vite",
@@ -333,10 +355,6 @@ export default defineConfig(({ mode }) => {
             ),
           }
         : {}),
-      headers: {
-        "Cross-Origin-Opener-Policy": "same-origin",
-        "Cross-Origin-Embedder-Policy": "credentialless",
-      },
       // Vite follows package real paths when serving assets. Keep the
       // workspace, Bun's package-only global store, and explicit linked
       // checkouts inside the development filesystem boundary.

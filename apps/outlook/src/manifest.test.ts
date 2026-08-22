@@ -55,13 +55,11 @@ describe("manifest XSD validation", () => {
     expect(() => validateXml(broken)).toThrow(ManifestValidationError);
   });
 
-  test("ships a mobile read command surface in the v1.1 manifest", () => {
+  test("does not advertise an unsupported mobile command surface", () => {
     const manifest = renderManifest("prod");
 
-    expect(manifest).toContain('xsi:type="MobileMessageReadCommandSurface"');
-    expect(manifest).toContain('xsi:type="bt:MobileIconList"');
-    expect(manifest).toContain('resid="Icon.25x25"');
-    expect(manifest).toContain('resid="Icon.48x48"');
+    expect(manifest).not.toContain("MobileFormFactor");
+    expect(manifest).not.toContain("MobileMessageReadCommandSurface");
   });
 
   test("requires Mailbox 1.8 for attachment APIs", () => {

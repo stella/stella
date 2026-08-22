@@ -1,7 +1,5 @@
 import { MailPlusIcon } from "lucide-react";
 
-import { ScrollArea } from "@stll/ui/components/scroll-area";
-
 import { Panel } from "@/components/panel";
 import type { Translate } from "@/components/panel";
 import type { MailSnapshot } from "@/types";
@@ -25,11 +23,11 @@ export const EmailSnapshotPanel = ({
         </p>
       </div>
     </div>
-    <ScrollArea className="bg-muted/40 border-border max-h-28 rounded-lg border">
+    <div className="bg-muted/40 border-border max-h-28 overflow-auto rounded-lg border">
       <p className="px-3 py-2.5 text-xs/5 whitespace-pre-wrap">
         {snapshot.bodyText || t("noBody")}
       </p>
-    </ScrollArea>
+    </div>
   </Panel>
 );
 

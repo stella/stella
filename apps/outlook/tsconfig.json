@@ -28,6 +28,6 @@
       "@stll/ui/*": ["../../packages/ui/src/*"]
     }
   },
-  "include": ["src", "scripts"],
+  "include": ["src", "scripts", "../../types"],
   "exclude": ["node_modules", "dist"]
 }
