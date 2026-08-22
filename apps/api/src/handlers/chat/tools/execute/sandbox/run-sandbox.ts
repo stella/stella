@@ -1,5 +1,4 @@
 import { Result } from "better-result";
-import { newAsyncContext } from "quickjs-emscripten";
 import type {
   QuickJSAsyncContext,
   QuickJSDeferredPromise,
@@ -16,6 +15,7 @@ import {
 } from "@/api/handlers/chat/tools/execute/sandbox/run-sandbox-prelude";
 import { transpileSandboxSource } from "@/api/handlers/chat/tools/execute/sandbox/transpile";
 import { SandboxError } from "@/api/lib/errors/tagged-errors";
+import { newQuickJsAsyncContext } from "@/api/lib/quickjs-runtime";
 
 export type SandboxFunction = {
   execute: (props: SandboxFunctionExecuteProps) => Promise<unknown>;
@@ -660,7 +660,7 @@ type CreateSandboxContextResult = Result<QuickJSAsyncContext, SandboxError>;
 
 const createSandboxContext = async (): Promise<CreateSandboxContextResult> =>
   await Result.tryPromise({
-    try: async () => await newAsyncContext(),
+    try: async () => await newQuickJsAsyncContext(),
     catch: (cause) =>
       new SandboxError({
         reason: "runtime",

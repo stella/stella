@@ -5,10 +5,10 @@
  * The class this pins: a bundled worker that resolves a native asset
  * through a hidden fallback on the developer machine — the repository's
  * node_modules or Bun's global cache — and then fails in the runner
- * image, where only the explicitly shipped assets exist. sharp's
- * platform binding failed exactly this way. Layout comes from
- * `RUNTIME_WORKER_NATIVE_LOOKUPS` and `RUNTIME_WORKER_SIDECAR_FILES`,
- * the same manifests the Dockerfile mirrors.
+ * image, where only the explicitly shipped assets exist. A native platform
+ * binding failed exactly this way. Layout comes from
+ * `RUNTIME_WORKER_NATIVE_LOOKUPS` and `RUNTIME_WORKER_SIDECAR_FILES`.
+ * The Dockerfile's native-asset materializer imports the same lookup builder.
  *
  * Requires the pinned ONNX models (`bun run ocr:fetch-models`); skips on
  * a checkout without them. The image build's smoke stage runs the same
@@ -73,14 +73,6 @@ describe.skipIf(!modelsPresent)("ocr-local-worker image layout", () => {
         path.join(workersDir, "latin-v5-dict.txt"),
       );
       // Native lookups from the shared manifest.
-      for (const scope of RUNTIME_WORKER_NATIVE_LOOKUPS.nodeModuleDirs) {
-        // oxlint-disable-next-line no-await-in-loop -- tiny manifest, sequential copies keep the test readable
-        await cp(
-          path.join(REPO_ROOT, "node_modules", scope),
-          path.join(workersDir, "node_modules", scope),
-          { recursive: true },
-        );
-      }
       for (const dir of RUNTIME_WORKER_NATIVE_LOOKUPS.siblingDirs) {
         // oxlint-disable-next-line no-await-in-loop -- tiny manifest, sequential copies keep the test readable
         await cp(

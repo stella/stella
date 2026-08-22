@@ -1,10 +1,10 @@
-import { loadNameDictionaries } from "@stll/anonymize-data";
 import {
   createNativePipelineFromConfig,
   createPipelineContext,
   deanonymise,
-  getBinding,
-} from "@stll/anonymize-wasm";
+  loadNativeAnonymizeBinding,
+} from "@stll/anonymize";
+import { loadNameDictionaries } from "@stll/anonymize-data";
 
 import { loadAnonymizationAllowlistCanonicals } from "@/api/lib/anonymization-allowlist";
 import { loadAnonymizationGazetteerEntries } from "@/api/lib/anonymization-blacklist";
@@ -31,7 +31,7 @@ const runWithPipelineContext = async <T>(
 };
 
 const anonymizeTextFieldsDependencies = {
-  getBinding,
+  getBinding: loadNativeAnonymizeBinding,
   createNativePipelineFromConfig,
   createPipelineContext,
   deanonymise,

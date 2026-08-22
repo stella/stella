@@ -1,14 +1,12 @@
 /**
  * Runtime-asset smoke for the compiled API image.
  *
- * The container ships hand-copied assets the binary loads lazily: the
- * anonymization engine's native glue and WASM, the quickjs sandbox WASM, the
- * compiled YARA rules, the bundled workers with their WASM sidecars, and the
- * OCR PDF font. Nothing else exercises them before the first request that
- * needs them. apps/api/Dockerfile compiles this entry like the server (so its
- * bundled asset URLs resolve the same way) and runs it in a throwaway stage
- * on top of the runner filesystem; a missing or unloadable asset fails the
- * image build.
+ * The container loads several runtimes and external assets lazily: the native
+ * anonymization engine embedded by Bun, the QuickJS sandbox WASM, compiled
+ * YARA rules, worker bundles with their sidecars, OCR models, and the OCR PDF
+ * font. apps/api/Dockerfile compiles this entry like the server and runs it in
+ * a throwaway stage on top of the runner filesystem; a missing or unloadable
+ * dependency fails the image build.
  *
  * Self-contained on purpose: no env module, no DB client. Each probe drives
  * the real loader rather than checking existence, except the worker bundles
@@ -18,12 +16,15 @@
 
 import { panic } from "better-result";
 import path from "node:path";
-import { newAsyncContext } from "quickjs-emscripten";
 
-import { getBinding, isNativeAnonymizeBinding } from "@stll/anonymize-wasm";
+import {
+  isNativeAnonymizeBinding,
+  loadNativeAnonymizeBinding,
+} from "@stll/anonymize";
 
 import { OCR_LOCAL_MODEL_FILES } from "@/api/lib/document-processing-contract";
 import { yaraRuleFileCount, yaraScanner } from "@/api/lib/file-scan/yara";
+import { newQuickJsAsyncContext } from "@/api/lib/quickjs-runtime";
 import {
   RUNTIME_WORKER_FILES,
   RUNTIME_WORKER_SIDECAR_FILES,
@@ -31,13 +32,13 @@ import {
   runtimeWorkerDir,
 } from "@/api/lib/runtime-worker-path";
 
-const probe = async (label: string, run: () => Promise<void>) => {
+const probe = async (label: string, run: () => Promise<void> | void) => {
   await run();
   console.log(`image-smoke ok: ${label}`);
 };
 
 await probe("quickjs sandbox wasm", async () => {
-  const context = await newAsyncContext();
+  const context = await newQuickJsAsyncContext();
   const handle = context.unwrapResult(context.evalCode("6 * 7"));
   const value = context.getNumber(handle);
   handle.dispose();
@@ -152,13 +153,10 @@ await probe("local ocr worker", async () => {
   }
 });
 
-// Requires STLL_ANONYMIZE_ASSET_DIR (set by the Dockerfile): the loader's
-// glue is loaded via ESM import(), which a compiled binary resolves against
-// its embedded filesystem only, unlike the fs-based probes above.
-await probe("anonymize-wasm native engine", async () => {
-  const binding = await getBinding();
+await probe("anonymize native engine", () => {
+  const binding = loadNativeAnonymizeBinding();
   if (!isNativeAnonymizeBinding(binding)) {
-    panic("anonymize-wasm getBinding() returned an unexpected binding shape");
+    panic("anonymize native loader returned an unexpected binding shape");
   }
 });
 

@@ -1,13 +1,13 @@
 import type { AnyServerTool, MCPToolSource } from "@tanstack/ai";
 import { Result } from "better-result";
 
+import { createPipelineContext, deanonymise } from "@stll/anonymize";
+import type { PipelineContext } from "@stll/anonymize";
 import {
   CHAT_SEND_MODE,
   CHAT_TRANSPORT_ERROR_CODE,
 } from "@stll/anonymize-chat";
 import type { ChatSendMode } from "@stll/anonymize-chat";
-import { createPipelineContext, deanonymise } from "@stll/anonymize-wasm";
-import type { PipelineContext } from "@stll/anonymize-wasm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
