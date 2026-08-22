@@ -930,6 +930,76 @@ describe("chat third-party anonymization boundary", () => {
     });
   });
 
+  test("keeps MCP metadata envelope keys stable and restores only schema argument keys", async () => {
+    const anonymizeMetadata = mock(
+      async ({ fields }: { fields: string[] }) => ({
+        entityCount: fields.length,
+        fields: fields.map((field) =>
+          field
+            .replaceAll("description", "[FIELD_1]")
+            .replaceAll("Jan Novák", "[PERSON_1]")
+            .replaceAll("Secret", "[CUSTOM_1]"),
+        ),
+        redactionMap: new Map([
+          ["[CUSTOM_1]", "Secret"],
+          ["[FIELD_1]", "description"],
+          ["[PERSON_1]", "Jan Novák"],
+        ]),
+      }),
+    );
+    const { scopedDb } = createScopedDbMock({});
+    const boundary = createChatThirdPartyBoundary({
+      anonymizeFields: anonymizeMetadata,
+      anonymizationScopeId: "workspace-A",
+      organizationId: toSafeId<"organization">(
+        "11111111-1111-4111-8111-111111111111",
+      ),
+      scopedDb,
+      sendMode: CHAT_SEND_MODE.anonymized,
+    });
+    let executedInput: unknown;
+    const sourceTool = toolDefinition({
+      name: "mcp__test__sensitive_schema_key",
+      description: "Secret",
+    }).server(async (input) => {
+      executedInput = input;
+      return { status: "ok" };
+    });
+    Reflect.set(sourceTool, "inputSchema", {
+      properties: {
+        "Jan Novák": { type: "string" },
+      },
+      type: "object",
+    });
+    const source = prepareMcpToolSourceForThirdParty({
+      boundary,
+      source: {
+        close: async () => {},
+        tools: async () => [sourceTool],
+      },
+    });
+
+    const [preparedTool] = await source.tools();
+    if (!preparedTool) {
+      throw new TypeError("Expected an MCP tool");
+    }
+    const executable = asTestExecutable<unknown, unknown>(preparedTool);
+
+    expect(Reflect.get(preparedTool, "description")).toBe("[CUSTOM_1]");
+    expect(Reflect.get(preparedTool, "inputSchema")).toEqual({
+      properties: {
+        "[PERSON_1]": { type: "string" },
+      },
+      type: "object",
+    });
+    await executable?.execute?.({
+      "[PERSON_1]": "Keep [PERSON_1] anonymized",
+    });
+    expect(executedInput).toEqual({
+      "Jan Novák": "Keep [PERSON_1] anonymized",
+    });
+  });
+
   test("rejects sensitive MCP tool names instead of corrupting identifiers", () => {
     const organizationId = toSafeId<"organization">(
       "11111111-1111-4111-8111-111111111111",

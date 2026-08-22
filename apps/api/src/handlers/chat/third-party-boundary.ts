@@ -1504,6 +1504,93 @@ const MCP_PROVIDER_METADATA_FIELDS = [
   "outputSchema",
 ] as const;
 
+const collectMcpInputKeyRestorations = ({
+  original,
+  prepared,
+  restorations,
+}: {
+  original: unknown;
+  prepared: unknown;
+  restorations: Map<string, string>;
+}): void => {
+  if (Array.isArray(original) && Array.isArray(prepared)) {
+    if (original.length !== prepared.length) {
+      throw new TypeError(
+        "MCP input schema preparation changed its array shape",
+      );
+    }
+    for (let index = 0; index < original.length; index += 1) {
+      collectMcpInputKeyRestorations({
+        original: original.at(index),
+        prepared: prepared.at(index),
+        restorations,
+      });
+    }
+    return;
+  }
+
+  if (
+    typeof original !== "object" ||
+    original === null ||
+    Array.isArray(original) ||
+    typeof prepared !== "object" ||
+    prepared === null ||
+    Array.isArray(prepared)
+  ) {
+    return;
+  }
+
+  const originalEntries = Object.entries(original);
+  const preparedEntries = Object.entries(prepared);
+  if (originalEntries.length !== preparedEntries.length) {
+    throw new TypeError(
+      "MCP input schema preparation changed its object shape",
+    );
+  }
+
+  for (const [
+    index,
+    [originalKey, originalValue],
+  ] of originalEntries.entries()) {
+    const preparedEntry = preparedEntries.at(index);
+    if (preparedEntry === undefined) {
+      throw new TypeError("MCP input schema preparation lost a property");
+    }
+    const [preparedKey, preparedValue] = preparedEntry;
+    if (preparedKey !== originalKey) {
+      restorations.set(preparedKey, originalKey);
+    }
+    collectMcpInputKeyRestorations({
+      original: originalValue,
+      prepared: preparedValue,
+      restorations,
+    });
+  }
+};
+
+const restoreMcpInputSchemaKeys = ({
+  restorations,
+  value,
+}: {
+  restorations: ReadonlyMap<string, string>;
+  value: unknown;
+}): unknown => {
+  if (Array.isArray(value)) {
+    return value.map((item) =>
+      restoreMcpInputSchemaKeys({ restorations, value: item }),
+    );
+  }
+  if (typeof value !== "object" || value === null) {
+    return value;
+  }
+  return Object.fromEntries(
+    Object.entries(value).map(([key, nested]) => [
+      restorations.get(key) ?? key,
+      restoreMcpInputSchemaKeys({ restorations, value: nested }),
+    ]),
+  );
+};
+
 const prepareMcpServerToolsForThirdParty = async ({
   boundary,
   index = 0,
@@ -1547,32 +1634,29 @@ const prepareMcpServerToolForThirdParty = async (
       throw nameCheck.error;
     }
   }
-  const providerMetadata: Record<string, unknown> = {};
+  const inputKeyRestorations = new Map<string, string>();
   for (const field of MCP_PROVIDER_METADATA_FIELDS) {
     const providerValue: unknown = Reflect.get(prepared, field);
-    if (providerValue !== undefined) {
-      Reflect.set(providerMetadata, field, providerValue);
+    if (providerValue === undefined) {
+      continue;
     }
-  }
-  const preparedMetadata = await prepareUnknownForThirdParty({
-    anonymizeStructuredKeys: true,
-    boundary,
-    encodeClaimedPlaceholders: true,
-    value: providerMetadata,
-  });
-  if (Result.isError(preparedMetadata)) {
-    throw preparedMetadata.error;
-  }
-  if (
-    typeof preparedMetadata.value !== "object" ||
-    preparedMetadata.value === null
-  ) {
-    throw new TypeError("MCP provider metadata preparation changed its shape");
-  }
-  for (const field of MCP_PROVIDER_METADATA_FIELDS) {
-    if (Reflect.has(preparedMetadata.value, field)) {
-      Reflect.set(prepared, field, Reflect.get(preparedMetadata.value, field));
+    const preparedMetadata = await prepareUnknownForThirdParty({
+      anonymizeStructuredKeys: true,
+      boundary,
+      encodeClaimedPlaceholders: true,
+      value: providerValue,
+    });
+    if (Result.isError(preparedMetadata)) {
+      throw preparedMetadata.error;
     }
+    if (field === "inputSchema") {
+      collectMcpInputKeyRestorations({
+        original: providerValue,
+        prepared: preparedMetadata.value,
+        restorations: inputKeyRestorations,
+      });
+    }
+    Reflect.set(prepared, field, preparedMetadata.value);
   }
 
   const execute = prepared.execute;
@@ -1583,7 +1667,13 @@ const prepareMcpServerToolForThirdParty = async (
   return {
     ...prepared,
     execute: async (input, context) => {
-      const outputValue: unknown = await execute(input, context);
+      const outputValue: unknown = await execute(
+        restoreMcpInputSchemaKeys({
+          restorations: inputKeyRestorations,
+          value: input,
+        }),
+        context,
+      );
       return await anonymizeToolOutputForThirdParty({
         boundary,
         outputValue,
