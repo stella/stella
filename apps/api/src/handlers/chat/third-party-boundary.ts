@@ -1556,7 +1556,11 @@ const collectMcpInputKeyRestorations = ({
     if (preparedEntry === undefined) {
       throw new TypeError("MCP input schema preparation lost a property");
     }
-    const [preparedKey, preparedValue] = preparedEntry;
+    const preparedKey = preparedEntry.at(0);
+    const preparedValue: unknown = preparedEntry.at(1);
+    if (preparedKey === undefined) {
+      throw new TypeError("MCP input schema preparation lost a property key");
+    }
     if (preparedKey !== originalKey) {
       restorations.set(preparedKey, originalKey);
     }
@@ -1640,6 +1644,9 @@ const prepareMcpServerToolForThirdParty = async (
     if (providerValue === undefined) {
       continue;
     }
+    // The boundary assigns placeholders globally, so fields must retain their
+    // deterministic order instead of racing their transformations.
+    // oxlint-disable-next-line no-await-in-loop -- placeholder allocation is order-dependent
     const preparedMetadata = await prepareUnknownForThirdParty({
       anonymizeStructuredKeys: true,
       boundary,
