@@ -4,6 +4,7 @@ import { request as requestHttp } from "node:http";
 import type { IncomingMessage } from "node:http";
 import { request as requestHttps } from "node:https";
 import { isIP } from "node:net";
+import type { LookupFunction, TcpSocketConnectOpts } from "node:net";
 import * as v from "valibot";
 
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
@@ -46,6 +47,31 @@ export type SafeOutboundFetchStreamResponse = {
 
 type SafeOutboundRedirectMode = "error" | "manual";
 
+// The caller vetted this whole set together. Keep it pinned while allowing
+// Happy Eyeballs to select a reachable family without another DNS lookup.
+const createPinnedLookup =
+  ({
+    addresses,
+    primaryAddress,
+  }: {
+    addresses: readonly SafeOutboundAddress[];
+    primaryAddress: SafeOutboundAddress;
+  }): LookupFunction =>
+  (_hostname, options, callback) => {
+    if (options.all === true) {
+      callback(
+        null,
+        addresses.map(({ address, family }) => ({ address, family })),
+      );
+      return;
+    }
+    callback(null, primaryAddress.address, primaryAddress.family);
+  };
+
+const AUTO_SELECT_FAMILY_OPTIONS = {
+  autoSelectFamily: true,
+} as const satisfies Pick<TcpSocketConnectOpts, "autoSelectFamily">;
+
 export const fetchWithResolvedAddress = async ({
   addresses,
   body,
@@ -65,8 +91,8 @@ export const fetchWithResolvedAddress = async ({
   timeoutMs: number;
   url: URL;
 }): Promise<Result<SafeOutboundFetchResponse, SafeOutboundFetchError>> => {
-  const address = addresses.at(0);
-  if (!address) {
+  const primaryAddress = addresses.at(0);
+  if (!primaryAddress) {
     return Result.err(
       new SafeOutboundFetchError({ message: "No resolved address available" }),
     );
@@ -93,15 +119,10 @@ export const fetchWithResolvedAddress = async ({
           url.protocol === "https:" ? requestHttps : requestHttp
         )(
           {
+            ...AUTO_SELECT_FAMILY_OPTIONS,
             headers: headersToObject(requestHeaders),
             hostname: url.hostname,
-            lookup: (_hostname, options, callback) => {
-              if (typeof options === "object" && options.all === true) {
-                callback(null, [address]);
-                return;
-              }
-              callback(null, address.address, address.family);
-            },
+            lookup: createPinnedLookup({ addresses, primaryAddress }),
             method,
             path: `${url.pathname}${url.search}`,
             port: url.port || undefined,
@@ -199,8 +220,8 @@ export const fetchStreamWithResolvedAddress = async ({
 }): Promise<
   Result<SafeOutboundFetchStreamResponse, SafeOutboundFetchError>
 > => {
-  const address = addresses.at(0);
-  if (!address) {
+  const primaryAddress = addresses.at(0);
+  if (!primaryAddress) {
     return Result.err(
       new SafeOutboundFetchError({ message: "No resolved address available" }),
     );
@@ -227,15 +248,10 @@ export const fetchStreamWithResolvedAddress = async ({
           url.protocol === "https:" ? requestHttps : requestHttp
         )(
           {
+            ...AUTO_SELECT_FAMILY_OPTIONS,
             headers: headersToObject(requestHeaders),
             hostname: url.hostname,
-            lookup: (_hostname, options, callback) => {
-              if (typeof options === "object" && options.all === true) {
-                callback(null, [address]);
-                return;
-              }
-              callback(null, address.address, address.family);
-            },
+            lookup: createPinnedLookup({ addresses, primaryAddress }),
             method,
             path: `${url.pathname}${url.search}`,
             port: url.port || undefined,
