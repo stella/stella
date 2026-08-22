@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState } from "react";
+import type { ReactNode, RefObject } from "react";
 
 import {
   useMutation,
@@ -21,6 +22,7 @@ import {
   Conversation,
   ConversationContent,
   ConversationScrollButton,
+  ConversationScrollProvider,
 } from "@/components/ai-elements/conversation";
 import {
   ChatSubmitPreservedError,
@@ -357,6 +359,7 @@ export const ChatThreadPage = ({
     suggestedFollowupPrompt,
     threadRef,
   });
+  const hasSuggestedFollowups = suggestedFollowupPrompts.length > 0;
 
   const openInspectorChat = useInspectorTabsStore((s) => s.openChat);
   const navigate = useNavigate();
@@ -640,10 +643,7 @@ export const ChatThreadPage = ({
             value (sticky headers, scroll button) inside its own context so
             none of them can leak up and overlay the fade or the composer.
           */}
-            <div
-              className="relative flex min-h-0 flex-1 flex-col"
-              ref={pageContainerRef}
-            >
+            <ChatThreadScrollSurface containerRef={pageContainerRef}>
               <Conversation className="@container isolate min-h-0">
                 <ConversationContent className="mx-auto w-full max-w-5xl gap-3 px-4 pb-[calc(var(--composer-block-h,7rem)+1.5rem)]">
                   {messages.length === 0 && !isGenerating && !error ? (
@@ -696,7 +696,12 @@ export const ChatThreadPage = ({
                   )}
                 </ConversationContent>
                 <ChatTurnNavigator messages={messages} />
-                <ConversationScrollButton className="bottom-[calc(var(--composer-block-h,7rem)+0.75rem)]" />
+                <ConversationScrollButton
+                  className={cn(
+                    "bottom-[calc(var(--composer-block-h,7rem)+0.75rem)]",
+                    hasSuggestedFollowups && "hidden",
+                  )}
+                />
               </Conversation>
 
               <ChatAnonymizationLayer
@@ -734,14 +739,6 @@ export const ChatThreadPage = ({
                 ref={composerBlockRef}
               >
                 <SuggestedFollowupChips
-                  isGenerating={isGenerating}
-                  isEmpty={
-                    controller.isEmpty && controller.attachments.length === 0
-                  }
-                  lastMessageId={messages.at(-1)?.id ?? null}
-                  lastMessageRole={messages.at(-1)?.role ?? null}
-                  messageCount={messages.length}
-                  prompts={suggestedFollowupPrompts}
                   onSelect={(prompt) => {
                     controller.setContent(prompt);
                     detached(
@@ -754,6 +751,7 @@ export const ChatThreadPage = ({
                       "chat-thread-page.submit",
                     );
                   }}
+                  prompts={suggestedFollowupPrompts}
                 />
                 {env.VITE_FEATURE_USAGE && <UsageFallbackNotice />}
                 {/* Glass tray behind the composer + status row: the shared
@@ -820,7 +818,7 @@ export const ChatThreadPage = ({
                   />
                 </div>
               </div>
-            </div>
+            </ChatThreadScrollSurface>
           </div>
         </ChatApprovalContext>
         <UsageLimitModal
@@ -831,6 +829,22 @@ export const ChatThreadPage = ({
     </RenderStormRegion>
   );
 };
+
+type ChatThreadScrollSurfaceProps = {
+  children: ReactNode;
+  containerRef: RefObject<HTMLDivElement | null>;
+};
+
+const ChatThreadScrollSurface = ({
+  children,
+  containerRef,
+}: ChatThreadScrollSurfaceProps) => (
+  <ConversationScrollProvider>
+    <div className="relative flex min-h-0 flex-1 flex-col" ref={containerRef}>
+      {children}
+    </div>
+  </ConversationScrollProvider>
+);
 
 type ChatWebSearchSeedProps = {
   threadRef: ChatThreadRef;
