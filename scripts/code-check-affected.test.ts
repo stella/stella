@@ -3,12 +3,14 @@ import { readFileSync } from "node:fs";
 
 import {
   ALL_WORKSPACE_CACHE_INPUTS,
+  ALL_WORKSPACE_TYPECHECK_CACHE_INPUTS,
   DEPENDENCY_CACHE_INPUTS,
   LINT_ONLY_CACHE_INPUTS,
   planCheck,
   PLUGIN_FIXTURE_INPUTS,
   PLUGIN_REGISTRY_INPUTS,
   ROOT_SCRIPT_LINT_INPUTS,
+  TYPECHECK_ONLY_CACHE_INPUTS,
   scopedCommands,
 } from "./code-check-affected";
 import { isChangedLintPath } from "./lint-paths";
@@ -18,6 +20,7 @@ const WORKSPACES = new Set([
   "apps/landing",
   "apps/web",
   "packages/errors",
+  "packages/scripts",
   "packages/typescript-config",
   "packages/ui",
 ]);
@@ -212,6 +215,22 @@ describe("affected code-check planning", () => {
     ]);
   });
 
+  test("the shared TypeScript runner invalidates only workspace typechecks", () => {
+    const planned = plan(
+      ["packages/scripts/src/tsc-native.ts"],
+      ["packages/scripts"],
+    );
+    expect(planned.type).toBe("scoped");
+    if (planned.type !== "scoped") {
+      throw new Error("Expected a scoped code-check plan");
+    }
+    expect(planned.lint).toEqual({
+      type: "targets",
+      targets: ["packages/scripts"],
+    });
+    expect(planned.typecheck).toEqual({ type: "all" });
+  });
+
   test("global dependency inputs use cacheable Turbo tasks", () => {
     const planned = plan(["bunfig.toml"], []);
     if (planned.type !== "scoped") {
@@ -308,6 +327,15 @@ describe("Turbo cache input contract", () => {
     }
   });
 
+  test("workspace typechecks cover every typecheck-only input", () => {
+    expect(TYPECHECK_ONLY_CACHE_INPUTS).toContain(
+      "$TURBO_ROOT$/packages/scripts/src/tsc-native.ts",
+    );
+    for (const input of TYPECHECK_ONLY_CACHE_INPUTS) {
+      expect(ALL_WORKSPACE_TYPECHECK_CACHE_INPUTS).toContain(input);
+    }
+  });
+
   test("keeps planner-wide inputs exactly aligned with their Turbo tasks", () => {
     const turboConfig = readFileSync("turbo.json", "utf-8");
     const typecheckStart = turboConfig.indexOf('    "typecheck":');
@@ -330,7 +358,7 @@ describe("Turbo cache input contract", () => {
         .sort();
 
     expect(rootInputs(typecheckConfig)).toEqual(
-      [...ALL_WORKSPACE_CACHE_INPUTS].sort(),
+      [...ALL_WORKSPACE_TYPECHECK_CACHE_INPUTS].sort(),
     );
     expect(rootInputs(lintConfig)).toEqual(
       [...ALL_WORKSPACE_CACHE_INPUTS, ...LINT_ONLY_CACHE_INPUTS].sort(),

@@ -34,6 +34,7 @@
         "$TURBO_ROOT$/bunfig.toml",
         "$TURBO_ROOT$/package.json",
         "$TURBO_ROOT$/bun.lock",
+        "$TURBO_ROOT$/packages/scripts/src/tsc-native.ts",
         "$TURBO_ROOT$/packages/typescript-config/**",
         "$TURBO_ROOT$/patches/**",
         "$TURBO_ROOT$/types/**"
