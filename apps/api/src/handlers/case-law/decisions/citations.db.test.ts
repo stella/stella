@@ -12,10 +12,7 @@ import {
 } from "@/api/handlers/case-law/decisions/citations";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import type {
-  CaseLawPublicReadDb,
-  CaseLawPublicReadTransaction,
-} from "@/api/lib/case-law-public-read-db";
+import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
@@ -32,7 +29,13 @@ const citationId = (value: number): SafeId<"caseLawCitation"> =>
 
 let client: Awaited<ReturnType<typeof createTestPglite>>;
 let db: ReturnType<typeof drizzle>;
-let caseLawDb: CaseLawPublicReadDb;
+/**
+ * The low-level readers take the transaction their caller gated in; here the
+ * embedded database stands in for it directly.
+ */
+// SAFETY: pglite's drizzle instance satisfies the select-only read surface.
+// oxlint-disable-next-line typescript/no-unsafe-type-assertion -- embedded test database stands in for the read handle
+const tx = () => db as unknown as CaseLawPublicReadTransaction;
 
 const decisionRow = ({
   caseNumber,
@@ -55,16 +58,6 @@ beforeAll(
   async () => {
     client = await createTestPglite();
     db = drizzle({ client });
-    const readDb = async <T>(
-      fn: (tx: CaseLawPublicReadTransaction) => Promise<T>,
-    ) =>
-      // SAFETY: pglite's drizzle instance satisfies the select-only read surface.
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- embedded test database stands in for the read handle
-      await fn(db as unknown as CaseLawPublicReadTransaction);
-    // SAFETY: brand-only wrapper; the reads never inspect the marker.
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- the branded handle carries no behaviour
-    caseLawDb = readDb as unknown as CaseLawPublicReadDb;
-
     await db.insert(caseLawSources).values([
       caseLawSourceRow({ adapterKey: "open", id: openSourceId, name: "open" }),
       caseLawSourceRow({
@@ -165,12 +158,12 @@ const collect = async (
 
 test("citation reads traverse bounded pages without leaking restricted decisions", async () => {
   const firstOutgoing = await listOutgoingDecisionCitations({
-    caseLawDb,
+    tx: tx(),
     cursor: undefined,
     decisionId: subjectId,
   });
   const firstIncoming = await listIncomingDecisionCitations({
-    caseLawDb,
+    tx: tx(),
     cursor: undefined,
     decisionId: subjectId,
   });
@@ -184,7 +177,7 @@ test("citation reads traverse bounded pages without leaking restricted decisions
 
   const outgoing = await collect(async (cursor) => {
     const page = await listOutgoingDecisionCitations({
-      caseLawDb,
+      tx: tx(),
       cursor,
       decisionId: subjectId,
     });
@@ -196,7 +189,7 @@ test("citation reads traverse bounded pages without leaking restricted decisions
   });
   const incoming = await collect(async (cursor) => {
     const page = await listIncomingDecisionCitations({
-      caseLawDb,
+      tx: tx(),
       cursor,
       decisionId: subjectId,
     });
@@ -224,7 +217,7 @@ test("citation reads traverse bounded pages without leaking restricted decisions
 
 test("citation reads reject malformed cursors", async () => {
   const page = await listOutgoingDecisionCitations({
-    caseLawDb,
+    tx: tx(),
     cursor: "not-a-cursor",
     decisionId: subjectId,
   });

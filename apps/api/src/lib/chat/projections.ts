@@ -1192,7 +1192,7 @@ export const SEARCH_CASE_LAW_PROJECTION = v.strictObject({
 
 /**
  * read_case_law_decision. Source of truth: `handleReadCaseLawDecisionTool`
- * (`stella-tools.ts`) mapping `readDecisionWithDocumentHandler`. All ids are
+ * (`stella-tools.ts`) mapping `readGatedDecisionWithDocument`. All ids are
  * public case-law corpus ids (decision, citation, source). `metadata` is
  * free-form public jsonb straight from the court source and cannot be
  * enumerated by path (same unenumerable-payload caveat as `list_audit_log`'s

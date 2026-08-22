@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { drizzle } from "drizzle-orm/pglite";
 
@@ -6,6 +7,7 @@ import {
   caseLawProvisionCitations,
   caseLawSources,
 } from "@/api/db/schema";
+import { withRedistributableSubject } from "@/api/handlers/case-law/decisions/public-subject";
 import { listCitingDecisionsHandler } from "@/api/handlers/case-law/provisions/citing-decisions";
 import { listDecisionProvisionsHandler } from "@/api/handlers/case-law/provisions/list-for-decision";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -195,10 +197,16 @@ afterAll(async () => {
   await client.close();
 });
 
+const subjectFor = async (id: SafeId<"caseLawDecision">) =>
+  (await withRedistributableSubject(
+    caseLawDb,
+    { kind: "id", id },
+    async (subject) => subject,
+  )) ?? panic("expected a redistributable subject");
+
 const decisionProvisions = async (cursor?: string) => {
   const page = await listDecisionProvisionsHandler({
-    caseLawDb,
-    decisionId: highAuthorityId,
+    subject: await subjectFor(highAuthorityId),
     query: { limit: 2, ...(cursor === undefined ? {} : { cursor }) },
   });
 
@@ -265,8 +273,7 @@ test("decision provisions page by span start", async () => {
 
 test("decision provisions reject a malformed cursor", async () => {
   const response = await listDecisionProvisionsHandler({
-    caseLawDb,
-    decisionId: highAuthorityId,
+    subject: await subjectFor(highAuthorityId),
     query: { cursor: "not-a-cursor" },
   });
 

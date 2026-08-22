@@ -28,8 +28,8 @@ void mock.module("@/api/handlers/case-law/decisions/search", () => ({
 void mock.module(
   "@/api/handlers/case-law/decisions/get-deferred-document",
   () => ({
-    readDecisionBySlugWithDocumentHandler: mock(),
-    readDecisionWithDocumentHandler: readDecisionHandlerMock,
+    hydrateDeferredDocument: async (read: unknown) => read,
+    readGatedDecisionWithDocument: readDecisionHandlerMock,
   }),
 );
 

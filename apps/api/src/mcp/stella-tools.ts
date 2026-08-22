@@ -15,7 +15,7 @@ import type {
   ContactPhone,
   FieldContent,
 } from "@/api/db/schema-validators";
-import { readDecisionWithDocumentHandler } from "@/api/handlers/case-law/decisions/get-deferred-document";
+import { readGatedDecisionWithDocument } from "@/api/handlers/case-law/decisions/get-deferred-document";
 import { searchDecisionsHandler } from "@/api/handlers/case-law/decisions/search";
 import { parseUsableDocumentAst } from "@/api/handlers/case-law/document-ast";
 import {
@@ -1202,12 +1202,12 @@ const isSearchCaseLawSuccess = (
   typeof value === "object" && "hits" in value && Array.isArray(value.hits);
 
 type ReadCaseLawDecisionSuccess = Extract<
-  Awaited<ReturnType<typeof readDecisionWithDocumentHandler>>,
+  NonNullable<Awaited<ReturnType<typeof readGatedDecisionWithDocument>>>,
   { caseNumber: string; citationsFrom: unknown[]; citationsTo: unknown[] }
 >;
 
 const isReadCaseLawDecisionSuccess = (
-  value: Awaited<ReturnType<typeof readDecisionWithDocumentHandler>>,
+  value: NonNullable<Awaited<ReturnType<typeof readGatedDecisionWithDocument>>>,
 ): value is ReadCaseLawDecisionSuccess =>
   typeof value === "object" &&
   "caseNumber" in value &&
@@ -1760,14 +1760,20 @@ const handleReadCaseLawDecisionTool: McpToolHandler = async ({ args }) => {
     });
   }
 
-  const result = await readDecisionWithDocumentHandler({
-    decisionId: brandPersistedCaseLawDecisionId(decisionId),
+  // The same gate the public route applies, in the same shape: a
+  // restricted decision does not exist for any caller, and the read that
+  // answers shares the transaction that approved it.
+  const result = await readGatedDecisionWithDocument({
     caseLawDb: caseLawPublicReadDb,
+    locator: { kind: "id", id: brandPersistedCaseLawDecisionId(decisionId) },
     citationsCursor: offsets.citations,
     // An agent holding a token is a reader we can attribute, so its
     // interest counts as demand.
     caller: "attributed",
   });
+  if (result === null) {
+    return notFoundResult("Decision not found");
+  }
   const resultMessage = getResultMessage(result);
   if (resultMessage) {
     return errorResult(resultMessage);

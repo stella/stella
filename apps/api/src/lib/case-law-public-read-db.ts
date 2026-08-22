@@ -32,8 +32,21 @@ export type CaseLawPublicReadTransaction = Pick<
   query: Pick<Transaction["query"], CaseLawQueryKey>;
 };
 
+/**
+ * How much of one state a transaction sees.
+ *
+ * `repeatable-read` pins every statement to the snapshot the first one took,
+ * so a decision gated at the start cannot have its content read out of a
+ * later, different state; the redistribution gate depends on it. Reads that
+ * answer from a single statement do not need it and do not pay for it.
+ */
+export type CaseLawReadIsolation = "read-committed" | "repeatable-read";
+
+export type CaseLawReadOptions = { isolation?: CaseLawReadIsolation };
+
 export type CaseLawPublicReadDb = (<T>(
   fn: (tx: CaseLawPublicReadTransaction) => Promise<T>,
+  options?: CaseLawReadOptions,
 ) => Promise<T>) & {
   [CASE_LAW_PUBLIC_READ_DB]: true;
 };
@@ -167,10 +180,26 @@ const validateExternalCaseLawDatabase = async (
   assertCaseLawDatabaseRolePermissions(permissions);
 };
 
+/**
+ * The isolation statement, first in the transaction so it binds the snapshot
+ * before any read takes one.
+ */
+const beginReadTransaction = async (
+  tx: Pick<Transaction, "execute">,
+  isolation: CaseLawReadIsolation,
+): Promise<void> => {
+  await tx.execute(
+    isolation === "repeatable-read"
+      ? sql`SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY`
+      : sql`SET TRANSACTION READ ONLY`,
+  );
+};
+
 const configureExternalReadTransaction = async (
   tx: Transaction,
+  isolation: CaseLawReadIsolation = "read-committed",
 ): Promise<void> => {
-  await tx.execute(sql`SET TRANSACTION READ ONLY`);
+  await beginReadTransaction(tx, isolation);
   await tx.execute(sql`SET LOCAL statement_timeout = '30s'`);
   await tx.execute(sql`SET LOCAL lock_timeout = '1s'`);
   await tx.execute(sql`SET LOCAL idle_in_transaction_session_timeout = '30s'`);
@@ -256,13 +285,15 @@ const getCaseLawDatabase = async (): Promise<typeof rootDb> => {
 export const caseLawPublicReadDb: CaseLawPublicReadDb = Object.assign(
   async <T>(
     fn: (tx: CaseLawPublicReadTransaction) => Promise<T>,
+    options?: CaseLawReadOptions,
   ): Promise<T> => {
+    const isolation = options?.isolation ?? "read-committed";
     const database = await getCaseLawDatabase();
     return await database.transaction(async (tx) => {
       if (envBase.CASE_LAW_DATABASE_URL !== undefined) {
-        await configureExternalReadTransaction(tx);
+        await configureExternalReadTransaction(tx, isolation);
       } else {
-        await tx.execute(sql`SET TRANSACTION READ ONLY`);
+        await beginReadTransaction(tx, isolation);
       }
 
       return await fn(tx);

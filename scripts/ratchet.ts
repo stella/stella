@@ -477,6 +477,38 @@ const countInlineTimestampCursorSql = (content: string): number =>
     /YYYY-MM-DD"T"HH24:MI:SS\.US(?!"Z")|::\s*timestamp\s+AT\s+TIME\s+ZONE\s*['"]UTC['"]/giu,
   );
 
+/**
+ * Direct `isRedistributable(x)` calls, counted from the syntax tree.
+ *
+ * A text scan cannot tell a call from a mention: it counts the word inside a
+ * comment explaining the gate, inside a string, and `source.isRedistributable(...)`
+ * on some unrelated object. This counts a call whose callee is the bare
+ * identifier — the shape the gate replaced — and nothing else.
+ */
+const countDirectRedistributableCalls = (content: string): number => {
+  const sourceFile = ts.createSourceFile(
+    "ratchet-source.ts",
+    content,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
+
+  let total = 0;
+  const visit = (node: ts.Node) => {
+    if (
+      ts.isCallExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      node.expression.text === "isRedistributable"
+    ) {
+      total += 1;
+    }
+    node.forEachChild(visit);
+  };
+  visit(sourceFile);
+  return total;
+};
+
 const countRepeatedTimestampCursorBoundaries = (content: string): number => {
   const code = stripComments(content);
   const sourceFile = ts.createSourceFile(
@@ -1310,6 +1342,18 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
     include: ["apps/api/src/handlers/**/*.ts"],
     exclude: isExcludedSource,
     count: countCrossSliceImports(crossesHandlerDomain),
+  },
+  {
+    id: "ad-hoc-decision-subject-gates",
+    description:
+      "direct `isRedistributable(` calls in public case-law decision/provision handlers. The subject gate lives in `decisions/public-subject.ts` and reaches handlers as a branded subject; a handler re-checking it by hand is the pattern that let two endpoints ship ungated. Stays at 0",
+    include: [
+      "apps/api/src/handlers/case-law/decisions/**/*.ts",
+      "apps/api/src/handlers/case-law/provisions/**/*.ts",
+    ],
+    exclude: (file) =>
+      isExcludedSource(file) || file.endsWith("/decisions/public-subject.ts"),
+    count: countDirectRedistributableCalls,
   },
   {
     id: "lib-to-handler-imports",
@@ -2263,6 +2307,22 @@ const SELF_TEST_WORKSPACE_ONLY_RLS = `${WORKSPACE_ONLY_RLS_FIXTURE_LINES.join("\
 // last one proving the comment strip runs before the scan.
 const EXPECTED_WORKSPACE_ONLY_RLS = 2;
 
+const AD_HOC_SUBJECT_GATE_FIXTURE_LINES = [
+  'import { isRedistributable } from "@/api/lib/legal-search/corpus-source";',
+  "export const read = async (row: Row) => {",
+  "  if (!isRedistributable(row.descriptor)) {",
+  "    return null;",
+  "  }",
+  "  return row;",
+  "};",
+];
+const SELF_TEST_AD_HOC_SUBJECT_GATE = `${AD_HOC_SUBJECT_GATE_FIXTURE_LINES.join("\n")}\n`;
+// Expected: one call from the decisions fixture and one from the provisions
+// fixture, so both `include` globs are exercised rather than only the first.
+// The gate module's own call is excluded, which is the exclusion's whole job:
+// counting it would make the metric un-zeroable and the guard meaningless.
+const EXPECTED_AD_HOC_SUBJECT_GATES = 2;
+
 const writeFixture = (root: string, rel: string, content: string): void => {
   const full = path.join(root, rel);
   mkdirSync(path.dirname(full), { recursive: true });
@@ -2535,6 +2595,23 @@ const runSelfTest = (): number => {
       "apps/api/src/mcp/generated/capability-catalog.json",
       SELF_TEST_CAPABILITY_CATALOG,
     );
+    // Both handler globs the subject-gate metric covers, plus the gate module
+    // itself, so the exclusion is exercised rather than assumed.
+    writeFixture(
+      root,
+      "apps/api/src/handlers/case-law/decisions/ad-hoc.ts",
+      SELF_TEST_AD_HOC_SUBJECT_GATE,
+    );
+    writeFixture(
+      root,
+      "apps/api/src/handlers/case-law/provisions/ad-hoc.ts",
+      SELF_TEST_AD_HOC_SUBJECT_GATE,
+    );
+    writeFixture(
+      root,
+      "apps/api/src/handlers/case-law/decisions/public-subject.ts",
+      SELF_TEST_AD_HOC_SUBJECT_GATE,
+    );
     writeFixture(root, "apps/api/src/db/index.ts", "export const x = 1;\n");
     writeFixture(root, "apps/web/src/lib/index.tsx", "export const y = 2;\n");
     // Excluded companions: these must NOT be counted.
@@ -2574,6 +2651,32 @@ const runSelfTest = (): number => {
     if (legacyRealtimeMetric.count !== EXPECTED_LEGACY_REALTIME_INVALIDATIONS) {
       failures.push(
         `legacy-realtime-invalidation-producers counted ${legacyRealtimeMetric.count}, expected ${EXPECTED_LEGACY_REALTIME_INVALIDATIONS}`,
+      );
+    }
+
+    const adHocSubjectGateMetric = requireSnapshot(
+      snapshot,
+      "ad-hoc-decision-subject-gates",
+    );
+    if (adHocSubjectGateMetric.count !== EXPECTED_AD_HOC_SUBJECT_GATES) {
+      failures.push(
+        `ad-hoc-decision-subject-gates counted ${adHocSubjectGateMetric.count}, expected ${EXPECTED_AD_HOC_SUBJECT_GATES}`,
+      );
+    }
+    for (const glob of [
+      "apps/api/src/handlers/case-law/decisions/ad-hoc.ts",
+      "apps/api/src/handlers/case-law/provisions/ad-hoc.ts",
+    ]) {
+      if (!(glob in adHocSubjectGateMetric.files)) {
+        failures.push(`ad-hoc-decision-subject-gates did not scan ${glob}`);
+      }
+    }
+    if (
+      "apps/api/src/handlers/case-law/decisions/public-subject.ts" in
+      adHocSubjectGateMetric.files
+    ) {
+      failures.push(
+        "ad-hoc-decision-subject-gates did not exclude the gate module",
       );
     }
 
@@ -2820,6 +2923,37 @@ const runSelfTest = (): number => {
       failures.push(
         `workspace-only-rls-on-org-tables counted ${workspaceOnlyRlsMetric.count}, expected ${EXPECTED_WORKSPACE_ONLY_RLS}`,
       );
+    }
+
+    // The subject-gate counter reads calls, not text: a mention in a comment
+    // or a string, and a method of the same name on some object, are not the
+    // hand-rolled gate the metric is holding at zero.
+    const redistributableCases = [
+      {
+        code: "if (!isRedistributable(row.descriptor)) return null;",
+        expected: 1,
+      },
+      {
+        code: "// isRedistributable(row) used to live here\nconst a = 1;",
+        expected: 0,
+      },
+      {
+        code: 'const message = "call isRedistributable(x) instead";',
+        expected: 0,
+      },
+      { code: "if (source.isRedistributable(row)) return row;", expected: 0 },
+      {
+        code: "isRedistributable(a); isRedistributable(b);",
+        expected: 2,
+      },
+    ];
+    for (const { code, expected } of redistributableCases) {
+      const counted = countDirectRedistributableCalls(code);
+      if (counted !== expected) {
+        failures.push(
+          `ad-hoc-decision-subject-gates counted ${counted}, expected ${expected}, for: ${code.replaceAll("\n", " ")}`,
+        );
+      }
     }
 
     // Diff behavior: equal passes, a rise regresses, a fall is a drop.

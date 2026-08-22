@@ -81,6 +81,11 @@ type ExposureType = (typeof EXPOSURE_TYPES)[number];
  * only enumeration into the ratchet is waived.
  */
 const INLINE_ENDPOINT_ALLOWLIST: Record<string, number> = {
+  // The subject-gate wrapper: its one `createSafePublicHandler` call builds
+  // the gated definition returned to callers, so it is a factory, not an
+  // endpoint. Endpoints made with it count under `createSafePublicSubjectHandler`
+  // in their own files.
+  "apps/api/src/handlers/case-law/decisions/public-subject.ts": 1,
   "apps/api/src/handlers/case-law/public-routes.ts": 9,
   "apps/api/src/handlers/files/routes.ts": 4,
   "apps/api/src/handlers/legislation/public-routes.ts": 5,

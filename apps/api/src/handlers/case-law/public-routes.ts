@@ -6,16 +6,20 @@ import {
   listDecisionFacetsHandler,
   listDecisionFacetsQuerySchema,
 } from "@/api/handlers/case-law/decisions/facets";
-import { readDecisionQuerySchema } from "@/api/handlers/case-law/decisions/get";
 import {
-  readDecisionBySlugWithDocumentHandler,
-  readDecisionWithDocumentHandler,
-} from "@/api/handlers/case-law/decisions/get-deferred-document";
+  readDecisionHandler,
+  readDecisionQuerySchema,
+} from "@/api/handlers/case-law/decisions/get";
+import { hydrateDeferredDocument } from "@/api/handlers/case-law/decisions/get-deferred-document";
 import {
   listDecisionsHandler,
   listDecisionsQuerySchema,
 } from "@/api/handlers/case-law/decisions/list";
 import listDecisionCitations from "@/api/handlers/case-law/decisions/list-citations";
+import {
+  createSafePublicSubjectHandler,
+  createSafePublicSubjectFollowUpHandler,
+} from "@/api/handlers/case-law/decisions/public-subject";
 import { searchDecisionsHandler } from "@/api/handlers/case-law/decisions/search";
 import { searchDecisionsBodySchema } from "@/api/handlers/case-law/decisions/search-schema";
 import {
@@ -66,33 +70,23 @@ const listDecisionFacets = createSafePublicHandler(
   },
 );
 
-const readDecision = createSafePublicHandler(
-  {
+const readDecision = createSafePublicSubjectFollowUpHandler({
+  config: {
     mcp: { type: "tool", name: "read_case_law_decision" },
     params: t.Object({ decisionId: tSafeId("caseLawDecision") }),
     query: readDecisionQuerySchema,
   },
-  async function* ({ params: { decisionId }, query: { citationsCursor } }) {
-    const response = yield* Result.await(
-      Result.tryPromise(
-        async () =>
-          await readDecisionWithDocumentHandler({
-            decisionId,
-            caseLawDb: caseLawPublicReadDb,
-            citationsCursor,
-            // Unauthenticated: hydrates when a slot is free, but never
-            // persists demand — see `recordDemand`.
-            caller: "anonymous",
-          }),
-      ),
-    );
+  caseLawDb: caseLawPublicReadDb,
+  locate: ({ params: { decisionId } }) => ({ kind: "id", id: decisionId }),
+  read: async (subject, { query: { citationsCursor } }) =>
+    await readDecisionHandler({ subject, citationsCursor }),
+  // Unauthenticated: hydrates when a slot is free, but never persists
+  // demand — see `recordDemand`. Runs after the gated transaction closes.
+  followUp: async (read) => await hydrateDeferredDocument(read, false),
+});
 
-    return Result.ok(response);
-  },
-);
-
-const readDecisionBySlug = createSafePublicHandler(
-  {
+const readDecisionBySlug = createSafePublicSubjectFollowUpHandler({
+  config: {
     mcp: { type: "covered", by: "read_case_law_decision" },
     params: t.Object({ slug: t.String({ minLength: 1, maxLength: 256 }) }),
     query: t.Composite([
@@ -102,46 +96,29 @@ const readDecisionBySlug = createSafePublicHandler(
       }),
     ]),
   },
-  async function* ({ params: { slug }, query: { citationsCursor, language } }) {
-    const response = yield* Result.await(
-      Result.tryPromise(
-        async () =>
-          await readDecisionBySlugWithDocumentHandler({
-            slug,
-            caseLawDb: caseLawPublicReadDb,
-            citationsCursor,
-            language,
-            caller: "anonymous",
-          }),
-      ),
-    );
-
-    return Result.ok(response);
-  },
-);
+  caseLawDb: caseLawPublicReadDb,
+  locate: ({ params: { slug }, query: { language } }) => ({
+    kind: "slug",
+    slug,
+    language,
+  }),
+  read: async (subject, { query: { citationsCursor } }) =>
+    await readDecisionHandler({ subject, citationsCursor }),
+  followUp: async (read) => await hydrateDeferredDocument(read, false),
+});
 
 /** Provision references of a decision. */
-const listDecisionProvisions = createSafePublicHandler(
-  {
+const listDecisionProvisions = createSafePublicSubjectHandler({
+  config: {
     mcp: { type: "internal", reason: "public_indexing" },
     params: t.Object({ decisionId: tSafeId("caseLawDecision") }),
     query: listDecisionProvisionsQuerySchema,
   },
-  async function* ({ params: { decisionId }, query }) {
-    const response = yield* Result.await(
-      Result.tryPromise(
-        async () =>
-          await listDecisionProvisionsHandler({
-            decisionId,
-            query,
-            caseLawDb: caseLawPublicReadDb,
-          }),
-      ),
-    );
-
-    return Result.ok(response);
-  },
-);
+  caseLawDb: caseLawPublicReadDb,
+  locate: ({ params: { decisionId } }) => ({ kind: "id", id: decisionId }),
+  read: async (subject, { query }) =>
+    await listDecisionProvisionsHandler({ subject, query }),
+});
 
 /** Decisions citing a provision. */
 const listCitingDecisions = createSafePublicHandler(

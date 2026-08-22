@@ -3,14 +3,8 @@ import type { SQL } from "drizzle-orm";
 import { status, t } from "elysia";
 import type { Static } from "elysia";
 
-import {
-  caseLawDecisions,
-  caseLawProvisionCitations,
-  caseLawSources,
-} from "@/api/db/schema";
-import type { SafeId } from "@/api/lib/branded-types";
-import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
-import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
+import { caseLawProvisionCitations } from "@/api/db/schema";
+import type { RedistributableDecisionSubject } from "@/api/handlers/case-law/decisions/public-subject";
 import { tPaginationCursor, tPaginationLimit } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
 import {
@@ -29,9 +23,12 @@ type ListDecisionProvisionsQuery = Static<
 >;
 
 type ListDecisionProvisionsOptions = {
-  decisionId: SafeId<"caseLawDecision">;
+  /**
+   * Gated upstream, and the only database handle this read gets: its rows
+   * come from the transaction that approved it.
+   */
+  subject: RedistributableDecisionSubject;
   query: ListDecisionProvisionsQuery;
-  caseLawDb: CaseLawPublicReadDb;
 };
 
 type ProvisionCursor = { spanStart: number; anchor: string };
@@ -55,14 +52,14 @@ const decodeProvisionCursor = (cursor: string): ProvisionCursor | null => {
 };
 
 export const listDecisionProvisionsHandler = async ({
-  decisionId,
+  subject: { id: decisionId, tx },
   query,
-  caseLawDb,
 }: ListDecisionProvisionsOptions) => {
   const limit = query.limit ?? LIMITS.caseLawSearchPageSizeDefault;
+  // Redistribution was decided when the subject was resolved; the rows
+  // belong to that one decision, so no source join is needed here.
   const conditions: SQL[] = [
     eq(caseLawProvisionCitations.decisionId, decisionId),
-    redistributableCaseLawSource,
   ];
 
   if (query.cursor) {
@@ -76,47 +73,37 @@ export const listDecisionProvisionsHandler = async ({
     );
   }
 
-  const rows = await caseLawDb((tx) =>
-    tx
-      .select({
-        jurisdiction: caseLawProvisionCitations.jurisdiction,
-        workIdentifier: caseLawProvisionCitations.workIdentifier,
-        workNumber: caseLawProvisionCitations.workNumber,
-        workYear: caseLawProvisionCitations.workYear,
-        workCollection: caseLawProvisionCitations.workCollection,
-        workEli: caseLawProvisionCitations.workEli,
-        workSource: caseLawProvisionCitations.workSource,
-        unit: caseLawProvisionCitations.unit,
-        section: caseLawProvisionCitations.section,
-        sectionSuffix: caseLawProvisionCitations.sectionSuffix,
-        subsection: caseLawProvisionCitations.subsection,
-        letter: caseLawProvisionCitations.letter,
-        point: caseLawProvisionCitations.point,
-        sentence: caseLawProvisionCitations.sentence,
-        openEnded: caseLawProvisionCitations.openEnded,
-        anchor: caseLawProvisionCitations.anchor,
-        versionValidFrom: caseLawProvisionCitations.versionValidFrom,
-        sentenceText: caseLawProvisionCitations.sentenceText,
-        spanStart: caseLawProvisionCitations.spanStart,
-        spanEnd: caseLawProvisionCitations.spanEnd,
-        confidence: caseLawProvisionCitations.confidence,
-      })
-      .from(caseLawProvisionCitations)
-      .innerJoin(
-        caseLawDecisions,
-        eq(caseLawDecisions.id, caseLawProvisionCitations.decisionId),
-      )
-      .innerJoin(
-        caseLawSources,
-        eq(caseLawSources.id, caseLawDecisions.sourceId),
-      )
-      .where(and(...conditions))
-      .orderBy(
-        asc(caseLawProvisionCitations.spanStart),
-        asc(caseLawProvisionCitations.anchor),
-      )
-      .limit(limit + 1),
-  );
+  const rows = await tx
+    .select({
+      jurisdiction: caseLawProvisionCitations.jurisdiction,
+      workIdentifier: caseLawProvisionCitations.workIdentifier,
+      workNumber: caseLawProvisionCitations.workNumber,
+      workYear: caseLawProvisionCitations.workYear,
+      workCollection: caseLawProvisionCitations.workCollection,
+      workEli: caseLawProvisionCitations.workEli,
+      workSource: caseLawProvisionCitations.workSource,
+      unit: caseLawProvisionCitations.unit,
+      section: caseLawProvisionCitations.section,
+      sectionSuffix: caseLawProvisionCitations.sectionSuffix,
+      subsection: caseLawProvisionCitations.subsection,
+      letter: caseLawProvisionCitations.letter,
+      point: caseLawProvisionCitations.point,
+      sentence: caseLawProvisionCitations.sentence,
+      openEnded: caseLawProvisionCitations.openEnded,
+      anchor: caseLawProvisionCitations.anchor,
+      versionValidFrom: caseLawProvisionCitations.versionValidFrom,
+      sentenceText: caseLawProvisionCitations.sentenceText,
+      spanStart: caseLawProvisionCitations.spanStart,
+      spanEnd: caseLawProvisionCitations.spanEnd,
+      confidence: caseLawProvisionCitations.confidence,
+    })
+    .from(caseLawProvisionCitations)
+    .where(and(...conditions))
+    .orderBy(
+      asc(caseLawProvisionCitations.spanStart),
+      asc(caseLawProvisionCitations.anchor),
+    )
+    .limit(limit + 1);
 
   return createCursorPage({
     rows,

@@ -4,7 +4,8 @@ import { beforeEach, describe, expect, mock, test } from "bun:test";
 import type { BoeSearchResponse } from "@stll/boe";
 
 import type { ScopedDb } from "@/api/db/safe-db";
-import type { readDecisionWithDocumentHandler } from "@/api/handlers/case-law/decisions/get-deferred-document";
+import type { readGatedDecisionWithDocument } from "@/api/handlers/case-law/decisions/get-deferred-document";
+import * as publicSubject from "@/api/handlers/case-law/decisions/public-subject";
 import type { searchDecisionsHandler } from "@/api/handlers/case-law/decisions/search";
 import { resolveToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
 import type { readWorkspaceHandler } from "@/api/handlers/workspaces/get";
@@ -72,7 +73,8 @@ const describeStoredTemplateMock = mock();
 const searchProviderSearchMock = mock();
 const decryptContentMock = mock(async () => "decrypted text");
 const searchDecisionsHandlerMock = mock();
-const readDecisionWithDocumentHandlerMock = mock();
+const readGatedDecisionWithDocumentMock = mock();
+const withRedistributableSubjectMock = mock();
 const searchConsolidatedLegislationMock = mock();
 const getLawTextBlockMock = mock();
 const executeRegistryLookupMock = mock();
@@ -119,9 +121,25 @@ void mock.module(
   "@/api/handlers/case-law/decisions/get-deferred-document",
   () => ({
     ...realCaseLawGetDeferred,
-    readDecisionWithDocumentHandler: readDecisionWithDocumentHandlerMock,
+    readGatedDecisionWithDocument: readGatedDecisionWithDocumentMock,
   }),
 );
+// The case-law read tool gates the subject before it reads, so the corpus
+// stands in for that lookup too; the fixture payload still comes from the
+// handler double above. Every export is declared rather than spread: the
+// module builds the public route handlers at import time, and the
+// `...(await import(SPEC))` idiom deadlocks on it.
+void mock.module("@/api/handlers/case-law/decisions/public-subject", () => ({
+  DECISION_NOT_FOUND: publicSubject.DECISION_NOT_FOUND,
+  createSafePublicSubjectHandler: publicSubject.createSafePublicSubjectHandler,
+  createSafePublicSubjectFollowUpHandler:
+    publicSubject.createSafePublicSubjectFollowUpHandler,
+  isSubjectGatedHandler: publicSubject.isSubjectGatedHandler,
+  normalizePublicDecisionLanguage:
+    publicSubject.normalizePublicDecisionLanguage,
+  subjectGatedHandlers: publicSubject.subjectGatedHandlers,
+  withRedistributableSubject: withRedistributableSubjectMock,
+}));
 void mock.module("@stll/boe", () => ({
   ...realBoe,
   searchConsolidatedLegislation: searchConsolidatedLegislationMock,
@@ -1209,7 +1227,7 @@ const CONTRACT_CORPUS = {
       mode: "read",
       buildArgs: () => ({ decision_id: uid(54) }),
       setup: () => {
-        readDecisionWithDocumentHandlerMock.mockResolvedValue({
+        readGatedDecisionWithDocumentMock.mockResolvedValue({
           documentPending: false,
           documentReadFailed: false,
           documentUnavailable: false,
@@ -1256,9 +1274,7 @@ const CONTRACT_CORPUS = {
           sourceUrl: "https://example.test/decision",
           createdAt: new Date("2020-05-01T00:00:00.000Z"),
           updatedAt: new Date("2020-05-01T00:00:00.000Z"),
-        } satisfies Awaited<
-          ReturnType<typeof readDecisionWithDocumentHandler>
-        >);
+        } satisfies Awaited<ReturnType<typeof readGatedDecisionWithDocument>>);
       },
       expectRefPaths: [],
     },
@@ -1407,7 +1423,7 @@ const ALL_MOCKS = [
   describeStoredTemplateMock,
   searchProviderSearchMock,
   searchDecisionsHandlerMock,
-  readDecisionWithDocumentHandlerMock,
+  readGatedDecisionWithDocumentMock,
   searchConsolidatedLegislationMock,
   getLawTextBlockMock,
   executeRegistryLookupMock,
@@ -1420,6 +1436,17 @@ beforeEach(() => {
   }
   decryptContentMock.mockReset();
   decryptContentMock.mockResolvedValue("decrypted text");
+  withRedistributableSubjectMock.mockReset();
+  // The gate's own behaviour is covered by `public-subject.db.test.ts`; here
+  // it stands in as "this id passed the gate" so the projection is reachable
+  // without a database.
+  withRedistributableSubjectMock.mockImplementation(
+    async (
+      _db: unknown,
+      locator: { kind: "id"; id: string },
+      read: (subject: { id: string }) => Promise<unknown>,
+    ) => await read({ id: locator.id }),
+  );
 });
 
 describe("registry projection contract", () => {

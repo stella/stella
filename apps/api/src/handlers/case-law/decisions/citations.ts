@@ -8,7 +8,7 @@ import {
   caseLawSources,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
-import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
+import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
 import { redistributableCaseLawSourceFor } from "@/api/lib/case-law/redistribution";
 import { LIMITS } from "@/api/lib/limits";
 import {
@@ -41,7 +41,7 @@ const decodeCitationCursor = (
 };
 
 type CitationPageOptions = {
-  caseLawDb: CaseLawPublicReadDb;
+  tx: CaseLawPublicReadTransaction;
   cursor: string | undefined;
   decisionId: SafeId<"caseLawDecision">;
 };
@@ -76,7 +76,7 @@ const createScannedCitationPage = <T>(
 };
 
 export const listOutgoingDecisionCitations = async ({
-  caseLawDb,
+  tx,
   cursor,
   decisionId,
 }: CitationPageOptions) => {
@@ -85,56 +85,51 @@ export const listOutgoingDecisionCitations = async ({
     return status(400, { message: "Invalid cursor" });
   }
 
-  const rows = await caseLawDb((tx) => {
-    const candidates = tx
-      .select({
-        id: caseLawCitations.id,
-        citationText: caseLawCitations.citationText,
-        citedDecisionId: caseLawCitations.citedDecisionId,
-        sectionIndex: caseLawCitations.sectionIndex,
-      })
-      .from(caseLawCitations)
-      .where(
-        and(
-          eq(caseLawCitations.citingDecisionId, decisionId),
-          cursorId === undefined
-            ? undefined
-            : gt(caseLawCitations.id, cursorId),
-        ),
-      )
-      .orderBy(asc(caseLawCitations.id))
-      .limit(LIMITS.caseLawDecisionCitationPageSize + 1)
-      .as("outgoing_citation_candidates");
-
-    return tx
-      .select({
-        item: {
-          id: candidates.id,
-          citationText: candidates.citationText,
-          citedDecisionId: candidates.citedDecisionId,
-          sectionIndex: candidates.sectionIndex,
-        },
-        scanId: candidates.id,
-        visible: sql<boolean>`(
-            ${candidates.citedDecisionId} IS NULL
-          OR (
-            ${citedSource.id} IS NOT NULL
-            AND ${redistributableCaseLawSourceFor(citedSource.descriptor)}
-          )
-        )`,
-      })
-      .from(candidates)
-      .leftJoin(citedDecision, eq(citedDecision.id, candidates.citedDecisionId))
-      .leftJoin(citedSource, eq(citedSource.id, citedDecision.sourceId))
-      .orderBy(asc(candidates.id))
-      .limit(LIMITS.caseLawDecisionCitationPageSize + 1);
-  });
+  const candidates = tx
+    .select({
+      id: caseLawCitations.id,
+      citationText: caseLawCitations.citationText,
+      citedDecisionId: caseLawCitations.citedDecisionId,
+      sectionIndex: caseLawCitations.sectionIndex,
+    })
+    .from(caseLawCitations)
+    .where(
+      and(
+        eq(caseLawCitations.citingDecisionId, decisionId),
+        cursorId === undefined ? undefined : gt(caseLawCitations.id, cursorId),
+      ),
+    )
+    .orderBy(asc(caseLawCitations.id))
+    .limit(LIMITS.caseLawDecisionCitationPageSize + 1)
+    .as("outgoing_citation_candidates");
+  const rows = await tx
+    .select({
+      item: {
+        id: candidates.id,
+        citationText: candidates.citationText,
+        citedDecisionId: candidates.citedDecisionId,
+        sectionIndex: candidates.sectionIndex,
+      },
+      scanId: candidates.id,
+      visible: sql<boolean>`(
+          ${candidates.citedDecisionId} IS NULL
+        OR (
+          ${citedSource.id} IS NOT NULL
+          AND ${redistributableCaseLawSourceFor(citedSource.descriptor)}
+        )
+      )`,
+    })
+    .from(candidates)
+    .leftJoin(citedDecision, eq(citedDecision.id, candidates.citedDecisionId))
+    .leftJoin(citedSource, eq(citedSource.id, citedDecision.sourceId))
+    .orderBy(asc(candidates.id))
+    .limit(LIMITS.caseLawDecisionCitationPageSize + 1);
 
   return createScannedCitationPage(rows);
 };
 
 export const listIncomingDecisionCitations = async ({
-  caseLawDb,
+  tx,
   cursor,
   decisionId,
 }: CitationPageOptions) => {
@@ -143,50 +138,45 @@ export const listIncomingDecisionCitations = async ({
     return status(400, { message: "Invalid cursor" });
   }
 
-  const rows = await caseLawDb((tx) => {
-    const candidates = tx
-      .select({
-        id: caseLawCitations.id,
-        citationText: caseLawCitations.citationText,
-        citingDecisionId: caseLawCitations.citingDecisionId,
-        sectionIndex: caseLawCitations.sectionIndex,
-      })
-      .from(caseLawCitations)
-      .where(
-        and(
-          eq(caseLawCitations.citedDecisionId, decisionId),
-          cursorId === undefined
-            ? undefined
-            : gt(caseLawCitations.id, cursorId),
-        ),
-      )
-      .orderBy(asc(caseLawCitations.id))
-      .limit(LIMITS.caseLawDecisionCitationPageSize + 1)
-      .as("incoming_citation_candidates");
-
-    return tx
-      .select({
-        item: {
-          id: candidates.id,
-          citationText: candidates.citationText,
-          citingDecisionId: candidates.citingDecisionId,
-          sectionIndex: candidates.sectionIndex,
-        },
-        scanId: candidates.id,
-        visible: sql<boolean>`(
-          ${citingSource.id} IS NOT NULL
-          AND ${redistributableCaseLawSourceFor(citingSource.descriptor)}
-        )`,
-      })
-      .from(candidates)
-      .leftJoin(
-        citingDecision,
-        eq(citingDecision.id, candidates.citingDecisionId),
-      )
-      .leftJoin(citingSource, eq(citingSource.id, citingDecision.sourceId))
-      .orderBy(asc(candidates.id))
-      .limit(LIMITS.caseLawDecisionCitationPageSize + 1);
-  });
+  const candidates = tx
+    .select({
+      id: caseLawCitations.id,
+      citationText: caseLawCitations.citationText,
+      citingDecisionId: caseLawCitations.citingDecisionId,
+      sectionIndex: caseLawCitations.sectionIndex,
+    })
+    .from(caseLawCitations)
+    .where(
+      and(
+        eq(caseLawCitations.citedDecisionId, decisionId),
+        cursorId === undefined ? undefined : gt(caseLawCitations.id, cursorId),
+      ),
+    )
+    .orderBy(asc(caseLawCitations.id))
+    .limit(LIMITS.caseLawDecisionCitationPageSize + 1)
+    .as("incoming_citation_candidates");
+  const rows = await tx
+    .select({
+      item: {
+        id: candidates.id,
+        citationText: candidates.citationText,
+        citingDecisionId: candidates.citingDecisionId,
+        sectionIndex: candidates.sectionIndex,
+      },
+      scanId: candidates.id,
+      visible: sql<boolean>`(
+        ${citingSource.id} IS NOT NULL
+        AND ${redistributableCaseLawSourceFor(citingSource.descriptor)}
+      )`,
+    })
+    .from(candidates)
+    .leftJoin(
+      citingDecision,
+      eq(citingDecision.id, candidates.citingDecisionId),
+    )
+    .leftJoin(citingSource, eq(citingSource.id, citingDecision.sourceId))
+    .orderBy(asc(candidates.id))
+    .limit(LIMITS.caseLawDecisionCitationPageSize + 1);
 
   return createScannedCitationPage(rows);
 };

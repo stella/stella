@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { drizzle } from "drizzle-orm/pglite";
 
@@ -18,6 +19,7 @@ import type {
   CitationDirection,
   DecisionCitationRow,
 } from "@/api/handlers/case-law/decisions/citation-graph";
+import { withRedistributableSubject } from "@/api/handlers/case-law/decisions/public-subject";
 import { POLARITIES, POLARITY } from "@/api/handlers/case-law/polarity/consts";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -196,16 +198,23 @@ afterAll(async () => {
   await client.close();
 });
 
+const subjectFor = async (id: SafeId<"caseLawDecision">) =>
+  (await withRedistributableSubject(
+    caseLawDb,
+    { kind: "id", id },
+    async (subject) => subject,
+  )) ?? panic("expected a redistributable subject");
+
 const collect = async (direction: CitationDirection) => {
   const items: DecisionCitationRow[] = [];
+  const subject = await subjectFor(subjectId);
   let cursor: string | undefined;
   let pages = 0;
 
   for (let request = 0; request < 4; request += 1) {
     // oxlint-disable-next-line no-await-in-loop -- cursor pages are sequential
     const page = await listDecisionCitationsHandler({
-      caseLawDb,
-      decisionId: subjectId,
+      subject,
       query: { direction, ...(cursor === undefined ? {} : { cursor }) },
     });
     if (!("items" in page)) {
@@ -275,8 +284,7 @@ test("incoming pages carry treatment and the citing decision, and the rollup mat
     counted.set(item.treatment, (counted.get(item.treatment) ?? 0) + 1);
   }
   const summary = await summaryOf({
-    caseLawDb,
-    decisionId: subjectId,
+    subject: await subjectFor(subjectId),
   });
   expect(Object.fromEntries(counted)).toEqual(
     Object.fromEntries(
@@ -301,8 +309,7 @@ test("outgoing keeps unresolved text, drops restricted and procedural rows", asy
   expect(outgoing.items.at(1)?.treatment).toBe("unclassified");
 
   const summary = await summaryOf({
-    caseLawDb,
-    decisionId: subjectId,
+    subject: await subjectFor(subjectId),
   });
   expect(summary.outgoing).toEqual({
     negative: 0,
@@ -315,8 +322,7 @@ test("outgoing keeps unresolved text, drops restricted and procedural rows", asy
 
 test("citation pages reject malformed cursors", async () => {
   const page = await listDecisionCitationsHandler({
-    caseLawDb,
-    decisionId: subjectId,
+    subject: await subjectFor(subjectId),
     query: { cursor: "not-a-cursor", direction: "incoming" },
   });
 
@@ -325,41 +331,42 @@ test("citation pages reject malformed cursors", async () => {
 
 test("incoming citations roll up by the citing decision's year within the bounded span", async () => {
   const summary = await summaryOf({
-    caseLawDb,
     currentYear: 2026,
-    decisionId: subjectId,
+    subject: await subjectFor(subjectId),
   });
   // Every visible citing row comes from one decision dated 2020.
   expect(summary.incomingByYear).toEqual([{ ...summary.incoming, year: 2020 }]);
 
   const beyondSpan = await summaryOf({
-    caseLawDb,
     currentYear: 2020 + CITATION_TIMELINE_MAX_YEARS,
-    decisionId: subjectId,
+    subject: await subjectFor(subjectId),
   });
   expect(beyondSpan.incoming).toEqual(summary.incoming);
   expect(beyondSpan.incomingByYear).toEqual([]);
 });
 
-test("a restricted subject decision has no citation reads, in either direction or summary", async () => {
+test("a restricted subject decision cannot be resolved as a subject", async () => {
   // The closed decision cites the subject, so it has an outgoing edge that
-  // would otherwise be served; the gate must answer before the edge walk.
-  const outgoing = await listDecisionCitationsHandler({
-    caseLawDb,
-    decisionId: closedRelatedId,
-    query: { direction: "outgoing" },
-  });
-  const incoming = await listDecisionCitationsHandler({
-    caseLawDb,
-    decisionId: closedRelatedId,
-    query: { direction: "incoming" },
-  });
-  const summary = await summarizeDecisionCitationsHandler({
-    caseLawDb,
-    decisionId: closedRelatedId,
-  });
-
-  expect("items" in outgoing).toBe(false);
-  expect("items" in incoming).toBe(false);
-  expect("incoming" in summary).toBe(false);
+  // would otherwise be served. The gate answers before any handler runs:
+  // without a subject there is no call to make, in either direction.
+  expect(
+    await withRedistributableSubject(
+      caseLawDb,
+      {
+        kind: "id",
+        id: closedRelatedId,
+      },
+      async (subject) => subject,
+    ),
+  ).toBeNull();
+  expect(
+    await withRedistributableSubject(
+      caseLawDb,
+      {
+        kind: "id",
+        id: subjectId,
+      },
+      async (subject) => subject,
+    ),
+  ).not.toBeNull();
 });
