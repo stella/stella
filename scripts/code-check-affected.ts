@@ -42,23 +42,27 @@ export const ALL_WORKSPACE_TYPECHECK_CACHE_INPUTS = [
   ...ALL_WORKSPACE_CACHE_INPUTS,
   ...TYPECHECK_ONLY_CACHE_INPUTS,
 ] as const;
-export const LINT_ONLY_CACHE_INPUTS = [
+const OXLINT_CONFIGURATION_CACHE_INPUTS = [
   "$TURBO_ROOT$/oxlint.config.ts",
   "$TURBO_ROOT$/.oxlint-plugins/**",
 ] as const;
+export const LINT_ONLY_CACHE_INPUTS = [
+  ...OXLINT_CONFIGURATION_CACHE_INPUTS,
+  "$TURBO_ROOT$/tsconfig.tooling.json",
+] as const;
 export const PLUGIN_FIXTURE_INPUTS = [
   ...DEPENDENCY_CACHE_INPUTS,
-  ...LINT_ONLY_CACHE_INPUTS,
+  ...OXLINT_CONFIGURATION_CACHE_INPUTS,
   "$TURBO_ROOT$/scripts/lint-oxlint-fixtures.sh",
   "$TURBO_ROOT$/tsconfig.oxlint-plugins.json",
 ] as const;
 export const PLUGIN_REGISTRY_INPUTS = [
-  ...LINT_ONLY_CACHE_INPUTS,
+  ...OXLINT_CONFIGURATION_CACHE_INPUTS,
   "$TURBO_ROOT$/scripts/check-oxlint-plugin-registry.ts",
 ] as const;
 export const ROOT_SCRIPT_LINT_INPUTS = [
   ...ALL_WORKSPACE_CACHE_INPUTS,
-  ...LINT_ONLY_CACHE_INPUTS,
+  ...OXLINT_CONFIGURATION_CACHE_INPUTS,
   "$TURBO_ROOT$/scripts/lint-root-scripts.sh",
   "$TURBO_ROOT$/scripts/tsconfig.json",
   "$TURBO_ROOT$/tsconfig.scripts.json",

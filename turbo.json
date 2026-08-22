@@ -81,6 +81,7 @@
         "$TURBO_ROOT$/.oxlint-plugins/**",
         "$TURBO_ROOT$/packages/typescript-config/**",
         "$TURBO_ROOT$/patches/**",
+        "$TURBO_ROOT$/tsconfig.tooling.json",
         "$TURBO_ROOT$/types/**"
       ]
     },

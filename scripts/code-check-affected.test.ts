@@ -160,6 +160,16 @@ describe("affected code-check planning", () => {
     },
   );
 
+  test("the shared tooling config invalidates only workspace lint", () => {
+    expect(plan(["tsconfig.tooling.json"], [])).toEqual({
+      type: "scoped",
+      lint: { type: "all" },
+      typecheck: { type: "targets", targets: [] },
+      rootLintPaths: [],
+      rootChecks: ["env", "repo-typecheck"],
+    });
+  });
+
   test.each([
     ["scripts/check-oxlint-plugin-registry.ts", "plugin-registry"],
     ["scripts/lint-oxlint-fixtures.sh", "plugin-fixtures"],
@@ -334,6 +344,12 @@ describe("Turbo cache input contract", () => {
     for (const input of TYPECHECK_ONLY_CACHE_INPUTS) {
       expect(ALL_WORKSPACE_TYPECHECK_CACHE_INPUTS).toContain(input);
     }
+  });
+
+  test("workspace lint covers the shared tooling config", () => {
+    expect(LINT_ONLY_CACHE_INPUTS).toContain(
+      "$TURBO_ROOT$/tsconfig.tooling.json",
+    );
   });
 
   test("keeps planner-wide inputs exactly aligned with their Turbo tasks", () => {
