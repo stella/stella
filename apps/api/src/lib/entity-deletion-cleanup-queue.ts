@@ -13,7 +13,11 @@ import {
   failEntityDeletionEffectChunk,
   listRecoverableEntityDeletionEffectRequestIds,
 } from "@/api/lib/entity-deletion-effect-store";
-import { connectionErrorFields, errorTag } from "@/api/lib/errors/utils";
+import {
+  connectionErrorFields,
+  errorSystemFields,
+  errorTag,
+} from "@/api/lib/errors/utils";
 import { deleteS3Keys } from "@/api/lib/files/utils";
 import { logger } from "@/api/lib/observability/logger";
 import { createBullMqConnection } from "@/api/lib/redis-client";
@@ -323,9 +327,10 @@ export const initEntityDeletionCleanupWorker = () => {
     },
     onError: (error) => {
       captureError(error);
-      logger.error("entity_deletion_cleanup.reconcile_failed", {
-        "error.type": errorTag(error),
-      });
+      logger.error(
+        "entity_deletion_cleanup.reconcile_failed",
+        errorSystemFields(error),
+      );
     },
   });
   reconcile();

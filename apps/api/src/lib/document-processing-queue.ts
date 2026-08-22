@@ -53,7 +53,11 @@ import {
 import { documentProcessingFailureFields } from "@/api/lib/document-processing-failure-fields";
 import { DocumentOcrError } from "@/api/lib/document-processing-ocr-result";
 import { startDocumentOcrWorkerReadiness } from "@/api/lib/document-processing-readiness";
-import { connectionErrorFields, errorTag } from "@/api/lib/errors/utils";
+import {
+  connectionErrorFields,
+  errorSystemFields,
+  errorTag,
+} from "@/api/lib/errors/utils";
 import { createFileKey, createOcrSearchablePdfKey } from "@/api/lib/file-key";
 import { logger } from "@/api/lib/observability/logger";
 import {
@@ -2863,7 +2867,7 @@ const reconcileDocumentProcessing = async ({
           }
           captureError(error, { phase });
           logger.error("document_processing.reconcile_phase_failed", {
-            "error.type": errorTag(error),
+            ...errorSystemFields(error),
             phase,
           });
         },
@@ -2893,9 +2897,10 @@ const reconcileDocumentProcessing = async ({
       });
     } else {
       captureError(error);
-      logger.error("document_processing.reconcile_failed", {
-        "error.type": errorTag(error),
-      });
+      logger.error(
+        "document_processing.reconcile_failed",
+        errorSystemFields(error),
+      );
     }
   } finally {
     onComplete();
