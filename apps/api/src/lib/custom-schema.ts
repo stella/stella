@@ -63,7 +63,9 @@ export const tDefaultVarchar = t.String({
 export const tPaginationLimit = (maximum: number) =>
   t.Integer({ minimum: 1, maximum });
 
-export const tPaginationCursor = (maxLength = 512) =>
+export const PAGINATION_CURSOR_MAX_CHARS = 512;
+
+export const tPaginationCursor = (maxLength = PAGINATION_CURSOR_MAX_CHARS) =>
   t.String({
     maxLength,
     description: "Opaque cursor from a previous page to fetch the next page",

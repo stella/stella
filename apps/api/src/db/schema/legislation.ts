@@ -1,3 +1,5 @@
+import type { SQLWrapper } from "drizzle-orm";
+
 import { LEGISLATION_DOCUMENT_STATUSES } from "@stll/api-contract/legislation-status";
 
 import {
@@ -35,6 +37,12 @@ import type {
  */
 const LEGISLATION_DOCUMENT_STATUS_SQL_VALUES =
   LEGISLATION_DOCUMENT_STATUSES.map((status) => sql.raw(`'${status}'`));
+
+/** Bounded prefix that owns stable public-list ordering. */
+export const LEGISLATION_TITLE_SORT_KEY_CHARS = 52;
+
+export const legislationTitleSortKey = (title: SQLWrapper) =>
+  sql<string>`left(${title}, ${sql.raw(String(LEGISLATION_TITLE_SORT_KEY_CHARS))})`;
 
 export const legislationSources = p.pgTable(
   "legislation_sources",
@@ -129,8 +137,9 @@ export const legislationDocuments = p.pgTable(
       .index("legislation_documents_eli_lang_valid_from_idx")
       .on(t.eli, t.language, t.versionValidFrom),
     p.index("legislation_documents_country_idx").on(t.country),
-    // The public statute list, in its own order: the country seeks, the
-    // title/id pair is both the sort and the cursor.
+    // The compatibility release still emits legacy full-title cursors. The
+    // follow-up cutover replaces this index after every replica understands
+    // the tagged bounded cursor protocol.
     p
       .index("legislation_documents_country_title_id_idx")
       .on(t.country, t.title, t.id),

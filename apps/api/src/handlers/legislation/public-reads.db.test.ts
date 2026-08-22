@@ -3,18 +3,30 @@ import { drizzle } from "drizzle-orm/pglite";
 
 import type { Block, DocumentAst } from "@stll/legal-ast/document-ast";
 
-import { legislationDocuments, legislationSources } from "@/api/db/schema";
+import {
+  LEGISLATION_TITLE_SORT_KEY_CHARS,
+  legislationDocuments,
+  legislationSources,
+} from "@/api/db/schema";
 import { readStatuteByEliHandler } from "@/api/handlers/legislation/by-eli";
 import {
   readLegislationHandler,
   readPublicLegislationHandler,
 } from "@/api/handlers/legislation/get";
-import { listStatutesHandler } from "@/api/handlers/legislation/list";
+import {
+  LEGISLATION_TITLE_CURSOR_KIND,
+  listStatutesHandler,
+} from "@/api/handlers/legislation/list";
 import { readProvisionHistoryHandler } from "@/api/handlers/legislation/provision-history";
 import { listStatuteVersionsHandler } from "@/api/handlers/legislation/versions";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { PAGINATION_CURSOR_MAX_CHARS } from "@/api/lib/custom-schema";
 import type { LegislationReadDb } from "@/api/lib/legislation-public-read-db";
+import {
+  decodePaginationCursor,
+  encodePaginationCursor,
+} from "@/api/lib/pagination";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 // Public statute reads over a fixture whose current version is neither the
@@ -33,9 +45,15 @@ const civilCodeCurrent = createSafeId<"legislationDocument">();
 const civilCodeFuture = createSafeId<"legislationDocument">();
 const civilCodeEnglish = createSafeId<"legislationDocument">();
 const labourCode = createSafeId<"legislationDocument">();
+const longTitleAct = createSafeId<"legislationDocument">();
 const registerAct = createSafeId<"legislationDocument">();
 const sunsetAct = createSafeId<"legislationDocument">();
 const withheldAct = createSafeId<"legislationDocument">();
+const enumeratedAmendments = Array.from(
+  { length: 20 },
+  (_, index) => `act-${index.toString(36).padStart(4, "0")}`,
+).join(", ");
+const longOfficialTitle = `Long legislation title amending ${enumeratedAmendments}`;
 
 /** The window boundary the half-open validity interval turns on. */
 const today = new Date().toISOString().slice(0, 10);
@@ -236,6 +254,14 @@ beforeAll(
         versionValidTo: null,
       }),
       seedDocument({
+        id: longTitleAct,
+        sourceId: openSourceId,
+        eli: "CZ/1994/85",
+        title: longOfficialTitle,
+        versionValidFrom: "1994-06-01",
+        versionValidTo: null,
+      }),
+      seedDocument({
         id: registerAct,
         sourceId: openSourceId,
         eli: "CZ/2013/304",
@@ -356,12 +382,18 @@ describe("public statute list", () => {
       await listStatutesHandler({ country: "CZE" }, legislationDb),
     );
 
+    expect(longOfficialTitle.length).toBeGreaterThan(64);
+    expect(longOfficialTitle.length).toBeLessThanOrEqual(1024);
     expect(page.items.map((item) => item.title)).toEqual([
       "Civil Code",
       "Civil Code (English)",
       "Labour Code",
+      longOfficialTitle,
       "Public Registers Act",
     ]);
+    expect(
+      page.items.every((item) => !Object.hasOwn(item, "titleSortKey")),
+    ).toBe(true);
   });
 
   test("drops a version whose validity window closes today", async () => {
@@ -443,6 +475,8 @@ describe("public statute list", () => {
       if (cursor === null) {
         break;
       }
+      expect(cursor.length).toBeLessThanOrEqual(PAGINATION_CURSOR_MAX_CHARS);
+      expect(decodePaginationCursor(cursor)).toHaveLength(2);
     }
 
     expect(cursor).toBeNull();
@@ -450,11 +484,44 @@ describe("public statute list", () => {
       civilCodeCurrent,
       civilCodeEnglish,
       labourCode,
+      longTitleAct,
       registerAct,
     ]);
   });
 
-  test("rejects a cursor that is not a title/id pair", async () => {
+  test("accepts and preserves the next release's bounded cursor protocol", async () => {
+    const maximumEscapedCursor = encodePaginationCursor([
+      LEGISLATION_TITLE_CURSOR_KIND,
+      "\u0001".repeat(LEGISLATION_TITLE_SORT_KEY_CHARS),
+      longTitleAct,
+    ]);
+    expect(maximumEscapedCursor.length).toBeLessThanOrEqual(
+      PAGINATION_CURSOR_MAX_CHARS,
+    );
+
+    const boundedCursor = encodePaginationCursor([
+      LEGISLATION_TITLE_CURSOR_KIND,
+      "Labour Code",
+      labourCode,
+    ]);
+    const page = expectPage(
+      await listStatutesHandler(
+        { country: "CZE", cursor: boundedCursor, limit: 1 },
+        legislationDb,
+      ),
+    );
+
+    expect(page.items.map((item) => item.id)).toEqual([longTitleAct]);
+    expect(decodePaginationCursor(page.nextCursor ?? "")).toEqual([
+      LEGISLATION_TITLE_CURSOR_KIND,
+      Array.from(longOfficialTitle)
+        .slice(0, LEGISLATION_TITLE_SORT_KEY_CHARS)
+        .join(""),
+      longTitleAct,
+    ]);
+  });
+
+  test("rejects a cursor outside both title cursor protocols", async () => {
     const result = await listStatutesHandler(
       { country: "CZE", cursor: "not-a-cursor" },
       legislationDb,
