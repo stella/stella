@@ -62,7 +62,7 @@ test("legislation titles retain the publisher's unbounded official title", async
 
     expect(result.rows.at(0)?.title).toBe(LONG_LEGISLATION_TITLE);
     expect(result.rows.at(0)?.title_sort_key).toBe(
-      [...LONG_LEGISLATION_TITLE]
+      Array.from(LONG_LEGISLATION_TITLE)
         .slice(0, LEGISLATION_TITLE_SORT_KEY_CHARS)
         .join(""),
     );

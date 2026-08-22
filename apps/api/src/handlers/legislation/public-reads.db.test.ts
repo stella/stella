@@ -479,7 +479,7 @@ describe("public statute list", () => {
 
   test("accepts a bounded full-title cursor from the prior release", async () => {
     const legacyCursor = encodePaginationCursor([
-      [...longOfficialTitle].slice(0, 100).join(""),
+      Array.from(longOfficialTitle).slice(0, 100).join(""),
       longTitleAct,
     ]);
     expect(legacyCursor.length).toBeLessThanOrEqual(

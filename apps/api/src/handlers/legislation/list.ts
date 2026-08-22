@@ -58,7 +58,7 @@ const decodeTitleSortIdCursor = (cursor: string): TitleSortIdCursor | null => {
     // The prior release emitted the full title. Accept that concrete rolling
     // deployment state, but normalize it to the generated ordering key; this
     // release emits only the bounded key below.
-    titleSortKey: [...titleCursorPart]
+    titleSortKey: Array.from(titleCursorPart)
       .slice(0, LEGISLATION_TITLE_SORT_KEY_CHARS)
       .join(""),
     id: brandPersistedLegislationDocumentId(id),
