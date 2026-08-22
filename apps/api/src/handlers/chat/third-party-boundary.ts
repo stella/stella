@@ -1559,11 +1559,7 @@ const collectMcpInputKeyRestorations = ({
     if (preparedEntry === undefined) {
       throw new TypeError("MCP input schema preparation lost a property");
     }
-    const preparedKey = preparedEntry.at(0);
-    const preparedValue: unknown = preparedEntry.at(1);
-    if (preparedKey === undefined) {
-      throw new TypeError("MCP input schema preparation lost a property key");
-    }
+    const [preparedKey, preparedValue] = preparedEntry;
     if (preparedKey !== originalKey) {
       restorations.set(preparedKey, originalKey);
     }
