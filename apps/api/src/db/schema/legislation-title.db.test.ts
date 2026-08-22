@@ -22,9 +22,6 @@ const LONG_LEGISLATION_TITLE = `85/1994 Sb., kterým se mění ${ENUMERATED_AMEN
 test("legislation titles retain the publisher's unbounded official title", async () => {
   expect(LONG_LEGISLATION_TITLE.length).toBeGreaterThan(1024);
   expect(legislationDocuments.title.getSQLType()).toBe("text");
-  expect(legislationDocuments.titleSortKey.getSQLType()).toBe(
-    `varchar(${LEGISLATION_TITLE_SORT_KEY_CHARS})`,
-  );
   const maximumWidthCursor = encodePaginationCursor([
     "😀".repeat(LEGISLATION_TITLE_SORT_KEY_CHARS),
     "00000000-0000-4000-8000-000000000001",
@@ -58,7 +55,9 @@ test("legislation titles retain the publisher's unbounded official title", async
     const result = await client.query<{
       title: string;
       title_sort_key: string;
-    }>('SELECT "title", "title_sort_key" FROM "legislation_documents"');
+    }>(
+      'SELECT "title", left("title", 64) AS "title_sort_key" FROM "legislation_documents"',
+    );
 
     expect(result.rows.at(0)?.title).toBe(LONG_LEGISLATION_TITLE);
     expect(result.rows.at(0)?.title_sort_key).toBe(
@@ -73,6 +72,12 @@ test("legislation titles retain the publisher's unbounded official title", async
       "legislation_documents_country_title_sort_id_idx",
       "legislation_documents_pkey",
     ]);
+    const replacementIndex = await client.query<{ indexdef: string }>(
+      "SELECT indexdef FROM pg_indexes WHERE indexname = 'legislation_documents_country_title_sort_id_idx'",
+    );
+    expect(replacementIndex.rows.at(0)?.indexdef).toMatch(
+      /"?left"?\(title, 64\)/u,
+    );
   } finally {
     await client.close();
   }

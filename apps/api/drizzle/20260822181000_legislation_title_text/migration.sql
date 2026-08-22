@@ -7,12 +7,6 @@ SET statement_timeout = 0;--> statement-breakpoint
 ALTER TABLE "legislation_documents" ALTER COLUMN "title" SET DATA TYPE text;--> statement-breakpoint
 SET statement_timeout = '5s';--> statement-breakpoint
 
--- The public list owns an explicitly bounded ordering key. PostgreSQL derives
--- it from the full title, so ingestion and readers cannot drift.
-ALTER TABLE "legislation_documents"
-  ADD COLUMN "title_sort_key" varchar(64)
-  GENERATED ALWAYS AS (left("title", 64)) STORED;--> statement-breakpoint
-
 -- Drizzle wraps pending migrations in one transaction, while PostgreSQL
 -- requires concurrent index operations outside a transaction block.
 -- squawk-ignore transaction-nesting
@@ -26,12 +20,12 @@ SET lock_timeout = 0;--> statement-breakpoint
 DROP INDEX CONCURRENTLY IF EXISTS "legislation_documents_country_title_sort_id_idx";--> statement-breakpoint
 -- squawk-ignore prefer-robust-stmts
 CREATE INDEX CONCURRENTLY "legislation_documents_country_title_sort_id_idx"
-  ON "legislation_documents" ("country", "title_sort_key", "id");--> statement-breakpoint
+  ON "legislation_documents" ("country", left("title", 64), "id");--> statement-breakpoint
 
 -- The full unbounded title cannot remain in a B-tree: PostgreSQL rejects an
 -- oversized index tuple before the row can be stored.
 -- stella-migration-safety: reviewed destructive-change - the replacement
--- index above serves the same list query with its bounded generated key.
+-- index above serves the same list query with its bounded title expression.
 DROP INDEX CONCURRENTLY IF EXISTS "legislation_documents_country_title_id_idx";--> statement-breakpoint
 
 SET statement_timeout = '5s';--> statement-breakpoint

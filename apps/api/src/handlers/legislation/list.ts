@@ -7,6 +7,7 @@ import {
   LEGISLATION_TITLE_SORT_KEY_CHARS,
   legislationDocuments,
   legislationSources,
+  legislationTitleSortKey,
 } from "@/api/db/schema";
 import { redistributableLegislationSource } from "@/api/handlers/legislation/redistribution";
 import {
@@ -40,6 +41,8 @@ type TitleSortIdCursor = {
   titleSortKey: string;
   id: SafeId<"legislationDocument">;
 };
+
+const titleSortKey = legislationTitleSortKey(legislationDocuments.title);
 
 const decodeTitleSortIdCursor = (cursor: string): TitleSortIdCursor | null => {
   const parts = decodePaginationCursor(cursor);
@@ -129,9 +132,9 @@ export const listStatutesHandler = async (
     }
 
     const keyset = or(
-      gt(legislationDocuments.titleSortKey, cursor.titleSortKey),
+      gt(titleSortKey, cursor.titleSortKey),
       and(
-        eq(legislationDocuments.titleSortKey, cursor.titleSortKey),
+        eq(titleSortKey, cursor.titleSortKey),
         gt(legislationDocuments.id, cursor.id),
       ),
     );
@@ -148,7 +151,7 @@ export const listStatutesHandler = async (
           id: legislationDocuments.id,
           eli: legislationDocuments.eli,
           title: legislationDocuments.title,
-          titleSortKey: legislationDocuments.titleSortKey,
+          titleSortKey,
           country: legislationDocuments.country,
           language: legislationDocuments.language,
           documentType: legislationDocuments.documentType,
@@ -165,10 +168,7 @@ export const listStatutesHandler = async (
           eq(legislationSources.id, legislationDocuments.sourceId),
         )
         .where(and(...conditions))
-        .orderBy(
-          asc(legislationDocuments.titleSortKey),
-          asc(legislationDocuments.id),
-        )
+        .orderBy(asc(titleSortKey), asc(legislationDocuments.id))
         .limit(limit + 1),
   );
 

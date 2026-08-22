@@ -1,3 +1,5 @@
+import type { SQLWrapper } from "drizzle-orm";
+
 import { LEGISLATION_DOCUMENT_STATUSES } from "@stll/api-contract/legislation-status";
 
 import {
@@ -36,8 +38,11 @@ import type {
 const LEGISLATION_DOCUMENT_STATUS_SQL_VALUES =
   LEGISLATION_DOCUMENT_STATUSES.map((status) => sql.raw(`'${status}'`));
 
-/** Bounded, generated prefix that owns stable public-list ordering. */
+/** Bounded prefix that owns stable public-list ordering. */
 export const LEGISLATION_TITLE_SORT_KEY_CHARS = 64;
+
+export const legislationTitleSortKey = (title: SQLWrapper) =>
+  sql<string>`left(${title}, ${sql.raw(String(LEGISLATION_TITLE_SORT_KEY_CHARS))})`;
 
 export const legislationSources = p.pgTable(
   "legislation_sources",
@@ -75,14 +80,6 @@ export const legislationDocuments = p.pgTable(
     // Official titles can enumerate every amended act and have no bounded
     // maximum in the publisher's domain.
     title: p.text().notNull(),
-    titleSortKey: p
-      .varchar("title_sort_key", {
-        length: LEGISLATION_TITLE_SORT_KEY_CHARS,
-      })
-      .notNull()
-      .generatedAlwaysAs(
-        sql`left("title", ${sql.raw(String(LEGISLATION_TITLE_SORT_KEY_CHARS))})`,
-      ),
     country: p.varchar({ length: 3 }).notNull(),
     language: p.varchar({ length: 8 }).notNull(),
     documentType: p.varchar("document_type", { length: 128 }),
@@ -142,11 +139,12 @@ export const legislationDocuments = p.pgTable(
       .index("legislation_documents_eli_lang_valid_from_idx")
       .on(t.eli, t.language, t.versionValidFrom),
     p.index("legislation_documents_country_idx").on(t.country),
-    // The public statute list uses a generated bounded title prefix. Full
-    // titles are not B-tree-safe and cannot travel in a bounded cursor.
+    // The public statute list uses a bounded title-prefix expression. Full
+    // titles are not B-tree-safe and cannot travel in a bounded cursor; the
+    // expression avoids a stored projection that could drift from the title.
     p
       .index("legislation_documents_country_title_sort_id_idx")
-      .on(t.country, t.titleSortKey, t.id),
+      .on(t.country, legislationTitleSortKey(t.title), t.id),
     // Its search filter matches anywhere in the title or the identifier, so
     // the access path has to be trigram rather than btree.
     p
