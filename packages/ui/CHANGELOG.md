@@ -1,5 +1,11 @@
 # @stll/ui
 
+## 0.5.1
+
+### Patch Changes
+
+- [#2345](https://github.com/stella/stella/pull/2345) [`3bf2e63`](https://github.com/stella/stella/commit/3bf2e63080436a16dad0a46958049850ec5831c4) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `use-latest` export; migrate internal render-body ref mirrors to it so affected components stay React Compiler-compatible.
+
 ## 0.5.0
 
 ### Minor Changes
