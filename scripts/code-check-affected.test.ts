@@ -10,6 +10,7 @@ import {
   PLUGIN_FIXTURE_INPUTS,
   PLUGIN_REGISTRY_INPUTS,
   ROOT_SCRIPT_LINT_INPUTS,
+  SHARED_COMPILER_CACHE_INPUTS,
   TYPECHECK_ONLY_CACHE_INPUTS,
   scopedCommands,
 } from "./code-check-affected";
@@ -139,6 +140,15 @@ describe("affected code-check planning", () => {
     }
     expect(planned.lint).toEqual({ type: "all" });
     expect(planned.typecheck).toEqual({ type: "all" });
+  });
+
+  test("shared compiler changes also invalidate plugin fixtures", () => {
+    const planned = plan(["packages/typescript-config/base.json"], []);
+    expect(planned.type).toBe("scoped");
+    if (planned.type !== "scoped") {
+      throw new Error("Expected a scoped code-check plan");
+    }
+    expect(planned.rootChecks).toContain("plugin-fixtures");
   });
 
   test.each(["oxlint.config.ts", ".oxlint-plugins/no-raw-use-effect.ts"])(
@@ -328,6 +338,12 @@ describe("Turbo cache input contract", () => {
 
   test("plugin fixtures cover every dependency-resolution input", () => {
     for (const input of DEPENDENCY_CACHE_INPUTS) {
+      expect(PLUGIN_FIXTURE_INPUTS).toContain(input);
+    }
+  });
+
+  test("plugin fixtures cover every shared compiler input", () => {
+    for (const input of SHARED_COMPILER_CACHE_INPUTS) {
       expect(PLUGIN_FIXTURE_INPUTS).toContain(input);
     }
   });

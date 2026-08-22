@@ -52,6 +52,7 @@ export const LINT_ONLY_CACHE_INPUTS = [
 ] as const;
 export const PLUGIN_FIXTURE_INPUTS = [
   ...DEPENDENCY_CACHE_INPUTS,
+  ...SHARED_COMPILER_CACHE_INPUTS,
   ...OXLINT_CONFIGURATION_CACHE_INPUTS,
   "$TURBO_ROOT$/scripts/lint-oxlint-fixtures.sh",
   "$TURBO_ROOT$/tsconfig.json",
