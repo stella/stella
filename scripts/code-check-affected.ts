@@ -2,11 +2,13 @@
 
 // Fast local code-quality gate.
 //
-// CI keeps the full repository-wide `code-check`. Pre-push uses this wrapper
-// to ask Turbo for changed workspaces plus reverse dependants, then caches each
-// workspace's complete lint and typecheck independently with bounded
-// concurrency. Root scripts sit outside Turbo, so only changed root sources are
-// linted directly. Global inputs conservatively fall back to the full check.
+// Pre-push and pull-request CI use this wrapper to ask Turbo for changed
+// workspaces plus reverse dependants. Known global inputs widen only the check
+// family they can affect, preserving independent lint and typecheck cache hits.
+// Root scripts sit outside workspace tasks, so changed root sources are linted
+// directly and root TypeScript projects run through a cacheable Turbo root task.
+// Inconsistent affected-workspace output still fails safe to the monolithic
+// repository check.
 
 import { panic } from "better-result";
 import { existsSync, readdirSync } from "node:fs";
@@ -18,38 +20,86 @@ const REPO_ROOT = path.resolve(import.meta.dirname, "..");
 const DEFAULT_BASE = "origin/main";
 const WORKSPACE_PARENTS = ["apps", "packages"] as const;
 
-const FULL_CHECK_FILES = new Set([
-  ".npmrc",
-  "bun.lock",
-  "bunfig.toml",
-  "oxlint.config.ts",
-  "package.json",
-  "scripts/code-check-affected.ts",
-  "scripts/lint-paths.ts",
-  "scripts/lint-oxlint-fixtures.sh",
-  "scripts/lint-root-scripts.sh",
-  "scripts/tsconfig.json",
-  "turbo.json",
-  "tsconfig.json",
-  "tsconfig.oxlint-plugins.json",
-  "tsconfig.scripts.json",
-  "tsconfig.tooling.json",
-]);
-
-const FULL_CHECK_PREFIXES = [
-  ".oxlint-plugins/",
-  "packages/typescript-config/",
-  "patches/",
-  "types/",
+export const DEPENDENCY_CACHE_INPUTS = [
+  "$TURBO_ROOT$/.npmrc",
+  "$TURBO_ROOT$/bun.lock",
+  "$TURBO_ROOT$/bunfig.toml",
+  "$TURBO_ROOT$/package.json",
+  "$TURBO_ROOT$/patches/**",
 ] as const;
+export const SHARED_COMPILER_CACHE_INPUTS = [
+  "$TURBO_ROOT$/packages/typescript-config/**",
+  "$TURBO_ROOT$/types/**",
+] as const;
+export const ALL_WORKSPACE_CACHE_INPUTS = [
+  ...DEPENDENCY_CACHE_INPUTS,
+  ...SHARED_COMPILER_CACHE_INPUTS,
+] as const;
+export const TYPECHECK_ONLY_CACHE_INPUTS = [
+  "$TURBO_ROOT$/packages/scripts/src/tsc-native.ts",
+] as const;
+export const ALL_WORKSPACE_TYPECHECK_CACHE_INPUTS = [
+  ...ALL_WORKSPACE_CACHE_INPUTS,
+  ...TYPECHECK_ONLY_CACHE_INPUTS,
+] as const;
+const OXLINT_CONFIGURATION_CACHE_INPUTS = [
+  "$TURBO_ROOT$/oxlint.config.ts",
+  "$TURBO_ROOT$/.oxlint-plugins/**",
+] as const;
+export const LINT_ONLY_CACHE_INPUTS = [
+  ...OXLINT_CONFIGURATION_CACHE_INPUTS,
+  "$TURBO_ROOT$/tsconfig.tooling.json",
+] as const;
+export const PLUGIN_FIXTURE_INPUTS = [
+  ...DEPENDENCY_CACHE_INPUTS,
+  ...SHARED_COMPILER_CACHE_INPUTS,
+  ...OXLINT_CONFIGURATION_CACHE_INPUTS,
+  "$TURBO_ROOT$/scripts/lint-oxlint-fixtures.sh",
+  "$TURBO_ROOT$/tsconfig.json",
+  "$TURBO_ROOT$/tsconfig.oxlint-plugins.json",
+] as const;
+export const PLUGIN_REGISTRY_INPUTS = [
+  ...OXLINT_CONFIGURATION_CACHE_INPUTS,
+  "$TURBO_ROOT$/scripts/check-oxlint-plugin-registry.ts",
+] as const;
+export const ROOT_SCRIPT_LINT_INPUTS = [
+  ...ALL_WORKSPACE_CACHE_INPUTS,
+  ...OXLINT_CONFIGURATION_CACHE_INPUTS,
+  "$TURBO_ROOT$/scripts/lint-root-scripts.sh",
+  "$TURBO_ROOT$/scripts/tsconfig.json",
+  "$TURBO_ROOT$/tsconfig.scripts.json",
+] as const;
+const TURBO_CONFIG_PATH = "turbo.json";
+const TURBO_ROOT_INPUT_PREFIX = "$TURBO_ROOT$/";
+const RECURSIVE_GLOB_SUFFIX = "/**";
 
-type CheckPlan =
-  | { type: "full"; changedPath: string }
-  | {
-      type: "affected";
-      targets: string[];
-      rootLintPaths: string[];
-    };
+const ROOT_CHECKS = {
+  env: "env",
+  pluginFixtures: "plugin-fixtures",
+  pluginRegistry: "plugin-registry",
+  repoTypecheck: "repo-typecheck",
+  rootScriptLint: "root-script-lint",
+} as const;
+type RootCheck = (typeof ROOT_CHECKS)[keyof typeof ROOT_CHECKS];
+const ROOT_CHECK_ORDER: readonly RootCheck[] = [
+  ROOT_CHECKS.env,
+  ROOT_CHECKS.pluginRegistry,
+  ROOT_CHECKS.pluginFixtures,
+  ROOT_CHECKS.rootScriptLint,
+  ROOT_CHECKS.repoTypecheck,
+];
+
+type TaskScope = { type: "all" } | { type: "targets"; targets: string[] };
+
+type ScopedCheckPlan = {
+  type: "scoped";
+  lint: TaskScope;
+  typecheck: TaskScope;
+  rootLintPaths: string[];
+  rootChecks: RootCheck[];
+};
+
+type CheckPlan = { type: "fallback"; changedPath: string } | ScopedCheckPlan;
 
 type PlanCheckOptions = {
   changedPaths: readonly string[];
@@ -72,9 +122,42 @@ const workspaceForPath = (file: string): string | null => {
   return `${parent}/${name}`;
 };
 
-const requiresFullCheck = (file: string): boolean =>
-  FULL_CHECK_FILES.has(file) ||
-  FULL_CHECK_PREFIXES.some((prefix) => file.startsWith(prefix));
+const matchesTurboInput = (file: string, input: string): boolean => {
+  if (!input.startsWith(TURBO_ROOT_INPUT_PREFIX)) {
+    return false;
+  }
+  const relativeInput = input.slice(TURBO_ROOT_INPUT_PREFIX.length);
+  if (!relativeInput.endsWith(RECURSIVE_GLOB_SUFFIX)) {
+    return file === relativeInput;
+  }
+  const directory = relativeInput.slice(0, -RECURSIVE_GLOB_SUFFIX.length);
+  return file.startsWith(`${directory}/`);
+};
+
+const invalidatesAllWorkspaceChecks = (file: string): boolean =>
+  file === TURBO_CONFIG_PATH ||
+  ALL_WORKSPACE_CACHE_INPUTS.some((input) => matchesTurboInput(file, input));
+
+const invalidatesAllWorkspaceTypecheck = (file: string): boolean =>
+  invalidatesAllWorkspaceChecks(file) ||
+  TYPECHECK_ONLY_CACHE_INPUTS.some((input) => matchesTurboInput(file, input));
+
+const invalidatesRootScriptLint = (file: string): boolean =>
+  ROOT_SCRIPT_LINT_INPUTS.some((input) => matchesTurboInput(file, input));
+
+const rootChecksForPath = (file: string): readonly RootCheck[] => {
+  const rootChecks: RootCheck[] = [];
+  if (PLUGIN_REGISTRY_INPUTS.some((input) => matchesTurboInput(file, input))) {
+    rootChecks.push(ROOT_CHECKS.pluginRegistry);
+  }
+  if (PLUGIN_FIXTURE_INPUTS.some((input) => matchesTurboInput(file, input))) {
+    rootChecks.push(ROOT_CHECKS.pluginFixtures);
+  }
+  if (invalidatesRootScriptLint(file)) {
+    rootChecks.push(ROOT_CHECKS.rootScriptLint);
+  }
+  return rootChecks;
+};
 
 export const planCheck = ({
   changedPaths,
@@ -82,15 +165,12 @@ export const planCheck = ({
   affectedWorkspacePaths,
   workspacePaths,
 }: PlanCheckOptions): CheckPlan => {
-  for (const changedPath of changedPaths) {
-    if (requiresFullCheck(changedPath)) {
-      return { type: "full", changedPath };
-    }
-  }
-
   const targets = [...new Set(affectedWorkspacePaths)].sort();
   if (targets.some((target) => !workspacePaths.has(target))) {
-    return { type: "full", changedPath: "invalid Turbo workspace output" };
+    return {
+      type: "fallback",
+      changedPath: "invalid Turbo workspace output",
+    };
   }
 
   const targetSet = new Set(targets);
@@ -99,23 +179,56 @@ export const planCheck = ({
     if (owner === null) {
       continue;
     }
-    if (!workspacePaths.has(owner) || !targetSet.has(owner)) {
-      return { type: "full", changedPath };
+    if (
+      !workspacePaths.has(owner) ||
+      (!targetSet.has(owner) && !invalidatesAllWorkspaceTypecheck(changedPath))
+    ) {
+      return { type: "fallback", changedPath };
     }
   }
 
+  const allWorkspaceChecks = changedPaths.some(invalidatesAllWorkspaceChecks);
+  const allWorkspaceTypecheck = changedPaths.some(
+    invalidatesAllWorkspaceTypecheck,
+  );
+  const allWorkspaceLint =
+    allWorkspaceChecks ||
+    changedPaths.some((changedPath) =>
+      LINT_ONLY_CACHE_INPUTS.some((input) =>
+        matchesTurboInput(changedPath, input),
+      ),
+    );
+  const rootCheckSet = new Set<RootCheck>([
+    ROOT_CHECKS.env,
+    ROOT_CHECKS.repoTypecheck,
+  ]);
+  for (const changedPath of changedPaths) {
+    for (const rootCheck of rootChecksForPath(changedPath)) {
+      rootCheckSet.add(rootCheck);
+    }
+  }
+  const rootChecks = ROOT_CHECK_ORDER.filter((rootCheck) =>
+    rootCheckSet.has(rootCheck),
+  );
+  const rootScriptLintRuns = rootCheckSet.has(ROOT_CHECKS.rootScriptLint);
+
   return {
-    type: "affected",
-    targets,
+    type: "scoped",
+    lint: allWorkspaceLint ? { type: "all" } : { type: "targets", targets },
+    typecheck: allWorkspaceTypecheck
+      ? { type: "all" }
+      : { type: "targets", targets },
     rootLintPaths: [
       ...new Set(
         presentChangedPaths.filter(
           (changedPath) =>
             workspaceForPath(changedPath) === null &&
-            isChangedLintPath(changedPath),
+            isChangedLintPath(changedPath) &&
+            !(rootScriptLintRuns && changedPath.startsWith("scripts/")),
         ),
       ),
     ].sort(),
+    rootChecks,
   };
 };
 
@@ -238,10 +351,49 @@ const affectedWorkspacePaths = (mergeBase: string): string[] => {
   });
 };
 
-export const affectedCommands = (
-  plan: Extract<CheckPlan, { type: "affected" }>,
-) => {
-  const commands: string[][] = [["bun", "run", "env:check"]];
+const turboCommand = (tasks: readonly string[], scope: TaskScope): string[] => [
+  "bun",
+  "--bun",
+  "turbo",
+  "run",
+  ...tasks,
+  "--concurrency=2",
+  ...(scope.type === "all"
+    ? []
+    : scope.targets.map((target) => `--filter=./${target}`)),
+];
+
+const sameScope = (left: TaskScope, right: TaskScope): boolean => {
+  if (left.type !== right.type) {
+    return false;
+  }
+  if (left.type === "all" || right.type === "all") {
+    return true;
+  }
+  return (
+    left.targets.length === right.targets.length &&
+    left.targets.every((target, index) => target === right.targets[index])
+  );
+};
+
+const hasTargets = (scope: TaskScope): boolean =>
+  scope.type === "all" || scope.targets.length > 0;
+
+export const scopedCommands = (plan: ScopedCheckPlan): string[][] => {
+  const commands: string[][] = [];
+  const rootChecks = new Set(plan.rootChecks);
+  if (rootChecks.has(ROOT_CHECKS.env)) {
+    commands.push(["bun", "run", "env:check"]);
+  }
+  if (rootChecks.has(ROOT_CHECKS.pluginRegistry)) {
+    commands.push(["bun", "scripts/check-oxlint-plugin-registry.ts"]);
+  }
+  if (rootChecks.has(ROOT_CHECKS.pluginFixtures)) {
+    commands.push(["bash", "scripts/lint-oxlint-fixtures.sh"]);
+  }
+  if (rootChecks.has(ROOT_CHECKS.rootScriptLint)) {
+    commands.push(["bash", "scripts/lint-root-scripts.sh"]);
+  }
   if (plan.rootLintPaths.length > 0) {
     commands.push([
       "bun",
@@ -255,19 +407,28 @@ export const affectedCommands = (
       ...plan.rootLintPaths,
     ]);
   }
-  if (plan.targets.length > 0) {
+  const lintRuns = hasTargets(plan.lint);
+  const typecheckRuns = hasTargets(plan.typecheck);
+  if (lintRuns && typecheckRuns && sameScope(plan.lint, plan.typecheck)) {
+    commands.push(turboCommand(["lint", "typecheck"], plan.lint));
+  } else {
+    if (lintRuns) {
+      commands.push(turboCommand(["lint"], plan.lint));
+    }
+    if (typecheckRuns) {
+      commands.push(turboCommand(["typecheck"], plan.typecheck));
+    }
+  }
+  if (rootChecks.has(ROOT_CHECKS.repoTypecheck)) {
     commands.push([
       "bun",
       "--bun",
       "turbo",
       "run",
-      "lint",
-      "typecheck",
+      "typecheck:repo",
       "--concurrency=2",
-      ...plan.targets.map((target) => `--filter=./${target}`),
     ]);
   }
-  commands.push(["bun", "run", "typecheck:repo"]);
   return commands;
 };
 
@@ -283,7 +444,7 @@ const main = () => {
     workspacePaths: workspacePaths(),
   });
 
-  if (plan.type === "full") {
+  if (plan.type === "fallback") {
     process.stdout.write(
       `code-check: full repository (${plan.changedPath} requires fallback)\n`,
     );
@@ -293,10 +454,19 @@ const main = () => {
     return;
   }
 
-  const targetLabel =
-    plan.targets.length === 0 ? "root projects only" : plan.targets.join(", ");
-  process.stdout.write(`code-check: affected ${targetLabel}\n`);
-  const commands = affectedCommands(plan);
+  const scopeLabel = (scope: TaskScope): string => {
+    if (scope.type === "all") {
+      return "all";
+    }
+    if (scope.targets.length === 0) {
+      return "none";
+    }
+    return scope.targets.join(", ");
+  };
+  process.stdout.write(
+    `code-check: lint ${scopeLabel(plan.lint)}; typecheck ${scopeLabel(plan.typecheck)}\n`,
+  );
+  const commands = scopedCommands(plan);
   if (options.dryRun) {
     for (const command of commands) {
       process.stdout.write(`  ${command.join(" ")}\n`);

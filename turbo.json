@@ -25,7 +25,43 @@
     },
     "typecheck": {
       "dependsOn": ["transit"],
+      // These files live outside each workspace but can change dependency
+      // resolution or the shared compiler program. Hash them explicitly so a
+      // linked worktree never restores a stale lint or TypeScript result.
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/.npmrc",
+        "$TURBO_ROOT$/bunfig.toml",
+        "$TURBO_ROOT$/package.json",
+        "$TURBO_ROOT$/bun.lock",
+        "$TURBO_ROOT$/packages/scripts/src/tsc-native.ts",
+        "$TURBO_ROOT$/packages/typescript-config/**",
+        "$TURBO_ROOT$/patches/**",
+        "$TURBO_ROOT$/types/**"
+      ],
       "outputs": [".cache/tsbuildinfo*.json", "**/.cache/tsbuildinfo*.json"]
+    },
+    "//#typecheck:repo": {
+      // Root projects can import workspace source. The broad workspace inputs
+      // trade some misses for correctness while still sharing exact results
+      // and compiler state between linked worktrees and CI runners.
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/.claude/mcp/**",
+        "$TURBO_ROOT$/.npmrc",
+        "$TURBO_ROOT$/.oxlint-plugins/**",
+        "$TURBO_ROOT$/apps/**",
+        "$TURBO_ROOT$/bunfig.toml",
+        "$TURBO_ROOT$/package.json",
+        "$TURBO_ROOT$/bun.lock",
+        "$TURBO_ROOT$/packages/**",
+        "$TURBO_ROOT$/patches/**",
+        "$TURBO_ROOT$/scripts/**",
+        "$TURBO_ROOT$/types/**",
+        "$TURBO_ROOT$/oxlint.config.ts",
+        "$TURBO_ROOT$/tsconfig*.json"
+      ],
+      "outputs": [".cache/tsbuildinfo*.json"]
     },
     "@stll/landing#typecheck": {
       "dependsOn": ["transit"],
@@ -33,10 +69,20 @@
     },
     "lint": {
       "dependsOn": ["transit"],
+      // Type-aware lint reads the same external install and compiler inputs as
+      // TypeScript, in addition to Oxlint's root config and plugins.
       "inputs": [
         "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/.npmrc",
+        "$TURBO_ROOT$/bunfig.toml",
+        "$TURBO_ROOT$/package.json",
+        "$TURBO_ROOT$/bun.lock",
         "$TURBO_ROOT$/oxlint.config.ts",
-        "$TURBO_ROOT$/.oxlint-plugins/**"
+        "$TURBO_ROOT$/.oxlint-plugins/**",
+        "$TURBO_ROOT$/packages/typescript-config/**",
+        "$TURBO_ROOT$/patches/**",
+        "$TURBO_ROOT$/tsconfig.tooling.json",
+        "$TURBO_ROOT$/types/**"
       ]
     },
     "lint:fix": {

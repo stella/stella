@@ -1,6 +1,19 @@
 import { describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
 
-import { affectedCommands, planCheck } from "./code-check-affected";
+import {
+  ALL_WORKSPACE_CACHE_INPUTS,
+  ALL_WORKSPACE_TYPECHECK_CACHE_INPUTS,
+  DEPENDENCY_CACHE_INPUTS,
+  LINT_ONLY_CACHE_INPUTS,
+  planCheck,
+  PLUGIN_FIXTURE_INPUTS,
+  PLUGIN_REGISTRY_INPUTS,
+  ROOT_SCRIPT_LINT_INPUTS,
+  SHARED_COMPILER_CACHE_INPUTS,
+  TYPECHECK_ONLY_CACHE_INPUTS,
+  scopedCommands,
+} from "./code-check-affected";
 import { isChangedLintPath } from "./lint-paths";
 
 const WORKSPACES = new Set([
@@ -8,6 +21,8 @@ const WORKSPACES = new Set([
   "apps/landing",
   "apps/web",
   "packages/errors",
+  "packages/scripts",
+  "packages/typescript-config",
   "packages/ui",
 ]);
 
@@ -31,26 +46,39 @@ describe("affected code-check planning", () => {
         ["packages/ui", "apps/web", "apps/landing"],
       ),
     ).toEqual({
-      type: "affected",
-      targets: ["apps/landing", "apps/web", "packages/ui"],
+      type: "scoped",
+      lint: {
+        type: "targets",
+        targets: ["apps/landing", "apps/web", "packages/ui"],
+      },
+      typecheck: {
+        type: "targets",
+        targets: ["apps/landing", "apps/web", "packages/ui"],
+      },
       rootLintPaths: [],
+      rootChecks: ["env", "repo-typecheck"],
     });
   });
 
   test("does not run workspace analysis for documentation-only changes", () => {
     expect(plan(["README.md"], [])).toEqual({
-      type: "affected",
-      targets: [],
+      type: "scoped",
+      lint: { type: "targets", targets: [] },
+      typecheck: { type: "targets", targets: [] },
       rootLintPaths: [],
+      rootChecks: ["env", "repo-typecheck"],
     });
   });
 
   test("caches lint and typecheck per affected workspace", () => {
-    const commands = affectedCommands({
-      type: "affected",
-      targets: ["apps/web", "packages/ui"],
-      rootLintPaths: [],
-    });
+    const planned = plan(
+      ["packages/ui/src/button.tsx"],
+      ["apps/web", "packages/ui"],
+    );
+    if (planned.type !== "scoped") {
+      throw new Error("Expected a scoped code-check plan");
+    }
+    const commands = scopedCommands(planned);
     expect(commands).toContainEqual(["bun", "run", "env:check"]);
     expect(commands).toContainEqual([
       "bun",
@@ -63,14 +91,22 @@ describe("affected code-check planning", () => {
       "--filter=./apps/web",
       "--filter=./packages/ui",
     ]);
+    expect(commands).toContainEqual([
+      "bun",
+      "--bun",
+      "turbo",
+      "run",
+      "typecheck:repo",
+      "--concurrency=2",
+    ]);
   });
 
   test("lints changed root scripts outside Turbo workspaces", () => {
-    const commands = affectedCommands({
-      type: "affected",
-      targets: [],
-      rootLintPaths: ["scripts/guard.ts"],
-    });
+    const planned = plan(["scripts/guard.ts"], []);
+    if (planned.type !== "scoped") {
+      throw new Error("Expected a scoped code-check plan");
+    }
+    const commands = scopedCommands(planned);
 
     const oxc = commands.find((command) => command.includes("oxlint"));
     expect(oxc).toContain("--type-aware");
@@ -79,49 +115,189 @@ describe("affected code-check planning", () => {
 
   test("typechecks dependants without trying to lint a deleted source", () => {
     expect(plan(["packages/ui/src/removed.ts"], ["packages/ui"], [])).toEqual({
-      type: "affected",
-      targets: ["packages/ui"],
+      type: "scoped",
+      lint: { type: "targets", targets: ["packages/ui"] },
+      typecheck: { type: "targets", targets: ["packages/ui"] },
       rootLintPaths: [],
+      rootChecks: ["env", "repo-typecheck"],
     });
   });
 
   test.each([
-    "package.json",
+    ".npmrc",
     "bun.lock",
     "bunfig.toml",
-    "scripts/code-check-affected.ts",
-    "scripts/lint-paths.ts",
-    "scripts/lint-oxlint-fixtures.sh",
-    "scripts/lint-root-scripts.sh",
-    "scripts/tsconfig.json",
+    "package.json",
     "turbo.json",
-    "oxlint.config.ts",
-    "tsconfig.json",
-    ".oxlint-plugins/no-raw-use-effect.ts",
     "packages/typescript-config/base.json",
     "patches/vite.patch",
     "types/react-css-properties.d.ts",
-  ])("falls back to the full repository for global input %s", (changedPath) => {
-    expect(plan([changedPath], [])).toEqual({ type: "full", changedPath });
+  ])("checks all workspaces for dependency input %s", (changedPath) => {
+    const planned = plan([changedPath], []);
+    expect(planned.type).toBe("scoped");
+    if (planned.type !== "scoped") {
+      throw new Error("Expected a scoped code-check plan");
+    }
+    expect(planned.lint).toEqual({ type: "all" });
+    expect(planned.typecheck).toEqual({ type: "all" });
+  });
+
+  test("shared compiler changes also invalidate plugin fixtures", () => {
+    const planned = plan(["packages/typescript-config/base.json"], []);
+    expect(planned.type).toBe("scoped");
+    if (planned.type !== "scoped") {
+      throw new Error("Expected a scoped code-check plan");
+    }
+    expect(planned.rootChecks).toContain("plugin-fixtures");
+  });
+
+  test.each(["oxlint.config.ts", ".oxlint-plugins/no-raw-use-effect.ts"])(
+    "invalidates lint without discarding typecheck cache for %s",
+    (changedPath) => {
+      expect(plan([changedPath], [])).toEqual({
+        type: "scoped",
+        lint: { type: "all" },
+        typecheck: { type: "targets", targets: [] },
+        rootLintPaths: [changedPath],
+        rootChecks: [
+          "env",
+          "plugin-registry",
+          "plugin-fixtures",
+          "root-script-lint",
+          "repo-typecheck",
+        ],
+      });
+    },
+  );
+
+  test("the shared tooling config invalidates only workspace lint", () => {
+    expect(plan(["tsconfig.tooling.json"], [])).toEqual({
+      type: "scoped",
+      lint: { type: "all" },
+      typecheck: { type: "targets", targets: [] },
+      rootLintPaths: [],
+      rootChecks: ["env", "repo-typecheck"],
+    });
+  });
+
+  test.each([
+    ["scripts/check-oxlint-plugin-registry.ts", "plugin-registry"],
+    ["scripts/lint-oxlint-fixtures.sh", "plugin-fixtures"],
+    ["scripts/lint-root-scripts.sh", "root-script-lint"],
+    ["scripts/tsconfig.json", "root-script-lint"],
+    ["tsconfig.json", "plugin-fixtures"],
+    ["tsconfig.scripts.json", "root-script-lint"],
+  ] as const)(
+    "runs only the owning root check for %s",
+    (changedPath, rootCheck) => {
+      const planned = plan([changedPath], []);
+      expect(planned.type).toBe("scoped");
+      if (planned.type !== "scoped") {
+        throw new Error("Expected a scoped code-check plan");
+      }
+      expect(planned.lint).toEqual({ type: "targets", targets: [] });
+      expect(planned.typecheck).toEqual({ type: "targets", targets: [] });
+      expect(planned.rootChecks).toEqual(["env", rootCheck, "repo-typecheck"]);
+    },
+  );
+
+  test("a lint-global input does not widen affected typechecks", () => {
+    const planned = plan(
+      ["oxlint.config.ts", "apps/web/src/route.tsx"],
+      ["apps/web"],
+    );
+    expect(planned.type).toBe("scoped");
+    if (planned.type !== "scoped") {
+      throw new Error("Expected a scoped code-check plan");
+    }
+    expect(planned.lint).toEqual({ type: "all" });
+    expect(planned.typecheck).toEqual({
+      type: "targets",
+      targets: ["apps/web"],
+    });
+
+    const commands = scopedCommands(planned);
+    expect(commands).toContainEqual([
+      "bun",
+      "--bun",
+      "turbo",
+      "run",
+      "lint",
+      "--concurrency=2",
+    ]);
+    expect(commands).toContainEqual([
+      "bun",
+      "--bun",
+      "turbo",
+      "run",
+      "typecheck",
+      "--concurrency=2",
+      "--filter=./apps/web",
+    ]);
+  });
+
+  test("the shared TypeScript runner invalidates only workspace typechecks", () => {
+    const planned = plan(
+      ["packages/scripts/src/tsc-native.ts"],
+      ["packages/scripts"],
+    );
+    expect(planned.type).toBe("scoped");
+    if (planned.type !== "scoped") {
+      throw new Error("Expected a scoped code-check plan");
+    }
+    expect(planned.lint).toEqual({
+      type: "targets",
+      targets: ["packages/scripts"],
+    });
+    expect(planned.typecheck).toEqual({ type: "all" });
+  });
+
+  test("global dependency inputs use cacheable Turbo tasks", () => {
+    const planned = plan(["bunfig.toml"], []);
+    if (planned.type !== "scoped") {
+      throw new Error("Expected a scoped code-check plan");
+    }
+    expect(scopedCommands(planned)).toContainEqual([
+      "bun",
+      "--bun",
+      "turbo",
+      "run",
+      "lint",
+      "typecheck",
+      "--concurrency=2",
+    ]);
+  });
+
+  test.each(
+    ROOT_SCRIPT_LINT_INPUTS.map((input) =>
+      input.slice("$TURBO_ROOT$/".length).replace(/\/\*\*$/u, "/fixture.ts"),
+    ),
+  )("shared root-script input %s schedules full root lint", (changedPath) => {
+    const planned = plan([changedPath], []);
+    expect(planned.type).toBe("scoped");
+    if (planned.type !== "scoped") {
+      throw new Error("Expected a scoped code-check plan");
+    }
+    expect(planned.rootChecks).toContain("root-script-lint");
   });
 
   test("falls back when Turbo omits the directly changed workspace", () => {
     expect(plan(["apps/api/src/server.ts"], ["apps/web"])).toEqual({
-      type: "full",
+      type: "fallback",
       changedPath: "apps/api/src/server.ts",
     });
   });
 
   test("falls back for an unknown workspace directory", () => {
     expect(plan(["apps/unknown/src/main.ts"], [])).toEqual({
-      type: "full",
+      type: "fallback",
       changedPath: "apps/unknown/src/main.ts",
     });
   });
 
   test("falls back when Turbo returns a non-workspace target", () => {
     expect(plan(["README.md"], ["tools/unknown"])).toEqual({
-      type: "full",
+      type: "fallback",
       changedPath: "invalid Turbo workspace output",
     });
   });
@@ -147,5 +323,103 @@ describe("changed lint path selection", () => {
     "packages/ui/node_modules/library/index.js",
   ])("excludes non-source or generated path %s", (changedPath) => {
     expect(isChangedLintPath(changedPath)).toBe(false);
+  });
+});
+
+describe("Turbo cache input contract", () => {
+  test("each plugin check invalidates on its own implementation", () => {
+    expect(PLUGIN_REGISTRY_INPUTS).toContain(
+      "$TURBO_ROOT$/scripts/check-oxlint-plugin-registry.ts",
+    );
+    expect(PLUGIN_FIXTURE_INPUTS).toContain(
+      "$TURBO_ROOT$/scripts/lint-oxlint-fixtures.sh",
+    );
+  });
+
+  test("plugin fixtures cover every dependency-resolution input", () => {
+    for (const input of DEPENDENCY_CACHE_INPUTS) {
+      expect(PLUGIN_FIXTURE_INPUTS).toContain(input);
+    }
+  });
+
+  test("plugin fixtures cover every shared compiler input", () => {
+    for (const input of SHARED_COMPILER_CACHE_INPUTS) {
+      expect(PLUGIN_FIXTURE_INPUTS).toContain(input);
+    }
+  });
+
+  test("plugin fixtures cover the root config discovered by Oxc", () => {
+    expect(PLUGIN_FIXTURE_INPUTS).toContain("$TURBO_ROOT$/tsconfig.json");
+  });
+
+  test("root script lint covers every shared workspace input", () => {
+    for (const input of ALL_WORKSPACE_CACHE_INPUTS) {
+      expect(ROOT_SCRIPT_LINT_INPUTS).toContain(input);
+    }
+  });
+
+  test("workspace typechecks cover every typecheck-only input", () => {
+    expect(TYPECHECK_ONLY_CACHE_INPUTS).toContain(
+      "$TURBO_ROOT$/packages/scripts/src/tsc-native.ts",
+    );
+    for (const input of TYPECHECK_ONLY_CACHE_INPUTS) {
+      expect(ALL_WORKSPACE_TYPECHECK_CACHE_INPUTS).toContain(input);
+    }
+  });
+
+  test("workspace lint covers the shared tooling config", () => {
+    expect(LINT_ONLY_CACHE_INPUTS).toContain(
+      "$TURBO_ROOT$/tsconfig.tooling.json",
+    );
+  });
+
+  test("keeps planner-wide inputs exactly aligned with their Turbo tasks", () => {
+    const turboConfig = readFileSync("turbo.json", "utf-8");
+    const typecheckStart = turboConfig.indexOf('    "typecheck":');
+    const rootTypecheckStart = turboConfig.indexOf('    "//#typecheck:repo":');
+    const lintStart = turboConfig.indexOf('    "lint":');
+    const lintFixStart = turboConfig.indexOf('    "lint:fix":');
+    expect(typecheckStart).toBeGreaterThan(-1);
+    expect(rootTypecheckStart).toBeGreaterThan(typecheckStart);
+    expect(lintStart).toBeGreaterThan(rootTypecheckStart);
+    expect(lintFixStart).toBeGreaterThan(lintStart);
+    const typecheckConfig = turboConfig.slice(
+      typecheckStart,
+      rootTypecheckStart,
+    );
+    const rootTypecheckConfig = turboConfig.slice(
+      rootTypecheckStart,
+      lintStart,
+    );
+    const lintConfig = turboConfig.slice(lintStart, lintFixStart);
+    const rootInputs = (taskConfig: string) =>
+      [...taskConfig.matchAll(/"(\$TURBO_ROOT\$\/[^"\n]+)"/gu)]
+        .map((match) => match.at(1))
+        .filter((input) => input !== undefined)
+        .sort();
+
+    expect(rootInputs(typecheckConfig)).toEqual(
+      [...ALL_WORKSPACE_TYPECHECK_CACHE_INPUTS].sort(),
+    );
+    expect(rootInputs(rootTypecheckConfig)).toEqual(
+      [
+        "$TURBO_ROOT$/.claude/mcp/**",
+        "$TURBO_ROOT$/.npmrc",
+        "$TURBO_ROOT$/.oxlint-plugins/**",
+        "$TURBO_ROOT$/apps/**",
+        "$TURBO_ROOT$/bun.lock",
+        "$TURBO_ROOT$/bunfig.toml",
+        "$TURBO_ROOT$/oxlint.config.ts",
+        "$TURBO_ROOT$/package.json",
+        "$TURBO_ROOT$/packages/**",
+        "$TURBO_ROOT$/patches/**",
+        "$TURBO_ROOT$/scripts/**",
+        "$TURBO_ROOT$/tsconfig*.json",
+        "$TURBO_ROOT$/types/**",
+      ].sort(),
+    );
+    expect(rootInputs(lintConfig)).toEqual(
+      [...ALL_WORKSPACE_CACHE_INPUTS, ...LINT_ONLY_CACHE_INPUTS].sort(),
+    );
   });
 });
