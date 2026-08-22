@@ -1130,6 +1130,7 @@
     "loadMore": "Laadi rohkem",
     "loading": "Laadimine",
     "logTime": "Salvesta aeg",
+    "markAllAsRead": "Mark all as read",
     "matter": "Toimik",
     "matters": "Toimikud",
     "members": "Liikmed",
@@ -1140,10 +1141,12 @@
     "newMatter": "Uus toimik",
     "newRow": "Uus rida",
     "next": "Edasi",
+    "noNotifications": "No notifications yet",
     "noResults": "Tulemused puuduvad",
     "noVersions": "Versiooniajalogu pole",
     "none": "Puudub",
     "notes": "Märkused",
+    "notifications": "Notifications",
     "open": "Ava",
     "openInNewTab": "Ava uuel vahekaardil",
     "options": "Valikud",
@@ -2739,6 +2742,40 @@
     "templates": "Mallid",
     "toggleChat": "Lülita vestlus sisse/välja",
     "toggleSidebar": "Külgriba kuvamine"
+  },
+  "notifications": {
+    "newMention": {
+      "message": "{actorName} mentioned you in \"{itemName}\"",
+      "title": "New Mention"
+    },
+    "productNews": {
+      "message": "{message}",
+      "title": "{title}"
+    },
+    "reportExportFailure": {
+      "message": "Your export of \"{reportName}\" failed.",
+      "title": "Report Export Failed"
+    },
+    "reportExportSuccess": {
+      "message": "Your export of \"{reportName}\" is ready to download.",
+      "title": "Report Export Ready"
+    },
+    "taskDeadline": {
+      "message": "The task \"{taskName}\" is due tomorrow ({dueDate}).",
+      "title": "Task Deadline Approaching"
+    },
+    "workflowAwaitingApproval": {
+      "message": "The workflow \"{flowName}\" is awaiting your approval.",
+      "title": "Workflow Awaiting Approval"
+    },
+    "workflowCompleted": {
+      "message": "The workflow \"{flowName}\" completed successfully.",
+      "title": "Workflow Completed"
+    },
+    "workflowFailed": {
+      "message": "The workflow \"{flowName}\" failed.",
+      "title": "Workflow Failed"
+    }
   },
   "onboarding": {
     "aiConfigFailed": "AI seadistust ei õnnestunud salvestada. Saate selle lõpetada seadetes.",

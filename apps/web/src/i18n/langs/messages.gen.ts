@@ -1133,6 +1133,7 @@ type Messages = {
     "loadMore": "Load more";
     "loading": "Loading";
     "logTime": "Log time";
+    "markAllAsRead": "Mark all as read";
     "matter": "Matter";
     "matters": "Matters";
     "members": "Members";
@@ -1143,10 +1144,12 @@ type Messages = {
     "newMatter": "New matter";
     "newRow": "New row";
     "next": "Next";
+    "noNotifications": "No notifications yet";
     "noResults": "No results";
     "noVersions": "No version history";
     "none": "None";
     "notes": "Notes";
+    "notifications": "Notifications";
     "open": "Open";
     "openInNewTab": "Open in new tab";
     "options": "Options";
@@ -2742,6 +2745,40 @@ type Messages = {
     "templates": "Templates";
     "toggleChat": "Toggle chat";
     "toggleSidebar": "Toggle sidebar";
+  };
+  "notifications": {
+    "newMention": {
+      "message": "{actorName} mentioned you in \"{itemName}\"";
+      "title": "New Mention";
+    };
+    "productNews": {
+      "message": "{message}";
+      "title": "{title}";
+    };
+    "reportExportFailure": {
+      "message": "Your export of \"{reportName}\" failed.";
+      "title": "Report Export Failed";
+    };
+    "reportExportSuccess": {
+      "message": "Your export of \"{reportName}\" is ready to download.";
+      "title": "Report Export Ready";
+    };
+    "taskDeadline": {
+      "message": "The task \"{taskName}\" is due tomorrow ({dueDate}).";
+      "title": "Task Deadline Approaching";
+    };
+    "workflowAwaitingApproval": {
+      "message": "The workflow \"{flowName}\" is awaiting your approval.";
+      "title": "Workflow Awaiting Approval";
+    };
+    "workflowCompleted": {
+      "message": "The workflow \"{flowName}\" completed successfully.";
+      "title": "Workflow Completed";
+    };
+    "workflowFailed": {
+      "message": "The workflow \"{flowName}\" failed.";
+      "title": "Workflow Failed";
+    };
   };
   "onboarding": {
     "aiConfigFailed": "Couldn't save your AI configuration. You can finish it from settings.";

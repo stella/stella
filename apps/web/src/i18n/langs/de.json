@@ -1130,6 +1130,7 @@
     "loadMore": "Mehr laden",
     "loading": "Wird geladen …",
     "logTime": "Zeit erfassen",
+    "markAllAsRead": "Mark all as read",
     "matter": "Akte",
     "matters": "Akten",
     "members": "Mitglieder",
@@ -1140,10 +1141,12 @@
     "newMatter": "Neue Akte",
     "newRow": "Neue Zeile",
     "next": "Weiter",
+    "noNotifications": "No notifications yet",
     "noResults": "Keine Ergebnisse",
     "noVersions": "Kein Versionsverlauf",
     "none": "Keine",
     "notes": "Notizen",
+    "notifications": "Notifications",
     "open": "Öffnen",
     "openInNewTab": "In neuem Tab öffnen",
     "options": "Optionen",
@@ -2739,6 +2742,40 @@
     "templates": "Vorlagen",
     "toggleChat": "Chat ein-/ausblenden",
     "toggleSidebar": "Seitenleiste ein-/ausblenden"
+  },
+  "notifications": {
+    "newMention": {
+      "message": "{actorName} mentioned you in \"{itemName}\"",
+      "title": "New Mention"
+    },
+    "productNews": {
+      "message": "{message}",
+      "title": "{title}"
+    },
+    "reportExportFailure": {
+      "message": "Your export of \"{reportName}\" failed.",
+      "title": "Report Export Failed"
+    },
+    "reportExportSuccess": {
+      "message": "Your export of \"{reportName}\" is ready to download.",
+      "title": "Report Export Ready"
+    },
+    "taskDeadline": {
+      "message": "The task \"{taskName}\" is due tomorrow ({dueDate}).",
+      "title": "Task Deadline Approaching"
+    },
+    "workflowAwaitingApproval": {
+      "message": "The workflow \"{flowName}\" is awaiting your approval.",
+      "title": "Workflow Awaiting Approval"
+    },
+    "workflowCompleted": {
+      "message": "The workflow \"{flowName}\" completed successfully.",
+      "title": "Workflow Completed"
+    },
+    "workflowFailed": {
+      "message": "The workflow \"{flowName}\" failed.",
+      "title": "Workflow Failed"
+    }
   },
   "onboarding": {
     "aiConfigFailed": "Ihre KI-Konfiguration konnte nicht gespeichert werden. Sie können sie in den Einstellungen abschließen.",

@@ -1130,6 +1130,7 @@
     "loadMore": "Načíst další",
     "loading": "Načítám",
     "logTime": "Zaznamenat čas",
+    "markAllAsRead": "Mark all as read",
     "matter": "Spis",
     "matters": "Spisy",
     "members": "Členové",
@@ -1140,10 +1141,12 @@
     "newMatter": "Nový spis",
     "newRow": "Nový řádek",
     "next": "Pokračovat",
+    "noNotifications": "No notifications yet",
     "noResults": "Žádné výsledky",
     "noVersions": "Žádná historie verzí",
     "none": "Žádné",
     "notes": "Poznámky",
+    "notifications": "Notifications",
     "open": "Otevřít",
     "openInNewTab": "Otevřít na nové kartě",
     "options": "Možnosti",
@@ -2739,6 +2742,40 @@
     "templates": "Vzory",
     "toggleChat": "Přepnout chat",
     "toggleSidebar": "Přepnout postranní panel"
+  },
+  "notifications": {
+    "newMention": {
+      "message": "{actorName} mentioned you in \"{itemName}\"",
+      "title": "New Mention"
+    },
+    "productNews": {
+      "message": "{message}",
+      "title": "{title}"
+    },
+    "reportExportFailure": {
+      "message": "Your export of \"{reportName}\" failed.",
+      "title": "Report Export Failed"
+    },
+    "reportExportSuccess": {
+      "message": "Your export of \"{reportName}\" is ready to download.",
+      "title": "Report Export Ready"
+    },
+    "taskDeadline": {
+      "message": "The task \"{taskName}\" is due tomorrow ({dueDate}).",
+      "title": "Task Deadline Approaching"
+    },
+    "workflowAwaitingApproval": {
+      "message": "The workflow \"{flowName}\" is awaiting your approval.",
+      "title": "Workflow Awaiting Approval"
+    },
+    "workflowCompleted": {
+      "message": "The workflow \"{flowName}\" completed successfully.",
+      "title": "Workflow Completed"
+    },
+    "workflowFailed": {
+      "message": "The workflow \"{flowName}\" failed.",
+      "title": "Workflow Failed"
+    }
   },
   "onboarding": {
     "aiConfigFailed": "Nastavení AI se nepodařilo uložit. Můžete ho dokončit v nastavení.",

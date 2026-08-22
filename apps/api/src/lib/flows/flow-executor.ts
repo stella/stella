@@ -1,5 +1,8 @@
 import { panic, Result, TaggedError } from "better-result";
 import { and, asc, eq, inArray, lt } from "drizzle-orm";
+import { createNotification } from "@/api/lib/notifications";
+import { broadcastUserNotification } from "@/api/lib/sse";
+import type { WorkspaceRealtimeEvent } from "@stll/api-contract";
 
 import { compileLegalSourceToDocx } from "@stll/docx-core";
 
@@ -143,6 +146,7 @@ export const executeFlowStep = async (
         stepIndex,
         workspaceId: run.workspaceId,
         scopedDb,
+        actorUserId,
       });
       return;
     case "ai": {
@@ -167,6 +171,7 @@ export const executeFlowStep = async (
         output,
         workspaceId: run.workspaceId,
         scopedDb,
+        actorUserId,
       });
       return;
     }
@@ -186,6 +191,7 @@ export const executeFlowStep = async (
         output,
         workspaceId: run.workspaceId,
         scopedDb,
+        actorUserId,
       });
       return;
     }
@@ -613,9 +619,10 @@ type CompleteStepArgs = {
   runId: SafeId<"flowRun">;
   stepIndex: number;
   stepCount: number;
-  output: FlowStepOutput;
+  output?: FlowStepOutput;
   workspaceId: SafeId<"workspace">;
   scopedDb: ReturnType<typeof createRootScopedDb>;
+  actorUserId: SafeId<"user">;
 };
 
 const completeStepAndAdvance = async ({
@@ -625,10 +632,12 @@ const completeStepAndAdvance = async ({
   output,
   workspaceId,
   scopedDb,
+  actorUserId,
 }: CompleteStepArgs): Promise<void> => {
   const advance = advanceAfterStep({ stepIndex, stepCount });
   const now = new Date();
 
+  let eventToBroadcast: WorkspaceRealtimeEvent | null = null;
   const payload = await scopedDb(async (tx) => {
     await tx
       .update(flowRunSteps)
@@ -642,6 +651,14 @@ const completeStepAndAdvance = async ({
         .update(flowRuns)
         .set({ status: "completed", finishedAt: now })
         .where(eq(flowRuns.id, runId));
+      eventToBroadcast = await createNotification(tx, {
+        userId: actorUserId,
+        kind: "notifications.workflowCompleted",
+        metadata: { workspaceId },
+        entityType: "flow_run",
+        entityId: runId,
+        idempotencyKey: `flow-complete:${runId}`,
+      });
     } else {
       await tx
         .update(flowRuns)
@@ -650,6 +667,10 @@ const completeStepAndAdvance = async ({
     }
     return await readRunProgress(tx, runId);
   });
+
+  if (eventToBroadcast) {
+    broadcastUserNotification(actorUserId, eventToBroadcast);
+  }
 
   broadcastFlowRunUpdate(workspaceId, payload);
 
@@ -663,12 +684,15 @@ const pauseAtReviewGate = async ({
   stepIndex,
   workspaceId,
   scopedDb,
+  actorUserId,
 }: {
   runId: SafeId<"flowRun">;
   stepIndex: number;
   workspaceId: SafeId<"workspace">;
   scopedDb: ReturnType<typeof createRootScopedDb>;
+  actorUserId: SafeId<"user">;
 }): Promise<void> => {
+  let eventToBroadcast: WorkspaceRealtimeEvent | null = null;
   const payload = await scopedDb(async (tx) => {
     await tx
       .update(flowRunSteps)
@@ -680,8 +704,19 @@ const pauseAtReviewGate = async ({
       .update(flowRuns)
       .set({ status: "awaiting_review" })
       .where(eq(flowRuns.id, runId));
+    eventToBroadcast = await createNotification(tx, {
+      userId: actorUserId,
+      kind: "notifications.workflowAwaitingApproval",
+      metadata: { stepIndex, workspaceId },
+      entityType: "flow_run",
+      entityId: runId,
+      idempotencyKey: `flow-review-gate:${runId}:${stepIndex}`,
+    });
     return await readRunProgress(tx, runId);
   });
+  if (eventToBroadcast) {
+    broadcastUserNotification(actorUserId, eventToBroadcast);
+  }
   broadcastFlowRunUpdate(workspaceId, payload);
 };
 
@@ -738,6 +773,7 @@ export const failFlowRunFromWorker = async (
   const message = errorMessage(error);
   const now = new Date();
 
+  let eventToBroadcast: WorkspaceRealtimeEvent | null = null;
   const writeFailure = async (
     tx: Transaction,
   ): Promise<FlowRunUpdatePayload> => {
@@ -751,6 +787,16 @@ export const failFlowRunFromWorker = async (
       .update(flowRuns)
       .set({ status: "failed", error: message, finishedAt: now })
       .where(eq(flowRuns.id, runId));
+    if (scope.actorUserId !== null) {
+      eventToBroadcast = await createNotification(tx, {
+        userId: scope.actorUserId,
+        kind: "notifications.workflowFailed",
+        metadata: { workspaceId: run.workspaceId },
+        entityType: "flow_run",
+        entityId: runId,
+        idempotencyKey: `flow-failure:${runId}`,
+      });
+    }
     return await readRunProgress(tx, runId);
   };
 
@@ -765,6 +811,10 @@ export const failFlowRunFromWorker = async (
           userId: scope.actorUserId,
           workspaceIds: [run.workspaceId],
         })(writeFailure);
+
+  if (eventToBroadcast && scope.actorUserId !== null) {
+    broadcastUserNotification(scope.actorUserId, eventToBroadcast);
+  }
   broadcastFlowRunUpdate(run.workspaceId, payload);
 };
 

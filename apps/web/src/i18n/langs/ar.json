@@ -1130,6 +1130,7 @@
     "loadMore": "تحميل المزيد",
     "loading": "جارٍ التحميل",
     "logTime": "تسجيل الوقت",
+    "markAllAsRead": "Mark all as read",
     "matter": "ملف قانوني",
     "matters": "الملفات القانونية",
     "members": "الأعضاء",
@@ -1140,10 +1141,12 @@
     "newMatter": "ملف قانوني جديد",
     "newRow": "صف جديد",
     "next": "التالي",
+    "noNotifications": "No notifications yet",
     "noResults": "لا توجد نتائج",
     "noVersions": "لا يوجد سجل إصدارات",
     "none": "لا شيء",
     "notes": "الملاحظات",
+    "notifications": "Notifications",
     "open": "فتح",
     "openInNewTab": "فتح في علامة تبويب جديدة",
     "options": "الخيارات",
@@ -2739,6 +2742,40 @@
     "templates": "القوالب",
     "toggleChat": "تبديل المحادثة",
     "toggleSidebar": "تبديل الشريط الجانبي"
+  },
+  "notifications": {
+    "newMention": {
+      "message": "{actorName} mentioned you in \"{itemName}\"",
+      "title": "New Mention"
+    },
+    "productNews": {
+      "message": "{message}",
+      "title": "{title}"
+    },
+    "reportExportFailure": {
+      "message": "Your export of \"{reportName}\" failed.",
+      "title": "Report Export Failed"
+    },
+    "reportExportSuccess": {
+      "message": "Your export of \"{reportName}\" is ready to download.",
+      "title": "Report Export Ready"
+    },
+    "taskDeadline": {
+      "message": "The task \"{taskName}\" is due tomorrow ({dueDate}).",
+      "title": "Task Deadline Approaching"
+    },
+    "workflowAwaitingApproval": {
+      "message": "The workflow \"{flowName}\" is awaiting your approval.",
+      "title": "Workflow Awaiting Approval"
+    },
+    "workflowCompleted": {
+      "message": "The workflow \"{flowName}\" completed successfully.",
+      "title": "Workflow Completed"
+    },
+    "workflowFailed": {
+      "message": "The workflow \"{flowName}\" failed.",
+      "title": "Workflow Failed"
+    }
   },
   "onboarding": {
     "aiConfigFailed": "تعذّر حفظ إعدادات الذكاء الاصطناعي. يمكنك إكمالها من الإعدادات.",

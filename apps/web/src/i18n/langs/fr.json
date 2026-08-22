@@ -1130,6 +1130,7 @@
     "loadMore": "Charger plus",
     "loading": "Chargement",
     "logTime": "Saisir le temps",
+    "markAllAsRead": "Mark all as read",
     "matter": "Dossier",
     "matters": "Dossiers",
     "members": "Membres",
@@ -1140,10 +1141,12 @@
     "newMatter": "Nouveau dossier",
     "newRow": "Nouvelle ligne",
     "next": "Suivant",
+    "noNotifications": "No notifications yet",
     "noResults": "Aucun résultat",
     "noVersions": "Aucun historique de versions",
     "none": "Aucun",
     "notes": "Notes",
+    "notifications": "Notifications",
     "open": "Ouvrir",
     "openInNewTab": "Ouvrir dans un nouvel onglet",
     "options": "Options",
@@ -2739,6 +2742,40 @@
     "templates": "Modèles",
     "toggleChat": "Afficher / masquer la conversation",
     "toggleSidebar": "Afficher/masquer la barre latérale"
+  },
+  "notifications": {
+    "newMention": {
+      "message": "{actorName} mentioned you in \"{itemName}\"",
+      "title": "New Mention"
+    },
+    "productNews": {
+      "message": "{message}",
+      "title": "{title}"
+    },
+    "reportExportFailure": {
+      "message": "Your export of \"{reportName}\" failed.",
+      "title": "Report Export Failed"
+    },
+    "reportExportSuccess": {
+      "message": "Your export of \"{reportName}\" is ready to download.",
+      "title": "Report Export Ready"
+    },
+    "taskDeadline": {
+      "message": "The task \"{taskName}\" is due tomorrow ({dueDate}).",
+      "title": "Task Deadline Approaching"
+    },
+    "workflowAwaitingApproval": {
+      "message": "The workflow \"{flowName}\" is awaiting your approval.",
+      "title": "Workflow Awaiting Approval"
+    },
+    "workflowCompleted": {
+      "message": "The workflow \"{flowName}\" completed successfully.",
+      "title": "Workflow Completed"
+    },
+    "workflowFailed": {
+      "message": "The workflow \"{flowName}\" failed.",
+      "title": "Workflow Failed"
+    }
   },
   "onboarding": {
     "aiConfigFailed": "Impossible d'enregistrer votre configuration IA. Vous pouvez la finaliser dans les paramètres.",

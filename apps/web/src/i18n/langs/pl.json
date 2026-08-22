@@ -1130,6 +1130,7 @@
     "loadMore": "Załaduj więcej",
     "loading": "Ładowanie",
     "logTime": "Zarejestruj czas",
+    "markAllAsRead": "Mark all as read",
     "matter": "Sprawa",
     "matters": "Sprawy",
     "members": "Członkowie",
@@ -1140,10 +1141,12 @@
     "newMatter": "Nowa sprawa",
     "newRow": "Nowy wiersz",
     "next": "Dalej",
+    "noNotifications": "No notifications yet",
     "noResults": "Brak wyników",
     "noVersions": "Brak historii wersji",
     "none": "Brak",
     "notes": "Notatki",
+    "notifications": "Notifications",
     "open": "Otwórz",
     "openInNewTab": "Otwórz w nowej karcie",
     "options": "Opcje",
@@ -2739,6 +2742,40 @@
     "templates": "Szablony",
     "toggleChat": "Przełącz czat",
     "toggleSidebar": "Przełącz panel boczny"
+  },
+  "notifications": {
+    "newMention": {
+      "message": "{actorName} mentioned you in \"{itemName}\"",
+      "title": "New Mention"
+    },
+    "productNews": {
+      "message": "{message}",
+      "title": "{title}"
+    },
+    "reportExportFailure": {
+      "message": "Your export of \"{reportName}\" failed.",
+      "title": "Report Export Failed"
+    },
+    "reportExportSuccess": {
+      "message": "Your export of \"{reportName}\" is ready to download.",
+      "title": "Report Export Ready"
+    },
+    "taskDeadline": {
+      "message": "The task \"{taskName}\" is due tomorrow ({dueDate}).",
+      "title": "Task Deadline Approaching"
+    },
+    "workflowAwaitingApproval": {
+      "message": "The workflow \"{flowName}\" is awaiting your approval.",
+      "title": "Workflow Awaiting Approval"
+    },
+    "workflowCompleted": {
+      "message": "The workflow \"{flowName}\" completed successfully.",
+      "title": "Workflow Completed"
+    },
+    "workflowFailed": {
+      "message": "The workflow \"{flowName}\" failed.",
+      "title": "Workflow Failed"
+    }
   },
   "onboarding": {
     "aiConfigFailed": "Nie udało się zapisać konfiguracji AI. Możesz ją dokończyć w ustawieniach.",

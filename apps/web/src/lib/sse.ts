@@ -157,3 +157,73 @@ export const useWorkspaceSSE = (
     };
   }, [workspaceId, captureConnectionOutage, handleParsedEvent]);
 };
+
+const getUserSSEUrl = () => apiUrl("/notifications/events");
+
+/**
+ * Subscribe to user-scoped notification SSE events.
+ * Invalidates the "notifications" query cache automatically.
+ */
+export const useUserSSE = () => {
+  const queryClient = useQueryClient();
+
+  useExternalSyncEffect(() => {
+    let source: EventSource | null = null;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+    let consecutiveFailures = 0;
+    let consecutiveOnlineFailures = 0;
+    let disposed = false;
+
+    const handleMessage = () => {
+      detached(
+        queryClient.invalidateQueries({ queryKey: ["notifications"] }),
+        "sse.invalidate_user_notifications",
+      );
+    };
+
+    const connect = () => {
+      const stream = new EventSource(
+        getUserSSEUrl(),
+        WORKSPACE_SSE_EVENT_SOURCE_INIT,
+      );
+      source = stream;
+
+      const handleOpen = () => {
+        consecutiveFailures = 0;
+        consecutiveOnlineFailures = 0;
+      };
+
+      const handleError = () => {
+        if (stream.readyState !== EventSource.CLOSED || disposed) {
+          return;
+        }
+        stream.close();
+        consecutiveFailures += 1;
+        if (navigator.onLine) {
+          consecutiveOnlineFailures += 1;
+        } else {
+          consecutiveOnlineFailures = 0;
+        }
+        reconnectTimer = setTimeout(() => {
+          reconnectTimer = null;
+          connect();
+        }, sseReconnectDelayMs(consecutiveFailures));
+      };
+
+      stream.addEventListener("open", handleOpen);
+      stream.addEventListener("message", handleMessage);
+      stream.addEventListener("error", handleError);
+    };
+
+    connect();
+
+    return () => {
+      disposed = true;
+      if (reconnectTimer !== null) {
+        clearTimeout(reconnectTimer);
+      }
+      source?.close();
+    };
+  }, [queryClient]);
+};
+

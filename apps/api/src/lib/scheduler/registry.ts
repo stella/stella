@@ -4,6 +4,10 @@ import {
   reconcileBufferIntents,
 } from "@/api/lib/scheduler/tasks/buffer-intent-reconciliation";
 import {
+  CHECK_DEADLINES_TASK,
+  checkDeadlines,
+} from "@/api/lib/scheduler/tasks/check-deadlines";
+import {
   RECONCILE_CASE_LAW_CORPUS_UPLOAD_INTENTS_TASK,
   reconcileCaseLawCorpusUploadIntentsTask,
 } from "@/api/lib/scheduler/tasks/case-law-corpus-upload-cleanup";
@@ -98,6 +102,7 @@ const SCHEDULER_TASKS = {
   [CLEAN_TEMPLATE_DELETION_OBJECTS_TASK]: cleanTemplateDeletionObjects,
   [REPAIR_FILE_DERIVATIVES_TASK]: repairFileDerivatives,
   [RECONCILE_FLOW_RUN_ORPHANS_TASK]: reconcileFlowRunOrphans,
+  [CHECK_DEADLINES_TASK]: checkDeadlines,
 } as const satisfies Record<string, SchedulerTask>;
 
 export type RegisteredSchedulerTaskName = keyof typeof SCHEDULER_TASKS;

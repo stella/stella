@@ -1130,6 +1130,7 @@
     "loadMore": "Több betöltése",
     "loading": "Betöltés",
     "logTime": "Idő rögzítése",
+    "markAllAsRead": "Mark all as read",
     "matter": "Ügy",
     "matters": "Ügyek",
     "members": "Tagok",
@@ -1140,10 +1141,12 @@
     "newMatter": "Új ügy",
     "newRow": "Új sor",
     "next": "Tovább",
+    "noNotifications": "No notifications yet",
     "noResults": "Nincs találat",
     "noVersions": "Nincs verzióelőzmény",
     "none": "Nincs",
     "notes": "Megjegyzések",
+    "notifications": "Notifications",
     "open": "Megnyitás",
     "openInNewTab": "Megnyitás új lapon",
     "options": "Beállítások",
@@ -2739,6 +2742,40 @@
     "templates": "Sablonok",
     "toggleChat": "Csevegés be/ki",
     "toggleSidebar": "Oldalsáv be/ki"
+  },
+  "notifications": {
+    "newMention": {
+      "message": "{actorName} mentioned you in \"{itemName}\"",
+      "title": "New Mention"
+    },
+    "productNews": {
+      "message": "{message}",
+      "title": "{title}"
+    },
+    "reportExportFailure": {
+      "message": "Your export of \"{reportName}\" failed.",
+      "title": "Report Export Failed"
+    },
+    "reportExportSuccess": {
+      "message": "Your export of \"{reportName}\" is ready to download.",
+      "title": "Report Export Ready"
+    },
+    "taskDeadline": {
+      "message": "The task \"{taskName}\" is due tomorrow ({dueDate}).",
+      "title": "Task Deadline Approaching"
+    },
+    "workflowAwaitingApproval": {
+      "message": "The workflow \"{flowName}\" is awaiting your approval.",
+      "title": "Workflow Awaiting Approval"
+    },
+    "workflowCompleted": {
+      "message": "The workflow \"{flowName}\" completed successfully.",
+      "title": "Workflow Completed"
+    },
+    "workflowFailed": {
+      "message": "The workflow \"{flowName}\" failed.",
+      "title": "Workflow Failed"
+    }
   },
   "onboarding": {
     "aiConfigFailed": "Az MI-konfigurációt nem sikerült menteni. A beállításokban befejezheti.",

@@ -41,6 +41,7 @@ import { KeyboardShortcutsDialog } from "@/components/keyboard-shortcuts-dialog"
 import { AIAvailabilityProvider } from "@/components/require-ai-key";
 import { SelfhostUpdateBanner } from "@/components/selfhost-update-banner";
 import { ShortcutEchoHud } from "@/components/shortcut-echo-hud";
+import { NotificationBell } from "@/components/notification-bell";
 import {
   SidebarInset,
   SidebarProvider,
@@ -316,6 +317,8 @@ function ProtectedPendingSkeleton() {
   );
 }
 
+import { useUserSSE } from "@/lib/sse";
+
 function ProtectedComponent() {
   const analyticsUser = Route.useRouteContext({ select: (ctx) => ctx.user });
   const inspectorBroadcastUserId = Route.useRouteContext({
@@ -337,6 +340,8 @@ function ProtectedComponent() {
     inspectorPaneOpen,
     viewportWidth,
   });
+
+  useUserSSE();
 
   useExternalSyncEffect(
     () =>
@@ -485,6 +490,7 @@ function ProtectedContent() {
       className="ms-auto flex shrink-0 items-center gap-0.5"
       onContextMenu={handleIconRowContextMenu}
     >
+      <NotificationBell />
       {workspaceId && (
         <>
           <Button

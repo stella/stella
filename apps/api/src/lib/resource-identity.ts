@@ -174,6 +174,7 @@ export const RESOURCE_IDENTITY_DISPOSITION = {
   legalListSection: { type: "non_resource", reason: "subresource" },
   matter: { type: "alias", resourceType: RESOURCE_TYPE.WORKSPACE },
   matterCounter: { type: "non_resource", reason: "projection" },
+  notification: { type: "non_resource", reason: "event" },
   mcpConnector: {
     type: "resource",
     resourceType: RESOURCE_TYPE.MCP_CONNECTOR,

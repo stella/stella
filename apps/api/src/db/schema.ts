@@ -21,6 +21,7 @@ export * from "./schema/mcp";
 export * from "./schema/sharepoint";
 export * from "./schema/files-views";
 export * from "./schema/reports";
+export * from "./schema/notifications";
 export * from "./schema/skills";
 export * from "./schema/style-sets";
 export * from "./schema/saved-searches";

@@ -28,6 +28,7 @@ import { REPAIR_SEARCH_PROJECTIONS_TASK } from "@/api/lib/scheduler/tasks/search
 import { REPAIR_SEARCH_SEMANTIC_TIMESTAMPS_TASK } from "@/api/lib/scheduler/tasks/search-semantic-timestamps";
 import { CLEAN_TEMPLATE_DELETION_OBJECTS_TASK } from "@/api/lib/scheduler/tasks/template-deletion-cleanup";
 import { BACKFILL_WORK_OBLIGATIONS_TASK } from "@/api/lib/scheduler/tasks/work-obligation-backfill";
+import { CHECK_DEADLINES_TASK } from "@/api/lib/scheduler/tasks/check-deadlines";
 
 type SchedulerJobDefinition = {
   id: string;
@@ -291,6 +292,18 @@ export const DECLARED_SCHEDULER_JOBS = [
       everyMs: 5 * 60 * 1000,
     },
     task: CHAT_THREAD_COMPACTOR_TASK,
+  },
+  {
+    description: "Check for approaching matter and task due dates",
+    id: "checkDeadlines.daily",
+    mode: "recurring",
+    schedule: {
+      type: "daily",
+      hour: 9,
+      minute: 0,
+      timeZone: "Europe/Prague",
+    },
+    task: CHECK_DEADLINES_TASK,
   },
 ] as const satisfies readonly DeclaredSchedulerJob[];
 
