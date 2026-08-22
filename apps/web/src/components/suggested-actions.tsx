@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { ComponentProps, ReactNode } from "react";
 
 import { Button } from "@stll/ui/button";
 import { cn } from "@stll/ui/utils";
@@ -8,6 +8,8 @@ export type SuggestedAction = {
   label: string;
   icon?: ReactNode;
 };
+
+export type SuggestedActionSurfaceName = "plain" | "floating" | "overlay";
 
 type SuggestedActionsProps = {
   actions: SuggestedAction[];
@@ -25,7 +27,7 @@ type SuggestedActionsProps = {
    * translucent with a slight backdrop blur, for floating over scrolling
    * text that should stay faintly visible behind the chips.
    */
-  surface?: "plain" | "floating" | "overlay";
+  surface?: SuggestedActionSurfaceName;
   /** Keyboard hint surfaced on each chip via `aria-keyshortcuts`. */
   keyShortcut?: string;
   className?: string;
@@ -42,6 +44,26 @@ const FLOATING_SURFACE_CLASS =
 // while the text behind shows through, blurred.
 const OVERLAY_SURFACE_CLASS =
   "border-foreground/10 bg-background/70 border shadow-sm backdrop-blur-sm";
+
+type SuggestedActionSurfaceProps = ComponentProps<"span"> & {
+  surface: SuggestedActionSurfaceName;
+};
+
+export const SuggestedActionSurface = ({
+  className,
+  surface,
+  ...props
+}: SuggestedActionSurfaceProps) => (
+  <span
+    className={cn(
+      "inline-flex rounded-full",
+      surface === "floating" && FLOATING_SURFACE_CLASS,
+      surface === "overlay" && OVERLAY_SURFACE_CLASS,
+      className,
+    )}
+    {...props}
+  />
+);
 
 /**
  * A row (or stack) of click-to-run "suggested action" chips. Shared by the
@@ -75,14 +97,10 @@ export const SuggestedActions = ({
       role="group"
     >
       {actions.map((action) => (
-        <span
-          className={cn(
-            "inline-flex rounded-full",
-            horizontal ? "shrink-0" : "max-w-full",
-            surface === "floating" && FLOATING_SURFACE_CLASS,
-            surface === "overlay" && OVERLAY_SURFACE_CLASS,
-          )}
+        <SuggestedActionSurface
+          className={cn(horizontal ? "shrink-0" : "max-w-full")}
           key={action.id}
+          surface={surface}
         >
           <Button
             aria-keyshortcuts={keyShortcut}
@@ -100,7 +118,7 @@ export const SuggestedActions = ({
               {action.label}
             </span>
           </Button>
-        </span>
+        </SuggestedActionSurface>
       ))}
     </div>
   );
