@@ -333,7 +333,11 @@ describe("detect-e2e-changes", () => {
   });
 
   test("keeps full code quality for manual sweeps and scopes pull requests", () => {
+    const plan = workflowJob("ci-plan");
     const codeQuality = workflowJob("code-quality");
+    expect(plan).toContain(
+      ".github/workflows/ci.yml)\n                # This workflow owns package-check scheduling and the\n                # code-quality job itself, so its changes must exercise both.\n                package_checks_required=true",
+    );
     expect(codeQuality).toContain(
       `EVENT_NAME: ${githubExpression("github.event_name")}`,
     );
