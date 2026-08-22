@@ -40,12 +40,12 @@ on:
     inputs:
       package:
         description: Package(s) to publish (dependency order is resolved centrally)
-          type: choice
-          options:
-            - all
-            - auth-model
-            - ai-catalog
-            - anonymize-chat
+        type: choice
+        options:
+          - all
+          - auth-model
+          - ai-catalog
+          - anonymize-chat
           - business-registries
           - country-codes
           - conditions
