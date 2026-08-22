@@ -33,6 +33,13 @@ export const LINT_ONLY_CACHE_INPUTS = [
   "$TURBO_ROOT$/oxlint.config.ts",
   "$TURBO_ROOT$/.oxlint-plugins/**",
 ] as const;
+export const ROOT_SCRIPT_LINT_INPUTS = [
+  ...ALL_WORKSPACE_CACHE_INPUTS,
+  ...LINT_ONLY_CACHE_INPUTS,
+  "$TURBO_ROOT$/scripts/lint-root-scripts.sh",
+  "$TURBO_ROOT$/scripts/tsconfig.json",
+  "$TURBO_ROOT$/tsconfig.scripts.json",
+] as const;
 const TURBO_CONFIG_PATH = "turbo.json";
 const TURBO_ROOT_INPUT_PREFIX = "$TURBO_ROOT$/";
 const RECURSIVE_GLOB_SUFFIX = "/**";
@@ -102,35 +109,29 @@ const invalidatesAllWorkspaceChecks = (file: string): boolean =>
   file === TURBO_CONFIG_PATH ||
   ALL_WORKSPACE_CACHE_INPUTS.some((input) => matchesTurboInput(file, input));
 
+const invalidatesRootScriptLint = (file: string): boolean =>
+  ROOT_SCRIPT_LINT_INPUTS.some((input) => matchesTurboInput(file, input));
+
 const rootChecksForPath = (file: string): readonly RootCheck[] => {
+  const rootChecks: RootCheck[] = [];
   if (file === "package.json") {
-    return [
-      ROOT_CHECKS.pluginRegistry,
-      ROOT_CHECKS.pluginFixtures,
-      ROOT_CHECKS.rootScriptLint,
-    ];
-  }
-  if (file === "oxlint.config.ts" || file.startsWith(".oxlint-plugins/")) {
-    return [
-      ROOT_CHECKS.pluginRegistry,
-      ROOT_CHECKS.pluginFixtures,
-      ROOT_CHECKS.rootScriptLint,
-    ];
+    rootChecks.push(ROOT_CHECKS.pluginRegistry, ROOT_CHECKS.pluginFixtures);
+  } else if (
+    file === "oxlint.config.ts" ||
+    file.startsWith(".oxlint-plugins/")
+  ) {
+    rootChecks.push(ROOT_CHECKS.pluginRegistry, ROOT_CHECKS.pluginFixtures);
   }
   if (file === "scripts/lint-oxlint-fixtures.sh") {
-    return [ROOT_CHECKS.pluginFixtures];
-  }
-  if (
-    file === "scripts/lint-root-scripts.sh" ||
-    file === "scripts/tsconfig.json" ||
-    file === "tsconfig.scripts.json"
-  ) {
-    return [ROOT_CHECKS.rootScriptLint];
+    rootChecks.push(ROOT_CHECKS.pluginFixtures);
   }
   if (file === "tsconfig.oxlint-plugins.json") {
-    return [ROOT_CHECKS.pluginRegistry, ROOT_CHECKS.pluginFixtures];
+    rootChecks.push(ROOT_CHECKS.pluginRegistry, ROOT_CHECKS.pluginFixtures);
   }
-  return [];
+  if (invalidatesRootScriptLint(file)) {
+    rootChecks.push(ROOT_CHECKS.rootScriptLint);
+  }
+  return rootChecks;
 };
 
 export const planCheck = ({

@@ -5,6 +5,7 @@ import {
   ALL_WORKSPACE_CACHE_INPUTS,
   LINT_ONLY_CACHE_INPUTS,
   planCheck,
+  ROOT_SCRIPT_LINT_INPUTS,
   scopedCommands,
 } from "./code-check-affected";
 import { isChangedLintPath } from "./lint-paths";
@@ -223,6 +224,19 @@ describe("affected code-check planning", () => {
     ]);
   });
 
+  test.each(
+    ROOT_SCRIPT_LINT_INPUTS.map((input) =>
+      input.slice("$TURBO_ROOT$/".length).replace(/\/\*\*$/u, "/fixture.ts"),
+    ),
+  )("shared root-script input %s schedules full root lint", (changedPath) => {
+    const planned = plan([changedPath], []);
+    expect(planned.type).toBe("scoped");
+    if (planned.type !== "scoped") {
+      throw new Error("Expected a scoped code-check plan");
+    }
+    expect(planned.rootChecks).toContain("root-script-lint");
+  });
+
   test("falls back when Turbo omits the directly changed workspace", () => {
     expect(plan(["apps/api/src/server.ts"], ["apps/web"])).toEqual({
       type: "fallback",
@@ -269,6 +283,12 @@ describe("changed lint path selection", () => {
 });
 
 describe("Turbo cache input contract", () => {
+  test("root script lint covers every shared workspace input", () => {
+    for (const input of ALL_WORKSPACE_CACHE_INPUTS) {
+      expect(ROOT_SCRIPT_LINT_INPUTS).toContain(input);
+    }
+  });
+
   test("keeps planner-wide inputs exactly aligned with their Turbo tasks", () => {
     const turboConfig = readFileSync("turbo.json", "utf-8");
     const typecheckStart = turboConfig.indexOf('    "typecheck":');
