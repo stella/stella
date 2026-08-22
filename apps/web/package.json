@@ -47,6 +47,7 @@
     "@stll/api": "workspace:*",
     "@stll/api-client": "workspace:*",
     "@stll/api-contract": "workspace:*",
+    "@stll/auth-model": "workspace:*",
     "@stll/calculations": "workspace:*",
     "@stll/catalogue": "workspace:*",
     "@stll/chat-limits": "workspace:*",

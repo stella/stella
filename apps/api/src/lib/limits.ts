@@ -9,6 +9,7 @@ import {
   VIEW_SORTS_MAX,
   WORKSPACES_PER_ORGANIZATION_MAX,
 } from "@stll/api-contract";
+import { BETTER_AUTH_ORGANIZATION_OPTIONS } from "@stll/auth-model";
 import {
   CHAT_CONTEXT_FILE_MAX_BYTES,
   CHAT_CONTEXT_FILE_MAX_MEGABYTES,
@@ -270,7 +271,7 @@ export const LIMITS = {
   contactRelationshipsCount: 50,
   workspaceContactsCount: 100,
   /** Better Auth organization member cap and full-org read bound. */
-  organizationMembersCount: 500,
+  organizationMembersCount: BETTER_AUTH_ORGANIZATION_OPTIONS.membershipLimit,
   workspaceMembersCount: 500,
   /** Max governed obligations synchronously unassigned during member removal. */
   workspaceMemberRemovalWorkObligationsMax: 500,

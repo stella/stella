@@ -1,8 +1,8 @@
 # Changesets
 
 Pull requests that change the shipped source of `@stll/cli`,
-`@stll/business-registries`, `@stll/calculations`, `@stll/conditions`,
-`@stll/country-codes`, `@stll/docx-utils`, `@stll/money`,
+`@stll/auth-model`, `@stll/business-registries`, `@stll/calculations`,
+`@stll/conditions`, `@stll/country-codes`, `@stll/docx-utils`, `@stll/money`,
 `@stll/template-conditions`, `@stll/ui`, `@stll/workspace-model`, or
 `@stll/workspace-ui` must include a Changeset describing the user-visible change
 and its semver impact.

@@ -858,6 +858,7 @@ jobs:
       - name: Published export map guard
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         run: |
+          bun scripts/check-published-exports.ts packages/auth-model
           bun scripts/check-published-exports.ts packages/ui
           bun scripts/check-published-exports.ts packages/money
           bun scripts/check-published-exports.ts packages/calculations

@@ -72,6 +72,7 @@
     "@stll/anonymize-chat": "workspace:*",
     "@stll/anonymize-data": "catalog:",
     "@stll/api-contract": "workspace:*",
+    "@stll/auth-model": "workspace:*",
     "@stll/boe": "workspace:*",
     "@stll/business-registries": "workspace:*",
     "@stll/calculations": "workspace:*",
