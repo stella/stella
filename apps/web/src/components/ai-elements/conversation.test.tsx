@@ -4,22 +4,23 @@ import { expect, test } from "bun:test";
 import { IntlProvider } from "use-intl";
 
 import { ConversationScrollButton } from "@/components/ai-elements/conversation";
+import { SuggestedFollowupChips } from "@/features/chat/components/suggested-followup-chips";
 import { StickToBottomContext } from "@/hooks/use-stick-to-bottom";
 import messages from "@/i18n/langs/ar.json";
+
+const STICK_TO_BOTTOM = {
+  contentRef: () => {},
+  isAtBottom: false,
+  isScrollable: true,
+  scrollElementRef: { current: null },
+  scrollRef: () => {},
+  scrollToBottom: () => {},
+};
 
 test("announces the scroll action in the active locale", () => {
   const html = renderToStaticMarkup(
     <IntlProvider locale="ar" messages={messages} timeZone="UTC">
-      <StickToBottomContext
-        value={{
-          contentRef: () => {},
-          isAtBottom: false,
-          isScrollable: true,
-          scrollElementRef: { current: null },
-          scrollRef: () => {},
-          scrollToBottom: () => {},
-        }}
-      >
+      <StickToBottomContext value={STICK_TO_BOTTOM}>
         <ConversationScrollButton />
       </StickToBottomContext>
     </IntlProvider>,
@@ -27,4 +28,25 @@ test("announces the scroll action in the active locale", () => {
 
   expect(html).toContain('aria-label="التمرير إلى الأسفل"');
   expect(html).not.toContain('aria-label="Scroll to bottom"');
+});
+
+test("keeps the inline scroll action outside the suggested-followups group", () => {
+  const html = renderToStaticMarkup(
+    <IntlProvider locale="ar" messages={messages} timeZone="UTC">
+      <StickToBottomContext value={STICK_TO_BOTTOM}>
+        <SuggestedFollowupChips onSelect={() => {}} prompts={["لخّص النتيجة"]} />
+      </StickToBottomContext>
+    </IntlProvider>,
+  );
+
+  const scrollActionIndex = html.indexOf('aria-label="التمرير إلى الأسفل"');
+  const suggestedGroupIndex = html.indexOf(
+    `aria-label="${messages.chat.suggestedFollowupsLabel}"`,
+  );
+
+  expect(scrollActionIndex).toBeGreaterThan(-1);
+  expect(suggestedGroupIndex).toBeGreaterThan(scrollActionIndex);
+  expect(html.slice(suggestedGroupIndex)).not.toContain(
+    'aria-label="التمرير إلى الأسفل"',
+  );
 });
