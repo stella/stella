@@ -175,6 +175,7 @@ describe("affected code-check planning", () => {
     ["scripts/lint-oxlint-fixtures.sh", "plugin-fixtures"],
     ["scripts/lint-root-scripts.sh", "root-script-lint"],
     ["scripts/tsconfig.json", "root-script-lint"],
+    ["tsconfig.json", "plugin-fixtures"],
     ["tsconfig.scripts.json", "root-script-lint"],
   ] as const)(
     "runs only the owning root check for %s",
@@ -329,6 +330,10 @@ describe("Turbo cache input contract", () => {
     for (const input of DEPENDENCY_CACHE_INPUTS) {
       expect(PLUGIN_FIXTURE_INPUTS).toContain(input);
     }
+  });
+
+  test("plugin fixtures cover the root config discovered by Oxc", () => {
+    expect(PLUGIN_FIXTURE_INPUTS).toContain("$TURBO_ROOT$/tsconfig.json");
   });
 
   test("root script lint covers every shared workspace input", () => {
