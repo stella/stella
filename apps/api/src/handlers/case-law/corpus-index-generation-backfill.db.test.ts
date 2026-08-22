@@ -1505,6 +1505,245 @@ test(
 );
 
 test(
+  "releases the checkpoint lease when snapshot selection fails",
+  async () => {
+    const generation = "case_law_v80";
+    const leaseToken = "00000000-0000-4000-8000-000000000180";
+    let claimObserved = false;
+    let postClaimTransactions = 0;
+    let injected = false;
+    let backfillCalls = 0;
+    const failingScopedDb = async <T>(
+      callback: (tx: Transaction) => Promise<T>,
+    ): Promise<T> => {
+      // The first five post-claim transactions renew the writer and
+      // checkpoint leases, then drain pending projections. The next one is
+      // the snapshot page read: fail it once to model an expired pool
+      // connection while the running arm still owns the checkpoint lease.
+      if (!injected && claimObserved && postClaimTransactions >= 5) {
+        injected = true;
+        throw new Error("snapshot selection failed");
+      }
+
+      const result = await scopedDb(callback);
+      const checkpoint = await readCheckpoint(generation);
+      if (checkpoint?.leaseToken === leaseToken) {
+        if (claimObserved) {
+          postClaimTransactions += 1;
+        } else {
+          claimObserved = true;
+        }
+      }
+      return result;
+    };
+    const backfill = createCaseLawGenerationBackfill({
+      backfillRows: async () => {
+        backfillCalls += 1;
+        return indexedOutcome(0);
+      },
+      newLeaseToken: () => leaseToken,
+      removeProjection: ignoreProjectionRemoval,
+    });
+
+    try {
+      const rejection: unknown = await backfill(
+        failingScopedDb,
+        1,
+        generation,
+      ).then(
+        () => null,
+        (error: unknown) => error,
+      );
+
+      expect(rejection).toMatchObject({
+        message: "snapshot selection failed",
+      });
+      expect(injected).toBe(true);
+      expect(postClaimTransactions).toBeGreaterThanOrEqual(5);
+      expect(backfillCalls).toBe(0);
+      expect(await readCheckpoint(generation)).toMatchObject({
+        leaseExpiresAt: null,
+        leaseToken: null,
+        status: "running",
+      });
+    } finally {
+      await db
+        .delete(caseLawCorpusIndexBackfills)
+        .where(eq(caseLawCorpusIndexBackfills.generation, generation));
+    }
+  },
+  { timeout: 30_000 },
+);
+
+test(
+  "releases the checkpoint lease when cursor advancement fails",
+  async () => {
+    const generation = "case_law_v81";
+    const leaseToken = "00000000-0000-4000-8000-000000000181";
+    let failNextTransaction = false;
+    const failingScopedDb = async <T>(
+      callback: (tx: Transaction) => Promise<T>,
+    ): Promise<T> => {
+      if (failNextTransaction) {
+        failNextTransaction = false;
+        throw new Error("cursor advancement failed");
+      }
+      return await scopedDb(callback);
+    };
+    const backfill = createCaseLawGenerationBackfill({
+      backfillRows: async (_runnerDb, rows, _rebuildGeneration, options) => {
+        await options.beforeRemoteEffect({
+          effect: completeRemoteEffect,
+          onLeaseLost: noRemoteEffectCompensation,
+        });
+        failNextTransaction = true;
+        return indexedOutcome(rows.length);
+      },
+      newLeaseToken: () => leaseToken,
+      removeProjection: ignoreProjectionRemoval,
+    });
+
+    try {
+      const rejection: unknown = await backfill(
+        failingScopedDb,
+        1,
+        generation,
+      ).then(
+        () => null,
+        (error: unknown) => error,
+      );
+
+      expect(rejection).toMatchObject({
+        message: "cursor advancement failed",
+      });
+      expect(await readCheckpoint(generation)).toMatchObject({
+        leaseExpiresAt: null,
+        leaseToken: null,
+        status: "running",
+      });
+    } finally {
+      await db
+        .delete(caseLawCorpusIndexBackfills)
+        .where(eq(caseLawCorpusIndexBackfills.generation, generation));
+    }
+  },
+  { timeout: 30_000 },
+);
+
+test(
+  "does not reopen checkpoint cleanup after cursor advancement released it",
+  async () => {
+    const generation = "case_law_v82";
+    let advancementObserved = false;
+    let postAdvancementTransactions = 0;
+    const tracedScopedDb = async <T>(
+      callback: (tx: Transaction) => Promise<T>,
+    ): Promise<T> => {
+      if (advancementObserved) {
+        postAdvancementTransactions += 1;
+      }
+      const result = await scopedDb(callback);
+      const checkpoint = await readCheckpoint(generation);
+      if (checkpoint?.cursorId !== null && checkpoint?.leaseToken === null) {
+        advancementObserved = true;
+      }
+      return result;
+    };
+    const backfill = createCaseLawGenerationBackfill({
+      backfillRows: async (_runnerDb, rows, _generation, options) => {
+        await options.beforeRemoteEffect({
+          effect: completeRemoteEffect,
+          onLeaseLost: noRemoteEffectCompensation,
+        });
+        return indexedOutcome(rows.length);
+      },
+      newLeaseToken: () => "00000000-0000-4000-8000-000000000182",
+      removeProjection: ignoreProjectionRemoval,
+    });
+
+    try {
+      expect(await backfill(tracedScopedDb, 1, generation)).toMatchObject({
+        indexed: 1,
+        status: "advanced",
+      });
+      expect(advancementObserved).toBe(true);
+      // Only the separate generation-writer lease release remains. A second
+      // transaction would be redundant checkpoint cleanup after its CAS
+      // already cleared the token and persisted the cursor.
+      expect(postAdvancementTransactions).toBe(1);
+    } finally {
+      await db
+        .delete(caseLawCorpusIndexBackfills)
+        .where(eq(caseLawCorpusIndexBackfills.generation, generation));
+    }
+  },
+  { timeout: 30_000 },
+);
+
+test(
+  "returns completion when the retried complete lease release succeeds",
+  async () => {
+    const generation = "case_law_v83";
+    const leaseToken = "00000000-0000-4000-8000-000000000183";
+    let releaseFailures = 0;
+    await db.insert(caseLawCorpusIndexBackfills).values({
+      generation,
+      snapshotAt: new Date("2000-01-01T00:00:00.000Z"),
+    });
+    const retryingScopedDb = async <T>(
+      runTransaction: (tx: Transaction) => Promise<T>,
+    ): Promise<T> =>
+      await db.transaction(async (tx) => {
+        // SAFETY: PGlite's transaction provides the Drizzle query surface the
+        // runner uses; the explicit transaction lets this test roll back the
+        // first completed-checkpoint release at its exact state boundary.
+        // eslint-disable-next-line typescript/no-unsafe-type-assertion
+        const transaction = tx as unknown as Transaction;
+        const result = await runTransaction(transaction);
+        const checkpoint = (
+          await transaction
+            .select()
+            .from(caseLawCorpusIndexBackfills)
+            .where(eq(caseLawCorpusIndexBackfills.generation, generation))
+            .limit(1)
+        ).at(0);
+        if (
+          releaseFailures === 0 &&
+          checkpoint?.status === "complete" &&
+          checkpoint.leaseToken === null
+        ) {
+          releaseFailures += 1;
+          throw new Error("complete lease release failed");
+        }
+        return result;
+      });
+    const backfill = createCaseLawGenerationBackfill({
+      backfillRows: async () => indexedOutcome(0),
+      newLeaseToken: () => leaseToken,
+      removeProjection: ignoreProjectionRemoval,
+    });
+
+    try {
+      expect(await backfill(retryingScopedDb, 1, generation)).toEqual({
+        indexed: 0,
+        status: "complete",
+      });
+      expect(releaseFailures).toBe(1);
+      expect(await readCheckpoint(generation)).toMatchObject({
+        leaseExpiresAt: null,
+        leaseToken: null,
+        status: "complete",
+      });
+    } finally {
+      await db
+        .delete(caseLawCorpusIndexBackfills)
+        .where(eq(caseLawCorpusIndexBackfills.generation, generation));
+    }
+  },
+  { timeout: 30_000 },
+);
+
+test(
   "an expired owner cannot issue another remote write after a new owner advances",
   async () => {
     const generation = "case_law_v31";

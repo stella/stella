@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { and, asc, eq, isNotNull, isNull, lte, or, sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
@@ -47,6 +47,7 @@ import {
   timestampMatchesCasToken,
 } from "@/api/lib/db/timestamp-cas";
 import { ConcurrentModificationError } from "@/api/lib/errors/tagged-errors";
+import { errorSystemFields } from "@/api/lib/errors/utils";
 import { caseLawDecisionCorpusIndexIdSql } from "@/api/lib/legal-search/case-law-corpus-projection";
 import { caseLawIndexIdSql } from "@/api/lib/legal-search/case-law-index-groups";
 import {
@@ -2115,102 +2116,204 @@ export const createCaseLawGenerationBackfill =
         leaseToken,
         status: CASE_LAW_CORPUS_INDEX_BACKFILL_STATUS.RUNNING,
       });
-      await runningGuards.beforeRemoteEffect({
-        effect: completeRemoteEffect,
-        onLeaseLost: async () => await Promise.resolve(),
-      });
-
-      const releaseRunningLease = async (): Promise<void> => {
-        await scopedDb(async (tx) => {
-          // audit: skip — releasing a failed lease preserves the durable cursor for replay
-          await tx
-            .update(caseLawCorpusIndexBackfills)
-            .set({ leaseExpiresAt: null, leaseToken: null })
-            .where(
-              and(
-                eq(caseLawCorpusIndexBackfills.generation, generation),
-                ownsUnexpiredLease({
-                  checkpoint: claimedCheckpoint,
-                  leaseToken,
-                  status: CASE_LAW_CORPUS_INDEX_BACKFILL_STATUS.RUNNING,
-                }),
-              ),
-            );
-        });
+      type ClaimedLeaseState =
+        | { type: "held"; status: CaseLawCorpusIndexBackfillStatus }
+        | { type: "released" };
+      type ClaimedLease = { state: ClaimedLeaseState };
+      type CompletionState =
+        | { type: "pending" }
+        | { type: "reconciled"; result: CorpusIndexBackfillResult };
+      type Completion = { state: CompletionState };
+      const claimedLease: ClaimedLease = {
+        state: {
+          type: "held",
+          status: CASE_LAW_CORPUS_INDEX_BACKFILL_STATUS.RUNNING,
+        },
       };
+      const completion: Completion = { state: { type: "pending" } };
+      const operation = await Result.tryPromise(async () => {
+        await runningGuards.beforeRemoteEffect({
+          effect: completeRemoteEffect,
+          onLeaseLost: async () => await Promise.resolve(),
+        });
 
-      // Drain the pending queue before walking the snapshot. Pending
-      // projections are live decision traffic; the walk is a bounded rebuild
-      // of pre-snapshot rows, and a generation can sit at `running` for a long
-      // time (or forever, when its walk is wedged). Draining under RUNNING
-      // keeps newly ingested decisions searchable regardless of walk state,
-      // and draining first means a row that wedges the walk cannot also wedge
-      // live indexing. The pending_revision epoch converges these appends with
-      // walk pages that later reach the same rows.
-      let drainedIndexed = 0;
-      try {
-        const drainStartedAt = performance.now();
-        let drained: CorpusIndexBackfillResult;
+        // Drain the pending queue before walking the snapshot. Pending
+        // projections are live decision traffic; the walk is a bounded rebuild
+        // of pre-snapshot rows, and a generation can sit at `running` for a long
+        // time (or forever, when its walk is wedged). Draining under RUNNING
+        // keeps newly ingested decisions searchable regardless of walk state,
+        // and draining first means a row that wedges the walk cannot also wedge
+        // live indexing. The pending_revision epoch converges these appends with
+        // walk pages that later reach the same rows.
+        let drainedIndexed = 0;
         try {
-          drained = await drainPendingProjections({
-            checkpoint: claimedCheckpoint,
-            leaseToken,
-            status: CASE_LAW_CORPUS_INDEX_BACKFILL_STATUS.RUNNING,
-          });
-        } finally {
-          stageMs.drain = sinceMs(drainStartedAt);
-        }
-        if (drained.status === BACKFILL_STATUS.BUSY) {
-          await releaseRunningLease();
+          const drainStartedAt = performance.now();
+          let drained: CorpusIndexBackfillResult;
+          try {
+            drained = await drainPendingProjections({
+              checkpoint: claimedCheckpoint,
+              leaseToken,
+              status: CASE_LAW_CORPUS_INDEX_BACKFILL_STATUS.RUNNING,
+            });
+          } finally {
+            stageMs.drain = sinceMs(drainStartedAt);
+          }
+          if (drained.status === BACKFILL_STATUS.BUSY) {
+            reportPage({
+              outcome: "busy",
+              selected: 0,
+              indexed: 0,
+              drainedIndexed: 0,
+            });
+            return drained;
+          }
+          drainedIndexed = drained.indexed;
+        } catch (error) {
           reportPage({
-            outcome: "busy",
+            outcome: "failed",
             selected: 0,
             indexed: 0,
             drainedIndexed: 0,
           });
-          return drained;
+          throw error;
         }
-        drainedIndexed = drained.indexed;
-      } catch (error) {
-        await releaseRunningLease();
-        reportPage({
-          outcome: "failed",
-          selected: 0,
-          indexed: 0,
-          drainedIndexed: 0,
-        });
-        throw error;
-      }
-      // Reports this invocation's total durable movement: rows the drain
-      // indexed count as ADVANCED even when the walk itself could not.
-      const withDrained = (
-        result: CorpusIndexBackfillResult,
-      ): CorpusIndexBackfillResult => {
-        if (drainedIndexed === 0) {
-          return result;
-        }
-        return result.status === BACKFILL_STATUS.ADVANCED
-          ? {
-              indexed: result.indexed + drainedIndexed,
-              status: BACKFILL_STATUS.ADVANCED,
-            }
-          : { indexed: drainedIndexed, status: BACKFILL_STATUS.ADVANCED };
-      };
+        // Reports this invocation's total durable movement: rows the drain
+        // indexed count as ADVANCED even when the walk itself could not.
+        const withDrained = (
+          result: CorpusIndexBackfillResult,
+        ): CorpusIndexBackfillResult => {
+          if (drainedIndexed === 0) {
+            return result;
+          }
+          return result.status === BACKFILL_STATUS.ADVANCED
+            ? {
+                indexed: result.indexed + drainedIndexed,
+                status: BACKFILL_STATUS.ADVANCED,
+              }
+            : { indexed: drainedIndexed, status: BACKFILL_STATUS.ADVANCED };
+        };
 
-      const selectStartedAt = performance.now();
-      const page = await selectGenerationBackfillPage(scopedDb, {
-        batchSize,
-        checkpoint: claimedCheckpoint,
-      });
-      stageMs.select = sinceMs(selectStartedAt);
-      const last = page.at(-1);
-      if (!last) {
-        const completed = await scopedDb(async (tx) => {
-          // audit: skip — completion is derived projection state recorded on the checkpoint itself
-          const rows = await tx
+        const selectStartedAt = performance.now();
+        const page = await selectGenerationBackfillPage(scopedDb, {
+          batchSize,
+          checkpoint: claimedCheckpoint,
+        });
+        stageMs.select = sinceMs(selectStartedAt);
+        const last = page.at(-1);
+        if (!last) {
+          const completed = await scopedDb(async (tx) => {
+            // audit: skip — completion is derived projection state recorded on the checkpoint itself
+            const rows = await tx
+              .update(caseLawCorpusIndexBackfills)
+              .set({
+                status: CASE_LAW_CORPUS_INDEX_BACKFILL_STATUS.COMPLETE,
+              })
+              .where(
+                and(
+                  eq(caseLawCorpusIndexBackfills.generation, generation),
+                  ownsUnexpiredLease({
+                    checkpoint: claimedCheckpoint,
+                    leaseToken,
+                    status: CASE_LAW_CORPUS_INDEX_BACKFILL_STATUS.RUNNING,
+                  }),
+                ),
+              )
+              .returning(GENERATION_CHECKPOINT_COLUMNS);
+            return rows.at(0);
+          });
+          if (!completed) {
+            return withDrained({ indexed: 0, status: BACKFILL_STATUS.BUSY });
+          }
+          claimedLease.state = {
+            type: "held",
+            status: CASE_LAW_CORPUS_INDEX_BACKFILL_STATUS.COMPLETE,
+          };
+          const completedCheckpoint = toGenerationCheckpoint(completed);
+          try {
+            completion.state = {
+              result: withDrained(
+                await reconcilePending({
+                  checkpoint: completedCheckpoint,
+                  leaseToken,
+                  status: CASE_LAW_CORPUS_INDEX_BACKFILL_STATUS.COMPLETE,
+                }),
+              ),
+              type: "reconciled",
+            };
+            return completion.state.result;
+          } finally {
+            await releaseLease({
+              leaseToken,
+              status: CASE_LAW_CORPUS_INDEX_BACKFILL_STATUS.COMPLETE,
+            });
+            claimedLease.state = { type: "released" };
+          }
+        }
+
+        const rows = page
+          .filter((row) => isEligibleForGeneration(row, generation))
+          .map(withoutSourceDescriptor);
+        const removals = page.filter(
+          (row) =>
+            !isCorpusEligible(row) &&
+            hasGenerationProjectionTargets({ generation, row }),
+        );
+        let indexed: number;
+        const indexStartedAt = performance.now();
+        try {
+          // The drain above may have brought every row on this page current, so
+          // skip the indexer rather than hand it an empty batch.
+          const outcome =
+            rows.length === 0
+              ? EMPTY_BACKFILL_OUTCOME
+              : await backfillRows(scopedDb, rows, generation, {
+                  ...runningGuards,
+                  ...readConcurrencyOption,
+                  onTiming: collectTiming,
+                  // Snapshot pages of the rebuild: bulk throughput, whose
+                  // completeness the generation's census verifies rather
+                  // than each request proving it for itself.
+                  commit: CORPUS_INDEX_COMMIT.auto,
+                });
+          if (outcome.indexed !== rows.length) {
+            throw fixedPointError({
+              outcome,
+              selected: rows.length,
+              stage: FIXED_POINT_STAGE.generationBackfillPage,
+            });
+          }
+          indexed = outcome.indexed;
+          await settleAll(
+            removals.map(async (row) => {
+              await removeProjection(scopedDb, {
+                generation,
+                options: runningGuards,
+                row,
+              });
+            }),
+          );
+        } catch (error) {
+          // Keep the cursor intact, but do not make a transient search/S3 failure
+          // wait for a stale lease before its durable retry.
+          reportPage({
+            outcome: "failed",
+            selected: rows.length,
+            indexed: 0,
+            drainedIndexed,
+          });
+          throw error;
+        } finally {
+          stageMs.index = sinceMs(indexStartedAt);
+        }
+
+        const advanced = await scopedDb(async (tx) => {
+          // audit: skip — cursor advancement is the durable audit trail for this derived rebuild
+          const advancedRows = await tx
             .update(caseLawCorpusIndexBackfills)
             .set({
-              status: CASE_LAW_CORPUS_INDEX_BACKFILL_STATUS.COMPLETE,
+              ...nextGenerationWalkCursorColumns(last),
+              leaseExpiresAt: null,
+              leaseToken: null,
             })
             .where(
               and(
@@ -2222,119 +2325,56 @@ export const createCaseLawGenerationBackfill =
                 }),
               ),
             )
-            .returning(GENERATION_CHECKPOINT_COLUMNS);
-          return rows.at(0);
+            .returning({ generation: caseLawCorpusIndexBackfills.generation });
+          return advancedRows.at(0);
         });
-        if (!completed) {
-          return withDrained({ indexed: 0, status: BACKFILL_STATUS.BUSY });
+        if (advanced) {
+          claimedLease.state = { type: "released" };
         }
-        const completedCheckpoint = toGenerationCheckpoint(completed);
-        try {
-          return withDrained(
-            await reconcilePending({
-              checkpoint: completedCheckpoint,
-              leaseToken,
-              status: CASE_LAW_CORPUS_INDEX_BACKFILL_STATUS.COMPLETE,
-            }),
-          );
-        } finally {
-          await releaseLease({
-            leaseToken,
-            status: CASE_LAW_CORPUS_INDEX_BACKFILL_STATUS.COMPLETE,
-          });
-        }
-      }
-
-      const rows = page
-        .filter((row) => isEligibleForGeneration(row, generation))
-        .map(withoutSourceDescriptor);
-      const removals = page.filter(
-        (row) =>
-          !isCorpusEligible(row) &&
-          hasGenerationProjectionTargets({ generation, row }),
-      );
-      let indexed: number;
-      const indexStartedAt = performance.now();
-      try {
-        // The drain above may have brought every row on this page current, so
-        // skip the indexer rather than hand it an empty batch.
-        const outcome =
-          rows.length === 0
-            ? EMPTY_BACKFILL_OUTCOME
-            : await backfillRows(scopedDb, rows, generation, {
-                ...runningGuards,
-                ...readConcurrencyOption,
-                onTiming: collectTiming,
-                // Snapshot pages of the rebuild: bulk throughput, whose
-                // completeness the generation's census verifies rather
-                // than each request proving it for itself.
-                commit: CORPUS_INDEX_COMMIT.auto,
-              });
-        if (outcome.indexed !== rows.length) {
-          throw fixedPointError({
-            outcome,
-            selected: rows.length,
-            stage: FIXED_POINT_STAGE.generationBackfillPage,
-          });
-        }
-        indexed = outcome.indexed;
-        await settleAll(
-          removals.map(async (row) => {
-            await removeProjection(scopedDb, {
-              generation,
-              options: runningGuards,
-              row,
-            });
-          }),
-        );
-      } catch (error) {
-        // Keep the cursor intact, but do not make a transient search/S3 failure
-        // wait for a stale lease before its durable retry.
-        await releaseRunningLease();
         reportPage({
-          outcome: "failed",
+          outcome: advanced ? "advanced" : "busy",
           selected: rows.length,
-          indexed: 0,
+          indexed,
           drainedIndexed,
         });
-        throw error;
-      } finally {
-        stageMs.index = sinceMs(indexStartedAt);
+        return withDrained(
+          advanced
+            ? { indexed, status: BACKFILL_STATUS.ADVANCED }
+            : { indexed: 0, status: BACKFILL_STATUS.BUSY },
+        );
+      });
+      const claimedLeaseState = claimedLease.state;
+      const completionState = completion.state;
+      const released =
+        claimedLeaseState.type === "released"
+          ? null
+          : await Result.tryPromise(
+              async () =>
+                await releaseLease({
+                  leaseToken,
+                  status: claimedLeaseState.status,
+                }),
+            );
+      if (Result.isError(operation)) {
+        if (released !== null && Result.isError(released)) {
+          logger.error(
+            "case_law.corpus_index.generation_lease_release_failed",
+            errorSystemFields(released.error.cause),
+          );
+        }
+        if (
+          completionState.type === "reconciled" &&
+          released !== null &&
+          !Result.isError(released)
+        ) {
+          return completionState.result;
+        }
+        throw operation.error.cause;
       }
-
-      const advanced = await scopedDb(async (tx) => {
-        // audit: skip — cursor advancement is the durable audit trail for this derived rebuild
-        const advancedRows = await tx
-          .update(caseLawCorpusIndexBackfills)
-          .set({
-            ...nextGenerationWalkCursorColumns(last),
-            leaseExpiresAt: null,
-            leaseToken: null,
-          })
-          .where(
-            and(
-              eq(caseLawCorpusIndexBackfills.generation, generation),
-              ownsUnexpiredLease({
-                checkpoint: claimedCheckpoint,
-                leaseToken,
-                status: CASE_LAW_CORPUS_INDEX_BACKFILL_STATUS.RUNNING,
-              }),
-            ),
-          )
-          .returning({ generation: caseLawCorpusIndexBackfills.generation });
-        return advancedRows.at(0);
-      });
-      reportPage({
-        outcome: advanced ? "advanced" : "busy",
-        selected: rows.length,
-        indexed,
-        drainedIndexed,
-      });
-      return withDrained(
-        advanced
-          ? { indexed, status: BACKFILL_STATUS.ADVANCED }
-          : { indexed: 0, status: BACKFILL_STATUS.BUSY },
-      );
+      if (released !== null && Result.isError(released)) {
+        throw released.error.cause;
+      }
+      return operation.value;
     } finally {
       await writerLease.release();
     }
