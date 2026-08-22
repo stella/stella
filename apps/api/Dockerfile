@@ -117,17 +117,12 @@ RUN mkdir -p /app/runtime-workers && \
 RUN cd apps/api && bun src/scripts/fetch-ocr-models.ts /app/ocr-models
 # Materialize only this image's ONNX Runtime closure. The package contains
 # binaries for every supported OS and architecture; copying its whole `bin`
-# directory adds more than 200 MB of unreachable files. `cp -L` also resolves
-# Bun's isolated-install symlink before the cross-stage COPY below.
-RUN case "$TARGETARCH" in \
-      amd64) onnx_arch=x64 ;; \
-      arm64) onnx_arch=arm64 ;; \
-      *) echo "unsupported ONNX Runtime architecture: $TARGETARCH" >&2; exit 1 ;; \
-    esac && \
-    mkdir -p "/app/runtime-onnx/bin/napi-v6/linux/$onnx_arch" && \
-    cp -RL \
-      "apps/api/node_modules/onnxruntime-node/bin/napi-v6/linux/$onnx_arch/." \
-      "/app/runtime-onnx/bin/napi-v6/linux/$onnx_arch/"
+# directory adds more than 200 MB of unreachable files. The materializer
+# imports the same lookup manifest as the runtime image-layout test, so the
+# worker and container cannot drift onto different package paths.
+RUN cd apps/api && \
+    bun src/scripts/materialize-runtime-worker-native-assets.ts \
+      "$TARGETARCH" /app/runtime-onnx
 RUN bun --filter @stll/legal-atlas-runner build
 # Runtime-asset smoke probe: initializes the compiled anonymize and QuickJS
 # runtimes, plus the external YARA rules, worker bundles, OCR model, and font.

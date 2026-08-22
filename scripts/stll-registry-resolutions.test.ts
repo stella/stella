@@ -9,8 +9,14 @@ import { describe, expect, test } from "bun:test";
 // forces a deliberate decision: widen the range, release the package, or
 // update this pin with the reasoning in the PR.
 const EXPECTED_REGISTRY_RESOLVED = [
+  "@stll/anonymize",
+  "@stll/anonymize-darwin-arm64",
+  "@stll/anonymize-darwin-x64",
   "@stll/anonymize-data",
+  "@stll/anonymize-linux-arm64-gnu",
+  "@stll/anonymize-linux-x64-gnu",
   "@stll/anonymize-wasm",
+  "@stll/anonymize-win32-x64-msvc",
   "@stll/conditions",
   "@stll/docx-core",
   "@stll/folio-agents",

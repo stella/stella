@@ -7,8 +7,8 @@
  * node_modules or Bun's global cache — and then fails in the runner
  * image, where only the explicitly shipped assets exist. A native platform
  * binding failed exactly this way. Layout comes from
- * `RUNTIME_WORKER_NATIVE_LOOKUPS` and `RUNTIME_WORKER_SIDECAR_FILES`,
- * the same manifests the Dockerfile mirrors.
+ * `RUNTIME_WORKER_NATIVE_LOOKUPS` and `RUNTIME_WORKER_SIDECAR_FILES`.
+ * The Dockerfile's native-asset materializer imports the same lookup builder.
  *
  * Requires the pinned ONNX models (`bun run ocr:fetch-models`); skips on
  * a checkout without them. The image build's smoke stage runs the same

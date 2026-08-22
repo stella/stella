@@ -37,15 +37,28 @@ export const RUNTIME_WORKER_SIDECAR_FILES = [
  * introduced hidden lookup fails a local test run before it can fail an image
  * build.
  */
-export const RUNTIME_WORKER_NATIVE_LOOKUPS = {
+type RuntimeWorkerPlatform = {
+  platform: NodeJS.Platform;
+  arch: NodeJS.Architecture;
+};
+
+export const runtimeWorkerNativeLookups = ({
+  platform,
+  arch,
+}: RuntimeWorkerPlatform) => ({
   /** node_modules paths shipped as siblings of the workers directory. */
   siblingDirs: [
     {
-      source: `onnxruntime-node/bin/napi-v6/${process.platform}/${process.arch}`,
-      target: `bin/napi-v6/${process.platform}/${process.arch}`,
+      source: `onnxruntime-node/bin/napi-v6/${platform}/${arch}`,
+      target: `bin/napi-v6/${platform}/${arch}`,
     },
   ],
-} as const;
+});
+
+export const RUNTIME_WORKER_NATIVE_LOOKUPS = runtimeWorkerNativeLookups({
+  platform: process.platform,
+  arch: process.arch,
+});
 
 export const runtimeWorkerDir = (): string | undefined =>
   process.env[WORKER_DIR_ENV];
