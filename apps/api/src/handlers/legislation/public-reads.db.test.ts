@@ -50,7 +50,7 @@ const registerAct = createSafeId<"legislationDocument">();
 const sunsetAct = createSafeId<"legislationDocument">();
 const withheldAct = createSafeId<"legislationDocument">();
 const enumeratedAmendments = Array.from(
-  { length: 20 },
+  { length: 1000 },
   (_, index) => `act-${index.toString(36).padStart(4, "0")}`,
 ).join(", ");
 const longOfficialTitle = `Long legislation title amending ${enumeratedAmendments}`;
@@ -382,8 +382,7 @@ describe("public statute list", () => {
       await listStatutesHandler({ country: "CZE" }, legislationDb),
     );
 
-    expect(longOfficialTitle.length).toBeGreaterThan(64);
-    expect(longOfficialTitle.length).toBeLessThanOrEqual(1024);
+    expect(longOfficialTitle.length).toBeGreaterThan(1024);
     expect(page.items.map((item) => item.title)).toEqual([
       "Civil Code",
       "Civil Code (English)",
@@ -476,7 +475,9 @@ describe("public statute list", () => {
         break;
       }
       expect(cursor.length).toBeLessThanOrEqual(PAGINATION_CURSOR_MAX_CHARS);
-      expect(decodePaginationCursor(cursor)).toHaveLength(2);
+      expect(decodePaginationCursor(cursor)?.at(0)).toBe(
+        LEGISLATION_TITLE_CURSOR_KIND,
+      );
     }
 
     expect(cursor).toBeNull();
@@ -486,6 +487,25 @@ describe("public statute list", () => {
       labourCode,
       longTitleAct,
       registerAct,
+    ]);
+  });
+
+  test("accepts and preserves the compatibility release's legacy cursor", async () => {
+    const legacyCursor = encodePaginationCursor([
+      "Civil Code (English)",
+      civilCodeEnglish,
+    ]);
+    const page = expectPage(
+      await listStatutesHandler(
+        { country: "CZE", cursor: legacyCursor, limit: 1 },
+        legislationDb,
+      ),
+    );
+
+    expect(page.items.map((item) => item.id)).toEqual([labourCode]);
+    expect(decodePaginationCursor(page.nextCursor ?? "")).toEqual([
+      "Labour Code",
+      labourCode,
     ]);
   });
 

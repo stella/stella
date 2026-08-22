@@ -125,9 +125,9 @@ export const listStatutesHandler = async (
     return status(400, { message: "Invalid cursor" });
   }
   const orderKind =
-    cursor?.type === LEGISLATION_TITLE_CURSOR_KIND
-      ? LEGISLATION_TITLE_CURSOR_KIND
-      : LEGACY_TITLE_CURSOR_KIND;
+    cursor?.type === LEGACY_TITLE_CURSOR_KIND
+      ? LEGACY_TITLE_CURSOR_KIND
+      : LEGISLATION_TITLE_CURSOR_KIND;
   const conditions: SQL[] = [
     redistributableLegislationSource,
     eq(legislationDocuments.country, query.country.toUpperCase()),
