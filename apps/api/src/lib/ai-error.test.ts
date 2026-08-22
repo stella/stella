@@ -231,15 +231,19 @@ describe("providerStatusFields", () => {
     expect(providerStatusFields(undefined)).toEqual({});
   });
 
-  test("never carries the provider message", () => {
-    for (const error of [
-      apiCallError(503),
-      tanStackProviderError(429),
-      providerErrorBody(404, "NOT_FOUND"),
-    ]) {
-      expect(Object.values(providerStatusFields(error))).not.toContain(
-        expect.stringContaining("provider responded"),
-      );
+  test("carries the status and nothing else", () => {
+    // Asserted as an exact key set and an exact value, not as the absence of a
+    // substring: every fixture here embeds the status in its message, so a
+    // helper that leaked the message would still satisfy a "does not contain"
+    // check against any one literal.
+    for (const [error, status] of [
+      [apiCallError(503), "503"],
+      [tanStackProviderError(429), "429"],
+      [providerErrorBody(404, "NOT_FOUND"), "404"],
+    ] as const) {
+      expect(providerStatusFields(error)).toEqual({
+        "error.provider.status": status,
+      });
     }
   });
 });
