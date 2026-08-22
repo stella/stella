@@ -1530,6 +1530,40 @@ describe("outgoing chat stream message ids", () => {
     expect(outcomes).toEqual(["failed"]);
   });
 
+  test("reports provider status for an in-band unknown failure", async () => {
+    const messageId = toSafeId<"chatMessage">(
+      "11111111-1111-4111-8111-111111111111",
+    );
+    const errorSpy = spyOn(logger, "error");
+    try {
+      const stream = processServerChatStream({
+        abortSignal: new AbortController().signal,
+        getResponseMessage: () => null,
+        mapMessageId: createChatMessageIdMapper(() => messageId),
+        onFinish: () => undefined,
+        processor: new StreamProcessor(),
+        source: streamChunks([
+          { type: EventType.RUN_STARTED, runId: "run-1", threadId: "thread-1" },
+          {
+            type: EventType.RUN_ERROR,
+            message: "provider request forbidden",
+            rawEvent: { statusCode: 403 },
+          },
+        ]),
+      });
+
+      await collectChunks(stream);
+
+      expect(errorSpy).toHaveBeenCalledWith("chat.stream_failed", {
+        kind: "unknown",
+        "error.class": "UnknownError",
+        "error.provider.status": "403",
+      });
+    } finally {
+      errorSpy.mockRestore();
+    }
+  });
+
   test("does not report an in-band configuration refusal as a defect", async () => {
     const messageId = toSafeId<"chatMessage">(
       "11111111-1111-4111-8111-111111111111",
