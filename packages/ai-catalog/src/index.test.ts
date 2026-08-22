@@ -253,6 +253,15 @@ describe("MODEL_RATES economic ordering", () => {
       getModelRate("gemini-3.7-flash"),
     );
   });
+
+  test("canonical model rates match expected amounts", () => {
+    expect(getModelRate("gemini-3.6-flash")).toEqual({
+      kind: "flat",
+      inputPerMTok: 75_000,
+      outputPerMTok: 375_000,
+      cachedInputPerMTok: 7500,
+    });
+  });
 });
 
 describe("CONTEXT_WINDOW_TOKENS", () => {

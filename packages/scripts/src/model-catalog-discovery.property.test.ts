@@ -158,4 +158,44 @@ describe("model catalog discovery invariants", () => {
       propertyConfig(),
     );
   });
+
+  test("default reviewed exclusions cover unversioned Google aliases", () => {
+    const googleAliases: UpstreamDiscoveryModel[] = [
+      {
+        provider: "google",
+        modelId: "gemini-flash-latest",
+        releaseDate: "2026-08-13",
+        status: null,
+        toolCall: true,
+        structuredOutput: true,
+        outputModalities: ["text"],
+      },
+      {
+        provider: "google",
+        modelId: "gemini-flash-lite-latest",
+        releaseDate: "2026-07-21",
+        status: null,
+        toolCall: true,
+        structuredOutput: true,
+        outputModalities: ["text"],
+      },
+    ];
+
+    expect(
+      findUnreviewedModels({
+        upstream: googleAliases,
+        offered: EMPTY_OFFERED,
+      }),
+    ).toEqual([]);
+
+    expect(
+      findUnreviewedModels({
+        upstream: googleAliases,
+        offered: EMPTY_OFFERED,
+        reviewedExclusions: {
+          "google:gemini-flash-latest": "2026-08-22: property-test disposition",
+        },
+      }),
+    ).toEqual([googleAliases[1]]);
+  });
 });
