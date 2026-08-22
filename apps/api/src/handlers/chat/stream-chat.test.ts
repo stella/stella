@@ -59,15 +59,11 @@ import {
   chatMessageUsageFromTokenUsage,
   collectInitialRestorationPlaceholders,
   createChatAttemptState,
-  createChatMessageIdMapper,
-  ensureAssistantMessageStart,
   hydrateMessages,
-  normalizeFinalAssistantMessageId,
   processServerChatStream,
   pruneOrphanedToolParts,
   prepareResumeForThirdParty,
   recordChatAttemptFinish,
-  remapOutgoingMessageIds,
   toChatMessage,
   resolveAgentRunBoundaryError,
   shouldAttemptChatFallback,
@@ -75,6 +71,12 @@ import {
   transformOutgoingStream,
   transformPersistenceVisibleStream,
 } from "./stream-chat";
+import {
+  createChatMessageIdMapper,
+  ensureAssistantMessageStart,
+  normalizeFinalAssistantMessageId,
+  remapOutgoingMessageIds,
+} from "./stream-message-identity";
 
 const collectChunks = async (
   stream: AsyncIterable<StreamChunk>,

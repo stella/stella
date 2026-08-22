@@ -20,7 +20,7 @@ import { isFieldPath } from "@stll/template-conditions";
 import type {
   ApplyActiveDocxEditsInput,
   ApplyActiveDocxEditsOutput,
-} from "@/features/chat/queries";
+} from "@/features/chat/chat-query-contract";
 import { stableStringify } from "@/lib/stable-stringify";
 
 /** Chars of surrounding text recorded so suggestions survive document edits

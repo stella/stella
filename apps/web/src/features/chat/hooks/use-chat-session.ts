@@ -82,6 +82,13 @@ import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import {
+  isChatMessageStartError,
+  sendThreadChatMessage,
+  type ChatRuntime,
+  type ChatSendMessageOptions,
+  type ChatUserMessageInput,
+} from "@/features/chat/chat-runtime";
+import {
   invalidateCreatedDocumentQueries,
   promoteCreateDocumentDraftInspectorTab,
   resetFailedCreateDocumentDraftInspectorTab,
@@ -98,14 +105,7 @@ import {
   type SendQueueEvent,
   type SendQueueState,
 } from "@/features/chat/hooks/use-chat-session-send-queue.logic";
-import {
-  fetchOlderMessages,
-  isChatMessageStartError,
-  sendThreadChatMessage,
-  type ChatRuntime,
-  type ChatSendMessageOptions,
-  type ChatUserMessageInput,
-} from "@/features/chat/queries";
+import { fetchOlderMessages } from "@/features/chat/queries";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { getAnalytics } from "@/lib/analytics/provider";

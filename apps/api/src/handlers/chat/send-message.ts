@@ -2,7 +2,6 @@ import { panic, Result } from "better-result";
 import { deepEquals } from "bun";
 import { and, eq } from "drizzle-orm";
 
-import type { ReasoningEffort } from "@stll/ai-catalog";
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import type { ChatSendMode } from "@stll/anonymize-chat";
 import {
@@ -14,7 +13,6 @@ import type { SkillMetadata } from "@stll/skills";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { chatMessages, chatThreads } from "@/api/db/schema";
-import type { UsageEventLane } from "@/api/db/schema";
 import { env } from "@/api/env";
 import {
   getActiveFileModelBinding,
@@ -76,11 +74,7 @@ import {
 } from "@/api/handlers/chat/chat-turn-persistence";
 import type { ChatTurnExecution } from "@/api/handlers/chat/chat-turn-persistence";
 import type { ChatTurnFailureCode } from "@/api/handlers/chat/chat-turn-state";
-import {
-  COMPACTION_SUMMARY_MESSAGE_ID,
-  compactChatMessagesForModel,
-  chatThreadNeedsCompaction,
-} from "@/api/handlers/chat/compaction";
+import { COMPACTION_SUMMARY_MESSAGE_ID } from "@/api/handlers/chat/compaction";
 import {
   computeAssistantTurnWorkspaceIds,
   extractIncomingMessageWorkspaceIds,
@@ -96,9 +90,10 @@ import { isExternalMcpToolPart } from "@/api/handlers/chat/mcp-tool-parts";
 import type { MessagePersistencePlan } from "@/api/handlers/chat/persist-message";
 import { planMessagePersistence } from "@/api/handlers/chat/persist-message";
 import {
-  applyChatCompactionCheckpoint,
-  readLatestChatCompaction,
-} from "@/api/handlers/chat/persistent-compaction";
+  compactMessagesForContext,
+  markChatCompactionDue,
+  selectMessagesForContextInput,
+} from "@/api/handlers/chat/send-message-compaction";
 import {
   rollbackUnpersistedChatSideEffects,
   uploadMessageFilesWithRollback,
@@ -158,7 +153,6 @@ import {
 } from "@/api/lib/agent-skills/skills";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { captureError } from "@/api/lib/analytics/capture";
-import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import {
   assertUsageAvailableForHandler,
@@ -173,7 +167,6 @@ import {
   createGeneratedDocumentActiveDraftContext,
   hasPersistedGeneratedDocumentActiveDraftContext,
 } from "@/api/lib/chat/active-draft-context";
-import { resolveChatCompactionBudget } from "@/api/lib/chat/compaction-budget";
 import { isReadyGeneratedDocumentDraft } from "@/api/lib/chat/created-draft";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import {
@@ -186,7 +179,6 @@ import {
   type ChatRefInputState,
   type ChatUnresolvedInputRefContext,
 } from "@/api/lib/chat/ref-token";
-import { markChatThreadCompactionDue } from "@/api/lib/chat/thread-compaction";
 import { createChatToolDefectMemo } from "@/api/lib/chat/tool-defect-memo";
 import { rewriteWorkspaceUrlsToMentions } from "@/api/lib/chat/workspace-url-mentions";
 import { detached } from "@/api/lib/detached";
@@ -1883,134 +1875,6 @@ const sendMessage = createSafeRootHandler(
 
 export default sendMessage;
 
-type ChatCompactionModelProps = {
-  /** Effective chat model override for this turn; see `resolveEffectiveChatModelSelection`. */
-  chatModelOverride: string | undefined;
-  organizationId: SafeId<"organization">;
-  orgAIConfig: OrgAIConfig | null;
-  /** Effective reasoning override paired with the selected thread model. */
-  reasoningEffort: ReasoningEffort | undefined;
-};
-
-type CompactMessagesForContextProps = ChatCompactionModelProps & {
-  abortSignal: AbortSignal;
-  boundary: ReturnType<typeof createChatThirdPartyBoundary>;
-  messages: ChatMessage[];
-  safeDb: SafeDb;
-  tenantWorkspaceIds: readonly SafeId<"workspace">[];
-  threadId: SafeId<"chatThread">;
-  /** Budget lane of the turn this compaction serves. */
-  usageLane: UsageEventLane;
-  userId: SafeId<"user">;
-  workspaceId: SafeId<"workspace"> | null;
-};
-
-type SelectMessagesForContextInputProps = {
-  messages: ChatMessage[];
-  safeDb: SafeDb;
-  skipCheckpoint: boolean;
-  threadId: SafeId<"chatThread">;
-};
-
-const selectMessagesForContextInput = async ({
-  messages,
-  safeDb,
-  skipCheckpoint,
-  threadId,
-}: SelectMessagesForContextInputProps): Promise<ChatMessage[]> => {
-  if (skipCheckpoint) {
-    return messages;
-  }
-
-  const checkpointResult = await readLatestChatCompaction({
-    safeDb,
-    threadId,
-  });
-  if (Result.isError(checkpointResult)) {
-    captureError(checkpointResult.error, {
-      threadId,
-      feature: "chat.compaction_checkpoint_read",
-    });
-    return messages;
-  }
-
-  if (checkpointResult.value === null) {
-    return messages;
-  }
-
-  return applyChatCompactionCheckpoint({
-    checkpoint: checkpointResult.value,
-    messages,
-  });
-};
-
-const compactMessagesForContext = async ({
-  abortSignal,
-  boundary,
-  chatModelOverride,
-  messages,
-  organizationId,
-  orgAIConfig,
-  reasoningEffort,
-  safeDb,
-  tenantWorkspaceIds,
-  threadId,
-  usageLane,
-  userId,
-  workspaceId,
-}: CompactMessagesForContextProps): Promise<
-  Result<ChatMessage[], HandlerError>
-> => {
-  const aiAnalytics = createTanStackAIAnalyticsCallbacks({
-    usageMetering: {
-      actionType: "chat",
-      // Pre-stream compaction is part of the same interactive turn,
-      // so it settles against the turn's resolved lane.
-      lane: usageLane,
-      organizationId,
-      safeDb,
-      serviceTier: "standard",
-      userId,
-      workspaceId,
-    },
-    feature: "chat.context_compaction",
-    modelRole: "chat",
-    orgAIConfig,
-    properties: {
-      organization_id: organizationId,
-      ...(workspaceId ? { workspace_id: workspaceId } : {}),
-    },
-    sessionId: threadId,
-    traceId: Bun.randomUUIDv7(),
-  });
-
-  const { triggerTokens, preserveTokens } = resolveChatCompactionBudget({
-    chatModelOverride,
-    orgAIConfig,
-    organizationId,
-  });
-
-  return await compactChatMessagesForModel({
-    abortSignal,
-    aiAnalytics,
-    boundary,
-    messages,
-    modelId: chatModelOverride,
-    tenantWorkspaceIds,
-    onSummaryError: (error) => {
-      captureError(error, {
-        threadId,
-        feature: "chat.compaction",
-      });
-    },
-    organizationId,
-    orgAIConfig,
-    reasoningEffort,
-    preserveTokens,
-    triggerTokens,
-  });
-};
-
 type ApplyAssistantPersistencePlanProps = {
   messages: PersistableChatMessage[];
   persistencePlan: MessagePersistencePlan;
@@ -2042,54 +1906,6 @@ const applyAssistantPersistencePlan = ({
       const exhaustive: never = persistencePlan;
       return exhaustive;
     }
-  }
-};
-
-type MarkChatCompactionDueProps = ChatCompactionModelProps & {
-  messages: ChatMessage[];
-  safeDb: SafeDb;
-  threadId: SafeId<"chatThread">;
-};
-
-/**
- * Put the thread on the compaction queue when its window crosses the trigger.
- *
- * The whole of compaction's cost — reading the delta and calling the
- * summarizer — belongs to the scheduler task that drains this queue. All the
- * send path contributes is the token estimate it already has in memory and one
- * indexed update, so a send never waits on a checkpoint and never has to
- * survive one.
- *
- * The mark is idempotent and re-derived on every send, which is what makes it
- * self-healing: if this update is lost, the next send over the trigger stamps
- * the thread again.
- */
-const markChatCompactionDue = async ({
-  chatModelOverride,
-  messages,
-  organizationId,
-  orgAIConfig,
-  safeDb,
-  threadId,
-}: MarkChatCompactionDueProps): Promise<void> => {
-  const { triggerTokens } = resolveChatCompactionBudget({
-    chatModelOverride,
-    orgAIConfig,
-    organizationId,
-  });
-
-  if (!chatThreadNeedsCompaction({ messages, triggerTokens })) {
-    return;
-  }
-
-  const marked = await safeDb(
-    async (tx) => await markChatThreadCompactionDue({ threadId, tx }),
-  );
-  if (Result.isError(marked)) {
-    captureError(marked.error, {
-      threadId,
-      feature: "chat.compaction_enqueue",
-    });
   }
 };
 
@@ -2845,18 +2661,21 @@ const hydrateAssistantMessageRefs = ({
         message.metadata?.refEncoding,
       );
       const refContext = message.metadata?.refContext;
+      const validatedRefContext = isChatRefContext(refContext)
+        ? refContext
+        : undefined;
       if (
         inputState === CHAT_REF_INPUT_STATE.PERSISTED_RESOURCE_REFS_V2 &&
-        !isChatRefContext(refContext)
+        validatedRefContext === undefined
       ) {
         panic("Stored chat reference context is invalid");
       }
-      const entityContexts = isChatRefContext(refContext)
-        ? refContext.entities
-        : [];
-      const unresolvedInputRefs = isChatRefContext(refContext)
-        ? refContext.unresolvedInputs
-        : [];
+      const entityContexts =
+        validatedRefContext === undefined ? [] : validatedRefContext.entities;
+      const unresolvedInputRefs =
+        validatedRefContext === undefined
+          ? []
+          : validatedRefContext.unresolvedInputs;
       const toolCallsById = new Map<string, { input: unknown; name: string }>();
       for (const part of message.parts) {
         if (part.type === "tool-call") {

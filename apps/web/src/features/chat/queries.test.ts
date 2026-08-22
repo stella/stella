@@ -12,14 +12,17 @@ import { CHAT_TURN_INTENT } from "@stll/api-contract";
 
 import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
 import { selectCreateDocumentDrafts } from "@/components/chat/create-document-draft.logic";
+import { chatKeys } from "@/features/chat/chat-query-contract";
+import {
+  buildSendRequestBody,
+  createChatRuntime,
+  sendThreadChatMessage,
+} from "@/features/chat/chat-runtime";
 import {
   __resetChatRequestStateForTests,
   acquireChatRuntime,
   applyChatModelChange,
-  buildSendRequestBody,
-  chatKeys,
   chatThreadOptions,
-  createChatRuntime,
   groupedChatThreadsOptions,
   invalidateGroupedChatThreads,
   invalidateChatThreadLists,
@@ -28,7 +31,6 @@ import {
   matchesChatThread,
   matchesChatThreadAcrossScopes,
   mergeGroupedChatThreadPages,
-  sendThreadChatMessage,
   type ChatThreadFetched,
 } from "@/features/chat/queries";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";

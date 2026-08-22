@@ -67,20 +67,22 @@ import type {
 import { COMPOSER_TEXT_CLASS } from "@/components/chat/composer-control-style";
 import { useAIKeyGate } from "@/components/require-ai-key";
 import { isInputType } from "@/components/templates/template-field-manifest";
+import type {
+  ApplyActiveDocxEditsInput,
+  ApplyActiveDocxEditsOutput,
+} from "@/features/chat/chat-query-contract";
+import {
+  chatKeys,
+  SUGGEST_TEMPLATE_FIELDS_TOOL_SCOPE,
+} from "@/features/chat/chat-query-contract";
+import type { ChatUserMessageInput } from "@/features/chat/chat-runtime";
 import { useChatSession } from "@/features/chat/hooks/use-chat-session";
 import { useChatThreadRuntime } from "@/features/chat/hooks/use-chat-thread-runtime";
 import { useChatUserContext } from "@/features/chat/hooks/use-chat-user-context";
 import { buildChatRequestMessage } from "@/features/chat/lib/build-chat-request-message";
 import {
-  chatKeys,
   chatThreadOptions,
-  SUGGEST_TEMPLATE_FIELDS_TOOL_SCOPE,
   templateChatThreadOptions,
-} from "@/features/chat/queries";
-import type {
-  ApplyActiveDocxEditsInput,
-  ApplyActiveDocxEditsOutput,
-  ChatUserMessageInput,
 } from "@/features/chat/queries";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";

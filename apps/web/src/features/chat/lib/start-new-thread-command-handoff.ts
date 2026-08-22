@@ -1,9 +1,9 @@
 import type { QueryClient } from "@tanstack/react-query";
 
 import type { ChatDraftAttachment } from "@/components/chat-editor-provider";
+import type { ChatThreadOptionsContext } from "@/features/chat/chat-query-contract";
 import { buildChatRequestMessage } from "@/features/chat/lib/build-chat-request-message";
 import { acquireChatRuntime, chatThreadOptions } from "@/features/chat/queries";
-import type { ChatThreadOptionsContext } from "@/features/chat/queries";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 
 type StartNewThreadCommandHandoffArgs = {

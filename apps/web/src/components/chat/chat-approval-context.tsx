@@ -6,7 +6,7 @@ import type {
   ApprovalToolName,
   ToolApprovalGrant,
 } from "@/components/chat/chat-ui-tools";
-import type { ChatSendMessageOptions } from "@/features/chat/queries";
+import type { ChatSendMessageOptions } from "@/features/chat/chat-runtime";
 
 /**
  * Tool-approval handlers and grant sets shared by every leaf that
