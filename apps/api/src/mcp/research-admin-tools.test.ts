@@ -11,6 +11,7 @@ import {
 } from "@/api/mcp/static-tool-definitions";
 import type { McpToolDefinition, McpToolResponse } from "@/api/mcp/tool-types";
 import { isMcpEgressPlan } from "@/api/mcp/tool-types";
+import { serializeToolResult } from "@/api/mcp/tool-utils";
 import { listMcpTools } from "@/api/mcp/tools";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
@@ -45,8 +46,9 @@ const errorText = (result: McpToolResponse): string => {
   if (isMcpEgressPlan(result)) {
     throw new Error("expected a CallToolResult, got an egress plan");
   }
-  expect(result.isError).toBe(true);
-  const first = result.content[0];
+  const serialized = serializeToolResult(result);
+  expect(serialized.isError).toBe(true);
+  const first = serialized.content[0];
   return first !== undefined && "text" in first ? first.text : "";
 };
 

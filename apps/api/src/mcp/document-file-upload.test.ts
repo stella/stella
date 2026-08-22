@@ -18,6 +18,7 @@ import {
   DOCUMENT_TOOL_HANDLERS,
 } from "@/api/mcp/document-tools";
 import { toMcpTools } from "@/api/mcp/gateway/list-tools";
+import { errorResult } from "@/api/mcp/tool-utils";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -112,13 +113,12 @@ describe("document file upload surface", () => {
       context: createContext(),
     });
 
-    expect(result).toMatchObject({ isError: true });
-    if (!("content" in result)) {
-      panic("Expected a structured MCP validation error");
-    }
-    expect(result.content.at(0)).toMatchObject({
-      type: "text",
-      text: expect.stringContaining('"code":"validation_error"'),
+    expect(result).toMatchObject({
+      status: "error",
+      error: {
+        type: "structured",
+        code: "validation_error",
+      },
     });
   });
 
@@ -242,7 +242,7 @@ describe("document file upload surface", () => {
 
     expect(capabilities).toEqual(["uploads.create"]);
     expect(aborted).toHaveBeenCalledTimes(1);
-    expect(result).toMatchObject({ isError: true });
+    expect(result).toMatchObject({ status: "error" });
   });
 
   test("reports a failed reservation cleanup without hiding the transfer failure", async () => {
@@ -260,10 +260,7 @@ describe("document file upload surface", () => {
       dependencies: {
         abort: mock(async () => ({
           status: "error" as const,
-          result: {
-            content: [{ type: "text" as const, text: "abort failed" }],
-            isError: true,
-          },
+          result: errorResult("abort failed"),
         })),
         captureCleanupFailure,
         download: mock(async () =>
@@ -287,14 +284,12 @@ describe("document file upload surface", () => {
     });
 
     expect(result).toMatchObject({
-      isError: true,
-      content: [
-        {
-          text: expect.stringContaining(
-            "could not be transferred, and its reserved upload could not be cleaned up",
-          ),
-        },
-      ],
+      status: "error",
+      error: {
+        message: expect.stringContaining(
+          "could not be transferred, and its reserved upload could not be cleaned up",
+        ),
+      },
     });
     expect(captureCleanupFailure).toHaveBeenCalledTimes(1);
     expect(captureCleanupFailure).toHaveBeenCalledWith(expect.any(Error), {
@@ -341,6 +336,6 @@ describe("document file upload surface", () => {
       uploadId: "upload_123",
       workspaceId: "00000000-0000-4000-8000-000000000001",
     });
-    expect(result).toMatchObject({ isError: true });
+    expect(result).toMatchObject({ status: "error" });
   });
 });

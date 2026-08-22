@@ -4,13 +4,13 @@ import { beforeEach, describe, expect, mock, test } from "bun:test";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { McpRequestContext } from "@/api/mcp/context";
 import type { ResolvedSkillTool } from "@/api/mcp/gateway/skills";
+import { structuredErrorResult } from "@/api/mcp/tool-utils";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 // Mock the two dispatch collaborators so this file exercises only
-// `dispatchGatewayToolCall`'s own branch selection, audit call, and error
-// envelope. The name-classification (`isSkillToolName` / `isExternalMcpToolName`)
-// and result builders (`structuredErrorResult` / `textResult`) stay real, so the
-// asserted envelopes are the exact shapes callers receive.
+// `dispatchGatewayToolCall`'s own branch selection, audit call, and result
+// envelope. The name-classification (`isSkillToolName` /
+// `isExternalMcpToolName`) and internal result builders stay real.
 const callGatewayExternalMcpToolMock = mock();
 const gatewayLoadErrorResultMock = mock();
 const recordSkillGatewayToolAuditMock = mock(async () => undefined);
@@ -44,14 +44,6 @@ const resolvedSkill = asTestRaw<ResolvedSkillTool>({
   compatibility: "stella>=1",
   exposedName: "skill__alpha",
 });
-
-const parseResult = (result: CallToolResult | null): unknown => {
-  const text = result?.content.at(0);
-  if (text?.type !== "text") {
-    throw new Error("expected a text content block");
-  }
-  return JSON.parse(text.text);
-};
 
 describe("dispatchGatewayToolCall", () => {
   beforeEach(() => {
@@ -90,7 +82,7 @@ describe("dispatchGatewayToolCall", () => {
       toolName: "mcp__registry__lookup",
     });
 
-    expect(result).toBe(sentinel);
+    expect(result).toEqual({ type: "external_mcp", result: sentinel });
     expect(callGatewayExternalMcpToolMock).toHaveBeenCalledWith({
       args,
       context,
@@ -122,9 +114,14 @@ describe("dispatchGatewayToolCall", () => {
       toolName: "skill__missing",
     });
 
-    expect(result?.isError).toBe(true);
-    expect(parseResult(result)).toEqual({
+    expect(result?.type).toBe("internal");
+    if (result?.type !== "internal") {
+      throw new Error("expected an internal gateway result");
+    }
+    expect(result.result).toEqual({
+      status: "error",
       error: {
+        type: "structured",
         code: "unknown_tool",
         message: "Unknown tool: skill__missing",
         hint: "Call tools/list for the tools available to this session.",
@@ -143,15 +140,21 @@ describe("dispatchGatewayToolCall", () => {
       toolName: "skill__alpha",
     });
 
-    expect(result?.isError).toBeUndefined();
-    expect(parseResult(result)).toEqual({
-      body: "# Alpha skill body",
-      compatibility: "stella>=1",
-      license: "MIT",
-      metadata: { key: "value" },
-      name: "alpha",
-      origin: "authored",
-      version: "1.2.3",
+    expect(result?.type).toBe("internal");
+    if (result?.type !== "internal") {
+      throw new Error("expected an internal gateway result");
+    }
+    expect(result.result).toEqual({
+      status: "success",
+      data: {
+        body: "# Alpha skill body",
+        compatibility: "stella>=1",
+        license: "MIT",
+        metadata: { key: "value" },
+        name: "alpha",
+        origin: "authored",
+        version: "1.2.3",
+      },
     });
 
     expect(recordSkillGatewayToolAuditMock).toHaveBeenCalledTimes(1);
@@ -172,10 +175,11 @@ describe("dispatchGatewayToolCall", () => {
     // unhandled rejection.
     const loadFault = new Error("db unavailable");
     resolveSkillToolMock.mockRejectedValue(loadFault);
-    const sentinel: CallToolResult = {
-      content: [{ type: "text", text: "retryable" }],
-      isError: true,
-    };
+    const sentinel = structuredErrorResult({
+      code: "internal_error",
+      message: "retryable",
+      retryable: true,
+    });
     gatewayLoadErrorResultMock.mockReturnValue(sentinel);
 
     const result = await dispatchGatewayToolCall({
@@ -186,7 +190,7 @@ describe("dispatchGatewayToolCall", () => {
     });
 
     expect(gatewayLoadErrorResultMock).toHaveBeenCalledWith(loadFault);
-    expect(result).toBe(sentinel);
+    expect(result).toEqual({ type: "internal", result: sentinel });
     expect(recordSkillGatewayToolAuditMock).not.toHaveBeenCalled();
   });
 

@@ -22,6 +22,9 @@ import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import type {
   DELETED_TRUE_PROJECTION,
+  LIST_CLAUSES_DETAIL_PROJECTION,
+  LIST_CLAUSES_LIST_PROJECTION,
+  LIST_CLAUSES_VERSION_PROJECTION,
   LIST_PLAYBOOKS_DETAIL_PROJECTION,
   LIST_PLAYBOOKS_LIST_PROJECTION,
   RUN_PLAYBOOK_PROJECTION,
@@ -72,7 +75,7 @@ import {
   nullableStringProp,
   stringProp,
   structuredErrorResult,
-  textResult,
+  toolDataResult,
   validationErrorResult,
 } from "@/api/mcp/tool-utils";
 
@@ -909,10 +912,10 @@ const readClauseDetail = async ({
     if (Result.isError(result)) {
       return internalFailureResult(result.error);
     }
-    const version = result.value;
+    const rawVersion = result.value;
     // Fail-closed (P7): a malformed version body aborts before any push runs,
     // exactly the Wave 4 fix — kept as inline control flow, unchanged.
-    if (!isClauseBody(version.body)) {
+    if (!isClauseBody(rawVersion.body)) {
       return structuredErrorResult({
         code: "validation_error",
         message: "Clause body has an unrecognized format",
@@ -921,6 +924,11 @@ const readClauseDetail = async ({
         ],
       });
     }
+    const version = {
+      ...rawVersion,
+      body: rawVersion.body,
+      createdAt: rawVersion.createdAt.toISOString(),
+    } satisfies v.InferInput<typeof LIST_CLAUSES_VERSION_PROJECTION>["version"];
     const textFields = runTextFieldSpecs(
       [
         clauseBodyTextFieldSpec({
@@ -941,20 +949,8 @@ const readClauseDetail = async ({
   if (Result.isError(result)) {
     return internalFailureResult(result.error);
   }
-  const clause = { ...result.value, metadata: undefined };
-  // title/description/usageNotes are queued unconditionally, matching the
-  // original handler: if the body guard below fails, this response (and these
-  // fields) is discarded via the early error return before it ever reaches a
-  // caller, same as before.
-  const textFields = runTextFieldSpecs(
-    clauseCoreTextFieldSpecs(organizationId),
-    {
-      clause,
-    },
-  );
-  // Fail-closed (P7): kept as inline control flow, unchanged, at the same
-  // point relative to the pushes above and below.
-  if (!isClauseBody(clause.body)) {
+  const { metadata: _metadata, ...rawClause } = result.value;
+  if (!isClauseBody(rawClause.body)) {
     return structuredErrorResult({
       code: "validation_error",
       message: "Clause body has an unrecognized format",
@@ -963,6 +959,37 @@ const readClauseDetail = async ({
       ],
     });
   }
+  const variants = [];
+  for (const rawVariant of rawClause.variants) {
+    if (!isClauseBody(rawVariant.body)) {
+      return structuredErrorResult({
+        code: "validation_error",
+        message: "Clause body has an unrecognized format",
+        issues: [
+          { path: "body", message: "Clause body has an unrecognized format" },
+        ],
+      });
+    }
+    variants.push({
+      ...rawVariant,
+      body: rawVariant.body,
+      createdAt: rawVariant.createdAt.toISOString(),
+    });
+  }
+  const clause = {
+    ...rawClause,
+    body: rawClause.body,
+    createdAt: rawClause.createdAt.toISOString(),
+    updatedAt: rawClause.updatedAt.toISOString(),
+    variants,
+    versions: rawClause.versions.map(({ createdAt, ...version }) =>
+      Object.assign(version, { createdAt: createdAt.toISOString() }),
+    ),
+  } satisfies v.InferInput<typeof LIST_CLAUSES_DETAIL_PROJECTION>["clause"];
+  const textFields = runTextFieldSpecs(
+    clauseCoreTextFieldSpecs(organizationId),
+    { clause },
+  );
   textFields.push(
     ...runTextFieldSpecs(
       [
@@ -981,16 +1008,6 @@ const readClauseDetail = async ({
         variant,
       }),
     );
-    // Fail-closed (P7): kept inline inside the variant loop, unchanged.
-    if (!isClauseBody(variant.body)) {
-      return structuredErrorResult({
-        code: "validation_error",
-        message: "Clause body has an unrecognized format",
-        issues: [
-          { path: "body", message: "Clause body has an unrecognized format" },
-        ],
-      });
-    }
     textFields.push(
       ...runTextFieldSpecs(
         [
@@ -1052,7 +1069,13 @@ const handleListClausesTool: McpToolHandler = async ({ args, context }) => {
   if (Result.isError(listed)) {
     return internalFailureResult(listed.error);
   }
-  const clauses = listed.value.items;
+  const clauses = listed.value.items.map(
+    ({ createdAt, updatedAt, ...clause }) =>
+      Object.assign(clause, {
+        createdAt: createdAt.toISOString(),
+        updatedAt: updatedAt.toISOString(),
+      }),
+  );
 
   // Sequential await, not Promise.all: a single safeDb client cannot multiplex
   // the clause and category queries concurrently.
@@ -1070,20 +1093,20 @@ const handleListClausesTool: McpToolHandler = async ({ args, context }) => {
   }
   const categories =
     categoriesResult !== undefined && !Result.isError(categoriesResult)
-      ? categoriesResult.value.categories
+      ? categoriesResult.value.categories.map(
+          ({ createdAt, updatedAt, ...category }) =>
+            Object.assign(category, {
+              createdAt: createdAt.toISOString(),
+              updatedAt: updatedAt.toISOString(),
+            }),
+        )
       : undefined;
 
-  // No compile-time tie against LIST_CLAUSES_LIST_PROJECTION here (nor on the
-  // detail/version branches below): the clause handlers return `Date` columns
-  // verbatim, and they only become the projection's `v.string()` after the JSON
-  // round-trip the chat adapter performs (`parsePayload`, run-registry-tool.ts).
-  // A `satisfies` tie would need the handler to pre-serialize those columns,
-  // which changes what every other transport returns.
   const payload = {
     clauses,
     ...(categories ? { categories } : {}),
     nextCursor: listed.value.nextCursor,
-  };
+  } satisfies v.InferInput<typeof LIST_CLAUSES_LIST_PROJECTION>;
   const textFields = [
     ...runTextFieldSpecs(clauseListTextFieldSpecs(organizationId), payload),
     ...(categories
@@ -1277,7 +1300,7 @@ const handleSaveClauseTool: McpToolHandler = async ({ args, context }) => {
     if (Result.isError(created)) {
       return internalFailureResult(created.error);
     }
-    return textResult({
+    return toolDataResult({
       clauseId: created.value.id,
     } satisfies v.InferInput<typeof SAVE_CLAUSE_PROJECTION>);
   }
@@ -1322,7 +1345,7 @@ const handleSaveClauseTool: McpToolHandler = async ({ args, context }) => {
   if (Result.isError(updated)) {
     return internalFailureResult(updated.error);
   }
-  return textResult({
+  return toolDataResult({
     clauseId: updated.value.id,
   } satisfies v.InferInput<typeof SAVE_CLAUSE_PROJECTION>);
 };
@@ -1358,7 +1381,7 @@ const handleDeleteClauseTool: McpToolHandler = async ({ args, context }) => {
   if (Result.isError(deleted)) {
     return internalFailureResult(deleted.error);
   }
-  return textResult({
+  return toolDataResult({
     deleted: true,
   } satisfies v.InferInput<typeof DELETED_TRUE_PROJECTION>);
 };
@@ -1568,7 +1591,7 @@ const handleRunPlaybookTool: McpToolHandler = async ({ args, context }) => {
   }
 
   if (outcome.materializedPropertyIds.length === 0) {
-    return textResult({ runPropertyCount: 0 } satisfies v.InferInput<
+    return toolDataResult({ runPropertyCount: 0 } satisfies v.InferInput<
       typeof RUN_PLAYBOOK_PROJECTION
     >);
   }
@@ -1598,7 +1621,7 @@ const handleRunPlaybookTool: McpToolHandler = async ({ args, context }) => {
     return workflowStartFailureResult();
   }
 
-  return textResult({
+  return toolDataResult({
     runPropertyCount: outcome.materializedPropertyIds.length,
   } satisfies v.InferInput<typeof RUN_PLAYBOOK_PROJECTION>);
 };

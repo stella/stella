@@ -13,7 +13,12 @@ import {
 } from "@/api/mcp/gateway/external-tools";
 import type { ResolvedSkillTool } from "@/api/mcp/gateway/skills";
 import { resolveSkillTool } from "@/api/mcp/gateway/skills";
-import { structuredErrorResult, textResult } from "@/api/mcp/tool-utils";
+import type { InternalToolResult } from "@/api/mcp/tool-types";
+import { structuredErrorResult, toolDataResult } from "@/api/mcp/tool-utils";
+
+export type GatewayDispatchResult =
+  | { type: "external_mcp"; result: CallToolResult }
+  | { type: "internal"; result: InternalToolResult };
 
 export const dispatchGatewayToolCall = async ({
   args,
@@ -25,13 +30,16 @@ export const dispatchGatewayToolCall = async ({
   context: McpRequestContext;
   mode: McpMode;
   toolName: string;
-}): Promise<CallToolResult | null> => {
+}): Promise<GatewayDispatchResult | null> => {
   if (mode !== "default") {
     return null;
   }
 
   if (isExternalMcpToolName(toolName)) {
-    return await callGatewayExternalMcpTool({ args, context, toolName });
+    return {
+      type: "external_mcp",
+      result: await callGatewayExternalMcpTool({ args, context, toolName }),
+    };
   }
 
   if (!isSkillToolName(toolName)) {
@@ -47,16 +55,19 @@ export const dispatchGatewayToolCall = async ({
     // retryable error, never a definitive `unknown_tool`.
     const loadError = gatewayLoadErrorResult(error);
     if (loadError) {
-      return loadError;
+      return { type: "internal", result: loadError };
     }
     throw error;
   }
   if (!skill) {
-    return structuredErrorResult({
-      code: "unknown_tool",
-      message: `Unknown tool: ${toolName}`,
-      hint: "Call tools/list for the tools available to this session.",
-    });
+    return {
+      type: "internal",
+      result: structuredErrorResult({
+        code: "unknown_tool",
+        message: `Unknown tool: ${toolName}`,
+        hint: "Call tools/list for the tools available to this session.",
+      }),
+    };
   }
 
   await recordSkillGatewayToolAudit({
@@ -67,13 +78,16 @@ export const dispatchGatewayToolCall = async ({
     toolName,
   });
 
-  return textResult({
-    body: skill.body,
-    compatibility: skill.compatibility,
-    license: skill.license,
-    metadata: skill.metadata,
-    name: skill.slug,
-    origin: skill.origin,
-    version: skill.version,
-  });
+  return {
+    type: "internal",
+    result: toolDataResult({
+      body: skill.body,
+      compatibility: skill.compatibility,
+      license: skill.license,
+      metadata: skill.metadata,
+      name: skill.slug,
+      origin: skill.origin,
+      version: skill.version,
+    }),
+  };
 };

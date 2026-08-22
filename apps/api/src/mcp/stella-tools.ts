@@ -1,4 +1,3 @@
-import type { CallToolResult } from "@modelcontextprotocol/server";
 import { panic, Result } from "better-result";
 import { and, desc, eq, sql } from "drizzle-orm";
 import * as v from "valibot";
@@ -74,6 +73,7 @@ import {
   runTextFieldSpecs,
 } from "@/api/mcp/text-field-spec";
 import type {
+  InternalToolSuccess,
   McpTextFieldSpec,
   McpToolDefinition,
   McpToolHandler,
@@ -99,7 +99,7 @@ import {
   resolveWindowBounds,
   stringProp,
   structuredErrorResult,
-  textResult,
+  toolDataResult,
   validationErrorResult,
 } from "@/api/mcp/tool-utils";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
@@ -748,15 +748,15 @@ const buildOnboardingHintText = () =>
   `\`{ countryCode, isPrimary }\`) to enable jurisdiction-aware tools, or ` +
   `have the user complete onboarding at ${getAppBaseUrl()}.`;
 
-const withOnboardingHintIfApplicable = async ({
+const withOnboardingHintIfApplicable = async <TData>({
   context,
   isEmpty,
   result,
 }: {
   context: McpRequestContext;
   isEmpty: boolean;
-  result: CallToolResult;
-}): Promise<CallToolResult> => {
+  result: InternalToolSuccess<TData>;
+}): Promise<InternalToolSuccess<TData>> => {
   if (!isEmpty) {
     return result;
   }
@@ -766,10 +766,13 @@ const withOnboardingHintIfApplicable = async ({
   }
   return {
     ...result,
-    content: [
-      ...result.content,
-      { type: "text", text: buildOnboardingHintText() },
-    ],
+    mcp: {
+      ...result.mcp,
+      additionalText: [
+        ...(result.mcp?.additionalText ?? []),
+        buildOnboardingHintText(),
+      ],
+    },
   };
 };
 
@@ -907,7 +910,7 @@ const handleListMattersTool: McpToolHandler = async ({ args, context }) => {
     return await withOnboardingHintIfApplicable({
       context,
       isEmpty: true,
-      result: textResult({ matters, nextCursor: page.nextCursor }),
+      result: toolDataResult({ matters, nextCursor: page.nextCursor }),
     });
   }
 
@@ -1670,7 +1673,7 @@ const handleSearchCaseLawTool: McpToolHandler = async ({ args, context }) => {
     return errorResult("Case-law search failed");
   }
 
-  const payload = textResult({
+  const payload = toolDataResult({
     facets: result.facets,
     nextCursor: result.nextCursor,
     results: result.hits.map((hit) => {
@@ -1810,7 +1813,7 @@ const handleReadCaseLawDecisionTool: McpToolHandler = async ({ args }) => {
     ? encodePaginationCursor([textBounds.end, result.citationsNextCursor])
     : null;
 
-  return textResult({
+  return toolDataResult({
     nextCursor,
     decision: {
       appUrl: buildCaseLawDecisionAppUrl({
@@ -1967,7 +1970,7 @@ const handleSetPracticeJurisdictionsTool: McpToolHandler = async ({
     practiceJurisdictions,
   );
 
-  return textResult({ practiceJurisdictions } satisfies v.InferInput<
+  return toolDataResult({ practiceJurisdictions } satisfies v.InferInput<
     typeof SET_PRACTICE_JURISDICTIONS_PROJECTION
   >);
 };

@@ -42,10 +42,15 @@ import {
   closestToolNames,
   MCP_INTERNAL_ERROR_HINT,
   oauthScopeRecoveryHint,
+  serializeToolResult,
   structuredErrorResult,
 } from "@/api/mcp/tool-utils";
 
 const MAX_TOOL_NAME_SUGGESTION_CHARS = 128;
+
+const mcpStructuredErrorResult = (
+  args: Parameters<typeof structuredErrorResult>[0],
+): CallToolResult => serializeToolResult(structuredErrorResult(args));
 
 type ByteStreamReadResult =
   | { done: false; value: Uint8Array }
@@ -81,7 +86,7 @@ const missingScopeResult = ({
   missingScope: ToolScope;
   requiredScopes: readonly ToolScope[];
 }): CallToolResult =>
-  structuredErrorResult({
+  mcpStructuredErrorResult({
     code: "missing_scope",
     message: `Insufficient permissions. Required scope: ${missingScope}`,
     hint: oauthScopeRecoveryHint({
@@ -300,7 +305,7 @@ const retryableServerErrorResponse = () => {
  * Details never reach the caller; they are captured at the failure site.
  */
 const retryableToolErrorResult = (): CallToolResult =>
-  structuredErrorResult({
+  mcpStructuredErrorResult({
     code: "internal_error",
     message:
       "The request could not be completed due to a temporary server error",
@@ -409,7 +414,7 @@ export const createMcpHttpRequestHandler = ({
                 ),
               )
             : [];
-        return structuredErrorResult({
+        return mcpStructuredErrorResult({
           code: "unknown_tool",
           message: `Unknown tool: ${formatUnknownToolName(toolName)}`,
           hint:

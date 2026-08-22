@@ -1,4 +1,3 @@
-import type { CallToolResult } from "@modelcontextprotocol/server";
 import { KindGuard, type TSchema } from "@sinclair/typebox";
 import { ValueErrorType } from "@sinclair/typebox/errors";
 import { Value, type ValueError } from "@sinclair/typebox/value";
@@ -40,6 +39,7 @@ import { CAPABILITY_DISPATCH } from "@/api/mcp/generated/capability-dispatch";
 import type { CapabilityDispatchEntry } from "@/api/mcp/generated/capability-dispatch";
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import type {
+  InternalToolErrorResult,
   McpEgressPlan,
   McpToolDefinition,
   McpToolHandler,
@@ -616,7 +616,7 @@ const statusResponseMessage = (response: unknown): string => {
 const mapStatusResponse = (
   statusCode: number,
   responseBody: unknown,
-): CallToolResult => {
+): InternalToolErrorResult => {
   const code = statusCodeToErrorCode(statusCode);
   const message = statusResponseMessage(responseBody);
   if (code === "internal_error") {
@@ -772,7 +772,7 @@ const decodeCapabilityCursor = (cursor: string): string | undefined | null => {
 
 // --- describe_capability -----------------------------------------------------
 
-const notFoundWithHint = (id: string): CallToolResult =>
+const notFoundWithHint = (id: string): InternalToolErrorResult =>
   notFoundResult(`No capability with id "${id}"`, hintForUnknownId(id));
 
 /**
@@ -780,7 +780,7 @@ const notFoundWithHint = (id: string): CallToolResult =>
  * as the static-tool dispatch guard (tools.ts) so agents see one behavior for
  * gated-off surface, tool or capability.
  */
-const featureDisabledResult = (): CallToolResult =>
+const featureDisabledResult = (): InternalToolErrorResult =>
   structuredErrorResult({
     code: "feature_disabled",
     message: "This feature is not enabled on this deployment",
@@ -796,7 +796,7 @@ const hintForUnknownId = (id: string): string => {
 
 type GuardedEndpoint =
   | { ok: true; endpoint: EndpointDefinition }
-  | { ok: false; result: CallToolResult };
+  | { ok: false; result: InternalToolErrorResult };
 
 /**
  * Load a capability's endpoint with failures contained: a rejecting dynamic
@@ -861,7 +861,7 @@ const describeCapabilityHandler = async ({
   const endpoint = loaded.endpoint;
 
   // The live TypeBox schemas are plain objects plus symbol metadata; the final
-  // JSON serialization (textResult in the egress pipeline) drops the symbols, so
+  // JSON serialization (toolDataResult in the egress pipeline) drops the symbols, so
   // they can go on the payload as-is. Uses the live config, never the snapshot,
   // so a snapshot-truncated capability still describes fully.
   const inputSchema = {
@@ -926,7 +926,7 @@ const transportBlockReason = (transport: CapabilityTransport): string => {
 const transportRefusal = (
   id: string,
   transport: CapabilityTransport,
-): CallToolResult | null => {
+): InternalToolErrorResult | null => {
   if (isTransportInvocable(transport)) {
     return null;
   }
@@ -951,7 +951,7 @@ const filelessFieldRefusal = (
   id: string,
   transport: CapabilityTransport,
   input: InvokeInput,
-): CallToolResult | null => {
+): InternalToolErrorResult | null => {
   const field = filelessOnlyField(transport);
   if (field === undefined || !isRecord(input.body) || !(field in input.body)) {
     return null;
@@ -1030,7 +1030,7 @@ const resolveCapabilityWorkspace = ({
   params: unknown;
 }):
   | { ok: true; workspaceId: SafeId<"workspace"> }
-  | { ok: false; result: CallToolResult } => {
+  | { ok: false; result: InternalToolErrorResult } => {
   const rawId = isRecord(params) ? params["workspaceId"] : undefined;
   if (typeof rawId !== "string" || rawId.length === 0) {
     return {
@@ -1244,7 +1244,7 @@ const invokeCapabilityHandler = async ({
  *   (`endpoint.handler`), the same code path REST uses; validateOnly
  *   additionally mirrors the permission gate explicitly (the wrapper is not
  *   called on that path).
- * - Egress finalization + anonymization (finalizeMcpEgress): applied by
+ * - Egress finalization + anonymization (finalizeToolEgress): applied by
  *   handleMcpToolCall to this handler's returned egress plan exactly as for
  *   any static tool; anonymized mode never reaches here (tools excluded).
  * - internal_error capture (tools.ts try/catch): invokeCapabilityHandler wraps

@@ -19,6 +19,12 @@ import type { McpRequestContext } from "@/api/mcp/context";
 import { getAccessibleWorkspaceId } from "@/api/mcp/context";
 import type { McpErrorCode, McpValidationIssue } from "@/api/mcp/error-codes";
 import { statusCodeToErrorCode } from "@/api/mcp/error-codes";
+import type {
+  InternalToolErrorResult,
+  InternalToolMcpPresentation,
+  InternalToolResult,
+  InternalToolSuccess,
+} from "@/api/mcp/tool-types";
 
 /**
  * Wrap the request-scoped recorder so audit rows written by the reused backing
@@ -119,9 +125,62 @@ export const confirmProp = (
     description,
   }) as const;
 
-export const textResult = (data: unknown): CallToolResult => ({
-  content: [{ type: "text", text: JSON.stringify(data) }],
+export const toolDataResult = <TData>(
+  data: TData,
+  mcp?: InternalToolMcpPresentation,
+): InternalToolSuccess<TData> => ({
+  status: "success",
+  data,
+  ...(mcp === undefined ? {} : { mcp }),
 });
+
+// TypeScript's JSON.stringify overload for `unknown` claims it always returns
+// a string, but the runtime returns undefined for unsupported root values.
+const stringifyJson = (value: unknown): unknown => JSON.stringify(value);
+
+/** Serialize a canonical Stella tool result at the external MCP boundary. */
+export const serializeToolResult = (
+  result: InternalToolResult,
+): CallToolResult => {
+  if (result.status === "success") {
+    const serializedData = stringifyJson(result.data);
+    if (typeof serializedData !== "string") {
+      panic("Internal tool success data must be JSON-serializable");
+    }
+    const content: CallToolResult["content"] = [
+      {
+        type: "text",
+        text: result.mcp?.primaryText ?? serializedData,
+      },
+    ];
+    for (const text of result.mcp?.additionalText ?? []) {
+      content.push({ type: "text", text });
+    }
+    return {
+      content,
+      ...(result.mcp?.structuredContent === undefined
+        ? {}
+        : { structuredContent: result.mcp.structuredContent }),
+    };
+  }
+
+  if (result.error.type === "text") {
+    return {
+      content: [{ type: "text", text: result.error.message }],
+      isError: true,
+    };
+  }
+
+  const { type: _type, ...error } = result.error;
+  return {
+    content: [{ type: "text", text: JSON.stringify({ error }) }],
+    isError: true,
+  };
+};
+
+/** Serialize unwrapped upstream data at an external MCP adapter boundary. */
+export const serializeMcpData = (data: unknown): CallToolResult =>
+  serializeToolResult(toolDataResult(data));
 
 /**
  * Legacy plain-text tool error. Kept for the handful of bespoke messages that
@@ -130,9 +189,9 @@ export const textResult = (data: unknown): CallToolResult => ({
  * `notFoundResult`, or the `validation_error`-tagged arg parsers below so agents
  * and the CLI can branch on a stable `error.code`.
  */
-export const errorResult = (message: string): CallToolResult => ({
-  content: [{ type: "text", text: message }],
-  isError: true,
+export const errorResult = (message: string): InternalToolErrorResult => ({
+  status: "error",
+  error: { type: "text", message },
 });
 
 /**
@@ -190,15 +249,16 @@ export const structuredErrorResult = ({
   issues?: readonly McpValidationIssue[] | undefined;
   message: string;
   retryable?: boolean | undefined;
-}): CallToolResult => {
+}): InternalToolErrorResult => {
   const error: {
+    type: "structured";
     code: McpErrorCode;
     message: string;
     hint?: string;
     issues?: readonly McpValidationIssue[];
     retryable?: boolean;
     requestId?: string;
-  } = { code, message };
+  } = { type: "structured", code, message };
   if (hint !== undefined) {
     error.hint = hint;
   }
@@ -213,10 +273,7 @@ export const structuredErrorResult = ({
     error.requestId = requestId;
   }
 
-  return {
-    content: [{ type: "text", text: JSON.stringify({ error }) }],
-    isError: true,
-  };
+  return { status: "error", error };
 };
 
 /**
@@ -248,7 +305,7 @@ export const validationErrorResult = ({
   hint?: string | undefined;
   issues: readonly v.BaseIssue<unknown>[];
   message: string;
-}): CallToolResult =>
+}): InternalToolErrorResult =>
   structuredErrorResult({
     code: "validation_error",
     hint,
@@ -260,7 +317,7 @@ export const validationErrorResult = ({
 export const notFoundResult = (
   message: string,
   hint?: string,
-): CallToolResult =>
+): InternalToolErrorResult =>
   structuredErrorResult({ code: "not_found", hint, message });
 
 /**
@@ -285,7 +342,9 @@ export const notFoundResult = (
  *    envelope the central pipeline's catch-all emits (see `handleMcpToolCall`),
  *    so no internal detail leaks to an external agent.
  */
-export const internalFailureResult = (error: unknown): CallToolResult => {
+export const internalFailureResult = (
+  error: unknown,
+): InternalToolErrorResult => {
   if (HandlerError.is(error)) {
     if (error.code === "upstream_unavailable") {
       captureError(error, { source: "mcp" });
@@ -384,7 +443,7 @@ export const hasErrorMessage = (value: unknown): value is { error: string } => {
  */
 export const toolThrownErrorToMcpResult = (
   err: unknown,
-): CallToolResult | null => {
+): InternalToolErrorResult | null => {
   if (TaggedError.is(err)) {
     return structuredErrorResult({
       code: "internal_error",
@@ -405,7 +464,7 @@ const argValidationError = (
   message: string,
   hint: string,
   path: string,
-): CallToolResult =>
+): InternalToolErrorResult =>
   structuredErrorResult({
     code: "validation_error",
     hint,
@@ -417,7 +476,7 @@ export const parseRequiredString = (
   args: Record<string, unknown>,
   key: string,
   opts?: { maxLength?: number },
-): string | CallToolResult => {
+): string | InternalToolErrorResult => {
   const value = args[key];
   if (typeof value !== "string" || value.length === 0) {
     return argValidationError(
@@ -446,7 +505,7 @@ export const parseOptionalEnum = <TValues extends readonly string[]>({
   defaultValue: TValues[number];
   key: string;
   values: TValues;
-}): TValues[number] | CallToolResult => {
+}): TValues[number] | InternalToolErrorResult => {
   const value = args[key];
   if (value === undefined) {
     return defaultValue;
@@ -471,7 +530,7 @@ export const parseOptionalLimit = ({
   defaultValue: number;
   key: string;
   max: number;
-}): number | CallToolResult => {
+}): number | InternalToolErrorResult => {
   const value = args[key];
   if (value === undefined) {
     return defaultValue;
@@ -491,11 +550,13 @@ export const parseOptionalLimit = ({
   return value;
 };
 
-export const isToolErrorResult = (value: unknown): value is CallToolResult =>
+export const isToolErrorResult = (
+  value: unknown,
+): value is InternalToolErrorResult =>
   typeof value === "object" &&
   value !== null &&
-  "isError" in value &&
-  value.isError === true;
+  "status" in value &&
+  value.status === "error";
 
 const MAX_CURSOR_LENGTH = 512;
 
@@ -505,7 +566,7 @@ export const parseOptionalCursor = ({
 }: {
   args: Record<string, unknown>;
   key: string;
-}): string | undefined | CallToolResult => {
+}): string | undefined | InternalToolErrorResult => {
   const value = args[key];
   if (value === undefined) {
     return undefined;
@@ -560,7 +621,7 @@ export const resolveWindowBounds = (
 
 const decodeTextWindowOffset = (
   cursor: string | undefined,
-): number | CallToolResult => {
+): number | InternalToolErrorResult => {
   if (cursor === undefined) {
     return 0;
   }
@@ -593,7 +654,7 @@ export const windowTextByCursor = ({
   cursor: string | undefined;
   maxChars: number;
   text: string;
-}): TextWindowResult | CallToolResult => {
+}): TextWindowResult | InternalToolErrorResult => {
   const offset = decodeTextWindowOffset(cursor);
   if (typeof offset !== "number") {
     return offset;
@@ -656,7 +717,7 @@ export const ensureActiveWorkspace = ({
 }: {
   context: McpRequestContext;
   workspaceId: string;
-}): SafeId<"workspace"> | CallToolResult => {
+}): SafeId<"workspace"> | InternalToolErrorResult => {
   const resolved = getAccessibleWorkspaceId({
     accessibleWorkspaceIdSet: context.accessibleWorkspaceIdSet,
     workspaceId,
@@ -823,7 +884,7 @@ export const invokeAiTool = async <TArgs extends Record<string, unknown>>({
   tool: {
     execute?: (args: TArgs, options: LocalToolExecutionOptions) => unknown;
   };
-}): Promise<CallToolResult> => {
+}): Promise<InternalToolResult> => {
   if (!tool.execute) {
     return errorResult("Tool is not executable");
   }
@@ -833,7 +894,7 @@ export const invokeAiTool = async <TArgs extends Record<string, unknown>>({
     if (hasErrorMessage(result)) {
       return errorResult(result.error);
     }
-    return textResult(result);
+    return toolDataResult(result);
   } catch (error) {
     const mapped = toolThrownErrorToMcpResult(error);
     if (mapped) {

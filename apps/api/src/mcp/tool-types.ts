@@ -1,5 +1,4 @@
 import type {
-  CallToolResult,
   JsonSchemaType,
   Tool as McpTool,
 } from "@modelcontextprotocol/server";
@@ -10,6 +9,7 @@ import type {
   MCP_DEFAULT_RESOURCE_SCOPES,
 } from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";
+import type { McpErrorCode, McpValidationIssue } from "@/api/mcp/error-codes";
 import type { TextWindowResult } from "@/api/mcp/tool-utils";
 
 /**
@@ -281,9 +281,9 @@ export type McpStructuredWindow = {
 };
 
 /**
- * A handler either returns a finished `CallToolResult`, or an egress plan the
- * dispatch layer finalizes (anonymize declared text fields, then window, then
- * serialize). Egress plans keep the full, pre-window, un-anonymized payload so
+ * A handler either returns a finished internal result, or an egress plan the
+ * dispatch layer finalizes (anonymize declared text fields, then window).
+ * Egress plans keep the full, pre-window, un-anonymized payload so
  * the central pipeline can anonymize before it windows, without the handler
  * ever seeing the request mode.
  *
@@ -295,7 +295,52 @@ export type McpStructuredWindow = {
  * OpenAI-compatible-specific shaping (workspaceId stripping, anonymization
  * metadata) that does not generalize.
  */
-export type McpEgressPlan =
+export type InternalToolMcpPresentation = {
+  additionalText?: readonly string[];
+  primaryText?: string;
+  structuredContent?: Record<string, unknown>;
+};
+
+export type InternalToolSuccess<TData = unknown> = {
+  status: "success";
+  data: TData;
+  mcp?: InternalToolMcpPresentation;
+};
+
+export type InternalToolStructuredError = {
+  type: "structured";
+  code: McpErrorCode;
+  message: string;
+  hint?: string;
+  issues?: readonly McpValidationIssue[];
+  retryable?: boolean;
+  requestId?: string;
+};
+
+export type InternalToolTextError = {
+  type: "text";
+  message: string;
+};
+
+export type InternalToolError =
+  | InternalToolStructuredError
+  | InternalToolTextError;
+
+export type InternalToolErrorResult = {
+  status: "error";
+  error: InternalToolError;
+};
+
+/**
+ * Canonical result returned by Stella-owned tool execution. It contains domain
+ * data or a typed error, never an MCP content block. The MCP boundary converts
+ * this result to `CallToolResult`; internal consumers use it directly.
+ */
+export type InternalToolResult<TData = unknown> =
+  | InternalToolSuccess<TData>
+  | InternalToolErrorResult;
+
+export type McpEgressPlan<TPayload = unknown> =
   | {
       egress: "compatSearch";
       nextCursor: string | null | undefined;
@@ -313,28 +358,26 @@ export type McpEgressPlan =
     }
   | {
       egress: "structured";
-      payload: unknown;
+      payload: TPayload;
       textFields: readonly McpStructuredTextField[];
       window?: McpStructuredWindow;
     };
 
-export type McpToolResponse = CallToolResult | McpEgressPlan;
+export type McpToolResponse<TData = unknown> =
+  | InternalToolResult<TData>
+  | McpEgressPlan<TData>;
 
 export const isMcpEgressPlan = (
   response: McpToolResponse,
-): response is McpEgressPlan =>
-  // SAFETY: `CallToolResult` has no `egress` key, so its presence discriminates
-  // the egress-plan variants from a finished result. `CallToolResult` is an
-  // external SDK type we cannot brand with a shared discriminator.
-  "egress" in response;
+): response is McpEgressPlan => "egress" in response;
 
-export type McpToolHandler = ({
+export type McpToolHandler<TData = unknown> = ({
   args,
   context,
 }: {
   args: Record<string, unknown>;
   context: McpRequestContext;
-}) => McpToolResponse | Promise<McpToolResponse>;
+}) => McpToolResponse<TData> | Promise<McpToolResponse<TData>>;
 
 export type McpToolHandlerMap<
   TDefinitions extends readonly McpToolDefinition[],

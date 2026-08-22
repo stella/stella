@@ -19,6 +19,7 @@ import {
   oauthScopeRecoveryHint,
   parseOptionalCursor,
   resolveWindowBounds,
+  serializeToolResult,
   slugifyCaseLawPathSegment,
   structuredErrorResult,
   validationErrorResult,
@@ -424,12 +425,20 @@ describe("parseOptionalCursor", () => {
 });
 
 const errorText = (result: ReturnType<typeof structuredErrorResult>) => {
-  const item = result.content.at(0);
+  const item = serializeToolResult(result).content.at(0);
   if (!item || item.type !== "text") {
     throw new Error("expected a text error content");
   }
   return item.text;
 };
+
+describe("serializeToolResult", () => {
+  test("rejects an undefined success payload at the MCP boundary", () => {
+    expect(() =>
+      serializeToolResult({ status: "success", data: undefined }),
+    ).toThrow("Internal tool success data must be JSON-serializable");
+  });
+});
 
 describe("oauthScopeRecoveryHint", () => {
   test("preserves granted scopes, adds every required scope, and removes duplicates", () => {
@@ -452,7 +461,7 @@ describe("structuredErrorResult", () => {
       message: "bad arg",
     });
 
-    expect(result.isError).toBe(true);
+    expect(result.status).toBe("error");
     expect(errorText(result)).toBe(
       JSON.stringify({
         error: { code: "validation_error", message: "bad arg" },
@@ -579,7 +588,7 @@ describe("validationErrorResult", () => {
       message: "name is required",
     });
 
-    expect(result.isError).toBe(true);
+    expect(result.status).toBe("error");
     const payload = JSON.parse(errorText(result));
     expect(payload.error.code).toBe("validation_error");
     expect(payload.error.message).toBe("name is required");

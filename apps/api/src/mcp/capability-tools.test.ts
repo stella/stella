@@ -1262,19 +1262,19 @@ describe("invoke_capability file-input gate", () => {
   });
 });
 
-// Read the error envelope out of a raw mapHandlerResult return (a CallToolResult
-// for the error cases), without going through the egress pipeline.
+// Read the typed error out of a raw mapHandlerResult return without going
+// through MCP serialization.
 const mappedError = (
   mapped: ReturnType<typeof mapHandlerResult>,
 ): ErrorEnvelope => {
-  if (!("content" in mapped)) {
+  if (!("status" in mapped) || mapped.status !== "error") {
     throw new Error(`Expected an error result, got: ${JSON.stringify(mapped)}`);
   }
-  const item = mapped.content.at(0);
-  if (!item || item.type !== "text") {
-    throw new Error("Expected a text error result");
+  if (mapped.error.type !== "structured") {
+    throw new Error("Expected a structured error result");
   }
-  return asTestRaw<{ error: ErrorEnvelope }>(JSON.parse(item.text)).error;
+  const { type: _type, ...error } = mapped.error;
+  return error;
 };
 
 // --- meta-tool argument shape validation (fail-closed dry runs) ---------------

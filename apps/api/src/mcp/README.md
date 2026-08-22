@@ -61,11 +61,12 @@ is therefore a compile error, and the two surfaces cannot silently diverge.
 ## Handlers never see the mode; the egress pipeline is central
 
 `McpToolHandler` has no `mode` parameter. A handler returns either a finished
-`CallToolResult` or an egress plan (`McpEgressPlan`) carrying the full,
+typed internal result or an egress plan (`McpEgressPlan`) carrying the full,
 pre-window, un-anonymized payload. `handleMcpToolCall` (in `tools.ts`) runs the
-handler and then `finalizeMcpEgress` (in `egress.ts`), which, in anonymized
-mode, anonymizes the declared text fields on the whole payload, THEN windows,
-THEN serializes. Anonymize-before-window keeps entity names from splitting
+handler and then `finalizeToolEgress` (in `egress.ts`), which, in anonymized
+mode, anonymizes the declared text fields on the whole payload, then windows.
+Only the outer MCP transport boundary serializes the finished result into a
+`CallToolResult`. Anonymize-before-window keeps entity names from splitting
 across a window edge and keeps placeholders stable across windows of one
 document. With no mode in scope, per-mode divergence inside a handler is
 structurally impossible. Tools with compound windowing (e.g.

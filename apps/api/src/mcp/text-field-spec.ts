@@ -9,7 +9,7 @@ import type {
  * response shape; `deriveTextFieldPaths` turns that list into the
  * documentation-only path list a registry entry declares today, and
  * `runTextFieldSpecs` turns it into the `McpStructuredTextField[]` push list
- * `finalizeMcpEgress` already consumes, replacing the four duplicated
+ * `finalizeToolEgress` already consumes, replacing the four duplicated
  * `pushTextField`/`collectAnonymizableField` helpers module by module.
  *
  * No tool module is migrated to this in this commit (see plan 049 Phases

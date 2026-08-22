@@ -49,7 +49,7 @@ import {
   intProp,
   stringProp,
   structuredErrorResult,
-  textResult,
+  toolDataResult,
   validationErrorResult,
 } from "@/api/mcp/tool-utils";
 
@@ -429,7 +429,7 @@ const handleSearchLegislationTool: McpToolHandler = async ({
       if (Result.isError(block)) {
         return internalFailureResult(block.error);
       }
-      return textResult({ lawId, blockId, block: block.value });
+      return toolDataResult({ lawId, blockId, block: block.value });
     }
 
     if (input.relation_type !== undefined) {
@@ -441,7 +441,7 @@ const handleSearchLegislationTool: McpToolHandler = async ({
       if (Result.isError(related)) {
         return internalFailureResult(related.error);
       }
-      return textResult(related.value);
+      return toolDataResult(related.value);
     }
 
     // Default read: the law plus its block structure. Both are external BOE
@@ -463,7 +463,7 @@ const handleSearchLegislationTool: McpToolHandler = async ({
     if (Result.isError(detail)) {
       return internalFailureResult(detail.error);
     }
-    return textResult(detail.value);
+    return toolDataResult(detail.value);
   }
 
   // Search mode.
@@ -500,7 +500,7 @@ const handleSearchLegislationTool: McpToolHandler = async ({
     typeof result.value,
     v.InferInput<typeof SEARCH_LEGISLATION_PROJECTION>
   >;
-  return textResult(result.value satisfies SearchLegislationPayload);
+  return toolDataResult(result.value satisfies SearchLegislationPayload);
 };
 
 // --- list_audit_log -----------------------------------------------------
@@ -589,7 +589,7 @@ const handleListAuditLogTool: McpToolHandler = async ({ args, context }) => {
   if (Result.isError(page)) {
     return internalFailureResult(page.error);
   }
-  return textResult(page.value);
+  return toolDataResult(page.value);
 };
 
 // --- manage_organization ------------------------------------------------
@@ -711,7 +711,7 @@ const handleAddMember = async ({
   if (Result.isError(added)) {
     return internalFailureResult(added.error);
   }
-  return textResult({
+  return toolDataResult({
     memberId: added.value.id,
   } satisfies v.InferInput<typeof MANAGE_ORGANIZATION_ADD_MEMBER_PROJECTION>);
 };
@@ -744,7 +744,7 @@ const handleRemoveMember = async ({
   if (Result.isError(removed)) {
     return internalFailureResult(removed.error);
   }
-  return textResult({
+  return toolDataResult({
     removed: true,
     id: removed.value.id,
   } satisfies v.InferInput<
@@ -834,7 +834,9 @@ const handleManageOrganizationTool: McpToolHandler = async ({
     typeof updated.value,
     v.InferInput<typeof MANAGE_ORGANIZATION_SETTINGS_PROJECTION>
   >;
-  return textResult(updated.value satisfies ManageOrganizationSettingsPayload);
+  return toolDataResult(
+    updated.value satisfies ManageOrganizationSettingsPayload,
+  );
 };
 
 export const RESEARCH_ADMIN_TOOL_HANDLERS = {

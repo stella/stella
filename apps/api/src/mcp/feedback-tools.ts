@@ -1,13 +1,16 @@
-import type { CallToolResult } from "@modelcontextprotocol/server";
 import * as v from "valibot";
 
 import { sanitizeFeedbackText } from "@/api/mcp/feedback-sanitize";
-import type { McpToolDefinition, McpToolHandler } from "@/api/mcp/tool-types";
+import type {
+  InternalToolSuccess,
+  McpToolDefinition,
+  McpToolHandler,
+} from "@/api/mcp/tool-types";
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
   enumProp,
   stringProp,
-  textResult,
+  toolDataResult,
   validationErrorResult,
 } from "@/api/mcp/tool-utils";
 
@@ -179,7 +182,7 @@ const buildGithubFeedbackResult = ({
   composedBody: string;
   redactions: number;
   sanitizedTitle: string;
-}): CallToolResult => {
+}): InternalToolSuccess => {
   const issueUrl = buildBoundedGithubIssueUrl({
     composedBody,
     title: sanitizedTitle,
@@ -188,7 +191,7 @@ const buildGithubFeedbackResult = ({
     `gh issue create --repo ${GITHUB_REPO} --label ${GITHUB_ISSUE_LABEL} ` +
     `--title ${shellSingleQuote(sanitizedTitle)} --body ${shellSingleQuote(composedBody)}`;
 
-  return textResult({
+  return toolDataResult({
     channel: "github",
     sanitized_title: sanitizedTitle,
     sanitized_body: composedBody,

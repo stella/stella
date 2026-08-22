@@ -4,6 +4,7 @@ import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { McpRequestContext } from "@/api/mcp/context";
 import type { McpEgressPlan } from "@/api/mcp/tool-types";
+import { serializeToolResult } from "@/api/mcp/tool-utils";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -21,7 +22,11 @@ void mock.module("@/api/lib/anonymization-blacklist", () => ({
   loadAnonymizationGazetteerEntries: loadAnonymizationGazetteerEntriesMock,
 }));
 
-const { finalizeMcpEgress } = await import("@/api/mcp/egress");
+const { finalizeToolEgress } = await import("@/api/mcp/egress");
+
+const finalizeMcpEgress = async (
+  options: Parameters<typeof finalizeToolEgress>[0],
+) => serializeToolResult(await finalizeToolEgress(options));
 
 const createContext = (): McpRequestContext => {
   const scopedDb = asTestRaw<McpRequestContext["scopedDb"]>(mock());
@@ -67,12 +72,13 @@ describe("finalizeMcpEgress", () => {
     loadAnonymizationGazetteerEntriesMock.mockResolvedValue([]);
   });
 
-  test("returns a finished CallToolResult untouched", async () => {
+  test("returns a finished internal result untouched", async () => {
     const finished = {
-      content: [{ type: "text" as const, text: "already done" }],
+      status: "success" as const,
+      data: { message: "already done" },
     };
     expect(
-      await finalizeMcpEgress({
+      await finalizeToolEgress({
         context: createContext(),
         mode: "anonymized",
         response: finished,

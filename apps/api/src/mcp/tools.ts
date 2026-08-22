@@ -15,7 +15,7 @@ import {
   bindApprovedMcpAuditContext,
   type McpRequestContext,
 } from "@/api/mcp/context";
-import { finalizeMcpEgress } from "@/api/mcp/egress";
+import { finalizeToolEgress } from "@/api/mcp/egress";
 import { dispatchGatewayToolCall } from "@/api/mcp/gateway/dispatch-call";
 import {
   getGatewayMcpToolDefinition,
@@ -34,6 +34,7 @@ import type {
 } from "@/api/mcp/tool-types";
 import {
   MCP_INTERNAL_ERROR_HINT,
+  serializeToolResult,
   structuredErrorResult,
 } from "@/api/mcp/tool-utils";
 
@@ -121,16 +122,20 @@ export const handleMcpToolCall = async ({
     toolName,
   });
   if (gatewayResult) {
-    return gatewayResult;
+    return gatewayResult.type === "external_mcp"
+      ? gatewayResult.result
+      : serializeToolResult(gatewayResult.result);
   }
 
   const staticTool = getStaticMcpToolDefinition(toolName, mode);
   if (!staticTool) {
-    return structuredErrorResult({
-      code: "unknown_tool",
-      message: `Unknown tool: ${toolName}`,
-      hint: "Call tools/list for the tools available to this session.",
-    });
+    return serializeToolResult(
+      structuredErrorResult({
+        code: "unknown_tool",
+        message: `Unknown tool: ${toolName}`,
+        hint: "Call tools/list for the tools available to this session.",
+      }),
+    );
   }
 
   if (
@@ -138,22 +143,27 @@ export const handleMcpToolCall = async ({
     toolName === "invoke_capability" &&
     !isDocumentsMcpCapabilityAllowed(args)
   ) {
-    return structuredErrorResult({
-      code: "feature_disabled",
-      message: "This capability is not available on the documents MCP surface",
-      hint: "Use one of the upload lifecycle operations exposed by the document upload panel.",
-    });
+    return serializeToolResult(
+      structuredErrorResult({
+        code: "feature_disabled",
+        message:
+          "This capability is not available on the documents MCP surface",
+        hint: "Use one of the upload lifecycle operations exposed by the document upload panel.",
+      }),
+    );
   }
 
   // Reject a gated-off tool even when the caller names it directly: the list
   // surface hides it, and this closes the guess-the-name bypass so the gate
   // holds on both the advertisement and the dispatch path.
   if (!isMcpToolFeatureEnabled(staticTool.feature)) {
-    return structuredErrorResult({
-      code: "feature_disabled",
-      message: "This feature is not enabled on this deployment",
-      hint: "This deployment or organization has this feature turned off; it cannot be enabled from the client.",
-    });
+    return serializeToolResult(
+      structuredErrorResult({
+        code: "feature_disabled",
+        message: "This feature is not enabled on this deployment",
+        hint: "This deployment or organization has this feature turned off; it cannot be enabled from the client.",
+      }),
+    );
   }
 
   // Destructive-op guardrail (agent misuse protection): an irreversible tool
@@ -164,20 +174,24 @@ export const handleMcpToolCall = async ({
     staticTool.annotations.destructiveHint === true &&
     args["confirm"] !== true
   ) {
-    return structuredErrorResult({
-      code: "confirmation_required",
-      message: `${toolName} is an irreversible operation and was called without confirmation`,
-      hint: "This operation is irreversible. Confirm with the human user, then retry with confirm: true.",
-    });
+    return serializeToolResult(
+      structuredErrorResult({
+        code: "confirmation_required",
+        message: `${toolName} is an irreversible operation and was called without confirmation`,
+        hint: "This operation is irreversible. Confirm with the human user, then retry with confirm: true.",
+      }),
+    );
   }
 
   const handler = MCP_TOOL_HANDLERS.get(toolName);
   if (!handler) {
-    return structuredErrorResult({
-      code: "unknown_tool",
-      message: `Unknown tool: ${toolName}`,
-      hint: "Call tools/list for the tools available to this session.",
-    });
+    return serializeToolResult(
+      structuredErrorResult({
+        code: "unknown_tool",
+        message: `Unknown tool: ${toolName}`,
+        hint: "Call tools/list for the tools available to this session.",
+      }),
+    );
   }
 
   try {
@@ -187,22 +201,27 @@ export const handleMcpToolCall = async ({
         : context;
     // Handlers never see the mode: they return either a finished result or an
     // egress plan. The central pipeline applies anonymization (anonymized mode)
-    // before windowing, then serializes. Both steps run inside this try so an
-    // anonymization or windowing failure is captured like any handler failure.
+    // before windowing; this transport boundary then serializes. Both steps run
+    // inside this try so an anonymization or windowing failure is captured like
+    // any handler failure.
     const response = await handler({ args, context: executionContext });
-    return await finalizeMcpEgress({
-      context: executionContext,
-      mode,
-      response,
-    });
+    return serializeToolResult(
+      await finalizeToolEgress({
+        context: executionContext,
+        mode,
+        response,
+      }),
+    );
   } catch (error) {
     captureError(error, { source: "mcp", toolName });
     // Generic message: never leak internals to the caller. `captureError` keeps
     // the real exception for observability.
-    return structuredErrorResult({
-      code: "internal_error",
-      message: "Tool execution failed",
-      hint: MCP_INTERNAL_ERROR_HINT,
-    });
+    return serializeToolResult(
+      structuredErrorResult({
+        code: "internal_error",
+        message: "Tool execution failed",
+        hint: MCP_INTERNAL_ERROR_HINT,
+      }),
+    );
   }
 };

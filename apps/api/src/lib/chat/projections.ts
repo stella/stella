@@ -207,9 +207,10 @@ const contactPhoneProjection = v.strictObject({
 
 /**
  * list_contacts. Source of truth: `listContactsPage`
- * (`handlers/contacts/list-query.ts`), whose whole `Page` envelope
- * (`items`/`limit`/`nextCursor`) is forwarded verbatim by
- * `handleListContactsTool`. The jsonb directory columns
+ * (`handlers/contacts/list-query.ts`), whose `Page` envelope
+ * (`items`/`limit`/`nextCursor`) is projected by `handleListContactsTool`.
+ * The handler converts database timestamps to ISO strings at that boundary.
+ * The jsonb directory columns
  * (`emails`/`phones`/`tags`) are nullable at the column level.
  */
 export const LIST_CONTACTS_PROJECTION = v.strictObject({
@@ -725,10 +726,9 @@ export const LIST_CLAUSES_LIST_PROJECTION = v.strictObject({
 
 /**
  * list_clauses, detail branch (`readClauseDetail` + `getClauseHandler`).
- * `metadata` is set to `undefined` at the handler, so it never survives the
- * JSON round-trip; `createdBy` is the authoring user's id (a `text` column,
- * not a uuid column, but licensed defensively in case a deployment's user
- * ids happen to be uuid-shaped).
+ * `metadata` is omitted by the handler; `createdBy` is the authoring user's id
+ * (a `text` column, not a uuid column, but licensed defensively in case a
+ * deployment's user ids happen to be uuid-shaped).
  */
 export const LIST_CLAUSES_DETAIL_PROJECTION = v.strictObject({
   clause: v.strictObject({
@@ -1447,7 +1447,7 @@ export const LIST_TEMPLATES_PROJECTION = v.union([
 
 // --- Write-tool projections ---------------------------------------------------
 // Write payloads are small acks and ids; each schema below mirrors the
-// handler's `textResult(...)` construction branch by branch. Input-param ref
+// handler's `toolDataResult(...)` construction branch by branch. Input-param ref
 // kinds were verified against each tool's actual `inputSchema` in
 // `apps/api/src/mcp/*-tools.ts`. Params that carry no chat ref kind (task
 // ids, user ids, template/clause/category/playbook ids, time-entry/version/

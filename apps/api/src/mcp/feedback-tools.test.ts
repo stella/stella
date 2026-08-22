@@ -36,11 +36,10 @@ const parsePayload = async (args: Record<string, unknown>) => {
   if (isMcpEgressPlan(result)) {
     throw new TypeError("Expected a finished result");
   }
-  const item = result.content.at(0);
-  if (!item || item.type !== "text") {
-    throw new TypeError("Expected a text result");
+  if (result.status === "error") {
+    return { payload: null, result };
   }
-  const payload: unknown = JSON.parse(item.text);
+  const payload: unknown = result.data;
   if (typeof payload !== "object" || payload === null) {
     throw new TypeError("Expected an object payload");
   }
@@ -55,7 +54,7 @@ describe("MCP send_feedback tool", () => {
       body: "Details at https://private.example/path",
     });
 
-    expect(result.isError).toBeFalsy();
+    expect(result.status).toBe("success");
     expect(payload).toMatchObject({
       channel: "github",
       sanitized_title: "Problem for [redacted-email]",
@@ -73,7 +72,7 @@ describe("MCP send_feedback tool", () => {
       channel: "email",
     });
 
-    expect(result.isError).toBe(true);
+    expect(result.status).toBe("error");
   });
 
   test("URL truncation never leaves a dangling high surrogate", () => {
