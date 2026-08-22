@@ -13,6 +13,39 @@ const safeId = <T extends SafeIdType>(value: string) =>
   asTestRaw<SafeId<T>>(value);
 
 describe("createBackgroundAuditRecorder", () => {
+  test("batches large groups without splitting their audit identity", async () => {
+    const insertedBatches: Record<string, unknown>[][] = [];
+    const tx = asTestRaw<Transaction>({
+      insert: () => ({
+        values: async (rows: Record<string, unknown>[]) => {
+          insertedBatches.push(rows);
+        },
+      }),
+    });
+    const recorder = createBackgroundAuditRecorder({
+      execution: {
+        performer: { id: safeId<"user">("user-1"), type: "user" },
+        trigger: { type: "direct" },
+      },
+      organizationId: safeId<"organization">("org-1"),
+      userId: safeId<"user">("user-1"),
+      workspaceId: safeId<"workspace">("workspace-1"),
+    });
+    const events = Array.from({ length: 501 }, (_, index) => ({
+      action: AUDIT_ACTION.DELETE,
+      resourceId: `entity-${index}`,
+      resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
+    }));
+
+    await recorder(tx, events);
+
+    expect(insertedBatches.map((batch) => batch.length)).toEqual([500, 1]);
+    const groupIds = new Set(
+      insertedBatches.flatMap((batch) => batch.map((row) => row["groupId"])),
+    );
+    expect(groupIds.size).toBe(1);
+  });
+
   test("stores bot provenance and keeps every event in one run group", async () => {
     let inserted: Record<string, unknown>[] = [];
     const tx = asTestRaw<Transaction>({

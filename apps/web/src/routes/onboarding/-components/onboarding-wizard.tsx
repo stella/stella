@@ -1,7 +1,7 @@
 import { useCallback, useLayoutEffect, useMemo, useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useNavigate } from "@tanstack/react-router";
+import { useNavigate, useSearch } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
 import {
@@ -94,6 +94,10 @@ const STEP_TO_PROGRESS = {
 export const OnboardingWizard = () => {
   const t = useTranslations();
   const navigate = useNavigate();
+  const redirectTo = useSearch({
+    from: "/onboarding",
+    select: (search) => search.redirectTo ?? "/chat",
+  });
   const analytics = useAnalytics();
   const browserRegion = useBrowserRegion();
   const queryClient = useQueryClient();
@@ -721,13 +725,13 @@ export const OnboardingWizard = () => {
           selected={downloadTarget}
           onNext={() => {
             detached(
-              navigate({ to: "/chat", replace: true }),
+              navigate({ href: redirectTo, replace: true }),
               "onboarding-wizard.navigate",
             );
           }}
           onSkip={() => {
             detached(
-              navigate({ to: "/chat", replace: true }),
+              navigate({ href: redirectTo, replace: true }),
               "onboarding-wizard.navigate",
             );
           }}

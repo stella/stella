@@ -13,7 +13,7 @@ export const uploadRoutePermission = {
 type UploadPurpose = PendingUploadPurposeData["type"];
 
 const uploadPurposePermission = (purpose: UploadPurpose): PermissionInput => {
-  if (purpose === "entity_create") {
+  if (purpose === "entity_create" || purpose === "email_ingest") {
     return { entity: ["create"] };
   }
   if (purpose === "entity_version") {

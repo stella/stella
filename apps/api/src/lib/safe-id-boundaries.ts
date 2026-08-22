@@ -108,6 +108,9 @@ export const brandPersistedFlowDefinitionId = (
 export const brandPersistedFlowRunId = (flowRunId: string): SafeId<"flowRun"> =>
   toSafeId<"flowRun">(flowRunId);
 
+export const brandDerivedFlowRunId = (flowRunId: string): SafeId<"flowRun"> =>
+  toSafeId<"flowRun">(flowRunId);
+
 export const brandPersistedExtractionRunId = (
   extractionRunId: string,
 ): SafeId<"extractionRun"> => toSafeId<"extractionRun">(extractionRunId);

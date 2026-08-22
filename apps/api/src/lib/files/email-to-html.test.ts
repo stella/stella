@@ -106,6 +106,23 @@ describe("email attachment preview policy", () => {
       }),
     ).toBe("application/octet-stream");
   });
+
+  test("recovers security-sensitive archive and Office types from filenames", () => {
+    expect(
+      resolveEmailAttachmentMimeType({
+        fileName: "evidence.zip",
+        mimeType: "application/octet-stream",
+      }),
+    ).toBe("application/zip");
+    expect(
+      resolveEmailAttachmentMimeType({
+        fileName: "agreement.docx",
+        mimeType: "binary/octet-stream",
+      }),
+    ).toBe(
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    );
+  });
 });
 
 describe("renderEmailHtml", () => {

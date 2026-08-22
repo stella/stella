@@ -148,6 +148,7 @@ const OrganizationSkeleton = () => (
 );
 
 const OrganizationFlow = ({ hydrated }: { hydrated: boolean }) => {
+  const redirectTo = Route.useSearch({ select: (search) => search.redirectTo });
   const { data: organizations, isPending } = authClient.useListOrganizations();
   const hasOrganizations = (organizations?.length ?? 0) > 0;
   const isOauthPostLoginFromSearch = Route.useRouteContext({
@@ -158,7 +159,7 @@ const OrganizationFlow = ({ hydrated }: { hydrated: boolean }) => {
     (hydrated && getSignedOauthQueryFromHash(window.location.hash) !== null);
 
   if (hydrated && !isPending && !hasOrganizations && !isOauthPostLogin) {
-    return <Navigate replace to="/onboarding" />;
+    return <Navigate replace search={{ redirectTo }} to="/onboarding" />;
   }
 
   if (!hydrated || isPending || (!hasOrganizations && !isOauthPostLogin)) {

@@ -19,6 +19,10 @@ import {
 import { validateAgentSkill } from "@/api/handlers/uploads/agent-skill";
 import { validateEntityVersion } from "@/api/handlers/uploads/entity-version";
 import {
+  captureOutlookIngestion,
+  outlookIngestionDiagnosticSchema,
+} from "@/api/handlers/uploads/outlook-ingestion-diagnostics";
+import {
   authorizeUploadPurpose,
   uploadRoutePermission,
 } from "@/api/handlers/uploads/permissions";
@@ -27,6 +31,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { EML_MIME_TYPE } from "@/api/lib/files/email-to-html";
 import { resolveUploadMime } from "@/api/lib/files/utils";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
 import { presignUploadUrl } from "@/api/lib/s3-presign";
@@ -82,6 +87,15 @@ const entityVersionPresignBodySchema = t.Object({
   ...baseFileMetadataSchema,
 });
 
+const emailIngestPresignBodySchema = t.Object({
+  purpose: t.Literal("email_ingest"),
+  propertyId: tSafeId("property"),
+  parentId: t.Optional(t.Nullable(tSafeId("entity"))),
+  diagnostic: t.Optional(outlookIngestionDiagnosticSchema),
+  ...baseFileMetadataSchema,
+  mimeType: t.Literal(EML_MIME_TYPE),
+});
+
 const agentSkillPresignBodySchema = t.Object({
   purpose: t.Literal("agent_skill"),
   scope: t.UnionEnum(AGENT_SKILL_SCOPES),
@@ -94,6 +108,7 @@ const presignBodySchema = t.Union([
   entityCreatePresignBodySchema,
   entityVersionPresignBodySchema,
   agentSkillPresignBodySchema,
+  emailIngestPresignBodySchema,
 ]);
 
 type PresignBody = Static<typeof presignBodySchema>;
@@ -103,14 +118,31 @@ type EntityCreatePurposeDataWithParent = Extract<
   { type: "entity_create" }
 > & { parentId: SafeId<"entity"> | null };
 
+type EmailIngestPurposeDataWithParent = Extract<
+  PendingUploadPurposeData,
+  { type: "email_ingest" }
+> & { parentId: SafeId<"entity"> | null };
+
 type PresignPurposeData =
   | EntityCreatePurposeDataWithParent
-  | Exclude<PendingUploadPurposeData, { type: "entity_create" }>;
+  | EmailIngestPurposeDataWithParent
+  | Exclude<
+      PendingUploadPurposeData,
+      { type: "entity_create" } | { type: "email_ingest" }
+    >;
 
 const toPurposeData = (purposeBody: PresignBody): PresignPurposeData => {
   if (purposeBody.purpose === "entity_create") {
     const purposeData: EntityCreatePurposeDataWithParent = {
       type: "entity_create",
+      propertyId: purposeBody.propertyId,
+      parentId: purposeBody.parentId ?? null,
+    };
+    return purposeData;
+  }
+  if (purposeBody.purpose === "email_ingest") {
+    const purposeData: EmailIngestPurposeDataWithParent = {
+      type: "email_ingest",
       propertyId: purposeBody.propertyId,
       parentId: purposeBody.parentId ?? null,
     };
@@ -164,7 +196,13 @@ const presignUpload = createSafeHandler(
       return Result.err(authorization.error);
     }
 
-    if (purposeBody.purpose === "entity_create") {
+    if (
+      purposeBody.purpose === "entity_create" ||
+      purposeBody.purpose === "email_ingest"
+    ) {
+      // email_ingest shares entity_create's file-property + folder-parent
+      // checks. Capacity reserves 1 here; the authoritative count check
+      // runs at finalize once the attachment count is known.
       const validation = yield* validateEntityCreate({
         safeDb,
         workspaceId,
@@ -249,7 +287,14 @@ const presignUpload = createSafeHandler(
     // resolves to the same workspace_ids on the API role.
     const writeResult = yield* Result.await(
       safeDb(async (tx): Promise<PresignWriteResult> => {
-        if (purposeData.type === "entity_create") {
+        if (
+          purposeData.type === "entity_create" ||
+          purposeData.type === "email_ingest"
+        ) {
+          // Reserve capacity for 1 entity. email_ingest fans out into
+          // additional attachment entities, but their count is unknown
+          // until the email is parsed at finalize; the authoritative
+          // capacity check there reserves `1 + attachments`.
           const capacityResult = await checkEntityCreateCapacityForInsert({
             tx,
             workspaceId,
@@ -299,6 +344,19 @@ const presignUpload = createSafeHandler(
           message: entityCreateWriteErrorMessage(writeResult.status),
         }),
       );
+    }
+
+    if (purposeBody.purpose === "email_ingest") {
+      captureOutlookIngestion({
+        diagnostic: purposeBody.diagnostic,
+        durableState: "pending",
+        operation: "reserve",
+        organizationId: session.activeOrganizationId,
+        outcome: "in_progress",
+        retryStage: "upload",
+        userId: user.id,
+        workspaceId,
+      });
     }
 
     return Result.ok({

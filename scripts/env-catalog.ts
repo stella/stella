@@ -105,6 +105,7 @@ const INTERNAL_SERVER_KEYS = new Set([
   "E2E_DISABLE_AUTH_RATE_LIMIT",
   "EMAIL_PROVIDER",
   "EXTENSION_ORIGIN",
+  "OUTLOOK_ORIGIN",
   "FEATURE_AGENT_ID_JAG",
   "FEATURE_AI_MEMORY",
   "FEATURE_CALENDAR",
@@ -220,6 +221,7 @@ const EXAMPLE_VALUES: Record<string, string> = {
   VITE_POSTHOG_HOST: "https://eu.i.posthog.com",
   VITE_POSTHOG_UI_HOST: "https://eu.posthog.com",
   VITE_PUBLIC_APP_URL: "http://localhost:3000",
+  VITE_OUTLOOK_ORIGIN: "https://localhost:3002",
 };
 
 const DESCRIPTION_OVERRIDES: Record<string, string> = {
@@ -405,6 +407,10 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Allow browser PostHog capture from localhost when using a real key.",
   VITE_PUBLIC_APP_URL:
     "Public web origin used for canonical URLs, Open Graph metadata, and sitemaps.",
+  VITE_OUTLOOK_ORIGIN:
+    "Exact task-pane origin accepted by the Outlook sign-in handoff.",
+  OUTLOOK_ORIGIN:
+    "Trusted origin for the separately hosted Outlook task pane.",
   VITE_SELFHOST: "Enable the release-update notice for self-hosted operators.",
   VITE_SEO_INDEXABLE: "Allow search engines to index this deployment.",
   VITE_TERMS_URL: "Absolute or root-relative Terms of Service link.",
@@ -461,6 +467,7 @@ const ACTIVE_EXAMPLE_KEYS = new Set([
   "VITE_API_URL",
   "VITE_POSTHOG_KEY",
   "VITE_PUBLIC_APP_URL",
+  "VITE_OUTLOOK_ORIGIN",
 ]);
 
 const HIDDEN_SCHEMA_KEYS = new Set(["isDev"]);
@@ -763,17 +770,26 @@ export const TOOLING_ENV_KEYS = new Set([
   "REPO",
   "SMOKE_API_URL",
   "SMOKE_TEST",
+  "STELLA_API_ORIGIN",
   "STELLA_DESKTOP_RELEASE_API_PATH",
   "STELLA_DESKTOP_RELEASE_EXPECTED_TAG",
   "STELLA_DEV_INSTANCE",
   "STELLA_INFRA_OFFSET",
+  "STELLA_OUTLOOK_FRAME_ANCESTORS",
+  "STELLA_OUTLOOK_PORT",
+  "STELLA_OUTLOOK_VERSION",
   "STELLA_PORT_OFFSET",
+  "STELLA_PROVIDER_NAME",
   "STELLA_RUN_POSTGRES_TESTS",
   "STELLA_SEED_ID_NAMESPACE",
   "STELLA_SEED_ORG_ID",
   "STELLA_SEED_USER_ID",
+  "STELLA_SUPPORT_URL",
+  "STELLA_TASKPANE_ORIGIN",
   "STELLA_TEST_LATEST_TAG",
   "STELLA_TEST_OMIT_ASSET",
+  "STELLA_UPLOAD_ORIGIN",
+  "STELLA_WEB_ORIGIN",
   "TURBO_SCM_BASE",
 ]);
 

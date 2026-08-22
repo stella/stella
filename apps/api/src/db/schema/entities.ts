@@ -894,7 +894,17 @@ export const PENDING_UPLOAD_PURPOSES = [
   "entity_create",
   "entity_version",
   "agent_skill",
+  "email_ingest",
 ] as const;
+
+export type EmailIngestPostCommitKickoff = {
+  entityId: SafeId<"entity">;
+  fieldId: SafeId<"field">;
+  sourceUploadId: SafeId<"pendingUpload">;
+  fileName: string;
+  mimeType: string;
+  encrypted: boolean;
+};
 
 export type PendingUploadPurposeData =
   | {
@@ -923,6 +933,15 @@ export type PendingUploadPurposeData =
       // Kept inline (not aliased to `AgentSkillScope`) because that
       // type is declared further down the file.
       scope: "team" | "private";
+    }
+  | {
+      type: "email_ingest";
+      propertyId: SafeId<"property">;
+      parentId?: SafeId<"entity"> | null;
+      /** Exact deterministic final keys owned by this recoverable ingest. */
+      recoveryObjectKeys?: string[];
+      /** Durable work descriptors replayed after the entity transaction commits. */
+      postCommitKickoffs?: EmailIngestPostCommitKickoff[];
     };
 
 export type PendingUploadFinalizedResult =
@@ -933,6 +952,16 @@ export type PendingUploadFinalizedResult =
       fileId: string;
       fileName: string;
       renamed: boolean;
+    }
+  | {
+      type: "email_ingest";
+      entityId: SafeId<"entity">;
+      fieldId: SafeId<"field">;
+      /** UUIDv7 stored on `fields.content.id`; not a branded SafeId. */
+      fileId: string;
+      fileName: string;
+      renamed: boolean;
+      attachmentEntityIds: SafeId<"entity">[];
     }
   | {
       type: "entity_version";
@@ -982,7 +1011,7 @@ export const pendingUploads = p.pgTable(
     /** Set inside the claim transaction. Used to detect stuck `scanning` rows. */
     claimedAt: timestamptz("claimed_at"),
     claimedByRequestId: p.varchar("claimed_by_request_id", { length: 64 }),
-    /** `createdAt + 5min`. A finalize after this rejects without touching S3. */
+    /** Reservation deadline matching the presigned upload transport window. */
     expiresAt: timestamptz("expires_at").notNull(),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
     finalizedAt: timestamptz("finalized_at"),
@@ -1016,6 +1045,14 @@ export const pendingUploads = p.pgTable(
         name: "pending_uploads_workspace_organization_fk",
       })
       .onDelete("cascade"),
+    p
+      .index("pending_uploads_email_ingest_recovery_idx")
+      .on(table.claimedAt, table.id)
+      .where(
+        sql`${table.status} IN ('scanning', 'failed')
+          AND ${table.purpose} = 'email_ingest'
+          AND jsonb_array_length(COALESCE(${table.purposeData}->'recoveryObjectKeys', '[]'::jsonb)) > 0`,
+      ),
     ...wsOrganizationPolicies("pending_uploads"),
   ],
 );
@@ -1040,7 +1077,7 @@ export const pendingUploads = p.pgTable(
 export const bufferObjectCleanupIntents = p.pgTable(
   "buffer_object_cleanup_intents",
   {
-    id: pUuid<"pendingUpload">().primaryKey(),
+    id: pUuid<"pendingUpload">().notNull(),
     organizationId: safeOrganizationId("organization_id").notNull(),
     workspaceId: safeWorkspaceId("workspace_id").notNull(),
     objectKey: p.text("object_key").notNull(),
@@ -1049,6 +1086,7 @@ export const bufferObjectCleanupIntents = p.pgTable(
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
+    p.primaryKey({ columns: [table.id, table.objectKey] }),
     p
       .index("buffer_object_cleanup_schedule_idx")
       .on(table.nextAttemptAt, table.id),

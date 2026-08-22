@@ -1,0 +1,28 @@
+import { StrictMode } from "react";
+import { createRoot } from "react-dom/client";
+
+import { panic } from "better-result";
+
+import { App } from "@/app";
+import { OutlookIntlProvider } from "@/i18n";
+import { waitForOffice } from "@/outlook";
+
+const rootElement = document.querySelector("#root");
+
+if (!rootElement) {
+  panic("Root element not found");
+}
+
+const render = () => {
+  createRoot(rootElement).render(
+    <StrictMode>
+      <OutlookIntlProvider>
+        <App />
+      </OutlookIntlProvider>
+    </StrictMode>,
+  );
+};
+
+waitForOffice()
+  .then(render)
+  .catch(() => render());

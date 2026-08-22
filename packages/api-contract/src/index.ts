@@ -2,6 +2,7 @@
 export const STELLA_REST_API_CONTRACT_VERSION = 1 as const;
 
 export { SKILL_RESOURCE_PATH_PATTERN } from "./agent-skills";
+export { OUTLOOK_AI_INPUT_MAX_CHARS, truncateOutlookAIInput } from "./ai";
 export { AI_ERROR_KINDS } from "./ai-errors";
 export type { AIErrorKind } from "./ai-errors";
 export {
@@ -114,6 +115,22 @@ export type {
 } from "./document-properties";
 export { ENTITY_KINDS, isEntityKind } from "./entity-kinds";
 export type { EntityKind } from "./entity-kinds";
+export { DOCUMENT_UPLOAD_POLICY } from "./upload-policy";
+export {
+  OUTLOOK_HOST_VERSION_PATTERN,
+  OUTLOOK_INGESTION_HOSTS,
+  OUTLOOK_INGESTION_OUTCOMES,
+  OUTLOOK_INGESTION_PLATFORMS,
+  OUTLOOK_INGESTION_RETRY_STAGES,
+  OUTLOOK_MAILBOX_REQUIREMENT_SET,
+} from "./outlook-ingestion";
+export type {
+  OutlookIngestionDiagnostic,
+  OutlookIngestionHost,
+  OutlookIngestionOutcome,
+  OutlookIngestionPlatform,
+  OutlookIngestionRetryStage,
+} from "./outlook-ingestion";
 export {
   DESKTOP_EDIT_FILE_TYPES,
   DESKTOP_EDIT_FILE_TYPE_CONFIG,

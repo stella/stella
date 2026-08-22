@@ -133,7 +133,10 @@ describe("startAutomatedFlowRun authorization gate", () => {
       .from(flowRuns)
       .where(eq(flowRuns.workspaceId, workspaceId));
 
-  const startForWorkspace = async (workspaceId: SafeId<"workspace">) => {
+  const startForWorkspace = async (
+    workspaceId: SafeId<"workspace">,
+    idempotencyKey = String(entityId),
+  ) => {
     await startAutomatedFlowRun({
       definitionId,
       organizationId,
@@ -141,15 +144,26 @@ describe("startAutomatedFlowRun authorization gate", () => {
       createdByUserId: authorId,
       triggerSource: { type: "file-upload", entityId },
       inputEntityIds: [entityId],
+      idempotencyKey,
       logContext: { definitionId, workspaceId, trigger: "file-upload" },
     });
   };
 
   test("starts the run when the author can access the upload workspace", async () => {
     await startForWorkspace(authorizedWorkspaceId);
+    await startForWorkspace(authorizedWorkspaceId);
 
     expect(await runsForWorkspace(authorizedWorkspaceId)).toHaveLength(1);
-    expect(enqueuedSteps.some((step) => step.stepIndex === 0)).toBe(true);
+    expect(enqueuedSteps.filter((step) => step.stepIndex === 0)).toHaveLength(
+      1,
+    );
+
+    await startForWorkspace(authorizedWorkspaceId, "second-upload-event");
+
+    expect(await runsForWorkspace(authorizedWorkspaceId)).toHaveLength(2);
+    expect(enqueuedSteps.filter((step) => step.stepIndex === 0)).toHaveLength(
+      2,
+    );
   });
 
   test("skips the run when the wildcard trigger fires in a matter the author cannot access", async () => {

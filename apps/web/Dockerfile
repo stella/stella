@@ -65,6 +65,7 @@ ARG RAILWAY_GIT_COMMIT_SHA=dev
 ARG PUBLIC_API_URL
 ARG PUBLIC_BROWSER_API_URL
 ARG PUBLIC_APP_URL
+ARG OUTLOOK_ORIGIN=https://outlook.stll.app
 ARG PUBLIC_GOOGLE_LOGIN_ENABLED
 ARG PUBLIC_MICROSOFT_LOGIN_ENABLED
 ARG PUBLIC_POSTHOG_TOKEN
@@ -110,6 +111,7 @@ RUN test -n "${PUBLIC_APP_URL}" || (echo "PUBLIC_APP_URL build arg is required" 
 RUN VITE_API_URL="${PUBLIC_API_URL}" \
     VITE_BROWSER_API_URL="${PUBLIC_BROWSER_API_URL}" \
     VITE_PUBLIC_APP_URL="${PUBLIC_APP_URL}" \
+    VITE_OUTLOOK_ORIGIN="${OUTLOOK_ORIGIN}" \
     VITE_AUTH_GOOGLE="${PUBLIC_GOOGLE_LOGIN_ENABLED}" \
     VITE_AUTH_MICROSOFT="${PUBLIC_MICROSOFT_LOGIN_ENABLED}" \
     VITE_POSTHOG_KEY="${PUBLIC_POSTHOG_TOKEN}" \
@@ -174,6 +176,7 @@ COPY --from=deps-prod /app/ .
 COPY --chown=stella:stella --from=pruner /app/out/json/ .
 COPY --chown=stella:stella --from=builder /app/web-runtime-stage/ .
 COPY --chown=stella:stella --from=builder /app/apps/web/start-runtime.js ./apps/web/start-runtime.js
+COPY --chown=stella:stella --from=builder /app/apps/web/cross-origin-isolation.js ./apps/web/cross-origin-isolation.js
 COPY --chown=stella:stella --from=builder /app/apps/web/dist ./apps/web/dist
 WORKDIR /app/apps/web
 USER stella

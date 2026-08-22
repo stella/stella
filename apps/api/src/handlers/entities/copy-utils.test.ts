@@ -5,6 +5,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { allocateFileObject } from "@/api/lib/files/file-object-ids";
 
 import {
+  getEntitySubtree,
   remapFileIds,
   type EntitySnapshot,
   type FileMapping,
@@ -14,6 +15,8 @@ const workspaceId = toSafeId<"workspace">("workspace_1");
 const organizationId = toSafeId<"organization">("organization_1");
 const firstEntityId = toSafeId<"entity">("entity_1");
 const secondEntityId = toSafeId<"entity">("entity_2");
+const messageEntityId = toSafeId<"entity">("message_1");
+const attachmentEntityId = toSafeId<"entity">("attachment_1");
 const filePropertyId = toSafeId<"property">("property_file");
 
 const sharedSourceFile = {
@@ -86,5 +89,34 @@ describe("remapFileIds", () => {
     expect(firstContent.id).toBe(firstNewFileId);
     expect(secondContent.id).toBe(secondNewFileId);
     expect(firstContent.id).not.toBe(secondContent.id);
+  });
+});
+
+describe("getEntitySubtree", () => {
+  test("includes attachment children of an ingested message", () => {
+    const subtree = getEntitySubtree(
+      [
+        {
+          currentVersion: { fields: [] },
+          id: messageEntityId,
+          kind: "message",
+          name: "Email.eml",
+          parentId: null,
+        },
+        {
+          currentVersion: { fields: [] },
+          id: attachmentEntityId,
+          kind: "document",
+          name: "Attachment.pdf",
+          parentId: messageEntityId,
+        },
+      ],
+      messageEntityId,
+    );
+
+    expect(subtree?.map((entity) => entity.id)).toEqual([
+      messageEntityId,
+      attachmentEntityId,
+    ]);
   });
 });

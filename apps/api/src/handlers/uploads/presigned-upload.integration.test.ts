@@ -9,7 +9,7 @@ import {
 } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 
-import { pendingUploads } from "@/api/db/schema";
+import { bufferObjectCleanupIntents, pendingUploads } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import { createSafeId, toSafeId, type SafeId } from "@/api/lib/branded-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -21,8 +21,17 @@ import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
 const deleteObjectMock = mock(async () => undefined);
+const extractionMock = mock(async () => undefined);
+const uploadFlowMock = mock(async () => undefined);
+const pdfDerivativeMock = mock(async () => undefined);
+const thumbnailDerivativeMock = mock(async () => undefined);
 
 const realS3 = await import("@/api/lib/s3");
+const realProcessExtraction =
+  await import("@/api/lib/search/process-extraction");
+const realUploadTriggeredFlows =
+  await import("@/api/lib/flows/maybe-start-upload-triggered-flows");
+const realFileDerivativeQueue = await import("@/api/lib/file-derivative-queue");
 
 void mock.module("@/api/lib/s3", () => ({
   ...realS3,
@@ -32,15 +41,33 @@ void mock.module("@/api/lib/s3", () => ({
   readS3ArrayBuffer: async () => new ArrayBuffer(0),
 }));
 
+void mock.module("@/api/lib/search/process-extraction", () => ({
+  ...realProcessExtraction,
+  processExtraction: extractionMock,
+}));
+
+void mock.module("@/api/lib/flows/maybe-start-upload-triggered-flows", () => ({
+  ...realUploadTriggeredFlows,
+  maybeStartUploadTriggeredFlows: uploadFlowMock,
+}));
+
+void mock.module("@/api/lib/file-derivative-queue", () => ({
+  ...realFileDerivativeQueue,
+  enqueueImageThumbnailOrMarkFailed: thumbnailDerivativeMock,
+  enqueuePdfDerivativeOrMarkFailed: pdfDerivativeMock,
+}));
+
 const { default: abortUpload } = await import("./delete");
 const { default: finalizeUpload } = await import("./update");
 const { default: presignUpload } = await import("./create");
+const { default: reconcileUpload } = await import("./reconcile");
 
 setDefaultTimeout(120_000);
 
 type PresignCtx = Parameters<typeof presignUpload.handler>[0];
 type AbortCtx = Parameters<typeof abortUpload.handler>[0];
 type FinalizeCtx = Parameters<typeof finalizeUpload.handler>[0];
+type ReconcileCtx = Parameters<typeof reconcileUpload.handler>[0];
 
 let testDb: TestDatabase;
 let ids: TestIds;
@@ -56,6 +83,9 @@ beforeAll(async () => {
 afterAll(async () => {
   try {
     if (seededUploadIds.length > 0) {
+      await testDb
+        .delete(bufferObjectCleanupIntents)
+        .where(inArray(bufferObjectCleanupIntents.id, seededUploadIds));
       await testDb
         .delete(pendingUploads)
         .where(inArray(pendingUploads.id, seededUploadIds));
@@ -97,6 +127,22 @@ describe("presigned upload mutation flow", () => {
       purpose: "agent_skill",
       purposeData: { type: "agent_skill", scope: "private" },
       status: "pending",
+    });
+
+    const reconcileResult = await reconcileUpload.handler(
+      asTestRaw<ReconcileCtx>(
+        createContext({
+          body: undefined,
+          params: { workspaceId: ids.wsA1, uploadId },
+          workspaceId: ids.wsA1,
+          organizationId: ids.orgA,
+          userId: ids.userA1,
+        }),
+      ),
+    );
+    expect(reconcileResult).toEqual({
+      code: 404,
+      response: { message: "Upload not found" },
     });
   });
 
@@ -180,6 +226,176 @@ describe("presigned upload mutation flow", () => {
     });
   });
 
+  test("preserves published recovery keys when aborting a failed email ingest", async () => {
+    const uploadId = createSafeId<"pendingUpload">();
+    const recoveryObjectKey = `${ids.orgA}/${ids.wsA1}/recovery/message.eml`;
+    await testDb.insert(pendingUploads).values({
+      id: uploadId,
+      organizationId: ids.orgA,
+      workspaceId: ids.wsA1,
+      userId: ids.userA1,
+      purpose: "email_ingest",
+      purposeData: {
+        type: "email_ingest",
+        propertyId: ids.propertyA1,
+        recoveryObjectKeys: [recoveryObjectKey],
+      },
+      declaredName: "message.eml",
+      declaredMime: "message/rfc822",
+      declaredSize: 12,
+      declaredSha256: "c".repeat(64),
+      status: "failed",
+      claimedAt: new Date(Date.now() - 120_000),
+      expiresAt: new Date(Date.now() + 60_000),
+      createdAt: new Date(),
+    });
+    seededUploadIds.push(uploadId);
+
+    const result = await abortUpload.handler(
+      asTestRaw<AbortCtx>(
+        createContext({
+          params: { workspaceId: ids.wsA1, uploadId },
+          workspaceId: ids.wsA1,
+          organizationId: ids.orgA,
+          userId: ids.userA1,
+        }),
+      ),
+    );
+
+    expect(result).toEqual({ ok: true });
+    expect(
+      await testDb
+        .select({ objectKey: bufferObjectCleanupIntents.objectKey })
+        .from(bufferObjectCleanupIntents)
+        .where(eq(bufferObjectCleanupIntents.id, uploadId)),
+    ).toEqual([{ objectKey: recoveryObjectKey }]);
+  });
+
+  test("preserves published recovery keys when expiring a failed email ingest", async () => {
+    const uploadId = createSafeId<"pendingUpload">();
+    const recoveryObjectKey = `${ids.orgA}/${ids.wsA1}/recovery/attachment.pdf`;
+    await testDb.insert(pendingUploads).values({
+      id: uploadId,
+      organizationId: ids.orgA,
+      workspaceId: ids.wsA1,
+      userId: ids.userA1,
+      purpose: "email_ingest",
+      purposeData: {
+        type: "email_ingest",
+        propertyId: ids.propertyA1,
+        recoveryObjectKeys: [recoveryObjectKey],
+      },
+      declaredName: "message.eml",
+      declaredMime: "message/rfc822",
+      declaredSize: 12,
+      declaredSha256: "d".repeat(64),
+      status: "failed",
+      claimedAt: new Date(Date.now() - 120_000),
+      expiresAt: new Date(Date.now() - 60_000),
+      createdAt: new Date(Date.now() - 120_000),
+    });
+    seededUploadIds.push(uploadId);
+
+    const result = await finalizeUpload.handler(
+      asTestRaw<FinalizeCtx>(
+        createContext({
+          params: { workspaceId: ids.wsA1, uploadId },
+          workspaceId: ids.wsA1,
+          organizationId: ids.orgA,
+          userId: ids.userA1,
+        }),
+      ),
+    );
+
+    expect(result).toEqual({
+      code: 422,
+      response: { message: "Upload URL expired" },
+    });
+    expect(
+      await testDb
+        .select({ objectKey: bufferObjectCleanupIntents.objectKey })
+        .from(bufferObjectCleanupIntents)
+        .where(eq(bufferObjectCleanupIntents.id, uploadId)),
+    ).toEqual([{ objectKey: recoveryObjectKey }]);
+  });
+
+  test("replays a completed email-ingest reconciliation without changing its durable result", async () => {
+    const uploadId = createSafeId<"pendingUpload">();
+    const finalizedResult = {
+      attachmentEntityIds: [],
+      entityId: ids.entityA1,
+      fieldId: ids.fieldA1,
+      fileId: Bun.randomUUIDv7(),
+      fileName: "message.eml",
+      renamed: false,
+      type: "email_ingest" as const,
+    };
+    await testDb.insert(pendingUploads).values({
+      id: uploadId,
+      organizationId: ids.orgA,
+      workspaceId: ids.wsA1,
+      userId: ids.userA1,
+      purpose: "email_ingest",
+      purposeData: {
+        type: "email_ingest",
+        propertyId: ids.propertyA1,
+        postCommitKickoffs: [
+          {
+            encrypted: false,
+            entityId: ids.entityA1,
+            fieldId: ids.fieldA1,
+            sourceUploadId: uploadId,
+            fileName: "message.eml",
+            mimeType: "message/rfc822",
+          },
+        ],
+      },
+      declaredName: "message.eml",
+      declaredMime: "message/rfc822",
+      declaredSize: 12,
+      declaredSha256: "e".repeat(64),
+      status: "finalized",
+      finalizedResult,
+      finalizedAt: new Date(),
+      expiresAt: new Date(Date.now() + 60_000),
+      createdAt: new Date(),
+    });
+    seededUploadIds.push(uploadId);
+    const context = asTestRaw<ReconcileCtx>(
+      createContext({
+        body: undefined,
+        params: { workspaceId: ids.wsA1, uploadId },
+        workspaceId: ids.wsA1,
+        organizationId: ids.orgA,
+        userId: ids.userA1,
+      }),
+    );
+    const finalizedReplay = await finalizeUpload.handler(
+      asTestRaw<FinalizeCtx>(
+        createContext({
+          params: { workspaceId: ids.wsA1, uploadId },
+          workspaceId: ids.wsA1,
+          organizationId: ids.orgA,
+          userId: ids.userA1,
+        }),
+      ),
+    );
+
+    const first = await reconcileUpload.handler(context);
+    const replay = await reconcileUpload.handler(context);
+
+    expect(first).toEqual({
+      finalizedResult,
+      state: "complete",
+    });
+    expect(replay).toEqual(first);
+    expect(finalizedReplay).toEqual({ finalizedResult });
+    expect(extractionMock).toHaveBeenCalledTimes(3);
+    expect(uploadFlowMock).toHaveBeenCalledTimes(3);
+    expect(pdfDerivativeMock).toHaveBeenCalledTimes(3);
+    expect(thumbnailDerivativeMock).toHaveBeenCalledTimes(3);
+  });
+
   test("does not let workspace A abort workspace B upload IDs", async () => {
     const uploadId = createSafeId<"pendingUpload">();
     await testDb.insert(pendingUploads).values({
@@ -212,6 +428,21 @@ describe("presigned upload mutation flow", () => {
     );
 
     expect(result).toEqual({
+      code: 404,
+      response: { message: "Upload not found" },
+    });
+    const reconcileResult = await reconcileUpload.handler(
+      asTestRaw<ReconcileCtx>(
+        createContext({
+          body: undefined,
+          params: { workspaceId: ids.wsA1, uploadId },
+          workspaceId: ids.wsA1,
+          organizationId: ids.orgA,
+          userId: ids.userA1,
+        }),
+      ),
+    );
+    expect(reconcileResult).toEqual({
       code: 404,
       response: { message: "Upload not found" },
     });
