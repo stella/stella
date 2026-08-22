@@ -88,7 +88,11 @@ import type {
 import { hydrateFilePart } from "@/api/handlers/chat/upload-files";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { getTemperatureForRole, resolveCaching } from "@/api/lib/ai-config";
-import { classifyAIError, isAnticipatedAIFailure } from "@/api/lib/ai-error";
+import {
+  classifyAIError,
+  isAnticipatedAIFailure,
+  providerStatusFields,
+} from "@/api/lib/ai-error";
 import type { AIErrorKind } from "@/api/lib/ai-error";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
@@ -1404,7 +1408,11 @@ const classifyRunErrorChunk = (chunk: RunErrorChunk): AIErrorKind => {
 const reportStreamFailure = (error: unknown, kind: AIErrorKind): void => {
   captureError(error, { kind });
   if (!isAnticipatedAIFailure(error, kind)) {
-    logger.error("chat.stream_failed", { kind, ...errorFingerprint(error) });
+    logger.error("chat.stream_failed", {
+      kind,
+      ...errorFingerprint(error),
+      ...providerStatusFields(error),
+    });
   }
 };
 

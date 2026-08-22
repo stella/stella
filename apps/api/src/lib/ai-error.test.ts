@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
-import { classifyAIError, isAnticipatedAIFailure } from "@/api/lib/ai-error";
+import {
+  classifyAIError,
+  isAnticipatedAIFailure,
+  providerStatusFields,
+} from "@/api/lib/ai-error";
 import {
   ChatEmptyCompletionError,
   ChatLoopDetectedError,
@@ -203,5 +207,74 @@ describe("isAnticipatedAIFailure", () => {
     const error = new Error("stream ended before completion");
 
     expect(isAnticipatedAIFailure(error, classifyAIError(error))).toBe(false);
+  });
+});
+
+describe("providerStatusFields", () => {
+  test("reports the status behind a failure the classifier cannot name", () => {
+    // A 403 is a status the classifier reads but maps to no kind, so it falls
+    // to `unknown` and is logged as a defect. The body arrives as a plain
+    // object, which `errorFingerprint` reduces to a bare `UnknownError`, so
+    // this status is the only thing separating it from a failure that carried
+    // no status at all.
+    const error = providerErrorBody(403, "PERMISSION_DENIED");
+
+    expect(classifyAIError(error)).toBe("unknown");
+    expect(providerStatusFields(error)).toEqual({
+      "error.provider.status": "403",
+    });
+  });
+
+  test("reports a status reached through a wrapper's cause", () => {
+    // `classifyAIError` walks the cause chain, so a wrapper around an unmapped
+    // provider response is still logged as `unknown`. Reading only the outer
+    // error would report no status for it, which is the shape this field
+    // exists to tell apart from a failure that carried none.
+    const wrapped = new Error("adapter call failed", {
+      cause: providerErrorBody(403, "PERMISSION_DENIED"),
+    });
+
+    expect(classifyAIError(wrapped)).toBe("unknown");
+    expect(providerStatusFields(wrapped)).toEqual({
+      "error.provider.status": "403",
+    });
+  });
+
+  test("ignores an integer outside the HTTP status range", () => {
+    // A top-level `status` was previously taken on `Number.isInteger` alone,
+    // so a sentinel zero was reported as though it were a real status.
+    for (const status of [0, 600, -1]) {
+      expect(providerStatusFields({ status })).toEqual({});
+      expect(providerStatusFields({ statusCode: status })).toEqual({});
+    }
+  });
+
+  test("stops at a cyclic cause chain without a status", () => {
+    const error = new Error("cyclic wrapper");
+    error.cause = error;
+
+    expect(providerStatusFields(error)).toEqual({});
+  });
+
+  test("reports nothing when the failure carries no status", () => {
+    expect(providerStatusFields(new Error("stream ended"))).toEqual({});
+    expect(providerStatusFields("boom")).toEqual({});
+    expect(providerStatusFields(undefined)).toEqual({});
+  });
+
+  test("carries the status and nothing else", () => {
+    // Asserted as an exact key set and an exact value, not as the absence of a
+    // substring: every fixture here embeds the status in its message, so a
+    // helper that leaked the message would still satisfy a "does not contain"
+    // check against any one literal.
+    for (const [error, status] of [
+      [apiCallError(503), "503"],
+      [tanStackProviderError(429), "429"],
+      [providerErrorBody(404, "NOT_FOUND"), "404"],
+    ] as const) {
+      expect(providerStatusFields(error)).toEqual({
+        "error.provider.status": status,
+      });
+    }
   });
 });
