@@ -43,7 +43,6 @@ import {
   isExternalMcpToolName,
   isToolApprovalGrant,
   sanitizeRunningToolCalls,
-  withParsedToolCallInputs,
 } from "@/components/chat/chat-ui-tools";
 import {
   beginCreateDocumentDraftPersistence,
@@ -302,15 +301,7 @@ export const useChatSession = ({
   // Latch for the error-transition effect below: `undefined` means "no
   // error has been notified yet" for the current error-free stretch.
   const lastHandledErrorRef = useRef<Error | undefined>(undefined);
-  // TanStack only populates a tool-call part's raw `arguments`; its
-  // typed `input` is filled here, once, as messages leave the runtime
-  // for the UI, so every consumer reads a parsed `input` the same way
-  // across live streaming, transcript re-send, and reload. Memoized on
-  // the runtime's message identity; unchanged messages keep their refs.
-  const messages = useMemo(
-    () => withParsedToolCallInputs(snapshot.messages),
-    [snapshot.messages],
-  );
+  const { messages } = snapshot;
   const authoritativeTurnError = useMemo(
     () => getChatAssistantTurnError(messages.at(-1) ?? null),
     [messages],

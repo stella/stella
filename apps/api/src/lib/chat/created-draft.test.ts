@@ -70,7 +70,10 @@ describe("generated document draft boundary", () => {
         fileName: "Power of attorney.docx",
         toolCallId: "tool-create-document-1",
       }),
-    ).toEqual({ partIndex: 0, status: "ready" });
+    ).toEqual({
+      locator: { partIndex: 0, persistenceVersion: 3 },
+      status: "ready",
+    });
 
     const savedMessage = toPersistableChatMessage({
       id: messageId,

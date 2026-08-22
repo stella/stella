@@ -56,7 +56,6 @@ import { ChatThreadMessages } from "@/components/chat/chat-thread-messages";
 import {
   getActiveDocxEditApprovalPart,
   isApplyActiveDocxEditsInput,
-  parseCompletedToolCallArguments,
   selectUnresolvedActiveDocxEditToolCallParts,
 } from "@/components/chat/chat-ui-tools";
 import type {
@@ -1119,9 +1118,8 @@ const TemplateStudioChatInner = ({
           ? { body: { toolScope: SUGGEST_TEMPLATE_FIELDS_TOOL_SCOPE } }
           : undefined;
       try {
-        const input = parseCompletedToolCallArguments(part);
-        const output = isApplyActiveDocxEditsInput(input)
-          ? await handleActiveDocxEditToolCall(input, part.id)
+        const output = isApplyActiveDocxEditsInput(part.input)
+          ? await handleActiveDocxEditToolCall(part.input, part.id)
           : { version: 1 as const, applied: [], queued: [], skipped: [] };
         await addToolResult(
           {

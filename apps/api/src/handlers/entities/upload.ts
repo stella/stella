@@ -930,7 +930,10 @@ const uploadEntityHandler = async function* ({
         // order every entity-creating path follows (issue #1139).
         await lockWorkspacesForEntityCap(tx, [workspaceId]);
 
-        let generatedDraftPartIndex: number | null = null;
+        let generatedDraftLocator: {
+          partIndex: number;
+          persistenceVersion: 2 | 3;
+        } | null = null;
         let generatedDraftThreadWorkspaceId: SafeId<"workspace"> | null = null;
         let draftChatThread: DraftChatThread | null = null;
         if (generatedDraft !== undefined) {
@@ -968,7 +971,7 @@ const uploadEntityHandler = async function* ({
               status: "replayed" as const,
             };
           }
-          generatedDraftPartIndex = draftState.partIndex;
+          generatedDraftLocator = draftState.locator;
           generatedDraftThreadWorkspaceId = draftState.threadWorkspaceId;
           const draftChatThreadLookup =
             await findGeneratedDocumentDraftChatThread({
@@ -1068,7 +1071,7 @@ const uploadEntityHandler = async function* ({
           }),
         });
 
-        if (generatedDraft !== undefined && generatedDraftPartIndex !== null) {
+        if (generatedDraft !== undefined && generatedDraftLocator !== null) {
           const href = toChatResourceHref({
             type: RESOURCE_TYPE.ENTITY,
             resource: resourceRef({ type: RESOURCE_TYPE.ENTITY, id: entityId }),
@@ -1091,7 +1094,10 @@ const uploadEntityHandler = async function* ({
             mention: `[${resolvedName.value}](${href})`,
             workspaceId,
           } as const;
-          const outputPath = `{data,${generatedDraftPartIndex},output}`;
+          const outputPath =
+            generatedDraftLocator.persistenceVersion === 3
+              ? `{data,${generatedDraftLocator.partIndex},output,value}`
+              : `{data,${generatedDraftLocator.partIndex},output}`;
           // The destination reference becomes durable in this source chat
           // message. Widen the source thread first, in this transaction, so a
           // global thread can never retain destination-matter data without

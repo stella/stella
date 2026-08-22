@@ -1310,10 +1310,8 @@ describe("validateMessage", () => {
   });
 
   test("accepts an input-complete tool call that carries only arguments", async () => {
-    // The wire/persist shape TanStack actually produces: a valid
-    // `arguments` JSON string and no `input` field. The client derives
-    // `input` from `arguments` at the UI boundary, so the server must
-    // keep accepting arguments-only tool-call parts.
+    // TanStack may send a valid `arguments` string without `input`. The live
+    // boundary accepts that wire shape and returns canonical parsed input.
     const result = await validateMessage({
       message: {
         id: chatMessageId("msg_arguments_only_tool_call"),
@@ -1335,6 +1333,15 @@ describe("validateMessage", () => {
     });
 
     expect(Result.isOk(result)).toBe(true);
+    if (Result.isError(result)) {
+      return;
+    }
+    const part = result.value.message.parts.at(0);
+    expect(part?.type).toBe("tool-call");
+    if (part?.type !== "tool-call") {
+      return;
+    }
+    expect(part.input).toEqual({ query: "contract" });
   });
 
   test("rejects an input-complete tool call whose arguments fail the tool schema", async () => {

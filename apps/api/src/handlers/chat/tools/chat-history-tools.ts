@@ -5,12 +5,13 @@ import { sql } from "drizzle-orm";
 import * as v from "valibot";
 
 import type { SafeDb } from "@/api/db/safe-db";
+import { normalizePersistedChatMessageContent } from "@/api/handlers/chat/chat-message-parts";
 import { renderChatMessagesForCompaction } from "@/api/handlers/chat/compaction";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import type {
   ChatMessage,
-  ChatMessageContent,
   ChatMessageRole,
+  PersistedChatMessageContent,
 } from "@/api/handlers/chat/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
@@ -111,7 +112,7 @@ type ChatHistorySearchRow = {
 };
 
 type ChatHistoryExpansionRow = {
-  content: ChatMessageContent;
+  content: PersistedChatMessageContent;
   createdAt: Date;
   id: SafeId<"chatMessage">;
   role: ChatMessageRole;
@@ -287,5 +288,5 @@ const persistedRowToChatMessage = (
 ): ChatMessage => ({
   id: row.id,
   role: row.role,
-  parts: row.content.data,
+  parts: normalizePersistedChatMessageContent(row.content).parts,
 });

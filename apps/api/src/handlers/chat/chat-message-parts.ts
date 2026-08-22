@@ -29,9 +29,22 @@ import type {
   PersistableChatMessage,
   PersistableTerminalAssistantMessage,
   PersistedChatMessageContent,
+  PersistedChatMessageContentV3,
 } from "@/api/handlers/chat/types";
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  isPersistedJsonValue,
+  proveParsedToolInput,
+  proveParsedToolOutput,
+  provePersistedChatMessageContentV3,
+  provePersistedJsonArray,
+  provePersistedJsonValue,
+} from "@/api/lib/chat/persisted-message-content";
+import type {
+  PersistedToolInput,
+  PersistedToolResultContent,
+} from "@/api/lib/chat/persisted-message-content";
 import { LIMITS } from "@/api/lib/limits";
 import { isUserFileUrl, parseUserFileId } from "@/api/lib/user-files/types";
 
@@ -248,16 +261,227 @@ export const normalizeLegacyMessagePartsToTanStack = (
 export const normalizePersistedChatMessageContent = (
   content: PersistedChatMessageContent,
 ): NormalizedLegacyMessageParts => {
+  if (content.version === 3) {
+    return normalizePersistedV3ChatMessageContent(content);
+  }
+
   if (content.version === 2) {
     return {
       metadata: content.metadata ?? {},
-      parts: content.data,
+      parts: normalizeLegacyPersistedToolInputs(content.data),
     };
   }
 
-  return normalizeLegacyMessagePartsToTanStack(
+  const normalized = normalizeLegacyMessagePartsToTanStack(
     normalizeLegacyRawToolInputs(content.data),
   );
+  return {
+    metadata: normalized.metadata,
+    parts: normalizeLegacyPersistedToolInputs(normalized.parts),
+  };
+};
+
+const normalizeLegacyPersistedToolInputs = (
+  parts: readonly ChatPart[],
+): ChatPart[] => parts.map(normalizeLegacyPersistedToolInput);
+
+const normalizeLegacyPersistedToolInput = (part: ChatPart): ChatPart => {
+  if (
+    part.type !== "tool-call" ||
+    part.input !== undefined ||
+    part.state === "awaiting-input" ||
+    part.state === "input-streaming"
+  ) {
+    return part;
+  }
+
+  const parsed = Result.try((): unknown => JSON.parse(part.arguments));
+  if (Result.isError(parsed)) {
+    return part;
+  }
+  const input =
+    parsed.value !== null && typeof parsed.value === "object"
+      ? parsed.value
+      : {};
+  const candidate: unknown = { ...part, input };
+  if (!isChatPart(candidate) || candidate.type !== "tool-call") {
+    panic(`Stored legacy tool call ${part.id} has invalid input`);
+  }
+  return candidate;
+};
+
+type PersistedV3Part = PersistedChatMessageContentV3["data"][number];
+
+const normalizePersistedV3ChatMessageContent = (
+  content: PersistedChatMessageContentV3,
+): NormalizedLegacyMessageParts => {
+  if (!Array.isArray(content.data)) {
+    panic("Stored v3 chat content has invalid data");
+  }
+  if (
+    content.metadata !== undefined &&
+    !isPersistedJsonValue(content.metadata)
+  ) {
+    panic("Stored v3 chat content has invalid metadata");
+  }
+  const outputByToolCallId = new Map<string, unknown>();
+  for (const part of content.data) {
+    if (!isRecord(part)) {
+      panic("Stored v3 chat content has an invalid part");
+    }
+    if (part.type === "tool-call" && part.output !== undefined) {
+      outputByToolCallId.set(part.id, decodePersistedToolOutput(part.output));
+    }
+  }
+
+  const parts: ChatPart[] = [];
+  for (const part of content.data) {
+    parts.push(persistedV3PartToChatPart({ outputByToolCallId, part }));
+  }
+  return { metadata: content.metadata ?? {}, parts };
+};
+
+const persistedV3PartToChatPart = ({
+  outputByToolCallId,
+  part,
+}: {
+  outputByToolCallId: ReadonlyMap<string, unknown>;
+  part: PersistedV3Part;
+}): ChatPart => {
+  if (part.type === "tool-call") {
+    const persistedInput = decodePersistedToolInput(part.input);
+    const input = persistedToolInputToChatInput(persistedInput);
+    const output = outputByToolCallId.get(part.id);
+    if (part.metadata !== undefined && !isPersistedJsonValue(part.metadata)) {
+      panic("Stored v3 tool call has invalid metadata");
+    }
+    const candidate: unknown = {
+      ...(part.approval === undefined ? {} : { approval: part.approval }),
+      arguments:
+        persistedInput.status === "raw"
+          ? persistedInput.rawArguments
+          : stringifyPersistedJsonValue(persistedInput.value),
+      id: part.id,
+      ...(input === undefined ? {} : { input }),
+      ...(part.metadata === undefined ? {} : { metadata: part.metadata }),
+      name: part.name,
+      ...(part.output === undefined ? {} : { output }),
+      state: part.state,
+      type: "tool-call",
+    };
+    if (!isChatPart(candidate) || candidate.type !== "tool-call") {
+      panic("Stored v3 tool call is not a valid chat part");
+    }
+    return candidate;
+  }
+
+  if (part.type === "tool-result") {
+    const content = persistedV3ToolResultContent({
+      outputByToolCallId,
+      part,
+    });
+    const candidate: unknown = {
+      content,
+      ...(part.error === undefined ? {} : { error: part.error }),
+      state: part.state,
+      toolCallId: part.toolCallId,
+      type: "tool-result",
+    };
+    if (!isChatPart(candidate) || candidate.type !== "tool-result") {
+      panic("Stored v3 tool result is not a valid chat part");
+    }
+    return candidate;
+  }
+
+  if (!isChatPart(part)) {
+    panic("Stored v3 non-tool part is not a valid chat part");
+  }
+  return part;
+};
+
+const persistedV3ToolResultContent = ({
+  outputByToolCallId,
+  part,
+}: {
+  outputByToolCallId: ReadonlyMap<string, unknown>;
+  part: Extract<PersistedV3Part, { type: "tool-result" }>;
+}): unknown => {
+  if (part.content !== undefined) {
+    return persistedToolResultContentToChatContent(part.content);
+  }
+  const output = outputByToolCallId.get(part.toolCallId);
+  if (output !== undefined) {
+    return stringifyPersistedJsonValue(output);
+  }
+  if (part.state === "error") {
+    return null;
+  }
+  return panic("Stored v3 tool result has no content or paired output");
+};
+
+const persistedToolInputToChatInput = (input: PersistedToolInput): unknown =>
+  input.status === "parsed" ? input.value : undefined;
+
+const decodePersistedToolInput = (input: unknown): PersistedToolInput => {
+  if (!isRecord(input)) {
+    return panic("Stored v3 tool call has invalid input");
+  }
+  if (input["status"] === "raw") {
+    return typeof input["rawArguments"] === "string"
+      ? { rawArguments: input["rawArguments"], status: "raw" }
+      : panic("Stored v3 tool call has invalid raw arguments");
+  }
+  if (input["status"] === "parsed" && "value" in input) {
+    return proveParsedToolInput(input["value"]);
+  }
+  return panic("Stored v3 tool call has invalid input state");
+};
+
+const decodePersistedToolOutput = (output: unknown): unknown => {
+  if (!isRecord(output) || !("value" in output)) {
+    return panic("Stored v3 tool call has invalid output");
+  }
+  return proveParsedToolOutput(output["value"]).value;
+};
+
+const persistedToolResultContentToChatContent = (
+  content: PersistedToolResultContent,
+): unknown => {
+  const decoded = decodePersistedToolResultContent(content);
+  switch (decoded.type) {
+    case "parts":
+      return decoded.value;
+    case "text":
+      return decoded.value;
+    default:
+      return decoded satisfies never;
+  }
+};
+
+const decodePersistedToolResultContent = (
+  content: unknown,
+): PersistedToolResultContent => {
+  if (!isRecord(content)) {
+    return panic("Stored v3 tool result has invalid content");
+  }
+  if (content["type"] === "text" && typeof content["value"] === "string") {
+    return { type: "text", value: content["value"] };
+  }
+  if (content["type"] === "parts") {
+    return { type: "parts", value: provePersistedJsonArray(content["value"]) };
+  }
+  return panic("Stored v3 tool result has invalid content state");
+};
+
+const stringifyPersistedJsonValue = (value: unknown): string => {
+  if (!isPersistedJsonValue(value)) {
+    panic("Stored canonical tool value is not JSON-serializable");
+  }
+  const serialized: unknown = JSON.stringify(value);
+  if (typeof serialized !== "string") {
+    panic("Stored canonical tool value is not JSON-serializable");
+  }
+  return serialized;
 };
 
 export const chatMessageFromPersisted = ({
@@ -278,9 +502,8 @@ export const chatMessageFromPersisted = ({
 
 export const chatMessageContentFromMessage = (
   message: PersistableChatMessage,
-): ChatMessageContent =>
-  toChatMessageContent({
-    version: 2,
+): PersistedChatMessageContentV3 =>
+  toPersistedChatMessageContentV3({
     data: message.parts,
     ...(message.metadata === undefined ? {} : { metadata: message.metadata }),
   });
@@ -1106,6 +1329,129 @@ export const toChatMessageContent = (
     panic("Normalized chat content violates the persistence policy");
   }
   return normalized;
+};
+
+/**
+ * Encode one message for the v3 JSONB representation. Canonical tool input and
+ * output are stored directly; TanStack wire strings are reconstructed only by
+ * `normalizePersisted...` on read.
+ */
+type PersistedChatMessageContentV3Source = Omit<
+  ChatMessageContentCandidate,
+  "version"
+>;
+
+export const toPersistedChatMessageContentV3 = (
+  content: PersistedChatMessageContentV3Source,
+): PersistedChatMessageContentV3 => {
+  if (!content.data.every(isChatPart)) {
+    panic("Cannot persist chat message content with unsupported parts");
+  }
+  const normalized = normalizeChatPartsForPersistence(content.data);
+  const outputsByToolCallId = new Map<string, unknown>();
+  for (const part of normalized) {
+    if (part.type === "tool-call" && part.output !== undefined) {
+      outputsByToolCallId.set(part.id, part.output);
+    }
+  }
+  const data = normalized.map((part) =>
+    chatPartToPersistedV3Part({ outputsByToolCallId, part }),
+  );
+  if (
+    content.metadata !== undefined &&
+    !isPersistedJsonValue(content.metadata)
+  ) {
+    panic("Cannot persist non-JSON chat metadata");
+  }
+  return provePersistedChatMessageContentV3(
+    {
+      data,
+      ...(content.metadata === undefined ? {} : { metadata: content.metadata }),
+      version: 3,
+    },
+    isPersistedV3Part,
+  );
+};
+
+const chatPartToPersistedV3Part = ({
+  outputsByToolCallId,
+  part,
+}: {
+  outputsByToolCallId: ReadonlyMap<string, unknown>;
+  part: ChatPart;
+}): PersistedV3Part => {
+  if (part.type === "tool-call") {
+    const approval = "approval" in part ? part.approval : undefined;
+    const metadata = "metadata" in part ? part.metadata : undefined;
+    const input = persistedToolInputFromChatPart(part);
+    return {
+      ...(approval === undefined ? {} : { approval }),
+      id: part.id,
+      input,
+      ...(metadata === undefined
+        ? {}
+        : { metadata: provePersistedJsonValue(metadata) }),
+      name: part.name,
+      ...(part.output === undefined
+        ? {}
+        : { output: proveParsedToolOutput(part.output) }),
+      state: part.state,
+      type: "tool-call",
+    };
+  }
+  if (part.type === "tool-result") {
+    const output = outputsByToolCallId.get(part.toolCallId);
+    const omitCanonicalOutput =
+      part.state !== "streaming" && output !== undefined;
+    if (
+      omitCanonicalOutput &&
+      part.content !== stringifyPersistedJsonValue(output)
+    ) {
+      panic(`Tool result ${part.toolCallId} disagrees with canonical output`);
+    }
+    const content = omitCanonicalOutput
+      ? undefined
+      : persistedToolResultContentFromChatContent(part.content);
+    return {
+      ...(content === undefined ? {} : { content }),
+      ...(part.error === undefined ? {} : { error: part.error }),
+      state: part.state,
+      toolCallId: part.toolCallId,
+      type: "tool-result",
+    };
+  }
+  return part;
+};
+
+const persistedToolInputFromChatPart = (
+  part: Extract<ChatPart, { type: "tool-call" }>,
+): PersistedToolInput => {
+  if (part.state === "awaiting-input" || part.state === "input-streaming") {
+    return { rawArguments: part.arguments, status: "raw" };
+  }
+  if (part.input === undefined) {
+    return { rawArguments: part.arguments, status: "raw" };
+  }
+  return proveParsedToolInput(part.input);
+};
+
+const persistedToolResultContentFromChatContent = (
+  content: Extract<ChatPart, { type: "tool-result" }>["content"],
+): PersistedToolResultContent => {
+  if (Array.isArray(content)) {
+    return { type: "parts", value: provePersistedJsonArray(content) };
+  }
+  return { type: "text", value: content };
+};
+
+const isPersistedV3Part = (part: PersistedV3Part): boolean => {
+  if (part.type === "tool-call") {
+    return part.id.length > 0 && part.name.length > 0;
+  }
+  if (part.type === "tool-result") {
+    return part.toolCallId.length > 0;
+  }
+  return isChatPart(part);
 };
 
 const isLegacyAnonRestorationsPart = (

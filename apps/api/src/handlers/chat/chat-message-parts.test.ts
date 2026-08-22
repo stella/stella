@@ -10,6 +10,7 @@ import { propertyConfig } from "@stll/property-testing";
 
 import {
   applyChatPartPersistenceBudget,
+  chatMessageContentFromMessage,
   chatMessageFromPersisted,
   classifyChatPartForPersistence,
   createChatTextPart,
@@ -18,8 +19,10 @@ import {
   isChatPart,
   isProviderVisibleChatPart,
   isServerOwnedChatPart,
+  normalizePersistedChatMessageContent,
   restoreServerOwnedChatParts,
   toChatMessageContent,
+  toPersistedChatMessageContentV3,
   toPersistableChatMessage,
   getAwaitingUserInteraction,
   getAwaitingUserInteractions,
@@ -46,6 +49,218 @@ const budgetPropertyPartFromKind = (kind: number): ChatPart => {
 };
 
 describe("persisted chat message parts", () => {
+  test("stores one canonical parsed tool-call representation", () => {
+    const input = { query: "nda" };
+    const output = { results: [{ id: "document-1" }] };
+    const parts = [
+      {
+        arguments: JSON.stringify(input),
+        id: "search-1",
+        input,
+        name: "mcp__external__search",
+        output,
+        state: "complete",
+        type: "tool-call",
+      },
+      {
+        content: JSON.stringify(output),
+        state: "complete",
+        toolCallId: "search-1",
+        type: "tool-result",
+      },
+    ] as const satisfies ChatPart[];
+
+    const persisted = toPersistedChatMessageContentV3({
+      data: [...parts],
+    });
+
+    expect(persisted.version).toBe(3);
+    const persistedCall = persisted.data.at(0);
+    expect(persistedCall?.type).toBe("tool-call");
+    if (persistedCall?.type !== "tool-call") {
+      return;
+    }
+    expect(persistedCall.input.status).toBe("parsed");
+    if (persistedCall.input.status !== "parsed") {
+      return;
+    }
+    expect(persistedCall.input.value).toEqual(input);
+    expect(persistedCall.output?.value).toEqual(output);
+    expect(persisted.data.at(1)).toEqual({
+      state: "complete",
+      toolCallId: "search-1",
+      type: "tool-result",
+    });
+    expect(normalizePersistedChatMessageContent(persisted).parts).toEqual(
+      parts,
+    );
+  });
+
+  test("preserves raw arguments only while tool input is partial", () => {
+    const part = {
+      arguments: '{"query":"nd',
+      id: "search-streaming",
+      name: "mcp__external__search",
+      state: "input-streaming",
+      type: "tool-call",
+    } as const satisfies ChatPart;
+
+    const persisted = toPersistedChatMessageContentV3({
+      data: [part],
+    });
+
+    expect(persisted.data).toEqual([
+      {
+        id: "search-streaming",
+        input: { rawArguments: '{"query":"nd', status: "raw" },
+        name: "mcp__external__search",
+        state: "input-streaming",
+        type: "tool-call",
+      },
+    ]);
+    expect(normalizePersistedChatMessageContent(persisted).parts).toEqual([
+      part,
+    ]);
+  });
+
+  test("parses old completed tool arguments once at the legacy read boundary", () => {
+    const legacy = toChatMessageContent({
+      data: [
+        {
+          arguments: '{"query":"contract"}',
+          id: "legacy-search",
+          name: "mcp__external__search",
+          state: "input-complete",
+          type: "tool-call",
+        },
+      ],
+      version: 2,
+    });
+
+    expect(normalizePersistedChatMessageContent(legacy).parts).toEqual([
+      {
+        arguments: '{"query":"contract"}',
+        id: "legacy-search",
+        input: { query: "contract" },
+        name: "mcp__external__search",
+        state: "input-complete",
+        type: "tool-call",
+      },
+    ]);
+  });
+
+  test("preserves malformed legacy arguments when no parsed input exists", () => {
+    const legacy = toChatMessageContent({
+      data: [
+        {
+          arguments: '{"query":',
+          id: "legacy-error",
+          name: "mcp__external__search",
+          output: { error: "Invalid arguments" },
+          state: "error",
+          type: "tool-call",
+        },
+      ],
+      version: 2,
+    });
+
+    expect(normalizePersistedChatMessageContent(legacy).parts).toEqual(
+      legacy.data,
+    );
+  });
+
+  test("preserves unavailable input for a terminal error call", () => {
+    const persisted = toPersistedChatMessageContentV3({
+      data: [
+        {
+          arguments: '{"query":',
+          id: "failed-input",
+          name: "mcp__external__search",
+          output: { error: "Invalid arguments" },
+          state: "error",
+          type: "tool-call",
+        },
+      ],
+    });
+
+    expect(persisted.data.at(0)).toMatchObject({
+      id: "failed-input",
+      input: { rawArguments: '{"query":', status: "raw" },
+      state: "error",
+      type: "tool-call",
+    });
+  });
+
+  test("rejects a completed result that disagrees with canonical output", () => {
+    expect(() =>
+      toPersistedChatMessageContentV3({
+        data: [
+          {
+            arguments: "{}",
+            id: "mismatched-output",
+            input: {},
+            name: "mcp__external__search",
+            output: { value: "canonical" },
+            state: "complete",
+            type: "tool-call",
+          },
+          {
+            content: '{"value":"stale"}',
+            state: "complete",
+            toolCallId: "mismatched-output",
+            type: "tool-result",
+          },
+        ],
+      }),
+    ).toThrow("Tool result mismatched-output disagrees with canonical output");
+  });
+
+  test("rejects malformed v3 parsed input at the database boundary", () => {
+    const persisted = toPersistedChatMessageContentV3({
+      data: [
+        {
+          arguments: "{}",
+          id: "malformed-row",
+          input: {},
+          name: "mcp__external__search",
+          state: "input-complete",
+          type: "tool-call",
+        },
+      ],
+    });
+    const call = persisted.data.at(0);
+    if (call === undefined) {
+      return;
+    }
+    Reflect.set(call, "input", { status: "parsed", value: new Date() });
+
+    expect(() => normalizePersistedChatMessageContent(persisted)).toThrow(
+      "Cannot mark an invalid tool input as parsed",
+    );
+  });
+
+  test("rejects non-JSON canonical tool output", () => {
+    expect(() =>
+      chatMessageContentFromMessage(
+        toPersistableChatMessage({
+          id: toSafeId<"chatMessage">("11111111-1111-4111-8111-111111111112"),
+          parts: [
+            {
+              arguments: "{}",
+              id: "invalid-output",
+              input: {},
+              name: "mcp__external__search",
+              output: new Date("2026-01-01T00:00:00.000Z"),
+              state: "complete",
+              type: "tool-call",
+            },
+          ],
+          role: "assistant",
+        }),
+      ),
+    ).toThrow("Cannot mark an invalid tool output as parsed");
+  });
+
   test("classifies every ask-user tool-call state for turn ownership", () => {
     type ToolCallState = Extract<ChatPart, { type: "tool-call" }>["state"];
 

@@ -14,7 +14,12 @@ import type {
   ChatClientToolsFor,
   ChatUIToolsFor,
 } from "@/api/lib/chat/chat-tool-types";
-import type { persistedChatMessageContentProof } from "@/api/lib/chat/persisted-message-content";
+import type {
+  PersistedToolCallPart,
+  PersistedToolResultPart,
+  persistedChatMessageContentProof,
+  persistedChatMessageContentV3Proof,
+} from "@/api/lib/chat/persisted-message-content";
 import type { ChatRefContext, ChatRefEncoding } from "@/api/lib/chat/ref-token";
 import type { ChatMentionsData } from "@/api/lib/chat/references";
 import type { UserFileUrl } from "@/api/lib/user-files/types";
@@ -210,6 +215,21 @@ export type ChatMessageContent = {
   version: 2;
 };
 
+export type PersistedChatToolPartV3 =
+  | PersistedToolCallPart
+  | PersistedToolResultPart;
+
+export type PersistedChatMessageContentV3 = {
+  data: (
+    | PersistedChatToolPartV3
+    | Exclude<ChatPart, { type: "tool-call" | "tool-result" }>
+  )[];
+  metadata?: ChatMessageMetadata | undefined;
+  readonly [persistedChatMessageContentV3Proof]: true;
+  version: 3;
+};
+
 export type PersistedChatMessageContent =
   | LegacyChatMessageContent
-  | ChatMessageContent;
+  | ChatMessageContent
+  | PersistedChatMessageContentV3;

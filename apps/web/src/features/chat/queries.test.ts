@@ -995,7 +995,7 @@ describe("chat runtime", () => {
     await stream;
   });
 
-  test("exposes progressive create-document source from TanStack tool arguments", async () => {
+  test("exposes progressive create-document source from partial arguments", async () => {
     const threadId = toChatThreadId("thread-progressive-draft");
     const messageId = "66666666-6666-4666-8666-666666666666";
     globalThis.fetch = createFetchMock(async () =>

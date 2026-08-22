@@ -1,5 +1,5 @@
 import { isStandardSchema, parseWithStandardSchema } from "@tanstack/ai";
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { deepEquals } from "bun";
 import type { Static } from "elysia";
 import { t } from "elysia";
@@ -33,6 +33,7 @@ import {
   getAwaitingUserInteractions,
   getResumedUserInteraction,
   hasServerOwnedChatPartType,
+  isChatPart,
   isIncomingChatPart,
   isChatTextPart,
   toPersistableChatMessage,
@@ -428,12 +429,35 @@ type ValidatedToolCallPart =
       type: "error";
       name: string;
       error: string | undefined;
+      part: ChatToolCallPart;
     }
   | {
       type: "schema";
       name: string;
       output: { type: "absent" } | { type: "present"; value: unknown };
+      part: ChatToolCallPart;
     };
+
+type ValidatedToolPayload =
+  | { type: "input-only"; input: unknown }
+  | { type: "input-output"; input: unknown; output: unknown };
+
+const withValidatedToolPayload = ({
+  part,
+  payload,
+}: {
+  part: ChatToolCallPart;
+  payload: ValidatedToolPayload;
+}): ChatToolCallPart => {
+  const candidate: unknown =
+    payload.type === "input-only"
+      ? { ...part, input: payload.input }
+      : { ...part, input: payload.input, output: payload.output };
+  if (!isChatPart(candidate) || candidate.type !== "tool-call") {
+    panic("Validated chat tool payload violates the tool-call contract");
+  }
+  return candidate;
+};
 
 export const validateMessage = async ({
   message,
@@ -465,14 +489,14 @@ export const validateMessage = async ({
       persistedMessage,
     });
 
-    const validatedMessage = toPersistableChatMessage({
+    const candidateMessage = toPersistableChatMessage({
       id: message.id,
       role: message.role,
       parts: partsResult.value,
       ...(metadata === undefined ? {} : { metadata }),
     });
     const toolValidationResult = validateToolCallParts({
-      message: validatedMessage,
+      message: candidateMessage,
       tools,
     });
 
@@ -485,6 +509,11 @@ export const validateMessage = async ({
         }),
       );
     }
+
+    const validatedMessage = toPersistableChatMessage({
+      ...candidateMessage,
+      parts: toolValidationResult.value,
+    });
 
     const storedFileRefsResult = validateChatFileParts({
       parts: validatedMessage.parts,
@@ -1184,14 +1213,15 @@ const isChatMessageMetadataEmpty = (metadata: ChatMessageMetadata): boolean =>
   metadata.turnOutcome === undefined &&
   metadata.usage === undefined;
 
-const validateToolCallParts = ({
+export const validateToolCallParts = ({
   message,
   tools,
 }: {
   message: ChatMessage;
   tools: ChatToolMap;
-}): Result<void, HandlerError<400>> => {
+}): Result<ChatPart[], HandlerError<400>> => {
   const toolCallsById = new Map<string, ValidatedToolCallPart>();
+  const parts: ChatPart[] = [];
 
   for (const part of message.parts) {
     if (part.type === "tool-call") {
@@ -1210,10 +1240,12 @@ const validateToolCallParts = ({
       }
 
       toolCallsById.set(part.id, toolCallResult.value);
+      parts.push(toolCallResult.value.part);
       continue;
     }
 
     if (part.type !== "tool-result") {
+      parts.push(part);
       continue;
     }
 
@@ -1225,8 +1257,9 @@ const validateToolCallParts = ({
     if (Result.isError(toolResult)) {
       return Result.err(toolResult.error);
     }
+    parts.push(part);
   }
-  return Result.ok();
+  return Result.ok(parts);
 };
 
 const validateToolCallPart = ({
@@ -1290,6 +1323,17 @@ const validateToolCallPart = ({
       type: "error",
       name: part.name,
       error: errorOutputResult.value,
+      part: withValidatedToolPayload({
+        part,
+        payload:
+          errorOutputResult.value === undefined
+            ? { type: "input-only", input: validatedArgumentsResult.value }
+            : {
+                type: "input-output",
+                input: validatedArgumentsResult.value,
+                output: { error: errorOutputResult.value },
+              },
+      }),
     });
   }
 
@@ -1298,6 +1342,10 @@ const validateToolCallPart = ({
       type: "schema",
       name: part.name,
       output: { type: "absent" },
+      part: withValidatedToolPayload({
+        part,
+        payload: { type: "input-only", input: validatedArgumentsResult.value },
+      }),
     });
   }
 
@@ -1314,6 +1362,14 @@ const validateToolCallPart = ({
     type: "schema",
     name: part.name,
     output: { type: "present", value: outputResult.value },
+    part: withValidatedToolPayload({
+      part,
+      payload: {
+        type: "input-output",
+        input: validatedArgumentsResult.value,
+        output: outputResult.value,
+      },
+    }),
   });
 };
 
