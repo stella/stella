@@ -366,6 +366,10 @@ describe("Turbo cache input contract", () => {
       typecheckStart,
       rootTypecheckStart,
     );
+    const rootTypecheckConfig = turboConfig.slice(
+      rootTypecheckStart,
+      lintStart,
+    );
     const lintConfig = turboConfig.slice(lintStart, lintFixStart);
     const rootInputs = (taskConfig: string) =>
       [...taskConfig.matchAll(/"(\$TURBO_ROOT\$\/[^"\n]+)"/gu)]
@@ -375,6 +379,23 @@ describe("Turbo cache input contract", () => {
 
     expect(rootInputs(typecheckConfig)).toEqual(
       [...ALL_WORKSPACE_TYPECHECK_CACHE_INPUTS].sort(),
+    );
+    expect(rootInputs(rootTypecheckConfig)).toEqual(
+      [
+        "$TURBO_ROOT$/.claude/mcp/**",
+        "$TURBO_ROOT$/.npmrc",
+        "$TURBO_ROOT$/.oxlint-plugins/**",
+        "$TURBO_ROOT$/apps/**",
+        "$TURBO_ROOT$/bun.lock",
+        "$TURBO_ROOT$/bunfig.toml",
+        "$TURBO_ROOT$/oxlint.config.ts",
+        "$TURBO_ROOT$/package.json",
+        "$TURBO_ROOT$/packages/**",
+        "$TURBO_ROOT$/patches/**",
+        "$TURBO_ROOT$/scripts/**",
+        "$TURBO_ROOT$/tsconfig*.json",
+        "$TURBO_ROOT$/types/**",
+      ].sort(),
     );
     expect(rootInputs(lintConfig)).toEqual(
       [...ALL_WORKSPACE_CACHE_INPUTS, ...LINT_ONLY_CACHE_INPUTS].sort(),
