@@ -912,8 +912,7 @@ export const createChatRuntime = ({
     },
   } satisfies ConnectConnectionAdapter;
 
-  const client = new ChatClient<ChatClientTools>({
-    id: getChatThreadKey(key),
+  const client = new ChatClient<ChatClientTools, unknown, readonly []>({
     threadId: key.threadId,
     initialMessages,
     connection,

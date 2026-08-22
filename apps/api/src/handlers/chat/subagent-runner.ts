@@ -35,6 +35,7 @@ import {
   resolveTanStackTextModel,
   systemPromptsPatch,
 } from "@/api/lib/tanstack-ai-generate";
+import { tokenUsageFromRunFinishedChunk } from "@/api/lib/tanstack-ai-usage";
 
 type RunSubagentMetering = {
   safeDb: SafeDb;
@@ -224,7 +225,7 @@ export const runSubagent = async (
   let usage: TokenUsage | undefined;
   for await (const chunk of stream) {
     if (chunk.type === EventType.RUN_FINISHED && chunk.usage) {
-      usage = chunk.usage;
+      usage = tokenUsageFromRunFinishedChunk(chunk);
     }
     processor.processChunk(chunk);
   }

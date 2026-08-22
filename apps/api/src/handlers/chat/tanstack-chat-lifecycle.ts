@@ -32,6 +32,8 @@ export const TANSTACK_CHAT_MIDDLEWARE_SEAM = {
   onConfig: "nonterminal",
   onError: "terminal",
   onFinish: "terminal",
+  onInterruptBoundary: "nonterminal",
+  onInterruptResolution: "nonterminal",
   onIteration: "nonterminal",
   onShouldContinue: "nonterminal",
   onStart: "nonterminal",
@@ -50,6 +52,7 @@ export const TANSTACK_CHAT_MIDDLEWARE_SEAM = {
 
 /** Compile-time seam with every phase passed to middleware onConfig. */
 export const TANSTACK_CHAT_MIDDLEWARE_PHASE_POLICY = {
+  afterModel: "agent-loop",
   afterTools: "agent-loop",
   beforeModel: "agent-loop",
   beforeTools: "agent-loop",

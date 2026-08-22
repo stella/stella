@@ -2871,10 +2871,9 @@ const hydrateAssistantMessageRefs = ({
         // Ref context is persistence-only. Hydration has consumed it, and
         // leaving raw workspace ids in message metadata would make the
         // provider-bound ingress guard report a false residual-id leak.
-        metadata:
-          message.metadata === undefined
-            ? undefined
-            : { ...message.metadata, refContext: undefined },
+        ...(message.metadata === undefined
+          ? {}
+          : { metadata: { ...message.metadata, refContext: undefined } }),
         parts: message.parts.map((part) => {
           let toolCallId: string | undefined;
           if (part.type === "tool-call") {

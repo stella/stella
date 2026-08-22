@@ -141,7 +141,7 @@ export type ChatMessageMetadata = {
 };
 
 export type ChatMessage = UIMessage<ChatClientTools> & {
-  metadata?: ChatMessageMetadata | undefined;
+  metadata?: ChatMessageMetadata;
 };
 
 export type PersistableChatMessageCandidate = {
@@ -157,7 +157,7 @@ declare const persistableChatMessageProof: unique symbol;
 export type PersistableChatMessage = {
   createdAt?: NonNullable<ChatMessage["createdAt"]>;
   id: SafeId<"chatMessage">;
-  metadata?: ChatMessageMetadata | undefined;
+  metadata?: ChatMessageMetadata;
   parts: ChatMessage["parts"];
   readonly [persistableChatMessageProof]: true;
   role: ChatMessage["role"];

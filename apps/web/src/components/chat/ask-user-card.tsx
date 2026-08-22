@@ -19,14 +19,14 @@ import type {
   AskUserInput,
   AskUserOutput,
   ChatAnonRestoration,
-  ChatToolCallPart,
+  ChatUIToolCallPart,
 } from "@/components/chat/chat-ui-tools";
 import { EntityLink } from "@/components/chat/entity-link";
 import { rehypeAnonSpans } from "@/components/chat/rehype-anon-spans";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { detached } from "@/lib/detached";
 
-type AskUserPart = Extract<ChatToolCallPart, { name: "ask-user" }>;
+type AskUserPart = Extract<ChatUIToolCallPart, { name: "ask-user" }>;
 
 type AskUserCardProps = {
   part: AskUserPart;

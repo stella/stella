@@ -202,9 +202,8 @@ describe("chat document-attachment capability", () => {
   );
 
   test("Mistral vision models accept PDF but not textual documents; other Mistral models accept neither", () => {
-    // Mistral's document_url path (patched in from the upstream document-input
-    // change) takes PDF only, and Mistral is deliberately not a pdf-role
-    // provider, so textual documents must never route to it.
+    // Mistral's document_url path takes PDF only, and Mistral is deliberately
+    // not a pdf-role provider, so textual documents must never route to it.
     expect(BYOK_DOCUMENT_INPUT_MODEL_OPTIONS.mistral).toHaveLength(0);
     const mistralPdfModels: readonly string[] =
       CHAT_PDF_ATTACHMENT_MODEL_OPTIONS.mistral;

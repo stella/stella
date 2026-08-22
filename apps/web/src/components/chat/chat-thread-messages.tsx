@@ -55,6 +55,8 @@ import type {
   ChatAnonRestoration,
   ChatAttachmentPart,
   ChatPart,
+  ChatUIMessage,
+  ChatUIPart,
   ChatUITools,
   PersistedChatMessage,
 } from "@/components/chat/chat-ui-tools";
@@ -62,6 +64,7 @@ import {
   getChatToolTitleKey,
   hasRunningToolCallInLatestAssistantMessage,
   isApprovalPart,
+  withParsedToolCallInputs,
 } from "@/components/chat/chat-ui-tools";
 import type { CreateDocumentDraft } from "@/components/chat/create-document-draft.logic";
 import { MessageExportMenu } from "@/components/chat/message-export-menu";
@@ -126,7 +129,10 @@ export const ChatThreadMessages = ({
   // persisted copy of one message during the per-turn refetch handoff; both
   // carry the same id, so React would render it twice. Collapse by id before
   // any downstream read.
-  const messages = useMemo(() => dedupeById(rawMessages), [rawMessages]);
+  const messages = useMemo(
+    () => dedupeById(withParsedToolCallInputs(rawMessages)),
+    [rawMessages],
+  );
   const generationActive = error === undefined && isGenerating;
   const retryableAssistantMessageId = useMemo(
     () => getRetryableAssistantMessageId(messages),
@@ -238,7 +244,7 @@ export const ChatThreadMessages = ({
   // Rendered per message in both the flat and sticky layouts, so the message
   // body markup stays identical across surfaces; only the surrounding turn
   // grouping differs when `stickyUserMessages` is on.
-  const renderMessageNode = (message: PersistedChatMessage, index: number) => (
+  const renderMessageNode = (message: ChatUIMessage, index: number) => (
     <Message
       className={cn(
         "transition-opacity duration-200",
@@ -1280,7 +1286,7 @@ type AssistantMessagePartsProps = Pick<
   assistantTextDensity: "compact" | "default";
   isGenerating: boolean;
   isLatestAssistantMessage: boolean;
-  message: PersistedChatMessage;
+  message: ChatUIMessage;
   shouldShowToolCalls: boolean;
 };
 
@@ -1288,7 +1294,7 @@ type AssistantPartRenderEntry =
   | { type: "rich"; key: string; part: RichChatPart }
   | {
       type: "standard";
-      part: Exclude<ChatPart, RichChatPart>;
+      part: Exclude<ChatUIPart, RichChatPart>;
     };
 
 const richPartRenderIdentity = (part: RichChatPart): string => {
@@ -1309,7 +1315,7 @@ const richPartRenderIdentity = (part: RichChatPart): string => {
 };
 
 const toAssistantPartRenderEntries = (
-  parts: readonly ChatPart[],
+  parts: readonly ChatUIPart[],
 ): AssistantPartRenderEntry[] => {
   const entries: AssistantPartRenderEntry[] = [];
   const richPartOccurrences = new Map<string, number>();

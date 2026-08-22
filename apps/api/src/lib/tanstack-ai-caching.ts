@@ -44,6 +44,17 @@ export function markTanStackCacheBreakpoint(
   if (!cacheControl) {
     return part;
   }
+
+  if (part.type === "text") {
+    return {
+      ...part,
+      metadata: {
+        ...part.metadata,
+        cache_control: cacheControl,
+      },
+    };
+  }
+
   return {
     ...part,
     metadata: {

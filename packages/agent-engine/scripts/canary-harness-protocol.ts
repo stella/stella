@@ -1,5 +1,6 @@
 import { EventType } from "@ag-ui/core";
 import type { StreamChunk } from "@tanstack/ai";
+import { tanstackMetadata } from "@tanstack/ai/adapter-internals";
 
 import {
   CANARY_COMPLETION_MARKER,
@@ -12,11 +13,7 @@ const CANARY_FINISH_COMPLETED_RESULT = JSON.stringify({
   status: "completed",
 });
 
-type ToolCallStartChunk = Extract<StreamChunk, { type: "TOOL_CALL_START" }>;
-
-export type CanaryHarnessChunk =
-  | Exclude<StreamChunk, ToolCallStartChunk>
-  | Omit<ToolCallStartChunk, "toolName">;
+export type CanaryHarnessChunk = StreamChunk;
 
 export type CanaryHarnessObservation = {
   assistantText: string;
@@ -160,7 +157,7 @@ export const consumeCanaryHarnessChunk = (
         };
         return;
       }
-      if (chunk.state === "output-error") {
+      if (tanstackMetadata(chunk)?.state === "output-error") {
         observation.finishResult = {
           status: "failed",
           message: `canary_finish returned output-error (content shape: ${finishResultShape(chunk.content)})`,

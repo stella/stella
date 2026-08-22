@@ -21,6 +21,7 @@ import {
   systemPromptsPatch,
 } from "@/api/lib/tanstack-ai-generate";
 import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
+import { tokenUsageFromRunFinishedChunk } from "@/api/lib/tanstack-ai-usage";
 
 const surfaces = ["old-mixed", "new-describe", "new-inline"] as const;
 
@@ -908,7 +909,7 @@ const runBenchTask = async ({
       continue;
     }
     if (chunk.type === EventType.RUN_FINISHED) {
-      usage = chunk.usage ?? null;
+      usage = tokenUsageFromRunFinishedChunk(chunk) ?? null;
     }
   }
 

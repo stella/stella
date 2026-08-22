@@ -20,7 +20,7 @@ const assistantMessage = (
   pairs: { placeholder: string; original: string }[] = [],
 ): PersistedChatMessage => ({
   id,
-  metadata: pairs.length > 0 ? { anonRestorations: { pairs } } : undefined,
+  ...(pairs.length > 0 ? { metadata: { anonRestorations: { pairs } } } : {}),
   parts: [{ type: "text", content: "reply" }],
   role: "assistant",
 });

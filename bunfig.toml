@@ -15,6 +15,24 @@ minimumReleaseAgeExcludes = [
   # bun-types 1.4.0 keeps the compiler contract aligned with Bun 1.4.0.
   # Remove this exception once the normal quarantine admits it.
   "bun-types", # quarantine-expires: 2026-08-25T14:11:33.785Z
+  # TanStack AI 0.48.0 contains the upstream fixes that replace Stella's local
+  # package patches. Keep the release family coherent across direct and
+  # transitive packages; remove these exceptions after the normal quarantine.
+  "@tanstack/ai", # quarantine-expires: 2026-08-27T06:54:08.208Z
+  "@tanstack/ai-anthropic", # quarantine-expires: 2026-08-27T06:54:06.714Z
+  "@tanstack/ai-bedrock", # quarantine-expires: 2026-08-27T06:54:10.284Z
+  "@tanstack/ai-client", # quarantine-expires: 2026-08-27T06:54:07.514Z
+  "@tanstack/ai-code-mode", # quarantine-expires: 2026-08-27T06:54:07.309Z
+  "@tanstack/ai-codex", # quarantine-expires: 2026-08-27T06:54:10.866Z
+  "@tanstack/ai-event-client", # quarantine-expires: 2026-08-27T06:54:14.258Z
+  "@tanstack/ai-gemini", # quarantine-expires: 2026-08-27T06:54:15.462Z
+  "@tanstack/ai-mcp", # quarantine-expires: 2026-08-27T06:54:19.883Z
+  "@tanstack/ai-mistral", # quarantine-expires: 2026-08-27T06:54:24.104Z
+  "@tanstack/ai-openai", # quarantine-expires: 2026-08-27T06:54:25.178Z
+  "@tanstack/ai-openrouter", # quarantine-expires: 2026-08-27T06:54:24.801Z
+  "@tanstack/ai-react", # quarantine-expires: 2026-08-27T06:54:28.211Z
+  "@tanstack/ai-sandbox", # quarantine-expires: 2026-08-27T06:54:31.373Z
+  "@tanstack/openai-base", # quarantine-expires: 2026-08-27T06:54:38.323Z
   # anydoc 0.1.9 bounds resource use for adversarial PDFs (pdf-inspector
   # 1.14.2); waived early to unblock the PDF extraction work. Listed with its
   # napi platform subpackages (see the @stll/stdnum note below).

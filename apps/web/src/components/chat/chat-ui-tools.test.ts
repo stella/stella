@@ -1317,7 +1317,7 @@ describe("withParsedToolCallInputs", () => {
 
     // Nothing to fill: the message object keeps its reference so
     // downstream memoization is not invalidated.
-    expect(result[0]).toBe(messages[0]);
+    expect(Object.is(result[0], messages[0])).toBe(true);
   });
 });
 

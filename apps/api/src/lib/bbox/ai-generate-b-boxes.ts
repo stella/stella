@@ -73,7 +73,6 @@ export const generateBBoxData = async ({
           value: Buffer.from(pdfData).toString("base64"),
           mimeType: "application/pdf",
         },
-        metadata: { mediaType: "application/pdf" },
       };
       const result = await generateTanStackObjectForRole({
         role: "pdf",

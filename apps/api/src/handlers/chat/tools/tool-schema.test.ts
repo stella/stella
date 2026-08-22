@@ -17,7 +17,10 @@ import { createMistralText } from "@tanstack/ai-mistral";
 import { createOpenaiChat } from "@tanstack/ai-openai";
 import { convertFunctionToolToAdapterFormat } from "@tanstack/ai-openai/tools";
 import { createOpenRouterText } from "@tanstack/ai-openrouter";
-import { resolveDebugOption } from "@tanstack/ai/adapter-internals";
+import {
+  DuplicateToolNameError,
+  resolveDebugOption,
+} from "@tanstack/ai/adapter-internals";
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
@@ -1362,17 +1365,12 @@ describe("chat tool schemas", () => {
                   type: ["string", "null"],
                   enum: [null],
                 },
-                acceptAnything: {
-                  anyOf: [true, { type: "null" }],
-                },
+                acceptAnything: true,
                 rejectAnything: {
                   anyOf: [false, { type: "null" }],
                 },
                 typeless: {
-                  anyOf: [
-                    { description: "An optional typeless value." },
-                    { type: "null" },
-                  ],
+                  description: "An optional typeless value.",
                 },
               },
               required: expect.arrayContaining([
@@ -1395,6 +1393,7 @@ describe("chat tool schemas", () => {
       question: "Which one?",
       nullableNote: null,
       acceptAnything: null,
+      typeless: null,
     });
   });
 
@@ -1626,7 +1625,7 @@ describe("chat tool schemas", () => {
     );
   });
 
-  test("Anthropic keeps an ordinary web_search function distinct from its native web-search tool", () => {
+  test("Anthropic rejects a custom tool that collides with its native web-search tool", () => {
     const ordinaryWebSearch: Tool = {
       name: "web_search",
       description: "Search through stella's configured provider.",
@@ -1642,25 +1641,13 @@ describe("chat tool schemas", () => {
       type: "web_search_20250305",
     });
 
-    expect(convertAnthropicTools([ordinaryWebSearch, nativeWebSearch])).toEqual(
-      [
-        {
-          name: "web_search",
-          type: "custom",
-          description: ordinaryWebSearch.description,
-          input_schema: {
-            type: "object",
-            properties: { query: { type: "string" } },
-            required: ["query"],
-          },
-          cache_control: null,
-        },
-        {
-          name: "web_search",
-          type: "web_search_20250305",
-          cache_control: null,
-        },
-      ],
+    expect(() =>
+      convertAnthropicTools([ordinaryWebSearch, nativeWebSearch]),
+    ).toThrow(DuplicateToolNameError);
+    expect(() =>
+      convertAnthropicTools([ordinaryWebSearch, nativeWebSearch]),
+    ).toThrow(
+      'Cannot pass two tools named "web_search" in the same chat() call.',
     );
   });
 
@@ -1668,8 +1655,8 @@ describe("chat tool schemas", () => {
   // `strict: true` but a schema outside the strict Structured Outputs subset.
   // This test runs the real adapter conversion over every registered chat tool
   // offline, so a schema that would 400 in production fails here first, even
-  // under USE_MOCK_AI. It also fails if the @tanstack/openai-base patch
-  // (patches/) stops applying, e.g. after a version bump.
+  // under USE_MOCK_AI. It also fails if an upstream adapter change regresses
+  // the non-strict fallback after a version bump.
   test("OpenAI falls back from strict mode when an anyOf variant needs null widening", () => {
     const inputSchema = {
       type: "object",

@@ -172,7 +172,6 @@ export const generateWorkflowData = async ({
           value: Buffer.from(file.content).toString("base64"),
           mimeType: file.mimeType,
         },
-        metadata: { mediaType: file.mimeType },
       });
       continue;
     }

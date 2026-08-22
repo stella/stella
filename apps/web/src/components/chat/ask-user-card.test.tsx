@@ -4,11 +4,14 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { afterAll, describe, expect, test } from "bun:test";
 import { IntlProvider } from "use-intl";
 
-import type { AskUserInput, ChatPart } from "@/components/chat/chat-ui-tools";
+import type {
+  AskUserInput,
+  ChatUIToolCallPart,
+} from "@/components/chat/chat-ui-tools";
 import { withParsedToolCallInputs } from "@/components/chat/chat-ui-tools";
 import messages from "@/i18n/langs/en.json";
 
-type AskUserPart = Extract<ChatPart, { name: "ask-user" }>;
+type AskUserPart = Extract<ChatUIToolCallPart, { name: "ask-user" }>;
 
 const previousApiUrl = process.env["VITE_API_URL"];
 process.env["VITE_API_URL"] = previousApiUrl ?? "https://api.example.test";

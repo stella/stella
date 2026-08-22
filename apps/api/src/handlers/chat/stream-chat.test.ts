@@ -246,10 +246,7 @@ const createScriptedAdapter = (
       type: EventType.TOOL_CALL_START,
       toolCallId: callId,
       toolCallName: toolName,
-      // eslint-disable-next-line typescript/no-deprecated -- AG-UI still requires the compatibility field.
-      toolName,
       parentMessageId: messageId,
-      model,
       timestamp,
     } satisfies StreamChunk;
     yield {
@@ -262,7 +259,6 @@ const createScriptedAdapter = (
     yield {
       type: EventType.TOOL_CALL_END,
       toolCallId: callId,
-      model,
       timestamp,
     } satisfies StreamChunk;
     yield {
@@ -488,8 +484,6 @@ describe("outgoing chat stream message ids", () => {
           parentMessageId: "provider-message",
           toolCallId: "ask-awaiting-input",
           toolCallName: "ask-user",
-          // eslint-disable-next-line typescript/no-deprecated -- AG-UI still requires the compatibility field.
-          toolName: "ask-user",
         },
       ],
       [
@@ -498,8 +492,6 @@ describe("outgoing chat stream message ids", () => {
           parentMessageId: "provider-message",
           toolCallId: "ask-input-complete",
           toolCallName: "ask-user",
-          // eslint-disable-next-line typescript/no-deprecated -- AG-UI still requires the compatibility field.
-          toolName: "ask-user",
         },
         {
           type: EventType.TOOL_CALL_ARGS,
@@ -510,9 +502,6 @@ describe("outgoing chat stream message ids", () => {
           type: EventType.TOOL_CALL_END,
           input: { question: "Which jurisdiction applies?" },
           toolCallId: "ask-input-complete",
-          toolCallName: "ask-user",
-          // eslint-disable-next-line typescript/no-deprecated -- AG-UI still requires the compatibility field.
-          toolName: "ask-user",
         },
       ],
       [
@@ -521,8 +510,6 @@ describe("outgoing chat stream message ids", () => {
           parentMessageId: "provider-message",
           toolCallId: "ask-input-streaming",
           toolCallName: "ask-user",
-          // eslint-disable-next-line typescript/no-deprecated -- AG-UI still requires the compatibility field.
-          toolName: "ask-user",
         },
         {
           type: EventType.TOOL_CALL_ARGS,
@@ -618,8 +605,6 @@ describe("outgoing chat stream message ids", () => {
               parentMessageId: "openrouter-responses-b",
               toolCallId: "tool-1",
               toolCallName: "ask-user",
-              // eslint-disable-next-line typescript/no-deprecated -- AG-UI still requires the compatibility field.
-              toolName: "ask-user",
             },
             {
               type: EventType.TOOL_CALL_RESULT,
@@ -655,8 +640,6 @@ describe("outgoing chat stream message ids", () => {
         parentMessageId: firstId,
         toolCallId: "tool-1",
         toolCallName: "ask-user",
-        // eslint-disable-next-line typescript/no-deprecated -- AG-UI still requires the compatibility field.
-        toolName: "ask-user",
       },
       {
         type: EventType.TOOL_CALL_RESULT,
@@ -742,8 +725,6 @@ describe("outgoing chat stream message ids", () => {
             parentMessageId: "assistant-previous",
             toolCallId: "tool-follow-up",
             toolCallName: "web_search",
-            // eslint-disable-next-line typescript/no-deprecated -- AG-UI still requires the compatibility field.
-            toolName: "web_search",
           },
           {
             type: EventType.CUSTOM,
@@ -809,8 +790,6 @@ describe("outgoing chat stream message ids", () => {
         parentMessageId: "assistant-previous",
         toolCallId: "tool-follow-up",
         toolCallName: "web_search",
-        // eslint-disable-next-line typescript/no-deprecated -- AG-UI still requires the compatibility field.
-        toolName: "web_search",
       },
       {
         type: EventType.CUSTOM,
@@ -1195,8 +1174,6 @@ describe("outgoing chat stream message ids", () => {
           parentMessageId: "provider-list-message",
           toolCallId: "list-call",
           toolCallName: "list_templates",
-          // eslint-disable-next-line typescript/no-deprecated -- AG-UI still requires the compatibility field.
-          toolName: "list_templates",
         },
         {
           type: EventType.TOOL_CALL_ARGS,
@@ -1207,9 +1184,6 @@ describe("outgoing chat stream message ids", () => {
           type: EventType.TOOL_CALL_END,
           input: {},
           toolCallId: "list-call",
-          toolCallName: "list_templates",
-          // eslint-disable-next-line typescript/no-deprecated -- AG-UI still requires the compatibility field.
-          toolName: "list_templates",
         },
         {
           type: EventType.TOOL_CALL_RESULT,
@@ -1233,8 +1207,6 @@ describe("outgoing chat stream message ids", () => {
           parentMessageId: "provider-ask-message",
           toolCallId: "ask-call",
           toolCallName: "ask-user",
-          // eslint-disable-next-line typescript/no-deprecated -- AG-UI still requires the compatibility field.
-          toolName: "ask-user",
         },
         {
           type: EventType.TOOL_CALL_ARGS,
@@ -1248,9 +1220,6 @@ describe("outgoing chat stream message ids", () => {
             question: "What scope should the power of attorney cover?",
           },
           toolCallId: "ask-call",
-          toolCallName: "ask-user",
-          // eslint-disable-next-line typescript/no-deprecated -- AG-UI still requires the compatibility field.
-          toolName: "ask-user",
         },
         {
           type: EventType.RUN_FINISHED,
@@ -1346,8 +1315,6 @@ describe("outgoing chat stream message ids", () => {
           parentMessageId: "provider-message",
           toolCallId: "tool-1",
           toolCallName: "web_search",
-          // eslint-disable-next-line typescript/no-deprecated -- AG-UI still requires the compatibility field.
-          toolName: "web_search",
         },
         {
           type: EventType.TOOL_CALL_ARGS,
@@ -1358,9 +1325,6 @@ describe("outgoing chat stream message ids", () => {
           type: EventType.TOOL_CALL_END,
           input: { query: "Winston Churchill quotes" },
           toolCallId: "tool-1",
-          toolCallName: "web_search",
-          // eslint-disable-next-line typescript/no-deprecated -- AG-UI still requires the compatibility field.
-          toolName: "web_search",
         },
         {
           type: EventType.RUN_FINISHED,
@@ -2301,8 +2265,6 @@ describe("chat stream refs", () => {
           parentMessageId: "provider-message",
           toolCallId: "tool-1",
           toolCallName: "list_matters",
-          // eslint-disable-next-line typescript/no-deprecated -- AG-UI still requires the compatibility field.
-          toolName: "list_matters",
         },
         {
           type: EventType.TOOL_CALL_ARGS,
@@ -2313,9 +2275,6 @@ describe("chat stream refs", () => {
           type: EventType.TOOL_CALL_END,
           input: { matter_id: matterRef },
           toolCallId: "tool-1",
-          toolCallName: "list_matters",
-          // eslint-disable-next-line typescript/no-deprecated -- AG-UI still requires the compatibility field.
-          toolName: "list_matters",
         },
         {
           type: EventType.RUN_FINISHED,
@@ -2537,8 +2496,6 @@ describe("chat stream refs", () => {
         type: EventType.TOOL_CALL_START,
         toolCallId: "tool_1",
         toolCallName: "list_matters",
-        // eslint-disable-next-line typescript/no-deprecated -- AG-UI still requires the compatibility field.
-        toolName: "list_matters",
       },
       {
         type: EventType.TOOL_CALL_RESULT,
@@ -2595,8 +2552,6 @@ describe("chat stream refs", () => {
             type: EventType.TOOL_CALL_START,
             toolCallId: "tool_1",
             toolCallName: "mcp__external__opaque",
-            // eslint-disable-next-line typescript/no-deprecated -- AG-UI still requires the compatibility field.
-            toolName: "mcp__external__opaque",
           },
           {
             type: EventType.TOOL_CALL_RESULT,

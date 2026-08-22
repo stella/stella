@@ -241,8 +241,8 @@ export const assistantMessageFallbackText = (markdown: string): string =>
     .replace(/\*\*|__/gu, "")
     .replace(/`+/gu, "");
 
-type TurnBodyItem = {
-  message: PersistedChatMessage;
+type TurnBodyItem<TMessage extends PersistedChatMessage> = {
+  message: TMessage;
   /** Position in the flat `messages` list, kept so anon-restoration lookups
    *  and retry targeting stay identical to the non-sticky layout. */
   index: number;
@@ -254,14 +254,14 @@ type TurnBodyItem = {
  * precede any user message (e.g. a greeting, or the tail of an older turn
  * pulled in by pagination) and render without a sticky header.
  */
-type MessageTurn =
+type MessageTurn<TMessage extends PersistedChatMessage> =
   | {
       type: "user";
       index: number;
-      header: PersistedChatMessage;
-      body: TurnBodyItem[];
+      header: TMessage;
+      body: TurnBodyItem<TMessage>[];
     }
-  | { type: "orphan"; body: TurnBodyItem[] };
+  | { type: "orphan"; body: TurnBodyItem<TMessage>[] };
 
 /**
  * Groups the flat message list into turns for the sticky layout: every user
@@ -270,10 +270,10 @@ type MessageTurn =
  * sticky header room to pin — a header can only stick within its own turn, so
  * the next turn's header pushes it out as it reaches the top.
  */
-export const buildMessageTurns = (
-  messages: readonly PersistedChatMessage[],
-): MessageTurn[] => {
-  const turns: MessageTurn[] = [];
+export const buildMessageTurns = <TMessage extends PersistedChatMessage>(
+  messages: readonly TMessage[],
+): MessageTurn<TMessage>[] => {
+  const turns: MessageTurn<TMessage>[] = [];
   for (let index = 0; index < messages.length; index += 1) {
     const message = messages[index];
     if (!message) {
