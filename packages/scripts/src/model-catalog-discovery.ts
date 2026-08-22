@@ -29,6 +29,10 @@ type DatedReviewReason = `${number}-${number}-${number}: ${string}`;
  */
 // oxlint-disable-next-line no-partial-record-satisfies/no-partial-record-satisfies -- DiscoveryModelKey is `${provider}:${string}`, an unbounded template-literal type; a total record is not constructible. Absence here means "no reviewed exclusion for this model ID" (the default, checked via `!== undefined` in findUnreviewedModels), not an unclassified union member.
 export const REVIEWED_MODEL_EXCLUSIONS = {
+  "google:gemini-flash-latest":
+    "2026-08-22: floating alias pointer; do not offer or assign fixed-model metadata",
+  "google:gemini-flash-lite-latest":
+    "2026-08-22: floating alias pointer; do not offer or assign fixed-model metadata",
   "openai:gpt-5.6-luna":
     "2026-07-23: specialized GPT-5.6 tier; offer the portable gpt-5.6 ID",
   "openai:gpt-5.6-sol":

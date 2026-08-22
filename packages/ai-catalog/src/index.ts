@@ -955,9 +955,9 @@ export const MODEL_RATES = {
   },
   "gemini-3.6-flash": {
     kind: "flat",
-    inputPerMTok: 150_000,
-    outputPerMTok: 750_000,
-    cachedInputPerMTok: 15_000,
+    inputPerMTok: 75_000,
+    outputPerMTok: 375_000,
+    cachedInputPerMTok: 7500,
   },
   "gemini-3.7-flash": {
     kind: "flat",

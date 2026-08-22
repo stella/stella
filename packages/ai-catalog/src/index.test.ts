@@ -26,6 +26,11 @@ import {
   TANSTACK_AI_PROVIDERS,
 } from "./index";
 
+const FLOATING_GOOGLE_MODEL_POINTERS = [
+  "gemini-flash-latest",
+  "gemini-flash-lite-latest",
+] as const;
+
 describe("BYOK provider role support", () => {
   test("does not route PDF flows through Mistral document-unsupported models", () => {
     expect(
@@ -246,6 +251,26 @@ describe("MODEL_RATES economic ordering", () => {
     expect(getModelRate("google/gemini-3.7-flash")).toBe(
       getModelRate("gemini-3.7-flash"),
     );
+  });
+
+  test("floating provider pointers do not inherit fixed-model metadata", () => {
+    for (const modelId of FLOATING_GOOGLE_MODEL_POINTERS) {
+      expect(getModelRate(modelId)).toBeUndefined();
+      expect(getContextWindowTokens(modelId)).toBe(
+        DEFAULT_CONTEXT_WINDOW_TOKENS,
+      );
+      expect(getModelReasoningEfforts(modelId)).toBeNull();
+      expect(shouldEmitTemperature(modelId)).toBe(false);
+    }
+  });
+
+  test("canonical model rates match expected amounts", () => {
+    expect(getModelRate("gemini-3.6-flash")).toEqual({
+      kind: "flat",
+      inputPerMTok: 75_000,
+      outputPerMTok: 375_000,
+      cachedInputPerMTok: 7500,
+    });
   });
 });
 
