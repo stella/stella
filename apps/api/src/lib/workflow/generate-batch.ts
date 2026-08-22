@@ -289,10 +289,25 @@ export const generateBatch = async ({
       });
     }
 
-    const preparedFiles = await fetchAndPrepareFiles(
-      resolvedFiles,
-      organizationId,
-      workspaceId,
+    // `fetchAndPrepareFiles` signals failure by rejecting (S3 reads, DOCX
+    // parsing, bates stamping, text extraction). Awaiting it bare would let
+    // that rejection escape `Result.gen` as a panic, so the integration
+    // failure this function declares in its error union would never reach
+    // the caller's retry and status classification.
+    const preparedFiles = yield* Result.await(
+      Result.tryPromise({
+        try: async () =>
+          await fetchAndPrepareFiles(
+            resolvedFiles,
+            organizationId,
+            workspaceId,
+          ),
+        catch: (cause) =>
+          new WorkflowIntegrationError({
+            message: "Failed to prepare workflow input files",
+            cause,
+          }),
+      }),
     );
 
     const filenames = buildJustificationFilenames(preparedFiles);
