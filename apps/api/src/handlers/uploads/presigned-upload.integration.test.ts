@@ -29,6 +29,9 @@ const thumbnailDerivativeMock = mock(async () => undefined);
 const realS3 = await import("@/api/lib/s3");
 const realProcessExtraction =
   await import("@/api/lib/search/process-extraction");
+const realUploadTriggeredFlows =
+  await import("@/api/lib/flows/maybe-start-upload-triggered-flows");
+const realFileDerivativeQueue = await import("@/api/lib/file-derivative-queue");
 
 void mock.module("@/api/lib/s3", () => ({
   ...realS3,
@@ -44,10 +47,12 @@ void mock.module("@/api/lib/search/process-extraction", () => ({
 }));
 
 void mock.module("@/api/lib/flows/maybe-start-upload-triggered-flows", () => ({
+  ...realUploadTriggeredFlows,
   maybeStartUploadTriggeredFlows: uploadFlowMock,
 }));
 
 void mock.module("@/api/lib/file-derivative-queue", () => ({
+  ...realFileDerivativeQueue,
   enqueueImageThumbnailOrMarkFailed: thumbnailDerivativeMock,
   enqueuePdfDerivativeOrMarkFailed: pdfDerivativeMock,
 }));

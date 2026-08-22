@@ -120,14 +120,37 @@ export const isOfficeAsyncValue = <T>(
 ): value is { getAsync: (callback: OfficeAsyncCallback<T>) => void } =>
   isRecord(value) && typeof value["getAsync"] === "function";
 
-const supportsMailbox18 = (office: OfficeRuntime): boolean => {
-  const requirements = office.context.requirements;
+type SupportsOfficeRequirementOptions = {
+  name: string;
+  requirements: unknown;
+  version: string;
+};
+
+export const supportsOfficeRequirement = ({
+  name,
+  requirements,
+  version,
+}: SupportsOfficeRequirementOptions): boolean => {
+  if (!isRecord(requirements)) {
+    return false;
+  }
+  const isSetSupported = requirements["isSetSupported"];
+  if (typeof isSetSupported !== "function") {
+    return false;
+  }
   try {
-    return requirements.isSetSupported("Mailbox", "1.8");
+    return isSetSupported.call(requirements, name, version) === true;
   } catch {
     return false;
   }
 };
+
+const supportsMailbox18 = (office: OfficeRuntime): boolean =>
+  supportsOfficeRequirement({
+    name: "Mailbox",
+    requirements: office.context.requirements,
+    version: "1.8",
+  });
 
 type OfficeAttachmentDetails =
   | Pick<

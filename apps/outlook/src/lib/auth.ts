@@ -1,4 +1,8 @@
-import { getOfficeDialogApi, getOfficeRuntime } from "@/lib/office";
+import {
+  getOfficeDialogApi,
+  getOfficeRuntime,
+  supportsOfficeRequirement,
+} from "@/lib/office";
 import { OutlookError } from "@/lib/outlook-error";
 
 const HANDOFF_MESSAGE_TYPE = "stella:auth";
@@ -77,11 +81,13 @@ export const buildDialogStartAddress = (taskpaneOrigin: string): string => {
 type SignInViaDialogOptions = {
   signInOrigin: string;
   taskpaneOrigin: string;
+  unsupportedDialogOriginMessage: string;
 };
 
 export const signInViaDialog = async ({
   signInOrigin,
   taskpaneOrigin,
+  unsupportedDialogOriginMessage,
 }: SignInViaDialogOptions): Promise<string> => {
   const office = getOfficeRuntime();
   const ui = getOfficeDialogApi();
@@ -90,6 +96,15 @@ export const signInViaDialog = async ({
       message:
         "Sign-in dialogs are available only when the add-in is opened inside Outlook.",
     });
+  }
+  if (
+    !supportsOfficeRequirement({
+      name: "DialogOrigin",
+      requirements: office.context.requirements,
+      version: "1.1",
+    })
+  ) {
+    throw new OutlookError({ message: unsupportedDialogOriginMessage });
   }
 
   const expectedOrigin = new URL(signInOrigin).origin;

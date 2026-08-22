@@ -1,7 +1,6 @@
 import { ExternalLinkIcon, FileTextIcon } from "lucide-react";
 
 import { Input } from "@stll/ui/components/input";
-import { ScrollArea } from "@stll/ui/components/scroll-area";
 import { cn } from "@stll/ui/lib/utils";
 
 import { Notice } from "@/components/notice";
@@ -36,7 +35,7 @@ export const MatterPanel = ({
   <Panel>
     <PanelTitle icon={<FileTextIcon />} title={t("chooseMatter")} />
     {workspaceError ? (
-      <Notice title={workspaceError} tone="warning">
+      <Notice role="alert" title={workspaceError} tone="warning">
         <a
           className="text-primary inline-flex items-center gap-1 underline"
           href={env.stellaWebUrl}
@@ -88,7 +87,7 @@ const MatterList = ({
   }
 
   return (
-    <ScrollArea className="max-h-44">
+    <div className="max-h-44 overflow-auto">
       <div className="grid gap-2 pe-0.5">
         {workspaces.slice(0, MAX_VISIBLE_MATTERS).map((workspace) => (
           <MatterOption
@@ -101,7 +100,7 @@ const MatterList = ({
           />
         ))}
       </div>
-    </ScrollArea>
+    </div>
   );
 };
 

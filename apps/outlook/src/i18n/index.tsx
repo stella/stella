@@ -48,6 +48,8 @@ const messages = {
     composeMode: "Compose mode",
     copiedToClipboard: "Copied to clipboard.",
     copyOrInsertDraft: "Insert or copy draft",
+    dialogOriginUnsupported:
+      "Update Outlook to sign in securely, then reopen the add-in.",
     draftIntentPlaceholder:
       "e.g. Acknowledge receipt and say we will review by Friday.",
     draftPlacementError: "Could not insert or copy the draft",

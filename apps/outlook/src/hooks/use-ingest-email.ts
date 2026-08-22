@@ -27,6 +27,7 @@ import {
   type UploadingEmailUpload,
 } from "@/ingestion-state";
 import { APIError, userErrorMessage } from "@/lib/api-error";
+import { attachmentsForIngestion } from "@/lib/attachment-selection";
 import { mapConcurrent } from "@/lib/bounded-concurrency";
 import {
   createIngestionDiagnosticBase,
@@ -38,9 +39,9 @@ import { downloadAttachment } from "@/outlook";
 import type { MailSnapshot } from "@/types";
 
 type IngestArgs = {
+  excludedAttachmentIds: Set<string> | null;
   isCurrent: (itemInstanceKey: string) => boolean;
   loadLatest: () => Promise<MailSnapshot>;
-  selectedAttachmentIds: Set<string> | null;
   snapshot: MailSnapshot;
   workspaceId: string;
 };
@@ -61,17 +62,6 @@ type UseIngestEmailOptions = PendingEmailUploadStore & {
   errorFallback: string;
   previousEmailSaveCompleted: string;
 };
-
-const selectedAttachments = (
-  snapshot: MailSnapshot,
-  selectedAttachmentIds: Set<string> | null,
-) =>
-  snapshot.attachments.filter(
-    (attachment) =>
-      attachment.isInline ||
-      selectedAttachmentIds === null ||
-      selectedAttachmentIds.has(attachment.id),
-  );
 
 const withDiagnostic = (
   pending: PendingEmailUpload,
@@ -284,15 +274,15 @@ export const useIngestEmail = ({
   };
 
   const save = async ({
+    excludedAttachmentIds,
     isCurrent,
     loadLatest,
-    selectedAttachmentIds,
     snapshot,
     workspaceId,
   }: IngestArgs) => {
-    const initialAttachments = selectedAttachments(
-      snapshot,
-      selectedAttachmentIds,
+    const initialAttachments = attachmentsForIngestion(
+      snapshot.attachments,
+      excludedAttachmentIds,
     );
     let attemptBase = createIngestionDiagnosticBase(initialAttachments);
     const existingPending = getPendingEmailUpload();
@@ -346,7 +336,10 @@ export const useIngestEmail = ({
         }
 
         const latest = await loadLatest();
-        const attachments = selectedAttachments(latest, selectedAttachmentIds);
+        const attachments = attachmentsForIngestion(
+          latest.attachments,
+          excludedAttachmentIds,
+        );
         const latestBase = createIngestionDiagnosticBase(attachments);
         attemptBase = { ...latestBase, traceId: attemptBase.traceId };
         transition({

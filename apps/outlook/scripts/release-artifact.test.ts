@@ -5,6 +5,7 @@ import {
   createContentHashedAssetName,
   getHtmlAssetPaths,
   getHtmlReleaseVersion,
+  getManifestIconPaths,
   getOutlookDeploymentHeaderRules,
   isContentHashedCodeAsset,
   resolveOutlookFrameAncestors,
@@ -57,6 +58,17 @@ describe("Outlook release artifact contract", () => {
     expect(getHtmlAssetPaths(html).every(isContentHashedCodeAsset)).toBe(true);
   });
 
+  test("extracts each unique manifest icon path", () => {
+    const manifest = `<IconUrl DefaultValue="https://outlook.example.test/assets/stella-icon-32.png" />
+      <bt:Image DefaultValue="https://outlook.example.test/assets/stella-icon-80.png" />
+      <bt:Image DefaultValue="https://outlook.example.test/assets/stella-icon-32.png" />`;
+
+    expect(getManifestIconPaths(manifest)).toEqual([
+      "/assets/stella-icon-32.png",
+      "/assets/stella-icon-80.png",
+    ]);
+  });
+
   test("declares no-cache documents and a CSP limited to stella and Office", () => {
     const rules = getOutlookDeploymentHeaderRules(ORIGINS);
     const taskpane = rules.find((rule) => rule.path === "/taskpane.html");
@@ -71,6 +83,11 @@ describe("Outlook release artifact contract", () => {
     expect(taskpane?.headers["Content-Security-Policy"]).toContain(
       ORIGINS.webOrigin,
     );
+    expect(
+      rules.find((rule) => rule.path === "/assets/stella-icon-*.png")?.headers[
+        "Cache-Control"
+      ],
+    ).toContain("no-cache");
   });
 
   test("uses explicitly configured OWA frame ancestors without widening CSP", () => {

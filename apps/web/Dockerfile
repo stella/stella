@@ -176,6 +176,7 @@ COPY --from=deps-prod /app/ .
 COPY --chown=stella:stella --from=pruner /app/out/json/ .
 COPY --chown=stella:stella --from=builder /app/web-runtime-stage/ .
 COPY --chown=stella:stella --from=builder /app/apps/web/start-runtime.js ./apps/web/start-runtime.js
+COPY --chown=stella:stella --from=builder /app/apps/web/cross-origin-isolation.js ./apps/web/cross-origin-isolation.js
 COPY --chown=stella:stella --from=builder /app/apps/web/dist ./apps/web/dist
 WORKDIR /app/apps/web
 USER stella

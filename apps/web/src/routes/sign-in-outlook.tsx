@@ -155,12 +155,16 @@ const SignInOutlook = () => {
         </p>
       </header>
 
-      {state.type === "loading" && <p>{tCommon("loading")}</p>}
+      {state.type === "loading" && <p role="status">{tCommon("loading")}</p>}
       {state.type === "delivered" && (
-        <p className="text-muted-foreground">{t("outlookHandoffSuccess")}</p>
+        <p className="text-muted-foreground" role="status">
+          {t("outlookHandoffSuccess")}
+        </p>
       )}
       {state.type === "error" && (
-        <p className="text-destructive">{state.message}</p>
+        <p className="text-destructive" role="alert">
+          {state.message}
+        </p>
       )}
     </main>
   );

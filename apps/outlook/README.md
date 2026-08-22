@@ -168,11 +168,11 @@ deployments must set it to the same origin used for
 `VITE_OUTLOOK_ORIGIN` (or Docker `OUTLOOK_ORIGIN` build argument) to that exact
 origin as well; the dialog handoff rejects every other parent origin.
 
-The XML manifest supports read mode on Outlook for iOS and Android, plus read
-and compose mode on supported desktop, web, and Mac clients. Compose mode is
-not exposed on Outlook mobile because Microsoft does not support mobile
-compose task panes. Browser sample data is restricted to development builds;
-a production build fails closed if the Office runtime is unavailable.
+The XML manifest supports read and compose mode on desktop, web, and Mac
+clients that provide Mailbox 1.8 and DialogOrigin 1.1. V1 does not advertise a
+mobile command surface because Outlook for iOS and Android do not provide
+those required capabilities. Browser sample data is restricted to development
+builds; a production build fails closed if the Office runtime is unavailable.
 
 V1 declares `en-US` as its only Marketplace locale. Runtime locale selection
 prefers Office's display language, then the browser language, and falls back to
@@ -204,5 +204,5 @@ been explicitly reviewed.
   npx office-addin-manifest validate apps/outlook/dist/manifest.xml
   ```
 - Exercise read, pinned read-item switching, compose insertion, dialog auth,
-  session expiry, attachment filing, and the mobile read surface in the
-  current Outlook clients before submitting the exact production artifact.
+  session expiry, and attachment filing in the current Outlook clients before
+  submitting the exact production artifact.

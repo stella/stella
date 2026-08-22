@@ -81,7 +81,7 @@ export const SavePanel = ({
         {saveState.type === "complete" ? t("saved") : saveLabel}
       </Button>
       {saveState.type === "complete" ? (
-        <Notice title={t("saveSuccess")} tone="success">
+        <Notice role="status" title={t("saveSuccess")} tone="success">
           {t("attachmentsSaved", { count: saveState.attachmentCount })}
           {saveState.skippedAttachments.length > 0 ? (
             <span className="mt-1 block">
@@ -103,7 +103,7 @@ export const SavePanel = ({
         </Notice>
       ) : null}
       {saveState.type === "error" ? (
-        <Notice title={t("saveFailed")} tone="risk">
+        <Notice role="alert" title={t("saveFailed")} tone="risk">
           {saveState.message}
         </Notice>
       ) : null}

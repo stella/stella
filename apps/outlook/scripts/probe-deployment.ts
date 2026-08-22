@@ -4,6 +4,7 @@ import {
   assertOutlookReleaseVersion,
   getHtmlAssetPaths,
   getHtmlReleaseVersion,
+  getManifestIconPaths,
   getOutlookDeploymentHeaderRules,
   isContentHashedCodeAsset,
   type OutlookReleaseOrigins,
@@ -189,6 +190,25 @@ const run = async () => {
   if (!manifest.includes(`${origin.origin}/taskpane.html`)) {
     panic("manifest task pane location does not match --origin.");
   }
+  const iconRule = headerRules.find(
+    (rule) => rule.path === "/assets/stella-icon-*.png",
+  );
+  if (!iconRule) {
+    panic("release contract has no manifest icon cache rule.");
+  }
+  const iconPaths = getManifestIconPaths(manifest);
+  if (iconPaths.length === 0) {
+    panic("manifest does not reference any icons.");
+  }
+  await Promise.all(
+    iconPaths.map(async (iconPath) => {
+      const url = urlAt(origin, iconPath);
+      const response = await fetchText(url);
+      for (const [name, value] of Object.entries(iconRule.headers)) {
+        assertHeader({ headers: response.headers, name, url, value });
+      }
+    }),
+  );
 
   const htmlAssetPaths = await Promise.all(
     REQUIRED_HTML_FILES.map(async (fileName) => {
