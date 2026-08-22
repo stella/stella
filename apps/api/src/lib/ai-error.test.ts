@@ -249,6 +249,13 @@ describe("providerStatusFields", () => {
     }
   });
 
+  test("stops at a cyclic cause chain without a status", () => {
+    const error = new Error("cyclic wrapper");
+    error.cause = error;
+
+    expect(providerStatusFields(error)).toEqual({});
+  });
+
   test("reports nothing when the failure carries no status", () => {
     expect(providerStatusFields(new Error("stream ended"))).toEqual({});
     expect(providerStatusFields("boom")).toEqual({});

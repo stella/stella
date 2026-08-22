@@ -88,13 +88,18 @@ const errorCause = (error: unknown): unknown => {
 // The first provider status in the cause chain, walked exactly as
 // `classifyAIError` walks it so the status a failure is logged with is the
 // one the classifier judged it by.
-const providerStatusInChain = (error: unknown): number | null => {
-  const status = providerStatusCode(error);
-  if (status !== null) {
-    return status;
+const providerStatusCodeFromCauseChain = (error: unknown): number | null => {
+  const seen = new Set<object>();
+  let candidate = error;
+  while (isRecord(candidate) && !seen.has(candidate)) {
+    seen.add(candidate);
+    const status = providerStatusCode(candidate);
+    if (status !== null) {
+      return status;
+    }
+    candidate = errorCause(candidate);
   }
-  const cause = errorCause(error);
-  return cause === undefined ? null : providerStatusInChain(cause);
+  return null;
 };
 
 export const classifyAIError = (error: unknown): AIErrorKind => {
@@ -163,7 +168,7 @@ export const classifyAIError = (error: unknown): AIErrorKind => {
 export const providerStatusFields = (
   error: unknown,
 ): Record<string, string> => {
-  const status = providerStatusInChain(error);
+  const status = providerStatusCodeFromCauseChain(error);
   return status === null ? {} : { "error.provider.status": String(status) };
 };
 
