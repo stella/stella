@@ -14,7 +14,9 @@ import { readProvisionHistoryHandler } from "@/api/handlers/legislation/provisio
 import { listStatuteVersionsHandler } from "@/api/handlers/legislation/versions";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { PAGINATION_CURSOR_MAX_CHARS } from "@/api/lib/custom-schema";
 import type { LegislationReadDb } from "@/api/lib/legislation-public-read-db";
+import { encodePaginationCursor } from "@/api/lib/pagination";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 // Public statute reads over a fixture whose current version is neither the
@@ -33,9 +35,15 @@ const civilCodeCurrent = createSafeId<"legislationDocument">();
 const civilCodeFuture = createSafeId<"legislationDocument">();
 const civilCodeEnglish = createSafeId<"legislationDocument">();
 const labourCode = createSafeId<"legislationDocument">();
+const longTitleAct = createSafeId<"legislationDocument">();
 const registerAct = createSafeId<"legislationDocument">();
 const sunsetAct = createSafeId<"legislationDocument">();
 const withheldAct = createSafeId<"legislationDocument">();
+const enumeratedAmendments = Array.from(
+  { length: 1000 },
+  (_, index) => `act-${index.toString(36).padStart(4, "0")}`,
+).join(", ");
+const longOfficialTitle = `Long legislation title amending ${enumeratedAmendments}`;
 
 /** The window boundary the half-open validity interval turns on. */
 const today = new Date().toISOString().slice(0, 10);
@@ -236,6 +244,14 @@ beforeAll(
         versionValidTo: null,
       }),
       seedDocument({
+        id: longTitleAct,
+        sourceId: openSourceId,
+        eli: "CZ/1994/85",
+        title: longOfficialTitle,
+        versionValidFrom: "1994-06-01",
+        versionValidTo: null,
+      }),
+      seedDocument({
         id: registerAct,
         sourceId: openSourceId,
         eli: "CZ/2013/304",
@@ -356,12 +372,17 @@ describe("public statute list", () => {
       await listStatutesHandler({ country: "CZE" }, legislationDb),
     );
 
+    expect(longOfficialTitle.length).toBeGreaterThan(1024);
     expect(page.items.map((item) => item.title)).toEqual([
       "Civil Code",
       "Civil Code (English)",
       "Labour Code",
+      longOfficialTitle,
       "Public Registers Act",
     ]);
+    expect(
+      page.items.every((item) => !Object.hasOwn(item, "titleSortKey")),
+    ).toBe(true);
   });
 
   test("drops a version whose validity window closes today", async () => {
@@ -443,6 +464,7 @@ describe("public statute list", () => {
       if (cursor === null) {
         break;
       }
+      expect(cursor.length).toBeLessThanOrEqual(PAGINATION_CURSOR_MAX_CHARS);
     }
 
     expect(cursor).toBeNull();
@@ -450,11 +472,31 @@ describe("public statute list", () => {
       civilCodeCurrent,
       civilCodeEnglish,
       labourCode,
+      longTitleAct,
       registerAct,
     ]);
   });
 
-  test("rejects a cursor that is not a title/id pair", async () => {
+  test("accepts a bounded full-title cursor from the prior release", async () => {
+    const legacyCursor = encodePaginationCursor([
+      [...longOfficialTitle].slice(0, 100).join(""),
+      longTitleAct,
+    ]);
+    expect(legacyCursor.length).toBeLessThanOrEqual(
+      PAGINATION_CURSOR_MAX_CHARS,
+    );
+
+    const page = expectPage(
+      await listStatutesHandler(
+        { country: "CZE", cursor: legacyCursor },
+        legislationDb,
+      ),
+    );
+
+    expect(page.items.map((item) => item.id)).toEqual([registerAct]);
+  });
+
+  test("rejects a cursor that is not a title-sort-key/id pair", async () => {
     const result = await listStatutesHandler(
       { country: "CZE", cursor: "not-a-cursor" },
       legislationDb,

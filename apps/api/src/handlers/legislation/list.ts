@@ -3,7 +3,11 @@ import type { SQL } from "drizzle-orm";
 import { status, t } from "elysia";
 import type { Static } from "elysia";
 
-import { legislationDocuments, legislationSources } from "@/api/db/schema";
+import {
+  LEGISLATION_TITLE_SORT_KEY_CHARS,
+  legislationDocuments,
+  legislationSources,
+} from "@/api/db/schema";
 import { redistributableLegislationSource } from "@/api/handlers/legislation/redistribution";
 import {
   inForceToday,
@@ -32,25 +36,33 @@ export const listStatutesQuerySchema = t.Object({
 
 type ListStatutesQuery = Static<typeof listStatutesQuerySchema>;
 
-type TitleIdCursor = {
-  title: string;
+type TitleSortIdCursor = {
+  titleSortKey: string;
   id: SafeId<"legislationDocument">;
 };
 
-const decodeTitleIdCursor = (cursor: string): TitleIdCursor | null => {
+const decodeTitleSortIdCursor = (cursor: string): TitleSortIdCursor | null => {
   const parts = decodePaginationCursor(cursor);
 
   if (parts?.length !== 2) {
     return null;
   }
 
-  const [title, id] = parts;
+  const [titleCursorPart, id] = parts;
 
-  if (typeof title !== "string" || !isUuidPaginationCursorPart(id)) {
+  if (typeof titleCursorPart !== "string" || !isUuidPaginationCursorPart(id)) {
     return null;
   }
 
-  return { title, id: brandPersistedLegislationDocumentId(id) };
+  return {
+    // The prior release emitted the full title. Accept that concrete rolling
+    // deployment state, but normalize it to the generated ordering key; this
+    // release emits only the bounded key below.
+    titleSortKey: [...titleCursorPart]
+      .slice(0, LEGISLATION_TITLE_SORT_KEY_CHARS)
+      .join(""),
+    id: brandPersistedLegislationDocumentId(id),
+  };
 };
 
 /**
@@ -110,16 +122,16 @@ export const listStatutesHandler = async (
   }
 
   if (query.cursor !== undefined) {
-    const cursor = decodeTitleIdCursor(query.cursor);
+    const cursor = decodeTitleSortIdCursor(query.cursor);
 
     if (cursor === null) {
       return status(400, { message: "Invalid cursor" });
     }
 
     const keyset = or(
-      gt(legislationDocuments.title, cursor.title),
+      gt(legislationDocuments.titleSortKey, cursor.titleSortKey),
       and(
-        eq(legislationDocuments.title, cursor.title),
+        eq(legislationDocuments.titleSortKey, cursor.titleSortKey),
         gt(legislationDocuments.id, cursor.id),
       ),
     );
@@ -136,6 +148,7 @@ export const listStatutesHandler = async (
           id: legislationDocuments.id,
           eli: legislationDocuments.eli,
           title: legislationDocuments.title,
+          titleSortKey: legislationDocuments.titleSortKey,
           country: legislationDocuments.country,
           language: legislationDocuments.language,
           documentType: legislationDocuments.documentType,
@@ -152,13 +165,22 @@ export const listStatutesHandler = async (
           eq(legislationSources.id, legislationDocuments.sourceId),
         )
         .where(and(...conditions))
-        .orderBy(asc(legislationDocuments.title), asc(legislationDocuments.id))
+        .orderBy(
+          asc(legislationDocuments.titleSortKey),
+          asc(legislationDocuments.id),
+        )
         .limit(limit + 1),
   );
 
-  return createCursorPage({
+  const page = createCursorPage({
     rows,
     limit,
-    cursorForItem: (item) => encodePaginationCursor([item.title, item.id]),
+    cursorForItem: (item) =>
+      encodePaginationCursor([item.titleSortKey, item.id]),
   });
+
+  return {
+    ...page,
+    items: page.items.map(({ titleSortKey: _titleSortKey, ...item }) => item),
+  };
 };
