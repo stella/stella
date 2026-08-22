@@ -2159,8 +2159,10 @@ const createBoundary = (
   organizationId: toSafeId<"organization">("org_test"),
   pipelineContext: createPipelineContext(),
   placeholderOffsets: new Map<string, number>(),
+  literalPlaceholderAliases: new Map<string, string>(),
   redactionMap: new Map(pairs),
   scopedDb,
+  sourcePlaceholders: new Set<string>(),
   type: "anonymized",
 });
 

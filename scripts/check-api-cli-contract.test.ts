@@ -20,6 +20,8 @@ import { loadChangesetPolicy } from "./changeset-guard";
 
 const SHARED_NPM_PACKAGES = [
   "auth-model",
+  "ai-catalog",
+  "anonymize-chat",
   "business-registries",
   "calculations",
   "country-codes",

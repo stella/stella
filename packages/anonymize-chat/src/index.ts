@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import * as v from "valibot";
 
 import type {
@@ -56,6 +57,16 @@ true satisfies MissingDefaultChatAnonEntityLabel extends never ? true : never;
 
 export const DEFAULT_CHAT_ANON_ENTITY_LABELS =
   DEFAULT_CHAT_ANON_ENTITY_LABEL_VALUES;
+
+/** Maximum exact values one anonymization call may force into detection. */
+export const FORCED_SENSITIVE_VALUES_MAX = 256;
+
+/** Maximum UTF-16 length of one forced sensitive value. */
+export const FORCED_SENSITIVE_VALUE_MAX_LENGTH = 4096;
+
+const FORCED_SENSITIVE_DEFAULT_LABEL = "misc" satisfies DefaultEntityLabel;
+const FORCED_SENSITIVE_PLACEHOLDER_ESCAPE_LABEL =
+  "case number" satisfies DefaultEntityLabel;
 
 export type ChatAnonPair = {
   placeholder: string;
@@ -276,6 +287,85 @@ const normalizeForExclusion = (value: string): string =>
   value.normalize("NFKC").toLowerCase().replaceAll(/\s+/gu, " ").trim();
 
 const PLACEHOLDER_TOKEN = /\[[A-Z][A-Z0-9_]*_\d+\]/gu;
+const PLACEHOLDER_LABEL = /^\[(?<label>[A-Z][A-Z0-9_]*)_\d+\]$/u;
+
+/**
+ * Return the distinct anonymization placeholders found in text, in first-seen
+ * order. Hosts can combine placeholders from source text and a redaction map
+ * to reject unknown tokens before restoring a provider response.
+ */
+export const findChatAnonPlaceholders = (text: string): string[] => {
+  const placeholders = text.match(PLACEHOLDER_TOKEN);
+  if (placeholders === null) {
+    return [];
+  }
+  return [...new Set(placeholders)];
+};
+
+const parsePlaceholderLabel = (placeholder: string): string | null => {
+  const match = PLACEHOLDER_LABEL.exec(placeholder);
+  return match?.groups?.["label"] ?? null;
+};
+
+const normalizeEntityLabelForPlaceholder = (label: string): string =>
+  label.trim().toUpperCase().replaceAll(/\s+/gu, "_");
+
+const LITERAL_PLACEHOLDER_SENTINEL_RANGES = [
+  { end: 0xf8_ff, start: 0xe0_00 },
+  { end: 0xf_ff_fd, start: 0xf_00_00 },
+  { end: 0x10_ff_fd, start: 0x10_00_00 },
+] as const;
+
+type LiteralPlaceholderSentinelCursor = {
+  codePoint: number;
+  rangeIndex: number;
+};
+
+const allocateLiteralPlaceholderSentinel = ({
+  blockedValues,
+  cursor,
+  text,
+}: {
+  blockedValues: ReadonlySet<string>;
+  cursor: LiteralPlaceholderSentinelCursor;
+  text: string;
+}): string => {
+  while (cursor.rangeIndex < LITERAL_PLACEHOLDER_SENTINEL_RANGES.length) {
+    const range = LITERAL_PLACEHOLDER_SENTINEL_RANGES.at(cursor.rangeIndex);
+    if (range === undefined) {
+      break;
+    }
+    if (cursor.codePoint > range.end) {
+      cursor.rangeIndex += 1;
+      const nextRange = LITERAL_PLACEHOLDER_SENTINEL_RANGES.at(
+        cursor.rangeIndex,
+      );
+      if (nextRange !== undefined) {
+        cursor.codePoint = nextRange.start;
+      }
+      continue;
+    }
+
+    const sentinel = String.fromCodePoint(cursor.codePoint);
+    cursor.codePoint += 1;
+    if (text.includes(sentinel)) {
+      continue;
+    }
+
+    let overlapsBlockedValue = false;
+    for (const blockedValue of blockedValues) {
+      if (blockedValue.includes(sentinel) || sentinel.includes(blockedValue)) {
+        overlapsBlockedValue = true;
+        break;
+      }
+    }
+    if (!overlapsBlockedValue) {
+      return sentinel;
+    }
+  }
+
+  throw new RangeError("literal placeholder sentinel space exhausted");
+};
 
 const restoreLiteralPlaceholders = (
   text: string,
@@ -288,25 +378,139 @@ const restoreLiteralPlaceholders = (
   return result;
 };
 
-const protectLiteralPlaceholders = (
-  text: string,
-): {
+const spanOverlapsLiteralValue = ({
+  end,
+  start,
+  text,
+  values,
+}: {
+  end: number;
+  start: number;
+  text: string;
+  values: ReadonlySet<string>;
+}): boolean => {
+  for (const value of values) {
+    const valueOffset = text.lastIndexOf(value, end - 1);
+    if (valueOffset !== -1 && valueOffset + value.length > start) {
+      return true;
+    }
+  }
+  return false;
+};
+
+const protectLiteralPlaceholders = ({
+  detectorVisibleValues,
+  forcedSensitiveValues,
+  text,
+}: {
+  detectorVisibleValues: ReadonlySet<string>;
+  forcedSensitiveValues: ReadonlySet<string>;
+  text: string;
+}): {
+  sourcePlaceholders: ReadonlySet<string>;
   text: string;
   restore: (value: string) => string;
 } => {
   const restoreMap = new Map<string, string>();
-  let index = 0;
-  const protectedText = text.replaceAll(PLACEHOLDER_TOKEN, (placeholder) => {
-    const sentinel = `\uE000CHAT_PLACEHOLDER_${index}\uE001`;
-    restoreMap.set(sentinel, placeholder);
-    index += 1;
-    return sentinel;
-  });
+  const sourcePlaceholders = new Set<string>();
+  const cursor: LiteralPlaceholderSentinelCursor = {
+    codePoint: LITERAL_PLACEHOLDER_SENTINEL_RANGES[0].start,
+    rangeIndex: 0,
+  };
+  const protectedText = text.replaceAll(
+    PLACEHOLDER_TOKEN,
+    (placeholder, offset: number) => {
+      sourcePlaceholders.add(placeholder);
+      if (
+        spanOverlapsLiteralValue({
+          end: offset + placeholder.length,
+          start: offset,
+          text,
+          values: forcedSensitiveValues,
+        })
+      ) {
+        return placeholder;
+      }
+
+      const sentinel = allocateLiteralPlaceholderSentinel({
+        blockedValues: detectorVisibleValues,
+        cursor,
+        text,
+      });
+      restoreMap.set(sentinel, placeholder);
+      return sentinel;
+    },
+  );
 
   return {
+    sourcePlaceholders,
     text: protectedText,
     restore: (value) => restoreLiteralPlaceholders(value, restoreMap),
   };
+};
+
+const forcedSensitiveGazetteerEntries = ({
+  forcedSensitiveValues,
+  text,
+  workspaceId,
+}: {
+  forcedSensitiveValues: readonly string[];
+  text: string;
+  workspaceId: string;
+}): GazetteerEntry[] => {
+  if (forcedSensitiveValues.length > FORCED_SENSITIVE_VALUES_MAX) {
+    throw new RangeError(
+      `forcedSensitiveValues exceeds ${String(FORCED_SENSITIVE_VALUES_MAX)} entries`,
+    );
+  }
+
+  const values = new Set<string>();
+  for (const value of forcedSensitiveValues) {
+    if (value.length > FORCED_SENSITIVE_VALUE_MAX_LENGTH) {
+      throw new RangeError(
+        `forced sensitive value exceeds ${String(FORCED_SENSITIVE_VALUE_MAX_LENGTH)} characters`,
+      );
+    }
+    if (value.length > 0 && text.includes(value)) {
+      values.add(value);
+    }
+  }
+
+  return [...values]
+    .toSorted((left, right) => right.length - left.length)
+    .map((canonical, index) => {
+      const label =
+        parsePlaceholderLabel(canonical) ===
+        normalizeEntityLabelForPlaceholder(FORCED_SENSITIVE_DEFAULT_LABEL)
+          ? FORCED_SENSITIVE_PLACEHOLDER_ESCAPE_LABEL
+          : FORCED_SENSITIVE_DEFAULT_LABEL;
+      return {
+        id: `forced-sensitive-${String(index + 1)}`,
+        canonical,
+        label,
+        variants: [],
+        workspaceId,
+        createdAt: 0,
+        source: "manual",
+      };
+    });
+};
+
+const gazetteerExactValues = (
+  entries: readonly GazetteerEntry[],
+): ReadonlySet<string> => {
+  const values = new Set<string>();
+  for (const entry of entries) {
+    if (entry.canonical.length > 0) {
+      values.add(entry.canonical);
+    }
+    for (const variant of entry.variants) {
+      if (variant.length > 0) {
+        values.add(variant);
+      }
+    }
+  }
+  return values;
 };
 
 type NativeRedaction = {
@@ -316,15 +520,103 @@ type NativeRedaction = {
   entityCount: number;
 };
 
-const PLACEHOLDER_LABEL = /^\[(?<label>[A-Z][A-Z0-9_]*)_\d+\]$/u;
+const rekeyReservedPlaceholderCollisions = ({
+  redaction,
+  reservedPlaceholders,
+}: {
+  redaction: NativeRedaction;
+  reservedPlaceholders: ReadonlySet<string>;
+}): NativeRedaction => {
+  if (
+    ![...redaction.redactionMap.keys()].some((placeholder) =>
+      reservedPlaceholders.has(placeholder),
+    )
+  ) {
+    return redaction;
+  }
 
-const parsePlaceholderLabel = (placeholder: string): string | null => {
-  const match = PLACEHOLDER_LABEL.exec(placeholder);
-  return match?.groups?.["label"] ?? null;
+  const blocked = new Set([
+    ...reservedPlaceholders,
+    ...redaction.redactionMap.keys(),
+  ]);
+  const redactionMap = new Map<string, string>();
+  const operatorMap = new Map(redaction.operatorMap);
+  let redactedText = redaction.redactedText;
+
+  for (const [placeholder, original] of redaction.redactionMap) {
+    let replacement = placeholder;
+    if (reservedPlaceholders.has(placeholder)) {
+      const label =
+        parsePlaceholderLabel(placeholder) ??
+        panic("native redaction emitted an invalid placeholder");
+      let index = 1;
+      replacement = `[${label}_${String(index)}]`;
+      while (blocked.has(replacement)) {
+        index += 1;
+        replacement = `[${label}_${String(index)}]`;
+      }
+      blocked.add(replacement);
+      redactedText = redactedText.replaceAll(placeholder, () => replacement);
+      const operator = operatorMap.get(placeholder);
+      operatorMap.delete(placeholder);
+      if (operator !== undefined) {
+        operatorMap.set(replacement, operator);
+      }
+    }
+
+    redactionMap.set(replacement, original);
+  }
+
+  return {
+    entityCount: redaction.entityCount,
+    operatorMap,
+    redactedText,
+    redactionMap,
+  };
 };
 
-const normalizeEntityLabelForPlaceholder = (label: string): string =>
-  label.trim().toUpperCase().replaceAll(/\s+/gu, "_");
+const assertForcedSensitiveValuesRedacted = ({
+  forcedSensitiveValues,
+  redaction,
+  resolvedEntities,
+  sourceText,
+}: {
+  forcedSensitiveValues: ReadonlySet<string>;
+  redaction: Pick<NativeRedaction, "redactionMap">;
+  resolvedEntities: readonly NativePipelineEntity[];
+  sourceText: string;
+}): void => {
+  for (const forcedValue of forcedSensitiveValues) {
+    const occurrences: { end: number; start: number }[] = [];
+    let offset = sourceText.indexOf(forcedValue);
+    while (offset !== -1) {
+      occurrences.push({ end: offset + forcedValue.length, start: offset });
+      offset = sourceText.indexOf(forcedValue, offset + 1);
+    }
+
+    const fullyCovered = occurrences.filter((occurrence) =>
+      resolvedEntities.some(
+        (entity) =>
+          entity.start <= occurrence.start && entity.end >= occurrence.end,
+      ),
+    );
+    for (const occurrence of occurrences) {
+      const overlapsCoveredOccurrence = fullyCovered.some(
+        (covered) =>
+          covered.start < occurrence.end && occurrence.start < covered.end,
+      );
+      if (!overlapsCoveredOccurrence) {
+        panic("forced sensitive value remained after anonymization");
+      }
+    }
+  }
+
+  for (const [placeholder, original] of redaction.redactionMap) {
+    if (placeholder === original && forcedSensitiveValues.has(original)) {
+      panic("forced sensitive value became its own placeholder");
+    }
+  }
+};
 
 /**
  * Build the public {@link ChatAnonResult} from a (possibly already
@@ -382,22 +674,38 @@ const toChatAnonResult = (
 const applyExcludedCanonicals = ({
   deanonymiseText,
   excludedCanonicals,
+  forcedSensitiveValues,
   resolvedEntities,
   redaction,
+  sourceText,
 }: {
   deanonymiseText: typeof deanonymise;
   excludedCanonicals: readonly string[] | undefined;
+  forcedSensitiveValues: ReadonlySet<string>;
   resolvedEntities: readonly NativePipelineEntity[];
   redaction: NativeRedaction;
+  sourceText: string;
 }): ChatAnonResult => {
   if (excludedCanonicals === undefined || excludedCanonicals.length === 0) {
     return toChatAnonResult(resolvedEntities, redaction);
   }
 
   const excludedSet = new Set(excludedCanonicals.map(normalizeForExclusion));
+  const isForcedEntity = (entity: NativePipelineEntity) =>
+    spanOverlapsLiteralValue({
+      end: entity.end,
+      start: entity.start,
+      text: sourceText,
+      values: forcedSensitiveValues,
+    });
+
   const revertMap = new Map<string, string>();
   for (const [placeholder, original] of redaction.redactionMap) {
-    if (excludedSet.has(normalizeForExclusion(original))) {
+    const isExcluded = excludedSet.has(normalizeForExclusion(original));
+    const hasForcedOccurrence = resolvedEntities.some(
+      (entity) => entity.text === original && isForcedEntity(entity),
+    );
+    if (isExcluded && !hasForcedOccurrence) {
       revertMap.set(placeholder, original);
     }
   }
@@ -413,7 +721,9 @@ const applyExcludedCanonicals = ({
     ),
   );
   const remainingEntities = resolvedEntities.filter(
-    (entity) => !excludedSet.has(normalizeForExclusion(entity.text)),
+    (entity) =>
+      !excludedSet.has(normalizeForExclusion(entity.text)) ||
+      isForcedEntity(entity),
   );
   // Occurrence-based approximation: `entityCount` reports redacted
   // *occurrences*, while `revertMap` is keyed per distinct
@@ -438,6 +748,7 @@ export const runChatAnonPipeline = async <
   context: providedContext,
   dictionaries,
   excludedCanonicals,
+  forcedSensitiveValues = [],
   gazetteerEntries = [],
   runtime,
   text,
@@ -454,6 +765,12 @@ export const runChatAnonPipeline = async <
   workspaceId: string;
   gazetteerEntries?: GazetteerEntry[] | undefined;
   context?: TPipelineContext | undefined;
+  /**
+   * Exact non-empty values that must be detected even when the probabilistic
+   * pipeline would not classify them. They share the native pipeline's single
+   * placeholder allocation and override a matching allowlist entry.
+   */
+  forcedSensitiveValues?: readonly string[] | undefined;
   /** Opt in to deny-list detection; see {@link buildChatAnonPipelineConfig}. */
   enableDenyList?: boolean | undefined;
   /** Country codes whose deny-list/city dictionaries are loaded. */
@@ -478,10 +795,17 @@ export const runChatAnonPipeline = async <
     };
   }
 
+  const forcedEntries = forcedSensitiveGazetteerEntries({
+    forcedSensitiveValues,
+    text,
+    workspaceId,
+  });
+  const effectiveGazetteerEntries = [...gazetteerEntries, ...forcedEntries];
+
   const context = providedContext ?? runtime.createPipelineContext();
   const config: PipelineConfig = {
     ...buildChatAnonPipelineConfig({
-      hasGazetteer: gazetteerEntries.length > 0,
+      hasGazetteer: effectiveGazetteerEntries.length > 0,
       locale,
       workspaceId,
       enableDenyList,
@@ -495,22 +819,42 @@ export const runChatAnonPipeline = async <
   const pipeline = await runtime.createNativePipelineFromConfig({
     binding,
     config,
-    gazetteerEntries,
+    gazetteerEntries: effectiveGazetteerEntries,
     context,
   });
-  const protectedInput = protectLiteralPlaceholders(text);
-  const { resolvedEntities, redaction } = pipeline.redactText(
+  const forcedSensitiveSet = new Set(
+    forcedEntries.map(({ canonical }) => canonical),
+  );
+  const protectedInput = protectLiteralPlaceholders({
+    detectorVisibleValues: gazetteerExactValues(effectiveGazetteerEntries),
+    forcedSensitiveValues: forcedSensitiveSet,
+    text,
+  });
+  const { resolvedEntities, redaction: nativeRedaction } = pipeline.redactText(
     protectedInput.text,
   );
+  const redaction = rekeyReservedPlaceholderCollisions({
+    redaction: nativeRedaction,
+    reservedPlaceholders: protectedInput.sourcePlaceholders,
+  });
+  assertForcedSensitiveValuesRedacted({
+    forcedSensitiveValues: forcedSensitiveSet,
+    redaction,
+    resolvedEntities,
+    sourceText: protectedInput.text,
+  });
 
   const result = applyExcludedCanonicals({
     deanonymiseText: runtime.deanonymise,
     excludedCanonicals,
+    forcedSensitiveValues: forcedSensitiveSet,
     resolvedEntities,
     redaction,
+    sourceText: protectedInput.text,
   });
+  const redactedText = protectedInput.restore(result.redactedText);
   return {
     ...result,
-    redactedText: protectedInput.restore(result.redactedText),
+    redactedText,
   };
 };

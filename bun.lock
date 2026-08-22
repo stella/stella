@@ -448,6 +448,7 @@
         "@tanstack/ai-mistral": "catalog:",
         "@tanstack/ai-openrouter": "catalog:",
         "bun-types": "catalog:",
+        "tsdown": "catalog:",
       },
     },
     "packages/anonymize-chat": {
@@ -455,6 +456,7 @@
       "version": "0.0.0",
       "dependencies": {
         "@stll/anonymize-wasm": "catalog:",
+        "better-result": "catalog:",
         "valibot": "catalog:",
       },
       "devDependencies": {
@@ -462,6 +464,7 @@
         "@stll/typescript-config": "workspace:*",
         "bun-types": "catalog:",
         "fast-check": "catalog:",
+        "tsdown": "catalog:",
       },
     },
     "packages/api-client": {

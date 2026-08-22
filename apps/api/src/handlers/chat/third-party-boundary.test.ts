@@ -28,7 +28,13 @@ import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 import { richChatParts } from "./__fixtures__/rich-chat-parts";
 
 const anonymizeTextFieldsMock = mock(
-  async ({ fields }: { fields: string[]; workspaceId: string }) => {
+  async ({
+    fields,
+  }: {
+    fields: string[];
+    forcedSensitiveValues?: readonly string[] | undefined;
+    workspaceId: string;
+  }) => {
     const swaps: [string, string][] = [
       ["[PERSON_1]", "Jan Novák"],
       ["[CUSTOM_1]", "Secret"],
@@ -58,10 +64,14 @@ const anonymizeTextFieldsMock = mock(
 
 const {
   createChatThirdPartyBoundary,
+  deanonymizeFromBoundary,
+  deanonymizeUnknownStringsFromBoundary,
   prepareMcpToolSourceForThirdParty,
   prepareMessagesForThirdParty,
   prepareTextForThirdParty,
   prepareToolsForThirdParty,
+  prepareUnknownForThirdParty,
+  reserveThirdPartyBoundarySourcePlaceholders,
 } = await import("@/api/handlers/chat/third-party-boundary");
 
 const createBoundary = () => {
@@ -122,6 +132,120 @@ describe("chat third-party anonymization boundary", () => {
     expect(anonymizeTextFieldsMock.mock.calls.at(0)?.[0].workspaceId).toBe(
       scopeId,
     );
+    expect(
+      anonymizeTextFieldsMock.mock.calls.at(0)?.[0].forcedSensitiveValues,
+    ).toEqual(["11111111-1111-4111-8111-111111111111", scopeId]);
+  });
+
+  test("forces boundary IDs through structured technical keys", async () => {
+    const organizationId = toSafeId<"organization">(
+      "0198f3e8-75f2-7c11-8af0-111111111111",
+    );
+    const scopeId = "22222222-2222-4222-8222-222222222222";
+    const anonymizeIds = mock(
+      async ({
+        fields,
+      }: {
+        fields: string[];
+        forcedSensitiveValues?: readonly string[] | undefined;
+      }) => {
+        const redactionMap = new Map<string, string>();
+        const anonymized = fields.map((field, index) => {
+          const placeholder = `[MISC_${String(index + 1)}]`;
+          redactionMap.set(placeholder, field);
+          return placeholder;
+        });
+        return {
+          entityCount: fields.length,
+          fields: anonymized,
+          redactionMap,
+        };
+      },
+    );
+    const { scopedDb } = createScopedDbMock({});
+    const boundary = createChatThirdPartyBoundary({
+      anonymizeFields: anonymizeIds,
+      anonymizationScopeId: scopeId,
+      organizationId,
+      scopedDb,
+      sendMode: CHAT_SEND_MODE.anonymized,
+    });
+
+    const prepared = await prepareUnknownForThirdParty({
+      boundary,
+      value: {
+        organizationId,
+        legacyId: organizationId.toUpperCase(),
+        id: `ref_${organizationId}`,
+        scopeId: `scope:${scopeId}`,
+        documentId: "doc_123",
+      },
+    });
+
+    expect(Result.isOk(prepared)).toBe(true);
+    if (Result.isError(prepared)) {
+      throw prepared.error;
+    }
+    expect(prepared.value).toEqual({
+      organizationId: "[MISC_1]",
+      legacyId: "[MISC_2]",
+      id: "[MISC_3]",
+      scopeId: "[MISC_4]",
+      documentId: "doc_123",
+    });
+    expect(anonymizeIds.mock.calls.at(0)?.[0].fields).toEqual([
+      organizationId,
+      organizationId.toUpperCase(),
+      `ref_${organizationId}`,
+      `scope:${scopeId}`,
+    ]);
+    expect(anonymizeIds.mock.calls.at(0)?.[0].forcedSensitiveValues).toContain(
+      organizationId.toUpperCase(),
+    );
+  });
+
+  test("forces boundary IDs through structured object keys", async () => {
+    const organizationId = "11111111-1111-4111-8111-111111111111";
+    const anonymizeIds = mock(async ({ fields }: { fields: string[] }) => ({
+      entityCount: fields.length,
+      fields: fields.map(() => "[MISC_1]"),
+      redactionMap: new Map([["[MISC_1]", fields.at(0) ?? ""]]),
+    }));
+    const { scopedDb } = createScopedDbMock({});
+    const boundary = createChatThirdPartyBoundary({
+      anonymizeFields: anonymizeIds,
+      anonymizationScopeId: "workspace-A",
+      organizationId: toSafeId<"organization">(organizationId),
+      scopedDb,
+      sendMode: CHAT_SEND_MODE.anonymized,
+    });
+
+    const prepared = await prepareUnknownForThirdParty({
+      boundary,
+      value: {
+        [`tenant:${organizationId}`]: 7,
+        "[MISC_1]": 8,
+      },
+    });
+
+    expect(Result.isOk(prepared)).toBe(true);
+    if (Result.isError(prepared)) {
+      throw prepared.error;
+    }
+    expect(prepared.value).toEqual({ "[MISC_2]": 7, "[MISC_1]": 8 });
+    expect(
+      deanonymizeUnknownStringsFromBoundary(boundary, prepared.value),
+    ).toEqual({ [`tenant:${organizationId}`]: 7, "[MISC_1]": 8 });
+    expect(
+      deanonymizeUnknownStringsFromBoundary(
+        boundary,
+        { MISC_2: 7, "[MISC_1]": 8 },
+        "lenient",
+      ),
+    ).toEqual({ [`tenant:${organizationId}`]: 7, "[MISC_1]": 8 });
+    expect(anonymizeIds.mock.calls.at(0)?.[0].fields).toEqual([
+      `tenant:${organizationId}`,
+    ]);
   });
 
   test("omits UI-only rich output before every provider boundary", async () => {
@@ -467,6 +591,181 @@ describe("chat third-party anonymization boundary", () => {
     });
   });
 
+  test("refuses rich-media URLs that require redaction", async () => {
+    const organizationId = toSafeId<"organization">(
+      "11111111-1111-4111-8111-111111111111",
+    );
+    const anonymizeIds = mock(async ({ fields }: { fields: string[] }) => ({
+      entityCount: 1,
+      fields: fields.map((field) =>
+        field.replaceAll(organizationId, () => "[MISC_1]"),
+      ),
+      redactionMap: new Map([["[MISC_1]", organizationId]]),
+    }));
+    const { scopedDb } = createScopedDbMock({});
+    const boundary = createChatThirdPartyBoundary({
+      anonymizeFields: anonymizeIds,
+      anonymizationScopeId: "workspace-A",
+      organizationId,
+      scopedDb,
+      sendMode: CHAT_SEND_MODE.anonymized,
+    });
+    const messages: ChatMessage[] = [
+      {
+        id: "msg_1",
+        role: "assistant",
+        parts: [
+          {
+            type: "tool-call",
+            id: "call_1",
+            name: "mcp__test__read_rich_result",
+            arguments: "{}",
+            state: "complete",
+          },
+          {
+            type: "tool-result",
+            toolCallId: "call_1",
+            content: [
+              {
+                type: "image",
+                source: {
+                  type: "url",
+                  value: `https://example.test/${organizationId}/image.png`,
+                  mimeType: "image/png",
+                },
+                metadata: { traceId: `ref_${organizationId}` },
+              },
+              {
+                type: "audio",
+                source: {
+                  type: "url",
+                  value: `https://example.test/${organizationId}/audio.mp3`,
+                  mimeType: "audio/mpeg",
+                },
+              },
+              {
+                type: "video",
+                source: {
+                  type: "url",
+                  value: `https://example.test/${organizationId}/video.mp4`,
+                  mimeType: "video/mp4",
+                },
+              },
+              {
+                type: "document",
+                source: {
+                  type: "url",
+                  value: `https://example.test/${organizationId}/document.pdf`,
+                  mimeType: "application/pdf",
+                },
+              },
+            ],
+            state: "complete",
+          },
+        ],
+      },
+    ];
+
+    const prepared = await prepareMessagesForThirdParty({
+      boundary,
+      messages,
+    });
+
+    expect(Result.isError(prepared)).toBe(true);
+    if (Result.isOk(prepared)) {
+      throw new TypeError("Expected sensitive rich-media URL refusal");
+    }
+    expect(prepared.error.status).toBe(422);
+    expect(anonymizeIds.mock.calls.at(0)?.[0].fields).toEqual([
+      `https://example.test/${organizationId}/image.png`,
+      `https://example.test/${organizationId}/audio.mp3`,
+      `https://example.test/${organizationId}/video.mp4`,
+      `https://example.test/${organizationId}/document.pdf`,
+      `ref_${organizationId}`,
+    ]);
+  });
+
+  test("preserves safe rich-media URLs while anonymizing metadata", async () => {
+    const boundary = createBoundary();
+    const prepared = await prepareMessagesForThirdParty({
+      boundary,
+      messages: [
+        {
+          id: "msg_1",
+          role: "assistant",
+          parts: [
+            {
+              type: "tool-result",
+              toolCallId: "call_1",
+              content: [
+                {
+                  type: "image",
+                  source: {
+                    type: "url",
+                    value: "https://example.test/image.png",
+                    mimeType: "image/png",
+                  },
+                  metadata: { caption: "Jan Novák" },
+                },
+              ],
+              state: "complete",
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(Result.isOk(prepared)).toBe(true);
+    if (Result.isError(prepared)) {
+      throw prepared.error;
+    }
+    expect(prepared.value.at(0)?.parts.at(0)).toMatchObject({
+      content: [
+        {
+          source: { value: "https://example.test/image.png" },
+          metadata: { caption: "[PERSON_1]" },
+        },
+      ],
+    });
+  });
+
+  test("refuses opaque inline rich-media tool results", async () => {
+    const boundary = createBoundary();
+    const prepared = await prepareMessagesForThirdParty({
+      boundary,
+      messages: [
+        {
+          id: "msg_1",
+          role: "assistant",
+          parts: [
+            {
+              type: "tool-result",
+              toolCallId: "call_1",
+              content: [
+                {
+                  type: "image",
+                  source: {
+                    type: "data",
+                    value: "AliceAAA",
+                    mimeType: "image/png",
+                  },
+                },
+              ],
+              state: "complete",
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(Result.isError(prepared)).toBe(true);
+    if (Result.isOk(prepared)) {
+      throw new TypeError("Expected inline rich-media refusal");
+    }
+    expect(prepared.error.status).toBe(422);
+    expect(anonymizeTextFieldsMock).not.toHaveBeenCalled();
+  });
+
   test("returns anonymized live tool output values", async () => {
     const boundary = createBoundary();
     const tools = {
@@ -525,6 +824,335 @@ describe("chat third-party anonymization boundary", () => {
       documentId: "doc_123",
       participants: ["[PERSON_1]", "[CUSTOM_1]"],
       text: "[CUSTOM_1] notes for [PERSON_1]",
+    });
+  });
+
+  test("reserves static tool metadata in the initial source prepass", async () => {
+    const boundary = createBoundary();
+    const tools = asTestToolSet({
+      literal_metadata: applyChatToolPolicy(
+        toolDefinition({
+          name: "literal_metadata",
+          description: "Preserve literal [PERSON_1].",
+        }).server(async () => undefined),
+        CHAT_TOOL_POLICY_KIND.internal,
+      ),
+    });
+    reserveThirdPartyBoundarySourcePlaceholders({
+      boundary,
+      value: ["System prompt", tools],
+    });
+
+    const prepared = await prepareTextForThirdParty({
+      boundary,
+      text: "Jan Novák prepared the memo.",
+    });
+
+    expect(Result.isOk(prepared)).toBe(true);
+    if (Result.isError(prepared)) {
+      throw prepared.error;
+    }
+    expect(prepared.value).toBe("[PERSON_2] prepared the memo.");
+  });
+
+  test("aliases claimed placeholders in late MCP tool metadata", async () => {
+    const boundary = createBoundary();
+    await prepareTextForThirdParty({
+      boundary,
+      text: "Jan Novák prepared the memo.",
+    });
+    const sourceTool = toolDefinition({
+      name: "mcp__test__literal_metadata",
+      description:
+        "Read Jan Novák; preserve literal [PERSON_1] in the description.",
+    }).server(async () => undefined);
+    Reflect.set(sourceTool, "inputSchema", {
+      type: "object",
+      properties: {
+        "[PERSON_1]": {
+          description:
+            "Enter Jan Novák or preserve literal [PERSON_1] in the example.",
+          type: "string",
+        },
+        "Jan Novák": {
+          description: "A sensitive schema property name.",
+          type: "string",
+        },
+      },
+    });
+    const source = prepareMcpToolSourceForThirdParty({
+      boundary,
+      source: {
+        close: async () => {},
+        tools: async () => [sourceTool],
+      },
+    });
+
+    const [preparedTool] = await source.tools();
+    if (!preparedTool) {
+      throw new TypeError("Expected an MCP tool");
+    }
+    const description: unknown = Reflect.get(preparedTool, "description");
+    const inputSchema: unknown = Reflect.get(preparedTool, "inputSchema");
+
+    expect(description).toBe(
+      "Read [PERSON_1]; preserve literal [LITERAL_PLACEHOLDER_1] in the description.",
+    );
+    expect(inputSchema).toEqual({
+      type: "object",
+      properties: {
+        "[LITERAL_PLACEHOLDER_2]": {
+          description:
+            "Enter [PERSON_1] or preserve literal [LITERAL_PLACEHOLDER_3] in the example.",
+          type: "string",
+        },
+        "[PERSON_1]": {
+          description: "A sensitive schema property name.",
+          type: "string",
+        },
+      },
+    });
+    expect(
+      deanonymizeUnknownStringsFromBoundary(boundary, inputSchema),
+    ).toEqual({
+      type: "object",
+      properties: {
+        "[PERSON_1]": {
+          description:
+            "Enter Jan Novák or preserve literal [PERSON_1] in the example.",
+          type: "string",
+        },
+        "Jan Novák": {
+          description: "A sensitive schema property name.",
+          type: "string",
+        },
+      },
+    });
+  });
+
+  test("keeps MCP metadata envelope keys stable and restores only schema argument keys", async () => {
+    const anonymizeMetadata = mock(
+      async ({ fields }: { fields: string[] }) => ({
+        entityCount: fields.length,
+        fields: fields.map((field) =>
+          field
+            .replaceAll("description", "[FIELD_1]")
+            .replaceAll("Jan Novák", "[PERSON_1]")
+            .replaceAll("Secret", "[CUSTOM_1]"),
+        ),
+        redactionMap: new Map([
+          ["[CUSTOM_1]", "Secret"],
+          ["[FIELD_1]", "description"],
+          ["[PERSON_1]", "Jan Novák"],
+        ]),
+      }),
+    );
+    const { scopedDb } = createScopedDbMock({});
+    const boundary = createChatThirdPartyBoundary({
+      anonymizeFields: anonymizeMetadata,
+      anonymizationScopeId: "workspace-A",
+      organizationId: toSafeId<"organization">(
+        "11111111-1111-4111-8111-111111111111",
+      ),
+      scopedDb,
+      sendMode: CHAT_SEND_MODE.anonymized,
+    });
+    let executedInput: unknown;
+    const sourceTool = toolDefinition({
+      name: "mcp__test__sensitive_schema_key",
+      description: "Secret",
+    }).server(async (input) => {
+      executedInput = input;
+      return { status: "ok" };
+    });
+    Reflect.set(sourceTool, "inputSchema", {
+      properties: {
+        "Jan Novák": { type: "string" },
+      },
+      type: "object",
+    });
+    const source = prepareMcpToolSourceForThirdParty({
+      boundary,
+      source: {
+        close: async () => {},
+        tools: async () => [sourceTool],
+      },
+    });
+
+    const [preparedTool] = await source.tools();
+    if (!preparedTool) {
+      throw new TypeError("Expected an MCP tool");
+    }
+    const executable = asTestExecutable<unknown, unknown>(preparedTool);
+
+    expect(Reflect.get(preparedTool, "description")).toBe("[CUSTOM_1]");
+    expect(Reflect.get(preparedTool, "inputSchema")).toEqual({
+      properties: {
+        "[PERSON_1]": { type: "string" },
+      },
+      type: "object",
+    });
+    await executable?.execute?.({
+      "[PERSON_1]": "Keep [PERSON_1] anonymized",
+    });
+    expect(executedInput).toEqual({
+      "Jan Novák": "Keep [PERSON_1] anonymized",
+    });
+  });
+
+  test("rejects sensitive MCP tool names instead of corrupting identifiers", () => {
+    const organizationId = toSafeId<"organization">(
+      "11111111-1111-4111-8111-111111111111",
+    );
+    const anonymizeIds = mock(async ({ fields }: { fields: string[] }) => ({
+      entityCount: 1,
+      fields: fields.map((field) =>
+        field.replaceAll(organizationId, () => "[MISC_1]"),
+      ),
+      redactionMap: new Map([["[MISC_1]", organizationId]]),
+    }));
+    const { scopedDb } = createScopedDbMock({});
+    const boundary = createChatThirdPartyBoundary({
+      anonymizeFields: anonymizeIds,
+      anonymizationScopeId: "workspace-A",
+      organizationId,
+      scopedDb,
+      sendMode: CHAT_SEND_MODE.anonymized,
+    });
+    const sourceTool = toolDefinition({
+      name: `mcp__crm__${organizationId}`,
+      description: "Read a record.",
+    }).server(async () => undefined);
+    const source = prepareMcpToolSourceForThirdParty({
+      boundary,
+      source: {
+        close: async () => {},
+        tools: async () => [sourceTool],
+      },
+    });
+
+    expect(source.tools()).rejects.toThrow(
+      "MCP tool names that contain sensitive data cannot cross an anonymized third-party boundary.",
+    );
+  });
+
+  test("aliases late literal placeholders in runtime tool output", async () => {
+    const boundary = createBoundary();
+    await prepareTextForThirdParty({
+      boundary,
+      text: "Jan Novák prepared the memo.",
+    });
+    const tools = {
+      literal_output: applyChatToolPolicy(
+        toolDefinition({
+          name: "literal_output",
+          description: "Return a literal placeholder fixture.",
+        }).server(async () => ({ text: "Keep [PERSON_1] literal" })),
+        CHAT_TOOL_POLICY_KIND.internal,
+      ),
+    };
+    const prepared = prepareToolsForThirdParty({
+      boundary,
+      tools: asTestToolSet(tools),
+    });
+    const executable = asTestExecutable<unknown, unknown>(
+      prepared["literal_output"],
+    );
+    const output = await executable?.execute?.(undefined);
+
+    expect(output).toEqual({
+      text: "Keep [LITERAL_PLACEHOLDER_1] literal",
+    });
+    expect(deanonymizeUnknownStringsFromBoundary(boundary, output)).toEqual({
+      text: "Keep [PERSON_1] literal",
+    });
+    expect(
+      deanonymizeFromBoundary({
+        boundary,
+        text: "[PERSON_1]; Keep [LITERAL_PLACEHOLDER_1] literal",
+      }),
+    ).toBe("Jan Novák; Keep [PERSON_1] literal");
+  });
+
+  test("chooses late aliases absent from the complete runtime output", async () => {
+    const boundary = createBoundary();
+    await prepareTextForThirdParty({
+      boundary,
+      text: "Jan Novák prepared the memo.",
+    });
+    const outputs = [
+      "[PERSON_1] [LITERAL_PLACEHOLDER_1]",
+      "[PERSON_1] [LITERAL_PLACEHOLDER_2]",
+    ];
+    const tools = {
+      literal_output: applyChatToolPolicy(
+        toolDefinition({
+          name: "literal_output",
+          description: "Return colliding literal placeholder fixtures.",
+        }).server(async () => ({ text: outputs.shift() })),
+        CHAT_TOOL_POLICY_KIND.internal,
+      ),
+    };
+    const prepared = prepareToolsForThirdParty({
+      boundary,
+      tools: asTestToolSet(tools),
+    });
+    const executable = asTestExecutable<unknown, unknown>(
+      prepared["literal_output"],
+    );
+
+    const first = await executable?.execute?.(undefined);
+    const second = await executable?.execute?.(undefined);
+
+    expect(first).toEqual({
+      text: "[LITERAL_PLACEHOLDER_2] [LITERAL_PLACEHOLDER_1]",
+    });
+    expect(second).toEqual({
+      text: "[LITERAL_PLACEHOLDER_3] [LITERAL_PLACEHOLDER_4]",
+    });
+    expect(deanonymizeUnknownStringsFromBoundary(boundary, first)).toEqual({
+      text: "[PERSON_1] [LITERAL_PLACEHOLDER_1]",
+    });
+    expect(deanonymizeUnknownStringsFromBoundary(boundary, second)).toEqual({
+      text: "[PERSON_1] [LITERAL_PLACEHOLDER_2]",
+    });
+  });
+
+  test("reserves aliases across a structured runtime output", async () => {
+    const boundary = createBoundary();
+    await prepareTextForThirdParty({
+      boundary,
+      text: "Jan Novák prepared the memo.",
+    });
+    const tools = {
+      literal_output: applyChatToolPolicy(
+        toolDefinition({
+          name: "literal_output",
+          description: "Return a structured placeholder collision fixture.",
+        }).server(async () => ({
+          literal: "[LITERAL_PLACEHOLDER_1]",
+          claimed: "[PERSON_1]",
+        })),
+        CHAT_TOOL_POLICY_KIND.internal,
+      ),
+    };
+    const prepared = prepareToolsForThirdParty({
+      boundary,
+      tools: asTestToolSet(tools),
+    });
+    const executable = asTestExecutable<unknown, unknown>(
+      prepared["literal_output"],
+    );
+
+    const output = await executable?.execute?.(undefined);
+
+    expect(output).toEqual({
+      literal: "[LITERAL_PLACEHOLDER_1]",
+      claimed: "[LITERAL_PLACEHOLDER_2]",
+    });
+    expect(deanonymizeUnknownStringsFromBoundary(boundary, output)).toEqual({
+      literal: "[LITERAL_PLACEHOLDER_1]",
+      claimed: "[PERSON_1]",
     });
   });
 
@@ -615,8 +1243,6 @@ describe("chat third-party anonymization boundary", () => {
   });
 
   test("round-trips placeholders so outgoing text is restored to originals", async () => {
-    const { deanonymizeFromBoundary, deanonymizeUnknownStringsFromBoundary } =
-      await import("@/api/handlers/chat/third-party-boundary");
     const boundary = createBoundary();
 
     // Anonymize on the inbound path so the boundary accumulates a map.
@@ -770,9 +1396,118 @@ describe("chat third-party anonymization boundary", () => {
     );
   });
 
-  test("round-trip helpers are no-ops on raw boundaries", async () => {
-    const { deanonymizeFromBoundary } =
-      await import("@/api/handlers/chat/third-party-boundary");
+  test("reserves later source placeholders before an earlier allocation", async () => {
+    const boundary = createBoundary();
+    reserveThirdPartyBoundarySourcePlaceholders({
+      boundary,
+      value: ["Jan Novák", "Keep [PERSON_1] literal"],
+    });
+
+    const first = await prepareTextForThirdParty({
+      boundary,
+      text: "Jan Novák prepared the memo.",
+    });
+    const second = await prepareTextForThirdParty({
+      boundary,
+      text: "Keep [PERSON_1] literal",
+    });
+
+    expect(Result.isOk(first)).toBe(true);
+    expect(Result.isOk(second)).toBe(true);
+    if (Result.isError(first) || Result.isError(second)) {
+      throw new TypeError("Expected anonymization to succeed");
+    }
+    expect(first.value).toBe("[PERSON_2] prepared the memo.");
+    expect(second.value).toBe("Keep [PERSON_1] literal");
+    if (boundary.type !== "anonymized") {
+      throw new TypeError("Expected anonymized boundary");
+    }
+    expect(boundary.redactionMap).toEqual(
+      new Map([["[PERSON_2]", "Jan Novák"]]),
+    );
+    expect(
+      deanonymizeFromBoundary({
+        boundary,
+        text: `${first.value} Keep [PERSON_1] literal`,
+      }),
+    ).toBe("Jan Novák prepared the memo. Keep [PERSON_1] literal");
+  });
+
+  test("keeps literal source placeholders distinct from new redactions", async () => {
+    const anonymizeSecret = mock(async ({ fields }: { fields: string[] }) => ({
+      entityCount: 1,
+      fields: fields.map((field) =>
+        field.replaceAll("Secret", () => "[MISC_2]"),
+      ),
+      redactionMap: new Map([["[MISC_2]", "Secret"]]),
+    }));
+    const { scopedDb } = createScopedDbMock({});
+    const boundary = createChatThirdPartyBoundary({
+      anonymizeFields: anonymizeSecret,
+      anonymizationScopeId: "workspace-A",
+      organizationId: toSafeId<"organization">(
+        "11111111-1111-4111-8111-111111111111",
+      ),
+      scopedDb,
+      sendMode: CHAT_SEND_MODE.anonymized,
+    });
+
+    const prepared = await prepareTextForThirdParty({
+      boundary,
+      text: "Keep [MISC_1] literal; redact Secret.",
+    });
+
+    expect(Result.isOk(prepared)).toBe(true);
+    if (Result.isError(prepared)) {
+      throw prepared.error;
+    }
+    expect(prepared.value).toBe("Keep [MISC_1] literal; redact [MISC_2].");
+    expect(deanonymizeFromBoundary({ boundary, text: prepared.value })).toBe(
+      "Keep [MISC_1] literal; redact Secret.",
+    );
+  });
+
+  test("does not let extreme literal indices collapse new placeholders", async () => {
+    const anonymizeSecrets = mock(async ({ fields }: { fields: string[] }) => ({
+      entityCount: 2,
+      fields: fields.map((field) =>
+        field
+          .replaceAll("First", () => "[MISC_1]")
+          .replaceAll("Second", () => "[MISC_2]"),
+      ),
+      redactionMap: new Map([
+        ["[MISC_1]", "First"],
+        ["[MISC_2]", "Second"],
+      ]),
+    }));
+    const { scopedDb } = createScopedDbMock({});
+    const boundary = createChatThirdPartyBoundary({
+      anonymizeFields: anonymizeSecrets,
+      anonymizationScopeId: "workspace-A",
+      organizationId: toSafeId<"organization">(
+        "11111111-1111-4111-8111-111111111111",
+      ),
+      scopedDb,
+      sendMode: CHAT_SEND_MODE.anonymized,
+    });
+    const literal = "[MISC_9007199254740991]";
+
+    const prepared = await prepareTextForThirdParty({
+      boundary,
+      text: `${literal} First Second`,
+    });
+
+    expect(Result.isOk(prepared)).toBe(true);
+    if (Result.isError(prepared)) {
+      throw prepared.error;
+    }
+    expect(prepared.value).toBe(`${literal} [MISC_1] [MISC_2]`);
+    expect(deanonymizeFromBoundary({ boundary, text: prepared.value })).toBe(
+      `${literal} First Second`,
+    );
+  });
+
+  test("round-trip helpers are no-ops on raw boundaries", () => {
     const boundary = createRawBoundary();
     expect(
       deanonymizeFromBoundary({ boundary, text: "[PERSON_1] is here" }),

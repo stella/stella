@@ -22,6 +22,8 @@ on:
       # accidentally start a release transaction.
       - packages/auth-model/CHANGELOG.md
       - packages/business-registries/CHANGELOG.md
+      - packages/ai-catalog/CHANGELOG.md
+      - packages/anonymize-chat/CHANGELOG.md
       - packages/country-codes/CHANGELOG.md
       - packages/conditions/CHANGELOG.md
       - packages/money/CHANGELOG.md
@@ -42,6 +44,8 @@ on:
         options:
           - all
           - auth-model
+          - ai-catalog
+          - anonymize-chat
           - business-registries
           - country-codes
           - conditions
@@ -188,10 +192,10 @@ jobs:
           if [[ "$EVENT_NAME" == "workflow_run" ]]; then
             pkgs=(cli)
           elif [[ "$EVENT_NAME" == "push" ]]; then
-            pkgs=(auth-model country-codes business-registries conditions template-conditions docx-utils ui money calculations workspace-model workspace-ui)
+            pkgs=(auth-model ai-catalog anonymize-chat country-codes business-registries conditions template-conditions docx-utils ui money calculations workspace-model workspace-ui)
           else
             case "$MANUAL_PACKAGE" in
-              all) pkgs=(auth-model country-codes business-registries conditions template-conditions docx-utils ui money calculations workspace-model workspace-ui cli) ;;
+              all) pkgs=(auth-model ai-catalog anonymize-chat country-codes business-registries conditions template-conditions docx-utils ui money calculations workspace-model workspace-ui cli) ;;
               *) pkgs=("$MANUAL_PACKAGE") ;;
             esac
           fi
@@ -319,6 +323,22 @@ jobs:
         with:
           name: npm-tarball-auth-model
           path: release-artifacts/auth-model/
+
+      - name: Upload ai-catalog tarball
+        if: contains(fromJSON(steps.pack.outputs.packages), 'ai-catalog')
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: npm-tarball-ai-catalog
+          path: release-artifacts/ai-catalog/
+          retention-days: 1
+          if-no-files-found: error
+
+      - name: Upload anonymize-chat tarball
+        if: contains(fromJSON(steps.pack.outputs.packages), 'anonymize-chat')
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: npm-tarball-anonymize-chat
+          path: release-artifacts/anonymize-chat/
           retention-days: 1
           if-no-files-found: error
 

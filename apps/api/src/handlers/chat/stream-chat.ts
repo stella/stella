@@ -68,11 +68,12 @@ import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-bou
 import {
   deanonymizeFromBoundary,
   deanonymizeUnknownStringsFromBoundary,
-  prepareMessagesForThirdParty,
   prepareMcpToolSourceForThirdParty,
+  prepareMessagesForThirdParty,
   prepareTextForThirdParty,
   prepareToolsForThirdParty,
   prepareUnknownForThirdParty,
+  reserveThirdPartyBoundarySourcePlaceholders,
 } from "@/api/handlers/chat/third-party-boundary";
 import type { StellaMcpToolSource } from "@/api/handlers/chat/tools/external-mcp-tools";
 import type {
@@ -334,6 +335,10 @@ export const streamChat = async ({
   if (agentBoundaryError !== null) {
     return thirdPartyBoundaryRefusalResponse(agentBoundaryError);
   }
+  reserveThirdPartyBoundarySourcePlaceholders({
+    boundary: thirdPartyBoundary,
+    value: [systemSafe, systemUntrusted, messages, resume, tools],
+  });
   const preparedUntrusted = await prepareTextForThirdParty({
     boundary: thirdPartyBoundary,
     text: systemUntrusted,
