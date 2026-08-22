@@ -1595,6 +1595,49 @@ const restoreMcpInputSchemaKeys = ({
   );
 };
 
+const prepareMcpProviderMetadataForThirdParty = async ({
+  boundary,
+  index = 0,
+  inputKeyRestorations,
+  prepared,
+}: {
+  boundary: Extract<ChatThirdPartyBoundary, { type: "anonymized" }>;
+  index?: number;
+  inputKeyRestorations: Map<string, string>;
+  prepared: AnyServerTool;
+}): Promise<void> => {
+  const field = MCP_PROVIDER_METADATA_FIELDS.at(index);
+  if (field === undefined) {
+    return;
+  }
+  const providerValue: unknown = Reflect.get(prepared, field);
+  if (providerValue !== undefined) {
+    const preparedMetadata = await prepareUnknownForThirdParty({
+      anonymizeStructuredKeys: true,
+      boundary,
+      encodeClaimedPlaceholders: true,
+      value: providerValue,
+    });
+    if (Result.isError(preparedMetadata)) {
+      throw preparedMetadata.error;
+    }
+    if (field === "inputSchema") {
+      collectMcpInputKeyRestorations({
+        original: providerValue,
+        prepared: preparedMetadata.value,
+        restorations: inputKeyRestorations,
+      });
+    }
+    Reflect.set(prepared, field, preparedMetadata.value);
+  }
+  return await prepareMcpProviderMetadataForThirdParty({
+    boundary,
+    index: index + 1,
+    inputKeyRestorations,
+    prepared,
+  });
+};
+
 const prepareMcpServerToolsForThirdParty = async ({
   boundary,
   index = 0,
@@ -1639,32 +1682,11 @@ const prepareMcpServerToolForThirdParty = async (
     }
   }
   const inputKeyRestorations = new Map<string, string>();
-  for (const field of MCP_PROVIDER_METADATA_FIELDS) {
-    const providerValue: unknown = Reflect.get(prepared, field);
-    if (providerValue === undefined) {
-      continue;
-    }
-    // The boundary assigns placeholders globally, so fields must retain their
-    // deterministic order instead of racing their transformations.
-    // oxlint-disable-next-line no-await-in-loop -- placeholder allocation is order-dependent
-    const preparedMetadata = await prepareUnknownForThirdParty({
-      anonymizeStructuredKeys: true,
-      boundary,
-      encodeClaimedPlaceholders: true,
-      value: providerValue,
-    });
-    if (Result.isError(preparedMetadata)) {
-      throw preparedMetadata.error;
-    }
-    if (field === "inputSchema") {
-      collectMcpInputKeyRestorations({
-        original: providerValue,
-        prepared: preparedMetadata.value,
-        restorations: inputKeyRestorations,
-      });
-    }
-    Reflect.set(prepared, field, preparedMetadata.value);
-  }
+  await prepareMcpProviderMetadataForThirdParty({
+    boundary,
+    inputKeyRestorations,
+    prepared,
+  });
 
   const execute = prepared.execute;
   if (!execute) {
