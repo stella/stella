@@ -39,7 +39,7 @@ const LEGISLATION_DOCUMENT_STATUS_SQL_VALUES =
   LEGISLATION_DOCUMENT_STATUSES.map((status) => sql.raw(`'${status}'`));
 
 /** Bounded prefix that owns stable public-list ordering. */
-export const LEGISLATION_TITLE_SORT_KEY_CHARS = 64;
+export const LEGISLATION_TITLE_SORT_KEY_CHARS = 52;
 
 export const legislationTitleSortKey = (title: SQLWrapper) =>
   sql<string>`left(${title}, ${sql.raw(String(LEGISLATION_TITLE_SORT_KEY_CHARS))})`;
@@ -77,9 +77,9 @@ export const legislationDocuments = p.pgTable(
     // European Legislation Identifier / national statute id — the work key
     // shared across consolidations.
     eli: p.varchar({ length: 512 }).notNull(),
-    // Official titles can enumerate every amended act and have no bounded
-    // maximum in the publisher's domain.
-    title: p.text().notNull(),
+    // Compatibility stage: the next release removes this application bound
+    // after every replica understands the bounded title cursor protocol.
+    title: p.varchar({ length: 1024 }).notNull(),
     country: p.varchar({ length: 3 }).notNull(),
     language: p.varchar({ length: 8 }).notNull(),
     documentType: p.varchar("document_type", { length: 128 }),
