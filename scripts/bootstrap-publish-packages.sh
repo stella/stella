@@ -23,9 +23,9 @@ if [[ -n "$(git status --porcelain)" ]]; then
   exit 1
 fi
 
-# conditions before template-conditions (which depends on it); docx-utils is
-# independent.
-packages=(conditions template-conditions docx-utils)
+# auth-model, conditions, and docx-utils are independent. Publish conditions
+# before template-conditions, which depends on it.
+packages=(auth-model conditions template-conditions docx-utils)
 
 for p in "${packages[@]}"; do
   echo "==> publishing @stll/${p}"
