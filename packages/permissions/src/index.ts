@@ -42,6 +42,11 @@ type PermissionMap = {
   [K in keyof typeof statements]: (typeof statements)[K][number][];
 };
 
+type StellaPermissionMap = Omit<
+  PermissionMap,
+  keyof typeof BETTER_AUTH_ORGANIZATION_STATEMENTS
+>;
+
 type RequireAtLeastOne<T> = Partial<T> &
   {
     [K in keyof T]-?: Pick<T, K>;
@@ -51,8 +56,39 @@ export type PermissionInput = RequireAtLeastOne<PermissionMap>;
 
 export const ac = createAccessControl(statements);
 
-const memberAc = ac.newRole({
-  ...BETTER_AUTH_ORGANIZATION_ROLE_GRANTS.member,
+const externalStellaGrants = {
+  workspace: ["read"],
+  contact: [],
+  invoice: [],
+  template: [],
+  styleSet: [],
+  clause: [],
+  entity: [],
+  timeEntry: [],
+  expense: [],
+  view: [],
+  property: [],
+  playbook: [],
+  flow: [],
+  billingCode: [],
+  rate: [],
+  chat: [],
+  organizationSettings: [],
+  auditLog: [],
+  agentSkill: [],
+  firmMemory: [],
+} satisfies StellaPermissionMap;
+
+const internStellaGrants = {
+  ...externalStellaGrants,
+  template: ["use"],
+  styleSet: ["use"],
+  timeEntry: ["read", "create", "update"],
+  expense: ["create", "update"],
+  chat: ["create", "update", "delete"],
+} satisfies StellaPermissionMap;
+
+const memberStellaGrants = {
   workspace: ["read", "create", "update", "delete"],
   contact: ["create", "update", "delete"],
   invoice: ["create", "update", "delete"],
@@ -73,100 +109,37 @@ const memberAc = ac.newRole({
   auditLog: [],
   agentSkill: ["create", "update", "delete"],
   firmMemory: [],
-});
+} satisfies StellaPermissionMap;
+
+const managementStellaGrants = {
+  ...memberStellaGrants,
+  timeEntry: ["read", "create", "update", "delete", "approve"],
+  playbook: ["create", "update", "delete", "apply", "approve"],
+  rate: ["read", "create", "update", "delete"],
+  organizationSettings: ["update"],
+  auditLog: ["read"],
+  firmMemory: ["create", "update"],
+} satisfies StellaPermissionMap;
 
 export const roles = {
   owner: ac.newRole({
     ...BETTER_AUTH_ORGANIZATION_ROLE_GRANTS.owner,
-    workspace: ["read", "create", "update", "delete"],
-    contact: ["create", "update", "delete"],
-    invoice: ["create", "update", "delete"],
-    template: ["use", "create", "update", "delete"],
-    styleSet: ["use", "create", "update", "delete"],
-    clause: ["create", "update", "delete"],
-    entity: ["create", "update", "delete"],
-    timeEntry: ["read", "create", "update", "delete", "approve"],
-    expense: ["create", "update", "delete"],
-    view: ["create", "update", "delete"],
-    property: ["create", "update", "delete"],
-    playbook: ["create", "update", "delete", "apply", "approve"],
-    flow: ["create", "update", "delete", "run", "review"],
-    billingCode: ["create", "update", "delete"],
-    rate: ["read", "create", "update", "delete"],
-    chat: ["create", "update", "delete"],
-    organizationSettings: ["update"],
-    auditLog: ["read"],
-    agentSkill: ["create", "update", "delete"],
-    firmMemory: ["create", "update"],
+    ...managementStellaGrants,
   }),
   admin: ac.newRole({
     ...BETTER_AUTH_ORGANIZATION_ROLE_GRANTS.admin,
-    workspace: ["read", "create", "update", "delete"],
-    contact: ["create", "update", "delete"],
-    invoice: ["create", "update", "delete"],
-    template: ["use", "create", "update", "delete"],
-    styleSet: ["use", "create", "update", "delete"],
-    clause: ["create", "update", "delete"],
-    entity: ["create", "update", "delete"],
-    timeEntry: ["read", "create", "update", "delete", "approve"],
-    expense: ["create", "update", "delete"],
-    view: ["create", "update", "delete"],
-    property: ["create", "update", "delete"],
-    playbook: ["create", "update", "delete", "apply", "approve"],
-    flow: ["create", "update", "delete", "run", "review"],
-    billingCode: ["create", "update", "delete"],
-    rate: ["read", "create", "update", "delete"],
-    chat: ["create", "update", "delete"],
-    organizationSettings: ["update"],
-    auditLog: ["read"],
-    agentSkill: ["create", "update", "delete"],
-    firmMemory: ["create", "update"],
+    ...managementStellaGrants,
   }),
-  member: memberAc,
+  member: ac.newRole({
+    ...BETTER_AUTH_ORGANIZATION_ROLE_GRANTS.member,
+    ...memberStellaGrants,
+  }),
   intern: ac.newRole({
     ...BETTER_AUTH_ORGANIZATION_ROLE_GRANTS.intern,
-    workspace: ["read"],
-    contact: [],
-    invoice: [],
-    template: ["use"],
-    styleSet: ["use"],
-    clause: [],
-    entity: [],
-    timeEntry: ["read", "create", "update"],
-    expense: ["create", "update"],
-    view: [],
-    property: [],
-    playbook: [],
-    flow: [],
-    billingCode: [],
-    rate: [],
-    chat: ["create", "update", "delete"],
-    organizationSettings: [],
-    auditLog: [],
-    agentSkill: [],
-    firmMemory: [],
+    ...internStellaGrants,
   }),
   external: ac.newRole({
     ...BETTER_AUTH_ORGANIZATION_ROLE_GRANTS.external,
-    workspace: ["read"],
-    contact: [],
-    invoice: [],
-    template: [],
-    styleSet: [],
-    clause: [],
-    entity: [],
-    timeEntry: [],
-    expense: [],
-    view: [],
-    property: [],
-    playbook: [],
-    flow: [],
-    billingCode: [],
-    rate: [],
-    chat: [],
-    organizationSettings: [],
-    auditLog: [],
-    agentSkill: [],
-    firmMemory: [],
+    ...externalStellaGrants,
   }),
 } satisfies Record<OrganizationRoleName, unknown>;
