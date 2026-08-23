@@ -1,7 +1,6 @@
 import type { SafeId } from "@/api/lib/branded-types";
 import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
 import { createLazyBullMqQueue } from "@/api/lib/bullmq-queue";
-import { createBullMqConnection } from "@/api/lib/redis-client";
 
 export const DOCUMENT_PROCESSING_QUEUE_NAME = "document-processing";
 export const DOCUMENT_PROCESSING_OCR_JOB_NAME = "ocr";
@@ -17,11 +16,10 @@ export type DocumentProcessingJobData = {
 
 const getQueue = createLazyBullMqQueue<DocumentProcessingJobData>({
   name: DOCUMENT_PROCESSING_QUEUE_NAME,
-  createConnection: () =>
-    createBullMqConnection({
-      connectionTimeout: QUEUE_OPERATION_TIMEOUT_MS,
-      enableOfflineQueue: false,
-    }),
+  connectionOptions: {
+    connectionTimeout: QUEUE_OPERATION_TIMEOUT_MS,
+    enableOfflineQueue: false,
+  },
   defaultJobOptions: {
     attempts: DEFAULT_JOB_ATTEMPTS,
     removeOnComplete: 1000,

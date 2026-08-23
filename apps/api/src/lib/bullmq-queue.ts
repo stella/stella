@@ -1,15 +1,16 @@
 import { Queue } from "bullmq";
 import type { QueueOptions } from "bullmq";
+import type { RedisOptions } from "bun";
 
 import { createBullMqConnection } from "@/api/lib/redis-client";
 
 type LazyBullMqQueueOptions = Omit<QueueOptions, "connection"> & {
-  createConnection?: () => ReturnType<typeof createBullMqConnection>;
+  connectionOptions?: RedisOptions;
   name: string;
 };
 
 export const createLazyBullMqQueue = <DataType>({
-  createConnection = createBullMqConnection,
+  connectionOptions,
   name,
   ...options
 }: LazyBullMqQueueOptions) => {
@@ -17,7 +18,7 @@ export const createLazyBullMqQueue = <DataType>({
   let queue: Queue<DataType> | null = null;
 
   return () => {
-    connection ??= createConnection();
+    connection ??= createBullMqConnection(connectionOptions);
     queue ??= new Queue<DataType>(name, {
       ...options,
       connection,

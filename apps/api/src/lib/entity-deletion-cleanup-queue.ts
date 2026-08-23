@@ -65,11 +65,10 @@ const defaultCleanupRequestDeps: EntityDeletionCleanupRequestDeps = {
 
 const getQueue = createLazyBullMqQueue<EntityDeletionCleanupJobData>({
   name: QUEUE_NAME,
-  createConnection: () =>
-    createBullMqConnection({
-      connectionTimeout: QUEUE_OPERATION_TIMEOUT_MS,
-      enableOfflineQueue: false,
-    }),
+  connectionOptions: {
+    connectionTimeout: QUEUE_OPERATION_TIMEOUT_MS,
+    enableOfflineQueue: false,
+  },
   defaultJobOptions: {
     attempts: DEFAULT_JOB_ATTEMPTS,
     backoff: { type: "exponential", delay: 30_000 },
