@@ -155,13 +155,26 @@ type GrantsRequiredPrivilegesOptions = {
   grantsTableDml: boolean;
 };
 
+const TABLE_MUTATION_PRIVILEGES = new Set([
+  "all",
+  "delete",
+  "insert",
+  "references",
+  "trigger",
+  "truncate",
+  "update",
+]);
+
 const grantsRequiredPrivileges = ({
   table,
   privileges,
   grantsTableDml,
 }: GrantsRequiredPrivilegesOptions): boolean => {
   if (POST_BOOTSTRAP_SELECT_ONLY_TABLES.has(table)) {
-    return privileges.has("select");
+    return (
+      privileges.has("select") &&
+      privileges.isDisjointFrom(TABLE_MUTATION_PRIVILEGES)
+    );
   }
   if (POST_BOOTSTRAP_SCOPED_HANDOFF_TABLES.has(table)) {
     return privileges.has("insert");
@@ -188,20 +201,25 @@ const enableRlsTableName = (statement: string): string | null => {
   return tableNameFromSql(statement.slice(prefix.length, -suffix.length));
 };
 
-const explicitStellaGrantTables = (statement: string): string[] => {
+type StellaTableGrant = {
+  privileges: Set<string>;
+  tables: string[];
+};
+
+const stellaTableGrant = (statement: string): StellaTableGrant | null => {
   const prefix = "GRANT ";
   const onTableMarker = " ON TABLE ";
   const toMarker = " TO ";
   const upperStatement = statement.toUpperCase();
 
   if (!upperStatement.startsWith(prefix)) {
-    return [];
+    return null;
   }
 
   const onTableIndex = upperStatement.indexOf(onTableMarker);
   const toIndex = upperStatement.lastIndexOf(toMarker);
   if (onTableIndex === -1 || toIndex <= onTableIndex) {
-    return [];
+    return null;
   }
 
   const privilegesSql = statement.slice(prefix.length, onTableIndex);
@@ -212,30 +230,43 @@ const explicitStellaGrantTables = (statement: string): string[] => {
   const targetRoleSql = statement.slice(toIndex + toMarker.length);
 
   if (!isStellaIdentifier(targetRoleSql)) {
-    return [];
+    return null;
   }
 
   const privileges = new Set(identifierNamesFromSql(privilegesSql));
-  const grantsTableDml =
-    privileges.has("select") &&
-    privileges.has("insert") &&
-    privileges.has("update") &&
-    privileges.has("delete");
-
   const tables = identifierNamesFromSql(tablesSql).filter(
     (name) => name !== "public",
   );
 
+  return { privileges, tables };
+};
+
+const explicitStellaGrantTables = (statement: string): string[] => {
+  const grant = stellaTableGrant(statement);
+  if (grant === null) {
+    return [];
+  }
+  const grantsTableDml =
+    grant.privileges.has("select") &&
+    grant.privileges.has("insert") &&
+    grant.privileges.has("update") &&
+    grant.privileges.has("delete");
+
   // Normal post-bootstrap tables grant full DML; explicit internal categories
   // enforce their narrower request-role surface.
-  return tables.filter((table) =>
-    grantsRequiredPrivileges({ table, privileges, grantsTableDml }),
+  return grant.tables.filter((table) =>
+    grantsRequiredPrivileges({
+      table,
+      privileges: grant.privileges,
+      grantsTableDml,
+    }),
   );
 };
 
 const collectRlsGrantState = () => {
   const rlsTables: RlsTableIntroduction[] = [];
   const explicitGrantMigrationsByTable = new Map<string, string[]>();
+  const selectOnlyMutationGrants: string[] = [];
 
   for (const path of migrationSqlFiles()) {
     const migration = nodePath.basename(nodePath.resolve(path, ".."));
@@ -257,13 +288,34 @@ const collectRlsGrantState = () => {
         migrations.push(migration);
         explicitGrantMigrationsByTable.set(table, migrations);
       }
+
+      const grant = stellaTableGrant(statement);
+      if (grant === null) {
+        continue;
+      }
+      for (const table of grant.tables) {
+        if (
+          POST_BOOTSTRAP_SELECT_ONLY_TABLES.has(table) &&
+          !grant.privileges.isDisjointFrom(TABLE_MUTATION_PRIVILEGES)
+        ) {
+          selectOnlyMutationGrants.push(`${migration}: ${table}`);
+        }
+      }
     }
   }
 
-  return { explicitGrantMigrationsByTable, rlsTables };
+  return {
+    explicitGrantMigrationsByTable,
+    rlsTables,
+    selectOnlyMutationGrants,
+  };
 };
 
 describe("RLS table grants", () => {
+  test("SELECT-only tables never grant mutation privileges to stella", () => {
+    expect(collectRlsGrantState().selectOnlyMutationGrants).toEqual([]);
+  });
+
   test("post-bootstrap RLS tables explicitly grant stella table privileges", () => {
     const { explicitGrantMigrationsByTable, rlsTables } =
       collectRlsGrantState();
