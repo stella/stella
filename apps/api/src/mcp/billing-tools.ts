@@ -11,7 +11,6 @@ import { createTimeEntryHandler } from "@/api/handlers/time-entries/create";
 import { deleteTimeEntryHandler } from "@/api/handlers/time-entries/delete";
 import { updateTimeEntryHandler } from "@/api/handlers/time-entries/update";
 import { readOrgEntitlementHandler } from "@/api/handlers/usage/get-entitlement";
-import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import { TIME_ENTRY_VISIBILITY } from "@/api/lib/billing-constants";
 import { resolveRate } from "@/api/lib/billing-rates";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -56,6 +55,7 @@ import type {
 } from "@/api/mcp/tool-types";
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
+  bindWorkspaceRecorder,
   confirmProp,
   DEFAULT_LIST_LIMIT,
   ensureActiveWorkspace,
@@ -564,38 +564,6 @@ export const BILLING_TOOL_DEFINITIONS = [
   },
 ] as const satisfies readonly McpToolDefinition[];
 
-/**
- * Wrap the request-scoped recorder so audit rows written by the reused backing
- * handlers carry the resolved workspace. The MCP recorder binds workspaceId to
- * null (org-scoped); workspace-scoped handlers build events without a
- * workspaceId, so inject it per event (an event that sets its own wins).
- */
-const bindWorkspaceRecorder =
-  (
-    context: McpRequestContext,
-    workspaceId: SafeId<"workspace">,
-  ): AuditRecorder =>
-  async (tx, event) => {
-    const events: AuditEvent[] = Array.isArray(event) ? event : [event];
-    for (const e of events) {
-      if (e.workspaceId === undefined) {
-        e.workspaceId = workspaceId;
-      }
-    }
-    await context.recordAuditEvent(tx, events);
-  };
-
-/**
- * Prefer a cross-field (`partial_check`) validation message when present,
- * falling back to the hand-written shape hint for structural failures.
- */
-const crossFieldOrGeneric = (
-  issues: readonly v.BaseIssue<unknown>[],
-  genericMessage: string,
-): string =>
-  issues.find((issue) => issue.type === "partial_check")?.message ??
-  genericMessage;
-
 /** Resolve the accessible workspace that owns a time entry, or null. */
 const resolveTimeEntryWorkspace = async ({
   context,
@@ -747,10 +715,8 @@ const handleListTimeEntriesTool: TypedMcpToolHandler<
   if (!parsed.success) {
     return validationErrorResult({
       issues: parsed.issues,
-      message: crossFieldOrGeneric(
-        parsed.issues,
+      message:
         "Invalid input: expected { matter_id?: string, time_entry_id?: string, entity_id?: string, user_id?: string, date_from?: YYYY-MM-DD, date_to?: YYYY-MM-DD, status?: string, limit?: integer, cursor?: string }",
-      ),
     });
   }
   const input = parsed.output;
@@ -1047,10 +1013,8 @@ const handleSaveTimeEntryTool: TypedMcpToolHandler<
   if (!parsed.success) {
     return validationErrorResult({
       issues: parsed.issues,
-      message: crossFieldOrGeneric(
-        parsed.issues,
+      message:
         "Invalid input: expected { time_entry_id?, matter_id?, entity_id?, date_worked?, timezone_id?, duration_minutes?, narrative?, invoice_narrative?, billable?, no_charge?, task_code?, activity_code? }",
-      ),
     });
   }
   const input = parsed.output;
@@ -1391,10 +1355,8 @@ const handleListInvoicesTool: TypedMcpToolHandler<
   if (!parsed.success) {
     return validationErrorResult({
       issues: parsed.issues,
-      message: crossFieldOrGeneric(
-        parsed.issues,
+      message:
         "Invalid input: expected { matter_id?: string, invoice_id?: string, limit?: integer, cursor?: string }",
-      ),
     });
   }
   const input = parsed.output;

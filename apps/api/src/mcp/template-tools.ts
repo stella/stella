@@ -1403,17 +1403,6 @@ const handleSaveFilledTemplateTool: McpToolHandler = async ({
   return toolDataResult(persistence.value.value);
 };
 
-/**
- * Prefer a cross-field (`partial_check`) validation message when present,
- * falling back to the hand-written shape hint for structural failures.
- */
-const crossFieldOrGeneric = (
-  issues: readonly v.BaseIssue<unknown>[],
-  genericMessage: string,
-): string =>
-  issues.find((issue) => issue.type === "partial_check")?.message ??
-  genericMessage;
-
 // Create branch of save_template: a new template from an uploaded DOCX, with an
 // optional field-configuration overlay. Reused from the former create_template
 // tool.
@@ -1570,10 +1559,8 @@ const handleSaveTemplateTool: TypedMcpToolHandler<
   if (!parsed.success) {
     return validationErrorResult({
       issues: parsed.issues,
-      message: crossFieldOrGeneric(
-        parsed.issues,
+      message:
         "Invalid input: expected { docx_base64: string, name: string, fields?: array } to create, or { template_id: string, fields: array } to configure",
-      ),
     });
   }
   const input = parsed.output;
