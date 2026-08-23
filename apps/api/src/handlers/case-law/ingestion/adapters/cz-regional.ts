@@ -23,9 +23,7 @@ import type {
   ReconciliationSlicePage,
   ReconciliationSlicePageOptions,
 } from "@/api/handlers/case-law/ingestion/adapter";
-import {
-  createCalendarDaySliceWalk,
-} from "@/api/handlers/case-law/ingestion/adapters/calendar-day-slice-walk";
+import { createCalendarDaySliceWalk } from "@/api/handlers/case-law/ingestion/adapters/calendar-day-slice-walk";
 import { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import {
   INGESTION_USER_AGENT,

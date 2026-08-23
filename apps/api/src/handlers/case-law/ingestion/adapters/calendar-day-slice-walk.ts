@@ -1,11 +1,7 @@
 import { panic } from "better-result";
 
 import type { AdapterKey } from "@/api/handlers/case-law/consts";
-import {
-  addUtcDays,
-  isoCalendarDay,
-  toUtcDateString,
-} from "@/api/lib/dates";
+import { addUtcDays, isoCalendarDay, toUtcDateString } from "@/api/lib/dates";
 
 type CalendarDaySliceWalkOptions = {
   firstSlice: string;
