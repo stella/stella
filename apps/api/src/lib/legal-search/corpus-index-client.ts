@@ -175,7 +175,24 @@ const requestLabel = ({ init, path }: CorpusIndexRequest): string =>
   `${init.method ?? "GET"} ${path}`;
 
 /**
- * Sends the request, naming it on a transport failure.
+ * The budget covers the whole exchange, so it can expire before the
+ * headers arrive or while the body is still streaming. Both abort with
+ * the same reason, and neither is a malformed payload.
+ */
+const isAborted = (error: unknown): boolean =>
+  error instanceof Error &&
+  (error.name === "TimeoutError" || error.name === "AbortError");
+
+type RequestFailureOptions = {
+  request: CorpusIndexRequest;
+  error: unknown;
+  /** How to describe a failure the budget did not cause. */
+  unaborted: string;
+};
+
+/**
+ * Names the request that failed, and the budget when the budget is what
+ * ended it.
  *
  * `fetchWithTimeout` rejects with the abort reason alone, so an expired
  * budget reaches the caller as "The operation timed out." and says
@@ -183,15 +200,24 @@ const requestLabel = ({ init, path }: CorpusIndexRequest): string =>
  * branch below already names the request; this gives the branch that
  * actually fires under load the same.
  */
+const requestFailure = ({
+  request,
+  error,
+  unaborted,
+}: RequestFailureOptions): CorpusIndexError =>
+  new CorpusIndexError({
+    message: isAborted(error)
+      ? `corpus index ${requestLabel(request)} failed within its ${request.timeoutMs}ms budget: ${String(error)}`
+      : `corpus index ${requestLabel(request)} ${unaborted}: ${String(error)}`,
+    cause: error,
+  });
+
 const sendRequest = async (request: CorpusIndexRequest): Promise<Response> =>
   await fetchWithTimeout(`${request.baseUrl}${request.path}`, {
     ...request.init,
     timeoutMs: request.timeoutMs,
   }).catch((error: unknown) => {
-    throw new CorpusIndexError({
-      message: `corpus index ${requestLabel(request)} failed within its ${request.timeoutMs}ms budget: ${String(error)}`,
-      cause: error,
-    });
+    throw requestFailure({ request, error, unaborted: "could not be sent" });
   });
 
 const requestJson = async (request: CorpusIndexRequest): Promise<unknown> => {
@@ -204,9 +230,10 @@ const requestJson = async (request: CorpusIndexRequest): Promise<unknown> => {
     });
   }
   return await response.json().catch((error: unknown) => {
-    throw new CorpusIndexError({
-      message: `corpus index ${requestLabel(request)} returned an unreadable body: ${String(error)}`,
-      cause: error,
+    throw requestFailure({
+      request,
+      error,
+      unaborted: "returned an unreadable body",
     });
   });
 };

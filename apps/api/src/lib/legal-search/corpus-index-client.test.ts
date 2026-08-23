@@ -381,3 +381,56 @@ test("an unreadable success body names the request too", async () => {
     );
   }
 });
+
+test("a body that stalls past the budget is a timeout, not an unreadable body", async () => {
+  // The timeout covers the body as well as the headers, so a response can
+  // arrive `ok` and then abort mid-stream. Reporting that as a malformed
+  // payload would hide the very timeout this client exists to name.
+  const stub = async (): Promise<Response> =>
+    new Response(
+      new ReadableStream({
+        start(controller) {
+          controller.error(
+            new DOMException("The operation timed out.", "TimeoutError"),
+          );
+        },
+      }),
+      { status: 200 },
+    );
+  globalThis.fetch = Object.assign(stub, {
+    preconnect: originalFetch.preconnect,
+  });
+
+  const result = await getCorpusIndexClient().search({
+    indexId: "legal_corpus_v1_cze",
+    query: "text:smlouva",
+    maxHits: 10,
+  });
+
+  expect(result.isErr()).toBe(true);
+  if (result.isErr()) {
+    expect(result.error.message).toBe(
+      "corpus index POST /api/v1/legal_corpus_v1_cze/search failed within its 30000ms budget: TimeoutError: The operation timed out.",
+    );
+  }
+});
+
+test("a request that never reaches the engine is not reported as a timeout", async () => {
+  rejectFetchWith(
+    new Error("Unable to connect. Is the computer able to access the url?"),
+  );
+
+  const result = await getCorpusIndexClient().search({
+    indexId: "legal_corpus_v1_cze",
+    query: "text:smlouva",
+    maxHits: 10,
+  });
+
+  expect(result.isErr()).toBe(true);
+  if (result.isErr()) {
+    // No budget expired here, so quoting one would misdescribe the failure.
+    expect(result.error.message).toBe(
+      "corpus index POST /api/v1/legal_corpus_v1_cze/search could not be sent: Error: Unable to connect. Is the computer able to access the url?",
+    );
+  }
+});
