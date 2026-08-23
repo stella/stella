@@ -388,9 +388,9 @@ describe("validateMessage", () => {
       role: "assistant",
       parts: [
         {
-          arguments: '{"query":"contra',
+          arguments: '{"question":"Which',
           id: "tool-call-1",
-          name: "search-documents",
+          name: "ask-user",
           state: "input-streaming",
           type: "tool-call",
         },
@@ -402,12 +402,12 @@ describe("validateMessage", () => {
         validateToolCallParts({
           allowPartialInput: true,
           message,
-          tools: searchTools,
+          tools: askUserTools,
         }),
       ),
     ).toBe(true);
     expect(
-      Result.isError(validateToolCallParts({ message, tools: searchTools })),
+      Result.isError(validateToolCallParts({ message, tools: askUserTools })),
     ).toBe(true);
   });
 

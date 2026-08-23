@@ -64,8 +64,6 @@ import {
   getChatToolTitleKey,
   hasRunningToolCallInLatestAssistantMessage,
   isApprovalPart,
-  isOpaquePersistedChatToolCallPart,
-  withParsedToolCallInputs,
 } from "@/components/chat/chat-ui-tools";
 import type { CreateDocumentDraft } from "@/components/chat/create-document-draft.logic";
 import { MessageExportMenu } from "@/components/chat/message-export-menu";
@@ -130,10 +128,7 @@ export const ChatThreadMessages = ({
   // persisted copy of one message during the per-turn refetch handoff; both
   // carry the same id, so React would render it twice. Collapse by id before
   // any downstream read.
-  const messages = useMemo(
-    () => dedupeById(withParsedToolCallInputs(rawMessages)),
-    [rawMessages],
-  );
+  const messages = useMemo(() => dedupeById(rawMessages), [rawMessages]);
   const generationActive = error === undefined && isGenerating;
   const retryableAssistantMessageId = useMemo(
     () => getRetryableAssistantMessageId(messages),
@@ -1521,17 +1516,6 @@ const AssistantMessageParts = ({
           key={`${message.id}-text-${index}`}
           restorationPairs={restorationPairs}
           text={part.content}
-        />
-      );
-    }
-
-    if (part.type === "tool-call" && isOpaquePersistedChatToolCallPart(part)) {
-      return (
-        <ToolCallCard
-          activeOrganizationId={activeOrganizationId}
-          key={part.id}
-          part={part}
-          showDetails={shouldShowToolCalls}
         />
       );
     }

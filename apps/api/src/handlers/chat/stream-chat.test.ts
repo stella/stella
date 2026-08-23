@@ -1840,11 +1840,11 @@ describe("chat stream client-disconnect persistence", () => {
           type: EventType.TOOL_CALL_START,
           parentMessageId: "provider-message",
           toolCallId: "search-call",
-          toolCallName: "search-documents",
+          toolCallName: "ask-user",
         },
         {
           type: EventType.TOOL_CALL_ARGS,
-          delta: '{"query":"[PER',
+          delta: '{"question":"[PER',
           toolCallId: "search-call",
         },
       ]),
@@ -1869,9 +1869,9 @@ describe("chat stream client-disconnect persistence", () => {
 
     expect(persistedParts).toEqual([
       {
-        arguments: '{"query":"[PER',
+        arguments: '{"question":"[PER',
         id: "search-call",
-        name: "search-documents",
+        name: "ask-user",
         state: "input-streaming",
         type: "tool-call",
       },

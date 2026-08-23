@@ -41,6 +41,7 @@ import {
   getUserFileIdFromAttachmentPart,
   isChatAttachmentPart,
   isChatDocumentPart,
+  isChatPart,
   toPersistableChatMessage,
 } from "@/api/handlers/chat/chat-message-parts";
 import type {
@@ -1496,7 +1497,7 @@ const restoreInterruptedToolCallInputs = (
         return part;
       }
       const metadata = "metadata" in part ? part.metadata : undefined;
-      return {
+      const candidate: unknown = {
         arguments: argumentsText,
         id: part.id,
         ...(metadata === undefined ? {} : { metadata }),
@@ -1504,7 +1505,11 @@ const restoreInterruptedToolCallInputs = (
         state:
           argumentsText.length === 0 ? "awaiting-input" : "input-streaming",
         type: "tool-call",
-      } as const satisfies ChatPart;
+      };
+      if (!isChatPart(candidate) || candidate.type !== "tool-call") {
+        return panic("Interrupted tool call cannot be restored");
+      }
+      return candidate;
     }),
   };
 };
@@ -1820,9 +1825,7 @@ type TransformOutgoingStreamProps = {
   resolveAssistantToolInputRefs?: AssistantToolInputRefResolver | undefined;
   resolveAssistantToolOutputRefs?: AssistantToolOutputRefResolver | undefined;
   resolveAssistantValueRefs?: AssistantValueRefResolver | undefined;
-  registerPendingFlush?:
-    | ((flushPending: () => StreamChunk[]) => void)
-    | undefined;
+  registerPendingFlush?: ((flushPending: () => StreamChunk[]) => void) | undefined;
   restorationPairs: ChatAnonRestoration[];
   source: AsyncIterable<StreamChunk>;
 };
