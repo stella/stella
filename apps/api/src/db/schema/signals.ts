@@ -8,7 +8,7 @@ import type {
   SignalEvidence,
   SignalSubject,
   SignalSuggestion,
-  SuggestionKind,
+  SUGGESTION_KIND,
 } from "@stll/api-contract/signals";
 
 import {
@@ -49,8 +49,26 @@ export const SIGNAL_EVENT_TYPES = [
 
 /** What an accepted suggestion produced, for provenance from the result back. */
 export type SignalAcceptedResult =
-  | { suggestionKind: SuggestionKind; entityId: string; workspaceId: string }
-  | { suggestionKind: SuggestionKind };
+  | {
+      suggestionKind:
+        | typeof SUGGESTION_KIND.CREATE_DEADLINE
+        | typeof SUGGESTION_KIND.CREATE_TASK;
+      result: { type: "entity"; entityId: string; workspaceId: string };
+    }
+  | {
+      suggestionKind: typeof SUGGESTION_KIND.PROMOTE_TO_WORKSPACE;
+      result: { type: "workspace"; workspaceId: string };
+    }
+  | {
+      suggestionKind:
+        | typeof SUGGESTION_KIND.ASSIGN
+        | typeof SUGGESTION_KIND.OPEN_CHAT;
+      result: { type: "none" };
+    };
+
+const SIGNAL_STATUS_SQL_VALUES = SIGNAL_STATUSES.map((status) =>
+  sql.raw(`'${status}'`),
+);
 
 export const SCOUT_RUN_STATUS = {
   RUNNING: "running",
@@ -137,6 +155,10 @@ export const signals = p.pgTable(
     p.check(
       "signals_model_has_confidence",
       sql`${table.origin} <> 'model' or ${table.confidence} is not null`,
+    ),
+    p.check(
+      "signals_status_check",
+      sql`${table.status} in (${sql.join(SIGNAL_STATUS_SQL_VALUES, sql`, `)})`,
     ),
     ...orgPolicies(),
   ],

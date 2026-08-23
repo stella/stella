@@ -35,6 +35,11 @@ const invalidateInbox = async ({
 
 export type SignalMutationArgs = InvalidateArgs & { signalId: string };
 
+export type ClientSignalAcceptanceResult = {
+  type: "workspace";
+  workspaceId: string;
+};
+
 export const snoozeSignal = async ({
   signalId,
   until,
@@ -75,11 +80,25 @@ export const assignSignal = async ({
 export const acceptSignal = async ({
   signalId,
   suggestionKind,
+  result,
   ...invalidate
-}: SignalMutationArgs & { suggestionKind: SuggestionKind }) =>
+}: SignalMutationArgs & {
+  suggestionKind: SuggestionKind;
+  result?: ClientSignalAcceptanceResult;
+}) =>
   Result.tryPromise(async () => {
     const accepted = unwrapEden(
-      await signalClient(signalId).acceptances.post({ suggestionKind }),
+      await signalClient(signalId).acceptances.post({
+        suggestionKind,
+        ...(result
+          ? {
+              result: {
+                type: result.type,
+                workspaceId: toSafeId<"workspace">(result.workspaceId),
+              },
+            }
+          : {}),
+      }),
     );
     await Promise.all([
       invalidateInbox(invalidate),

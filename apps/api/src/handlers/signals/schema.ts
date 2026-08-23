@@ -66,15 +66,15 @@ export const assignBodySchema = t.Object({
 
 /**
  * Accepting names the suggestion taken. Server-executed kinds create the
- * result here; client-resolved kinds report what the client produced (if
- * anything) so provenance survives either way.
+ * result here; promotion reports the matter created by the client so
+ * provenance survives the dialog boundary.
  */
 export const acceptBodySchema = t.Object({
   suggestionKind: suggestionKindSchema,
   result: t.Optional(
     t.Object({
+      type: t.Literal("workspace"),
       workspaceId: tSafeId("workspace"),
-      entityId: tSafeId("entity"),
     }),
   ),
 });

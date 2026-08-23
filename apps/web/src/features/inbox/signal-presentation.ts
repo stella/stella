@@ -34,10 +34,8 @@ export const ORIGIN_LABEL_KEY = {
 export const SUGGESTION_LABEL_KEY = {
   [SUGGESTION_KIND.CREATE_DEADLINE]: "inbox.suggestion.createDeadline",
   [SUGGESTION_KIND.CREATE_TASK]: "inbox.suggestion.createTask",
-  [SUGGESTION_KIND.FILE_TO_WORKSPACE]: "inbox.suggestion.fileToWorkspace",
   [SUGGESTION_KIND.PROMOTE_TO_WORKSPACE]: "common.newMatter",
   [SUGGESTION_KIND.ASSIGN]: "inbox.suggestion.assign",
-  [SUGGESTION_KIND.RUN_REVIEW]: "inbox.suggestion.runReview",
   [SUGGESTION_KIND.OPEN_CHAT]: "inspector.openChat",
 } as const satisfies Record<SuggestionKind, TranslationKey>;
 

@@ -9,11 +9,8 @@ import {
   entities,
 } from "@/api/db/schema";
 import { env } from "@/api/env";
-import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { DOCUMENT_REVIEW_FINDINGS_PER_RUN_MAX } from "@/api/lib/document-review/run-contract";
-import { errorTag } from "@/api/lib/errors/utils";
-import { logger } from "@/api/lib/observability/logger";
 import {
   REVIEW_FINDINGS_SHOWN_MAX,
   REVIEW_SIGNAL_CONFIDENCE,
@@ -132,8 +129,9 @@ export const emitDocumentReviewSignal = async ({
 };
 
 /**
- * Boundary wrapper for the finalize path: a scout failure is logged and
- * captured but never rolls back the run's completion.
+ * Emit inside the finalize transaction. A persistence failure must abort the
+ * finalize CAS so the durable review run remains retryable; completing the
+ * review without its signal would make the missing notification permanent.
  */
 export const maybeEmitDocumentReviewSignal = async (
   args: EmitDocumentReviewSignalArgs,
@@ -141,22 +139,5 @@ export const maybeEmitDocumentReviewSignal = async (
   if (!documentScoutsEnabled()) {
     return;
   }
-  try {
-    // Savepoint: a failed statement here must not poison the outer
-    // transaction that is finalizing the run.
-    await args.tx.transaction(
-      async (savepoint) =>
-        await emitDocumentReviewSignal({ ...args, tx: savepoint }),
-    );
-  } catch (error: unknown) {
-    captureError(error, {
-      scout: SCOUT_KEY.DOCUMENT_REVIEW,
-      runId: args.runId,
-    });
-    logger.error("scout.document_review.failed", {
-      "run.id": args.runId,
-      "workspace.id": args.workspaceId,
-      "error.type": errorTag(error),
-    });
-  }
+  await emitDocumentReviewSignal(args);
 };

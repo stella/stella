@@ -165,6 +165,7 @@ export const CreateMatterDialog = () => {
   );
   const isOpen = dialog.status === "open";
   const draftClient = dialog.status === "open" ? dialog.draftClient : null;
+  const onCreated = dialog.status === "open" ? dialog.onCreated : undefined;
 
   return (
     <Dialog
@@ -180,6 +181,7 @@ export const CreateMatterDialog = () => {
           closeDialog={closeDialog}
           draftClient={draftClient}
           key={draftClient?.id ?? "new"}
+          onCreated={onCreated}
         />
       ) : null}
     </Dialog>
@@ -189,11 +191,13 @@ export const CreateMatterDialog = () => {
 type CreateMatterDialogBodyProps = {
   closeDialog: () => void;
   draftClient: MatterDraftClient | null;
+  onCreated?: (workspaceId: string) => void | Promise<void>;
 };
 
 const CreateMatterDialogBody = ({
   closeDialog,
   draftClient,
+  onCreated,
 }: CreateMatterDialogBodyProps) => {
   const t = useTranslations();
   const locale = useLocale();
@@ -316,6 +320,8 @@ const CreateMatterDialogBody = ({
     }
 
     const workspaceId = result.value.id;
+
+    await onCreated?.(workspaceId);
 
     handleClose();
     // Navigate to the workspace root immediately and let the index

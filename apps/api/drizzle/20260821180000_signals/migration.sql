@@ -26,7 +26,8 @@ CREATE TABLE "signals" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "signals_id_org_unq" UNIQUE("id","organization_id"),
 	CONSTRAINT "signals_confidence_range" CHECK ("confidence" is null or ("confidence" >= 0 and "confidence" <= 1)),
-	CONSTRAINT "signals_model_has_confidence" CHECK ("origin" <> 'model' or "confidence" is not null)
+	CONSTRAINT "signals_model_has_confidence" CHECK ("origin" <> 'model' or "confidence" is not null),
+	CONSTRAINT "signals_status_check" CHECK ("status" in ('new', 'snoozed', 'accepted', 'dismissed'))
 );
 --> statement-breakpoint
 CREATE TABLE "signal_events" (

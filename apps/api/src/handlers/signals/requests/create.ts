@@ -129,7 +129,6 @@ const createRequest = createSafeRootHandler(
                     { kind: SUGGESTION_KIND.ASSIGN },
                   ]
                 : [
-                    { kind: SUGGESTION_KIND.FILE_TO_WORKSPACE },
                     { kind: SUGGESTION_KIND.PROMOTE_TO_WORKSPACE },
                     { kind: SUGGESTION_KIND.ASSIGN },
                   ],

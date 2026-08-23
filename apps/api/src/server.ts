@@ -112,6 +112,7 @@ import { assertConfiguredBetterAuthOAuthPolicy } from "@/api/lib/db/assert-bette
 import { assertMigrationsApplied } from "@/api/lib/db/assert-migrations-applied";
 import { detached } from "@/api/lib/detached";
 import { DEV_INSPECTOR_ORIGINS, frontendOrigins } from "@/api/lib/dev-origins";
+import { initDocumentDeadlineScoutWorker } from "@/api/lib/document-processing-enqueue";
 import { initDocumentReviewRunWorker } from "@/api/lib/document-review/run-queue";
 import { initDocumentTranslationRunWorker } from "@/api/lib/document-translation/run-queue";
 import { initEntityDeletionCleanupWorker } from "@/api/lib/entity-deletion-cleanup-queue";
@@ -789,6 +790,9 @@ const startServer = async (): Promise<void> => {
   // BullMQ worker for unified document translation runs.
   const documentTranslationRunWorker = initDocumentTranslationRunWorker();
 
+  // BullMQ worker for durable post-processing deadline scouts.
+  const documentDeadlineScoutWorker = initDocumentDeadlineScoutWorker();
+
   // BullMQ worker for durable bilingual translation runs.
   const bilingualRunWorker = initBilingualRunWorker();
 
@@ -849,6 +853,7 @@ const startServer = async (): Promise<void> => {
         reportExportWorker.close(),
         documentReviewRunWorker.close(),
         documentTranslationRunWorker.close(),
+        documentDeadlineScoutWorker.close(),
         bilingualRunWorker.close(),
       ]),
       Bun.sleep(WORKER_SHUTDOWN_TIMEOUT_MS),

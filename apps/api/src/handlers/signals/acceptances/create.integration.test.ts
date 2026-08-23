@@ -154,8 +154,8 @@ describe("signal acceptance", () => {
     });
     expect(accepted?.status).toBe(SIGNAL_STATUS.ACCEPTED);
     expect(accepted?.acceptedResult).toMatchObject({
+      result: { type: "entity", workspaceId: ids.wsA1 },
       suggestionKind: SUGGESTION_KIND.CREATE_TASK,
-      workspaceId: ids.wsA1,
     });
 
     const createdTasks = await testDb
@@ -174,7 +174,7 @@ describe("signal acceptance", () => {
     if (createdTask) {
       taskIds.push(createdTask.id);
       expect(accepted?.acceptedResult).toMatchObject({
-        entityId: createdTask.id,
+        result: { entityId: createdTask.id },
       });
     }
     expect(flushEntitySearchRepairsMock).toHaveBeenCalledTimes(1);

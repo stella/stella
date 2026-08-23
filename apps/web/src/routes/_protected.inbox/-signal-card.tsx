@@ -14,7 +14,6 @@ import {
   MenuGroupLabel,
   MenuItem,
   MenuPopup,
-  MenuSeparator,
   MenuTrigger,
 } from "@stll/ui/menu";
 import {
@@ -40,6 +39,7 @@ import {
   SEVERITY_LABEL_KEY,
   SUGGESTION_LABEL_KEY,
 } from "@/features/inbox/signal-presentation";
+import { usePermissions } from "@/hooks/use-permissions";
 import { useFormatter } from "@/i18n/formatting-context";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
@@ -53,6 +53,7 @@ import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 import {
   acceptSignal,
   assignSignal,
+  type ClientSignalAcceptanceResult,
   dismissSignal,
   openSignalChat,
   snoozeSignal,
@@ -73,6 +74,8 @@ export const SignalCard = ({
   const t = useTranslations();
   const format = useFormatter();
   const analytics = useAnalytics();
+  const canResolve = usePermissions({ signal: ["resolve"] });
+  const canChat = usePermissions({ chat: ["create"] });
   const queryClient = useQueryClient();
   const [busy, setBusy] = useState(false);
   const isOpen =
@@ -118,9 +121,17 @@ export const SignalCard = ({
     );
   };
 
-  const accept = async (suggestionKind: SignalSuggestion["kind"]) =>
+  const accept = async (
+    suggestionKind: SignalSuggestion["kind"],
+    result?: ClientSignalAcceptanceResult,
+  ) =>
     await run(
-      async () => await acceptSignal({ ...mutationArgs, suggestionKind }),
+      async () =>
+        await acceptSignal({
+          ...mutationArgs,
+          suggestionKind,
+          ...(result ? { result } : {}),
+        }),
       t("inspector.review.decisions.accepted"),
     );
 
@@ -211,106 +222,114 @@ export const SignalCard = ({
         </div>
       </div>
 
-      {isOpen && (
+      {isOpen && (canResolve || canChat) && (
         <div className="flex flex-wrap items-center gap-1.5 ps-5">
-          {signal.suggestions.map((suggestion) => (
-            <SuggestionButton
-              disabled={busy}
-              key={suggestion.kind}
-              onAccept={accept}
-              onAssign={async (assigneeUserId) =>
-                await run(async () => {
-                  const assigned = await assignSignal({
-                    ...mutationArgs,
-                    assigneeUserId,
-                  });
-                  if (Result.isError(assigned)) {
-                    return assigned;
-                  }
-                  return acceptSignal({
-                    ...mutationArgs,
-                    suggestionKind: SUGGESTION_KIND.ASSIGN,
-                  });
-                }, t("inspector.review.decisions.accepted"))
-              }
-              onOpenChat={askAboutThis}
-              organizationId={organizationId}
-              suggestion={suggestion}
-            />
-          ))}
+          {canResolve &&
+            signal.suggestions.map((suggestion) => (
+              <SuggestionButton
+                disabled={busy}
+                key={suggestion.kind}
+                onAccept={accept}
+                onAssign={async (assigneeUserId) =>
+                  await run(async () => {
+                    const assigned = await assignSignal({
+                      ...mutationArgs,
+                      assigneeUserId,
+                    });
+                    if (Result.isError(assigned)) {
+                      return assigned;
+                    }
+                    return acceptSignal({
+                      ...mutationArgs,
+                      suggestionKind: SUGGESTION_KIND.ASSIGN,
+                    });
+                  }, t("inspector.review.decisions.accepted"))
+                }
+                onOpenChat={(prompt) => openSignalChat(signal, prompt)}
+                organizationId={organizationId}
+                suggestion={suggestion}
+              />
+            ))}
           <span className="flex-1" />
-          <Button
-            className="text-muted-foreground"
-            onClick={askAboutThis}
-            size="sm"
-            variant="ghost"
-          >
-            <MessageSquareIcon />
-            {t("inbox.ask")}
-          </Button>
-          <Menu>
-            <MenuTrigger
-              render={
-                <Button
-                  aria-label={t("inbox.snooze")}
-                  className="text-muted-foreground"
-                  disabled={busy}
-                  size="sm"
-                  variant="ghost"
-                />
-              }
+          {canChat && (
+            <Button
+              className="text-muted-foreground"
+              onClick={askAboutThis}
+              size="sm"
+              variant="ghost"
             >
-              <AlarmClockIcon />
-            </MenuTrigger>
-            <MenuPopup>
-              <MenuGroup>
-                <MenuGroupLabel>{t("inbox.snooze")}</MenuGroupLabel>
-                <MenuItem
-                  onClick={() => {
-                    detached(
-                      run(
-                        async () =>
-                          await snoozeSignal({
-                            ...mutationArgs,
-                            until: snoozeUntil("tomorrow"),
-                          }),
-                        null,
-                      ),
-                      "inbox.snooze",
-                    );
-                  }}
+              <MessageSquareIcon />
+              {t("inbox.ask")}
+            </Button>
+          )}
+          {canResolve && (
+            <>
+              <Menu>
+                <MenuTrigger
+                  render={
+                    <Button
+                      aria-label={t("inbox.snooze")}
+                      className="text-muted-foreground"
+                      disabled={busy}
+                      size="sm"
+                      variant="ghost"
+                    />
+                  }
                 >
-                  {t("inbox.snoozeTomorrow")}
-                </MenuItem>
-                <MenuItem
-                  onClick={() => {
-                    detached(
-                      run(
-                        async () =>
-                          await snoozeSignal({
-                            ...mutationArgs,
-                            until: snoozeUntil("next-week"),
-                          }),
-                        null,
-                      ),
-                      "inbox.snooze",
-                    );
-                  }}
-                >
-                  {t("inbox.snoozeNextWeek")}
-                </MenuItem>
-              </MenuGroup>
-            </MenuPopup>
-          </Menu>
-          <DismissPopover
-            disabled={busy}
-            onDismiss={async (reason) =>
-              await run(
-                async () => await dismissSignal({ ...mutationArgs, reason }),
-                null,
-              )
-            }
-          />
+                  <AlarmClockIcon />
+                </MenuTrigger>
+                <MenuPopup>
+                  <MenuGroup>
+                    <MenuGroupLabel>{t("inbox.snooze")}</MenuGroupLabel>
+                    <MenuItem
+                      onClick={() => {
+                        detached(
+                          run(
+                            async () =>
+                              await snoozeSignal({
+                                ...mutationArgs,
+                                until: snoozeUntil("tomorrow"),
+                              }),
+                            null,
+                          ),
+                          "inbox.snooze",
+                        );
+                      }}
+                    >
+                      {t("inbox.snoozeTomorrow")}
+                    </MenuItem>
+                    <MenuItem
+                      onClick={() => {
+                        detached(
+                          run(
+                            async () =>
+                              await snoozeSignal({
+                                ...mutationArgs,
+                                until: snoozeUntil("next-week"),
+                              }),
+                            null,
+                          ),
+                          "inbox.snooze",
+                        );
+                      }}
+                    >
+                      {t("inbox.snoozeNextWeek")}
+                    </MenuItem>
+                  </MenuGroup>
+                </MenuPopup>
+              </Menu>
+              <DismissPopover
+                disabled={busy}
+                onDismiss={async (reason) =>
+                  await run(
+                    async () =>
+                      await dismissSignal({ ...mutationArgs, reason }),
+                    null,
+                  )
+                }
+              />
+            </>
+          )}
         </div>
       )}
     </article>
@@ -384,9 +403,12 @@ type SuggestionButtonProps = {
   suggestion: SignalSuggestion;
   organizationId: string;
   disabled: boolean;
-  onAccept: (kind: SignalSuggestion["kind"]) => Promise<boolean>;
+  onAccept: (
+    kind: SignalSuggestion["kind"],
+    result?: ClientSignalAcceptanceResult,
+  ) => Promise<boolean>;
   onAssign: (assigneeUserId: string) => Promise<boolean>;
-  onOpenChat: () => void;
+  onOpenChat: (prompt: string) => void;
 };
 
 const SuggestionButton = ({
@@ -425,22 +447,17 @@ const SuggestionButton = ({
           organizationId={organizationId}
         />
       );
-    case SUGGESTION_KIND.FILE_TO_WORKSPACE:
-      return (
-        <MatterMenu
-          disabled={disabled}
-          label={label}
-          onPick={async () => await onAccept(suggestion.kind)}
-          organizationId={organizationId}
-        />
-      );
     case SUGGESTION_KIND.PROMOTE_TO_WORKSPACE:
       return (
         <Button
           disabled={disabled}
           onClick={() => {
-            openCreateMatter();
-            detached(onAccept(suggestion.kind), "inbox.accept");
+            openCreateMatter(undefined, async (workspaceId) => {
+              await onAccept(suggestion.kind, {
+                type: "workspace",
+                workspaceId,
+              });
+            });
           }}
           size="sm"
           variant="outline"
@@ -448,13 +465,12 @@ const SuggestionButton = ({
           {label}
         </Button>
       );
-    case SUGGESTION_KIND.RUN_REVIEW:
     case SUGGESTION_KIND.OPEN_CHAT:
       return (
         <Button
           disabled={disabled}
           onClick={() => {
-            onOpenChat();
+            onOpenChat(suggestion.prompt);
             detached(onAccept(suggestion.kind), "inbox.accept");
           }}
           size="sm"
@@ -507,54 +523,6 @@ const AssignMenu = ({
             </MenuItem>
           ))}
         </MenuGroup>
-      </MenuPopup>
-    </Menu>
-  );
-};
-
-type MatterMenuProps = {
-  label: string;
-  disabled: boolean;
-  organizationId: string;
-  onPick: (workspaceId: string) => Promise<boolean>;
-};
-
-const MatterMenu = ({
-  label,
-  disabled,
-  organizationId,
-  onPick,
-}: MatterMenuProps) => {
-  const t = useTranslations();
-  const { data } = useQuery(workspacesNavigationOptions(organizationId));
-  const workspaces = data?.workspaces ?? [];
-  return (
-    <Menu>
-      <MenuTrigger
-        render={<Button disabled={disabled} size="sm" variant="outline" />}
-      >
-        {label}
-      </MenuTrigger>
-      <MenuPopup>
-        <MenuGroup>
-          <MenuGroupLabel>{t("common.selectAMatter")}</MenuGroupLabel>
-          {workspaces.map((workspace) => (
-            <MenuItem
-              key={workspace.id}
-              onClick={() => {
-                detached(onPick(workspace.id), "inbox.file");
-              }}
-            >
-              {workspace.name}
-            </MenuItem>
-          ))}
-        </MenuGroup>
-        {workspaces.length === 0 && (
-          <>
-            <MenuSeparator />
-            <MenuItem disabled>{t("common.noResults")}</MenuItem>
-          </>
-        )}
       </MenuPopup>
     </Menu>
   );

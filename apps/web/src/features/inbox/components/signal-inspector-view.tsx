@@ -1,10 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
+import { AlertCircleIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { SIGNAL_KIND } from "@stll/api-contract/signals";
 import type { SignalEvidence } from "@stll/api-contract/signals";
 import { UserText } from "@stll/ui/bidi-text";
+import { Button } from "@stll/ui/button";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { Skeleton } from "@stll/ui/skeleton";
 import { cn } from "@stll/ui/utils";
@@ -21,6 +23,7 @@ import {
   VERDICT_LABEL_KEY,
 } from "@/features/inbox/signal-presentation";
 import { useFormatter } from "@/i18n/formatting-context";
+import { detached } from "@/lib/detached";
 import type { InboxSignal } from "@/lib/inbox/queries";
 import { inboxSignalOptions } from "@/lib/inbox/queries";
 import { sanitizeHref } from "@/lib/sanitize-href";
@@ -36,9 +39,12 @@ export const SignalInspectorView = ({
   const activeOrganizationId = protectedRouteApi.useRouteContext({
     select: (ctx) => ctx.user.activeOrganizationId,
   });
-  const { data: signal, isPending } = useQuery(
-    inboxSignalOptions(activeOrganizationId, tab.payload.signalId),
-  );
+  const {
+    data: signal,
+    isError,
+    isPending,
+    refetch,
+  } = useQuery(inboxSignalOptions(activeOrganizationId, tab.payload.signalId));
 
   return (
     <div className="bg-background flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -46,6 +52,24 @@ export const SignalInspectorView = ({
       <ScrollArea className="min-h-0 flex-1">
         <div className="flex flex-col gap-5 p-4">
           {isPending && <EvidenceSkeleton />}
+          {isError && (
+            <div
+              className="text-muted-foreground flex flex-col items-center gap-3 py-10 text-center text-sm"
+              role="alert"
+            >
+              <AlertCircleIcon className="text-destructive size-8" />
+              <p>{t("common.unexpectedError")}</p>
+              <Button
+                onClick={() => {
+                  detached(refetch(), "inbox.refetch-signal-evidence");
+                }}
+                size="sm"
+                variant="outline"
+              >
+                {t("common.retry")}
+              </Button>
+            </div>
+          )}
           {signal && <SignalHeader signal={signal} />}
           {signal && (
             <section className="flex flex-col gap-2">

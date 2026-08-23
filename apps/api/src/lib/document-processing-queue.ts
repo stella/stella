@@ -47,6 +47,7 @@ import {
 } from "@/api/lib/document-processing-contract";
 import {
   DOCUMENT_PROCESSING_QUEUE_NAME,
+  enqueueDocumentDeadlineScout,
   enqueueDocumentProcessingRun,
   type DocumentProcessingJobData,
 } from "@/api/lib/document-processing-enqueue";
@@ -105,7 +106,7 @@ import {
   brandPersistedFieldId,
   brandPersistedUserId,
 } from "@/api/lib/safe-id-boundaries";
-import { maybeRunDocumentDeadlineScout } from "@/api/lib/scouts/document-deadlines";
+import { documentScoutsEnabled } from "@/api/lib/scouts/document-deadlines";
 import {
   executeNativeExtraction,
   requiresDurableNativeExtraction,
@@ -628,6 +629,17 @@ const completeDocumentProcessingRun = async ({
   claimToken: string;
   run: typeof documentProcessingRuns.$inferSelect;
 }): Promise<boolean> => {
+  if (documentScoutsEnabled()) {
+    await enqueueDocumentDeadlineScout({
+      sourceRunId: run.id,
+      entityId: run.entityId,
+      workspaceId: run.workspaceId,
+      organizationId: run.organizationId,
+      requestedBy: run.requestedBy
+        ? brandPersistedUserId(run.requestedBy)
+        : null,
+    });
+  }
   const completed = await rootDb
     .update(documentProcessingRuns)
     .set({
@@ -655,14 +667,6 @@ const completeDocumentProcessingRun = async ({
     run.workspaceId,
     resourceRef({ type: RESOURCE_TYPE.ENTITY, id: run.entityId }),
   );
-  // Text is persisted at this point; the inbox scout reads it detached so a
-  // model failure never touches the processing run's outcome.
-  maybeRunDocumentDeadlineScout({
-    entityId: run.entityId,
-    workspaceId: run.workspaceId,
-    organizationId: run.organizationId,
-    requestedBy: run.requestedBy ? brandPersistedUserId(run.requestedBy) : null,
-  });
   return true;
 };
 

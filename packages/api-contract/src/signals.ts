@@ -127,10 +127,8 @@ true satisfies [MissingEvidenceKind, ExtraEvidenceKind] extends [never, never]
 export const SUGGESTION_KIND = {
   CREATE_DEADLINE: "create-deadline",
   CREATE_TASK: "create-task",
-  FILE_TO_WORKSPACE: "file-to-workspace",
   PROMOTE_TO_WORKSPACE: "promote-to-workspace",
   ASSIGN: "assign",
-  RUN_REVIEW: "run-review",
   OPEN_CHAT: "open-chat",
 } as const;
 export type SuggestionKind =
@@ -138,10 +136,8 @@ export type SuggestionKind =
 export const SUGGESTION_KINDS = [
   SUGGESTION_KIND.CREATE_DEADLINE,
   SUGGESTION_KIND.CREATE_TASK,
-  SUGGESTION_KIND.FILE_TO_WORKSPACE,
   SUGGESTION_KIND.PROMOTE_TO_WORKSPACE,
   SUGGESTION_KIND.ASSIGN,
-  SUGGESTION_KIND.RUN_REVIEW,
   SUGGESTION_KIND.OPEN_CHAT,
 ] as const satisfies readonly SuggestionKind[];
 
@@ -163,14 +159,8 @@ export type SignalSuggestion =
       name: string;
       dueAt: string | null;
     }
-  | { kind: typeof SUGGESTION_KIND.FILE_TO_WORKSPACE }
   | { kind: typeof SUGGESTION_KIND.PROMOTE_TO_WORKSPACE }
   | { kind: typeof SUGGESTION_KIND.ASSIGN }
-  | {
-      kind: typeof SUGGESTION_KIND.RUN_REVIEW;
-      workspaceId: string;
-      entityId: string;
-    }
   | { kind: typeof SUGGESTION_KIND.OPEN_CHAT; prompt: string };
 
 type MissingSuggestionKind = Exclude<SuggestionKind, SignalSuggestion["kind"]>;

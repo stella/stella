@@ -4,11 +4,9 @@ import { rootDb } from "@/api/db/root";
 import { env } from "@/api/env";
 import { resolveCaching } from "@/api/lib/ai-config";
 import { loadOrgAIConfig } from "@/api/lib/ai-config-loader";
-import { captureError } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
 import { decryptContent } from "@/api/lib/content-encryption";
-import { errorTag } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
 import { createRootSafeDb, createRootScopedDb } from "@/api/lib/root-scoped-db";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
@@ -195,28 +193,5 @@ export const runDocumentDeadlineScout = async (
     organizationId,
     scoutKey: SCOUT_KEY.DOCUMENT_DEADLINES,
     observe: () => proposed,
-  });
-};
-
-/**
- * Fire-and-forget entry used by the document-processing worker. Failures are
- * logged and captured; they never affect the processing run's outcome.
- */
-export const maybeRunDocumentDeadlineScout = (
-  args: RunDocumentDeadlineScoutArgs,
-): void => {
-  if (!documentScoutsEnabled()) {
-    return;
-  }
-  runDocumentDeadlineScout(args).catch((error: unknown) => {
-    captureError(error, {
-      scout: SCOUT_KEY.DOCUMENT_DEADLINES,
-      entityId: args.entityId,
-    });
-    logger.error("scout.document_deadlines.failed", {
-      "entity.id": args.entityId,
-      "workspace.id": args.workspaceId,
-      "error.type": errorTag(error),
-    });
   });
 };

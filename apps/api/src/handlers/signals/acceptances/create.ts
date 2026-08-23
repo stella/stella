@@ -90,9 +90,7 @@ const acceptSignal = createSafeRootHandler(
       );
     }
 
-    let acceptedResult: SignalAcceptedResult = {
-      suggestionKind: suggestion.kind,
-    };
+    let acceptedResult: SignalAcceptedResult;
 
     switch (suggestion.kind) {
       case SUGGESTION_KIND.CREATE_TASK:
@@ -111,8 +109,7 @@ const acceptSignal = createSafeRootHandler(
         const entityId = createSafeId<"entity">();
         acceptedResult = {
           suggestionKind: suggestion.kind,
-          entityId,
-          workspaceId,
+          result: { type: "entity", entityId, workspaceId },
         };
 
         const created = yield* Result.await(
@@ -191,29 +188,38 @@ const acceptSignal = createSafeRootHandler(
         });
         return Result.ok(serializeSignal(row));
       }
-      case SUGGESTION_KIND.FILE_TO_WORKSPACE:
-      case SUGGESTION_KIND.PROMOTE_TO_WORKSPACE:
-      case SUGGESTION_KIND.ASSIGN:
-      case SUGGESTION_KIND.RUN_REVIEW:
-      case SUGGESTION_KIND.OPEN_CHAT: {
+      case SUGGESTION_KIND.PROMOTE_TO_WORKSPACE: {
         const reported = body.result;
-        if (reported) {
-          const access = yield* Result.await(
-            Result.tryPromise(
-              async () => await getWorkspaceAccess(reported.workspaceId),
-            ),
+        if (!reported) {
+          return Result.err(
+            new HandlerError({
+              status: 400,
+              message: "Matter promotion must report the created matter",
+            }),
           );
-          if (!access) {
-            return Result.err(
-              new HandlerError({ status: 404, message: "Matter not found" }),
-            );
-          }
-          acceptedResult = {
-            suggestionKind: suggestion.kind,
-            entityId: reported.entityId,
-            workspaceId: reported.workspaceId,
-          };
         }
+        const access = yield* Result.await(
+          Result.tryPromise(
+            async () => await getWorkspaceAccess(reported.workspaceId),
+          ),
+        );
+        if (!access) {
+          return Result.err(
+            new HandlerError({ status: 404, message: "Matter not found" }),
+          );
+        }
+        acceptedResult = {
+          suggestionKind: suggestion.kind,
+          result: { type: "workspace", workspaceId: reported.workspaceId },
+        };
+        break;
+      }
+      case SUGGESTION_KIND.ASSIGN:
+      case SUGGESTION_KIND.OPEN_CHAT: {
+        acceptedResult = {
+          suggestionKind: suggestion.kind,
+          result: { type: "none" },
+        };
         break;
       }
       default: {
