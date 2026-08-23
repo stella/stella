@@ -20,6 +20,7 @@ import type {
   ReconciliationSlicePage,
   ReconciliationSlicePageOptions,
 } from "@/api/handlers/case-law/ingestion/adapter";
+import { createCalendarDaySliceWalk } from "@/api/handlers/case-law/ingestion/adapters/calendar-day-slice-walk";
 import { createPagePaginatedFetch } from "@/api/handlers/case-law/ingestion/adapters/pagination";
 import {
   INGESTION_USER_AGENT,
@@ -32,7 +33,6 @@ import {
   parseCeDate,
   toOptionalValue,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
-import { addUtcDays, isoCalendarDay, toUtcDateString } from "@/api/lib/dates";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { fetchWithTimeout } from "@/api/lib/fetch";
 import { restrictSkCourtDocumentUrl } from "@/api/lib/legal-search/sk-court-document-url";
@@ -616,26 +616,10 @@ const SLICE_SORT_DIRECTION = "ASC";
  * a single year, and a slice of that size cannot be walked to the end, so the
  * ledger could never record it at all.
  */
-const skCourtsDayStart = (slice: string): Date => {
-  const day = isoCalendarDay(slice);
-  if (day === null || day !== slice) {
-    panic(`sk-courts slice is not a UTC calendar day: ${slice}`);
-  }
-  return new Date(`${day}T00:00:00.000Z`);
-};
-
-const skCourtsStepSlice = (slice: string, days: number): string =>
-  toUtcDateString(addUtcDays(skCourtsDayStart(slice), days));
-
-const skCourtsNextSlice = (slice: string): string | null => {
-  const next = skCourtsStepSlice(slice, 1);
-  return next > toUtcDateString(new Date()) ? null : next;
-};
-
-const skCourtsPreviousSlice = (slice: string): string | null => {
-  const previous = skCourtsStepSlice(slice, -1);
-  return previous < SK_COURTS_FIRST_SLICE ? null : previous;
-};
+const skCourtsDaySlices = createCalendarDaySliceWalk({
+  firstSlice: SK_COURTS_FIRST_SLICE,
+  source: ADAPTER_KEYS.SK_COURTS,
+});
 
 /**
  * The envelope a slice walk reads.
@@ -678,7 +662,7 @@ const listSkCourtsSlicePage = async ({
   // Refused here rather than at the publisher: this endpoint ignores a date it
   // cannot parse and answers the whole 4.6M-decision collection instead, which
   // a walk would read as one date holding all of it.
-  skCourtsDayStart(slice);
+  skCourtsDaySlices.dayStart(slice);
   const url = `${BASE_URL}?${new URLSearchParams({
     page: String(page + LISTING_FIRST_PAGE),
     size: String(LISTING_PAGE_SIZE),
@@ -823,9 +807,7 @@ export const skCourtsAdapter = defineSourceAdapter({
    */
   reconciliation: {
     firstSlice: SK_COURTS_FIRST_SLICE,
-    sliceOf: toUtcDateString,
-    nextSlice: skCourtsNextSlice,
-    previousSlice: skCourtsPreviousSlice,
+    ...skCourtsDaySlices.walk,
     tipWindowDays: SK_COURTS_TIP_WINDOW_DAYS,
     listSlicePage: listSkCourtsSlicePage,
     buildDecision: buildSkCourtsFromPayload,

@@ -21,6 +21,7 @@ import type {
   ReconciliationSlicePage,
   ReconciliationSlicePageOptions,
 } from "@/api/handlers/case-law/ingestion/adapter";
+import { createCalendarDaySliceWalk } from "@/api/handlers/case-law/ingestion/adapters/calendar-day-slice-walk";
 import { createPagePaginatedFetch } from "@/api/handlers/case-law/ingestion/adapters/pagination";
 import {
   hashContent,
@@ -33,7 +34,6 @@ import {
   toOptionalValue,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { parsePlDecisionContent } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
-import { addUtcDays, isoCalendarDay, toUtcDateString } from "@/api/lib/dates";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { fetchWithTimeout } from "@/api/lib/fetch";
@@ -929,26 +929,10 @@ const parseItemWithDetail = async (
  * `YYYY-MM-DD` sorts lexicographically in chronological order, which is the
  * ordering the ledger relies on.
  */
-const plCourtsDayStart = (slice: string): Date => {
-  const day = isoCalendarDay(slice);
-  if (day === null || day !== slice) {
-    panic(`pl-courts slice is not a UTC calendar day: ${slice}`);
-  }
-  return new Date(`${day}T00:00:00.000Z`);
-};
-
-const plCourtsStepSlice = (slice: string, days: number): string =>
-  toUtcDateString(addUtcDays(plCourtsDayStart(slice), days));
-
-const plCourtsNextSlice = (slice: string): string | null => {
-  const next = plCourtsStepSlice(slice, 1);
-  return next > toUtcDateString(new Date()) ? null : next;
-};
-
-const plCourtsPreviousSlice = (slice: string): string | null => {
-  const previous = plCourtsStepSlice(slice, -1);
-  return previous < PL_COURTS_FIRST_SLICE ? null : previous;
-};
+const plCourtsDaySlices = createCalendarDaySliceWalk({
+  firstSlice: PL_COURTS_FIRST_SLICE,
+  source: ADAPTER_KEYS.PL_COURTS,
+});
 
 /** The search endpoint's answer, read only for what a slice walk needs. */
 type SaosSliceResponse = {
@@ -1189,9 +1173,7 @@ export const plCourtsAdapter = defineSourceAdapter({
    */
   reconciliation: {
     firstSlice: PL_COURTS_FIRST_SLICE,
-    sliceOf: toUtcDateString,
-    nextSlice: plCourtsNextSlice,
-    previousSlice: plCourtsPreviousSlice,
+    ...plCourtsDaySlices.walk,
     tipWindowDays: PL_COURTS_TIP_WINDOW_DAYS,
     listSlicePage: listPlCourtsSlicePage,
     buildDecision: buildPlCourtsFromPayload,

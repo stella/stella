@@ -22,6 +22,7 @@ import type {
   ReconciliationSlicePage,
   ReconciliationSlicePageOptions,
 } from "@/api/handlers/case-law/ingestion/adapter";
+import { createCalendarDaySliceWalk } from "@/api/handlers/case-law/ingestion/adapters/calendar-day-slice-walk";
 import {
   INGESTION_USER_AGENT,
   adapterCatch,
@@ -30,7 +31,7 @@ import {
   stripHtml,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { parseNssDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-nss";
-import { addUtcDays, isoCalendarDay, toUtcDateString } from "@/api/lib/dates";
+import { addUtcDays } from "@/api/lib/dates";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { fetchWithTimeout } from "@/api/lib/fetch";
@@ -1189,26 +1190,10 @@ export const czNssListingIdentity = (row: ParsedRow): ListingIdentity => {
  * it a day at a time. `YYYY-MM-DD` sorts lexicographically in chronological
  * order, which is the ordering the ledger relies on.
  */
-const czNssDayStart = (slice: string): Date => {
-  const day = isoCalendarDay(slice);
-  if (day === null || day !== slice) {
-    panic(`cz-nss slice is not a UTC calendar day: ${slice}`);
-  }
-  return new Date(`${day}T00:00:00.000Z`);
-};
-
-const czNssStepSlice = (slice: string, days: number): string =>
-  toUtcDateString(addUtcDays(czNssDayStart(slice), days));
-
-const czNssNextSlice = (slice: string): string | null => {
-  const next = czNssStepSlice(slice, 1);
-  return next > todayIso() ? null : next;
-};
-
-const czNssPreviousSlice = (slice: string): string | null => {
-  const previous = czNssStepSlice(slice, -1);
-  return previous < CZ_NSS_FIRST_SLICE ? null : previous;
-};
+const czNssDaySlices = createCalendarDaySliceWalk({
+  firstSlice: CZ_NSS_FIRST_SLICE,
+  source: ADAPTER_KEYS.CZ_NSS,
+});
 
 /**
  * One page of the portal's own listing for a decision day, with no detail or
@@ -1234,7 +1219,7 @@ const listCzNssSlicePage = async ({
 }: ReconciliationSlicePageOptions): Promise<ReconciliationSlicePage> => {
   // Refuse a slice this adapter cannot have produced before it reaches the
   // date formatter, which would silently query some other day for it.
-  czNssDayStart(slice);
+  czNssDaySlices.dayStart(slice);
   const effectiveSignal =
     signal ?? AbortSignal.timeout(CZ_NSS_LISTING_TIMEOUT_MS);
 
@@ -1473,9 +1458,7 @@ export const czNssAdapter = defineSourceAdapter({
    */
   reconciliation: {
     firstSlice: CZ_NSS_FIRST_SLICE,
-    sliceOf: toUtcDateString,
-    nextSlice: czNssNextSlice,
-    previousSlice: czNssPreviousSlice,
+    ...czNssDaySlices.walk,
     tipWindowDays: CZ_NSS_TIP_WINDOW_DAYS,
     listSlicePage: listCzNssSlicePage,
     buildDecision: buildCzNssFromPayload,
