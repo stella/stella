@@ -478,7 +478,12 @@ describe("public statute list", () => {
       const cursorParts = decodePaginationCursor(cursor);
       expect(cursorParts).toHaveLength(3);
       expect(cursorParts?.at(0)).toBe(LEGISLATION_TITLE_CURSOR_KIND);
-      expect(cursorParts?.at(1)?.length).toBeLessThanOrEqual(
+      const sortKey = cursorParts?.at(1);
+      expect(typeof sortKey).toBe("string");
+      if (typeof sortKey !== "string") {
+        throw new TypeError("Expected a title sort key in the tagged cursor");
+      }
+      expect(sortKey.length).toBeLessThanOrEqual(
         LEGISLATION_TITLE_SORT_KEY_CHARS,
       );
     }
