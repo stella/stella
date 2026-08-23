@@ -2354,16 +2354,6 @@ const FileChatOverlayInner = ({
                 clipped): they stay inside the chat window, scroll with the
                 messages, and are never smashed against the card edge. */}
             <SuggestedFollowupChips
-              isGenerating={isGenerating}
-              isEmpty={
-                editorController.isEmpty &&
-                editorController.attachments.length === 0
-              }
-              lastMessageId={messages.at(-1)?.id ?? null}
-              lastMessageRole={messages.at(-1)?.role ?? null}
-              messageCount={messages.length}
-              prompts={suggestedPrompts}
-              surface="plain"
               onSelect={(prompt) => {
                 // Mirror the PromptBar send guard: when an editable DOCX's edit
                 // snapshot isn't ready, block the chip send too so the model
@@ -2393,6 +2383,8 @@ const FileChatOverlayInner = ({
                   "file-chat-overlay.submit",
                 );
               }}
+              prompts={suggestedPrompts}
+              surface="plain"
             />
           </ChatThreadCard>
         )}

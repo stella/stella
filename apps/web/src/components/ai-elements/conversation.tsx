@@ -10,10 +10,26 @@ import { ScrollArea } from "@stll/ui/scroll-area";
 import { cn } from "@stll/ui/utils";
 
 import {
+  SuggestedActionSurface,
+  type SuggestedActionSurfaceName,
+} from "@/components/suggested-actions";
+import {
   StickToBottomContext,
   useStickToBottom,
   useStickToBottomContext,
 } from "@/hooks/use-stick-to-bottom";
+
+type ConversationScrollProviderProps = {
+  children: ReactNode;
+};
+
+export const ConversationScrollProvider = ({
+  children,
+}: ConversationScrollProviderProps) => (
+  <StickToBottomContext value={useStickToBottom()}>
+    {children}
+  </StickToBottomContext>
+);
 
 type ConversationProps = ComponentProps<"div">;
 
@@ -21,21 +37,15 @@ export const Conversation = ({
   className,
   children,
   ...props
-}: ConversationProps) => {
-  const stickToBottom = useStickToBottom();
-
-  return (
-    <StickToBottomContext value={stickToBottom}>
-      <div
-        className={cn("relative flex-1 overflow-y-hidden", className)}
-        role="log"
-        {...props}
-      >
-        {children}
-      </div>
-    </StickToBottomContext>
-  );
-};
+}: ConversationProps) => (
+  <div
+    className={cn("relative flex-1 overflow-y-hidden", className)}
+    role="log"
+    {...props}
+  >
+    {children}
+  </div>
+);
 
 type ConversationContentProps = ComponentProps<"div">;
 
@@ -106,41 +116,74 @@ export const ConversationEmptyState = ({
   </div>
 );
 
-type ConversationScrollButtonProps = ComponentProps<typeof Button>;
+type ConversationScrollButtonBaseProps = Omit<
+  ComponentProps<typeof Button>,
+  "onClick" | "size" | "variant"
+>;
+
+type ConversationScrollButtonProps = ConversationScrollButtonBaseProps &
+  (
+    | { placement?: "floating"; surface?: never }
+    | {
+        placement: "inline";
+        surface: Extract<SuggestedActionSurfaceName, "plain" | "overlay">;
+      }
+  );
 
 export const ConversationScrollButton = ({
   className,
+  placement = "floating",
+  surface = "plain",
   ...props
 }: ConversationScrollButtonProps) => {
   const t = useTranslations();
   const { isAtBottom, isScrollable, scrollToBottom } =
     useStickToBottomContext();
+  const isVisible = isScrollable && !isAtBottom;
 
-  return (
-    isScrollable &&
-    !isAtBottom && (
-      <Button
-        aria-label={t("common.scrollToBottom")}
-        className={cn(
-          // The outline variant is translucent in dark mode (content shows
-          // through the button) and its `::before` highlight is a rounded
-          // rectangle whose corners poke past the circle as faint "ears".
-          // Pin an opaque surface in both themes and round `::before` to
-          // the circle; isolate/z-10 keep it above the scrolled content.
-          "bg-background dark:bg-background hover:bg-muted",
-          "isolate shadow-sm before:rounded-full",
-          "absolute bottom-4 left-1/2 z-10 -translate-x-1/2 rounded-full",
-          className,
-        )}
-        onClick={() => scrollToBottom()}
-        size="icon"
-        type="button"
-        variant="outline"
-        {...props}
-      >
-        <ArrowDownIcon className="size-4" />
-      </Button>
-    )
+  if (!isVisible && placement === "floating") {
+    return null;
+  }
+
+  const button = (
+    <Button
+      aria-label={t("common.scrollToBottom")}
+      className={cn(
+        "before:rounded-full",
+        placement === "floating"
+          ? [
+              // The outline variant is translucent in dark mode (content
+              // shows through the button). Pin an opaque surface in both
+              // themes; isolate/z-10 keep it above the scrolled content.
+              "bg-background dark:bg-background hover:bg-muted",
+              "isolate shadow-sm",
+              "absolute bottom-4 left-1/2 z-10 -translate-x-1/2 rounded-full",
+            ]
+          : "size-full rounded-full sm:size-full",
+        className,
+      )}
+      {...props}
+      onClick={() => scrollToBottom()}
+      size={placement === "floating" ? "icon" : "icon-sm"}
+      type="button"
+      variant={
+        placement === "floating" || surface === "plain" ? "outline" : "ghost"
+      }
+    >
+      <ArrowDownIcon className="size-4" />
+    </Button>
+  );
+
+  return placement === "inline" ? (
+    <SuggestedActionSurface
+      aria-hidden={!isVisible || undefined}
+      className={cn("size-8 shrink-0", !isVisible && "invisible")}
+      surface={surface}
+    >
+      {isVisible && button}
+    </SuggestedActionSurface>
+  ) : (
+    button
   );
 };
 

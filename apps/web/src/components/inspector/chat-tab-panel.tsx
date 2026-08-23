@@ -37,6 +37,7 @@ import {
   Conversation,
   ConversationContent,
   ConversationScrollButton,
+  ConversationScrollProvider,
 } from "@/components/ai-elements/conversation";
 import {
   DockedComposer,
@@ -368,6 +369,7 @@ export const ChatTabPanel = ({
     suggestedFollowupPrompt,
     threadRef,
   });
+  const hasSuggestedFollowups = suggestedPrompts.length > 0;
   const focusComposer = editorController.focus;
   const sendWithoutAnonymization = useLatestCallback(async () => {
     await resendLatestMessage({ sendMode: CHAT_SEND_MODE.rawOverride });
@@ -663,7 +665,9 @@ export const ChatTabPanel = ({
               )}
             </ConversationContent>
             {/* Clear the floating composer block (veil + pill + row). */}
-            <ConversationScrollButton className="bottom-32" />
+            <ConversationScrollButton
+              className={cn("bottom-32", hasSuggestedFollowups && "hidden")}
+            />
           </Conversation>
 
           <ChatAnonymizationLayer
@@ -689,15 +693,6 @@ export const ChatTabPanel = ({
             }
             followupChips={
               <SuggestedFollowupChips
-                isGenerating={isGenerating}
-                isEmpty={
-                  editorController.isEmpty &&
-                  editorController.attachments.length === 0
-                }
-                lastMessageId={messages.at(-1)?.id ?? null}
-                lastMessageRole={messages.at(-1)?.role ?? null}
-                messageCount={messages.length}
-                prompts={suggestedPrompts}
                 onSelect={(prompt) => {
                   editorController.setContent(prompt);
                   detached(
@@ -710,6 +705,7 @@ export const ChatTabPanel = ({
                     "chat-tab-panel.submit",
                   );
                 }}
+                prompts={suggestedPrompts}
               />
             }
             layout="standalone"
@@ -875,7 +871,9 @@ const ChatTabPanelChrome = ({
         }}
       />
 
-      <div className="relative flex min-h-0 flex-1 flex-col">{children}</div>
+      <div className="relative flex min-h-0 flex-1 flex-col">
+        <ConversationScrollProvider>{children}</ConversationScrollProvider>
+      </div>
     </div>
   );
 };
