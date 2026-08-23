@@ -1,5 +1,7 @@
 # @stll/anonymize-linux-x64-gnu
 
+## 2.8.2
+
 ## 2.8.1
 
 ## 2.8.0

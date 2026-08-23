@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.8.2
+
+### Patch Changes
+
+- [#470](https://github.com/stella/anonymize/pull/470) [`de387c5`](https://github.com/stella/anonymize/commit/de387c598d97eca428f510a64ebe6aaa8d398db9) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Improve contextual identifier and legal-form detection, and avoid unnecessary written-email scans.
+
 ## 2.8.1
 
 ### Patch Changes
