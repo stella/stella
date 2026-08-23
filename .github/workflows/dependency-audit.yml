@@ -6,14 +6,21 @@ name: Dependency Audit
 # already-resolved versions over time), and on demand. Complements the 5-day
 # `minimumReleaseAge` quarantine in bunfig.toml, which blocks freshly published
 # versions at install time.
+#
+# Also rejects a lockfile that Bun can deduplicate and proves that the
+# effective lifecycle-script trust set exactly matches package.json.
 
 on:
   pull_request:
     paths:
       - "bun.lock"
       - "bunfig.toml"
+      - "package.json"
+      - "patches/**"
       - "scripts/dependency-audit.ts"
       - "scripts/dependency-audit-baseline.json"
+      - "scripts/dependency-diff.ts"
+      - "scripts/check-trusted-dependencies.ts"
       - ".github/workflows/dependency-audit.yml"
   schedule:
     - cron: "0 6 * * *"
@@ -47,3 +54,9 @@ jobs:
       # dependency install is required.
       - name: Audit dependencies
         run: bun scripts/dependency-audit.ts --check
+
+      - name: Check lockfile deduplication
+        run: bun --no-env-file dedupe --check
+
+      - name: Check trusted lifecycle dependencies
+        run: bun --no-env-file scripts/check-trusted-dependencies.ts

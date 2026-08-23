@@ -3,7 +3,6 @@ import { t } from "elysia";
 
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import type { LookupOutcome } from "@/api/lib/docx/lookup-fields";
 import {
   createDispatchLookupResolver,
   isPlausibleLookupValue,
@@ -13,6 +12,8 @@ import {
 import { buildIsRegistryEnabledForOrg } from "@/api/lib/docx/registry-org-gate";
 import { LOOKUP_REGISTRIES } from "@/api/lib/docx/types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+
+import { getLookupPreviewOutcome } from "./lookup-preview-cache";
 
 const lookupPreviewBodySchema = t.Object({
   registry: t.UnionEnum(LOOKUP_REGISTRIES),
@@ -35,29 +36,6 @@ const config = {
   access: "read",
   body: lookupPreviewBodySchema,
 } satisfies HandlerConfig;
-
-// Process-lifetime cache of resolved outcomes per (registry, number): the
-// studio preview re-resolves the same numbers on every keystroke session and
-// the upstream registries are slow. Hits and not-founds are kept (registry
-// data churn is irrelevant at preview granularity); transient upstream errors
-// are not, so a blip does not stick. Bounded: at most
-// LOOKUP_PREVIEW_CACHE_MAX entries, evicting the oldest insertion, so memory
-// stays capped regardless of process lifetime.
-const LOOKUP_PREVIEW_CACHE_MAX = 500;
-const outcomeCache = new Map<string, LookupOutcome>();
-
-const rememberOutcome = (key: string, outcome: LookupOutcome): void => {
-  if (outcome.type === "error") {
-    return;
-  }
-  if (outcomeCache.size >= LOOKUP_PREVIEW_CACHE_MAX) {
-    const oldest = outcomeCache.keys().next().value;
-    if (oldest !== undefined) {
-      outcomeCache.delete(oldest);
-    }
-  }
-  outcomeCache.set(key, outcome);
-};
 
 const resolveLookup = createDispatchLookupResolver();
 
@@ -112,22 +90,22 @@ const lookupPreview = createSafeRootHandler(
     }
 
     const cacheKey = `${registry}:${number.replaceAll(/\s/gu, "")}`;
-    let outcome = outcomeCache.get(cacheKey);
-    if (outcome === undefined) {
-      // The per-registry adapters own timeouts on their upstream calls.
-      outcome = yield* Result.await(
-        Result.tryPromise({
-          try: async () => await resolveLookup({ registry, query: number }),
-          catch: (cause) =>
-            new HandlerError({
-              status: 502,
-              message: `${registryName} lookup failed`,
-              cause,
-            }),
-        }),
-      );
-      rememberOutcome(cacheKey, outcome);
-    }
+    const outcome = yield* Result.await(
+      Result.tryPromise({
+        try: async () =>
+          await getLookupPreviewOutcome({
+            key: cacheKey,
+            // The per-registry adapters own timeouts on their upstream calls.
+            load: async () => await resolveLookup({ registry, query: number }),
+          }),
+        catch: (cause) =>
+          new HandlerError({
+            status: 502,
+            message: `${registryName} lookup failed`,
+            cause,
+          }),
+      }),
+    );
 
     if (outcome.type === "not-found") {
       return Result.err(

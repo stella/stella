@@ -49,12 +49,12 @@ const skillsById: ReadonlyMap<string, GeneratedSkill> = new Map(
 );
 
 type Frontmatter = {
-  compatibility?: string | undefined;
-  description?: string | undefined;
-  license?: string | undefined;
-  metadata?: Record<string, string> | undefined;
-  name?: string | undefined;
-  version?: string | undefined;
+  compatibility: string | undefined;
+  description: string;
+  license: string | undefined;
+  metadata: Record<string, string> | undefined;
+  name: string;
+  version: string | undefined;
 };
 
 type GeneratedSkill = (typeof GENERATED_SKILLS)[number];
@@ -133,20 +133,15 @@ export const parseSkillFile = (
     panic("Skill file missing frontmatter");
   }
 
-  const end = normalizedSource.indexOf("\n---", 4);
+  let end = normalizedSource.indexOf("\n---\n", 4);
+  if (end === -1 && normalizedSource.endsWith("\n---")) {
+    end = normalizedSource.length - "\n---".length;
+  }
   if (end === -1) {
     panic("Skill file missing frontmatter terminator");
   }
 
-  const frontmatter = parseSimpleFrontmatter(normalizedSource.slice(4, end));
-  if (
-    !frontmatter.name ||
-    frontmatter.name.trim().length === 0 ||
-    !frontmatter.description ||
-    frontmatter.description.trim().length === 0
-  ) {
-    panic("Skill file frontmatter must include name and description");
-  }
+  const frontmatter = parseFrontmatter(normalizedSource.slice(4, end));
 
   return {
     metadata: {
@@ -161,234 +156,80 @@ export const parseSkillFile = (
   };
 };
 
-const parseSimpleFrontmatter = (source: string): Frontmatter => {
-  const frontmatter: Frontmatter = {};
-  const lines = source.split("\n");
-  let parsingMetadata = false;
-  let index = 0;
-
-  while (index < lines.length) {
-    const line = lines[index];
-    index += 1;
-    if (line === undefined || line.trim().length === 0) {
-      continue;
-    }
-
-    if (parsingMetadata && /^\s+/u.test(line)) {
-      const metadataEntry = parseFrontmatterEntry(line.trim());
-      if (metadataEntry) {
-        frontmatter.metadata ??= {};
-        frontmatter.metadata[metadataEntry.key] = metadataEntry.value;
-      }
-      continue;
-    }
-
-    parsingMetadata = false;
-    const entry = splitFrontmatterEntry(line);
-    if (!entry) {
-      continue;
-    }
-    if (entry.key === "metadata") {
-      frontmatter.metadata ??= {};
-      parsingMetadata = true;
-      continue;
-    }
-    if (!isFrontmatterKey(entry.key)) {
-      continue;
-    }
-
-    const indicator = parseBlockScalarIndicator(entry.rawValue);
-    if (indicator) {
-      const block = readBlockScalar({ indicator, lines, startIndex: index });
-      index = block.nextIndex;
-      setFrontmatterValue({
-        frontmatter,
-        key: entry.key,
-        value: block.value,
-      });
-      continue;
-    }
-
-    setFrontmatterValue({
-      frontmatter,
-      key: entry.key,
-      value: stripYamlString(entry.rawValue),
-    });
+const parseFrontmatter = (source: string): Frontmatter => {
+  const parsed = parseYaml(source);
+  if (!isPlainRecord(parsed)) {
+    panic("Skill file frontmatter must be a YAML mapping");
   }
 
-  return frontmatter;
-};
-
-type BlockScalarIndicator = {
-  chomp: "clip" | "strip";
-  style: "folded" | "literal";
-};
-
-/** A bare block-scalar header (`>`, `>-`, `|`, `|-`, and the `+` keep
- *  forms), never inline text that merely starts with `>` or `|`. */
-const parseBlockScalarIndicator = (
-  rawValue: string,
-): BlockScalarIndicator | null => {
-  const match = /^(?<style>[|>])(?<chomp>[+-]?)$/u.exec(rawValue.trim());
-  if (!match?.groups) {
-    return null;
-  }
+  const name = readRequiredString(parsed, "name");
+  const description = readRequiredString(parsed, "description");
 
   return {
-    chomp: match.groups["chomp"] === "-" ? "strip" : "clip",
-    style: match.groups["style"] === ">" ? "folded" : "literal",
+    compatibility: readOptionalString(parsed, "compatibility"),
+    description,
+    license: readOptionalString(parsed, "license"),
+    metadata: readMetadata(parsed["metadata"]),
+    name,
+    version: readOptionalString(parsed, "version"),
   };
 };
 
-/**
- * Consume a top-level block scalar's indented body. Content lines are
- * those indented past column 0 (or blank); the first non-blank content
- * line sets the block indentation that is stripped from each line.
- * Folded joins lines with single spaces, literal with newlines; `strip`
- * chomping drops the trailing newline, `clip` keeps a single one.
- */
-const readBlockScalar = ({
-  indicator,
-  lines,
-  startIndex,
-}: {
-  indicator: BlockScalarIndicator;
-  lines: readonly string[];
-  startIndex: number;
-}): { nextIndex: number; value: string } => {
-  const contentLines: string[] = [];
-  let index = startIndex;
-  let blockIndent: number | null = null;
-
-  while (index < lines.length) {
-    const line = lines[index];
-    if (line === undefined) {
-      break;
-    }
-    if (line.trim().length === 0) {
-      contentLines.push("");
-      index += 1;
-      continue;
-    }
-    const indent = line.length - line.trimStart().length;
-    if (indent === 0) {
-      break;
-    }
-    blockIndent ??= indent;
-    contentLines.push(stripLeadingSpaces(line, blockIndent));
-    index += 1;
+const parseYaml = (source: string): unknown => {
+  try {
+    return Bun.YAML.parse(source);
+  } catch {
+    return panic("Skill file frontmatter must be valid YAML");
   }
-
-  while (contentLines.at(-1) === "") {
-    contentLines.pop();
-  }
-
-  const joined =
-    indicator.style === "folded"
-      ? foldBlockScalarLines(contentLines)
-      : contentLines.join("\n");
-  const value = indicator.chomp === "strip" ? joined : `${joined}\n`;
-  return { nextIndex: index, value };
 };
 
-const foldBlockScalarLines = (lines: readonly string[]): string => {
-  let value = "";
-  for (const [index, line] of lines.entries()) {
-    if (index > 0) {
-      const previous = lines[index - 1] ?? "";
-      const previousMoreIndented = previous.length > 0 && /^\s/u.test(previous);
-      const currentMoreIndented = line.length > 0 && /^\s/u.test(line);
-      if (line.length === 0 || previousMoreIndented || currentMoreIndented) {
-        value += "\n";
-      } else if (previous.length > 0) {
-        value += " ";
-      }
-    }
-    value += line;
+const isPlainRecord = (value: unknown): value is Record<string, unknown> => {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return false;
+  }
+
+  const prototype = Reflect.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+};
+
+const readRequiredString = (
+  frontmatter: Record<string, unknown>,
+  field: "description" | "name",
+): string => {
+  const value = readOptionalString(frontmatter, field);
+  if (value === undefined || value.trim().length === 0) {
+    panic("Skill file frontmatter must include name and description");
   }
   return value;
 };
 
-const stripLeadingSpaces = (line: string, max: number): string => {
-  let removed = 0;
-  while (removed < max && (line[removed] === " " || line[removed] === "\t")) {
-    removed += 1;
+const readOptionalString = (
+  frontmatter: Record<string, unknown>,
+  field: Exclude<keyof Frontmatter, "metadata">,
+): string | undefined => {
+  const value = frontmatter[field];
+  if (value === undefined || typeof value === "string") {
+    return value;
   }
-  return line.slice(removed);
+  return panic(`Skill file frontmatter ${field} must be a string`);
 };
 
-const parseFrontmatterEntry = (
-  line: string,
-): { key: string; value: string } | null => {
-  const entry = splitFrontmatterEntry(line);
-  if (!entry) {
-    return null;
+const readMetadata = (value: unknown): Record<string, string> | undefined => {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (!isPlainRecord(value)) {
+    panic("Skill file frontmatter metadata must be a string mapping");
   }
 
-  return { key: entry.key, value: stripYamlString(entry.rawValue) };
-};
-
-/**
- * Split `key: value` into the trimmed key and the raw (unstripped)
- * value. The raw value is kept so a block-scalar header (`>`, `|`, ...)
- * can be detected before quote-stripping would mangle it.
- */
-const splitFrontmatterEntry = (
-  line: string,
-): { key: string; rawValue: string } | null => {
-  const separatorIndex = line.indexOf(":");
-  if (separatorIndex === -1) {
-    return null;
+  const entries: [string, string][] = [];
+  for (const [key, metadataValue] of Object.entries(value)) {
+    if (typeof metadataValue !== "string") {
+      panic("Skill file frontmatter metadata values must be strings");
+    }
+    entries.push([key, metadataValue]);
   }
-
-  return {
-    key: line.slice(0, separatorIndex).trim(),
-    rawValue: line.slice(separatorIndex + 1),
-  };
-};
-
-const isFrontmatterKey = (key: string): key is keyof Frontmatter =>
-  key === "compatibility" ||
-  key === "description" ||
-  key === "license" ||
-  key === "name" ||
-  key === "version";
-
-const setFrontmatterValue = ({
-  frontmatter,
-  key,
-  value,
-}: {
-  frontmatter: Frontmatter;
-  key: keyof Frontmatter;
-  value: string;
-}) => {
-  switch (key) {
-    case "compatibility":
-      frontmatter.compatibility = value;
-      return;
-    case "description":
-      frontmatter.description = value;
-      return;
-    case "license":
-      frontmatter.license = value;
-      return;
-    case "name":
-      frontmatter.name = value;
-      return;
-    case "version":
-      frontmatter.version = value;
-      return;
-    case "metadata":
-      return;
-    default:
-      return;
-  }
-};
-
-const stripYamlString = (value: string): string => {
-  const trimmed = value.trim();
-  return trimmed.replace(/^["']|["']$/gu, "");
+  return Object.fromEntries(entries);
 };
 
 export const normalizeResourcePath = (resourcePath: string): string => {

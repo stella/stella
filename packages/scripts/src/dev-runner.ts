@@ -1439,6 +1439,8 @@ export const buildPersistentSteps = ({
     primary.push({
       cmd: [
         resolveCommandPath("bun"),
+        "--no-clear-screen",
+        "--no-env-file",
         "--preload",
         "./src/dev/register-mock-ai.ts",
         "--watch",

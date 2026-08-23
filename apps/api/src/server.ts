@@ -77,6 +77,7 @@ import { myTasksRoute } from "@/api/handlers/tasks/my-tasks-route";
 import { tasksRoute } from "@/api/handlers/tasks/routes";
 import { templatePacksRoute } from "@/api/handlers/template-packs/routes";
 import { templateRecipesRoute } from "@/api/handlers/template-recipes/routes";
+import { clearLookupPreviewCache } from "@/api/handlers/templates/lookup-preview-cache";
 import {
   templateCategoriesRoute,
   templatesRoute,
@@ -119,6 +120,7 @@ import { initFlowRunWorker } from "@/api/lib/flows/flow-run-worker";
 import { markScheduledJobsReady } from "@/api/lib/health/readiness";
 import { API_RATE_LIMITS } from "@/api/lib/limits";
 import { FORMATTING_LOCALE_HEADER } from "@/api/lib/locale";
+import { createMemoryPressureHandler } from "@/api/lib/memory-pressure";
 import { multipartFormParser } from "@/api/lib/multipart-form-parser";
 import {
   logger,
@@ -148,6 +150,7 @@ import { securityCanaryInterceptor } from "@/api/lib/security-canary";
 import { setSecurityHeaders } from "@/api/lib/security-headers";
 import { startSse, stopSse } from "@/api/lib/sse";
 import { initStyleSetPackageCleanupWorker } from "@/api/lib/style-set-package-cleanup-queue";
+import { clearByokAdapterCache } from "@/api/lib/tanstack-ai-models";
 import { isUploadRateLimitedPath } from "@/api/lib/upload-rate-limit";
 import { initWorkflowWorkers } from "@/api/lib/workflow-queue";
 
@@ -184,6 +187,24 @@ const getApiPort = () => {
   }
 
   return parsedPort;
+};
+
+const startMemoryPressureHandler = () => {
+  process.on(
+    "memoryPressure",
+    createMemoryPressureHandler({
+      caches: [
+        { clear: clearLookupPreviewCache },
+        { clear: clearByokAdapterCache },
+      ],
+      onEviction: ({ evictedEntries, level }) => {
+        logger.warn("runtime.memory_pressure", {
+          "cache.evicted_entries": evictedEntries,
+          "memory.pressure_level": level,
+        });
+      },
+    }),
+  );
 };
 
 const getRequestPath = (request: Request): string =>
@@ -715,6 +736,8 @@ const startS3RefreshLoop = () => {
 // schema mirror — must yield the fully constructed `api` without any of
 // these side effects (no DB, no Redis, no listen).
 const startServer = async (): Promise<void> => {
+  startMemoryPressureHandler();
+
   // Start the SSE keep-alive heartbeat and cross-instance Redis subscriber
   // first, before any awaited setup below, so its connection timing
   // matches the previous import-time behavior and completes well before

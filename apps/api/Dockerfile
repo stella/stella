@@ -47,6 +47,7 @@ COPY --from=pruner /app/out/full/ .
 # handler codegen (minified variable renames vs Sucrose). See elysiajs/elysia#1711.
 RUN bun build \
     --compile \
+    --no-compile-autoload-dotenv \
     --target bun \
     --outfile /app/server \
     apps/api/src/server.ts
@@ -129,6 +130,7 @@ RUN bun --filter @stll/legal-atlas-runner build
 # Compiled like the server and run by the verification stage below.
 RUN bun build \
     --compile \
+    --no-compile-autoload-dotenv \
     --target bun \
     --outfile /app/image-smoke \
     apps/api/src/scripts/image-smoke.ts
