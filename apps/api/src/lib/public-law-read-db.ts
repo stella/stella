@@ -5,6 +5,7 @@ import type { SQL as SqlFragment } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/bun-sql";
 
 import { databaseRelations } from "@/api/db/database-relations";
+import { stellaPublicLawReader } from "@/api/db/rls";
 import { rootDb } from "@/api/db/root";
 import type { Transaction } from "@/api/db/root";
 import { envBase } from "@/api/env-base";
@@ -108,7 +109,10 @@ export const publicLawDatabaseRolePermissionsSql = (): SqlFragment => {
         EXISTS (
           SELECT 1
           FROM pg_roles AS roles
-          WHERE roles.rolname <> current_user
+          WHERE roles.rolname NOT IN (
+              current_user,
+              ${stellaPublicLawReader.name}
+            )
             AND pg_has_role(current_user, roles.oid, 'SET')
         ) AS "canAssumeOtherRole",
         has_database_privilege(

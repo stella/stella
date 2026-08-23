@@ -1,4 +1,6 @@
 export const PUBLIC_LAW_SHARED_QUERY = {
+  caseLawAnalysis: "case-law.analysis",
+  caseLawBrowseFacets: "case-law.browse-facets",
   caseLawCorpusIndexRehydration: "case-law.corpus-index-rehydration",
   caseLawDocumentContext: "case-law.document-context",
   caseLawNonRedistributableSources: "case-law.non-redistributable-sources",

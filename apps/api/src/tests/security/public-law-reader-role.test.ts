@@ -26,9 +26,11 @@ import type {
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
 import { readNonRedistributableCaseLawSourceIdsQuery } from "@/api/lib/case-law/non-redistributable-sources";
+import { readDecisionAnalysis } from "@/api/lib/case-law/decision-analysis";
 import { getCollator } from "@/api/lib/collation";
 import { rehydrateCorpusIndexProviderCandidates } from "@/api/lib/legal-search/corpus-index-provider";
 import { readDocumentContextDecision } from "@/api/lib/legal-search/document-context";
+import { readPgFtsBrowseFacets } from "@/api/lib/legal-search/pg-fts-browse-facets";
 import type {
   LegislationReadDb,
   LegislationReadTransaction,
@@ -314,6 +316,36 @@ describe("public-law reader role", () => {
     expect(roleMember).toMatchObject({ canAssumeOtherRole: true });
   });
 
+  test("startup attestation accepts a login that can assume only the reader role", async () => {
+    let permissions: PublicLawDatabaseRolePermissions | undefined;
+    try {
+      await testDb.transaction(async (tx) => {
+        await tx.execute(sql`CREATE ROLE reader_attestation_login NOLOGIN`);
+        await tx.execute(
+          sql.raw(
+            `GRANT ${quoted(READER_ROLE)} TO reader_attestation_login`,
+          ),
+        );
+        await tx.execute(sql`SET LOCAL ROLE reader_attestation_login`);
+        const result = await tx.execute<PublicLawDatabaseRolePermissions>(
+          publicLawDatabaseRolePermissionsSql(),
+        );
+        permissions = result.rows.at(0);
+        tx.rollback();
+      });
+    } catch (error) {
+      if (!(error instanceof TransactionRollbackError)) {
+        throw error;
+      }
+    }
+
+    expect(permissions).toMatchObject({
+      canAssumeOtherRole: false,
+      canReadPublicLaw: true,
+      canReadOtherData: false,
+    });
+  });
+
   test("SET ROLE can SELECT every surface and rejects an operational column", async () => {
     await testDb.transaction(async (tx) => {
       await tx.execute(sql.raw(`SET LOCAL ROLE ${quoted(READER_ROLE)}`));
@@ -410,6 +442,12 @@ describe("public-law reader role", () => {
     const exercised = new Set<string>();
 
     await caseLawDb(async (tx) => {
+      await readDecisionAnalysis(tx, decisionId);
+      exercised.add(readDecisionAnalysis.publicLawSharedQuery);
+
+      await readPgFtsBrowseFacets(tx, { excludedSourceIds: [], limit: 10 });
+      exercised.add(readPgFtsBrowseFacets.publicLawSharedQuery);
+
       await readDocumentContextDecision(tx, decisionId);
       exercised.add(readDocumentContextDecision.publicLawSharedQuery);
 

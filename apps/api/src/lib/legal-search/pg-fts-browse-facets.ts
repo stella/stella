@@ -3,7 +3,10 @@ import { and, desc, eq, isNotNull, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
-import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
+import {
+  caseLawPublicReadDb,
+  type CaseLawPublicReadTransaction,
+} from "@/api/lib/case-law-public-read-db";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
 import { LegalBrowseFacetsError } from "@/api/lib/legal-search/browse-facets";
 import type {
@@ -11,6 +14,10 @@ import type {
   LegalBrowseFacetsQuery,
 } from "@/api/lib/legal-search/types";
 import type { FacetBucket } from "@/api/lib/search/types";
+import {
+  definePublicLawSharedQuery,
+  PUBLIC_LAW_SHARED_QUERY,
+} from "@/api/lib/public-law-shared-query";
 
 /**
  * Browse-page facets for a deployment without a corpus index: three grouped
@@ -26,75 +33,76 @@ const toFacetBuckets = (
   rows: readonly { count: number; value: string }[],
 ): FacetBucket[] => rows.map((row) => ({ count: row.count, value: row.value }));
 
-const pgFtsBrowseFacetsUnsafe = async (
-  query: LegalBrowseFacetsQuery,
-): Promise<LegalBrowseFacets> => {
-  const scope: SQL[] = [redistributableCaseLawSource];
-  if (query.jurisdiction) {
-    scope.push(eq(caseLawDecisions.country, query.jurisdiction));
-  }
+export const readPgFtsBrowseFacets = definePublicLawSharedQuery(
+  PUBLIC_LAW_SHARED_QUERY.caseLawBrowseFacets,
+  async (
+    tx: CaseLawPublicReadTransaction,
+    query: LegalBrowseFacetsQuery,
+  ): Promise<LegalBrowseFacets> => {
+    const scope: SQL[] = [redistributableCaseLawSource];
+    if (query.jurisdiction) {
+      scope.push(eq(caseLawDecisions.country, query.jurisdiction));
+    }
 
-  const [countryRows, courtRows, yearRows] = await caseLawPublicReadDb(
-    async (tx) => {
-      const countries = await tx
-        .select({
-          value: caseLawDecisions.country,
-          count: sql<number>`count(*)::int`,
-        })
-        .from(caseLawDecisions)
-        .innerJoin(
-          caseLawSources,
-          eq(caseLawSources.id, caseLawDecisions.sourceId),
-        )
-        .where(and(...scope))
-        .groupBy(caseLawDecisions.country)
-        .orderBy(desc(sql`count(*)`), desc(caseLawDecisions.country))
-        .limit(query.limit);
+    const countryRows = await tx
+      .select({
+        value: caseLawDecisions.country,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(caseLawDecisions)
+      .innerJoin(
+        caseLawSources,
+        eq(caseLawSources.id, caseLawDecisions.sourceId),
+      )
+      .where(and(...scope))
+      .groupBy(caseLawDecisions.country)
+      .orderBy(desc(sql`count(*)`), desc(caseLawDecisions.country))
+      .limit(query.limit);
 
-      const courts = await tx
-        .select({
-          value: caseLawDecisions.court,
-          count: sql<number>`count(*)::int`,
-        })
-        .from(caseLawDecisions)
-        .innerJoin(
-          caseLawSources,
-          eq(caseLawSources.id, caseLawDecisions.sourceId),
-        )
-        .where(and(...scope))
-        .groupBy(caseLawDecisions.court)
-        .orderBy(desc(sql`count(*)`), desc(caseLawDecisions.court))
-        .limit(query.limit);
+    const courtRows = await tx
+      .select({
+        value: caseLawDecisions.court,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(caseLawDecisions)
+      .innerJoin(
+        caseLawSources,
+        eq(caseLawSources.id, caseLawDecisions.sourceId),
+      )
+      .where(and(...scope))
+      .groupBy(caseLawDecisions.court)
+      .orderBy(desc(sql`count(*)`), desc(caseLawDecisions.court))
+      .limit(query.limit);
 
-      const years = await tx
-        .select({
-          value: decisionYear,
-          count: sql<number>`count(*)::int`,
-        })
-        .from(caseLawDecisions)
-        .innerJoin(
-          caseLawSources,
-          eq(caseLawSources.id, caseLawDecisions.sourceId),
-        )
-        .where(and(isNotNull(caseLawDecisions.decisionDate), ...scope))
-        .groupBy(decisionYear)
-        .orderBy(desc(decisionYear))
-        .limit(query.limit);
+    const yearRows = await tx
+      .select({
+        value: decisionYear,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(caseLawDecisions)
+      .innerJoin(
+        caseLawSources,
+        eq(caseLawSources.id, caseLawDecisions.sourceId),
+      )
+      .where(and(isNotNull(caseLawDecisions.decisionDate), ...scope))
+      .groupBy(decisionYear)
+      .orderBy(desc(decisionYear))
+      .limit(query.limit);
 
-      return [countries, courts, years] as const;
-    },
-  );
-
-  return {
-    country: toFacetBuckets(countryRows),
-    court: toFacetBuckets(courtRows),
-    year: toFacetBuckets(yearRows),
-  };
-};
+    return {
+      country: toFacetBuckets(countryRows),
+      court: toFacetBuckets(courtRows),
+      year: toFacetBuckets(yearRows),
+    };
+  },
+);
 
 export const pgFtsBrowseFacets = async (query: LegalBrowseFacetsQuery) =>
   await Result.tryPromise({
-    try: async () => await pgFtsBrowseFacetsUnsafe(query),
+    try: async () =>
+      await caseLawPublicReadDb(
+        async (tx) => await readPgFtsBrowseFacets(tx, query),
+      ),
     catch: (cause) =>
       new LegalBrowseFacetsError({
         message:
