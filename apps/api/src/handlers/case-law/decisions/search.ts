@@ -51,6 +51,7 @@ import {
   blendStableCitationAuthority,
   stableBlendUpperBound,
 } from "@/api/lib/legal-search/rerank";
+import type { ScoredCandidate } from "@/api/lib/legal-search/rerank";
 import { LIMITS } from "@/api/lib/limits";
 import { decodeCursor, encodeCursor } from "@/api/lib/search/cursor";
 import {
@@ -480,6 +481,114 @@ const extractCorpusSnippet = (
   return raw.replaceAll("<b>", "<mark>").replaceAll("</b>", "</mark>");
 };
 
+type RehydrateCaseLawCandidatesOptions = {
+  body: SearchDecisionsBody;
+  candidates: readonly ScoredCandidate[];
+  caseLawDb: CaseLawPublicReadDb;
+  generation: string;
+};
+
+/**
+ * The PostgreSQL half of corpus-index search. Keeping it independently
+ * callable lets the restricted-role census execute the exact production
+ * projection without needing a live search engine.
+ */
+export const rehydrateCaseLawCandidates = async ({
+  body,
+  candidates,
+  caseLawDb,
+  generation,
+}: RehydrateCaseLawCandidatesOptions) => {
+  const ids = candidates.map((candidate) =>
+    toSafeId<"caseLawDecision">(candidate.id),
+  );
+  // Reapply the request filters against the current rows: a stale
+  // corpus hit (metadata changed, async re-index/delete pending) must
+  // not satisfy filters it no longer matches.
+  const rehydrationFilters: SQL[] = [
+    redistributableCaseLawSource,
+    // Prefer the generation-specific projection state; generations that
+    // predate durable rebuild checkpoints fall back to the serving marker.
+    // Both paths reject a scrubbed or pending row, so a stale physical
+    // copy cannot serve outdated or erased snippets.
+    currentCaseLawCorpusProjection(generation),
+  ];
+  if (body.court) {
+    rehydrationFilters.push(eq(caseLawDecisions.court, body.court));
+  }
+  if (body.country) {
+    rehydrationFilters.push(eq(caseLawDecisions.country, body.country));
+  }
+  if (body.dateFrom) {
+    rehydrationFilters.push(
+      sql`${caseLawDecisions.decisionDate} >= ${body.dateFrom}`,
+    );
+  }
+  if (body.dateTo) {
+    rehydrationFilters.push(
+      sql`${caseLawDecisions.decisionDate} <= ${body.dateTo}`,
+    );
+  }
+  if (body.decisionType) {
+    rehydrationFilters.push(
+      eq(caseLawDecisions.decisionType, body.decisionType),
+    );
+  }
+  if (body.sourceId) {
+    rehydrationFilters.push(eq(caseLawDecisions.sourceId, body.sourceId));
+  }
+  if (body.language) {
+    rehydrationFilters.push(eq(caseLawDecisions.language, body.language));
+  }
+  const rows =
+    ids.length === 0
+      ? []
+      : await caseLawDb((tx) =>
+          tx
+            .select({
+              id: caseLawDecisions.id,
+              caseNumber: caseLawDecisions.caseNumber,
+              slug: caseLawDecisions.slug,
+              ecli: caseLawDecisions.ecli,
+              court: caseLawDecisions.court,
+              country: caseLawDecisions.country,
+              language: caseLawDecisions.language,
+              languageGroupKey: caseLawDecisions.languageGroupKey,
+              decisionDate: caseLawDecisions.decisionDate,
+              decisionType: caseLawDecisions.decisionType,
+              sourceUrl: caseLawDecisions.sourceUrl,
+              citationCount: caseLawDecisions.citationCount,
+              citationAuthority: caseLawDecisions.citationAuthority,
+              createdAt: caseLawDecisions.createdAt,
+            })
+            .from(caseLawDecisions)
+            .leftJoin(
+              caseLawCorpusIndexProjections,
+              caseLawCorpusProjectionJoin(generation),
+            )
+            .innerJoin(
+              caseLawSources,
+              eq(caseLawSources.id, caseLawDecisions.sourceId),
+            )
+            .where(
+              and(inArray(caseLawDecisions.id, ids), ...rehydrationFilters),
+            ),
+        );
+
+  const byId = new Map(rows.map((row) => [String(row.id), row]));
+  const authorityById = new Map(
+    rows.map((row) => [String(row.id), row.citationAuthority]),
+  );
+
+  return {
+    context: { byId },
+    ranked: blendStableCitationAuthority({
+      candidates: candidates.filter((candidate) => byId.has(candidate.id)),
+      authorityById,
+    }),
+  };
+};
+
 const searchCorpusIndexDecisions = async (
   body: SearchDecisionsBody,
   caseLawDb: CaseLawPublicReadDb,
@@ -526,96 +635,13 @@ const searchCorpusIndexDecisions = async (
     // no unseen candidate could out-blend the page cursor. Saturated
     // authority is bounded by 1, so the bound reads nothing from the corpus.
     unseenScoreUpperBound: stableBlendUpperBound,
-    rankCandidates: async (candidates) => {
-      const ids = candidates.map((candidate) =>
-        toSafeId<"caseLawDecision">(candidate.id),
-      );
-      // Reapply the request filters against the current rows: a stale
-      // corpus hit (metadata changed, async re-index/delete pending) must
-      // not satisfy filters it no longer matches.
-      const rehydrationFilters: SQL[] = [
-        redistributableCaseLawSource,
-        // Prefer the generation-specific projection state; generations that
-        // predate durable rebuild checkpoints fall back to the serving marker.
-        // Both paths reject a scrubbed or pending row, so a stale physical
-        // copy cannot serve outdated or erased snippets.
-        currentCaseLawCorpusProjection(generation),
-      ];
-      if (body.court) {
-        rehydrationFilters.push(eq(caseLawDecisions.court, body.court));
-      }
-      if (body.country) {
-        rehydrationFilters.push(eq(caseLawDecisions.country, body.country));
-      }
-      if (body.dateFrom) {
-        rehydrationFilters.push(
-          sql`${caseLawDecisions.decisionDate} >= ${body.dateFrom}`,
-        );
-      }
-      if (body.dateTo) {
-        rehydrationFilters.push(
-          sql`${caseLawDecisions.decisionDate} <= ${body.dateTo}`,
-        );
-      }
-      if (body.decisionType) {
-        rehydrationFilters.push(
-          eq(caseLawDecisions.decisionType, body.decisionType),
-        );
-      }
-      if (body.sourceId) {
-        rehydrationFilters.push(eq(caseLawDecisions.sourceId, body.sourceId));
-      }
-      if (body.language) {
-        rehydrationFilters.push(eq(caseLawDecisions.language, body.language));
-      }
-      const rows =
-        ids.length === 0
-          ? []
-          : await caseLawDb((tx) =>
-              tx
-                .select({
-                  id: caseLawDecisions.id,
-                  caseNumber: caseLawDecisions.caseNumber,
-                  slug: caseLawDecisions.slug,
-                  ecli: caseLawDecisions.ecli,
-                  court: caseLawDecisions.court,
-                  country: caseLawDecisions.country,
-                  language: caseLawDecisions.language,
-                  languageGroupKey: caseLawDecisions.languageGroupKey,
-                  decisionDate: caseLawDecisions.decisionDate,
-                  decisionType: caseLawDecisions.decisionType,
-                  sourceUrl: caseLawDecisions.sourceUrl,
-                  citationCount: caseLawDecisions.citationCount,
-                  citationAuthority: caseLawDecisions.citationAuthority,
-                  createdAt: caseLawDecisions.createdAt,
-                })
-                .from(caseLawDecisions)
-                .leftJoin(
-                  caseLawCorpusIndexProjections,
-                  caseLawCorpusProjectionJoin(generation),
-                )
-                .innerJoin(
-                  caseLawSources,
-                  eq(caseLawSources.id, caseLawDecisions.sourceId),
-                )
-                .where(
-                  and(inArray(caseLawDecisions.id, ids), ...rehydrationFilters),
-                ),
-            );
-
-      const byId = new Map(rows.map((row) => [String(row.id), row]));
-      const authorityById = new Map(
-        rows.map((row) => [String(row.id), row.citationAuthority]),
-      );
-
-      return {
-        context: { byId },
-        ranked: blendStableCitationAuthority({
-          candidates: candidates.filter((candidate) => byId.has(candidate.id)),
-          authorityById,
-        }),
-      };
-    },
+    rankCandidates: async (candidates) =>
+      await rehydrateCaseLawCandidates({
+        body,
+        candidates,
+        caseLawDb,
+        generation,
+      }),
   });
 
   const {

@@ -130,9 +130,11 @@ export const publicLawDatabaseRolePermissionsSql = (): SqlFragment => {
           INNER JOIN pg_namespace AS schemas
             ON schemas.oid = tables.relnamespace
           LEFT JOIN expected
-            ON expected.relation = tables.relname
+            ON schemas.nspname = 'public'
+            AND expected.relation = tables.relname
             AND expected.column_name = columns.attname
-          WHERE schemas.nspname = 'public'
+          WHERE schemas.nspname <> 'information_schema'
+            AND schemas.nspname !~ '^pg_'
             AND tables.relkind IN ('r', 'p', 'v', 'm', 'f')
             AND columns.attnum > 0
             AND NOT columns.attisdropped
@@ -146,17 +148,38 @@ export const publicLawDatabaseRolePermissionsSql = (): SqlFragment => {
         ) AS "canReadOtherData",
         has_schema_privilege(current_user, 'public', 'USAGE')
           AS "canUseSchema",
-        has_schema_privilege(current_user, 'public', 'CREATE') OR EXISTS (
+        EXISTS (
+          SELECT 1
+          FROM pg_namespace AS schemas
+          WHERE schemas.nspname <> 'information_schema'
+            AND schemas.nspname !~ '^pg_'
+            AND has_schema_privilege(current_user, schemas.oid, 'CREATE')
+        ) OR EXISTS (
           SELECT 1
           FROM pg_class AS tables
           INNER JOIN pg_namespace AS schemas
             ON schemas.oid = tables.relnamespace
-          WHERE schemas.nspname = 'public'
+          WHERE schemas.nspname <> 'information_schema'
+            AND schemas.nspname !~ '^pg_'
             AND tables.relkind IN ('r', 'p', 'v', 'm', 'f')
-            AND has_table_privilege(
-              current_user,
-              tables.oid,
-              'INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER'
+            AND (
+              has_table_privilege(
+                current_user,
+                tables.oid,
+                'INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER'
+              ) OR EXISTS (
+                SELECT 1
+                FROM pg_attribute AS columns
+                WHERE columns.attrelid = tables.oid
+                  AND columns.attnum > 0
+                  AND NOT columns.attisdropped
+                  AND has_column_privilege(
+                    current_user,
+                    columns.attrelid,
+                    columns.attnum,
+                    'INSERT,UPDATE,REFERENCES'
+                  )
+              )
             )
         ) AS "canWritePublicLaw"
     `;

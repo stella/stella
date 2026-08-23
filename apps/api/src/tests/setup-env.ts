@@ -49,6 +49,7 @@ delete process.env["LEGAL_SEARCH_PROVIDER"];
 // through the production invariant. Unit tests stub the index transport and
 // require that endpoint only to build request URLs, so keep both sides local.
 delete process.env["PUBLIC_LAW_DATABASE_URL"];
+delete process.env["PUBLIC_LAW_DATABASE_POOL_MAX"];
 delete process.env["CASE_LAW_DATABASE_URL"];
 delete process.env["CASE_LAW_DATABASE_POOL_MAX"];
 

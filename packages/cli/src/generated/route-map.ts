@@ -18128,7 +18128,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "legislation", "get"],
                 capabilityId: "legislation.get",
                 description:
-                  "Read one legislation document from the stella corpus by id: its ELI, title, country, language, document type, status, effective and version-validity dates, source links, metadata, full text, and parsed structure. Only documents from sources cleared for redistribution are returned; anything else reads as not found.",
+                  "Read one legislation document from the stella corpus by id: its ELI, title, country, language, document type, status, effective and version-validity dates, source links, full text, and parsed structure. Only documents from sources cleared for redistribution are returned; anything else reads as not found.",
                 access: "read",
                 flags: [
                   {

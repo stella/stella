@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { sql } from "drizzle-orm";
+import { sql, TransactionRollbackError } from "drizzle-orm";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import nodePath from "node:path";
 
@@ -8,9 +8,19 @@ import {
   stellaCaseLawReader,
   stellaPublicLawReader,
 } from "@/api/db/rls";
+import { listDecisionsHandler } from "@/api/handlers/case-law/decisions/list";
+import { rehydrateCaseLawCandidates } from "@/api/handlers/case-law/decisions/search";
+import {
+  listSitemapShardDecisionsHandler,
+  listSitemapShardsHandler,
+} from "@/api/handlers/case-law/decisions/sitemap";
 import { rehydrateLegislationCandidates } from "@/api/handlers/legislation/search";
 import { createSafeId } from "@/api/lib/branded-types";
 import { getCollator } from "@/api/lib/collation";
+import type {
+  CaseLawPublicReadDb,
+  CaseLawPublicReadTransaction,
+} from "@/api/lib/case-law-public-read-db";
 import type {
   LegislationReadDb,
   LegislationReadTransaction,
@@ -27,7 +37,10 @@ import {
   ROLLOUT_CASE_LAW_WHOLE_RELATIONS,
 } from "@/api/lib/public-law-relations";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
-import type { TestDatabase } from "@/api/tests/security/test-utils";
+import type {
+  TestDatabase,
+  TestDatabaseTransaction,
+} from "@/api/tests/security/test-utils";
 
 const DRIZZLE_DIR = nodePath.resolve(import.meta.dir, "../../../drizzle");
 const READER_ROLE = stellaPublicLawReader.name;
@@ -70,6 +83,47 @@ const expectedQualifiedColumns = Object.entries(PUBLIC_LAW_COLUMNS_BY_RELATION)
   .toSorted();
 
 let testDb: TestDatabase;
+
+const rolePermissionsAfter = async (
+  setup: (tx: TestDatabaseTransaction) => Promise<void>,
+): Promise<PublicLawDatabaseRolePermissions | undefined> => {
+  let permissions: PublicLawDatabaseRolePermissions | undefined;
+  try {
+    await testDb.transaction(async (tx) => {
+      await setup(tx);
+      await tx.execute(sql.raw(`SET LOCAL ROLE ${quoted(READER_ROLE)}`));
+      const result = await tx.execute<PublicLawDatabaseRolePermissions>(
+        publicLawDatabaseRolePermissionsSql(),
+      );
+      permissions = result.rows.at(0);
+      // oxlint-disable-next-line node/callback-return -- rollback removes the temporary privilege probe after its result is captured
+      tx.rollback();
+    });
+  } catch (error) {
+    if (!(error instanceof TransactionRollbackError)) {
+      throw error;
+    }
+  }
+  return permissions;
+};
+
+const caseLawReaderDb = (): CaseLawPublicReadDb => {
+  const readDb = async <T>(
+    fn: (tx: CaseLawPublicReadTransaction) => Promise<T>,
+  ): Promise<T> =>
+    await testDb.transaction(async (tx) => {
+      await tx.execute(sql.raw(`SET LOCAL ROLE ${quoted(READER_ROLE)}`));
+      // SAFETY: the role transaction supplies the exact select/execute/query
+      // surface exposed by the production public-law read boundary.
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- role-scoped production query census
+      return await fn(tx as unknown as CaseLawPublicReadTransaction);
+    });
+
+  // SAFETY: the symbol is a nominal marker; query behavior is established by
+  // the role-scoped implementation above.
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test-only branded read handle
+  return readDb as unknown as CaseLawPublicReadDb;
+};
 
 beforeAll(
   async () => {
@@ -170,6 +224,35 @@ describe("public-law reader role", () => {
     });
   });
 
+  test("startup attestation rejects column writes and reads in other schemas", async () => {
+    const columnWriter = await rolePermissionsAfter(async (tx) => {
+      await tx.execute(
+        sql.raw(
+          `GRANT UPDATE (metadata) ON TABLE case_law_decisions TO ${quoted(READER_ROLE)}`,
+        ),
+      );
+    });
+    expect(columnWriter).toMatchObject({ canWritePublicLaw: true });
+
+    const crossSchemaReader = await rolePermissionsAfter(async (tx) => {
+      await tx.execute(sql`CREATE SCHEMA reader_attestation_probe`);
+      await tx.execute(
+        sql`CREATE TABLE reader_attestation_probe.private_data (id integer)`,
+      );
+      await tx.execute(
+        sql.raw(
+          `GRANT USAGE ON SCHEMA reader_attestation_probe TO ${quoted(READER_ROLE)}`,
+        ),
+      );
+      await tx.execute(
+        sql.raw(
+          `GRANT SELECT (id) ON TABLE reader_attestation_probe.private_data TO ${quoted(READER_ROLE)}`,
+        ),
+      );
+    });
+    expect(crossSchemaReader).toMatchObject({ canReadOtherData: true });
+  });
+
   test("SET ROLE can SELECT every surface and rejects an operational column", async () => {
     await testDb.transaction(async (tx) => {
       await tx.execute(sql.raw(`SET LOCAL ROLE ${quoted(READER_ROLE)}`));
@@ -226,6 +309,30 @@ describe("public-law reader role", () => {
     });
 
     expect(result.ranked).toEqual([]);
+  });
+
+  test("executes list, sitemap, and search projections as the reader role", async () => {
+    const caseLawDb = caseLawReaderDb();
+
+    const list = await listDecisionsHandler({}, caseLawDb);
+    expect(list).toMatchObject({ items: [] });
+
+    const shards = await listSitemapShardsHandler(caseLawDb);
+    expect(shards).toMatchObject({ items: [] });
+
+    const shard = await listSitemapShardDecisionsHandler(
+      { country: "cz", year: "2026", month: "08" },
+      caseLawDb,
+    );
+    expect(shard).toMatchObject({ items: [] });
+
+    const search = await rehydrateCaseLawCandidates({
+      body: { query: "reader role census" },
+      candidates: [{ id: createSafeId<"caseLawDecision">(), score: 1 }],
+      caseLawDb,
+      generation: "case_law_v3",
+    });
+    expect(search.ranked).toEqual([]);
   });
 
   test("preserves the v0.7.22 reader during the rollout window", async () => {
@@ -313,6 +420,8 @@ const identifiers = (list: string): string[] =>
 
 const STATEMENT_PATTERN =
   /^(?<verb>GRANT|REVOKE) SELECT(?: \((?<columns>[^)]+)\))? ON TABLE (?<tables>.+?) (?:TO|FROM) "?(?<role>stella_(?:caselaw_reader|public_law_reader))"?$/iu;
+const READER_SELECT_TARGET_PATTERN =
+  /^(?:GRANT|REVOKE) SELECT\b.*\b(?:TO|FROM) "?stella_(?:caselaw_reader|public_law_reader)"?(?:\s|$)/iu;
 
 const foldReaderSelectGrants = (
   sqlSources: readonly string[],
@@ -327,6 +436,9 @@ const foldReaderSelectGrants = (
       const statement = raw.replaceAll(/\s+/gu, " ").trim();
       const match = STATEMENT_PATTERN.exec(statement);
       if (match?.groups === undefined) {
+        if (READER_SELECT_TARGET_PATTERN.test(statement)) {
+          throw new Error(`Unsupported reader SELECT statement: ${statement}`);
+        }
         continue;
       }
       if (match.groups["role"] !== readerRole) {
@@ -427,5 +539,16 @@ describe("public-law reader migrations", () => {
 
     expect([...grants.tables].toSorted()).toEqual(["a"]);
     expect(sortedColumns(grants)).toEqual({ c: ["x"] });
+  });
+
+  test("rejects reader SELECT syntax outside the audited grammar", () => {
+    expect(() =>
+      foldReaderSelectGrants(
+        [
+          "GRANT SELECT ON ALL TABLES IN SCHEMA public TO stella_public_law_reader;",
+        ],
+        READER_ROLE,
+      ),
+    ).toThrow("Unsupported reader SELECT statement");
   });
 });
