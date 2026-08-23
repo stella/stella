@@ -1041,11 +1041,41 @@ export const parseCompletedToolCallArguments = (
   }
 };
 
+const isOpaquePersistedChatToolCallPart = (
+  value: unknown,
+): value is ExternalMcpChatToolCallPart => {
+  if (
+    typeof value !== "object" ||
+    value === null ||
+    !("type" in value) ||
+    value.type !== "tool-call" ||
+    !("id" in value) ||
+    typeof value.id !== "string" ||
+    !("name" in value) ||
+    typeof value.name !== "string" ||
+    !("arguments" in value) ||
+    typeof value.arguments !== "string" ||
+    !("state" in value) ||
+    typeof value.state !== "string" ||
+    !isChatToolCallState(value.state)
+  ) {
+    return false;
+  }
+  // TanStack's typed tool union has no opaque branch. Its external-tool branch
+  // is the existing generic-payload branch, so an otherwise valid historical
+  // name enters the UI through that shape. Runtime external-tool behavior still
+  // requires the `mcp__` prefix and therefore cannot be activated by this guard.
+  return !isChatToolName(value.name) && !isExternalMcpToolName(value.name);
+};
+
 const withParsedToolCallInput = (part: ChatPart): ChatUIPart => {
   if (part.type !== "tool-call") {
     return part;
   }
   if (isExternalMcpChatToolCallPart(part)) {
+    return part;
+  }
+  if (isOpaquePersistedChatToolCallPart(part)) {
     return part;
   }
   if (part.input !== undefined && isRegisteredToolCallWithInput(part)) {
@@ -1056,7 +1086,7 @@ const withParsedToolCallInput = (part: ChatPart): ChatUIPart => {
     if (isRegisteredToolCallWithInput(part)) {
       return part;
     }
-    return panic("Unhandled persisted chat tool name");
+    return panic("Malformed persisted chat tool call");
   }
   const { input: _input, ...partWithoutInput } = part;
   const candidate = { ...partWithoutInput, input: parsedInput };
@@ -1066,7 +1096,7 @@ const withParsedToolCallInput = (part: ChatPart): ChatUIPart => {
   if (isRegisteredToolCallWithInput(part)) {
     return part;
   }
-  return panic("Unhandled persisted chat tool name");
+  return panic("Malformed persisted chat tool call");
 };
 
 const isRegisteredToolCallWithInput = (
@@ -1100,6 +1130,7 @@ const isChatUIMessage = (
     (part) =>
       part.type !== "tool-call" ||
       isExternalMcpChatToolCallPart(part) ||
+      isOpaquePersistedChatToolCallPart(part) ||
       isRegisteredToolCallWithInput(part),
   );
 

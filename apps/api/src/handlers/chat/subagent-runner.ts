@@ -224,7 +224,7 @@ export const runSubagent = async (
 
   let usage: TokenUsage | undefined;
   for await (const chunk of stream) {
-    if (chunk.type === EventType.RUN_FINISHED && chunk.usage) {
+    if (chunk.type === EventType.RUN_FINISHED) {
       usage = tokenUsageFromRunFinishedChunk(chunk);
     }
     processor.processChunk(chunk);

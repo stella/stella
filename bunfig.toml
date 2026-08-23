@@ -30,6 +30,7 @@ minimumReleaseAgeExcludes = [
   "@tanstack/ai-mistral", # quarantine-expires: 2026-08-27T06:54:24.104Z
   "@tanstack/ai-openai", # quarantine-expires: 2026-08-27T06:54:25.178Z
   "@tanstack/ai-openrouter", # quarantine-expires: 2026-08-27T06:54:24.801Z
+  "@tanstack/ai-persistence", # quarantine-expires: 2026-08-27T06:54:27.038Z
   "@tanstack/ai-react", # quarantine-expires: 2026-08-27T06:54:28.211Z
   "@tanstack/ai-sandbox", # quarantine-expires: 2026-08-27T06:54:31.373Z
   "@tanstack/openai-base", # quarantine-expires: 2026-08-27T06:54:38.323Z

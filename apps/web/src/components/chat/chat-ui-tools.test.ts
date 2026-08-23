@@ -1319,6 +1319,23 @@ describe("withParsedToolCallInputs", () => {
     // downstream memoization is not invalidated.
     expect(Object.is(result[0], messages[0])).toBe(true);
   });
+
+  test("preserves an unknown persisted tool call as an opaque part", () => {
+    const part = {
+      arguments: JSON.stringify({ query: "historical query" }),
+      id: "tool-call-1",
+      name: "ask-user",
+      state: "complete",
+      type: "tool-call",
+    } satisfies ChatPart;
+    // The server persistence boundary accepts arbitrary historical tool names,
+    // while the current generated client union contains registered names only.
+    expect(Reflect.set(part, "name", "retired-provider-tool")).toBe(true);
+
+    const [message] = withParsedToolCallInputs(argumentsOnlyMessages(part));
+
+    expect(message?.parts[0]).toBe(part);
+  });
 });
 
 describe("getUserMessageHtmlHistory", () => {

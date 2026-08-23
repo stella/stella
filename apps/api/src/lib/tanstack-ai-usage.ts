@@ -16,11 +16,11 @@ const nonEmptyDetails = <T extends object>(details: T): T | undefined =>
 export const tokenUsageFromRunFinishedChunk = (
   chunk: RunFinishedChunk,
 ): TokenUsage | undefined => {
-  if (!Array.isArray(chunk.usage)) {
+  if (chunk.usage !== undefined && !Array.isArray(chunk.usage)) {
     return chunk.usage;
   }
 
-  const spec = chunk.usage.at(0);
+  const spec = chunk.usage?.at(0);
   const leftover = tanstackMetadata(chunk)?.usage;
   if (spec === undefined && leftover === undefined) {
     return undefined;
