@@ -18,6 +18,7 @@ import {
   CENSUS_CYCLE_INTERVAL,
   CENSUS_DISPOSITION,
   CENSUS_TOLERANCE,
+  CaseLawCorpusIndexCountNotReadyError,
   censusIndex,
   createCaseLawCensus,
   reportIndexCensus,
@@ -83,19 +84,16 @@ const engineHolding = (numHits: number, ok = true): void => {
 };
 
 /**
- * A database whose only answer is the count the census asks for. Every
- * aggregate the module runs returns the same single row, which is enough
- * because the census takes exactly one count per side.
+ * A database whose only answer is the maintained count the census asks for.
+ * The lookup returns one row; the engine supplies the other side.
  */
 const databaseHolding = (
   marked: number,
   jurisdictions?: string[],
+  countStatus = "complete",
 ): ScopedDb => {
   const handle = async (callback: (tx: Transaction) => Promise<unknown>) => {
-    const rows =
-      jurisdictions === undefined
-        ? [{ marked }]
-        : jurisdictions.map((country) => ({ country, marked }));
+    let rows: Record<string, unknown>[] = [];
     const chain = {
       from: () => chain,
       leftJoin: () => chain,
@@ -103,8 +101,17 @@ const databaseHolding = (
       orderBy: () => chain,
       where: () => rows,
     };
-    const tx = { select: () => chain, selectDistinct: () => chain };
-    // SAFETY: the census only ever builds the two aggregate chains above.
+    const tx = {
+      select: (selection: Record<string, unknown>) => {
+        rows = "status" in selection ? [{ marked, status: countStatus }] : [];
+        return chain;
+      },
+      selectDistinct: () => {
+        rows = (jurisdictions ?? []).map((country) => ({ country }));
+        return chain;
+      },
+    };
+    // SAFETY: the census only builds the two inert query chains above.
     // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- inert query-builder double
     return await callback(tx as unknown as Transaction);
   };
@@ -191,6 +198,22 @@ describe("index census", () => {
     });
 
     expect(census.isErr()).toBe(true);
+  });
+
+  test("a partially seeded exact count is unavailable, never zero", async () => {
+    engineHolding(0);
+
+    const rejection: unknown = await censusIndex({
+      scopedDb: databaseHolding(10_000, undefined, "running"),
+      generation: GENERATION,
+      indexId: INDEX_ID,
+    }).then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+    expect(rejection).toBeInstanceOf(CaseLawCorpusIndexCountNotReadyError);
+    expect(countedIndexIds).toEqual([]);
   });
 });
 
@@ -318,9 +341,8 @@ describe("census reporting", () => {
       await census.step();
     }
 
-    // Two aggregates per census against a corpus this size is real query
-    // budget; paying it on every backfill batch would answer the same
-    // slow-moving question over and over.
+    // The engine aggregate is real query budget; paying it on every backfill
+    // batch would answer the same slow-moving question over and over.
     expect(warn).not.toHaveBeenCalled();
   });
 
