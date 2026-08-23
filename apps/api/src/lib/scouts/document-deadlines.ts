@@ -1,7 +1,6 @@
 import { SIGNAL_KIND, SUGGESTION_KIND } from "@stll/api-contract/signals";
 
 import { rootDb } from "@/api/db/root";
-import { env } from "@/api/env";
 import { resolveCaching } from "@/api/lib/ai-config";
 import { loadOrgAIConfig } from "@/api/lib/ai-config-loader";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
@@ -25,9 +24,6 @@ import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
 
 const DEADLINE_GENERATION_TIMEOUT_MS = 60_000;
 const DEADLINE_MAX_OUTPUT_TOKENS = 2000;
-
-export const documentScoutsEnabled = (): boolean =>
-  env.isDev || env.FEATURE_INBOX_DOCUMENT_SCOUTS;
 
 export type RunDocumentDeadlineScoutArgs = {
   entityId: SafeId<"entity">;

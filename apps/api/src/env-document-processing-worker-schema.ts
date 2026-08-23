@@ -1,6 +1,6 @@
 import * as v from "valibot";
 
-import { DEPLOYED_NODE_ENVS } from "@/api/env-base-schema";
+import { DEPLOYED_NODE_ENVS, featureFlagSchema } from "@/api/env-base-schema";
 import {
   isRailwayPrivateHostname,
   isTlsOrLoopbackUrl,
@@ -34,6 +34,7 @@ export const envDocumentProcessingWorkerServerSchema = {
     v.pipe(v.string(), v.parseBoolean()),
     "true",
   ),
+  FEATURE_INBOX_DOCUMENT_SCOUTS: featureFlagSchema,
   DOCUMENT_OCR_MODEL_DIR: v.optional(v.string()),
   /**
    * Batch mode: exit once the processing queue has been empty this many

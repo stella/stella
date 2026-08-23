@@ -1,17 +1,12 @@
 import path from "node:path";
 import * as v from "valibot";
 
-import { DEPLOYED_NODE_ENVS } from "@/api/env-base-schema";
+import { DEPLOYED_NODE_ENVS, featureFlagSchema } from "@/api/env-base-schema";
 import { SIGNUP_RATE_LIMIT_IP_SOURCE } from "@/api/lib/client-ip-config";
 import {
   isSecureGotenbergUrl,
   isTlsOrLoopbackUrl,
 } from "@/api/lib/secure-service-url";
-
-const featureFlagSchema = v.optional(
-  v.pipe(v.string(), v.parseBoolean()),
-  "false",
-);
 
 type EmailProviderInput = {
   EMAIL_PROVIDER?: "ses" | "smtp" | undefined;
@@ -268,7 +263,6 @@ export const envApiServerSchema = {
   /** Dark-launch governed work obligations and compatibility task behavior. */
   FEATURE_GOVERNED_WORKFLOW: featureFlagSchema,
   /** Opt-in model-backed inbox producers (deadline and review scouts); they spend AI usage per processed document. */
-  FEATURE_INBOX_DOCUMENT_SCOUTS: featureFlagSchema,
   /** Enables reviewed GitHub-sourced skills in the authenticated catalogue. */
   FEATURE_PUBLIC_TOOLS: featureFlagSchema,
   /** Offers the bundled template-pack catalogue; off hides its routes. */

@@ -31,6 +31,7 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
+import { envDocumentProcessingWorker } from "@/api/env-document-processing-worker";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -106,7 +107,7 @@ import {
   brandPersistedFieldId,
   brandPersistedUserId,
 } from "@/api/lib/safe-id-boundaries";
-import { documentScoutsEnabled } from "@/api/lib/scouts/document-deadlines";
+import { documentScoutsEnabled } from "@/api/lib/scouts/document-scout-config";
 import {
   executeNativeExtraction,
   requiresDurableNativeExtraction,
@@ -629,7 +630,7 @@ const completeDocumentProcessingRun = async ({
   claimToken: string;
   run: typeof documentProcessingRuns.$inferSelect;
 }): Promise<boolean> => {
-  if (documentScoutsEnabled()) {
+  if (documentScoutsEnabled(envDocumentProcessingWorker)) {
     await enqueueDocumentDeadlineScout({
       sourceRunId: run.id,
       entityId: run.entityId,

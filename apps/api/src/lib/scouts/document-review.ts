@@ -19,11 +19,9 @@ import {
   reviewVerdict,
   toReviewSignalFindings,
 } from "@/api/lib/scouts/document-review.logic";
+import { documentScoutsEnabled } from "@/api/lib/scouts/document-scout-config";
 import { emitSignals } from "@/api/lib/signals/emit";
 import { SCOUT_KEY } from "@/api/lib/signals/scout";
-
-const documentScoutsEnabled = (): boolean =>
-  env.isDev || env.FEATURE_INBOX_DOCUMENT_SCOUTS;
 
 export type EmitDocumentReviewSignalArgs = {
   tx: Transaction;
@@ -136,7 +134,7 @@ export const emitDocumentReviewSignal = async ({
 export const maybeEmitDocumentReviewSignal = async (
   args: EmitDocumentReviewSignalArgs,
 ): Promise<void> => {
-  if (!documentScoutsEnabled()) {
+  if (!documentScoutsEnabled(env)) {
     return;
   }
   await emitDocumentReviewSignal(args);
