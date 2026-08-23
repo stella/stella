@@ -75,12 +75,10 @@ beforeAll(async () => {
     id: sourceId,
     name: "Public",
   });
-  await db
-    .insert(caseLawCorpusIndexBackfills)
-    .values({
-      generation: GENERATION,
-      status: CASE_LAW_CORPUS_INDEX_BACKFILL_STATUS.COMPLETE,
-    });
+  await db.insert(caseLawCorpusIndexBackfills).values({
+    generation: GENERATION,
+    status: CASE_LAW_CORPUS_INDEX_BACKFILL_STATUS.COMPLETE,
+  });
   await db.insert(caseLawDecisions).values([
     {
       caseNumber: "current",
