@@ -153,8 +153,11 @@ export const serializeToolResult = (
         text: result.mcp?.primaryText ?? serializedData,
       },
     ];
-    for (const text of result.mcp?.additionalText ?? []) {
-      content.push({ type: "text", text });
+    const additionalText = result.mcp?.additionalText;
+    if (additionalText !== undefined) {
+      for (const text of additionalText) {
+        content.push({ type: "text", text });
+      }
     }
     return {
       content,

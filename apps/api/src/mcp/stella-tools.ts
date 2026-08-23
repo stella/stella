@@ -764,14 +764,16 @@ const withOnboardingHintIfApplicable = async <TData>({
   if (jurisdictions.length > 0) {
     return result;
   }
+  const onboardingHint = buildOnboardingHintText();
+  const additionalText = result.mcp?.additionalText;
   return {
     ...result,
     mcp: {
       ...result.mcp,
-      additionalText: [
-        ...(result.mcp?.additionalText ?? []),
-        buildOnboardingHintText(),
-      ],
+      additionalText:
+        additionalText === undefined
+          ? [onboardingHint]
+          : [...additionalText, onboardingHint],
     },
   };
 };
