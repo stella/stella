@@ -122,8 +122,7 @@ const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
 
 const SQL_IDENTIFIER_PATTERN =
   /"(?<quoted>[^"]+)"|(?<unquoted>[a-z_][a-z0-9_]*)/giu;
-const DYNAMIC_GRANT_PATTERN =
-  /EXECUTE\s+format\s*\([^;]*?\bGRANT\b[^;]*?\)/giu;
+const DYNAMIC_GRANT_PATTERN = /EXECUTE\s+format\s*\([^;]*?\bGRANT\b[^;]*?\)/giu;
 
 type RlsTableIntroduction = {
   migration: string;
@@ -321,11 +320,7 @@ const stellaTableGrant = (statement: string): StellaTableGrant | null => {
     return null;
   }
   const targetStart = onIndex + onMarker.length;
-  const tablesStart = startsWithSqlKeyword(
-    statement,
-    tableMarker,
-    targetStart,
-  )
+  const tablesStart = startsWithSqlKeyword(statement, tableMarker, targetStart)
     ? targetStart + tableMarker.length
     : targetStart;
   const toIndex = sqlKeywordIndex({
@@ -472,9 +467,7 @@ describe("RLS table grants", () => {
       tables: ["classified_table", "straße"],
     });
     expect(
-      stellaTableGrant(
-        "GRANT SELECT, UPDATE ON classified_table TO PUBLIC",
-      ),
+      stellaTableGrant("GRANT SELECT, UPDATE ON classified_table TO PUBLIC"),
     ).toEqual({
       privileges: new Set(["select", "update"]),
       tables: ["classified_table"],
