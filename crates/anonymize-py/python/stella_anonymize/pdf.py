@@ -58,7 +58,9 @@ def inspect_pdf(
     observations_json = (
         None
         if page_observations is None
-        else json.dumps(list(page_observations), separators=(",", ":"))
+        else json.dumps(
+            list(page_observations), separators=(",", ":"), ensure_ascii=False
+        )
     )
     try:
         return json.loads(_inspect_pdf_json(bytes(document), observations_json))
@@ -113,7 +115,9 @@ def rewrite_pdf_raster_from_detections(
                 "limit-exceeded",
                 "limit-exceeded: PDF source exceeds its byte limit",
             )
-        request_json = json.dumps(dict(request), separators=(",", ":"))
+        request_json = json.dumps(
+            dict(request), separators=(",", ":"), ensure_ascii=False
+        )
         if len(request_json.encode("utf-8")) > PDF_RASTER_REQUEST_JSON_MAX_BYTES:
             raise PdfRasterError(
                 "limit-exceeded",
@@ -269,7 +273,9 @@ def anonymize_pdf_raster(
                 batch_json = (
                     external_batch
                     if isinstance(external_batch, str)
-                    else json.dumps(external_batch, separators=(",", ":"))
+                    else json.dumps(
+                        external_batch, separators=(",", ":"), ensure_ascii=False
+                    )
                 )
                 converted = json.loads(
                     _convert_external_batch(text.encode("utf-8"), batch_json)

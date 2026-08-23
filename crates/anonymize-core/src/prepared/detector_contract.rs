@@ -10,11 +10,13 @@ use crate::labels::{
 use crate::legal_forms::PreparedLegalFormData;
 use crate::legal_forms::process_legal_form_matches;
 use crate::name_corpus::{NameCorpusDetection, PreparedNameCorpusData};
+use crate::prepared_metadata::{
+  PreparedCountryMatchData, PreparedGazetteerMatchData, PreparedRegexMatchData,
+};
 use crate::processors::{
-  CountryMatchData, DenyListMatchData, GazetteerMatchData, PatternSlice,
-  RegexMatchMeta, process_country_matches,
-  process_deny_list_matches_with_field_labels, process_gazetteer_matches,
-  process_regex_matches,
+  DenyListMatchData, PatternSlice, process_deny_list_matches_with_field_labels,
+  process_prepared_country_matches, process_prepared_gazetteer_matches,
+  process_prepared_regex_matches,
 };
 use crate::resolution::{PipelineEntity, ResolutionDocument};
 use crate::signatures::{PreparedSignatureData, detect_signatures};
@@ -197,9 +199,8 @@ impl<'a> StaticDetectorContext<'a> {
   }
 
   pub(super) fn detect_regex(&self) -> Result<Vec<PipelineEntity>> {
-    process_regex_matches(
+    process_prepared_regex_matches(
       self.regex_matches()?,
-      self.regex_slice()?,
       self.full_text()?,
       self.regex_meta()?,
     )
@@ -213,9 +214,8 @@ impl<'a> StaticDetectorContext<'a> {
   }
 
   pub(super) fn detect_custom_regex(&self) -> Result<Vec<PipelineEntity>> {
-    process_regex_matches(
+    process_prepared_regex_matches(
       self.custom_regex_matches()?,
-      self.custom_regex_slice()?,
       self.full_text()?,
       self.custom_regex_meta()?,
     )
@@ -248,9 +248,8 @@ impl<'a> StaticDetectorContext<'a> {
     let Some(data) = self.gazetteer_data()? else {
       return Ok(Vec::new());
     };
-    process_gazetteer_matches(
+    process_prepared_gazetteer_matches(
       self.literal_matches()?,
-      self.gazetteer_slice()?,
       self.full_text()?,
       data,
     )
@@ -264,9 +263,8 @@ impl<'a> StaticDetectorContext<'a> {
     let Some(data) = self.country_data()? else {
       return Ok(Vec::new());
     };
-    process_country_matches(
+    process_prepared_country_matches(
       self.literal_matches()?,
-      self.countries_slice()?,
       self.full_text()?,
       data,
     )
@@ -428,39 +426,19 @@ impl<'a> StaticDetectorContext<'a> {
     Ok(&self.matches.literal)
   }
 
-  fn regex_meta(&self) -> Result<&'a [RegexMatchMeta]> {
+  fn regex_meta(&self) -> Result<&'a PreparedRegexMatchData> {
     self.require(StaticDetectorInput::RegexMeta)?;
     Ok(&self.engine.policy.regex_meta)
   }
 
-  fn custom_regex_meta(&self) -> Result<&'a [RegexMatchMeta]> {
+  fn custom_regex_meta(&self) -> Result<&'a PreparedRegexMatchData> {
     self.require(StaticDetectorInput::CustomRegexMeta)?;
     Ok(&self.engine.policy.custom_regex_meta)
-  }
-
-  fn regex_slice(&self) -> Result<PatternSlice> {
-    self.require(StaticDetectorInput::RegexMatches)?;
-    Ok(self.engine.policy.slices.regex)
-  }
-
-  fn custom_regex_slice(&self) -> Result<PatternSlice> {
-    self.require(StaticDetectorInput::CustomRegexMatches)?;
-    Ok(self.engine.policy.slices.custom_regex)
   }
 
   fn deny_list_slice(&self) -> Result<PatternSlice> {
     self.require(StaticDetectorInput::DenyListData)?;
     Ok(self.engine.policy.slices.deny_list)
-  }
-
-  fn gazetteer_slice(&self) -> Result<PatternSlice> {
-    self.require(StaticDetectorInput::GazetteerData)?;
-    Ok(self.engine.policy.slices.gazetteer)
-  }
-
-  fn countries_slice(&self) -> Result<PatternSlice> {
-    self.require(StaticDetectorInput::CountryData)?;
-    Ok(self.engine.policy.slices.countries)
   }
 
   fn triggers_slice(&self) -> Result<PatternSlice> {
@@ -483,12 +461,12 @@ impl<'a> StaticDetectorContext<'a> {
     Ok(self.engine.data.deny_list.as_ref())
   }
 
-  fn gazetteer_data(&self) -> Result<Option<&'a GazetteerMatchData>> {
+  fn gazetteer_data(&self) -> Result<Option<&'a PreparedGazetteerMatchData>> {
     self.require(StaticDetectorInput::GazetteerData)?;
     Ok(self.engine.data.gazetteer.as_ref())
   }
 
-  fn country_data(&self) -> Result<Option<&'a CountryMatchData>> {
+  fn country_data(&self) -> Result<Option<&'a PreparedCountryMatchData>> {
     self.require(StaticDetectorInput::CountryData)?;
     Ok(self.engine.data.countries.as_ref())
   }

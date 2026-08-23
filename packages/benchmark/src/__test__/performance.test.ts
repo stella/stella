@@ -28,6 +28,7 @@ import {
 import {
   buildPerformanceWorkerInvocation,
   parsePerformanceArgs,
+  parsePerformanceWorkerMessage,
 } from "../performance/run";
 import { summarize } from "../performance/statistics";
 import {
@@ -46,6 +47,55 @@ import {
 } from "../performance/providers/input-identity";
 
 describe("canonical performance statistics", () => {
+  test("validates worker messages at the process boundary", () => {
+    expect(parsePerformanceWorkerMessage('{"type":"ready"}')).toEqual({
+      type: "ready",
+    });
+    expect(() =>
+      parsePerformanceWorkerMessage('{"type":"result","sample":{}}'),
+    ).toThrow("performance worker sample contains unknown or missing fields");
+    expect(() => parsePerformanceWorkerMessage("not JSON")).toThrow();
+  });
+
+  test("rejects unknown worker DTO fields at every closed layer", () => {
+    const digest = "a".repeat(64);
+    const sample = {
+      scenario: {
+        type: "performance-input-scenario",
+        schemaVersion: 1,
+        id: "fixture-mixed",
+      },
+      runtime: { type: "bun-native-binding", version: "1.3.0" },
+      inputBytes: 1024,
+      inputCharacters: 1024,
+      inputSha256: digest,
+      outputCount: 0,
+      outputDigest: digest,
+      initSeconds: 0,
+      coldSeconds: 0,
+      warmSeconds: 0,
+    };
+    const hostileMessages = [
+      { type: "ready", extra: true },
+      { type: "result", sample, extra: true },
+      { type: "result", sample: { ...sample, extra: true } },
+      {
+        type: "result",
+        sample: { ...sample, scenario: { ...sample.scenario, extra: true } },
+      },
+      {
+        type: "result",
+        sample: { ...sample, runtime: { ...sample.runtime, extra: true } },
+      },
+    ];
+
+    for (const message of hostileMessages) {
+      expect(() =>
+        parsePerformanceWorkerMessage(JSON.stringify(message)),
+      ).toThrow("unknown or missing fields");
+    }
+  });
+
   test("reports median, MAD, and nearest-rank p95 without sorting samples", () => {
     const values = [9, 1, 4, 2, 3];
     expect(summarize(values)).toEqual({

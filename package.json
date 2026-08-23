@@ -14,7 +14,7 @@
     "typecheck": "turbo run typecheck",
     "typecheck:built": "turbo run typecheck --only",
     "lint": "turbo run lint && bun run lint:oxlint && bun run check:brand-case && bun run check:vocab && bun run test:vocab",
-    "lint:oxlint": "bun run lint:prepare && bun --bun oxlint -c oxlint.config.ts --deny-warnings --type-aware .",
+    "lint:oxlint": "bun test oxlint.plugin.test.ts && bun run lint:prepare && bun --bun oxlint -c oxlint.config.ts --deny-warnings --type-aware .",
     "lint:prepare": "bun x tsdown --config packages/anonymize/tsdown.config.ts --no-clean && bun x tsdown --config packages/document-docx/tsdown.config.ts --no-clean",
     "lint:fix": "bun run lint:prepare && bun --bun oxlint -c oxlint.config.ts --type-aware --fix .",
     "format": "turbo run format && oxfmt . \"!packages/**\" \"!.ai/**\" \"!.agents/**\" \"!.claude/**\" \"!AGENTS.md\" \"!CLAUDE.md\" \"!GEMINI.md\"",

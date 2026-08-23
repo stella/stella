@@ -1,7 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import { strToU8, zipSync } from "fflate";
+import { CALLER_DETECTION_MAX_COUNT } from "@stll/anonymize";
 
 import {
+  DOCX_ANONYMIZATION_MAX_CALLER_DETECTIONS,
   DOCX_COVERAGE_MODES,
   DocxAnonymizationError,
   anonymizeDocx,
@@ -48,6 +50,12 @@ const fullCoveragePolicy = {
 } as const;
 
 describe("anonymizeDocx", () => {
+  test("shares the caller-detection limit with session planning", () => {
+    expect(DOCX_ANONYMIZATION_MAX_CALLER_DETECTIONS).toBe(
+      CALLER_DETECTION_MAX_COUNT,
+    );
+  });
+
   test("rewrites a caller detection and returns an audit-safe summary", () => {
     const document = docx(
       "<w:p><w:r><w:t>Ali</w:t></w:r><w:r><w:t>ce signed.</w:t></w:r></w:p>",

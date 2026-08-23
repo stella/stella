@@ -4,11 +4,13 @@ use smallvec::SmallVec;
 
 use crate::address_seeds::soft_wrapped_us_city_tail;
 use crate::byte_offsets::ByteOffsets;
+use crate::prepared_metadata::{
+  PreparedCountryMatchData, PreparedGazetteerMatchData, PreparedRegexMatchData,
+};
 use crate::resolution::{
   DetectionSource, PipelineEntity, ResolutionDocument, SourceDetail,
 };
 use crate::types::{Error, Result, SearchMatch};
-use crate::validators::validate_id;
 
 const GAZETTEER_EXACT_SCORE: f64 = 0.9;
 const GAZETTEER_FUZZY_SCORE: f64 = 0.85;
@@ -783,41 +785,38 @@ pub fn process_regex_matches(
   full_text: &str,
   meta: &[RegexMatchMeta],
 ) -> Result<Vec<PipelineEntity>> {
+  let prepared =
+    PreparedRegexMatchData::new(meta.to_vec(), slice, "regex_meta")?;
+  process_prepared_regex_matches(matches, full_text, &prepared)
+}
+
+pub(crate) fn process_prepared_regex_matches(
+  matches: &[SearchMatch],
+  full_text: &str,
+  meta: &PreparedRegexMatchData,
+) -> Result<Vec<PipelineEntity>> {
   let offsets = ByteOffsets::new(full_text);
   let mut results = Vec::new();
 
   for found in matches {
     let pattern = found.pattern();
-    let Some(local_index) = slice.local_index(pattern) else {
-      continue;
-    };
-    let Some(entry) = meta.get(local_index) else {
+    let Some(entry) = meta.get(pattern) else {
       continue;
     };
     let text = offsets.slice(found.start(), found.end())?;
-    if let Some(validator_id) = &entry.validator_id {
-      if !validate_id(validator_id, &text, entry.validator_input.as_deref()) {
-        continue;
-      }
-    } else if entry.requires_validation {
-      return Err(Error::UnsupportedRegexValidation { pattern });
-    }
-    if entry
-      .min_byte_length
-      .is_some_and(|min| byte_len(&text) < min)
-    {
+    if !entry.accepts(&text) || !entry.accepts_byte_length(byte_len(&text)) {
       continue;
     }
 
     let mut entity = PipelineEntity::detected(
       found.start(),
       found.end(),
-      entry.label.clone(),
+      entry.label(),
       text,
-      entry.score,
+      entry.score(),
       DetectionSource::Regex,
     );
-    entity.source_detail = entry.source_detail;
+    entity.source_detail = entry.source_detail();
     results.push(entity);
   }
 
@@ -1502,21 +1501,26 @@ pub fn process_gazetteer_matches(
   full_text: &str,
   data: &GazetteerMatchData,
 ) -> Result<Vec<PipelineEntity>> {
+  let prepared = PreparedGazetteerMatchData::new(data.clone(), slice)?;
+  process_prepared_gazetteer_matches(matches, full_text, &prepared)
+}
+
+pub(crate) fn process_prepared_gazetteer_matches(
+  matches: &[SearchMatch],
+  full_text: &str,
+  data: &PreparedGazetteerMatchData,
+) -> Result<Vec<PipelineEntity>> {
   let offsets = ByteOffsets::new(full_text);
   let mut results = Vec::new();
   let mut exact_spans = Vec::<(u32, u32)>::new();
 
   for found in matches {
-    let Some(local_index) = slice.local_index(found.pattern()) else {
+    let Some(row) = data.get(found.pattern()) else {
       continue;
     };
-    if data.is_fuzzy.get(local_index).copied().unwrap_or(false) {
+    if row.is_fuzzy() {
       continue;
     }
-
-    let Some(label) = data.labels.get(local_index) else {
-      continue;
-    };
     let extended = try_gazetteer_prefix_extension(&offsets, found)?;
     let (end, text, source_detail) = if let Some(extension) = extended {
       extension
@@ -1532,7 +1536,7 @@ pub fn process_gazetteer_matches(
     let mut entity = PipelineEntity::detected(
       found.start(),
       end,
-      label.clone(),
+      row.label(),
       text,
       GAZETTEER_EXACT_SCORE,
       DetectionSource::Gazetteer,
@@ -1542,19 +1546,15 @@ pub fn process_gazetteer_matches(
   }
 
   for found in matches {
-    let Some(local_index) = slice.local_index(found.pattern()) else {
+    let Some(row) = data.get(found.pattern()) else {
       continue;
     };
-    if !data.is_fuzzy.get(local_index).copied().unwrap_or(false) {
+    if !row.is_fuzzy() {
       continue;
     }
     if fuzzy_distance(found) == Some(0) {
       continue;
     }
-
-    let Some(label) = data.labels.get(local_index) else {
-      continue;
-    };
     if exact_spans
       .iter()
       .any(|(start, end)| found.start() < *end && found.end() > *start)
@@ -1565,7 +1565,7 @@ pub fn process_gazetteer_matches(
     results.push(PipelineEntity::detected(
       found.start(),
       found.end(),
-      label.clone(),
+      row.label(),
       offsets.slice(found.start(), found.end())?,
       GAZETTEER_FUZZY_SCORE,
       DetectionSource::Gazetteer,
@@ -1581,14 +1581,20 @@ pub fn process_country_matches(
   full_text: &str,
   data: &CountryMatchData,
 ) -> Result<Vec<PipelineEntity>> {
+  let prepared = PreparedCountryMatchData::new(data.clone(), slice)?;
+  process_prepared_country_matches(matches, full_text, &prepared)
+}
+
+pub(crate) fn process_prepared_country_matches(
+  matches: &[SearchMatch],
+  full_text: &str,
+  data: &PreparedCountryMatchData,
+) -> Result<Vec<PipelineEntity>> {
   let offsets = ByteOffsets::new(full_text);
   let mut results = Vec::new();
 
   for found in matches {
-    let Some(local_index) = slice.local_index(found.pattern()) else {
-      continue;
-    };
-    let Some(label) = data.labels.get(local_index) else {
+    let Some(label) = data.label(found.pattern()) else {
       continue;
     };
     if !starts_as_proper_noun(full_text, &offsets, found.start())? {
@@ -1598,7 +1604,7 @@ pub fn process_country_matches(
     results.push(PipelineEntity::detected(
       found.start(),
       found.end(),
-      label.clone(),
+      label,
       offsets.slice(found.start(), found.end())?,
       COUNTRY_SCORE,
       DetectionSource::Country,

@@ -1,6 +1,10 @@
 import { loadNativeAnonymizeBinding } from "@stll/anonymize";
 
 import { docxWorkflowCoverage } from "./coverage";
+import {
+  decodeDocxRestorationPlan,
+  type NativeDocxRestorationPlan,
+} from "./native-codec";
 import { rewriteDocxText } from "./rewrite";
 import {
   DOCX_RESTORATION_ERROR_CODES,
@@ -25,21 +29,6 @@ const restorationError = (
   code: DocxRestorationErrorCode,
   message: string,
 ): DocxRestorationError => new DocxRestorationError(code, message);
-
-type NativeRestorationPlan = {
-  extraction: {
-    coverage: Parameters<typeof docxWorkflowCoverage>[0];
-  };
-  blocks: readonly {
-    location: DocxBlockRewrite["location"];
-    expectedText: string;
-    candidates: readonly {
-      start: number;
-      end: number;
-      candidate: string;
-    }[];
-  }[];
-};
 
 export const restoreDocxText = ({
   document,
@@ -81,11 +70,9 @@ export const restoreDocxText = ({
       "Native anonymize binding does not expose DOCX restoration planning",
     );
   }
-  let plan: NativeRestorationPlan;
+  let plan: NativeDocxRestorationPlan;
   try {
-    plan = JSON.parse(
-      planRestoration(document, sessionId),
-    ) as NativeRestorationPlan;
+    plan = decodeDocxRestorationPlan(planRestoration(document, sessionId));
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     const separator = message.indexOf(": ");

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 import re
 from collections.abc import Callable, Mapping, Sequence
 from functools import lru_cache
@@ -8,6 +9,14 @@ from importlib.resources import files
 from os import PathLike
 from typing import Literal, TypedDict, cast
 from weakref import WeakSet
+
+from ._caller_limits import (
+    CALLER_DETECTION_MAX_COUNT,
+    CALLER_DETECTION_REQUEST_JSON_MAX_BYTES,
+    CALLER_DETECTION_TEXT_MAX_BYTES,
+    SESSION_CALLER_INPUTS_JSON_MAX_BYTES,
+    SESSION_CALLER_MAX_INPUTS,
+)
 
 from ._native import (
     OperatorEntry,
@@ -82,6 +91,11 @@ __all__ = [
     "MaskOperatorConfig",
     "CallerDetection",
     "CALLER_DETECTION_CONTRACT_VERSION",
+    "CALLER_DETECTION_MAX_COUNT",
+    "CALLER_DETECTION_REQUEST_JSON_MAX_BYTES",
+    "CALLER_DETECTION_TEXT_MAX_BYTES",
+    "SESSION_CALLER_INPUTS_JSON_MAX_BYTES",
+    "SESSION_CALLER_MAX_INPUTS",
     "ExternalDetectionBatch",
     "ExternalDetection",
     "ExternalDetectionDocument",
@@ -200,16 +214,10 @@ _EXTERNAL_DETECTION_LIMITS = cast(
     dict[str, int], json.loads(_native_external_detection_limits_json())
 )
 EXTERNAL_DETECTION_BATCH_MAX_BYTES = _EXTERNAL_DETECTION_LIMITS["batchMaxBytes"]
-EXTERNAL_DETECTION_DOCUMENT_MAX_BYTES = _EXTERNAL_DETECTION_LIMITS[
-    "documentMaxBytes"
-]
+EXTERNAL_DETECTION_DOCUMENT_MAX_BYTES = _EXTERNAL_DETECTION_LIMITS["documentMaxBytes"]
 EXTERNAL_DETECTION_MAX_DETECTIONS = _EXTERNAL_DETECTION_LIMITS["maxDetections"]
-EXTERNAL_DETECTION_MAX_LABEL_MAPPINGS = _EXTERNAL_DETECTION_LIMITS[
-    "maxLabelMappings"
-]
-EXTERNAL_DETECTION_MAX_METADATA_BYTES = _EXTERNAL_DETECTION_LIMITS[
-    "maxMetadataBytes"
-]
+EXTERNAL_DETECTION_MAX_LABEL_MAPPINGS = _EXTERNAL_DETECTION_LIMITS["maxLabelMappings"]
+EXTERNAL_DETECTION_MAX_METADATA_BYTES = _EXTERNAL_DETECTION_LIMITS["maxMetadataBytes"]
 EXTERNAL_DETECTION_PROVIDER_ID_MAX_BYTES = _EXTERNAL_DETECTION_LIMITS[
     "providerIdMaxBytes"
 ]
@@ -266,7 +274,9 @@ def convert_external_detection_batch(
     batch: ExternalDetectionBatch | str,
 ) -> list[CallerDetection]:
     batch_json = (
-        batch if isinstance(batch, str) else json.dumps(batch, separators=(",", ":"))
+        batch
+        if isinstance(batch, str)
+        else json.dumps(batch, separators=(",", ":"), ensure_ascii=False)
     )
     converted = json.loads(
         _native_convert_external_detection_batch(bytes(document), batch_json)
@@ -333,17 +343,47 @@ class PreparedRedactionSession:
         operators: OperatorConfig,
         observed_at_epoch_seconds: int | None,
     ) -> object:
-        native_inputs = [
-            {
-                "full_text": str(item["full_text"]),
-                "request_json": _caller_detection_request_json(
-                    item.get("detections", ())  # type: ignore[arg-type]
-                ),
-            }
-            for item in inputs
-        ]
+        if len(inputs) > SESSION_CALLER_MAX_INPUTS:
+            raise ValueError(
+                "Session caller inputs contains "
+                f"{len(inputs)} items; the maximum is {SESSION_CALLER_MAX_INPUTS}"
+            )
+        detection_count = 0
+        text_bytes = 0
+        writer = _BoundedJsonWriter(
+            SESSION_CALLER_INPUTS_JSON_MAX_BYTES,
+            "Session caller inputs JSON",
+            suffix="]",
+        )
+        writer.append_ascii("[")
+        for index, item in enumerate(inputs):
+            full_text = str(item["full_text"])
+            detections = cast(Sequence[CallerDetection], item.get("detections", ()))
+            detection_count += len(detections)
+            if detection_count > CALLER_DETECTION_MAX_COUNT:
+                raise ValueError(
+                    "Session caller detections contains "
+                    f"{detection_count} items; the maximum is "
+                    f"{CALLER_DETECTION_MAX_COUNT}"
+                )
+            text_bytes += len(full_text.encode("utf-8"))
+            if text_bytes > CALLER_DETECTION_TEXT_MAX_BYTES:
+                raise ValueError(
+                    "Session caller text contains "
+                    f"{text_bytes} bytes; the maximum is "
+                    f"{CALLER_DETECTION_TEXT_MAX_BYTES}"
+                )
+            request_json = _caller_detection_request_json(detections, full_text)
+            if index > 0:
+                writer.append_ascii(",")
+            writer.append_ascii('{"full_text":')
+            writer.append_string(full_text, "Session caller full_text")
+            writer.append_ascii(',"request_json":')
+            writer.append_string(request_json, "Session caller request_json")
+            writer.append_ascii("}")
+        inputs_json = writer.finish()
         return self._session.plan_docx_text_batch(
-            json.dumps(native_inputs, separators=(",", ":")),
+            inputs_json,
             _operator_config_json(operators, redact_string=None),
             observed_at_epoch_seconds,
         )
@@ -609,7 +649,7 @@ class PreparedAnonymizer:
     ) -> StaticRedactionResult:
         return self._prepared.redact_static_entities_with_caller_detections(
             full_text,
-            _caller_detection_request_json(detections),
+            _caller_detection_request_json(detections, full_text),
             _operator_config_json(operators, redact_string=redact_string),
         )
 
@@ -623,7 +663,7 @@ class PreparedAnonymizer:
     ) -> str:
         return self._prepared.redact_static_entities_with_caller_detections_json(
             full_text,
-            _caller_detection_request_json(detections),
+            _caller_detection_request_json(detections, full_text),
             _operator_config_json(operators, redact_string=redact_string),
         )
 
@@ -637,7 +677,7 @@ class PreparedAnonymizer:
     ) -> str:
         return self._prepared.redact_static_entities_with_caller_detections_diagnostics_json(
             full_text,
-            _caller_detection_request_json(detections),
+            _caller_detection_request_json(detections, full_text),
             _operator_config_json(operators, redact_string=redact_string),
         )
 
@@ -1186,19 +1226,132 @@ def _native_search_config_json(config_json: NativeSearchPackageInput) -> str:
         return config_json
     if isinstance(config_json, (bytes, bytearray, memoryview)):
         return bytes(config_json).decode("utf-8")
-    return json.dumps(config_json, separators=(",", ":"))
+    return json.dumps(config_json, separators=(",", ":"), ensure_ascii=False)
 
 
 def _caller_detection_request_json(
     detections: Sequence[CallerDetection],
+    full_text: str,
 ) -> str:
-    return json.dumps(
-        {
-            "version": CALLER_DETECTION_CONTRACT_VERSION,
-            "detections": list(detections),
-        },
-        separators=(",", ":"),
+    if len(detections) > CALLER_DETECTION_MAX_COUNT:
+        raise ValueError(
+            f"Caller detections contains {len(detections)} items; the maximum is "
+            f"{CALLER_DETECTION_MAX_COUNT}"
+        )
+    text_bytes = len(full_text.encode("utf-8"))
+    if text_bytes > CALLER_DETECTION_TEXT_MAX_BYTES:
+        raise ValueError(
+            f"Caller detection text contains {text_bytes} bytes; the maximum is "
+            f"{CALLER_DETECTION_TEXT_MAX_BYTES}"
+        )
+    writer = _BoundedJsonWriter(
+        CALLER_DETECTION_REQUEST_JSON_MAX_BYTES,
+        "Caller detection request JSON",
+        suffix="]}",
     )
+    writer.append_ascii(
+        f'{{"version":{CALLER_DETECTION_CONTRACT_VERSION},"detections":['
+    )
+    for index, detection in enumerate(detections):
+        if index > 0:
+            writer.append_ascii(",")
+        writer.append_ascii('{"start":')
+        writer.append_offset(detection["start"], "Caller detection start")
+        writer.append_ascii(',"end":')
+        writer.append_offset(detection["end"], "Caller detection end")
+        writer.append_ascii(',"label":')
+        writer.append_string(detection["label"], "Caller detection label")
+        writer.append_ascii(',"score":')
+        writer.append_score(detection["score"], "Caller detection score")
+        writer.append_ascii(',"provider_id":')
+        writer.append_string(detection["provider_id"], "Caller detection provider_id")
+        writer.append_ascii(',"detection_id":')
+        writer.append_string(detection["detection_id"], "Caller detection detection_id")
+        writer.append_ascii("}")
+    return writer.finish()
+
+
+_CALLER_JSON_STRING_CHUNK_CHARACTERS = 64 * 1024
+
+
+class _BoundedJsonWriter:
+    def __init__(self, maximum_bytes: int, label: str, *, suffix: str) -> None:
+        self._chunks: list[str] = []
+        self._suffix = suffix
+        self._maximum_bytes = maximum_bytes - len(suffix.encode("utf-8"))
+        self._reported_maximum_bytes = maximum_bytes
+        self._label = label
+        self._bytes = 0
+
+    def append_ascii(self, value: str) -> None:
+        self._reserve(len(value))
+        self._chunks.append(value)
+
+    def append_offset(self, value: object, field: str) -> None:
+        if (
+            isinstance(value, bool)
+            or not isinstance(value, int)
+            or value < 0
+            or value > 0xFFFFFFFF
+        ):
+            raise ValueError(f"{field} must be an unsigned 32-bit integer")
+        self.append_ascii(str(value))
+
+    def append_score(self, value: object, field: str) -> None:
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise TypeError(f"{field} must be a number")
+        if not 0 <= value <= 1 or not math.isfinite(value):
+            raise ValueError(f"{field} must be finite and between 0 and 1")
+        self.append_ascii(_ecmascript_score_json(value))
+
+    def append_string(self, value: object, field: str) -> None:
+        if not isinstance(value, str):
+            raise TypeError(f"{field} must be a string")
+        self.append_ascii('"')
+        for offset in range(0, len(value), _CALLER_JSON_STRING_CHUNK_CHARACTERS):
+            chunk = value[offset : offset + _CALLER_JSON_STRING_CHUNK_CHARACTERS]
+            encoded_chunk = json.dumps(
+                chunk, separators=(",", ":"), ensure_ascii=False
+            )[1:-1]
+            self._reserve(len(encoded_chunk.encode("utf-8")))
+            self._chunks.append(encoded_chunk)
+        self.append_ascii('"')
+
+    def finish(self) -> str:
+        return "".join(self._chunks) + self._suffix
+
+    def _reserve(self, byte_count: int) -> None:
+        if byte_count > self._maximum_bytes - self._bytes:
+            raise ValueError(
+                f"{self._label} exceeds the {self._reported_maximum_bytes}-byte maximum"
+            )
+        self._bytes += byte_count
+
+
+def _ecmascript_score_json(value: int | float) -> str:
+    number = float(value)
+    if number == 0:
+        return "0"
+    if number == 1:
+        return "1"
+
+    rendered = repr(number).lower()
+    if "e" not in rendered:
+        return rendered
+
+    mantissa, exponent_text = rendered.split("e")
+    exponent = int(exponent_text)
+    if number < 1e-6:
+        return f"{mantissa}e{exponent}"
+
+    integer, _, fraction = mantissa.partition(".")
+    digits = integer + fraction
+    decimal_position = len(integer) + exponent
+    if decimal_position <= 0:
+        return f"0.{('0' * -decimal_position)}{digits}"
+    if decimal_position >= len(digits):
+        return digits + ("0" * (decimal_position - len(digits)))
+    return f"{digits[:decimal_position]}.{digits[decimal_position:]}"
 
 
 def _operator_config_json(
@@ -1217,4 +1370,4 @@ def _operator_config_json(
         payload["operators"] = dict(operators)
     if redact_string is not None:
         payload["redactString"] = redact_string
-    return json.dumps(payload, separators=(",", ":"))
+    return json.dumps(payload, separators=(",", ":"), ensure_ascii=False)

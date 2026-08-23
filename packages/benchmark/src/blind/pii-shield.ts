@@ -155,7 +155,7 @@ export const createPiiShieldAdapter = (): Adapter => ({
         ]);
         let parsed: unknown;
         try {
-          parsed = JSON.parse(scan.stdout);
+          parsed = JSON.parse(scan.stdout) as unknown;
         } catch {
           const tail = scan.stderr.trim().split("\n").slice(-3).join(" | ");
           throw new Error(

@@ -281,7 +281,10 @@ const loadVerifiedTabCorpus = async (
     expectedSha256: provenance.sha256,
     name: `TAB ${split} split`,
     parse: (verified) =>
-      parseTabCorpus(JSON.parse(new TextDecoder().decode(verified)), split),
+      parseTabCorpus(
+        JSON.parse(new TextDecoder().decode(verified)) as unknown,
+        split,
+      ),
   });
 };
 

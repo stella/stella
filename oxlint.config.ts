@@ -13,6 +13,7 @@ export default library({
   ],
   jsPlugins: ["./oxlint.plugin.ts"],
   rules: {
+    "stll/no-double-assertion": "error",
     "stll/no-dynamic-import-specifier": "error",
     "no-non-null-assertion": "off",
     "require-await": "off",
@@ -22,6 +23,34 @@ export default library({
     "typescript/strict-boolean-expressions": "off",
   },
   overrides: [
+    {
+      // JavaScript cannot express the required parse-to-unknown handoff.
+      files: ["**/*.ts", "**/*.tsx", "**/*.mts", "**/*.cts"],
+      rules: {
+        "stll/no-unchecked-json-parse-typing": "error",
+      },
+    },
+    {
+      // Runtime-parity fixtures deliberately construct malformed values. The
+      // production rules still cover every shipped package source.
+      files: ["**/__test__/**", "**/*.test.ts"],
+      rules: {
+        "stll/no-double-assertion": "off",
+        "stll/no-unchecked-json-parse-typing": "off",
+      },
+    },
+    {
+      // Existing transport decoders being migrated to validated codecs. Keep
+      // this list file-specific so new violations elsewhere fail immediately.
+      files: [
+        "packages/anonymize/src/native.ts",
+        "packages/anonymize/src/native-pipeline.ts",
+        "packages/anonymize/src/wasm-binding.ts",
+      ],
+      rules: {
+        "stll/no-unchecked-json-parse-typing": "off",
+      },
+    },
     {
       files: [".github/tools/**", "eval-html.ts"],
       rules: {

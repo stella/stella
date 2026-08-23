@@ -5,10 +5,12 @@
 //! UTF-16 conversion, and session workflows so every binding executes the same
 //! logic.
 
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
+pub use stella_anonymize_adapter_contract::CALLER_DETECTION_MAX_COUNT;
 use stella_anonymize_adapter_contract::{
   BindingCallerDetectionRequest, BindingOperatorConfig,
-  BindingPreparedSearchConfig, ContractError, assemble_static_search_config,
+  BindingPreparedSearchConfig, BindingStaticRedactionPlanResult,
+  BindingStaticRedactionResult, ContractError, assemble_static_search_config,
   caller_detections_from_utf16_binding, diagnostic_events_to_utf16_binding,
   operator_config_from_binding, prepared_search_config_from_binding,
   prepared_search_core_package_to_bytes,
@@ -23,13 +25,13 @@ use stella_anonymize_adapter_contract::{
   static_redaction_stream_event_to_utf16_binding,
 };
 use stella_anonymize_core::{
-  CallerRedactionOptions, DiagnosticDetail, Error as CoreError,
-  OpenSessionArchiveOptions, OperatorConfig, PreparedEngine,
-  PreparedEngineArtifactsView, PreparedSessionCallerRedactionOptions,
-  PreparedSessionRedactionOptions, REDACTION_SESSION_ARCHIVE_KEY_BYTES,
-  REDACTION_SESSION_ARCHIVE_MAX_BYTES, RedactionSession, SessionArchiveKey,
-  SessionId, SessionLifecycle, SessionStatus, SessionTimestamp,
-  StaticRedactionDiagnostics,
+  CallerDetection, CallerRedactionOptions, DiagnosticDetail,
+  Error as CoreError, OpenSessionArchiveOptions, OperatorConfig,
+  PreparedEngine, PreparedEngineArtifactsView,
+  PreparedSessionCallerRedactionOptions, PreparedSessionRedactionOptions,
+  REDACTION_SESSION_ARCHIVE_KEY_BYTES, REDACTION_SESSION_ARCHIVE_MAX_BYTES,
+  RedactionSession, SessionArchiveKey, SessionId, SessionLifecycle,
+  SessionStatus, SessionTimestamp, StaticRedactionDiagnostics,
   assemble::{AssembleError, Dictionaries, GazetteerEntry, PipelineConfig},
 };
 
@@ -58,9 +60,30 @@ pub enum BindingFacadeError {
   SessionPlanConflict,
   #[error("Redaction session plan has already been committed")]
   SessionPlanAlreadyCommitted,
+  #[error("{field} contains {actual} items; the maximum is {maximum}")]
+  ItemLimitExceeded {
+    field: &'static str,
+    actual: usize,
+    maximum: usize,
+  },
+  #[error("{field} contains {actual_bytes} bytes; the maximum is {max_bytes}")]
+  ByteLimitExceeded {
+    field: &'static str,
+    actual_bytes: usize,
+    max_bytes: usize,
+  },
   #[error(transparent)]
   Serialization(#[from] serde_json::Error),
 }
+
+/// Maximum UTF-8 text bytes accepted by one caller-assisted operation or plan.
+pub const CALLER_DETECTION_TEXT_MAX_BYTES: usize = 64 * 1024 * 1024;
+/// Maximum encoded bytes accepted by one caller-detection JSON request.
+pub const CALLER_DETECTION_REQUEST_JSON_MAX_BYTES: usize = 16 * 1024 * 1024;
+/// Maximum number of caller-assisted inputs accepted by one atomic session plan.
+pub const SESSION_CALLER_MAX_INPUTS: usize = 100_000;
+/// Maximum canonical encoded bytes accepted by one session-plan input batch.
+pub const SESSION_CALLER_INPUTS_JSON_MAX_BYTES: usize = 64 * 1024 * 1024;
 
 /// Digest verification policy for a prepared package.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -256,17 +279,46 @@ pub fn redact_with_caller_detections_json(
   request_json: &str,
   operators: &OperatorConfig,
 ) -> Result<String> {
-  let request =
-    serde_json::from_str::<BindingCallerDetectionRequest>(request_json)?;
-  let detections = caller_detections_from_utf16_binding(request, full_text)?;
+  let detections = BorrowedValidatedCallerDetections::from_utf16_binding_json(
+    request_json,
+    full_text,
+  )?;
+  Ok(serde_json::to_string(&redact_with_validated_parts(
+    engine,
+    detections.full_text(),
+    detections.as_slice(),
+    operators,
+  )?)?)
+}
+
+/// Runs static redaction with caller detections validated at a host boundary.
+pub fn redact_with_caller_detections(
+  engine: &PreparedEngine,
+  detections: &ValidatedCallerDetections,
+  operators: &OperatorConfig,
+) -> Result<BindingStaticRedactionResult> {
+  redact_with_validated_parts(
+    engine,
+    detections.full_text(),
+    detections.as_slice(),
+    operators,
+  )
+}
+
+fn redact_with_validated_parts(
+  engine: &PreparedEngine,
+  full_text: &str,
+  detections: &[CallerDetection],
+  operators: &OperatorConfig,
+) -> Result<BindingStaticRedactionResult> {
   let result = engine.redact_static_entities_with_caller_detections(
     full_text,
     CallerRedactionOptions {
       operators,
-      detections: &detections,
+      detections,
     },
   )?;
-  serialize_redaction_result(result, full_text)
+  Ok(static_redaction_result_to_utf16_binding(result, full_text)?)
 }
 
 /// Runs caller-assisted redaction and includes preparation diagnostics.
@@ -277,15 +329,48 @@ pub fn redact_with_caller_detections_diagnostics_json(
   request_json: &str,
   operators: &OperatorConfig,
 ) -> Result<String> {
-  let request =
-    serde_json::from_str::<BindingCallerDetectionRequest>(request_json)?;
-  let detections = caller_detections_from_utf16_binding(request, full_text)?;
+  let detections = BorrowedValidatedCallerDetections::from_utf16_binding_json(
+    request_json,
+    full_text,
+  )?;
+  redact_with_validated_parts_diagnostics_json(
+    engine,
+    prepare_diagnostics,
+    detections.full_text(),
+    detections.as_slice(),
+    operators,
+  )
+}
+
+/// Runs caller-assisted redaction after host-boundary validation.
+pub fn redact_with_validated_caller_detections_diagnostics_json(
+  engine: &PreparedEngine,
+  prepare_diagnostics: &StaticRedactionDiagnostics,
+  detections: &ValidatedCallerDetections,
+  operators: &OperatorConfig,
+) -> Result<String> {
+  redact_with_validated_parts_diagnostics_json(
+    engine,
+    prepare_diagnostics,
+    detections.full_text(),
+    detections.as_slice(),
+    operators,
+  )
+}
+
+fn redact_with_validated_parts_diagnostics_json(
+  engine: &PreparedEngine,
+  prepare_diagnostics: &StaticRedactionDiagnostics,
+  full_text: &str,
+  detections: &[CallerDetection],
+  operators: &OperatorConfig,
+) -> Result<String> {
   let mut result = engine
     .redact_static_entities_with_caller_detections_and_diagnostics(
       full_text,
       CallerRedactionOptions {
         operators,
-        detections: &detections,
+        detections,
       },
     )?;
   prepend_prepare_diagnostics(&mut result.diagnostics, prepare_diagnostics);
@@ -361,11 +446,219 @@ pub fn redact_diagnostics_stream_json(
   serialize_diagnostic_result(result, full_text)
 }
 
-/// Input for one operation in an atomic session plan.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
-pub struct SessionCallerInput {
-  pub full_text: String,
-  pub request_json: String,
+/// Caller detections whose contract and offsets were validated at a host boundary.
+#[derive(Clone, PartialEq)]
+pub struct ValidatedCallerDetections {
+  full_text: String,
+  detections: Vec<CallerDetection>,
+}
+
+struct BorrowedValidatedCallerDetections<'text> {
+  full_text: &'text str,
+  detections: Vec<CallerDetection>,
+}
+
+impl<'text> BorrowedValidatedCallerDetections<'text> {
+  fn from_utf16_binding_json(
+    request_json: &str,
+    full_text: &'text str,
+  ) -> Result<Self> {
+    let request = caller_detection_request_from_json(request_json)?;
+    validate_caller_detection_text(full_text)?;
+    let detections = caller_detections_from_utf16_binding(request, full_text)?;
+    Ok(Self {
+      full_text,
+      detections,
+    })
+  }
+
+  const fn full_text(&self) -> &'text str {
+    self.full_text
+  }
+
+  fn as_slice(&self) -> &[CallerDetection] {
+    &self.detections
+  }
+}
+
+impl ValidatedCallerDetections {
+  /// Validates a portable UTF-16 request and establishes the internal type.
+  pub fn from_utf16_binding(
+    request: BindingCallerDetectionRequest,
+    full_text: String,
+  ) -> Result<Self> {
+    validate_caller_detection_request(&request)?;
+    validate_caller_detection_text(&full_text)?;
+    let detections = caller_detections_from_utf16_binding(request, &full_text)?;
+    Ok(Self {
+      full_text,
+      detections,
+    })
+  }
+
+  fn full_text(&self) -> &str {
+    &self.full_text
+  }
+
+  fn as_slice(&self) -> &[CallerDetection] {
+    &self.detections
+  }
+}
+
+/// Decodes and bounds an untrusted caller-detection JSON request.
+pub fn caller_detection_request_from_json(
+  request_json: &str,
+) -> Result<BindingCallerDetectionRequest> {
+  validate_byte_limit(
+    "Caller detection request JSON",
+    request_json.len(),
+    CALLER_DETECTION_REQUEST_JSON_MAX_BYTES,
+  )?;
+  let request = serde_json::from_str(request_json)?;
+  validate_caller_detection_request(&request)?;
+  Ok(request)
+}
+
+/// Bounds caller-assisted text before offset conversion or detector execution.
+pub const fn validate_caller_detection_text(full_text: &str) -> Result<()> {
+  validate_byte_limit(
+    "Caller detection text",
+    full_text.len(),
+    CALLER_DETECTION_TEXT_MAX_BYTES,
+  )
+}
+
+/// Bounds raw session input JSON before deserialization.
+pub const fn validate_session_caller_inputs_json(
+  inputs_json: &str,
+) -> Result<()> {
+  validate_byte_limit(
+    "Session caller inputs JSON",
+    inputs_json.len(),
+    SESSION_CALLER_INPUTS_JSON_MAX_BYTES,
+  )
+}
+
+#[derive(Clone, PartialEq)]
+struct SessionCallerInput {
+  detections: ValidatedCallerDetections,
+}
+
+/// An aggregate-bounded collection of validated session inputs.
+pub struct SessionCallerInputs {
+  inputs: Vec<SessionCallerInput>,
+  detection_count: usize,
+  text_bytes: usize,
+  encoded_json_bytes: usize,
+}
+
+impl SessionCallerInputs {
+  /// Creates a bounded collection with capacity for the decoded input count.
+  pub fn with_capacity(capacity: usize) -> Result<Self> {
+    validate_item_limit(
+      "Session caller inputs",
+      capacity,
+      SESSION_CALLER_MAX_INPUTS,
+    )?;
+    Ok(Self {
+      inputs: Vec::with_capacity(capacity),
+      detection_count: 0,
+      text_bytes: 0,
+      encoded_json_bytes: 2,
+    })
+  }
+
+  /// Checks canonical and aggregate limits before decoding and retaining one input.
+  pub fn push_utf16_binding_json(
+    &mut self,
+    request_json: &str,
+    full_text: String,
+  ) -> Result<()> {
+    validate_byte_limit(
+      "Caller detection request JSON",
+      request_json.len(),
+      CALLER_DETECTION_REQUEST_JSON_MAX_BYTES,
+    )?;
+    validate_caller_detection_text(&full_text)?;
+    validate_item_limit(
+      "Session caller inputs",
+      self.inputs.len().saturating_add(1),
+      SESSION_CALLER_MAX_INPUTS,
+    )?;
+    let encoded_json_bytes = self
+      .encoded_json_bytes
+      .saturating_add(usize::from(!self.inputs.is_empty()))
+      .saturating_add(canonical_session_input_json_bytes(
+        &full_text,
+        request_json,
+      )?);
+    validate_byte_limit(
+      "Session caller inputs JSON",
+      encoded_json_bytes,
+      SESSION_CALLER_INPUTS_JSON_MAX_BYTES,
+    )?;
+
+    let request = caller_detection_request_from_json(request_json)?;
+    let detection_count = self
+      .detection_count
+      .saturating_add(request.detections.len());
+    validate_item_limit(
+      "Session caller detections",
+      detection_count,
+      CALLER_DETECTION_MAX_COUNT,
+    )?;
+    let text_bytes = self.text_bytes.saturating_add(full_text.len());
+    validate_byte_limit(
+      "Session caller text",
+      text_bytes,
+      CALLER_DETECTION_TEXT_MAX_BYTES,
+    )?;
+
+    let detections =
+      ValidatedCallerDetections::from_utf16_binding(request, full_text)?;
+    self.inputs.push(SessionCallerInput { detections });
+    self.detection_count = detection_count;
+    self.text_bytes = text_bytes;
+    self.encoded_json_bytes = encoded_json_bytes;
+    Ok(())
+  }
+}
+
+#[derive(Serialize)]
+struct CanonicalSessionCallerInput<'input> {
+  full_text: &'input str,
+  request_json: &'input str,
+}
+
+#[derive(Default)]
+struct JsonByteCounter {
+  bytes: usize,
+}
+
+impl std::io::Write for JsonByteCounter {
+  fn write(&mut self, buffer: &[u8]) -> std::io::Result<usize> {
+    self.bytes = self.bytes.saturating_add(buffer.len());
+    Ok(buffer.len())
+  }
+
+  fn flush(&mut self) -> std::io::Result<()> {
+    Ok(())
+  }
+}
+
+fn canonical_session_input_json_bytes(
+  full_text: &str,
+  request_json: &str,
+) -> Result<usize> {
+  let mut counter = JsonByteCounter::default();
+  serde_json::to_writer(
+    &mut counter,
+    &CanonicalSessionCallerInput {
+      full_text,
+      request_json,
+    },
+  )?;
+  Ok(counter.bytes)
 }
 
 /// Session inspection data independent of the host runtime.
@@ -389,14 +682,14 @@ pub struct SessionDeletion {
 pub struct PreparedSessionPlan {
   base: RedactionSession,
   planned: Option<RedactionSession>,
-  result_json: String,
+  results: Vec<BindingStaticRedactionPlanResult>,
 }
 
 impl PreparedSessionPlan {
-  /// Returns the portable JSON results without committing the session state.
+  /// Returns typed portable results without committing the session state.
   #[must_use]
-  pub fn result_json(&self) -> &str {
-    &self.result_json
+  pub fn results(&self) -> &[BindingStaticRedactionPlanResult] {
+    &self.results
   }
 
   /// Returns the session snapshot used to detect concurrent changes.
@@ -572,7 +865,7 @@ pub fn redact_with_session_json(
 pub fn plan_session_redactions(
   engine: &PreparedEngine,
   session: &RedactionSession,
-  inputs: Vec<SessionCallerInput>,
+  inputs: SessionCallerInputs,
   operators: &OperatorConfig,
   observed_at_epoch_seconds: Option<u32>,
 ) -> Result<PreparedSessionPlan> {
@@ -580,33 +873,68 @@ pub fn plan_session_redactions(
   let mut planned = base.clone();
   let observed_at =
     observed_at_epoch_seconds.map(SessionTimestamp::from_epoch_seconds);
-  let mut results = Vec::with_capacity(inputs.len());
-  for input in inputs {
-    let request = serde_json::from_str::<BindingCallerDetectionRequest>(
-      &input.request_json,
-    )?;
-    let detections =
-      caller_detections_from_utf16_binding(request, &input.full_text)?;
+  let mut results = Vec::with_capacity(inputs.inputs.len());
+  for input in inputs.inputs {
+    let full_text = input.detections.full_text();
     let result = engine
       .redact_static_entities_with_caller_detections_and_session(
-        &input.full_text,
+        full_text,
         PreparedSessionCallerRedactionOptions {
           operators,
-          detections: &detections,
+          detections: input.detections.as_slice(),
           session: &mut planned,
           observed_at,
         },
       )?;
     results.push(static_redaction_plan_result_to_utf16_binding(
-      &result,
-      &input.full_text,
+      &result, full_text,
     )?);
   }
   Ok(PreparedSessionPlan {
     base,
     planned: Some(planned),
-    result_json: serde_json::to_string(&results)?,
+    results,
   })
+}
+
+const fn validate_caller_detection_request(
+  request: &BindingCallerDetectionRequest,
+) -> Result<()> {
+  validate_item_limit(
+    "Caller detections",
+    request.detections.len(),
+    CALLER_DETECTION_MAX_COUNT,
+  )
+}
+
+const fn validate_item_limit(
+  field: &'static str,
+  actual: usize,
+  maximum: usize,
+) -> Result<()> {
+  if actual > maximum {
+    return Err(BindingFacadeError::ItemLimitExceeded {
+      field,
+      actual,
+      maximum,
+    });
+  }
+  Ok(())
+}
+
+const fn validate_byte_limit(
+  field: &'static str,
+  actual_bytes: usize,
+  max_bytes: usize,
+) -> Result<()> {
+  if actual_bytes > max_bytes {
+    return Err(BindingFacadeError::ByteLimitExceeded {
+      field,
+      actual_bytes,
+      max_bytes,
+    });
+  }
+  Ok(())
 }
 
 fn serialize_redaction_result(
@@ -703,7 +1031,7 @@ mod tests {
     let mut plan = PreparedSessionPlan {
       base: base.clone(),
       planned: Some(planned),
-      result_json: "[]".to_owned(),
+      results: Vec::new(),
     };
 
     assert!(matches!(
@@ -717,5 +1045,154 @@ mod tests {
       Err(BindingFacadeError::SessionPlanAlreadyCommitted)
     ));
     Ok(())
+  }
+
+  #[test]
+  fn validated_caller_detections_establish_utf8_offsets_once() -> Result<()> {
+    let detections = ValidatedCallerDetections::from_utf16_binding(
+      BindingCallerDetectionRequest {
+        version:
+          stella_anonymize_adapter_contract::CALLER_DETECTION_CONTRACT_VERSION,
+        detections: vec![
+          stella_anonymize_adapter_contract::BindingCallerDetection {
+            start: 2,
+            end: 7,
+            label: "PERSON".to_owned(),
+            score: 1.0,
+            provider_id: "test".to_owned(),
+            detection_id: "detection-1".to_owned(),
+          },
+        ],
+      },
+      "😀Alice".to_owned(),
+    )?;
+
+    assert_eq!(detections.as_slice().len(), 1);
+    assert_eq!(
+      detections
+        .as_slice()
+        .first()
+        .map(|detection| detection.provenance().detection_id()),
+      Some("detection-1")
+    );
+    Ok(())
+  }
+
+  #[test]
+  fn validated_caller_detections_reject_split_surrogate_offsets() {
+    let result = ValidatedCallerDetections::from_utf16_binding(
+      BindingCallerDetectionRequest {
+        version:
+          stella_anonymize_adapter_contract::CALLER_DETECTION_CONTRACT_VERSION,
+        detections: vec![
+          stella_anonymize_adapter_contract::BindingCallerDetection {
+            start: 1,
+            end: 2,
+            label: "PERSON".to_owned(),
+            score: 1.0,
+            provider_id: "test".to_owned(),
+            detection_id: "detection-1".to_owned(),
+          },
+        ],
+      },
+      "😀".to_owned(),
+    );
+
+    assert!(matches!(result, Err(BindingFacadeError::Contract(_))));
+  }
+
+  #[test]
+  fn session_input_builder_rejects_aggregate_limits_before_conversion()
+  -> Result<()> {
+    let invalid_request = BindingCallerDetectionRequest {
+      version:
+        stella_anonymize_adapter_contract::CALLER_DETECTION_CONTRACT_VERSION,
+      detections: vec![
+        stella_anonymize_adapter_contract::BindingCallerDetection {
+          start: 1,
+          end: 0,
+          label: "PERSON".to_owned(),
+          score: 1.0,
+          provider_id: "test".to_owned(),
+          detection_id: "detection-1".to_owned(),
+        },
+      ],
+    };
+    let request_json = serde_json::to_string(&invalid_request)?;
+    let mut detection_limited = SessionCallerInputs::with_capacity(1)?;
+    detection_limited.detection_count = CALLER_DETECTION_MAX_COUNT;
+    let detection_result =
+      detection_limited.push_utf16_binding_json(&request_json, "x".to_owned());
+    assert!(matches!(
+      detection_result,
+      Err(BindingFacadeError::ItemLimitExceeded {
+        field: "Session caller detections",
+        actual,
+        maximum: CALLER_DETECTION_MAX_COUNT,
+      }) if actual == CALLER_DETECTION_MAX_COUNT + 1
+    ));
+
+    let mut text_limited = SessionCallerInputs::with_capacity(1)?;
+    text_limited.text_bytes = CALLER_DETECTION_TEXT_MAX_BYTES;
+    let text_result =
+      text_limited.push_utf16_binding_json(&request_json, "x".to_owned());
+    assert!(matches!(
+      text_result,
+      Err(BindingFacadeError::ByteLimitExceeded {
+        field: "Session caller text",
+        actual_bytes,
+        max_bytes: CALLER_DETECTION_TEXT_MAX_BYTES,
+      }) if actual_bytes == CALLER_DETECTION_TEXT_MAX_BYTES + 1
+    ));
+
+    let mut encoded_limited = SessionCallerInputs::with_capacity(1)?;
+    encoded_limited.encoded_json_bytes = SESSION_CALLER_INPUTS_JSON_MAX_BYTES;
+    let encoded_result =
+      encoded_limited.push_utf16_binding_json("{", "x".to_owned());
+    assert!(matches!(
+      encoded_result,
+      Err(BindingFacadeError::ByteLimitExceeded {
+        field: "Session caller inputs JSON",
+        actual_bytes,
+        max_bytes: SESSION_CALLER_INPUTS_JSON_MAX_BYTES,
+      }) if actual_bytes > SESSION_CALLER_INPUTS_JSON_MAX_BYTES
+    ));
+    Ok(())
+  }
+
+  #[test]
+  fn session_input_builder_matches_canonical_transport_budget() -> Result<()> {
+    let request_json = format!(
+      "\n{}\t",
+      serde_json::to_string(&BindingCallerDetectionRequest {
+        version:
+          stella_anonymize_adapter_contract::CALLER_DETECTION_CONTRACT_VERSION,
+        detections: Vec::new(),
+      })?
+    );
+    let full_texts = ["quote: \"", "line\n😀"];
+    let canonical = full_texts
+      .iter()
+      .map(|full_text| CanonicalSessionCallerInput {
+        full_text,
+        request_json: &request_json,
+      })
+      .collect::<Vec<_>>();
+    let expected = serde_json::to_vec(&canonical)?.len();
+
+    let mut inputs = SessionCallerInputs::with_capacity(full_texts.len())?;
+    for full_text in full_texts {
+      inputs.push_utf16_binding_json(&request_json, full_text.to_owned())?;
+    }
+
+    assert_eq!(inputs.encoded_json_bytes, expected);
+    Ok(())
+  }
+
+  #[test]
+  fn borrowed_caller_detections_own_json_validation() {
+    let result =
+      BorrowedValidatedCallerDetections::from_utf16_binding_json("{", "text");
+    assert!(matches!(result, Err(BindingFacadeError::Serialization(_))));
   }
 }

@@ -23,7 +23,6 @@ import {
   copyFileSync,
   cpSync,
   existsSync,
-  mkdirSync,
   mkdtempSync,
   readFileSync,
   readdirSync,
@@ -36,6 +35,7 @@ import { join } from "node:path";
 import { afterAll, describe, expect, setDefaultTimeout, test } from "bun:test";
 
 import {
+  CALLER_DETECTION_CONTRACT_VERSION,
   EXTERNAL_DETECTION_BATCH_MAX_BYTES,
   EXTERNAL_DETECTION_DOCUMENT_MAX_BYTES,
   EXTERNAL_DETECTION_MAX_DETECTIONS,
@@ -142,6 +142,13 @@ type PythonParityOutput = {
     masked_text: string;
     mask_map_count: number;
     mask_operator: string;
+  };
+  unicode_json_serialization: {
+    bounded_caller_request_rejected_before_later: boolean;
+    bounded_session_inputs_rejected_before_later: boolean;
+    canonical_score_requests: string[];
+    caller_request_json: string;
+    session_inputs_json: string;
   };
   external_detection_results: {
     start: number;
@@ -345,6 +352,78 @@ caller_result = json.loads(
           "provider_id": "parity-provider", "detection_id": "person-1"}],
     )
 )
+unicode_full_text = "😀Žluťoučký"
+unicode_detection = {
+    "start": 0,
+    "end": 1,
+    "label": "osoba-😀",
+    "score": 0.9,
+    "provider_id": "poskytovatel-Ž",
+    "detection_id": "detekce-č",
+}
+unicode_caller_request_json = anonymize._caller_detection_request_json(
+    [unicode_detection], unicode_full_text
+)
+canonical_score_requests = [
+    anonymize._caller_detection_request_json(
+        [{**unicode_detection, "score": score}], unicode_full_text
+    )
+    for score in [1.0, 1e-6, 1e-7, -0.0]
+]
+
+class UnreadCallerDetection(dict):
+    def __getitem__(self, _key):
+        raise AssertionError("later caller detection was read")
+
+try:
+    anonymize._caller_detection_request_json(
+        [
+            {**unicode_detection, "label": "x" * anonymize.CALLER_DETECTION_REQUEST_JSON_MAX_BYTES},
+            UnreadCallerDetection(),
+        ],
+        "x",
+    )
+    raise AssertionError("oversized caller request was accepted")
+except ValueError:
+    bounded_caller_request_rejected_before_later = True
+
+class CapturingSession:
+    def plan_docx_text_batch(
+        self, inputs_json, _operators_json, _observed_at_epoch_seconds
+    ):
+        self.inputs_json = inputs_json
+        return None
+
+unicode_session_capture = CapturingSession()
+anonymize.PreparedRedactionSession(unicode_session_capture)._plan_docx_text_batch(
+    [{"full_text": unicode_full_text, "detections": [unicode_detection]}],
+    None,
+    None,
+)
+
+class UnreadSessionInput(dict):
+    def __getitem__(self, _key):
+        raise AssertionError("later session input was read")
+
+original_session_json_maximum = anonymize.SESSION_CALLER_INPUTS_JSON_MAX_BYTES
+anonymize.SESSION_CALLER_INPUTS_JSON_MAX_BYTES = 256
+try:
+    anonymize.PreparedRedactionSession(CapturingSession())._plan_docx_text_batch(
+        [
+            {
+                "full_text": "x",
+                "detections": [{**unicode_detection, "label": "x" * 256}],
+            },
+            UnreadSessionInput(),
+        ],
+        None,
+        None,
+    )
+    raise AssertionError("oversized session inputs were accepted")
+except ValueError:
+    bounded_session_inputs_rejected_before_later = True
+finally:
+    anonymize.SESSION_CALLER_INPUTS_JSON_MAX_BYTES = original_session_json_maximum
 external_detection_results = []
 for offset_unit, start, end in [
     ("utf8-byte", 4, 9),
@@ -894,6 +973,13 @@ print(
                 "mask_map_count": len(caller_mask_result["redaction"]["redaction_map"]),
                 "mask_operator": caller_mask_result["redaction"]["operator_map"][0]["operator"],
             },
+            "unicode_json_serialization": {
+                "bounded_caller_request_rejected_before_later": bounded_caller_request_rejected_before_later,
+                "bounded_session_inputs_rejected_before_later": bounded_session_inputs_rejected_before_later,
+                "canonical_score_requests": canonical_score_requests,
+                "caller_request_json": unicode_caller_request_json,
+                "session_inputs_json": unicode_session_capture.inputs_json,
+            },
             "external_detection_results": external_detection_results,
             "external_detection_error_messages": external_detection_error_messages,
             "external_detection_limits": external_detection_limits,
@@ -1041,26 +1127,11 @@ const getPythonModule = (): string => {
   const tempDir = mkdtempSync(join(tmpdir(), "stella-anonymize-py-parity-"));
   pythonModuleTempDir = tempDir;
   const packageDir = join(tempDir, "stella_anonymize");
-  mkdirSync(packageDir);
+  cpSync(join(PYTHON_SOURCE_DIR, "stella_anonymize"), packageDir, {
+    recursive: true,
+  });
   const modulePath = join(packageDir, "_native.so");
   copyFileSync(nativeLibraryPath("stella_anonymize_core_py"), modulePath);
-  copyFileSync(
-    join(PYTHON_SOURCE_DIR, "stella_anonymize", "__init__.py"),
-    join(packageDir, "__init__.py"),
-  );
-  copyFileSync(
-    join(PYTHON_SOURCE_DIR, "stella_anonymize", "docx.py"),
-    join(packageDir, "docx.py"),
-  );
-  copyFileSync(
-    join(PYTHON_SOURCE_DIR, "stella_anonymize", "pdf.py"),
-    join(packageDir, "pdf.py"),
-  );
-  cpSync(
-    join(PYTHON_SOURCE_DIR, "stella_anonymize", "native_packages"),
-    join(packageDir, "native_packages"),
-    { recursive: true },
-  );
   pythonModulePath = modulePath;
   return pythonModulePath;
 };
@@ -1427,6 +1498,51 @@ describe("python binding parity", () => {
       mask_operator: "mask",
     });
   });
+
+  pythonParityTest(
+    "caller and session request JSON matches JavaScript UTF-8 serialization",
+    () => {
+      const python = runPythonParity([]);
+      const fullText = "😀Žluťoučký";
+      const requestJson = JSON.stringify({
+        version: CALLER_DETECTION_CONTRACT_VERSION,
+        detections: [
+          {
+            start: 0,
+            end: 1,
+            label: "osoba-😀",
+            score: 0.9,
+            provider_id: "poskytovatel-Ž",
+            detection_id: "detekce-č",
+          },
+        ],
+      });
+
+      expect(python.unicode_json_serialization).toEqual({
+        bounded_caller_request_rejected_before_later: true,
+        bounded_session_inputs_rejected_before_later: true,
+        canonical_score_requests: [1, 1e-6, 1e-7, -0].map((score) =>
+          JSON.stringify({
+            version: CALLER_DETECTION_CONTRACT_VERSION,
+            detections: [
+              {
+                start: 0,
+                end: 1,
+                label: "osoba-😀",
+                score,
+                provider_id: "poskytovatel-Ž",
+                detection_id: "detekce-č",
+              },
+            ],
+          }),
+        ),
+        caller_request_json: requestJson,
+        session_inputs_json: JSON.stringify([
+          { full_text: fullText, request_json: requestJson },
+        ]),
+      });
+    },
+  );
 
   pythonParityTest(
     "external detection batches share validation and host offset semantics",

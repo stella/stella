@@ -239,7 +239,7 @@ const runNativeNym = async (
     throw new Error(`native Nym adapter crashed (exit ${exitCode}): ${tail}`);
   }
   try {
-    return parseNymResult(JSON.parse(stdout));
+    return parseNymResult(JSON.parse(stdout) as unknown);
   } catch (error) {
     const detail = error instanceof Error ? error.message : "unknown error";
     throw new Error(`native Nym adapter emitted an invalid result: ${detail}`);

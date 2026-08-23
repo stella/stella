@@ -12,6 +12,7 @@ import { join, sep } from "node:path";
 
 import { loadNativeAnonymizeBinding } from "@stll/anonymize";
 
+import { decodePdfInspection } from "./native-codec";
 import type {
   PdfGlyphObservation,
   PdfPageObservation,
@@ -211,44 +212,18 @@ const inspectPageGeometry = (
     );
   }
   try {
-    const inspection = JSON.parse(inspect(document)) as {
-      encrypted?: unknown;
-      pageCount?: unknown;
-      pages?: unknown;
-    };
+    const inspection = decodePdfInspection(inspect(document));
     if (
       inspection.encrypted === true ||
-      !Number.isSafeInteger(inspection.pageCount) ||
-      (inspection.pageCount as number) < 1 ||
-      (inspection.pageCount as number) > PDF_MAX_PAGES ||
-      !Array.isArray(inspection.pages) ||
-      inspection.pages.length !== inspection.pageCount
+      inspection.pageCount < 1 ||
+      inspection.pageCount > PDF_MAX_PAGES
     ) {
       throw new Error("source rejected");
     }
-    return inspection.pages.map((page, pageIndex) => {
-      if (typeof page !== "object" || page === null) {
-        throw new Error("source rejected");
-      }
-      const candidate = page as Record<string, unknown>;
-      const {
-        heightPoints,
-        pageIndex: inspectedPageIndex,
-        widthPoints,
-      } = candidate;
-      if (
-        inspectedPageIndex !== pageIndex ||
-        typeof widthPoints !== "number" ||
-        !Number.isFinite(widthPoints) ||
-        widthPoints <= 0 ||
-        typeof heightPoints !== "number" ||
-        !Number.isFinite(heightPoints) ||
-        heightPoints <= 0
-      ) {
-        throw new Error("source rejected");
-      }
-      return { heightPoints, widthPoints };
-    });
+    return inspection.pages.map(({ heightPoints, widthPoints }) => ({
+      heightPoints,
+      widthPoints,
+    }));
   } catch {
     throw providerError(
       PDF_LOCAL_PROVIDER_ERROR_CODES.sourceRejected,

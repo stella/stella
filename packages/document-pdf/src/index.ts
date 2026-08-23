@@ -18,6 +18,10 @@ import {
   type PdfRasterRewrite,
   type PdfRasterRewriteResult,
 } from "./types";
+import {
+  decodePdfInspection,
+  decodePdfRasterRewriteCertificate,
+} from "./native-codec";
 
 export const PDF_INSPECTION_CONTRACT_VERSION = 1 as const;
 export const PDF_RASTER_CONTRACT_VERSION = 1 as const;
@@ -90,12 +94,12 @@ export const inspectPdf = (
   }
   try {
     const observations = options.pageObservations;
-    return JSON.parse(
+    return decodePdfInspection(
       inspect(
         document,
         observations === undefined ? undefined : JSON.stringify(observations),
       ),
-    ) as PdfInspection;
+    );
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "PDF inspection failed";
@@ -131,8 +135,8 @@ export const rewritePdfRasterFromDetections = ({
     const result = rewrite(document, JSON.stringify(request), pagePixels);
     return {
       document: result.document,
-      certificate: JSON.parse(result.certificateJson),
-    } as PdfRasterRewriteResult;
+      certificate: decodePdfRasterRewriteCertificate(result.certificateJson),
+    };
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "PDF raster rewrite failed";

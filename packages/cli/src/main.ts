@@ -458,38 +458,33 @@ const writeOutput = async ({
   await writeFile(path, content, "utf8");
 };
 
-type RedactionKeyFile = {
-  entries: Record<string, { original: string; operator: string }>;
-};
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
 
 const parseRedactionKey = (raw: string): Map<string, string> => {
   let parsed: unknown;
   try {
-    parsed = JSON.parse(raw);
+    parsed = JSON.parse(raw) as unknown;
   } catch {
     throw new UsageError("redaction key is not valid JSON");
   }
-  if (typeof parsed !== "object" || parsed === null || !("entries" in parsed)) {
+  if (!isRecord(parsed) || !("entries" in parsed)) {
     throw new UsageError(
       'redaction key must be an object with an "entries" field',
     );
   }
-  const { entries } = parsed as RedactionKeyFile;
-  if (
-    typeof entries !== "object" ||
-    entries === null ||
-    Array.isArray(entries)
-  ) {
+  const { entries } = parsed;
+  if (!isRecord(entries)) {
     throw new UsageError('redaction key "entries" must be an object');
   }
   const map = new Map<string, string>();
   for (const [placeholder, entry] of Object.entries(entries)) {
-    if (typeof entry?.original !== "string") {
+    if (!isRecord(entry) || typeof entry["original"] !== "string") {
       throw new UsageError(
         `redaction key entry "${placeholder}" has no original text`,
       );
     }
-    map.set(placeholder, entry.original);
+    map.set(placeholder, entry["original"]);
   }
   return map;
 };

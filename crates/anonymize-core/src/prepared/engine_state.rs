@@ -7,10 +7,10 @@ use crate::hotwords::PreparedHotwordData;
 use crate::legal_forms::PreparedLegalFormData;
 use crate::money::PreparedMonetaryData;
 use crate::name_corpus::PreparedNameCorpusData as PreparedNames;
-use crate::processors::{
-  CountryMatchData, DenyListFilterData, DenyListMatchData, GazetteerMatchData,
-  RegexMatchMeta,
+use crate::prepared_metadata::{
+  PreparedCountryMatchData, PreparedGazetteerMatchData, PreparedRegexMatchData,
 };
+use crate::processors::{DenyListFilterData, DenyListMatchData};
 use crate::search::SearchIndex;
 use crate::signatures::PreparedSignatureData;
 use crate::triggers::PreparedTriggerData;
@@ -32,15 +32,15 @@ pub(super) struct PipelinePolicy {
   pub(super) threshold: f64,
   pub(super) confidence_boost: bool,
   pub(super) slices: PreparedEngineSlices,
-  pub(super) regex_meta: Vec<RegexMatchMeta>,
-  pub(super) custom_regex_meta: Vec<RegexMatchMeta>,
+  pub(super) regex_meta: PreparedRegexMatchData,
+  pub(super) custom_regex_meta: PreparedRegexMatchData,
 }
 
 pub(super) struct PreparedStaticData {
   pub(super) deny_list: Option<DenyListMatchData>,
   pub(super) false_positive_filters: Option<DenyListFilterData>,
-  pub(super) gazetteer: Option<GazetteerMatchData>,
-  pub(super) countries: Option<CountryMatchData>,
+  pub(super) gazetteer: Option<PreparedGazetteerMatchData>,
+  pub(super) countries: Option<PreparedCountryMatchData>,
   pub(super) hotwords: Option<PreparedHotwordData>,
   pub(super) triggers: Option<PreparedTriggerData>,
   pub(super) legal_forms: Option<PreparedLegalFormData>,

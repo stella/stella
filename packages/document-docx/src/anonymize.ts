@@ -1,3 +1,5 @@
+import { CALLER_DETECTION_MAX_COUNT } from "@stll/anonymize";
+
 import { docxWorkflowCoverage } from "./coverage";
 import { extractDocxText } from "./extract";
 import { docxLocationKey, docxLocationsEqual } from "./location";
@@ -12,7 +14,8 @@ import {
   type DocxBlockRewrite,
 } from "./types";
 
-export const DOCX_ANONYMIZATION_MAX_CALLER_DETECTIONS = 1_000_000;
+export const DOCX_ANONYMIZATION_MAX_CALLER_DETECTIONS =
+  CALLER_DETECTION_MAX_COUNT;
 
 export class DocxAnonymizationError extends Error {
   readonly code: DocxAnonymizationErrorCode;

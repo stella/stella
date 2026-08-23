@@ -12,8 +12,13 @@ import { syncWorkspaceVersions } from "./lib/bun-lock-workspace-versions";
 
 const ROOT = join(import.meta.dirname, "..");
 
-const readJson = async (path: string): Promise<Record<string, unknown>> =>
-  JSON.parse(await Bun.file(path).text());
+const readJson = async (path: string): Promise<Record<string, unknown>> => {
+  const value: unknown = JSON.parse(await Bun.file(path).text());
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new Error(`${path} must contain a JSON object`);
+  }
+  return value;
+};
 
 const resolveWorkspaceDirs = async (globs: string[]): Promise<string[]> => {
   const dirs: string[] = [];

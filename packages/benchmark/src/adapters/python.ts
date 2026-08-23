@@ -253,7 +253,7 @@ export const createPythonAdapter = ({
 
       let rawResult: unknown;
       try {
-        rawResult = JSON.parse(stdout);
+        rawResult = JSON.parse(stdout) as unknown;
       } catch {
         throw new Error(`${name} adapter emitted malformed JSON`);
       }

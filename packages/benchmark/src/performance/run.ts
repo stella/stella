@@ -8,6 +8,7 @@ import { verifyCanonicalHost } from "./host";
 import {
   DEFAULT_PERFORMANCE_SCENARIO_ID,
   PERFORMANCE_INPUT_SOURCE,
+  PERFORMANCE_SCENARIO_SCHEMA_VERSION,
   type PerformanceScenarioId,
   performanceInputSourceDigest,
   parsePerformanceScenarioId,
@@ -138,6 +139,164 @@ type WorkerMessage =
   | { readonly type: "ready" }
   | { readonly type: "result"; readonly sample: PerformanceSample };
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const objectValue = (
+  value: unknown,
+  label: string,
+): Record<string, unknown> => {
+  if (!isRecord(value)) {
+    throw new Error(`${label} must be an object`);
+  }
+  return value;
+};
+
+const exactKeys = (
+  value: Record<string, unknown>,
+  expected: readonly string[],
+  label: string,
+): void => {
+  const keys = Object.keys(value);
+  if (
+    keys.length !== expected.length ||
+    keys.some((key) => !expected.includes(key))
+  ) {
+    throw new Error(`${label} contains unknown or missing fields`);
+  }
+};
+
+const stringValue = (value: unknown, label: string): string => {
+  if (typeof value !== "string") {
+    throw new Error(`${label} must be a string`);
+  }
+  return value;
+};
+
+const numberValue = (value: unknown, label: string): number => {
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
+    throw new Error(`${label} must be a non-negative finite number`);
+  }
+  return value;
+};
+
+const integerValue = (
+  value: unknown,
+  label: string,
+  minimum: number,
+): number => {
+  if (
+    !Number.isSafeInteger(value) ||
+    typeof value !== "number" ||
+    value < minimum
+  ) {
+    throw new Error(`${label} must be a safe integer of at least ${minimum}`);
+  }
+  return value;
+};
+
+const digestValue = (value: unknown, label: string): string => {
+  const digest = stringValue(value, label);
+  if (!/^[a-f0-9]{64}$/u.test(digest)) {
+    throw new Error(`${label} must be a lowercase SHA-256 digest`);
+  }
+  return digest;
+};
+
+export const parsePerformanceWorkerMessage = (line: string): WorkerMessage => {
+  const value: unknown = JSON.parse(line);
+  const message = objectValue(value, "performance worker message");
+  if (message["type"] === "ready") {
+    exactKeys(message, ["type"], "performance worker ready message");
+    return { type: "ready" };
+  }
+  if (message["type"] !== "result") {
+    throw new Error("performance worker message has an unknown type");
+  }
+  exactKeys(message, ["type", "sample"], "performance worker result message");
+  const sample = objectValue(message["sample"], "performance worker sample");
+  exactKeys(
+    sample,
+    [
+      "scenario",
+      "runtime",
+      "inputBytes",
+      "inputCharacters",
+      "inputSha256",
+      "outputCount",
+      "outputDigest",
+      "initSeconds",
+      "coldSeconds",
+      "warmSeconds",
+    ],
+    "performance worker sample",
+  );
+  const scenario = objectValue(sample["scenario"], "performance scenario");
+  exactKeys(scenario, ["type", "schemaVersion", "id"], "performance scenario");
+  if (
+    scenario["type"] !== "performance-input-scenario" ||
+    scenario["schemaVersion"] !== PERFORMANCE_SCENARIO_SCHEMA_VERSION
+  ) {
+    throw new Error("performance worker scenario has an invalid contract");
+  }
+  const runtime = objectValue(sample["runtime"], "performance runtime");
+  exactKeys(runtime, ["type", "version"], "performance runtime");
+  if (runtime["type"] !== "bun-native-binding") {
+    throw new Error("performance worker runtime has an invalid type");
+  }
+  return {
+    type: "result",
+    sample: {
+      scenario: {
+        type: "performance-input-scenario",
+        schemaVersion: PERFORMANCE_SCENARIO_SCHEMA_VERSION,
+        id: parsePerformanceScenarioId(
+          stringValue(scenario["id"], "performance scenario id"),
+        ),
+      },
+      runtime: {
+        type: "bun-native-binding",
+        version: stringValue(runtime["version"], "performance runtime version"),
+      },
+      inputBytes: integerValue(
+        sample["inputBytes"],
+        "performance input bytes",
+        1,
+      ),
+      inputCharacters: integerValue(
+        sample["inputCharacters"],
+        "performance input characters",
+        1,
+      ),
+      inputSha256: digestValue(
+        sample["inputSha256"],
+        "performance input digest",
+      ),
+      outputCount: integerValue(
+        sample["outputCount"],
+        "performance output count",
+        0,
+      ),
+      outputDigest: digestValue(
+        sample["outputDigest"],
+        "performance output digest",
+      ),
+      initSeconds: numberValue(
+        sample["initSeconds"],
+        "performance init seconds",
+      ),
+      coldSeconds: numberValue(
+        sample["coldSeconds"],
+        "performance cold seconds",
+      ),
+      warmSeconds: numberValue(
+        sample["warmSeconds"],
+        "performance warm seconds",
+      ),
+    },
+  };
+};
+
 type IsolatedSample = PerformanceSample & { readonly startupSeconds: number };
 
 export type SampleExecution =
@@ -196,7 +355,7 @@ const runIsolatedSample = (
     lines.on("line", (line) => {
       let message: WorkerMessage;
       try {
-        message = JSON.parse(line) as WorkerMessage;
+        message = parsePerformanceWorkerMessage(line);
       } catch (error) {
         reject(
           new Error("performance worker emitted invalid JSON", {

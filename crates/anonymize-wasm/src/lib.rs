@@ -9,13 +9,14 @@
 use std::{cell::RefCell, rc::Rc};
 
 use js_sys::{Function, Uint8Array};
+use serde::Deserialize;
 use stella_anonymize_adapter_contract::{
   external_detection_batch_to_utf16_caller_request,
   external_detection_limits_json as contract_external_detection_limits_json,
 };
 use stella_anonymize_binding_core::{
   PackageEncoding, PackageVerification, PreparedBinding, PreparedSessionPlan,
-  SessionCallerInput, assemble_config,
+  SessionCallerInputs, assemble_config,
   assemble_package as binding_assemble_package, create_session,
   create_session_with_lifecycle, delete_session, encrypted_session_archive,
   inspect_session, operators_from_json, plaintext_session_json,
@@ -29,6 +30,7 @@ use stella_anonymize_binding_core::{
   redact_with_caller_detections_diagnostics_json,
   redact_with_caller_detections_json, redact_with_session_json,
   restore_encrypted_session, restore_session, restore_session_text,
+  validate_session_caller_inputs_json,
 };
 use stella_anonymize_core::{
   DiagnosticDetail, PreparedEngine, RedactionSession,
@@ -51,6 +53,13 @@ use stella_anonymize_pdf_core::{
 use wasm_bindgen::prelude::*;
 
 type WasmResult<T> = Result<T, JsError>;
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct WasmSessionCallerInput {
+  full_text: String,
+  request_json: String,
+}
 
 #[wasm_bindgen(js_name = normalizeForSearch)]
 #[must_use]
@@ -662,8 +671,17 @@ impl WasmPreparedRedactionSession {
     operators_json: Option<String>,
     observed_at_epoch_seconds: Option<u32>,
   ) -> WasmResult<WasmPreparedSessionRedactionPlan> {
-    let inputs = serde_json::from_str::<Vec<SessionCallerInput>>(inputs_json)
-      .map_err(js_error)?;
+    validate_session_caller_inputs_json(inputs_json).map_err(js_error)?;
+    let raw_inputs =
+      serde_json::from_str::<Vec<WasmSessionCallerInput>>(inputs_json)
+        .map_err(js_error)?;
+    let mut inputs =
+      SessionCallerInputs::with_capacity(raw_inputs.len()).map_err(js_error)?;
+    for input in raw_inputs {
+      inputs
+        .push_utf16_binding_json(&input.request_json, input.full_text)
+        .map_err(js_error)?;
+    }
     let operators =
       operators_from_json(operators_json.as_deref()).map_err(js_error)?;
     let plan = plan_session_redactions(
@@ -674,7 +692,8 @@ impl WasmPreparedRedactionSession {
       observed_at_epoch_seconds,
     )
     .map_err(js_error)?;
-    let result_json = plan.result_json().to_owned();
+    let result_json =
+      serde_json::to_string(plan.results()).map_err(js_error)?;
     Ok(WasmPreparedSessionRedactionPlan {
       target: Rc::clone(&self.session),
       plan: RefCell::new(plan),

@@ -6,10 +6,11 @@ use std::{
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::{PyAny, PyBytes};
+use serde::Deserialize;
 use stella_anonymize_adapter_contract::{
-  BindingCallerDetectionRequest, BindingOperatorConfig, BindingOperatorEntry,
-  BindingPipelineEntity, BindingPreparedSearchConfig, BindingRedactionEntry,
-  BindingRedactionResult, BindingStaticRedactionResult, ContractError,
+  BindingOperatorConfig, BindingOperatorEntry, BindingPipelineEntity,
+  BindingPreparedSearchConfig, BindingRedactionEntry, BindingRedactionResult,
+  BindingStaticRedactionResult, ContractError,
   PreparedSearchPackageDecodeTimings, assemble_static_search_config,
   caller_detections_from_character_binding, diagnostic_events_to_utf16_binding,
   diagnostic_stage_event,
@@ -29,8 +30,9 @@ use stella_anonymize_adapter_contract::{
   static_redaction_stream_event_to_utf16_binding,
 };
 use stella_anonymize_binding_core::{
-  PreparedSessionPlan, SessionCallerInput,
+  PreparedSessionPlan, SessionCallerInputs, caller_detection_request_from_json,
   plan_session_redactions as binding_plan_session_redactions,
+  validate_caller_detection_text, validate_session_caller_inputs_json,
 };
 use stella_anonymize_core::{
   CallerRedactionOptions, DiagnosticDetail, DiagnosticEvent, DiagnosticStage,
@@ -135,6 +137,13 @@ pub struct PyPreparedSessionRedactionPlan {
   target: Arc<Mutex<RedactionSession>>,
   plan: Mutex<PreparedSessionPlan>,
   result_json: String,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct PySessionCallerInput {
+  full_text: String,
+  request_json: String,
 }
 
 #[pymethods]
@@ -268,8 +277,18 @@ impl PyPreparedRedactionSession {
     operators_json: Option<&str>,
     observed_at_epoch_seconds: Option<u32>,
   ) -> PyResult<PyPreparedSessionRedactionPlan> {
-    let inputs = serde_json::from_str::<Vec<SessionCallerInput>>(inputs_json)
-      .map_err(|error| to_py_serde_error(&error))?;
+    validate_session_caller_inputs_json(inputs_json)
+      .map_err(to_py_facade_error)?;
+    let raw_inputs =
+      serde_json::from_str::<Vec<PySessionCallerInput>>(inputs_json)
+        .map_err(|error| to_py_serde_error(&error))?;
+    let mut inputs = SessionCallerInputs::with_capacity(raw_inputs.len())
+      .map_err(to_py_facade_error)?;
+    for input in raw_inputs {
+      inputs
+        .push_utf16_binding_json(&input.request_json, input.full_text)
+        .map_err(to_py_facade_error)?;
+    }
     let operators =
       operator_config_from_binding(parse_operator_config(operators_json)?)
         .map_err(|error| to_py_contract_error(&error))?;
@@ -283,7 +302,8 @@ impl PyPreparedRedactionSession {
     )
     .map_err(to_py_facade_error)?;
     drop(session);
-    let result_json = plan.result_json().to_owned();
+    let result_json = serde_json::to_string(plan.results())
+      .map_err(|error| to_py_serde_error(&error))?;
     Ok(PyPreparedSessionRedactionPlan {
       target: Arc::clone(&self.session),
       plan: Mutex::new(plan),
@@ -695,9 +715,9 @@ impl PyPreparedSearch {
     request_json: &str,
     operators_json: Option<&str>,
   ) -> PyResult<String> {
-    let request =
-      serde_json::from_str::<BindingCallerDetectionRequest>(request_json)
-        .map_err(|error| to_py_serde_error(&error))?;
+    validate_caller_detection_text(full_text).map_err(to_py_facade_error)?;
+    let request = caller_detection_request_from_json(request_json)
+      .map_err(to_py_facade_error)?;
     let detections =
       caller_detections_from_character_binding(request, full_text)
         .map_err(|error| to_py_contract_error(&error))?;
@@ -823,9 +843,9 @@ impl PyPreparedSearch {
     request_json: &str,
     operators_json: Option<&str>,
   ) -> PyResult<StaticRedactionResult> {
-    let request =
-      serde_json::from_str::<BindingCallerDetectionRequest>(request_json)
-        .map_err(|error| to_py_serde_error(&error))?;
+    validate_caller_detection_text(full_text).map_err(to_py_facade_error)?;
+    let request = caller_detection_request_from_json(request_json)
+      .map_err(to_py_facade_error)?;
     let detections =
       caller_detections_from_character_binding(request, full_text)
         .map_err(|error| to_py_contract_error(&error))?;

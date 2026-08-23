@@ -10,6 +10,7 @@ import json
 from collections.abc import Mapping, Sequence
 from typing import Any, TypedDict
 
+from ._caller_limits import CALLER_DETECTION_MAX_COUNT
 from ._native import extract_docx_text_json as _extract_docx_text_json
 from ._native import plan_docx_restoration_json as _plan_docx_restoration_json
 from ._native import rewrite_docx_text_native as _rewrite_docx_text_native
@@ -203,7 +204,9 @@ def rewrite_docx_text(
                 normalized["expectedText"] = normalized.pop("expected_text")
             normalized_rewrites.append(normalized)
         serializable_rewrites = _preflight_rewrite_plan(normalized_rewrites)
-        rewrites_json = json.dumps(serializable_rewrites, separators=(",", ":"))
+        rewrites_json = json.dumps(
+            serializable_rewrites, separators=(",", ":"), ensure_ascii=False
+        )
     except DocxRewriteError:
         raise
     except (TypeError, ValueError) as error:
@@ -326,10 +329,11 @@ def anonymize_docx(
                 "DOCX caller-detection location or expected text no longer matches",
             )
         caller_count += len(item.get("detections", ()))
-        if caller_count > 1_000_000:
+        if caller_count > CALLER_DETECTION_MAX_COUNT:
             raise DocxAnonymizationError(
                 "invalid-caller-detections",
-                "DOCX workflows must not contain more than 1000000 caller detections",
+                "DOCX workflows must not contain more than "
+                f"{CALLER_DETECTION_MAX_COUNT} caller detections",
             )
         detections_by_location[key] = item
     rewrites: list[dict[str, Any]] = []

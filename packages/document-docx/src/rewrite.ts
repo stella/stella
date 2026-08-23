@@ -1,9 +1,11 @@
 import { loadNativeAnonymizeBinding } from "@stll/anonymize";
 
 import {
+  DOCX_PART_TYPES,
   DOCX_EXTRACTION_ERROR_CODES,
   DOCX_REWRITE_ERROR_CODES,
   type DocxBlockRewrite,
+  type DocxBlockLocation,
   type DocxExtractionErrorCode,
   type DocxRewriteErrorCode,
   type DocxRewriteResult,
@@ -32,17 +34,147 @@ const EXTRACTION_ERROR_CODES = new Set<DocxExtractionErrorCode>(
 );
 const DOCX_REWRITE_MAX_BLOCKS = 100_000;
 const DOCX_REWRITE_MAX_REPLACEMENTS = 1_000_000;
-const LOCATION_PATH_KEYS = [
-  "xmlPath",
-  "tablePath",
-  "rowPath",
-  "cellPath",
-  "textBoxPath",
-] as const;
+
+const invalidLocation = (message: string): never => {
+  throw new DocxRewriteError(
+    DOCX_REWRITE_ERROR_CODES.invalidReplacement,
+    message,
+  );
+};
+
+const ownDataRecord = (value: unknown, fields?: readonly string[]): object => {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return invalidLocation("DOCX rewrite locations must be plain objects");
+  }
+  const prototype = Object.getPrototypeOf(value);
+  if (prototype !== Object.prototype && prototype !== null) {
+    return invalidLocation("DOCX rewrite locations must be plain objects");
+  }
+  const keys = Reflect.ownKeys(value);
+  if (
+    keys.some((key) => typeof key !== "string") ||
+    (fields !== undefined &&
+      (keys.length !== fields.length ||
+        keys.some((key) => typeof key !== "string" || !fields.includes(key))))
+  ) {
+    return invalidLocation(
+      "DOCX rewrite locations must contain exactly their declared fields",
+    );
+  }
+  for (const field of fields ?? keys) {
+    if (typeof field !== "string") {
+      return invalidLocation(
+        "DOCX rewrite locations must contain string fields",
+      );
+    }
+    const descriptor = Object.getOwnPropertyDescriptor(value, field);
+    if (descriptor === undefined || !("value" in descriptor)) {
+      return invalidLocation(
+        "DOCX rewrite locations must contain own data properties",
+      );
+    }
+  }
+  return value;
+};
+
+const ownValue = (record: object, field: string): unknown =>
+  Object.getOwnPropertyDescriptor(record, field)?.value;
+
+const isDocxPartType = (
+  value: unknown,
+): value is DocxBlockLocation["part"]["type"] =>
+  Object.values(DOCX_PART_TYPES).some((type) => type === value);
+
+const copyPath = (path: unknown): number[] => {
+  if (!Array.isArray(path)) {
+    return invalidLocation("DOCX rewrite location paths must be arrays");
+  }
+  if (path.length > DOCX_XML_MAX_DEPTH) {
+    throw new DocxRewriteError(
+      DOCX_REWRITE_ERROR_CODES.invalidReplacement,
+      `DOCX rewrite location paths must not exceed ${DOCX_XML_MAX_DEPTH} entries`,
+    );
+  }
+  const copy: number[] = [];
+  for (let pathIndex = 0; pathIndex < path.length; pathIndex += 1) {
+    const descriptor = Object.getOwnPropertyDescriptor(path, pathIndex);
+    const index = descriptor?.value;
+    if (index === undefined || !Number.isSafeInteger(index) || index < 0) {
+      throw new DocxRewriteError(
+        DOCX_REWRITE_ERROR_CODES.invalidReplacement,
+        "DOCX rewrite location paths must contain non-negative integers",
+      );
+    }
+    copy.push(index);
+  }
+  return copy;
+};
+
+const copyLocation = (location: unknown): DocxBlockLocation => {
+  const candidate = ownDataRecord(location);
+  const type = ownValue(candidate, "type");
+  const fields = ["type", "part", "blockIndex", "xmlPath"];
+  if (type === "table-cell-paragraph") {
+    fields.push("tablePath", "rowPath", "cellPath");
+  } else if (type === "text-box-paragraph") {
+    fields.push("textBoxPath");
+  }
+  if (Object.hasOwn(candidate, "toJSON")) {
+    fields.push("toJSON");
+  }
+  const base = ownDataRecord(location, fields);
+  const partRecord = ownDataRecord(ownValue(base, "part"), ["type", "path"]);
+  const partType = ownValue(partRecord, "type");
+  const partPath = ownValue(partRecord, "path");
+  const blockIndex = ownValue(base, "blockIndex");
+  if (
+    !isDocxPartType(partType) ||
+    typeof partPath !== "string" ||
+    !Number.isSafeInteger(blockIndex) ||
+    typeof blockIndex !== "number" ||
+    blockIndex < 0
+  ) {
+    return invalidLocation(
+      "DOCX rewrite locations must contain a known type, part, and block index",
+    );
+  }
+  const part = { type: partType, path: partPath };
+  switch (type) {
+    case "paragraph":
+      return {
+        type,
+        part,
+        blockIndex,
+        xmlPath: copyPath(ownValue(base, "xmlPath")),
+      };
+    case "table-cell-paragraph":
+      return {
+        type,
+        part,
+        blockIndex,
+        xmlPath: copyPath(ownValue(base, "xmlPath")),
+        tablePath: copyPath(ownValue(base, "tablePath")),
+        rowPath: copyPath(ownValue(base, "rowPath")),
+        cellPath: copyPath(ownValue(base, "cellPath")),
+      };
+    case "text-box-paragraph":
+      return {
+        type,
+        part,
+        blockIndex,
+        xmlPath: copyPath(ownValue(base, "xmlPath")),
+        textBoxPath: copyPath(ownValue(base, "textBoxPath")),
+      };
+    default:
+      return invalidLocation(
+        "DOCX rewrite locations must use a known location type",
+      );
+  }
+};
 
 const preflightRewritePlan = (
   rewrites: readonly DocxBlockRewrite[],
-): readonly unknown[] => {
+): readonly DocxBlockRewrite[] => {
   const rewriteCount = rewrites.length;
   if (rewriteCount > DOCX_REWRITE_MAX_BLOCKS) {
     throw new DocxRewriteError(
@@ -52,7 +184,7 @@ const preflightRewritePlan = (
   }
   let replacementCount = 0;
   let estimatedBytes = rewriteCount * 256;
-  const serializableRewrites: unknown[] = [];
+  const serializableRewrites: DocxBlockRewrite[] = [];
   for (let rewriteIndex = 0; rewriteIndex < rewriteCount; rewriteIndex += 1) {
     const rewrite = rewrites[rewriteIndex];
     if (rewrite === undefined) {
@@ -75,12 +207,15 @@ const preflightRewritePlan = (
         `DOCX rewrites must not contain more than ${DOCX_REWRITE_MAX_REPLACEMENTS} replacements`,
       );
     }
+    if (typeof rewrite.expectedText !== "string") {
+      throw new DocxRewriteError(
+        DOCX_REWRITE_ERROR_CODES.invalidReplacement,
+        "DOCX block rewrite expectedText must be a string",
+      );
+    }
     estimatedBytes +=
-      (typeof rewrite.expectedText === "string"
-        ? rewrite.expectedText.length * 6
-        : 0) +
-      blockReplacementCount * 96;
-    const serializableReplacements: unknown[] = [];
+      rewrite.expectedText.length * 6 + blockReplacementCount * 96;
+    const replacements: DocxBlockRewrite["replacements"][number][] = [];
     for (
       let replacementIndex = 0;
       replacementIndex < blockReplacementCount;
@@ -93,57 +228,51 @@ const preflightRewritePlan = (
           "DOCX rewrite plans must not contain sparse replacements",
         );
       }
-      const value = replacement.replacement;
-      if (typeof value === "string") {
-        estimatedBytes += value.length * 6;
+      if (
+        !Number.isSafeInteger(replacement.start) ||
+        replacement.start < 0 ||
+        !Number.isSafeInteger(replacement.end) ||
+        replacement.end < replacement.start ||
+        typeof replacement.replacement !== "string"
+      ) {
+        throw new DocxRewriteError(
+          DOCX_REWRITE_ERROR_CODES.invalidReplacement,
+          "DOCX replacements require ordered non-negative integer offsets and string values",
+        );
       }
-      serializableReplacements.push({
-        start: typeof replacement.start === "number" ? replacement.start : null,
-        end: typeof replacement.end === "number" ? replacement.end : null,
-        replacement: typeof value === "string" ? value : null,
+      estimatedBytes += replacement.replacement.length * 6;
+      replacements.push({
+        start: replacement.start,
+        end: replacement.end,
+        replacement: replacement.replacement,
       });
     }
-    const location = rewrite.location as unknown as Record<string, unknown>;
-    const part = location["part"] as Record<string, unknown> | undefined;
-    for (const value of [location["type"], part?.["type"], part?.["path"]]) {
-      if (typeof value === "string") {
-        estimatedBytes += value.length * 6;
-      }
-    }
-    const serializableLocation: Record<string, unknown> = {
-      type: typeof location["type"] === "string" ? location["type"] : null,
-      part: {
-        type: typeof part?.["type"] === "string" ? part["type"] : null,
-        path: typeof part?.["path"] === "string" ? part["path"] : null,
-      },
-      blockIndex:
-        typeof location["blockIndex"] === "number"
-          ? location["blockIndex"]
-          : null,
-    };
-    for (const key of LOCATION_PATH_KEYS) {
-      const path = location[key];
-      if (Array.isArray(path)) {
-        if (path.length > DOCX_XML_MAX_DEPTH) {
-          throw new DocxRewriteError(
-            DOCX_REWRITE_ERROR_CODES.invalidReplacement,
-            `DOCX rewrite location paths must not exceed ${DOCX_XML_MAX_DEPTH} entries`,
-          );
-        }
-        estimatedBytes += path.length * 24;
-        const serializablePath: Array<number | null> = [];
-        for (let pathIndex = 0; pathIndex < path.length; pathIndex += 1) {
-          const value = path[pathIndex];
-          serializablePath.push(typeof value === "number" ? value : null);
-        }
-        serializableLocation[key] = serializablePath;
-      }
+    const { location } = rewrite;
+    const serializableLocation = copyLocation(location);
+    estimatedBytes +=
+      (serializableLocation.type.length +
+        serializableLocation.part.type.length +
+        serializableLocation.part.path.length) *
+      6;
+    estimatedBytes += serializableLocation.xmlPath.length * 24;
+    switch (serializableLocation.type) {
+      case "paragraph":
+        break;
+      case "table-cell-paragraph":
+        estimatedBytes +=
+          (serializableLocation.tablePath.length +
+            serializableLocation.rowPath.length +
+            serializableLocation.cellPath.length) *
+          24;
+        break;
+      case "text-box-paragraph":
+        estimatedBytes += serializableLocation.textBoxPath.length * 24;
+        break;
     }
     serializableRewrites.push({
       location: serializableLocation,
-      expectedText:
-        typeof rewrite.expectedText === "string" ? rewrite.expectedText : null,
-      replacements: serializableReplacements,
+      expectedText: rewrite.expectedText,
+      replacements,
     });
     if (estimatedBytes > DOCX_UNCOMPRESSED_MAX_BYTES) {
       throw new DocxRewriteError(
@@ -165,7 +294,7 @@ export const rewriteDocxText = (
       "The native anonymize binding does not expose DOCX rewriting",
     );
   }
-  let serializableRewrites: readonly unknown[];
+  let serializableRewrites: readonly DocxBlockRewrite[];
   try {
     serializableRewrites = preflightRewritePlan(rewrites);
   } catch (error) {

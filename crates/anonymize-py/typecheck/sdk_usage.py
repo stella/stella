@@ -145,6 +145,11 @@ def convert_external_detection(document: bytes) -> list[anonymize.CallerDetectio
         anonymize.EXTERNAL_DETECTION_MAX_LABEL_MAPPINGS,
         anonymize.EXTERNAL_DETECTION_MAX_METADATA_BYTES,
         anonymize.EXTERNAL_DETECTION_PROVIDER_ID_MAX_BYTES,
+        anonymize.CALLER_DETECTION_MAX_COUNT,
+        anonymize.CALLER_DETECTION_REQUEST_JSON_MAX_BYTES,
+        anonymize.CALLER_DETECTION_TEXT_MAX_BYTES,
+        anonymize.SESSION_CALLER_INPUTS_JSON_MAX_BYTES,
+        anonymize.SESSION_CALLER_MAX_INPUTS,
     )
     assert all(limit > 0 for limit in limits)
     batch: anonymize.ExternalDetectionBatch = {

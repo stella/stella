@@ -26,6 +26,7 @@ mod name_corpus;
 pub(crate) mod normalize;
 mod placeholders;
 mod prepared;
+mod prepared_metadata;
 mod processors;
 mod redact;
 mod resolution;

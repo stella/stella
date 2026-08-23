@@ -8,6 +8,7 @@ use crate::error::{ContractError, Result};
 use crate::offsets::{CharacterOffsetMap, Utf16OffsetMap};
 
 pub const CALLER_DETECTION_CONTRACT_VERSION: u32 = 2;
+pub const CALLER_DETECTION_MAX_COUNT: usize = 1_000_000;
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]

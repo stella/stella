@@ -5,6 +5,7 @@ import type {
   NativePreparedSearchBinding,
   NativePreparedSessionRedactionPlanBinding,
 } from "./native";
+import { SESSION_CALLER_INPUTS_JSON_MAX_BYTES } from "./native";
 import type { OperatorType } from "./types";
 
 type OperatorConfig = Parameters<
@@ -407,17 +408,25 @@ const wrapSession = (
     inputs,
     operators,
     observedAtEpochSeconds,
-  }): NativePreparedSessionRedactionPlanBinding =>
-    raw.planStaticEntitiesWithCallerDetections(
-      JSON.stringify(
-        inputs.map(({ fullText, requestJson }) => ({
-          full_text: fullText,
-          request_json: requestJson,
-        })),
-      ),
+  }): NativePreparedSessionRedactionPlanBinding => {
+    const inputsJson = JSON.stringify(
+      inputs.map(({ fullText, requestJson }) => ({
+        full_text: fullText,
+        request_json: requestJson,
+      })),
+    );
+    const inputsJsonBytes = new TextEncoder().encode(inputsJson).byteLength;
+    if (inputsJsonBytes > SESSION_CALLER_INPUTS_JSON_MAX_BYTES) {
+      throw new RangeError(
+        `Session caller inputs JSON contains ${inputsJsonBytes} bytes; the maximum is ${SESSION_CALLER_INPUTS_JSON_MAX_BYTES}`,
+      );
+    }
+    return raw.planStaticEntitiesWithCallerDetections(
+      inputsJson,
       json(operators),
       observedAtEpochSeconds,
-    ),
+    );
+  },
 });
 
 const json = (value: OperatorConfig | undefined): string | undefined =>

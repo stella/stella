@@ -20,7 +20,9 @@ import {
 } from "@stll/anonymize/feedback";
 import {
   DOCX_ARCHIVE_MAX_BYTES,
+  DOCX_ANONYMIZATION_ERROR_CODES,
   DOCX_COVERAGE_MODES,
+  DocxAnonymizationError,
   anonymizeDocx,
   extractDocxText,
   restoreDocxText,
@@ -29,6 +31,8 @@ import {
 } from "@stll/anonymize-docx";
 import {
   PDF_DOCUMENT_MAX_BYTES,
+  PDF_LOCAL_PROVIDER_ERROR_CODES,
+  PdfLocalProviderError,
   anonymizePdfRaster,
   renderPdfWithPopplerTesseract,
 } from "@stll/anonymize-pdf";
@@ -79,42 +83,28 @@ const nodeErrorCode = (error: unknown): string | undefined =>
     ? (error as NodeJS.ErrnoException).code
     : undefined;
 
-/**
- * The local PDF provider collapses a missing/failed pdftoppm or tesseract into a
- * `PdfLocalProviderError` with code `executable-failed`; treat it as a missing
- * dependency so agents get an actionable install hint instead of a generic
- * internal error. Duck-typed to avoid importing the provider's internals.
- */
+/** Map an unavailable local toolchain to the shared agent-surface taxonomy. */
 const isPdfToolchainUnavailable = (error: unknown): boolean =>
-  typeof error === "object" &&
-  error !== null &&
-  (error as { name?: unknown }).name === "PdfLocalProviderError" &&
-  (error as { code?: unknown }).code === "executable-failed";
+  error instanceof PdfLocalProviderError &&
+  error.code === PDF_LOCAL_PROVIDER_ERROR_CODES.executableFailed;
 
 /**
  * The docx package refuses under requireFull coverage with a
  * `DocxAnonymizationError` (code `incomplete-coverage`). Map it to a
  * validation_error so the agent gets the actionable allowPartialCoverage hint
  * instead of a generic internal_error; pass anything else through unchanged.
- * Duck-typed to avoid importing the docx error class.
  */
 const mapDocxCoverageError = (error: unknown): unknown => {
   if (
-    typeof error === "object" &&
-    error !== null &&
-    (error as { name?: unknown }).name === "DocxAnonymizationError" &&
-    (error as { code?: unknown }).code === "incomplete-coverage"
+    error instanceof DocxAnonymizationError &&
+    error.code === DOCX_ANONYMIZATION_ERROR_CODES.incompleteCoverage
   ) {
     // Preserve the docx package's specific (content-free) coverage message; add
     // the stable code and the actionable hint.
-    return new AnonymizeSurfaceError(
-      "validation_error",
-      (error as Error).message,
-      {
-        hint: "Re-run with allowPartialCoverage: true to accept partial coverage.",
-        cause: error,
-      },
-    );
+    return new AnonymizeSurfaceError("validation_error", error.message, {
+      hint: "Re-run with allowPartialCoverage: true to accept partial coverage.",
+      cause: error,
+    });
   }
   return error;
 };
@@ -135,24 +125,87 @@ export const MCP_SESSION_MODES = {
 export type McpSessionMode =
   (typeof MCP_SESSION_MODES)[keyof typeof MCP_SESSION_MODES];
 
-export type AuditSafeResult = {
-  operation: "anonymize" | "inspect" | "restore";
-  format: "docx" | "pdf" | "text";
-  outputCreated: boolean;
-  sessionId?: string;
-  entityCount?: number;
-  blockCount?: number;
-  rewrittenBlockCount?: number;
-  restoredPlaceholderCount?: number;
-  coverageStatus?: "full" | "partial";
-  externalDetectionBatchStatus?: "accepted";
-  externalDetectionCount?: number;
-  retainedExternalDetectionCount?: number;
-  pageCount?: number;
-  mappedRegionCount?: number;
-  structurePixelRewriteVerified?: true;
-  piiCleanGuaranteed?: false;
+type TextAnonymizationResultBase = {
+  operation: "anonymize";
+  format: "text";
+  outputCreated: true;
+  sessionId: string;
+  entityCount: number;
 };
+
+type TextAnonymizationResult = TextAnonymizationResultBase;
+
+type ExternalDetectionTextAnonymizationResult = TextAnonymizationResultBase & {
+  externalDetectionBatchStatus: "accepted";
+  externalDetectionCount: number;
+  retainedExternalDetectionCount: number;
+};
+
+type DocxAnonymizationAuditResult = {
+  operation: "anonymize";
+  format: "docx";
+  outputCreated: true;
+  sessionId: string;
+  entityCount: number;
+  blockCount: number;
+  rewrittenBlockCount: number;
+  coverageStatus: "full" | "partial";
+};
+
+type PdfAnonymizationAuditResult = {
+  operation: "anonymize";
+  format: "pdf";
+  outputCreated: true;
+  pageCount: number;
+  entityCount: number;
+  mappedRegionCount: number;
+  structurePixelRewriteVerified: true;
+  piiCleanGuaranteed: false;
+};
+
+type TextRestorationAuditResult = {
+  operation: "restore";
+  format: "text";
+  outputCreated: true;
+  sessionId: string;
+};
+
+type DocxRestorationAuditResult = {
+  operation: "restore";
+  format: "docx";
+  outputCreated: true;
+  sessionId: string;
+  rewrittenBlockCount: number;
+  restoredPlaceholderCount: number;
+  coverageStatus: "full" | "partial";
+};
+
+type DocxInspectionAuditResult = {
+  operation: "inspect";
+  format: "docx";
+  outputCreated: false;
+  blockCount: number;
+  coverageStatus: "full" | "partial";
+};
+
+type AuditSafeResultVariant =
+  | TextAnonymizationResult
+  | ExternalDetectionTextAnonymizationResult
+  | DocxAnonymizationAuditResult
+  | PdfAnonymizationAuditResult
+  | TextRestorationAuditResult
+  | DocxRestorationAuditResult
+  | DocxInspectionAuditResult;
+
+type UnionKeys<Union> = Union extends unknown ? keyof Union : never;
+
+type StrictUnionMember<Member, Whole> = Member extends unknown
+  ? Member & Partial<Record<Exclude<UnionKeys<Whole>, keyof Member>, never>>
+  : never;
+
+type StrictUnion<Union> = StrictUnionMember<Union, Union>;
+
+export type AuditSafeResult = StrictUnion<AuditSafeResultVariant>;
 
 const EXTERNAL_DETECTION_FAILURES = {
   batchRejected: {
@@ -520,7 +573,30 @@ type NativeNodeSurface = {
   native_package_version: () => string;
 };
 
-const nativeNodeSurface = nativeNode as unknown as NativeNodeSurface; // SAFETY: These native-node runtime exports are public, but their generated declarations are minified during workspace builds.
+const isNativeNodeSurface = (value: unknown): value is NativeNodeSurface =>
+  ((typeof value === "object" && value !== null) ||
+    typeof value === "function") &&
+  "convert_external_detection_batch" in value &&
+  typeof value.convert_external_detection_batch === "function" &&
+  "getDefaultNativePipeline" in value &&
+  typeof value.getDefaultNativePipeline === "function" &&
+  "native_package_version" in value &&
+  typeof value.native_package_version === "function";
+
+let cachedNativeNodeSurface: NativeNodeSurface | undefined;
+
+const getNativeNodeSurface = (): NativeNodeSurface => {
+  if (cachedNativeNodeSurface !== undefined) {
+    return cachedNativeNodeSurface;
+  }
+  if (!isNativeNodeSurface(nativeNode)) {
+    throw new Error(
+      "The native-node package does not expose the MCP runtime surface",
+    );
+  }
+  cachedNativeNodeSurface = nativeNode;
+  return cachedNativeNodeSurface;
+};
 
 const assertOutputParent = async ({
   parent,
@@ -839,7 +915,7 @@ export class LocalAnonymizeService {
       if (this.#sessions.size >= SESSION_MAX_COUNT) {
         throw new Error(`MCP sessions must not exceed ${SESSION_MAX_COUNT}`);
       }
-      const pipeline = nativeNodeSurface.getDefaultNativePipeline(
+      const pipeline = getNativeNodeSurface().getDefaultNativePipeline(
         language === undefined ? {} : { language },
       );
       const durableSessions = this.#durableSessions;
@@ -935,7 +1011,7 @@ export class LocalAnonymizeService {
       }
       this.#sessionInitializations.add(sessionId);
       try {
-        const pipeline = nativeNodeSurface.getDefaultNativePipeline({});
+        const pipeline = getNativeNodeSurface().getDefaultNativePipeline({});
         const stored = await this.#durableSessions.load(sessionId);
         if (stored !== undefined) {
           try {
@@ -1003,13 +1079,13 @@ export class LocalAnonymizeService {
 
   async anonymizeText(
     input: z.infer<typeof textInput>,
-  ): Promise<AuditSafeResult> {
+  ): Promise<TextAnonymizationResult> {
     return this.#runOperation(() => this.#anonymizeText(input));
   }
 
   async anonymizePdf(
     input: z.infer<typeof pdfInput>,
-  ): Promise<AuditSafeResult> {
+  ): Promise<PdfAnonymizationAuditResult> {
     return this.#runOperation(() =>
       this.#serializePdfOperation(() => this.#anonymizePdf(input)),
     );
@@ -1033,7 +1109,7 @@ export class LocalAnonymizeService {
 
   async #anonymizePdf(
     input: z.infer<typeof pdfInput>,
-  ): Promise<AuditSafeResult> {
+  ): Promise<PdfAnonymizationAuditResult> {
     const source = await this.#scope.readInput({
       path: input.inputPath,
       extension: ".pdf",
@@ -1042,7 +1118,7 @@ export class LocalAnonymizeService {
     });
     const destination = await this.#scope.output(input.outputPath, ".pdf");
     assertDifferentPaths(source.path, destination.path);
-    const pipeline = nativeNodeSurface.getDefaultNativePipeline(
+    const pipeline = getNativeNodeSurface().getDefaultNativePipeline(
       input.detectionLanguage === undefined
         ? {}
         : { language: input.detectionLanguage },
@@ -1098,7 +1174,7 @@ export class LocalAnonymizeService {
 
   async #anonymizeText(
     input: z.infer<typeof textInput>,
-  ): Promise<AuditSafeResult> {
+  ): Promise<TextAnonymizationResult> {
     const source = await this.#scope.readInput({
       path: input.inputPath,
       extension: ".txt",
@@ -1130,13 +1206,13 @@ export class LocalAnonymizeService {
 
   async restoreText(
     input: z.infer<typeof restoreInput>,
-  ): Promise<AuditSafeResult> {
+  ): Promise<TextRestorationAuditResult> {
     return this.#runOperation(() => this.#restoreText(input));
   }
 
   async anonymizeTextWithExternalDetections(
     input: z.infer<typeof externalDetectionTextInput>,
-  ): Promise<AuditSafeResult> {
+  ): Promise<ExternalDetectionTextAnonymizationResult> {
     try {
       return await this.#runOperation(() =>
         this.#anonymizeTextWithExternalDetections(input),
@@ -1151,7 +1227,7 @@ export class LocalAnonymizeService {
 
   async #anonymizeTextWithExternalDetections(
     input: z.infer<typeof externalDetectionTextInput>,
-  ): Promise<AuditSafeResult> {
+  ): Promise<ExternalDetectionTextAnonymizationResult> {
     const { batch, destination, source } = await externalDetectionStep(
       EXTERNAL_DETECTION_FAILURES.inputRejected,
       async () => {
@@ -1188,7 +1264,7 @@ export class LocalAnonymizeService {
     const detections = await externalDetectionStep(
       EXTERNAL_DETECTION_FAILURES.batchRejected,
       () =>
-        nativeNodeSurface.convert_external_detection_batch(
+        getNativeNodeSurface().convert_external_detection_batch(
           source.bytes,
           decodeUtf8(batch.bytes, "External detection batches"),
         ),
@@ -1234,7 +1310,7 @@ export class LocalAnonymizeService {
 
   async #restoreText(
     input: z.infer<typeof restoreInput>,
-  ): Promise<AuditSafeResult> {
+  ): Promise<TextRestorationAuditResult> {
     const source = await this.#scope.readInput({
       path: input.inputPath,
       extension: ".txt",
@@ -1263,13 +1339,13 @@ export class LocalAnonymizeService {
 
   async anonymizeDocx(
     input: z.infer<typeof docxInput>,
-  ): Promise<AuditSafeResult> {
+  ): Promise<DocxAnonymizationAuditResult> {
     return this.#runOperation(() => this.#anonymizeDocx(input));
   }
 
   async #anonymizeDocx(
     input: z.infer<typeof docxInput>,
-  ): Promise<AuditSafeResult> {
+  ): Promise<DocxAnonymizationAuditResult> {
     const source = await this.#scope.readInput({
       path: input.inputPath,
       extension: ".docx",
@@ -1314,13 +1390,13 @@ export class LocalAnonymizeService {
 
   async restoreDocx(
     input: z.infer<typeof docxRestoreInput>,
-  ): Promise<AuditSafeResult> {
+  ): Promise<DocxRestorationAuditResult> {
     return this.#runOperation(() => this.#restoreDocx(input));
   }
 
   async #restoreDocx(
     input: z.infer<typeof docxRestoreInput>,
-  ): Promise<AuditSafeResult> {
+  ): Promise<DocxRestorationAuditResult> {
     const source = await this.#scope.readInput({
       path: input.inputPath,
       extension: ".docx",
@@ -1360,11 +1436,11 @@ export class LocalAnonymizeService {
     }
   }
 
-  async inspectDocx(inputPath: string): Promise<AuditSafeResult> {
+  async inspectDocx(inputPath: string): Promise<DocxInspectionAuditResult> {
     return this.#runOperation(() => this.#inspectDocx(inputPath));
   }
 
-  async #inspectDocx(inputPath: string): Promise<AuditSafeResult> {
+  async #inspectDocx(inputPath: string): Promise<DocxInspectionAuditResult> {
     const source = await this.#scope.readInput({
       path: inputPath,
       extension: ".docx",
@@ -1488,7 +1564,7 @@ const capabilitiesResult = async (
 ): Promise<CallToolResult> => {
   const value = {
     capabilityManifest: CAPABILITY_MANIFEST,
-    runtimeVersion: nativeNodeSurface.native_package_version(),
+    runtimeVersion: getNativeNodeSurface().native_package_version(),
     mcp: {
       externalDetectionBatch: {
         ingestion: "path-only" as const,

@@ -66,11 +66,15 @@ export const syncWorkspaceVersions = (
       cursor += 1;
       if (character === '"') {
         const raw = source.slice(start, cursor);
+        const value: unknown = JSON.parse(raw);
+        if (typeof value !== "string") {
+          return fail("expected a string");
+        }
         return {
           kind: "string",
           start,
           end: cursor,
-          value: JSON.parse(raw) as string,
+          value,
         };
       }
     }

@@ -3,6 +3,10 @@ use web_time::Instant;
 use crate::dates::{DateData, PreparedDateData};
 use crate::diagnostics::{DiagnosticStage, StaticRedactionDiagnostics};
 use crate::money::{MonetaryData, PreparedMonetaryData};
+use crate::prepared_metadata::{
+  PreparedCountryMatchData, PreparedGazetteerMatchData, PreparedRegexMatchData,
+};
+use crate::processors::{CountryMatchData, GazetteerMatchData, RegexMatchMeta};
 use crate::types::{Error, Result};
 
 use super::artifacts::{PreparedEngineArtifacts, PreparedEngineArtifactsView};
@@ -21,7 +25,7 @@ use super::support_prepare::{
 use super::timing::elapsed_us;
 use super::{
   PreparedEngine, PreparedEngineConfig, PreparedEngineDetectorConfig,
-  PreparedEnginePolicyConfig, PreparedEngineSearchConfig, PreparedEngineSlices,
+  PreparedEngineSearchConfig, PreparedEngineSlices,
 };
 
 #[bon::bon]
@@ -173,17 +177,18 @@ impl PreparedEngine {
       regex_meta,
       custom_regex_meta,
     } = search;
-    let PreparedEnginePolicyConfig {
-      allowed_labels,
-      threshold,
-      confidence_boost,
-    } = policy_config;
+    let prepared_metadata =
+      prepare_match_metadata(PrepareMatchMetadataInput {
+        regex: regex_meta,
+        custom_regex: custom_regex_meta,
+        gazetteer: detectors.gazetteer_data.take(),
+        countries: detectors.country_data.take(),
+        slices: &slices,
+      })?;
     let anchored_len = anchored_config_len(
       detectors.date_data.as_ref(),
       detectors.monetary_data.as_ref(),
     );
-    let date_data_input = detectors.date_data.as_ref();
-    let monetary_data_input = detectors.monetary_data.take();
     let search_input = SearchIndexConfigInput {
       regex_patterns,
       custom_regex_patterns,
@@ -193,21 +198,20 @@ impl PreparedEngine {
       literal_options,
       anchored_len,
     };
-    let collect_diagnostics = diagnostics.is_some();
     let PreparedEnginePrepareBranches {
       anchored,
       index_bundle,
       support_data,
       diagnostics: branch_diagnostics,
     } = prepare_engine_branches(PrepareEngineBranchInput {
-      date_data: date_data_input,
-      monetary_data: monetary_data_input,
+      date_data: detectors.date_data.as_ref(),
+      monetary_data: detectors.monetary_data.take(),
       monetary_extraction,
       search: search_input,
       support: support_input,
       slices: &slices,
       artifacts,
-      collect_diagnostics,
+      collect_diagnostics: diagnostics.is_some(),
     })?;
     append_prepare_branch_diagnostics(&mut diagnostics, branch_diagnostics);
     let PreparedEngineIndexBundle {
@@ -231,20 +235,67 @@ impl PreparedEngine {
       literals,
     };
     let policy = PipelinePolicy {
-      allowed_labels,
-      threshold,
-      confidence_boost,
+      allowed_labels: policy_config.allowed_labels,
+      threshold: policy_config.threshold,
+      confidence_boost: policy_config.confidence_boost,
       slices,
-      regex_meta,
-      custom_regex_meta,
+      regex_meta: prepared_metadata.regex,
+      custom_regex_meta: prepared_metadata.custom_regex,
     };
-    let data = prepared_static_data(detectors, support_data, anchored);
+    let data = prepared_static_data(PreparedStaticDataInput {
+      detectors,
+      support_data,
+      anchored,
+      gazetteer: prepared_metadata.gazetteer,
+      countries: prepared_metadata.countries,
+    });
     Ok(Self {
       indexes,
       policy,
       data,
     })
   }
+}
+
+struct PrepareMatchMetadataInput<'a> {
+  regex: Vec<RegexMatchMeta>,
+  custom_regex: Vec<RegexMatchMeta>,
+  gazetteer: Option<GazetteerMatchData>,
+  countries: Option<CountryMatchData>,
+  slices: &'a PreparedEngineSlices,
+}
+
+struct PreparedMatchMetadata {
+  regex: PreparedRegexMatchData,
+  custom_regex: PreparedRegexMatchData,
+  gazetteer: Option<PreparedGazetteerMatchData>,
+  countries: Option<PreparedCountryMatchData>,
+}
+
+fn prepare_match_metadata(
+  input: PrepareMatchMetadataInput<'_>,
+) -> Result<PreparedMatchMetadata> {
+  let PrepareMatchMetadataInput {
+    regex,
+    custom_regex,
+    gazetteer,
+    countries,
+    slices,
+  } = input;
+  Ok(PreparedMatchMetadata {
+    regex: PreparedRegexMatchData::new(regex, slices.regex, "regex_meta")?,
+    custom_regex: PreparedRegexMatchData::new(
+      custom_regex,
+      slices.custom_regex,
+      "custom_regex_meta",
+    )?,
+    gazetteer: gazetteer
+      .map(|data| PreparedGazetteerMatchData::new(data, slices.gazetteer))
+      .transpose()?,
+    countries: countries
+      .map(|data| PreparedCountryMatchData::new(data, slices.countries))
+      .transpose()?,
+  })
 }
 
 struct PrepareBranch<T> {
@@ -443,16 +494,27 @@ fn warm_search_index(
   })
 }
 
-fn prepared_static_data(
+struct PreparedStaticDataInput {
   detectors: PreparedEngineDetectorConfig,
   support_data: PreparedSupportData,
   anchored: PreparedAnchoredData,
-) -> PreparedStaticData {
+  gazetteer: Option<PreparedGazetteerMatchData>,
+  countries: Option<PreparedCountryMatchData>,
+}
+
+fn prepared_static_data(input: PreparedStaticDataInput) -> PreparedStaticData {
+  let PreparedStaticDataInput {
+    detectors,
+    support_data,
+    anchored,
+    gazetteer,
+    countries,
+  } = input;
   PreparedStaticData {
     deny_list: detectors.deny_list_data,
     false_positive_filters: detectors.false_positive_filters,
-    gazetteer: detectors.gazetteer_data,
-    countries: detectors.country_data,
+    gazetteer,
+    countries,
     hotwords: support_data.hotwords,
     triggers: support_data.triggers,
     legal_forms: support_data.legal_forms,

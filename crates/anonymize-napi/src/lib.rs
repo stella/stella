@@ -23,7 +23,7 @@ use stella_anonymize_adapter_contract::{
   static_redaction_result_to_utf16_binding,
 };
 use stella_anonymize_binding_core::{
-  PackageEncoding, PreparedBinding, PreparedSessionPlan, SessionCallerInput,
+  PackageEncoding, PreparedBinding, PreparedSessionPlan, SessionCallerInputs,
   operators_from_json as binding_operators_from_json,
   package_from_binding_config as binding_package_from_config,
   plan_session_redactions as binding_plan_session_redactions,
@@ -923,14 +923,13 @@ impl NativePreparedRedactionSession {
     options: JsSessionCallerRedactionPlanOptions,
   ) -> Result<NativePreparedSessionRedactionPlan> {
     let operators = operator_config_from_js(options.operators)?;
-    let inputs = options
-      .inputs
-      .into_iter()
-      .map(|input| SessionCallerInput {
-        full_text: input.full_text,
-        request_json: input.request_json,
-      })
-      .collect();
+    let mut inputs = SessionCallerInputs::with_capacity(options.inputs.len())
+      .map_err(to_napi_facade_error)?;
+    for input in options.inputs {
+      inputs
+        .push_utf16_binding_json(&input.request_json, input.full_text)
+        .map_err(to_napi_facade_error)?;
+    }
     let session = self.lock_session()?;
     let plan = binding_plan_session_redactions(
       &self.inner,
@@ -941,7 +940,8 @@ impl NativePreparedRedactionSession {
     )
     .map_err(to_napi_facade_error)?;
     drop(session);
-    let result_json = plan.result_json().to_owned();
+    let result_json = serde_json::to_string(plan.results())
+      .map_err(|error| Error::from_reason(error.to_string()))?;
     Ok(NativePreparedSessionRedactionPlan {
       target: Arc::clone(&self.session),
       plan: Mutex::new(plan),

@@ -7,13 +7,23 @@ pub(crate) fn validate_id(
   value: &str,
   input: Option<&str>,
 ) -> bool {
-  if validator == "phone.international" {
-    return validate_international_phone(value);
-  }
-  if validator == "phone.nanp" {
-    return validate_nanp_phone(value);
+  if let Some(validate) = phone_validator(validator) {
+    return validate(value);
   }
   stella_stdnum_core::validate_id(validator, value, input)
+}
+
+pub(crate) fn supports_id(validator: &str) -> bool {
+  phone_validator(validator).is_some()
+    || stella_stdnum_core::supported_validator_ids().contains(&validator)
+}
+
+fn phone_validator(validator: &str) -> Option<fn(&str) -> bool> {
+  match validator {
+    "phone.international" => Some(validate_international_phone),
+    "phone.nanp" => Some(validate_nanp_phone),
+    _ => None,
+  }
 }
 
 fn validate_international_phone(value: &str) -> bool {

@@ -89,6 +89,31 @@ behavior.
 Report suspected vulnerabilities privately according to `SECURITY.md`; do not
 open a public issue for them.
 
+## Preserve type information across boundaries
+
+Validate each untrusted value once, at the boundary that receives it. The
+validator or decoder must return a canonical domain type; internal callers must
+not parse, cast, or reconstruct that value again.
+
+- Parse JSON to `unknown`, then validate it. Repo-local Oxlint rules reject
+  unchecked `JSON.parse` typing and double assertions in production code.
+- Keep transport, persistence, domain, and public projection types distinct.
+  Serialize only in the adapter that owns the wire format.
+- Model mutually exclusive states with discriminated unions. Make companion
+  maps total with `satisfies Record<Union, ...>`.
+- When a runtime codec mirrors a public object type, use a total field map such
+  as `RequiredFields<T>` and reject unknown fields. A new contract field must
+  fail typecheck until its codec is updated.
+- Convert validated parallel arrays and related optional fields into private
+  row types or enums before hot-path execution.
+
+When fixing a boundary bug, add the strongest applicable regression guard: a
+compile-time negative fixture for invalid state construction, a property test
+for a large input space, or a codec/parity invariant for wire data. Add an
+Oxlint rule when the forbidden syntax is mechanically recognizable; include a
+rule unit test and enable it in `oxlint.config.ts`. Keep any temporary migration
+exception file-specific, documented, and removed with that file's migration.
+
 ## Pull requests
 
 - Keep one coherent change per pull request.

@@ -134,4 +134,65 @@ describe("WASM result and byte contracts", () => {
       "Unknown redaction operator: unknown",
     );
   });
+
+  test("serializes typed caller detections only at the raw WASM boundary", () => {
+    const raw = fakeRawModule();
+    let requestJson = "";
+    const resultJson = JSON.stringify({
+      resolved_entities: [],
+      redaction: {
+        redacted_text: "text",
+        redaction_map: [],
+        operator_map: [],
+        entity_count: 0,
+      },
+    });
+    raw.WasmPreparedSearch.fromConfigJsonBytes = () => ({
+      prepareDiagnosticsJson: () => "{}",
+      warmLazyRegex: () => undefined,
+      warmLazyRegexDiagnosticsJson: () => "{}",
+      createRedactionSession: unavailable,
+      createRedactionSessionWithLifecycle: unavailable,
+      restoreRedactionSession: unavailable,
+      restoreEncryptedRedactionSession: unavailable,
+      redactStaticEntitiesJson: () => resultJson,
+      redactStaticEntitiesWithCallerDetectionsJson: (
+        _fullText,
+        callerRequestJson,
+      ) => {
+        requestJson = callerRequestJson;
+        return resultJson;
+      },
+      redactStaticEntitiesWithCallerDetectionsDiagnosticsJson: () => "{}",
+      redactStaticEntitiesDiagnosticsJson: () => "{}",
+      redactStaticEntitiesSummaryDiagnosticsJson: () => "{}",
+      redactStaticEntitiesResultStreamJson: () => resultJson,
+      redactStaticEntitiesDiagnosticsStreamJson: () => "{}",
+    });
+    const prepared = createWasmBinding(
+      raw,
+    ).NativePreparedSearch.fromConfigJsonBytes(new Uint8Array());
+
+    const callerRequest = {
+      version: 2,
+      detections: [
+        {
+          start: 0,
+          end: 4,
+          label: "PERSON",
+          score: 1,
+          provider_id: "test",
+          detection_id: "detection-1",
+        },
+      ],
+    };
+    const result = JSON.parse(
+      prepared.redactStaticEntitiesWithCallerDetectionsJson("text", {
+        requestJson: JSON.stringify(callerRequest),
+      }),
+    );
+
+    expect(result.redaction.redacted_text).toBe("text");
+    expect(JSON.parse(requestJson)).toEqual(callerRequest);
+  });
 });

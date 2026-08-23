@@ -104,11 +104,7 @@ type CanonicalSessionDeletionSummary = {
 };
 
 type CanonicalSessionRedactionPlanResult = {
-  replacements: Array<{
-    start: number;
-    end: number;
-    replacement: string;
-  }>;
+  replacements: Array<{ start: number; end: number; replacement: string }>;
   entity_count: number;
   caller_entity_count: number;
 };
@@ -453,6 +449,11 @@ export type NativeOperatorConfig = {
 };
 
 export const CALLER_DETECTION_CONTRACT_VERSION = 2;
+export const CALLER_DETECTION_MAX_COUNT = 1_000_000;
+export const CALLER_DETECTION_TEXT_MAX_BYTES = 64 * 1024 * 1024;
+export const CALLER_DETECTION_REQUEST_JSON_MAX_BYTES = 16 * 1024 * 1024;
+export const SESSION_CALLER_MAX_INPUTS = 100_000;
+export const SESSION_CALLER_INPUTS_JSON_MAX_BYTES = 64 * 1024 * 1024;
 
 export const EXTERNAL_DETECTION_BATCH_VERSION = 1 as const;
 export const EXTERNAL_DETECTION_BATCH_MAX_BYTES = 16 * 1024 * 1024;
@@ -543,20 +544,310 @@ export type NativeSessionBlockRedactionPlan = {
   callerEntityCount: number;
 };
 
-const callerDetectionRequestJson = (
+const utf8ByteLengthWithin = (
+  text: string,
+  maximum: number,
+): number | undefined => {
+  let bytes = 0;
+  for (let index = 0; index < text.length; index += 1) {
+    const unit = text.charCodeAt(index);
+    if (unit <= 0x7f) {
+      bytes += 1;
+    } else if (unit <= 0x7ff) {
+      bytes += 2;
+    } else if (
+      unit >= 0xd800 &&
+      unit <= 0xdbff &&
+      index + 1 < text.length &&
+      text.charCodeAt(index + 1) >= 0xdc00 &&
+      text.charCodeAt(index + 1) <= 0xdfff
+    ) {
+      bytes += 4;
+      index += 1;
+    } else {
+      bytes += 3;
+    }
+    if (bytes > maximum) {
+      return undefined;
+    }
+  }
+  return bytes;
+};
+
+const validateCallerDetectionInput = (
+  fullText: string,
   detections: readonly NativeCallerDetection[],
-): string =>
-  JSON.stringify({
-    version: CALLER_DETECTION_CONTRACT_VERSION,
-    detections: detections.map((detection) => ({
-      start: detection.start,
-      end: detection.end,
-      label: detection.label,
-      score: detection.score,
-      provider_id: detection.providerId,
-      detection_id: detection.detectionId,
-    })),
-  });
+): number => {
+  if (!Array.isArray(detections)) {
+    throw new TypeError("Caller detections must be an array");
+  }
+  if (detections.length > CALLER_DETECTION_MAX_COUNT) {
+    throw new RangeError(
+      `Caller detections contains ${detections.length} items; the maximum is ${CALLER_DETECTION_MAX_COUNT}`,
+    );
+  }
+  const textBytes = utf8ByteLengthWithin(
+    fullText,
+    CALLER_DETECTION_TEXT_MAX_BYTES,
+  );
+  if (textBytes === undefined) {
+    throw new RangeError(
+      `Caller detection text exceeds the ${CALLER_DETECTION_TEXT_MAX_BYTES}-byte maximum`,
+    );
+  }
+  return textBytes;
+};
+
+abstract class BoundedJsonSink {
+  readonly #maximumBytes: number;
+  readonly #label: string;
+  readonly #reportedMaximumBytes: number;
+  #bytes = 0;
+
+  constructor(maximumBytes: number, label: string, suffix: string) {
+    this.#maximumBytes = maximumBytes - suffix.length;
+    this.#label = label;
+    this.#reportedMaximumBytes = maximumBytes;
+  }
+
+  appendAscii(value: string): void {
+    this.#reserve(value.length);
+    this.capture(value);
+  }
+
+  appendOffset(value: number, field: string): void {
+    this.#requireNumber(value, field);
+    if (!Number.isInteger(value) || value < 0 || value > 0xff_ff_ff_ff) {
+      throw new RangeError(
+        `${field} must be an integer between 0 and 4294967295`,
+      );
+    }
+    this.#appendNumber(value);
+  }
+
+  appendScore(value: number, field: string): void {
+    this.#requireNumber(value, field);
+    if (!Number.isFinite(value) || value < 0 || value > 1) {
+      throw new RangeError(`${field} must be finite and between 0 and 1`);
+    }
+    this.#appendNumber(value);
+  }
+
+  appendString(value: string, field: string): void {
+    if (typeof value !== "string") {
+      throw new TypeError(`${field} must be a string`);
+    }
+    this.appendAscii('"');
+    let runStart = 0;
+    for (let index = 0; index < value.length; index += 1) {
+      const unit = value.charCodeAt(index);
+      const escape = jsonEscape(unit);
+      if (escape !== undefined) {
+        this.#appendReservedRun(value, runStart, index);
+        this.appendAscii(escape);
+        runStart = index + 1;
+        continue;
+      }
+      if (
+        unit >= 0xd800 &&
+        unit <= 0xdbff &&
+        index + 1 < value.length &&
+        value.charCodeAt(index + 1) >= 0xdc00 &&
+        value.charCodeAt(index + 1) <= 0xdfff
+      ) {
+        this.#reserve(4);
+        index += 1;
+        continue;
+      }
+      if (unit >= 0xd800 && unit <= 0xdfff) {
+        this.#appendReservedRun(value, runStart, index);
+        this.appendAscii(`\\u${unit.toString(16).padStart(4, "0")}`);
+        runStart = index + 1;
+        continue;
+      }
+      let unitBytes = 3;
+      if (unit <= 0x7f) {
+        unitBytes = 1;
+      } else if (unit <= 0x7ff) {
+        unitBytes = 2;
+      }
+      this.#reserve(unitBytes);
+    }
+    this.#appendReservedRun(value, runStart, value.length);
+    this.appendAscii('"');
+  }
+
+  #appendReservedRun(value: string, start: number, end: number): void {
+    if (end > start) {
+      this.capture(value.slice(start, end));
+    }
+  }
+
+  #appendNumber(value: number): void {
+    this.appendAscii(JSON.stringify(value));
+  }
+
+  #requireNumber(value: number, field: string): void {
+    if (typeof value !== "number") {
+      throw new TypeError(`${field} must be a number`);
+    }
+  }
+
+  #reserve(bytes: number): void {
+    if (bytes > this.#maximumBytes - this.#bytes) {
+      throw new RangeError(
+        `${this.#label} exceeds the ${this.#reportedMaximumBytes}-byte maximum`,
+      );
+    }
+    this.#bytes += bytes;
+  }
+
+  protected abstract capture(value: string): void;
+}
+
+class CountingJsonBudget extends BoundedJsonSink {
+  protected capture(value: string): void {
+    void value;
+  }
+}
+
+class BoundedJsonWriter extends BoundedJsonSink {
+  readonly #chunks: string[] = [];
+  readonly #suffix: string;
+
+  constructor(maximumBytes: number, label: string, suffix: string) {
+    super(maximumBytes, label, suffix);
+    this.#suffix = suffix;
+  }
+
+  finish(): string {
+    return this.#chunks.join("") + this.#suffix;
+  }
+
+  protected capture(value: string): void {
+    this.#chunks.push(value);
+  }
+}
+
+const jsonEscape = (unit: number): string | undefined => {
+  switch (unit) {
+    case 0x08:
+      return "\\b";
+    case 0x09:
+      return "\\t";
+    case 0x0a:
+      return "\\n";
+    case 0x0c:
+      return "\\f";
+    case 0x0d:
+      return "\\r";
+    case 0x22:
+      return '\\"';
+    case 0x5c:
+      return "\\\\";
+    default:
+      return unit < 0x20
+        ? `\\u${unit.toString(16).padStart(4, "0")}`
+        : undefined;
+  }
+};
+
+const callerDetectionRequestJson = (
+  fullText: string,
+  detections: readonly NativeCallerDetection[],
+): string => {
+  validateCallerDetectionInput(fullText, detections);
+  return serializeCallerDetectionRequest(detections);
+};
+
+const serializeCallerDetectionRequest = (
+  detections: readonly NativeCallerDetection[],
+): string => {
+  const writer = new BoundedJsonWriter(
+    CALLER_DETECTION_REQUEST_JSON_MAX_BYTES,
+    "Caller detection request JSON",
+    "]}",
+  );
+  writer.appendAscii(
+    `{"version":${CALLER_DETECTION_CONTRACT_VERSION},"detections":[`,
+  );
+  for (let index = 0; index < detections.length; index += 1) {
+    const detection = detections[index];
+    if (detection === undefined) {
+      throw new TypeError("Caller detections must not be sparse");
+    }
+    if (index > 0) {
+      writer.appendAscii(",");
+    }
+    writer.appendAscii('{"start":');
+    writer.appendOffset(detection.start, "Caller detection start");
+    writer.appendAscii(',"end":');
+    writer.appendOffset(detection.end, "Caller detection end");
+    writer.appendAscii(',"label":');
+    writer.appendString(detection.label, "Caller detection label");
+    writer.appendAscii(',"score":');
+    writer.appendScore(detection.score, "Caller detection score");
+    writer.appendAscii(',"provider_id":');
+    writer.appendString(detection.providerId, "Caller detection providerId");
+    writer.appendAscii(',"detection_id":');
+    writer.appendString(detection.detectionId, "Caller detection detectionId");
+    writer.appendAscii("}");
+  }
+  return writer.finish();
+};
+
+const toBindingSessionCallerInputs = (
+  inputs: readonly NativeSessionCallerRedactionInput[],
+) => {
+  if (!Array.isArray(inputs)) {
+    throw new TypeError("Session caller inputs must be an array");
+  }
+  if (inputs.length > SESSION_CALLER_MAX_INPUTS) {
+    throw new RangeError(
+      `Session caller inputs contains ${inputs.length} items; the maximum is ${SESSION_CALLER_MAX_INPUTS}`,
+    );
+  }
+  let detectionCount = 0;
+  let textBytes = 0;
+  const bindingInputs: NativeBindingSessionCallerRedactionInput[] = [];
+  const budget = new CountingJsonBudget(
+    SESSION_CALLER_INPUTS_JSON_MAX_BYTES,
+    "Session caller inputs JSON",
+    "]",
+  );
+  budget.appendAscii("[");
+  for (let index = 0; index < inputs.length; index += 1) {
+    const input = inputs[index];
+    if (input === undefined) {
+      throw new TypeError("Session caller inputs must not be sparse");
+    }
+    const { detections, fullText } = input;
+    const inputTextBytes = validateCallerDetectionInput(fullText, detections);
+    detectionCount += detections.length;
+    if (detectionCount > CALLER_DETECTION_MAX_COUNT) {
+      throw new RangeError(
+        `Session caller detections contains ${detectionCount} items; the maximum is ${CALLER_DETECTION_MAX_COUNT}`,
+      );
+    }
+    textBytes += inputTextBytes;
+    if (textBytes > CALLER_DETECTION_TEXT_MAX_BYTES) {
+      throw new RangeError(
+        `Session caller text contains ${textBytes} bytes; the maximum is ${CALLER_DETECTION_TEXT_MAX_BYTES}`,
+      );
+    }
+    const requestJson = serializeCallerDetectionRequest(detections);
+    if (index > 0) {
+      budget.appendAscii(",");
+    }
+    budget.appendAscii('{"full_text":');
+    budget.appendString(fullText, "Session caller fullText");
+    budget.appendAscii(',"request_json":');
+    budget.appendString(requestJson, "Session caller requestJson");
+    budget.appendAscii("}");
+    bindingInputs.push({ fullText, requestJson });
+  }
+  return bindingInputs;
+};
 
 export type NativePipelineEntity = {
   start: number;
@@ -829,10 +1120,7 @@ export class PreparedNativeRedactionSession {
   }: NativeSessionCallerRedactionPlanOptions): PreparedNativeSessionRedactionPlan {
     const bindingOperators = toBindingOperatorConfig(operators);
     const bindingPlan = this.#session.planStaticEntitiesWithCallerDetections({
-      inputs: inputs.map(({ detections, fullText }) => ({
-        fullText,
-        requestJson: callerDetectionRequestJson(detections),
-      })),
+      inputs: toBindingSessionCallerInputs(inputs),
       ...(bindingOperators === undefined
         ? {}
         : { operators: bindingOperators }),
@@ -994,7 +1282,10 @@ export class PreparedNativeAnonymizer {
     fullText: string,
     options: NativeCallerRedactionOptions,
   ): NativeStaticRedactionResult {
-    const requestJson = callerDetectionRequestJson(options.detections);
+    const requestJson = callerDetectionRequestJson(
+      fullText,
+      options.detections,
+    );
     const operators = toBindingOperatorConfig(options.operators);
     const result: CanonicalStaticRedactionResult = JSON.parse(
       this.#prepared.redactStaticEntitiesWithCallerDetectionsJson(fullText, {
@@ -1016,7 +1307,10 @@ export class PreparedNativeAnonymizer {
     fullText: string,
     options: NativeCallerRedactionOptions,
   ): string {
-    const requestJson = callerDetectionRequestJson(options.detections);
+    const requestJson = callerDetectionRequestJson(
+      fullText,
+      options.detections,
+    );
     const operators = toBindingOperatorConfig(options.operators);
     return this.#prepared.redactStaticEntitiesWithCallerDetectionsDiagnosticsJson(
       fullText,
