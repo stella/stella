@@ -145,10 +145,6 @@ const sqlStatements = (contents: string): string[] =>
     .map((statement) => statement.replace(/\s+/gu, " ").trim())
     .filter((statement) => statement.length > 0);
 
-const isStellaIdentifier = (value: string): boolean =>
-  value.trim().toLowerCase() === "stella" ||
-  value.trim().toLowerCase() === '"stella"';
-
 type GrantsRequiredPrivilegesOptions = {
   table: string;
   privileges: Set<string>;
@@ -207,6 +203,17 @@ type StellaTableGrant = {
   tables: string[];
 };
 
+const GRANT_OPTION_PATTERN = /\s+(?:WITH\s+GRANT\s+OPTION|GRANTED\s+BY)\b/iu;
+
+const grantTargetsStella = (targetClause: string): boolean => {
+  const optionsStart = targetClause.search(GRANT_OPTION_PATTERN);
+  const granteesSql =
+    optionsStart === -1 ? targetClause : targetClause.slice(0, optionsStart);
+  return identifierNamesFromSql(granteesSql).some(
+    (grantee) => grantee.toLowerCase() === "stella",
+  );
+};
+
 const stellaTableGrant = (statement: string): StellaTableGrant | null => {
   const prefix = "GRANT ";
   const onTableMarker = " ON TABLE ";
@@ -230,7 +237,7 @@ const stellaTableGrant = (statement: string): StellaTableGrant | null => {
   );
   const targetRoleSql = statement.slice(toIndex + toMarker.length);
 
-  if (!isStellaIdentifier(targetRoleSql)) {
+  if (!grantTargetsStella(targetRoleSql)) {
     return null;
   }
 
@@ -313,6 +320,22 @@ const collectRlsGrantState = () => {
 };
 
 describe("RLS table grants", () => {
+  test("classifies stella in a grantee list but not as the grantor", () => {
+    expect(
+      stellaTableGrant(
+        "GRANT SELECT, UPDATE ON TABLE classified_table TO stella, another_role WITH GRANT OPTION",
+      ),
+    ).toEqual({
+      privileges: new Set(["select", "update"]),
+      tables: ["classified_table"],
+    });
+    expect(
+      stellaTableGrant(
+        "GRANT SELECT ON TABLE classified_table TO another_role GRANTED BY stella",
+      ),
+    ).toBeNull();
+  });
+
   test("SELECT-only tables never grant mutation privileges to stella", () => {
     expect(collectRlsGrantState().selectOnlyMutationGrants).toEqual([]);
   });
