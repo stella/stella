@@ -188,9 +188,9 @@ const LIST_AUDIT_LOG_TOOL_DEFINITION = defineValibotMcpTool({
     "cursor. Requires organization audit-log access.",
   inputSchema: listAuditLogArgsSchema,
   jsonSchemaProjectionWaiver: {
-    ignoreActions: ["partial_check"],
+    ignoreActions: ["iso_timestamp", "partial_check"],
     reason:
-      "The resource_id dependency remains authoritative in the runtime schema.",
+      "The CLI trust boundary does not interpret format; ISO timestamps and the resource_id dependency remain authoritative in the runtime schema.",
   },
   // Audit payloads carry free-form tenant-authored change diffs whose text
   // fields cannot be enumerated for redaction, so this read tool fails closed

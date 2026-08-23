@@ -4276,14 +4276,12 @@ export const generatedRouteMap: RouteNode = {
                 },
                 from: {
                   type: "string",
-                  format: "date-time",
                   maxLength: 40,
                   description:
                     "Only entries created on or after this ISO date-time",
                 },
                 to: {
                   type: "string",
-                  format: "date-time",
                   maxLength: 40,
                   description:
                     "Only entries created on or before this ISO date-time",
