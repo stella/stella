@@ -44,7 +44,7 @@ const LANGUAGE_DECISIONS_FILE =
   "apps/api/src/handlers/case-law/decisions/language.ts";
 const SITEMAP_DECISIONS_FILE =
   "apps/api/src/handlers/case-law/decisions/sitemap.ts";
-const PUBLIC_READ_DB_FILE = "apps/api/src/lib/case-law-public-read-db.ts";
+const PUBLIC_READ_DB_FILE = "apps/api/src/lib/public-law-read-db.ts";
 const DECISION_PROVISIONS_FILE =
   "apps/api/src/handlers/case-law/provisions/list-for-decision.ts";
 const CITING_DECISIONS_FILE =
@@ -153,12 +153,14 @@ describe("public case-law route boundary", () => {
     );
 
     expect(source).toContain(
-      "connectionTimeout: EXTERNAL_CASE_LAW_CONNECTION_TIMEOUT_SECONDS",
+      "connectionTimeout: EXTERNAL_PUBLIC_LAW_CONNECTION_TIMEOUT_SECONDS",
     );
     expect(validation).toContain(".transaction(async (tx) =>");
     expect(
       validation.indexOf("configureExternalReadTransaction(tx)"),
-    ).toBeLessThan(validation.indexOf("validateExternalCaseLawDatabase(tx)"));
+    ).toBeLessThan(
+      validation.indexOf("validateExternalPublicLawDatabase(tx)"),
+    );
     expect(validation).toContain(
       'external.roleValidation = { status: "idle" }',
     );
@@ -166,7 +168,7 @@ describe("public case-law route boundary", () => {
 
   test("shared-corpus reads cannot start document ingestion", async () => {
     const source = await readDeferredDocumentSource();
-    const guard = source.indexOf("envBase.CASE_LAW_DATABASE_URL !== undefined");
+    const guard = source.indexOf("envBase.PUBLIC_LAW_DATABASE_URL !== undefined");
     const ingestionCall = source.indexOf("readThroughDeferredDocument({");
 
     expect(guard).toBeGreaterThanOrEqual(0);

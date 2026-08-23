@@ -73,7 +73,7 @@ const INTERNAL_SERVER_KEYS = new Set([
   "AZURE_RESOURCE_NAME",
   "BETTER_AUTH_COOKIE_PREFIX",
   "BETTER_AUTH_URL",
-  "CASE_LAW_DATABASE_POOL_MAX",
+  "PUBLIC_LAW_DATABASE_POOL_MAX",
   "CORPUS_INDEXING_ENABLED",
   "CORPUS_INDEX_BACKPRESSURE_DIMENSIONS",
   "CORPUS_INDEX_BACKPRESSURE_HIGH_WATERMARK",
@@ -254,10 +254,10 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Maximum RLS pool size. Keep its sum with DATABASE_ROOT_POOL_MAX within the process connection budget.",
   DATABASE_ROOT_POOL_MAX:
     "Maximum root pool size. Keep its sum with DATABASE_RLS_POOL_MAX within the process connection budget.",
-  CASE_LAW_DATABASE_POOL_MAX:
-    "Maximum connections in the optional local read-only public case-law pool.",
-  CASE_LAW_DATABASE_URL:
-    "Local-development-only read-only Postgres URL for a shared public case-law corpus. Unset uses DATABASE_URL.",
+  PUBLIC_LAW_DATABASE_POOL_MAX:
+    "Maximum connections in the optional local read-only public-law pool.",
+  PUBLIC_LAW_DATABASE_URL:
+    "Local-development-only read-only Postgres URL for the shared public-law corpus. Unset uses DATABASE_URL.",
   CORPUS_INDEX_BACKPRESSURE_DIMENSIONS:
     "Name=Value[,Name=Value...] dimensions of the pacing metric.",
   CORPUS_INDEX_BACKPRESSURE_HIGH_WATERMARK:

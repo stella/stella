@@ -8,11 +8,11 @@ export const stella = p.pgRole("stella").existing();
 // Bootstrapped in 20260516000000_case_law_ingestion_role.
 export const stellaIngestion = p.pgRole("stella_ingestion").existing();
 
-// Read-only role for the public case-law corpus: SELECT on exactly
-// PUBLIC_CASE_LAW_RELATIONS, nothing else. Bootstrapped in
-// 20260821150000_case_law_reader_role; `case-law-reader-role.test.ts`
-// holds the grants to that list.
-export const stellaCaseLawReader = p.pgRole("stella_caselaw_reader").existing();
+// Read-only role for the public case-law and legislation corpus. Every
+// relation is column-restricted by the public-law relation map.
+export const stellaPublicLawReader = p
+  .pgRole("stella_public_law_reader")
+  .existing();
 
 /** Session setting keys set via `set_config` per transaction. */
 export const SETTING_WORKSPACE_IDS = "app.workspace_ids";
@@ -511,14 +511,14 @@ export const globalCaseLawPolicies = () => [
 ];
 
 /**
- * Row visibility for the public case-law reader. Applied only to the tables
- * in PUBLIC_CASE_LAW_RELATIONS: the role's table grants stop at that list,
- * and a policy without a grant would be dead weight on any other table.
+ * Row visibility for the public-law reader. Applied only to the relations in
+ * the exact public-law column map; a policy without a grant would be dead
+ * weight on any other table.
  */
-export const publicCaseLawReaderPolicies = () => [
-  p.pgPolicy("case_law_reader_access", {
+export const publicLawReaderPolicies = () => [
+  p.pgPolicy("public_law_reader_access", {
     for: "select",
-    to: stellaCaseLawReader,
+    to: stellaPublicLawReader,
     using: allowAllRows,
   }),
 ];

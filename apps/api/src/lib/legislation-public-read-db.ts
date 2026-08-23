@@ -1,7 +1,5 @@
-import { sql } from "drizzle-orm";
-
-import { rootDb } from "@/api/db/root";
 import type { Transaction } from "@/api/db/root";
+import { publicLawReadDb } from "@/api/lib/public-law-read-db";
 
 const LEGISLATION_PUBLIC_READ_DB = Symbol("legislationPublicReadDb");
 
@@ -32,11 +30,6 @@ export type LegislationPublicReadDb = LegislationReadDb & {
  */
 export const legislationPublicReadDb: LegislationPublicReadDb = Object.assign(
   async <T>(fn: (tx: LegislationReadTransaction) => Promise<T>): Promise<T> =>
-    await rootDb.transaction(async (tx) => {
-      await tx.execute(sql`SET TRANSACTION READ ONLY`);
-      await tx.execute(sql`SET LOCAL statement_timeout = '30s'`);
-
-      return await fn(tx);
-    }),
+    await publicLawReadDb(fn),
   { [LEGISLATION_PUBLIC_READ_DB]: true as const },
 );

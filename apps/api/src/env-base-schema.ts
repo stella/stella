@@ -115,8 +115,8 @@ export const envBaseServerSchema = {
   DATABASE_URL: v.pipe(v.string(), v.url()),
   DATABASE_ROOT_POOL_MAX: databasePoolMaxSchema(),
   DATABASE_RLS_POOL_MAX: databasePoolMaxSchema(),
-  CASE_LAW_DATABASE_URL: v.optional(postgresUrlSchema()),
-  CASE_LAW_DATABASE_POOL_MAX: databasePoolMaxSchema("2"),
+  PUBLIC_LAW_DATABASE_URL: v.optional(postgresUrlSchema()),
+  PUBLIC_LAW_DATABASE_POOL_MAX: databasePoolMaxSchema("2"),
   DATABASE_POOL_MAX_LIFETIME_S: databasePoolSecondsSchema("0"),
   DATABASE_POOL_IDLE_TIMEOUT_S: databasePoolSecondsSchema("0"),
   DOCUMENT_OCR_BATCH_INTERVAL_MINUTES: documentOcrBatchIntervalMinutesSchema,
@@ -241,7 +241,7 @@ export const databaseComponentEnvSchema = {
 };
 
 type EnvBaseInvariantInput = {
-  CASE_LAW_DATABASE_URL?: string | undefined;
+  PUBLIC_LAW_DATABASE_URL?: string | undefined;
   CORPUS_INDEX_BACKPRESSURE_DIMENSIONS?: string | undefined;
   CORPUS_INDEX_BACKPRESSURE_HIGH_WATERMARK: number;
   CORPUS_INDEX_BACKPRESSURE_LOW_WATERMARK: number;
@@ -264,7 +264,7 @@ type EnvBaseInvariantInput = {
 };
 
 export const envBaseInvariantViolation = ({
-  CASE_LAW_DATABASE_URL,
+  PUBLIC_LAW_DATABASE_URL,
   CORPUS_INDEX_BACKPRESSURE_DIMENSIONS,
   CORPUS_INDEX_BACKPRESSURE_HIGH_WATERMARK,
   CORPUS_INDEX_BACKPRESSURE_LOW_WATERMARK,
@@ -308,13 +308,13 @@ export const envBaseInvariantViolation = ({
     return "DATABASE_URL must enable TLS outside loopback or Railway private networking.";
   }
   if (
-    CASE_LAW_DATABASE_URL !== undefined &&
-    !hasSecureDatabaseTransport(CASE_LAW_DATABASE_URL)
+    PUBLIC_LAW_DATABASE_URL !== undefined &&
+    !hasSecureDatabaseTransport(PUBLIC_LAW_DATABASE_URL)
   ) {
-    return "CASE_LAW_DATABASE_URL must enable TLS outside loopback or Railway private networking.";
+    return "PUBLIC_LAW_DATABASE_URL must enable TLS outside loopback or Railway private networking.";
   }
-  if (!isDev && CASE_LAW_DATABASE_URL !== undefined) {
-    return "CASE_LAW_DATABASE_URL is only supported in local development.";
+  if (!isDev && PUBLIC_LAW_DATABASE_URL !== undefined) {
+    return "PUBLIC_LAW_DATABASE_URL is only supported in local development.";
   }
   if (
     CORPUS_INDEX_SEARCH_ENDPOINT !== undefined &&
@@ -342,25 +342,25 @@ export const envBaseInvariantViolation = ({
     return 'QUERY_EXPANSION_MODE="on" requires dictionary-version-carrying cursors; not yet implemented — use "shadow".';
   }
   if (
-    CASE_LAW_DATABASE_URL !== undefined &&
+    PUBLIC_LAW_DATABASE_URL !== undefined &&
     LEGAL_SEARCH_PROVIDER !== "corpus-index"
   ) {
-    return 'CASE_LAW_DATABASE_URL requires LEGAL_SEARCH_PROVIDER="corpus-index".';
+    return 'PUBLIC_LAW_DATABASE_URL requires LEGAL_SEARCH_PROVIDER="corpus-index".';
   }
   if (
-    CASE_LAW_DATABASE_URL !== undefined &&
+    PUBLIC_LAW_DATABASE_URL !== undefined &&
     CORPUS_INDEX_SEARCH_ENDPOINT === undefined
   ) {
-    return "CASE_LAW_DATABASE_URL requires CORPUS_INDEX_SEARCH_ENDPOINT.";
+    return "PUBLIC_LAW_DATABASE_URL requires CORPUS_INDEX_SEARCH_ENDPOINT.";
   }
   if (
-    CASE_LAW_DATABASE_URL !== undefined &&
+    PUBLIC_LAW_DATABASE_URL !== undefined &&
     CORPUS_INDEX_ENDPOINT !== undefined
   ) {
-    return "CORPUS_INDEX_ENDPOINT must be unset when CASE_LAW_DATABASE_URL is configured.";
+    return "CORPUS_INDEX_ENDPOINT must be unset when PUBLIC_LAW_DATABASE_URL is configured.";
   }
-  if (CASE_LAW_DATABASE_URL !== undefined && CORPUS_INDEXING_ENABLED) {
-    return "CORPUS_INDEXING_ENABLED must be false when CASE_LAW_DATABASE_URL is configured.";
+  if (PUBLIC_LAW_DATABASE_URL !== undefined && CORPUS_INDEXING_ENABLED) {
+    return "CORPUS_INDEXING_ENABLED must be false when PUBLIC_LAW_DATABASE_URL is configured.";
   }
   if (
     !isDev &&

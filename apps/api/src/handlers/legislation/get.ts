@@ -30,14 +30,17 @@ type LegislationTextMode =
   (typeof LEGISLATION_TEXT_MODE)[keyof typeof LEGISLATION_TEXT_MODE];
 
 type ReadLegislationOptions = {
+  audience: "public" | "workspace";
   textMode: LegislationTextMode;
 };
 
 const DEFAULT_READ_OPTIONS = {
+  audience: "workspace",
   textMode: LEGISLATION_TEXT_MODE.ALWAYS,
 } as const satisfies ReadLegislationOptions;
 
 const PUBLIC_READ_OPTIONS = {
+  audience: "public",
   textMode: LEGISLATION_TEXT_MODE.FALLBACK,
 } as const satisfies ReadLegislationOptions;
 
@@ -70,13 +73,15 @@ export const readLegislationHandler = async (
           sections: legislationDocuments.sections,
           sourceUrl: legislationDocuments.sourceUrl,
           documentUrl: legislationDocuments.documentUrl,
-          metadata: legislationDocuments.metadata,
           createdAt: legislationDocuments.createdAt,
           updatedAt: legislationDocuments.updatedAt,
           documentAst: legislationDocuments.documentAst,
           fulltext: legislationDocuments.fulltext,
           astS3Key: legislationDocuments.astS3Key,
           textS3Key: legislationDocuments.textS3Key,
+          ...(options.audience === "workspace"
+            ? { metadata: legislationDocuments.metadata }
+            : {}),
         })
         .from(legislationDocuments)
         .innerJoin(

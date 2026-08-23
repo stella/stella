@@ -9,6 +9,7 @@ import {
   jsonb,
   p,
   pUuid,
+  publicLawReaderPolicies,
   safeUuid,
   sql,
   tsvector,
@@ -64,6 +65,7 @@ export const legislationSources = p.pgTable(
   (t) => [
     p.uniqueIndex("legislation_sources_adapter_key_idx").on(t.adapterKey),
     ...globalCaseLawPolicies(),
+    ...publicLawReaderPolicies(),
   ],
 );
 
@@ -179,6 +181,7 @@ export const legislationDocuments = p.pgTable(
       sql`${t.status} IN (${sql.join(LEGISLATION_DOCUMENT_STATUS_SQL_VALUES, sql.raw(","))})`,
     ),
     ...globalCaseLawPolicies(),
+    ...publicLawReaderPolicies(),
   ],
 );
 

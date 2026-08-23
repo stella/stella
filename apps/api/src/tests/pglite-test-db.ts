@@ -7,11 +7,7 @@ import * as agentAuthSchema from "@/api/db/agent-auth-schema";
 import * as authSchema from "@/api/db/auth-schema";
 import * as rlsExports from "@/api/db/rls";
 import * as schema from "@/api/db/schema";
-import {
-  PUBLIC_CASE_LAW_SOURCE_COLUMNS,
-  PUBLIC_CASE_LAW_SOURCE_TABLE,
-  PUBLIC_CASE_LAW_TABLES,
-} from "@/api/lib/case-law/public-relations";
+import { PUBLIC_LAW_COLUMNS_BY_RELATION } from "@/api/lib/public-law-relations";
 import {
   createSchemaPglite,
   installPgliteSchemaPrerequisites,
@@ -179,17 +175,15 @@ const ROLE_GRANT_STATEMENTS = [
   // Derived from the allowlist the connection validator reads, so the role
   // in tests can only ever match the role the migration defines.
   `
-    GRANT USAGE ON SCHEMA public TO stella_caselaw_reader
+    GRANT USAGE ON SCHEMA public TO stella_public_law_reader
   `,
-  `
-    GRANT SELECT ON TABLE ${PUBLIC_CASE_LAW_TABLES.map(quoteSqlIdentifier).join(", ")}
-    TO stella_caselaw_reader
-  `,
-  `
-    GRANT SELECT (${PUBLIC_CASE_LAW_SOURCE_COLUMNS.map(quoteSqlIdentifier).join(", ")})
-      ON TABLE ${quoteSqlIdentifier(PUBLIC_CASE_LAW_SOURCE_TABLE)}
-      TO stella_caselaw_reader
-  `,
+  ...Object.entries(PUBLIC_LAW_COLUMNS_BY_RELATION).map(
+    ([relation, columns]) => `
+      GRANT SELECT (${columns.map(quoteSqlIdentifier).join(", ")})
+        ON TABLE ${quoteSqlIdentifier(relation)}
+        TO stella_public_law_reader
+    `,
+  ),
 ] as const;
 
 /**
@@ -206,7 +200,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
 
   await db.execute(sql.raw("CREATE ROLE stella NOLOGIN"));
   await db.execute(sql.raw("CREATE ROLE stella_ingestion NOLOGIN"));
-  await db.execute(sql.raw("CREATE ROLE stella_caselaw_reader NOLOGIN"));
+  await db.execute(sql.raw("CREATE ROLE stella_public_law_reader NOLOGIN"));
   await installPgliteSchemaPrerequisites(db);
 
   // drizzle-kit is a heavyweight dev dependency; import it only on this

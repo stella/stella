@@ -225,7 +225,7 @@ export const generateAnalysis = async (
     analysis: true,
   } as const;
   const decision =
-    envBase.CASE_LAW_DATABASE_URL === undefined
+    envBase.PUBLIC_LAW_DATABASE_URL === undefined
       ? await scopedDb((tx) =>
           tx.query.caseLawDecisions.findFirst({
             where: { id: { eq: decisionId } },
@@ -265,7 +265,7 @@ export const generateAnalysis = async (
   // A shared corpus connection is deliberately read-only. It may serve an
   // analysis already persisted by the owning environment, but this process
   // must never try to create or update one in that database.
-  if (envBase.CASE_LAW_DATABASE_URL !== undefined) {
+  if (envBase.PUBLIC_LAW_DATABASE_URL !== undefined) {
     return Result.ok({
       status: "error",
       error: "Analysis is unavailable for this decision",
