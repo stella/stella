@@ -83,21 +83,37 @@ test("pre-migration audit is repeatable and rejects ownership corruption and an 
       expect(second.status).toBe("ok");
       expect(second.value.baseline).toEqual(first.value.baseline);
 
+      await transaction.execute(sql`
+        ALTER POLICY auth_no_stella_access ON account
+          USING (true)
+          WITH CHECK (true)
+      `);
       await transaction
         .update(account)
         .set({ accountId: `wrong-owner-${suffix}` })
         .where(eq(account.id, accountId));
-      const wrongOwner = await runBetterAuthMigrationAudit({
+      const corruptedAccessAndOwnership = await runBetterAuthMigrationAudit({
         baseline: null,
         database: auditDatabase,
         mode: BETTER_AUTH_AUDIT_MODES.PRE_MIGRATION,
       });
       expect(
         checkStatus(
-          wrongOwner,
+          corruptedAccessAndOwnership,
+          BETTER_AUTH_AUDIT_CHECKS.AUTH_ACCESS_BOUNDARIES,
+        ),
+      ).toBe("failed");
+      expect(
+        checkStatus(
+          corruptedAccessAndOwnership,
           BETTER_AUTH_AUDIT_CHECKS.CREDENTIAL_ACCOUNT_OWNERSHIP,
         ),
       ).toBe("failed");
+      await transaction.execute(sql`
+        ALTER POLICY auth_no_stella_access ON account
+          USING (false)
+          WITH CHECK (false)
+      `);
 
       await transaction
         .update(account)
@@ -211,11 +227,15 @@ test("post phases require resource links, final constraints, and the exact basel
       await transaction.execute(sql`
         CREATE TABLE oauth_client_resource (
           id text PRIMARY KEY,
-          client_id text NOT NULL REFERENCES oauth_client(client_id),
-          resource_id text NOT NULL REFERENCES oauth_resource(identifier),
+          client_id text NOT NULL,
+          resource_id text NOT NULL,
           metadata jsonb,
           created_at timestamptz,
-          UNIQUE (client_id, resource_id)
+          UNIQUE (client_id, resource_id),
+          CONSTRAINT oauth_client_resource_client_fk
+            FOREIGN KEY (client_id) REFERENCES oauth_client(client_id),
+          CONSTRAINT oauth_client_resource_resource_fk
+            FOREIGN KEY (resource_id) REFERENCES oauth_resource(identifier)
         )
       `);
       await transaction.execute(sql`
@@ -293,6 +313,9 @@ test("post phases require resource links, final constraints, and the exact basel
       if (preMigration.status === "error") {
         throw preMigration.error;
       }
+      expect(
+        preMigration.value.baseline.tables["account"]?.preservedColumns,
+      ).not.toContain("issuer");
 
       const postBackfill = await runBetterAuthMigrationAudit({
         baseline: preMigration.value.baseline,
@@ -321,6 +344,23 @@ test("post phases require resource links, final constraints, and the exact basel
         sql`ALTER TABLE account ALTER COLUMN issuer SET NOT NULL`,
       );
       await transaction.execute(
+        sql`CREATE UNIQUE INDEX account_issuer_account_id_partial_uidx ON account (issuer, account_id) WHERE issuer IS NOT NULL`,
+      );
+      const partialIdentityIndex = await runBetterAuthMigrationAudit({
+        baseline: preMigration.value.baseline,
+        database: auditDatabase,
+        mode: BETTER_AUTH_AUDIT_MODES.POST_MIGRATION,
+      });
+      expect(
+        checkStatus(
+          partialIdentityIndex,
+          BETTER_AUTH_AUDIT_CHECKS.FINAL_ACCOUNT_CONSTRAINTS,
+        ),
+      ).toBe("failed");
+      await transaction.execute(
+        sql`DROP INDEX account_issuer_account_id_partial_uidx`,
+      );
+      await transaction.execute(
         sql`CREATE UNIQUE INDEX account_issuer_account_id_uidx ON account (issuer, account_id)`,
       );
       const postMigration = await runBetterAuthMigrationAudit({
@@ -333,6 +373,54 @@ test("post phases require resource links, final constraints, and the exact basel
         throw postMigration.error;
       }
       expect(postMigration.value.report.status).toBe("passed");
+
+      await transaction.execute(sql`
+        ALTER POLICY auth_member_select ON member
+          USING (organization_id IS NOT NULL)
+      `);
+      const changedScopedPolicy = await runBetterAuthMigrationAudit({
+        baseline: preMigration.value.baseline,
+        database: auditDatabase,
+        mode: BETTER_AUTH_AUDIT_MODES.POST_BACKFILL,
+      });
+      expect(
+        checkStatus(
+          changedScopedPolicy,
+          BETTER_AUTH_AUDIT_CHECKS.AUTH_ACCESS_BOUNDARIES,
+        ),
+      ).toBe("failed");
+      await transaction.execute(sql`
+        ALTER POLICY auth_member_select ON member
+          USING (
+            organization_id = (
+              SELECT current_setting('app.organization_id', true)
+            )
+          )
+      `);
+
+      await transaction.execute(sql`
+        ALTER TABLE oauth_client_resource
+          DROP CONSTRAINT oauth_client_resource_client_fk,
+          ADD CONSTRAINT oauth_client_resource_resource_duplicate_fk
+            FOREIGN KEY (resource_id) REFERENCES oauth_resource(identifier)
+      `);
+      const wrongResourceForeignKeys = await runBetterAuthMigrationAudit({
+        baseline: preMigration.value.baseline,
+        database: auditDatabase,
+        mode: BETTER_AUTH_AUDIT_MODES.POST_MIGRATION,
+      });
+      expect(
+        checkStatus(
+          wrongResourceForeignKeys,
+          BETTER_AUTH_AUDIT_CHECKS.POST_MIGRATION_CONSTRAINTS,
+        ),
+      ).toBe("failed");
+      await transaction.execute(sql`
+        ALTER TABLE oauth_client_resource
+          DROP CONSTRAINT oauth_client_resource_resource_duplicate_fk,
+          ADD CONSTRAINT oauth_client_resource_client_fk
+            FOREIGN KEY (client_id) REFERENCES oauth_client(client_id)
+      `);
 
       await transaction.execute(
         sql`UPDATE "user" SET name = 'Unexpected migration mutation' WHERE id = ${userId}`,

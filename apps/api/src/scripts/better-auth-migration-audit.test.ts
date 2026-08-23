@@ -28,11 +28,13 @@ afterAll(async () => {
 });
 
 const baselinePayload = () => ({
-  formatVersion: 1,
+  accessPolicyDigest: "c".repeat(64),
+  formatVersion: 2,
   tables: Object.fromEntries(
-    Object.keys(AUTH_TABLE_AUDIT_POLICY).map((model) => [
+    Object.entries(AUTH_TABLE_AUDIT_POLICY).map(([model, policy]) => [
       model,
       {
+        preservedColumns: [...policy.preservedColumns],
         primaryKeyDigest: "a".repeat(64),
         rowContentDigest: "b".repeat(64),
         rowCount: "7",
@@ -71,10 +73,11 @@ describe("Better Auth migration audit command", () => {
   test("rejects incomplete, expanded, or malformed private baselines", () => {
     expect(parseBetterAuthAuditBaseline(baselinePayload()).status).toBe("ok");
     expect(
-      parseBetterAuthAuditBaseline({ formatVersion: 1, tables: {} }).status,
+      parseBetterAuthAuditBaseline({ formatVersion: 2, tables: {} }).status,
     ).toBe("error");
     const expanded = baselinePayload();
     expanded.tables["unreviewedAuthTable"] = {
+      preservedColumns: ["id"],
       primaryKeyDigest: "a".repeat(64),
       rowContentDigest: "b".repeat(64),
       rowCount: "0",
@@ -86,6 +89,21 @@ describe("Better Auth migration audit command", () => {
       first.primaryKeyDigest = "not-a-digest";
     }
     expect(parseBetterAuthAuditBaseline(malformed).status).toBe("error");
+
+    const unknownColumn = baselinePayload();
+    const unknownColumnTable = Object.values(unknownColumn.tables).at(0);
+    if (unknownColumnTable) {
+      unknownColumnTable.preservedColumns.push("unreviewed_column");
+    }
+    expect(parseBetterAuthAuditBaseline(unknownColumn).status).toBe("error");
+
+    const duplicateColumn = baselinePayload();
+    const duplicateColumnTable = Object.values(duplicateColumn.tables).at(0);
+    const duplicated = duplicateColumnTable?.preservedColumns.at(0);
+    if (duplicateColumnTable && duplicated) {
+      duplicateColumnTable.preservedColumns.push(duplicated);
+    }
+    expect(parseBetterAuthAuditBaseline(duplicateColumn).status).toBe("error");
   });
 
   test("creates the baseline once, accepts an identical rerun, and refuses replacement", async () => {

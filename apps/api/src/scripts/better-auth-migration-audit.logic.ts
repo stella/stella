@@ -51,8 +51,14 @@ type AuthTableAuditPolicy = {
 
 type AuthAccessPolicy = {
   access: "denied" | "scoped";
-  policyNames: readonly string[];
+  policies: readonly AuthPolicyRule[];
   tableName: string;
+};
+
+type AuthPolicyRule = {
+  command: "ALL" | "SELECT" | "UPDATE";
+  name: string;
+  predicate: "deny" | "scoped-read" | "scoped-write";
 };
 
 const columnNames = (table: Table) =>
@@ -232,78 +238,168 @@ const AUTH_TABLE_POLICIES = Object.values(AUTH_TABLE_AUDIT_POLICY);
 const isAuthModel = (value: string): value is AuthModel =>
   Object.hasOwn(AUTH_TABLE_AUDIT_POLICY, value);
 
+const PRESERVED_AUTH_TABLE_NAMES = AUTH_MODEL_NAMES.flatMap((model) =>
+  isAuthModel(model) ? [AUTH_TABLE_AUDIT_POLICY[model].tableName] : [],
+);
+
 const AUTH_ACCESS_POLICY = {
   account: {
     access: "denied",
-    policyNames: ["auth_no_stella_access"],
+    policies: [
+      {
+        command: "ALL",
+        name: "auth_no_stella_access",
+        predicate: "deny",
+      },
+    ],
     tableName: AUTH_TABLE_AUDIT_POLICY.account.tableName,
   },
   apikey: {
     access: "denied",
-    policyNames: ["auth_no_stella_access"],
+    policies: [
+      {
+        command: "ALL",
+        name: "auth_no_stella_access",
+        predicate: "deny",
+      },
+    ],
     tableName: AUTH_TABLE_AUDIT_POLICY.apikey.tableName,
   },
   invitation: {
     access: "denied",
-    policyNames: ["auth_no_stella_access"],
+    policies: [
+      {
+        command: "ALL",
+        name: "auth_no_stella_access",
+        predicate: "deny",
+      },
+    ],
     tableName: AUTH_TABLE_AUDIT_POLICY.invitation.tableName,
   },
   jwks: {
     access: "denied",
-    policyNames: ["auth_no_stella_access"],
+    policies: [
+      {
+        command: "ALL",
+        name: "auth_no_stella_access",
+        predicate: "deny",
+      },
+    ],
     tableName: AUTH_TABLE_AUDIT_POLICY.jwks.tableName,
   },
   member: {
     access: "scoped",
-    policyNames: [
-      "auth_member_select",
-      "auth_member_update_last_active_workspace",
+    policies: [
+      {
+        command: "SELECT",
+        name: "auth_member_select",
+        predicate: "scoped-read",
+      },
+      {
+        command: "UPDATE",
+        name: "auth_member_update_last_active_workspace",
+        predicate: "scoped-write",
+      },
     ],
     tableName: AUTH_TABLE_AUDIT_POLICY.member.tableName,
   },
   oauthAccessToken: {
     access: "denied",
-    policyNames: ["auth_no_stella_access"],
+    policies: [
+      {
+        command: "ALL",
+        name: "auth_no_stella_access",
+        predicate: "deny",
+      },
+    ],
     tableName: AUTH_TABLE_AUDIT_POLICY.oauthAccessToken.tableName,
   },
   oauthClient: {
     access: "denied",
-    policyNames: ["auth_no_stella_access"],
+    policies: [
+      {
+        command: "ALL",
+        name: "auth_no_stella_access",
+        predicate: "deny",
+      },
+    ],
     tableName: AUTH_TABLE_AUDIT_POLICY.oauthClient.tableName,
   },
   oauthConsent: {
     access: "denied",
-    policyNames: ["auth_no_stella_access"],
+    policies: [
+      {
+        command: "ALL",
+        name: "auth_no_stella_access",
+        predicate: "deny",
+      },
+    ],
     tableName: AUTH_TABLE_AUDIT_POLICY.oauthConsent.tableName,
   },
   oauthRefreshToken: {
     access: "denied",
-    policyNames: ["auth_no_stella_access"],
+    policies: [
+      {
+        command: "ALL",
+        name: "auth_no_stella_access",
+        predicate: "deny",
+      },
+    ],
     tableName: AUTH_TABLE_AUDIT_POLICY.oauthRefreshToken.tableName,
   },
   organization: {
     access: "scoped",
-    policyNames: ["auth_organization_select"],
+    policies: [
+      {
+        command: "SELECT",
+        name: "auth_organization_select",
+        predicate: "scoped-read",
+      },
+    ],
     tableName: AUTH_TABLE_AUDIT_POLICY.organization.tableName,
   },
   session: {
     access: "denied",
-    policyNames: ["auth_no_stella_access"],
+    policies: [
+      {
+        command: "ALL",
+        name: "auth_no_stella_access",
+        predicate: "deny",
+      },
+    ],
     tableName: AUTH_TABLE_AUDIT_POLICY.session.tableName,
   },
   twoFactor: {
     access: "denied",
-    policyNames: ["auth_no_stella_access"],
+    policies: [
+      {
+        command: "ALL",
+        name: "auth_no_stella_access",
+        predicate: "deny",
+      },
+    ],
     tableName: AUTH_TABLE_AUDIT_POLICY.twoFactor.tableName,
   },
   user: {
     access: "scoped",
-    policyNames: ["auth_user_select"],
+    policies: [
+      {
+        command: "SELECT",
+        name: "auth_user_select",
+        predicate: "scoped-read",
+      },
+    ],
     tableName: AUTH_TABLE_AUDIT_POLICY.user.tableName,
   },
   verification: {
     access: "denied",
-    policyNames: ["auth_no_stella_access"],
+    policies: [
+      {
+        command: "ALL",
+        name: "auth_no_stella_access",
+        predicate: "deny",
+      },
+    ],
     tableName: AUTH_TABLE_AUDIT_POLICY.verification.tableName,
   },
 } as const satisfies Record<AuthModel, AuthAccessPolicy>;
@@ -317,7 +413,13 @@ const FUTURE_AUTH_TABLES = {
 const FUTURE_AUTH_ACCESS_POLICY = Object.values(FUTURE_AUTH_TABLES).map(
   (tableName) => ({
     access: "denied" as const,
-    policyNames: ["auth_no_stella_access"],
+    policies: [
+      {
+        command: "ALL" as const,
+        name: "auth_no_stella_access",
+        predicate: "deny" as const,
+      },
+    ],
     tableName,
   }),
 );
@@ -471,10 +573,16 @@ export type BetterAuthAuditCheck = {
 };
 
 export type BetterAuthAuditBaseline = {
-  formatVersion: 1;
+  accessPolicyDigest: string;
+  formatVersion: 2;
   tables: Record<
     string,
-    { primaryKeyDigest: string; rowContentDigest: string; rowCount: string }
+    {
+      preservedColumns: readonly string[];
+      primaryKeyDigest: string;
+      rowContentDigest: string;
+      rowCount: string;
+    }
   >;
 };
 
@@ -625,16 +733,23 @@ const accessBoundariesStatement = (includeFutureTables: boolean) => {
   const expectedTables = policies.map(
     ({ access, tableName }) => sql`(${tableName}::text, ${access}::text)`,
   );
-  const expectedPolicies = policies.flatMap(({ policyNames, tableName }) =>
-    policyNames.map(
-      (policyName) => sql`(${tableName}::text, ${policyName}::text)`,
-    ),
+  const expectedPolicies = policies.flatMap(
+    ({ policies: policyRules, tableName }) =>
+      policyRules.map(
+        ({ command, name, predicate }) =>
+          sql`(
+          ${tableName}::text,
+          ${name}::text,
+          ${command}::text,
+          ${predicate}::text
+        )`,
+      ),
   );
   return sql`
     WITH expected_tables(table_name, access) AS (
       VALUES ${sql.join(expectedTables, sql`, `)}
     ),
-    expected_policies(table_name, policy_name) AS (
+    expected_policies(table_name, policy_name, command, predicate) AS (
       VALUES ${sql.join(expectedPolicies, sql`, `)}
     )
     SELECT
@@ -657,8 +772,40 @@ const accessBoundariesStatement = (includeFutureTables: boolean) => {
             WHERE policy.schemaname = 'public'
               AND policy.tablename = expected.table_name
               AND policy.policyname = expected.policy_name
-              AND policy.roles @> ARRAY['stella']::name[]
+              AND policy.permissive = 'PERMISSIVE'
+              AND policy.cmd = expected.command
+              AND policy.roles = ARRAY['stella']::name[]
+              AND CASE expected.predicate
+                    WHEN 'deny' THEN
+                      policy.qual = 'false' AND policy.with_check = 'false'
+                    WHEN 'scoped-read' THEN
+                      policy.qual IS NOT NULL
+                      AND policy.qual <> 'true'
+                      AND policy.with_check IS NULL
+                    WHEN 'scoped-write' THEN
+                      policy.qual IS NOT NULL
+                      AND policy.qual <> 'true'
+                      AND policy.with_check = policy.qual
+                    ELSE false
+                  END
          )
+      )
+      AND NOT EXISTS (
+        SELECT 1
+          FROM pg_policies policy
+          JOIN expected_tables expected
+            ON expected.table_name = policy.tablename
+         WHERE policy.schemaname = 'public'
+           AND (
+             policy.roles @> ARRAY['stella']::name[]
+             OR policy.roles @> ARRAY['public']::name[]
+           )
+           AND NOT EXISTS (
+             SELECT 1
+               FROM expected_policies expected_policy
+              WHERE expected_policy.table_name = policy.tablename
+                AND expected_policy.policy_name = policy.policyname
+           )
       )
       AND NOT EXISTS (
         SELECT 1
@@ -703,6 +850,54 @@ const accessBoundariesStatement = (includeFutureTables: boolean) => {
            )
       ) AS "passed"
   `;
+};
+
+const accessPolicyInventoryStatement = sql`
+  SELECT jsonb_build_array(
+           table_record.relname,
+           table_record.relrowsecurity,
+           policy.policyname,
+           policy.permissive,
+           policy.cmd,
+           policy.roles::text,
+           policy.qual,
+           policy.with_check
+         )::text AS "fingerprintPart"
+    FROM pg_class table_record
+    JOIN pg_namespace namespace ON namespace.oid = table_record.relnamespace
+    LEFT JOIN pg_policies policy
+      ON policy.schemaname = namespace.nspname
+     AND policy.tablename = table_record.relname
+   WHERE namespace.nspname = 'public'
+     AND table_record.relname IN (${sql.join(
+       PRESERVED_AUTH_TABLE_NAMES.map((tableName) => sql`${tableName}`),
+       sql`, `,
+     )})
+   ORDER BY table_record.relname, policy.policyname
+`;
+
+const readAccessPolicyDigest = async (database: BetterAuthAuditDatabase) => {
+  const queried = await queryRows(database, accessPolicyInventoryStatement);
+  if (Result.isError(queried)) {
+    return queried;
+  }
+  const hasher = new Bun.CryptoHasher("sha256");
+  for (const row of queried.value) {
+    const fingerprintPart = isRecord(row)
+      ? requiredString(row["fingerprintPart"])
+      : null;
+    if (fingerprintPart === null) {
+      return Result.err(
+        new BetterAuthAuditError({
+          code: "database-query-failed",
+          message: "Better Auth access policy inventory returned invalid data",
+        }),
+      );
+    }
+    hasher.update(fingerprintPart);
+    hasher.update("\0");
+  }
+  return Result.ok(hasher.digest("hex"));
 };
 
 const providersClassifiedStatement = sql`
@@ -847,6 +1042,8 @@ const finalAccountConstraintsStatement = sql`
          AND table_record.relname = 'account'
          AND index_record.indisunique
          AND index_record.indisvalid
+         AND index_record.indpred IS NULL
+         AND index_record.indexprs IS NULL
          AND (
            SELECT array_agg(attribute.attname ORDER BY key_position.ordinality)
              FROM unnest(index_record.indkey) WITH ORDINALITY key_position(attnum, ordinality)
@@ -858,6 +1055,15 @@ const finalAccountConstraintsStatement = sql`
 `;
 
 const postMigrationConstraintsStatement = sql`
+  WITH expected_resource_foreign_keys(
+    child_column,
+    parent_table,
+    parent_column
+  ) AS (
+    VALUES
+      ('client_id'::text, 'oauth_client'::text, 'client_id'::text),
+      ('resource_id'::text, 'oauth_resource'::text, 'identifier'::text)
+  )
   SELECT
     EXISTS (
       SELECT 1
@@ -868,6 +1074,8 @@ const postMigrationConstraintsStatement = sql`
          AND table_record.relname = ${FUTURE_AUTH_TABLES.OAUTH_CLIENT_RESOURCE}
          AND index_record.indisunique
          AND index_record.indisvalid
+         AND index_record.indpred IS NULL
+         AND index_record.indexprs IS NULL
          AND (
            SELECT array_agg(attribute.attname ORDER BY key_position.ordinality)
              FROM unnest(index_record.indkey) WITH ORDINALITY key_position(attnum, ordinality)
@@ -885,6 +1093,8 @@ const postMigrationConstraintsStatement = sql`
          AND table_record.relname = ${FUTURE_AUTH_TABLES.OAUTH_RESOURCE}
          AND index_record.indisunique
          AND index_record.indisvalid
+         AND index_record.indpred IS NULL
+         AND index_record.indexprs IS NULL
          AND (
            SELECT array_agg(attribute.attname ORDER BY key_position.ordinality)
              FROM unnest(index_record.indkey) WITH ORDINALITY key_position(attnum, ordinality)
@@ -892,6 +1102,36 @@ const postMigrationConstraintsStatement = sql`
                ON attribute.attrelid = table_record.oid
               AND attribute.attnum = key_position.attnum
          ) = ARRAY['identifier']::name[]
+    )
+    AND NOT EXISTS (
+      SELECT 1
+        FROM expected_resource_foreign_keys expected
+       WHERE NOT EXISTS (
+         SELECT 1
+           FROM pg_constraint constraint_record
+           JOIN pg_class child ON child.oid = constraint_record.conrelid
+           JOIN pg_namespace child_namespace
+             ON child_namespace.oid = child.relnamespace
+           JOIN pg_class parent ON parent.oid = constraint_record.confrelid
+           JOIN pg_namespace parent_namespace
+             ON parent_namespace.oid = parent.relnamespace
+           JOIN pg_attribute child_attribute
+             ON child_attribute.attrelid = child.oid
+            AND child_attribute.attnum = constraint_record.conkey[1]
+           JOIN pg_attribute parent_attribute
+             ON parent_attribute.attrelid = parent.oid
+            AND parent_attribute.attnum = constraint_record.confkey[1]
+          WHERE constraint_record.contype = 'f'
+            AND constraint_record.convalidated
+            AND cardinality(constraint_record.conkey) = 1
+            AND cardinality(constraint_record.confkey) = 1
+            AND child_namespace.nspname = 'public'
+            AND parent_namespace.nspname = 'public'
+            AND child.relname = ${FUTURE_AUTH_TABLES.OAUTH_CLIENT_RESOURCE}
+            AND child_attribute.attname = expected.child_column
+            AND parent.relname = expected.parent_table
+            AND parent_attribute.attname = expected.parent_column
+       )
     )
     AND (
       SELECT count(*)
@@ -902,7 +1142,7 @@ const postMigrationConstraintsStatement = sql`
          AND child.relname = ${FUTURE_AUTH_TABLES.OAUTH_CLIENT_RESOURCE}
          AND constraint_record.contype = 'f'
          AND constraint_record.convalidated
-    ) = 2
+    ) = (SELECT count(*) FROM expected_resource_foreign_keys)
     AND EXISTS (
       SELECT 1
         FROM pg_constraint constraint_record
@@ -1010,18 +1250,23 @@ const columnInventory = async (database: BetterAuthAuditDatabase) => {
 };
 
 type TableCensus = {
+  preservedColumns: readonly string[];
   primaryKeyDigest: string;
   rowContentDigest: string;
   rowCount: string;
 };
 
+type ReadTableCensusOptions = {
+  preservedColumns: readonly string[];
+  tableName: string;
+};
+
 const readTableCensus = async (
   database: BetterAuthAuditDatabase,
-  policy: AuthTableAuditPolicy,
+  { preservedColumns, tableName }: ReadTableCensusOptions,
 ) => {
   const primaryKeyHasher = new Bun.CryptoHasher("sha256");
   const rowContentHasher = new Bun.CryptoHasher("sha256");
-  const { preservedColumns, tableName } = policy;
   const preservedValues = preservedColumns.map((column) =>
     sql.identifier(column),
   );
@@ -1086,6 +1331,7 @@ const readTableCensus = async (
     }
     if (queried.value.length < PRIMARY_KEY_PAGE_SIZE) {
       return Result.ok({
+        preservedColumns,
         primaryKeyDigest: primaryKeyHasher.digest("hex"),
         rowContentDigest: rowContentHasher.digest("hex"),
         rowCount: nextRowCount.toString(),
@@ -1097,7 +1343,10 @@ const readTableCensus = async (
   return await readPage(null, 0n);
 };
 
-const readAuthCensus = async (database: BetterAuthAuditDatabase) => {
+const readAuthCensus = async (
+  database: BetterAuthAuditDatabase,
+  baseline: BetterAuthAuditBaseline | null,
+) => {
   const entries: BetterAuthAuditBaseline["tables"] = {};
   const readModel = async (
     index: number,
@@ -1116,10 +1365,12 @@ const readAuthCensus = async (database: BetterAuthAuditDatabase) => {
         }),
       );
     }
-    const census = await readTableCensus(
-      database,
-      AUTH_TABLE_AUDIT_POLICY[model],
-    );
+    const policy = AUTH_TABLE_AUDIT_POLICY[model];
+    const census = await readTableCensus(database, {
+      preservedColumns:
+        baseline?.tables[model]?.preservedColumns ?? policy.preservedColumns,
+      tableName: policy.tableName,
+    });
     if (Result.isError(census)) {
       return census;
     }
@@ -1149,19 +1400,29 @@ const report = (
     : "failed",
 });
 
-const createBaseline = (tables: BetterAuthAuditBaseline["tables"]) => ({
-  formatVersion: 1 as const,
+const createBaseline = (
+  tables: BetterAuthAuditBaseline["tables"],
+  accessPolicyDigest: string,
+): BetterAuthAuditBaseline => ({
+  accessPolicyDigest,
+  formatVersion: 2,
   tables,
 });
 
 const emptyBaseline = (): BetterAuthAuditBaseline =>
   createBaseline(
     Object.fromEntries(
-      AUTH_MODEL_NAMES.map((model) => [
+      Object.entries(AUTH_TABLE_AUDIT_POLICY).map(([model, policy]) => [
         model,
-        { primaryKeyDigest: "", rowContentDigest: "", rowCount: "0" },
+        {
+          preservedColumns: policy.preservedColumns,
+          primaryKeyDigest: "",
+          rowContentDigest: "",
+          rowCount: "0",
+        },
       ]),
     ),
+    "0".repeat(64),
   );
 
 type NamedAuditStatement = readonly [BetterAuthAuditCheckName, SQL];
@@ -1250,6 +1511,10 @@ export const runBetterAuthMigrationAudit = async ({
     }
   }
 
+  const accessPolicyDigest = await readAccessPolicyDigest(database);
+  if (Result.isError(accessPolicyDigest)) {
+    return accessPolicyDigest;
+  }
   const accessBoundaries = await booleanCheck(
     database,
     BETTER_AUTH_AUDIT_CHECKS.AUTH_ACCESS_BOUNDARIES,
@@ -1258,7 +1523,15 @@ export const runBetterAuthMigrationAudit = async ({
   if (Result.isError(accessBoundaries)) {
     return accessBoundaries;
   }
-  checks.push(accessBoundaries.value);
+  checks.push(
+    check(
+      BETTER_AUTH_AUDIT_CHECKS.AUTH_ACCESS_BOUNDARIES,
+      accessBoundaries.value.status === "passed" &&
+        (mode === BETTER_AUTH_AUDIT_MODES.PRE_MIGRATION ||
+          (baseline !== null &&
+            baseline.accessPolicyDigest === accessPolicyDigest.value)),
+    ),
+  );
 
   const commonChecks = [
     [
@@ -1360,11 +1633,11 @@ export const runBetterAuthMigrationAudit = async ({
     }
   }
 
-  const census = await readAuthCensus(database);
+  const census = await readAuthCensus(database, baseline);
   if (Result.isError(census)) {
     return census;
   }
-  const nextBaseline = createBaseline(census.value);
+  const nextBaseline = createBaseline(census.value, accessPolicyDigest.value);
   if (mode === BETTER_AUTH_AUDIT_MODES.PRE_MIGRATION) {
     checks.push(check(BETTER_AUTH_AUDIT_CHECKS.AUTH_ROWS_BASELINED, true));
   } else {
@@ -1376,6 +1649,10 @@ export const runBetterAuthMigrationAudit = async ({
         return (
           expected !== undefined &&
           actual !== undefined &&
+          expected.preservedColumns.length === actual.preservedColumns.length &&
+          expected.preservedColumns.every(
+            (column, index) => actual.preservedColumns.at(index) === column,
+          ) &&
           expected.rowCount === actual.rowCount &&
           expected.primaryKeyDigest === actual.primaryKeyDigest &&
           expected.rowContentDigest === actual.rowContentDigest
@@ -1401,67 +1678,84 @@ export const runBetterAuthMigrationAudit = async ({
 export const parseBetterAuthAuditBaseline = (
   value: unknown,
 ): Result<BetterAuthAuditBaseline, BetterAuthAuditError> => {
-  if (!isRecord(value) || value["formatVersion"] !== 1) {
-    return Result.err(
+  const invalidBaseline = () =>
+    Result.err(
       new BetterAuthAuditError({
         code: "invalid-baseline",
         message: "Better Auth audit baseline is invalid",
       }),
     );
+  if (
+    !isRecord(value) ||
+    Object.keys(value).length !== 3 ||
+    value["formatVersion"] !== 2 ||
+    !/^[a-f\d]{64}$/u.test(requiredString(value["accessPolicyDigest"]) ?? "")
+  ) {
+    return invalidBaseline();
   }
   const rawTables = value["tables"];
   if (!isRecord(rawTables)) {
-    return Result.err(
-      new BetterAuthAuditError({
-        code: "invalid-baseline",
-        message: "Better Auth audit baseline is invalid",
-      }),
-    );
+    return invalidBaseline();
   }
   const keys = Object.keys(rawTables);
-  if (
-    keys.length !== AUTH_MODEL_NAMES.length ||
-    AUTH_MODEL_NAMES.some((model) => {
-      const table = rawTables[model];
-      return (
-        !isRecord(table) ||
-        Object.keys(table).length !== 3 ||
-        !/^\d+$/u.test(requiredString(table["rowCount"]) ?? "") ||
-        !/^[a-f\d]{64}$/u.test(
-          requiredString(table["primaryKeyDigest"]) ?? "",
-        ) ||
-        !/^[a-f\d]{64}$/u.test(requiredString(table["rowContentDigest"]) ?? "")
-      );
-    })
-  ) {
-    return Result.err(
-      new BetterAuthAuditError({
-        code: "invalid-baseline",
-        message: "Better Auth audit baseline is invalid",
-      }),
-    );
+  if (keys.length !== AUTH_MODEL_NAMES.length) {
+    return invalidBaseline();
   }
+
+  const tables: BetterAuthAuditBaseline["tables"] = {};
+  for (const model of AUTH_MODEL_NAMES) {
+    if (!isAuthModel(model)) {
+      return invalidBaseline();
+    }
+    const table = rawTables[model];
+    if (!isRecord(table) || Object.keys(table).length !== 4) {
+      return invalidBaseline();
+    }
+    const rawPreservedColumns = table["preservedColumns"];
+    if (!Array.isArray(rawPreservedColumns)) {
+      return invalidBaseline();
+    }
+    const preservedColumns: string[] = [];
+    for (const column of rawPreservedColumns) {
+      if (typeof column !== "string") {
+        return invalidBaseline();
+      }
+      preservedColumns.push(column);
+    }
+    const uniqueColumns = new Set(preservedColumns);
+    const allowedColumns = new Set<string>(
+      AUTH_TABLE_AUDIT_POLICY[model].preservedColumns,
+    );
+    if (
+      preservedColumns.length === 0 ||
+      uniqueColumns.size !== preservedColumns.length ||
+      !uniqueColumns.has("id") ||
+      preservedColumns.some((column) => !allowedColumns.has(column))
+    ) {
+      return invalidBaseline();
+    }
+    const primaryKeyDigest = requiredString(table["primaryKeyDigest"]);
+    const rowContentDigest = requiredString(table["rowContentDigest"]);
+    const rowCount = requiredString(table["rowCount"]);
+    if (
+      !/^\d+$/u.test(rowCount ?? "") ||
+      !/^[a-f\d]{64}$/u.test(primaryKeyDigest ?? "") ||
+      !/^[a-f\d]{64}$/u.test(rowContentDigest ?? "")
+    ) {
+      return invalidBaseline();
+    }
+    tables[model] = {
+      preservedColumns,
+      primaryKeyDigest: primaryKeyDigest ?? "",
+      rowContentDigest: rowContentDigest ?? "",
+      rowCount: rowCount ?? "",
+    };
+  }
+
   return Result.ok({
-    formatVersion: 1,
-    tables: Object.fromEntries(
-      AUTH_MODEL_NAMES.map((model) => {
-        const table = rawTables[model];
-        if (!isRecord(table)) {
-          return [
-            model,
-            { primaryKeyDigest: "", rowContentDigest: "", rowCount: "" },
-          ];
-        }
-        return [
-          model,
-          {
-            primaryKeyDigest: requiredString(table["primaryKeyDigest"]) ?? "",
-            rowContentDigest: requiredString(table["rowContentDigest"]) ?? "",
-            rowCount: requiredString(table["rowCount"]) ?? "",
-          },
-        ];
-      }),
-    ),
+    accessPolicyDigest: requiredString(value["accessPolicyDigest"]) ?? "",
+    formatVersion: 2,
+    tables,
   });
 };
 
