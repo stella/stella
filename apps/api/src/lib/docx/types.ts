@@ -393,14 +393,14 @@ const hasCompatibleDerivedSources = ({
   parts,
   source,
 }: {
-  aiAdapt?: boolean;
-  aiPrompt?: string;
-  condition?: string;
-  conditionAst?: ConditionNode;
-  formula?: string;
-  lookup?: FieldLookup;
-  parts?: FieldPart[];
-  source?: FieldSource;
+  aiAdapt?: boolean | undefined;
+  aiPrompt?: string | undefined;
+  condition?: string | undefined;
+  conditionAst?: ConditionNode | undefined;
+  formula?: string | undefined;
+  lookup?: FieldLookup | undefined;
+  parts?: FieldPart[] | undefined;
+  source?: FieldSource | undefined;
 }): boolean => {
   const hasFormula = formula !== undefined;
   const hasCondition = condition !== undefined || conditionAst !== undefined;
@@ -519,8 +519,8 @@ const hasCompleteCompositeField = ({
   format,
   parts,
 }: {
-  format?: string;
-  parts?: FieldPart[];
+  format?: string | undefined;
+  parts?: FieldPart[] | undefined;
 }): boolean => (parts === undefined) === (format === undefined);
 
 export const fieldMetaSchema = v.pipe(

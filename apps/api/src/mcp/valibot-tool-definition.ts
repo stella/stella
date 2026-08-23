@@ -56,11 +56,16 @@ const deriveMcpInputSchema = (
  * to distinguish derived schemas from legacy hand-maintained mirrors.
  */
 export const defineValibotMcpTool = <
-  const TDefinition extends Omit<McpToolDefinition, "inputSchema"> & {
-    inputSchema: v.GenericSchema;
-    jsonSchemaProjectionWaiver?: JsonSchemaProjectionWaiver;
-  },
->({ inputSchema, jsonSchemaProjectionWaiver, ...definition }: TDefinition) => ({
+  const TSchema extends v.GenericSchema,
+  const TDefinition extends Omit<McpToolDefinition, "inputSchema">,
+>({
+  inputSchema,
+  jsonSchemaProjectionWaiver,
+  ...definition
+}: TDefinition & {
+  inputSchema: TSchema;
+  jsonSchemaProjectionWaiver?: JsonSchemaProjectionWaiver;
+}) => ({
   ...definition,
   inputSchema: deriveMcpInputSchema(inputSchema, jsonSchemaProjectionWaiver),
   inputSchemaSource: inputSchema,

@@ -49,22 +49,35 @@ import {
  * schema field — stripped/unenumerated positions — admits any payload type
  * without descending).
  */
+type ProjectionScalar =
+  | string
+  | number
+  | boolean
+  | bigint
+  | symbol
+  | null
+  | undefined;
+
 type ExtraProjectionFields<Payload, SchemaInput> =
-  Payload extends readonly (infer Item)[]
-    ? SchemaInput extends readonly (infer ShapeItem)[]
-      ? ExtraProjectionFields<Item, ShapeItem>
-      : never
-    : Payload extends object
-      ? SchemaInput extends object
-        ? Payload extends SchemaInput
-          ? {
-              [K in keyof Payload]-?: K extends keyof SchemaInput
-                ? ExtraProjectionFields<Payload[K], SchemaInput[K]>
-                : K;
-            }[keyof Payload]
+  unknown extends SchemaInput
+    ? never
+    : SchemaInput extends ProjectionScalar
+      ? never
+      : Payload extends readonly (infer Item)[]
+        ? SchemaInput extends readonly (infer ShapeItem)[]
+          ? ExtraProjectionFields<Item, ShapeItem>
           : never
-        : never
-      : never;
+        : Payload extends object
+          ? SchemaInput extends object
+            ? Payload extends SchemaInput
+              ? {
+                  [K in keyof Payload]-?: K extends keyof SchemaInput
+                    ? ExtraProjectionFields<Payload[K], SchemaInput[K]>
+                    : K;
+                }[keyof Payload]
+              : never
+            : never
+          : never;
 
 /**
  * Compile-time exactness tie for a chat payload that is NOT built as an
