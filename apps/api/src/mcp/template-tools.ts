@@ -73,6 +73,7 @@ import {
   runTextFieldSpecs,
 } from "@/api/mcp/text-field-spec";
 import type {
+  InternalToolResult,
   McpTextFieldSpec,
   McpToolDefinition,
   McpToolHandler,
@@ -90,7 +91,7 @@ import {
   parseOptionalCursor,
   stringProp,
   structuredErrorResult,
-  textResult,
+  toolDataResult,
   validationErrorResult,
 } from "@/api/mcp/tool-utils";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
@@ -921,7 +922,7 @@ const handleFillTemplateTool: McpToolHandler = async ({ args, context }) => {
 
   const truncated = filled.text.length > TEMPLATE_FILL_TEXT_MAX_CHARS;
 
-  return textResult({
+  return toolDataResult({
     completionStatus,
     templateName: filled.templateName,
     fileName: filled.fileName,
@@ -1133,7 +1134,7 @@ const handleSaveFilledTemplateTool: McpToolHandler = async ({
       case "claimed":
         return claim.value.claimToken;
       case "completed":
-        return textResult(claim.value.result);
+        return toolDataResult(claim.value.result);
       case "conflict":
         return structuredErrorResult({
           code: "validation_error",
@@ -1420,7 +1421,7 @@ const handleSaveFilledTemplateTool: McpToolHandler = async ({
     await releaseClaim();
     return errorResult(persistence.value.message);
   }
-  return textResult(persistence.value.value);
+  return toolDataResult(persistence.value.value);
 };
 
 // base64 encodes 3 bytes per 4 chars, so bound the encoded length to the doc
@@ -1528,7 +1529,7 @@ const createTemplateFromDocx = async ({
   docxBase64: string;
   fields: readonly unknown[] | undefined;
   name: string;
-}): Promise<ReturnType<typeof textResult>> => {
+}): Promise<InternalToolResult> => {
   const hasPermission = roles[context.memberRole].authorize({
     template: ["create"],
   });
@@ -1615,7 +1616,7 @@ const createTemplateFromDocx = async ({
     return errorResult(created.error.message);
   }
 
-  return textResult({
+  return toolDataResult({
     templateId: created.value.id,
     name: created.value.name,
     fieldCount: created.value.fieldCount,
@@ -1632,7 +1633,7 @@ const configureExistingTemplate = async ({
   context: McpRequestContext;
   fields: readonly unknown[];
   templateId: string;
-}): Promise<ReturnType<typeof textResult>> => {
+}): Promise<InternalToolResult> => {
   const hasPermission = roles[context.memberRole].authorize({
     template: ["update"],
   });
@@ -1687,7 +1688,7 @@ const configureExistingTemplate = async ({
     typeof described,
     v.InferInput<typeof TEMPLATE_DESCRIBE_PROJECTION>
   >;
-  return textResult(described satisfies ConfiguredTemplatePayload);
+  return toolDataResult(described satisfies ConfiguredTemplatePayload);
 };
 
 const handleSaveTemplateTool: McpToolHandler = async ({ args, context }) => {

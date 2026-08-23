@@ -28,7 +28,11 @@ import {
   validateOutboundFetchTarget,
 } from "@/api/lib/safe-outbound-fetch";
 import type { SafeOutboundFetchBody } from "@/api/lib/safe-outbound-fetch";
-import { errorResult, textResult } from "@/api/mcp/tool-utils";
+import {
+  errorResult,
+  serializeMcpData,
+  serializeToolResult,
+} from "@/api/mcp/tool-utils";
 
 import { normalizeDiscoveredMcpTools } from "./cached-tools";
 
@@ -397,7 +401,8 @@ const isExecutableMcpTool = (value: unknown): value is ExecutableMcpTool =>
 // becomes the raw object. Treat every value here as application output. A raw
 // object that happens to contain `content` or `resultType` must not be trusted
 // as a protocol envelope and allowed to overwrite our own result shape.
-const asCallToolResult = (value: unknown): CallToolResult => textResult(value);
+const asCallToolResult = (value: unknown): CallToolResult =>
+  serializeMcpData(value);
 
 export const proxyMcpToolCall = async ({
   args,
@@ -421,7 +426,9 @@ export const proxyMcpToolCall = async ({
     userId,
   });
   if (!client) {
-    return errorResult("External MCP connection is unavailable");
+    return serializeToolResult(
+      errorResult("External MCP connection is unavailable"),
+    );
   }
 
   try {
@@ -435,7 +442,9 @@ export const proxyMcpToolCall = async ({
     ]);
     const tool: unknown = tools.at(0);
     if (!isExecutableMcpTool(tool)) {
-      return errorResult("External MCP tool is unavailable");
+      return serializeToolResult(
+        errorResult("External MCP tool is unavailable"),
+      );
     }
 
     const result = await tool.execute(args);

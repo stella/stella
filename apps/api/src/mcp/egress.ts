@@ -1,11 +1,10 @@
-import type { CallToolResult } from "@modelcontextprotocol/server";
-
 import { loadAnonymizationGazetteerEntries } from "@/api/lib/anonymization-blacklist";
 import { anonymizeTextFields } from "@/api/mcp/anonymization";
 import type { McpMode } from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";
 import type {
   McpEgressPlan,
+  InternalToolResult,
   McpStructuredTextField,
   McpToolResponse,
 } from "@/api/mcp/tool-types";
@@ -13,7 +12,7 @@ import { isMcpEgressPlan } from "@/api/mcp/tool-types";
 import {
   isToolErrorResult,
   normalizeTextField,
-  textResult,
+  toolDataResult,
   windowTextByCursor,
 } from "@/api/mcp/tool-utils";
 
@@ -21,10 +20,10 @@ const ANONYMIZED_FIELD_MISSING_FALLBACK = "[REDACTED]";
 
 /**
  * Central egress pipeline. A handler never sees the request mode: it returns a
- * finished `CallToolResult` (no tenant text, or its own windowing) or an egress
+ * finished internal result (no tenant text, or its own windowing) or an egress
  * plan carrying the full pre-window payload. In anonymized mode this anonymizes
- * the plan's declared text fields on the whole payload, THEN windows, THEN
- * serializes, so an entity name can never be split across a window edge and
+ * the plan's declared text fields on the whole payload, then windows, so an
+ * entity name can never be split across a window edge and
  * placeholders stay stable across consecutive windows of one document.
  *
  * Deliberately out of scope: tenant/entity ids. This pipeline (and the
@@ -44,15 +43,17 @@ const ANONYMIZED_FIELD_MISSING_FALLBACK = "[REDACTED]";
  * `projection-schema.ts`). That backstop belongs there, not here, because
  * this pipeline itself never hands output to a model.
  */
-export const finalizeMcpEgress = async ({
-  context,
-  mode,
-  response,
-}: {
+type FinalizeToolEgressOptions = {
   context: McpRequestContext;
   mode: McpMode;
   response: McpToolResponse;
-}): Promise<CallToolResult> => {
+};
+
+export const finalizeToolEgress = async ({
+  context,
+  mode,
+  response,
+}: FinalizeToolEgressOptions): Promise<InternalToolResult> => {
   if (!isMcpEgressPlan(response)) {
     return response;
   }
@@ -134,7 +135,7 @@ const finalizeStructured = async ({
   context: McpRequestContext;
   mode: McpMode;
   plan: Extract<McpEgressPlan, { egress: "structured" }>;
-}): Promise<CallToolResult> => {
+}): Promise<InternalToolResult> => {
   // Anonymize the declared text fields on the whole payload first (anonymized
   // mode only), THEN window, so an entity name can never straddle a window edge
   // and placeholders stay stable across windows of one field.
@@ -154,7 +155,7 @@ const finalizeStructured = async ({
     plan.window.apply(textWindow);
   }
 
-  return textResult(plan.payload);
+  return toolDataResult(plan.payload);
 };
 
 const finalizeCompatSearch = async ({
@@ -165,7 +166,7 @@ const finalizeCompatSearch = async ({
   context: McpRequestContext;
   mode: McpMode;
   plan: Extract<McpEgressPlan, { egress: "compatSearch" }>;
-}): Promise<CallToolResult> => {
+}): Promise<InternalToolResult> => {
   // `workspaceId` is per-hit attribution the egress pipeline uses to group
   // anonymization; it is stripped before the result reaches the client.
   const results = plan.results.map(
@@ -192,7 +193,7 @@ const finalizeCompatSearch = async ({
     });
   }
 
-  return textResult({ nextCursor: plan.nextCursor, results });
+  return toolDataResult({ nextCursor: plan.nextCursor, results });
 };
 
 const finalizeCompatFetch = async ({
@@ -203,7 +204,7 @@ const finalizeCompatFetch = async ({
   context: McpRequestContext;
   mode: McpMode;
   plan: Extract<McpEgressPlan, { egress: "compatFetch" }>;
-}): Promise<CallToolResult> => {
+}): Promise<InternalToolResult> => {
   if (mode === "anonymized") {
     // Same boundary as anonymized search: the user may fetch a raw document
     // internally, but the AI client receives only the anonymized title/body.
@@ -225,7 +226,7 @@ const finalizeCompatFetch = async ({
       return textWindow;
     }
 
-    return textResult({
+    return toolDataResult({
       id: plan.id,
       title: anonymized.title,
       text: textWindow.text,
@@ -251,7 +252,7 @@ const finalizeCompatFetch = async ({
     return textWindow;
   }
 
-  return textResult({
+  return toolDataResult({
     id: plan.id,
     title: plan.title,
     text: textWindow.text,

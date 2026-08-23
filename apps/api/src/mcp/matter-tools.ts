@@ -36,6 +36,7 @@ import type {
   DELETED_TRUE_PROJECTION,
   LINK_MATTER_CONTACT_LINK_PROJECTION,
   LINK_MATTER_CONTACT_UNLINK_PROJECTION,
+  LIST_CONTACTS_PROJECTION,
   LIST_TASKS_DETAIL_PROJECTION,
   LIST_TASKS_LIST_PROJECTION,
   LOOKUP_BUSINESS_REGISTRY_PROJECTION,
@@ -92,7 +93,7 @@ import {
   nullableStringProp,
   stringProp,
   structuredErrorResult,
-  textResult,
+  toolDataResult,
   validationErrorResult,
 } from "@/api/mcp/tool-utils";
 
@@ -669,7 +670,7 @@ const handleSaveMatterTool: McpToolHandler = async ({ args, context }) => {
     if (Result.isError(created)) {
       return internalFailureResult(created.error);
     }
-    return textResult({
+    return toolDataResult({
       matterId: created.value.id,
     } satisfies v.InferInput<typeof SAVE_MATTER_PROJECTION>);
   }
@@ -758,7 +759,7 @@ const handleSaveMatterTool: McpToolHandler = async ({ args, context }) => {
     }
   }
 
-  return textResult({
+  return toolDataResult({
     matterId: workspaceId,
     updated: true,
   } satisfies v.InferInput<typeof SAVE_MATTER_PROJECTION>);
@@ -806,7 +807,7 @@ const handleDeleteMatterTool: McpToolHandler = async ({ args, context }) => {
   if (Result.isError(deleted)) {
     return internalFailureResult(deleted.error);
   }
-  return textResult({
+  return toolDataResult({
     deleted: true,
   } satisfies v.InferInput<typeof DELETED_TRUE_PROJECTION>);
 };
@@ -858,11 +859,16 @@ const handleListContactsTool: McpToolHandler = async ({ args, context }) => {
   if (Result.isError(listed)) {
     return internalFailureResult(listed.error);
   }
-  // No compile-time tie against LIST_CONTACTS_PROJECTION: the contacts page is
-  // forwarded verbatim and carries `Date` columns that only become the
-  // projection's `v.string()` after the JSON round-trip the chat adapter
-  // performs (`parsePayload`, run-registry-tool.ts).
-  return textResult(listed.value);
+  const page = {
+    ...listed.value,
+    items: listed.value.items.map(({ createdAt, ...contact }) =>
+      Object.assign(contact, {
+        createdAt: createdAt.toISOString(),
+      }),
+    ),
+  } satisfies v.InferInput<typeof LIST_CONTACTS_PROJECTION>;
+
+  return toolDataResult(page);
 };
 
 // --- save_contact -------------------------------------------------------
@@ -972,7 +978,7 @@ const handleSaveContactTool: McpToolHandler = async ({ args, context }) => {
     if (Result.isError(created)) {
       return internalFailureResult(created.error);
     }
-    return textResult({
+    return toolDataResult({
       contactId: created.value.id,
     } satisfies v.InferInput<typeof SAVE_CONTACT_PROJECTION>);
   }
@@ -1007,7 +1013,7 @@ const handleSaveContactTool: McpToolHandler = async ({ args, context }) => {
   if (Result.isError(updated)) {
     return internalFailureResult(updated.error);
   }
-  return textResult({
+  return toolDataResult({
     contactId: updated.value.id,
   } satisfies v.InferInput<typeof SAVE_CONTACT_PROJECTION>);
 };
@@ -1043,7 +1049,7 @@ const handleDeleteContactTool: McpToolHandler = async ({ args, context }) => {
   if (Result.isError(deleted)) {
     return internalFailureResult(deleted.error);
   }
-  return textResult({
+  return toolDataResult({
     deleted: true,
   } satisfies v.InferInput<typeof DELETED_TRUE_PROJECTION>);
 };
@@ -1087,7 +1093,7 @@ const handleLookupBusinessRegistryTool: McpToolHandler = async ({
     typeof result.value,
     v.InferInput<typeof LOOKUP_BUSINESS_REGISTRY_PROJECTION>
   >;
-  return textResult(result.value satisfies LookupBusinessRegistryPayload);
+  return toolDataResult(result.value satisfies LookupBusinessRegistryPayload);
 };
 
 // --- list_tasks ---------------------------------------------------------
@@ -1782,7 +1788,7 @@ const handleSaveTaskTool: McpToolHandler = async ({ args, context }) => {
     if (Result.isError(created)) {
       return internalFailureResult(created.error);
     }
-    return textResult({
+    return toolDataResult({
       taskId: created.value.entityId,
     } satisfies v.InferInput<typeof SAVE_TASK_PROJECTION>);
   }
@@ -1918,7 +1924,7 @@ const handleSaveTaskTool: McpToolHandler = async ({ args, context }) => {
     }
   }
 
-  return textResult({
+  return toolDataResult({
     taskId,
     updated: true,
   } satisfies v.InferInput<typeof SAVE_TASK_PROJECTION>);
@@ -2048,7 +2054,7 @@ const handleLinkMatterContactTool: McpToolHandler = async ({
     if (Result.isError(removed)) {
       return internalFailureResult(removed.error);
     }
-    return textResult({
+    return toolDataResult({
       unlinked: true,
     } satisfies v.InferInput<typeof LINK_MATTER_CONTACT_UNLINK_PROJECTION>);
   }
@@ -2072,7 +2078,7 @@ const handleLinkMatterContactTool: McpToolHandler = async ({
   if (Result.isError(created)) {
     return internalFailureResult(created.error);
   }
-  return textResult({
+  return toolDataResult({
     workspaceContactId: created.value.id,
   } satisfies v.InferInput<typeof LINK_MATTER_CONTACT_LINK_PROJECTION>);
 };

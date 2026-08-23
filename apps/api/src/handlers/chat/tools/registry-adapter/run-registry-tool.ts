@@ -1,18 +1,14 @@
-import type { CallToolResult } from "@modelcontextprotocol/server";
 import { panic, Result } from "better-result";
 
 import { projectForChat } from "@/api/lib/chat/projection-schema";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
-import type { ChatToolErrorKind } from "@/api/lib/errors/tagged-errors";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import { BILLING_TOOL_HANDLERS } from "@/api/mcp/billing-tools";
 import { CAPABILITY_TOOL_HANDLERS } from "@/api/mcp/capability-tools";
 import { COMPAT_TOOL_HANDLERS } from "@/api/mcp/compat-tools";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { DOCUMENT_TOOL_HANDLERS } from "@/api/mcp/document-tools";
-import { finalizeMcpEgress } from "@/api/mcp/egress";
-import type { McpErrorCode } from "@/api/mcp/error-codes";
-import { MCP_ERROR_CODES } from "@/api/mcp/error-codes";
+import { finalizeToolEgress } from "@/api/mcp/egress";
 import { isMcpToolFeatureEnabled } from "@/api/mcp/gateway/list-tools";
 import { KNOWLEDGE_TOOL_HANDLERS } from "@/api/mcp/knowledge-tools";
 import { MATTER_TOOL_HANDLERS } from "@/api/mcp/matter-tools";
@@ -25,6 +21,7 @@ import type { McpToolHandler } from "@/api/mcp/tool-types";
 import type { RegistryReadToolName } from "./ref-field-map";
 import { READ_TOOL_REF_FIELD_MAP } from "./ref-field-map";
 import { dehydrateInputRefs } from "./ref-mediation";
+import { toRegistryChatToolError } from "./registry-tool-error";
 
 /**
  * The read-only registry handlers chat may drive, gathered from the per-domain
@@ -64,89 +61,6 @@ const REGISTRY_READ_TOOL_HANDLERS = {
   describe_capability: CAPABILITY_TOOL_HANDLERS.describe_capability,
 } satisfies Record<RegistryReadToolName, McpToolHandler>;
 
-export const firstTextContent = (result: CallToolResult): string => {
-  const item = result.content.at(0);
-  return item?.type === "text" ? item.text : "";
-};
-
-/** Fallback for an `isError` result whose content carries no text block. */
-export const DEFAULT_TOOL_ERROR_MESSAGE = "Tool execution failed.";
-
-const MCP_CODE_TO_CHAT_KIND = {
-  validation_error: "invalid-input",
-  missing_scope: "unavailable",
-  feature_disabled: "unavailable",
-  not_found: "not-found",
-  confirmation_required: "invalid-input",
-  permission_denied: "unavailable",
-  usage_limited: "limit",
-  // A 409 needs a different action (refetch state, rename, regenerate), which
-  // is the model correcting its input, not a defect or a bare retry.
-  conflict: "invalid-input",
-  rate_limited: "transient",
-  upstream_unavailable: "transient",
-  unknown_tool: "unavailable",
-  internal_error: "server-defect",
-} as const satisfies Record<McpErrorCode, ChatToolErrorKind>;
-
-const isMcpErrorCode = (value: unknown): value is McpErrorCode =>
-  typeof value === "string" && MCP_ERROR_CODES.some((code) => code === value);
-
-/**
- * Classify a finished registry `isError` result into a chat error kind via the
- * envelope's stable `error.code` (`structuredErrorResult`). Legacy code-less
- * plain-text errors ("Forbidden", bespoke hints) default to `invalid-input`:
- * the conservative non-blocking kind, since a wrong `server-defect` would
- * suppress legitimate corrected retries. The boundary parse of an
- * already-serialized envelope is not control flow.
- */
-export const classifyRegistryErrorKind = (
-  message: string,
-): ChatToolErrorKind => {
-  try {
-    const parsed: unknown = JSON.parse(message);
-    if (
-      typeof parsed === "object" &&
-      parsed !== null &&
-      "error" in parsed &&
-      typeof parsed.error === "object" &&
-      parsed.error !== null &&
-      "code" in parsed.error &&
-      isMcpErrorCode(parsed.error.code)
-    ) {
-      return MCP_CODE_TO_CHAT_KIND[parsed.error.code];
-    }
-  } catch {
-    // Legacy plain-text error; fall through to the default.
-  }
-  return "invalid-input";
-};
-
-/**
- * A finished registry result is a single text content block holding the
- * handler's JSON payload (`textResult`). Parse it back into the plain object the
- * chat sandbox expects, mapping a malformed body to a `ChatToolError`. The
- * try/catch is a boundary parse of an already-serialized payload, not control
- * flow.
- */
-export const parsePayload = (
-  result: CallToolResult,
-): Result<unknown, ChatToolError> => {
-  try {
-    // JSON.parse is typed `any`; pin it to `unknown` so the payload stays
-    // opaque until ref hydration walks it (no `as` cast).
-    const parsed: unknown = JSON.parse(firstTextContent(result));
-    return Result.ok(parsed);
-  } catch {
-    return Result.err(
-      new ChatToolError({
-        kind: "server-defect",
-        message: "The tool returned a response that could not be read.",
-      }),
-    );
-  }
-};
-
 export type RunRegistryReadToolProps = {
   toolName: RegistryReadToolName;
   args: Record<string, unknown>;
@@ -163,8 +77,8 @@ export type RunRegistryReadToolProps = {
  * 2. Dehydrate ref args to real UUIDs.
  * 3. Run the handler and finalize its egress in DEFAULT mode (chat is not the
  *    anonymized surface).
- * 4. Map an `isError` result into a `ChatToolError`; otherwise parse the JSON
- *    payload and project it for chat in a single schema-driven pass
+ * 4. Project a typed error into a `ChatToolError`; otherwise project the typed
+ *    payload for chat in a single schema-driven pass
  *    (`projectForChat`: strict parse, strip, ref hydration, UUID invariant).
  */
 export const runRegistryReadTool = async ({
@@ -204,22 +118,14 @@ export const runRegistryReadTool = async ({
     args: dehydrated.value.args,
     context,
   });
-  const finished = await finalizeMcpEgress({
+  const finished = await finalizeToolEgress({
     context,
     mode: "default",
     response,
   });
 
-  if (finished.isError === true) {
-    const message = firstTextContent(finished) || DEFAULT_TOOL_ERROR_MESSAGE;
-    return Result.err(
-      new ChatToolError({ kind: classifyRegistryErrorKind(message), message }),
-    );
-  }
-
-  const payload = parsePayload(finished);
-  if (Result.isError(payload)) {
-    return Result.err(payload.error);
+  if (finished.status === "error") {
+    return Result.err(toRegistryChatToolError(finished.error));
   }
 
   // One schema-driven pass: strict parse (an unknown key — a field nobody
@@ -228,7 +134,7 @@ export const runRegistryReadTool = async ({
   // invariant in the same walk. Failures carry only paths to telemetry.
   return projectForChat({
     dehydration: dehydrated.value,
-    payload: payload.value,
+    payload: finished.data,
     refRegistry,
     schema: entry.projection,
     source: "run-registry-tool",

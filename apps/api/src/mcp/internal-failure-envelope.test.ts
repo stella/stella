@@ -42,7 +42,7 @@ const { DOCUMENT_TOOL_HANDLERS } = await import("@/api/mcp/document-tools");
 const { KNOWLEDGE_TOOL_HANDLERS } = await import("@/api/mcp/knowledge-tools");
 const { RESEARCH_ADMIN_TOOL_HANDLERS } =
   await import("@/api/mcp/research-admin-tools");
-const { internalFailureResult, MCP_INTERNAL_ERROR_HINT } =
+const { internalFailureResult, MCP_INTERNAL_ERROR_HINT, serializeToolResult } =
   await import("@/api/mcp/tool-utils");
 
 // A unique token the fake DB failure carries. The whole point of the envelope
@@ -82,7 +82,7 @@ const asCallToolResult = (result: McpToolResponse) => {
   if (isMcpEgressPlan(result)) {
     throw new Error("expected a CallToolResult, got an egress plan");
   }
-  return result;
+  return serializeToolResult(result);
 };
 
 const envelopeText = (result: McpToolResponse): string => {
@@ -185,8 +185,9 @@ describe("MCP tool DB failures return a structured internal_error envelope", () 
       new Error(`unhandled: ${DB_INTERNAL_LEAK_TOKEN}`),
     );
 
-    expect(result.isError).toBe(true);
-    const first = result.content.at(0);
+    const serialized = serializeToolResult(result);
+    expect(serialized.isError).toBe(true);
+    const first = serialized.content.at(0);
     const text = first !== undefined && "text" in first ? first.text : "";
     expect(text).not.toContain(DB_INTERNAL_LEAK_TOKEN);
     expect(JSON.parse(text)).toEqual({

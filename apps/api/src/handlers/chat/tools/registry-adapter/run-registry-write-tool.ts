@@ -7,7 +7,7 @@ import { BILLING_TOOL_HANDLERS } from "@/api/mcp/billing-tools";
 import { CAPABILITY_TOOL_HANDLERS } from "@/api/mcp/capability-tools";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { DOCUMENT_TOOL_HANDLERS } from "@/api/mcp/document-tools";
-import { finalizeMcpEgress } from "@/api/mcp/egress";
+import { finalizeToolEgress } from "@/api/mcp/egress";
 import { FEEDBACK_TOOL_HANDLERS } from "@/api/mcp/feedback-tools";
 import { isMcpToolFeatureEnabled } from "@/api/mcp/gateway/list-tools";
 import { KNOWLEDGE_TOOL_HANDLERS } from "@/api/mcp/knowledge-tools";
@@ -21,12 +21,7 @@ import type { McpToolHandler } from "@/api/mcp/tool-types";
 import type { RegistryWriteToolName } from "./ref-field-map";
 import { WRITE_TOOL_REF_FIELD_MAP } from "./ref-field-map";
 import { dehydrateRefs } from "./ref-mediation";
-import {
-  classifyRegistryErrorKind,
-  DEFAULT_TOOL_ERROR_MESSAGE,
-  firstTextContent,
-  parsePayload,
-} from "./run-registry-tool";
+import { toRegistryChatToolError } from "./registry-tool-error";
 
 /**
  * The write registry handlers chat may drive, gathered from the per-domain
@@ -158,22 +153,14 @@ export const runRegistryWriteTool = async ({
     }),
     context,
   });
-  const finished = await finalizeMcpEgress({
+  const finished = await finalizeToolEgress({
     context,
     mode: "default",
     response,
   });
 
-  if (finished.isError === true) {
-    const message = firstTextContent(finished) || DEFAULT_TOOL_ERROR_MESSAGE;
-    return Result.err(
-      new ChatToolError({ kind: classifyRegistryErrorKind(message), message }),
-    );
-  }
-
-  const payload = parsePayload(finished);
-  if (Result.isError(payload)) {
-    return Result.err(payload.error);
+  if (finished.status === "error") {
+    return Result.err(toRegistryChatToolError(finished.error));
   }
 
   // Same single schema-driven pass as the read path: strict parse (an
@@ -182,7 +169,7 @@ export const runRegistryWriteTool = async ({
   // carry only paths to telemetry, never values.
   return projectForChat({
     dehydration: dehydrated.value,
-    payload: payload.value,
+    payload: finished.data,
     refRegistry,
     schema: entry.projection,
     source: "run-registry-write-tool",

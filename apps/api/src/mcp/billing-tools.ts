@@ -65,7 +65,7 @@ import {
   nullableStringProp,
   stringProp,
   structuredErrorResult,
-  textResult,
+  toolDataResult,
   validationErrorResult,
 } from "@/api/mcp/tool-utils";
 
@@ -1098,7 +1098,7 @@ const handleSaveTimeEntryTool: McpToolHandler = async ({ args, context }) => {
     if (Result.isError(created)) {
       return internalFailureResult(created.error);
     }
-    return textResult({
+    return toolDataResult({
       timeEntryId: created.value.id,
     } satisfies v.InferInput<typeof SAVE_TIME_ENTRY_PROJECTION>);
   }
@@ -1168,7 +1168,7 @@ const handleSaveTimeEntryTool: McpToolHandler = async ({ args, context }) => {
   if (Result.isError(updated)) {
     return internalFailureResult(updated.error);
   }
-  return textResult({
+  return toolDataResult({
     timeEntryId,
     updated: true,
   } satisfies v.InferInput<typeof SAVE_TIME_ENTRY_PROJECTION>);
@@ -1219,7 +1219,7 @@ const handleDeleteTimeEntryTool: McpToolHandler = async ({ args, context }) => {
   if (Result.isError(deleted)) {
     return internalFailureResult(deleted.error);
   }
-  return textResult({
+  return toolDataResult({
     deleted: deleted.value.deleted,
   } satisfies v.InferInput<typeof DELETE_TIME_ENTRY_PROJECTION>);
 };
@@ -1285,7 +1285,7 @@ const handleResolveRateTool: McpToolHandler = async ({ args, context }) => {
 
   // Passthrough: only a rate amount (minor units) and currency code, no
   // tenant-authored text.
-  return textResult(
+  return toolDataResult(
     resolved.value ??
       ({ hourlyRate: null, currency: null } satisfies v.InferInput<
         typeof RESOLVE_RATE_PROJECTION
@@ -1581,7 +1581,7 @@ const handleGetUsageTool: McpToolHandler = async ({ args, context }) => {
   // The two payload branches are tied to GET_USAGE_NO_PLAN_PROJECTION /
   // GET_USAGE_ENTITLED_PROJECTION where they are built
   // (`readOrgEntitlementHandler`, handlers/usage/get-entitlement.ts).
-  return textResult(entitlement.value);
+  return toolDataResult(entitlement.value);
 };
 
 export const BILLING_TOOL_HANDLERS = {

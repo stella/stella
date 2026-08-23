@@ -82,6 +82,7 @@ import {
   runTextFieldSpecs,
 } from "@/api/mcp/text-field-spec";
 import type {
+  InternalToolResult,
   McpTextFieldSpec,
   McpToolDefinition,
   McpToolHandler,
@@ -104,7 +105,7 @@ import {
   nullableStringProp,
   stringProp,
   structuredErrorResult,
-  textResult,
+  toolDataResult,
   validationErrorResult,
 } from "@/api/mcp/tool-utils";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
@@ -1948,7 +1949,7 @@ const createDocumentEntity = async ({
 }: {
   context: McpRequestContext;
   input: SaveDocumentInput;
-}): Promise<ReturnType<typeof textResult>> => {
+}): Promise<InternalToolResult> => {
   if (!roles[context.memberRole].authorize({ entity: ["create"] }).success) {
     return errorResult("Forbidden");
   }
@@ -1981,7 +1982,7 @@ const createDocumentEntity = async ({
     return internalFailureResult(created.error);
   }
 
-  return textResult({
+  return toolDataResult({
     entityId: created.value.entityId,
   } satisfies v.InferInput<typeof SAVE_DOCUMENT_CREATE_PROJECTION>);
 };
@@ -2103,7 +2104,7 @@ const updateDocumentEntity = async ({
 }: {
   context: McpRequestContext;
   input: SaveDocumentInput;
-}): Promise<ReturnType<typeof textResult>> => {
+}): Promise<InternalToolResult> => {
   if (!roles[context.memberRole].authorize({ entity: ["update"] }).success) {
     return errorResult("Forbidden");
   }
@@ -2192,7 +2193,7 @@ const updateDocumentEntity = async ({
     }
   }
 
-  return textResult({
+  return toolDataResult({
     updated: true,
   } satisfies v.InferInput<typeof SAVE_DOCUMENT_UPDATE_PROJECTION>);
 };
@@ -2301,18 +2302,15 @@ const handleOpenDocumentVersionUploadTool: McpToolHandler = async ({
     return target.response;
   }
 
-  return {
-    content: [
-      {
-        type: "text",
-        text: "Choose a file in the upload panel to add a new document version.",
-      },
-    ],
-    structuredContent: {
-      entityId: target.entityId,
-      workspaceId: target.workspaceId,
-    },
+  const data = {
+    entityId: target.entityId,
+    workspaceId: target.workspaceId,
   };
+  return toolDataResult(data, {
+    primaryText:
+      "Choose a file in the upload panel to add a new document version.",
+    structuredContent: data,
+  });
 };
 
 const deleteDocumentArgsSchema = v.strictObject({
@@ -2365,7 +2363,7 @@ const handleDeleteDocumentTool: McpToolHandler = async ({ args, context }) => {
     if (Result.isError(deleted)) {
       return internalFailureResult(deleted.error);
     }
-    return textResult({
+    return toolDataResult({
       deleted: true,
     } satisfies v.InferInput<typeof DELETED_TRUE_PROJECTION>);
   }
@@ -2385,7 +2383,7 @@ const handleDeleteDocumentTool: McpToolHandler = async ({ args, context }) => {
   if (Result.isError(deleted)) {
     return internalFailureResult(deleted.error);
   }
-  return textResult({
+  return toolDataResult({
     deleted: true,
   } satisfies v.InferInput<typeof DELETED_TRUE_PROJECTION>);
 };
@@ -2616,7 +2614,7 @@ const handleSetFieldValueTool: McpToolHandler = async ({ args, context }) => {
     return internalFailureResult(result.error);
   }
 
-  return textResult(
+  return toolDataResult(
     {} satisfies v.InferInput<typeof SET_FIELD_VALUE_PROJECTION>,
   );
 };

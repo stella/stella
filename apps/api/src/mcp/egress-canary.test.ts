@@ -139,7 +139,11 @@ void mock.module("@/api/lib/templates/template-fill-service", () => ({
   describeStoredTemplate: describeStoredTemplateMock,
 }));
 
-const { finalizeMcpEgress } = await import("@/api/mcp/egress");
+const { finalizeToolEgress } = await import("@/api/mcp/egress");
+const { serializeToolResult } = await import("@/api/mcp/tool-utils");
+const finalizeMcpEgress = async (
+  options: Parameters<typeof finalizeToolEgress>[0],
+) => serializeToolResult(await finalizeToolEgress(options));
 const { ANONYMIZED_MCP_TOOL_DEFINITIONS } =
   await import("@/api/mcp/static-tool-definitions");
 const { COMPAT_TOOL_HANDLERS } = await import("@/api/mcp/compat-tools");
@@ -1558,13 +1562,10 @@ describe("MCP anonymization canary corpus", () => {
     if (isMcpEgressPlan(response)) {
       throw new Error("Expected a finished error result, not an egress plan");
     }
-    expect(response.isError).toBe(true);
-    const item = response.content.at(0);
-    if (!item || item.type !== "text") {
-      throw new Error("Expected a text MCP response");
-    }
-    expect(JSON.parse(item.text)).toEqual({
+    expect(response).toEqual({
+      status: "error",
       error: {
+        type: "structured",
         code: "validation_error",
         message: "Clause body has an unrecognized format",
         issues: [

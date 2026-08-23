@@ -17,10 +17,16 @@ import type { LoadedMcpConnection } from "@/api/lib/mcp-upstream/connections";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { McpGatewayLoadError } from "@/api/mcp/errors";
 import { consumeMcpGatewayRateLimit } from "@/api/mcp/gateway/rate-limit";
+import type { InternalToolErrorResult } from "@/api/mcp/tool-types";
 import {
   MCP_INTERNAL_ERROR_HINT,
+  serializeToolResult,
   structuredErrorResult,
 } from "@/api/mcp/tool-utils";
+
+const mcpStructuredErrorResult = (
+  args: Parameters<typeof structuredErrorResult>[0],
+): CallToolResult => serializeToolResult(structuredErrorResult(args));
 
 type GatewayConnectionToolRow = {
   cachedTools: CachedMcpToolDefinition[] | null;
@@ -47,7 +53,7 @@ export type ResolvedExternalMcpTool = {
  */
 export const gatewayLoadErrorResult = (
   error: unknown,
-): CallToolResult | null =>
+): InternalToolErrorResult | null =>
   error instanceof McpGatewayLoadError
     ? structuredErrorResult({
         code: "internal_error",
@@ -132,12 +138,12 @@ export const callGatewayExternalMcpTool = async ({
     // retryable error, never a definitive `unknown_tool`.
     const loadError = gatewayLoadErrorResult(error);
     if (loadError) {
-      return loadError;
+      return serializeToolResult(loadError);
     }
     throw error;
   }
   if (!resolved) {
-    return structuredErrorResult({
+    return mcpStructuredErrorResult({
       code: "unknown_tool",
       message: `Unknown tool: ${toolName}`,
       hint: "Call tools/list for the tools available to this session.",
@@ -156,7 +162,7 @@ export const callGatewayExternalMcpTool = async ({
       resolved,
       toolKind: "external_mcp",
     });
-    return structuredErrorResult({
+    return mcpStructuredErrorResult({
       code: "rate_limited",
       message: "External MCP tool rate limit exceeded",
       retryable: true,
@@ -195,7 +201,7 @@ export const callGatewayExternalMcpTool = async ({
       resolved,
       toolKind: "external_mcp",
     });
-    return structuredErrorResult({
+    return mcpStructuredErrorResult({
       code: "internal_error",
       message: "External MCP tool execution failed",
       hint: MCP_INTERNAL_ERROR_HINT,

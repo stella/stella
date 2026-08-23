@@ -246,12 +246,10 @@ describe("MCP knowledge tools", () => {
     if (isMcpEgressPlan(response)) {
       throw new Error("Expected a finished error result, not an egress plan");
     }
-    expect(response.isError).toBe(true);
-    const message = response.content.at(0);
-    const parsed =
-      message?.type === "text" ? JSON.parse(message.text) : undefined;
-    expect(parsed).toEqual({
+    expect(response).toEqual({
+      status: "error",
       error: {
+        type: "structured",
         code: "validation_error",
         message: "Clause body has an unrecognized format",
         issues: [
