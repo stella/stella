@@ -3,7 +3,12 @@ import { not } from "drizzle-orm";
 
 import { caseLawSources } from "@/api/db/schema";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
+import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
+import {
+  definePublicLawSharedQuery,
+  PUBLIC_LAW_SHARED_QUERY,
+} from "@/api/lib/public-law-shared-query";
 
 export class NonRedistributableSourcesError extends TaggedError(
   "NonRedistributableSourcesError",
@@ -25,17 +30,23 @@ export class NonRedistributableSourcesError extends TaggedError(
  *
  * The table holds one row per court feed, so this is a few dozen ids at most.
  */
+export const readNonRedistributableCaseLawSourceIdsQuery =
+  definePublicLawSharedQuery(
+    PUBLIC_LAW_SHARED_QUERY.caseLawNonRedistributableSources,
+    async (tx: CaseLawPublicReadTransaction) => {
+      const rows = await tx
+        .select({ id: caseLawSources.id })
+        .from(caseLawSources)
+        .where(not(redistributableCaseLawSource));
+
+      return rows.map(({ id }) => id);
+    },
+  );
+
 export const readNonRedistributableCaseLawSourceIds = async () =>
   await Result.tryPromise({
     try: async () =>
-      await caseLawPublicReadDb(async (tx) => {
-        const rows = await tx
-          .select({ id: caseLawSources.id })
-          .from(caseLawSources)
-          .where(not(redistributableCaseLawSource));
-
-        return rows.map(({ id }) => id);
-      }),
+      await caseLawPublicReadDb(readNonRedistributableCaseLawSourceIdsQuery),
     catch: (cause) =>
       new NonRedistributableSourcesError({
         message:

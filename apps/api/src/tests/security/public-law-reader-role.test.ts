@@ -21,11 +21,14 @@ import {
 } from "@/api/handlers/case-law/decisions/sitemap";
 import { rehydrateLegislationCandidates } from "@/api/handlers/legislation/search";
 import { createSafeId } from "@/api/lib/branded-types";
+import { readNonRedistributableCaseLawSourceIdsQuery } from "@/api/lib/case-law/non-redistributable-sources";
 import type {
   CaseLawPublicReadDb,
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
 import { getCollator } from "@/api/lib/collation";
+import { rehydrateCorpusIndexProviderCandidates } from "@/api/lib/legal-search/corpus-index-provider";
+import { readDocumentContextDecision } from "@/api/lib/legal-search/document-context";
 import type {
   LegislationReadDb,
   LegislationReadTransaction,
@@ -34,6 +37,7 @@ import {
   publicLawDatabaseRolePermissionsSql,
   type PublicLawDatabaseRolePermissions,
 } from "@/api/lib/public-law-read-db";
+import { PUBLIC_LAW_SHARED_QUERY } from "@/api/lib/public-law-shared-query";
 import {
   PUBLIC_LAW_COLUMNS_BY_RELATION,
   ROLLOUT_CASE_LAW_RELATIONS,
@@ -217,6 +221,7 @@ describe("public-law reader role", () => {
       });
 
     expect(await asRole(READER_ROLE)).toEqual({
+      canAssumeOtherRole: false,
       canConnect: true,
       canDelegatePublicLaw: false,
       canReadPublicLaw: true,
@@ -294,6 +299,19 @@ describe("public-law reader role", () => {
       );
     });
     expect(delegatingReader).toMatchObject({ canDelegatePublicLaw: true });
+  });
+
+  test("startup attestation rejects every settable role membership", async () => {
+    const roleMember = await rolePermissionsAfter(async (tx) => {
+      await tx.execute(sql`CREATE ROLE reader_attestation_escalation NOLOGIN`);
+      await tx.execute(
+        sql.raw(
+          `GRANT reader_attestation_escalation TO ${quoted(READER_ROLE)}`,
+        ),
+      );
+    });
+
+    expect(roleMember).toMatchObject({ canAssumeOtherRole: true });
   });
 
   test("SET ROLE can SELECT every surface and rejects an operational column", async () => {
@@ -384,6 +402,34 @@ describe("public-law reader role", () => {
       generation: "case_law_v3",
     });
     expect(search.ranked).toEqual([]);
+  });
+
+  test("executes every declared shared-reader query as the reader role", async () => {
+    const caseLawDb = caseLawReaderDb();
+    const decisionId = createSafeId<"caseLawDecision">();
+    const exercised = new Set<string>();
+
+    await caseLawDb(async (tx) => {
+      await readDocumentContextDecision(tx, decisionId);
+      exercised.add(readDocumentContextDecision.publicLawSharedQuery);
+
+      await readNonRedistributableCaseLawSourceIdsQuery(tx);
+      exercised.add(
+        readNonRedistributableCaseLawSourceIdsQuery.publicLawSharedQuery,
+      );
+
+      await rehydrateCorpusIndexProviderCandidates(tx, {
+        generation: "case_law_v3",
+        ids: [decisionId],
+      });
+      exercised.add(
+        rehydrateCorpusIndexProviderCandidates.publicLawSharedQuery,
+      );
+    });
+
+    expect([...exercised].toSorted()).toEqual(
+      Object.values(PUBLIC_LAW_SHARED_QUERY).toSorted(),
+    );
   });
 
   test("preserves the v0.7.22 reader during the rollout window", async () => {
@@ -607,9 +653,7 @@ describe("public-law reader migrations", () => {
     ).toThrow("Unsupported reader SELECT statement");
     expect(() =>
       foldReaderSelectGrants(
-        [
-          'GRANT SELECT ON TABLE "a" TO other_role, stella_public_law_reader;',
-        ],
+        ['GRANT SELECT ON TABLE "a" TO other_role, stella_public_law_reader;'],
         READER_ROLE,
       ),
     ).toThrow("Unsupported reader SELECT statement");

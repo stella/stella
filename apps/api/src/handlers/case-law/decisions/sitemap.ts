@@ -182,10 +182,7 @@ export const readSitemapBucketShards = async (
       lastmod: sql<Date | null>`max(${caseLawDecisions.updatedAt})`,
     })
     .from(caseLawDecisions)
-    .innerJoin(
-      caseLawSources,
-      eq(caseLawSources.id, caseLawDecisions.sourceId),
-    )
+    .innerJoin(caseLawSources, eq(caseLawSources.id, caseLawDecisions.sourceId))
     .where(redistributableCaseLawSource)
     .groupBy(
       caseLawDecisions.country,
@@ -218,10 +215,7 @@ export const readSitemapDecisionAlternates = async (
       updatedAt: caseLawDecisions.updatedAt,
     })
     .from(caseLawDecisions)
-    .innerJoin(
-      caseLawSources,
-      eq(caseLawSources.id, caseLawDecisions.sourceId),
-    )
+    .innerJoin(caseLawSources, eq(caseLawSources.id, caseLawDecisions.sourceId))
     .where(
       and(
         inArray(caseLawDecisions.languageGroupKey, languageGroupKeys),
@@ -263,9 +257,7 @@ export const listSitemapShardsHandler = async (
     const needsBucketShards = natural.some(
       (shard) => shard.total > LIMITS.caseLawSitemapShardUrlLimit,
     );
-    const buckets = needsBucketShards
-      ? await readSitemapBucketShards(tx)
-      : [];
+    const buckets = needsBucketShards ? await readSitemapBucketShards(tx) : [];
 
     return { naturalShards: natural, bucketShardRows: buckets };
   });
