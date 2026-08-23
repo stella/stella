@@ -203,12 +203,47 @@ type StellaTableGrant = {
   tables: string[];
 };
 
-const GRANT_OPTION_PATTERN = /\s+(?:WITH\s+GRANT\s+OPTION|GRANTED\s+BY)\b/iu;
+type SqlKeywordIndexOptions = {
+  from?: number;
+  keyword: string;
+  sql: string;
+};
+
+/** Locate structural SQL outside double-quoted identifiers. */
+const sqlKeywordIndex = ({
+  from = 0,
+  keyword,
+  sql,
+}: SqlKeywordIndexOptions): number => {
+  const upperSql = sql.toUpperCase();
+  let quoted = false;
+
+  for (let index = 0; index <= sql.length - keyword.length; index += 1) {
+    if (sql.at(index) === '"') {
+      if (quoted && sql.at(index + 1) === '"') {
+        index += 1;
+        continue;
+      }
+      quoted = !quoted;
+      continue;
+    }
+    if (!quoted && index >= from && upperSql.startsWith(keyword, index)) {
+      return index;
+    }
+  }
+  return -1;
+};
 
 const grantTargetsStella = (targetClause: string): boolean => {
-  const optionsStart = targetClause.search(GRANT_OPTION_PATTERN);
+  const optionsStart = [" WITH GRANT OPTION", " GRANTED BY "]
+    .map((keyword) => sqlKeywordIndex({ keyword, sql: targetClause }))
+    .filter((index) => index !== -1)
+    .toSorted((left, right) => left - right)
+    .at(0);
   const granteesSql =
-    optionsStart === -1 ? targetClause : targetClause.slice(0, optionsStart);
+    optionsStart === undefined
+      ? targetClause
+      : targetClause.slice(0, optionsStart);
   return identifierNamesFromSql(granteesSql).some(
     (grantee) => grantee.toLowerCase() === "stella",
   );
@@ -224,8 +259,15 @@ const stellaTableGrant = (statement: string): StellaTableGrant | null => {
     return null;
   }
 
-  const onTableIndex = upperStatement.indexOf(onTableMarker);
-  const toIndex = upperStatement.lastIndexOf(toMarker);
+  const onTableIndex = sqlKeywordIndex({
+    keyword: onTableMarker,
+    sql: statement,
+  });
+  const toIndex = sqlKeywordIndex({
+    from: onTableIndex + onTableMarker.length,
+    keyword: toMarker,
+    sql: statement,
+  });
   if (onTableIndex === -1 || toIndex <= onTableIndex) {
     return null;
   }
@@ -324,6 +366,14 @@ describe("RLS table grants", () => {
     expect(
       stellaTableGrant(
         "GRANT SELECT, UPDATE ON TABLE classified_table TO stella, another_role WITH GRANT OPTION",
+      ),
+    ).toEqual({
+      privileges: new Set(["select", "update"]),
+      tables: ["classified_table"],
+    });
+    expect(
+      stellaTableGrant(
+        'GRANT SELECT, UPDATE ON TABLE classified_table TO stella, "read TO audit", "read WITH GRANT OPTION audit" GRANTED BY owner',
       ),
     ).toEqual({
       privileges: new Set(["select", "update"]),
