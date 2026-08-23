@@ -161,6 +161,55 @@ test("pre-migration audit is repeatable and rejects ownership corruption and an 
   }
 });
 
+test("census crosses page boundaries with stable database-native ordering", async () => {
+  try {
+    await database.transaction(async (transaction) => {
+      const suffix = Bun.randomUUIDv7();
+      await transaction.insert(user).values(
+        Array.from({ length: 1001 }, (_, index) => {
+          const caseMarker = index % 2 === 0 ? "A" : "a";
+          return {
+            id: `audit-page-${caseMarker}-${index.toString().padStart(4, "0")}-${suffix}`,
+            email: `audit-page-${index}-${suffix}@example.invalid`,
+            name: "Audit pagination fixture",
+          };
+        }),
+      );
+
+      const auditDatabase = {
+        execute: async (statement: Parameters<typeof transaction.execute>[0]) =>
+          await transaction.execute(statement),
+      };
+      const first = await runBetterAuthMigrationAudit({
+        baseline: null,
+        database: auditDatabase,
+        mode: BETTER_AUTH_AUDIT_MODES.PRE_MIGRATION,
+      });
+      if (first.status === "error") {
+        throw first.error;
+      }
+      const second = await runBetterAuthMigrationAudit({
+        baseline: null,
+        database: auditDatabase,
+        mode: BETTER_AUTH_AUDIT_MODES.PRE_MIGRATION,
+      });
+      if (second.status === "error") {
+        throw second.error;
+      }
+
+      expect(
+        BigInt(first.value.baseline.tables["user"]?.rowCount ?? "0"),
+      ).toBeGreaterThan(1000n);
+      expect(second.value.baseline).toEqual(first.value.baseline);
+      throw new TransactionRollbackError();
+    });
+  } catch (error) {
+    if (!(error instanceof TransactionRollbackError)) {
+      throw error;
+    }
+  }
+});
+
 test("post phases require resource links, final constraints, and the exact baseline row set", async () => {
   try {
     await database.transaction(async (transaction) => {

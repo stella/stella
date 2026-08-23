@@ -9,6 +9,7 @@
 import { Result, TaggedError } from "better-result";
 import { getColumns, getTableName, sql } from "drizzle-orm";
 import type { SQL, Table } from "drizzle-orm";
+import * as v from "valibot";
 
 import { authSchema } from "@/api/db/auth-schema";
 import { isRecord } from "@/api/lib/type-guards";
@@ -205,6 +206,9 @@ export const AUTH_TABLE_AUDIT_POLICY = {
   },
 } as const satisfies Record<AuthModel, AuthTableAuditPolicy>;
 
+const isAuthModel = (value: string): value is AuthModel =>
+  Object.hasOwn(AUTH_TABLE_AUDIT_POLICY, value);
+
 /**
  * Separate from table coverage on purpose. A 1.7-only table is audited but is
  * not expected in the baseline written by the 1.6 image. When `authSchema`
@@ -230,13 +234,10 @@ const AUTH_BASELINE_DISPOSITION = {
 const isPreservedDisposition = (value: "introduced" | "preserve") =>
   value === "preserve";
 
-const AUTH_MODEL_NAMES = Object.entries(AUTH_BASELINE_DISPOSITION)
-  .filter(([, disposition]) => isPreservedDisposition(disposition))
-  .map(([model]) => model);
+const AUTH_MODEL_NAMES = Object.keys(AUTH_BASELINE_DISPOSITION)
+  .filter(isAuthModel)
+  .filter((model) => isPreservedDisposition(AUTH_BASELINE_DISPOSITION[model]));
 const AUTH_TABLE_POLICIES = Object.values(AUTH_TABLE_AUDIT_POLICY);
-
-const isAuthModel = (value: string): value is AuthModel =>
-  Object.hasOwn(AUTH_TABLE_AUDIT_POLICY, value);
 
 const PRESERVED_AUTH_TABLE_NAMES = AUTH_MODEL_NAMES.flatMap((model) =>
   isAuthModel(model) ? [AUTH_TABLE_AUDIT_POLICY[model].tableName] : [],
@@ -1249,13 +1250,6 @@ const columnInventory = async (database: BetterAuthAuditDatabase) => {
   return Result.ok(columns);
 };
 
-type TableCensus = {
-  preservedColumns: readonly string[];
-  primaryKeyDigest: string;
-  rowContentDigest: string;
-  rowCount: string;
-};
-
 type ReadTableCensusOptions = {
   preservedColumns: readonly string[];
   tableName: string;
@@ -1270,35 +1264,50 @@ const readTableCensus = async (
   const preservedValues = preservedColumns.map((column) =>
     sql.identifier(column),
   );
-  const readPage = async (
-    after: string | null,
-    rowCount: bigint,
-  ): Promise<Result<TableCensus, BetterAuthAuditError>> => {
-    const statement =
-      after === null
-        ? sql`
-            SELECT id AS "primaryKey",
-                   jsonb_build_array(${sql.join(preservedValues, sql`, `)})::text
-                     AS "rowContent"
-              FROM ${sql.identifier(tableName)}
-             ORDER BY id
-             LIMIT ${PRIMARY_KEY_PAGE_SIZE}
-          `
-        : sql`
-            SELECT id AS "primaryKey",
-                   jsonb_build_array(${sql.join(preservedValues, sql`, `)})::text
-                     AS "rowContent"
-              FROM ${sql.identifier(tableName)}
-             WHERE id > ${after}
-             ORDER BY id
-             LIMIT ${PRIMARY_KEY_PAGE_SIZE}
-          `;
-    const queried = await queryRows(database, statement);
+  let after: string | null = null;
+  let rowCount = 0n;
+  const pages = {
+    [Symbol.asyncIterator]: () => {
+      let complete = false;
+      return {
+        next: async () => {
+          if (complete) {
+            return { done: true as const, value: undefined };
+          }
+          const statement =
+            after === null
+              ? sql`
+                  SELECT id AS "primaryKey",
+                         jsonb_build_array(${sql.join(preservedValues, sql`, `)})::text
+                           AS "rowContent"
+                    FROM ${sql.identifier(tableName)}
+                   ORDER BY id
+                   LIMIT ${PRIMARY_KEY_PAGE_SIZE}
+                `
+              : sql`
+                  SELECT id AS "primaryKey",
+                         jsonb_build_array(${sql.join(preservedValues, sql`, `)})::text
+                           AS "rowContent"
+                    FROM ${sql.identifier(tableName)}
+                   WHERE id > ${after}
+                   ORDER BY id
+                   LIMIT ${PRIMARY_KEY_PAGE_SIZE}
+                `;
+          const queried = await queryRows(database, statement);
+          complete =
+            Result.isError(queried) ||
+            queried.value.length < PRIMARY_KEY_PAGE_SIZE;
+          return { done: false as const, value: queried };
+        },
+      };
+    },
+  };
+
+  for await (const queried of pages) {
     if (Result.isError(queried)) {
       return queried;
     }
-    let nextAfter = after;
-    let nextRowCount = rowCount;
+    let nextAfter: string | null = after;
     for (const row of queried.value) {
       const primaryKey = isRecord(row)
         ? requiredString(row["primaryKey"])
@@ -1306,10 +1315,12 @@ const readTableCensus = async (
       const rowContent = isRecord(row)
         ? requiredString(row["rowContent"])
         : null;
+      // PostgreSQL's primary-key collation owns both ORDER BY and the cursor.
+      // JavaScript lexical comparison can disagree for mixed-case text IDs.
       if (
         primaryKey === null ||
         rowContent === null ||
-        (nextAfter !== null && primaryKey <= nextAfter)
+        (nextAfter !== null && primaryKey === nextAfter)
       ) {
         return Result.err(
           new BetterAuthAuditError({
@@ -1327,20 +1338,17 @@ const readTableCensus = async (
       rowContentHasher.update(rowContent);
       rowContentHasher.update("\0");
       nextAfter = primaryKey;
-      nextRowCount += 1n;
+      rowCount += 1n;
     }
-    if (queried.value.length < PRIMARY_KEY_PAGE_SIZE) {
-      return Result.ok({
-        preservedColumns,
-        primaryKeyDigest: primaryKeyHasher.digest("hex"),
-        rowContentDigest: rowContentHasher.digest("hex"),
-        rowCount: nextRowCount.toString(),
-      });
-    }
-    return await readPage(nextAfter, nextRowCount);
-  };
+    after = nextAfter;
+  }
 
-  return await readPage(null, 0n);
+  return Result.ok({
+    preservedColumns,
+    primaryKeyDigest: primaryKeyHasher.digest("hex"),
+    rowContentDigest: rowContentHasher.digest("hex"),
+    rowCount: rowCount.toString(),
+  });
 };
 
 const readAuthCensus = async (
@@ -1675,6 +1683,49 @@ export const runBetterAuthMigrationAudit = async ({
   return Result.ok({ baseline: nextBaseline, report: report(mode, checks) });
 };
 
+const digestSchema = v.pipe(v.string(), v.regex(/^[a-f\d]{64}$/u));
+const rowCountSchema = v.pipe(v.string(), v.regex(/^\d+$/u));
+
+const tableCensusSchema = (model: AuthModel) => {
+  const allowedColumns = new Set<string>(
+    AUTH_TABLE_AUDIT_POLICY[model].preservedColumns,
+  );
+  return v.strictObject({
+    preservedColumns: v.pipe(
+      v.array(v.string()),
+      v.minLength(1),
+      v.check(
+        (columns) => new Set(columns).size === columns.length,
+        "Preserved columns must be unique",
+      ),
+      v.check(
+        (columns) => columns.includes("id"),
+        "Preserved columns must include id",
+      ),
+      v.check(
+        (columns) => columns.every((column) => allowedColumns.has(column)),
+        "Preserved columns must be reviewed",
+      ),
+    ),
+    primaryKeyDigest: digestSchema,
+    rowContentDigest: digestSchema,
+    rowCount: rowCountSchema,
+  });
+};
+
+const betterAuthAuditBaselineSchema: v.GenericSchema<
+  unknown,
+  BetterAuthAuditBaseline
+> = v.strictObject({
+  accessPolicyDigest: digestSchema,
+  formatVersion: v.literal(2),
+  tables: v.strictObject(
+    Object.fromEntries(
+      AUTH_MODEL_NAMES.map((model) => [model, tableCensusSchema(model)]),
+    ),
+  ),
+});
+
 export const parseBetterAuthAuditBaseline = (
   value: unknown,
 ): Result<BetterAuthAuditBaseline, BetterAuthAuditError> => {
@@ -1685,78 +1736,8 @@ export const parseBetterAuthAuditBaseline = (
         message: "Better Auth audit baseline is invalid",
       }),
     );
-  if (
-    !isRecord(value) ||
-    Object.keys(value).length !== 3 ||
-    value["formatVersion"] !== 2 ||
-    !/^[a-f\d]{64}$/u.test(requiredString(value["accessPolicyDigest"]) ?? "")
-  ) {
-    return invalidBaseline();
-  }
-  const rawTables = value["tables"];
-  if (!isRecord(rawTables)) {
-    return invalidBaseline();
-  }
-  const keys = Object.keys(rawTables);
-  if (keys.length !== AUTH_MODEL_NAMES.length) {
-    return invalidBaseline();
-  }
-
-  const tables: BetterAuthAuditBaseline["tables"] = {};
-  for (const model of AUTH_MODEL_NAMES) {
-    if (!isAuthModel(model)) {
-      return invalidBaseline();
-    }
-    const table = rawTables[model];
-    if (!isRecord(table) || Object.keys(table).length !== 4) {
-      return invalidBaseline();
-    }
-    const rawPreservedColumns = table["preservedColumns"];
-    if (!Array.isArray(rawPreservedColumns)) {
-      return invalidBaseline();
-    }
-    const preservedColumns: string[] = [];
-    for (const column of rawPreservedColumns) {
-      if (typeof column !== "string") {
-        return invalidBaseline();
-      }
-      preservedColumns.push(column);
-    }
-    const uniqueColumns = new Set(preservedColumns);
-    const allowedColumns = new Set<string>(
-      AUTH_TABLE_AUDIT_POLICY[model].preservedColumns,
-    );
-    if (
-      preservedColumns.length === 0 ||
-      uniqueColumns.size !== preservedColumns.length ||
-      !uniqueColumns.has("id") ||
-      preservedColumns.some((column) => !allowedColumns.has(column))
-    ) {
-      return invalidBaseline();
-    }
-    const primaryKeyDigest = requiredString(table["primaryKeyDigest"]);
-    const rowContentDigest = requiredString(table["rowContentDigest"]);
-    const rowCount = requiredString(table["rowCount"]);
-    if (
-      !/^\d+$/u.test(rowCount ?? "") ||
-      !/^[a-f\d]{64}$/u.test(primaryKeyDigest ?? "") ||
-      !/^[a-f\d]{64}$/u.test(rowContentDigest ?? "")
-    ) {
-      return invalidBaseline();
-    }
-    tables[model] = {
-      preservedColumns,
-      primaryKeyDigest: primaryKeyDigest ?? "",
-      rowContentDigest: rowContentDigest ?? "",
-      rowCount: rowCount ?? "",
-    };
-  }
-
-  return Result.ok({
-    accessPolicyDigest: requiredString(value["accessPolicyDigest"]) ?? "",
-    formatVersion: 2,
-    tables,
-  });
+  const parsed = v.safeParse(betterAuthAuditBaselineSchema, value);
+  return parsed.success ? Result.ok(parsed.output) : invalidBaseline();
 };
 
 export const renderBetterAuthAuditReport = (
