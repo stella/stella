@@ -14,7 +14,7 @@ describe("memories rate limiting", () => {
     );
 
     try {
-      const key = await options.generator(request, null, {});
+      const key = await options.generator(request, null);
 
       expect(options.context).toBeInstanceOf(RedisRateLimitContext);
       expect(key.startsWith("api\u001f")).toBe(true);

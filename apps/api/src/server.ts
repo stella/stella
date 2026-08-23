@@ -1,7 +1,6 @@
 import cors from "@elysiajs/cors";
 import { Elysia } from "elysia";
 import type { Context } from "elysia";
-import { rateLimit } from "elysia-rate-limit";
 
 import { STELLA_API_VERSION_PREFIX } from "@stll/api-contract";
 
@@ -137,6 +136,7 @@ import {
 import { emitRequestDurationMetric } from "@/api/lib/observability/request-metrics";
 import { runWithRequestScope } from "@/api/lib/observability/request-scope";
 import { resolveResponseStatus } from "@/api/lib/observability/response-status";
+import { rateLimit } from "@/api/lib/rate-limit/rate-limit";
 import { createRedisRateLimit } from "@/api/lib/rate-limit/redis-context";
 import {
   isCorpusS3Stale,
@@ -518,7 +518,6 @@ const api = new Elysia()
     new Elysia()
       .use(
         rateLimit({
-          scoping: "scoped",
           duration: API_RATE_LIMITS.agentAuth.duration,
           max: API_RATE_LIMITS.agentAuth.max,
           ...createRedisRateLimit({
@@ -536,7 +535,6 @@ const api = new Elysia()
     new Elysia()
       .use(
         rateLimit({
-          scoping: "scoped",
           duration: API_RATE_LIMITS.api.duration,
           max: API_RATE_LIMITS.api.max,
           ...createRedisRateLimit({
@@ -565,7 +563,6 @@ const api = new Elysia()
 
       .use(
         rateLimit({
-          scoping: "scoped",
           duration: API_RATE_LIMITS.api.duration,
           max: API_RATE_LIMITS.api.max,
           ...createRedisRateLimit({
@@ -613,7 +610,6 @@ const api = new Elysia()
         new Elysia()
           .use(
             rateLimit({
-              scoping: "scoped",
               duration: API_RATE_LIMITS.folioCollab.duration,
               max: API_RATE_LIMITS.folioCollab.max,
               ...createRedisRateLimit({

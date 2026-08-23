@@ -15,9 +15,10 @@
  */
 
 import { describe, expect, mock, test } from "bun:test";
-import type { Options as RateLimitOptions } from "elysia-rate-limit";
 
 import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+
+import type { RateLimitOptions } from "@/api/lib/rate-limit/rate-limit";
 
 // Port 1 is privileged and unbound in every environment this runs in, so a
 // connect attempt fails immediately rather than hanging on a routing black
@@ -65,13 +66,9 @@ const RATE_LIMIT_MAX = 10;
 // Time for a connect rejected by `kill()` to reach its handler.
 const CONNECT_SETTLE_MS = 100;
 const RATE_LIMIT_OPTIONS = {
-  countFailedRequest: false,
   duration: RATE_LIMIT_WINDOW_MS,
-  errorResponse: "rate limit reached",
   generator: () => "outage-client",
-  headers: true,
   max: RATE_LIMIT_MAX,
-  scoping: "scoped",
   skip: () => false,
 } as const satisfies Omit<RateLimitOptions, "context">;
 

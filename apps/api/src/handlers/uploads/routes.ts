@@ -1,5 +1,4 @@
 import Elysia from "elysia";
-import { rateLimit } from "elysia-rate-limit";
 
 import { RESOURCE_TYPE } from "@stll/api-contract";
 
@@ -10,6 +9,7 @@ import preflightEntityCreate from "@/api/handlers/uploads/preflight-entity-creat
 import finalizeUpload from "@/api/handlers/uploads/update";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
 import { API_RATE_LIMITS } from "@/api/lib/limits";
+import { rateLimit } from "@/api/lib/rate-limit/rate-limit";
 import { createRedisRateLimit } from "@/api/lib/rate-limit/redis-context";
 import {
   resourceRealtime,
@@ -55,7 +55,6 @@ export const uploadsRoute = new Elysia({
   .use(permissionMacro)
   .use(
     rateLimit({
-      scoping: "scoped",
       duration: API_RATE_LIMITS.upload.duration,
       max: API_RATE_LIMITS.upload.max,
       ...createRedisRateLimit({

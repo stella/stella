@@ -21,7 +21,6 @@ import { panic, Result } from "better-result";
 import { and, eq, exists, inArray, isNotNull, or } from "drizzle-orm";
 import type { InferSelectModel } from "drizzle-orm";
 import Elysia, { t } from "elysia";
-import type { Context as RateLimitContext } from "elysia-rate-limit";
 
 import { BETTER_AUTH_ORGANIZATION_OPTIONS } from "@stll/auth-model";
 import { ac, roles } from "@stll/permissions";
@@ -105,6 +104,7 @@ import {
   readAuthorizedMemberRole,
 } from "@/api/lib/permission-authorization";
 import { createAuthRateLimitStorage } from "@/api/lib/rate-limit/auth-storage";
+import type { RateLimitContext } from "@/api/lib/rate-limit/rate-limit";
 import { memoizePerRequest } from "@/api/lib/request-memo";
 import {
   brandPersistedOrganizationId,

@@ -11,10 +11,10 @@
 
 import { panic } from "better-result";
 import Elysia, { t } from "elysia";
-import { rateLimit } from "elysia-rate-limit";
 
 import { receiveHostedUsageWebhook } from "@/api/handlers/hosted-usage-webhook/receive";
 import { API_RATE_LIMITS } from "@/api/lib/limits";
+import { rateLimit } from "@/api/lib/rate-limit/rate-limit";
 import { createRedisRateLimit } from "@/api/lib/rate-limit/redis-context";
 
 export const hostedUsageWebhookRoute = new Elysia({
@@ -22,7 +22,6 @@ export const hostedUsageWebhookRoute = new Elysia({
 })
   .use(
     rateLimit({
-      scoping: "scoped",
       duration: API_RATE_LIMITS.hostedUsageWebhook.duration,
       max: API_RATE_LIMITS.hostedUsageWebhook.max,
       ...createRedisRateLimit({

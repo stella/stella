@@ -14,7 +14,8 @@
  */
 
 import { afterAll, describe, expect, mock, test } from "bun:test";
-import type { Options as RateLimitOptions } from "elysia-rate-limit";
+
+import type { RateLimitOptions } from "@/api/lib/rate-limit/rate-limit";
 
 // Any count the per-process fallback cannot produce on a first increment, so
 // the assertion below can only pass when the reply came from the peer.
@@ -52,13 +53,9 @@ const { RedisRateLimitContext } =
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const CONNECT_DEADLINE_MS = 5000;
 const RATE_LIMIT_OPTIONS = {
-  countFailedRequest: false,
   duration: RATE_LIMIT_WINDOW_MS,
-  errorResponse: "rate limit reached",
   generator: () => "cold-start-client",
-  headers: true,
   max: 10,
-  scoping: "scoped",
   skip: () => false,
 } as const satisfies Omit<RateLimitOptions, "context">;
 
