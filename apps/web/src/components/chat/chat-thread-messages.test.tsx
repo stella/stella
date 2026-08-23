@@ -7,7 +7,10 @@ import { IntlProvider } from "use-intl";
 
 import { ChatApprovalContext } from "@/components/chat/chat-approval-context";
 import { ChatMattersContext } from "@/components/chat/chat-matters-context";
-import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
+import type {
+  ChatUIMessage,
+  PersistedChatMessage,
+} from "@/components/chat/chat-ui-tools";
 import messages from "@/i18n/langs/en.json";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
 
@@ -57,7 +60,7 @@ const renderWithProviders = (children: ReactNode) =>
 
 describe("chat thread messages", () => {
   test("does not flash TipTap paragraph tags for an optimistic user message", () => {
-    const chatMessages: PersistedChatMessage[] = [
+    const chatMessages: ChatUIMessage[] = [
       {
         id: "message-user",
         parts: [{ type: "text", content: "<p>ahoj</p>" }],
@@ -107,7 +110,7 @@ describe("chat thread messages", () => {
   });
 
   test("shows a copy action at the end of assistant responses", () => {
-    const chatMessages: PersistedChatMessage[] = [
+    const chatMessages: ChatUIMessage[] = [
       {
         id: "message-A",
         parts: [{ type: "text", content: "Draft answer" }],
@@ -134,7 +137,7 @@ describe("chat thread messages", () => {
   });
 
   test("renders persisted audio, video, and sandboxed app output", () => {
-    const chatMessages: PersistedChatMessage[] = [
+    const chatMessages: ChatUIMessage[] = [
       {
         id: "message-rich",
         role: "assistant",
@@ -193,7 +196,7 @@ describe("chat thread messages", () => {
   });
 
   test("keeps historical exports available while the latest answer streams", () => {
-    const chatMessages: PersistedChatMessage[] = [
+    const chatMessages: ChatUIMessage[] = [
       {
         id: "message-old",
         parts: [{ type: "text", content: "Completed answer" }],
@@ -228,7 +231,7 @@ describe("chat thread messages", () => {
   });
 
   test("renders assistant reasoning separately from the final answer", () => {
-    const chatMessages: PersistedChatMessage[] = [
+    const chatMessages: ChatUIMessage[] = [
       {
         id: "message-A",
         metadata: {
@@ -270,7 +273,7 @@ describe("chat thread messages", () => {
   });
 
   test("shows provider-reported reasoning tokens without a thinking part", () => {
-    const chatMessages: PersistedChatMessage[] = [
+    const chatMessages: ChatUIMessage[] = [
       {
         id: "message-A",
         metadata: {
@@ -304,7 +307,7 @@ describe("chat thread messages", () => {
   });
 
   test("renders non-approval tool calls when tool details are enabled", () => {
-    const chatMessages: PersistedChatMessage[] = [
+    const chatMessages: ChatUIMessage[] = [
       {
         id: "message-A",
         parts: [
@@ -340,7 +343,7 @@ describe("chat thread messages", () => {
   });
 
   test("folds process steps across invisible tool results into one disclosure", () => {
-    const chatMessages: PersistedChatMessage[] = [
+    const chatMessages: ChatUIMessage[] = [
       {
         id: "message-A",
         parts: [
@@ -411,7 +414,7 @@ describe("chat thread messages", () => {
   });
 
   test("keeps streaming reasoning visible and immediately collapsible", () => {
-    const chatMessages: PersistedChatMessage[] = [
+    const chatMessages: ChatUIMessage[] = [
       {
         id: "message-A",
         parts: [
@@ -447,7 +450,7 @@ describe("chat thread messages", () => {
   });
 
   test("folds assistant reasoning once streaming settles, even before answer text starts", () => {
-    const chatMessages: PersistedChatMessage[] = [
+    const chatMessages: ChatUIMessage[] = [
       {
         id: "message-A",
         parts: [{ type: "thinking", content: "Checking cited filings." }],
@@ -483,7 +486,7 @@ describe("chat thread messages", () => {
       source:
         "@doc kind=agreement locale=cs page=A4\n@title Dohoda\n**Smluvní strany:** Poskytovatel a příjemce",
     };
-    const chatMessages: PersistedChatMessage[] = [
+    const chatMessages: ChatUIMessage[] = [
       {
         id: "message-document",
         parts: [
@@ -520,7 +523,7 @@ describe("chat thread messages", () => {
   });
 
   test("renders a terminal generated-document state as a failure", () => {
-    const chatMessages: PersistedChatMessage[] = [
+    const chatMessages: ChatUIMessage[] = [
       {
         id: "message-document-error",
         parts: [
@@ -558,7 +561,7 @@ describe("chat thread messages", () => {
       name: "Power of attorney",
       source: "@doc kind=other locale=en page=A4\n@title Power of attorney",
     };
-    const chatMessages: PersistedChatMessage[] = [
+    const chatMessages: ChatUIMessage[] = [
       {
         id: "message-document-ready",
         parts: [
@@ -610,7 +613,7 @@ describe("chat thread messages", () => {
         placeholder: "data:image/png;base64,AAAA",
       },
     } as const;
-    const chatMessages: PersistedChatMessage[] = [
+    const chatMessages: ChatUIMessage[] = [
       {
         id: "message-A",
         parts: [imagePart],
@@ -640,7 +643,7 @@ describe("chat thread messages", () => {
   });
 
   test("shows retry only on the latest assistant response", () => {
-    const chatMessages: PersistedChatMessage[] = [
+    const chatMessages: ChatUIMessage[] = [
       {
         id: "message-A",
         parts: [{ type: "text", content: "First answer" }],
@@ -674,7 +677,7 @@ describe("chat thread messages", () => {
   });
 
   test("hides retry when a later user message is the final turn", () => {
-    const chatMessages: PersistedChatMessage[] = [
+    const chatMessages: ChatUIMessage[] = [
       {
         id: "message-A",
         parts: [{ type: "text", content: "Answer before retry" }],
@@ -708,7 +711,7 @@ describe("chat thread messages", () => {
   });
 
   test("hides retry while the latest assistant response is generating", () => {
-    const chatMessages: PersistedChatMessage[] = [
+    const chatMessages: ChatUIMessage[] = [
       {
         id: "message-A",
         parts: [{ type: "text", content: "Streaming answer" }],

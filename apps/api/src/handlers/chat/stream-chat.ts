@@ -1458,24 +1458,21 @@ const trackIncompleteToolCallInput = (
   chunk: StreamChunk,
   rawArgumentsByToolCallId: Map<string, string>,
 ): void => {
-  switch (chunk.type) {
-    case EventType.TOOL_CALL_START:
-      if (!rawArgumentsByToolCallId.has(chunk.toolCallId)) {
-        rawArgumentsByToolCallId.set(chunk.toolCallId, "");
-      }
-      return;
-    case EventType.TOOL_CALL_ARGS:
-      rawArgumentsByToolCallId.set(
-        chunk.toolCallId,
-        (rawArgumentsByToolCallId.get(chunk.toolCallId) ?? "") +
-          (chunk.delta ?? ""),
-      );
-      return;
-    case EventType.TOOL_CALL_END:
-      rawArgumentsByToolCallId.delete(chunk.toolCallId);
-      return;
-    default:
-      return;
+  if (chunk.type === EventType.TOOL_CALL_START) {
+    if (!rawArgumentsByToolCallId.has(chunk.toolCallId)) {
+      rawArgumentsByToolCallId.set(chunk.toolCallId, "");
+    }
+    return;
+  }
+  if (chunk.type === EventType.TOOL_CALL_ARGS) {
+    rawArgumentsByToolCallId.set(
+      chunk.toolCallId,
+      (rawArgumentsByToolCallId.get(chunk.toolCallId) ?? "") + chunk.delta,
+    );
+    return;
+  }
+  if (chunk.type === EventType.TOOL_CALL_END) {
+    rawArgumentsByToolCallId.delete(chunk.toolCallId);
   }
 };
 
@@ -1825,9 +1822,7 @@ type TransformOutgoingStreamProps = {
   resolveAssistantToolInputRefs?: AssistantToolInputRefResolver | undefined;
   resolveAssistantToolOutputRefs?: AssistantToolOutputRefResolver | undefined;
   resolveAssistantValueRefs?: AssistantValueRefResolver | undefined;
-  registerPendingFlush?:
-    | ((flushPending: () => StreamChunk[]) => void)
-    | undefined;
+  registerPendingFlush?: (flushPending: () => StreamChunk[]) => void;
   restorationPairs: ChatAnonRestoration[];
   source: AsyncIterable<StreamChunk>;
 };
