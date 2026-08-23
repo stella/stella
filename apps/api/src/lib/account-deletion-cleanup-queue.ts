@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { Queue, Worker } from "bullmq";
+import { type Queue, Worker } from "bullmq";
 
 import {
   claimNextAccountDeletionEffectChunk,
@@ -11,6 +11,7 @@ import {
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
+import { createLazyBullMqQueue } from "@/api/lib/bullmq-queue";
 import { detached } from "@/api/lib/detached";
 import {
   connectionErrorFields,
@@ -53,26 +54,15 @@ const defaultCleanupRequestDeps: AccountDeletionCleanupRequestDeps = {
   failChunk: failAccountDeletionEffectChunk,
 };
 
-let queue: Queue<AccountDeletionCleanupJobData> | null = null;
-let queueConnection: ReturnType<typeof createBullMqConnection> | null = null;
-
-const getQueueConnection = () => {
-  queueConnection ??= createBullMqConnection();
-  return queueConnection;
-};
-
-const getQueue = (): Queue<AccountDeletionCleanupJobData> => {
-  queue ??= new Queue<AccountDeletionCleanupJobData>(QUEUE_NAME, {
-    connection: getQueueConnection(),
-    defaultJobOptions: {
-      attempts: DEFAULT_JOB_ATTEMPTS,
-      backoff: { type: "exponential", delay: 30_000 },
-      removeOnComplete: 100,
-      removeOnFail: 500,
-    },
-  });
-  return queue;
-};
+const getQueue = createLazyBullMqQueue<AccountDeletionCleanupJobData>({
+  name: QUEUE_NAME,
+  defaultJobOptions: {
+    attempts: DEFAULT_JOB_ATTEMPTS,
+    backoff: { type: "exponential", delay: 30_000 },
+    removeOnComplete: 100,
+    removeOnFail: 500,
+  },
+});
 
 export const enqueueAccountDeletionCleanup = async (
   requestId: SafeId<"accountDeletionRequest">,

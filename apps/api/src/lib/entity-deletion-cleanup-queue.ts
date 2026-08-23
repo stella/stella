@@ -1,10 +1,11 @@
 import { Result, UnhandledException } from "better-result";
-import { Queue, Worker } from "bullmq";
+import { type Queue, Worker } from "bullmq";
 
 import type { EntityDeletionCleanupStatus } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
+import { createLazyBullMqQueue } from "@/api/lib/bullmq-queue";
 import { detached } from "@/api/lib/detached";
 import {
   claimNextEntityDeletionEffectChunk,
@@ -62,29 +63,19 @@ const defaultCleanupRequestDeps: EntityDeletionCleanupRequestDeps = {
   storageDeleteTimeoutMs: STORAGE_DELETE_TIMEOUT_MS,
 };
 
-let queue: Queue<EntityDeletionCleanupJobData> | null = null;
-let queueConnection: ReturnType<typeof createBullMqConnection> | null = null;
-
-const getQueueConnection = () => {
-  queueConnection ??= createBullMqConnection({
+const getQueue = createLazyBullMqQueue<EntityDeletionCleanupJobData>({
+  name: QUEUE_NAME,
+  connectionOptions: {
     connectionTimeout: QUEUE_OPERATION_TIMEOUT_MS,
     enableOfflineQueue: false,
-  });
-  return queueConnection;
-};
-
-const getQueue = (): Queue<EntityDeletionCleanupJobData> => {
-  queue ??= new Queue<EntityDeletionCleanupJobData>(QUEUE_NAME, {
-    connection: getQueueConnection(),
-    defaultJobOptions: {
-      attempts: DEFAULT_JOB_ATTEMPTS,
-      backoff: { type: "exponential", delay: 30_000 },
-      removeOnComplete: 100,
-      removeOnFail: 500,
-    },
-  });
-  return queue;
-};
+  },
+  defaultJobOptions: {
+    attempts: DEFAULT_JOB_ATTEMPTS,
+    backoff: { type: "exponential", delay: 30_000 },
+    removeOnComplete: 100,
+    removeOnFail: 500,
+  },
+});
 
 export const enqueueEntityDeletionCleanup = async (
   requestId: SafeId<"entityDeletionCleanupRequest">,

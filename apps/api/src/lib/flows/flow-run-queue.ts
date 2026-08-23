@@ -1,6 +1,4 @@
-import { Queue } from "bullmq";
-
-import { createBullMqConnection } from "@/api/lib/redis-client";
+import { createLazyBullMqQueue } from "@/api/lib/bullmq-queue";
 
 // ── Queue name + payload ────────────────────────────────
 
@@ -30,26 +28,15 @@ const FLOW_STEP_JOB_BACKOFF_MS = 5000;
 
 // ── Lazy singletons ─────────────────────────────────────
 
-let queue: Queue<FlowStepJobData> | null = null;
-let queueConnection: ReturnType<typeof createBullMqConnection> | null = null;
-
-const getQueueConnection = () => {
-  queueConnection ??= createBullMqConnection();
-  return queueConnection;
-};
-
-const getQueue = (): Queue<FlowStepJobData> => {
-  queue ??= new Queue<FlowStepJobData>(FLOW_RUN_QUEUE_NAME, {
-    connection: getQueueConnection(),
-    defaultJobOptions: {
-      removeOnComplete: 100,
-      removeOnFail: 500,
-      attempts: FLOW_STEP_JOB_ATTEMPTS,
-      backoff: { type: "exponential", delay: FLOW_STEP_JOB_BACKOFF_MS },
-    },
-  });
-  return queue;
-};
+const getQueue = createLazyBullMqQueue<FlowStepJobData>({
+  name: FLOW_RUN_QUEUE_NAME,
+  defaultJobOptions: {
+    removeOnComplete: 100,
+    removeOnFail: 500,
+    attempts: FLOW_STEP_JOB_ATTEMPTS,
+    backoff: { type: "exponential", delay: FLOW_STEP_JOB_BACKOFF_MS },
+  },
+});
 
 // Deterministic per-(run, step) job id. Prevents the same step being enqueued
 // twice (start + orphan sweep, or two concurrent review resolutions) and lets

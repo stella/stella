@@ -12,7 +12,7 @@
  */
 
 import { Result } from "better-result";
-import { Queue, Worker } from "bullmq";
+import { Worker } from "bullmq";
 import { and, asc, eq, inArray, lt, or, sql } from "drizzle-orm";
 
 import { applyFolioAIEditsToBuffer } from "@stll/folio-core/server";
@@ -48,11 +48,13 @@ import type { StoredRow } from "@/api/lib/bilingual/operations";
 import { checkTranslationConsistency } from "@/api/lib/bilingual/rows";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
+import { createLazyBullMqQueue } from "@/api/lib/bullmq-queue";
 import { createEntityVersionFromBuffer } from "@/api/lib/entity-versions/create-entity-version-from-buffer";
 import { loadEntityVersionDocxBuffer } from "@/api/lib/entity-versions/load-entity-version-docx-buffer";
 import { validateDocxBuffer } from "@/api/lib/entity-versions/validate-docx-buffer";
 import { connectionErrorFields, errorTag } from "@/api/lib/errors/utils";
 import { getScanWarnings, scanFile } from "@/api/lib/file-scan/scan";
+import { startNonOverlappingInterval } from "@/api/lib/non-overlapping-interval";
 import { logger } from "@/api/lib/observability/logger";
 import { createBullMqConnection } from "@/api/lib/redis-client";
 import { createRootSafeDb, createRootScopedDb } from "@/api/lib/root-scoped-db";
@@ -87,25 +89,14 @@ export type EnqueueBilingualRunArgs = {
   userId: SafeId<"user">;
 };
 
-let queue: Queue<BilingualRunJobData> | null = null;
-let queueConnection: ReturnType<typeof createBullMqConnection> | null = null;
-
-const getQueueConnection = () => {
-  queueConnection ??= createBullMqConnection();
-  return queueConnection;
-};
-
-const getQueue = (): Queue<BilingualRunJobData> => {
-  queue ??= new Queue<BilingualRunJobData>(QUEUE_NAME, {
-    connection: getQueueConnection(),
-    defaultJobOptions: {
-      attempts: JOB_ATTEMPTS,
-      removeOnComplete: 100,
-      removeOnFail: 500,
-    },
-  });
-  return queue;
-};
+const getQueue = createLazyBullMqQueue<BilingualRunJobData>({
+  name: QUEUE_NAME,
+  defaultJobOptions: {
+    attempts: JOB_ATTEMPTS,
+    removeOnComplete: 100,
+    removeOnFail: 500,
+  },
+});
 
 export const enqueueBilingualRun = async ({
   runId,
@@ -179,34 +170,20 @@ export const initBilingualRunWorker = () => {
     logger.error("bilingual_run.worker_error", connectionErrorFields(error));
   });
 
-  let closing = false;
-  let activeReconcile: Promise<void> | null = null;
-  const scheduleReconcile = (): void => {
-    if (closing || activeReconcile !== null) {
-      return;
-    }
-    activeReconcile = reconcileStuckBilingualRuns()
-      .then((recovered) => {
-        if (recovered > 0) {
-          logger.warn("bilingual_run.recovered_stuck", {
-            count: String(recovered),
-          });
-        }
-        return undefined;
-      })
-      .catch((error: unknown) => {
-        captureError(error, { operation: "bilingual_run.reconcile" });
-      })
-      .finally(() => {
-        activeReconcile = null;
-      });
-  };
-  scheduleReconcile();
-  const reconcileTimer = setInterval(
-    scheduleReconcile,
-    ORPHAN_RECONCILE_INTERVAL_MS,
-  );
-  reconcileTimer.unref();
+  const closeReconcile = startNonOverlappingInterval({
+    intervalMs: ORPHAN_RECONCILE_INTERVAL_MS,
+    run: async () => {
+      const recovered = await reconcileStuckBilingualRuns();
+      if (recovered > 0) {
+        logger.warn("bilingual_run.recovered_stuck", {
+          count: String(recovered),
+        });
+      }
+    },
+    onError: (error) => {
+      captureError(error, { operation: "bilingual_run.reconcile" });
+    },
+  });
 
   logger.info("bilingual_run.worker_started", {
     concurrency: String(WORKER_CONCURRENCY),
@@ -214,11 +191,7 @@ export const initBilingualRunWorker = () => {
 
   return {
     close: async () => {
-      closing = true;
-      clearInterval(reconcileTimer);
-      if (activeReconcile !== null) {
-        await activeReconcile;
-      }
+      await closeReconcile();
       await worker.close();
     },
   };

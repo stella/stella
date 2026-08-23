@@ -14,7 +14,7 @@
  */
 
 import { Result } from "better-result";
-import { Queue, Worker } from "bullmq";
+import { Worker } from "bullmq";
 import { and, eq, inArray } from "drizzle-orm";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
@@ -39,6 +39,7 @@ import { assertUsageAvailableForHandler } from "@/api/lib/api-handlers";
 import { createBackgroundAuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
+import { createLazyBullMqQueue } from "@/api/lib/bullmq-queue";
 import {
   buildAiConditionDecider,
   buildAiFieldGenerator,
@@ -47,6 +48,7 @@ import {
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import { connectionErrorFields, errorTag } from "@/api/lib/errors/utils";
 import { convertToPdf } from "@/api/lib/files/gotenberg";
+import { startNonOverlappingInterval } from "@/api/lib/non-overlapping-interval";
 import { logger } from "@/api/lib/observability/logger";
 import { createBullMqConnection } from "@/api/lib/redis-client";
 import { listPendingReportExportNotifications } from "@/api/lib/report-export-notification-recovery";
@@ -105,25 +107,14 @@ export type EnqueueReportExportArgs = {
   aiNarrative: boolean;
 };
 
-let queue: Queue<ReportExportJobData> | null = null;
-let queueConnection: ReturnType<typeof createBullMqConnection> | null = null;
-
-const getQueueConnection = () => {
-  queueConnection ??= createBullMqConnection();
-  return queueConnection;
-};
-
-const getQueue = (): Queue<ReportExportJobData> => {
-  queue ??= new Queue<ReportExportJobData>(QUEUE_NAME, {
-    connection: getQueueConnection(),
-    defaultJobOptions: {
-      attempts: JOB_ATTEMPTS,
-      removeOnComplete: 100,
-      removeOnFail: 500,
-    },
-  });
-  return queue;
-};
+const getQueue = createLazyBullMqQueue<ReportExportJobData>({
+  name: QUEUE_NAME,
+  defaultJobOptions: {
+    attempts: JOB_ATTEMPTS,
+    removeOnComplete: 100,
+    removeOnFail: 500,
+  },
+});
 
 export const enqueueReportExport = async ({
   exportId,
@@ -204,8 +195,6 @@ export const initReportExportWorker = () => {
     logger.error("report_export.worker_error", connectionErrorFields(error));
   });
 
-  let closing = false;
-  let activeNotificationReconcile: Promise<void> | null = null;
   const runNotificationReconcile = async (): Promise<void> => {
     const { actors, suppressed } = await listPendingReportExportNotifications();
     const results = await Promise.all(
@@ -227,26 +216,15 @@ export const initReportExportWorker = () => {
       });
     }
   };
-  const scheduleNotificationReconcile = (): void => {
-    if (closing || activeNotificationReconcile !== null) {
-      return;
-    }
-    activeNotificationReconcile = runNotificationReconcile()
-      .catch((error: unknown) => {
-        captureError(error, {
-          operation: "report_export.notification.reconcile",
-        });
-      })
-      .finally(() => {
-        activeNotificationReconcile = null;
+  const closeNotificationReconcile = startNonOverlappingInterval({
+    intervalMs: NOTIFICATION_RECONCILE_INTERVAL_MS,
+    run: runNotificationReconcile,
+    onError: (error) => {
+      captureError(error, {
+        operation: "report_export.notification.reconcile",
       });
-  };
-  scheduleNotificationReconcile();
-  const notificationReconcileTimer = setInterval(
-    scheduleNotificationReconcile,
-    NOTIFICATION_RECONCILE_INTERVAL_MS,
-  );
-  notificationReconcileTimer.unref();
+    },
+  });
 
   logger.info("report_export.worker_started", {
     concurrency: String(WORKER_CONCURRENCY),
@@ -254,11 +232,7 @@ export const initReportExportWorker = () => {
 
   return {
     close: async () => {
-      closing = true;
-      clearInterval(notificationReconcileTimer);
-      if (activeNotificationReconcile !== null) {
-        await activeNotificationReconcile;
-      }
+      await closeNotificationReconcile();
       await worker.close();
     },
   };

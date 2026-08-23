@@ -2546,10 +2546,11 @@ export default defineConfig({
           "error",
           {
             allowedFiles: [
-              // Queue transport. Each module owns one BullMQ queue's
-              // connection lifecycle; BullMQ owns the key layout under its
-              // own prefix (see redis-client.ts for the cluster cutover).
-              "apps/api/src/lib/document-processing-enqueue.ts",
+              // Queue transport. The shared facade owns lazy producer
+              // connections; worker modules own their dedicated blocking
+              // connections. BullMQ owns the key layout under its own prefix
+              // (see redis-client.ts for the cluster cutover).
+              "apps/api/src/lib/bullmq-queue.ts",
               "apps/api/src/lib/document-processing-queue.ts",
               "apps/api/src/lib/workflow-queue.ts",
               "apps/api/src/lib/file-derivative-queue.ts",
@@ -2558,7 +2559,6 @@ export default defineConfig({
               "apps/api/src/lib/style-set-package-cleanup-queue.ts",
               "apps/api/src/lib/document-review/run-queue.ts",
               "apps/api/src/lib/bilingual/run-queue.ts",
-              "apps/api/src/lib/flows/flow-run-queue.ts",
               "apps/api/src/lib/flows/flow-run-worker.ts",
               "apps/api/src/lib/scheduler/bullmq.ts",
               "apps/api/src/handlers/reports/report-export-queue.ts",
