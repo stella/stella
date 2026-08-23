@@ -1,7 +1,6 @@
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
-import { validCaseLawLanguageAlternateCountSql } from "@/api/handlers/case-law/decisions/language";
 import type {
   CaseLawPublicReadDb,
   CaseLawPublicReadTransaction,
@@ -11,6 +10,15 @@ import {
   definePublicLawSharedQuery,
   PUBLIC_LAW_SHARED_QUERY,
 } from "@/api/lib/public-law-shared-query";
+
+const CASE_LAW_LANGUAGE_SEGMENT_PATTERN = "^[a-z]{2,3}(-[a-z0-9]{2,8})*$";
+
+const normalizedCaseLawLanguageSql = sql<string>`replace(lower(${caseLawDecisions.language}), '_', '-')`;
+
+const validCaseLawLanguageAlternateCountSql = sql<number>`(
+  count(distinct ${normalizedCaseLawLanguageSql})
+    filter (where ${normalizedCaseLawLanguageSql} ~ ${CASE_LAW_LANGUAGE_SEGMENT_PATTERN})
+)::int`;
 
 export const readDecisionLanguageAlternateCountsQuery =
   definePublicLawSharedQuery(

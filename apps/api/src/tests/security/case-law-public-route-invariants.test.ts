@@ -40,8 +40,6 @@ const SEARCH_DECISIONS_FILE =
   "apps/api/src/handlers/case-law/decisions/search.ts";
 const SEARCH_DECISIONS_SCHEMA_FILE =
   "apps/api/src/handlers/case-law/decisions/search-schema.ts";
-const LANGUAGE_DECISIONS_FILE =
-  "apps/api/src/handlers/case-law/decisions/language.ts";
 const LANGUAGE_ALTERNATE_COUNTS_FILE =
   "apps/api/src/lib/case-law/language-alternate-counts.ts";
 const SITEMAP_DECISIONS_FILE =
@@ -99,8 +97,6 @@ const readNonRedistributableSourcesSource = async () =>
 const readSearchSource = async () => await readSource(SEARCH_DECISIONS_FILE);
 const readSearchSchemaSource = async () =>
   await readSource(SEARCH_DECISIONS_SCHEMA_FILE);
-const readLanguageSource = async () =>
-  await readSource(LANGUAGE_DECISIONS_FILE);
 const readLanguageAlternateCountsSource = async () =>
   await readSource(LANGUAGE_ALTERNATE_COUNTS_FILE);
 const readSitemapSource = async () => await readSource(SITEMAP_DECISIONS_FILE);
@@ -319,12 +315,10 @@ describe("public case-law route boundary", () => {
     const [
       listSource,
       searchSource,
-      languageSource,
       languageAlternateCountsSource,
     ] = await Promise.all([
       readListSource(),
       readSearchSource(),
-      readLanguageSource(),
       readLanguageAlternateCountsSource(),
     ]);
 
@@ -351,13 +345,15 @@ describe("public case-law route boundary", () => {
     expect(languageAlternateCountsSource).toContain(
       "validCaseLawLanguageAlternateCountSql",
     );
-    expect(languageSource).toContain("count(distinct");
-    expect(languageSource).toContain("replace(lower(");
-    expect(languageSource).toContain("filter (where");
-    expect(languageSource).toMatch(
+    expect(languageAlternateCountsSource).toContain("count(distinct");
+    expect(languageAlternateCountsSource).toContain("replace(lower(");
+    expect(languageAlternateCountsSource).toContain("filter (where");
+    expect(languageAlternateCountsSource).toMatch(
       /~ \$\{CASE_LAW_LANGUAGE_SEGMENT_PATTERN\}/u,
     );
-    expect(languageSource).toContain("^[a-z]{2,3}(-[a-z0-9]{2,8})*$");
+    expect(languageAlternateCountsSource).toContain(
+      "^[a-z]{2,3}(-[a-z0-9]{2,8})*$",
+    );
   });
 
   test("public sitemap payload is an explicit public allowlist", async () => {
