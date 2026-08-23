@@ -250,10 +250,8 @@ export const databaseComponentEnvSchema = {
 };
 
 type EnvBaseInvariantInput = {
-  CASE_LAW_DATABASE_POOL_MAX?: number | undefined;
   CASE_LAW_DATABASE_URL?: string | undefined;
   PUBLIC_LAW_DATABASE_URL?: string | undefined;
-  PUBLIC_LAW_DATABASE_POOL_MAX: number;
   CORPUS_INDEX_BACKPRESSURE_DIMENSIONS?: string | undefined;
   CORPUS_INDEX_BACKPRESSURE_HIGH_WATERMARK: number;
   CORPUS_INDEX_BACKPRESSURE_LOW_WATERMARK: number;
@@ -276,10 +274,8 @@ type EnvBaseInvariantInput = {
 };
 
 export const envBaseInvariantViolation = ({
-  CASE_LAW_DATABASE_POOL_MAX,
   CASE_LAW_DATABASE_URL,
   PUBLIC_LAW_DATABASE_URL,
-  PUBLIC_LAW_DATABASE_POOL_MAX,
   CORPUS_INDEX_BACKPRESSURE_DIMENSIONS,
   CORPUS_INDEX_BACKPRESSURE_HIGH_WATERMARK,
   CORPUS_INDEX_BACKPRESSURE_LOW_WATERMARK,
@@ -300,20 +296,10 @@ export const envBaseInvariantViolation = ({
   S3_SECRET_ACCESS_KEY,
   isDev,
 }: EnvBaseInvariantInput): string | null => {
-  // REMOVAL CONDITION: remove these two conflict checks with the CASE_LAW_*
-  // schema inputs after v0.7.22 leaves the rollback window.
-  if (
-    CASE_LAW_DATABASE_URL !== undefined &&
-    CASE_LAW_DATABASE_URL !== PUBLIC_LAW_DATABASE_URL
-  ) {
-    return "CASE_LAW_DATABASE_URL and PUBLIC_LAW_DATABASE_URL must match during the v0.7.22 rollback window.";
-  }
-  if (
-    CASE_LAW_DATABASE_POOL_MAX !== undefined &&
-    CASE_LAW_DATABASE_POOL_MAX !== PUBLIC_LAW_DATABASE_POOL_MAX
-  ) {
-    return "CASE_LAW_DATABASE_POOL_MAX and PUBLIC_LAW_DATABASE_POOL_MAX must match during the v0.7.22 rollback window.";
-  }
+  const hasPublicLawDatabaseUrl =
+    PUBLIC_LAW_DATABASE_URL !== undefined ||
+    CASE_LAW_DATABASE_URL !== undefined;
+
   if (
     (CORPUS_INDEX_BACKPRESSURE_METRIC === undefined) !==
     (CORPUS_INDEX_BACKPRESSURE_NAMESPACE === undefined)
@@ -342,8 +328,14 @@ export const envBaseInvariantViolation = ({
   ) {
     return "PUBLIC_LAW_DATABASE_URL must enable TLS outside loopback or Railway private networking.";
   }
-  if (!isDev && PUBLIC_LAW_DATABASE_URL !== undefined) {
-    return "PUBLIC_LAW_DATABASE_URL is only supported in local development.";
+  if (
+    CASE_LAW_DATABASE_URL !== undefined &&
+    !hasSecureDatabaseTransport(CASE_LAW_DATABASE_URL)
+  ) {
+    return "CASE_LAW_DATABASE_URL must enable TLS outside loopback or Railway private networking.";
+  }
+  if (!isDev && hasPublicLawDatabaseUrl) {
+    return "Public-law database URLs are only supported in local development.";
   }
   if (
     CORPUS_INDEX_SEARCH_ENDPOINT !== undefined &&
@@ -371,25 +363,28 @@ export const envBaseInvariantViolation = ({
     return 'QUERY_EXPANSION_MODE="on" requires dictionary-version-carrying cursors; not yet implemented — use "shadow".';
   }
   if (
-    PUBLIC_LAW_DATABASE_URL !== undefined &&
+    hasPublicLawDatabaseUrl &&
     LEGAL_SEARCH_PROVIDER !== "corpus-index"
   ) {
-    return 'PUBLIC_LAW_DATABASE_URL requires LEGAL_SEARCH_PROVIDER="corpus-index".';
+    return 'Public-law database URLs require LEGAL_SEARCH_PROVIDER="corpus-index".';
   }
   if (
-    PUBLIC_LAW_DATABASE_URL !== undefined &&
+    hasPublicLawDatabaseUrl &&
     CORPUS_INDEX_SEARCH_ENDPOINT === undefined
   ) {
-    return "PUBLIC_LAW_DATABASE_URL requires CORPUS_INDEX_SEARCH_ENDPOINT.";
+    return "Public-law database URLs require CORPUS_INDEX_SEARCH_ENDPOINT.";
   }
   if (
-    PUBLIC_LAW_DATABASE_URL !== undefined &&
+    hasPublicLawDatabaseUrl &&
     CORPUS_INDEX_ENDPOINT !== undefined
   ) {
-    return "CORPUS_INDEX_ENDPOINT must be unset when PUBLIC_LAW_DATABASE_URL is configured.";
+    return "CORPUS_INDEX_ENDPOINT must be unset when a public-law database URL is configured.";
   }
-  if (PUBLIC_LAW_DATABASE_URL !== undefined && CORPUS_INDEXING_ENABLED) {
-    return "CORPUS_INDEXING_ENABLED must be false when PUBLIC_LAW_DATABASE_URL is configured.";
+  if (
+    hasPublicLawDatabaseUrl &&
+    CORPUS_INDEXING_ENABLED
+  ) {
+    return "CORPUS_INDEXING_ENABLED must be false when a public-law database URL is configured.";
   }
   if (
     !isDev &&
@@ -426,32 +421,4 @@ export const envBaseInvariantViolation = ({
     corpusBucket: LEGAL_CORPUS_S3_BUCKET,
     isDev,
   });
-};
-
-type PublicLawDatabaseEnvironment = {
-  CASE_LAW_DATABASE_POOL_MAX?: string | undefined;
-  CASE_LAW_DATABASE_URL?: string | undefined;
-  PUBLIC_LAW_DATABASE_POOL_MAX?: string | undefined;
-  PUBLIC_LAW_DATABASE_URL?: string | undefined;
-};
-
-/**
- * Additive v0.7.22 rollback bridge. New code consumes only PUBLIC_LAW_* while
- * older deployment configuration can still supply CASE_LAW_* for one release
- * window. envBaseInvariantViolation rejects conflicting dual configuration.
- */
-export const resolvePublicLawDatabaseEnvironment = ({
-  CASE_LAW_DATABASE_POOL_MAX,
-  CASE_LAW_DATABASE_URL,
-  PUBLIC_LAW_DATABASE_POOL_MAX,
-  PUBLIC_LAW_DATABASE_URL,
-}: PublicLawDatabaseEnvironment) => {
-  const currentPoolMax = PUBLIC_LAW_DATABASE_POOL_MAX || undefined;
-  const currentUrl = PUBLIC_LAW_DATABASE_URL || undefined;
-  const rolloutPoolMax = CASE_LAW_DATABASE_POOL_MAX || undefined;
-  const rolloutUrl = CASE_LAW_DATABASE_URL || undefined;
-  return {
-    PUBLIC_LAW_DATABASE_POOL_MAX: currentPoolMax ?? rolloutPoolMax,
-    PUBLIC_LAW_DATABASE_URL: currentUrl ?? rolloutUrl,
-  };
 };

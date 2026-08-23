@@ -345,9 +345,11 @@ describe("environment doctor output", () => {
     }
   });
 
-  test("resolves the v0.7.22 case-law keys into the public-law boundary", () => {
+  test("keeps v0.7.22 and public-law credentials distinct during rollout", () => {
     const legacyUrl =
       "postgres://case_law_reader:password@db.example.com:5432/stella?sslmode=require";
+    const currentUrl =
+      "postgres://public_law_reader:password@db.example.com:5432/stella?sslmode=require";
     const result = validateDoctorEnvironment({
       app: "api",
       input: {
@@ -356,42 +358,17 @@ describe("environment doctor output", () => {
         CASE_LAW_DATABASE_URL: legacyUrl,
         CORPUS_INDEX_SEARCH_ENDPOINT: "https://quickwit-search.example.com",
         LEGAL_SEARCH_PROVIDER: "corpus-index",
+        PUBLIC_LAW_DATABASE_POOL_MAX: "4",
+        PUBLIC_LAW_DATABASE_URL: currentUrl,
       },
     });
 
     expect(result.status).toBe("valid");
-    expect(result.values["PUBLIC_LAW_DATABASE_POOL_MAX"]).toBe(3);
-    expect(result.values["PUBLIC_LAW_DATABASE_URL"]).toBe(legacyUrl);
-  });
-
-  test.each([
-    {
-      expected:
-        "CASE_LAW_DATABASE_URL and PUBLIC_LAW_DATABASE_URL must match during the v0.7.22 rollback window.",
-      overrides: {
-        CASE_LAW_DATABASE_URL:
-          "postgres://old_reader:password@db.example.com:5432/stella?sslmode=require",
-        PUBLIC_LAW_DATABASE_URL:
-          "postgres://new_reader:password@db.example.com:5432/stella?sslmode=require",
-      },
-    },
-    {
-      expected:
-        "CASE_LAW_DATABASE_POOL_MAX and PUBLIC_LAW_DATABASE_POOL_MAX must match during the v0.7.22 rollback window.",
-      overrides: {
-        CASE_LAW_DATABASE_POOL_MAX: "3",
-        PUBLIC_LAW_DATABASE_POOL_MAX: "4",
-      },
-    },
-  ])("rejects conflicting rollback keys", ({ expected, overrides }) => {
-    const result = validateDoctorEnvironment({
-      app: "api",
-      input: { ...validApiInput(), ...overrides },
-    });
-
-    expect(result.status).toBe("invalid");
-    if (result.status === "invalid") {
-      expect(result.issues).toContain(expected);
+    if (result.status === "valid") {
+      expect(result.values["CASE_LAW_DATABASE_POOL_MAX"]).toBe(3);
+      expect(result.values["CASE_LAW_DATABASE_URL"]).toBe(legacyUrl);
+      expect(result.values["PUBLIC_LAW_DATABASE_POOL_MAX"]).toBe(4);
+      expect(result.values["PUBLIC_LAW_DATABASE_URL"]).toBe(currentUrl);
     }
   });
 
@@ -463,7 +440,7 @@ describe("environment doctor output", () => {
       },
     },
     {
-      expected: "PUBLIC_LAW_DATABASE_URL is only supported in local development.",
+      expected: "Public-law database URLs are only supported in local development.",
       overrides: {
         PUBLIC_LAW_DATABASE_URL:
           "postgres://case_law_reader:password@db.example.com:5432/stella?sslmode=require",
@@ -489,14 +466,14 @@ describe("environment doctor output", () => {
     },
     {
       expected:
-        'PUBLIC_LAW_DATABASE_URL requires LEGAL_SEARCH_PROVIDER="corpus-index".',
+        'Public-law database URLs require LEGAL_SEARCH_PROVIDER="corpus-index".',
       overrides: {
         PUBLIC_LAW_DATABASE_URL:
           "postgres://case_law_reader:password@db.example.com:5432/stella?sslmode=require",
       },
     },
     {
-      expected: "PUBLIC_LAW_DATABASE_URL requires CORPUS_INDEX_SEARCH_ENDPOINT.",
+      expected: "Public-law database URLs require CORPUS_INDEX_SEARCH_ENDPOINT.",
       overrides: {
         PUBLIC_LAW_DATABASE_URL:
           "postgres://case_law_reader:password@db.example.com:5432/stella?sslmode=require",
@@ -505,7 +482,7 @@ describe("environment doctor output", () => {
     },
     {
       expected:
-        "CORPUS_INDEX_ENDPOINT must be unset when PUBLIC_LAW_DATABASE_URL is configured.",
+        "CORPUS_INDEX_ENDPOINT must be unset when a public-law database URL is configured.",
       overrides: {
         PUBLIC_LAW_DATABASE_URL:
           "postgres://case_law_reader:password@db.example.com:5432/stella?sslmode=require",
@@ -516,7 +493,7 @@ describe("environment doctor output", () => {
     },
     {
       expected:
-        "CORPUS_INDEXING_ENABLED must be false when PUBLIC_LAW_DATABASE_URL is configured.",
+        "CORPUS_INDEXING_ENABLED must be false when a public-law database URL is configured.",
       overrides: {
         PUBLIC_LAW_DATABASE_URL:
           "postgres://case_law_reader:password@db.example.com:5432/stella?sslmode=require",

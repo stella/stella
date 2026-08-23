@@ -15,25 +15,16 @@ import {
   DEPLOYED_NODE_ENVS,
   envBaseInvariantViolation,
   envBaseServerSchema,
-  resolvePublicLawDatabaseEnvironment,
 } from "@/api/env-base-schema";
 import { resolveCorpusStorageMode } from "@/api/lib/corpus-storage-mode";
 
 export { DEPLOYED_NODE_ENVS } from "@/api/env-base-schema";
-
-const publicLawDatabaseEnvironment = resolvePublicLawDatabaseEnvironment({
-  CASE_LAW_DATABASE_POOL_MAX: process.env.CASE_LAW_DATABASE_POOL_MAX,
-  CASE_LAW_DATABASE_URL: process.env.CASE_LAW_DATABASE_URL,
-  PUBLIC_LAW_DATABASE_POOL_MAX: process.env.PUBLIC_LAW_DATABASE_POOL_MAX,
-  PUBLIC_LAW_DATABASE_URL: process.env.PUBLIC_LAW_DATABASE_URL,
-});
 
 export const envBase = createEnv({
   server: envBaseServerSchema,
   emptyStringAsUndefined: true,
   runtimeEnv: {
     ...process.env,
-    ...publicLawDatabaseEnvironment,
     DATABASE_URL: resolveDatabaseUrl(),
     isDev: !DEPLOYED_NODE_ENVS.has(process.env.NODE_ENV ?? ""),
   },

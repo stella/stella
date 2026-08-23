@@ -17,7 +17,6 @@ import { resolveDatabaseUrl } from "../apps/api/src/db-url";
 import {
   DEPLOYED_NODE_ENVS,
   envBaseInvariantViolation,
-  resolvePublicLawDatabaseEnvironment,
 } from "../apps/api/src/env-base-schema";
 import { documentProcessingEnvInvariantViolation } from "../apps/api/src/env-document-processing-worker-schema";
 import {
@@ -891,12 +890,6 @@ const validateApiEnvironment = (input: DoctorInput): DoctorValidationResult => {
   const nodeEnv = input["NODE_ENV"];
   const runtimeInput = {
     ...input,
-    ...resolvePublicLawDatabaseEnvironment({
-      CASE_LAW_DATABASE_POOL_MAX: input["CASE_LAW_DATABASE_POOL_MAX"],
-      CASE_LAW_DATABASE_URL: input["CASE_LAW_DATABASE_URL"],
-      PUBLIC_LAW_DATABASE_POOL_MAX: input["PUBLIC_LAW_DATABASE_POOL_MAX"],
-      PUBLIC_LAW_DATABASE_URL: input["PUBLIC_LAW_DATABASE_URL"],
-    }),
     DATABASE_URL: databaseUrl.value,
     isDev: !DEPLOYED_NODE_ENVS.has(nodeEnv ?? ""),
   };
