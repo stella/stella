@@ -15935,6 +15935,10 @@
         },
         {
           "name": "SrcFile",
+          "value": "packages/auth-model/node_modules/better-auth/package.json"
+        },
+        {
+          "name": "SrcFile",
           "value": "node_modules/better-auth/package.json"
         },
         {
@@ -16153,10 +16157,7 @@
             "location": "apps/api/src/handlers/case-law/decisions/get.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/case-law/decisions/list-citations.ts#1"
-          },
-          {
-            "location": "apps/api/src/handlers/case-law/decisions/summarize-citations.ts#1"
+            "location": "apps/api/src/handlers/case-law/decisions/public-subject.ts#21"
           },
           {
             "location": "apps/api/src/handlers/case-law/erasure.ts#1"
@@ -18160,6 +18161,9 @@
             "location": "apps/api/src/lib/ocr-local/recognize-local.ts#9"
           },
           {
+            "location": "apps/api/src/lib/ocr-local/rgb-image.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/ocr-searchable-pdf-worker.ts#9"
           },
           {
@@ -18466,7 +18470,10 @@
             "location": "apps/api/src/scripts/fetch-ocr-models.ts#11"
           },
           {
-            "location": "apps/api/src/scripts/image-smoke.ts#19"
+            "location": "apps/api/src/scripts/image-smoke.ts#17"
+          },
+          {
+            "location": "apps/api/src/scripts/materialize-runtime-worker-native-assets.ts#1"
           },
           {
             "location": "apps/api/src/scripts/post-deploy-smoke.ts#25"
@@ -18491,12 +18498,6 @@
           },
           {
             "location": "apps/api/src/scripts/replay-case-law-source.ts#1"
-          },
-          {
-            "location": "apps/api/src/scripts/runtime-asset-manifest.ts#1"
-          },
-          {
-            "location": "apps/api/src/scripts/stage-runtime-assets.ts#1"
           },
           {
             "location": "apps/collab/src/server.ts#3"
@@ -18706,6 +18707,9 @@
             "location": "packages/agent-engine/src/sandbox.ts#9"
           },
           {
+            "location": "packages/anonymize-chat/src/index.ts#1"
+          },
+          {
             "location": "packages/catalogue/scripts/catalogue-filesystem.ts#1"
           },
           {
@@ -18892,7 +18896,7 @@
             "location": "scripts/check-resolution-ranges.ts#30"
           },
           {
-            "location": "scripts/code-check-affected.ts#11"
+            "location": "scripts/code-check-affected.ts#13"
           },
           {
             "location": "scripts/env-tool.ts#2"
@@ -19194,6 +19198,10 @@
         {
           "name": "SrcFile",
           "value": "packages/catalogue/node_modules/better-result/package.json"
+        },
+        {
+          "name": "SrcFile",
+          "value": "packages/anonymize-chat/node_modules/better-result/package.json"
         },
         {
           "name": "SrcFile",
@@ -20192,6 +20200,9 @@
             "location": "apps/api/src/db/schema/extraction-runs.ts#1"
           },
           {
+            "location": "apps/api/src/db/schema/legislation.ts#1"
+          },
+          {
             "location": "apps/api/src/db/schema/office-evidence.ts#1"
           },
           {
@@ -20283,6 +20294,9 @@
           },
           {
             "location": "apps/api/src/handlers/case-law/decisions/list.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/decisions/public-subject.ts#22"
           },
           {
             "location": "apps/api/src/handlers/case-law/decisions/search.ts#1"
@@ -21743,9 +21757,6 @@
             "location": "apps/api/src/lib/organization-storage-teardown.ts#2"
           },
           {
-            "location": "apps/api/src/lib/pg-error.ts#1"
-          },
-          {
             "location": "apps/api/src/lib/properties/delete-playbook-columns.ts#17"
           },
           {
@@ -22405,13 +22416,16 @@
             "location": "apps/api/src/handlers/case-law/decisions/get.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/case-law/decisions/list-citations.ts#2"
+            "location": "apps/api/src/handlers/case-law/decisions/list-citations.ts#1"
           },
           {
             "location": "apps/api/src/handlers/case-law/decisions/list.ts#3"
           },
           {
             "location": "apps/api/src/handlers/case-law/decisions/list.ts#4"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/decisions/public-subject.ts#23"
           },
           {
             "location": "apps/api/src/handlers/case-law/decisions/search-schema.ts#1"
@@ -22429,7 +22443,7 @@
             "location": "apps/api/src/handlers/case-law/decisions/sitemap.ts#4"
           },
           {
-            "location": "apps/api/src/handlers/case-law/decisions/summarize-citations.ts#2"
+            "location": "apps/api/src/handlers/case-law/decisions/summarize-citations.ts#1"
           },
           {
             "location": "apps/api/src/handlers/case-law/matter-links/create.ts#3"
@@ -26645,10 +26659,10 @@
         ],
         "occurrences": [
           {
-            "location": "apps/api/src/handlers/chat/tools/execute/sandbox/run-sandbox.ts#7"
+            "location": "apps/api/src/handlers/chat/tools/execute/sandbox/run-sandbox.ts#6"
           },
           {
-            "location": "apps/api/src/handlers/chat/tools/execute/sandbox/run-sandbox.ts#8"
+            "location": "apps/api/src/handlers/chat/tools/execute/sandbox/run-sandbox.ts#7"
           }
         ]
       },
@@ -26707,10 +26721,7 @@
         ],
         "occurrences": [
           {
-            "location": "apps/api/src/handlers/chat/tools/execute/sandbox/run-sandbox.ts#2"
-          },
-          {
-            "location": "apps/api/src/scripts/image-smoke.ts#21"
+            "location": "apps/api/src/lib/quickjs-runtime.ts#5"
           }
         ]
       },
@@ -29063,80 +29074,6 @@
       "scope": "required",
       "type": "library",
       "version": "0.3.0"
-    },
-    {
-      "authors": [
-        {
-          "name": "Lovell Fuller <npm@lovell.info>"
-        }
-      ],
-      "bom-ref": "pkg:npm/sharp@0.35.3",
-      "description": "High performance Node.js image processing, the fastest module to resize JPEG, PNG, WebP, GIF, AVIF and TIFF images",
-      "evidence": {
-        "identity": [
-          {
-            "concludedValue": "apps/api/node_modules/sharp/package.json",
-            "confidence": 0.7,
-            "field": "purl",
-            "methods": [
-              {
-                "confidence": 0.7,
-                "technique": "manifest-analysis",
-                "value": "apps/api/node_modules/sharp/package.json"
-              }
-            ]
-          }
-        ],
-        "occurrences": [
-          {
-            "location": "apps/api/src/lib/ocr-local/ocr-local-worker.ts#24"
-          },
-          {
-            "location": "apps/landing/src/lib/og-card.ts#8"
-          }
-        ]
-      },
-      "externalReferences": [
-        {
-          "type": "website",
-          "url": "https://sharp.pixelplumbing.com"
-        },
-        {
-          "type": "vcs",
-          "url": "git+https://github.com/lovell/sharp.git"
-        }
-      ],
-      "group": "",
-      "licenses": [
-        {
-          "license": {
-            "id": "Apache-2.0",
-            "url": "https://opensource.org/licenses/Apache-2.0"
-          }
-        }
-      ],
-      "name": "sharp",
-      "properties": [
-        {
-          "name": "SrcFile",
-          "value": "node_modules/sharp/package.json"
-        },
-        {
-          "name": "SrcFile",
-          "value": "apps/landing/node_modules/sharp/package.json"
-        },
-        {
-          "name": "SrcFile",
-          "value": "apps/api/node_modules/sharp/package.json"
-        }
-      ],
-      "purl": "pkg:npm/sharp@0.35.3",
-      "scope": "required",
-      "tags": [
-        "performance"
-      ],
-      "type": "library",
-      "version": "0.35.3"
     },
     {
       "authors": [
@@ -31707,7 +31644,7 @@
             "location": "apps/api/src/lib/redis-keys.ts#23"
           },
           {
-            "location": "apps/api/src/lib/safe-outbound-fetch.ts#7"
+            "location": "apps/api/src/lib/safe-outbound-fetch.ts#8"
           },
           {
             "location": "apps/api/src/lib/sanitize-filename.ts#1"
@@ -31875,7 +31812,7 @@
             "location": "packages/ai-catalog/src/index.ts#22"
           },
           {
-            "location": "packages/anonymize-chat/src/index.ts#1"
+            "location": "packages/anonymize-chat/src/index.ts#2"
           },
           {
             "location": "packages/api-contract/src/contact-import.ts#1"

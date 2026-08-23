@@ -146,7 +146,6 @@ Project: root
 - react-native 0.86.2 — MIT
 - react-native-safe-area-context 5.7.0 — MIT
 - scslre 0.3.0 — MIT
-- sharp 0.35.3 — Apache-2.0
 - slimdom 4.3.5 — MIT
 - ssf 0.11.2 — Apache-2.0
 - streamdown 2.5.0 — Apache-2.0
