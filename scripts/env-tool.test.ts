@@ -333,7 +333,8 @@ describe("environment doctor output", () => {
       app: "api",
       input: {
         ...validApiInput(),
-        PUBLIC_LAW_DATABASE_URL: "https://db.example.com/stella?sslmode=require",
+        PUBLIC_LAW_DATABASE_URL:
+          "https://db.example.com/stella?sslmode=require",
       },
     });
 
@@ -440,7 +441,8 @@ describe("environment doctor output", () => {
       },
     },
     {
-      expected: "Public-law database URLs are only supported in local development.",
+      expected:
+        "Public-law database URLs are only supported in local development.",
       overrides: {
         PUBLIC_LAW_DATABASE_URL:
           "postgres://case_law_reader:password@db.example.com:5432/stella?sslmode=require",
@@ -473,7 +475,8 @@ describe("environment doctor output", () => {
       },
     },
     {
-      expected: "Public-law database URLs require CORPUS_INDEX_SEARCH_ENDPOINT.",
+      expected:
+        "Public-law database URLs require CORPUS_INDEX_SEARCH_ENDPOINT.",
       overrides: {
         PUBLIC_LAW_DATABASE_URL:
           "postgres://case_law_reader:password@db.example.com:5432/stella?sslmode=require",

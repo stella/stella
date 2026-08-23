@@ -362,28 +362,16 @@ export const envBaseInvariantViolation = ({
   if (QUERY_EXPANSION_MODE === "on") {
     return 'QUERY_EXPANSION_MODE="on" requires dictionary-version-carrying cursors; not yet implemented — use "shadow".';
   }
-  if (
-    hasPublicLawDatabaseUrl &&
-    LEGAL_SEARCH_PROVIDER !== "corpus-index"
-  ) {
+  if (hasPublicLawDatabaseUrl && LEGAL_SEARCH_PROVIDER !== "corpus-index") {
     return 'Public-law database URLs require LEGAL_SEARCH_PROVIDER="corpus-index".';
   }
-  if (
-    hasPublicLawDatabaseUrl &&
-    CORPUS_INDEX_SEARCH_ENDPOINT === undefined
-  ) {
+  if (hasPublicLawDatabaseUrl && CORPUS_INDEX_SEARCH_ENDPOINT === undefined) {
     return "Public-law database URLs require CORPUS_INDEX_SEARCH_ENDPOINT.";
   }
-  if (
-    hasPublicLawDatabaseUrl &&
-    CORPUS_INDEX_ENDPOINT !== undefined
-  ) {
+  if (hasPublicLawDatabaseUrl && CORPUS_INDEX_ENDPOINT !== undefined) {
     return "CORPUS_INDEX_ENDPOINT must be unset when a public-law database URL is configured.";
   }
-  if (
-    hasPublicLawDatabaseUrl &&
-    CORPUS_INDEXING_ENABLED
-  ) {
+  if (hasPublicLawDatabaseUrl && CORPUS_INDEXING_ENABLED) {
     return "CORPUS_INDEXING_ENABLED must be false when a public-law database URL is configured.";
   }
   if (
