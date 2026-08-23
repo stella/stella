@@ -6,6 +6,8 @@ import {
   type ResourceRef,
 } from "@stll/api-contract";
 
+import { isRecord } from "@/api/lib/type-guards";
+
 /**
  * Model-facing spellings only. Persisted IDs may have the same text; the
  * protocol stage, not a reserved string namespace, distinguishes them.
@@ -67,9 +69,6 @@ export type ChatRefContext = {
   unresolvedInputs: ChatUnresolvedInputRefContext[];
   workspaceScope: ResourceRef<"workspace">[];
 };
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
 
 const isChatEntityRefContext = (
   value: unknown,

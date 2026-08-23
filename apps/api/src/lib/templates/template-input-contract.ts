@@ -1,3 +1,5 @@
+import { isRecord } from "@/api/lib/type-guards";
+
 type FindUnusedTemplateValueKeysOptions = {
   contract: TemplateInputContract;
   values: Record<string, unknown>;
@@ -259,9 +261,6 @@ const isFlattenedArrayDescendant = (
   }
   return false;
 };
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
 
 const isTemplateLoopPrimitive = (
   value: unknown,

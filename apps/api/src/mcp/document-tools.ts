@@ -952,11 +952,7 @@ const handleListDocumentsTool: TypedMcpToolHandler<
 
   const parsed = v.safeParse(listDocumentsArgsSchema, args);
   if (!parsed.success) {
-    return validationErrorResult({
-      issues: parsed.issues,
-      message:
-        "Invalid input: expected { matter_id: string, mode?: 'flat'|'children', parent_id?: string, limit?: integer, cursor?: string }",
-    });
+    return validationErrorResult(parsed.issues);
   }
 
   const workspaceId = ensureWorkspaceAccess({
@@ -1630,10 +1626,7 @@ const handleReadDocumentTool: TypedMcpToolHandler<
 
   const parsed = v.safeParse(readDocumentArgsSchema, args);
   if (!parsed.success) {
-    return validationErrorResult({
-      issues: parsed.issues,
-      message: "Invalid input: expected { entity_id: string, ... }",
-    });
+    return validationErrorResult(parsed.issues);
   }
 
   const entityId = brandPersistedEntityId(parsed.output.entity_id);
@@ -2199,11 +2192,7 @@ const handleSaveDocumentTool: TypedMcpToolHandler<
 > = async ({ args, context }) => {
   const parsed = v.safeParse(saveDocumentArgsSchema, args);
   if (!parsed.success) {
-    return validationErrorResult({
-      issues: parsed.issues,
-      message:
-        "Invalid input: expected { matter_id, name, parent_id?, kind? } to create, or { entity_id, name?/parent_id?/move_to_root?/version_id?/label?/description? } to update",
-    });
+    return validationErrorResult(parsed.issues);
   }
   const input = parsed.output;
 
@@ -2260,11 +2249,7 @@ const handleUploadDocumentVersionTool: McpToolHandler = async ({
     args,
   );
   if (!parsed.success) {
-    return validationErrorResult({
-      issues: parsed.issues,
-      message:
-        "Invalid input: expected { entity_id: string, file: { download_url, file_id, mime_type?, file_name? } }",
-    });
+    return validationErrorResult(parsed.issues);
   }
 
   const target = await resolveDocumentVersionUploadTarget({
@@ -2292,10 +2277,7 @@ const handleOpenDocumentVersionUploadTool: McpToolHandler = async ({
     args,
   );
   if (!parsed.success) {
-    return validationErrorResult({
-      issues: parsed.issues,
-      message: "Invalid input: expected { entity_id: string }",
-    });
+    return validationErrorResult(parsed.issues);
   }
 
   const target = await resolveDocumentVersionUploadTarget({
@@ -2328,11 +2310,7 @@ const handleDeleteDocumentTool: TypedMcpToolHandler<
 > = async ({ args, context }) => {
   const parsed = v.safeParse(deleteDocumentArgsSchema, args);
   if (!parsed.success) {
-    return validationErrorResult({
-      issues: parsed.issues,
-      message:
-        "Invalid input: expected { entity_id: string, version_id?: string }",
-    });
+    return validationErrorResult(parsed.issues);
   }
 
   const entityId = brandPersistedEntityId(parsed.output.entity_id);
@@ -2419,11 +2397,7 @@ const handleListPropertiesTool: TypedMcpToolHandler<
 
   const parsed = v.safeParse(listPropertiesArgsSchema, args);
   if (!parsed.success) {
-    return validationErrorResult({
-      issues: parsed.issues,
-      message:
-        "Invalid input: expected { matter_id: string, limit?: integer, cursor?: string }",
-    });
+    return validationErrorResult(parsed.issues);
   }
 
   const workspaceId = ensureWorkspaceAccess({
@@ -2580,11 +2554,7 @@ const handleSetFieldValueTool: TypedMcpToolHandler<
 
   const parsed = v.safeParse(setFieldValueArgsSchema, args);
   if (!parsed.success) {
-    return validationErrorResult({
-      issues: parsed.issues,
-      message:
-        "Invalid input: expected { entity_id: string, property_id: string, content: { type, value, currency? } }",
-    });
+    return validationErrorResult(parsed.issues);
   }
   if (!isUuid(parsed.output.property_id)) {
     return structuredErrorResult({

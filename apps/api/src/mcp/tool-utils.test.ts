@@ -591,15 +591,12 @@ describe("validationErrorResult", () => {
       throw new Error("expected a validation failure");
     }
 
-    const result = validationErrorResult({
-      issues: parsed.issues,
-      message: "name is required",
-    });
+    const result = validationErrorResult(parsed.issues);
 
     expect(result.status).toBe("error");
     const payload = JSON.parse(errorText(result));
     expect(payload.error.code).toBe("validation_error");
-    expect(payload.error.message).toBe("name is required");
+    expect(payload.error.message).toBe(parsed.issues.at(0)?.message);
     expect(payload.error.issues).toEqual([
       { path: "name", message: expect.any(String) },
     ]);

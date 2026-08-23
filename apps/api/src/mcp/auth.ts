@@ -3,6 +3,7 @@ import type { JWTPayload } from "jose";
 
 import { getAuthEndpointUrl, getAuthIssuerUrl } from "@/api/lib/auth-paths";
 import { isMachineApiKeyCredential } from "@/api/lib/machine-api-key-config";
+import { isRecord } from "@/api/lib/type-guards";
 import { AGENT_RUN_TOKEN_PURPOSE } from "@/api/mcp/agent-run-token";
 import { resolveMachineApiKeySession } from "@/api/mcp/api-key-auth";
 import type { McpMode } from "@/api/mcp/constants";
@@ -50,9 +51,6 @@ export const getMcpAccessTokenVerificationOptions = (
 const isStringArray = (value: unknown): value is string[] =>
   Array.isArray(value) &&
   value.every((item) => typeof item === "string" && item.length > 0);
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
 
 const isMcpCredential = (
   value: unknown,

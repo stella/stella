@@ -9,12 +9,10 @@ import type { TimestampCasToken } from "@/api/lib/db/timestamp-cas";
 import { LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
 import { CHAT_SEARCH_DISPLAY_METADATA_GENERATION } from "@/api/lib/search/chat-search-generation";
+import { isRecord } from "@/api/lib/type-guards";
 
 const BACKFILL_BATCH_SIZE = 200;
 const ZERO_UUID = "00000000-0000-0000-0000-000000000000";
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
 
 type SearchablePersistedChatMessageContent = {
   data: unknown[];

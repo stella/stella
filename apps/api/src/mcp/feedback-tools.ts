@@ -209,15 +209,12 @@ const buildGithubFeedbackResult = ({
 const handleSendFeedbackTool: McpToolHandler = async ({ args }) => {
   const parsed = await Promise.resolve(v.safeParse(feedbackArgsSchema, args));
   if (!parsed.success) {
-    return validationErrorResult({
-      issues: parsed.issues,
-      message:
-        parsed.issues.at(0)?.message ?? "Invalid send_feedback arguments",
-      hint:
-        `Provide kind (one of ${FEEDBACK_KINDS.join(", ")}), a non-empty title ` +
+    return validationErrorResult(
+      parsed.issues,
+      `Provide kind (one of ${FEEDBACK_KINDS.join(", ")}), a non-empty title ` +
         `(<= ${MAX_FEEDBACK_TITLE_CHARS} chars), and a non-empty body ` +
         `(<= ${MAX_FEEDBACK_BODY_CHARS} chars).`,
-    });
+    );
   }
   const { body, kind, title } = parsed.output;
   const sanitizedTitlePass = sanitizeFeedbackText(title);

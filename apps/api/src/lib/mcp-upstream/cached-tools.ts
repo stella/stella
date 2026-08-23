@@ -1,14 +1,12 @@
 import type { CachedMcpToolDefinition } from "@/api/db/schema";
 import { LIMITS } from "@/api/lib/limits";
+import { isRecord } from "@/api/lib/type-guards";
 
 import { namespaceMcpToolName, shortToolNameHash } from "./namespace";
 
 type ToolAnnotationInput = {
   readOnlyHint?: unknown;
 };
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
 
 const stringValue = (value: unknown, maxLength: number): string | undefined =>
   typeof value === "string" ? value.slice(0, maxLength) : undefined;

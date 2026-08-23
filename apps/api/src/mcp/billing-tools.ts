@@ -713,11 +713,7 @@ const handleListTimeEntriesTool: TypedMcpToolHandler<
 
   const parsed = v.safeParse(listTimeEntriesArgsSchema, args);
   if (!parsed.success) {
-    return validationErrorResult({
-      issues: parsed.issues,
-      message:
-        "Invalid input: expected { matter_id?: string, time_entry_id?: string, entity_id?: string, user_id?: string, date_from?: YYYY-MM-DD, date_to?: YYYY-MM-DD, status?: string, limit?: integer, cursor?: string }",
-    });
+    return validationErrorResult(parsed.issues);
   }
   const input = parsed.output;
 
@@ -1011,11 +1007,7 @@ const handleSaveTimeEntryTool: TypedMcpToolHandler<
 > = async ({ args, context }) => {
   const parsed = v.safeParse(saveTimeEntryArgsSchema, args);
   if (!parsed.success) {
-    return validationErrorResult({
-      issues: parsed.issues,
-      message:
-        "Invalid input: expected { time_entry_id?, matter_id?, entity_id?, date_worked?, timezone_id?, duration_minutes?, narrative?, invoice_narrative?, billable?, no_charge?, task_code?, activity_code? }",
-    });
+    return validationErrorResult(parsed.issues);
   }
   const input = parsed.output;
 
@@ -1161,10 +1153,7 @@ const handleDeleteTimeEntryTool: TypedMcpToolHandler<
 
   const parsed = v.safeParse(deleteTimeEntryArgsSchema, args);
   if (!parsed.success) {
-    return validationErrorResult({
-      issues: parsed.issues,
-      message: "Invalid input: expected { time_entry_id: string }",
-    });
+    return validationErrorResult(parsed.issues);
   }
 
   const timeEntryId = brandPersistedTimeEntryId(parsed.output.time_entry_id);
@@ -1212,11 +1201,7 @@ const handleResolveRateTool: McpToolHandler = async ({ args, context }) => {
 
   const parsed = v.safeParse(resolveRateArgsSchema, args);
   if (!parsed.success) {
-    return validationErrorResult({
-      issues: parsed.issues,
-      message:
-        "Invalid input: expected { matter_id: string, user_id: string, date: YYYY-MM-DD }",
-    });
+    return validationErrorResult(parsed.issues);
   }
 
   const workspaceId = ensureWorkspaceAccess({
@@ -1353,11 +1338,7 @@ const handleListInvoicesTool: TypedMcpToolHandler<
 
   const parsed = v.safeParse(listInvoicesArgsSchema, args);
   if (!parsed.success) {
-    return validationErrorResult({
-      issues: parsed.issues,
-      message:
-        "Invalid input: expected { matter_id?: string, invoice_id?: string, limit?: integer, cursor?: string }",
-    });
+    return validationErrorResult(parsed.issues);
   }
   const input = parsed.output;
 
@@ -1535,10 +1516,7 @@ const handleGetUsageTool: TypedMcpToolHandler<
 
   const parsed = v.safeParse(getUsageArgsSchema, args);
   if (!parsed.success) {
-    return validationErrorResult({
-      issues: parsed.issues,
-      message: "Invalid input: expected no parameters",
-    });
+    return validationErrorResult(parsed.issues);
   }
 
   const entitlement = await Result.gen(() =>

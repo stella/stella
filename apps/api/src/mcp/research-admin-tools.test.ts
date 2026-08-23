@@ -122,7 +122,7 @@ describe("list_audit_log", () => {
       context: createContext("owner"),
     });
 
-    expect(errorMessage(result)).toContain("Invalid input");
+    expect(errorText(result)).toContain('"code":"validation_error"');
   });
 });
 

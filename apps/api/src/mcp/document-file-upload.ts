@@ -12,6 +12,7 @@ import { captureError } from "@/api/lib/analytics/capture";
 import { fetchWithTimeout } from "@/api/lib/fetch";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
 import { safeOutboundFetchBytes } from "@/api/lib/safe-outbound-fetch";
+import { isRecord } from "@/api/lib/type-guards";
 import { CAPABILITY_TOOL_HANDLERS } from "@/api/mcp/capability-tools";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { isMcpEgressPlan } from "@/api/mcp/tool-types";
@@ -107,9 +108,6 @@ const invokeCapability = async ({
   }
   return { status: "ok", payload: response.payload };
 };
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
 
 type UploadReservation = {
   headers: Record<string, string>;

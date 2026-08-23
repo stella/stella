@@ -609,11 +609,7 @@ const handleSaveMatterTool: TypedMcpToolHandler<
 > = async ({ args, context }) => {
   const parsed = v.safeParse(saveMatterArgsSchema, args);
   if (!parsed.success) {
-    return validationErrorResult({
-      issues: parsed.issues,
-      message:
-        "Invalid input: expected { matter_id?: string, name?: string, client_id?: string, reference?: string, billing_reference?: string|null, status?: 'active'|'archived' }",
-    });
+    return validationErrorResult(parsed.issues);
   }
   const input = parsed.output;
 
@@ -774,10 +770,7 @@ const handleDeleteMatterTool: TypedMcpToolHandler<
 
   const parsed = v.safeParse(deleteMatterArgsSchema, args);
   if (!parsed.success) {
-    return validationErrorResult({
-      issues: parsed.issues,
-      message: "Invalid input: expected { matter_id: string }",
-    });
+    return validationErrorResult(parsed.issues);
   }
 
   // The HTTP delete route sits inside the active-only workspace group, so an
@@ -832,11 +825,7 @@ const handleListContactsTool: TypedMcpToolHandler<
 
   const parsed = v.safeParse(listContactsArgsSchema, args);
   if (!parsed.success) {
-    return validationErrorResult({
-      issues: parsed.issues,
-      message:
-        "Invalid input: expected { q?: string, type?: 'person'|'organization', cursor?: string, limit?: integer }",
-    });
+    return validationErrorResult(parsed.issues);
   }
 
   const listed = await listContactsPage({
@@ -930,11 +919,7 @@ const handleSaveContactTool: TypedMcpToolHandler<
 > = async ({ args, context }) => {
   const parsed = v.safeParse(saveContactArgsSchema, args);
   if (!parsed.success) {
-    return validationErrorResult({
-      issues: parsed.issues,
-      message:
-        "Invalid input: expected { contact_id?: string, type?: 'person'|'organization', display_name?: string, first_name?: string|null, last_name?: string|null, organization_name?: string|null, notes?: string|null }",
-    });
+    return validationErrorResult(parsed.issues);
   }
   const input = parsed.output;
 
@@ -1031,10 +1016,7 @@ const handleDeleteContactTool: TypedMcpToolHandler<
 
   const parsed = v.safeParse(deleteContactArgsSchema, args);
   if (!parsed.success) {
-    return validationErrorResult({
-      issues: parsed.issues,
-      message: "Invalid input: expected { contact_id: string }",
-    });
+    return validationErrorResult(parsed.issues);
   }
 
   const deleted = await Result.gen(() =>
@@ -1069,10 +1051,7 @@ const handleLookupBusinessRegistryTool: TypedMcpToolHandler<
 
   const parsed = v.safeParse(lookupBusinessRegistryArgsSchema, args);
   if (!parsed.success) {
-    return validationErrorResult({
-      issues: parsed.issues,
-      message: `Invalid input: expected { registry: one of ${BUSINESS_REGISTRY_SLUGS.join(", ")}, query: string }`,
-    });
+    return validationErrorResult(parsed.issues);
   }
 
   const result = await lookupBusinessRegistryShared({
@@ -1266,11 +1245,7 @@ const handleListTasksTool: TypedMcpToolHandler<
 
   const parsed = v.safeParse(listTasksArgsSchema, args);
   if (!parsed.success) {
-    return validationErrorResult({
-      issues: parsed.issues,
-      message:
-        "Invalid input: expected { matter_id?: string, task_id?: string, date_from?: YYYY-MM-DD, date_to?: YYYY-MM-DD, status?: string, limit?: integer, cursor?: string }",
-    });
+    return validationErrorResult(parsed.issues);
   }
   const input = parsed.output;
 
@@ -1731,11 +1706,7 @@ const handleSaveTaskTool: TypedMcpToolHandler<
 > = async ({ args, context }) => {
   const parsed = v.safeParse(saveTaskArgsSchema, args);
   if (!parsed.success) {
-    return validationErrorResult({
-      issues: parsed.issues,
-      message:
-        "Invalid input: expected { task_id?, matter_id?, name?, item_type?, status?, priority?, due_date?, workflow_reason?, add_assignee_user_id?, remove_assignee_user_id?, link_entity_id?, unlink_link_id? }",
-    });
+    return validationErrorResult(parsed.issues);
   }
   const input = parsed.output;
 
@@ -2008,11 +1979,7 @@ const handleLinkMatterContactTool: TypedMcpToolHandler<
 
   const parsed = v.safeParse(linkMatterContactArgsSchema, args);
   if (!parsed.success) {
-    return validationErrorResult({
-      issues: parsed.issues,
-      message:
-        "Invalid input: expected { matter_id: string, contact_id?: string, role?: string, workspace_contact_id?: string }",
-    });
+    return validationErrorResult(parsed.issues);
   }
   const input = parsed.output;
 
