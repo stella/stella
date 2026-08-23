@@ -1466,7 +1466,11 @@ export const runCaseLawIngest = async (
       await Promise.all([
         Bun.sleep(CORPUS_INDEX_INTERVAL_MS),
         census.step(),
-        countSeed.step(),
+        runWithHardDeadline(
+          "corpus-index-count-seed",
+          BACKFILL_HARD_DEADLINE_MS,
+          async () => await countSeed.step(),
+        ),
       ]);
       if (isDraining()) {
         return;

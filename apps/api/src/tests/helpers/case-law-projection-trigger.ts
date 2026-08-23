@@ -89,9 +89,7 @@ export const installCaseLawProjectionTrigger = async (
 
 /** The seed statement and triggers that maintain exact projection counts. */
 export const caseLawProjectionAccountingStatements = (): string[] =>
-  migrationStatements(latestMigrationContaining(ACCOUNTING_FUNCTION)).filter(
-    (statement) => ACCOUNTING_OBJECT.test(statement),
-  );
+  latestStatements(ACCOUNTING_FUNCTION, ACCOUNTING_OBJECT);
 
 /** Install exact projection accounting in a schema-built test database. */
 export const installCaseLawProjectionAccounting = async (
