@@ -38,6 +38,10 @@ CREATE POLICY "case_law_ingestion_access"
   ON "case_law_corpus_index_counts"
   AS PERMISSIVE FOR ALL TO stella_ingestion
   USING (true) WITH CHECK (true);--> statement-breakpoint
+CREATE POLICY "case_law_global_access"
+  ON "case_law_corpus_index_counts"
+  AS PERMISSIVE FOR SELECT TO stella
+  USING (true);--> statement-breakpoint
 GRANT SELECT ON TABLE "case_law_corpus_index_counts" TO stella;--> statement-breakpoint
 GRANT SELECT, INSERT, UPDATE, DELETE
   ON TABLE "case_law_corpus_index_counts" TO stella_ingestion;--> statement-breakpoint
@@ -60,6 +64,10 @@ CREATE POLICY "case_law_ingestion_access"
   ON "case_law_corpus_index_count_backfills"
   AS PERMISSIVE FOR ALL TO stella_ingestion
   USING (true) WITH CHECK (true);--> statement-breakpoint
+CREATE POLICY "case_law_global_access"
+  ON "case_law_corpus_index_count_backfills"
+  AS PERMISSIVE FOR SELECT TO stella
+  USING (true);--> statement-breakpoint
 GRANT SELECT ON TABLE "case_law_corpus_index_count_backfills" TO stella;--> statement-breakpoint
 GRANT SELECT, INSERT, UPDATE, DELETE
   ON TABLE "case_law_corpus_index_count_backfills" TO stella_ingestion;--> statement-breakpoint
@@ -249,7 +257,8 @@ AS $function$
 BEGIN
   INSERT INTO case_law_corpus_index_count_backfills (generation, status)
   VALUES (NEW.generation, 'complete')
-  ON CONFLICT (generation) DO NOTHING;
+  ON CONFLICT ON CONSTRAINT case_law_corpus_index_count_backfills_pkey
+  DO NOTHING;
   RETURN NEW;
 END
 $function$;--> statement-breakpoint
