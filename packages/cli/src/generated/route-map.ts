@@ -2076,7 +2076,8 @@ export const generatedRouteMap: RouteNode = {
                             type: "object",
                             properties: {
                               kind: {
-                                const: "contact",
+                                enum: ["contact"],
+                                type: "string",
                               },
                               field: {
                                 enum: [
@@ -2107,7 +2108,8 @@ export const generatedRouteMap: RouteNode = {
                             type: "object",
                             properties: {
                               kind: {
-                                const: "party",
+                                enum: ["party"],
+                                type: "string",
                               },
                               role: {
                                 enum: [
@@ -2152,7 +2154,8 @@ export const generatedRouteMap: RouteNode = {
                             type: "object",
                             properties: {
                               kind: {
-                                const: "matter",
+                                enum: ["matter"],
+                                type: "string",
                               },
                               field: {
                                 enum: [
@@ -2171,7 +2174,8 @@ export const generatedRouteMap: RouteNode = {
                             type: "object",
                             properties: {
                               kind: {
-                                const: "attorney",
+                                enum: ["attorney"],
+                                type: "string",
                               },
                               ref: {
                                 enum: ["responsible", "originating", "lead"],
@@ -2189,7 +2193,8 @@ export const generatedRouteMap: RouteNode = {
                             type: "object",
                             properties: {
                               kind: {
-                                const: "firm",
+                                enum: ["firm"],
+                                type: "string",
                               },
                               field: {
                                 enum: ["name"],

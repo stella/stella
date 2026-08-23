@@ -960,7 +960,8 @@
                     "type": "object",
                     "properties": {
                       "kind": {
-                        "const": "contact"
+                        "enum": ["contact"],
+                        "type": "string"
                       },
                       "field": {
                         "enum": [
@@ -991,7 +992,8 @@
                     "type": "object",
                     "properties": {
                       "kind": {
-                        "const": "party"
+                        "enum": ["party"],
+                        "type": "string"
                       },
                       "role": {
                         "enum": [
@@ -1036,7 +1038,8 @@
                     "type": "object",
                     "properties": {
                       "kind": {
-                        "const": "matter"
+                        "enum": ["matter"],
+                        "type": "string"
                       },
                       "field": {
                         "enum": [
@@ -1055,7 +1058,8 @@
                     "type": "object",
                     "properties": {
                       "kind": {
-                        "const": "attorney"
+                        "enum": ["attorney"],
+                        "type": "string"
                       },
                       "ref": {
                         "enum": ["responsible", "originating", "lead"],
@@ -1073,7 +1077,8 @@
                     "type": "object",
                     "properties": {
                       "kind": {
-                        "const": "firm"
+                        "enum": ["firm"],
+                        "type": "string"
                       },
                       "field": {
                         "enum": ["name"],
