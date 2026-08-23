@@ -311,3 +311,73 @@ test("ingest succeeds when every document is accepted", async () => {
 
   expect(result.isOk()).toBe(true);
 });
+
+// Bun rejects a request whose timeout fires with the abort reason alone —
+// a DOMException reading "The operation timed out." and nothing else. On
+// the backfill path that reaches the log as the whole story, so the client
+// has to say which request expired and how long it had.
+const rejectFetchWith = (reason: unknown): void => {
+  const stub = async (): Promise<Response> => {
+    throw reason;
+  };
+  globalThis.fetch = Object.assign(stub, {
+    preconnect: originalFetch.preconnect,
+  });
+};
+
+test("ingest names the request and its budget when the transport fails", async () => {
+  rejectFetchWith(new DOMException("The operation timed out.", "TimeoutError"));
+
+  const result = await getCorpusIndexClient().ingestBatch(
+    "legal_corpus_v1_cze",
+    '{"document_id":"a"}',
+    CORPUS_INDEX_COMMIT.waitFor,
+  );
+
+  expect(result.isErr()).toBe(true);
+  if (result.isErr()) {
+    expect(result.error.message).toBe(
+      `corpus index POST /api/v1/legal_corpus_v1_cze/ingest?commit=${CORPUS_INDEX_COMMIT.waitFor} failed within its ${CORPUS_INDEX_INGEST_TIMEOUT_MS}ms budget: TimeoutError: The operation timed out.`,
+    );
+  }
+});
+
+test("each request reports its own budget, not a shared one", async () => {
+  rejectFetchWith(new DOMException("The operation timed out.", "TimeoutError"));
+
+  const result = await getCorpusIndexClient().search({
+    indexId: "legal_corpus_v1_cze",
+    query: "text:smlouva",
+    maxHits: 10,
+  });
+
+  expect(result.isErr()).toBe(true);
+  if (result.isErr()) {
+    // The search budget differs from the ingest budget above, so a message
+    // that hardcoded one of them could not satisfy both tests.
+    expect(result.error.message).toBe(
+      "corpus index POST /api/v1/legal_corpus_v1_cze/search failed within its 30000ms budget: TimeoutError: The operation timed out.",
+    );
+  }
+});
+
+test("an unreadable success body names the request too", async () => {
+  const stub = async (): Promise<Response> =>
+    new Response("not json", { status: 200 });
+  globalThis.fetch = Object.assign(stub, {
+    preconnect: originalFetch.preconnect,
+  });
+
+  const result = await getCorpusIndexClient().search({
+    indexId: "legal_corpus_v1_cze",
+    query: "text:smlouva",
+    maxHits: 10,
+  });
+
+  expect(result.isErr()).toBe(true);
+  if (result.isErr()) {
+    expect(result.error.message).toContain(
+      "corpus index POST /api/v1/legal_corpus_v1_cze/search returned an unreadable body:",
+    );
+  }
+});

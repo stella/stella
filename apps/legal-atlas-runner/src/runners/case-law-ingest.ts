@@ -119,6 +119,7 @@ import {
   stepCadence,
   stepStallAlert,
 } from "./cycle-progress";
+import { formatLogDetail } from "./log-detail";
 import {
   RECOMPUTE_OUTCOME,
   type RecomputeOutcome,
@@ -132,31 +133,6 @@ import {
   SOURCE_TOTAL_POLL_TIMING,
   runSourceTotalPoll,
 } from "./source-total-poll";
-
-const formatLogDetail = (detail: unknown): string => {
-  if (detail === undefined) {
-    return "";
-  }
-
-  if (detail instanceof Error) {
-    const base = detail.stack ?? detail.message;
-    // Wrapped driver errors (e.g. DrizzleQueryError) carry the actual
-    // failure in `cause`; without it the log shows only the query text.
-    return detail.cause instanceof Error
-      ? `${base}\n[cause] ${detail.cause.stack ?? detail.cause.message}`
-      : base;
-  }
-
-  if (typeof detail === "string") {
-    return detail;
-  }
-
-  try {
-    return JSON.stringify(detail);
-  } catch {
-    return "[unserializable log detail]";
-  }
-};
 
 const logInfo = (message: string): void => {
   void Bun.write(Bun.stdout, `${message}\n`);
