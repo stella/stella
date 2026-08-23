@@ -19,12 +19,14 @@ import { TEMPLATE_TOOL_HANDLERS } from "@/api/mcp/template-tools";
 import type {
   AllHandlerOutputsTyped,
   AssertTrue,
+  HandlerOutputsMatchByName,
   McpToolHandler,
   TypedHandlerDataByName,
 } from "@/api/mcp/tool-types";
 
 import type {
   ChatProjectableToolName,
+  ProjectionDataByName,
   RegistryWriteToolName,
 } from "./ref-field-map";
 import { WRITE_TOOL_REF_FIELD_MAP } from "./ref-field-map";
@@ -87,12 +89,23 @@ export type RegistryWriteToolDataByName = TypedHandlerDataByName<
   ProjectableRegistryWriteToolName
 >;
 
+type RegistryWriteProjectionDataByName = ProjectionDataByName<
+  typeof WRITE_TOOL_REF_FIELD_MAP,
+  ProjectableRegistryWriteToolName
+>;
+
 /** Compile-time guard: every chat-projected handler declares typed output. */
 export type RegistryWriteToolOutputContract = AssertTrue<
   AllHandlerOutputsTyped<
     typeof REGISTRY_WRITE_TOOL_HANDLERS,
     ProjectableRegistryWriteToolName
-  >
+  > extends true
+    ? HandlerOutputsMatchByName<
+        typeof REGISTRY_WRITE_TOOL_HANDLERS,
+        RegistryWriteProjectionDataByName,
+        ProjectableRegistryWriteToolName
+      >
+    : false
 >;
 
 export type RunRegistryWriteToolProps = {

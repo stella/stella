@@ -18,9 +18,6 @@ import type {
 } from "@stll/legal-ast/analysis";
 import {
   analysisHeadingInputSchema,
-  isAnalysisInProgress,
-  isAnalysisGenerating,
-  isDecisionAnalysis,
   parsePersistedDecisionAnalysis,
 } from "@stll/legal-ast/analysis";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
@@ -249,16 +246,16 @@ export const generateAnalysis = async (
   const analysis = parsePersistedDecisionAnalysis(decision.analysis);
 
   // Return cached analysis (complete or partial with progress)
-  if (isAnalysisInProgress(analysis)) {
+  if (analysis !== null && "status" in analysis && "tree" in analysis) {
     return Result.ok({ status: "generating", analysis });
   }
 
-  if (isDecisionAnalysis(analysis)) {
+  if (analysis !== null && !("status" in analysis)) {
     return Result.ok({ status: "done", analysis });
   }
 
   // Concurrent generation guard for the lightweight sentinel without a tree.
-  if (isAnalysisGenerating(analysis)) {
+  if (analysis !== null) {
     const startedAt = new Date(analysis.startedAt).getTime();
     if (Date.now() - startedAt < SENTINEL_STALE_MS) {
       return Result.ok({ status: "generating" });

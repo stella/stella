@@ -402,13 +402,63 @@ export type TypedHandlerDataByName<
   [TName in TNames]: TypedHandlerData<THandlers[TName]>;
 };
 
-export type AllHandlerOutputsTyped<THandlers, TNames extends keyof THandlers> =
-  Pick<THandlers, TNames> extends Record<
-    TNames,
-    TypedMcpToolHandler<Record<string, unknown>>
-  >
+type IsAny<TValue> = 0 extends 1 & TValue ? true : false;
+
+type IsNever<TValue> = [TValue] extends [never] ? true : false;
+
+type IsUnknown<TValue> = IsAny<TValue> extends true
+  ? false
+  : unknown extends TValue
     ? true
     : false;
+
+type IsBroadRecord<TValue> = string extends keyof TValue ? true : false;
+
+type HandlerOutputIsTyped<
+  THandler,
+  TData = TypedHandlerData<THandler>,
+> = IsNever<TData> extends true
+  ? false
+  : IsAny<TData> extends true
+    ? false
+    : IsUnknown<TData> extends true
+      ? false
+      : IsBroadRecord<TData> extends true
+        ? false
+        : TData extends Record<string, unknown>
+          ? true
+          : false;
+
+type HandlerOutputMatches<THandler, TExpected> =
+  HandlerOutputIsTyped<THandler> extends true
+    ? [TypedHandlerData<THandler>] extends [TExpected]
+      ? [TExpected] extends [TypedHandlerData<THandler>]
+        ? true
+        : false
+      : false
+    : false;
+
+export type AllHandlerOutputsTyped<
+  THandlers,
+  TNames extends keyof THandlers,
+> = false extends {
+  [TName in TNames]: HandlerOutputIsTyped<THandlers[TName]>;
+}[TNames]
+  ? false
+  : true;
+
+export type HandlerOutputsMatchByName<
+  THandlers,
+  TExpectedByName,
+  TNames extends keyof THandlers & keyof TExpectedByName,
+> = false extends {
+  [TName in TNames]: HandlerOutputMatches<
+    THandlers[TName],
+    TExpectedByName[TName]
+  >;
+}[TNames]
+  ? false
+  : true;
 
 export type AssertTrue<TValue extends true> = TValue;
 

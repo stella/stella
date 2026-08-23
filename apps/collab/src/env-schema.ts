@@ -6,7 +6,7 @@ export const envCollabServerSchema = {
     v.pipe(
       v.string(),
       v.digits(),
-      v.transform(Number),
+      v.toNumber(),
       v.integer(),
       v.minValue(1),
       v.maxValue(65_535),

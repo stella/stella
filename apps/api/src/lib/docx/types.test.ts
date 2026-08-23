@@ -44,6 +44,16 @@ describe("isFieldMeta", () => {
     expect(isFieldMeta(compositeField)).toBe(true);
   });
 
+  test("rejects unknown metadata keys at every owned object boundary", () => {
+    expect(isFieldMeta({ path: "client.name", lable: "Client" })).toBe(false);
+    expect(
+      isFieldMeta({
+        ...compositeField,
+        parts: [{ key: "name", inputType: "text", lable: "Name" }],
+      }),
+    ).toBe(false);
+  });
+
   test("rejects parts without format (and vice versa)", () => {
     const { format: _format, ...partsOnly } = compositeField;
     expect(isFieldMeta(partsOnly)).toBe(false);

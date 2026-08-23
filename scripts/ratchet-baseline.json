@@ -11,6 +11,12 @@
     "count": 0,
     "files": {}
   },
+  "legacy-manual-mcp-input-schemas": {
+    "count": 44,
+    "files": {
+      "apps/api/src/mcp/static-tool-definitions.ts": 44
+    }
+  },
   "nullish-array-fallback": {
     "count": 7,
     "files": {

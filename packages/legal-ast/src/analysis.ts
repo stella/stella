@@ -88,55 +88,57 @@ export const analysisHeadingSchema: v.GenericSchema<AnalysisHeading> = v.object(
 );
 
 export const decisionAnalysisSchema: v.GenericSchema<DecisionAnalysis> =
-  v.object({
+  v.strictObject({
     version: v.literal(1),
     generatedAt: v.string(),
     model: v.string(),
     tree: v.array(analysisHeadingSchema),
   });
 
-const analysisInProgressSchema: v.GenericSchema<AnalysisInProgress> = v.object({
-  version: v.literal(1),
-  generatedAt: v.string(),
-  model: v.string(),
-  tree: v.array(analysisHeadingSchema),
-  status: v.literal("generating"),
-});
+const analysisInProgressSchema: v.GenericSchema<AnalysisInProgress> =
+  v.strictObject({
+    version: v.literal(1),
+    generatedAt: v.string(),
+    model: v.string(),
+    tree: v.array(analysisHeadingSchema),
+    status: v.literal("generating"),
+  });
 
-const analysisGeneratingSchema: v.GenericSchema<AnalysisGenerating> = v.object({
-  version: v.literal(1),
-  status: v.literal("generating"),
-  startedAt: v.string(),
-});
+const analysisGeneratingSchema: v.GenericSchema<AnalysisGenerating> =
+  v.strictObject({
+    version: v.literal(1),
+    status: v.literal("generating"),
+    startedAt: v.string(),
+  });
+
+const persistedDecisionAnalysisSchema: v.GenericSchema<PersistedDecisionAnalysis> =
+  v.union([
+    analysisInProgressSchema,
+    analysisGeneratingSchema,
+    decisionAnalysisSchema,
+  ]);
 
 export const isAnalysisGenerating = (val: unknown): val is AnalysisGenerating =>
-  v.safeParse(analysisGeneratingSchema, val).success;
+  v.is(analysisGeneratingSchema, val);
 
 export const isDecisionAnalysis = (val: unknown): val is DecisionAnalysis =>
-  v.safeParse(decisionAnalysisSchema, val).success &&
-  !(typeof val === "object" && val !== null && Object.hasOwn(val, "status"));
+  v.is(decisionAnalysisSchema, val);
 
 export const isAnalysisInProgress = (val: unknown): val is AnalysisInProgress =>
-  v.safeParse(analysisInProgressSchema, val).success;
+  v.is(analysisInProgressSchema, val);
 
 export const parsePersistedDecisionAnalysis = (
   val: unknown,
 ): PersistedDecisionAnalysis | null => {
-  if (
-    isAnalysisInProgress(val) ||
-    isDecisionAnalysis(val) ||
-    isAnalysisGenerating(val)
-  ) {
-    return val;
+  let candidate = val;
+  if (typeof candidate === "string") {
+    try {
+      candidate = JSON.parse(candidate);
+    } catch {
+      return null;
+    }
   }
 
-  if (typeof val !== "string") {
-    return null;
-  }
-
-  try {
-    return parsePersistedDecisionAnalysis(JSON.parse(val));
-  } catch {
-    return null;
-  }
+  const result = v.safeParse(persistedDecisionAnalysisSchema, candidate);
+  return result.success ? result.output : null;
 };

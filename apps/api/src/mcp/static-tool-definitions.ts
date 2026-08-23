@@ -69,6 +69,87 @@ true satisfies [MissingMcpToolName, ExtraMcpToolName] extends [never, never]
   ? true
   : never;
 
+type ValibotInputToolName = Extract<
+  (typeof DEFAULT_MCP_TOOL_DEFINITIONS)[number],
+  { inputSchemaSource: object }
+>["name"];
+type LegacyManualInputToolName = Exclude<
+  RegisteredMcpToolName,
+  ValibotInputToolName
+>;
+
+/**
+ * Ratchet for native tools whose advertised JSON Schema still mirrors a
+ * separate runtime validator. New tools must use defineValibotMcpTool; each
+ * migration removes a name here. The bidirectional check prevents this debt
+ * list from drifting away from the executable registry; the shared
+ * `legacy-manual-mcp-input-schemas` decrease-only metric prevents it growing.
+ */
+const MCP_LEGACY_MANUAL_INPUT_SCHEMA_TOOL_NAMES = [
+  "search",
+  "fetch",
+  "list_matters",
+  "search_across_matters",
+  "search_case_law",
+  "read_content_across_matters",
+  "read_case_law_decision",
+  "read_contact",
+  "set_practice_jurisdictions",
+  "list_templates",
+  "fill_template",
+  "save_filled_template",
+  "list_documents",
+  "read_document",
+  "save_document",
+  "delete_document",
+  "list_properties",
+  "set_field_value",
+  "save_matter",
+  "delete_matter",
+  "list_contacts",
+  "save_contact",
+  "delete_contact",
+  "lookup_business_registry",
+  "list_tasks",
+  "save_task",
+  "link_matter_contact",
+  "list_clauses",
+  "save_clause",
+  "delete_clause",
+  "list_playbooks",
+  "run_playbook",
+  "list_time_entries",
+  "save_time_entry",
+  "delete_time_entry",
+  "resolve_rate",
+  "list_invoices",
+  "get_usage",
+  "search_legislation",
+  "manage_organization",
+  "send_feedback",
+  "list_capabilities",
+  "describe_capability",
+  "invoke_capability",
+] as const satisfies readonly LegacyManualInputToolName[];
+
+type DeclaredLegacyManualInputToolName =
+  (typeof MCP_LEGACY_MANUAL_INPUT_SCHEMA_TOOL_NAMES)[number];
+type MissingLegacyManualInputToolName = Exclude<
+  LegacyManualInputToolName,
+  DeclaredLegacyManualInputToolName
+>;
+type MigratedInputToolStillDeclaredLegacy = Exclude<
+  DeclaredLegacyManualInputToolName,
+  LegacyManualInputToolName
+>;
+
+true satisfies [
+  MissingLegacyManualInputToolName,
+  MigratedInputToolStillDeclaredLegacy,
+] extends [never, never]
+  ? true
+  : never;
+
 /**
  * The closed set of curated static MCP tool names, derived from the single
  * default registry. Source of truth for the `McpToolName` type

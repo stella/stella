@@ -1116,6 +1116,78 @@ const countWorkspaceOnlyRlsOnOrgTables = (content: string): number => {
   return count;
 };
 
+const LEGACY_MANUAL_MCP_INPUT_SCHEMA_ALLOWLIST =
+  "MCP_LEGACY_MANUAL_INPUT_SCHEMA_TOOL_NAMES";
+
+const unwrapExpression = (expression: ts.Expression): ts.Expression => {
+  let current = expression;
+  while (
+    ts.isAsExpression(current) ||
+    ts.isSatisfiesExpression(current) ||
+    ts.isParenthesizedExpression(current)
+  ) {
+    current = current.expression;
+  }
+  return current;
+};
+
+/**
+ * Entries in the explicit legacy native-MCP input-schema inventory. Each entry
+ * is a tool whose hand-authored JSON Schema still mirrors a separate runtime
+ * validator; the count may only shrink as tools move to Valibot-derived wire
+ * schemas. Parse the exact declaration so comments and unrelated arrays cannot
+ * buy or consume this debt budget.
+ */
+const countLegacyManualMcpInputSchemas = (
+  content: string,
+  file: string,
+): number => {
+  const sourceFile = ts.createSourceFile(
+    file,
+    content,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
+
+  for (const statement of sourceFile.statements) {
+    if (!ts.isVariableStatement(statement)) {
+      continue;
+    }
+    for (const declaration of statement.declarationList.declarations) {
+      if (
+        !ts.isIdentifier(declaration.name) ||
+        declaration.name.text !== LEGACY_MANUAL_MCP_INPUT_SCHEMA_ALLOWLIST
+      ) {
+        continue;
+      }
+      if (declaration.initializer === undefined) {
+        return panic(
+          `${LEGACY_MANUAL_MCP_INPUT_SCHEMA_ALLOWLIST} must have an array initializer`,
+        );
+      }
+      const initializer = unwrapExpression(declaration.initializer);
+      if (!ts.isArrayLiteralExpression(initializer)) {
+        return panic(
+          `${LEGACY_MANUAL_MCP_INPUT_SCHEMA_ALLOWLIST} must be an array literal`,
+        );
+      }
+      for (const element of initializer.elements) {
+        if (!ts.isStringLiteralLike(element)) {
+          return panic(
+            `${LEGACY_MANUAL_MCP_INPUT_SCHEMA_ALLOWLIST} must contain only string literals`,
+          );
+        }
+      }
+      return initializer.elements.length;
+    }
+  }
+
+  return panic(
+    `${LEGACY_MANUAL_MCP_INPUT_SCHEMA_ALLOWLIST} is missing from ${file}`,
+  );
+};
+
 type FileCounter = (content: string, file: string) => number;
 
 type RatchetMetric = {
@@ -1174,6 +1246,14 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
     include: ["apps/api/src/**/*.{ts,tsx}"],
     exclude: isExcludedSource,
     count: countLegacyRealtimeInvalidationProducers,
+  },
+  {
+    id: "legacy-manual-mcp-input-schemas",
+    description:
+      "tools in MCP_LEGACY_MANUAL_INPUT_SCHEMA_TOOL_NAMES whose hand-authored JSON Schema mirrors a separate runtime validator; each Valibot source-of-truth conversion removes one entry",
+    include: ["apps/api/src/mcp/static-tool-definitions.ts"],
+    exclude: () => false,
+    count: countLegacyManualMcpInputSchemas,
   },
   {
     id: "nullish-array-fallback",
@@ -1900,6 +1980,18 @@ const LEGACY_REALTIME_INVALIDATION_FIXTURE_LINES = [
 const SELF_TEST_LEGACY_REALTIME_INVALIDATIONS = `${LEGACY_REALTIME_INVALIDATION_FIXTURE_LINES.join("\n")}\n`;
 const EXPECTED_LEGACY_REALTIME_INVALIDATIONS = 7;
 
+const LEGACY_MANUAL_MCP_INPUT_SCHEMA_FIXTURE_LINES = [
+  "const MCP_LEGACY_MANUAL_INPUT_SCHEMA_TOOL_NAMES = [",
+  '  "search",',
+  '  "fetch",',
+  '  "list_matters",',
+  "] as const satisfies readonly LegacyManualInputToolName[];",
+  'const unrelated = ["save_template"];',
+  '// "commented_tool",',
+];
+const SELF_TEST_LEGACY_MANUAL_MCP_INPUT_SCHEMAS = `${LEGACY_MANUAL_MCP_INPUT_SCHEMA_FIXTURE_LINES.join("\n")}\n`;
+const EXPECTED_LEGACY_MANUAL_MCP_INPUT_SCHEMAS = 3;
+
 const ENTITY_GLYPH_FIXTURE_LINES = [
   'import { FolderIcon, FolderOpenIcon, ListTodoIcon } from "lucide-react";',
   "const shut = <FolderIcon />;",
@@ -2480,6 +2572,11 @@ const runSelfTest = (): number => {
     );
     writeFixture(
       root,
+      "apps/api/src/mcp/static-tool-definitions.ts",
+      SELF_TEST_LEGACY_MANUAL_MCP_INPUT_SCHEMAS,
+    );
+    writeFixture(
+      root,
       "apps/web/src/entity-glyphs.tsx",
       SELF_TEST_ENTITY_GLYPHS,
     );
@@ -2651,6 +2748,19 @@ const runSelfTest = (): number => {
     if (legacyRealtimeMetric.count !== EXPECTED_LEGACY_REALTIME_INVALIDATIONS) {
       failures.push(
         `legacy-realtime-invalidation-producers counted ${legacyRealtimeMetric.count}, expected ${EXPECTED_LEGACY_REALTIME_INVALIDATIONS}`,
+      );
+    }
+
+    const legacyManualMcpInputSchemaMetric = requireSnapshot(
+      snapshot,
+      "legacy-manual-mcp-input-schemas",
+    );
+    if (
+      legacyManualMcpInputSchemaMetric.count !==
+      EXPECTED_LEGACY_MANUAL_MCP_INPUT_SCHEMAS
+    ) {
+      failures.push(
+        `legacy-manual-mcp-input-schemas counted ${legacyManualMcpInputSchemaMetric.count}, expected ${EXPECTED_LEGACY_MANUAL_MCP_INPUT_SCHEMAS}`,
       );
     }
 

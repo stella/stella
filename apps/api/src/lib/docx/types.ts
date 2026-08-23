@@ -2,6 +2,7 @@
 
 import * as v from "valibot";
 
+import { BUSINESS_REGISTRY_SLUGS } from "@stll/api-contract";
 import type { ExtractedDocxParagraph } from "@stll/folio-core/server";
 import {
   type BlockDirectiveKind,
@@ -13,10 +14,9 @@ import {
   isFieldPath,
 } from "@stll/template-conditions";
 
-import { BUSINESS_REGISTRY_SLUGS } from "@/api/lib/business-registries/dispatch";
 import {
+  fieldSourceSchema,
   type FieldSource,
-  isFieldSource,
 } from "@/api/lib/template-binding/binding-sources";
 
 export type { FieldSource } from "@/api/lib/template-binding/binding-sources";
@@ -207,17 +207,8 @@ export type InputType = (typeof INPUT_TYPES)[number];
 
 export type PartInputType = "text" | "select";
 
-/** One part of a composite field's value (see {@link FieldMeta.parts}). */
-export type FieldPart = {
-  /** Part key referenced by the field's format; same charset as field paths. */
-  key: string;
-  label?: string | undefined;
-  inputType: PartInputType;
-  /** Allowed values when {@link inputType} is "select". */
-  options?: string[] | undefined;
-  /** Regex matched against the whole part value at fill time. */
-  pattern?: string | undefined;
-};
+/** Canonical parsed part of a composite field value. */
+export type FieldPart = v.InferOutput<typeof fieldPartSchema>;
 
 /** Registries a lookup field can resolve against. Single-sourced from the
  *  dispatch table's slug set, so every registry the fill boundary can resolve
@@ -239,16 +230,7 @@ export type LookupRegistry = (typeof LOOKUP_REGISTRIES)[number];
  * default, addressed by the bare marker `{{path}}`; every later format is
  * addressed by a dotted marker `{{path.key}}` in the document.
  */
-export type FieldLookupFormat = {
-  /** Marker segment after the field path: `{{company.<key>}}` (the first
-   *  format is the default and is addressed by the bare `{{company}}`).
-   *  Validated like a single field-path segment (letters, digits, underscore,
-   *  dash; no dots). */
-  key: string;
-  /** [token]-substituted template rendered against the hit (supports
-   *  `**bold**` / `*italic*`). */
-  template: string;
-};
+export type FieldLookupFormat = v.InferOutput<typeof fieldLookupFormatSchema>;
 
 /** Upper bound on named formats per lookup field; keeps the manifest small and
  *  the per-fill render work bounded. */
@@ -264,144 +246,18 @@ const LOOKUP_FORMAT_KEY_RE = /^[\p{L}\p{N}_-]+$/u;
 export const isLookupFormatKey = (value: string): boolean =>
   LOOKUP_FORMAT_KEY_RE.test(value);
 
-export type FieldLookup = {
-  registry: LookupRegistry;
-  /**
-   * Named renderings of the registry hit. The registry is resolved once per
-   * fill; every format renders that one hit through its own [token] template
-   * (e.g. "[company name], with its seat in [seat], KRS [registry number]").
-   * Always non-empty: the FIRST format is the default for the bare `{{path}}`
-   * marker; every later format is addressed by a dotted marker `{{path.key}}`.
-   */
-  formats: FieldLookupFormat[];
-};
+export type FieldLookup = v.InferOutput<typeof fieldLookupSchema>;
 
 export const isFieldLookupFormat = (
   value: unknown,
 ): value is FieldLookupFormat =>
-  isRecordLike(value) &&
-  typeof value["key"] === "string" &&
-  isLookupFormatKey(value["key"]) &&
-  typeof value["template"] === "string" &&
-  value["template"].length <= LOOKUP_FORMAT_TEMPLATE_MAX_LENGTH;
+  v.is(fieldLookupFormatSchema, value);
 
-export type FieldValidation = {
-  required?: boolean;
-  minLength?: number;
-  maxLength?: number;
-  min?: number;
-  max?: number;
-  pattern?: string;
-  /** Minimum repeats for an `{{#each}}` loop; lives on the FieldMeta whose
-   *  path equals the loop's array (container) path. */
-  minItems?: number;
-  /** Maximum repeats for an `{{#each}}` loop; lives on the loop-container
-   *  FieldMeta alongside {@link minItems}. */
-  maxItems?: number;
-};
+export type FieldValidation = v.InferOutput<typeof fieldValidationSchema>;
 
-export type FieldMeta = {
-  path: string;
-  label?: string | undefined;
-  /**
-   * Short guidance for the person filling the field (expected format, where
-   * to find the value, …). Shown as the input's placeholder in the fill form
-   * and included in AI prompts so prefill maps source text to the right
-   * field. Kept short (~200 chars, enforced by the config UI).
-   */
-  hint?: string | undefined;
-  inputType?: InputType | undefined;
-  options?: string[] | undefined;
-  validation?: FieldValidation | undefined;
-  required?: boolean | undefined;
-  /**
-   * When set, the field's value is drafted by AI at fill time from this
-   * instruction (e.g. "Draft the scope of this power of attorney"), unless the
-   * user supplies a value. The model provider is injected at the fill boundary;
-   * with no provider the field is simply left unfilled.
-   */
-  aiPrompt?: string | undefined;
-  /**
-   * When true, the user-entered value is a stub that AI rewrites at fill time
-   * to fit the surrounding text of each marker occurrence (declension and
-   * phrasing differ per sentence in inflected languages). With no model
-   * provider, or on any model failure, the stub fills every occurrence as-is.
-   */
-  aiAdapt?: boolean | undefined;
-  /**
-   * Per-field opt-in for AI-drafted fields ({@link aiPrompt}): when true, the
-   * rendered document text is injected into the generator prompt so the draft
-   * can reference the surrounding contract. Default falsy keeps the token cost
-   * bounded — only opted-in fields pay for the document context.
-   */
-  aiSeesDocument?: boolean | undefined;
-  /**
-   * Composite field: the value is entered as several parts (e.g. a select for
-   * a professional title plus a free-text name) that are validated and joined
-   * by {@link format} into the single string the document's one {{marker}} is
-   * filled with. Present iff `format` is present; a field with parts ignores
-   * its own inputType for input rendering.
-   */
-  parts?: FieldPart[] | undefined;
-  /** Join template over part keys, `{{key}}` syntax (e.g. "{{position}} {{name}}").
-   *  Present iff `parts` is present. */
-  format?: string | undefined;
-  /**
-   * Dependent select: path of another field whose submitted value(s) supply
-   * this field's allowed options at fill time (e.g. the user first enters a
-   * list of parties, and this field must be one of them). Static {@link
-   * options} act as a fallback while the source field is empty.
-   */
-  optionsFrom?: string | undefined;
-  /**
-   * Registry lookup field: the submitted value is a registry number (e.g. a
-   * KRS number) that is resolved against the configured business registry at
-   * fill time and replaced with the rendered company details.
-   */
-  lookup?: FieldLookup | undefined;
-  /**
-   * Contact-sourced field: the value is resolved from a contact record (the
-   * matter's client) at fill time, not user-entered. A derived value source,
-   * mutually exclusive with the others ({@link formula}, {@link aiPrompt},
-   * {@link aiAdapt}, {@link lookup}, {@link parts}, {@link condition}).
-   */
-  source?: FieldSource | undefined;
-  /**
-   * Formula field: the value is derived from other fields via an arithmetic
-   * expression (evaluated by `evaluateNumericExpression`) at fill time, e.g.
-   * `min(rent * (1 + index / 100), rent * 1.05)`. Derived, never
-   * user-submitted; mutually exclusive with the other value sources
-   * ({@link aiPrompt}, {@link aiAdapt}, {@link lookup}, {@link parts}).
-   */
-  formula?: string | undefined;
-  /**
-   * Boolean rule condition: a yes/no value derived from a rule expression in
-   * the @stll/template-conditions grammar (e.g. `client_type == "company"`,
-   * `signing_date >= "2026-06-10" and amount > 1000`), evaluated at fill time.
-   * Meaningful only on a boolean field; markers reference it by field path
-   * (`{{#if field_path}}`). A derived value source, so it is mutually exclusive
-   * with the others ({@link formula}, {@link aiPrompt}, {@link aiAdapt},
-   * {@link lookup}, {@link parts}); a plain boolean field (no condition, no
-   * aiPrompt) is asked as a yes/no question in the fill form instead.
-   */
-  condition?: string | undefined;
-  /**
-   * The canonical condition AST, set instead of {@link condition} when the rule
-   * uses a `formula` operand (e.g. `rent * 12 < 100000`) that the `{{#if}}`
-   * expression grammar cannot represent. Authoritative when present; the
-   * string {@link condition} is used otherwise. Same mutual-exclusivity and
-   * boolean-field constraints as {@link condition}.
-   */
-  conditionAst?: ConditionNode | undefined;
-  /**
-   * Locale-aware rendering for a "date" {@link inputType} field: the
-   * submitted ISO date (the date input's value) is formatted in this locale
-   * and style before substitution — and before any AI step, so a field that
-   * also sets {@link aiAdapt} hands the formatted date to the per-occurrence
-   * adapter as the stub.
-   */
-  dateFormat?: FieldDateFormat | undefined;
-};
+/** Canonical parsed field metadata. Runtime validation, MCP schema generation,
+ * and downstream TypeScript all derive from {@link fieldMetaSchema}. */
+export type FieldMeta = v.InferOutput<typeof fieldMetaSchema>;
 
 export type TemplateManifest = {
   version: number;
@@ -410,53 +266,6 @@ export type TemplateManifest = {
 
 const isRecordLike = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
-
-const isInputType = (value: unknown): value is InputType =>
-  INPUT_TYPES.some((inputType) => inputType === value);
-
-const isFieldValidation = (value: unknown): value is FieldValidation => {
-  if (!isRecordLike(value)) {
-    return false;
-  }
-
-  return (
-    (value["required"] === undefined ||
-      typeof value["required"] === "boolean") &&
-    (value["minLength"] === undefined ||
-      typeof value["minLength"] === "number") &&
-    (value["maxLength"] === undefined ||
-      typeof value["maxLength"] === "number") &&
-    (value["min"] === undefined || typeof value["min"] === "number") &&
-    (value["max"] === undefined || typeof value["max"] === "number") &&
-    (value["pattern"] === undefined || typeof value["pattern"] === "string") &&
-    (value["minItems"] === undefined ||
-      (typeof value["minItems"] === "number" &&
-        Number.isFinite(value["minItems"]))) &&
-    (value["maxItems"] === undefined ||
-      (typeof value["maxItems"] === "number" &&
-        Number.isFinite(value["maxItems"])))
-  );
-};
-
-const isPartInputType = (value: unknown): value is PartInputType =>
-  value === "text" || value === "select";
-
-export const isFieldPart = (value: unknown): value is FieldPart =>
-  isRecordLike(value) &&
-  typeof value["key"] === "string" &&
-  isFieldPath(value["key"]) &&
-  (value["label"] === undefined || typeof value["label"] === "string") &&
-  isPartInputType(value["inputType"]) &&
-  (value["options"] === undefined ||
-    (Array.isArray(value["options"]) &&
-      value["options"].every((option) => typeof option === "string"))) &&
-  (value["pattern"] === undefined || typeof value["pattern"] === "string");
-
-const isLookupRegistry = (value: unknown): value is LookupRegistry =>
-  LOOKUP_REGISTRIES.some((registry) => registry === value);
-
-const isDateFormatStyle = (value: unknown): value is DateFormatStyle =>
-  DATE_FORMAT_STYLES.some((style) => style === value);
 
 /** Structurally malformed BCP-47 tags make `Intl` throw a RangeError; a
  *  well-formed but unknown tag passes and merely falls back to the default
@@ -470,108 +279,286 @@ export const isPlausibleLocale = (value: string): boolean => {
   }
 };
 
-export const isFieldDateFormat = (value: unknown): value is FieldDateFormat =>
-  isRecordLike(value) &&
-  typeof value["locale"] === "string" &&
-  isPlausibleLocale(value["locale"]) &&
-  isDateFormatStyle(value["style"]);
+const describedString = (description: string) =>
+  v.pipe(v.string(), v.description(description));
 
-export const isFieldLookup = (value: unknown): value is FieldLookup =>
-  isRecordLike(value) &&
-  isLookupRegistry(value["registry"]) &&
-  Array.isArray(value["formats"]) &&
-  value["formats"].length >= 1 &&
-  value["formats"].length <= LOOKUP_FORMATS_MAX &&
-  value["formats"].every(isFieldLookupFormat);
+const fieldPathSchema = (description: string) =>
+  v.pipe(
+    v.string(),
+    v.check(isFieldPath, "Invalid field path"),
+    v.description(description),
+  );
 
-export const isFieldMeta = (value: unknown): value is FieldMeta => {
-  if (!isRecordLike(value) || typeof value["path"] !== "string") {
-    return false;
-  }
+export const fieldPartSchema = v.strictObject({
+  key: fieldPathSchema("Part key referenced by the field format"),
+  label: v.optional(describedString("Human-readable part label")),
+  inputType: v.pipe(
+    v.picklist(["text", "select"]),
+    v.description("Part input control type"),
+  ),
+  options: v.optional(
+    v.pipe(
+      v.array(v.string()),
+      v.description("Allowed values for a select part"),
+    ),
+  ),
+  pattern: v.optional(
+    describedString("Regex matched against the complete part value"),
+  ),
+});
 
-  // parts and format describe one composite value together: parts without a
-  // join format (or vice versa) cannot be rendered, so reject the half-shape.
-  if ((value["parts"] === undefined) !== (value["format"] === undefined)) {
-    return false;
-  }
+export const fieldLookupFormatSchema = v.strictObject({
+  key: v.pipe(
+    v.string(),
+    v.check(isLookupFormatKey, "Invalid lookup format key"),
+    v.description("Marker segment after the path: {{path.key}}"),
+  ),
+  template: v.pipe(
+    v.string(),
+    v.maxLength(LOOKUP_FORMAT_TEMPLATE_MAX_LENGTH),
+    v.description("[token]-substituted rendering of the registry hit"),
+  ),
+});
 
-  // A formula field's value is derived at fill time, never user-entered, so
-  // the other value-source mechanisms cannot coexist with it.
+export const fieldLookupSchema = v.pipe(
+  v.strictObject({
+    registry: v.pipe(
+      v.picklist(LOOKUP_REGISTRIES),
+      v.description("Business registry to query"),
+    ),
+    formats: v.pipe(
+      v.array(fieldLookupFormatSchema),
+      v.minLength(1),
+      v.maxLength(LOOKUP_FORMATS_MAX),
+      v.description(
+        "Named output renderings; the first is the default for the bare marker",
+      ),
+    ),
+  }),
+  v.description("Who-fills = business-registry lookup"),
+);
+
+export const fieldDateFormatSchema = v.pipe(
+  v.strictObject({
+    locale: v.pipe(
+      v.string(),
+      v.check(isPlausibleLocale, "Invalid BCP-47 locale"),
+      v.description("BCP-47 language tag, e.g. 'cs', 'de', 'pl'"),
+    ),
+    style: v.pipe(
+      v.picklist(DATE_FORMAT_STYLES),
+      v.description("Date rendering style"),
+    ),
+  }),
+  v.description("Locale-aware date rendering for a date field"),
+);
+
+export const fieldValidationSchema = v.pipe(
+  v.strictObject({
+    required: v.optional(
+      v.pipe(v.boolean(), v.description("Whether a value is required")),
+    ),
+    minLength: v.optional(
+      v.pipe(v.number(), v.finite(), v.description("Minimum string length")),
+    ),
+    maxLength: v.optional(
+      v.pipe(v.number(), v.finite(), v.description("Maximum string length")),
+    ),
+    min: v.optional(
+      v.pipe(v.number(), v.finite(), v.description("Minimum numeric value")),
+    ),
+    max: v.optional(
+      v.pipe(v.number(), v.finite(), v.description("Maximum numeric value")),
+    ),
+    pattern: v.optional(
+      describedString("Regex matched against the complete value"),
+    ),
+    minItems: v.optional(
+      v.pipe(v.number(), v.finite(), v.description("Minimum repeated items")),
+    ),
+    maxItems: v.optional(
+      v.pipe(v.number(), v.finite(), v.description("Maximum repeated items")),
+    ),
+  }),
+  v.description("Field-level value constraints"),
+);
+
+const hasCompatibleDerivedSources = ({
+  aiAdapt,
+  aiPrompt,
+  condition,
+  conditionAst,
+  formula,
+  lookup,
+  parts,
+  source,
+}: {
+  aiAdapt?: boolean;
+  aiPrompt?: string;
+  condition?: string;
+  conditionAst?: ConditionNode;
+  formula?: string;
+  lookup?: FieldLookup;
+  parts?: FieldPart[];
+  source?: FieldSource;
+}): boolean => {
+  const hasFormula = formula !== undefined;
+  const hasCondition = condition !== undefined || conditionAst !== undefined;
+  const hasSource = source !== undefined;
+
   if (
-    value["formula"] !== undefined &&
-    (value["aiPrompt"] !== undefined ||
-      value["aiAdapt"] !== undefined ||
-      value["lookup"] !== undefined ||
-      value["parts"] !== undefined)
+    hasFormula &&
+    (aiPrompt !== undefined ||
+      aiAdapt !== undefined ||
+      lookup !== undefined ||
+      parts !== undefined)
   ) {
     return false;
   }
-
-  // A condition field is a boolean derived by rule at fill time; like a
-  // formula it cannot also carry another value source. The rule is held either
-  // as a `{{#if}}` string (`condition`) or, for formula-bearing rules, as the
-  // AST (`conditionAst`) — either form makes this a condition field.
   if (
-    (value["condition"] !== undefined || value["conditionAst"] !== undefined) &&
-    (value["formula"] !== undefined ||
-      value["aiPrompt"] !== undefined ||
-      value["aiAdapt"] !== undefined ||
-      value["lookup"] !== undefined ||
-      value["parts"] !== undefined)
+    hasCondition &&
+    (hasFormula ||
+      aiPrompt !== undefined ||
+      aiAdapt !== undefined ||
+      lookup !== undefined ||
+      parts !== undefined)
   ) {
     return false;
   }
-
-  // A contact-sourced field's value is resolved from a contact record at fill
-  // time, never user-entered, so it cannot coexist with another value source.
-  if (
-    value["source"] !== undefined &&
-    (value["formula"] !== undefined ||
-      value["aiPrompt"] !== undefined ||
-      value["aiAdapt"] !== undefined ||
-      value["lookup"] !== undefined ||
-      value["parts"] !== undefined ||
-      value["condition"] !== undefined ||
-      value["conditionAst"] !== undefined)
-  ) {
-    return false;
-  }
-
   return (
-    (value["label"] === undefined || typeof value["label"] === "string") &&
-    (value["hint"] === undefined || typeof value["hint"] === "string") &&
-    (value["inputType"] === undefined || isInputType(value["inputType"])) &&
-    (value["options"] === undefined ||
-      (Array.isArray(value["options"]) &&
-        value["options"].every((option) => typeof option === "string"))) &&
-    (value["validation"] === undefined ||
-      isFieldValidation(value["validation"])) &&
-    (value["required"] === undefined ||
-      typeof value["required"] === "boolean") &&
-    (value["aiPrompt"] === undefined ||
-      typeof value["aiPrompt"] === "string") &&
-    (value["aiAdapt"] === undefined || typeof value["aiAdapt"] === "boolean") &&
-    (value["aiSeesDocument"] === undefined ||
-      typeof value["aiSeesDocument"] === "boolean") &&
-    (value["parts"] === undefined ||
-      (Array.isArray(value["parts"]) &&
-        value["parts"].length > 0 &&
-        value["parts"].every(isFieldPart))) &&
-    (value["format"] === undefined || typeof value["format"] === "string") &&
-    (value["optionsFrom"] === undefined ||
-      (typeof value["optionsFrom"] === "string" &&
-        isFieldPath(value["optionsFrom"]))) &&
-    (value["lookup"] === undefined || isFieldLookup(value["lookup"])) &&
-    (value["formula"] === undefined || typeof value["formula"] === "string") &&
-    (value["condition"] === undefined ||
-      typeof value["condition"] === "string") &&
-    (value["conditionAst"] === undefined ||
-      v.is(conditionNodeSchema, value["conditionAst"])) &&
-    (value["dateFormat"] === undefined ||
-      isFieldDateFormat(value["dateFormat"])) &&
-    (value["source"] === undefined || isFieldSource(value["source"]))
+    !hasSource ||
+    (!hasFormula &&
+      !hasCondition &&
+      aiPrompt === undefined &&
+      aiAdapt === undefined &&
+      lookup === undefined &&
+      parts === undefined)
   );
 };
+
+const fieldMetaObjectSchema = v.strictObject({
+  path: fieldPathSchema("Field path; must match a {{marker}} in the template"),
+  label: v.optional(describedString("Human-readable field label")),
+  hint: v.optional(
+    describedString("Short fill guidance shown to the person filling the field"),
+  ),
+  inputType: v.optional(
+    v.pipe(v.picklist(INPUT_TYPES), v.description("Input control type")),
+  ),
+  options: v.optional(
+    v.pipe(
+      v.array(v.string()),
+      v.description("Allowed values when inputType is 'select'"),
+    ),
+  ),
+  validation: v.optional(fieldValidationSchema),
+  required: v.optional(
+    v.pipe(v.boolean(), v.description("Whether a value is required")),
+  ),
+  aiPrompt: v.optional(
+    describedString(
+      "Who-fills = AI: instruction the model uses to draft the value at fill time",
+    ),
+  ),
+  aiAdapt: v.optional(
+    v.pipe(
+      v.boolean(),
+      v.description(
+        "Who-fills = Person+AI: the entered value is a stub AI rewrites per occurrence",
+      ),
+    ),
+  ),
+  aiSeesDocument: v.optional(
+    v.pipe(
+      v.boolean(),
+      v.description("Include the rendered document in this AI field's prompt"),
+    ),
+  ),
+  parts: v.optional(
+    v.pipe(
+      v.array(fieldPartSchema),
+      v.minLength(1),
+      v.description("Composite field parts joined by format"),
+    ),
+  ),
+  format: v.optional(
+    describedString(
+      "Join template over composite part keys, e.g. '{{title}} {{name}}'",
+    ),
+  ),
+  optionsFrom: v.optional(
+    fieldPathSchema(
+      "Dependent select: path of another field whose values supply the options",
+    ),
+  ),
+  lookup: v.optional(fieldLookupSchema),
+  source: v.optional(
+    v.pipe(
+      fieldSourceSchema,
+      v.description("Matter or contact data resolved server-side"),
+    ),
+  ),
+  formula: v.optional(
+    describedString("Arithmetic expression derived from other fields"),
+  ),
+  condition: v.optional(
+    describedString(
+      "Boolean rule expression referenced by a {{#if field_path}} marker",
+    ),
+  ),
+  conditionAst: v.optional(
+    v.pipe(
+      conditionNodeSchema,
+      v.description("Canonical condition AST for manifest round-tripping"),
+    ),
+  ),
+  dateFormat: v.optional(fieldDateFormatSchema),
+});
+
+const hasCompleteCompositeField = ({
+  format,
+  parts,
+}: {
+  format?: string;
+  parts?: FieldPart[];
+}): boolean => (parts === undefined) === (format === undefined);
+
+const FIELD_META_RULES = [
+  v.check(
+    hasCompleteCompositeField,
+    "parts and format must be provided together",
+  ),
+  v.check(
+    hasCompatibleDerivedSources,
+    "Derived field sources are mutually exclusive",
+  ),
+] as const;
+
+export const fieldMetaSchema = v.pipe(
+  fieldMetaObjectSchema,
+  ...FIELD_META_RULES,
+);
+
+/** Model-facing subset: conditionAst is the persisted canonical form, not an
+ * authoring input. This schema still shares every public field and rule with
+ * fieldMetaSchema through the same object schema and rule composer. */
+export const fieldMetaToolInputSchema = v.pipe(
+  v.omit(fieldMetaObjectSchema, ["conditionAst"]),
+  ...FIELD_META_RULES,
+);
+
+export const isFieldPart = (value: unknown): value is FieldPart =>
+  v.is(fieldPartSchema, value);
+
+export const isFieldDateFormat = (
+  value: unknown,
+): value is FieldDateFormat => v.is(fieldDateFormatSchema, value);
+
+export const isFieldLookup = (value: unknown): value is FieldLookup =>
+  v.is(fieldLookupSchema, value);
+
+export const isFieldMeta = (value: unknown): value is FieldMeta =>
+  v.is(fieldMetaSchema, value);
 
 const isRichRun = (value: unknown): value is RichRun =>
   isRecordLike(value) &&

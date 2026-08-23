@@ -19,12 +19,14 @@ import { TEMPLATE_TOOL_HANDLERS } from "@/api/mcp/template-tools";
 import type {
   AllHandlerOutputsTyped,
   AssertTrue,
+  HandlerOutputsMatchByName,
   McpToolHandler,
   TypedHandlerDataByName,
 } from "@/api/mcp/tool-types";
 
 import type {
   ChatProjectableToolName,
+  ProjectionDataByName,
   RegistryReadToolName,
 } from "./ref-field-map";
 import { READ_TOOL_REF_FIELD_MAP } from "./ref-field-map";
@@ -83,12 +85,23 @@ export type RegistryReadToolDataByName = TypedHandlerDataByName<
   ProjectableRegistryReadToolName
 >;
 
+type RegistryReadProjectionDataByName = ProjectionDataByName<
+  typeof READ_TOOL_REF_FIELD_MAP,
+  ProjectableRegistryReadToolName
+>;
+
 /** Compile-time guard: every chat-projected handler declares typed output. */
 export type RegistryReadToolOutputContract = AssertTrue<
   AllHandlerOutputsTyped<
     typeof REGISTRY_READ_TOOL_HANDLERS,
     ProjectableRegistryReadToolName
-  >
+  > extends true
+    ? HandlerOutputsMatchByName<
+        typeof REGISTRY_READ_TOOL_HANDLERS,
+        RegistryReadProjectionDataByName,
+        ProjectableRegistryReadToolName
+      >
+    : false
 >;
 export type RunRegistryReadToolProps = {
   toolName: RegistryReadToolName;

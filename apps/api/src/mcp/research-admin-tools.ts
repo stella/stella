@@ -57,6 +57,7 @@ import {
   toolDataResult,
   validationErrorResult,
 } from "@/api/mcp/tool-utils";
+import { defineValibotMcpTool } from "@/api/mcp/valibot-tool-definition";
 
 type ResearchAdminToolName =
   | "search_legislation"
@@ -85,6 +86,120 @@ const MANAGE_ORG_ACTIONS = [
   "remove_member",
   "update_org_settings",
 ] as const;
+
+const listAuditLogArgsSchema = v.pipe(
+  v.strictObject({
+    workspace_id: v.optional(
+      v.pipe(
+        v.string(),
+        v.minLength(1),
+        v.description("Only entries scoped to this matter/workspace"),
+      ),
+    ),
+    action: v.optional(
+      v.pipe(
+        v.string(),
+        v.minLength(1),
+        v.description("Only entries with this audit action"),
+      ),
+    ),
+    resource_type: v.optional(
+      v.pipe(
+        v.string(),
+        v.minLength(1),
+        v.description("Only entries about this resource type"),
+      ),
+    ),
+    resource_id: v.optional(
+      v.pipe(
+        v.string(),
+        v.minLength(1),
+        v.description(
+          "Only entries about this resource id; requires resource_type",
+        ),
+      ),
+    ),
+    user_id: v.optional(
+      v.pipe(
+        v.string(),
+        v.minLength(1),
+        v.description("Only entries whose actor is this user"),
+      ),
+    ),
+    from: v.optional(
+      v.pipe(
+        v.string(),
+        v.isoTimestamp(),
+        v.maxLength(40),
+        v.description("Only entries created on or after this ISO date-time"),
+      ),
+    ),
+    to: v.optional(
+      v.pipe(
+        v.string(),
+        v.isoTimestamp(),
+        v.maxLength(40),
+        v.description("Only entries created on or before this ISO date-time"),
+      ),
+    ),
+    limit: v.optional(
+      v.pipe(
+        v.number(),
+        v.integer(),
+        v.minValue(1),
+        v.maxValue(LIMITS.auditLogPageSizeMax),
+        v.description("Max entries to return"),
+      ),
+    ),
+    cursor: v.optional(
+      v.pipe(
+        v.string(),
+        v.minLength(1),
+        v.maxLength(512),
+        v.description(
+          "Opaque cursor from a previous list_audit_log call to fetch the next page",
+        ),
+      ),
+    ),
+  }),
+  v.forward(
+    v.partialCheck(
+      [["resource_type"], ["resource_id"]],
+      ({ resource_id, resource_type }) =>
+        resource_id === undefined || resource_type !== undefined,
+      "resourceType is required when resourceId is provided",
+    ),
+    ["resource_id"],
+  ),
+);
+
+const LIST_AUDIT_LOG_TOOL_DEFINITION = defineValibotMcpTool({
+  annotations: {
+    title: "List audit log",
+    readOnlyHint: true,
+    openWorldHint: false,
+  },
+  description:
+    "Read the organization's audit trail (compliance view). Returns audit " +
+    "entries newest first, each with its action, resource type and id, actor " +
+    "user id, workspace, timestamp, and change detail. Filter by workspace_id, " +
+    "action, resource_type (with optional resource_id), user_id, and a " +
+    "created-at range (from/to, ISO date-time). Paginate with limit and " +
+    "cursor. Requires organization audit-log access.",
+  inputSchema: listAuditLogArgsSchema,
+  jsonSchemaProjectionWaiver: {
+    ignoreActions: ["partial_check"],
+    reason:
+      "The resource_id dependency remains authoritative in the runtime schema.",
+  },
+  // Audit payloads carry free-form tenant-authored change diffs whose text
+  // fields cannot be enumerated for redaction, so this read tool fails closed
+  // and never appears on the anonymized surface.
+  access: "read",
+  anonymized: { exposure: "excluded", reason: "dynamic_tenant_payload" },
+  name: "list_audit_log",
+  scope: "stella:admin_read",
+});
 
 export const RESEARCH_ADMIN_TOOL_DEFINITIONS = [
   {
@@ -164,56 +279,7 @@ export const RESEARCH_ADMIN_TOOL_DEFINITIONS = [
     name: "search_legislation",
     scope: "stella:read",
   },
-  {
-    annotations: {
-      title: "List audit log",
-      readOnlyHint: true,
-      openWorldHint: false,
-    },
-    description:
-      "Read the organization's audit trail (compliance view). Returns audit " +
-      "entries newest first, each with its action, resource type and id, actor " +
-      "user id, workspace, timestamp, and change detail. Filter by workspace_id, " +
-      "action, resource_type (with optional resource_id), user_id, and a " +
-      "created-at range (from/to, ISO date-time). Paginate with limit and " +
-      "cursor. Requires organization audit-log access.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        workspace_id: stringProp(
-          "Only entries scoped to this matter/workspace",
-        ),
-        action: stringProp("Only entries with this audit action"),
-        resource_type: stringProp("Only entries about this resource type"),
-        resource_id: stringProp(
-          "Only entries about this resource id; requires resource_type",
-        ),
-        user_id: stringProp("Only entries whose actor is this user"),
-        from: stringProp(
-          "Only entries created on or after this ISO date-time",
-          { maxLength: 40 },
-        ),
-        to: stringProp("Only entries created on or before this ISO date-time", {
-          maxLength: 40,
-        }),
-        limit: intProp("Max entries to return", {
-          min: 1,
-          max: LIMITS.auditLogPageSizeMax,
-        }),
-        cursor: stringProp(
-          "Opaque cursor from a previous list_audit_log call to fetch the next page",
-          { maxLength: 512 },
-        ),
-      },
-    },
-    // Audit payloads carry free-form tenant-authored change diffs whose text
-    // fields cannot be enumerated for redaction, so this read tool fails closed
-    // and never appears on the anonymized surface.
-    access: "read",
-    anonymized: { exposure: "excluded", reason: "dynamic_tenant_payload" },
-    name: "list_audit_log",
-    scope: "stella:admin_read",
-  },
+  LIST_AUDIT_LOG_TOOL_DEFINITION,
   {
     description:
       "Manage organization members and non-secret settings. Member actions " +
@@ -509,40 +575,15 @@ const handleSearchLegislationTool: TypedMcpToolHandler<
 
 // --- list_audit_log -----------------------------------------------------
 
-const ISO_DATE_INPUT = v.pipe(
-  v.string(),
-  v.minLength(1),
-  v.check(
-    (value) => !Number.isNaN(new Date(value).getTime()),
-    "must be an ISO date or date-time",
-  ),
-);
-
-const listAuditLogArgsSchema = v.strictObject({
-  workspace_id: v.optional(v.pipe(v.string(), v.minLength(1))),
-  action: v.optional(v.pipe(v.string(), v.minLength(1))),
-  resource_type: v.optional(v.pipe(v.string(), v.minLength(1))),
-  resource_id: v.optional(v.pipe(v.string(), v.minLength(1))),
-  user_id: v.optional(v.pipe(v.string(), v.minLength(1))),
-  from: v.optional(ISO_DATE_INPUT),
-  to: v.optional(ISO_DATE_INPUT),
-  limit: v.optional(
-    v.pipe(
-      v.number(),
-      v.integer(),
-      v.minValue(1),
-      v.maxValue(LIMITS.auditLogPageSizeMax),
-    ),
-  ),
-  cursor: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(512))),
-});
-
 const handleListAuditLogTool: McpToolHandler = async ({ args, context }) => {
   if (!roles[context.memberRole].authorize({ auditLog: ["read"] }).success) {
     return errorResult("Forbidden");
   }
 
-  const parsed = v.safeParse(listAuditLogArgsSchema, args);
+  const parsed = v.safeParse(
+    LIST_AUDIT_LOG_TOOL_DEFINITION.inputSchemaSource,
+    args,
+  );
   if (!parsed.success) {
     return validationErrorResult({
       issues: parsed.issues,

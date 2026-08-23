@@ -91,6 +91,7 @@ import {
   internalFailureResult,
   getWorkspaceStatus,
   intProp,
+  ISO_DATE_SCHEMA,
   MAX_LIST_LIMIT,
   notFoundResult,
   nullableStringProp,
@@ -1144,14 +1145,12 @@ const resolveTaskWorkspace = async ({
   return { status: "ok", workspaceId: entity.workspaceId };
 };
 
-const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/u;
-
 const listTasksArgsSchema = v.pipe(
   v.strictObject({
     matter_id: v.optional(v.pipe(v.string(), v.minLength(1))),
     task_id: v.optional(v.pipe(v.string(), v.minLength(1))),
-    date_from: v.optional(v.pipe(v.string(), v.regex(ISO_DATE))),
-    date_to: v.optional(v.pipe(v.string(), v.regex(ISO_DATE))),
+    date_from: v.optional(ISO_DATE_SCHEMA),
+    date_to: v.optional(ISO_DATE_SCHEMA),
     status: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(32))),
     limit: v.optional(
       v.pipe(
@@ -1464,7 +1463,7 @@ const saveTaskArgsSchema = v.pipe(
     list_description: v.optional(
       v.nullable(v.pipe(v.string(), v.maxLength(10_000))),
     ),
-    due_date: v.optional(v.nullable(v.pipe(v.string(), v.regex(ISO_DATE)))),
+    due_date: v.optional(v.nullable(ISO_DATE_SCHEMA)),
     workflow_reason: v.optional(
       v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(1000)),
     ),

@@ -1426,8 +1426,27 @@ describe("MCP template tools", () => {
 
     expect(result.isError).toBe(true);
     expect(createStoredTemplateMock).not.toHaveBeenCalled();
-    const message = result.content.at(0);
-    expect(message?.type === "text" && message.text).toContain("fields[0]");
+    const error = validationEnvelope(result);
+    const issues = asTestRaw<{ path: string }[]>(error["issues"]);
+    expect(issues.some(({ path }) => path === "fields.0")).toBe(true);
+  });
+
+  test("save_template rejects unknown field metadata keys before inserting", async () => {
+    const result = await handleMcpToolCall({
+      args: {
+        name: "NDA",
+        docx_base64: await makeValidDocxBase64(),
+        fields: [{ path: "fee", lable: "Misspelled label" }],
+      },
+      context: createContext(),
+      toolName: "save_template",
+    });
+
+    expect(result.isError).toBe(true);
+    expect(createStoredTemplateMock).not.toHaveBeenCalled();
+    const error = validationEnvelope(result);
+    const issues = asTestRaw<{ path: string }[]>(error["issues"]);
+    expect(issues.some(({ path }) => path === "fields.0.lable")).toBe(true);
   });
 
   test("save_template (create) surfaces the service's unknown-path rejection", async () => {

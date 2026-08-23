@@ -64,6 +64,7 @@ import {
   errorResult,
   internalFailureResult,
   intProp,
+  ISO_DATE_SCHEMA,
   MAX_LIST_LIMIT,
   notFoundResult,
   nullableStringProp,
@@ -80,8 +81,6 @@ type BillingToolName =
   | "resolve_rate"
   | "list_invoices"
   | "get_usage";
-
-const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/u;
 
 // --- list_time_entries text-field specs ---------------------------------
 
@@ -680,8 +679,8 @@ const listTimeEntriesArgsSchema = v.pipe(
     time_entry_id: v.optional(v.pipe(v.string(), v.minLength(1))),
     entity_id: v.optional(v.pipe(v.string(), v.minLength(1))),
     user_id: v.optional(v.pipe(v.string(), v.minLength(1))),
-    date_from: v.optional(v.pipe(v.string(), v.regex(ISO_DATE))),
-    date_to: v.optional(v.pipe(v.string(), v.regex(ISO_DATE))),
+    date_from: v.optional(ISO_DATE_SCHEMA),
+    date_to: v.optional(ISO_DATE_SCHEMA),
     status: v.optional(v.picklist(TIME_ENTRY_STATUSES)),
     limit: v.optional(
       v.pipe(
@@ -955,7 +954,7 @@ const saveTimeEntryArgsSchema = v.pipe(
     time_entry_id: v.optional(v.pipe(v.string(), v.minLength(1))),
     matter_id: v.optional(v.pipe(v.string(), v.minLength(1))),
     entity_id: v.optional(v.nullable(v.pipe(v.string(), v.minLength(1)))),
-    date_worked: v.optional(v.pipe(v.string(), v.regex(ISO_DATE))),
+    date_worked: v.optional(ISO_DATE_SCHEMA),
     timezone_id: v.optional(
       v.pipe(v.string(), v.minLength(1), v.maxLength(64)),
     ),
@@ -1239,7 +1238,7 @@ const handleDeleteTimeEntryTool: TypedMcpToolHandler<
 const resolveRateArgsSchema = v.strictObject({
   matter_id: v.pipe(v.string(), v.minLength(1)),
   user_id: v.pipe(v.string(), v.minLength(1)),
-  date: v.pipe(v.string(), v.regex(ISO_DATE)),
+  date: ISO_DATE_SCHEMA,
 });
 
 const handleResolveRateTool: McpToolHandler = async ({ args, context }) => {

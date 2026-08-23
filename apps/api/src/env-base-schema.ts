@@ -36,7 +36,7 @@ const databasePoolMaxSchema = (fallback = "5") =>
     v.pipe(
       v.string(),
       v.digits(),
-      v.transform(Number),
+      v.toNumber(),
       v.integer(),
       v.minValue(1),
     ),
@@ -47,7 +47,7 @@ const documentOcrBatchIntervalMinutesSchema = v.optional(
   v.pipe(
     v.string(),
     v.digits(),
-    v.transform(Number),
+    v.toNumber(),
     v.integer(),
     v.minValue(5),
     v.maxValue(10_080),
@@ -62,7 +62,7 @@ const documentOcrBatchIntervalMinutesSchema = v.optional(
 // after upgrading the runtime. 0 disables a bound.
 const databasePoolSecondsSchema = (fallback: string) =>
   v.optional(
-    v.pipe(v.string(), v.digits(), v.transform(Number), v.integer()),
+    v.pipe(v.string(), v.digits(), v.toNumber(), v.integer()),
     fallback,
   );
 
@@ -87,7 +87,7 @@ const boundedIntegerEnv = ({ fallback, min, max }: BoundedIntegerEnvOptions) =>
     v.pipe(
       v.string(),
       v.digits(),
-      v.transform(Number),
+      v.toNumber(),
       v.integer(),
       v.minValue(min),
       v.maxValue(max),
@@ -100,7 +100,14 @@ const BACKPRESSURE_DIMENSIONS_PATTERN =
 
 const nonNegativeNumberEnv = (fallback: string) =>
   v.optional(
-    v.pipe(v.string(), v.transform(Number), v.finite(), v.minValue(0)),
+    v.pipe(
+      v.string(),
+      v.trim(),
+      v.minLength(1),
+      v.toNumber(),
+      v.finite(),
+      v.minValue(0),
+    ),
     fallback,
   );
 

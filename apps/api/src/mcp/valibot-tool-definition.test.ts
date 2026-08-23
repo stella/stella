@@ -1,0 +1,119 @@
+import { describe, expect, test } from "bun:test";
+import * as v from "valibot";
+
+import { defineValibotMcpTool } from "@/api/mcp/valibot-tool-definition";
+
+describe("Valibot-backed MCP tool definitions", () => {
+  test("derives the wire schema from the handler's strict runtime schema", () => {
+    const inputSchema = v.strictObject({
+      from: v.pipe(
+        v.string(),
+        v.isoTimestamp(),
+        v.description("Inclusive ISO timestamp"),
+      ),
+      limit: v.optional(
+        v.pipe(
+          v.number(),
+          v.integer(),
+          v.minValue(1),
+          v.maxValue(100),
+          v.description("Maximum rows"),
+        ),
+      ),
+      score: v.optional(
+        v.pipe(
+          v.number(),
+          v.finite(),
+          v.description("Finite relevance score"),
+        ),
+      ),
+    });
+    const definition = defineValibotMcpTool({
+      access: "read",
+      annotations: { title: "Read example", readOnlyHint: true },
+      anonymized: { exposure: "passthrough" },
+      description: "Read an example.",
+      inputSchema,
+      jsonSchemaProjectionWaiver: {
+        ignoreActions: ["finite"],
+        reason: "JSON numbers are finite on the MCP wire.",
+      },
+      name: "read_example",
+      scope: "stella:read",
+    });
+
+    expect(definition.inputSchemaSource).toBe(inputSchema);
+    expect(definition).not.toHaveProperty("jsonSchemaProjectionWaiver");
+    expect(definition.inputSchema).toEqual({
+      type: "object",
+      properties: {
+        from: {
+          type: "string",
+          format: "date-time",
+          description: "Inclusive ISO timestamp",
+        },
+        limit: {
+          type: "integer",
+          minimum: 1,
+          maximum: 100,
+          description: "Maximum rows",
+        },
+        score: {
+          type: "number",
+          description: "Finite relevance score",
+        },
+      },
+      required: ["from"],
+      additionalProperties: false,
+    });
+    expect(definition.inputSchema).not.toHaveProperty("$schema");
+
+    // The handler parses the exact schema object supplied to the definition;
+    // generated JSON is transport metadata, never a second runtime validator.
+    expect(
+      v.safeParse(definition.inputSchemaSource, {
+        from: "2026-08-23T12:00:00Z",
+        limit: 20,
+      }).success,
+    ).toBe(true);
+    expect(
+      v.safeParse(definition.inputSchemaSource, {
+        from: "August 23, 2026",
+        limit: 20,
+        ignored: true,
+      }).success,
+    ).toBe(false);
+  });
+
+  test("rejects an unsupported action without an explicit projection waiver", () => {
+    expect(() =>
+      defineValibotMcpTool({
+        access: "read",
+        annotations: { title: "Read example", readOnlyHint: true },
+        anonymized: { exposure: "passthrough" },
+        description: "Read an example.",
+        inputSchema: v.strictObject({
+          score: v.pipe(v.number(), v.finite()),
+        }),
+        name: "read_example",
+        scope: "stella:read",
+      }),
+    ).toThrow(/finite/u);
+  });
+
+  test("rejects an input schema that admits unknown root properties", () => {
+    expect(() =>
+      defineValibotMcpTool({
+        access: "read",
+        annotations: { title: "Read example", readOnlyHint: true },
+        anonymized: { exposure: "passthrough" },
+        description: "Read an example.",
+        inputSchema: v.looseObject({ query: v.string() }),
+        name: "read_example",
+        scope: "stella:read",
+      }),
+    ).toThrow(
+      "A native MCP tool input schema must reject unknown root properties",
+    );
+  });
+});

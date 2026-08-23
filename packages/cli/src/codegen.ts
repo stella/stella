@@ -48,14 +48,14 @@ const annotationOutputUrl = new URL(
 
 const stringArraySchema = v.array(v.string());
 
-const discriminatorSubcommandSchema = v.looseObject({
+const discriminatorSubcommandSchema = v.object({
   command: v.string(),
   destructive: v.optional(v.literal(true)),
   include: v.optional(stringArraySchema),
   required: v.optional(stringArraySchema),
 });
 
-const cliAnnotationSchema = v.looseObject({
+const cliAnnotationSchema = v.object({
   command: stringArraySchema,
   additionalScopes: v.optional(v.array(v.picklist(MCP_CLI_TOOL_SCOPES))),
   requestTimeoutMs: v.optional(
@@ -70,7 +70,7 @@ const cliAnnotationSchema = v.looseObject({
   paginationless: v.optional(v.literal(true)),
   inputOnly: v.optional(stringArraySchema),
   discriminator: v.optional(
-    v.looseObject({
+    v.object({
       prop: v.string(),
       subcommands: v.record(v.string(), discriminatorSubcommandSchema),
     }),
@@ -156,13 +156,13 @@ const projectToolAnnotation = (cli: ParsedCliAnnotation): ToolAnnotation => {
 // Validate the snapshot into the four wire fields so the codegen input is typed
 // (not `any` off `.json()`) and a malformed snapshot fails loudly.
 const listingSchema = v.array(
-  v.looseObject({
+  v.object({
     cli: cliAnnotationSchema,
     name: v.string(),
     description: v.string(),
     inputSchema: v.record(v.string(), v.unknown()),
     annotations: v.optional(
-      v.looseObject({
+      v.object({
         readOnlyHint: v.optional(v.boolean()),
         destructiveHint: v.optional(v.boolean()),
       }),

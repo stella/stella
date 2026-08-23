@@ -13,7 +13,7 @@ type PostMessageOpener = {
 // `window.message` listener on the opener page can't pick up
 // unrelated messages that happen to share `status`. Callers only
 // see the public `McpOAuthOutcome` (without `kind`).
-const mcpOAuthMessageSchema = v.union([
+const mcpOAuthMessageSchema = v.variant("status", [
   v.strictObject({
     kind: v.literal(MESSAGE_KIND),
     status: v.literal("connected"),

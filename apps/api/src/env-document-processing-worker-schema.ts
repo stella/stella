@@ -30,7 +30,7 @@ export const envDocumentProcessingWorkerServerSchema = {
    * minutes. Unset keeps the worker long-running.
    */
   DOCUMENT_PROCESSING_IDLE_EXIT_MINUTES: v.optional(
-    v.pipe(v.string(), v.transform(Number), v.integer(), v.minValue(1)),
+    v.pipe(v.string(), v.toNumber(), v.integer(), v.minValue(1)),
   ),
   CONTENT_ENCRYPTION_KEY: v.optional(
     v.pipe(

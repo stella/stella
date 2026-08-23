@@ -7,6 +7,7 @@ import {
   OFFICE_EVIDENCE_LIMITS,
   OFFICE_EVIDENCE_STATUS,
   OFFICE_EVIDENCE_UNAVAILABLE_CODE,
+  OFFICE_EVIDENCE_UNAVAILABLE_CODES,
   type OfficeEvidenceFormat,
   type OfficeEvidenceUnavailableCode,
 } from "@/api/lib/files/office-evidence-domain";
@@ -112,10 +113,7 @@ export const officeEvidencePayloadSchema = v.variant("format", [
 ]);
 
 const unavailableResultSchema = v.object({
-  errorCode: v.union([
-    v.literal(OFFICE_EVIDENCE_UNAVAILABLE_CODE.parseFailed),
-    v.literal(OFFICE_EVIDENCE_UNAVAILABLE_CODE.resourceLimit),
-  ]),
+  errorCode: v.picklist(OFFICE_EVIDENCE_UNAVAILABLE_CODES),
   status: v.literal(OFFICE_EVIDENCE_STATUS.unavailable),
 });
 

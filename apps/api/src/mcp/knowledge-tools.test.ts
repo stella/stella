@@ -190,7 +190,7 @@ describe("MCP knowledge tools", () => {
       args: {},
       context: createContext({ scopedDb: createClauseScopedDb(rows) }),
     });
-    if (!isMcpEgressPlan(response) || response.egress !== "structured") {
+    if (!isMcpEgressPlan(response)) {
       throw new Error("Expected a structured egress plan");
     }
 

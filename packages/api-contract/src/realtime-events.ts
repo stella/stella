@@ -62,6 +62,13 @@ const resourcesChangedEventSchema = v.object({
   ),
 });
 
+const resourceChangeCountSchema = v.pipe(
+  v.number(),
+  v.integer(),
+  v.minValue(1),
+  v.maxValue(MAX_RESOURCE_CHANGES_PER_EVENT),
+);
+
 const resourceSetUpdatedEventSchema = v.object({
   type: v.literal(REALTIME_EVENT_TYPE.RESOURCE_SET_UPDATED),
   resourceType: v.custom<ResourceType>(isResourceType),
@@ -150,11 +157,13 @@ export const resourceDeletedChange = (resource: ResourceRef) =>
 
 export const resourcesChangedRealtimeEvent = (
   changes: readonly ResourceChange[],
-): ResourceRealtimeEvent =>
-  v.parse(resourcesChangedEventSchema, {
+): ResourceRealtimeEvent => {
+  v.parse(resourceChangeCountSchema, changes.length);
+  return {
     type: REALTIME_EVENT_TYPE.RESOURCES_CHANGED,
     changes: [...changes],
-  });
+  };
+};
 
 export const resourceSetUpdatedRealtimeEvent = (resourceType: ResourceType) =>
   ({

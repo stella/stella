@@ -18,7 +18,7 @@ export type TokenResponse = {
   readonly token_type: string;
 };
 
-const tokenResponseSchema = v.looseObject({
+const tokenResponseSchema = v.object({
   access_token: v.string(),
   expires_in: v.number(),
   refresh_token: v.optional(v.string()),
@@ -26,7 +26,7 @@ const tokenResponseSchema = v.looseObject({
   token_type: v.string(),
 });
 
-const oauthErrorBodySchema = v.looseObject({
+const oauthErrorBodySchema = v.object({
   error: v.string(),
   error_description: v.optional(v.string()),
 });

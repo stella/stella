@@ -11,6 +11,7 @@ import {
   chatEntityRef,
   chatRef,
   passthroughId,
+  projectionBranch,
   strippedField,
   unenumeratedJson,
 } from "./projection-schema";
@@ -43,8 +44,8 @@ import {
  * The field paths in `Payload` that `SchemaInput` does not declare, at any
  * depth (arrays compared element-wise; a `Payload` union branch is compared
  * only against the `SchemaInput` branches it is assignable to; an `unknown`
- * schema field — ref/stripped/unenumerated positions — admits any payload
- * type without descending).
+ * schema field — stripped/unenumerated positions — admits any payload type
+ * without descending).
  */
 type ExtraProjectionFields<Payload, SchemaInput> =
   Payload extends readonly (infer Item)[]
@@ -181,8 +182,8 @@ export const LIST_MATTERS_DETAIL_PROJECTION = v.strictObject({
 });
 
 export const LIST_MATTERS_PROJECTION = v.union([
-  LIST_MATTERS_LIST_PROJECTION,
-  LIST_MATTERS_DETAIL_PROJECTION,
+  projectionBranch(LIST_MATTERS_LIST_PROJECTION),
+  projectionBranch(LIST_MATTERS_DETAIL_PROJECTION),
 ]);
 
 /**
@@ -322,75 +323,99 @@ export const LIST_DOCUMENTS_PROJECTION = v.strictObject({
  * out of the model context entirely.
  */
 const documentFieldContentProjection = v.variant("type", [
-  v.strictObject({ version: v.literal(1), type: v.literal("error") }),
-  v.strictObject({ version: v.literal(1), type: v.literal("pending") }),
-  v.strictObject({ version: v.literal(1), type: v.literal("unsupported") }),
-  v.strictObject({
-    version: v.literal(1),
-    type: v.literal("file"),
-    id: strippedField(),
-    fileName: v.string(),
-    mimeType: v.string(),
-    sizeBytes: v.number(),
-    encrypted: v.boolean(),
-    sha256Hex: strippedField(),
-    pdfFileId: strippedField(),
-    pdfDerivative: v.optional(strippedField()),
-    thumbnailFileId: v.optional(strippedField()),
-    placeholder: v.optional(strippedField()),
-    thumbnailDerivative: v.optional(strippedField()),
-    scanWarnings: v.optional(v.array(v.string())),
-  }),
-  v.strictObject({
-    version: v.literal(1),
-    type: v.literal("text"),
-    value: v.string(),
-  }),
-  v.strictObject({
-    version: v.literal(1),
-    type: v.literal("single-select"),
-    value: v.nullable(v.string()),
-  }),
-  v.strictObject({
-    version: v.literal(1),
-    type: v.literal("multi-select"),
-    value: v.array(v.string()),
-  }),
-  v.strictObject({
-    version: v.literal(1),
-    type: v.literal("date"),
-    value: v.nullable(v.string()),
-  }),
-  v.strictObject({
-    version: v.literal(1),
-    type: v.literal("int"),
-    value: v.number(),
-    currency: v.nullable(v.string()),
-  }),
-  v.strictObject({
-    version: v.literal(1),
-    type: v.literal("money"),
-    amountCents: v.number(),
-    currency: v.string(),
-  }),
-  v.strictObject({
-    version: v.literal(1),
-    type: v.literal("person"),
-    // The workspace member handle is machinery chat cannot act on; the name is
-    // what a model reads.
-    userId: strippedField(),
-    name: v.string(),
-    image: strippedField(),
-  }),
-  v.strictObject({
-    version: v.literal(1),
-    type: v.literal("clip"),
-    url: v.string(),
-    snippet: v.optional(v.string()),
-    citation: v.optional(v.string()),
-    jurisdiction: v.optional(v.string()),
-    sourceType: v.optional(v.string()),
-  }),
+  projectionBranch(
+    v.strictObject({ version: v.literal(1), type: v.literal("error") }),
+  ),
+  projectionBranch(
+    v.strictObject({ version: v.literal(1), type: v.literal("pending") }),
+  ),
+  projectionBranch(
+    v.strictObject({ version: v.literal(1), type: v.literal("unsupported") }),
+  ),
+  projectionBranch(
+    v.strictObject({
+      version: v.literal(1),
+      type: v.literal("file"),
+      id: strippedField(),
+      fileName: v.string(),
+      mimeType: v.string(),
+      sizeBytes: v.number(),
+      encrypted: v.boolean(),
+      sha256Hex: strippedField(),
+      pdfFileId: strippedField(),
+      pdfDerivative: v.optional(strippedField()),
+      thumbnailFileId: v.optional(strippedField()),
+      placeholder: v.optional(strippedField()),
+      thumbnailDerivative: v.optional(strippedField()),
+      scanWarnings: v.optional(v.array(v.string())),
+    }),
+  ),
+  projectionBranch(
+    v.strictObject({
+      version: v.literal(1),
+      type: v.literal("text"),
+      value: v.string(),
+    }),
+  ),
+  projectionBranch(
+    v.strictObject({
+      version: v.literal(1),
+      type: v.literal("single-select"),
+      value: v.nullable(v.string()),
+    }),
+  ),
+  projectionBranch(
+    v.strictObject({
+      version: v.literal(1),
+      type: v.literal("multi-select"),
+      value: v.array(v.string()),
+    }),
+  ),
+  projectionBranch(
+    v.strictObject({
+      version: v.literal(1),
+      type: v.literal("date"),
+      value: v.nullable(v.string()),
+    }),
+  ),
+  projectionBranch(
+    v.strictObject({
+      version: v.literal(1),
+      type: v.literal("int"),
+      value: v.number(),
+      currency: v.nullable(v.string()),
+    }),
+  ),
+  projectionBranch(
+    v.strictObject({
+      version: v.literal(1),
+      type: v.literal("money"),
+      amountCents: v.number(),
+      currency: v.string(),
+    }),
+  ),
+  projectionBranch(
+    v.strictObject({
+      version: v.literal(1),
+      type: v.literal("person"),
+      // The workspace member handle is machinery chat cannot act on; the name is
+      // what a model reads.
+      userId: strippedField(),
+      name: v.string(),
+      image: strippedField(),
+    }),
+  ),
+  projectionBranch(
+    v.strictObject({
+      version: v.literal(1),
+      type: v.literal("clip"),
+      url: v.string(),
+      snippet: v.optional(v.string()),
+      citation: v.optional(v.string()),
+      jurisdiction: v.optional(v.string()),
+      sourceType: v.optional(v.string()),
+    }),
+  ),
 ]);
 
 /**
@@ -421,78 +446,100 @@ const readDocumentEntityId = () =>
   chatEntityRef({ from: "inputEntity", param: "entity_id" });
 
 const documentProcessingRemediationProjection = v.variant("type", [
-  v.strictObject({
-    type: v.literal("action"),
-    tool: v.literal("invoke_capability"),
-    // Internal chat cannot invoke generic capabilities. Strip arguments
-    // defensively if this unreachable branch is ever returned.
-    arguments: strippedField(),
-  }),
-  v.strictObject({
-    type: v.literal("escalation"),
-    requiredScope: v.literal("stella:matters_write"),
-    requiredPermission: v.literal("entity:update"),
-    instruction: v.string(),
-  }),
+  projectionBranch(
+    v.strictObject({
+      type: v.literal("action"),
+      tool: v.literal("invoke_capability"),
+      // Internal chat cannot invoke generic capabilities. Strip arguments
+      // defensively if this unreachable branch is ever returned.
+      arguments: strippedField(),
+    }),
+  ),
+  projectionBranch(
+    v.strictObject({
+      type: v.literal("escalation"),
+      requiredScope: v.literal("stella:matters_write"),
+      requiredPermission: v.literal("entity:update"),
+      instruction: v.string(),
+    }),
+  ),
 ]);
 
 const documentContentStateProjection = v.variant("status", [
-  v.strictObject({ status: v.literal("not_applicable") }),
-  v.strictObject({
-    status: v.literal("ready"),
-    source: v.picklist(["direct_docx", "extracted_text"]),
-    sourceVersionId: passthroughId(),
-    updatedAt: v.string(),
-  }),
-  v.strictObject({
-    status: v.literal("pending"),
-    processingKind: v.literal(DOCUMENT_PROCESSING_KIND),
-    runId: v.nullable(passthroughId()),
-    sourceVersionId: passthroughId(),
-  }),
-  v.strictObject({
-    status: v.literal(DOCUMENT_PROCESSING_REQUIRED_STATUS),
-    sourceVersionId: passthroughId(),
-    remediation: documentProcessingRemediationProjection,
-  }),
-  v.strictObject({
-    status: v.literal("failed"),
-    processingKind: v.literal(DOCUMENT_PROCESSING_KIND),
-    runId: passthroughId(),
-    sourceVersionId: passthroughId(),
-    errorCode: v.literal(DOCUMENT_PROCESSING_FAILURE_CODE),
-    retryable: v.literal(true),
-  }),
-  v.strictObject({
-    status: v.literal("unsupported"),
-    sourceVersionId: passthroughId(),
-    reason: v.string(),
-  }),
+  projectionBranch(v.strictObject({ status: v.literal("not_applicable") })),
+  projectionBranch(
+    v.strictObject({
+      status: v.literal("ready"),
+      source: v.picklist(["direct_docx", "extracted_text"]),
+      sourceVersionId: passthroughId(),
+      updatedAt: v.string(),
+    }),
+  ),
+  projectionBranch(
+    v.strictObject({
+      status: v.literal("pending"),
+      processingKind: v.literal(DOCUMENT_PROCESSING_KIND),
+      runId: v.nullable(passthroughId()),
+      sourceVersionId: passthroughId(),
+    }),
+  ),
+  projectionBranch(
+    v.strictObject({
+      status: v.literal(DOCUMENT_PROCESSING_REQUIRED_STATUS),
+      sourceVersionId: passthroughId(),
+      remediation: documentProcessingRemediationProjection,
+    }),
+  ),
+  projectionBranch(
+    v.strictObject({
+      status: v.literal("failed"),
+      processingKind: v.literal(DOCUMENT_PROCESSING_KIND),
+      runId: passthroughId(),
+      sourceVersionId: passthroughId(),
+      errorCode: v.literal(DOCUMENT_PROCESSING_FAILURE_CODE),
+      retryable: v.literal(true),
+    }),
+  ),
+  projectionBranch(
+    v.strictObject({
+      status: v.literal("unsupported"),
+      sourceVersionId: passthroughId(),
+      reason: v.string(),
+    }),
+  ),
 ]);
 
 const documentSearchIndexStateProjection = v.variant("status", [
-  v.strictObject({ status: v.literal("not_applicable") }),
-  v.strictObject({
-    status: v.literal("ready"),
-    sourceVersionId: passthroughId(),
-    updatedAt: v.string(),
-  }),
-  v.strictObject({
-    status: v.literal("pending"),
-    sourceVersionId: passthroughId(),
-  }),
-  v.strictObject({
-    status: v.literal("failed"),
-    runId: passthroughId(),
-    sourceVersionId: passthroughId(),
-    errorCode: v.literal("search_index_failed"),
-    retryable: v.literal(true),
-  }),
-  v.strictObject({
-    status: v.literal("unsupported"),
-    sourceVersionId: passthroughId(),
-    reason: v.string(),
-  }),
+  projectionBranch(v.strictObject({ status: v.literal("not_applicable") })),
+  projectionBranch(
+    v.strictObject({
+      status: v.literal("ready"),
+      sourceVersionId: passthroughId(),
+      updatedAt: v.string(),
+    }),
+  ),
+  projectionBranch(
+    v.strictObject({
+      status: v.literal("pending"),
+      sourceVersionId: passthroughId(),
+    }),
+  ),
+  projectionBranch(
+    v.strictObject({
+      status: v.literal("failed"),
+      runId: passthroughId(),
+      sourceVersionId: passthroughId(),
+      errorCode: v.literal("search_index_failed"),
+      retryable: v.literal(true),
+    }),
+  ),
+  projectionBranch(
+    v.strictObject({
+      status: v.literal("unsupported"),
+      sourceVersionId: passthroughId(),
+      reason: v.string(),
+    }),
+  ),
 ]);
 
 /**
@@ -539,19 +586,23 @@ export const READ_DOCUMENT_DIFF_PROJECTION = v.strictObject({
     targetVersionId: passthroughId(),
     segments: v.array(
       v.variant("kind", [
-        v.strictObject({
-          kind: v.picklist(["added", "removed", "unchanged", "gap"]),
-          text: v.string(),
-        }),
-        v.strictObject({
-          kind: v.literal("changed"),
-          runs: v.array(
-            v.strictObject({
-              kind: v.picklist(["same", "del", "ins"]),
-              text: v.string(),
-            }),
-          ),
-        }),
+        projectionBranch(
+          v.strictObject({
+            kind: v.picklist(["added", "removed", "unchanged", "gap"]),
+            text: v.string(),
+          }),
+        ),
+        projectionBranch(
+          v.strictObject({
+            kind: v.literal("changed"),
+            runs: v.array(
+              v.strictObject({
+                kind: v.picklist(["same", "del", "ins"]),
+                text: v.string(),
+              }),
+            ),
+          }),
+        ),
       ]),
     ),
   }),
@@ -562,9 +613,9 @@ export const READ_DOCUMENT_DIFF_PROJECTION = v.strictObject({
  * `document-tools.ts`).
  */
 export const READ_DOCUMENT_PROJECTION = v.union([
-  READ_DOCUMENT_DEFAULT_PROJECTION,
-  READ_DOCUMENT_VERSION_PROJECTION,
-  READ_DOCUMENT_DIFF_PROJECTION,
+  projectionBranch(READ_DOCUMENT_DEFAULT_PROJECTION),
+  projectionBranch(READ_DOCUMENT_VERSION_PROJECTION),
+  projectionBranch(READ_DOCUMENT_DIFF_PROJECTION),
 ]);
 
 /**
@@ -657,8 +708,8 @@ export const LIST_TASKS_DETAIL_PROJECTION = v.strictObject({
 });
 
 export const LIST_TASKS_PROJECTION = v.union([
-  LIST_TASKS_LIST_PROJECTION,
-  LIST_TASKS_DETAIL_PROJECTION,
+  projectionBranch(LIST_TASKS_LIST_PROJECTION),
+  projectionBranch(LIST_TASKS_DETAIL_PROJECTION),
 ]);
 
 /**
@@ -773,9 +824,9 @@ export const LIST_CLAUSES_VERSION_PROJECTION = v.strictObject({
 });
 
 export const LIST_CLAUSES_PROJECTION = v.union([
-  LIST_CLAUSES_LIST_PROJECTION,
-  LIST_CLAUSES_DETAIL_PROJECTION,
-  LIST_CLAUSES_VERSION_PROJECTION,
+  projectionBranch(LIST_CLAUSES_LIST_PROJECTION),
+  projectionBranch(LIST_CLAUSES_DETAIL_PROJECTION),
+  projectionBranch(LIST_CLAUSES_VERSION_PROJECTION),
 ]);
 
 /**
@@ -788,12 +839,16 @@ export const LIST_CLAUSES_PROJECTION = v.union([
  * documents the swap.
  */
 const playbookIdealLanguageProjection = v.variant("source", [
-  v.strictObject({
-    source: v.literal("clause"),
-    clauseId: passthroughId(),
-    clauseVersion: v.optional(v.number()),
-  }),
-  v.strictObject({ source: v.literal("inline"), text: v.string() }),
+  projectionBranch(
+    v.strictObject({
+      source: v.literal("clause"),
+      clauseId: passthroughId(),
+      clauseVersion: v.optional(v.number()),
+    }),
+  ),
+  projectionBranch(
+    v.strictObject({ source: v.literal("inline"), text: v.string() }),
+  ),
 ]);
 
 /**
@@ -830,21 +885,25 @@ const playbookAskManualProjection = v.strictObject({
 });
 
 const playbookAskConfigProjection = v.variant("mode", [
-  v.strictObject({
-    mode: v.literal("auto"),
-    derived: v.optional(
-      v.strictObject({
-        question: v.string(),
-        content: unenumeratedJson(),
-        rulesHash: v.string(),
-      }),
-    ),
-  }),
-  v.strictObject({
-    mode: v.literal("manual"),
-    question: v.string(),
-    content: unenumeratedJson(),
-  }),
+  projectionBranch(
+    v.strictObject({
+      mode: v.literal("auto"),
+      derived: v.optional(
+        v.strictObject({
+          question: v.string(),
+          content: unenumeratedJson(),
+          rulesHash: v.string(),
+        }),
+      ),
+    }),
+  ),
+  projectionBranch(
+    v.strictObject({
+      mode: v.literal("manual"),
+      question: v.string(),
+      content: unenumeratedJson(),
+    }),
+  ),
 ]);
 
 /**
@@ -853,36 +912,40 @@ const playbookAskConfigProjection = v.variant("mode", [
  * unenumerated, so the backstop still guards it.
  */
 const playbookPositionProjection = v.variant("mode", [
-  v.strictObject({
-    mode: v.literal("extract"),
-    // Client-supplied stable id that maps a position back to its
-    // materialized column across edits; run_playbook accepts none of these,
-    // but the id survives as a documented handle rather than UUID noise the
-    // strict parse would refuse.
-    sourceId: passthroughId(),
-    issue: v.string(),
-    ask: playbookAskManualProjection,
-    guidance: v.optional(v.string()),
-    enabled: v.boolean(),
-  }),
-  v.strictObject({
-    mode: v.literal("graded"),
-    sourceId: passthroughId(),
-    issue: v.string(),
-    severity: v.string(),
-    tiers: playbookTiersProjection,
-    check: v.optional(unenumeratedJson()),
-    ask: playbookAskConfigProjection,
-    guidance: v.optional(v.string()),
-    negotiation: v.optional(
-      v.strictObject({
-        rationale: v.optional(v.string()),
-        talkingPoints: v.optional(v.array(v.string())),
-        escalation: v.optional(v.string()),
-      }),
-    ),
-    enabled: v.boolean(),
-  }),
+  projectionBranch(
+    v.strictObject({
+      mode: v.literal("extract"),
+      // Client-supplied stable id that maps a position back to its
+      // materialized column across edits; run_playbook accepts none of these,
+      // but the id survives as a documented handle rather than UUID noise the
+      // strict parse would refuse.
+      sourceId: passthroughId(),
+      issue: v.string(),
+      ask: playbookAskManualProjection,
+      guidance: v.optional(v.string()),
+      enabled: v.boolean(),
+    }),
+  ),
+  projectionBranch(
+    v.strictObject({
+      mode: v.literal("graded"),
+      sourceId: passthroughId(),
+      issue: v.string(),
+      severity: v.string(),
+      tiers: playbookTiersProjection,
+      check: v.optional(unenumeratedJson()),
+      ask: playbookAskConfigProjection,
+      guidance: v.optional(v.string()),
+      negotiation: v.optional(
+        v.strictObject({
+          rationale: v.optional(v.string()),
+          talkingPoints: v.optional(v.array(v.string())),
+          escalation: v.optional(v.string()),
+        }),
+      ),
+      enabled: v.boolean(),
+    }),
+  ),
 ]);
 
 /**
@@ -933,8 +996,8 @@ export const LIST_PLAYBOOKS_DETAIL_PROJECTION = v.strictObject({
 });
 
 export const LIST_PLAYBOOKS_PROJECTION = v.union([
-  LIST_PLAYBOOKS_LIST_PROJECTION,
-  LIST_PLAYBOOKS_DETAIL_PROJECTION,
+  projectionBranch(LIST_PLAYBOOKS_LIST_PROJECTION),
+  projectionBranch(LIST_PLAYBOOKS_DETAIL_PROJECTION),
 ]);
 
 /**
@@ -1002,8 +1065,8 @@ export const LIST_TIME_ENTRIES_DETAIL_PROJECTION = v.strictObject({
 });
 
 export const LIST_TIME_ENTRIES_PROJECTION = v.union([
-  LIST_TIME_ENTRIES_LIST_PROJECTION,
-  LIST_TIME_ENTRIES_DETAIL_PROJECTION,
+  projectionBranch(LIST_TIME_ENTRIES_LIST_PROJECTION),
+  projectionBranch(LIST_TIME_ENTRIES_DETAIL_PROJECTION),
 ]);
 
 /**
@@ -1106,8 +1169,8 @@ export const LIST_INVOICES_DETAIL_PROJECTION = v.strictObject({
 });
 
 export const LIST_INVOICES_PROJECTION = v.union([
-  LIST_INVOICES_LIST_PROJECTION,
-  LIST_INVOICES_DETAIL_PROJECTION,
+  projectionBranch(LIST_INVOICES_LIST_PROJECTION),
+  projectionBranch(LIST_INVOICES_DETAIL_PROJECTION),
 ]);
 
 /**
@@ -1140,8 +1203,8 @@ export const GET_USAGE_ENTITLED_PROJECTION = v.strictObject({
 });
 
 export const GET_USAGE_PROJECTION = v.union([
-  GET_USAGE_NO_PLAN_PROJECTION,
-  GET_USAGE_ENTITLED_PROJECTION,
+  projectionBranch(GET_USAGE_NO_PLAN_PROJECTION),
+  projectionBranch(GET_USAGE_ENTITLED_PROJECTION),
 ]);
 
 /** One facet bucket of the case-law search response. */
@@ -1260,69 +1323,77 @@ export const READ_CASE_LAW_DECISION_PROJECTION = v.strictObject({
  */
 export const SEARCH_LEGISLATION_PROJECTION = v.union([
   // block branch: one article/disposition as raw XML.
-  v.strictObject({
-    lawId: passthroughId(),
-    blockId: passthroughId(),
-    block: v.string(),
-  }),
+  projectionBranch(
+    v.strictObject({
+      lawId: passthroughId(),
+      blockId: passthroughId(),
+      block: v.string(),
+    }),
+  ),
   // related branch: `findRelatedLaws` (`@stll/boe`).
-  v.strictObject({
-    lawId: passthroughId(),
-    relationType: v.string(),
-    analysis: unenumeratedJson(),
-  }),
+  projectionBranch(
+    v.strictObject({
+      lawId: passthroughId(),
+      relationType: v.string(),
+      analysis: unenumeratedJson(),
+    }),
+  ),
   // default read branch: `{ law, structure }` (`getConsolidatedLaw` +
   // `getLawStructure`).
-  v.strictObject({
-    law: v.strictObject({
-      lawId: passthroughId(),
-      metadata: unenumeratedJson(),
-      analysis: unenumeratedJson(),
-      fullText: v.nullable(v.string()),
-      eli: v.nullable(v.string()),
+  projectionBranch(
+    v.strictObject({
+      law: v.strictObject({
+        lawId: passthroughId(),
+        metadata: unenumeratedJson(),
+        analysis: unenumeratedJson(),
+        fullText: v.nullable(v.string()),
+        eli: v.nullable(v.string()),
+      }),
+      structure: unenumeratedJson(),
     }),
-    structure: unenumeratedJson(),
-  }),
+  ),
   // search branch: the raw `BoeSearchResponse` envelope (every field
   // optional upstream).
-  v.strictObject({
-    data: v.optional(
-      v.array(
+  projectionBranch(
+    v.strictObject({
+      data: v.optional(
+        v.array(
+          v.strictObject({
+            identificador: passthroughId(),
+            titulo: v.optional(v.string()),
+            fecha_publicacion: v.optional(v.string()),
+            fecha_disposicion: v.optional(v.string()),
+            departamento: v.optional(
+              v.strictObject({
+                codigo: v.optional(v.string()),
+                texto: v.optional(v.string()),
+              }),
+            ),
+            rango: v.optional(
+              v.strictObject({
+                codigo: v.optional(v.string()),
+                texto: v.optional(v.string()),
+              }),
+            ),
+            estado_consolidacion: v.optional(
+              v.strictObject({
+                codigo: v.optional(v.string()),
+                texto: v.optional(v.string()),
+              }),
+            ),
+            url_eli: v.optional(v.string()),
+            url_html_consolidada: v.optional(v.string()),
+          }),
+        ),
+      ),
+      status: v.optional(
         v.strictObject({
-          identificador: passthroughId(),
-          titulo: v.optional(v.string()),
-          fecha_publicacion: v.optional(v.string()),
-          fecha_disposicion: v.optional(v.string()),
-          departamento: v.optional(
-            v.strictObject({
-              codigo: v.optional(v.string()),
-              texto: v.optional(v.string()),
-            }),
-          ),
-          rango: v.optional(
-            v.strictObject({
-              codigo: v.optional(v.string()),
-              texto: v.optional(v.string()),
-            }),
-          ),
-          estado_consolidacion: v.optional(
-            v.strictObject({
-              codigo: v.optional(v.string()),
-              texto: v.optional(v.string()),
-            }),
-          ),
-          url_eli: v.optional(v.string()),
-          url_html_consolidada: v.optional(v.string()),
+          code: v.optional(v.string()),
+          text: v.optional(v.string()),
         }),
       ),
-    ),
-    status: v.optional(
-      v.strictObject({
-        code: v.optional(v.string()),
-        text: v.optional(v.string()),
-      }),
-    ),
-  }),
+    }),
+  ),
 ]);
 
 /**
@@ -1359,16 +1430,20 @@ const businessRegistryHitProjection = v.strictObject({
  * `handleLookupBusinessRegistryTool` (`matter-tools.ts`).
  */
 export const LOOKUP_BUSINESS_REGISTRY_PROJECTION = v.variant("type", [
-  v.strictObject({
-    type: v.literal("lookup"),
-    registry: v.string(),
-    hit: v.nullable(businessRegistryHitProjection),
-  }),
-  v.strictObject({
-    type: v.literal("search"),
-    registry: v.string(),
-    hits: v.array(businessRegistryHitProjection),
-  }),
+  projectionBranch(
+    v.strictObject({
+      type: v.literal("lookup"),
+      registry: v.string(),
+      hit: v.nullable(businessRegistryHitProjection),
+    }),
+  ),
+  projectionBranch(
+    v.strictObject({
+      type: v.literal("search"),
+      registry: v.string(),
+      hits: v.array(businessRegistryHitProjection),
+    }),
+  ),
 ]);
 
 /**
@@ -1441,8 +1516,8 @@ export const LIST_TEMPLATES_LIST_PROJECTION = v.strictObject({
 });
 
 export const LIST_TEMPLATES_PROJECTION = v.union([
-  LIST_TEMPLATES_LIST_PROJECTION,
-  TEMPLATE_DESCRIBE_PROJECTION,
+  projectionBranch(LIST_TEMPLATES_LIST_PROJECTION),
+  projectionBranch(TEMPLATE_DESCRIBE_PROJECTION),
 ]);
 
 // --- Write-tool projections ---------------------------------------------------
@@ -1495,8 +1570,8 @@ export const LINK_MATTER_CONTACT_UNLINK_PROJECTION = v.strictObject({
 });
 
 export const LINK_MATTER_CONTACT_PROJECTION = v.union([
-  LINK_MATTER_CONTACT_LINK_PROJECTION,
-  LINK_MATTER_CONTACT_UNLINK_PROJECTION,
+  projectionBranch(LINK_MATTER_CONTACT_LINK_PROJECTION),
+  projectionBranch(LINK_MATTER_CONTACT_UNLINK_PROJECTION),
 ]);
 
 /**
@@ -1513,8 +1588,8 @@ export const SAVE_DOCUMENT_UPDATE_PROJECTION = v.strictObject({
 });
 
 export const SAVE_DOCUMENT_PROJECTION = v.union([
-  SAVE_DOCUMENT_CREATE_PROJECTION,
-  SAVE_DOCUMENT_UPDATE_PROJECTION,
+  projectionBranch(SAVE_DOCUMENT_CREATE_PROJECTION),
+  projectionBranch(SAVE_DOCUMENT_UPDATE_PROJECTION),
 ]);
 
 /** set_field_value returns `{}`. */
@@ -1567,9 +1642,9 @@ export const MANAGE_ORGANIZATION_SETTINGS_PROJECTION = v.strictObject({
 });
 
 export const MANAGE_ORGANIZATION_PROJECTION = v.union([
-  MANAGE_ORGANIZATION_ADD_MEMBER_PROJECTION,
-  MANAGE_ORGANIZATION_REMOVE_MEMBER_PROJECTION,
-  MANAGE_ORGANIZATION_SETTINGS_PROJECTION,
+  projectionBranch(MANAGE_ORGANIZATION_ADD_MEMBER_PROJECTION),
+  projectionBranch(MANAGE_ORGANIZATION_REMOVE_MEMBER_PROJECTION),
+  projectionBranch(MANAGE_ORGANIZATION_SETTINGS_PROJECTION),
 ]);
 
 /**
@@ -1594,6 +1669,6 @@ export const SAVE_TEMPLATE_CREATE_PROJECTION = v.strictObject({
 });
 
 export const SAVE_TEMPLATE_PROJECTION = v.union([
-  SAVE_TEMPLATE_CREATE_PROJECTION,
-  TEMPLATE_DESCRIBE_PROJECTION,
+  projectionBranch(SAVE_TEMPLATE_CREATE_PROJECTION),
+  projectionBranch(TEMPLATE_DESCRIBE_PROJECTION),
 ]);

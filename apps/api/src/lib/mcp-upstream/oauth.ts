@@ -53,26 +53,18 @@ const authorizationServerMetadataSchema = v.looseObject({
   client_id_metadata_document_supported: v.optional(v.boolean()),
 });
 
-const dynamicClientRegistrationResponseSchema = v.intersect([
-  v.object({
-    client_id: v.string(),
-  }),
-  v.looseObject({
-    client_secret: v.optional(v.string()),
-  }),
-]);
+const dynamicClientRegistrationResponseSchema = v.looseObject({
+  client_id: v.string(),
+  client_secret: v.optional(v.string()),
+});
 
-const tokenResponseSchema = v.intersect([
-  v.object({
-    access_token: v.string(),
-  }),
-  v.looseObject({
-    refresh_token: v.optional(v.string()),
-    token_type: v.optional(v.string()),
-    expires_in: v.optional(v.number()),
-    scope: v.optional(v.string()),
-  }),
-]);
+const tokenResponseSchema = v.looseObject({
+  access_token: v.string(),
+  refresh_token: v.optional(v.string()),
+  token_type: v.optional(v.string()),
+  expires_in: v.optional(v.number()),
+  scope: v.optional(v.string()),
+});
 
 export type ProtectedResourceMetadata = v.InferOutput<
   typeof protectedResourceMetadataSchema

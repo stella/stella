@@ -12,6 +12,8 @@
  * display label, so renaming a label never breaks a saved binding.
  */
 
+import * as v from "valibot";
+
 import {
   WORKSPACE_CONTACT_ROLES,
   type WorkspaceContactRole,
@@ -79,25 +81,42 @@ export type BindingSourceKind = (typeof BINDING_SOURCE_KINDS)[number];
  * A contact/matter data binding on a template field. Discriminated on `kind`;
  * `field` is the stable key within the resolved record (see module docs).
  */
-export type FieldSource =
-  | { kind: "contact"; field: string }
-  | { kind: "party"; role: WorkspaceContactRole; field: string }
-  | { kind: "matter"; field: string }
-  | { kind: "attorney"; ref: AttorneyRef; field: string }
-  | { kind: "firm"; field: string };
-
-const isRecordLike = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
-const isMember = (members: readonly string[], value: unknown): boolean =>
-  typeof value === "string" && members.includes(value);
+const workspaceContactRoleSchema = v.picklist(WORKSPACE_CONTACT_ROLES);
+const attorneyRefSchema = v.picklist(ATTORNEY_REFS);
 
 export const isWorkspaceContactRole = (
   value: unknown,
-): value is WorkspaceContactRole => isMember(WORKSPACE_CONTACT_ROLES, value);
+): value is WorkspaceContactRole => v.is(workspaceContactRoleSchema, value);
 
 export const isAttorneyRef = (value: unknown): value is AttorneyRef =>
-  isMember(ATTORNEY_REFS, value);
+  v.is(attorneyRefSchema, value);
+
+export const fieldSourceSchema = v.variant("kind", [
+  v.strictObject({
+    kind: v.literal("contact"),
+    field: v.picklist(CONTACT_FIELDS),
+  }),
+  v.strictObject({
+    kind: v.literal("party"),
+    role: workspaceContactRoleSchema,
+    field: v.picklist(CONTACT_FIELDS),
+  }),
+  v.strictObject({
+    kind: v.literal("matter"),
+    field: v.picklist(MATTER_FIELDS),
+  }),
+  v.strictObject({
+    kind: v.literal("attorney"),
+    ref: attorneyRefSchema,
+    field: v.picklist(USER_FIELDS),
+  }),
+  v.strictObject({
+    kind: v.literal("firm"),
+    field: v.picklist(FIRM_FIELDS),
+  }),
+]);
+
+export type FieldSource = v.InferOutput<typeof fieldSourceSchema>;
 
 /**
  * Validate a {@link FieldSource}: a known `kind`, a `field` key allowed for
@@ -105,27 +124,5 @@ export const isAttorneyRef = (value: unknown): value is AttorneyRef =>
  * are checked against the per-kind allow-lists; when the registry lands this
  * widens to also accept property ids.
  */
-export const isFieldSource = (value: unknown): value is FieldSource => {
-  if (!isRecordLike(value) || typeof value["field"] !== "string") {
-    return false;
-  }
-  switch (value["kind"]) {
-    case "contact":
-      return isMember(CONTACT_FIELDS, value["field"]);
-    case "party":
-      return (
-        isWorkspaceContactRole(value["role"]) &&
-        isMember(CONTACT_FIELDS, value["field"])
-      );
-    case "matter":
-      return isMember(MATTER_FIELDS, value["field"]);
-    case "attorney":
-      return (
-        isAttorneyRef(value["ref"]) && isMember(USER_FIELDS, value["field"])
-      );
-    case "firm":
-      return isMember(FIRM_FIELDS, value["field"]);
-    default:
-      return false;
-  }
-};
+export const isFieldSource = (value: unknown): value is FieldSource =>
+  v.is(fieldSourceSchema, value);
