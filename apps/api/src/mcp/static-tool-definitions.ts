@@ -78,6 +78,26 @@ type LegacyManualInputToolName = Exclude<
   ValibotInputToolName
 >;
 
+type ListAuditLogInputDefinition = Extract<
+  (typeof DEFAULT_MCP_TOOL_DEFINITIONS)[number],
+  { name: "list_audit_log" }
+>;
+type SaveTemplateInputDefinition = Extract<
+  (typeof DEFAULT_MCP_TOOL_DEFINITIONS)[number],
+  { name: "save_template" }
+>;
+
+true satisfies ListAuditLogInputDefinition extends {
+  inputSchemaSource: unknown;
+}
+  ? true
+  : never;
+true satisfies SaveTemplateInputDefinition extends {
+  inputSchemaSource: unknown;
+}
+  ? true
+  : never;
+
 /**
  * Ratchet for native tools whose advertised JSON Schema still mirrors a
  * separate runtime validator. New tools must use defineValibotMcpTool; each
@@ -143,10 +163,8 @@ type MigratedInputToolStillDeclaredLegacy = Exclude<
   LegacyManualInputToolName
 >;
 
-true satisfies [
-  MissingLegacyManualInputToolName,
-  MigratedInputToolStillDeclaredLegacy,
-] extends [never, never]
+true satisfies MissingLegacyManualInputToolName extends never ? true : never;
+true satisfies MigratedInputToolStillDeclaredLegacy extends never
   ? true
   : never;
 
