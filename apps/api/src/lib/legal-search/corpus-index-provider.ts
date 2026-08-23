@@ -180,11 +180,12 @@ const search = async (query: LegalSearchQuery): Promise<LegalSearchResult> => {
       const rows =
         ids.length === 0
           ? []
-          : await caseLawPublicReadDb(async (tx) =>
-              await rehydrateCorpusIndexProviderCandidates(tx, {
-                generation,
-                ids,
-              }),
+          : await caseLawPublicReadDb(
+              async (tx) =>
+                await rehydrateCorpusIndexProviderCandidates(tx, {
+                  generation,
+                  ids,
+                }),
             );
 
       // Keyed by plain string id (candidate ids from corpus index are strings).
