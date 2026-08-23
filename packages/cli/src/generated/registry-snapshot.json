@@ -758,29 +758,34 @@
     "description": "Create a document template from a DOCX, or configure an existing template's fields. To create, pass docx_base64 (base64-encoded .docx / Office Open XML bytes, max ~10 MB decoded) and a name; the {{field}} markers in the file become the template's fillable fields, and you can pass fields to configure them in the same call. To configure an existing template, pass template_id with fields and no docx_base64; only the manifest changes, the document's {{markers}} stay untouched. Each fields entry's path must match a {{marker}} in the template. Read the marker grammar from the template-markers reference resource when unsure. Returns the template id and field count when creating, or the updated field list when configuring.",
     "inputSchema": {
       "type": "object",
+      "required": [],
+      "additionalProperties": false,
       "properties": {
         "template_id": {
           "type": "string",
-          "description": "Existing template id to configure its fields; omit (with docx_base64) to create a new template"
+          "minLength": 1,
+          "description": "Existing template id to configure; omit when creating a template"
         },
         "name": {
           "type": "string",
-          "description": "Template display name; required when creating",
-          "maxLength": 256
+          "minLength": 1,
+          "maxLength": 256,
+          "description": "Template display name; required when creating"
         },
         "docx_base64": {
           "type": "string",
-          "description": "Base64-encoded DOCX file bytes (Office Open XML, max ~10 MB decoded); required when creating, omit when configuring"
+          "minLength": 1,
+          "maxLength": 69905068,
+          "description": "Base64-encoded DOCX bytes; required when creating, omit when configuring"
         },
         "fields": {
           "type": "array",
-          "description": "Field configuration overlay, one entry per field to configure. Each entry's 'path' must match a {{marker}} in the template. Configurable: label, hint, inputType, required, options, optionsFrom (dependent select), date format, composite parts + format, and who-fills the field — a person (default), AI (aiPrompt), Person+AI (aiAdapt), a formula, or a company-register lookup (registry + named output formats). formula is mutually exclusive with aiPrompt/aiAdapt/lookup/parts.",
           "items": {
             "type": "object",
             "properties": {
               "path": {
                 "type": "string",
-                "description": "Field path — must match a {{marker}} in the template"
+                "description": "Field path; must match a {{marker}} in the template"
               },
               "label": {
                 "type": "string",
@@ -791,13 +796,9 @@
                 "description": "Short fill guidance shown to the person filling the field"
               },
               "inputType": {
-                "type": "string",
                 "enum": ["text", "number", "boolean", "date", "select"],
+                "type": "string",
                 "description": "Input control type"
-              },
-              "required": {
-                "type": "boolean",
-                "description": "Whether a value is required"
               },
               "options": {
                 "type": "array",
@@ -806,9 +807,49 @@
                 },
                 "description": "Allowed values when inputType is 'select'"
               },
-              "optionsFrom": {
-                "type": "string",
-                "description": "Dependent select: path of another field whose value(s) supply the options"
+              "validation": {
+                "type": "object",
+                "properties": {
+                  "required": {
+                    "type": "boolean",
+                    "description": "Whether a value is required"
+                  },
+                  "minLength": {
+                    "type": "number",
+                    "description": "Minimum string length"
+                  },
+                  "maxLength": {
+                    "type": "number",
+                    "description": "Maximum string length"
+                  },
+                  "min": {
+                    "type": "number",
+                    "description": "Minimum numeric value"
+                  },
+                  "max": {
+                    "type": "number",
+                    "description": "Maximum numeric value"
+                  },
+                  "pattern": {
+                    "type": "string",
+                    "description": "Regex matched against the complete value"
+                  },
+                  "minItems": {
+                    "type": "number",
+                    "description": "Minimum repeated items"
+                  },
+                  "maxItems": {
+                    "type": "number",
+                    "description": "Maximum repeated items"
+                  }
+                },
+                "required": [],
+                "additionalProperties": false,
+                "description": "Field-level value constraints"
+              },
+              "required": {
+                "type": "boolean",
+                "description": "Whether a value is required"
               },
               "aiPrompt": {
                 "type": "string",
@@ -818,53 +859,76 @@
                 "type": "boolean",
                 "description": "Who-fills = Person+AI: the entered value is a stub AI rewrites per occurrence"
               },
-              "formula": {
-                "type": "string",
-                "description": "Who-fills = formula: arithmetic expression over other fields, derived at fill time"
-              },
-              "condition": {
-                "type": "string",
-                "description": "Boolean field derived by rule: a condition expression (e.g. client_type == \"company\"), evaluated at fill time. A {{#if field_path}} marker references it by path. Mutually exclusive with formula/aiPrompt/aiAdapt/lookup/parts."
+              "aiSeesDocument": {
+                "type": "boolean",
+                "description": "Include the rendered document in this AI field's prompt"
               },
               "parts": {
                 "type": "array",
-                "description": "Composite field parts (joined by 'format')",
                 "items": {
                   "type": "object",
-                  "additionalProperties": true
-                }
+                  "properties": {
+                    "key": {
+                      "type": "string",
+                      "description": "Part key referenced by the field format"
+                    },
+                    "label": {
+                      "type": "string",
+                      "description": "Human-readable part label"
+                    },
+                    "inputType": {
+                      "enum": ["text", "select"],
+                      "type": "string",
+                      "description": "Part input control type"
+                    },
+                    "options": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "Allowed values for a select part"
+                    },
+                    "pattern": {
+                      "type": "string",
+                      "description": "Regex matched against the complete part value"
+                    }
+                  },
+                  "required": ["key", "inputType"],
+                  "additionalProperties": false
+                },
+                "minItems": 1,
+                "description": "Composite field parts joined by format"
               },
               "format": {
                 "type": "string",
                 "description": "Join template over composite part keys, e.g. '{{title}} {{name}}'"
               },
-              "dateFormat": {
-                "type": "object",
-                "description": "Locale-aware date rendering for a date field",
-                "properties": {
-                  "locale": {
-                    "type": "string",
-                    "description": "BCP-47 language tag, e.g. 'cs', 'de', 'pl'"
-                  },
-                  "style": {
-                    "type": "string",
-                    "enum": ["long", "medium", "short", "iso"],
-                    "description": "Date style"
-                  }
-                },
-                "required": ["locale", "style"]
+              "optionsFrom": {
+                "type": "string",
+                "description": "Dependent select: path of another field whose values supply the options"
               },
               "lookup": {
                 "type": "object",
-                "description": "Who-fills = company-register lookup",
                 "properties": {
                   "registry": {
+                    "enum": [
+                      "ares",
+                      "brreg",
+                      "companies-house",
+                      "denue",
+                      "edgar",
+                      "gcis",
+                      "krs",
+                      "orsr",
+                      "prh",
+                      "recherche-entreprises",
+                      "vies"
+                    ],
                     "type": "string",
-                    "description": "Registry slug, e.g. 'krs'"
+                    "description": "Business registry to query"
                   },
                   "formats": {
                     "type": "array",
-                    "description": "Named output renderings; the first is the default for the bare {{marker}}",
                     "items": {
                       "type": "object",
                       "properties": {
@@ -874,19 +938,184 @@
                         },
                         "template": {
                           "type": "string",
+                          "maxLength": 2000,
                           "description": "[token]-substituted rendering of the registry hit"
                         }
                       },
-                      "required": ["key", "template"]
-                    }
+                      "required": ["key", "template"],
+                      "additionalProperties": false
+                    },
+                    "minItems": 1,
+                    "maxItems": 10,
+                    "description": "Named output renderings; the first is the default for the bare marker"
                   }
                 },
-                "required": ["registry", "formats"]
+                "required": ["registry", "formats"],
+                "additionalProperties": false,
+                "description": "Who-fills = business-registry lookup"
+              },
+              "source": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "const": "contact"
+                      },
+                      "field": {
+                        "enum": [
+                          "displayName",
+                          "firstName",
+                          "lastName",
+                          "organizationName",
+                          "email",
+                          "phone",
+                          "address",
+                          "addressStreet",
+                          "addressCity",
+                          "addressPostalCode",
+                          "addressCountry",
+                          "registrationNumber",
+                          "taxId",
+                          "iban",
+                          "bic",
+                          "dataBox"
+                        ],
+                        "type": "string"
+                      }
+                    },
+                    "required": ["kind", "field"],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "const": "party"
+                      },
+                      "role": {
+                        "enum": [
+                          "opposing_party",
+                          "opposing_counsel",
+                          "co_counsel",
+                          "witness",
+                          "expert_witness",
+                          "third_party",
+                          "judge",
+                          "mediator",
+                          "other"
+                        ],
+                        "type": "string"
+                      },
+                      "field": {
+                        "enum": [
+                          "displayName",
+                          "firstName",
+                          "lastName",
+                          "organizationName",
+                          "email",
+                          "phone",
+                          "address",
+                          "addressStreet",
+                          "addressCity",
+                          "addressPostalCode",
+                          "addressCountry",
+                          "registrationNumber",
+                          "taxId",
+                          "iban",
+                          "bic",
+                          "dataBox"
+                        ],
+                        "type": "string"
+                      }
+                    },
+                    "required": ["kind", "role", "field"],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "const": "matter"
+                      },
+                      "field": {
+                        "enum": [
+                          "name",
+                          "reference",
+                          "billingReference",
+                          "status"
+                        ],
+                        "type": "string"
+                      }
+                    },
+                    "required": ["kind", "field"],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "const": "attorney"
+                      },
+                      "ref": {
+                        "enum": ["responsible", "originating", "lead"],
+                        "type": "string"
+                      },
+                      "field": {
+                        "enum": ["name", "email"],
+                        "type": "string"
+                      }
+                    },
+                    "required": ["kind", "ref", "field"],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "const": "firm"
+                      },
+                      "field": {
+                        "enum": ["name"],
+                        "type": "string"
+                      }
+                    },
+                    "required": ["kind", "field"],
+                    "additionalProperties": false
+                  }
+                ],
+                "description": "Matter or contact data resolved server-side"
+              },
+              "formula": {
+                "type": "string",
+                "description": "Arithmetic expression derived from other fields"
+              },
+              "condition": {
+                "type": "string",
+                "description": "Boolean rule expression referenced by a {{#if field_path}} marker"
+              },
+              "dateFormat": {
+                "type": "object",
+                "properties": {
+                  "locale": {
+                    "type": "string",
+                    "description": "BCP-47 language tag, e.g. 'cs', 'de', 'pl'"
+                  },
+                  "style": {
+                    "enum": ["long", "medium", "short", "iso"],
+                    "type": "string",
+                    "description": "Date rendering style"
+                  }
+                },
+                "required": ["locale", "style"],
+                "additionalProperties": false,
+                "description": "Locale-aware date rendering for a date field"
               }
             },
             "required": ["path"],
             "additionalProperties": false
-          }
+          },
+          "description": "Strict field configuration overlay; each path must match a template marker"
         }
       }
     },
@@ -2241,47 +2470,57 @@
     "description": "Read the organization's audit trail (compliance view). Returns audit entries newest first, each with its action, resource type and id, actor user id, workspace, timestamp, and change detail. Filter by workspace_id, action, resource_type (with optional resource_id), user_id, and a created-at range (from/to, ISO date-time). Paginate with limit and cursor. Requires organization audit-log access.",
     "inputSchema": {
       "type": "object",
+      "required": [],
+      "additionalProperties": false,
       "properties": {
         "workspace_id": {
           "type": "string",
+          "minLength": 1,
           "description": "Only entries scoped to this matter/workspace"
         },
         "action": {
           "type": "string",
+          "minLength": 1,
           "description": "Only entries with this audit action"
         },
         "resource_type": {
           "type": "string",
+          "minLength": 1,
           "description": "Only entries about this resource type"
         },
         "resource_id": {
           "type": "string",
+          "minLength": 1,
           "description": "Only entries about this resource id; requires resource_type"
         },
         "user_id": {
           "type": "string",
+          "minLength": 1,
           "description": "Only entries whose actor is this user"
         },
         "from": {
           "type": "string",
-          "description": "Only entries created on or after this ISO date-time",
-          "maxLength": 40
+          "format": "date-time",
+          "maxLength": 40,
+          "description": "Only entries created on or after this ISO date-time"
         },
         "to": {
           "type": "string",
-          "description": "Only entries created on or before this ISO date-time",
-          "maxLength": 40
+          "format": "date-time",
+          "maxLength": 40,
+          "description": "Only entries created on or before this ISO date-time"
         },
         "limit": {
           "type": "integer",
-          "description": "Max entries to return",
           "minimum": 1,
-          "maximum": 200
+          "maximum": 200,
+          "description": "Max entries to return"
         },
         "cursor": {
           "type": "string",
-          "description": "Opaque cursor from a previous list_audit_log call to fetch the next page",
-          "maxLength": 512
+          "minLength": 1,
+          "maxLength": 512,
+          "description": "Opaque cursor from a previous list_audit_log call to fetch the next page"
         }
       }
     },
