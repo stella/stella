@@ -337,12 +337,12 @@ export const composeInputFromFlags = async <T extends FlagSpec>({
  * path in the JSON. A required flag is satisfied either by being set or by
  * already being present in `base`, so `--input` can carry it. Exported for tests.
  */
-export const buildArgsFromFlags = (
+export const buildArgsFromFlags = async (
   spec: LeafCommandSpec,
   flags: LeafFlags,
   base: Record<string, unknown> = {},
 ): Promise<ArgsResult> =>
-  composeInputFromFlags({
+  await composeInputFromFlags({
     base,
     flagPath: (flagSpec) => flagSpec.prop,
     flagSpecs: spec.flags,
