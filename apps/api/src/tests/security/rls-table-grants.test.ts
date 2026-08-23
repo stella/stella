@@ -367,7 +367,7 @@ const stellaTableGrant = (statement: string): StellaTableGrant | null => {
 
 const explicitStellaGrantTables = (statement: string): string[] => {
   const grant = stellaTableGrant(statement);
-  if (grant === null || grant.type !== "tables") {
+  if (grant?.type !== "tables") {
     return [];
   }
   const grantsTableDml =
