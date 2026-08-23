@@ -498,23 +498,21 @@ describe("public statute list", () => {
     ]);
   });
 
-  test("accepts and preserves the compatibility release's legacy cursor", async () => {
+  test("rejects the retired full-title cursor protocol", async () => {
     const legacyCursor = encodePaginationCursor([
       "Civil Code (English)",
       civilCodeEnglish,
     ]);
-    const page = expectPage(
-      await listStatutesHandler(
-        { country: "CZE", cursor: legacyCursor, limit: 1 },
-        legislationDb,
-      ),
+    const result = await listStatutesHandler(
+      { country: "CZE", cursor: legacyCursor, limit: 1 },
+      legislationDb,
     );
 
-    expect(page.items.map((item) => item.id)).toEqual([labourCode]);
-    expect(decodePaginationCursor(page.nextCursor ?? "")).toEqual([
-      "Labour Code",
-      labourCode,
-    ]);
+    expect(result).not.toHaveProperty("items");
+    expect(result).toMatchObject({
+      code: 400,
+      response: { message: "Invalid cursor" },
+    });
   });
 
   test("accepts and preserves the next release's bounded cursor protocol", async () => {
@@ -549,7 +547,7 @@ describe("public statute list", () => {
     ]);
   });
 
-  test("rejects a cursor outside both title cursor protocols", async () => {
+  test("rejects a cursor outside the bounded title protocol", async () => {
     const result = await listStatutesHandler(
       { country: "CZE", cursor: "not-a-cursor" },
       legislationDb,
