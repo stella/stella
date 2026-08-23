@@ -39,23 +39,29 @@ type PublicLawSharedReadTransaction = Pick<
 
 export type PublicLawDatabaseRolePermissions = {
   canConnect: boolean;
+  canDelegatePublicLaw: boolean;
   canReadPublicLaw: boolean;
   canReadOtherData: boolean;
+  canUseSequence: boolean;
   canUseSchema: boolean;
   canWritePublicLaw: boolean;
 };
 
 export const assertPublicLawDatabaseRolePermissions = ({
   canConnect,
+  canDelegatePublicLaw,
   canReadPublicLaw,
   canReadOtherData,
+  canUseSequence,
   canUseSchema,
   canWritePublicLaw,
 }: PublicLawDatabaseRolePermissions): void => {
   if (
     !canConnect ||
+    canDelegatePublicLaw ||
     !canReadPublicLaw ||
     canReadOtherData ||
+    canUseSequence ||
     !canUseSchema ||
     canWritePublicLaw
   ) {
@@ -123,6 +129,33 @@ export const publicLawDatabaseRolePermissionsSql = (): SqlFragment => {
             AND NOT columns.attisdropped
         ) AS "canReadPublicLaw",
         EXISTS (
+          SELECT 1
+          FROM information_schema.role_table_grants
+          WHERE table_schema <> 'information_schema'
+            AND table_schema !~ '^pg_'
+            AND is_grantable = 'YES'
+        ) OR EXISTS (
+          SELECT 1
+          FROM information_schema.role_column_grants
+          WHERE table_schema <> 'information_schema'
+            AND table_schema !~ '^pg_'
+            AND is_grantable = 'YES'
+        ) AS "canDelegatePublicLaw",
+        EXISTS (
+          SELECT 1
+          FROM pg_class AS sequences
+          INNER JOIN pg_namespace AS schemas
+            ON schemas.oid = sequences.relnamespace
+          WHERE schemas.nspname <> 'information_schema'
+            AND schemas.nspname !~ '^pg_'
+            AND sequences.relkind = 'S'
+            AND has_sequence_privilege(
+              current_user,
+              sequences.oid,
+              'USAGE,SELECT,UPDATE'
+            )
+        ) AS "canUseSequence",
+        EXISTS (
           -- Any readable column outside the exact allowlist is excess.
           SELECT 1
           FROM pg_attribute AS columns
@@ -148,7 +181,11 @@ export const publicLawDatabaseRolePermissionsSql = (): SqlFragment => {
         ) AS "canReadOtherData",
         has_schema_privilege(current_user, 'public', 'USAGE')
           AS "canUseSchema",
-        EXISTS (
+        has_database_privilege(
+          current_user,
+          current_database(),
+          'CREATE'
+        ) OR EXISTS (
           SELECT 1
           FROM pg_namespace AS schemas
           WHERE schemas.nspname <> 'information_schema'

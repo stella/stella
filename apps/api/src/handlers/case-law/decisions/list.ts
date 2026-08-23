@@ -41,6 +41,35 @@ const caseLawCreatedAtCursor = createTimestampIdCursorCodec({
   brandId: brandPersistedCaseLawDecisionId,
 });
 
+type ReadDecisionLanguageAlternateCountsOptions = {
+  caseLawDb: CaseLawPublicReadDb;
+  languageGroupKeys: string[];
+};
+
+export const readDecisionLanguageAlternateCounts = async ({
+  caseLawDb,
+  languageGroupKeys,
+}: ReadDecisionLanguageAlternateCountsOptions) =>
+  await caseLawDb((tx) =>
+    tx
+      .select({
+        languageGroupKey: caseLawDecisions.languageGroupKey,
+        count: validCaseLawLanguageAlternateCountSql,
+      })
+      .from(caseLawDecisions)
+      .innerJoin(
+        caseLawSources,
+        eq(caseLawSources.id, caseLawDecisions.sourceId),
+      )
+      .where(
+        and(
+          inArray(caseLawDecisions.languageGroupKey, languageGroupKeys),
+          redistributableCaseLawSource,
+        ),
+      )
+      .groupBy(caseLawDecisions.languageGroupKey),
+  );
+
 export const listDecisionsHandler = async (
   query: ListDecisionsQuery,
   caseLawDb: CaseLawPublicReadDb,
@@ -159,25 +188,10 @@ export const listDecisionsHandler = async (
   ];
   const languageAlternateCounts =
     languageGroupKeys.length > 0
-      ? await caseLawDb((tx) =>
-          tx
-            .select({
-              languageGroupKey: caseLawDecisions.languageGroupKey,
-              count: validCaseLawLanguageAlternateCountSql,
-            })
-            .from(caseLawDecisions)
-            .innerJoin(
-              caseLawSources,
-              eq(caseLawSources.id, caseLawDecisions.sourceId),
-            )
-            .where(
-              and(
-                inArray(caseLawDecisions.languageGroupKey, languageGroupKeys),
-                redistributableCaseLawSource,
-              ),
-            )
-            .groupBy(caseLawDecisions.languageGroupKey),
-        )
+      ? await readDecisionLanguageAlternateCounts({
+          caseLawDb,
+          languageGroupKeys,
+        })
       : [];
   const languageAlternateCountByGroupKey = new Map(
     languageAlternateCounts

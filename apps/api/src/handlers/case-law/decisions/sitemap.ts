@@ -5,7 +5,10 @@ import type { Static } from "elysia";
 
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import { arrayOrEmpty } from "@/api/lib/array";
-import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
+import type {
+  CaseLawPublicReadDb,
+  CaseLawPublicReadTransaction,
+} from "@/api/lib/case-law-public-read-db";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
 import { groupableSql } from "@/api/lib/groupable-sql";
 import { LIMITS } from "@/api/lib/limits";
@@ -27,6 +30,10 @@ const SITEMAP_LANGUAGE_ALTERNATE_GROUP_BATCH_SIZE = 1000;
 // decision-detail alternate read (read-by-id.ts) via LIMITS.
 const MAX_LANGUAGES_PER_ALTERNATE_GROUP =
   LIMITS.caseLawLanguageAlternatesPerGroupMax;
+const SITEMAP_LANGUAGE_ALTERNATE_ROW_LIMIT =
+  SITEMAP_LANGUAGE_ALTERNATE_GROUP_BATCH_SIZE *
+    MAX_LANGUAGES_PER_ALTERNATE_GROUP +
+  1;
 const LANGUAGE_SEGMENT_REGEX = /^[a-z]{2,3}(?:-[a-z0-9]{2,8})*$/u;
 
 export const sitemapShardDecisionsQuerySchema = t.Object({
@@ -162,6 +169,68 @@ const getShardConditions = ({
   return conditions;
 };
 
+export const readSitemapBucketShards = async (
+  tx: CaseLawPublicReadTransaction,
+) =>
+  await tx
+    .select({
+      country: caseLawDecisions.country,
+      year: decisionYearSql,
+      month: decisionMonthSql,
+      bucket: decisionBucketSql,
+      total: sql<number>`count(*)::int`,
+      lastmod: sql<Date | null>`max(${caseLawDecisions.updatedAt})`,
+    })
+    .from(caseLawDecisions)
+    .innerJoin(
+      caseLawSources,
+      eq(caseLawSources.id, caseLawDecisions.sourceId),
+    )
+    .where(redistributableCaseLawSource)
+    .groupBy(
+      caseLawDecisions.country,
+      decisionYearSql,
+      decisionMonthSql,
+      decisionBucketSql,
+    )
+    .orderBy(
+      asc(caseLawDecisions.country),
+      desc(decisionYearSql),
+      desc(decisionMonthSql),
+      asc(decisionBucketSql),
+    )
+    // Fetch one past the index cap so an overflowing bucket set is rejected.
+    .limit(LIMITS.caseLawSitemapIndexEntryLimit + 1);
+
+export const readSitemapDecisionAlternates = async (
+  tx: CaseLawPublicReadTransaction,
+  languageGroupKeys: string[],
+) =>
+  await tx
+    .select({
+      id: caseLawDecisions.id,
+      caseNumber: caseLawDecisions.caseNumber,
+      slug: caseLawDecisions.slug,
+      country: caseLawDecisions.country,
+      court: caseLawDecisions.court,
+      language: caseLawDecisions.language,
+      languageGroupKey: caseLawDecisions.languageGroupKey,
+      updatedAt: caseLawDecisions.updatedAt,
+    })
+    .from(caseLawDecisions)
+    .innerJoin(
+      caseLawSources,
+      eq(caseLawSources.id, caseLawDecisions.sourceId),
+    )
+    .where(
+      and(
+        inArray(caseLawDecisions.languageGroupKey, languageGroupKeys),
+        redistributableCaseLawSource,
+      ),
+    )
+    .orderBy(asc(caseLawDecisions.language), asc(caseLawDecisions.id))
+    .limit(SITEMAP_LANGUAGE_ALTERNATE_ROW_LIMIT);
+
 export const listSitemapShardsHandler = async (
   caseLawDb: CaseLawPublicReadDb,
 ) => {
@@ -195,39 +264,7 @@ export const listSitemapShardsHandler = async (
       (shard) => shard.total > LIMITS.caseLawSitemapShardUrlLimit,
     );
     const buckets = needsBucketShards
-      ? await tx
-          .select({
-            country: caseLawDecisions.country,
-            year: decisionYearSql,
-            month: decisionMonthSql,
-            bucket: decisionBucketSql,
-            total: sql<number>`count(*)::int`,
-            lastmod: sql<Date | null>`max(${caseLawDecisions.updatedAt})`,
-          })
-          .from(caseLawDecisions)
-          .innerJoin(
-            caseLawSources,
-            eq(caseLawSources.id, caseLawDecisions.sourceId),
-          )
-          .where(redistributableCaseLawSource)
-          .groupBy(
-            caseLawDecisions.country,
-            decisionYearSql,
-            decisionMonthSql,
-            decisionBucketSql,
-          )
-          .orderBy(
-            asc(caseLawDecisions.country),
-            desc(decisionYearSql),
-            desc(decisionMonthSql),
-            asc(decisionBucketSql),
-          )
-          // Fetch one past the index cap so an overflowing bucket set is
-          // rejected below. Capping exactly at the limit could truncate a
-          // natural shard's buckets mid-shard — the partial shard's row count is
-          // still nonzero, so it would emit only the fetched buckets and
-          // silently drop the rest of that shard from the index.
-          .limit(LIMITS.caseLawSitemapIndexEntryLimit + 1)
+      ? await readSitemapBucketShards(tx)
       : [];
 
     return { naturalShards: natural, bucketShardRows: buckets };
@@ -360,47 +397,20 @@ export const listSitemapShardDecisionsHandler = async (
     // would make the read unbounded. Hitting the cap is a data-integrity anomaly
     // (a group exceeding the expected variant count), not a normal case: warn and
     // proceed with what loaded rather than 500 the whole sitemap.
-    const alternateRowLimit =
-      SITEMAP_LANGUAGE_ALTERNATE_GROUP_BATCH_SIZE *
-        MAX_LANGUAGES_PER_ALTERNATE_GROUP +
-      1;
     for (const groupKeyBatch of chunkArray(
       languageGroupKeys,
       SITEMAP_LANGUAGE_ALTERNATE_GROUP_BATCH_SIZE,
     )) {
-      // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop, no-await-in-loop -- sequential by design: sequential reads on the same transaction connection (one in-flight query per tx)
-      const batchRows = await tx
-        .select({
-          id: caseLawDecisions.id,
-          caseNumber: caseLawDecisions.caseNumber,
-          slug: caseLawDecisions.slug,
-          country: caseLawDecisions.country,
-          court: caseLawDecisions.court,
-          language: caseLawDecisions.language,
-          languageGroupKey: caseLawDecisions.languageGroupKey,
-          updatedAt: caseLawDecisions.updatedAt,
-        })
-        .from(caseLawDecisions)
-        .innerJoin(
-          caseLawSources,
-          eq(caseLawSources.id, caseLawDecisions.sourceId),
-        )
-        .where(
-          and(
-            inArray(caseLawDecisions.languageGroupKey, groupKeyBatch),
-            redistributableCaseLawSource,
-          ),
-        )
-        .orderBy(asc(caseLawDecisions.language), asc(caseLawDecisions.id))
-        .limit(alternateRowLimit);
-      if (batchRows.length === alternateRowLimit) {
+      // oxlint-disable-next-line no-await-in-loop -- sequential by design: one in-flight query per transaction
+      const batchRows = await readSitemapDecisionAlternates(tx, groupKeyBatch);
+      if (batchRows.length === SITEMAP_LANGUAGE_ALTERNATE_ROW_LIMIT) {
         logger.warn("case_law.sitemap.language_alternate_overflow", {
           country: query.country,
           year: query.year,
           month: query.month,
           bucket: query.bucket ?? SITEMAP_ALL_BUCKET,
           groupKeys: groupKeyBatch.length,
-          limit: alternateRowLimit,
+          limit: SITEMAP_LANGUAGE_ALTERNATE_ROW_LIMIT,
         });
       }
       alternateRows.push(...batchRows);

@@ -8,11 +8,16 @@ import {
   stellaCaseLawReader,
   stellaPublicLawReader,
 } from "@/api/db/rls";
-import { listDecisionsHandler } from "@/api/handlers/case-law/decisions/list";
+import {
+  listDecisionsHandler,
+  readDecisionLanguageAlternateCounts,
+} from "@/api/handlers/case-law/decisions/list";
 import { rehydrateCaseLawCandidates } from "@/api/handlers/case-law/decisions/search";
 import {
   listSitemapShardDecisionsHandler,
   listSitemapShardsHandler,
+  readSitemapBucketShards,
+  readSitemapDecisionAlternates,
 } from "@/api/handlers/case-law/decisions/sitemap";
 import { rehydrateLegislationCandidates } from "@/api/handlers/legislation/search";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -213,8 +218,10 @@ describe("public-law reader role", () => {
 
     expect(await asRole(READER_ROLE)).toEqual({
       canConnect: true,
+      canDelegatePublicLaw: false,
       canReadPublicLaw: true,
       canReadOtherData: false,
+      canUseSequence: false,
       canUseSchema: true,
       canWritePublicLaw: false,
     });
@@ -250,6 +257,43 @@ describe("public-law reader role", () => {
       );
     });
     expect(crossSchemaReader).toMatchObject({ canReadOtherData: true });
+  });
+
+  test("startup attestation rejects database CREATE, sequences, and delegable SELECT", async () => {
+    const databaseCreator = await rolePermissionsAfter(async (tx) => {
+      const result = await tx.execute<{ name: string }>(
+        sql`SELECT current_database() AS name`,
+      );
+      const databaseName = result.rows.at(0)?.name;
+      if (databaseName === undefined) {
+        throw new Error("current database name missing");
+      }
+      await tx.execute(
+        sql.raw(
+          `GRANT CREATE ON DATABASE ${quoted(databaseName)} TO ${quoted(READER_ROLE)}`,
+        ),
+      );
+    });
+    expect(databaseCreator).toMatchObject({ canWritePublicLaw: true });
+
+    const sequenceUser = await rolePermissionsAfter(async (tx) => {
+      await tx.execute(sql`CREATE SEQUENCE reader_attestation_probe_sequence`);
+      await tx.execute(
+        sql.raw(
+          `GRANT USAGE ON SEQUENCE reader_attestation_probe_sequence TO ${quoted(READER_ROLE)}`,
+        ),
+      );
+    });
+    expect(sequenceUser).toMatchObject({ canUseSequence: true });
+
+    const delegatingReader = await rolePermissionsAfter(async (tx) => {
+      await tx.execute(
+        sql.raw(
+          `GRANT SELECT (id) ON TABLE case_law_decisions TO ${quoted(READER_ROLE)} WITH GRANT OPTION`,
+        ),
+      );
+    });
+    expect(delegatingReader).toMatchObject({ canDelegatePublicLaw: true });
   });
 
   test("SET ROLE can SELECT every surface and rejects an operational column", async () => {
@@ -315,9 +359,17 @@ describe("public-law reader role", () => {
 
     const list = await listDecisionsHandler({}, caseLawDb);
     expect(list).toMatchObject({ items: [] });
+    await readDecisionLanguageAlternateCounts({
+      caseLawDb,
+      languageGroupKeys: ["reader-role-census"],
+    });
 
     const shards = await listSitemapShardsHandler(caseLawDb);
     expect(shards).toMatchObject({ items: [] });
+    await caseLawDb(async (tx) => {
+      await readSitemapBucketShards(tx);
+      await readSitemapDecisionAlternates(tx, ["reader-role-census"]);
+    });
 
     const shard = await listSitemapShardDecisionsHandler(
       { country: "cz", year: "2026", month: "08" },
@@ -419,8 +471,9 @@ const identifiers = (list: string): string[] =>
 
 const STATEMENT_PATTERN =
   /^(?<verb>GRANT|REVOKE) SELECT(?: \((?<columns>[^)]+)\))? ON TABLE (?<tables>.+?) (?:TO|FROM) "?(?<role>stella_(?:caselaw_reader|public_law_reader))"?$/iu;
-const READER_SELECT_TARGET_PATTERN =
-  /^(?:GRANT|REVOKE) SELECT\b.*\b(?:TO|FROM) "?stella_(?:caselaw_reader|public_law_reader)"?(?:\s|$)/iu;
+const READER_SELECT_STATEMENT_PATTERN = /^(?:GRANT|REVOKE) SELECT\b/iu;
+const READER_ROLE_NAME_PATTERN =
+  /\bstella_(?:caselaw_reader|public_law_reader)\b/iu;
 
 const foldReaderSelectGrants = (
   sqlSources: readonly string[],
@@ -435,7 +488,10 @@ const foldReaderSelectGrants = (
       const statement = raw.replaceAll(/\s+/gu, " ").trim();
       const match = STATEMENT_PATTERN.exec(statement);
       if (match?.groups === undefined) {
-        if (READER_SELECT_TARGET_PATTERN.test(statement)) {
+        if (
+          READER_SELECT_STATEMENT_PATTERN.test(statement) &&
+          READER_ROLE_NAME_PATTERN.test(statement)
+        ) {
           throw new Error(`Unsupported reader SELECT statement: ${statement}`);
         }
         continue;
@@ -546,6 +602,20 @@ describe("public-law reader migrations", () => {
         [
           "GRANT SELECT ON ALL TABLES IN SCHEMA public TO stella_public_law_reader;",
         ],
+        READER_ROLE,
+      ),
+    ).toThrow("Unsupported reader SELECT statement");
+    expect(() =>
+      foldReaderSelectGrants(
+        [
+          'GRANT SELECT ON TABLE "a" TO other_role, stella_public_law_reader;',
+        ],
+        READER_ROLE,
+      ),
+    ).toThrow("Unsupported reader SELECT statement");
+    expect(() =>
+      foldReaderSelectGrants(
+        ['GRANT SELECT ON TABLE "a" TO GROUP stella_public_law_reader;'],
         READER_ROLE,
       ),
     ).toThrow("Unsupported reader SELECT statement");
