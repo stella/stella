@@ -2,9 +2,11 @@ import { useRef, useState } from "react";
 import type * as React from "react";
 
 import {
+  ArrowRightIcon,
   ArchiveIcon,
   BellIcon,
   ChevronDownIcon,
+  ChevronRightIcon,
   ClockIcon,
   CogIcon,
   CopyIcon,
@@ -73,6 +75,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@stll/ui/dialog";
+import { DirectionalIcon } from "@stll/ui/directional-icon";
 import {
   Field,
   FieldDescription,
@@ -904,6 +907,48 @@ export function UiPlayground() {
                     </BreadcrumbItem>
                   </BreadcrumbList>
                 </Breadcrumb>
+              </PlaygroundSection>
+
+              <PlaygroundSection
+                description="Chevrons and arrows in default and RTL layouts."
+                title="Directional Icon"
+              >
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="flex flex-col gap-3 rounded-md border p-3">
+                    <span className="text-muted-foreground text-xs font-medium">
+                      Default direction
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <DirectionalIcon
+                        className="size-5"
+                        icon={ChevronRightIcon}
+                      />
+                      <DirectionalIcon
+                        className="size-5"
+                        icon={ArrowRightIcon}
+                      />
+                    </div>
+                  </div>
+
+                  <div
+                    className="flex flex-col gap-3 rounded-md border p-3"
+                    dir="rtl"
+                  >
+                    <span className="text-muted-foreground text-xs font-medium">
+                      RTL direction
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <DirectionalIcon
+                        className="size-5"
+                        icon={ChevronRightIcon}
+                      />
+                      <DirectionalIcon
+                        className="size-5"
+                        icon={ArrowRightIcon}
+                      />
+                    </div>
+                  </div>
+                </div>
               </PlaygroundSection>
 
               <PlaygroundSection
