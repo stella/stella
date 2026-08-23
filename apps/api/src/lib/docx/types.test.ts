@@ -214,6 +214,28 @@ describe("isFieldMeta", () => {
     );
   });
 
+  test("rejects multiple active derived source modes", () => {
+    expect(
+      isFieldMeta({ path: "x", aiPrompt: "draft it", aiAdapt: false }),
+    ).toBe(true);
+    expect(
+      isFieldMeta({ path: "x", aiPrompt: "draft it", aiAdapt: true }),
+    ).toBe(false);
+    expect(
+      isFieldMeta({
+        path: "x",
+        aiPrompt: "draft it",
+        lookup: { registry: "krs" },
+      }),
+    ).toBe(false);
+    expect(
+      isFieldMeta({
+        ...compositeField,
+        lookup: { registry: "krs" },
+      }),
+    ).toBe(false);
+  });
+
   test("accepts a contact-sourced field", () => {
     expect(
       isFieldMeta({

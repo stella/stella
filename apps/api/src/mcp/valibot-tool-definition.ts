@@ -20,6 +20,19 @@ type JsonSchemaProjectionWaiver = {
   reason: string;
 };
 
+type ValibotMcpToolDefinition<
+  TSchema extends v.GenericSchema,
+  TName extends string,
+  TDefinition extends Omit<McpToolDefinition, "inputSchema" | "name">,
+> = Omit<
+  TDefinition,
+  "inputSchema" | "jsonSchemaProjectionWaiver" | "name"
+> & {
+  inputSchema: McpToolInputSchema;
+  inputSchemaSource: TSchema;
+  name: TName;
+};
+
 const deriveMcpInputSchema = (
   schema: v.GenericSchema,
   projectionWaiver: JsonSchemaProjectionWaiver | undefined,
@@ -59,18 +72,17 @@ export const defineValibotMcpTool = <
   const TSchema extends v.GenericSchema,
   const TName extends string,
   const TDefinition extends Omit<McpToolDefinition, "inputSchema" | "name">,
->({
-  inputSchema,
-  jsonSchemaProjectionWaiver,
-  name,
-  ...definition
-}: TDefinition & {
+>(definition: TDefinition & {
   inputSchema: TSchema;
   jsonSchemaProjectionWaiver?: JsonSchemaProjectionWaiver;
   name: TName;
-}) => ({
-  ...definition,
-  inputSchema: deriveMcpInputSchema(inputSchema, jsonSchemaProjectionWaiver),
-  inputSchemaSource: inputSchema,
-  name,
-});
+}): ValibotMcpToolDefinition<TSchema, TName, TDefinition> => {
+  const { inputSchema, jsonSchemaProjectionWaiver, name, ...toolDefinition } =
+    definition;
+  return {
+    ...toolDefinition,
+    inputSchema: deriveMcpInputSchema(inputSchema, jsonSchemaProjectionWaiver),
+    inputSchemaSource: inputSchema,
+    name,
+  };
+};

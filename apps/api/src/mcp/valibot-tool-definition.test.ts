@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { expectTypeOf } from "expect-type";
 import * as v from "valibot";
 
 import { defineValibotMcpTool } from "@/api/mcp/valibot-tool-definition";
@@ -38,6 +39,10 @@ describe("Valibot-backed MCP tool definitions", () => {
       scope: "stella:read",
     });
 
+    expectTypeOf(definition.name).toEqualTypeOf<"read_example">();
+    expectTypeOf(definition.inputSchemaSource).toEqualTypeOf<
+      typeof inputSchema
+    >();
     expect(definition.inputSchemaSource).toBe(inputSchema);
     expect(definition).not.toHaveProperty("jsonSchemaProjectionWaiver");
     expect(definition.inputSchema).toEqual({

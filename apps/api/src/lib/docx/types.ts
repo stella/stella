@@ -383,16 +383,16 @@ export const fieldValidationSchema = v.pipe(
   v.description("Field-level value constraints"),
 );
 
-const hasCompatibleDerivedSources = ({
-  aiAdapt,
-  aiPrompt,
-  condition,
-  conditionAst,
-  formula,
-  lookup,
-  parts,
-  source,
-}: {
+type DerivedSourceMode =
+  | "ai-adapt"
+  | "ai-prompt"
+  | "condition"
+  | "formula"
+  | "lookup"
+  | "parts"
+  | "source";
+
+type DerivedSourceFields = {
   aiAdapt?: boolean | undefined;
   aiPrompt?: string | undefined;
   condition?: string | undefined;
@@ -401,40 +401,33 @@ const hasCompatibleDerivedSources = ({
   lookup?: FieldLookup | undefined;
   parts?: FieldPart[] | undefined;
   source?: FieldSource | undefined;
-}): boolean => {
-  const hasFormula = formula !== undefined;
-  const hasCondition = condition !== undefined || conditionAst !== undefined;
-  const hasSource = source !== undefined;
-
-  if (
-    hasFormula &&
-    (aiPrompt !== undefined ||
-      aiAdapt !== undefined ||
-      lookup !== undefined ||
-      parts !== undefined)
-  ) {
-    return false;
-  }
-  if (
-    hasCondition &&
-    (hasFormula ||
-      aiPrompt !== undefined ||
-      aiAdapt !== undefined ||
-      lookup !== undefined ||
-      parts !== undefined)
-  ) {
-    return false;
-  }
-  return (
-    !hasSource ||
-    (!hasFormula &&
-      !hasCondition &&
-      aiPrompt === undefined &&
-      aiAdapt === undefined &&
-      lookup === undefined &&
-      parts === undefined)
-  );
 };
+
+const activeDerivedSourceModes = ({
+  aiAdapt,
+  aiPrompt,
+  condition,
+  conditionAst,
+  formula,
+  lookup,
+  parts,
+  source,
+}: DerivedSourceFields): DerivedSourceMode[] => {
+  const modes: DerivedSourceMode[] = [];
+  if (aiAdapt === true) modes.push("ai-adapt");
+  if (aiPrompt !== undefined) modes.push("ai-prompt");
+  if (condition !== undefined || conditionAst !== undefined) {
+    modes.push("condition");
+  }
+  if (formula !== undefined) modes.push("formula");
+  if (lookup !== undefined) modes.push("lookup");
+  if (parts !== undefined) modes.push("parts");
+  if (source !== undefined) modes.push("source");
+  return modes;
+};
+
+const hasCompatibleDerivedSources = (fields: DerivedSourceFields): boolean =>
+  activeDerivedSourceModes(fields).length <= 1;
 
 const fieldMetaObjectSchema = v.strictObject({
   path: fieldPathSchema("Field path; must match a {{marker}} in the template"),
