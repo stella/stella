@@ -37,14 +37,7 @@ export const listStatutesQuerySchema = t.Object({
 
 type ListStatutesQuery = Static<typeof listStatutesQuerySchema>;
 
-const LEGACY_TITLE_CURSOR_KIND = "legacy-title";
 export const LEGISLATION_TITLE_CURSOR_KIND = "title-prefix-v1";
-
-type LegacyTitleIdCursor = {
-  type: typeof LEGACY_TITLE_CURSOR_KIND;
-  title: string;
-  id: SafeId<"legislationDocument">;
-};
 
 type TitlePrefixIdCursor = {
   type: typeof LEGISLATION_TITLE_CURSOR_KIND;
@@ -52,24 +45,10 @@ type TitlePrefixIdCursor = {
   id: SafeId<"legislationDocument">;
 };
 
-type LegislationTitleCursor = LegacyTitleIdCursor | TitlePrefixIdCursor;
-
 const titleSortKey = legislationTitleSortKey(legislationDocuments.title);
 
-const decodeTitleCursor = (cursor: string): LegislationTitleCursor | null => {
+const decodeTitleCursor = (cursor: string): TitlePrefixIdCursor | null => {
   const parts = decodePaginationCursor(cursor);
-
-  if (parts?.length === 2) {
-    const [title, id] = parts;
-    if (typeof title !== "string" || !isUuidPaginationCursorPart(id)) {
-      return null;
-    }
-    return {
-      type: LEGACY_TITLE_CURSOR_KIND,
-      title,
-      id: brandPersistedLegislationDocumentId(id),
-    };
-  }
 
   if (parts?.length === 3) {
     const [kind, key, id] = parts;
@@ -124,10 +103,6 @@ export const listStatutesHandler = async (
   if (query.cursor !== undefined && cursor === null) {
     return status(400, { message: "Invalid cursor" });
   }
-  const orderKind =
-    cursor?.type === LEGISLATION_TITLE_CURSOR_KIND
-      ? LEGISLATION_TITLE_CURSOR_KIND
-      : LEGACY_TITLE_CURSOR_KIND;
   const conditions: SQL[] = [
     redistributableLegislationSource,
     eq(legislationDocuments.country, query.country.toUpperCase()),
@@ -157,22 +132,13 @@ export const listStatutesHandler = async (
   }
 
   if (cursor !== null) {
-    const keyset =
-      cursor.type === LEGISLATION_TITLE_CURSOR_KIND
-        ? or(
-            gt(titleSortKey, cursor.titleSortKey),
-            and(
-              eq(titleSortKey, cursor.titleSortKey),
-              gt(legislationDocuments.id, cursor.id),
-            ),
-          )
-        : or(
-            gt(legislationDocuments.title, cursor.title),
-            and(
-              eq(legislationDocuments.title, cursor.title),
-              gt(legislationDocuments.id, cursor.id),
-            ),
-          );
+    const keyset = or(
+      gt(titleSortKey, cursor.titleSortKey),
+      and(
+        eq(titleSortKey, cursor.titleSortKey),
+        gt(legislationDocuments.id, cursor.id),
+      ),
+    );
 
     if (keyset) {
       conditions.push(keyset);
@@ -203,14 +169,7 @@ export const listStatutesHandler = async (
           eq(legislationSources.id, legislationDocuments.sourceId),
         )
         .where(and(...conditions))
-        .orderBy(
-          asc(
-            orderKind === LEGISLATION_TITLE_CURSOR_KIND
-              ? titleSortKey
-              : legislationDocuments.title,
-          ),
-          asc(legislationDocuments.id),
-        )
+        .orderBy(asc(titleSortKey), asc(legislationDocuments.id))
         .limit(limit + 1),
   );
 
@@ -218,13 +177,11 @@ export const listStatutesHandler = async (
     rows,
     limit,
     cursorForItem: (item) =>
-      orderKind === LEGISLATION_TITLE_CURSOR_KIND
-        ? encodePaginationCursor([
-            LEGISLATION_TITLE_CURSOR_KIND,
-            item.titleSortKey,
-            item.id,
-          ])
-        : encodePaginationCursor([item.title, item.id]),
+      encodePaginationCursor([
+        LEGISLATION_TITLE_CURSOR_KIND,
+        item.titleSortKey,
+        item.id,
+      ]),
   });
 
   return {

@@ -50,7 +50,7 @@ const registerAct = createSafeId<"legislationDocument">();
 const sunsetAct = createSafeId<"legislationDocument">();
 const withheldAct = createSafeId<"legislationDocument">();
 const enumeratedAmendments = Array.from(
-  { length: 20 },
+  { length: 1000 },
   (_, index) => `act-${index.toString(36).padStart(4, "0")}`,
 ).join(", ");
 const longOfficialTitle = `Long legislation title amending ${enumeratedAmendments}`;
@@ -382,8 +382,7 @@ describe("public statute list", () => {
       await listStatutesHandler({ country: "CZE" }, legislationDb),
     );
 
-    expect(longOfficialTitle.length).toBeGreaterThan(64);
-    expect(longOfficialTitle.length).toBeLessThanOrEqual(1024);
+    expect(longOfficialTitle.length).toBeGreaterThan(1024);
     expect(page.items.map((item) => item.title)).toEqual([
       "Civil Code",
       "Civil Code (English)",
@@ -476,7 +475,17 @@ describe("public statute list", () => {
         break;
       }
       expect(cursor.length).toBeLessThanOrEqual(PAGINATION_CURSOR_MAX_CHARS);
-      expect(decodePaginationCursor(cursor)).toHaveLength(2);
+      const cursorParts = decodePaginationCursor(cursor);
+      expect(cursorParts).toHaveLength(3);
+      expect(cursorParts?.at(0)).toBe(LEGISLATION_TITLE_CURSOR_KIND);
+      const sortKey = cursorParts?.at(1);
+      expect(typeof sortKey).toBe("string");
+      if (typeof sortKey !== "string") {
+        throw new TypeError("Expected a title sort key in the tagged cursor");
+      }
+      expect(sortKey.length).toBeLessThanOrEqual(
+        LEGISLATION_TITLE_SORT_KEY_CHARS,
+      );
     }
 
     expect(cursor).toBeNull();
@@ -487,6 +496,23 @@ describe("public statute list", () => {
       longTitleAct,
       registerAct,
     ]);
+  });
+
+  test("rejects the retired full-title cursor protocol", async () => {
+    const legacyCursor = encodePaginationCursor([
+      "Civil Code (English)",
+      civilCodeEnglish,
+    ]);
+    const result = await listStatutesHandler(
+      { country: "CZE", cursor: legacyCursor, limit: 1 },
+      legislationDb,
+    );
+
+    expect(result).not.toHaveProperty("items");
+    expect(result).toMatchObject({
+      code: 400,
+      response: { message: "Invalid cursor" },
+    });
   });
 
   test("accepts and preserves the next release's bounded cursor protocol", async () => {
@@ -521,7 +547,7 @@ describe("public statute list", () => {
     ]);
   });
 
-  test("rejects a cursor outside both title cursor protocols", async () => {
+  test("rejects a cursor outside the bounded title protocol", async () => {
     const result = await listStatutesHandler(
       { country: "CZE", cursor: "not-a-cursor" },
       legislationDb,

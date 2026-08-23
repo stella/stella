@@ -77,7 +77,9 @@ export const legislationDocuments = p.pgTable(
     // European Legislation Identifier / national statute id — the work key
     // shared across consolidations.
     eli: p.varchar({ length: 512 }).notNull(),
-    title: p.varchar({ length: 1024 }).notNull(),
+    // Official titles can enumerate every amended act and have no bounded
+    // maximum in the publisher's domain.
+    title: p.text().notNull(),
     country: p.varchar({ length: 3 }).notNull(),
     language: p.varchar({ length: 8 }).notNull(),
     documentType: p.varchar("document_type", { length: 128 }),
@@ -137,12 +139,11 @@ export const legislationDocuments = p.pgTable(
       .index("legislation_documents_eli_lang_valid_from_idx")
       .on(t.eli, t.language, t.versionValidFrom),
     p.index("legislation_documents_country_idx").on(t.country),
-    // The compatibility release still emits legacy full-title cursors. The
-    // follow-up cutover replaces this index after every replica understands
-    // the tagged bounded cursor protocol.
+    // Full titles are not B-tree-safe and cannot travel in a bounded cursor.
+    // The canonical expression also owns the handler's tagged ordering.
     p
-      .index("legislation_documents_country_title_id_idx")
-      .on(t.country, t.title, t.id),
+      .index("legislation_documents_country_title_sort_id_idx")
+      .on(t.country, legislationTitleSortKey(t.title), t.id),
     // Its search filter matches anywhere in the title or the identifier, so
     // the access path has to be trigram rather than btree.
     p
