@@ -995,7 +995,7 @@ export const validateTanStackDevModelOverride = (
 const byokCache = new Map<string, TanStackTextAdapterFactory>();
 
 /** Drop reconstructible provider adapters when the runtime reports memory pressure. */
-export const clearByokAdapterCache = (): number => {
+export const clearByokAdapterCache = () => {
   const evictedEntries = byokCache.size;
   byokCache.clear();
   return evictedEntries;

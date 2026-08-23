@@ -77,7 +77,7 @@ import { myTasksRoute } from "@/api/handlers/tasks/my-tasks-route";
 import { tasksRoute } from "@/api/handlers/tasks/routes";
 import { templatePacksRoute } from "@/api/handlers/template-packs/routes";
 import { templateRecipesRoute } from "@/api/handlers/template-recipes/routes";
-import { clearLookupPreviewCache } from "@/api/handlers/templates/lookup-preview";
+import { clearLookupPreviewCache } from "@/api/handlers/templates/lookup-preview-cache";
 import {
   templateCategoriesRoute,
   templatesRoute,
@@ -189,7 +189,7 @@ const getApiPort = () => {
   return parsedPort;
 };
 
-const startMemoryPressureHandler = (): void => {
+const startMemoryPressureHandler = () => {
   process.on(
     "memoryPressure",
     createMemoryPressureHandler({

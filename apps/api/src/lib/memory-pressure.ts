@@ -17,7 +17,7 @@ type CreateMemoryPressureHandlerOptions = {
 /** Build the process-boundary handler without registering module-level effects. */
 export const createMemoryPressureHandler =
   ({ caches, onEviction }: CreateMemoryPressureHandlerOptions) =>
-  (level: MemoryPressureLevel): void => {
+  (level: MemoryPressureLevel) => {
     let evictedEntries = 0;
     for (const cache of caches) {
       evictedEntries += cache.clear();
