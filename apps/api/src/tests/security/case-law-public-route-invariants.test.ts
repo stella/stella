@@ -329,7 +329,25 @@ describe("public case-law route boundary", () => {
     ]);
 
     expect(listSource).toContain("readDecisionLanguageAlternateCounts");
-    expect(searchSource).toContain("readDecisionLanguageAlternateCounts");
+    const postgresSearchStart = searchSource.indexOf(
+      "const searchPostgresDecisions",
+    );
+    const postgresSearchEnd = searchSource.indexOf(
+      "const resolveCorpusIndexQuery",
+    );
+    const corpusIndexSearchStart = searchSource.indexOf(
+      "const searchCorpusIndexDecisions",
+    );
+
+    expect(postgresSearchStart).toBeGreaterThanOrEqual(0);
+    expect(postgresSearchEnd).toBeGreaterThan(postgresSearchStart);
+    expect(corpusIndexSearchStart).toBeGreaterThan(postgresSearchEnd);
+    expect(
+      searchSource.slice(postgresSearchStart, postgresSearchEnd),
+    ).toContain("readDecisionLanguageAlternateCounts");
+    expect(searchSource.slice(corpusIndexSearchStart)).toContain(
+      "readDecisionLanguageAlternateCounts",
+    );
     expect(languageAlternateCountsSource).toContain(
       "validCaseLawLanguageAlternateCountSql",
     );
