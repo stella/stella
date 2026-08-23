@@ -1,6 +1,6 @@
 import { toJsonSchema } from "@valibot/to-json-schema";
 import { panic } from "better-result";
-import * as v from "valibot";
+import type * as v from "valibot";
 
 import type {
   McpToolDefinition,

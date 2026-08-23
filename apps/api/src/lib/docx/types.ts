@@ -413,15 +413,27 @@ const activeDerivedSourceModes = ({
   source,
 }: DerivedSourceFields): DerivedSourceMode[] => {
   const modes: DerivedSourceMode[] = [];
-  if (aiAdapt === true) modes.push("ai-adapt");
-  if (aiPrompt !== undefined) modes.push("ai-prompt");
+  if (aiAdapt === true) {
+    modes.push("ai-adapt");
+  }
+  if (aiPrompt !== undefined) {
+    modes.push("ai-prompt");
+  }
   if (condition !== undefined || conditionAst !== undefined) {
     modes.push("condition");
   }
-  if (formula !== undefined) modes.push("formula");
-  if (lookup !== undefined) modes.push("lookup");
-  if (parts !== undefined) modes.push("parts");
-  if (source !== undefined) modes.push("source");
+  if (formula !== undefined) {
+    modes.push("formula");
+  }
+  if (lookup !== undefined) {
+    modes.push("lookup");
+  }
+  if (parts !== undefined) {
+    modes.push("parts");
+  }
+  if (source !== undefined) {
+    modes.push("source");
+  }
   return modes;
 };
 

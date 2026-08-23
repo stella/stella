@@ -1,7 +1,15 @@
+import * as v from "valibot";
+
 import {
+  isSafeIdValue,
   type SafeId as PortableSafeId,
-  toSafeId as toPortableSafeId,
-} from "@stll/api-contract/safe-id";
+} from "@stll/api-contract";
+
+const safeIdSchema = v.pipe(
+  v.string(),
+  v.check(isSafeIdValue, "Expected a non-empty identifier"),
+  v.brand("SafeId"),
+);
 
 export type SafeIdType =
   | "accountDeletionRequest"
@@ -135,7 +143,7 @@ export type SafeIdType =
 export type SafeId<T extends SafeIdType> = PortableSafeId<T>;
 
 export const toSafeId = <T extends SafeIdType>(value: string): SafeId<T> =>
-  toPortableSafeId<T>(value);
+  v.parse(safeIdSchema, value);
 
 export const createSafeId = <T extends SafeIdType>(): SafeId<T> =>
   toSafeId<T>(Bun.randomUUIDv7());
