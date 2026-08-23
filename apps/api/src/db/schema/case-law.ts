@@ -1656,6 +1656,13 @@ export const caseLawCorpusIndexProjections = p.pgTable(
       .default(sql`'{}'::varchar(64)[]`),
     pendingRevision: p.integer("pending_revision").default(0).notNull(),
     /**
+     * Physical index whose membership is reflected in the exact aggregate.
+     * A database trigger derives this from the same current-decision and
+     * committed-projection state accepted by the serving query; null means
+     * this row contributes no document to the aggregate.
+     */
+    accountedIndexId: p.varchar("accounted_index_id", { length: 64 }),
+    /**
      * When a reservation last crossed the external append boundary. Only the
      * append reservation sets it — the projection trigger never does — so
      * its absence, with no committed copy, proves nothing has reached the
@@ -1697,6 +1704,10 @@ export const caseLawCorpusIndexProjections = p.pgTable(
       "case_law_corpus_index_projections_pending_revision_nonnegative",
       sql`${t.pendingRevision} >= 0`,
     ),
+    p.check(
+      "case_law_corpus_index_projections_accounted_shape",
+      sql`${t.accountedIndexId} IS NULL OR (${t.pendingAction} IS NULL AND ${t.indexedHash} IS NOT NULL AND ${t.accountedIndexId} = ${t.indexId})`,
+    ),
     p.index("case_law_corpus_index_projections_decision_idx").on(t.decisionId),
     p
       .index("case_law_corpus_index_projections_pending_idx")
@@ -1704,6 +1715,84 @@ export const caseLawCorpusIndexProjections = p.pgTable(
       .where(isNotNull(t.pendingAction)),
     ...globalCaseLawPolicies(),
     ...publicCaseLawReaderPolicies(),
+  ],
+);
+
+export const CASE_LAW_CORPUS_INDEX_COUNT_BACKFILL_STATUSES = [
+  "running",
+  "complete",
+] as const;
+
+export type CaseLawCorpusIndexCountBackfillStatus =
+  (typeof CASE_LAW_CORPUS_INDEX_COUNT_BACKFILL_STATUSES)[number];
+
+export const CASE_LAW_CORPUS_INDEX_COUNT_BACKFILL_STATUS = {
+  RUNNING: CASE_LAW_CORPUS_INDEX_COUNT_BACKFILL_STATUSES[0],
+  COMPLETE: CASE_LAW_CORPUS_INDEX_COUNT_BACKFILL_STATUSES[1],
+} as const satisfies Record<string, CaseLawCorpusIndexCountBackfillStatus>;
+
+/** Exact, transactionally maintained document count per physical index. */
+export const caseLawCorpusIndexCounts = p.pgTable(
+  "case_law_corpus_index_counts",
+  {
+    generation: p.varchar({ length: 32 }).notNull(),
+    indexId: p.varchar("index_id", { length: 64 }).notNull(),
+    markedIndexed: p
+      .bigint("marked_indexed", { mode: "number" })
+      .default(0)
+      .notNull(),
+    updatedAt: timestamptz("updated_at").defaultNow().notNull(),
+  },
+  (t) => [
+    p.primaryKey({
+      columns: [t.generation, t.indexId],
+      name: "case_law_corpus_index_counts_pk",
+    }),
+    p
+      .foreignKey({
+        name: "case_law_corpus_index_counts_generation_fk",
+        columns: [t.generation],
+        foreignColumns: [caseLawCorpusIndexBackfills.generation],
+      })
+      .onDelete("cascade"),
+    p.check(
+      "case_law_corpus_index_counts_nonnegative",
+      sql`${t.markedIndexed} >= 0`,
+    ),
+    ...globalCaseLawPolicies(),
+  ],
+);
+
+/** Durable keyset progress for accounting projections created before rollout. */
+export const caseLawCorpusIndexCountBackfills = p.pgTable(
+  "case_law_corpus_index_count_backfills",
+  {
+    generation: p.varchar({ length: 32 }).primaryKey(),
+    cursorDecisionId: safeUuid<"caseLawDecision">("cursor_decision_id"),
+    status: p
+      .text({ enum: CASE_LAW_CORPUS_INDEX_COUNT_BACKFILL_STATUSES })
+      .notNull()
+      .default(CASE_LAW_CORPUS_INDEX_COUNT_BACKFILL_STATUS.RUNNING),
+    updatedAt: timestamptz("updated_at").defaultNow().notNull(),
+  },
+  (t) => [
+    p
+      .foreignKey({
+        name: "case_law_corpus_index_count_backfills_generation_fk",
+        columns: [t.generation],
+        foreignColumns: [caseLawCorpusIndexBackfills.generation],
+      })
+      .onDelete("cascade"),
+    p.check(
+      "case_law_corpus_index_count_backfills_status_values",
+      sql`${t.status} IN (${sql.join(
+        CASE_LAW_CORPUS_INDEX_COUNT_BACKFILL_STATUSES.map((status) =>
+          sql.raw(`'${status}'`),
+        ),
+        sql.raw(","),
+      )})`,
+    ),
+    ...globalCaseLawPolicies(),
   ],
 );
 

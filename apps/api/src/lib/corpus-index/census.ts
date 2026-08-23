@@ -12,11 +12,11 @@
  * has an `indexedHash`) nor stale (the hash matches), so nothing selects
  * it again and the gap is permanent and invisible.
  *
- * A census is what makes it visible. It is a count on both sides, not a
- * diff: naming the missing documents would mean streaming the whole
- * index out of the engine, while the number alone is one cheap
- * aggregate per side and is enough to decide that an index needs
- * re-indexing. The repair is correspondingly blunt — un-mark a slice of
+ * A census is what makes it visible. It compares counts rather than
+ * identities: naming the missing documents would mean streaming the whole
+ * index out of the engine, while the number alone needs one engine aggregate
+ * and one exact PostgreSQL counter lookup. That is enough to decide that an
+ * index needs re-indexing. The repair is correspondingly blunt — un-mark a slice of
  * the index's rows and let the ordinary backfill re-project it — because
  * the projection is idempotent and re-ingesting a document the engine
  * already holds converges on the same split.
@@ -27,15 +27,22 @@
  * ones whose country the index holds (`corpusIndexJurisdictions`, the
  * inverse of that derivation), in the state the search path accepts.
  *
- * Bounded by construction: one index per call, one aggregate query per
- * side, and a caller that decides how often to run it.
+ * Bounded by construction: one index per call, one engine aggregate, one
+ * constant-time PostgreSQL lookup, and a caller that decides how often to run
+ * it.
  */
 
-import { Result } from "better-result";
-import { inArray, type SQL, sql } from "drizzle-orm";
+import { Result, TaggedError } from "better-result";
+import { and, asc, eq, gt, inArray, type SQL, sql } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
+  CASE_LAW_CORPUS_INDEX_BACKFILL_STATUS,
+  CASE_LAW_CORPUS_INDEX_COUNT_BACKFILL_STATUS,
+  type CaseLawCorpusIndexCountBackfillStatus,
+  caseLawCorpusIndexBackfills,
+  caseLawCorpusIndexCountBackfills,
+  caseLawCorpusIndexCounts,
   caseLawCorpusIndexProjections,
   caseLawDecisions,
 } from "@/api/db/schema";
@@ -60,6 +67,197 @@ import { isRecord } from "@/api/lib/type-guards";
  * granularity the family is indexed at.
  */
 const DOCUMENT_COUNT_QUERY = "seq:0";
+
+/** One short transaction's maximum accounting seed work. */
+export const CASE_LAW_CORPUS_INDEX_COUNT_BACKFILL_BATCH_SIZE = 1000;
+
+export class CaseLawCorpusIndexCountNotReadyError extends TaggedError(
+  "CaseLawCorpusIndexCountNotReadyError",
+)<{
+  message: string;
+  generation: string;
+}> {}
+
+export type CaseLawCorpusIndexCountBackfillStep = {
+  generation: string;
+  processed: number;
+  status: CaseLawCorpusIndexCountBackfillStatus;
+};
+
+type AdvanceCaseLawCorpusIndexCountBackfill = (
+  scopedDb: ScopedDb,
+  generation: string,
+) => Promise<CaseLawCorpusIndexCountBackfillStep>;
+
+/**
+ * Account one keyset page of projections that predate the aggregate.
+ *
+ * The row trigger derives `accountedIndexId` under the same row lock, and the
+ * statement trigger applies the net per-index delta once. Inserts and updates
+ * racing behind the cursor are already accounted by that trigger, so replay,
+ * overlap, and a process restart all converge without a snapshot transaction.
+ */
+export const advanceCaseLawCorpusIndexCountBackfill = async (
+  scopedDb: ScopedDb,
+  generation: string,
+): Promise<CaseLawCorpusIndexCountBackfillStep> =>
+  await scopedDb(async (tx) => {
+    const checkpoint = (
+      await tx
+        .select({
+          cursorDecisionId: caseLawCorpusIndexCountBackfills.cursorDecisionId,
+          generationStatus: caseLawCorpusIndexBackfills.status,
+          status: caseLawCorpusIndexCountBackfills.status,
+        })
+        .from(caseLawCorpusIndexCountBackfills)
+        .innerJoin(
+          caseLawCorpusIndexBackfills,
+          eq(
+            caseLawCorpusIndexBackfills.generation,
+            caseLawCorpusIndexCountBackfills.generation,
+          ),
+        )
+        .where(eq(caseLawCorpusIndexCountBackfills.generation, generation))
+        .for("update")
+    ).at(0);
+
+    if (checkpoint === undefined) {
+      throw new CaseLawCorpusIndexCountNotReadyError({
+        generation,
+        message: `No corpus-index count checkpoint exists for ${generation}`,
+      });
+    }
+    if (
+      checkpoint.status === CASE_LAW_CORPUS_INDEX_COUNT_BACKFILL_STATUS.COMPLETE
+    ) {
+      return {
+        generation,
+        processed: 0,
+        status: CASE_LAW_CORPUS_INDEX_COUNT_BACKFILL_STATUS.COMPLETE,
+      };
+    }
+
+    const page = await tx
+      .select({ decisionId: caseLawCorpusIndexProjections.decisionId })
+      .from(caseLawCorpusIndexProjections)
+      .where(
+        and(
+          eq(caseLawCorpusIndexProjections.generation, generation),
+          checkpoint.cursorDecisionId === null
+            ? undefined
+            : gt(
+                caseLawCorpusIndexProjections.decisionId,
+                checkpoint.cursorDecisionId,
+              ),
+        ),
+      )
+      .orderBy(asc(caseLawCorpusIndexProjections.decisionId))
+      .limit(CASE_LAW_CORPUS_INDEX_COUNT_BACKFILL_BATCH_SIZE)
+      .for("update");
+
+    if (page.length === 0) {
+      // A running generation can still be served through the legacy decision
+      // marker before its projection walk reaches every row. Keep the count
+      // unavailable until that walk removes the fallback population; newly
+      // written projections are already exact through the accounting trigger.
+      if (
+        checkpoint.generationStatus ===
+        CASE_LAW_CORPUS_INDEX_BACKFILL_STATUS.RUNNING
+      ) {
+        return {
+          generation,
+          processed: 0,
+          status: CASE_LAW_CORPUS_INDEX_COUNT_BACKFILL_STATUS.RUNNING,
+        };
+      }
+      await tx
+        .update(caseLawCorpusIndexCountBackfills)
+        .set({
+          status: CASE_LAW_CORPUS_INDEX_COUNT_BACKFILL_STATUS.COMPLETE,
+          updatedAt: new Date(),
+        })
+        .where(eq(caseLawCorpusIndexCountBackfills.generation, generation));
+      return {
+        generation,
+        processed: 0,
+        status: CASE_LAW_CORPUS_INDEX_COUNT_BACKFILL_STATUS.COMPLETE,
+      };
+    }
+
+    const decisionIds = sql.join(
+      page.map(({ decisionId }) => sql`${decisionId}::uuid`),
+      sql`, `,
+    );
+    // Deliberately assign the accounting marker to itself. The database's
+    // BEFORE trigger derives the current bucket; raw SQL avoids changing the
+    // projection's application-level updated_at CAS token.
+    await tx.execute(sql`
+      UPDATE ${caseLawCorpusIndexProjections}
+      SET accounted_index_id = accounted_index_id
+      WHERE generation = ${generation}
+        AND decision_id IN (${decisionIds})
+    `);
+
+    const cursorDecisionId = page.at(-1)?.decisionId;
+    if (cursorDecisionId === undefined) {
+      throw new CaseLawCorpusIndexCountNotReadyError({
+        generation,
+        message: `Corpus-index count page for ${generation} lost its cursor`,
+      });
+    }
+    await tx
+      .update(caseLawCorpusIndexCountBackfills)
+      .set({ cursorDecisionId, updatedAt: new Date() })
+      .where(eq(caseLawCorpusIndexCountBackfills.generation, generation));
+
+    return {
+      generation,
+      processed: page.length,
+      status: CASE_LAW_CORPUS_INDEX_COUNT_BACKFILL_STATUS.RUNNING,
+    };
+  });
+
+type CaseLawCorpusIndexCountSeedOptions = {
+  scopedDb: ScopedDb;
+  generation: string;
+  advance?: AdvanceCaseLawCorpusIndexCountBackfill;
+};
+
+/**
+ * Drive the rollout-only count seed one bounded page per corpus-worker cycle.
+ *
+ * Completion is remembered in-process, so the steady-state worker pays no
+ * database round-trip. A failure is reported and retried on the next cycle;
+ * it never stops the corpus projection loop that owns this maintenance work.
+ */
+export const createCaseLawCorpusIndexCountSeed = ({
+  scopedDb,
+  generation,
+  advance = advanceCaseLawCorpusIndexCountBackfill,
+}: CaseLawCorpusIndexCountSeedOptions): { step: () => Promise<void> } => {
+  let complete = false;
+
+  return {
+    step: async (): Promise<void> => {
+      if (complete) {
+        return;
+      }
+      const outcome = await Result.tryPromise(
+        async () => await advance(scopedDb, generation),
+      );
+      if (Result.isError(outcome)) {
+        logger.warn("case_law.corpus_index.count_seed_failed", {
+          generation,
+          "error.type": errorTag(outcome.error),
+        });
+        return;
+      }
+      complete =
+        outcome.value.status ===
+        CASE_LAW_CORPUS_INDEX_COUNT_BACKFILL_STATUS.COMPLETE;
+    },
+  };
+};
 
 /**
  * How far the two sides may disagree in one observation.
@@ -149,15 +347,31 @@ const countMarkedIndexed = async (
 ): Promise<number> => {
   const rows = await scopedDb((tx) =>
     tx
-      .select({ marked: sql<number>`count(*)::int` })
-      .from(caseLawDecisions)
+      .select({
+        marked: caseLawCorpusIndexCounts.markedIndexed,
+        status: caseLawCorpusIndexCountBackfills.status,
+      })
+      .from(caseLawCorpusIndexCountBackfills)
       .leftJoin(
-        caseLawCorpusIndexProjections,
-        caseLawCorpusProjectionJoin(generation),
+        caseLawCorpusIndexCounts,
+        and(
+          eq(
+            caseLawCorpusIndexCounts.generation,
+            caseLawCorpusIndexCountBackfills.generation,
+          ),
+          eq(caseLawCorpusIndexCounts.indexId, indexId),
+        ),
       )
-      .where(censusPopulation(generation, indexId)),
+      .where(eq(caseLawCorpusIndexCountBackfills.generation, generation)),
   );
-  return rows.at(0)?.marked ?? 0;
+  const row = rows.at(0);
+  if (row?.status !== CASE_LAW_CORPUS_INDEX_COUNT_BACKFILL_STATUS.COMPLETE) {
+    throw new CaseLawCorpusIndexCountNotReadyError({
+      generation,
+      message: `Corpus-index count for ${generation} is not ready`,
+    });
+  }
+  return row.marked ?? 0;
 };
 
 export type CensusIndexOptions = {
@@ -298,11 +512,10 @@ export const listCaseLawIndexIds = async (
 /**
  * Backfill cycles between one census and the next.
  *
- * The census is a diagnostic, not a gate: it costs an aggregate on each
- * side and the drift it looks for accumulates over hours, so running it
- * on every batch would spend real query budget to answer the same
- * question. One index per census means a corpus of N indexes is fully
- * covered every N of these.
+ * The census is a diagnostic, not a gate: the engine aggregate still costs
+ * query budget and the drift it looks for accumulates over hours, so running
+ * it on every batch would answer the same question repeatedly. One index per
+ * census means a corpus of N indexes is fully covered every N of these.
  */
 export const CENSUS_CYCLE_INTERVAL = 20;
 

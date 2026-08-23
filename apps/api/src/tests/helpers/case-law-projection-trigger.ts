@@ -24,6 +24,10 @@ const PROJECTION_TRIGGER =
   "CREATE TRIGGER case_law_decisions_enqueue_corpus_index_projection";
 const PROJECTION_TRIGGER_STATEMENT =
   /\b(?:CREATE|DROP) TRIGGER (?:IF EXISTS )?case_law_decisions_enqueue_corpus_index_projection\b/u;
+const ACCOUNTING_FUNCTION =
+  "CREATE OR REPLACE FUNCTION derive_case_law_corpus_index_accounting()";
+const ACCOUNTING_OBJECT =
+  /(?:INSERT INTO "case_law_corpus_index_count_backfills"|derive_case_law_corpus_index_accounting|add_inserted_case_law_corpus_index_counts|apply_updated_case_law_corpus_index_counts|subtract_deleted_case_law_corpus_index_counts|seed_case_law_corpus_index_count_backfill|case_law_corpus_index_projection_(?:derive_accounting|count_(?:insert|update|delete))|case_law_corpus_index_backfill_seed_count)/u;
 
 /** Statements of a migration file, in order, comments included. */
 export const migrationStatements = (path: string): string[] =>
@@ -79,6 +83,20 @@ export const installCaseLawProjectionTrigger = async (
 ): Promise<void> => {
   for (const statement of caseLawProjectionTriggerStatements()) {
     // oxlint-disable-next-line no-await-in-loop -- functions, replacement drop, and trigger creation are order-dependent DDL
+    await db.execute(sql.raw(statement));
+  }
+};
+
+/** The seed statement and triggers that maintain exact projection counts. */
+export const caseLawProjectionAccountingStatements = (): string[] =>
+  latestStatements(ACCOUNTING_FUNCTION, ACCOUNTING_OBJECT);
+
+/** Install exact projection accounting in a schema-built test database. */
+export const installCaseLawProjectionAccounting = async (
+  db: Executor,
+): Promise<void> => {
+  for (const statement of caseLawProjectionAccountingStatements()) {
+    // oxlint-disable-next-line no-await-in-loop -- seed state, functions, and triggers are order-dependent DDL
     await db.execute(sql.raw(statement));
   }
 };
