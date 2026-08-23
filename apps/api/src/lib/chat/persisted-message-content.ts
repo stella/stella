@@ -135,8 +135,7 @@ const isPersistedJsonValueAt = (
 
 export const isPersistedJsonValue = (
   value: unknown,
-): value is PersistedJsonValue =>
-  isPersistedJsonValueAt(value, new WeakSet());
+): value is PersistedJsonValue => isPersistedJsonValueAt(value, new WeakSet());
 
 export const provePersistedJsonValue = (value: unknown): PersistedJsonValue => {
   if (!isPersistedJsonValue(value)) {

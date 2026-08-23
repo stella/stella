@@ -20,15 +20,17 @@ type JsonSchemaProjectionWaiver = {
   reason: string;
 };
 
-type ValibotMcpToolDefinition<
-  TSchema extends v.GenericSchema,
-  TDefinition extends Omit<McpToolDefinition, "inputSchema">,
-> = Omit<
+type ValibotMcpToolInput = Omit<McpToolDefinition, "inputSchema"> & {
+  inputSchema: v.GenericSchema;
+  jsonSchemaProjectionWaiver?: JsonSchemaProjectionWaiver;
+};
+
+type ValibotMcpToolDefinition<TDefinition extends ValibotMcpToolInput> = Omit<
   TDefinition,
   "inputSchema" | "jsonSchemaProjectionWaiver"
 > & {
   inputSchema: McpToolInputSchema;
-  inputSchemaSource: TSchema;
+  inputSchemaSource: TDefinition["inputSchema"];
 };
 
 const deriveMcpInputSchema = (
@@ -67,12 +69,10 @@ const deriveMcpInputSchema = (
  * to distinguish derived schemas from legacy hand-maintained mirrors.
  */
 export const defineValibotMcpTool = <
-  const TSchema extends v.GenericSchema,
-  const TDefinition extends Omit<McpToolDefinition, "inputSchema">,
->(definition: TDefinition & {
-  inputSchema: TSchema;
-  jsonSchemaProjectionWaiver?: JsonSchemaProjectionWaiver;
-}): ValibotMcpToolDefinition<TSchema, TDefinition> => {
+  const TDefinition extends ValibotMcpToolInput,
+>(
+  definition: TDefinition,
+): ValibotMcpToolDefinition<TDefinition> => {
   const { inputSchema, jsonSchemaProjectionWaiver, ...toolDefinition } =
     definition;
   return {

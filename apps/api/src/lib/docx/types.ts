@@ -250,8 +250,7 @@ export type FieldLookup = v.InferOutput<typeof fieldLookupSchema>;
 
 export const isFieldLookupFormat = (
   value: unknown,
-): value is FieldLookupFormat =>
-  v.is(fieldLookupFormatSchema, value);
+): value is FieldLookupFormat => v.is(fieldLookupFormatSchema, value);
 
 export type FieldValidation = v.InferOutput<typeof fieldValidationSchema>;
 
@@ -433,7 +432,9 @@ const fieldMetaObjectSchema = v.strictObject({
   path: fieldPathSchema("Field path; must match a {{marker}} in the template"),
   label: v.optional(describedString("Human-readable field label")),
   hint: v.optional(
-    describedString("Short fill guidance shown to the person filling the field"),
+    describedString(
+      "Short fill guidance shown to the person filling the field",
+    ),
   ),
   inputType: v.optional(
     v.pipe(v.picklist(INPUT_TYPES), v.description("Input control type")),
@@ -554,9 +555,8 @@ export const fieldMetaToolInputSchema = v.pipe(
 export const isFieldPart = (value: unknown): value is FieldPart =>
   v.is(fieldPartSchema, value);
 
-export const isFieldDateFormat = (
-  value: unknown,
-): value is FieldDateFormat => v.is(fieldDateFormatSchema, value);
+export const isFieldDateFormat = (value: unknown): value is FieldDateFormat =>
+  v.is(fieldDateFormatSchema, value);
 
 export const isFieldLookup = (value: unknown): value is FieldLookup =>
   v.is(fieldLookupSchema, value);
