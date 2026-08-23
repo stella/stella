@@ -120,7 +120,7 @@ function InboxPage() {
 
   const signals = data ? data.pages.flatMap((page) => page.items) : [];
   const days = groupInboxDays(signals);
-  const workspaces = workspacesData?.workspaces ?? [];
+  const workspaces = workspacesData ? workspacesData.workspaces : [];
   const selectedWorkspaceName =
     filters.workspaceId === null
       ? null

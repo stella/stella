@@ -76,8 +76,8 @@ export const NewRequestDialog = ({ organizationId }: NewRequestDialogProps) => {
     workspacesNavigationOptions(organizationId),
   );
   const { data: organization } = useQuery(organizationOptions(organizationId));
-  const workspaces = workspacesData?.workspaces ?? [];
-  const members = organization?.members ?? [];
+  const workspaces = workspacesData ? workspacesData.workspaces : [];
+  const members = organization ? organization.members : [];
 
   const form = useForm({
     defaultValues,

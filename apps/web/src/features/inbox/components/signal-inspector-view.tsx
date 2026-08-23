@@ -26,6 +26,7 @@ import { useFormatter } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
 import type { InboxSignal } from "@/lib/inbox/queries";
 import { inboxSignalOptions } from "@/lib/inbox/queries";
+import { MEDIUM_DATE_SHORT_TIME_FORMAT } from "@/lib/relative-time";
 import { sanitizeHref } from "@/lib/sanitize-href";
 
 const protectedRouteApi = getRouteApi("/_protected");
@@ -115,10 +116,10 @@ const SignalHeader = ({ signal }: { signal: InboxSignal }) => {
         )}
         <span aria-hidden>·</span>
         <time dateTime={signal.createdAt}>
-          {format.dateTime(new Date(signal.createdAt), {
-            dateStyle: "medium",
-            timeStyle: "short",
-          })}
+          {format.dateTime(
+            new Date(signal.createdAt),
+            MEDIUM_DATE_SHORT_TIME_FORMAT,
+          )}
         </time>
       </div>
       <h2 className="text-base font-semibold text-balance">{signal.title}</h2>
@@ -143,7 +144,7 @@ const EvidenceBody = ({ evidence, signal }: EvidenceBodyProps) => {
   const t = useTranslations();
   const format = useFormatter();
   const formatDateTime = (iso: string) =>
-    format.dateTime(new Date(iso), { dateStyle: "medium", timeStyle: "short" });
+    format.dateTime(new Date(iso), MEDIUM_DATE_SHORT_TIME_FORMAT);
 
   switch (evidence.kind) {
     case SIGNAL_KIND.REQUEST_SUBMITTED:

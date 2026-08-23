@@ -24,6 +24,7 @@ import {
 } from "@stll/ui/popover";
 import { Textarea } from "@stll/ui/textarea";
 import { stellaToast } from "@stll/ui/toast";
+import { Tooltip } from "@stll/ui/tooltip";
 import { cn } from "@stll/ui/utils";
 
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
@@ -47,7 +48,7 @@ import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { snoozeUntil } from "@/lib/inbox/inbox.logic";
 import type { InboxSignal } from "@/lib/inbox/queries";
 import { organizationOptions } from "@/lib/organization/queries";
-import { formatRelativeTime } from "@/lib/relative-time";
+import { formatFullTimestamp, formatRelativeTime } from "@/lib/relative-time";
 import { useCreateMatterStore } from "@/lib/workspaces/create-matter-store";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 import {
@@ -135,6 +136,24 @@ export const SignalCard = ({
       t("inspector.review.decisions.accepted"),
     );
 
+  const assign = (assigneeUserId: string) =>
+    run(async () => {
+      const assigned = await assignSignal({
+        ...mutationArgs,
+        assigneeUserId,
+      });
+      if (Result.isError(assigned)) {
+        return assigned;
+      }
+      return acceptSignal({
+        ...mutationArgs,
+        suggestionKind: SUGGESTION_KIND.ASSIGN,
+      });
+    }, t("inspector.review.decisions.accepted"));
+
+  const dismiss = (reason: string | null) =>
+    run(async () => await dismissSignal({ ...mutationArgs, reason }), null);
+
   const scoutKey = scoutLabelKey(signal.scoutKey);
 
   return (
@@ -184,15 +203,12 @@ export const SignalCard = ({
               </>
             )}
             <span aria-hidden>·</span>
-            <time
-              dateTime={signal.createdAt}
-              title={format.dateTime(new Date(signal.createdAt), {
-                dateStyle: "medium",
-                timeStyle: "short",
-              })}
+            <Tooltip
+              content={formatFullTimestamp(signal.createdAt)}
+              render={<time dateTime={signal.createdAt} />}
             >
               {formatRelativeTime(signal.createdAt)}
-            </time>
+            </Tooltip>
             {signal.status === SIGNAL_STATUS.SNOOZED &&
               signal.snoozedUntil !== null && (
                 <>
@@ -230,21 +246,7 @@ export const SignalCard = ({
                 disabled={busy}
                 key={suggestion.kind}
                 onAccept={accept}
-                onAssign={async (assigneeUserId) =>
-                  await run(async () => {
-                    const assigned = await assignSignal({
-                      ...mutationArgs,
-                      assigneeUserId,
-                    });
-                    if (Result.isError(assigned)) {
-                      return assigned;
-                    }
-                    return acceptSignal({
-                      ...mutationArgs,
-                      suggestionKind: SUGGESTION_KIND.ASSIGN,
-                    });
-                  }, t("inspector.review.decisions.accepted"))
-                }
+                onAssign={assign}
                 onOpenChat={(prompt) => openSignalChat(signal, prompt)}
                 organizationId={organizationId}
                 suggestion={suggestion}
@@ -318,16 +320,7 @@ export const SignalCard = ({
                   </MenuGroup>
                 </MenuPopup>
               </Menu>
-              <DismissPopover
-                disabled={busy}
-                onDismiss={async (reason) =>
-                  await run(
-                    async () =>
-                      await dismissSignal({ ...mutationArgs, reason }),
-                    null,
-                  )
-                }
-              />
+              <DismissPopover disabled={busy} onDismiss={dismiss} />
             </>
           )}
         </div>
@@ -501,7 +494,7 @@ const AssignMenu = ({
 }: AssignMenuProps) => {
   const t = useTranslations();
   const { data: organization } = useQuery(organizationOptions(organizationId));
-  const members = organization?.members ?? [];
+  const members = organization ? organization.members : [];
   return (
     <Menu>
       <MenuTrigger
