@@ -42,6 +42,8 @@ const SEARCH_DECISIONS_SCHEMA_FILE =
   "apps/api/src/handlers/case-law/decisions/search-schema.ts";
 const LANGUAGE_DECISIONS_FILE =
   "apps/api/src/handlers/case-law/decisions/language.ts";
+const LANGUAGE_ALTERNATE_COUNTS_FILE =
+  "apps/api/src/lib/case-law/language-alternate-counts.ts";
 const SITEMAP_DECISIONS_FILE =
   "apps/api/src/handlers/case-law/decisions/sitemap.ts";
 const PUBLIC_READ_DB_FILE = "apps/api/src/lib/public-law-read-db.ts";
@@ -99,6 +101,8 @@ const readSearchSchemaSource = async () =>
   await readSource(SEARCH_DECISIONS_SCHEMA_FILE);
 const readLanguageSource = async () =>
   await readSource(LANGUAGE_DECISIONS_FILE);
+const readLanguageAlternateCountsSource = async () =>
+  await readSource(LANGUAGE_ALTERNATE_COUNTS_FILE);
 const readSitemapSource = async () => await readSource(SITEMAP_DECISIONS_FILE);
 const readPublicReadDbSource = async () =>
   await readSource(PUBLIC_READ_DB_FILE);
@@ -290,7 +294,7 @@ describe("public case-law route boundary", () => {
     expect(source).not.toContain("organization");
     expect(source).not.toContain("matter");
     expect(source).toContain("d.language_group_key");
-    expect(source).toContain("validCaseLawLanguageAlternateCountSql");
+    expect(source).toContain("readDecisionLanguageAlternateCounts");
     expect(source).toContain("languageAlternateCount:");
     expect(source).toContain("languageGroupKey,");
   });
@@ -312,14 +316,23 @@ describe("public case-law route boundary", () => {
   });
 
   test("public language alternate counts only include route-safe languages", async () => {
-    const [listSource, searchSource, languageSource] = await Promise.all([
+    const [
+      listSource,
+      searchSource,
+      languageSource,
+      languageAlternateCountsSource,
+    ] = await Promise.all([
       readListSource(),
       readSearchSource(),
       readLanguageSource(),
+      readLanguageAlternateCountsSource(),
     ]);
 
-    expect(listSource).toContain("validCaseLawLanguageAlternateCountSql");
-    expect(searchSource).toContain("validCaseLawLanguageAlternateCountSql");
+    expect(listSource).toContain("readDecisionLanguageAlternateCounts");
+    expect(searchSource).toContain("readDecisionLanguageAlternateCounts");
+    expect(languageAlternateCountsSource).toContain(
+      "validCaseLawLanguageAlternateCountSql",
+    );
     expect(languageSource).toContain("count(distinct");
     expect(languageSource).toContain("replace(lower(");
     expect(languageSource).toContain("filter (where");
