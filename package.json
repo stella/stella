@@ -147,7 +147,7 @@
     "prosemirror-view": "1.42.2",
     "react-native-screens": "4.26.2",
     "svgo": "4.0.2",
-    "undici": "7.29.0"
+    "undici": "8.10.0"
   },
   "packageManager": "bun@1.4.0",
   "catalog": {
