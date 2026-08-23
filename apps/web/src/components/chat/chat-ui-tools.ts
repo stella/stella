@@ -10,7 +10,7 @@ import type {
   ApprovalRequiredBuiltInChatToolName,
   BuiltInChatToolPolicyKindByName,
   ChatMessage,
-  ChatPart,
+  ChatPart as TanStackChatPart,
   ChatUITools,
 } from "@stll/api/types";
 import { FOLIO_AGENT_TOOL_NAMES } from "@stll/folio-agents";
@@ -20,10 +20,56 @@ import type { TranslationKey } from "@/i18n/types";
 export type {
   ChatAnonRestoration,
   ChatMessage,
-  ChatPart,
   ChatUITools,
 } from "@stll/api/types";
+export type ChatPart = TanStackChatPart;
 export type PersistedChatMessage = ChatMessage;
+type TanStackChatToolCallPart = Extract<
+  TanStackChatPart,
+  { type: "tool-call" }
+>;
+type BuiltInChatToolName = keyof BuiltInChatToolPolicyKindByName;
+type BuiltInChatToolCallPart = {
+  [TName in BuiltInChatToolName]: Omit<
+    Extract<TanStackChatToolCallPart, { name: TName }>,
+    "input" | "output"
+  > & {
+    input?: ChatUITools[TName]["input"];
+    output?: ChatUITools[TName]["output"];
+  };
+}[BuiltInChatToolName];
+type ExternalMcpChatToolCallPart = Extract<
+  TanStackChatToolCallPart,
+  { name: `mcp__${string}` }
+>;
+declare const opaquePersistedChatToolCallProof: unique symbol;
+/**
+ * Proof assigned after a persisted tool call passes the protocol-shape guard
+ * and its name is confirmed absent from both current tool namespaces.
+ */
+export type OpaquePersistedChatToolCallPart = TanStackChatToolCallPart & {
+  readonly [opaquePersistedChatToolCallProof]: true;
+};
+
+/**
+ * TanStack deliberately leaves JSON-schema tool payloads unknown. At Stella's
+ * rendering boundary, built-in payloads retain the types derived from the same
+ * Standard Schema tool map; external MCP and opaque historical payloads remain
+ * unknown.
+ */
+export type RegisteredChatUIToolCallPart =
+  | BuiltInChatToolCallPart
+  | ExternalMcpChatToolCallPart;
+export type ChatUIToolCallPart =
+  | RegisteredChatUIToolCallPart
+  | OpaquePersistedChatToolCallPart;
+export type ChatUIPart =
+  | Exclude<TanStackChatPart, { type: "tool-call" }>
+  | ChatUIToolCallPart;
+export type ChatUIMessage = Omit<ChatMessage, "parts"> & {
+  parts: ChatUIPart[];
+};
+export type ChatToolCallPart = TanStackChatToolCallPart;
 export type ChatAttachmentPart = Extract<
   ChatPart,
   { type: "document" | "image" }
@@ -50,8 +96,7 @@ const MCP_CONNECTOR_APPROVAL_GRANT_PREFIX = "mcp-connector:";
 export type ToolApprovalGrant =
   | ApprovalToolName
   | `${typeof MCP_CONNECTOR_APPROVAL_GRANT_PREFIX}${string}`;
-export type ChatToolCallPart = Extract<ChatPart, { type: "tool-call" }>;
-export type ApprovalToolPart = ChatToolCallPart & {
+export type ApprovalToolPart = RegisteredChatUIToolCallPart & {
   name: ApprovalToolName;
   approval: {
     approved?: boolean | undefined;
@@ -221,6 +266,10 @@ const EXTERNAL_INPUT_CHAT_TOOL_NAMES = {
 export const isExternalMcpToolName = (
   toolName: string,
 ): toolName is `mcp__${string}` => toolName.startsWith("mcp__");
+
+const isExternalMcpChatToolCallPart = (
+  part: TanStackChatToolCallPart,
+): part is ExternalMcpChatToolCallPart => isExternalMcpToolName(part.name);
 
 export const isExternalInputChatToolName = (
   toolName: ApprovalToolName,
@@ -804,8 +853,9 @@ const toTerminalIfRunningToolPart = (
     mode === "hydrate" &&
     part.name === "create-document" &&
     part.state === "input-complete" &&
-    typeof part.input?.source === "string" &&
-    part.input.source.trim() !== ""
+    isJsonObject(part.input) &&
+    typeof part.input["source"] === "string" &&
+    part.input["source"].trim() !== ""
   ) {
     return part;
   }
@@ -1003,37 +1053,94 @@ export const parseCompletedToolCallArguments = (
   }
 };
 
-const withParsedToolCallInput = (part: ChatPart): ChatPart => {
-  if (part.type !== "tool-call" || part.input !== undefined) {
+export const isOpaquePersistedChatToolCallPart = (
+  value: unknown,
+): value is OpaquePersistedChatToolCallPart => {
+  if (
+    typeof value !== "object" ||
+    value === null ||
+    !("type" in value) ||
+    value.type !== "tool-call" ||
+    !("id" in value) ||
+    typeof value.id !== "string" ||
+    !("name" in value) ||
+    typeof value.name !== "string" ||
+    !("arguments" in value) ||
+    typeof value.arguments !== "string" ||
+    !("state" in value) ||
+    typeof value.state !== "string" ||
+    !isChatToolCallState(value.state)
+  ) {
+    return false;
+  }
+  return !isChatToolName(value.name) && !isExternalMcpToolName(value.name);
+};
+
+const withParsedToolCallInput = (part: ChatPart): ChatUIPart => {
+  if (part.type !== "tool-call") {
     return part;
   }
-  const input = parseCompletedToolCallArguments(part);
-  if (input === undefined) {
+  if (isExternalMcpChatToolCallPart(part)) {
     return part;
   }
-  const withInput = { ...part, input };
-  return isRegisteredToolCallWithInput(withInput) ? withInput : part;
+  if (isOpaquePersistedChatToolCallPart(part)) {
+    return part;
+  }
+  if (part.input !== undefined && isRegisteredToolCallWithInput(part)) {
+    return part;
+  }
+  const parsedInput = parseCompletedToolCallArguments(part);
+  if (parsedInput === undefined) {
+    if (isRegisteredToolCallWithInput(part)) {
+      return part;
+    }
+    return panic("Malformed persisted chat tool call");
+  }
+  const { input: _input, ...partWithoutInput } = part;
+  const candidate = { ...partWithoutInput, input: parsedInput };
+  if (isRegisteredToolCallWithInput(candidate)) {
+    return candidate;
+  }
+  if (isRegisteredToolCallWithInput(part)) {
+    return part;
+  }
+  return panic("Malformed persisted chat tool call");
 };
 
 const isRegisteredToolCallWithInput = (
   value: unknown,
-): value is ChatToolCallPart => {
+): value is ChatUIToolCallPart => {
   if (
     typeof value !== "object" ||
     value === null ||
     !("type" in value) ||
     value.type !== "tool-call" ||
     !("name" in value) ||
-    typeof value.name !== "string" ||
-    !("input" in value)
+    typeof value.name !== "string"
   ) {
     return false;
   }
-  return isChatToolName(value.name) && isJsonObject(value.input);
+  return (
+    isChatToolName(value.name) &&
+    (!("input" in value) ||
+      value.input === undefined ||
+      isJsonObject(value.input))
+  );
 };
 
 const isJsonObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
+
+const isChatUIMessage = (
+  message: PersistedChatMessage,
+): message is ChatUIMessage =>
+  message.parts.every(
+    (part) =>
+      part.type !== "tool-call" ||
+      isExternalMcpChatToolCallPart(part) ||
+      isOpaquePersistedChatToolCallPart(part) ||
+      isRegisteredToolCallWithInput(part),
+  );
 
 export type DocumentDeletionToolCallEffects = {
   hasVersionDeletion: boolean;
@@ -1109,13 +1216,16 @@ export const consumeDocumentDeletionToolCalls = ({
  */
 export const withParsedToolCallInputs = (
   messages: readonly PersistedChatMessage[],
-): PersistedChatMessage[] =>
+): ChatUIMessage[] =>
   messages.map((message) => {
     const parts = message.parts.map(withParsedToolCallInput);
     const partsChanged = parts.some(
       (part, index) => part !== message.parts[index],
     );
-    return partsChanged ? { ...message, parts } : message;
+    if (!partsChanged && isChatUIMessage(message)) {
+      return message;
+    }
+    return { ...message, parts };
   });
 
 export const getUserMessageHtmlHistory = (

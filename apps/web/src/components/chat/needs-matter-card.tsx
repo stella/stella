@@ -20,8 +20,8 @@ import { cn } from "@stll/ui/utils";
 import { useChatMatters } from "@/components/chat/chat-matters-context";
 import { assistantMessageFallbackText } from "@/components/chat/chat-thread-messages.logic";
 import type {
-  ChatToolCallPart,
   ChatUITools,
+  RegisteredChatUIToolCallPart,
 } from "@/components/chat/chat-ui-tools";
 import {
   buildCreateDocumentDownloadFileName,
@@ -34,7 +34,7 @@ import { DOCX_MIME } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 
 type CreateDocumentPart = Extract<
-  ChatToolCallPart,
+  RegisteredChatUIToolCallPart,
   { name: "create-document" }
 >;
 type CreateDocumentInput = ChatUITools["create-document"]["input"];

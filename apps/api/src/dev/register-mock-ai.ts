@@ -183,10 +183,7 @@ const createMockTextAdapter = (modelId: string): AnyTextAdapter => ({
         type: EventType.TOOL_CALL_START,
         toolCallId: "mock-create-document-call",
         toolCallName: E2E_CREATE_DOCUMENT_TOOL_NAME,
-        // eslint-disable-next-line typescript/no-deprecated -- AG-UI still requires the compatibility field.
-        toolName: E2E_CREATE_DOCUMENT_TOOL_NAME,
         parentMessageId: messageId,
-        model,
         timestamp,
       } satisfies StreamChunk;
       yield {
@@ -202,7 +199,6 @@ const createMockTextAdapter = (modelId: string): AnyTextAdapter => ({
       yield {
         type: EventType.TOOL_CALL_END,
         toolCallId: "mock-create-document-call",
-        model,
         timestamp,
       } satisfies StreamChunk;
       yield {

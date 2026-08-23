@@ -533,7 +533,7 @@ export const isBYOKModelRoleSupported = ({
  * pdf ROLE (`BYOK_DOCUMENT_INPUT_MODEL_OPTIONS`, which curates model selection
  * for PDF-processing flows): it only asks "will the chat stream survive this
  * attachment." The Mistral text adapter maps PDF `document` parts to
- * `document_url` (patched in via the upstream document-input change), so its
+ * `document_url`, so its
  * vision models accept PDF attachments even though Mistral is deliberately not
  * offered as a pdf-role provider. Mistral's `document_url` takes PDF but NOT
  * textual documents (docx/txt/csv/md), so those still gate on

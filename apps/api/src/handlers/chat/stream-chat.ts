@@ -136,6 +136,7 @@ import {
 } from "@/api/lib/tanstack-ai-generate";
 import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
 import { projectSchemaInputJsonSchema } from "@/api/lib/tanstack-ai-schema";
+import { tokenUsageFromRunFinishedChunk } from "@/api/lib/tanstack-ai-usage";
 
 const MAX_TOOL_STEPS = 100;
 const THIRD_PARTY_BOUNDARY_REFUSAL_MESSAGE =
@@ -1562,7 +1563,7 @@ export const processServerChatStream = async function* ({
           panic("Unhandled TanStack completed stream event");
         }
         if (chunk.usage) {
-          usage = chunk.usage;
+          usage = tokenUsageFromRunFinishedChunk(chunk);
         }
         // TanStack's agent loop can emit continuation events after a model
         // run finishes, notably `approval-requested` for a gated server tool.

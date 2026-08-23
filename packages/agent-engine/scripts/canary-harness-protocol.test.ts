@@ -21,7 +21,6 @@ const finishToolStart = {
   type: EventType.TOOL_CALL_START,
   toolCallId: FINISH_TOOL_CALL_ID,
   toolCallName: CANARY_FINISH_STREAM_TOOL_NAME,
-  model: MODEL,
 } satisfies CanaryHarnessChunk;
 
 const finishToolResult = {
@@ -133,7 +132,7 @@ describe("real harness completion protocol", () => {
   test("does not hide an explicit finish-tool error behind the completion text", () => {
     const failedFinishResult = {
       ...finishToolResult,
-      state: "output-error",
+      metadata: { tanstack: { state: "output-error" } },
     } satisfies CanaryHarnessChunk;
 
     expect(

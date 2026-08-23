@@ -29,7 +29,7 @@ import { parseUserFileId } from "@/api/lib/user-files/types";
 
 export type ClientMessage = {
   id: SafeId<"chatMessage">;
-  metadata?: ChatMessageMetadata | undefined;
+  metadata?: ChatMessageMetadata;
   role: ChatMessageRole;
   parts: ChatPart[];
 };

@@ -5,8 +5,8 @@ import type { MistralModelInputModalitiesByName } from "@tanstack/ai-mistral";
 import type { OpenRouterModelInputModalitiesByName } from "@tanstack/ai-openrouter";
 
 import type {
-  BYOK_DOCUMENT_INPUT_MODEL_OPTIONS,
   BYOKModelIdByProvider,
+  CHAT_PDF_ATTACHMENT_MODEL_OPTIONS,
 } from "./index";
 
 type ModelInputModalitiesByName = Record<string, readonly string[]>;
@@ -55,7 +55,8 @@ type TanStackModelInputModalitiesByProvider = {
 // metadata omits document input, while the dated source corrections cover
 // Responses API `input_file` support for the offered models.
 
-type DocumentInputModelOptions = typeof BYOK_DOCUMENT_INPUT_MODEL_OPTIONS;
+type AdapterDocumentInputModelOptions =
+  typeof CHAT_PDF_ATTACHMENT_MODEL_OPTIONS;
 
 type Assert<T extends true> = T;
 type Extends<T, U> = [T] extends [U] ? true : false;
@@ -63,7 +64,7 @@ type Extends<T, U> = [T] extends [U] ? true : false;
 type EveryKnownDocumentInputOptionIsSupported = {
   [TProvider in keyof TanStackDocumentInputModelByProvider]: Extends<
     Extract<
-      DocumentInputModelOptions[TProvider][number],
+      AdapterDocumentInputModelOptions[TProvider][number],
       keyof TanStackModelInputModalitiesByProvider[TProvider]
     >,
     TanStackDocumentInputModelByProvider[TProvider]
@@ -76,7 +77,7 @@ type EveryOfferedTanStackDocumentModelIsIncluded = {
       BYOKModelIdByProvider[TProvider],
       TanStackDocumentInputModelByProvider[TProvider]
     >,
-    DocumentInputModelOptions[TProvider][number]
+    AdapterDocumentInputModelOptions[TProvider][number]
   >;
 }[keyof TanStackDocumentInputModelByProvider];
 
