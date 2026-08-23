@@ -122,7 +122,7 @@ const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
 
 const SQL_IDENTIFIER_PATTERN =
   /"(?<quoted>[^"]+)"|(?<unquoted>[a-z_][a-z0-9_]*)/giu;
-const DYNAMIC_GRANT_PATTERN = /EXECUTE\s+format\s*\([^;]*?\bGRANT\b[^;]*?\)/giu;
+const DYNAMIC_GRANT_PATTERN = /\bEXECUTE\b[^;]*\bGRANT\b[^;]*/giu;
 
 type RlsTableIntroduction = {
   migration: string;
@@ -167,7 +167,7 @@ const dynamicGrantSites = ({
   contents,
   migration,
 }: DynamicGrantSitesOptions): string[] =>
-  [...contents.matchAll(DYNAMIC_GRANT_PATTERN)].map(
+  [...stripSqlLineComments(contents).matchAll(DYNAMIC_GRANT_PATTERN)].map(
     (match) => `${migration}: ${match[0].replace(/\s+/gu, " ").trim()}`,
   );
 
@@ -225,10 +225,17 @@ const enableRlsTableName = (statement: string): string | null => {
   return tableNameFromSql(statement.slice(prefix.length, -suffix.length));
 };
 
-type StellaTableGrant = {
-  privileges: Set<string>;
-  tables: string[];
-};
+type StellaTableGrant =
+  | {
+      type: "tables";
+      privileges: Set<string>;
+      tables: string[];
+    }
+  | {
+      type: "all_tables_in_schema";
+      privileges: Set<string>;
+      schemas: string[];
+    };
 
 type SqlKeywordIndexOptions = {
   from?: number;
@@ -341,16 +348,24 @@ const stellaTableGrant = (statement: string): StellaTableGrant | null => {
   }
 
   const privileges = new Set(identifierNamesFromSql(privilegesSql));
+  const allTablesPrefix = "ALL TABLES IN SCHEMA ";
+  if (startsWithSqlKeyword(tablesSql, allTablesPrefix, 0)) {
+    return {
+      type: "all_tables_in_schema",
+      privileges,
+      schemas: identifierNamesFromSql(tablesSql.slice(allTablesPrefix.length)),
+    };
+  }
   const tables = identifierNamesFromSql(tablesSql).filter(
     (name) => name !== "public",
   );
 
-  return { privileges, tables };
+  return { type: "tables", privileges, tables };
 };
 
 const explicitStellaGrantTables = (statement: string): string[] => {
   const grant = stellaTableGrant(statement);
-  if (grant === null) {
+  if (grant === null || grant.type !== "tables") {
     return [];
   }
   const grantsTableDml =
@@ -367,6 +382,20 @@ const explicitStellaGrantTables = (statement: string): string[] => {
       privileges: grant.privileges,
       grantsTableDml,
     }),
+  );
+};
+
+const selectOnlyMutationTargets = (grant: StellaTableGrant): string[] => {
+  if (grant.privileges.isDisjointFrom(TABLE_MUTATION_PRIVILEGES)) {
+    return [];
+  }
+  if (grant.type === "all_tables_in_schema") {
+    return grant.schemas.includes("public")
+      ? ["all tables in schema public"]
+      : [];
+  }
+  return grant.tables.filter((table) =>
+    POST_BOOTSTRAP_SELECT_ONLY_TABLES.has(table),
   );
 };
 
@@ -408,13 +437,8 @@ const collectRlsGrantState = () => {
       if (grant === null) {
         continue;
       }
-      for (const table of grant.tables) {
-        if (
-          POST_BOOTSTRAP_SELECT_ONLY_TABLES.has(table) &&
-          !grant.privileges.isDisjointFrom(TABLE_MUTATION_PRIVILEGES)
-        ) {
-          selectOnlyMutationGrants.push(`${migration}: ${table}`);
-        }
+      for (const target of selectOnlyMutationTargets(grant)) {
+        selectOnlyMutationGrants.push(`${migration}: ${target}`);
       }
     }
   }
@@ -438,6 +462,15 @@ describe("RLS table grants", () => {
     ).toEqual([
       "future_migration: EXECUTE format($grant$GRANT UPDATE ON TABLE %I TO stella$grant$, table_name)",
     ]);
+    expect(
+      dynamicGrantSites({
+        contents:
+          "EXECUTE 'GRANT UPDATE ON TABLE case_law_corpus_index_counts TO stella';",
+        migration: "future_migration",
+      }),
+    ).toEqual([
+      "future_migration: EXECUTE 'GRANT UPDATE ON TABLE case_law_corpus_index_counts TO stella'",
+    ]);
     expect(collectRlsGrantState().unexpectedDynamicGrantSites).toEqual([]);
   });
 
@@ -447,6 +480,7 @@ describe("RLS table grants", () => {
         "GRANT SELECT, UPDATE ON TABLE classified_table TO stella, another_role WITH GRANT OPTION",
       ),
     ).toEqual({
+      type: "tables",
       privileges: new Set(["select", "update"]),
       tables: ["classified_table"],
     });
@@ -455,6 +489,7 @@ describe("RLS table grants", () => {
         'GRANT SELECT, UPDATE ON TABLE classified_table TO stella, "read TO audit", "read WITH GRANT OPTION audit" GRANTED BY owner',
       ),
     ).toEqual({
+      type: "tables",
       privileges: new Set(["select", "update"]),
       tables: ["classified_table"],
     });
@@ -463,12 +498,14 @@ describe("RLS table grants", () => {
         'GRANT SELECT, UPDATE ON TABLE classified_table, "straße" TO stella',
       ),
     ).toEqual({
+      type: "tables",
       privileges: new Set(["select", "update"]),
       tables: ["classified_table", "straße"],
     });
     expect(
       stellaTableGrant("GRANT SELECT, UPDATE ON classified_table TO PUBLIC"),
     ).toEqual({
+      type: "tables",
       privileges: new Set(["select", "update"]),
       tables: ["classified_table"],
     });
@@ -477,6 +514,24 @@ describe("RLS table grants", () => {
         "GRANT SELECT ON TABLE classified_table TO another_role GRANTED BY stella",
       ),
     ).toBeNull();
+    expect(
+      stellaTableGrant(
+        "GRANT UPDATE ON ALL TABLES IN SCHEMA public TO PUBLIC",
+      ),
+    ).toEqual({
+      type: "all_tables_in_schema",
+      privileges: new Set(["update"]),
+      schemas: ["public"],
+    });
+    const schemaWideMutation = stellaTableGrant(
+      "GRANT UPDATE ON ALL TABLES IN SCHEMA public TO PUBLIC",
+    );
+    expect(schemaWideMutation).not.toBeNull();
+    if (schemaWideMutation !== null) {
+      expect(selectOnlyMutationTargets(schemaWideMutation)).toEqual([
+        "all tables in schema public",
+      ]);
+    }
   });
 
   test("SELECT-only tables never grant mutation privileges to stella", () => {
