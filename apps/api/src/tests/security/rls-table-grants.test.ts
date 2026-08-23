@@ -5,6 +5,18 @@ import nodePath from "node:path";
 const DRIZZLE_DIR = nodePath.resolve(import.meta.dir, "../../../drizzle");
 const BOOTSTRAP_MIGRATION = "20260510140000_document_rls_role_bootstrap";
 
+// Deployed migrations contain these six reviewed dynamic grants. New grants
+// must be literal SQL so the privilege parser below can classify their target;
+// an exact site allowlist prevents EXECUTE format(...) from becoming a bypass.
+const AUDITED_DYNAMIC_GRANT_SITES = new Set([
+  "20260510140000_document_rls_role_bootstrap: EXECUTE format( 'GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE %s TO stella', target_table )",
+  "20260510140000_document_rls_role_bootstrap: EXECUTE format('GRANT USAGE, SELECT ON SEQUENCE %s TO stella', target_sequence)",
+  "20260510140000_document_rls_role_bootstrap: EXECUTE format('GRANT stella TO %I', CURRENT_USER)",
+  "20260516000000_case_law_ingestion_role: EXECUTE format( 'GRANT USAGE, SELECT ON SEQUENCE %s TO stella_ingestion', target_sequence )",
+  "20260516000000_case_law_ingestion_role: EXECUTE format('GRANT stella_ingestion TO %I', CURRENT_USER)",
+  "20260808014000_legal_lists: EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE %I TO stella', table_name)",
+]);
+
 // These migrations were already in the tree when the bootstrap migration
 // introduced the `stella` RLS role and dynamically granted all existing
 // RLS tables. Do not add new migrations here; post-bootstrap tables need
@@ -110,6 +122,8 @@ const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
 
 const SQL_IDENTIFIER_PATTERN =
   /"(?<quoted>[^"]+)"|(?<unquoted>[a-z_][a-z0-9_]*)/giu;
+const DYNAMIC_GRANT_PATTERN =
+  /EXECUTE\s+format\s*\([^;]*?\bGRANT\b[^;]*?\)/giu;
 
 type RlsTableIntroduction = {
   migration: string;
@@ -145,6 +159,19 @@ const sqlStatements = (contents: string): string[] =>
     .map((statement) => statement.replace(/\s+/gu, " ").trim())
     .filter((statement) => statement.length > 0);
 
+type DynamicGrantSitesOptions = {
+  contents: string;
+  migration: string;
+};
+
+const dynamicGrantSites = ({
+  contents,
+  migration,
+}: DynamicGrantSitesOptions): string[] =>
+  [...contents.matchAll(DYNAMIC_GRANT_PATTERN)].map(
+    (match) => `${migration}: ${match[0].replace(/\s+/gu, " ").trim()}`,
+  );
+
 type GrantsRequiredPrivilegesOptions = {
   table: string;
   privileges: Set<string>;
@@ -161,6 +188,7 @@ const TABLE_MUTATION_PRIVILEGES = new Set([
   "truncate",
   "update",
 ]);
+const STELLA_GRANT_GRANTEES = new Set(["public", "stella"]);
 
 const grantsRequiredPrivileges = ({
   table,
@@ -269,14 +297,15 @@ const grantTargetsStella = (targetClause: string): boolean => {
     optionsStart === undefined
       ? targetClause
       : targetClause.slice(0, optionsStart);
-  return identifierNamesFromSql(granteesSql).some(
-    (grantee) => grantee.toLowerCase() === "stella",
+  return identifierNamesFromSql(granteesSql).some((grantee) =>
+    STELLA_GRANT_GRANTEES.has(grantee.toLowerCase()),
   );
 };
 
 const stellaTableGrant = (statement: string): StellaTableGrant | null => {
   const prefix = "GRANT ";
-  const onTableMarker = " ON TABLE ";
+  const onMarker = " ON ";
+  const tableMarker = "TABLE ";
   const toMarker = " TO ";
   const upperStatement = statement.toUpperCase();
 
@@ -284,24 +313,32 @@ const stellaTableGrant = (statement: string): StellaTableGrant | null => {
     return null;
   }
 
-  const onTableIndex = sqlKeywordIndex({
-    keyword: onTableMarker,
+  const onIndex = sqlKeywordIndex({
+    keyword: onMarker,
     sql: statement,
   });
+  if (onIndex === -1) {
+    return null;
+  }
+  const targetStart = onIndex + onMarker.length;
+  const tablesStart = startsWithSqlKeyword(
+    statement,
+    tableMarker,
+    targetStart,
+  )
+    ? targetStart + tableMarker.length
+    : targetStart;
   const toIndex = sqlKeywordIndex({
-    from: onTableIndex + onTableMarker.length,
+    from: tablesStart,
     keyword: toMarker,
     sql: statement,
   });
-  if (onTableIndex === -1 || toIndex <= onTableIndex) {
+  if (toIndex <= onIndex) {
     return null;
   }
 
-  const privilegesSql = statement.slice(prefix.length, onTableIndex);
-  const tablesSql = statement.slice(
-    onTableIndex + onTableMarker.length,
-    toIndex,
-  );
+  const privilegesSql = statement.slice(prefix.length, onIndex);
+  const tablesSql = statement.slice(tablesStart, toIndex);
   const targetRoleSql = statement.slice(toIndex + toMarker.length);
 
   if (!grantTargetsStella(targetRoleSql)) {
@@ -342,10 +379,18 @@ const collectRlsGrantState = () => {
   const rlsTables: RlsTableIntroduction[] = [];
   const explicitGrantMigrationsByTable = new Map<string, string[]>();
   const selectOnlyMutationGrants: string[] = [];
+  const unexpectedDynamicGrantSites: string[] = [];
 
   for (const path of migrationSqlFiles()) {
     const migration = nodePath.basename(nodePath.resolve(path, ".."));
-    const statements = sqlStatements(readFileSync(path, "utf-8"));
+    const contents = readFileSync(path, "utf-8");
+    const statements = sqlStatements(contents);
+
+    for (const site of dynamicGrantSites({ contents, migration })) {
+      if (!AUDITED_DYNAMIC_GRANT_SITES.has(site)) {
+        unexpectedDynamicGrantSites.push(site);
+      }
+    }
 
     for (const statement of statements) {
       const rlsTable = enableRlsTableName(statement);
@@ -383,10 +428,24 @@ const collectRlsGrantState = () => {
     explicitGrantMigrationsByTable,
     rlsTables,
     selectOnlyMutationGrants,
+    unexpectedDynamicGrantSites,
   };
 };
 
 describe("RLS table grants", () => {
+  test("rejects dynamic grants outside the exact deployed allowlist", () => {
+    expect(
+      dynamicGrantSites({
+        contents:
+          "EXECUTE format($grant$GRANT UPDATE ON TABLE %I TO stella$grant$, table_name);",
+        migration: "future_migration",
+      }),
+    ).toEqual([
+      "future_migration: EXECUTE format($grant$GRANT UPDATE ON TABLE %I TO stella$grant$, table_name)",
+    ]);
+    expect(collectRlsGrantState().unexpectedDynamicGrantSites).toEqual([]);
+  });
+
   test("classifies stella in a grantee list but not as the grantor", () => {
     expect(
       stellaTableGrant(
@@ -411,6 +470,14 @@ describe("RLS table grants", () => {
     ).toEqual({
       privileges: new Set(["select", "update"]),
       tables: ["classified_table", "straße"],
+    });
+    expect(
+      stellaTableGrant(
+        "GRANT SELECT, UPDATE ON classified_table TO PUBLIC",
+      ),
+    ).toEqual({
+      privileges: new Set(["select", "update"]),
+      tables: ["classified_table"],
     });
     expect(
       stellaTableGrant(
