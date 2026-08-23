@@ -37,7 +37,8 @@ CREATE TABLE "signal_events" (
 	"type" text NOT NULL,
 	"actor_user_id" text,
 	"payload" jsonb,
-	"created_at" timestamp with time zone DEFAULT now() NOT NULL
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "signal_events_type_check" CHECK ("type" in ('created', 'snoozed', 'unsnoozed', 'accepted', 'dismissed', 'assigned'))
 );
 --> statement-breakpoint
 CREATE TABLE "scout_runs" (
@@ -49,7 +50,8 @@ CREATE TABLE "scout_runs" (
 	"inserted_count" integer DEFAULT 0 NOT NULL,
 	"error" text,
 	"started_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"finished_at" timestamp with time zone
+	"finished_at" timestamp with time zone,
+	CONSTRAINT "scout_runs_status_check" CHECK ("status" in ('running', 'succeeded', 'failed'))
 );
 --> statement-breakpoint
 ALTER TABLE "signals" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint

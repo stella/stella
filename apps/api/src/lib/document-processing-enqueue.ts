@@ -1,12 +1,6 @@
-import { Worker } from "bullmq";
-
-import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
 import { createLazyBullMqQueue } from "@/api/lib/bullmq-queue";
-import { connectionErrorFields, errorTag } from "@/api/lib/errors/utils";
-import { logger } from "@/api/lib/observability/logger";
-import { createBullMqConnection } from "@/api/lib/redis-client";
 
 export const DOCUMENT_PROCESSING_QUEUE_NAME = "document-processing";
 export const DOCUMENT_PROCESSING_OCR_JOB_NAME = "ocr";
@@ -15,10 +9,9 @@ export const DOCUMENT_PROCESSING_OCR_JOB_NAME = "ocr";
 // BullMQ must deliver each enqueue once so it cannot bypass that policy.
 const DEFAULT_JOB_ATTEMPTS = 1;
 const QUEUE_OPERATION_TIMEOUT_MS = 2000;
-const DEADLINE_SCOUT_QUEUE_NAME = "document-deadline-scouts";
-const DEADLINE_SCOUT_JOB_NAME = "scan-document-deadlines";
+export const DEADLINE_SCOUT_QUEUE_NAME = "document-deadline-scouts";
+export const DEADLINE_SCOUT_JOB_NAME = "scan-document-deadlines";
 const DEADLINE_SCOUT_JOB_ATTEMPTS = 5;
-const DEADLINE_SCOUT_WORKER_CONCURRENCY = 1;
 
 export type DocumentProcessingJobData = {
   runId: SafeId<"documentProcessingRun">;
@@ -141,48 +134,4 @@ export const enqueueDocumentDeadlineScout = async (
     scoutQueue: getDeadlineScoutQueue(),
     job,
   });
-};
-
-export const initDocumentDeadlineScoutWorker = () => {
-  const worker = new Worker<DocumentDeadlineScoutJobData>(
-    DEADLINE_SCOUT_QUEUE_NAME,
-    async ({ data }) => {
-      const { runDocumentDeadlineScout } =
-        await import("@/api/lib/scouts/document-deadlines");
-      await runDocumentDeadlineScout(data);
-    },
-    {
-      connection: createBullMqConnection(),
-      concurrency: DEADLINE_SCOUT_WORKER_CONCURRENCY,
-    },
-  );
-
-  worker.on("failed", (job, error) => {
-    captureError(error, {
-      scout: DEADLINE_SCOUT_JOB_NAME,
-      sourceRunId: job?.data.sourceRunId ?? "",
-    });
-    logger.error("scout.document_deadlines.failed", {
-      "entity.id": job?.data.entityId ?? "",
-      "error.type": errorTag(error),
-      "source.run.id": job?.data.sourceRunId ?? "",
-      "workspace.id": job?.data.workspaceId ?? "",
-    });
-  });
-  worker.on("error", (error) => {
-    logger.error(
-      "scout.document_deadlines.worker_error",
-      connectionErrorFields(error),
-    );
-  });
-
-  logger.info("scout.document_deadlines.worker_started", {
-    concurrency: String(DEADLINE_SCOUT_WORKER_CONCURRENCY),
-  });
-
-  return {
-    close: async (): Promise<void> => {
-      await worker.close();
-    },
-  };
 };

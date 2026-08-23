@@ -24,6 +24,9 @@ type ScopedDb = CreateTaskCtx["scopedDb"];
 
 const workspaceId = toSafeId<"workspace">("ws_test123");
 const userId = toSafeId<"user">("user_abc");
+const sourceEntityId = toSafeId<"entity">(
+  "11111111-1111-4111-8111-111111111248",
+);
 
 /** Mock scopedDb that throws if called (validates early return). */
 const throwingScopedDb = () =>
@@ -315,6 +318,7 @@ describe("createTaskHandler validation", () => {
         features: TASK_FEATURES_ENABLED,
         workObligationSource: {
           type: "document",
+          entityId: sourceEntityId,
           description: "Inbox signal: filing deadline",
         },
       }),
@@ -324,6 +328,7 @@ describe("createTaskHandler validation", () => {
     expect(obligationRows).toEqual([
       expect.objectContaining({
         ownerUserId: null,
+        sourceEntityId,
         sourceDescription: "Inbox signal: filing deadline",
         sourceType: "document",
         status: "unassigned",

@@ -6,6 +6,7 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
+import { Result } from "better-result";
 import {
   AlertCircleIcon,
   ArrowDownIcon,
@@ -135,17 +136,26 @@ export const MyWorkView = ({ organizationId }: { organizationId: string }) => {
   const groups = groupByWorkspace(items);
 
   const createTask = async (workspaceId: string) => {
-    const response = await api.tasks({ workspaceId }).put({
-      name: t("tasks.untitled"),
+    const created = await Result.tryPromise(async () => {
+      const response = await api.tasks({ workspaceId }).put({
+        name: t("tasks.untitled"),
+      });
+      return unwrapEden(response).entityId;
     });
-    const entityId = unwrapEden(response).entityId;
+    if (Result.isError(created)) {
+      analytics.captureError(created.error);
+      stellaToast.error(
+        userErrorFromThrown(created.error, t("errors.actionFailed")),
+      );
+      return;
+    }
     await queryClient.invalidateQueries({ queryKey: myWorkKeys.all });
     await navigate({
       to: "/workspaces/$workspaceId",
       params: { workspaceId },
     });
     useInspectorTabsStore.getState().openTask({
-      taskId: entityId,
+      taskId: created.value,
       workspaceId,
       isNew: true,
     });

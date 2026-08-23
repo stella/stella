@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import { SIGNAL_SEVERITY } from "@stll/api-contract/signals";
 import type { SignalSeverity } from "@stll/api-contract/signals";
 import { DAY_IN_MS } from "@stll/time";
@@ -7,6 +9,24 @@ import { isRecord } from "@/api/lib/type-guards";
 
 /** Hearings this close to now are flagged even when not rescheduled. */
 export const HEARING_SOON_WINDOW_MS = 14 * DAY_IN_MS;
+export const INFO_SOUD_TIME_ZONE = "Europe/Prague";
+
+/** Date-only value in the source court's civil time, not the server's UTC day. */
+export const infoSoudLocalDate = (date: Date): string => {
+  const parts = new Intl.DateTimeFormat("en", {
+    day: "2-digit",
+    month: "2-digit",
+    timeZone: INFO_SOUD_TIME_ZONE,
+    year: "numeric",
+  }).formatToParts(date);
+  const year = parts.find(({ type }) => type === "year")?.value;
+  const month = parts.find(({ type }) => type === "month")?.value;
+  const day = parts.find(({ type }) => type === "day")?.value;
+  if (!year || !month || !day) {
+    panic("InfoSoud hearing date could not be formatted");
+  }
+  return `${year}-${month}-${day}`;
+};
 
 /** The slice of an infosoud hearing entity the scout reasons about. */
 export type HearingRecord = {

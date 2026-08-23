@@ -17,14 +17,12 @@ import type { SafeId } from "@/api/lib/branded-types";
  * the contract) and narrows the evidence shape; `confidence` is required
  * exactly when the origin is `model` (also a DB check).
  */
-export type NewSignal<K extends SignalKind = SignalKind> = {
+type NewSignalOf<K extends SignalKind> = {
   kind: K;
   scoutKey: string;
   workspaceId: SafeId<"workspace"> | null;
   severity: SignalSeverity;
-  confidence: K extends "deadline.detected" | "contract.reviewed"
-    ? number
-    : null;
+  confidence: (typeof SIGNAL_KIND_ORIGIN)[K] extends "model" ? number : null;
   title: string;
   summary: string;
   subject: SignalSubject;
@@ -35,6 +33,10 @@ export type NewSignal<K extends SignalKind = SignalKind> = {
   assigneeUserId?: SafeId<"user"> | null;
   createdByUserId?: SafeId<"user"> | null;
 };
+
+export type NewSignal = {
+  [K in SignalKind]: NewSignalOf<K>;
+}[SignalKind];
 
 export type EmitSignalsArgs = {
   tx: Transaction;

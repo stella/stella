@@ -112,7 +112,7 @@ import { assertConfiguredBetterAuthOAuthPolicy } from "@/api/lib/db/assert-bette
 import { assertMigrationsApplied } from "@/api/lib/db/assert-migrations-applied";
 import { detached } from "@/api/lib/detached";
 import { DEV_INSPECTOR_ORIGINS, frontendOrigins } from "@/api/lib/dev-origins";
-import { initDocumentDeadlineScoutWorker } from "@/api/lib/document-processing-enqueue";
+import { initDocumentDeadlineScoutWorker } from "@/api/lib/document-deadline-scout-worker";
 import { initDocumentReviewRunWorker } from "@/api/lib/document-review/run-queue";
 import { initDocumentTranslationRunWorker } from "@/api/lib/document-translation/run-queue";
 import { initEntityDeletionCleanupWorker } from "@/api/lib/entity-deletion-cleanup-queue";

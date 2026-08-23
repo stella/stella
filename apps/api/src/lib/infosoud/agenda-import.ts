@@ -16,7 +16,10 @@ import { AGENDA_ITEM_KIND, TASK_STATUS } from "@/api/lib/entity-constants";
 import type { AgendaItemKind } from "@/api/lib/entity-constants";
 import { LIMITS } from "@/api/lib/limits";
 import { emitInfoSoudHearingSignals } from "@/api/lib/scouts/infosoud-hearings";
-import { toHearingRecord } from "@/api/lib/scouts/infosoud-hearings.logic";
+import {
+  INFO_SOUD_TIME_ZONE,
+  toHearingRecord,
+} from "@/api/lib/scouts/infosoud-hearings.logic";
 
 type InfoSoudAgendaItem = {
   agendaKind: AgendaItemKind;
@@ -69,8 +72,6 @@ type ImportInfoSoudAgendaItemsResult =
     };
 
 export const INFO_SOUD_EXTERNAL_SOURCE = "infosoud" as const;
-export const INFO_SOUD_TIME_ZONE = "Europe/Prague";
-
 export const buildInfoSoudAgendaItems = (
   caseResult: CaseSearchResult,
   hearings: HearingEvent[],

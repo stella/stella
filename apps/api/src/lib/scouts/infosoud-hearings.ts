@@ -10,6 +10,7 @@ import {
   findPreviousStart,
   hearingDedupeKey,
   hearingSeverity,
+  infoSoudLocalDate,
   toHearingRecord,
 } from "@/api/lib/scouts/infosoud-hearings.logic";
 import type { HearingRecord } from "@/api/lib/scouts/infosoud-hearings.logic";
@@ -107,7 +108,7 @@ export const emitInfoSoudHearingSignals = async ({
                   kind: SUGGESTION_KIND.CREATE_DEADLINE,
                   workspaceId,
                   name: `${hearing.court} ${hearing.caseMark} hearing`,
-                  dueAt: hearing.startAt.toISOString(),
+                  dueAt: infoSoudLocalDate(hearing.startAt),
                 } as const,
               ]
             : []),

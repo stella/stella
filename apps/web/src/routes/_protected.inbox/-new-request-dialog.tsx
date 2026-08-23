@@ -119,6 +119,7 @@ export const NewRequestDialog = ({ organizationId }: NewRequestDialogProps) => {
         queryKey: inboxKeys.all(organizationId),
       });
       stellaToast.add({ title: t("inbox.request.created"), type: "success" });
+      formApi.reset();
       setIsOpen(false);
     },
   });

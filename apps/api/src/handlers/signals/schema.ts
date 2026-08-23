@@ -1,11 +1,13 @@
+import type { TSchema } from "@sinclair/typebox";
 import { t } from "elysia";
 
 import {
   SERVER_EXECUTED_SUGGESTION_KINDS,
-  SIGNAL_ORIGINS,
-  SIGNAL_SEVERITIES,
+  SIGNAL_ORIGIN,
+  SIGNAL_SEVERITY,
   SUGGESTION_KINDS,
 } from "@stll/api-contract/signals";
+import type { SignalOrigin, SignalSeverity } from "@stll/api-contract/signals";
 
 import {
   tPaginationCursor,
@@ -27,9 +29,40 @@ export const SIGNAL_VIEWS = [
   SIGNAL_VIEW.RESOLVED,
 ] as const satisfies readonly SignalView[];
 
-const signalViewSchema = t.UnionEnum(SIGNAL_VIEWS);
-const signalOriginSchema = t.UnionEnum(SIGNAL_ORIGINS);
-const signalSeveritySchema = t.UnionEnum(SIGNAL_SEVERITIES);
+const SIGNAL_VIEW_SCHEMAS = {
+  [SIGNAL_VIEW.OPEN]: t.Literal(SIGNAL_VIEW.OPEN),
+  [SIGNAL_VIEW.SNOOZED]: t.Literal(SIGNAL_VIEW.SNOOZED),
+  [SIGNAL_VIEW.RESOLVED]: t.Literal(SIGNAL_VIEW.RESOLVED),
+} as const satisfies Record<SignalView, TSchema>;
+const signalViewSchema = t.Union([
+  SIGNAL_VIEW_SCHEMAS.open,
+  SIGNAL_VIEW_SCHEMAS.snoozed,
+  SIGNAL_VIEW_SCHEMAS.resolved,
+]);
+
+const SIGNAL_ORIGIN_SCHEMAS = {
+  [SIGNAL_ORIGIN.MANUAL]: t.Literal(SIGNAL_ORIGIN.MANUAL),
+  [SIGNAL_ORIGIN.SOURCE]: t.Literal(SIGNAL_ORIGIN.SOURCE),
+  [SIGNAL_ORIGIN.MODEL]: t.Literal(SIGNAL_ORIGIN.MODEL),
+} as const satisfies Record<SignalOrigin, TSchema>;
+const signalOriginSchema = t.Union([
+  SIGNAL_ORIGIN_SCHEMAS.manual,
+  SIGNAL_ORIGIN_SCHEMAS.source,
+  SIGNAL_ORIGIN_SCHEMAS.model,
+]);
+
+const SIGNAL_SEVERITY_SCHEMAS = {
+  [SIGNAL_SEVERITY.INFO]: t.Literal(SIGNAL_SEVERITY.INFO),
+  [SIGNAL_SEVERITY.NOTICE]: t.Literal(SIGNAL_SEVERITY.NOTICE),
+  [SIGNAL_SEVERITY.WARNING]: t.Literal(SIGNAL_SEVERITY.WARNING),
+  [SIGNAL_SEVERITY.CRITICAL]: t.Literal(SIGNAL_SEVERITY.CRITICAL),
+} as const satisfies Record<SignalSeverity, TSchema>;
+const signalSeveritySchema = t.Union([
+  SIGNAL_SEVERITY_SCHEMAS.info,
+  SIGNAL_SEVERITY_SCHEMAS.notice,
+  SIGNAL_SEVERITY_SCHEMAS.warning,
+  SIGNAL_SEVERITY_SCHEMAS.critical,
+]);
 const suggestionKindSchema = t.UnionEnum(SUGGESTION_KINDS);
 
 export const listSignalsQuerySchema = t.Object({

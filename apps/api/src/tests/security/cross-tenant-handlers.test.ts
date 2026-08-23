@@ -116,7 +116,7 @@ const savedSearchB = toSafeId<"savedSearch">(
   "22222222-2222-4222-8222-222222222245",
 );
 const foreignSignalB = toSafeId<"signal">(
-  "22222222-2222-4222-8222-222222222246",
+  "22222222-2222-4222-8222-222222222248",
 );
 const visibleSignalB = toSafeId<"signal">(
   "22222222-2222-4222-8222-222222222247",

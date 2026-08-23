@@ -69,6 +69,9 @@ export type SignalAcceptedResult =
 const SIGNAL_STATUS_SQL_VALUES = SIGNAL_STATUSES.map((status) =>
   sql.raw(`'${status}'`),
 );
+const SIGNAL_EVENT_TYPE_SQL_VALUES = SIGNAL_EVENT_TYPES.map((type) =>
+  sql.raw(`'${type}'`),
+);
 
 export const SCOUT_RUN_STATUS = {
   RUNNING: "running",
@@ -82,6 +85,9 @@ export const SCOUT_RUN_STATUSES = [
   SCOUT_RUN_STATUS.SUCCEEDED,
   SCOUT_RUN_STATUS.FAILED,
 ] as const satisfies readonly ScoutRunStatus[];
+const SCOUT_RUN_STATUS_SQL_VALUES = SCOUT_RUN_STATUSES.map((status) =>
+  sql.raw(`'${status}'`),
+);
 
 /**
  * Org-scoped inbox signal. `workspaceId` NULL means unscoped (triage):
@@ -189,6 +195,10 @@ export const signalEvents = p.pgTable(
     p
       .index("signal_events_signal_created_idx")
       .on(table.signalId, table.createdAt),
+    p.check(
+      "signal_events_type_check",
+      sql`${table.type} in (${sql.join(SIGNAL_EVENT_TYPE_SQL_VALUES, sql`, `)})`,
+    ),
     p.pgPolicy("signal_events_select", {
       for: "select",
       to: stella,
@@ -238,6 +248,10 @@ export const scoutRuns = p.pgTable(
     p
       .index("scout_runs_org_scout_started_idx")
       .on(table.organizationId, table.scoutKey, table.startedAt.desc()),
+    p.check(
+      "scout_runs_status_check",
+      sql`${table.status} in (${sql.join(SCOUT_RUN_STATUS_SQL_VALUES, sql`, `)})`,
+    ),
     ...orgPolicies(),
   ],
 );

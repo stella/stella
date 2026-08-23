@@ -1,8 +1,10 @@
+import { Result } from "better-result";
 import { eq } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { SCOUT_RUN_STATUS, scoutRuns } from "@/api/db/schema";
+import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { emitSignals } from "@/api/lib/signals/emit";
@@ -58,16 +60,25 @@ export const runScout = async ({
       return emitSignals({ tx, organizationId, signals: proposed });
     });
   } catch (error) {
-    await db((tx) =>
-      tx
-        .update(scoutRuns)
-        .set({
-          status: SCOUT_RUN_STATUS.FAILED,
-          error: error instanceof Error ? error.message : String(error),
-          finishedAt: new Date(),
-        })
-        .where(eq(scoutRuns.id, runId)),
+    const recorded = await Result.tryPromise(
+      async () =>
+        await db((tx) =>
+          tx
+            .update(scoutRuns)
+            .set({
+              status: SCOUT_RUN_STATUS.FAILED,
+              error: error instanceof Error ? error.message : String(error),
+              finishedAt: new Date(),
+            })
+            .where(eq(scoutRuns.id, runId)),
+        ),
     );
+    if (Result.isError(recorded)) {
+      captureError(recorded.error, {
+        operation: "signals.scout.record-failure",
+        runId,
+      });
+    }
     throw error;
   }
 

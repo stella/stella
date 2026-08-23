@@ -4,6 +4,7 @@ import {
   findPreviousStart,
   HEARING_SOON_WINDOW_MS,
   hearingSeverity,
+  infoSoudLocalDate,
   toHearingRecord,
 } from "@/api/lib/scouts/infosoud-hearings.logic";
 import type { HearingRecord } from "@/api/lib/scouts/infosoud-hearings.logic";
@@ -123,10 +124,23 @@ describe("findPreviousStart", () => {
 
   test("the hearing's own id is not its previous occurrence (mutation guard)", () => {
     const same = record("old", "2026-09-03T07:30:00.000Z");
-    // The fixture shares its id with `existing[0]`; without the id filter
+    const firstExisting = existing.at(0);
+    expect(firstExisting).toBeDefined();
+    if (!firstExisting) {
+      throw new Error("Expected an existing hearing fixture");
+    }
+    // The fixture shares its id with the first existing row; without the id filter
     // the function would return the hearing's own start.
-    expect(existing[0]?.externalId).toBe(same.externalId);
-    expect(findPreviousStart(same, [existing[0]!])).toBeNull();
+    expect(firstExisting.externalId).toBe(same.externalId);
+    expect(findPreviousStart(same, [firstExisting])).toBeNull();
+  });
+});
+
+describe("infoSoudLocalDate", () => {
+  test("keeps a near-midnight hearing on the Prague civil date", () => {
+    expect(infoSoudLocalDate(new Date("2026-09-02T22:30:00.000Z"))).toBe(
+      "2026-09-03",
+    );
   });
 });
 

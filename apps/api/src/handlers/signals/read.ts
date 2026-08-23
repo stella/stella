@@ -162,14 +162,22 @@ export const listSignalsHandler = async function* ({
         new HandlerError({ status: 400, message: "Invalid cursor" }),
       );
     }
-    const boundary = yield* Result.await(
+    const boundaryRows = yield* Result.await(
       safeDb((tx) =>
-        tx.query.signals.findFirst({
-          where: { id: { eq: cursor }, organizationId: { eq: organizationId } },
-          columns: { id: true },
-        }),
+        tx
+          .select({ id: signals.id })
+          .from(signals)
+          .where(
+            and(
+              eq(signals.id, cursor),
+              eq(signals.organizationId, organizationId),
+              signalVisibilityCondition(canTriage),
+            ),
+          )
+          .limit(1),
       ),
     );
+    const boundary = boundaryRows.at(0);
     if (!boundary) {
       return Result.err(
         new HandlerError({ status: 400, message: "Invalid cursor" }),

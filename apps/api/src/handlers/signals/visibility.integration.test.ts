@@ -19,6 +19,7 @@ import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import listSignals from "@/api/handlers/signals/list";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { encodePaginationCursor } from "@/api/lib/pagination";
 import { SCOUT_KEY } from "@/api/lib/signals/scout";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
@@ -35,6 +36,7 @@ type ListContext = Parameters<typeof listSignals.handler>[0];
 let testDb: TestDatabase;
 let ids: TestIds;
 const seeded: SafeId<"signal">[] = [];
+let unscopedSignalA: SafeId<"signal"> | null = null;
 
 const seedSignal = async ({
   organizationId,
@@ -81,7 +83,7 @@ beforeAll(async () => {
     workspaceId: ids.wsA1,
     title: "scoped A1",
   });
-  await seedSignal({
+  unscopedSignalA = await seedSignal({
     organizationId: ids.orgA,
     workspaceId: null,
     title: "unscoped A",
@@ -103,16 +105,18 @@ afterAll(async () => {
   }
 });
 
-const listAs = async ({
+const runListAs = async ({
   userId,
   organizationId,
   workspaceIds,
   role,
+  query = {},
 }: {
   userId: SafeId<"user">;
   organizationId: SafeId<"organization">;
   workspaceIds: SafeId<"workspace">[];
   role: ListContext["memberRole"]["role"];
+  query?: ListContext["query"];
 }) => {
   const scopedDb = createScopedDb(testDb, workspaceIds, organizationId, userId);
   const safeDb = createSafeDb(testDb, workspaceIds, organizationId, userId);
@@ -134,10 +138,15 @@ const listAs = async ({
       scopedDb,
       session: { activeOrganizationId: organizationId },
       user: { id: userId },
-      query: {},
+      query,
       route: "/test/signals",
     }),
   );
+  return result;
+};
+
+const listAs = async (args: Parameters<typeof runListAs>[0]) => {
+  const result = await runListAs(args);
   if (!("items" in result)) {
     throw new Error(`unexpected list result: ${JSON.stringify(result)}`);
   }
@@ -174,6 +183,24 @@ describe("signal visibility", () => {
         role: "owner",
       }),
     ).toEqual(["scoped A1", "unscoped A"]);
+  });
+
+  test("a hidden unscoped signal cannot be used as a pagination cursor", async () => {
+    expect(unscopedSignalA).not.toBeNull();
+    if (!unscopedSignalA) {
+      throw new Error("Expected the unscoped signal fixture");
+    }
+    const result = await runListAs({
+      userId: ids.userA1,
+      organizationId: ids.orgA,
+      workspaceIds: [ids.wsA1],
+      role: "intern",
+      query: { cursor: encodePaginationCursor([unscopedSignalA]) },
+    });
+    expect(result).toEqual({
+      code: 400,
+      response: { message: "Invalid cursor" },
+    });
   });
 
   test("another organization's signals never leak", async () => {

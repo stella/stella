@@ -16,7 +16,17 @@ const JOB: DocumentDeadlineScoutJobData = {
 
 describe("enqueueDocumentDeadlineScoutJob", () => {
   test("adds one deterministic job when none exists", async () => {
-    const add = mock(async () => undefined);
+    let addedJob: DocumentDeadlineScoutJobData | null = null;
+    const add = mock(
+      async (
+        _name: string,
+        job: DocumentDeadlineScoutJobData,
+        _options: { jobId: string },
+      ) => {
+        addedJob = job;
+        return null;
+      },
+    );
     const getJob = mock(async () => undefined);
 
     await enqueueDocumentDeadlineScoutJob({
@@ -25,7 +35,7 @@ describe("enqueueDocumentDeadlineScoutJob", () => {
     });
 
     expect(add).toHaveBeenCalledTimes(1);
-    expect(add.mock.calls.at(0)?.at(1)).toEqual(JOB);
+    expect(addedJob).toEqual(JOB);
   });
 
   test("keeps an existing active or completed job", async () => {

@@ -2150,7 +2150,7 @@
   },
   "inbox": {
     "ask": "Zeptat se",
-    "askPrompt": "Řekni mi více o této položce doručených a co mám udělat dál.\n\n{title}\n{summary}",
+    "askPrompt": "Řekněte mi více o této položce v doručené poště a co mám udělat dál.\n\n{title}\n{summary}",
     "assignTo": "Přiřadit",
     "confidence": "Jistota {percent} %",
     "dismissReason": "Důvod (nepovinné)",
@@ -2179,7 +2179,7 @@
     },
     "request": {
       "created": "Požadavek odeslán",
-      "description": "Popište, na co se má právní tým podívat. Požadavek se objeví v doručených k roztřídění.",
+      "description": "Popište, na co se má právní tým podívat. Požadavek se objeví v doručené poště k roztřídění.",
       "submit": "Odeslat požadavek"
     },
     "scout": {

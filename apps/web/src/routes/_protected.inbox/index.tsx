@@ -256,34 +256,51 @@ function InboxPage() {
 
             {isPending && <FeedSkeleton />}
 
-            {!isPending && days.length === 0 && (
+            {!isPending && error && (
+              <div className="text-muted-foreground flex flex-col items-center gap-3 py-16 text-sm">
+                <InboxIcon className="size-8 opacity-40" />
+                <p>{userErrorFromThrown(error, t("common.unexpectedError"))}</p>
+                <Button
+                  onClick={() => {
+                    detached(refetch(), "inbox.retry-feed");
+                  }}
+                  size="sm"
+                  variant="outline"
+                >
+                  {t("common.retry")}
+                </Button>
+              </div>
+            )}
+
+            {!isPending && !error && days.length === 0 && (
               <div className="text-muted-foreground flex flex-col items-center gap-2 py-16 text-sm">
                 <InboxIcon className="size-8 opacity-40" />
                 <p>{t("inbox.empty")}</p>
               </div>
             )}
 
-            {days.map((day) => (
-              <section className="flex flex-col gap-2" key={day.key}>
-                <h2 className="text-muted-foreground px-1 text-xs font-medium">
-                  {format.dateTime(new Date(day.at), { dateStyle: "full" })}
-                </h2>
-                <div className="flex flex-col gap-2">
-                  {day.items.map((signal) => (
-                    <SignalCard
-                      key={signal.id}
-                      onSettled={() => {
-                        detached(refetch(), "inbox.refetch");
-                      }}
-                      organizationId={activeOrganizationId}
-                      signal={signal}
-                    />
-                  ))}
-                </div>
-              </section>
-            ))}
+            {!error &&
+              days.map((day) => (
+                <section className="flex flex-col gap-2" key={day.key}>
+                  <h2 className="text-muted-foreground px-1 text-xs font-medium">
+                    {format.dateTime(new Date(day.at), { dateStyle: "full" })}
+                  </h2>
+                  <div className="flex flex-col gap-2">
+                    {day.items.map((signal) => (
+                      <SignalCard
+                        key={signal.id}
+                        onSettled={() => {
+                          detached(refetch(), "inbox.refetch");
+                        }}
+                        organizationId={activeOrganizationId}
+                        signal={signal}
+                      />
+                    ))}
+                  </div>
+                </section>
+              ))}
 
-            {hasNextPage && (
+            {!error && hasNextPage && (
               <Button
                 className="self-center"
                 disabled={isFetchingNextPage}
