@@ -21,6 +21,7 @@ import {
   CaseLawCorpusIndexCountNotReadyError,
   censusIndex,
   createCaseLawCensus,
+  createCaseLawCorpusIndexCountSeed,
   reportIndexCensus,
 } from "@/api/lib/corpus-index/census";
 import { corpusIndexId } from "@/api/lib/legal-search/index-naming";
@@ -127,6 +128,62 @@ beforeEach(() => {
 
 afterEach(() => {
   globalThis.fetch = originalFetch;
+});
+
+describe("count seed driver", () => {
+  let seedWarn: ReturnType<typeof spyOn<typeof logger, "warn">>;
+
+  beforeEach(() => {
+    seedWarn = spyOn(logger, "warn").mockImplementation(() => undefined);
+  });
+
+  afterEach(() => {
+    seedWarn.mockRestore();
+  });
+
+  test("advances once per cycle and stops permanently at completion", async () => {
+    const statuses = ["running", "complete"] as const;
+    let calls = 0;
+    const seed = createCaseLawCorpusIndexCountSeed({
+      generation: GENERATION,
+      scopedDb: databaseHolding(0),
+      advance: async (_scopedDb, generation) => ({
+        generation,
+        processed: 1,
+        status: statuses.at(calls++) ?? "complete",
+      }),
+    });
+
+    await seed.step();
+    await seed.step();
+    await seed.step();
+
+    expect(calls).toBe(2);
+  });
+
+  test("contains a failed page and retries it on the next cycle", async () => {
+    let calls = 0;
+    const seed = createCaseLawCorpusIndexCountSeed({
+      generation: GENERATION,
+      scopedDb: databaseHolding(0),
+      advance: async (_scopedDb, generation) => {
+        calls += 1;
+        if (calls === 1) {
+          throw new Error("pool exhausted");
+        }
+        return { generation, processed: 0, status: "complete" };
+      },
+    });
+
+    await seed.step();
+    await seed.step();
+    await seed.step();
+
+    expect(calls).toBe(2);
+    expect(seedWarn.mock.calls.at(0)?.at(0)).toBe(
+      "case_law.corpus_index.count_seed_failed",
+    );
+  });
 });
 
 describe("index census", () => {

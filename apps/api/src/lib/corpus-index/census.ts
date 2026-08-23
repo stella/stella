@@ -82,6 +82,11 @@ export type CaseLawCorpusIndexCountBackfillStep = {
   status: CaseLawCorpusIndexCountBackfillStatus;
 };
 
+type AdvanceCaseLawCorpusIndexCountBackfill = (
+  scopedDb: ScopedDb,
+  generation: string,
+) => Promise<CaseLawCorpusIndexCountBackfillStep>;
+
 /**
  * Account one keyset page of projections that predate the aggregate.
  *
@@ -187,6 +192,48 @@ export const advanceCaseLawCorpusIndexCountBackfill = async (
       status: CASE_LAW_CORPUS_INDEX_COUNT_BACKFILL_STATUS.RUNNING,
     };
   });
+
+type CaseLawCorpusIndexCountSeedOptions = {
+  scopedDb: ScopedDb;
+  generation: string;
+  advance?: AdvanceCaseLawCorpusIndexCountBackfill;
+};
+
+/**
+ * Drive the rollout-only count seed one bounded page per corpus-worker cycle.
+ *
+ * Completion is remembered in-process, so the steady-state worker pays no
+ * database round-trip. A failure is reported and retried on the next cycle;
+ * it never stops the corpus projection loop that owns this maintenance work.
+ */
+export const createCaseLawCorpusIndexCountSeed = ({
+  scopedDb,
+  generation,
+  advance = advanceCaseLawCorpusIndexCountBackfill,
+}: CaseLawCorpusIndexCountSeedOptions): { step: () => Promise<void> } => {
+  let complete = false;
+
+  return {
+    step: async (): Promise<void> => {
+      if (complete) {
+        return;
+      }
+      const outcome = await Result.tryPromise(() =>
+        advance(scopedDb, generation),
+      );
+      if (Result.isError(outcome)) {
+        logger.warn("case_law.corpus_index.count_seed_failed", {
+          generation,
+          "error.type": errorTag(outcome.error),
+        });
+        return;
+      }
+      complete =
+        outcome.value.status ===
+        CASE_LAW_CORPUS_INDEX_COUNT_BACKFILL_STATUS.COMPLETE;
+    },
+  };
+};
 
 /**
  * How far the two sides may disagree in one observation.

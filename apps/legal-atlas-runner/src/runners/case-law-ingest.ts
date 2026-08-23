@@ -52,7 +52,10 @@ import {
 import { backfillLegislationCorpusIndex } from "@/api/handlers/legislation/corpus-index";
 import { backfillLegislationSearchIndex } from "@/api/handlers/legislation/search-index";
 import { captureError } from "@/api/lib/analytics/capture";
-import { createCaseLawCensus } from "@/api/lib/corpus-index/census";
+import {
+  createCaseLawCensus,
+  createCaseLawCorpusIndexCountSeed,
+} from "@/api/lib/corpus-index/census";
 import {
   IngestionStallError,
   TimeoutError,
@@ -1425,6 +1428,10 @@ export const runCaseLawIngest = async (
     // at all: the rows it lost are neither missing nor stale, so nothing
     // else in this process would ever look at them again.
     const census = createCaseLawCensus({ generation, scopedDb: backfillDb });
+    const countSeed = createCaseLawCorpusIndexCountSeed({
+      generation,
+      scopedDb: backfillDb,
+    });
     // A leaked lease (every step BUSY) and a failing backend (every step
     // throws) both look like idle silence in this loop unless counted.
     let corpusStreaks: CorpusIndexStreaks = INITIAL_CORPUS_INDEX_STREAKS;
@@ -1456,7 +1463,11 @@ export const runCaseLawIngest = async (
       // exactly when drift stops being repaired. It contains its own
       // failures, so it cannot turn a slow cycle into a stopped loop.
       // oxlint-disable-next-line no-await-in-loop -- fixed-interval backfill poll; the loop must wait CORPUS_INDEX_INTERVAL_MS between batches, so this await is intentionally sequential
-      await Promise.all([Bun.sleep(CORPUS_INDEX_INTERVAL_MS), census.step()]);
+      await Promise.all([
+        Bun.sleep(CORPUS_INDEX_INTERVAL_MS),
+        census.step(),
+        countSeed.step(),
+      ]);
       if (isDraining()) {
         return;
       }

@@ -72,11 +72,34 @@ GRANT SELECT ON TABLE "case_law_corpus_index_count_backfills" TO stella;--> stat
 GRANT SELECT, INSERT, UPDATE, DELETE
   ON TABLE "case_law_corpus_index_count_backfills" TO stella_ingestion;--> statement-breakpoint
 
+CREATE OR REPLACE FUNCTION seed_case_law_corpus_index_count_backfill()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $function$
+BEGIN
+  INSERT INTO case_law_corpus_index_count_backfills (generation, status)
+  VALUES (NEW.generation, 'complete')
+  ON CONFLICT ON CONSTRAINT case_law_corpus_index_count_backfills_pkey
+  DO NOTHING;
+  RETURN NEW;
+END
+$function$;--> statement-breakpoint
+
+-- Install generation tracking before taking the snapshot. CREATE TRIGGER's
+-- table lock separates earlier inserts, which the snapshot sees, from later
+-- inserts, which this trigger records as exact empty generations.
+CREATE TRIGGER case_law_corpus_index_backfill_seed_count
+AFTER INSERT ON "case_law_corpus_index_backfills"
+FOR EACH ROW
+EXECUTE FUNCTION seed_case_law_corpus_index_count_backfill();--> statement-breakpoint
+
 -- Only generations that predate this migration need a seed walk. A generation
 -- created after the accounting trigger exists starts exact at zero.
 INSERT INTO "case_law_corpus_index_count_backfills" ("generation", "status")
 SELECT "generation", 'running'
-FROM "case_law_corpus_index_backfills";--> statement-breakpoint
+FROM "case_law_corpus_index_backfills"
+ON CONFLICT ON CONSTRAINT case_law_corpus_index_count_backfills_pkey
+DO NOTHING;--> statement-breakpoint
 
 CREATE OR REPLACE FUNCTION derive_case_law_corpus_index_accounting()
 RETURNS trigger
@@ -249,21 +272,3 @@ AFTER DELETE ON "case_law_corpus_index_projections"
 REFERENCING OLD TABLE AS old_projections
 FOR EACH STATEMENT
 EXECUTE FUNCTION subtract_deleted_case_law_corpus_index_counts();--> statement-breakpoint
-
-CREATE OR REPLACE FUNCTION seed_case_law_corpus_index_count_backfill()
-RETURNS trigger
-LANGUAGE plpgsql
-AS $function$
-BEGIN
-  INSERT INTO case_law_corpus_index_count_backfills (generation, status)
-  VALUES (NEW.generation, 'complete')
-  ON CONFLICT ON CONSTRAINT case_law_corpus_index_count_backfills_pkey
-  DO NOTHING;
-  RETURN NEW;
-END
-$function$;--> statement-breakpoint
-
-CREATE TRIGGER case_law_corpus_index_backfill_seed_count
-AFTER INSERT ON "case_law_corpus_index_backfills"
-FOR EACH ROW
-EXECUTE FUNCTION seed_case_law_corpus_index_count_backfill();
