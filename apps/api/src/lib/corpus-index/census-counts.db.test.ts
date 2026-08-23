@@ -5,6 +5,7 @@ import { drizzle } from "drizzle-orm/pglite";
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
+  CASE_LAW_CORPUS_INDEX_BACKFILL_STATUS,
   CASE_LAW_CORPUS_INDEX_COUNT_BACKFILL_STATUS,
   caseLawCorpusIndexBackfills,
   caseLawCorpusIndexCountBackfills,
@@ -76,7 +77,10 @@ beforeAll(async () => {
   });
   await db
     .insert(caseLawCorpusIndexBackfills)
-    .values({ generation: GENERATION });
+    .values({
+      generation: GENERATION,
+      status: CASE_LAW_CORPUS_INDEX_BACKFILL_STATUS.COMPLETE,
+    });
   await db.insert(caseLawDecisions).values([
     {
       caseNumber: "current",
@@ -297,7 +301,7 @@ test("exact accounting converges across replay, races, and valid projection tran
 
   await db
     .update(caseLawCorpusIndexBackfills)
-    .set({ status: "complete" })
+    .set({ status: CASE_LAW_CORPUS_INDEX_BACKFILL_STATUS.COMPLETE })
     .where(eq(caseLawCorpusIndexBackfills.generation, FUTURE_GENERATION));
   expect(
     await advanceCaseLawCorpusIndexCountBackfill(scopedDb, FUTURE_GENERATION),
