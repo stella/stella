@@ -21,11 +21,11 @@ import {
 } from "@/api/handlers/case-law/decisions/sitemap";
 import { rehydrateLegislationCandidates } from "@/api/handlers/legislation/search";
 import { createSafeId } from "@/api/lib/branded-types";
-import { readNonRedistributableCaseLawSourceIdsQuery } from "@/api/lib/case-law/non-redistributable-sources";
 import type {
   CaseLawPublicReadDb,
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
+import { readNonRedistributableCaseLawSourceIdsQuery } from "@/api/lib/case-law/non-redistributable-sources";
 import { getCollator } from "@/api/lib/collation";
 import { rehydrateCorpusIndexProviderCandidates } from "@/api/lib/legal-search/corpus-index-provider";
 import { readDocumentContextDecision } from "@/api/lib/legal-search/document-context";
@@ -37,7 +37,6 @@ import {
   publicLawDatabaseRolePermissionsSql,
   type PublicLawDatabaseRolePermissions,
 } from "@/api/lib/public-law-read-db";
-import { PUBLIC_LAW_SHARED_QUERY } from "@/api/lib/public-law-shared-query";
 import {
   PUBLIC_LAW_COLUMNS_BY_RELATION,
   ROLLOUT_CASE_LAW_RELATIONS,
@@ -45,6 +44,7 @@ import {
   ROLLOUT_CASE_LAW_SOURCE_RELATION,
   ROLLOUT_CASE_LAW_WHOLE_RELATIONS,
 } from "@/api/lib/public-law-relations";
+import { PUBLIC_LAW_SHARED_QUERY } from "@/api/lib/public-law-shared-query";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type {
   TestDatabase,

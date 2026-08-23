@@ -35,11 +35,11 @@ import type {
   LegalSearchQuery,
   LegalSearchResult,
 } from "@/api/lib/legal-search/types";
-import { encodeCursor, decodeCursor } from "@/api/lib/search/cursor";
 import {
   definePublicLawSharedQuery,
   PUBLIC_LAW_SHARED_QUERY,
 } from "@/api/lib/public-law-shared-query";
+import { encodeCursor, decodeCursor } from "@/api/lib/search/cursor";
 
 /**
  * corpus index legal-search provider: two-stage retrieve-then-rerank.
