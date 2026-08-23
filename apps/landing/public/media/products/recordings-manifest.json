@@ -8,7 +8,7 @@
         "width": 1280
       },
       "dpr": 2,
-      "recordedAtCommit": "90ef0c4bdda39b5f9d0ad44667dae807750a67fa",
+      "recordedAtCommit": "c3cb3a372449a6a04d0e82653fb4cfe555b94486",
       "watchedPaths": [
         "apps/web/e2e/marketing/captures.ts",
         "apps/web/e2e/marketing/record-product-story.ts",
@@ -16,19 +16,17 @@
         "apps/api/scripts/seed-test-user.ts",
         "apps/web/src/components/app-sidebar.tsx",
         "apps/web/src/components/app-sidebar.logic.ts",
+        "apps/web/src/components/workspace-primary-nav.ts",
+        "apps/web/src/i18n/langs/en.json",
         "apps/web/src/components/breadcrumbs",
         "apps/web/src/routes/__root.tsx",
         "apps/web/src/fonts.css",
-        "packages/ui/src/styles/globals.css",
+        "apps/web/src/styles/app.css",
+        "packages/ui/src/styles/theme.css",
         "apps/web/src/routes/_protected.chat",
         "apps/web/src/components/chat",
         "apps/web/src/components/ai-elements"
-      ],
-      "manualVerification": {
-        "artifactsHash": "d5a2bcdfe9cb207f2a0fe113cecb70849ea844f3d4fd2eeea2fb20798c8cd19e",
-        "reason": "Patch release, UX diff negligible",
-        "watchedPathsHash": "aad57e3eb490744a723bb5b2113b26b64d74483aae8e8d2629205ccd616b7b87"
-      }
+      ]
     },
     {
       "captureId": "agent",
@@ -38,7 +36,7 @@
         "width": 1280
       },
       "dpr": 2,
-      "recordedAtCommit": "90ef0c4bdda39b5f9d0ad44667dae807750a67fa",
+      "recordedAtCommit": "c3cb3a372449a6a04d0e82653fb4cfe555b94486",
       "watchedPaths": [
         "apps/web/e2e/marketing/captures.ts",
         "apps/web/e2e/marketing/record-product-story.ts",
@@ -46,19 +44,17 @@
         "apps/api/scripts/seed-test-user.ts",
         "apps/web/src/components/app-sidebar.tsx",
         "apps/web/src/components/app-sidebar.logic.ts",
+        "apps/web/src/components/workspace-primary-nav.ts",
+        "apps/web/src/i18n/langs/en.json",
         "apps/web/src/components/breadcrumbs",
         "apps/web/src/routes/__root.tsx",
         "apps/web/src/fonts.css",
-        "packages/ui/src/styles/globals.css",
+        "apps/web/src/styles/app.css",
+        "packages/ui/src/styles/theme.css",
         "apps/web/src/routes/_protected.chat",
         "apps/web/src/components/chat",
         "apps/web/src/components/ai-elements"
-      ],
-      "manualVerification": {
-        "artifactsHash": "14c73ce07be8ad2b9f23235eb99275e2ebf4968daf63f95855228a116b5d363f",
-        "reason": "Patch release, UX diff negligible",
-        "watchedPathsHash": "aad57e3eb490744a723bb5b2113b26b64d74483aae8e8d2629205ccd616b7b87"
-      }
+      ]
     },
     {
       "captureId": "agent-hero",
@@ -68,7 +64,7 @@
         "width": 1280
       },
       "dpr": 2,
-      "recordedAtCommit": "90ef0c4bdda39b5f9d0ad44667dae807750a67fa",
+      "recordedAtCommit": "c3cb3a372449a6a04d0e82653fb4cfe555b94486",
       "watchedPaths": [
         "apps/web/e2e/marketing/captures.ts",
         "apps/web/e2e/marketing/record-product-story.ts",
@@ -76,19 +72,17 @@
         "apps/api/scripts/seed-test-user.ts",
         "apps/web/src/components/app-sidebar.tsx",
         "apps/web/src/components/app-sidebar.logic.ts",
+        "apps/web/src/components/workspace-primary-nav.ts",
+        "apps/web/src/i18n/langs/en.json",
         "apps/web/src/components/breadcrumbs",
         "apps/web/src/routes/__root.tsx",
         "apps/web/src/fonts.css",
-        "packages/ui/src/styles/globals.css",
+        "apps/web/src/styles/app.css",
+        "packages/ui/src/styles/theme.css",
         "apps/web/src/routes/_protected.chat",
         "apps/web/src/components/chat",
         "apps/web/src/components/ai-elements"
-      ],
-      "manualVerification": {
-        "artifactsHash": "14857ed437810aeb4c71bcf4095e362309bdedc159e511a8787e0f32e224d407",
-        "reason": "Patch release, UX diff negligible",
-        "watchedPathsHash": "aad57e3eb490744a723bb5b2113b26b64d74483aae8e8d2629205ccd616b7b87"
-      }
+      ]
     },
     {
       "captureId": "agent-hero",
@@ -98,7 +92,7 @@
         "width": 1280
       },
       "dpr": 2,
-      "recordedAtCommit": "90ef0c4bdda39b5f9d0ad44667dae807750a67fa",
+      "recordedAtCommit": "c3cb3a372449a6a04d0e82653fb4cfe555b94486",
       "watchedPaths": [
         "apps/web/e2e/marketing/captures.ts",
         "apps/web/e2e/marketing/record-product-story.ts",
@@ -106,19 +100,17 @@
         "apps/api/scripts/seed-test-user.ts",
         "apps/web/src/components/app-sidebar.tsx",
         "apps/web/src/components/app-sidebar.logic.ts",
+        "apps/web/src/components/workspace-primary-nav.ts",
+        "apps/web/src/i18n/langs/en.json",
         "apps/web/src/components/breadcrumbs",
         "apps/web/src/routes/__root.tsx",
         "apps/web/src/fonts.css",
-        "packages/ui/src/styles/globals.css",
+        "apps/web/src/styles/app.css",
+        "packages/ui/src/styles/theme.css",
         "apps/web/src/routes/_protected.chat",
         "apps/web/src/components/chat",
         "apps/web/src/components/ai-elements"
-      ],
-      "manualVerification": {
-        "artifactsHash": "55505a814c4132d7f88fdceafc880471f2fb26941aa1181df2d38af0f67e5f04",
-        "reason": "Patch release, UX diff negligible",
-        "watchedPathsHash": "aad57e3eb490744a723bb5b2113b26b64d74483aae8e8d2629205ccd616b7b87"
-      }
+      ]
     },
     {
       "captureId": "cli",
@@ -128,7 +120,7 @@
         "width": 1280
       },
       "dpr": 2,
-      "recordedAtCommit": "90ef0c4bdda39b5f9d0ad44667dae807750a67fa",
+      "recordedAtCommit": "c3cb3a372449a6a04d0e82653fb4cfe555b94486",
       "watchedPaths": [
         "apps/web/e2e/marketing/captures.ts",
         "apps/web/e2e/marketing/record-product-story.ts",
@@ -136,17 +128,15 @@
         "apps/api/scripts/seed-test-user.ts",
         "apps/web/src/components/app-sidebar.tsx",
         "apps/web/src/components/app-sidebar.logic.ts",
+        "apps/web/src/components/workspace-primary-nav.ts",
+        "apps/web/src/i18n/langs/en.json",
         "apps/web/src/components/breadcrumbs",
         "apps/web/src/routes/__root.tsx",
         "apps/web/src/fonts.css",
-        "packages/ui/src/styles/globals.css",
+        "apps/web/src/styles/app.css",
+        "packages/ui/src/styles/theme.css",
         "apps/web/src/routes/_protected.knowledge"
-      ],
-      "manualVerification": {
-        "artifactsHash": "28c9775d65b2247d6437acc6e67614f2ed92b602cb8580cd836feed5ce1f5b3b",
-        "reason": "Patch release, UX diff negligible",
-        "watchedPathsHash": "d1ad1374edc041600824ec1517f5c0d3700a53c641300b76254daf7345cafb27"
-      }
+      ]
     },
     {
       "captureId": "cli",
@@ -156,7 +146,7 @@
         "width": 1280
       },
       "dpr": 2,
-      "recordedAtCommit": "90ef0c4bdda39b5f9d0ad44667dae807750a67fa",
+      "recordedAtCommit": "c3cb3a372449a6a04d0e82653fb4cfe555b94486",
       "watchedPaths": [
         "apps/web/e2e/marketing/captures.ts",
         "apps/web/e2e/marketing/record-product-story.ts",
@@ -164,17 +154,15 @@
         "apps/api/scripts/seed-test-user.ts",
         "apps/web/src/components/app-sidebar.tsx",
         "apps/web/src/components/app-sidebar.logic.ts",
+        "apps/web/src/components/workspace-primary-nav.ts",
+        "apps/web/src/i18n/langs/en.json",
         "apps/web/src/components/breadcrumbs",
         "apps/web/src/routes/__root.tsx",
         "apps/web/src/fonts.css",
-        "packages/ui/src/styles/globals.css",
+        "apps/web/src/styles/app.css",
+        "packages/ui/src/styles/theme.css",
         "apps/web/src/routes/_protected.knowledge"
-      ],
-      "manualVerification": {
-        "artifactsHash": "1c356e0adcc5503bce6a57c23fcf271e270eb083792e8e7124e83e431846ab66",
-        "reason": "Patch release, UX diff negligible",
-        "watchedPathsHash": "d1ad1374edc041600824ec1517f5c0d3700a53c641300b76254daf7345cafb27"
-      }
+      ]
     },
     {
       "captureId": "cli-hero",
@@ -184,7 +172,7 @@
         "width": 1280
       },
       "dpr": 2,
-      "recordedAtCommit": "90ef0c4bdda39b5f9d0ad44667dae807750a67fa",
+      "recordedAtCommit": "c3cb3a372449a6a04d0e82653fb4cfe555b94486",
       "watchedPaths": [
         "apps/web/e2e/marketing/captures.ts",
         "apps/web/e2e/marketing/record-product-story.ts",
@@ -192,17 +180,15 @@
         "apps/api/scripts/seed-test-user.ts",
         "apps/web/src/components/app-sidebar.tsx",
         "apps/web/src/components/app-sidebar.logic.ts",
+        "apps/web/src/components/workspace-primary-nav.ts",
+        "apps/web/src/i18n/langs/en.json",
         "apps/web/src/components/breadcrumbs",
         "apps/web/src/routes/__root.tsx",
         "apps/web/src/fonts.css",
-        "packages/ui/src/styles/globals.css",
+        "apps/web/src/styles/app.css",
+        "packages/ui/src/styles/theme.css",
         "apps/web/src/routes/_protected.knowledge"
-      ],
-      "manualVerification": {
-        "artifactsHash": "3cca69baffa577ac04968ef6908a9ec35acf6b2c6f4b268c340da3b4108538d2",
-        "reason": "Patch release, UX diff negligible",
-        "watchedPathsHash": "d1ad1374edc041600824ec1517f5c0d3700a53c641300b76254daf7345cafb27"
-      }
+      ]
     },
     {
       "captureId": "cli-hero",
@@ -212,7 +198,7 @@
         "width": 1280
       },
       "dpr": 2,
-      "recordedAtCommit": "90ef0c4bdda39b5f9d0ad44667dae807750a67fa",
+      "recordedAtCommit": "c3cb3a372449a6a04d0e82653fb4cfe555b94486",
       "watchedPaths": [
         "apps/web/e2e/marketing/captures.ts",
         "apps/web/e2e/marketing/record-product-story.ts",
@@ -220,17 +206,15 @@
         "apps/api/scripts/seed-test-user.ts",
         "apps/web/src/components/app-sidebar.tsx",
         "apps/web/src/components/app-sidebar.logic.ts",
+        "apps/web/src/components/workspace-primary-nav.ts",
+        "apps/web/src/i18n/langs/en.json",
         "apps/web/src/components/breadcrumbs",
         "apps/web/src/routes/__root.tsx",
         "apps/web/src/fonts.css",
-        "packages/ui/src/styles/globals.css",
+        "apps/web/src/styles/app.css",
+        "packages/ui/src/styles/theme.css",
         "apps/web/src/routes/_protected.knowledge"
-      ],
-      "manualVerification": {
-        "artifactsHash": "0a61397072f8763463f99fb268bd57d94d93f926d8853aaa0fd40352883b2e57",
-        "reason": "Patch release, UX diff negligible",
-        "watchedPathsHash": "d1ad1374edc041600824ec1517f5c0d3700a53c641300b76254daf7345cafb27"
-      }
+      ]
     },
     {
       "captureId": "editor",
@@ -240,7 +224,7 @@
         "width": 1280
       },
       "dpr": 2,
-      "recordedAtCommit": "90ef0c4bdda39b5f9d0ad44667dae807750a67fa",
+      "recordedAtCommit": "c3cb3a372449a6a04d0e82653fb4cfe555b94486",
       "watchedPaths": [
         "apps/web/e2e/marketing/captures.ts",
         "apps/web/e2e/marketing/record-product-story.ts",
@@ -248,17 +232,15 @@
         "apps/api/scripts/seed-test-user.ts",
         "apps/web/src/components/app-sidebar.tsx",
         "apps/web/src/components/app-sidebar.logic.ts",
+        "apps/web/src/components/workspace-primary-nav.ts",
+        "apps/web/src/i18n/langs/en.json",
         "apps/web/src/components/breadcrumbs",
         "apps/web/src/routes/__root.tsx",
         "apps/web/src/fonts.css",
-        "packages/ui/src/styles/globals.css",
+        "apps/web/src/styles/app.css",
+        "packages/ui/src/styles/theme.css",
         "apps/web/src/routes/_protected.workspaces/$workspaceId"
-      ],
-      "manualVerification": {
-        "artifactsHash": "1553822e54e6112387c18b55e6c2d552e7558706427c6707df30cff279dc38b4",
-        "reason": "Patch release, UX diff negligible",
-        "watchedPathsHash": "118c385b536eba2aa9915f95c849a3eb60adc98b20035c82b7781bc3b72cbf93"
-      }
+      ]
     },
     {
       "captureId": "editor",
@@ -268,7 +250,7 @@
         "width": 1280
       },
       "dpr": 2,
-      "recordedAtCommit": "90ef0c4bdda39b5f9d0ad44667dae807750a67fa",
+      "recordedAtCommit": "c3cb3a372449a6a04d0e82653fb4cfe555b94486",
       "watchedPaths": [
         "apps/web/e2e/marketing/captures.ts",
         "apps/web/e2e/marketing/record-product-story.ts",
@@ -276,17 +258,15 @@
         "apps/api/scripts/seed-test-user.ts",
         "apps/web/src/components/app-sidebar.tsx",
         "apps/web/src/components/app-sidebar.logic.ts",
+        "apps/web/src/components/workspace-primary-nav.ts",
+        "apps/web/src/i18n/langs/en.json",
         "apps/web/src/components/breadcrumbs",
         "apps/web/src/routes/__root.tsx",
         "apps/web/src/fonts.css",
-        "packages/ui/src/styles/globals.css",
+        "apps/web/src/styles/app.css",
+        "packages/ui/src/styles/theme.css",
         "apps/web/src/routes/_protected.workspaces/$workspaceId"
-      ],
-      "manualVerification": {
-        "artifactsHash": "9e47c94efff82f9da94412b777dab0c2f12ef22e8111dfdca565f3a15ebdc7d6",
-        "reason": "Patch release, UX diff negligible",
-        "watchedPathsHash": "118c385b536eba2aa9915f95c849a3eb60adc98b20035c82b7781bc3b72cbf93"
-      }
+      ]
     },
     {
       "captureId": "editor-hero",
@@ -296,7 +276,7 @@
         "width": 1280
       },
       "dpr": 2,
-      "recordedAtCommit": "90ef0c4bdda39b5f9d0ad44667dae807750a67fa",
+      "recordedAtCommit": "c3cb3a372449a6a04d0e82653fb4cfe555b94486",
       "watchedPaths": [
         "apps/web/e2e/marketing/captures.ts",
         "apps/web/e2e/marketing/record-product-story.ts",
@@ -304,17 +284,15 @@
         "apps/api/scripts/seed-test-user.ts",
         "apps/web/src/components/app-sidebar.tsx",
         "apps/web/src/components/app-sidebar.logic.ts",
+        "apps/web/src/components/workspace-primary-nav.ts",
+        "apps/web/src/i18n/langs/en.json",
         "apps/web/src/components/breadcrumbs",
         "apps/web/src/routes/__root.tsx",
         "apps/web/src/fonts.css",
-        "packages/ui/src/styles/globals.css",
+        "apps/web/src/styles/app.css",
+        "packages/ui/src/styles/theme.css",
         "apps/web/src/routes/_protected.workspaces/$workspaceId"
-      ],
-      "manualVerification": {
-        "artifactsHash": "a75f2871dfaa0a89721329a9c004bc5503f55411110c599eea8770a056ad2eba",
-        "reason": "Patch release, UX diff negligible",
-        "watchedPathsHash": "118c385b536eba2aa9915f95c849a3eb60adc98b20035c82b7781bc3b72cbf93"
-      }
+      ]
     },
     {
       "captureId": "editor-hero",
@@ -324,7 +302,7 @@
         "width": 1280
       },
       "dpr": 2,
-      "recordedAtCommit": "90ef0c4bdda39b5f9d0ad44667dae807750a67fa",
+      "recordedAtCommit": "c3cb3a372449a6a04d0e82653fb4cfe555b94486",
       "watchedPaths": [
         "apps/web/e2e/marketing/captures.ts",
         "apps/web/e2e/marketing/record-product-story.ts",
@@ -332,17 +310,15 @@
         "apps/api/scripts/seed-test-user.ts",
         "apps/web/src/components/app-sidebar.tsx",
         "apps/web/src/components/app-sidebar.logic.ts",
+        "apps/web/src/components/workspace-primary-nav.ts",
+        "apps/web/src/i18n/langs/en.json",
         "apps/web/src/components/breadcrumbs",
         "apps/web/src/routes/__root.tsx",
         "apps/web/src/fonts.css",
-        "packages/ui/src/styles/globals.css",
+        "apps/web/src/styles/app.css",
+        "packages/ui/src/styles/theme.css",
         "apps/web/src/routes/_protected.workspaces/$workspaceId"
-      ],
-      "manualVerification": {
-        "artifactsHash": "6a5e6dfcce3e0842efae22572bb83fd9313d655206f725fb89e8121a8879b487",
-        "reason": "Patch release, UX diff negligible",
-        "watchedPathsHash": "118c385b536eba2aa9915f95c849a3eb60adc98b20035c82b7781bc3b72cbf93"
-      }
+      ]
     },
     {
       "captureId": "editor-portrait",
@@ -352,7 +328,7 @@
         "width": 900
       },
       "dpr": 2,
-      "recordedAtCommit": "90ef0c4bdda39b5f9d0ad44667dae807750a67fa",
+      "recordedAtCommit": "c3cb3a372449a6a04d0e82653fb4cfe555b94486",
       "watchedPaths": [
         "apps/web/e2e/marketing/captures.ts",
         "apps/web/e2e/marketing/record-product-story.ts",
@@ -360,17 +336,15 @@
         "apps/api/scripts/seed-test-user.ts",
         "apps/web/src/components/app-sidebar.tsx",
         "apps/web/src/components/app-sidebar.logic.ts",
+        "apps/web/src/components/workspace-primary-nav.ts",
+        "apps/web/src/i18n/langs/en.json",
         "apps/web/src/components/breadcrumbs",
         "apps/web/src/routes/__root.tsx",
         "apps/web/src/fonts.css",
-        "packages/ui/src/styles/globals.css",
+        "apps/web/src/styles/app.css",
+        "packages/ui/src/styles/theme.css",
         "apps/web/src/routes/_protected.workspaces/$workspaceId"
-      ],
-      "manualVerification": {
-        "artifactsHash": "3131a5cb2a7f01ecd0fb670bd3000691880fd5bd3844da29e3cbe9113ef3d3bd",
-        "reason": "Patch release, UX diff negligible",
-        "watchedPathsHash": "118c385b536eba2aa9915f95c849a3eb60adc98b20035c82b7781bc3b72cbf93"
-      }
+      ]
     },
     {
       "captureId": "editor-portrait",
@@ -380,7 +354,7 @@
         "width": 900
       },
       "dpr": 2,
-      "recordedAtCommit": "90ef0c4bdda39b5f9d0ad44667dae807750a67fa",
+      "recordedAtCommit": "c3cb3a372449a6a04d0e82653fb4cfe555b94486",
       "watchedPaths": [
         "apps/web/e2e/marketing/captures.ts",
         "apps/web/e2e/marketing/record-product-story.ts",
@@ -388,17 +362,15 @@
         "apps/api/scripts/seed-test-user.ts",
         "apps/web/src/components/app-sidebar.tsx",
         "apps/web/src/components/app-sidebar.logic.ts",
+        "apps/web/src/components/workspace-primary-nav.ts",
+        "apps/web/src/i18n/langs/en.json",
         "apps/web/src/components/breadcrumbs",
         "apps/web/src/routes/__root.tsx",
         "apps/web/src/fonts.css",
-        "packages/ui/src/styles/globals.css",
+        "apps/web/src/styles/app.css",
+        "packages/ui/src/styles/theme.css",
         "apps/web/src/routes/_protected.workspaces/$workspaceId"
-      ],
-      "manualVerification": {
-        "artifactsHash": "ac5884e8ab62adcd0a1fa8d20a9a8f0ba2127ac554a60f749122481f0666ad16",
-        "reason": "Patch release, UX diff negligible",
-        "watchedPathsHash": "118c385b536eba2aa9915f95c849a3eb60adc98b20035c82b7781bc3b72cbf93"
-      }
+      ]
     },
     {
       "captureId": "review",
@@ -408,7 +380,7 @@
         "width": 1280
       },
       "dpr": 2,
-      "recordedAtCommit": "90ef0c4bdda39b5f9d0ad44667dae807750a67fa",
+      "recordedAtCommit": "c3cb3a372449a6a04d0e82653fb4cfe555b94486",
       "watchedPaths": [
         "apps/web/e2e/marketing/captures.ts",
         "apps/web/e2e/marketing/record-product-story.ts",
@@ -416,17 +388,15 @@
         "apps/api/scripts/seed-test-user.ts",
         "apps/web/src/components/app-sidebar.tsx",
         "apps/web/src/components/app-sidebar.logic.ts",
+        "apps/web/src/components/workspace-primary-nav.ts",
+        "apps/web/src/i18n/langs/en.json",
         "apps/web/src/components/breadcrumbs",
         "apps/web/src/routes/__root.tsx",
         "apps/web/src/fonts.css",
-        "packages/ui/src/styles/globals.css",
+        "apps/web/src/styles/app.css",
+        "packages/ui/src/styles/theme.css",
         "apps/web/src/routes/_protected.workspaces/$workspaceId"
-      ],
-      "manualVerification": {
-        "artifactsHash": "f9fd54903147062cee36d911e58665fefa25074c47884790795aa1a374d43e7e",
-        "reason": "Patch release, UX diff negligible",
-        "watchedPathsHash": "118c385b536eba2aa9915f95c849a3eb60adc98b20035c82b7781bc3b72cbf93"
-      }
+      ]
     },
     {
       "captureId": "review",
@@ -436,7 +406,7 @@
         "width": 1280
       },
       "dpr": 2,
-      "recordedAtCommit": "90ef0c4bdda39b5f9d0ad44667dae807750a67fa",
+      "recordedAtCommit": "c3cb3a372449a6a04d0e82653fb4cfe555b94486",
       "watchedPaths": [
         "apps/web/e2e/marketing/captures.ts",
         "apps/web/e2e/marketing/record-product-story.ts",
@@ -444,17 +414,15 @@
         "apps/api/scripts/seed-test-user.ts",
         "apps/web/src/components/app-sidebar.tsx",
         "apps/web/src/components/app-sidebar.logic.ts",
+        "apps/web/src/components/workspace-primary-nav.ts",
+        "apps/web/src/i18n/langs/en.json",
         "apps/web/src/components/breadcrumbs",
         "apps/web/src/routes/__root.tsx",
         "apps/web/src/fonts.css",
-        "packages/ui/src/styles/globals.css",
+        "apps/web/src/styles/app.css",
+        "packages/ui/src/styles/theme.css",
         "apps/web/src/routes/_protected.workspaces/$workspaceId"
-      ],
-      "manualVerification": {
-        "artifactsHash": "553d1eb26755b34e782e3ab7067fc1a76a6c7f8a39bee0cb80fddec32ae4b9e8",
-        "reason": "Patch release, UX diff negligible",
-        "watchedPathsHash": "118c385b536eba2aa9915f95c849a3eb60adc98b20035c82b7781bc3b72cbf93"
-      }
+      ]
     },
     {
       "captureId": "review-citation",
@@ -464,7 +432,7 @@
         "width": 1280
       },
       "dpr": 2,
-      "recordedAtCommit": "8d1b94331423d9ba3b9d4ef9df088f93d6611b04",
+      "recordedAtCommit": "c3cb3a372449a6a04d0e82653fb4cfe555b94486",
       "watchedPaths": [
         "apps/web/e2e/marketing/captures.ts",
         "apps/web/e2e/marketing/record-product-story.ts",
@@ -472,19 +440,17 @@
         "apps/api/scripts/seed-test-user.ts",
         "apps/web/src/components/app-sidebar.tsx",
         "apps/web/src/components/app-sidebar.logic.ts",
+        "apps/web/src/components/workspace-primary-nav.ts",
+        "apps/web/src/i18n/langs/en.json",
         "apps/web/src/components/breadcrumbs",
         "apps/web/src/routes/__root.tsx",
         "apps/web/src/fonts.css",
-        "packages/ui/src/styles/globals.css",
+        "apps/web/src/styles/app.css",
+        "packages/ui/src/styles/theme.css",
         "apps/web/src/routes/_protected.workspaces/$workspaceId",
         "apps/web/src/components/inspector",
         "apps/web/src/routes/_protected.tsx"
-      ],
-      "manualVerification": {
-        "artifactsHash": "416fbf782fc3c787d32a598f2aa2f751b44eeffb3fbfa74272e049bd93b34491",
-        "reason": "Patch release, UX diff negligible",
-        "watchedPathsHash": "d4cfff37849fb757601faa3f396eadc842491489be142105454b24657866ccee"
-      }
+      ]
     },
     {
       "captureId": "review-citation",
@@ -494,7 +460,7 @@
         "width": 1280
       },
       "dpr": 2,
-      "recordedAtCommit": "8d1b94331423d9ba3b9d4ef9df088f93d6611b04",
+      "recordedAtCommit": "c3cb3a372449a6a04d0e82653fb4cfe555b94486",
       "watchedPaths": [
         "apps/web/e2e/marketing/captures.ts",
         "apps/web/e2e/marketing/record-product-story.ts",
@@ -502,19 +468,17 @@
         "apps/api/scripts/seed-test-user.ts",
         "apps/web/src/components/app-sidebar.tsx",
         "apps/web/src/components/app-sidebar.logic.ts",
+        "apps/web/src/components/workspace-primary-nav.ts",
+        "apps/web/src/i18n/langs/en.json",
         "apps/web/src/components/breadcrumbs",
         "apps/web/src/routes/__root.tsx",
         "apps/web/src/fonts.css",
-        "packages/ui/src/styles/globals.css",
+        "apps/web/src/styles/app.css",
+        "packages/ui/src/styles/theme.css",
         "apps/web/src/routes/_protected.workspaces/$workspaceId",
         "apps/web/src/components/inspector",
         "apps/web/src/routes/_protected.tsx"
-      ],
-      "manualVerification": {
-        "artifactsHash": "0554ffa50bc7964b0f036f146ac1a0aecd9b234464ddebb81cd837c8075f1e33",
-        "reason": "Patch release, UX diff negligible",
-        "watchedPathsHash": "d4cfff37849fb757601faa3f396eadc842491489be142105454b24657866ccee"
-      }
+      ]
     },
     {
       "captureId": "review-hero",
@@ -524,7 +488,7 @@
         "width": 1280
       },
       "dpr": 2,
-      "recordedAtCommit": "90ef0c4bdda39b5f9d0ad44667dae807750a67fa",
+      "recordedAtCommit": "c3cb3a372449a6a04d0e82653fb4cfe555b94486",
       "watchedPaths": [
         "apps/web/e2e/marketing/captures.ts",
         "apps/web/e2e/marketing/record-product-story.ts",
@@ -532,17 +496,15 @@
         "apps/api/scripts/seed-test-user.ts",
         "apps/web/src/components/app-sidebar.tsx",
         "apps/web/src/components/app-sidebar.logic.ts",
+        "apps/web/src/components/workspace-primary-nav.ts",
+        "apps/web/src/i18n/langs/en.json",
         "apps/web/src/components/breadcrumbs",
         "apps/web/src/routes/__root.tsx",
         "apps/web/src/fonts.css",
-        "packages/ui/src/styles/globals.css",
+        "apps/web/src/styles/app.css",
+        "packages/ui/src/styles/theme.css",
         "apps/web/src/routes/_protected.workspaces/$workspaceId"
-      ],
-      "manualVerification": {
-        "artifactsHash": "07698b043c413a114a9909efa111ef86bcc40e8fd4d9ebdf03cc82baa50d55f7",
-        "reason": "Patch release, UX diff negligible",
-        "watchedPathsHash": "118c385b536eba2aa9915f95c849a3eb60adc98b20035c82b7781bc3b72cbf93"
-      }
+      ]
     },
     {
       "captureId": "review-hero",
@@ -552,7 +514,7 @@
         "width": 1280
       },
       "dpr": 2,
-      "recordedAtCommit": "90ef0c4bdda39b5f9d0ad44667dae807750a67fa",
+      "recordedAtCommit": "c3cb3a372449a6a04d0e82653fb4cfe555b94486",
       "watchedPaths": [
         "apps/web/e2e/marketing/captures.ts",
         "apps/web/e2e/marketing/record-product-story.ts",
@@ -560,17 +522,15 @@
         "apps/api/scripts/seed-test-user.ts",
         "apps/web/src/components/app-sidebar.tsx",
         "apps/web/src/components/app-sidebar.logic.ts",
+        "apps/web/src/components/workspace-primary-nav.ts",
+        "apps/web/src/i18n/langs/en.json",
         "apps/web/src/components/breadcrumbs",
         "apps/web/src/routes/__root.tsx",
         "apps/web/src/fonts.css",
-        "packages/ui/src/styles/globals.css",
+        "apps/web/src/styles/app.css",
+        "packages/ui/src/styles/theme.css",
         "apps/web/src/routes/_protected.workspaces/$workspaceId"
-      ],
-      "manualVerification": {
-        "artifactsHash": "35e18ef272ae83e3d2fe80d742fa86507d6066db221a37a321f9d0255b5284ee",
-        "reason": "Patch release, UX diff negligible",
-        "watchedPathsHash": "118c385b536eba2aa9915f95c849a3eb60adc98b20035c82b7781bc3b72cbf93"
-      }
+      ]
     },
     {
       "captureId": "template-fill",
@@ -580,7 +540,7 @@
         "width": 1280
       },
       "dpr": 2,
-      "recordedAtCommit": "90ef0c4bdda39b5f9d0ad44667dae807750a67fa",
+      "recordedAtCommit": "c3cb3a372449a6a04d0e82653fb4cfe555b94486",
       "watchedPaths": [
         "apps/web/e2e/marketing/captures.ts",
         "apps/web/e2e/marketing/record-product-story.ts",
@@ -588,20 +548,18 @@
         "apps/api/scripts/seed-test-user.ts",
         "apps/web/src/components/app-sidebar.tsx",
         "apps/web/src/components/app-sidebar.logic.ts",
+        "apps/web/src/components/workspace-primary-nav.ts",
+        "apps/web/src/i18n/langs/en.json",
         "apps/web/src/components/breadcrumbs",
         "apps/web/src/routes/__root.tsx",
         "apps/web/src/fonts.css",
-        "packages/ui/src/styles/globals.css",
+        "apps/web/src/styles/app.css",
+        "packages/ui/src/styles/theme.css",
         "apps/web/src/routes/_protected.workspaces/$workspaceId",
         "apps/web/src/routes/_protected.knowledge",
         "apps/api/scripts/seed-templates.ts",
         "apps/api/src/dev/register-mock-ai.ts"
-      ],
-      "manualVerification": {
-        "artifactsHash": "b30a6816404858e6719c18565abc00860e4caeb7fa52961ce6ff879ecaa00818",
-        "reason": "Patch release, UX diff negligible",
-        "watchedPathsHash": "090efd727f2b4abe773a7660447422b3d4876672d00e2e26a8f1de3f5c9278bf"
-      }
+      ]
     },
     {
       "captureId": "template-fill",
@@ -611,7 +569,7 @@
         "width": 1280
       },
       "dpr": 2,
-      "recordedAtCommit": "90ef0c4bdda39b5f9d0ad44667dae807750a67fa",
+      "recordedAtCommit": "c3cb3a372449a6a04d0e82653fb4cfe555b94486",
       "watchedPaths": [
         "apps/web/e2e/marketing/captures.ts",
         "apps/web/e2e/marketing/record-product-story.ts",
@@ -619,20 +577,18 @@
         "apps/api/scripts/seed-test-user.ts",
         "apps/web/src/components/app-sidebar.tsx",
         "apps/web/src/components/app-sidebar.logic.ts",
+        "apps/web/src/components/workspace-primary-nav.ts",
+        "apps/web/src/i18n/langs/en.json",
         "apps/web/src/components/breadcrumbs",
         "apps/web/src/routes/__root.tsx",
         "apps/web/src/fonts.css",
-        "packages/ui/src/styles/globals.css",
+        "apps/web/src/styles/app.css",
+        "packages/ui/src/styles/theme.css",
         "apps/web/src/routes/_protected.workspaces/$workspaceId",
         "apps/web/src/routes/_protected.knowledge",
         "apps/api/scripts/seed-templates.ts",
         "apps/api/src/dev/register-mock-ai.ts"
-      ],
-      "manualVerification": {
-        "artifactsHash": "a9623a9af54a7be8fbd95001ae304743a357b404bed1128ba64ad0f9a39cc597",
-        "reason": "Patch release, UX diff negligible",
-        "watchedPathsHash": "090efd727f2b4abe773a7660447422b3d4876672d00e2e26a8f1de3f5c9278bf"
-      }
+      ]
     },
     {
       "captureId": "templates",
@@ -642,7 +598,7 @@
         "width": 1280
       },
       "dpr": 2,
-      "recordedAtCommit": "90ef0c4bdda39b5f9d0ad44667dae807750a67fa",
+      "recordedAtCommit": "c3cb3a372449a6a04d0e82653fb4cfe555b94486",
       "watchedPaths": [
         "apps/web/e2e/marketing/captures.ts",
         "apps/web/e2e/marketing/record-product-story.ts",
@@ -650,18 +606,16 @@
         "apps/api/scripts/seed-test-user.ts",
         "apps/web/src/components/app-sidebar.tsx",
         "apps/web/src/components/app-sidebar.logic.ts",
+        "apps/web/src/components/workspace-primary-nav.ts",
+        "apps/web/src/i18n/langs/en.json",
         "apps/web/src/components/breadcrumbs",
         "apps/web/src/routes/__root.tsx",
         "apps/web/src/fonts.css",
-        "packages/ui/src/styles/globals.css",
+        "apps/web/src/styles/app.css",
+        "packages/ui/src/styles/theme.css",
         "apps/web/src/routes/_protected.knowledge",
         "apps/api/scripts/seed-templates.ts"
-      ],
-      "manualVerification": {
-        "artifactsHash": "16c7b4bf6534c8a2fad8fc227faf45054ec62b5b4e0eb9f1c0be00595f63207d",
-        "reason": "Patch release, UX diff negligible",
-        "watchedPathsHash": "ea0be011abe3f74028fa9078ec8ade404bcf89123bf009100ba7dceb7a3ed86d"
-      }
+      ]
     },
     {
       "captureId": "templates",
@@ -671,7 +625,7 @@
         "width": 1280
       },
       "dpr": 2,
-      "recordedAtCommit": "90ef0c4bdda39b5f9d0ad44667dae807750a67fa",
+      "recordedAtCommit": "c3cb3a372449a6a04d0e82653fb4cfe555b94486",
       "watchedPaths": [
         "apps/web/e2e/marketing/captures.ts",
         "apps/web/e2e/marketing/record-product-story.ts",
@@ -679,18 +633,16 @@
         "apps/api/scripts/seed-test-user.ts",
         "apps/web/src/components/app-sidebar.tsx",
         "apps/web/src/components/app-sidebar.logic.ts",
+        "apps/web/src/components/workspace-primary-nav.ts",
+        "apps/web/src/i18n/langs/en.json",
         "apps/web/src/components/breadcrumbs",
         "apps/web/src/routes/__root.tsx",
         "apps/web/src/fonts.css",
-        "packages/ui/src/styles/globals.css",
+        "apps/web/src/styles/app.css",
+        "packages/ui/src/styles/theme.css",
         "apps/web/src/routes/_protected.knowledge",
         "apps/api/scripts/seed-templates.ts"
-      ],
-      "manualVerification": {
-        "artifactsHash": "0b8c0e5177bb533e3ba845d3888ae5ce7426f03f5a264ce1b6723de2498552a6",
-        "reason": "Patch release, UX diff negligible",
-        "watchedPathsHash": "ea0be011abe3f74028fa9078ec8ade404bcf89123bf009100ba7dceb7a3ed86d"
-      }
+      ]
     },
     {
       "captureId": "workspace",
@@ -700,7 +652,7 @@
         "width": 1280
       },
       "dpr": 2,
-      "recordedAtCommit": "90ef0c4bdda39b5f9d0ad44667dae807750a67fa",
+      "recordedAtCommit": "c3cb3a372449a6a04d0e82653fb4cfe555b94486",
       "watchedPaths": [
         "apps/web/e2e/marketing/captures.ts",
         "apps/web/e2e/marketing/record-product-story.ts",
@@ -708,17 +660,15 @@
         "apps/api/scripts/seed-test-user.ts",
         "apps/web/src/components/app-sidebar.tsx",
         "apps/web/src/components/app-sidebar.logic.ts",
+        "apps/web/src/components/workspace-primary-nav.ts",
+        "apps/web/src/i18n/langs/en.json",
         "apps/web/src/components/breadcrumbs",
         "apps/web/src/routes/__root.tsx",
         "apps/web/src/fonts.css",
-        "packages/ui/src/styles/globals.css",
+        "apps/web/src/styles/app.css",
+        "packages/ui/src/styles/theme.css",
         "apps/web/src/routes/_protected.workspaces/$workspaceId"
-      ],
-      "manualVerification": {
-        "artifactsHash": "a3ceb9819d918ca96be6445fe20e49d1e2a6336f9c43a7a6de50a5ed17e533a9",
-        "reason": "Patch release, UX diff negligible",
-        "watchedPathsHash": "118c385b536eba2aa9915f95c849a3eb60adc98b20035c82b7781bc3b72cbf93"
-      }
+      ]
     },
     {
       "captureId": "workspace",
@@ -728,7 +678,7 @@
         "width": 1280
       },
       "dpr": 2,
-      "recordedAtCommit": "90ef0c4bdda39b5f9d0ad44667dae807750a67fa",
+      "recordedAtCommit": "c3cb3a372449a6a04d0e82653fb4cfe555b94486",
       "watchedPaths": [
         "apps/web/e2e/marketing/captures.ts",
         "apps/web/e2e/marketing/record-product-story.ts",
@@ -736,17 +686,15 @@
         "apps/api/scripts/seed-test-user.ts",
         "apps/web/src/components/app-sidebar.tsx",
         "apps/web/src/components/app-sidebar.logic.ts",
+        "apps/web/src/components/workspace-primary-nav.ts",
+        "apps/web/src/i18n/langs/en.json",
         "apps/web/src/components/breadcrumbs",
         "apps/web/src/routes/__root.tsx",
         "apps/web/src/fonts.css",
-        "packages/ui/src/styles/globals.css",
+        "apps/web/src/styles/app.css",
+        "packages/ui/src/styles/theme.css",
         "apps/web/src/routes/_protected.workspaces/$workspaceId"
-      ],
-      "manualVerification": {
-        "artifactsHash": "8c7f87bbfd4202dabdc2b30d395dd376b262f8613fd785766db7b73a508a4be3",
-        "reason": "Patch release, UX diff negligible",
-        "watchedPathsHash": "118c385b536eba2aa9915f95c849a3eb60adc98b20035c82b7781bc3b72cbf93"
-      }
+      ]
     },
     {
       "captureId": "workspace-hero",
@@ -756,7 +704,7 @@
         "width": 1280
       },
       "dpr": 2,
-      "recordedAtCommit": "90ef0c4bdda39b5f9d0ad44667dae807750a67fa",
+      "recordedAtCommit": "c3cb3a372449a6a04d0e82653fb4cfe555b94486",
       "watchedPaths": [
         "apps/web/e2e/marketing/captures.ts",
         "apps/web/e2e/marketing/record-product-story.ts",
@@ -764,17 +712,15 @@
         "apps/api/scripts/seed-test-user.ts",
         "apps/web/src/components/app-sidebar.tsx",
         "apps/web/src/components/app-sidebar.logic.ts",
+        "apps/web/src/components/workspace-primary-nav.ts",
+        "apps/web/src/i18n/langs/en.json",
         "apps/web/src/components/breadcrumbs",
         "apps/web/src/routes/__root.tsx",
         "apps/web/src/fonts.css",
-        "packages/ui/src/styles/globals.css",
+        "apps/web/src/styles/app.css",
+        "packages/ui/src/styles/theme.css",
         "apps/web/src/routes/_protected.workspaces/$workspaceId"
-      ],
-      "manualVerification": {
-        "artifactsHash": "74c3e53ce928ba855d60b5d3d5977a2acb7b439a1c08a7f590b3803119699a88",
-        "reason": "Patch release, UX diff negligible",
-        "watchedPathsHash": "118c385b536eba2aa9915f95c849a3eb60adc98b20035c82b7781bc3b72cbf93"
-      }
+      ]
     },
     {
       "captureId": "workspace-hero",
@@ -784,7 +730,7 @@
         "width": 1280
       },
       "dpr": 2,
-      "recordedAtCommit": "90ef0c4bdda39b5f9d0ad44667dae807750a67fa",
+      "recordedAtCommit": "c3cb3a372449a6a04d0e82653fb4cfe555b94486",
       "watchedPaths": [
         "apps/web/e2e/marketing/captures.ts",
         "apps/web/e2e/marketing/record-product-story.ts",
@@ -792,17 +738,15 @@
         "apps/api/scripts/seed-test-user.ts",
         "apps/web/src/components/app-sidebar.tsx",
         "apps/web/src/components/app-sidebar.logic.ts",
+        "apps/web/src/components/workspace-primary-nav.ts",
+        "apps/web/src/i18n/langs/en.json",
         "apps/web/src/components/breadcrumbs",
         "apps/web/src/routes/__root.tsx",
         "apps/web/src/fonts.css",
-        "packages/ui/src/styles/globals.css",
+        "apps/web/src/styles/app.css",
+        "packages/ui/src/styles/theme.css",
         "apps/web/src/routes/_protected.workspaces/$workspaceId"
-      ],
-      "manualVerification": {
-        "artifactsHash": "3b9d6c88f905012c59568d623704aa1bbc21f5b9283777216d293da55f6a8773",
-        "reason": "Patch release, UX diff negligible",
-        "watchedPathsHash": "118c385b536eba2aa9915f95c849a3eb60adc98b20035c82b7781bc3b72cbf93"
-      }
+      ]
     }
   ]
 }

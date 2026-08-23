@@ -34,6 +34,7 @@ const API_URL = process.env["E2E_API_URL"] ?? "http://localhost:3001";
 const CAPTURE_FILTER = process.env["MARKETING_CAPTURE"];
 const THEME_FILTER = process.env["MARKETING_THEME"];
 const EMAIL = "test@stella.dev";
+const MARKETING_ORGANIZATION_NAME = "Harbrook & Partners";
 const MARKETING_AGENT_THREAD_TITLE = "Project Atlas · Change-of-control review";
 const EXPORT_REVIEW_WORKSPACE_ID = "bb8641dc-0667-574c-8e30-152a1fd4b3f5";
 const MERIDIAN_WORKSPACE_ID = "6cbf3f81-bcc9-55da-8a4e-840221d4cabe";
@@ -1366,13 +1367,7 @@ const selectMarketingOrganization = async (
   const page = await context.newPage();
   configurePage(page);
   await page.goto("/auth/organization", { waitUntil: "commit" });
-  // The seeded organization's display name (apps/api/scripts/seed-test-user.ts
-  // TEST_ORG); it is filmed in the sidebar chrome, so it is a real-sounding
-  // firm name rather than a placeholder.
-  const organization = page.getByRole("button", {
-    name: /Harbrook & Partners/u,
-  });
-  await organization.waitFor({ state: "visible" });
+  const organizationRoute = "/auth/organization";
   const initialViewsRequest = page
     .waitForResponse(
       (response) =>
@@ -1381,11 +1376,29 @@ const selectMarketingOrganization = async (
       { timeout: 30_000 },
     )
     .catch(() => undefined);
-  await organization.click();
-  await page.waitForURL(
-    (url) => !url.pathname.startsWith("/auth/organization"),
-    { waitUntil: "commit" },
+  // The seeded organization's display name (apps/api/scripts/seed-test-user.ts
+  // TEST_ORG); it is filmed in the sidebar chrome, so it is a real-sounding
+  // firm name rather than a placeholder.
+  const organization = page.getByRole("button", {
+    name: MARKETING_ORGANIZATION_NAME,
+  });
+  await page.waitForFunction(
+    ({ organizationName, routePath }) =>
+      window.location.pathname !== routePath ||
+      [...document.querySelectorAll("button")].some((button) =>
+        button.textContent.includes(organizationName),
+      ),
+    {
+      organizationName: MARKETING_ORGANIZATION_NAME,
+      routePath: organizationRoute,
+    },
   );
+  if (new URL(page.url()).pathname === organizationRoute) {
+    await organization.click();
+  }
+  await page.waitForURL((url) => url.pathname !== organizationRoute, {
+    waitUntil: "commit",
+  });
   await initialViewsRequest;
   const selectedCookies = await context.cookies();
   await context.close();

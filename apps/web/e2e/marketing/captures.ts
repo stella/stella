@@ -83,6 +83,10 @@ const COMMON_WATCHED_PATHS = [
   "apps/api/scripts/seed-test-user.ts",
   "apps/web/src/components/app-sidebar.tsx",
   "apps/web/src/components/app-sidebar.logic.ts",
+  // The primary navigation's labels and icons are visible in the sidebar.
+  // Track both its typed item registry and the English copy used by captures.
+  "apps/web/src/components/workspace-primary-nav.ts",
+  "apps/web/src/i18n/langs/en.json",
   "apps/web/src/components/breadcrumbs",
   "apps/web/src/routes/__root.tsx",
   "apps/web/src/fonts.css",
