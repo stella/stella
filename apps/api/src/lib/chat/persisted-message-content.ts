@@ -92,8 +92,9 @@ export type PersistedChatMessageContentV3<TPart, TMetadata> =
   PersistedChatMessageContentV3Candidate<TPart, TMetadata> &
     PersistedChatMessageContentV3Proof;
 
-export const isPersistedJsonValue = (
+const isPersistedJsonValueAt = (
   value: unknown,
+  ancestors: WeakSet<object>,
 ): value is PersistedJsonValue => {
   if (
     value === null ||
@@ -104,7 +105,15 @@ export const isPersistedJsonValue = (
     return true;
   }
   if (Array.isArray(value)) {
-    return value.every(isPersistedJsonValue);
+    if (ancestors.has(value)) {
+      return false;
+    }
+    ancestors.add(value);
+    const valid = value.every((item) =>
+      isPersistedJsonValueAt(item, ancestors),
+    );
+    ancestors.delete(value);
+    return valid;
   }
   if (
     typeof value !== "object" ||
@@ -113,8 +122,20 @@ export const isPersistedJsonValue = (
   ) {
     return false;
   }
-  return Object.values(value).every(isPersistedJsonValue);
+  if (ancestors.has(value)) {
+    return false;
+  }
+  ancestors.add(value);
+  const valid = Object.values(value).every((item) =>
+    isPersistedJsonValueAt(item, ancestors),
+  );
+  ancestors.delete(value);
+  return valid;
 };
+
+export const isPersistedJsonValue = (
+  value: unknown,
+): value is PersistedJsonValue => isPersistedJsonValueAt(value, new WeakSet());
 
 export const provePersistedJsonValue = (value: unknown): PersistedJsonValue => {
   if (!isPersistedJsonValue(value)) {

@@ -24,9 +24,11 @@ import type {
   DELETED_TRUE_PROJECTION,
   LIST_CLAUSES_DETAIL_PROJECTION,
   LIST_CLAUSES_LIST_PROJECTION,
+  LIST_CLAUSES_PROJECTION,
   LIST_CLAUSES_VERSION_PROJECTION,
   LIST_PLAYBOOKS_DETAIL_PROJECTION,
   LIST_PLAYBOOKS_LIST_PROJECTION,
+  LIST_PLAYBOOKS_PROJECTION,
   RUN_PLAYBOOK_PROJECTION,
   SAVE_CLAUSE_PROJECTION,
 } from "@/api/lib/chat/projections";
@@ -62,6 +64,7 @@ import type {
   McpTextFieldSpec,
   McpToolDefinition,
   McpToolHandler,
+  TypedMcpToolHandler,
 } from "@/api/mcp/tool-types";
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
@@ -1024,7 +1027,9 @@ const readClauseDetail = async ({
   return { egress: "structured", payload: { clause }, textFields } as const;
 };
 
-const handleListClausesTool: McpToolHandler = async ({ args, context }) => {
+const handleListClausesTool: TypedMcpToolHandler<
+  v.InferInput<typeof LIST_CLAUSES_PROJECTION>
+> = async ({ args, context }) => {
   if (!roles[context.memberRole].authorize({ workspace: ["read"] }).success) {
     return errorResult("Forbidden");
   }
@@ -1213,7 +1218,9 @@ const saveClauseArgsSchema = v.pipe(
   ),
 );
 
-const handleSaveClauseTool: McpToolHandler = async ({ args, context }) => {
+const handleSaveClauseTool: TypedMcpToolHandler<
+  v.InferInput<typeof SAVE_CLAUSE_PROJECTION>
+> = async ({ args, context }) => {
   const parsed = v.safeParse(saveClauseArgsSchema, args);
   if (!parsed.success) {
     return validationErrorResult({
@@ -1357,7 +1364,9 @@ const deleteClauseArgsSchema = v.strictObject({
   confirm: v.optional(v.boolean()),
 });
 
-const handleDeleteClauseTool: McpToolHandler = async ({ args, context }) => {
+const handleDeleteClauseTool: TypedMcpToolHandler<
+  v.InferInput<typeof DELETED_TRUE_PROJECTION>
+> = async ({ args, context }) => {
   if (!roles[context.memberRole].authorize({ clause: ["delete"] }).success) {
     return errorResult("Forbidden");
   }
@@ -1445,7 +1454,9 @@ const readPlaybookDetail = async ({
   } as const;
 };
 
-const handleListPlaybooksTool: McpToolHandler = async ({ args, context }) => {
+const handleListPlaybooksTool: TypedMcpToolHandler<
+  v.InferInput<typeof LIST_PLAYBOOKS_PROJECTION>
+> = async ({ args, context }) => {
   if (!roles[context.memberRole].authorize({ workspace: ["read"] }).success) {
     return errorResult("Forbidden");
   }
@@ -1518,7 +1529,9 @@ const workflowStartFailureResult = () =>
     retryable: true,
   });
 
-const handleRunPlaybookTool: McpToolHandler = async ({ args, context }) => {
+const handleRunPlaybookTool: TypedMcpToolHandler<
+  v.InferInput<typeof RUN_PLAYBOOK_PROJECTION>
+> = async ({ args, context }) => {
   if (!roles[context.memberRole].authorize({ playbook: ["apply"] }).success) {
     return errorResult("Forbidden");
   }

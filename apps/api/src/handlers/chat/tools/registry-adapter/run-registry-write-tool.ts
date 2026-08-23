@@ -16,9 +16,19 @@ import { RESEARCH_ADMIN_TOOL_HANDLERS } from "@/api/mcp/research-admin-tools";
 import { getStaticMcpToolDefinition } from "@/api/mcp/static-tool-definitions";
 import { STELLA_TOOL_HANDLERS } from "@/api/mcp/stella-tools";
 import { TEMPLATE_TOOL_HANDLERS } from "@/api/mcp/template-tools";
-import type { McpToolHandler } from "@/api/mcp/tool-types";
+import type {
+  AllHandlerOutputsTyped,
+  AssertTrue,
+  HandlerOutputsMatchByName,
+  McpToolHandler,
+  TypedHandlerDataByName,
+} from "@/api/mcp/tool-types";
 
-import type { RegistryWriteToolName } from "./ref-field-map";
+import type {
+  ChatProjectableToolName,
+  ProjectionDataByName,
+  RegistryWriteToolName,
+} from "./ref-field-map";
 import { WRITE_TOOL_REF_FIELD_MAP } from "./ref-field-map";
 import { dehydrateRefs } from "./ref-mediation";
 import { toRegistryChatToolError } from "./registry-tool-error";
@@ -64,6 +74,39 @@ const REGISTRY_WRITE_TOOL_HANDLERS = {
   // refuses it before dispatch. Wired only to keep this map exhaustive.
   invoke_capability: CAPABILITY_TOOL_HANDLERS.invoke_capability,
 } satisfies Record<RegistryWriteToolName, McpToolHandler>;
+
+type ProjectableRegistryWriteToolName = ChatProjectableToolName<
+  typeof WRITE_TOOL_REF_FIELD_MAP
+>;
+
+const isProjectableRegistryWriteToolName = (
+  toolName: RegistryWriteToolName,
+): toolName is ProjectableRegistryWriteToolName =>
+  WRITE_TOOL_REF_FIELD_MAP[toolName].chatProjectable;
+
+export type RegistryWriteToolDataByName = TypedHandlerDataByName<
+  typeof REGISTRY_WRITE_TOOL_HANDLERS,
+  ProjectableRegistryWriteToolName
+>;
+
+type RegistryWriteProjectionDataByName = ProjectionDataByName<
+  typeof WRITE_TOOL_REF_FIELD_MAP,
+  ProjectableRegistryWriteToolName
+>;
+
+/** Compile-time guard: every chat-projected handler declares typed output. */
+export type RegistryWriteToolOutputContract = AssertTrue<
+  AllHandlerOutputsTyped<
+    typeof REGISTRY_WRITE_TOOL_HANDLERS,
+    ProjectableRegistryWriteToolName
+  > extends true
+    ? HandlerOutputsMatchByName<
+        typeof REGISTRY_WRITE_TOOL_HANDLERS,
+        RegistryWriteProjectionDataByName,
+        ProjectableRegistryWriteToolName
+      >
+    : false
+>;
 
 export type RunRegistryWriteToolProps = {
   toolName: RegistryWriteToolName;
@@ -115,8 +158,7 @@ export const runRegistryWriteTool = async ({
   context,
   refRegistry,
 }: RunRegistryWriteToolProps): Promise<Result<unknown, ChatToolError>> => {
-  const entry = WRITE_TOOL_REF_FIELD_MAP[toolName];
-  if (!entry.chatProjectable) {
+  if (!isProjectableRegistryWriteToolName(toolName)) {
     return Result.err(
       new ChatToolError({
         kind: "unavailable",
@@ -124,6 +166,7 @@ export const runRegistryWriteTool = async ({
       }),
     );
   }
+  const entry = WRITE_TOOL_REF_FIELD_MAP[toolName];
 
   const staticDefinition =
     getStaticMcpToolDefinition(toolName) ??

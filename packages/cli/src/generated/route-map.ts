@@ -1830,7 +1830,7 @@ export const generatedRouteMap: RouteNode = {
                 kind: "string",
                 repeatable: false,
                 description:
-                  "Existing template id to configure its fields; omit (with docx_base64) to create a new template",
+                  "Existing template id to configure; omit when creating a template",
                 required: false,
               },
               {
@@ -1847,7 +1847,7 @@ export const generatedRouteMap: RouteNode = {
                 kind: "string",
                 repeatable: false,
                 description:
-                  "Base64-encoded DOCX file bytes (Office Open XML, max ~10 MB decoded); required when creating, omit when configuring",
+                  "Base64-encoded DOCX bytes; required when creating, omit when configuring",
                 required: false,
               },
             ],
@@ -1858,33 +1858,37 @@ export const generatedRouteMap: RouteNode = {
             scope: "templates",
             inputSchema: {
               type: "object",
+              required: [],
+              additionalProperties: false,
               properties: {
                 template_id: {
                   type: "string",
+                  minLength: 1,
                   description:
-                    "Existing template id to configure its fields; omit (with docx_base64) to create a new template",
+                    "Existing template id to configure; omit when creating a template",
                 },
                 name: {
                   type: "string",
-                  description: "Template display name; required when creating",
+                  minLength: 1,
                   maxLength: 256,
+                  description: "Template display name; required when creating",
                 },
                 docx_base64: {
                   type: "string",
+                  minLength: 1,
+                  maxLength: 69905068,
                   description:
-                    "Base64-encoded DOCX file bytes (Office Open XML, max ~10 MB decoded); required when creating, omit when configuring",
+                    "Base64-encoded DOCX bytes; required when creating, omit when configuring",
                 },
                 fields: {
                   type: "array",
-                  description:
-                    "Field configuration overlay, one entry per field to configure. Each entry's 'path' must match a {{marker}} in the template. Configurable: label, hint, inputType, required, options, optionsFrom (dependent select), date format, composite parts + format, and who-fills the field — a person (default), AI (aiPrompt), Person+AI (aiAdapt), a formula, or a company-register lookup (registry + named output formats). formula is mutually exclusive with aiPrompt/aiAdapt/lookup/parts.",
                   items: {
                     type: "object",
                     properties: {
                       path: {
                         type: "string",
                         description:
-                          "Field path — must match a {{marker}} in the template",
+                          "Field path; must match a {{marker}} in the template",
                       },
                       label: {
                         type: "string",
@@ -1896,13 +1900,9 @@ export const generatedRouteMap: RouteNode = {
                           "Short fill guidance shown to the person filling the field",
                       },
                       inputType: {
-                        type: "string",
                         enum: ["text", "number", "boolean", "date", "select"],
+                        type: "string",
                         description: "Input control type",
-                      },
-                      required: {
-                        type: "boolean",
-                        description: "Whether a value is required",
                       },
                       options: {
                         type: "array",
@@ -1912,10 +1912,50 @@ export const generatedRouteMap: RouteNode = {
                         description:
                           "Allowed values when inputType is 'select'",
                       },
-                      optionsFrom: {
-                        type: "string",
-                        description:
-                          "Dependent select: path of another field whose value(s) supply the options",
+                      validation: {
+                        type: "object",
+                        properties: {
+                          required: {
+                            type: "boolean",
+                            description: "Whether a value is required",
+                          },
+                          minLength: {
+                            type: "number",
+                            description: "Minimum string length",
+                          },
+                          maxLength: {
+                            type: "number",
+                            description: "Maximum string length",
+                          },
+                          min: {
+                            type: "number",
+                            description: "Minimum numeric value",
+                          },
+                          max: {
+                            type: "number",
+                            description: "Maximum numeric value",
+                          },
+                          pattern: {
+                            type: "string",
+                            description:
+                              "Regex matched against the complete value",
+                          },
+                          minItems: {
+                            type: "number",
+                            description: "Minimum repeated items",
+                          },
+                          maxItems: {
+                            type: "number",
+                            description: "Maximum repeated items",
+                          },
+                        },
+                        required: [],
+                        additionalProperties: false,
+                        description: "Field-level value constraints",
+                      },
+                      required: {
+                        type: "boolean",
+                        description: "Whether a value is required",
                       },
                       aiPrompt: {
                         type: "string",
@@ -1927,60 +1967,81 @@ export const generatedRouteMap: RouteNode = {
                         description:
                           "Who-fills = Person+AI: the entered value is a stub AI rewrites per occurrence",
                       },
-                      formula: {
-                        type: "string",
+                      aiSeesDocument: {
+                        type: "boolean",
                         description:
-                          "Who-fills = formula: arithmetic expression over other fields, derived at fill time",
-                      },
-                      condition: {
-                        type: "string",
-                        description:
-                          'Boolean field derived by rule: a condition expression (e.g. client_type == "company"), evaluated at fill time. A {{#if field_path}} marker references it by path. Mutually exclusive with formula/aiPrompt/aiAdapt/lookup/parts.',
+                          "Include the rendered document in this AI field's prompt",
                       },
                       parts: {
                         type: "array",
-                        description:
-                          "Composite field parts (joined by 'format')",
                         items: {
                           type: "object",
-                          additionalProperties: true,
+                          properties: {
+                            key: {
+                              type: "string",
+                              description:
+                                "Part key referenced by the field format",
+                            },
+                            label: {
+                              type: "string",
+                              description: "Human-readable part label",
+                            },
+                            inputType: {
+                              enum: ["text", "select"],
+                              type: "string",
+                              description: "Part input control type",
+                            },
+                            options: {
+                              type: "array",
+                              items: {
+                                type: "string",
+                              },
+                              description: "Allowed values for a select part",
+                            },
+                            pattern: {
+                              type: "string",
+                              description:
+                                "Regex matched against the complete part value",
+                            },
+                          },
+                          required: ["key", "inputType"],
+                          additionalProperties: false,
                         },
+                        minItems: 1,
+                        description: "Composite field parts joined by format",
                       },
                       format: {
                         type: "string",
                         description:
                           "Join template over composite part keys, e.g. '{{title}} {{name}}'",
                       },
-                      dateFormat: {
-                        type: "object",
+                      optionsFrom: {
+                        type: "string",
                         description:
-                          "Locale-aware date rendering for a date field",
-                        properties: {
-                          locale: {
-                            type: "string",
-                            description:
-                              "BCP-47 language tag, e.g. 'cs', 'de', 'pl'",
-                          },
-                          style: {
-                            type: "string",
-                            enum: ["long", "medium", "short", "iso"],
-                            description: "Date style",
-                          },
-                        },
-                        required: ["locale", "style"],
+                          "Dependent select: path of another field whose values supply the options",
                       },
                       lookup: {
                         type: "object",
-                        description: "Who-fills = company-register lookup",
                         properties: {
                           registry: {
+                            enum: [
+                              "ares",
+                              "brreg",
+                              "companies-house",
+                              "denue",
+                              "edgar",
+                              "gcis",
+                              "krs",
+                              "orsr",
+                              "prh",
+                              "recherche-entreprises",
+                              "vies",
+                            ],
                             type: "string",
-                            description: "Registry slug, e.g. 'krs'",
+                            description: "Business registry to query",
                           },
                           formats: {
                             type: "array",
-                            description:
-                              "Named output renderings; the first is the default for the bare {{marker}}",
                             items: {
                               type: "object",
                               properties: {
@@ -1991,20 +2052,197 @@ export const generatedRouteMap: RouteNode = {
                                 },
                                 template: {
                                   type: "string",
+                                  maxLength: 2000,
                                   description:
                                     "[token]-substituted rendering of the registry hit",
                                 },
                               },
                               required: ["key", "template"],
+                              additionalProperties: false,
                             },
+                            minItems: 1,
+                            maxItems: 10,
+                            description:
+                              "Named output renderings; the first is the default for the bare marker",
                           },
                         },
                         required: ["registry", "formats"],
+                        additionalProperties: false,
+                        description: "Who-fills = business-registry lookup",
+                      },
+                      source: {
+                        anyOf: [
+                          {
+                            type: "object",
+                            properties: {
+                              kind: {
+                                enum: ["contact"],
+                                type: "string",
+                              },
+                              field: {
+                                enum: [
+                                  "displayName",
+                                  "firstName",
+                                  "lastName",
+                                  "organizationName",
+                                  "email",
+                                  "phone",
+                                  "address",
+                                  "addressStreet",
+                                  "addressCity",
+                                  "addressPostalCode",
+                                  "addressCountry",
+                                  "registrationNumber",
+                                  "taxId",
+                                  "iban",
+                                  "bic",
+                                  "dataBox",
+                                ],
+                                type: "string",
+                              },
+                            },
+                            required: ["kind", "field"],
+                            additionalProperties: false,
+                          },
+                          {
+                            type: "object",
+                            properties: {
+                              kind: {
+                                enum: ["party"],
+                                type: "string",
+                              },
+                              role: {
+                                enum: [
+                                  "opposing_party",
+                                  "opposing_counsel",
+                                  "co_counsel",
+                                  "witness",
+                                  "expert_witness",
+                                  "third_party",
+                                  "judge",
+                                  "mediator",
+                                  "other",
+                                ],
+                                type: "string",
+                              },
+                              field: {
+                                enum: [
+                                  "displayName",
+                                  "firstName",
+                                  "lastName",
+                                  "organizationName",
+                                  "email",
+                                  "phone",
+                                  "address",
+                                  "addressStreet",
+                                  "addressCity",
+                                  "addressPostalCode",
+                                  "addressCountry",
+                                  "registrationNumber",
+                                  "taxId",
+                                  "iban",
+                                  "bic",
+                                  "dataBox",
+                                ],
+                                type: "string",
+                              },
+                            },
+                            required: ["kind", "role", "field"],
+                            additionalProperties: false,
+                          },
+                          {
+                            type: "object",
+                            properties: {
+                              kind: {
+                                enum: ["matter"],
+                                type: "string",
+                              },
+                              field: {
+                                enum: [
+                                  "name",
+                                  "reference",
+                                  "billingReference",
+                                  "status",
+                                ],
+                                type: "string",
+                              },
+                            },
+                            required: ["kind", "field"],
+                            additionalProperties: false,
+                          },
+                          {
+                            type: "object",
+                            properties: {
+                              kind: {
+                                enum: ["attorney"],
+                                type: "string",
+                              },
+                              ref: {
+                                enum: ["responsible", "originating", "lead"],
+                                type: "string",
+                              },
+                              field: {
+                                enum: ["name", "email"],
+                                type: "string",
+                              },
+                            },
+                            required: ["kind", "ref", "field"],
+                            additionalProperties: false,
+                          },
+                          {
+                            type: "object",
+                            properties: {
+                              kind: {
+                                enum: ["firm"],
+                                type: "string",
+                              },
+                              field: {
+                                enum: ["name"],
+                                type: "string",
+                              },
+                            },
+                            required: ["kind", "field"],
+                            additionalProperties: false,
+                          },
+                        ],
+                        description:
+                          "Matter or contact data resolved server-side",
+                      },
+                      formula: {
+                        type: "string",
+                        description:
+                          "Arithmetic expression derived from other fields",
+                      },
+                      condition: {
+                        type: "string",
+                        description:
+                          "Boolean rule expression referenced by a {{#if field_path}} marker",
+                      },
+                      dateFormat: {
+                        type: "object",
+                        properties: {
+                          locale: {
+                            type: "string",
+                            description:
+                              "BCP-47 language tag, e.g. 'cs', 'de', 'pl'",
+                          },
+                          style: {
+                            enum: ["long", "medium", "short", "iso"],
+                            type: "string",
+                            description: "Date rendering style",
+                          },
+                        },
+                        required: ["locale", "style"],
+                        additionalProperties: false,
+                        description:
+                          "Locale-aware date rendering for a date field",
                       },
                     },
                     required: ["path"],
                     additionalProperties: false,
                   },
+                  description:
+                    "Strict field configuration overlay; each path must match a template marker",
                 },
               },
             },
@@ -4012,51 +4250,59 @@ export const generatedRouteMap: RouteNode = {
             scope: "admin_read",
             inputSchema: {
               type: "object",
+              required: [],
+              additionalProperties: false,
               properties: {
                 workspace_id: {
                   type: "string",
+                  minLength: 1,
                   description: "Only entries scoped to this matter/workspace",
                 },
                 action: {
                   type: "string",
+                  minLength: 1,
                   description: "Only entries with this audit action",
                 },
                 resource_type: {
                   type: "string",
+                  minLength: 1,
                   description: "Only entries about this resource type",
                 },
                 resource_id: {
                   type: "string",
+                  minLength: 1,
                   description:
                     "Only entries about this resource id; requires resource_type",
                 },
                 user_id: {
                   type: "string",
+                  minLength: 1,
                   description: "Only entries whose actor is this user",
                 },
                 from: {
                   type: "string",
+                  maxLength: 40,
                   description:
                     "Only entries created on or after this ISO date-time",
-                  maxLength: 40,
                 },
                 to: {
                   type: "string",
+                  maxLength: 40,
                   description:
                     "Only entries created on or before this ISO date-time",
-                  maxLength: 40,
                 },
                 limit: {
                   type: "integer",
-                  description: "Max entries to return",
                   minimum: 1,
                   maximum: 200,
+                  description: "Max entries to return",
                 },
                 cursor: {
                   type: "string",
+                  minLength: 1,
+                  maxLength: 512,
                   description:
                     "Opaque cursor from a previous list_audit_log call to fetch the next page",
-                  maxLength: 512,
                 },
               },
             },

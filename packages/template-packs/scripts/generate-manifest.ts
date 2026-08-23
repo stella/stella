@@ -86,20 +86,12 @@ const assertIndexAgrees = ({
     return;
   }
   const disagreements = [
-    indexed.license !== undefined && indexed.license !== effective.license
-      ? "license"
-      : null,
-    indexed.jurisdictions !== undefined &&
+    indexed.license !== effective.license ? "license" : null,
     !sameJson(indexed.jurisdictions, effective.jurisdictions)
       ? "jurisdictions"
       : null,
-    indexed.languages !== undefined &&
-    !sameJson(indexed.languages, effective.languages)
-      ? "languages"
-      : null,
-    indexed.legalArea !== undefined && indexed.legalArea !== effective.legalArea
-      ? "legalArea"
-      : null,
+    !sameJson(indexed.languages, effective.languages) ? "languages" : null,
+    indexed.legalArea !== effective.legalArea ? "legalArea" : null,
   ].filter((field) => field !== null);
   if (disagreements.length > 0) {
     panic(

@@ -1,3 +1,5 @@
+import type { GenericSchema, InferInput } from "valibot";
+
 import type {
   ChatProjectionSchema,
   RegistryRefKind,
@@ -98,6 +100,20 @@ export type RefMediationEntry = {
 export type RegistryRefFieldMapEntry =
   | { chatProjectable: false }
   | ({ chatProjectable: true } & RefMediationEntry);
+
+export type ChatProjectableToolName<TMap> = {
+  [TName in keyof TMap]: TMap[TName] extends { chatProjectable: true }
+    ? TName
+    : never;
+}[keyof TMap];
+
+export type ProjectionDataByName<TMap, TNames extends keyof TMap> = {
+  [TName in TNames]: TMap[TName] extends {
+    projection: infer TProjection extends GenericSchema;
+  }
+    ? InferInput<TProjection>
+    : never;
+};
 
 // --- Chat projection schemas -------------------------------------------------
 // One artifact per projected tool: the exact shape the chat surface forwards,

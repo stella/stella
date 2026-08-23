@@ -16,9 +16,19 @@ import { RESEARCH_ADMIN_TOOL_HANDLERS } from "@/api/mcp/research-admin-tools";
 import { getStaticMcpToolDefinition } from "@/api/mcp/static-tool-definitions";
 import { STELLA_TOOL_HANDLERS } from "@/api/mcp/stella-tools";
 import { TEMPLATE_TOOL_HANDLERS } from "@/api/mcp/template-tools";
-import type { McpToolHandler } from "@/api/mcp/tool-types";
+import type {
+  AllHandlerOutputsTyped,
+  AssertTrue,
+  HandlerOutputsMatchByName,
+  McpToolHandler,
+  TypedHandlerDataByName,
+} from "@/api/mcp/tool-types";
 
-import type { RegistryReadToolName } from "./ref-field-map";
+import type {
+  ChatProjectableToolName,
+  ProjectionDataByName,
+  RegistryReadToolName,
+} from "./ref-field-map";
 import { READ_TOOL_REF_FIELD_MAP } from "./ref-field-map";
 import { dehydrateInputRefs } from "./ref-mediation";
 import { toRegistryChatToolError } from "./registry-tool-error";
@@ -61,6 +71,38 @@ const REGISTRY_READ_TOOL_HANDLERS = {
   describe_capability: CAPABILITY_TOOL_HANDLERS.describe_capability,
 } satisfies Record<RegistryReadToolName, McpToolHandler>;
 
+type ProjectableRegistryReadToolName = ChatProjectableToolName<
+  typeof READ_TOOL_REF_FIELD_MAP
+>;
+
+const isProjectableRegistryReadToolName = (
+  toolName: RegistryReadToolName,
+): toolName is ProjectableRegistryReadToolName =>
+  READ_TOOL_REF_FIELD_MAP[toolName].chatProjectable;
+
+export type RegistryReadToolDataByName = TypedHandlerDataByName<
+  typeof REGISTRY_READ_TOOL_HANDLERS,
+  ProjectableRegistryReadToolName
+>;
+
+type RegistryReadProjectionDataByName = ProjectionDataByName<
+  typeof READ_TOOL_REF_FIELD_MAP,
+  ProjectableRegistryReadToolName
+>;
+
+/** Compile-time guard: every chat-projected handler declares typed output. */
+export type RegistryReadToolOutputContract = AssertTrue<
+  AllHandlerOutputsTyped<
+    typeof REGISTRY_READ_TOOL_HANDLERS,
+    ProjectableRegistryReadToolName
+  > extends true
+    ? HandlerOutputsMatchByName<
+        typeof REGISTRY_READ_TOOL_HANDLERS,
+        RegistryReadProjectionDataByName,
+        ProjectableRegistryReadToolName
+      >
+    : false
+>;
 export type RunRegistryReadToolProps = {
   toolName: RegistryReadToolName;
   args: Record<string, unknown>;
@@ -87,8 +129,7 @@ export const runRegistryReadTool = async ({
   context,
   refRegistry,
 }: RunRegistryReadToolProps): Promise<Result<unknown, ChatToolError>> => {
-  const entry = READ_TOOL_REF_FIELD_MAP[toolName];
-  if (!entry.chatProjectable) {
+  if (!isProjectableRegistryReadToolName(toolName)) {
     return Result.err(
       new ChatToolError({
         kind: "unavailable",
@@ -96,6 +137,7 @@ export const runRegistryReadTool = async ({
       }),
     );
   }
+  const entry = READ_TOOL_REF_FIELD_MAP[toolName];
 
   const staticDefinition =
     getStaticMcpToolDefinition(toolName) ??

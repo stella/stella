@@ -115,6 +115,15 @@ describe("list_audit_log", () => {
       "resourceType is required when resourceId is provided",
     );
   });
+
+  test("rejects permissive Date inputs that are not ISO timestamps", async () => {
+    const result = await RESEARCH_ADMIN_TOOL_HANDLERS.list_audit_log({
+      args: { from: "August 23, 2026" },
+      context: createContext("owner"),
+    });
+
+    expect(errorMessage(result)).toContain("Invalid input");
+  });
 });
 
 describe("search_legislation feature gating", () => {

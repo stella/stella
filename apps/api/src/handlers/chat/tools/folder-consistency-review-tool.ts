@@ -51,7 +51,7 @@ const skippedDocumentSchema = v.strictObject({
   reason: v.string(),
 });
 
-const citationSchema = v.union([
+const citationSchema = v.variant("type", [
   v.strictObject({
     type: v.literal("docx-folio"),
     documentName: v.string(),

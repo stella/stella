@@ -39,7 +39,7 @@ const relativePathSchema = v.pipe(
 const nonEmptyString = v.pipe(v.string(), v.trim(), v.minLength(1));
 const optionalString = v.optional(v.string());
 
-export const templatePackJurisdictionSchema = v.object({
+export const templatePackJurisdictionSchema = v.strictObject({
   country: v.pipe(v.string(), v.regex(COUNTRY_PATTERN)),
   subdivision: optionalString,
 });
@@ -47,7 +47,7 @@ export type TemplatePackJurisdiction = v.InferOutput<
   typeof templatePackJurisdictionSchema
 >;
 
-export const templatePackAuthorSchema = v.object({
+export const templatePackAuthorSchema = v.strictObject({
   name: nonEmptyString,
   organization: optionalString,
   url: optionalString,
@@ -56,14 +56,14 @@ export const templatePackAuthorSchema = v.object({
 });
 export type TemplatePackAuthor = v.InferOutput<typeof templatePackAuthorSchema>;
 
-export const templatePackSourceSchema = v.object({
+export const templatePackSourceSchema = v.strictObject({
   name: nonEmptyString,
   url: nonEmptyString,
   retrievedAt: optionalString,
 });
 export type TemplatePackSource = v.InferOutput<typeof templatePackSourceSchema>;
 
-const templateEntrySchema = v.object({
+const templateEntrySchema = v.strictObject({
   slug: slugSchema,
   title: nonEmptyString,
   /** Path of the DOCX relative to the pack directory. */
@@ -77,7 +77,7 @@ const templateEntrySchema = v.object({
 });
 
 /** `pack.json` as committed in the content repository. */
-export const packManifestSchema = v.object({
+export const packManifestSchema = v.strictObject({
   id: slugSchema,
   name: nonEmptyString,
   version: nonEmptyString,
@@ -97,19 +97,28 @@ export const packManifestSchema = v.object({
 });
 export type PackManifest = v.InferOutput<typeof packManifestSchema>;
 
-/** `index.json` at the content root: per-template field lists, hashes and
- *  the effective (template-or-pack) license, jurisdictions and languages. */
+/** `index.json` at the content root: the complete generated catalogue shape. */
 export const packIndexSchema = v.array(
-  v.object({
+  v.strictObject({
     id: slugSchema,
+    name: nonEmptyString,
+    version: nonEmptyString,
+    license: nonEmptyString,
+    jurisdictions: v.array(templatePackJurisdictionSchema),
+    languages: v.array(nonEmptyString),
+    legalAreas: v.array(nonEmptyString),
+    authors: v.array(templatePackAuthorSchema),
+    templateCount: v.pipe(v.number(), v.integer(), v.minValue(0)),
     templates: v.array(
-      v.object({
+      v.strictObject({
         slug: slugSchema,
-        license: v.optional(v.string()),
-        jurisdictions: v.optional(v.array(templatePackJurisdictionSchema)),
-        languages: v.optional(v.array(v.string())),
-        legalArea: v.optional(v.nullable(v.string())),
-        fields: v.optional(v.array(v.string()), []),
+        title: nonEmptyString,
+        file: relativePathSchema,
+        license: nonEmptyString,
+        jurisdictions: v.array(templatePackJurisdictionSchema),
+        languages: v.array(nonEmptyString),
+        legalArea: v.nullable(nonEmptyString),
+        fields: v.array(nonEmptyString),
         sha256: v.pipe(v.string(), v.regex(SHA256_PATTERN)),
       }),
     ),

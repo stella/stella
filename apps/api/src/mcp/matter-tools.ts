@@ -36,9 +36,11 @@ import type {
   DELETED_TRUE_PROJECTION,
   LINK_MATTER_CONTACT_LINK_PROJECTION,
   LINK_MATTER_CONTACT_UNLINK_PROJECTION,
+  LINK_MATTER_CONTACT_PROJECTION,
   LIST_CONTACTS_PROJECTION,
   LIST_TASKS_DETAIL_PROJECTION,
   LIST_TASKS_LIST_PROJECTION,
+  LIST_TASKS_PROJECTION,
   LOOKUP_BUSINESS_REGISTRY_PROJECTION,
   SAVE_CONTACT_PROJECTION,
   SAVE_MATTER_PROJECTION,
@@ -75,6 +77,7 @@ import type {
   McpTextFieldSpec,
   McpToolDefinition,
   McpToolHandler,
+  TypedMcpToolHandler,
 } from "@/api/mcp/tool-types";
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
@@ -88,6 +91,7 @@ import {
   internalFailureResult,
   getWorkspaceStatus,
   intProp,
+  ISO_DATE_SCHEMA,
   MAX_LIST_LIMIT,
   notFoundResult,
   nullableStringProp,
@@ -611,7 +615,9 @@ const saveMatterArgsSchema = v.pipe(
   ),
 );
 
-const handleSaveMatterTool: McpToolHandler = async ({ args, context }) => {
+const handleSaveMatterTool: TypedMcpToolHandler<
+  v.InferInput<typeof SAVE_MATTER_PROJECTION>
+> = async ({ args, context }) => {
   const parsed = v.safeParse(saveMatterArgsSchema, args);
   if (!parsed.success) {
     return validationErrorResult({
@@ -772,7 +778,9 @@ const deleteMatterArgsSchema = v.strictObject({
   confirm: v.optional(v.boolean()),
 });
 
-const handleDeleteMatterTool: McpToolHandler = async ({ args, context }) => {
+const handleDeleteMatterTool: TypedMcpToolHandler<
+  v.InferInput<typeof DELETED_TRUE_PROJECTION>
+> = async ({ args, context }) => {
   if (!roles[context.memberRole].authorize({ workspace: ["delete"] }).success) {
     return errorResult("Forbidden");
   }
@@ -828,7 +836,9 @@ const listContactsArgsSchema = v.strictObject({
   ),
 });
 
-const handleListContactsTool: McpToolHandler = async ({ args, context }) => {
+const handleListContactsTool: TypedMcpToolHandler<
+  v.InferInput<typeof LIST_CONTACTS_PROJECTION>
+> = async ({ args, context }) => {
   if (!roles[context.memberRole].authorize({ workspace: ["read"] }).success) {
     return errorResult("Forbidden");
   }
@@ -928,7 +938,9 @@ const saveContactArgsSchema = v.pipe(
   ),
 );
 
-const handleSaveContactTool: McpToolHandler = async ({ args, context }) => {
+const handleSaveContactTool: TypedMcpToolHandler<
+  v.InferInput<typeof SAVE_CONTACT_PROJECTION>
+> = async ({ args, context }) => {
   const parsed = v.safeParse(saveContactArgsSchema, args);
   if (!parsed.success) {
     return validationErrorResult({
@@ -1025,7 +1037,9 @@ const deleteContactArgsSchema = v.strictObject({
   confirm: v.optional(v.boolean()),
 });
 
-const handleDeleteContactTool: McpToolHandler = async ({ args, context }) => {
+const handleDeleteContactTool: TypedMcpToolHandler<
+  v.InferInput<typeof DELETED_TRUE_PROJECTION>
+> = async ({ args, context }) => {
   if (!roles[context.memberRole].authorize({ contact: ["delete"] }).success) {
     return errorResult("Forbidden");
   }
@@ -1061,10 +1075,9 @@ const lookupBusinessRegistryArgsSchema = v.strictObject({
   query: v.pipe(v.string(), v.minLength(1), v.maxLength(256)),
 });
 
-const handleLookupBusinessRegistryTool: McpToolHandler = async ({
-  args,
-  context,
-}) => {
+const handleLookupBusinessRegistryTool: TypedMcpToolHandler<
+  v.InferInput<typeof LOOKUP_BUSINESS_REGISTRY_PROJECTION>
+> = async ({ args, context }) => {
   if (!roles[context.memberRole].authorize({ workspace: ["read"] }).success) {
     return errorResult("Forbidden");
   }
@@ -1132,14 +1145,12 @@ const resolveTaskWorkspace = async ({
   return { status: "ok", workspaceId: entity.workspaceId };
 };
 
-const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/u;
-
 const listTasksArgsSchema = v.pipe(
   v.strictObject({
     matter_id: v.optional(v.pipe(v.string(), v.minLength(1))),
     task_id: v.optional(v.pipe(v.string(), v.minLength(1))),
-    date_from: v.optional(v.pipe(v.string(), v.regex(ISO_DATE))),
-    date_to: v.optional(v.pipe(v.string(), v.regex(ISO_DATE))),
+    date_from: v.optional(ISO_DATE_SCHEMA),
+    date_to: v.optional(ISO_DATE_SCHEMA),
     status: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(32))),
     limit: v.optional(
       v.pipe(
@@ -1261,7 +1272,9 @@ const readTaskDetail = async ({
   };
 };
 
-const handleListTasksTool: McpToolHandler = async ({ args, context }) => {
+const handleListTasksTool: TypedMcpToolHandler<
+  v.InferInput<typeof LIST_TASKS_PROJECTION>
+> = async ({ args, context }) => {
   if (!roles[context.memberRole].authorize({ workspace: ["read"] }).success) {
     return errorResult("Forbidden");
   }
@@ -1450,7 +1463,7 @@ const saveTaskArgsSchema = v.pipe(
     list_description: v.optional(
       v.nullable(v.pipe(v.string(), v.maxLength(10_000))),
     ),
-    due_date: v.optional(v.nullable(v.pipe(v.string(), v.regex(ISO_DATE)))),
+    due_date: v.optional(v.nullable(ISO_DATE_SCHEMA)),
     workflow_reason: v.optional(
       v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(1000)),
     ),
@@ -1730,7 +1743,9 @@ const validateSaveTaskTargets = async ({
   return null;
 };
 
-const handleSaveTaskTool: McpToolHandler = async ({ args, context }) => {
+const handleSaveTaskTool: TypedMcpToolHandler<
+  v.InferInput<typeof SAVE_TASK_PROJECTION>
+> = async ({ args, context }) => {
   const parsed = v.safeParse(saveTaskArgsSchema, args);
   if (!parsed.success) {
     return validationErrorResult({
@@ -2003,10 +2018,9 @@ const resolveUnlinkWorkspaceContactId = async ({
   return brandPersistedWorkspaceContactId(first.id);
 };
 
-const handleLinkMatterContactTool: McpToolHandler = async ({
-  args,
-  context,
-}) => {
+const handleLinkMatterContactTool: TypedMcpToolHandler<
+  v.InferInput<typeof LINK_MATTER_CONTACT_PROJECTION>
+> = async ({ args, context }) => {
   if (!roles[context.memberRole].authorize({ workspace: ["update"] }).success) {
     return errorResult("Forbidden");
   }

@@ -26,6 +26,9 @@
       {
         "slug": "employment-agreement",
         "title": "Employment agreement",
+        "file": "templates/employment-agreement/template.docx",
+        "license": "CC-BY-4.0",
+        "jurisdictions": [{ "country": "CZ" }],
         "languages": ["en"],
         "legalArea": "employment",
         "fields": [

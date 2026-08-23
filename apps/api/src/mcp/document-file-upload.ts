@@ -1,6 +1,5 @@
 import { Result } from "better-result";
-import { t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
 
 import {
   buildDocumentVersionUploadReservationInput,
@@ -30,52 +29,53 @@ export const DOCUMENT_UPLOAD_APP_RESOURCE_URI =
  * canonical static-tool input schema and is also the runtime validator: the
  * host adapter therefore cannot accept a shape different from `tools/list`.
  */
-export const OPENAI_FILE_REFERENCE_SCHEMA = t.Object(
-  {
-    download_url: t.String({
-      description:
+export const OPENAI_FILE_REFERENCE_SCHEMA = v.pipe(
+  v.strictObject({
+    download_url: v.pipe(
+      v.string(),
+      v.description(
         "Temporary URL supplied by the host for downloading the file",
-    }),
-    file_id: t.String({
-      description: "Host-assigned identifier for the attached file",
-    }),
-    mime_type: t.Optional(
-      t.String({ description: "MIME type reported by the host" }),
+      ),
     ),
-    file_name: t.Optional(
-      t.String({ description: "Original file name reported by the host" }),
+    file_id: v.pipe(
+      v.string(),
+      v.description("Host-assigned identifier for the attached file"),
     ),
-  },
-  {
-    additionalProperties: false,
-    description: "File reference supplied by a compatible MCP host",
-  },
+    mime_type: v.optional(
+      v.pipe(v.string(), v.description("MIME type reported by the host")),
+    ),
+    file_name: v.optional(
+      v.pipe(
+        v.string(),
+        v.description("Original file name reported by the host"),
+      ),
+    ),
+  }),
+  v.description("File reference supplied by a compatible MCP host"),
 );
 
-export const UPLOAD_DOCUMENT_VERSION_INPUT_SCHEMA = t.Object(
-  {
-    entity_id: t.String({
-      minLength: 1,
-      description:
-        "Existing document entity ID that will receive a new version",
-    }),
-    file: OPENAI_FILE_REFERENCE_SCHEMA,
-  },
-  { additionalProperties: false },
-);
+export const UPLOAD_DOCUMENT_VERSION_INPUT_SCHEMA = v.strictObject({
+  entity_id: v.pipe(
+    v.string(),
+    v.minLength(1),
+    v.description(
+      "Existing document entity ID that will receive a new version",
+    ),
+  ),
+  file: OPENAI_FILE_REFERENCE_SCHEMA,
+});
 
-export const OPEN_DOCUMENT_VERSION_UPLOAD_INPUT_SCHEMA = t.Object(
-  {
-    entity_id: t.String({
-      minLength: 1,
-      description:
-        "Existing document entity ID that will receive a new version",
-    }),
-  },
-  { additionalProperties: false },
-);
+export const OPEN_DOCUMENT_VERSION_UPLOAD_INPUT_SCHEMA = v.strictObject({
+  entity_id: v.pipe(
+    v.string(),
+    v.minLength(1),
+    v.description(
+      "Existing document entity ID that will receive a new version",
+    ),
+  ),
+});
 
-export type UploadDocumentVersionInput = Static<
+export type UploadDocumentVersionInput = v.InferOutput<
   typeof UPLOAD_DOCUMENT_VERSION_INPUT_SCHEMA
 >;
 
@@ -238,7 +238,7 @@ const abortCreatedReservation = async ({
 };
 
 const normalizedMimeType = (
-  file: UploadDocumentVersionInput["file"] & object,
+  file: UploadDocumentVersionInput["file"],
   responseHeaders: Headers,
 ): string =>
   file.mime_type ??
@@ -261,7 +261,7 @@ export const uploadRemoteDocumentVersion = async ({
   context: McpRequestContext;
   dependencies?: DocumentFileUploadDependencies;
   entityId: string;
-  file: UploadDocumentVersionInput["file"] & object;
+  file: UploadDocumentVersionInput["file"];
   workspaceId: string;
 }): Promise<McpToolResponse> => {
   const downloaded = await dependencies.download({

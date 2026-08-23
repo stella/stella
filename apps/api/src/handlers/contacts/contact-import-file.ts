@@ -749,11 +749,7 @@ export const validateContactImportCandidate = ({
     report(CONTACT_IMPORT_ISSUE_CODE.DISPLAY_NAME_REQUIRED, "display_name");
   }
 
-  if (
-    candidate.emails?.some(
-      ({ address }) => !v.safeParse(emailSchema, address).success,
-    )
-  ) {
+  if (candidate.emails?.some(({ address }) => !v.is(emailSchema, address))) {
     report(CONTACT_IMPORT_ISSUE_CODE.INVALID_EMAIL, "primary_email");
   }
   if (

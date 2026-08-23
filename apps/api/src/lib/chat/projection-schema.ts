@@ -1,8 +1,11 @@
 import { panic, Result } from "better-result";
 import * as v from "valibot";
 
+import { isSafeIdValue } from "@stll/api-contract/safe-id";
+
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
+import { isPersistedJsonValue } from "@/api/lib/chat/persisted-message-content";
 import type { ChatRefKind, ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import {
@@ -132,6 +135,7 @@ const annotationSchema = v.variant("role", [
   }),
   v.strictObject({ role: v.literal("passthroughId") }),
   v.strictObject({ role: v.literal("strip") }),
+  v.strictObject({ role: v.literal("json") }),
 ]);
 
 type ChatProjectionAnnotation = v.InferOutput<typeof annotationSchema>;
@@ -139,23 +143,59 @@ type ChatProjectionAnnotation = v.InferOutput<typeof annotationSchema>;
 const CHAT_PROJECTION_METADATA_KEY = "chatProjection";
 
 /**
- * The widened schema type every projection value and annotated field carries.
- * Deliberately not the inferred builder type: the payload arrives as `unknown`
- * from `JSON.parse`, so nothing consumes the precise input/output types, and
- * widening at the wrapper boundary keeps valibot's generic instantiation cost
- * out of the map (per the type-cost guard).
+ * The widened schema type used by the runtime projection registry. Individual
+ * annotated field builders retain their inferred input/output types so the
+ * same schemas can provide precise handler contracts at compile time; only the
+ * heterogeneous registry boundary widens them for AST walking.
  */
 export type ChatProjectionSchema = v.GenericSchema<
   Record<string, unknown>,
   Record<string, unknown>
 >;
 
-type AnnotatedFieldSchema = v.GenericSchema;
+const selectedProjectionBranches = new WeakMap<
+  Record<string, unknown>,
+  ChatProjectionSchema
+>();
+
+const projectionBranchSources = new WeakMap<
+  v.GenericSchema,
+  ChatProjectionSchema
+>();
+
+/**
+ * Mark one union/variant option as a projection branch. Its Valibot transform
+ * records which schema produced the canonical output object during the one
+ * strict parse; the annotation walk can then follow that branch without
+ * validating it again.
+ */
+export const projectionBranch = <TSchema extends ChatProjectionSchema>(
+  schema: TSchema,
+) => {
+  const branch = v.pipe(
+    schema,
+    v.transform((output) => {
+      selectedProjectionBranches.set(output, schema);
+      return output;
+    }),
+  );
+  projectionBranchSources.set(branch, schema);
+  return branch;
+};
+
+type SimpleRefId<TKind extends SimpleRefKind> = {
+  contact: SafeId<"contact">;
+  matter: SafeId<"workspace">;
+  property: SafeId<"property">;
+}[TKind];
 
 /** A tenant id field hydrated into a `mat_N`/`contact_N`/`prop_N` chat ref. */
-export const chatRef = (kind: SimpleRefKind): AnnotatedFieldSchema =>
+export const chatRef = <TKind extends SimpleRefKind>(kind: TKind) =>
   v.pipe(
-    v.string(),
+    v.custom<SimpleRefId<TKind>>(
+      (value) => typeof value === "string" && isSafeIdValue(value),
+      `Expected a ${kind} identifier`,
+    ),
     v.metadata({ [CHAT_PROJECTION_METADATA_KEY]: { role: "ref", kind } }),
   );
 
@@ -163,11 +203,12 @@ export const chatRef = (kind: SimpleRefKind): AnnotatedFieldSchema =>
  * A tenant entity id field hydrated into an `ent_N` chat ref, declaring where
  * its owning workspace id is recovered from.
  */
-export const chatEntityRef = (
-  workspace: EntityWorkspaceSource,
-): AnnotatedFieldSchema =>
+export const chatEntityRef = (workspace: EntityWorkspaceSource) =>
   v.pipe(
-    v.string(),
+    v.custom<SafeId<"entity">>(
+      (value) => typeof value === "string" && isSafeIdValue(value),
+      "Expected an entity identifier",
+    ),
     v.metadata({
       [CHAT_PROJECTION_METADATA_KEY]: { role: "entityRef", workspace },
     }),
@@ -177,7 +218,7 @@ export const chatEntityRef = (
  * A non-tenant handle (user/version/link/library id, opaque cursor) the model
  * may pass back verbatim; licensed to survive the runtime UUID backstop.
  */
-export const passthroughId = (): AnnotatedFieldSchema =>
+export const passthroughId = () =>
   v.pipe(
     v.string(),
     v.metadata({ [CHAT_PROJECTION_METADATA_KEY]: { role: "passthroughId" } }),
@@ -189,7 +230,7 @@ export const passthroughId = (): AnnotatedFieldSchema =>
  * base: the strict parse admits it at its declared key, then the derived
  * `stripPaths` remove it.
  */
-export const strippedField = (): AnnotatedFieldSchema =>
+export const strippedField = () =>
   v.pipe(
     v.unknown(),
     v.metadata({ [CHAT_PROJECTION_METADATA_KEY]: { role: "strip" } }),
@@ -199,15 +240,26 @@ export const strippedField = (): AnnotatedFieldSchema =>
  * A free-form JSON subtree the schema cannot enumerate by path: public-source
  * jsonb (`decision.metadata`), an external API envelope (BOE sections,
  * registry `details`), or a structural config with no stable leaf grammar
- * (playbook ask content, condition ASTs). Deliberately NOT an annotation:
- * the strict parse admits any value at the declared key, the walker records
- * nothing beneath it (an unannotated `unknown` leaf contributes no mediation
- * paths), and therefore the runtime UUID backstop still applies, unlicensed,
- * to every string inside — a UUID-shaped value in the subtree fails closed
- * exactly as it did under the hand-written entries, which never enumerated
- * these subtrees either.
+ * (playbook ask content, condition ASTs). Its annotation tells the walker to
+ * record no mediation paths but to scan every nested string for unlicensed
+ * UUIDs. A UUID-shaped value therefore fails closed exactly as it did under
+ * the hand-written entries, which never enumerated these subtrees either. The
+ * schema also proves that the subtree is canonical JSON, so direct typed
+ * execution cannot smuggle cycles, bigint, functions, symbols, or non-finite
+ * numbers past the former MCP serialization boundary.
  */
-export const unenumeratedJson = (): AnnotatedFieldSchema => v.unknown();
+export const unenumeratedJson = () =>
+  v.pipe(
+    v.unknown(),
+    v.rawTransform(({ addIssue, dataset, NEVER }) => {
+      if (!isPersistedJsonValue(dataset.value)) {
+        addIssue({ message: "Expected a canonical JSON value" });
+        return NEVER;
+      }
+      return dataset.value;
+    }),
+    v.metadata({ [CHAT_PROJECTION_METADATA_KEY]: { role: "json" } }),
+  );
 
 // --- Schema AST walking ---------------------------------------------------------
 // Valibot schemas are plain objects: `v.pipe` spreads its base schema and adds
@@ -218,6 +270,11 @@ export const unenumeratedJson = (): AnnotatedFieldSchema => v.unknown();
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
+
+const isSchemaNode = (value: unknown): value is v.GenericSchema =>
+  isRecord(value) &&
+  value["kind"] === "schema" &&
+  typeof value["type"] === "string";
 
 // Memoized per schema node: `projectForChat` reads annotations on every
 // request's walk, and a node's annotation never changes after construction.
@@ -354,6 +411,14 @@ const walkContainerSchema = (
       panic("union schema node has no options array");
     }
     for (const option of options) {
+      if (!isSchemaNode(option)) {
+        panic("union option is not a valibot schema");
+      }
+      if (!projectionBranchSources.has(option)) {
+        panic(
+          "chat projection union option is not wrapped in projectionBranch",
+        );
+      }
       walkContainerSchema(option, segments, visit);
     }
     return;
@@ -371,7 +436,12 @@ const walkContainerSchema = (
   if (nodeType === "array") {
     panic("the ref path grammar cannot address nested arrays");
   }
-  // A scalar leaf (string/number/boolean/literal/picklist/unknown/null):
+  if (nodeType === "unknown") {
+    panic(
+      "unknown chat projection fields must use strippedField or unenumeratedJson",
+    );
+  }
+  // A scalar leaf (string/number/boolean/literal/picklist/null):
   // ordinary data, nothing to record.
 };
 
@@ -417,6 +487,9 @@ const buildMediationLists = (
       }
       case "strip": {
         stripPaths.add(path);
+        return;
+      }
+      case "json": {
         return;
       }
       default: {
@@ -624,11 +697,6 @@ type ProjectWalkContext = {
   uuidViolations: string[];
 };
 
-const isSchemaNode = (value: unknown): value is v.GenericSchema =>
-  isRecord(value) &&
-  value["kind"] === "schema" &&
-  typeof value["type"] === "string";
-
 /**
  * Record a violation if a string leaf carries a UUID anywhere in it. A
  * substring match (not just a bare-UUID exact match) so a UUID embedded
@@ -795,9 +863,13 @@ const projectRefLeaf = ({
   }
 };
 
-/** Pick the union/variant option that admits `value` (the outer parse already
- * proved one does), mirroring valibot's own first-match option order. */
-const matchUnionOption = (
+/**
+ * Recover the branch proof recorded while Valibot produced this canonical
+ * object. Every union/variant option must use `projectionBranch`; accepting an
+ * unmarked branch would make its annotation policy unknowable without a
+ * second parse, so it is an impossible projection-schema state.
+ */
+const selectUnionOption = (
   unionNode: Record<string, unknown>,
   value: unknown,
 ): v.GenericSchema => {
@@ -805,15 +877,26 @@ const matchUnionOption = (
   if (!Array.isArray(options)) {
     panic("union schema node has no options array");
   }
+  if (!isRecord(value)) {
+    return panic("chat projection unions must contain object branches");
+  }
+  const selected = selectedProjectionBranches.get(value);
+  if (selected === undefined) {
+    return panic("parsed projection union value has no branch proof");
+  }
   for (const option of options) {
     if (!isSchemaNode(option)) {
       panic("union option is not a valibot schema");
     }
-    if (v.safeParse(option, value).success) {
-      return option;
+    const source = projectionBranchSources.get(option);
+    if (source === undefined) {
+      panic("chat projection union option is not wrapped in projectionBranch");
+    }
+    if (source === selected) {
+      return source;
     }
   }
-  return panic("no union option matches a value the union already parsed");
+  return panic("projection branch proof does not belong to its union");
 };
 
 type ProjectFieldArgs = {
@@ -869,6 +952,11 @@ const projectField = ({
         // Licensed to survive verbatim, UUID-shaped or not.
         return value;
       }
+      case "json": {
+        const segment = Array.isArray(value) ? `${key}[]` : key;
+        scanUnenumerated(ctx, value, [...segments, segment]);
+        return value;
+      }
       case "ref": {
         return projectRefLeaf({
           ctx,
@@ -921,11 +1009,9 @@ const projectField = ({
     return value.map((entry) => projectValue(ctx, item, entry, itemSegments));
   }
   if (nodeType === "unknown") {
-    // unenumeratedJson: forwarded unmodified; the invariant scan still covers
-    // every string inside, unlicensed.
-    const segment = Array.isArray(value) ? `${key}[]` : key;
-    scanUnenumerated(ctx, value, [...segments, segment]);
-    return value;
+    return panic(
+      "unknown chat projection fields must use strippedField or unenumeratedJson",
+    );
   }
   return projectValue(ctx, schemaNode, value, [...segments, key]);
 };
@@ -954,7 +1040,7 @@ const projectValue = (
   if (UNION_TYPES.has(nodeType)) {
     return projectValue(
       ctx,
-      matchUnionOption(schemaNode, value),
+      selectUnionOption(schemaNode, value),
       value,
       segments,
     );
@@ -990,8 +1076,9 @@ const projectValue = (
     panic("the ref path grammar cannot address nested arrays");
   }
   if (nodeType === "unknown") {
-    scanUnenumerated(ctx, value, segments);
-    return value;
+    return panic(
+      "unknown chat projection fields must use strippedField or unenumeratedJson",
+    );
   }
   // A scalar leaf (string/number/boolean/literal/picklist/null): ordinary
   // data. A UUID-bearing string here is undeclared and fails closed.
@@ -1004,9 +1091,9 @@ type ProjectionTelemetrySource =
   | "run-registry-tool"
   | "run-registry-write-tool";
 
-export type ProjectForChatOptions = {
+export type ProjectForChatOptions<TPayload> = {
   schema: ChatProjectionSchema;
-  payload: unknown;
+  payload: TPayload;
   refRegistry: ChatRefRegistry;
   dehydration: DehydratedInput;
   /** Telemetry context only; never part of the transform. */
@@ -1033,14 +1120,14 @@ export type ProjectForChatOptions = {
  *    survivor fails closed as a `server-defect`, its path (never its value)
  *    to telemetry.
  */
-export const projectForChat = ({
+export const projectForChat = <TPayload>({
   schema,
   payload,
   refRegistry,
   dehydration,
   source,
   toolName,
-}: ProjectForChatOptions): Result<unknown, ChatToolError> => {
+}: ProjectForChatOptions<TPayload>): Result<unknown, ChatToolError> => {
   const parsed = strictParseProjection({ payload, schema });
   if (Result.isError(parsed)) {
     const error = new ChatToolError({

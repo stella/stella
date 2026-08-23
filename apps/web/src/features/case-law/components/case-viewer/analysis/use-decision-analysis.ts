@@ -9,10 +9,10 @@ import { useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
-import type { DecisionAnalysis } from "@stll/legal-ast/analysis";
 import {
-  isAnalysisInProgress,
-  isDecisionAnalysis,
+  type DecisionAnalysis,
+  type PersistedDecisionAnalysis,
+  parsePersistedDecisionAnalysis,
 } from "@stll/legal-ast/analysis";
 
 import { caseLawDecisionKeys } from "@/features/case-law/queries/decisions";
@@ -37,7 +37,19 @@ const POLL_INTERVAL_MS = 2000;
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
 
-const parseAnalysisResponse = (value: unknown): AnalysisResponse | null => {
+const completeAnalysis = (
+  analysis: PersistedDecisionAnalysis | null,
+): DecisionAnalysis | null =>
+  analysis !== null && !("status" in analysis) ? analysis : null;
+
+const analysisTree = (
+  analysis: PersistedDecisionAnalysis | null,
+): DecisionAnalysis["tree"] =>
+  analysis !== null && "tree" in analysis ? analysis.tree : [];
+
+export const parseAnalysisResponse = (
+  value: unknown,
+): AnalysisResponse | null => {
   if (!isRecord(value)) {
     return null;
   }
@@ -45,15 +57,17 @@ const parseAnalysisResponse = (value: unknown): AnalysisResponse | null => {
   const status = value["status"];
 
   if (status === "done") {
-    const analysis = value["analysis"];
-    return isDecisionAnalysis(analysis) ? { status: "done", analysis } : null;
+    const analysis = completeAnalysis(
+      parsePersistedDecisionAnalysis(value["analysis"]),
+    );
+    return analysis === null ? null : { status: "done", analysis };
   }
 
   if (status === "generating") {
-    const analysis = value["analysis"];
+    const analysis = parsePersistedDecisionAnalysis(value["analysis"]);
     return {
       status: "generating",
-      tree: isDecisionAnalysis(analysis) ? analysis.tree : [],
+      tree: analysisTree(analysis),
     };
   }
 
@@ -81,9 +95,10 @@ export const useDecisionAnalysis = (
   existingAnalysis: unknown,
 ) => {
   const queryClient = useQueryClient();
-  const hasFreshAnalysis =
-    isDecisionAnalysis(existingAnalysis) &&
-    !isAnalysisInProgress(existingAnalysis);
+  const existingCompleteAnalysis = completeAnalysis(
+    parsePersistedDecisionAnalysis(existingAnalysis),
+  );
+  const hasFreshAnalysis = existingCompleteAnalysis !== null;
   // Track which decision the user kicked generation off for. Comparing
   // against the current `decisionId` in the same render keeps a stale
   // value from enabling a fetch (and an unintended backend kick-off)
@@ -179,8 +194,8 @@ export const useDecisionAnalysis = (
   };
 
   const state: AnalysisState = (() => {
-    if (hasFreshAnalysis && isDecisionAnalysis(existingAnalysis)) {
-      return { status: "done", analysis: existingAnalysis };
+    if (existingCompleteAnalysis !== null) {
+      return { status: "done", analysis: existingCompleteAnalysis };
     }
     if (!isGenerating) {
       return { status: "idle" };

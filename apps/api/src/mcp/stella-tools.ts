@@ -33,6 +33,7 @@ import type {
   AssertNoExtraFields,
   LIST_MATTERS_DETAIL_PROJECTION,
   LIST_MATTERS_LIST_PROJECTION,
+  LIST_MATTERS_PROJECTION,
   READ_CASE_LAW_DECISION_PROJECTION,
   READ_CONTACT_PROJECTION,
   READ_CONTENT_ACROSS_MATTERS_PROJECTION,
@@ -61,6 +62,7 @@ import {
   brandPersistedCaseLawSourceId,
   brandPersistedContactId,
   brandPersistedEntityId,
+  brandPersistedWorkspaceId,
 } from "@/api/lib/safe-id-boundaries";
 import { decodeCursor } from "@/api/lib/search/cursor";
 import { getSearchProvider } from "@/api/lib/search/provider";
@@ -77,6 +79,7 @@ import type {
   McpTextFieldSpec,
   McpToolDefinition,
   McpToolHandler,
+  TypedMcpToolHandler,
 } from "@/api/mcp/tool-types";
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
@@ -790,7 +793,9 @@ const decodeMatterPageCursor = (cursor: string): string | null => {
   return isUuidPaginationCursorPart(rawId) ? rawId : null;
 };
 
-const handleListMattersTool: McpToolHandler = async ({ args, context }) => {
+const handleListMattersTool: TypedMcpToolHandler<
+  v.InferInput<typeof LIST_MATTERS_PROJECTION>
+> = async ({ args, context }) => {
   // Detail mode: matter_id selects one matter's overview. The list-only
   // filters (status/limit/cursor) do not apply, so reject the mixed request
   // up front rather than silently ignoring them.
@@ -931,7 +936,9 @@ const handleListMattersTool: McpToolHandler = async ({ args, context }) => {
 // Detail branch of list_matters: one matter's overview (counts, recent
 // entities, contacts, members). Reused verbatim from the former
 // get_matter_overview tool, which list_matters absorbed.
-const readMatterOverview: McpToolHandler = async ({ args, context }) => {
+const readMatterOverview: TypedMcpToolHandler<
+  v.InferInput<typeof LIST_MATTERS_PROJECTION>
+> = async ({ args, context }) => {
   const matterId = parseRequiredString(args, "matter_id");
   if (typeof matterId !== "string") {
     return matterId;
@@ -1035,10 +1042,9 @@ const readMatterOverview: McpToolHandler = async ({ args, context }) => {
   return { egress: "structured", payload, textFields };
 };
 
-const handleSearchAcrossMattersTool: McpToolHandler = async ({
-  args,
-  context,
-}) => {
+const handleSearchAcrossMattersTool: TypedMcpToolHandler<
+  v.InferInput<typeof SEARCH_ACROSS_MATTERS_PROJECTION>
+> = async ({ args, context }) => {
   const query = parseRequiredString(args, "query", {
     maxLength: LIMITS.searchQueryMaxLength,
   });
@@ -1081,8 +1087,8 @@ const handleSearchAcrossMattersTool: McpToolHandler = async ({
   });
 
   const hits = result.hits.map((hit) => ({
-    entityId: hit.entityId,
-    workspaceId: hit.workspaceId,
+    entityId: brandPersistedEntityId(hit.entityId),
+    workspaceId: brandPersistedWorkspaceId(hit.workspaceId),
     workspaceName: hit.workspaceName,
     name: hit.title,
     kind: hit.kind,
@@ -1354,10 +1360,9 @@ const loadCurrentVersionDocxMarkdown = async ({
     : { kind: "markdown", text: markdownResult.value };
 };
 
-const handleReadContentAcrossMattersTool: McpToolHandler = async ({
-  args,
-  context,
-}) => {
+const handleReadContentAcrossMattersTool: TypedMcpToolHandler<
+  v.InferInput<typeof READ_CONTENT_ACROSS_MATTERS_PROJECTION>
+> = async ({ args, context }) => {
   const rawEntityId = parseRequiredString(args, "entity_id");
   if (typeof rawEntityId !== "string") {
     return rawEntityId;
@@ -1530,7 +1535,7 @@ const handleReadContentAcrossMattersTool: McpToolHandler = async ({
     text,
     truncated: false,
     nextCursor: initialNextCursor(),
-    workspaceId: currentDocument.workspaceId,
+    workspaceId: brandPersistedWorkspaceId(currentDocument.workspaceId),
   };
   // The egress window's `apply` below mutates this object in place, so the tie
   // cannot ride on the literal: a `satisfies` clause would contextually pin
@@ -1562,7 +1567,9 @@ const handleReadContentAcrossMattersTool: McpToolHandler = async ({
   };
 };
 
-const handleSearchCaseLawTool: McpToolHandler = async ({ args, context }) => {
+const handleSearchCaseLawTool: TypedMcpToolHandler<
+  v.InferInput<typeof SEARCH_CASE_LAW_PROJECTION>
+> = async ({ args, context }) => {
   const query = parseRequiredString(args, "query", {
     maxLength: LIMITS.searchQueryMaxLength,
   });
@@ -1745,7 +1752,9 @@ const decodeDecisionCursor = (
   return { citations, text };
 };
 
-const handleReadCaseLawDecisionTool: McpToolHandler = async ({ args }) => {
+const handleReadCaseLawDecisionTool: TypedMcpToolHandler<
+  v.InferInput<typeof READ_CASE_LAW_DECISION_PROJECTION>
+> = async ({ args }) => {
   const decisionId = parseRequiredString(args, "decision_id");
   if (typeof decisionId !== "string") {
     return decisionId;
@@ -1857,7 +1866,9 @@ const handleReadCaseLawDecisionTool: McpToolHandler = async ({ args }) => {
   } satisfies v.InferInput<typeof READ_CASE_LAW_DECISION_PROJECTION>);
 };
 
-const handleReadContactTool: McpToolHandler = async ({ args, context }) => {
+const handleReadContactTool: TypedMcpToolHandler<
+  v.InferInput<typeof READ_CONTACT_PROJECTION>
+> = async ({ args, context }) => {
   const rawContactId = parseRequiredString(args, "contact_id");
   if (typeof rawContactId !== "string") {
     return rawContactId;
@@ -1927,10 +1938,9 @@ const setPracticeJurisdictionsArgsSchema = v.strictObject({
   ),
 });
 
-const handleSetPracticeJurisdictionsTool: McpToolHandler = async ({
-  args,
-  context,
-}) => {
+const handleSetPracticeJurisdictionsTool: TypedMcpToolHandler<
+  v.InferInput<typeof SET_PRACTICE_JURISDICTIONS_PROJECTION>
+> = async ({ args, context }) => {
   const hasPermission = roles[context.memberRole].authorize({
     organizationSettings: ["update"],
   });

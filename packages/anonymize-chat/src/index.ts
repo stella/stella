@@ -103,7 +103,7 @@ export const CHAT_SEND_MODE = {
 export const chatSendModeSchema = v.picklist(CHAT_SEND_MODES);
 
 export const isChatSendMode = (value: unknown): value is ChatSendMode =>
-  v.safeParse(chatSendModeSchema, value).success;
+  v.is(chatSendModeSchema, value);
 
 export const getPreferredChatSendMode = (anonymized: boolean): ChatSendMode =>
   anonymized ? CHAT_SEND_MODE.anonymized : CHAT_SEND_MODE.rawOverride;

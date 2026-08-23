@@ -213,7 +213,7 @@ export const persistedDocumentAstSchema: v.GenericSchema<unknown, DocumentAst> =
   );
 
 export const isDocumentAst = (val: unknown): val is DocumentAst =>
-  v.safeParse(documentAstSchema, val).success;
+  v.is(documentAstSchema, val);
 
 export const parseDocumentAst = (raw: unknown): DocumentAst | null => {
   if (raw === null || raw === undefined) {

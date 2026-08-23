@@ -367,6 +367,10 @@ export type McpToolResponse<TData = unknown> =
   | InternalToolResult<TData>
   | McpEgressPlan<TData>;
 
+export type TypedMcpToolResponse<TData> =
+  | InternalToolResult<TData>
+  | Extract<McpEgressPlan<TData>, { egress: "structured" }>;
+
 export const isMcpEgressPlan = (
   response: McpToolResponse,
 ): response is McpEgressPlan => "egress" in response;
@@ -378,6 +382,80 @@ export type McpToolHandler<TData = unknown> = ({
   args: Record<string, unknown>;
   context: McpRequestContext;
 }) => McpToolResponse<TData> | Promise<McpToolResponse<TData>>;
+
+type TypedMcpToolHandlerResult<TData> =
+  | TypedMcpToolResponse<TData>
+  | Promise<TypedMcpToolResponse<TData>>;
+
+export type TypedMcpToolHandler<TData> = (options: {
+  args: Record<string, unknown>;
+  context: McpRequestContext;
+}) => TypedMcpToolHandlerResult<TData>;
+
+type TypedHandlerData<THandler> =
+  THandler extends TypedMcpToolHandler<infer TData> ? TData : never;
+
+export type TypedHandlerDataByName<
+  THandlers,
+  TNames extends keyof THandlers,
+> = {
+  [TName in TNames]: TypedHandlerData<THandlers[TName]>;
+};
+
+type IsAny<TValue> = 0 extends 1 & TValue ? true : false;
+
+type IsNever<TValue> = [TValue] extends [never] ? true : false;
+
+type IsUnknown<TValue> =
+  IsAny<TValue> extends true ? false : unknown extends TValue ? true : false;
+
+type IsBroadRecord<TValue> = string extends keyof TValue ? true : false;
+
+type HandlerOutputIsTyped<THandler, TData = TypedHandlerData<THandler>> =
+  IsNever<TData> extends true
+    ? false
+    : IsAny<TData> extends true
+      ? false
+      : IsUnknown<TData> extends true
+        ? false
+        : IsBroadRecord<TData> extends true
+          ? false
+          : TData extends Record<string, unknown>
+            ? true
+            : false;
+
+type HandlerOutputMatches<THandler, TExpected> =
+  HandlerOutputIsTyped<THandler> extends true
+    ? [TypedHandlerData<THandler>] extends [TExpected]
+      ? [TExpected] extends [TypedHandlerData<THandler>]
+        ? true
+        : false
+      : false
+    : false;
+
+export type AllHandlerOutputsTyped<
+  THandlers,
+  TNames extends keyof THandlers,
+> = false extends {
+  [TName in TNames]: HandlerOutputIsTyped<THandlers[TName]>;
+}[TNames]
+  ? false
+  : true;
+
+export type HandlerOutputsMatchByName<
+  THandlers,
+  TExpectedByName,
+  TNames extends keyof THandlers & keyof TExpectedByName,
+> = false extends {
+  [TName in TNames]: HandlerOutputMatches<
+    THandlers[TName],
+    TExpectedByName[TName]
+  >;
+}[TNames]
+  ? false
+  : true;
+
+export type AssertTrue<TValue extends true> = TValue;
 
 export type McpToolHandlerMap<
   TDefinitions extends readonly McpToolDefinition[],

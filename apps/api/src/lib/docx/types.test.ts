@@ -39,9 +39,23 @@ describe("isFieldMeta", () => {
     ],
     format: "{{position}} {{name}}",
   };
+  const validLookup = {
+    registry: "krs",
+    formats: [{ key: "full", template: "[name]" }],
+  };
 
   test("accepts a composite field with parts and format", () => {
     expect(isFieldMeta(compositeField)).toBe(true);
+  });
+
+  test("rejects unknown metadata keys at every owned object boundary", () => {
+    expect(isFieldMeta({ path: "client.name", lable: "Client" })).toBe(false);
+    expect(
+      isFieldMeta({
+        ...compositeField,
+        parts: [{ key: "name", inputType: "text", lable: "Name" }],
+      }),
+    ).toBe(false);
   });
 
   test("rejects parts without format (and vice versa)", () => {
@@ -196,12 +210,34 @@ describe("isFieldMeta", () => {
       isFieldMeta({
         path: "x",
         formula: "rent * 12",
-        lookup: { registry: "krs" },
+        lookup: validLookup,
       }),
     ).toBe(false);
     expect(isFieldMeta({ ...compositeField, formula: "rent * 12" })).toBe(
       false,
     );
+  });
+
+  test("rejects multiple active derived source modes", () => {
+    expect(
+      isFieldMeta({ path: "x", aiPrompt: "draft it", aiAdapt: false }),
+    ).toBe(true);
+    expect(
+      isFieldMeta({ path: "x", aiPrompt: "draft it", aiAdapt: true }),
+    ).toBe(false);
+    expect(
+      isFieldMeta({
+        path: "x",
+        aiPrompt: "draft it",
+        lookup: validLookup,
+      }),
+    ).toBe(false);
+    expect(
+      isFieldMeta({
+        ...compositeField,
+        lookup: validLookup,
+      }),
+    ).toBe(false);
   });
 
   test("accepts a contact-sourced field", () => {

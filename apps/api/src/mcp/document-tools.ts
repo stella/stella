@@ -1,4 +1,3 @@
-import { Value } from "@sinclair/typebox/value";
 import { panic, Result } from "better-result";
 import { and, asc, desc, eq, inArray, isNull, lt, or, sql } from "drizzle-orm";
 import * as v from "valibot";
@@ -35,8 +34,10 @@ import type {
   LIST_PROPERTIES_PROJECTION,
   READ_DOCUMENT_DEFAULT_PROJECTION,
   READ_DOCUMENT_DIFF_PROJECTION,
+  READ_DOCUMENT_PROJECTION,
   READ_DOCUMENT_VERSION_PROJECTION,
   SAVE_DOCUMENT_CREATE_PROJECTION,
+  SAVE_DOCUMENT_PROJECTION,
   SAVE_DOCUMENT_UPDATE_PROJECTION,
   SET_FIELD_VALUE_PROJECTION,
 } from "@/api/lib/chat/projections";
@@ -87,6 +88,7 @@ import type {
   McpToolDefinition,
   McpToolHandler,
   McpToolResponse,
+  TypedMcpToolHandler,
 } from "@/api/mcp/tool-types";
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
@@ -108,6 +110,7 @@ import {
   toolDataResult,
   validationErrorResult,
 } from "@/api/mcp/tool-utils";
+import { defineValibotMcpTool } from "@/api/mcp/valibot-tool-definition";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 
 type DocumentToolName =
@@ -486,6 +489,50 @@ const READ_DOCUMENT_TEXT_FIELD_PATHS = [
   ]),
 ];
 
+const UPLOAD_DOCUMENT_VERSION_TOOL_DEFINITION = defineValibotMcpTool({
+  _meta: {
+    "openai/fileParams": ["file"],
+  },
+  annotations: {
+    title: "Upload document version",
+    idempotentHint: false,
+    openWorldHint: true,
+  },
+  description:
+    "Upload an attached host file as a new version of an existing document. " +
+    "Pass entity_id and file. Use open_document_version_upload only when the " +
+    "host cannot supply MCP file parameters. The upload uses stella's standard " +
+    "presigned, checksum-verified, scanned, and audited file-version pipeline.",
+  inputSchema: UPLOAD_DOCUMENT_VERSION_INPUT_SCHEMA,
+  access: "write",
+  anonymized: { exposure: "excluded", reason: "write" },
+  name: DOCUMENT_VERSION_UPLOAD_TRANSPORT.toolName,
+  scope: "stella:documents_write",
+});
+
+const OPEN_DOCUMENT_VERSION_UPLOAD_TOOL_DEFINITION = defineValibotMcpTool({
+  _meta: {
+    ui: {
+      resourceUri: DOCUMENT_UPLOAD_APP_RESOURCE_URI,
+      visibility: ["model", "app"],
+    },
+  },
+  annotations: {
+    title: "Open document version upload",
+    idempotentHint: false,
+    openWorldHint: true,
+  },
+  description:
+    "Open a portable file picker for uploading a new version of an existing " +
+    "document. Use only when upload_document_version cannot receive a host file " +
+    "reference; do not use when the host already supplied an attached file.",
+  inputSchema: OPEN_DOCUMENT_VERSION_UPLOAD_INPUT_SCHEMA,
+  access: "write",
+  anonymized: { exposure: "excluded", reason: "write" },
+  name: DOCUMENT_VERSION_UPLOAD_TRANSPORT.pickerToolName,
+  scope: "stella:documents_write",
+});
+
 export const DOCUMENT_TOOL_DEFINITIONS = [
   {
     annotations: {
@@ -638,48 +685,8 @@ export const DOCUMENT_TOOL_DEFINITIONS = [
     name: "save_document",
     scope: "stella:documents_write",
   },
-  {
-    _meta: {
-      "openai/fileParams": ["file"],
-    },
-    annotations: {
-      title: "Upload document version",
-      idempotentHint: false,
-      openWorldHint: true,
-    },
-    description:
-      "Upload an attached host file as a new version of an existing document. " +
-      "Pass entity_id and file. Use open_document_version_upload only when the " +
-      "host cannot supply MCP file parameters. The upload uses stella's standard " +
-      "presigned, checksum-verified, scanned, and audited file-version pipeline.",
-    inputSchema: UPLOAD_DOCUMENT_VERSION_INPUT_SCHEMA,
-    access: "write",
-    anonymized: { exposure: "excluded", reason: "write" },
-    name: DOCUMENT_VERSION_UPLOAD_TRANSPORT.toolName,
-    scope: "stella:documents_write",
-  },
-  {
-    _meta: {
-      ui: {
-        resourceUri: DOCUMENT_UPLOAD_APP_RESOURCE_URI,
-        visibility: ["model", "app"],
-      },
-    },
-    annotations: {
-      title: "Open document version upload",
-      idempotentHint: false,
-      openWorldHint: true,
-    },
-    description:
-      "Open a portable file picker for uploading a new version of an existing " +
-      "document. Use only when upload_document_version cannot receive a host file " +
-      "reference; do not use when the host already supplied an attached file.",
-    inputSchema: OPEN_DOCUMENT_VERSION_UPLOAD_INPUT_SCHEMA,
-    access: "write",
-    anonymized: { exposure: "excluded", reason: "write" },
-    name: DOCUMENT_VERSION_UPLOAD_TRANSPORT.pickerToolName,
-    scope: "stella:documents_write",
-  },
+  UPLOAD_DOCUMENT_VERSION_TOOL_DEFINITION,
+  OPEN_DOCUMENT_VERSION_UPLOAD_TOOL_DEFINITION,
   {
     annotations: {
       title: "Delete document",
@@ -947,7 +954,9 @@ const documentsParentCondition = ({
   return undefined;
 };
 
-const handleListDocumentsTool: McpToolHandler = async ({ args, context }) => {
+const handleListDocumentsTool: TypedMcpToolHandler<
+  v.InferInput<typeof LIST_DOCUMENTS_PROJECTION>
+> = async ({ args, context }) => {
   const hasPermission = roles[context.memberRole].authorize({
     workspace: ["read"],
   });
@@ -1625,7 +1634,9 @@ const loadDocumentProcessingStates = async ({
   return { contentState, searchIndexState };
 };
 
-const handleReadDocumentTool: McpToolHandler = async ({ args, context }) => {
+const handleReadDocumentTool: TypedMcpToolHandler<
+  v.InferInput<typeof READ_DOCUMENT_PROJECTION>
+> = async ({ args, context }) => {
   const hasPermission = roles[context.memberRole].authorize({
     workspace: ["read"],
   });
@@ -1949,7 +1960,9 @@ const createDocumentEntity = async ({
 }: {
   context: McpRequestContext;
   input: SaveDocumentInput;
-}): Promise<InternalToolResult> => {
+}): Promise<
+  InternalToolResult<v.InferInput<typeof SAVE_DOCUMENT_PROJECTION>>
+> => {
   if (!roles[context.memberRole].authorize({ entity: ["create"] }).success) {
     return errorResult("Forbidden");
   }
@@ -2104,7 +2117,9 @@ const updateDocumentEntity = async ({
 }: {
   context: McpRequestContext;
   input: SaveDocumentInput;
-}): Promise<InternalToolResult> => {
+}): Promise<
+  InternalToolResult<v.InferInput<typeof SAVE_DOCUMENT_PROJECTION>>
+> => {
   if (!roles[context.memberRole].authorize({ entity: ["update"] }).success) {
     return errorResult("Forbidden");
   }
@@ -2198,7 +2213,9 @@ const updateDocumentEntity = async ({
   } satisfies v.InferInput<typeof SAVE_DOCUMENT_UPDATE_PROJECTION>);
 };
 
-const handleSaveDocumentTool: McpToolHandler = async ({ args, context }) => {
+const handleSaveDocumentTool: TypedMcpToolHandler<
+  v.InferInput<typeof SAVE_DOCUMENT_PROJECTION>
+> = async ({ args, context }) => {
   const parsed = v.safeParse(saveDocumentArgsSchema, args);
   if (!parsed.success) {
     return validationErrorResult({
@@ -2259,9 +2276,13 @@ const handleUploadDocumentVersionTool: McpToolHandler = async ({
   args,
   context,
 }) => {
-  if (!Value.Check(UPLOAD_DOCUMENT_VERSION_INPUT_SCHEMA, args)) {
-    return structuredErrorResult({
-      code: "validation_error",
+  const parsed = v.safeParse(
+    UPLOAD_DOCUMENT_VERSION_TOOL_DEFINITION.inputSchemaSource,
+    args,
+  );
+  if (!parsed.success) {
+    return validationErrorResult({
+      issues: parsed.issues,
       message:
         "Invalid input: expected { entity_id: string, file: { download_url, file_id, mime_type?, file_name? } }",
     });
@@ -2269,7 +2290,7 @@ const handleUploadDocumentVersionTool: McpToolHandler = async ({
 
   const target = await resolveDocumentVersionUploadTarget({
     context,
-    entityId: args.entity_id,
+    entityId: parsed.output.entity_id,
   });
   if (target.status === "error") {
     return target.response;
@@ -2278,7 +2299,7 @@ const handleUploadDocumentVersionTool: McpToolHandler = async ({
   return await uploadRemoteDocumentVersion({
     context,
     entityId: target.entityId,
-    file: args.file,
+    file: parsed.output.file,
     workspaceId: target.workspaceId,
   });
 };
@@ -2287,16 +2308,20 @@ const handleOpenDocumentVersionUploadTool: McpToolHandler = async ({
   args,
   context,
 }) => {
-  if (!Value.Check(OPEN_DOCUMENT_VERSION_UPLOAD_INPUT_SCHEMA, args)) {
-    return structuredErrorResult({
-      code: "validation_error",
+  const parsed = v.safeParse(
+    OPEN_DOCUMENT_VERSION_UPLOAD_TOOL_DEFINITION.inputSchemaSource,
+    args,
+  );
+  if (!parsed.success) {
+    return validationErrorResult({
+      issues: parsed.issues,
       message: "Invalid input: expected { entity_id: string }",
     });
   }
 
   const target = await resolveDocumentVersionUploadTarget({
     context,
-    entityId: args.entity_id,
+    entityId: parsed.output.entity_id,
   });
   if (target.status === "error") {
     return target.response;
@@ -2319,7 +2344,9 @@ const deleteDocumentArgsSchema = v.strictObject({
   confirm: v.optional(v.boolean()),
 });
 
-const handleDeleteDocumentTool: McpToolHandler = async ({ args, context }) => {
+const handleDeleteDocumentTool: TypedMcpToolHandler<
+  v.InferInput<typeof DELETED_TRUE_PROJECTION>
+> = async ({ args, context }) => {
   const parsed = v.safeParse(deleteDocumentArgsSchema, args);
   if (!parsed.success) {
     return validationErrorResult({
@@ -2401,7 +2428,9 @@ const propertyPageCursorCodec = createTimestampIdCursorCodec({
   brandId: brandPersistedPropertyId,
 });
 
-const handleListPropertiesTool: McpToolHandler = async ({ args, context }) => {
+const handleListPropertiesTool: TypedMcpToolHandler<
+  v.InferInput<typeof LIST_PROPERTIES_PROJECTION>
+> = async ({ args, context }) => {
   const hasPermission = roles[context.memberRole].authorize({
     workspace: ["read"],
   });
@@ -2540,7 +2569,9 @@ const toFieldContent = (content: SetFieldValueContent): UpsertFieldContent => {
   return { version: 1, type: "text", value: content.value };
 };
 
-const handleSetFieldValueTool: McpToolHandler = async ({ args, context }) => {
+const handleSetFieldValueTool: TypedMcpToolHandler<
+  v.InferInput<typeof SET_FIELD_VALUE_PROJECTION>
+> = async ({ args, context }) => {
   const hasPermission = roles[context.memberRole].authorize({
     entity: ["create", "update"],
   });

@@ -3,10 +3,11 @@ import { anonymizeTextFields } from "@/api/mcp/anonymization";
 import type { McpMode } from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";
 import type {
-  McpEgressPlan,
   InternalToolResult,
+  McpEgressPlan,
   McpStructuredTextField,
   McpToolResponse,
+  TypedMcpToolResponse,
 } from "@/api/mcp/tool-types";
 import { isMcpEgressPlan } from "@/api/mcp/tool-types";
 import {
@@ -43,17 +44,23 @@ const ANONYMIZED_FIELD_MISSING_FALLBACK = "[REDACTED]";
  * `projection-schema.ts`). That backstop belongs there, not here, because
  * this pipeline itself never hands output to a model.
  */
-type FinalizeToolEgressOptions = {
+type FinalizeToolEgressOptions<TResponse extends McpToolResponse> = {
   context: McpRequestContext;
   mode: McpMode;
-  response: McpToolResponse;
+  response: TResponse;
 };
 
-export const finalizeToolEgress = async ({
+export function finalizeToolEgress<TData>(
+  options: FinalizeToolEgressOptions<TypedMcpToolResponse<TData>>,
+): Promise<InternalToolResult<TData>>;
+export function finalizeToolEgress(
+  options: FinalizeToolEgressOptions<McpToolResponse>,
+): Promise<InternalToolResult>;
+export async function finalizeToolEgress({
   context,
   mode,
   response,
-}: FinalizeToolEgressOptions): Promise<InternalToolResult> => {
+}: FinalizeToolEgressOptions<McpToolResponse>): Promise<InternalToolResult> {
   if (!isMcpEgressPlan(response)) {
     return response;
   }
@@ -67,7 +74,7 @@ export const finalizeToolEgress = async ({
   }
 
   return await finalizeStructured({ context, mode, plan: response });
-};
+}
 
 /**
  * Anonymize a flat list of text fields grouped by their `workspaceId` scope.

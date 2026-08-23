@@ -27,6 +27,43 @@ describe("parsePersistedDecisionAnalysis", () => {
     ).toBeNull();
   });
 
+  test("returns the canonical parsed payload instead of the raw object", () => {
+    expect(
+      parsePersistedDecisionAnalysis({
+        version: 1,
+        generatedAt: "2026-04-30T12:00:00.000Z",
+        model: "test-model",
+        tree: [
+          {
+            id: "h1",
+            label: "Heading",
+            category: "facts",
+            startAnchorId: "a1",
+            endAnchorId: "a2",
+            annotations: [],
+            children: [],
+            staleProducerField: true,
+          },
+        ],
+      }),
+    ).toEqual({
+      version: 1,
+      generatedAt: "2026-04-30T12:00:00.000Z",
+      model: "test-model",
+      tree: [
+        {
+          id: "h1",
+          label: "Heading",
+          category: "facts",
+          startAnchorId: "a1",
+          endAnchorId: "a2",
+          annotations: [],
+          children: [],
+        },
+      ],
+    });
+  });
+
   test("rejects a decision analysis with malformed headings", () => {
     const malformed = {
       version: 1,

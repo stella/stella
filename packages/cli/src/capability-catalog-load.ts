@@ -24,18 +24,18 @@ const jsonSchemaSchema = v.record(v.string(), v.unknown());
 // an exporter whose transport union has moved on fails validation here (and the
 // exporter runs this parser over its own output), so the mirrored union in
 // generate-capability-tree.ts cannot silently fall behind the API-side one.
-const fileInputSchema = v.looseObject({
+const fileInputSchema = v.object({
   field: v.string(),
   required: v.boolean(),
 });
 const transportSchema = v.variant("type", [
-  v.looseObject({ type: v.literal("json") }),
-  v.looseObject({ type: v.literal("file-input"), input: fileInputSchema }),
-  v.looseObject({ type: v.literal("file-response") }),
-  v.looseObject({ type: v.literal("file-both"), input: fileInputSchema }),
+  v.object({ type: v.literal("json") }),
+  v.object({ type: v.literal("file-input"), input: fileInputSchema }),
+  v.object({ type: v.literal("file-response") }),
+  v.object({ type: v.literal("file-both"), input: fileInputSchema }),
 ]);
 
-const catalogEntrySchema = v.looseObject({
+const catalogEntrySchema = v.object({
   id: v.string(),
   description: v.optional(v.string()),
   handlerKind: v.picklist(["workspace", "root", "session"]),
@@ -44,7 +44,7 @@ const catalogEntrySchema = v.looseObject({
   scope: v.string(),
   additionalScopes: v.optional(v.array(v.string())),
   transport: transportSchema,
-  inputSchema: v.looseObject({
+  inputSchema: v.object({
     $defs: v.optional(jsonSchemaSchema),
     body: v.optional(jsonSchemaSchema),
     params: v.optional(jsonSchemaSchema),

@@ -496,7 +496,7 @@ const editWorkspaceDocumentAuthorNameRequiredSchema = v.strictObject({
   retryable: v.literal(true),
 });
 
-const outputSchema = v.union([
+const outputSchema = v.variant("success", [
   editWorkspaceDocumentSuccessSchema,
   editWorkspaceDocumentAuthorNameRequiredSchema,
 ]);

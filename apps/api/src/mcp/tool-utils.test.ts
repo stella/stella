@@ -13,6 +13,7 @@ import {
   closestToolNames,
   ensureActiveWorkspace,
   ensureWorkspaceAccess,
+  ISO_DATE_SCHEMA,
   isToolErrorResult,
   mapValibotIssues,
   notFoundResult,
@@ -31,6 +32,13 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 // the test env preload; getAppBaseUrl() strips any trailing slash.
 const BASE = "http://localhost:3000";
 const WORKSPACE_ID = toSafeId<"workspace">("ws_1");
+
+describe("MCP ISO date contract", () => {
+  test("accepts ISO dates and rejects out-of-range date components", () => {
+    expect(v.is(ISO_DATE_SCHEMA, "2026-08-23")).toBe(true);
+    expect(v.is(ISO_DATE_SCHEMA, "2026-99-99")).toBe(false);
+  });
+});
 
 const createWorkspaceGateContext = (
   status: "active" | "archived",

@@ -44,10 +44,10 @@ export const inlineSchema: v.GenericSchema<Inline> = v.variant("type", [
 const inlineArraySchema = v.array(v.lazy(() => inlineSchema));
 
 export const isInlineArray = (val: unknown): val is Inline[] =>
-  v.safeParse(inlineArraySchema, val).success;
+  v.is(inlineArraySchema, val);
 
 export const isInline = (val: unknown): val is Inline =>
-  v.safeParse(inlineSchema, val).success;
+  v.is(inlineSchema, val);
 
 export const flattenInlineText = (inlines: readonly Inline[]): string => {
   const parts: string[] = [];

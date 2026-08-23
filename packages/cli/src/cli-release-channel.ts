@@ -7,7 +7,7 @@ const stableVersionSchema = v.pipe(
   v.string(),
   v.regex(/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/u),
 );
-const npmPackageSchema = v.looseObject({ version: stableVersionSchema });
+const npmPackageSchema = v.object({ version: stableVersionSchema });
 type ReleaseChannelFetch = (
   input: string | URL | Request,
   init?: RequestInit,

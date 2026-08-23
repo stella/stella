@@ -1,8 +1,10 @@
 import { Result } from "better-result";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
+import { expectTypeOf } from "expect-type";
 import * as v from "valibot";
 
-import { toSafeId } from "@/api/lib/branded-types";
+import { type SafeId, toSafeId } from "@/api/lib/branded-types";
+import type { PersistedJsonValue } from "@/api/lib/chat/persisted-message-content";
 import type {
   ChatProjectionSchema,
   DehydratedInput,
@@ -28,15 +30,18 @@ const {
   chatEntityRef,
   chatRef,
   containsRawUuid,
+  deriveRefMediationEntry,
   passthroughId,
   PROJECTION_SCHEMA_FAILURE_MESSAGE,
+  projectionBranch,
   projectForChat,
   REF_PROJECTION_FAILURE_MESSAGE,
   renderProjectionShape,
   strippedField,
   unenumeratedJson,
 } = await import("@/api/lib/chat/projection-schema");
-const { READ_TOOL_REF_FIELD_MAP } = await import("./ref-field-map");
+const { READ_TOOL_REF_FIELD_MAP, WRITE_TOOL_REF_FIELD_MAP } =
+  await import("./ref-field-map");
 
 const LIST_MATTERS_PROJECTION = READ_TOOL_REF_FIELD_MAP.list_matters.projection;
 const READ_DOCUMENT_PROJECTION =
@@ -153,6 +158,30 @@ describe("projectForChat", () => {
       propertyId: propertyRef,
     });
     expect(containsRawUuid(projected)).toBe(false);
+  });
+
+  test("ref fields reject identifiers that cannot carry the SafeId brand", () => {
+    const schema: ChatProjectionSchema = v.strictObject({
+      entityId: chatEntityRef({ from: "sibling", key: "workspaceId" }),
+      matterId: chatRef("matter"),
+      workspaceId: chatRef("matter"),
+    });
+
+    for (const invalidId of ["", "\uD800"]) {
+      const result = project({
+        payload: {
+          entityId: invalidId,
+          matterId: invalidId,
+          workspaceId: invalidId,
+        },
+        schema,
+      });
+
+      expect(Result.isError(result)).toBe(true);
+      if (Result.isError(result)) {
+        expect(result.error.message).toBe(PROJECTION_SCHEMA_FAILURE_MESSAGE);
+      }
+    }
   });
 
   test("strippedField leaves are omitted, UUIDs inside them and all", () => {
@@ -502,6 +531,88 @@ describe("projectForChat", () => {
     });
     expect(containsRawUuid(projected)).toBe(false);
   });
+
+  test("a union branch is not parsed again during projection", () => {
+    let validationRuns = 0;
+    const schema: ChatProjectionSchema = v.union([
+      projectionBranch(
+        v.strictObject({
+          type: v.literal("checked"),
+          value: v.pipe(
+            v.string(),
+            v.check((value) => {
+              validationRuns += 1;
+              return value.length > 0;
+            }),
+          ),
+        }),
+      ),
+      projectionBranch(
+        v.strictObject({
+          type: v.literal("other"),
+          value: v.string(),
+        }),
+      ),
+    ]);
+
+    const projected = project({
+      payload: { type: "checked", value: "once" },
+      schema,
+    }).unwrap();
+
+    expect(projected).toEqual({ type: "checked", value: "once" });
+    expect(validationRuns).toBe(1);
+  });
+
+  test("every registered union branch records its parse proof", () => {
+    for (const fieldMap of [
+      READ_TOOL_REF_FIELD_MAP,
+      WRITE_TOOL_REF_FIELD_MAP,
+    ]) {
+      for (const entry of Object.values(fieldMap)) {
+        if (entry.chatProjectable) {
+          expect(() => deriveRefMediationEntry(entry.projection)).not.toThrow();
+        }
+      }
+    }
+  });
+
+  test("an unwrapped union branch fails before projection", () => {
+    const schema: ChatProjectionSchema = v.union([
+      v.strictObject({ type: v.literal("unwrapped") }),
+    ]);
+
+    expect(() => deriveRefMediationEntry(schema)).toThrow(
+      "chat projection union option is not wrapped in projectionBranch",
+    );
+  });
+
+  test("a bare unknown leaf cannot bypass the JSON or strip contracts", () => {
+    const schema: ChatProjectionSchema = v.strictObject({
+      payload: v.unknown(),
+    });
+
+    expect(() => deriveRefMediationEntry(schema)).toThrow(
+      "unknown chat projection fields must use strippedField or unenumeratedJson",
+    );
+  });
+
+  test("unenumerated subtrees reject values that cannot cross a JSON boundary", () => {
+    const schema: ChatProjectionSchema = v.strictObject({
+      metadata: unenumeratedJson(),
+    });
+    const cyclic: Record<string, unknown> = {};
+    cyclic["self"] = cyclic;
+
+    for (const metadata of [1n, () => undefined, cyclic]) {
+      const result = project({ payload: { metadata }, schema });
+
+      expect(Result.isError(result)).toBe(true);
+      if (Result.isError(result)) {
+        expect(result.error.message).toBe(PROJECTION_SCHEMA_FAILURE_MESSAGE);
+      }
+    }
+  });
 });
 
 describe("renderProjectionShape", () => {
@@ -541,6 +652,28 @@ describe("renderProjectionShape", () => {
  * materializes is itself a typecheck failure, which is the assertion.
  */
 describe("compile-time payload ties", () => {
+  test("annotated fields retain their precise input types", () => {
+    const schema = projectionBranch(
+      v.strictObject({
+        entityId: chatEntityRef({ from: "inputParam", param: "matter_id" }),
+        matterId: chatRef("matter"),
+        passthrough: passthroughId(),
+        stripped: strippedField(),
+        unenumerated: unenumeratedJson(),
+      }),
+    );
+    type Input = v.InferInput<typeof schema>;
+
+    expectTypeOf<Input["entityId"]>().toEqualTypeOf<SafeId<"entity">>();
+    expectTypeOf<Input["matterId"]>().toEqualTypeOf<SafeId<"workspace">>();
+    expectTypeOf<Input["passthrough"]>().toEqualTypeOf<string>();
+    expectTypeOf<Input["stripped"]>().toEqualTypeOf<unknown>();
+    expectTypeOf<Input["unenumerated"]>().toEqualTypeOf<unknown>();
+    expectTypeOf<
+      v.InferOutput<typeof schema>["unenumerated"]
+    >().toEqualTypeOf<PersistedJsonValue>();
+  });
+
   test("an unclassified field fails against the projection input", () => {
     const withExtraField = {
       matters: [],

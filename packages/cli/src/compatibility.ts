@@ -18,11 +18,11 @@ const SEMVER_PATTERN =
 const SEMVER_BUILD_PATTERN = /^[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*$/u;
 const positiveIntegerSchema = v.pipe(v.number(), v.integer(), v.minValue(1));
 
-const compatibilityMetadataSchema = v.looseObject({
+const compatibilityMetadataSchema = v.object({
   resource: v.pipe(v.string(), v.url()),
   scopes_supported: v.array(v.string()),
   stella_contract: v.optional(
-    v.looseObject({
+    v.object({
       protocol: positiveIntegerSchema,
       revision: positiveIntegerSchema,
       capabilities: v.record(v.string(), positiveIntegerSchema),

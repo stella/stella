@@ -17,7 +17,7 @@ import {
 import { ClientRegistrationError } from "./errors.js";
 import type { AuthorizationServerMetadata } from "./oauth-metadata.js";
 
-const registrationResponseSchema = v.looseObject({
+const registrationResponseSchema = v.object({
   client_id: v.string(),
 });
 

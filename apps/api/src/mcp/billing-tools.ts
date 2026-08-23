@@ -17,10 +17,13 @@ import { resolveRate } from "@/api/lib/billing-rates";
 import type { SafeId } from "@/api/lib/branded-types";
 import type {
   DELETE_TIME_ENTRY_PROJECTION,
+  GET_USAGE_PROJECTION,
   LIST_INVOICES_DETAIL_PROJECTION,
   LIST_INVOICES_LIST_PROJECTION,
+  LIST_INVOICES_PROJECTION,
   LIST_TIME_ENTRIES_DETAIL_PROJECTION,
   LIST_TIME_ENTRIES_LIST_PROJECTION,
+  LIST_TIME_ENTRIES_PROJECTION,
   RESOLVE_RATE_PROJECTION,
   SAVE_TIME_ENTRY_PROJECTION,
 } from "@/api/lib/chat/projections";
@@ -49,6 +52,7 @@ import type {
   McpTextFieldSpec,
   McpToolDefinition,
   McpToolHandler,
+  TypedMcpToolHandler,
 } from "@/api/mcp/tool-types";
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
@@ -60,6 +64,7 @@ import {
   errorResult,
   internalFailureResult,
   intProp,
+  ISO_DATE_SCHEMA,
   MAX_LIST_LIMIT,
   notFoundResult,
   nullableStringProp,
@@ -76,8 +81,6 @@ type BillingToolName =
   | "resolve_rate"
   | "list_invoices"
   | "get_usage";
-
-const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/u;
 
 // --- list_time_entries text-field specs ---------------------------------
 
@@ -676,8 +679,8 @@ const listTimeEntriesArgsSchema = v.pipe(
     time_entry_id: v.optional(v.pipe(v.string(), v.minLength(1))),
     entity_id: v.optional(v.pipe(v.string(), v.minLength(1))),
     user_id: v.optional(v.pipe(v.string(), v.minLength(1))),
-    date_from: v.optional(v.pipe(v.string(), v.regex(ISO_DATE))),
-    date_to: v.optional(v.pipe(v.string(), v.regex(ISO_DATE))),
+    date_from: v.optional(ISO_DATE_SCHEMA),
+    date_to: v.optional(ISO_DATE_SCHEMA),
     status: v.optional(v.picklist(TIME_ENTRY_STATUSES)),
     limit: v.optional(
       v.pipe(
@@ -733,7 +736,9 @@ const decodeTimeEntryPageCursor = (
   return { dateWorked, id: brandPersistedTimeEntryId(id) };
 };
 
-const handleListTimeEntriesTool: McpToolHandler = async ({ args, context }) => {
+const handleListTimeEntriesTool: TypedMcpToolHandler<
+  v.InferInput<typeof LIST_TIME_ENTRIES_PROJECTION>
+> = async ({ args, context }) => {
   if (!roles[context.memberRole].authorize({ timeEntry: ["read"] }).success) {
     return errorResult("Forbidden");
   }
@@ -949,7 +954,7 @@ const saveTimeEntryArgsSchema = v.pipe(
     time_entry_id: v.optional(v.pipe(v.string(), v.minLength(1))),
     matter_id: v.optional(v.pipe(v.string(), v.minLength(1))),
     entity_id: v.optional(v.nullable(v.pipe(v.string(), v.minLength(1)))),
-    date_worked: v.optional(v.pipe(v.string(), v.regex(ISO_DATE))),
+    date_worked: v.optional(ISO_DATE_SCHEMA),
     timezone_id: v.optional(
       v.pipe(v.string(), v.minLength(1), v.maxLength(64)),
     ),
@@ -1035,7 +1040,9 @@ const saveTimeEntryArgsSchema = v.pipe(
   ),
 );
 
-const handleSaveTimeEntryTool: McpToolHandler = async ({ args, context }) => {
+const handleSaveTimeEntryTool: TypedMcpToolHandler<
+  v.InferInput<typeof SAVE_TIME_ENTRY_PROJECTION>
+> = async ({ args, context }) => {
   const parsed = v.safeParse(saveTimeEntryArgsSchema, args);
   if (!parsed.success) {
     return validationErrorResult({
@@ -1181,7 +1188,9 @@ const deleteTimeEntryArgsSchema = v.strictObject({
   confirm: v.optional(v.boolean()),
 });
 
-const handleDeleteTimeEntryTool: McpToolHandler = async ({ args, context }) => {
+const handleDeleteTimeEntryTool: TypedMcpToolHandler<
+  v.InferInput<typeof DELETE_TIME_ENTRY_PROJECTION>
+> = async ({ args, context }) => {
   if (!roles[context.memberRole].authorize({ timeEntry: ["delete"] }).success) {
     return errorResult("Forbidden");
   }
@@ -1229,7 +1238,7 @@ const handleDeleteTimeEntryTool: McpToolHandler = async ({ args, context }) => {
 const resolveRateArgsSchema = v.strictObject({
   matter_id: v.pipe(v.string(), v.minLength(1)),
   user_id: v.pipe(v.string(), v.minLength(1)),
-  date: v.pipe(v.string(), v.regex(ISO_DATE)),
+  date: ISO_DATE_SCHEMA,
 });
 
 const handleResolveRateTool: McpToolHandler = async ({ args, context }) => {
@@ -1371,7 +1380,9 @@ const readInvoiceDetail = async ({
     }),
   );
 
-const handleListInvoicesTool: McpToolHandler = async ({ args, context }) => {
+const handleListInvoicesTool: TypedMcpToolHandler<
+  v.InferInput<typeof LIST_INVOICES_PROJECTION>
+> = async ({ args, context }) => {
   if (!roles[context.memberRole].authorize({ workspace: ["read"] }).success) {
     return errorResult("Forbidden");
   }
@@ -1550,7 +1561,9 @@ const handleListInvoicesTool: McpToolHandler = async ({ args, context }) => {
 
 const getUsageArgsSchema = v.strictObject({});
 
-const handleGetUsageTool: McpToolHandler = async ({ args, context }) => {
+const handleGetUsageTool: TypedMcpToolHandler<
+  v.InferInput<typeof GET_USAGE_PROJECTION>
+> = async ({ args, context }) => {
   if (
     !roles[context.memberRole].authorize({ organizationSettings: ["update"] })
       .success
