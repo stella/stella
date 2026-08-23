@@ -21,11 +21,7 @@ describe("Valibot-backed MCP tool definitions", () => {
         ),
       ),
       score: v.optional(
-        v.pipe(
-          v.number(),
-          v.finite(),
-          v.description("Finite relevance score"),
-        ),
+        v.pipe(v.number(), v.finite(), v.description("Finite relevance score")),
       ),
     });
     const definition = defineValibotMcpTool({

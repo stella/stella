@@ -107,10 +107,7 @@ export type ChatProjectableToolName<TMap> = {
     : never;
 }[keyof TMap];
 
-export type ProjectionDataByName<
-  TMap,
-  TNames extends keyof TMap,
-> = {
+export type ProjectionDataByName<TMap, TNames extends keyof TMap> = {
   [TName in TNames]: TMap[TName] extends {
     projection: infer TProjection extends GenericSchema;
   }

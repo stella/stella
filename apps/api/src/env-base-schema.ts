@@ -33,13 +33,7 @@ export const DEPLOYED_NODE_ENVS = new Set(["production", "staging"]);
 
 const databasePoolMaxSchema = (fallback = "5") =>
   v.optional(
-    v.pipe(
-      v.string(),
-      v.digits(),
-      v.toNumber(),
-      v.integer(),
-      v.minValue(1),
-    ),
+    v.pipe(v.string(), v.digits(), v.toNumber(), v.integer(), v.minValue(1)),
     fallback,
   );
 

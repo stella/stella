@@ -5,9 +5,7 @@ import { isSafeIdValue } from "@stll/api-contract/safe-id";
 
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
-import {
-  isPersistedJsonValue,
-} from "@/api/lib/chat/persisted-message-content";
+import { isPersistedJsonValue } from "@/api/lib/chat/persisted-message-content";
 import type { ChatRefKind, ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import {

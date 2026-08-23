@@ -57,16 +57,20 @@ const deriveMcpInputSchema = (
  */
 export const defineValibotMcpTool = <
   const TSchema extends v.GenericSchema,
-  const TDefinition extends Omit<McpToolDefinition, "inputSchema">,
+  const TName extends string,
+  const TDefinition extends Omit<McpToolDefinition, "inputSchema" | "name">,
 >({
   inputSchema,
   jsonSchemaProjectionWaiver,
+  name,
   ...definition
 }: TDefinition & {
   inputSchema: TSchema;
   jsonSchemaProjectionWaiver?: JsonSchemaProjectionWaiver;
+  name: TName;
 }) => ({
   ...definition,
   inputSchema: deriveMcpInputSchema(inputSchema, jsonSchemaProjectionWaiver),
   inputSchemaSource: inputSchema,
+  name,
 });
