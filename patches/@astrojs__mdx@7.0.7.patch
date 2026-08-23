@@ -1,0 +1,13 @@
+diff --git a/dist/vite-plugin-mdx.js b/dist/vite-plugin-mdx.js
+index 319a64a..ecf2b44 100644
+--- a/dist/vite-plugin-mdx.js
++++ b/dist/vite-plugin-mdx.js
+@@ -51,7 +51,7 @@ function vitePluginMdx(opts, settings) {
+             }
+           };
+         } catch (e) {
+-          const err = e;
++          const err = new Error(e.message, { cause: e });
+           err.name = "MDXError";
+           err.loc = { file: id, line: e.line, column: e.column };
+           Error.captureStackTrace(err);
