@@ -12,6 +12,7 @@ import {
 import { buildIsRegistryEnabledForOrg } from "@/api/lib/docx/registry-org-gate";
 import { LOOKUP_REGISTRIES } from "@/api/lib/docx/types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+
 import { getLookupPreviewOutcome } from "./lookup-preview-cache";
 
 const lookupPreviewBodySchema = t.Object({
