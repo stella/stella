@@ -26,6 +26,7 @@ import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import type { ChatToolDefectMemo } from "@/api/lib/chat/tool-defect-memo";
 import { knownDefectRefusalMessage } from "@/api/lib/chat/tool-defect-memo";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
+import { isRecord } from "@/api/lib/type-guards";
 import {
   DEFAULT_MCP_TOOL_DEFINITIONS,
   getStaticMcpToolDefinition,
@@ -62,9 +63,6 @@ import {
  * read surface reachable.
  */
 const EAGER_CHAT_READ_TOOLS = new Set<RegistryReadToolName>(["list_matters"]);
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
 
 /**
  * The chat-projectable read tools, in registry order. Derived from the

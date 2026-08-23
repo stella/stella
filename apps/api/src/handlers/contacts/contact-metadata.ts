@@ -6,9 +6,7 @@ import type {
 } from "@/api/db/schema-validators";
 import { toJsonObject, toJsonValue } from "@/api/lib/json-value";
 import type { JsonObject } from "@/api/lib/json-value";
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
+import { isRecord } from "@/api/lib/type-guards";
 
 const CONTACT_METADATA_VERSION = 1;
 const CONTACT_METADATA_KEYS = new Set(["version", "dataBoxes", "customFields"]);

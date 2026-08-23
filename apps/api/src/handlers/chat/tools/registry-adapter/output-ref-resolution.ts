@@ -10,6 +10,7 @@ import type {
   ChatEntityRefContext,
   ChatRefInputState,
 } from "@/api/lib/chat/ref-token";
+import { isRecord } from "@/api/lib/type-guards";
 
 import { NATIVE_CHAT_REF_POLICY } from "./native-chat-ref-policy";
 import type { RegistryRefFieldMapEntry } from "./ref-field-map";
@@ -80,9 +81,6 @@ const buildOutputRefPathsByTool = (): ReadonlyMap<
 };
 
 const OUTPUT_REF_PATHS_BY_TOOL = buildOutputRefPathsByTool();
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
 
 const readScalarPath = (root: unknown, path: string): unknown => {
   let value = root;

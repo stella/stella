@@ -9,6 +9,7 @@ import type {
   ChatRefInputState,
   ChatUnresolvedInputRefContext,
 } from "@/api/lib/chat/ref-token";
+import { isRecord } from "@/api/lib/type-guards";
 
 import { NATIVE_CHAT_REF_POLICY } from "./native-chat-ref-policy";
 import type { InputRefParam, RegistryRefFieldMapEntry } from "./ref-field-map";
@@ -64,9 +65,6 @@ const buildInputRefsByTool = (): ReadonlyMap<
 };
 
 const INPUT_REFS_BY_TOOL = buildInputRefsByTool();
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
 
 /**
  * The workspace an entity param's ref key needs. Chat's write tools that take

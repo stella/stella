@@ -1004,11 +1004,7 @@ const handleListClausesTool: TypedMcpToolHandler<
 
   const parsed = v.safeParse(listClausesArgsSchema, args);
   if (!parsed.success) {
-    return validationErrorResult({
-      issues: parsed.issues,
-      message:
-        "Invalid input: expected { clause_id?: string, version_id?: string, category_id?: string, query?: string, include_categories?: boolean, limit?: integer, cursor?: string }",
-    });
+    return validationErrorResult(parsed.issues);
   }
   const input = parsed.output;
 
@@ -1189,11 +1185,7 @@ const handleSaveClauseTool: TypedMcpToolHandler<
 > = async ({ args, context }) => {
   const parsed = v.safeParse(saveClauseArgsSchema, args);
   if (!parsed.success) {
-    return validationErrorResult({
-      issues: parsed.issues,
-      message:
-        "Invalid input: expected { clause_id?: string, title?: string, body?: array, category_id?: string|null, language?: string|null, description?: string|null, usage_notes?: string|null, metadata?: object|null, snapshot_version?: boolean }",
-    });
+    return validationErrorResult(parsed.issues);
   }
   const input = parsed.output;
 
@@ -1337,10 +1329,7 @@ const handleDeleteClauseTool: TypedMcpToolHandler<
 
   const parsed = v.safeParse(deleteClauseArgsSchema, args);
   if (!parsed.success) {
-    return validationErrorResult({
-      issues: parsed.issues,
-      message: "Invalid input: expected { clause_id: string }",
-    });
+    return validationErrorResult(parsed.issues);
   }
 
   const deleted = await Result.gen(() =>
@@ -1427,11 +1416,7 @@ const handleListPlaybooksTool: TypedMcpToolHandler<
 
   const parsed = v.safeParse(listPlaybooksArgsSchema, args);
   if (!parsed.success) {
-    return validationErrorResult({
-      issues: parsed.issues,
-      message:
-        "Invalid input: expected { playbook_id?: string, limit?: integer, cursor?: string }",
-    });
+    return validationErrorResult(parsed.issues);
   }
   const input = parsed.output;
 
@@ -1500,11 +1485,7 @@ const handleRunPlaybookTool: TypedMcpToolHandler<
 
   const parsed = v.safeParse(runPlaybookArgsSchema, args);
   if (!parsed.success) {
-    return validationErrorResult({
-      issues: parsed.issues,
-      message:
-        "Invalid input: expected { matter_id: string, playbook_id: string }",
-    });
+    return validationErrorResult(parsed.issues);
   }
 
   // A playbook run materializes columns in the matter, so the matter must be

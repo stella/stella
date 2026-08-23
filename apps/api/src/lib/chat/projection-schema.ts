@@ -14,6 +14,7 @@ import {
   brandPersistedPropertyId,
   brandPersistedWorkspaceId,
 } from "@/api/lib/safe-id-boundaries";
+import { isRecord } from "@/api/lib/type-guards";
 
 /**
  * Chat projection schemas: one Valibot `strictObject` per converted tool that
@@ -267,9 +268,6 @@ export const unenumeratedJson = () =>
 // wrappers carry `wrapped`; objects carry `entries`; arrays carry `item`;
 // unions/variants carry `options`. The walker reads that runtime AST through
 // structural guards, so it needs no valibot generics at all.
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
 
 const isSchemaNode = (value: unknown): value is v.GenericSchema =>
   isRecord(value) &&

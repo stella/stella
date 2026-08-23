@@ -465,11 +465,7 @@ const handleSearchLegislationTool: TypedMcpToolHandler<
 
   const parsed = v.safeParse(searchLegislationArgsSchema, args);
   if (!parsed.success) {
-    return validationErrorResult({
-      issues: parsed.issues,
-      message:
-        "Invalid input: expected search filters (query/title/…) or law_id with optional block_id/relation_type/full_text",
-    });
+    return validationErrorResult(parsed.issues);
   }
   const input = parsed.output;
 
@@ -572,11 +568,7 @@ const handleListAuditLogTool: McpToolHandler = async ({ args, context }) => {
     args,
   );
   if (!parsed.success) {
-    return validationErrorResult({
-      issues: parsed.issues,
-      message:
-        "Invalid input: expected { workspace_id?, action?, resource_type?, resource_id?, user_id?, from?, to?, limit?, cursor? }",
-    });
+    return validationErrorResult(parsed.issues);
   }
   const input = parsed.output;
 
@@ -789,11 +781,7 @@ const handleManageOrganizationTool: TypedMcpToolHandler<
 > = async ({ args, context }) => {
   const parsed = v.safeParse(manageOrganizationArgsSchema, args);
   if (!parsed.success) {
-    return validationErrorResult({
-      issues: parsed.issues,
-      message:
-        "Invalid input: expected { action: 'add_member'|'remove_member'|'update_org_settings', matter_id?, user_id?, matter_number_pattern?, matter_number_padding?, prompt_caching_enabled?, document_processing_mode? }",
-    });
+    return validationErrorResult(parsed.issues);
   }
   const input = parsed.output;
 

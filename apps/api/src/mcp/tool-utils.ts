@@ -296,24 +296,22 @@ export const mapValibotIssues = (
 
 /**
  * Build the shared validation envelope. Prefer an actionable cross-field issue
- * as its summary; `message` is the fallback for structural failures.
+ * as its summary, then the first structural issue. The structured issue list is
+ * the canonical schema-derived error detail; callers must not mirror schemas in
+ * handwritten fallback messages that can drift from the contract.
  */
-export const validationErrorResult = ({
-  hint,
-  issues,
-  message,
-}: {
-  hint?: string | undefined;
-  issues: readonly v.BaseIssue<unknown>[];
-  message: string;
-}): InternalToolErrorResult =>
+export const validationErrorResult = (
+  issues: readonly v.BaseIssue<unknown>[],
+  hint?: string,
+): InternalToolErrorResult =>
   structuredErrorResult({
     code: "validation_error",
     hint,
     issues: mapValibotIssues(issues),
     message:
       issues.find((issue) => issue.type === "partial_check")?.message ??
-      message,
+      issues.at(0)?.message ??
+      "Invalid tool input",
   });
 
 /** `not_found` envelope for a resource that does not exist or is inaccessible. */

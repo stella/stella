@@ -1950,11 +1950,7 @@ const handleSetPracticeJurisdictionsTool: TypedMcpToolHandler<
 
   const parsed = v.safeParse(setPracticeJurisdictionsArgsSchema, args);
   if (!parsed.success) {
-    return validationErrorResult({
-      issues: parsed.issues,
-      message:
-        "Invalid input: expected { jurisdictions: Array<{ countryCode: ISO 3166-1 alpha-2, isPrimary: boolean }> }",
-    });
+    return validationErrorResult(parsed.issues);
   }
 
   const primaryCount = parsed.output.jurisdictions.filter(

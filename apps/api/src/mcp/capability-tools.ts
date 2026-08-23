@@ -24,6 +24,7 @@ import {
 } from "@/api/lib/pagination";
 import { hasMemberPermission } from "@/api/lib/permission-authorization";
 import { brandPersistedWorkspaceId } from "@/api/lib/safe-id-boundaries";
+import { isRecord } from "@/api/lib/type-guards";
 import { synthesizeCapabilityContext } from "@/api/mcp/capability-context";
 import type { SynthesizedCapabilityContext } from "@/api/mcp/capability-context";
 import { isCapabilityFeatureEnabled } from "@/api/mcp/capability-feature";
@@ -123,9 +124,6 @@ type CatalogEntry = {
   inputSchema?: { body?: unknown; params?: unknown; query?: unknown };
   mcp: CapabilityMcpDisposition;
 };
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
 
 const HANDLER_KIND_SET = new Set<string>(HANDLER_KINDS);
 

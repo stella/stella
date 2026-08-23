@@ -615,10 +615,7 @@ const handleListTemplatesTool: TypedMcpToolHandler<
 
   const parsed = v.safeParse(listTemplatesArgsSchema, args);
   if (!parsed.success) {
-    return validationErrorResult({
-      issues: parsed.issues,
-      message: "Invalid input: list_templates accepts template_id or cursor",
-    });
+    return validationErrorResult(parsed.issues);
   }
 
   const cursor = parseOptionalCursor({ args, key: "cursor" });
@@ -701,10 +698,7 @@ const describeTemplateDetail: TypedMcpToolHandler<
 > = async ({ args, context }) => {
   const parsed = v.safeParse(describeTemplateArgsSchema, args);
   if (!parsed.success) {
-    return validationErrorResult({
-      issues: parsed.issues,
-      message: "Invalid input: expected { template_id: string }",
-    });
+    return validationErrorResult(parsed.issues);
   }
 
   const result = await describeStoredTemplate({
@@ -756,11 +750,7 @@ const handleFillTemplateTool: McpToolHandler = async ({ args, context }) => {
 
   const parsed = v.safeParse(fillTemplateArgsSchema, args);
   if (!parsed.success) {
-    return validationErrorResult({
-      issues: parsed.issues,
-      message:
-        "Invalid input: expected { template_id: string, values: object }",
-    });
+    return validationErrorResult(parsed.issues);
   }
 
   // Load the org's AI config so AI-fillable / aiAdapt fields behave exactly as
@@ -1029,11 +1019,7 @@ const handleSaveFilledTemplateTool: McpToolHandler = async ({
 }) => {
   const parsed = v.safeParse(saveFilledTemplateArgsSchema, args);
   if (!parsed.success) {
-    return validationErrorResult({
-      issues: parsed.issues,
-      message:
-        "Invalid input: expected { action, template_id, matter_id, idempotency_key, values, entity_id?, parent_id?, name? }",
-    });
+    return validationErrorResult(parsed.issues);
   }
   const input = parsed.output;
 
@@ -1557,11 +1543,7 @@ const handleSaveTemplateTool: TypedMcpToolHandler<
     args,
   );
   if (!parsed.success) {
-    return validationErrorResult({
-      issues: parsed.issues,
-      message:
-        "Invalid input: expected { docx_base64: string, name: string, fields?: array } to create, or { template_id: string, fields: array } to configure",
-    });
+    return validationErrorResult(parsed.issues);
   }
   const input = parsed.output;
 

@@ -18,6 +18,7 @@ import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import type { ChatToolDefectMemo } from "@/api/lib/chat/tool-defect-memo";
 import { knownDefectRefusalMessage } from "@/api/lib/chat/tool-defect-memo";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
+import { isRecord } from "@/api/lib/type-guards";
 import {
   DEFAULT_MCP_TOOL_DEFINITIONS,
   getStaticMcpToolDefinition,
@@ -55,9 +56,6 @@ export type ProjectedWriteToolName = {
 export type ChatRegistryWriteToolMap = {
   [K in ProjectedWriteToolName]: ServerTool<SchemaInput, SchemaInput, K>;
 };
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
 
 /**
  * The projected write tools, in registry order. Derived from the `as const`

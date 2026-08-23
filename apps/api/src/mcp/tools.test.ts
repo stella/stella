@@ -3742,10 +3742,11 @@ describe("OpenAI-compatible MCP tools", () => {
       toolName: "list_contacts",
     });
 
-    expectValidationMessage(
-      result,
-      "Invalid input: expected { q?: string, type?: 'person'|'organization', cursor?: string, limit?: integer }",
-    );
+    const error = validationEnvelope(result);
+    expect(error["code"]).toBe("validation_error");
+    expect(error["issues"]).toEqual([
+      { path: "registry", message: expect.any(String) },
+    ]);
   });
 
   test("save_task rejects a create with no matter_id", async () => {

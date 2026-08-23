@@ -13,6 +13,7 @@ import { SKILL_PACKAGE_LIMITS } from "@stll/skills/package-limits";
 import { HandlerError, unreachable } from "@/api/lib/errors/tagged-errors";
 import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
 import { safeOutboundFetchBytes } from "@/api/lib/safe-outbound-fetch";
+import { isRecord } from "@/api/lib/type-guards";
 
 const SKILL_FILE_NAME = "SKILL.md";
 const SKILL_NAME_PATTERN = /^[a-z0-9][a-z0-9-]{0,63}$/u;
@@ -1999,9 +2000,6 @@ const zipUncompressedSize = (file: JSZip.JSZipObject): number | null => {
     ? size
     : null;
 };
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
 
 const toHandlerError = (cause: unknown): HandlerError =>
   HandlerError.is(cause)
