@@ -72,25 +72,26 @@ const assignSignal = createSafeRootHandler(
       }
     }
     const transition = yield* Result.await(
-      safeDb((tx) =>
-        transitionSignal({
-          tx,
-          organizationId,
-          signalId: params.signalId,
-          actorUserId: user.id,
-          from: [SIGNAL_STATUS.NEW, SIGNAL_STATUS.SNOOZED],
-          set: { assigneeUserId: body.assigneeUserId },
-          event: {
-            type: SIGNAL_EVENT_TYPE.ASSIGNED,
-            payload: { assigneeUserId: body.assigneeUserId },
-          },
-          audit: {
-            recordAuditEvent,
-            workspaceId: existing.workspaceId,
-            previousStatus: existing.status,
-            metadata: { kind: existing.kind, scoutKey: existing.scoutKey },
-          },
-        }),
+      safeDb(
+        async (tx) =>
+          await transitionSignal({
+            tx,
+            organizationId,
+            signalId: params.signalId,
+            actorUserId: user.id,
+            from: [SIGNAL_STATUS.NEW, SIGNAL_STATUS.SNOOZED],
+            set: { assigneeUserId: body.assigneeUserId },
+            event: {
+              type: SIGNAL_EVENT_TYPE.ASSIGNED,
+              payload: { assigneeUserId: body.assigneeUserId },
+            },
+            audit: {
+              recordAuditEvent,
+              workspaceId: existing.workspaceId,
+              previousStatus: existing.status,
+              metadata: { kind: existing.kind, scoutKey: existing.scoutKey },
+            },
+          }),
       ),
     );
     yield* transition;

@@ -2208,6 +2208,7 @@
       "safe": "Unbedenklich"
     },
     "view": {
+      "new": "Neu",
       "resolved": "Erledigt",
       "snoozed": "Zurückgestellt"
     }

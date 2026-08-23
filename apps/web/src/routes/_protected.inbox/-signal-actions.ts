@@ -16,6 +16,7 @@ import { unwrapEden } from "@/lib/errors/api";
 import { inboxKeys } from "@/lib/inbox/queries";
 import type { InboxSignal } from "@/lib/inbox/queries";
 import { toSafeId } from "@/lib/safe-id";
+import { myWorkKeys } from "@/lib/workspaces/queries/my-work";
 
 type SignalClient = ReturnType<typeof api.signals>;
 
@@ -80,7 +81,10 @@ export const acceptSignal = async ({
     const accepted = unwrapEden(
       await signalClient(signalId).acceptances.post({ suggestionKind }),
     );
-    await invalidateInbox(invalidate);
+    await Promise.all([
+      invalidateInbox(invalidate),
+      invalidate.queryClient.invalidateQueries({ queryKey: myWorkKeys.all }),
+    ]);
     return accepted;
   });
 

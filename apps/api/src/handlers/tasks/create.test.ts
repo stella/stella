@@ -313,12 +313,21 @@ describe("createTaskHandler validation", () => {
         recordAuditEvent: async () => {},
         body: { name: "Firm-admin task" },
         features: TASK_FEATURES_ENABLED,
+        workObligationSource: {
+          type: "document",
+          description: "Inbox signal: filing deadline",
+        },
       }),
     );
 
     expect(Result.isOk(result)).toBe(true);
     expect(obligationRows).toEqual([
-      expect.objectContaining({ ownerUserId: null, status: "unassigned" }),
+      expect.objectContaining({
+        ownerUserId: null,
+        sourceDescription: "Inbox signal: filing deadline",
+        sourceType: "document",
+        status: "unassigned",
+      }),
     ]);
   });
 

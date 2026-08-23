@@ -2208,6 +2208,7 @@
       "safe": "Bez rizika"
     },
     "view": {
+      "new": "Nové",
       "resolved": "Vybavené",
       "snoozed": "Odložené"
     }

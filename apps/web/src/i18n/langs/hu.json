@@ -2208,6 +2208,7 @@
       "safe": "Biztonságos"
     },
     "view": {
+      "new": "Új",
       "resolved": "Lezárt",
       "snoozed": "Elhalasztott"
     }

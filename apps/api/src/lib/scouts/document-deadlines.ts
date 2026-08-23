@@ -194,7 +194,7 @@ export const runDocumentDeadlineScout = async (
     db: scopedDb,
     organizationId,
     scoutKey: SCOUT_KEY.DOCUMENT_DEADLINES,
-    observe: async () => proposed,
+    observe: () => proposed,
   });
 };
 

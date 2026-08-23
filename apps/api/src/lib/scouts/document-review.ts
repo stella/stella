@@ -144,8 +144,9 @@ export const maybeEmitDocumentReviewSignal = async (
   try {
     // Savepoint: a failed statement here must not poison the outer
     // transaction that is finalizing the run.
-    await args.tx.transaction((savepoint) =>
-      emitDocumentReviewSignal({ ...args, tx: savepoint }),
+    await args.tx.transaction(
+      async (savepoint) =>
+        await emitDocumentReviewSignal({ ...args, tx: savepoint }),
     );
   } catch (error: unknown) {
     captureError(error, {

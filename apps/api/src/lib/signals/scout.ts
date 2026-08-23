@@ -22,7 +22,7 @@ export type RunScoutArgs = {
   organizationId: SafeId<"organization">;
   scoutKey: ScoutKey;
   /** Produces signals; runs inside the same transaction that stores them. */
-  observe: (tx: Transaction) => Promise<NewSignal[]>;
+  observe: (tx: Transaction) => NewSignal[] | Promise<NewSignal[]>;
 };
 
 export type RunScoutResult = EmitSignalsResult & {

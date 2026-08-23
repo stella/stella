@@ -27,14 +27,16 @@ export const SIGNAL_VIEWS = [
   SIGNAL_VIEW.RESOLVED,
 ] as const satisfies readonly SignalView[];
 
-const tUnion = <T extends readonly string[]>(values: T) =>
-  t.Union(values.map((value) => t.Literal(value)));
+const signalViewSchema = t.UnionEnum(SIGNAL_VIEWS);
+const signalOriginSchema = t.UnionEnum(SIGNAL_ORIGINS);
+const signalSeveritySchema = t.UnionEnum(SIGNAL_SEVERITIES);
+const suggestionKindSchema = t.UnionEnum(SUGGESTION_KINDS);
 
 export const listSignalsQuerySchema = t.Object({
-  view: t.Optional(tUnion(SIGNAL_VIEWS)),
+  view: t.Optional(signalViewSchema),
   matterId: t.Optional(tSafeId("workspace")),
-  origin: t.Optional(tUnion(SIGNAL_ORIGINS)),
-  severity: t.Optional(tUnion(SIGNAL_SEVERITIES)),
+  origin: t.Optional(signalOriginSchema),
+  severity: t.Optional(signalSeveritySchema),
   assignedToMe: t.Optional(t.Boolean()),
   limit: t.Optional(tPaginationLimit(LIMITS.signalsPageSizeMax)),
   cursor: t.Optional(tPaginationCursor()),
@@ -47,7 +49,7 @@ export const createRequestBodySchema = t.Object({
   description: t.String({ maxLength: 10_000 }),
   matterId: t.Optional(t.Nullable(tSafeId("workspace"))),
   assigneeUserId: t.Optional(t.Nullable(tSafeId("user"))),
-  severity: t.Optional(tUnion(SIGNAL_SEVERITIES)),
+  severity: t.Optional(signalSeveritySchema),
 });
 
 export const snoozeBodySchema = t.Object({
@@ -68,7 +70,7 @@ export const assignBodySchema = t.Object({
  * anything) so provenance survives either way.
  */
 export const acceptBodySchema = t.Object({
-  suggestionKind: tUnion(SUGGESTION_KINDS),
+  suggestionKind: suggestionKindSchema,
   result: t.Optional(
     t.Object({
       workspaceId: tSafeId("workspace"),

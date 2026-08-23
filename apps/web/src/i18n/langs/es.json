@@ -2208,6 +2208,7 @@
       "safe": "Seguro"
     },
     "view": {
+      "new": "Nuevos",
       "resolved": "Resueltos",
       "snoozed": "Pospuestos"
     }

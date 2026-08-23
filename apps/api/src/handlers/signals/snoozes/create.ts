@@ -59,25 +59,26 @@ const snoozeSignal = createSafeRootHandler(
       signalId: params.signalId,
     });
     const transition = yield* Result.await(
-      safeDb((tx) =>
-        transitionSignal({
-          tx,
-          organizationId,
-          signalId: params.signalId,
-          actorUserId: user.id,
-          from: [SIGNAL_STATUS.NEW, SIGNAL_STATUS.SNOOZED],
-          set: { status: SIGNAL_STATUS.SNOOZED, snoozedUntil: until },
-          event: {
-            type: SIGNAL_EVENT_TYPE.SNOOZED,
-            payload: { until: until.toISOString() },
-          },
-          audit: {
-            recordAuditEvent,
-            workspaceId: existing.workspaceId,
-            previousStatus: existing.status,
-            metadata: { kind: existing.kind, scoutKey: existing.scoutKey },
-          },
-        }),
+      safeDb(
+        async (tx) =>
+          await transitionSignal({
+            tx,
+            organizationId,
+            signalId: params.signalId,
+            actorUserId: user.id,
+            from: [SIGNAL_STATUS.NEW, SIGNAL_STATUS.SNOOZED],
+            set: { status: SIGNAL_STATUS.SNOOZED, snoozedUntil: until },
+            event: {
+              type: SIGNAL_EVENT_TYPE.SNOOZED,
+              payload: { until: until.toISOString() },
+            },
+            audit: {
+              recordAuditEvent,
+              workspaceId: existing.workspaceId,
+              previousStatus: existing.status,
+              metadata: { kind: existing.kind, scoutKey: existing.scoutKey },
+            },
+          }),
       ),
     );
     yield* transition;

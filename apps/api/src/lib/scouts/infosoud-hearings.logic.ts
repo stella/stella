@@ -3,6 +3,7 @@ import type { SignalSeverity } from "@stll/api-contract/signals";
 import { DAY_IN_MS } from "@stll/time";
 
 import type { SafeId } from "@/api/lib/branded-types";
+import { isRecord } from "@/api/lib/type-guards";
 
 /** Hearings this close to now are flagged even when not rescheduled. */
 export const HEARING_SOON_WINDOW_MS = 14 * DAY_IN_MS;
@@ -17,16 +18,6 @@ export type HearingRecord = {
   cancelled: boolean;
   date: string | null;
   time: string | null;
-};
-
-type HearingExternalData = {
-  case?: { caseMark?: unknown; court?: unknown };
-  hearing?: {
-    type?: unknown;
-    cancelled?: unknown;
-    date?: unknown;
-    time?: unknown;
-  };
 };
 
 const readString = (value: unknown): string | null =>
@@ -44,23 +35,26 @@ export const toHearingRecord = (row: {
   if (!row.externalId || !row.externalData) {
     return null;
   }
-  const data: HearingExternalData = row.externalData;
-  if (typeof data.hearing !== "object" || data.hearing === null) {
+  const data = row.externalData;
+  const hearing = data["hearing"];
+  if (!isRecord(hearing)) {
     return null;
   }
-  const caseMark = readString(data.case?.caseMark);
+  const rawCase = data["case"];
+  const caseData = isRecord(rawCase) ? rawCase : null;
+  const caseMark = readString(caseData?.["caseMark"]);
   if (!caseMark) {
     return null;
   }
   return {
     externalId: row.externalId,
     caseMark,
-    court: readString(data.case?.court) ?? "",
-    hearingType: readString(data.hearing.type),
+    court: readString(caseData?.["court"]) ?? "",
+    hearingType: readString(hearing["type"]),
     startAt: row.startAt,
-    cancelled: data.hearing.cancelled === true,
-    date: readString(data.hearing.date),
-    time: readString(data.hearing.time),
+    cancelled: hearing["cancelled"] === true,
+    date: readString(hearing["date"]),
+    time: readString(hearing["time"]),
   };
 };
 

@@ -2211,6 +2211,7 @@ type Messages = {
       "safe": "Safe";
     };
     "view": {
+      "new": "New";
       "resolved": "Resolved";
       "snoozed": "Snoozed";
     };

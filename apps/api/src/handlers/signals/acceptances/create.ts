@@ -1,9 +1,17 @@
 import { Result } from "better-result";
 
-import { SIGNAL_STATUS, SUGGESTION_KIND } from "@stll/api-contract/signals";
-import type { SignalSuggestion } from "@stll/api-contract/signals";
+import {
+  SIGNAL_KIND,
+  SIGNAL_STATUS,
+  SUGGESTION_KIND,
+} from "@stll/api-contract/signals";
+import type { SignalKind, SignalSuggestion } from "@stll/api-contract/signals";
 
-import type { SignalAcceptedResult } from "@/api/db/schema";
+import { abortableTx } from "@/api/db/safe-db";
+import type {
+  SignalAcceptedResult,
+  WorkObligationSource,
+} from "@/api/db/schema";
 import {
   loadVisibleSignal,
   serializeSignal,
@@ -17,12 +25,16 @@ import {
   SIGNAL_EVENT_TYPE,
   transitionSignal,
 } from "@/api/handlers/signals/transition";
+import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { createSafeId } from "@/api/lib/branded-types";
 import { AGENDA_ITEM_KIND } from "@/api/lib/entity-constants";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { brandPersistedWorkspaceId } from "@/api/lib/safe-id-boundaries";
+import { flushEntitySearchRepairs } from "@/api/lib/search/projection-repair-queue";
 import { createTaskEntityHandler } from "@/api/lib/tasks/create-task-entity";
+import { deployedTaskFeatures } from "@/api/lib/tasks/deployment-features";
 
 const config = {
   description:
@@ -37,6 +49,13 @@ const config = {
 } satisfies HandlerConfig;
 
 const toDateOnly = (iso: string): string => iso.slice(0, 10);
+
+const SIGNAL_WORK_OBLIGATION_SOURCE = {
+  [SIGNAL_KIND.REQUEST_SUBMITTED]: "manual",
+  [SIGNAL_KIND.HEARING_CHANGED]: "calendar",
+  [SIGNAL_KIND.DEADLINE_DETECTED]: "document",
+  [SIGNAL_KIND.CONTRACT_REVIEWED]: "document",
+} as const satisfies Record<SignalKind, WorkObligationSource>;
 
 const acceptSignal = createSafeRootHandler(
   config,
@@ -88,25 +107,89 @@ const acceptSignal = createSafeRootHandler(
           );
         }
         const isDeadline = suggestion.kind === SUGGESTION_KIND.CREATE_DEADLINE;
-        const created = yield* yield* createTaskEntityHandler({
-          safeDb,
-          workspaceId,
-          userId: user.id,
-          recordAuditEvent,
-          body: {
-            name: suggestion.name,
-            agendaKind: isDeadline
-              ? AGENDA_ITEM_KIND.DEADLINE
-              : AGENDA_ITEM_KIND.TASK,
-            dueDate: suggestion.dueAt ? toDateOnly(suggestion.dueAt) : null,
-          },
-        });
+        const taskFeatures = deployedTaskFeatures();
+        const entityId = createSafeId<"entity">();
         acceptedResult = {
           suggestionKind: suggestion.kind,
-          entityId: created.entityId,
+          entityId,
           workspaceId,
         };
-        break;
+
+        const created = yield* Result.await(
+          abortableTx(safeDb, async (tx) => {
+            const transition = await transitionSignal({
+              tx,
+              organizationId,
+              signalId: params.signalId,
+              actorUserId: user.id,
+              from: [SIGNAL_STATUS.NEW, SIGNAL_STATUS.SNOOZED],
+              set: {
+                status: SIGNAL_STATUS.ACCEPTED,
+                acceptedResult,
+                snoozedUntil: null,
+                resolvedAt: new Date(),
+              },
+              event: {
+                type: SIGNAL_EVENT_TYPE.ACCEPTED,
+                payload: { ...acceptedResult },
+              },
+              audit: {
+                recordAuditEvent,
+                workspaceId: existing.workspaceId,
+                previousStatus: existing.status,
+                metadata: {
+                  kind: existing.kind,
+                  scoutKey: existing.scoutKey,
+                  suggestionKind: suggestion.kind,
+                },
+              },
+            });
+            if (transition.isErr()) {
+              throw transition.error;
+            }
+
+            const task = await Result.gen(() =>
+              createTaskEntityHandler({
+                tx,
+                workspaceId,
+                userId: user.id,
+                recordAuditEvent,
+                entityId,
+                body: {
+                  name: suggestion.name,
+                  agendaKind: isDeadline
+                    ? AGENDA_ITEM_KIND.DEADLINE
+                    : AGENDA_ITEM_KIND.TASK,
+                  dueDate: suggestion.dueAt
+                    ? toDateOnly(suggestion.dueAt)
+                    : null,
+                },
+                features: taskFeatures,
+                ...(taskFeatures.governedWorkflow
+                  ? {
+                      workObligationSource: {
+                        type: SIGNAL_WORK_OBLIGATION_SOURCE[existing.kind],
+                        description: `Inbox signal ${existing.id}: ${existing.title}`,
+                      },
+                    }
+                  : {}),
+              }),
+            );
+            if (task.isErr()) {
+              throw task.error;
+            }
+            return task.value;
+          }),
+        );
+        flushEntitySearchRepairs([created.entityId]).catch(captureError);
+
+        const row = yield* yield* loadVisibleSignal({
+          safeDb,
+          organizationId,
+          canTriage,
+          signalId: params.signalId,
+        });
+        return Result.ok(serializeSignal(row));
       }
       case SUGGESTION_KIND.FILE_TO_WORKSPACE:
       case SUGGESTION_KIND.PROMOTE_TO_WORKSPACE:

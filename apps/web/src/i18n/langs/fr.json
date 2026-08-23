@@ -2208,6 +2208,7 @@
       "safe": "Sans risque"
     },
     "view": {
+      "new": "Nouveaux",
       "resolved": "Traités",
       "snoozed": "Reportés"
     }
