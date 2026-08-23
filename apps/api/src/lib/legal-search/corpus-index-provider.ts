@@ -180,8 +180,8 @@ const search = async (query: LegalSearchQuery): Promise<LegalSearchResult> => {
       const rows =
         ids.length === 0
           ? []
-          : await caseLawPublicReadDb((tx) =>
-              rehydrateCorpusIndexProviderCandidates(tx, {
+          : await caseLawPublicReadDb(async (tx) =>
+              await rehydrateCorpusIndexProviderCandidates(tx, {
                 generation,
                 ids,
               }),
