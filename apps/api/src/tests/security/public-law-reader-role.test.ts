@@ -8,6 +8,7 @@ import {
   stellaCaseLawReader,
   stellaPublicLawReader,
 } from "@/api/db/rls";
+import { getCollator } from "@/api/lib/collation";
 import {
   publicLawDatabaseRolePermissionsSql,
   type PublicLawDatabaseRolePermissions,
@@ -19,7 +20,6 @@ import {
   ROLLOUT_CASE_LAW_SOURCE_RELATION,
   ROLLOUT_CASE_LAW_WHOLE_RELATIONS,
 } from "@/api/lib/public-law-relations";
-import { getCollator } from "@/api/lib/collation";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
@@ -41,9 +41,7 @@ const errorMessageChain = (error: unknown): string => {
   return messages.join(" | ");
 };
 
-const expectedQualifiedColumns = Object.entries(
-  PUBLIC_LAW_COLUMNS_BY_RELATION,
-)
+const expectedQualifiedColumns = Object.entries(PUBLIC_LAW_COLUMNS_BY_RELATION)
   .flatMap(([relation, columns]) =>
     columns.map((column) => `${relation}.${column}`),
   )
@@ -167,9 +165,7 @@ describe("public-law reader role", () => {
     const operationalColumnRejection: unknown = await testDb
       .transaction(async (tx) => {
         await tx.execute(sql.raw(`SET LOCAL ROLE ${quoted(READER_ROLE)}`));
-        await tx.execute(
-          sql.raw('SELECT "config" FROM "legislation_sources"'),
-        );
+        await tx.execute(sql.raw('SELECT "config" FROM "legislation_sources"'));
       })
       .then(
         () => null,
@@ -186,7 +182,9 @@ describe("public-law reader role", () => {
 
   test("preserves the v0.7.22 reader during the rollout window", async () => {
     await testDb.transaction(async (tx) => {
-      await tx.execute(sql.raw(`SET LOCAL ROLE ${quoted(ROLLOUT_READER_ROLE)}`));
+      await tx.execute(
+        sql.raw(`SET LOCAL ROLE ${quoted(ROLLOUT_READER_ROLE)}`),
+      );
       for (const relation of ROLLOUT_CASE_LAW_WHOLE_RELATIONS) {
         // oxlint-disable-next-line no-await-in-loop -- each statement proves the previous reader contract still resolves after the additive migration
         await tx.execute(sql.raw(`SELECT * FROM ${quoted(relation)} LIMIT 0`));

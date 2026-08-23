@@ -42,9 +42,7 @@ describe("external public-law database boundary", () => {
   ] satisfies PublicLawDatabaseRolePermissions[])(
     "rejects an over- or under-privileged role",
     (permissions) => {
-      expect(() =>
-        assertPublicLawDatabaseRolePermissions(permissions),
-      ).toThrow(
+      expect(() => assertPublicLawDatabaseRolePermissions(permissions)).toThrow(
         "PUBLIC_LAW_DATABASE_URL must use a role that can only read the public-law corpus",
       );
     },

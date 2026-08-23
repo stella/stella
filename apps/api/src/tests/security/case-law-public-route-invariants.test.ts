@@ -158,9 +158,7 @@ describe("public case-law route boundary", () => {
     expect(validation).toContain(".transaction(async (tx) =>");
     expect(
       validation.indexOf("configureExternalReadTransaction(tx)"),
-    ).toBeLessThan(
-      validation.indexOf("validateExternalPublicLawDatabase(tx)"),
-    );
+    ).toBeLessThan(validation.indexOf("validateExternalPublicLawDatabase(tx)"));
     expect(validation).toContain(
       'external.roleValidation = { status: "idle" }',
     );
@@ -168,7 +166,9 @@ describe("public case-law route boundary", () => {
 
   test("shared-corpus reads cannot start document ingestion", async () => {
     const source = await readDeferredDocumentSource();
-    const guard = source.indexOf("envBase.PUBLIC_LAW_DATABASE_URL !== undefined");
+    const guard = source.indexOf(
+      "envBase.PUBLIC_LAW_DATABASE_URL !== undefined",
+    );
     const ingestionCall = source.indexOf("readThroughDeferredDocument({");
 
     expect(guard).toBeGreaterThanOrEqual(0);

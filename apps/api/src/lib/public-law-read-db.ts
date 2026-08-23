@@ -8,8 +8,8 @@ import { databaseRelations } from "@/api/db/database-relations";
 import { rootDb } from "@/api/db/root";
 import type { Transaction } from "@/api/db/root";
 import { envBase } from "@/api/env-base";
-import { PUBLIC_LAW_COLUMNS_BY_RELATION } from "@/api/lib/public-law-relations";
 import { queryCountLogger } from "@/api/lib/db-query-counter";
+import { PUBLIC_LAW_COLUMNS_BY_RELATION } from "@/api/lib/public-law-relations";
 
 const EXTERNAL_PUBLIC_LAW_CONNECTION_TIMEOUT_SECONDS = 10;
 
@@ -80,8 +80,10 @@ let externalPublicLawDatabase: ExternalPublicLawDatabase | null = null;
  * Exported so the role a migration defines can be held to the same query.
  */
 export const publicLawDatabaseRolePermissionsSql = (): SqlFragment => {
-  const expectedColumns = Object.entries(PUBLIC_LAW_COLUMNS_BY_RELATION).flatMap(
-    ([relation, columns]) => columns.map((column) => ({ relation, column })),
+  const expectedColumns = Object.entries(
+    PUBLIC_LAW_COLUMNS_BY_RELATION,
+  ).flatMap(([relation, columns]) =>
+    columns.map((column) => ({ relation, column })),
   );
   const expectedValues = sql.join(
     expectedColumns.map(
