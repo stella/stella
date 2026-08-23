@@ -27844,6 +27844,580 @@ export const generatedRouteMap: RouteNode = {
             },
           },
         },
+        signals: {
+          kind: "route",
+          children: {
+            "acceptances-create": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "signals", "acceptances-create"],
+                capabilityId: "signals.acceptances.create",
+                description:
+                  "Accept an inbox signal by taking one of its suggestions. Task and deadline suggestions are created here; for the others the client performs the action and reports what it produced.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--signal-id",
+                    prop: "signalId",
+                    required: true,
+                    part: "params",
+                    partPath: "signalId",
+                  },
+                  {
+                    kind: "enum",
+                    enum: [
+                      "create-deadline",
+                      "create-task",
+                      "promote-to-workspace",
+                      "assign",
+                      "open-chat",
+                    ],
+                    repeatable: false,
+                    flag: "--suggestion-kind",
+                    prop: "suggestionKind",
+                    required: true,
+                    part: "body",
+                    partPath: "suggestionKind",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--result.type",
+                    prop: "result.type",
+                    required: false,
+                    part: "body",
+                    partPath: "result.type",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--result.workspace-id",
+                    prop: "result.workspaceId",
+                    required: false,
+                    part: "body",
+                    partPath: "result.workspaceId",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "matters_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      required: ["suggestionKind"],
+                      properties: {
+                        suggestionKind: {
+                          default: "create-deadline",
+                          type: "string",
+                          enum: [
+                            "create-deadline",
+                            "create-task",
+                            "promote-to-workspace",
+                            "assign",
+                            "open-chat",
+                          ],
+                        },
+                        result: {
+                          type: "object",
+                          required: ["type", "workspaceId"],
+                          properties: {
+                            type: {
+                              const: "workspace",
+                              type: "string",
+                            },
+                            workspaceId: {
+                              minLength: 36,
+                              maxLength: 36,
+                              pattern:
+                                "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                              type: "string",
+                            },
+                          },
+                        },
+                      },
+                    },
+                    params: {
+                      type: "object",
+                      required: ["signalId"],
+                      properties: {
+                        signalId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "assignments-create": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "signals", "assignments-create"],
+                capabilityId: "signals.assignments.create",
+                description:
+                  "Assign an open inbox signal to an organization member, or clear the assignment with null.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--signal-id",
+                    prop: "signalId",
+                    required: true,
+                    part: "params",
+                    partPath: "signalId",
+                  },
+                ],
+                inputOnly: ["body.assigneeUserId"],
+                paginated: false,
+                destructive: false,
+                scope: "matters_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      required: ["assigneeUserId"],
+                      properties: {
+                        assigneeUserId: {
+                          nullable: true,
+                          anyOf: [
+                            {
+                              minLength: 36,
+                              maxLength: 36,
+                              pattern:
+                                "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                              type: "string",
+                            },
+                            {
+                              type: "null",
+                            },
+                          ],
+                        },
+                      },
+                    },
+                    params: {
+                      type: "object",
+                      required: ["signalId"],
+                      properties: {
+                        signalId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "dismissals-create": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "signals", "dismissals-create"],
+                capabilityId: "signals.dismissals.create",
+                description:
+                  "Dismiss an inbox signal with an optional reason; the reason is kept for tuning the producer that emitted it.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--signal-id",
+                    prop: "signalId",
+                    required: true,
+                    part: "params",
+                    partPath: "signalId",
+                  },
+                ],
+                inputOnly: ["body.reason"],
+                paginated: false,
+                destructive: false,
+                scope: "matters_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      properties: {
+                        reason: {
+                          nullable: true,
+                          anyOf: [
+                            {
+                              maxLength: 1000,
+                              type: "string",
+                            },
+                            {
+                              type: "null",
+                            },
+                          ],
+                        },
+                      },
+                    },
+                    params: {
+                      type: "object",
+                      required: ["signalId"],
+                      properties: {
+                        signalId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            get: {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "signals", "get"],
+                capabilityId: "signals.get",
+                description:
+                  "Read one inbox signal with its evidence and suggestions; 404 when it is not visible to the caller.",
+                access: "read",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--signal-id",
+                    prop: "signalId",
+                    required: true,
+                    part: "params",
+                    partPath: "signalId",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "read",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    params: {
+                      type: "object",
+                      required: ["signalId"],
+                      properties: {
+                        signalId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            list: {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "signals", "list"],
+                capabilityId: "signals.list",
+                description:
+                  "List inbox signals visible to the caller: open by default, or snoozed or resolved via `view`; filter by matter, origin, severity, or assignment.",
+                access: "read",
+                flags: [
+                  {
+                    kind: "enum",
+                    enum: ["open", "snoozed", "resolved"],
+                    repeatable: false,
+                    flag: "--view",
+                    prop: "view",
+                    required: false,
+                    part: "query",
+                    partPath: "view",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--matter-id",
+                    prop: "matterId",
+                    required: false,
+                    part: "query",
+                    partPath: "matterId",
+                  },
+                  {
+                    kind: "enum",
+                    enum: ["manual", "source", "model"],
+                    repeatable: false,
+                    flag: "--origin",
+                    prop: "origin",
+                    required: false,
+                    part: "query",
+                    partPath: "origin",
+                  },
+                  {
+                    kind: "enum",
+                    enum: ["info", "notice", "warning", "critical"],
+                    repeatable: false,
+                    flag: "--severity",
+                    prop: "severity",
+                    required: false,
+                    part: "query",
+                    partPath: "severity",
+                  },
+                  {
+                    kind: "boolean",
+                    repeatable: false,
+                    flag: "--assigned-to-me",
+                    prop: "assignedToMe",
+                    required: false,
+                    part: "query",
+                    partPath: "assignedToMe",
+                  },
+                ],
+                inputOnly: [],
+                paginated: true,
+                paginationPart: "query",
+                itemsKey: "items",
+                destructive: false,
+                scope: "read",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    query: {
+                      type: "object",
+                      properties: {
+                        view: {
+                          default: "open",
+                          type: "string",
+                          enum: ["open", "snoozed", "resolved"],
+                        },
+                        matterId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        origin: {
+                          default: "manual",
+                          type: "string",
+                          enum: ["manual", "source", "model"],
+                        },
+                        severity: {
+                          default: "info",
+                          type: "string",
+                          enum: ["info", "notice", "warning", "critical"],
+                        },
+                        assignedToMe: {
+                          type: "boolean",
+                        },
+                        limit: {
+                          minimum: 1,
+                          maximum: 100,
+                          anyOf: [
+                            {
+                              format: "integer",
+                              default: 0,
+                              type: "string",
+                            },
+                            {
+                              minimum: 1,
+                              maximum: 100,
+                              type: "integer",
+                            },
+                          ],
+                        },
+                        cursor: {
+                          maxLength: 512,
+                          description:
+                            "Opaque cursor from a previous page to fetch the next page",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "requests-create": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "signals", "requests-create"],
+                capabilityId: "signals.requests.create",
+                description:
+                  "Post a manual request into the inbox: a piece of work for the legal team, optionally scoped to a matter and assigned to a colleague.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--title",
+                    prop: "title",
+                    required: true,
+                    part: "body",
+                    partPath: "title",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--description",
+                    prop: "description",
+                    required: true,
+                    part: "body",
+                    partPath: "description",
+                  },
+                  {
+                    kind: "enum",
+                    enum: ["info", "notice", "warning", "critical"],
+                    repeatable: false,
+                    flag: "--severity",
+                    prop: "severity",
+                    required: false,
+                    part: "body",
+                    partPath: "severity",
+                  },
+                ],
+                inputOnly: ["body.matterId", "body.assigneeUserId"],
+                paginated: false,
+                destructive: false,
+                scope: "matters_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      required: ["title", "description"],
+                      properties: {
+                        title: {
+                          minLength: 1,
+                          maxLength: 512,
+                          type: "string",
+                        },
+                        description: {
+                          maxLength: 10000,
+                          type: "string",
+                        },
+                        matterId: {
+                          nullable: true,
+                          anyOf: [
+                            {
+                              minLength: 36,
+                              maxLength: 36,
+                              pattern:
+                                "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                              type: "string",
+                            },
+                            {
+                              type: "null",
+                            },
+                          ],
+                        },
+                        assigneeUserId: {
+                          nullable: true,
+                          anyOf: [
+                            {
+                              minLength: 36,
+                              maxLength: 36,
+                              pattern:
+                                "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                              type: "string",
+                            },
+                            {
+                              type: "null",
+                            },
+                          ],
+                        },
+                        severity: {
+                          default: "info",
+                          type: "string",
+                          enum: ["info", "notice", "warning", "critical"],
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "snoozes-create": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "signals", "snoozes-create"],
+                capabilityId: "signals.snoozes.create",
+                description:
+                  "Snooze an inbox signal until a later time; it returns to the open feed once that time passes.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--signal-id",
+                    prop: "signalId",
+                    required: true,
+                    part: "params",
+                    partPath: "signalId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--until",
+                    prop: "until",
+                    required: true,
+                    part: "body",
+                    partPath: "until",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "matters_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      required: ["until"],
+                      properties: {
+                        until: {
+                          format: "date-time",
+                          type: "string",
+                        },
+                      },
+                    },
+                    params: {
+                      type: "object",
+                      required: ["signalId"],
+                      properties: {
+                        signalId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
         skills: {
           kind: "route",
           children: {
