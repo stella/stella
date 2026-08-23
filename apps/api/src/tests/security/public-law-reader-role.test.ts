@@ -96,7 +96,6 @@ const rolePermissionsAfter = async (
         publicLawDatabaseRolePermissionsSql(),
       );
       permissions = result.rows.at(0);
-      // oxlint-disable-next-line node/callback-return -- rollback removes the temporary privilege probe after its result is captured
       tx.rollback();
     });
   } catch (error) {
