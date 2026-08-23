@@ -407,35 +407,34 @@ const parseFieldPart = (el: slimdom.Element): FieldPart | null => {
   return part;
 };
 
+const parseFieldSourceCandidate = (candidate: unknown): FieldSource | null =>
+  isFieldSource(candidate) ? candidate : null;
+
 const parseFieldSource = (el: slimdom.Element): FieldSource | null => {
-  const candidate = {
-    kind: el.getAttribute("kind"),
-    role: el.getAttribute("role"),
-    ref: el.getAttribute("ref"),
-    field: el.getAttribute("field"),
-  };
-  if (!isFieldSource(candidate)) {
-    return null;
-  }
-  // Reconstruct the exact per-kind shape: isFieldSource ignores irrelevant
-  // attributes, but the stored binding must match its union member so a
-  // contact/matter/firm source never carries a stray role/ref from hand-edited
-  // XML, and a round-tripped source compares equal to its input.
-  switch (candidate.kind) {
+  const kind = el.getAttribute("kind");
+  const field = el.getAttribute("field");
+
+  switch (kind) {
     case "party":
-      return { kind: "party", role: candidate.role, field: candidate.field };
+      return parseFieldSourceCandidate({
+        kind,
+        role: el.getAttribute("role"),
+        field,
+      });
     case "attorney":
-      return { kind: "attorney", ref: candidate.ref, field: candidate.field };
+      return parseFieldSourceCandidate({
+        kind,
+        ref: el.getAttribute("ref"),
+        field,
+      });
     case "contact":
-      return { kind: "contact", field: candidate.field };
     case "matter":
-      return { kind: "matter", field: candidate.field };
     case "firm":
-      return { kind: "firm", field: candidate.field };
-    default: {
-      const exhaustive: never = candidate;
-      return exhaustive;
-    }
+      return parseFieldSourceCandidate({ kind, field });
+    case null:
+      return null;
+    default:
+      return null;
   }
 };
 

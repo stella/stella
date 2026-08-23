@@ -587,8 +587,10 @@ const handleListAuditLogTool: McpToolHandler = async ({ args, context }) => {
   if (!parsed.success) {
     return validationErrorResult({
       issues: parsed.issues,
-      message:
+      message: crossFieldOrGeneric(
+        parsed.issues,
         "Invalid input: expected { workspace_id?, action?, resource_type?, resource_id?, user_id?, from?, to?, limit?, cursor? }",
+      ),
     });
   }
   const input = parsed.output;

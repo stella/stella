@@ -39,6 +39,10 @@ describe("isFieldMeta", () => {
     ],
     format: "{{position}} {{name}}",
   };
+  const validLookup = {
+    registry: "krs",
+    formats: [{ key: "full", template: "[name]" }],
+  };
 
   test("accepts a composite field with parts and format", () => {
     expect(isFieldMeta(compositeField)).toBe(true);
@@ -206,7 +210,7 @@ describe("isFieldMeta", () => {
       isFieldMeta({
         path: "x",
         formula: "rent * 12",
-        lookup: { registry: "krs" },
+        lookup: validLookup,
       }),
     ).toBe(false);
     expect(isFieldMeta({ ...compositeField, formula: "rent * 12" })).toBe(
@@ -225,13 +229,13 @@ describe("isFieldMeta", () => {
       isFieldMeta({
         path: "x",
         aiPrompt: "draft it",
-        lookup: { registry: "krs" },
+        lookup: validLookup,
       }),
     ).toBe(false);
     expect(
       isFieldMeta({
         ...compositeField,
-        lookup: { registry: "krs" },
+        lookup: validLookup,
       }),
     ).toBe(false);
   });

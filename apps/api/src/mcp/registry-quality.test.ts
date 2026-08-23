@@ -64,10 +64,13 @@ const TOOL_COUNT_CEILING: Record<SurfaceMode, number> = {
 // phase 2): measured 51_580 chars. The anonymized surface is unchanged (all
 // three are excluded from it).
 // default bumped 54_000 -> 61_000 after contact discovery and template
-// persistence brought the measured payload to 55_283 chars; the new ceiling
-// retains roughly 10% review headroom.
+// persistence brought the measured payload to 55_283 chars.
+// default bumped 61_000 -> 70_000 after save_template began advertising the
+// canonical strict field-configuration contract instead of a loose object
+// approximation: measured 63_213 chars. The new ceiling retains roughly 10%
+// review headroom without weakening the provider-visible schema.
 const TOOLS_LIST_PAYLOAD_CHAR_CEILING: Record<SurfaceMode, number> = {
-  default: 61_000,
+  default: 70_000,
   anonymized: 22_000,
 };
 

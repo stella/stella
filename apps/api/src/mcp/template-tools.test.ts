@@ -1440,7 +1440,10 @@ describe("MCP template tools", () => {
           {
             path: "company",
             aiPrompt: "Draft the company details",
-            lookup: { registry: "krs" },
+            lookup: {
+              registry: "krs",
+              formats: [{ key: "default", template: "[name]" }],
+            },
           },
         ],
       },

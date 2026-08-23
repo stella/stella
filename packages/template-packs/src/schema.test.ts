@@ -24,6 +24,34 @@ describe("template pack manifest contract", () => {
     expect(
       v.safeParse(packManifestSchema, {
         ...validManifest,
+        licenceUrl: "https://example.test/license",
+      }).success,
+    ).toBe(false);
+    expect(
+      v.safeParse(packManifestSchema, {
+        ...validManifest,
+        jurisdictions: [{ country: "CZ", subdivisionName: "Praha" }],
+      }).success,
+    ).toBe(false);
+    expect(
+      v.safeParse(packManifestSchema, {
+        ...validManifest,
+        authors: [{ name: "A", role: "drafter", org: "Example" }],
+      }).success,
+    ).toBe(false);
+    expect(
+      v.safeParse(packManifestSchema, {
+        ...validManifest,
+        source: {
+          name: "Example",
+          url: "https://example.test/source",
+          archiveUrl: "https://example.test/archive",
+        },
+      }).success,
+    ).toBe(false);
+    expect(
+      v.safeParse(packManifestSchema, {
+        ...validManifest,
         templates: [
           {
             ...validTemplate,
