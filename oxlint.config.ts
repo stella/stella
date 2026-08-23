@@ -2566,6 +2566,7 @@ export default defineConfig({
               "apps/api/src/lib/style-set-package-cleanup-queue.ts",
               "apps/api/src/lib/document-review/run-queue.ts",
               "apps/api/src/lib/bilingual/run-queue.ts",
+              "apps/api/src/lib/document-translation/run-queue.ts",
               "apps/api/src/lib/flows/flow-run-worker.ts",
               "apps/api/src/lib/scheduler/bullmq.ts",
               "apps/api/src/handlers/reports/report-export-queue.ts",

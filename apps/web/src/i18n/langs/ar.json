@@ -3933,12 +3933,25 @@
   },
   "translate": {
     "dialog": {
+      "aiDescription": "استخدم Stella AI مع الحفاظ على بنية المستند وتنسيقه.",
+      "backgroundHint": "يمكنك إغلاق هذه النافذة. ستعلمك Stella عند جاهزية المستند.",
+      "bilingualDescription": "أنشئ عمودين للمصدر وترجمته بالذكاء الاصطناعي.",
+      "bilingualDocument": "أعمدة ثنائية اللغة · Stella AI",
+      "completed": "الترجمة جاهزة",
+      "deeplDescription": "ترجمة الملف الكامل باستخدام DeepL.",
       "description": "ترجمة المستند المفتوح عبر DeepL. تُحفَظ النسخة المترجَمة في هذا الملف القانوني كمستند جديد.",
+      "docxOnly": "ترجمة Stella AI متاحة حاليًا لملفات DOCX فقط.",
       "noLanguagesFound": "لم يتم العثور على لغات",
       "notConfigured": "DeepL غير مُهيّأ لهذه المؤسسة. أضِف مفتاح API الخاص بـ DeepL في إعدادات المؤسسة لتمكين الترجمة.",
+      "outputLabel": "نوع الترجمة",
+      "progress": "تقدم الترجمة",
+      "progressCount": "اكتمل {completed} من {total}",
+      "runFailed": "تعذّر إكمال الترجمة.",
       "selectPlaceholder": "اختر لغة",
       "targetLanguage": "اللغة الهدف",
       "title": "ترجمة المستند",
+      "translatedDocument": "مستند مترجم · DeepL",
+      "translatedDocumentAi": "مستند مترجم · Stella AI",
       "translating": "جارٍ الترجمة…"
     },
     "error": {

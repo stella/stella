@@ -66,6 +66,11 @@ export const brandPersistedDocumentReviewRunId = (
   runId: string,
 ): SafeId<"documentReviewRun"> => toSafeId<"documentReviewRun">(runId);
 
+export const brandPersistedDocumentTranslationRunId = (
+  runId: string,
+): SafeId<"documentTranslationRun"> =>
+  toSafeId<"documentTranslationRun">(runId);
+
 export const brandPersistedLegalListId = (
   listId: string,
 ): SafeId<"legalList"> => toSafeId<"legalList">(listId);

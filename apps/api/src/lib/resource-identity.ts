@@ -120,6 +120,8 @@ export const RESOURCE_IDENTITY_DISPOSITION = {
   // that produced it, so it is that run's subresource rather than a noun.
   bilingualTranslationRow: { type: "non_resource", reason: "subresource" },
   bilingualTranslationRun: { type: "non_resource", reason: "job" },
+  documentTranslationRun: { type: "non_resource", reason: "job" },
+  documentTranslationUnit: { type: "non_resource", reason: "subresource" },
   documentReviewFinding: { type: "non_resource", reason: "subresource" },
   documentReviewRun: { type: "non_resource", reason: "job" },
   documentType: {
