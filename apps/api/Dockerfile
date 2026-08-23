@@ -61,6 +61,15 @@ RUN bun build \
     --target bun \
     --outfile /app/backfill.js \
     apps/api/src/scripts/backfill-case-law-slugs.ts
+# Better Auth migration rehearsal validator. It accepts only a database
+# credential plus a private tmpfs baseline path; stdout is a redacted JSON
+# report. Run on the isolated clone task with command override:
+#   ["bun", "/app/better-auth-migration-audit.js", "pre-migration",
+#    "--baseline", "/tmp/better-auth-baseline.json"]
+RUN bun build \
+    --target bun \
+    --outfile /app/better-auth-migration-audit.js \
+    apps/api/src/scripts/better-auth-migration-audit.ts
 # Dedicated durable document-processing worker. Deploy the same image with
 # command override ["bun", "/app/document-processing-worker.js"]. OCR runs
 # in-image through the isolated local ONNX worker.
@@ -165,6 +174,7 @@ RUN groupadd --system --gid 1001 stella && \
     useradd --system --uid 1001 --gid stella --no-create-home stella
 COPY --chown=stella:stella --from=builder /app/server /app/server
 COPY --chown=stella:stella --from=builder /app/backfill.js /app/backfill.js
+COPY --chown=stella:stella --from=builder /app/better-auth-migration-audit.js /app/better-auth-migration-audit.js
 COPY --chown=stella:stella --from=builder /app/document-processing-worker.js /app/document-processing-worker.js
 COPY --chown=stella:stella --from=builder /app/apps/legal-atlas-runner/dist/index.js /app/legal-atlas.js
 # Bundled migration task entrypoint:

@@ -1,0 +1,285 @@
+/**
+ * Usage:
+ *   bun src/scripts/better-auth-migration-audit.ts <mode> --baseline <path>
+ *
+ * The baseline belongs on the rehearsal task's private tmpfs. It contains
+ * auth-table counts and primary-key digests, and must never be uploaded as an
+ * artifact. The command itself emits only redacted named check results.
+ */
+
+import { Result, TaggedError } from "better-result";
+import { SQL } from "bun";
+import { sql } from "drizzle-orm";
+import { drizzle } from "drizzle-orm/bun-sql";
+import { constants } from "node:fs";
+import { open, writeFile } from "node:fs/promises";
+
+import { hasSecureDatabaseTransport, resolveDatabaseUrl } from "@/api/db-url";
+import { isRecord } from "@/api/lib/type-guards";
+import {
+  BETTER_AUTH_AUDIT_MODES,
+  BetterAuthAuditError,
+  parseBetterAuthAuditBaseline,
+  renderBetterAuthAuditReport,
+  runBetterAuthMigrationAudit,
+} from "@/api/scripts/better-auth-migration-audit.logic";
+import type {
+  BetterAuthAuditBaseline,
+  BetterAuthAuditMode,
+} from "@/api/scripts/better-auth-migration-audit.logic";
+
+const EXIT_CODE = {
+  CONFIGURATION_OR_QUERY_FAILURE: 2,
+  INVARIANT_FAILURE: 1,
+  SUCCESS: 0,
+} as const;
+
+const TRANSACTION_TIMEOUT = "60s";
+const LOCK_TIMEOUT = "2s";
+
+class BetterAuthAuditCommandError extends TaggedError(
+  "BetterAuthAuditCommandError",
+)<{
+  code:
+    | "baseline-conflict"
+    | "baseline-read-failed"
+    | "baseline-write-failed"
+    | "invalid-arguments";
+  message: string;
+}> {}
+
+type BetterAuthAuditCommandArgs = {
+  baselinePath: string;
+  mode: BetterAuthAuditMode;
+};
+
+const isAuditMode = (value: string): value is BetterAuthAuditMode =>
+  Object.values(BETTER_AUTH_AUDIT_MODES).some((mode) => mode === value);
+
+export const parseBetterAuthAuditArgs = (
+  args: readonly string[],
+): Result<BetterAuthAuditCommandArgs, BetterAuthAuditCommandError> => {
+  const mode = args.at(0);
+  const baselineFlag = args.at(1);
+  const baselinePath = args.at(2);
+  if (
+    mode === undefined ||
+    !isAuditMode(mode) ||
+    baselineFlag !== "--baseline" ||
+    baselinePath === undefined ||
+    baselinePath.length === 0 ||
+    args.length !== 3
+  ) {
+    return Result.err(
+      new BetterAuthAuditCommandError({
+        code: "invalid-arguments",
+        message:
+          "Usage: better-auth-migration-audit <pre-migration|post-backfill|post-migration> --baseline <private-path>",
+      }),
+    );
+  }
+  return Result.ok({ baselinePath, mode });
+};
+
+const isNodeErrorCode = (value: unknown, code: string): boolean =>
+  isRecord(value) && value["code"] === code;
+
+export const readBetterAuthAuditBaseline = async (
+  path: string,
+): Promise<
+  Result<
+    BetterAuthAuditBaseline,
+    BetterAuthAuditCommandError | BetterAuthAuditError
+  >
+> => {
+  const loaded = await Result.tryPromise({
+    try: async () => {
+      const handle = await open(path, constants.O_NOFOLLOW);
+      try {
+        const metadata = await handle.stat();
+        if (!metadata.isFile() || metadata.mode % 0o100 !== 0) {
+          throw new BetterAuthAuditCommandError({
+            code: "baseline-read-failed",
+            message: "Better Auth audit baseline is not a private regular file",
+          });
+        }
+        const parsed: unknown = JSON.parse(await handle.readFile("utf-8"));
+        return parsed;
+      } finally {
+        await handle.close();
+      }
+    },
+    catch: () =>
+      new BetterAuthAuditCommandError({
+        code: "baseline-read-failed",
+        message: "Better Auth audit baseline could not be read",
+      }),
+  });
+  if (Result.isError(loaded)) {
+    return loaded;
+  }
+  return parseBetterAuthAuditBaseline(loaded.value);
+};
+
+/**
+ * Create once, or accept a byte-equivalent rerun. Never replace a different
+ * baseline: that would erase the only row-set evidence the later phases use.
+ */
+export const persistBetterAuthAuditBaseline = async (
+  path: string,
+  baseline: BetterAuthAuditBaseline,
+): Promise<
+  Result<void, BetterAuthAuditCommandError | BetterAuthAuditError>
+> => {
+  const content = `${JSON.stringify(baseline)}\n`;
+  const written = await Result.tryPromise({
+    try: async () => {
+      await writeFile(path, content, {
+        encoding: "utf-8",
+        flag: "wx",
+        mode: 0o600,
+      });
+    },
+    catch: (cause) => cause,
+  });
+  if (Result.isOk(written)) {
+    return Result.ok(undefined);
+  }
+  if (!isNodeErrorCode(written.error, "EEXIST")) {
+    return Result.err(
+      new BetterAuthAuditCommandError({
+        code: "baseline-write-failed",
+        message: "Better Auth audit baseline could not be written",
+      }),
+    );
+  }
+
+  const existing = await readBetterAuthAuditBaseline(path);
+  if (existing.status === "error") {
+    return existing;
+  }
+  if (JSON.stringify(existing.value) !== JSON.stringify(baseline)) {
+    return Result.err(
+      new BetterAuthAuditCommandError({
+        code: "baseline-conflict",
+        message: "Better Auth audit baseline conflicts with the current census",
+      }),
+    );
+  }
+  return Result.ok(undefined);
+};
+
+const run = async (
+  args: readonly string[],
+): Promise<
+  Result<number, BetterAuthAuditCommandError | BetterAuthAuditError>
+> => {
+  const parsed = parseBetterAuthAuditArgs(args);
+  if (Result.isError(parsed)) {
+    return parsed;
+  }
+
+  let baseline: BetterAuthAuditBaseline | null = null;
+  if (parsed.value.mode !== BETTER_AUTH_AUDIT_MODES.PRE_MIGRATION) {
+    const loadedBaseline = await readBetterAuthAuditBaseline(
+      parsed.value.baselinePath,
+    );
+    if (loadedBaseline.status === "error") {
+      return loadedBaseline;
+    }
+    baseline = loadedBaseline.value;
+  }
+
+  const databaseUrl = resolveDatabaseUrl();
+  if (!databaseUrl || !hasSecureDatabaseTransport(databaseUrl)) {
+    return Result.err(
+      new BetterAuthAuditCommandError({
+        code: "invalid-arguments",
+        message: "Better Auth audit requires a secure database connection",
+      }),
+    );
+  }
+
+  const client = new SQL({ url: databaseUrl, max: 1 });
+  const database = drizzle({ client });
+  const executed = await Result.tryPromise({
+    try: async () =>
+      await database.transaction(async (transaction) => {
+        await transaction.execute(
+          sql`SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY`,
+        );
+        await transaction.execute(
+          sql`SELECT set_config('statement_timeout', ${TRANSACTION_TIMEOUT}, true)`,
+        );
+        await transaction.execute(
+          sql`SELECT set_config('lock_timeout', ${LOCK_TIMEOUT}, true)`,
+        );
+        await transaction.execute(
+          sql`SELECT set_config('idle_in_transaction_session_timeout', ${TRANSACTION_TIMEOUT}, true)`,
+        );
+        return await runBetterAuthMigrationAudit({
+          baseline,
+          database: {
+            execute: async (statement) => await transaction.execute(statement),
+          },
+          mode: parsed.value.mode,
+        });
+      }),
+    catch: (cause) =>
+      new BetterAuthAuditError({
+        cause,
+        code: "database-query-failed",
+        message: "Better Auth audit transaction failed",
+      }),
+  });
+  await client.end();
+  if (Result.isError(executed)) {
+    return executed;
+  }
+  if (Result.isError(executed.value)) {
+    return executed.value;
+  }
+
+  const { report, baseline: nextBaseline } = executed.value.value;
+  if (
+    parsed.value.mode === BETTER_AUTH_AUDIT_MODES.PRE_MIGRATION &&
+    report.status === "passed"
+  ) {
+    const persisted = await persistBetterAuthAuditBaseline(
+      parsed.value.baselinePath,
+      nextBaseline,
+    );
+    if (Result.isError(persisted)) {
+      return persisted;
+    }
+  }
+
+  process.stdout.write(renderBetterAuthAuditReport(report));
+  return Result.ok(
+    report.status === "passed"
+      ? EXIT_CODE.SUCCESS
+      : EXIT_CODE.INVARIANT_FAILURE,
+  );
+};
+
+if (import.meta.main) {
+  run(Bun.argv.slice(2))
+    .then((result) => {
+      if (Result.isError(result)) {
+        process.stderr.write(
+          `${JSON.stringify({ code: result.error.code, status: "error" })}\n`,
+        );
+        process.exitCode = EXIT_CODE.CONFIGURATION_OR_QUERY_FAILURE;
+        return undefined;
+      }
+      process.exitCode = result.value;
+      return undefined;
+    })
+    .catch(() => {
+      process.stderr.write(
+        `${JSON.stringify({ code: "audit-execution-failed", status: "error" })}\n`,
+      );
+      process.exitCode = EXIT_CODE.CONFIGURATION_OR_QUERY_FAILURE;
+      return undefined;
+    });
+}

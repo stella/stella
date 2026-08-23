@@ -350,6 +350,13 @@ jobs:
               exit 1
             fi
           done
+          audit_output=$(docker run --rm stella-api:smoke timeout 20 bun /app/better-auth-migration-audit.js 2>&1 || true)
+          if grep -qiE "cannot (find|resolve) (module|package)" <<<"$audit_output" \
+            || ! grep -q '"code":"invalid-arguments"' <<<"$audit_output"; then
+            echo "::error::Better Auth migration audit bundle failed its command smoke."
+            printf '%s\n' "$audit_output"
+            exit 1
+          fi
           docker run --rm stella-api:smoke bun /app/legal-atlas.js list
 
   build:
