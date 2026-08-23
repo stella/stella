@@ -10,7 +10,6 @@ import {
 } from "@/api/db/rls";
 import {
   listDecisionsHandler,
-  readDecisionLanguageAlternateCounts,
 } from "@/api/handlers/case-law/decisions/list";
 import { rehydrateCaseLawCandidates } from "@/api/handlers/case-law/decisions/search";
 import {
@@ -25,8 +24,12 @@ import type {
   CaseLawPublicReadDb,
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
-import { readNonRedistributableCaseLawSourceIdsQuery } from "@/api/lib/case-law/non-redistributable-sources";
 import { readDecisionAnalysis } from "@/api/lib/case-law/decision-analysis";
+import {
+  readDecisionLanguageAlternateCounts,
+  readDecisionLanguageAlternateCountsQuery,
+} from "@/api/lib/case-law/language-alternate-counts";
+import { readNonRedistributableCaseLawSourceIdsQuery } from "@/api/lib/case-law/non-redistributable-sources";
 import { getCollator } from "@/api/lib/collation";
 import { rehydrateCorpusIndexProviderCandidates } from "@/api/lib/legal-search/corpus-index-provider";
 import { readDocumentContextDecision } from "@/api/lib/legal-search/document-context";
@@ -322,9 +325,7 @@ describe("public-law reader role", () => {
       await testDb.transaction(async (tx) => {
         await tx.execute(sql`CREATE ROLE reader_attestation_login NOLOGIN`);
         await tx.execute(
-          sql.raw(
-            `GRANT ${quoted(READER_ROLE)} TO reader_attestation_login`,
-          ),
+          sql.raw(`GRANT ${quoted(READER_ROLE)} TO reader_attestation_login`),
         );
         await tx.execute(sql`SET LOCAL ROLE reader_attestation_login`);
         const result = await tx.execute<PublicLawDatabaseRolePermissions>(
@@ -353,9 +354,19 @@ describe("public-law reader role", () => {
         await tx.execute(sql`CREATE ROLE reader_attestation_admin NOLOGIN`);
         await tx.execute(
           sql.raw(
-            `GRANT ${quoted(READER_ROLE)} TO reader_attestation_admin WITH ADMIN OPTION`,
+            `GRANT ${quoted(READER_ROLE)} TO reader_attestation_admin WITH ADMIN TRUE, INHERIT FALSE, SET FALSE`,
           ),
         );
+        for (const [relation, columns] of Object.entries(
+          PUBLIC_LAW_COLUMNS_BY_RELATION,
+        )) {
+          // oxlint-disable-next-line no-await-in-loop -- each statement gives the probe the exact direct projection while role inheritance stays disabled
+          await tx.execute(
+            sql.raw(
+              `GRANT SELECT (${columns.map(quoted).join(", ")}) ON TABLE ${quoted(relation)} TO reader_attestation_admin`,
+            ),
+          );
+        }
         await tx.execute(sql`SET LOCAL ROLE reader_attestation_admin`);
         const result = await tx.execute<PublicLawDatabaseRolePermissions>(
           publicLawDatabaseRolePermissionsSql(),
@@ -369,7 +380,12 @@ describe("public-law reader role", () => {
       }
     }
 
-    expect(permissions).toMatchObject({ canDelegatePublicLaw: true });
+    expect(permissions).toMatchObject({
+      canAssumeOtherRole: false,
+      canDelegatePublicLaw: true,
+      canReadPublicLaw: true,
+      canReadOtherData: false,
+    });
   });
 
   test("SET ROLE can SELECT every surface and rejects an operational column", async () => {
@@ -473,6 +489,13 @@ describe("public-law reader role", () => {
 
       await readPgFtsBrowseFacets(tx, { excludedSourceIds: [], limit: 10 });
       exercised.add(readPgFtsBrowseFacets.publicLawSharedQuery);
+
+      await readDecisionLanguageAlternateCountsQuery(tx, [
+        "reader-role-census",
+      ]);
+      exercised.add(
+        readDecisionLanguageAlternateCountsQuery.publicLawSharedQuery,
+      );
 
       await readDocumentContextDecision(tx, decisionId);
       exercised.add(readDocumentContextDecision.publicLawSharedQuery);

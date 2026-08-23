@@ -146,7 +146,7 @@ export const publicLawDatabaseRolePermissionsSql = (): SqlFragment => {
           AND pg_has_role(
             current_user,
             ${stellaPublicLawReader.name},
-            'USAGE WITH ADMIN OPTION'
+            'MEMBER WITH ADMIN OPTION'
           )
         ) OR EXISTS (
           SELECT 1

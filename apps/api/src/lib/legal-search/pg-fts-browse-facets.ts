@@ -13,11 +13,11 @@ import type {
   LegalBrowseFacets,
   LegalBrowseFacetsQuery,
 } from "@/api/lib/legal-search/types";
-import type { FacetBucket } from "@/api/lib/search/types";
 import {
   definePublicLawSharedQuery,
   PUBLIC_LAW_SHARED_QUERY,
 } from "@/api/lib/public-law-shared-query";
+import type { FacetBucket } from "@/api/lib/search/types";
 
 /**
  * Browse-page facets for a deployment without a corpus index: three grouped

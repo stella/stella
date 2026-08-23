@@ -3,6 +3,7 @@ export const PUBLIC_LAW_SHARED_QUERY = {
   caseLawBrowseFacets: "case-law.browse-facets",
   caseLawCorpusIndexRehydration: "case-law.corpus-index-rehydration",
   caseLawDocumentContext: "case-law.document-context",
+  caseLawLanguageAlternateCounts: "case-law.language-alternate-counts",
   caseLawNonRedistributableSources: "case-law.non-redistributable-sources",
 } as const;
 

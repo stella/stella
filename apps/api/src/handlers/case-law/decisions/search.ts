@@ -14,12 +14,12 @@ import {
   polarityWeightSql,
 } from "@/api/handlers/case-law/citation-score";
 import { loadCourtWeightEntriesForSql } from "@/api/handlers/case-law/court-weights";
-import { validCaseLawLanguageAlternateCountSql } from "@/api/handlers/case-law/decisions/language";
 import type { searchDecisionsBodySchema } from "@/api/handlers/case-law/decisions/search-schema";
 import { arrayOrEmpty } from "@/api/lib/array";
 // eslint-disable-next-line no-restricted-imports -- search boundary: brands document ids returned by the corpus index before re-hydrating from Postgres
 import { toSafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
+import { readDecisionLanguageAlternateCounts } from "@/api/lib/case-law/language-alternate-counts";
 import {
   redistributableCaseLawSource,
   redistributableCaseLawSourceSqlFor,
@@ -335,25 +335,10 @@ const searchPostgresDecisions = async (
   ];
   const languageAlternateCounts =
     languageGroupKeys.length > 0
-      ? await caseLawDb((tx) =>
-          tx
-            .select({
-              languageGroupKey: caseLawDecisions.languageGroupKey,
-              count: validCaseLawLanguageAlternateCountSql,
-            })
-            .from(caseLawDecisions)
-            .innerJoin(
-              caseLawSources,
-              eq(caseLawSources.id, caseLawDecisions.sourceId),
-            )
-            .where(
-              and(
-                inArray(caseLawDecisions.languageGroupKey, languageGroupKeys),
-                redistributableCaseLawSource,
-              ),
-            )
-            .groupBy(caseLawDecisions.languageGroupKey),
-        )
+      ? await readDecisionLanguageAlternateCounts({
+          caseLawDb,
+          languageGroupKeys,
+        })
       : [];
   const languageAlternateCountByGroupKey = new Map(
     languageAlternateCounts
@@ -661,25 +646,10 @@ const searchCorpusIndexDecisions = async (
   ];
   const languageAlternateCounts =
     languageGroupKeys.length > 0
-      ? await caseLawDb((tx) =>
-          tx
-            .select({
-              languageGroupKey: caseLawDecisions.languageGroupKey,
-              count: validCaseLawLanguageAlternateCountSql,
-            })
-            .from(caseLawDecisions)
-            .innerJoin(
-              caseLawSources,
-              eq(caseLawSources.id, caseLawDecisions.sourceId),
-            )
-            .where(
-              and(
-                inArray(caseLawDecisions.languageGroupKey, languageGroupKeys),
-                redistributableCaseLawSource,
-              ),
-            )
-            .groupBy(caseLawDecisions.languageGroupKey),
-        )
+      ? await readDecisionLanguageAlternateCounts({
+          caseLawDb,
+          languageGroupKeys,
+        })
       : [];
   const languageAlternateCountByGroupKey = new Map(
     languageAlternateCounts
