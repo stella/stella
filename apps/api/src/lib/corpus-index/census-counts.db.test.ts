@@ -285,6 +285,25 @@ test("exact accounting converges across replay, races, and valid projection tran
     .from(caseLawCorpusIndexCountBackfills)
     .where(eq(caseLawCorpusIndexCountBackfills.generation, FUTURE_GENERATION));
   expect(checkpoint.at(0)?.status).toBe(
-    CASE_LAW_CORPUS_INDEX_COUNT_BACKFILL_STATUS.COMPLETE,
+    CASE_LAW_CORPUS_INDEX_COUNT_BACKFILL_STATUS.RUNNING,
   );
+  expect(
+    await advanceCaseLawCorpusIndexCountBackfill(scopedDb, FUTURE_GENERATION),
+  ).toEqual({
+    generation: FUTURE_GENERATION,
+    processed: 0,
+    status: CASE_LAW_CORPUS_INDEX_COUNT_BACKFILL_STATUS.RUNNING,
+  });
+
+  await db
+    .update(caseLawCorpusIndexBackfills)
+    .set({ status: "complete" })
+    .where(eq(caseLawCorpusIndexBackfills.generation, FUTURE_GENERATION));
+  expect(
+    await advanceCaseLawCorpusIndexCountBackfill(scopedDb, FUTURE_GENERATION),
+  ).toEqual({
+    generation: FUTURE_GENERATION,
+    processed: 0,
+    status: CASE_LAW_CORPUS_INDEX_COUNT_BACKFILL_STATUS.COMPLETE,
+  });
 });

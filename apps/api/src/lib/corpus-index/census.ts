@@ -37,8 +37,10 @@ import { and, asc, eq, gt, inArray, type SQL, sql } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
+  CASE_LAW_CORPUS_INDEX_BACKFILL_STATUS,
   CASE_LAW_CORPUS_INDEX_COUNT_BACKFILL_STATUS,
   type CaseLawCorpusIndexCountBackfillStatus,
+  caseLawCorpusIndexBackfills,
   caseLawCorpusIndexCountBackfills,
   caseLawCorpusIndexCounts,
   caseLawCorpusIndexProjections,
@@ -104,9 +106,17 @@ export const advanceCaseLawCorpusIndexCountBackfill = async (
       await tx
         .select({
           cursorDecisionId: caseLawCorpusIndexCountBackfills.cursorDecisionId,
+          generationStatus: caseLawCorpusIndexBackfills.status,
           status: caseLawCorpusIndexCountBackfills.status,
         })
         .from(caseLawCorpusIndexCountBackfills)
+        .innerJoin(
+          caseLawCorpusIndexBackfills,
+          eq(
+            caseLawCorpusIndexBackfills.generation,
+            caseLawCorpusIndexCountBackfills.generation,
+          ),
+        )
         .where(eq(caseLawCorpusIndexCountBackfills.generation, generation))
         .for("update")
     ).at(0);
@@ -146,6 +156,20 @@ export const advanceCaseLawCorpusIndexCountBackfill = async (
       .for("update");
 
     if (page.length === 0) {
+      // A running generation can still be served through the legacy decision
+      // marker before its projection walk reaches every row. Keep the count
+      // unavailable until that walk removes the fallback population; newly
+      // written projections are already exact through the accounting trigger.
+      if (
+        checkpoint.generationStatus ===
+        CASE_LAW_CORPUS_INDEX_BACKFILL_STATUS.RUNNING
+      ) {
+        return {
+          generation,
+          processed: 0,
+          status: CASE_LAW_CORPUS_INDEX_COUNT_BACKFILL_STATUS.RUNNING,
+        };
+      }
       await tx
         .update(caseLawCorpusIndexCountBackfills)
         .set({

@@ -159,6 +159,7 @@ const TABLE_MUTATION_PRIVILEGES = new Set([
   "all",
   "delete",
   "insert",
+  "maintain",
   "references",
   "trigger",
   "truncate",
