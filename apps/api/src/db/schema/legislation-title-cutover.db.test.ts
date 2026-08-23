@@ -53,26 +53,29 @@ test("the staged cutover widens titles without rewriting the table or retaining 
     );
 
     const migration = await Bun.file(MIGRATION).text();
-    const alterAt = migration.indexOf(
-      'ALTER COLUMN "title" SET DATA TYPE text',
-    );
+    const offsetOf = (statement: string) => {
+      const offset = migration.indexOf(statement);
+      expect(offset).toBeGreaterThanOrEqual(0);
+      return offset;
+    };
+    const alterAt = offsetOf('ALTER COLUMN "title" SET DATA TYPE text');
     expect(
-      migration.indexOf(
+      offsetOf(
         'DROP INDEX CONCURRENTLY IF EXISTS "legislation_documents_country_title_id_idx"',
       ),
     ).toBeLessThan(alterAt);
     expect(
-      migration.indexOf(
+      offsetOf(
         'DROP INDEX CONCURRENTLY IF EXISTS "legislation_documents_title_trgm_idx"',
       ),
     ).toBeLessThan(alterAt);
     expect(
-      migration.indexOf(
+      offsetOf(
         'CREATE INDEX CONCURRENTLY "legislation_documents_country_title_sort_id_idx"',
       ),
     ).toBeGreaterThan(alterAt);
     expect(
-      migration.indexOf(
+      offsetOf(
         'CREATE INDEX CONCURRENTLY "legislation_documents_title_trgm_idx"',
       ),
     ).toBeGreaterThan(alterAt);

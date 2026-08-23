@@ -475,8 +475,11 @@ describe("public statute list", () => {
         break;
       }
       expect(cursor.length).toBeLessThanOrEqual(PAGINATION_CURSOR_MAX_CHARS);
-      expect(decodePaginationCursor(cursor)?.at(0)).toBe(
-        LEGISLATION_TITLE_CURSOR_KIND,
+      const cursorParts = decodePaginationCursor(cursor);
+      expect(cursorParts).toHaveLength(3);
+      expect(cursorParts?.at(0)).toBe(LEGISLATION_TITLE_CURSOR_KIND);
+      expect(cursorParts?.at(1)?.length).toBeLessThanOrEqual(
+        LEGISLATION_TITLE_SORT_KEY_CHARS,
       );
     }
 
