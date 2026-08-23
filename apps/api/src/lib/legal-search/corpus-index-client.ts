@@ -164,24 +164,78 @@ const toCorpusIndexError = (error: unknown): CorpusIndexError =>
         cause: error,
       });
 
-const requestJson = async (
-  baseUrl: string,
-  path: string,
-  init: Omit<RequestInit, "signal">,
-  timeoutMs: number,
-): Promise<unknown> => {
-  const response = await fetchWithTimeout(`${baseUrl}${path}`, {
-    ...init,
-    timeoutMs,
+type CorpusIndexRequest = {
+  baseUrl: string;
+  path: string;
+  init: Omit<RequestInit, "signal">;
+  timeoutMs: number;
+};
+
+const requestLabel = ({ init, path }: CorpusIndexRequest): string =>
+  `${init.method ?? "GET"} ${path}`;
+
+/**
+ * The budget covers the whole exchange, so it can expire before the
+ * headers arrive or while the body is still streaming. Both abort with
+ * the same reason, and neither is a malformed payload.
+ */
+const isAborted = (error: unknown): boolean =>
+  error instanceof Error &&
+  (error.name === "TimeoutError" || error.name === "AbortError");
+
+type RequestFailureOptions = {
+  request: CorpusIndexRequest;
+  error: unknown;
+  /** How to describe a failure the budget did not cause. */
+  unaborted: string;
+};
+
+/**
+ * Names the request that failed, and the budget when the budget is what
+ * ended it.
+ *
+ * `fetchWithTimeout` rejects with the abort reason alone, so an expired
+ * budget reaches the caller as "The operation timed out." and says
+ * neither which request expired nor how long it had. The rejected-status
+ * branch below already names the request; this gives the branch that
+ * actually fires under load the same.
+ */
+const requestFailure = ({
+  request,
+  error,
+  unaborted,
+}: RequestFailureOptions): CorpusIndexError =>
+  new CorpusIndexError({
+    message: isAborted(error)
+      ? `corpus index ${requestLabel(request)} failed within its ${request.timeoutMs}ms budget: ${String(error)}`
+      : `corpus index ${requestLabel(request)} ${unaborted}: ${String(error)}`,
+    cause: error,
   });
+
+const sendRequest = async (request: CorpusIndexRequest): Promise<Response> =>
+  await fetchWithTimeout(`${request.baseUrl}${request.path}`, {
+    ...request.init,
+    timeoutMs: request.timeoutMs,
+  }).catch((error: unknown) => {
+    throw requestFailure({ request, error, unaborted: "could not be sent" });
+  });
+
+const requestJson = async (request: CorpusIndexRequest): Promise<unknown> => {
+  const response = await sendRequest(request);
   if (!response.ok) {
     const body = await response.text().catch(() => "");
     throw new CorpusIndexError({
-      message: `corpus index ${init.method ?? "GET"} ${path} -> ${response.status}: ${body.slice(0, 500)}`,
+      message: `corpus index ${requestLabel(request)} -> ${response.status}: ${body.slice(0, 500)}`,
       status: response.status,
     });
   }
-  return await response.json();
+  return await response.json().catch((error: unknown) => {
+    throw requestFailure({
+      request,
+      error,
+      unaborted: "returned an unreadable body",
+    });
+  });
 };
 
 const parseRecordArray = (value: unknown): Record<string, unknown>[] | null => {
@@ -203,16 +257,16 @@ const buildClient = (): CorpusIndexClient => ({
   createIndex: async (config) =>
     await Result.tryPromise({
       try: async () => {
-        await requestJson(
-          mutationBaseUrl(),
-          "/api/v1/indexes",
-          {
+        await requestJson({
+          baseUrl: mutationBaseUrl(),
+          path: "/api/v1/indexes",
+          init: {
             method: "POST",
             headers: { "content-type": "application/json" },
             body: JSON.stringify(config),
           },
-          ADMIN_TIMEOUT_MS,
-        );
+          timeoutMs: ADMIN_TIMEOUT_MS,
+        });
       },
       catch: toCorpusIndexError,
     }),
@@ -220,12 +274,12 @@ const buildClient = (): CorpusIndexClient => ({
   deleteIndex: async (indexId) =>
     await Result.tryPromise({
       try: async () => {
-        await requestJson(
-          mutationBaseUrl(),
-          `/api/v1/indexes/${indexId}`,
-          { method: "DELETE" },
-          ADMIN_TIMEOUT_MS,
-        );
+        await requestJson({
+          baseUrl: mutationBaseUrl(),
+          path: `/api/v1/indexes/${indexId}`,
+          init: { method: "DELETE" },
+          timeoutMs: ADMIN_TIMEOUT_MS,
+        });
       },
       catch: toCorpusIndexError,
     }),
@@ -233,13 +287,12 @@ const buildClient = (): CorpusIndexClient => ({
   indexExists: async (indexId) =>
     await Result.tryPromise({
       try: async () => {
-        const response = await fetchWithTimeout(
-          `${mutationBaseUrl()}/api/v1/indexes/${indexId}`,
-          {
-            method: "GET",
-            timeoutMs: ADMIN_TIMEOUT_MS,
-          },
-        );
+        const response = await sendRequest({
+          baseUrl: mutationBaseUrl(),
+          path: `/api/v1/indexes/${indexId}`,
+          init: { method: "GET" },
+          timeoutMs: ADMIN_TIMEOUT_MS,
+        });
         if (response.status === 404) {
           return false;
         }
@@ -260,16 +313,16 @@ const buildClient = (): CorpusIndexClient => ({
         const sentDocs = ndjson
           .split("\n")
           .filter((line) => line.trim().length > 0).length;
-        const response = await requestJson(
-          mutationBaseUrl(),
-          `/api/v1/${indexId}/ingest?commit=${commit}`,
-          {
+        const response = await requestJson({
+          baseUrl: mutationBaseUrl(),
+          path: `/api/v1/${indexId}/ingest?commit=${commit}`,
+          init: {
             method: "POST",
             headers: { "content-type": "application/x-ndjson" },
             body: ndjson,
           },
-          CORPUS_INDEX_INGEST_TIMEOUT_MS,
-        );
+          timeoutMs: CORPUS_INDEX_INGEST_TIMEOUT_MS,
+        });
         if (!isRecord(response)) {
           throw new CorpusIndexError({
             message: "corpus index ingest returned an invalid response",
@@ -325,16 +378,16 @@ const buildClient = (): CorpusIndexClient => ({
         if (snippetFields !== undefined && snippetFields.length > 0) {
           body["snippet_fields"] = snippetFields.join(",");
         }
-        const response = await requestJson(
-          searchBaseUrl(),
-          `/api/v1/${indexId}/search`,
-          {
+        const response = await requestJson({
+          baseUrl: searchBaseUrl(),
+          path: `/api/v1/${indexId}/search`,
+          init: {
             method: "POST",
             headers: { "content-type": "application/json" },
             body: JSON.stringify(body),
           },
-          SEARCH_TIMEOUT_MS,
-        );
+          timeoutMs: SEARCH_TIMEOUT_MS,
+        });
         if (!isRecord(response)) {
           throw new CorpusIndexError({
             message: "corpus index search returned an invalid response",
@@ -374,18 +427,18 @@ const buildClient = (): CorpusIndexClient => ({
   aggregate: async ({ indexId, query, aggs }) =>
     await Result.tryPromise({
       try: async () => {
-        const response = await requestJson(
-          searchBaseUrl(),
-          `/api/v1/${indexId}/search`,
-          {
+        const response = await requestJson({
+          baseUrl: searchBaseUrl(),
+          path: `/api/v1/${indexId}/search`,
+          init: {
             method: "POST",
             headers: { "content-type": "application/json" },
             // Aggregations only: hits are the expensive part of the
             // response and the caller wants counts, not documents.
             body: JSON.stringify({ query, max_hits: 0, aggs }),
           },
-          AGGREGATION_TIMEOUT_MS,
-        );
+          timeoutMs: AGGREGATION_TIMEOUT_MS,
+        });
         if (!isRecord(response) || !isRecord(response["aggregations"])) {
           throw new CorpusIndexError({
             message: "corpus index aggregation returned an invalid response",
@@ -399,16 +452,16 @@ const buildClient = (): CorpusIndexClient => ({
   deleteByQuery: async (indexId, query) =>
     await Result.tryPromise({
       try: async () => {
-        await requestJson(
-          mutationBaseUrl(),
-          `/api/v1/${indexId}/delete-tasks`,
-          {
+        await requestJson({
+          baseUrl: mutationBaseUrl(),
+          path: `/api/v1/${indexId}/delete-tasks`,
+          init: {
             method: "POST",
             headers: { "content-type": "application/json" },
             body: JSON.stringify({ query }),
           },
-          ADMIN_TIMEOUT_MS,
-        );
+          timeoutMs: ADMIN_TIMEOUT_MS,
+        });
       },
       catch: toCorpusIndexError,
     }),
