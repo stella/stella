@@ -166,10 +166,12 @@ type DynamicGrantSitesOptions = {
 const dynamicGrantSites = ({
   contents,
   migration,
-}: DynamicGrantSitesOptions): string[] =>
-  [...stripSqlLineComments(contents).matchAll(DYNAMIC_GRANT_PATTERN)].map(
+}: DynamicGrantSitesOptions): string[] => {
+  const uncommented = stripSqlLineComments(contents);
+  return [...uncommented.matchAll(DYNAMIC_GRANT_PATTERN)].map(
     (match) => `${migration}: ${match[0].replace(/\s+/gu, " ").trim()}`,
   );
+};
 
 type GrantsRequiredPrivilegesOptions = {
   table: string;
@@ -390,9 +392,10 @@ const selectOnlyMutationTargets = (grant: StellaTableGrant): string[] => {
     return [];
   }
   if (grant.type === "all_tables_in_schema") {
-    return grant.schemas.includes("public")
-      ? ["all tables in schema public"]
-      : [];
+    if (!grant.schemas.includes("public")) {
+      return [];
+    }
+    return ["all tables in schema public"];
   }
   return grant.tables.filter((table) =>
     POST_BOOTSTRAP_SELECT_ONLY_TABLES.has(table),
@@ -514,19 +517,14 @@ describe("RLS table grants", () => {
         "GRANT SELECT ON TABLE classified_table TO another_role GRANTED BY stella",
       ),
     ).toBeNull();
-    expect(
-      stellaTableGrant(
-        "GRANT UPDATE ON ALL TABLES IN SCHEMA public TO PUBLIC",
-      ),
-    ).toEqual({
+    const schemaWideMutation = stellaTableGrant(
+      "GRANT UPDATE ON ALL TABLES IN SCHEMA public TO PUBLIC",
+    );
+    expect(schemaWideMutation).toEqual({
       type: "all_tables_in_schema",
       privileges: new Set(["update"]),
       schemas: ["public"],
     });
-    const schemaWideMutation = stellaTableGrant(
-      "GRANT UPDATE ON ALL TABLES IN SCHEMA public TO PUBLIC",
-    );
-    expect(schemaWideMutation).not.toBeNull();
     if (schemaWideMutation !== null) {
       expect(selectOnlyMutationTargets(schemaWideMutation)).toEqual([
         "all tables in schema public",
