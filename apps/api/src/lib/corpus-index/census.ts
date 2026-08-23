@@ -218,8 +218,8 @@ export const createCaseLawCorpusIndexCountSeed = ({
       if (complete) {
         return;
       }
-      const outcome = await Result.tryPromise(() =>
-        advance(scopedDb, generation),
+      const outcome = await Result.tryPromise(async () =>
+        await advance(scopedDb, generation),
       );
       if (Result.isError(outcome)) {
         logger.warn("case_law.corpus_index.count_seed_failed", {
