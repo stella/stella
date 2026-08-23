@@ -12,7 +12,7 @@ describe("lookup preview cache", () => {
 
     const firstLookup = cache.getOrLoad({
       key: "registry:number",
-      load: () => {
+      load: async () => {
         loads += 1;
         return pending.promise;
       },

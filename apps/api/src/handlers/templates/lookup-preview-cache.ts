@@ -53,6 +53,6 @@ const lookupPreviewCache = createLookupPreviewCache();
 /** Drop reconstructible registry results when the runtime reports memory pressure. */
 export const clearLookupPreviewCache = () => lookupPreviewCache.clear();
 
-export const getLookupPreviewOutcome = (
+export const getLookupPreviewOutcome = async (
   options: GetLookupPreviewOutcomeOptions,
 ) => lookupPreviewCache.getOrLoad(options);
