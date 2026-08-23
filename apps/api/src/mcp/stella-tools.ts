@@ -62,6 +62,7 @@ import {
   brandPersistedCaseLawSourceId,
   brandPersistedContactId,
   brandPersistedEntityId,
+  brandPersistedWorkspaceId,
 } from "@/api/lib/safe-id-boundaries";
 import { decodeCursor } from "@/api/lib/search/cursor";
 import { getSearchProvider } from "@/api/lib/search/provider";
@@ -1086,8 +1087,8 @@ const handleSearchAcrossMattersTool: TypedMcpToolHandler<
   });
 
   const hits = result.hits.map((hit) => ({
-    entityId: hit.entityId,
-    workspaceId: hit.workspaceId,
+    entityId: brandPersistedEntityId(hit.entityId),
+    workspaceId: brandPersistedWorkspaceId(hit.workspaceId),
     workspaceName: hit.workspaceName,
     name: hit.title,
     kind: hit.kind,
@@ -1534,7 +1535,7 @@ const handleReadContentAcrossMattersTool: TypedMcpToolHandler<
     text,
     truncated: false,
     nextCursor: initialNextCursor(),
-    workspaceId: currentDocument.workspaceId,
+    workspaceId: brandPersistedWorkspaceId(currentDocument.workspaceId),
   };
   // The egress window's `apply` below mutates this object in place, so the tie
   // cannot ride on the literal: a `satisfies` clause would contextually pin

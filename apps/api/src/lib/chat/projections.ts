@@ -1,5 +1,7 @@
 import * as v from "valibot";
 
+import { ENTITY_KINDS } from "@stll/api-contract";
+
 import { TIME_ENTRY_VISIBILITY } from "@/api/lib/billing-constants";
 import {
   DOCUMENT_PROCESSING_FAILURE_CODE,
@@ -253,7 +255,7 @@ export const SEARCH_ACROSS_MATTERS_PROJECTION = v.strictObject({
       workspaceId: chatRef("matter"),
       workspaceName: v.string(),
       name: v.string(),
-      kind: v.string(),
+      kind: v.picklist(ENTITY_KINDS),
       headline: v.nullable(v.string()),
     }),
   ),
@@ -270,7 +272,7 @@ export const READ_CONTENT_ACROSS_MATTERS_PROJECTION = v.strictObject({
   // reuses the dehydrated ref; the sibling source (the hand entry's
   // declaration, kept verbatim) only backs a non-echo payload.
   entityId: chatEntityRef({ from: "sibling", key: "workspaceId" }),
-  kind: v.string(),
+  kind: v.picklist(ENTITY_KINDS),
   name: v.string(),
   text: v.string(),
   truncated: v.boolean(),

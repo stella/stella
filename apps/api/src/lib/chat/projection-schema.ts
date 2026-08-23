@@ -7,7 +7,6 @@ import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   isPersistedJsonValue,
-  type PersistedJsonValue,
 } from "@/api/lib/chat/persisted-message-content";
 import type { ChatRefKind, ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";

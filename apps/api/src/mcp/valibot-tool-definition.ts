@@ -42,7 +42,10 @@ const deriveMcpInputSchema = (
     );
   }
 
-  return { ...jsonSchema, type: "object" };
+  const { properties, ...objectSchema } = jsonSchema;
+  return properties === undefined
+    ? { ...objectSchema, type: "object" }
+    : { ...objectSchema, properties, type: "object" };
 };
 
 /**
@@ -53,9 +56,8 @@ const deriveMcpInputSchema = (
  * to distinguish derived schemas from legacy hand-maintained mirrors.
  */
 export const defineValibotMcpTool = <
-  const TSchema extends v.GenericSchema,
   const TDefinition extends Omit<McpToolDefinition, "inputSchema"> & {
-    inputSchema: TSchema;
+    inputSchema: v.GenericSchema;
     jsonSchemaProjectionWaiver?: JsonSchemaProjectionWaiver;
   },
 >({ inputSchema, jsonSchemaProjectionWaiver, ...definition }: TDefinition) => ({

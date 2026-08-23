@@ -523,28 +523,39 @@ const hasCompleteCompositeField = ({
   parts?: FieldPart[];
 }): boolean => (parts === undefined) === (format === undefined);
 
-const FIELD_META_RULES = [
+export const fieldMetaSchema = v.pipe(
+  fieldMetaObjectSchema,
   v.check(
-    hasCompleteCompositeField,
+    (field: v.InferOutput<typeof fieldMetaObjectSchema>) =>
+      hasCompleteCompositeField(field),
     "parts and format must be provided together",
   ),
   v.check(
-    hasCompatibleDerivedSources,
+    (field: v.InferOutput<typeof fieldMetaObjectSchema>) =>
+      hasCompatibleDerivedSources(field),
     "Derived field sources are mutually exclusive",
   ),
-] as const;
-
-export const fieldMetaSchema = v.pipe(
-  fieldMetaObjectSchema,
-  ...FIELD_META_RULES,
 );
 
 /** Model-facing subset: conditionAst is the persisted canonical form, not an
- * authoring input. This schema still shares every public field and rule with
- * fieldMetaSchema through the same object schema and rule composer. */
+ * authoring input. This schema derives its public fields from the persisted
+ * object schema and applies the same named invariant predicates. */
+const fieldMetaToolInputObjectSchema = v.omit(fieldMetaObjectSchema, [
+  "conditionAst",
+]);
+
 export const fieldMetaToolInputSchema = v.pipe(
-  v.omit(fieldMetaObjectSchema, ["conditionAst"]),
-  ...FIELD_META_RULES,
+  fieldMetaToolInputObjectSchema,
+  v.check(
+    (field: v.InferOutput<typeof fieldMetaToolInputObjectSchema>) =>
+      hasCompleteCompositeField(field),
+    "parts and format must be provided together",
+  ),
+  v.check(
+    (field: v.InferOutput<typeof fieldMetaToolInputObjectSchema>) =>
+      hasCompatibleDerivedSources(field),
+    "Derived field sources are mutually exclusive",
+  ),
 );
 
 export const isFieldPart = (value: unknown): value is FieldPart =>
