@@ -18,10 +18,10 @@ import { STELLA_TOOL_HANDLERS } from "@/api/mcp/stella-tools";
 import { TEMPLATE_TOOL_HANDLERS } from "@/api/mcp/template-tools";
 import type { McpToolHandler } from "@/api/mcp/tool-types";
 
-import { toRegistryChatToolError } from "./registry-tool-error";
 import type { RegistryWriteToolName } from "./ref-field-map";
 import { WRITE_TOOL_REF_FIELD_MAP } from "./ref-field-map";
 import { dehydrateRefs } from "./ref-mediation";
+import { toRegistryChatToolError } from "./registry-tool-error";
 
 /**
  * The write registry handlers chat may drive, gathered from the per-domain
