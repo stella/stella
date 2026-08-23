@@ -50,6 +50,10 @@ const POST_BOOTSTRAP_SELECT_ONLY_TABLES = new Set([
   "case_law_corpus_index_source_reconciliations",
   "case_law_corpus_index_writer_leases",
   "case_law_corpus_index_projections",
+  // Exact corpus-index accounting is maintained only by ingestion triggers
+  // and the bounded seed worker; request handlers may observe its status.
+  "case_law_corpus_index_counts",
+  "case_law_corpus_index_count_backfills",
   "legislation_sources",
   "legislation_documents",
   "legislation_search_documents",
