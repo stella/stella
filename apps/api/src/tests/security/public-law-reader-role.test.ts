@@ -16,11 +16,11 @@ import {
 } from "@/api/handlers/case-law/decisions/sitemap";
 import { rehydrateLegislationCandidates } from "@/api/handlers/legislation/search";
 import { createSafeId } from "@/api/lib/branded-types";
-import { getCollator } from "@/api/lib/collation";
 import type {
   CaseLawPublicReadDb,
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
+import { getCollator } from "@/api/lib/collation";
 import type {
   LegislationReadDb,
   LegislationReadTransaction,
