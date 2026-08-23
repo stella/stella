@@ -367,6 +367,10 @@ export type McpToolResponse<TData = unknown> =
   | InternalToolResult<TData>
   | McpEgressPlan<TData>;
 
+export type TypedMcpToolResponse<TData> =
+  | InternalToolResult<TData>
+  | Extract<McpEgressPlan<TData>, { egress: "structured" }>;
+
 export const isMcpEgressPlan = (
   response: McpToolResponse,
 ): response is McpEgressPlan => "egress" in response;
@@ -378,6 +382,35 @@ export type McpToolHandler<TData = unknown> = ({
   args: Record<string, unknown>;
   context: McpRequestContext;
 }) => McpToolResponse<TData> | Promise<McpToolResponse<TData>>;
+
+type TypedMcpToolHandlerResult<TData> =
+  | TypedMcpToolResponse<TData>
+  | Promise<TypedMcpToolResponse<TData>>;
+
+export type TypedMcpToolHandler<TData> = (options: {
+  args: Record<string, unknown>;
+  context: McpRequestContext;
+}) => TypedMcpToolHandlerResult<TData>;
+
+type TypedHandlerData<THandler> =
+  THandler extends TypedMcpToolHandler<infer TData> ? TData : never;
+
+export type TypedHandlerDataByName<
+  THandlers,
+  TNames extends keyof THandlers,
+> = {
+  [TName in TNames]: TypedHandlerData<THandlers[TName]>;
+};
+
+export type AllHandlerOutputsTyped<THandlers, TNames extends keyof THandlers> =
+  Pick<THandlers, TNames> extends Record<
+    TNames,
+    TypedMcpToolHandler<Record<string, unknown>>
+  >
+    ? true
+    : false;
+
+export type AssertTrue<TValue extends true> = TValue;
 
 export type McpToolHandlerMap<
   TDefinitions extends readonly McpToolDefinition[],

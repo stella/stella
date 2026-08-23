@@ -99,6 +99,12 @@ export type RegistryRefFieldMapEntry =
   | { chatProjectable: false }
   | ({ chatProjectable: true } & RefMediationEntry);
 
+export type ChatProjectableToolName<TMap> = {
+  [TName in keyof TMap]: TMap[TName] extends { chatProjectable: true }
+    ? TName
+    : never;
+}[keyof TMap];
+
 // --- Chat projection schemas -------------------------------------------------
 // One artifact per projected tool: the exact shape the chat surface forwards,
 // with per-field chat semantics attached (`chatRef`/`chatEntityRef`/

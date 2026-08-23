@@ -1004,9 +1004,9 @@ type ProjectionTelemetrySource =
   | "run-registry-tool"
   | "run-registry-write-tool";
 
-export type ProjectForChatOptions = {
+export type ProjectForChatOptions<TPayload> = {
   schema: ChatProjectionSchema;
-  payload: unknown;
+  payload: TPayload;
   refRegistry: ChatRefRegistry;
   dehydration: DehydratedInput;
   /** Telemetry context only; never part of the transform. */
@@ -1033,14 +1033,14 @@ export type ProjectForChatOptions = {
  *    survivor fails closed as a `server-defect`, its path (never its value)
  *    to telemetry.
  */
-export const projectForChat = ({
+export const projectForChat = <TPayload>({
   schema,
   payload,
   refRegistry,
   dehydration,
   source,
   toolName,
-}: ProjectForChatOptions): Result<unknown, ChatToolError> => {
+}: ProjectForChatOptions<TPayload>): Result<unknown, ChatToolError> => {
   const parsed = strictParseProjection({ payload, schema });
   if (Result.isError(parsed)) {
     const error = new ChatToolError({

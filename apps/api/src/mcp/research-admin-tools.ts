@@ -26,6 +26,7 @@ import type {
   MANAGE_ORGANIZATION_ADD_MEMBER_PROJECTION,
   MANAGE_ORGANIZATION_REMOVE_MEMBER_PROJECTION,
   MANAGE_ORGANIZATION_SETTINGS_PROJECTION,
+  MANAGE_ORGANIZATION_PROJECTION,
   SEARCH_LEGISLATION_PROJECTION,
 } from "@/api/lib/chat/projections";
 import { LIMITS } from "@/api/lib/limits";
@@ -37,7 +38,11 @@ import {
   bindApprovedMcpAuditContext,
   type McpRequestContext,
 } from "@/api/mcp/context";
-import type { McpToolDefinition, McpToolHandler } from "@/api/mcp/tool-types";
+import type {
+  McpToolDefinition,
+  McpToolHandler,
+  TypedMcpToolHandler,
+} from "@/api/mcp/tool-types";
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
   bindWorkspaceRecorder,
@@ -396,10 +401,9 @@ const searchLegislationArgsSchema = v.pipe(
   ),
 );
 
-const handleSearchLegislationTool: McpToolHandler = async ({
-  args,
-  context,
-}) => {
+const handleSearchLegislationTool: TypedMcpToolHandler<
+  v.InferInput<typeof SEARCH_LEGISLATION_PROJECTION>
+> = async ({ args, context }) => {
   if (!roles[context.memberRole].authorize({ workspace: ["read"] }).success) {
     return errorResult("Forbidden");
   }
@@ -752,10 +756,9 @@ const handleRemoveMember = async ({
   >);
 };
 
-const handleManageOrganizationTool: McpToolHandler = async ({
-  args,
-  context,
-}) => {
+const handleManageOrganizationTool: TypedMcpToolHandler<
+  v.InferInput<typeof MANAGE_ORGANIZATION_PROJECTION>
+> = async ({ args, context }) => {
   const parsed = v.safeParse(manageOrganizationArgsSchema, args);
   if (!parsed.success) {
     return validationErrorResult({

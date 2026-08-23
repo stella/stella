@@ -15,7 +15,9 @@ import { assertUsageAvailableForHandler } from "@/api/lib/api-handlers";
 import type {
   AssertNoExtraFields,
   LIST_TEMPLATES_LIST_PROJECTION,
+  LIST_TEMPLATES_PROJECTION,
   SAVE_TEMPLATE_CREATE_PROJECTION,
+  SAVE_TEMPLATE_PROJECTION,
   TEMPLATE_DESCRIBE_PROJECTION,
 } from "@/api/lib/chat/projections";
 import {
@@ -77,6 +79,7 @@ import type {
   McpTextFieldSpec,
   McpToolDefinition,
   McpToolHandler,
+  TypedMcpToolHandler,
 } from "@/api/mcp/tool-types";
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
@@ -607,7 +610,9 @@ const decodeTemplatePageCursor = (cursor: string): string | null => {
   return isUuidPaginationCursorPart(rawId) ? rawId : null;
 };
 
-const handleListTemplatesTool: McpToolHandler = async ({ args, context }) => {
+const handleListTemplatesTool: TypedMcpToolHandler<
+  v.InferInput<typeof LIST_TEMPLATES_PROJECTION>
+> = async ({ args, context }) => {
   const hasPermission = roles[context.memberRole].authorize({
     workspace: ["read"],
   });
@@ -719,7 +724,9 @@ const describeTemplateArgsSchema = v.strictObject({
 // Detail branch of list_templates: one template's field configuration. Reused
 // verbatim from the former describe_template tool, which list_templates
 // absorbed. The caller (list_templates) already checked the read permission.
-const describeTemplateDetail: McpToolHandler = async ({ args, context }) => {
+const describeTemplateDetail: TypedMcpToolHandler<
+  v.InferInput<typeof LIST_TEMPLATES_PROJECTION>
+> = async ({ args, context }) => {
   const parsed = v.safeParse(describeTemplateArgsSchema, args);
   if (!parsed.success) {
     return validationErrorResult({
@@ -1529,7 +1536,9 @@ const createTemplateFromDocx = async ({
   docxBase64: string;
   fields: readonly unknown[] | undefined;
   name: string;
-}): Promise<InternalToolResult> => {
+}): Promise<
+  InternalToolResult<v.InferInput<typeof SAVE_TEMPLATE_PROJECTION>>
+> => {
   const hasPermission = roles[context.memberRole].authorize({
     template: ["create"],
   });
@@ -1633,7 +1642,9 @@ const configureExistingTemplate = async ({
   context: McpRequestContext;
   fields: readonly unknown[];
   templateId: string;
-}): Promise<InternalToolResult> => {
+}): Promise<
+  InternalToolResult<v.InferInput<typeof SAVE_TEMPLATE_PROJECTION>>
+> => {
   const hasPermission = roles[context.memberRole].authorize({
     template: ["update"],
   });
@@ -1691,7 +1702,9 @@ const configureExistingTemplate = async ({
   return toolDataResult(described satisfies ConfiguredTemplatePayload);
 };
 
-const handleSaveTemplateTool: McpToolHandler = async ({ args, context }) => {
+const handleSaveTemplateTool: TypedMcpToolHandler<
+  v.InferInput<typeof SAVE_TEMPLATE_PROJECTION>
+> = async ({ args, context }) => {
   const parsed = v.safeParse(saveTemplateArgsSchema, args);
   if (!parsed.success) {
     return validationErrorResult({

@@ -17,10 +17,13 @@ import { resolveRate } from "@/api/lib/billing-rates";
 import type { SafeId } from "@/api/lib/branded-types";
 import type {
   DELETE_TIME_ENTRY_PROJECTION,
+  GET_USAGE_PROJECTION,
   LIST_INVOICES_DETAIL_PROJECTION,
   LIST_INVOICES_LIST_PROJECTION,
+  LIST_INVOICES_PROJECTION,
   LIST_TIME_ENTRIES_DETAIL_PROJECTION,
   LIST_TIME_ENTRIES_LIST_PROJECTION,
+  LIST_TIME_ENTRIES_PROJECTION,
   RESOLVE_RATE_PROJECTION,
   SAVE_TIME_ENTRY_PROJECTION,
 } from "@/api/lib/chat/projections";
@@ -49,6 +52,7 @@ import type {
   McpTextFieldSpec,
   McpToolDefinition,
   McpToolHandler,
+  TypedMcpToolHandler,
 } from "@/api/mcp/tool-types";
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
@@ -733,7 +737,9 @@ const decodeTimeEntryPageCursor = (
   return { dateWorked, id: brandPersistedTimeEntryId(id) };
 };
 
-const handleListTimeEntriesTool: McpToolHandler = async ({ args, context }) => {
+const handleListTimeEntriesTool: TypedMcpToolHandler<
+  v.InferInput<typeof LIST_TIME_ENTRIES_PROJECTION>
+> = async ({ args, context }) => {
   if (!roles[context.memberRole].authorize({ timeEntry: ["read"] }).success) {
     return errorResult("Forbidden");
   }
@@ -1035,7 +1041,9 @@ const saveTimeEntryArgsSchema = v.pipe(
   ),
 );
 
-const handleSaveTimeEntryTool: McpToolHandler = async ({ args, context }) => {
+const handleSaveTimeEntryTool: TypedMcpToolHandler<
+  v.InferInput<typeof SAVE_TIME_ENTRY_PROJECTION>
+> = async ({ args, context }) => {
   const parsed = v.safeParse(saveTimeEntryArgsSchema, args);
   if (!parsed.success) {
     return validationErrorResult({
@@ -1181,7 +1189,9 @@ const deleteTimeEntryArgsSchema = v.strictObject({
   confirm: v.optional(v.boolean()),
 });
 
-const handleDeleteTimeEntryTool: McpToolHandler = async ({ args, context }) => {
+const handleDeleteTimeEntryTool: TypedMcpToolHandler<
+  v.InferInput<typeof DELETE_TIME_ENTRY_PROJECTION>
+> = async ({ args, context }) => {
   if (!roles[context.memberRole].authorize({ timeEntry: ["delete"] }).success) {
     return errorResult("Forbidden");
   }
@@ -1371,7 +1381,9 @@ const readInvoiceDetail = async ({
     }),
   );
 
-const handleListInvoicesTool: McpToolHandler = async ({ args, context }) => {
+const handleListInvoicesTool: TypedMcpToolHandler<
+  v.InferInput<typeof LIST_INVOICES_PROJECTION>
+> = async ({ args, context }) => {
   if (!roles[context.memberRole].authorize({ workspace: ["read"] }).success) {
     return errorResult("Forbidden");
   }
@@ -1550,7 +1562,9 @@ const handleListInvoicesTool: McpToolHandler = async ({ args, context }) => {
 
 const getUsageArgsSchema = v.strictObject({});
 
-const handleGetUsageTool: McpToolHandler = async ({ args, context }) => {
+const handleGetUsageTool: TypedMcpToolHandler<
+  v.InferInput<typeof GET_USAGE_PROJECTION>
+> = async ({ args, context }) => {
   if (
     !roles[context.memberRole].authorize({ organizationSettings: ["update"] })
       .success

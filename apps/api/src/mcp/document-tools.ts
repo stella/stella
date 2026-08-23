@@ -35,8 +35,10 @@ import type {
   LIST_PROPERTIES_PROJECTION,
   READ_DOCUMENT_DEFAULT_PROJECTION,
   READ_DOCUMENT_DIFF_PROJECTION,
+  READ_DOCUMENT_PROJECTION,
   READ_DOCUMENT_VERSION_PROJECTION,
   SAVE_DOCUMENT_CREATE_PROJECTION,
+  SAVE_DOCUMENT_PROJECTION,
   SAVE_DOCUMENT_UPDATE_PROJECTION,
   SET_FIELD_VALUE_PROJECTION,
 } from "@/api/lib/chat/projections";
@@ -87,6 +89,7 @@ import type {
   McpToolDefinition,
   McpToolHandler,
   McpToolResponse,
+  TypedMcpToolHandler,
 } from "@/api/mcp/tool-types";
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
@@ -947,7 +950,9 @@ const documentsParentCondition = ({
   return undefined;
 };
 
-const handleListDocumentsTool: McpToolHandler = async ({ args, context }) => {
+const handleListDocumentsTool: TypedMcpToolHandler<
+  v.InferInput<typeof LIST_DOCUMENTS_PROJECTION>
+> = async ({ args, context }) => {
   const hasPermission = roles[context.memberRole].authorize({
     workspace: ["read"],
   });
@@ -1625,7 +1630,9 @@ const loadDocumentProcessingStates = async ({
   return { contentState, searchIndexState };
 };
 
-const handleReadDocumentTool: McpToolHandler = async ({ args, context }) => {
+const handleReadDocumentTool: TypedMcpToolHandler<
+  v.InferInput<typeof READ_DOCUMENT_PROJECTION>
+> = async ({ args, context }) => {
   const hasPermission = roles[context.memberRole].authorize({
     workspace: ["read"],
   });
@@ -1949,7 +1956,9 @@ const createDocumentEntity = async ({
 }: {
   context: McpRequestContext;
   input: SaveDocumentInput;
-}): Promise<InternalToolResult> => {
+}): Promise<
+  InternalToolResult<v.InferInput<typeof SAVE_DOCUMENT_PROJECTION>>
+> => {
   if (!roles[context.memberRole].authorize({ entity: ["create"] }).success) {
     return errorResult("Forbidden");
   }
@@ -2104,7 +2113,9 @@ const updateDocumentEntity = async ({
 }: {
   context: McpRequestContext;
   input: SaveDocumentInput;
-}): Promise<InternalToolResult> => {
+}): Promise<
+  InternalToolResult<v.InferInput<typeof SAVE_DOCUMENT_PROJECTION>>
+> => {
   if (!roles[context.memberRole].authorize({ entity: ["update"] }).success) {
     return errorResult("Forbidden");
   }
@@ -2198,7 +2209,9 @@ const updateDocumentEntity = async ({
   } satisfies v.InferInput<typeof SAVE_DOCUMENT_UPDATE_PROJECTION>);
 };
 
-const handleSaveDocumentTool: McpToolHandler = async ({ args, context }) => {
+const handleSaveDocumentTool: TypedMcpToolHandler<
+  v.InferInput<typeof SAVE_DOCUMENT_PROJECTION>
+> = async ({ args, context }) => {
   const parsed = v.safeParse(saveDocumentArgsSchema, args);
   if (!parsed.success) {
     return validationErrorResult({
@@ -2319,7 +2332,9 @@ const deleteDocumentArgsSchema = v.strictObject({
   confirm: v.optional(v.boolean()),
 });
 
-const handleDeleteDocumentTool: McpToolHandler = async ({ args, context }) => {
+const handleDeleteDocumentTool: TypedMcpToolHandler<
+  v.InferInput<typeof DELETED_TRUE_PROJECTION>
+> = async ({ args, context }) => {
   const parsed = v.safeParse(deleteDocumentArgsSchema, args);
   if (!parsed.success) {
     return validationErrorResult({
@@ -2401,7 +2416,9 @@ const propertyPageCursorCodec = createTimestampIdCursorCodec({
   brandId: brandPersistedPropertyId,
 });
 
-const handleListPropertiesTool: McpToolHandler = async ({ args, context }) => {
+const handleListPropertiesTool: TypedMcpToolHandler<
+  v.InferInput<typeof LIST_PROPERTIES_PROJECTION>
+> = async ({ args, context }) => {
   const hasPermission = roles[context.memberRole].authorize({
     workspace: ["read"],
   });
@@ -2540,7 +2557,9 @@ const toFieldContent = (content: SetFieldValueContent): UpsertFieldContent => {
   return { version: 1, type: "text", value: content.value };
 };
 
-const handleSetFieldValueTool: McpToolHandler = async ({ args, context }) => {
+const handleSetFieldValueTool: TypedMcpToolHandler<
+  v.InferInput<typeof SET_FIELD_VALUE_PROJECTION>
+> = async ({ args, context }) => {
   const hasPermission = roles[context.memberRole].authorize({
     entity: ["create", "update"],
   });
