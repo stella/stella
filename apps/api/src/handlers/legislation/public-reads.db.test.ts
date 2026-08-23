@@ -298,11 +298,13 @@ beforeAll(
     const readDb = async <T>(
       fn: (tx: LegislationReadTransaction) => Promise<T>,
     ): Promise<T> =>
-      await withPublicLawReaderRole(db, async (tx) =>
-        // SAFETY: this PGlite transaction executes under the production
-        // public-law role and exposes the same read surface to the callback.
-        // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- embedded role transaction stands in for LegislationReadTransaction
-        await fn(tx as unknown as LegislationReadTransaction),
+      await withPublicLawReaderRole(
+        db,
+        async (tx) =>
+          // SAFETY: this PGlite transaction executes under the production
+          // public-law role and exposes the same read surface to the callback.
+          // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- embedded role transaction stands in for LegislationReadTransaction
+          await fn(tx as unknown as LegislationReadTransaction),
       );
     legislationDb = readDb;
   },

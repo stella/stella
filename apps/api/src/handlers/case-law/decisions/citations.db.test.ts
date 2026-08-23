@@ -36,11 +36,13 @@ let db: ReturnType<typeof drizzle>;
 const withReader = async <T>(
   fn: (tx: CaseLawPublicReadTransaction) => Promise<T>,
 ): Promise<T> =>
-  await withPublicLawReaderRole(db, async (roleTx) =>
-    // SAFETY: the role transaction has the same Drizzle read surface as the
-    // public-law handle; writes remain on the owner database above.
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- PGlite test transaction stands in for the public read handle
-    await fn(roleTx as unknown as CaseLawPublicReadTransaction),
+  await withPublicLawReaderRole(
+    db,
+    async (roleTx) =>
+      // SAFETY: the role transaction has the same Drizzle read surface as the
+      // public-law handle; writes remain on the owner database above.
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- PGlite test transaction stands in for the public read handle
+      await fn(roleTx as unknown as CaseLawPublicReadTransaction),
   );
 
 const decisionRow = ({

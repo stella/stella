@@ -36,11 +36,11 @@ import {
   stableBlendUpperBound,
 } from "@/api/lib/legal-search/rerank";
 import type { ScoredCandidate } from "@/api/lib/legal-search/rerank";
-import { LIMITS } from "@/api/lib/limits";
 import {
   legislationPublicReadDb,
   type LegislationReadDb,
 } from "@/api/lib/legislation-public-read-db";
+import { LIMITS } from "@/api/lib/limits";
 import { decodeCursor, encodeCursor } from "@/api/lib/search/cursor";
 import {
   escapeAndHighlight,
@@ -294,9 +294,7 @@ export const rehydrateLegislationCandidates = async ({
     rehydrationFilters.push(eq(legislationDocuments.sourceId, body.source));
   }
   if (body.language) {
-    rehydrationFilters.push(
-      eq(legislationDocuments.language, body.language),
-    );
+    rehydrationFilters.push(eq(legislationDocuments.language, body.language));
   }
   if (body.dateFrom) {
     rehydrationFilters.push(
@@ -331,10 +329,7 @@ export const rehydrateLegislationCandidates = async ({
               eq(legislationSources.id, legislationDocuments.sourceId),
             )
             .where(
-              and(
-                inArray(legislationDocuments.id, ids),
-                ...rehydrationFilters,
-              ),
+              and(inArray(legislationDocuments.id, ids), ...rehydrationFilters),
             ),
         );
 

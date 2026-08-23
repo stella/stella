@@ -8,17 +8,17 @@ import {
   stellaCaseLawReader,
   stellaPublicLawReader,
 } from "@/api/db/rls";
-import { getCollator } from "@/api/lib/collation";
-import {
-  publicLawDatabaseRolePermissionsSql,
-  type PublicLawDatabaseRolePermissions,
-} from "@/api/lib/public-law-read-db";
 import { rehydrateLegislationCandidates } from "@/api/handlers/legislation/search";
 import { createSafeId } from "@/api/lib/branded-types";
+import { getCollator } from "@/api/lib/collation";
 import type {
   LegislationReadDb,
   LegislationReadTransaction,
 } from "@/api/lib/legislation-public-read-db";
+import {
+  publicLawDatabaseRolePermissionsSql,
+  type PublicLawDatabaseRolePermissions,
+} from "@/api/lib/public-law-read-db";
 import {
   PUBLIC_LAW_COLUMNS_BY_RELATION,
   ROLLOUT_CASE_LAW_RELATIONS,
@@ -221,9 +221,7 @@ describe("public-law reader role", () => {
 
     const result = await rehydrateLegislationCandidates({
       body: { query: "reader role census" },
-      candidates: [
-        { id: createSafeId<"legislationDocument">(), score: 1 },
-      ],
+      candidates: [{ id: createSafeId<"legislationDocument">(), score: 1 }],
       legislationDb,
     });
 

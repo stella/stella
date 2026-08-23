@@ -7,8 +7,8 @@ import { drizzle } from "drizzle-orm/pglite";
 import * as agentAuthSchema from "@/api/db/agent-auth-schema";
 import * as authSchema from "@/api/db/auth-schema";
 import * as rlsExports from "@/api/db/rls";
-import type { AnyDrizzle } from "@/api/db/scoped";
 import * as schema from "@/api/db/schema";
+import type { AnyDrizzle } from "@/api/db/scoped";
 import {
   PUBLIC_LAW_COLUMNS_BY_RELATION,
   ROLLOUT_CASE_LAW_SOURCE_COLUMNS,
@@ -56,7 +56,9 @@ export const withPublicLawReaderRole = async <
 ): Promise<TResult> =>
   await database.transaction(async (tx) => {
     await tx.execute(
-      sql.raw(`SET LOCAL ROLE ${quoteSqlIdentifier(rlsExports.stellaPublicLawReader.name)}`),
+      sql.raw(
+        `SET LOCAL ROLE ${quoteSqlIdentifier(rlsExports.stellaPublicLawReader.name)}`,
+      ),
     );
     return await fn(tx);
   });
