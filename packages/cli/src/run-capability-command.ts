@@ -6,35 +6,21 @@
 // output contract) so the output/behavior contract stays identical CLI-wide.
 
 import { Result } from "better-result";
-import { readFile } from "node:fs/promises";
 
 import type { Context } from "./context.js";
 import { expandSchemaDefs } from "./expand-schema-defs.js";
 import { validateAgainstSchema } from "./json-schema-validate.js";
 import { callTool, type CallToolResult } from "./mcp-client.js";
 import { EXIT_CODES } from "./mcp-constants.js";
-import {
-  buildRenderPlan,
-  renderResult,
-  type OutputFormat,
-  type Writers,
-} from "./output.js";
 import type { CapabilityLeafSpec } from "./route-types.js";
 import {
-  approvalReRunHint,
-  coerceFlagValue,
+  composeInputFromFlags,
   confirmDestructive,
-  errorEnvelope,
-  flagKey,
-  flagValueProvided,
-  hasInputPath,
   mapClientErrorExit,
-  parsePayload,
-  readAllStdin,
+  maybeConfirmAndRetry,
+  parseInputObject,
   readOutputFormat,
-  readRequestReceipt,
-  renderToolError,
-  requestIdLine,
+  renderCommandResult,
   RESERVED_FLAG_KEYS,
   reservedFlagUsageError,
   scopePreflightFailure,
@@ -52,89 +38,6 @@ type LeafFlags = Record<string, unknown>;
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
-type InputResult =
-  | { ok: true; input: Record<string, unknown> }
-  | { ok: false; message: string };
-
-/**
- * Overlay parsed value flags onto `base` (the `{ body?, params?, query? }`
- * object built from `--input`, or `{}` when no `--input` was given). Each SET
- * flag is coerced and written at its known input path (`${part}.${partPath}` —
- * the same mapping the flag would use on its own), so an explicit flag WINS over
- * the same path in the JSON. A required flag is satisfied either by being set or
- * by already being present in `base`, so `--input` can carry it.
- */
-const buildInputFromFlags = async (
-  spec: CapabilityLeafSpec,
-  flags: LeafFlags,
-  base: Record<string, unknown> = {},
-): Promise<InputResult> => {
-  const input = base;
-  for (const flagSpec of spec.flags) {
-    const value = flags[flagKey(flagSpec)];
-    if (!flagValueProvided(flagSpec, value)) {
-      continue;
-    }
-    // eslint-disable-next-line no-await-in-loop -- @file/@- reads must stay sequential
-    const coerced = await coerceFlagValue(flagSpec, value);
-    if (Result.isError(coerced)) {
-      return { ok: false, message: coerced.error };
-    }
-    setPath(input, `${flagSpec.part}.${flagSpec.partPath}`, coerced.value);
-  }
-  for (const flagSpec of spec.flags) {
-    if (
-      flagSpec.required &&
-      !hasInputPath(input, `${flagSpec.part}.${flagSpec.partPath}`)
-    ) {
-      return { ok: false, message: `missing required flag ${flagSpec.flag}` };
-    }
-  }
-  return { ok: true, input };
-};
-
-/** Resolve `--input` (`-` stdin / `@file` / literal) to the parsed input object. */
-const buildInputFromRaw = async ({
-  inputRaw,
-  writers,
-}: {
-  inputRaw: string;
-  writers: Writers;
-}): Promise<Record<string, unknown> | undefined> => {
-  let jsonText: string;
-  if (inputRaw === "-") {
-    jsonText = await readAllStdin();
-  } else if (inputRaw.startsWith("@")) {
-    const read = await Result.tryPromise({
-      try: async () => await readFile(inputRaw.slice(1), "utf-8"),
-      catch: (cause) => cause,
-    });
-    if (Result.isError(read)) {
-      writers.stderr(`--input could not read file ${inputRaw.slice(1)}\n`);
-      return undefined;
-    }
-    jsonText = read.value;
-  } else {
-    jsonText = inputRaw;
-  }
-
-  const parsed = Result.try((): unknown => JSON.parse(jsonText));
-  if (Result.isError(parsed)) {
-    writers.stderr("--input is not valid JSON.\n");
-    return undefined;
-  }
-  if (!isRecord(parsed.value)) {
-    writers.stderr("--input must be a JSON object.\n");
-    return undefined;
-  }
-  // Parse only: schema validation runs on the COMPOSED input (after value flags
-  // overlay their paths), never on the raw `--input` alone. Validating here would
-  // reject a `--input` that legitimately omits a required flag-backed path (e.g.
-  // the synthetic `params.workspaceId` supplied by `--workspace`), defeating the
-  // compose semantics for exactly the required flags they target.
-  return parsed.value;
-};
-
 /** A fresh copy of the invoke args with `cursor` set inside the pagination part. */
 const withCursor = (
   base: Record<string, unknown>,
@@ -147,133 +50,6 @@ const withCursor = (
     ...base,
     input: { ...input, [part]: { ...partObj, cursor } },
   };
-};
-
-const renderCapabilityResult = ({
-  context,
-  spec,
-  result,
-  format,
-  writers,
-}: {
-  context: Context;
-  spec: CapabilityLeafSpec;
-  result: CallToolResult;
-  format: OutputFormat;
-  writers: Writers;
-}): void => {
-  if (result.isError) {
-    renderToolError({ context, result, writers });
-    return;
-  }
-  const payload = parsePayload(result);
-  if (payload === undefined) {
-    writers.stdout(`${result.content.at(0)?.text ?? ""}\n`);
-    return;
-  }
-  // A list-shaped capability (Page<T>) renders as a page/table; anything else
-  // renders as a single object. `itemsKey` is set only for paginated leaves.
-  const plan = buildRenderPlan({
-    payload,
-    itemsKey: spec.itemsKey,
-    windowedText: false,
-    singleReadActive: false,
-    columns: undefined,
-  });
-  renderResult({ plan, format, writers, allActive: false });
-
-  const hint = approvalReRunHint({
-    isTTY: context.process.stdout.isTTY,
-    payload,
-  });
-  if (hint !== null) {
-    writers.stderr(`${hint}\n`);
-  }
-
-  // Surface the server's request-id receipt for a mutation only: a write is an
-  // action an operator may need to reference, a read is not. The id rides the
-  // success payload's `meta.requestId` (stdout stays pure result; the receipt
-  // goes to stderr).
-  if (spec.access === "write") {
-    const requestId = readRequestReceipt(payload);
-    if (requestId !== undefined) {
-      writers.stderr(requestIdLine(requestId, context.process.stderr.isTTY));
-    }
-  }
-};
-
-type CapabilityRetryOptions = {
-  args: Record<string, unknown>;
-  call: CallToolResult;
-  context: Context;
-  flags: LeafFlags;
-  format: OutputFormat;
-  serverUrl: string;
-  spec: CapabilityLeafSpec;
-  token: string;
-  writers: Writers;
-};
-
-/**
- * Confirm-passthrough prompt-and-retry: a call WITHOUT `confirm` that comes back
- * `confirmation_required` prompts (on a TTY, unless `--no-input`) and retries
- * once with `confirm: true`. Returns true when it fully handled the command. A
- * declined/refused prompt is terminal (one stderr `aborted` line, exit 7): the
- * original envelope is NOT rendered on top of the abort, matching the pre-call
- * destructive abort flow.
- */
-const maybeConfirmRetry = async ({
-  args,
-  call,
-  context,
-  flags,
-  format,
-  serverUrl,
-  spec,
-  token,
-  writers,
-}: CapabilityRetryOptions): Promise<boolean> => {
-  if (
-    call.isError !== true ||
-    args["confirm"] === true ||
-    !context.process.stdin.isTTY
-  ) {
-    return false;
-  }
-  const envelope = errorEnvelope(parsePayload(call));
-  if (envelope?.code !== "confirmation_required") {
-    return false;
-  }
-  const outcome = await confirmDestructive({
-    context,
-    flags,
-    writers,
-    label: spec.commandPath.join(" "),
-  });
-  if (outcome !== "proceed") {
-    writers.stderr("aborted\n");
-    setExit(context, EXIT_CODES.aborted);
-    return true;
-  }
-  const retry = await callTool({
-    serverUrl,
-    token,
-    name: INVOKE_TOOL,
-    args: { ...args, confirm: true },
-  });
-  if (Result.isError(retry)) {
-    writers.stderr(`${retry.error.message}\n`);
-    setExit(context, mapClientErrorExit(retry.error));
-    return true;
-  }
-  renderCapabilityResult({
-    context,
-    spec,
-    result: retry.value,
-    format,
-    writers,
-  });
-  return true;
 };
 
 /** Run one capability leaf end to end. Sets `process.exitCode` per spec S4. */
@@ -312,19 +88,24 @@ export const runCapabilityCommand = async ({
   const inputRaw = flags[RESERVED_FLAG_KEYS.input];
   const inputBase =
     typeof inputRaw === "string"
-      ? await buildInputFromRaw({ inputRaw, writers })
+      ? await parseInputObject({ inputRaw, writers })
       : {};
   if (inputBase === undefined) {
     setExit(context, EXIT_CODES.validation);
     return;
   }
-  const built = await buildInputFromFlags(spec, flags, inputBase);
+  const built = await composeInputFromFlags({
+    base: inputBase,
+    flagPath: (flagSpec) => `${flagSpec.part}.${flagSpec.partPath}`,
+    flagSpecs: spec.flags,
+    flags,
+  });
   if (!built.ok) {
     writers.stderr(`${built.message}\n`);
     setExit(context, EXIT_CODES.validation);
     return;
   }
-  const input = built.input;
+  const input = built.args;
 
   // Validate the COMPOSED input (JSON base + overlaid flags) against the snapshot
   // schema, only when `--input` supplied JSON. Flags-only requests keep relying on
@@ -365,6 +146,17 @@ export const runCapabilityCommand = async ({
   }
 
   const format = readOutputFormat(flags, context);
+  const renderCall = (result: CallToolResult) => {
+    renderCommandResult({
+      context,
+      format,
+      itemsKey: spec.itemsKey,
+      result,
+      windowedText: false,
+      writers,
+      writeReceipt: spec.access === "write",
+    });
+  };
   const allActive = spec.paginated && flags[RESERVED_FLAG_KEYS.all] === true;
   const paginationPart = spec.paginationPart;
 
@@ -440,26 +232,23 @@ export const runCapabilityCommand = async ({
     return;
   }
 
-  const retried = await maybeConfirmRetry({
+  const retried = await maybeConfirmAndRetry({
     args: toolArgs,
     call: call.value,
     context,
+    enabled: true,
     flags,
-    format,
+    label: spec.commandPath.join(" "),
+    renderCall,
     serverUrl,
-    spec,
+    timeoutMs: undefined,
     token,
+    toolName: INVOKE_TOOL,
     writers,
   });
   if (retried) {
     return;
   }
 
-  renderCapabilityResult({
-    context,
-    spec,
-    result: call.value,
-    format,
-    writers,
-  });
+  renderCall(call.value);
 };
