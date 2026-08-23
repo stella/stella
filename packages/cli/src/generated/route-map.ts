@@ -28139,16 +28139,6 @@ export const generatedRouteMap: RouteNode = {
                 access: "read",
                 flags: [
                   {
-                    kind: "enum",
-                    enum: ["open", "snoozed", "resolved"],
-                    repeatable: false,
-                    flag: "--view",
-                    prop: "view",
-                    required: false,
-                    part: "query",
-                    partPath: "view",
-                  },
-                  {
                     kind: "string",
                     repeatable: false,
                     flag: "--matter-id",
@@ -28156,26 +28146,6 @@ export const generatedRouteMap: RouteNode = {
                     required: false,
                     part: "query",
                     partPath: "matterId",
-                  },
-                  {
-                    kind: "enum",
-                    enum: ["manual", "source", "model"],
-                    repeatable: false,
-                    flag: "--origin",
-                    prop: "origin",
-                    required: false,
-                    part: "query",
-                    partPath: "origin",
-                  },
-                  {
-                    kind: "enum",
-                    enum: ["info", "notice", "warning", "critical"],
-                    repeatable: false,
-                    flag: "--severity",
-                    prop: "severity",
-                    required: false,
-                    part: "query",
-                    partPath: "severity",
                   },
                   {
                     kind: "boolean",
@@ -28187,7 +28157,7 @@ export const generatedRouteMap: RouteNode = {
                     partPath: "assignedToMe",
                   },
                 ],
-                inputOnly: [],
+                inputOnly: ["query.view", "query.origin", "query.severity"],
                 paginated: true,
                 paginationPart: "query",
                 itemsKey: "items",
@@ -28201,9 +28171,20 @@ export const generatedRouteMap: RouteNode = {
                       type: "object",
                       properties: {
                         view: {
-                          default: "open",
-                          type: "string",
-                          enum: ["open", "snoozed", "resolved"],
+                          anyOf: [
+                            {
+                              const: "open",
+                              type: "string",
+                            },
+                            {
+                              const: "snoozed",
+                              type: "string",
+                            },
+                            {
+                              const: "resolved",
+                              type: "string",
+                            },
+                          ],
                         },
                         matterId: {
                           minLength: 36,
@@ -28213,14 +28194,40 @@ export const generatedRouteMap: RouteNode = {
                           type: "string",
                         },
                         origin: {
-                          default: "manual",
-                          type: "string",
-                          enum: ["manual", "source", "model"],
+                          anyOf: [
+                            {
+                              const: "manual",
+                              type: "string",
+                            },
+                            {
+                              const: "source",
+                              type: "string",
+                            },
+                            {
+                              const: "model",
+                              type: "string",
+                            },
+                          ],
                         },
                         severity: {
-                          default: "info",
-                          type: "string",
-                          enum: ["info", "notice", "warning", "critical"],
+                          anyOf: [
+                            {
+                              const: "info",
+                              type: "string",
+                            },
+                            {
+                              const: "notice",
+                              type: "string",
+                            },
+                            {
+                              const: "warning",
+                              type: "string",
+                            },
+                            {
+                              const: "critical",
+                              type: "string",
+                            },
+                          ],
                         },
                         assignedToMe: {
                           type: "boolean",
@@ -28280,18 +28287,12 @@ export const generatedRouteMap: RouteNode = {
                     part: "body",
                     partPath: "description",
                   },
-                  {
-                    kind: "enum",
-                    enum: ["info", "notice", "warning", "critical"],
-                    repeatable: false,
-                    flag: "--severity",
-                    prop: "severity",
-                    required: false,
-                    part: "body",
-                    partPath: "severity",
-                  },
                 ],
-                inputOnly: ["body.matterId", "body.assigneeUserId"],
+                inputOnly: [
+                  "body.matterId",
+                  "body.assigneeUserId",
+                  "body.severity",
+                ],
                 paginated: false,
                 destructive: false,
                 scope: "matters_write",
@@ -28343,9 +28344,24 @@ export const generatedRouteMap: RouteNode = {
                           ],
                         },
                         severity: {
-                          default: "info",
-                          type: "string",
-                          enum: ["info", "notice", "warning", "critical"],
+                          anyOf: [
+                            {
+                              const: "info",
+                              type: "string",
+                            },
+                            {
+                              const: "notice",
+                              type: "string",
+                            },
+                            {
+                              const: "warning",
+                              type: "string",
+                            },
+                            {
+                              const: "critical",
+                              type: "string",
+                            },
+                          ],
                         },
                       },
                     },
