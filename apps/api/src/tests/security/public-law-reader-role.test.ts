@@ -31,6 +31,16 @@ const WRITE_PRIVILEGES = "INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER";
 const quoted = (identifier: string): string =>
   `"${identifier.replaceAll('"', '""')}"`;
 
+const errorMessageChain = (error: unknown): string => {
+  const messages: string[] = [];
+  let current = error;
+  while (current instanceof Error) {
+    messages.push(current.message);
+    current = current.cause;
+  }
+  return messages.join(" | ");
+};
+
 const expectedQualifiedColumns = Object.entries(
   PUBLIC_LAW_COLUMNS_BY_RELATION,
 )
@@ -154,14 +164,24 @@ describe("public-law reader role", () => {
         );
       }
     });
-    await expect(
-      testDb.transaction(async (tx) => {
+    const operationalColumnRejection: unknown = await testDb
+      .transaction(async (tx) => {
         await tx.execute(sql.raw(`SET LOCAL ROLE ${quoted(READER_ROLE)}`));
         await tx.execute(
           sql.raw('SELECT "config" FROM "legislation_sources"'),
         );
-      }),
-    ).rejects.toThrow();
+      })
+      .then(
+        () => null,
+        (error: unknown) => error,
+      );
+    expect(operationalColumnRejection).toBeInstanceOf(Error);
+    expect(errorMessageChain(operationalColumnRejection)).toContain(
+      "permission denied",
+    );
+    expect(errorMessageChain(operationalColumnRejection)).toContain(
+      "legislation_sources",
+    );
   });
 
   test("preserves the v0.7.22 reader during the rollout window", async () => {
@@ -177,14 +197,24 @@ describe("public-law reader role", () => {
         ),
       );
     });
-    await expect(
-      testDb.transaction(async (tx) => {
+    const legislationRejection: unknown = await testDb
+      .transaction(async (tx) => {
         await tx.execute(
           sql.raw(`SET LOCAL ROLE ${quoted(ROLLOUT_READER_ROLE)}`),
         );
         await tx.execute(sql.raw('SELECT "id" FROM "legislation_documents"'));
-      }),
-    ).rejects.toThrow();
+      })
+      .then(
+        () => null,
+        (error: unknown) => error,
+      );
+    expect(legislationRejection).toBeInstanceOf(Error);
+    expect(errorMessageChain(legislationRejection)).toContain(
+      "permission denied",
+    );
+    expect(errorMessageChain(legislationRejection)).toContain(
+      "legislation_documents",
+    );
   });
 
   test("has a SELECT policy on every allowlisted relation and no other", async () => {
