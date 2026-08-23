@@ -10,7 +10,7 @@ import type {
   ApprovalRequiredBuiltInChatToolName,
   BuiltInChatToolPolicyKindByName,
   ChatMessage,
-  ChatPart,
+  ChatPart as TanStackChatPart,
   ChatUITools,
 } from "@stll/api/types";
 import { FOLIO_AGENT_TOOL_NAMES } from "@stll/folio-agents";
@@ -20,10 +20,56 @@ import type { TranslationKey } from "@/i18n/types";
 export type {
   ChatAnonRestoration,
   ChatMessage,
-  ChatPart,
   ChatUITools,
 } from "@stll/api/types";
+export type ChatPart = TanStackChatPart;
 export type PersistedChatMessage = ChatMessage;
+type TanStackChatToolCallPart = Extract<
+  TanStackChatPart,
+  { type: "tool-call" }
+>;
+type BuiltInChatToolName = keyof BuiltInChatToolPolicyKindByName;
+type BuiltInChatToolCallPart = {
+  [TName in BuiltInChatToolName]: Omit<
+    Extract<TanStackChatToolCallPart, { name: TName }>,
+    "input" | "output"
+  > & {
+    input?: ChatUITools[TName]["input"];
+    output?: ChatUITools[TName]["output"];
+  };
+}[BuiltInChatToolName];
+type ExternalMcpChatToolCallPart = Extract<
+  TanStackChatToolCallPart,
+  { name: `mcp__${string}` }
+>;
+declare const opaquePersistedChatToolCallProof: unique symbol;
+/**
+ * Proof assigned after a persisted tool call passes the protocol-shape guard
+ * and its name is confirmed absent from both current tool namespaces.
+ */
+export type OpaquePersistedChatToolCallPart = TanStackChatToolCallPart & {
+  readonly [opaquePersistedChatToolCallProof]: true;
+};
+
+/**
+ * TanStack deliberately leaves JSON-schema tool payloads unknown. At Stella's
+ * rendering boundary, built-in payloads retain the types derived from the same
+ * Standard Schema tool map; external MCP and opaque historical payloads remain
+ * unknown.
+ */
+export type RegisteredChatUIToolCallPart =
+  | BuiltInChatToolCallPart
+  | ExternalMcpChatToolCallPart;
+export type ChatUIToolCallPart =
+  | RegisteredChatUIToolCallPart
+  | OpaquePersistedChatToolCallPart;
+export type ChatUIPart =
+  | Exclude<TanStackChatPart, { type: "tool-call" }>
+  | ChatUIToolCallPart;
+export type ChatUIMessage = Omit<ChatMessage, "parts"> & {
+  parts: ChatUIPart[];
+};
+export type ChatToolCallPart = TanStackChatToolCallPart;
 export type ChatAttachmentPart = Extract<
   ChatPart,
   { type: "document" | "image" }
@@ -50,8 +96,7 @@ const MCP_CONNECTOR_APPROVAL_GRANT_PREFIX = "mcp-connector:";
 export type ToolApprovalGrant =
   | ApprovalToolName
   | `${typeof MCP_CONNECTOR_APPROVAL_GRANT_PREFIX}${string}`;
-export type ChatToolCallPart = Extract<ChatPart, { type: "tool-call" }>;
-export type ApprovalToolPart = ChatToolCallPart & {
+export type ApprovalToolPart = RegisteredChatUIToolCallPart & {
   name: ApprovalToolName;
   approval: {
     approved?: boolean | undefined;
@@ -804,8 +849,9 @@ const toTerminalIfRunningToolPart = (
     mode === "hydrate" &&
     part.name === "create-document" &&
     part.state === "input-complete" &&
-    typeof part.input?.source === "string" &&
-    part.input.source.trim() !== ""
+    isJsonObject(part.input) &&
+    typeof part.input["source"] === "string" &&
+    part.input["source"].trim() !== ""
   ) {
     return part;
   }
@@ -977,8 +1023,72 @@ export const getChatAssistantTurnError = (
   }
 };
 
+export const isOpaquePersistedChatToolCallPart = (
+  value: unknown,
+): value is OpaquePersistedChatToolCallPart => {
+  if (
+    typeof value !== "object" ||
+    value === null ||
+    !("type" in value) ||
+    value.type !== "tool-call" ||
+    !("id" in value) ||
+    typeof value.id !== "string" ||
+    !("name" in value) ||
+    typeof value.name !== "string" ||
+    !("arguments" in value) ||
+    typeof value.arguments !== "string" ||
+    !("state" in value) ||
+    typeof value.state !== "string" ||
+    !isChatToolCallState(value.state)
+  ) {
+    return false;
+  }
+  return !isChatToolName(value.name) && !isExternalMcpToolName(value.name);
+};
+
+const isCanonicalBuiltInToolCall = (
+  value: TanStackChatToolCallPart,
+): value is BuiltInChatToolCallPart => {
+  if (!isChatToolName(value.name)) {
+    return false;
+  }
+  if (value.state === "awaiting-input" || value.state === "input-streaming") {
+    return !("input" in value) || value.input === undefined;
+  }
+  return "input" in value && isJsonObject(value.input);
+};
+
 const isJsonObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
+
+const isCanonicalChatUIMessage = (
+  message: PersistedChatMessage,
+): message is ChatUIMessage =>
+  message.parts.every(
+    (part) =>
+      part.type !== "tool-call" ||
+      isExternalMcpToolName(part.name) ||
+      isOpaquePersistedChatToolCallPart(part) ||
+      isCanonicalBuiltInToolCall(part),
+  );
+
+/**
+ * Prove the runtime-to-UI contract without parsing tool arguments again.
+ * Completed built-in calls must already carry their canonical parsed input;
+ * only protocol-partial calls may omit it.
+ */
+export const projectCanonicalChatUIMessages = (
+  messages: readonly PersistedChatMessage[],
+): ChatUIMessage[] => {
+  const projected: ChatUIMessage[] = [];
+  for (const message of messages) {
+    if (!isCanonicalChatUIMessage(message)) {
+      return panic("Chat runtime produced a non-canonical tool call");
+    }
+    projected.push(message);
+  }
+  return projected;
+};
 
 export type DocumentDeletionToolCallEffects = {
   hasVersionDeletion: boolean;

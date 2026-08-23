@@ -1825,7 +1825,9 @@ type TransformOutgoingStreamProps = {
   resolveAssistantToolInputRefs?: AssistantToolInputRefResolver | undefined;
   resolveAssistantToolOutputRefs?: AssistantToolOutputRefResolver | undefined;
   resolveAssistantValueRefs?: AssistantValueRefResolver | undefined;
-  registerPendingFlush?: ((flushPending: () => StreamChunk[]) => void) | undefined;
+  registerPendingFlush?:
+    | ((flushPending: () => StreamChunk[]) => void)
+    | undefined;
   restorationPairs: ChatAnonRestoration[];
   source: AsyncIterable<StreamChunk>;
 };

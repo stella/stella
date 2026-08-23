@@ -42,6 +42,7 @@ import {
   isChatClientRequestActive,
   isExternalMcpToolName,
   isToolApprovalGrant,
+  projectCanonicalChatUIMessages,
   sanitizeRunningToolCalls,
 } from "@/components/chat/chat-ui-tools";
 import {
@@ -301,7 +302,10 @@ export const useChatSession = ({
   // Latch for the error-transition effect below: `undefined` means "no
   // error has been notified yet" for the current error-free stretch.
   const lastHandledErrorRef = useRef<Error | undefined>(undefined);
-  const { messages } = snapshot;
+  const messages = useMemo(
+    () => projectCanonicalChatUIMessages(snapshot.messages),
+    [snapshot.messages],
+  );
   const authoritativeTurnError = useMemo(
     () => getChatAssistantTurnError(messages.at(-1) ?? null),
     [messages],

@@ -20,6 +20,7 @@ import {
   isRunningToolPart,
   isToolApprovedByGrant,
   isUnresolvedFolioAgentDocToolCallPart,
+  projectCanonicalChatUIMessages,
   resolveChatAssistantTurnOutcome,
   sanitizeRunningToolCalls,
   selectUnresolvedFolioAgentDocToolCallParts,
@@ -112,6 +113,83 @@ describe("assistant turn outcomes", () => {
       reason: "user-stop",
     });
     expect(getChatAssistantTurnError(cancelled)).toBeUndefined();
+  });
+});
+
+describe("canonical chat UI projection", () => {
+  test("consumes canonical built-in input without parsing arguments", () => {
+    const message = {
+      id: "assistant-canonical-input",
+      parts: [
+        {
+          arguments: "not valid JSON",
+          id: "ask-1",
+          input: {
+            analysis: "The user must choose a jurisdiction.",
+            questions: [
+              {
+                question: "Which jurisdiction applies?",
+                reason: "The governing law changes the draft.",
+              },
+            ],
+          },
+          name: "ask-user",
+          state: "input-complete",
+          type: "tool-call",
+        },
+      ],
+      role: "assistant",
+    } satisfies PersistedChatMessage;
+
+    const projected = projectCanonicalChatUIMessages([message]);
+
+    expect(projected.at(0)).toBe(message);
+  });
+
+  test("refuses to reconstruct missing canonical input from arguments", () => {
+    const message = {
+      id: "assistant-missing-canonical-input",
+      parts: [
+        {
+          arguments: JSON.stringify({
+            analysis: "The user must choose a jurisdiction.",
+            questions: [
+              {
+                question: "Which jurisdiction applies?",
+                reason: "The governing law changes the draft.",
+              },
+            ],
+          }),
+          id: "ask-1",
+          name: "ask-user",
+          state: "input-complete",
+          type: "tool-call",
+        },
+      ],
+      role: "assistant",
+    } satisfies PersistedChatMessage;
+
+    expect(() => projectCanonicalChatUIMessages([message])).toThrow(
+      "Chat runtime produced a non-canonical tool call",
+    );
+  });
+
+  test("preserves protocol-partial built-in calls without input", () => {
+    const message = {
+      id: "assistant-partial-input",
+      parts: [
+        {
+          arguments: '{"analysis":',
+          id: "ask-1",
+          name: "ask-user",
+          state: "input-streaming",
+          type: "tool-call",
+        },
+      ],
+      role: "assistant",
+    } satisfies PersistedChatMessage;
+
+    expect(projectCanonicalChatUIMessages([message]).at(0)).toBe(message);
   });
 });
 

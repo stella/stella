@@ -64,6 +64,7 @@ import {
   getChatToolTitleKey,
   hasRunningToolCallInLatestAssistantMessage,
   isApprovalPart,
+  isOpaquePersistedChatToolCallPart,
 } from "@/components/chat/chat-ui-tools";
 import type { CreateDocumentDraft } from "@/components/chat/create-document-draft.logic";
 import { MessageExportMenu } from "@/components/chat/message-export-menu";
@@ -1131,7 +1132,7 @@ type ChatThreadMessagesProps = {
   /** True after an older-page fetch failed; pauses the auto-trigger so the
    *  sentinel cannot loop the request (the manual button still retries). */
   loadOlderError?: boolean | undefined;
-  messages: PersistedChatMessage[];
+  messages: ChatUIMessage[];
   /** Explicit scroll container for surfaces that render outside a
    *  `Conversation`/StickToBottom provider (e.g. the file-chat overlay);
    *  falls back to the StickToBottom context when omitted. */
@@ -1516,6 +1517,17 @@ const AssistantMessageParts = ({
           key={`${message.id}-text-${index}`}
           restorationPairs={restorationPairs}
           text={part.content}
+        />
+      );
+    }
+
+    if (part.type === "tool-call" && isOpaquePersistedChatToolCallPart(part)) {
+      return (
+        <ToolCallCard
+          activeOrganizationId={activeOrganizationId}
+          key={part.id}
+          part={part}
+          showDetails={shouldShowToolCalls}
         />
       );
     }
