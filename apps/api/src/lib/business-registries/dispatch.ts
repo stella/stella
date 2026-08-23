@@ -7,8 +7,6 @@
 // `executeRegistryLookup` so the two surfaces never drift in error
 // mapping, normalisation, or shape detection.
 
-import { panic } from "better-result";
-
 import type { BusinessRegistrySlug } from "@stll/api-contract";
 import {
   AresAPIError,
@@ -1574,22 +1572,19 @@ export const executeRegistryLookup = async ({
     });
   }
 
-  const isLookup = handler.isCanonicalId(trimmed);
   const searchFn = handler.search;
-  if (!isLookup && !searchFn) {
-    return new HandlerError({
-      status: 400,
-      message: `Registry '${handler.slug}' does not support name search; provide a canonical identifier`,
-    });
-  }
-
+  // `isCanonicalId` runs inside the guard: adapters validate through native
+  // checksum bindings, and a binding failure must map like any adapter error.
   try {
-    if (isLookup) {
+    if (handler.isCanonicalId(trimmed)) {
       const hit = await handler.lookup(trimmed);
       return { type: "lookup", registry: handler.slug, hit };
     }
     if (!searchFn) {
-      panic("searchFn must be defined when !isLookup reaches here");
+      return new HandlerError({
+        status: 400,
+        message: `Registry '${handler.slug}' does not support name search; provide a canonical identifier`,
+      });
     }
     const hits = await searchFn(
       trimmed,

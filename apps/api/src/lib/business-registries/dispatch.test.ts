@@ -354,3 +354,21 @@ describe("DENUE deployment gating", () => {
     }
   });
 });
+
+describe("executeRegistryLookup — canonical-id guard", () => {
+  test("maps an isCanonicalId failure to a handler error instead of throwing", async () => {
+    const result = await executeRegistryLookup({
+      handler: stubHandler({
+        isCanonicalId: () => {
+          throw new Error("native binding unavailable");
+        },
+      }),
+      query: "27082440",
+    });
+
+    if (!(result instanceof Error)) {
+      throw new TypeError("expected a handler error");
+    }
+    expect(result.status).toBe(500);
+  });
+});

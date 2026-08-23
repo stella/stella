@@ -21,6 +21,7 @@ import {
   isNativeAnonymizeBinding,
   loadNativeAnonymizeBinding,
 } from "@stll/anonymize";
+import { validateIco } from "@stll/business-registries/ares";
 
 import { OCR_LOCAL_MODEL_FILES } from "@/api/lib/document-processing-contract";
 import { yaraRuleFileCount, yaraScanner } from "@/api/lib/file-scan/yara";
@@ -157,6 +158,15 @@ await probe("anonymize native engine", () => {
   const binding = loadNativeAnonymizeBinding();
   if (!isNativeAnonymizeBinding(binding)) {
     panic("anonymize native loader returned an unexpected binding shape");
+  }
+});
+
+// Registry adapters validate identifiers through the stdnum native binding,
+// which loads lazily on first call; a well-formed IČO proves the addon is
+// embedded and callable.
+await probe("stdnum native binding", () => {
+  if (!validateIco("27082440")) {
+    panic("stdnum rejected a well-formed identifier");
   }
 });
 
