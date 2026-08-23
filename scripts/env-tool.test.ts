@@ -373,6 +373,26 @@ describe("environment doctor output", () => {
     }
   });
 
+  test("rejects a legacy-only shared-corpus configuration", () => {
+    const result = validateDoctorEnvironment({
+      app: "api",
+      input: {
+        ...validApiInput(),
+        CASE_LAW_DATABASE_URL:
+          "postgres://case_law_reader:password@db.example.com:5432/stella?sslmode=require",
+        CORPUS_INDEX_SEARCH_ENDPOINT: "https://quickwit-search.example.com",
+        LEGAL_SEARCH_PROVIDER: "corpus-index",
+      },
+    });
+
+    expect(result.status).toBe("invalid");
+    if (result.status === "invalid") {
+      expect(result.issues).toContain(
+        "CASE_LAW_DATABASE_URL is a v0.7.22 rollback input; configure PUBLIC_LAW_DATABASE_URL for the current release.",
+      );
+    }
+  });
+
   test.each([
     {
       expected:

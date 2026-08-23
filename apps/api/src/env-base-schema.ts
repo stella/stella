@@ -301,6 +301,12 @@ export const envBaseInvariantViolation = ({
     CASE_LAW_DATABASE_URL !== undefined;
 
   if (
+    CASE_LAW_DATABASE_URL !== undefined &&
+    PUBLIC_LAW_DATABASE_URL === undefined
+  ) {
+    return "CASE_LAW_DATABASE_URL is a v0.7.22 rollback input; configure PUBLIC_LAW_DATABASE_URL for the current release.";
+  }
+  if (
     (CORPUS_INDEX_BACKPRESSURE_METRIC === undefined) !==
     (CORPUS_INDEX_BACKPRESSURE_NAMESPACE === undefined)
   ) {
