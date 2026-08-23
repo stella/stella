@@ -224,9 +224,10 @@ const startsWithSqlKeyword = (
   index: number,
 ): boolean => {
   for (let offset = 0; offset < keyword.length; offset += 1) {
+    const sqlCode = sql.codePointAt(index + offset);
     if (
-      asciiUpperCode(sql.charCodeAt(index + offset)) !==
-      keyword.charCodeAt(offset)
+      sqlCode === undefined ||
+      asciiUpperCode(sqlCode) !== keyword.codePointAt(offset)
     ) {
       return false;
     }
