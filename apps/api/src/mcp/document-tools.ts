@@ -893,20 +893,6 @@ const decodeEntityPageCursor = (
   return { createdAt, id: brandPersistedEntityId(id) };
 };
 
-/**
- * Prefer a cross-field (`partial_check`) validation message when one is
- * present, falling back to the hand-written shape hint for structural failures.
- * The partialCheck rules carry actionable messages ("parent_id requires mode
- * 'children'", etc.); valibot's raw structural errors are less useful to a tool
- * caller than the generic shape summary.
- */
-const crossFieldOrGeneric = (
-  issues: readonly v.BaseIssue<unknown>[],
-  genericMessage: string,
-): string =>
-  issues.find((issue) => issue.type === "partial_check")?.message ??
-  genericMessage;
-
 const listDocumentsArgsSchema = v.pipe(
   v.strictObject({
     matter_id: v.pipe(v.string(), v.minLength(1)),
@@ -968,10 +954,8 @@ const handleListDocumentsTool: TypedMcpToolHandler<
   if (!parsed.success) {
     return validationErrorResult({
       issues: parsed.issues,
-      message: crossFieldOrGeneric(
-        parsed.issues,
+      message:
         "Invalid input: expected { matter_id: string, mode?: 'flat'|'children', parent_id?: string, limit?: integer, cursor?: string }",
-      ),
     });
   }
 
@@ -1648,10 +1632,7 @@ const handleReadDocumentTool: TypedMcpToolHandler<
   if (!parsed.success) {
     return validationErrorResult({
       issues: parsed.issues,
-      message: crossFieldOrGeneric(
-        parsed.issues,
-        "Invalid input: expected { entity_id: string, ... }",
-      ),
+      message: "Invalid input: expected { entity_id: string, ... }",
     });
   }
 
@@ -2220,10 +2201,8 @@ const handleSaveDocumentTool: TypedMcpToolHandler<
   if (!parsed.success) {
     return validationErrorResult({
       issues: parsed.issues,
-      message: crossFieldOrGeneric(
-        parsed.issues,
+      message:
         "Invalid input: expected { matter_id, name, parent_id?, kind? } to create, or { entity_id, name?/parent_id?/move_to_root?/version_id?/label?/description? } to update",
-      ),
     });
   }
   const input = parsed.output;

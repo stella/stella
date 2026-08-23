@@ -295,11 +295,8 @@ export const mapValibotIssues = (
   }));
 
 /**
- * `validation_error` envelope for a failed tool argument parse. `message` is the
- * caller-facing summary (today's collapsed single line); `issues` is the raw
- * Valibot issue list, mapped to the structured `{ path, message }[]` the CLI and
- * agents branch on. This is the single sink every `safeParse` failure path in
- * the tool modules routes through, replacing the legacy code-less `errorResult`.
+ * Build the shared validation envelope. Prefer an actionable cross-field issue
+ * as its summary; `message` is the fallback for structural failures.
  */
 export const validationErrorResult = ({
   hint,
@@ -314,7 +311,9 @@ export const validationErrorResult = ({
     code: "validation_error",
     hint,
     issues: mapValibotIssues(issues),
-    message,
+    message:
+      issues.find((issue) => issue.type === "partial_check")?.message ??
+      message,
   });
 
 /** `not_found` envelope for a resource that does not exist or is inaccessible. */

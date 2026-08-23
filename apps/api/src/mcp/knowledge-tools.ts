@@ -18,7 +18,6 @@ import {
   listPlaybookDefinitionsHandler,
 } from "@/api/handlers/playbooks/read";
 import { captureError } from "@/api/lib/analytics/capture";
-import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import type {
   DELETED_TRUE_PROJECTION,
@@ -68,6 +67,7 @@ import type {
 } from "@/api/mcp/tool-types";
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
+  bindWorkspaceRecorder,
   confirmProp,
   ensureActiveWorkspace,
   enumProp,
@@ -810,38 +810,6 @@ export const KNOWLEDGE_TOOL_DEFINITIONS = [
   },
 ] as const satisfies readonly McpToolDefinition[];
 
-/**
- * Wrap the request-scoped recorder so audit rows written by the reused backing
- * handlers carry the resolved workspace. The MCP recorder binds workspaceId to
- * null (org-scoped); the workspace-scoped playbook run builds its EXECUTE event
- * without a workspaceId, so inject it per event (an event that sets its own wins).
- */
-const bindWorkspaceRecorder =
-  (
-    context: McpRequestContext,
-    workspaceId: SafeId<"workspace">,
-  ): AuditRecorder =>
-  async (tx, event) => {
-    const events: AuditEvent[] = Array.isArray(event) ? event : [event];
-    for (const e of events) {
-      if (e.workspaceId === undefined) {
-        e.workspaceId = workspaceId;
-      }
-    }
-    await context.recordAuditEvent(tx, events);
-  };
-
-/**
- * Prefer a cross-field (`partial_check`) validation message when present,
- * falling back to the hand-written shape hint for structural failures.
- */
-const crossFieldOrGeneric = (
-  issues: readonly v.BaseIssue<unknown>[],
-  genericMessage: string,
-): string =>
-  issues.find((issue) => issue.type === "partial_check")?.message ??
-  genericMessage;
-
 // --- list_clauses -------------------------------------------------------
 
 const listClausesArgsSchema = v.pipe(
@@ -1038,10 +1006,8 @@ const handleListClausesTool: TypedMcpToolHandler<
   if (!parsed.success) {
     return validationErrorResult({
       issues: parsed.issues,
-      message: crossFieldOrGeneric(
-        parsed.issues,
+      message:
         "Invalid input: expected { clause_id?: string, version_id?: string, category_id?: string, query?: string, include_categories?: boolean, limit?: integer, cursor?: string }",
-      ),
     });
   }
   const input = parsed.output;
@@ -1225,10 +1191,8 @@ const handleSaveClauseTool: TypedMcpToolHandler<
   if (!parsed.success) {
     return validationErrorResult({
       issues: parsed.issues,
-      message: crossFieldOrGeneric(
-        parsed.issues,
+      message:
         "Invalid input: expected { clause_id?: string, title?: string, body?: array, category_id?: string|null, language?: string|null, description?: string|null, usage_notes?: string|null, metadata?: object|null, snapshot_version?: boolean }",
-      ),
     });
   }
   const input = parsed.output;
@@ -1465,10 +1429,8 @@ const handleListPlaybooksTool: TypedMcpToolHandler<
   if (!parsed.success) {
     return validationErrorResult({
       issues: parsed.issues,
-      message: crossFieldOrGeneric(
-        parsed.issues,
+      message:
         "Invalid input: expected { playbook_id?: string, limit?: integer, cursor?: string }",
-      ),
     });
   }
   const input = parsed.output;

@@ -334,17 +334,6 @@ export const RESEARCH_ADMIN_TOOL_DEFINITIONS = [
   },
 ] as const satisfies readonly McpToolDefinition[];
 
-/**
- * Prefer a cross-field (`partial_check`) validation message when present,
- * falling back to the hand-written shape hint for structural failures.
- */
-const crossFieldOrGeneric = (
-  issues: readonly v.BaseIssue<unknown>[],
-  genericMessage: string,
-): string =>
-  issues.find((issue) => issue.type === "partial_check")?.message ??
-  genericMessage;
-
 // --- search_legislation -------------------------------------------------
 
 const searchLegislationArgsSchema = v.pipe(
@@ -478,10 +467,8 @@ const handleSearchLegislationTool: TypedMcpToolHandler<
   if (!parsed.success) {
     return validationErrorResult({
       issues: parsed.issues,
-      message: crossFieldOrGeneric(
-        parsed.issues,
+      message:
         "Invalid input: expected search filters (query/title/…) or law_id with optional block_id/relation_type/full_text",
-      ),
     });
   }
   const input = parsed.output;
@@ -587,10 +574,8 @@ const handleListAuditLogTool: McpToolHandler = async ({ args, context }) => {
   if (!parsed.success) {
     return validationErrorResult({
       issues: parsed.issues,
-      message: crossFieldOrGeneric(
-        parsed.issues,
+      message:
         "Invalid input: expected { workspace_id?, action?, resource_type?, resource_id?, user_id?, from?, to?, limit?, cursor? }",
-      ),
     });
   }
   const input = parsed.output;
@@ -806,10 +791,8 @@ const handleManageOrganizationTool: TypedMcpToolHandler<
   if (!parsed.success) {
     return validationErrorResult({
       issues: parsed.issues,
-      message: crossFieldOrGeneric(
-        parsed.issues,
+      message:
         "Invalid input: expected { action: 'add_member'|'remove_member'|'update_org_settings', matter_id?, user_id?, matter_number_pattern?, matter_number_padding?, prompt_caching_enabled?, document_processing_mode? }",
-      ),
     });
   }
   const input = parsed.output;

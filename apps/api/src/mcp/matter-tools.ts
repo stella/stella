@@ -549,17 +549,6 @@ export const MATTER_TOOL_DEFINITIONS = [
   },
 ] as const satisfies readonly McpToolDefinition[];
 
-/**
- * Prefer a cross-field (`partial_check`) validation message when present,
- * falling back to the hand-written shape hint for structural failures.
- */
-const crossFieldOrGeneric = (
-  issues: readonly v.BaseIssue<unknown>[],
-  genericMessage: string,
-): string =>
-  issues.find((issue) => issue.type === "partial_check")?.message ??
-  genericMessage;
-
 // --- save_matter --------------------------------------------------------
 
 const saveMatterArgsSchema = v.pipe(
@@ -622,10 +611,8 @@ const handleSaveMatterTool: TypedMcpToolHandler<
   if (!parsed.success) {
     return validationErrorResult({
       issues: parsed.issues,
-      message: crossFieldOrGeneric(
-        parsed.issues,
+      message:
         "Invalid input: expected { matter_id?: string, name?: string, client_id?: string, reference?: string, billing_reference?: string|null, status?: 'active'|'archived' }",
-      ),
     });
   }
   const input = parsed.output;
@@ -945,10 +932,8 @@ const handleSaveContactTool: TypedMcpToolHandler<
   if (!parsed.success) {
     return validationErrorResult({
       issues: parsed.issues,
-      message: crossFieldOrGeneric(
-        parsed.issues,
+      message:
         "Invalid input: expected { contact_id?: string, type?: 'person'|'organization', display_name?: string, first_name?: string|null, last_name?: string|null, organization_name?: string|null, notes?: string|null }",
-      ),
     });
   }
   const input = parsed.output;
@@ -1283,10 +1268,8 @@ const handleListTasksTool: TypedMcpToolHandler<
   if (!parsed.success) {
     return validationErrorResult({
       issues: parsed.issues,
-      message: crossFieldOrGeneric(
-        parsed.issues,
+      message:
         "Invalid input: expected { matter_id?: string, task_id?: string, date_from?: YYYY-MM-DD, date_to?: YYYY-MM-DD, status?: string, limit?: integer, cursor?: string }",
-      ),
     });
   }
   const input = parsed.output;
@@ -1750,10 +1733,8 @@ const handleSaveTaskTool: TypedMcpToolHandler<
   if (!parsed.success) {
     return validationErrorResult({
       issues: parsed.issues,
-      message: crossFieldOrGeneric(
-        parsed.issues,
+      message:
         "Invalid input: expected { task_id?, matter_id?, name?, item_type?, status?, priority?, due_date?, workflow_reason?, add_assignee_user_id?, remove_assignee_user_id?, link_entity_id?, unlink_link_id? }",
-      ),
     });
   }
   const input = parsed.output;
@@ -2029,10 +2010,8 @@ const handleLinkMatterContactTool: TypedMcpToolHandler<
   if (!parsed.success) {
     return validationErrorResult({
       issues: parsed.issues,
-      message: crossFieldOrGeneric(
-        parsed.issues,
+      message:
         "Invalid input: expected { matter_id: string, contact_id?: string, role?: string, workspace_contact_id?: string }",
-      ),
     });
   }
   const input = parsed.output;
