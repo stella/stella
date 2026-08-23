@@ -149,8 +149,6 @@
         "drizzle-kit": "catalog:",
         "expect-type": "^1.4.0",
         "fast-check": "catalog:",
-        "vite": "catalog:",
-        "vite-plugin-singlefile": "^2.3.0",
       },
     },
     "apps/collab": {
