@@ -209,13 +209,37 @@ type SqlKeywordIndexOptions = {
   sql: string;
 };
 
+const ASCII_LOWERCASE_A = 97;
+const ASCII_LOWERCASE_Z = 122;
+const ASCII_CASE_OFFSET = 32;
+
+const asciiUpperCode = (code: number): number =>
+  code >= ASCII_LOWERCASE_A && code <= ASCII_LOWERCASE_Z
+    ? code - ASCII_CASE_OFFSET
+    : code;
+
+const startsWithSqlKeyword = (
+  sql: string,
+  keyword: string,
+  index: number,
+): boolean => {
+  for (let offset = 0; offset < keyword.length; offset += 1) {
+    if (
+      asciiUpperCode(sql.charCodeAt(index + offset)) !==
+      keyword.charCodeAt(offset)
+    ) {
+      return false;
+    }
+  }
+  return true;
+};
+
 /** Locate structural SQL outside double-quoted identifiers. */
 const sqlKeywordIndex = ({
   from = 0,
   keyword,
   sql,
 }: SqlKeywordIndexOptions): number => {
-  const upperSql = sql.toUpperCase();
   let quoted = false;
 
   for (let index = 0; index <= sql.length - keyword.length; index += 1) {
@@ -227,7 +251,7 @@ const sqlKeywordIndex = ({
       quoted = !quoted;
       continue;
     }
-    if (!quoted && index >= from && upperSql.startsWith(keyword, index)) {
+    if (!quoted && index >= from && startsWithSqlKeyword(sql, keyword, index)) {
       return index;
     }
   }
@@ -378,6 +402,14 @@ describe("RLS table grants", () => {
     ).toEqual({
       privileges: new Set(["select", "update"]),
       tables: ["classified_table"],
+    });
+    expect(
+      stellaTableGrant(
+        'GRANT SELECT, UPDATE ON TABLE classified_table, "straße" TO stella',
+      ),
+    ).toEqual({
+      privileges: new Set(["select", "update"]),
+      tables: ["classified_table", "straße"],
     });
     expect(
       stellaTableGrant(
