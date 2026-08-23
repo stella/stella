@@ -30,7 +30,9 @@ const chatReadySurface = (page: Page) => {
 // the actual exception behind a blank page.
 test.beforeEach(({ page }) => {
   page.on("pageerror", (error) => {
-    console.log(`[pageerror] ${error.stack ?? String(error)}`);
+    // Emptiness, not absence, is how an error reports "no stack" here, so
+    // a nullish fallback would log the empty string instead of the error.
+    console.log(`[pageerror] ${error.stack || String(error)}`);
   });
   page.on("requestfailed", (request) => {
     const failure = request.failure()?.errorText ?? "unknown failure";
