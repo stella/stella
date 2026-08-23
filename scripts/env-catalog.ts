@@ -73,6 +73,7 @@ const INTERNAL_SERVER_KEYS = new Set([
   "AZURE_RESOURCE_NAME",
   "BETTER_AUTH_COOKIE_PREFIX",
   "BETTER_AUTH_URL",
+  "CASE_LAW_DATABASE_POOL_MAX",
   "PUBLIC_LAW_DATABASE_POOL_MAX",
   "CORPUS_INDEXING_ENABLED",
   "CORPUS_INDEX_BACKPRESSURE_DIMENSIONS",
@@ -463,7 +464,11 @@ const ACTIVE_EXAMPLE_KEYS = new Set([
   "VITE_PUBLIC_APP_URL",
 ]);
 
-const HIDDEN_SCHEMA_KEYS = new Set(["isDev"]);
+const HIDDEN_SCHEMA_KEYS = new Set([
+  "CASE_LAW_DATABASE_POOL_MAX",
+  "CASE_LAW_DATABASE_URL",
+  "isDev",
+]);
 
 const humanizeEnvName = (name: string) => {
   const words = name

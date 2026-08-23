@@ -345,6 +345,56 @@ describe("environment doctor output", () => {
     }
   });
 
+  test("resolves the v0.7.22 case-law keys into the public-law boundary", () => {
+    const legacyUrl =
+      "postgres://case_law_reader:password@db.example.com:5432/stella?sslmode=require";
+    const result = validateDoctorEnvironment({
+      app: "api",
+      input: {
+        ...validApiInput(),
+        CASE_LAW_DATABASE_POOL_MAX: "3",
+        CASE_LAW_DATABASE_URL: legacyUrl,
+        CORPUS_INDEX_SEARCH_ENDPOINT: "https://quickwit-search.example.com",
+        LEGAL_SEARCH_PROVIDER: "corpus-index",
+      },
+    });
+
+    expect(result.status).toBe("valid");
+    expect(result.values["PUBLIC_LAW_DATABASE_POOL_MAX"]).toBe(3);
+    expect(result.values["PUBLIC_LAW_DATABASE_URL"]).toBe(legacyUrl);
+  });
+
+  test.each([
+    {
+      expected:
+        "CASE_LAW_DATABASE_URL and PUBLIC_LAW_DATABASE_URL must match during the v0.7.22 rollback window.",
+      overrides: {
+        CASE_LAW_DATABASE_URL:
+          "postgres://old_reader:password@db.example.com:5432/stella?sslmode=require",
+        PUBLIC_LAW_DATABASE_URL:
+          "postgres://new_reader:password@db.example.com:5432/stella?sslmode=require",
+      },
+    },
+    {
+      expected:
+        "CASE_LAW_DATABASE_POOL_MAX and PUBLIC_LAW_DATABASE_POOL_MAX must match during the v0.7.22 rollback window.",
+      overrides: {
+        CASE_LAW_DATABASE_POOL_MAX: "3",
+        PUBLIC_LAW_DATABASE_POOL_MAX: "4",
+      },
+    },
+  ])("rejects conflicting rollback keys", ({ expected, overrides }) => {
+    const result = validateDoctorEnvironment({
+      app: "api",
+      input: { ...validApiInput(), ...overrides },
+    });
+
+    expect(result.status).toBe("invalid");
+    if (result.status === "invalid") {
+      expect(result.issues).toContain(expected);
+    }
+  });
+
   test.each([
     {
       expected:

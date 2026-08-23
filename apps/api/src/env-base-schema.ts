@@ -31,11 +31,16 @@ import { isTlsOrLoopbackUrl } from "@/api/lib/secure-service-url";
  */
 export const DEPLOYED_NODE_ENVS = new Set(["production", "staging"]);
 
+const databasePoolMaxValueSchema = v.pipe(
+  v.string(),
+  v.digits(),
+  v.toNumber(),
+  v.integer(),
+  v.minValue(1),
+);
+
 const databasePoolMaxSchema = (fallback = "5") =>
-  v.optional(
-    v.pipe(v.string(), v.digits(), v.toNumber(), v.integer(), v.minValue(1)),
-    fallback,
-  );
+  v.optional(databasePoolMaxValueSchema, fallback);
 
 const documentOcrBatchIntervalMinutesSchema = v.optional(
   v.pipe(
@@ -117,6 +122,10 @@ export const envBaseServerSchema = {
   DATABASE_RLS_POOL_MAX: databasePoolMaxSchema(),
   PUBLIC_LAW_DATABASE_URL: v.optional(postgresUrlSchema()),
   PUBLIC_LAW_DATABASE_POOL_MAX: databasePoolMaxSchema("2"),
+  // REMOVAL CONDITION: delete both CASE_LAW_* inputs after v0.7.22 is no
+  // longer a deployable rollback target. All consumers use PUBLIC_LAW_*.
+  CASE_LAW_DATABASE_URL: v.optional(postgresUrlSchema()),
+  CASE_LAW_DATABASE_POOL_MAX: v.optional(databasePoolMaxValueSchema),
   DATABASE_POOL_MAX_LIFETIME_S: databasePoolSecondsSchema("0"),
   DATABASE_POOL_IDLE_TIMEOUT_S: databasePoolSecondsSchema("0"),
   DOCUMENT_OCR_BATCH_INTERVAL_MINUTES: documentOcrBatchIntervalMinutesSchema,
@@ -241,7 +250,10 @@ export const databaseComponentEnvSchema = {
 };
 
 type EnvBaseInvariantInput = {
+  CASE_LAW_DATABASE_POOL_MAX?: number | undefined;
+  CASE_LAW_DATABASE_URL?: string | undefined;
   PUBLIC_LAW_DATABASE_URL?: string | undefined;
+  PUBLIC_LAW_DATABASE_POOL_MAX: number;
   CORPUS_INDEX_BACKPRESSURE_DIMENSIONS?: string | undefined;
   CORPUS_INDEX_BACKPRESSURE_HIGH_WATERMARK: number;
   CORPUS_INDEX_BACKPRESSURE_LOW_WATERMARK: number;
@@ -264,7 +276,10 @@ type EnvBaseInvariantInput = {
 };
 
 export const envBaseInvariantViolation = ({
+  CASE_LAW_DATABASE_POOL_MAX,
+  CASE_LAW_DATABASE_URL,
   PUBLIC_LAW_DATABASE_URL,
+  PUBLIC_LAW_DATABASE_POOL_MAX,
   CORPUS_INDEX_BACKPRESSURE_DIMENSIONS,
   CORPUS_INDEX_BACKPRESSURE_HIGH_WATERMARK,
   CORPUS_INDEX_BACKPRESSURE_LOW_WATERMARK,
@@ -285,6 +300,20 @@ export const envBaseInvariantViolation = ({
   S3_SECRET_ACCESS_KEY,
   isDev,
 }: EnvBaseInvariantInput): string | null => {
+  // REMOVAL CONDITION: remove these two conflict checks with the CASE_LAW_*
+  // schema inputs after v0.7.22 leaves the rollback window.
+  if (
+    CASE_LAW_DATABASE_URL !== undefined &&
+    CASE_LAW_DATABASE_URL !== PUBLIC_LAW_DATABASE_URL
+  ) {
+    return "CASE_LAW_DATABASE_URL and PUBLIC_LAW_DATABASE_URL must match during the v0.7.22 rollback window.";
+  }
+  if (
+    CASE_LAW_DATABASE_POOL_MAX !== undefined &&
+    CASE_LAW_DATABASE_POOL_MAX !== PUBLIC_LAW_DATABASE_POOL_MAX
+  ) {
+    return "CASE_LAW_DATABASE_POOL_MAX and PUBLIC_LAW_DATABASE_POOL_MAX must match during the v0.7.22 rollback window.";
+  }
   if (
     (CORPUS_INDEX_BACKPRESSURE_METRIC === undefined) !==
     (CORPUS_INDEX_BACKPRESSURE_NAMESPACE === undefined)
@@ -397,4 +426,32 @@ export const envBaseInvariantViolation = ({
     corpusBucket: LEGAL_CORPUS_S3_BUCKET,
     isDev,
   });
+};
+
+type PublicLawDatabaseEnvironment = {
+  CASE_LAW_DATABASE_POOL_MAX?: string | undefined;
+  CASE_LAW_DATABASE_URL?: string | undefined;
+  PUBLIC_LAW_DATABASE_POOL_MAX?: string | undefined;
+  PUBLIC_LAW_DATABASE_URL?: string | undefined;
+};
+
+/**
+ * Additive v0.7.22 rollback bridge. New code consumes only PUBLIC_LAW_* while
+ * older deployment configuration can still supply CASE_LAW_* for one release
+ * window. envBaseInvariantViolation rejects conflicting dual configuration.
+ */
+export const resolvePublicLawDatabaseEnvironment = ({
+  CASE_LAW_DATABASE_POOL_MAX,
+  CASE_LAW_DATABASE_URL,
+  PUBLIC_LAW_DATABASE_POOL_MAX,
+  PUBLIC_LAW_DATABASE_URL,
+}: PublicLawDatabaseEnvironment) => {
+  const currentPoolMax = PUBLIC_LAW_DATABASE_POOL_MAX || undefined;
+  const currentUrl = PUBLIC_LAW_DATABASE_URL || undefined;
+  const rolloutPoolMax = CASE_LAW_DATABASE_POOL_MAX || undefined;
+  const rolloutUrl = CASE_LAW_DATABASE_URL || undefined;
+  return {
+    PUBLIC_LAW_DATABASE_POOL_MAX: currentPoolMax ?? rolloutPoolMax,
+    PUBLIC_LAW_DATABASE_URL: currentUrl ?? rolloutUrl,
+  };
 };
