@@ -1,7 +1,6 @@
-import { Queue } from "bullmq";
-
 import type { SafeId } from "@/api/lib/branded-types";
 import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
+import { createLazyBullMqQueue } from "@/api/lib/bullmq-queue";
 import { createBullMqConnection } from "@/api/lib/redis-client";
 
 export const DOCUMENT_PROCESSING_QUEUE_NAME = "document-processing";
@@ -16,31 +15,19 @@ export type DocumentProcessingJobData = {
   runId: SafeId<"documentProcessingRun">;
 };
 
-let queue: Queue<DocumentProcessingJobData> | null = null;
-let queueConnection: ReturnType<typeof createBullMqConnection> | null = null;
-
-const getQueueConnection = () => {
-  queueConnection ??= createBullMqConnection({
-    connectionTimeout: QUEUE_OPERATION_TIMEOUT_MS,
-    enableOfflineQueue: false,
-  });
-  return queueConnection;
-};
-
-const getQueue = (): Queue<DocumentProcessingJobData> => {
-  queue ??= new Queue<DocumentProcessingJobData>(
-    DOCUMENT_PROCESSING_QUEUE_NAME,
-    {
-      connection: getQueueConnection(),
-      defaultJobOptions: {
-        attempts: DEFAULT_JOB_ATTEMPTS,
-        removeOnComplete: 1000,
-        removeOnFail: 5000,
-      },
-    },
-  );
-  return queue;
-};
+const getQueue = createLazyBullMqQueue<DocumentProcessingJobData>({
+  name: DOCUMENT_PROCESSING_QUEUE_NAME,
+  createConnection: () =>
+    createBullMqConnection({
+      connectionTimeout: QUEUE_OPERATION_TIMEOUT_MS,
+      enableOfflineQueue: false,
+    }),
+  defaultJobOptions: {
+    attempts: DEFAULT_JOB_ATTEMPTS,
+    removeOnComplete: 1000,
+    removeOnFail: 5000,
+  },
+});
 
 /**
  * Jobs currently visible to the queue in any not-yet-finished state. The

@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { Queue, Worker } from "bullmq";
+import { Worker } from "bullmq";
 import { and, eq, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
@@ -14,6 +14,7 @@ import type {
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
+import { createLazyBullMqQueue } from "@/api/lib/bullmq-queue";
 import { connectionErrorFields, errorTag } from "@/api/lib/errors/utils";
 import { decidePdfDerivativeAction } from "@/api/lib/file-derivative-decision";
 import {
@@ -84,26 +85,15 @@ type EnqueueFileDerivativeArgs = {
   workspaceId: SafeId<"workspace">;
 };
 
-let queue: Queue<FileDerivativeJobData> | null = null;
-let queueConnection: ReturnType<typeof createBullMqConnection> | null = null;
-
-const getQueueConnection = () => {
-  queueConnection ??= createBullMqConnection();
-  return queueConnection;
-};
-
-const getQueue = (): Queue<FileDerivativeJobData> => {
-  queue ??= new Queue<FileDerivativeJobData>(QUEUE_NAME, {
-    connection: getQueueConnection(),
-    defaultJobOptions: {
-      attempts: DEFAULT_JOB_ATTEMPTS,
-      backoff: { type: "exponential", delay: 30_000 },
-      removeOnComplete: 100,
-      removeOnFail: 500,
-    },
-  });
-  return queue;
-};
+const getQueue = createLazyBullMqQueue<FileDerivativeJobData>({
+  name: QUEUE_NAME,
+  defaultJobOptions: {
+    attempts: DEFAULT_JOB_ATTEMPTS,
+    backoff: { type: "exponential", delay: 30_000 },
+    removeOnComplete: 100,
+    removeOnFail: 500,
+  },
+});
 
 export const enqueuePdfDerivative = async ({
   encrypted,

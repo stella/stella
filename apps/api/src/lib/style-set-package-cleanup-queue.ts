@@ -1,9 +1,10 @@
-import { Queue, Worker } from "bullmq";
+import { Worker } from "bullmq";
 import { eq, or } from "drizzle-orm";
 
 import { rootDb } from "@/api/db/root";
 import { styleSets } from "@/api/db/schema";
 import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
+import { createLazyBullMqQueue } from "@/api/lib/bullmq-queue";
 import { connectionErrorFields, errorTag } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
 import { createBullMqConnection } from "@/api/lib/redis-client";
@@ -45,26 +46,15 @@ type StyleSetPackageCleanupQueue = {
   getJob: (jobId: string) => Promise<StyleSetPackageCleanupJob | undefined>;
 };
 
-let queue: Queue<StyleSetPackageCleanupJobData> | null = null;
-let queueConnection: ReturnType<typeof createBullMqConnection> | null = null;
-
-const getQueueConnection = () => {
-  queueConnection ??= createBullMqConnection();
-  return queueConnection;
-};
-
-const getQueue = (): Queue<StyleSetPackageCleanupJobData> => {
-  queue ??= new Queue<StyleSetPackageCleanupJobData>(QUEUE_NAME, {
-    connection: getQueueConnection(),
-    defaultJobOptions: {
-      attempts: DEFAULT_JOB_ATTEMPTS,
-      backoff: { type: "exponential", delay: 30_000 },
-      removeOnComplete: 100,
-      removeOnFail: 500,
-    },
-  });
-  return queue;
-};
+const getQueue = createLazyBullMqQueue<StyleSetPackageCleanupJobData>({
+  name: QUEUE_NAME,
+  defaultJobOptions: {
+    attempts: DEFAULT_JOB_ATTEMPTS,
+    backoff: { type: "exponential", delay: 30_000 },
+    removeOnComplete: 100,
+    removeOnFail: 500,
+  },
+});
 
 export const enqueueStyleSetPackageCleanup = async ({
   s3Key,

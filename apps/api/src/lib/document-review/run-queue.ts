@@ -18,7 +18,7 @@
  */
 
 import { Result } from "better-result";
-import { Queue, Worker } from "bullmq";
+import { Worker } from "bullmq";
 import { and, eq, inArray, lt, or } from "drizzle-orm";
 
 import { DAY_IN_MS } from "@stll/time";
@@ -37,6 +37,7 @@ import { captureError } from "@/api/lib/analytics/capture";
 import type { AIUsageMetering } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
+import { createLazyBullMqQueue } from "@/api/lib/bullmq-queue";
 import type { DocumentReviewTopic } from "@/api/lib/document-review/contract";
 import {
   buildDocumentReviewFindingRow,
@@ -62,6 +63,7 @@ import { finalizeReviewRun } from "@/api/lib/document-review/run-finalize";
 import { planReviewRun } from "@/api/lib/document-review/run-plan";
 import type { ReviewRunPlan } from "@/api/lib/document-review/run-plan";
 import { connectionErrorFields, errorTag } from "@/api/lib/errors/utils";
+import { startNonOverlappingInterval } from "@/api/lib/non-overlapping-interval";
 import { logger } from "@/api/lib/observability/logger";
 import { createBullMqConnection } from "@/api/lib/redis-client";
 import { createRootSafeDb, createRootScopedDb } from "@/api/lib/root-scoped-db";
@@ -115,25 +117,14 @@ export type EnqueueDocumentReviewRunArgs = {
   userId: SafeId<"user">;
 };
 
-let queue: Queue<DocumentReviewRunJobData> | null = null;
-let queueConnection: ReturnType<typeof createBullMqConnection> | null = null;
-
-const getQueueConnection = () => {
-  queueConnection ??= createBullMqConnection();
-  return queueConnection;
-};
-
-const getQueue = (): Queue<DocumentReviewRunJobData> => {
-  queue ??= new Queue<DocumentReviewRunJobData>(QUEUE_NAME, {
-    connection: getQueueConnection(),
-    defaultJobOptions: {
-      attempts: JOB_ATTEMPTS,
-      removeOnComplete: 100,
-      removeOnFail: 500,
-    },
-  });
-  return queue;
-};
+const getQueue = createLazyBullMqQueue<DocumentReviewRunJobData>({
+  name: QUEUE_NAME,
+  defaultJobOptions: {
+    attempts: JOB_ATTEMPTS,
+    removeOnComplete: 100,
+    removeOnFail: 500,
+  },
+});
 
 /** One job, described exactly as the queue takes it. The run id IS the job
  *  identity: a duplicate enqueue collapses onto the job already in flight
@@ -257,8 +248,6 @@ export const initDocumentReviewRunWorker = () => {
     );
   });
 
-  let closing = false;
-  let activeReconcile: Promise<void> | null = null;
   const runReconcile = async (): Promise<void> => {
     const recovered = await reconcileStuckDocumentReviewRuns();
     if (recovered > 0) {
@@ -267,24 +256,13 @@ export const initDocumentReviewRunWorker = () => {
       });
     }
   };
-  const scheduleReconcile = (): void => {
-    if (closing || activeReconcile !== null) {
-      return;
-    }
-    activeReconcile = runReconcile()
-      .catch((error: unknown) => {
-        captureError(error, { operation: "document_review_run.reconcile" });
-      })
-      .finally(() => {
-        activeReconcile = null;
-      });
-  };
-  scheduleReconcile();
-  const reconcileTimer = setInterval(
-    scheduleReconcile,
-    ORPHAN_RECONCILE_INTERVAL_MS,
-  );
-  reconcileTimer.unref();
+  const closeReconcile = startNonOverlappingInterval({
+    intervalMs: ORPHAN_RECONCILE_INTERVAL_MS,
+    run: runReconcile,
+    onError: (error) => {
+      captureError(error, { operation: "document_review_run.reconcile" });
+    },
+  });
 
   logger.info("document_review_run.worker_started", {
     concurrency: String(WORKER_CONCURRENCY),
@@ -292,11 +270,7 @@ export const initDocumentReviewRunWorker = () => {
 
   return {
     close: async () => {
-      closing = true;
-      clearInterval(reconcileTimer);
-      if (activeReconcile !== null) {
-        await activeReconcile;
-      }
+      await closeReconcile();
       await worker.close();
     },
   };
