@@ -163,14 +163,14 @@ const collect = async (
 };
 
 test("citation reads traverse bounded pages without leaking restricted decisions", async () => {
-  const firstOutgoing = await withReader((tx) =>
+  const firstOutgoing = await withReader(async (tx) =>
     listOutgoingDecisionCitations({
       tx,
       cursor: undefined,
       decisionId: subjectId,
     }),
   );
-  const firstIncoming = await withReader((tx) =>
+  const firstIncoming = await withReader(async (tx) =>
     listIncomingDecisionCitations({
       tx,
       cursor: undefined,
@@ -186,7 +186,7 @@ test("citation reads traverse bounded pages without leaking restricted decisions
   expect(firstIncoming.nextCursor).not.toBeNull();
 
   const outgoing = await collect(async (cursor) => {
-    const page = await withReader((tx) =>
+    const page = await withReader(async (tx) =>
       listOutgoingDecisionCitations({
         tx,
         cursor,
@@ -200,7 +200,7 @@ test("citation reads traverse bounded pages without leaking restricted decisions
     return page;
   });
   const incoming = await collect(async (cursor) => {
-    const page = await withReader((tx) =>
+    const page = await withReader(async (tx) =>
       listIncomingDecisionCitations({
         tx,
         cursor,
@@ -230,7 +230,7 @@ test("citation reads traverse bounded pages without leaking restricted decisions
 });
 
 test("citation reads reject malformed cursors", async () => {
-  const page = await withReader((tx) =>
+  const page = await withReader(async (tx) =>
     listOutgoingDecisionCitations({
       tx,
       cursor: "not-a-cursor",
