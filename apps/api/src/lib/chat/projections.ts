@@ -58,26 +58,25 @@ type ProjectionScalar =
   | null
   | undefined;
 
-type ExtraProjectionFields<Payload, SchemaInput> =
-  unknown extends SchemaInput
+type ExtraProjectionFields<Payload, SchemaInput> = unknown extends SchemaInput
+  ? never
+  : SchemaInput extends ProjectionScalar
     ? never
-    : SchemaInput extends ProjectionScalar
-      ? never
-      : Payload extends readonly (infer Item)[]
-        ? SchemaInput extends readonly (infer ShapeItem)[]
-          ? ExtraProjectionFields<Item, ShapeItem>
-          : never
-        : Payload extends object
-          ? SchemaInput extends object
-            ? Payload extends SchemaInput
-              ? {
-                  [K in keyof Payload]-?: K extends keyof SchemaInput
-                    ? ExtraProjectionFields<Payload[K], SchemaInput[K]>
-                    : K;
-                }[keyof Payload]
-              : never
+    : Payload extends readonly (infer Item)[]
+      ? SchemaInput extends readonly (infer ShapeItem)[]
+        ? ExtraProjectionFields<Item, ShapeItem>
+        : never
+      : Payload extends object
+        ? SchemaInput extends object
+          ? Payload extends SchemaInput
+            ? {
+                [K in keyof Payload]-?: K extends keyof SchemaInput
+                  ? ExtraProjectionFields<Payload[K], SchemaInput[K]>
+                  : K;
+              }[keyof Payload]
             : never
-          : never;
+          : never
+        : never;
 
 /**
  * Compile-time exactness tie for a chat payload that is NOT built as an
@@ -413,8 +412,8 @@ const documentFieldContentProjection = v.variant("type", [
     v.strictObject({
       version: v.literal(1),
       type: v.literal("person"),
-      // The workspace member handle is machinery chat cannot act on; the name is
-      // what a model reads.
+      // The workspace member handle is machinery chat cannot act on; the name
+      // is what a model reads.
       userId: strippedField(),
       name: v.string(),
       image: strippedField(),

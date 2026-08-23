@@ -406,11 +406,8 @@ type IsAny<TValue> = 0 extends 1 & TValue ? true : false;
 
 type IsNever<TValue> = [TValue] extends [never] ? true : false;
 
-type IsUnknown<TValue> = IsAny<TValue> extends true
-  ? false
-  : unknown extends TValue
-    ? true
-    : false;
+type IsUnknown<TValue> =
+  IsAny<TValue> extends true ? false : unknown extends TValue ? true : false;
 
 type IsBroadRecord<TValue> = string extends keyof TValue ? true : false;
 
@@ -436,12 +433,14 @@ type HandlerOutputMatches<THandler, TExpected> =
       : false
     : false;
 
-export type AllHandlerOutputsTyped<THandlers, TNames extends keyof THandlers> =
-  false extends {
-    [TName in TNames]: HandlerOutputIsTyped<THandlers[TName]>;
-  }[TNames]
-    ? false
-    : true;
+export type AllHandlerOutputsTyped<
+  THandlers,
+  TNames extends keyof THandlers,
+> = false extends {
+  [TName in TNames]: HandlerOutputIsTyped<THandlers[TName]>;
+}[TNames]
+  ? false
+  : true;
 
 export type HandlerOutputsMatchByName<
   THandlers,

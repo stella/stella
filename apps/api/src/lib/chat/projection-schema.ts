@@ -415,7 +415,9 @@ const walkContainerSchema = (
         panic("union option is not a valibot schema");
       }
       if (!projectionBranchSources.has(option)) {
-        panic("chat projection union option is not wrapped in projectionBranch");
+        panic(
+          "chat projection union option is not wrapped in projectionBranch",
+        );
       }
       walkContainerSchema(option, segments, visit);
     }

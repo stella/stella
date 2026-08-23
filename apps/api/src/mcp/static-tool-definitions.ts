@@ -71,7 +71,7 @@ true satisfies [MissingMcpToolName, ExtraMcpToolName] extends [never, never]
 
 type ValibotInputToolName = Extract<
   (typeof DEFAULT_MCP_TOOL_DEFINITIONS)[number],
-  { inputSchemaSource: object }
+  { inputSchemaSource: unknown }
 >["name"];
 type LegacyManualInputToolName = Exclude<
   RegisteredMcpToolName,
