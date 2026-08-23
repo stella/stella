@@ -346,6 +346,32 @@ describe("public-law reader role", () => {
     });
   });
 
+  test("startup attestation rejects a login that can delegate the reader role", async () => {
+    let permissions: PublicLawDatabaseRolePermissions | undefined;
+    try {
+      await testDb.transaction(async (tx) => {
+        await tx.execute(sql`CREATE ROLE reader_attestation_admin NOLOGIN`);
+        await tx.execute(
+          sql.raw(
+            `GRANT ${quoted(READER_ROLE)} TO reader_attestation_admin WITH ADMIN OPTION`,
+          ),
+        );
+        await tx.execute(sql`SET LOCAL ROLE reader_attestation_admin`);
+        const result = await tx.execute<PublicLawDatabaseRolePermissions>(
+          publicLawDatabaseRolePermissionsSql(),
+        );
+        permissions = result.rows.at(0);
+        tx.rollback();
+      });
+    } catch (error) {
+      if (!(error instanceof TransactionRollbackError)) {
+        throw error;
+      }
+    }
+
+    expect(permissions).toMatchObject({ canDelegatePublicLaw: true });
+  });
+
   test("SET ROLE can SELECT every surface and rejects an operational column", async () => {
     await testDb.transaction(async (tx) => {
       await tx.execute(sql.raw(`SET LOCAL ROLE ${quoted(READER_ROLE)}`));

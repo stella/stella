@@ -141,7 +141,14 @@ export const publicLawDatabaseRolePermissionsSql = (): SqlFragment => {
             AND columns.attnum > 0
             AND NOT columns.attisdropped
         ) AS "canReadPublicLaw",
-        EXISTS (
+        (
+          current_user <> ${stellaPublicLawReader.name}
+          AND pg_has_role(
+            current_user,
+            ${stellaPublicLawReader.name},
+            'USAGE WITH ADMIN OPTION'
+          )
+        ) OR EXISTS (
           SELECT 1
           FROM information_schema.role_table_grants
           WHERE table_schema <> 'information_schema'
