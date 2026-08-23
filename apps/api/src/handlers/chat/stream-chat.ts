@@ -41,6 +41,7 @@ import {
   getUserFileIdFromAttachmentPart,
   isChatAttachmentPart,
   isChatDocumentPart,
+  isChatPart,
   toPersistableChatMessage,
 } from "@/api/handlers/chat/chat-message-parts";
 import type {
@@ -521,6 +522,7 @@ export const streamChat = async ({
   const processedStream = processServerChatStream({
     abortSignal,
     existingMessageIds: new Set(preparedMessageList.map(({ id }) => id)),
+    flushPendingSource: persistenceVisibleStream.flushPending,
     preservedTerminalMessageId: owningAssistantMessageId,
     onFinish,
     processor,
@@ -1345,6 +1347,7 @@ const createChatRuntimeMiddleware = ({
 type ProcessServerChatStreamProps = {
   abortSignal: AbortSignal;
   existingMessageIds?: ReadonlySet<string> | undefined;
+  flushPendingSource?: (() => StreamChunk[]) | undefined;
   getResponseMessage: () => ChatMessage | null;
   mapMessageId: MessageIdMapper;
   onFinish: (event: StreamChatFinishEvent) => Promise<void> | void;
@@ -1451,9 +1454,67 @@ const awaitsCompleteInput = (interaction: AwaitingInteraction): boolean => {
   }
 };
 
+const trackIncompleteToolCallInput = (
+  chunk: StreamChunk,
+  rawArgumentsByToolCallId: Map<string, string>,
+): void => {
+  if (chunk.type === EventType.TOOL_CALL_START) {
+    if (!rawArgumentsByToolCallId.has(chunk.toolCallId)) {
+      rawArgumentsByToolCallId.set(chunk.toolCallId, "");
+    }
+    return;
+  }
+  if (chunk.type === EventType.TOOL_CALL_ARGS) {
+    rawArgumentsByToolCallId.set(
+      chunk.toolCallId,
+      (rawArgumentsByToolCallId.get(chunk.toolCallId) ?? "") + chunk.delta,
+    );
+    return;
+  }
+  if (chunk.type === EventType.TOOL_CALL_END) {
+    rawArgumentsByToolCallId.delete(chunk.toolCallId);
+  }
+};
+
+const restoreInterruptedToolCallInputs = (
+  message: ChatMessage | null,
+  rawArgumentsByToolCallId: ReadonlyMap<string, string>,
+): ChatMessage | null => {
+  if (message === null || rawArgumentsByToolCallId.size === 0) {
+    return message;
+  }
+  return {
+    ...message,
+    parts: message.parts.map((part) => {
+      if (part.type !== "tool-call") {
+        return part;
+      }
+      const argumentsText = rawArgumentsByToolCallId.get(part.id);
+      if (argumentsText === undefined) {
+        return part;
+      }
+      const metadata = "metadata" in part ? part.metadata : undefined;
+      const candidate: unknown = {
+        arguments: argumentsText,
+        id: part.id,
+        ...(metadata === undefined ? {} : { metadata }),
+        name: part.name,
+        state:
+          argumentsText.length === 0 ? "awaiting-input" : "input-streaming",
+        type: "tool-call",
+      };
+      if (!isChatPart(candidate) || candidate.type !== "tool-call") {
+        return panic("Interrupted tool call cannot be restored");
+      }
+      return candidate;
+    }),
+  };
+};
+
 export const processServerChatStream = async function* ({
   abortSignal,
   existingMessageIds = new Set(),
+  flushPendingSource,
   getResponseMessage,
   mapMessageId,
   onFinish,
@@ -1462,6 +1523,7 @@ export const processServerChatStream = async function* ({
   source,
 }: ProcessServerChatStreamProps): AsyncIterable<StreamChunk> {
   const deferredRunFinishedChunks: StreamChunk[] = [];
+  const rawArgumentsByIncompleteToolCallId = new Map<string, string>();
   const toolCallsWithCompleteInput = new Set<string>();
   let usage: TokenUsage | undefined;
   // One accepted turn has exactly one terminal callback. Set before awaiting
@@ -1477,6 +1539,12 @@ export const processServerChatStream = async function* ({
   }): Promise<void> => {
     if (terminal.state === "settled") {
       return;
+    }
+    if (outcome.type === "interrupted" && flushPendingSource !== undefined) {
+      for (const chunk of flushPendingSource()) {
+        trackIncompleteToolCallInput(chunk, rawArgumentsByIncompleteToolCallId);
+        processor.processChunk(chunk);
+      }
     }
     if (flushProcessor) {
       finalizeResponseProcessor(processor);
@@ -1495,15 +1563,22 @@ export const processServerChatStream = async function* ({
         "Persistence processor dropped an assistant turn that carried a complete tool call",
       );
     }
-    const responseMessage = createTerminalResponseMessage({
-      getResponseMessage,
+    const responseMessage =
+      outcome.type === "interrupted"
+        ? restoreInterruptedToolCallInputs(
+            getResponseMessage(),
+            rawArgumentsByIncompleteToolCallId,
+          )
+        : getResponseMessage();
+    const terminalResponseMessage = createTerminalResponseMessage({
       mapMessageId,
       outcome,
       preservedTerminalMessageId,
+      responseMessage,
       usage,
     });
     terminal.state = "settled";
-    await onFinish({ outcome, responseMessage });
+    await onFinish({ outcome, responseMessage: terminalResponseMessage });
   };
   try {
     const normalizedSource = ensureAssistantMessageStart({
@@ -1517,6 +1592,10 @@ export const processServerChatStream = async function* ({
     });
 
     for await (const sourceChunk of normalizedSource) {
+      trackIncompleteToolCallInput(
+        sourceChunk,
+        rawArgumentsByIncompleteToolCallId,
+      );
       if (sourceChunk.type === EventType.TOOL_CALL_END) {
         toolCallsWithCompleteInput.add(sourceChunk.toolCallId);
       }
@@ -1681,21 +1760,20 @@ export const processServerChatStream = async function* ({
 };
 
 type FinishResponseMessageProps = {
-  getResponseMessage: () => ChatMessage | null;
   mapMessageId: MessageIdMapper;
   outcome: ChatTurnOutcome;
   preservedTerminalMessageId: SafeId<"chatMessage"> | undefined;
+  responseMessage: ChatMessage | null;
   usage: TokenUsage | undefined;
 };
 
 const createTerminalResponseMessage = ({
-  getResponseMessage,
   mapMessageId,
   outcome,
   preservedTerminalMessageId,
+  responseMessage,
   usage,
 }: FinishResponseMessageProps): PersistableTerminalAssistantMessage => {
-  const responseMessage = getResponseMessage();
   if (
     (outcome.type === "completed" || outcome.type === "awaiting-user") &&
     (!responseMessage || responseMessage.parts.length === 0)
@@ -1741,6 +1819,7 @@ type TransformOutgoingStreamProps = {
   resolveAssistantToolInputRefs?: AssistantToolInputRefResolver | undefined;
   resolveAssistantToolOutputRefs?: AssistantToolOutputRefResolver | undefined;
   resolveAssistantValueRefs?: AssistantValueRefResolver | undefined;
+  registerPendingFlush?: (flushPending: () => StreamChunk[]) => void;
   restorationPairs: ChatAnonRestoration[];
   source: AsyncIterable<StreamChunk>;
 };
@@ -1752,6 +1831,7 @@ export const transformOutgoingStream = async function* ({
   resolveAssistantToolInputRefs,
   resolveAssistantToolOutputRefs,
   resolveAssistantValueRefs,
+  registerPendingFlush,
   restorationPairs,
   source,
 }: TransformOutgoingStreamProps): AsyncIterable<StreamChunk> {
@@ -1764,6 +1844,7 @@ export const transformOutgoingStream = async function* ({
     resolveAssistantValueRefs,
     restorationPairs,
   });
+  registerPendingFlush?.(transform.flush);
 
   for await (const chunk of source) {
     for (const transformed of transform(chunk)) {
@@ -1781,19 +1862,32 @@ type TransformPersistenceVisibleStreamProps = Pick<
   "boundary" | "initialRestorationPlaceholders" | "restorationPairs" | "source"
 >;
 
+type PersistenceVisibleStream = AsyncIterable<StreamChunk> & {
+  flushPending: () => StreamChunk[];
+};
+
 /** Deanonymize the processor's copy while preserving model-facing chat refs. */
 export const transformPersistenceVisibleStream = ({
   boundary,
   initialRestorationPlaceholders,
   restorationPairs,
   source,
-}: TransformPersistenceVisibleStreamProps): AsyncIterable<StreamChunk> =>
-  transformOutgoingStream({
+}: TransformPersistenceVisibleStreamProps): PersistenceVisibleStream => {
+  let flushPending = (): StreamChunk[] => [];
+  const transformed = transformOutgoingStream({
     boundary,
     initialRestorationPlaceholders,
+    registerPendingFlush: (flush) => {
+      flushPending = flush;
+    },
     restorationPairs,
     source,
   });
+  return {
+    flushPending: () => flushPending(),
+    [Symbol.asyncIterator]: () => transformed[Symbol.asyncIterator](),
+  };
+};
 
 type TransformClientVisibleStreamProps = Pick<
   TransformOutgoingStreamProps,

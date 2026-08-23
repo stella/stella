@@ -523,11 +523,9 @@ const getCreateDocumentInput = (
   if (part.state !== "input-streaming") {
     return null;
   }
-  // TanStack accumulates partial tool arguments but currently exposes its
-  // progressive parse only in internal state. Parse the same raw accumulator
-  // here so the inspector can render while the source string is arriving.
-  const partialInput: unknown = parsePartialJSON(part.arguments);
-  return normalizeCreateDocumentInput(partialInput);
+  // Partial streaming input has not crossed a validation boundary yet. Parse
+  // it only for this progressive preview; completed calls use canonical input.
+  return normalizeCreateDocumentInput(parsePartialJSON(part.arguments));
 };
 
 export const selectCreateDocumentDrafts = (

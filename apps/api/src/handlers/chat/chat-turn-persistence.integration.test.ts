@@ -272,7 +272,28 @@ describe("durable chat turn persistence", () => {
       error: "unknown",
       type: "failed",
     });
-    expect(reloaded.parts).toEqual(owningAssistantMessage.parts);
+    // v3 persists canonical input rather than the lexical JSON argument
+    // string, whose object-key order is not preserved by PostgreSQL JSONB.
+    expect(reloaded.parts).toMatchObject([
+      {
+        id: "ask-1",
+        input: {
+          analysis: "Need jurisdiction",
+          questions: [
+            {
+              question: "Which court?",
+              reason: "Jurisdiction determines the law.",
+            },
+          ],
+        },
+        name: "ask-user",
+        output: {
+          answers: [{ answer: "Commercial Court", question: "Which court?" }],
+        },
+        state: "complete",
+        type: "tool-call",
+      },
+    ]);
     expect(
       await testDb.query.chatTurns.findFirst({
         where: { id: { eq: acceptance.id } },

@@ -20,10 +20,10 @@ import {
   isRunningToolPart,
   isToolApprovedByGrant,
   isUnresolvedFolioAgentDocToolCallPart,
+  projectCanonicalChatUIMessages,
   resolveChatAssistantTurnOutcome,
   sanitizeRunningToolCalls,
   selectUnresolvedFolioAgentDocToolCallParts,
-  withParsedToolCallInputs,
 } from "@/components/chat/chat-ui-tools";
 import type {
   ChatMessage,
@@ -113,6 +113,102 @@ describe("assistant turn outcomes", () => {
       reason: "user-stop",
     });
     expect(getChatAssistantTurnError(cancelled)).toBeUndefined();
+  });
+});
+
+describe("canonical chat UI projection", () => {
+  test("consumes canonical built-in input without parsing arguments", () => {
+    const message = {
+      id: "assistant-canonical-input",
+      parts: [
+        {
+          arguments: "not valid JSON",
+          id: "ask-1",
+          input: {
+            analysis: "The user must choose a jurisdiction.",
+            questions: [
+              {
+                question: "Which jurisdiction applies?",
+                reason: "The governing law changes the draft.",
+              },
+            ],
+          },
+          name: "ask-user",
+          state: "input-complete",
+          type: "tool-call",
+        },
+      ],
+      role: "assistant",
+    } satisfies PersistedChatMessage;
+
+    const projected = projectCanonicalChatUIMessages([message]);
+
+    expect(projected.at(0)).toBe(message);
+  });
+
+  test("refuses to reconstruct missing canonical input from arguments", () => {
+    const message = {
+      id: "assistant-missing-canonical-input",
+      parts: [
+        {
+          arguments: JSON.stringify({
+            analysis: "The user must choose a jurisdiction.",
+            questions: [
+              {
+                question: "Which jurisdiction applies?",
+                reason: "The governing law changes the draft.",
+              },
+            ],
+          }),
+          id: "ask-1",
+          name: "ask-user",
+          state: "input-complete",
+          type: "tool-call",
+        },
+      ],
+      role: "assistant",
+    } satisfies PersistedChatMessage;
+
+    expect(() => projectCanonicalChatUIMessages([message])).toThrow(
+      "Chat runtime produced a non-canonical tool call",
+    );
+  });
+
+  test("preserves protocol-partial built-in calls without input", () => {
+    const message = {
+      id: "assistant-partial-input",
+      parts: [
+        {
+          arguments: '{"analysis":',
+          id: "ask-1",
+          name: "ask-user",
+          state: "input-streaming",
+          type: "tool-call",
+        },
+      ],
+      role: "assistant",
+    } satisfies PersistedChatMessage;
+
+    expect(projectCanonicalChatUIMessages([message]).at(0)).toBe(message);
+  });
+
+  test("preserves protocol-partial built-in calls with progressive input", () => {
+    const message = {
+      id: "assistant-progressive-input",
+      parts: [
+        {
+          arguments: '{"name":"Contract',
+          id: "create-document-1",
+          input: { name: "Contract", source: "@title Contract" },
+          name: "create-document",
+          state: "input-streaming",
+          type: "tool-call",
+        },
+      ],
+      role: "assistant",
+    } satisfies PersistedChatMessage;
+
+    expect(projectCanonicalChatUIMessages([message]).at(0)).toBe(message);
   });
 });
 
@@ -1187,159 +1283,6 @@ describe("sanitizeRunningToolCalls", () => {
     // Nothing running anywhere: every message keeps its reference.
     expect(sanitized[0]).toBe(messages[0]);
     expect(sanitized[1]).toBe(messages[1]);
-  });
-});
-
-describe("withParsedToolCallInputs", () => {
-  const askUserArguments = JSON.stringify({
-    analysis: "Which company did you mean?",
-    questions: [
-      {
-        default: "Alza.cz a.s.",
-        question: "Which entity should I look up?",
-        reason: "The lookup needs the exact legal entity.",
-        options: ["Alza.cz a.s.", "Alzashop.com"],
-      },
-    ],
-  });
-
-  const argumentsOnlyMessages = (part: ChatPart): PersistedChatMessage[] => [
-    { id: "message-1", parts: [part], role: "assistant" },
-  ];
-
-  test("derives input from arguments on an input-complete tool call", () => {
-    // Exactly the persisted/streamed shape TanStack produces: a valid
-    // `arguments` JSON string with no `input` field.
-    const part = {
-      arguments: askUserArguments,
-      id: "tool-call-1",
-      name: "ask-user",
-      state: "input-complete",
-      type: "tool-call",
-    } satisfies ChatPart;
-
-    const [message] = withParsedToolCallInputs(argumentsOnlyMessages(part));
-    const normalized = message?.parts[0];
-    if (normalized?.type !== "tool-call" || normalized.name !== "ask-user") {
-      throw new Error("Expected a normalized ask-user tool-call part");
-    }
-
-    expect(normalized.input).toEqual({
-      analysis: "Which company did you mean?",
-      questions: [
-        {
-          default: "Alza.cz a.s.",
-          question: "Which entity should I look up?",
-          reason: "The lookup needs the exact legal entity.",
-          options: ["Alza.cz a.s.", "Alzashop.com"],
-        },
-      ],
-    });
-  });
-
-  test("leaves input undefined for invalid JSON arguments without throwing", () => {
-    const part = {
-      arguments: '{"questions":[',
-      id: "tool-call-1",
-      name: "ask-user",
-      state: "input-complete",
-      type: "tool-call",
-    } satisfies ChatPart;
-
-    const [message] = withParsedToolCallInputs(argumentsOnlyMessages(part));
-    const normalized = message?.parts[0];
-    if (normalized?.type !== "tool-call") {
-      throw new Error("Expected a tool-call part");
-    }
-
-    expect(normalized.input).toBeUndefined();
-    // The part is unchanged, so its reference is preserved.
-    expect(normalized).toBe(part);
-  });
-
-  test("rejects non-object input for a registered UI tool", () => {
-    const part = {
-      arguments: '"not-an-object"',
-      id: "tool-call-1",
-      name: "ask-user",
-      state: "input-complete",
-      type: "tool-call",
-    } satisfies ChatPart;
-
-    const [message] = withParsedToolCallInputs(argumentsOnlyMessages(part));
-    expect(message?.parts[0]).toBe(part);
-  });
-
-  test("leaves dynamic MCP input opaque when no UI validator is registered", () => {
-    const part = {
-      arguments: JSON.stringify({ query: "consumer credit" }),
-      id: "tool-call-1",
-      name: "mcp__salvia__search_decisions",
-      state: "input-complete",
-      type: "tool-call",
-    } satisfies ChatPart;
-
-    const [message] = withParsedToolCallInputs(argumentsOnlyMessages(part));
-    expect(message?.parts[0]).toBe(part);
-  });
-
-  test("does not parse arguments while the tool call is still streaming", () => {
-    const part = {
-      arguments: '{"questions":[{"quest',
-      id: "tool-call-1",
-      name: "ask-user",
-      state: "input-streaming",
-      type: "tool-call",
-    } satisfies ChatPart;
-
-    const [message] = withParsedToolCallInputs(argumentsOnlyMessages(part));
-    const normalized = message?.parts[0];
-    if (normalized?.type !== "tool-call") {
-      throw new Error("Expected a tool-call part");
-    }
-
-    expect(normalized.input).toBeUndefined();
-    expect(normalized).toBe(part);
-  });
-
-  test("preserves an already-populated input and message identity", () => {
-    const part = {
-      arguments: JSON.stringify({ query: "consumer credit" }),
-      id: "tool-call-1",
-      input: { query: "consumer credit" },
-      name: "mcp__salvia__search_decisions",
-      state: "input-complete",
-      type: "tool-call",
-    } satisfies ChatPart;
-    const messages = argumentsOnlyMessages(part);
-
-    const result = withParsedToolCallInputs(messages);
-
-    // Nothing to fill: the message object keeps its reference so
-    // downstream memoization is not invalidated.
-    expect(Object.is(result[0], messages[0])).toBe(true);
-  });
-
-  test("preserves an unknown persisted tool call as an opaque part", () => {
-    const part = {
-      arguments: JSON.stringify({ query: "historical query" }),
-      id: "tool-call-1",
-      name: "ask-user",
-      state: "complete",
-      type: "tool-call",
-    } satisfies ChatPart;
-    // The server persistence boundary accepts arbitrary historical tool names,
-    // while the current generated client union contains registered names only.
-    expect(Reflect.set(part, "name", "retired-provider-tool")).toBe(true);
-
-    const [message] = withParsedToolCallInputs(argumentsOnlyMessages(part));
-
-    expect(message?.parts[0]).toBe(part);
-    expect(message?.parts[0]).toMatchObject({
-      name: "retired-provider-tool",
-      type: "tool-call",
-    });
-    expect(part.name.startsWith("mcp__")).toBe(false);
   });
 });
 

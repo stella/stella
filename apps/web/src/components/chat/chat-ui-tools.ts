@@ -267,10 +267,6 @@ export const isExternalMcpToolName = (
   toolName: string,
 ): toolName is `mcp__${string}` => toolName.startsWith("mcp__");
 
-const isExternalMcpChatToolCallPart = (
-  part: TanStackChatToolCallPart,
-): part is ExternalMcpChatToolCallPart => isExternalMcpToolName(part.name);
-
 export const isExternalInputChatToolName = (
   toolName: ApprovalToolName,
 ): toolName is ExternalInputToolName =>
@@ -1027,32 +1023,6 @@ export const getChatAssistantTurnError = (
   }
 };
 
-/**
- * Parse a completed tool-call part's raw `arguments` JSON.
- *
- * Arguments stream in incrementally, so the part carries no usable
- * payload while it is `awaiting-input` / `input-streaming`; parsing is
- * skipped for those states. Invalid or empty JSON yields `undefined`
- * rather than throwing (JSON boundary, so a local try/catch is fine).
- */
-export const parseCompletedToolCallArguments = (
-  part: ChatToolCallPart,
-): unknown => {
-  if (part.state === "awaiting-input" || part.state === "input-streaming") {
-    return undefined;
-  }
-  const raw = part.arguments.trim();
-  if (raw.length === 0) {
-    return undefined;
-  }
-  try {
-    const parsed: unknown = JSON.parse(raw);
-    return parsed;
-  } catch {
-    return undefined;
-  }
-};
-
 export const isOpaquePersistedChatToolCallPart = (
   value: unknown,
 ): value is OpaquePersistedChatToolCallPart => {
@@ -1076,71 +1046,53 @@ export const isOpaquePersistedChatToolCallPart = (
   return !isChatToolName(value.name) && !isExternalMcpToolName(value.name);
 };
 
-const withParsedToolCallInput = (part: ChatPart): ChatUIPart => {
-  if (part.type !== "tool-call") {
-    return part;
-  }
-  if (isExternalMcpChatToolCallPart(part)) {
-    return part;
-  }
-  if (isOpaquePersistedChatToolCallPart(part)) {
-    return part;
-  }
-  if (part.input !== undefined && isRegisteredToolCallWithInput(part)) {
-    return part;
-  }
-  const parsedInput = parseCompletedToolCallArguments(part);
-  if (parsedInput === undefined) {
-    if (isRegisteredToolCallWithInput(part)) {
-      return part;
-    }
-    return panic("Malformed persisted chat tool call");
-  }
-  const { input: _input, ...partWithoutInput } = part;
-  const candidate = { ...partWithoutInput, input: parsedInput };
-  if (isRegisteredToolCallWithInput(candidate)) {
-    return candidate;
-  }
-  if (isRegisteredToolCallWithInput(part)) {
-    return part;
-  }
-  return panic("Malformed persisted chat tool call");
-};
-
-const isRegisteredToolCallWithInput = (
-  value: unknown,
-): value is ChatUIToolCallPart => {
-  if (
-    typeof value !== "object" ||
-    value === null ||
-    !("type" in value) ||
-    value.type !== "tool-call" ||
-    !("name" in value) ||
-    typeof value.name !== "string"
-  ) {
+const isCanonicalBuiltInToolCall = (
+  value: TanStackChatToolCallPart,
+): value is BuiltInChatToolCallPart => {
+  if (!isChatToolName(value.name)) {
     return false;
   }
-  return (
-    isChatToolName(value.name) &&
-    (!("input" in value) ||
+  if (value.state === "awaiting-input" || value.state === "input-streaming") {
+    return (
+      !("input" in value) ||
       value.input === undefined ||
-      isJsonObject(value.input))
-  );
+      isJsonObject(value.input)
+    );
+  }
+  return "input" in value && isJsonObject(value.input);
 };
 
 const isJsonObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
-const isChatUIMessage = (
+const isCanonicalChatUIMessage = (
   message: PersistedChatMessage,
 ): message is ChatUIMessage =>
   message.parts.every(
     (part) =>
       part.type !== "tool-call" ||
-      isExternalMcpChatToolCallPart(part) ||
+      isExternalMcpToolName(part.name) ||
       isOpaquePersistedChatToolCallPart(part) ||
-      isRegisteredToolCallWithInput(part),
+      isCanonicalBuiltInToolCall(part),
   );
+
+/**
+ * Prove the runtime-to-UI contract without parsing tool arguments again.
+ * Completed built-in calls must already carry their canonical parsed input;
+ * only protocol-partial calls may omit it.
+ */
+export const projectCanonicalChatUIMessages = (
+  messages: readonly PersistedChatMessage[],
+): ChatUIMessage[] => {
+  const projected: ChatUIMessage[] = [];
+  for (const message of messages) {
+    if (!isCanonicalChatUIMessage(message)) {
+      return panic("Chat runtime produced a non-canonical tool call");
+    }
+    projected.push(message);
+  }
+  return projected;
+};
 
 export type DocumentDeletionToolCallEffects = {
   hasVersionDeletion: boolean;
@@ -1194,39 +1146,6 @@ export const consumeDocumentDeletionToolCalls = ({
 
   return { hasVersionDeletion, hasWholeDocumentDeletion };
 };
-
-/**
- * Fill each tool-call part's typed `input` from its raw `arguments`.
- *
- * TanStack's stream processor and its persisted-message projection
- * only ever populate `arguments` (the raw JSON string) on a tool-call
- * part; `input` is optional at the type level and never set at runtime
- * (the parsed value stays inside the processor as `parsedArguments`).
- * Reading `part.input` directly therefore always yields `undefined` —
- * identically in live streaming, transcript re-send, and reload from
- * persistence.
- *
- * Deriving `input` here, once, at the single point where messages
- * leave the chat runtime for the UI (`useChatSession`), gives every
- * consumer (ask-user / create-document / approval cards, generic
- * tool-call card, active-DOCX-edit recovery) a parsed `input` without
- * scattering `JSON.parse` across components. Messages and parts that
- * need no change are returned by reference so downstream memoization
- * and referential-equality checks stay stable.
- */
-export const withParsedToolCallInputs = (
-  messages: readonly PersistedChatMessage[],
-): ChatUIMessage[] =>
-  messages.map((message) => {
-    const parts = message.parts.map(withParsedToolCallInput);
-    const partsChanged = parts.some(
-      (part, index) => part !== message.parts[index],
-    );
-    if (!partsChanged && isChatUIMessage(message)) {
-      return message;
-    }
-    return { ...message, parts };
-  });
 
 export const getUserMessageHtmlHistory = (
   messages: readonly PersistedChatMessage[],

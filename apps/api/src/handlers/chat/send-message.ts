@@ -63,6 +63,7 @@ import {
   DEFAULT_CHAT_EDIT_APPLY_MODE,
   DEFAULT_DOCX_EDIT_REPRESENTATION,
   parseMessage,
+  validateToolCallParts,
   validateMessage,
 } from "@/api/handlers/chat/chat-schema";
 import { resolveChatScope } from "@/api/handlers/chat/chat-scope";
@@ -142,6 +143,7 @@ import {
 import type {
   ChatMention,
   ChatMessage,
+  ChatPart,
   PersistableChatMessage,
 } from "@/api/handlers/chat/types";
 import { createRawChatFilePart } from "@/api/handlers/chat/upload-files";
@@ -1648,9 +1650,25 @@ const sendMessage = createSafeRootHandler(
                   ? {}
                   : { owningAssistantMessageId: owningAssistantMessage.id }),
                 onFinish: async ({ outcome, responseMessage }) => {
+                  const validatedToolParts = validateToolCallParts({
+                    allowPartialInput: outcome.type === "interrupted",
+                    message: responseMessage,
+                    tools: streamingTools,
+                  });
+                  if (Result.isError(validatedToolParts)) {
+                    throw new HandlerError({
+                      status: 500,
+                      message: "Generated chat tool parts are invalid",
+                      cause: validatedToolParts.error,
+                    });
+                  }
+                  const canonicalResponseMessage = toPersistableChatMessage({
+                    ...responseMessage,
+                    parts: validatedToolParts.value,
+                  });
                   const resolved = resolveAssistantMessageRefs({
                     accessibleWorkspaceIds: accessibleSet,
-                    messages: [responseMessage],
+                    messages: [canonicalResponseMessage],
                     opaqueReadWorkspaceIds:
                       body.runMode === CHAT_RUN_MODE.agent
                         ? toolWorkspaceIds
@@ -2397,6 +2415,55 @@ type ResolveAssistantMessageRefsResult = {
   workspaceIds: SafeId<"workspace">[];
 };
 
+const stringifyToolPayload = (value: unknown): unknown => JSON.stringify(value);
+
+const toolResultPayload = ({
+  outputsByCallId,
+  part,
+}: {
+  outputsByCallId: ReadonlyMap<string, unknown>;
+  part: Extract<ChatPart, { type: "tool-result" }>;
+}): unknown => {
+  if (outputsByCallId.has(part.toolCallId)) {
+    return outputsByCallId.get(part.toolCallId);
+  }
+  if (part.state === "error" && part.error !== undefined) {
+    return { error: part.error };
+  }
+  return undefined;
+};
+
+const synchronizeToolResultContent = (
+  parts: readonly ChatPart[],
+): ChatPart[] => {
+  const outputsByCallId = new Map<string, unknown>();
+  for (const part of parts) {
+    if (part.type === "tool-call" && part.output !== undefined) {
+      outputsByCallId.set(part.id, part.output);
+    }
+  }
+
+  return parts.map((part) => {
+    if (part.type !== "tool-result" || part.state === "streaming") {
+      return part;
+    }
+    const payload = toolResultPayload({ outputsByCallId, part });
+    if (Array.isArray(part.content)) {
+      if (!deepEquals(part.content, payload)) {
+        panic(`Canonical tool result ${part.toolCallId} disagrees with output`);
+      }
+      return part;
+    }
+    const content = stringifyToolPayload(payload);
+    if (typeof content !== "string") {
+      panic(
+        `Canonical tool result ${part.toolCallId} has no serializable output`,
+      );
+    }
+    return { ...part, content };
+  });
+};
+
 const resolveAssistantMessageRefs = ({
   accessibleWorkspaceIds,
   messages,
@@ -2407,10 +2474,9 @@ const resolveAssistantMessageRefs = ({
   const resolvePart = (
     part: ChatMessage["parts"][number],
     entityContexts: ChatEntityRefContext[],
-    toolNamesByCallId: ReadonlyMap<string, string>,
     unresolvedInputRefs: ChatUnresolvedInputRefContext[],
   ): ChatMessage["parts"][number] => {
-    let withDeclaredToolRefs: unknown =
+    const withDeclaredToolRefs: unknown =
       part.type === "tool-call"
         ? {
             ...part,
@@ -2453,23 +2519,6 @@ const resolveAssistantMessageRefs = ({
               : {}),
           }
         : part;
-    if (part.type === "tool-result" && typeof part.content === "string") {
-      const content = part.content;
-      const toolName = toolNamesByCallId.get(part.toolCallId);
-      const parsed = Result.try((): unknown => JSON.parse(content));
-      if (toolName !== undefined && Result.isOk(parsed)) {
-        const serialized = JSON.stringify(
-          resolveRegistryToolOutputRefs({
-            output: parsed.value,
-            refRegistry,
-            toolName,
-          }),
-        );
-        if (typeof serialized === "string") {
-          withDeclaredToolRefs = { ...part, content: serialized };
-        }
-      }
-    }
     const resolved =
       refRegistry.resolveAssistantValueRefs(withDeclaredToolRefs);
     if (!isChatPart(resolved)) {
@@ -2488,15 +2537,10 @@ const resolveAssistantMessageRefs = ({
     }
     const entityContexts: ChatEntityRefContext[] = [];
     const unresolvedInputRefs: ChatUnresolvedInputRefContext[] = [];
-    const toolNamesByCallId = new Map<string, string>();
-    for (const part of message.parts) {
-      if (part.type === "tool-call") {
-        toolNamesByCallId.set(part.id, part.name);
-      }
-    }
-    const parts = message.parts.map((part) =>
-      resolvePart(part, entityContexts, toolNamesByCallId, unresolvedInputRefs),
+    const resolvedParts = message.parts.map((part) =>
+      resolvePart(part, entityContexts, unresolvedInputRefs),
     );
+    const parts = synchronizeToolResultContent(resolvedParts);
     const messageWorkspaceIds = computeAssistantTurnWorkspaceIds({
       accessibleWorkspaceIds,
       opaqueReadWorkspaceIds,
@@ -2586,35 +2630,14 @@ const hydrateAssistantMessageRefs = ({
     part: ChatMessage["parts"][number],
     entityContexts: readonly ChatEntityRefContext[],
     inputState: ChatRefInputState,
-    toolCallsById: ReadonlyMap<string, { input: unknown; name: string }>,
     unresolvedInputRefs: readonly ChatUnresolvedInputRefContext[],
   ): ChatMessage["parts"][number] => {
-    let withDeclaredToolRefs = hydrateToolCallPart(
+    const withDeclaredToolRefs = hydrateToolCallPart(
       part,
       entityContexts,
       inputState,
       unresolvedInputRefs,
     );
-    if (part.type === "tool-result" && typeof part.content === "string") {
-      const content = part.content;
-      const toolCall = toolCallsById.get(part.toolCallId);
-      const parsed = Result.try((): unknown => JSON.parse(content));
-      if (toolCall !== undefined && Result.isOk(parsed)) {
-        const serialized = JSON.stringify(
-          hydrateRegistryToolOutputRefs({
-            entityContexts,
-            input: toolCall.input,
-            inputState,
-            output: parsed.value,
-            refRegistry,
-            toolName: toolCall.name,
-          }),
-        );
-        if (typeof serialized === "string") {
-          withDeclaredToolRefs = { ...part, content: serialized };
-        }
-      }
-    }
     const hydrated =
       refRegistry.hydrateAssistantValueRefs(withDeclaredToolRefs);
     if (!isChatPart(hydrated)) {
@@ -2676,15 +2699,32 @@ const hydrateAssistantMessageRefs = ({
         validatedRefContext === undefined
           ? []
           : validatedRefContext.unresolvedInputs;
-      const toolCallsById = new Map<string, { input: unknown; name: string }>();
-      for (const part of message.parts) {
+      const hydratedParts = message.parts.map((part) => {
+        let toolCallId: string | undefined;
         if (part.type === "tool-call") {
-          toolCallsById.set(part.id, {
-            input: "input" in part ? part.input : undefined,
-            name: part.name,
-          });
+          toolCallId = part.id;
+        } else if (part.type === "tool-result") {
+          toolCallId = part.toolCallId;
         }
-      }
+        const partEntityContexts =
+          toolCallId === undefined
+            ? []
+            : entityContexts.filter(
+                (context) => context.toolCallId === toolCallId,
+              );
+        const partUnresolvedInputRefs =
+          toolCallId === undefined
+            ? []
+            : unresolvedInputRefs.filter(
+                (context) => context.toolCallId === toolCallId,
+              );
+        return hydratePart(
+          part,
+          partEntityContexts,
+          inputState,
+          partUnresolvedInputRefs,
+        );
+      });
       hydratedMessages.push({
         ...message,
         // Ref context is persistence-only. Hydration has consumed it, and
@@ -2693,33 +2733,7 @@ const hydrateAssistantMessageRefs = ({
         ...(message.metadata === undefined
           ? {}
           : { metadata: { ...message.metadata, refContext: undefined } }),
-        parts: message.parts.map((part) => {
-          let toolCallId: string | undefined;
-          if (part.type === "tool-call") {
-            toolCallId = part.id;
-          } else if (part.type === "tool-result") {
-            toolCallId = part.toolCallId;
-          }
-          const partEntityContexts =
-            toolCallId === undefined
-              ? []
-              : entityContexts.filter(
-                  (context) => context.toolCallId === toolCallId,
-                );
-          const partUnresolvedInputRefs =
-            toolCallId === undefined
-              ? []
-              : unresolvedInputRefs.filter(
-                  (context) => context.toolCallId === toolCallId,
-                );
-          return hydratePart(
-            part,
-            partEntityContexts,
-            inputState,
-            toolCallsById,
-            partUnresolvedInputRefs,
-          );
-        }),
+        parts: synchronizeToolResultContent(hydratedParts),
       });
       continue;
     }

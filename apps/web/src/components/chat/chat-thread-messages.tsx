@@ -65,7 +65,6 @@ import {
   hasRunningToolCallInLatestAssistantMessage,
   isApprovalPart,
   isOpaquePersistedChatToolCallPart,
-  withParsedToolCallInputs,
 } from "@/components/chat/chat-ui-tools";
 import type { CreateDocumentDraft } from "@/components/chat/create-document-draft.logic";
 import { MessageExportMenu } from "@/components/chat/message-export-menu";
@@ -130,10 +129,7 @@ export const ChatThreadMessages = ({
   // persisted copy of one message during the per-turn refetch handoff; both
   // carry the same id, so React would render it twice. Collapse by id before
   // any downstream read.
-  const messages = useMemo(
-    () => dedupeById(withParsedToolCallInputs(rawMessages)),
-    [rawMessages],
-  );
+  const messages = useMemo(() => dedupeById(rawMessages), [rawMessages]);
   const generationActive = error === undefined && isGenerating;
   const retryableAssistantMessageId = useMemo(
     () => getRetryableAssistantMessageId(messages),
@@ -1136,7 +1132,7 @@ type ChatThreadMessagesProps = {
   /** True after an older-page fetch failed; pauses the auto-trigger so the
    *  sentinel cannot loop the request (the manual button still retries). */
   loadOlderError?: boolean | undefined;
-  messages: PersistedChatMessage[];
+  messages: ChatUIMessage[];
   /** Explicit scroll container for surfaces that render outside a
    *  `Conversation`/StickToBottom provider (e.g. the file-chat overlay);
    *  falls back to the StickToBottom context when omitted. */

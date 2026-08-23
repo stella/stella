@@ -172,6 +172,26 @@ describe("chat search indexing", () => {
     });
   });
 
+  test("indexes version 3 text and metadata", async () => {
+    const { normalizeSearchableChatMessageContent } =
+      await import("./index-chat");
+
+    expect(
+      normalizeSearchableChatMessageContent({
+        version: 3,
+        data: [{ type: "text", content: "Canonical text" }],
+        metadata: {
+          sourceDocuments: [{ kind: "document", title: "Agreement.pdf" }],
+        },
+      }),
+    ).toEqual({
+      metadata: {
+        sourceDocuments: [{ kind: "document", title: "Agreement.pdf" }],
+      },
+      parts: [{ type: "text", content: "Canonical text" }],
+    });
+  });
+
   test("does not let stale upserts overwrite a newer search document", async () => {
     const { upsertChatThreadSearchDocument } = await import("./index-chat");
 

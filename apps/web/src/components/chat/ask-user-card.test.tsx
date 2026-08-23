@@ -8,10 +8,6 @@ import type {
   AskUserInput,
   RegisteredChatUIToolCallPart,
 } from "@/components/chat/chat-ui-tools";
-import {
-  isOpaquePersistedChatToolCallPart,
-  withParsedToolCallInputs,
-} from "@/components/chat/chat-ui-tools";
 import messages from "@/i18n/langs/en.json";
 
 type AskUserPart = Extract<RegisteredChatUIToolCallPart, { name: "ask-user" }>;
@@ -73,90 +69,6 @@ describe("ask-user clarification card", () => {
     expect(html).toContain('type="text"');
     expect(html).toContain('type="submit"');
     expect(html).toContain(">Submit answers</button>");
-  });
-
-  test("renders questions from an arguments-only part after normalization", () => {
-    // Reproduces the persisted/streamed shape TanStack emits: a valid
-    // `arguments` JSON string and no `input` field. Without the
-    // `withParsedToolCallInputs` boundary fill the card collapses to a
-    // bare "Request clarification" header with no questions.
-    const input: AskUserInput = {
-      analysis: "Need a clarification before continuing.",
-      questions: [
-        {
-          question: "Which jurisdiction should I use?",
-          reason: "The answer changes the legal analysis.",
-        },
-      ],
-    };
-    const argumentsOnlyPart = {
-      arguments: JSON.stringify(input),
-      id: "tool-call-ask-user",
-      state: "input-complete",
-      name: "ask-user",
-      type: "tool-call",
-    } satisfies AskUserPart;
-
-    const [message] = withParsedToolCallInputs([
-      { id: "message-1", parts: [argumentsOnlyPart], role: "assistant" },
-    ]);
-    const normalized = message?.parts[0];
-    if (
-      normalized?.type !== "tool-call" ||
-      normalized.name !== "ask-user" ||
-      isOpaquePersistedChatToolCallPart(normalized)
-    ) {
-      throw new Error("Expected a normalized ask-user tool-call part");
-    }
-
-    const html = renderWithIntl(
-      <AskUserCard onSubmit={() => {}} part={normalized} />,
-    );
-
-    expect(html).toContain("<form");
-    expect(html).toContain('type="submit"');
-    expect(html).toContain("Which jurisdiction should I use?");
-  });
-
-  test("renders historical arguments whose optional fields are null", () => {
-    const argumentsOnlyPart = {
-      arguments: JSON.stringify({
-        analysis: "The user wants a Florida non-compete.",
-        questions: [
-          {
-            question: "Please provide the employer's legal name.",
-            reason: "Required party identifier for the agreement.",
-            options: null,
-            default: null,
-          },
-        ],
-      }),
-      id: "tool-call-ask-user",
-      state: "input-complete",
-      name: "ask-user",
-      type: "tool-call",
-    } satisfies AskUserPart;
-
-    const [message] = withParsedToolCallInputs([
-      { id: "message-1", parts: [argumentsOnlyPart], role: "assistant" },
-    ]);
-    const normalized = message?.parts[0];
-    if (
-      normalized?.type !== "tool-call" ||
-      normalized.name !== "ask-user" ||
-      isOpaquePersistedChatToolCallPart(normalized)
-    ) {
-      throw new Error("Expected a normalized ask-user tool-call part");
-    }
-
-    const html = renderWithIntl(
-      <AskUserCard onSubmit={() => {}} part={normalized} />,
-    );
-
-    expect(html).toContain("legal name.");
-    expect(html).toContain('type="text"');
-    expect(html).toContain('type="submit"');
-    expect(html).not.toContain('type="button"');
   });
 
   test("keeps option chips out of form submission semantics", () => {

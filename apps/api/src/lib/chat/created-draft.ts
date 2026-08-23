@@ -16,7 +16,10 @@ export type SavedGeneratedDocumentDraft = {
 export type GeneratedDocumentDraftState =
   | { status: "invalid" }
   | { output: SavedGeneratedDocumentDraft; status: "saved" }
-  | { partIndex: number; status: "ready" };
+  | {
+      locator: { partIndex: number; persistenceVersion: 2 | 3 };
+      status: "ready";
+    };
 
 const toSavedGeneratedDocumentDraft = (
   value: unknown,
@@ -59,11 +62,12 @@ export const getGeneratedDocumentDraftState = ({
 }): GeneratedDocumentDraftState => {
   if (
     !isRecord(persistedContent) ||
-    persistedContent["version"] !== 2 ||
+    (persistedContent["version"] !== 2 && persistedContent["version"] !== 3) ||
     !Array.isArray(persistedContent["data"])
   ) {
     return { status: "invalid" };
   }
+  const persistenceVersion = persistedContent["version"];
   for (const [partIndex, part] of persistedContent["data"].entries()) {
     if (
       !isRecord(part) ||
@@ -74,17 +78,25 @@ export const getGeneratedDocumentDraftState = ({
     ) {
       continue;
     }
-    const saved = toSavedGeneratedDocumentDraft(part["output"]);
+    const storedOutput = part["output"];
+    const output =
+      persistenceVersion === 3 && isRecord(storedOutput)
+        ? storedOutput["value"]
+        : storedOutput;
+    const saved = toSavedGeneratedDocumentDraft(output);
     if (saved !== null) {
       return { output: saved, status: "saved" };
     }
     if (
-      isRecord(part["output"]) &&
-      part["output"]["success"] === true &&
-      part["output"]["destination"] === "draft" &&
-      part["output"]["fileName"] === fileName
+      isRecord(output) &&
+      output["success"] === true &&
+      output["destination"] === "draft" &&
+      output["fileName"] === fileName
     ) {
-      return { partIndex, status: "ready" };
+      return {
+        locator: { partIndex, persistenceVersion },
+        status: "ready",
+      };
     }
   }
   return { status: "invalid" };

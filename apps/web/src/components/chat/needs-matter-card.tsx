@@ -103,10 +103,8 @@ export const NeedsMatterCard = ({
     );
   }
 
-  // Streaming-tolerant input read. `part.input` is derived from the
-  // part's `arguments` at the session boundary (see
-  // `withParsedToolCallInputs`) once the tool call reaches
-  // `input-complete`; show whatever has arrived so far.
+  // Streaming-tolerant input read. The runtime exposes the canonical parsed
+  // input on the part; show whatever has arrived so far.
   const partialInput =
     part.state === "input-streaming" ||
     part.state === "input-complete" ||

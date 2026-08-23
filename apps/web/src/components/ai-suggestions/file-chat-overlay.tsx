@@ -82,7 +82,6 @@ import {
   getActiveDocxEditApprovalPart,
   isApplyActiveDocxEditsInput,
   isApprovalPart,
-  parseCompletedToolCallArguments,
   selectUnresolvedActiveDocxEditToolCallParts,
   selectUnresolvedFolioAgentDocToolCallParts,
 } from "@/components/chat/chat-ui-tools";
@@ -1820,7 +1819,7 @@ const FileChatOverlayInner = ({
   const runFolioAgentCommentMutationTool = async (part: ApprovalToolPart) => {
     try {
       const bridge = createFolioAgentBridge();
-      const args = parseCompletedToolCallArguments(part) ?? {};
+      const args: unknown = part.input ?? {};
       const output = bridge
         ? await Promise.resolve(executeFolioToolCall(part.name, args, bridge))
         : { ok: false, error: "No document is open." };
@@ -1961,7 +1960,7 @@ const FileChatOverlayInner = ({
           return;
         }
 
-        const args = parseCompletedToolCallArguments(part) ?? {};
+        const args = part.input ?? {};
         const result = await Promise.resolve(
           executeFolioToolCall(part.name, args, bridge),
         );
@@ -2047,9 +2046,8 @@ const FileChatOverlayInner = ({
         // the cached output on any retry.
         let output = outputCache?.get(part.id);
         if (output === undefined) {
-          const input = parseCompletedToolCallArguments(part);
-          output = isApplyActiveDocxEditsInput(input)
-            ? handleActiveDocxEditToolCall(input)
+          output = isApplyActiveDocxEditsInput(part.input)
+            ? handleActiveDocxEditToolCall(part.input)
             : { version: 1 as const, applied: [], queued: [], skipped: [] };
           outputCache?.set(part.id, output);
         }

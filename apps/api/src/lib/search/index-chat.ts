@@ -19,14 +19,16 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 type SearchablePersistedChatMessageContent = {
   data: unknown[];
   metadata?: unknown;
-  version: 1 | 2;
+  version: 1 | 2 | 3;
 };
 
 const isPersistedChatMessageContent = (
   value: unknown,
 ): value is SearchablePersistedChatMessageContent =>
   isRecord(value) &&
-  (value["version"] === 1 || value["version"] === 2) &&
+  (value["version"] === 1 ||
+    value["version"] === 2 ||
+    value["version"] === 3) &&
   Array.isArray(value["data"]);
 
 type SearchableChatTextPart = {
@@ -133,7 +135,7 @@ export const normalizeSearchableChatMessageContent = (content: unknown) => {
     return searchable ? [searchable] : [];
   });
   const rawMetadata =
-    content.version === 2 && isRecord(content.metadata) ? content.metadata : {};
+    content.version !== 1 && isRecord(content.metadata) ? content.metadata : {};
   const version2SourceDocuments = rawMetadata["sourceDocuments"];
   const legacySourceDocuments =
     content.version === 1

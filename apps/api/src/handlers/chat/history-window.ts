@@ -6,8 +6,8 @@ import type { SafeDb, SafeDbError, SafeDbOrTx } from "@/api/db/safe-db";
 import { withScopedTx } from "@/api/db/safe-db";
 import { chatMessages } from "@/api/db/schema";
 import {
-  chatMessageContentFromMessage,
   chatMessageFromPersisted,
+  toChatMessageContent,
 } from "@/api/handlers/chat/chat-message-parts";
 import type { ChatThreadCompactionCheckpoint } from "@/api/handlers/chat/persistent-compaction";
 import { readLatestChatCompactionOnTx } from "@/api/handlers/chat/persistent-compaction";
@@ -35,11 +35,18 @@ const toWindowedMessage = (row: {
   id: SafeId<"chatMessage">;
   role: ChatMessageRole;
   content: PersistedChatMessageContent;
-}): WindowedThreadMessage => ({
-  id: row.id,
-  role: row.role,
-  content: chatMessageContentFromMessage(chatMessageFromPersisted(row)),
-});
+}): WindowedThreadMessage => {
+  const message = chatMessageFromPersisted(row);
+  return {
+    id: row.id,
+    role: row.role,
+    content: toChatMessageContent({
+      data: message.parts,
+      ...(message.metadata === undefined ? {} : { metadata: message.metadata }),
+      version: 2,
+    }),
+  };
+};
 
 /**
  * Decode a checkpoint's stored delta cursor.
