@@ -1,6 +1,7 @@
 import type { ContentPartSource } from "@tanstack/ai";
 import type { ToolCallPart as TanStackToolCallPart } from "@tanstack/ai-client";
 import { panic, Result } from "better-result";
+import { deepEquals } from "bun";
 import { Buffer } from "node:buffer";
 
 import {
@@ -407,7 +408,10 @@ const persistedV3ToolResultContent = ({
   part: Extract<PersistedV3Part, { type: "tool-result" }>;
 }): unknown => {
   if (part.content !== undefined) {
-    return persistedToolResultContentToChatContent(part.content);
+    return persistedToolResultContentToChatContent(
+      part.content,
+      outputByToolCallId.get(part.toolCallId),
+    );
   }
   const output = outputByToolCallId.get(part.toolCallId);
   if (output !== undefined) {
@@ -446,9 +450,12 @@ const decodePersistedToolOutput = (output: unknown): unknown => {
 
 const persistedToolResultContentToChatContent = (
   content: PersistedToolResultContent,
+  pairedOutput: unknown,
 ): unknown => {
   const decoded = decodePersistedToolResultContent(content);
   switch (decoded.type) {
+    case "paired-output-parts":
+      return provePersistedJsonArray(pairedOutput);
     case "parts":
       return decoded.value;
     case "text":
@@ -463,6 +470,9 @@ const decodePersistedToolResultContent = (
 ): PersistedToolResultContent => {
   if (!isRecord(content)) {
     return panic("Stored v3 tool result has invalid content");
+  }
+  if (content["type"] === "paired-output-parts") {
+    return { type: "paired-output-parts" };
   }
   if (content["type"] === "text" && typeof content["value"] === "string") {
     return { type: "text", value: content["value"] };
@@ -1401,17 +1411,18 @@ const chatPartToPersistedV3Part = ({
   }
   if (part.type === "tool-result") {
     const output = outputsByToolCallId.get(part.toolCallId);
-    const omitCanonicalOutput =
-      part.state !== "streaming" && output !== undefined;
-    if (
-      omitCanonicalOutput &&
-      part.content !== stringifyPersistedJsonValue(output)
-    ) {
+    const hasPairedOutput = part.state !== "streaming" && output !== undefined;
+    let content: PersistedToolResultContent | undefined;
+    if (!hasPairedOutput) {
+      content = persistedToolResultContentFromChatContent(part.content);
+    } else if (Array.isArray(part.content)) {
+      if (!deepEquals(part.content, output)) {
+        panic(`Tool result ${part.toolCallId} disagrees with canonical output`);
+      }
+      content = { type: "paired-output-parts" };
+    } else if (part.content !== stringifyPersistedJsonValue(output)) {
       panic(`Tool result ${part.toolCallId} disagrees with canonical output`);
     }
-    const content = omitCanonicalOutput
-      ? undefined
-      : persistedToolResultContentFromChatContent(part.content);
     return {
       ...(content === undefined ? {} : { content }),
       ...(part.error === undefined ? {} : { error: part.error }),

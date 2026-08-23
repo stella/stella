@@ -1214,9 +1214,11 @@ const isChatMessageMetadataEmpty = (metadata: ChatMessageMetadata): boolean =>
   metadata.usage === undefined;
 
 export const validateToolCallParts = ({
+  allowPartialInput = false,
   message,
   tools,
 }: {
+  allowPartialInput?: boolean;
   message: ChatMessage;
   tools: ChatToolMap;
 }): Result<ChatPart[], HandlerError<400>> => {
@@ -1234,7 +1236,11 @@ export const validateToolCallParts = ({
         );
       }
 
-      const toolCallResult = validateToolCallPart({ part, tools });
+      const toolCallResult = validateToolCallPart({
+        allowPartialInput,
+        part,
+        tools,
+      });
       if (Result.isError(toolCallResult)) {
         return Result.err(toolCallResult.error);
       }
@@ -1263,9 +1269,11 @@ export const validateToolCallParts = ({
 };
 
 const validateToolCallPart = ({
+  allowPartialInput,
   part,
   tools,
 }: {
+  allowPartialInput: boolean;
   part: ChatToolCallPart;
   tools: ChatToolMap;
 }): Result<ValidatedToolCallPart, HandlerError<400>> => {
@@ -1277,6 +1285,18 @@ const validateToolCallPart = ({
         message: `Unknown chat tool: ${part.name}`,
       }),
     );
+  }
+
+  if (
+    allowPartialInput &&
+    (part.state === "awaiting-input" || part.state === "input-streaming")
+  ) {
+    return Result.ok({
+      type: "schema",
+      name: part.name,
+      output: { type: "absent" },
+      part,
+    });
   }
 
   const argumentsResult = parseToolArguments(part.arguments);

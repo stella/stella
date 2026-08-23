@@ -47,6 +47,7 @@ export type PersistedToolCallPart = {
 };
 
 export type PersistedToolResultContent =
+  | { type: "paired-output-parts" }
   | { type: "parts"; value: PersistedJsonValue[] }
   | { type: "text"; value: string };
 

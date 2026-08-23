@@ -1651,6 +1651,7 @@ const sendMessage = createSafeRootHandler(
                   : { owningAssistantMessageId: owningAssistantMessage.id }),
                 onFinish: async ({ outcome, responseMessage }) => {
                   const validatedToolParts = validateToolCallParts({
+                    allowPartialInput: outcome.type === "interrupted",
                     message: responseMessage,
                     tools: streamingTools,
                   });
@@ -2447,6 +2448,12 @@ const synchronizeToolResultContent = (
       return part;
     }
     const payload = toolResultPayload({ outputsByCallId, part });
+    if (Array.isArray(part.content)) {
+      if (!deepEquals(part.content, payload)) {
+        panic(`Canonical tool result ${part.toolCallId} disagrees with output`);
+      }
+      return part;
+    }
     const content = stringifyToolPayload(payload);
     if (typeof content !== "string") {
       panic(

@@ -24,6 +24,7 @@ import {
   agUiSendMessageBodySchema,
   parseMessage,
   sendMessageBodySchema,
+  validateToolCallParts,
   validateMessage as validateMessageWithPersistence,
 } from "@/api/handlers/chat/chat-schema";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
@@ -381,6 +382,35 @@ describe("parseMessage", () => {
 });
 
 describe("validateMessage", () => {
+  test("accepts malformed partial tool input only for interrupted persistence", () => {
+    const message = {
+      id: chatMessageId("msg_interrupted_partial_tool"),
+      role: "assistant",
+      parts: [
+        {
+          arguments: '{"query":"contra',
+          id: "tool-call-1",
+          name: "search-documents",
+          state: "input-streaming",
+          type: "tool-call",
+        },
+      ],
+    } as const satisfies ChatMessage;
+
+    expect(
+      Result.isOk(
+        validateToolCallParts({
+          allowPartialInput: true,
+          message,
+          tools: searchTools,
+        }),
+      ),
+    ).toBe(true);
+    expect(
+      Result.isError(validateToolCallParts({ message, tools: searchTools })),
+    ).toBe(true);
+  });
+
   test("accepts TanStack text parts at the live boundary", async () => {
     const result = await validateMessage({
       message: {

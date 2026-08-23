@@ -1154,14 +1154,16 @@ describe("outgoing chat stream message ids", () => {
         },
       },
     });
-    let persistedToolNames: string[] = [];
+    let persistedToolCalls: { input: unknown; name: string }[] = [];
     const stream = processServerChatStream({
       abortSignal: new AbortController().signal,
       getResponseMessage: () => responseMessage,
       mapMessageId: createChatMessageIdMapper(() => messageId),
       onFinish: ({ responseMessage: finishedMessage }) => {
-        persistedToolNames = finishedMessage.parts.flatMap((part) =>
-          part.type === "tool-call" ? [part.name] : [],
+        persistedToolCalls = finishedMessage.parts.flatMap((part) =>
+          part.type === "tool-call"
+            ? [{ input: part.input, name: part.name }]
+            : [],
         );
       },
       processor,
@@ -1179,12 +1181,11 @@ describe("outgoing chat stream message ids", () => {
         },
         {
           type: EventType.TOOL_CALL_ARGS,
-          delta: "{}",
+          delta: '{"category":"contract"}',
           toolCallId: "list-call",
         },
         {
           type: EventType.TOOL_CALL_END,
-          input: {},
           toolCallId: "list-call",
         },
         {
@@ -1244,16 +1245,18 @@ describe("outgoing chat stream message ids", () => {
     });
 
     const chunks = await collectChunks(stream);
-    let clientToolNames: string[] = [];
+    let clientToolCalls: { input: unknown; name: string }[] = [];
     const clientProcessor = new StreamProcessor({
       events: {
         onMessagesChange: (messages) => {
           const assistant = messages.findLast(
             (message) => message.role === "assistant",
           );
-          clientToolNames =
+          clientToolCalls =
             assistant?.parts.flatMap((part) =>
-              part.type === "tool-call" ? [part.name] : [],
+              part.type === "tool-call"
+                ? [{ input: part.input, name: part.name }]
+                : [],
             ) ?? [];
         },
       },
@@ -1262,8 +1265,16 @@ describe("outgoing chat stream message ids", () => {
       clientProcessor.processChunk(chunk);
     }
 
-    expect(persistedToolNames).toEqual(["list_templates", "ask-user"]);
-    expect(persistedToolNames).toEqual(clientToolNames);
+    expect(persistedToolCalls).toEqual([
+      { input: { category: "contract" }, name: "list_templates" },
+      {
+        input: {
+          question: "What scope should the power of attorney cover?",
+        },
+        name: "ask-user",
+      },
+    ]);
+    expect(persistedToolCalls).toEqual(clientToolCalls);
   });
 
   test("persists approval requests emitted after a model run finishes", async () => {
@@ -1807,6 +1818,64 @@ describe("chat stream client-disconnect persistence", () => {
       { outcome: "interrupted", text: "Partial answer" },
     ]);
     expect(abortSignal.aborted).toBe(false);
+  });
+
+  test("preserves unfinished tool arguments when the client disconnects", async () => {
+    let responseMessage: ChatMessage | null = null;
+    const processor = new StreamProcessor({
+      events: {
+        onStreamEnd: (message) => {
+          responseMessage = toChatMessage(message);
+        },
+      },
+    });
+    let persistedParts: ChatMessage["parts"] = [];
+    const persistenceVisible = transformPersistenceVisibleStream({
+      boundary: createBoundary([["[PERSON_1]", "Jan Novak"]]),
+      initialRestorationPlaceholders: new Set(),
+      restorationPairs: [],
+      source: streamChunks([
+        { type: EventType.RUN_STARTED, runId: "run-1", threadId: "thread-1" },
+        {
+          type: EventType.TOOL_CALL_START,
+          parentMessageId: "provider-message",
+          toolCallId: "search-call",
+          toolCallName: "search-documents",
+        },
+        {
+          type: EventType.TOOL_CALL_ARGS,
+          delta: '{"query":"[PER',
+          toolCallId: "search-call",
+        },
+      ]),
+    });
+    const stream = processServerChatStream({
+      abortSignal: new AbortController().signal,
+      flushPendingSource: persistenceVisible.flushPending,
+      getResponseMessage: () => responseMessage,
+      mapMessageId: createChatMessageIdMapper(() => messageId),
+      onFinish: ({ responseMessage: finishedMessage }) => {
+        persistedParts = finishedMessage.parts;
+      },
+      processor,
+      source: persistenceVisible,
+    });
+
+    for await (const chunk of stream) {
+      if (chunk.type === EventType.TOOL_CALL_ARGS) {
+        break;
+      }
+    }
+
+    expect(persistedParts).toEqual([
+      {
+        arguments: '{"query":"[PER',
+        id: "search-call",
+        name: "search-documents",
+        state: "input-streaming",
+        type: "tool-call",
+      },
+    ]);
   });
 
   test("runs the finish callback exactly once on natural completion", async () => {

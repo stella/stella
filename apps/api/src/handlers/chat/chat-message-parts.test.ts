@@ -123,6 +123,105 @@ describe("persisted chat message parts", () => {
     ]);
   });
 
+  test("stores paired rich tool output once without flattening its parts", () => {
+    const output = [
+      { content: "Generated evidence", type: "text" },
+      {
+        source: {
+          mimeType: "image/png",
+          type: "url",
+          value: "https://example.test/evidence.png",
+        },
+        type: "image",
+      },
+      {
+        source: {
+          mimeType: "audio/mpeg",
+          type: "url",
+          value: "https://example.test/evidence.mp3",
+        },
+        type: "audio",
+      },
+      {
+        source: {
+          mimeType: "video/mp4",
+          type: "url",
+          value: "https://example.test/evidence.mp4",
+        },
+        type: "video",
+      },
+      {
+        source: {
+          mimeType: "application/pdf",
+          type: "url",
+          value: "https://example.test/evidence.pdf",
+        },
+        type: "document",
+      },
+    ] satisfies Extract<ChatPart, { type: "tool-result" }>["content"];
+    const parts = [
+      {
+        arguments: "{}",
+        id: "rich-output",
+        input: {},
+        name: "mcp__external__evidence",
+        output,
+        state: "complete",
+        type: "tool-call",
+      },
+      {
+        content: output,
+        state: "complete",
+        toolCallId: "rich-output",
+        type: "tool-result",
+      },
+    ] as const satisfies ChatPart[];
+
+    const persisted = toPersistedChatMessageContentV3({ data: [...parts] });
+
+    expect(persisted.data.at(1)).toEqual({
+      content: { type: "paired-output-parts" },
+      state: "complete",
+      toolCallId: "rich-output",
+      type: "tool-result",
+    });
+    expect(normalizePersistedChatMessageContent(persisted).parts).toEqual(
+      parts,
+    );
+  });
+
+  test("keeps ordinary JSON-array output as textual tool-result content", () => {
+    const output = [{ id: "document-1" }];
+    const parts = [
+      {
+        arguments: "{}",
+        id: "json-array-output",
+        input: {},
+        name: "mcp__external__list",
+        output,
+        state: "complete",
+        type: "tool-call",
+      },
+      {
+        content: JSON.stringify(output),
+        state: "complete",
+        toolCallId: "json-array-output",
+        type: "tool-result",
+      },
+    ] as const satisfies ChatPart[];
+
+    const persisted = toPersistedChatMessageContentV3({ data: [...parts] });
+
+    expect(persisted.data.at(1)).toEqual({
+      state: "complete",
+      toolCallId: "json-array-output",
+      type: "tool-result",
+    });
+    expect(normalizePersistedChatMessageContent(persisted).parts).toEqual(
+      parts,
+    );
+  });
+
   test("parses old completed tool arguments once at the legacy read boundary", () => {
     const legacy = toChatMessageContent({
       data: [
