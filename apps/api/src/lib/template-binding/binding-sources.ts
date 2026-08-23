@@ -116,6 +116,11 @@ export const fieldSourceSchema = v.variant("kind", [
   }),
 ]);
 
+/** Provider-portable projection of the same discriminated branches. Runtime
+ * parsing uses the indexed variant above; tool JSON Schema uses `anyOf`
+ * because model providers do not share support for `oneOf`. */
+export const fieldSourceToolInputSchema = v.union(fieldSourceSchema.options);
+
 export type FieldSource = v.InferOutput<typeof fieldSourceSchema>;
 
 /**

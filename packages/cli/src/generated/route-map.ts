@@ -2071,7 +2071,7 @@ export const generatedRouteMap: RouteNode = {
                         description: "Who-fills = business-registry lookup",
                       },
                       source: {
-                        oneOf: [
+                        anyOf: [
                           {
                             type: "object",
                             properties: {

@@ -16,6 +16,7 @@ import {
 
 import {
   fieldSourceSchema,
+  fieldSourceToolInputSchema,
   type FieldSource,
 } from "@/api/lib/template-binding/binding-sources";
 
@@ -440,6 +441,8 @@ const activeDerivedSourceModes = ({
 const hasCompatibleDerivedSources = (fields: DerivedSourceFields): boolean =>
   activeDerivedSourceModes(fields).length <= 1;
 
+const FIELD_SOURCE_DESCRIPTION = "Matter or contact data resolved server-side";
+
 const fieldMetaObjectSchema = v.strictObject({
   path: fieldPathSchema("Field path; must match a {{marker}} in the template"),
   label: v.optional(describedString("Human-readable field label")),
@@ -499,10 +502,7 @@ const fieldMetaObjectSchema = v.strictObject({
   ),
   lookup: v.optional(fieldLookupSchema),
   source: v.optional(
-    v.pipe(
-      fieldSourceSchema,
-      v.description("Matter or contact data resolved server-side"),
-    ),
+    v.pipe(fieldSourceSchema, v.description(FIELD_SOURCE_DESCRIPTION)),
   ),
   formula: v.optional(
     describedString("Arithmetic expression derived from other fields"),
@@ -546,9 +546,12 @@ export const fieldMetaSchema = v.pipe(
 /** Model-facing subset: conditionAst is the persisted canonical form, not an
  * authoring input. This schema derives its public fields from the persisted
  * object schema and applies the same named invariant predicates. */
-const fieldMetaToolInputObjectSchema = v.omit(fieldMetaObjectSchema, [
-  "conditionAst",
-]);
+const fieldMetaToolInputObjectSchema = v.strictObject({
+  ...v.omit(fieldMetaObjectSchema, ["conditionAst"]).entries,
+  source: v.optional(
+    v.pipe(fieldSourceToolInputSchema, v.description(FIELD_SOURCE_DESCRIPTION)),
+  ),
+});
 
 export const fieldMetaToolInputSchema = v.pipe(
   fieldMetaToolInputObjectSchema,
