@@ -1542,10 +1542,7 @@ export const processServerChatStream = async function* ({
     }
     if (outcome.type === "interrupted" && flushPendingSource !== undefined) {
       for (const chunk of flushPendingSource()) {
-        trackIncompleteToolCallInput(
-          chunk,
-          rawArgumentsByIncompleteToolCallId,
-        );
+        trackIncompleteToolCallInput(chunk, rawArgumentsByIncompleteToolCallId);
         processor.processChunk(chunk);
       }
     }
