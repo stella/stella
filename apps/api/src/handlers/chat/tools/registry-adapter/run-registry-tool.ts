@@ -2,7 +2,6 @@ import { panic, Result } from "better-result";
 
 import { projectForChat } from "@/api/lib/chat/projection-schema";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
-import type { ChatToolErrorKind } from "@/api/lib/errors/tagged-errors";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import { BILLING_TOOL_HANDLERS } from "@/api/mcp/billing-tools";
 import { CAPABILITY_TOOL_HANDLERS } from "@/api/mcp/capability-tools";
@@ -10,7 +9,6 @@ import { COMPAT_TOOL_HANDLERS } from "@/api/mcp/compat-tools";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { DOCUMENT_TOOL_HANDLERS } from "@/api/mcp/document-tools";
 import { finalizeToolEgress } from "@/api/mcp/egress";
-import type { McpErrorCode } from "@/api/mcp/error-codes";
 import { isMcpToolFeatureEnabled } from "@/api/mcp/gateway/list-tools";
 import { KNOWLEDGE_TOOL_HANDLERS } from "@/api/mcp/knowledge-tools";
 import { MATTER_TOOL_HANDLERS } from "@/api/mcp/matter-tools";
@@ -18,8 +16,9 @@ import { RESEARCH_ADMIN_TOOL_HANDLERS } from "@/api/mcp/research-admin-tools";
 import { getStaticMcpToolDefinition } from "@/api/mcp/static-tool-definitions";
 import { STELLA_TOOL_HANDLERS } from "@/api/mcp/stella-tools";
 import { TEMPLATE_TOOL_HANDLERS } from "@/api/mcp/template-tools";
-import type { InternalToolError, McpToolHandler } from "@/api/mcp/tool-types";
+import type { McpToolHandler } from "@/api/mcp/tool-types";
 
+import { toRegistryChatToolError } from "./registry-tool-error";
 import type { RegistryReadToolName } from "./ref-field-map";
 import { READ_TOOL_REF_FIELD_MAP } from "./ref-field-map";
 import { dehydrateInputRefs } from "./ref-mediation";
@@ -62,35 +61,6 @@ const REGISTRY_READ_TOOL_HANDLERS = {
   describe_capability: CAPABILITY_TOOL_HANDLERS.describe_capability,
 } satisfies Record<RegistryReadToolName, McpToolHandler>;
 
-const MCP_CODE_TO_CHAT_KIND = {
-  validation_error: "invalid-input",
-  missing_scope: "unavailable",
-  feature_disabled: "unavailable",
-  not_found: "not-found",
-  confirmation_required: "invalid-input",
-  permission_denied: "unavailable",
-  usage_limited: "limit",
-  // A 409 needs a different action (refetch state, rename, regenerate), which
-  // is the model correcting its input, not a defect or a bare retry.
-  conflict: "invalid-input",
-  rate_limited: "transient",
-  upstream_unavailable: "transient",
-  unknown_tool: "unavailable",
-  internal_error: "server-defect",
-} as const satisfies Record<McpErrorCode, ChatToolErrorKind>;
-
-/**
- * Classify a typed registry error directly. Legacy code-less plain-text errors
- * default to `invalid-input`: the conservative non-blocking kind, since a
- * wrong `server-defect` would suppress legitimate corrected retries.
- */
-export const classifyRegistryErrorKind = (
-  error: InternalToolError,
-): ChatToolErrorKind =>
-  error.type === "structured"
-    ? MCP_CODE_TO_CHAT_KIND[error.code]
-    : "invalid-input";
-
 export type RunRegistryReadToolProps = {
   toolName: RegistryReadToolName;
   args: Record<string, unknown>;
@@ -107,8 +77,8 @@ export type RunRegistryReadToolProps = {
  * 2. Dehydrate ref args to real UUIDs.
  * 3. Run the handler and finalize its egress in DEFAULT mode (chat is not the
  *    anonymized surface).
- * 4. Map an `isError` result into a `ChatToolError`; otherwise parse the JSON
- *    payload and project it for chat in a single schema-driven pass
+ * 4. Project a typed error into a `ChatToolError`; otherwise project the typed
+ *    payload for chat in a single schema-driven pass
  *    (`projectForChat`: strict parse, strip, ref hydration, UUID invariant).
  */
 export const runRegistryReadTool = async ({
@@ -155,12 +125,7 @@ export const runRegistryReadTool = async ({
   });
 
   if (finished.status === "error") {
-    return Result.err(
-      new ChatToolError({
-        kind: classifyRegistryErrorKind(finished.error),
-        message: finished.error.message,
-      }),
-    );
+    return Result.err(toRegistryChatToolError(finished.error));
   }
 
   // One schema-driven pass: strict parse (an unknown key — a field nobody
