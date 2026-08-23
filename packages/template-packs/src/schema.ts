@@ -97,19 +97,28 @@ export const packManifestSchema = v.strictObject({
 });
 export type PackManifest = v.InferOutput<typeof packManifestSchema>;
 
-/** `index.json` at the content root: per-template field lists, hashes and
- *  the effective (template-or-pack) license, jurisdictions and languages. */
+/** `index.json` at the content root: the complete generated catalogue shape. */
 export const packIndexSchema = v.array(
   v.strictObject({
     id: slugSchema,
+    name: nonEmptyString,
+    version: nonEmptyString,
+    license: nonEmptyString,
+    jurisdictions: v.array(templatePackJurisdictionSchema),
+    languages: v.array(nonEmptyString),
+    legalAreas: v.array(nonEmptyString),
+    authors: v.array(templatePackAuthorSchema),
+    templateCount: v.pipe(v.number(), v.integer(), v.minValue(0)),
     templates: v.array(
       v.strictObject({
         slug: slugSchema,
-        license: v.optional(v.string()),
-        jurisdictions: v.optional(v.array(templatePackJurisdictionSchema)),
-        languages: v.optional(v.array(v.string())),
-        legalArea: v.optional(v.nullable(v.string())),
-        fields: v.optional(v.array(v.string()), []),
+        title: nonEmptyString,
+        file: relativePathSchema,
+        license: nonEmptyString,
+        jurisdictions: v.array(templatePackJurisdictionSchema),
+        languages: v.array(nonEmptyString),
+        legalArea: v.nullable(nonEmptyString),
+        fields: v.array(nonEmptyString),
         sha256: v.pipe(v.string(), v.regex(SHA256_PATTERN)),
       }),
     ),
