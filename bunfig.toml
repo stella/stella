@@ -65,26 +65,6 @@ minimumReleaseAgeExcludes = [
   # oxc-transform-react 0.145.0 replaces the Babel React Compiler transform.
   # Keep every napi binding in the same temporary exception: Bun otherwise
   # skips quarantined optional bindings and leaves the parent unusable.
-  "oxc-transform-react", # quarantine-expires: 2026-08-23T14:49:09.386Z
-  "@oxc-transform-react/binding-android-arm-eabi", # quarantine-expires: 2026-08-23T14:49:09.386Z
-  "@oxc-transform-react/binding-android-arm64", # quarantine-expires: 2026-08-23T14:49:09.386Z
-  "@oxc-transform-react/binding-darwin-arm64", # quarantine-expires: 2026-08-23T14:49:09.386Z
-  "@oxc-transform-react/binding-darwin-x64", # quarantine-expires: 2026-08-23T14:49:09.386Z
-  "@oxc-transform-react/binding-freebsd-x64", # quarantine-expires: 2026-08-23T14:49:09.386Z
-  "@oxc-transform-react/binding-linux-arm-gnueabihf", # quarantine-expires: 2026-08-23T14:49:09.386Z
-  "@oxc-transform-react/binding-linux-arm-musleabihf", # quarantine-expires: 2026-08-23T14:49:09.386Z
-  "@oxc-transform-react/binding-linux-arm64-gnu", # quarantine-expires: 2026-08-23T14:49:09.386Z
-  "@oxc-transform-react/binding-linux-arm64-musl", # quarantine-expires: 2026-08-23T14:49:09.386Z
-  "@oxc-transform-react/binding-linux-ppc64-gnu", # quarantine-expires: 2026-08-23T14:49:09.386Z
-  "@oxc-transform-react/binding-linux-riscv64-gnu", # quarantine-expires: 2026-08-23T14:49:09.386Z
-  "@oxc-transform-react/binding-linux-riscv64-musl", # quarantine-expires: 2026-08-23T14:49:09.386Z
-  "@oxc-transform-react/binding-linux-s390x-gnu", # quarantine-expires: 2026-08-23T14:49:09.386Z
-  "@oxc-transform-react/binding-linux-x64-gnu", # quarantine-expires: 2026-08-23T14:49:09.386Z
-  "@oxc-transform-react/binding-linux-x64-musl", # quarantine-expires: 2026-08-23T14:49:09.386Z
-  "@oxc-transform-react/binding-openharmony-arm64", # quarantine-expires: 2026-08-23T14:49:09.386Z
-  "@oxc-transform-react/binding-win32-arm64-msvc", # quarantine-expires: 2026-08-23T14:49:09.386Z
-  "@oxc-transform-react/binding-win32-ia32-msvc", # quarantine-expires: 2026-08-23T14:49:09.386Z
-  "@oxc-transform-react/binding-win32-x64-msvc", # quarantine-expires: 2026-08-23T14:49:09.386Z
   "@stll/oxlint-config", # quarantine-excluded-since: 2026-07-08T00:22:40.000Z
   "@stll/typescript-config", # quarantine-excluded-since: 2026-07-08T00:22:40.000Z
   "@stll/aho-corasick-wasm", # quarantine-excluded-since: 2026-07-08T00:22:40.000Z
