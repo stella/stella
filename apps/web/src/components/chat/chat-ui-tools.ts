@@ -42,15 +42,27 @@ type ExternalMcpChatToolCallPart = Extract<
   TanStackChatToolCallPart,
   { name: `mcp__${string}` }
 >;
+declare const opaquePersistedChatToolCallProof: unique symbol;
+/**
+ * Proof assigned after a persisted tool call passes the protocol-shape guard
+ * and its name is confirmed absent from both current tool namespaces.
+ */
+export type OpaquePersistedChatToolCallPart = TanStackChatToolCallPart & {
+  readonly [opaquePersistedChatToolCallProof]: true;
+};
 
 /**
  * TanStack deliberately leaves JSON-schema tool payloads unknown. At Stella's
  * rendering boundary, built-in payloads retain the types derived from the same
- * Standard Schema tool map; external MCP payloads remain unknown.
+ * Standard Schema tool map; external MCP and opaque historical payloads remain
+ * unknown.
  */
-export type ChatUIToolCallPart =
+export type RegisteredChatUIToolCallPart =
   | BuiltInChatToolCallPart
   | ExternalMcpChatToolCallPart;
+export type ChatUIToolCallPart =
+  | RegisteredChatUIToolCallPart
+  | OpaquePersistedChatToolCallPart;
 export type ChatUIPart =
   | Exclude<TanStackChatPart, { type: "tool-call" }>
   | ChatUIToolCallPart;
@@ -84,7 +96,7 @@ const MCP_CONNECTOR_APPROVAL_GRANT_PREFIX = "mcp-connector:";
 export type ToolApprovalGrant =
   | ApprovalToolName
   | `${typeof MCP_CONNECTOR_APPROVAL_GRANT_PREFIX}${string}`;
-export type ApprovalToolPart = ChatUIToolCallPart & {
+export type ApprovalToolPart = RegisteredChatUIToolCallPart & {
   name: ApprovalToolName;
   approval: {
     approved?: boolean | undefined;
@@ -1041,9 +1053,9 @@ export const parseCompletedToolCallArguments = (
   }
 };
 
-const isOpaquePersistedChatToolCallPart = (
+export const isOpaquePersistedChatToolCallPart = (
   value: unknown,
-): value is ExternalMcpChatToolCallPart => {
+): value is OpaquePersistedChatToolCallPart => {
   if (
     typeof value !== "object" ||
     value === null ||
@@ -1061,10 +1073,6 @@ const isOpaquePersistedChatToolCallPart = (
   ) {
     return false;
   }
-  // TanStack's typed tool union has no opaque branch. Its external-tool branch
-  // is the existing generic-payload branch, so an otherwise valid historical
-  // name enters the UI through that shape. Runtime external-tool behavior still
-  // requires the `mcp__` prefix and therefore cannot be activated by this guard.
   return !isChatToolName(value.name) && !isExternalMcpToolName(value.name);
 };
 

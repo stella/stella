@@ -1335,6 +1335,11 @@ describe("withParsedToolCallInputs", () => {
     const [message] = withParsedToolCallInputs(argumentsOnlyMessages(part));
 
     expect(message?.parts[0]).toBe(part);
+    expect(message?.parts[0]).toMatchObject({
+      name: "retired-provider-tool",
+      type: "tool-call",
+    });
+    expect(part.name.startsWith("mcp__")).toBe(false);
   });
 });
 

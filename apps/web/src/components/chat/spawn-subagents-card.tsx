@@ -7,14 +7,14 @@ import {
 import { useTranslations } from "use-intl";
 
 import type {
-  ChatUIToolCallPart,
   ChatUITools,
+  RegisteredChatUIToolCallPart,
 } from "@/components/chat/chat-ui-tools";
 import { keySpawnSubagents } from "@/components/chat/spawn-subagents-card.logic";
 import { useFormatter } from "@/i18n/formatting-context";
 
 type SpawnSubagentsPart = Extract<
-  ChatUIToolCallPart,
+  RegisteredChatUIToolCallPart,
   { name: "spawn_subagents" }
 >;
 

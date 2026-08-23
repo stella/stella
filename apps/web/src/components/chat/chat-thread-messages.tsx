@@ -64,6 +64,7 @@ import {
   getChatToolTitleKey,
   hasRunningToolCallInLatestAssistantMessage,
   isApprovalPart,
+  isOpaquePersistedChatToolCallPart,
   withParsedToolCallInputs,
 } from "@/components/chat/chat-ui-tools";
 import type { CreateDocumentDraft } from "@/components/chat/create-document-draft.logic";
@@ -1520,6 +1521,17 @@ const AssistantMessageParts = ({
           key={`${message.id}-text-${index}`}
           restorationPairs={restorationPairs}
           text={part.content}
+        />
+      );
+    }
+
+    if (part.type === "tool-call" && isOpaquePersistedChatToolCallPart(part)) {
+      return (
+        <ToolCallCard
+          activeOrganizationId={activeOrganizationId}
+          key={part.id}
+          part={part}
+          showDetails={shouldShowToolCalls}
         />
       );
     }
