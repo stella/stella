@@ -103,3 +103,26 @@ export const PUBLIC_LAW_COLUMNS_BY_RELATION = {
 } as const;
 
 export type PublicLawRelation = keyof typeof PUBLIC_LAW_COLUMNS_BY_RELATION;
+
+/**
+ * The v0.7.22 reader contract retained during the bounded rollout window.
+ * Remove these constants with `stella_caselaw_reader` after that release can
+ * no longer be deployed or used for rollback.
+ */
+export const ROLLOUT_CASE_LAW_WHOLE_RELATIONS = [
+  "case_law_citations",
+  "case_law_corpus_index_projections",
+  "case_law_decisions",
+  "case_law_provision_citations",
+] as const;
+export const ROLLOUT_CASE_LAW_SOURCE_RELATION = "case_law_sources";
+export const ROLLOUT_CASE_LAW_SOURCE_COLUMNS = [
+  "id",
+  "name",
+  "adapter_key",
+  "descriptor",
+] as const;
+export const ROLLOUT_CASE_LAW_RELATIONS = [
+  ...ROLLOUT_CASE_LAW_WHOLE_RELATIONS,
+  ROLLOUT_CASE_LAW_SOURCE_RELATION,
+] as const;

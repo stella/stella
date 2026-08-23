@@ -8,6 +8,10 @@ export const stella = p.pgRole("stella").existing();
 // Bootstrapped in 20260516000000_case_law_ingestion_role.
 export const stellaIngestion = p.pgRole("stella_ingestion").existing();
 
+// The v0.7.22 case-law reader remains intact for the bounded rollout window.
+// Remove it after that release can no longer be deployed or used for rollback.
+export const stellaCaseLawReader = p.pgRole("stella_caselaw_reader").existing();
+
 // Read-only role for the public case-law and legislation corpus. Every
 // relation is column-restricted by the public-law relation map.
 export const stellaPublicLawReader = p
@@ -521,6 +525,16 @@ export const publicLawReaderPolicies = () => [
     to: stellaPublicLawReader,
     using: allowAllRows,
   }),
+];
+
+/** Case-law relations retain the v0.7.22 policy during the rollout window. */
+export const publicCaseLawReaderPolicies = () => [
+  p.pgPolicy("case_law_reader_access", {
+    for: "select",
+    to: stellaCaseLawReader,
+    using: allowAllRows,
+  }),
+  ...publicLawReaderPolicies(),
 ];
 
 /**

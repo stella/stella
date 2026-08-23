@@ -1,22 +1,10 @@
 SET lock_timeout = '1s';--> statement-breakpoint
 SET statement_timeout = '5s';--> statement-breakpoint
 
--- Preserve the role OID, memberships and existing RLS bindings while giving
--- the shared case-law and legislation boundary its owning name.
-ALTER ROLE stella_caselaw_reader RENAME TO stella_public_law_reader;--> statement-breakpoint
-
--- Remove every grant from the earlier case-law-only boundary. Table-level
--- and column-level privileges are distinct in PostgreSQL, so both forms are
--- revoked explicitly before the exact shared allowlist is installed.
-REVOKE SELECT ON TABLE
-  "case_law_citations",
-  "case_law_corpus_index_projections",
-  "case_law_decisions",
-  "case_law_provision_citations"
-FROM stella_public_law_reader;--> statement-breakpoint
-REVOKE SELECT (id, name, adapter_key, descriptor)
-  ON TABLE "case_law_sources"
-  FROM stella_public_law_reader;--> statement-breakpoint
+-- Add the shared role beside stella_caselaw_reader. The older role must keep
+-- its exact grants until the v0.7.22 rollback window has closed; older local
+-- readers validate that boundary at connection time.
+CREATE ROLE stella_public_law_reader NOLOGIN;--> statement-breakpoint
 
 GRANT USAGE ON SCHEMA public TO stella_public_law_reader;--> statement-breakpoint
 
@@ -124,16 +112,16 @@ GRANT SELECT (id, descriptor)
   ON TABLE "legislation_sources"
   TO stella_public_law_reader;--> statement-breakpoint
 
-ALTER POLICY "case_law_reader_access" ON "case_law_citations"
-  RENAME TO "public_law_reader_access";--> statement-breakpoint
-ALTER POLICY "case_law_reader_access" ON "case_law_corpus_index_projections"
-  RENAME TO "public_law_reader_access";--> statement-breakpoint
-ALTER POLICY "case_law_reader_access" ON "case_law_decisions"
-  RENAME TO "public_law_reader_access";--> statement-breakpoint
-ALTER POLICY "case_law_reader_access" ON "case_law_provision_citations"
-  RENAME TO "public_law_reader_access";--> statement-breakpoint
-ALTER POLICY "case_law_reader_access" ON "case_law_sources"
-  RENAME TO "public_law_reader_access";--> statement-breakpoint
+CREATE POLICY "public_law_reader_access" ON "case_law_citations"
+  AS PERMISSIVE FOR SELECT TO "stella_public_law_reader" USING (true);--> statement-breakpoint
+CREATE POLICY "public_law_reader_access" ON "case_law_corpus_index_projections"
+  AS PERMISSIVE FOR SELECT TO "stella_public_law_reader" USING (true);--> statement-breakpoint
+CREATE POLICY "public_law_reader_access" ON "case_law_decisions"
+  AS PERMISSIVE FOR SELECT TO "stella_public_law_reader" USING (true);--> statement-breakpoint
+CREATE POLICY "public_law_reader_access" ON "case_law_provision_citations"
+  AS PERMISSIVE FOR SELECT TO "stella_public_law_reader" USING (true);--> statement-breakpoint
+CREATE POLICY "public_law_reader_access" ON "case_law_sources"
+  AS PERMISSIVE FOR SELECT TO "stella_public_law_reader" USING (true);--> statement-breakpoint
 
 CREATE POLICY "public_law_reader_access" ON "legislation_documents"
   AS PERMISSIVE FOR SELECT TO "stella_public_law_reader" USING (true);--> statement-breakpoint

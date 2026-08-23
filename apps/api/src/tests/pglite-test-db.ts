@@ -7,7 +7,12 @@ import * as agentAuthSchema from "@/api/db/agent-auth-schema";
 import * as authSchema from "@/api/db/auth-schema";
 import * as rlsExports from "@/api/db/rls";
 import * as schema from "@/api/db/schema";
-import { PUBLIC_LAW_COLUMNS_BY_RELATION } from "@/api/lib/public-law-relations";
+import {
+  PUBLIC_LAW_COLUMNS_BY_RELATION,
+  ROLLOUT_CASE_LAW_SOURCE_COLUMNS,
+  ROLLOUT_CASE_LAW_SOURCE_RELATION,
+  ROLLOUT_CASE_LAW_WHOLE_RELATIONS,
+} from "@/api/lib/public-law-relations";
 import {
   createSchemaPglite,
   installPgliteSchemaPrerequisites,
@@ -172,6 +177,19 @@ const ROLE_GRANT_STATEMENTS = [
   `
     GRANT INSERT ON TABLE "legislation_index_jobs" TO stella_ingestion
   `,
+  // Preserve the v0.7.22 reader contract until its rollback window closes.
+  `
+    GRANT USAGE ON SCHEMA public TO stella_caselaw_reader
+  `,
+  `
+    GRANT SELECT ON TABLE ${ROLLOUT_CASE_LAW_WHOLE_RELATIONS.map(quoteSqlIdentifier).join(", ")}
+    TO stella_caselaw_reader
+  `,
+  `
+    GRANT SELECT (${ROLLOUT_CASE_LAW_SOURCE_COLUMNS.map(quoteSqlIdentifier).join(", ")})
+      ON TABLE ${quoteSqlIdentifier(ROLLOUT_CASE_LAW_SOURCE_RELATION)}
+      TO stella_caselaw_reader
+  `,
   // Derived from the allowlist the connection validator reads, so the role
   // in tests can only ever match the role the migration defines.
   `
@@ -200,6 +218,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
 
   await db.execute(sql.raw("CREATE ROLE stella NOLOGIN"));
   await db.execute(sql.raw("CREATE ROLE stella_ingestion NOLOGIN"));
+  await db.execute(sql.raw("CREATE ROLE stella_caselaw_reader NOLOGIN"));
   await db.execute(sql.raw("CREATE ROLE stella_public_law_reader NOLOGIN"));
   await installPgliteSchemaPrerequisites(db);
 

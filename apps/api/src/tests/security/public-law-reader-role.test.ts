@@ -3,18 +3,29 @@ import { sql } from "drizzle-orm";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import nodePath from "node:path";
 
-import { stella, stellaPublicLawReader } from "@/api/db/rls";
+import {
+  stella,
+  stellaCaseLawReader,
+  stellaPublicLawReader,
+} from "@/api/db/rls";
 import {
   publicLawDatabaseRolePermissionsSql,
   type PublicLawDatabaseRolePermissions,
 } from "@/api/lib/public-law-read-db";
-import { PUBLIC_LAW_COLUMNS_BY_RELATION } from "@/api/lib/public-law-relations";
+import {
+  PUBLIC_LAW_COLUMNS_BY_RELATION,
+  ROLLOUT_CASE_LAW_RELATIONS,
+  ROLLOUT_CASE_LAW_SOURCE_COLUMNS,
+  ROLLOUT_CASE_LAW_SOURCE_RELATION,
+  ROLLOUT_CASE_LAW_WHOLE_RELATIONS,
+} from "@/api/lib/public-law-relations";
 import { getCollator } from "@/api/lib/collation";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
 const DRIZZLE_DIR = nodePath.resolve(import.meta.dir, "../../../drizzle");
 const READER_ROLE = stellaPublicLawReader.name;
+const ROLLOUT_READER_ROLE = stellaCaseLawReader.name;
 const WRITE_PRIVILEGES = "INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER";
 
 const quoted = (identifier: string): string =>
@@ -153,6 +164,29 @@ describe("public-law reader role", () => {
     ).rejects.toThrow();
   });
 
+  test("preserves the v0.7.22 reader during the rollout window", async () => {
+    await testDb.transaction(async (tx) => {
+      await tx.execute(sql.raw(`SET LOCAL ROLE ${quoted(ROLLOUT_READER_ROLE)}`));
+      for (const relation of ROLLOUT_CASE_LAW_WHOLE_RELATIONS) {
+        // oxlint-disable-next-line no-await-in-loop -- each statement proves the previous reader contract still resolves after the additive migration
+        await tx.execute(sql.raw(`SELECT * FROM ${quoted(relation)} LIMIT 0`));
+      }
+      await tx.execute(
+        sql.raw(
+          `SELECT ${ROLLOUT_CASE_LAW_SOURCE_COLUMNS.map(quoted).join(", ")} FROM ${quoted(ROLLOUT_CASE_LAW_SOURCE_RELATION)} LIMIT 0`,
+        ),
+      );
+    });
+    await expect(
+      testDb.transaction(async (tx) => {
+        await tx.execute(
+          sql.raw(`SET LOCAL ROLE ${quoted(ROLLOUT_READER_ROLE)}`),
+        );
+        await tx.execute(sql.raw('SELECT "id" FROM "legislation_documents"'));
+      }),
+    ).rejects.toThrow();
+  });
+
   test("has a SELECT policy on every allowlisted relation and no other", async () => {
     const result = await testDb.execute<{ tablename: string }>(sql`
       SELECT tablename
@@ -165,6 +199,21 @@ describe("public-law reader role", () => {
 
     expect(result.rows.map(({ tablename }) => tablename)).toEqual(
       Object.keys(PUBLIC_LAW_COLUMNS_BY_RELATION).toSorted(),
+    );
+  });
+
+  test("keeps the previous reader policies during rollout", async () => {
+    const result = await testDb.execute<{ tablename: string }>(sql`
+      SELECT tablename
+      FROM pg_policies
+      WHERE schemaname = 'public'
+        AND ${ROLLOUT_READER_ROLE} = ANY (roles)
+        AND cmd = 'SELECT'
+      ORDER BY tablename
+    `);
+
+    expect(result.rows.map(({ tablename }) => tablename)).toEqual(
+      [...ROLLOUT_CASE_LAW_RELATIONS].toSorted(),
     );
   });
 });
@@ -187,10 +236,11 @@ const identifiers = (list: string): string[] =>
   list.split(",").map((entry) => entry.trim().replaceAll('"', ""));
 
 const STATEMENT_PATTERN =
-  /^(?<verb>GRANT|REVOKE) SELECT(?: \((?<columns>[^)]+)\))? ON TABLE (?<tables>.+?) (?:TO|FROM) "?stella_(?:caselaw_reader|public_law_reader)"?$/iu;
+  /^(?<verb>GRANT|REVOKE) SELECT(?: \((?<columns>[^)]+)\))? ON TABLE (?<tables>.+?) (?:TO|FROM) "?(?<role>stella_(?:caselaw_reader|public_law_reader))"?$/iu;
 
 const foldReaderSelectGrants = (
   sqlSources: readonly string[],
+  readerRole: string,
 ): EffectiveSelectGrants => {
   const effective: EffectiveSelectGrants = {
     tables: new Set(),
@@ -201,6 +251,9 @@ const foldReaderSelectGrants = (
       const statement = raw.replaceAll(/\s+/gu, " ").trim();
       const match = STATEMENT_PATTERN.exec(statement);
       if (match?.groups === undefined) {
+        continue;
+      }
+      if (match.groups["role"] !== readerRole) {
         continue;
       }
       const granting = match.groups["verb"]?.toUpperCase() === "GRANT";
@@ -252,7 +305,7 @@ describe("public-law reader migrations", () => {
       .toSorted()
       .map((path) => readFileSync(path, "utf-8"));
 
-    const grants = foldReaderSelectGrants(sources);
+    const grants = foldReaderSelectGrants(sources, READER_ROLE);
     const expected = Object.fromEntries(
       Object.entries(PUBLIC_LAW_COLUMNS_BY_RELATION).map(
         ([relation, columns]) => [relation, [...columns].toSorted()],
@@ -263,13 +316,38 @@ describe("public-law reader migrations", () => {
     expect(sortedColumns(grants)).toEqual(expected);
   });
 
-  test("a later REVOKE undoes table and column grants", () => {
-    const grants = foldReaderSelectGrants([
-      `GRANT SELECT ON TABLE "a", "b" TO stella_caselaw_reader;
-       GRANT SELECT (x, y) ON TABLE "c" TO stella_caselaw_reader;`,
-      `REVOKE SELECT ON TABLE "b" FROM stella_public_law_reader;
-       REVOKE SELECT (y) ON TABLE "c" FROM stella_public_law_reader;`,
+  test("keeps the previous reader grants unchanged during rollout", () => {
+    const sources = readdirSync(DRIZZLE_DIR, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) =>
+        nodePath.resolve(DRIZZLE_DIR, entry.name, "migration.sql"),
+      )
+      .filter((path) => existsSync(path))
+      .toSorted()
+      .map((path) => readFileSync(path, "utf-8"));
+
+    const grants = foldReaderSelectGrants(sources, ROLLOUT_READER_ROLE);
+
+    expect([...grants.tables].toSorted()).toEqual([
+      ...ROLLOUT_CASE_LAW_WHOLE_RELATIONS,
     ]);
+    expect(sortedColumns(grants)).toEqual({
+      [ROLLOUT_CASE_LAW_SOURCE_RELATION]: [
+        ...ROLLOUT_CASE_LAW_SOURCE_COLUMNS,
+      ].toSorted(),
+    });
+  });
+
+  test("a later REVOKE undoes table and column grants", () => {
+    const grants = foldReaderSelectGrants(
+      [
+        `GRANT SELECT ON TABLE "a", "b" TO stella_public_law_reader;
+         GRANT SELECT (x, y) ON TABLE "c" TO stella_public_law_reader;`,
+        `REVOKE SELECT ON TABLE "b" FROM stella_public_law_reader;
+         REVOKE SELECT (y) ON TABLE "c" FROM stella_public_law_reader;`,
+      ],
+      READER_ROLE,
+    );
 
     expect([...grants.tables].toSorted()).toEqual(["a"]);
     expect(sortedColumns(grants)).toEqual({ c: ["x"] });

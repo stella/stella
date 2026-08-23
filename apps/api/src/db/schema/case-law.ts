@@ -39,7 +39,7 @@ import {
   jsonb,
   p,
   pUuid,
-  publicLawReaderPolicies,
+  publicCaseLawReaderPolicies,
   safeUuid,
   safeWorkspaceId,
   sql,
@@ -235,7 +235,7 @@ export const caseLawSources = p.pgTable(
     // is reported as unrecognized rather than silently ignored.
     p.uniqueIndex("case_law_sources_adapter_key_idx").on(t.adapterKey),
     ...globalCaseLawPolicies(),
-    ...publicLawReaderPolicies(),
+    ...publicCaseLawReaderPolicies(),
   ],
 );
 
@@ -540,7 +540,7 @@ export const caseLawDecisions = p.pgTable(
     // every such citation.
     p.check("decisions_citation_key_non_empty", sql`${t.citationKey} <> ''`),
     ...globalCaseLawPolicies(),
-    ...publicLawReaderPolicies(),
+    ...publicCaseLawReaderPolicies(),
   ],
 );
 
@@ -929,7 +929,7 @@ export const caseLawCitations = p.pgTable(
       .on(t.citedDecisionId)
       .where(sql`${t.kind} = 'precedent' AND ${t.citedDecisionId} IS NOT NULL`),
     ...globalCaseLawPolicies(),
-    ...publicLawReaderPolicies(),
+    ...publicCaseLawReaderPolicies(),
   ],
 );
 
@@ -1047,7 +1047,7 @@ export const caseLawProvisionCitations = p.pgTable(
       sql`${t.confidence} > 0 AND ${t.confidence} <= 1`,
     ),
     ...globalCaseLawPolicies(),
-    ...publicLawReaderPolicies(),
+    ...publicCaseLawReaderPolicies(),
   ],
 );
 
@@ -1714,7 +1714,7 @@ export const caseLawCorpusIndexProjections = p.pgTable(
       .on(t.generation, t.decisionId)
       .where(isNotNull(t.pendingAction)),
     ...globalCaseLawPolicies(),
-    ...publicLawReaderPolicies(),
+    ...publicCaseLawReaderPolicies(),
   ],
 );
 
