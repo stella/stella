@@ -3,11 +3,9 @@ import type { useNavigate } from "@tanstack/react-router";
 
 import type { InspectorTab } from "@/components/inspector/inspector-tabs-store";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
+import { chatKeys } from "@/features/chat/chat-query-contract";
 import type { ChatThreadFetched } from "@/features/chat/queries";
-import {
-  chatKeys,
-  invalidateChatThreadAcrossScopes,
-} from "@/features/chat/queries";
+import { invalidateChatThreadAcrossScopes } from "@/features/chat/queries";
 import { detached } from "@/lib/detached";
 
 type MaximizeContext = {

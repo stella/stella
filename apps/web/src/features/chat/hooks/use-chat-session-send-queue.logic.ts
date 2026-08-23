@@ -6,7 +6,7 @@ import type { ChatSendMode } from "@stll/anonymize-chat";
 import type {
   ChatSendMessageOptions,
   ChatUserMessageInput,
-} from "@/features/chat/queries";
+} from "@/features/chat/chat-runtime";
 import type {
   ChatEditApplyMode,
   DocxEditRepresentation,

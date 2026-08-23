@@ -5,23 +5,10 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { createIdleExitCheck } from "@/api/lib/document-processing-idle-exit";
 import {
   abortDocumentProcessingWorkerBeforeClose,
-  automaticOcrRetryDelayMs,
-  classifyOcrProjectionSource,
-  classifyOcrWorkspaceDispatch,
   createDocumentProcessingLeaseRenewal,
-  createReconciliationProgress,
   DOCUMENT_PROCESSING_RECONCILIATION_PHASE_FEEDS,
   DOCUMENT_PROCESSING_RECONCILIATION_PHASES,
-  DocumentProcessingJobError,
-  indexDocumentProjection,
-  isCurrentNativeExtractionSource,
-  isCurrentOcrSource,
-  isPreservableAutomaticProjection,
-  isRetryableAutomaticOcrFailure,
-  isRetryableOcrDerivativeFailure,
-  isRetryableSearchIndexFailure,
   mapWithConcurrency,
-  ownsPromotedManualOcrClaim,
   readRepairScanCursor,
   RECONCILE_BATCH_SIZE,
   reconciliationLeftWorkBehind,
@@ -30,13 +17,30 @@ import {
   resolveSearchIndexReplayBatch,
   runDocumentProcessingReconciliationPhases,
   runSearchIndexReplayAttempt,
-  settleDocumentProcessingAttemptError,
-  requiresOcrPolicy,
-  shouldFailStaleAutomaticOcrRun,
-  shouldPreserveCurrentProjection,
   tryEnqueueDocumentProcessingRun,
   writeRepairScanCursor,
 } from "@/api/lib/document-processing-queue";
+import {
+  automaticOcrRetryDelayMs,
+  isRetryableAutomaticOcrFailure,
+  isRetryableOcrDerivativeFailure,
+  isRetryableSearchIndexFailure,
+  settleDocumentProcessingAttemptError,
+} from "@/api/lib/document-processing-queue-attempt";
+import {
+  classifyOcrProjectionSource,
+  classifyOcrWorkspaceDispatch,
+  DocumentProcessingJobError,
+  indexDocumentProjection,
+  isCurrentNativeExtractionSource,
+  isCurrentOcrSource,
+  isPreservableAutomaticProjection,
+  ownsPromotedManualOcrClaim,
+  requiresOcrPolicy,
+  shouldFailStaleAutomaticOcrRun,
+  shouldPreserveCurrentProjection,
+} from "@/api/lib/document-processing-queue-policy";
+import { createReconciliationProgress } from "@/api/lib/document-processing-reconciliation-progress";
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 
 const queueSource = await Bun.file(

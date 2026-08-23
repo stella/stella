@@ -102,6 +102,10 @@ import { useChatModelSelection } from "@/components/chat/use-chat-model-selectio
 import type { DocxComments } from "@/components/docx/app-docx-editor";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { useAIKeyGate } from "@/components/require-ai-key";
+import type {
+  ApplyActiveDocxEditsInput,
+  ApplyActiveDocxEditsOutput,
+} from "@/features/chat/chat-query-contract";
 import { ChatTitleRename } from "@/features/chat/components/chat-title-rename";
 import { SuggestedFollowupChips } from "@/features/chat/components/suggested-followup-chips";
 import { useChatSession } from "@/features/chat/hooks/use-chat-session";
@@ -114,10 +118,6 @@ import {
   resolveSuggestedPromptsAvailability,
   resolveSuggestedPromptsTurnOwner,
 } from "@/features/chat/lib/suggested-prompts-availability";
-import type {
-  ApplyActiveDocxEditsInput,
-  ApplyActiveDocxEditsOutput,
-} from "@/features/chat/queries";
 import {
   applyChatModelChange,
   chatThreadOptions,

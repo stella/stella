@@ -44,6 +44,7 @@ import { useAIKeyGate } from "@/components/require-ai-key";
 import { StellaMark } from "@/components/stella-mark";
 import Tooltip from "@/components/tooltip";
 import { MatterContextMenu } from "@/components/workspaces/matter-context-menu";
+import { chatKeys } from "@/features/chat/chat-query-contract";
 import { useChatDraftMeta } from "@/features/chat/hooks/use-chat-draft-meta";
 import { useChatUserContext } from "@/features/chat/hooks/use-chat-user-context";
 import { buildChatRequestMessage } from "@/features/chat/lib/build-chat-request-message";
@@ -51,7 +52,6 @@ import { startNewThreadCommandHandoff } from "@/features/chat/lib/start-new-thre
 import {
   acquireChatRuntime,
   applyChatModelChange,
-  chatKeys,
   chatThreadOptions,
   groupedChatThreadsOptions,
   invalidateGroupedChatThreads,

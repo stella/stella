@@ -1,4 +1,4 @@
-import { Result, TaggedError } from "better-result";
+import { Result } from "better-result";
 import { Worker } from "bullmq";
 import {
   and,
@@ -52,7 +52,34 @@ import {
 } from "@/api/lib/document-processing-enqueue";
 import { documentProcessingFailureFields } from "@/api/lib/document-processing-failure-fields";
 import { DocumentOcrError } from "@/api/lib/document-processing-ocr-result";
+import {
+  automaticOcrRetryDelayMs,
+  isRetryableAutomaticOcrFailure,
+  isRetryableOcrDerivativeFailure,
+  isRetryableSearchIndexFailure,
+  retryableOcrFailureCodes,
+  settleDocumentProcessingAttemptError,
+} from "@/api/lib/document-processing-queue-attempt";
+import {
+  AUTOMATIC_OCR_MAX_ATTEMPTS,
+  classifyOcrProjectionSource,
+  classifyOcrWorkspaceDispatch,
+  DocumentProcessingJobError,
+  indexDocumentProjection,
+  isCurrentNativeExtractionSource,
+  isCurrentOcrSource,
+  isPreservableAutomaticProjection,
+  ownsPromotedManualOcrClaim,
+  requiresOcrPolicy,
+  SEARCH_INDEX_ATTEMPT_TIMEOUT_MS,
+  SEARCHABLE_PDF_FAILURE_CODE,
+  SEARCH_INDEX_FAILURE_CODE,
+  shouldFailStaleAutomaticOcrRun,
+  shouldPreserveCurrentProjection,
+} from "@/api/lib/document-processing-queue-policy";
+import type { CurrentDocumentSource } from "@/api/lib/document-processing-queue-policy";
 import { startDocumentOcrWorkerReadiness } from "@/api/lib/document-processing-readiness";
+import { createReconciliationProgress } from "@/api/lib/document-processing-reconciliation-progress";
 import {
   connectionErrorFields,
   errorSystemFields,
@@ -100,7 +127,6 @@ const WORKER_LEASE_HEARTBEAT_MS = 5 * 60 * 1000;
 const WORKER_LEASE_HEARTBEAT_TIMEOUT_MS = 30_000;
 const SEARCH_INDEX_REPLAY_CONCURRENCY = 2;
 const SEARCH_INDEX_REPLAY_BATCH_SIZE = SEARCH_INDEX_REPLAY_CONCURRENCY * 2;
-const SEARCH_INDEX_ATTEMPT_TIMEOUT_MS = 30_000;
 const SEARCH_INDEX_REPLAY_STATE_TRANSITION_TIMEOUT_MS = 5000;
 const REPAIR_SETTLE_DELAY_MS = 5 * 60 * 1000;
 // Single compare-and-set slot for the repair sweep's resume position, so the
@@ -126,71 +152,7 @@ const REPAIR_SCAN_CURSOR_CAS_SCRIPT = `
   end
   return 0
 `;
-const AUTOMATIC_OCR_MAX_ATTEMPTS = 5;
-const AUTOMATIC_OCR_RETRY_BASE_DELAY_MS = 30_000;
-const AUTOMATIC_OCR_RETRY_MAX_DELAY_MS = 30 * 60 * 1000;
-const SEARCH_INDEX_FAILURE_CODE = "search_index_failed";
-const SEARCHABLE_PDF_FAILURE_CODE = "searchable_pdf_failed";
-const RETRYABLE_AUTOMATIC_OCR_FAILURE_CODES = [
-  "not_configured",
-  "processing_failed",
-  "request_failed",
-] as const;
 const SOURCE_SUPERSEDED_CANCELLATION_CODE = "source_superseded";
-
-type CurrentDocumentSource = {
-  content: FieldContent;
-  currentVersionId: SafeId<"entityVersion"> | null;
-  entityReadOnly: boolean;
-  fieldEntityVersionId: SafeId<"entityVersion">;
-  versionDeletedAt: Date | null;
-};
-
-type OcrProjectionProvenance = {
-  sourceEntityVersionId: SafeId<"entityVersion"> | null;
-  sourceFieldId: SafeId<"field"> | null;
-  sourceFileId: string | null;
-  sourceSha256Hex: string | null;
-};
-
-type ProjectionSourceField = {
-  content: FieldContent;
-  entityVersionId: SafeId<"entityVersion">;
-  id: SafeId<"field">;
-  workspaceId: SafeId<"workspace">;
-};
-
-export class DocumentProcessingJobError extends TaggedError(
-  "DocumentProcessingJobError",
-)<{
-  code: string;
-  message: string;
-  cause?: unknown;
-}> {}
-
-export const indexDocumentProjection = async ({
-  indexEntity,
-  timeoutMs = SEARCH_INDEX_ATTEMPT_TIMEOUT_MS,
-}: {
-  indexEntity: () => Promise<void>;
-  timeoutMs?: number;
-}): Promise<void> => {
-  const indexed = await Result.tryPromise({
-    try: async () =>
-      await withTimeout(indexEntity, {
-        label: "document processing initial search index",
-        timeoutMs,
-      }),
-    catch: (cause) => cause,
-  });
-  if (Result.isError(indexed)) {
-    throw new DocumentProcessingJobError({
-      code: SEARCH_INDEX_FAILURE_CODE,
-      message: "Document text was stored but search indexing failed",
-      cause: indexed.error,
-    });
-  }
-};
 
 /**
  * Builds and stores the run's cached searchable PDF.
@@ -250,135 +212,6 @@ const writeOcrSearchablePdfDerivative = async ({
       cause: written.error,
     });
   }
-};
-
-export const isCurrentOcrSource = ({
-  run,
-  source,
-}: {
-  run: {
-    entityVersionId: SafeId<"entityVersion">;
-    fieldId: SafeId<"field">;
-    sourceFileId: string;
-    sourceSha256Hex: string;
-  };
-  source: CurrentDocumentSource | null;
-}): boolean =>
-  source !== null &&
-  !source.entityReadOnly &&
-  source.versionDeletedAt === null &&
-  source.currentVersionId === run.entityVersionId &&
-  source.fieldEntityVersionId === run.entityVersionId &&
-  source.content.type === "file" &&
-  source.content.id === run.sourceFileId &&
-  source.content.sha256Hex === run.sourceSha256Hex &&
-  source.content.mimeType === PDF_MIME_TYPE &&
-  !source.content.encrypted;
-
-export const isCurrentNativeExtractionSource = (
-  run: {
-    entityVersionId: SafeId<"entityVersion">;
-    fieldId: SafeId<"field">;
-    sourceFileId: string;
-    sourceSha256Hex: string;
-  },
-  source: CurrentDocumentSource | null,
-): source is CurrentDocumentSource & {
-  content: Extract<FieldContent, { type: "file" }>;
-} =>
-  source !== null &&
-  !source.entityReadOnly &&
-  source.versionDeletedAt === null &&
-  source.currentVersionId === run.entityVersionId &&
-  source.fieldEntityVersionId === run.entityVersionId &&
-  source.content.type === "file" &&
-  source.content.id === run.sourceFileId &&
-  source.content.sha256Hex === run.sourceSha256Hex &&
-  requiresDurableNativeExtraction(source.content);
-
-export const isPreservableAutomaticProjection = ({
-  currentEntityVersionId,
-  currentWorkspaceId,
-  provenance,
-  sourceField,
-}: {
-  currentEntityVersionId: SafeId<"entityVersion">;
-  currentWorkspaceId: SafeId<"workspace">;
-  provenance: OcrProjectionProvenance;
-  sourceField: ProjectionSourceField | null;
-}): boolean => {
-  const isLegacyProjection =
-    provenance.sourceEntityVersionId === null &&
-    provenance.sourceFieldId === null &&
-    provenance.sourceFileId === null &&
-    provenance.sourceSha256Hex === null;
-  return (
-    isLegacyProjection ||
-    (provenance.sourceEntityVersionId === currentEntityVersionId &&
-      provenance.sourceFieldId !== null &&
-      provenance.sourceFileId !== null &&
-      provenance.sourceSha256Hex !== null &&
-      sourceField !== null &&
-      sourceField.id === provenance.sourceFieldId &&
-      sourceField.entityVersionId === currentEntityVersionId &&
-      sourceField.workspaceId === currentWorkspaceId &&
-      sourceField.content.type === "file" &&
-      sourceField.content.id === provenance.sourceFileId &&
-      sourceField.content.sha256Hex === provenance.sourceSha256Hex)
-  );
-};
-
-export const shouldPreserveCurrentProjection = (
-  requestSource: (typeof documentProcessingRuns.$inferSelect)["requestSource"],
-): boolean => requestSource !== "manual";
-
-export const shouldFailStaleAutomaticOcrRun = ({
-  attemptCount,
-  errorCode,
-  requestSource,
-}: {
-  attemptCount: number;
-  errorCode: string | null;
-  requestSource: (typeof documentProcessingRuns.$inferSelect)["requestSource"];
-}): boolean =>
-  requestSource !== "manual" &&
-  errorCode !== SEARCH_INDEX_FAILURE_CODE &&
-  attemptCount >= AUTOMATIC_OCR_MAX_ATTEMPTS;
-
-export const classifyOcrProjectionSource = ({
-  run,
-  source,
-  workspaceStatus,
-}: {
-  run: {
-    entityVersionId: SafeId<"entityVersion">;
-    fieldId: SafeId<"field">;
-    sourceFileId: string;
-    sourceSha256Hex: string;
-  };
-  source: CurrentDocumentSource | null;
-  workspaceStatus: (typeof workspaces.$inferSelect)["status"] | undefined;
-}): "current" | "source_superseded" | "workspace_unavailable" => {
-  if (workspaceStatus !== "active") {
-    return "workspace_unavailable";
-  }
-  return isCurrentOcrSource({ run, source }) ? "current" : "source_superseded";
-};
-
-export const classifyOcrWorkspaceDispatch = ({
-  requestSource,
-  workspaceStatus,
-}: {
-  requestSource: (typeof documentProcessingRuns.$inferSelect)["requestSource"];
-  workspaceStatus: (typeof workspaces.$inferSelect)["status"] | undefined;
-}): "available" | "deferred" | "workspace_unavailable" => {
-  if (workspaceStatus === "active") {
-    return "available";
-  }
-  if (workspaceStatus === "deleting" && requestSource === "manual") {
-    return "deferred";
-  }
-  return "workspace_unavailable";
 };
 
 const markRunCancelled = async (
@@ -786,75 +619,6 @@ const persistOcrProjection = async ({
       );
     return "persisted";
   });
-
-export const requiresOcrPolicy = (
-  requestSource: (typeof documentProcessingRuns.$inferSelect)["requestSource"],
-): boolean => requestSource !== "manual";
-
-export const ownsPromotedManualOcrClaim = ({
-  claimToken,
-  run,
-}: {
-  claimToken: string;
-  run:
-    | Pick<
-        typeof documentProcessingRuns.$inferSelect,
-        "claimedBy" | "requestSource" | "status"
-      >
-    | undefined;
-}): boolean =>
-  run?.claimedBy === claimToken &&
-  run.requestSource === "manual" &&
-  run.status === "running";
-
-export const isLifecycleInterruptionError = ({
-  error,
-  lifecycleSignal,
-}: {
-  error: unknown;
-  lifecycleSignal: AbortSignal;
-}): boolean => {
-  if (!lifecycleSignal.aborted) {
-    return false;
-  }
-
-  const visited = new Set<unknown>();
-  let current: unknown = error;
-  while (current !== undefined && !visited.has(current)) {
-    if (current === lifecycleSignal.reason) {
-      return true;
-    }
-    visited.add(current);
-    if (
-      typeof current !== "object" ||
-      current === null ||
-      !("cause" in current)
-    ) {
-      return false;
-    }
-    current = current.cause;
-  }
-  return false;
-};
-
-export const settleDocumentProcessingAttemptError = async ({
-  error,
-  lifecycleSignal,
-  markFailed,
-  returnToQueue,
-}: {
-  error: unknown;
-  lifecycleSignal: AbortSignal;
-  markFailed: () => Promise<void>;
-  returnToQueue: () => Promise<void>;
-}): Promise<"failed" | "interrupted"> => {
-  if (isLifecycleInterruptionError({ error, lifecycleSignal })) {
-    await returnToQueue();
-    return "interrupted";
-  }
-  await markFailed();
-  return "failed";
-};
 
 const completeDocumentProcessingRun = async ({
   claimToken,
@@ -1287,40 +1051,6 @@ const errorCode = (error: unknown): string => {
   }
   return "processing_failed";
 };
-
-export const automaticOcrRetryDelayMs = (attemptCount: number): number =>
-  Math.min(
-    AUTOMATIC_OCR_RETRY_BASE_DELAY_MS * 2 ** Math.max(0, attemptCount - 1),
-    AUTOMATIC_OCR_RETRY_MAX_DELAY_MS,
-  );
-
-export const isRetryableAutomaticOcrFailure = ({
-  attemptCount,
-  errorCode: failureCode,
-  requestSource,
-}: {
-  attemptCount: number;
-  errorCode: string;
-  requestSource: (typeof documentProcessingRuns.$inferSelect)["requestSource"];
-}): boolean =>
-  requestSource !== "manual" &&
-  attemptCount < AUTOMATIC_OCR_MAX_ATTEMPTS &&
-  (failureCode === RETRYABLE_AUTOMATIC_OCR_FAILURE_CODES[0] ||
-    failureCode === RETRYABLE_AUTOMATIC_OCR_FAILURE_CODES[1] ||
-    failureCode === RETRYABLE_AUTOMATIC_OCR_FAILURE_CODES[2]);
-
-export const isRetryableSearchIndexFailure = (failureCode: string): boolean =>
-  failureCode === SEARCH_INDEX_FAILURE_CODE;
-
-export const isRetryableOcrDerivativeFailure = ({
-  attemptCount,
-  errorCode: failureCode,
-}: {
-  attemptCount: number;
-  errorCode: string;
-}): boolean =>
-  failureCode === SEARCHABLE_PDF_FAILURE_CODE &&
-  attemptCount < AUTOMATIC_OCR_MAX_ATTEMPTS;
 
 type MarkRunFailedOutcome = {
   attemptCount: number;
@@ -2066,10 +1796,7 @@ const retryableOcrFailureCondition = () =>
   or(
     and(
       inArray(documentProcessingRuns.requestSource, ["upload", "repair"]),
-      inArray(
-        documentProcessingRuns.errorCode,
-        RETRYABLE_AUTOMATIC_OCR_FAILURE_CODES,
-      ),
+      inArray(documentProcessingRuns.errorCode, retryableOcrFailureCodes),
     ),
     eq(documentProcessingRuns.errorCode, SEARCHABLE_PDF_FAILURE_CODE),
   );
@@ -2726,62 +2453,6 @@ export const reconciliationLeftWorkBehind = (
   results: ReconciliationResults,
 ): boolean =>
   RECONCILIATION_PHASE_NAMES.some((phase) => results[phase].hasMore);
-
-/**
- * Reconciliation progress as the idle sampler sees it. A caller that
- * arrives while a tick is running waits for that tick instead of reading
- * the previous one's answer, which makes the answer independent of how
- * the caller's cadence lines up with the reconciliation cadence: a
- * snapshot read would let a sampler that keeps landing inside slow ticks
- * see "running" at every sample and never let the worker exit, while
- * still risking a stale drained answer from the tick before. The flag
- * clears only when a tick resolves fully drained; a rejected tick leaves
- * it set, because a tick that never reported cannot prove the backlog is
- * empty. One tick at a time: the caller serialises them.
- */
-export const createReconciliationProgress = () => {
-  let unfinished = false;
-  let running: Promise<void> | null = null;
-  let generation = 0;
-  return {
-    hasUnfinishedWork: async (): Promise<boolean> => {
-      await running;
-      return unfinished;
-    },
-    /**
-     * Whether a tick is running right now, for a caller that has already
-     * taken its other readings and is deciding in this frame: the awaited
-     * answer above can only describe the tick it waited for, so a tick
-     * that started afterwards is visible here and nowhere else.
-     */
-    isTickRunning: (): boolean => running !== null,
-    /**
-     * How many ticks have started. A caller that snapshots this and
-     * re-reads it before deciding sees any tick that began in between,
-     * including one that also finished there and so left neither a
-     * running flag nor a verdict of its own behind.
-     */
-    tickGeneration: (): number => generation,
-    /** `tick` resolves with whether it left work behind. */
-    runTick: async (tick: () => Promise<boolean>): Promise<void> => {
-      // All three published before the first await, so a caller that
-      // arrives during this tick waits for it rather than reading the last
-      // one, and one that only overlaps it still sees that it happened.
-      unfinished = true;
-      generation += 1;
-      let finish: () => void = () => undefined;
-      running = new Promise<void>((resolve) => {
-        finish = resolve;
-      });
-      try {
-        unfinished = await tick();
-      } finally {
-        running = null;
-        finish();
-      }
-    },
-  };
-};
 
 const reconciliationProgress = createReconciliationProgress();
 
