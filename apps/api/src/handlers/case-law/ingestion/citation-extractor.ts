@@ -1,3 +1,11 @@
+import { panic } from "better-result";
+
+import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
+import type {
+  DecisionIdentifier,
+  DecisionIdentifiers,
+} from "@stll/legal-ast/decision-identifier";
+
 import {
   type CitationDecisionTypeHint,
   detectCitationDecisionTypeHint,
@@ -627,9 +635,28 @@ const stripPrefix = (text: string): string => {
   return trimmed;
 };
 
-type DecisionIdentity = {
+type DecisionMetadata = {
   caseNumber: string;
   ecli?: string | null;
+};
+
+export const decisionIdentifiersFromMetadata = ({
+  caseNumber,
+  ecli,
+}: DecisionMetadata): DecisionIdentifiers => {
+  const caseNumberIdentifier = {
+    type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+    value: caseNumber,
+  } as const;
+
+  if (!ecli) {
+    return [caseNumberIdentifier];
+  }
+
+  return [
+    caseNumberIdentifier,
+    { type: DECISION_IDENTIFIER_TYPES.ECLI, value: ecli },
+  ];
 };
 
 /**
@@ -654,26 +681,37 @@ export const bareCitationKey = (text: string): string =>
 export const citationKeyOf = (text: string): string | null =>
   bareCitationKey(text) || null;
 
+const identifierComparisonKey = (
+  citationText: string,
+  identifier: DecisionIdentifier,
+): string => {
+  switch (identifier.type) {
+    case DECISION_IDENTIFIER_TYPES.CASE_NUMBER:
+      return bareCitationKey(citationText);
+    case DECISION_IDENTIFIER_TYPES.ECLI:
+    case DECISION_IDENTIFIER_TYPES.NEUTRAL_CITATION:
+    case DECISION_IDENTIFIER_TYPES.REPORTER_CITATION:
+      return canonicalizeDedupKey(citationText);
+    default: {
+      const unhandled: never = identifier;
+      return panic(`Unhandled decision identifier: ${String(unhandled)}`);
+    }
+  }
+};
+
 /**
  * Check whether a citation text refers to the same decision that
  * contains it (self-citation).
  */
 export const isSelfCitation = (
   citationText: string,
-  decision: DecisionIdentity,
-): boolean => {
-  const trimmed = citationText.trim();
-
-  // ECLI exact match
-  if (decision.ecli && trimmed === decision.ecli) {
-    return true;
-  }
-
-  // Compare bare case numbers, using the same canonicalization as the
-  // extractor's dedup key so a self-citation written with a different
-  // (but equivalent) separator, dot, or case spelling is still recognized.
-  return bareCitationKey(trimmed) === canonicalizeDedupKey(decision.caseNumber);
-};
+  identifiers: DecisionIdentifiers,
+): boolean =>
+  identifiers.some(
+    (identifier) =>
+      identifierComparisonKey(citationText, identifier) ===
+      canonicalizeDedupKey(identifier.value),
+  );
 
 /**
  * Extract citation references from decision text.
