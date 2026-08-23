@@ -191,6 +191,25 @@ describe("canonical chat UI projection", () => {
 
     expect(projectCanonicalChatUIMessages([message]).at(0)).toBe(message);
   });
+
+  test("preserves protocol-partial built-in calls with progressive input", () => {
+    const message = {
+      id: "assistant-progressive-input",
+      parts: [
+        {
+          arguments: '{"name":"Contract',
+          id: "create-document-1",
+          input: { name: "Contract", source: "@title Contract" },
+          name: "create-document",
+          state: "input-streaming",
+          type: "tool-call",
+        },
+      ],
+      role: "assistant",
+    } satisfies PersistedChatMessage;
+
+    expect(projectCanonicalChatUIMessages([message]).at(0)).toBe(message);
+  });
 });
 
 describe("chat tool titles", () => {

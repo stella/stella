@@ -1053,7 +1053,11 @@ const isCanonicalBuiltInToolCall = (
     return false;
   }
   if (value.state === "awaiting-input" || value.state === "input-streaming") {
-    return !("input" in value) || value.input === undefined;
+    return (
+      !("input" in value) ||
+      value.input === undefined ||
+      isJsonObject(value.input)
+    );
   }
   return "input" in value && isJsonObject(value.input);
 };

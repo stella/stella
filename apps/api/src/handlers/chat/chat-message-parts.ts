@@ -1421,7 +1421,7 @@ const chatPartToPersistedV3Part = ({
       }
       content = { type: "paired-output-parts" };
     } else if (part.content !== stringifyPersistedJsonValue(output)) {
-      panic(`Tool result ${part.toolCallId} disagrees with canonical output`);
+      content = { type: "text", value: part.content };
     }
     return {
       ...(content === undefined ? {} : { content }),

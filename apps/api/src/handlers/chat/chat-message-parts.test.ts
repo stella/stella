@@ -290,7 +290,39 @@ describe("persisted chat message parts", () => {
     });
   });
 
-  test("rejects a completed result that disagrees with canonical output", () => {
+  test("preserves string result content that differs from canonical output", () => {
+    const parts = [
+      {
+        arguments: "{}",
+        id: "formatted-output",
+        input: {},
+        name: "mcp__external__search",
+        output: { value: "canonical" },
+        state: "complete",
+        type: "tool-call",
+      },
+      {
+        content: "Provider-formatted result",
+        state: "complete",
+        toolCallId: "formatted-output",
+        type: "tool-result",
+      },
+    ] as const satisfies ChatPart[];
+
+    const persisted = toPersistedChatMessageContentV3({ data: [...parts] });
+
+    expect(persisted.data.at(1)).toEqual({
+      content: { type: "text", value: "Provider-formatted result" },
+      state: "complete",
+      toolCallId: "formatted-output",
+      type: "tool-result",
+    });
+    expect(normalizePersistedChatMessageContent(persisted).parts).toEqual(
+      parts,
+    );
+  });
+
+  test("rejects rich result content that disagrees with canonical output", () => {
     expect(() =>
       toPersistedChatMessageContentV3({
         data: [
@@ -299,12 +331,12 @@ describe("persisted chat message parts", () => {
             id: "mismatched-output",
             input: {},
             name: "mcp__external__search",
-            output: { value: "canonical" },
+            output: [{ content: "canonical", type: "text" }],
             state: "complete",
             type: "tool-call",
           },
           {
-            content: '{"value":"stale"}',
+            content: [{ content: "stale", type: "text" }],
             state: "complete",
             toolCallId: "mismatched-output",
             type: "tool-result",
