@@ -1,7 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
+import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
+import type { DecisionIdentifiers } from "@stll/legal-ast/decision-identifier";
+
 import {
   bareCitationKey,
+  decisionIdentifiersFromMetadata,
   extractCitations,
   isSelfCitation,
 } from "@/api/handlers/case-law/ingestion/citation-extractor";
@@ -78,7 +82,10 @@ describe("extractCitations", () => {
     const citations = extractCitations([{ index: 0, text }]);
     expect(citations).toHaveLength(1);
     expect(
-      isSelfCitation("C‑128/22", { caseNumber: "C-128/22", ecli: null }),
+      isSelfCitation(
+        "C‑128/22",
+        decisionIdentifiersFromMetadata({ caseNumber: "C-128/22" }),
+      ),
     ).toBe(true);
   });
 
@@ -433,10 +440,12 @@ describe("extractCitations", () => {
 
   test("recognizes a self-citation to an insolvency case number spelled with a different separator", () => {
     expect(
-      isSelfCitation("č. j. KSCB 26INS/8270/2018", {
-        caseNumber: "KSCB 26 INS 8270/2018",
-        ecli: null,
-      }),
+      isSelfCitation(
+        "č. j. KSCB 26INS/8270/2018",
+        decisionIdentifiersFromMetadata({
+          caseNumber: "KSCB 26 INS 8270/2018",
+        }),
+      ),
     ).toBe(true);
   });
 
@@ -456,10 +465,12 @@ describe("extractCitations", () => {
 
   test("recognizes a self-citation to an insolvency case number whose stored court code is not uppercase", () => {
     expect(
-      isSelfCitation("č. j. MSPH 99 INS 19057/2012", {
-        caseNumber: "Msph 99 INS 19057/2012",
-        ecli: null,
-      }),
+      isSelfCitation(
+        "č. j. MSPH 99 INS 19057/2012",
+        decisionIdentifiersFromMetadata({
+          caseNumber: "Msph 99 INS 19057/2012",
+        }),
+      ),
     ).toBe(true);
   });
 
@@ -469,10 +480,10 @@ describe("extractCitations", () => {
     expect(citations).toHaveLength(1);
     expect(citations[0]?.citationText).toBe("č. j.: 137 Ex 1850/23");
     expect(
-      isSelfCitation("č. j.: 137 Ex 1850/23", {
-        caseNumber: "137 Ex 1850/23",
-        ecli: null,
-      }),
+      isSelfCitation(
+        "č. j.: 137 Ex 1850/23",
+        decisionIdentifiersFromMetadata({ caseNumber: "137 Ex 1850/23" }),
+      ),
     ).toBe(true);
   });
 
@@ -988,10 +999,10 @@ describe("extractCitations", () => {
     expect(citations).toHaveLength(1);
     expect(citations[0]?.citationText).toBe("č. k. 4 Obo 48/02");
     expect(
-      isSelfCitation("č. k. 4 Obo 48/02", {
-        caseNumber: "4 Obo 48/02",
-        ecli: null,
-      }),
+      isSelfCitation(
+        "č. k. 4 Obo 48/02",
+        decisionIdentifiersFromMetadata({ caseNumber: "4 Obo 48/02" }),
+      ),
     ).toBe(true);
   });
 
@@ -1891,10 +1902,10 @@ describe("extractCitations", () => {
 });
 
 describe("isSelfCitation", () => {
-  const decision = {
+  const decision = decisionIdentifiersFromMetadata({
     caseNumber: "21 Cdo 1234/2020",
     ecli: "ECLI:CZ:NS:2020:21.CDO.1234.2020.1",
-  };
+  });
 
   test("detects ECLI self-reference", () => {
     expect(isSelfCitation("ECLI:CZ:NS:2020:21.CDO.1234.2020.1", decision)).toBe(
@@ -1925,22 +1936,56 @@ describe("isSelfCitation", () => {
   });
 
   test("case-insensitive match", () => {
-    const d = { caseNumber: "21 cdo 1234/2020" };
+    const d = decisionIdentifiersFromMetadata({
+      caseNumber: "21 cdo 1234/2020",
+    });
     expect(isSelfCitation("sp. zn. 21 Cdo 1234/2020", d)).toBe(true);
   });
 
   test("detects sygn. akt self-reference (Polish)", () => {
-    const d = { caseNumber: "II CSK 123/20" };
+    const d = decisionIdentifiersFromMetadata({ caseNumber: "II CSK 123/20" });
     expect(isSelfCitation("sygn. akt II CSK 123/20", d)).toBe(true);
   });
 
   test("detects sygn. self-reference without akt", () => {
-    const d = { caseNumber: "II CSK 123/20" };
+    const d = decisionIdentifiersFromMetadata({ caseNumber: "II CSK 123/20" });
     expect(isSelfCitation("sygn. II CSK 123/20", d)).toBe(true);
   });
 
   test("returns false when decision has no ECLI", () => {
-    const d = { caseNumber: "21 Cdo 1234/2020" };
+    const d = decisionIdentifiersFromMetadata({
+      caseNumber: "21 Cdo 1234/2020",
+    });
     expect(isSelfCitation("ECLI:CZ:NS:2019:30.CDO.5678.2019.1", d)).toBe(false);
+  });
+
+  test("detects any parallel reporter citation", () => {
+    const identifiers = [
+      {
+        type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+        value: "A-123",
+      },
+      {
+        type: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
+        value: "12 Example Reports 34",
+      },
+      {
+        type: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
+        value: "56 Parallel Reports 78",
+      },
+    ] as const satisfies DecisionIdentifiers;
+
+    expect(isSelfCitation("56 Parallel Reports 78", identifiers)).toBe(true);
+  });
+
+  test("detects a neutral citation", () => {
+    const identifiers = [
+      {
+        type: DECISION_IDENTIFIER_TYPES.NEUTRAL_CITATION,
+        value: "[2026] Example Court 12",
+      },
+    ] as const satisfies DecisionIdentifiers;
+
+    expect(isSelfCitation("[2026] Example Court 12", identifiers)).toBe(true);
   });
 });

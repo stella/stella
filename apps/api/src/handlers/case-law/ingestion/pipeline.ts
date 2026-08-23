@@ -40,6 +40,7 @@ import { getAdapter } from "@/api/handlers/case-law/ingestion/adapters/adapter-r
 import {
   bareCitationKey,
   citationKeyOf,
+  decisionIdentifiersFromMetadata,
   extractCitations,
   isSelfCitation,
 } from "@/api/handlers/case-law/ingestion/citation-extractor";
@@ -1259,15 +1260,13 @@ const processDecisionAttempt = async ({
     (caseNumber) => bareCitationKey(caseNumber),
   );
 
+  const decisionIdentifiers = decisionIdentifiersFromMetadata({
+    caseNumber: result.caseNumber,
+    ecli: result.ecli ?? null,
+  });
   const citations = extractCitations(
     sections.map((s) => ({ index: s.index, text: s.text })),
-  ).filter(
-    (c) =>
-      !isSelfCitation(c.citationText, {
-        caseNumber: result.caseNumber,
-        ecli: result.ecli ?? null,
-      }),
-  );
+  ).filter((c) => !isSelfCitation(c.citationText, decisionIdentifiers));
 
   // Where the publisher supplies its own cited-decisions list, it is the
   // one ground truth extraction can be measured against without measuring

@@ -35,6 +35,10 @@
       "types": "./src/document-ast.ts",
       "import": "./src/document-ast.ts"
     },
+    "./decision-identifier": {
+      "types": "./src/decision-identifier.ts",
+      "import": "./src/decision-identifier.ts"
+    },
     "./inline": {
       "types": "./src/inline.ts",
       "import": "./src/inline.ts"
@@ -42,6 +46,10 @@
     "./statute-ast": {
       "types": "./src/statute-ast.ts",
       "import": "./src/statute-ast.ts"
+    },
+    "./text-sanitize": {
+      "types": "./src/text-sanitize.ts",
+      "import": "./src/text-sanitize.ts"
     }
   },
   "scripts": {
