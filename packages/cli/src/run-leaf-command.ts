@@ -168,10 +168,6 @@ export const hasInputPath = (
   return node !== undefined;
 };
 
-type ArgsResult =
-  | { ok: true; args: Record<string, unknown> }
-  | { ok: false; message: string };
-
 const parseBoundedInt = (
   spec: FlagSpec,
   raw: string,
@@ -294,6 +290,46 @@ export const coerceFlagValue = async (
   return Result.ok(raw);
 };
 
+type ArgsResult =
+  | { ok: true; args: Record<string, unknown> }
+  | { ok: false; message: string };
+
+type ComposeInputFromFlagsOptions<T extends FlagSpec> = {
+  base: Record<string, unknown>;
+  flagPath: (flagSpec: T) => string;
+  flagSpecs: readonly T[];
+  flags: LeafFlags;
+};
+
+export const composeInputFromFlags = async <T extends FlagSpec>({
+  base,
+  flagPath,
+  flagSpecs,
+  flags,
+}: ComposeInputFromFlagsOptions<T>): Promise<ArgsResult> => {
+  for (const flagSpec of flagSpecs) {
+    const path = flagPath(flagSpec);
+    const value = flags[flagKey(flagSpec)];
+    if (!flagValueProvided(flagSpec, value)) {
+      continue;
+    }
+    // eslint-disable-next-line no-await-in-loop -- @file/@- reads must stay sequential
+    const coerced = await coerceFlagValue(flagSpec, value);
+    if (Result.isError(coerced)) {
+      return { ok: false, message: coerced.error };
+    }
+    setPath(base, path, coerced.value);
+  }
+
+  for (const flagSpec of flagSpecs) {
+    if (flagSpec.required && !hasInputPath(base, flagPath(flagSpec))) {
+      return { ok: false, message: `missing required flag ${flagSpec.flag}` };
+    }
+  }
+
+  return { ok: true, args: base };
+};
+
 /**
  * Overlay parsed value flags onto `base` (spec S3). `base` is the args object
  * built from `--input` (or `{}` when no `--input` was given): each SET flag is
@@ -305,34 +341,15 @@ export const buildArgsFromFlags = async (
   spec: LeafCommandSpec,
   flags: LeafFlags,
   base: Record<string, unknown> = {},
-): Promise<ArgsResult> => {
-  const args = base;
+): Promise<ArgsResult> =>
+  await composeInputFromFlags({
+    base,
+    flagPath: (flagSpec) => flagSpec.prop,
+    flagSpecs: spec.flags,
+    flags,
+  });
 
-  for (const flagSpec of spec.flags) {
-    const value = flags[flagKey(flagSpec)];
-    if (!flagValueProvided(flagSpec, value)) {
-      continue;
-    }
-    // eslint-disable-next-line no-await-in-loop -- @file/@- reads must stay sequential
-    const coerced = await coerceFlagValue(flagSpec, value);
-    if (Result.isError(coerced)) {
-      return { ok: false, message: coerced.error };
-    }
-    setPath(args, flagSpec.prop, coerced.value);
-  }
-
-  // Enforce required flags (spec S3): unset AND absent from `--input` -> usage
-  // error (exit 2 upstream), naming the missing flag.
-  for (const flagSpec of spec.flags) {
-    if (flagSpec.required && !hasInputPath(args, flagSpec.prop)) {
-      return { ok: false, message: `missing required flag ${flagSpec.flag}` };
-    }
-  }
-
-  return { ok: true, args };
-};
-
-const buildArgsFromInput = async ({
+export const parseInputObject = async ({
   inputRaw,
   writers,
 }: {
@@ -965,19 +982,25 @@ export const renderToolError = ({
   setExit(context, classifyToolError(errorPayload));
 };
 
-const renderCallResult = ({
-  context,
-  spec,
-  result,
-  format,
-  writers,
-}: {
+type RenderCommandResultOptions = {
   context: Context;
-  spec: LeafCommandSpec;
-  result: CallToolResult;
   format: OutputFormat;
+  itemsKey: string | undefined;
+  result: CallToolResult;
+  windowedText: boolean;
   writers: Writers;
-}): void => {
+  writeReceipt: boolean;
+};
+
+export const renderCommandResult = ({
+  context,
+  format,
+  itemsKey,
+  result,
+  windowedText,
+  writers,
+  writeReceipt,
+}: RenderCommandResultOptions): void => {
   if (result.isError) {
     renderToolError({ context, result, writers });
     return;
@@ -989,8 +1012,8 @@ const renderCallResult = ({
   }
   const plan = buildRenderPlan({
     payload,
-    itemsKey: spec.itemsKey,
-    windowedText: spec.windowedText,
+    itemsKey,
+    windowedText,
     singleReadActive: false,
     columns: undefined,
   });
@@ -1005,6 +1028,12 @@ const renderCallResult = ({
   });
   if (hint !== null) {
     writers.stderr(`${hint}\n`);
+  }
+  if (writeReceipt) {
+    const requestId = readRequestReceipt(payload);
+    if (requestId !== undefined) {
+      writers.stderr(requestIdLine(requestId, context.process.stderr.isTTY));
+    }
   }
 };
 
@@ -1044,7 +1073,7 @@ export const runLeafCommand = async ({
   const inputRaw = flags[RESERVED_FLAG_KEYS.input];
   const argsBase =
     typeof inputRaw === "string"
-      ? await buildArgsFromInput({ inputRaw, writers })
+      ? await parseInputObject({ inputRaw, writers })
       : {};
   if (argsBase === undefined) {
     setExit(context, EXIT_CODES.validation);
@@ -1114,6 +1143,17 @@ export const runLeafCommand = async ({
     spec.windowedText && !explicitJson
       ? "table"
       : readOutputFormat(flags, context);
+  const renderCall = (result: CallToolResult) => {
+    renderCommandResult({
+      context,
+      format,
+      itemsKey: spec.itemsKey,
+      result,
+      windowedText: spec.windowedText,
+      writers,
+      writeReceipt: false,
+    });
+  };
   const allActive = spec.paginated && flags[RESERVED_FLAG_KEYS.all] === true;
 
   // Reserved pagination flags map onto the tool's cursor/limit args (spec S3).
@@ -1162,22 +1202,25 @@ export const runLeafCommand = async ({
     return;
   }
 
-  const retried = await maybeConfirmRetry({
+  const retried = await maybeConfirmAndRetry({
     args,
     call: call.value,
     context,
+    enabled: spec.confirmPassthrough === true,
     flags,
-    format,
+    label: spec.commandPath.join(" "),
+    renderCall,
     serverUrl,
-    spec,
+    timeoutMs: spec.requestTimeoutMs,
     token,
+    toolName: spec.toolName,
     writers,
   });
   if (retried) {
     return;
   }
 
-  renderCallResult({ context, spec, result: call.value, format, writers });
+  renderCall(call.value);
 };
 
 type ConfirmGateOutcome = { aborted: boolean; args: Record<string, unknown> };
@@ -1189,7 +1232,7 @@ type ConfirmGateOutcome = { aborted: boolean; args: Record<string, unknown> };
  *  - a confirm-PASSTHROUGH leaf (per-target destructiveness, e.g.
  *    `capability invoke`) never prompts upfront, but --yes pre-approves the
  *    server's confirmation_required gate by injecting `confirm: true`; without
- *    --yes the post-call prompt-and-retry flow (`maybeConfirmRetry`) handles it.
+ *    --yes the post-call prompt-and-retry flow handles it.
  */
 const applyConfirmGates = async ({
   args,
@@ -1235,18 +1278,21 @@ type ConfirmRetryOptions = {
   args: Record<string, unknown>;
   call: CallToolResult;
   context: Context;
+  enabled: boolean;
   flags: LeafFlags;
-  format: OutputFormat;
+  label: string;
+  renderCall: (result: CallToolResult) => void;
   serverUrl: string;
-  spec: LeafCommandSpec;
+  timeoutMs: number | undefined;
   token: string;
+  toolName: string;
   writers: Writers;
 };
 
 /**
  * Confirm-passthrough prompt-and-retry: when a call WITHOUT `confirm` comes
- * back `confirmation_required` on a confirm-passthrough leaf and stdin is a
- * TTY, ask the human exactly like the destructive prompt and retry ONCE with
+ * back `confirmation_required` for an eligible command and stdin is a TTY, ask
+ * the human exactly like the destructive prompt and retry ONCE with
  * `confirm: true`. Returns true when it fully handled the command (rendered a
  * retry result, a retry transport error, or a terminal abort); false lets the
  * caller render the original envelope, so every non-TTY call keeps today's
@@ -1254,19 +1300,22 @@ type ConfirmRetryOptions = {
  * `aborted` line, exit 7, no envelope render on top — matching the pre-call
  * destructive abort flow and the capability executor.
  */
-const maybeConfirmRetry = async ({
+export const maybeConfirmAndRetry = async ({
   args,
   call,
   context,
+  enabled,
   flags,
-  format,
+  label,
+  renderCall,
   serverUrl,
-  spec,
+  timeoutMs,
   token,
+  toolName,
   writers,
 }: ConfirmRetryOptions): Promise<boolean> => {
   if (
-    spec.confirmPassthrough !== true ||
+    !enabled ||
     call.isError !== true ||
     args["confirm"] === true ||
     !context.process.stdin.isTTY
@@ -1281,7 +1330,7 @@ const maybeConfirmRetry = async ({
     context,
     flags,
     writers,
-    label: spec.commandPath.join(" "),
+    label,
   });
   if (outcome !== "proceed") {
     writers.stderr("aborted\n");
@@ -1291,17 +1340,15 @@ const maybeConfirmRetry = async ({
   const retry = await callTool({
     serverUrl,
     token,
-    name: spec.toolName,
+    name: toolName,
     args: { ...args, confirm: true },
-    ...(spec.requestTimeoutMs === undefined
-      ? {}
-      : { timeoutMs: spec.requestTimeoutMs }),
+    ...(timeoutMs === undefined ? {} : { timeoutMs }),
   });
   if (Result.isError(retry)) {
     writers.stderr(`${retry.error.message}\n`);
     setExit(context, mapClientErrorExit(retry.error));
     return true;
   }
-  renderCallResult({ context, spec, result: retry.value, format, writers });
+  renderCall(retry.value);
   return true;
 };
