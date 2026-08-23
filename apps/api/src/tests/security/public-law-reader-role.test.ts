@@ -8,9 +8,7 @@ import {
   stellaCaseLawReader,
   stellaPublicLawReader,
 } from "@/api/db/rls";
-import {
-  listDecisionsHandler,
-} from "@/api/handlers/case-law/decisions/list";
+import { listDecisionsHandler } from "@/api/handlers/case-law/decisions/list";
 import { rehydrateCaseLawCandidates } from "@/api/handlers/case-law/decisions/search";
 import {
   listSitemapShardDecisionsHandler,
