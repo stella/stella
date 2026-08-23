@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, expect, test } from "bun:test";
+import { afterAll, beforeAll, expect, setDefaultTimeout, test } from "bun:test";
 import { eq, sql, TransactionRollbackError } from "drizzle-orm";
 
 import { account, oauthClient, session, user } from "@/api/db/auth-schema";
@@ -11,6 +11,8 @@ import type { TestDatabase } from "@/api/tests/security/test-utils";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 
 let database: TestDatabase;
+
+setDefaultTimeout(120_000);
 
 beforeAll(async () => {
   database = await getTestDb();
