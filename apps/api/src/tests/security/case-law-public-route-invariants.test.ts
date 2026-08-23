@@ -156,6 +156,9 @@ describe("public case-law route boundary", () => {
       "connectionTimeout: EXTERNAL_PUBLIC_LAW_CONNECTION_TIMEOUT_SECONDS",
     );
     expect(validation).toContain(".transaction(async (tx) =>");
+    expect(validation).toContain(
+      "await tx.execute(sql`SET LOCAL statement_timeout = '30s'`)",
+    );
     expect(
       validation.indexOf("configureExternalReadTransaction(tx)"),
     ).toBeLessThan(validation.indexOf("validateExternalPublicLawDatabase(tx)"));

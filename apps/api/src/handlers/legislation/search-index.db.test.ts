@@ -3,7 +3,6 @@ import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import type { Transaction } from "@/api/db/root";
-import type { ScopedDb } from "@/api/db/safe-db";
 import {
   legislationDocuments,
   legislationSearchDocuments,
@@ -18,6 +17,10 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { formatCorpusLocation } from "@/api/lib/legal-search/corpus-location";
 import { packKey } from "@/api/lib/legal-search/corpus-pack";
 import type { DecisionSection } from "@/api/lib/legal-search/document-types";
+import type {
+  LegislationReadDb,
+  LegislationReadTransaction,
+} from "@/api/lib/legislation-public-read-db";
 import { brandPersistedLegislationDocumentId } from "@/api/lib/safe-id-boundaries";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
@@ -77,7 +80,7 @@ const scopedDb: Parameters<typeof indexLegislationDocument>[1] = async (
   // eslint-disable-next-line typescript/no-unsafe-type-assertion -- test transaction shim
   await callback(db as unknown as Transaction);
 
-const searchScopedDb: ScopedDb = async (callback) => {
+const searchReadDb: LegislationReadDb = async (callback) => {
   const tx = new Proxy(db, {
     get: (target, property, receiver) => {
       if (property !== "execute") {
@@ -90,7 +93,7 @@ const searchScopedDb: ScopedDb = async (callback) => {
   // SAFETY: the proxy preserves the PGlite DB and adapts only execute's result
   // shape to match the production driver used by this search boundary.
   // eslint-disable-next-line typescript/no-unsafe-type-assertion -- test transaction shim
-  return await callback(tx as unknown as Transaction);
+  return await callback(tx as unknown as LegislationReadTransaction);
 };
 
 const seedDocument = ({
@@ -290,7 +293,7 @@ test("an unreadable corpus row does not block the bounded missing scan", async (
   expect(
     await searchLegislationHandler(
       { query: "retry pending sentinel" },
-      searchScopedDb,
+      searchReadDb,
       searchDependencies,
     ),
   ).toMatchObject({ hits: [] });
@@ -318,7 +321,7 @@ test("an unreadable corpus row does not block the bounded missing scan", async (
   expect(
     await searchLegislationHandler(
       { query: "repaired corpus sentinel" },
-      searchScopedDb,
+      searchReadDb,
       searchDependencies,
     ),
   ).toMatchObject({ hits: [{ documentId: unavailableCorpusId }] });

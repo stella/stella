@@ -18,7 +18,10 @@ import type {
 } from "@/api/lib/case-law-public-read-db";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
-import { createTestPglite } from "@/api/tests/pglite-test-db";
+import {
+  createTestPglite,
+  withPublicLawReaderRole,
+} from "@/api/tests/pglite-test-db";
 
 const openSourceId = createSafeId<"caseLawSource">();
 const closedSourceId = createSafeId<"caseLawSource">();
@@ -55,14 +58,16 @@ beforeAll(
       options?: { isolation?: string },
     ) => {
       opened.push(options?.isolation);
-      // A fresh delegating handle per open, so a read that reached for its
-      // own transaction is visible as a different object, not just a count.
-      // SAFETY: a delegating view of the embedded database; the reads only
-      // use its select surface.
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test handle stands in for a transaction
-      const tx = Object.create(db) as CaseLawPublicReadTransaction;
-      handles.push(tx);
-      return await fn(tx);
+      return await withPublicLawReaderRole(db, async (roleTx) => {
+        // A fresh delegating handle per open, so a read that reached for its
+        // own transaction is visible as a different object, not just a count.
+        // SAFETY: a delegating view of the role transaction; the reads only
+        // use its select surface.
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test handle stands in for a transaction
+        const tx = Object.create(roleTx) as CaseLawPublicReadTransaction;
+        handles.push(tx);
+        return await fn(tx);
+      });
     };
     // SAFETY: brand-only wrapper; the reads never inspect the marker.
     // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- the branded handle carries no behaviour

@@ -19,7 +19,10 @@ import {
   parsePersistedCorpusAst,
 } from "@/api/lib/legal-search/corpus-storage";
 import type { EmptyAst } from "@/api/lib/legal-search/document-types";
-import type { LegislationReadDb } from "@/api/lib/legislation-public-read-db";
+import {
+  legislationPublicReadDb,
+  type LegislationReadDb,
+} from "@/api/lib/legislation-public-read-db";
 
 const LEGISLATION_TEXT_MODE = {
   ALWAYS: "always",
@@ -170,7 +173,7 @@ const config = {
   description:
     "Read one legislation document from the stella corpus by id: its ELI, " +
     "title, country, language, document type, status, effective and " +
-    "version-validity dates, source links, metadata, full text, and parsed " +
+    "version-validity dates, source links, full text, and parsed " +
     "structure. Only documents from sources cleared for redistribution are " +
     "returned; anything else reads as not found.",
   permissions: { workspace: ["read"] },
@@ -181,10 +184,14 @@ const config = {
 
 const readLegislation = createSafeRootHandler(
   config,
-  async function* ({ params: { documentId }, scopedDb }) {
+  async function* ({ params: { documentId } }) {
     const response = yield* Result.await(
       Result.tryPromise(
-        async () => await readLegislationHandler(documentId, scopedDb),
+        async () =>
+          await readPublicLegislationHandler(
+            documentId,
+            legislationPublicReadDb,
+          ),
       ),
     );
     return Result.ok(response);

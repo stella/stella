@@ -25,6 +25,16 @@ describe("external public-law database boundary", () => {
     expect(PUBLIC_LAW_COLUMNS_BY_RELATION.legislation_sources).not.toContain(
       "config",
     );
+    expect(PUBLIC_LAW_COLUMNS_BY_RELATION.legislation_documents).toEqual(
+      expect.arrayContaining([
+        "citation_authority",
+        "content_hash",
+        "indexed_hash",
+      ]),
+    );
+    expect(PUBLIC_LAW_COLUMNS_BY_RELATION.legislation_documents).not.toContain(
+      "metadata",
+    );
   });
 
   test("accepts the exact public-law reader", () => {

@@ -13,6 +13,12 @@ import {
   publicLawDatabaseRolePermissionsSql,
   type PublicLawDatabaseRolePermissions,
 } from "@/api/lib/public-law-read-db";
+import { rehydrateLegislationCandidates } from "@/api/handlers/legislation/search";
+import { createSafeId } from "@/api/lib/branded-types";
+import type {
+  LegislationReadDb,
+  LegislationReadTransaction,
+} from "@/api/lib/legislation-public-read-db";
 import {
   PUBLIC_LAW_COLUMNS_BY_RELATION,
   ROLLOUT_CASE_LAW_RELATIONS,
@@ -40,6 +46,22 @@ const errorMessageChain = (error: unknown): string => {
   }
   return messages.join(" | ");
 };
+
+const forbiddenColumnRead = async (
+  relation: string,
+  column: string,
+): Promise<unknown> =>
+  await testDb
+    .transaction(async (tx) => {
+      await tx.execute(sql.raw(`SET LOCAL ROLE ${quoted(READER_ROLE)}`));
+      await tx.execute(
+        sql.raw(`SELECT ${quoted(column)} FROM ${quoted(relation)}`),
+      );
+    })
+    .then(
+      () => null,
+      (error: unknown) => error,
+    );
 
 const expectedQualifiedColumns = Object.entries(PUBLIC_LAW_COLUMNS_BY_RELATION)
   .flatMap(([relation, columns]) =>
@@ -162,15 +184,10 @@ describe("public-law reader role", () => {
         );
       }
     });
-    const operationalColumnRejection: unknown = await testDb
-      .transaction(async (tx) => {
-        await tx.execute(sql.raw(`SET LOCAL ROLE ${quoted(READER_ROLE)}`));
-        await tx.execute(sql.raw('SELECT "config" FROM "legislation_sources"'));
-      })
-      .then(
-        () => null,
-        (error: unknown) => error,
-      );
+    const operationalColumnRejection = await forbiddenColumnRead(
+      "legislation_sources",
+      "config",
+    );
     expect(operationalColumnRejection).toBeInstanceOf(Error);
     expect(errorMessageChain(operationalColumnRejection)).toContain(
       "permission denied",
@@ -178,6 +195,39 @@ describe("public-law reader role", () => {
     expect(errorMessageChain(operationalColumnRejection)).toContain(
       "legislation_sources",
     );
+
+    const publisherPayloadRejection = await forbiddenColumnRead(
+      "legislation_documents",
+      "metadata",
+    );
+    expect(publisherPayloadRejection).toBeInstanceOf(Error);
+    expect(errorMessageChain(publisherPayloadRejection)).toContain(
+      "permission denied",
+    );
+    expect(errorMessageChain(publisherPayloadRejection)).toContain(
+      "legislation_documents",
+    );
+  });
+
+  test("executes the production legislation rehydration query as the reader role", async () => {
+    const legislationDb: LegislationReadDb = async (fn) =>
+      await testDb.transaction(async (tx) => {
+        await tx.execute(sql.raw(`SET LOCAL ROLE ${quoted(READER_ROLE)}`));
+        // SAFETY: the production Postgres transaction supplies the exact
+        // select/execute surface exposed by LegislationReadTransaction.
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- role-scoped production query census
+        return await fn(tx as unknown as LegislationReadTransaction);
+      });
+
+    const result = await rehydrateLegislationCandidates({
+      body: { query: "reader role census" },
+      candidates: [
+        { id: createSafeId<"legislationDocument">(), score: 1 },
+      ],
+      legislationDb,
+    });
+
+    expect(result.ranked).toEqual([]);
   });
 
   test("preserves the v0.7.22 reader during the rollout window", async () => {

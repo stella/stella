@@ -28,7 +28,10 @@ import type {
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
-import { createTestPglite } from "@/api/tests/pglite-test-db";
+import {
+  createTestPglite,
+  withPublicLawReaderRole,
+} from "@/api/tests/pglite-test-db";
 
 const openSourceId = createSafeId<"caseLawSource">();
 const closedSourceId = createSafeId<"caseLawSource">();
@@ -76,9 +79,12 @@ beforeAll(
     const readDb = async <T>(
       fn: (tx: CaseLawPublicReadTransaction) => Promise<T>,
     ) =>
-      // SAFETY: pglite's drizzle instance satisfies the select-only read surface.
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- embedded test database stands in for the read handle
-      await fn(db as unknown as CaseLawPublicReadTransaction);
+      await withPublicLawReaderRole(db, async (tx) =>
+        // SAFETY: the role transaction has the same Drizzle read surface as
+        // the public-law handle; writes remain on the owner database above.
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- PGlite test transaction stands in for the public read handle
+        await fn(tx as unknown as CaseLawPublicReadTransaction),
+      );
     // SAFETY: brand-only wrapper; the reads never inspect the marker.
     // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- the branded handle carries no behaviour
     caseLawDb = readDb as unknown as CaseLawPublicReadDb;

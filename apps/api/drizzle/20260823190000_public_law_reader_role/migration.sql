@@ -102,8 +102,11 @@ GRANT SELECT (
   document_ast,
   source_url,
   document_url,
+  citation_authority,
   text_s3_key,
   ast_s3_key,
+  content_hash,
+  indexed_hash,
   created_at,
   updated_at
 ) ON TABLE "legislation_documents" TO stella_public_law_reader;--> statement-breakpoint

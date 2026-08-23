@@ -180,7 +180,7 @@ const validateExternalPublicLawDatabase = async (
  * The isolation statement, first in the transaction so it binds the snapshot
  * before any read takes one.
  */
-const beginReadTransaction = async (
+const configureReadTransaction = async (
   tx: Pick<Transaction, "execute">,
   isolation: PublicLawReadIsolation,
 ): Promise<void> => {
@@ -189,14 +189,14 @@ const beginReadTransaction = async (
       ? sql`SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY`
       : sql`SET TRANSACTION READ ONLY`,
   );
+  await tx.execute(sql`SET LOCAL statement_timeout = '30s'`);
 };
 
 const configureExternalReadTransaction = async (
   tx: Transaction,
   isolation: PublicLawReadIsolation = "read-committed",
 ): Promise<void> => {
-  await beginReadTransaction(tx, isolation);
-  await tx.execute(sql`SET LOCAL statement_timeout = '30s'`);
+  await configureReadTransaction(tx, isolation);
   await tx.execute(sql`SET LOCAL lock_timeout = '1s'`);
   await tx.execute(sql`SET LOCAL idle_in_transaction_session_timeout = '30s'`);
 };
@@ -288,7 +288,7 @@ export const publicLawReadDb = async <T>(
     if (envBase.PUBLIC_LAW_DATABASE_URL !== undefined) {
       await configureExternalReadTransaction(tx, isolation);
     } else {
-      await beginReadTransaction(tx, isolation);
+      await configureReadTransaction(tx, isolation);
     }
 
     return await fn(tx);

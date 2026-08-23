@@ -1,11 +1,13 @@
 import { PGlite } from "@electric-sql/pglite";
 import { pg_trgm } from "@electric-sql/pglite/contrib/pg_trgm";
 import { sql } from "drizzle-orm";
+import type { SQLWrapper } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import * as agentAuthSchema from "@/api/db/agent-auth-schema";
 import * as authSchema from "@/api/db/auth-schema";
 import * as rlsExports from "@/api/db/rls";
+import type { AnyDrizzle } from "@/api/db/scoped";
 import * as schema from "@/api/db/schema";
 import {
   PUBLIC_LAW_COLUMNS_BY_RELATION,
@@ -35,6 +37,29 @@ const allSchema = {
 
 const quoteSqlIdentifier = (identifier: string) =>
   `"${identifier.replaceAll('"', '""')}"`;
+
+/**
+ * Execute a read callback under the same role used by the external public-law
+ * database. Writes in the surrounding test setup stay on the owner handle;
+ * this role change is local to the callback's transaction.
+ */
+type PublicLawRoleTransaction = {
+  execute: (query: SQLWrapper | string) => PromiseLike<unknown>;
+};
+
+export const withPublicLawReaderRole = async <
+  TTransaction extends PublicLawRoleTransaction,
+  TResult,
+>(
+  database: AnyDrizzle<TTransaction>,
+  fn: (tx: TTransaction) => Promise<TResult>,
+): Promise<TResult> =>
+  await database.transaction(async (tx) => {
+    await tx.execute(
+      sql.raw(`SET LOCAL ROLE ${quoteSqlIdentifier(rlsExports.stellaPublicLawReader.name)}`),
+    );
+    return await fn(tx);
+  });
 
 const AUTH_TABLES_SQL = [
   "user",
