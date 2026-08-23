@@ -56,3 +56,17 @@ test("passes a string detail through and serialises other values", () => {
     '{"adapterKey":"cz-us"}',
   );
 });
+
+// `logError` drops a falsy detail, so returning anything but a string here
+// loses the detail entirely — the same silent loss this module exists to
+// stop. Both unserialisable shapes are covered: one throws, one does not.
+test("names a detail it cannot serialise rather than returning nothing", () => {
+  const cyclic: Record<string, unknown> = {};
+  cyclic["self"] = cyclic;
+
+  expect(formatLogDetail(cyclic)).toBe("[unserializable log detail]");
+  expect(formatLogDetail(() => "work")).toBe("[unserializable log detail]");
+  expect(formatLogDetail(Symbol("adapter"))).toBe(
+    "[unserializable log detail]",
+  );
+});

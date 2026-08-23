@@ -15,6 +15,16 @@
  * `name: message` also matches the first line of a stack, so both
  * branches read the same.
  */
+const UNSERIALIZABLE = "[unserializable log detail]";
+
+/**
+ * `JSON.stringify` is declared to return `string`, but returns undefined
+ * for a function, a symbol, or a value whose `toJSON` yields one. Stating
+ * the real signature keeps the fallback below visible to the type checker
+ * rather than looking redundant to it.
+ */
+const serialize = (value: unknown): string | undefined => JSON.stringify(value);
+
 const describeError = (error: Error): string => {
   const { stack } = error;
   return stack !== undefined && stack.length > 0
@@ -40,9 +50,11 @@ export const formatLogDetail = (detail: unknown): string => {
     return detail;
   }
 
+  // Two ways to be unserialisable and only one of them throws: a cyclic
+  // value raises, a function or symbol returns undefined.
   try {
-    return JSON.stringify(detail);
+    return serialize(detail) ?? UNSERIALIZABLE;
   } catch {
-    return "[unserializable log detail]";
+    return UNSERIALIZABLE;
   }
 };
