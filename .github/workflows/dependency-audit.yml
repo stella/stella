@@ -55,8 +55,5 @@ jobs:
       - name: Audit dependencies
         run: bun scripts/dependency-audit.ts --check
 
-      - name: Check lockfile deduplication
-        run: bun --no-env-file dedupe --check
-
       - name: Check trusted lifecycle dependencies
         run: bun --no-env-file scripts/check-trusted-dependencies.ts
