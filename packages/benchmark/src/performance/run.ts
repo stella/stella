@@ -6,8 +6,11 @@ import { createInterface } from "node:readline";
 import { benchmarkGitRevision } from "../git-revision";
 import { verifyCanonicalHost } from "./host";
 import {
+  DEFAULT_PERFORMANCE_SCENARIO_ID,
   PERFORMANCE_INPUT_SOURCE,
+  type PerformanceScenarioId,
   performanceInputSourceDigest,
+  parsePerformanceScenarioId,
 } from "./input";
 import {
   assertPerformanceReport,
@@ -20,6 +23,8 @@ import type { PerformanceSample } from "./sample";
 import { summarize } from "./statistics";
 
 const KIBIBYTE = 1024;
+const MINIMUM_LOCAL_INPUT_BYTES = KIBIBYTE;
+const MAXIMUM_LOCAL_INPUT_BYTES = 1024 * KIBIBYTE;
 const DEFAULT_INPUT_BYTES = [
   48 * KIBIBYTE,
   256 * KIBIBYTE,
@@ -28,12 +33,14 @@ const DEFAULT_INPUT_BYTES = [
 ] as const;
 const DEFAULT_WARMUPS = 3;
 const DEFAULT_SAMPLES = 20;
+const DEFAULT_SCENARIOS = [DEFAULT_PERFORMANCE_SCENARIO_ID] as const;
 
 type CliOptions = {
   readonly mode: "local" | "canonical";
   readonly warmups: number;
   readonly samples: number;
   readonly inputBytes: readonly number[];
+  readonly scenarios: readonly PerformanceScenarioId[];
   readonly outputPath: string | undefined;
 };
 
@@ -50,6 +57,7 @@ export const parsePerformanceArgs = (args: readonly string[]): CliOptions => {
   let warmups = DEFAULT_WARMUPS;
   let samples = DEFAULT_SAMPLES;
   let inputBytes: readonly number[] = DEFAULT_INPUT_BYTES;
+  let scenarios: readonly PerformanceScenarioId[] = DEFAULT_SCENARIOS;
   let outputPath: string | undefined;
   for (const argument of args) {
     if (argument === "--canonical") {
@@ -72,6 +80,10 @@ export const parsePerformanceArgs = (args: readonly string[]): CliOptions => {
         .map((size) => positiveInteger(size, name) * KIBIBYTE);
       continue;
     }
+    if (name === "--scenarios") {
+      scenarios = value.split(",").map(parsePerformanceScenarioId);
+      continue;
+    }
     if (name === "--output") {
       if (value === "") throw new Error("--output must not be empty");
       outputPath = resolve(value);
@@ -81,10 +93,20 @@ export const parsePerformanceArgs = (args: readonly string[]): CliOptions => {
   }
   if (
     inputBytes.some(
-      (size) => size < DEFAULT_INPUT_BYTES[0] || size > DEFAULT_INPUT_BYTES[3],
+      (size) =>
+        size < MINIMUM_LOCAL_INPUT_BYTES || size > MAXIMUM_LOCAL_INPUT_BYTES,
     )
   ) {
-    throw new Error("performance sizes must remain between 48 KiB and 1 MiB");
+    throw new Error("performance sizes must remain between 1 KiB and 1 MiB");
+  }
+  if (new Set(inputBytes).size !== inputBytes.length) {
+    throw new Error("performance sizes must not contain duplicates");
+  }
+  if (scenarios.length === 0) {
+    throw new Error("performance scenarios must not be empty");
+  }
+  if (new Set(scenarios).size !== scenarios.length) {
+    throw new Error("performance scenarios must not contain duplicates");
   }
   if (mode === "canonical") {
     if (warmups < DEFAULT_WARMUPS || samples < DEFAULT_SAMPLES) {
@@ -100,8 +122,16 @@ export const parsePerformanceArgs = (args: readonly string[]): CliOptions => {
         "canonical mode requires the standard 48 KiB–1 MiB scale set",
       );
     }
+    if (
+      scenarios.length !== DEFAULT_SCENARIOS.length ||
+      scenarios.some((scenario, index) => scenario !== DEFAULT_SCENARIOS[index])
+    ) {
+      throw new Error(
+        "canonical mode requires the standard fixture-mixed scenario",
+      );
+    }
   }
-  return { mode, warmups, samples, inputBytes, outputPath };
+  return { mode, warmups, samples, inputBytes, scenarios, outputPath };
 };
 
 type WorkerMessage =
@@ -117,8 +147,13 @@ export type SampleExecution =
 export const buildPerformanceWorkerInvocation = (
   inputBytes: number,
   execution: SampleExecution,
+  scenarioId: PerformanceScenarioId = DEFAULT_PERFORMANCE_SCENARIO_ID,
 ): { readonly command: string; readonly args: readonly string[] } => {
-  const workerArgs = [resolve(import.meta.dir, "worker.ts"), `${inputBytes}`];
+  const workerArgs = [
+    resolve(import.meta.dir, "worker.ts"),
+    `${inputBytes}`,
+    scenarioId,
+  ];
   if (execution.type === "local") {
     return { command: process.execPath, args: workerArgs };
   }
@@ -136,12 +171,14 @@ export const buildPerformanceWorkerInvocation = (
 const runIsolatedSample = (
   inputBytes: number,
   execution: SampleExecution,
+  scenarioId: PerformanceScenarioId,
 ): Promise<IsolatedSample> =>
   new Promise((resolveSample, reject) => {
     const spawnedAt = performance.now();
     const { command, args } = buildPerformanceWorkerInvocation(
       inputBytes,
       execution,
+      scenarioId,
     );
     const child = spawn(command, args, {
       cwd: resolve(import.meta.dir, "..", "..", "..", ".."),
@@ -198,19 +235,42 @@ const runIsolatedSample = (
     });
   });
 
-const rotatedSizes = (
-  sizes: readonly number[],
-  round: number,
-): readonly number[] => {
-  const offset = round % sizes.length;
-  return [...sizes.slice(offset), ...sizes.slice(0, offset)];
+type PerformanceCoordinate = {
+  readonly scenarioId: PerformanceScenarioId;
+  readonly inputBytes: number;
 };
+
+const performanceCoordinates = (
+  scenarios: readonly PerformanceScenarioId[],
+  inputBytes: readonly number[],
+): readonly PerformanceCoordinate[] =>
+  scenarios.flatMap((scenarioId) =>
+    inputBytes.map((size) => ({ scenarioId, inputBytes: size })),
+  );
+
+const rotatedCoordinates = (
+  coordinates: readonly PerformanceCoordinate[],
+  round: number,
+): readonly PerformanceCoordinate[] => {
+  const offset = round % coordinates.length;
+  return [...coordinates.slice(offset), ...coordinates.slice(0, offset)];
+};
+
+const coordinateKey = ({
+  scenarioId,
+  inputBytes,
+}: PerformanceCoordinate): string => `${scenarioId}:${inputBytes}`;
 
 const assertSameOutput = (
   expected: IsolatedSample,
   actual: IsolatedSample,
 ): void => {
   if (
+    expected.scenario.id !== actual.scenario.id ||
+    expected.scenario.schemaVersion !== actual.scenario.schemaVersion ||
+    expected.scenario.type !== actual.scenario.type ||
+    expected.runtime.type !== actual.runtime.type ||
+    expected.runtime.version !== actual.runtime.version ||
     expected.inputBytes !== actual.inputBytes ||
     expected.inputSha256 !== actual.inputSha256 ||
     expected.inputCharacters !== actual.inputCharacters ||
@@ -218,7 +278,7 @@ const assertSameOutput = (
     expected.outputDigest !== actual.outputDigest
   ) {
     throw new Error(
-      `performance output changed for ${actual.inputBytes} bytes`,
+      `performance output changed for ${actual.scenario.id} at ${actual.inputBytes} bytes`,
     );
   }
 };
@@ -238,43 +298,62 @@ export const runPerformance = async (
     throw new Error("canonical performance runs require a clean Git worktree");
   }
 
-  const expected = new Map<number, IsolatedSample>();
+  const coordinates = performanceCoordinates(
+    options.scenarios,
+    options.inputBytes,
+  );
+  const expected = new Map<string, IsolatedSample>();
   for (let round = 0; round < options.warmups; round += 1) {
-    for (const size of rotatedSizes(options.inputBytes, round)) {
+    for (const coordinate of rotatedCoordinates(coordinates, round)) {
       process.stderr.write(
-        `warmup ${round + 1}/${options.warmups}: ${size} bytes\n`,
+        `warmup ${round + 1}/${options.warmups}: ${coordinate.scenarioId}, ${coordinate.inputBytes} bytes\n`,
       );
-      const sample = await runIsolatedSample(size, execution);
-      const previous = expected.get(size);
-      if (previous === undefined) expected.set(size, sample);
+      const sample = await runIsolatedSample(
+        coordinate.inputBytes,
+        execution,
+        coordinate.scenarioId,
+      );
+      const key = coordinateKey(coordinate);
+      const previous = expected.get(key);
+      if (previous === undefined) expected.set(key, sample);
       else assertSameOutput(previous, sample);
     }
   }
 
-  const measured = new Map<number, IsolatedSample[]>();
-  for (const size of options.inputBytes) measured.set(size, []);
+  const measured = new Map<string, IsolatedSample[]>();
+  for (const coordinate of coordinates) {
+    measured.set(coordinateKey(coordinate), []);
+  }
   for (let round = 0; round < options.samples; round += 1) {
-    for (const size of rotatedSizes(options.inputBytes, round)) {
+    for (const coordinate of rotatedCoordinates(coordinates, round)) {
       process.stderr.write(
-        `sample ${round + 1}/${options.samples}: ${size} bytes\n`,
+        `sample ${round + 1}/${options.samples}: ${coordinate.scenarioId}, ${coordinate.inputBytes} bytes\n`,
       );
-      const sample = await runIsolatedSample(size, execution);
-      const previous = expected.get(size);
+      const sample = await runIsolatedSample(
+        coordinate.inputBytes,
+        execution,
+        coordinate.scenarioId,
+      );
+      const key = coordinateKey(coordinate);
+      const previous = expected.get(key);
       if (previous === undefined)
         throw new Error("warmup output is unavailable");
       assertSameOutput(previous, sample);
-      measured.get(size)?.push(sample);
+      measured.get(key)?.push(sample);
     }
   }
 
-  const results: PerformanceResult[] = options.inputBytes.map((size) => {
-    const samples = measured.get(size);
-    const identity = expected.get(size);
+  const results: PerformanceResult[] = coordinates.map((coordinate) => {
+    const key = coordinateKey(coordinate);
+    const samples = measured.get(key);
+    const identity = expected.get(key);
     if (samples === undefined || identity === undefined) {
-      throw new Error(`performance samples are unavailable for ${size} bytes`);
+      throw new Error(`performance samples are unavailable for ${key}`);
     }
     return {
-      inputBytes: size,
+      scenario: identity.scenario,
+      runtime: identity.runtime,
+      inputBytes: coordinate.inputBytes,
       inputCharacters: identity.inputCharacters,
       inputSha256: identity.inputSha256,
       outputCount: identity.outputCount,
@@ -302,12 +381,15 @@ export const runPerformance = async (
       warmups: options.warmups,
       samples: options.samples,
       inputBytes: [...options.inputBytes],
+      scenarios: [...options.scenarios],
       processIsolation: "fresh-process-per-sample",
     },
     fixture: {
       kind: "public-safe-synthetic",
       source: PERFORMANCE_INPUT_SOURCE,
-      sha256: performanceInputSourceDigest(),
+      sha256: await performanceInputSourceDigest({
+        scenarioIds: options.scenarios,
+      }),
     },
     machine: await machineMetadata(
       execution.type === "canonical" ? execution.benchmarkCpu : null,

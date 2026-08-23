@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 
 import { loadVerifiedTabDevCorpus, type TabDocument } from "./blind/tab";
 import { createPythonAdapter } from "./adapters/python";
+import { PRESIDIO_PROVIDER } from "./adapters/python-providers";
 import { createStllAdapter } from "./adapters/stella";
 import type { NativePrediction } from "./adapters/types";
 import type { GroundTruthDocument } from "./ground-truth";
@@ -48,14 +49,7 @@ const inputs: GroundTruthDocument[] = corpus.map(({ id, text }) => ({
   language: "en",
   entities: [],
 }));
-const adapters = [
-  createStllAdapter(),
-  createPythonAdapter({
-    name: "presidio",
-    venvDir: ".venv-presidio",
-    script: "presidio_adapter.py",
-  }),
-];
+const adapters = [createStllAdapter(), createPythonAdapter(PRESIDIO_PROVIDER)];
 const predictions = new Map<
   string,
   ReadonlyMap<string, readonly NativePrediction[]>

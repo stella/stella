@@ -1,0 +1,121 @@
+{
+  "schemaVersion": 5,
+  "createdAt": "2026-08-22T13:47:19.510Z",
+  "sourceGitSha": "36b03b58aff20e30247c5f178094a9d11b0f3232",
+  "runtime": "Bun 1.4.0",
+  "policy": "evaluation-only",
+  "corpus": {
+    "id": "multigrassco",
+    "source": "https://zenodo.org/records/18847836",
+    "version": "18847836",
+    "file": "MultiGraSCCo_annotations.zip",
+    "sha256": "bfbd84d32a39dd53b0f63e0a3b49e423feb0188c686497ac7b9e62366cbb95ff",
+    "license": "CC-BY-4.0",
+    "split": "evaluation",
+    "documentCount": 605,
+    "selection": {
+      "type": "validated-offset-subset",
+      "sourceDocuments": 630,
+      "excludedDocuments": 25,
+      "reasonCode": "invalid-source-spans"
+    }
+  },
+  "libraries": [
+    {
+      "name": "stella",
+      "version": "2.8.1",
+      "status": "ok",
+      "timing": {
+        "initSeconds": 0.3224032910000001,
+        "coldSeconds": 7.90373775,
+        "warmSeconds": 13.710298333999999,
+        "totalChars": 2472060
+      },
+      "adapterWallSeconds": 21.937515958,
+      "metrics": {
+        "type": "multigrassco-direct-indirect-redaction",
+        "documents": 605,
+        "directSpans": 13398,
+        "indirectSpans": 10534,
+        "predictedSpans": 6853,
+        "directSpanRecall": 0.42371995820271685,
+        "indirectSpanRecall": 0.01110689196886273,
+        "directCharacterRecall": 0.457895576967727,
+        "indirectCharacterRecall": 0.01816013060333281,
+        "acceptedCharacterPrecision": 0.8378574243830496
+      }
+    },
+    {
+      "name": "openredaction",
+      "version": "1.1.5",
+      "status": "ok",
+      "timing": {
+        "initSeconds": 0.06302887499999997,
+        "coldSeconds": 23.092407083,
+        "warmSeconds": 27.094652333,
+        "totalChars": 2472060
+      },
+      "adapterWallSeconds": 50.250725167000006,
+      "metrics": {
+        "type": "multigrassco-direct-indirect-redaction",
+        "documents": 605,
+        "directSpans": 13398,
+        "indirectSpans": 10534,
+        "predictedSpans": 40350,
+        "directSpanRecall": 0.3628153455739663,
+        "indirectSpanRecall": 0.07670400607556484,
+        "directCharacterRecall": 0.4478102507545856,
+        "indirectCharacterRecall": 0.20406265320872777,
+        "acceptedCharacterPrecision": 0.2250485023107966
+      }
+    },
+    {
+      "name": "presidio",
+      "version": "unknown",
+      "status": "unavailable",
+      "reasonCode": "adapter-unavailable"
+    },
+    {
+      "name": "scrubadub",
+      "version": "unknown",
+      "status": "unavailable",
+      "reasonCode": "adapter-unavailable"
+    },
+    {
+      "name": "datafog",
+      "version": "unknown",
+      "status": "unavailable",
+      "reasonCode": "adapter-unavailable"
+    },
+    {
+      "name": "redact-pii",
+      "version": "3.4.0",
+      "status": "ok",
+      "timing": {
+        "initSeconds": 0.009930458000002544,
+        "coldSeconds": 140.53583808300002,
+        "warmSeconds": 266.124326625,
+        "totalChars": 2472060
+      },
+      "adapterWallSeconds": 406.670436834,
+      "metrics": {
+        "type": "multigrassco-direct-indirect-redaction",
+        "documents": 605,
+        "directSpans": 13398,
+        "indirectSpans": 10534,
+        "predictedSpans": 7819,
+        "directSpanRecall": 0.10337363785639647,
+        "indirectSpanRecall": 0.000569584203531422,
+        "directCharacterRecall": 0.21432406547480845,
+        "indirectCharacterRecall": 0.00651500371491678,
+        "acceptedCharacterPrecision": 0.7573472688814235
+      }
+    },
+    {
+      "name": "pii-shield",
+      "version": "unknown",
+      "status": "unavailable",
+      "reasonCode": "adapter-unavailable"
+    }
+  ]
+}

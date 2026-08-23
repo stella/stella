@@ -1,0 +1,70 @@
+[
+  {
+    "id": "cs-contextual-party-and-identifiers",
+    "language": "cs",
+    "title": "Kontext smluvních stran a dokladů (synthetic)",
+    "segments": [
+      "Smluvní strany ",
+      { "t": "Testovací osoba", "label": "person" },
+      " a ",
+      { "t": "Křišťálové dílny s.r.o.", "label": "organization" },
+      " uzavřely dohodu. Rodné číslo je ",
+      { "t": "900314/1258", "label": "id-number" },
+      ". Číslo občanského průkazu je ",
+      { "t": "123456789", "label": "id-number" },
+      "."
+    ]
+  },
+  {
+    "id": "cs-contextual-field-labels-without-values",
+    "language": "cs",
+    "title": "Neidentifikující popis polí (synthetic)",
+    "segments": [
+      "Výrazy rodné číslo a číslo občanského průkazu jsou názvy polí; tento vzor neobsahuje žádné hodnoty ani smluvní strany."
+    ]
+  },
+  {
+    "id": "de-contextual-party-and-identifier",
+    "language": "de",
+    "title": "Vertragspartei und Ausweisfeld (synthetic)",
+    "segments": [
+      "Die Vertragsparteien ",
+      { "t": "Testperson", "label": "person" },
+      " und ",
+      { "t": "Morgenhafen Werkstatt GmbH", "label": "organization" },
+      " schließen den Vertrag. Die Personalausweisnummer lautet ",
+      { "t": "T22000123", "label": "id-number" },
+      "."
+    ]
+  },
+  {
+    "id": "de-contextual-field-label-without-value",
+    "language": "de",
+    "title": "Nicht identifizierende Feldbeschreibung (synthetic)",
+    "segments": [
+      "Personalausweisnummer ist hier nur eine Feldbezeichnung; ein konkreter Wert und eine Vertragspartei fehlen."
+    ]
+  },
+  {
+    "id": "en-contextual-party-and-identifier",
+    "language": "en",
+    "title": "Contracting party and passport field (synthetic)",
+    "segments": [
+      "The parties ",
+      { "t": "Sample Person", "label": "person" },
+      " and ",
+      { "t": "Silver Orchard Labs LLC", "label": "organization" },
+      " signed the agreement. The passport number is ",
+      { "t": "Z12345678", "label": "id-number" },
+      "."
+    ]
+  },
+  {
+    "id": "en-contextual-field-label-without-value",
+    "language": "en",
+    "title": "Non-identifying field description (synthetic)",
+    "segments": [
+      "Passport number is a field label in this template; it contains no identifier or contracting party."
+    ]
+  }
+]

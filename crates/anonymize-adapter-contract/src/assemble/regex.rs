@@ -250,12 +250,19 @@ fn regex_literal(value: &str) -> String {
 }
 
 fn token_alternation(tokens: &[String]) -> Option<String> {
-  let escaped: Vec<String> = tokens
+  let escaped: Vec<String> = non_empty_tokens(tokens)
     .iter()
-    .filter(|token| !token.is_empty())
     .map(|token| regex_literal(token))
     .collect();
   (!escaped.is_empty()).then(|| escaped.join("|"))
+}
+
+fn non_empty_tokens(tokens: &[String]) -> Vec<String> {
+  tokens
+    .iter()
+    .filter(|token| !token.is_empty())
+    .cloned()
+    .collect()
 }
 
 /// Builds conservative written-email patterns from language-scoped data.
@@ -301,17 +308,12 @@ fn build_obfuscated_email_patterns(
       case_insensitive: None,
       whole_words: None,
       lazy: Some(true),
-      prefilter_any: None,
-      prefilter_case_insensitive: None,
-      prefilter_regex: Some(format!(
-        concat!(
-          r"(?i)[^\S\n](?:{})[^\S\n]+",
-          r"[\p{{L}}\p{{N}}](?:[\p{{L}}\p{{N}}\p{{M}}-]{{0,61}}",
-          r"[\p{{L}}\p{{N}}\p{{M}}])?",
-          r"[^\S\n]+(?:{})[^\S\n]"
-        ),
-        at_tokens, dot_tokens
-      )),
+      // Every accepted address contains one of the language-owned dot tokens.
+      // A literal necessary-condition gate avoids compiling and scanning a
+      // second regex while the main regex remains the exact authority.
+      prefilter_any: Some(non_empty_tokens(&vocabulary.dot_tokens)),
+      prefilter_case_insensitive: Some(true),
+      prefilter_regex: None,
       prefilter_window_bytes: None,
       prepared_artifact_policy: None,
     });

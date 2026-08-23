@@ -1,10 +1,9 @@
 # Reproducing the benchmark
 
 This document records the toolchain, library versions, models, and
-taxonomy-mapping decisions for the benchmark harness. The latest held-out
-reports were generated from release commit
-`22e52184b3ad6ea06a224b4278e574a9abc930cf` with stella 2.7.8. The development
-fixture report remains a historical 2.4.1 regression result. Its scores are not
+taxonomy-mapping decisions for the benchmark harness. Each held-out report
+records its exact source commit, runtime, and provider version. The development
+fixture report records the same provenance; results from older releases are not
 necessarily representative.
 
 ## Development regression fixture
@@ -33,6 +32,7 @@ The held-out suite uses public tools and credential-free public artifacts:
 | TAB            | GitHub raw content        | built-in JSON            | repository commit plus SHA-256 |
 | RedactionBench | Hugging Face dataset file | `hyparquet`              | dataset commit plus SHA-256    |
 | MEDDOCAN       | Zenodo record API         | `fflate` and BRAT parser | archive SHA-256                |
+| MultiGraSCCo   | Zenodo record API         | `fflate` and strict JSON | archive SHA-256                |
 | German LER     | Hugging Face dataset file | `hyparquet`              | dataset commit plus SHA-256    |
 
 From `packages/benchmark`, run all complete test splits or one corpus:
@@ -42,6 +42,7 @@ bun run bench:sealed
 bun run bench:sealed:tab
 bun run bench:sealed:redactionbench
 bun run bench:sealed:meddocan
+bun run bench:sealed:multigrassco
 bun run bench:sealed:german-ler
 ```
 
@@ -50,17 +51,20 @@ SHA-256 digest, and only then invoke a parser. A mismatched cached file is not
 parsed. Generated JSON and Markdown share the exact aggregate-only schema in
 `src/sealed-report.ts`; no raw text, examples, category breakdowns,
 predictions, failure cases, or per-document records are persisted or printed.
-The three native task semantics remain separate and are never combined into a
-suite-wide score. See `ATTRIBUTION.md` for public provenance and licenses.
+The native task semantics remain separate and are never combined into a
+suite-wide score. MultiGraSCCo retains separate direct and indirect identifier
+recall. Its strict loader excludes a whole document when the source artifact's
+annotation offsets do not reproduce the annotated text; reports disclose that
+selection without exposing examples. See `ATTRIBUTION.md` for public provenance
+and licenses.
 
 ## Hardware / runtime note
 
-The latest held-out reports were produced on Apple M3 (8 cores), 24 GiB RAM,
-macOS, with Bun 1.3.14. The latest development report was produced on Apple M4
-(10 cores), 16 GiB RAM. Older reports used other hosts; each development report
-records its own hardware. Quality-suite throughput comes from a single run and
-is directional, not a speed ranking. Recall and precision are deterministic for
-a fixed commit, corpus, and dependency set.
+Each development report records its hardware and Bun runtime; every held-out
+report records its runtime. Older reports used other hosts. Quality-suite
+throughput comes from a single run and is directional, not a speed ranking.
+Recall and precision are deterministic for a fixed commit, corpus, and
+dependency set.
 
 ### Canonical performance host
 
@@ -76,7 +80,32 @@ Its defaults are three discarded warmup rounds and 20 measured rounds at 48,
 startup, full pipeline initialization, cold detection, and warm detection
 separately. The JSON report contains the raw observations, median, median
 absolute deviation, p95, machine metadata, and deterministic input/output
-digests. It contains no source text or sealed-corpus result.
+digests. Each result also includes the versioned input-scenario identity and
+the Bun native-binding runtime identity. It contains no source text or
+sealed-corpus result. The harness validates identities, not elapsed-time
+thresholds; timing remains non-blocking evidence.
+
+The canonical profile remains fixed to the original `fixture-mixed` scenario
+and the 48–1,024 KiB scale set, preserving longitudinal comparability. For a
+quick local short-document and density-coverage run:
+
+```sh
+bun run bench:performance --warmups=1 --samples=1 \
+  --sizes-kib=1,4,16 \
+  --scenarios=negative-prose,sparse-entities,dense-entities
+```
+
+Local mode accepts 1–1,024 KiB inputs. The scenarios are:
+
+- `fixture-mixed`: the existing English synthetic legal fixture.
+- `negative-prose`: ordinary prose with no intentionally planted entity.
+- `sparse-entities`: one planted contact per 16 KiB block.
+- `dense-entities`: repeated email, phone, and account-like values.
+
+Scenario inputs are generated deterministically to the exact requested UTF-8
+byte length. Cold and warm output identities must agree, and the span count
+plus SHA-256 identity over redacted text, offsets, labels, and matched values
+must remain stable across every isolated sample.
 
 The canonical GitHub workflow targets only the self-hosted
 `anonymize-perf-v1` label. Until the runner exists, leave the repository
@@ -158,8 +187,8 @@ input bytes, denominator, and SHA-256 independently. Python virtualenvs default 
 
 | Component                             | Version                           |
 | ------------------------------------- | --------------------------------- |
-| Bun                                   | 1.3.14                            |
-| stella (`@stll/anonymize`)            | 2.7.8 (current workspace release) |
+| Bun                                   | 1.4.0                             |
+| stella (`@stll/anonymize`)            | 2.8.1 (current workspace release) |
 | OpenRedaction (`@openredaction/core`) | 1.1.5                             |
 | redact-pii (npm)                      | 3.4.0                             |
 | Python                                | 3.11.12                           |

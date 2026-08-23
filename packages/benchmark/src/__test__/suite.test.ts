@@ -9,6 +9,7 @@ import {
 import { parseRedactionBenchRows } from "../suite/redactionbench";
 import { scoreRedactionBench } from "../suite/redactionbench-score";
 import { parseMeddocanArchive } from "../suite/meddocan";
+import { parseMultiGraSCCoArchive } from "../suite/multigrassco";
 import { parseGermanLerRows } from "../suite/german-ler";
 import { scoreSpanCorpus } from "../suite/span-score";
 
@@ -37,6 +38,9 @@ describe("benchmark suite registry", () => {
     ).toBe(true);
     expect(BENCHMARK_CORPORA.some(({ id }) => id === "tab-echr")).toBe(true);
     expect(BENCHMARK_CORPORA.some(({ id }) => id === "meddocan")).toBe(true);
+    expect(BENCHMARK_CORPORA.some(({ id }) => id === "multigrassco")).toBe(
+      true,
+    );
     expect(BENCHMARK_CORPORA.some(({ id }) => id === "german-ler")).toBe(true);
     expect(BENCHMARK_CORPORA.every(({ access }) => access !== undefined)).toBe(
       true,
@@ -49,15 +53,81 @@ describe("benchmark suite registry", () => {
       "blind.ts",
       "redactionbench.ts",
       "meddocan.ts",
+      "multigrassco.ts",
       "german-ler.ts",
     ]);
     for (const corpus of BENCHMARK_CORPORA.filter(
       ({ policy }) => policy === "evaluation-only",
     )) {
       expect(corpus.access).toBe("verified-download");
-      expect(corpus.artifact?.split).toBe("test");
-      expect(corpus.artifact?.sha256).toMatch(/^[a-f0-9]{64}$/u);
+      const artifact = corpus.artifact;
+      if (artifact === undefined) {
+        throw new Error(`${corpus.id} must pin an evaluation artifact`);
+      }
+      expect(["test", "evaluation"]).toContain(artifact.split);
+      expect(artifact.sha256).toMatch(/^[a-f0-9]{64}$/u);
     }
+  });
+});
+
+describe("MultiGraSCCo normalization", () => {
+  const languageNames = [
+    "Arabic",
+    "English",
+    "French",
+    "German",
+    "Italian",
+    "Persian",
+    "Polish",
+    "Russian",
+    "Turkish",
+    "Ukrainian",
+  ];
+
+  const archive = (staleLanguage?: string): Uint8Array => {
+    const entries: Record<string, Uint8Array> = {};
+    for (const language of languageNames) {
+      const text = "😀 Alice visited Rome";
+      const directStart = language === staleLanguage ? 3 : 2;
+      const direct = [
+        {
+          filename: "example.json",
+          text,
+          entities: [
+            { start: directStart, end: 7, text: "Alice", type: "NAME_PATIENT" },
+          ],
+        },
+      ];
+      const indirect = [
+        {
+          filename: "example.json",
+          text,
+          entities: [
+            { start: 16, end: 20, text: "Rome", type: "ADDRESS_CITY" },
+          ],
+        },
+      ];
+      entries[`MultiGraSCCo/${language}_PHI.json`] = strToU8(
+        JSON.stringify(direct),
+      );
+      entries[`MultiGraSCCo/${language}_IPI.json`] = strToU8(
+        JSON.stringify(indirect),
+      );
+    }
+    return zipSync(entries);
+  };
+
+  test("converts Unicode code-point annotations to UTF-16 spans", () => {
+    const corpus = parseMultiGraSCCoArchive(archive(), 1);
+    expect(corpus.sourceDocuments).toBe(10);
+    expect(corpus.excludedDocuments).toBe(0);
+    expect(corpus.documents.at(0)?.directSpans).toEqual([{ start: 3, end: 8 }]);
+  });
+
+  test("excludes a whole document instead of guessing a stale span", () => {
+    const corpus = parseMultiGraSCCoArchive(archive("English"), 1);
+    expect(corpus.documents).toHaveLength(9);
+    expect(corpus.excludedDocuments).toBe(1);
   });
 });
 

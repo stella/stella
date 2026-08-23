@@ -43,6 +43,21 @@ redistributed by this repository.
 - Citation: Elena Leitner, Georg Rehm, and Julian Moreno-Schneider,
   “Fine-grained Named Entity Recognition in Legal Documents” (2019)
 
+## MultiGraSCCo
+
+- Project: MultiGraSCCo, a multilingual Graz synthetic clinical corpus
+- DOI: https://doi.org/10.5281/zenodo.18847836
+- Record: https://zenodo.org/records/18847836
+- Evaluation archive: `MultiGraSCCo_annotations.zip`
+- SHA-256: `bfbd84d32a39dd53b0f63e0a3b49e423feb0188c686497ac7b9e62366cbb95ff`
+- License: Creative Commons Attribution 4.0 International (CC BY 4.0)
+
+The published archive contains invalid annotations in 25 translated documents,
+including stale offsets and one empty span. The runner excludes an entire
+document when any direct or indirect annotation fails exact text/offset
+validation; it never reconstructs spans from the annotated entity text. The
+aggregate report records both source and excluded document counts.
+
 Use of each corpus remains subject to its upstream license and citation
 requirements. See the linked upstream project or record for the canonical
 license text and citation metadata.

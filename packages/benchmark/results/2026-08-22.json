@@ -1,0 +1,463 @@
+{
+  "createdAt": "2026-08-22T13:38:00.723Z",
+  "gitSha": "baf89465",
+  "hardware": "darwin/arm64, 8x Apple M3, 24 GiB RAM",
+  "runtime": "Bun 1.4.0",
+  "corpus": {
+    "documents": 34,
+    "entities": 203,
+    "byLanguage": {
+      "cs": 12,
+      "de": 10,
+      "en": 12
+    },
+    "byLabel": {
+      "organization": 34,
+      "id-number": 23,
+      "date": 29,
+      "person": 40,
+      "address": 24,
+      "money": 21,
+      "email": 19,
+      "phone": 13
+    }
+  },
+  "matching": {
+    "primary": "overlap: same label and IoU >= 0.5",
+    "secondary": "exact: same label and identical [start, end)"
+  },
+  "libraries": [
+    {
+      "name": "stella",
+      "version": "2.8.1",
+      "status": "ok",
+      "notes": "shipped prepared packages (language-scoped when available); product-default rules and dictionaries; NER disabled",
+      "supportedLabels": [
+        "address",
+        "date",
+        "email",
+        "id-number",
+        "money",
+        "organization",
+        "person",
+        "phone"
+      ],
+      "throughput": {
+        "initSeconds": 0.519930083,
+        "totalChars": 8854,
+        "coldCharsPerSec": 13158.644339034168,
+        "warmCharsPerSec": 175657.3232339562
+      },
+      "overall": {
+        "overlapAll": {
+          "precision": 0.9411764705882353,
+          "recall": 0.8669950738916257,
+          "f1": 0.9025641025641026,
+          "tp": 176,
+          "fp": 11,
+          "fn": 27
+        },
+        "overlapSupported": {
+          "precision": 0.9411764705882353,
+          "recall": 0.8669950738916257,
+          "f1": 0.9025641025641026,
+          "tp": 176,
+          "fp": 11,
+          "fn": 27
+        },
+        "exactAll": {
+          "precision": 0.8502673796791443,
+          "recall": 0.7832512315270936,
+          "f1": 0.8153846153846154,
+          "tp": 159,
+          "fp": 28,
+          "fn": 44
+        }
+      },
+      "perLabel": {
+        "person": {
+          "precision": 1,
+          "recall": 0.925,
+          "f1": 0.961038961038961,
+          "tp": 37,
+          "fp": 0,
+          "fn": 3
+        },
+        "organization": {
+          "precision": 0.7407407407407407,
+          "recall": 0.5882352941176471,
+          "f1": 0.6557377049180328,
+          "tp": 20,
+          "fp": 7,
+          "fn": 14
+        },
+        "address": {
+          "precision": 0.8888888888888888,
+          "recall": 1,
+          "f1": 0.9411764705882353,
+          "tp": 24,
+          "fp": 3,
+          "fn": 0
+        },
+        "email": {
+          "precision": 1,
+          "recall": 0.9473684210526315,
+          "f1": 0.972972972972973,
+          "tp": 18,
+          "fp": 0,
+          "fn": 1
+        },
+        "phone": {
+          "precision": 0.9285714285714286,
+          "recall": 1,
+          "f1": 0.962962962962963,
+          "tp": 13,
+          "fp": 1,
+          "fn": 0
+        },
+        "id-number": {
+          "precision": 1,
+          "recall": 0.782608695652174,
+          "f1": 0.878048780487805,
+          "tp": 18,
+          "fp": 0,
+          "fn": 5
+        },
+        "date": {
+          "precision": 1,
+          "recall": 0.9655172413793104,
+          "f1": 0.9824561403508771,
+          "tp": 28,
+          "fp": 0,
+          "fn": 1
+        },
+        "money": {
+          "precision": 1,
+          "recall": 0.8571428571428571,
+          "f1": 0.923076923076923,
+          "tp": 18,
+          "fp": 0,
+          "fn": 3
+        }
+      },
+      "perLanguage": {
+        "cs": {
+          "precision": 0.9193548387096774,
+          "recall": 0.7808219178082192,
+          "f1": 0.8444444444444444,
+          "tp": 57,
+          "fp": 5,
+          "fn": 16
+        },
+        "de": {
+          "precision": 0.9215686274509803,
+          "recall": 0.8545454545454545,
+          "f1": 0.8867924528301887,
+          "tp": 47,
+          "fp": 4,
+          "fn": 8
+        },
+        "en": {
+          "precision": 0.972972972972973,
+          "recall": 0.96,
+          "f1": 0.9664429530201343,
+          "tp": 72,
+          "fp": 2,
+          "fn": 3
+        }
+      }
+    },
+    {
+      "name": "openredaction",
+      "version": "1.1.5",
+      "status": "ok",
+      "notes": "579 built-in regex patterns; stateless local configuration; learning and NER disabled",
+      "supportedLabels": [
+        "address",
+        "date",
+        "email",
+        "id-number",
+        "person",
+        "phone"
+      ],
+      "throughput": {
+        "initSeconds": 0.034040083000000096,
+        "totalChars": 8854,
+        "coldCharsPerSec": 31601.503710476598,
+        "warmCharsPerSec": 125227.6239069636
+      },
+      "overall": {
+        "overlapAll": {
+          "precision": 0.2765957446808511,
+          "recall": 0.1921182266009852,
+          "f1": 0.22674418604651164,
+          "tp": 39,
+          "fp": 102,
+          "fn": 164
+        },
+        "overlapSupported": {
+          "precision": 0.2765957446808511,
+          "recall": 0.2635135135135135,
+          "f1": 0.2698961937716263,
+          "tp": 39,
+          "fp": 102,
+          "fn": 109
+        },
+        "exactAll": {
+          "precision": 0.11347517730496454,
+          "recall": 0.07881773399014778,
+          "f1": 0.09302325581395347,
+          "tp": 16,
+          "fp": 125,
+          "fn": 187
+        }
+      },
+      "perLabel": {
+        "person": {
+          "precision": 0.21518987341772153,
+          "recall": 0.425,
+          "f1": 0.28571428571428575,
+          "tp": 17,
+          "fp": 62,
+          "fn": 23
+        },
+        "organization": {
+          "precision": 0,
+          "recall": 0,
+          "f1": 0,
+          "tp": 0,
+          "fp": 0,
+          "fn": 34
+        },
+        "address": {
+          "precision": 0.041666666666666664,
+          "recall": 0.041666666666666664,
+          "f1": 0.041666666666666664,
+          "tp": 1,
+          "fp": 23,
+          "fn": 23
+        },
+        "email": {
+          "precision": 1,
+          "recall": 0.3157894736842105,
+          "f1": 0.4799999999999999,
+          "tp": 6,
+          "fp": 0,
+          "fn": 13
+        },
+        "phone": {
+          "precision": 0.5882352941176471,
+          "recall": 0.7692307692307693,
+          "f1": 0.6666666666666667,
+          "tp": 10,
+          "fp": 7,
+          "fn": 3
+        },
+        "id-number": {
+          "precision": 0.3333333333333333,
+          "recall": 0.21739130434782608,
+          "f1": 0.26315789473684204,
+          "tp": 5,
+          "fp": 10,
+          "fn": 18
+        },
+        "date": {
+          "precision": 0,
+          "recall": 0,
+          "f1": 0,
+          "tp": 0,
+          "fp": 0,
+          "fn": 29
+        },
+        "money": {
+          "precision": 0,
+          "recall": 0,
+          "f1": 0,
+          "tp": 0,
+          "fp": 0,
+          "fn": 21
+        }
+      },
+      "perLanguage": {
+        "cs": {
+          "precision": 0.5263157894736842,
+          "recall": 0.273972602739726,
+          "f1": 0.36036036036036034,
+          "tp": 20,
+          "fp": 18,
+          "fn": 53
+        },
+        "de": {
+          "precision": 0.1590909090909091,
+          "recall": 0.12727272727272726,
+          "f1": 0.1414141414141414,
+          "tp": 7,
+          "fp": 37,
+          "fn": 48
+        },
+        "en": {
+          "precision": 0.2033898305084746,
+          "recall": 0.16,
+          "f1": 0.1791044776119403,
+          "tp": 12,
+          "fp": 47,
+          "fn": 63
+        }
+      }
+    },
+    {
+      "name": "presidio",
+      "version": "unknown",
+      "status": "unavailable",
+      "reason": "virtualenv not found at .venv-presidio; create it per REPRODUCING.md"
+    },
+    {
+      "name": "scrubadub",
+      "version": "unknown",
+      "status": "unavailable",
+      "reason": "virtualenv not found at .venv-scrubadub; create it per REPRODUCING.md"
+    },
+    {
+      "name": "datafog",
+      "version": "unknown",
+      "status": "unavailable",
+      "reason": "virtualenv not found at .venv-datafog; create it per REPRODUCING.md"
+    },
+    {
+      "name": "redact-pii",
+      "version": "3.4.0",
+      "status": "ok",
+      "supportedLabels": [
+        "address",
+        "email",
+        "id-number",
+        "person",
+        "phone"
+      ],
+      "throughput": {
+        "initSeconds": 0.024572999999999866,
+        "totalChars": 8854,
+        "coldCharsPerSec": 4816.157137349653,
+        "warmCharsPerSec": 8943.103864129527
+      },
+      "overall": {
+        "overlapAll": {
+          "precision": 0.38461538461538464,
+          "recall": 0.270935960591133,
+          "f1": 0.31791907514450873,
+          "tp": 55,
+          "fp": 88,
+          "fn": 148
+        },
+        "overlapSupported": {
+          "precision": 0.38461538461538464,
+          "recall": 0.46218487394957986,
+          "f1": 0.4198473282442748,
+          "tp": 55,
+          "fp": 88,
+          "fn": 64
+        },
+        "exactAll": {
+          "precision": 0.26573426573426573,
+          "recall": 0.18719211822660098,
+          "f1": 0.21965317919075145,
+          "tp": 38,
+          "fp": 105,
+          "fn": 165
+        }
+      },
+      "perLabel": {
+        "person": {
+          "precision": 0.42105263157894735,
+          "recall": 0.4,
+          "f1": 0.41025641025641024,
+          "tp": 16,
+          "fp": 22,
+          "fn": 24
+        },
+        "organization": {
+          "precision": 0,
+          "recall": 0,
+          "f1": 0,
+          "tp": 0,
+          "fp": 0,
+          "fn": 34
+        },
+        "address": {
+          "precision": 0.04,
+          "recall": 0.041666666666666664,
+          "f1": 0.04081632653061224,
+          "tp": 1,
+          "fp": 24,
+          "fn": 23
+        },
+        "email": {
+          "precision": 0.9473684210526315,
+          "recall": 0.9473684210526315,
+          "f1": 0.9473684210526315,
+          "tp": 18,
+          "fp": 1,
+          "fn": 1
+        },
+        "phone": {
+          "precision": 0.6363636363636364,
+          "recall": 0.5384615384615384,
+          "f1": 0.5833333333333334,
+          "tp": 7,
+          "fp": 4,
+          "fn": 6
+        },
+        "id-number": {
+          "precision": 0.26,
+          "recall": 0.5652173913043478,
+          "f1": 0.3561643835616438,
+          "tp": 13,
+          "fp": 37,
+          "fn": 10
+        },
+        "date": {
+          "precision": 0,
+          "recall": 0,
+          "f1": 0,
+          "tp": 0,
+          "fp": 0,
+          "fn": 29
+        },
+        "money": {
+          "precision": 0,
+          "recall": 0,
+          "f1": 0,
+          "tp": 0,
+          "fp": 0,
+          "fn": 21
+        }
+      },
+      "perLanguage": {
+        "cs": {
+          "precision": 0.38461538461538464,
+          "recall": 0.2054794520547945,
+          "f1": 0.26785714285714285,
+          "tp": 15,
+          "fp": 24,
+          "fn": 58
+        },
+        "de": {
+          "precision": 0.41025641025641024,
+          "recall": 0.2909090909090909,
+          "f1": 0.3404255319148936,
+          "tp": 16,
+          "fp": 23,
+          "fn": 39
+        },
+        "en": {
+          "precision": 0.36923076923076925,
+          "recall": 0.32,
+          "f1": 0.34285714285714286,
+          "tp": 24,
+          "fp": 41,
+          "fn": 51
+        }
+      }
+    }
+  ]
+}

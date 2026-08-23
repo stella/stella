@@ -136,6 +136,20 @@ describe("ground truth fixtures", () => {
       }
     }
   });
+
+  test("contextual party fixtures score both person and organization parties", async () => {
+    const docs = await loadGroundTruth();
+    const partyDocs = docs.filter((fixture) =>
+      fixture.id.includes("contextual-party"),
+    );
+
+    expect(partyDocs.length).toBeGreaterThan(0);
+    for (const fixture of partyDocs) {
+      const labels = new Set(fixture.entities.map((entity) => entity.label));
+      expect(labels).toContain("person");
+      expect(labels).toContain("organization");
+    }
+  });
 });
 
 import { convertCodePointSpans } from "../adapters/python";

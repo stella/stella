@@ -181,6 +181,7 @@ export const OPENREDACTION_MAPPING: NativeMapping = {
   CZECH_NATIONAL_ID: "id-number",
   ENROLLMENT_NUMBER: "id-number",
   LICENSE_PLATE: "id-number",
+  LAB_TEST_ID: "id-number",
   NDA_ID: "id-number",
   STANDING_ORDER_REF: "id-number",
   CREDIT_CARD: "id-number",

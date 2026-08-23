@@ -3,15 +3,7 @@
   "changes": [
     {
       "type": "remove",
-      "path": ["trigger_data"]
-    },
-    {
-      "type": "remove",
       "path": ["date_data", "year_words_by_language", "cs"]
-    },
-    {
-      "type": "remove",
-      "path": ["date_data", "year_words_by_language", "sk"]
     },
     {
       "type": "remove",
@@ -23,31 +15,11 @@
     },
     {
       "type": "remove",
-      "path": ["date_data", "year_words_by_language", "fr"]
-    },
-    {
-      "type": "remove",
       "path": ["date_data", "year_words_by_language", "es"]
     },
     {
       "type": "remove",
-      "path": ["date_data", "year_words_by_language", "it"]
-    },
-    {
-      "type": "remove",
-      "path": ["date_data", "year_words_by_language", "pt"]
-    },
-    {
-      "type": "remove",
-      "path": ["date_data", "year_words_by_language", "pl"]
-    },
-    {
-      "type": "remove",
-      "path": ["date_data", "year_words_by_language", "sv"]
-    },
-    {
-      "type": "remove",
-      "path": ["date_data", "year_words_by_language", "nl"]
+      "path": ["date_data", "year_words_by_language", "fr"]
     },
     {
       "type": "remove",
@@ -55,7 +27,141 @@
     },
     {
       "type": "remove",
+      "path": ["date_data", "year_words_by_language", "it"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "year_words_by_language", "nl"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "year_words_by_language", "pl"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "year_words_by_language", "pt"]
+    },
+    {
+      "type": "remove",
       "path": ["date_data", "year_words_by_language", "ro"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "year_words_by_language", "sk"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "year_words_by_language", "sv"]
+    },
+    {
+      "type": "array",
+      "path": ["regex_meta"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 0,
+          "end": 3
+        },
+        {
+          "type": "values",
+          "values": [
+            {
+              "label": "iban",
+              "score": 1.0
+            },
+            {
+              "label": "email address",
+              "score": 1.0
+            }
+          ]
+        },
+        {
+          "type": "copy",
+          "start": 5,
+          "end": 6
+        },
+        {
+          "type": "values",
+          "values": [
+            {
+              "label": "phone number",
+              "min_byte_length": 7,
+              "requires_validation": true,
+              "score": 1.0,
+              "validator_id": "phone.international"
+            }
+          ]
+        },
+        {
+          "type": "copy",
+          "start": 7,
+          "end": 10
+        },
+        {
+          "type": "values",
+          "values": [
+            {
+              "label": "credit card number",
+              "score": 1.0
+            },
+            {
+              "label": "birth number",
+              "requires_validation": true,
+              "score": 1.0,
+              "validator_id": "cz.rc"
+            }
+          ]
+        },
+        {
+          "type": "copy",
+          "start": 12,
+          "end": 13
+        },
+        {
+          "type": "values",
+          "values": [
+            {
+              "label": "date",
+              "score": 1.0
+            },
+            {
+              "label": "date",
+              "score": 1.0
+            },
+            {
+              "label": "ip address",
+              "score": 1.0
+            }
+          ]
+        },
+        {
+          "type": "copy",
+          "start": 16,
+          "end": 40
+        },
+        {
+          "type": "values",
+          "values": [
+            {
+              "label": "url",
+              "score": 1.0
+            },
+            {
+              "label": "ip address",
+              "score": 1.0
+            },
+            {
+              "label": "mac address",
+              "score": 1.0
+            }
+          ]
+        },
+        {
+          "type": "copy",
+          "start": 43,
+          "end": 118
+        }
+      ]
     },
     {
       "type": "array",
@@ -72,6 +178,10 @@
       "type": "set",
       "path": ["slices", "triggers", "end"],
       "value": 1407
+    },
+    {
+      "type": "remove",
+      "path": ["trigger_data"]
     }
   ]
 }

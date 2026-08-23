@@ -1,9 +1,159 @@
 #![allow(clippy::expect_used, clippy::indexing_slicing, clippy::unwrap_used)]
 
-use stella_anonymize_core::{
-  Error, FuzzySearchOptions, LiteralSearchOptions, RegexSearchOptions,
-  SearchIndex, SearchIndexArtifacts, SearchMatch, SearchOptions, SearchPattern,
+use std::collections::BTreeMap;
+use std::sync::OnceLock;
+
+use proptest::prelude::{ProptestConfig, any};
+use proptest::{collection, prop_assert, prop_assert_eq, proptest, sample};
+use serde::Deserialize;
+use stella_anonymize_adapter_contract::{
+  BindingPreparedArtifactPolicy, BindingSearchPattern,
+  assemble_static_search_config,
 };
+use stella_anonymize_core::assemble::{GazetteerEntry, PipelineConfig};
+use stella_anonymize_core::{
+  Error, FuzzySearchOptions, LiteralSearchOptions, PreparedArtifactPolicy,
+  RegexArtifactPolicy, RegexSearchOptions, SearchIndex, SearchIndexArtifacts,
+  SearchMatch, SearchOptions, SearchPattern,
+};
+
+#[derive(Deserialize)]
+struct AssembleFixtureInput {
+  config: PipelineConfig,
+  #[serde(default)]
+  gazetteer: Vec<GazetteerEntry>,
+}
+
+#[derive(Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct EmailObfuscationVocabulary {
+  at_tokens: Vec<String>,
+  dot_tokens: Vec<String>,
+}
+
+fn assemble_fixture_input() -> AssembleFixtureInput {
+  serde_json::from_str(include_str!(
+    "fixtures/assemble/baseline-all-on.input.json"
+  ))
+  .unwrap()
+}
+
+fn email_obfuscation_vocabularies()
+-> BTreeMap<String, EmailObfuscationVocabulary> {
+  serde_json::from_str(include_str!(
+    "../../../packages/data/config/email-obfuscation-tokens.json"
+  ))
+  .unwrap()
+}
+
+fn assembled_obfuscated_email_pattern(
+  language: &str,
+  vocabulary: &EmailObfuscationVocabulary,
+) -> BindingSearchPattern {
+  let mut input = assemble_fixture_input();
+  input.config.languages = Some(vec![language.to_string()]);
+  let assembled =
+    assemble_static_search_config(&input.config, None, &input.gazetteer)
+      .unwrap();
+  let dot_tokens = vocabulary
+    .dot_tokens
+    .iter()
+    .filter(|token| !token.is_empty())
+    .cloned()
+    .collect::<Vec<_>>();
+  let pattern = assembled
+    .regex_patterns
+    .into_iter()
+    .find(|pattern| {
+      pattern.lazy == Some(true)
+        && pattern.prefilter_any.as_deref() == Some(dot_tokens.as_slice())
+    })
+    .expect("assembled language-owned written-email pattern");
+  assert_eq!(
+    pattern.prefilter_case_insensitive,
+    Some(true),
+    "the dot-token gate must preserve the main regex's case insensitivity"
+  );
+  assert_eq!(
+    pattern.prefilter_regex, None,
+    "the written-email pattern must not retain a secondary regex"
+  );
+  assert_eq!(
+    pattern.prefilter_window_bytes, None,
+    "the written-email pattern must not impose a prefilter window"
+  );
+  assert_eq!(
+    pattern.prepared_artifact_policy, None,
+    "the written-email pattern must not override artifact policy"
+  );
+  pattern
+}
+
+fn written_email_search_pattern(
+  pattern: BindingSearchPattern,
+) -> SearchPattern {
+  SearchPattern::RegexWithOptions {
+    pattern: pattern.pattern,
+    lazy: true,
+    prefilter_any: pattern.prefilter_any.unwrap_or_default(),
+    prefilter_case_insensitive: pattern.prefilter_case_insensitive,
+    prefilter_regex: None,
+    prefilter_window_bytes: pattern
+      .prefilter_window_bytes
+      .map(|value| usize::try_from(value).unwrap()),
+    prepared_artifact_policy: pattern.prepared_artifact_policy.map(|policy| {
+      match policy {
+        BindingPreparedArtifactPolicy::Include => {
+          PreparedArtifactPolicy::Include
+        }
+        BindingPreparedArtifactPolicy::Omit => PreparedArtifactPolicy::Omit,
+      }
+    }),
+  }
+}
+
+fn obfuscated_email_pattern() -> SearchPattern {
+  let vocabularies = email_obfuscation_vocabularies();
+  let vocabulary = vocabularies.get("en").unwrap();
+  written_email_search_pattern(assembled_obfuscated_email_pattern(
+    "en", vocabulary,
+  ))
+}
+
+fn written_email_search_options() -> SearchOptions {
+  SearchOptions {
+    regex: RegexSearchOptions {
+      artifact_policy: RegexArtifactPolicy::Omit,
+      ..RegexSearchOptions::default()
+    },
+    ..SearchOptions::default()
+  }
+}
+
+fn written_email_indexes() -> (&'static SearchIndex, &'static SearchIndex) {
+  static OPTIMIZED: OnceLock<SearchIndex> = OnceLock::new();
+  static REFERENCE: OnceLock<SearchIndex> = OnceLock::new();
+
+  let optimized = OPTIMIZED.get_or_init(|| {
+    SearchIndex::new(
+      vec![obfuscated_email_pattern()],
+      written_email_search_options(),
+    )
+    .unwrap()
+  });
+  let reference = REFERENCE.get_or_init(|| {
+    let vocabularies = email_obfuscation_vocabularies();
+    let vocabulary = vocabularies.get("en").unwrap();
+    SearchIndex::new(
+      vec![SearchPattern::Regex(
+        assembled_obfuscated_email_pattern("en", vocabulary).pattern,
+      )],
+      written_email_search_options(),
+    )
+    .unwrap()
+  });
+  (optimized, reference)
+}
 
 #[test]
 fn search_index_routes_literal_regex_and_fuzzy_patterns() {
@@ -467,4 +617,143 @@ fn search_index_prepared_artifacts_reject_stale_literal_options() {
       .is_err(),
     "prepared artifacts should be bound to literal search options"
   );
+}
+
+#[test]
+fn written_email_literal_prefilter_removes_secondary_regex_artifact() {
+  let artifacts = SearchIndex::prepare_artifacts(
+    vec![obfuscated_email_pattern()],
+    written_email_search_options(),
+  )
+  .unwrap();
+  let slot = artifacts.slots.first().unwrap();
+
+  assert_eq!(
+    slot.aho_automata.len(),
+    0,
+    "a single literal cue must stay on the allocation-free inline path"
+  );
+  assert_eq!(
+    slot.regex_sets.len(),
+    1,
+    "only the authoritative email regex should need a regex artifact"
+  );
+}
+
+fn token_case_variants(token: &str) -> Vec<String> {
+  let alternating = token
+    .chars()
+    .enumerate()
+    .flat_map(|(index, character)| {
+      if index % 2 == 0 {
+        character.to_uppercase().collect::<Vec<_>>()
+      } else {
+        character.to_lowercase().collect::<Vec<_>>()
+      }
+    })
+    .collect::<String>();
+  let mut variants = vec![
+    token.to_string(),
+    token.to_lowercase(),
+    token.to_uppercase(),
+    alternating,
+  ];
+  variants.sort();
+  variants.dedup();
+  variants
+}
+
+#[test]
+fn every_shipped_written_email_vocabulary_matches_unfiltered_reference() {
+  let vocabularies = email_obfuscation_vocabularies();
+  assert!(
+    !vocabularies.is_empty(),
+    "written-email coverage requires at least one shipped vocabulary"
+  );
+
+  for (language, vocabulary) in vocabularies {
+    let assembled = assembled_obfuscated_email_pattern(&language, &vocabulary);
+    let source = assembled.pattern.clone();
+    let optimized = SearchIndex::new(
+      vec![written_email_search_pattern(assembled)],
+      written_email_search_options(),
+    )
+    .unwrap();
+    let reference = SearchIndex::new(
+      vec![SearchPattern::Regex(source)],
+      written_email_search_options(),
+    )
+    .unwrap();
+    let at_tokens = vocabulary
+      .at_tokens
+      .iter()
+      .filter(|token| !token.is_empty());
+    let dot_tokens = vocabulary
+      .dot_tokens
+      .iter()
+      .filter(|token| !token.is_empty());
+
+    for at_token in at_tokens {
+      for dot_token in dot_tokens.clone() {
+        for at_variant in token_case_variants(at_token) {
+          for dot_variant in token_case_variants(dot_token) {
+            for whitespace in [" ", "  ", "\t", "\u{a0}"] {
+              let haystack = format!(
+                "Contact alice{whitespace}{at_variant}{whitespace}example{whitespace}{dot_variant}{whitespace}com now"
+              );
+              let optimized_matches = optimized.find_iter(&haystack).unwrap();
+              assert!(
+                !optimized_matches.is_empty(),
+                "{language} literal gate rejected a main-regex match for {haystack:?}"
+              );
+              assert_eq!(
+                optimized_matches,
+                reference.find_iter(&haystack).unwrap(),
+                "{language} literal gate changed match identity for {haystack:?}"
+              );
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+proptest! {
+  #![proptest_config(ProptestConfig {
+    cases: 96,
+    ..ProptestConfig::default()
+  })]
+
+  #[test]
+  fn written_email_literal_prefilter_matches_reference_for_arbitrary_text(
+    characters in collection::vec(any::<char>(), 0..256),
+  ) {
+    let haystack = characters.into_iter().collect::<String>();
+    let (optimized, reference) = written_email_indexes();
+
+    prop_assert_eq!(
+      optimized.find_iter(&haystack).unwrap(),
+      reference.find_iter(&haystack).unwrap(),
+    );
+  }
+
+  #[test]
+  fn written_email_literal_prefilter_preserves_case_and_unicode_whitespace(
+    local in "[a-z0-9]{1,12}",
+    domain in "[a-z0-9]{1,12}",
+    suffix in "[a-z]{2,6}",
+    at_token in sample::select(vec!["at", "At", "aT", "AT"]),
+    dot_token in sample::select(vec!["dot", "Dot", "dOt", "DOT"]),
+    whitespace in sample::select(vec![" ", "  ", "\t", "\u{a0}"]),
+  ) {
+    let haystack = format!(
+      "Contact {local}{whitespace}{at_token}{whitespace}{domain}{whitespace}{dot_token}{whitespace}{suffix} now"
+    );
+    let (optimized, reference) = written_email_indexes();
+    let optimized_matches = optimized.find_iter(&haystack).unwrap();
+
+    prop_assert!(!optimized_matches.is_empty());
+    prop_assert_eq!(optimized_matches, reference.find_iter(&haystack).unwrap());
+  }
 }

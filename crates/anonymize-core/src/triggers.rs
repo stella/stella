@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use regex::{Regex, RegexBuilder};
 
@@ -116,6 +116,12 @@ struct PreparedTriggerRule {
   strategy: PreparedTriggerStrategy,
   validations: Vec<PreparedTriggerValidation>,
   include_trigger: bool,
+}
+
+struct SuccessfulTriggerCandidate<'a> {
+  found: SearchMatch,
+  rule: &'a PreparedTriggerRule,
+  entity: PipelineEntity,
 }
 
 enum PreparedTriggerStrategy {
@@ -322,7 +328,7 @@ pub(crate) fn process_trigger_matches(
   mut diagnostics: Option<&mut StaticRedactionDiagnostics>,
 ) -> Result<Vec<PipelineEntity>> {
   let offsets = ByteOffsets::new(full_text);
-  let mut results = Vec::new();
+  let mut candidates = Vec::new();
   let extraction_data = TriggerExtractionData {
     address_stop_keywords: &data.address_stop_keywords,
     party_position_terms: &data.party_position_terms,
@@ -457,14 +463,49 @@ pub(crate) fn process_trigger_matches(
     if label.is_empty() {
       label.clone_from(&rule.label);
     }
-    results.push(PipelineEntity::detected(
-      entity_start,
-      entity_end,
-      label,
-      entity_text,
-      TRIGGER_SCORE,
-      DetectionSource::Trigger,
-    ));
+    candidates.push(SuccessfulTriggerCandidate {
+      found: *found,
+      rule,
+      entity: PipelineEntity::detected(
+        entity_start,
+        entity_end,
+        label,
+        entity_text,
+        TRIGGER_SCORE,
+        DetectionSource::Trigger,
+      ),
+    });
+  }
+
+  // Several configured field grammars intentionally share a start
+  // (`passport number` and `passport number is`). A successful longer rule
+  // owns that field grammar for its label, but a boundary-valid rule that
+  // cannot extract or validate a value must leave the shorter fallback
+  // available. Distinct labels and equal-length alternatives remain available.
+  let mut maximum_successful_end_by_start_and_label =
+    HashMap::<(u32, String), u32>::new();
+  for candidate in &candidates {
+    maximum_successful_end_by_start_and_label
+      .entry((candidate.found.start(), candidate.entity.label.clone()))
+      .and_modify(|end| *end = (*end).max(candidate.found.end()))
+      .or_insert_with(|| candidate.found.end());
+  }
+
+  let mut results = Vec::with_capacity(candidates.len());
+  for candidate in candidates {
+    if maximum_successful_end_by_start_and_label
+      .get(&(candidate.found.start(), candidate.entity.label.clone()))
+      .is_some_and(|maximum_end| candidate.found.end() < *maximum_end)
+    {
+      record_trigger_rejection(
+        &mut diagnostics,
+        &candidate.found,
+        candidate.rule,
+        "shorter-same-start-trigger",
+      );
+      continue;
+    }
+    results.push(candidate.entity);
   }
 
   Ok(results)
@@ -2815,6 +2856,228 @@ mod tests {
   use crate::search::{SearchIndex, SearchOptions, SearchPattern};
 
   use super::*;
+
+  fn trigger_test_data(rules: Vec<TriggerRule>) -> PreparedTriggerData {
+    PreparedTriggerData::new(TriggerData {
+      rules,
+      address_stop_keywords: Vec::new(),
+      party_position_terms: Vec::new(),
+      legal_form_suffixes: Vec::new(),
+      post_nominals: Vec::new(),
+      sentence_terminal_currency_terms: Vec::new(),
+      phone_extension_labels: Vec::new(),
+      number_markers: Vec::new(),
+      number_labels: Vec::new(),
+      person_field_labels: Vec::new(),
+    })
+    .unwrap()
+  }
+
+  fn n_words_rule(trigger: &str, label: &str) -> TriggerRule {
+    TriggerRule {
+      trigger: String::from(trigger),
+      label: String::from(label),
+      strategy: TriggerStrategy::NWords { count: 1 },
+      validations: Vec::new(),
+      include_trigger: false,
+    }
+  }
+
+  #[test]
+  fn longer_same_start_trigger_makes_field_grammar_authoritative() {
+    let text = "passport number is Z12345678";
+    let data = trigger_test_data(vec![
+      n_words_rule("passport number", "passport number"),
+      n_words_rule("passport number is", "passport number"),
+    ]);
+    let entities = process_trigger_matches(
+      &[
+        SearchMatch::Literal {
+          pattern: 0,
+          start: 0,
+          end: u32::try_from("passport number".len()).unwrap(),
+        },
+        SearchMatch::Literal {
+          pattern: 1,
+          start: 0,
+          end: u32::try_from("passport number is".len()).unwrap(),
+        },
+      ],
+      PatternSlice { start: 0, end: 2 },
+      text,
+      &data,
+      &BTreeSet::new(),
+      None,
+    )
+    .unwrap();
+
+    assert_eq!(entities.len(), 1);
+    assert_eq!(entities[0].text, "Z12345678");
+  }
+
+  #[test]
+  fn equal_length_same_start_trigger_alternatives_are_preserved() {
+    let text = "record number 12345";
+    let data = trigger_test_data(vec![
+      n_words_rule("record number", "registration number"),
+      n_words_rule("record number", "case number"),
+    ]);
+    let end = u32::try_from("record number".len()).unwrap();
+    let entities = process_trigger_matches(
+      &[
+        SearchMatch::Literal {
+          pattern: 0,
+          start: 0,
+          end,
+        },
+        SearchMatch::Literal {
+          pattern: 1,
+          start: 0,
+          end,
+        },
+      ],
+      PatternSlice { start: 0, end: 2 },
+      text,
+      &data,
+      &BTreeSet::new(),
+      None,
+    )
+    .unwrap();
+
+    assert_eq!(entities.len(), 2);
+    assert_eq!(entities[0].text, "12345");
+    assert_eq!(entities[1].text, "12345");
+  }
+
+  #[test]
+  fn shorter_same_start_trigger_with_distinct_label_is_preserved() {
+    let text = "record number code 12345";
+    let data = trigger_test_data(vec![
+      TriggerRule {
+        trigger: String::from("record number"),
+        label: String::from("case number"),
+        strategy: TriggerStrategy::NWords { count: 2 },
+        validations: Vec::new(),
+        include_trigger: false,
+      },
+      n_words_rule("record number code", "registration number"),
+    ]);
+    let entities = process_trigger_matches(
+      &[
+        SearchMatch::Literal {
+          pattern: 0,
+          start: 0,
+          end: u32::try_from("record number".len()).unwrap(),
+        },
+        SearchMatch::Literal {
+          pattern: 1,
+          start: 0,
+          end: u32::try_from("record number code".len()).unwrap(),
+        },
+      ],
+      PatternSlice { start: 0, end: 2 },
+      text,
+      &data,
+      &BTreeSet::new(),
+      None,
+    )
+    .unwrap();
+
+    assert_eq!(entities.len(), 2);
+    assert_eq!(entities[0].label, "case number");
+    assert_eq!(entities[0].text, "code 12345");
+    assert_eq!(entities[1].label, "registration number");
+    assert_eq!(entities[1].text, "12345");
+  }
+
+  #[test]
+  fn boundary_invalid_longer_trigger_does_not_shadow_valid_fallback() {
+    let text = "VAT numbers 12345";
+    let data = trigger_test_data(vec![
+      TriggerRule {
+        trigger: String::from("VAT"),
+        label: String::from("tax identification number"),
+        strategy: TriggerStrategy::NWords { count: 2 },
+        validations: Vec::new(),
+        include_trigger: false,
+      },
+      n_words_rule("VAT number", "tax identification number"),
+    ]);
+    let entities = process_trigger_matches(
+      &[
+        SearchMatch::Literal {
+          pattern: 0,
+          start: 0,
+          end: u32::try_from("VAT".len()).unwrap(),
+        },
+        SearchMatch::Literal {
+          pattern: 1,
+          start: 0,
+          end: u32::try_from("VAT number".len()).unwrap(),
+        },
+      ],
+      PatternSlice { start: 0, end: 2 },
+      text,
+      &data,
+      &BTreeSet::new(),
+      None,
+    )
+    .unwrap();
+
+    assert_eq!(entities.len(), 1);
+    assert_eq!(entities[0].text, "numbers 12345");
+  }
+
+  proptest::proptest! {
+    #[test]
+    fn validation_failed_longer_trigger_does_not_shadow_valid_fallback(
+      identifier in "[0-9]{1,12}",
+    ) {
+      let text = format!("record number code {identifier}");
+      let data = trigger_test_data(vec![
+        TriggerRule {
+          trigger: String::from("record number"),
+          label: String::from("registration number"),
+          strategy: TriggerStrategy::NWords { count: 2 },
+          validations: vec![TriggerValidation::HasDigits],
+          include_trigger: false,
+        },
+        TriggerRule {
+          trigger: String::from("record number code"),
+          label: String::from("registration number"),
+          strategy: TriggerStrategy::NWords { count: 1 },
+          validations: vec![TriggerValidation::NoDigits],
+          include_trigger: false,
+        },
+      ]);
+      let entities = process_trigger_matches(
+        &[
+          SearchMatch::Literal {
+            pattern: 0,
+            start: 0,
+            end: u32::try_from("record number".len()).unwrap(),
+          },
+          SearchMatch::Literal {
+            pattern: 1,
+            start: 0,
+            end: u32::try_from("record number code".len()).unwrap(),
+          },
+        ],
+        PatternSlice { start: 0, end: 2 },
+        &text,
+        &data,
+        &BTreeSet::new(),
+        None,
+      )
+      .unwrap();
+
+      proptest::prop_assert_eq!(entities.len(), 1);
+      proptest::prop_assert_eq!(
+        &entities[0].text,
+        &format!("code {identifier}"),
+      );
+    }
+  }
 
   #[test]
   fn court_trigger_includes_trigger_span() {

@@ -26,7 +26,7 @@ const text = (bytes: Uint8Array): string =>
   new TextDecoder().decode(bytes).trim();
 
 const GENERATED_AGGREGATE_REPORT =
-  /^packages\/benchmark\/results\/blind\/(?:(redactionbench|meddocan|german-ler)\/)?(\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z)\.(json|md)$/u;
+  /^packages\/benchmark\/results\/blind\/(?:(redactionbench|meddocan|multigrassco|german-ler)\/)?(\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z)\.(json|md)$/u;
 
 const generatedAggregateReport = (
   root: string,
@@ -47,10 +47,12 @@ const generatedAggregateReport = (
     let expectedCorpus:
       | "german-ler"
       | "meddocan"
+      | "multigrassco"
       | "redactionbench"
       | "tab-echr" = "tab-echr";
     if (suite === "redactionbench") expectedCorpus = "redactionbench";
     if (suite === "meddocan") expectedCorpus = "meddocan";
+    if (suite === "multigrassco") expectedCorpus = "multigrassco";
     if (suite === "german-ler") expectedCorpus = "german-ler";
     return (
       report.corpus.id === expectedCorpus &&

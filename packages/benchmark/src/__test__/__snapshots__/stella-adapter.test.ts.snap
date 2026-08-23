@@ -1,0 +1,8 @@
+// Bun Snapshot v1, https://bun.sh/docs/test/snapshots
+
+exports[`stella benchmark adapter language scoping pins the shipped product-default prepared pipeline output 1`] = `
+{
+  "digest": "b580842b9398875d23553913d51e1e11f91994da97761930b568b10eeede7458",
+  "spanCount": 185,
+}
+`;

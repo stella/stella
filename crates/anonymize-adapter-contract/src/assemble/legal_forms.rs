@@ -534,22 +534,54 @@ pub(super) fn clause_noun_heads() -> Result<Vec<String>, AssembleError> {
   load_lowercase_union("clause-noun-heads.json", CLAUSE_NOUN_HEADS_SEED)
 }
 
+fn scoped_clause_noun_heads(
+  selected: Option<&[String]>,
+) -> Result<Vec<String>, AssembleError> {
+  let configured: OrderedMap<Value> =
+    parse_ordered_data_file("clause-noun-heads.json")?;
+  let mut seen = HashSet::new();
+  let mut result = Vec::new();
+  if language::language_config_matches("en", selected) {
+    for word in CLAUSE_NOUN_HEADS_SEED {
+      push_unique((*word).to_string(), &mut seen, &mut result);
+    }
+  }
+  for word in language::language_keyed_terms(&configured, selected) {
+    push_unique(word.to_lowercase(), &mut seen, &mut result);
+  }
+  Ok(result)
+}
+
 /// Mirrors `getConnectorProseHeadsSync` (post-warm): `generic-roles.json`
-/// `roles`, lowercased, insertion-order dedup.
-fn connector_prose_heads() -> Result<Vec<String>, AssembleError> {
+/// `roles`, lowercased, insertion-order dedup, filtered through explicit
+/// language ownership from `connector-prose-heads.json`.
+fn connector_prose_heads(
+  selected: Option<&[String]>,
+) -> Result<Vec<String>, AssembleError> {
   #[derive(Deserialize)]
   struct GenericRoles {
     #[serde(default)]
     roles: Vec<String>,
   }
   let parsed: GenericRoles = parse_data_file("generic-roles.json")?;
+  let ownership: OrderedMap<Value> =
+    parse_ordered_data_file("connector-prose-heads.json")?;
+  let selected_roles: HashSet<String> =
+    language::language_keyed_terms(&ownership, selected)
+      .into_iter()
+      .map(|role| role.to_lowercase())
+      .collect();
   let mut seen = HashSet::new();
   let mut out = Vec::new();
   for role in parsed.roles {
     if role.is_empty() {
       continue;
     }
-    push_unique(role.to_lowercase(), &mut seen, &mut out);
+    let role = role.to_lowercase();
+    if !selected_roles.contains(&role) {
+      continue;
+    }
+    push_unique(role, &mut seen, &mut out);
   }
   Ok(out)
 }
@@ -601,20 +633,54 @@ fn leading_clause_trims() -> Result<LeadingClauseTrims, AssembleError> {
   })
 }
 
-/// Copy-through arrays from `legal-form-rule-words.json`.
+/// Shared and language-owned arrays from `legal-form-rule-words.json`.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct LegalFormRuleWords {
   #[serde(default)]
   connector_words: Vec<String>,
   #[serde(default)]
-  and_connector_words: Vec<String>,
+  connector_word_languages: OrderedMap<Value>,
+  #[serde(default)]
+  party_connector_words: OrderedMap<Value>,
   #[serde(default)]
   in_name_prepositions: Vec<String>,
   #[serde(default)]
   company_suffix_words: Vec<String>,
   #[serde(default)]
   comma_gated_direct_prefixes: Vec<String>,
+}
+
+fn scoped_connector_words(
+  rule_words: &LegalFormRuleWords,
+  selected: Option<&[String]>,
+) -> Vec<String> {
+  let owned: HashSet<String> = language::language_keyed_terms(
+    &rule_words.connector_word_languages,
+    selected,
+  )
+  .into_iter()
+  .map(|word| word.to_lowercase())
+  .collect();
+  rule_words
+    .connector_words
+    .iter()
+    .map(|word| word.to_lowercase())
+    .filter(|word| owned.contains(word))
+    .collect()
+}
+
+type ScopedLegalFormRuleWords = (LegalFormRuleWords, Vec<String>, Vec<String>);
+
+fn scoped_legal_form_rule_words(
+  selected: Option<&[String]>,
+) -> Result<ScopedLegalFormRuleWords, AssembleError> {
+  let rule_words: LegalFormRuleWords =
+    parse_data_file("legal-form-rule-words.json")?;
+  let connector_words = scoped_connector_words(&rule_words, selected);
+  let party_connector_words =
+    language::language_keyed_terms(&rule_words.party_connector_words, selected);
+  Ok((rule_words, connector_words, party_connector_words))
 }
 
 #[derive(Deserialize)]
@@ -744,8 +810,8 @@ pub(super) fn build_legal_form_data(
     .collect();
 
   let trims = leading_clause_trims()?;
-  let rule_words: LegalFormRuleWords =
-    parse_data_file("legal-form-rule-words.json")?;
+  let (rule_words, connector_words, party_connector_words) =
+    scoped_legal_form_rule_words(ctx.content_languages.as_deref())?;
   let institutional =
     institutional_organization_data(ctx.content_languages.as_deref())?;
 
@@ -764,19 +830,20 @@ pub(super) fn build_legal_form_data(
       "sentence-verb-indicators.json",
       &[],
     )?,
-    clause_noun_heads: load_lowercase_union(
-      "clause-noun-heads.json",
-      CLAUSE_NOUN_HEADS_SEED,
+    clause_noun_heads: scoped_clause_noun_heads(
+      ctx.content_languages.as_deref(),
     )?,
-    connector_prose_heads: connector_prose_heads()?,
+    connector_prose_heads: connector_prose_heads(
+      ctx.content_languages.as_deref(),
+    )?,
     structural_single_cap_prefixes: load_lowercase_union(
       "structural-single-cap-prefixes.json",
       &[],
     )?,
     leading_clause_phrases: trims.phrases,
     leading_clause_direct_prefixes: trims.direct_prefixes,
-    connector_words: rule_words.connector_words,
-    and_connector_words: rule_words.and_connector_words,
+    connector_words,
+    and_connector_words: party_connector_words,
     in_name_prepositions: rule_words.in_name_prepositions,
     company_suffix_words: rule_words.company_suffix_words,
     comma_gated_direct_prefixes: rule_words.comma_gated_direct_prefixes,
@@ -805,10 +872,17 @@ pub(super) fn build_legal_form_data(
 mod tests {
   #![allow(clippy::unwrap_used)]
 
+  use std::collections::HashSet;
+
+  use serde_json::Value;
+  use stella_anonymize_core::assemble::{OrderedMap, parse_ordered_data_file};
+
   use super::{
-    InstitutionalOrganizationData, all_legal_suffixes,
-    institutional_language_words, non_ascii_name_short_suffixes,
-    organization_detection_suffixes, role_heads, validate_institutional_terms,
+    InstitutionalOrganizationData, LegalFormRuleWords, all_legal_suffixes,
+    connector_prose_heads, institutional_language_words, language,
+    non_ascii_name_short_suffixes, organization_detection_suffixes,
+    parse_data_file, role_heads, scoped_clause_noun_heads,
+    scoped_connector_words, validate_institutional_terms,
   };
 
   #[test]
@@ -835,6 +909,84 @@ mod tests {
 
     assert!(czech.iter().any(|word| word == "poskytovatele"));
     assert!(!english.iter().any(|word| word == "poskytovatele"));
+  }
+
+  #[test]
+  fn clause_noun_heads_follow_content_language_scope() {
+    let czech = scoped_clause_noun_heads(Some(&[String::from("cs")])).unwrap();
+    let english =
+      scoped_clause_noun_heads(Some(&[String::from("en")])).unwrap();
+
+    assert!(czech.iter().any(|word| word == "dohoda"));
+    assert!(!english.iter().any(|word| word == "dohoda"));
+    assert!(english.iter().any(|word| word == "agreement"));
+    assert!(!czech.iter().any(|word| word == "agreement"));
+  }
+
+  #[test]
+  fn connector_prose_heads_follow_content_language_scope() {
+    let czech = connector_prose_heads(Some(&[String::from("cs")])).unwrap();
+    let english = connector_prose_heads(Some(&[String::from("en")])).unwrap();
+
+    assert!(czech.contains(&String::from("nájemce")));
+    assert!(!czech.contains(&String::from("customer")));
+    assert!(english.contains(&String::from("customer")));
+    assert!(english.contains(&String::from("supplier")));
+    assert!(!english.contains(&String::from("nájemce")));
+  }
+
+  #[test]
+  fn connector_prose_ownership_exactly_covers_generic_roles() {
+    let generic: Value = parse_data_file("generic-roles.json").unwrap();
+    let expected: HashSet<String> = generic
+      .get("roles")
+      .and_then(Value::as_array)
+      .unwrap()
+      .iter()
+      .filter_map(Value::as_str)
+      .map(str::to_string)
+      .collect();
+    let ownership: OrderedMap<Value> =
+      parse_ordered_data_file("connector-prose-heads.json").unwrap();
+    let owned: HashSet<String> =
+      language::language_keyed_terms(&ownership, None)
+        .into_iter()
+        .collect();
+
+    assert_eq!(owned, expected);
+    for shared_role in ["cedente", "cliente", "parte"] {
+      let owner_count = ownership
+        .values()
+        .filter_map(Value::as_array)
+        .filter(|roles| {
+          roles.iter().any(|role| role.as_str() == Some(shared_role))
+        })
+        .count();
+      assert!(owner_count >= 2, "{shared_role} must retain every owner");
+    }
+  }
+
+  #[test]
+  fn alphabetic_connectors_follow_content_language_scope() {
+    let rule_words: LegalFormRuleWords =
+      parse_data_file("legal-form-rule-words.json").unwrap();
+    let english =
+      scoped_connector_words(&rule_words, Some(&[String::from("en")]));
+    let italian =
+      scoped_connector_words(&rule_words, Some(&[String::from("it")]));
+    let english_party = language::language_keyed_terms(
+      &rule_words.party_connector_words,
+      Some(&[String::from("en")]),
+    );
+    let italian_party = language::language_keyed_terms(
+      &rule_words.party_connector_words,
+      Some(&[String::from("it")]),
+    );
+
+    assert_eq!(english, ["and", "&"]);
+    assert_eq!(italian, ["e", "&"]);
+    assert_eq!(english_party, ["and"]);
+    assert_eq!(italian_party, ["e"]);
   }
 
   #[test]

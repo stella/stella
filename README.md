@@ -71,6 +71,12 @@ sessions, custom detections, operators, diagnostics, and prepared packages; the
 [capability manifest](packages/anonymize/src/capabilities.ts) is the exact list
 of public runtime surfaces and entity types.
 
+The default pipeline targets personal identifiers, not general secret scanning.
+It does not claim to detect passwords, authentication tokens, API keys, or
+private cryptographic material. IP addresses, MAC addresses, and URLs are
+available only through explicit opt-in capabilities; inspect the manifest before
+using redaction as a security boundary.
+
 ### Browser
 
 ```bash
@@ -244,13 +250,14 @@ you need the browser runtime.
 
 ## Benchmarks
 
-The held-out public-test suite compares stella with OpenRedaction, Presidio,
+The held-out public-evaluation suite compares stella with OpenRedaction, Presidio,
 base scrubadub, DataFog's model-free regex engine, and redact-pii on TAB-ECHR,
-RedactionBench, MEDDOCAN, and German Legal Entity Recognition. Each corpus keeps
-its own task and metrics; German LER is reported as legal-entity coverage, not
-PII recall. Holdout reports contain aggregate values only. PII-Shield is
-included when its external CLI and model are installed, and the German runner
-can also report an optional pinned Nym ONNX model as an assisted stella lane.
+RedactionBench, MEDDOCAN, MultiGraSCCo, and German Legal Entity Recognition.
+Each corpus keeps its own task and metrics; MultiGraSCCo reports direct and
+indirect identifier recall separately, while German LER is legal-entity
+coverage, not PII recall. Holdout reports contain aggregate values only. PII-Shield is
+included when its external CLI and model are installed. The German runner can
+also report an optional pinned Nym ONNX model as an assisted stella lane.
 
 Quality-suite timings are one-shot corpus passes, so they are directional
 rather than speed rankings. The separate cross-provider harness runs stella's

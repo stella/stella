@@ -1,7 +1,8 @@
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 
-export const SEALED_AGGREGATE_REPORT_SCHEMA_VERSION = 4 as const;
+export const SEALED_AGGREGATE_REPORT_SCHEMA_VERSION = 5 as const;
+export const LEGACY_SEALED_AGGREGATE_REPORT_SCHEMA_VERSION = 4 as const;
 
 const SAFE_PROVIDER_NAME = /^[a-z0-9][a-z0-9._-]{0,63}$/u;
 const SAFE_PROVIDER_VERSION = /^[A-Za-z0-9][A-Za-z0-9 ._+/@():-]{0,127}$/u;
@@ -53,6 +54,19 @@ export type MeddocanAggregateMetrics = {
   readonly goldSpans: number;
 };
 
+export type MultiGraSCCoAggregateMetrics = {
+  readonly type: "multigrassco-direct-indirect-redaction";
+  readonly documents: number;
+  readonly directSpans: number;
+  readonly indirectSpans: number;
+  readonly predictedSpans: number;
+  readonly directSpanRecall: number;
+  readonly indirectSpanRecall: number;
+  readonly directCharacterRecall: number;
+  readonly indirectCharacterRecall: number;
+  readonly acceptedCharacterPrecision: number;
+};
+
 export type GermanLerAggregateMetrics = {
   readonly type: "german-legal-entity-coverage";
   readonly documents: number;
@@ -67,7 +81,13 @@ export type SealedAggregateMetrics =
   | TabAggregateMetrics
   | RedactionBenchAggregateMetrics
   | MeddocanAggregateMetrics
+  | MultiGraSCCoAggregateMetrics
   | GermanLerAggregateMetrics;
+
+export type LegacySealedAggregateMetrics = Exclude<
+  SealedAggregateMetrics,
+  MultiGraSCCoAggregateMetrics
+>;
 
 export type SealedLibraryResult =
   | {
@@ -83,11 +103,60 @@ export type SealedLibraryResult =
       readonly name: string;
       readonly version: string;
       readonly status: "unavailable";
+      readonly reasonCode: "adapter-unavailable" | "language-unsupported";
+    };
+
+export type LegacySealedLibraryResult =
+  | {
+      readonly name: string;
+      readonly version: string;
+      readonly status: "ok";
+      readonly timing: SealedTiming;
+      readonly adapterWallSeconds: number;
+      readonly metrics: LegacySealedAggregateMetrics;
+    }
+  | {
+      readonly name: string;
+      readonly version: string;
+      readonly status: "unavailable";
       readonly reasonCode: "adapter-unavailable";
     };
 
 export type SealedAggregateReport = {
   readonly schemaVersion: typeof SEALED_AGGREGATE_REPORT_SCHEMA_VERSION;
+  readonly createdAt: string;
+  readonly sourceGitSha: string;
+  readonly runtime: string;
+  readonly policy: "evaluation-only";
+  readonly corpus: {
+    readonly id:
+      | "tab-echr"
+      | "redactionbench"
+      | "meddocan"
+      | "multigrassco"
+      | "german-ler";
+    readonly source: string;
+    readonly version: string;
+    readonly file: string;
+    readonly sha256: string;
+    readonly license: string;
+    readonly split: "test" | "evaluation";
+    readonly documentCount: number;
+    readonly selection:
+      | { readonly type: "full-test-split" }
+      | { readonly type: "fixed-hash-sample"; readonly seed: string }
+      | {
+          readonly type: "validated-offset-subset";
+          readonly sourceDocuments: number;
+          readonly excludedDocuments: number;
+          readonly reasonCode: "invalid-source-spans";
+        };
+  };
+  readonly libraries: readonly SealedLibraryResult[];
+};
+
+export type LegacySealedAggregateReport = {
+  readonly schemaVersion: typeof LEGACY_SEALED_AGGREGATE_REPORT_SCHEMA_VERSION;
   readonly createdAt: string;
   readonly sourceGitSha: string;
   readonly runtime: string;
@@ -105,8 +174,16 @@ export type SealedAggregateReport = {
       | { readonly type: "full-test-split" }
       | { readonly type: "fixed-hash-sample"; readonly seed: string };
   };
-  readonly libraries: readonly SealedLibraryResult[];
+  readonly libraries: readonly LegacySealedLibraryResult[];
 };
+
+export type SupportedSealedAggregateReport =
+  | LegacySealedAggregateReport
+  | SealedAggregateReport;
+
+type AvailableSupportedSealedLibraryResult =
+  | Extract<LegacySealedLibraryResult, { status: "ok" }>
+  | Extract<SealedLibraryResult, { status: "ok" }>;
 
 type SealedReportVersionFreshnessOptions = {
   readonly currentVersion: string;
@@ -129,6 +206,27 @@ export type SealedReportVersionFreshness =
       readonly currentVersion: string;
       readonly reportVersion: string;
     };
+
+type SealedReportRevisionFreshnessOptions = {
+  readonly currentGitSha: string;
+  readonly reportGitSha: string;
+};
+
+export type SealedReportRevisionFreshness =
+  | { readonly status: "current" }
+  | {
+      readonly status: "stale";
+      readonly currentGitSha: string;
+      readonly reportGitSha: string;
+    };
+
+export const assessSealedReportRevisionFreshness = ({
+  currentGitSha,
+  reportGitSha,
+}: SealedReportRevisionFreshnessOptions): SealedReportRevisionFreshness =>
+  currentGitSha === reportGitSha
+    ? { status: "current" }
+    : { status: "stale", currentGitSha, reportGitSha };
 
 const RELEASE_VERSION =
   /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-(alpha|beta|rc)\.(0|[1-9]\d*))?$/u;
@@ -304,7 +402,10 @@ const validateTiming = (value: unknown, context: string): void => {
   requireCount(value["totalChars"], `${context} totalChars`);
 };
 
-const validateMetrics = (value: unknown): void => {
+const validateMetrics = (
+  value: unknown,
+  schemaVersion: SupportedSealedAggregateReport["schemaVersion"],
+): void => {
   if (!isRecord(value)) {
     throw new Error("sealed metrics must be an object");
   }
@@ -357,6 +458,32 @@ const validateMetrics = (value: unknown): void => {
     for (const key of ratios) requireRatio(value[key], `MEDDOCAN ${key}`);
     return;
   }
+  if (type === "multigrassco-direct-indirect-redaction") {
+    if (schemaVersion === LEGACY_SEALED_AGGREGATE_REPORT_SCHEMA_VERSION) {
+      throw new Error("legacy sealed metrics use an unknown task type");
+    }
+    const counts = [
+      "documents",
+      "directSpans",
+      "indirectSpans",
+      "predictedSpans",
+    ];
+    const ratios = [
+      "directSpanRecall",
+      "indirectSpanRecall",
+      "directCharacterRecall",
+      "indirectCharacterRecall",
+      "acceptedCharacterPrecision",
+    ];
+    exactKeys(
+      value,
+      ["type", ...counts, ...ratios],
+      "MultiGraSCCo aggregate metrics",
+    );
+    for (const key of counts) requireCount(value[key], `MultiGraSCCo ${key}`);
+    for (const key of ratios) requireRatio(value[key], `MultiGraSCCo ${key}`);
+    return;
+  }
   if (type === "german-legal-entity-coverage") {
     const counts = ["documents", "goldEntities", "predictedSpans"];
     const ratios = ["entityRecall", "characterRecall", "characterPrecision"];
@@ -373,7 +500,7 @@ const validateMetrics = (value: unknown): void => {
 };
 
 const metricTypeForCorpus = (
-  corpusId: SealedAggregateReport["corpus"]["id"],
+  corpusId: unknown,
 ): SealedAggregateMetrics["type"] => {
   if (corpusId === "tab-echr") {
     return "tab-independent-annotator-span-redaction";
@@ -384,12 +511,15 @@ const metricTypeForCorpus = (
   if (corpusId === "german-ler") {
     return "german-legal-entity-coverage";
   }
+  if (corpusId === "multigrassco") {
+    return "multigrassco-direct-indirect-redaction";
+  }
   return "label-agnostic-span-redaction";
 };
 
-export const assertSealedAggregateReport: (
+export const assertSupportedSealedAggregateReport: (
   value: unknown,
-) => asserts value is SealedAggregateReport = (value) => {
+) => asserts value is SupportedSealedAggregateReport = (value) => {
   if (!isRecord(value)) throw new Error("sealed report must be an object");
   exactKeys(
     value,
@@ -404,8 +534,10 @@ export const assertSealedAggregateReport: (
     ],
     "sealed report",
   );
+  const schemaVersion = value["schemaVersion"];
   if (
-    value["schemaVersion"] !== SEALED_AGGREGATE_REPORT_SCHEMA_VERSION ||
+    (schemaVersion !== LEGACY_SEALED_AGGREGATE_REPORT_SCHEMA_VERSION &&
+      schemaVersion !== SEALED_AGGREGATE_REPORT_SCHEMA_VERSION) ||
     value["policy"] !== "evaluation-only"
   ) {
     throw new Error("sealed report contract or policy is invalid");
@@ -438,13 +570,18 @@ export const assertSealedAggregateReport: (
     "sealed report corpus",
   );
   const corpusId = corpus["id"];
-  if (
-    (corpusId !== "tab-echr" &&
-      corpusId !== "redactionbench" &&
-      corpusId !== "meddocan" &&
-      corpusId !== "german-ler") ||
-    corpus["split"] !== "test"
-  ) {
+  const legacyCorpus =
+    corpusId === "tab-echr" ||
+    corpusId === "redactionbench" ||
+    corpusId === "meddocan" ||
+    corpusId === "german-ler";
+  const currentCorpus = legacyCorpus || corpusId === "multigrassco";
+  const validCorpusAndSplit =
+    schemaVersion === LEGACY_SEALED_AGGREGATE_REPORT_SCHEMA_VERSION
+      ? legacyCorpus && corpus["split"] === "test"
+      : currentCorpus &&
+        (corpus["split"] === "test" || corpus["split"] === "evaluation");
+  if (!validCorpusAndSplit) {
     throw new Error("sealed report corpus id or split is invalid");
   }
   for (const key of ["source", "version", "file", "sha256", "license"] as const)
@@ -464,11 +601,54 @@ export const assertSealedAggregateReport: (
   } else if (selection["type"] === "fixed-hash-sample") {
     exactKeys(selection, ["type", "seed"], "sealed report sample selection");
     requireString(selection["seed"], "sealed report sample seed");
+  } else if (selection["type"] === "validated-offset-subset") {
+    exactKeys(
+      selection,
+      ["type", "sourceDocuments", "excludedDocuments", "reasonCode"],
+      "sealed report validated-offset selection",
+    );
+    requireCount(selection["sourceDocuments"], "sealed report sourceDocuments");
+    requireCount(
+      selection["excludedDocuments"],
+      "sealed report excludedDocuments",
+    );
+    if (
+      selection["reasonCode"] !== "invalid-source-spans" ||
+      typeof selection["sourceDocuments"] !== "number" ||
+      typeof selection["excludedDocuments"] !== "number" ||
+      typeof corpus["documentCount"] !== "number" ||
+      selection["sourceDocuments"] !==
+        corpus["documentCount"] + selection["excludedDocuments"]
+    ) {
+      throw new Error("sealed report validated-offset selection is invalid");
+    }
   } else {
     throw new Error("sealed report selection is invalid");
   }
-  if (corpusId !== "tab-echr" && selection["type"] !== "full-test-split") {
-    throw new Error("only TAB supports a fixed sealed sample");
+  if (schemaVersion === LEGACY_SEALED_AGGREGATE_REPORT_SCHEMA_VERSION) {
+    if (
+      selection["type"] === "validated-offset-subset" ||
+      (corpusId !== "tab-echr" && selection["type"] !== "full-test-split")
+    ) {
+      throw new Error("legacy sealed report selection is invalid");
+    }
+  } else {
+    if (
+      corpusId !== "tab-echr" &&
+      corpusId !== "multigrassco" &&
+      selection["type"] !== "full-test-split"
+    ) {
+      throw new Error("only TAB supports a fixed sealed sample");
+    }
+    if (
+      (corpusId === "multigrassco") !==
+        (selection["type"] === "validated-offset-subset") ||
+      (corpusId === "multigrassco") !== (corpus["split"] === "evaluation")
+    ) {
+      throw new Error(
+        "MultiGraSCCo requires its validated evaluation selection",
+      );
+    }
   }
 
   const libraries = value["libraries"];
@@ -503,7 +683,12 @@ export const assertSealedAggregateReport: (
         ["name", "version", "status", "reasonCode"],
         `sealed library ${index}`,
       );
-      if (library["reasonCode"] !== "adapter-unavailable")
+      const reasonCode = library["reasonCode"];
+      if (
+        reasonCode !== "adapter-unavailable" &&
+        (schemaVersion === LEGACY_SEALED_AGGREGATE_REPORT_SCHEMA_VERSION ||
+          reasonCode !== "language-unsupported")
+      )
         throw new Error(`sealed library ${index} reason code is invalid`);
       continue;
     }
@@ -534,7 +719,7 @@ export const assertSealedAggregateReport: (
       library["adapterWallSeconds"],
       `sealed library ${index} adapterWallSeconds`,
     );
-    validateMetrics(library["metrics"]);
+    validateMetrics(library["metrics"], schemaVersion);
     const metrics = library["metrics"];
     if (!isRecord(metrics)) {
       throw new Error(`sealed library ${index} metrics are invalid`);
@@ -553,6 +738,15 @@ export const assertSealedAggregateReport: (
         `sealed library ${index} document count does not match the corpus`,
       );
     }
+  }
+};
+
+export const assertSealedAggregateReport: (
+  value: unknown,
+) => asserts value is SealedAggregateReport = (value) => {
+  assertSupportedSealedAggregateReport(value);
+  if (value.schemaVersion !== SEALED_AGGREGATE_REPORT_SCHEMA_VERSION) {
+    throw new Error("sealed report does not use the current schema");
   }
 };
 
@@ -622,6 +816,24 @@ const tableDefinition = (
       ],
     };
   }
+  if (metrics.type === "multigrassco-direct-indirect-redaction") {
+    return {
+      headers: [
+        "Direct span recall",
+        "Indirect span recall",
+        "Direct character recall",
+        "Indirect character recall",
+        "Accepted character precision",
+      ],
+      values: [
+        percent(metrics.directSpanRecall),
+        percent(metrics.indirectSpanRecall),
+        percent(metrics.directCharacterRecall),
+        percent(metrics.indirectCharacterRecall),
+        percent(metrics.acceptedCharacterPrecision),
+      ],
+    };
+  }
   return {
     headers: ["Span recall", "Character recall", "Character precision"],
     values: [
@@ -632,11 +844,20 @@ const tableDefinition = (
   };
 };
 
+const firstAvailableLibrary = (
+  report: SupportedSealedAggregateReport,
+): AvailableSupportedSealedLibraryResult | undefined => {
+  for (const library of report.libraries) {
+    if (library.status === "ok") return library;
+  }
+  return undefined;
+};
+
 export const renderSealedAggregateMarkdown = (
-  report: SealedAggregateReport,
+  report: SupportedSealedAggregateReport,
 ): string => {
-  assertSealedAggregateReport(report);
-  const available = report.libraries.find((library) => library.status === "ok");
+  assertSupportedSealedAggregateReport(report);
+  const available = firstAvailableLibrary(report);
   const definition =
     available === undefined
       ? { headers: ["Aggregate metrics"], values: ["unavailable"] }
@@ -644,7 +865,9 @@ export const renderSealedAggregateMarkdown = (
   const lines = [
     "# Held-out aggregate benchmark evaluation",
     "",
-    "Evaluation-only results on a checksum-pinned public test split.",
+    report.schemaVersion === LEGACY_SEALED_AGGREGATE_REPORT_SCHEMA_VERSION
+      ? "Evaluation-only results on a checksum-pinned public test split."
+      : "Evaluation-only results on a checksum-pinned public corpus.",
     "This report is generated exclusively from the aggregate report contract.",
     "It contains no source text, examples, categories, predictions, or per-document results.",
     "",
@@ -670,8 +893,12 @@ export const renderSealedAggregateMarkdown = (
   ];
   for (const library of report.libraries) {
     if (library.status === "unavailable") {
+      const availability =
+        library.reasonCode === "language-unsupported"
+          ? "unsupported"
+          : "unavailable";
       const unavailableValues = [
-        "unavailable",
+        availability,
         ...definition.headers.slice(1).map(() => "—"),
       ].join(" | ");
       lines.push(
@@ -699,6 +926,12 @@ export const renderSealedAggregateMarkdown = (
       ? [
           "German LER coverage is label-agnostic: it measures overlap with all seven coarse legal NER classes, not PII recall or label-aware NER accuracy.",
           "The source decisions were already anonymized before annotation, so this corpus cannot measure de-identification recall.",
+        ]
+      : []),
+    ...(report.corpus.id === "multigrassco"
+      ? [
+          "MultiGraSCCo direct (PHI) and indirect (IPI) identifiers retain their published task distinction.",
+          "Documents with any invalid published annotation span are excluded as a whole; spans are never guessed from entity text.",
         ]
       : []),
     "Warm chars/s covers one complete second pass over the corpus; it is not proof that the provider reached steady state.",

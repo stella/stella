@@ -15,6 +15,17 @@ This package is the stable data surface for the runtime package. It exists so th
 - `dictionaries/cities/` for country-specific city corpora
 - `dictionaries/banks/`, `dictionaries/courts/`, `dictionaries/insurance/`, `dictionaries/education/`, `dictionaries/government/`, `dictionaries/healthcare/`, and `dictionaries/international/` for organization and institution deny-lists
 
+## National-document field phrase coverage
+
+These phrases belong only to their named language config; they are not global vocabulary or fallbacks for other languages.
+
+| Language scope | Field phrase                   | Document field       |
+| -------------- | ------------------------------ | -------------------- |
+| Czech (`cs`)   | `rodné číslo je`               | Birth number         |
+| Czech (`cs`)   | `číslo občanského průkazu je`  | Identity card number |
+| German (`de`)  | `Personalausweisnummer lautet` | Identity card number |
+| English (`en`) | `passport number is`           | Passport number      |
+
 ## Install
 
 ```bash

@@ -1,5 +1,5 @@
 {
-  "_comment": "Common contract/clause nouns that appear in legal prose between a sentence-verb and the company name (e.g. 'Vendor signed Agreement with Acme Inc.'). The legal-form trim skips these when scanning forward for the org's first Cap word, so the anchor lands on the real company name rather than the contract noun. Lowercased; matched case-insensitively. Organised per-language; at runtime the legal-form detector unions every language's list into a single set because match spans don't carry a language tag.",
+  "_comment": "Common contract/clause nouns that appear in legal prose between a sentence-verb and the company name (e.g. 'Vendor signed Agreement with Acme Inc.'). The legal-form trim skips these when scanning forward for the org's first Cap word, so the anchor lands on the real company name rather than the contract noun. Lowercased; matched case-insensitively and scoped to the configured content languages.",
   "en": [
     "agreement",
     "agreements",

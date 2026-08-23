@@ -1,0 +1,9 @@
+// Bun Snapshot v1, https://bun.sh/docs/test/snapshots
+
+exports[`redact-pii benchmark adapter preserves the pinned 3.4.0 predictions 1`] = `
+{
+  "digest": "8d75251bc1212ad4ecde55c8d11ca1ce4e8439a20f73e5b6a6bbede6b478c333",
+  "documentCount": 34,
+  "spanCount": 143,
+}
+`;

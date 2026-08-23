@@ -8,6 +8,13 @@ Runtime package for multi-layer PII detection and anonymization.
 
 It combines regex detectors, trigger phrases, deny-list matching, and coreference handling in a single deterministic pipeline that works in native Node.js and in browser builds through the WASM entrypoint.
 
+The default pipeline detects personal identifiers; it is not a general-purpose
+secret scanner. Passwords, authentication tokens, API keys, and private
+cryptographic material are outside its claimed scope. IP addresses, MAC
+addresses, and URLs are explicit opt-in capabilities. Query
+`CAPABILITY_MANIFEST` or `anonymize --capabilities` instead of assuming a label
+is enabled.
+
 ## Install
 
 ```bash

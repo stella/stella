@@ -3,21 +3,6 @@
   "changes": [
     {
       "type": "array",
-      "path": ["deny_list_data", "label_table"],
-      "segments": [
-        {
-          "type": "values",
-          "values": ["organization"]
-        },
-        {
-          "type": "copy",
-          "start": 0,
-          "end": 1
-        }
-      ]
-    },
-    {
-      "type": "array",
       "path": ["deny_list_data", "label_indices"],
       "segments": [
         {
@@ -3278,6 +3263,21 @@
     },
     {
       "type": "array",
+      "path": ["deny_list_data", "label_table"],
+      "segments": [
+        {
+          "type": "values",
+          "values": ["organization"]
+        },
+        {
+          "type": "copy",
+          "start": 0,
+          "end": 1
+        }
+      ]
+    },
+    {
+      "type": "array",
       "path": ["deny_list_data", "originals"],
       "segments": [
         {
@@ -3288,21 +3288,6 @@
           "type": "copy",
           "start": 0,
           "end": 3244
-        }
-      ]
-    },
-    {
-      "type": "array",
-      "path": ["deny_list_data", "source_table"],
-      "segments": [
-        {
-          "type": "values",
-          "values": ["custom-deny-list"]
-        },
-        {
-          "type": "copy",
-          "start": 0,
-          "end": 3
         }
       ]
     },
@@ -3348,8 +3333,13 @@
         },
         {
           "type": "copy",
+          "start": 3005,
+          "end": 3151
+        },
+        {
+          "type": "copy",
           "start": 2523,
-          "end": 2674
+          "end": 2528
         },
         {
           "type": "copy",
@@ -3483,6 +3473,21 @@
             [3],
             [3]
           ]
+        }
+      ]
+    },
+    {
+      "type": "array",
+      "path": ["deny_list_data", "source_table"],
+      "segments": [
+        {
+          "type": "values",
+          "values": ["custom-deny-list"]
+        },
+        {
+          "type": "copy",
+          "start": 0,
+          "end": 3
         }
       ]
     },
@@ -6738,18 +6743,133 @@
       ]
     },
     {
+      "type": "array",
+      "path": ["regex_meta"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 0,
+          "end": 3
+        },
+        {
+          "type": "values",
+          "values": [
+            {
+              "label": "iban",
+              "score": 1.0
+            },
+            {
+              "label": "email address",
+              "score": 1.0
+            }
+          ]
+        },
+        {
+          "type": "copy",
+          "start": 5,
+          "end": 6
+        },
+        {
+          "type": "values",
+          "values": [
+            {
+              "label": "phone number",
+              "min_byte_length": 7,
+              "requires_validation": true,
+              "score": 1.0,
+              "validator_id": "phone.international"
+            }
+          ]
+        },
+        {
+          "type": "copy",
+          "start": 7,
+          "end": 10
+        },
+        {
+          "type": "values",
+          "values": [
+            {
+              "label": "credit card number",
+              "score": 1.0
+            },
+            {
+              "label": "birth number",
+              "requires_validation": true,
+              "score": 1.0,
+              "validator_id": "cz.rc"
+            }
+          ]
+        },
+        {
+          "type": "copy",
+          "start": 12,
+          "end": 13
+        },
+        {
+          "type": "values",
+          "values": [
+            {
+              "label": "date",
+              "score": 1.0
+            },
+            {
+              "label": "date",
+              "score": 1.0
+            },
+            {
+              "label": "ip address",
+              "score": 1.0
+            }
+          ]
+        },
+        {
+          "type": "copy",
+          "start": 16,
+          "end": 40
+        },
+        {
+          "type": "values",
+          "values": [
+            {
+              "label": "url",
+              "score": 1.0
+            },
+            {
+              "label": "ip address",
+              "score": 1.0
+            },
+            {
+              "label": "mac address",
+              "score": 1.0
+            }
+          ]
+        },
+        {
+          "type": "copy",
+          "start": 43,
+          "end": 118
+        }
+      ]
+    },
+    {
+      "type": "set",
+      "path": ["slices", "countries", "end"],
+      "value": 6680
+    },
+    {
+      "type": "set",
+      "path": ["slices", "countries", "start"],
+      "value": 3419
+    },
+    {
       "type": "set",
       "path": ["slices", "deny_list", "end"],
       "value": 3245
     },
     {
       "type": "set",
-      "path": ["slices", "street_types", "start"],
-      "value": 3245
-    },
-    {
-      "type": "set",
-      "path": ["slices", "street_types", "end"],
+      "path": ["slices", "gazetteer", "end"],
       "value": 3419
     },
     {
@@ -6759,17 +6879,7 @@
     },
     {
       "type": "set",
-      "path": ["slices", "gazetteer", "end"],
-      "value": 3419
-    },
-    {
-      "type": "set",
-      "path": ["slices", "countries", "start"],
-      "value": 3419
-    },
-    {
-      "type": "set",
-      "path": ["slices", "countries", "end"],
+      "path": ["slices", "hotwords", "end"],
       "value": 6680
     },
     {
@@ -6779,8 +6889,13 @@
     },
     {
       "type": "set",
-      "path": ["slices", "hotwords", "end"],
-      "value": 6680
+      "path": ["slices", "street_types", "end"],
+      "value": 3419
+    },
+    {
+      "type": "set",
+      "path": ["slices", "street_types", "start"],
+      "value": 3245
     }
   ]
 }

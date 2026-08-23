@@ -94,20 +94,36 @@ sensitive; use repeated isolated runs and compare medians for performance work.
 For optimization work, `bun run bench:performance` is stella's scaling harness.
 `bun run bench:performance:providers` runs the controlled cross-provider lanes:
 stella's full pipeline, stella regex-only, base scrubadub, and DataFog
-regex-only. The harness uses only the public-safe synthetic English fixture,
-expands it to 48, 256, 512, and 1,024 KiB, then starts a fresh process for every
-observation.
+regex-only. The canonical stella harness uses only the public-safe synthetic
+English fixture, expands it to 48, 256, 512, and 1,024 KiB, then starts a fresh
+process for every observation.
 Three warmup rounds are discarded; 20 measured rounds report every observation
 plus median, median absolute deviation, and p95 for process startup, pipeline
 initialization, cold detection, warm detection, and warm characters per second.
-Output span count and a digest over offsets and labels must remain identical in
-every process. This harness is development-only and never reads a sealed
-held-out evaluation corpus.
+Output span count and a digest over the redacted text, offsets, labels, and
+matched values must remain identical in every cold pass, warm pass, and
+isolated process. Each result records a tagged, versioned scenario identity,
+its Bun native-binding runtime identity, and exact input and output digests.
+This harness is development-only and never reads a sealed held-out evaluation
+corpus. Timings are evidence only; the harness has no wall-clock pass/fail
+threshold.
 
 Local runs accept smaller counts for quick verification:
 
 ```sh
 bun run bench:performance --warmups=1 --samples=2 --sizes-kib=48
+```
+
+Local coverage runs accept 1–1,024 KiB inputs and four deterministic scenarios:
+the original mixed fixture (`fixture-mixed`), entity-negative prose
+(`negative-prose`), sparse entities (`sparse-entities`), and dense entities
+(`dense-entities`). The canonical defaults remain the original mixed scenario
+and scale set.
+
+```sh
+bun run bench:performance --warmups=1 --samples=1 \
+  --sizes-kib=1,4,16 \
+  --scenarios=negative-prose,sparse-entities,dense-entities
 ```
 
 Canonical reports run only on trusted `main` pushes or manual dispatches on the

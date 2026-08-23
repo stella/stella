@@ -30,6 +30,15 @@
     ]
   },
   {
+    "id": "en-passport-number",
+    "label": "passport number",
+    "strategy": {
+      "type": "match-pattern",
+      "pattern": "^(?:[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b"
+    },
+    "triggers": ["passport number is"]
+  },
+  {
     "id": "en-jurisdiction",
     "label": "address",
     "strategy": {

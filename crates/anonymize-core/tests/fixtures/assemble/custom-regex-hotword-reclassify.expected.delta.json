@@ -10,25 +10,6 @@
       "path": ["address_seed_data"]
     },
     {
-      "type": "remove",
-      "path": ["country_data"]
-    },
-    {
-      "type": "array",
-      "path": ["custom_regex_patterns"],
-      "segments": [
-        {
-          "type": "values",
-          "values": [
-            {
-              "kind": "regex",
-              "pattern": "DOB-\\d+"
-            }
-          ]
-        }
-      ]
-    },
-    {
       "type": "array",
       "path": ["allowed_labels"],
       "segments": [
@@ -37,6 +18,10 @@
           "values": ["date of birth"]
         }
       ]
+    },
+    {
+      "type": "remove",
+      "path": ["country_data"]
     },
     {
       "type": "array",
@@ -56,12 +41,40 @@
     },
     {
       "type": "array",
+      "path": ["custom_regex_patterns"],
+      "segments": [
+        {
+          "type": "values",
+          "values": [
+            {
+              "kind": "regex",
+              "pattern": "DOB-\\d+"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "array",
+      "path": ["literal_patterns"],
+      "segments": []
+    },
+    {
+      "type": "array",
       "path": ["regex_meta"],
       "segments": [
         {
-          "type": "copy",
-          "start": 13,
-          "end": 15
+          "type": "values",
+          "values": [
+            {
+              "label": "date",
+              "score": 1.0
+            },
+            {
+              "label": "date",
+              "score": 1.0
+            }
+          ]
         },
         {
           "type": "copy",
@@ -87,58 +100,13 @@
         {
           "type": "copy",
           "start": 118,
-          "end": 3176
+          "end": 3181
         }
       ]
     },
     {
-      "type": "array",
-      "path": ["literal_patterns"],
-      "segments": []
-    },
-    {
       "type": "set",
-      "path": ["slices", "regex", "end"],
-      "value": 3
-    },
-    {
-      "type": "set",
-      "path": ["slices", "custom_regex", "end"],
-      "value": 1
-    },
-    {
-      "type": "set",
-      "path": ["slices", "legal_forms", "start"],
-      "value": 3
-    },
-    {
-      "type": "set",
-      "path": ["slices", "legal_forms", "end"],
-      "value": 1292
-    },
-    {
-      "type": "set",
-      "path": ["slices", "triggers", "start"],
-      "value": 1292
-    },
-    {
-      "type": "set",
-      "path": ["slices", "triggers", "end"],
-      "value": 3061
-    },
-    {
-      "type": "set",
-      "path": ["slices", "street_types", "end"],
-      "value": 3244
-    },
-    {
-      "type": "set",
-      "path": ["slices", "gazetteer", "start"],
-      "value": 3244
-    },
-    {
-      "type": "set",
-      "path": ["slices", "gazetteer", "end"],
+      "path": ["slices", "countries", "end"],
       "value": 3244
     },
     {
@@ -148,7 +116,22 @@
     },
     {
       "type": "set",
-      "path": ["slices", "countries", "end"],
+      "path": ["slices", "custom_regex", "end"],
+      "value": 1
+    },
+    {
+      "type": "set",
+      "path": ["slices", "gazetteer", "end"],
+      "value": 3244
+    },
+    {
+      "type": "set",
+      "path": ["slices", "gazetteer", "start"],
+      "value": 3244
+    },
+    {
+      "type": "set",
+      "path": ["slices", "hotwords", "end"],
       "value": 3244
     },
     {
@@ -158,8 +141,33 @@
     },
     {
       "type": "set",
-      "path": ["slices", "hotwords", "end"],
+      "path": ["slices", "legal_forms", "end"],
+      "value": 1292
+    },
+    {
+      "type": "set",
+      "path": ["slices", "legal_forms", "start"],
+      "value": 3
+    },
+    {
+      "type": "set",
+      "path": ["slices", "regex", "end"],
+      "value": 3
+    },
+    {
+      "type": "set",
+      "path": ["slices", "street_types", "end"],
       "value": 3244
+    },
+    {
+      "type": "set",
+      "path": ["slices", "triggers", "end"],
+      "value": 3066
+    },
+    {
+      "type": "set",
+      "path": ["slices", "triggers", "start"],
+      "value": 1292
     }
   ]
 }

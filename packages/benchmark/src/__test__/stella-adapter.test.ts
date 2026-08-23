@@ -42,10 +42,10 @@ describe("stella benchmark adapter language scoping", () => {
       }
     }
 
-    expect(spanCount).toBe(174);
-    expect(hash.digest("hex")).toBe(
-      "416dc1eafab50bcd92948c7ec94e10ff19414e68b6a3ed3d3e1aff5344403a5b",
-    );
+    expect({
+      digest: hash.digest("hex"),
+      spanCount,
+    }).toMatchSnapshot();
   });
 
   test("uses the all-language package when no scoped package is shipped", async () => {

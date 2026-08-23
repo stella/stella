@@ -14,12 +14,14 @@
     "bench:sealed:tab": "bun src/blind.ts --full",
     "bench:sealed:redactionbench": "bun src/redactionbench.ts",
     "bench:sealed:meddocan": "bun src/meddocan.ts",
+    "bench:sealed:multigrassco": "bun src/multigrassco.ts",
     "bench:sealed:german-ler": "bun src/german-ler.ts",
     "bench:sealed:german-ler:assisted": "bun src/german-ler.ts --assisted",
     "bench:sealed": "bun src/suite.ts",
     "bench:dev-gap": "bun src/dev-gap.ts",
     "bench:redactionbench": "bun src/redactionbench.ts",
     "bench:meddocan": "bun src/meddocan.ts",
+    "bench:multigrassco": "bun src/multigrassco.ts",
     "bench:german-ler": "bun src/german-ler.ts",
     "bench:german-ler:assisted": "bun src/german-ler.ts --assisted",
     "bench:dev:nym-assisted": "bun src/nym-assisted-dev.ts",
@@ -31,7 +33,7 @@
     "@openredaction/core": "1.1.5",
     "@stll/anonymize": "workspace:^",
     "@stll/anonymize-data": "^0.0.10",
-    "fflate": "0.8.2",
+    "fflate": "0.8.3",
     "hyparquet": "1.28.1"
   },
   "devDependencies": {

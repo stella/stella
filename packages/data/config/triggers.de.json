@@ -25,6 +25,15 @@
     "triggers": ["Reisepass Nr.", "Reisepass"]
   },
   {
+    "id": "de-identity-card-number",
+    "label": "identity card number",
+    "strategy": {
+      "type": "match-pattern",
+      "pattern": "^[A-Za-z0-9]{9}\\b"
+    },
+    "triggers": ["Personalausweisnummer lautet"]
+  },
+  {
     "id": "de-person",
     "label": "person",
     "strategy": { "type": "to-next-comma" },

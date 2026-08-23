@@ -3,14 +3,136 @@
   "changes": [
     {
       "type": "array",
-      "path": ["signature_data", "form_field_labels"],
+      "path": ["address_seed_data", "boundary_words"],
       "segments": [
         {
           "type": "copy",
-          "start": 14,
-          "end": 24
+          "start": 0,
+          "end": 12
+        },
+        {
+          "type": "copy",
+          "start": 154,
+          "end": 163
+        },
+        {
+          "type": "copy",
+          "start": 135,
+          "end": 136
+        },
+        {
+          "type": "copy",
+          "start": 163,
+          "end": 174
+        },
+        {
+          "type": "values",
+          "values": ["dič", "ičo"]
+        },
+        {
+          "type": "copy",
+          "start": 174,
+          "end": 175
         }
       ]
+    },
+    {
+      "type": "array",
+      "path": ["coreference_data", "definition_patterns"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 0,
+          "end": 2
+        }
+      ]
+    },
+    {
+      "type": "array",
+      "path": ["coreference_data", "organization_determiners"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 4,
+          "end": 6
+        }
+      ]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "lowercase_month_ambiguities", "da"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "lowercase_month_ambiguities", "de"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "lowercase_month_ambiguities", "en"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "lowercase_month_ambiguities", "es"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "lowercase_month_ambiguities", "et"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "lowercase_month_ambiguities", "fr"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "lowercase_month_ambiguities", "hr"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "lowercase_month_ambiguities", "hu"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "lowercase_month_ambiguities", "id"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "lowercase_month_ambiguities", "it"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "lowercase_month_ambiguities", "nb"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "lowercase_month_ambiguities", "nl"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "lowercase_month_ambiguities", "nn"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "lowercase_month_ambiguities", "pl"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "lowercase_month_ambiguities", "pt"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "lowercase_month_ambiguities", "ro"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "lowercase_month_ambiguities", "sk"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "lowercase_month_ambiguities", "sv"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "lowercase_month_ambiguities", "tr"]
     },
     {
       "type": "remove",
@@ -98,86 +220,6 @@
     },
     {
       "type": "remove",
-      "path": ["date_data", "lowercase_month_ambiguities", "da"]
-    },
-    {
-      "type": "remove",
-      "path": ["date_data", "lowercase_month_ambiguities", "de"]
-    },
-    {
-      "type": "remove",
-      "path": ["date_data", "lowercase_month_ambiguities", "en"]
-    },
-    {
-      "type": "remove",
-      "path": ["date_data", "lowercase_month_ambiguities", "es"]
-    },
-    {
-      "type": "remove",
-      "path": ["date_data", "lowercase_month_ambiguities", "et"]
-    },
-    {
-      "type": "remove",
-      "path": ["date_data", "lowercase_month_ambiguities", "fr"]
-    },
-    {
-      "type": "remove",
-      "path": ["date_data", "lowercase_month_ambiguities", "hr"]
-    },
-    {
-      "type": "remove",
-      "path": ["date_data", "lowercase_month_ambiguities", "hu"]
-    },
-    {
-      "type": "remove",
-      "path": ["date_data", "lowercase_month_ambiguities", "id"]
-    },
-    {
-      "type": "remove",
-      "path": ["date_data", "lowercase_month_ambiguities", "it"]
-    },
-    {
-      "type": "remove",
-      "path": ["date_data", "lowercase_month_ambiguities", "nb"]
-    },
-    {
-      "type": "remove",
-      "path": ["date_data", "lowercase_month_ambiguities", "nl"]
-    },
-    {
-      "type": "remove",
-      "path": ["date_data", "lowercase_month_ambiguities", "nn"]
-    },
-    {
-      "type": "remove",
-      "path": ["date_data", "lowercase_month_ambiguities", "pl"]
-    },
-    {
-      "type": "remove",
-      "path": ["date_data", "lowercase_month_ambiguities", "pt"]
-    },
-    {
-      "type": "remove",
-      "path": ["date_data", "lowercase_month_ambiguities", "ro"]
-    },
-    {
-      "type": "remove",
-      "path": ["date_data", "lowercase_month_ambiguities", "sk"]
-    },
-    {
-      "type": "remove",
-      "path": ["date_data", "lowercase_month_ambiguities", "sv"]
-    },
-    {
-      "type": "remove",
-      "path": ["date_data", "lowercase_month_ambiguities", "tr"]
-    },
-    {
-      "type": "remove",
-      "path": ["date_data", "year_words_by_language", "sk"]
-    },
-    {
-      "type": "remove",
       "path": ["date_data", "year_words_by_language", "de"]
     },
     {
@@ -186,31 +228,11 @@
     },
     {
       "type": "remove",
-      "path": ["date_data", "year_words_by_language", "fr"]
-    },
-    {
-      "type": "remove",
       "path": ["date_data", "year_words_by_language", "es"]
     },
     {
       "type": "remove",
-      "path": ["date_data", "year_words_by_language", "it"]
-    },
-    {
-      "type": "remove",
-      "path": ["date_data", "year_words_by_language", "pt"]
-    },
-    {
-      "type": "remove",
-      "path": ["date_data", "year_words_by_language", "pl"]
-    },
-    {
-      "type": "remove",
-      "path": ["date_data", "year_words_by_language", "sv"]
-    },
-    {
-      "type": "remove",
-      "path": ["date_data", "year_words_by_language", "nl"]
+      "path": ["date_data", "year_words_by_language", "fr"]
     },
     {
       "type": "remove",
@@ -218,490 +240,73 @@
     },
     {
       "type": "remove",
+      "path": ["date_data", "year_words_by_language", "it"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "year_words_by_language", "nl"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "year_words_by_language", "pl"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "year_words_by_language", "pt"]
+    },
+    {
+      "type": "remove",
       "path": ["date_data", "year_words_by_language", "ro"]
     },
     {
-      "type": "array",
-      "path": ["zone_data", "signing_clauses"],
-      "segments": [
-        {
-          "type": "copy",
-          "start": 0,
-          "end": 1
-        }
-      ]
+      "type": "remove",
+      "path": ["date_data", "year_words_by_language", "sk"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "year_words_by_language", "sv"]
     },
     {
       "type": "array",
-      "path": ["address_seed_data", "boundary_words"],
-      "segments": [
-        {
-          "type": "copy",
-          "start": 0,
-          "end": 220
-        }
-      ]
-    },
-    {
-      "type": "array",
-      "path": ["legal_form_data", "suffixes"],
-      "segments": [
-        {
-          "type": "copy",
-          "start": 0,
-          "end": 620
-        },
-        {
-          "type": "copy",
-          "start": 621,
-          "end": 661
-        },
-        {
-          "type": "copy",
-          "start": 665,
-          "end": 700
-        },
-        {
-          "type": "copy",
-          "start": 703,
-          "end": 757
-        },
-        {
-          "type": "copy",
-          "start": 762,
-          "end": 790
-        },
-        {
-          "type": "copy",
-          "start": 791,
-          "end": 874
-        },
-        {
-          "type": "copy",
-          "start": 876,
-          "end": 919
-        },
-        {
-          "type": "copy",
-          "start": 921,
-          "end": 1289
-        }
-      ]
-    },
-    {
-      "type": "array",
-      "path": ["legal_form_data", "non_ascii_name_short_suffixes"],
-      "segments": [
-        {
-          "type": "copy",
-          "start": 7,
-          "end": 8
-        }
-      ]
-    },
-    {
-      "type": "array",
-      "path": ["legal_form_data", "detection_only_suffixes"],
+      "path": ["deny_list_data", "filters", "address_trailing_nouns"],
       "segments": []
     },
     {
       "type": "array",
-      "path": ["legal_form_data", "institutional_heads"],
+      "path": ["deny_list_data", "filters", "generic_roles"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 0,
+          "end": 265
+        }
+      ]
+    },
+    {
+      "type": "array",
+      "path": ["deny_list_data", "filters", "page_footer_markers"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 57,
+          "end": 62
+        },
+        {
+          "type": "copy",
+          "start": 63,
+          "end": 66
+        },
+        {
+          "type": "copy",
+          "start": 67,
+          "end": 68
+        }
+      ]
+    },
+    {
+      "type": "array",
+      "path": ["deny_list_data", "filters", "person_trailing_nouns"],
       "segments": []
-    },
-    {
-      "type": "array",
-      "path": ["legal_form_data", "normalized_in_name_words"],
-      "segments": [
-        {
-          "type": "copy",
-          "start": 0,
-          "end": 63
-        },
-        {
-          "type": "copy",
-          "start": 64,
-          "end": 88
-        },
-        {
-          "type": "copy",
-          "start": 92,
-          "end": 115
-        },
-        {
-          "type": "copy",
-          "start": 118,
-          "end": 142
-        },
-        {
-          "type": "copy",
-          "start": 147,
-          "end": 160
-        },
-        {
-          "type": "copy",
-          "start": 161,
-          "end": 175
-        },
-        {
-          "type": "copy",
-          "start": 177,
-          "end": 188
-        },
-        {
-          "type": "copy",
-          "start": 190,
-          "end": 230
-        }
-      ]
-    },
-    {
-      "type": "array",
-      "path": ["legal_form_data", "normalized_suffix_words"],
-      "segments": [
-        {
-          "type": "copy",
-          "start": 0,
-          "end": 620
-        },
-        {
-          "type": "copy",
-          "start": 621,
-          "end": 661
-        },
-        {
-          "type": "copy",
-          "start": 665,
-          "end": 700
-        },
-        {
-          "type": "copy",
-          "start": 703,
-          "end": 757
-        },
-        {
-          "type": "copy",
-          "start": 762,
-          "end": 790
-        },
-        {
-          "type": "copy",
-          "start": 791,
-          "end": 874
-        },
-        {
-          "type": "copy",
-          "start": 876,
-          "end": 919
-        },
-        {
-          "type": "copy",
-          "start": 921,
-          "end": 1289
-        }
-      ]
-    },
-    {
-      "type": "array",
-      "path": ["legal_form_data", "role_heads"],
-      "segments": [
-        {
-          "type": "copy",
-          "start": 0,
-          "end": 38
-        }
-      ]
-    },
-    {
-      "type": "array",
-      "path": ["legal_form_data", "institutional_complement_heads"],
-      "segments": []
-    },
-    {
-      "type": "array",
-      "path": ["legal_form_data", "institutional_complement_starters"],
-      "segments": []
-    },
-    {
-      "type": "array",
-      "path": ["legal_form_data", "institutional_complement_connectors"],
-      "segments": []
-    },
-    {
-      "type": "array",
-      "path": ["legal_form_data", "institutional_generic_words"],
-      "segments": []
-    },
-    {
-      "type": "array",
-      "path": ["legal_form_data", "institutional_prefix_generic_words"],
-      "segments": []
-    },
-    {
-      "type": "array",
-      "path": ["regex_meta"],
-      "segments": [
-        {
-          "type": "copy",
-          "start": 0,
-          "end": 5
-        },
-        {
-          "type": "copy",
-          "start": 6,
-          "end": 111
-        }
-      ]
-    },
-    {
-      "type": "array",
-      "path": ["regex_patterns"],
-      "segments": [
-        {
-          "type": "copy",
-          "start": 0,
-          "end": 5
-        },
-        {
-          "type": "copy",
-          "start": 6,
-          "end": 7
-        },
-        {
-          "type": "values",
-          "values": [
-            {
-              "kind": "regex",
-              "pattern": "\\b(?:[2-7]\\d{2}(?:[^\\S\\n]|[.\\-])?\\d{3}(?:[^\\S\\n]|[.\\-])?\\d{3}|0\\d{2,4}(?:[^\\S\\n]|[./\\-])\\d{5,8})(?!(?:[^\\S\\n]|[.\\-])?\\d*/\\d)(?![^\\S\\n]*(?:Kč|,-|korun|EUR|USD|€|\\$))\\b",
-              "case_insensitive": null,
-              "lazy": null,
-              "prefilter_any": null,
-              "prefilter_case_insensitive": null,
-              "prefilter_window_bytes": null,
-              "prepared_artifact_policy": null
-            }
-          ]
-        },
-        {
-          "type": "copy",
-          "start": 8,
-          "end": 107
-        },
-        {
-          "type": "values",
-          "values": [
-            {
-              "kind": "regex",
-              "pattern": "\\bECLI:[A-Z]{2}:[A-Za-z0-9.]+:\\d{4}:[A-Za-z0-9._]+\\b",
-              "case_insensitive": null,
-              "lazy": true,
-              "prefilter_any": ["ECLI:"],
-              "prefilter_case_insensitive": false,
-              "prefilter_window_bytes": null,
-              "prepared_artifact_policy": null
-            },
-            {
-              "kind": "regex",
-              "pattern": "\\[\\d{4}\\][^\\S\\n]+(?:UKSC|UKPC|EWCA|EWHC|UKUT|UKFTT|EWFC|EWCOP)(?:[^\\S\\n]+(?:Civ|Crim|Ch|Fam|Pat|QB|KB|TCC|Comm))?[^\\S\\n]+\\d+\\b",
-              "case_insensitive": null,
-              "lazy": true,
-              "prefilter_any": [
-                "UKSC",
-                "UKPC",
-                "EWCA",
-                "EWHC",
-                "UKUT",
-                "UKFTT",
-                "EWFC",
-                "EWCOP"
-              ],
-              "prefilter_case_insensitive": false,
-              "prefilter_window_bytes": null,
-              "prepared_artifact_policy": null
-            },
-            {
-              "kind": "regex",
-              "pattern": "\\b\\d{1,2}:\\d{2}-(?:[cC][vV]|[cC][rR]|[mM][dD]|[mM][cC]|[mM][jJ])-\\d{1,6}\\b",
-              "case_insensitive": null,
-              "lazy": null,
-              "prefilter_any": null,
-              "prefilter_case_insensitive": null,
-              "prefilter_window_bytes": null,
-              "prepared_artifact_policy": null
-            }
-          ]
-        },
-        {
-          "type": "copy",
-          "start": 110,
-          "end": 111
-        },
-        {
-          "type": "copy",
-          "start": 118,
-          "end": 738
-        },
-        {
-          "type": "copy",
-          "start": 739,
-          "end": 779
-        },
-        {
-          "type": "copy",
-          "start": 783,
-          "end": 818
-        },
-        {
-          "type": "copy",
-          "start": 821,
-          "end": 875
-        },
-        {
-          "type": "copy",
-          "start": 880,
-          "end": 908
-        },
-        {
-          "type": "copy",
-          "start": 909,
-          "end": 992
-        },
-        {
-          "type": "copy",
-          "start": 994,
-          "end": 1037
-        },
-        {
-          "type": "copy",
-          "start": 1039,
-          "end": 1729
-        },
-        {
-          "type": "copy",
-          "start": 3109,
-          "end": 3155
-        }
-      ]
-    },
-    {
-      "type": "array",
-      "path": ["trigger_data", "rules"],
-      "segments": [
-        {
-          "type": "copy",
-          "start": 0,
-          "end": 322
-        },
-        {
-          "type": "copy",
-          "start": 1702,
-          "end": 1748
-        }
-      ]
-    },
-    {
-      "type": "array",
-      "path": ["trigger_data", "party_position_terms"],
-      "segments": [
-        {
-          "type": "copy",
-          "start": 0,
-          "end": 38
-        }
-      ]
-    },
-    {
-      "type": "array",
-      "path": ["trigger_data", "phone_extension_labels"],
-      "segments": []
-    },
-    {
-      "type": "array",
-      "path": ["trigger_data", "number_markers"],
-      "segments": [
-        {
-          "type": "copy",
-          "start": 0,
-          "end": 3
-        }
-      ]
-    },
-    {
-      "type": "array",
-      "path": ["trigger_data", "number_labels"],
-      "segments": [
-        {
-          "type": "copy",
-          "start": 0,
-          "end": 3
-        }
-      ]
-    },
-    {
-      "type": "array",
-      "path": ["trigger_data", "person_field_labels"],
-      "segments": [
-        {
-          "type": "copy",
-          "start": 14,
-          "end": 24
-        }
-      ]
-    },
-    {
-      "type": "array",
-      "path": ["coreference_data", "definition_patterns"],
-      "segments": [
-        {
-          "type": "copy",
-          "start": 0,
-          "end": 2
-        }
-      ]
-    },
-    {
-      "type": "array",
-      "path": ["coreference_data", "organization_determiners"],
-      "segments": [
-        {
-          "type": "copy",
-          "start": 4,
-          "end": 6
-        }
-      ]
-    },
-    {
-      "type": "array",
-      "path": ["deny_list_data", "label_indices"],
-      "segments": [
-        {
-          "type": "copy",
-          "start": 0,
-          "end": 3179
-        }
-      ]
-    },
-    {
-      "type": "array",
-      "path": ["deny_list_data", "originals"],
-      "segments": [
-        {
-          "type": "copy",
-          "start": 0,
-          "end": 3179
-        }
-      ]
-    },
-    {
-      "type": "array",
-      "path": ["deny_list_data", "source_indices"],
-      "segments": [
-        {
-          "type": "copy",
-          "start": 0,
-          "end": 3179
-        }
-      ]
     },
     {
       "type": "array",
@@ -714,34 +319,8 @@
         },
         {
           "type": "copy",
-          "start": 6,
-          "end": 7
-        },
-        {
-          "type": "copy",
-          "start": 13,
-          "end": 14
-        },
-        {
-          "type": "copy",
-          "start": 95,
+          "start": 93,
           "end": 185
-        }
-      ]
-    },
-    {
-      "type": "array",
-      "path": ["deny_list_data", "filters", "person_trailing_nouns"],
-      "segments": []
-    },
-    {
-      "type": "array",
-      "path": ["deny_list_data", "filters", "generic_roles"],
-      "segments": [
-        {
-          "type": "copy",
-          "start": 0,
-          "end": 265
         }
       ]
     },
@@ -988,12 +567,61 @@
     },
     {
       "type": "array",
-      "path": ["deny_list_data", "filters", "address_trailing_nouns"],
+      "path": ["deny_list_data", "filters", "us_state_abbreviations"],
       "segments": []
     },
     {
       "type": "array",
-      "path": ["deny_list_data", "filters", "page_footer_markers"],
+      "path": ["deny_list_data", "label_indices"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 0,
+          "end": 3179
+        }
+      ]
+    },
+    {
+      "type": "array",
+      "path": ["deny_list_data", "originals"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 0,
+          "end": 3179
+        }
+      ]
+    },
+    {
+      "type": "array",
+      "path": ["deny_list_data", "source_indices"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 0,
+          "end": 3179
+        }
+      ]
+    },
+    {
+      "type": "array",
+      "path": ["false_positive_filters", "address_trailing_nouns"],
+      "segments": []
+    },
+    {
+      "type": "array",
+      "path": ["false_positive_filters", "generic_roles"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 0,
+          "end": 265
+        }
+      ]
+    },
+    {
+      "type": "array",
+      "path": ["false_positive_filters", "page_footer_markers"],
       "segments": [
         {
           "type": "copy",
@@ -1014,6 +642,11 @@
     },
     {
       "type": "array",
+      "path": ["false_positive_filters", "person_trailing_nouns"],
+      "segments": []
+    },
+    {
+      "type": "array",
       "path": ["false_positive_filters", "title_tokens"],
       "segments": [
         {
@@ -1023,34 +656,8 @@
         },
         {
           "type": "copy",
-          "start": 6,
-          "end": 7
-        },
-        {
-          "type": "copy",
-          "start": 13,
-          "end": 14
-        },
-        {
-          "type": "copy",
-          "start": 95,
+          "start": 93,
           "end": 185
-        }
-      ]
-    },
-    {
-      "type": "array",
-      "path": ["false_positive_filters", "person_trailing_nouns"],
-      "segments": []
-    },
-    {
-      "type": "array",
-      "path": ["false_positive_filters", "generic_roles"],
-      "segments": [
-        {
-          "type": "copy",
-          "start": 0,
-          "end": 265
         }
       ]
     },
@@ -1297,27 +904,429 @@
     },
     {
       "type": "array",
-      "path": ["false_positive_filters", "address_trailing_nouns"],
+      "path": ["false_positive_filters", "us_state_abbreviations"],
       "segments": []
     },
     {
       "type": "array",
-      "path": ["false_positive_filters", "page_footer_markers"],
+      "path": ["legal_form_data", "and_connector_words"],
       "segments": [
         {
           "type": "copy",
-          "start": 57,
-          "end": 62
+          "start": 1,
+          "end": 2
+        }
+      ]
+    },
+    {
+      "type": "array",
+      "path": ["legal_form_data", "clause_noun_heads"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 15,
+          "end": 23
         },
         {
           "type": "copy",
-          "start": 63,
-          "end": 66
+          "start": 5,
+          "end": 6
+        },
+        {
+          "type": "copy",
+          "start": 23,
+          "end": 34
+        }
+      ]
+    },
+    {
+      "type": "array",
+      "path": ["legal_form_data", "connector_prose_heads"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 17,
+          "end": 18
+        },
+        {
+          "type": "copy",
+          "start": 36,
+          "end": 37
+        },
+        {
+          "type": "copy",
+          "start": 38,
+          "end": 39
+        },
+        {
+          "type": "copy",
+          "start": 57,
+          "end": 58
         },
         {
           "type": "copy",
           "start": 67,
           "end": 68
+        },
+        {
+          "type": "copy",
+          "start": 69,
+          "end": 70
+        },
+        {
+          "type": "copy",
+          "start": 71,
+          "end": 72
+        },
+        {
+          "type": "copy",
+          "start": 80,
+          "end": 81
+        },
+        {
+          "type": "copy",
+          "start": 87,
+          "end": 88
+        },
+        {
+          "type": "copy",
+          "start": 89,
+          "end": 90
+        },
+        {
+          "type": "copy",
+          "start": 93,
+          "end": 94
+        },
+        {
+          "type": "copy",
+          "start": 97,
+          "end": 100
+        },
+        {
+          "type": "copy",
+          "start": 107,
+          "end": 108
+        },
+        {
+          "type": "copy",
+          "start": 109,
+          "end": 110
+        },
+        {
+          "type": "copy",
+          "start": 112,
+          "end": 113
+        },
+        {
+          "type": "copy",
+          "start": 116,
+          "end": 117
+        },
+        {
+          "type": "copy",
+          "start": 118,
+          "end": 119
+        },
+        {
+          "type": "copy",
+          "start": 120,
+          "end": 121
+        }
+      ]
+    },
+    {
+      "type": "array",
+      "path": ["legal_form_data", "connector_words"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 0,
+          "end": 1
+        },
+        {
+          "type": "copy",
+          "start": 7,
+          "end": 8
+        }
+      ]
+    },
+    {
+      "type": "array",
+      "path": ["legal_form_data", "detection_only_suffixes"],
+      "segments": []
+    },
+    {
+      "type": "array",
+      "path": ["legal_form_data", "institutional_complement_connectors"],
+      "segments": []
+    },
+    {
+      "type": "array",
+      "path": ["legal_form_data", "institutional_complement_heads"],
+      "segments": []
+    },
+    {
+      "type": "array",
+      "path": ["legal_form_data", "institutional_complement_starters"],
+      "segments": []
+    },
+    {
+      "type": "array",
+      "path": ["legal_form_data", "institutional_generic_words"],
+      "segments": []
+    },
+    {
+      "type": "array",
+      "path": ["legal_form_data", "institutional_heads"],
+      "segments": []
+    },
+    {
+      "type": "array",
+      "path": ["legal_form_data", "institutional_prefix_generic_words"],
+      "segments": []
+    },
+    {
+      "type": "array",
+      "path": ["legal_form_data", "non_ascii_name_short_suffixes"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 7,
+          "end": 8
+        }
+      ]
+    },
+    {
+      "type": "array",
+      "path": ["legal_form_data", "normalized_in_name_words"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 0,
+          "end": 63
+        },
+        {
+          "type": "copy",
+          "start": 64,
+          "end": 88
+        },
+        {
+          "type": "copy",
+          "start": 92,
+          "end": 115
+        },
+        {
+          "type": "copy",
+          "start": 118,
+          "end": 142
+        },
+        {
+          "type": "copy",
+          "start": 147,
+          "end": 160
+        },
+        {
+          "type": "copy",
+          "start": 161,
+          "end": 175
+        },
+        {
+          "type": "copy",
+          "start": 177,
+          "end": 188
+        },
+        {
+          "type": "copy",
+          "start": 190,
+          "end": 230
+        }
+      ]
+    },
+    {
+      "type": "array",
+      "path": ["legal_form_data", "normalized_suffix_words"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 0,
+          "end": 620
+        },
+        {
+          "type": "copy",
+          "start": 621,
+          "end": 661
+        },
+        {
+          "type": "copy",
+          "start": 665,
+          "end": 700
+        },
+        {
+          "type": "copy",
+          "start": 703,
+          "end": 757
+        },
+        {
+          "type": "copy",
+          "start": 762,
+          "end": 790
+        },
+        {
+          "type": "copy",
+          "start": 791,
+          "end": 874
+        },
+        {
+          "type": "copy",
+          "start": 876,
+          "end": 919
+        },
+        {
+          "type": "copy",
+          "start": 921,
+          "end": 1289
+        }
+      ]
+    },
+    {
+      "type": "array",
+      "path": ["legal_form_data", "role_heads"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 0,
+          "end": 38
+        }
+      ]
+    },
+    {
+      "type": "array",
+      "path": ["legal_form_data", "suffixes"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 0,
+          "end": 620
+        },
+        {
+          "type": "copy",
+          "start": 621,
+          "end": 661
+        },
+        {
+          "type": "copy",
+          "start": 665,
+          "end": 700
+        },
+        {
+          "type": "copy",
+          "start": 703,
+          "end": 757
+        },
+        {
+          "type": "copy",
+          "start": 762,
+          "end": 790
+        },
+        {
+          "type": "copy",
+          "start": 791,
+          "end": 874
+        },
+        {
+          "type": "copy",
+          "start": 876,
+          "end": 919
+        },
+        {
+          "type": "copy",
+          "start": 921,
+          "end": 1289
+        }
+      ]
+    },
+    {
+      "type": "array",
+      "path": ["monetary_data", "amount_words", "magnitude_suffixes"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 0,
+          "end": 1
+        }
+      ]
+    },
+    {
+      "type": "array",
+      "path": ["monetary_data", "amount_words", "number_words"],
+      "segments": []
+    },
+    {
+      "type": "array",
+      "path": ["monetary_data", "amount_words", "share_quantity_terms"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 0,
+          "end": 1
+        }
+      ]
+    },
+    {
+      "type": "array",
+      "path": ["monetary_data", "amount_words", "written_amount_patterns"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 0,
+          "end": 1
+        }
+      ]
+    },
+    {
+      "type": "array",
+      "path": ["name_corpus_data", "arabic_connectors"],
+      "segments": []
+    },
+    {
+      "type": "array",
+      "path": ["name_corpus_data", "cjk_non_person_terms"],
+      "segments": []
+    },
+    {
+      "type": "array",
+      "path": ["name_corpus_data", "cjk_surname_starters"],
+      "segments": []
+    },
+    {
+      "type": "array",
+      "path": ["name_corpus_data", "hyphenated_prefixes"],
+      "segments": []
+    },
+    {
+      "type": "array",
+      "path": ["name_corpus_data", "ja_suffixes"],
+      "segments": []
+    },
+    {
+      "type": "array",
+      "path": ["name_corpus_data", "non_western_names"],
+      "segments": []
+    },
+    {
+      "type": "array",
+      "path": ["name_corpus_data", "relation_connectors"],
+      "segments": []
+    },
+    {
+      "type": "array",
+      "path": ["name_corpus_data", "title_abbreviations"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 0,
+          "end": 92
         }
       ]
     },
@@ -1334,74 +1343,207 @@
     },
     {
       "type": "array",
-      "path": ["name_corpus_data", "title_abbreviations"],
+      "path": ["regex_meta"],
       "segments": [
         {
           "type": "copy",
           "start": 0,
-          "end": 92
+          "end": 3
+        },
+        {
+          "type": "values",
+          "values": [
+            {
+              "label": "iban",
+              "score": 1.0
+            },
+            {
+              "label": "email address",
+              "score": 1.0
+            },
+            {
+              "label": "phone number",
+              "min_byte_length": 7,
+              "requires_validation": true,
+              "score": 1.0,
+              "validator_id": "phone.international"
+            }
+          ]
+        },
+        {
+          "type": "copy",
+          "start": 7,
+          "end": 10
+        },
+        {
+          "type": "values",
+          "values": [
+            {
+              "label": "credit card number",
+              "score": 1.0
+            },
+            {
+              "label": "birth number",
+              "requires_validation": true,
+              "score": 1.0,
+              "validator_id": "cz.rc"
+            }
+          ]
+        },
+        {
+          "type": "copy",
+          "start": 12,
+          "end": 13
+        },
+        {
+          "type": "values",
+          "values": [
+            {
+              "label": "date",
+              "score": 1.0
+            },
+            {
+              "label": "date",
+              "score": 1.0
+            },
+            {
+              "label": "ip address",
+              "score": 1.0
+            }
+          ]
+        },
+        {
+          "type": "copy",
+          "start": 16,
+          "end": 40
+        },
+        {
+          "type": "values",
+          "values": [
+            {
+              "label": "url",
+              "score": 1.0
+            },
+            {
+              "label": "ip address",
+              "score": 1.0
+            },
+            {
+              "label": "mac address",
+              "score": 1.0
+            }
+          ]
+        },
+        {
+          "type": "copy",
+          "start": 43,
+          "end": 111
         }
       ]
     },
     {
       "type": "array",
-      "path": ["name_corpus_data", "non_western_names"],
-      "segments": []
+      "path": ["regex_patterns"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 0,
+          "end": 5
+        },
+        {
+          "type": "copy",
+          "start": 6,
+          "end": 111
+        },
+        {
+          "type": "copy",
+          "start": 118,
+          "end": 738
+        },
+        {
+          "type": "copy",
+          "start": 739,
+          "end": 779
+        },
+        {
+          "type": "copy",
+          "start": 783,
+          "end": 818
+        },
+        {
+          "type": "copy",
+          "start": 821,
+          "end": 875
+        },
+        {
+          "type": "copy",
+          "start": 880,
+          "end": 908
+        },
+        {
+          "type": "copy",
+          "start": 909,
+          "end": 992
+        },
+        {
+          "type": "copy",
+          "start": 994,
+          "end": 1037
+        },
+        {
+          "type": "copy",
+          "start": 1039,
+          "end": 1732
+        },
+        {
+          "type": "copy",
+          "start": 3114,
+          "end": 3160
+        }
+      ]
     },
     {
       "type": "array",
-      "path": ["name_corpus_data", "ja_suffixes"],
-      "segments": []
+      "path": ["signature_data", "contact_field_labels"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 0,
+          "end": 6
+        }
+      ]
     },
     {
       "type": "array",
-      "path": ["name_corpus_data", "arabic_connectors"],
-      "segments": []
+      "path": ["signature_data", "form_field_labels"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 14,
+          "end": 24
+        }
+      ]
     },
     {
       "type": "array",
-      "path": ["name_corpus_data", "relation_connectors"],
-      "segments": []
-    },
-    {
-      "type": "array",
-      "path": ["name_corpus_data", "hyphenated_prefixes"],
-      "segments": []
-    },
-    {
-      "type": "array",
-      "path": ["name_corpus_data", "cjk_non_person_terms"],
-      "segments": []
-    },
-    {
-      "type": "array",
-      "path": ["name_corpus_data", "cjk_surname_starters"],
-      "segments": []
+      "path": ["signature_data", "person_list_labels"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 0,
+          "end": 1
+        }
+      ]
     },
     {
       "type": "set",
-      "path": ["slices", "regex", "end"],
-      "value": 110
+      "path": ["slices", "countries", "end"],
+      "value": 6614
     },
     {
       "type": "set",
-      "path": ["slices", "legal_forms", "start"],
-      "value": 110
-    },
-    {
-      "type": "set",
-      "path": ["slices", "legal_forms", "end"],
-      "value": 1381
-    },
-    {
-      "type": "set",
-      "path": ["slices", "triggers", "start"],
-      "value": 1381
-    },
-    {
-      "type": "set",
-      "path": ["slices", "triggers", "end"],
-      "value": 1749
+      "path": ["slices", "countries", "start"],
+      "value": 3353
     },
     {
       "type": "set",
@@ -1410,12 +1552,7 @@
     },
     {
       "type": "set",
-      "path": ["slices", "street_types", "start"],
-      "value": 3179
-    },
-    {
-      "type": "set",
-      "path": ["slices", "street_types", "end"],
+      "path": ["slices", "gazetteer", "end"],
       "value": 3353
     },
     {
@@ -1425,17 +1562,7 @@
     },
     {
       "type": "set",
-      "path": ["slices", "gazetteer", "end"],
-      "value": 3353
-    },
-    {
-      "type": "set",
-      "path": ["slices", "countries", "start"],
-      "value": 3353
-    },
-    {
-      "type": "set",
-      "path": ["slices", "countries", "end"],
+      "path": ["slices", "hotwords", "end"],
       "value": 6614
     },
     {
@@ -1445,60 +1572,114 @@
     },
     {
       "type": "set",
-      "path": ["slices", "hotwords", "end"],
-      "value": 6614
+      "path": ["slices", "legal_forms", "end"],
+      "value": 1381
+    },
+    {
+      "type": "set",
+      "path": ["slices", "legal_forms", "start"],
+      "value": 110
+    },
+    {
+      "type": "set",
+      "path": ["slices", "regex", "end"],
+      "value": 110
+    },
+    {
+      "type": "set",
+      "path": ["slices", "street_types", "end"],
+      "value": 3353
+    },
+    {
+      "type": "set",
+      "path": ["slices", "street_types", "start"],
+      "value": 3179
+    },
+    {
+      "type": "set",
+      "path": ["slices", "triggers", "end"],
+      "value": 1752
+    },
+    {
+      "type": "set",
+      "path": ["slices", "triggers", "start"],
+      "value": 1381
     },
     {
       "type": "array",
-      "path": ["address_seed_data", "boundary_words"],
+      "path": ["trigger_data", "number_labels"],
       "segments": [
-        { "type": "copy", "start": 0, "end": 12 },
-        { "type": "copy", "start": 154, "end": 163 },
-        { "type": "copy", "start": 135, "end": 136 },
-        { "type": "copy", "start": 163, "end": 174 },
-        { "type": "values", "values": ["dič", "ičo"] },
-        { "type": "copy", "start": 174, "end": 175 }
+        {
+          "type": "copy",
+          "start": 0,
+          "end": 3
+        }
       ]
     },
     {
-      "type": "set",
-      "path": ["deny_list_data", "filters", "us_state_abbreviations"],
-      "value": []
-    },
-    {
-      "type": "set",
-      "path": ["false_positive_filters", "us_state_abbreviations"],
-      "value": []
+      "type": "array",
+      "path": ["trigger_data", "number_markers"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 0,
+          "end": 3
+        }
+      ]
     },
     {
       "type": "array",
-      "path": ["monetary_data", "amount_words", "written_amount_patterns"],
-      "segments": [{ "type": "copy", "start": 0, "end": 1 }]
+      "path": ["trigger_data", "party_position_terms"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 0,
+          "end": 38
+        }
+      ]
     },
     {
       "type": "array",
-      "path": ["monetary_data", "amount_words", "number_words"],
+      "path": ["trigger_data", "person_field_labels"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 14,
+          "end": 24
+        }
+      ]
+    },
+    {
+      "type": "array",
+      "path": ["trigger_data", "phone_extension_labels"],
       "segments": []
     },
     {
       "type": "array",
-      "path": ["monetary_data", "amount_words", "magnitude_suffixes"],
-      "segments": [{ "type": "copy", "start": 0, "end": 1 }]
+      "path": ["trigger_data", "rules"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 0,
+          "end": 325
+        },
+        {
+          "type": "copy",
+          "start": 1707,
+          "end": 1753
+        }
+      ]
     },
     {
       "type": "array",
-      "path": ["monetary_data", "amount_words", "share_quantity_terms"],
-      "segments": [{ "type": "copy", "start": 0, "end": 1 }]
-    },
-    {
-      "type": "set",
-      "path": ["signature_data", "person_list_labels"],
-      "value": ["k rukám"]
-    },
-    {
-      "type": "set",
-      "path": ["signature_data", "contact_field_labels"],
-      "value": ["e-mail", "email", "tel", "tel.", "telefon", "telefonní číslo"]
+      "path": ["zone_data", "signing_clauses"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 0,
+          "end": 1
+        }
+      ]
     }
   ]
 }

@@ -4,18 +4,24 @@ export const PRESIDIO_PROVIDER = {
   name: "presidio",
   venvDir: ".venv-presidio",
   script: "presidio_adapter.py",
+  languageSupport: {
+    type: "allowlist",
+    languages: ["en", "de", "es", "cs"],
+  },
 } as const satisfies PythonAdapterOptions;
 
 export const SCRUBADUB_PROVIDER = {
   name: "scrubadub",
   venvDir: ".venv-scrubadub",
   script: "scrubadub_adapter.py",
+  languageSupport: { type: "all" },
 } as const satisfies PythonAdapterOptions;
 
 export const DATAFOG_PROVIDER = {
   name: "datafog",
   venvDir: ".venv-datafog",
   script: "datafog_adapter.py",
+  languageSupport: { type: "all" },
 } as const satisfies PythonAdapterOptions;
 
 /** Optional Python providers executed by every sealed runner. */

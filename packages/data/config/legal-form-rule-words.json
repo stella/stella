@@ -1,6 +1,28 @@
 {
   "connectorWords": ["a", "and", "und", "et", "e", "y", "i", "&"],
-  "andConnectorWords": ["and", "und", "et"],
+  "connectorWordLanguages": {
+    "und": ["&"],
+    "en": ["and"],
+    "cs": ["a"],
+    "de": ["und"],
+    "es": ["y"],
+    "fr": ["et"],
+    "it": ["e"],
+    "pl": ["i"],
+    "pt-br": ["e"],
+    "sk": ["a"]
+  },
+  "partyConnectorWords": {
+    "en": ["and"],
+    "cs": ["a"],
+    "de": ["und"],
+    "es": ["y"],
+    "fr": ["et"],
+    "it": ["e"],
+    "pl": ["i"],
+    "pt-br": ["e"],
+    "sk": ["a"]
+  },
   "inNamePrepositions": ["of", "the"],
   "companySuffixWords": [
     "Company",

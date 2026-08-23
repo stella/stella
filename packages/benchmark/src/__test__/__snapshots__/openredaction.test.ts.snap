@@ -1,0 +1,9 @@
+// Bun Snapshot v1, https://bun.sh/docs/test/snapshots
+
+exports[`OpenRedaction benchmark adapter preserves the pinned 1.1.5 predictions 1`] = `
+{
+  "digest": "2df2f4e127f6ed6c718dc4c67250063e47f848b5d0e8bc0297db99b4971cd505",
+  "documentCount": 34,
+  "spanCount": 210,
+}
+`;

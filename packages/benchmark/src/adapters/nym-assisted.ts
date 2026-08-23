@@ -255,6 +255,7 @@ export const createNymAssistedAdapter = (): Adapter => ({
     if (!existsSync(NATIVE_BINARY)) {
       return {
         status: "unavailable",
+        reasonCode: "adapter-unavailable",
         reason:
           "optional native Nym adapter is not built; create it using the pinned command in REPRODUCING.md",
       };

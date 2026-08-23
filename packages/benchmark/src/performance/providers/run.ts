@@ -11,6 +11,7 @@ import {
 } from "../host";
 import {
   buildPerformanceInput,
+  DEFAULT_PERFORMANCE_SCENARIO_ID,
   PERFORMANCE_INPUT_SOURCE,
   performanceInputSourceDigest,
 } from "../input";
@@ -678,7 +679,9 @@ export const runCrossProviderPerformance = async (
     fixture: {
       kind: "public-safe-synthetic",
       source: PERFORMANCE_INPUT_SOURCE,
-      sha256: performanceInputSourceDigest(),
+      sha256: await performanceInputSourceDigest({
+        scenarioIds: [DEFAULT_PERFORMANCE_SCENARIO_ID],
+      }),
     },
     machine: await machineMetadata(benchmarkCpu),
     hostNoise,

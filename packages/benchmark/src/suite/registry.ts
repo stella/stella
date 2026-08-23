@@ -21,7 +21,7 @@ export type BenchmarkCorpus = {
   readonly artifact?: {
     readonly file: string;
     readonly sha256: string;
-    readonly split: "dev" | "test";
+    readonly split: "dev" | "test" | "evaluation";
   };
   readonly runnable: boolean;
   readonly execution?: {
@@ -140,6 +140,27 @@ export const BENCHMARK_CORPORA: readonly BenchmarkCorpus[] = [
       "Complete 250-document test split; checksum-pinned Zenodo BRAT archive.",
   },
   {
+    id: "multigrassco",
+    name: "MultiGraSCCo",
+    domains: ["medical"],
+    languages: ["ar", "de", "en", "fa", "fr", "it", "pl", "ru", "tr", "uk"],
+    task: "contextual-redaction",
+    access: "verified-download",
+    policy: "evaluation-only",
+    license: MULTIGRASCCO_PROVENANCE.license,
+    source: MULTIGRASCCO_PROVENANCE.repository,
+    version: MULTIGRASCCO_PROVENANCE.version,
+    artifact: {
+      file: MULTIGRASCCO_PROVENANCE.file,
+      sha256: MULTIGRASCCO_PROVENANCE.sha256,
+      split: "evaluation",
+    },
+    runnable: true,
+    execution: { script: "multigrassco.ts", args: [] },
+    notes:
+      "Multilingual synthetic clinical corpus with separate direct (PHI) and indirect (IPI) annotations; documents with invalid source spans are excluded by a declared integrity rule.",
+  },
+  {
     id: "german-ler",
     name: "German Legal Entity Recognition",
     domains: ["court decisions", "legal"],
@@ -179,9 +200,12 @@ export const validateBenchmarkRegistry = (): void => {
       if (!/^[a-f0-9]{64}$/u.test(corpus.artifact.sha256)) {
         throw new Error(`${corpus.id} must pin a valid SHA-256 digest`);
       }
-      const expectedSplit =
-        corpus.policy === "evaluation-only" ? "test" : "dev";
-      if (corpus.artifact.split !== expectedSplit) {
+      const validSplit =
+        corpus.policy === "evaluation-only"
+          ? corpus.artifact.split === "test" ||
+            corpus.artifact.split === "evaluation"
+          : corpus.artifact.split === "dev";
+      if (!validSplit) {
         throw new Error(`${corpus.id} artifact split violates its policy`);
       }
     }
@@ -197,4 +221,5 @@ export const validateBenchmarkRegistry = (): void => {
 import { TAB_DEV_PROVENANCE, TAB_PROVENANCE } from "../blind/tab";
 import { GERMAN_LER_PROVENANCE } from "./german-ler";
 import { MEDDOCAN_PROVENANCE } from "./meddocan";
+import { MULTIGRASCCO_PROVENANCE } from "./multigrassco";
 import { REDACTIONBENCH_PROVENANCE } from "./redactionbench";

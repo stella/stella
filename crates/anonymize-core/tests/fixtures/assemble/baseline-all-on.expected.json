@@ -16446,7 +16446,7 @@
     "leading_clause_phrases": ["by and among", "by and between", "is between"],
     "leading_clause_direct_prefixes": ["by", "among", "amongst", "between"],
     "connector_words": ["a", "and", "und", "et", "e", "y", "i", "&"],
-    "and_connector_words": ["and", "und", "et"],
+    "and_connector_words": ["and", "a", "und", "y", "et", "e", "i"],
     "in_name_prepositions": ["of", "the"],
     "company_suffix_words": [
       "Company",
@@ -17130,27 +17130,15 @@
     },
     {
       "label": "case number",
-      "score": 0.95,
-      "requires_validation": null,
-      "validator_id": null,
-      "validator_input": null,
-      "min_byte_length": null
+      "score": 0.95
     },
     {
       "label": "case number",
-      "score": 0.95,
-      "requires_validation": null,
-      "validator_id": null,
-      "validator_input": null,
-      "min_byte_length": null
+      "score": 0.95
     },
     {
       "label": "case number",
-      "score": 0.95,
-      "requires_validation": null,
-      "validator_id": null,
-      "validator_input": null,
-      "min_byte_length": null
+      "score": 0.95
     },
     {
       "label": "address",
@@ -17341,7 +17329,8 @@
       "kind": "regex",
       "pattern": "(?i)(?<![\\p{L}\\p{N}\\p{M}_!#$%&'*+/=?^`{|}~.\\-])[\\p{L}\\p{N}_!#$%&'*+/=?^`{|}~-][\\p{L}\\p{N}\\p{M}_!#$%&'*+/=?^`{|}~-]*(?:\\.[\\p{L}\\p{N}_!#$%&'*+/=?^`{|}~-][\\p{L}\\p{N}\\p{M}_!#$%&'*+/=?^`{|}~-]*)*[^\\S\\n]+(?:at)[^\\S\\n]+[\\p{L}\\p{N}](?:[\\p{L}\\p{N}\\p{M}-]{0,61}[\\p{L}\\p{N}\\p{M}])?(?:[^\\S\\n]+(?:dot)[^\\S\\n]+[\\p{L}\\p{N}](?:[\\p{L}\\p{N}\\p{M}-]{0,61}[\\p{L}\\p{N}\\p{M}])?)+\\b",
       "lazy": true,
-      "prefilter_regex": "(?i)[^\\S\\n](?:at)[^\\S\\n]+[\\p{L}\\p{N}](?:[\\p{L}\\p{N}\\p{M}-]{0,61}[\\p{L}\\p{N}\\p{M}])?[^\\S\\n]+(?:dot)[^\\S\\n]"
+      "prefilter_any": ["dot"],
+      "prefilter_case_insensitive": true
     },
     {
       "kind": "regex",
@@ -23950,12 +23939,27 @@
     },
     {
       "kind": "literal-with-options",
+      "pattern": "rodné číslo je",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
       "pattern": "r.č.:",
       "case_insensitive": true
     },
     {
       "kind": "literal-with-options",
       "pattern": "rodné číslo:",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "rodné číslo je:",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "číslo občanského průkazu je",
       "case_insensitive": true
     },
     {
@@ -24885,6 +24889,11 @@
     },
     {
       "kind": "literal-with-options",
+      "pattern": "personalausweisnummer lautet",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
       "pattern": "vertreten durch",
       "case_insensitive": true
     },
@@ -25321,6 +25330,11 @@
     {
       "kind": "literal-with-options",
       "pattern": "domiciled in",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "passport number is",
       "case_insensitive": true
     },
     {
@@ -33751,6 +33765,16 @@
         "include_trigger": false
       },
       {
+        "trigger": "rodné číslo je",
+        "label": "birth number",
+        "strategy": {
+          "type": "n-words",
+          "count": 1
+        },
+        "validations": [],
+        "include_trigger": false
+      },
+      {
         "trigger": "r.č.:",
         "label": "birth number",
         "strategy": {
@@ -33766,6 +33790,26 @@
         "strategy": {
           "type": "n-words",
           "count": 1
+        },
+        "validations": [],
+        "include_trigger": false
+      },
+      {
+        "trigger": "rodné číslo je:",
+        "label": "birth number",
+        "strategy": {
+          "type": "n-words",
+          "count": 1
+        },
+        "validations": [],
+        "include_trigger": false
+      },
+      {
+        "trigger": "číslo občanského průkazu je",
+        "label": "identity card number",
+        "strategy": {
+          "type": "match-pattern",
+          "pattern": "^(?:[1-9]\\d{8}|[A-Za-z]{2}(?:\\d{2})?\\d{6})\\b"
         },
         "validations": [],
         "include_trigger": false
@@ -36385,6 +36429,16 @@
         "include_trigger": false
       },
       {
+        "trigger": "Personalausweisnummer lautet",
+        "label": "identity card number",
+        "strategy": {
+          "type": "match-pattern",
+          "pattern": "^[A-Za-z0-9]{9}\\b"
+        },
+        "validations": [],
+        "include_trigger": false
+      },
+      {
         "trigger": "vertreten durch",
         "label": "person",
         "strategy": {
@@ -37413,6 +37467,16 @@
         "include_trigger": false
       },
       {
+        "trigger": "passport number is",
+        "label": "passport number",
+        "strategy": {
+          "type": "match-pattern",
+          "pattern": "^(?:[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b"
+        },
+        "validations": [],
+        "include_trigger": false
+      },
+      {
         "trigger": "State of",
         "label": "address",
         "strategy": {
@@ -37872,8 +37936,7 @@
         "validations": [
           {
             "type": "matches-pattern",
-            "pattern": "^(?:SC|NI|OC|SO|R|FC|GE|GS|IC|IP|LP|NC|NF|NL|NO|NP|NR|NZ|RC|SA|SF|SI|SL|SP|SR|SZ)?\\d{6,8}$",
-            "flags": null
+            "pattern": "^(?:SC|NI|OC|SO|R|FC|GE|GS|IC|IP|LP|NC|NF|NL|NO|NP|NR|NZ|RC|SA|SF|SI|SL|SP|SR|SZ)?\\d{6,8}$"
           }
         ],
         "include_trigger": false
@@ -37985,8 +38048,7 @@
         "validations": [
           {
             "type": "matches-pattern",
-            "pattern": "^(?:SC|NI|OC|SO|R|FC|GE|GS|IC|IP|LP|NC|NF|NL|NO|NP|NR|NZ|RC|SA|SF|SI|SL|SP|SR|SZ)?\\d{6,8}$",
-            "flags": null
+            "pattern": "^(?:SC|NI|OC|SO|R|FC|GE|GS|IC|IP|LP|NC|NF|NL|NO|NP|NR|NZ|RC|SA|SF|SI|SL|SP|SR|SZ)?\\d{6,8}$"
           }
         ],
         "include_trigger": false
@@ -38000,8 +38062,7 @@
         "validations": [
           {
             "type": "matches-pattern",
-            "pattern": "^(?:SC|NI|OC|SO|R|FC|GE|GS|IC|IP|LP|NC|NF|NL|NO|NP|NR|NZ|RC|SA|SF|SI|SL|SP|SR|SZ)?\\d{6,8}$",
-            "flags": null
+            "pattern": "^(?:SC|NI|OC|SO|R|FC|GE|GS|IC|IP|LP|NC|NF|NL|NO|NP|NR|NZ|RC|SA|SF|SI|SL|SP|SR|SZ)?\\d{6,8}$"
           }
         ],
         "include_trigger": false
@@ -40350,7 +40411,7 @@
         "label": "monetary amount",
         "strategy": {
           "type": "match-pattern",
-          "pattern": "^(?:[+\\-\u2010\u2011\u2012\u2013\u2014\u2015\u2e3a\u2e3b\u2043\u05be\u2212][ \\u00a0]?)?(?:[A-Z]{1,3}\\p{Sc}|\\p{Sc}|[A-Z]{3}[ \\u00a0]?)?\\d{1,3}(?:(?:[.,' \\u00a0]\\d{3})+|\\d*)(?:[.,]\\d{1,2})?(?:,-+)?(?:[ \\u00a0]?(?:\\p{Sc}|[A-Z]{3}))?"
+          "pattern": "^(?:[+\\-‐‑‒–—―⸺⸻⁃־−][ \\u00a0]?)?(?:[A-Z]{1,3}\\p{Sc}|\\p{Sc}|[A-Z]{3}[ \\u00a0]?)?\\d{1,3}(?:(?:[.,' \\u00a0]\\d{3})+|\\d*)(?:[.,]\\d{1,2})?(?:,-+)?(?:[ \\u00a0]?(?:\\p{Sc}|[A-Z]{3}))?"
         },
         "validations": [
           {
@@ -40364,7 +40425,7 @@
         "label": "monetary amount",
         "strategy": {
           "type": "match-pattern",
-          "pattern": "^(?:[+\\-\u2010\u2011\u2012\u2013\u2014\u2015\u2e3a\u2e3b\u2043\u05be\u2212][ \\u00a0]?)?(?:[A-Z]{1,3}\\p{Sc}|\\p{Sc}|[A-Z]{3}[ \\u00a0]?)?\\d{1,3}(?:(?:[.,' \\u00a0]\\d{3})+|\\d*)(?:[.,]\\d{1,2})?(?:,-+)?(?:[ \\u00a0]?(?:\\p{Sc}|[A-Z]{3}))?"
+          "pattern": "^(?:[+\\-‐‑‒–—―⸺⸻⁃־−][ \\u00a0]?)?(?:[A-Z]{1,3}\\p{Sc}|\\p{Sc}|[A-Z]{3}[ \\u00a0]?)?\\d{1,3}(?:(?:[.,' \\u00a0]\\d{3})+|\\d*)(?:[.,]\\d{1,2})?(?:,-+)?(?:[ \\u00a0]?(?:\\p{Sc}|[A-Z]{3}))?"
         },
         "validations": [
           {
@@ -40378,7 +40439,7 @@
         "label": "monetary amount",
         "strategy": {
           "type": "match-pattern",
-          "pattern": "^(?:[+\\-\u2010\u2011\u2012\u2013\u2014\u2015\u2e3a\u2e3b\u2043\u05be\u2212][ \\u00a0]?)?(?:[A-Z]{1,3}\\p{Sc}|\\p{Sc}|[A-Z]{3}[ \\u00a0]?)?\\d{1,3}(?:(?:[.,' \\u00a0]\\d{3})+|\\d*)(?:[.,]\\d{1,2})?(?:,-+)?(?:[ \\u00a0]?(?:\\p{Sc}|[A-Z]{3}))?"
+          "pattern": "^(?:[+\\-‐‑‒–—―⸺⸻⁃־−][ \\u00a0]?)?(?:[A-Z]{1,3}\\p{Sc}|\\p{Sc}|[A-Z]{3}[ \\u00a0]?)?\\d{1,3}(?:(?:[.,' \\u00a0]\\d{3})+|\\d*)(?:[.,]\\d{1,2})?(?:,-+)?(?:[ \\u00a0]?(?:\\p{Sc}|[A-Z]{3}))?"
         },
         "validations": [
           {
@@ -40392,7 +40453,7 @@
         "label": "monetary amount",
         "strategy": {
           "type": "match-pattern",
-          "pattern": "^(?:[+\\-\u2010\u2011\u2012\u2013\u2014\u2015\u2e3a\u2e3b\u2043\u05be\u2212][ \\u00a0]?)?(?:[A-Z]{1,3}\\p{Sc}|\\p{Sc}|[A-Z]{3}[ \\u00a0]?)?\\d{1,3}(?:(?:[.,' \\u00a0]\\d{3})+|\\d*)(?:[.,]\\d{1,2})?(?:,-+)?(?:[ \\u00a0]?(?:\\p{Sc}|[A-Z]{3}))?"
+          "pattern": "^(?:[+\\-‐‑‒–—―⸺⸻⁃־−][ \\u00a0]?)?(?:[A-Z]{1,3}\\p{Sc}|\\p{Sc}|[A-Z]{3}[ \\u00a0]?)?\\d{1,3}(?:(?:[.,' \\u00a0]\\d{3})+|\\d*)(?:[.,]\\d{1,2})?(?:,-+)?(?:[ \\u00a0]?(?:\\p{Sc}|[A-Z]{3}))?"
         },
         "validations": [
           {
@@ -40406,7 +40467,7 @@
         "label": "monetary amount",
         "strategy": {
           "type": "match-pattern",
-          "pattern": "^(?:[+\\-\u2010\u2011\u2012\u2013\u2014\u2015\u2e3a\u2e3b\u2043\u05be\u2212][ \\u00a0]?)?(?:[A-Z]{1,3}\\p{Sc}|\\p{Sc}|[A-Z]{3}[ \\u00a0]?)?\\d{1,3}(?:(?:[.,' \\u00a0]\\d{3})+|\\d*)(?:[.,]\\d{1,2})?(?:,-+)?(?:[ \\u00a0]?(?:\\p{Sc}|[A-Z]{3}))?"
+          "pattern": "^(?:[+\\-‐‑‒–—―⸺⸻⁃־−][ \\u00a0]?)?(?:[A-Z]{1,3}\\p{Sc}|\\p{Sc}|[A-Z]{3}[ \\u00a0]?)?\\d{1,3}(?:(?:[.,' \\u00a0]\\d{3})+|\\d*)(?:[.,]\\d{1,2})?(?:,-+)?(?:[ \\u00a0]?(?:\\p{Sc}|[A-Z]{3}))?"
         },
         "validations": [
           {
@@ -40420,7 +40481,7 @@
         "label": "monetary amount",
         "strategy": {
           "type": "match-pattern",
-          "pattern": "^(?:[+\\-\u2010\u2011\u2012\u2013\u2014\u2015\u2e3a\u2e3b\u2043\u05be\u2212][ \\u00a0]?)?(?:[A-Z]{1,3}\\p{Sc}|\\p{Sc}|[A-Z]{3}[ \\u00a0]?)?\\d{1,3}(?:(?:[.,' \\u00a0]\\d{3})+|\\d*)(?:[.,]\\d{1,2})?(?:,-+)?(?:[ \\u00a0]?(?:\\p{Sc}|[A-Z]{3}))?"
+          "pattern": "^(?:[+\\-‐‑‒–—―⸺⸻⁃־−][ \\u00a0]?)?(?:[A-Z]{1,3}\\p{Sc}|\\p{Sc}|[A-Z]{3}[ \\u00a0]?)?\\d{1,3}(?:(?:[.,' \\u00a0]\\d{3})+|\\d*)(?:[.,]\\d{1,2})?(?:,-+)?(?:[ \\u00a0]?(?:\\p{Sc}|[A-Z]{3}))?"
         },
         "validations": [
           {
@@ -40434,7 +40495,7 @@
         "label": "monetary amount",
         "strategy": {
           "type": "match-pattern",
-          "pattern": "^(?:[+\\-\u2010\u2011\u2012\u2013\u2014\u2015\u2e3a\u2e3b\u2043\u05be\u2212][ \\u00a0]?)?(?:[A-Z]{1,3}\\p{Sc}|\\p{Sc}|[A-Z]{3}[ \\u00a0]?)?\\d{1,3}(?:(?:[.,' \\u00a0]\\d{3})+|\\d*)(?:[.,]\\d{1,2})?(?:,-+)?(?:[ \\u00a0]?(?:\\p{Sc}|[A-Z]{3}))?"
+          "pattern": "^(?:[+\\-‐‑‒–—―⸺⸻⁃־−][ \\u00a0]?)?(?:[A-Z]{1,3}\\p{Sc}|\\p{Sc}|[A-Z]{3}[ \\u00a0]?)?\\d{1,3}(?:(?:[.,' \\u00a0]\\d{3})+|\\d*)(?:[.,]\\d{1,2})?(?:,-+)?(?:[ \\u00a0]?(?:\\p{Sc}|[A-Z]{3}))?"
         },
         "validations": [
           {
@@ -40448,7 +40509,7 @@
         "label": "monetary amount",
         "strategy": {
           "type": "match-pattern",
-          "pattern": "^(?:[+\\-\u2010\u2011\u2012\u2013\u2014\u2015\u2e3a\u2e3b\u2043\u05be\u2212][ \\u00a0]?)?(?:[A-Z]{1,3}\\p{Sc}|\\p{Sc}|[A-Z]{3}[ \\u00a0]?)?\\d{1,3}(?:(?:[.,' \\u00a0]\\d{3})+|\\d*)(?:[.,]\\d{1,2})?(?:,-+)?(?:[ \\u00a0]?(?:\\p{Sc}|[A-Z]{3}))?"
+          "pattern": "^(?:[+\\-‐‑‒–—―⸺⸻⁃־−][ \\u00a0]?)?(?:[A-Z]{1,3}\\p{Sc}|\\p{Sc}|[A-Z]{3}[ \\u00a0]?)?\\d{1,3}(?:(?:[.,' \\u00a0]\\d{3})+|\\d*)(?:[.,]\\d{1,2})?(?:,-+)?(?:[ \\u00a0]?(?:\\p{Sc}|[A-Z]{3}))?"
         },
         "validations": [
           {
@@ -40462,7 +40523,7 @@
         "label": "monetary amount",
         "strategy": {
           "type": "match-pattern",
-          "pattern": "^(?:[+\\-\u2010\u2011\u2012\u2013\u2014\u2015\u2e3a\u2e3b\u2043\u05be\u2212][ \\u00a0]?)?(?:[A-Z]{1,3}\\p{Sc}|\\p{Sc}|[A-Z]{3}[ \\u00a0]?)?\\d{1,3}(?:(?:[.,' \\u00a0]\\d{3})+|\\d*)(?:[.,]\\d{1,2})?(?:,-+)?(?:[ \\u00a0]?(?:\\p{Sc}|[A-Z]{3}))?"
+          "pattern": "^(?:[+\\-‐‑‒–—―⸺⸻⁃־−][ \\u00a0]?)?(?:[A-Z]{1,3}\\p{Sc}|\\p{Sc}|[A-Z]{3}[ \\u00a0]?)?\\d{1,3}(?:(?:[.,' \\u00a0]\\d{3})+|\\d*)(?:[.,]\\d{1,2})?(?:,-+)?(?:[ \\u00a0]?(?:\\p{Sc}|[A-Z]{3}))?"
         },
         "validations": [
           {
@@ -40476,7 +40537,7 @@
         "label": "monetary amount",
         "strategy": {
           "type": "match-pattern",
-          "pattern": "^(?:[+\\-\u2010\u2011\u2012\u2013\u2014\u2015\u2e3a\u2e3b\u2043\u05be\u2212][ \\u00a0]?)?(?:[A-Z]{1,3}\\p{Sc}|\\p{Sc}|[A-Z]{3}[ \\u00a0]?)?\\d{1,3}(?:(?:[.,' \\u00a0]\\d{3})+|\\d*)(?:[.,]\\d{1,2})?(?:,-+)?(?:[ \\u00a0]?(?:\\p{Sc}|[A-Z]{3}))?"
+          "pattern": "^(?:[+\\-‐‑‒–—―⸺⸻⁃־−][ \\u00a0]?)?(?:[A-Z]{1,3}\\p{Sc}|\\p{Sc}|[A-Z]{3}[ \\u00a0]?)?\\d{1,3}(?:(?:[.,' \\u00a0]\\d{3})+|\\d*)(?:[.,]\\d{1,2})?(?:,-+)?(?:[ \\u00a0]?(?:\\p{Sc}|[A-Z]{3}))?"
         },
         "validations": [
           {
@@ -40490,7 +40551,7 @@
         "label": "monetary amount",
         "strategy": {
           "type": "match-pattern",
-          "pattern": "^(?:[+\\-\u2010\u2011\u2012\u2013\u2014\u2015\u2e3a\u2e3b\u2043\u05be\u2212][ \\u00a0]?)?(?:[A-Z]{1,3}\\p{Sc}|\\p{Sc}|[A-Z]{3}[ \\u00a0]?)?\\d{1,3}(?:(?:[.,' \\u00a0]\\d{3})+|\\d*)(?:[.,]\\d{1,2})?(?:,-+)?(?:[ \\u00a0]?(?:\\p{Sc}|[A-Z]{3}))?"
+          "pattern": "^(?:[+\\-‐‑‒–—―⸺⸻⁃־−][ \\u00a0]?)?(?:[A-Z]{1,3}\\p{Sc}|\\p{Sc}|[A-Z]{3}[ \\u00a0]?)?\\d{1,3}(?:(?:[.,' \\u00a0]\\d{3})+|\\d*)(?:[.,]\\d{1,2})?(?:,-+)?(?:[ \\u00a0]?(?:\\p{Sc}|[A-Z]{3}))?"
         },
         "validations": [
           {
@@ -40504,7 +40565,7 @@
         "label": "monetary amount",
         "strategy": {
           "type": "match-pattern",
-          "pattern": "^(?:[+\\-\u2010\u2011\u2012\u2013\u2014\u2015\u2e3a\u2e3b\u2043\u05be\u2212][ \\u00a0]?)?(?:[A-Z]{1,3}\\p{Sc}|\\p{Sc}|[A-Z]{3}[ \\u00a0]?)?\\d{1,3}(?:(?:[.,' \\u00a0]\\d{3})+|\\d*)(?:[.,]\\d{1,2})?(?:,-+)?(?:[ \\u00a0]?(?:\\p{Sc}|[A-Z]{3}))?"
+          "pattern": "^(?:[+\\-‐‑‒–—―⸺⸻⁃־−][ \\u00a0]?)?(?:[A-Z]{1,3}\\p{Sc}|\\p{Sc}|[A-Z]{3}[ \\u00a0]?)?\\d{1,3}(?:(?:[.,' \\u00a0]\\d{3})+|\\d*)(?:[.,]\\d{1,2})?(?:,-+)?(?:[ \\u00a0]?(?:\\p{Sc}|[A-Z]{3}))?"
         },
         "validations": [
           {
@@ -40518,7 +40579,7 @@
         "label": "monetary amount",
         "strategy": {
           "type": "match-pattern",
-          "pattern": "^(?:[+\\-\u2010\u2011\u2012\u2013\u2014\u2015\u2e3a\u2e3b\u2043\u05be\u2212][ \\u00a0]?)?(?:[A-Z]{1,3}\\p{Sc}|\\p{Sc}|[A-Z]{3}[ \\u00a0]?)?\\d{1,3}(?:(?:[.,' \\u00a0]\\d{3})+|\\d*)(?:[.,]\\d{1,2})?(?:,-+)?(?:[ \\u00a0]?(?:\\p{Sc}|[A-Z]{3}))?"
+          "pattern": "^(?:[+\\-‐‑‒–—―⸺⸻⁃־−][ \\u00a0]?)?(?:[A-Z]{1,3}\\p{Sc}|\\p{Sc}|[A-Z]{3}[ \\u00a0]?)?\\d{1,3}(?:(?:[.,' \\u00a0]\\d{3})+|\\d*)(?:[.,]\\d{1,2})?(?:,-+)?(?:[ \\u00a0]?(?:\\p{Sc}|[A-Z]{3}))?"
         },
         "validations": [
           {
@@ -40532,7 +40593,7 @@
         "label": "monetary amount",
         "strategy": {
           "type": "match-pattern",
-          "pattern": "^(?:[+\\-\u2010\u2011\u2012\u2013\u2014\u2015\u2e3a\u2e3b\u2043\u05be\u2212][ \\u00a0]?)?(?:[A-Z]{1,3}\\p{Sc}|\\p{Sc}|[A-Z]{3}[ \\u00a0]?)?\\d{1,3}(?:(?:[.,' \\u00a0]\\d{3})+|\\d*)(?:[.,]\\d{1,2})?(?:,-+)?(?:[ \\u00a0]?(?:\\p{Sc}|[A-Z]{3}))?"
+          "pattern": "^(?:[+\\-‐‑‒–—―⸺⸻⁃־−][ \\u00a0]?)?(?:[A-Z]{1,3}\\p{Sc}|\\p{Sc}|[A-Z]{3}[ \\u00a0]?)?\\d{1,3}(?:(?:[.,' \\u00a0]\\d{3})+|\\d*)(?:[.,]\\d{1,2})?(?:,-+)?(?:[ \\u00a0]?(?:\\p{Sc}|[A-Z]{3}))?"
         },
         "validations": [
           {
@@ -48397,7 +48458,7 @@
         "label": "monetary amount",
         "strategy": {
           "type": "match-pattern",
-          "pattern": "^(?:[+\\-\u2010\u2011\u2012\u2013\u2014\u2015\u2e3a\u2e3b\u2043\u05be\u2212][ \\u00a0]?)?(?:[A-Z]{1,3}\\p{Sc}|\\p{Sc}|[A-Z]{3}[ \\u00a0]?)?\\d{1,3}(?:(?:[.,' \\u00a0]\\d{3})+|\\d*)(?:[.,]\\d{1,2})?(?:,-+)?(?:[ \\u00a0]?(?:\\p{Sc}|[A-Z]{3}))?"
+          "pattern": "^(?:[+\\-‐‑‒–—―⸺⸻⁃־−][ \\u00a0]?)?(?:[A-Z]{1,3}\\p{Sc}|\\p{Sc}|[A-Z]{3}[ \\u00a0]?)?\\d{1,3}(?:(?:[.,' \\u00a0]\\d{3})+|\\d*)(?:[.,]\\d{1,2})?(?:,-+)?(?:[ \\u00a0]?(?:\\p{Sc}|[A-Z]{3}))?"
         },
         "validations": [
           {
@@ -48416,7 +48477,7 @@
         "label": "monetary amount",
         "strategy": {
           "type": "match-pattern",
-          "pattern": "^(?:[+\\-\u2010\u2011\u2012\u2013\u2014\u2015\u2e3a\u2e3b\u2043\u05be\u2212][ \\u00a0]?)?(?:[A-Z]{1,3}\\p{Sc}|\\p{Sc}|[A-Z]{3}[ \\u00a0]?)?\\d{1,3}(?:(?:[.,' \\u00a0]\\d{3})+|\\d*)(?:[.,]\\d{1,2})?(?:,-+)?(?:[ \\u00a0]?(?:\\p{Sc}|[A-Z]{3}))?"
+          "pattern": "^(?:[+\\-‐‑‒–—―⸺⸻⁃־−][ \\u00a0]?)?(?:[A-Z]{1,3}\\p{Sc}|\\p{Sc}|[A-Z]{3}[ \\u00a0]?)?\\d{1,3}(?:(?:[.,' \\u00a0]\\d{3})+|\\d*)(?:[.,]\\d{1,2})?(?:,-+)?(?:[ \\u00a0]?(?:\\p{Sc}|[A-Z]{3}))?"
         },
         "validations": [
           {
@@ -48435,7 +48496,7 @@
         "label": "monetary amount",
         "strategy": {
           "type": "match-pattern",
-          "pattern": "^(?:[+\\-\u2010\u2011\u2012\u2013\u2014\u2015\u2e3a\u2e3b\u2043\u05be\u2212][ \\u00a0]?)?(?:[A-Z]{1,3}\\p{Sc}|\\p{Sc}|[A-Z]{3}[ \\u00a0]?)?\\d{1,3}(?:(?:[.,' \\u00a0]\\d{3})+|\\d*)(?:[.,]\\d{1,2})?(?:,-+)?(?:[ \\u00a0]?(?:\\p{Sc}|[A-Z]{3}))?"
+          "pattern": "^(?:[+\\-‐‑‒–—―⸺⸻⁃־−][ \\u00a0]?)?(?:[A-Z]{1,3}\\p{Sc}|\\p{Sc}|[A-Z]{3}[ \\u00a0]?)?\\d{1,3}(?:(?:[.,' \\u00a0]\\d{3})+|\\d*)(?:[.,]\\d{1,2})?(?:,-+)?(?:[ \\u00a0]?(?:\\p{Sc}|[A-Z]{3}))?"
         },
         "validations": [
           {
@@ -48454,7 +48515,7 @@
         "label": "monetary amount",
         "strategy": {
           "type": "match-pattern",
-          "pattern": "^(?:[+\\-\u2010\u2011\u2012\u2013\u2014\u2015\u2e3a\u2e3b\u2043\u05be\u2212][ \\u00a0]?)?(?:[A-Z]{1,3}\\p{Sc}|\\p{Sc}|[A-Z]{3}[ \\u00a0]?)?\\d{1,3}(?:(?:[.,' \\u00a0]\\d{3})+|\\d*)(?:[.,]\\d{1,2})?(?:,-+)?(?:[ \\u00a0]?(?:\\p{Sc}|[A-Z]{3}))?"
+          "pattern": "^(?:[+\\-‐‑‒–—―⸺⸻⁃־−][ \\u00a0]?)?(?:[A-Z]{1,3}\\p{Sc}|\\p{Sc}|[A-Z]{3}[ \\u00a0]?)?\\d{1,3}(?:(?:[.,' \\u00a0]\\d{3})+|\\d*)(?:[.,]\\d{1,2})?(?:,-+)?(?:[ \\u00a0]?(?:\\p{Sc}|[A-Z]{3}))?"
         },
         "validations": [
           {
@@ -48473,7 +48534,7 @@
         "label": "monetary amount",
         "strategy": {
           "type": "match-pattern",
-          "pattern": "^(?:[+\\-\u2010\u2011\u2012\u2013\u2014\u2015\u2e3a\u2e3b\u2043\u05be\u2212][ \\u00a0]?)?(?:[A-Z]{1,3}\\p{Sc}|\\p{Sc}|[A-Z]{3}[ \\u00a0]?)?\\d{1,3}(?:(?:[.,' \\u00a0]\\d{3})+|\\d*)(?:[.,]\\d{1,2})?(?:,-+)?(?:[ \\u00a0]?(?:\\p{Sc}|[A-Z]{3}))?"
+          "pattern": "^(?:[+\\-‐‑‒–—―⸺⸻⁃־−][ \\u00a0]?)?(?:[A-Z]{1,3}\\p{Sc}|\\p{Sc}|[A-Z]{3}[ \\u00a0]?)?\\d{1,3}(?:(?:[.,' \\u00a0]\\d{3})+|\\d*)(?:[.,]\\d{1,2})?(?:,-+)?(?:[ \\u00a0]?(?:\\p{Sc}|[A-Z]{3}))?"
         },
         "validations": [
           {
@@ -48492,7 +48553,7 @@
         "label": "monetary amount",
         "strategy": {
           "type": "match-pattern",
-          "pattern": "^(?:[+\\-\u2010\u2011\u2012\u2013\u2014\u2015\u2e3a\u2e3b\u2043\u05be\u2212][ \\u00a0]?)?(?:[A-Z]{1,3}\\p{Sc}|\\p{Sc}|[A-Z]{3}[ \\u00a0]?)?\\d{1,3}(?:(?:[.,' \\u00a0]\\d{3})+|\\d*)(?:[.,]\\d{1,2})?(?:,-+)?(?:[ \\u00a0]?(?:\\p{Sc}|[A-Z]{3}))?"
+          "pattern": "^(?:[+\\-‐‑‒–—―⸺⸻⁃־−][ \\u00a0]?)?(?:[A-Z]{1,3}\\p{Sc}|\\p{Sc}|[A-Z]{3}[ \\u00a0]?)?\\d{1,3}(?:(?:[.,' \\u00a0]\\d{3})+|\\d*)(?:[.,]\\d{1,2})?(?:,-+)?(?:[ \\u00a0]?(?:\\p{Sc}|[A-Z]{3}))?"
         },
         "validations": [
           {
@@ -48511,7 +48572,7 @@
         "label": "monetary amount",
         "strategy": {
           "type": "match-pattern",
-          "pattern": "^(?:[+\\-\u2010\u2011\u2012\u2013\u2014\u2015\u2e3a\u2e3b\u2043\u05be\u2212][ \\u00a0]?)?(?:[A-Z]{1,3}\\p{Sc}|\\p{Sc}|[A-Z]{3}[ \\u00a0]?)?\\d{1,3}(?:(?:[.,' \\u00a0]\\d{3})+|\\d*)(?:[.,]\\d{1,2})?(?:,-+)?(?:[ \\u00a0]?(?:\\p{Sc}|[A-Z]{3}))?"
+          "pattern": "^(?:[+\\-‐‑‒–—―⸺⸻⁃־−][ \\u00a0]?)?(?:[A-Z]{1,3}\\p{Sc}|\\p{Sc}|[A-Z]{3}[ \\u00a0]?)?\\d{1,3}(?:(?:[.,' \\u00a0]\\d{3})+|\\d*)(?:[.,]\\d{1,2})?(?:,-+)?(?:[ \\u00a0]?(?:\\p{Sc}|[A-Z]{3}))?"
         },
         "validations": [
           {
@@ -48530,7 +48591,7 @@
         "label": "monetary amount",
         "strategy": {
           "type": "match-pattern",
-          "pattern": "^(?:[+\\-\u2010\u2011\u2012\u2013\u2014\u2015\u2e3a\u2e3b\u2043\u05be\u2212][ \\u00a0]?)?(?:[A-Z]{1,3}\\p{Sc}|\\p{Sc}|[A-Z]{3}[ \\u00a0]?)?\\d{1,3}(?:(?:[.,' \\u00a0]\\d{3})+|\\d*)(?:[.,]\\d{1,2})?(?:,-+)?(?:[ \\u00a0]?(?:\\p{Sc}|[A-Z]{3}))?"
+          "pattern": "^(?:[+\\-‐‑‒–—―⸺⸻⁃־−][ \\u00a0]?)?(?:[A-Z]{1,3}\\p{Sc}|\\p{Sc}|[A-Z]{3}[ \\u00a0]?)?\\d{1,3}(?:(?:[.,' \\u00a0]\\d{3})+|\\d*)(?:[.,]\\d{1,2})?(?:,-+)?(?:[ \\u00a0]?(?:\\p{Sc}|[A-Z]{3}))?"
         },
         "validations": [
           {
@@ -48549,7 +48610,7 @@
         "label": "monetary amount",
         "strategy": {
           "type": "match-pattern",
-          "pattern": "^(?:[+\\-\u2010\u2011\u2012\u2013\u2014\u2015\u2e3a\u2e3b\u2043\u05be\u2212][ \\u00a0]?)?(?:[A-Z]{1,3}\\p{Sc}|\\p{Sc}|[A-Z]{3}[ \\u00a0]?)?\\d{1,3}(?:(?:[.,' \\u00a0]\\d{3})+|\\d*)(?:[.,]\\d{1,2})?(?:,-+)?(?:[ \\u00a0]?(?:\\p{Sc}|[A-Z]{3}))?"
+          "pattern": "^(?:[+\\-‐‑‒–—―⸺⸻⁃־−][ \\u00a0]?)?(?:[A-Z]{1,3}\\p{Sc}|\\p{Sc}|[A-Z]{3}[ \\u00a0]?)?\\d{1,3}(?:(?:[.,' \\u00a0]\\d{3})+|\\d*)(?:[.,]\\d{1,2})?(?:,-+)?(?:[ \\u00a0]?(?:\\p{Sc}|[A-Z]{3}))?"
         },
         "validations": [
           {
@@ -48568,7 +48629,7 @@
         "label": "monetary amount",
         "strategy": {
           "type": "match-pattern",
-          "pattern": "^(?:[+\\-\u2010\u2011\u2012\u2013\u2014\u2015\u2e3a\u2e3b\u2043\u05be\u2212][ \\u00a0]?)?(?:[A-Z]{1,3}\\p{Sc}|\\p{Sc}|[A-Z]{3}[ \\u00a0]?)?\\d{1,3}(?:(?:[.,' \\u00a0]\\d{3})+|\\d*)(?:[.,]\\d{1,2})?(?:,-+)?(?:[ \\u00a0]?(?:\\p{Sc}|[A-Z]{3}))?"
+          "pattern": "^(?:[+\\-‐‑‒–—―⸺⸻⁃־−][ \\u00a0]?)?(?:[A-Z]{1,3}\\p{Sc}|\\p{Sc}|[A-Z]{3}[ \\u00a0]?)?\\d{1,3}(?:(?:[.,' \\u00a0]\\d{3})+|\\d*)(?:[.,]\\d{1,2})?(?:,-+)?(?:[ \\u00a0]?(?:\\p{Sc}|[A-Z]{3}))?"
         },
         "validations": [
           {
@@ -48587,7 +48648,7 @@
         "label": "monetary amount",
         "strategy": {
           "type": "match-pattern",
-          "pattern": "^(?:[+\\-\u2010\u2011\u2012\u2013\u2014\u2015\u2e3a\u2e3b\u2043\u05be\u2212][ \\u00a0]?)?(?:[A-Z]{1,3}\\p{Sc}|\\p{Sc}|[A-Z]{3}[ \\u00a0]?)?\\d{1,3}(?:(?:[.,' \\u00a0]\\d{3})+|\\d*)(?:[.,]\\d{1,2})?(?:,-+)?(?:[ \\u00a0]?(?:\\p{Sc}|[A-Z]{3}))?"
+          "pattern": "^(?:[+\\-‐‑‒–—―⸺⸻⁃־−][ \\u00a0]?)?(?:[A-Z]{1,3}\\p{Sc}|\\p{Sc}|[A-Z]{3}[ \\u00a0]?)?\\d{1,3}(?:(?:[.,' \\u00a0]\\d{3})+|\\d*)(?:[.,]\\d{1,2})?(?:,-+)?(?:[ \\u00a0]?(?:\\p{Sc}|[A-Z]{3}))?"
         },
         "validations": [
           {
@@ -48606,7 +48667,7 @@
         "label": "monetary amount",
         "strategy": {
           "type": "match-pattern",
-          "pattern": "^(?:[+\\-\u2010\u2011\u2012\u2013\u2014\u2015\u2e3a\u2e3b\u2043\u05be\u2212][ \\u00a0]?)?(?:[A-Z]{1,3}\\p{Sc}|\\p{Sc}|[A-Z]{3}[ \\u00a0]?)?\\d{1,3}(?:(?:[.,' \\u00a0]\\d{3})+|\\d*)(?:[.,]\\d{1,2})?(?:,-+)?(?:[ \\u00a0]?(?:\\p{Sc}|[A-Z]{3}))?"
+          "pattern": "^(?:[+\\-‐‑‒–—―⸺⸻⁃־−][ \\u00a0]?)?(?:[A-Z]{1,3}\\p{Sc}|\\p{Sc}|[A-Z]{3}[ \\u00a0]?)?\\d{1,3}(?:(?:[.,' \\u00a0]\\d{3})+|\\d*)(?:[.,]\\d{1,2})?(?:,-+)?(?:[ \\u00a0]?(?:\\p{Sc}|[A-Z]{3}))?"
         },
         "validations": [
           {
@@ -48625,7 +48686,7 @@
         "label": "monetary amount",
         "strategy": {
           "type": "match-pattern",
-          "pattern": "^(?:[+\\-\u2010\u2011\u2012\u2013\u2014\u2015\u2e3a\u2e3b\u2043\u05be\u2212][ \\u00a0]?)?(?:[A-Z]{1,3}\\p{Sc}|\\p{Sc}|[A-Z]{3}[ \\u00a0]?)?\\d{1,3}(?:(?:[.,' \\u00a0]\\d{3})+|\\d*)(?:[.,]\\d{1,2})?(?:,-+)?(?:[ \\u00a0]?(?:\\p{Sc}|[A-Z]{3}))?"
+          "pattern": "^(?:[+\\-‐‑‒–—―⸺⸻⁃־−][ \\u00a0]?)?(?:[A-Z]{1,3}\\p{Sc}|\\p{Sc}|[A-Z]{3}[ \\u00a0]?)?\\d{1,3}(?:(?:[.,' \\u00a0]\\d{3})+|\\d*)(?:[.,]\\d{1,2})?(?:,-+)?(?:[ \\u00a0]?(?:\\p{Sc}|[A-Z]{3}))?"
         },
         "validations": [
           {
@@ -48644,7 +48705,7 @@
         "label": "monetary amount",
         "strategy": {
           "type": "match-pattern",
-          "pattern": "^(?:[+\\-\u2010\u2011\u2012\u2013\u2014\u2015\u2e3a\u2e3b\u2043\u05be\u2212][ \\u00a0]?)?(?:[A-Z]{1,3}\\p{Sc}|\\p{Sc}|[A-Z]{3}[ \\u00a0]?)?\\d{1,3}(?:(?:[.,' \\u00a0]\\d{3})+|\\d*)(?:[.,]\\d{1,2})?(?:,-+)?(?:[ \\u00a0]?(?:\\p{Sc}|[A-Z]{3}))?"
+          "pattern": "^(?:[+\\-‐‑‒–—―⸺⸻⁃־−][ \\u00a0]?)?(?:[A-Z]{1,3}\\p{Sc}|\\p{Sc}|[A-Z]{3}[ \\u00a0]?)?\\d{1,3}(?:(?:[.,' \\u00a0]\\d{3})+|\\d*)(?:[.,]\\d{1,2})?(?:,-+)?(?:[ \\u00a0]?(?:\\p{Sc}|[A-Z]{3}))?"
         },
         "validations": [
           {
@@ -48663,7 +48724,7 @@
         "label": "monetary amount",
         "strategy": {
           "type": "match-pattern",
-          "pattern": "^(?:[+\\-\u2010\u2011\u2012\u2013\u2014\u2015\u2e3a\u2e3b\u2043\u05be\u2212][ \\u00a0]?)?(?:[A-Z]{1,3}\\p{Sc}|\\p{Sc}|[A-Z]{3}[ \\u00a0]?)?\\d{1,3}(?:(?:[.,' \\u00a0]\\d{3})+|\\d*)(?:[.,]\\d{1,2})?(?:,-+)?(?:[ \\u00a0]?(?:\\p{Sc}|[A-Z]{3}))?"
+          "pattern": "^(?:[+\\-‐‑‒–—―⸺⸻⁃־−][ \\u00a0]?)?(?:[A-Z]{1,3}\\p{Sc}|\\p{Sc}|[A-Z]{3}[ \\u00a0]?)?\\d{1,3}(?:(?:[.,' \\u00a0]\\d{3})+|\\d*)(?:[.,]\\d{1,2})?(?:,-+)?(?:[ \\u00a0]?(?:\\p{Sc}|[A-Z]{3}))?"
         },
         "validations": [
           {
@@ -48682,7 +48743,7 @@
         "label": "monetary amount",
         "strategy": {
           "type": "match-pattern",
-          "pattern": "^(?:[+\\-\u2010\u2011\u2012\u2013\u2014\u2015\u2e3a\u2e3b\u2043\u05be\u2212][ \\u00a0]?)?(?:[A-Z]{1,3}\\p{Sc}|\\p{Sc}|[A-Z]{3}[ \\u00a0]?)?\\d{1,3}(?:(?:[.,' \\u00a0]\\d{3})+|\\d*)(?:[.,]\\d{1,2})?(?:,-+)?(?:[ \\u00a0]?(?:\\p{Sc}|[A-Z]{3}))?"
+          "pattern": "^(?:[+\\-‐‑‒–—―⸺⸻⁃־−][ \\u00a0]?)?(?:[A-Z]{1,3}\\p{Sc}|\\p{Sc}|[A-Z]{3}[ \\u00a0]?)?\\d{1,3}(?:(?:[.,' \\u00a0]\\d{3})+|\\d*)(?:[.,]\\d{1,2})?(?:,-+)?(?:[ \\u00a0]?(?:\\p{Sc}|[A-Z]{3}))?"
         },
         "validations": [
           {
@@ -48701,7 +48762,7 @@
         "label": "monetary amount",
         "strategy": {
           "type": "match-pattern",
-          "pattern": "^(?:[+\\-\u2010\u2011\u2012\u2013\u2014\u2015\u2e3a\u2e3b\u2043\u05be\u2212][ \\u00a0]?)?(?:[A-Z]{1,3}\\p{Sc}|\\p{Sc}|[A-Z]{3}[ \\u00a0]?)?\\d{1,3}(?:(?:[.,' \\u00a0]\\d{3})+|\\d*)(?:[.,]\\d{1,2})?(?:,-+)?(?:[ \\u00a0]?(?:\\p{Sc}|[A-Z]{3}))?"
+          "pattern": "^(?:[+\\-‐‑‒–—―⸺⸻⁃־−][ \\u00a0]?)?(?:[A-Z]{1,3}\\p{Sc}|\\p{Sc}|[A-Z]{3}[ \\u00a0]?)?\\d{1,3}(?:(?:[.,' \\u00a0]\\d{3})+|\\d*)(?:[.,]\\d{1,2})?(?:,-+)?(?:[ \\u00a0]?(?:\\p{Sc}|[A-Z]{3}))?"
         },
         "validations": [
           {
@@ -48720,7 +48781,7 @@
         "label": "monetary amount",
         "strategy": {
           "type": "match-pattern",
-          "pattern": "^(?:[+\\-\u2010\u2011\u2012\u2013\u2014\u2015\u2e3a\u2e3b\u2043\u05be\u2212][ \\u00a0]?)?(?:[A-Z]{1,3}\\p{Sc}|\\p{Sc}|[A-Z]{3}[ \\u00a0]?)?\\d{1,3}(?:(?:[.,' \\u00a0]\\d{3})+|\\d*)(?:[.,]\\d{1,2})?(?:,-+)?(?:[ \\u00a0]?(?:\\p{Sc}|[A-Z]{3}))?"
+          "pattern": "^(?:[+\\-‐‑‒–—―⸺⸻⁃־−][ \\u00a0]?)?(?:[A-Z]{1,3}\\p{Sc}|\\p{Sc}|[A-Z]{3}[ \\u00a0]?)?\\d{1,3}(?:(?:[.,' \\u00a0]\\d{3})+|\\d*)(?:[.,]\\d{1,2})?(?:,-+)?(?:[ \\u00a0]?(?:\\p{Sc}|[A-Z]{3}))?"
         },
         "validations": [
           {
@@ -48739,7 +48800,7 @@
         "label": "monetary amount",
         "strategy": {
           "type": "match-pattern",
-          "pattern": "^(?:[+\\-\u2010\u2011\u2012\u2013\u2014\u2015\u2e3a\u2e3b\u2043\u05be\u2212][ \\u00a0]?)?(?:[A-Z]{1,3}\\p{Sc}|\\p{Sc}|[A-Z]{3}[ \\u00a0]?)?\\d{1,3}(?:(?:[.,' \\u00a0]\\d{3})+|\\d*)(?:[.,]\\d{1,2})?(?:,-+)?(?:[ \\u00a0]?(?:\\p{Sc}|[A-Z]{3}))?"
+          "pattern": "^(?:[+\\-‐‑‒–—―⸺⸻⁃־−][ \\u00a0]?)?(?:[A-Z]{1,3}\\p{Sc}|\\p{Sc}|[A-Z]{3}[ \\u00a0]?)?\\d{1,3}(?:(?:[.,' \\u00a0]\\d{3})+|\\d*)(?:[.,]\\d{1,2})?(?:,-+)?(?:[ \\u00a0]?(?:\\p{Sc}|[A-Z]{3}))?"
         },
         "validations": [
           {
@@ -48758,7 +48819,7 @@
         "label": "monetary amount",
         "strategy": {
           "type": "match-pattern",
-          "pattern": "^(?:[+\\-\u2010\u2011\u2012\u2013\u2014\u2015\u2e3a\u2e3b\u2043\u05be\u2212][ \\u00a0]?)?(?:[A-Z]{1,3}\\p{Sc}|\\p{Sc}|[A-Z]{3}[ \\u00a0]?)?\\d{1,3}(?:(?:[.,' \\u00a0]\\d{3})+|\\d*)(?:[.,]\\d{1,2})?(?:,-+)?(?:[ \\u00a0]?(?:\\p{Sc}|[A-Z]{3}))?"
+          "pattern": "^(?:[+\\-‐‑‒–—―⸺⸻⁃־−][ \\u00a0]?)?(?:[A-Z]{1,3}\\p{Sc}|\\p{Sc}|[A-Z]{3}[ \\u00a0]?)?\\d{1,3}(?:(?:[.,' \\u00a0]\\d{3})+|\\d*)(?:[.,]\\d{1,2})?(?:,-+)?(?:[ \\u00a0]?(?:\\p{Sc}|[A-Z]{3}))?"
         },
         "validations": [
           {
@@ -54926,8 +54987,7 @@
         "validations": [
           {
             "type": "matches-pattern",
-            "pattern": "^[A-Za-z]{4}[A-Za-z]{2}[A-Za-z0-9]{2}(?:[A-Za-z0-9]{3})?$",
-            "flags": null
+            "pattern": "^[A-Za-z]{4}[A-Za-z]{2}[A-Za-z0-9]{2}(?:[A-Za-z0-9]{3})?$"
           }
         ],
         "include_trigger": false
@@ -54942,8 +55002,7 @@
         "validations": [
           {
             "type": "matches-pattern",
-            "pattern": "^[A-Za-z]{4}[A-Za-z]{2}[A-Za-z0-9]{2}(?:[A-Za-z0-9]{3})?$",
-            "flags": null
+            "pattern": "^[A-Za-z]{4}[A-Za-z]{2}[A-Za-z0-9]{2}(?:[A-Za-z0-9]{3})?$"
           }
         ],
         "include_trigger": false
@@ -54988,8 +55047,7 @@
         "validations": [
           {
             "type": "matches-pattern",
-            "pattern": "^[A-Za-z]{4}[A-Za-z]{2}[A-Za-z0-9]{2}(?:[A-Za-z0-9]{3})?$",
-            "flags": null
+            "pattern": "^[A-Za-z]{4}[A-Za-z]{2}[A-Za-z0-9]{2}(?:[A-Za-z0-9]{3})?$"
           }
         ],
         "include_trigger": false
@@ -55004,8 +55062,7 @@
         "validations": [
           {
             "type": "matches-pattern",
-            "pattern": "^[A-Za-z]{4}[A-Za-z]{2}[A-Za-z0-9]{2}(?:[A-Za-z0-9]{3})?$",
-            "flags": null
+            "pattern": "^[A-Za-z]{4}[A-Za-z]{2}[A-Za-z0-9]{2}(?:[A-Za-z0-9]{3})?$"
           }
         ],
         "include_trigger": false
@@ -55366,7 +55423,7 @@
         "label": "monetary amount",
         "strategy": {
           "type": "match-pattern",
-          "pattern": "^(?:[+\\-\u2010\u2011\u2012\u2013\u2014\u2015\u2e3a\u2e3b\u2043\u05be\u2212][ \\u00a0]?)?(?:[A-Z]{1,3}\\p{Sc}|\\p{Sc}|[A-Z]{3}[ \\u00a0]?)?\\d{1,3}(?:(?:[.,' \\u00a0]\\d{3})+|\\d*)(?:[.,]\\d{1,2})?(?:,-+)?(?:[ \\u00a0]?(?:\\p{Sc}|[A-Z]{3}))?"
+          "pattern": "^(?:[+\\-‐‑‒–—―⸺⸻⁃־−][ \\u00a0]?)?(?:[A-Z]{1,3}\\p{Sc}|\\p{Sc}|[A-Z]{3}[ \\u00a0]?)?\\d{1,3}(?:(?:[.,' \\u00a0]\\d{3})+|\\d*)(?:[.,]\\d{1,2})?(?:,-+)?(?:[ \\u00a0]?(?:\\p{Sc}|[A-Z]{3}))?"
         },
         "validations": [
           {
@@ -55380,7 +55437,7 @@
         "label": "monetary amount",
         "strategy": {
           "type": "match-pattern",
-          "pattern": "^(?:[+\\-\u2010\u2011\u2012\u2013\u2014\u2015\u2e3a\u2e3b\u2043\u05be\u2212][ \\u00a0]?)?(?:[A-Z]{1,3}\\p{Sc}|\\p{Sc}|[A-Z]{3}[ \\u00a0]?)?\\d{1,3}(?:(?:[.,' \\u00a0]\\d{3})+|\\d*)(?:[.,]\\d{1,2})?(?:,-+)?(?:[ \\u00a0]?(?:\\p{Sc}|[A-Z]{3}))?"
+          "pattern": "^(?:[+\\-‐‑‒–—―⸺⸻⁃־−][ \\u00a0]?)?(?:[A-Z]{1,3}\\p{Sc}|\\p{Sc}|[A-Z]{3}[ \\u00a0]?)?\\d{1,3}(?:(?:[.,' \\u00a0]\\d{3})+|\\d*)(?:[.,]\\d{1,2})?(?:,-+)?(?:[ \\u00a0]?(?:\\p{Sc}|[A-Z]{3}))?"
         },
         "validations": [
           {
@@ -55394,7 +55451,7 @@
         "label": "monetary amount",
         "strategy": {
           "type": "match-pattern",
-          "pattern": "^(?:[+\\-\u2010\u2011\u2012\u2013\u2014\u2015\u2e3a\u2e3b\u2043\u05be\u2212][ \\u00a0]?)?(?:[A-Z]{1,3}\\p{Sc}|\\p{Sc}|[A-Z]{3}[ \\u00a0]?)?\\d{1,3}(?:(?:[.,' \\u00a0]\\d{3})+|\\d*)(?:[.,]\\d{1,2})?(?:,-+)?(?:[ \\u00a0]?(?:\\p{Sc}|[A-Z]{3}))?"
+          "pattern": "^(?:[+\\-‐‑‒–—―⸺⸻⁃־−][ \\u00a0]?)?(?:[A-Z]{1,3}\\p{Sc}|\\p{Sc}|[A-Z]{3}[ \\u00a0]?)?\\d{1,3}(?:(?:[.,' \\u00a0]\\d{3})+|\\d*)(?:[.,]\\d{1,2})?(?:,-+)?(?:[ \\u00a0]?(?:\\p{Sc}|[A-Z]{3}))?"
         },
         "validations": [
           {
@@ -55408,7 +55465,7 @@
         "label": "monetary amount",
         "strategy": {
           "type": "match-pattern",
-          "pattern": "^(?:[+\\-\u2010\u2011\u2012\u2013\u2014\u2015\u2e3a\u2e3b\u2043\u05be\u2212][ \\u00a0]?)?(?:[A-Z]{1,3}\\p{Sc}|\\p{Sc}|[A-Z]{3}[ \\u00a0]?)?\\d{1,3}(?:(?:[.,' \\u00a0]\\d{3})+|\\d*)(?:[.,]\\d{1,2})?(?:,-+)?(?:[ \\u00a0]?(?:\\p{Sc}|[A-Z]{3}))?"
+          "pattern": "^(?:[+\\-‐‑‒–—―⸺⸻⁃־−][ \\u00a0]?)?(?:[A-Z]{1,3}\\p{Sc}|\\p{Sc}|[A-Z]{3}[ \\u00a0]?)?\\d{1,3}(?:(?:[.,' \\u00a0]\\d{3})+|\\d*)(?:[.,]\\d{1,2})?(?:,-+)?(?:[ \\u00a0]?(?:\\p{Sc}|[A-Z]{3}))?"
         },
         "validations": [
           {
@@ -55422,7 +55479,7 @@
         "label": "monetary amount",
         "strategy": {
           "type": "match-pattern",
-          "pattern": "^(?:[+\\-\u2010\u2011\u2012\u2013\u2014\u2015\u2e3a\u2e3b\u2043\u05be\u2212][ \\u00a0]?)?(?:[A-Z]{1,3}\\p{Sc}|\\p{Sc}|[A-Z]{3}[ \\u00a0]?)?\\d{1,3}(?:(?:[.,' \\u00a0]\\d{3})+|\\d*)(?:[.,]\\d{1,2})?(?:,-+)?(?:[ \\u00a0]?(?:\\p{Sc}|[A-Z]{3}))?"
+          "pattern": "^(?:[+\\-‐‑‒–—―⸺⸻⁃־−][ \\u00a0]?)?(?:[A-Z]{1,3}\\p{Sc}|\\p{Sc}|[A-Z]{3}[ \\u00a0]?)?\\d{1,3}(?:(?:[.,' \\u00a0]\\d{3})+|\\d*)(?:[.,]\\d{1,2})?(?:,-+)?(?:[ \\u00a0]?(?:\\p{Sc}|[A-Z]{3}))?"
         },
         "validations": [
           {
@@ -55436,7 +55493,7 @@
         "label": "monetary amount",
         "strategy": {
           "type": "match-pattern",
-          "pattern": "^(?:[+\\-\u2010\u2011\u2012\u2013\u2014\u2015\u2e3a\u2e3b\u2043\u05be\u2212][ \\u00a0]?)?(?:[A-Z]{1,3}\\p{Sc}|\\p{Sc}|[A-Z]{3}[ \\u00a0]?)?\\d{1,3}(?:(?:[.,' \\u00a0]\\d{3})+|\\d*)(?:[.,]\\d{1,2})?(?:,-+)?(?:[ \\u00a0]?(?:\\p{Sc}|[A-Z]{3}))?"
+          "pattern": "^(?:[+\\-‐‑‒–—―⸺⸻⁃־−][ \\u00a0]?)?(?:[A-Z]{1,3}\\p{Sc}|\\p{Sc}|[A-Z]{3}[ \\u00a0]?)?\\d{1,3}(?:(?:[.,' \\u00a0]\\d{3})+|\\d*)(?:[.,]\\d{1,2})?(?:,-+)?(?:[ \\u00a0]?(?:\\p{Sc}|[A-Z]{3}))?"
         },
         "validations": [
           {
@@ -55450,7 +55507,7 @@
         "label": "monetary amount",
         "strategy": {
           "type": "match-pattern",
-          "pattern": "^(?:[+\\-\u2010\u2011\u2012\u2013\u2014\u2015\u2e3a\u2e3b\u2043\u05be\u2212][ \\u00a0]?)?(?:[A-Z]{1,3}\\p{Sc}|\\p{Sc}|[A-Z]{3}[ \\u00a0]?)?\\d{1,3}(?:(?:[.,' \\u00a0]\\d{3})+|\\d*)(?:[.,]\\d{1,2})?(?:,-+)?(?:[ \\u00a0]?(?:\\p{Sc}|[A-Z]{3}))?"
+          "pattern": "^(?:[+\\-‐‑‒–—―⸺⸻⁃־−][ \\u00a0]?)?(?:[A-Z]{1,3}\\p{Sc}|\\p{Sc}|[A-Z]{3}[ \\u00a0]?)?\\d{1,3}(?:(?:[.,' \\u00a0]\\d{3})+|\\d*)(?:[.,]\\d{1,2})?(?:,-+)?(?:[ \\u00a0]?(?:\\p{Sc}|[A-Z]{3}))?"
         },
         "validations": [
           {
@@ -55464,7 +55521,7 @@
         "label": "monetary amount",
         "strategy": {
           "type": "match-pattern",
-          "pattern": "^(?:[+\\-\u2010\u2011\u2012\u2013\u2014\u2015\u2e3a\u2e3b\u2043\u05be\u2212][ \\u00a0]?)?(?:[A-Z]{1,3}\\p{Sc}|\\p{Sc}|[A-Z]{3}[ \\u00a0]?)?\\d{1,3}(?:(?:[.,' \\u00a0]\\d{3})+|\\d*)(?:[.,]\\d{1,2})?(?:,-+)?(?:[ \\u00a0]?(?:\\p{Sc}|[A-Z]{3}))?"
+          "pattern": "^(?:[+\\-‐‑‒–—―⸺⸻⁃־−][ \\u00a0]?)?(?:[A-Z]{1,3}\\p{Sc}|\\p{Sc}|[A-Z]{3}[ \\u00a0]?)?\\d{1,3}(?:(?:[.,' \\u00a0]\\d{3})+|\\d*)(?:[.,]\\d{1,2})?(?:,-+)?(?:[ \\u00a0]?(?:\\p{Sc}|[A-Z]{3}))?"
         },
         "validations": [
           {
@@ -55478,7 +55535,7 @@
         "label": "monetary amount",
         "strategy": {
           "type": "match-pattern",
-          "pattern": "^(?:[+\\-\u2010\u2011\u2012\u2013\u2014\u2015\u2e3a\u2e3b\u2043\u05be\u2212][ \\u00a0]?)?(?:[A-Z]{1,3}\\p{Sc}|\\p{Sc}|[A-Z]{3}[ \\u00a0]?)?\\d{1,3}(?:(?:[.,' \\u00a0]\\d{3})+|\\d*)(?:[.,]\\d{1,2})?(?:,-+)?(?:[ \\u00a0]?(?:\\p{Sc}|[A-Z]{3}))?"
+          "pattern": "^(?:[+\\-‐‑‒–—―⸺⸻⁃־−][ \\u00a0]?)?(?:[A-Z]{1,3}\\p{Sc}|\\p{Sc}|[A-Z]{3}[ \\u00a0]?)?\\d{1,3}(?:(?:[.,' \\u00a0]\\d{3})+|\\d*)(?:[.,]\\d{1,2})?(?:,-+)?(?:[ \\u00a0]?(?:\\p{Sc}|[A-Z]{3}))?"
         },
         "validations": [
           {
@@ -55492,7 +55549,7 @@
         "label": "monetary amount",
         "strategy": {
           "type": "match-pattern",
-          "pattern": "^(?:[+\\-\u2010\u2011\u2012\u2013\u2014\u2015\u2e3a\u2e3b\u2043\u05be\u2212][ \\u00a0]?)?(?:[A-Z]{1,3}\\p{Sc}|\\p{Sc}|[A-Z]{3}[ \\u00a0]?)?\\d{1,3}(?:(?:[.,' \\u00a0]\\d{3})+|\\d*)(?:[.,]\\d{1,2})?(?:,-+)?(?:[ \\u00a0]?(?:\\p{Sc}|[A-Z]{3}))?"
+          "pattern": "^(?:[+\\-‐‑‒–—―⸺⸻⁃־−][ \\u00a0]?)?(?:[A-Z]{1,3}\\p{Sc}|\\p{Sc}|[A-Z]{3}[ \\u00a0]?)?\\d{1,3}(?:(?:[.,' \\u00a0]\\d{3})+|\\d*)(?:[.,]\\d{1,2})?(?:,-+)?(?:[ \\u00a0]?(?:\\p{Sc}|[A-Z]{3}))?"
         },
         "validations": [
           {
@@ -55506,7 +55563,7 @@
         "label": "monetary amount",
         "strategy": {
           "type": "match-pattern",
-          "pattern": "^(?:[+\\-\u2010\u2011\u2012\u2013\u2014\u2015\u2e3a\u2e3b\u2043\u05be\u2212][ \\u00a0]?)?(?:[A-Z]{1,3}\\p{Sc}|\\p{Sc}|[A-Z]{3}[ \\u00a0]?)?\\d{1,3}(?:(?:[.,' \\u00a0]\\d{3})+|\\d*)(?:[.,]\\d{1,2})?(?:,-+)?(?:[ \\u00a0]?(?:\\p{Sc}|[A-Z]{3}))?"
+          "pattern": "^(?:[+\\-‐‑‒–—―⸺⸻⁃־−][ \\u00a0]?)?(?:[A-Z]{1,3}\\p{Sc}|\\p{Sc}|[A-Z]{3}[ \\u00a0]?)?\\d{1,3}(?:(?:[.,' \\u00a0]\\d{3})+|\\d*)(?:[.,]\\d{1,2})?(?:,-+)?(?:[ \\u00a0]?(?:\\p{Sc}|[A-Z]{3}))?"
         },
         "validations": [
           {
@@ -55520,7 +55577,7 @@
         "label": "monetary amount",
         "strategy": {
           "type": "match-pattern",
-          "pattern": "^(?:[+\\-\u2010\u2011\u2012\u2013\u2014\u2015\u2e3a\u2e3b\u2043\u05be\u2212][ \\u00a0]?)?(?:[A-Z]{1,3}\\p{Sc}|\\p{Sc}|[A-Z]{3}[ \\u00a0]?)?\\d{1,3}(?:(?:[.,' \\u00a0]\\d{3})+|\\d*)(?:[.,]\\d{1,2})?(?:,-+)?(?:[ \\u00a0]?(?:\\p{Sc}|[A-Z]{3}))?"
+          "pattern": "^(?:[+\\-‐‑‒–—―⸺⸻⁃־−][ \\u00a0]?)?(?:[A-Z]{1,3}\\p{Sc}|\\p{Sc}|[A-Z]{3}[ \\u00a0]?)?\\d{1,3}(?:(?:[.,' \\u00a0]\\d{3})+|\\d*)(?:[.,]\\d{1,2})?(?:,-+)?(?:[ \\u00a0]?(?:\\p{Sc}|[A-Z]{3}))?"
         },
         "validations": [
           {
@@ -55534,7 +55591,7 @@
         "label": "monetary amount",
         "strategy": {
           "type": "match-pattern",
-          "pattern": "^(?:[+\\-\u2010\u2011\u2012\u2013\u2014\u2015\u2e3a\u2e3b\u2043\u05be\u2212][ \\u00a0]?)?(?:[A-Z]{1,3}\\p{Sc}|\\p{Sc}|[A-Z]{3}[ \\u00a0]?)?\\d{1,3}(?:(?:[.,' \\u00a0]\\d{3})+|\\d*)(?:[.,]\\d{1,2})?(?:,-+)?(?:[ \\u00a0]?(?:\\p{Sc}|[A-Z]{3}))?"
+          "pattern": "^(?:[+\\-‐‑‒–—―⸺⸻⁃־−][ \\u00a0]?)?(?:[A-Z]{1,3}\\p{Sc}|\\p{Sc}|[A-Z]{3}[ \\u00a0]?)?\\d{1,3}(?:(?:[.,' \\u00a0]\\d{3})+|\\d*)(?:[.,]\\d{1,2})?(?:,-+)?(?:[ \\u00a0]?(?:\\p{Sc}|[A-Z]{3}))?"
         },
         "validations": [
           {
@@ -55548,7 +55605,7 @@
         "label": "monetary amount",
         "strategy": {
           "type": "match-pattern",
-          "pattern": "^(?:[+\\-\u2010\u2011\u2012\u2013\u2014\u2015\u2e3a\u2e3b\u2043\u05be\u2212][ \\u00a0]?)?(?:[A-Z]{1,3}\\p{Sc}|\\p{Sc}|[A-Z]{3}[ \\u00a0]?)?\\d{1,3}(?:(?:[.,' \\u00a0]\\d{3})+|\\d*)(?:[.,]\\d{1,2})?(?:,-+)?(?:[ \\u00a0]?(?:\\p{Sc}|[A-Z]{3}))?"
+          "pattern": "^(?:[+\\-‐‑‒–—―⸺⸻⁃־−][ \\u00a0]?)?(?:[A-Z]{1,3}\\p{Sc}|\\p{Sc}|[A-Z]{3}[ \\u00a0]?)?\\d{1,3}(?:(?:[.,' \\u00a0]\\d{3})+|\\d*)(?:[.,]\\d{1,2})?(?:,-+)?(?:[ \\u00a0]?(?:\\p{Sc}|[A-Z]{3}))?"
         },
         "validations": [
           {
@@ -120011,7 +120068,7 @@
     },
     "triggers": {
       "start": 1407,
-      "end": 3176
+      "end": 3181
     },
     "deny_list": {
       "start": 0,

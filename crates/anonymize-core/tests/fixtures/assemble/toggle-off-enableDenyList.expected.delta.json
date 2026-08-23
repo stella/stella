@@ -7,13 +7,133 @@
     },
     {
       "type": "set",
+      "path": ["literal_patterns_from_deny_list_data"],
+      "value": false
+    },
+    {
+      "type": "set",
       "path": ["name_corpus_mode"],
       "value": "full"
     },
     {
+      "type": "array",
+      "path": ["regex_meta"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 0,
+          "end": 3
+        },
+        {
+          "type": "values",
+          "values": [
+            {
+              "label": "iban",
+              "score": 1.0
+            },
+            {
+              "label": "email address",
+              "score": 1.0
+            }
+          ]
+        },
+        {
+          "type": "copy",
+          "start": 5,
+          "end": 6
+        },
+        {
+          "type": "values",
+          "values": [
+            {
+              "label": "phone number",
+              "min_byte_length": 7,
+              "requires_validation": true,
+              "score": 1.0,
+              "validator_id": "phone.international"
+            }
+          ]
+        },
+        {
+          "type": "copy",
+          "start": 7,
+          "end": 10
+        },
+        {
+          "type": "values",
+          "values": [
+            {
+              "label": "credit card number",
+              "score": 1.0
+            },
+            {
+              "label": "birth number",
+              "requires_validation": true,
+              "score": 1.0,
+              "validator_id": "cz.rc"
+            }
+          ]
+        },
+        {
+          "type": "copy",
+          "start": 12,
+          "end": 13
+        },
+        {
+          "type": "values",
+          "values": [
+            {
+              "label": "date",
+              "score": 1.0
+            },
+            {
+              "label": "date",
+              "score": 1.0
+            },
+            {
+              "label": "ip address",
+              "score": 1.0
+            }
+          ]
+        },
+        {
+          "type": "copy",
+          "start": 16,
+          "end": 40
+        },
+        {
+          "type": "values",
+          "values": [
+            {
+              "label": "url",
+              "score": 1.0
+            },
+            {
+              "label": "ip address",
+              "score": 1.0
+            },
+            {
+              "label": "mac address",
+              "score": 1.0
+            }
+          ]
+        },
+        {
+          "type": "copy",
+          "start": 43,
+          "end": 118
+        }
+      ]
+    },
+    {
       "type": "set",
-      "path": ["literal_patterns_from_deny_list_data"],
-      "value": false
+      "path": ["slices", "countries", "end"],
+      "value": 3435
+    },
+    {
+      "type": "set",
+      "path": ["slices", "countries", "start"],
+      "value": 174
     },
     {
       "type": "set",
@@ -22,12 +142,7 @@
     },
     {
       "type": "set",
-      "path": ["slices", "street_types", "start"],
-      "value": 0
-    },
-    {
-      "type": "set",
-      "path": ["slices", "street_types", "end"],
+      "path": ["slices", "gazetteer", "end"],
       "value": 174
     },
     {
@@ -37,17 +152,7 @@
     },
     {
       "type": "set",
-      "path": ["slices", "gazetteer", "end"],
-      "value": 174
-    },
-    {
-      "type": "set",
-      "path": ["slices", "countries", "start"],
-      "value": 174
-    },
-    {
-      "type": "set",
-      "path": ["slices", "countries", "end"],
+      "path": ["slices", "hotwords", "end"],
       "value": 3435
     },
     {
@@ -57,8 +162,13 @@
     },
     {
       "type": "set",
-      "path": ["slices", "hotwords", "end"],
-      "value": 3435
+      "path": ["slices", "street_types", "end"],
+      "value": 174
+    },
+    {
+      "type": "set",
+      "path": ["slices", "street_types", "start"],
+      "value": 0
     }
   ]
 }

@@ -1,8 +1,15 @@
 import { cpus, freemem, hostname, platform, release, totalmem } from "node:os";
 
+import {
+  PERFORMANCE_SCENARIO_IDS,
+  PERFORMANCE_SCENARIO_SCHEMA_VERSION,
+  type PerformanceScenario,
+  type PerformanceScenarioId,
+} from "./input";
+import type { PerformanceRuntime } from "./sample";
 import type { Distribution } from "./statistics";
 
-export const PERFORMANCE_REPORT_SCHEMA_VERSION = 1 as const;
+export const PERFORMANCE_REPORT_SCHEMA_VERSION = 2 as const;
 
 export type PerformanceMachine = {
   readonly platform: string;
@@ -20,6 +27,8 @@ export type PerformanceMachine = {
 };
 
 export type PerformanceResult = {
+  readonly scenario: PerformanceScenario;
+  readonly runtime: PerformanceRuntime;
   readonly inputBytes: number;
   readonly inputCharacters: number;
   readonly inputSha256: string;
@@ -42,6 +51,7 @@ export type PerformanceReport = {
     readonly warmups: number;
     readonly samples: number;
     readonly inputBytes: readonly number[];
+    readonly scenarios: readonly PerformanceScenarioId[];
     readonly processIsolation: "fresh-process-per-sample";
   };
   readonly fixture: {
@@ -55,6 +65,11 @@ export type PerformanceReport = {
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === "object" && !Array.isArray(value);
+
+const isPerformanceScenarioId = (
+  value: unknown,
+): value is PerformanceScenarioId =>
+  PERFORMANCE_SCENARIO_IDS.some((candidate) => candidate === value);
 
 const exactKeys = (
   value: Record<string, unknown>,
@@ -103,6 +118,35 @@ const requireString = (value: unknown, context: string): void => {
 const requireSha256 = (value: unknown, context: string): void => {
   if (typeof value !== "string" || !/^[a-f0-9]{64}$/u.test(value)) {
     throw new Error(`${context} must be a lowercase SHA-256 digest`);
+  }
+};
+
+const assertPerformanceScenario: (
+  value: unknown,
+  expectedId: PerformanceScenarioId,
+) => asserts value is PerformanceScenario = (value, expectedId) => {
+  if (!isRecord(value)) throw new Error("scenario must be an object");
+  exactKeys(value, ["type", "schemaVersion", "id"], "scenario");
+  if (
+    value["type"] !== "performance-input-scenario" ||
+    value["schemaVersion"] !== PERFORMANCE_SCENARIO_SCHEMA_VERSION ||
+    value["id"] !== expectedId
+  ) {
+    throw new Error("result scenario does not match configuration order");
+  }
+};
+
+const assertPerformanceRuntime: (
+  value: unknown,
+  expectedVersion: string,
+) => asserts value is PerformanceRuntime = (value, expectedVersion) => {
+  if (!isRecord(value)) throw new Error("runtime must be an object");
+  exactKeys(value, ["type", "version"], "runtime");
+  if (
+    value["type"] !== "bun-native-binding" ||
+    value["version"] !== expectedVersion
+  ) {
+    throw new Error("result runtime does not match machine Bun version");
   }
 };
 
@@ -170,7 +214,7 @@ export const assertPerformanceReport: (
     throw new Error("configuration must be an object");
   exactKeys(
     configuration,
-    ["warmups", "samples", "inputBytes", "processIsolation"],
+    ["warmups", "samples", "inputBytes", "scenarios", "processIsolation"],
     "configuration",
   );
   requirePositiveInteger(configuration["warmups"], "warmups");
@@ -183,6 +227,29 @@ export const assertPerformanceReport: (
   }
   for (const size of configuration["inputBytes"]) {
     requirePositiveInteger(size, "inputBytes entry");
+  }
+  if (
+    new Set(configuration["inputBytes"]).size !==
+    configuration["inputBytes"].length
+  ) {
+    throw new Error("inputBytes entries must be unique");
+  }
+  if (
+    !Array.isArray(configuration["scenarios"]) ||
+    configuration["scenarios"].length === 0
+  ) {
+    throw new Error("scenarios must be a non-empty array");
+  }
+  for (const scenario of configuration["scenarios"]) {
+    if (!isPerformanceScenarioId(scenario)) {
+      throw new Error("scenario entry is unsupported");
+    }
+  }
+  if (
+    new Set(configuration["scenarios"]).size !==
+    configuration["scenarios"].length
+  ) {
+    throw new Error("scenario entries must be unique");
   }
   if (configuration["processIsolation"] !== "fresh-process-per-sample") {
     throw new Error("processIsolation is unsupported");
@@ -237,11 +304,20 @@ export const assertPerformanceReport: (
     throw new Error("local reports must remain unpinned");
   }
   requireSha256(machine["hostnameSha256"], "hostnameSha256");
+  const bunVersion = machine["bunVersion"];
+  if (typeof bunVersion !== "string") {
+    throw new Error("machine Bun version must be a string");
+  }
 
   if (!Array.isArray(value["results"]))
     throw new Error("results must be an array");
-  if (value["results"].length !== configuration["inputBytes"].length) {
-    throw new Error("results must contain one entry per input size");
+  if (
+    value["results"].length !==
+    configuration["inputBytes"].length * configuration["scenarios"].length
+  ) {
+    throw new Error(
+      "results must contain one entry per scenario and input size",
+    );
   }
   const sampleCount = configuration["samples"];
   if (typeof sampleCount !== "number")
@@ -252,6 +328,8 @@ export const assertPerformanceReport: (
     exactKeys(
       result,
       [
+        "scenario",
+        "runtime",
         "inputBytes",
         "inputCharacters",
         "inputSha256",
@@ -265,8 +343,20 @@ export const assertPerformanceReport: (
       ],
       "performance result",
     );
+    const scenarioIndex = Math.floor(
+      index / configuration["inputBytes"].length,
+    );
+    const expectedScenario = configuration["scenarios"].at(scenarioIndex);
+    if (!isPerformanceScenarioId(expectedScenario)) {
+      throw new Error("configured scenario is invalid");
+    }
+    assertPerformanceScenario(result["scenario"], expectedScenario);
+    assertPerformanceRuntime(result["runtime"], bunVersion);
     requirePositiveInteger(result["inputBytes"], "result inputBytes");
-    if (result["inputBytes"] !== configuration["inputBytes"].at(index)) {
+    if (
+      result["inputBytes"] !==
+      configuration["inputBytes"].at(index % configuration["inputBytes"].length)
+    ) {
       throw new Error("result inputBytes do not match configuration order");
     }
     requirePositiveInteger(result["inputCharacters"], "result inputCharacters");

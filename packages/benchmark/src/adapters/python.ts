@@ -147,6 +147,12 @@ export type PythonAdapterOptions = {
   readonly venvDir: string;
   /** Adapter script under python/. */
   readonly script: string;
+  readonly languageSupport:
+    | { readonly type: "all" }
+    | {
+        readonly type: "allowlist";
+        readonly languages: readonly string[];
+      };
 };
 
 /**
@@ -174,6 +180,7 @@ export const createPythonAdapter = ({
   name,
   venvDir,
   script,
+  languageSupport,
 }: PythonAdapterOptions): Adapter => {
   const pythonBin = join(PACKAGE_ROOT, venvDir, "bin", "python");
   const scriptPath = join(PACKAGE_ROOT, "python", script);
@@ -184,9 +191,27 @@ export const createPythonAdapter = ({
     run: async (
       docs: readonly GroundTruthDocument[],
     ): Promise<AdapterOutcome> => {
+      if (languageSupport.type === "allowlist") {
+        const supported = new Set(languageSupport.languages);
+        const unsupported = [
+          ...new Set(
+            docs
+              .map(({ language }) => language)
+              .filter((language) => !supported.has(language)),
+          ),
+        ].sort();
+        if (unsupported.length > 0) {
+          return {
+            status: "unavailable",
+            reasonCode: "language-unsupported",
+            reason: `${name} does not support corpus languages: ${unsupported.join(", ")}`,
+          };
+        }
+      }
       if (!existsSync(pythonBin)) {
         return {
           status: "unavailable",
+          reasonCode: "adapter-unavailable",
           reason: `virtualenv not found at ${venvDir}; create it per REPRODUCING.md`,
         };
       }
@@ -219,6 +244,7 @@ export const createPythonAdapter = ({
         if (isSetupError(stderr)) {
           return {
             status: "unavailable",
+            reasonCode: "adapter-unavailable",
             reason: `${name} venv is incomplete (${tail}); reinstall it per REPRODUCING.md`,
           };
         }

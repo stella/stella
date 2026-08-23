@@ -19,6 +19,7 @@ describe("DataFog benchmark provider", () => {
       name: "datafog",
       venvDir: ".venv-datafog",
       script: "datafog_adapter.py",
+      languageSupport: { type: "all" },
     });
   });
 

@@ -2,8 +2,13 @@
   "base": "baseline-all-on",
   "changes": [
     {
+      "type": "set",
+      "path": ["confidence_boost"],
+      "value": false
+    },
+    {
       "type": "remove",
-      "path": ["monetary_data"]
+      "path": ["coreference_data"]
     },
     {
       "type": "remove",
@@ -11,7 +16,7 @@
     },
     {
       "type": "remove",
-      "path": ["zone_data"]
+      "path": ["deny_list_data"]
     },
     {
       "type": "remove",
@@ -22,29 +27,17 @@
       "path": ["legal_form_data"]
     },
     {
-      "type": "remove",
-      "path": ["trigger_data"]
+      "type": "set",
+      "path": ["literal_patterns_from_deny_list_data"],
+      "value": false
     },
     {
       "type": "remove",
-      "path": ["coreference_data"]
-    },
-    {
-      "type": "remove",
-      "path": ["deny_list_data"]
+      "path": ["monetary_data"]
     },
     {
       "type": "remove",
       "path": ["name_corpus_data"]
-    },
-    {
-      "type": "remove",
-      "path": ["name_corpus_mode"]
-    },
-    {
-      "type": "set",
-      "path": ["confidence_boost"],
-      "value": false
     },
     {
       "type": "array",
@@ -58,33 +51,13 @@
     },
     {
       "type": "set",
-      "path": ["literal_patterns_from_deny_list_data"],
-      "value": false
+      "path": ["slices", "countries", "end"],
+      "value": 3435
     },
     {
       "type": "set",
-      "path": ["slices", "regex", "end"],
-      "value": 0
-    },
-    {
-      "type": "set",
-      "path": ["slices", "legal_forms", "start"],
-      "value": 0
-    },
-    {
-      "type": "set",
-      "path": ["slices", "legal_forms", "end"],
-      "value": 0
-    },
-    {
-      "type": "set",
-      "path": ["slices", "triggers", "start"],
-      "value": 0
-    },
-    {
-      "type": "set",
-      "path": ["slices", "triggers", "end"],
-      "value": 0
+      "path": ["slices", "countries", "start"],
+      "value": 174
     },
     {
       "type": "set",
@@ -93,12 +66,7 @@
     },
     {
       "type": "set",
-      "path": ["slices", "street_types", "start"],
-      "value": 0
-    },
-    {
-      "type": "set",
-      "path": ["slices", "street_types", "end"],
+      "path": ["slices", "gazetteer", "end"],
       "value": 174
     },
     {
@@ -108,17 +76,7 @@
     },
     {
       "type": "set",
-      "path": ["slices", "gazetteer", "end"],
-      "value": 174
-    },
-    {
-      "type": "set",
-      "path": ["slices", "countries", "start"],
-      "value": 174
-    },
-    {
-      "type": "set",
-      "path": ["slices", "countries", "end"],
+      "path": ["slices", "hotwords", "end"],
       "value": 3435
     },
     {
@@ -128,8 +86,46 @@
     },
     {
       "type": "set",
-      "path": ["slices", "hotwords", "end"],
-      "value": 3435
+      "path": ["slices", "legal_forms", "end"],
+      "value": 0
+    },
+    {
+      "type": "set",
+      "path": ["slices", "legal_forms", "start"],
+      "value": 0
+    },
+    {
+      "type": "set",
+      "path": ["slices", "regex", "end"],
+      "value": 0
+    },
+    {
+      "type": "set",
+      "path": ["slices", "street_types", "end"],
+      "value": 174
+    },
+    {
+      "type": "set",
+      "path": ["slices", "street_types", "start"],
+      "value": 0
+    },
+    {
+      "type": "set",
+      "path": ["slices", "triggers", "end"],
+      "value": 0
+    },
+    {
+      "type": "set",
+      "path": ["slices", "triggers", "start"],
+      "value": 0
+    },
+    {
+      "type": "remove",
+      "path": ["trigger_data"]
+    },
+    {
+      "type": "remove",
+      "path": ["zone_data"]
     }
   ]
 }

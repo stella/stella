@@ -23,7 +23,14 @@ use stella_anonymize_adapter_contract::{
 };
 use stella_anonymize_core::assemble::{GazetteerEntry, PipelineConfig};
 
-use assemble_support::read_expected_value;
+use assemble_support::{
+  BASELINE_FIXTURE, preserve_omission_oracle, read_expected_value,
+  write_expected_delta,
+};
+
+/// Set to `1` to rewrite derived delta snapshots after the independent
+/// baseline oracle has been reviewed and updated manually.
+const UPDATE_SNAPSHOTS_ENV: &str = "ANONYMIZE_UPDATE_ASSEMBLE_SNAPSHOTS";
 
 #[derive(Deserialize)]
 struct FixtureInput {
@@ -61,6 +68,131 @@ fn read_json<T: for<'de> Deserialize<'de>>(path: &Path) -> Result<T, String> {
     .map_err(|error| format!("parse {}: {error}", path.display()))
 }
 
+fn fixture_name(input_path: &Path) -> &str {
+  input_path
+    .file_name()
+    .and_then(|file_name| file_name.to_str())
+    .and_then(|file_name| file_name.strip_suffix(".input.json"))
+    .unwrap_or("<unknown>")
+}
+
+fn assemble_fixture(
+  input_path: &Path,
+) -> Result<BindingPreparedSearchConfig, String> {
+  let name = fixture_name(input_path);
+  let input: FixtureInput = read_json(input_path)?;
+  assemble_static_search_config(
+    &input.config,
+    input.config.dictionaries.as_ref(),
+    &input.gazetteer,
+  )
+  .map_err(|error| format!("{name}: assemble failed: {error}"))
+}
+
+fn is_typescript_optional_null_member(key: &str) -> bool {
+  matches!(
+    key,
+    "distance"
+      | "case_insensitive"
+      | "whole_words"
+      | "lazy"
+      | "prefilter_any"
+      | "prefilter_case_insensitive"
+      | "prefilter_regex"
+      | "prefilter_window_bytes"
+      | "prepared_artifact_policy"
+      | "regex"
+      | "custom_regex"
+      | "legal_forms"
+      | "triggers"
+      | "deny_list"
+      | "street_types"
+      | "gazetteer"
+      | "countries"
+      | "hotwords"
+      | "literal_case_insensitive"
+      | "literal_whole_words"
+      | "regex_whole_words"
+      | "regex_overlap_all"
+      | "regex_artifact_policy"
+      | "fuzzy_case_insensitive"
+      | "fuzzy_whole_words"
+      | "fuzzy_normalize_diacritics"
+      | "source_detail"
+      | "requires_validation"
+      | "validator_id"
+      | "validator_input"
+      | "min_byte_length"
+      | "reclassify_to"
+      | "max_length"
+      | "max_chars"
+      | "flags"
+      | "standalone_street"
+      | "regex_options"
+      | "custom_regex_options"
+      | "literal_options"
+      | "deny_list_data"
+      | "false_positive_filters"
+      | "gazetteer_data"
+      | "country_data"
+      | "hotword_data"
+      | "trigger_data"
+      | "legal_form_data"
+      | "address_seed_data"
+      | "zone_data"
+      | "address_context_data"
+      | "coreference_data"
+      | "name_corpus_data"
+      | "signature_data"
+      | "date_data"
+      | "monetary_data"
+      | "operators"
+      | "redact_string"
+  )
+}
+
+fn omit_typescript_optional_members(value: &mut Value) {
+  match value {
+    Value::Object(object) => {
+      object.retain(|key, member| {
+        !(member.is_null() && is_typescript_optional_null_member(key)
+          || key == "stop_words"
+            && member.as_array().is_some_and(Vec::is_empty))
+      });
+      for member in object.values_mut() {
+        omit_typescript_optional_members(member);
+      }
+    }
+    Value::Array(array) => {
+      for member in array {
+        omit_typescript_optional_members(member);
+      }
+    }
+    _ => {}
+  }
+}
+
+fn canonical_oracle_value(
+  config: &BindingPreparedSearchConfig,
+) -> Result<Value, String> {
+  let mut value = serde_json::to_value(config)
+    .map_err(|error| format!("serialize assembled config: {error}"))?;
+  omit_typescript_optional_members(&mut value);
+
+  if let Some(deny_list) = value
+    .get_mut("deny_list_data")
+    .and_then(Value::as_object_mut)
+  {
+    deny_list.retain(|key, member| {
+      !matches!(
+        key.as_str(),
+        "labels" | "custom_labels" | "custom_label_indices" | "sources"
+      ) || !member.as_array().is_some_and(Vec::is_empty)
+    });
+  }
+  Ok(value)
+}
+
 fn first_json_difference(
   path: &str,
   actual: &Value,
@@ -69,7 +201,11 @@ fn first_json_difference(
   match (actual, expected) {
     (Value::Object(actual), Value::Object(expected)) => {
       for key in actual.keys().chain(expected.keys()) {
-        if actual.get(key) == expected.get(key) {
+        if actual
+          .get(key)
+          .zip(expected.get(key))
+          .is_some_and(|(actual, expected)| json_values_equal(actual, expected))
+        {
           continue;
         }
         let child_path = format!("{path}.{key}");
@@ -88,7 +224,7 @@ fn first_json_difference(
       for (index, (actual_item, expected_item)) in
         actual.iter().zip(expected.iter()).enumerate()
       {
-        if actual_item != expected_item {
+        if !json_values_equal(actual_item, expected_item) {
           return first_json_difference(
             &format!("{path}[{index}]"),
             actual_item,
@@ -99,6 +235,31 @@ fn first_json_difference(
       format!("{path}.length: {} != {}", actual.len(), expected.len())
     }
     _ => format!("{path}: {actual:?} != {expected:?}"),
+  }
+}
+
+fn json_values_equal(actual: &Value, expected: &Value) -> bool {
+  match (actual, expected) {
+    (Value::Object(actual), Value::Object(expected)) => {
+      actual.len() == expected.len()
+        && actual.iter().all(|(key, actual)| {
+          expected
+            .get(key)
+            .is_some_and(|expected| json_values_equal(actual, expected))
+        })
+    }
+    (Value::Array(actual), Value::Array(expected)) => {
+      actual.len() == expected.len()
+        && actual
+          .iter()
+          .zip(expected)
+          .all(|(actual, expected)| json_values_equal(actual, expected))
+    }
+    (Value::Number(actual), Value::Number(expected)) => actual
+      .as_f64()
+      .zip(expected.as_f64())
+      .is_some_and(|(actual, expected)| actual.to_bits() == expected.to_bits()),
+    _ => actual == expected,
   }
 }
 
@@ -672,8 +833,8 @@ fn compare_regex_and_legal(
   }
   if actual.legal_form_data != expected.legal_form_data {
     return Err(format!(
-      "{name}: legal_form_data {:?} != {:?}",
-      actual.legal_form_data, expected.legal_form_data
+      "{name}: legal_form_data {}",
+      serialized_difference(&actual.legal_form_data, &expected.legal_form_data)
     ));
   }
   compare_regex_patterns(name, actual, expected)
@@ -708,24 +869,132 @@ fn compare_regex_patterns(
 }
 
 fn check_fixture(input_path: &Path) -> Result<(), String> {
-  let name = input_path
-    .file_name()
-    .and_then(|file_name| file_name.to_str())
-    .and_then(|file_name| file_name.strip_suffix(".input.json"))
-    .unwrap_or("<unknown>");
-  let input: FixtureInput = read_json(input_path)?;
+  let name = fixture_name(input_path);
+  let expected_value = read_expected_value(&fixtures_dir(), name)?;
   let expected: BindingPreparedSearchConfig =
-    serde_json::from_value(read_expected_value(&fixtures_dir(), name)?)
-      .map_err(|error| {
-        format!("{name}: parse reconstructed config: {error}")
+    serde_json::from_value(expected_value.clone()).map_err(|error| {
+      format!("{name}: parse reconstructed config: {error}")
+    })?;
+  let actual = assemble_fixture(input_path)?;
+  compare_full_config(name, &actual, &expected)?;
+  let actual_value = canonical_oracle_value(&actual)?;
+  if json_values_equal(&actual_value, &expected_value) {
+    return Ok(());
+  }
+  Err(format!(
+    "{name}: canonical serialized shape differs: {}",
+    first_json_difference("config", &actual_value, &expected_value)
+  ))
+}
+
+fn refresh_delta_snapshots(
+  dir: &Path,
+  inputs: &[PathBuf],
+) -> Result<(), String> {
+  let baseline_path = inputs
+    .iter()
+    .find(|path| fixture_name(path) == BASELINE_FIXTURE)
+    .ok_or_else(|| String::from("baseline input fixture is missing"))?;
+  let baseline_value = read_expected_value(dir, BASELINE_FIXTURE)?;
+  let baseline_actual = assemble_fixture(baseline_path)?;
+  let baseline_actual_value = canonical_oracle_value(&baseline_actual)?;
+  if !json_values_equal(&baseline_actual_value, &baseline_value) {
+    return Err({
+      let difference = first_json_difference(
+        "config",
+        &baseline_actual_value,
+        &baseline_value,
+      );
+      format!(
+        "refusing to update derived snapshots because the independent baseline \
+       oracle differs:\n{BASELINE_FIXTURE}: {difference}"
+      )
+    });
+  }
+
+  for input_path in inputs {
+    let name = fixture_name(input_path);
+    if name == BASELINE_FIXTURE {
+      continue;
+    }
+    let actual = assemble_fixture(input_path)?;
+    let mut actual_value = canonical_oracle_value(&actual)?;
+    preserve_omission_oracle(dir, name, &mut actual_value)?;
+    write_expected_delta(dir, name, &baseline_value, &actual_value)?;
+  }
+  Ok(())
+}
+
+#[test]
+fn baseline_oracle_has_exact_serialized_shape() -> Result<(), String> {
+  let dir = fixtures_dir();
+  let baseline_input = dir.join(format!("{BASELINE_FIXTURE}.input.json"));
+  let actual = canonical_oracle_value(&assemble_fixture(&baseline_input)?)?;
+  let expected = read_expected_value(&dir, BASELINE_FIXTURE)?;
+  if json_values_equal(&actual, &expected) {
+    return Ok(());
+  }
+  Err(format!(
+    "baseline oracle shape differs: {}",
+    first_json_difference("config", &actual, &expected)
+  ))
+}
+
+#[test]
+fn refresh_rejects_lossy_baseline_default_omission() -> Result<(), String> {
+  let source_dir = fixtures_dir();
+  let dir = std::env::temp_dir().join(format!(
+    "stella-assemble-baseline-shape-{}",
+    std::process::id()
+  ));
+  fs::create_dir_all(&dir)
+    .map_err(|error| format!("create {}: {error}", dir.display()))?;
+
+  let result = (|| {
+    let baseline_input =
+      source_dir.join(format!("{BASELINE_FIXTURE}.input.json"));
+    let assembled = assemble_fixture(&baseline_input)?;
+    let mut baseline = canonical_oracle_value(&assembled)?;
+    baseline
+      .as_object_mut()
+      .ok_or_else(|| String::from("baseline oracle is not an object"))?
+      .remove("custom_regex_patterns")
+      .ok_or_else(|| {
+        String::from("baseline oracle lacks custom_regex_patterns")
       })?;
-  let actual = assemble_static_search_config(
-    &input.config,
-    input.config.dictionaries.as_ref(),
-    &input.gazetteer,
-  )
-  .map_err(|error| format!("{name}: assemble failed: {error}"))?;
-  compare_full_config(name, &actual, &expected)
+    let baseline_path = dir.join(format!("{BASELINE_FIXTURE}.expected.json"));
+    fs::write(
+      &baseline_path,
+      serde_json::to_vec(&baseline)
+        .map_err(|error| format!("serialize baseline oracle: {error}"))?,
+    )
+    .map_err(|error| format!("write {}: {error}", baseline_path.display()))?;
+
+    let lossy_expected: BindingPreparedSearchConfig =
+      serde_json::from_value(baseline.clone())
+        .map_err(|error| format!("parse lossy baseline oracle: {error}"))?;
+    assert_eq!(
+      assembled, lossy_expected,
+      "the typed comparison must demonstrate the omitted default is lossy"
+    );
+
+    let error = match refresh_delta_snapshots(&dir, &[baseline_input]) {
+      Ok(()) => {
+        return Err(String::from(
+          "exact-shape gate accepted an omitted baseline member",
+        ));
+      }
+      Err(error) => error,
+    };
+    assert!(
+      error.contains("config.custom_regex_patterns"),
+      "unexpected refresh error: {error}"
+    );
+    Ok(())
+  })();
+  fs::remove_dir_all(&dir)
+    .map_err(|error| format!("remove {}: {error}", dir.display()))?;
+  result
 }
 
 #[test]
@@ -737,6 +1006,15 @@ fn assemble_parity_matches_typescript() -> Result<(), String> {
       "expected the captured fixture set, found {} inputs in {}",
       inputs.len(),
       dir.display()
+    ));
+  }
+
+  let update =
+    std::env::var(UPDATE_SNAPSHOTS_ENV).is_ok_and(|value| value == "1");
+  if update {
+    refresh_delta_snapshots(&dir, &inputs)?;
+    return Err(format!(
+      "refreshed derived snapshots; review them and rerun without {UPDATE_SNAPSHOTS_ENV}=1"
     ));
   }
 

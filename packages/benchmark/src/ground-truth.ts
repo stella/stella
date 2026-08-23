@@ -37,7 +37,16 @@ export type GroundTruthDocument = {
   readonly entities: readonly GoldEntity[];
 };
 
-const FIXTURES_DIR = join(import.meta.dir, "..", "fixtures");
+export const FIXTURES_DIR = join(import.meta.dir, "..", "fixtures");
+
+export const loadGroundTruthFile = async (
+  file: string,
+): Promise<GroundTruthDocument[]> => {
+  const raw = (await Bun.file(
+    join(FIXTURES_DIR, file),
+  ).json()) as RawDocument[];
+  return raw.map(buildGroundTruthDocument);
+};
 
 export const buildGroundTruthDocument = (
   raw: RawDocument,
@@ -86,15 +95,12 @@ export const loadGroundTruth = async (): Promise<GroundTruthDocument[]> => {
   const seenIds = new Set<string>();
 
   for (const file of files) {
-    const raw = (await Bun.file(
-      join(FIXTURES_DIR, file),
-    ).json()) as RawDocument[];
-    for (const doc of raw) {
+    for (const doc of await loadGroundTruthFile(file)) {
       if (seenIds.has(doc.id)) {
         throw new Error(`duplicate document id "${doc.id}" in ${file}`);
       }
       seenIds.add(doc.id);
-      documents.push(buildGroundTruthDocument(doc));
+      documents.push(doc);
     }
   }
 

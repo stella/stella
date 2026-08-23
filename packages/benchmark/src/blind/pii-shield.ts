@@ -90,6 +90,7 @@ export const createPiiShieldAdapter = (): Adapter => ({
     ) {
       return {
         status: "unavailable",
+        reasonCode: "adapter-unavailable",
         reason: `PII_SHIELD_BIN does not exist: ${command()}`,
       };
     }
@@ -99,12 +100,14 @@ export const createPiiShieldAdapter = (): Adapter => ({
     } catch {
       return {
         status: "unavailable",
+        reasonCode: "adapter-unavailable",
         reason: UNAVAILABLE_REASON,
       };
     }
     if (version.exitCode !== 0) {
       return {
         status: "unavailable",
+        reasonCode: "adapter-unavailable",
         reason: UNAVAILABLE_REASON,
       };
     }
@@ -117,11 +120,16 @@ export const createPiiShieldAdapter = (): Adapter => ({
     try {
       doctor = await runProcess(["doctor"]);
     } catch {
-      return { status: "unavailable", reason: UNAVAILABLE_REASON };
+      return {
+        status: "unavailable",
+        reasonCode: "adapter-unavailable",
+        reason: UNAVAILABLE_REASON,
+      };
     }
     if (doctor.exitCode !== 0) {
       return {
         status: "unavailable",
+        reasonCode: "adapter-unavailable",
         reason: UNAVAILABLE_REASON,
       };
     }

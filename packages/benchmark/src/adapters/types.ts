@@ -39,7 +39,11 @@ export type AdapterOutcome =
       /** Free-form provenance note surfaced in the report (e.g. active detectors). */
       readonly notes?: string | undefined;
     }
-  | { readonly status: "unavailable"; readonly reason: string };
+  | {
+      readonly status: "unavailable";
+      readonly reasonCode: "adapter-unavailable" | "language-unsupported";
+      readonly reason: string;
+    };
 
 export type Adapter = {
   readonly name: string;

@@ -5,9 +5,6 @@ import { describe, expect, test } from "bun:test";
 import { createRedactPiiAdapter } from "../adapters/redact-pii";
 import { loadGroundTruth } from "../ground-truth";
 
-const EXPECTED_PREDICTION_DIGEST =
-  "73276b381d24bd28856cbf7782b77ee2d57cfd7d0457d12ac8ec71aec92f0b6a";
-
 type StablePrediction = readonly [
   string,
   readonly {
@@ -48,8 +45,10 @@ describe("redact-pii benchmark adapter", () => {
       .update(JSON.stringify(predictions))
       .digest("hex");
 
-    expect(predictions).toHaveLength(28);
-    expect(spanCount).toBe(139);
-    expect(digest).toBe(EXPECTED_PREDICTION_DIGEST);
+    expect({
+      digest,
+      documentCount: predictions.length,
+      spanCount,
+    }).toMatchSnapshot();
   });
 });
