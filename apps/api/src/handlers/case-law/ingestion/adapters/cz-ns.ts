@@ -23,6 +23,9 @@ import type {
   ReconciliationSlicePageOptions,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import {
+  createCalendarDaySliceWalk,
+} from "@/api/handlers/case-law/ingestion/adapters/calendar-day-slice-walk";
+import {
   INGESTION_USER_AGENT,
   adapterCatch,
   hashContent,
@@ -35,7 +38,6 @@ import {
   toOptionalValue,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { parseNsDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-ns";
-import { addUtcDays, isoCalendarDay, toUtcDateString } from "@/api/lib/dates";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { fetchWithTimeout } from "@/api/lib/fetch";
@@ -494,30 +496,14 @@ export const CZ_NS_FIRST_SLICE = "2010-01-01";
  */
 const CZ_NS_TIP_WINDOW_DAYS = 14;
 
-const czNsDayStart = (slice: string): Date => {
-  const day = isoCalendarDay(slice);
-  if (day === null || day !== slice) {
-    panic(`cz-ns slice is not a UTC calendar day: ${slice}`);
-  }
-  return new Date(`${day}T00:00:00.000Z`);
-};
-
-const czNsStepSlice = (slice: string, days: number): string =>
-  toUtcDateString(addUtcDays(czNsDayStart(slice), days));
-
-const czNsNextSlice = (slice: string): string | null => {
-  const next = czNsStepSlice(slice, 1);
-  return next > toUtcDateString(new Date()) ? null : next;
-};
-
-const czNsPreviousSlice = (slice: string): string | null => {
-  const previous = czNsStepSlice(slice, -1);
-  return previous < CZ_NS_FIRST_SLICE ? null : previous;
-};
+const czNsDaySlices = createCalendarDaySliceWalk({
+  firstSlice: CZ_NS_FIRST_SLICE,
+  source: ADAPTER_KEYS.CZ_NS,
+});
 
 /** The publisher's own date literal for a slice: `DD.MM.YYYY`. */
 const czNsSliceDate = (slice: string): string => {
-  const start = czNsDayStart(slice);
+  const start = czNsDaySlices.dayStart(slice);
   const day = String(start.getUTCDate()).padStart(2, "0");
   const month = String(start.getUTCMonth() + 1).padStart(2, "0");
   return `${day}.${month}.${String(start.getUTCFullYear()).padStart(4, "0")}`;
@@ -784,9 +770,7 @@ export const czNsAdapter = defineSourceAdapter({
    */
   reconciliation: {
     firstSlice: CZ_NS_FIRST_SLICE,
-    sliceOf: toUtcDateString,
-    nextSlice: czNsNextSlice,
-    previousSlice: czNsPreviousSlice,
+    ...czNsDaySlices.walk,
     tipWindowDays: CZ_NS_TIP_WINDOW_DAYS,
     listSlicePage: listCzNsSlicePage,
     buildDecision: buildCzNsFromPayload,

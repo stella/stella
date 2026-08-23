@@ -23,6 +23,9 @@ import type {
   ReconciliationSlicePage,
   ReconciliationSlicePageOptions,
 } from "@/api/handlers/case-law/ingestion/adapter";
+import {
+  createCalendarDaySliceWalk,
+} from "@/api/handlers/case-law/ingestion/adapters/calendar-day-slice-walk";
 import { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import {
   INGESTION_USER_AGENT,
@@ -37,7 +40,7 @@ import {
   toOptionalValue,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { parseRegionalDecision } from "@/api/handlers/case-law/ingestion/parsers/cz-regional";
-import { addUtcDays, isoCalendarDay, toUtcDateString } from "@/api/lib/dates";
+import { addUtcDays } from "@/api/lib/dates";
 import {
   AdapterFetchError,
   FetchBoundaryError,
@@ -842,26 +845,10 @@ export const buildCzRegionalDecision = async (
  * sorts lexicographically in chronological order, which is the ordering the
  * ledger relies on.
  */
-const czRegionalDayStart = (slice: string): Date => {
-  const day = isoCalendarDay(slice);
-  if (day === null || day !== slice) {
-    panic(`cz-regional slice is not a UTC calendar day: ${slice}`);
-  }
-  return new Date(`${day}T00:00:00.000Z`);
-};
-
-const czRegionalStepSlice = (slice: string, days: number): string =>
-  toUtcDateString(addUtcDays(czRegionalDayStart(slice), days));
-
-const czRegionalNextSlice = (slice: string): string | null => {
-  const next = czRegionalStepSlice(slice, 1);
-  return next > todayIso() ? null : next;
-};
-
-const czRegionalPreviousSlice = (slice: string): string | null => {
-  const previous = czRegionalStepSlice(slice, -1);
-  return previous < CZ_REGIONAL_FEED_START ? null : previous;
-};
+const czRegionalDaySlices = createCalendarDaySliceWalk({
+  firstSlice: CZ_REGIONAL_FEED_START,
+  source: ADAPTER_KEYS.CZ_REGIONAL,
+});
 
 const listCzRegionalSlicePage = async ({
   slice,
@@ -969,9 +956,7 @@ export const czRegionalAdapter = defineSourceAdapter({
    */
   reconciliation: {
     firstSlice: CZ_REGIONAL_FEED_START,
-    sliceOf: toUtcDateString,
-    nextSlice: czRegionalNextSlice,
-    previousSlice: czRegionalPreviousSlice,
+    ...czRegionalDaySlices.walk,
     tipWindowDays: CZ_REGIONAL_TIP_WINDOW_DAYS,
     listSlicePage: listCzRegionalSlicePage,
     buildDecision: buildCzRegionalFromPayload,
