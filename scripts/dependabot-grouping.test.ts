@@ -12,27 +12,69 @@ const dependencyFields = [
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
-const readElysiaGroupPatterns = async () => {
-  const dependabot = await Bun.file(
-    new URL("../.github/dependabot.yml", import.meta.url),
-  ).text();
-  const groupMarker = "\n      elysia:\n";
-  const groupStart = dependabot.indexOf(groupMarker);
-  expect(groupStart).toBeGreaterThanOrEqual(0);
-
-  const groupTail = dependabot.slice(groupStart + groupMarker.length);
-  const nextGroupOffset = groupTail.search(/^ {6}[a-z0-9][a-z0-9-]*:$/mu);
-  expect(nextGroupOffset).toBeGreaterThanOrEqual(0);
-
-  return [
-    ...groupTail.slice(0, nextGroupOffset).matchAll(/^ {10}- "([^"]+)"$/gmu),
-  ].flatMap((match) => (match[1] === undefined ? [] : [match[1]]));
+const readStringArray = (value: unknown, field: string) => {
+  if (!Array.isArray(value)) {
+    throw new TypeError(`${field} must be an array of strings`);
+  }
+  const strings = value.flatMap((item) =>
+    typeof item === "string" ? [item] : [],
+  );
+  if (strings.length !== value.length) {
+    throw new TypeError(`${field} must be an array of strings`);
+  }
+  return strings;
 };
+
+const parseElysiaGroup = (source: string) => {
+  const dependabot: unknown = Bun.YAML.parse(source);
+  if (!isRecord(dependabot) || !Array.isArray(dependabot["updates"])) {
+    throw new TypeError("Dependabot config must contain an updates array");
+  }
+  const bunUpdate = dependabot["updates"].find(
+    (update) => isRecord(update) && update["package-ecosystem"] === "bun",
+  );
+  if (!isRecord(bunUpdate) || !isRecord(bunUpdate["groups"])) {
+    throw new TypeError("Dependabot config must contain Bun dependency groups");
+  }
+  const elysiaGroup = bunUpdate["groups"]["elysia"];
+  if (!isRecord(elysiaGroup)) {
+    throw new TypeError("Dependabot config must contain the Elysia group");
+  }
+
+  return {
+    excludePatterns:
+      elysiaGroup["exclude-patterns"] === undefined
+        ? []
+        : readStringArray(
+            elysiaGroup["exclude-patterns"],
+            "Elysia exclude-patterns",
+          ),
+    patterns: readStringArray(elysiaGroup["patterns"], "Elysia patterns"),
+  };
+};
+
+const readElysiaGroup = async () =>
+  parseElysiaGroup(
+    await Bun.file(
+      new URL("../.github/dependabot.yml", import.meta.url),
+    ).text(),
+  );
 
 const matchesDependabotPattern = (dependency: string, pattern: string) => {
   const escaped = pattern.replace(/[.+?^${}()|[\]\\]/gu, "\\$&");
   return new RegExp(`^${escaped.replaceAll("*", ".*")}$`, "u").test(dependency);
 };
+
+type DependabotGroup = ReturnType<typeof parseElysiaGroup>;
+
+const isDependencyInGroup = (
+  dependency: string,
+  { excludePatterns, patterns }: DependabotGroup,
+) =>
+  patterns.some((pattern) => matchesDependabotPattern(dependency, pattern)) &&
+  !excludePatterns.some((pattern) =>
+    matchesDependabotPattern(dependency, pattern),
+  );
 
 describe("Dependabot dependency groups", () => {
   test("keeps every installed Elysia package in one update group", async () => {
@@ -75,16 +117,28 @@ describe("Dependabot dependency groups", () => {
       }
     }
 
-    const groupPatterns = await readElysiaGroupPatterns();
+    const group = await readElysiaGroup();
     const uncovered = [...installedElysiaPackages]
-      .filter(
-        (dependency) =>
-          !groupPatterns.some((pattern) =>
-            matchesDependabotPattern(dependency, pattern),
-          ),
-      )
+      .filter((dependency) => !isDependencyInGroup(dependency, group))
       .sort();
 
     expect(uncovered).toEqual([]);
+  });
+
+  test("applies exclude patterns after include patterns", () => {
+    const group = parseElysiaGroup(`
+version: 2
+updates:
+  - package-ecosystem: bun
+    groups:
+      elysia:
+        patterns:
+          - "@elysia/*"
+        exclude-patterns:
+          - "@elysia/eden"
+`);
+
+    expect(isDependencyInGroup("@elysia/cors", group)).toBe(true);
+    expect(isDependencyInGroup("@elysia/eden", group)).toBe(false);
   });
 });
