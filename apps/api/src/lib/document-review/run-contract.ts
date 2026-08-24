@@ -11,6 +11,7 @@ import { DOCUMENT_REVIEW_LIMITS } from "@stll/api-contract";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ConstantMap } from "@/api/lib/constant-map";
 import { REFERENCE_ASSESSMENTS } from "@/api/lib/document-review/contract";
+import type { ReviewPerspective } from "@/api/lib/document-review/contract";
 import type { ReferenceReviewFinding } from "@/api/lib/document-review/reference-compare";
 import type { ReviewFinding } from "@/api/lib/document-review/review-grade";
 import type { PlaybookPositions } from "@/api/lib/workflow/playbook-positions";
@@ -158,12 +159,36 @@ export type PinnedReference = {
  *  basis the client confirms. */
 export type DocumentReviewRunBasis =
   | { type: "playbook"; playbook: PinnedPlaybook }
-  | { type: "references"; references: PinnedReference[] }
+  | {
+      type: "references";
+      references: PinnedReference[];
+      /** The side the comparison was judged for; pinned so a restored run
+       *  reads its impacts the way they were meant. */
+      perspective: ReviewPerspective;
+    }
   | {
       type: "combined";
       playbook: PinnedPlaybook;
       references: PinnedReference[];
+      perspective: ReviewPerspective;
     };
+
+/** The side a run's reference comparison was judged for, or `null` for a
+ *  playbook-only run, which compares against nothing. */
+export const basisPerspective = (
+  basis: DocumentReviewRunBasis,
+): ReviewPerspective | null => {
+  switch (basis.type) {
+    case "references":
+    case "combined":
+      return basis.perspective;
+    case "playbook":
+      return null;
+    default:
+      basis satisfies never;
+      return null;
+  }
+};
 
 /** The basis discriminators the run row's CHECK constraint accepts, derived
  *  from the union so a new basis shape cannot land without the constraint. */

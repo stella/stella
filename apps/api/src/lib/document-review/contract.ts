@@ -38,3 +38,24 @@ export const REFERENCE_CONSENSUS_VALUES = [
   "mixed",
 ] as const;
 export type ReferenceConsensus = (typeof REFERENCE_CONSENSUS_VALUES)[number];
+
+// Whose interest a reference comparison judges. A difference between two
+// drafts has no direction on its own: "the cap is lower" is bad for a buyer
+// and good for a seller. `neutral` means no side was chosen, and the
+// comparison then reports impact as `unknown`. Same vocabulary as the
+// playbook scope's `perspective`.
+export const REVIEW_PERSPECTIVES = ["buyer", "seller", "neutral"] as const;
+export type ReviewPerspective = (typeof REVIEW_PERSPECTIVES)[number];
+
+// Which way a topic's difference cuts for the chosen side.
+export const REFERENCE_IMPACTS = [
+  "favourable",
+  "unfavourable",
+  "neutral",
+  "unknown",
+] as const;
+export type ReferenceImpact = (typeof REFERENCE_IMPACTS)[number];
+
+// How much the difference matters commercially or legally for that side.
+export const REFERENCE_SEVERITIES = ["high", "medium", "low"] as const;
+export type ReferenceSeverity = (typeof REFERENCE_SEVERITIES)[number];

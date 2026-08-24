@@ -113,6 +113,7 @@ describe("planReviewRun", () => {
     const basis: DocumentReviewRunBasis = {
       type: "references",
       references: [reference],
+      perspective: "buyer",
     };
     const plan = planReviewRun({ basis, topics: allTopics });
 
@@ -131,6 +132,7 @@ describe("planReviewRun", () => {
       type: "combined",
       playbook,
       references: [reference],
+      perspective: "buyer",
     };
     const plan = planReviewRun({ basis, topics: allTopics });
 
@@ -145,6 +147,7 @@ describe("planReviewRun", () => {
       type: "combined",
       playbook,
       references: [reference],
+      perspective: "buyer",
     };
     const plan = planReviewRun({
       basis,

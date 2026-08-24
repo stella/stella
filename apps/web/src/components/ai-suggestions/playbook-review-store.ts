@@ -16,8 +16,12 @@
 import { Result } from "better-result";
 import { create } from "zustand";
 
-import type { ReviewBasis } from "@/components/ai-suggestions/document-review-basis.logic";
+import type {
+  ReviewBasis,
+  ReviewPerspective,
+} from "@/components/ai-suggestions/document-review-basis.logic";
 import {
+  perspectiveFromBasis,
   playbookIdFromBasis,
   referencesFromBasis,
 } from "@/components/ai-suggestions/document-review-basis.logic";
@@ -226,7 +230,12 @@ export type StartRunArgs = {
   entityId: string;
   fileFieldId: string;
   playbookId: string | null;
-  references: readonly { entityId: string; fileFieldId: string }[];
+  references: readonly {
+    workspaceId: string;
+    entityId: string;
+    fileFieldId: string;
+  }[];
+  perspective: ReviewPerspective;
   topics: readonly ReviewTopic[];
   unexpectedErrorMessage: string;
   /** Restated size estimate after a confirmation answer. */
@@ -300,6 +309,7 @@ const requestRun = async ({
   fileFieldId,
   playbookId,
   references,
+  perspective,
   topics,
   confirmedUnits,
 }: Omit<StartRunArgs, "unexpectedErrorMessage">) => {
@@ -322,6 +332,7 @@ const requestRun = async ({
           entityId: toSafeId<"entity">(reference.entityId),
           fileFieldId: toSafeId<"field">(reference.fileFieldId),
         })),
+        perspective,
         // The run stores the confirmed plan, and the endpoint rejects an
         // unconfirmed topic: send exactly what the reviewer approved.
         topics: topics.filter((topic) => topic.included),
@@ -379,6 +390,7 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => ({
         fileFieldId,
         playbookId,
         references: [],
+        perspective: perspectiveFromBasis(basis),
         topics: seededTopics,
         unexpectedErrorMessage,
       });
@@ -418,6 +430,7 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => ({
               entityId: toSafeId<"entity">(reference.entityId),
               fileFieldId: toSafeId<"field">(reference.fileFieldId),
             })),
+            perspective: perspectiveFromBasis(basis),
             seededTopics,
           },
           {
@@ -712,6 +725,7 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => ({
       fileFieldId,
       playbookId: playbookIdFromBasis(session.basis),
       references: referencesFromBasis(session.basis),
+      perspective: perspectiveFromBasis(session.basis),
       topics: session.topics,
       unexpectedErrorMessage,
     });

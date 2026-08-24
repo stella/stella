@@ -10,6 +10,7 @@ import {
   type AIUsageMetering,
 } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { ReviewPerspective } from "@/api/lib/document-review/contract";
 import {
   buildReviewDocumentParts,
   reviewDocumentsScopeKey,
@@ -34,12 +35,19 @@ const proposedTopicsSchema = v.strictObject({
 
 const SYSTEM_PROMPT = `You help a lawyer define the issues for a structured comparison of one target legal document and one or more reference documents.
 
-Propose a concise, non-overlapping list of material legal or commercial topics that the supplied documents make useful to compare. References are examples, not policy or proof of market practice. Do not make findings, score the target, or propose wording yet. Do not repeat any seeded topic. context is a short explanation of what the later comparison should examine.`;
+Propose a concise, non-overlapping list of material legal or commercial topics that the supplied documents make useful to compare. When the input names the side the lawyer acts for, favour the topics where that side's position differs between the documents. References are examples, not policy or proof of market practice. Do not make findings, score the target, or propose wording yet. Do not repeat any seeded topic. context is a short explanation of what the later comparison should examine.`;
+
+const PERSPECTIVE_LINE = {
+  buyer: "The lawyer acts for the buyer.",
+  seller: "The lawyer acts for the seller.",
+  neutral: "No side is named.",
+} as const satisfies Record<ReviewPerspective, string>;
 
 type ProposeReferenceTopicsArgs = {
   target: PreparedDocxFile;
   references: readonly PreparedDocxFile[];
   seededTopics: readonly DocumentReviewTopic[];
+  perspective: ReviewPerspective;
   targetEntityVersionId: SafeId<"entityVersion">;
   referenceEntityVersionIds: readonly SafeId<"entityVersion">[];
   organizationId: SafeId<"organization">;
@@ -55,6 +63,7 @@ export const proposeReferenceTopics = async ({
   target,
   references,
   seededTopics,
+  perspective,
   targetEntityVersionId,
   referenceEntityVersionIds,
   organizationId,
@@ -112,7 +121,7 @@ export const proposeReferenceTopics = async ({
               ...buildReviewDocumentParts({ target, references, caching }),
               {
                 type: "text",
-                content: `Seeded topics (do not repeat):\n${seeded || "(none)"}`,
+                content: `${PERSPECTIVE_LINE[perspective]}\n\nSeeded topics (do not repeat):\n${seeded || "(none)"}`,
               },
             ],
           },

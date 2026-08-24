@@ -124,6 +124,7 @@ const proposeTopics = createSafeHandler(
       target,
       references,
       seededTopics: body.seededTopics,
+      perspective: body.perspective,
       targetEntityVersionId: selection.value.target.entityVersionId,
       referenceEntityVersionIds: selection.value.references.map(
         (reference) => reference.entityVersionId,

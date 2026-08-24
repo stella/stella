@@ -173,6 +173,21 @@ export const isReviewResultActionable = ({
   if (reference === null) {
     return false;
   }
+  // A comparison judged for a side answers the question directly: only a
+  // difference that leaves that side worse off needs the reviewer. Without a
+  // side (older runs, or none chosen) the assessment decides.
+  switch (reference.impact) {
+    case "unfavourable":
+      return true;
+    case "favourable":
+    case "neutral":
+      return false;
+    case "unknown":
+    case undefined:
+      break;
+    default:
+      reference.impact satisfies never;
+  }
   switch (reference.assessment) {
     case "different":
     case "missing-from-target":
@@ -196,3 +211,45 @@ export const isReviewResultActionable = ({
 export const isReviewResultActionNeeded = (item: ReviewResultItem): boolean =>
   !isDecisionSettled(reviewItemDecision(item)) &&
   isReviewResultActionable(item);
+
+/** Lower sorts first: what hurts the reviewer's side, by how much, then the
+ *  rest in the run's own order. Total over the impact vocabulary. */
+const IMPACT_RANK = {
+  unfavourable: 0,
+  unknown: 1,
+  neutral: 2,
+  favourable: 3,
+} as const satisfies Record<NonNullable<ReferenceFinding["impact"]>, number>;
+
+const SEVERITY_RANK = {
+  high: 0,
+  medium: 1,
+  low: 2,
+} as const satisfies Record<NonNullable<ReferenceFinding["severity"]>, number>;
+
+const itemRank = (item: ReviewResultItem): [number, number] => {
+  const reference = item.reference;
+  if (reference === null) {
+    return [IMPACT_RANK.unknown, SEVERITY_RANK.medium];
+  }
+  return [
+    IMPACT_RANK[reference.impact ?? "unknown"],
+    SEVERITY_RANK[reference.severity ?? "medium"],
+  ];
+};
+
+/**
+ * The list a reviewer reads top to bottom: findings that cut against their
+ * side first, the worst of those on top. Stable, so findings the run could
+ * not rank keep the order the reviewer confirmed the topics in.
+ */
+export const sortReviewResultItems = (
+  items: readonly ReviewResultItem[],
+): ReviewResultItem[] =>
+  items
+    .map((item, index) => ({ item, index, rank: itemRank(item) }))
+    .sort(
+      (a, b) =>
+        a.rank[0] - b.rank[0] || a.rank[1] - b.rank[1] || a.index - b.index,
+    )
+    .map(({ item }) => item);

@@ -8,7 +8,10 @@
  * an already active run (409).
  */
 
-import type { ReferenceFile } from "@/components/ai-suggestions/document-review-basis.logic";
+import type {
+  ReferenceFile,
+  ReviewPerspective,
+} from "@/components/ai-suggestions/document-review-basis.logic";
 import type {
   DecidedReviewFinding,
   DocumentReviewDecision,
@@ -155,6 +158,9 @@ export type RestoredReviewBasis = {
   playbookId: string | null;
   playbookName: string;
   references: ReferenceFile[];
+  /** The side the run's comparison was judged for; `neutral` for a
+   *  playbook-only run, which had no comparison. */
+  perspective: ReviewPerspective;
 };
 
 const pinnedReferenceFiles = (
@@ -186,22 +192,30 @@ export const restoreReviewBasis = (
         playbookId: basis.playbook.definitionId,
         playbookName: basis.playbook.definitionSnapshot.name,
         references: [],
+        perspective: "neutral",
       };
     case "references":
       return {
         playbookId: null,
         playbookName: "",
         references: pinnedReferenceFiles(basis.references),
+        perspective: basis.perspective,
       };
     case "combined":
       return {
         playbookId: basis.playbook.definitionId,
         playbookName: basis.playbook.definitionSnapshot.name,
         references: pinnedReferenceFiles(basis.references),
+        perspective: basis.perspective,
       };
     default:
       basis satisfies never;
-      return { playbookId: null, playbookName: "", references: [] };
+      return {
+        playbookId: null,
+        playbookName: "",
+        references: [],
+        perspective: "neutral",
+      };
   }
 };
 

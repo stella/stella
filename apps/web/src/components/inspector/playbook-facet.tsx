@@ -51,10 +51,12 @@ import {
 import {
   createReviewBasis,
   playbookIdFromBasis,
+  REVIEW_PERSPECTIVES,
 } from "@/components/ai-suggestions/document-review-basis.logic";
 import type {
   ReferenceFile,
   ReviewBasis,
+  ReviewPerspective,
 } from "@/components/ai-suggestions/document-review-basis.logic";
 import {
   decideReviewFindings,
@@ -103,7 +105,6 @@ import type {
   StartReviewResult,
 } from "@/components/ai-suggestions/playbook-review-store";
 import { DocumentIcon } from "@/components/document-icon";
-import { InlinePill } from "@/components/inline-pill";
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import {
@@ -111,6 +112,7 @@ import {
   isReviewResultActionable,
   isReviewResultActionNeeded,
   reviewItemDecision,
+  sortReviewResultItems,
 } from "@/components/inspector/playbook-review-results.logic";
 import type { ReviewResultItem } from "@/components/inspector/playbook-review-results.logic";
 import type { OverallRisk } from "@/components/inspector/playbook-risk-rollup";
@@ -265,6 +267,7 @@ export const PlaybookFacet = ({
         fileFieldId,
         playbookId: retry.playbookId,
         references: retry.references,
+        perspective: retry.perspective,
         topics: retry.topics,
         unexpectedErrorMessage: t("common.unexpectedError"),
       }),
@@ -582,6 +585,7 @@ export const PlaybookFacet = ({
 export type ReviewRunRetry = {
   playbookId: string | null;
   references: readonly ReferenceFile[];
+  perspective: ReviewPerspective;
   topics: readonly ReviewTopic[];
 };
 
@@ -716,6 +720,7 @@ const ReviewRunPanel = ({
           onRetry({
             playbookId: restored.basis.playbookId,
             references: restored.basis.references,
+            perspective: restored.basis.perspective,
             topics: run.topics,
           })
         }
@@ -752,6 +757,7 @@ const ReviewRunPanel = ({
       onReviewAgain={onReviewAgain}
       onScrollToBlock={onScrollToBlock}
       onScrollToFix={onScrollToFix}
+      perspective={restored.basis.perspective}
       playbookFindings={restored.results.playbook}
       playbookName={restored.basis.playbookName}
       referenceFindings={restored.results.references}
@@ -777,6 +783,7 @@ const SECTION_LABEL_CLASS =
 const LAUNCHER_BASIS_DIVIDER_LABEL = "and / or";
 const TARGET_AS_REFERENCE_LABEL =
   "The reviewed document cannot be its own reference.";
+const RECOMMENDATION_LABEL = "Recommendation:";
 
 type LauncherPlaybook = Pick<PlaybookListItem, "id" | "name" | "status">;
 
@@ -798,9 +805,11 @@ const Launcher = ({
     null,
   );
   const [references, setReferences] = useState<ReferenceFile[]>([]);
+  const [perspective, setPerspective] = useState<ReviewPerspective>("neutral");
   const basis = createReviewBasis({
     playbookId: selectedPlaybookId,
     references,
+    perspective,
   });
   const user = useAuthenticatedUser();
   const { data: selectedPlaybook } = useQuery({
@@ -852,6 +861,9 @@ const Launcher = ({
           target={target}
           workspaceId={workspaceId}
         />
+        {references.length > 0 && (
+          <PerspectivePicker onSelect={setPerspective} value={perspective} />
+        )}
       </div>
       {/* Pinned right above the action it describes, outside the scroll. */}
       <div className="shrink-0 px-4 pb-2">
@@ -883,6 +895,57 @@ const Launcher = ({
     </div>
   );
 };
+
+// English until the launcher copy settles; then it joins the catalog.
+const PERSPECTIVE_SECTION_LABEL = "We act for";
+const PERSPECTIVE_OPTION_LABEL = {
+  buyer: "Buyer",
+  seller: "Seller",
+  neutral: "Not specified",
+} as const satisfies Record<ReviewPerspective, string>;
+
+/**
+ * Whose side the comparison judges. A difference between two drafts has no
+ * direction on its own, so without this the results can only say "different";
+ * with it they can say "worse for the buyer", which is what gets acted on.
+ */
+const PerspectivePicker = ({
+  value,
+  onSelect,
+}: {
+  value: ReviewPerspective;
+  onSelect: (perspective: ReviewPerspective) => void;
+}) => (
+  <section className="space-y-2">
+    <h3 className={SECTION_LABEL_CLASS}>{PERSPECTIVE_SECTION_LABEL}</h3>
+    <div
+      aria-label={PERSPECTIVE_SECTION_LABEL}
+      className="flex flex-wrap gap-1"
+      role="radiogroup"
+    >
+      {REVIEW_PERSPECTIVES.map((option) => {
+        const checked = option === value;
+        return (
+          <button
+            aria-checked={checked}
+            className={cn(
+              "min-h-8 rounded-full border px-3 text-xs transition-colors duration-150",
+              checked
+                ? "border-foreground bg-foreground text-background"
+                : "border-border text-muted-foreground hover:text-foreground hover:bg-muted/50",
+            )}
+            key={option}
+            onClick={() => onSelect(option)}
+            role="radio"
+            type="button"
+          >
+            {PERSPECTIVE_OPTION_LABEL[option]}
+          </button>
+        );
+      })}
+    </div>
+  </section>
+);
 
 /** One line saying what the review will be measured against, so the reviewer
  *  reads the basis back before starting. Nothing chosen yet renders nothing:
@@ -1556,6 +1619,8 @@ type ResultsViewProps = {
   freshness: ReviewRunFreshness;
   negotiationBySourceId: ReadonlyMap<string, Negotiation>;
   playbookName: string;
+  /** The side the run's comparison was judged for; labels impacts. */
+  perspective: ReviewPerspective;
   editorAvailable: boolean;
   topics: readonly ReviewTopic[];
   onDecide: (
@@ -1588,6 +1653,7 @@ const ResultsView = ({
   freshness,
   negotiationBySourceId,
   playbookName,
+  perspective,
   editorAvailable,
   topics,
   onDecide,
@@ -1664,6 +1730,7 @@ const ResultsView = ({
             onRejectFix={onRejectFix}
             onScrollToBlock={onScrollToBlock}
             onScrollToFix={onScrollToFix}
+            perspective={perspective}
             references={references}
           />
         ) : (
@@ -1792,6 +1859,7 @@ const NoReviewIssues = () => {
 type ReviewResultListProps = {
   items: readonly ReviewResultItem[];
   references: readonly ReferenceFile[];
+  perspective: ReviewPerspective;
   commentStateByFinding: Record<string, ReviewCommentState>;
   decisionPending: boolean;
   fixStateByFinding: Record<string, ReviewFixState>;
@@ -1835,13 +1903,16 @@ const ReviewResultList = ({
 }: ReviewResultListProps) => {
   const t = useTranslations();
   const format = useFormatter();
+  // What cuts against the reviewer's side comes first, worst on top; the run's
+  // own order only breaks ties.
+  const orderedItems = sortReviewResultItems(items);
   // Deciding a card takes it out of this list without changing what the run
   // found: "Action needed" counts findings nobody has answered yet.
-  const actionableItems = items.filter(isReviewResultActionNeeded);
+  const actionableItems = orderedItems.filter(isReviewResultActionNeeded);
   const [filter, setFilter] = useState<ReviewResultFilter>(
     actionableItems.length > 0 ? "actionable" : "all",
   );
-  const visibleItems = filter === "actionable" ? actionableItems : items;
+  const visibleItems = filter === "actionable" ? actionableItems : orderedItems;
   const [expandedId, setExpandedId] = useState(
     actionableItems.at(0)?.id ?? items.at(0)?.id ?? null,
   );
@@ -1909,6 +1980,7 @@ const ReviewResultList = ({
             onToggle={() =>
               setExpandedId(visibleExpandedId === item.id ? null : item.id)
             }
+            perspective={perspective}
             references={references}
           />
         ))}
@@ -1933,6 +2005,7 @@ const ReviewResultList = ({
 type ReviewResultCardProps = {
   item: ReviewResultItem;
   references: readonly ReferenceFile[];
+  perspective: ReviewPerspective;
   commentStateByFinding: Record<string, ReviewCommentState>;
   decisionPending: boolean;
   fixStateByFinding: Record<string, ReviewFixState>;
@@ -1960,6 +2033,7 @@ type ReviewResultCardProps = {
 const ReviewResultCard = ({
   item,
   references,
+  perspective,
   commentStateByFinding,
   decisionPending,
   fixStateByFinding,
@@ -2044,23 +2118,57 @@ const ReviewResultCard = ({
                 {severityLabels[playbook.severity]}
               </span>
             )}
-            {reference !== null && (
-              <span
-                className={cn(
-                  "inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[11px] font-medium",
-                  referenceAssessmentChipClass(reference.assessment),
-                )}
-              >
-                <span
-                  aria-hidden="true"
-                  className={cn(
-                    "size-1.5 rounded-full",
-                    referenceAssessmentDotClass(reference.assessment),
+            {/* A comparison judged for a side says which way it cuts and how
+                much; only an undirected one falls back to the bare
+                assessment. */}
+            {reference !== null &&
+              (isDirectedImpact(reference.impact) ? (
+                <>
+                  <span
+                    className={cn(
+                      "inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[11px] font-medium",
+                      impactChipClass(reference.impact),
+                    )}
+                  >
+                    <span
+                      aria-hidden="true"
+                      className={cn(
+                        "size-1.5 rounded-full",
+                        impactDotClass(reference.impact),
+                      )}
+                    />
+                    {impactLabel(reference.impact, perspective)}
+                  </span>
+                  {reference.severity !== undefined && (
+                    <span className="text-muted-foreground inline-flex items-center gap-1 text-[11px] font-medium">
+                      <span
+                        aria-hidden="true"
+                        className={cn(
+                          "size-1.5 rounded-full",
+                          severityDotClass(reference.severity),
+                        )}
+                      />
+                      {severityLabels[reference.severity]}
+                    </span>
                   )}
-                />
-                {assessmentLabels[reference.assessment]}
-              </span>
-            )}
+                </>
+              ) : (
+                <span
+                  className={cn(
+                    "inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[11px] font-medium",
+                    referenceAssessmentChipClass(reference.assessment),
+                  )}
+                >
+                  <span
+                    aria-hidden="true"
+                    className={cn(
+                      "size-1.5 rounded-full",
+                      referenceAssessmentDotClass(reference.assessment),
+                    )}
+                  />
+                  {assessmentLabels[reference.assessment]}
+                </span>
+              ))}
             {reference?.consensus === "mixed" && (
               <span className="border-warning/30 text-warning-foreground inline-flex items-center rounded-full border px-1.5 py-0.5 text-[11px] font-medium">
                 {t("inspector.review.referencesDisagree")}
@@ -2131,6 +2239,14 @@ const ReviewResultCard = ({
                   ? reference.explanation.text
                   : t("inspector.review.insufficientEvidence")}
               </p>
+              {typeof reference.recommendation === "string" && (
+                <p className="text-foreground text-xs leading-snug text-pretty">
+                  <span className="text-foreground-strong-muted font-medium">
+                    {RECOMMENDATION_LABEL}
+                  </span>{" "}
+                  {reference.recommendation}
+                </p>
+              )}
             </section>
           )}
           <ReviewEvidence
@@ -2320,7 +2436,7 @@ const ReviewEvidence = ({
   );
 };
 
-const CITATION_PREVIEW_CHARS = 72;
+const CITATION_ARIA_CHARS = 72;
 
 type CitationGroupProps = {
   label: string;
@@ -2328,6 +2444,12 @@ type CitationGroupProps = {
   onActivate: ((citation: PlaybookCitation) => void) | undefined;
 };
 
+/**
+ * The cited passages of one document, quoted in full: the point of the card
+ * is to see how the topic is drafted here and there, so the text is on the
+ * card, not behind a chip. Each passage is the affordance that scrolls its
+ * document to the block.
+ */
 const CitationGroup = ({
   label,
   citations,
@@ -2335,36 +2457,47 @@ const CitationGroup = ({
 }: CitationGroupProps) => {
   const t = useTranslations();
   return (
-    <div className="space-y-1.5">
+    <div className="space-y-1">
       <p className="text-foreground-strong-muted flex items-center gap-1 text-[11px] font-medium">
         <FileTextIcon className="size-3 shrink-0" />
-        <BidiText>{label}</BidiText>
+        <BidiText className="truncate">{label}</BidiText>
       </p>
-      <div className="flex flex-wrap gap-1">
+      <ul className="space-y-1">
         {citations.map((citation) => {
           const trimmed = citation.text.trim();
-          const preview =
-            trimmed.length > CITATION_PREVIEW_CHARS
-              ? `${trimmed.slice(0, CITATION_PREVIEW_CHARS).trimEnd()}…`
-              : trimmed || t("knowledge.playbooks.review.viewClause");
+          const ariaLabel = t("chat.openCitation", {
+            label:
+              trimmed.length > CITATION_ARIA_CHARS
+                ? `${trimmed.slice(0, CITATION_ARIA_CHARS).trimEnd()}…`
+                : trimmed || t("knowledge.playbooks.review.viewClause"),
+          });
+          const passageClass =
+            "border-s-2 border-border bg-muted/40 block w-full rounded-e-md ps-2.5 pe-2 py-1.5 text-start text-xs leading-relaxed";
           return (
-            <InlinePill
-              ariaLabel={t("chat.openCitation", { label: preview })}
-              key={citation.blockId}
-              leadingIcon={<FileTextIcon className="size-3 shrink-0" />}
-              onActivate={
-                onActivate === undefined
-                  ? undefined
-                  : () => onActivate(citation)
-              }
-              tooltip={trimmed || undefined}
-              truncate
-            >
-              <BidiText>{preview}</BidiText>
-            </InlinePill>
+            <li key={citation.blockId}>
+              {onActivate === undefined ? (
+                <BidiText as="p" className={passageClass}>
+                  {trimmed || t("knowledge.playbooks.review.viewClause")}
+                </BidiText>
+              ) : (
+                <button
+                  aria-label={ariaLabel}
+                  className={cn(
+                    passageClass,
+                    "hover:border-ring hover:bg-muted transition-colors duration-150",
+                  )}
+                  onClick={() => onActivate(citation)}
+                  type="button"
+                >
+                  <BidiText>
+                    {trimmed || t("knowledge.playbooks.review.viewClause")}
+                  </BidiText>
+                </button>
+              )}
+            </li>
           );
         })}
-      </div>
+      </ul>
     </div>
   );
 };
@@ -2924,6 +3057,59 @@ const useReferenceAssessmentLabels = (): Record<
     "not-comparable": t("inspector.review.assessment.notComparable"),
   };
 };
+
+type DirectedImpact = Exclude<
+  NonNullable<ReferenceFinding["impact"]>,
+  "unknown"
+>;
+
+/** An impact the card can put a direction on; `unknown` and findings that
+ *  predate impacts fall back to the assessment chip. */
+const isDirectedImpact = (
+  impact: ReferenceFinding["impact"],
+): impact is DirectedImpact => impact !== undefined && impact !== "unknown";
+
+// English until the results copy settles; then it joins the catalog. Labels
+// name the side so "worse" is never ambiguous on a printed or shared card.
+const IMPACT_LABEL = {
+  buyer: {
+    unfavourable: "Worse for buyer",
+    favourable: "Better for buyer",
+    neutral: "No effect for buyer",
+  },
+  seller: {
+    unfavourable: "Worse for seller",
+    favourable: "Better for seller",
+    neutral: "No effect for seller",
+  },
+  neutral: {
+    unfavourable: "Unfavourable",
+    favourable: "Favourable",
+    neutral: "No effect",
+  },
+} as const satisfies Record<ReviewPerspective, Record<DirectedImpact, string>>;
+
+const impactLabel = (
+  impact: DirectedImpact,
+  perspective: ReviewPerspective,
+): string => IMPACT_LABEL[perspective][impact];
+
+const IMPACT_CHIP_CLASS = {
+  unfavourable: "border-warning/30 text-warning-foreground",
+  favourable: "border-success/30 text-success",
+  neutral: "border-border text-muted-foreground",
+} as const satisfies Record<DirectedImpact, string>;
+
+const IMPACT_DOT_CLASS = {
+  unfavourable: "bg-warning",
+  favourable: "bg-success",
+  neutral: "bg-muted-foreground",
+} as const satisfies Record<DirectedImpact, string>;
+
+const impactChipClass = (impact: DirectedImpact): string =>
+  IMPACT_CHIP_CLASS[impact];
+const impactDotClass = (impact: DirectedImpact): string =>
+  IMPACT_DOT_CLASS[impact];
 
 const REFERENCE_ASSESSMENT_ALIGNED = "border-success/30 text-success";
 const REFERENCE_ASSESSMENT_DIFFERENT =

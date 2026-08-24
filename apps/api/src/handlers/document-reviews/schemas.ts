@@ -4,6 +4,7 @@ import type { Static } from "elysia";
 import { DOCUMENT_REVIEW_LIMITS } from "@stll/api-contract";
 
 import { tSafeId } from "@/api/lib/custom-schema";
+import { REVIEW_PERSPECTIVES } from "@/api/lib/document-review/contract";
 import type { DocumentReviewTopic as ReviewEngineTopic } from "@/api/lib/document-review/contract";
 import { DOCUMENT_REVIEW_DECISIONS } from "@/api/lib/document-review/run-contract";
 import type { DocumentReviewDecision } from "@/api/lib/document-review/run-contract";
@@ -71,12 +72,17 @@ export type DocumentReviewDecisionInput = Assignable<
   DocumentReviewDecision
 >;
 
+// Required, never optional: an absent optional UnionEnum coerces to its first
+// member, and `buyer` is not a safe default for `neutral`.
+const reviewPerspectiveSchema = t.UnionEnum([...REVIEW_PERSPECTIVES]);
+
 const reviewDocumentsSchema = {
   target: documentReviewTargetSchema,
   references: t.Array(documentReviewRefSchema, {
     minItems: 1,
     maxItems: DOCUMENT_REVIEW_LIMITS.referencesMax,
   }),
+  perspective: reviewPerspectiveSchema,
 };
 
 export const proposeReviewTopicsBodySchema = t.Object({
@@ -96,6 +102,9 @@ export const createDocumentReviewRunBodySchema = t.Object({
   references: t.Array(documentReviewRefSchema, {
     maxItems: DOCUMENT_REVIEW_LIMITS.referencesMax,
   }),
+  /** The side the reference comparison is judged for. Sent even for a
+   *  playbook-only run, where it is recorded on nothing. */
+  perspective: reviewPerspectiveSchema,
   topics: t.Array(documentReviewTopicSchema, {
     minItems: 1,
     maxItems: DOCUMENT_REVIEW_LIMITS.topicsMax,

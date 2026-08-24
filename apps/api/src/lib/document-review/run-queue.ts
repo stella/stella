@@ -17,7 +17,7 @@
  * wrote before.
  */
 
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { Worker } from "bullmq";
 import { and, eq, inArray, lt, or } from "drizzle-orm";
 
@@ -52,6 +52,7 @@ import type { ReviewAsk } from "@/api/lib/document-review/review-extract";
 import { buildFindings } from "@/api/lib/document-review/review-grade";
 import type { ReviewFinding } from "@/api/lib/document-review/review-grade";
 import {
+  basisPerspective,
   basisPlaybook,
   basisReferences,
   DOCUMENT_REVIEW_RUN_EXECUTOR,
@@ -697,10 +698,18 @@ const runReferencePass = async ({
     return null;
   }
 
+  const perspective = basisPerspective(run.basis);
+  if (perspective === null) {
+    // The plan only schedules reference topics for a basis that pins
+    // references, and every such basis names a side.
+    return panic("Reference pass planned for a basis without a perspective");
+  }
+
   const comparison = await compareReferenceDocuments({
     abortSignal: deps.abortSignal,
     orgAIConfig: deps.orgAIConfig,
     organizationId: deps.organizationId,
+    perspective,
     promptCachingEnabled: deps.promptCachingEnabled,
     references,
     referenceEntityVersionIds: basisReferences(run.basis).map(

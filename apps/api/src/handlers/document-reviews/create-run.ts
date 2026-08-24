@@ -25,6 +25,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { workspaceParams } from "@/api/lib/custom-schema";
 import { loadLatestApprovedVersion } from "@/api/lib/document-review/approved-playbook-versions";
+import type { ReviewPerspective } from "@/api/lib/document-review/contract";
 import { resolvePlaybookPin } from "@/api/lib/document-review/resolve-playbook-pin";
 import { DOCUMENT_REVIEW_RUN_ACTIVE_STATUSES } from "@/api/lib/document-review/run-contract";
 import type {
@@ -52,18 +53,28 @@ const config = {
 } satisfies HandlerConfig;
 
 /** Build the discriminated basis from what the request actually pinned. */
-const buildBasis = (
-  playbook: PinnedPlaybook | null,
-  references: readonly PinnedReference[],
-): DocumentReviewRunBasis | null => {
+const buildBasis = ({
+  playbook,
+  references,
+  perspective,
+}: {
+  playbook: PinnedPlaybook | null;
+  references: readonly PinnedReference[];
+  perspective: ReviewPerspective;
+}): DocumentReviewRunBasis | null => {
   if (playbook !== null && references.length > 0) {
-    return { type: "combined", playbook, references: [...references] };
+    return {
+      type: "combined",
+      playbook,
+      references: [...references],
+      perspective,
+    };
   }
   if (playbook !== null) {
     return { type: "playbook", playbook };
   }
   if (references.length > 0) {
-    return { type: "references", references: [...references] };
+    return { type: "references", references: [...references], perspective };
   }
   return null;
 };
@@ -194,7 +205,11 @@ const createDocumentReviewRun = createSafeHandler(
       playbook = resolvePlaybookPin(loaded);
     }
 
-    const basis = buildBasis(playbook, references);
+    const basis = buildBasis({
+      playbook,
+      references,
+      perspective: body.perspective,
+    });
     if (basis === null) {
       return Result.err(
         new HandlerError({
