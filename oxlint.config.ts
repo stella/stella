@@ -191,6 +191,10 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("public-case-law-db-boundary.fixture.ts", [
     "public-case-law-db-boundary/public-case-law-db-boundary",
   ]),
+  fixtureRuleOverride("public-law-read-boundary.fixture.ts", [
+    "public-law-read-boundary/require-language-alternate-counts",
+    "public-law-read-boundary/require-configured-read-transaction",
+  ]),
   fixtureRuleOverride("require-audit-on-mutation.fixture.ts", [
     "require-audit-on-mutation/require-audit-on-mutation",
   ]),
@@ -494,6 +498,8 @@ export default defineConfig({
     "no-partial-record-satisfies/no-partial-record-satisfies": "error",
     "no-raw-public-law-seo/no-raw-public-law-seo": "off",
     "public-case-law-db-boundary/public-case-law-db-boundary": "off",
+    "public-law-read-boundary/require-language-alternate-counts": "off",
+    "public-law-read-boundary/require-configured-read-transaction": "off",
     "require-contained-handler/no-portal-under-interactive-ancestor": "error",
     "require-contained-handler/require-contained-handler": "error",
     "require-function-replacer/require-function-replacer": "error",
@@ -754,6 +760,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-unvalidated-json-domain-cast.ts",
     "./.oxlint-plugins/no-raw-public-law-seo.ts",
     "./.oxlint-plugins/public-case-law-db-boundary.ts",
+    "./.oxlint-plugins/public-law-read-boundary.ts",
     "./.oxlint-plugins/require-contained-handler.ts",
     "./.oxlint-plugins/suppression-hygiene.ts",
     "./.oxlint-plugins/no-coerced-optional-union-enum.ts",
@@ -2835,6 +2842,18 @@ export default defineConfig({
       ],
       rules: {
         "public-case-law-db-boundary/public-case-law-db-boundary": "error",
+      },
+    },
+    {
+      files: ["apps/api/src/handlers/case-law/decisions/search.ts"],
+      rules: {
+        "public-law-read-boundary/require-language-alternate-counts": "error",
+      },
+    },
+    {
+      files: ["apps/api/src/lib/public-law-read-db.ts"],
+      rules: {
+        "public-law-read-boundary/require-configured-read-transaction": "error",
       },
     },
     {

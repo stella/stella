@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { sql, TransactionRollbackError } from "drizzle-orm";
+import { eq, sql, TransactionRollbackError } from "drizzle-orm";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import nodePath from "node:path";
 
@@ -8,7 +8,10 @@ import {
   stellaCaseLawReader,
   stellaPublicLawReader,
 } from "@/api/db/rls";
+import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
+import { readDecisionHandler } from "@/api/handlers/case-law/decisions/get";
 import { listDecisionsHandler } from "@/api/handlers/case-law/decisions/list";
+import { withRedistributableSubject } from "@/api/handlers/case-law/decisions/public-subject";
 import { rehydrateCaseLawCandidates } from "@/api/handlers/case-law/decisions/search";
 import {
   listSitemapShardDecisionsHandler,
@@ -224,7 +227,7 @@ describe("public-law reader role", () => {
       });
 
     expect(await asRole(READER_ROLE)).toEqual({
-      canAssumeOtherRole: false,
+      canUseOtherRole: false,
       canConnect: true,
       canDelegatePublicLaw: false,
       canReadPublicLaw: true,
@@ -232,7 +235,8 @@ describe("public-law reader role", () => {
       canUseSequence: false,
       canUseSchema: true,
       canWritePublicLaw: false,
-      isPublicLawReaderMember: true,
+      hasPrivilegedRoleAttributes: false,
+      hasPublicLawReaderUsage: true,
     });
     expect(await asRole(stella.name)).toMatchObject({
       canReadOtherData: true,
@@ -305,17 +309,17 @@ describe("public-law reader role", () => {
     expect(delegatingReader).toMatchObject({ canDelegatePublicLaw: true });
   });
 
-  test("startup attestation rejects every settable role membership", async () => {
+  test("startup attestation rejects every usable or settable role membership", async () => {
     const roleMember = await rolePermissionsAfter(async (tx) => {
       await tx.execute(sql`CREATE ROLE reader_attestation_escalation NOLOGIN`);
       await tx.execute(
         sql.raw(
-          `GRANT reader_attestation_escalation TO ${quoted(READER_ROLE)}`,
+          `GRANT reader_attestation_escalation TO ${quoted(READER_ROLE)} WITH SET FALSE, INHERIT TRUE`,
         ),
       );
     });
 
-    expect(roleMember).toMatchObject({ canAssumeOtherRole: true });
+    expect(roleMember).toMatchObject({ canUseOtherRole: true });
   });
 
   test("startup attestation accepts a login that can assume only the reader role", async () => {
@@ -340,10 +344,40 @@ describe("public-law reader role", () => {
     }
 
     expect(permissions).toMatchObject({
-      canAssumeOtherRole: false,
+      canUseOtherRole: false,
       canReadPublicLaw: true,
       canReadOtherData: false,
-      isPublicLawReaderMember: true,
+      hasPublicLawReaderUsage: true,
+    });
+  });
+
+  test("startup attestation rejects privileged login attributes", async () => {
+    let permissions: PublicLawDatabaseRolePermissions | undefined;
+    try {
+      await testDb.transaction(async (tx) => {
+        await tx.execute(
+          sql`CREATE ROLE reader_attestation_privileged NOLOGIN CREATEDB`,
+        );
+        await tx.execute(
+          sql.raw(
+            `GRANT ${quoted(READER_ROLE)} TO reader_attestation_privileged`,
+          ),
+        );
+        await tx.execute(sql`SET LOCAL ROLE reader_attestation_privileged`);
+        const result = await tx.execute<PublicLawDatabaseRolePermissions>(
+          publicLawDatabaseRolePermissionsSql(),
+        );
+        permissions = result.rows.at(0);
+        tx.rollback();
+      });
+    } catch (error) {
+      if (!(error instanceof TransactionRollbackError)) {
+        throw error;
+      }
+    }
+
+    expect(permissions).toMatchObject({
+      hasPrivilegedRoleAttributes: true,
     });
   });
 
@@ -381,10 +415,11 @@ describe("public-law reader role", () => {
     }
 
     expect(permissions).toMatchObject({
-      canAssumeOtherRole: false,
+      canUseOtherRole: false,
       canDelegatePublicLaw: true,
       canReadPublicLaw: true,
       canReadOtherData: false,
+      hasPublicLawReaderUsage: false,
     });
   });
 
@@ -481,11 +516,36 @@ describe("public-law reader role", () => {
   test("executes every declared shared-reader query as the reader role", async () => {
     const caseLawDb = caseLawReaderDb();
     const decisionId = createSafeId<"caseLawDecision">();
+    const sourceId = createSafeId<"caseLawSource">();
     const exercised = new Set<string>();
 
-    await caseLawDb(async (tx) => {
-      await readDecisionAnalysis(tx, decisionId);
-      exercised.add(readDecisionAnalysis.publicLawSharedQuery);
+    await testDb.insert(caseLawSources).values({
+      id: sourceId,
+      adapterKey: "reader-role-census",
+      name: "Reader role census",
+    });
+    await testDb.insert(caseLawDecisions).values({
+      id: decisionId,
+      sourceId,
+      caseNumber: "reader-role-census",
+      court: "Reader role census",
+      country: "CZE",
+      language: "cs",
+      languageGroupKey: "reader-role-census",
+    });
+
+    try {
+      const decision = await withRedistributableSubject(
+        caseLawDb,
+        { kind: "id", id: decisionId },
+        async (subject) => await readDecisionHandler({ subject }),
+      );
+      expect(decision).not.toBeNull();
+      exercised.add(readDecisionHandler.publicLawSharedQuery);
+
+      await caseLawDb(async (tx) => {
+        await readDecisionAnalysis(tx, decisionId);
+        exercised.add(readDecisionAnalysis.publicLawSharedQuery);
 
       await readPgFtsBrowseFacets(tx, { excludedSourceIds: [], limit: 10 });
       exercised.add(readPgFtsBrowseFacets.publicLawSharedQuery);
@@ -505,18 +565,24 @@ describe("public-law reader role", () => {
         readNonRedistributableCaseLawSourceIdsQuery.publicLawSharedQuery,
       );
 
-      await rehydrateCorpusIndexProviderCandidates(tx, {
-        generation: "case_law_v3",
-        ids: [decisionId],
+        await rehydrateCorpusIndexProviderCandidates(tx, {
+          generation: "case_law_v3",
+          ids: [decisionId],
+        });
+        exercised.add(
+          rehydrateCorpusIndexProviderCandidates.publicLawSharedQuery,
+        );
       });
-      exercised.add(
-        rehydrateCorpusIndexProviderCandidates.publicLawSharedQuery,
-      );
-    });
 
-    expect([...exercised].toSorted()).toEqual(
-      Object.values(PUBLIC_LAW_SHARED_QUERY).toSorted(),
-    );
+      expect([...exercised].toSorted()).toEqual(
+        Object.values(PUBLIC_LAW_SHARED_QUERY).toSorted(),
+      );
+    } finally {
+      await testDb
+        .delete(caseLawDecisions)
+        .where(eq(caseLawDecisions.id, decisionId));
+      await testDb.delete(caseLawSources).where(eq(caseLawSources.id, sourceId));
+    }
   });
 
   test("preserves the v0.7.22 reader during the rollout window", async () => {

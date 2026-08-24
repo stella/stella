@@ -7,7 +7,7 @@ import {
 import { PUBLIC_LAW_COLUMNS_BY_RELATION } from "@/api/lib/public-law-relations";
 
 const VALID_PERMISSIONS = {
-  canAssumeOtherRole: false,
+  canUseOtherRole: false,
   canConnect: true,
   canDelegatePublicLaw: false,
   canReadPublicLaw: true,
@@ -15,7 +15,8 @@ const VALID_PERMISSIONS = {
   canUseSequence: false,
   canUseSchema: true,
   canWritePublicLaw: false,
-  isPublicLawReaderMember: true,
+  hasPrivilegedRoleAttributes: false,
+  hasPublicLawReaderUsage: true,
 } as const satisfies PublicLawDatabaseRolePermissions;
 
 describe("external public-law database boundary", () => {
@@ -48,7 +49,7 @@ describe("external public-law database boundary", () => {
   });
 
   test.each([
-    { ...VALID_PERMISSIONS, canAssumeOtherRole: true },
+    { ...VALID_PERMISSIONS, canUseOtherRole: true },
     { ...VALID_PERMISSIONS, canConnect: false },
     { ...VALID_PERMISSIONS, canDelegatePublicLaw: true },
     { ...VALID_PERMISSIONS, canReadPublicLaw: false },
@@ -56,7 +57,8 @@ describe("external public-law database boundary", () => {
     { ...VALID_PERMISSIONS, canUseSequence: true },
     { ...VALID_PERMISSIONS, canUseSchema: false },
     { ...VALID_PERMISSIONS, canWritePublicLaw: true },
-    { ...VALID_PERMISSIONS, isPublicLawReaderMember: false },
+    { ...VALID_PERMISSIONS, hasPrivilegedRoleAttributes: true },
+    { ...VALID_PERMISSIONS, hasPublicLawReaderUsage: false },
   ] satisfies PublicLawDatabaseRolePermissions[])(
     "rejects an over- or under-privileged role",
     (permissions) => {

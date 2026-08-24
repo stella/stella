@@ -39,7 +39,7 @@ type PublicLawSharedReadTransaction = Pick<
 };
 
 export type PublicLawDatabaseRolePermissions = {
-  canAssumeOtherRole: boolean;
+  canUseOtherRole: boolean;
   canConnect: boolean;
   canDelegatePublicLaw: boolean;
   canReadPublicLaw: boolean;
@@ -47,11 +47,12 @@ export type PublicLawDatabaseRolePermissions = {
   canUseSequence: boolean;
   canUseSchema: boolean;
   canWritePublicLaw: boolean;
-  isPublicLawReaderMember: boolean;
+  hasPrivilegedRoleAttributes: boolean;
+  hasPublicLawReaderUsage: boolean;
 };
 
 export const assertPublicLawDatabaseRolePermissions = ({
-  canAssumeOtherRole,
+  canUseOtherRole,
   canConnect,
   canDelegatePublicLaw,
   canReadPublicLaw,
@@ -59,10 +60,11 @@ export const assertPublicLawDatabaseRolePermissions = ({
   canUseSequence,
   canUseSchema,
   canWritePublicLaw,
-  isPublicLawReaderMember,
+  hasPrivilegedRoleAttributes,
+  hasPublicLawReaderUsage,
 }: PublicLawDatabaseRolePermissions): void => {
   if (
-    canAssumeOtherRole ||
+    canUseOtherRole ||
     !canConnect ||
     canDelegatePublicLaw ||
     !canReadPublicLaw ||
@@ -70,7 +72,8 @@ export const assertPublicLawDatabaseRolePermissions = ({
     canUseSequence ||
     !canUseSchema ||
     canWritePublicLaw ||
-    !isPublicLawReaderMember
+    hasPrivilegedRoleAttributes ||
+    !hasPublicLawReaderUsage
   ) {
     panic(
       "PUBLIC_LAW_DATABASE_URL must use a role that can only read the public-law corpus",
@@ -116,8 +119,11 @@ export const publicLawDatabaseRolePermissionsSql = (): SqlFragment => {
               current_user,
               ${stellaPublicLawReader.name}
             )
-            AND pg_has_role(current_user, roles.oid, 'SET')
-        ) AS "canAssumeOtherRole",
+            AND (
+              pg_has_role(current_user, roles.oid, 'SET')
+              OR pg_has_role(current_user, roles.oid, 'USAGE')
+            )
+        ) AS "canUseOtherRole",
         has_database_privilege(
           current_user,
           current_database(),
@@ -204,11 +210,21 @@ export const publicLawDatabaseRolePermissionsSql = (): SqlFragment => {
         ) AS "canReadOtherData",
         has_schema_privilege(current_user, 'public', 'USAGE')
           AS "canUseSchema",
+        (
+          SELECT
+            roles.rolsuper
+            OR roles.rolcreatedb
+            OR roles.rolcreaterole
+            OR roles.rolreplication
+            OR roles.rolbypassrls
+          FROM pg_roles AS roles
+          WHERE roles.rolname = current_user
+        ) AS "hasPrivilegedRoleAttributes",
         pg_has_role(
           current_user,
           ${stellaPublicLawReader.name},
-          'MEMBER'
-        ) AS "isPublicLawReaderMember",
+          'USAGE'
+        ) AS "hasPublicLawReaderUsage",
         has_database_privilege(
           current_user,
           current_database(),

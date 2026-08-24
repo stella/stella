@@ -36,6 +36,10 @@ import {
   decodePaginationCursor,
   encodePaginationCursor,
 } from "@/api/lib/pagination";
+import {
+  definePublicLawSharedQuery,
+  PUBLIC_LAW_SHARED_QUERY,
+} from "@/api/lib/public-law-shared-query";
 
 type PublicDecisionLanguageAlternate = {
   caseNumber: string;
@@ -246,14 +250,16 @@ const emptyCitationPage = () => ({
   nextCursor: null,
 });
 
-export const readDecisionHandler = async ({
-  citationsCursor,
-  subject: { id: decisionId, tx },
-}: ReadDecisionOptions) => {
-  const citationCursors = decodeDecisionCitationCursor(citationsCursor);
-  if (citationCursors === null) {
-    return status(400, { message: "Invalid cursor" });
-  }
+export const readDecisionHandler = definePublicLawSharedQuery(
+  PUBLIC_LAW_SHARED_QUERY.caseLawDecisionRead,
+  async ({
+    citationsCursor,
+    subject: { id: decisionId, tx },
+  }: ReadDecisionOptions) => {
+    const citationCursors = decodeDecisionCitationCursor(citationsCursor);
+    if (citationCursors === null) {
+      return status(400, { message: "Invalid cursor" });
+    }
 
   const decision = await tx.query.caseLawDecisions.findFirst({
     where: { id: { eq: decisionId } },
@@ -397,41 +403,42 @@ export const readDecisionHandler = async ({
           documentUnavailable: false,
         };
 
-  return {
-    documentPending,
-    documentReadFailed,
-    documentUnavailable,
-    id: decision.id,
-    caseNumber: decision.caseNumber,
-    slug: decision.slug,
-    ecli: decision.ecli,
-    court: decision.court,
-    country: decision.country,
-    language: decision.language,
-    languageGroupKey: decision.languageGroupKey,
-    decisionDate: decision.decisionDate,
-    decisionType: decision.decisionType,
-    documentAst,
-    sourceUrl: decision.sourceUrl,
-    documentUrl: decision.documentUrl,
-    metadata: decision.metadata,
-    createdAt: decision.createdAt,
-    updatedAt: decision.updatedAt,
-    source: {
-      id: source.id,
-      name: source.name,
-      adapterKey: source.adapterKey,
-      // Derived licence bit (never the raw descriptor): AI consumers
-      // must not feed the full text to a model when this is false.
-      allowsDerivedAi: allowsDerivedAi(source.descriptor),
-    },
-    citationsFrom: citationsFromPage.items,
-    citationsTo: citationsToPage.items,
-    citationsNextCursor,
-    languageAlternates,
-    fulltext,
-  };
-};
+    return {
+      documentPending,
+      documentReadFailed,
+      documentUnavailable,
+      id: decision.id,
+      caseNumber: decision.caseNumber,
+      slug: decision.slug,
+      ecli: decision.ecli,
+      court: decision.court,
+      country: decision.country,
+      language: decision.language,
+      languageGroupKey: decision.languageGroupKey,
+      decisionDate: decision.decisionDate,
+      decisionType: decision.decisionType,
+      documentAst,
+      sourceUrl: decision.sourceUrl,
+      documentUrl: decision.documentUrl,
+      metadata: decision.metadata,
+      createdAt: decision.createdAt,
+      updatedAt: decision.updatedAt,
+      source: {
+        id: source.id,
+        name: source.name,
+        adapterKey: source.adapterKey,
+        // Derived licence bit (never the raw descriptor): AI consumers
+        // must not feed the full text to a model when this is false.
+        allowsDerivedAi: allowsDerivedAi(source.descriptor),
+      },
+      citationsFrom: citationsFromPage.items,
+      citationsTo: citationsToPage.items,
+      citationsNextCursor,
+      languageAlternates,
+      fulltext,
+    };
+  },
+);
 
 /**
  * A payload the read tried to resolve, and whether object storage
