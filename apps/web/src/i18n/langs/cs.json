@@ -2152,7 +2152,7 @@
     "ask": "Zeptat se",
     "askPrompt": "Řekněte mi více o této položce v doručené poště a co mám udělat dál.\n\n{title}\n{summary}",
     "assignTo": "Přiřadit",
-    "confidence": "Jistota {percent} %",
+    "confidence": "Jistota {percent}",
     "dismissReason": "Důvod (nepovinné)",
     "empty": "Teď vás nic nečeká. Založte požadavek tlačítkem výše.",
     "evidence": {

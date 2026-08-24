@@ -2152,7 +2152,7 @@
     "ask": "Dazu fragen",
     "askPrompt": "Erkläre mir diesen Posteingangseintrag und was ich als Nächstes tun sollte.\n\n{title}\n{summary}",
     "assignTo": "Zuweisen an",
-    "confidence": "{percent} % Konfidenz",
+    "confidence": "{percent} Konfidenz",
     "dismissReason": "Grund (optional)",
     "empty": "Nichts wartet auf Sie. Erstellen Sie oben eine Anfrage.",
     "evidence": {

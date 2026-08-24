@@ -2152,7 +2152,7 @@
     "ask": "Poser une question",
     "askPrompt": "Explique-moi cet élément de la boîte de réception et ce que je devrais faire ensuite.\n\n{title}\n{summary}",
     "assignTo": "Attribuer à",
-    "confidence": "Confiance : {percent} %",
+    "confidence": "Confiance : {percent}",
     "dismissReason": "Motif (facultatif)",
     "empty": "Rien ne vous attend. Créez une demande avec le bouton ci-dessus.",
     "evidence": {

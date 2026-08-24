@@ -2152,7 +2152,7 @@
     "ask": "Perguntar sobre isto",
     "askPrompt": "Conte-me mais sobre este item da caixa de entrada e o que devo fazer a seguir.\n\n{title}\n{summary}",
     "assignTo": "Atribuir a",
-    "confidence": "{percent}% de confiança",
+    "confidence": "{percent} de confiança",
     "dismissReason": "Motivo (opcional)",
     "empty": "Nada aguarda você agora. Crie uma solicitação pelo botão acima.",
     "evidence": {

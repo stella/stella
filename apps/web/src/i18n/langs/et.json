@@ -2152,7 +2152,7 @@
     "ask": "Küsi selle kohta",
     "askPrompt": "Räägi mulle sellest postkasti kirjest lähemalt ja mida peaksin järgmisena tegema.\n\n{title}\n{summary}",
     "assignTo": "Määra",
-    "confidence": "Kindlus {percent}%",
+    "confidence": "Kindlus {percent}",
     "dismissReason": "Põhjus (valikuline)",
     "empty": "Praegu ei oota miski. Lisa taotlus ülalolevast nupust.",
     "evidence": {

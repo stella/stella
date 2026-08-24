@@ -2152,7 +2152,7 @@
     "ask": "اسأل عن هذا",
     "askPrompt": "أخبرني المزيد عن هذا العنصر في صندوق الوارد وما الذي يجب أن أفعله بعد ذلك.\n\n{title}\n{summary}",
     "assignTo": "إسناد إلى",
-    "confidence": "ثقة {percent}٪",
+    "confidence": "ثقة {percent}",
     "dismissReason": "السبب (اختياري)",
     "empty": "لا شيء بانتظارك الآن. أنشئ طلباً بالزر أعلاه.",
     "evidence": {

@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import {
   afterAll,
   beforeAll,
@@ -6,7 +7,7 @@ import {
   setDefaultTimeout,
   test,
 } from "bun:test";
-import { inArray } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 
 import {
   SIGNAL_KIND,
@@ -14,7 +15,7 @@ import {
   SIGNAL_SEVERITY,
 } from "@stll/api-contract/signals";
 
-import { signals } from "@/api/db/schema";
+import { SIGNAL_EVENT_TYPE, signalEvents, signals } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import listSignals from "@/api/handlers/signals/list";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -37,6 +38,7 @@ let testDb: TestDatabase;
 let ids: TestIds;
 const seeded: SafeId<"signal">[] = [];
 let unscopedSignalA: SafeId<"signal"> | null = null;
+let scopedSignalA1: SafeId<"signal"> | null = null;
 
 const seedSignal = async ({
   organizationId,
@@ -78,11 +80,12 @@ beforeAll(async () => {
   const fixture = await getRlsFixture();
   testDb = fixture.testDb;
   ids = fixture.ids;
-  await seedSignal({
+  const seededScopedSignalA1 = await seedSignal({
     organizationId: ids.orgA,
     workspaceId: ids.wsA1,
     title: "scoped A1",
   });
+  scopedSignalA1 = seededScopedSignalA1;
   unscopedSignalA = await seedSignal({
     organizationId: ids.orgA,
     workspaceId: null,
@@ -92,6 +95,12 @@ beforeAll(async () => {
     organizationId: ids.orgB,
     workspaceId: ids.wsB1,
     title: "scoped B1",
+  });
+  await testDb.insert(signalEvents).values({
+    id: createSafeId<"signalEvent">(),
+    organizationId: ids.orgA,
+    signalId: seededScopedSignalA1,
+    type: SIGNAL_EVENT_TYPE.CREATED,
   });
 });
 
@@ -212,5 +221,53 @@ describe("signal visibility", () => {
         role: "owner",
       }),
     ).toEqual(["scoped B1"]);
+  });
+
+  test("signal events inherit their parent signal's workspace visibility", async () => {
+    const signalId = scopedSignalA1;
+    expect(signalId).not.toBeNull();
+    if (!signalId) {
+      throw new Error("Expected the scoped signal fixture");
+    }
+
+    const countVisibleToA2 = await createScopedDb(
+      testDb,
+      [ids.wsA2],
+      ids.orgA,
+      ids.userA2,
+    )(
+      async (tx) =>
+        await tx.$count(signalEvents, eq(signalEvents.signalId, signalId)),
+    );
+    expect(countVisibleToA2).toBe(0);
+
+    const hiddenParentInsert = await Result.tryPromise(
+      async () =>
+        await createScopedDb(
+          testDb,
+          [ids.wsA2],
+          ids.orgA,
+          ids.userA2,
+        )(async (tx) => {
+          await tx.insert(signalEvents).values({
+            id: createSafeId<"signalEvent">(),
+            organizationId: ids.orgA,
+            signalId,
+            type: SIGNAL_EVENT_TYPE.CREATED,
+          });
+        }),
+    );
+    expect(Result.isError(hiddenParentInsert)).toBe(true);
+
+    const countVisibleToA1 = await createScopedDb(
+      testDb,
+      [ids.wsA1],
+      ids.orgA,
+      ids.userA1,
+    )(
+      async (tx) =>
+        await tx.$count(signalEvents, eq(signalEvents.signalId, signalId)),
+    );
+    expect(countVisibleToA1).toBe(1);
   });
 });

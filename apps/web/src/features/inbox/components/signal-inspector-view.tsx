@@ -110,7 +110,7 @@ const SignalHeader = ({ signal }: { signal: InboxSignal }) => {
         {signal.confidence !== null && (
           <span className="tabular-nums">
             {t("inbox.confidence", {
-              percent: String(Math.round(signal.confidence * 100)),
+              percent: format.number(signal.confidence, { style: "percent" }),
             })}
           </span>
         )}
@@ -153,21 +153,23 @@ const EvidenceBody = ({ evidence, signal }: EvidenceBodyProps) => {
           <p className="text-pretty whitespace-pre-wrap">
             {evidence.description}
           </p>
-          <Row label={t("emailViewer.attachments")}>
-            {evidence.attachments.length === 0 ? (
-              <span className="text-muted-foreground">
-                {t("inbox.evidence.noAttachments")}
-              </span>
-            ) : (
-              <ul className="flex flex-col gap-0.5">
-                {evidence.attachments.map((attachment) => (
-                  <li key={attachment.fileId}>
-                    <UserText>{attachment.name}</UserText>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Row>
+          <dl className="flex flex-col gap-2">
+            <Row label={t("emailViewer.attachments")}>
+              {evidence.attachments.length === 0 ? (
+                <span className="text-muted-foreground">
+                  {t("inbox.evidence.noAttachments")}
+                </span>
+              ) : (
+                <ul className="flex flex-col gap-0.5">
+                  {evidence.attachments.map((attachment) => (
+                    <li key={attachment.fileId}>
+                      <UserText>{attachment.name}</UserText>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Row>
+          </dl>
         </div>
       );
     case SIGNAL_KIND.HEARING_CHANGED:

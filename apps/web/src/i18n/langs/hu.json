@@ -2152,7 +2152,7 @@
     "ask": "Kérdés erről",
     "askPrompt": "Mondj többet erről a beérkezett elemről és arról, mit tegyek ezután.\n\n{title}\n{summary}",
     "assignTo": "Hozzárendelés",
-    "confidence": "{percent}% megbízhatóság",
+    "confidence": "{percent} megbízhatóság",
     "dismissReason": "Indok (nem kötelező)",
     "empty": "Most semmi sem vár Önre. Adjon fel kérést a fenti gombbal.",
     "evidence": {

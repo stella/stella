@@ -60,36 +60,12 @@ CREATE INDEX "work_obligation_events_ws_obligation_occurred_id_idx" ON "work_obl
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "work_obligations" TO stella;--> statement-breakpoint
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "work_obligation_events" TO stella;--> statement-breakpoint
 
-CREATE POLICY "workspace_select" ON "work_obligations" AS PERMISSIVE FOR SELECT TO "stella" USING (CASE
-  WHEN "workspace_id" = ANY(COALESCE(NULLIF((SELECT pg_catalog.current_setting('app.workspace_ids', true)), '')::uuid[], ARRAY[]::uuid[]))
-  THEN true
-  ELSE "workspace_id" IN (SELECT aw.authorized_workspace_id FROM public.stella_authorized_workspaces aw)
-END);--> statement-breakpoint
-CREATE POLICY "workspace_insert" ON "work_obligations" AS PERMISSIVE FOR INSERT TO "stella" WITH CHECK (CASE
-  WHEN "workspace_id" = ANY(COALESCE(NULLIF((SELECT pg_catalog.current_setting('app.workspace_ids', true)), '')::uuid[], ARRAY[]::uuid[]))
-  THEN true
-  ELSE "workspace_id" IN (SELECT aw.authorized_workspace_id FROM public.stella_authorized_workspaces aw)
-END);--> statement-breakpoint
-CREATE POLICY "workspace_update" ON "work_obligations" AS PERMISSIVE FOR UPDATE TO "stella" USING (CASE
-  WHEN "workspace_id" = ANY(COALESCE(NULLIF((SELECT pg_catalog.current_setting('app.workspace_ids', true)), '')::uuid[], ARRAY[]::uuid[]))
-  THEN true
-  ELSE "workspace_id" IN (SELECT aw.authorized_workspace_id FROM public.stella_authorized_workspaces aw)
-END);--> statement-breakpoint
-CREATE POLICY "workspace_delete" ON "work_obligations" AS PERMISSIVE FOR DELETE TO "stella" USING (CASE
-  WHEN "workspace_id" = ANY(COALESCE(NULLIF((SELECT pg_catalog.current_setting('app.workspace_ids', true)), '')::uuid[], ARRAY[]::uuid[]))
-  THEN true
-  ELSE "workspace_id" IN (SELECT aw.authorized_workspace_id FROM public.stella_authorized_workspaces aw)
-END);--> statement-breakpoint
+CREATE POLICY "workspace_select" ON "work_obligations" AS PERMISSIVE FOR SELECT TO "stella" USING ("workspace_id" = ANY((SELECT pg_catalog.current_setting('app.workspace_ids', true))::uuid[]));--> statement-breakpoint
+CREATE POLICY "workspace_insert" ON "work_obligations" AS PERMISSIVE FOR INSERT TO "stella" WITH CHECK ("workspace_id" = ANY((SELECT pg_catalog.current_setting('app.workspace_ids', true))::uuid[]));--> statement-breakpoint
+CREATE POLICY "workspace_update" ON "work_obligations" AS PERMISSIVE FOR UPDATE TO "stella" USING ("workspace_id" = ANY((SELECT pg_catalog.current_setting('app.workspace_ids', true))::uuid[]));--> statement-breakpoint
+CREATE POLICY "workspace_delete" ON "work_obligations" AS PERMISSIVE FOR DELETE TO "stella" USING ("workspace_id" = ANY((SELECT pg_catalog.current_setting('app.workspace_ids', true))::uuid[]));--> statement-breakpoint
 
-CREATE POLICY "work_obligation_events_select" ON "work_obligation_events" AS PERMISSIVE FOR SELECT TO "stella" USING (CASE
-  WHEN "workspace_id" = ANY(COALESCE(NULLIF((SELECT pg_catalog.current_setting('app.workspace_ids', true)), '')::uuid[], ARRAY[]::uuid[]))
-  THEN true
-  ELSE "workspace_id" IN (SELECT aw.authorized_workspace_id FROM public.stella_authorized_workspaces aw)
-END);--> statement-breakpoint
-CREATE POLICY "work_obligation_events_insert" ON "work_obligation_events" AS PERMISSIVE FOR INSERT TO "stella" WITH CHECK (CASE
-  WHEN "workspace_id" = ANY(COALESCE(NULLIF((SELECT pg_catalog.current_setting('app.workspace_ids', true)), '')::uuid[], ARRAY[]::uuid[]))
-  THEN true
-  ELSE "workspace_id" IN (SELECT aw.authorized_workspace_id FROM public.stella_authorized_workspaces aw)
-END);--> statement-breakpoint
+CREATE POLICY "work_obligation_events_select" ON "work_obligation_events" AS PERMISSIVE FOR SELECT TO "stella" USING ("workspace_id" = ANY((SELECT pg_catalog.current_setting('app.workspace_ids', true))::uuid[]));--> statement-breakpoint
+CREATE POLICY "work_obligation_events_insert" ON "work_obligation_events" AS PERMISSIVE FOR INSERT TO "stella" WITH CHECK ("workspace_id" = ANY((SELECT pg_catalog.current_setting('app.workspace_ids', true))::uuid[]));--> statement-breakpoint
 CREATE POLICY "work_obligation_events_no_update" ON "work_obligation_events" AS RESTRICTIVE FOR UPDATE TO "stella" USING (false);--> statement-breakpoint
 CREATE POLICY "work_obligation_events_no_delete" ON "work_obligation_events" AS RESTRICTIVE FOR DELETE TO "stella" USING (false);

@@ -2152,7 +2152,7 @@
     "ask": "Opýtať sa",
     "askPrompt": "Povedz mi viac o tejto položke doručených a čo mám urobiť ďalej.\n\n{title}\n{summary}",
     "assignTo": "Priradiť",
-    "confidence": "Istota {percent} %",
+    "confidence": "Istota {percent}",
     "dismissReason": "Dôvod (nepovinné)",
     "empty": "Teraz vás nič nečaká. Zadajte požiadavku tlačidlom vyššie.",
     "evidence": {

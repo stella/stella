@@ -350,6 +350,7 @@ const OriginChip = ({
   organizationId,
 }: OriginChipProps) => {
   const t = useTranslations();
+  const format = useFormatter();
   const { data: organization } = useQuery({
     ...organizationOptions(organizationId),
     enabled: origin === "manual" && createdByUserId !== null,
@@ -371,7 +372,7 @@ const OriginChip = ({
         <span className="tabular-nums">
           ·{" "}
           {t("inbox.confidence", {
-            percent: String(Math.round(confidence * 100)),
+            percent: format.number(confidence, { style: "percent" }),
           })}
         </span>
       )}

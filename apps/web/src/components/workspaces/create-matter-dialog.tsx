@@ -321,7 +321,12 @@ const CreateMatterDialogBody = ({
 
     const workspaceId = result.value.id;
 
-    await onCreated?.(workspaceId);
+    if (onCreated) {
+      detached(
+        Promise.resolve().then(async () => await onCreated(workspaceId)),
+        "create-matter-dialog.on-created",
+      );
+    }
 
     handleClose();
     // Navigate to the workspace root immediately and let the index

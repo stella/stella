@@ -2152,7 +2152,7 @@
     "ask": "Jautāt par šo",
     "askPrompt": "Pastāsti vairāk par šo iesūtnes ierakstu un ko man darīt tālāk.\n\n{title}\n{summary}",
     "assignTo": "Piešķirt",
-    "confidence": "Ticamība {percent}%",
+    "confidence": "Ticamība {percent}",
     "dismissReason": "Iemesls (neobligāti)",
     "empty": "Pašlaik nekas negaida. Izveidojiet pieprasījumu ar pogu augšā.",
     "evidence": {

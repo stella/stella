@@ -2155,7 +2155,7 @@ type Messages = {
     "ask": "Ask about this";
     "askPrompt": "Tell me more about this inbox item and what I should do next.\n\n{title}\n{summary}";
     "assignTo": "Assign to";
-    "confidence": "{percent}% confidence";
+    "confidence": "{percent} confidence";
     "dismissReason": "Reason (optional)";
     "empty": "Nothing needs you right now. Post a request to start one.";
     "evidence": {

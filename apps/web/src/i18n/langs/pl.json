@@ -2152,7 +2152,7 @@
     "ask": "Zapytaj o to",
     "askPrompt": "Opowiedz mi więcej o tym elemencie skrzynki i co powinienem zrobić dalej.\n\n{title}\n{summary}",
     "assignTo": "Przypisz do",
-    "confidence": "Pewność: {percent}%",
+    "confidence": "Pewność: {percent}",
     "dismissReason": "Powód (opcjonalnie)",
     "empty": "Nic nie czeka. Dodaj zgłoszenie przyciskiem powyżej.",
     "evidence": {

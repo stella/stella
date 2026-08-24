@@ -185,44 +185,56 @@ export const signalEvents = p.pgTable(
     payload: jsonb().$type<Record<string, unknown>>(),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
-  (table) => [
-    p
-      .foreignKey({
-        columns: [table.signalId, table.organizationId],
-        foreignColumns: [signals.id, signals.organizationId],
-        name: "signal_events_signal_fk",
-      })
-      .onDelete("cascade"),
-    p
-      .index("signal_events_signal_created_idx")
-      .on(table.signalId, table.createdAt),
-    p.check(
-      "signal_events_type_check",
-      sql`${table.type} in (${sql.join(SIGNAL_EVENT_TYPE_SQL_VALUES, sql`, `)})`,
-    ),
-    p.pgPolicy("signal_events_select", {
-      for: "select",
-      to: stella,
-      using: organizationCheck,
-    }),
-    p.pgPolicy("signal_events_insert", {
-      for: "insert",
-      to: stella,
-      withCheck: organizationCheck,
-    }),
-    p.pgPolicy("signal_events_no_update", {
-      as: "restrictive",
-      for: "update",
-      to: stella,
-      using: sql`false`,
-    }),
-    p.pgPolicy("signal_events_no_delete", {
-      as: "restrictive",
-      for: "delete",
-      to: stella,
-      using: sql`false`,
-    }),
-  ],
+  (table) => {
+    const parentSignalVisible = sql`(
+      ${organizationCheck}
+      AND EXISTS (
+        SELECT 1
+        FROM ${signals}
+        WHERE ${signals.id} = ${table.signalId}
+          AND ${signals.organizationId} = ${table.organizationId}
+      )
+    )`;
+
+    return [
+      p
+        .foreignKey({
+          columns: [table.signalId, table.organizationId],
+          foreignColumns: [signals.id, signals.organizationId],
+          name: "signal_events_signal_fk",
+        })
+        .onDelete("cascade"),
+      p
+        .index("signal_events_signal_created_idx")
+        .on(table.signalId, table.createdAt),
+      p.check(
+        "signal_events_type_check",
+        sql`${table.type} in (${sql.join(SIGNAL_EVENT_TYPE_SQL_VALUES, sql`, `)})`,
+      ),
+      p.pgPolicy("signal_events_select", {
+        for: "select",
+        to: stella,
+        using: parentSignalVisible,
+      }),
+      p.pgPolicy("signal_events_insert", {
+        for: "insert",
+        to: stella,
+        withCheck: parentSignalVisible,
+      }),
+      p.pgPolicy("signal_events_no_update", {
+        as: "restrictive",
+        for: "update",
+        to: stella,
+        using: sql`false`,
+      }),
+      p.pgPolicy("signal_events_no_delete", {
+        as: "restrictive",
+        for: "delete",
+        to: stella,
+        using: sql`false`,
+      }),
+    ];
+  },
 );
 
 /**

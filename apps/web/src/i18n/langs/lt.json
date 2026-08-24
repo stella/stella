@@ -2152,7 +2152,7 @@
     "ask": "Paklausti apie tai",
     "askPrompt": "Papasakok daugiau apie šį gautųjų įrašą ir ką turėčiau daryti toliau.\n\n{title}\n{summary}",
     "assignTo": "Priskirti",
-    "confidence": "Patikimumas {percent}%",
+    "confidence": "Patikimumas {percent}",
     "dismissReason": "Priežastis (neprivaloma)",
     "empty": "Šiuo metu nieko nelaukia. Sukurkite užklausą mygtuku viršuje.",
     "evidence": {

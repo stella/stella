@@ -118,14 +118,24 @@ CREATE POLICY "signals_scope_delete" ON "signals" AS PERMISSIVE FOR DELETE TO "s
     END
   )
 );--> statement-breakpoint
-CREATE POLICY "signal_events_select" ON "signal_events" AS PERMISSIVE FOR SELECT TO "stella" USING (organization_id =
-  (SELECT current_setting(
-    'app.organization_id', true
-  )));--> statement-breakpoint
-CREATE POLICY "signal_events_insert" ON "signal_events" AS PERMISSIVE FOR INSERT TO "stella" WITH CHECK (organization_id =
-  (SELECT current_setting(
-    'app.organization_id', true
-  )));--> statement-breakpoint
+CREATE POLICY "signal_events_select" ON "signal_events" AS PERMISSIVE FOR SELECT TO "stella" USING (
+  organization_id = (SELECT current_setting('app.organization_id', true))
+  AND EXISTS (
+    SELECT 1
+    FROM signals
+    WHERE signals.id = signal_events.signal_id
+      AND signals.organization_id = signal_events.organization_id
+  )
+);--> statement-breakpoint
+CREATE POLICY "signal_events_insert" ON "signal_events" AS PERMISSIVE FOR INSERT TO "stella" WITH CHECK (
+  organization_id = (SELECT current_setting('app.organization_id', true))
+  AND EXISTS (
+    SELECT 1
+    FROM signals
+    WHERE signals.id = signal_events.signal_id
+      AND signals.organization_id = signal_events.organization_id
+  )
+);--> statement-breakpoint
 CREATE POLICY "signal_events_no_update" ON "signal_events" AS RESTRICTIVE FOR UPDATE TO "stella" USING (false);--> statement-breakpoint
 CREATE POLICY "signal_events_no_delete" ON "signal_events" AS RESTRICTIVE FOR DELETE TO "stella" USING (false);--> statement-breakpoint
 CREATE POLICY "organization_select" ON "scout_runs" AS PERMISSIVE FOR SELECT TO "stella" USING (organization_id =

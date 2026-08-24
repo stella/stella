@@ -2152,7 +2152,7 @@
     "ask": "Preguntar sobre esto",
     "askPrompt": "Explícame este elemento de la bandeja de entrada y qué debería hacer a continuación.\n\n{title}\n{summary}",
     "assignTo": "Asignar a",
-    "confidence": "Confianza: {percent} %",
+    "confidence": "Confianza: {percent}",
     "dismissReason": "Motivo (opcional)",
     "empty": "Nada requiere su atención. Cree una solicitud con el botón superior.",
     "evidence": {
