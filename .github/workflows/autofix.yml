@@ -5,6 +5,7 @@ on:
     types: [opened, synchronize, reopened]
     paths:
       - "bun.lock"
+      - "packages/ui/**"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
@@ -14,8 +15,8 @@ permissions:
   contents: read
 
 jobs:
-  dependabot-bun-dedupe:
-    name: Dedupe Dependabot Bun lockfile
+  dependabot-bun-autofix:
+    name: Autofix Dependabot Bun update
     if: >-
       github.actor == 'dependabot[bot]'
       && github.event.pull_request.user.login == 'dependabot[bot]'
@@ -24,6 +25,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     env:
+      EMPTY_CHANGESET_PATH: .changeset/dependabot-ui-${{ github.event.pull_request.number }}.md
       # autofix-ci/action v1.3.4 declares Node 24 support, but its action
       # metadata still names node20 for compatibility with older runners.
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -32,6 +34,7 @@ jobs:
       - name: Checkout Dependabot head
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          fetch-depth: 0
           persist-credentials: false
           ref: ${{ github.event.pull_request.head.sha }}
 
@@ -45,22 +48,56 @@ jobs:
       - name: Dedupe lockfile
         run: bun --no-env-file dedupe --lockfile-only --ignore-scripts
 
-      - name: Restrict generated changes to the lockfile
+      - name: Add missing empty @stll/ui changeset
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         shell: bash
         run: |
           set -euo pipefail
 
-          unexpected_tracked="$(git diff --name-only -- . ':(exclude)bun.lock')"
-          unexpected_untracked="$(git ls-files --others --exclude-standard)"
+          ui_files="$(git diff --name-only "${BASE_SHA}...${HEAD_SHA}" -- packages/ui)"
+          if [[ -z "$ui_files" ]]; then
+            exit 0
+          fi
+
+          added_changesets="$(git diff --name-only --diff-filter=A \
+            "${BASE_SHA}...${HEAD_SHA}" -- \
+            ".changeset/*.md" \
+            ":(exclude).changeset/README.md")"
+          if [[ -n "$added_changesets" ]]; then
+            exit 0
+          fi
+
+          if [[ -e "$EMPTY_CHANGESET_PATH" || -L "$EMPTY_CHANGESET_PATH" ]]; then
+            echo "::error::Refusing to overwrite $EMPTY_CHANGESET_PATH."
+            exit 1
+          fi
+
+          printf '%s\n' "---" "---" > "$EMPTY_CHANGESET_PATH"
+
+      - name: Restrict generated changes
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          unexpected_tracked="$(git diff --name-only -- . ':(exclude)bun.lock' ":(exclude)$EMPTY_CHANGESET_PATH")"
+          unexpected_untracked="$(git ls-files --others --exclude-standard -- . ":(exclude)$EMPTY_CHANGESET_PATH")"
           if [[ -n "${unexpected_tracked}${unexpected_untracked}" ]]; then
-            echo "::error::Bun dedupe changed files outside bun.lock."
+            echo "::error::Autofix changed files outside bun.lock and $EMPTY_CHANGESET_PATH."
             git status --short
+            exit 1
+          fi
+
+          if [[ -e "$EMPTY_CHANGESET_PATH" || -L "$EMPTY_CHANGESET_PATH" ]] && \
+            { [[ -L "$EMPTY_CHANGESET_PATH" ]] || ! cmp -s <(printf '%s\n' "---" "---") "$EMPTY_CHANGESET_PATH"; }; then
+            echo "::error::$EMPTY_CHANGESET_PATH is not an empty changeset."
             exit 1
           fi
 
           git diff --check -- bun.lock
 
-      - name: Push dedupe fix
+      - name: Push autofixes
         uses: autofix-ci/action@c5b2d67aa2274e7b5a18224e8171550871fc7e4a # v1.3.4
         with:
-          commit-message: "chore: dedupe Bun lockfile"
+          commit-message: "chore: autofix Dependabot Bun update"
