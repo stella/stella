@@ -371,6 +371,53 @@ const resolveCitationBatchFor = async (id: SafeId<"caseLawCitation">) => {
   return await resolveCitationsForDecision(asTx(), citingId);
 };
 
+test("counts a structured identifier blocked only by jurisdiction", async () => {
+  const targetId = createSafeId<"caseLawDecision">();
+  const citingId = createSafeId<"caseLawDecision">();
+  const citationId = createSafeId<"caseLawCitation">();
+  await db.insert(caseLawDecisions).values([
+    {
+      ...base,
+      id: targetId,
+      caseNumber: "Structured Slovak target",
+      citationKey: "structured slovak target",
+      country: "SVK",
+      decisionDate: "2019-01-01",
+    },
+    {
+      ...base,
+      id: citingId,
+      caseNumber: "Structured Czech citing",
+      citationKey: "structured czech citing",
+      country: "CZE",
+      decisionDate: "2020-01-01",
+    },
+  ]);
+  await db.insert(caseLawDecisionIdentifiers).values({
+    decisionId: targetId,
+    type: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
+    value: "Zbierka 123/2019",
+    normalizedValue: "zbierka123/2019",
+  });
+  await db.insert(caseLawCitations).values({
+    id: citationId,
+    citingDecisionId: citingId,
+    citationText: "Zbierka 123/2019",
+    citationKey: "zbierka 123/2019",
+    identifierType: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
+    normalizedIdentifierValue: "zbierka123/2019",
+  });
+
+  const result = await resolveCitationsForDecision(asTx(), citingId);
+
+  expect(result.jurisdictionBlocked).toBe(1);
+  expect(result.resolved).toBe(0);
+  expect(await rowOf(citationId)).toMatchObject({
+    cited: null,
+    status: CITATION_RESOLUTION_STATUS.UNMATCHED,
+  });
+});
+
 test("the walk settles every keyed citation and terminates", async () => {
   const totals = await drain();
   // Eight keyed rows, one of which belongs to an undeclared jurisdiction and
