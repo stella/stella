@@ -56,6 +56,8 @@ export type AnnotationToolbarController = {
 type AnnotationToolbarProps = {
   /** A mark the reader clicked; the bar edits it instead of the selection. */
   activeAnnotation: DecisionAnnotation | null;
+  /** Every paragraph the clicked mark covers, for a comment on the passage. */
+  activeSpans: readonly SelectionAnchor[];
   controller: AnnotationToolbarController;
   decision: AnnotationToolbarDecision;
   onClearActive: () => void;
@@ -92,6 +94,7 @@ const STYLE_ICONS = {
  */
 export const AnnotationToolbar = ({
   activeAnnotation,
+  activeSpans,
   controller,
   decision,
   onClearActive,
@@ -365,6 +368,30 @@ export const AnnotationToolbar = ({
                 );
               })}
             </div>
+            <span className="bg-border mx-1 h-4 w-px" />
+          </>
+        )}
+        {activeAnnotation.kind === "highlight" && activeRect !== null && (
+          <>
+            <Button
+              onClick={() => {
+                setComposer({
+                  rect: activeRect,
+                  spans: activeSpans.map((span) => ({
+                    blockAnchorId: span.blockAnchorId,
+                    endOffset: span.endOffset,
+                    quote: span.quote,
+                    startOffset: span.startOffset,
+                  })),
+                });
+                onClearActive();
+              }}
+              size="sm"
+              variant="ghost"
+            >
+              <MessageSquarePlusIcon className="size-3.5" />
+              {t("caseLaw.annotations.comment")}
+            </Button>
             <span className="bg-border mx-1 h-4 w-px" />
           </>
         )}

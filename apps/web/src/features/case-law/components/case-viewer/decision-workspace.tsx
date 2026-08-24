@@ -92,6 +92,35 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
   const activeAnnotation =
     annotations?.annotations.find((item) => item.id === activeAnnotationId) ??
     null;
+  // A mark over several paragraphs is several rows under one group; the bar
+  // acts on all of them, and a comment left from the mark covers them all.
+  const rowsOf = (item: DecisionAnnotation): DecisionAnnotation[] =>
+    item.groupId === null
+      ? [item]
+      : (annotations?.annotations ?? []).filter(
+          (row) => row.groupId === item.groupId,
+        );
+  const activeSpans = activeAnnotation === null ? [] : rowsOf(activeAnnotation);
+  const activateAnnotation = (item: DecisionAnnotation) => {
+    setActiveAnnotationId(item.id);
+    // Flash the words the mark covers, the way a margin jump does, so the
+    // reader sees at once what the bar is about.
+    const container = mainRef.current;
+    if (!container) {
+      return;
+    }
+    for (const row of rowsOf(item)) {
+      const element = container.querySelector<HTMLElement>(
+        `[data-annotation-id="${CSS.escape(row.id)}"]`,
+      );
+      if (!element) {
+        continue;
+      }
+      delete element.dataset["highlight"];
+      forceReflow(element);
+      element.dataset["highlight"] = "";
+    }
+  };
   const annotationAnchors: AnnotationAnchorSource[] = (
     annotations?.annotations ?? []
   ).map((item) => ({
@@ -100,7 +129,7 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
     endOffset: item.endOffset,
     id: item.id,
     kind: item.kind,
-    onActivate: () => setActiveAnnotationId(item.id),
+    onActivate: () => activateAnnotation(item),
     startOffset: item.startOffset,
     style: item.style,
   }));
@@ -421,6 +450,7 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
         {annotations !== undefined && (
           <AnnotationToolbar
             activeAnnotation={activeAnnotation}
+            activeSpans={activeSpans}
             controller={annotations.controller}
             decision={{
               caseNumber: decision.caseNumber,
