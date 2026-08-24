@@ -3,17 +3,11 @@ import { Result } from "better-result";
 import { EOC_CLASS_NAME } from "@/lib/pdf/consts";
 import type { RenderedPage } from "@/lib/pdf/pdf-context";
 import { PDFViewerError } from "@/lib/pdf/pdf-errors";
+import { isPdfRenderCancellation } from "@/lib/pdf/pdf-renderer.logic";
+import type { PdfCancellationClasses } from "@/lib/pdf/pdf-renderer.logic";
 import { loadPdfjs } from "@/lib/pdf/pdfjs-loader";
 import type { PageViewport, PDFPageProxy } from "@/lib/pdf/pdfjs-loader";
 import { getCanvasSize, getCanvasTransform } from "@/lib/pdf/utils";
-
-const isRenderingCancelledError = (
-  err: unknown,
-  RenderingCancelledException: unknown,
-): boolean =>
-  (typeof RenderingCancelledException === "function" &&
-    err instanceof RenderingCancelledException) ||
-  (err instanceof Error && err.name === "AbortError");
 
 const createCanvasElement = (viewport: PageViewport): HTMLCanvasElement => {
   const canvas = document.createElement("canvas");
@@ -77,12 +71,13 @@ export const renderPage = async (
   viewport: PageViewport,
   signal: AbortSignal,
 ): Promise<Result<RenderedPage, PDFViewerError>> => {
-  let renderingCancelledException: unknown = null;
+  let cancellationClasses: PdfCancellationClasses | null = null;
 
   return await Result.tryPromise({
     try: async (): Promise<Result<RenderedPage, PDFViewerError>> => {
-      const { RenderingCancelledException, TextLayer } = await loadPdfjs();
-      renderingCancelledException = RenderingCancelledException;
+      const { AbortException, RenderingCancelledException, TextLayer } =
+        await loadPdfjs();
+      cancellationClasses = { AbortException, RenderingCancelledException };
 
       signal.throwIfAborted();
 
@@ -135,7 +130,7 @@ export const renderPage = async (
       });
     },
     catch: (err) =>
-      isRenderingCancelledError(err, renderingCancelledException)
+      isPdfRenderCancellation(err, cancellationClasses)
         ? new PDFViewerError({
             code: "CANCELLED",
             message: "Rendering cancelled",
