@@ -59,7 +59,9 @@ export const CitedProvisionLink = ({
               "text-primary decoration-primary/40 underline underline-offset-2 hover:decoration-current",
               className,
             )}
-            hash={provision.payload.anchorId}
+            hash={
+              provision.payload.highlightAnchorId ?? provision.payload.anchorId
+            }
             onClick={onProvisionClick}
             params={{
               country: toStatuteCountrySegment(provision.document.country),

@@ -37,6 +37,12 @@ export const listCitingDecisionsQuerySchema = t.Object({
   anchor: t.Optional(t.String({ minLength: 1, maxLength: 256 })),
   limit: t.Optional(tPaginationLimit(LIMITS.caseLawSearchPageSizeMax)),
   cursor: t.Optional(tPaginationCursor()),
+  /**
+   * `newest` (default) pages by application date. `authority` returns one
+   * page of the most authoritative citing decisions and no cursor: the
+   * authority signal is refreshed in place, so it cannot key a walk.
+   */
+  sort: t.Optional(t.Union([t.Literal("newest"), t.Literal("authority")])),
 });
 
 type ListCitingDecisionsQuery = Static<typeof listCitingDecisionsQuerySchema>;
@@ -117,6 +123,10 @@ export const listCitingDecisionsHandler = async (
   }
 
   const limit = query.limit ?? LIMITS.caseLawSearchPageSizeDefault;
+  const byAuthority = query.sort === "authority";
+  if (byAuthority && query.cursor !== undefined) {
+    return status(400, { message: "Authority order has no cursor" });
+  }
   const conditions: SQL[] = [
     eq(caseLawProvisionCitations.jurisdiction, query.jurisdiction),
     work,
@@ -177,6 +187,9 @@ export const listCitingDecisionsHandler = async (
       )
       .where(and(...conditions))
       .orderBy(
+        ...(byAuthority
+          ? [sql`coalesce(${caseLawDecisions.citationAuthority}, 0) DESC`]
+          : []),
         desc(decisionDateKeySql),
         desc(caseLawProvisionCitations.decisionId),
         desc(caseLawProvisionCitations.spanStart),
@@ -199,6 +212,7 @@ export const listCitingDecisionsHandler = async (
 
   return {
     ...page,
+    nextCursor: byAuthority ? null : page.nextCursor,
     items: page.items.map(
       ({ anchor: _anchor, decisionDateCursor: _decisionDateCursor, ...item }) =>
         item,

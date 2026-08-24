@@ -1,4 +1,4 @@
-import { infiniteQueryOptions } from "@tanstack/react-query";
+import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
@@ -34,6 +34,37 @@ export const citingDecisionKeys = {
     },
   ],
 };
+
+/** How many of the most authoritative citing decisions the view leads with. */
+const TOP_CITING_LIMIT = 5;
+
+/**
+ * The provision's most authoritative citing decisions, one read and no
+ * paging: the leading cases a reader wants first, and the passages the Ask
+ * prompt is seeded with.
+ */
+export const topCitingDecisionsOptions = (key: CitingDecisionsKey) =>
+  queryOptions({
+    queryKey: [...citingDecisionKeys.forProvision(key), "top"],
+    queryFn: async ({ signal }) => {
+      const response = await api.case.provisions["citing-decisions"].get({
+        query: {
+          anchor: key.anchor,
+          eli: key.eli,
+          jurisdiction: key.jurisdiction,
+          limit: TOP_CITING_LIMIT,
+          sort: "authority",
+        },
+        fetch: { signal },
+      });
+
+      const data = unwrapEden(response);
+      assertPublicLawApiData(data, "listPublicTopCitingDecisions");
+
+      return data.items;
+    },
+    staleTime: ROUTE_QUERY_STALE_TIME_MS,
+  });
 
 export const citingDecisionsInfiniteOptions = (key: CitingDecisionsKey) =>
   infiniteQueryOptions({

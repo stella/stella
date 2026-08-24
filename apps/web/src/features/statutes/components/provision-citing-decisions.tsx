@@ -16,6 +16,50 @@ import { useFormatter } from "@/i18n/formatting-context";
 import { optionalArray } from "@/lib/arrays";
 import { detached } from "@/lib/detached";
 
+export type CitingDecisionRow = {
+  caseNumber: string;
+  country: string;
+  court: string;
+  decisionDate: string | null;
+  decisionId: string;
+  sentenceText: string;
+  slug: string | null;
+};
+
+/** One citing decision with the passage that applies the provision. */
+export const CitingDecisionItem = ({
+  decision,
+}: {
+  decision: CitingDecisionRow;
+}) => {
+  const format = useFormatter();
+  const decided = formatValidityDate(decision.decisionDate, format);
+
+  return (
+    <CitedDecisionLink
+      className="hover:bg-accent -mx-2 flex flex-col gap-0.5 rounded-md px-2 py-1.5 no-underline"
+      decision={{
+        caseNumber: decision.caseNumber,
+        country: decision.country,
+        court: decision.court,
+        decisionDate: decision.decisionDate,
+        id: decision.decisionId,
+        slug: decision.slug,
+      }}
+    >
+      <BidiText as="span" className="text-foreground text-xs font-medium">
+        {decision.caseNumber}
+      </BidiText>
+      <span className="text-muted-foreground text-[0.7rem]">
+        {decided === null ? decision.court : `${decision.court} · ${decided}`}
+      </span>
+      <span className="text-foreground-strong-muted line-clamp-3 text-[0.72rem] leading-snug">
+        {decision.sentenceText}
+      </span>
+    </CitedDecisionLink>
+  );
+};
+
 type ProvisionCitingDecisionsProps = {
   /** The provision's anchor, the key its incoming citations are filed under. */
   anchorId: string;
@@ -36,7 +80,6 @@ export const ProvisionCitingDecisions = ({
   jurisdiction,
 }: ProvisionCitingDecisionsProps) => {
   const t = useTranslations();
-  const format = useFormatter();
   const [filter, setFilter] = useState("");
 
   const {
@@ -104,40 +147,11 @@ export const ProvisionCitingDecisions = ({
         <p className="text-muted-foreground text-xs">{t("common.noResults")}</p>
       )}
       <ul className="m-0 flex list-none flex-col p-0">
-        {visible.map((decision) => {
-          const decided = formatValidityDate(decision.decisionDate, format);
-
-          return (
-            <li key={`${decision.decisionId}-${decision.spanStart}`}>
-              <CitedDecisionLink
-                className="hover:bg-accent -mx-2 flex flex-col gap-0.5 rounded-md px-2 py-1.5 no-underline"
-                decision={{
-                  caseNumber: decision.caseNumber,
-                  country: decision.country,
-                  court: decision.court,
-                  decisionDate: decision.decisionDate,
-                  id: decision.decisionId,
-                  slug: decision.slug,
-                }}
-              >
-                <BidiText
-                  as="span"
-                  className="text-foreground text-xs font-medium"
-                >
-                  {decision.caseNumber}
-                </BidiText>
-                <span className="text-muted-foreground text-[0.7rem]">
-                  {decided === null
-                    ? decision.court
-                    : `${decision.court} · ${decided}`}
-                </span>
-                <span className="text-foreground-strong-muted line-clamp-3 text-[0.72rem] leading-snug">
-                  {decision.sentenceText}
-                </span>
-              </CitedDecisionLink>
-            </li>
-          );
-        })}
+        {visible.map((decision) => (
+          <li key={`${decision.decisionId}-${decision.spanStart}`}>
+            <CitingDecisionItem decision={decision} />
+          </li>
+        ))}
       </ul>
       {hasNextPage && (
         <Button

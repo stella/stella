@@ -1,6 +1,7 @@
 import { lazy, Suspense } from "react";
 import type { ReactNode } from "react";
 
+import { useQuery } from "@tanstack/react-query";
 import { Link, useRouterState } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
@@ -11,9 +12,15 @@ import { Skeleton } from "@stll/ui/skeleton";
 import { InspectorTabHeader } from "@/components/inspector/inspector-tab-header";
 import type { InspectorViewRenderProps } from "@/components/inspector/view-registry";
 import { usePublicSignInRequest } from "@/components/public-sign-in-request";
-import { ProvisionCitingDecisions } from "@/features/statutes/components/provision-citing-decisions";
+import {
+  CitingDecisionItem,
+  ProvisionCitingDecisions,
+} from "@/features/statutes/components/provision-citing-decisions";
+import type { CitingDecisionRow } from "@/features/statutes/components/provision-citing-decisions";
 import { ProvisionHistory } from "@/features/statutes/components/provision-history";
+import { ProvisionWording } from "@/features/statutes/components/provision-wording";
 import type { ProvisionViewPayload } from "@/features/statutes/provision-inspector.logic";
+import { topCitingDecisionsOptions } from "@/features/statutes/queries/citing-decisions";
 import { formatValidityDate } from "@/features/statutes/statute-format";
 import { useFormatter } from "@/i18n/formatting-context";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
@@ -28,8 +35,10 @@ const LazyProvisionAskActions = lazy(async () => {
 });
 
 /**
- * One provision of a statute, in the inspector: who cites it, how its
- * wording changed, and a way to ask about it.
+ * One provision of a statute, in the inspector: its wording first, landed on
+ * the cited subdivision; the decisions that carry the most authority on it,
+ * with the passages applying it; every citing decision; how the wording
+ * changed; and a way to ask about it that starts from those passages.
  */
 export const ProvisionInspectorView = ({
   onClose,
@@ -39,6 +48,15 @@ export const ProvisionInspectorView = ({
   const format = useFormatter();
   const { payload } = tab;
   const validFrom = formatValidityDate(payload.versionValidFrom, format);
+  const { data: leading } = useQuery(
+    topCitingDecisionsOptions({
+      anchor: payload.anchorId,
+      eli: payload.eli,
+      jurisdiction: payload.jurisdiction,
+    }),
+  );
+  const leadingDecisions =
+    leading === undefined ? [] : uniqueByDecision(leading);
 
   return (
     <div className="bg-background flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -59,7 +77,7 @@ export const ProvisionInspectorView = ({
             )}
             <Link
               className="text-muted-foreground hover:text-foreground w-fit text-xs underline underline-offset-2"
-              hash={payload.anchorId}
+              hash={payload.highlightAnchorId ?? payload.anchorId}
               params={{
                 country: toStatuteCountrySegment(payload.jurisdiction),
                 documentId: payload.documentId,
@@ -69,6 +87,24 @@ export const ProvisionInspectorView = ({
               {t("statutes.showInText")}
             </Link>
           </header>
+
+          <ProvisionWording
+            anchorId={payload.anchorId}
+            documentId={payload.documentId}
+            highlightAnchorId={payload.highlightAnchorId}
+          />
+
+          {leadingDecisions.length > 0 && (
+            <ProvisionSection title={t("statutes.leadingDecisions")}>
+              <ul className="m-0 flex list-none flex-col p-0">
+                {leadingDecisions.map((decision) => (
+                  <li key={decision.decisionId}>
+                    <CitingDecisionItem decision={decision} />
+                  </li>
+                ))}
+              </ul>
+            </ProvisionSection>
+          )}
 
           <ProvisionSection title={t("caseLaw.viewer.citedBy")}>
             <ProvisionCitingDecisions
@@ -88,12 +124,28 @@ export const ProvisionInspectorView = ({
           )}
 
           <ProvisionSection title={t("common.askAI")}>
-            <ProvisionAsk payload={payload} />
+            <ProvisionAsk passages={leadingDecisions} payload={payload} />
           </ProvisionSection>
         </div>
       </ScrollArea>
     </div>
   );
+};
+
+/** One entry per decision: a decision applying the provision twice leads once. */
+const uniqueByDecision = (
+  rows: readonly CitingDecisionRow[],
+): CitingDecisionRow[] => {
+  const seen = new Set<string>();
+  const unique: CitingDecisionRow[] = [];
+  for (const row of rows) {
+    if (seen.has(row.decisionId)) {
+      continue;
+    }
+    seen.add(row.decisionId);
+    unique.push(row);
+  }
+  return unique;
 };
 
 const ProvisionSection = ({
@@ -113,9 +165,15 @@ const ProvisionSection = ({
 
 /**
  * Asking needs a session: the chat is an account feature. A visitor is
- * offered the sign-in instead, and keeps the citations and history.
+ * offered the sign-in instead, and keeps the wording, citations and history.
  */
-const ProvisionAsk = ({ payload }: { payload: ProvisionViewPayload }) => {
+const ProvisionAsk = ({
+  passages,
+  payload,
+}: {
+  passages: readonly CitingDecisionRow[];
+  payload: ProvisionViewPayload;
+}) => {
   const t = useTranslations();
   const user = useMaybeAuthenticatedUser();
   const requestSignIn = usePublicSignInRequest();
@@ -126,7 +184,7 @@ const ProvisionAsk = ({ payload }: { payload: ProvisionViewPayload }) => {
   if (user !== null) {
     return (
       <Suspense fallback={<Skeleton className="h-16 w-full" />}>
-        <LazyProvisionAskActions payload={payload} />
+        <LazyProvisionAskActions passages={passages} payload={payload} />
       </Suspense>
     );
   }

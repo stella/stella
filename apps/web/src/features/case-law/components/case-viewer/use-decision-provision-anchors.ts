@@ -31,6 +31,13 @@ const workKeyOf = ({ eli, jurisdiction }: WorkKey): string =>
   `${jurisdiction}/${eli}`;
 
 /**
+ * The heading a cited subdivision belongs to: `par_90-odst_5` is filed, cited
+ * and versioned under `par_90`. The subdivision stays the highlight target.
+ */
+export const provisionHeadingAnchor = (anchor: string): string =>
+  anchor.split("-")[0] ?? anchor;
+
+/**
  * The provisions a decision applies, each resolved to the consolidation it
  * was made against, ready to be located in the text. A reference whose work
  * the corpus does not hold, or whose cited version is not yet known, is left
@@ -136,7 +143,8 @@ export const useDecisionProvisionAnchors = (
       target: {
         document: { country: document.country, id: document.id },
         payload: {
-          anchorId: row.anchor,
+          anchorId: provisionHeadingAnchor(row.anchor),
+          highlightAnchorId: row.anchor,
           documentId: document.id,
           eli: row.workEli,
           jurisdiction: row.jurisdiction,
