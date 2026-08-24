@@ -84,9 +84,13 @@ const invokesInOwnBody = (functionNode: AstNode, name: string): boolean => {
 };
 
 const namedFunctionFromDeclarator = (
-  node: AstNode,
+  node: unknown,
 ): readonly [string, AstNode] | null => {
-  if (node.type !== "VariableDeclarator" || !isIdentifier(node.id)) {
+  if (
+    !isAstNode(node) ||
+    node.type !== "VariableDeclarator" ||
+    !isIdentifier(node.id)
+  ) {
     return null;
   }
   const initializer = unwrapExpression(node.init);
@@ -234,7 +238,11 @@ export default eslintCompatPlugin({
         const functions = new Map<string, AstNode>();
         return {
           FunctionDeclaration(node) {
-            if (isIdentifier(node.id) && SEARCH_FUNCTIONS.has(node.id.name)) {
+            if (
+              isAstNode(node) &&
+              isIdentifier(node.id) &&
+              SEARCH_FUNCTIONS.has(node.id.name)
+            ) {
               functions.set(node.id.name, node);
             }
           },
