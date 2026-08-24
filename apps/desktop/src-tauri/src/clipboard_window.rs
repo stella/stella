@@ -4,12 +4,9 @@ use tauri::{
   window::{Effect, EffectState, EffectsBuilder},
 };
 
-use crate::{
-  clipboard_focus::ClipboardFocusState,
-  desktop_telemetry::{
-    DesktopErrorReport, DesktopTelemetry, DesktopTelemetryErrorCode,
-    DesktopTelemetryOperation, DesktopTelemetryWindow,
-  },
+use crate::desktop_telemetry::{
+  DesktopErrorReport, DesktopTelemetry, DesktopTelemetryErrorCode,
+  DesktopTelemetryOperation, DesktopTelemetryWindow,
 };
 
 const CLIPBOARD_WINDOW_LABEL: &str = "clipboard";
@@ -59,10 +56,6 @@ fn position_window(app: &AppHandle, window: &WebviewWindow) {
 }
 
 pub fn show(app: &AppHandle) {
-  if let Some(focus_state) = app.try_state::<ClipboardFocusState>() {
-    focus_state.remember_frontmost_application();
-  }
-
   #[cfg(target_os = "macos")]
   let _ = app.show();
 

@@ -1,18 +1,13 @@
-use enigo::{Direction, Enigo, Key, Keyboard, Settings};
-#[cfg(target_os = "macos")]
-use objc2::MainThreadMarker;
 use serde::Serialize;
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Emitter, State, WebviewWindow};
-use tauri_plugin_notification::NotificationExt;
 
 use crate::{
   clipboard::{
     ClipboardAppState, ClipboardCaptureStatus, ClipboardGroup, ClipboardGroupColor,
     ClipboardItem, ClipboardSnapshot, write_item,
   },
-  clipboard_focus::ClipboardFocusState,
-  clipboard_window, i18n,
+  clipboard_window,
 };
 
 const HISTORY_EVENT: &str = "clipboard-history-changed";
@@ -25,13 +20,6 @@ pub type ClipboardEditorState = Arc<Mutex<Option<String>>>;
 pub struct ClipboardEditorContext {
   groups: Vec<ClipboardGroup>,
   item: ClipboardItem,
-}
-
-#[derive(Debug, Serialize)]
-#[serde(tag = "status", rename_all = "camelCase")]
-pub enum ClipboardPasteOutcome {
-  Pasted,
-  CopiedOnly,
 }
 
 fn lock_error() -> String {
@@ -232,93 +220,16 @@ pub fn clipboard_close_editor(window: WebviewWindow) {
   let _ = window.destroy();
 }
 
-#[cfg(target_os = "macos")]
-fn simulate_paste_on_main_thread(
-  _main_thread_marker: MainThreadMarker,
-) -> Result<(), String> {
-  let mut enigo = Enigo::new(&Settings::default())
-    .map_err(|error| format!("input automation is unavailable: {error}"))?;
-  let modifier = Key::Meta;
-
-  enigo
-    .key(modifier, Direction::Press)
-    .map_err(|error| format!("paste modifier failed: {error}"))?;
-  let paste_result = enigo.key(Key::Unicode('v'), Direction::Click);
-  let release_result = enigo.key(modifier, Direction::Release);
-  paste_result
-    .and(release_result)
-    .map_err(|error| format!("paste shortcut failed: {error}"))
-}
-
-#[cfg(target_os = "macos")]
-async fn simulate_paste(app: &AppHandle) -> Result<(), String> {
-  let (result_sender, result_receiver) = tokio::sync::oneshot::channel();
-  app
-    .run_on_main_thread(move || {
-      let result = MainThreadMarker::new()
-        .ok_or_else(|| "paste simulation did not run on the main thread".to_string())
-        .and_then(simulate_paste_on_main_thread);
-      let _ = result_sender.send(result);
-    })
-    .map_err(|error| format!("paste simulation could not be scheduled: {error}"))?;
-  result_receiver
-    .await
-    .map_err(|_| "paste simulation ended before reporting its result".to_string())?
-}
-
-#[cfg(not(target_os = "macos"))]
-fn simulate_paste_on_worker() -> Result<(), String> {
-  let mut enigo = Enigo::new(&Settings::default())
-    .map_err(|error| format!("input automation is unavailable: {error}"))?;
-  let modifier = Key::Control;
-
-  enigo
-    .key(modifier, Direction::Press)
-    .map_err(|error| format!("paste modifier failed: {error}"))?;
-  let paste_result = enigo.key(Key::Unicode('v'), Direction::Click);
-  let release_result = enigo.key(modifier, Direction::Release);
-  paste_result
-    .and(release_result)
-    .map_err(|error| format!("paste shortcut failed: {error}"))
-}
-
-#[cfg(not(target_os = "macos"))]
-async fn simulate_paste(_app: &AppHandle) -> Result<(), String> {
-  tokio::task::spawn_blocking(simulate_paste_on_worker)
-    .await
-    .map_err(|error| format!("direct paste task failed: {error}"))?
-}
-
-fn notify_copied_only(app: &AppHandle) {
-  if let Err(error) = app
-    .notification()
-    .builder()
-    .title(i18n::t("clipboard.title"))
-    .body(i18n::t("clipboard.copiedOnly"))
-    .show()
-  {
-    tracing::warn!(error = %error, "clipboard fallback notification failed");
-  }
-}
-
-struct ClipboardWriteRequest<'a> {
-  id: &'a str,
-  plain_text_only: bool,
-}
-
-fn write_history_item(
-  state: &ClipboardAppState,
-  request: ClipboardWriteRequest<'_>,
-) -> Result<(), String> {
+fn write_history_item(state: &ClipboardAppState, id: &str) -> Result<(), String> {
   let item = {
     let mut manager = state.lock().map_err(|_| lock_error())?;
     let item = manager
-      .item(request.id)
+      .item(id)
       .ok_or_else(|| "clipboard item no longer exists".to_string())?;
-    manager.suppress_next(&item, request.plain_text_only);
+    manager.suppress_next(&item, false);
     item
   };
-  if let Err(error) = write_item(&item, request.plain_text_only) {
+  if let Err(error) = write_item(&item, false) {
     if let Ok(mut manager) = state.lock() {
       manager.clear_suppression();
     }
@@ -333,42 +244,9 @@ pub fn clipboard_copy_item(
   state: State<'_, ClipboardAppState>,
   window: WebviewWindow,
 ) -> Result<(), String> {
-  write_history_item(
-    state.inner(),
-    ClipboardWriteRequest {
-      id: &id,
-      plain_text_only: false,
-    },
-  )?;
+  write_history_item(state.inner(), &id)?;
   clipboard_window::hide(&window);
   Ok(())
-}
-
-#[tauri::command]
-pub async fn clipboard_paste_item(
-  id: String,
-  plain_text_only: bool,
-  app: AppHandle,
-  focus_state: State<'_, ClipboardFocusState>,
-  state: State<'_, ClipboardAppState>,
-  window: WebviewWindow,
-) -> Result<ClipboardPasteOutcome, String> {
-  write_history_item(
-    state.inner(),
-    ClipboardWriteRequest {
-      id: &id,
-      plain_text_only,
-    },
-  )?;
-
-  clipboard_window::hide(&window);
-  focus_state.restore_frontmost_application(&app).await;
-  if let Err(error) = simulate_paste(&app).await {
-    tracing::warn!(error = %error, "clipboard item was copied but direct paste failed");
-    notify_copied_only(&app);
-    return Ok(ClipboardPasteOutcome::CopiedOnly);
-  }
-  Ok(ClipboardPasteOutcome::Pasted)
 }
 
 #[tauri::command]

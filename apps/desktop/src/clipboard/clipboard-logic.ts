@@ -115,7 +115,7 @@ export const nextClipboardIndex = (
   return (currentIndex + offset + itemCount) % itemCount;
 };
 
-export const quickPasteIndex = (key: string, itemCount: number) => {
+export const quickCopyIndex = (key: string, itemCount: number) => {
   if (!/^[1-9]$/u.test(key)) {
     return null;
   }

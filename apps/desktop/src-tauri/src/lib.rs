@@ -2,7 +2,6 @@ mod app_lifecycle;
 mod bridge;
 mod clipboard;
 mod clipboard_commands;
-mod clipboard_focus;
 mod clipboard_store;
 mod clipboard_window;
 mod commands;
@@ -38,7 +37,6 @@ use tracing_subscriber::EnvFilter;
 
 use clipboard::{ClipboardAppState, ClipboardManager};
 use clipboard_commands::ClipboardEditorState;
-use clipboard_focus::ClipboardFocusState;
 use commands::AppState;
 use session_manager::SessionManager;
 
@@ -94,7 +92,6 @@ pub fn run() {
     .manage::<AppState>(Arc::clone(&manager))
     .manage::<ClipboardAppState>(Arc::clone(&clipboard_manager))
     .manage::<ClipboardEditorState>(Arc::new(std::sync::Mutex::new(None)))
-    .manage(ClipboardFocusState::default())
     .setup(move |app| {
       let handle = app.handle().clone();
       let desktop_telemetry = desktop_telemetry::DesktopTelemetry::start();

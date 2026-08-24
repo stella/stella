@@ -13,11 +13,11 @@ export const DESKTOP_TELEMETRY_OPERATIONS = {
   clipboardEditorClose: "clipboardEditorClose",
   clipboardEditorRead: "clipboardEditorRead",
   clipboardEditorSave: "clipboardEditorSave",
+  clipboardCopy: "clipboardCopy",
   clipboardExternalOpen: "clipboardExternalOpen",
   clipboardHistoryRead: "clipboardHistoryRead",
   clipboardHistorySubscribe: "clipboardHistorySubscribe",
   clipboardHistoryUpdate: "clipboardHistoryUpdate",
-  clipboardPaste: "clipboardPaste",
   render: "render",
   runtime: "runtime",
 } as const;

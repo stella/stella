@@ -9,10 +9,9 @@ import {
   highlightClipboardText,
   isClipboardCopyShortcut,
   nextClipboardIndex,
-  quickPasteIndex,
+  quickCopyIndex,
 } from "../src/clipboard/clipboard-logic";
 import type { ClipboardItem } from "../src/clipboard/clipboard-types";
-import { isClipboardPasteOutcome } from "../src/clipboard/clipboard-types";
 
 const TEXT_ITEM = {
   copiedAt: "2026-08-23T10:00:00Z",
@@ -34,15 +33,6 @@ const FORMATTED_ITEM = {
 } satisfies ClipboardItem;
 
 const ITEMS = [TEXT_ITEM, FORMATTED_ITEM] satisfies ClipboardItem[];
-
-describe("clipboard paste outcomes", () => {
-  test("accepts only the native paste result contract", () => {
-    expect(isClipboardPasteOutcome({ status: "pasted" })).toBe(true);
-    expect(isClipboardPasteOutcome({ status: "copiedOnly" })).toBe(true);
-    expect(isClipboardPasteOutcome({ status: "unknown" })).toBe(false);
-    expect(isClipboardPasteOutcome(null)).toBe(false);
-  });
-});
 
 describe("clipboardDraggedItemId", () => {
   const itemIds = new Set(["one", "two"]);
@@ -147,10 +137,10 @@ describe("keyboard indexes", () => {
     expect(nextClipboardIndex(0, "previous", 2)).toBe(1);
   });
 
-  test("quick paste only accepts visible slots one through nine", () => {
-    expect(quickPasteIndex("2", 2)).toBe(1);
-    expect(quickPasteIndex("3", 2)).toBeNull();
-    expect(quickPasteIndex("0", 10)).toBeNull();
+  test("quick copy only accepts visible slots one through nine", () => {
+    expect(quickCopyIndex("2", 2)).toBe(1);
+    expect(quickCopyIndex("3", 2)).toBeNull();
+    expect(quickCopyIndex("0", 10)).toBeNull();
   });
 
   test("copy accepts either platform primary modifier", () => {

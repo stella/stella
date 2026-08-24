@@ -71,12 +71,9 @@ import {
   highlightClipboardText,
   isClipboardCopyShortcut,
   nextClipboardIndex,
-  quickPasteIndex,
+  quickCopyIndex,
 } from "./clipboard-logic";
-import {
-  isClipboardPasteOutcome,
-  isClipboardSnapshot,
-} from "./clipboard-types";
+import { isClipboardSnapshot } from "./clipboard-types";
 import type {
   ClipboardCaptureStatus,
   ClipboardGroup,
@@ -139,6 +136,16 @@ const scrollCardIntoView = (id: string) => {
   });
 };
 
+const focusCard = (id: string) => {
+  requestAnimationFrame(() => {
+    document
+      .querySelector<HTMLElement>(
+        `[data-clipboard-id="${CSS.escape(id)}"] [data-clipboard-card-trigger]`,
+      )
+      ?.focus();
+  });
+};
+
 type ClipboardCardProps = {
   active: boolean;
   dragging: boolean;
@@ -151,7 +158,7 @@ type ClipboardCardProps = {
     item: ClipboardItem,
     index: number,
   ) => void;
-  onPaste: (item: ClipboardItem, plainTextOnly: boolean) => void;
+  onCopy: (item: ClipboardItem) => void;
   onSelect: (index: number) => void;
   query: string;
   sourceVisual: ClipboardSourceAppVisual | null;
@@ -173,7 +180,7 @@ const ClipboardCard = ({
   index,
   item,
   onOpenMenu,
-  onPaste,
+  onCopy,
   onSelect,
   query,
   sourceVisual,
@@ -278,10 +285,10 @@ const ClipboardCard = ({
       style={sourceStyle}
     >
       <button
-        aria-label={t("pasteItem", { number: index + 1 })}
+        aria-label={t("copyItem", { number: index + 1 })}
         className="flex size-full flex-col text-start focus-visible:outline-none"
         data-clipboard-card-trigger=""
-        onClick={() => onPaste(item, false)}
+        onClick={() => onCopy(item)}
         onContextMenu={(event) => onOpenMenu(event, item, index)}
         onFocus={() => onSelect(index)}
         onMouseEnter={() => onSelect(index)}
@@ -786,7 +793,6 @@ const ClipboardApp = () => {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
   const [dialog, setDialog] = useState<ClipboardDialogState>({
     type: "closed",
   });
@@ -868,6 +874,27 @@ const ClipboardApp = () => {
     Math.max(0, filteredItems.length - 1),
   );
   const activeItem = filteredItems.at(activeIndex);
+  const activeItemId = activeItem?.id;
+
+  useEffect(() => {
+    const focusActiveCard = () => {
+      if (activeItemId) {
+        focusCard(activeItemId);
+        return;
+      }
+      timelineRef.current?.focus();
+    };
+    window.addEventListener("focus", focusActiveCard);
+    if (
+      document.hasFocus() &&
+      (document.activeElement === document.body ||
+        document.activeElement === timelineRef.current)
+    ) {
+      focusActiveCard();
+    }
+    return () => window.removeEventListener("focus", focusActiveCard);
+  }, [activeItemId]);
+
   const nextGroupColor =
     CLIPBOARD_GROUP_COLORS.at(
       snapshot.groups.length % CLIPBOARD_GROUP_COLORS.length,
@@ -913,50 +940,12 @@ const ClipboardApp = () => {
     [t],
   );
 
-  const pasteItem = (item: ClipboardItem, plainTextOnly: boolean) => {
-    setError(null);
-    setNotice(null);
-    void invoke<unknown>("clipboard_paste_item", {
-      id: item.id,
-      plainTextOnly,
-    })
-      .then((value) => {
-        if (!isClipboardPasteOutcome(value)) {
-          reportDesktopError({
-            code: DESKTOP_TELEMETRY_ERROR_CODES.invalidResponse,
-            operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardPaste,
-            window: DESKTOP_TELEMETRY_WINDOWS.clipboard,
-          });
-          setError(t("errorPaste"));
-          return undefined;
-        }
-        switch (value.status) {
-          case "pasted":
-            return undefined;
-          case "copiedOnly":
-            setNotice(t("copiedOnly"));
-            return undefined;
-          default:
-            return value satisfies never;
-        }
-      })
-      .catch(() => {
-        reportDesktopError({
-          code: DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
-          operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardPaste,
-          window: DESKTOP_TELEMETRY_WINDOWS.clipboard,
-        });
-        setError(t("errorPaste"));
-      });
-  };
-
   const copyItem = (item: ClipboardItem) => {
     setError(null);
-    setNotice(null);
     void invoke("clipboard_copy_item", { id: item.id }).catch(() => {
       reportDesktopError({
         code: DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
-        operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardPaste,
+        operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardCopy,
         window: DESKTOP_TELEMETRY_WINDOWS.clipboard,
       });
       setError(t("errorPaste"));
@@ -1118,6 +1107,7 @@ const ClipboardApp = () => {
     const item = filteredItems.at(index);
     if (item) {
       scrollCardIntoView(item.id);
+      focusCard(item.id);
     }
   };
 
@@ -1144,12 +1134,12 @@ const ClipboardApp = () => {
       return;
     }
     if (primaryModifier) {
-      const quickIndex = quickPasteIndex(event.key, filteredItems.length);
+      const quickIndex = quickCopyIndex(event.key, filteredItems.length);
       if (quickIndex !== null) {
         event.preventDefault();
         const item = filteredItems.at(quickIndex);
         if (item) {
-          pasteItem(item, event.shiftKey);
+          copyItem(item);
         }
         return;
       }
@@ -1157,7 +1147,7 @@ const ClipboardApp = () => {
     if (event.target instanceof HTMLInputElement) {
       if (event.key === "Enter" && activeItem) {
         event.preventDefault();
-        pasteItem(activeItem, event.shiftKey);
+        copyItem(activeItem);
       }
       return;
     }
@@ -1191,19 +1181,19 @@ const ClipboardApp = () => {
       searchInputRef.current?.focus();
       return;
     }
-    if (event.key === "ArrowRight") {
+    if (event.key === "ArrowRight" || event.key === "ArrowDown") {
       event.preventDefault();
       navigate("next");
       return;
     }
-    if (event.key === "ArrowLeft") {
+    if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
       event.preventDefault();
       navigate("previous");
       return;
     }
     if (event.key === "Enter" && activeItem) {
       event.preventDefault();
-      pasteItem(activeItem, event.shiftKey);
+      copyItem(activeItem);
       return;
     }
     if ((event.key === "Backspace" || event.key === "Delete") && activeItem) {
@@ -1258,15 +1248,6 @@ const ClipboardApp = () => {
         role="alert"
       >
         {error}
-      </div>
-    );
-  } else if (notice) {
-    feedback = (
-      <div
-        className="bg-foreground text-background absolute inset-x-0 top-0 z-20 px-5 py-1.5 text-center text-xs"
-        role="status"
-      >
-        {notice}
       </div>
     );
   }
@@ -1445,7 +1426,7 @@ const ClipboardApp = () => {
                   item={item}
                   key={item.id}
                   onOpenMenu={openContextMenu}
-                  onPaste={pasteItem}
+                  onCopy={copyItem}
                   onSelect={setSelectedIndex}
                   query={query}
                   sourceVisual={
