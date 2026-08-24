@@ -220,6 +220,7 @@ run_test() {
 run_step "AI skill sync wrapper self-test" bash scripts/check-ai-skill-sync.test.sh
 run_step "AI skill sync" bash scripts/check-ai-skill-sync.sh .
 run_step "Workspace hygiene" bun run lint:ws
+run_step "Dependabot group guard" bun test scripts/dependabot-grouping.test.ts
 run_step "Lockfile workspace-version guard" bun scripts/check-lockfile-workspace-versions.ts
 run_step "Quarantine-exclude guards" run_quarantine_exclude_guard
 run_step "Policy evidence" bun run policies:check

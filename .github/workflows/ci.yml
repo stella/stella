@@ -465,6 +465,12 @@ jobs:
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         run: bun run lint:ws
 
+      - name: Dependabot group guard
+        # Related framework and plugin updates must stay in one PR even when
+        # upstream moves packages between scopes.
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        run: bun test scripts/dependabot-grouping.test.ts
+
       - name: Lockfile workspace-version guard
         # `bun.lock` caches each workspace's `name`/`version`; `bun install`
         # (frozen or not) never rewrites that cache when only a workspace's
