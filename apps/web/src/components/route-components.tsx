@@ -453,20 +453,19 @@ type DefaultPendingComponentProps = {
   className?: string | undefined;
 };
 
+// The router's pending fallback renders before the intl provider exists (it
+// covers the root route's own load), so it cannot read a translation: the
+// label is a constant.
+const PENDING_LABEL = "Loading";
+
 export const DefaultPendingComponent = ({
   className,
-}: DefaultPendingComponentProps) => {
-  const t = useTranslations();
-  return (
-    <div
-      className={cn(
-        "flex h-full w-full items-center justify-center",
-        className,
-      )}
-    >
-      <Loader label={t("common.loading")} size="lg" />
-    </div>
-  );
-};
+}: DefaultPendingComponentProps) => (
+  <div
+    className={cn("flex h-full w-full items-center justify-center", className)}
+  >
+    <Loader label={PENDING_LABEL} size="lg" />
+  </div>
+);
 
 export const DefaultNotFoundComponent = () => <Navigate to="/workspaces" />;
