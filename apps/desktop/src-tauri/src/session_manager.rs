@@ -2060,7 +2060,7 @@ impl SessionManager {
   fn emit_state_change(&self) {
     if let Some(ref handle) = self.app_handle {
       let snapshot = self.get_snapshot();
-      let _ = handle.emit("state-changed", &snapshot);
+      let _ = handle.emit_to("main", "state-changed", &snapshot);
 
       // Rebuild tray menu to reflect new state
       if let Ok(menu) = crate::tray::build_tray_menu(handle, &snapshot)

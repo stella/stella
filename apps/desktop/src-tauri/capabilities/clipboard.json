@@ -1,0 +1,22 @@
+{
+  "identifier": "clipboard",
+  "description": "Clipboard timeline commands and history event subscriptions",
+  "windows": ["clipboard"],
+  "permissions": [
+    "core:event:allow-listen",
+    "core:event:allow-unlisten",
+    "allow-clipboard-get-snapshot",
+    "allow-clipboard-set-capture-status",
+    "allow-clipboard-delete-item",
+    "allow-clipboard-duplicate-item",
+    "allow-clipboard-clear-history",
+    "allow-clipboard-create-group",
+    "allow-clipboard-delete-group",
+    "allow-clipboard-set-item-group",
+    "allow-clipboard-open-editor",
+    "allow-clipboard-copy-item",
+    "allow-clipboard-hide",
+    "allow-clipboard-open-stella",
+    "allow-desktop-report-error"
+  ]
+}

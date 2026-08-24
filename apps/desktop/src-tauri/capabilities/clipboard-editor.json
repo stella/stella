@@ -1,0 +1,13 @@
+{
+  "identifier": "clipboard-editor",
+  "description": "Clipboard editor commands",
+  "windows": ["clipboard-editor"],
+  "permissions": [
+    "core:event:allow-listen",
+    "core:event:allow-unlisten",
+    "allow-clipboard-get-editor-context",
+    "allow-clipboard-save-editor-item",
+    "allow-clipboard-close-editor",
+    "allow-desktop-report-error"
+  ]
+}

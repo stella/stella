@@ -17,10 +17,12 @@
     "typecheck": "bun ../../packages/scripts/src/tsc-native.ts --noEmit && bun ../../packages/scripts/src/tsc-native.ts --noEmit -p tsconfig.test.json"
   },
   "dependencies": {
+    "@atlaskit/pragmatic-drag-and-drop": "catalog:",
     "@stll/api-contract": "workspace:*",
     "@stll/ui": "workspace:*",
     "@tauri-apps/api": "^2.11.1",
     "better-result": "catalog:",
+    "lucide-react": "catalog:",
     "react": "catalog:react19",
     "react-dom": "catalog:react19",
     "use-intl": "catalog:"

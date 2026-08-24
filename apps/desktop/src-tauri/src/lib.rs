@@ -1,7 +1,13 @@
+mod app_lifecycle;
 mod bridge;
+mod clipboard;
+mod clipboard_commands;
+mod clipboard_store;
+mod clipboard_window;
 mod commands;
 mod config;
 mod deep_link;
+mod desktop_telemetry;
 mod diagnostics;
 #[cfg(test)]
 mod e2e;
@@ -14,6 +20,14 @@ mod tray;
 mod types;
 mod updater;
 
+include!("command_manifest.rs");
+
+macro_rules! generate_stella_handler {
+  ($($path:path => $name:literal),* $(,)?) => {
+    tauri::generate_handler![$($path),*]
+  };
+}
+
 use std::sync::Arc;
 use tauri::{Emitter, Manager};
 use tauri_plugin_autostart::MacosLauncher;
@@ -21,6 +35,8 @@ use tauri_plugin_notification::NotificationExt;
 use tokio::sync::Mutex;
 use tracing_subscriber::EnvFilter;
 
+use clipboard::{ClipboardAppState, ClipboardManager};
+use clipboard_commands::ClipboardEditorState;
 use commands::AppState;
 use session_manager::SessionManager;
 
@@ -37,6 +53,7 @@ pub fn run() {
   let allowed_origins = config::resolve_allowed_origins();
 
   let manager = Arc::new(Mutex::new(SessionManager::new()));
+  let clipboard_manager = Arc::new(std::sync::Mutex::new(ClipboardManager::new()));
   #[cfg(target_os = "macos")]
   let manager_for_single_instance = Arc::clone(&manager);
 
@@ -67,13 +84,73 @@ pub fn run() {
     ))
     .plugin(tauri_plugin_clipboard_manager::init())
     .plugin(tauri_plugin_deep_link::init())
+    .plugin(tauri_plugin_global_shortcut::Builder::new().build())
     .plugin(tauri_plugin_notification::init())
     .plugin(tauri_plugin_opener::init())
     .plugin(tauri_plugin_process::init())
     .plugin(tauri_plugin_updater::Builder::new().build())
     .manage::<AppState>(Arc::clone(&manager))
+    .manage::<ClipboardAppState>(Arc::clone(&clipboard_manager))
+    .manage::<ClipboardEditorState>(Arc::new(std::sync::Mutex::new(None)))
     .setup(move |app| {
       let handle = app.handle().clone();
+      let desktop_telemetry = desktop_telemetry::DesktopTelemetry::start();
+      app.manage(desktop_telemetry.clone());
+
+      // Clipboard history initializes on a dedicated thread because the OS
+      // keychain can block on authorization and the watcher runs continuously.
+      {
+        let clipboard_manager = Arc::clone(&clipboard_manager);
+        let clipboard_handle = handle.clone();
+        let watcher_telemetry = desktop_telemetry.clone();
+        let spawn_telemetry = desktop_telemetry.clone();
+        if let Err(error) = std::thread::Builder::new()
+          .name("stella-clipboard-watcher".to_string())
+          .spawn(move || {
+            clipboard::initialize_and_watch(
+              clipboard_manager,
+              clipboard_handle,
+              watcher_telemetry,
+            );
+          })
+        {
+          tracing::error!(error = %error, "clipboard watcher thread could not start");
+          spawn_telemetry.capture(desktop_telemetry::DesktopErrorReport {
+            window: desktop_telemetry::DesktopTelemetryWindow::Clipboard,
+            operation:
+              desktop_telemetry::DesktopTelemetryOperation::ClipboardWatcherStart,
+            code: desktop_telemetry::DesktopTelemetryErrorCode::WatcherUnavailable,
+          });
+        }
+      }
+
+      // Paste uses the same default activation shortcut. Registration is
+      // intentionally non-fatal so users can open the timeline from the tray
+      // while another clipboard manager still owns the shortcut.
+      {
+        use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
+        if let Err(error) = app.global_shortcut().on_shortcut(
+          "CommandOrControl+Shift+V",
+          |app, _shortcut, event| {
+            if event.state == ShortcutState::Pressed {
+              clipboard_window::toggle(app);
+            }
+          },
+        ) {
+          tracing::warn!(error = %error, "clipboard shortcut is unavailable");
+          desktop_telemetry.capture(desktop_telemetry::DesktopErrorReport {
+            window: desktop_telemetry::DesktopTelemetryWindow::Clipboard,
+            operation:
+              desktop_telemetry::DesktopTelemetryOperation::ClipboardShortcutRegister,
+            code: desktop_telemetry::DesktopTelemetryErrorCode::ShortcutUnavailable,
+          });
+        }
+      }
+
+      #[cfg(debug_assertions)]
+      if std::env::var_os("STELLA_OPEN_CLIPBOARD_ON_LAUNCH").is_some() {
+        clipboard_window::show(&handle);
+      }
 
       // Restore sessions and build the initial tray menu off the main thread.
       // Session restore reads the OS keychain, which can block on user
@@ -134,10 +211,14 @@ pub fn run() {
               tray::MenuAction::Quit => {
                 let mgr = manager.lock().await;
                 mgr.persist_sessions_public().await;
-                std::process::exit(0);
+                drop(mgr);
+                handle.exit(0);
               }
               tray::MenuAction::OpenPreferences(tab) => {
                 ensure_main_window(&handle, tab);
+              }
+              tray::MenuAction::OpenClipboard => {
+                clipboard_window::show(&handle);
               }
               tray::MenuAction::CheckForUpdates => {
                 let active_edit_sessions = {
@@ -287,30 +368,20 @@ pub fn run() {
       tracing::info!("stella desktop started");
       Ok(())
     })
-    .invoke_handler(tauri::generate_handler![
-      commands::get_state,
-      commands::update_notification_preferences,
-      commands::open_session_file,
-      commands::reveal_session,
-      commands::finish_session,
-      commands::retry_session,
-      commands::respond_to_takeover,
-      commands::takeover_dialog_respond,
-      commands::self_host_connect_dialog_respond,
-      commands::copy_diagnostics,
-      commands::email_support,
-      commands::reveal_support_root,
-      commands::open_edit_root,
-      commands::is_autostart_enabled,
-      commands::set_autostart,
-    ])
+    .invoke_handler(with_stella_commands!(generate_stella_handler))
     .build(tauri::generate_context!())
     .expect("error while building stella desktop")
-    .run(|_app, event| {
-      if let tauri::RunEvent::ExitRequested { api, .. } = event {
-        // Prevent exit when the last window closes — we're a tray app.
-        api.prevent_exit();
+    .run(|_app, event| match event {
+      tauri::RunEvent::ExitRequested { api, code, .. } => {
+        if app_lifecycle::should_prevent_exit(code) {
+          tracing::info!("prevented background desktop process from exiting");
+          api.prevent_exit();
+        } else {
+          tracing::info!(?code, "desktop process received an explicit exit request");
+        }
       }
+      tauri::RunEvent::Exit => tracing::info!("desktop event loop exited"),
+      _ => {}
     });
 }
 

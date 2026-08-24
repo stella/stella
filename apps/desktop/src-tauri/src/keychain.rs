@@ -14,6 +14,7 @@ use std::{
 use keyring_core::{Entry, Error};
 
 const SERVICE_NAME: &str = "stella-desktop";
+const CLIPBOARD_HISTORY_KEY: &str = "clipboard:history:v1";
 
 #[derive(Debug)]
 pub struct KeychainReadUnavailable;
@@ -37,6 +38,11 @@ fn entry(session_id: &str) -> Result<Entry, String> {
   ensure_default_store()?;
   Entry::new(SERVICE_NAME, &entry_key(session_id))
     .map_err(|e| format!("keychain entry error: {e}"))
+}
+
+fn named_entry(key: &str) -> Result<Entry, String> {
+  ensure_default_store()?;
+  Entry::new(SERVICE_NAME, key).map_err(|e| format!("keychain entry error: {e}"))
 }
 
 fn ensure_default_store() -> Result<(), String> {
@@ -156,5 +162,28 @@ pub fn delete_token(session_id: &str) {
         tracing::warn!(session_id, error = %e, "keychain delete failed");
       }
     }
+  }
+}
+
+/// Load the clipboard history encryption key, creating it on first use.
+/// Clipboard contents never leave encrypted storage when persistence is
+/// available; callers fall back to memory-only history if this fails.
+pub fn get_or_create_clipboard_key() -> Result<[u8; 32], String> {
+  let key_entry = named_entry(CLIPBOARD_HISTORY_KEY)?;
+  match key_entry.get_secret() {
+    Ok(secret) => secret
+      .try_into()
+      .map_err(|_| "clipboard key has an invalid length".to_string()),
+    Err(Error::NoEntry) => {
+      use aes_gcm::aead::{OsRng, rand_core::RngCore};
+
+      let mut key = [0_u8; 32];
+      OsRng.fill_bytes(&mut key);
+      key_entry
+        .set_secret(&key)
+        .map_err(|e| format!("keychain store error: {e}"))?;
+      Ok(key)
+    }
+    Err(e) => Err(format!("keychain read error: {e}")),
   }
 }
