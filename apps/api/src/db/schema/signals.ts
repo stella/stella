@@ -15,6 +15,7 @@ import {
   jsonb,
   organization,
   organizationCheck,
+  organizationOptionalWorkspacePolicies,
   orgPolicies,
   p,
   pUuid,
@@ -91,9 +92,9 @@ const SCOUT_RUN_STATUS_SQL_VALUES = SCOUT_RUN_STATUSES.map((status) =>
 
 /**
  * Org-scoped inbox signal. `workspaceId` NULL means unscoped (triage):
- * visible only to members with the `signal:triage` permission. RLS is
- * org-only; workspace visibility is enforced in the list query because a
- * nullable column cannot carry the workspace policy.
+ * visible only to members with the `signal:triage` permission. RLS pins the
+ * organization for every row and additionally requires workspace access when
+ * the signal is scoped; handlers enforce the triage permission.
  *
  * `dedupeKey` makes scouts replay-safe: re-emitting the same observation is
  * an `ON CONFLICT DO NOTHING`.
@@ -166,7 +167,7 @@ export const signals = p.pgTable(
       "signals_status_check",
       sql`${table.status} in (${sql.join(SIGNAL_STATUS_SQL_VALUES, sql`, `)})`,
     ),
-    ...orgPolicies(),
+    ...organizationOptionalWorkspacePolicies("signals"),
   ],
 );
 

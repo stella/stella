@@ -74,22 +74,50 @@ CREATE INDEX "scout_runs_org_scout_started_idx" ON "scout_runs" USING btree ("or
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "signals" TO stella;--> statement-breakpoint
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "signal_events" TO stella;--> statement-breakpoint
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "scout_runs" TO stella;--> statement-breakpoint
-CREATE POLICY "organization_select" ON "signals" AS PERMISSIVE FOR SELECT TO "stella" USING (organization_id =
-  (SELECT current_setting(
-    'app.organization_id', true
-  )));--> statement-breakpoint
-CREATE POLICY "organization_insert" ON "signals" AS PERMISSIVE FOR INSERT TO "stella" WITH CHECK (organization_id =
-  (SELECT current_setting(
-    'app.organization_id', true
-  )));--> statement-breakpoint
-CREATE POLICY "organization_update" ON "signals" AS PERMISSIVE FOR UPDATE TO "stella" USING (organization_id =
-  (SELECT current_setting(
-    'app.organization_id', true
-  )));--> statement-breakpoint
-CREATE POLICY "organization_delete" ON "signals" AS PERMISSIVE FOR DELETE TO "stella" USING (organization_id =
-  (SELECT current_setting(
-    'app.organization_id', true
-  )));--> statement-breakpoint
+CREATE POLICY "signals_scope_select" ON "signals" AS PERMISSIVE FOR SELECT TO "stella" USING (
+  organization_id = (SELECT current_setting('app.organization_id', true))
+  AND (
+    workspace_id IS NULL
+    OR CASE
+      WHEN workspace_id = ANY(COALESCE(NULLIF((SELECT pg_catalog.current_setting('app.workspace_ids', true)), '')::uuid[], ARRAY[]::uuid[]))
+      THEN true
+      ELSE workspace_id IN (SELECT aw.authorized_workspace_id FROM public.stella_authorized_workspaces aw)
+    END
+  )
+);--> statement-breakpoint
+CREATE POLICY "signals_scope_insert" ON "signals" AS PERMISSIVE FOR INSERT TO "stella" WITH CHECK (
+  organization_id = (SELECT current_setting('app.organization_id', true))
+  AND (
+    workspace_id IS NULL
+    OR CASE
+      WHEN workspace_id = ANY(COALESCE(NULLIF((SELECT pg_catalog.current_setting('app.workspace_ids', true)), '')::uuid[], ARRAY[]::uuid[]))
+      THEN true
+      ELSE workspace_id IN (SELECT aw.authorized_workspace_id FROM public.stella_authorized_workspaces aw)
+    END
+  )
+);--> statement-breakpoint
+CREATE POLICY "signals_scope_update" ON "signals" AS PERMISSIVE FOR UPDATE TO "stella" USING (
+  organization_id = (SELECT current_setting('app.organization_id', true))
+  AND (
+    workspace_id IS NULL
+    OR CASE
+      WHEN workspace_id = ANY(COALESCE(NULLIF((SELECT pg_catalog.current_setting('app.workspace_ids', true)), '')::uuid[], ARRAY[]::uuid[]))
+      THEN true
+      ELSE workspace_id IN (SELECT aw.authorized_workspace_id FROM public.stella_authorized_workspaces aw)
+    END
+  )
+);--> statement-breakpoint
+CREATE POLICY "signals_scope_delete" ON "signals" AS PERMISSIVE FOR DELETE TO "stella" USING (
+  organization_id = (SELECT current_setting('app.organization_id', true))
+  AND (
+    workspace_id IS NULL
+    OR CASE
+      WHEN workspace_id = ANY(COALESCE(NULLIF((SELECT pg_catalog.current_setting('app.workspace_ids', true)), '')::uuid[], ARRAY[]::uuid[]))
+      THEN true
+      ELSE workspace_id IN (SELECT aw.authorized_workspace_id FROM public.stella_authorized_workspaces aw)
+    END
+  )
+);--> statement-breakpoint
 CREATE POLICY "signal_events_select" ON "signal_events" AS PERMISSIVE FOR SELECT TO "stella" USING (organization_id =
   (SELECT current_setting(
     'app.organization_id', true
