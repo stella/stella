@@ -66,6 +66,9 @@ const POST_BOOTSTRAP_SELECT_ONLY_TABLES = new Set([
   // and the bounded seed worker; request handlers may observe its status.
   "case_law_corpus_index_counts",
   "case_law_corpus_index_count_backfills",
+  // Append-only ingestion registry: request code reads the bounded country
+  // set for census; decision-write triggers are its only writer.
+  "case_law_corpus_jurisdictions",
   "case_law_corpus_index_delete_watermarks",
   "legislation_sources",
   "legislation_documents",
