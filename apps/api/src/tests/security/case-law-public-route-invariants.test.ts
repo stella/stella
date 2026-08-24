@@ -147,6 +147,14 @@ describe("public case-law route boundary", () => {
 
   test("external role validation is bounded and retries after failure", async () => {
     const source = await readPublicReadDbSource();
+    const readConfiguration = source.slice(
+      source.indexOf("const configureReadTransaction"),
+      source.indexOf("const configureExternalReadTransaction"),
+    );
+    const externalConfiguration = source.slice(
+      source.indexOf("const configureExternalReadTransaction"),
+      source.indexOf("const startRoleValidation"),
+    );
     const validation = source.slice(
       source.indexOf("const startRoleValidation"),
       source.indexOf("const ensureRoleValidated"),
@@ -156,8 +164,17 @@ describe("public case-law route boundary", () => {
       "connectionTimeout: EXTERNAL_PUBLIC_LAW_CONNECTION_TIMEOUT_SECONDS",
     );
     expect(validation).toContain(".transaction(async (tx) =>");
-    expect(validation).toContain(
+    expect(readConfiguration).toContain(
       "await tx.execute(sql`SET LOCAL statement_timeout = '30s'`)",
+    );
+    expect(externalConfiguration).toContain(
+      "await configureReadTransaction(tx, isolation)",
+    );
+    expect(externalConfiguration).toContain(
+      "await tx.execute(sql`SET LOCAL lock_timeout = '1s'`)",
+    );
+    expect(externalConfiguration).toContain(
+      "await tx.execute(sql`SET LOCAL idle_in_transaction_session_timeout = '30s'`)",
     );
     expect(
       validation.indexOf("configureExternalReadTransaction(tx)"),
