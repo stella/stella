@@ -980,6 +980,14 @@ export const caseLawCitations = p.pgTable(
       length: 16,
     }),
     /**
+     * The court phrase the citing text named, verbatim ("Krajského soudu v
+     * Českých Budějovicích"); null when the sentence did not take the
+     * standard form. See `citation-court-hint.ts`. The resolver matches it
+     * against each candidate's court, which is what tells apart regional
+     * dockets that several courts reuse.
+     */
+    citedCourtHint: p.varchar("cited_court_hint", { length: 128 }),
+    /**
      * Outcome of the last resolution attempt. Split from the nullability of
      * `citedDecisionId` because a null foreign key cannot tell "not examined"
      * from "examined, nothing honest to link to": with both meanings on one

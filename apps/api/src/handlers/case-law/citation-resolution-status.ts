@@ -59,6 +59,7 @@ export const CITATION_RESOLUTION_STATUS = {
 export const CITATION_RESOLUTION_RULES = [
   "unique-key",
   "type-hint",
+  "court-hint",
   "one-file-merits",
 ] as const;
 
@@ -69,6 +70,8 @@ export const CITATION_RESOLUTION_RULE = {
   UNIQUE_KEY: "unique-key",
   /** Several holders; the text named the type, and one holder had it. */
   TYPE_HINT: "type-hint",
+  /** Several holders; the text named the court, and one holder sits there. */
+  COURT_HINT: "court-hint",
   /** Several holders in one file; the single merits decision took the link. */
   ONE_FILE_MERITS: "one-file-merits",
 } as const satisfies ConstantMap<CitationResolutionRule>;
@@ -83,6 +86,9 @@ export const countsByRule = (
   ),
   [CITATION_RESOLUTION_RULE.TYPE_HINT]: read(
     CITATION_RESOLUTION_RULE.TYPE_HINT,
+  ),
+  [CITATION_RESOLUTION_RULE.COURT_HINT]: read(
+    CITATION_RESOLUTION_RULE.COURT_HINT,
   ),
   [CITATION_RESOLUTION_RULE.ONE_FILE_MERITS]: read(
     CITATION_RESOLUTION_RULE.ONE_FILE_MERITS,

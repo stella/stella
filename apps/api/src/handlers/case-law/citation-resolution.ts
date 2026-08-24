@@ -29,7 +29,16 @@
  *   the citing court said so. A hint that names none of them is a word the
  *   corpus cannot use and the next rule applies; one that names several
  *   leaves the row ambiguous, since the next rule would contradict the text.
- * - **One file, one merits decision.** The second adjudication rule, and the
+ * - **The text names the court.** The second adjudication rule. Regional
+ *   courts number files independently, so `65 A 3/2025` exists at several of
+ *   them and the key alone never links a citation of a regional decision.
+ *   The citing sentence says which court ("rozsudek Krajského soudu v
+ *   Českých Budějovicích ze dne …, č. j. …"); the extractor keeps that
+ *   phrase as `cited_court_hint`, and when exactly one time-valid holder
+ *   sits at that court the link goes there. Both sides are compared through
+ *   one normalization (`courtNameKeySql`), since the phrase is inflected and
+ *   the stored name is not.
+ * - **One file, one merits decision.** The third adjudication rule, and the
  *   one structural exception to uniqueness. A constitutional court keeps one
  *   docket number for a whole file, so the nález on the merits and the
  *   procedural orders issued along the way all canonicalize to the same key.
@@ -67,6 +76,7 @@ import {
   caseLawDecisionIdentifiers,
   caseLawDecisions,
 } from "@/api/db/schema";
+import { courtNameKeySql } from "@/api/handlers/case-law/citation-court-hint";
 import {
   CITATION_DECISION_TYPE_HINT_FAMILIES,
   CITATION_DECISION_TYPE_HINTS,
@@ -365,6 +375,7 @@ const resolutionStatement = (selection: SQL): SQL => sql`
            c.normalized_identifier_value,
            c.citing_decision_id,
            c.cited_decision_type_hint,
+           c.cited_court_hint,
            citing.country AS citing_country,
            citing.decision_date AS citing_date
       FROM ${caseLawCitations} c
@@ -384,6 +395,7 @@ const resolutionStatement = (selection: SQL): SQL => sql`
            m.sole_id,
            m.merits_id,
            m.hinted_id,
+           m.court_id,
            j.blocked,
            -- The text said which decision it meant, and exactly one
            -- candidate is of that type: the link goes there, whatever the
@@ -395,6 +407,18 @@ const resolutionStatement = (selection: SQL): SQL => sql`
              AND m.n < ${CITATION_CANDIDATE_SCAN_CAP}
              AND m.hinted_n = 1
            ) AS hinted,
+           -- The text said which court decided, and exactly one candidate
+           -- sits there: regional courts number files independently, so
+           -- the court is what makes such a docket number a name. Same
+           -- bound as the type rule, and a type hint that already singled
+           -- out a holder takes precedence, since it is the more specific
+           -- word.
+           (
+                 m.n > 1
+             AND m.n < ${CITATION_CANDIDATE_SCAN_CAP}
+             AND m.hinted_n <> 1
+             AND m.court_n = 1
+           ) AS court_hinted,
            -- The one-file rule, as a predicate over the bounded candidate
            -- set: one court, exactly one merits decision, every other
            -- candidate a procedural order. The strict upper bound is load
@@ -424,6 +448,16 @@ const resolutionStatement = (selection: SQL): SQL => sql`
                (array_agg(k.id) FILTER (
                  WHERE lower(k.decision_type) = ANY (hf.decision_types)
                ))[1] AS hinted_id,
+               count(*) FILTER (
+                 WHERE b.cited_court_hint IS NOT NULL
+                   AND ${courtNameKeySql(sql.raw("k.court"))}
+                     = ${courtNameKeySql(sql.raw("b.cited_court_hint"))}
+               )::int AS court_n,
+               (array_agg(k.id) FILTER (
+                 WHERE b.cited_court_hint IS NOT NULL
+                   AND ${courtNameKeySql(sql.raw("k.court"))}
+                     = ${courtNameKeySql(sql.raw("b.cited_court_hint"))}
+               ))[1] AS court_id,
                count(*) FILTER (
                  WHERE lower(k.decision_type) = ANY (${decisionTypeArray(MERITS_DECISION_TYPES)})
                )::int AS merits_n,
@@ -477,6 +511,7 @@ const resolutionStatement = (selection: SQL): SQL => sql`
            CASE
              WHEN c.n = 1 THEN c.sole_id
              WHEN c.hinted THEN c.hinted_id
+             WHEN c.court_hinted THEN c.court_id
              WHEN c.one_file THEN c.merits_id
            END AS decision_id,
            -- The rule is the same chain a third time: a resolved row names
@@ -484,11 +519,13 @@ const resolutionStatement = (selection: SQL): SQL => sql`
            CASE
              WHEN c.n = 1 THEN ${CITATION_RESOLUTION_RULE.UNIQUE_KEY}::text
              WHEN c.hinted THEN ${CITATION_RESOLUTION_RULE.TYPE_HINT}::text
+             WHEN c.court_hinted
+               THEN ${CITATION_RESOLUTION_RULE.COURT_HINT}::text
              WHEN c.one_file
                THEN ${CITATION_RESOLUTION_RULE.ONE_FILE_MERITS}::text
            END AS rule_id,
            CASE
-             WHEN c.n = 1 OR c.hinted OR c.one_file
+             WHEN c.n = 1 OR c.hinted OR c.court_hinted OR c.one_file
                THEN ${CITATION_RESOLUTION_STATUS.RESOLVED}::text
              WHEN c.n > 1 THEN ${CITATION_RESOLUTION_STATUS.AMBIGUOUS}::text
              ELSE ${CITATION_RESOLUTION_STATUS.UNMATCHED}::text

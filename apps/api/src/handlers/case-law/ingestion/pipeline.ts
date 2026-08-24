@@ -341,6 +341,7 @@ const citationRow = (
     sectionIndex: number | null;
     citedDecisionTypeHint: CitationDecisionTypeHint | null;
     identifierType: DecisionIdentifierType;
+    citedCourtHint: string | null;
   },
   sections: { index: number; text: string }[],
   proceduralKeys: ProceduralKeys,
@@ -356,6 +357,7 @@ const citationRow = (
       citation.citationText,
     ),
     citedDecisionTypeHint: citation.citedDecisionTypeHint,
+    citedCourtHint: citation.citedCourtHint,
     kind: classifyCitation({
       citationText: citation.citationText,
       citationKey,

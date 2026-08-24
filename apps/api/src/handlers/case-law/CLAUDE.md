@@ -477,6 +477,33 @@ classify the driving loop's no-progress outcomes (busy, failed) into
 sustained-stall telemetry. A loop that only logs its successes makes a
 leaked lease indistinguishable from an idle system.
 
+### 23. A cited docket number names a decision only together with its court
+
+Rule 17 from the other side. `9 A 34/2025` (Městský soud v Praze) cites
+"rozsudek Krajského soudu v Českých Budějovicích ze dne 21. 5. 2025,
+č. j. 65 A 3/2025-226"; the corpus held that decision and the citation
+still ended `ambiguous`, because `65 A 3/2025` also exists at Krajský soud
+v Brně and v Ostravě. Regional courts reuse every docket, so the key alone
+can never resolve a citation of a regional decision, and the uniqueness
+rule is not the one that will link it.
+
+The citing sentence carries the missing coordinate. The extractor keeps
+the court phrase as `cited_court_hint` (`citation-court-hint.ts`), the way
+it keeps the decision-type word, and the resolver's `court-hint` rule links
+the one time-valid holder whose court matches. Three things to hold to:
+
+- The phrase is inflected ("Krajského soudu"); the stored court is not
+  ("Krajský soud"). Compare through one normalization applied to both
+  sides in the same statement (`courtNameKeySql`), never through a
+  per-court spelling table that drifts from the adapters.
+- A rule that reads context from the text only helps rows that were
+  extracted after the column existed. Re-adjudicating old rows without
+  re-extracting their citing decisions changes nothing.
+- Test every positive form of a pattern, not just the negatives: `soud`
+  is s-o-u-d and `súd` is s-ú-d, and `s[oú]d` matched only the Slovak
+  one while the negative test passed. Assemble long patterns from named
+  fragments so each part reads on its own.
+
 ## DocumentAst Conventions
 
 ```typescript
