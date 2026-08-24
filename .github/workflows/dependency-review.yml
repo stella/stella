@@ -10,7 +10,7 @@ name: Dependency Review
 # package-scoped exception when their licenses are blocked.
 #
 # Allowed: MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC, 0BSD,
-#          BlueOak-1.0.0, Unlicense, CC0-1.0, CC-BY-4.0, MIT-0,
+#          BlueOak-1.0.0, Unlicense, CC0-1.0, CC-BY-4.0, MIT-0, BSL-1.0,
 #          MPL-2.0 (file-level copyleft, acceptable for unmodified use),
 #          Python-2.0, Zlib, Unicode-3.0 (permissive Unicode data license),
 #          OFL-1.1 (font assets)
@@ -56,6 +56,7 @@ jobs:
             CC0-1.0,
             CC-BY-4.0,
             MIT-0,
+            BSL-1.0,
             MPL-2.0,
             Python-2.0,
             Zlib,
