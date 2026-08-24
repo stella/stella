@@ -264,129 +264,107 @@ export const withProjectedPlainText = (ast: DocumentAst): DocumentAst => ({
 export const omitDerivablePlainText = (ast: DocumentAst): WireDocumentAst => ({
   ...ast,
   blocks: ast.blocks.map((block): WireBlock => {
-    if (block.type === "table") {
-      return {
-        ...block,
-        rows: block.rows.map((row) => row.map(({ inlines }) => ({ inlines }))),
-      };
+    // Every branch drops `plainText` and keeps the rest of the block by
+    // spreading it. Listing the fields to keep instead would silently
+    // drop each one added later.
+    if (block.type === "heading") {
+      const { plainText: _derived, ...rest } = block;
+      return rest;
     }
-    return block.type === "heading"
-      ? {
-          id: block.id,
-          anchorId: block.anchorId,
-          type: "heading",
-          level: block.level,
-          role: block.role,
-          inlines: block.inlines,
-        }
-      : {
-          id: block.id,
-          anchorId: block.anchorId,
-          type: "paragraph",
-          role: block.role,
-          number: block.number,
-          inlines: block.inlines,
-        };
+    if (block.type === "paragraph") {
+      const { plainText: _derived, ...rest } = block;
+      return rest;
+    }
+    return {
+      ...block,
+      rows: block.rows.map((row) =>
+        row.map(({ plainText: _cellDerived, ...cell }) => cell),
+      ),
+    };
   }),
 });
 
 const inlineArraySchema = v.array(v.lazy(() => inlineSchema));
-const tableCellSchema: v.GenericSchema<TableCell> = v.object({
+
+/**
+ * Every field of a block except `plainText`, declared once.
+ *
+ * The canonical schema and the wire schema are the same entries plus a
+ * required or an optional `plainText`. Sharing the entries is what keeps
+ * them from drifting: a field added to a block reaches both readers, so
+ * it can never be validated on the way in and silently dropped on the
+ * way out. `v.object` strips what it does not declare, which is exactly
+ * how a duplicated wire schema loses a newly added field.
+ */
+const headingEntries = {
+  id: v.string(),
+  anchorId: v.string(),
+  type: v.literal("heading"),
+  level: v.picklist([1, 2, 3, 4, 5, 6]),
+  role: v.optional(v.picklist(["decision-title", "section-heading"])),
   inlines: inlineArraySchema,
+};
+
+const paragraphEntries = {
+  id: v.string(),
+  anchorId: v.string(),
+  type: v.literal("paragraph"),
+  role: v.optional(
+    v.picklist([
+      "case-number",
+      "intro",
+      "history",
+      "argumentation",
+      "holding",
+      "closing",
+      "signature",
+      "unknown",
+    ]),
+  ),
+  note: v.optional(
+    v.variant("type", [
+      v.object({
+        type: v.literal("footnote"),
+        label: v.string(),
+      }),
+    ]),
+  ),
+  number: v.optional(v.pipe(v.number(), v.finite())),
+  inlines: inlineArraySchema,
+};
+
+const tableCellEntries = { inlines: inlineArraySchema };
+
+/** Table fields except `rows`, whose cells differ between the two readers. */
+const tableEntries = {
+  id: v.string(),
+  anchorId: v.string(),
+  type: v.literal("table"),
+  role: v.optional(v.picklist(["related-proceedings", "metadata-table"])),
+  plainText: v.string(),
+};
+
+const tableCellSchema: v.GenericSchema<TableCell> = v.object({
+  ...tableCellEntries,
   plainText: v.string(),
 });
+
 const blockSchema: v.GenericSchema<Block> = v.variant("type", [
-  v.object({
-    id: v.string(),
-    anchorId: v.string(),
-    type: v.literal("heading"),
-    level: v.picklist([1, 2, 3, 4, 5, 6]),
-    role: v.optional(v.picklist(["decision-title", "section-heading"])),
-    inlines: inlineArraySchema,
-    plainText: v.string(),
-  }),
-  v.object({
-    id: v.string(),
-    anchorId: v.string(),
-    type: v.literal("paragraph"),
-    role: v.optional(
-      v.picklist([
-        "case-number",
-        "intro",
-        "history",
-        "argumentation",
-        "holding",
-        "closing",
-        "signature",
-        "unknown",
-      ]),
-    ),
-    note: v.optional(
-      v.variant("type", [
-        v.object({
-          type: v.literal("footnote"),
-          label: v.string(),
-        }),
-      ]),
-    ),
-    number: v.optional(v.pipe(v.number(), v.finite())),
-    inlines: inlineArraySchema,
-    plainText: v.string(),
-  }),
-  v.object({
-    id: v.string(),
-    anchorId: v.string(),
-    type: v.literal("table"),
-    role: v.optional(v.picklist(["related-proceedings", "metadata-table"])),
-    rows: v.array(v.array(tableCellSchema)),
-    plainText: v.string(),
-  }),
+  v.object({ ...headingEntries, plainText: v.string() }),
+  v.object({ ...paragraphEntries, plainText: v.string() }),
+  v.object({ ...tableEntries, rows: v.array(v.array(tableCellSchema)) }),
 ]);
 
 const wireTableCellSchema: v.GenericSchema<WireTableCell> = v.object({
-  inlines: inlineArraySchema,
+  ...tableCellEntries,
   plainText: v.optional(v.string()),
 });
 
 /** `blockSchema` with the rebuildable `plainText` fields made optional. */
 const wireBlockSchema: v.GenericSchema<WireBlock> = v.variant("type", [
-  v.object({
-    id: v.string(),
-    anchorId: v.string(),
-    type: v.literal("heading"),
-    level: v.picklist([1, 2, 3, 4, 5, 6]),
-    role: v.optional(v.picklist(["decision-title", "section-heading"])),
-    inlines: inlineArraySchema,
-    plainText: v.optional(v.string()),
-  }),
-  v.object({
-    id: v.string(),
-    anchorId: v.string(),
-    type: v.literal("paragraph"),
-    role: v.optional(
-      v.picklist([
-        "case-number",
-        "intro",
-        "history",
-        "argumentation",
-        "holding",
-        "closing",
-        "signature",
-        "unknown",
-      ]),
-    ),
-    number: v.optional(v.pipe(v.number(), v.finite())),
-    inlines: inlineArraySchema,
-    plainText: v.optional(v.string()),
-  }),
-  v.object({
-    id: v.string(),
-    anchorId: v.string(),
-    type: v.literal("table"),
-    role: v.optional(v.picklist(["related-proceedings", "metadata-table"])),
-    rows: v.array(v.array(wireTableCellSchema)),
-    plainText: v.string(),
-  }),
+  v.object({ ...headingEntries, plainText: v.optional(v.string()) }),
+  v.object({ ...paragraphEntries, plainText: v.optional(v.string()) }),
+  v.object({ ...tableEntries, rows: v.array(v.array(wireTableCellSchema)) }),
 ]);
 
 const documentAstSourceSchema: v.GenericSchema<DocumentAstSource> = v.object({

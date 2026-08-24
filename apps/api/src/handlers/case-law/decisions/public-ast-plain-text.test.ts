@@ -91,8 +91,71 @@ const countPieces = (ast: DocumentAst): number =>
 const readGz = async (name: string, dir: URL): Promise<string> =>
   decoder.decode(Bun.gunzipSync(await Bun.file(new URL(name, dir)).bytes()));
 
+/**
+ * A block carrying every optional field the AST can hold, so the round
+ * trip is checked against structure the publisher fixtures do not
+ * happen to exercise. `plainText` is the only field the omission may
+ * touch: anything else that fails to survive is a field the wire schema
+ * or the omission forgot, which is how additive block metadata gets
+ * dropped silently.
+ */
+const decoratedAst = (): DocumentAst => ({
+  version: 1,
+  source: {
+    system: "test",
+    documentId: "d1",
+    webUrl: "https://example.test/d1",
+    printUrl: "https://example.test/d1.pdf",
+  },
+  metadata: {
+    caseNumber: "1 Az 1/2020",
+    ecli: null,
+    court: "Test court",
+    decisionDate: null,
+    decisionType: null,
+    keywords: [],
+    statutes: [],
+  },
+  blocks: [
+    {
+      id: "h1",
+      anchorId: "h-1",
+      type: "heading",
+      level: 2,
+      role: "section-heading",
+      inlines: [{ type: "text", text: "Odůvodnění" }],
+      plainText: "Odůvodnění",
+    },
+    {
+      id: "p1",
+      anchorId: "p-1",
+      type: "paragraph",
+      role: "argumentation",
+      note: { type: "footnote", label: "1" },
+      number: 12,
+      inlines: [{ type: "text", text: "Poznámka pod čarou." }],
+      plainText: "Poznámka pod čarou.",
+    },
+    {
+      id: "t1",
+      anchorId: "t-1",
+      type: "table",
+      role: "metadata-table",
+      rows: [
+        [
+          { inlines: [{ type: "text", text: "Soud" }], plainText: "Soud" },
+          { inlines: [{ type: "text", text: "NS" }], plainText: "NS" },
+        ],
+      ],
+      plainText: "Soud\tNS",
+    },
+  ],
+});
+
 const fixtureAsts = async (): Promise<{ name: string; ast: DocumentAst }[]> => {
-  const asts: { name: string; ast: DocumentAst }[] = [];
+  const asts: { name: string; ast: DocumentAst }[] = [
+    { name: "synthetic/every-optional-field", ast: decoratedAst() },
+  ];
 
   asts.push({
     name: "at-ris/jjt-1925",
