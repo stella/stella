@@ -148,7 +148,8 @@ describe("parseNssDecisionHtml", () => {
 
       const { documentAst } = parseNssDecisionHtml(baseInput(html));
       const titles = documentAst.blocks.filter(
-        (block) => block.type === "heading" && block.role === "decision-title",
+        (block): block is Extract<Block, { type: "heading" }> =>
+          block.type === "heading" && block.role === "decision-title",
       );
 
       expect(titles.map((title) => title.plainText)).toEqual([
