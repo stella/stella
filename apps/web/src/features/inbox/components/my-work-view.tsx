@@ -121,6 +121,7 @@ export const MyWorkView = ({ organizationId }: { organizationId: string }) => {
     hasNextPage,
     isFetchingNextPage,
     isPending,
+    refetch,
   } = useInfiniteQuery(myWorkOptions(queue, asOf));
   const { data: workspaces } = useQuery(workspacesRouteOptions(organizationId));
 
@@ -205,27 +206,44 @@ export const MyWorkView = ({ organizationId }: { organizationId: string }) => {
 
       {isPending && <MyWorkSkeleton />}
 
-      {!isPending && groups.length === 0 && (
+      {!isPending && error && (
+        <div className="text-muted-foreground flex flex-col items-center gap-3 py-16 text-sm">
+          <AlertCircleIcon className="size-8 opacity-40" />
+          <p>{userErrorFromThrown(error, t("common.unexpectedError"))}</p>
+          <Button
+            onClick={() => {
+              detached(refetch(), "inbox.retry-my-work");
+            }}
+            size="sm"
+            variant="outline"
+          >
+            {t("common.retry")}
+          </Button>
+        </div>
+      )}
+
+      {!isPending && !error && groups.length === 0 && (
         <div className="text-muted-foreground flex flex-col items-center gap-2 py-16 text-sm">
           <CheckCircle2Icon className="size-8 opacity-40" />
           <p>{t("tasks.noWorkInQueue")}</p>
         </div>
       )}
 
-      {groups.map((group) => (
-        <section className="flex flex-col gap-1" key={group.workspace.id}>
-          <h2 className="text-muted-foreground px-1 text-xs font-medium">
-            {group.workspace.name}
-          </h2>
-          <div className="flex flex-col gap-1">
-            {group.items.map((item) => (
-              <WorkItemRow item={item} key={item.entityId} />
-            ))}
-          </div>
-        </section>
-      ))}
+      {!error &&
+        groups.map((group) => (
+          <section className="flex flex-col gap-1" key={group.workspace.id}>
+            <h2 className="text-muted-foreground px-1 text-xs font-medium">
+              {group.workspace.name}
+            </h2>
+            <div className="flex flex-col gap-1">
+              {group.items.map((item) => (
+                <WorkItemRow item={item} key={item.entityId} />
+              ))}
+            </div>
+          </section>
+        ))}
 
-      {hasNextPage && (
+      {!error && hasNextPage && (
         <Button
           className="self-center"
           disabled={isFetchingNextPage}

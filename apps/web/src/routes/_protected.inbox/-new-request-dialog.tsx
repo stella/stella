@@ -35,6 +35,7 @@ import { Textarea } from "@stll/ui/textarea";
 import { stellaToast } from "@stll/ui/toast";
 
 import { SEVERITY_LABEL_KEY } from "@/features/inbox/signal-presentation";
+import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
@@ -70,8 +71,10 @@ type NewRequestDialogProps = {
 /** Posts a manual request into the inbox. */
 export const NewRequestDialog = ({ organizationId }: NewRequestDialogProps) => {
   const t = useTranslations();
+  const analytics = useAnalytics();
   const queryClient = useQueryClient();
   const [isOpen, setIsOpen] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const { data: workspacesData } = useQuery(
     workspacesNavigationOptions(organizationId),
   );
@@ -83,6 +86,7 @@ export const NewRequestDialog = ({ organizationId }: NewRequestDialogProps) => {
     defaultValues,
     validators: { onDynamic: requestSchema },
     onSubmit: async ({ value, formApi }) => {
+      setSubmitError(null);
       const parsed = v.safeParse(requestSchema, value);
       if (!parsed.success) {
         return;
@@ -103,16 +107,10 @@ export const NewRequestDialog = ({ organizationId }: NewRequestDialogProps) => {
         ),
       );
       if (Result.isError(created)) {
-        formApi.setErrorMap({
-          onSubmit: {
-            fields: {
-              title: userErrorFromThrown(
-                created.error,
-                t("errors.actionFailed"),
-              ),
-            },
-          },
-        });
+        analytics.captureError(created.error);
+        setSubmitError(
+          userErrorFromThrown(created.error, t("errors.actionFailed")),
+        );
         return;
       }
       await queryClient.invalidateQueries({
@@ -144,6 +142,7 @@ export const NewRequestDialog = ({ organizationId }: NewRequestDialogProps) => {
         setIsOpen(open);
         if (!open) {
           form.reset();
+          setSubmitError(null);
         }
       }}
       open={isOpen}
@@ -282,6 +281,11 @@ export const NewRequestDialog = ({ organizationId }: NewRequestDialogProps) => {
                 )}
               </form.Field>
             </div>
+            {submitError && (
+              <p className="text-destructive text-sm" role="alert">
+                {submitError}
+              </p>
+            )}
           </DialogPanel>
           <DialogFooter>
             <DialogClose render={<Button variant="ghost" />}>

@@ -44,15 +44,21 @@ export const SUGGESTION_LABEL_KEY = {
  * this is a display lookup with the raw key as the fallback, not a total
  * map.
  */
-const SCOUT_LABEL_KEY: Readonly<Record<string, TranslationKey>> = {
+const SCOUT_LABEL_KEY = {
   "manual.request": "inbox.scout.manualRequest",
   "infosoud.hearings": "workspaces.infosoud.title",
   "document.deadlines": "inbox.scout.documentDeadlines",
   "document.review": "inbox.scout.documentReview",
-};
+} as const satisfies Readonly<Record<string, TranslationKey>>;
 
-export const scoutLabelKey = (scoutKey: string): TranslationKey | null =>
-  SCOUT_LABEL_KEY[scoutKey] ?? null;
+type KnownScoutKey = keyof typeof SCOUT_LABEL_KEY;
+type ScoutLabelKey = (typeof SCOUT_LABEL_KEY)[KnownScoutKey];
+
+const isKnownScoutKey = (scoutKey: string): scoutKey is KnownScoutKey =>
+  Object.hasOwn(SCOUT_LABEL_KEY, scoutKey);
+
+export const scoutLabelKey = (scoutKey: string): ScoutLabelKey | null =>
+  isKnownScoutKey(scoutKey) ? SCOUT_LABEL_KEY[scoutKey] : null;
 
 export const VERDICT_LABEL_KEY = {
   safe: "inbox.verdict.safe",

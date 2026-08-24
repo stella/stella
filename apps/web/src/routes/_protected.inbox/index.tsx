@@ -170,6 +170,7 @@ function InboxPage() {
               <div className="flex gap-1">
                 {INBOX_VIEWS.map((view) => (
                   <Button
+                    aria-pressed={filters.view === view}
                     key={view}
                     onClick={() => update({ view })}
                     size="sm"

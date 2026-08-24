@@ -24,11 +24,11 @@ import {
 } from "@stll/ui/popover";
 import { Textarea } from "@stll/ui/textarea";
 import { stellaToast } from "@stll/ui/toast";
-import { Tooltip } from "@stll/ui/tooltip";
 import { cn } from "@stll/ui/utils";
 
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { MatterRefLink } from "@/components/matter-ref-link";
+import Tooltip from "@/components/tooltip";
 import {
   INBOX_SIGNAL_VIEW,
   inboxSignalTabId,
@@ -369,7 +369,10 @@ const OriginChip = ({
       )}
       {origin === "model" && confidence !== null && (
         <span className="tabular-nums">
-          · {t("inbox.confidence", { percent: Math.round(confidence * 100) })}
+          ·{" "}
+          {t("inbox.confidence", {
+            percent: String(Math.round(confidence * 100)),
+          })}
         </span>
       )}
     </span>

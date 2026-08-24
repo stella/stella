@@ -110,7 +110,7 @@ const SignalHeader = ({ signal }: { signal: InboxSignal }) => {
         {signal.confidence !== null && (
           <span className="tabular-nums">
             {t("inbox.confidence", {
-              percent: Math.round(signal.confidence * 100),
+              percent: String(Math.round(signal.confidence * 100)),
             })}
           </span>
         )}
