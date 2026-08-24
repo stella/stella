@@ -39,6 +39,19 @@ export const brandPersistedAiMemoryId = (
   aiMemoryId: string,
 ): SafeId<"aiMemory"> => toSafeId<"aiMemory">(aiMemoryId);
 
+/**
+ * A property id derived from a stable seed rather than minted: the same seed
+ * always yields the same id, which is what lets a prompt built from these ids
+ * repeat byte-for-byte. Shaped like a UUID so every consumer of property ids
+ * treats it as one.
+ */
+export const brandDerivedPropertyId = (seed: string): SafeId<"property"> => {
+  const digest = new Bun.CryptoHasher("sha256").update(seed).digest("hex");
+  return toSafeId<"property">(
+    `${digest.slice(0, 8)}-${digest.slice(8, 12)}-${digest.slice(12, 16)}-${digest.slice(16, 20)}-${digest.slice(20, 32)}`,
+  );
+};
+
 export const brandPersistedEntityId = (entityId: string): SafeId<"entity"> =>
   toSafeId<"entity">(entityId);
 

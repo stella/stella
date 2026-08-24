@@ -10,9 +10,12 @@ import {
   type AIUsageMetering,
 } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  buildReviewDocumentParts,
+  reviewDocumentsScopeKey,
+} from "@/api/lib/document-review/review-document-messages";
 import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
 import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
-import { buildDocxBlocksMessage } from "@/api/lib/workflow/ai-prompts";
 import type { PreparedDocxFile } from "@/api/lib/workflow/generate-batch";
 
 const ROLE = "pdf" as const;
@@ -64,12 +67,14 @@ export const proposeReferenceTopics = async ({
 }: ProposeReferenceTopicsArgs): Promise<
   Result<DocumentReviewTopic[], WorkflowIntegrationError>
 > => {
-  const scopeHasher = new Bun.CryptoHasher("sha256");
-  scopeHasher.update(targetEntityVersionId);
-  for (const versionId of referenceEntityVersionIds) {
-    scopeHasher.update(versionId);
-  }
-  const scopeKey = `document-review-topics:${scopeHasher.digest("hex")}`;
+  const caching = resolveCaching({
+    promptCachingEnabled,
+    role: ROLE,
+    scopeKey: reviewDocumentsScopeKey(
+      targetEntityVersionId,
+      referenceEntityVersionIds,
+    ),
+  });
   const aiAnalytics = createTanStackAIAnalyticsCallbacks({
     feature: "document-review.topics",
     modelRole: ROLE,
@@ -87,14 +92,6 @@ export const proposeReferenceTopics = async ({
       (topic) => `- ${topic.title}: ${topic.context || "(no extra context)"}`,
     )
     .join("\n");
-  const documents = [target, ...references]
-    .map((file) =>
-      buildDocxBlocksMessage({
-        simplifiedName: file.simplifiedName,
-        blocks: file.blocks,
-      }),
-    )
-    .join("\n\n");
 
   return await Result.tryPromise({
     try: async () => {
@@ -103,15 +100,23 @@ export const proposeReferenceTopics = async ({
         orgAIConfig,
         organizationId,
         analytics: aiAnalytics,
-        caching: resolveCaching({
-          promptCachingEnabled,
-          role: ROLE,
-          scopeKey,
-        }),
+        caching,
         serviceTier,
         tenantWorkspaceIds: [workspaceId],
         system: SYSTEM_PROMPT,
-        prompt: `Seeded topics (do not repeat):\n${seeded || "(none)"}\n\n${documents}`,
+        // Documents first (the shared, cached region), the seeded topics last.
+        messages: [
+          {
+            role: "user",
+            content: [
+              ...buildReviewDocumentParts({ target, references, caching }),
+              {
+                type: "text",
+                content: `Seeded topics (do not repeat):\n${seeded || "(none)"}`,
+              },
+            ],
+          },
+        ],
         abortSignal: AbortSignal.any([
           abortSignal,
           AbortSignal.timeout(TIMEOUT_MS),

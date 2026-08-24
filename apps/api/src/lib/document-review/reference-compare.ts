@@ -17,13 +17,16 @@ import type {
   ReferenceAssessment,
   ReferenceConsensus,
 } from "@/api/lib/document-review/contract";
+import {
+  buildReviewDocumentParts,
+  reviewDocumentsScopeKey,
+} from "@/api/lib/document-review/review-document-messages";
 import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
 import {
   buildGroundedReviewFix,
   type GroundedReviewFix,
 } from "@/api/lib/grounded-review-fix";
 import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
-import { buildDocxBlocksMessage } from "@/api/lib/workflow/ai-prompts";
 import type { PreparedDocxFile } from "@/api/lib/workflow/generate-batch";
 
 const REFERENCE_REVIEW_TIMEOUT_MS = 120_000;
@@ -330,33 +333,17 @@ References are examples, not policy and not proof of market practice. Never call
 
 Assess every supplied review topic exactly once. Preserve its topicId exactly. Classify the target as aligned, different, missing-from-target, additional-in-target, deal-specific, or not-comparable. Set consensus to mixed when the reference documents materially disagree with each other. Cite only exact block IDs supplied in the input. F0 is always the target; every other source is a reference. proposedText must be null unless the cited reference language directly supports a concrete target edit. For missing-from-target proposed text, the first target citation must identify the verified block after which the new text belongs; without a safe target anchor, proposedText must be null. Use not-comparable when the documents do not support a grounded conclusion.`;
 
-const buildReferencePrompt = (
-  target: PreparedDocxFile,
-  references: readonly PreparedDocxFile[],
-  topics: readonly DocumentReviewTopic[],
-): string => {
-  const sourceGuide = [
-    `${target.simplifiedName}: target document`,
-    ...references.map(
-      (reference, index) =>
-        `${reference.simplifiedName}: reference document ${String(index + 1)}`,
-    ),
-  ].join("\n");
-  const documents = [target, ...references]
-    .map((file) =>
-      buildDocxBlocksMessage({
-        simplifiedName: file.simplifiedName,
-        blocks: file.blocks,
-      }),
-    )
-    .join("\n\n");
+// The topics come after the shared document region: they are what changes
+// between calls, and anything placed before the documents would push them out
+// of the cached prefix.
+const buildTopicsPart = (topics: readonly DocumentReviewTopic[]): string => {
   const topicGuide = topics
     .map(
       (topic) =>
         `- topicId=${topic.topicId}\n  title=${topic.title}\n  reviewer context=${topic.context || "(none)"}`,
     )
     .join("\n");
-  return `Review topics:\n${topicGuide}\n\nSource roles:\n${sourceGuide}\n\n${documents}`;
+  return `Review topics:\n${topicGuide}`;
 };
 
 type CompareReferenceDocumentsArgs = {
@@ -390,12 +377,14 @@ export const compareReferenceDocuments = async ({
 }: CompareReferenceDocumentsArgs): Promise<
   Result<ReferenceReviewFinding[], WorkflowIntegrationError>
 > => {
-  const scopeHasher = new Bun.CryptoHasher("sha256");
-  scopeHasher.update(targetEntityVersionId);
-  for (const versionId of referenceEntityVersionIds) {
-    scopeHasher.update(versionId);
-  }
-  const scopeKey = `document-review:${scopeHasher.digest("hex")}`;
+  const caching = resolveCaching({
+    promptCachingEnabled,
+    role: REFERENCE_REVIEW_ROLE,
+    scopeKey: reviewDocumentsScopeKey(
+      targetEntityVersionId,
+      referenceEntityVersionIds,
+    ),
+  });
   const aiAnalytics = createTanStackAIAnalyticsCallbacks({
     feature: "document-review.references",
     modelRole: REFERENCE_REVIEW_ROLE,
@@ -416,15 +405,19 @@ export const compareReferenceDocuments = async ({
         orgAIConfig,
         organizationId,
         analytics: aiAnalytics,
-        caching: resolveCaching({
-          promptCachingEnabled,
-          role: REFERENCE_REVIEW_ROLE,
-          scopeKey,
-        }),
+        caching,
         serviceTier,
         tenantWorkspaceIds: [workspaceId],
         system: SYSTEM_PROMPT,
-        prompt: buildReferencePrompt(target, references, topics),
+        messages: [
+          {
+            role: "user",
+            content: [
+              ...buildReviewDocumentParts({ target, references, caching }),
+              { type: "text", content: buildTopicsPart(topics) },
+            ],
+          },
+        ],
         abortSignal: AbortSignal.any([
           abortSignal,
           AbortSignal.timeout(REFERENCE_REVIEW_TIMEOUT_MS),
