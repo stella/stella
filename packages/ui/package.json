@@ -168,7 +168,7 @@
   },
   "devDependencies": {
     "@atlaskit/pragmatic-drag-and-drop": "^3.0.0",
-    "@atlaskit/pragmatic-drag-and-drop-auto-scroll": "^3.0.1",
+    "@atlaskit/pragmatic-drag-and-drop-auto-scroll": "^3.1.0",
     "@base-ui/react": "catalog:",
     "@stll/typescript-config": "workspace:*",
     "@types/react": "catalog:react19",
@@ -181,7 +181,7 @@
   },
   "peerDependencies": {
     "@atlaskit/pragmatic-drag-and-drop": "^3.0.0",
-    "@atlaskit/pragmatic-drag-and-drop-auto-scroll": "^3.0.1",
+    "@atlaskit/pragmatic-drag-and-drop-auto-scroll": "^3.1.0",
     "@base-ui/react": "^1.7.0",
     "react": ">=19",
     "react-dom": ">=19",
