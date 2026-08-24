@@ -183,7 +183,9 @@ const annotationClassName = ({
     }
     case "highlight":
     case null: {
-      return "cursor-pointer rounded-sm px-px text-inherit";
+      // No padding or rounding: a mark over several inline runs is several
+      // elements, and only a flat background reads as one continuous mark.
+      return "cursor-pointer text-inherit";
     }
     default: {
       const unreachable: never = style;

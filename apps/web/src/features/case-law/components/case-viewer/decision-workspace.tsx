@@ -134,25 +134,35 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
           (row) => row.groupId === item.groupId,
         );
   const activeSpans = activeAnnotation === null ? [] : rowsOf(activeAnnotation);
-  // Flash the words the mark covers, the way a margin jump does, so the
-  // reader sees at once what the bar is about. Runs from the id in state, so
-  // the toolbar's once-installed document listener never holds a stale list.
+  // Select the words the mark covers, exactly as if the reader had dragged
+  // over them, so the bar reads as acting on that selection. Runs from the
+  // id in state, so the toolbar's once-installed document listener never
+  // holds a stale list.
   const activeRowIds = activeSpans.map((row) => row.id).join(" ");
   useExternalSyncEffect(() => {
     const container = mainRef.current;
     if (!container || activeRowIds === "") {
       return;
     }
+    const pieces: HTMLElement[] = [];
     for (const id of activeRowIds.split(" ")) {
-      const elements = container.querySelectorAll<HTMLElement>(
-        `[data-annotation-id="${CSS.escape(id)}"]`,
+      pieces.push(
+        ...container.querySelectorAll<HTMLElement>(
+          `[data-annotation-id="${CSS.escape(id)}"]`,
+        ),
       );
-      for (const element of elements) {
-        delete element.dataset["highlight"];
-        forceReflow(element);
-        element.dataset["highlight"] = "";
-      }
     }
+    const first = pieces.at(0);
+    const last = pieces.at(-1);
+    if (first === undefined || last === undefined) {
+      return;
+    }
+    const range = container.ownerDocument.createRange();
+    range.setStartBefore(first);
+    range.setEndAfter(last);
+    const selection = container.ownerDocument.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
   }, [activeRowIds]);
   const annotationAnchors: AnnotationAnchorSource[] = (
     annotations?.annotations ?? []
