@@ -148,13 +148,11 @@ const databaseHolding = (
           ];
         } else if ("opstamp" in selection && deleteOpstamp !== undefined) {
           rows = [{ opstamp: deleteOpstamp }];
+        } else if ("country" in selection) {
+          rows = (jurisdictions ?? []).map((country) => ({ country }));
         } else {
           rows = [];
         }
-        return chain;
-      },
-      selectDistinct: () => {
-        rows = (jurisdictions ?? []).map((country) => ({ country }));
         return chain;
       },
     };

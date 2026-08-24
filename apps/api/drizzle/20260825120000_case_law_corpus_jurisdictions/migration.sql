@@ -6,8 +6,9 @@ SET statement_timeout = '5s';--> statement-breakpoint
 -- handful of countries; SELECT DISTINCT nevertheless plans as a full parallel
 -- scan in production. This registry is derived at the write boundary instead.
 CREATE TABLE "case_law_corpus_jurisdictions" (
-  "country" varchar(3) PRIMARY KEY,
-  "first_observed_at" timestamptz DEFAULT now() NOT NULL
+  "country" varchar(3) NOT NULL,
+  "first_observed_at" timestamptz DEFAULT now() NOT NULL,
+  CONSTRAINT "case_law_corpus_jurisdictions_pkey" PRIMARY KEY ("country")
 );--> statement-breakpoint
 
 ALTER TABLE "case_law_corpus_jurisdictions" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
@@ -33,7 +34,7 @@ BEGIN
   INSERT INTO case_law_corpus_jurisdictions (country)
   SELECT DISTINCT country
   FROM inserted_decisions
-  ON CONFLICT (country) DO NOTHING;
+  ON CONFLICT ON CONSTRAINT case_law_corpus_jurisdictions_pkey DO NOTHING;
   RETURN NULL;
 END
 $function$;--> statement-breakpoint
@@ -45,7 +46,7 @@ AS $function$
 BEGIN
   INSERT INTO case_law_corpus_jurisdictions (country)
   VALUES (NEW.country)
-  ON CONFLICT (country) DO NOTHING;
+  ON CONFLICT ON CONSTRAINT case_law_corpus_jurisdictions_pkey DO NOTHING;
   RETURN NULL;
 END
 $function$;--> statement-breakpoint
@@ -68,6 +69,7 @@ EXECUTE FUNCTION register_updated_case_law_corpus_jurisdiction();--> statement-b
 -- PostgreSQL otherwise chooses a sequential aggregate over the whole corpus.
 -- This loose index scan performs one case_law_decisions_country_idx seek per
 -- distinct country, so the additive migration remains bounded at corpus scale.
+-- stella-migration-safety: reviewed bulk-backfill - the loose index scan performs one indexed min(country) seek per distinct three-letter jurisdiction rather than scanning case_law_decisions; it inserts at most the bounded jurisdiction-code domain into a new empty registry and is idempotent.
 WITH RECURSIVE observed_countries(country) AS (
   SELECT min(country)
   FROM case_law_decisions
@@ -84,4 +86,4 @@ INSERT INTO case_law_corpus_jurisdictions (country)
 SELECT country
 FROM observed_countries
 WHERE country IS NOT NULL
-ON CONFLICT (country) DO NOTHING;
+ON CONFLICT ON CONSTRAINT case_law_corpus_jurisdictions_pkey DO NOTHING;

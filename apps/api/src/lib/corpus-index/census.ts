@@ -618,9 +618,9 @@ export const reportIndexCensus = ({
 const MAX_CENSUSED_JURISDICTIONS = 256;
 
 /**
- * Jurisdictions the corpus holds. Read from the decisions themselves
- * rather than from a hand-kept list, so a new country's index cannot be
- * uncensused because nobody remembered to add it.
+ * Jurisdictions the corpus has ever held. The write-boundary-derived registry
+ * keeps the read constant-size without becoming a hand-maintained list, so a
+ * new country's index cannot be uncensused because nobody remembered to add it.
  */
 export const listCaseLawJurisdictions = async (
   scopedDb: ScopedDb,
