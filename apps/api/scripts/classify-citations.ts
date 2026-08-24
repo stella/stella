@@ -13,11 +13,14 @@
  *   --language cs  Only process citations in this language
  *   --seed         Seed initial polarity rules before classifying
  *   --dry-run      Classify but don't persist results
+ *   --ids FILE     Only the citation ids in FILE (a JSON array), all of them:
+ *                  the set `seed-polarity-rules.ts` writes when it retires a
+ *                  rule. Overrides --limit.
  *
  * Idempotent: only processes citations with NULL polarity.
  */
 
-import { and, desc, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 
 import { rootDb, rlsDb } from "@/api/db/root";
 import {
@@ -35,12 +38,14 @@ import { RULE_SOURCE } from "@/api/handlers/case-law/polarity/consts";
 import type { RuleCache } from "@/api/handlers/case-law/polarity/rule-engine";
 import { SEED_RULES } from "@/api/handlers/case-law/polarity/seed-rules";
 import { toSafeId } from "@/api/lib/branded-types";
+import type { SafeId } from "@/api/lib/branded-types";
 
 type Args = {
   limit: number;
   language: string | null;
   seed: boolean;
   dryRun: boolean;
+  idsFile: string | null;
 };
 
 const parseArgs = (): Args => {
@@ -50,6 +55,7 @@ const parseArgs = (): Args => {
     language: null,
     seed: false,
     dryRun: false,
+    idsFile: null,
   };
 
   for (let i = 0; i < args.length; i++) {
@@ -68,10 +74,31 @@ const parseArgs = (): Args => {
       result.seed = true;
     } else if (args[i] === "--dry-run") {
       result.dryRun = true;
+    } else if (args[i] === "--ids") {
+      // Without the file the run would fall back to the newest unclassified
+      // rows and classify the wrong set: refuse rather than guess.
+      if (!next) {
+        console.error("Missing file path after --ids");
+        process.exit(1);
+      }
+      result.idsFile = next;
+      i++;
     }
   }
 
   return result;
+};
+
+/** The ids a retirement wrote; anything but a list of ids is a wrong file. */
+const readIdsFile = async (
+  path: string,
+): Promise<SafeId<"caseLawCitation">[]> => {
+  const raw: unknown = await Bun.file(path).json();
+  if (!Array.isArray(raw) || !raw.every((id) => typeof id === "string")) {
+    console.error(`Expected a JSON array of citation ids in ${path}`);
+    process.exit(1);
+  }
+  return raw.map((id) => toSafeId<"caseLawCitation">(id));
 };
 
 const seedRules = async () => {
@@ -113,6 +140,12 @@ const main = async () => {
   if (args.language) {
     conditions.push(eq(caseLawDecisions.language, args.language));
   }
+  const onlyIds =
+    args.idsFile === null ? null : await readIdsFile(args.idsFile);
+  if (onlyIds !== null) {
+    conditions.push(inArray(caseLawCitations.id, onlyIds));
+  }
+  const limit = onlyIds === null ? args.limit : onlyIds.length;
 
   // Fetch unclassified citations with their decision context
   const citations = await rootDb
@@ -130,7 +163,7 @@ const main = async () => {
     )
     .where(and(...conditions))
     .orderBy(desc(caseLawCitations.createdAt))
-    .limit(args.limit);
+    .limit(limit);
 
   if (citations.length === 0) {
     console.log("No unclassified citations found.");

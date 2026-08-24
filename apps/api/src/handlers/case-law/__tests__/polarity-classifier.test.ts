@@ -117,6 +117,11 @@ describe("seed rules", () => {
     const testCases = [
       "na rozdíl od předchozího rozhodnutí",
       "tento závěr byl překonán",
+      "bez dalšího nelze aplikovat ani dovolatelkou zmiňovaný rozsudek Nejvyššího soudu",
+      "v této věci nelze aplikovat závěry vyplývající z rozsudků",
+      "na daný případ nelze aplikovat rozsudek Nejvyššího soudu",
+      "tento rozsudek však nelze aplikovat",
+      "závěry citovaného usnesení nelze aplikovat na projednávanou věc",
     ];
 
     for (const text of testCases) {
@@ -125,6 +130,66 @@ describe("seed rules", () => {
       );
       expect(matched).toBe(true);
     }
+  });
+
+  /**
+   * Windows from the corpus in which a negative cue speaks of a party, a
+   * court or a statute, next to a citation the court relies on. A negative
+   * rule that fires on any of these labels an authority as overruled; the
+   * class of defect is a cue without the cited decision as its object.
+   */
+  test("Czech negative rules stay silent where the cue is not about the cited decision", () => {
+    const negativeRules = SEED_RULES.filter(
+      (r) => r.language === "cs" && r.polarity === "negative",
+    );
+
+    const windows = [
+      "Takovým postupem by přestal být nestranným rozhodčím sporu (viz např. rozsudek rozšířeného senátu Nejvyššího správního soudu ze dne 24. 8. 2010, č. j. 4 As 3/2008 – 78). Zcela obecné žalobní body tedy soud vypořádává se stejnou mírou obecnosti.",
+      "V tomto směru podle názoru krajského soudu neobstojí odvolací námitka nedoručení výměru odůvodněná tvrzením, že povinná v jiné věci (sp. zn. 26 E 1519/1997) předložila generální plnou moc.",
+      "Rovněž tak neobstojí jiné vyjádření, které ukazuje na značnou nejistotu souvislosti chybného postupu s nastalým stavem.",
+      "Neobstojí ani případná argumentace, že se jednalo o vyjádření svobodné vůle účastníků s důsledky pacta sunt servanda.",
+      "Pouhá paragrafová či slovní citace některého zákonného ustanovení jako stížní bod neobstojí.",
+      "neboť ten, kdo odebíral plyn, na rozdíl od povinného, neměl uzavřenou žádnou smlouvu o odběru.",
+      "nemá důvodu pochybovat o pravdivosti jeho tvrzení, neboť na rozdíl od stěžovatele nemá na výsledku řízení zájem.",
+      "odvolací soud (na rozdíl od soudu prvního stupně) neuzavřel, že by nárok byl promlčen.",
+      "Leasingovým společnostem, byť jsou vlastníky předmětu leasingu, na rozdíl od nájemního vztahu nezáleží na tom, zda leasingoví nájemci zhodnocují předmět leasingu.",
+      "postup k odstranění pochybností nelze na rozdíl od daňové kontroly použít pro namátkové prošetření tvrzení daňového subjektu.",
+      "Rozhodnutí odvolacího soudu o tom, že na posuzovanou věc nelze aplikovat § 1765 odst. 1 o. z., spočívá na závěrech, podle nichž závazek zanikl.",
+      "nález Ústavního soudu vydaný v listopadu 2008 nelze aplikovat na daňovou kontrolu zahájenou v březnu téhož roku.",
+      "Ustanovení § 1765 o. z. nelze aplikovat na daný případ (srov. rozsudek Nejvyššího soudu ze dne 11. 4. 2018, sp. zn. 31 Cdo 927/2016).",
+      "Na rozdíl od situace v projednávané věci šlo o jednostranný zápočet; k tomu srov. rozsudek Nejvyššího soudu sp. zn. 31 Cdo 927/2016.",
+      "Na rozdíl od krajského soudu, jehož rozsudek ze dne 3. 5. 2019 vycházel z jiného skutkového stavu, Nejvyšší soud dospěl k závěru, že žaloba je důvodná.",
+      "Rozsudek uvádí, že § 1765 nelze aplikovat na závazky vzniklé před účinností zákona (srov. usnesení Nejvyššího soudu sp. zn. 29 Cdo 2303/2013).",
+    ];
+
+    for (const text of windows) {
+      const fired = negativeRules.filter((r) =>
+        new RegExp(r.pattern, "iu").test(text),
+      );
+      expect({ text, fired: fired.map((r) => r.pattern) }).toEqual({
+        text,
+        fired: [],
+      });
+    }
+  });
+
+  /**
+   * A positive cue and a negative one in one window, the negative about the
+   * cited decision: negative wins precedence, so the negative rule has to
+   * fire or the retired cue's loss turns an inapplicable citation positive.
+   */
+  test("a decision named before the negative cue is still read as negative", () => {
+    const rules = compileRules(
+      SEED_RULES.filter((r) => r.language === "cs").map((r) => ({
+        id: createSafeId<"caseLawPolarityRule">(),
+        pattern: r.pattern,
+        polarity: r.polarity,
+        confidence: 1,
+      })),
+    );
+    const context =
+      "Dovolatel odkazuje na rozsudek Nejvyššího soudu ze dne 25. 11. 2008, sp. zn. 22 Cdo 3554/2008; tento rozsudek však nelze aplikovat, neboť vychází z jiných skutkových okolností.";
+    expect(selectRuleMatch(rules, context)?.polarity).toBe(POLARITY.NEGATIVE);
   });
 
   test("Czech supportive rules match expected phrases", () => {

@@ -3,16 +3,19 @@
  *
  * Idempotent: each rule is keyed on `(pattern, language)`, so re-running
  * updates the polarity a rule asserts rather than accumulating duplicates of
- * it, and rules listed as retired are marked so rather than deleted. Run after
+ * it, and rules listed as retired are marked so rather than deleted, with the
+ * citations they labelled returned to the unclassified pool. Run after
  * changing `polarity/seed-rules.ts`; nothing else writes rows with
  * `source = 'manual'`.
  *
  *   bun apps/api/src/scripts/seed-polarity-rules.ts
  */
 
-import { and, eq, or } from "drizzle-orm";
+import { and, eq, inArray, or, sql } from "drizzle-orm";
+import { tmpdir } from "node:os";
+import path from "node:path";
 
-import { caseLawPolarityRules } from "@/api/db/schema";
+import { caseLawCitations, caseLawPolarityRules } from "@/api/db/schema";
 import { RULE_SOURCE } from "@/api/handlers/case-law/polarity/consts";
 import {
   RETIRED_SEED_RULES,
@@ -49,8 +52,12 @@ for (const rule of SEED_RULES) {
     });
 }
 
+/** Rows reset per statement; bounded so the lock never spans the table. */
+const RESET_BATCH = 5000;
+
+let resetIds: string[] = [];
 if (RETIRED_SEED_RULES.length > 0) {
-  await rootDb
+  const retired = await rootDb
     .update(caseLawPolarityRules)
     .set({ source: RULE_SOURCE.RETIRED })
     .where(
@@ -62,11 +69,47 @@ if (RETIRED_SEED_RULES.length > 0) {
           ),
         ),
       ),
-    );
+    )
+    .returning({ id: caseLawPolarityRules.id });
+
+  // A retired rule's verdicts go with it: the citations it labelled return
+  // to the unclassified pool, and `scripts/classify-citations.ts` reads them
+  // again under the rules that remain. Left in place, a withdrawn rule would
+  // keep speaking through every row it ever touched.
+  const retiredIds = retired.map((rule) => rule.id);
+  const resetBatch = async (): Promise<string[]> => {
+    const reset = await rootDb
+      .update(caseLawCitations)
+      .set({ polarity: null, polarityRuleId: null })
+      .where(
+        sql`${caseLawCitations.id} IN (
+          SELECT ${caseLawCitations.id} FROM ${caseLawCitations}
+          WHERE ${inArray(caseLawCitations.polarityRuleId, retiredIds)}
+          LIMIT ${RESET_BATCH}
+        )`,
+      )
+      .returning({ id: caseLawCitations.id });
+    const ids = reset.map((row) => row.id);
+    return reset.length < RESET_BATCH ? ids : [...ids, ...(await resetBatch())];
+  };
+  if (retiredIds.length > 0) {
+    resetIds = await resetBatch();
+  }
 }
 
 console.log(
-  `Done. ${SEED_RULES.length} rules upserted, ${RETIRED_SEED_RULES.length} retired.`,
+  `Done. ${SEED_RULES.length} rules upserted, ${RETIRED_SEED_RULES.length} retired, ${resetIds.length} citations returned to the unclassified pool.`,
 );
+if (resetIds.length > 0) {
+  // The classifier walks the newest unclassified rows first and stops at a
+  // limit; the reset rows are old and would wait behind the backlog. Their
+  // ids go to a file the classifier can be pointed at, so the pass that
+  // follows consumes exactly this set.
+  const resetFile = path.join(tmpdir(), `polarity-reset-${Date.now()}.json`);
+  await Bun.write(resetFile, JSON.stringify(resetIds));
+  console.log(
+    `Next: bun apps/api/scripts/classify-citations.ts --ids ${resetFile}, then bun apps/api/src/scripts/backfill-citation-authority.ts.`,
+  );
+}
 
 process.exit(0);
