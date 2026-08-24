@@ -224,29 +224,52 @@ const fillBlockPlainText = (block: WireBlock): Block => {
 };
 
 /**
- * Every rebuildable `plainText` recomputed from the `inlines` beside it.
+ * Cell separator within a row, and row separator within a table, for a
+ * table block's own `plainText`.
+ *
+ * A tab rather than a visible delimiter: this string is what the corpus
+ * index reads for a table, so a separator that is pure whitespace adds
+ * no token of its own to the index.
+ */
+const TABLE_CELL_SEPARATOR = "\t";
+const TABLE_ROW_SEPARATOR = "\n";
+
+/**
+ * Every `plainText` recomputed from the `inlines` beside it.
  *
  * Applied once at the ingestion boundary, after text sanitization, which
- * is what makes dropping those fields from a response lossless: a stored
- * value is by construction what `projectPlainText` yields, so a reader
- * rebuilds it exactly. Parsers need not agree on a normalization, only
- * on producing correct `inlines`.
+ * is what makes dropping the rebuildable ones from a response lossless: a
+ * stored value is by construction what `projectPlainText` yields, so a
+ * reader rebuilds it exactly. Parsers need not agree on a normalization,
+ * only on producing correct `inlines`.
  *
- * A table block's own `plainText` spans the grid and is not rebuildable
- * from any single inline run, so it is left as the parser wrote it.
+ * A table block's own `plainText` is not rebuildable from any single
+ * inline run, so it still travels on the wire — but it is derived here
+ * all the same, by joining the projected cells. Two reasons it cannot be
+ * left as the parser wrote it: the corpus index reads this field for a
+ * table, so a letter-spaced heading in a cell has to be collapsed here
+ * too or it stops matching; and the cells beside it have just been
+ * reprojected, so a parser-built join would describe the text they used
+ * to hold.
  */
 export const withProjectedPlainText = (ast: DocumentAst): DocumentAst => ({
   ...ast,
   blocks: ast.blocks.map((block): Block => {
     if (block.type === "table") {
+      const rows = block.rows.map((row) =>
+        row.map(({ inlines }) => ({
+          inlines,
+          plainText: projectPlainText(inlines),
+        })),
+      );
       return {
         ...block,
-        rows: block.rows.map((row) =>
-          row.map(({ inlines }) => ({
-            inlines,
-            plainText: projectPlainText(inlines),
-          })),
-        ),
+        rows,
+        plainText: rows
+          .map((row) =>
+            row.map((cell) => cell.plainText).join(TABLE_CELL_SEPARATOR),
+          )
+          .join(TABLE_ROW_SEPARATOR),
       };
     }
     return { ...block, plainText: projectPlainText(block.inlines) };

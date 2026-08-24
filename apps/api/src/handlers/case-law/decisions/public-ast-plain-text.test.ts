@@ -143,11 +143,14 @@ const decoratedAst = (): DocumentAst => ({
       role: "metadata-table",
       rows: [
         [
-          { inlines: [{ type: "text", text: "Soud" }], plainText: "Soud" },
+          {
+            inlines: [{ type: "text", text: "z a m i e t a" }],
+            plainText: "z a m i e t a",
+          },
           { inlines: [{ type: "text", text: "NS" }], plainText: "NS" },
         ],
       ],
-      plainText: "Soud\tNS",
+      plainText: "z a m i e t a\tNS",
     },
   ],
 });
@@ -269,5 +272,15 @@ describe("public decision AST plain text", () => {
 
     expect(stored.blocks.length).toBeGreaterThan(400);
     expect(sent).toBeLessThan(full * 0.7);
+  });
+
+  test("collapses a letter-spaced table cell into the indexed table text", () => {
+    const table = storedAst(decoratedAst()).blocks.find(
+      (block) => block.type === "table",
+    );
+
+    // `chunkBlocks` indexes a table by this field, not by its cells, so
+    // the collapse has to reach it or a spaced heading stops matching.
+    expect(table?.plainText).toBe("zamieta\tNS");
   });
 });
