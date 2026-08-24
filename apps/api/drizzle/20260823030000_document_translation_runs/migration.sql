@@ -23,16 +23,18 @@ CREATE TABLE "document_translation_runs" (
   "output_entity_id" uuid,
   "output_field_id" uuid,
   "output_file_name" varchar(1024),
-  "requested_by" text NOT NULL,
+  "requested_by" text,
   "model_ref" varchar(256),
   "pipeline_version" integer DEFAULT 1 NOT NULL,
   "created_at" timestamptz DEFAULT now() NOT NULL,
   "started_at" timestamptz,
   "finished_at" timestamptz,
+  CONSTRAINT "document_translation_runs_id_workspace_organization_unq"
+    UNIQUE("id", "workspace_id", "organization_id"),
   CONSTRAINT "document_translation_runs_status_values_check"
     CHECK ("status" IN ('queued', 'preparing', 'translating', 'assembling', 'validating', 'completed', 'failed', 'cancelled')),
   CONSTRAINT "document_translation_runs_error_code_values_check"
-    CHECK ("error_code" IS NULL OR "error_code" IN ('document_unresolved', 'document_changed', 'unsupported_format', 'unsupported_review_markup', 'provider_unavailable', 'translation_failed', 'format_validation_failed', 'enqueue_failed', 'internal')),
+    CHECK ("error_code" IS NULL OR "error_code" IN ('document_unresolved', 'document_changed', 'unsupported_format', 'unsupported_review_markup', 'provider_unavailable', 'translation_failed', 'format_validation_failed', 'internal')),
   CONSTRAINT "document_translation_runs_output_values_check"
     CHECK ("output" IN ('translated', 'bilingual')),
   CONSTRAINT "document_translation_runs_engine_values_check"
@@ -75,7 +77,7 @@ ALTER TABLE "document_translation_runs"
 ALTER TABLE "document_translation_runs"
   ADD CONSTRAINT "document_translation_runs_requested_by_user_id_fk"
   FOREIGN KEY ("requested_by") REFERENCES "public"."user"("id")
-  ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+  ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "document_translation_runs"
   ADD CONSTRAINT "document_translation_runs_entity_id_entities_id_fk"
   FOREIGN KEY ("entity_id") REFERENCES "public"."entities"("id")
@@ -95,13 +97,14 @@ ALTER TABLE "document_translation_units"
   FOREIGN KEY ("workspace_id") REFERENCES "public"."workspaces"("id")
   ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "document_translation_units"
-  ADD CONSTRAINT "document_translation_units_run_id_fk"
-  FOREIGN KEY ("run_id") REFERENCES "public"."document_translation_runs"("id")
-  ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "document_translation_units"
   ADD CONSTRAINT "document_translation_units_workspace_organization_fk"
   FOREIGN KEY ("workspace_id", "organization_id")
   REFERENCES "public"."workspaces"("id", "organization_id")
+  ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "document_translation_units"
+  ADD CONSTRAINT "document_translation_units_run_workspace_organization_fk"
+  FOREIGN KEY ("run_id", "workspace_id", "organization_id")
+  REFERENCES "public"."document_translation_runs"("id", "workspace_id", "organization_id")
   ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 
 CREATE INDEX "document_translation_runs_document_created_idx"

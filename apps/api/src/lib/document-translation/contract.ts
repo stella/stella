@@ -48,7 +48,6 @@ export const DOCUMENT_TRANSLATION_RUN_ERROR_CODES = [
   "provider_unavailable",
   "translation_failed",
   "format_validation_failed",
-  "enqueue_failed",
   "internal",
 ] as const;
 export type DocumentTranslationRunErrorCode =

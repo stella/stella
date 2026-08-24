@@ -3933,14 +3933,14 @@
   },
   "translate": {
     "dialog": {
-      "aiDescription": "Usa Stella AI manteniendo la estructura y el formato del documento.",
-      "backgroundHint": "Puedes cerrar esta ventana. Stella te avisará cuando el documento esté listo.",
+      "aiDescription": "Usa stella AI manteniendo la estructura y el formato del documento.",
+      "backgroundHint": "Puedes cerrar esta ventana. stella te avisará cuando el documento esté listo.",
       "bilingualDescription": "Crea dos columnas con el original y su traducción mediante IA.",
-      "bilingualDocument": "Columnas bilingües · Stella AI",
+      "bilingualDocument": "Columnas bilingües · stella AI",
       "completed": "Traducción lista",
       "deeplDescription": "Traduce el archivo completo con DeepL.",
-      "description": "Traduce el documento abierto con DeepL. La copia traducida se guarda en este asunto como un documento nuevo.",
-      "docxOnly": "La traducción con Stella AI solo está disponible actualmente para archivos DOCX.",
+      "description": "Crea una copia traducida del documento abierto. El original no cambia.",
+      "docxOnly": "La traducción con stella AI solo está disponible actualmente para archivos DOCX.",
       "noLanguagesFound": "No se encontraron idiomas",
       "notConfigured": "DeepL no está configurado para esta organización. Añade una clave de API de DeepL en la configuración de la organización para habilitar la traducción.",
       "outputLabel": "Tipo de traducción",
@@ -3951,7 +3951,7 @@
       "targetLanguage": "Idioma de destino",
       "title": "Traducir documento",
       "translatedDocument": "Documento traducido · DeepL",
-      "translatedDocumentAi": "Documento traducido · Stella AI",
+      "translatedDocumentAi": "Documento traducido · stella AI",
       "translating": "Traduciendo…"
     },
     "error": {

@@ -3933,14 +3933,14 @@
   },
   "translate": {
     "dialog": {
-      "aiDescription": "Naudokite „Stella AI“, išsaugodami dokumento struktūrą ir formatavimą.",
-      "backgroundHint": "Šį langą galite uždaryti. „Stella“ praneš, kai dokumentas bus parengtas.",
+      "aiDescription": "Naudokite „stella AI“, išsaugodami dokumento struktūrą ir formatavimą.",
+      "backgroundHint": "Šį langą galite uždaryti. „stella“ praneš, kai dokumentas bus parengtas.",
       "bilingualDescription": "Sukurkite du stulpelius su šaltiniu ir jo vertimu naudojant DI.",
-      "bilingualDocument": "Dvikalbiai stulpeliai · Stella AI",
+      "bilingualDocument": "Dvikalbiai stulpeliai · stella AI",
       "completed": "Vertimas parengtas",
       "deeplDescription": "Išverskite visą failą naudodami DeepL.",
-      "description": "Išverskite atidarytą dokumentą naudodami DeepL. Išversta kopija išsaugoma šioje byloje kaip naujas dokumentas.",
-      "docxOnly": "Vertimas naudojant „Stella AI“ šiuo metu galimas tik DOCX failams.",
+      "description": "Sukurkite išverstą atidaryto dokumento kopiją. Originalas nebus pakeistas.",
+      "docxOnly": "Vertimas naudojant „stella AI“ šiuo metu galimas tik DOCX failams.",
       "noLanguagesFound": "Kalbų nerasta",
       "notConfigured": "DeepL nesukonfigūruotas šiai organizacijai. Norėdami įjungti vertimą, organizacijos nustatymuose pridėkite DeepL API raktą.",
       "outputLabel": "Vertimo tipas",
@@ -3951,7 +3951,7 @@
       "targetLanguage": "Tikslinė kalba",
       "title": "Versti dokumentą",
       "translatedDocument": "Išverstas dokumentas · DeepL",
-      "translatedDocumentAi": "Išverstas dokumentas · Stella AI",
+      "translatedDocumentAi": "Išverstas dokumentas · stella AI",
       "translating": "Verčiama…"
     },
     "error": {

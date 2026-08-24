@@ -78,8 +78,7 @@ export const documentTranslationRuns = p.pgTable(
     outputFileName: p.varchar("output_file_name", { length: 1024 }),
     requestedBy: p
       .text("requested_by")
-      .notNull()
-      .references(() => user.id, { onDelete: "restrict" }),
+      .references(() => user.id, { onDelete: "set null" }),
     modelRef: p.varchar("model_ref", { length: 256 }),
     pipelineVersion: p.integer("pipeline_version").notNull().default(1),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
@@ -100,6 +99,9 @@ export const documentTranslationRuns = p.pgTable(
       .uniqueIndex("document_translation_runs_active_document_uidx")
       .on(table.workspaceId, table.entityId, table.fileFieldId)
       .where(sql`${table.status} IN (${ACTIVE_STATUS_VALUES})`),
+    p
+      .unique("document_translation_runs_id_workspace_organization_unq")
+      .on(table.id, table.workspaceId, table.organizationId),
     p.check(
       "document_translation_runs_status_values_check",
       sql`${table.status} IN (${RUN_STATUS_VALUES})`,
@@ -153,9 +155,7 @@ export const documentTranslationUnits = p.pgTable(
     workspaceId: safeWorkspaceId("workspace_id")
       .notNull()
       .references(() => workspaces.id, { onDelete: "cascade" }),
-    runId: safeUuid<"documentTranslationRun">("run_id")
-      .notNull()
-      .references(() => documentTranslationRuns.id, { onDelete: "cascade" }),
+    runId: safeUuid<"documentTranslationRun">("run_id").notNull(),
     unitKey: p.varchar("unit_key", { length: 512 }).notNull(),
     ordinal: p.integer().notNull(),
     sourceText: p.text("source_text").notNull(),
@@ -187,6 +187,17 @@ export const documentTranslationUnits = p.pgTable(
         columns: [table.workspaceId, table.organizationId],
         foreignColumns: [workspaces.id, workspaces.organizationId],
         name: "document_translation_units_workspace_organization_fk",
+      })
+      .onDelete("cascade"),
+    p
+      .foreignKey({
+        columns: [table.runId, table.workspaceId, table.organizationId],
+        foreignColumns: [
+          documentTranslationRuns.id,
+          documentTranslationRuns.workspaceId,
+          documentTranslationRuns.organizationId,
+        ],
+        name: "document_translation_units_run_workspace_organization_fk",
       })
       .onDelete("cascade"),
     ...wsOrganizationPolicies("document_translation_units"),

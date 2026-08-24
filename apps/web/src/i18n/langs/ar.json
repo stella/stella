@@ -3933,14 +3933,14 @@
   },
   "translate": {
     "dialog": {
-      "aiDescription": "استخدم Stella AI مع الحفاظ على بنية المستند وتنسيقه.",
-      "backgroundHint": "يمكنك إغلاق هذه النافذة. ستعلمك Stella عند جاهزية المستند.",
+      "aiDescription": "استخدم stella AI مع الحفاظ على بنية المستند وتنسيقه.",
+      "backgroundHint": "يمكنك إغلاق هذه النافذة. ستعلمك stella عند جاهزية المستند.",
       "bilingualDescription": "أنشئ عمودين للمصدر وترجمته بالذكاء الاصطناعي.",
-      "bilingualDocument": "أعمدة ثنائية اللغة · Stella AI",
+      "bilingualDocument": "أعمدة ثنائية اللغة · stella AI",
       "completed": "الترجمة جاهزة",
       "deeplDescription": "ترجمة الملف الكامل باستخدام DeepL.",
-      "description": "ترجمة المستند المفتوح عبر DeepL. تُحفَظ النسخة المترجَمة في هذا الملف القانوني كمستند جديد.",
-      "docxOnly": "ترجمة Stella AI متاحة حاليًا لملفات DOCX فقط.",
+      "description": "أنشئ نسخة مترجمة من المستند المفتوح. لن يتغير المستند الأصلي.",
+      "docxOnly": "ترجمة stella AI متاحة حاليًا لملفات DOCX فقط.",
       "noLanguagesFound": "لم يتم العثور على لغات",
       "notConfigured": "DeepL غير مُهيّأ لهذه المؤسسة. أضِف مفتاح API الخاص بـ DeepL في إعدادات المؤسسة لتمكين الترجمة.",
       "outputLabel": "نوع الترجمة",
@@ -3951,7 +3951,7 @@
       "targetLanguage": "اللغة الهدف",
       "title": "ترجمة المستند",
       "translatedDocument": "مستند مترجم · DeepL",
-      "translatedDocumentAi": "مستند مترجم · Stella AI",
+      "translatedDocumentAi": "مستند مترجم · stella AI",
       "translating": "جارٍ الترجمة…"
     },
     "error": {

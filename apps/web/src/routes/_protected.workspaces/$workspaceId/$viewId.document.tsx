@@ -422,8 +422,8 @@ const JustificationScrollSync = () => {
 };
 
 function RouteComponent() {
-  const workspaceId = Route.useParams({
-    select: (p) => p.workspaceId,
+  const { viewId, workspaceId } = Route.useParams({
+    select: (p) => ({ viewId: p.viewId, workspaceId: p.workspaceId }),
   });
   const initialFieldId = Route.useSearch({ select: (s) => s.field });
   const entityId = Route.useSearch({ select: (s) => s.entity });
@@ -438,6 +438,7 @@ function RouteComponent() {
       entityId={entityId}
       initialFieldId={initialFieldId}
       key={initialFieldId}
+      viewId={viewId}
       workspaceId={workspaceId}
     />
   );
@@ -445,10 +446,12 @@ function RouteComponent() {
 
 function RouteComponentInner({
   workspaceId,
+  viewId,
   entityId,
   initialFieldId,
 }: {
   workspaceId: string;
+  viewId: string;
   entityId: string;
   initialFieldId: string;
 }) {
@@ -739,6 +742,7 @@ function RouteComponentInner({
                     entityId={entityId}
                     fieldId={fieldId}
                     isDocx={isDocxFile}
+                    viewId={viewId}
                     workspaceId={workspaceId}
                   />
                 }
@@ -794,6 +798,7 @@ function RouteComponentInner({
                                 entityId={entityId}
                                 fieldId={fieldId}
                                 isDocx
+                                viewId={viewId}
                                 workspaceId={workspaceId}
                               />
                             }

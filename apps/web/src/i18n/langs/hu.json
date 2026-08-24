@@ -3933,14 +3933,14 @@
   },
   "translate": {
     "dialog": {
-      "aiDescription": "A Stella AI használata a dokumentum szerkezetének és formázásának megőrzésével.",
-      "backgroundHint": "Az ablak bezárható. A Stella értesíti, amikor a dokumentum elkészült.",
+      "aiDescription": "A stella AI használata a dokumentum szerkezetének és formázásának megőrzésével.",
+      "backgroundHint": "Az ablak bezárható. A stella értesíti, amikor a dokumentum elkészült.",
       "bilingualDescription": "Két oszlop létrehozása: az eredeti és az AI-fordítás.",
-      "bilingualDocument": "Kétnyelvű oszlopok · Stella AI",
+      "bilingualDocument": "Kétnyelvű oszlopok · stella AI",
       "completed": "A fordítás elkészült",
       "deeplDescription": "A teljes fájl lefordítása DeepL-lel.",
-      "description": "Fordítsa le a megnyitott dokumentumot a DeepL segítségével. A lefordított másolat új dokumentumként ebbe az ügybe kerül.",
-      "docxOnly": "A Stella AI-fordítás jelenleg csak DOCX-fájlokhoz érhető el.",
+      "description": "Készítsen fordítást a megnyitott dokumentumról. Az eredeti változatlan marad.",
+      "docxOnly": "A stella AI-fordítás jelenleg csak DOCX-fájlokhoz érhető el.",
       "noLanguagesFound": "Nem találhatók nyelvek",
       "notConfigured": "A DeepL nincs beállítva ehhez a szervezethez. A fordítás engedélyezéséhez adjon hozzá egy DeepL API-kulcsot a szervezet beállításaiban.",
       "outputLabel": "Fordítás típusa",
@@ -3951,7 +3951,7 @@
       "targetLanguage": "Célnyelv",
       "title": "Dokumentum fordítása",
       "translatedDocument": "Lefordított dokumentum · DeepL",
-      "translatedDocumentAi": "Lefordított dokumentum · Stella AI",
+      "translatedDocumentAi": "Lefordított dokumentum · stella AI",
       "translating": "Fordítás…"
     },
     "error": {

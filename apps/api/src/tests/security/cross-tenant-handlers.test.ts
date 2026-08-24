@@ -9,6 +9,7 @@ import {
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
+  documentTranslationRuns,
   entities,
   legalLists,
   savedSearches,
@@ -19,6 +20,7 @@ import readBilingualRun from "@/api/handlers/bilingual-translations/read-run";
 import readBillingCodes from "@/api/handlers/billing-codes/list";
 import readContactById from "@/api/handlers/contacts/get";
 import listDocumentReviewSources from "@/api/handlers/document-reviews/list-sources";
+import readDocumentTranslationRun from "@/api/handlers/document-translations/read-run";
 import listDocxSuggestions from "@/api/handlers/docx-suggestions/read";
 import readEntityById from "@/api/handlers/entities/get";
 import readVersionById from "@/api/handlers/entities/read-version-by-id";
@@ -111,6 +113,12 @@ const legalListA = toSafeId<"legalList">(
 );
 const legalListB = toSafeId<"legalList">(
   "22222222-2222-4222-8222-222222222246",
+);
+const documentTranslationRunB = toSafeId<"documentTranslationRun">(
+  "22222222-2222-4222-8222-222222222248",
+);
+const documentTranslationSourceFileB = toSafeId<"userFile">(
+  "22222222-2222-4222-8222-222222222249",
 );
 
 const savedSearchCriteria = (
@@ -286,7 +294,27 @@ const isolationCases: IsolationCase[] = [
       }),
     expectDenied: expectStatus(404),
     expectPositive: (result, { ids: testIds }) =>
-      expectBilingualRunIdEquals(result, testIds.bilingualRunB1),
+      expectTranslationRunIdEquals(result, testIds.bilingualRunB1),
+  },
+  {
+    name: "document translation run read by id",
+    runAAgainstB: async ({ ids: testIds, workspaceA }) =>
+      await runHandler(readDocumentTranslationRun, workspaceA, {
+        params: {
+          workspaceId: testIds.wsA1,
+          runId: documentTranslationRunB,
+        },
+      }),
+    runBPositive: async ({ ids: testIds, workspaceB }) =>
+      await runHandler(readDocumentTranslationRun, workspaceB, {
+        params: {
+          workspaceId: testIds.wsB1,
+          runId: documentTranslationRunB,
+        },
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: (result) =>
+      expectTranslationRunIdEquals(result, documentTranslationRunB),
   },
   {
     name: "invoice read by id",
@@ -526,6 +554,23 @@ beforeAll(async () => {
       createdByUserId: ids.userB1,
     },
   ]);
+  await testDb.insert(documentTranslationRuns).values({
+    id: documentTranslationRunB,
+    organizationId: ids.orgB,
+    workspaceId: ids.wsB1,
+    entityId: ids.entityB1,
+    fileFieldId: ids.fieldB1,
+    entityVersionId: ids.entityVersionB1,
+    sourceFileId: documentTranslationSourceFileB,
+    sourceFileName: "agreement.docx",
+    sourceMimeType:
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    output: "translated",
+    engine: "deepl",
+    sourceLang: "auto",
+    targetLang: "en",
+    status: "completed",
+  });
 });
 
 afterAll(async () => {
@@ -717,10 +762,13 @@ function expectRecordFieldEquals(
   expect(result[field]).toBe(expectedValue);
 }
 
-function expectBilingualRunIdEquals(result: unknown, expectedId: string): void {
+function expectTranslationRunIdEquals(
+  result: unknown,
+  expectedId: string,
+): void {
   expect(getStatusCode(result)).toBeNull();
   if (!isRecord(result) || !isRecord(result["run"])) {
-    throw new Error("Expected a bilingual translation run response");
+    throw new Error("Expected a translation run response");
   }
   expect(result["run"]["id"]).toBe(expectedId);
 }

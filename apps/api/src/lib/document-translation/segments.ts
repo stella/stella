@@ -19,6 +19,8 @@ type DocxTranslationErrorReason =
 export type DocxTranslationTextRun = Readonly<{
   markerId: string;
   text: string;
+  /** Position among all w:t nodes in the source part; used only for patching. */
+  textNodeOrdinal: number;
 }>;
 
 export type DocxTranslationSegment = Readonly<{
@@ -86,6 +88,12 @@ const hasReviewMarkup = (doc: slimdom.Document): boolean => {
   for (const name of [
     "ins",
     "del",
+    "moveFrom",
+    "moveTo",
+    "moveFromRangeStart",
+    "moveFromRangeEnd",
+    "moveToRangeStart",
+    "moveToRangeEnd",
     "commentRangeStart",
     "commentRangeEnd",
     "commentReference",
@@ -155,6 +163,9 @@ const inspectXmlParts = async (
 const paragraphRuns = (paragraph: slimdom.Element): slimdom.Element[] => {
   const result: slimdom.Element[] = [];
   const walk = (node: slimdom.Node) => {
+    if (node !== paragraph && isWordElement(node, "p")) {
+      return;
+    }
     if (
       isElement(node) &&
       (node.localName === "instrText" || node.localName === "delText")
@@ -196,6 +207,7 @@ const makeSegment = (
   partPath: string,
   paragraphIndex: number,
   paragraph: slimdom.Element,
+  textNodeOrdinals: ReadonlyMap<slimdom.Element, number>,
 ): DocxTranslationSegment | null => {
   const textNodes = paragraphRuns(paragraph);
   if (textNodes.length === 0) {
@@ -203,10 +215,20 @@ const makeSegment = (
   }
 
   const segmentId = `${partPath}:p${String(paragraphIndex).padStart(6, "0")}`;
-  const runs = textNodes.map((node, runIndex) => ({
-    markerId: markerIdFor(segmentId, runIndex),
-    text: node.textContent ?? "",
-  }));
+  const runs = textNodes.map((node, runIndex) => {
+    const textNodeOrdinal = textNodeOrdinals.get(node);
+    if (textNodeOrdinal === undefined) {
+      return fail(
+        "malformed-xml",
+        `DOCX part ${partPath} has an unmapped w:t node`,
+      );
+    }
+    return {
+      markerId: markerIdFor(segmentId, runIndex),
+      text: node.textContent ?? "",
+      textNodeOrdinal,
+    };
+  });
   const taggedText = runs
     .map(
       ({ markerId, text }) =>
@@ -232,13 +254,19 @@ const parsePart = (path: string, xml: string): DocxTranslationSegment[] => {
     );
   }
   const segments: DocxTranslationSegment[] = [];
+  const textNodeOrdinals = new Map<slimdom.Element, number>();
+  for (const [ordinal, textNode] of [
+    ...doc.getElementsByTagNameNS(W_NS, "t"),
+  ].entries()) {
+    textNodeOrdinals.set(textNode, ordinal);
+  }
   const paragraphs = doc.getElementsByTagNameNS(W_NS, "p");
   for (let index = 0; index < paragraphs.length; index += 1) {
     const paragraph = paragraphs[index];
     if (!paragraph) {
       continue;
     }
-    const segment = makeSegment(path, index + 1, paragraph);
+    const segment = makeSegment(path, index + 1, paragraph, textNodeOrdinals);
     if (segment) {
       segments.push(segment);
     }
@@ -342,21 +370,33 @@ const replacementByMarker = (
   return result;
 };
 
-const wordTextPrefix = (xml: string): string => {
-  const prefixed =
-    /xmlns:(?<prefix>[A-Za-z_][\w.-]*)=["']http:\/\/schemas\.openxmlformats\.org\/wordprocessingml\/2006\/main["']/u.exec(
-      xml,
-    )?.groups?.["prefix"];
-  return prefixed ?? "w";
+const wordTextElementName = (xml: string): string => {
+  const wordNamespace =
+    "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+  const prefixed = new RegExp(
+    `xmlns:(?<prefix>[A-Za-z_][\\w.-]*)\\s*=\\s*["']${wordNamespace}["']`,
+    "u",
+  ).exec(xml)?.groups?.["prefix"];
+  if (prefixed) {
+    return `${prefixed}:t`;
+  }
+  if (new RegExp(`xmlns\\s*=\\s*["']${wordNamespace}["']`, "u").test(xml)) {
+    return "t";
+  }
+  return "w:t";
 };
 
 const patchTextNodes = (
   xml: string,
   replacements: ReadonlyMap<number, string>,
 ): string => {
-  const prefix = wordTextPrefix(xml).replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+  const elementName = wordTextElementName(xml).replace(
+    /[.*+?^${}()|[\]\\]/gu,
+    "\\$&",
+  );
+  const closingElementName = wordTextElementName(xml);
   const textElement = new RegExp(
-    `<${prefix}:t\\b[^>]*?(?:>(?<content>[\\s\\S]*?)<\\/${prefix}:t>|\\s*/>)`,
+    `<${elementName}\\b[^>]*?(?:>(?<content>[\\s\\S]*?)<\\/${elementName}>|\\s*/>)`,
     "gu",
   );
   let ordinal = 0;
@@ -382,7 +422,7 @@ const patchTextNodes = (
       if (replacement === "") {
         return whole;
       }
-      const close = `</${wordTextPrefix(xml)}:t>`;
+      const close = `</${closingElementName}>`;
       return `${whole.slice(0, whole.lastIndexOf("/"))}>${escapeXml(replacement)}${close}`;
     }
     const start = whole.indexOf(">") + 1;
@@ -423,13 +463,6 @@ export const applyDocxTranslationSegments = async (
     const byMarker = replacementByMarker(segment, translation.taggedText);
     const partReplacements =
       replacementByPart.get(segment.partPath) ?? new Map<number, string>();
-    const prefixSegment = document.segments.filter(
-      (candidate) => candidate.partPath === segment.partPath,
-    );
-    const paragraph = prefixSegment.indexOf(segment);
-    const paragraphNodesBefore = prefixSegment
-      .slice(0, paragraph)
-      .reduce((sum, candidate) => sum + candidate.runs.length, 0);
     for (let runIndex = 0; runIndex < segment.runs.length; runIndex += 1) {
       const run = segment.runs.at(runIndex);
       if (!run) {
@@ -439,7 +472,7 @@ export const applyDocxTranslationSegments = async (
         );
       }
       partReplacements.set(
-        paragraphNodesBefore + runIndex,
+        run.textNodeOrdinal,
         byMarker.get(run.markerId) ?? "",
       );
     }

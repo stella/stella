@@ -3933,14 +3933,14 @@
   },
   "translate": {
     "dialog": {
-      "aiDescription": "Izmantojiet Stella AI, saglabājot dokumenta struktūru un formatējumu.",
-      "backgroundHint": "Šo logu var aizvērt. Stella paziņos, kad dokuments būs gatavs.",
+      "aiDescription": "Izmantojiet stella AI, saglabājot dokumenta struktūru un formatējumu.",
+      "backgroundHint": "Šo logu var aizvērt. stella paziņos, kad dokuments būs gatavs.",
       "bilingualDescription": "Izveidojiet divas kolonnas ar avotu un tā AI tulkojumu.",
-      "bilingualDocument": "Divvalodu kolonnas · Stella AI",
+      "bilingualDocument": "Divvalodu kolonnas · stella AI",
       "completed": "Tulkojums ir gatavs",
       "deeplDescription": "Tulkojiet visu failu ar DeepL.",
-      "description": "Tulkojiet atvērto dokumentu, izmantojot DeepL. Tulkotā kopija tiek saglabāta šajā lietā kā jauns dokuments.",
-      "docxOnly": "Tulkošana ar Stella AI pašlaik pieejama tikai DOCX failiem.",
+      "description": "Izveidojiet atvērtā dokumenta tulkotu kopiju. Oriģināls paliek nemainīgs.",
+      "docxOnly": "Tulkošana ar stella AI pašlaik pieejama tikai DOCX failiem.",
       "noLanguagesFound": "Valodas nav atrastas",
       "notConfigured": "DeepL nav konfigurēts šai organizācijai. Lai iespējotu tulkošanu, organizācijas iestatījumos pievienojiet DeepL API atslēgu.",
       "outputLabel": "Tulkojuma veids",
@@ -3951,7 +3951,7 @@
       "targetLanguage": "Mērķa valoda",
       "title": "Tulkot dokumentu",
       "translatedDocument": "Tulkots dokuments · DeepL",
-      "translatedDocumentAi": "Tulkots dokuments · Stella AI",
+      "translatedDocumentAi": "Tulkots dokuments · stella AI",
       "translating": "Notiek tulkošana…"
     },
     "error": {

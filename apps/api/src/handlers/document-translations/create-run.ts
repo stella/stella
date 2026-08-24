@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 import {
   documentTranslationRuns,
@@ -8,7 +8,10 @@ import {
   fields,
 } from "@/api/db/schema";
 import { createDocumentTranslationRunBodySchema } from "@/api/handlers/document-translations/schemas";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import {
+  assertUsageAvailableForHandler,
+  createSafeHandler,
+} from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -16,11 +19,10 @@ import { workspaceParams } from "@/api/lib/custom-schema";
 import {
   DOCUMENT_TRANSLATION_ENGINE,
   DOCUMENT_TRANSLATION_OUTPUT,
-  DOCUMENT_TRANSLATION_RUN_ACTIVE_STATUSES,
   isExecutableTranslationCombination,
 } from "@/api/lib/document-translation/contract";
 import { isDeepLSupportedMimeType } from "@/api/lib/document-translation/deepl-formats";
-import { enqueueDocumentTranslationRun } from "@/api/lib/document-translation/run-queue";
+import { handoffCommittedDocumentTranslationRun } from "@/api/lib/document-translation/handoff";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { brandPersistedUserFileId } from "@/api/lib/safe-id-boundaries";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
@@ -39,6 +41,7 @@ const createDocumentTranslationRun = createSafeHandler(
   config,
   async function* ({
     body,
+    orgAIConfig,
     recordAuditEvent,
     safeDb,
     session,
@@ -55,7 +58,7 @@ const createDocumentTranslationRun = createSafeHandler(
     }
     if (
       body.engine === DOCUMENT_TRANSLATION_ENGINE.AI &&
-      body.sourceLang === undefined
+      (body.sourceLang === undefined || body.sourceLang === "auto")
     ) {
       return Result.err(
         new HandlerError({
@@ -63,6 +66,20 @@ const createDocumentTranslationRun = createSafeHandler(
           message: "AI translation requires a source language",
         }),
       );
+    }
+
+    if (body.engine === DOCUMENT_TRANSLATION_ENGINE.AI) {
+      const usageError = await assertUsageAvailableForHandler({
+        metering: { actionType: "doc_review", modelRole: "chat" },
+        organizationId: session.activeOrganizationId,
+        orgAIConfig,
+        workspaceId,
+        userId: user.id,
+        safeDb,
+      });
+      if (usageError !== null) {
+        return Result.err(usageError);
+      }
     }
 
     const sources = yield* Result.await(
@@ -150,39 +167,29 @@ const createDocumentTranslationRun = createSafeHandler(
     const runId = createSafeId<"documentTranslationRun">();
     const inserted = yield* Result.await(
       safeDb(async (tx) => {
-        const active = await tx
-          .select({ id: documentTranslationRuns.id })
-          .from(documentTranslationRuns)
-          .where(
-            and(
-              eq(documentTranslationRuns.workspaceId, workspaceId),
-              eq(documentTranslationRuns.entityId, body.entityId),
-              eq(documentTranslationRuns.fileFieldId, body.fieldId),
-              inArray(documentTranslationRuns.status, [
-                ...DOCUMENT_TRANSLATION_RUN_ACTIVE_STATUSES,
-              ]),
-            ),
-          )
-          .limit(1);
-        if (active.length > 0) {
+        const created = await tx
+          .insert(documentTranslationRuns)
+          .values({
+            id: runId,
+            organizationId,
+            workspaceId,
+            entityId: body.entityId,
+            fileFieldId: body.fieldId,
+            entityVersionId: source.entityVersionId,
+            sourceFileId: brandPersistedUserFileId(sourceContent.id),
+            sourceFileName: sourceContent.fileName,
+            sourceMimeType: sourceContent.mimeType,
+            output: body.output,
+            engine: body.engine,
+            sourceLang: body.sourceLang ?? "auto",
+            targetLang: body.targetLang,
+            requestedBy: user.id,
+          })
+          .onConflictDoNothing()
+          .returning({ id: documentTranslationRuns.id });
+        if (!created.at(0)) {
           return false;
         }
-        await tx.insert(documentTranslationRuns).values({
-          id: runId,
-          organizationId,
-          workspaceId,
-          entityId: body.entityId,
-          fileFieldId: body.fieldId,
-          entityVersionId: source.entityVersionId,
-          sourceFileId: brandPersistedUserFileId(sourceContent.id),
-          sourceFileName: sourceContent.fileName,
-          sourceMimeType: sourceContent.mimeType,
-          output: body.output,
-          engine: body.engine,
-          sourceLang: body.sourceLang ?? "auto",
-          targetLang: body.targetLang,
-          requestedBy: user.id,
-        });
         await recordAuditEvent(tx, {
           action: AUDIT_ACTION.EXECUTE,
           resourceType: AUDIT_RESOURCE_TYPE.DOCUMENT_TRANSLATION_RUN,
@@ -206,38 +213,12 @@ const createDocumentTranslationRun = createSafeHandler(
       );
     }
 
-    const enqueued = await Result.tryPromise({
-      try: async () =>
-        await enqueueDocumentTranslationRun({
-          runId,
-          organizationId,
-          workspaceId,
-          userId: user.id,
-        }),
-      catch: (cause) => cause,
+    await handoffCommittedDocumentTranslationRun({
+      runId,
+      organizationId,
+      workspaceId,
+      userId: user.id,
     });
-    if (Result.isError(enqueued)) {
-      yield* Result.await(
-        safeDb(async (tx) => {
-          // audit: skip — lifecycle bookkeeping on the run audited at create.
-          await tx
-            .update(documentTranslationRuns)
-            .set({
-              status: "failed",
-              errorCode: "enqueue_failed",
-              finishedAt: new Date(),
-            })
-            .where(eq(documentTranslationRuns.id, runId));
-        }),
-      );
-      return Result.err(
-        new HandlerError({
-          status: 500,
-          message: "Failed to start the translation",
-          cause: enqueued.error,
-        }),
-      );
-    }
     return Result.ok({ runId });
   },
 );

@@ -12,6 +12,9 @@ const W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
 const part = (body: string): string =>
   `<?xml version="1.0" encoding="UTF-8"?><w:document xmlns:w="${W_NS}" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><w:body>${body}</w:body></w:document>`;
 
+const defaultNamespacePart = (body: string): string =>
+  `<?xml version="1.0" encoding="UTF-8"?><document xmlns="${W_NS}"><body>${body}</body></document>`;
+
 const createDocx = async (
   parts: Readonly<Record<string, string>>,
 ): Promise<ArrayBuffer> => {
@@ -33,6 +36,12 @@ const readEntry = async (
   }
   return await entry.async("string");
 };
+
+const captureRejection = async (promise: Promise<unknown>): Promise<unknown> =>
+  await promise.then(
+    () => null,
+    (error: unknown) => error,
+  );
 
 const translateAll = async (
   input: ArrayBuffer,
@@ -95,6 +104,24 @@ describe("DOCX translation segments", () => {
     ]);
   });
 
+  test("does not duplicate text from nested paragraphs", async () => {
+    const input = await createDocx({
+      "word/document.xml": part(
+        "<w:p><w:r><w:t>outer start</w:t></w:r><w:custom><w:p><w:r><w:t>nested</w:t></w:r></w:p></w:custom><w:r><w:t> outer end</w:t></w:r></w:p>",
+      ),
+    });
+    const document = await extractDocxTranslationSegments(input);
+    expect(document.segments.map((segment) => segment.text)).toEqual([
+      "outer start outer end",
+      "nested",
+    ]);
+    const output = await translateAll(input, (text) => `[${text}]`);
+    const outputXml = await readEntry(output, "word/document.xml");
+    expect(outputXml).toContain("[outer start]");
+    expect(outputXml).toContain("[nested]");
+    expect(outputXml).toContain("[ outer end]");
+  });
+
   test("patches only w:t contents and retains run formatting and other entries", async () => {
     const input = await createDocx({
       "word/document.xml": part(
@@ -122,23 +149,56 @@ describe("DOCX translation segments", () => {
     );
   });
 
+  test("patches text in a document using the default WordprocessingML namespace", async () => {
+    const input = await createDocx({
+      "word/document.xml": defaultNamespacePart(
+        "<p><r><t>default namespace</t></r></p>",
+      ),
+    });
+    const output = await translateAll(input, (text) => `translated ${text}`);
+    expect(await readEntry(output, "word/document.xml")).toContain(
+      "<t>translated default namespace</t>",
+    );
+  });
+
   test("rejects tracked changes and comments before exposing source text", async () => {
     const tracked = await createDocx({
       "word/document.xml": part(
         '<w:ins w:id="1"><w:p><w:r><w:t>hidden</w:t></w:r></w:p></w:ins>',
       ),
     });
-    expect(extractDocxTranslationSegments(tracked)).rejects.toBeInstanceOf(
-      DocxTranslationError,
-    );
+    expect(
+      await captureRejection(extractDocxTranslationSegments(tracked)),
+    ).toBeInstanceOf(DocxTranslationError);
 
     const comments = await createDocx({
       "word/document.xml": part("<w:p><w:r><w:t>source</w:t></w:r></w:p>"),
       "word/comments.xml": part('<w:comment w:id="1"/>'),
     });
-    expect(extractDocxTranslationSegments(comments)).rejects.toThrow(
-      "tracked changes or comments",
+    const commentRejection = await captureRejection(
+      extractDocxTranslationSegments(comments),
     );
+    expect(commentRejection).toBeInstanceOf(DocxTranslationError);
+    expect(commentRejection).toMatchObject({
+      message: expect.stringContaining("tracked changes or comments"),
+    });
+
+    const movedRejections = await Promise.all(
+      ["moveFrom", "moveTo"].map(async (movedElement) => {
+        const moved = await createDocx({
+          "word/document.xml": part(
+            `<w:${movedElement}><w:p><w:r><w:t>moved</w:t></w:r></w:p></w:${movedElement}>`,
+          ),
+        });
+        return await captureRejection(extractDocxTranslationSegments(moved));
+      }),
+    );
+    for (const rejection of movedRejections) {
+      expect(rejection).toBeInstanceOf(DocxTranslationError);
+      expect(rejection).toMatchObject({
+        message: expect.stringContaining("tracked changes or comments"),
+      });
+    }
   });
 
   test("rejects missing, duplicate, and reordered model markers", async () => {
@@ -159,16 +219,21 @@ describe("DOCX translation segments", () => {
       }
       return `[[stella-translation:${run.markerId}]]x[[/stella-translation:${run.markerId}]]`;
     };
-    for (const taggedText of [
-      marker(0),
-      `${marker(0)}${marker(0)}`,
-      `${marker(1)}${marker(0)}`,
-    ]) {
-      expect(
-        applyDocxTranslationSegments(input, [
-          { segmentId: segment.segmentId, taggedText },
-        ]),
-      ).rejects.toThrow("marker");
+    const markerRejections = await Promise.all(
+      [marker(0), `${marker(0)}${marker(0)}`, `${marker(1)}${marker(0)}`].map(
+        async (taggedText) =>
+          await captureRejection(
+            applyDocxTranslationSegments(input, [
+              { segmentId: segment.segmentId, taggedText },
+            ]),
+          ),
+      ),
+    );
+    for (const rejection of markerRejections) {
+      expect(rejection).toBeInstanceOf(DocxTranslationError);
+      expect(rejection).toMatchObject({
+        message: expect.stringContaining("marker"),
+      });
     }
   });
 });

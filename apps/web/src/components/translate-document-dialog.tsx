@@ -10,7 +10,6 @@ import { useRef, useState } from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useRouteContext } from "@tanstack/react-router";
-import { panic } from "better-result";
 import { LanguagesIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -32,6 +31,11 @@ import {
   defaultLanguagePair,
   DocumentLanguagePicker,
 } from "@/components/document-language-picker";
+import {
+  documentTranslationRunOptions,
+  isDocumentTranslationRunActive,
+  type DocumentTranslationRun,
+} from "@/components/document-translation-queries";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useLocale } from "@/i18n/formatting-context";
@@ -59,6 +63,7 @@ type TranslationChoice = keyof typeof TRANSLATION_CHOICES;
 
 type TranslateDocumentDialogProps = {
   workspaceId: string;
+  viewId: string;
   entityId: string;
   fieldId: string;
   isDocx: boolean;
@@ -67,37 +72,9 @@ type TranslateDocumentDialogProps = {
 };
 
 const DEFAULT_CHOICE: TranslationChoice = "translated:deepl";
-const RUN_POLL_INTERVAL_MS = 2000;
-
-type TranslationRun = {
-  status:
-    | "queued"
-    | "preparing"
-    | "translating"
-    | "assembling"
-    | "validating"
-    | "completed"
-    | "failed"
-    | "cancelled";
-  total: number;
-  completed: number;
-  errorCode: string | null;
-  outputEntityId: string | null;
-  outputFieldId: string | null;
-  outputFileName: string | null;
-  warnings: string[];
-};
-
-const ACTIVE_RUN_STATUSES = new Set<TranslationRun["status"]>([
-  "queued",
-  "preparing",
-  "translating",
-  "assembling",
-  "validating",
-]);
-
 export const TranslateDocumentDialog = ({
   workspaceId,
+  viewId,
   entityId,
   fieldId,
   isDocx,
@@ -125,42 +102,28 @@ export const TranslateDocumentDialog = ({
     () => defaultLanguagePair(locale).target,
   );
   const [runId, setRunId] = useState<string | null>(null);
-  const notifiedRunRef = useRef<string | null>(null);
+  const terminalNotifiedRunRef = useRef<string | null>(null);
+  const pollingErrorRunRef = useRef<string | null>(null);
 
   const isDeepL = choice.endsWith(":deepl");
   const sameLanguage = !isDeepL && sourceLang === targetLang;
   const canUseDeepL = availability?.configured === true;
   const runQuery = useQuery({
-    queryKey: ["document-translation-runs", workspaceId, runId],
+    ...documentTranslationRunOptions({
+      workspaceId,
+      runId: runId ?? "",
+    }),
     enabled: runId !== null,
-    queryFn: async ({ signal }) => {
-      if (runId === null) {
-        return panic("A translation run is required");
-      }
-      const response = await api
-        .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        ["document-translations"].runs({
-          runId: toSafeId<"documentTranslationRun">(runId),
-        })
-        .get({ fetch: { signal } });
-      return unwrapEden(response);
-    },
-    refetchInterval: (query) => {
-      const status = query.state.data?.run.status;
-      return status && ACTIVE_RUN_STATUSES.has(status)
-        ? RUN_POLL_INTERVAL_MS
-        : false;
-    },
   });
 
-  const openOutput = useLatestCallback((run: TranslationRun) => {
+  const openOutput = useLatestCallback((run: DocumentTranslationRun) => {
     if (!run.outputEntityId || !run.outputFieldId) {
       return;
     }
     detached(
       navigate({
         to: "/workspaces/$workspaceId/$viewId/document",
-        params: { workspaceId, viewId: run.outputEntityId },
+        params: { workspaceId, viewId },
         search: { entity: run.outputEntityId, field: run.outputFieldId },
       }),
       "translate-document-dialog.navigate",
@@ -172,9 +135,9 @@ export const TranslateDocumentDialog = ({
     if (
       runQuery.error !== null &&
       runId !== null &&
-      notifiedRunRef.current !== runId
+      pollingErrorRunRef.current !== runId
     ) {
-      notifiedRunRef.current = runId;
+      pollingErrorRunRef.current = runId;
       analytics.captureError(runQuery.error);
       stellaToast.add({
         title: t("translate.error.title"),
@@ -186,11 +149,11 @@ export const TranslateDocumentDialog = ({
       });
       return;
     }
-    if (!run || runId === null || notifiedRunRef.current === runId) {
+    if (!run || runId === null || terminalNotifiedRunRef.current === runId) {
       return;
     }
     if (run.status === "completed") {
-      notifiedRunRef.current = runId;
+      terminalNotifiedRunRef.current = runId;
       stellaToast.add({
         title: t("translate.success.title"),
         description: t("translate.success.description", {
@@ -217,7 +180,7 @@ export const TranslateDocumentDialog = ({
       return;
     }
     if (run.status === "failed" || run.status === "cancelled") {
-      notifiedRunRef.current = runId;
+      terminalNotifiedRunRef.current = runId;
       stellaToast.add({
         title: t("translate.error.title"),
         description: t("translate.dialog.runFailed"),
@@ -266,7 +229,7 @@ export const TranslateDocumentDialog = ({
 
   const run = runQuery.data?.run;
   const isStarting = translateMutation.isPending;
-  const isRunning = run ? ACTIVE_RUN_STATUSES.has(run.status) : false;
+  const isRunning = run ? isDocumentTranslationRunActive(run.status) : false;
   const progress =
     run && run.total > 0 ? Math.min(1, run.completed / run.total) : 0;
   const canStart =

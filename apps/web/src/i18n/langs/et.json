@@ -3933,14 +3933,14 @@
   },
   "translate": {
     "dialog": {
-      "aiDescription": "Kasutage Stella AI-d, säilitades dokumendi struktuuri ja vormingu.",
-      "backgroundHint": "Võite akna sulgeda. Stella annab dokumendi valmimisest teada.",
+      "aiDescription": "Kasutage stella AI-d, säilitades dokumendi struktuuri ja vormingu.",
+      "backgroundHint": "Võite akna sulgeda. stella annab dokumendi valmimisest teada.",
       "bilingualDescription": "Looge kaks veergu: lähtekeel ja selle AI-tõlge.",
-      "bilingualDocument": "Kakskeelsed veerud · Stella AI",
+      "bilingualDocument": "Kakskeelsed veerud · stella AI",
       "completed": "Tõlge on valmis",
       "deeplDescription": "Tõlkige kogu fail DeepL-i abil.",
-      "description": "Tõlkige avatud dokument DeepL-i abil. Tõlgitud koopia salvestatakse sellesse toimikusse uue dokumendina.",
-      "docxOnly": "Stella AI tõlge on praegu saadaval ainult DOCX-failidele.",
+      "description": "Looge avatud dokumendist tõlgitud koopia. Originaal jääb muutmata.",
+      "docxOnly": "stella AI tõlge on praegu saadaval ainult DOCX-failidele.",
       "noLanguagesFound": "Keeli ei leitud",
       "notConfigured": "DeepL pole selle organisatsiooni jaoks seadistatud. Tõlkimise lubamiseks lisage organisatsiooni seadetes DeepL-i API-võti.",
       "outputLabel": "Tõlke tüüp",
@@ -3951,7 +3951,7 @@
       "targetLanguage": "Sihtkeel",
       "title": "Tõlgi dokument",
       "translatedDocument": "Tõlgitud dokument · DeepL",
-      "translatedDocumentAi": "Tõlgitud dokument · Stella AI",
+      "translatedDocumentAi": "Tõlgitud dokument · stella AI",
       "translating": "Tõlgin…"
     },
     "error": {

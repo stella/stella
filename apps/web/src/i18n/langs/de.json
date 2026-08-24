@@ -3933,14 +3933,14 @@
   },
   "translate": {
     "dialog": {
-      "aiDescription": "Stella AI verwenden und dabei Struktur und Formatierung des Dokuments beibehalten.",
-      "backgroundHint": "Sie können dieses Fenster schließen. Stella benachrichtigt Sie, sobald das Dokument bereit ist.",
+      "aiDescription": "stella AI verwenden und dabei Struktur und Formatierung des Dokuments beibehalten.",
+      "backgroundHint": "Sie können dieses Fenster schließen. stella benachrichtigt Sie, sobald das Dokument bereit ist.",
       "bilingualDescription": "Zwei Spalten mit dem Ausgangstext und der KI-Übersetzung erstellen.",
-      "bilingualDocument": "Zweispaltig · Stella AI",
+      "bilingualDocument": "Zweispaltig · stella AI",
       "completed": "Übersetzung bereit",
       "deeplDescription": "Die gesamte Datei mit DeepL übersetzen.",
-      "description": "Übersetzen Sie das geöffnete Dokument mit DeepL. Die übersetzte Kopie wird als neues Dokument in dieser Akte abgelegt.",
-      "docxOnly": "Die Übersetzung mit Stella AI ist derzeit nur für DOCX-Dateien verfügbar.",
+      "description": "Erstellen Sie eine übersetzte Kopie des geöffneten Dokuments. Das Original bleibt unverändert.",
+      "docxOnly": "Die Übersetzung mit stella AI ist derzeit nur für DOCX-Dateien verfügbar.",
       "noLanguagesFound": "Keine Sprachen gefunden",
       "notConfigured": "DeepL ist für diese Organisation nicht konfiguriert. Fügen Sie in den Organisationseinstellungen einen DeepL-API-Schlüssel hinzu, um die Übersetzung zu aktivieren.",
       "outputLabel": "Übersetzungsart",
@@ -3951,7 +3951,7 @@
       "targetLanguage": "Zielsprache",
       "title": "Dokument übersetzen",
       "translatedDocument": "Übersetztes Dokument · DeepL",
-      "translatedDocumentAi": "Übersetztes Dokument · Stella AI",
+      "translatedDocumentAi": "Übersetztes Dokument · stella AI",
       "translating": "Wird übersetzt…"
     },
     "error": {

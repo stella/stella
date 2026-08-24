@@ -1,13 +1,12 @@
 import { Result, panic } from "better-result";
-import { Worker } from "bullmq";
-import { and, eq, inArray, lt, or, sql } from "drizzle-orm";
+import { type Queue, Worker } from "bullmq";
+import { and, asc, eq, inArray, isNull, lt, sql } from "drizzle-orm";
 
 import {
   applyFolioAIEditsToBuffer,
   createBilingualDocx,
   readBilingualDocx,
 } from "@stll/folio-core/server";
-import { DAY_IN_MS } from "@stll/time";
 
 import { rootDb } from "@/api/db/root";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
@@ -18,8 +17,6 @@ import {
   entityVersions,
   fields,
 } from "@/api/db/schema";
-import { buildBilingualFileName } from "@/api/handlers/entities/bilingual/output";
-import { resolveTranslatedOutput } from "@/api/handlers/entities/translate-output";
 import {
   loadOrgAIConfig,
   loadPromptCachingPreference,
@@ -65,6 +62,10 @@ import type {
   DocumentTranslationRunStatus,
 } from "@/api/lib/document-translation/contract";
 import {
+  buildBilingualFileName,
+  resolveTranslatedOutput,
+} from "@/api/lib/document-translation/output";
+import {
   applyDocxTranslationSegments,
   DocxTranslationError,
   extractDocxTranslationSegments,
@@ -84,16 +85,18 @@ import {
   brandPersistedUserId,
   brandValidatedWorkflowActorKey,
 } from "@/api/lib/safe-id-boundaries";
+import { withTimeout } from "@/api/lib/with-timeout";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 const QUEUE_NAME = "document-translation-runs";
 const JOB_NAME = "run-document-translation";
 const WORKER_CONCURRENCY = 2;
 const JOB_ATTEMPTS = 1;
+const QUEUE_OPERATION_TIMEOUT_MS = 2000;
 const RUN_TIMEOUT_MS = 45 * 60 * 1000;
 const ORPHAN_RECONCILE_INTERVAL_MS = 5 * 60 * 1000;
 const STUCK_RUNNING_MS = 60 * 60 * 1000;
-const STUCK_QUEUED_MS = DAY_IN_MS;
+const RECONCILE_BATCH_MAX = 100;
 
 type DocumentTranslationRunJobData = {
   runId: string;
@@ -101,6 +104,11 @@ type DocumentTranslationRunJobData = {
   organizationId: string;
   userId: string;
 };
+
+type DocumentTranslationRunQueue = Pick<
+  Queue<DocumentTranslationRunJobData>,
+  "add" | "getJob"
+>;
 
 export type EnqueueDocumentTranslationRunArgs = {
   runId: SafeId<"documentTranslationRun">;
@@ -111,6 +119,10 @@ export type EnqueueDocumentTranslationRunArgs = {
 
 const getQueue = createLazyBullMqQueue<DocumentTranslationRunJobData>({
   name: QUEUE_NAME,
+  connectionOptions: {
+    connectionTimeout: QUEUE_OPERATION_TIMEOUT_MS,
+    enableOfflineQueue: false,
+  },
   defaultJobOptions: {
     attempts: JOB_ATTEMPTS,
     removeOnComplete: 100,
@@ -118,17 +130,87 @@ const getQueue = createLazyBullMqQueue<DocumentTranslationRunJobData>({
   },
 });
 
-export const enqueueDocumentTranslationRun = async ({
+const runJob = ({
   runId,
   workspaceId,
   organizationId,
   userId,
-}: EnqueueDocumentTranslationRunArgs): Promise<void> => {
-  await getQueue().add(
-    JOB_NAME,
-    { runId, workspaceId, organizationId, userId },
-    { jobId: createBullMqJobId(workspaceId, runId) },
+}: EnqueueDocumentTranslationRunArgs) => ({
+  name: JOB_NAME,
+  data: { runId, workspaceId, organizationId, userId },
+  opts: { jobId: createBullMqJobId(workspaceId, runId) },
+});
+
+export const enqueueDocumentTranslationRun = async (
+  args: EnqueueDocumentTranslationRunArgs,
+): Promise<void> => {
+  await enqueueDocumentTranslationRunJob({ args, queue: getQueue() });
+};
+
+export const enqueueDocumentTranslationRunJob = async ({
+  args,
+  operationTimeoutMs = QUEUE_OPERATION_TIMEOUT_MS,
+  queue,
+}: {
+  args: EnqueueDocumentTranslationRunArgs;
+  operationTimeoutMs?: number;
+  queue: DocumentTranslationRunQueue;
+}): Promise<void> => {
+  const { name, data, opts } = runJob(args);
+  const existing = await withTimeout(
+    async () => await queue.getJob(opts.jobId),
+    {
+      label: "document-translation.queue.get-job",
+      timeoutMs: operationTimeoutMs,
+    },
   );
+  if (existing) {
+    const state = await withTimeout(async () => await existing.getState(), {
+      label: "document-translation.queue.get-state",
+      timeoutMs: operationTimeoutMs,
+    });
+    if (state === "failed") {
+      await withTimeout(async () => await existing.retry(), {
+        label: "document-translation.queue.retry-job",
+        timeoutMs: operationTimeoutMs,
+      });
+      return;
+    }
+    if (state !== "completed") {
+      return;
+    }
+    await withTimeout(async () => await existing.remove(), {
+      label: "document-translation.queue.remove-job",
+      timeoutMs: operationTimeoutMs,
+    });
+  }
+  await withTimeout(async () => await queue.add(name, data, opts), {
+    label: "document-translation.queue.add-job",
+    timeoutMs: operationTimeoutMs,
+  });
+};
+
+const enqueueDocumentTranslationRuns = async (
+  runs: readonly EnqueueDocumentTranslationRunArgs[],
+): Promise<number> => {
+  const outcomes = await Promise.all(
+    runs.map(
+      async (run) =>
+        await Result.tryPromise({
+          try: async () => await enqueueDocumentTranslationRun(run),
+          catch: (cause) => cause,
+        }),
+    ),
+  );
+  let handedOff = 0;
+  for (const [index, outcome] of outcomes.entries()) {
+    if (Result.isError(outcome)) {
+      captureError(outcome.error, { runId: runs.at(index)?.runId ?? "" });
+      continue;
+    }
+    handedOff += 1;
+  }
+  return handedOff;
 };
 
 type RunActor = {
@@ -207,21 +289,56 @@ const claimRun = async (actor: RunActor): Promise<ClaimedRun | null> => {
   return { ...claimed, sourceLang: claimed.sourceLang ?? "auto" };
 };
 
-const setStage = async (
+type ActiveRunStage = Extract<
+  DocumentTranslationRunStatus,
+  "preparing" | "translating" | "assembling" | "validating"
+>;
+
+const transitionStage = async (
   actor: RunActor,
-  status: Extract<
-    DocumentTranslationRunStatus,
-    "preparing" | "translating" | "assembling" | "validating"
-  >,
-): Promise<void> => {
+  from: ActiveRunStage,
+  to: ActiveRunStage,
+): Promise<boolean> =>
   await actor.scopedDb(async (tx) => {
     // audit: skip — lifecycle bookkeeping on the run audited at create.
-    await tx
+    const transitioned = await tx
       .update(documentTranslationRuns)
-      .set({ status })
-      .where(eq(documentTranslationRuns.id, actor.runId));
+      .set({ status: to })
+      .where(
+        and(
+          eq(documentTranslationRuns.id, actor.runId),
+          eq(documentTranslationRuns.status, from),
+        ),
+      )
+      .returning({ id: documentTranslationRuns.id });
+    return transitioned.length === 1;
   });
-};
+
+const failRedeliveredRun = async (actor: RunActor): Promise<boolean> =>
+  await actor.scopedDb(async (tx) => {
+    // A stalled BullMQ delivery means the previous worker lost its lease. AI
+    // calls are intentionally one-shot, so fail the durable run immediately
+    // rather than resuming it and double-spending metered work. Every later
+    // stage transition is compare-and-set, fencing the stale worker before it
+    // can publish an output.
+    const failed = await tx
+      .update(documentTranslationRuns)
+      .set({ status: "failed", errorCode: "internal", finishedAt: new Date() })
+      .where(
+        and(
+          eq(documentTranslationRuns.id, actor.runId),
+          eq(documentTranslationRuns.workspaceId, actor.workspaceId),
+          inArray(documentTranslationRuns.status, [
+            "preparing",
+            "translating",
+            "assembling",
+            "validating",
+          ]),
+        ),
+      )
+      .returning({ id: documentTranslationRuns.id });
+    return failed.length === 1;
+  });
 
 const setRunFailed = async (
   actor: RunActor,
@@ -489,11 +606,12 @@ const translateDocxWithAI = async (
   await setTotal(actor, segments.length);
 
   const translated = new Map<string, string>();
-  for (
-    let index = 0;
-    index < segments.length;
-    index += DOCUMENT_TRANSLATION_LIMITS.batchSize
-  ) {
+  const translateNextBatch = async (
+    index: number,
+  ): Promise<Result<void, "translation_failed">> => {
+    if (index >= segments.length) {
+      return Result.ok();
+    }
     const batch = segments.slice(
       index,
       index + DOCUMENT_TRANSLATION_LIMITS.batchSize,
@@ -501,7 +619,6 @@ const translateDocxWithAI = async (
     const preceding = segments
       .slice(0, index)
       .slice(-DOCUMENT_TRANSLATION_LIMITS.contextUnits);
-    // oxlint-disable-next-line no-await-in-loop -- batches are sequential so preceding translations provide context and metered spend stays bounded
     const result = await Result.tryPromise({
       try: async () =>
         await translateTaggedSegments({
@@ -532,11 +649,19 @@ const translateDocxWithAI = async (
       translated.set(segment.segmentId, targetText);
       updates.push({ unitKey: segment.segmentId, targetText });
     }
-    // oxlint-disable-next-line no-await-in-loop -- persist each completed batch before starting another model call
     await updateTranslatedUnits(actor, updates);
+    return await translateNextBatch(
+      index + DOCUMENT_TRANSLATION_LIMITS.batchSize,
+    );
+  };
+  const translation = await translateNextBatch(0);
+  if (Result.isError(translation)) {
+    return translation;
   }
 
-  await setStage(actor, "assembling");
+  if (!(await transitionStage(actor, "translating", "assembling"))) {
+    return Result.err("internal");
+  }
   const applied = await Result.tryPromise({
     try: async () =>
       await applyDocxTranslationSegments(
@@ -655,15 +780,16 @@ const translateBilingualWithAI = async (
   await setTotal(actor, pending.length);
 
   const translated = new Map<string, string>();
-  for (
-    let index = 0;
-    index < pending.length;
-    index += BILINGUAL_LIMITS.batchSize
-  ) {
+  const translateNextBatch = async (
+    index: number,
+  ): Promise<Result<void, "translation_failed">> => {
+    if (index >= pending.length) {
+      return Result.ok();
+    }
     const batch = pending.slice(index, index + BILINGUAL_LIMITS.batchSize);
     const first = batch.at(0);
     if (!first) {
-      break;
+      return Result.ok();
     }
     const preceding: TranslationContextRow[] = rows
       .filter(
@@ -676,7 +802,6 @@ const translateBilingualWithAI = async (
         sourceText: row.sourceText,
         targetText: translated.get(row.rowId) ?? null,
       }));
-    // oxlint-disable-next-line no-await-in-loop -- batches are sequential so preceding translations provide context and metered spend stays bounded
     const result = await Result.tryPromise({
       try: async () =>
         await translateBatch(
@@ -698,11 +823,17 @@ const translateBilingualWithAI = async (
       translated.set(row.rowId, targetText);
       updates.push({ unitKey: row.rowId, targetText });
     }
-    // oxlint-disable-next-line no-await-in-loop -- persist each completed batch before starting another model call
     await updateTranslatedUnits(actor, updates);
+    return await translateNextBatch(index + BILINGUAL_LIMITS.batchSize);
+  };
+  const translation = await translateNextBatch(0);
+  if (Result.isError(translation)) {
+    return translation;
   }
 
-  await setStage(actor, "assembling");
+  if (!(await transitionStage(actor, "translating", "assembling"))) {
+    return Result.err("internal");
+  }
   const operations = buildOperations(rows, translated);
   const applied = await Result.tryPromise({
     try: async () =>
@@ -738,7 +869,9 @@ const executeRun = async (
   if (Result.isError(loaded)) {
     return loaded.error;
   }
-  await setStage(actor, "translating");
+  if (!(await transitionStage(actor, "preparing", "translating"))) {
+    return "internal";
+  }
 
   let output: Result<TranslationOutput, DocumentTranslationRunErrorCode>;
   if (run.engine === DOCUMENT_TRANSLATION_ENGINE.DEEPL) {
@@ -771,7 +904,13 @@ const executeRun = async (
     return output.error;
   }
 
-  await setStage(actor, "validating");
+  const outputStage =
+    run.engine === DOCUMENT_TRANSLATION_ENGINE.DEEPL
+      ? "translating"
+      : "assembling";
+  if (!(await transitionStage(actor, outputStage, "validating"))) {
+    return "internal";
+  }
   if (output.value.mimeType === DOCX_MIME_TYPE) {
     const validation = await validateDocxBuffer(
       output.value.buffer instanceof Uint8Array
@@ -862,6 +1001,12 @@ const processRunJob = async (
   const actor = brandActor(data);
   const run = await claimRun(actor);
   if (run === null) {
+    if (await failRedeliveredRun(actor)) {
+      logger.warn("document_translation.redelivery_failed_run", {
+        runId: actor.runId,
+        workspaceId: actor.workspaceId,
+      });
+    }
     return;
   }
   const result = await Result.tryPromise({
@@ -878,32 +1023,71 @@ const processRunJob = async (
   }
 };
 
-export const reconcileStuckDocumentTranslationRuns =
-  async (): Promise<number> => {
+type ReconcileDocumentTranslationRunsResult = {
+  cancelled: number;
+  failed: number;
+  handedOff: number;
+};
+
+export const reconcileDocumentTranslationRuns =
+  async (): Promise<ReconcileDocumentTranslationRunsResult> => {
     const runningCutoff = new Date(Date.now() - STUCK_RUNNING_MS);
-    const queuedCutoff = new Date(Date.now() - STUCK_QUEUED_MS);
+    const cancelled = await rootDb
+      .update(documentTranslationRuns)
+      .set({ status: "cancelled", errorCode: null, finishedAt: new Date() })
+      .where(
+        and(
+          inArray(documentTranslationRuns.status, [
+            ...DOCUMENT_TRANSLATION_RUN_ACTIVE_STATUSES,
+          ]),
+          isNull(documentTranslationRuns.requestedBy),
+        ),
+      )
+      .returning({ id: documentTranslationRuns.id });
+    const queued = await rootDb
+      .select({
+        id: documentTranslationRuns.id,
+        organizationId: documentTranslationRuns.organizationId,
+        requestedBy: documentTranslationRuns.requestedBy,
+        workspaceId: documentTranslationRuns.workspaceId,
+      })
+      .from(documentTranslationRuns)
+      .where(eq(documentTranslationRuns.status, "queued"))
+      .orderBy(
+        asc(documentTranslationRuns.createdAt),
+        asc(documentTranslationRuns.id),
+      )
+      .limit(RECONCILE_BATCH_MAX);
+    const handedOff = await enqueueDocumentTranslationRuns(
+      queued.flatMap((run) =>
+        run.requestedBy === null
+          ? []
+          : [
+              {
+                runId: run.id,
+                organizationId: run.organizationId,
+                workspaceId: run.workspaceId,
+                userId: brandPersistedUserId(run.requestedBy),
+              },
+            ],
+      ),
+    );
     const recovered = await rootDb
       .update(documentTranslationRuns)
       .set({ status: "failed", errorCode: "internal", finishedAt: new Date() })
       .where(
-        or(
-          and(
-            inArray(documentTranslationRuns.status, [
-              "preparing",
-              "translating",
-              "assembling",
-              "validating",
-            ]),
-            lt(documentTranslationRuns.startedAt, runningCutoff),
-          ),
-          and(
-            eq(documentTranslationRuns.status, "queued"),
-            lt(documentTranslationRuns.createdAt, queuedCutoff),
-          ),
+        and(
+          inArray(documentTranslationRuns.status, [
+            "preparing",
+            "translating",
+            "assembling",
+            "validating",
+          ]),
+          lt(documentTranslationRuns.startedAt, runningCutoff),
         ),
       )
       .returning({ id: documentTranslationRuns.id });
-    return recovered.length;
+    return { cancelled: cancelled.length, failed: recovered.length, handedOff };
   };
 
 export const initDocumentTranslationRunWorker = () => {
@@ -931,7 +1115,14 @@ export const initDocumentTranslationRunWorker = () => {
   const closeReconcile = startNonOverlappingInterval({
     intervalMs: ORPHAN_RECONCILE_INTERVAL_MS,
     run: async () => {
-      await reconcileStuckDocumentTranslationRuns();
+      const result = await reconcileDocumentTranslationRuns();
+      if (result.cancelled > 0 || result.failed > 0 || result.handedOff > 0) {
+        logger.info("document_translation.reconciled", {
+          cancelled: String(result.cancelled),
+          failed: String(result.failed),
+          handedOff: String(result.handedOff),
+        });
+      }
     },
     onError: (error) => {
       logger.error("document_translation.reconcile_failed", {
