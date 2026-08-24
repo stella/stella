@@ -100,6 +100,7 @@
     "clear": "Clear history",
     "clearConfirmation": "Clear all clipboard history? This cannot be undone.",
     "close": "Close",
+    "copiedOnly": "Copied. Paste it manually.",
     "create": "Create",
     "createGroup": "New group",
     "deleteGroup": "Delete group",

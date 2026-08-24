@@ -26,6 +26,8 @@ use crate::{
 use icns::{IconFamily, PixelFormat};
 #[cfg(target_os = "macos")]
 use objc2_app_kit::NSWorkspace;
+#[cfg(target_os = "windows")]
+use std::path::Path;
 #[cfg(target_os = "macos")]
 use std::{
   fs::File,
@@ -34,6 +36,8 @@ use std::{
   sync::mpsc::sync_channel,
   time::Duration as StdDuration,
 };
+#[cfg(target_os = "windows")]
+use winsafe::{HPROCESS, HVERSIONINFO, HWND, co};
 
 const HISTORY_EVENT: &str = "clipboard-history-changed";
 const INTERNAL_CLIPBOARD_FORMAT: &str = "legal.stella.desktop.clipboard";
@@ -42,6 +46,8 @@ const MAX_ITEM_TEXT_BYTES: usize = 64 * 1024;
 const MAX_ITEM_HTML_BYTES: usize = 128 * 1024;
 const MAX_HISTORY_BYTES: usize = 16 * 1024 * 1024;
 const RETENTION_DAYS: i64 = 30;
+const RETENTION_SWEEP_INTERVAL: std::time::Duration =
+  std::time::Duration::from_secs(60 * 60);
 const MAX_GROUPS: usize = 24;
 const MAX_GROUP_NAME_BYTES: usize = 64;
 const MAX_SOURCE_APP_NAME_BYTES: usize = 128;
@@ -311,6 +317,14 @@ pub struct ClipboardManager {
   suppressed_content: Option<(String, Option<String>)>,
 }
 
+struct ClipboardManagerCheckpoint {
+  capture_status: ClipboardCaptureStatus,
+  groups: Vec<ClipboardGroup>,
+  items: Vec<ClipboardItem>,
+  source_app_visuals: HashMap<String, ClipboardSourceAppVisual>,
+  suppressed_content: Option<(String, Option<String>)>,
+}
+
 pub type ClipboardAppState = Arc<Mutex<ClipboardManager>>;
 
 struct ClipboardCapture {
@@ -368,7 +382,13 @@ impl ClipboardManager {
     );
     match store.load() {
       Ok(Some(mut state)) => {
-        prune_items(&mut state.items, Utc::now());
+        if prune_items(&mut state.items, Utc::now())
+          && let Err(error) = store.persist(&state)
+        {
+          self.persistence = ClipboardPersistenceStatus::MemoryOnly;
+          tracing::warn!(error = %error, "expired clipboard history could not be removed");
+          return;
+        }
         self.capture_status = state.capture_status;
         self.groups = state.groups;
         self.items = state.items;
@@ -400,40 +420,52 @@ impl ClipboardManager {
     }
   }
 
-  pub fn set_capture_status(&mut self, status: ClipboardCaptureStatus) {
+  pub fn set_capture_status(
+    &mut self,
+    status: ClipboardCaptureStatus,
+  ) -> Result<(), String> {
+    let checkpoint = self.checkpoint();
     self.capture_status = status;
-    self.persist();
+    self.persist_or_restore(checkpoint)
   }
 
-  pub fn delete_item(&mut self, id: &str) -> bool {
+  pub fn delete_item(&mut self, id: &str) -> Result<bool, String> {
     let original_len = self.items.len();
+    let checkpoint = self.checkpoint();
     self.items.retain(|item| item.id() != id);
     let changed = original_len != self.items.len();
-    if changed {
-      self.persist();
+    if !changed {
+      return Ok(false);
     }
-    changed
+    self.persist_or_restore(checkpoint)?;
+    Ok(true)
   }
 
-  pub fn duplicate_item(&mut self, id: &str) -> bool {
+  pub fn duplicate_item(&mut self, id: &str) -> Result<bool, String> {
     self.duplicate_item_at(id, Utc::now())
   }
 
-  fn duplicate_item_at(&mut self, id: &str, copied_at: DateTime<Utc>) -> bool {
-    let Some(item) = self.items.iter().find(|item| item.id() == id) else {
-      return false;
+  fn duplicate_item_at(
+    &mut self,
+    id: &str,
+    copied_at: DateTime<Utc>,
+  ) -> Result<bool, String> {
+    let Some(item) = self.items.iter().find(|item| item.id() == id).cloned() else {
+      return Ok(false);
     };
+    let checkpoint = self.checkpoint();
     let duplicate = item.duplicate_at(copied_at);
     self.items.insert(0, duplicate);
     prune_items(&mut self.items, copied_at);
-    self.persist();
-    true
+    self.persist_or_restore(checkpoint)?;
+    Ok(true)
   }
 
-  pub fn clear(&mut self) {
+  pub fn clear(&mut self) -> Result<(), String> {
+    let checkpoint = self.checkpoint();
     self.items.clear();
     self.source_app_visuals.clear();
-    self.persist();
+    self.persist_or_restore(checkpoint)
   }
 
   pub fn create_group(
@@ -457,28 +489,30 @@ impl ClipboardManager {
       return Err("clipboard group name already exists".to_string());
     }
     let id = uuid::Uuid::new_v4().to_string();
+    let checkpoint = self.checkpoint();
     self.groups.push(ClipboardGroup {
       color,
       id: id.clone(),
       name: name.to_string(),
     });
-    self.persist();
+    self.persist_or_restore(checkpoint)?;
     Ok(id)
   }
 
-  pub fn delete_group(&mut self, id: &str) -> bool {
+  pub fn delete_group(&mut self, id: &str) -> Result<bool, String> {
     let original_len = self.groups.len();
+    let checkpoint = self.checkpoint();
     self.groups.retain(|group| group.id != id);
     if original_len == self.groups.len() {
-      return false;
+      return Ok(false);
     }
     for item in &mut self.items {
       if item.group_id() == Some(id) {
         item.set_group_id(None);
       }
     }
-    self.persist();
-    true
+    self.persist_or_restore(checkpoint)?;
+    Ok(true)
   }
 
   pub fn update_item(
@@ -500,6 +534,7 @@ impl ClipboardManager {
       return Err("clipboard item formatting is invalid".to_string());
     }
     let html = html.and_then(sanitized_html);
+    let checkpoint = self.checkpoint();
     let Some(item) = self.items.iter_mut().find(|item| item.id() == id) else {
       return Ok(false);
     };
@@ -507,7 +542,7 @@ impl ClipboardManager {
       item.replace_content(plain_text.to_string(), html);
     }
     item.set_group_id(group_id);
-    self.persist();
+    self.persist_or_restore(checkpoint)?;
     Ok(true)
   }
 
@@ -521,11 +556,12 @@ impl ClipboardManager {
     {
       return Err("clipboard group does not exist".to_string());
     }
+    let checkpoint = self.checkpoint();
     let Some(item) = self.items.iter_mut().find(|item| item.id() == id) else {
       return Ok(false);
     };
     item.set_group_id(group_id);
-    self.persist();
+    self.persist_or_restore(checkpoint)?;
     Ok(true)
   }
 
@@ -548,9 +584,9 @@ impl ClipboardManager {
     self.suppressed_content = None;
   }
 
-  fn capture(&mut self, capture: ClipboardCapture) -> bool {
+  fn capture(&mut self, capture: ClipboardCapture) -> Result<bool, String> {
     if self.capture_status == ClipboardCaptureStatus::Paused {
-      return false;
+      return Ok(false);
     }
     let ClipboardCapture {
       copied_at,
@@ -561,8 +597,9 @@ impl ClipboardManager {
     } = capture;
     if self.suppressed_content.as_ref() == Some(&(plain_text.clone(), html.clone())) {
       self.suppressed_content = None;
-      return false;
+      return Ok(false);
     }
+    let checkpoint = self.checkpoint();
     self.suppressed_content = None;
 
     if let Some(source_app_visual) = source_app_visual
@@ -602,28 +639,66 @@ impl ClipboardManager {
     };
     self.items.insert(0, item);
     prune_items(&mut self.items, copied_at);
-    self.persist();
-    true
+    self.persist_or_restore(checkpoint)?;
+    Ok(true)
   }
 
-  fn persist(&mut self) {
+  pub fn prune_expired(&mut self, now: DateTime<Utc>) -> Result<bool, String> {
+    let checkpoint = self.checkpoint();
+    if !prune_items(&mut self.items, now) {
+      return Ok(false);
+    }
+    self.persist_or_restore(checkpoint)?;
+    Ok(true)
+  }
+
+  fn checkpoint(&self) -> ClipboardManagerCheckpoint {
+    ClipboardManagerCheckpoint {
+      capture_status: self.capture_status,
+      groups: self.groups.clone(),
+      items: self.items.clone(),
+      source_app_visuals: self.source_app_visuals.clone(),
+      suppressed_content: self.suppressed_content.clone(),
+    }
+  }
+
+  fn restore(&mut self, checkpoint: ClipboardManagerCheckpoint) {
+    self.capture_status = checkpoint.capture_status;
+    self.groups = checkpoint.groups;
+    self.items = checkpoint.items;
+    self.source_app_visuals = checkpoint.source_app_visuals;
+    self.suppressed_content = checkpoint.suppressed_content;
+  }
+
+  fn persist_or_restore(
+    &mut self,
+    checkpoint: ClipboardManagerCheckpoint,
+  ) -> Result<(), String> {
+    if let Err(error) = self.persist() {
+      self.restore(checkpoint);
+      return Err(error);
+    }
+    Ok(())
+  }
+
+  fn persist(&self) -> Result<(), String> {
     let Some(store) = &self.store else {
-      return;
+      return Ok(());
     };
     let state = PersistedClipboardState {
       capture_status: self.capture_status,
       groups: self.groups.clone(),
       items: self.items.clone(),
     };
-    if let Err(error) = store.persist(&state) {
+    store.persist(&state).map_err(|error| {
       tracing::warn!(error = %error, "clipboard history persistence failed");
-      self.persistence = ClipboardPersistenceStatus::MemoryOnly;
-      self.store = None;
-    }
+      error
+    })
   }
 }
 
-fn prune_items(items: &mut Vec<ClipboardItem>, now: DateTime<Utc>) {
+fn prune_items(items: &mut Vec<ClipboardItem>, now: DateTime<Utc>) -> bool {
+  let original_len = items.len();
   let oldest = now - Duration::days(RETENTION_DAYS);
   items.retain(|item| item.copied_at() >= oldest);
   items.truncate(MAX_HISTORY_ITEMS);
@@ -633,6 +708,7 @@ fn prune_items(items: &mut Vec<ClipboardItem>, now: DateTime<Utc>) {
     total_bytes += item.byte_len();
     total_bytes <= MAX_HISTORY_BYTES
   });
+  items.len() != original_len
 }
 
 fn sanitized_html(raw_html: &str) -> Option<String> {
@@ -873,18 +949,45 @@ fn frontmost_source_app(app: &AppHandle) -> Option<ClipboardSourceCapture> {
 }
 
 #[cfg(target_os = "windows")]
+fn windows_product_name(executable_path: &str) -> Option<String> {
+  let version = HVERSIONINFO::GetFileVersionInfo(executable_path).ok()?;
+  let language_and_code_page = version.langs_and_cps().ok()?.first().copied()?;
+  version
+    .str_val(language_and_code_page, "ProductName")
+    .ok()
+    .and_then(|name| bounded_metadata(&name, MAX_SOURCE_APP_NAME_BYTES))
+}
+
+#[cfg(target_os = "windows")]
 fn frontmost_source_app(_app: &AppHandle) -> Option<ClipboardSourceCapture> {
-  let application = active_win_pos_rs::get_active_window().ok()?;
-  let executable_name = application
-    .process_path
+  let window = HWND::GetForegroundWindow()?;
+  let (_, process_id) = window.GetWindowThreadProcessId();
+  let process =
+    HPROCESS::OpenProcess(co::PROCESS::QUERY_LIMITED_INFORMATION, false, process_id)
+      .ok()?;
+  let executable_path = process
+    .QueryFullProcessImageName(co::PROCESS_NAME::WIN32)
+    .ok()?;
+  let executable_name = Path::new(&executable_path)
     .file_name()
     .and_then(|name| name.to_str())
     .and_then(|name| bounded_metadata(name, MAX_SOURCE_APP_IDENTIFIER_BYTES));
-  let name = bounded_metadata(&application.app_name, MAX_SOURCE_APP_NAME_BYTES)
+  let name = windows_product_name(&executable_path)
+    .or_else(|| {
+      Path::new(&executable_path)
+        .file_stem()
+        .and_then(|name| name.to_str())
+        .and_then(|name| bounded_metadata(name, MAX_SOURCE_APP_NAME_BYTES))
+    })
+    .or_else(|| {
+      window
+        .GetWindowText()
+        .ok()
+        .and_then(|title| bounded_metadata(&title, MAX_SOURCE_APP_NAME_BYTES))
+    })
     .or_else(|| executable_name.clone())?;
-  let (icon_data_url, color) = u32::try_from(application.process_id)
+  let (icon_data_url, color) = windows_icons::get_icon_by_process_id(process_id)
     .ok()
-    .and_then(|process_id| windows_icons::get_icon_by_process_id(process_id).ok())
     .map_or((None, None), source_app_visual);
   let app = ClipboardSourceApp {
     identifier: executable_name,
@@ -962,7 +1065,18 @@ impl ClipboardHandler for HistoryClipboardHandler {
       source_app_visual,
     };
     let changed = match self.manager.lock() {
-      Ok(mut manager) => manager.capture(capture),
+      Ok(mut manager) => match manager.capture(capture) {
+        Ok(changed) => changed,
+        Err(error) => {
+          tracing::error!(error = %error, "clipboard capture could not be persisted");
+          self.telemetry.capture(DesktopErrorReport {
+            window: DesktopTelemetryWindow::Clipboard,
+            operation: DesktopTelemetryOperation::ClipboardWatcherRead,
+            code: DesktopTelemetryErrorCode::PersistenceFailed,
+          });
+          return;
+        }
+      },
       Err(_) => {
         tracing::error!("clipboard manager lock is poisoned");
         self.telemetry.capture(DesktopErrorReport {
@@ -996,6 +1110,43 @@ pub fn initialize_and_watch(
     return;
   }
   let _ = app.emit(HISTORY_EVENT, ());
+
+  let retention_manager = Arc::clone(&manager);
+  let retention_app = app.clone();
+  let retention_telemetry = telemetry.clone();
+  tauri::async_runtime::spawn(async move {
+    let mut interval = tokio::time::interval(RETENTION_SWEEP_INTERVAL);
+    interval.tick().await;
+    loop {
+      interval.tick().await;
+      let changed = match retention_manager.lock() {
+        Ok(mut manager) => match manager.prune_expired(Utc::now()) {
+          Ok(changed) => changed,
+          Err(error) => {
+            tracing::error!(error = %error, "expired clipboard history could not be removed");
+            retention_telemetry.capture(DesktopErrorReport {
+              window: DesktopTelemetryWindow::Clipboard,
+              operation: DesktopTelemetryOperation::ClipboardWatcherRead,
+              code: DesktopTelemetryErrorCode::PersistenceFailed,
+            });
+            false
+          }
+        },
+        Err(_) => {
+          tracing::error!("clipboard manager lock is poisoned during retention sweep");
+          retention_telemetry.capture(DesktopErrorReport {
+            window: DesktopTelemetryWindow::Clipboard,
+            operation: DesktopTelemetryOperation::ClipboardWatcherRead,
+            code: DesktopTelemetryErrorCode::LockPoisoned,
+          });
+          false
+        }
+      };
+      if changed {
+        let _ = retention_app.emit(HISTORY_EVENT, ());
+      }
+    }
+  });
 
   let clipboard = match ClipboardContext::new() {
     Ok(clipboard) => clipboard,
@@ -1064,19 +1215,28 @@ mod tests {
     }
   }
 
+  fn unique_store_path() -> std::path::PathBuf {
+    std::env::temp_dir().join(format!(
+      "stella-clipboard-manager-{}.json.enc",
+      uuid::Uuid::new_v4()
+    ))
+  }
+
   fn capture(
     manager: &mut ClipboardManager,
     plain_text: &str,
     html: Option<&str>,
     copied_at: DateTime<Utc>,
   ) -> bool {
-    manager.capture(ClipboardCapture {
-      copied_at,
-      html: html.map(str::to_string),
-      plain_text: plain_text.to_string(),
-      source_app: None,
-      source_app_visual: None,
-    })
+    manager
+      .capture(ClipboardCapture {
+        copied_at,
+        html: html.map(str::to_string),
+        plain_text: plain_text.to_string(),
+        source_app: None,
+        source_app_visual: None,
+      })
+      .unwrap()
   }
 
   #[test]
@@ -1163,7 +1323,11 @@ mod tests {
     let mut manager = ClipboardManager::new();
     manager.items.push(original.clone());
 
-    assert!(manager.duplicate_item_at("original", duplicate_time));
+    assert!(
+      manager
+        .duplicate_item_at("original", duplicate_time)
+        .unwrap()
+    );
     assert_eq!(manager.items.len(), 2);
     assert_ne!(manager.items[0].id(), original.id());
     assert_eq!(manager.items[0].copied_at(), duplicate_time);
@@ -1178,7 +1342,7 @@ mod tests {
   fn duplicating_a_missing_item_does_not_change_history() {
     let mut manager = ClipboardManager::new();
 
-    assert!(!manager.duplicate_item_at("missing", Utc::now()));
+    assert!(!manager.duplicate_item_at("missing", Utc::now()).unwrap());
     assert!(manager.items.is_empty());
   }
 
@@ -1200,9 +1364,59 @@ mod tests {
   }
 
   #[test]
+  fn persistence_failure_rolls_back_history_mutations() {
+    let store_path = unique_store_path();
+    std::fs::create_dir_all(&store_path).unwrap();
+    let mut manager = ClipboardManager::new();
+    manager.persistence = ClipboardPersistenceStatus::Encrypted;
+    manager.store = Some(ClipboardStore::new([7; 32], store_path.clone()));
+    manager.items.push(text_item(Utc::now(), "must remain"));
+
+    assert!(manager.clear().is_err());
+    assert_eq!(manager.items.len(), 1);
+    assert_eq!(manager.items[0].plain_text(), "must remain");
+
+    std::fs::remove_dir(store_path).unwrap();
+  }
+
+  #[test]
+  fn retention_pruning_is_written_to_encrypted_history() {
+    let store_path = unique_store_path();
+    let store = ClipboardStore::new([9; 32], store_path.clone());
+    let now = Utc::now();
+    let state = PersistedClipboardState {
+      capture_status: ClipboardCaptureStatus::Active,
+      groups: Vec::new(),
+      items: vec![
+        text_item(now - Duration::days(RETENTION_DAYS + 1), "expired"),
+        text_item(now, "current"),
+      ],
+    };
+    store.persist(&state).unwrap();
+
+    let mut manager = ClipboardManager::new();
+    manager.persistence = ClipboardPersistenceStatus::Encrypted;
+    manager.items = state.items;
+    manager.store = Some(store);
+
+    assert!(manager.prune_expired(now).unwrap());
+    assert_eq!(manager.items.len(), 1);
+    let persisted = ClipboardStore::new([9; 32], store_path.clone())
+      .load()
+      .unwrap()
+      .unwrap();
+    assert_eq!(persisted.items.len(), 1);
+    assert_eq!(persisted.items[0].plain_text(), "current");
+
+    std::fs::remove_file(store_path).unwrap();
+  }
+
+  #[test]
   fn paused_capture_does_not_record_content() {
     let mut manager = ClipboardManager::new();
-    manager.set_capture_status(ClipboardCaptureStatus::Paused);
+    manager
+      .set_capture_status(ClipboardCaptureStatus::Paused)
+      .unwrap();
 
     assert!(!capture(&mut manager, "ignored", None, Utc::now()));
     assert!(manager.items.is_empty());
@@ -1248,7 +1462,7 @@ mod tests {
         .unwrap()
     );
 
-    assert!(manager.delete_group(&group_id));
+    assert!(manager.delete_group(&group_id).unwrap());
     assert_eq!(manager.items.len(), 1);
     assert_eq!(manager.items[0].group_id(), None);
   }

@@ -119,9 +119,9 @@ objc2-foundation = { version = "0.3", default-features = false, features = [
 plist = "1.10"
 
 [target.'cfg(target_os = "windows")'.dependencies]
-active-win-pos-rs = "0.11.0"
 windows-icons = "0.4.0"
 windows-native-keyring-store = "1"
+winsafe = { version = "0.0.28", features = ["kernel", "user", "version"] }
 
 [dev-dependencies]
 tower = { version = "0.5", features = ["util"] }

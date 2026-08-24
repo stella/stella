@@ -23,9 +23,19 @@ pub struct ClipboardFocusState {
   previous_application: Mutex<Option<Retained<NSRunningApplication>>>,
 }
 
-#[derive(Default)]
 #[cfg(not(target_os = "macos"))]
-pub struct ClipboardFocusState;
+pub struct ClipboardFocusState {
+  fallback_delay: Duration,
+}
+
+#[cfg(not(target_os = "macos"))]
+impl Default for ClipboardFocusState {
+  fn default() -> Self {
+    Self {
+      fallback_delay: FALLBACK_FOCUS_DELAY,
+    }
+  }
+}
 
 impl ClipboardFocusState {
   #[cfg(target_os = "macos")]
@@ -43,7 +53,9 @@ impl ClipboardFocusState {
   }
 
   #[cfg(not(target_os = "macos"))]
-  pub fn remember_frontmost_application(&self) {}
+  pub fn remember_frontmost_application(&self) {
+    let _ = self.fallback_delay;
+  }
 
   #[cfg(target_os = "macos")]
   pub async fn restore_frontmost_application(&self, app: &AppHandle) {
@@ -88,6 +100,6 @@ impl ClipboardFocusState {
 
   #[cfg(not(target_os = "macos"))]
   pub async fn restore_frontmost_application(&self, _app: &AppHandle) {
-    tokio::time::sleep(FALLBACK_FOCUS_DELAY).await;
+    tokio::time::sleep(self.fallback_delay).await;
   }
 }

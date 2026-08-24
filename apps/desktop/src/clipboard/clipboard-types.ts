@@ -64,6 +64,12 @@ export type ClipboardPasteOutcome =
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
 
+export const isClipboardPasteOutcome = (
+  value: unknown,
+): value is ClipboardPasteOutcome =>
+  isRecord(value) &&
+  (value["status"] === "pasted" || value["status"] === "copiedOnly");
+
 const isClipboardSourceApp = (value: unknown): value is ClipboardSourceApp =>
   isRecord(value) &&
   (value["identifier"] === null || typeof value["identifier"] === "string") &&

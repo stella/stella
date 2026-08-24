@@ -153,27 +153,28 @@ type RichTextAreaProps = {
 };
 
 const RichTextArea = memo(
-  forwardRef<HTMLDivElement, RichTextAreaProps>(({ item, label }, ref) => (
-    <div
-      aria-label={label}
-      autoFocus
-      className="clipboard-rich-editor bg-card ring-border focus:ring-ring min-h-0 flex-1 overflow-y-auto rounded-[22px] p-5 text-sm leading-6 ring-1 outline-none ring-inset focus:ring-2"
-      contentEditable
-      dir="auto"
-      ref={ref}
-      role="textbox"
-      suppressContentEditableWarning
-    >
-      {item.type === "formattedText" ? (
-        <div
-          // safe-html: Clipboard HTML was sanitized by Rust before IPC.
-          dangerouslySetInnerHTML={{ __html: item.html }}
-        />
-      ) : (
-        item.plainText
-      )}
-    </div>
-  )),
+  forwardRef<HTMLDivElement, RichTextAreaProps>(({ item, label }, ref) => {
+    const content =
+      item.type === "formattedText"
+        ? {
+            // safe-html: Clipboard HTML was sanitized by Rust before IPC.
+            dangerouslySetInnerHTML: { __html: item.html },
+          }
+        : { children: item.plainText };
+    return (
+      <div
+        aria-label={label}
+        autoFocus
+        className="clipboard-rich-editor bg-card ring-border focus:ring-ring min-h-0 flex-1 overflow-y-auto rounded-[22px] p-5 text-sm leading-6 ring-1 outline-none ring-inset focus:ring-2"
+        contentEditable
+        dir="auto"
+        ref={ref}
+        role="textbox"
+        suppressContentEditableWarning
+        {...content}
+      />
+    );
+  }),
 );
 
 RichTextArea.displayName = "RichTextArea";

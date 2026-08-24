@@ -1,0 +1,6 @@
+{
+  "identifier": "clipboard",
+  "description": "Custom clipboard commands plus history event subscriptions for the clipboard windows",
+  "windows": ["clipboard", "clipboard-editor"],
+  "permissions": ["core:event:allow-listen", "core:event:allow-unlisten"]
+}

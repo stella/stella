@@ -2,6 +2,7 @@ use enigo::{Direction, Enigo, Key, Keyboard, Settings};
 use serde::Serialize;
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Emitter, State, WebviewWindow};
+use tauri_plugin_notification::NotificationExt;
 
 use crate::{
   clipboard::{
@@ -9,7 +10,7 @@ use crate::{
     ClipboardItem, ClipboardSnapshot, write_item,
   },
   clipboard_focus::ClipboardFocusState,
-  clipboard_window,
+  clipboard_window, i18n,
 };
 
 const HISTORY_EVENT: &str = "clipboard-history-changed";
@@ -39,10 +40,9 @@ fn lock_error() -> String {
 pub fn clipboard_get_snapshot(
   state: State<'_, ClipboardAppState>,
 ) -> Result<ClipboardSnapshot, String> {
-  state
-    .lock()
-    .map_err(|_| lock_error())
-    .map(|manager| manager.snapshot())
+  let mut manager = state.lock().map_err(|_| lock_error())?;
+  manager.prune_expired(chrono::Utc::now())?;
+  Ok(manager.snapshot())
 }
 
 #[tauri::command]
@@ -53,7 +53,7 @@ pub fn clipboard_set_capture_status(
 ) -> Result<ClipboardSnapshot, String> {
   let snapshot = {
     let mut manager = state.lock().map_err(|_| lock_error())?;
-    manager.set_capture_status(status);
+    manager.set_capture_status(status)?;
     manager.snapshot()
   };
   let _ = window.emit(HISTORY_EVENT, ());
@@ -68,7 +68,7 @@ pub fn clipboard_delete_item(
 ) -> Result<ClipboardSnapshot, String> {
   let snapshot = {
     let mut manager = state.lock().map_err(|_| lock_error())?;
-    manager.delete_item(&id);
+    manager.delete_item(&id)?;
     manager.snapshot()
   };
   let _ = window.emit(HISTORY_EVENT, ());
@@ -83,7 +83,7 @@ pub fn clipboard_duplicate_item(
 ) -> Result<ClipboardSnapshot, String> {
   let snapshot = {
     let mut manager = state.lock().map_err(|_| lock_error())?;
-    if !manager.duplicate_item(&id) {
+    if !manager.duplicate_item(&id)? {
       return Err("clipboard item no longer exists".to_string());
     }
     manager.snapshot()
@@ -99,7 +99,7 @@ pub fn clipboard_clear_history(
 ) -> Result<ClipboardSnapshot, String> {
   let snapshot = {
     let mut manager = state.lock().map_err(|_| lock_error())?;
-    manager.clear();
+    manager.clear()?;
     manager.snapshot()
   };
   let _ = window.emit(HISTORY_EVENT, ());
@@ -130,7 +130,7 @@ pub fn clipboard_delete_group(
 ) -> Result<ClipboardSnapshot, String> {
   let snapshot = {
     let mut manager = state.lock().map_err(|_| lock_error())?;
-    manager.delete_group(&id);
+    manager.delete_group(&id)?;
     manager.snapshot()
   };
   let _ = window.emit(HISTORY_EVENT, ());
@@ -195,7 +195,8 @@ pub fn clipboard_get_editor_context(
     .map_err(|_| lock_error())?
     .clone()
     .ok_or_else(|| "no clipboard item is open for editing".to_string())?;
-  let manager = state.lock().map_err(|_| lock_error())?;
+  let mut manager = state.lock().map_err(|_| lock_error())?;
+  manager.prune_expired(chrono::Utc::now())?;
   let item = manager
     .item(&id)
     .ok_or_else(|| "clipboard item no longer exists".to_string())?;
@@ -247,6 +248,18 @@ fn simulate_paste() -> Result<(), String> {
     .map_err(|error| format!("paste shortcut failed: {error}"))
 }
 
+fn notify_copied_only(app: &AppHandle) {
+  if let Err(error) = app
+    .notification()
+    .builder()
+    .title(i18n::t("clipboard.title"))
+    .body(i18n::t("clipboard.copiedOnly"))
+    .show()
+  {
+    tracing::warn!(error = %error, "clipboard fallback notification failed");
+  }
+}
+
 #[tauri::command]
 pub async fn clipboard_paste_item(
   id: String,
@@ -277,10 +290,12 @@ pub async fn clipboard_paste_item(
     Ok(Ok(())) => Ok(ClipboardPasteOutcome::Pasted),
     Ok(Err(error)) => {
       tracing::warn!(error = %error, "clipboard item was copied but direct paste failed");
+      notify_copied_only(&app);
       Ok(ClipboardPasteOutcome::CopiedOnly)
     }
     Err(error) => {
       tracing::warn!(error = %error, "direct paste task failed");
+      notify_copied_only(&app);
       Ok(ClipboardPasteOutcome::CopiedOnly)
     }
   }

@@ -98,6 +98,7 @@
     "clear": "Verlauf löschen",
     "clearConfirmation": "Den gesamten Zwischenablageverlauf löschen? Dies kann nicht rückgängig gemacht werden.",
     "close": "Schließen",
+    "copiedOnly": "Kopiert. Fügen Sie den Inhalt manuell ein.",
     "create": "Erstellen",
     "createGroup": "Neue Gruppe",
     "deleteGroup": "Gruppe löschen",

@@ -17,10 +17,12 @@ import {
   FileTextIcon,
   FolderInputIcon,
   FolderPlusIcon,
+  LockKeyholeIcon,
   PauseIcon,
   PencilIcon,
   PlayIcon,
   SearchIcon,
+  ShieldAlertIcon,
   TagsIcon,
   Trash2Icon,
   XIcon,
@@ -55,13 +57,15 @@ import {
   nextClipboardIndex,
   quickPasteIndex,
 } from "./clipboard-logic";
-import { isClipboardSnapshot } from "./clipboard-types";
+import {
+  isClipboardPasteOutcome,
+  isClipboardSnapshot,
+} from "./clipboard-types";
 import type {
   ClipboardCaptureStatus,
   ClipboardGroup,
   ClipboardGroupColor,
   ClipboardItem,
-  ClipboardPasteOutcome,
   ClipboardSnapshot,
   ClipboardSourceAppVisual,
 } from "./clipboard-types";
@@ -257,6 +261,7 @@ const ClipboardCard = ({
       <button
         aria-label={t("pasteItem", { number: index + 1 })}
         className="flex size-full flex-col text-start focus-visible:outline-none"
+        data-clipboard-card-trigger=""
         draggable
         onClick={() => onPaste(item, false)}
         onContextMenu={(event) => onOpenMenu(event, item, index)}
@@ -688,6 +693,7 @@ const ClipboardApp = () => {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [dialog, setDialog] = useState<ClipboardDialogState>({
     type: "closed",
   });
@@ -811,17 +817,39 @@ const ClipboardApp = () => {
 
   const pasteItem = (item: ClipboardItem, plainTextOnly: boolean) => {
     setError(null);
-    void invoke<ClipboardPasteOutcome>("clipboard_paste_item", {
+    setNotice(null);
+    void invoke<unknown>("clipboard_paste_item", {
       id: item.id,
       plainTextOnly,
-    }).catch(() => {
-      reportDesktopError({
-        code: DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
-        operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardPaste,
-        window: DESKTOP_TELEMETRY_WINDOWS.clipboard,
+    })
+      .then((value) => {
+        if (!isClipboardPasteOutcome(value)) {
+          reportDesktopError({
+            code: DESKTOP_TELEMETRY_ERROR_CODES.invalidResponse,
+            operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardPaste,
+            window: DESKTOP_TELEMETRY_WINDOWS.clipboard,
+          });
+          setError(t("errorPaste"));
+          return undefined;
+        }
+        switch (value.status) {
+          case "pasted":
+            return undefined;
+          case "copiedOnly":
+            setNotice(t("copiedOnly"));
+            return undefined;
+          default:
+            return value satisfies never;
+        }
+      })
+      .catch(() => {
+        reportDesktopError({
+          code: DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
+          operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardPaste,
+          window: DESKTOP_TELEMETRY_WINDOWS.clipboard,
+        });
+        setError(t("errorPaste"));
       });
-      setError(t("errorPaste"));
-    });
   };
 
   const openEditor = (id: string) => {
@@ -991,6 +1019,17 @@ const ClipboardApp = () => {
     ) {
       return;
     }
+    const target = event.target instanceof HTMLElement ? event.target : null;
+    const cardTrigger = target?.closest("[data-clipboard-card-trigger]");
+    const interactiveTarget = target?.closest(
+      "button, a, input, textarea, select, [contenteditable='true']",
+    );
+    if (interactiveTarget && !cardTrigger) {
+      return;
+    }
+    if (cardTrigger && event.key === " ") {
+      return;
+    }
     if (
       event.key.length === 1 &&
       !event.isComposing &&
@@ -1063,6 +1102,26 @@ const ClipboardApp = () => {
 
   const nextCaptureStatus: ClipboardCaptureStatus =
     snapshot.captureStatus === "active" ? "paused" : "active";
+  let feedback: ReactNode = null;
+  if (error) {
+    feedback = (
+      <div
+        className="bg-destructive text-destructive-foreground absolute inset-x-0 top-0 z-20 px-5 py-1.5 text-center text-xs"
+        role="alert"
+      >
+        {error}
+      </div>
+    );
+  } else if (notice) {
+    feedback = (
+      <div
+        className="bg-foreground text-background absolute inset-x-0 top-0 z-20 px-5 py-1.5 text-center text-xs"
+        role="status"
+      >
+        {notice}
+      </div>
+    );
+  }
 
   return (
     <div
@@ -1107,14 +1166,7 @@ const ClipboardApp = () => {
         </>
       )}
       <main className="relative min-h-0 flex-1">
-        {error ? (
-          <div
-            className="bg-destructive text-destructive-foreground absolute inset-x-0 top-0 z-20 px-5 py-1.5 text-center text-xs"
-            role="alert"
-          >
-            {error}
-          </div>
-        ) : null}
+        {feedback}
 
         <nav
           aria-label={t("groups")}
@@ -1289,6 +1341,33 @@ const ClipboardApp = () => {
           >
             <StellaMark className="size-6" />
           </a>
+          {snapshot.persistence.status === "initializing" ? null : (
+            <span
+              aria-label={
+                snapshot.persistence.status === "encrypted"
+                  ? t("encryptedHistory")
+                  : t("memoryOnly")
+              }
+              className={cn(
+                "grid size-7 place-items-center rounded-full",
+                snapshot.persistence.status === "encrypted"
+                  ? "text-muted-foreground"
+                  : "bg-warning/12 text-warning",
+              )}
+              role="status"
+              title={
+                snapshot.persistence.status === "encrypted"
+                  ? t("encryptedHistory")
+                  : t("memoryOnly")
+              }
+            >
+              {snapshot.persistence.status === "encrypted" ? (
+                <LockKeyholeIcon aria-hidden="true" className="size-3.5" />
+              ) : (
+                <ShieldAlertIcon aria-hidden="true" className="size-3.5" />
+              )}
+            </span>
+          )}
         </div>
 
         <InputGroup className="clipboard-search mx-auto h-10 w-full max-w-[440px] rounded-full">

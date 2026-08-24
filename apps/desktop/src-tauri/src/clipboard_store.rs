@@ -92,8 +92,11 @@ impl ClipboardStore {
       let _ = fs::set_permissions(&temp_path, fs::Permissions::from_mode(0o600));
     }
 
-    fs::rename(&temp_path, &self.path)
-      .map_err(|error| format!("clipboard store replace failed: {error}"))
+    if let Err(error) = fs::rename(&temp_path, &self.path) {
+      let _ = fs::remove_file(&temp_path);
+      return Err(format!("clipboard store replace failed: {error}"));
+    }
+    Ok(())
   }
 }
 

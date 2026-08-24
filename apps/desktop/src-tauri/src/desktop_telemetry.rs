@@ -92,6 +92,7 @@ pub enum DesktopTelemetryErrorCode {
   WatcherUnavailable,
   LockPoisoned,
   FormatReadFailed,
+  PersistenceFailed,
   WindowUnavailable,
   ShortcutUnavailable,
 }
@@ -111,6 +112,7 @@ impl DesktopTelemetryErrorCode {
       Self::WatcherUnavailable => "watcherUnavailable",
       Self::LockPoisoned => "lockPoisoned",
       Self::FormatReadFailed => "formatReadFailed",
+      Self::PersistenceFailed => "persistenceFailed",
       Self::WindowUnavailable => "windowUnavailable",
       Self::ShortcutUnavailable => "shortcutUnavailable",
     }

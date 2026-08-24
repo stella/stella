@@ -12,6 +12,7 @@ import {
   quickPasteIndex,
 } from "../src/clipboard/clipboard-logic";
 import type { ClipboardItem } from "../src/clipboard/clipboard-types";
+import { isClipboardPasteOutcome } from "../src/clipboard/clipboard-types";
 
 const TEXT_ITEM = {
   copiedAt: "2026-08-23T10:00:00Z",
@@ -33,6 +34,15 @@ const FORMATTED_ITEM = {
 } satisfies ClipboardItem;
 
 const ITEMS = [TEXT_ITEM, FORMATTED_ITEM] satisfies ClipboardItem[];
+
+describe("clipboard paste outcomes", () => {
+  test("accepts only the native paste result contract", () => {
+    expect(isClipboardPasteOutcome({ status: "pasted" })).toBe(true);
+    expect(isClipboardPasteOutcome({ status: "copiedOnly" })).toBe(true);
+    expect(isClipboardPasteOutcome({ status: "unknown" })).toBe(false);
+    expect(isClipboardPasteOutcome(null)).toBe(false);
+  });
+});
 
 describe("clipboardDraggedItemId", () => {
   const itemIds = new Set(["one", "two"]);
