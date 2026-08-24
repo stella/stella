@@ -64,6 +64,7 @@ import {
 } from "../telemetry/desktop-telemetry";
 import {
   CLIPBOARD_ITEM_DRAG_TYPE,
+  clipboardContextMenuPosition,
   clipboardDraggedItemId,
   clipboardSourceTintIndex,
   filterClipboardItems,
@@ -580,6 +581,13 @@ const ClipboardContextMenu = ({
   onMove,
 }: ClipboardContextMenuProps) => {
   const t = useTranslations("clipboard");
+  const position = clipboardContextMenuPosition({
+    anchorX: menu.x,
+    anchorY: menu.y,
+    type: menu.type,
+    viewportHeight: window.innerHeight,
+    viewportWidth: window.innerWidth,
+  });
   const itemClassName =
     "text-foreground hover:bg-foreground/8 focus-visible:bg-foreground/8 flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-start text-sm outline-none";
   const handleKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
@@ -623,12 +631,16 @@ const ClipboardContextMenu = ({
   };
   return (
     <div
-      className="bg-popover ring-border fixed z-30 w-56 rounded-2xl p-1.5 shadow-2xl ring-1"
+      className="bg-popover ring-border fixed z-30 flex w-56 flex-col overflow-hidden rounded-2xl p-1.5 shadow-2xl ring-1"
       onContextMenu={(event) => event.preventDefault()}
       onKeyDown={handleKeyDown}
       onPointerDown={(event) => event.stopPropagation()}
       role="menu"
-      style={{ insetInlineStart: menu.x, top: menu.y }}
+      style={{
+        insetInlineStart: position.x,
+        maxHeight: position.maxHeight,
+        top: position.y,
+      }}
       tabIndex={-1}
     >
       {menu.type === "actions" ? (
@@ -732,7 +744,7 @@ const ClipboardContextMenu = ({
             {t("moveToGroup")}
           </button>
           <div className="bg-border my-1 h-px" />
-          <div className="max-h-64 overflow-y-auto">
+          <div className="min-h-0 flex-1 overflow-y-auto">
             {[{ color: null, id: null, name: t("noGroup") }, ...groups].map(
               (group) => (
                 <button
@@ -975,8 +987,8 @@ const ClipboardApp = () => {
     setContextMenu({
       item,
       type: "actions",
-      x: Math.max(8, Math.min(event.clientX, window.innerWidth - 232)),
-      y: Math.max(8, Math.min(event.clientY, window.innerHeight - 224)),
+      x: event.clientX,
+      y: event.clientY,
     });
   };
 
@@ -1240,6 +1252,12 @@ const ClipboardApp = () => {
 
   const nextCaptureStatus: ClipboardCaptureStatus =
     snapshot.captureStatus === "active" ? "paused" : "active";
+  let persistenceLabel = t("memoryOnly");
+  if (snapshot.persistence.status === "encrypted") {
+    persistenceLabel = t("encryptedHistory");
+  } else if (snapshot.persistence.status === "deletionOnly") {
+    persistenceLabel = t("errorReadHistory");
+  }
   let feedback: ReactNode = null;
   if (error) {
     feedback = (
@@ -1465,11 +1483,7 @@ const ClipboardApp = () => {
           </a>
           {snapshot.persistence.status === "initializing" ? null : (
             <span
-              aria-label={
-                snapshot.persistence.status === "encrypted"
-                  ? t("encryptedHistory")
-                  : t("memoryOnly")
-              }
+              aria-label={persistenceLabel}
               className={cn(
                 "grid size-7 place-items-center rounded-full",
                 snapshot.persistence.status === "encrypted"
@@ -1477,11 +1491,7 @@ const ClipboardApp = () => {
                   : "bg-warning/12 text-warning",
               )}
               role="status"
-              title={
-                snapshot.persistence.status === "encrypted"
-                  ? t("encryptedHistory")
-                  : t("memoryOnly")
-              }
+              title={persistenceLabel}
             >
               {snapshot.persistence.status === "encrypted" ? (
                 <LockKeyholeIcon aria-hidden="true" className="size-3.5" />
@@ -1543,7 +1553,10 @@ const ClipboardApp = () => {
           <Button
             aria-label={t("clear")}
             className="size-11 rounded-full"
-            disabled={snapshot.items.length === 0}
+            disabled={
+              snapshot.items.length === 0 &&
+              snapshot.persistence.status !== "deletionOnly"
+            }
             onClick={() => {
               setDialog({ type: "clearHistory" });
             }}

@@ -1,6 +1,12 @@
 import type { ClipboardItem } from "./clipboard-types";
 
 const CLIPBOARD_SOURCE_TINT_COUNT = 6;
+const CLIPBOARD_CONTEXT_MENU_MARGIN = 8;
+const CLIPBOARD_CONTEXT_MENU_WIDTH = 224;
+const CLIPBOARD_CONTEXT_MENU_HEIGHT = {
+  actions: 224,
+  groups: 320,
+} as const;
 
 export const CLIPBOARD_ITEM_DRAG_TYPE =
   "application/x-stella-clipboard-item-id";
@@ -10,6 +16,54 @@ type ClipboardDragData = Record<string | symbol, unknown>;
 export type ClipboardTextSegment = {
   match: boolean;
   text: string;
+};
+
+type ClipboardContextMenuPositionOptions = {
+  anchorX: number;
+  anchorY: number;
+  type: keyof typeof CLIPBOARD_CONTEXT_MENU_HEIGHT;
+  viewportHeight: number;
+  viewportWidth: number;
+};
+
+export const clipboardContextMenuPosition = ({
+  anchorX,
+  anchorY,
+  type,
+  viewportHeight,
+  viewportWidth,
+}: ClipboardContextMenuPositionOptions) => {
+  const availableHeight = Math.max(
+    0,
+    viewportHeight - CLIPBOARD_CONTEXT_MENU_MARGIN * 2,
+  );
+  const menuHeight = Math.min(
+    CLIPBOARD_CONTEXT_MENU_HEIGHT[type],
+    availableHeight,
+  );
+  const top = Math.max(
+    CLIPBOARD_CONTEXT_MENU_MARGIN,
+    Math.min(
+      anchorY,
+      viewportHeight - menuHeight - CLIPBOARD_CONTEXT_MENU_MARGIN,
+    ),
+  );
+  return {
+    maxHeight: Math.max(
+      0,
+      viewportHeight - top - CLIPBOARD_CONTEXT_MENU_MARGIN,
+    ),
+    x: Math.max(
+      CLIPBOARD_CONTEXT_MENU_MARGIN,
+      Math.min(
+        anchorX,
+        viewportWidth -
+          CLIPBOARD_CONTEXT_MENU_WIDTH -
+          CLIPBOARD_CONTEXT_MENU_MARGIN,
+      ),
+    ),
+    y: top,
+  };
 };
 
 type ClipboardCopyShortcut = {

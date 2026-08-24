@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   CLIPBOARD_ITEM_DRAG_TYPE,
+  clipboardContextMenuPosition,
   clipboardDraggedItemId,
   clipboardSourceTintIndex,
   filterClipboardItems,
@@ -33,6 +34,32 @@ const FORMATTED_ITEM = {
 } satisfies ClipboardItem;
 
 const ITEMS = [TEXT_ITEM, FORMATTED_ITEM] satisfies ClipboardItem[];
+
+describe("clipboardContextMenuPosition", () => {
+  test("repositions a tall group menu within a compact viewport", () => {
+    expect(
+      clipboardContextMenuPosition({
+        anchorX: 600,
+        anchorY: 300,
+        type: "groups",
+        viewportHeight: 326,
+        viewportWidth: 800,
+      }),
+    ).toEqual({ maxHeight: 310, x: 568, y: 8 });
+  });
+
+  test("keeps the shorter action menu near its anchor", () => {
+    expect(
+      clipboardContextMenuPosition({
+        anchorX: 100,
+        anchorY: 100,
+        type: "actions",
+        viewportHeight: 326,
+        viewportWidth: 800,
+      }),
+    ).toEqual({ maxHeight: 224, x: 100, y: 94 });
+  });
+});
 
 describe("clipboardDraggedItemId", () => {
   const itemIds = new Set(["one", "two"]);

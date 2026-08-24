@@ -3,7 +3,10 @@ use aes_gcm::{
   aead::{Aead, KeyInit, OsRng, rand_core::RngCore},
 };
 use serde::{Deserialize, Serialize};
-use std::{fs, path::PathBuf};
+use std::{
+  fs,
+  path::{Path, PathBuf},
+};
 
 use crate::clipboard::PersistedClipboardState;
 
@@ -54,6 +57,14 @@ impl ClipboardStore {
     serde_json::from_slice(&plaintext)
       .map(Some)
       .map_err(|error| format!("clipboard history is invalid: {error}"))
+  }
+
+  pub fn remove(path: &Path) -> Result<(), String> {
+    match fs::remove_file(path) {
+      Ok(()) => Ok(()),
+      Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+      Err(error) => Err(format!("clipboard store removal failed: {error}")),
+    }
   }
 
   pub fn persist(&self, state: &PersistedClipboardState) -> Result<(), String> {
@@ -154,5 +165,16 @@ mod tests {
     assert!(wrong_store.load().is_err());
 
     fs::remove_file(path).unwrap();
+  }
+
+  #[test]
+  fn removing_a_store_is_idempotent() {
+    let path = unique_path();
+    fs::write(&path, b"encrypted history").unwrap();
+
+    ClipboardStore::remove(&path).unwrap();
+    ClipboardStore::remove(&path).unwrap();
+
+    assert!(!path.exists());
   }
 }

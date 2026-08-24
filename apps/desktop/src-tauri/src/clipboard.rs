@@ -290,6 +290,7 @@ pub enum ClipboardPersistenceStatus {
   Initializing,
   Encrypted,
   MemoryOnly,
+  DeletionOnly,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -315,10 +316,27 @@ pub struct ClipboardManager {
   capture_status: ClipboardCaptureStatus,
   groups: Vec<ClipboardGroup>,
   items: Vec<ClipboardItem>,
-  persistence: ClipboardPersistenceStatus,
+  persistence: ClipboardPersistence,
   source_app_visuals: HashMap<String, ClipboardSourceAppVisual>,
-  store: Option<ClipboardStore>,
   suppressed_content: Option<(String, Option<String>)>,
+}
+
+enum ClipboardPersistence {
+  Initializing,
+  Encrypted(ClipboardStore),
+  MemoryOnly,
+  DeletionOnly(std::path::PathBuf),
+}
+
+impl ClipboardPersistence {
+  fn status(&self) -> ClipboardPersistenceStatus {
+    match self {
+      Self::Initializing => ClipboardPersistenceStatus::Initializing,
+      Self::Encrypted(_) => ClipboardPersistenceStatus::Encrypted,
+      Self::MemoryOnly => ClipboardPersistenceStatus::MemoryOnly,
+      Self::DeletionOnly(_) => ClipboardPersistenceStatus::DeletionOnly,
+    }
+  }
 }
 
 struct ClipboardManagerCheckpoint {
@@ -345,9 +363,8 @@ impl ClipboardManager {
       capture_status: ClipboardCaptureStatus::Active,
       groups: Vec::new(),
       items: Vec::new(),
-      persistence: ClipboardPersistenceStatus::Initializing,
+      persistence: ClipboardPersistence::Initializing,
       source_app_visuals: HashMap::new(),
-      store: None,
       suppressed_content: None,
     }
   }
@@ -355,7 +372,7 @@ impl ClipboardManager {
   pub fn initialize(&mut self) {
     #[cfg(debug_assertions)]
     if std::env::var_os(DEBUG_PERSISTENCE_ENV).is_none() {
-      self.persistence = ClipboardPersistenceStatus::MemoryOnly;
+      self.persistence = ClipboardPersistence::MemoryOnly;
       tracing::info!(
         "clipboard history is memory-only in debug builds; set \
          STELLA_ENABLE_DEBUG_CLIPBOARD_PERSISTENCE=1 to test encrypted persistence"
@@ -364,32 +381,34 @@ impl ClipboardManager {
     }
 
     let Some(data_dir) = dirs::data_dir() else {
-      self.persistence = ClipboardPersistenceStatus::MemoryOnly;
+      self.persistence = ClipboardPersistence::MemoryOnly;
       tracing::warn!(
         "clipboard history is memory-only because no data directory is available"
       );
       return;
     };
+    let store_path = data_dir
+      .join("legal.stella.desktop")
+      .join("clipboard-history.json.enc");
     let key = match keychain::get_or_create_clipboard_key() {
       Ok(key) => key,
       Err(error) => {
-        self.persistence = ClipboardPersistenceStatus::MemoryOnly;
+        self.persistence = if store_path.is_file() {
+          ClipboardPersistence::DeletionOnly(store_path)
+        } else {
+          ClipboardPersistence::MemoryOnly
+        };
         tracing::warn!(error = %error, "clipboard history key is unavailable");
         return;
       }
     };
-    let store = ClipboardStore::new(
-      key,
-      data_dir
-        .join("legal.stella.desktop")
-        .join("clipboard-history.json.enc"),
-    );
+    let store = ClipboardStore::new(key, store_path.clone());
     match store.load() {
       Ok(Some(mut state)) => {
         if prune_items(&mut state.items, Utc::now())
           && let Err(error) = store.persist(&state)
         {
-          self.persistence = ClipboardPersistenceStatus::MemoryOnly;
+          self.persistence = ClipboardPersistence::DeletionOnly(store_path);
           tracing::warn!(error = %error, "expired clipboard history could not be removed");
           return;
         }
@@ -399,13 +418,12 @@ impl ClipboardManager {
       }
       Ok(None) => {}
       Err(error) => {
-        self.persistence = ClipboardPersistenceStatus::MemoryOnly;
+        self.persistence = ClipboardPersistence::DeletionOnly(store_path);
         tracing::warn!(error = %error, "encrypted clipboard history is unavailable");
         return;
       }
     }
-    self.store = Some(store);
-    self.persistence = ClipboardPersistenceStatus::Encrypted;
+    self.persistence = ClipboardPersistence::Encrypted(store);
   }
 
   pub fn snapshot(&self) -> ClipboardSnapshot {
@@ -419,7 +437,7 @@ impl ClipboardManager {
       capture_status: self.capture_status,
       groups: self.groups.clone(),
       items: self.items.clone(),
-      persistence: self.persistence,
+      persistence: self.persistence.status(),
       source_app_visuals,
     }
   }
@@ -469,6 +487,14 @@ impl ClipboardManager {
     let checkpoint = self.checkpoint();
     self.items.clear();
     self.source_app_visuals.clear();
+    if let ClipboardPersistence::DeletionOnly(path) = &self.persistence {
+      if let Err(error) = ClipboardStore::remove(path) {
+        self.restore(checkpoint);
+        return Err(error);
+      }
+      self.persistence = ClipboardPersistence::MemoryOnly;
+      return Ok(());
+    }
     self.persist_or_restore(checkpoint)
   }
 
@@ -546,6 +572,7 @@ impl ClipboardManager {
       item.replace_content(plain_text.to_string(), html);
     }
     item.set_group_id(group_id);
+    prune_items(&mut self.items, Utc::now());
     self.persist_or_restore(checkpoint)?;
     Ok(true)
   }
@@ -686,7 +713,7 @@ impl ClipboardManager {
   }
 
   fn persist(&self) -> Result<(), String> {
-    let Some(store) = &self.store else {
+    let ClipboardPersistence::Encrypted(store) = &self.persistence else {
       return Ok(());
     };
     let state = PersistedClipboardState {
@@ -1340,7 +1367,7 @@ mod tests {
   fn capture_deduplicates_and_moves_content_to_the_front() {
     let now = Utc::now();
     let mut manager = ClipboardManager::new();
-    manager.persistence = ClipboardPersistenceStatus::MemoryOnly;
+    manager.persistence = ClipboardPersistence::MemoryOnly;
 
     assert!(capture(&mut manager, "first", None, now));
     assert!(capture(&mut manager, "second", None, now));
@@ -1409,12 +1436,54 @@ mod tests {
   }
 
   #[test]
+  fn editing_reapplies_the_total_history_byte_limit() {
+    let now = Utc::now();
+    let mut manager = ClipboardManager::new();
+    manager.persistence = ClipboardPersistence::MemoryOnly;
+    manager.items.push(text_item(now, "editable"));
+    let large_text = "x".repeat(MAX_ITEM_TEXT_BYTES);
+    loop {
+      let candidate = text_item(now, &large_text);
+      let next_total = manager
+        .items
+        .iter()
+        .map(ClipboardItem::byte_len)
+        .sum::<usize>()
+        + candidate.byte_len();
+      if next_total > MAX_HISTORY_BYTES {
+        break;
+      }
+      manager.items.push(candidate);
+    }
+
+    assert!(
+      !manager
+        .update_item("missing", &large_text, None, None)
+        .unwrap()
+    );
+    let editable_id = manager.items[0].id().to_string();
+    assert!(
+      manager
+        .update_item(&editable_id, &large_text, None, None)
+        .unwrap()
+    );
+    assert!(
+      manager
+        .items
+        .iter()
+        .map(ClipboardItem::byte_len)
+        .sum::<usize>()
+        <= MAX_HISTORY_BYTES
+    );
+  }
+
+  #[test]
   fn persistence_failure_rolls_back_history_mutations() {
     let store_path = unique_store_path();
     std::fs::create_dir_all(&store_path).unwrap();
     let mut manager = ClipboardManager::new();
-    manager.persistence = ClipboardPersistenceStatus::Encrypted;
-    manager.store = Some(ClipboardStore::new([7; 32], store_path.clone()));
+    manager.persistence =
+      ClipboardPersistence::Encrypted(ClipboardStore::new([7; 32], store_path.clone()));
     manager.items.push(text_item(Utc::now(), "must remain"));
 
     assert!(manager.clear().is_err());
@@ -1422,6 +1491,22 @@ mod tests {
     assert_eq!(manager.items[0].plain_text(), "must remain");
 
     std::fs::remove_dir(store_path).unwrap();
+  }
+
+  #[test]
+  fn deletion_only_clear_removes_unreadable_encrypted_history() {
+    let store_path = unique_store_path();
+    std::fs::write(&store_path, b"encrypted history").unwrap();
+    let mut manager = ClipboardManager::new();
+    manager.persistence = ClipboardPersistence::DeletionOnly(store_path.clone());
+
+    manager.clear().unwrap();
+
+    assert!(!store_path.exists());
+    assert_eq!(
+      manager.persistence.status(),
+      ClipboardPersistenceStatus::MemoryOnly
+    );
   }
 
   #[test]
@@ -1440,9 +1525,8 @@ mod tests {
     store.persist(&state).unwrap();
 
     let mut manager = ClipboardManager::new();
-    manager.persistence = ClipboardPersistenceStatus::Encrypted;
     manager.items = state.items;
-    manager.store = Some(store);
+    manager.persistence = ClipboardPersistence::Encrypted(store);
 
     assert!(manager.prune_expired(now).unwrap());
     assert_eq!(manager.items.len(), 1);

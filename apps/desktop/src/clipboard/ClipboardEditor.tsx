@@ -1,4 +1,4 @@
-import { forwardRef, memo, useEffect, useRef, useState } from "react";
+import { Fragment, forwardRef, memo, useEffect, useRef, useState } from "react";
 
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
@@ -114,11 +114,11 @@ const EDITOR_BLOCK_TAGS = new Set([
 const editorPlainText = (editor: HTMLDivElement) => {
   const parts: string[] = [];
   const appendLineBreak = () => {
-    if (parts.length > 0 && parts.at(-1) !== "\n") {
+    if (parts.at(-1) !== "\n") {
       parts.push("\n");
     }
   };
-  const appendNode = (node: Node) => {
+  const appendNode = (node: Node, hasFollowingSibling: boolean) => {
     if (node instanceof Text) {
       parts.push(node.data);
       return;
@@ -127,24 +127,23 @@ const editorPlainText = (editor: HTMLDivElement) => {
       return;
     }
     if (node.tagName === "BR") {
-      appendLineBreak();
+      parts.push("\n");
       return;
     }
-    for (const child of node.childNodes) {
-      appendNode(child);
+    const children = Array.from(node.childNodes);
+    for (const [index, child] of children.entries()) {
+      appendNode(child, index < children.length - 1);
     }
-    if (EDITOR_BLOCK_TAGS.has(node.tagName)) {
+    if (EDITOR_BLOCK_TAGS.has(node.tagName) && hasFollowingSibling) {
       appendLineBreak();
     }
   };
 
-  for (const child of editor.childNodes) {
-    appendNode(child);
+  const children = Array.from(editor.childNodes);
+  for (const [index, child] of children.entries()) {
+    appendNode(child, index < children.length - 1);
   }
-  return parts
-    .join("")
-    .replace(/\n{3,}/gu, "\n\n")
-    .trimEnd();
+  return parts.join("");
 };
 
 type RichTextAreaProps = {
@@ -154,13 +153,21 @@ type RichTextAreaProps = {
 
 const RichTextArea = memo(
   forwardRef<HTMLDivElement, RichTextAreaProps>(({ item, label }, ref) => {
+    const plainTextLines = item.plainText.split("\n");
     const content =
       item.type === "formattedText"
         ? {
             // safe-html: Clipboard HTML was sanitized by Rust before IPC.
             dangerouslySetInnerHTML: { __html: item.html },
           }
-        : { children: item.plainText };
+        : {
+            children: plainTextLines.map((line, index) => (
+              <Fragment key={index}>
+                {index > 0 ? <br /> : null}
+                {line}
+              </Fragment>
+            )),
+          };
     return (
       <div
         aria-label={label}

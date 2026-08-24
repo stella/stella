@@ -47,7 +47,8 @@ export type ClipboardGroup = {
 export type ClipboardPersistence =
   | { status: "initializing" }
   | { status: "encrypted" }
-  | { status: "memoryOnly" };
+  | { status: "memoryOnly" }
+  | { status: "deletionOnly" };
 
 export type ClipboardSnapshot = {
   captureStatus: ClipboardCaptureStatus;
@@ -121,7 +122,8 @@ const isPersistence = (value: unknown): value is ClipboardPersistence => {
   return (
     value["status"] === "initializing" ||
     value["status"] === "encrypted" ||
-    value["status"] === "memoryOnly"
+    value["status"] === "memoryOnly" ||
+    value["status"] === "deletionOnly"
   );
 };
 
