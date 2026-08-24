@@ -507,10 +507,7 @@ const buildClient = (): CorpusIndexClient => ({
   readDeleteSettlement: async (indexId, requiredOpstamp) =>
     await Result.tryPromise({
       try: async () => {
-        if (
-          !Number.isSafeInteger(requiredOpstamp) ||
-          requiredOpstamp < 0
-        ) {
+        if (!Number.isSafeInteger(requiredOpstamp) || requiredOpstamp < 0) {
           throw new CorpusIndexError({
             message:
               "corpus index delete settlement received an invalid opstamp",
@@ -551,8 +548,7 @@ const buildClient = (): CorpusIndexClient => ({
               : null;
             if (splits === null) {
               throw new CorpusIndexError({
-                message:
-                  "corpus index split list returned an invalid response",
+                message: "corpus index split list returned an invalid response",
               });
             }
             scannedSplits += splits.length;

@@ -356,9 +356,7 @@ describe("idempotent corpus removals", () => {
     expect(removed.isOk()).toBe(true);
     expect(deleteRecords).toMatchObject([
       {
-        jobs: [
-          { entityId: row.id, operation: "delete", status: "succeeded" },
-        ],
+        jobs: [{ entityId: row.id, operation: "delete", status: "succeeded" }],
         opstamp: 41,
       },
     ]);
@@ -464,10 +462,9 @@ describe("fenced serving-generation appends", () => {
         events.push(url.includes("/ingest") ? "ingest" : "remote");
         if (url.includes("/delete-tasks")) {
           nextDeleteOpstamp += 1;
-          return new Response(
-            JSON.stringify({ opstamp: nextDeleteOpstamp }),
-            { status: 200 },
-          );
+          return new Response(JSON.stringify({ opstamp: nextDeleteOpstamp }), {
+            status: 200,
+          });
         }
         return new Response(
           url.includes("/ingest")

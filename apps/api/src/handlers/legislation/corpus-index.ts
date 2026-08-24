@@ -11,6 +11,7 @@ import {
   sql,
 } from "drizzle-orm";
 
+import type { ScopedDb } from "@/api/db/safe-db";
 import {
   legislationCorpusIndexDeleteWatermarks,
   legislationCorpusIndexPendingDeletes,
@@ -18,7 +19,6 @@ import {
   legislationIndexJobs,
   legislationSources,
 } from "@/api/db/schema";
-import type { ScopedDb } from "@/api/db/safe-db";
 import { redistributableLegislationSource } from "@/api/handlers/legislation/redistribution";
 import type { SafeId } from "@/api/lib/branded-types";
 import { DELETE_SETTLEMENT_STALE_MS } from "@/api/lib/corpus-index/census";
@@ -31,11 +31,11 @@ import {
   timestampCasToken,
   type TimestampCasToken,
 } from "@/api/lib/db/timestamp-cas";
-import { readCorpusText } from "@/api/lib/legal-search/corpus-storage";
 import {
   CorpusIndexError,
   getCorpusIndexClient,
 } from "@/api/lib/legal-search/corpus-index-client";
+import { readCorpusText } from "@/api/lib/legal-search/corpus-storage";
 import { logger } from "@/api/lib/observability/logger";
 
 /**
@@ -444,10 +444,7 @@ export const reconcileNextLegislationCorpusIndexDelete = async (
             .delete(legislationCorpusIndexPendingDeletes)
             .where(
               and(
-                eq(
-                  legislationCorpusIndexPendingDeletes.indexId,
-                  next.indexId,
-                ),
+                eq(legislationCorpusIndexPendingDeletes.indexId, next.indexId),
                 lte(
                   legislationCorpusIndexPendingDeletes.opstamp,
                   appliedOpstamp,
