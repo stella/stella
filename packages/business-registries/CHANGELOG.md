@@ -1,5 +1,11 @@
 # @stll/business-registries
 
+## 0.3.1
+
+### Patch Changes
+
+- [#2391](https://github.com/stella/stella/pull/2391) [`bea13cb`](https://github.com/stella/stella/commit/bea13cbebf9847a01f83671d293e5a202078b627) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Bump `@stll/stdnum` to 2.3.2, whose loader resolves the native binding through literal requires so bundlers embed it.
+
 ## 0.3.0
 
 ### Minor Changes

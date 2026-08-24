@@ -1,6 +1,6 @@
 {
   "name": "@stll/anonymize-chat",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Placeholder-safe, reversible anonymization contracts for provider-bound text.",
   "keywords": [
     "anonymization",

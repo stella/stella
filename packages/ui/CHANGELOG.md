@@ -1,5 +1,11 @@
 # @stll/ui
 
+## 0.5.2
+
+### Patch Changes
+
+- [#2412](https://github.com/stella/stella/pull/2412) [`e152e00`](https://github.com/stella/stella/commit/e152e00d04ec923758e5cece8033c46f87469c48) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Render inspector rail tabs as canonical square active chips.
+
 ## 0.5.1
 
 ### Patch Changes

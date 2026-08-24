@@ -1,5 +1,15 @@
 # @stll/cli
 
+## 0.6.6
+
+### Patch Changes
+
+- [#2372](https://github.com/stella/stella/pull/2372) [`425b628`](https://github.com/stella/stella/commit/425b6285ee00f22cebcb5635f4433dcb1938d841) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Use canonical Valibot guards and discard unmodeled registry and OAuth response fields.
+
+- [#2389](https://github.com/stella/stella/pull/2389) [`5c2aff5`](https://github.com/stella/stella/commit/5c2aff55fb6c454aadc1dbfbf97baac3cdd057c3) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Consolidate shared command execution contracts without changing CLI behavior.
+
+- [#2379](https://github.com/stella/stella/pull/2379) [`d21b5dc`](https://github.com/stella/stella/commit/d21b5dca3bd92767a441ef8531cb5c52e2161589) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Keep legislation command metadata aligned with the public reader response.
+
 ## 0.6.5
 
 ### Patch Changes
