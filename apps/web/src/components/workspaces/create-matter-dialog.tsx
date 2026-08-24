@@ -322,10 +322,18 @@ const CreateMatterDialogBody = ({
     const workspaceId = result.value.id;
 
     if (onCreated) {
-      detached(
-        Promise.resolve().then(async () => await onCreated(workspaceId)),
-        "create-matter-dialog.on-created",
+      const callbackResult = await Result.tryPromise(
+        async () => await onCreated(workspaceId),
       );
+      if (Result.isError(callbackResult)) {
+        stellaToast.add({
+          title: toActionErrorTitle({
+            error: callbackResult.error,
+            fallback: t("errors.actionFailed"),
+          }),
+          type: "error",
+        });
+      }
     }
 
     handleClose();
