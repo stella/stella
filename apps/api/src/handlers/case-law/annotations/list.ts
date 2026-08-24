@@ -77,7 +77,7 @@ const listDecisionAnnotations = createSafeRootHandler(
       ),
     );
 
-    return { items: rows };
+    return Result.ok({ items: rows });
   },
 );
 

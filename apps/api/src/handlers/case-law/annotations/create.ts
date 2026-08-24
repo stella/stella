@@ -75,7 +75,11 @@ const createDecisionAnnotation = createSafeRootHandler(
       );
     }
 
-    return { groupId, id: first.id, ids: rows.map((row) => row.id) };
+    return Result.ok({
+      groupId,
+      id: first.id,
+      ids: rows.map((row) => row.id),
+    });
   },
 );
 

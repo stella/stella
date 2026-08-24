@@ -40,7 +40,7 @@ const deleteDecisionAnnotation = createSafeRootHandler(
       );
     }
 
-    return { ok: true as const };
+    return Result.ok({ ok: true as const });
   },
 );
 
