@@ -10,10 +10,12 @@ import { Button } from "@stll/ui/button";
 import { OutlineRail } from "@stll/ui/outline-rail";
 import type { OutlineItem } from "@stll/ui/outline-rail";
 
+import type { SelectionAnchor } from "@/features/case-law/annotations/selection-anchor";
 import { MarginNotes } from "@/features/case-law/components/case-viewer/analysis/margin-notes";
 import type {
   AnalysisMarginItem,
   CommentMarginItem,
+  ComposerMarginItem,
 } from "@/features/case-law/components/case-viewer/analysis/margin-notes";
 import {
   buildSectionMap,
@@ -89,6 +91,32 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
   const [activeAnnotationId, setActiveAnnotationId] = useState<string | null>(
     null,
   );
+  // The comment being written: its paragraphs, so the margin can sit the
+  // composer beside the first and the saved comment covers them all.
+  const [composing, setComposing] = useState<SelectionAnchor[] | null>(null);
+  const composerItem: ComposerMarginItem[] =
+    composing === null || composing[0] === undefined
+      ? []
+      : [
+          {
+            id: "composer",
+            kind: "composer",
+            onCancel: () => setComposing(null),
+            onSubmit: (body, visibility) => {
+              detached(
+                annotations?.controller.create({
+                  body,
+                  kind: "comment",
+                  spans: composing,
+                  visibility,
+                }) ?? Promise.resolve(),
+                "case-law.annotation-comment",
+              );
+              setComposing(null);
+            },
+            startAnchorId: composing[0].blockAnchorId,
+          },
+        ];
   const activeAnnotation =
     annotations?.annotations.find((item) => item.id === activeAnnotationId) ??
     null;
@@ -360,9 +388,14 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
           >
             <aside className="relative max-lg:hidden">
               {((hasAnalysis && marginItems.length > 0) ||
-                commentItems.length > 0) && (
+                commentItems.length > 0 ||
+                composerItem.length > 0) && (
                 <MarginNotes
-                  items={[...(hasAnalysis ? marginItems : []), ...commentItems]}
+                  items={[
+                    ...(hasAnalysis ? marginItems : []),
+                    ...commentItems,
+                    ...composerItem,
+                  ]}
                   scrollContainerRef={mainRef}
                 />
               )}
@@ -458,6 +491,7 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
               id: decisionId,
             }}
             onClearActive={() => setActiveAnnotationId(null)}
+            onCompose={setComposing}
             scrollContainerRef={mainRef}
           />
         )}

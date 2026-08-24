@@ -16,7 +16,6 @@ import {
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
-import { Textarea } from "@stll/ui/textarea";
 import { cn } from "@stll/ui/utils";
 
 import Tooltip from "@/components/tooltip";
@@ -61,6 +60,8 @@ type AnnotationToolbarProps = {
   controller: AnnotationToolbarController;
   decision: AnnotationToolbarDecision;
   onClearActive: () => void;
+  /** Opens the margin composer on these paragraphs. */
+  onCompose: (spans: SelectionAnchor[]) => void;
   scrollContainerRef: RefObject<HTMLElement | null>;
 };
 
@@ -69,11 +70,6 @@ type Selected = {
   /** One per paragraph the selection touches; empty outside the words. */
   spans: SelectionAnchor[];
   text: string;
-};
-
-type Composer = {
-  rect: DOMRect;
-  spans: SelectionAnchor[];
 };
 
 const STYLE_ICONS = {
@@ -98,6 +94,7 @@ export const AnnotationToolbar = ({
   controller,
   decision,
   onClearActive,
+  onCompose,
   scrollContainerRef,
 }: AnnotationToolbarProps) => {
   const t = useTranslations();
@@ -108,9 +105,8 @@ export const AnnotationToolbar = ({
   // bar holds, so nothing here reads a ref while rendering.
   const [doc, setDoc] = useState<Document | null>(null);
   const [style, setStyle] = useState<AnnotationStyle>("highlight");
-  const [composer, setComposer] = useState<Composer | null>(null);
-  const [comment, setComment] = useState("");
-  const [visibility, setVisibility] = useState<AnnotationVisibility>("private");
+  // A new highlight is private; sharing is a deliberate second step on the mark.
+  const visibility: AnnotationVisibility = "private";
 
   useMountEffect(() => {
     const root = scrollContainerRef.current;
@@ -148,7 +144,6 @@ export const AnnotationToolbar = ({
     };
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
-        setComposer(null);
         onClearActive();
         ownerDoc.getSelection()?.removeAllRanges();
       }
@@ -162,7 +157,6 @@ export const AnnotationToolbar = ({
       ) {
         return;
       }
-      setComposer(null);
       onClearActive();
     };
     ownerDoc.addEventListener("selectionchange", readSelection);
@@ -222,26 +216,7 @@ export const AnnotationToolbar = ({
     clearSelection();
   };
 
-  const submitComment = () => {
-    const body = comment.trim();
-    if (composer === null || body === "") {
-      return;
-    }
-    detached(
-      controller.create({
-        body,
-        spans: composer.spans,
-        kind: "comment",
-        visibility,
-      }),
-      "case-law.annotation-comment",
-    );
-    setComment("");
-    setComposer(null);
-    clearSelection();
-  };
-
-  const rect = composer?.rect ?? activeRect ?? selected?.rect ?? null;
+  const rect = activeRect ?? selected?.rect ?? null;
   if (rect === null) {
     return null;
   }
@@ -295,48 +270,7 @@ export const AnnotationToolbar = ({
     });
 
   let content: ReactNode;
-  if (composer !== null) {
-    content = (
-      <form
-        className="flex w-72 flex-col gap-2 p-1"
-        onSubmit={(event) => {
-          event.preventDefault();
-          submitComment();
-        }}
-      >
-        <Textarea
-          aria-label={t("caseLaw.annotations.comment")}
-          autoFocus
-          className="min-h-16 text-xs"
-          onChange={(event) => setComment(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" && !event.shiftKey) {
-              event.preventDefault();
-              submitComment();
-            }
-          }}
-          placeholder={t("caseLaw.annotations.commentPlaceholder")}
-          value={comment}
-        />
-        <div className="flex items-center justify-between gap-2">
-          <VisibilityToggle onChange={setVisibility} value={visibility} />
-          <div className="flex items-center gap-1">
-            <Button
-              onClick={() => setComposer(null)}
-              size="sm"
-              type="button"
-              variant="ghost"
-            >
-              {t("common.cancel")}
-            </Button>
-            <Button disabled={comment.trim() === ""} size="sm" type="submit">
-              {t("common.save")}
-            </Button>
-          </div>
-        </div>
-      </form>
-    );
-  } else if (activeAnnotation !== null) {
+  if (activeAnnotation !== null) {
     const removeLabel =
       activeAnnotation.kind === "highlight"
         ? t("caseLaw.annotations.removeHighlight")
@@ -371,19 +305,18 @@ export const AnnotationToolbar = ({
             <span className="bg-border mx-1 h-4 w-px" />
           </>
         )}
-        {activeAnnotation.kind === "highlight" && activeRect !== null && (
+        {activeAnnotation.kind === "highlight" && (
           <>
             <Button
               onClick={() => {
-                setComposer({
-                  rect: activeRect,
-                  spans: activeSpans.map((span) => ({
+                onCompose(
+                  activeSpans.map((span) => ({
                     blockAnchorId: span.blockAnchorId,
                     endOffset: span.endOffset,
                     quote: span.quote,
                     startOffset: span.startOffset,
                   })),
-                });
+                );
                 onClearActive();
               }}
               size="sm"
@@ -460,7 +393,10 @@ export const AnnotationToolbar = ({
             </div>
             <span className="bg-border mx-1 h-4 w-px" />
             <Button
-              onClick={() => setComposer({ rect: selected.rect, spans })}
+              onClick={() => {
+                onCompose(spans);
+                clearSelection();
+              }}
               size="sm"
               variant="ghost"
             >

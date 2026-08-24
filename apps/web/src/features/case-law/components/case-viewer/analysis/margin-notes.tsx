@@ -12,6 +12,8 @@ import type { RefObject } from "react";
 import { Building2Icon, LockIcon, Trash2Icon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { Button } from "@stll/ui/button";
+import { Textarea } from "@stll/ui/textarea";
 import { cn } from "@stll/ui/utils";
 
 import Tooltip from "@/components/tooltip";
@@ -47,7 +49,19 @@ export type CommentMarginItem = {
   onToggleVisibility: () => void;
 };
 
-export type MarginItem = AnalysisMarginItem | CommentMarginItem;
+/** A comment being written, beside the paragraph it will belong to. */
+export type ComposerMarginItem = {
+  kind: "composer";
+  id: string;
+  startAnchorId: string;
+  onCancel: () => void;
+  onSubmit: (body: string, visibility: "private" | "shared") => void;
+};
+
+export type MarginItem =
+  | AnalysisMarginItem
+  | CommentMarginItem
+  | ComposerMarginItem;
 
 type MarginNotesProps = {
   items: MarginItem[];
@@ -146,23 +160,40 @@ export const MarginNotes = ({
 
   return (
     <div className="absolute inset-0" ref={containerRef}>
-      {positioned.map((item) =>
-        item.kind === "comment" ? (
-          <CommentNote
-            item={item}
-            key={item.id}
-            measureRef={measureRef}
-            onJump={() => scrollTo(item.startAnchorId)}
-          />
-        ) : (
-          <AnalysisNote
-            item={item}
-            key={item.id}
-            measureRef={measureRef}
-            onJump={() => scrollTo(item.startAnchorId)}
-          />
-        ),
-      )}
+      {positioned.map((item) => {
+        switch (item.kind) {
+          case "comment": {
+            return (
+              <CommentNote
+                item={item}
+                key={item.id}
+                measureRef={measureRef}
+                onJump={() => scrollTo(item.startAnchorId)}
+              />
+            );
+          }
+          case "composer": {
+            return (
+              <ComposerNote item={item} key={item.id} measureRef={measureRef} />
+            );
+          }
+          case "card":
+          case "annotation": {
+            return (
+              <AnalysisNote
+                item={item}
+                key={item.id}
+                measureRef={measureRef}
+                onJump={() => scrollTo(item.startAnchorId)}
+              />
+            );
+          }
+          default: {
+            const unreachable: never = item;
+            return unreachable;
+          }
+        }
+      })}
     </div>
   );
 };
@@ -207,6 +238,106 @@ const AnalysisNote = ({
         </span>
       )}
     </button>
+  );
+};
+
+/**
+ * The comment being written, in the margin beside its paragraph so the text
+ * stays uncovered. Enter sends, Shift+Enter breaks a line, Escape cancels.
+ */
+const ComposerNote = ({
+  item,
+  measureRef,
+}: {
+  item: ComposerMarginItem & { top: number };
+  measureRef: (el: HTMLElement | null, id: string) => void;
+}) => {
+  const t = useTranslations();
+  const [body, setBody] = useState("");
+  const [visibility, setVisibility] = useState<"private" | "shared">("private");
+  const shared = visibility === "shared";
+  const visibilityLabel = shared
+    ? t("caseLaw.annotations.visibilityShared")
+    : t("caseLaw.annotations.visibilityPrivate");
+  const submit = () => {
+    const trimmed = body.trim();
+    if (trimmed !== "") {
+      item.onSubmit(trimmed, visibility);
+    }
+  };
+
+  return (
+    <form
+      className="absolute start-0 end-0 flex flex-col gap-1.5 border-s-[3px] py-1 ps-2.5 pe-2"
+      onSubmit={(event) => {
+        event.preventDefault();
+        submit();
+      }}
+      ref={(el) => measureRef(el, item.id)}
+      style={{
+        top: `${item.top}px`,
+        borderInlineStartColor: "var(--option-sky)",
+      }}
+    >
+      <Textarea
+        aria-label={t("caseLaw.annotations.comment")}
+        autoFocus
+        className="min-h-14 text-xs"
+        onChange={(event) => setBody(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === "Escape") {
+            event.preventDefault();
+            item.onCancel();
+            return;
+          }
+          if (event.key === "Enter" && !event.shiftKey) {
+            event.preventDefault();
+            submit();
+          }
+        }}
+        placeholder={t("caseLaw.annotations.commentPlaceholder")}
+        value={body}
+      />
+      <div className="flex items-center justify-between gap-1">
+        <Tooltip
+          content={visibilityLabel}
+          render={
+            <button
+              aria-label={visibilityLabel}
+              aria-pressed={shared}
+              className="text-foreground-disabled hover:text-foreground rounded-sm p-0.5"
+              onClick={() => setVisibility(shared ? "private" : "shared")}
+              type="button"
+            />
+          }
+        >
+          {shared ? (
+            <Building2Icon className="size-3.5" />
+          ) : (
+            <LockIcon className="size-3.5" />
+          )}
+        </Tooltip>
+        <div className="flex items-center gap-1">
+          <Button
+            className="h-6 px-2 text-[0.7rem]"
+            onClick={item.onCancel}
+            size="sm"
+            type="button"
+            variant="ghost"
+          >
+            {t("common.cancel")}
+          </Button>
+          <Button
+            className="h-6 px-2 text-[0.7rem]"
+            disabled={body.trim() === ""}
+            size="sm"
+            type="submit"
+          >
+            {t("common.save")}
+          </Button>
+        </div>
+      </div>
+    </form>
   );
 };
 
