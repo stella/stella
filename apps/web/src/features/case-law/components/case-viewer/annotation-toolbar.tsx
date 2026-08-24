@@ -18,6 +18,7 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/button";
 import { cn } from "@stll/ui/utils";
 
+import { writeDecisionPassage } from "@/components/chat-decision-passage";
 import Tooltip from "@/components/tooltip";
 import { askAboutSelection } from "@/features/case-law/annotations/ask-about-selection";
 import { selectionAnchorsFrom } from "@/features/case-law/annotations/selection-anchor";
@@ -165,14 +166,36 @@ export const AnnotationToolbar = ({
       }
       onClearActive();
     };
+    // Dragging selected words carries the passage with its decision, so a
+    // drop on the chat composer lands as chips rather than loose text.
+    const onDragStart = (event: DragEvent) => {
+      const selection = ownerDoc.getSelection();
+      const quote = selection?.toString().replace(/\s+/gu, " ").trim() ?? "";
+      if (
+        event.dataTransfer === null ||
+        selection === null ||
+        quote === "" ||
+        !root.contains(selection.anchorNode)
+      ) {
+        return;
+      }
+      writeDecisionPassage(event.dataTransfer, {
+        caseNumber: decision.caseNumber,
+        court: decision.court,
+        decisionId: decision.id,
+        quote,
+      });
+    };
     ownerDoc.addEventListener("selectionchange", readSelection);
     ownerDoc.addEventListener("keydown", onKeyDown);
     ownerDoc.addEventListener("pointerdown", onPointerDown);
+    root.addEventListener("dragstart", onDragStart);
     return () => {
       cancelAnimationFrame(frame);
       ownerDoc.removeEventListener("selectionchange", readSelection);
       ownerDoc.removeEventListener("keydown", onKeyDown);
       ownerDoc.removeEventListener("pointerdown", onPointerDown);
+      root.removeEventListener("dragstart", onDragStart);
     };
   });
 
@@ -193,16 +216,6 @@ export const AnnotationToolbar = ({
   const clearSelection = () => {
     doc?.getSelection()?.removeAllRanges();
     setSelected(null);
-  };
-
-  const decisionUrl = (): string => {
-    const view = doc?.defaultView;
-    if (!view) {
-      return "";
-    }
-    const url = new URL(view.location.href);
-    url.hash = "";
-    return url.href;
   };
 
   const createHighlight = (
@@ -379,7 +392,6 @@ export const AnnotationToolbar = ({
               caseNumber: decision.caseNumber,
               court: decision.court,
               decisionId: decision.id,
-              decisionUrl: decisionUrl(),
               quote: selected.text,
             });
             clearSelection();

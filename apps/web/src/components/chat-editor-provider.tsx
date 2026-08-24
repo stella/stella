@@ -33,6 +33,10 @@ import { useTranslations } from "use-intl";
 import { CHAT_CONTEXT_FILE_MAX_BYTES } from "@stll/chat-limits";
 
 import {
+  decisionPassageContent,
+  readDecisionPassage,
+} from "@/components/chat-decision-passage";
+import {
   applyDraftDocToEditor,
   updateCarriesDraftEcho,
 } from "@/components/chat-editor-echo";
@@ -1372,12 +1376,23 @@ export const useChatEditor = ({
   };
 
   const handleDrop = (event: React.DragEvent) => {
-    event.preventDefault();
-    if (event.dataTransfer.files.length === 0) {
+    const passage = readDecisionPassage(event.dataTransfer);
+    const targetEditor = editorRef.current;
+    if (passage !== null && targetEditor !== null) {
+      event.preventDefault();
+      targetEditor
+        .chain()
+        .focus()
+        .insertContent(decisionPassageContent(passage))
+        .run();
+      targetEditor.commands.setTextSelection(targetEditor.state.selection.to);
       return;
     }
-
-    addFiles(event.dataTransfer.files);
+    if (event.dataTransfer.files.length > 0) {
+      event.preventDefault();
+      addFiles(event.dataTransfer.files);
+    }
+    // Anything else (dragged text) is the editor's own drop to handle.
   };
 
   const handlePaste = (event: React.ClipboardEvent) => {
