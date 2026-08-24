@@ -99,12 +99,15 @@ const DirectionSection = ({
 
   return (
     <section className="flex flex-col gap-3">
-      <h3 className="text-foreground-strong-muted flex items-baseline gap-1.5 text-xs font-medium">
-        {t(DIRECTION_TITLE[direction])}
-        <span className="text-muted-foreground font-normal tabular-nums">
-          {format.number(total)}
-        </span>
-      </h3>
+      <div className="flex flex-col gap-1.5">
+        <h3 className="text-foreground-strong-muted flex items-baseline gap-1.5 text-xs font-medium">
+          {t(DIRECTION_TITLE[direction])}
+          <span className="text-muted-foreground font-normal tabular-nums">
+            {format.number(total)}
+          </span>
+        </h3>
+        <TreatmentBar counts={counts} total={total} />
+      </div>
       {CITATION_TREATMENT_ORDER.map((treatment) => {
         const rows = (leading ?? []).filter(
           (row) => row.treatment === treatment,
@@ -160,6 +163,47 @@ const DirectionSection = ({
         </Button>
       )}
     </section>
+  );
+};
+
+/**
+ * The reception in one line: each treatment's share of the citations, in
+ * display order, in the colour its group heading carries. No legend and
+ * no axis; the headings below are the legend, and a sliver that would be
+ * invisible is still drawn one pixel wide so a lone negative is not lost.
+ */
+const TreatmentBar = ({
+  counts,
+  total,
+}: {
+  counts: Record<CitationTreatment, number>;
+  total: number;
+}) => {
+  const t = useTranslations();
+  const format = useFormatter();
+  return (
+    <div
+      aria-label={CITATION_TREATMENT_ORDER.filter(
+        (treatment) => counts[treatment] > 0,
+      )
+        .map(
+          (treatment) =>
+            `${t(CITATION_TREATMENT_LABEL[treatment])}: ${format.number(counts[treatment])}`,
+        )
+        .join(", ")}
+      className="bg-muted/40 flex h-1 w-full gap-px overflow-hidden rounded-full"
+      role="img"
+    >
+      {CITATION_TREATMENT_ORDER.map((treatment) =>
+        counts[treatment] === 0 ? null : (
+          <span
+            className={cn("min-w-px", CITATION_TREATMENT_DOT[treatment])}
+            key={treatment}
+            style={{ flexGrow: counts[treatment] / total }}
+          />
+        ),
+      )}
+    </div>
   );
 };
 

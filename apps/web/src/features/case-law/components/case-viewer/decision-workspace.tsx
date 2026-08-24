@@ -395,13 +395,6 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
         )}
 
         <div className="reader-scroll h-full overflow-y-auto" ref={mainRef}>
-          {hasAnalysis && flatAnalysisHeadings.length > 0 && (
-            <CurrentSection
-              anchorById={analysisOutline.anchorById}
-              headings={flatAnalysisHeadings}
-              scrollContainerRef={mainRef}
-            />
-          )}
           <div
             className="grid max-lg:!grid-cols-[1fr]"
             style={{ gridTemplateColumns: `${panelWidth}px minmax(0, 1fr)` }}
@@ -481,6 +474,13 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
             </aside>
 
             <main className="reader-paper min-w-0 px-4 py-8 max-sm:px-3">
+              {hasAnalysis && flatAnalysisHeadings.length > 0 && (
+                <CurrentSection
+                  anchorById={analysisOutline.anchorById}
+                  headings={flatAnalysisHeadings}
+                  scrollContainerRef={mainRef}
+                />
+              )}
               <ProvisionsCited decisionId={decisionId} />
               <DecisionText
                 activeMatchIndex={activeMatchIndex}

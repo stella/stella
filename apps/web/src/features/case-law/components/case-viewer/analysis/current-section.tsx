@@ -24,9 +24,9 @@ type CurrentSectionProps = {
 /**
  * The AI-generated heading of the passage under the reader's eye, held at
  * the top of the text while they scroll, with its parent for the path. A
- * click returns to where the section starts. Placed inside the scroll
- * container so `sticky` can hold it; nothing shows until a heading has
- * scrolled past the top.
+ * click returns to where the section starts. Placed at the top of the text
+ * column, inside the scroll container so `sticky` can hold it; nothing
+ * shows until a heading has scrolled past the top.
  */
 export const CurrentSection = ({
   anchorById,
@@ -111,40 +111,44 @@ export const CurrentSection = ({
   };
 
   return (
-    <div
-      aria-hidden={current === null}
-      className={cn(
-        "pointer-events-none sticky top-0 z-10 flex justify-center px-4 pt-2 transition-opacity duration-150",
-        current === null ? "opacity-0" : "opacity-100",
-      )}
-    >
-      <button
-        className="bg-background/90 text-foreground-strong-muted hover:text-foreground border-border/60 pointer-events-auto flex max-w-full items-center gap-2 rounded-full border px-3 py-1 font-sans text-xs shadow-sm backdrop-blur"
-        disabled={current === null}
-        onClick={jumpBack}
-        title={t("caseLaw.analysis.backToSection")}
-        type="button"
-      >
-        {current !== null && (
-          <span
-            aria-hidden="true"
-            className="size-1.5 shrink-0 rounded-full"
-            style={{
-              backgroundColor: `var(${getCategoryVar(current.category)})`,
-            }}
-          />
+    // Out of the flow (a sticky box of no height), so the text keeps its
+    // place and the bar lies over its top edge, on the paper's own colour.
+    <div className="sticky top-0 z-10 -mx-4 h-0 max-sm:-mx-3">
+      <div
+        aria-hidden={current === null}
+        className={cn(
+          "reader-paper border-border/60 absolute inset-x-0 top-0 border-b transition-opacity duration-150",
+          current === null ? "pointer-events-none opacity-0" : "opacity-100",
         )}
-        <span className="truncate">
-          {parent !== undefined && parent !== null && (
-            <span className="text-muted-foreground">{parent.label} › </span>
+      >
+        <button
+          className="text-foreground-strong-muted hover:text-foreground flex w-full items-center gap-2 px-4 py-1.5 text-start font-sans text-xs max-sm:px-3"
+          disabled={current === null}
+          onClick={jumpBack}
+          title={t("caseLaw.analysis.backToSection")}
+          type="button"
+        >
+          {current !== null && (
+            <span
+              aria-hidden="true"
+              className="h-3 w-[3px] shrink-0 rounded-full"
+              style={{
+                backgroundColor: `var(${getCategoryVar(current.category)})`,
+              }}
+            />
           )}
-          {current?.label}
-        </span>
-        <ChevronUpIcon
-          aria-hidden="true"
-          className="text-foreground-disabled size-3.5 shrink-0"
-        />
-      </button>
+          <span className="min-w-0 flex-1 truncate">
+            {parent !== undefined && parent !== null && (
+              <span className="text-muted-foreground">{parent.label} › </span>
+            )}
+            {current?.label}
+          </span>
+          <ChevronUpIcon
+            aria-hidden="true"
+            className="text-foreground-disabled size-3.5 shrink-0"
+          />
+        </button>
+      </div>
     </div>
   );
 };
