@@ -118,9 +118,13 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
             startAnchorId: composing[0].blockAnchorId,
           },
         ];
+  // A mark the server has not stored yet has no id to act on, so it is not
+  // active even if clicked.
   const activeAnnotation =
-    annotations?.annotations.find((item) => item.id === activeAnnotationId) ??
-    null;
+    annotations?.annotations.find(
+      (item) =>
+        item.id === activeAnnotationId && !isPendingAnnotationId(item.id),
+    ) ?? null;
   // A mark over several paragraphs is several rows under one group; the bar
   // acts on all of them, and a comment left from the mark covers them all.
   const rowsOf = (item: DecisionAnnotation): DecisionAnnotation[] =>
@@ -130,26 +134,26 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
           (row) => row.groupId === item.groupId,
         );
   const activeSpans = activeAnnotation === null ? [] : rowsOf(activeAnnotation);
-  const activateAnnotation = (item: DecisionAnnotation) => {
-    setActiveAnnotationId(item.id);
-    // Flash the words the mark covers, the way a margin jump does, so the
-    // reader sees at once what the bar is about.
+  // Flash the words the mark covers, the way a margin jump does, so the
+  // reader sees at once what the bar is about. Runs from the id in state, so
+  // the toolbar's once-installed document listener never holds a stale list.
+  const activeRowIds = activeSpans.map((row) => row.id).join(" ");
+  useExternalSyncEffect(() => {
     const container = mainRef.current;
-    if (!container) {
+    if (!container || activeRowIds === "") {
       return;
     }
-    for (const row of rowsOf(item)) {
-      const element = container.querySelector<HTMLElement>(
-        `[data-annotation-id="${CSS.escape(row.id)}"]`,
+    for (const id of activeRowIds.split(" ")) {
+      const elements = container.querySelectorAll<HTMLElement>(
+        `[data-annotation-id="${CSS.escape(id)}"]`,
       );
-      if (!element) {
-        continue;
+      for (const element of elements) {
+        delete element.dataset["highlight"];
+        forceReflow(element);
+        element.dataset["highlight"] = "";
       }
-      delete element.dataset["highlight"];
-      forceReflow(element);
-      element.dataset["highlight"] = "";
     }
-  };
+  }, [activeRowIds]);
   const annotationAnchors: AnnotationAnchorSource[] = (
     annotations?.annotations ?? []
   ).map((item) => ({
@@ -490,14 +494,7 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
               court: decision.court,
               id: decisionId,
             }}
-            onActivateAnnotation={(id) => {
-              const item = annotations?.annotations.find(
-                (row) => row.id === id,
-              );
-              if (item && !isPendingAnnotationId(item.id)) {
-                activateAnnotation(item);
-              }
-            }}
+            onActivateAnnotation={setActiveAnnotationId}
             onClearActive={() => setActiveAnnotationId(null)}
             onCompose={setComposing}
             scrollContainerRef={mainRef}

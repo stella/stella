@@ -206,6 +206,37 @@ const annotationStyle = ({
     : { textDecorationColor: swatch };
 };
 
+/** The pieces of a mark left once the links inside it are cut out. */
+const splitAroundLinks = (
+  mark: TextAnchor,
+  links: readonly TextAnchor[],
+): TextAnchor[] => {
+  const cuts = links
+    .filter((link) => mark.start < link.end && link.start < mark.end)
+    .sort((a, b) => a.start - b.start);
+  const pieces: TextAnchor[] = [];
+  let cursor = mark.start;
+  for (const cut of cuts) {
+    if (cut.start > cursor) {
+      pieces.push({
+        ...mark,
+        end: cut.start,
+        key: `${mark.key}:${pieces.length}`,
+        start: cursor,
+      });
+    }
+    cursor = Math.max(cursor, cut.end);
+  }
+  if (cursor < mark.end) {
+    pieces.push({
+      ...mark,
+      key: pieces.length === 0 ? mark.key : `${mark.key}:${pieces.length}`,
+      start: cursor,
+    });
+  }
+  return pieces;
+};
+
 const buildAnchorsByPieceId = ({
   annotations,
   blocks,
@@ -287,17 +318,15 @@ const buildAnchorsByPieceId = ({
       });
     }
     // Links first: a link and a mark on the same words keep the link, since
-    // the mark still reads in the margin while a lost link is gone.
+    // the mark still reads in the margin while a lost link is gone. The mark
+    // continues on either side of the link, so a sentence with a citation
+    // in it is still visibly marked.
     const links = dropOverlappingSpans(
       anchors.filter((anchor) => !anchor.key.startsWith("annotation:")),
     );
-    const marks = anchors.filter(
-      (anchor) =>
-        anchor.key.startsWith("annotation:") &&
-        !links.some(
-          (link) => anchor.start < link.end && link.start < anchor.end,
-        ),
-    );
+    const marks = anchors
+      .filter((anchor) => anchor.key.startsWith("annotation:"))
+      .flatMap((mark) => splitAroundLinks(mark, links));
     anchorsByPieceId[blockId] = dropOverlappingSpans([...links, ...marks]);
   }
   return anchorsByPieceId;
