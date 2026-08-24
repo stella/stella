@@ -19,6 +19,8 @@
 import type { SQL, SQLWrapper } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 
+import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
+
 import type { ConstantMap } from "@/api/lib/constant-map";
 
 /** The declaration the column's `enum` and the CHECK both derive from. */
@@ -163,6 +165,21 @@ export const citationReopenableByKeySql = (resolutionStatus: SQLWrapper): SQL =>
   sql`${resolutionStatus} IN ('${sql.raw(
     CITATION_RESOLUTION_STATUS.UNMATCHED,
   )}', '${sql.raw(CITATION_RESOLUTION_STATUS.AMBIGUOUS)}')`;
+
+export const effectiveCitationIdentifierTypeSql = (
+  identifierType: SQLWrapper,
+): SQL =>
+  sql`coalesce(${identifierType}, '${sql.raw(
+    DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+  )}')`;
+
+export const effectiveCitationIdentifierValueSql = (
+  normalizedIdentifierValue: SQLWrapper,
+  citationKey: SQLWrapper,
+): SQL => sql`coalesce(${normalizedIdentifierValue}, ${citationKey})`;
+
+export const settledCitationSql = (resolutionStatus: SQLWrapper): SQL =>
+  sql`${resolutionStatus} <> '${sql.raw(CITATION_RESOLUTION_STATUS.PENDING)}'`;
 
 /**
  * Lanes the resolution walk keeps a cursor for. One today; the type exists so

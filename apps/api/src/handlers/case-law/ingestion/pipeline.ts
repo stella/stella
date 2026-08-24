@@ -22,6 +22,7 @@ import {
 } from "@/api/handlers/case-law/citation-kind";
 import type { ProceduralKeys } from "@/api/handlers/case-law/citation-kind";
 import {
+  lockCitationGraph,
   reopenCitationsForDecisionIdentifiers,
   reopenCitationsForKeys,
   reopenCitationsFrom,
@@ -1715,6 +1716,12 @@ const processDecisionAttempt = async ({
           return DECISION_ROW_WRITE_STATUS.APPLIED;
         }
 
+        // The resolver locks the graph before it locks citation rows. Match
+        // that order even when the decision identity did not change; taking
+        // row locks first and the graph lock in resolve below can deadlock an
+        // overlapping resolver batch. Re-entrant when a reopen helper above
+        // already acquired it for this transaction.
+        await lockCitationGraph(tx);
         await tx
           .delete(caseLawCitations)
           .where(eq(caseLawCitations.citingDecisionId, existing.id));

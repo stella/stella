@@ -16,6 +16,7 @@ import {
   type CitationDecisionTypeHint,
   detectCitationDecisionTypeHint,
 } from "@/api/handlers/case-law/citation-decision-type-hint";
+import { decisionIdentifiersFromPersistedMetadata } from "@/api/lib/legal-search/decision-identifier-metadata";
 
 /**
  * Extracted citation reference found in decision text.
@@ -712,16 +713,39 @@ export const decisionIdentifiersFromStoredMetadata = ({
   ecli,
   metadata,
 }: StoredDecisionMetadata): DecisionIdentifiers => {
+  const persistedIdentifiers =
+    decisionIdentifiersFromPersistedMetadata(metadata);
+  if (persistedIdentifiers !== null) {
+    const [firstIdentifier, ...otherIdentifiers] = persistedIdentifiers;
+    return decisionIdentifiersFromMetadata({
+      caseNumber,
+      ecli,
+      identifiers:
+        firstIdentifier === undefined
+          ? undefined
+          : [firstIdentifier, ...otherIdentifiers],
+    });
+  }
   const storedAliasesValue =
     metadata[PUBLISHER_CASE_NUMBER_ALIASES_METADATA_KEY];
-  if (!Array.isArray(storedAliasesValue)) {
-    return decisionIdentifiersFromMetadata({ caseNumber, ecli });
-  }
+  const legacyReporterCitation = metadata["citation"];
   // Array.isArray narrows to any[]; keep publisher-owned JSON unknown until
   // each candidate passes the shared identifier schema.
-  const storedAliases: unknown[] = storedAliasesValue;
+  const storedAliases: unknown[] = Array.isArray(storedAliasesValue)
+    ? storedAliasesValue
+    : [];
 
-  const capacity = DECISION_IDENTIFIER_MAX_COUNT - (ecli ? 2 : 1);
+  const reporterIdentifier = {
+    type: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
+    value: legacyReporterCitation,
+  };
+  const validReporterIdentifier = isDecisionIdentifier(reporterIdentifier)
+    ? reporterIdentifier
+    : null;
+  const capacity =
+    DECISION_IDENTIFIER_MAX_COUNT -
+    (ecli ? 2 : 1) -
+    (validReporterIdentifier === null ? 0 : 1);
   const seen = new Set([
     normalizeDecisionIdentifier({
       type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
@@ -747,12 +771,18 @@ export const decisionIdentifiersFromStoredMetadata = ({
       break;
     }
   }
-  const [firstAlias, ...otherAliases] = aliases;
+  const legacyIdentifiers: DecisionIdentifier[] = aliases;
+  if (validReporterIdentifier !== null) {
+    legacyIdentifiers.push(validReporterIdentifier);
+  }
+  const [firstIdentifier, ...otherIdentifiers] = legacyIdentifiers;
   return decisionIdentifiersFromMetadata({
     caseNumber,
     ecli,
     identifiers:
-      firstAlias === undefined ? undefined : [firstAlias, ...otherAliases],
+      firstIdentifier === undefined
+        ? undefined
+        : [firstIdentifier, ...otherIdentifiers],
   });
 };
 

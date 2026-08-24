@@ -20,6 +20,9 @@ import {
   CITATION_RESOLUTION_STATUS,
   CITATION_RESOLUTION_STATUSES,
   citationReopenableByKeySql,
+  effectiveCitationIdentifierTypeSql,
+  effectiveCitationIdentifierValueSql,
+  settledCitationSql,
   unsettledCitationSql,
 } from "@/api/handlers/case-law/citation-resolution-status";
 import {
@@ -597,6 +600,84 @@ export const caseLawDecisionIdentifiers = p.pgTable(
   ],
 );
 
+export const CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASES = [
+  "decisions",
+  "citations",
+  "verify-decisions",
+  "verify-citations",
+  "complete",
+] as const;
+
+export type CaseLawDecisionIdentifierBackfillPhase =
+  (typeof CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASES)[number];
+
+export const CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE = {
+  DECISIONS: CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASES[0],
+  CITATIONS: CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASES[1],
+  VERIFY_DECISIONS: CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASES[2],
+  VERIFY_CITATIONS: CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASES[3],
+  COMPLETE: CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASES[4],
+} as const satisfies ConstantMap<CaseLawDecisionIdentifierBackfillPhase>;
+
+/**
+ * Durable progress and completion receipt for the typed-identifier rollout.
+ *
+ * One versioned row owns one restartable phase walk. The maintenance lane keeps
+ * operator runs from overlapping; the row lock keeps page writes and cursor
+ * advancement atomic. A completed row is only written after the verifier
+ * observes no legacy decisions or citations, so it is evidence for removing
+ * the resolver's temporary docket bridge rather than merely evidence that a
+ * process reached the end of its input once.
+ */
+export const caseLawDecisionIdentifierBackfills = p.pgTable(
+  "case_law_decision_identifier_backfills",
+  {
+    version: p.varchar({ length: 32 }).primaryKey(),
+    phase: p
+      .text({ enum: CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASES })
+      .notNull()
+      .default(CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.DECISIONS),
+    cursorId: p.uuid("cursor_id"),
+    decisionsScanned: p
+      .bigint("decisions_scanned", { mode: "number" })
+      .notNull()
+      .default(0),
+    citationsScanned: p
+      .bigint("citations_scanned", { mode: "number" })
+      .notNull()
+      .default(0),
+    completedAt: timestamptz("completed_at"),
+    updatedAt: timestamptz("updated_at")
+      .defaultNow()
+      .notNull()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => [
+    p.check(
+      "case_law_decision_identifier_backfills_phase_values",
+      sql`${t.phase} IN (${sql.join(
+        CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASES.map((phase) =>
+          sql.raw(`'${phase}'`),
+        ),
+        sql.raw(","),
+      )})`,
+    ),
+    p.check(
+      "case_law_decision_identifier_backfills_counts_nonnegative",
+      sql`${t.decisionsScanned} >= 0 AND ${t.citationsScanned} >= 0`,
+    ),
+    p.check(
+      "case_law_decision_identifier_backfills_terminal_shape",
+      sql`(${t.phase} = ${CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.COMPLETE}) = (${t.completedAt} IS NOT NULL)`,
+    ),
+    p.check(
+      "case_law_decision_identifier_backfills_terminal_cursor",
+      sql`${t.phase} <> ${CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.COMPLETE} OR ${t.cursorId} IS NULL`,
+    ),
+    ...globalCaseLawPolicies(),
+  ],
+);
+
 /**
  * Durable ownership for every exact publisher identity observed for a
  * decision. `decisionId` intentionally has no foreign key: identity is
@@ -952,6 +1033,16 @@ export const caseLawCitations = p.pgTable(
       .index("case_law_citations_reopenable_identifier_idx")
       .on(t.identifierType, t.normalizedIdentifierValue)
       .where(citationReopenableByKeySql(t.resolutionStatus)),
+    p
+      .index("case_law_citations_identifier_backfill_identity_idx")
+      .on(
+        effectiveCitationIdentifierTypeSql(t.identifierType),
+        effectiveCitationIdentifierValueSql(
+          t.normalizedIdentifierValue,
+          t.citationKey,
+        ),
+      )
+      .where(settledCitationSql(t.resolutionStatus)),
     p.check(
       "citations_polarity_values",
       sql`${t.polarity} IN (${sql.join(POLARITY_SQL_VALUES, sql.raw(","))})`,

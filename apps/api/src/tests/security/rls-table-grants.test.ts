@@ -92,6 +92,9 @@ const POST_BOOTSTRAP_SELECT_ONLY_TABLES = new Set([
   // Publisher-stated decision identifiers: global legal data read by public
   // case-law projections, written only by ingestion and the bounded backfill.
   "case_law_decision_identifiers",
+  // Durable operator progress: request code may inspect the rollout receipt;
+  // only the ingestion role and the maintenance script may advance it.
+  "case_law_decision_identifier_backfills",
 ]);
 
 // Internal handoff tables whose scoped role needs INSERT but not table-wide

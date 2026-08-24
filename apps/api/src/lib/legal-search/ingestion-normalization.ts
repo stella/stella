@@ -16,6 +16,7 @@ import {
   sanitizeMetadata,
   stripDangerousChars,
 } from "@/api/lib/legal-search/corpus-sanitize";
+import { storeDecisionIdentifiersInMetadata } from "@/api/lib/legal-search/decision-identifier-metadata";
 import {
   EMPTY_AST,
   isPersistableSourceDocumentId,
@@ -169,10 +170,14 @@ export const sanitizeResult = (result: IngestionResult): IngestionResult => {
     ? sanitizedDocumentAst
     : EMPTY_AST;
 
-  const metadata = Object.fromEntries(
-    Object.entries(sanitizeMetadata(result.metadata)).filter(
-      ([key]) => key !== PARTIAL_OBSERVATION_KEY,
+  const identifiers = sanitizeDecisionIdentifiers(result.identifiers);
+  const metadata = storeDecisionIdentifiersInMetadata(
+    Object.fromEntries(
+      Object.entries(sanitizeMetadata(result.metadata)).filter(
+        ([key]) => key !== PARTIAL_OBSERVATION_KEY,
+      ),
     ),
+    identifiers,
   );
   // Adapter metadata describes the publisher. Keep ingestion quality in a
   // reserved pipeline-owned marker so every court gets the same partial-row
@@ -204,7 +209,7 @@ export const sanitizeResult = (result: IngestionResult): IngestionResult => {
   return {
     ...result,
     caseNumber: result.caseNumber.replace(DANGEROUS_CHARS, ""),
-    identifiers: sanitizeDecisionIdentifiers(result.identifiers),
+    identifiers,
     sourceDocumentId,
     sourceDocumentIdAliases: result.sourceDocumentIdAliases?.filter(
       (identity): identity is string =>

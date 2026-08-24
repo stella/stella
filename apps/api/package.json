@@ -41,6 +41,8 @@
     "db:seed-templates": "bun scripts/seed-templates.ts",
     "db:backfill-chat-search": "bun scripts/backfill-chat-search.ts",
     "db:backfill-search-previews": "bun scripts/backfill-search-previews.ts",
+    "db:backfill-decision-identifiers": "bun run --env-file=.env src/scripts/backfill-decision-identifiers.ts --apply",
+    "db:verify-decision-identifiers": "bun run --env-file=.env src/scripts/backfill-decision-identifiers.ts --verify",
     "document-processing-worker": "bun src/scripts/document-processing-worker.ts",
     "dev:errors": "tail -F .dev-logs/errors.jsonl"
   },
