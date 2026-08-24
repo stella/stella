@@ -479,7 +479,7 @@ const countMarkedIndexed = async (
   }
   return {
     markedIndexed: row.marked ?? 0,
-    hasPendingDelete: row.hasPendingDelete,
+    hasPendingDelete: row.hasPendingDelete === true,
   };
 };
 
