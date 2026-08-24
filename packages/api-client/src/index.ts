@@ -1,5 +1,5 @@
-import { treaty } from "@elysiajs/eden";
-import type { Treaty } from "@elysiajs/eden";
+import { treaty } from "@elysia/eden";
+import type { Treaty } from "@elysia/eden";
 import type { AnyElysia } from "elysia";
 
 export type StellaEdenClientOptions = Omit<Treaty.Config, "parseDate">;

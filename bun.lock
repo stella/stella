@@ -54,7 +54,7 @@
         "@aws-sdk/s3-request-presigner": "^3.1113.0",
         "@better-auth/api-key": "catalog:",
         "@better-auth/oauth-provider": "catalog:",
-        "@elysiajs/cors": "^1.4.2",
+        "@elysia/cors": "^1.4.2",
         "@firecrawl/anydoc": "0.1.9",
         "@google/genai": "^2.17.1",
         "@hyzyla/pdfium": "2.1.13",
@@ -469,7 +469,7 @@
       "name": "@stll/api-client",
       "version": "0.0.0",
       "dependencies": {
-        "@elysiajs/eden": "^1.4.9",
+        "@elysia/eden": "^1.4.10",
       },
       "devDependencies": {
         "@stll/typescript-config": "workspace:*",
@@ -1356,9 +1356,9 @@
 
     "@electric-sql/pglite": ["@electric-sql/pglite@0.5.4", "", {}, "sha512-yYZUyyXrHU7tPlCjwZQJ6hIG9DscdCCn7Uk0mYKwC1FeHX286AbcmFveMiRBEak8e9iPupjsoVImN3yJZVed2g=="],
 
-    "@elysiajs/cors": ["@elysiajs/cors@1.4.2", "", { "peerDependencies": { "elysia": ">= 1.4.0" } }, "sha512-FTCcbH35brTLigF1W7BYySRZomgI/dBEMK9BgK9RP9Nez7zmpGh4koL/Yr1BFv8nYz7CfhRvcM8d/c+XnwMaVQ=="],
+    "@elysia/cors": ["@elysia/cors@1.4.2", "", { "peerDependencies": { "elysia": ">= 1.4.0" } }, "sha512-dXkfo1IxZWJkJReNYnPJorJqb+XpWno0D/YWlMEJSkiFIFd751zJ4R/YswAYdo88mLWo8cycEj673o7L+gbxsw=="],
 
-    "@elysiajs/eden": ["@elysiajs/eden@1.4.9", "", { "peerDependencies": { "elysia": ">=1.4.19" } }, "sha512-3CKVD4ycVjB8nCNssfmhnUuq3SzSHkUES3v5PNCFr9LxIrx39/HVRAZ8z2sLxrFqzUs48dCBZaxoZzJ5UUVHDA=="],
+    "@elysia/eden": ["@elysia/eden@1.4.10", "", { "peerDependencies": { "elysia": ">=1.4.19" } }, "sha512-vcZXQcW6wZj6rhTxaiTkuCbVuS/yAJQ9jqCM6b83a5hu99F5Aj3HOyWXL17iod2Rz+pJpYsQGX0XaeoCsMpw2g=="],
 
     "@emmetio/abbreviation": ["@emmetio/abbreviation@2.3.3", "", { "dependencies": { "@emmetio/scanner": "^1.0.4" } }, "sha512-mgv58UrU3rh4YgbE/TzgLQwJ3pFsHHhCLqY20aJq+9comytTXUDNGG/SMtSeMJdkpxgXSXunBGLD8Boka3JyVA=="],
 
