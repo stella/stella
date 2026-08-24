@@ -1,4 +1,6 @@
-import { Elysia } from "elysia";
+import { Elysia, type Context } from "elysia";
+
+import { resolveResponseStatus } from "@/api/lib/observability/response-status";
 
 type MaybePromise<T> = T | Promise<T>;
 
@@ -144,10 +146,16 @@ export class InMemoryRateLimitContext implements RateLimitContext {
   }
 }
 
-type RateLimitResponseSet = {
-  headers: Record<string, string | number | boolean | undefined>;
-  status?: number | string;
-};
+type RateLimitResponseSet = Context["set"];
+
+type RateLimitRequestState =
+  | { type: "counted"; key: string }
+  | { type: "counted_early_failure" }
+  | { type: "limited" }
+  | { type: "refunded" }
+  | { type: "skipped" };
+
+type RateLimitApplicationPhase = "before_handler" | "early_failure";
 
 const DEFAULT_RATE_LIMIT_ERROR_RESPONSE = "rate-limit reached";
 
@@ -191,6 +199,9 @@ const isResponseValidationError = (error: unknown): boolean =>
   "type" in error &&
   error.type === "response";
 
+const isEarlyFailureStatus = (statusCode: number): boolean =>
+  statusCode === 400 || statusCode === 404 || statusCode === 422;
+
 /**
  * Stella's Elysia adapter for its replica-safe rate-limit contexts.
  *
@@ -206,7 +217,7 @@ export const rateLimit = ({
   skip = () => false,
 }: RateLimitOptions) => {
   context.init({ duration });
-  const countedKeyByRequest = new WeakMap<Request, string>();
+  const requestState = new WeakMap<Request, RateLimitRequestState>();
 
   // Each registration owns a route subtree even when two subtrees share the
   // same counter key and limits. Keeping the plugin unnamed prevents Elysia's
@@ -214,15 +225,18 @@ export const rateLimit = ({
   const plugin = new Elysia();
 
   const applyRateLimit = async ({
+    phase,
     request,
     server,
     set,
   }: {
+    phase: RateLimitApplicationPhase;
     request: Request;
     server: RequestIpServer | null;
     set: RateLimitResponseSet;
   }): Promise<string | undefined> => {
     if (await skip(request)) {
+      requestState.set(request, { type: "skipped" });
       return undefined;
     }
 
@@ -248,28 +262,51 @@ export const rateLimit = ({
     });
 
     if (exceeded) {
+      requestState.set(request, { type: "limited" });
       set.status = 429;
       return DEFAULT_RATE_LIMIT_ERROR_RESPONSE;
     }
 
-    countedKeyByRequest.set(request, key);
+    requestState.set(
+      request,
+      phase === "before_handler"
+        ? { type: "counted", key }
+        : { type: "counted_early_failure" },
+    );
     return undefined;
   };
 
   plugin.onBeforeHandle(
     { as: "scoped" },
     async ({ request, server, set }) =>
-      await applyRateLimit({ request, server, set }),
+      await applyRateLimit({
+        phase: "before_handler",
+        request,
+        server,
+        set,
+      }),
   );
 
   plugin.onError(
     { as: "scoped" },
     async ({ code, error, request, server, set }) => {
-      const countedKey = countedKeyByRequest.get(request);
-      if (countedKey !== undefined) {
-        countedKeyByRequest.delete(request);
-        await context.decrement(countedKey);
-        return undefined;
+      const state = requestState.get(request);
+      if (state !== undefined) {
+        switch (state.type) {
+          case "counted":
+            requestState.set(request, { type: "refunded" });
+            await context.decrement(state.key);
+            return undefined;
+          case "counted_early_failure":
+          case "limited":
+          case "refunded":
+          case "skipped":
+            return undefined;
+          default: {
+            const unreachable: never = state;
+            return unreachable;
+          }
+        }
       }
 
       const currentStatus =
@@ -282,11 +319,56 @@ export const rateLimit = ({
         rateLimitErrorStatus(error) === 404;
 
       if (failedBeforeRateLimit) {
-        return await applyRateLimit({ request, server, set });
+        return await applyRateLimit({
+          phase: "early_failure",
+          request,
+          server,
+          set,
+        });
       }
       return undefined;
     },
   );
+
+  plugin.mapResponse({ as: "scoped" }, async (lifecycle) => {
+    const { request, responseValue, server, set } = lifecycle;
+    const handledError = Object.hasOwn(lifecycle, "code");
+    const statusCode = resolveResponseStatus({
+      response: responseValue,
+      set,
+    });
+    const state = requestState.get(request);
+
+    if (state === undefined) {
+      if (handledError && isEarlyFailureStatus(statusCode)) {
+        await applyRateLimit({
+          phase: "early_failure",
+          request,
+          server,
+          set,
+        });
+      }
+      return;
+    }
+
+    switch (state.type) {
+      case "counted":
+        if (handledError) {
+          requestState.set(request, { type: "refunded" });
+          await context.decrement(state.key);
+        }
+        return;
+      case "counted_early_failure":
+      case "limited":
+      case "refunded":
+      case "skipped":
+        return;
+      default: {
+        state satisfies never;
+        return;
+      }
+    }
+  });
 
   plugin.onStop(async () => {
     await context.kill();

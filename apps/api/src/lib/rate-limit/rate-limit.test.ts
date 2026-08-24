@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import Elysia, { t } from "elysia";
+import Elysia, { status, t } from "elysia";
 
 import {
   rateLimit,
@@ -419,6 +419,50 @@ describe("RedisRateLimitContext", () => {
     expect(context.decrementedKeys).toEqual(["shared-client"]);
   });
 
+  test("counts handlers that return a failed status", async () => {
+    const context = new TrackingRateLimitContext();
+    const app = createTrackingRateLimitedApp({ context, max: 1 })
+      .get("/fails", () => status(400, { message: "failed" }))
+      .get("/passes", () => "ok");
+
+    const failed = await app.handle(new Request("http://localhost/fails"));
+    const limited = await app.handle(new Request("http://localhost/passes"));
+
+    expect(failed.status).toBe(400);
+    expect(limited.status).toBe(429);
+    expect(context.decrementedKeys).toEqual([]);
+  });
+
+  test("refunds thrown failures after an earlier error handler returns", async () => {
+    const context = new TrackingRateLimitContext();
+    const app = new Elysia()
+      .onError(({ set }) => {
+        set.status = 500;
+        return { message: "sanitized" };
+      })
+      .use(
+        rateLimit({
+          context,
+          duration: WINDOW_MS,
+          generator: () => "shared-client",
+          max: 1,
+        }),
+      )
+      .get("/fails", () => {
+        throw new TypeError("handler failed");
+      })
+      .get("/passes", () => "ok");
+
+    const failed = await app.handle(new Request("http://localhost/fails"));
+    const passed = await app.handle(new Request("http://localhost/passes"));
+    const limited = await app.handle(new Request("http://localhost/passes"));
+
+    expect(failed.status).toBe(500);
+    expect(passed.status).toBe(200);
+    expect(limited.status).toBe(429);
+    expect(context.decrementedKeys).toEqual(["shared-client"]);
+  });
+
   test("skipped failing requests cannot refund another request", async () => {
     const context = new TrackingRateLimitContext();
     const app = createTrackingRateLimitedApp({
@@ -476,6 +520,80 @@ describe("RedisRateLimitContext", () => {
     expect(invalid.status).toBe(422);
     expect(limited.status).toBe(429);
     expect(context.incrementedKeys).toEqual([
+      "shared-client",
+      "shared-client",
+      "shared-client",
+    ]);
+  });
+
+  test("accounts for early failures after an earlier error handler returns", async () => {
+    const context = new TrackingRateLimitContext();
+    const app = new Elysia()
+      .onError(({ code, set }) => {
+        switch (code) {
+          case "NOT_FOUND":
+            set.status = 404;
+            break;
+          case "PARSE":
+            set.status = 400;
+            break;
+          case "VALIDATION":
+            set.status = 422;
+            break;
+          case "INTERNAL_SERVER_ERROR":
+          case "INVALID_COOKIE_SIGNATURE":
+          case "INVALID_FILE_TYPE":
+          case "UNKNOWN":
+            set.status = 500;
+            break;
+          default:
+            set.status = 500;
+        }
+        return { message: "sanitized" };
+      })
+      .use(
+        rateLimit({
+          context,
+          duration: WINDOW_MS,
+          generator: () => "shared-client",
+          max: 3,
+        }),
+      )
+      .post("/known", () => "ok", {
+        body: t.Object({ name: t.String() }),
+      });
+
+    const malformed = await app.handle(
+      new Request("http://localhost/known", {
+        body: "{",
+        headers: { "content-type": "application/json" },
+        method: "POST",
+      }),
+    );
+    const invalid = await app.handle(
+      new Request("http://localhost/known", {
+        body: JSON.stringify({ name: 42 }),
+        headers: { "content-type": "application/json" },
+        method: "POST",
+      }),
+    );
+    const missing = await app.handle(
+      new Request("http://localhost/missing", { method: "POST" }),
+    );
+    const limited = await app.handle(
+      new Request("http://localhost/known", {
+        body: JSON.stringify({ name: "Stella" }),
+        headers: { "content-type": "application/json" },
+        method: "POST",
+      }),
+    );
+
+    expect(malformed.status).toBe(400);
+    expect(invalid.status).toBe(422);
+    expect(missing.status).toBe(404);
+    expect(limited.status).toBe(429);
+    expect(context.incrementedKeys).toEqual([
+      "shared-client",
       "shared-client",
       "shared-client",
       "shared-client",
