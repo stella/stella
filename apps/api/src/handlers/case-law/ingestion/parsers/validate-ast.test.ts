@@ -221,6 +221,20 @@ describe("validateAst", () => {
       expect(result.stats.missingWords).toEqual([]);
     });
 
+    test("peels repeated leading markers off one fused token", () => {
+      // Consecutive placeholders glue into one token ("OBRÁZEKOBRÁZEKČeská");
+      // peeling must strip every leading marker, not just the first.
+      const html = wrapInHtml("OBRÁZEKOBRÁZEKČeská republika rozsudek");
+      const blocks: Block[] = [
+        makeHeading("H"),
+        makeBlock({ plainText: "Česká republika rozsudek" }),
+      ];
+
+      const result = validateAst(html, blocks);
+
+      expect(result.stats.missingWords).toEqual([]);
+    });
+
     test("treats an inline-element marker boundary as glue, not loss", () => {
       // The same placeholder wrapped in an inline element
       // ("<span>Obrázek</span>Česká") glues the same way: .text()
