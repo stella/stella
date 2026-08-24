@@ -22,6 +22,7 @@ import { DecisionCitations } from "@/features/case-law/components/case-viewer/de
 import { DecisionText } from "@/features/case-law/components/case-viewer/decision-text";
 import { ProvisionsCited } from "@/features/case-law/components/case-viewer/provisions-cited";
 import { useDecisionCitationAnchors } from "@/features/case-law/components/case-viewer/use-decision-citation-anchors";
+import { useDecisionProvisionAnchors } from "@/features/case-law/components/case-viewer/use-decision-provision-anchors";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useCaseSearchStore } from "@/lib/case-search-store";
 import { detached } from "@/lib/detached";
@@ -98,6 +99,7 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
   // The text links every cited decision the first outgoing page resolves;
   // the panel below pages further, the links stop at what is already read.
   const citationAnchors = useDecisionCitationAnchors(decisionId);
+  const provisionAnchors = useDecisionProvisionAnchors(decisionId);
 
   const { state: analysisState, generate: generateDecisionAnalysis } =
     useDecisionAnalysis(decisionId, decision.analysis ?? null);
@@ -351,6 +353,7 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
                 citationAnchors={citationAnchors}
                 decision={decision}
                 onMatchCountChange={setMatchCount}
+                provisionAnchors={provisionAnchors}
                 searchQuery={searchOpen ? searchQuery : ""}
                 sectionMap={sectionMap}
               />

@@ -25,6 +25,7 @@ import { DecisionFacts } from "@/features/case-law/components/case-viewer/decisi
 import { DecisionText } from "@/features/case-law/components/case-viewer/decision-text";
 import { ProvisionsCited } from "@/features/case-law/components/case-viewer/provisions-cited";
 import { useDecisionCitationAnchors } from "@/features/case-law/components/case-viewer/use-decision-citation-anchors";
+import { useDecisionProvisionAnchors } from "@/features/case-law/components/case-viewer/use-decision-provision-anchors";
 import { decisionOptions } from "@/features/case-law/queries/decisions";
 import { useMainCaseLawDecision } from "@/features/case-law/use-main-decision";
 import { detached } from "@/lib/detached";
@@ -39,6 +40,7 @@ export const CaseDecisionInspectorView = ({
   const { payload } = tab;
   const decisionId = toSafeId<"caseLawDecision">(payload.decisionId);
   const citationAnchors = useDecisionCitationAnchors(decisionId);
+  const provisionAnchors = useDecisionProvisionAnchors(decisionId);
   const {
     data: decision,
     isError,
@@ -168,6 +170,7 @@ export const CaseDecisionInspectorView = ({
                 activeMatchIndex={0}
                 citationAnchors={citationAnchors}
                 decision={decision}
+                provisionAnchors={provisionAnchors}
                 searchQuery=""
               />
             </>

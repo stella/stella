@@ -8,6 +8,7 @@ import { parseDocumentAst } from "@stll/legal-ast/document-ast";
 import { cn } from "@stll/ui/utils";
 
 import { CitedDecisionLink } from "@/components/legal-reader/cited-decision-link";
+import { CitedProvisionLink } from "@/components/legal-reader/cited-provision-link";
 import {
   BlockRenderer,
   FulltextFallback,
@@ -22,9 +23,14 @@ import type {
   SearchPiece,
 } from "@/components/legal-reader/reader-search";
 import { buildSearchResults } from "@/components/legal-reader/reader-search";
-import { locateCitationAnchors } from "@/features/case-law/citation-anchors";
+import {
+  dropOverlappingSpans,
+  locateCitationAnchors,
+} from "@/features/case-law/citation-anchors";
 import type { CitationAnchorSource } from "@/features/case-law/citation-anchors";
 import { visibleDecisionBlocks } from "@/features/case-law/components/case-viewer/decision-text.logic";
+import type { DecisionProvisionAnchor } from "@/features/case-law/components/case-viewer/use-decision-provision-anchors";
+import { locateProvisionAnchors } from "@/features/case-law/provision-anchors";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 
 type Decision = {
@@ -42,6 +48,8 @@ type DecisionTextProps = {
   citationAnchors?: readonly CitationAnchorSource[] | undefined;
   decision: Decision;
   onMatchCountChange?: ((count: number) => void) | undefined;
+  /** Applied provisions whose statute is held, for inline links. */
+  provisionAnchors?: readonly DecisionProvisionAnchor[] | undefined;
   searchQuery: string;
   sectionMap?: Map<string, { cssVar: string; headingId: string }> | undefined;
 };
@@ -129,26 +137,55 @@ const EditorialSupplement = ({
   );
 };
 
+/**
+ * Every inline link in the text, by block: cited decisions and applied
+ * provisions, located separately and merged so the two kinds never nest. A
+ * decision citation and a provision reference cannot share characters in
+ * honest text, so whichever starts first simply wins.
+ */
 const buildAnchorsByPieceId = ({
   blocks,
   citations,
+  provisions,
 }: {
   blocks: readonly Block[];
   citations: readonly CitationAnchorSource[];
+  provisions: readonly DecisionProvisionAnchor[];
 }): Record<string, TextAnchor[]> => {
-  const located = locateCitationAnchors({ blocks, citations });
+  const citationSpans = locateCitationAnchors({ blocks, citations });
+  const provisionSpans = locateProvisionAnchors({ blocks, provisions });
   const anchorsByPieceId: Record<string, TextAnchor[]> = {};
-  for (const [blockId, spans] of Object.entries(located)) {
-    anchorsByPieceId[blockId] = spans.map((span) => ({
-      end: span.end,
-      key: span.source.id,
-      render: (children) => (
-        <CitedDecisionLink decision={span.source.decision}>
-          {children}
-        </CitedDecisionLink>
-      ),
-      start: span.start,
-    }));
+  const blockIds = new Set([
+    ...Object.keys(citationSpans),
+    ...Object.keys(provisionSpans),
+  ]);
+  for (const blockId of blockIds) {
+    const anchors: TextAnchor[] = [];
+    for (const span of citationSpans[blockId] ?? []) {
+      anchors.push({
+        end: span.end,
+        key: `decision:${span.source.id}`,
+        render: (children) => (
+          <CitedDecisionLink decision={span.source.decision}>
+            {children}
+          </CitedDecisionLink>
+        ),
+        start: span.start,
+      });
+    }
+    for (const span of provisionSpans[blockId] ?? []) {
+      anchors.push({
+        end: span.end,
+        key: `provision:${span.source.id}`,
+        render: (children) => (
+          <CitedProvisionLink provision={span.source.target}>
+            {children}
+          </CitedProvisionLink>
+        ),
+        start: span.start,
+      });
+    }
+    anchorsByPieceId[blockId] = dropOverlappingSpans(anchors);
   }
   return anchorsByPieceId;
 };
@@ -240,12 +277,14 @@ const renderBlocksWithHoldingZone = ({
 };
 
 const NO_CITATION_ANCHORS: readonly CitationAnchorSource[] = [];
+const NO_PROVISION_ANCHORS: readonly DecisionProvisionAnchor[] = [];
 
 export const DecisionText = ({
   activeMatchIndex,
   citationAnchors = NO_CITATION_ANCHORS,
   decision,
   onMatchCountChange,
+  provisionAnchors = NO_PROVISION_ANCHORS,
   searchQuery,
   sectionMap,
 }: DecisionTextProps) => {
@@ -372,6 +411,7 @@ export const DecisionText = ({
           anchorsByPieceId: buildAnchorsByPieceId({
             blocks: visibleBlocks,
             citations: citationAnchors,
+            provisions: provisionAnchors,
           }),
           blocks: visibleBlocks,
           rangesByPieceId: searchResults.rangesByPieceId,

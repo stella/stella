@@ -22,8 +22,28 @@ export type CitationAnchorSpan = {
  */
 const MIN_ANCHOR_TEXT_LENGTH = 5;
 
-const escapeRegExp = (value: string): string =>
+export const escapeRegExp = (value: string): string =>
   value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+
+/**
+ * Overlapping spans keep the earlier, longer one. Shared by every kind of
+ * inline anchor so two locators cannot hand the renderer nested links.
+ */
+export const dropOverlappingSpans = <T extends { end: number; start: number }>(
+  spans: readonly T[],
+): T[] => {
+  const sorted = [...spans].sort((a, b) => a.start - b.start || b.end - a.end);
+  const kept: T[] = [];
+  let lastEnd = -1;
+  for (const span of sorted) {
+    if (span.start < lastEnd) {
+      continue;
+    }
+    kept.push(span);
+    lastEnd = span.end;
+  }
+  return kept;
+};
 
 /**
  * A pattern for the citation as the text may print it: the extractor stored
@@ -102,17 +122,7 @@ export const locateCitationAnchors = ({
       continue;
     }
 
-    hits.sort((a, b) => a.start - b.start || b.end - a.end);
-    const kept: CitationAnchorSpan[] = [];
-    let lastEnd = -1;
-    for (const hit of hits) {
-      if (hit.start < lastEnd) {
-        continue;
-      }
-      kept.push(hit);
-      lastEnd = hit.end;
-    }
-    result[block.id] = kept;
+    result[block.id] = dropOverlappingSpans(hits);
   }
 
   return result;
