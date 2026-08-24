@@ -4,7 +4,7 @@ import { drizzle } from "drizzle-orm/pglite";
 
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
-import { caseLawCorpusJurisdictions } from "@/api/db/schema/case-law";
+import { caseLawCorpusJurisdictions } from "@/api/db/schema";
 import { listCaseLawJurisdictions } from "@/api/lib/corpus-index/census";
 
 const MIGRATION = new URL(
@@ -68,7 +68,7 @@ test("the jurisdiction registry is seeded and remains derived at the decision wr
       const first = Math.floor(index / (26 * 26));
       const second = Math.floor(index / 26) % 26;
       const third = index % 26;
-      return String.fromCharCode(65 + first, 65 + second, 65 + third);
+      return String.fromCodePoint(65 + first, 65 + second, 65 + third);
     });
     await db
       .insert(caseLawCorpusJurisdictions)
