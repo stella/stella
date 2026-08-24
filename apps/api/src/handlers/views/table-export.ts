@@ -89,8 +89,10 @@ const CELL_FLAG_IDS = [
 
 type CellFlagId = (typeof CELL_FLAG_IDS)[number];
 
+// The writers read nothing but the header off a column, so any tabular
+// export (a view, a review's issues table) can share them.
 export type ExportTable = {
-  columns: ExportColumn[];
+  columns: Pick<ExportColumn, "header">[];
   rows: ExportRow[];
 };
 
@@ -108,7 +110,7 @@ type BuildExportTableOptions = {
 
 type ExportCellStyle = "default" | CellFlagId;
 
-type ExportTextCell = {
+export type ExportTextCell = {
   type: "text";
   value: string;
   style: ExportCellStyle;

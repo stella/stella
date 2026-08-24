@@ -118,6 +118,7 @@ import {
 import type { ReviewResultItem } from "@/components/inspector/playbook-review-results.logic";
 import type { OverallRisk } from "@/components/inspector/playbook-risk-rollup";
 import { computeRiskRollup } from "@/components/inspector/playbook-risk-rollup";
+import { ReviewExportMenu } from "@/components/inspector/review-export-menu";
 import { PlaybookStatusBadge } from "@/components/playbook-status-badge";
 import { SearchDialog } from "@/components/search-dialog";
 import Tooltip from "@/components/tooltip";
@@ -765,7 +766,9 @@ const ReviewRunPanel = ({
       perspective={restored.basis.perspective}
       playbookFindings={restored.results.playbook}
       playbookName={restored.basis.playbookName}
+      runId={run.id}
       targetFileFieldId={targetFileFieldId}
+      workspaceId={workspaceId}
       referenceFindings={restored.results.references}
       references={restored.basis.references}
       topics={restored.topics}
@@ -1704,6 +1707,8 @@ type ResultsViewProps = {
   /** The side the run's comparison was judged for; labels impacts. */
   perspective: ReviewPerspective;
   targetFileFieldId: string;
+  runId: string;
+  workspaceId: string;
   editorAvailable: boolean;
   topics: readonly ReviewTopic[];
   onDecide: (
@@ -1738,6 +1743,8 @@ const ResultsView = ({
   playbookName,
   perspective,
   targetFileFieldId,
+  runId,
+  workspaceId,
   editorAvailable,
   topics,
   onDecide,
@@ -1780,6 +1787,7 @@ const ResultsView = ({
               })}
             </span>
           )}
+          <ReviewExportMenu runId={runId} workspaceId={workspaceId} />
           <Button onClick={onReviewAgain} size="xs" variant="outline">
             {t("inspector.review.reviewAgain")}
           </Button>
