@@ -453,8 +453,7 @@ const countMarkedIndexed = async (
           tx
             .select({ indexId: caseLawCorpusIndexPendingDeletes.indexId })
             .from(caseLawCorpusIndexPendingDeletes)
-            .where(eq(caseLawCorpusIndexPendingDeletes.indexId, indexId))
-            .limit(1),
+            .where(eq(caseLawCorpusIndexPendingDeletes.indexId, indexId)),
         ),
       })
       .from(caseLawCorpusIndexCountBackfills)
