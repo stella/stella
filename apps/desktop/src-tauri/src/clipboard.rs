@@ -49,7 +49,7 @@ const RETENTION_DAYS: i64 = 30;
 const RETENTION_SWEEP_INTERVAL: std::time::Duration =
   std::time::Duration::from_secs(60 * 60);
 const MAX_GROUPS: usize = 24;
-const MAX_GROUP_NAME_BYTES: usize = 64;
+const MAX_GROUP_NAME_CHARACTERS: usize = 64;
 const MAX_SOURCE_APP_NAME_BYTES: usize = 128;
 const MAX_SOURCE_APP_IDENTIFIER_BYTES: usize = 255;
 const MAX_SOURCE_APP_ICON_DATA_URL_BYTES: usize = 48 * 1024;
@@ -474,7 +474,7 @@ impl ClipboardManager {
     color: ClipboardGroupColor,
   ) -> Result<String, String> {
     let name = name.trim();
-    if name.is_empty() || name.len() > MAX_GROUP_NAME_BYTES {
+    if name.is_empty() || name.chars().count() > MAX_GROUP_NAME_CHARACTERS {
       return Err("clipboard group name is invalid".to_string());
     }
     if self.groups.len() >= MAX_GROUPS {
@@ -1486,8 +1486,28 @@ mod tests {
     assert!(
       manager
         .create_group(
-          &"x".repeat(MAX_GROUP_NAME_BYTES + 1),
+          &"x".repeat(MAX_GROUP_NAME_CHARACTERS + 1),
           ClipboardGroupColor::Gray,
+        )
+        .is_err()
+    );
+  }
+
+  #[test]
+  fn group_name_limit_counts_unicode_characters() {
+    let mut manager = ClipboardManager::new();
+    let international_name = "界".repeat(MAX_GROUP_NAME_CHARACTERS);
+
+    assert!(
+      manager
+        .create_group(&international_name, ClipboardGroupColor::Blue)
+        .is_ok()
+    );
+    assert!(
+      manager
+        .create_group(
+          &format!("{international_name}界"),
+          ClipboardGroupColor::Blue,
         )
         .is_err()
     );

@@ -21,6 +21,14 @@ mod tray;
 mod types;
 mod updater;
 
+include!("command_manifest.rs");
+
+macro_rules! generate_stella_handler {
+  ($($path:path => $name:literal),* $(,)?) => {
+    tauri::generate_handler![$($path),*]
+  };
+}
+
 use std::sync::Arc;
 use tauri::{Emitter, Manager};
 use tauri_plugin_autostart::MacosLauncher;
@@ -363,41 +371,7 @@ pub fn run() {
       tracing::info!("stella desktop started");
       Ok(())
     })
-    .invoke_handler(tauri::generate_handler![
-      commands::get_state,
-      commands::update_notification_preferences,
-      commands::open_session_file,
-      commands::reveal_session,
-      commands::finish_session,
-      commands::retry_session,
-      commands::respond_to_takeover,
-      commands::takeover_dialog_respond,
-      commands::self_host_connect_dialog_respond,
-      commands::copy_diagnostics,
-      commands::email_support,
-      commands::reveal_support_root,
-      commands::open_edit_root,
-      commands::is_autostart_enabled,
-      commands::set_autostart,
-      clipboard_commands::clipboard_get_snapshot,
-      clipboard_commands::clipboard_set_capture_status,
-      clipboard_commands::clipboard_delete_item,
-      clipboard_commands::clipboard_duplicate_item,
-      clipboard_commands::clipboard_clear_history,
-      clipboard_commands::clipboard_create_group,
-      clipboard_commands::clipboard_delete_group,
-      clipboard_commands::clipboard_update_item,
-      clipboard_commands::clipboard_set_item_group,
-      clipboard_commands::clipboard_open_editor,
-      clipboard_commands::clipboard_get_editor_context,
-      clipboard_commands::clipboard_save_editor_item,
-      clipboard_commands::clipboard_close_editor,
-      clipboard_commands::clipboard_paste_item,
-      clipboard_commands::clipboard_hide,
-      clipboard_commands::clipboard_show,
-      clipboard_commands::clipboard_open_stella,
-      desktop_telemetry::desktop_report_error,
-    ])
+    .invoke_handler(with_stella_commands!(generate_stella_handler))
     .build(tauri::generate_context!())
     .expect("error while building stella desktop")
     .run(|_app, event| match event {

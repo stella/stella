@@ -1,4 +1,6 @@
 use enigo::{Direction, Enigo, Key, Keyboard, Settings};
+#[cfg(target_os = "macos")]
+use objc2::MainThreadMarker;
 use serde::Serialize;
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Emitter, State, WebviewWindow};
@@ -230,12 +232,44 @@ pub fn clipboard_close_editor(window: WebviewWindow) {
   let _ = window.destroy();
 }
 
-fn simulate_paste() -> Result<(), String> {
+#[cfg(target_os = "macos")]
+fn simulate_paste_on_main_thread(
+  _main_thread_marker: MainThreadMarker,
+) -> Result<(), String> {
   let mut enigo = Enigo::new(&Settings::default())
     .map_err(|error| format!("input automation is unavailable: {error}"))?;
-  #[cfg(target_os = "macos")]
   let modifier = Key::Meta;
-  #[cfg(not(target_os = "macos"))]
+
+  enigo
+    .key(modifier, Direction::Press)
+    .map_err(|error| format!("paste modifier failed: {error}"))?;
+  let paste_result = enigo.key(Key::Unicode('v'), Direction::Click);
+  let release_result = enigo.key(modifier, Direction::Release);
+  paste_result
+    .and(release_result)
+    .map_err(|error| format!("paste shortcut failed: {error}"))
+}
+
+#[cfg(target_os = "macos")]
+async fn simulate_paste(app: &AppHandle) -> Result<(), String> {
+  let (result_sender, result_receiver) = tokio::sync::oneshot::channel();
+  app
+    .run_on_main_thread(move || {
+      let result = MainThreadMarker::new()
+        .ok_or_else(|| "paste simulation did not run on the main thread".to_string())
+        .and_then(simulate_paste_on_main_thread);
+      let _ = result_sender.send(result);
+    })
+    .map_err(|error| format!("paste simulation could not be scheduled: {error}"))?;
+  result_receiver
+    .await
+    .map_err(|_| "paste simulation ended before reporting its result".to_string())?
+}
+
+#[cfg(not(target_os = "macos"))]
+fn simulate_paste_on_worker() -> Result<(), String> {
+  let mut enigo = Enigo::new(&Settings::default())
+    .map_err(|error| format!("input automation is unavailable: {error}"))?;
   let modifier = Key::Control;
 
   enigo
@@ -246,6 +280,13 @@ fn simulate_paste() -> Result<(), String> {
   paste_result
     .and(release_result)
     .map_err(|error| format!("paste shortcut failed: {error}"))
+}
+
+#[cfg(not(target_os = "macos"))]
+async fn simulate_paste(_app: &AppHandle) -> Result<(), String> {
+  tokio::task::spawn_blocking(simulate_paste_on_worker)
+    .await
+    .map_err(|error| format!("direct paste task failed: {error}"))?
 }
 
 fn notify_copied_only(app: &AppHandle) {
@@ -286,19 +327,12 @@ pub async fn clipboard_paste_item(
 
   clipboard_window::hide(&window);
   focus_state.restore_frontmost_application(&app).await;
-  match tokio::task::spawn_blocking(simulate_paste).await {
-    Ok(Ok(())) => Ok(ClipboardPasteOutcome::Pasted),
-    Ok(Err(error)) => {
-      tracing::warn!(error = %error, "clipboard item was copied but direct paste failed");
-      notify_copied_only(&app);
-      Ok(ClipboardPasteOutcome::CopiedOnly)
-    }
-    Err(error) => {
-      tracing::warn!(error = %error, "direct paste task failed");
-      notify_copied_only(&app);
-      Ok(ClipboardPasteOutcome::CopiedOnly)
-    }
+  if let Err(error) = simulate_paste(&app).await {
+    tracing::warn!(error = %error, "clipboard item was copied but direct paste failed");
+    notify_copied_only(&app);
+    return Ok(ClipboardPasteOutcome::CopiedOnly);
   }
+  Ok(ClipboardPasteOutcome::Pasted)
 }
 
 #[tauri::command]

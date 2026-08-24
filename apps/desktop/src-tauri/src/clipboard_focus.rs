@@ -40,6 +40,10 @@ impl Default for ClipboardFocusState {
 impl ClipboardFocusState {
   #[cfg(target_os = "macos")]
   pub fn remember_frontmost_application(&self) {
+    let Ok(mut previous_application) = self.previous_application.lock() else {
+      return;
+    };
+    *previous_application = None;
     let Some(frontmost) = NSWorkspace::sharedWorkspace().frontmostApplication() else {
       return;
     };
@@ -47,9 +51,7 @@ impl ClipboardFocusState {
     if frontmost.processIdentifier() == current.processIdentifier() {
       return;
     }
-    if let Ok(mut previous_application) = self.previous_application.lock() {
-      *previous_application = Some(frontmost);
-    }
+    *previous_application = Some(frontmost);
   }
 
   #[cfg(not(target_os = "macos"))]
@@ -76,7 +78,9 @@ impl ClipboardFocusState {
         return;
       };
       let current = NSApplication::sharedApplication(main_thread_marker);
-      current.yieldActivationToApplication(&target_to_activate);
+      if objc2::available!(macos = 14.0) {
+        current.yieldActivationToApplication(&target_to_activate);
+      }
       if !target_to_activate
         .activateWithOptions(NSApplicationActivationOptions::empty())
       {

@@ -1,0 +1,6 @@
+{
+  "identifier": "takeover-dialog",
+  "description": "Edit-session takeover response command",
+  "windows": ["takeover-dialog"],
+  "permissions": ["allow-takeover-dialog-respond"]
+}

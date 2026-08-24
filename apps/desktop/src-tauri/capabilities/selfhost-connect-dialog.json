@@ -2,5 +2,5 @@
   "identifier": "selfhost-connect-dialog",
   "description": "Minimal capabilities for the self-host connection approval prompt; it only invokes the self_host_connect_dialog_respond command",
   "windows": ["selfhost-connect-dialog"],
-  "permissions": ["core:default"]
+  "permissions": ["allow-self-host-connect-dialog-respond"]
 }

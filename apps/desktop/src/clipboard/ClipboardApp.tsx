@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type {
   CSSProperties,
   DragEvent as ReactDragEvent,
+  KeyboardEvent as ReactKeyboardEvent,
   MouseEvent as ReactMouseEvent,
   ReactNode,
 } from "react";
@@ -89,6 +90,7 @@ const CLIPBOARD_GROUP_ACCENTS = {
 } as const satisfies Record<ClipboardGroupColor, string>;
 
 const STELLA_WEB_APP_URL = "https://my.stll.app";
+const MAX_GROUP_NAME_CHARACTERS = 64;
 
 const EMPTY_SNAPSHOT = {
   captureStatus: "active",
@@ -372,7 +374,11 @@ const DialogShell = ({
 type ClipboardDialogProps = {
   dialog: ClipboardDialogState;
   onChange: (dialog: ClipboardDialogState) => void;
-  onCommand: (command: string, args?: Record<string, unknown>) => void;
+  onCommand: (
+    command: string,
+    args?: Record<string, unknown>,
+    onSuccess?: () => void,
+  ) => void;
 };
 
 const ClipboardDialog = ({
@@ -392,8 +398,7 @@ const ClipboardDialog = ({
           destructive
           onClose={close}
           onSubmit={() => {
-            onCommand("clipboard_clear_history");
-            close();
+            onCommand("clipboard_clear_history", {}, close);
           }}
           submitLabel={t("clear")}
           title={t("clear")}
@@ -408,11 +413,14 @@ const ClipboardDialog = ({
         <DialogShell
           onClose={close}
           onSubmit={() => {
-            onCommand("clipboard_create_group", {
-              color: dialog.color,
-              name: dialog.name,
-            });
-            close();
+            onCommand(
+              "clipboard_create_group",
+              {
+                color: dialog.color,
+                name: dialog.name,
+              },
+              close,
+            );
           }}
           submitDisabled={!dialog.name.trim()}
           submitLabel={t("create")}
@@ -426,14 +434,19 @@ const ClipboardDialog = ({
               autoFocus
               className="mt-2 h-11 rounded-2xl"
               dir="auto"
-              maxLength={64}
-              onChange={(event) =>
+              onChange={(event) => {
+                if (
+                  Array.from(event.target.value).length >
+                  MAX_GROUP_NAME_CHARACTERS
+                ) {
+                  return;
+                }
                 onChange({
                   color: dialog.color,
                   name: event.target.value,
                   type: "createGroup",
-                })
-              }
+                });
+              }}
               value={dialog.name}
             />
           </label>
@@ -479,8 +492,7 @@ const ClipboardDialog = ({
           destructive
           onClose={close}
           onSubmit={() => {
-            onCommand("clipboard_delete_group", { id: dialog.groupId });
-            close();
+            onCommand("clipboard_delete_group", { id: dialog.groupId }, close);
           }}
           submitLabel={t("deleteGroup")}
           title={t("deleteGroup")}
@@ -514,6 +526,7 @@ type ClipboardContextMenuProps = {
   groups: ClipboardGroup[];
   menu: Exclude<ClipboardContextMenuState, { type: "closed" }>;
   onChange: (menu: ClipboardContextMenuState) => void;
+  onClose: () => void;
   onDelete: (id: string) => void;
   onDuplicate: (id: string) => void;
   onEdit: (id: string) => void;
@@ -524,19 +537,59 @@ const ClipboardContextMenu = ({
   groups,
   menu,
   onChange,
+  onClose,
   onDelete,
   onDuplicate,
   onEdit,
   onMove,
 }: ClipboardContextMenuProps) => {
   const t = useTranslations("clipboard");
-  const close = () => onChange({ type: "closed" });
   const itemClassName =
     "text-foreground hover:bg-foreground/8 focus-visible:bg-foreground/8 flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-start text-sm outline-none";
+  const handleKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    event.stopPropagation();
+    if (event.key === "Escape") {
+      event.preventDefault();
+      onClose();
+      return;
+    }
+    if (
+      event.key !== "ArrowDown" &&
+      event.key !== "ArrowUp" &&
+      event.key !== "Home" &&
+      event.key !== "End"
+    ) {
+      return;
+    }
+    event.preventDefault();
+    const items = Array.from(
+      event.currentTarget.querySelectorAll<HTMLElement>(
+        '[role="menuitem"], [role="menuitemradio"]',
+      ),
+    ).filter((item) => !item.hasAttribute("disabled"));
+    if (items.length === 0) {
+      return;
+    }
+    const activeItem =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+    const activeIndex = activeItem ? items.indexOf(activeItem) : -1;
+    let nextIndex = 0;
+    if (event.key === "ArrowDown") {
+      nextIndex = (activeIndex + 1) % items.length;
+    } else if (event.key === "ArrowUp") {
+      nextIndex = (activeIndex - 1 + items.length) % items.length;
+    } else if (event.key === "End") {
+      nextIndex = items.length - 1;
+    }
+    items.at(nextIndex)?.focus();
+  };
   return (
     <div
       className="bg-popover ring-border fixed z-30 w-56 rounded-2xl p-1.5 shadow-2xl ring-1"
       onContextMenu={(event) => event.preventDefault()}
+      onKeyDown={handleKeyDown}
       onPointerDown={(event) => event.stopPropagation()}
       role="menu"
       style={{ insetInlineStart: menu.x, top: menu.y }}
@@ -545,10 +598,11 @@ const ClipboardContextMenu = ({
       {menu.type === "actions" ? (
         <>
           <button
+            autoFocus
             className={itemClassName}
             onClick={() => {
               onEdit(menu.item.id);
-              close();
+              onClose();
             }}
             role="menuitem"
             type="button"
@@ -563,7 +617,7 @@ const ClipboardContextMenu = ({
             className={itemClassName}
             onClick={() => {
               onDuplicate(menu.item.id);
-              close();
+              onClose();
             }}
             role="menuitem"
             type="button"
@@ -602,7 +656,7 @@ const ClipboardContextMenu = ({
             className={`${itemClassName} hover:text-destructive focus-visible:text-destructive`}
             onClick={() => {
               onDelete(menu.item.id);
-              close();
+              onClose();
             }}
             role="menuitem"
             type="button"
@@ -614,6 +668,7 @@ const ClipboardContextMenu = ({
       ) : (
         <>
           <button
+            autoFocus
             className={itemClassName}
             onClick={() =>
               onChange({
@@ -642,7 +697,7 @@ const ClipboardContextMenu = ({
                   key={group.id ?? "none"}
                   onClick={() => {
                     onMove(menu.item.id, group.id);
-                    close();
+                    onClose();
                   }}
                   role="menuitemradio"
                   type="button"
@@ -688,6 +743,7 @@ const ClipboardApp = () => {
   const t = useTranslations("clipboard");
   const searchInputRef = useRef<HTMLInputElement>(null);
   const timelineRef = useRef<HTMLDivElement>(null);
+  const contextMenuTriggerRef = useRef<HTMLElement>(null);
   const [snapshot, setSnapshot] = useState<ClipboardSnapshot>(EMPTY_SNAPSHOT);
   const [query, setQuery] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -789,12 +845,14 @@ const ClipboardApp = () => {
   const applySnapshotCommand = (
     command: string,
     args: Record<string, unknown> = {},
+    onSuccess?: () => void,
   ) => {
     setError(null);
     void invoke<unknown>(command, args)
       .then((value) => {
         if (isClipboardSnapshot(value)) {
           setSnapshot(value);
+          onSuccess?.();
           return undefined;
         }
         reportDesktopError({
@@ -870,6 +928,7 @@ const ClipboardApp = () => {
     index: number,
   ) => {
     event.preventDefault();
+    contextMenuTriggerRef.current = event.currentTarget;
     setSelectedIndex(index);
     setContextMenu({
       item,
@@ -877,6 +936,11 @@ const ClipboardApp = () => {
       x: Math.max(8, Math.min(event.clientX, window.innerWidth - 232)),
       y: Math.max(8, Math.min(event.clientY, window.innerHeight - 224)),
     });
+  };
+
+  const closeContextMenu = () => {
+    setContextMenu({ type: "closed" });
+    requestAnimationFrame(() => contextMenuTriggerRef.current?.focus());
   };
 
   const startDragging = (
@@ -1071,7 +1135,7 @@ const ClipboardApp = () => {
     event.preventDefault();
     event.stopPropagation();
     if (contextMenu.type !== "closed") {
-      setContextMenu({ type: "closed" });
+      closeContextMenu();
       return;
     }
     if (dialog.type !== "closed") {
@@ -1144,7 +1208,7 @@ const ClipboardApp = () => {
           <button
             aria-label={t("close")}
             className="fixed inset-0 z-20 cursor-default"
-            onClick={() => setContextMenu({ type: "closed" })}
+            onClick={closeContextMenu}
             tabIndex={-1}
             type="button"
           />
@@ -1152,6 +1216,7 @@ const ClipboardApp = () => {
             groups={snapshot.groups}
             menu={contextMenu}
             onChange={setContextMenu}
+            onClose={closeContextMenu}
             onDelete={(id) =>
               applySnapshotCommand("clipboard_delete_item", { id })
             }
