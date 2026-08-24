@@ -917,7 +917,10 @@ jobs:
         run: bash scripts/detect-desktop-release-changes.test.sh
 
       - name: Test CI workflow invariants
-        run: bun test scripts/detect-e2e-changes.test.ts
+        run: >-
+          bun test
+          scripts/detect-e2e-changes.test.ts
+          scripts/autofix-workflow.test.ts
 
       - name: Test affected code-check planner
         if: needs.ci-plan.outputs.package_checks_required == 'true'
