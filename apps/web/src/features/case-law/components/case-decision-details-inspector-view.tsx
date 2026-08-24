@@ -10,6 +10,8 @@ import { Skeleton } from "@stll/ui/skeleton";
 import type { CaseDecisionViewPayload } from "@/components/inspector/case-decision-view";
 import { InspectorTabHeader } from "@/components/inspector/inspector-tab-header";
 import type { InspectorViewRenderProps } from "@/components/inspector/view-registry";
+import { CitationHeader } from "@/features/case-law/components/case-viewer/citation-header";
+import { DecisionCitations } from "@/features/case-law/components/case-viewer/decision-citations";
 import { DecisionFacts } from "@/features/case-law/components/case-viewer/decision-facts";
 import { decisionOptions } from "@/features/case-law/queries/decisions";
 import { useFormatter } from "@/i18n/formatting-context";
@@ -63,6 +65,15 @@ export const CaseDecisionDetailsInspectorView = ({
                 source={decision.source}
                 sourceUrl={decision.sourceUrl}
               />
+              {/* Who cites this decision and what it cites, off the page
+                  so the text starts at the top and the lists have room. */}
+              <div className="mt-6">
+                <CitationHeader
+                  decisionDate={decision.decisionDate}
+                  decisionId={decisionId}
+                />
+                <DecisionCitations decisionId={decisionId} />
+              </div>
             </>
           )}
         </div>

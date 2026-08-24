@@ -26,8 +26,6 @@ import {
 import { useDecisionAnalysis } from "@/features/case-law/components/case-viewer/analysis/use-decision-analysis";
 import { AnnotationToolbar } from "@/features/case-law/components/case-viewer/annotation-toolbar";
 import type { AnnotationToolbarController } from "@/features/case-law/components/case-viewer/annotation-toolbar";
-import { CitationHeader } from "@/features/case-law/components/case-viewer/citation-header";
-import { DecisionCitations } from "@/features/case-law/components/case-viewer/decision-citations";
 import type { AnnotationAnchorSource } from "@/features/case-law/components/case-viewer/decision-text";
 import { DecisionText } from "@/features/case-law/components/case-viewer/decision-text";
 import { ProvisionsCited } from "@/features/case-law/components/case-viewer/provisions-cited";
@@ -475,11 +473,6 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
             </aside>
 
             <main className="reader-paper min-w-0 px-4 py-8 max-sm:px-3">
-              <CitationHeader
-                decisionDate={decision.decisionDate}
-                decisionId={decisionId}
-              />
-              <DecisionCitations decisionId={decisionId} />
               <ProvisionsCited decisionId={decisionId} />
               <DecisionText
                 activeMatchIndex={activeMatchIndex}
