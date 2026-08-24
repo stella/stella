@@ -4,11 +4,8 @@ const CLIPBOARD_SOURCE_TINT_COUNT = 6;
 
 export const CLIPBOARD_ITEM_DRAG_TYPE =
   "application/x-stella-clipboard-item-id";
-export const WEBKIT_DRAG_FALLBACK_TYPE = "text/plain";
 
-type ClipboardDragData = {
-  getData: (type: string) => string;
-};
+type ClipboardDragData = Record<string | symbol, unknown>;
 
 export type ClipboardTextSegment = {
   match: boolean;
@@ -19,10 +16,11 @@ export const clipboardDraggedItemId = (
   data: ClipboardDragData,
   itemIds: ReadonlySet<string>,
 ) => {
-  const itemId =
-    data.getData(CLIPBOARD_ITEM_DRAG_TYPE) ||
-    data.getData(WEBKIT_DRAG_FALLBACK_TYPE);
-  return itemIds.has(itemId) ? itemId : null;
+  if (data["type"] !== CLIPBOARD_ITEM_DRAG_TYPE) {
+    return null;
+  }
+  const itemId = data["itemId"];
+  return typeof itemId === "string" && itemIds.has(itemId) ? itemId : null;
 };
 
 const escapeRegExp = (value: string) =>

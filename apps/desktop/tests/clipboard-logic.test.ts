@@ -2,7 +2,6 @@ import { describe, expect, test } from "bun:test";
 
 import {
   CLIPBOARD_ITEM_DRAG_TYPE,
-  WEBKIT_DRAG_FALLBACK_TYPE,
   clipboardDraggedItemId,
   clipboardSourceTintIndex,
   filterClipboardItems,
@@ -47,37 +46,28 @@ describe("clipboard paste outcomes", () => {
 describe("clipboardDraggedItemId", () => {
   const itemIds = new Set(["one", "two"]);
 
-  test("prefers the stella drag payload", () => {
-    const data = new Map([
-      [CLIPBOARD_ITEM_DRAG_TYPE, "one"],
-      [WEBKIT_DRAG_FALLBACK_TYPE, "two"],
-    ]);
-
+  test("accepts a known stella clipboard item", () => {
     expect(
       clipboardDraggedItemId(
-        { getData: (type) => data.get(type) ?? "" },
+        { itemId: "one", type: CLIPBOARD_ITEM_DRAG_TYPE },
         itemIds,
       ),
     ).toBe("one");
   });
 
-  test("accepts WebKit's fallback when the item is known", () => {
-    const data = new Map([[WEBKIT_DRAG_FALLBACK_TYPE, "two"]]);
-
+  test("rejects data from another drag source", () => {
     expect(
-      clipboardDraggedItemId(
-        { getData: (type) => data.get(type) ?? "" },
-        itemIds,
-      ),
-    ).toBe("two");
+      clipboardDraggedItemId({ itemId: "one", type: "other" }, itemIds),
+    ).toBeNull();
   });
 
-  test("rejects external or stale drag payloads", () => {
-    const data = new Map([[WEBKIT_DRAG_FALLBACK_TYPE, "not-a-history-item"]]);
-
+  test("rejects stale clipboard items", () => {
     expect(
       clipboardDraggedItemId(
-        { getData: (type) => data.get(type) ?? "" },
+        {
+          itemId: "not-a-history-item",
+          type: CLIPBOARD_ITEM_DRAG_TYPE,
+        },
         itemIds,
       ),
     ).toBeNull();

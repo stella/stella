@@ -1,12 +1,18 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type {
   CSSProperties,
-  DragEvent as ReactDragEvent,
   KeyboardEvent as ReactKeyboardEvent,
   MouseEvent as ReactMouseEvent,
   ReactNode,
 } from "react";
 
+import { combine } from "@atlaskit/pragmatic-drag-and-drop/combine";
+import {
+  draggable,
+  dropTargetForElements,
+} from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
+import { setCustomNativeDragPreview } from "@atlaskit/pragmatic-drag-and-drop/element/set-custom-native-drag-preview";
+import { preserveOffsetOnSource } from "@atlaskit/pragmatic-drag-and-drop/utils/preserve-offset-on-source";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import {
@@ -49,7 +55,6 @@ import {
 } from "../telemetry/desktop-telemetry";
 import {
   CLIPBOARD_ITEM_DRAG_TYPE,
-  WEBKIT_DRAG_FALLBACK_TYPE,
   clipboardDraggedItemId,
   clipboardSourceTintIndex,
   filterClipboardItems,
@@ -91,6 +96,9 @@ const CLIPBOARD_GROUP_ACCENTS = {
 
 const STELLA_WEB_APP_URL = "https://my.stll.app";
 const MAX_GROUP_NAME_CHARACTERS = 64;
+const CLIPBOARD_CARD_SELECTOR = "[data-clipboard-id]";
+const CLIPBOARD_GROUP_DROP_SELECTOR = "[data-clipboard-group-id]";
+const CLIPBOARD_NO_GROUP_DROP_ID = "__no_group__";
 
 const EMPTY_SNAPSHOT = {
   captureStatus: "active",
@@ -130,8 +138,6 @@ type ClipboardCardProps = {
     item: ClipboardItem,
     index: number,
   ) => void;
-  onDragEnd: () => void;
-  onDragStart: (event: ReactDragEvent<HTMLElement>, itemId: string) => void;
   onPaste: (item: ClipboardItem, plainTextOnly: boolean) => void;
   onSelect: (index: number) => void;
   query: string;
@@ -154,8 +160,6 @@ const ClipboardCard = ({
   index,
   item,
   onOpenMenu,
-  onDragEnd,
-  onDragStart,
   onPaste,
   onSelect,
   query,
@@ -264,11 +268,8 @@ const ClipboardCard = ({
         aria-label={t("pasteItem", { number: index + 1 })}
         className="flex size-full flex-col text-start focus-visible:outline-none"
         data-clipboard-card-trigger=""
-        draggable
         onClick={() => onPaste(item, false)}
         onContextMenu={(event) => onOpenMenu(event, item, index)}
-        onDragEnd={onDragEnd}
-        onDragStart={(event) => onDragStart(event, item.id)}
         onFocus={() => onSelect(index)}
         onMouseEnter={() => onSelect(index)}
         type="button"
@@ -638,6 +639,14 @@ const ClipboardContextMenu = ({
                 y: menu.y,
               })
             }
+            onPointerEnter={() =>
+              onChange({
+                item: menu.item,
+                type: "groups",
+                x: menu.x,
+                y: menu.y,
+              })
+            }
             role="menuitem"
             type="button"
           >
@@ -842,36 +851,39 @@ const ClipboardApp = () => {
     emptyStateTitle = t("groupEmpty");
   }
 
-  const applySnapshotCommand = (
-    command: string,
-    args: Record<string, unknown> = {},
-    onSuccess?: () => void,
-  ) => {
-    setError(null);
-    void invoke<unknown>(command, args)
-      .then((value) => {
-        if (isClipboardSnapshot(value)) {
-          setSnapshot(value);
-          onSuccess?.();
+  const applySnapshotCommand = useCallback(
+    (
+      command: string,
+      args: Record<string, unknown> = {},
+      onSuccess?: () => void,
+    ) => {
+      setError(null);
+      void invoke<unknown>(command, args)
+        .then((value) => {
+          if (isClipboardSnapshot(value)) {
+            setSnapshot(value);
+            onSuccess?.();
+            return undefined;
+          }
+          reportDesktopError({
+            code: DESKTOP_TELEMETRY_ERROR_CODES.invalidResponse,
+            operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardHistoryUpdate,
+            window: DESKTOP_TELEMETRY_WINDOWS.clipboard,
+          });
+          setError(t("errorUpdateHistory"));
           return undefined;
-        }
-        reportDesktopError({
-          code: DESKTOP_TELEMETRY_ERROR_CODES.invalidResponse,
-          operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardHistoryUpdate,
-          window: DESKTOP_TELEMETRY_WINDOWS.clipboard,
+        })
+        .catch(() => {
+          reportDesktopError({
+            code: DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
+            operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardHistoryUpdate,
+            window: DESKTOP_TELEMETRY_WINDOWS.clipboard,
+          });
+          setError(t("errorUpdateHistory"));
         });
-        setError(t("errorUpdateHistory"));
-        return undefined;
-      })
-      .catch(() => {
-        reportDesktopError({
-          code: DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
-          operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardHistoryUpdate,
-          window: DESKTOP_TELEMETRY_WINDOWS.clipboard,
-        });
-        setError(t("errorUpdateHistory"));
-      });
-  };
+    },
+    [t],
+  );
 
   const pasteItem = (item: ClipboardItem, plainTextOnly: boolean) => {
     setError(null);
@@ -943,91 +955,117 @@ const ClipboardApp = () => {
     requestAnimationFrame(() => contextMenuTriggerRef.current?.focus());
   };
 
-  const startDragging = (
-    event: ReactDragEvent<HTMLElement>,
-    itemId: string,
-  ) => {
-    event.dataTransfer.effectAllowed = "move";
-    event.dataTransfer.setData(CLIPBOARD_ITEM_DRAG_TYPE, itemId);
-    event.dataTransfer.setData(WEBKIT_DRAG_FALLBACK_TYPE, itemId);
-    const card = event.currentTarget.parentElement;
-    if (card) {
-      const bounds = card.getBoundingClientRect();
-      const offsetX = Math.round(
-        Math.max(0, Math.min(event.clientX - bounds.left, bounds.width)),
-      );
-      const offsetY = Math.round(
-        Math.max(0, Math.min(event.clientY - bounds.top, bounds.height)),
-      );
-      event.dataTransfer.setDragImage(card, offsetX, offsetY);
-    }
-    setDragState({
-      itemId,
-      target: { type: "none" },
-      type: "dragging",
-    });
-  };
+  useEffect(() => {
+    const itemIds = new Set(snapshot.items.map((item) => item.id));
+    const groupIds = new Set(snapshot.groups.map((group) => group.id));
+    const cleanups: (() => void)[] = [];
 
-  const selectDropTarget = (
-    event: ReactDragEvent<HTMLElement>,
-    groupId: string | null,
-  ) => {
-    event.preventDefault();
-    event.dataTransfer.dropEffect = "move";
-    setDragState((current) => {
-      if (current.type === "idle") {
-        return current;
+    for (const element of document.querySelectorAll<HTMLElement>(
+      CLIPBOARD_CARD_SELECTOR,
+    )) {
+      const itemId = element.dataset["clipboardId"];
+      if (!itemId || !itemIds.has(itemId)) {
+        continue;
       }
+      cleanups.push(
+        draggable({
+          element,
+          getInitialData: () => ({
+            itemId,
+            type: CLIPBOARD_ITEM_DRAG_TYPE,
+          }),
+          onDragStart: () => {
+            setDragState({
+              itemId,
+              target: { type: "none" },
+              type: "dragging",
+            });
+          },
+          onDrop: () => setDragState({ type: "idle" }),
+          onGenerateDragPreview: ({ location, nativeSetDragImage }) => {
+            setCustomNativeDragPreview({
+              getOffset: preserveOffsetOnSource({
+                element,
+                input: location.current.input,
+              }),
+              nativeSetDragImage,
+              render: ({ container }) => {
+                const clone = element.cloneNode(true);
+                if (!(clone instanceof HTMLElement)) {
+                  return;
+                }
+                const bounds = element.getBoundingClientRect();
+                clone.style.height = `${bounds.height}px`;
+                clone.style.width = `${bounds.width}px`;
+                container.append(clone);
+              },
+            });
+          },
+        }),
+      );
+    }
+
+    for (const element of document.querySelectorAll<HTMLElement>(
+      CLIPBOARD_GROUP_DROP_SELECTOR,
+    )) {
+      const dropId = element.dataset["clipboardGroupId"];
+      const groupId = dropId === CLIPBOARD_NO_GROUP_DROP_ID ? null : dropId;
       if (
-        current.target.type === "group" &&
-        current.target.groupId === groupId
+        groupId === undefined ||
+        (groupId !== null && !groupIds.has(groupId))
       ) {
-        return current;
+        continue;
       }
-      return {
-        itemId: current.itemId,
-        target: { groupId, type: "group" },
-        type: "dragging",
-      };
-    });
-  };
-
-  const clearDropTarget = (event: ReactDragEvent<HTMLElement>) => {
-    if (
-      event.relatedTarget instanceof Node &&
-      event.currentTarget.contains(event.relatedTarget)
-    ) {
-      return;
+      cleanups.push(
+        dropTargetForElements({
+          canDrop: ({ source }) =>
+            clipboardDraggedItemId(source.data, itemIds) !== null,
+          element,
+          onDragEnter: ({ source }) => {
+            const itemId = clipboardDraggedItemId(source.data, itemIds);
+            if (!itemId) {
+              return;
+            }
+            setDragState({
+              itemId,
+              target: { groupId, type: "group" },
+              type: "dragging",
+            });
+          },
+          onDragLeave: ({ source }) => {
+            const itemId = clipboardDraggedItemId(source.data, itemIds);
+            if (!itemId) {
+              return;
+            }
+            setDragState({
+              itemId,
+              target: { type: "none" },
+              type: "dragging",
+            });
+          },
+          onDrop: ({ source }) => {
+            const itemId = clipboardDraggedItemId(source.data, itemIds);
+            setDragState({ type: "idle" });
+            if (!itemId) {
+              return;
+            }
+            applySnapshotCommand("clipboard_set_item_group", {
+              groupId,
+              id: itemId,
+            });
+          },
+        }),
+      );
     }
-    setDragState((current) => {
-      if (current.type === "idle") {
-        return current;
-      }
-      return {
-        itemId: current.itemId,
-        target: { type: "none" },
-        type: "dragging",
-      };
-    });
-  };
 
-  const dropIntoGroup = (
-    event: ReactDragEvent<HTMLElement>,
-    groupId: string | null,
-  ) => {
-    event.preventDefault();
-    const itemId = clipboardDraggedItemId(
-      event.dataTransfer,
-      new Set(snapshot.items.map((item) => item.id)),
-    );
-    if (itemId) {
-      applySnapshotCommand("clipboard_set_item_group", {
-        groupId,
-        id: itemId,
-      });
-    }
-    setDragState({ type: "idle" });
-  };
+    return combine(...cleanups);
+  }, [
+    activeGroupId,
+    applySnapshotCommand,
+    query,
+    snapshot.groups,
+    snapshot.items,
+  ]);
 
   const isDropTarget = (groupId: string | null) =>
     dragState.type === "dragging" &&
@@ -1240,11 +1278,8 @@ const ClipboardApp = () => {
           <Button
             aria-pressed={activeGroupId === null}
             className="h-11 shrink-0 rounded-full px-4 text-xs"
+            data-clipboard-group-id={CLIPBOARD_NO_GROUP_DROP_ID}
             data-drop-target={isDropTarget(null) ? "" : undefined}
-            onDragEnter={(event) => selectDropTarget(event, null)}
-            onDragLeave={clearDropTarget}
-            onDragOver={(event) => selectDropTarget(event, null)}
-            onDrop={(event) => dropIntoGroup(event, null)}
             onClick={() => {
               setSelectedGroupId(null);
               setSelectedIndex(0);
@@ -1261,13 +1296,10 @@ const ClipboardApp = () => {
               <Button
                 aria-pressed={activeGroupId === group.id}
                 className="clipboard-group-chip h-11 shrink-0 rounded-full px-4 text-xs"
+                data-clipboard-group-id={group.id}
                 data-drop-target={isDropTarget(group.id) ? "" : undefined}
                 data-group-chip=""
                 key={group.id}
-                onDragEnter={(event) => selectDropTarget(event, group.id)}
-                onDragLeave={clearDropTarget}
-                onDragOver={(event) => selectDropTarget(event, group.id)}
-                onDrop={(event) => dropIntoGroup(event, group.id)}
                 onClick={() => {
                   setSelectedGroupId(group.id);
                   setSelectedIndex(0);
@@ -1367,8 +1399,6 @@ const ClipboardApp = () => {
                   item={item}
                   key={item.id}
                   onOpenMenu={openContextMenu}
-                  onDragEnd={() => setDragState({ type: "idle" })}
-                  onDragStart={startDragging}
                   onPaste={pasteItem}
                   onSelect={setSelectedIndex}
                   query={query}
