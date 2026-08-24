@@ -19,13 +19,15 @@ type RetiredSeedRule = Pick<SeedRule, "pattern" | "language">;
 /**
  * The words a court uses for the decision it is treating, as stems so the
  * cases inflect freely. A negative cue anchored on one of these names the
- * cited decision; the same cue without one names a party, a court or a
- * statute, and says nothing about the citation.
+ * cited decision; the same cue without one names a party, a court, a
+ * statute or the matter at hand ("na daný případ nelze aplikovat § 1765"),
+ * and says nothing about the citation. Words for the matter itself (věc,
+ * případ, situace) are deliberately absent for that reason.
  */
 const CS_DECISION_ANCHOR =
-  "(?:závěr|rozsud|usnesen|nález|judikat|rozhodnut|stanovisk|věci|případ|situac)";
+  "(?:závěr|rozsud|usnesen|nález|judikat|rozhodnut|stanovisk)";
 const SK_DECISION_ANCHOR =
-  "(?:záver|rozsud|uznesen|nález|judikat|rozhodnut|stanovisk|veci|prípad|situác)";
+  "(?:záver|rozsud|uznesen|nález|judikat|rozhodnut|stanovisk)";
 
 export const SEED_RULES: readonly SeedRule[] = [
   // -- Czech: positive -------------------------------------------
@@ -83,6 +85,13 @@ export const SEED_RULES: readonly SeedRule[] = [
   { pattern: "odchyluje\\s+se", polarity: "negative", language: "cs" },
   {
     pattern: `nelze\\s+aplikovat[^.;]{0,40}\\b${CS_DECISION_ANCHOR}`,
+    polarity: "negative",
+    language: "cs",
+  },
+  // The decision may be named before the cue ("tento rozsudek však nelze
+  // aplikovat"); within the same clause the anchor still binds it.
+  {
+    pattern: `\\b${CS_DECISION_ANCHOR}\\w*[^.;]{0,40}\\bnelze\\s+aplikovat`,
     polarity: "negative",
     language: "cs",
   },

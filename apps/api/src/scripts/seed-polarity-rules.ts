@@ -12,6 +12,8 @@
  */
 
 import { and, eq, inArray, or, sql } from "drizzle-orm";
+import { tmpdir } from "node:os";
+import path from "node:path";
 
 import { caseLawCitations, caseLawPolarityRules } from "@/api/db/schema";
 import { RULE_SOURCE } from "@/api/handlers/case-law/polarity/consts";
@@ -53,7 +55,7 @@ for (const rule of SEED_RULES) {
 /** Rows reset per statement; bounded so the lock never spans the table. */
 const RESET_BATCH = 5000;
 
-let resetTotal = 0;
+let resetIds: string[] = [];
 if (RETIRED_SEED_RULES.length > 0) {
   const retired = await rootDb
     .update(caseLawPolarityRules)
@@ -75,7 +77,7 @@ if (RETIRED_SEED_RULES.length > 0) {
   // again under the rules that remain. Left in place, a withdrawn rule would
   // keep speaking through every row it ever touched.
   const retiredIds = retired.map((rule) => rule.id);
-  const resetBatch = async (): Promise<number> => {
+  const resetBatch = async (): Promise<string[]> => {
     const reset = await rootDb
       .update(caseLawCitations)
       .set({ polarity: null, polarityRuleId: null })
@@ -87,21 +89,26 @@ if (RETIRED_SEED_RULES.length > 0) {
         )`,
       )
       .returning({ id: caseLawCitations.id });
-    return reset.length < RESET_BATCH
-      ? reset.length
-      : reset.length + (await resetBatch());
+    const ids = reset.map((row) => row.id);
+    return reset.length < RESET_BATCH ? ids : [...ids, ...(await resetBatch())];
   };
   if (retiredIds.length > 0) {
-    resetTotal = await resetBatch();
+    resetIds = await resetBatch();
   }
 }
 
 console.log(
-  `Done. ${SEED_RULES.length} rules upserted, ${RETIRED_SEED_RULES.length} retired, ${resetTotal} citations returned to the unclassified pool.`,
+  `Done. ${SEED_RULES.length} rules upserted, ${RETIRED_SEED_RULES.length} retired, ${resetIds.length} citations returned to the unclassified pool.`,
 );
-if (resetTotal > 0) {
+if (resetIds.length > 0) {
+  // The classifier walks the newest unclassified rows first and stops at a
+  // limit; the reset rows are old and would wait behind the backlog. Their
+  // ids go to a file the classifier can be pointed at, so the pass that
+  // follows consumes exactly this set.
+  const resetFile = path.join(tmpdir(), `polarity-reset-${Date.now()}.json`);
+  await Bun.write(resetFile, JSON.stringify(resetIds));
   console.log(
-    "Next: bun apps/api/scripts/classify-citations.ts, then bun apps/api/src/scripts/backfill-citation-authority.ts.",
+    `Next: bun apps/api/scripts/classify-citations.ts --ids ${resetFile}, then bun apps/api/src/scripts/backfill-citation-authority.ts.`,
   );
 }
 

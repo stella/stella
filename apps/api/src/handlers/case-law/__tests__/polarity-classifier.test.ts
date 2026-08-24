@@ -120,6 +120,8 @@ describe("seed rules", () => {
       "bez dalšího nelze aplikovat ani dovolatelkou zmiňovaný rozsudek Nejvyššího soudu",
       "v této věci nelze aplikovat závěry vyplývající z rozsudků",
       "na daný případ nelze aplikovat rozsudek Nejvyššího soudu",
+      "tento rozsudek však nelze aplikovat",
+      "závěry citovaného usnesení nelze aplikovat na projednávanou věc",
     ];
 
     for (const text of testCases) {
@@ -154,6 +156,8 @@ describe("seed rules", () => {
       "postup k odstranění pochybností nelze na rozdíl od daňové kontroly použít pro namátkové prošetření tvrzení daňového subjektu.",
       "Rozhodnutí odvolacího soudu o tom, že na posuzovanou věc nelze aplikovat § 1765 odst. 1 o. z., spočívá na závěrech, podle nichž závazek zanikl.",
       "nález Ústavního soudu vydaný v listopadu 2008 nelze aplikovat na daňovou kontrolu zahájenou v březnu téhož roku.",
+      "Ustanovení § 1765 o. z. nelze aplikovat na daný případ (srov. rozsudek Nejvyššího soudu ze dne 11. 4. 2018, sp. zn. 31 Cdo 927/2016).",
+      "Na rozdíl od situace v projednávané věci šlo o jednostranný zápočet; k tomu srov. rozsudek Nejvyššího soudu sp. zn. 31 Cdo 927/2016.",
     ];
 
     for (const text of windows) {
@@ -165,6 +169,25 @@ describe("seed rules", () => {
         fired: [],
       });
     }
+  });
+
+  /**
+   * A positive cue and a negative one in one window, the negative about the
+   * cited decision: negative wins precedence, so the negative rule has to
+   * fire or the retired cue's loss turns an inapplicable citation positive.
+   */
+  test("a decision named before the negative cue is still read as negative", () => {
+    const rules = compileRules(
+      SEED_RULES.filter((r) => r.language === "cs").map((r) => ({
+        id: createSafeId<"caseLawPolarityRule">(),
+        pattern: r.pattern,
+        polarity: r.polarity,
+        confidence: 1,
+      })),
+    );
+    const context =
+      "Dovolatel odkazuje na rozsudek Nejvyššího soudu ze dne 25. 11. 2008, sp. zn. 22 Cdo 3554/2008; tento rozsudek však nelze aplikovat, neboť vychází z jiných skutkových okolností.";
+    expect(selectRuleMatch(rules, context)?.polarity).toBe(POLARITY.NEGATIVE);
   });
 
   test("Czech supportive rules match expected phrases", () => {
