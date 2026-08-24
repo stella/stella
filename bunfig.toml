@@ -15,12 +15,6 @@ minimumReleaseAgeExcludes = [
   # Keep Astro's framework and Markdown packages on one patch line while
   # verifying their Vite 8.2/Rolldown 1.2 compatibility. Remove these
   # exceptions once the normal quarantine admits them.
-  "astro", # quarantine-expires: 2026-08-24T14:43:52.274Z
-  "@astrojs/react", # quarantine-expires: 2026-08-24T14:40:47.072Z
-  "@astrojs/mdx", # quarantine-expires: 2026-08-24T14:39:48.823Z
-  "@astrojs/internal-helpers", # quarantine-expires: 2026-08-24T14:39:49.268Z
-  "@astrojs/markdown-remark", # quarantine-expires: 2026-08-24T14:39:51.902Z
-  "@astrojs/markdown-satteri", # quarantine-expires: 2026-08-24T14:40:56.495Z
   "satteri", # quarantine-expires: 2026-08-24T20:38:24.126Z
   "@bruits/satteri-darwin-arm64", # quarantine-expires: 2026-08-24T20:35:12.975Z
   "@bruits/satteri-darwin-x64", # quarantine-expires: 2026-08-24T20:35:18.993Z
