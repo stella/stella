@@ -31,7 +31,7 @@ const LOADER_ICON_NAMES = new Set([
 const BANNED_UTILITY = /(?:^|\s)animate-(?:spin|pulse)(?:\s|$)/u;
 
 const isAllowedFile = (
-  context: { filename?: unknown; getFilename?: () => string },
+  context: Parameters<typeof filenameForContext>[0],
   allowedFiles: unknown[],
 ): boolean => {
   const filename = filenameForContext(context);
