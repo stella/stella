@@ -1,7 +1,7 @@
 import { Result } from "better-result";
-import { and, eq } from "drizzle-orm";
 
 import { caseLawDecisionAnnotations } from "@/api/db/schema";
+import { wholeAnnotationSql } from "@/api/handlers/case-law/annotations/group";
 import { annotationParamsSchema } from "@/api/handlers/case-law/annotations/schema";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
@@ -24,14 +24,11 @@ const deleteDecisionAnnotation = createSafeRootHandler(
         return tx
           .delete(caseLawDecisionAnnotations)
           .where(
-            and(
-              eq(caseLawDecisionAnnotations.id, annotationId),
-              eq(
-                caseLawDecisionAnnotations.organizationId,
-                session.activeOrganizationId,
-              ),
-              eq(caseLawDecisionAnnotations.userId, user.id),
-            ),
+            wholeAnnotationSql({
+              annotationId,
+              organizationId: session.activeOrganizationId,
+              userId: user.id,
+            }),
           )
           .returning({ id: caseLawDecisionAnnotations.id });
       }),

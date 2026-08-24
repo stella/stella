@@ -1,4 +1,5 @@
 import { Result } from "better-result";
+import { randomUUIDv7 } from "bun";
 
 import { caseLawDecisionAnnotations } from "@/api/db/schema";
 import {
@@ -18,14 +19,16 @@ const config = {
 } satisfies HandlerConfig;
 
 /**
- * Leaves a highlight or a comment on a passage. Private unless the reader
- * says otherwise; the author and organization come from the session, never
- * from the request.
+ * Leaves a highlight or a comment on a passage. A passage over several
+ * paragraphs becomes one row per paragraph under one group, so it reads,
+ * changes and disappears as one mark. Private unless the reader says
+ * otherwise; the author and organization come from the session, never from
+ * the request.
  */
 const createDecisionAnnotation = createSafeRootHandler(
   config,
   async function* ({ body, params: { decisionId }, safeDb, session, user }) {
-    if (body.endOffset <= body.startOffset) {
+    if (body.spans.some((span) => span.endOffset <= span.startOffset)) {
       return Result.err(
         new HandlerError({
           status: 400,
@@ -34,42 +37,45 @@ const createDecisionAnnotation = createSafeRootHandler(
       );
     }
 
+    const groupId = body.spans.length > 1 ? randomUUIDv7() : null;
     const rows = yield* Result.await(
       // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
       safeDb((tx) => {
         // audit: skip — a reader's own mark on public text, private by default; no tenant configuration or shared record changes.
         return tx
           .insert(caseLawDecisionAnnotations)
-          .values({
-            id: createSafeId<"caseLawDecisionAnnotation">(),
-            organizationId: session.activeOrganizationId,
-            userId: user.id,
-            decisionId,
-            kind: body.kind,
-            visibility: body.visibility ?? "private",
-            color: body.kind === "highlight" ? body.color : null,
-            style: body.kind === "highlight" ? body.style : null,
-            body: body.kind === "comment" ? body.body : null,
-            blockAnchorId: body.blockAnchorId,
-            startOffset: body.startOffset,
-            endOffset: body.endOffset,
-            quote: body.quote,
-          })
-          .returning({
-            id: caseLawDecisionAnnotations.id,
-            createdAt: caseLawDecisionAnnotations.createdAt,
-          });
+          .values(
+            body.spans.map((span, index) => ({
+              id: createSafeId<"caseLawDecisionAnnotation">(),
+              organizationId: session.activeOrganizationId,
+              userId: user.id,
+              decisionId,
+              groupId,
+              kind: body.kind,
+              visibility: body.visibility ?? "private",
+              color: body.kind === "highlight" ? body.color : null,
+              style: body.kind === "highlight" ? body.style : null,
+              // A comment's words belong to the passage once, on its first
+              // paragraph; the other rows only mark where it continues.
+              body: body.kind === "comment" && index === 0 ? body.body : null,
+              blockAnchorId: span.blockAnchorId,
+              startOffset: span.startOffset,
+              endOffset: span.endOffset,
+              quote: span.quote,
+            })),
+          )
+          .returning({ id: caseLawDecisionAnnotations.id });
       }),
     );
 
-    const created = rows.at(0);
-    if (created === undefined) {
+    const first = rows.at(0);
+    if (first === undefined) {
       return Result.err(
         new HandlerError({ status: 500, message: "Annotation was not stored" }),
       );
     }
 
-    return created;
+    return { groupId, id: first.id, ids: rows.map((row) => row.id) };
   },
 );
 

@@ -19,8 +19,8 @@ export const annotationVisibilitySchema = tLiterals(
   CASE_LAW_ANNOTATION_VISIBILITIES,
 );
 
-/** Where on the decision the annotation sits. */
-const anchorFields = {
+/** Where on the decision one paragraph's share of the annotation sits. */
+const spanSchema = t.Object({
   blockAnchorId: t.String({ minLength: 1, maxLength: 64 }),
   startOffset: t.Integer({ minimum: 0 }),
   endOffset: t.Integer({ minimum: 1 }),
@@ -28,7 +28,15 @@ const anchorFields = {
     minLength: 1,
     maxLength: CASE_LAW_ANNOTATION_QUOTE_MAX_LENGTH,
   }),
-};
+});
+
+/** A selection is a run of paragraphs; a court's reasoning rarely ends at one. */
+export const ANNOTATION_MAX_SPANS = 40;
+
+const spansSchema = t.Array(spanSchema, {
+  minItems: 1,
+  maxItems: ANNOTATION_MAX_SPANS,
+});
 
 /**
  * One body per kind, so a highlight cannot carry words and a comment cannot
@@ -40,7 +48,7 @@ export const createAnnotationBodySchema = t.Union([
     color: annotationColorSchema,
     style: annotationStyleSchema,
     visibility: t.Optional(annotationVisibilitySchema),
-    ...anchorFields,
+    spans: spansSchema,
   }),
   t.Object({
     kind: t.Literal("comment"),
@@ -49,7 +57,7 @@ export const createAnnotationBodySchema = t.Union([
       maxLength: CASE_LAW_ANNOTATION_BODY_MAX_LENGTH,
     }),
     visibility: t.Optional(annotationVisibilitySchema),
-    ...anchorFields,
+    spans: spansSchema,
   }),
 ]);
 

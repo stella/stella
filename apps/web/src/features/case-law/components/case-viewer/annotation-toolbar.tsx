@@ -21,7 +21,7 @@ import { cn } from "@stll/ui/utils";
 
 import Tooltip from "@/components/tooltip";
 import { askAboutSelection } from "@/features/case-law/annotations/ask-about-selection";
-import { selectionAnchorFrom } from "@/features/case-law/annotations/selection-anchor";
+import { selectionAnchorsFrom } from "@/features/case-law/annotations/selection-anchor";
 import type { SelectionAnchor } from "@/features/case-law/annotations/selection-anchor";
 import {
   ANNOTATION_COLORS,
@@ -63,14 +63,15 @@ type AnnotationToolbarProps = {
 };
 
 type Selected = {
-  anchor: SelectionAnchor | null;
   rect: DOMRect;
+  /** One per paragraph the selection touches; empty outside the words. */
+  spans: SelectionAnchor[];
   text: string;
 };
 
 type Composer = {
-  anchor: SelectionAnchor;
   rect: DOMRect;
+  spans: SelectionAnchor[];
 };
 
 const STYLE_ICONS = {
@@ -136,8 +137,8 @@ export const AnnotationToolbar = ({
           return;
         }
         setSelected({
-          anchor: selectionAnchorFrom(selection, root),
           rect: selection.getRangeAt(0).getBoundingClientRect(),
+          spans: selectionAnchorsFrom(selection, root),
           text,
         });
       });
@@ -201,11 +202,14 @@ export const AnnotationToolbar = ({
     return url.href;
   };
 
-  const createHighlight = (anchor: SelectionAnchor, color: AnnotationColor) => {
+  const createHighlight = (
+    spans: SelectionAnchor[],
+    color: AnnotationColor,
+  ) => {
     detached(
       controller.create({
-        ...anchor,
         color,
+        spans,
         kind: "highlight",
         style,
         visibility,
@@ -222,8 +226,8 @@ export const AnnotationToolbar = ({
     }
     detached(
       controller.create({
-        ...composer.anchor,
         body,
+        spans: composer.spans,
         kind: "comment",
         visibility,
       }),
@@ -400,7 +404,7 @@ export const AnnotationToolbar = ({
       </div>
     );
   } else if (selected !== null) {
-    const anchor = selected.anchor;
+    const spans = selected.spans;
     content = (
       <div className="flex items-center gap-1">
         <Button
@@ -420,16 +424,16 @@ export const AnnotationToolbar = ({
           <SparklesIcon className="size-3.5" />
           {t("common.askAI")}
         </Button>
-        {anchor !== null && (
+        {spans.length > 0 && (
           <>
             <span className="bg-border mx-1 h-4 w-px" />
             {styleButtons(style, setStyle)}
             <div className="flex items-center gap-1.5 px-1">
-              {colorSwatches((color) => createHighlight(anchor, color))}
+              {colorSwatches((color) => createHighlight(spans, color))}
             </div>
             <span className="bg-border mx-1 h-4 w-px" />
             <Button
-              onClick={() => setComposer({ anchor, rect: selected.rect })}
+              onClick={() => setComposer({ rect: selected.rect, spans })}
               size="sm"
               variant="ghost"
             >

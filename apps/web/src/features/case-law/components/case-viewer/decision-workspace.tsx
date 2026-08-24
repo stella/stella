@@ -104,8 +104,10 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
     startOffset: item.startOffset,
     style: item.style,
   }));
+  // A comment over several paragraphs is several rows; its words sit on the
+  // first, and that is the one the margin shows.
   const commentItems: CommentMarginItem[] = (annotations?.annotations ?? [])
-    .filter((item) => item.kind === "comment")
+    .filter((item) => item.kind === "comment" && item.body !== null)
     .map((item) => ({
       author: { image: item.authorImage, name: item.authorName },
       id: item.id,

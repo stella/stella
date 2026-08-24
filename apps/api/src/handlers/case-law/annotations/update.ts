@@ -1,7 +1,7 @@
 import { Result } from "better-result";
-import { and, eq } from "drizzle-orm";
 
 import { caseLawDecisionAnnotations } from "@/api/db/schema";
+import { wholeAnnotationSql } from "@/api/handlers/case-law/annotations/group";
 import {
   annotationParamsSchema,
   updateAnnotationBodySchema,
@@ -18,7 +18,11 @@ const config = {
   body: updateAnnotationBodySchema,
 } satisfies HandlerConfig;
 
-/** The columns one change touches; the change names itself. */
+/**
+ * The columns one change touches; the change names itself. The words of a
+ * comment live on its first row only, so a body change is applied where a
+ * body is; every other change reaches the whole group.
+ */
 const changesFor = (
   body: UpdateAnnotationBody,
 ): Partial<typeof caseLawDecisionAnnotations.$inferInsert> => {
@@ -59,14 +63,11 @@ const updateDecisionAnnotation = createSafeRootHandler(
           .update(caseLawDecisionAnnotations)
           .set({ ...changesFor(body), updatedAt: new Date() })
           .where(
-            and(
-              eq(caseLawDecisionAnnotations.id, annotationId),
-              eq(
-                caseLawDecisionAnnotations.organizationId,
-                session.activeOrganizationId,
-              ),
-              eq(caseLawDecisionAnnotations.userId, user.id),
-            ),
+            wholeAnnotationSql({
+              annotationId,
+              organizationId: session.activeOrganizationId,
+              userId: user.id,
+            }),
           )
           .returning({ id: caseLawDecisionAnnotations.id });
       }),

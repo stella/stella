@@ -8,6 +8,7 @@ CREATE TABLE "case_law_decision_annotations" (
   "organization_id" varchar(128) NOT NULL,
   "user_id" text NOT NULL,
   "decision_id" uuid NOT NULL,
+  "group_id" uuid,
   "kind" text NOT NULL,
   "visibility" text DEFAULT 'private' NOT NULL,
   "color" text,
@@ -38,7 +39,7 @@ CREATE TABLE "case_law_decision_annotations" (
   CONSTRAINT "case_law_decision_annotations_kind_shape"
     CHECK (
       ("kind" = 'highlight' AND "color" IS NOT NULL AND "style" IS NOT NULL AND "body" IS NULL)
-      OR ("kind" = 'comment' AND "body" IS NOT NULL AND "body" <> '' AND "style" IS NULL)
+      OR ("kind" = 'comment' AND "style" IS NULL AND (("body" IS NOT NULL AND "body" <> '') OR "group_id" IS NOT NULL))
     ),
   CONSTRAINT "case_law_decision_annotations_span_shape"
     CHECK ("start_offset" >= 0 AND "end_offset" > "start_offset" AND "quote" <> '')
@@ -46,6 +47,15 @@ CREATE TABLE "case_law_decision_annotations" (
 
 CREATE INDEX "case_law_decision_annotations_decision_idx"
   ON "case_law_decision_annotations" ("organization_id", "decision_id", "created_at", "id");--> statement-breakpoint
+
+-- A mark over several paragraphs is one row per paragraph under one group;
+-- a change to the mark reaches every row of the group.
+CREATE INDEX "case_law_decision_annotations_group_idx"
+  ON "case_law_decision_annotations" ("organization_id", "group_id")
+  WHERE "group_id" IS NOT NULL;--> statement-breakpoint
+
+GRANT SELECT, INSERT, UPDATE, DELETE
+  ON "case_law_decision_annotations" TO stella;--> statement-breakpoint
 
 ALTER TABLE "case_law_decision_annotations" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 

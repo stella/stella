@@ -1,7 +1,8 @@
 /**
  * Where a selection sits in the decision, in the terms an annotation is
- * stored in: the block's stable anchor and offsets into the block's rendered
- * text, which is the same text the reader lays inline anchors over.
+ * stored in: per paragraph, the block's stable anchor and offsets into the
+ * block's rendered text, which is the same text the reader lays inline
+ * anchors over. A selection over several paragraphs yields one span each.
  *
  * Reader chrome inside a block (the permalink, a hanging paragraph number)
  * is marked `data-reader-chrome` and does not count; the offsets index the
@@ -17,111 +18,102 @@ export type SelectionAnchor = {
   startOffset: number;
 };
 
-const blockOf = (node: Node): HTMLElement | null => {
-  const element = node instanceof Element ? node : node.parentElement;
-  return element?.closest<HTMLElement>("[data-anchor]") ?? null;
-};
-
 const isChrome = (node: Node): boolean => {
   const element = node instanceof Element ? node : node.parentElement;
   return element?.closest(`[${READER_CHROME_ATTRIBUTE}]`) !== null;
 };
 
-/** Text offset of a DOM point within the block's words. */
+const textNodesOf = (block: HTMLElement): Text[] => {
+  const walker = block.ownerDocument.createTreeWalker(
+    block,
+    NodeFilter.SHOW_TEXT,
+  );
+  const nodes: Text[] = [];
+  for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
+    if (node instanceof Text && !isChrome(node)) {
+      nodes.push(node);
+    }
+  }
+  return nodes;
+};
+
+/** The block's words, in the order and form the offsets index. */
+export const blockWords = (block: HTMLElement): string =>
+  textNodesOf(block)
+    .map((node) => node.data)
+    .join("");
+
+/**
+ * Text offset of a DOM point within the block's words. A point on an element
+ * boundary counts every word node before the boundary's child index.
+ */
 const offsetWithin = (
   block: HTMLElement,
   container: Node,
   offset: number,
-): number | null => {
-  const walker = block.ownerDocument.createTreeWalker(
-    block,
-    NodeFilter.SHOW_TEXT,
-  );
+): number => {
   let total = 0;
-  for (let text = walker.nextNode(); text !== null; text = walker.nextNode()) {
-    if (isChrome(text)) {
-      continue;
-    }
-    if (text === container) {
+  for (const node of textNodesOf(block)) {
+    if (node === container) {
       return total + offset;
     }
-    // A point on an element boundary: everything before the boundary's
-    // child index counts.
-    if (
-      container instanceof Element &&
-      container.contains(text) &&
-      Array.from(container.childNodes)
+    if (container instanceof Element && container.contains(node)) {
+      const before = Array.from(container.childNodes)
         .slice(0, offset)
-        .some((child) => child === text || child.contains(text))
-    ) {
-      total += text.data.length;
-      continue;
+        .some((child) => child === node || child.contains(node));
+      if (!before) {
+        return total;
+      }
     }
-    if (container instanceof Element && container.contains(text)) {
-      return total;
-    }
-    total += text.data.length;
+    total += node.data.length;
   }
-  return container instanceof Element && block.contains(container)
-    ? total
-    : null;
+  return total;
 };
 
 /**
- * The anchor for the current selection when it lies within one block, or
- * null: across blocks, outside the reader, collapsed, or on chrome. A quote
- * is taken from the block's own words, so it is what the reader saw.
+ * The spans for the current selection, one per paragraph it touches, or an
+ * empty list: collapsed, outside the reader, or nothing but whitespace. A
+ * quote is taken from each block's own words, so it is what the reader saw.
  */
-export const selectionAnchorFrom = (
+export const selectionAnchorsFrom = (
   selection: Selection,
   root: HTMLElement,
-): SelectionAnchor | null => {
+): SelectionAnchor[] => {
   if (selection.rangeCount === 0 || selection.isCollapsed) {
-    return null;
+    return [];
   }
   const range = selection.getRangeAt(0);
-  const block = blockOf(range.startContainer);
-  if (
-    block === null ||
-    !root.contains(block) ||
-    blockOf(range.endContainer) !== block ||
-    isChrome(range.startContainer) ||
-    isChrome(range.endContainer)
-  ) {
-    return null;
-  }
-  const blockAnchorId = block.dataset["anchor"];
-  if (blockAnchorId === undefined || blockAnchorId === "") {
-    return null;
-  }
-  const startOffset = offsetWithin(
-    block,
-    range.startContainer,
-    range.startOffset,
-  );
-  const endOffset = offsetWithin(block, range.endContainer, range.endOffset);
-  if (startOffset === null || endOffset === null || endOffset <= startOffset) {
-    return null;
-  }
-  const words = blockWords(block);
-  const quote = words.slice(startOffset, endOffset);
-  if (quote.trim() === "") {
-    return null;
-  }
-  return { blockAnchorId, endOffset, quote, startOffset };
-};
-
-/** The block's words, in the order and form the offsets index. */
-export const blockWords = (block: HTMLElement): string => {
-  const walker = block.ownerDocument.createTreeWalker(
-    block,
-    NodeFilter.SHOW_TEXT,
-  );
-  let words = "";
-  for (let text = walker.nextNode(); text !== null; text = walker.nextNode()) {
-    if (!isChrome(text)) {
-      words += text.data;
+  const spans: SelectionAnchor[] = [];
+  for (const block of root.querySelectorAll<HTMLElement>("[data-anchor]")) {
+    if (!range.intersectsNode(block)) {
+      continue;
     }
+    const blockAnchorId = block.dataset["anchor"];
+    if (blockAnchorId === undefined || blockAnchorId === "") {
+      continue;
+    }
+    const words = blockWords(block);
+    const startOffset = block.contains(range.startContainer)
+      ? offsetWithin(block, range.startContainer, range.startOffset)
+      : 0;
+    const endOffset = block.contains(range.endContainer)
+      ? offsetWithin(block, range.endContainer, range.endOffset)
+      : words.length;
+    // Trailing and leading whitespace a drag picks up is not a mark on the
+    // words; a paragraph the selection only brushes contributes nothing.
+    const quote = words.slice(startOffset, endOffset);
+    const trimmedStart =
+      startOffset + (quote.length - quote.trimStart().length);
+    const trimmedEnd = endOffset - (quote.length - quote.trimEnd().length);
+    if (trimmedEnd <= trimmedStart) {
+      continue;
+    }
+    spans.push({
+      blockAnchorId,
+      endOffset: trimmedEnd,
+      quote: words.slice(trimmedStart, trimmedEnd),
+      startOffset: trimmedStart,
+    });
   }
-  return words;
+  return spans;
 };

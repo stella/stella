@@ -34,6 +34,7 @@ const listDecisionAnnotations = createSafeRootHandler(
         tx
           .select({
             id: caseLawDecisionAnnotations.id,
+            groupId: caseLawDecisionAnnotations.groupId,
             kind: caseLawDecisionAnnotations.kind,
             visibility: caseLawDecisionAnnotations.visibility,
             color: caseLawDecisionAnnotations.color,

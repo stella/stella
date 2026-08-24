@@ -39,16 +39,15 @@ export const ANNOTATION_STYLES: readonly AnnotationStyle[] = [
   "strikethrough",
 ];
 
-export type CreateAnnotationInput = SelectionAnchor &
-  (
-    | {
-        kind: "highlight";
-        color: AnnotationColor;
-        style: AnnotationStyle;
-        visibility: AnnotationVisibility;
-      }
-    | { kind: "comment"; body: string; visibility: AnnotationVisibility }
-  );
+export type CreateAnnotationInput = { spans: SelectionAnchor[] } & (
+  | {
+      kind: "highlight";
+      color: AnnotationColor;
+      style: AnnotationStyle;
+      visibility: AnnotationVisibility;
+    }
+  | { kind: "comment"; body: string; visibility: AnnotationVisibility }
+);
 
 /** One named change to one annotation. */
 export type UpdateAnnotationInput = { id: string } & (

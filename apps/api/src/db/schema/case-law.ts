@@ -1558,6 +1558,11 @@ export const caseLawDecisionAnnotations = p.pgTable(
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
     decisionId: safeUuid<"caseLawDecision">("decision_id").notNull(),
+    /**
+     * Ties the rows of one mark that spans several paragraphs; null for a
+     * mark inside one. A change to the mark reaches every row of the group.
+     */
+    groupId: p.uuid("group_id"),
     kind: p.text("kind", { enum: CASE_LAW_ANNOTATION_KINDS }).notNull(),
     visibility: p
       .text("visibility", { enum: CASE_LAW_ANNOTATION_VISIBILITIES })
@@ -1579,6 +1584,10 @@ export const caseLawDecisionAnnotations = p.pgTable(
     p
       .index("case_law_decision_annotations_decision_idx")
       .on(t.organizationId, t.decisionId, t.createdAt, t.id),
+    p
+      .index("case_law_decision_annotations_group_idx")
+      .on(t.organizationId, t.groupId)
+      .where(isNotNull(t.groupId)),
     p.check(
       "case_law_decision_annotations_kind_values",
       sql`${t.kind} IN (${sql.join(CASE_LAW_ANNOTATION_KIND_SQL_VALUES, sql`, `)})`,
@@ -1595,11 +1604,12 @@ export const caseLawDecisionAnnotations = p.pgTable(
       "case_law_decision_annotations_style_values",
       sql`${t.style} IS NULL OR ${t.style} IN (${sql.join(CASE_LAW_ANNOTATION_STYLE_SQL_VALUES, sql`, `)})`,
     ),
-    // A highlight is a colour and a style on the text; a comment is words.
+    // A highlight is a colour and a style on the text; a comment is words,
+    // carried by its first row when the passage spans paragraphs.
     p.check(
       "case_law_decision_annotations_kind_shape",
       sql`(${t.kind} = 'highlight' AND ${t.color} IS NOT NULL AND ${t.style} IS NOT NULL AND ${t.body} IS NULL)
-        OR (${t.kind} = 'comment' AND ${t.body} IS NOT NULL AND ${t.body} <> '' AND ${t.style} IS NULL)`,
+        OR (${t.kind} = 'comment' AND ${t.style} IS NULL AND ((${t.body} IS NOT NULL AND ${t.body} <> '') OR ${t.groupId} IS NOT NULL))`,
     ),
     p.check(
       "case_law_decision_annotations_span_shape",
