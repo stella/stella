@@ -90,23 +90,28 @@ export const MarginNotes = ({
     }
 
     const wrapperRect = wrapper.getBoundingClientRect();
-    const result: PositionedItem[] = [];
-    let lastBottom = 0;
-
+    // Notes stack downwards from where their paragraph is, so they are laid
+    // out in reading order regardless of the order they were handed in;
+    // otherwise a later item (a comment being written) lands below every
+    // earlier one instead of beside its own paragraph.
+    const anchored: { item: MarginItem; anchorTop: number }[] = [];
     for (const item of items) {
       const el = sc.querySelector(`#${CSS.escape(item.startAnchorId)}`);
       if (!el) {
         continue;
       }
+      anchored.push({
+        item,
+        anchorTop: el.getBoundingClientRect().top - wrapperRect.top,
+      });
+    }
+    anchored.sort((a, b) => a.anchorTop - b.anchorTop);
 
-      const elRect = el.getBoundingClientRect();
-      let top = elRect.top - wrapperRect.top;
-
+    const result: PositionedItem[] = [];
+    let lastBottom = 0;
+    for (const { item, anchorTop } of anchored) {
       const h = heights.get(item.id) ?? 48;
-      if (top < lastBottom + 8) {
-        top = lastBottom + 8;
-      }
-
+      const top = Math.max(anchorTop, lastBottom + 8);
       result.push({ ...item, top });
       lastBottom = top + h;
     }
