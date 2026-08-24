@@ -117,6 +117,9 @@ describe("seed rules", () => {
     const testCases = [
       "na rozdíl od předchozího rozhodnutí",
       "tento závěr byl překonán",
+      "bez dalšího nelze aplikovat ani dovolatelkou zmiňovaný rozsudek Nejvyššího soudu",
+      "v této věci nelze aplikovat závěry vyplývající z rozsudků",
+      "na daný případ nelze aplikovat rozsudek Nejvyššího soudu",
     ];
 
     for (const text of testCases) {
@@ -124,6 +127,43 @@ describe("seed rules", () => {
         new RegExp(r.pattern, "iu").test(text),
       );
       expect(matched).toBe(true);
+    }
+  });
+
+  /**
+   * Windows from the corpus in which a negative cue speaks of a party, a
+   * court or a statute, next to a citation the court relies on. A negative
+   * rule that fires on any of these labels an authority as overruled; the
+   * class of defect is a cue without the cited decision as its object.
+   */
+  test("Czech negative rules stay silent where the cue is not about the cited decision", () => {
+    const negativeRules = SEED_RULES.filter(
+      (r) => r.language === "cs" && r.polarity === "negative",
+    );
+
+    const windows = [
+      "Takovým postupem by přestal být nestranným rozhodčím sporu (viz např. rozsudek rozšířeného senátu Nejvyššího správního soudu ze dne 24. 8. 2010, č. j. 4 As 3/2008 – 78). Zcela obecné žalobní body tedy soud vypořádává se stejnou mírou obecnosti.",
+      "V tomto směru podle názoru krajského soudu neobstojí odvolací námitka nedoručení výměru odůvodněná tvrzením, že povinná v jiné věci (sp. zn. 26 E 1519/1997) předložila generální plnou moc.",
+      "Rovněž tak neobstojí jiné vyjádření, které ukazuje na značnou nejistotu souvislosti chybného postupu s nastalým stavem.",
+      "Neobstojí ani případná argumentace, že se jednalo o vyjádření svobodné vůle účastníků s důsledky pacta sunt servanda.",
+      "Pouhá paragrafová či slovní citace některého zákonného ustanovení jako stížní bod neobstojí.",
+      "neboť ten, kdo odebíral plyn, na rozdíl od povinného, neměl uzavřenou žádnou smlouvu o odběru.",
+      "nemá důvodu pochybovat o pravdivosti jeho tvrzení, neboť na rozdíl od stěžovatele nemá na výsledku řízení zájem.",
+      "odvolací soud (na rozdíl od soudu prvního stupně) neuzavřel, že by nárok byl promlčen.",
+      "Leasingovým společnostem, byť jsou vlastníky předmětu leasingu, na rozdíl od nájemního vztahu nezáleží na tom, zda leasingoví nájemci zhodnocují předmět leasingu.",
+      "postup k odstranění pochybností nelze na rozdíl od daňové kontroly použít pro namátkové prošetření tvrzení daňového subjektu.",
+      "Rozhodnutí odvolacího soudu o tom, že na posuzovanou věc nelze aplikovat § 1765 odst. 1 o. z., spočívá na závěrech, podle nichž závazek zanikl.",
+      "nález Ústavního soudu vydaný v listopadu 2008 nelze aplikovat na daňovou kontrolu zahájenou v březnu téhož roku.",
+    ];
+
+    for (const text of windows) {
+      const fired = negativeRules.filter((r) =>
+        new RegExp(r.pattern, "iu").test(text),
+      );
+      expect({ text, fired: fired.map((r) => r.pattern) }).toEqual({
+        text,
+        fired: [],
+      });
     }
   });
 

@@ -16,6 +16,17 @@ type SeedRule = {
 
 type RetiredSeedRule = Pick<SeedRule, "pattern" | "language">;
 
+/**
+ * The words a court uses for the decision it is treating, as stems so the
+ * cases inflect freely. A negative cue anchored on one of these names the
+ * cited decision; the same cue without one names a party, a court or a
+ * statute, and says nothing about the citation.
+ */
+const CS_DECISION_ANCHOR =
+  "(?:závěr|rozsud|usnesen|nález|judikat|rozhodnut|stanovisk|věci|případ|situac)";
+const SK_DECISION_ANCHOR =
+  "(?:záver|rozsud|uznesen|nález|judikat|rozhodnut|stanovisk|veci|prípad|situác)";
+
 export const SEED_RULES: readonly SeedRule[] = [
   // -- Czech: positive -------------------------------------------
   { pattern: "v\\s+souladu\\s+s", polarity: "positive", language: "cs" },
@@ -58,13 +69,25 @@ export const SEED_RULES: readonly SeedRule[] = [
   },
 
   // -- Czech: negative -------------------------------------------
-  { pattern: "na\\s+rozdíl\\s+od", polarity: "negative", language: "cs" },
+  // A negative cue must have the cited decision as its object. "na rozdíl
+  // od" mostly compares parties or courts, and "nelze aplikovat" mostly
+  // speaks of a statute; each is a treatment only when what follows is a
+  // decision, so the anchor is part of the pattern (see the regression
+  // corpus in `__tests__/polarity-classifier.test.ts`).
+  {
+    pattern: `na\\s+rozdíl\\s+od[^.;]{0,30}\\b${CS_DECISION_ANCHOR}`,
+    polarity: "negative",
+    language: "cs",
+  },
   { pattern: "překonán[aouy]?", polarity: "negative", language: "cs" },
   { pattern: "odchyluje\\s+se", polarity: "negative", language: "cs" },
-  { pattern: "nelze\\s+aplikovat", polarity: "negative", language: "cs" },
+  {
+    pattern: `nelze\\s+aplikovat[^.;]{0,40}\\b${CS_DECISION_ANCHOR}`,
+    polarity: "negative",
+    language: "cs",
+  },
   { pattern: "odlišuje\\s+se\\s+od", polarity: "negative", language: "cs" },
   { pattern: "nesprávně\\s+dovodil", polarity: "negative", language: "cs" },
-  { pattern: "neobstojí", polarity: "negative", language: "cs" },
 
   // -- Slovak: positive ------------------------------------------
   { pattern: "v\\s+súlade\\s+s", polarity: "positive", language: "sk" },
@@ -78,7 +101,11 @@ export const SEED_RULES: readonly SeedRule[] = [
   { pattern: "obdobne", polarity: "supportive", language: "sk" },
 
   // -- Slovak: negative ------------------------------------------
-  { pattern: "na\\s+rozdiel\\s+od", polarity: "negative", language: "sk" },
+  {
+    pattern: `na\\s+rozdiel\\s+od[^.;]{0,30}\\b${SK_DECISION_ANCHOR}`,
+    polarity: "negative",
+    language: "sk",
+  },
   { pattern: "prekonan[áéý]?", polarity: "negative", language: "sk" },
   { pattern: "odlišuje\\s+sa\\s+od", polarity: "negative", language: "sk" },
 ];
@@ -90,8 +117,19 @@ export const SEED_RULES: readonly SeedRule[] = [
  * "byl zrušen" names the fate of a judgment under review far more often than
  * a precedent being overruled, and it sits next to the citations of whatever
  * quashed it, so as a negative cue it mislabelled the authority it invoked.
+ *
+ * "neobstojí" is what a court says of a party's objection ("námitka
+ * neobstojí"), never of the precedent it cites beside it; "na rozdíl od" and
+ * "nelze aplikovat" without an object are comparisons of parties and courts
+ * and statements about statutes. Sampled on the corpus they were wrong in
+ * 14 of 21 windows and never right without the anchor their replacements
+ * carry. Retiring a rule resets the rows it labelled, so they are read again.
  */
 export const RETIRED_SEED_RULES: readonly RetiredSeedRule[] = [
   { pattern: "byl[aoyi]?\\s+zrušen[aouy]?", language: "cs" },
   { pattern: "bol[aoi]?\\s+zrušen[áéý]?", language: "sk" },
+  { pattern: "neobstojí", language: "cs" },
+  { pattern: "na\\s+rozdíl\\s+od", language: "cs" },
+  { pattern: "nelze\\s+aplikovat", language: "cs" },
+  { pattern: "na\\s+rozdiel\\s+od", language: "sk" },
 ];
