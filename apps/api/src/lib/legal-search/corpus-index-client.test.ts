@@ -294,9 +294,21 @@ test("delete settlement compares every published split with the retained task", 
     offset: 0,
     size: 3,
     splits: [
-      { split_state: "Published", delete_opstamp: 42 },
-      { split_state: "Published", delete_opstamp: 41 },
-      { split_state: "Published", delete_opstamp: 45 },
+      {
+        split_id: "split-42",
+        split_state: "Published",
+        delete_opstamp: 42,
+      },
+      {
+        split_id: "split-41",
+        split_state: "Published",
+        delete_opstamp: 41,
+      },
+      {
+        split_id: "split-45",
+        split_state: "Published",
+        delete_opstamp: 45,
+      },
     ],
   };
 
@@ -327,12 +339,43 @@ const settlementResponse = (splitCount: number) => (url: URL) => {
   const offset = Number(url.searchParams.get("offset") ?? "0");
   const pageSize = Math.min(1000, Math.max(splitCount - offset, 0));
   return {
-    splits: Array.from({ length: pageSize }, () => ({
+    splits: Array.from({ length: pageSize }, (_, index) => ({
+      split_id: `split-${offset + index}`,
       split_state: "Published",
       delete_opstamp: 42,
     })),
   };
 };
+
+test("delete settlement repeats an offset scan until split identities stabilize", async () => {
+  let firstPageReads = 0;
+  responseBodyForUrl = (url) => {
+    const offset = Number(url.searchParams.get("offset") ?? "0");
+    if (offset === 0) {
+      firstPageReads += 1;
+      return {
+        splits: Array.from({ length: 1000 }, (_, index) => ({
+          split_id:
+            firstPageReads === 1 || index > 0 ? `split-${index}` : "split-new",
+          split_state: "Published",
+          delete_opstamp: 42,
+        })),
+      };
+    }
+    return { splits: [] };
+  };
+
+  const result = await getCorpusIndexClient().readDeleteSettlement(
+    "legal_corpus_v1_cze",
+    42,
+  );
+
+  expect(result.isOk()).toBe(true);
+  if (result.isOk()) {
+    expect(result.value.publishedSplits).toBe(1000);
+  }
+  expect(firstPageReads).toBe(3);
+});
 
 test("delete settlement accepts exactly the published split ceiling", async () => {
   responseBodyForUrl = settlementResponse(10_000);

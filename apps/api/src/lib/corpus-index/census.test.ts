@@ -93,6 +93,7 @@ const engineHolding = (
           offset: 0,
           size: splitOpstamps.length,
           splits: splitOpstamps.map((opstamp) => ({
+            split_id: `split-${opstamp}`,
             split_state: "Published",
             delete_opstamp: opstamp,
           })),

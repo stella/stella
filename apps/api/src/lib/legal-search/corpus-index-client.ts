@@ -48,6 +48,7 @@ const ADMIN_TIMEOUT_MS = 30_000;
 const AGGREGATION_TIMEOUT_MS = 10_000;
 const SPLIT_PAGE_SIZE = 1000;
 const MAX_SETTLEMENT_SPLITS = 10_000;
+const MAX_SETTLEMENT_SCAN_PASSES = 3;
 
 /**
  * What "the engine accepted this batch" is allowed to mean.
@@ -513,60 +514,95 @@ const buildClient = (): CorpusIndexClient => ({
             message: "corpus index delete settlement received an invalid opstamp",
           });
         }
-        let offset = 0;
-        let publishedSplits = 0;
-        let laggingSplits = 0;
-        let minAppliedOpstamp: number | null = null;
-        const readSplitPage = async (): Promise<void> => {
-          const response = await requestJson({
-            baseUrl: mutationBaseUrl(),
-            path:
-              `/api/v1/indexes/${indexId}/splits?offset=${offset}&limit=${SPLIT_PAGE_SIZE}&split_states=Published`,
-            init: { method: "GET" },
-            timeoutMs: ADMIN_TIMEOUT_MS,
-          });
-          const splits = isRecord(response)
-            ? parseRecordArray(response["splits"])
-            : null;
-          if (splits === null) {
+        const observedSplitOpstamps = new Map<string, number>();
+        let finalPassSplitIds = new Set<string>();
+        let scanPasses = 0;
+        const readSplitPass = async (): Promise<void> => {
+          scanPasses += 1;
+          if (scanPasses > MAX_SETTLEMENT_SCAN_PASSES) {
             throw new CorpusIndexError({
-              message: "corpus index split list returned an invalid response",
+              message:
+                "corpus index split list did not reach a stable published-split set",
             });
           }
-          for (const split of splits) {
-            const opstamp = split["delete_opstamp"];
-            if (
-              split["split_state"] !== "Published" ||
-              typeof opstamp !== "number" ||
-              !Number.isSafeInteger(opstamp) ||
-              opstamp < 0
-            ) {
+          let offset = 0;
+          let scannedSplits = 0;
+          let sawUnobservedSplit = false;
+          const currentSplitIds = new Set<string>();
+          const readSplitPage = async (): Promise<void> => {
+            const response = await requestJson({
+              baseUrl: mutationBaseUrl(),
+              path:
+                `/api/v1/indexes/${indexId}/splits?offset=${offset}&limit=${SPLIT_PAGE_SIZE}&split_states=Published`,
+              init: { method: "GET" },
+              timeoutMs: ADMIN_TIMEOUT_MS,
+            });
+            const splits = isRecord(response)
+              ? parseRecordArray(response["splits"])
+              : null;
+            if (splits === null) {
               throw new CorpusIndexError({
                 message: "corpus index split list returned an invalid response",
               });
             }
-            minAppliedOpstamp =
-              minAppliedOpstamp === null
-                ? opstamp
-                : Math.min(minAppliedOpstamp, opstamp);
-            if (opstamp < requiredOpstamp) {
-              laggingSplits += 1;
+            scannedSplits += splits.length;
+            if (scannedSplits > MAX_SETTLEMENT_SPLITS) {
+              throw new CorpusIndexError({
+                message:
+                  `corpus index split list exceeds ${MAX_SETTLEMENT_SPLITS} published splits`,
+              });
             }
-          }
-          publishedSplits += splits.length;
-          if (publishedSplits > MAX_SETTLEMENT_SPLITS) {
-            throw new CorpusIndexError({
-              message:
-                `corpus index split list exceeds ${MAX_SETTLEMENT_SPLITS} published splits`,
-            });
-          }
-          if (splits.length < SPLIT_PAGE_SIZE) {
-            return;
-          }
-          offset += splits.length;
+            for (const split of splits) {
+              const splitId = split["split_id"];
+              const opstamp = split["delete_opstamp"];
+              if (
+                split["split_state"] !== "Published" ||
+                typeof splitId !== "string" ||
+                splitId.length === 0 ||
+                typeof opstamp !== "number" ||
+                !Number.isSafeInteger(opstamp) ||
+                opstamp < 0
+              ) {
+                throw new CorpusIndexError({
+                  message: "corpus index split list returned an invalid response",
+                });
+              }
+              const previousOpstamp = observedSplitOpstamps.get(splitId);
+              currentSplitIds.add(splitId);
+              if (previousOpstamp === undefined) {
+                sawUnobservedSplit = true;
+                observedSplitOpstamps.set(splitId, opstamp);
+              } else {
+                observedSplitOpstamps.set(
+                  splitId,
+                  Math.min(previousOpstamp, opstamp),
+                );
+              }
+            }
+            if (splits.length < SPLIT_PAGE_SIZE) {
+              return;
+            }
+            offset += splits.length;
+            await readSplitPage();
+          };
           await readSplitPage();
+          finalPassSplitIds = currentSplitIds;
+          // Quickwit lists by numeric offset, not a snapshot cursor. A split
+          // published or retired while an earlier page is read can shift a
+          // later page. Only clear durable delete state after one complete
+          // pass adds no split identity; ongoing churn fails closed instead.
+          if (sawUnobservedSplit) {
+            await readSplitPass();
+          }
         };
-        await readSplitPage();
+        await readSplitPass();
+        const appliedOpstamps = [...observedSplitOpstamps.values()];
+        const publishedSplits = finalPassSplitIds.size;
+        const laggingSplits = appliedOpstamps.filter(
+          (opstamp) => opstamp < requiredOpstamp,
+        ).length;
+        const minAppliedOpstamp =
+          appliedOpstamps.length === 0 ? null : Math.min(...appliedOpstamps);
         return {
           requiredOpstamp,
           publishedSplits,
