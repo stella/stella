@@ -524,10 +524,9 @@ export const censusIndex = async ({
   }
 
   const shortfall = marked.markedIndexed - counted.value.numHits;
-  const deleteSettlementResult =
-    shortfall < -CENSUS_TOLERANCE || marked.hasPendingDelete
-      ? await readDeleteSettlement(scopedDb, indexId)
-      : Result.ok(null);
+  const deleteSettlementResult = marked.hasPendingDelete
+    ? await readDeleteSettlement(scopedDb, indexId)
+    : Result.ok(null);
   if (Result.isError(deleteSettlementResult)) {
     return Result.err(deleteSettlementResult.error);
   }

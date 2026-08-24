@@ -275,7 +275,7 @@ describe("index census", () => {
     // reason this direction cannot simply be ignored — each one cancels
     // a genuinely missing document in the same subtraction. Reporting
     // the surplus is what stops the pair going quiet together.
-    engineHolding(50_000);
+    engineHolding(50_000, true, [], false);
 
     const census = await censusIndex({
       scopedDb: databaseHolding(10_000),
@@ -337,7 +337,10 @@ describe("index census", () => {
     engineHolding(50_000, true, [41], false);
 
     const census = await censusIndex({
-      scopedDb: databaseHolding(10_000, undefined, "complete", 42),
+      scopedDb: databaseHolding(10_000, undefined, "complete", 42, {
+        count: 1,
+        oldest: new Date(),
+      }),
       generation: GENERATION,
       indexId: INDEX_ID,
     });

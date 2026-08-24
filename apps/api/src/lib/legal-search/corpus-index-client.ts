@@ -49,6 +49,7 @@ const AGGREGATION_TIMEOUT_MS = 10_000;
 const SPLIT_PAGE_SIZE = 1000;
 const MAX_SETTLEMENT_SPLITS = 10_000;
 const MAX_SETTLEMENT_SCAN_PASSES = 3;
+const SETTLEMENT_SCAN_TIMEOUT_MS = 60_000;
 
 /**
  * What "the engine accepted this batch" is allowed to mean.
@@ -506,15 +507,28 @@ const buildClient = (): CorpusIndexClient => ({
   readDeleteSettlement: async (indexId, requiredOpstamp) =>
     await Result.tryPromise({
       try: async () => {
-        if (!Number.isSafeInteger(requiredOpstamp) || requiredOpstamp < 0) {
+        if (
+          !Number.isSafeInteger(requiredOpstamp) ||
+          requiredOpstamp < 0
+        ) {
           throw new CorpusIndexError({
-            message: "corpus index delete settlement received an invalid opstamp",
+            message:
+              "corpus index delete settlement received an invalid opstamp",
           });
         }
+        const deadline = Date.now() + SETTLEMENT_SCAN_TIMEOUT_MS;
+        const remainingBudget = (): number => {
+          const remaining = deadline - Date.now();
+          if (remaining <= 0) {
+            throw new CorpusIndexError({
+              message: `corpus index delete settlement exceeded its ${SETTLEMENT_SCAN_TIMEOUT_MS}ms budget`,
+            });
+          }
+          return Math.min(remaining, ADMIN_TIMEOUT_MS);
+        };
         const observedSplitOpstamps = new Map<string, number>();
-        let finalPassSplitIds = new Set<string>();
         let scanPasses = 0;
-        const readSplitPass = async (): Promise<void> => {
+        const readSplitPass = async (): Promise<Set<string>> => {
           scanPasses += 1;
           if (scanPasses > MAX_SETTLEMENT_SCAN_PASSES) {
             throw new CorpusIndexError({
@@ -524,21 +538,21 @@ const buildClient = (): CorpusIndexClient => ({
           }
           let offset = 0;
           let scannedSplits = 0;
-          let sawUnobservedSplit = false;
           const currentSplitIds = new Set<string>();
           const readSplitPage = async (): Promise<void> => {
             const response = await requestJson({
               baseUrl: mutationBaseUrl(),
               path: `/api/v1/indexes/${indexId}/splits?offset=${offset}&limit=${SPLIT_PAGE_SIZE}&split_states=Published`,
               init: { method: "GET" },
-              timeoutMs: ADMIN_TIMEOUT_MS,
+              timeoutMs: remainingBudget(),
             });
             const splits = isRecord(response)
               ? parseRecordArray(response["splits"])
               : null;
             if (splits === null) {
               throw new CorpusIndexError({
-                message: "corpus index split list returned an invalid response",
+                message:
+                  "corpus index split list returned an invalid response",
               });
             }
             scannedSplits += splits.length;
@@ -559,13 +573,13 @@ const buildClient = (): CorpusIndexClient => ({
                 opstamp < 0
               ) {
                 throw new CorpusIndexError({
-                  message: "corpus index split list returned an invalid response",
+                  message:
+                    "corpus index split list returned an invalid response",
                 });
               }
               const previousOpstamp = observedSplitOpstamps.get(splitId);
               currentSplitIds.add(splitId);
               if (previousOpstamp === undefined) {
-                sawUnobservedSplit = true;
                 observedSplitOpstamps.set(splitId, opstamp);
               } else {
                 observedSplitOpstamps.set(
@@ -581,17 +595,32 @@ const buildClient = (): CorpusIndexClient => ({
             await readSplitPage();
           };
           await readSplitPage();
-          finalPassSplitIds = currentSplitIds;
+          return currentSplitIds;
+        };
+        const readStableSplitPass = async (
+          previousPassSplitIds: ReadonlySet<string>,
+        ): Promise<Set<string>> => {
+          const currentSplitIds = await readSplitPass();
           // Quickwit lists by numeric offset, not a snapshot cursor. A split
           // published or retired while an earlier page is read can shift a
           // later page. Only clear durable delete state after one complete
-          // pass adds no split identity; ongoing churn fails closed instead.
-          if (sawUnobservedSplit) {
-            await readSplitPass();
+          // pass has exactly the same identity set; ongoing churn fails closed.
+          const stable =
+            currentSplitIds.size === previousPassSplitIds.size &&
+            currentSplitIds.isSubsetOf(previousPassSplitIds);
+          if (stable) {
+            return currentSplitIds;
           }
+          return await readStableSplitPass(currentSplitIds);
         };
-        await readSplitPass();
-        const appliedOpstamps = [...observedSplitOpstamps.values()];
+        const finalPassSplitIds = await readStableSplitPass(new Set());
+        const appliedOpstamps = [...finalPassSplitIds].map((splitId) => {
+          const opstamp = observedSplitOpstamps.get(splitId);
+          if (opstamp === undefined) {
+            panic("settlement scan lost a published split opstamp");
+          }
+          return opstamp;
+        });
         const publishedSplits = finalPassSplitIds.size;
         const laggingSplits = appliedOpstamps.filter(
           (opstamp) => opstamp < requiredOpstamp,

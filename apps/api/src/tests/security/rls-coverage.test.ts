@@ -766,11 +766,16 @@ describe("policy coverage", () => {
         "UPDATE",
       ]);
     }
-    expect(
-      privilegesForTable(
-        tablePrivileges,
-        "case_law_corpus_index_pending_deletes",
-      ),
-    ).toEqual(["DELETE", "INSERT", "SELECT", "UPDATE"]);
+    for (const table of [
+      "case_law_corpus_index_pending_deletes",
+      "legislation_corpus_index_pending_deletes",
+    ]) {
+      expect(privilegesForTable(tablePrivileges, table)).toEqual([
+        "DELETE",
+        "INSERT",
+        "SELECT",
+        "UPDATE",
+      ]);
+    }
   });
 });

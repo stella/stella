@@ -335,6 +335,34 @@ test("delete settlement compares every published split with the retained task", 
   );
 });
 
+test("delete settlement rejects an invalid required opstamp", async () => {
+  const result = await getCorpusIndexClient().readDeleteSettlement(
+    "legal_corpus_v1_cze",
+    -1,
+  );
+
+  expect(result.isErr()).toBe(true);
+  if (result.isErr()) {
+    expect(result.error.message).toContain("invalid opstamp");
+  }
+});
+
+test("delete settlement rejects a split without a usable delete opstamp", async () => {
+  responseBody = {
+    splits: [{ split_id: "split-1", split_state: "Published" }],
+  };
+
+  const result = await getCorpusIndexClient().readDeleteSettlement(
+    "legal_corpus_v1_cze",
+    42,
+  );
+
+  expect(result.isErr()).toBe(true);
+  if (result.isErr()) {
+    expect(result.error.message).toContain("invalid response");
+  }
+});
+
 const settlementResponse = (splitCount: number) => (url: URL) => {
   const offset = Number(url.searchParams.get("offset") ?? "0");
   const pageSize = Math.min(1000, Math.max(splitCount - offset, 0));
