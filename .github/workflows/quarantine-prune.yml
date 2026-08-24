@@ -40,7 +40,7 @@ jobs:
           ref: ${{ github.event.repository.default_branch }}
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@48aacae31829ce15216a6b766b03a92fd2e84da3
+        uses: stella/.github/actions/setup-bun-cached@68f07b8d089564fcbd9383824ddc8af31ff8d4ba
 
       # The script only reads bunfig.toml and bun.lock, so no install is needed.
       - name: Prune expired excludes

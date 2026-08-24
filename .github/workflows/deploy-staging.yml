@@ -262,7 +262,7 @@ jobs:
           submodules: true
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
 
       - name: Login to GHCR
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
@@ -455,7 +455,7 @@ jobs:
 
       - name: Setup Bun
         if: steps.current.outputs.promoted == 'true'
-        uses: stella/.github/actions/setup-bun-cached@48aacae31829ce15216a6b766b03a92fd2e84da3
+        uses: stella/.github/actions/setup-bun-cached@68f07b8d089564fcbd9383824ddc8af31ff8d4ba
 
       - name: Install dependencies
         id: smoke-deps

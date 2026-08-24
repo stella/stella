@@ -22,7 +22,7 @@ jobs:
   audit-branch:
     permissions:
       contents: read
-    uses: stella/.github/.github/workflows/audit-branch-protection.yml@48aacae31829ce15216a6b766b03a92fd2e84da3
+    uses: stella/.github/.github/workflows/audit-branch-protection.yml@68f07b8d089564fcbd9383824ddc8af31ff8d4ba
     with:
       expected-config-path: .github/branch-protection/ruleset-main.json
     secrets:
@@ -32,7 +32,7 @@ jobs:
   audit-tag:
     permissions:
       contents: read
-    uses: stella/.github/.github/workflows/audit-branch-protection.yml@48aacae31829ce15216a6b766b03a92fd2e84da3
+    uses: stella/.github/.github/workflows/audit-branch-protection.yml@68f07b8d089564fcbd9383824ddc8af31ff8d4ba
     with:
       expected-config-path: .github/branch-protection/tags-v.json
     secrets:
