@@ -138,10 +138,10 @@ const createDocumentReviewRun = createSafeHandler(
       ),
     ];
     const referenceWorkspaces = yield* Result.await(
-      safeDb((tx) =>
+      safeDb(async (tx) =>
         referenceWorkspaceIds.length === 0
-          ? Promise.resolve([])
-          : tx.query.workspaces.findMany({
+          ? []
+          : await tx.query.workspaces.findMany({
               where: { id: { in: referenceWorkspaceIds } },
               columns: { id: true, name: true },
               limit: referenceWorkspaceIds.length,
