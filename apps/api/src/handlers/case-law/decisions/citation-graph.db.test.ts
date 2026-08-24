@@ -20,6 +20,7 @@ import type {
   DecisionCitationRow,
 } from "@/api/handlers/case-law/decisions/citation-graph";
 import { withRedistributableSubject } from "@/api/handlers/case-law/decisions/public-subject";
+import type { RedistributableDecisionSubject } from "@/api/handlers/case-law/decisions/public-subject";
 import { POLARITIES, POLARITY } from "@/api/handlers/case-law/polarity/consts";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -28,7 +29,10 @@ import type {
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
-import { createTestPglite } from "@/api/tests/pglite-test-db";
+import {
+  createTestPglite,
+  withPublicLawReaderRole,
+} from "@/api/tests/pglite-test-db";
 
 const openSourceId = createSafeId<"caseLawSource">();
 const closedSourceId = createSafeId<"caseLawSource">();
@@ -76,9 +80,14 @@ beforeAll(
     const readDb = async <T>(
       fn: (tx: CaseLawPublicReadTransaction) => Promise<T>,
     ) =>
-      // SAFETY: pglite's drizzle instance satisfies the select-only read surface.
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- embedded test database stands in for the read handle
-      await fn(db as unknown as CaseLawPublicReadTransaction);
+      await withPublicLawReaderRole(
+        db,
+        async (tx) =>
+          // SAFETY: the role transaction has the same Drizzle read surface as
+          // the public-law handle; writes remain on the owner database above.
+          // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- PGlite test transaction stands in for the public read handle
+          await fn(tx as unknown as CaseLawPublicReadTransaction),
+      );
     // SAFETY: brand-only wrapper; the reads never inspect the marker.
     // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- the branded handle carries no behaviour
     caseLawDb = readDb as unknown as CaseLawPublicReadDb;
@@ -198,25 +207,34 @@ afterAll(async () => {
   await client.close();
 });
 
-const subjectFor = async (id: SafeId<"caseLawDecision">) =>
-  (await withRedistributableSubject(
-    caseLawDb,
-    { kind: "id", id },
-    async (subject) => subject,
-  )) ?? panic("expected a redistributable subject");
+const withSubject = async <T>(
+  id: SafeId<"caseLawDecision">,
+  read: (subject: RedistributableDecisionSubject) => Promise<T>,
+): Promise<T> =>
+  (await withRedistributableSubject(caseLawDb, { kind: "id", id }, read)) ??
+  panic("expected a redistributable subject");
+
+const readCitationPage = async (
+  direction: CitationDirection,
+  cursor: string | undefined,
+) =>
+  await withSubject(
+    subjectId,
+    async (subject) =>
+      await listDecisionCitationsHandler({
+        subject,
+        query: { direction, ...(cursor === undefined ? {} : { cursor }) },
+      }),
+  );
 
 const collect = async (direction: CitationDirection) => {
   const items: DecisionCitationRow[] = [];
-  const subject = await subjectFor(subjectId);
   let cursor: string | undefined;
   let pages = 0;
 
   for (let request = 0; request < 4; request += 1) {
     // oxlint-disable-next-line no-await-in-loop -- cursor pages are sequential
-    const page = await listDecisionCitationsHandler({
-      subject,
-      query: { direction, ...(cursor === undefined ? {} : { cursor }) },
-    });
+    const page = await readCitationPage(direction, cursor);
     if (!("items" in page)) {
       throw new Error("expected a citation page");
     }
@@ -283,9 +301,10 @@ test("incoming pages carry treatment and the citing decision, and the rollup mat
   for (const item of incoming.items) {
     counted.set(item.treatment, (counted.get(item.treatment) ?? 0) + 1);
   }
-  const summary = await summaryOf({
-    subject: await subjectFor(subjectId),
-  });
+  const summary = await withSubject(
+    subjectId,
+    async (subject) => await summaryOf({ subject }),
+  );
   expect(Object.fromEntries(counted)).toEqual(
     Object.fromEntries(
       Object.entries(summary.incoming).filter(([, count]) => count > 0),
@@ -308,9 +327,10 @@ test("outgoing keeps unresolved text, drops restricted and procedural rows", asy
   expect(outgoing.items.at(1)?.decision).toBeNull();
   expect(outgoing.items.at(1)?.treatment).toBe("unclassified");
 
-  const summary = await summaryOf({
-    subject: await subjectFor(subjectId),
-  });
+  const summary = await withSubject(
+    subjectId,
+    async (subject) => await summaryOf({ subject }),
+  );
   expect(summary.outgoing).toEqual({
     negative: 0,
     neutral: 0,
@@ -321,26 +341,34 @@ test("outgoing keeps unresolved text, drops restricted and procedural rows", asy
 });
 
 test("citation pages reject malformed cursors", async () => {
-  const page = await listDecisionCitationsHandler({
-    subject: await subjectFor(subjectId),
-    query: { cursor: "not-a-cursor", direction: "incoming" },
-  });
+  const page = await withSubject(
+    subjectId,
+    async (subject) =>
+      await listDecisionCitationsHandler({
+        subject,
+        query: { cursor: "not-a-cursor", direction: "incoming" },
+      }),
+  );
 
   expect("items" in page).toBe(false);
 });
 
 test("incoming citations roll up by the citing decision's year within the bounded span", async () => {
-  const summary = await summaryOf({
-    currentYear: 2026,
-    subject: await subjectFor(subjectId),
-  });
+  const summary = await withSubject(
+    subjectId,
+    async (subject) => await summaryOf({ currentYear: 2026, subject }),
+  );
   // Every visible citing row comes from one decision dated 2020.
   expect(summary.incomingByYear).toEqual([{ ...summary.incoming, year: 2020 }]);
 
-  const beyondSpan = await summaryOf({
-    currentYear: 2020 + CITATION_TIMELINE_MAX_YEARS,
-    subject: await subjectFor(subjectId),
-  });
+  const beyondSpan = await withSubject(
+    subjectId,
+    async (subject) =>
+      await summaryOf({
+        currentYear: 2020 + CITATION_TIMELINE_MAX_YEARS,
+        subject,
+      }),
+  );
   expect(beyondSpan.incoming).toEqual(summary.incoming);
   expect(beyondSpan.incomingByYear).toEqual([]);
 });
@@ -356,7 +384,7 @@ test("a restricted subject decision cannot be resolved as a subject", async () =
         kind: "id",
         id: closedRelatedId,
       },
-      async (subject) => subject,
+      async () => true,
     ),
   ).toBeNull();
   expect(
@@ -366,7 +394,7 @@ test("a restricted subject decision cannot be resolved as a subject", async () =
         kind: "id",
         id: subjectId,
       },
-      async (subject) => subject,
+      async () => true,
     ),
-  ).not.toBeNull();
+  ).toBe(true);
 });

@@ -31,11 +31,16 @@ import { isTlsOrLoopbackUrl } from "@/api/lib/secure-service-url";
  */
 export const DEPLOYED_NODE_ENVS = new Set(["production", "staging"]);
 
+const databasePoolMaxValueSchema = v.pipe(
+  v.string(),
+  v.digits(),
+  v.toNumber(),
+  v.integer(),
+  v.minValue(1),
+);
+
 const databasePoolMaxSchema = (fallback = "5") =>
-  v.optional(
-    v.pipe(v.string(), v.digits(), v.toNumber(), v.integer(), v.minValue(1)),
-    fallback,
-  );
+  v.optional(databasePoolMaxValueSchema, fallback);
 
 const documentOcrBatchIntervalMinutesSchema = v.optional(
   v.pipe(
@@ -115,8 +120,12 @@ export const envBaseServerSchema = {
   DATABASE_URL: v.pipe(v.string(), v.url()),
   DATABASE_ROOT_POOL_MAX: databasePoolMaxSchema(),
   DATABASE_RLS_POOL_MAX: databasePoolMaxSchema(),
+  PUBLIC_LAW_DATABASE_URL: v.optional(postgresUrlSchema()),
+  PUBLIC_LAW_DATABASE_POOL_MAX: databasePoolMaxSchema("2"),
+  // REMOVAL CONDITION: delete both CASE_LAW_* inputs after v0.7.22 is no
+  // longer a deployable rollback target. All consumers use PUBLIC_LAW_*.
   CASE_LAW_DATABASE_URL: v.optional(postgresUrlSchema()),
-  CASE_LAW_DATABASE_POOL_MAX: databasePoolMaxSchema("2"),
+  CASE_LAW_DATABASE_POOL_MAX: v.optional(databasePoolMaxValueSchema),
   DATABASE_POOL_MAX_LIFETIME_S: databasePoolSecondsSchema("0"),
   DATABASE_POOL_IDLE_TIMEOUT_S: databasePoolSecondsSchema("0"),
   DOCUMENT_OCR_BATCH_INTERVAL_MINUTES: documentOcrBatchIntervalMinutesSchema,
@@ -242,6 +251,7 @@ export const databaseComponentEnvSchema = {
 
 type EnvBaseInvariantInput = {
   CASE_LAW_DATABASE_URL?: string | undefined;
+  PUBLIC_LAW_DATABASE_URL?: string | undefined;
   CORPUS_INDEX_BACKPRESSURE_DIMENSIONS?: string | undefined;
   CORPUS_INDEX_BACKPRESSURE_HIGH_WATERMARK: number;
   CORPUS_INDEX_BACKPRESSURE_LOW_WATERMARK: number;
@@ -265,6 +275,7 @@ type EnvBaseInvariantInput = {
 
 export const envBaseInvariantViolation = ({
   CASE_LAW_DATABASE_URL,
+  PUBLIC_LAW_DATABASE_URL,
   CORPUS_INDEX_BACKPRESSURE_DIMENSIONS,
   CORPUS_INDEX_BACKPRESSURE_HIGH_WATERMARK,
   CORPUS_INDEX_BACKPRESSURE_LOW_WATERMARK,
@@ -285,6 +296,16 @@ export const envBaseInvariantViolation = ({
   S3_SECRET_ACCESS_KEY,
   isDev,
 }: EnvBaseInvariantInput): string | null => {
+  const hasPublicLawDatabaseUrl =
+    PUBLIC_LAW_DATABASE_URL !== undefined ||
+    CASE_LAW_DATABASE_URL !== undefined;
+
+  if (
+    CASE_LAW_DATABASE_URL !== undefined &&
+    PUBLIC_LAW_DATABASE_URL === undefined
+  ) {
+    return "CASE_LAW_DATABASE_URL is a v0.7.22 rollback input; configure PUBLIC_LAW_DATABASE_URL for the current release.";
+  }
   if (
     (CORPUS_INDEX_BACKPRESSURE_METRIC === undefined) !==
     (CORPUS_INDEX_BACKPRESSURE_NAMESPACE === undefined)
@@ -308,13 +329,19 @@ export const envBaseInvariantViolation = ({
     return "DATABASE_URL must enable TLS outside loopback or Railway private networking.";
   }
   if (
+    PUBLIC_LAW_DATABASE_URL !== undefined &&
+    !hasSecureDatabaseTransport(PUBLIC_LAW_DATABASE_URL)
+  ) {
+    return "PUBLIC_LAW_DATABASE_URL must enable TLS outside loopback or Railway private networking.";
+  }
+  if (
     CASE_LAW_DATABASE_URL !== undefined &&
     !hasSecureDatabaseTransport(CASE_LAW_DATABASE_URL)
   ) {
     return "CASE_LAW_DATABASE_URL must enable TLS outside loopback or Railway private networking.";
   }
-  if (!isDev && CASE_LAW_DATABASE_URL !== undefined) {
-    return "CASE_LAW_DATABASE_URL is only supported in local development.";
+  if (!isDev && hasPublicLawDatabaseUrl) {
+    return "Public-law database URLs are only supported in local development.";
   }
   if (
     CORPUS_INDEX_SEARCH_ENDPOINT !== undefined &&
@@ -341,26 +368,17 @@ export const envBaseInvariantViolation = ({
   if (QUERY_EXPANSION_MODE === "on") {
     return 'QUERY_EXPANSION_MODE="on" requires dictionary-version-carrying cursors; not yet implemented — use "shadow".';
   }
-  if (
-    CASE_LAW_DATABASE_URL !== undefined &&
-    LEGAL_SEARCH_PROVIDER !== "corpus-index"
-  ) {
-    return 'CASE_LAW_DATABASE_URL requires LEGAL_SEARCH_PROVIDER="corpus-index".';
+  if (hasPublicLawDatabaseUrl && LEGAL_SEARCH_PROVIDER !== "corpus-index") {
+    return 'Public-law database URLs require LEGAL_SEARCH_PROVIDER="corpus-index".';
   }
-  if (
-    CASE_LAW_DATABASE_URL !== undefined &&
-    CORPUS_INDEX_SEARCH_ENDPOINT === undefined
-  ) {
-    return "CASE_LAW_DATABASE_URL requires CORPUS_INDEX_SEARCH_ENDPOINT.";
+  if (hasPublicLawDatabaseUrl && CORPUS_INDEX_SEARCH_ENDPOINT === undefined) {
+    return "Public-law database URLs require CORPUS_INDEX_SEARCH_ENDPOINT.";
   }
-  if (
-    CASE_LAW_DATABASE_URL !== undefined &&
-    CORPUS_INDEX_ENDPOINT !== undefined
-  ) {
-    return "CORPUS_INDEX_ENDPOINT must be unset when CASE_LAW_DATABASE_URL is configured.";
+  if (hasPublicLawDatabaseUrl && CORPUS_INDEX_ENDPOINT !== undefined) {
+    return "CORPUS_INDEX_ENDPOINT must be unset when a public-law database URL is configured.";
   }
-  if (CASE_LAW_DATABASE_URL !== undefined && CORPUS_INDEXING_ENABLED) {
-    return "CORPUS_INDEXING_ENABLED must be false when CASE_LAW_DATABASE_URL is configured.";
+  if (hasPublicLawDatabaseUrl && CORPUS_INDEXING_ENABLED) {
+    return "CORPUS_INDEXING_ENABLED must be false when a public-law database URL is configured.";
   }
   if (
     !isDev &&

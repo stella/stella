@@ -143,6 +143,7 @@ const searchProviderSearchMock = mock(
     };
   },
 );
+const rehydrateCaseLawCandidatesMock = mock();
 const searchDecisionsHandlerMock = mock();
 const readDecisionHandlerMock = mock();
 /** The gate-and-read the tool calls; null is a denied or missing subject. */
@@ -233,6 +234,7 @@ void mock.module("@/api/lib/anonymization-blacklist", () => ({
 }));
 
 void mock.module("@/api/handlers/case-law/decisions/search", () => ({
+  rehydrateCaseLawCandidates: rehydrateCaseLawCandidatesMock,
   searchDecisionsHandler: searchDecisionsHandlerMock,
 }));
 

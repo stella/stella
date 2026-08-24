@@ -48,7 +48,10 @@ delete process.env["LEGAL_SEARCH_PROVIDER"];
 // A developer case-law database URL disables the local corpus-index endpoint
 // through the production invariant. Unit tests stub the index transport and
 // require that endpoint only to build request URLs, so keep both sides local.
+delete process.env["PUBLIC_LAW_DATABASE_URL"];
+delete process.env["PUBLIC_LAW_DATABASE_POOL_MAX"];
 delete process.env["CASE_LAW_DATABASE_URL"];
+delete process.env["CASE_LAW_DATABASE_POOL_MAX"];
 
 process.env["REDIS_URL"] ??= "redis://localhost:6379";
 process.env["BETTER_AUTH_SECRET"] ??= "x".repeat(32);

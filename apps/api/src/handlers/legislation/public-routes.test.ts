@@ -1,7 +1,14 @@
 import { describe, expect, test } from "bun:test";
+import nodePath from "node:path";
 
 import { env } from "@/api/env";
 import { publicLegislationRoute } from "@/api/handlers/legislation/public-routes";
+
+const repoRoot = nodePath.resolve(import.meta.dir, "../../../../..");
+const readHandlerSource = async (file: string) =>
+  await Bun.file(
+    nodePath.resolve(repoRoot, `apps/api/src/handlers/legislation/${file}`),
+  ).text();
 
 describe("public statute routes", () => {
   test("serves nothing while the public-law feature is off", async () => {
@@ -75,5 +82,25 @@ describe("public statute routes", () => {
 
     expect(response.status).toBe(400);
     expect(await response.json()).toEqual({ message: "Invalid cursor" });
+  });
+
+  test("authenticated corpus reads use the shared public-law boundary", async () => {
+    const [getSource, searchSource] = await Promise.all([
+      readHandlerSource("get.ts"),
+      readHandlerSource("search.ts"),
+    ]);
+    const getWrapper = getSource.slice(
+      getSource.indexOf("const readLegislation = createSafeRootHandler"),
+    );
+    const searchWrapper = searchSource.slice(
+      searchSource.indexOf("const searchLegislation = createSafeRootHandler"),
+    );
+
+    expect(getWrapper).toContain("readPublicLegislationHandler(");
+    expect(getWrapper).toContain("legislationPublicReadDb");
+    expect(getWrapper).not.toContain("scopedDb");
+    expect(searchWrapper).toContain("searchLegislationHandler(");
+    expect(searchWrapper).toContain("legislationPublicReadDb");
+    expect(searchWrapper).not.toContain("scopedDb");
   });
 });

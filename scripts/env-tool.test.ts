@@ -333,14 +333,62 @@ describe("environment doctor output", () => {
       app: "api",
       input: {
         ...validApiInput(),
-        CASE_LAW_DATABASE_URL: "https://db.example.com/stella?sslmode=require",
+        PUBLIC_LAW_DATABASE_URL:
+          "https://db.example.com/stella?sslmode=require",
       },
     });
 
     expect(result.status).toBe("invalid");
     if (result.status === "invalid") {
       expect(result.issues).toContain(
-        "CASE_LAW_DATABASE_URL: invalid secret value.",
+        "PUBLIC_LAW_DATABASE_URL: invalid secret value.",
+      );
+    }
+  });
+
+  test("keeps v0.7.22 and public-law credentials distinct during rollout", () => {
+    const legacyUrl =
+      "postgres://case_law_reader:password@db.example.com:5432/stella?sslmode=require";
+    const currentUrl =
+      "postgres://public_law_reader:password@db.example.com:5432/stella?sslmode=require";
+    const result = validateDoctorEnvironment({
+      app: "api",
+      input: {
+        ...validApiInput(),
+        CASE_LAW_DATABASE_POOL_MAX: "3",
+        CASE_LAW_DATABASE_URL: legacyUrl,
+        CORPUS_INDEX_SEARCH_ENDPOINT: "https://quickwit-search.example.com",
+        LEGAL_SEARCH_PROVIDER: "corpus-index",
+        PUBLIC_LAW_DATABASE_POOL_MAX: "4",
+        PUBLIC_LAW_DATABASE_URL: currentUrl,
+      },
+    });
+
+    expect(result.status).toBe("valid");
+    if (result.status === "valid") {
+      expect(result.values["CASE_LAW_DATABASE_POOL_MAX"]).toBe(3);
+      expect(result.values["CASE_LAW_DATABASE_URL"]).toBe(legacyUrl);
+      expect(result.values["PUBLIC_LAW_DATABASE_POOL_MAX"]).toBe(4);
+      expect(result.values["PUBLIC_LAW_DATABASE_URL"]).toBe(currentUrl);
+    }
+  });
+
+  test("rejects a legacy-only shared-corpus configuration", () => {
+    const result = validateDoctorEnvironment({
+      app: "api",
+      input: {
+        ...validApiInput(),
+        CASE_LAW_DATABASE_URL:
+          "postgres://case_law_reader:password@db.example.com:5432/stella?sslmode=require",
+        CORPUS_INDEX_SEARCH_ENDPOINT: "https://quickwit-search.example.com",
+        LEGAL_SEARCH_PROVIDER: "corpus-index",
+      },
+    });
+
+    expect(result.status).toBe("invalid");
+    if (result.status === "invalid") {
+      expect(result.issues).toContain(
+        "CASE_LAW_DATABASE_URL is a v0.7.22 rollback input; configure PUBLIC_LAW_DATABASE_URL for the current release.",
       );
     }
   });
@@ -404,18 +452,19 @@ describe("environment doctor output", () => {
     },
     {
       expected:
-        "CASE_LAW_DATABASE_URL must enable TLS outside loopback or Railway private networking.",
+        "PUBLIC_LAW_DATABASE_URL must enable TLS outside loopback or Railway private networking.",
       overrides: {
-        CASE_LAW_DATABASE_URL:
+        PUBLIC_LAW_DATABASE_URL:
           "postgres://case_law_reader:password@db.example.com:5432/stella?sslmode=disable",
         CONTENT_ENCRYPTION_KEY: "a".repeat(64),
         NODE_ENV: "staging",
       },
     },
     {
-      expected: "CASE_LAW_DATABASE_URL is only supported in local development.",
+      expected:
+        "Public-law database URLs are only supported in local development.",
       overrides: {
-        CASE_LAW_DATABASE_URL:
+        PUBLIC_LAW_DATABASE_URL:
           "postgres://case_law_reader:password@db.example.com:5432/stella?sslmode=require",
         CONTENT_ENCRYPTION_KEY: "a".repeat(64),
         NODE_ENV: "staging",
@@ -439,25 +488,26 @@ describe("environment doctor output", () => {
     },
     {
       expected:
-        'CASE_LAW_DATABASE_URL requires LEGAL_SEARCH_PROVIDER="corpus-index".',
+        'Public-law database URLs require LEGAL_SEARCH_PROVIDER="corpus-index".',
       overrides: {
-        CASE_LAW_DATABASE_URL:
+        PUBLIC_LAW_DATABASE_URL:
           "postgres://case_law_reader:password@db.example.com:5432/stella?sslmode=require",
       },
     },
     {
-      expected: "CASE_LAW_DATABASE_URL requires CORPUS_INDEX_SEARCH_ENDPOINT.",
+      expected:
+        "Public-law database URLs require CORPUS_INDEX_SEARCH_ENDPOINT.",
       overrides: {
-        CASE_LAW_DATABASE_URL:
+        PUBLIC_LAW_DATABASE_URL:
           "postgres://case_law_reader:password@db.example.com:5432/stella?sslmode=require",
         LEGAL_SEARCH_PROVIDER: "corpus-index",
       },
     },
     {
       expected:
-        "CORPUS_INDEX_ENDPOINT must be unset when CASE_LAW_DATABASE_URL is configured.",
+        "CORPUS_INDEX_ENDPOINT must be unset when a public-law database URL is configured.",
       overrides: {
-        CASE_LAW_DATABASE_URL:
+        PUBLIC_LAW_DATABASE_URL:
           "postgres://case_law_reader:password@db.example.com:5432/stella?sslmode=require",
         CORPUS_INDEX_ENDPOINT: "https://quickwit-admin.example.com",
         CORPUS_INDEX_SEARCH_ENDPOINT: "https://quickwit-search.example.com",
@@ -466,9 +516,9 @@ describe("environment doctor output", () => {
     },
     {
       expected:
-        "CORPUS_INDEXING_ENABLED must be false when CASE_LAW_DATABASE_URL is configured.",
+        "CORPUS_INDEXING_ENABLED must be false when a public-law database URL is configured.",
       overrides: {
-        CASE_LAW_DATABASE_URL:
+        PUBLIC_LAW_DATABASE_URL:
           "postgres://case_law_reader:password@db.example.com:5432/stella?sslmode=require",
         CORPUS_INDEXING_ENABLED: "true",
         CORPUS_INDEX_SEARCH_ENDPOINT: "https://quickwit-search.example.com",

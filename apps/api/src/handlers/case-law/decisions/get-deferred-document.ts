@@ -33,7 +33,7 @@ const hydrate = async (
   // decision stays metadata-only instead of starting the ingestion path,
   // which would otherwise crawl the publisher and write through the local
   // ingestion database.
-  if (envBase.CASE_LAW_DATABASE_URL !== undefined) {
+  if (envBase.PUBLIC_LAW_DATABASE_URL !== undefined) {
     return decision;
   }
 

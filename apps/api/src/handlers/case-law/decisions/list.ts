@@ -1,11 +1,11 @@
-import { and, desc, eq, inArray, lt, sql } from "drizzle-orm";
+import { and, desc, eq, lt, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { status, t } from "elysia";
 import type { Static } from "elysia";
 
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
-import { validCaseLawLanguageAlternateCountSql } from "@/api/handlers/case-law/decisions/language";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
+import { readDecisionLanguageAlternateCounts } from "@/api/lib/case-law/language-alternate-counts";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
 import {
   isUuid,
@@ -159,25 +159,10 @@ export const listDecisionsHandler = async (
   ];
   const languageAlternateCounts =
     languageGroupKeys.length > 0
-      ? await caseLawDb((tx) =>
-          tx
-            .select({
-              languageGroupKey: caseLawDecisions.languageGroupKey,
-              count: validCaseLawLanguageAlternateCountSql,
-            })
-            .from(caseLawDecisions)
-            .innerJoin(
-              caseLawSources,
-              eq(caseLawSources.id, caseLawDecisions.sourceId),
-            )
-            .where(
-              and(
-                inArray(caseLawDecisions.languageGroupKey, languageGroupKeys),
-                redistributableCaseLawSource,
-              ),
-            )
-            .groupBy(caseLawDecisions.languageGroupKey),
-        )
+      ? await readDecisionLanguageAlternateCounts({
+          caseLawDb,
+          languageGroupKeys,
+        })
       : [];
   const languageAlternateCountByGroupKey = new Map(
     languageAlternateCounts

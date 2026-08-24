@@ -1,17 +1,20 @@
 import { PGlite } from "@electric-sql/pglite";
 import { pg_trgm } from "@electric-sql/pglite/contrib/pg_trgm";
 import { sql } from "drizzle-orm";
+import type { SQLWrapper } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import * as agentAuthSchema from "@/api/db/agent-auth-schema";
 import * as authSchema from "@/api/db/auth-schema";
 import * as rlsExports from "@/api/db/rls";
 import * as schema from "@/api/db/schema";
+import type { AnyDrizzle } from "@/api/db/scoped";
 import {
-  PUBLIC_CASE_LAW_SOURCE_COLUMNS,
-  PUBLIC_CASE_LAW_SOURCE_TABLE,
-  PUBLIC_CASE_LAW_TABLES,
-} from "@/api/lib/case-law/public-relations";
+  PUBLIC_LAW_COLUMNS_BY_RELATION,
+  ROLLOUT_CASE_LAW_SOURCE_COLUMNS,
+  ROLLOUT_CASE_LAW_SOURCE_RELATION,
+  ROLLOUT_CASE_LAW_WHOLE_RELATIONS,
+} from "@/api/lib/public-law-relations";
 import {
   createSchemaPglite,
   installPgliteSchemaPrerequisites,
@@ -34,6 +37,31 @@ const allSchema = {
 
 const quoteSqlIdentifier = (identifier: string) =>
   `"${identifier.replaceAll('"', '""')}"`;
+
+/**
+ * Execute a read callback under the same role used by the external public-law
+ * database. Writes in the surrounding test setup stay on the owner handle;
+ * this role change is local to the callback's transaction.
+ */
+type PublicLawRoleTransaction = {
+  execute: (query: SQLWrapper | string) => PromiseLike<unknown>;
+};
+
+export const withPublicLawReaderRole = async <
+  TTransaction extends PublicLawRoleTransaction,
+  TResult,
+>(
+  database: AnyDrizzle<TTransaction>,
+  fn: (tx: TTransaction) => Promise<TResult>,
+): Promise<TResult> =>
+  await database.transaction(async (tx) => {
+    await tx.execute(
+      sql.raw(
+        `SET LOCAL ROLE ${quoteSqlIdentifier(rlsExports.stellaPublicLawReader.name)}`,
+      ),
+    );
+    return await fn(tx);
+  });
 
 const AUTH_TABLES_SQL = [
   "user",
@@ -176,20 +204,31 @@ const ROLE_GRANT_STATEMENTS = [
   `
     GRANT INSERT ON TABLE "legislation_index_jobs" TO stella_ingestion
   `,
-  // Derived from the allowlist the connection validator reads, so the role
-  // in tests can only ever match the role the migration defines.
+  // Preserve the v0.7.22 reader contract until its rollback window closes.
   `
     GRANT USAGE ON SCHEMA public TO stella_caselaw_reader
   `,
   `
-    GRANT SELECT ON TABLE ${PUBLIC_CASE_LAW_TABLES.map(quoteSqlIdentifier).join(", ")}
+    GRANT SELECT ON TABLE ${ROLLOUT_CASE_LAW_WHOLE_RELATIONS.map(quoteSqlIdentifier).join(", ")}
     TO stella_caselaw_reader
   `,
   `
-    GRANT SELECT (${PUBLIC_CASE_LAW_SOURCE_COLUMNS.map(quoteSqlIdentifier).join(", ")})
-      ON TABLE ${quoteSqlIdentifier(PUBLIC_CASE_LAW_SOURCE_TABLE)}
+    GRANT SELECT (${ROLLOUT_CASE_LAW_SOURCE_COLUMNS.map(quoteSqlIdentifier).join(", ")})
+      ON TABLE ${quoteSqlIdentifier(ROLLOUT_CASE_LAW_SOURCE_RELATION)}
       TO stella_caselaw_reader
   `,
+  // Derived from the allowlist the connection validator reads, so the role
+  // in tests can only ever match the role the migration defines.
+  `
+    GRANT USAGE ON SCHEMA public TO stella_public_law_reader
+  `,
+  ...Object.entries(PUBLIC_LAW_COLUMNS_BY_RELATION).map(
+    ([relation, columns]) => `
+      GRANT SELECT (${columns.map(quoteSqlIdentifier).join(", ")})
+        ON TABLE ${quoteSqlIdentifier(relation)}
+        TO stella_public_law_reader
+    `,
+  ),
 ] as const;
 
 /**
@@ -207,6 +246,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await db.execute(sql.raw("CREATE ROLE stella NOLOGIN"));
   await db.execute(sql.raw("CREATE ROLE stella_ingestion NOLOGIN"));
   await db.execute(sql.raw("CREATE ROLE stella_caselaw_reader NOLOGIN"));
+  await db.execute(sql.raw("CREATE ROLE stella_public_law_reader NOLOGIN"));
   await installPgliteSchemaPrerequisites(db);
 
   // drizzle-kit is a heavyweight dev dependency; import it only on this

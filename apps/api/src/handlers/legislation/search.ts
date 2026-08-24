@@ -4,7 +4,6 @@ import type { SQL } from "drizzle-orm";
 import { status, t } from "elysia";
 import type { Static } from "elysia";
 
-import type { ScopedDb } from "@/api/db/safe-db";
 import { legislationDocuments, legislationSources } from "@/api/db/schema";
 import { envBase } from "@/api/env-base";
 import { redistributableLegislationSource } from "@/api/handlers/legislation/redistribution";
@@ -36,6 +35,11 @@ import {
   blendStableCitationAuthority,
   stableBlendUpperBound,
 } from "@/api/lib/legal-search/rerank";
+import type { ScoredCandidate } from "@/api/lib/legal-search/rerank";
+import {
+  legislationPublicReadDb,
+  type LegislationReadDb,
+} from "@/api/lib/legislation-public-read-db";
 import { LIMITS } from "@/api/lib/limits";
 import { decodeCursor, encodeCursor } from "@/api/lib/search/cursor";
 import {
@@ -62,7 +66,7 @@ export const searchLegislationBodySchema = t.Object({
   dateTo: t.Optional(t.String({ format: "date" })),
 });
 
-type SearchLegislationBody = Static<typeof searchLegislationBodySchema>;
+export type SearchLegislationBody = Static<typeof searchLegislationBodySchema>;
 
 type LegislationHit = {
   documentId: string;
@@ -113,7 +117,7 @@ const headlineRegconfig = sql`'public.stella_unaccent'::regconfig`;
 const pgSearch = async (
   body: SearchLegislationBody,
   parsedCursor: { score: number; id: string } | null,
-  scopedDb: ScopedDb,
+  legislationDb: LegislationReadDb,
   dependencies: SearchLegislationDependencies,
 ): Promise<{ hits: LegislationHit[]; nextCursor: string | null }> => {
   const limit = body.limit ?? LIMITS.caseLawSearchPageSizeDefault;
@@ -144,7 +148,7 @@ const pgSearch = async (
     ? sql`AND (${scoreExpr}, sd.document_id) < (${parsedCursor.score}::float8, ${parsedCursor.id})`
     : sql``;
 
-  const rows = await scopedDb((tx) =>
+  const rows = await legislationDb((tx) =>
     tx.execute(sql`
     SELECT
       sd.document_id,
@@ -244,10 +248,109 @@ const extractCorpusSnippet = (
   return raw.replaceAll("<b>", "<mark>").replaceAll("</b>", "</mark>");
 };
 
+type RehydrateLegislationCandidatesOptions = {
+  body: SearchLegislationBody;
+  candidates: readonly ScoredCandidate[];
+  legislationDb: LegislationReadDb;
+};
+
+/**
+ * The production corpus-index rehydration query, exported so the reader-role
+ * suite executes this exact query surface under SET ROLE.
+ */
+export const rehydrateLegislationCandidates = async ({
+  body,
+  candidates,
+  legislationDb,
+}: RehydrateLegislationCandidatesOptions) => {
+  const ids = candidates.map((candidate) =>
+    toSafeId<"legislationDocument">(candidate.id),
+  );
+  // Reapply the request filters against the current rows: a stale corpus hit
+  // (metadata changed, async re-index/delete pending) must not satisfy filters
+  // it no longer matches.
+  const rehydrationFilters: SQL[] = [
+    redistributableLegislationSource,
+    // Accept only hits whose index state is current. The equality fails for
+    // rows cleared for a write retry (null contentHash) and for rows whose
+    // payload changed but are not re-indexed yet (indexedHash cleared by
+    // ingestion), so stale index copies cannot serve outdated snippets.
+    eq(legislationDocuments.indexedHash, legislationDocuments.contentHash),
+  ];
+  if (body.jurisdiction) {
+    rehydrationFilters.push(
+      eq(legislationDocuments.country, body.jurisdiction),
+    );
+  }
+  if (body.documentType) {
+    rehydrationFilters.push(
+      eq(legislationDocuments.documentType, body.documentType),
+    );
+  }
+  if (body.status) {
+    rehydrationFilters.push(eq(legislationDocuments.status, body.status));
+  }
+  if (body.source) {
+    rehydrationFilters.push(eq(legislationDocuments.sourceId, body.source));
+  }
+  if (body.language) {
+    rehydrationFilters.push(eq(legislationDocuments.language, body.language));
+  }
+  if (body.dateFrom) {
+    rehydrationFilters.push(
+      sql`${legislationDocuments.effectiveDate} >= ${body.dateFrom}`,
+    );
+  }
+  if (body.dateTo) {
+    rehydrationFilters.push(
+      sql`${legislationDocuments.effectiveDate} <= ${body.dateTo}`,
+    );
+  }
+  const rows =
+    ids.length === 0
+      ? []
+      : await legislationDb((tx) =>
+          tx
+            .select({
+              id: legislationDocuments.id,
+              eli: legislationDocuments.eli,
+              title: legislationDocuments.title,
+              country: legislationDocuments.country,
+              language: legislationDocuments.language,
+              documentType: legislationDocuments.documentType,
+              statusValue: legislationDocuments.status,
+              effectiveDate: legislationDocuments.effectiveDate,
+              sourceUrl: legislationDocuments.sourceUrl,
+              citationAuthority: legislationDocuments.citationAuthority,
+            })
+            .from(legislationDocuments)
+            .innerJoin(
+              legislationSources,
+              eq(legislationSources.id, legislationDocuments.sourceId),
+            )
+            .where(
+              and(inArray(legislationDocuments.id, ids), ...rehydrationFilters),
+            ),
+        );
+
+  const byId = new Map(rows.map((row) => [String(row.id), row]));
+  const authorityById = new Map(
+    rows.map((row) => [String(row.id), row.citationAuthority]),
+  );
+
+  return {
+    context: { byId },
+    ranked: blendStableCitationAuthority({
+      candidates: candidates.filter((candidate) => byId.has(candidate.id)),
+      authorityById,
+    }),
+  };
+};
+
 const corpusIndexSearch = async (
   body: SearchLegislationBody,
   parsedCursor: { score: number; id: string } | null,
-  scopedDb: ScopedDb,
+  legislationDb: LegislationReadDb,
 ): Promise<{ hits: LegislationHit[]; nextCursor: string | null }> => {
   const limit = body.limit ?? LIMITS.caseLawSearchPageSizeDefault;
   const generation = corpusGeneration("legislation");
@@ -275,96 +378,12 @@ const corpusIndexSearch = async (
     // no unseen candidate could out-blend the page cursor. Saturated
     // authority is bounded by 1, so the bound reads nothing from the corpus.
     unseenScoreUpperBound: stableBlendUpperBound,
-    rankCandidates: async (candidates) => {
-      const ids = candidates.map((candidate) =>
-        toSafeId<"legislationDocument">(candidate.id),
-      );
-      // Reapply the request filters against the current rows: a stale
-      // corpus hit (metadata changed, async re-index/delete pending) must
-      // not satisfy filters it no longer matches.
-      const rehydrationFilters: SQL[] = [
-        redistributableLegislationSource,
-        // Accept only hits whose index state is current. The equality
-        // fails for rows cleared for a write retry (null contentHash)
-        // and for rows whose payload changed but are not re-indexed yet
-        // (indexedHash cleared by ingestion), so stale index copies
-        // cannot serve outdated snippets.
-        eq(legislationDocuments.indexedHash, legislationDocuments.contentHash),
-      ];
-      if (body.jurisdiction) {
-        rehydrationFilters.push(
-          eq(legislationDocuments.country, body.jurisdiction),
-        );
-      }
-      if (body.documentType) {
-        rehydrationFilters.push(
-          eq(legislationDocuments.documentType, body.documentType),
-        );
-      }
-      if (body.status) {
-        rehydrationFilters.push(eq(legislationDocuments.status, body.status));
-      }
-      if (body.source) {
-        rehydrationFilters.push(eq(legislationDocuments.sourceId, body.source));
-      }
-      if (body.language) {
-        rehydrationFilters.push(
-          eq(legislationDocuments.language, body.language),
-        );
-      }
-      if (body.dateFrom) {
-        rehydrationFilters.push(
-          sql`${legislationDocuments.effectiveDate} >= ${body.dateFrom}`,
-        );
-      }
-      if (body.dateTo) {
-        rehydrationFilters.push(
-          sql`${legislationDocuments.effectiveDate} <= ${body.dateTo}`,
-        );
-      }
-      const rows =
-        ids.length === 0
-          ? []
-          : await scopedDb((tx) =>
-              tx
-                .select({
-                  id: legislationDocuments.id,
-                  eli: legislationDocuments.eli,
-                  title: legislationDocuments.title,
-                  country: legislationDocuments.country,
-                  language: legislationDocuments.language,
-                  documentType: legislationDocuments.documentType,
-                  statusValue: legislationDocuments.status,
-                  effectiveDate: legislationDocuments.effectiveDate,
-                  sourceUrl: legislationDocuments.sourceUrl,
-                  citationAuthority: legislationDocuments.citationAuthority,
-                })
-                .from(legislationDocuments)
-                .innerJoin(
-                  legislationSources,
-                  eq(legislationSources.id, legislationDocuments.sourceId),
-                )
-                .where(
-                  and(
-                    inArray(legislationDocuments.id, ids),
-                    ...rehydrationFilters,
-                  ),
-                ),
-            );
-
-      const byId = new Map(rows.map((row) => [String(row.id), row]));
-      const authorityById = new Map(
-        rows.map((row) => [String(row.id), row.citationAuthority]),
-      );
-
-      return {
-        context: { byId },
-        ranked: blendStableCitationAuthority({
-          candidates: candidates.filter((candidate) => byId.has(candidate.id)),
-          authorityById,
-        }),
-      };
-    },
+    rankCandidates: async (candidates) =>
+      await rehydrateLegislationCandidates({
+        body,
+        candidates,
+        legislationDb,
+      }),
   });
 
   const {
@@ -403,7 +422,7 @@ const corpusIndexSearch = async (
 
 export const searchLegislationHandler = async (
   body: SearchLegislationBody,
-  scopedDb: ScopedDb,
+  legislationDb: LegislationReadDb,
   dependencies = defaultSearchLegislationDependencies,
 ) => {
   // source_id and the cursor id reach Postgres as UUID comparisons in the
@@ -430,8 +449,8 @@ export const searchLegislationHandler = async (
 
   const { hits, nextCursor } =
     envBase.LEGAL_SEARCH_PROVIDER === "corpus-index"
-      ? await corpusIndexSearch(body, parsedCursor, scopedDb)
-      : await pgSearch(body, parsedCursor, scopedDb, dependencies);
+      ? await corpusIndexSearch(body, parsedCursor, legislationDb)
+      : await pgSearch(body, parsedCursor, legislationDb, dependencies);
 
   return { hits, nextCursor, totalCount: null };
 };
@@ -454,10 +473,11 @@ const config = {
 
 const searchLegislation = createSafeRootHandler(
   config,
-  async function* ({ body, scopedDb }) {
+  async function* ({ body }) {
     const response = yield* Result.await(
       Result.tryPromise(
-        async () => await searchLegislationHandler(body, scopedDb),
+        async () =>
+          await searchLegislationHandler(body, legislationPublicReadDb),
       ),
     );
     return Result.ok(response);

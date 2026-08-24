@@ -8,6 +8,7 @@ import {
   caseLawSources,
 } from "@/api/db/schema";
 import { withRedistributableSubject } from "@/api/handlers/case-law/decisions/public-subject";
+import type { RedistributableDecisionSubject } from "@/api/handlers/case-law/decisions/public-subject";
 import { listCitingDecisionsHandler } from "@/api/handlers/case-law/provisions/citing-decisions";
 import { listDecisionProvisionsHandler } from "@/api/handlers/case-law/provisions/list-for-decision";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -17,7 +18,10 @@ import type {
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
-import { createTestPglite } from "@/api/tests/pglite-test-db";
+import {
+  createTestPglite,
+  withPublicLawReaderRole,
+} from "@/api/tests/pglite-test-db";
 
 const JURISDICTION = "CZE";
 /** The display citation a decision's own text states. */
@@ -100,10 +104,14 @@ beforeAll(
     const readDb = async <T>(
       fn: (tx: CaseLawPublicReadTransaction) => Promise<T>,
     ) =>
-      // SAFETY: pglite's drizzle instance satisfies the read surface these
-      // handlers use (`select` only).
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- embedded test database stands in for the read handle
-      await fn(db as unknown as CaseLawPublicReadTransaction);
+      await withPublicLawReaderRole(
+        db,
+        async (tx) =>
+          // SAFETY: the role transaction has the same Drizzle read surface as
+          // the public-law handle; writes remain on the owner database above.
+          // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- PGlite test transaction stands in for the public read handle
+          await fn(tx as unknown as CaseLawPublicReadTransaction),
+      );
     // SAFETY: brand-only wrapper; the reads never inspect the marker.
     // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- the branded handle carries no behaviour
     caseLawDb = readDb as unknown as CaseLawPublicReadDb;
@@ -197,18 +205,22 @@ afterAll(async () => {
   await client.close();
 });
 
-const subjectFor = async (id: SafeId<"caseLawDecision">) =>
-  (await withRedistributableSubject(
-    caseLawDb,
-    { kind: "id", id },
-    async (subject) => subject,
-  )) ?? panic("expected a redistributable subject");
+const withSubject = async <T>(
+  id: SafeId<"caseLawDecision">,
+  read: (subject: RedistributableDecisionSubject) => Promise<T>,
+): Promise<T> =>
+  (await withRedistributableSubject(caseLawDb, { kind: "id", id }, read)) ??
+  panic("expected a redistributable subject");
 
 const decisionProvisions = async (cursor?: string) => {
-  const page = await listDecisionProvisionsHandler({
-    subject: await subjectFor(highAuthorityId),
-    query: { limit: 2, ...(cursor === undefined ? {} : { cursor }) },
-  });
+  const page = await withSubject(
+    highAuthorityId,
+    async (subject) =>
+      await listDecisionProvisionsHandler({
+        subject,
+        query: { limit: 2, ...(cursor === undefined ? {} : { cursor }) },
+      }),
+  );
 
   if ("items" in page) {
     return page;
@@ -272,10 +284,14 @@ test("decision provisions page by span start", async () => {
 });
 
 test("decision provisions reject a malformed cursor", async () => {
-  const response = await listDecisionProvisionsHandler({
-    subject: await subjectFor(highAuthorityId),
-    query: { cursor: "not-a-cursor" },
-  });
+  const response = await withSubject(
+    highAuthorityId,
+    async (subject) =>
+      await listDecisionProvisionsHandler({
+        subject,
+        query: { cursor: "not-a-cursor" },
+      }),
+  );
 
   expect("items" in response).toBe(false);
 });

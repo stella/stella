@@ -19,7 +19,10 @@ import {
   parsePersistedCorpusAst,
 } from "@/api/lib/legal-search/corpus-storage";
 import type { EmptyAst } from "@/api/lib/legal-search/document-types";
-import type { LegislationReadDb } from "@/api/lib/legislation-public-read-db";
+import {
+  legislationPublicReadDb,
+  type LegislationReadDb,
+} from "@/api/lib/legislation-public-read-db";
 
 const LEGISLATION_TEXT_MODE = {
   ALWAYS: "always",
@@ -30,14 +33,17 @@ type LegislationTextMode =
   (typeof LEGISLATION_TEXT_MODE)[keyof typeof LEGISLATION_TEXT_MODE];
 
 type ReadLegislationOptions = {
+  audience: "public" | "workspace";
   textMode: LegislationTextMode;
 };
 
 const DEFAULT_READ_OPTIONS = {
+  audience: "workspace",
   textMode: LEGISLATION_TEXT_MODE.ALWAYS,
 } as const satisfies ReadLegislationOptions;
 
 const PUBLIC_READ_OPTIONS = {
+  audience: "public",
   textMode: LEGISLATION_TEXT_MODE.FALLBACK,
 } as const satisfies ReadLegislationOptions;
 
@@ -70,13 +76,15 @@ export const readLegislationHandler = async (
           sections: legislationDocuments.sections,
           sourceUrl: legislationDocuments.sourceUrl,
           documentUrl: legislationDocuments.documentUrl,
-          metadata: legislationDocuments.metadata,
           createdAt: legislationDocuments.createdAt,
           updatedAt: legislationDocuments.updatedAt,
           documentAst: legislationDocuments.documentAst,
           fulltext: legislationDocuments.fulltext,
           astS3Key: legislationDocuments.astS3Key,
           textS3Key: legislationDocuments.textS3Key,
+          ...(options.audience === "workspace"
+            ? { metadata: legislationDocuments.metadata }
+            : {}),
         })
         .from(legislationDocuments)
         .innerJoin(
@@ -165,7 +173,7 @@ const config = {
   description:
     "Read one legislation document from the stella corpus by id: its ELI, " +
     "title, country, language, document type, status, effective and " +
-    "version-validity dates, source links, metadata, full text, and parsed " +
+    "version-validity dates, source links, full text, and parsed " +
     "structure. Only documents from sources cleared for redistribution are " +
     "returned; anything else reads as not found.",
   permissions: { workspace: ["read"] },
@@ -176,10 +184,14 @@ const config = {
 
 const readLegislation = createSafeRootHandler(
   config,
-  async function* ({ params: { documentId }, scopedDb }) {
+  async function* ({ params: { documentId } }) {
     const response = yield* Result.await(
       Result.tryPromise(
-        async () => await readLegislationHandler(documentId, scopedDb),
+        async () =>
+          await readPublicLegislationHandler(
+            documentId,
+            legislationPublicReadDb,
+          ),
       ),
     );
     return Result.ok(response);

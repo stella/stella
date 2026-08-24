@@ -39,6 +39,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { formatDecisionForPrompt } from "@/api/lib/case-law/analysis-prompt";
+import { readDecisionAnalysis } from "@/api/lib/case-law/decision-analysis";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { detached } from "@/api/lib/detached";
 import type { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -215,28 +216,11 @@ export const generateAnalysis = async (
   promptCachingEnabled: boolean,
 ): Promise<Result<GenerateAnalysisResponse, HandlerError>> => {
   // audit: skip — background AI analysis output
-  const decisionColumns = {
-    id: true,
-    language: true,
-    court: true,
-    country: true,
-    decisionType: true,
-    documentAst: true,
-    analysis: true,
-  } as const;
   const decision =
-    envBase.CASE_LAW_DATABASE_URL === undefined
-      ? await scopedDb((tx) =>
-          tx.query.caseLawDecisions.findFirst({
-            where: { id: { eq: decisionId } },
-            columns: decisionColumns,
-          }),
-        )
-      : await caseLawPublicReadDb((tx) =>
-          tx.query.caseLawDecisions.findFirst({
-            where: { id: { eq: decisionId } },
-            columns: decisionColumns,
-          }),
+    envBase.PUBLIC_LAW_DATABASE_URL === undefined
+      ? await scopedDb(async (tx) => await readDecisionAnalysis(tx, decisionId))
+      : await caseLawPublicReadDb(
+          async (tx) => await readDecisionAnalysis(tx, decisionId),
         );
 
   if (!decision) {
@@ -265,7 +249,7 @@ export const generateAnalysis = async (
   // A shared corpus connection is deliberately read-only. It may serve an
   // analysis already persisted by the owning environment, but this process
   // must never try to create or update one in that database.
-  if (envBase.CASE_LAW_DATABASE_URL !== undefined) {
+  if (envBase.PUBLIC_LAW_DATABASE_URL !== undefined) {
     return Result.ok({
       status: "error",
       error: "Analysis is unavailable for this decision",

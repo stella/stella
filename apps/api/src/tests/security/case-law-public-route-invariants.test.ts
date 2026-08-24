@@ -40,11 +40,11 @@ const SEARCH_DECISIONS_FILE =
   "apps/api/src/handlers/case-law/decisions/search.ts";
 const SEARCH_DECISIONS_SCHEMA_FILE =
   "apps/api/src/handlers/case-law/decisions/search-schema.ts";
-const LANGUAGE_DECISIONS_FILE =
-  "apps/api/src/handlers/case-law/decisions/language.ts";
+const LANGUAGE_ALTERNATE_COUNTS_FILE =
+  "apps/api/src/lib/case-law/language-alternate-counts.ts";
 const SITEMAP_DECISIONS_FILE =
   "apps/api/src/handlers/case-law/decisions/sitemap.ts";
-const PUBLIC_READ_DB_FILE = "apps/api/src/lib/case-law-public-read-db.ts";
+const PUBLIC_READ_DB_FILE = "apps/api/src/lib/public-law-read-db.ts";
 const DECISION_PROVISIONS_FILE =
   "apps/api/src/handlers/case-law/provisions/list-for-decision.ts";
 const CITING_DECISIONS_FILE =
@@ -97,8 +97,8 @@ const readNonRedistributableSourcesSource = async () =>
 const readSearchSource = async () => await readSource(SEARCH_DECISIONS_FILE);
 const readSearchSchemaSource = async () =>
   await readSource(SEARCH_DECISIONS_SCHEMA_FILE);
-const readLanguageSource = async () =>
-  await readSource(LANGUAGE_DECISIONS_FILE);
+const readLanguageAlternateCountsSource = async () =>
+  await readSource(LANGUAGE_ALTERNATE_COUNTS_FILE);
 const readSitemapSource = async () => await readSource(SITEMAP_DECISIONS_FILE);
 const readPublicReadDbSource = async () =>
   await readSource(PUBLIC_READ_DB_FILE);
@@ -147,18 +147,38 @@ describe("public case-law route boundary", () => {
 
   test("external role validation is bounded and retries after failure", async () => {
     const source = await readPublicReadDbSource();
+    const readConfiguration = source.slice(
+      source.indexOf("const configureReadTransaction"),
+      source.indexOf("const configureExternalReadTransaction"),
+    );
+    const externalConfiguration = source.slice(
+      source.indexOf("const configureExternalReadTransaction"),
+      source.indexOf("const startRoleValidation"),
+    );
     const validation = source.slice(
       source.indexOf("const startRoleValidation"),
       source.indexOf("const ensureRoleValidated"),
     );
 
     expect(source).toContain(
-      "connectionTimeout: EXTERNAL_CASE_LAW_CONNECTION_TIMEOUT_SECONDS",
+      "connectionTimeout: EXTERNAL_PUBLIC_LAW_CONNECTION_TIMEOUT_SECONDS",
     );
     expect(validation).toContain(".transaction(async (tx) =>");
+    expect(readConfiguration).toContain(
+      "await tx.execute(sql`SET LOCAL statement_timeout = '30s'`)",
+    );
+    expect(externalConfiguration).toContain(
+      "await configureReadTransaction(tx, isolation)",
+    );
+    expect(externalConfiguration).toContain(
+      "await tx.execute(sql`SET LOCAL lock_timeout = '1s'`)",
+    );
+    expect(externalConfiguration).toContain(
+      "await tx.execute(sql`SET LOCAL idle_in_transaction_session_timeout = '30s'`)",
+    );
     expect(
       validation.indexOf("configureExternalReadTransaction(tx)"),
-    ).toBeLessThan(validation.indexOf("validateExternalCaseLawDatabase(tx)"));
+    ).toBeLessThan(validation.indexOf("validateExternalPublicLawDatabase(tx)"));
     expect(validation).toContain(
       'external.roleValidation = { status: "idle" }',
     );
@@ -166,7 +186,9 @@ describe("public case-law route boundary", () => {
 
   test("shared-corpus reads cannot start document ingestion", async () => {
     const source = await readDeferredDocumentSource();
-    const guard = source.indexOf("envBase.CASE_LAW_DATABASE_URL !== undefined");
+    const guard = source.indexOf(
+      "envBase.PUBLIC_LAW_DATABASE_URL !== undefined",
+    );
     const ingestionCall = source.indexOf("readThroughDeferredDocument({");
 
     expect(guard).toBeGreaterThanOrEqual(0);
@@ -285,7 +307,7 @@ describe("public case-law route boundary", () => {
     expect(source).not.toContain("organization");
     expect(source).not.toContain("matter");
     expect(source).toContain("d.language_group_key");
-    expect(source).toContain("validCaseLawLanguageAlternateCountSql");
+    expect(source).toContain("readDecisionLanguageAlternateCounts");
     expect(source).toContain("languageAlternateCount:");
     expect(source).toContain("languageGroupKey,");
   });
@@ -307,21 +329,24 @@ describe("public case-law route boundary", () => {
   });
 
   test("public language alternate counts only include route-safe languages", async () => {
-    const [listSource, searchSource, languageSource] = await Promise.all([
+    const [listSource, languageAlternateCountsSource] = await Promise.all([
       readListSource(),
-      readSearchSource(),
-      readLanguageSource(),
+      readLanguageAlternateCountsSource(),
     ]);
 
-    expect(listSource).toContain("validCaseLawLanguageAlternateCountSql");
-    expect(searchSource).toContain("validCaseLawLanguageAlternateCountSql");
-    expect(languageSource).toContain("count(distinct");
-    expect(languageSource).toContain("replace(lower(");
-    expect(languageSource).toContain("filter (where");
-    expect(languageSource).toMatch(
+    expect(listSource).toContain("readDecisionLanguageAlternateCounts");
+    expect(languageAlternateCountsSource).toContain(
+      "validCaseLawLanguageAlternateCountSql",
+    );
+    expect(languageAlternateCountsSource).toContain("count(distinct");
+    expect(languageAlternateCountsSource).toContain("replace(lower(");
+    expect(languageAlternateCountsSource).toContain("filter (where");
+    expect(languageAlternateCountsSource).toMatch(
       /~ \$\{CASE_LAW_LANGUAGE_SEGMENT_PATTERN\}/u,
     );
-    expect(languageSource).toContain("^[a-z]{2,3}(-[a-z0-9]{2,8})*$");
+    expect(languageAlternateCountsSource).toContain(
+      "^[a-z]{2,3}(-[a-z0-9]{2,8})*$",
+    );
   });
 
   test("public sitemap payload is an explicit public allowlist", async () => {

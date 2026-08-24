@@ -22,12 +22,18 @@ import { listStatuteVersionsHandler } from "@/api/handlers/legislation/versions"
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { PAGINATION_CURSOR_MAX_CHARS } from "@/api/lib/custom-schema";
-import type { LegislationReadDb } from "@/api/lib/legislation-public-read-db";
+import type {
+  LegislationReadDb,
+  LegislationReadTransaction,
+} from "@/api/lib/legislation-public-read-db";
 import {
   decodePaginationCursor,
   encodePaginationCursor,
 } from "@/api/lib/pagination";
-import { createTestPglite } from "@/api/tests/pglite-test-db";
+import {
+  createTestPglite,
+  withPublicLawReaderRole,
+} from "@/api/tests/pglite-test-db";
 
 // Public statute reads over a fixture whose current version is neither the
 // newest row nor the newest window: one superseded version, one in force and
@@ -35,6 +41,7 @@ import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 let client: Awaited<ReturnType<typeof createTestPglite>> | undefined;
 let legislationDb: LegislationReadDb;
+let workspaceDb: LegislationReadDb;
 
 const openSourceId = createSafeId<"legislationSource">();
 const closedSourceId = createSafeId<"legislationSource">();
@@ -289,10 +296,27 @@ beforeAll(
       }),
     ]);
 
-    // Test shim: run each read callback directly against the pglite handle.
-    // eslint-disable-next-line typescript/no-unsafe-type-assertion -- test-only LegislationReadDb shim
-    legislationDb = ((fn: (tx: unknown) => unknown) =>
-      fn(db)) as unknown as LegislationReadDb;
+    workspaceDb = async (read) =>
+      await db.transaction(
+        async (tx) =>
+          // SAFETY: the PGlite transaction has the statement surface under
+          // test; only its driver-specific execute result differs nominally.
+          // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- embedded owner transaction stands in for LegislationReadTransaction
+          await read(tx as unknown as LegislationReadTransaction),
+      );
+
+    const readDb = async <T>(
+      fn: (tx: LegislationReadTransaction) => Promise<T>,
+    ): Promise<T> =>
+      await withPublicLawReaderRole(
+        db,
+        async (tx) =>
+          // SAFETY: this PGlite transaction executes under the production
+          // public-law role and exposes the same read surface to the callback.
+          // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- embedded role transaction stands in for LegislationReadTransaction
+          await fn(tx as unknown as LegislationReadTransaction),
+      );
+    legislationDb = readDb;
   },
   { timeout: 30_000 },
 );
@@ -629,7 +653,7 @@ describe("public statute read", () => {
   test("keeps the stored publisher metadata off the public response", async () => {
     const workspaceRead = await readLegislationHandler(
       civilCodeCurrent,
-      legislationDb,
+      workspaceDb,
     );
     const publicRead = await readPublicLegislationHandler(
       civilCodeCurrent,
@@ -647,7 +671,7 @@ describe("public statute read", () => {
   test("returns full text only as the AST fallback", async () => {
     const workspaceRead = await readLegislationHandler(
       civilCodeCurrent,
-      legislationDb,
+      workspaceDb,
     );
     const structuredPublicRead = await readPublicLegislationHandler(
       civilCodeCurrent,
