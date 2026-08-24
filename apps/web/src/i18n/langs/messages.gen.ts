@@ -445,6 +445,8 @@ type Messages = {
       "abstract": "Abstract";
       "citedBy": "Cited by";
       "cites": "Cites";
+      "judgeRapporteur": "Judge rapporteur";
+      "legalArea": "Legal area";
       "legalSentence": "Legal sentence";
       "nalusDisclaimer": "Source: NALUS, Constitutional Court of the Czech Republic. Free of charge. This electronic version is not authentic; only originals with the state emblem and signature of the authorized person are authentic.";
       "popularName": "Popular name";

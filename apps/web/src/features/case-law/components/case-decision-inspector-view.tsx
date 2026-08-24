@@ -21,6 +21,7 @@ import type { InspectorViewRenderProps } from "@/components/inspector/view-regis
 import Tooltip from "@/components/tooltip";
 import { CitationHeader } from "@/features/case-law/components/case-viewer/citation-header";
 import { DecisionCitations } from "@/features/case-law/components/case-viewer/decision-citations";
+import { DecisionFacts } from "@/features/case-law/components/case-viewer/decision-facts";
 import { DecisionText } from "@/features/case-law/components/case-viewer/decision-text";
 import { ProvisionsCited } from "@/features/case-law/components/case-viewer/provisions-cited";
 import { useDecisionCitationAnchors } from "@/features/case-law/components/case-viewer/use-decision-citation-anchors";
@@ -154,6 +155,12 @@ export const CaseDecisionInspectorView = ({
               <CitationHeader
                 decisionDate={decision.decisionDate}
                 decisionId={decisionId}
+              />
+              <DecisionFacts
+                decisionType={decision.decisionType}
+                metadata={decision.metadata}
+                source={decision.source}
+                sourceUrl={decision.sourceUrl}
               />
               <DecisionCitations decisionId={decisionId} />
               <ProvisionsCited decisionId={decisionId} />

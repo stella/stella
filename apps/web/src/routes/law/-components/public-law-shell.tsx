@@ -42,6 +42,21 @@ function PublicLawTopBar() {
       );
     },
   });
+  // The area of law is the one fact that belongs next to the name; the rest
+  // of a decision's facts live in the inspector.
+  const legalArea = useRouterState({
+    select: (state) => {
+      const loaderData: unknown = state.matches.at(-1)?.loaderData;
+      const metadata: unknown =
+        typeof loaderData === "object" &&
+        loaderData !== null &&
+        "metadata" in loaderData
+          ? loaderData.metadata
+          : null;
+
+      return readStringField(metadata, "legalArea");
+    },
+  });
   const country = useRouterState({
     select: (state) => {
       const params: unknown = state.matches.at(-1)?.params;
@@ -84,6 +99,11 @@ function PublicLawTopBar() {
             <span className="text-foreground truncate font-medium">
               {documentLabel}
             </span>
+            {legalArea !== null && (
+              <span className="text-muted-foreground min-w-0 truncate">
+                · {legalArea}
+              </span>
+            )}
           </>
         )}
       </nav>
