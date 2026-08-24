@@ -178,17 +178,18 @@ const hasCallInOwnBranch = (
 };
 
 const transactionCallbackIsConfigured = (functionNode: AstNode): boolean => {
-  let callback: AstNode | null = null;
+  const callbacks: AstNode[] = [];
   walkOwnFunctionBody(functionNode, (node) => {
-    if (!isMemberCall(node, "transaction") || callback !== null) {
+    if (!isMemberCall(node, "transaction") || callbacks.length > 0) {
       return;
     }
     const candidate = unwrapExpression(firstArgument(node));
     if (isFunctionLike(candidate)) {
-      callback = candidate;
+      callbacks.push(candidate);
     }
   });
-  if (callback === null) {
+  const callback = callbacks.at(0);
+  if (callback === undefined) {
     return false;
   }
 
