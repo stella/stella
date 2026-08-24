@@ -1,5 +1,6 @@
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
+import { PUBLIC_CASE_LAW_SCHEMA_IMPORTS } from "../apps/api/src/lib/public-law-relations.ts";
 import { getImportedName, getPropertyName, isIdentifier } from "./utils.ts";
 
 type AstNode = Record<string, unknown> & { type: string };
@@ -11,13 +12,11 @@ const isAstNode = (value: unknown): value is AstNode =>
   typeof value === "object" &&
   value !== null &&
   "type" in value &&
-  typeof (value as { type: unknown }).type === "string";
+  typeof value.type === "string";
 
-const PUBLIC_CASE_LAW_SCHEMA_IMPORTS = new Set([
-  "caseLawCorpusIndexProjections",
-  "caseLawDecisions",
-  "caseLawSources",
-]);
+const PUBLIC_CASE_LAW_SCHEMA_IMPORT_SET = new Set(
+  PUBLIC_CASE_LAW_SCHEMA_IMPORTS,
+);
 
 const PUBLIC_CASE_LAW_QUERY_RELATIONS = new Set(["caseLawDecisions"]);
 
@@ -46,8 +45,7 @@ const rawTemplateText = (node): string | null => {
   if (typeof value !== "object" || value === null) {
     return null;
   }
-  const raw = (value as { raw?: unknown }).raw;
-  return typeof raw === "string" ? raw : null;
+  return "raw" in value && typeof value.raw === "string" ? value.raw : null;
 };
 
 const hasPrivateSqlText = (text: string): boolean =>
@@ -79,7 +77,7 @@ export default eslintCompatPlugin({
               const imported = getImportedName(specifier);
               if (
                 imported === null ||
-                !PUBLIC_CASE_LAW_SCHEMA_IMPORTS.has(imported)
+                !PUBLIC_CASE_LAW_SCHEMA_IMPORT_SET.has(imported)
               ) {
                 context.report({
                   node: specifier,

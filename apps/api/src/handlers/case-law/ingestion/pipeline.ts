@@ -1,11 +1,14 @@
 import { Result, panic } from "better-result";
 import { and, eq, inArray, isNull, lt, notInArray, or, sql } from "drizzle-orm";
 
+import type { DecisionIdentifierType } from "@stll/legal-ast/decision-identifier";
+
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   CASE_LAW_CORPUS_MIRROR_STATUS,
   caseLawCitations,
+  caseLawDecisionIdentifiers,
   caseLawDecisionSourceIdentities,
   caseLawDecisions,
   caseLawIngestionFailures,
@@ -19,7 +22,7 @@ import {
 } from "@/api/handlers/case-law/citation-kind";
 import type { ProceduralKeys } from "@/api/handlers/case-law/citation-kind";
 import {
-  reopenCitationsForDecisionKey,
+  reopenCitationsForDecisionIdentifiers,
   reopenCitationsForKeys,
   reopenCitationsFrom,
   reopenCitationsResolvedTo,
@@ -43,6 +46,8 @@ import {
   decisionIdentifiersFromMetadata,
   extractCitations,
   isSelfCitation,
+  normalizeDecisionIdentifier,
+  normalizeDecisionIdentifierValue,
 } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import { publisherCitationGap } from "@/api/handlers/case-law/ingestion/citation-recall";
 import { shouldSkipRefresh } from "@/api/handlers/case-law/ingestion/refresh-policy";
@@ -334,6 +339,7 @@ const citationRow = (
     citationText: string;
     sectionIndex: number | null;
     citedDecisionTypeHint: CitationDecisionTypeHint | null;
+    identifierType: DecisionIdentifierType;
   },
   sections: { index: number; text: string }[],
   proceduralKeys: ProceduralKeys,
@@ -343,6 +349,11 @@ const citationRow = (
     citingDecisionId,
     citationText: citation.citationText,
     citationKey,
+    identifierType: citation.identifierType,
+    normalizedIdentifierValue: normalizeDecisionIdentifierValue(
+      citation.identifierType,
+      citation.citationText,
+    ),
     citedDecisionTypeHint: citation.citedDecisionTypeHint,
     kind: classifyCitation({
       citationText: citation.citationText,
@@ -1263,7 +1274,13 @@ const processDecisionAttempt = async ({
   const decisionIdentifiers = decisionIdentifiersFromMetadata({
     caseNumber: result.caseNumber,
     ecli: result.ecli ?? null,
+    identifiers: result.identifiers,
   });
+  const identifierRows = decisionIdentifiers.map((identifier) => ({
+    type: identifier.type,
+    value: identifier.value,
+    normalizedValue: normalizeDecisionIdentifier(identifier),
+  }));
   const citations = extractCitations(
     sections.map((s) => ({ index: s.index, text: s.text })),
   ).filter((c) => !isSelfCitation(c.citationText, decisionIdentifiers));
@@ -1376,7 +1393,7 @@ const processDecisionAttempt = async ({
   const incomingCitationKey = citationKeyOf(result.caseNumber);
 
   /**
-   * Tell the citation graph that this decision now holds `incomingCitationKey`.
+   * Tell the citation graph which normalized identifiers this decision holds.
    *
    * A stored decision changes the answer for citations that are not its own,
    * in both directions: it can satisfy citations that gave up on that key, and
@@ -1385,14 +1402,19 @@ const processDecisionAttempt = async ({
    * side, so the standing walk would never revisit them; doing it here, in the
    * transaction that created the reason, is what keeps the graph honest.
    *
-   * Only when the key is genuinely new to this row: a refresh that rewrites
-   * metadata under the same key changes nothing about who can be cited.
+   * Only when the identifier set is genuinely new to this row: a metadata
+   * refresh under the same identities changes nothing about who can be cited.
    */
-  const announceCitationKey = async (
+  type DecisionIdentifierLookup = Pick<
+    (typeof identifierRows)[number],
+    "type" | "normalizedValue"
+  >;
+  const announceDecisionIdentifiers = async (
     tx: Transaction,
     id: SafeId<"caseLawDecision">,
+    identifiers: readonly DecisionIdentifierLookup[],
   ): Promise<void> => {
-    if (incomingCitationKey === null) {
+    if (identifiers.length === 0) {
       return;
     }
     if (!isCaseLawJurisdiction(result.country)) {
@@ -1404,8 +1426,8 @@ const processDecisionAttempt = async ({
       });
       return;
     }
-    await reopenCitationsForDecisionKey(tx, {
-      citationKey: incomingCitationKey,
+    await reopenCitationsForDecisionIdentifiers(tx, {
+      identifiers,
       decisionId: id,
       jurisdiction: result.country,
       decisionDate: persistedDecisionDate ?? null,
@@ -1439,6 +1461,10 @@ const processDecisionAttempt = async ({
     citationKey: string | null;
     country: string;
     decisionDate: string | null;
+    identifiers: {
+      type: (typeof identifierRows)[number]["type"];
+      normalizedValue: string;
+    }[];
   } | null> => {
     const rows = await tx
       .select({
@@ -1450,18 +1476,48 @@ const processDecisionAttempt = async ({
       .where(eq(caseLawDecisions.id, id))
       .for("update")
       .limit(1);
-    return rows.at(0) ?? null;
+    const row = rows.at(0);
+    if (!row) {
+      return null;
+    }
+    const identifiers = await tx
+      .select({
+        type: caseLawDecisionIdentifiers.type,
+        normalizedValue: caseLawDecisionIdentifiers.normalizedValue,
+      })
+      .from(caseLawDecisionIdentifiers)
+      .where(eq(caseLawDecisionIdentifiers.decisionId, id));
+    return { ...row, identifiers };
   };
 
   const resolutionIdentityChanged = (previous: {
     citationKey: string | null;
     country: string;
     decisionDate: string | null;
-  }): boolean =>
-    previous.citationKey !== incomingCitationKey ||
-    previous.country !== result.country ||
-    (persistedDecisionDate !== undefined &&
-      previous.decisionDate !== persistedDecisionDate);
+    identifiers: {
+      type: (typeof identifierRows)[number]["type"];
+      normalizedValue: string;
+    }[];
+  }): boolean => {
+    const incoming = new Set(
+      identifierRows.map(
+        (identifier) => `${identifier.type}:${identifier.normalizedValue}`,
+      ),
+    );
+    const identifiersChanged =
+      previous.identifiers.length !== incoming.size ||
+      previous.identifiers.some(
+        (identifier) =>
+          !incoming.has(`${identifier.type}:${identifier.normalizedValue}`),
+      );
+    return (
+      identifiersChanged ||
+      previous.citationKey !== incomingCitationKey ||
+      previous.country !== result.country ||
+      (persistedDecisionDate !== undefined &&
+        previous.decisionDate !== persistedDecisionDate)
+    );
+  };
 
   const writeDecisionRow = async (
     slug?: string,
@@ -1598,6 +1654,18 @@ const processDecisionAttempt = async ({
           }
         }
 
+        if (!preservesExistingDetail) {
+          await tx
+            .delete(caseLawDecisionIdentifiers)
+            .where(eq(caseLawDecisionIdentifiers.decisionId, existing.id));
+          await tx.insert(caseLawDecisionIdentifiers).values(
+            identifierRows.map((identifier) => ({
+              decisionId: existing.id,
+              ...identifier,
+            })),
+          );
+        }
+
         if (
           replacedIdentity !== null &&
           resolutionIdentityChanged(replacedIdentity)
@@ -1623,7 +1691,22 @@ const processDecisionAttempt = async ({
               (key) => key !== null,
             ),
           );
-          await announceCitationKey(tx, existing.id);
+          const affectedIdentifiers = [
+            ...replacedIdentity.identifiers,
+            ...identifierRows,
+          ].filter(
+            (identifier, index, all) =>
+              all.findIndex(
+                (candidate) =>
+                  candidate.type === identifier.type &&
+                  candidate.normalizedValue === identifier.normalizedValue,
+              ) === index,
+          );
+          await announceDecisionIdentifiers(
+            tx,
+            existing.id,
+            affectedIdentifiers,
+          );
         }
 
         // Citations are read out of the document, so a refresh that
@@ -1690,7 +1773,14 @@ const processDecisionAttempt = async ({
         panic("Failed to insert decision: no row returned");
       }
 
-      await announceCitationKey(tx, decisionRow.id);
+      await tx.insert(caseLawDecisionIdentifiers).values(
+        identifierRows.map((identifier) => ({
+          decisionId: decisionRow.id,
+          ...identifier,
+        })),
+      );
+
+      await announceDecisionIdentifiers(tx, decisionRow.id, identifierRows);
 
       if (citations.length > 0) {
         await tx

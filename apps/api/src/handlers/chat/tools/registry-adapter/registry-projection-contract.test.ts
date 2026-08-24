@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 import type { BoeSearchResponse } from "@stll/boe";
+import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import type { readGatedDecisionWithDocument } from "@/api/handlers/case-law/decisions/get-deferred-document";
@@ -1207,6 +1208,16 @@ const CONTRACT_CORPUS = {
               decisionId: uid(53),
               decisionType: "judgment",
               ecli: "ECLI:CZ:NS:2020:22.CDO.1000.2020.1",
+              identifiers: [
+                {
+                  type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+                  value: "22 Cdo 1000/2020",
+                },
+                {
+                  type: DECISION_IDENTIFIER_TYPES.ECLI,
+                  value: "ECLI:CZ:NS:2020:22.CDO.1000.2020.1",
+                },
+              ],
               headline: "…dobré <em>mravy</em>…",
               language: "cs",
               languageAlternateCount: 0,
@@ -1259,6 +1270,16 @@ const CONTRACT_CORPUS = {
           documentAst: null,
           documentUrl: null,
           ecli: "ECLI:CZ:NS:2020:22.CDO.1000.2020.1",
+          identifiers: [
+            {
+              type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+              value: "22 Cdo 1000/2020",
+            },
+            {
+              type: DECISION_IDENTIFIER_TYPES.ECLI,
+              value: "ECLI:CZ:NS:2020:22.CDO.1000.2020.1",
+            },
+          ],
           fulltext: "Full decision text.",
           language: "cs",
           languageGroupKey: null,

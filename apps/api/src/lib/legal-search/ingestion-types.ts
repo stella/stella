@@ -1,6 +1,8 @@
 import { panic } from "better-result";
 import type { Result } from "better-result";
 
+import type { DecisionIdentifiers } from "@stll/legal-ast/decision-identifier";
+
 import type { DocumentAst } from "@/api/lib/case-law/document-ast";
 import type { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { EMPTY_AST } from "@/api/lib/legal-search/document-types";
@@ -25,6 +27,12 @@ export const isPersistableSourceDocumentId = (value: string): boolean =>
 /** Result of parsing a single court decision from a source. */
 export type IngestionResult = {
   caseNumber: string;
+  /**
+   * Every identifier the publisher states for this decision. The pipeline
+   * always adds `caseNumber` and `ecli`, so adapters may omit this until they
+   * expose neutral or reporter citations.
+   */
+  identifiers?: DecisionIdentifiers | undefined;
   /**
    * True when `caseNumber` is a durable ingestion placeholder rather than a
    * publisher docket. Identified-row refreshes preserve an already recovered

@@ -2,6 +2,7 @@ import { and, asc, eq, gt, isNull, notExists, or, sql } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
+  caseLawDecisionIdentifiers,
   caseLawDecisions,
   caseLawSearchDocumentPreviewPassages,
   caseLawSearchDocuments,
@@ -44,6 +45,12 @@ export const indexDecision = async (
         id: caseLawDecisions.id,
         caseNumber: caseLawDecisions.caseNumber,
         ecli: caseLawDecisions.ecli,
+        identifiers: sql<string[]>`ARRAY(
+          SELECT identifier.value
+          FROM ${caseLawDecisionIdentifiers} identifier
+          WHERE identifier.decision_id = ${caseLawDecisions.id}
+          ORDER BY identifier.type, identifier.value
+        )`,
         court: caseLawDecisions.court,
         language: caseLawDecisions.language,
         fulltext: caseLawDecisions.fulltext,
@@ -81,6 +88,7 @@ export const indexDecision = async (
   const searchableText = [
     decision.caseNumber,
     decision.ecli,
+    ...decision.identifiers,
     decision.court,
     bodyText,
   ]

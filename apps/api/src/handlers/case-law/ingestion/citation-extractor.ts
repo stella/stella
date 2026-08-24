@@ -1,9 +1,14 @@
 import { panic } from "better-result";
 
-import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
+import {
+  DECISION_IDENTIFIER_MAX_COUNT,
+  DECISION_IDENTIFIER_TYPES,
+  normalizeStructuredDecisionIdentifier,
+} from "@stll/legal-ast/decision-identifier";
 import type {
   DecisionIdentifier,
   DecisionIdentifiers,
+  DecisionIdentifierType,
 } from "@stll/legal-ast/decision-identifier";
 
 import {
@@ -25,6 +30,7 @@ type ExtractedCitation = {
    * not say", never "unknown type".
    */
   citedDecisionTypeHint: CitationDecisionTypeHint | null;
+  identifierType: DecisionIdentifierType;
 };
 
 /**
@@ -359,6 +365,12 @@ const CITATION_PATTERNS: RegExp[] = [
   // combining beyond the same gap the lookbehind can still recognize, or
   // the symbol at the tail phantom-duplicates as a second citation.
   /\b[IVX]{1,4}(?:\s{1,3}(?:[A-Z]{2,5}|[A-Z]{1,4}[az])|[A-Z])\s+\d{1,6}\/\d{2,4}\b/gu,
+
+  // Neutral citations: bracketed year, one to three court/division tokens,
+  // then the decision number (for example "[2024] Example Court 12"). The
+  // bracketed year and final number keep this narrower than an ordinary
+  // title or parenthetical date.
+  /\[\d{4}\]\s+[A-Z][A-Za-z]{1,9}(?:\s+[A-Z][A-Za-z]{1,9}){0,2}\s+\d{1,6}\b/gu,
 ];
 
 /**
@@ -638,25 +650,43 @@ const stripPrefix = (text: string): string => {
 type DecisionMetadata = {
   caseNumber: string;
   ecli?: string | null;
+  identifiers?: DecisionIdentifiers | undefined;
 };
 
 export const decisionIdentifiersFromMetadata = ({
   caseNumber,
   ecli,
+  identifiers,
 }: DecisionMetadata): DecisionIdentifiers => {
   const caseNumberIdentifier = {
     type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
     value: caseNumber,
   } as const;
 
-  if (!ecli) {
-    return [caseNumberIdentifier];
-  }
-
-  return [
+  const candidates: DecisionIdentifier[] = [
     caseNumberIdentifier,
-    { type: DECISION_IDENTIFIER_TYPES.ECLI, value: ecli },
+    ...(ecli
+      ? [{ type: DECISION_IDENTIFIER_TYPES.ECLI, value: ecli } as const]
+      : []),
   ];
+  if (identifiers !== undefined) {
+    candidates.push(...identifiers);
+  }
+  const seen = new Set([
+    `${caseNumberIdentifier.type}:${normalizeDecisionIdentifier(caseNumberIdentifier)}`,
+  ]);
+  const additional = candidates.slice(1).filter((identifier) => {
+    const key = `${identifier.type}:${normalizeDecisionIdentifier(identifier)}`;
+    if (seen.has(key)) {
+      return false;
+    }
+    seen.add(key);
+    return true;
+  });
+  if (additional.length >= DECISION_IDENTIFIER_MAX_COUNT) {
+    throw new TypeError("Decision has too many identifiers");
+  }
+  return [caseNumberIdentifier, ...additional];
 };
 
 /**
@@ -681,20 +711,39 @@ export const bareCitationKey = (text: string): string =>
 export const citationKeyOf = (text: string): string | null =>
   bareCitationKey(text) || null;
 
-const identifierComparisonKey = (
-  citationText: string,
+export const normalizeDecisionIdentifier = (
   identifier: DecisionIdentifier,
 ): string => {
   switch (identifier.type) {
     case DECISION_IDENTIFIER_TYPES.CASE_NUMBER:
-      return bareCitationKey(citationText);
+      return bareCitationKey(identifier.value);
     case DECISION_IDENTIFIER_TYPES.ECLI:
     case DECISION_IDENTIFIER_TYPES.NEUTRAL_CITATION:
     case DECISION_IDENTIFIER_TYPES.REPORTER_CITATION:
-      return canonicalizeDedupKey(citationText);
+      return normalizeStructuredDecisionIdentifier(identifier);
     default: {
       const unhandled: never = identifier;
       return panic(`Unhandled decision identifier: ${String(unhandled)}`);
+    }
+  }
+};
+
+export const normalizeDecisionIdentifierValue = (
+  type: DecisionIdentifierType,
+  value: string,
+): string => {
+  switch (type) {
+    case DECISION_IDENTIFIER_TYPES.CASE_NUMBER:
+      return normalizeDecisionIdentifier({ type, value });
+    case DECISION_IDENTIFIER_TYPES.ECLI:
+      return normalizeDecisionIdentifier({ type, value });
+    case DECISION_IDENTIFIER_TYPES.NEUTRAL_CITATION:
+      return normalizeDecisionIdentifier({ type, value });
+    case DECISION_IDENTIFIER_TYPES.REPORTER_CITATION:
+      return normalizeDecisionIdentifier({ type, value });
+    default: {
+      const exhaustive: never = type;
+      return panic(`Unhandled decision identifier type: ${String(exhaustive)}`);
     }
   }
 };
@@ -709,9 +758,24 @@ export const isSelfCitation = (
 ): boolean =>
   identifiers.some(
     (identifier) =>
-      identifierComparisonKey(citationText, identifier) ===
-      canonicalizeDedupKey(identifier.value),
+      normalizeDecisionIdentifierValue(identifier.type, citationText) ===
+      normalizeDecisionIdentifier(identifier),
   );
+
+export const decisionIdentifierTypeOfCitation = (
+  citationText: string,
+): DecisionIdentifierType => {
+  if (/^(?:ECLI:|EU:[CTF]:)/u.test(citationText)) {
+    return DECISION_IDENTIFIER_TYPES.ECLI;
+  }
+  if (/^\[\d{4}\]/u.test(citationText)) {
+    return DECISION_IDENTIFIER_TYPES.NEUTRAL_CITATION;
+  }
+  if (/\bSb\.\s*(?:rozh\.|NSS|NS)/iu.test(citationText)) {
+    return DECISION_IDENTIFIER_TYPES.REPORTER_CITATION;
+  }
+  return DECISION_IDENTIFIER_TYPES.CASE_NUMBER;
+};
 
 /**
  * Extract citation references from decision text.
@@ -744,6 +808,7 @@ export const extractCitations = (
         // embedded line-wrap newline. Only the dedup key below is
         // canonicalized.
         const citationText = match[0].trim();
+        const identifierType = decisionIdentifierTypeOfCitation(citationText);
         // For patterns with a capture group (e.g. the Polish prefixed
         // pattern), use the bare case number as the canonical dedup key
         // so both "sygn. akt II CSK 123/20" and "II CSK 123/20" resolve
@@ -751,9 +816,8 @@ export const extractCitations = (
         // canonicalizeDedupKey further folds whitespace/separator/case
         // spelling variance so the same real case number never fractures
         // into two keys.
-        const dedupKey = canonicalizeDedupKey(
-          match.groups?.["caseNumber"]?.trim() ?? citationText,
-        );
+        const dedupValue = match.groups?.["caseNumber"]?.trim() ?? citationText;
+        const dedupKey = `${identifierType}:${normalizeDecisionIdentifierValue(identifierType, dedupValue)}`;
 
         const citedDecisionTypeHint = detectCitationDecisionTypeHint(
           section.text,
@@ -766,6 +830,7 @@ export const extractCitations = (
             citationText,
             sectionIndex: section.index,
             citedDecisionTypeHint,
+            identifierType,
           });
           continue;
         }

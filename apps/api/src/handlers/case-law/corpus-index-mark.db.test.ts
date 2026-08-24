@@ -106,6 +106,7 @@ const loadRow = async (id: SafeId<"caseLawDecision">) => {
       sourceId: caseLawDecisions.sourceId,
       caseNumber: caseLawDecisions.caseNumber,
       ecli: caseLawDecisions.ecli,
+      identifiers: sql<string[]>`'{}'::text[]`,
       court: caseLawDecisions.court,
       country: caseLawDecisions.country,
       language: caseLawDecisions.language,

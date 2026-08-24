@@ -6,6 +6,24 @@
  * owning service side. The runtime attestation and migration tests derive
  * from this map, so adding a field requires one explicit public-data decision.
  */
+export const PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT = {
+  caseLawCitations: "case_law_citations",
+  caseLawCorpusIndexProjections: "case_law_corpus_index_projections",
+  caseLawDecisionIdentifiers: "case_law_decision_identifiers",
+  caseLawDecisions: "case_law_decisions",
+  caseLawProvisionCitations: "case_law_provision_citations",
+  caseLawSources: "case_law_sources",
+  legislationDocuments: "legislation_documents",
+  legislationSources: "legislation_sources",
+} as const;
+
+export type PublicLawRelation =
+  (typeof PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT)[keyof typeof PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT];
+
+export const PUBLIC_CASE_LAW_SCHEMA_IMPORTS = Object.keys(
+  PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT,
+).filter((schemaImport) => schemaImport.startsWith("caseLaw"));
+
 export const PUBLIC_LAW_COLUMNS_BY_RELATION = {
   case_law_citations: [
     "id",
@@ -22,6 +40,13 @@ export const PUBLIC_LAW_COLUMNS_BY_RELATION = {
     "index_id",
     "indexed_hash",
     "pending_action",
+  ],
+  case_law_decision_identifiers: [
+    "decision_id",
+    "type",
+    "value",
+    "normalized_value",
+    "created_at",
   ],
   case_law_decisions: [
     "id",
@@ -103,9 +128,7 @@ export const PUBLIC_LAW_COLUMNS_BY_RELATION = {
     "updated_at",
   ],
   legislation_sources: ["id", "descriptor"],
-} as const;
-
-export type PublicLawRelation = keyof typeof PUBLIC_LAW_COLUMNS_BY_RELATION;
+} as const satisfies Record<PublicLawRelation, readonly string[]>;
 
 /**
  * The v0.7.22 reader contract retained during the bounded rollout window.

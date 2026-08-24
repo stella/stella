@@ -20,6 +20,7 @@ import { corpusCarriesDocument } from "@/api/handlers/case-law/stored-payload";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
+import { decisionIdentifierProjection } from "@/api/lib/case-law/decision-identifiers";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
 import { tPaginationCursor } from "@/api/lib/custom-schema";
 import { CorpusPayloadUnavailableError } from "@/api/lib/errors/tagged-errors";
@@ -307,6 +308,9 @@ export const readDecisionHandler = definePublicLawSharedQuery(
         // sections: frontend doesn't use these
       },
       with: {
+        identifiers: {
+          columns: { type: true, value: true },
+        },
         source: {
           // descriptor: only for `allowsDerivedAi` below, never returned to
           // the client. Redistribution was decided when the subject was
@@ -323,6 +327,10 @@ export const readDecisionHandler = definePublicLawSharedQuery(
 
     const source =
       decision.source ?? panic("Case-law decision has no source relation");
+    const identifiers = decisionIdentifierProjection(decision.identifiers, {
+      caseNumber: decision.caseNumber,
+      ecli: decision.ecli,
+    });
 
     const [languageAlternates, citationsFromPage, citationsToPage] =
       await Promise.all([
@@ -421,6 +429,7 @@ export const readDecisionHandler = definePublicLawSharedQuery(
       caseNumber: decision.caseNumber,
       slug: decision.slug,
       ecli: decision.ecli,
+      identifiers,
       court: decision.court,
       country: decision.country,
       language: decision.language,

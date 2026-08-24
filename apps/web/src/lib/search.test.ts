@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import { resourceRef, RESOURCE_TYPE, toResourceName } from "@stll/api-contract";
 import type { GlobalSearchHit } from "@stll/api/types";
+import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
 import { toSafeId } from "@/lib/safe-id";
 import {
@@ -594,6 +595,12 @@ describe("search preview targets", () => {
         type: "case-law",
         decisionId: "decision_1",
         caseNumber: "1 T 1/2026",
+        identifiers: [
+          {
+            type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+            value: "1 T 1/2026",
+          },
+        ],
         court: "Court",
         country: "CZ",
         decisionDate: null,
@@ -647,6 +654,12 @@ describe("search preview dates", () => {
     updatedAt: "2026-07-29T12:00:00.000Z",
     decisionId: "decision_1",
     caseNumber: "1 T 1/2026",
+    identifiers: [
+      {
+        type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+        value: "1 T 1/2026",
+      },
+    ],
     court: "Court",
     country: "CZ",
   } as const;

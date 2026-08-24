@@ -1,7 +1,8 @@
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 
 import {
   caseLawCorpusIndexProjections,
+  caseLawDecisionIdentifiers,
   caseLawDecisions,
   caseLawSources,
 } from "@/api/db/schema";
@@ -12,6 +13,7 @@ import {
   caseLawPublicReadDb,
   type CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
+import { decisionIdentifierProjection } from "@/api/lib/case-law/decision-identifiers";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
 import { isUuid } from "@/api/lib/custom-schema";
 import {
@@ -91,6 +93,17 @@ export const rehydrateCorpusIndexProviderCandidates =
           id: caseLawDecisions.id,
           caseNumber: caseLawDecisions.caseNumber,
           ecli: caseLawDecisions.ecli,
+          identifiers: sql<unknown>`coalesce((
+            SELECT jsonb_agg(
+              jsonb_build_object(
+                'type', identifier.type,
+                'value', identifier.value
+              )
+              ORDER BY identifier.type, identifier.value
+            )
+            FROM ${caseLawDecisionIdentifiers} identifier
+            WHERE identifier.decision_id = ${caseLawDecisions.id}
+          ), '[]'::jsonb)`,
           court: caseLawDecisions.court,
           country: caseLawDecisions.country,
           language: caseLawDecisions.language,
@@ -230,6 +243,10 @@ const search = async (query: LegalSearchQuery): Promise<LegalSearchResult> => {
         decisionId: row.id,
         caseNumber: row.caseNumber,
         ecli: toNullableString(row.ecli),
+        identifiers: decisionIdentifierProjection(row.identifiers, {
+          caseNumber: row.caseNumber,
+          ecli: toNullableString(row.ecli),
+        }),
         court: row.court,
         country: row.country,
         language: row.language,

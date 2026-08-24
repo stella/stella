@@ -106,6 +106,7 @@ const ROLE_GRANT_STATEMENTS = [
     REVOKE INSERT, UPDATE, DELETE ON TABLE
       "case_law_sources",
       "case_law_decisions",
+      "case_law_decision_identifiers",
       "case_law_citations",
       "case_law_provision_citations",
       "case_law_polarity_rules",
@@ -121,6 +122,7 @@ const ROLE_GRANT_STATEMENTS = [
     GRANT SELECT ON TABLE
       "case_law_sources",
       "case_law_decisions",
+      "case_law_decision_identifiers",
       "case_law_citations",
       "case_law_provision_citations",
       "case_law_polarity_rules",
@@ -135,6 +137,7 @@ const ROLE_GRANT_STATEMENTS = [
   `
     GRANT INSERT, UPDATE, DELETE ON TABLE
       "case_law_decisions",
+      "case_law_decision_identifiers",
       "case_law_citations",
       "case_law_provision_citations",
       "case_law_polarity_rules",

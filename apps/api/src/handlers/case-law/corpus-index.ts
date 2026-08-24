@@ -4,11 +4,12 @@ import { and, asc, eq, isNotNull, isNull, lte, or, sql } from "drizzle-orm";
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
-  caseLawDecisions,
   caseLawCorpusIndexBackfills,
   caseLawCorpusIndexProjections,
   caseLawCorpusIndexSourceReconciliations,
   caseLawCorpusIndexWriterLeases,
+  caseLawDecisionIdentifiers,
+  caseLawDecisions,
   CASE_LAW_CORPUS_INDEX_BACKFILL_STATUS,
   type CaseLawCorpusIndexBackfillStatus,
   type CaseLawCorpusIndexProjectionAction,
@@ -97,6 +98,7 @@ type IndexableRow = {
   sourceId: SafeId<"caseLawSource">;
   caseNumber: string;
   ecli: string | null;
+  identifiers: string[];
   court: string;
   country: string;
   language: string;
@@ -125,6 +127,12 @@ const SELECT_COLUMNS = {
   sourceId: caseLawDecisions.sourceId,
   caseNumber: caseLawDecisions.caseNumber,
   ecli: caseLawDecisions.ecli,
+  identifiers: sql<string[]>`ARRAY(
+    SELECT identifier.value
+    FROM ${caseLawDecisionIdentifiers} identifier
+    WHERE identifier.decision_id = ${caseLawDecisions.id}
+    ORDER BY identifier.type, identifier.value
+  )`,
   court: caseLawDecisions.court,
   country: caseLawDecisions.country,
   language: caseLawDecisions.language,
@@ -673,7 +681,9 @@ const buildDocs = (
   { text, ast }: CorpusDocumentPayload,
 ): Record<string, unknown>[] => {
   const shared = buildSharedFields(row);
-  const title = `${row.caseNumber} — ${row.court}`;
+  const identifierTitle =
+    row.identifiers.length > 0 ? row.identifiers.join(" · ") : row.caseNumber;
+  const title = `${identifierTitle} — ${row.court}`;
   return chunkDocument({
     ast: hasUsableAst(ast) ? ast : null,
     fallbackText: text,

@@ -2,10 +2,13 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
+import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
+
 import type { Transaction } from "@/api/db/root";
 import {
   caseLawCitationResolutionProgress,
   caseLawCitations,
+  caseLawDecisionIdentifiers,
   caseLawDecisions,
   caseLawSources,
 } from "@/api/db/schema";
@@ -251,6 +254,54 @@ beforeAll(
 
 afterAll(async () => {
   await client.close();
+});
+
+test("resolves a structured citation through its normalized identifier", async () => {
+  const targetId = createSafeId<"caseLawDecision">();
+  const citingId = createSafeId<"caseLawDecision">();
+  const citationId = createSafeId<"caseLawCitation">();
+  await db.insert(caseLawDecisions).values([
+    {
+      ...base,
+      id: targetId,
+      caseNumber: "Example target",
+      citationKey: "example target",
+      country: "CZE",
+      decisionDate: "2019-01-01",
+    },
+    {
+      ...base,
+      id: citingId,
+      caseNumber: "Example citing",
+      citationKey: "example citing",
+      country: "CZE",
+      decisionDate: "2020-01-01",
+    },
+  ]);
+  await db.insert(caseLawDecisionIdentifiers).values({
+    decisionId: targetId,
+    type: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
+    value: "347 U.S. 483",
+    normalizedValue: "347us483",
+  });
+  await db.insert(caseLawCitations).values({
+    id: citationId,
+    citingDecisionId: citingId,
+    citationText: "347 US 483",
+    citationKey: "347 us 483",
+    identifierType: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
+    normalizedIdentifierValue: "347us483",
+  });
+
+  await resolveCitationsForDecision(asTx(), citingId);
+
+  const [citation] = await db
+    .select()
+    .from(caseLawCitations)
+    .where(eq(caseLawCitations.id, citationId))
+    .limit(1);
+  expect(citation?.citedDecisionId).toBe(targetId);
+  expect(citation?.resolutionStatus).toBe(CITATION_RESOLUTION_STATUS.RESOLVED);
 });
 
 type CitationRow = {

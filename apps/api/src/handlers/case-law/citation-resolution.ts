@@ -1,11 +1,11 @@
 /**
  * Citation resolution: link a citation to the decision it cites.
  *
- * Both sides carry the same canonical key (`bareCitationKey` over the
- * citation's text and over the decision's case number), so resolution is an
- * indexed equality join rather than a scan. The work happens inside one
- * statement per batch: nothing about it scales with corpus size, and a run
- * can stop and resume anywhere.
+ * Both sides carry the same typed, canonical identifier. Docket-only legacy
+ * rows keep their `citation_key` bridge until the bounded identifier backfill
+ * projects them. Resolution is therefore an indexed equality join rather
+ * than a scan. The work happens inside one statement per batch: nothing about
+ * it scales with corpus size, and a run can stop and resume anywhere.
  *
  * Three rules keep a link honest, and each of them is a filter in the join
  * rather than a check afterwards:
@@ -58,10 +58,13 @@
 import { sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
+import type { DecisionIdentifierType } from "@stll/legal-ast/decision-identifier";
+
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   caseLawCitationResolutionProgress,
   caseLawCitations,
+  caseLawDecisionIdentifiers,
   caseLawDecisions,
 } from "@/api/db/schema";
 import {
@@ -279,6 +282,8 @@ const policyCte = (): SQL =>
 type CitationCandidateHoldersSqlOptions = {
   holder: SQL;
   citationKey: SQL;
+  identifierType: SQL;
+  normalizedIdentifierValue: SQL;
   citingDecisionId: SQL;
   citingDate: SQL;
   resolvesTo: SQL;
@@ -287,21 +292,48 @@ type CitationCandidateHoldersSqlOptions = {
 export const citationCandidateHoldersSql = ({
   holder,
   citationKey,
+  identifierType,
+  normalizedIdentifierValue,
   citingDecisionId,
   citingDate,
   resolvesTo,
 }: CitationCandidateHoldersSqlOptions): SQL => sql`
-  SELECT ${holder}.id, ${holder}.court, ${holder}.decision_type
-    FROM ${caseLawDecisions} ${holder}
-   WHERE ${holder}.citation_key = ${citationKey}
-     AND ${holder}.country = ANY (${resolvesTo})
-     AND ${holder}.id <> ${citingDecisionId}
-     AND (
-           ${holder}.decision_date IS NULL
-        OR ${citingDate} IS NULL
-        OR ${citingDate} >= ${holder}.decision_date
-         )
-   LIMIT ${CITATION_CANDIDATE_SCAN_CAP}`;
+  SELECT candidate.id, candidate.court, candidate.decision_type
+  FROM (
+    SELECT ${holder}.id, ${holder}.court, ${holder}.decision_type
+      FROM ${caseLawDecisionIdentifiers} identifier
+      JOIN ${caseLawDecisions} ${holder}
+        ON ${holder}.id = identifier.decision_id
+     WHERE identifier.type = coalesce(${identifierType}, 'case-number')
+       AND identifier.normalized_value = coalesce(${normalizedIdentifierValue}, ${citationKey})
+       AND ${holder}.country = ANY (${resolvesTo})
+       AND ${holder}.id <> ${citingDecisionId}
+       AND (
+             ${holder}.decision_date IS NULL
+          OR ${citingDate} IS NULL
+          OR ${citingDate} >= ${holder}.decision_date
+           )
+    UNION ALL
+    SELECT ${holder}.id, ${holder}.court, ${holder}.decision_type
+      FROM ${caseLawDecisions} ${holder}
+     WHERE (${identifierType} IS NULL OR ${identifierType} = 'case-number')
+       AND ${holder}.citation_key = ${citationKey}
+       AND ${holder}.country = ANY (${resolvesTo})
+       AND ${holder}.id <> ${citingDecisionId}
+       AND (
+             ${holder}.decision_date IS NULL
+          OR ${citingDate} IS NULL
+          OR ${citingDate} >= ${holder}.decision_date
+           )
+       AND NOT EXISTS (
+         SELECT 1
+         FROM ${caseLawDecisionIdentifiers} existing_identifier
+         WHERE existing_identifier.decision_id = ${holder}.id
+           AND existing_identifier.type = 'case-number'
+           AND existing_identifier.normalized_value = ${citationKey}
+       )
+  ) candidate
+  LIMIT ${CITATION_CANDIDATE_SCAN_CAP}`;
 
 /**
  * The one statement. `selection` names which pending rows this call settles;
@@ -318,6 +350,8 @@ const resolutionStatement = (selection: SQL): SQL => sql`
   batch AS (
     SELECT c.id,
            c.citation_key,
+           c.identifier_type,
+           c.normalized_identifier_value,
            c.citing_decision_id,
            c.cited_decision_type_hint,
            citing.country AS citing_country,
@@ -392,6 +426,10 @@ const resolutionStatement = (selection: SQL): SQL => sql`
             ${citationCandidateHoldersSql({
               holder: sql.raw("cited"),
               citationKey: sql.raw("b.citation_key"),
+              identifierType: sql.raw("b.identifier_type"),
+              normalizedIdentifierValue: sql.raw(
+                "b.normalized_identifier_value",
+              ),
               citingDecisionId: sql.raw("b.citing_decision_id"),
               citingDate: sql.raw("b.citing_date"),
               resolvesTo: sql.raw("pol.resolves_to"),
@@ -401,7 +439,22 @@ const resolutionStatement = (selection: SQL): SQL => sql`
       LEFT JOIN LATERAL (
         SELECT 1 AS blocked
           FROM ${caseLawDecisions} other
-         WHERE other.citation_key = b.citation_key
+         WHERE (
+               EXISTS (
+                 SELECT 1
+                 FROM ${caseLawDecisionIdentifiers} other_identifier
+                 WHERE other_identifier.decision_id = other.id
+                   AND other_identifier.type = coalesce(b.identifier_type, 'case-number')
+                   AND other_identifier.normalized_value = coalesce(
+                     b.normalized_identifier_value,
+                     b.citation_key
+                   )
+               )
+               OR (
+                 (b.identifier_type IS NULL OR b.identifier_type = 'case-number')
+                 AND other.citation_key = b.citation_key
+               )
+             )
            AND NOT (other.country = ANY (pol.resolves_to))
            AND other.id <> b.citing_decision_id
            AND (
@@ -774,6 +827,110 @@ export const reopenCitationsForDecisionKey = async (
          + (SELECT count(*)::int FROM contested) AS reopened
   `);
 
+  const row: unknown = firstRow(result);
+  return isRecord(row) ? toCount(row["reopened"]) : 0;
+};
+
+type NormalizedDecisionIdentifier = {
+  type: DecisionIdentifierType;
+  normalizedValue: string;
+};
+
+type ReopenCitationsForDecisionIdentifiersOptions = {
+  identifiers: readonly NormalizedDecisionIdentifier[];
+  decisionId: SafeId<"caseLawDecision">;
+  jurisdiction: CaseLawJurisdiction;
+  decisionDate: string | null;
+};
+
+/** Reopen typed citations whose candidate set changed with one decision. */
+export const reopenCitationsForDecisionIdentifiers = async (
+  tx: CitationResolutionTx,
+  {
+    identifiers,
+    decisionId,
+    jurisdiction,
+    decisionDate,
+  }: ReopenCitationsForDecisionIdentifiersOptions,
+): Promise<number> => {
+  if (identifiers.length === 0) {
+    return 0;
+  }
+  await lockCitationGraph(tx);
+  const identifierRows = sql.join(
+    identifiers.map(
+      (identifier) =>
+        sql`(${identifier.type}::varchar, ${identifier.normalizedValue}::varchar)`,
+    ),
+    sql`, `,
+  );
+  const reachedFrom = sql`(
+    SELECT pol.citing_country
+      FROM (VALUES ${sql.join(
+        citationResolutionPolicyRows().map(
+          ({ jurisdiction: citing, resolvesTo }) =>
+            sql`(${citing}::varchar, ${jurisdictionArray(resolvesTo)})`,
+        ),
+        sql`, `,
+      )}) AS pol(citing_country, resolves_to)
+     WHERE ${jurisdiction}::varchar = ANY (pol.resolves_to)
+  )`;
+
+  const result: unknown = await tx.execute(sql`
+    WITH arriving(type, normalized_value) AS (VALUES ${identifierRows}),
+    revived AS (
+      UPDATE ${caseLawCitations} citation
+         SET resolution_status = ${CITATION_RESOLUTION_STATUS.PENDING},
+             resolution_rule_id = NULL
+        FROM ${caseLawDecisions} citing
+       WHERE citing.id = citation.citing_decision_id
+         AND EXISTS (
+           SELECT 1
+           FROM arriving
+           WHERE arriving.type = coalesce(citation.identifier_type, 'case-number')
+             AND arriving.normalized_value = coalesce(
+               citation.normalized_identifier_value,
+               citation.citation_key
+             )
+         )
+         AND ${citationReopenableByKeySql(sql.raw("citation.resolution_status"))}
+         AND citing.country IN ${reachedFrom}
+         AND (
+               citing.decision_date IS NULL
+            OR ${decisionDate}::date IS NULL
+            OR citing.decision_date >= ${decisionDate}::date
+             )
+      RETURNING citation.id
+    ),
+    contested AS (
+      UPDATE ${caseLawCitations} citation
+         SET resolution_status = ${CITATION_RESOLUTION_STATUS.PENDING},
+             cited_decision_id = NULL,
+             resolution_rule_id = NULL
+        FROM ${caseLawDecisions} citing, ${caseLawDecisions} cited
+       WHERE citing.id = citation.citing_decision_id
+         AND cited.id = citation.cited_decision_id
+         AND cited.id <> ${decisionId}::uuid
+         AND EXISTS (
+           SELECT 1
+           FROM arriving
+           JOIN ${caseLawDecisionIdentifiers} cited_identifier
+             ON cited_identifier.type = arriving.type
+            AND cited_identifier.normalized_value = arriving.normalized_value
+           WHERE cited_identifier.decision_id = cited.id
+         )
+         AND citation.resolution_status = ${CITATION_RESOLUTION_STATUS.RESOLVED}
+         AND citing.country IN ${reachedFrom}
+         AND (
+               citing.decision_date IS NULL
+            OR ${decisionDate}::date IS NULL
+            OR citing.decision_date >= ${decisionDate}::date
+             )
+      RETURNING citation.id
+    )
+    SELECT (SELECT count(*)::int FROM revived)
+         + (SELECT count(*)::int FROM contested) AS reopened
+  `);
   const row: unknown = firstRow(result);
   return isRecord(row) ? toCount(row["reopened"]) : 0;
 };

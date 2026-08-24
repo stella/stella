@@ -1,5 +1,8 @@
 import { panic } from "better-result";
 
+import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
+import type { DecisionIdentifier } from "@stll/legal-ast/decision-identifier";
+
 import {
   ADAPTER_KEYS,
   ADAPTER_TIMEOUT,
@@ -815,6 +818,27 @@ const buildPlDecision = ({
         Boolean(courtCase.caseNumber) && courtCase.caseNumber !== caseNumber,
     )
     .map((courtCase) => courtCase.caseNumber);
+  const courtReporters = normalizeOptionalArray(
+    item.courtReporters,
+    dumpItem.courtReporters,
+  );
+  const reporterIdentifiers: DecisionIdentifier[] = courtReporters.map(
+    (value) => ({
+      type: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
+      value,
+    }),
+  );
+  const publisherIdentifiers: DecisionIdentifier[] = additionalCaseNumbers
+    ? [
+        ...additionalCaseNumbers.map((value) => ({
+          type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+          value,
+        })),
+        ...reporterIdentifiers,
+      ]
+    : reporterIdentifiers;
+  const [firstPublisherIdentifier, ...otherPublisherIdentifiers] =
+    publisherIdentifiers;
 
   const rawPayload = JSON.stringify({ dumpItem, detail });
   const rawHash = hashContent(JSON.stringify(dumpItem));
@@ -829,6 +853,11 @@ const buildPlDecision = ({
   return {
     caseNumber,
     ecli,
+    ...(firstPublisherIdentifier === undefined
+      ? {}
+      : {
+          identifiers: [firstPublisherIdentifier, ...otherPublisherIdentifiers],
+        }),
     court: courtName,
     country: "POL",
     language: "pl",
@@ -857,10 +886,7 @@ const buildPlDecision = ({
       keywords,
       division: effectiveDivision,
       source: effectiveSource,
-      courtReporters: normalizeOptionalArray(
-        item.courtReporters,
-        dumpItem.courtReporters,
-      ),
+      courtReporters,
       decision: toOptionalValue(item.decision ?? dumpItem.decision),
       summary: toOptionalValue(item.summary ?? dumpItem.summary),
       legalBases: statutes,

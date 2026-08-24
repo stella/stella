@@ -1,8 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  DECISION_IDENTIFIER_MAX_LENGTH,
   DECISION_IDENTIFIER_TYPES,
   isDecisionIdentifier,
+  normalizeStructuredDecisionIdentifier,
 } from "./decision-identifier";
 import type { DecisionIdentifiers } from "./decision-identifier";
 
@@ -43,6 +45,35 @@ describe("decision identifiers", () => {
       }),
     ).toBe(false);
   });
+
+  test("rejects values beyond the shared storage boundary", () => {
+    expect(
+      isDecisionIdentifier({
+        type: DECISION_IDENTIFIER_TYPES.ECLI,
+        value: "x".repeat(DECISION_IDENTIFIER_MAX_LENGTH + 1),
+      }),
+    ).toBe(false);
+  });
+
+  test.each([
+    [DECISION_IDENTIFIER_TYPES.ECLI, "ECLI:EU:C:2024:123", "euc2024123"],
+    [
+      DECISION_IDENTIFIER_TYPES.NEUTRAL_CITATION,
+      "[2024] Example Court 12",
+      "2024examplecourt12",
+    ],
+    [DECISION_IDENTIFIER_TYPES.REPORTER_CITATION, "347 U.S. 483", "347us483"],
+  ] as const)(
+    "normalizes structured identifier %s",
+    (type, value, expected) => {
+      expect(
+        normalizeStructuredDecisionIdentifier({
+          type,
+          value,
+        }),
+      ).toBe(expected);
+    },
+  );
 
   test("represents parallel citations as identifiers for one decision", () => {
     const identifiers = [

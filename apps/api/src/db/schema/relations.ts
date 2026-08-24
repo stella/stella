@@ -9,6 +9,7 @@ import {
 import {
   caseLawCitations,
   caseLawCourtWeights,
+  caseLawDecisionIdentifiers,
   caseLawDecisionSourceIdentities,
   caseLawDecisions,
   caseLawFtsConfigs,
@@ -183,6 +184,7 @@ export const relations = defineRelations(
     searchDocuments,
     extractedContent,
     caseLawSources,
+    caseLawDecisionIdentifiers,
     caseLawDecisionSourceIdentities,
     caseLawDecisions,
     caseLawCitations,
@@ -1073,6 +1075,12 @@ export const relations = defineRelations(
         to: r.caseLawSources.id,
       }),
     },
+    caseLawDecisionIdentifiers: {
+      decision: r.one.caseLawDecisions({
+        from: r.caseLawDecisionIdentifiers.decisionId,
+        to: r.caseLawDecisions.id,
+      }),
+    },
     caseLawDecisions: {
       source: r.one.caseLawSources({
         from: r.caseLawDecisions.sourceId,
@@ -1085,6 +1093,10 @@ export const relations = defineRelations(
       citationsTo: r.many.caseLawCitations({
         from: r.caseLawDecisions.id,
         to: r.caseLawCitations.citedDecisionId,
+      }),
+      identifiers: r.many.caseLawDecisionIdentifiers({
+        from: r.caseLawDecisions.id,
+        to: r.caseLawDecisionIdentifiers.decisionId,
       }),
       searchDocument: r.one.caseLawSearchDocuments({
         from: r.caseLawDecisions.id,
