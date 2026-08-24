@@ -146,7 +146,7 @@ const footnoteOf = (el: cheerio.Cheerio<AnyNode>): PChunk["footnote"] => {
     : { anchorId: id, label };
 };
 
-const SPACED_EMPHASIS_RE = /^\s*(?:\p{L}\s+){1,}\p{L}\s*(?:[,:;.!?])?\s*$/u;
+const SPACED_EMPHASIS_RE = /^(?:\p{L} +)+\p{L}(?: *[,:;.!?])?$/u;
 const MULTI_SPACE_MARKER = "\u0000";
 
 /**
@@ -191,14 +191,14 @@ const normalizeNssInlines = (
     }
     if (node.type === "text") {
       const whitespaceNormalized = node.text.replace(/\s/gu, " ");
+      const trimmed = whitespaceNormalized.trim();
       const text =
-        spacedEmphasis && SPACED_EMPHASIS_RE.test(whitespaceNormalized)
-          ? whitespaceNormalized
-              .trim()
+        spacedEmphasis && SPACED_EMPHASIS_RE.test(trimmed)
+          ? trimmed
               .replace(/ {2,}/gu, () => MULTI_SPACE_MARKER)
               .replace(/(?<=\p{L}) (?=\p{L})/gu, "")
               .replaceAll(MULTI_SPACE_MARKER, " ")
-              .replace(/\s+([,:;.!?])/gu, "$1")
+              .replace(/(?<=\p{L}) +(?=[,:;.!?])/gu, "")
           : collapseSpacedLetters(whitespaceNormalized);
       return node.anonymized === true
         ? { type: "text", text, anonymized: true }
