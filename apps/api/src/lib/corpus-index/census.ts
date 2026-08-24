@@ -32,7 +32,7 @@
  * it.
  */
 
-import { Result, TaggedError } from "better-result";
+import { Result, TaggedError, panic } from "better-result";
 import {
   and,
   asc,
@@ -58,6 +58,7 @@ import {
   caseLawCorpusIndexDeleteWatermarks,
   caseLawCorpusIndexPendingDeletes,
   caseLawCorpusIndexProjections,
+  caseLawCorpusJurisdictions,
   caseLawDecisions,
 } from "@/api/db/schema";
 import { errorTag } from "@/api/lib/errors/error-tag";
@@ -617,20 +618,25 @@ export const reportIndexCensus = ({
 const MAX_CENSUSED_JURISDICTIONS = 256;
 
 /**
- * Jurisdictions the corpus holds. Read from the decisions themselves
- * rather than from a hand-kept list, so a new country's index cannot be
- * uncensused because nobody remembered to add it.
+ * Jurisdictions the corpus has ever held. The write-boundary-derived registry
+ * keeps the read constant-size without becoming a hand-maintained list, so a
+ * new country's index cannot be uncensused because nobody remembered to add it.
  */
 export const listCaseLawJurisdictions = async (
   scopedDb: ScopedDb,
 ): Promise<string[]> => {
   const rows = await scopedDb((tx) =>
     tx
-      .selectDistinct({ country: caseLawDecisions.country })
-      .from(caseLawDecisions)
-      .orderBy(caseLawDecisions.country)
-      .limit(MAX_CENSUSED_JURISDICTIONS),
+      .select({ country: caseLawCorpusJurisdictions.country })
+      .from(caseLawCorpusJurisdictions)
+      .orderBy(caseLawCorpusJurisdictions.country)
+      .limit(MAX_CENSUSED_JURISDICTIONS + 1),
   );
+  if (rows.length > MAX_CENSUSED_JURISDICTIONS) {
+    return panic(
+      `Case-law corpus exceeds the ${MAX_CENSUSED_JURISDICTIONS} jurisdiction census ceiling`,
+    );
+  }
   return rows.map(({ country }) => country);
 };
 
