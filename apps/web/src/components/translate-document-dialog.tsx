@@ -36,6 +36,7 @@ import {
   isDocumentTranslationRunActive,
   type DocumentTranslationRun,
 } from "@/components/document-translation-queries";
+import { canStartDocumentTranslation } from "@/components/translate-document-dialog.logic";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useLocale } from "@/i18n/formatting-context";
@@ -229,11 +230,18 @@ export const TranslateDocumentDialog = ({
 
   const run = runQuery.data?.run;
   const isStarting = translateMutation.isPending;
+  const isLoadingRun = runId !== null && runQuery.isPending;
   const isRunning = run ? isDocumentTranslationRunActive(run.status) : false;
   const progress =
     run && run.total > 0 ? Math.min(1, run.completed / run.total) : 0;
-  const canStart =
-    !isStarting && (!isDeepL || canUseDeepL) && !sameLanguage && !isRunning;
+  const canStart = canStartDocumentTranslation({
+    canUseDeepL,
+    isDeepL,
+    isLoadingRun,
+    isRunning,
+    isStarting,
+    sameLanguage,
+  });
 
   return (
     <Dialog

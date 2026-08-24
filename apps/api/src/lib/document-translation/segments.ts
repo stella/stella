@@ -371,16 +371,18 @@ const replacementByMarker = (
 };
 
 const wordTextElementName = (xml: string): string => {
-  const wordNamespace =
-    "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
-  const prefixed = new RegExp(
-    `xmlns:(?<prefix>[A-Za-z_][\\w.-]*)\\s*=\\s*["']${wordNamespace}["']`,
-    "u",
-  ).exec(xml)?.groups?.["prefix"];
+  const prefixed =
+    /xmlns:(?<prefix>[A-Za-z_][\w.-]*)\s*=\s*["']http:\/\/schemas\.openxmlformats\.org\/wordprocessingml\/2006\/main["']/u.exec(
+      xml,
+    )?.groups?.["prefix"];
   if (prefixed) {
     return `${prefixed}:t`;
   }
-  if (new RegExp(`xmlns\\s*=\\s*["']${wordNamespace}["']`, "u").test(xml)) {
+  if (
+    /xmlns\s*=\s*["']http:\/\/schemas\.openxmlformats\.org\/wordprocessingml\/2006\/main["']/u.test(
+      xml,
+    )
+  ) {
     return "t";
   }
   return "w:t";

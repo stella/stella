@@ -9,6 +9,7 @@ import { Checkbox } from "@stll/ui/checkbox";
 import { Input } from "@stll/ui/input";
 
 import { DatePickerPopover } from "@/components/date-picker-popover";
+import { rememberSelectedFacetLabels } from "@/components/search-dialog.logic";
 import {
   dateInputToIsoEnd,
   dateInputToIsoStart,
@@ -298,6 +299,9 @@ export const SearchableFacetGroup = ({
         className="mb-1.5 h-7 px-2 text-xs"
         onChange={(event) => {
           const value = event.target.value;
+          setSelectedLabels((current) =>
+            rememberSelectedFacetLabels(current, selected, labelsByValue),
+          );
           setSearch(value);
           debouncedSetSearch(value);
         }}
@@ -307,10 +311,9 @@ export const SearchableFacetGroup = ({
       <FacetBucketList
         buckets={buckets}
         onChange={(value) => {
-          const label = labelsByValue.get(value);
-          if (label !== undefined && selectedLabels[value] !== label) {
-            setSelectedLabels((current) => ({ ...current, [value]: label }));
-          }
+          setSelectedLabels((current) =>
+            rememberSelectedFacetLabels(current, [value], labelsByValue),
+          );
           onChange(value);
         }}
         selected={selected}

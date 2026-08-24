@@ -216,3 +216,22 @@ export const toAskAIMessageHtml = (query: string): string =>
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;");
+
+export const rememberSelectedFacetLabels = (
+  current: Record<string, string>,
+  selected: readonly string[],
+  labelsByValue: ReadonlyMap<string, string>,
+): Record<string, string> => {
+  let next = current;
+  for (const value of selected) {
+    const label = labelsByValue.get(value);
+    if (label === undefined || current[value] === label) {
+      continue;
+    }
+    if (next === current) {
+      next = { ...current };
+    }
+    next[value] = label;
+  }
+  return next;
+};
