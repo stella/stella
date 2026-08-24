@@ -2277,7 +2277,7 @@
       "results": "Výsledky kontroly",
       "reviewAgain": "Spustit další kontrolu",
       "reviewedAgainstCombined": "{count, plural, one {Zkontrolováno podle {name} a porovnáno s # referenčním dokumentem} few {Zkontrolováno podle {name} a porovnáno s # referenčními dokumenty} other {Zkontrolováno podle {name} a porovnáno s # referenčními dokumenty}}",
-      "reviewing": "Kontrola probíhá…",
+      "reviewing": "Probíhá kontrola…",
       "reviewingHint": "U rozsáhlých dokumentů to může trvat až několik minut.",
       "run": "Spustit kontrolu",
       "scoreTopics": "Zkontrolovat tato témata",

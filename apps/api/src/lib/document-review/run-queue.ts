@@ -19,13 +19,17 @@
 
 import { panic, Result } from "better-result";
 import { Worker } from "bullmq";
-import { and, eq, inArray, lt, or } from "drizzle-orm";
+import { and, eq, inArray, lt, or, sql } from "drizzle-orm";
 
 import { DAY_IN_MS } from "@stll/time";
 
 import { rootDb } from "@/api/db/root";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
-import { documentReviewRuns, fields } from "@/api/db/schema";
+import {
+  documentReviewFindings,
+  documentReviewRuns,
+  fields,
+} from "@/api/db/schema";
 import { isAiExtractablePropertyContent } from "@/api/db/schema-validators";
 import type { FieldContent } from "@/api/db/schema-validators";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
@@ -780,13 +784,33 @@ const buildFindingRow = ({
     payload,
   });
 
+/** Commit a pass's findings and record how many the run holds so far, so a
+ *  client polling the run sees progress land pass by pass rather than only
+ *  at the end. Counted in the same transaction as the write, so the number
+ *  can never run ahead of the rows. */
 const upsertFindings = async (
   actor: RunActor,
   rows: readonly FindingRow[],
 ): Promise<void> => {
-  await actor.scopedDb(
-    async (tx) => await upsertDocumentReviewFindings(tx, rows),
-  );
+  await actor.scopedDb(async (tx) => {
+    await upsertDocumentReviewFindings(tx, rows);
+    // audit: skip — progress bookkeeping on the run row audited at create.
+    await tx
+      .update(documentReviewRuns)
+      .set({
+        completed: sql<number>`(
+          select count(*)::int from ${documentReviewFindings}
+          where ${documentReviewFindings.runId} = ${documentReviewRuns.id}
+        )`,
+      })
+      .where(
+        and(
+          eq(documentReviewRuns.id, actor.runId),
+          eq(documentReviewRuns.workspaceId, actor.workspaceId),
+          eq(documentReviewRuns.status, "running"),
+        ),
+      );
+  });
 };
 
 /**

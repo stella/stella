@@ -1794,13 +1794,20 @@ const ReviewProgressState = ({
 }: ReviewProgressStateProps) => {
   const t = useTranslations();
   const format = useFormatter();
-  const ratio = total === 0 ? 0 : Math.min(1, completed / total);
-  const percent = format.number(ratio, { style: "percent" });
+  // The worker commits findings a pass at a time, so a count is honest only
+  // once something has landed; before that the loader alone says "working".
+  const progress =
+    completed > 0 && total > 0
+      ? `${format.number(completed)}/${format.number(total)}`
+      : null;
+  const detail = [sourceName, progress]
+    .filter((part) => part !== null && part.length > 0)
+    .join(" · ");
 
   return (
     <LoaderState
       className="bg-background"
-      detail={sourceName.length > 0 ? `${sourceName} · ${percent}` : percent}
+      detail={detail.length > 0 ? detail : undefined}
       hint={t("inspector.review.reviewingHint")}
       label={t("inspector.review.reviewing")}
     />
