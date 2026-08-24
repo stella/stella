@@ -14,7 +14,12 @@ import {
 } from "@/api/db/schema";
 import type { CaseLawDecisionIdentifierBackfillPhase } from "@/api/db/schema";
 import { lockCitationGraph } from "@/api/handlers/case-law/citation-resolution";
-import { CITATION_RESOLUTION_STATUS } from "@/api/handlers/case-law/citation-resolution-status";
+import {
+  CITATION_RESOLUTION_STATUS,
+  effectiveCitationIdentifierTypeSql,
+  effectiveCitationIdentifierValueSql,
+  settledCitationSql,
+} from "@/api/handlers/case-law/citation-resolution-status";
 import {
   decisionIdentifierTypeOfCitation,
   decisionIdentifiersFromStoredMetadata,
@@ -409,17 +414,16 @@ const projectDecisionPage = async (
       SET resolution_status = ${CITATION_RESOLUTION_STATUS.PENDING},
           cited_decision_id = NULL, resolution_rule_id = NULL,
           resolution_attempted_at = NULL
-      WHERE citation.resolution_status <> ${CITATION_RESOLUTION_STATUS.PENDING}
+      WHERE ${settledCitationSql(sql.raw("citation.resolution_status"))}
         AND EXISTS (
           SELECT 1 FROM changed_identifiers changed
-          WHERE changed.type = coalesce(
-                  citation.identifier_type,
-                  ${DECISION_IDENTIFIER_TYPES.CASE_NUMBER}
-                )
-            AND changed.normalized_value = coalesce(
-                  citation.normalized_identifier_value,
-                  citation.citation_key
-                )
+          WHERE changed.type = ${effectiveCitationIdentifierTypeSql(
+            sql.raw("citation.identifier_type"),
+          )}
+            AND changed.normalized_value = ${effectiveCitationIdentifierValueSql(
+              sql.raw("citation.normalized_identifier_value"),
+              sql.raw("citation.citation_key"),
+            )}
         )
       RETURNING citation.id
     ), changed_decisions AS (

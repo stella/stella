@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
-import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
+import {
+  DECISION_IDENTIFIER_MAX_COUNT,
+  DECISION_IDENTIFIER_TYPES,
+} from "@stll/legal-ast/decision-identifier";
 import type { DecisionIdentifiers } from "@stll/legal-ast/decision-identifier";
 
 import {
@@ -1946,6 +1949,26 @@ describe("stored decision identifier projection", () => {
         value: "12 Test Reporter 34",
       },
     ]);
+  });
+
+  test("reserves identifier capacity for a legacy reporter citation", () => {
+    const identifiers = decisionIdentifiersFromStoredMetadata({
+      caseNumber: "1 As 2/2024",
+      ecli: null,
+      metadata: {
+        additionalCaseNumbers: Array.from(
+          { length: DECISION_IDENTIFIER_MAX_COUNT },
+          (_, index) => `alias ${index}/2024`,
+        ),
+        citation: "12 Test Reporter 34",
+      },
+    });
+
+    expect(identifiers).toHaveLength(DECISION_IDENTIFIER_MAX_COUNT);
+    expect(identifiers.at(-1)).toEqual({
+      type: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
+      value: "12 Test Reporter 34",
+    });
   });
 
   test("reads the exact identifier set persisted by ingestion", () => {

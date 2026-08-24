@@ -20,6 +20,9 @@ import {
   CITATION_RESOLUTION_STATUS,
   CITATION_RESOLUTION_STATUSES,
   citationReopenableByKeySql,
+  effectiveCitationIdentifierTypeSql,
+  effectiveCitationIdentifierValueSql,
+  settledCitationSql,
   unsettledCitationSql,
 } from "@/api/handlers/case-law/citation-resolution-status";
 import {
@@ -1030,6 +1033,16 @@ export const caseLawCitations = p.pgTable(
       .index("case_law_citations_reopenable_identifier_idx")
       .on(t.identifierType, t.normalizedIdentifierValue)
       .where(citationReopenableByKeySql(t.resolutionStatus)),
+    p
+      .index("case_law_citations_identifier_backfill_identity_idx")
+      .on(
+        effectiveCitationIdentifierTypeSql(t.identifierType),
+        effectiveCitationIdentifierValueSql(
+          t.normalizedIdentifierValue,
+          t.citationKey,
+        ),
+      )
+      .where(settledCitationSql(t.resolutionStatus)),
     p.check(
       "citations_polarity_values",
       sql`${t.polarity} IN (${sql.join(POLARITY_SQL_VALUES, sql.raw(","))})`,

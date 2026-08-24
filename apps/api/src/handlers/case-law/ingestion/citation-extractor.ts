@@ -735,7 +735,17 @@ export const decisionIdentifiersFromStoredMetadata = ({
     ? storedAliasesValue
     : [];
 
-  const capacity = DECISION_IDENTIFIER_MAX_COUNT - (ecli ? 2 : 1);
+  const reporterIdentifier = {
+    type: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
+    value: legacyReporterCitation,
+  };
+  const validReporterIdentifier = isDecisionIdentifier(reporterIdentifier)
+    ? reporterIdentifier
+    : null;
+  const capacity =
+    DECISION_IDENTIFIER_MAX_COUNT -
+    (ecli ? 2 : 1) -
+    (validReporterIdentifier === null ? 0 : 1);
   const seen = new Set([
     normalizeDecisionIdentifier({
       type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
@@ -761,13 +771,9 @@ export const decisionIdentifiersFromStoredMetadata = ({
       break;
     }
   }
-  const reporterIdentifier = {
-    type: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
-    value: legacyReporterCitation,
-  };
   const legacyIdentifiers: DecisionIdentifier[] = aliases;
-  if (isDecisionIdentifier(reporterIdentifier)) {
-    legacyIdentifiers.push(reporterIdentifier);
+  if (validReporterIdentifier !== null) {
+    legacyIdentifiers.push(validReporterIdentifier);
   }
   const [firstIdentifier, ...otherIdentifiers] = legacyIdentifiers;
   return decisionIdentifiersFromMetadata({

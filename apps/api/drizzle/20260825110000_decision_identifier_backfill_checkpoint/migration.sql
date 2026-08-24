@@ -33,4 +33,26 @@ CREATE POLICY "case_law_ingestion_access"
 
 GRANT SELECT ON TABLE "case_law_decision_identifier_backfills" TO stella;--> statement-breakpoint
 GRANT SELECT, INSERT, UPDATE, DELETE
-  ON TABLE "case_law_decision_identifier_backfills" TO stella_ingestion;
+  ON TABLE "case_law_decision_identifier_backfills" TO stella_ingestion;--> statement-breakpoint
+
+-- The rollout reopens settled citations when a decision's legacy identity
+-- changes. Build the exact coalesced lookup before the backfill can run so a
+-- page never scans the citation corpus while holding the graph lock.
+-- squawk-ignore transaction-nesting
+COMMIT;--> statement-breakpoint
+SET statement_timeout = 0;--> statement-breakpoint
+SET lock_timeout = 0;--> statement-breakpoint
+-- stella-migration-safety: reviewed destructive-change - removes only this
+-- migration's index so a cancelled INVALID build can be retried.
+DROP INDEX CONCURRENTLY IF EXISTS "case_law_citations_identifier_backfill_identity_idx";--> statement-breakpoint
+-- squawk-ignore prefer-robust-stmts
+CREATE INDEX CONCURRENTLY "case_law_citations_identifier_backfill_identity_idx"
+  ON "case_law_citations" (
+    (coalesce("identifier_type", 'case-number')),
+    (coalesce("normalized_identifier_value", "citation_key"))
+  )
+  WHERE "resolution_status" <> 'pending';--> statement-breakpoint
+SET statement_timeout = '5s';--> statement-breakpoint
+SET lock_timeout = '1s';--> statement-breakpoint
+-- squawk-ignore transaction-nesting, ban-uncommitted-transaction
+BEGIN;
