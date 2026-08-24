@@ -11,9 +11,12 @@
 /** Shared responsive size for the two round controls flanking a composer. */
 export const COMPOSER_CONTROL_BUTTON_SIZE = "icon-sm" as const;
 
-/** The bordered box: background, radius, border, colour transition. */
+/** The bordered box: background, radius, border, colour transition. The
+ *  radius is the docked bar's original `rounded-2xl`: at the compact row's
+ *  stature it reads as a soft pill, which is the shape the composers were
+ *  meant to unify on. */
 export const COMPOSER_BOX_CLASS =
-  "bg-background rounded-lg border transition-colors";
+  "bg-background rounded-2xl border transition-colors";
 
 /** The box's focus ring in its default (non-anonymized) treatment. */
 export const COMPOSER_BOX_FOCUS_CLASS = "focus-within:border-ring";
