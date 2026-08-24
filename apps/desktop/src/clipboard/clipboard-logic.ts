@@ -12,6 +12,20 @@ export type ClipboardTextSegment = {
   text: string;
 };
 
+type ClipboardCopyShortcut = {
+  altKey: boolean;
+  ctrlKey: boolean;
+  key: string;
+  metaKey: boolean;
+  shiftKey: boolean;
+};
+
+export const isClipboardCopyShortcut = (shortcut: ClipboardCopyShortcut) =>
+  (shortcut.metaKey || shortcut.ctrlKey) &&
+  !shortcut.altKey &&
+  !shortcut.shiftKey &&
+  shortcut.key.toLocaleLowerCase() === "c";
+
 export const clipboardDraggedItemId = (
   data: ClipboardDragData,
   itemIds: ReadonlySet<string>,

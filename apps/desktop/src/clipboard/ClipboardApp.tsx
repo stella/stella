@@ -60,6 +60,7 @@ import {
   filterClipboardItems,
   formatClipboardAge,
   highlightClipboardText,
+  isClipboardCopyShortcut,
   nextClipboardIndex,
   quickPasteIndex,
 } from "./clipboard-logic";
@@ -922,6 +923,19 @@ const ClipboardApp = () => {
       });
   };
 
+  const copyItem = (item: ClipboardItem) => {
+    setError(null);
+    setNotice(null);
+    void invoke("clipboard_copy_item", { id: item.id }).catch(() => {
+      reportDesktopError({
+        code: DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
+        operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardPaste,
+        window: DESKTOP_TELEMETRY_WINDOWS.clipboard,
+      });
+      setError(t("errorPaste"));
+    });
+  };
+
   const openEditor = (id: string) => {
     setError(null);
     void invoke("clipboard_open_editor", { id }).catch(() => {
@@ -1095,6 +1109,11 @@ const ClipboardApp = () => {
       event.preventDefault();
       searchInputRef.current?.focus();
       searchInputRef.current?.select();
+      return;
+    }
+    if (isClipboardCopyShortcut(event) && activeItem) {
+      event.preventDefault();
+      copyItem(activeItem);
       return;
     }
     if (primaryModifier) {

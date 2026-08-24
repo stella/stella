@@ -301,6 +301,49 @@ fn notify_copied_only(app: &AppHandle) {
   }
 }
 
+struct ClipboardWriteRequest<'a> {
+  id: &'a str,
+  plain_text_only: bool,
+}
+
+fn write_history_item(
+  state: &ClipboardAppState,
+  request: ClipboardWriteRequest<'_>,
+) -> Result<(), String> {
+  let item = {
+    let mut manager = state.lock().map_err(|_| lock_error())?;
+    let item = manager
+      .item(request.id)
+      .ok_or_else(|| "clipboard item no longer exists".to_string())?;
+    manager.suppress_next(&item, request.plain_text_only);
+    item
+  };
+  if let Err(error) = write_item(&item, request.plain_text_only) {
+    if let Ok(mut manager) = state.lock() {
+      manager.clear_suppression();
+    }
+    return Err(error);
+  }
+  Ok(())
+}
+
+#[tauri::command]
+pub fn clipboard_copy_item(
+  id: String,
+  state: State<'_, ClipboardAppState>,
+  window: WebviewWindow,
+) -> Result<(), String> {
+  write_history_item(
+    state.inner(),
+    ClipboardWriteRequest {
+      id: &id,
+      plain_text_only: false,
+    },
+  )?;
+  clipboard_window::hide(&window);
+  Ok(())
+}
+
 #[tauri::command]
 pub async fn clipboard_paste_item(
   id: String,
@@ -310,20 +353,13 @@ pub async fn clipboard_paste_item(
   state: State<'_, ClipboardAppState>,
   window: WebviewWindow,
 ) -> Result<ClipboardPasteOutcome, String> {
-  let item = {
-    let mut manager = state.lock().map_err(|_| lock_error())?;
-    let item = manager
-      .item(&id)
-      .ok_or_else(|| "clipboard item no longer exists".to_string())?;
-    manager.suppress_next(&item, plain_text_only);
-    item
-  };
-  if let Err(error) = write_item(&item, plain_text_only) {
-    if let Ok(mut manager) = state.lock() {
-      manager.clear_suppression();
-    }
-    return Err(error);
-  }
+  write_history_item(
+    state.inner(),
+    ClipboardWriteRequest {
+      id: &id,
+      plain_text_only,
+    },
+  )?;
 
   clipboard_window::hide(&window);
   focus_state.restore_frontmost_application(&app).await;

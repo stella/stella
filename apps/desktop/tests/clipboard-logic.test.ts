@@ -7,6 +7,7 @@ import {
   filterClipboardItems,
   formatClipboardAge,
   highlightClipboardText,
+  isClipboardCopyShortcut,
   nextClipboardIndex,
   quickPasteIndex,
 } from "../src/clipboard/clipboard-logic";
@@ -150,6 +151,48 @@ describe("keyboard indexes", () => {
     expect(quickPasteIndex("2", 2)).toBe(1);
     expect(quickPasteIndex("3", 2)).toBeNull();
     expect(quickPasteIndex("0", 10)).toBeNull();
+  });
+
+  test("copy accepts either platform primary modifier", () => {
+    expect(
+      isClipboardCopyShortcut({
+        altKey: false,
+        ctrlKey: false,
+        key: "c",
+        metaKey: true,
+        shiftKey: false,
+      }),
+    ).toBe(true);
+    expect(
+      isClipboardCopyShortcut({
+        altKey: false,
+        ctrlKey: true,
+        key: "C",
+        metaKey: false,
+        shiftKey: false,
+      }),
+    ).toBe(true);
+  });
+
+  test("copy does not consume modified variants", () => {
+    expect(
+      isClipboardCopyShortcut({
+        altKey: false,
+        ctrlKey: false,
+        key: "c",
+        metaKey: false,
+        shiftKey: false,
+      }),
+    ).toBe(false);
+    expect(
+      isClipboardCopyShortcut({
+        altKey: false,
+        ctrlKey: true,
+        key: "c",
+        metaKey: false,
+        shiftKey: true,
+      }),
+    ).toBe(false);
   });
 });
 

@@ -14,6 +14,7 @@
     "allow-clipboard-delete-group",
     "allow-clipboard-set-item-group",
     "allow-clipboard-open-editor",
+    "allow-clipboard-copy-item",
     "allow-clipboard-paste-item",
     "allow-clipboard-hide",
     "allow-clipboard-open-stella",
