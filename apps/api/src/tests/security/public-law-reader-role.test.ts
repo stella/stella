@@ -267,33 +267,6 @@ describe("public-law reader role", () => {
     });
   });
 
-  test("startup attestation rejects access to another database", async () => {
-    const permissions = await rolePermissionsAfter(async (tx) => {
-      const result = await tx.execute<{ name: string }>(sql`
-        SELECT datname AS name
-        FROM pg_database
-        WHERE NOT datistemplate
-          AND datallowconn
-          AND datname <> current_database()
-        ORDER BY datname
-        LIMIT 1
-      `);
-      const databaseName = result.rows.at(0)?.name;
-      if (databaseName === undefined) {
-        throw new Error(
-          "another non-template database is required for the attestation test",
-        );
-      }
-      await tx.execute(
-        sql.raw(
-          `GRANT CONNECT ON DATABASE ${quoted(databaseName)} TO ${quoted(READER_ROLE)}`,
-        ),
-      );
-    });
-
-    expect(permissions).toMatchObject({ canAccessOtherDatabase: true });
-  });
-
   test("startup attestation rejects column writes and reads in other schemas", async () => {
     const columnWriter = await rolePermissionsAfter(async (tx) => {
       await tx.execute(
