@@ -147,6 +147,7 @@ const footnoteOf = (el: cheerio.Cheerio<AnyNode>): PChunk["footnote"] => {
 };
 
 const SPACED_EMPHASIS_RE = /^(?:\p{L} +)+\p{L}(?: *[,:;.!?])?$/u;
+const SINGLE_LETTER_RE = /^\p{L}$/u;
 const MULTI_SPACE_MARKER = "\u0000";
 
 type SpacedBoldRun = {
@@ -163,29 +164,52 @@ const collectSpacedBoldRun = (
     return null;
   }
 
+  const firstText = inlinesToPlainText(first.children).replace(/\s/gu, " ");
+  if (!SINGLE_LETTER_RE.test(firstText.trim())) {
+    return null;
+  }
+
   const children = [...first.children];
   let endIndex = startIndex;
 
-  for (let index = startIndex + 1; index < source.length; index++) {
-    const node = source[index];
-    if (node?.type === "bold") {
-      children.push(...node.children);
-      endIndex = index;
-      continue;
+  while (endIndex + 1 < source.length) {
+    let separatorIndex = endIndex + 1;
+    const gapBeforeSeparator = source.at(separatorIndex);
+    if (
+      gapBeforeSeparator?.type === "text" &&
+      gapBeforeSeparator.text.trim().length === 0
+    ) {
+      separatorIndex += 1;
     }
 
-    const next = source.at(index + 1);
+    const separator = source.at(separatorIndex);
     if (
-      node?.type === "text" &&
-      node.text.trim().length === 0 &&
-      next?.type === "bold"
+      separator?.type !== "bold" ||
+      inlinesToPlainText(separator.children).trim().length !== 0
     ) {
-      children.push(...next.children);
-      endIndex = index + 1;
-      index += 1;
-      continue;
+      break;
     }
-    break;
+
+    let letterIndex = separatorIndex + 1;
+    const gapBeforeLetter = source.at(letterIndex);
+    if (
+      gapBeforeLetter?.type === "text" &&
+      gapBeforeLetter.text.trim().length === 0
+    ) {
+      letterIndex += 1;
+    }
+
+    const letter = source.at(letterIndex);
+    if (letter?.type !== "bold") {
+      break;
+    }
+    const letterText = inlinesToPlainText(letter.children).replace(/\s/gu, " ");
+    if (!SINGLE_LETTER_RE.test(letterText.trim())) {
+      break;
+    }
+
+    children.push(...separator.children, ...letter.children);
+    endIndex = letterIndex;
   }
 
   if (endIndex === startIndex) {
