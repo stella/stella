@@ -24,7 +24,7 @@ type RecordedRequest = {
 };
 
 let requests: RecordedRequest[];
-let responseBody: unknown;
+let responseBody: unknown | ((url: URL) => unknown);
 const originalFetch = globalThis.fetch;
 const originalCorpusIndexEndpoint = envBase.CORPUS_INDEX_ENDPOINT;
 const originalCorpusIndexSearchEndpoint = envBase.CORPUS_INDEX_SEARCH_ENDPOINT;
@@ -52,7 +52,9 @@ beforeEach(() => {
       search: url.search,
       body: typeof init?.body === "string" ? init.body : "",
     });
-    return new Response(JSON.stringify(responseBody), { status: 200 });
+    const body =
+      typeof responseBody === "function" ? responseBody(url) : responseBody;
+    return new Response(JSON.stringify(body), { status: 200 });
   };
   globalThis.fetch = Object.assign(stub, {
     preconnect: originalFetch.preconnect,
@@ -317,6 +319,46 @@ test("delete settlement compares every published split with the retained task", 
   expect(requests.at(0)?.search).toBe(
     "?offset=0&limit=1000&split_states=Published",
   );
+});
+
+const settlementResponse = (splitCount: number) => (url: URL) => {
+  const offset = Number(url.searchParams.get("offset") ?? "0");
+  const pageSize = Math.min(1000, Math.max(splitCount - offset, 0));
+  return {
+    splits: Array.from({ length: pageSize }, () => ({
+      split_state: "Published",
+      delete_opstamp: 42,
+    })),
+  };
+};
+
+test("delete settlement accepts exactly the published split ceiling", async () => {
+  responseBody = settlementResponse(10_000);
+
+  const result = await getCorpusIndexClient().readDeleteSettlement(
+    "legal_corpus_v1_cze",
+    42,
+  );
+
+  expect(result.isOk()).toBe(true);
+  if (result.isOk()) {
+    expect(result.value.publishedSplits).toBe(10_000);
+    expect(result.value.settled).toBe(true);
+  }
+});
+
+test("delete settlement rejects the first split beyond its ceiling", async () => {
+  responseBody = settlementResponse(10_001);
+
+  const result = await getCorpusIndexClient().readDeleteSettlement(
+    "legal_corpus_v1_cze",
+    42,
+  );
+
+  expect(result.isErr()).toBe(true);
+  if (result.isErr()) {
+    expect(result.error.message).toContain("exceeds 10000");
+  }
 });
 
 test("ingest sends the commit mode the caller asked for", async () => {

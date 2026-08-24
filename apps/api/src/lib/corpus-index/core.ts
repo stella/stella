@@ -998,24 +998,19 @@ export const createCorpusIndexer = <
         : deleted;
     // One audit row per entity however many entities shared the task: the
     // trail records what happened to a document, not what carried it.
-    await adapter.recordDeleteJobs(
-      scopedDb,
-      {
-        indexId,
-        jobs: entityIds.map((entityId) => ({
-          entityId,
-          contentHash: null,
-          operation,
-          status: result.isErr()
-            ? ("failed" as const)
-            : ("succeeded" as const),
-          ...(result.isErr()
-            ? { errorMessage: result.error.message.slice(0, 2048) }
-            : {}),
-        })),
-        opstamp: result.isOk() ? (result.value?.opstamp ?? null) : null,
-      },
-    );
+    await adapter.recordDeleteJobs(scopedDb, {
+      indexId,
+      jobs: entityIds.map((entityId) => ({
+        entityId,
+        contentHash: null,
+        operation,
+        status: result.isErr() ? ("failed" as const) : ("succeeded" as const),
+        ...(result.isErr()
+          ? { errorMessage: result.error.message.slice(0, 2048) }
+          : {}),
+      })),
+      opstamp: result.isOk() ? (result.value?.opstamp ?? null) : null,
+    });
     return result.isErr() ? result : Result.ok(undefined);
   };
 

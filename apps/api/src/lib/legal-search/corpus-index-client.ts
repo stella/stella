@@ -505,10 +505,7 @@ const buildClient = (): CorpusIndexClient => ({
   readDeleteSettlement: async (indexId, requiredOpstamp) =>
     await Result.tryPromise({
       try: async () => {
-        if (
-          !Number.isSafeInteger(requiredOpstamp) ||
-          requiredOpstamp < 0
-        ) {
+        if (!Number.isSafeInteger(requiredOpstamp) || requiredOpstamp < 0) {
           throw new CorpusIndexError({
             message: "corpus index delete settlement received an invalid opstamp",
           });
@@ -552,13 +549,13 @@ const buildClient = (): CorpusIndexClient => ({
             }
           }
           publishedSplits += splits.length;
-          if (splits.length < SPLIT_PAGE_SIZE) {
-            break;
-          }
-          if (publishedSplits >= MAX_SETTLEMENT_SPLITS) {
+          if (publishedSplits > MAX_SETTLEMENT_SPLITS) {
             throw new CorpusIndexError({
               message: `corpus index split list exceeds ${MAX_SETTLEMENT_SPLITS} published splits`,
             });
+          }
+          if (splits.length < SPLIT_PAGE_SIZE) {
+            break;
           }
           offset += splits.length;
         }
