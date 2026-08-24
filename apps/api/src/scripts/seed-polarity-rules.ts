@@ -75,25 +75,24 @@ if (RETIRED_SEED_RULES.length > 0) {
   // again under the rules that remain. Left in place, a withdrawn rule would
   // keep speaking through every row it ever touched.
   const retiredIds = retired.map((rule) => rule.id);
+  const resetBatch = async (): Promise<number> => {
+    const reset = await rootDb
+      .update(caseLawCitations)
+      .set({ polarity: null, polarityRuleId: null })
+      .where(
+        sql`${caseLawCitations.id} IN (
+          SELECT ${caseLawCitations.id} FROM ${caseLawCitations}
+          WHERE ${inArray(caseLawCitations.polarityRuleId, retiredIds)}
+          LIMIT ${RESET_BATCH}
+        )`,
+      )
+      .returning({ id: caseLawCitations.id });
+    return reset.length < RESET_BATCH
+      ? reset.length
+      : reset.length + (await resetBatch());
+  };
   if (retiredIds.length > 0) {
-    for (;;) {
-      // oxlint-disable-next-line no-await-in-loop -- bounded batches, each its own short statement
-      const reset = await rootDb
-        .update(caseLawCitations)
-        .set({ polarity: null, polarityRuleId: null })
-        .where(
-          sql`${caseLawCitations.id} IN (
-            SELECT ${caseLawCitations.id} FROM ${caseLawCitations}
-            WHERE ${inArray(caseLawCitations.polarityRuleId, retiredIds)}
-            LIMIT ${RESET_BATCH}
-          )`,
-        )
-        .returning({ id: caseLawCitations.id });
-      resetTotal += reset.length;
-      if (reset.length < RESET_BATCH) {
-        break;
-      }
-    }
+    resetTotal = await resetBatch();
   }
 }
 
