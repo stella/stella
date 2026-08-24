@@ -32,19 +32,36 @@ const proposedTopicSchema = v.strictObject({
   context: v.pipe(v.string(), v.maxLength(2000)),
 });
 
+// No transforms here: the schema is handed to the provider as JSON Schema,
+// which cannot express them. Whitespace is normalized in `normalizeParties`.
 const proposedPartySchema = v.strictObject({
   role: v.pipe(
     v.string(),
-    v.trim(),
     v.minLength(1),
     v.maxLength(REVIEW_PARTY_ROLE_MAX_LENGTH),
   ),
   name: v.nullable(
-    v.pipe(v.string(), v.trim(), v.maxLength(REVIEW_PARTY_NAME_MAX_LENGTH)),
+    v.pipe(v.string(), v.maxLength(REVIEW_PARTY_NAME_MAX_LENGTH)),
   ),
 });
 
-const proposedTopicsSchema = v.strictObject({
+type ProposedParty = v.InferOutput<typeof proposedPartySchema>;
+
+/** Trims the model's text and drops entries left without a role. */
+const normalizeParties = (parties: readonly ProposedParty[]): ReviewParty[] => {
+  const normalized: ReviewParty[] = [];
+  for (const party of parties.slice(0, REVIEW_PARTIES_MAX)) {
+    const role = party.role.trim();
+    if (role.length === 0) {
+      continue;
+    }
+    const name = party.name?.trim() ?? "";
+    normalized.push({ role, name: name.length === 0 ? null : name });
+  }
+  return normalized;
+};
+
+export const proposedTopicsSchema = v.strictObject({
   // Cardinality is normalized by mergeProposedReviewTopics. Providers do not
   // reliably honor JSON Schema array limits, so excess suggestions stay recoverable.
   topics: v.array(proposedTopicSchema),
@@ -154,7 +171,7 @@ export const proposeReferenceTopics = async ({
       });
       return {
         topics: mergeProposedReviewTopics(seededTopics, output.topics),
-        parties: output.parties.slice(0, REVIEW_PARTIES_MAX),
+        parties: normalizeParties(output.parties),
       };
     },
     catch: (cause) => {
