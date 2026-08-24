@@ -299,73 +299,68 @@ describe("idempotent corpus removals", () => {
     ]);
   });
 
-  test(
-    "a successful deletion records the engine opstamp with its audit job",
-    async () => {
-      const row = {
-        id: toSafeId<"caseLawDecision">("settled-delete-row"),
-        country: "CZ",
-        textS3Key: null,
-        astS3Key: null,
-        contentHash: null,
-        indexedHash: null,
-        indexedGeneration: null,
-        // SAFETY: the removal path never reads the fabricated timestamp token.
-        // eslint-disable-next-line typescript/no-unsafe-type-assertion
-        updatedAtToken: "2026-01-01 00:00:00" as TimestampCasToken,
-      };
-      const deleteRecords: {
-        jobs: CorpusJobInput<"caseLawDecision">[];
-        opstamp: number | null;
-      }[] = [];
-      const indexer = createCorpusIndexer<"caseLawDecision", typeof row>({
-        family: "case_law",
-        captureStep: "test",
-        granularity: "document",
-        generationProjectionIndexIds: () => [],
-        buildDocs: () => [],
-        readCorpusText: async () => "unused",
-        selectMissing: async () => [],
-        selectStale: async () => [],
-        fetchFulltext: async () => null,
-        markIndexedBatch: async () => new Set(),
-        insertSucceededJobs: async () => undefined,
-        recordJobs: async () => undefined,
-        recordDeleteJobs: async (_db, { jobs, opstamp }) => {
-          deleteRecords.push({ jobs: [...jobs], opstamp });
-        },
-      });
-      let nextDeleteOpstamp = 40;
-      globalThis.fetch = Object.assign(
-        async () => {
-          nextDeleteOpstamp += 1;
-          return new Response(JSON.stringify({ opstamp: nextDeleteOpstamp }), {
-            status: 200,
-          });
-        },
-        { preconnect: originalFetch.preconnect },
-      );
-      const scopedDb: ScopedDb = async () => {
-        throw new Error("removal should not open a database transaction");
-      };
+  test("a successful deletion records the engine opstamp with its audit job", async () => {
+    const row = {
+      id: toSafeId<"caseLawDecision">("settled-delete-row"),
+      country: "CZ",
+      textS3Key: null,
+      astS3Key: null,
+      contentHash: null,
+      indexedHash: null,
+      indexedGeneration: null,
+      // SAFETY: the removal path never reads the fabricated timestamp token.
+      // eslint-disable-next-line typescript/no-unsafe-type-assertion
+      updatedAtToken: "2026-01-01 00:00:00" as TimestampCasToken,
+    };
+    const deleteRecords: {
+      jobs: CorpusJobInput<"caseLawDecision">[];
+      opstamp: number | null;
+    }[] = [];
+    const indexer = createCorpusIndexer<"caseLawDecision", typeof row>({
+      family: "case_law",
+      captureStep: "test",
+      granularity: "document",
+      generationProjectionIndexIds: () => [],
+      buildDocs: () => [],
+      readCorpusText: async () => "unused",
+      selectMissing: async () => [],
+      selectStale: async () => [],
+      fetchFulltext: async () => null,
+      markIndexedBatch: async () => new Set(),
+      insertSucceededJobs: async () => undefined,
+      recordJobs: async () => undefined,
+      recordDeleteJobs: async (_db, { jobs, opstamp }) => {
+        deleteRecords.push({ jobs: [...jobs], opstamp });
+      },
+    });
+    let nextDeleteOpstamp = 40;
+    globalThis.fetch = Object.assign(
+      async () => {
+        nextDeleteOpstamp += 1;
+        return new Response(JSON.stringify({ opstamp: nextDeleteOpstamp }), {
+          status: 200,
+        });
+      },
+      { preconnect: originalFetch.preconnect },
+    );
+    const scopedDb: ScopedDb = async () => {
+      throw new Error("removal should not open a database transaction");
+    };
 
-      const removed = await indexer.remove(
-        row.id,
-        scopedDb,
-        corpusIndexId("case_law_v2", "CZ"),
-      );
+    const removed = await indexer.remove(
+      row.id,
+      scopedDb,
+      corpusIndexId("case_law_v2", "CZ"),
+    );
 
-      expect(removed.isOk()).toBe(true);
-      expect(deleteRecords).toMatchObject([
-        {
-          jobs: [
-            { entityId: row.id, operation: "delete", status: "succeeded" },
-          ],
-          opstamp: 41,
-        },
-      ]);
-    },
-  );
+    expect(removed.isOk()).toBe(true);
+    expect(deleteRecords).toMatchObject([
+      {
+        jobs: [{ entityId: row.id, operation: "delete", status: "succeeded" }],
+        opstamp: 41,
+      },
+    ]);
+  });
 
   test("a fenced removal records guard failures after the remote effect", async () => {
     const row = {
