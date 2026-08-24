@@ -11,6 +11,7 @@ import { OutlineRail } from "@stll/ui/outline-rail";
 import type { OutlineItem } from "@stll/ui/outline-rail";
 
 import type { SelectionAnchor } from "@/features/case-law/annotations/selection-anchor";
+import { isPendingAnnotationId } from "@/features/case-law/annotations/use-decision-annotations";
 import { MarginNotes } from "@/features/case-law/components/case-viewer/analysis/margin-notes";
 import type {
   AnalysisMarginItem,
@@ -157,7 +158,6 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
     endOffset: item.endOffset,
     id: item.id,
     kind: item.kind,
-    onActivate: () => activateAnnotation(item),
     startOffset: item.startOffset,
     style: item.style,
   }));
@@ -489,6 +489,14 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
               caseNumber: decision.caseNumber,
               court: decision.court,
               id: decisionId,
+            }}
+            onActivateAnnotation={(id) => {
+              const item = annotations?.annotations.find(
+                (row) => row.id === id,
+              );
+              if (item && !isPendingAnnotationId(item.id)) {
+                activateAnnotation(item);
+              }
             }}
             onClearActive={() => setActiveAnnotationId(null)}
             onCompose={setComposing}

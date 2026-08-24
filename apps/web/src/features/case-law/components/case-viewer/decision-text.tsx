@@ -50,7 +50,6 @@ export type AnnotationAnchorSource = {
   endOffset: number;
   id: string;
   kind: "highlight" | "comment";
-  onActivate: () => void;
   startOffset: number;
   /** How a highlight is drawn; null for a comment. */
   style: "highlight" | "underline" | "squiggly" | "strikethrough" | null;
@@ -247,21 +246,18 @@ const buildAnchorsByPieceId = ({
       anchors.push({
         end: annotation.endOffset,
         key: `annotation:${annotation.id}`,
-        // A mark is a control: clicking (or Enter on it) opens the bar that
-        // changes or removes it.
+        // Plain inline markup so the words keep wrapping and justifying as
+        // the paragraph's own; a button cannot break across lines. A click
+        // on a mark is handled by the toolbar, which listens on the document
+        // and reads the id off the element.
         render: (children) => (
-          <button
-            className={cn(
-              "inline appearance-none border-0 p-0 text-start align-baseline font-[inherit] text-[length:inherit] leading-[inherit]",
-              annotationClassName(annotation),
-            )}
+          <mark
+            className={cn(annotationClassName(annotation))}
             data-annotation-id={annotation.id}
-            onClick={annotation.onActivate}
             style={annotationStyle(annotation)}
-            type="button"
           >
             {children}
-          </button>
+          </mark>
         ),
         start: annotation.startOffset,
       });

@@ -60,6 +60,8 @@ type AnnotationToolbarProps = {
   controller: AnnotationToolbarController;
   decision: AnnotationToolbarDecision;
   onClearActive: () => void;
+  /** The reader clicked a mark in the text. */
+  onActivateAnnotation: (id: string) => void;
   /** Opens the margin composer on these paragraphs. */
   onCompose: (spans: SelectionAnchor[]) => void;
   scrollContainerRef: RefObject<HTMLElement | null>;
@@ -93,6 +95,7 @@ export const AnnotationToolbar = ({
   activeSpans,
   controller,
   decision,
+  onActivateAnnotation,
   onClearActive,
   onCompose,
   scrollContainerRef,
@@ -150,11 +153,14 @@ export const AnnotationToolbar = ({
     };
     const onPointerDown = (event: PointerEvent) => {
       const target = event.target;
-      if (
-        target instanceof Node &&
-        (barRef.current?.contains(target) === true ||
-          (target instanceof Element && target.closest("[data-annotation-id]")))
-      ) {
+      if (!(target instanceof Node) || barRef.current?.contains(target)) {
+        return;
+      }
+      const element = target instanceof Element ? target : target.parentElement;
+      const mark = element?.closest("[data-annotation-id]") ?? null;
+      const id = mark?.dataset.annotationId ?? null;
+      if (mark !== null && id !== null && root.contains(mark)) {
+        onActivateAnnotation(id);
         return;
       }
       onClearActive();
