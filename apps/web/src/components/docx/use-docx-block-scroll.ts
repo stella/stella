@@ -6,8 +6,13 @@ import { useInspectorCommandStore } from "@/components/inspector/inspector-comma
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { FOLIO_SCROLL_EVENT } from "@/lib/folio-scroll-event";
 
+// A block that is not on screen yet is retried quickly while the editor
+// settles, then slowly for as long as a large document takes to load, since
+// a tab opened onto a citation has nothing to show until then.
 const BLOCK_SCROLL_RETRY_DELAY_MS = 50;
-const BLOCK_SCROLL_RETRY_LIMIT = 20;
+const BLOCK_SCROLL_FAST_RETRY_LIMIT = 20;
+const BLOCK_SCROLL_SLOW_RETRY_DELAY_MS = 250;
+const BLOCK_SCROLL_RETRY_LIMIT = 60;
 const BLOCK_SCROLL_SETTLE_DELAY_MS = 180;
 const BLOCK_SCROLL_SETTLE_ATTEMPTS = 2;
 const FOLIO_SCROLL_DEBUG_KEY = "folio:debug-scroll";
@@ -212,7 +217,12 @@ const scheduleDocxBlockScroll = ({
 
     attempts += 1;
     if (attempts < BLOCK_SCROLL_RETRY_LIMIT) {
-      retryTimer = setTimeout(tryScroll, BLOCK_SCROLL_RETRY_DELAY_MS);
+      retryTimer = setTimeout(
+        tryScroll,
+        attempts < BLOCK_SCROLL_FAST_RETRY_LIMIT
+          ? BLOCK_SCROLL_RETRY_DELAY_MS
+          : BLOCK_SCROLL_SLOW_RETRY_DELAY_MS,
+      );
     }
   };
 
