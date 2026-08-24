@@ -8,10 +8,10 @@ import { Button } from "@stll/ui/button";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { Skeleton } from "@stll/ui/skeleton";
 
+import type { CaseDecisionViewPayload } from "@/components/inspector/case-decision-view";
 import { InspectorTabHeader } from "@/components/inspector/inspector-tab-header";
 import type { InspectorViewRenderProps } from "@/components/inspector/view-registry";
 import Tooltip from "@/components/tooltip";
-import type { CaseDecisionViewPayload } from "@/features/case-law/case-decision-inspector.logic";
 import { CitationHeader } from "@/features/case-law/components/case-viewer/citation-header";
 import { DecisionCitations } from "@/features/case-law/components/case-viewer/decision-citations";
 import { DecisionText } from "@/features/case-law/components/case-viewer/decision-text";

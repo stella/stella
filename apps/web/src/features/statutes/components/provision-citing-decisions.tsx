@@ -8,7 +8,7 @@ import { Button } from "@stll/ui/button";
 import { Input } from "@stll/ui/input";
 import { Skeleton } from "@stll/ui/skeleton";
 
-import { CitedDecisionLink } from "@/features/case-law/components/cited-decision-link";
+import { CitedDecisionLink } from "@/components/legal-reader/cited-decision-link";
 import { filterCitingDecisions } from "@/features/statutes/provision-inspector.logic";
 import { citingDecisionsInfiniteOptions } from "@/features/statutes/queries/citing-decisions";
 import { formatValidityDate } from "@/features/statutes/statute-format";

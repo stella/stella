@@ -8,6 +8,7 @@ import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { cn } from "@stll/ui/utils";
 
+import { CitedDecisionLink } from "@/components/legal-reader/cited-decision-link";
 import {
   CITATION_TREATMENT_DOT,
   CITATION_TREATMENT_LABEL,
@@ -19,9 +20,6 @@ import type {
   CitationTreatmentCounts,
   DecisionCitation,
 } from "@/features/case-law/citation-treatment";
-import { citedDecisionLabel } from "@/features/case-law/cited-decision-label";
-import { CitedDecisionLink } from "@/features/case-law/components/cited-decision-link";
-import { formatDecisionDate } from "@/features/case-law/decision-date";
 import {
   decisionCitationsInfiniteOptions,
   decisionCitationSummaryOptions,
@@ -30,6 +28,8 @@ import type { CitationDirection } from "@/features/case-law/queries/citations";
 import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import { optionalArray } from "@/lib/arrays";
+import { citedDecisionLabel } from "@/lib/cited-decision-label";
+import { formatDecisionDate } from "@/lib/decision-date";
 import { detached } from "@/lib/detached";
 import type { SafeId } from "@/lib/safe-id";
 

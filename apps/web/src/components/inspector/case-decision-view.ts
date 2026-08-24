@@ -1,6 +1,6 @@
 import { createCaseLawDecisionRouteParams } from "@/lib/case-law-route";
 
-/** Inspector view kind for one public case-law decision. */
+/** Registered inspector view kind for one public case-law decision. */
 export const CASE_DECISION_VIEW = "case-law-decision";
 
 export type CaseDecisionViewPayload = {

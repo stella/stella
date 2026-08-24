@@ -4,7 +4,7 @@ import { parseDeterministicDate } from "@/lib/deterministic-date";
 
 type IntlFormatter = ReturnType<typeof createFormatter>;
 
-/** A decision date as a medium date in UTC, or null when none is stored. */
+/** A legal decision date as a medium date in UTC, or null when none is stored. */
 export const formatDecisionDate = (
   value: Date | string | null,
   format: IntlFormatter,

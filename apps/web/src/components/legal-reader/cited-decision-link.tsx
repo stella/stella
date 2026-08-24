@@ -10,15 +10,15 @@ import {
 } from "@stll/ui/preview-card";
 import { cn } from "@stll/ui/utils";
 
-import { useInspectorView } from "@/components/inspector/use-inspector-view";
 import {
   createCaseDecisionViewTab,
   opensCitationInInspector,
-} from "@/features/case-law/case-decision-inspector.logic";
-import { citedDecisionLabel } from "@/features/case-law/cited-decision-label";
-import { formatDecisionDate } from "@/features/case-law/decision-date";
+} from "@/components/inspector/case-decision-view";
+import { useInspectorView } from "@/components/inspector/use-inspector-view";
 import { useFormatter } from "@/i18n/formatting-context";
 import { createCaseLawDecisionRouteParams } from "@/lib/case-law-route";
+import { citedDecisionLabel } from "@/lib/cited-decision-label";
+import { formatDecisionDate } from "@/lib/decision-date";
 
 type CitedDecisionLinkProps = {
   children: ReactNode;

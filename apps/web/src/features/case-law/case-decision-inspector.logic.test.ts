@@ -5,7 +5,7 @@ import {
   createCaseDecisionViewTab,
   isCaseDecisionViewPayload,
   opensCitationInInspector,
-} from "@/features/case-law/case-decision-inspector.logic";
+} from "@/components/inspector/case-decision-view";
 
 describe("case decision inspector", () => {
   test("derives one stable tab and canonical route payload", () => {

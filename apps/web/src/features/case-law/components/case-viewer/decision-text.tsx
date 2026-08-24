@@ -7,6 +7,7 @@ import type { Block } from "@stll/legal-ast/document-ast";
 import { parseDocumentAst } from "@stll/legal-ast/document-ast";
 import { cn } from "@stll/ui/utils";
 
+import { CitedDecisionLink } from "@/components/legal-reader/cited-decision-link";
 import {
   BlockRenderer,
   FulltextFallback,
@@ -24,7 +25,6 @@ import { buildSearchResults } from "@/components/legal-reader/reader-search";
 import { locateCitationAnchors } from "@/features/case-law/citation-anchors";
 import type { CitationAnchorSource } from "@/features/case-law/citation-anchors";
 import { visibleDecisionBlocks } from "@/features/case-law/components/case-viewer/decision-text.logic";
-import { CitedDecisionLink } from "@/features/case-law/components/cited-decision-link";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 
 type Decision = {

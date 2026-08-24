@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { citedDecisionLabel } from "@/features/case-law/cited-decision-label";
+import { citedDecisionLabel } from "@/lib/cited-decision-label";
 
 describe("citedDecisionLabel", () => {
   test("two documents of one file get distinct labels", () => {

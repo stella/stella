@@ -6,9 +6,9 @@ import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 
+import { createCaseDecisionViewTab } from "@/components/inspector/case-decision-view";
 import { useInspectorView } from "@/components/inspector/use-inspector-view";
 import Tooltip from "@/components/tooltip";
-import { createCaseDecisionViewTab } from "@/features/case-law/case-decision-inspector.logic";
 import { DecisionWorkspace } from "@/features/case-law/components/case-viewer/decision-workspace";
 import { useClientAuthStatus } from "@/hooks/use-client-auth-status";
 import { ChromeHeaderActions } from "@/lib/chrome-header-actions";

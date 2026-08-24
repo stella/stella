@@ -1,4 +1,4 @@
-type LabelSource = {
+type CitedDecisionLabelSource = {
   caseNumber: string;
   decisionDate: string | null;
   decisionType?: string | null | undefined;
@@ -18,7 +18,7 @@ export const citedDecisionLabel = ({
   caseNumber,
   decisionDate,
   decisionType,
-}: LabelSource): string => {
+}: CitedDecisionLabelSource): string => {
   const type = decisionType?.trim();
   if (!type) {
     return caseNumber;
