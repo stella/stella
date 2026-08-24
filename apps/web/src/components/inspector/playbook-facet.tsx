@@ -118,6 +118,11 @@ import {
 import type { ReviewResultItem } from "@/components/inspector/playbook-review-results.logic";
 import type { OverallRisk } from "@/components/inspector/playbook-risk-rollup";
 import { computeRiskRollup } from "@/components/inspector/playbook-risk-rollup";
+import {
+  buildAcceptedFixBatch,
+  collectAcceptedFixes,
+} from "@/components/inspector/review-apply-accepted.logic";
+import type { AcceptedFixPlan } from "@/components/inspector/review-apply-accepted.logic";
 import { ReviewExportMenu } from "@/components/inspector/review-export-menu";
 import { PlaybookStatusBadge } from "@/components/playbook-status-badge";
 import { SearchDialog } from "@/components/search-dialog";
@@ -347,6 +352,66 @@ export const PlaybookFacet = ({
     });
   };
 
+  const applyAcceptedFixes = async (plans: readonly AcceptedFixPlan[]) => {
+    if (plans.length === 0 || registration === undefined) {
+      return;
+    }
+    const editor = registration.editorRef.current;
+    if (!editor) {
+      return;
+    }
+    const unlocked = registration.editable
+      ? true
+      : await registration.requestEditMode();
+    if (!unlocked) {
+      return;
+    }
+    const snapshot = editor.createAIEditSnapshot();
+    if (!snapshot) {
+      stellaToast.add({ type: "error", title: APPLY_ACCEPTED_FAILED });
+      return;
+    }
+    const batch = buildAcceptedFixBatch({ plans, newId: uuidv7 });
+    const result = editor.applyAIEditOperations({
+      snapshot,
+      operations: batch.operations,
+      mode: "tracked-changes",
+      ...(author.length > 0 && { author }),
+    });
+    const revisionIdsByOperationId = new Map(
+      result.applied.map((applied) => [applied.id, applied.revisionIds ?? []]),
+    );
+    let appliedCount = 0;
+    for (const plan of plans) {
+      const operationId = batch.fixOperationIdByKey.get(plan.findingKey);
+      const revisionIds =
+        operationId === undefined
+          ? undefined
+          : revisionIdsByOperationId.get(operationId);
+      if (revisionIds === undefined || revisionIds.length === 0) {
+        continue;
+      }
+      appliedCount += 1;
+      setFixState(entityId, fileFieldId, plan.findingKey, {
+        status: "applied",
+        revisionIds,
+      });
+      if (plan.referenceFindingId !== null && plan.comment !== null) {
+        beginComment(entityId, fileFieldId, plan.referenceFindingId);
+        completeComment(entityId, fileFieldId, plan.referenceFindingId);
+      }
+    }
+    if (appliedCount < plans.length) {
+      stellaToast.add({
+        type: "error",
+        title: APPLY_ACCEPTED_FAILED,
+        description: applyAcceptedSkippedDescription(
+          plans.length - appliedCount,
+        ),
+      });
+    }
+  };
+
   const addFindingComment = async (finding: ReferenceFinding) => {
     const blockId = finding.targetCitations.at(0)?.blockId;
     const { explanation } = finding;
@@ -546,6 +611,12 @@ export const PlaybookFacet = ({
               "playbook-facet.add-finding-comment",
             );
           }}
+          onApplyAccepted={(plans) => {
+            detached(
+              applyAcceptedFixes(plans),
+              "playbook-facet.apply-accepted",
+            );
+          }}
           onInsertFix={(findingId, fix) => {
             detached(insertFix(findingId, fix), "playbook-facet.insert-fix");
           }}
@@ -605,6 +676,7 @@ type ReviewRunPanelProps = {
   fixStateByFinding: Record<string, ReviewFixState>;
   onAcceptFix: (findingId: string, revisionIds: readonly number[]) => void;
   onAddReferenceComment: (finding: ReferenceFinding) => void;
+  onApplyAccepted: (plans: readonly AcceptedFixPlan[]) => void;
   onInsertFix: (findingId: string, fix: ReviewFindingFix | null) => void;
   onOpenReferenceCitation: (
     reference: ReferenceFile,
@@ -636,6 +708,7 @@ const ReviewRunPanel = ({
   fixStateByFinding,
   onAcceptFix,
   onAddReferenceComment,
+  onApplyAccepted,
   onInsertFix,
   onOpenReferenceCitation,
   onRejectFix,
@@ -746,6 +819,7 @@ const ReviewRunPanel = ({
       negotiationBySourceId={negotiationLookup(playbookDetail)}
       onAcceptFix={onAcceptFix}
       onAddReferenceComment={onAddReferenceComment}
+      onApplyAccepted={onApplyAccepted}
       onDecide={(findingIds, decision) => {
         decide.mutate({ workspaceId, findingIds, decision });
       }}
@@ -1721,6 +1795,7 @@ type ResultsViewProps = {
   onScrollToFix: (revisionIds: readonly number[]) => void;
   onAcceptFix: (findingId: string, revisionIds: readonly number[]) => void;
   onAddReferenceComment: (finding: ReferenceFinding) => void;
+  onApplyAccepted: (plans: readonly AcceptedFixPlan[]) => void;
   onOpenReferenceCitation: (
     referenceFieldId: string,
     blockId: string,
@@ -1754,6 +1829,7 @@ const ResultsView = ({
   onScrollToFix,
   onAcceptFix,
   onAddReferenceComment,
+  onApplyAccepted,
   onOpenReferenceCitation,
   onRejectFix,
 }: ResultsViewProps) => {
@@ -1765,6 +1841,12 @@ const ResultsView = ({
     decisions,
   });
   const progress = reviewDecisionProgress(decisionCounts);
+  const acceptedPlans = collectAcceptedFixes({
+    items: results,
+    fixStateByFinding,
+    references,
+    playbookName,
+  });
 
   return (
     <div className="bg-background flex h-full flex-col">
@@ -1799,6 +1881,12 @@ const ResultsView = ({
           freshness={freshness}
           onReviewAgain={onReviewAgain}
         />
+        {editorAvailable && acceptedPlans.length > 0 && (
+          <ApplyAcceptedBar
+            count={acceptedPlans.length}
+            onApply={() => onApplyAccepted(acceptedPlans)}
+          />
+        )}
         {playbookFindings !== null && playbookFindings.length > 0 && (
           <RiskSummaryCard
             editorAvailable={editorAvailable}
@@ -1833,6 +1921,37 @@ const ResultsView = ({
     </div>
   );
 };
+
+// TODO(i18n): English until the review surface is localized as a whole.
+const APPLY_ACCEPTED_LABEL = "Apply all as tracked changes";
+const APPLY_ACCEPTED_FAILED = "Some accepted changes could not be applied";
+const applyAcceptedPendingDescription = (count: number): string =>
+  count === 1
+    ? "1 accepted change is not in the document yet"
+    : `${count} accepted changes are not in the document yet`;
+const applyAcceptedSkippedDescription = (count: number): string =>
+  count === 1
+    ? "1 change no longer matches the document"
+    : `${count} changes no longer match the document`;
+
+type ApplyAcceptedBarProps = {
+  count: number;
+  onApply: () => void;
+};
+
+/** Accepted findings whose wording is still outside the document: one
+ *  action puts every one of them in as tracked changes, each with a
+ *  comment citing its precedent. */
+const ApplyAcceptedBar = ({ count, onApply }: ApplyAcceptedBarProps) => (
+  <div className="bg-muted/50 mb-2 flex items-center justify-between gap-2 rounded-md border px-3 py-2">
+    <span className="text-muted-foreground min-w-0 text-xs tabular-nums">
+      {applyAcceptedPendingDescription(count)}
+    </span>
+    <Button onClick={onApply} size="xs" variant="default">
+      {APPLY_ACCEPTED_LABEL}
+    </Button>
+  </div>
+);
 
 /** Which notice a pinned playbook calls for, or none while it is still the one
  *  an author would run today. Total over the freshness vocabulary. */
