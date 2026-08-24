@@ -40,21 +40,24 @@ export const COMPOSER_COMPACT_ROW_CLASS =
 
 /**
  * The compact text cell: one `text-sm` line at `leading-5` plus the
- * vertical inset that seats it on the row's controls. The editable element
- * itself takes `min-h-0` so an empty composer collapses to this one line.
+ * vertical inset that makes a single line exactly as tall as the row's
+ * inner height (44px row, 1px inset each side ⇒ 42px), so text and controls
+ * share one centre. The editable element itself takes `min-h-0` so an empty
+ * composer collapses to this one line and grows from there.
  */
-export const COMPOSER_COMPACT_TEXT_CELL_CLASS = "relative min-w-0 py-1";
+export const COMPOSER_COMPACT_TEXT_CELL_CLASS = "relative min-w-0 py-[11px]";
 
 /** Text stature of the editor and every placeholder painted over it. */
 export const COMPOSER_TEXT_CLASS = "text-sm leading-5";
 
 /**
- * A round control's slot in the compact row: as tall as the control
- * (`icon-sm`), bottom-aligned by the row, so the control rides the last
- * text line as the editor grows.
+ * A round control's slot in the compact row: as tall as the row's inner
+ * height, with the control centred in it. In a one-line row that centres
+ * the control on the text; as the editor grows the row's `items-end` keeps
+ * the slot on the last line, where the control stays centred on that line.
  */
 export const COMPOSER_COMPACT_CONTROL_SLOT_CLASS =
-  "flex h-8 shrink-0 items-center";
+  "flex h-[calc(--spacing(11)-2px)] shrink-0 items-center";
 
 /**
  * The `large` (hero) text well: the padding around the editor. The editor's
