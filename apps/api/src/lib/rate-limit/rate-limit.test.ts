@@ -600,6 +600,48 @@ describe("RedisRateLimitContext", () => {
     ]);
   });
 
+  test("returns the rate-limit body when an early failure exceeds the quota", async () => {
+    const context = new TrackingRateLimitContext();
+    const app = new Elysia()
+      .onError(({ set }) => {
+        set.status = 400;
+        return { message: "sanitized" };
+      })
+      .use(
+        rateLimit({
+          context,
+          duration: WINDOW_MS,
+          generator: () => "shared-client",
+          max: 1,
+        }),
+      )
+      .post("/known", () => "ok", {
+        body: t.Object({ name: t.String() }),
+      });
+
+    const first = await app.handle(
+      new Request("http://localhost/known", {
+        body: "{",
+        headers: { "content-type": "application/json" },
+        method: "POST",
+      }),
+    );
+    const limited = await app.handle(
+      new Request("http://localhost/known", {
+        body: "{",
+        headers: { "content-type": "application/json" },
+        method: "POST",
+      }),
+    );
+
+    expect(first.status).toBe(400);
+    expect(limited.status).toBe(429);
+    expect(limited.headers.get("RateLimit-Limit")).toBe("1");
+    expect(limited.headers.get("RateLimit-Remaining")).toBe("0");
+    expect(limited.headers.get("Retry-After")).toBe("1");
+    expect(await limited.text()).toBe("rate-limit reached");
+  });
+
   test("counts unknown routes that bypass before-handle hooks", async () => {
     const context = new TrackingRateLimitContext();
     const app = createTrackingRateLimitedApp({ context, max: 1 }).get(

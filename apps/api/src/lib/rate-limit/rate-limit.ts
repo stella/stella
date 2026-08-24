@@ -341,14 +341,24 @@ export const rateLimit = ({
 
     if (state === undefined) {
       if (handledError && isEarlyFailureStatus(statusCode)) {
-        await applyRateLimit({
+        const rateLimitResponse = await applyRateLimit({
           phase: "early_failure",
           request,
           server,
           set,
         });
+        if (rateLimitResponse !== undefined) {
+          const headers = new Headers();
+          for (const [name, value] of Object.entries(set.headers)) {
+            headers.set(name, String(value));
+          }
+          return new Response(rateLimitResponse, {
+            headers,
+            status: 429,
+          });
+        }
       }
-      return;
+      return undefined;
     }
 
     switch (state.type) {
@@ -357,15 +367,15 @@ export const rateLimit = ({
           requestState.set(request, { type: "refunded" });
           await context.decrement(state.key);
         }
-        return;
+        return undefined;
       case "counted_early_failure":
       case "limited":
       case "refunded":
       case "skipped":
-        return;
+        return undefined;
       default: {
         state satisfies never;
-        return;
+        return undefined;
       }
     }
   });
