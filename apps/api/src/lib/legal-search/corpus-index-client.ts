@@ -46,6 +46,10 @@ const ADMIN_TIMEOUT_MS = 30_000;
  * hold the request open for the full search timeout.
  */
 const AGGREGATION_TIMEOUT_MS = 10_000;
+const SPLIT_PAGE_SIZE = 1000;
+const MAX_SETTLEMENT_SPLITS = 10_000;
+const MAX_SETTLEMENT_SCAN_PASSES = 3;
+const SETTLEMENT_SCAN_TIMEOUT_MS = 60_000;
 
 /**
  * What "the engine accepted this batch" is allowed to mean.
@@ -106,6 +110,25 @@ export type CorpusIndexSearchResponse = {
   snippets: Record<string, unknown>[];
 };
 
+/**
+ * Durable identity of one asynchronous engine deletion.
+ *
+ * Quickwit applies delete tasks to published splits after accepting the
+ * request. Retaining the returned opstamp is the bounded proof boundary;
+ * discarding it forces operators to list the engine's ever-growing task log.
+ */
+export type CorpusIndexDeleteTask = {
+  opstamp: number;
+};
+
+export type CorpusIndexDeleteSettlement = {
+  requiredOpstamp: number;
+  publishedSplits: number;
+  laggingSplits: number;
+  minAppliedOpstamp: number | null;
+  settled: boolean;
+};
+
 export type CorpusIndexClient = {
   createIndex: (
     config: CorpusIndexConfig,
@@ -131,7 +154,11 @@ export type CorpusIndexClient = {
   deleteByQuery: (
     indexId: string,
     query: string,
-  ) => Promise<Result<void, CorpusIndexError>>;
+  ) => Promise<Result<CorpusIndexDeleteTask, CorpusIndexError>>;
+  readDeleteSettlement: (
+    indexId: string,
+    requiredOpstamp: number,
+  ) => Promise<Result<CorpusIndexDeleteSettlement, CorpusIndexError>>;
 };
 
 const mutationBaseUrl = (): string => {
@@ -452,7 +479,7 @@ const buildClient = (): CorpusIndexClient => ({
   deleteByQuery: async (indexId, query) =>
     await Result.tryPromise({
       try: async () => {
-        await requestJson({
+        const response = await requestJson({
           baseUrl: mutationBaseUrl(),
           path: `/api/v1/${indexId}/delete-tasks`,
           init: {
@@ -462,6 +489,147 @@ const buildClient = (): CorpusIndexClient => ({
           },
           timeoutMs: ADMIN_TIMEOUT_MS,
         });
+        if (
+          !isRecord(response) ||
+          typeof response["opstamp"] !== "number" ||
+          !Number.isSafeInteger(response["opstamp"]) ||
+          response["opstamp"] < 0
+        ) {
+          throw new CorpusIndexError({
+            message: "corpus index delete task returned an invalid response",
+          });
+        }
+        return { opstamp: response["opstamp"] };
+      },
+      catch: toCorpusIndexError,
+    }),
+
+  readDeleteSettlement: async (indexId, requiredOpstamp) =>
+    await Result.tryPromise({
+      try: async () => {
+        if (!Number.isSafeInteger(requiredOpstamp) || requiredOpstamp < 0) {
+          throw new CorpusIndexError({
+            message:
+              "corpus index delete settlement received an invalid opstamp",
+          });
+        }
+        const deadline = Date.now() + SETTLEMENT_SCAN_TIMEOUT_MS;
+        const remainingBudget = (): number => {
+          const remaining = deadline - Date.now();
+          if (remaining <= 0) {
+            throw new CorpusIndexError({
+              message: `corpus index delete settlement exceeded its ${SETTLEMENT_SCAN_TIMEOUT_MS}ms budget`,
+            });
+          }
+          return Math.min(remaining, ADMIN_TIMEOUT_MS);
+        };
+        const observedSplitOpstamps = new Map<string, number>();
+        let scanPasses = 0;
+        const readSplitPass = async (): Promise<Set<string>> => {
+          scanPasses += 1;
+          if (scanPasses > MAX_SETTLEMENT_SCAN_PASSES) {
+            throw new CorpusIndexError({
+              message:
+                "corpus index split list did not reach a stable published-split set",
+            });
+          }
+          let offset = 0;
+          let scannedSplits = 0;
+          const currentSplitIds = new Set<string>();
+          const readSplitPage = async (): Promise<void> => {
+            const response = await requestJson({
+              baseUrl: mutationBaseUrl(),
+              path: `/api/v1/indexes/${indexId}/splits?offset=${offset}&limit=${SPLIT_PAGE_SIZE}&split_states=Published`,
+              init: { method: "GET" },
+              timeoutMs: remainingBudget(),
+            });
+            const splits = isRecord(response)
+              ? parseRecordArray(response["splits"])
+              : null;
+            if (splits === null) {
+              throw new CorpusIndexError({
+                message: "corpus index split list returned an invalid response",
+              });
+            }
+            scannedSplits += splits.length;
+            if (scannedSplits > MAX_SETTLEMENT_SPLITS) {
+              throw new CorpusIndexError({
+                message: `corpus index split list exceeds ${MAX_SETTLEMENT_SPLITS} published splits`,
+              });
+            }
+            for (const split of splits) {
+              const splitId = split["split_id"];
+              const opstamp = split["delete_opstamp"];
+              if (
+                split["split_state"] !== "Published" ||
+                typeof splitId !== "string" ||
+                splitId.length === 0 ||
+                typeof opstamp !== "number" ||
+                !Number.isSafeInteger(opstamp) ||
+                opstamp < 0
+              ) {
+                throw new CorpusIndexError({
+                  message:
+                    "corpus index split list returned an invalid response",
+                });
+              }
+              const previousOpstamp = observedSplitOpstamps.get(splitId);
+              currentSplitIds.add(splitId);
+              if (previousOpstamp === undefined) {
+                observedSplitOpstamps.set(splitId, opstamp);
+              } else {
+                observedSplitOpstamps.set(
+                  splitId,
+                  Math.min(previousOpstamp, opstamp),
+                );
+              }
+            }
+            if (splits.length < SPLIT_PAGE_SIZE) {
+              return;
+            }
+            offset += splits.length;
+            await readSplitPage();
+          };
+          await readSplitPage();
+          return currentSplitIds;
+        };
+        const readStableSplitPass = async (
+          previousPassSplitIds: ReadonlySet<string>,
+        ): Promise<Set<string>> => {
+          const currentSplitIds = await readSplitPass();
+          // Quickwit lists by numeric offset, not a snapshot cursor. A split
+          // published or retired while an earlier page is read can shift a
+          // later page. Only clear durable delete state after one complete
+          // pass has exactly the same identity set; ongoing churn fails closed.
+          const stable =
+            currentSplitIds.size === previousPassSplitIds.size &&
+            currentSplitIds.isSubsetOf(previousPassSplitIds);
+          if (stable) {
+            return currentSplitIds;
+          }
+          return await readStableSplitPass(currentSplitIds);
+        };
+        const finalPassSplitIds = await readStableSplitPass(new Set());
+        const appliedOpstamps = [...finalPassSplitIds].map((splitId) => {
+          const opstamp = observedSplitOpstamps.get(splitId);
+          if (opstamp === undefined) {
+            panic("settlement scan lost a published split opstamp");
+          }
+          return opstamp;
+        });
+        const publishedSplits = finalPassSplitIds.size;
+        const laggingSplits = appliedOpstamps.filter(
+          (opstamp) => opstamp < requiredOpstamp,
+        ).length;
+        const minAppliedOpstamp =
+          appliedOpstamps.length === 0 ? null : Math.min(...appliedOpstamps);
+        return {
+          requiredOpstamp,
+          publishedSplits,
+          laggingSplits,
+          minAppliedOpstamp,
+          settled: laggingSplits === 0,
+        };
       },
       catch: toCorpusIndexError,
     }),

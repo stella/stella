@@ -1,12 +1,27 @@
-import { and, eq, isNotNull, isNull, sql } from "drizzle-orm";
-
+import { Result } from "better-result";
 import {
+  and,
+  count,
+  eq,
+  exists,
+  isNotNull,
+  isNull,
+  lte,
+  min,
+  sql,
+} from "drizzle-orm";
+
+import type { ScopedDb } from "@/api/db/safe-db";
+import {
+  legislationCorpusIndexDeleteWatermarks,
+  legislationCorpusIndexPendingDeletes,
   legislationDocuments,
   legislationIndexJobs,
   legislationSources,
 } from "@/api/db/schema";
 import { redistributableLegislationSource } from "@/api/handlers/legislation/redistribution";
 import type { SafeId } from "@/api/lib/branded-types";
+import { DELETE_SETTLEMENT_STALE_MS } from "@/api/lib/corpus-index/census";
 import type { CorpusDocumentPayload } from "@/api/lib/corpus-index/core";
 import {
   createCorpusIndexer,
@@ -16,7 +31,12 @@ import {
   timestampCasToken,
   type TimestampCasToken,
 } from "@/api/lib/db/timestamp-cas";
+import {
+  CorpusIndexError,
+  getCorpusIndexClient,
+} from "@/api/lib/legal-search/corpus-index-client";
 import { readCorpusText } from "@/api/lib/legal-search/corpus-storage";
+import { logger } from "@/api/lib/observability/logger";
 
 /**
  * corpus index projection for the `legislation` family. Domain adapter over the
@@ -280,8 +300,217 @@ const indexer = createCorpusIndexer<"legislationDocument", IndexableRow>({
       );
     });
   },
+  recordDeleteJobs: async (scopedDb, { indexId, jobs, opstamp }) => {
+    if (jobs.length === 0) {
+      return;
+    }
+    await scopedDb(async (tx) => {
+      // audit: skip — append-only index-job rows ARE the indexing audit trail
+      await tx.insert(legislationIndexJobs).values(
+        jobs.map((job) => ({
+          documentId: job.entityId,
+          generation: indexId,
+          operation: job.operation,
+          status: job.status,
+          contentHash: job.contentHash,
+          errorMessage: job.errorMessage ?? null,
+        })),
+      );
+      if (opstamp === null) {
+        return;
+      }
+      // audit: skip — derived engine-settlement watermark; the job rows above
+      // are the document-level audit trail for the same remote effect
+      await tx
+        .insert(legislationCorpusIndexDeleteWatermarks)
+        .values({ indexId, opstamp })
+        .onConflictDoUpdate({
+          target: legislationCorpusIndexDeleteWatermarks.indexId,
+          set: {
+            opstamp: sql`GREATEST(
+              ${legislationCorpusIndexDeleteWatermarks.opstamp},
+              excluded.opstamp
+            )`,
+            updatedAt: new Date(),
+          },
+        });
+      // audit: skip — bounded settlement state; append-only index jobs above
+      // remain the audit trail after settled rows are removed by reconciliation
+      await tx
+        .insert(legislationCorpusIndexPendingDeletes)
+        .values(
+          jobs.map((job) => ({
+            indexId,
+            documentId: job.entityId,
+            opstamp,
+          })),
+        )
+        .onConflictDoUpdate({
+          target: [
+            legislationCorpusIndexPendingDeletes.indexId,
+            legislationCorpusIndexPendingDeletes.documentId,
+          ],
+          set: {
+            opstamp: sql`GREATEST(
+              ${legislationCorpusIndexPendingDeletes.opstamp},
+              excluded.opstamp
+            )`,
+          },
+        });
+    });
+  },
 });
 
+export type LegislationDeleteSettlement = {
+  indexId: string;
+  pendingDocuments: number;
+  stale: boolean;
+  settled: boolean;
+};
+
+/**
+ * Reconcile one oldest legislation delete backlog. Delete tasks apply to
+ * Quickwit splits asynchronously, so an accepted task cannot clear its
+ * durable ownership until every published split reaches the task opstamp.
+ * One index per call bounds engine and database work; the daemon calls this
+ * every index cycle and drains every remaining backlog over time.
+ */
+// audit: skip — scheduler-owned, derived corpus-index settlement state; the
+// append-only index-job rows retain the document-level audit trail.
+export const reconcileNextLegislationCorpusIndexDelete = async (
+  scopedDb: ScopedDb,
+): Promise<Result<LegislationDeleteSettlement | null, CorpusIndexError>> =>
+  await Result.tryPromise({
+    try: async () => {
+      const next = (
+        await scopedDb((tx) =>
+          tx
+            .select({
+              indexId: legislationCorpusIndexDeleteWatermarks.indexId,
+              opstamp: legislationCorpusIndexDeleteWatermarks.opstamp,
+            })
+            .from(legislationCorpusIndexDeleteWatermarks)
+            .where(
+              exists(
+                tx
+                  .select({
+                    indexId: legislationCorpusIndexPendingDeletes.indexId,
+                  })
+                  .from(legislationCorpusIndexPendingDeletes)
+                  .where(
+                    eq(
+                      legislationCorpusIndexPendingDeletes.indexId,
+                      legislationCorpusIndexDeleteWatermarks.indexId,
+                    ),
+                  )
+                  .limit(1),
+              ),
+            )
+            .orderBy(
+              sql`${legislationCorpusIndexDeleteWatermarks.lastCheckedAt} NULLS FIRST`,
+            )
+            .limit(1),
+        )
+      ).at(0);
+      if (next === undefined) {
+        return null;
+      }
+      await scopedDb(async (tx) => {
+        // audit: skip — scheduler-owned, derived settlement scheduling state
+        await tx
+          .update(legislationCorpusIndexDeleteWatermarks)
+          .set({ lastCheckedAt: new Date() })
+          .where(
+            eq(legislationCorpusIndexDeleteWatermarks.indexId, next.indexId),
+          );
+      });
+
+      const settlement = await getCorpusIndexClient().readDeleteSettlement(
+        next.indexId,
+        next.opstamp,
+      );
+      if (settlement.isErr()) {
+        throw settlement.error;
+      }
+      const appliedOpstamp =
+        settlement.value.publishedSplits === 0
+          ? next.opstamp
+          : settlement.value.minAppliedOpstamp;
+      const pending = await scopedDb(async (tx) => {
+        if (appliedOpstamp !== null) {
+          // audit: skip — bounded derived settlement state
+          await tx
+            .delete(legislationCorpusIndexPendingDeletes)
+            .where(
+              and(
+                eq(legislationCorpusIndexPendingDeletes.indexId, next.indexId),
+                lte(
+                  legislationCorpusIndexPendingDeletes.opstamp,
+                  appliedOpstamp,
+                ),
+              ),
+            );
+        }
+        return await tx
+          .select({
+            oldestPendingAt: min(
+              legislationCorpusIndexPendingDeletes.createdAt,
+            ),
+            pendingDocuments: count(),
+          })
+          .from(legislationCorpusIndexPendingDeletes)
+          .where(
+            eq(legislationCorpusIndexPendingDeletes.indexId, next.indexId),
+          );
+      });
+      const state = pending.at(0);
+      const oldestPendingAt = state?.oldestPendingAt ?? null;
+      const pendingDocuments = state?.pendingDocuments ?? 0;
+      return {
+        indexId: next.indexId,
+        pendingDocuments,
+        stale:
+          oldestPendingAt !== null &&
+          Date.now() - oldestPendingAt.getTime() >= DELETE_SETTLEMENT_STALE_MS,
+        settled: pendingDocuments === 0,
+      };
+    },
+    catch: (error) =>
+      error instanceof CorpusIndexError
+        ? error
+        : new CorpusIndexError({
+            message:
+              error instanceof Error
+                ? error.message
+                : "legislation delete settlement failed",
+            cause: error,
+          }),
+  });
+
 export const loadDocsForBatch = indexer.loadDocsForBatch;
-export const backfillLegislationCorpusIndex = indexer.backfill;
+export const backfillLegislationCorpusIndex = async (
+  scopedDb: ScopedDb,
+  batchSize: number,
+  generation: string,
+  options: { readConcurrency?: number } = {},
+): Promise<number> => {
+  const indexed = await indexer.backfill(
+    scopedDb,
+    batchSize,
+    generation,
+    options,
+  );
+  const settlement = await reconcileNextLegislationCorpusIndexDelete(scopedDb);
+  if (settlement.isErr()) {
+    logger.warn("legislation.corpus_index.delete_settlement_unavailable", {
+      "error.type": settlement.error._tag,
+    });
+  } else if (settlement.value?.stale) {
+    logger.warn("legislation.corpus_index.delete_settlement_stalled", {
+      indexId: settlement.value.indexId,
+      pendingDocuments: settlement.value.pendingDocuments,
+    });
+  }
+  return indexed;
+};
 export const removeLegislationFromCorpusIndex = indexer.remove;

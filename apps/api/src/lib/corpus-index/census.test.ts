@@ -18,6 +18,7 @@ import {
   CENSUS_CYCLE_INTERVAL,
   CENSUS_DISPOSITION,
   CENSUS_TOLERANCE,
+  DELETE_SETTLEMENT_STALE_MS,
   CaseLawCorpusIndexCountNotReadyError,
   censusIndex,
   createCaseLawCensus,
@@ -36,6 +37,7 @@ const INDEX_ID = corpusIndexId(GENERATION, JURISDICTION);
 const LAST_CYCLE_START = 0.99;
 
 const originalFetch = globalThis.fetch;
+const NO_PENDING_DELETE = { count: 0, oldest: null } as const;
 
 /** Index ids the engine was asked to count, in request order. */
 let countedIndexIds: string[];
@@ -45,7 +47,12 @@ const indexIdOfCountRequest = (url: string): string | undefined =>
   /\/api\/v1\/(?<indexId>[^/]+)\/search/u.exec(url)?.groups?.["indexId"];
 
 /** Serves the engine's document count, and nothing else. */
-const engineHolding = (numHits: number, ok = true): void => {
+const engineHolding = (
+  numHits: number,
+  ok = true,
+  splitOpstamps: readonly number[] = [],
+  splitOk = true,
+): void => {
   const resolveUrl = (input: Parameters<typeof fetch>[0]): string => {
     if (typeof input === "string") {
       return input;
@@ -77,6 +84,23 @@ const engineHolding = (numHits: number, ok = true): void => {
         { status: 200 },
       );
     }
+    if (url.includes("/splits")) {
+      if (!splitOk) {
+        return new Response("split list unavailable", { status: 503 });
+      }
+      return new Response(
+        JSON.stringify({
+          offset: 0,
+          size: splitOpstamps.length,
+          splits: splitOpstamps.map((opstamp) => ({
+            split_id: `split-${opstamp}`,
+            split_state: "Published",
+            delete_opstamp: opstamp,
+          })),
+        }),
+        { status: 200 },
+      );
+    }
     return new Response(JSON.stringify({}), { status: 200 });
   };
   globalThis.fetch = Object.assign(stub, {
@@ -92,6 +116,8 @@ const databaseHolding = (
   marked: number,
   jurisdictions?: string[],
   countStatus = "complete",
+  deleteOpstamp?: number,
+  pendingDelete: { count: number; oldest: Date | null } = NO_PENDING_DELETE,
 ): ScopedDb => {
   const handle = async (callback: (tx: Transaction) => Promise<unknown>) => {
     let rows: Record<string, unknown>[] = [];
@@ -103,8 +129,28 @@ const databaseHolding = (
       where: () => rows,
     };
     const tx = {
+      delete: () => chain,
       select: (selection: Record<string, unknown>) => {
-        rows = "status" in selection ? [{ marked, status: countStatus }] : [];
+        if ("status" in selection) {
+          rows = [
+            {
+              marked,
+              status: countStatus,
+              hasPendingDelete: pendingDelete.count > 0,
+            },
+          ];
+        } else if ("pendingDocuments" in selection) {
+          rows = [
+            {
+              oldestPendingAt: pendingDelete.oldest,
+              pendingDocuments: pendingDelete.count,
+            },
+          ];
+        } else if ("opstamp" in selection && deleteOpstamp !== undefined) {
+          rows = [{ opstamp: deleteOpstamp }];
+        } else {
+          rows = [];
+        }
         return chain;
       },
       selectDistinct: () => {
@@ -229,7 +275,7 @@ describe("index census", () => {
     // reason this direction cannot simply be ignored — each one cancels
     // a genuinely missing document in the same subtraction. Reporting
     // the surplus is what stops the pair going quiet together.
-    engineHolding(50_000);
+    engineHolding(50_000, true, [], false);
 
     const census = await censusIndex({
       scopedDb: databaseHolding(10_000),
@@ -241,6 +287,65 @@ describe("index census", () => {
     expect(census.isOk() && census.value.disposition).toBe(
       CENSUS_DISPOSITION.surplus,
     );
+  });
+
+  test("a retained delete task explains surplus until every split applies it", async () => {
+    engineHolding(50_000, true, [42, 41, 45]);
+
+    const census = await censusIndex({
+      scopedDb: databaseHolding(10_000, undefined, "complete", 42, {
+        count: 40_000,
+        oldest: new Date(),
+      }),
+      generation: GENERATION,
+      indexId: INDEX_ID,
+    });
+
+    expect(census.isOk() && census.value.disposition).toBe(
+      CENSUS_DISPOSITION.pendingDelete,
+    );
+    expect(census.isOk() && census.value.deleteSettlement).toEqual({
+      requiredOpstamp: 42,
+      publishedSplits: 3,
+      laggingSplits: 1,
+      minAppliedOpstamp: 41,
+      pendingDocuments: 40_000,
+      oldestPendingAt: expect.any(Date),
+      stale: false,
+      settled: false,
+    });
+  });
+
+  test("a pending delete explains no more surplus than its document set", async () => {
+    engineHolding(50_000, true, [41]);
+
+    const census = await censusIndex({
+      scopedDb: databaseHolding(10_000, undefined, "complete", 42, {
+        count: 10,
+        oldest: new Date(),
+      }),
+      generation: GENERATION,
+      indexId: INDEX_ID,
+    });
+
+    expect(census.isOk() && census.value.disposition).toBe(
+      CENSUS_DISPOSITION.surplus,
+    );
+  });
+
+  test("a split settlement failure stays in the census Result", async () => {
+    engineHolding(50_000, true, [41], false);
+
+    const census = await censusIndex({
+      scopedDb: databaseHolding(10_000, undefined, "complete", 42, {
+        count: 1,
+        oldest: new Date(),
+      }),
+      generation: GENERATION,
+      indexId: INDEX_ID,
+    });
+
+    expect(census.isErr()).toBe(true);
   });
 
   test("an unreachable index is a failure, not an empty index", async () => {
@@ -295,6 +400,7 @@ describe("census reporting", () => {
         markedIndexed: 10_000,
         shortfall: 9100,
         disposition: CENSUS_DISPOSITION.short,
+        deleteSettlement: null,
       },
     });
 
@@ -322,6 +428,7 @@ describe("census reporting", () => {
         markedIndexed: 10_000,
         shortfall: 0,
         disposition: CENSUS_DISPOSITION.aligned,
+        deleteSettlement: null,
       },
     });
 
@@ -341,6 +448,7 @@ describe("census reporting", () => {
         markedIndexed: 10_000,
         shortfall: 9100,
         disposition: CENSUS_DISPOSITION.short,
+        deleteSettlement: null,
       },
     });
 
@@ -357,12 +465,99 @@ describe("census reporting", () => {
         markedIndexed: 10_000,
         shortfall: -2000,
         disposition: CENSUS_DISPOSITION.surplus,
+        deleteSettlement: null,
       },
     });
 
     expect(warn.mock.calls.at(0)?.at(1)).toMatchObject({
       disposition: CENSUS_DISPOSITION.surplus,
     });
+  });
+
+  test("a surplus with an unapplied retained delete is not reported as drift", () => {
+    reportIndexCensus({
+      generation: GENERATION,
+      previous: CENSUS_DISPOSITION.pendingDelete,
+      census: {
+        indexId: INDEX_ID,
+        engineDocuments: 12_000,
+        markedIndexed: 10_000,
+        shortfall: -2000,
+        disposition: CENSUS_DISPOSITION.pendingDelete,
+        deleteSettlement: {
+          requiredOpstamp: 42,
+          publishedSplits: 3,
+          laggingSplits: 1,
+          minAppliedOpstamp: 41,
+          pendingDocuments: 2000,
+          oldestPendingAt: new Date(),
+          stale: false,
+          settled: false,
+        },
+      },
+    });
+
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  test("an old pending delete is reported as stalled settlement", () => {
+    reportIndexCensus({
+      generation: GENERATION,
+      previous: CENSUS_DISPOSITION.pendingDelete,
+      census: {
+        indexId: INDEX_ID,
+        engineDocuments: 12_000,
+        markedIndexed: 10_000,
+        shortfall: -2000,
+        disposition: CENSUS_DISPOSITION.pendingDelete,
+        deleteSettlement: {
+          requiredOpstamp: 42,
+          publishedSplits: 3,
+          laggingSplits: 1,
+          minAppliedOpstamp: 41,
+          pendingDocuments: 2000,
+          oldestPendingAt: new Date(
+            Date.now() - DELETE_SETTLEMENT_STALE_MS - 1,
+          ),
+          stale: true,
+          settled: false,
+        },
+      },
+    });
+
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn.mock.calls.at(0)?.at(0)).toBe(
+      "case_law.corpus_index.delete_settlement_stalled",
+    );
+  });
+
+  test("a small stale delete is reported inside census tolerance", async () => {
+    engineHolding(10_000 + CENSUS_TOLERANCE, true, [41]);
+
+    const census = await censusIndex({
+      scopedDb: databaseHolding(10_000, undefined, "complete", 42, {
+        count: CENSUS_TOLERANCE,
+        oldest: new Date(Date.now() - DELETE_SETTLEMENT_STALE_MS - 1),
+      }),
+      generation: GENERATION,
+      indexId: INDEX_ID,
+    });
+    if (census.isErr()) {
+      throw census.error;
+    }
+
+    expect(census.value.disposition).toBe(CENSUS_DISPOSITION.aligned);
+    expect(census.value.deleteSettlement?.stale).toBe(true);
+
+    reportIndexCensus({
+      generation: GENERATION,
+      previous: CENSUS_DISPOSITION.aligned,
+      census: census.value,
+    });
+
+    expect(warn.mock.calls.at(0)?.at(0)).toBe(
+      "case_law.corpus_index.delete_settlement_stalled",
+    );
   });
 
   test("an unreachable index reports separately from drift", async () => {

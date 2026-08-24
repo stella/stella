@@ -78,6 +78,22 @@ const AUTH_USER_STELLA_SELECT_COLUMNS_SQL =
     ", ",
   );
 
+const CORPUS_DELETE_WATERMARK_TABLES_SQL = [
+  schema.caseLawCorpusIndexDeleteWatermarks,
+  schema.legislationCorpusIndexDeleteWatermarks,
+]
+  .map(getTableName)
+  .map(quoteSqlIdentifier)
+  .join(", ");
+
+const CORPUS_PENDING_DELETE_TABLES_SQL = [
+  schema.caseLawCorpusIndexPendingDeletes,
+  schema.legislationCorpusIndexPendingDeletes,
+]
+  .map(getTableName)
+  .map(quoteSqlIdentifier)
+  .join(", ");
+
 // The snapshot bakes in the superset every suite needs: RLS roles, schema,
 // workspace-access objects, and the role grants. Suites that never SET ROLE
 // simply ignore the grants.
@@ -194,6 +210,29 @@ const ROLE_GRANT_STATEMENTS = [
   `,
   `
     GRANT INSERT ON TABLE "legislation_index_jobs" TO stella_ingestion
+  `,
+  // Corpus delete settlement mirrors the migration's least-privilege split:
+  // request handlers may inspect watermarks, while only ingestion owns the
+  // pending ledger and advances settlement.
+  `
+    REVOKE INSERT, UPDATE, DELETE ON TABLE
+      ${CORPUS_DELETE_WATERMARK_TABLES_SQL}
+    FROM stella
+  `,
+  `
+    REVOKE ALL PRIVILEGES ON TABLE
+      ${CORPUS_PENDING_DELETE_TABLES_SQL}
+    FROM stella
+  `,
+  `
+    GRANT SELECT, INSERT, UPDATE ON TABLE
+      ${CORPUS_DELETE_WATERMARK_TABLES_SQL}
+    TO stella_ingestion
+  `,
+  `
+    GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE
+      ${CORPUS_PENDING_DELETE_TABLES_SQL}
+    TO stella_ingestion
   `,
   // Preserve the v0.7.22 reader contract until its rollback window closes.
   `

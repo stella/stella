@@ -25,6 +25,7 @@ type RecordedRequest = {
 
 let requests: RecordedRequest[];
 let responseBody: unknown;
+let responseBodyForUrl: ((url: URL) => unknown) | null;
 const originalFetch = globalThis.fetch;
 const originalCorpusIndexEndpoint = envBase.CORPUS_INDEX_ENDPOINT;
 const originalCorpusIndexSearchEndpoint = envBase.CORPUS_INDEX_SEARCH_ENDPOINT;
@@ -32,6 +33,7 @@ const originalCorpusIndexSearchEndpoint = envBase.CORPUS_INDEX_SEARCH_ENDPOINT;
 beforeEach(() => {
   requests = [];
   responseBody = {};
+  responseBodyForUrl = null;
   const resolveUrl = (input: Parameters<typeof fetch>[0]): string => {
     if (typeof input === "string") {
       return input;
@@ -52,7 +54,9 @@ beforeEach(() => {
       search: url.search,
       body: typeof init?.body === "string" ? init.body : "",
     });
-    return new Response(JSON.stringify(responseBody), { status: 200 });
+    const body =
+      responseBodyForUrl === null ? responseBody : responseBodyForUrl(url);
+    return new Response(JSON.stringify(body), { status: 200 });
   };
   globalThis.fetch = Object.assign(stub, {
     preconnect: originalFetch.preconnect,
@@ -249,7 +253,7 @@ test("ingest fails when the engine reports rejected documents", async () => {
 });
 
 test("delete-by-query posts one document-scoped delete task", async () => {
-  responseBody = {};
+  responseBody = { opstamp: 42 };
 
   const result = await getCorpusIndexClient().deleteByQuery(
     "legal_corpus_v1_cze",
@@ -257,6 +261,9 @@ test("delete-by-query posts one document-scoped delete task", async () => {
   );
 
   expect(result.isOk()).toBe(true);
+  if (result.isOk()) {
+    expect(result.value).toEqual({ opstamp: 42 });
+  }
   // One task per document, whatever the index layout: a passage-split
   // document is removed by the same single query as a whole one, so the
   // indexer never has to know how many documents a row previously emitted.
@@ -266,6 +273,165 @@ test("delete-by-query posts one document-scoped delete task", async () => {
   expect(request?.path).toBe("/api/v1/legal_corpus_v1_cze/delete-tasks");
   const body: Record<string, unknown> = JSON.parse(request?.body ?? "{}");
   expect(body["query"]).toBe('document_id:"dec-1"');
+});
+
+test("delete-by-query rejects a response without a usable opstamp", async () => {
+  responseBody = {};
+
+  const result = await getCorpusIndexClient().deleteByQuery(
+    "legal_corpus_v1_cze",
+    'document_id:"dec-1"',
+  );
+
+  expect(result.isErr()).toBe(true);
+  if (result.isErr()) {
+    expect(result.error.message).toContain("invalid response");
+  }
+});
+
+test("delete settlement compares every published split with the retained task", async () => {
+  responseBody = {
+    offset: 0,
+    size: 3,
+    splits: [
+      {
+        split_id: "split-42",
+        split_state: "Published",
+        delete_opstamp: 42,
+      },
+      {
+        split_id: "split-41",
+        split_state: "Published",
+        delete_opstamp: 41,
+      },
+      {
+        split_id: "split-45",
+        split_state: "Published",
+        delete_opstamp: 45,
+      },
+    ],
+  };
+
+  const result = await getCorpusIndexClient().readDeleteSettlement(
+    "legal_corpus_v1_cze",
+    42,
+  );
+
+  expect(result.isOk()).toBe(true);
+  if (result.isOk()) {
+    expect(result.value).toEqual({
+      requiredOpstamp: 42,
+      publishedSplits: 3,
+      laggingSplits: 1,
+      minAppliedOpstamp: 41,
+      settled: false,
+    });
+  }
+  expect(requests.at(0)?.path).toBe(
+    "/api/v1/indexes/legal_corpus_v1_cze/splits",
+  );
+  expect(requests.at(0)?.search).toBe(
+    "?offset=0&limit=1000&split_states=Published",
+  );
+});
+
+test("delete settlement rejects an invalid required opstamp", async () => {
+  const result = await getCorpusIndexClient().readDeleteSettlement(
+    "legal_corpus_v1_cze",
+    -1,
+  );
+
+  expect(result.isErr()).toBe(true);
+  if (result.isErr()) {
+    expect(result.error.message).toContain("invalid opstamp");
+  }
+});
+
+test("delete settlement rejects a split without a usable delete opstamp", async () => {
+  responseBody = {
+    splits: [{ split_id: "split-1", split_state: "Published" }],
+  };
+
+  const result = await getCorpusIndexClient().readDeleteSettlement(
+    "legal_corpus_v1_cze",
+    42,
+  );
+
+  expect(result.isErr()).toBe(true);
+  if (result.isErr()) {
+    expect(result.error.message).toContain("invalid response");
+  }
+});
+
+const settlementResponse = (splitCount: number) => (url: URL) => {
+  const offset = Number(url.searchParams.get("offset") ?? "0");
+  const pageSize = Math.min(1000, Math.max(splitCount - offset, 0));
+  return {
+    splits: Array.from({ length: pageSize }, (_, index) => ({
+      split_id: `split-${offset + index}`,
+      split_state: "Published",
+      delete_opstamp: 42,
+    })),
+  };
+};
+
+test("delete settlement repeats an offset scan until split identities stabilize", async () => {
+  let firstPageReads = 0;
+  responseBodyForUrl = (url) => {
+    const offset = Number(url.searchParams.get("offset") ?? "0");
+    if (offset === 0) {
+      firstPageReads += 1;
+      return {
+        splits: Array.from({ length: 1000 }, (_, index) => ({
+          split_id:
+            firstPageReads === 1 || index > 0 ? `split-${index}` : "split-new",
+          split_state: "Published",
+          delete_opstamp: 42,
+        })),
+      };
+    }
+    return { splits: [] };
+  };
+
+  const result = await getCorpusIndexClient().readDeleteSettlement(
+    "legal_corpus_v1_cze",
+    42,
+  );
+
+  expect(result.isOk()).toBe(true);
+  if (result.isOk()) {
+    expect(result.value.publishedSplits).toBe(1000);
+  }
+  expect(firstPageReads).toBe(3);
+});
+
+test("delete settlement accepts exactly the published split ceiling", async () => {
+  responseBodyForUrl = settlementResponse(10_000);
+
+  const result = await getCorpusIndexClient().readDeleteSettlement(
+    "legal_corpus_v1_cze",
+    42,
+  );
+
+  expect(result.isOk()).toBe(true);
+  if (result.isOk()) {
+    expect(result.value.publishedSplits).toBe(10_000);
+    expect(result.value.settled).toBe(true);
+  }
+});
+
+test("delete settlement rejects the first split beyond its ceiling", async () => {
+  responseBodyForUrl = settlementResponse(10_001);
+
+  const result = await getCorpusIndexClient().readDeleteSettlement(
+    "legal_corpus_v1_cze",
+    42,
+  );
+
+  expect(result.isErr()).toBe(true);
+  if (result.isErr()) {
+    expect(result.error.message).toContain("exceeds 10000");
+  }
 });
 
 test("ingest sends the commit mode the caller asked for", async () => {

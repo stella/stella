@@ -275,6 +275,9 @@ describe("idempotent corpus removals", () => {
       recordJobs: async (_db, jobs) => {
         recorded.push(...jobs);
       },
+      recordDeleteJobs: async (_db, { jobs }) => {
+        recorded.push(...jobs);
+      },
     });
     globalThis.fetch = Object.assign(
       async () => new Response("missing", { status: 404 }),
@@ -293,6 +296,69 @@ describe("idempotent corpus removals", () => {
     expect(removed.isOk()).toBe(true);
     expect(recorded).toMatchObject([
       { entityId: row.id, operation: "delete", status: "succeeded" },
+    ]);
+  });
+
+  test("a successful deletion records its opstamp", async () => {
+    const row = {
+      id: toSafeId<"caseLawDecision">("settled-delete-row"),
+      country: "CZ",
+      textS3Key: null,
+      astS3Key: null,
+      contentHash: null,
+      indexedHash: null,
+      indexedGeneration: null,
+      // SAFETY: the removal path never reads the fabricated timestamp token.
+      // eslint-disable-next-line typescript/no-unsafe-type-assertion
+      updatedAtToken: "2026-01-01 00:00:00" as TimestampCasToken,
+    };
+    const deleteRecords: {
+      jobs: CorpusJobInput<"caseLawDecision">[];
+      opstamp: number | null;
+    }[] = [];
+    const indexer = createCorpusIndexer<"caseLawDecision", typeof row>({
+      family: "case_law",
+      captureStep: "test",
+      granularity: "document",
+      generationProjectionIndexIds: () => [],
+      buildDocs: () => [],
+      readCorpusText: async () => "unused",
+      selectMissing: async () => [],
+      selectStale: async () => [],
+      fetchFulltext: async () => null,
+      markIndexedBatch: async () => new Set(),
+      insertSucceededJobs: async () => undefined,
+      recordJobs: async () => undefined,
+      recordDeleteJobs: async (_db, { jobs, opstamp }) => {
+        deleteRecords.push({ jobs: [...jobs], opstamp });
+      },
+    });
+    let nextDeleteOpstamp = 40;
+    globalThis.fetch = Object.assign(
+      async () => {
+        nextDeleteOpstamp += 1;
+        return new Response(JSON.stringify({ opstamp: nextDeleteOpstamp }), {
+          status: 200,
+        });
+      },
+      { preconnect: originalFetch.preconnect },
+    );
+    const scopedDb: ScopedDb = async () => {
+      throw new Error("removal should not open a database transaction");
+    };
+
+    const removed = await indexer.remove(
+      row.id,
+      scopedDb,
+      corpusIndexId("case_law_v2", "CZ"),
+    );
+
+    expect(removed.isOk()).toBe(true);
+    expect(deleteRecords).toMatchObject([
+      {
+        jobs: [{ entityId: row.id, operation: "delete", status: "succeeded" }],
+        opstamp: 41,
+      },
     ]);
   });
 
@@ -325,9 +391,18 @@ describe("idempotent corpus removals", () => {
       recordJobs: async (_db, jobs) => {
         recorded.push(...jobs);
       },
+      recordDeleteJobs: async (_db, { jobs }) => {
+        recorded.push(...jobs);
+      },
     });
+    let nextDeleteOpstamp = 0;
     globalThis.fetch = Object.assign(
-      async () => new Response(JSON.stringify({}), { status: 200 }),
+      async () => {
+        nextDeleteOpstamp += 1;
+        return new Response(JSON.stringify({ opstamp: nextDeleteOpstamp }), {
+          status: 200,
+        });
+      },
       { preconnect: originalFetch.preconnect },
     );
     const scopedDb: ScopedDb = async () => {
@@ -380,10 +455,17 @@ describe("fenced serving-generation appends", () => {
       updatedAtToken: "2026-01-01 00:00:00" as TimestampCasToken,
     };
     const events: string[] = [];
+    let nextDeleteOpstamp = 0;
     globalThis.fetch = Object.assign(
       async (input: Parameters<typeof fetch>[0]) => {
         const url = input instanceof Request ? input.url : String(input);
         events.push(url.includes("/ingest") ? "ingest" : "remote");
+        if (url.includes("/delete-tasks")) {
+          nextDeleteOpstamp += 1;
+          return new Response(JSON.stringify({ opstamp: nextDeleteOpstamp }), {
+            status: 200,
+          });
+        }
         return new Response(
           url.includes("/ingest")
             ? JSON.stringify({ num_docs_for_processing: 1 })
@@ -412,6 +494,7 @@ describe("fenced serving-generation appends", () => {
         new Set(rows.map((selected) => selected.id)),
       insertSucceededJobs: async () => undefined,
       recordJobs: async () => undefined,
+      recordDeleteJobs: async () => undefined,
     });
 
     expect(
@@ -503,6 +586,7 @@ describe("failed index jobs always reach the audit trail", () => {
   beforeEach(() => {
     // The CZ index rejects its ingest; the SK index accepts. Everything else
     // the indexer probes succeeds.
+    let nextDeleteOpstamp = 0;
     const resolveUrl = (input: Parameters<typeof fetch>[0]): string => {
       if (typeof input === "string") {
         return input;
@@ -516,6 +600,12 @@ describe("failed index jobs always reach the audit trail", () => {
       }
       if (url.includes("/ingest")) {
         return new Response(JSON.stringify({ num_docs_for_processing: 1 }), {
+          status: 200,
+        });
+      }
+      if (url.includes("/delete-tasks")) {
+        nextDeleteOpstamp += 1;
+        return new Response(JSON.stringify({ opstamp: nextDeleteOpstamp }), {
           status: 200,
         });
       }
@@ -557,6 +647,7 @@ describe("failed index jobs always reach the audit trail", () => {
       recordJobs: async (_db, jobs, indexId) => {
         recorded.push({ indexId, jobs: [...jobs] });
       },
+      recordDeleteJobs: async () => undefined,
     });
 
     const outcome = await indexer.backfill(scopedDb, 10, GENERATION).then(
@@ -595,6 +686,9 @@ describe("failed index jobs always reach the audit trail", () => {
           status: 200,
         });
       }
+      if (lastUrl.includes("/delete-tasks")) {
+        return new Response(JSON.stringify({ opstamp: 1 }), { status: 200 });
+      }
       return new Response(JSON.stringify({}), { status: 200 });
     };
     globalThis.fetch = Object.assign(stub, {
@@ -619,6 +713,7 @@ describe("failed index jobs always reach the audit trail", () => {
       recordJobs: async (_db, jobs) => {
         recorded.push(...jobs);
       },
+      recordDeleteJobs: async () => undefined,
     });
 
     const outcome: unknown = await indexer
@@ -673,6 +768,7 @@ describe("failed index jobs always reach the audit trail", () => {
 
   test("reserved replays delete every durable target in rebuild and serving modes", async () => {
     const calls: { method: string; url: string; body?: string }[] = [];
+    let nextDeleteOpstamp = 0;
     const stub = async (
       input: Parameters<typeof fetch>[0],
       init?: RequestInit,
@@ -692,6 +788,12 @@ describe("failed index jobs always reach the audit trail", () => {
       });
       if (url.includes("/ingest")) {
         return new Response(JSON.stringify({ num_docs_for_processing: 1 }), {
+          status: 200,
+        });
+      }
+      if (url.includes("/delete-tasks")) {
+        nextDeleteOpstamp += 1;
+        return new Response(JSON.stringify({ opstamp: nextDeleteOpstamp }), {
           status: 200,
         });
       }
@@ -728,6 +830,7 @@ describe("failed index jobs always reach the audit trail", () => {
       },
       insertSucceededJobs: async () => undefined,
       recordJobs: async () => undefined,
+      recordDeleteJobs: async () => undefined,
     });
 
     let guardedEffects = 0;
@@ -977,6 +1080,7 @@ describe("ingest commit mode", () => {
         new Set(rows.map((selected) => selected.id)),
       insertSucceededJobs: async () => undefined,
       recordJobs: async () => undefined,
+      recordDeleteJobs: async () => undefined,
     });
 
   test("the incremental backfill waits for the commit", async () => {
@@ -1079,6 +1183,7 @@ describe("first-ever fenced appends", () => {
         new Set(markedRows.map((selected) => selected.id)),
       insertSucceededJobs: async () => undefined,
       recordJobs: async () => undefined,
+      recordDeleteJobs: async () => undefined,
     });
 
     const outcome = await indexer.backfillRows(scopedDb, [row], GENERATION, {
@@ -1113,7 +1218,11 @@ describe("first-ever fenced appends", () => {
     input: Parameters<typeof fetch>[0],
     init?: Parameters<typeof fetch>[1],
   ) => {
-    if (!requestUrl(input).includes("/ingest")) {
+    const url = requestUrl(input);
+    if (url.includes("/delete-tasks")) {
+      return new Response(JSON.stringify({ opstamp: 1 }), { status: 200 });
+    }
+    if (!url.includes("/ingest")) {
       return new Response(JSON.stringify({}), { status: 200 });
     }
     const body = typeof init?.body === "string" ? init.body : "";
@@ -1185,6 +1294,7 @@ describe("first-ever fenced appends", () => {
       _jobs: readonly CorpusJobInput<"caseLawDecision">[],
       _indexId: string,
     ): Promise<void> => undefined,
+    recordDeleteJobs: async (): Promise<void> => undefined,
   };
 
   const outcomeIndexer = (
@@ -1367,6 +1477,7 @@ describe("delete-task amplification", () => {
     rowCount: number,
   ): Promise<{ deletes: DeleteCall[]; indexed: number }> => {
     const deletes: DeleteCall[] = [];
+    let nextDeleteOpstamp = 0;
     const stub = async (
       input: Parameters<typeof fetch>[0],
       init?: Parameters<typeof fetch>[1],
@@ -1389,6 +1500,10 @@ describe("delete-task amplification", () => {
             ? parsed["query"]
             : "";
         deletes.push({ url, query });
+        nextDeleteOpstamp += 1;
+        return new Response(JSON.stringify({ opstamp: nextDeleteOpstamp }), {
+          status: 200,
+        });
       }
       if (url.includes("/ingest")) {
         const sent = body.split("\n").filter((line) => line.length > 0).length;
@@ -1438,6 +1553,7 @@ describe("delete-task amplification", () => {
         new Set(markedRows.map((selected) => selected.id)),
       insertSucceededJobs: async () => undefined,
       recordJobs: async () => undefined,
+      recordDeleteJobs: async () => undefined,
     });
 
     const { indexed } = await indexer.backfillRows(scopedDb, rows, GENERATION, {

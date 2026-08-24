@@ -5,6 +5,8 @@ import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   caseLawCorpusIndexBackfills,
+  caseLawCorpusIndexDeleteWatermarks,
+  caseLawCorpusIndexPendingDeletes,
   caseLawCorpusIndexProjections,
   caseLawCorpusIndexSourceReconciliations,
   caseLawCorpusIndexWriterLeases,
@@ -867,6 +869,59 @@ export const caseLawCorpusIndexAdapter = {
           errorMessage: job.errorMessage ?? null,
         })),
       );
+    });
+  },
+  recordDeleteJobs: async (scopedDb, { indexId, jobs, opstamp }) => {
+    if (jobs.length === 0) {
+      return;
+    }
+    await scopedDb(async (tx) => {
+      // audit: skip — append-only index-job rows ARE the indexing audit trail
+      await tx.insert(caseLawIndexJobs).values(
+        jobs.map((job) => ({
+          decisionId: job.entityId,
+          generation: indexId,
+          operation: job.operation,
+          status: job.status,
+          contentHash: job.contentHash,
+          errorMessage: job.errorMessage ?? null,
+        })),
+      );
+      if (opstamp === null) {
+        return;
+      }
+      // audit: skip — derived engine-settlement watermark; the job rows above
+      // are the document-level audit trail for the same remote effect
+      await tx
+        .insert(caseLawCorpusIndexDeleteWatermarks)
+        .values({ indexId, opstamp })
+        .onConflictDoUpdate({
+          target: caseLawCorpusIndexDeleteWatermarks.indexId,
+          set: {
+            opstamp: sql`GREATEST(${caseLawCorpusIndexDeleteWatermarks.opstamp}, excluded.opstamp)`,
+            updatedAt: new Date(),
+          },
+        });
+      // audit: skip — bounded settlement state; append-only index jobs above
+      // remain the audit trail after settled rows are removed by census
+      await tx
+        .insert(caseLawCorpusIndexPendingDeletes)
+        .values(
+          jobs.map((job) => ({
+            indexId,
+            decisionId: job.entityId,
+            opstamp,
+          })),
+        )
+        .onConflictDoUpdate({
+          target: [
+            caseLawCorpusIndexPendingDeletes.indexId,
+            caseLawCorpusIndexPendingDeletes.decisionId,
+          ],
+          set: {
+            opstamp: sql`GREATEST(${caseLawCorpusIndexPendingDeletes.opstamp}, excluded.opstamp)`,
+          },
+        });
     });
   },
 } satisfies CorpusIndexAdapter<"caseLawDecision", IndexableRow>;

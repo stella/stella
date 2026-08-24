@@ -592,6 +592,20 @@ export type CorpusIndexAdapter<
     jobs: readonly CorpusJobInput<TBrand>[],
     generation: string,
   ) => Promise<void>;
+  /**
+   * Atomically record document audit rows and the engine task that carries
+   * their asynchronous deletion. A successful task without this durable
+   * watermark is not settled evidence, so persistence failure must fail the
+   * page and let replay create a newer task.
+   */
+  recordDeleteJobs: (
+    scopedDb: ScopedDb,
+    args: {
+      indexId: string;
+      jobs: readonly CorpusJobInput<TBrand>[];
+      opstamp: number | null;
+    },
+  ) => Promise<void>;
 };
 
 export type LoadedBatch<TBrand extends SafeIdType, TRow> = {
@@ -980,13 +994,13 @@ export const createCorpusIndexer = <
     // avoids retrying an index that can no longer contain the document.
     const result =
       deleted.isErr() && deleted.error.status === 404
-        ? Result.ok(undefined)
+        ? Result.ok(null)
         : deleted;
     // One audit row per entity however many entities shared the task: the
     // trail records what happened to a document, not what carried it.
-    await adapter.recordJobs(
-      scopedDb,
-      entityIds.map((entityId) => ({
+    await adapter.recordDeleteJobs(scopedDb, {
+      indexId,
+      jobs: entityIds.map((entityId) => ({
         entityId,
         contentHash: null,
         operation,
@@ -995,9 +1009,9 @@ export const createCorpusIndexer = <
           ? { errorMessage: result.error.message.slice(0, 2048) }
           : {}),
       })),
-      indexId,
-    );
-    return result;
+      opstamp: result.isOk() ? (result.value?.opstamp ?? null) : null,
+    });
+    return result.isErr() ? result : Result.ok(undefined);
   };
 
   // Narrows on `args`, not on destructured locals: destructuring splits the

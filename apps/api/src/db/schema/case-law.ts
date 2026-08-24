@@ -1543,6 +1543,58 @@ export const caseLawIndexJobs = p.pgTable(
   ],
 );
 
+/**
+ * Highest Quickwit delete task durably observed for each physical case-law
+ * index. One row replaces an unbounded scan of the engine's task history:
+ * settlement means every published split has reached this opstamp.
+ */
+export const caseLawCorpusIndexDeleteWatermarks = p.pgTable(
+  "case_law_corpus_index_delete_watermarks",
+  {
+    indexId: p.varchar("index_id", { length: 64 }).primaryKey(),
+    opstamp: p.bigint({ mode: "number" }).notNull(),
+    updatedAt: timestamptz("updated_at").defaultNow().notNull(),
+  },
+  (t) => [
+    p.check(
+      "case_law_corpus_index_delete_watermarks_nonnegative",
+      sql`${t.opstamp} >= 0`,
+    ),
+    ...globalCaseLawPolicies(),
+  ],
+);
+
+/**
+ * Documents whose accepted Quickwit delete task has not been observed on
+ * every published split. The composite key makes task replay idempotent;
+ * census removes a row only after the split watermark reaches its opstamp.
+ */
+export const caseLawCorpusIndexPendingDeletes = p.pgTable(
+  "case_law_corpus_index_pending_deletes",
+  {
+    indexId: p.varchar("index_id", { length: 64 }).notNull(),
+    // No foreign key: a source deletion must not erase settlement ownership
+    // before the engine has removed the decision from every published split.
+    decisionId: safeUuid<"caseLawDecision">("decision_id").notNull(),
+    opstamp: p.bigint({ mode: "number" }).notNull(),
+    createdAt: timestamptz("created_at").defaultNow().notNull(),
+  },
+  (t) => [
+    p.primaryKey({
+      name: "case_law_corpus_index_pending_deletes_pkey",
+      columns: [t.indexId, t.decisionId],
+    }),
+    p
+      .index("case_law_corpus_index_pending_deletes_settlement_idx")
+      .on(t.indexId, t.opstamp),
+    p.check(
+      "case_law_corpus_index_pending_deletes_nonnegative",
+      sql`${t.opstamp} >= 0`,
+    ),
+    ...caseLawIngestionOnlyPolicies(),
+  ],
+);
+
 export const CASE_LAW_CORPUS_INDEX_BACKFILL_STATUSES = [
   "running",
   "complete",
