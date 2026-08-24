@@ -7,6 +7,7 @@ import { totalCitations } from "@/features/case-law/citation-treatment";
 import type { CitationYearCounts } from "@/features/case-law/citation-treatment";
 import { CitationYearStrip } from "@/features/case-law/components/citation-year-strip";
 import { decisionCitationSummaryOptions } from "@/features/case-law/queries/citations";
+import { useHydrated } from "@/hooks/use-hydrated";
 import { parseDeterministicDate } from "@/lib/deterministic-date";
 import type { SafeId } from "@/lib/safe-id";
 
@@ -66,8 +67,11 @@ export const CitationHeader = ({
   const { data: summary } = useQuery(
     decisionCitationSummaryOptions(decisionId),
   );
+  // Prefetched without blocking the route: known on one side of hydration
+  // and not the other, so the strip waits for hydration to stay identical.
+  const hydrated = useHydrated();
 
-  if (summary === undefined) {
+  if (!hydrated || summary === undefined) {
     return null;
   }
   const total = totalCitations(summary.incoming);

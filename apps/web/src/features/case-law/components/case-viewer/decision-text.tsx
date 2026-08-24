@@ -32,6 +32,7 @@ import { visibleDecisionBlocks } from "@/features/case-law/components/case-viewe
 import type { DecisionProvisionAnchor } from "@/features/case-law/components/case-viewer/use-decision-provision-anchors";
 import { locateProvisionAnchors } from "@/features/case-law/provision-anchors";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useHydrated } from "@/hooks/use-hydrated";
 
 type Decision = {
   caseNumber: string;
@@ -411,6 +412,10 @@ export const DecisionText = ({
   const ast = parseDocumentAst(decision.documentAst);
   const visibleBlocks = visibleDecisionBlocks(ast);
   const articleRef = useRef<HTMLElement>(null);
+  // Inline links come from prefetches that do not block the route, so the
+  // server pass and the client's hydration pass may not agree on them. The
+  // text hydrates bare and the links are laid over it right after.
+  const hydrated = useHydrated();
 
   const caseNumberBlock = ast?.blocks.find(
     (block) => block.type === "paragraph" && block.role === "case-number",
@@ -527,10 +532,10 @@ export const DecisionText = ({
         {renderBlocksWithHoldingZone({
           activeMatchIndex,
           anchorsByPieceId: buildAnchorsByPieceId({
-            annotations: annotationAnchors,
+            annotations: hydrated ? annotationAnchors : NO_ANNOTATION_ANCHORS,
             blocks: visibleBlocks,
-            citations: citationAnchors,
-            provisions: provisionAnchors,
+            citations: hydrated ? citationAnchors : NO_CITATION_ANCHORS,
+            provisions: hydrated ? provisionAnchors : NO_PROVISION_ANCHORS,
           }),
           blocks: visibleBlocks,
           rangesByPieceId: searchResults.rangesByPieceId,

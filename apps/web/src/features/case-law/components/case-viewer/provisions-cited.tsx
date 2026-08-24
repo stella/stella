@@ -23,6 +23,7 @@ import {
   versionCoversDate,
 } from "@/features/case-law/statute-version";
 import { useProvisionPartRenderer } from "@/features/case-law/use-provision-part-renderer";
+import { useHydrated } from "@/hooks/use-hydrated";
 import { optionalArray } from "@/lib/arrays";
 import { detached } from "@/lib/detached";
 import type { SafeId } from "@/lib/safe-id";
@@ -108,8 +109,11 @@ export const ProvisionsCited = ({
 
   // Absent is the answer for a decision that applies no provisions. A failed
   // read is not that answer, so it keeps the panel and says so instead of
-  // disappearing as though the decision cited nothing.
-  if (groups.length === 0 && !isError) {
+  // disappearing as though the decision cited nothing. Until hydrated the
+  // panel is absent either way: the non-blocking prefetch may be known on
+  // one side of hydration and not the other.
+  const hydrated = useHydrated();
+  if (!hydrated || (groups.length === 0 && !isError)) {
     return null;
   }
 
