@@ -2100,6 +2100,8 @@ type ReviewResultFilter = "actionable" | "all";
 const ReviewResultList = ({
   items,
   references,
+  perspective,
+  targetFileFieldId,
   commentStateByFinding,
   decisionPending,
   fixStateByFinding,
