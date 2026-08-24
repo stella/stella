@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import { useDebouncedCallback } from "use-debounce";
@@ -242,7 +242,9 @@ export const SearchableFacetGroup = ({
     setDebouncedSearch,
     FACET_SEARCH_DEBOUNCE_MS,
   );
-  const labelCacheRef = useRef<Record<string, string>>({});
+  const [selectedLabels, setSelectedLabels] = useState<Record<string, string>>(
+    {},
+  );
   const isSearching = debouncedSearch.trim().length > 0;
   const { data: searchData } = useQuery({
     ...searchFacetOptions({
@@ -256,19 +258,15 @@ export const SearchableFacetGroup = ({
   const resolveLabel = (bucket: FacetBucket): string =>
     formatLabel ? formatLabel(bucket) : (bucket.label ?? bucket.value);
 
-  // Refs are intentionally mutated during render — they don't trigger
-  // re-renders, and we want every label seen in the current render's
-  // buckets to be available when computing `buckets` below.
-  /* eslint-disable react/react-compiler -- deliberate render-time label cache: mutating labelCacheRef here makes every label seen this render available to the missingSelected lookup below; refs don't trigger re-renders so this is safe */
+  const labelsByValue = new Map<string, string>();
   for (const bucket of defaultBuckets) {
-    labelCacheRef.current[bucket.value] = resolveLabel(bucket);
+    labelsByValue.set(bucket.value, resolveLabel(bucket));
   }
   if (searchData) {
     for (const bucket of searchData.buckets) {
-      labelCacheRef.current[bucket.value] = resolveLabel(bucket);
+      labelsByValue.set(bucket.value, resolveLabel(bucket));
     }
   }
-  /* eslint-enable react/react-compiler */
 
   const sourceBuckets =
     isSearching && searchData ? searchData.buckets : defaultBuckets;
@@ -278,11 +276,16 @@ export const SearchableFacetGroup = ({
     label: resolveLabel(bucket),
   }));
   const present = new Set(visible.map((bucket) => bucket.value));
-  // eslint-disable-next-line react/react-compiler -- reads the deliberate render-time label cache mutated above; ref reads don't affect render correctness here
   const missingSelected: FacetBucket[] = selected.flatMap((id) =>
     present.has(id)
       ? []
-      : [{ value: id, label: labelCacheRef.current[id] ?? id, count: 0 }],
+      : [
+          {
+            value: id,
+            label: labelsByValue.get(id) ?? selectedLabels[id] ?? id,
+            count: 0,
+          },
+        ],
   );
   const buckets: FacetBucket[] = [...visible, ...missingSelected];
   if (buckets.length === 0 && !isSearching && searchData === undefined) {
@@ -303,7 +306,13 @@ export const SearchableFacetGroup = ({
       />
       <FacetBucketList
         buckets={buckets}
-        onChange={onChange}
+        onChange={(value) => {
+          const label = labelsByValue.get(value);
+          if (label !== undefined && selectedLabels[value] !== label) {
+            setSelectedLabels((current) => ({ ...current, [value]: label }));
+          }
+          onChange(value);
+        }}
         selected={selected}
       />
     </div>
