@@ -131,7 +131,13 @@ const databaseHolding = (
       delete: () => chain,
       select: (selection: Record<string, unknown>) => {
         if ("status" in selection) {
-          rows = [{ marked, status: countStatus }];
+          rows = [
+            {
+              marked,
+              status: countStatus,
+              hasPendingDelete: pendingDelete.count > 0,
+            },
+          ];
         } else if ("pendingDocuments" in selection) {
           rows = [
             {
@@ -516,6 +522,35 @@ describe("census reporting", () => {
     });
 
     expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn.mock.calls.at(0)?.at(0)).toBe(
+      "case_law.corpus_index.delete_settlement_stalled",
+    );
+  });
+
+  test("a small stale delete is reported inside census tolerance", async () => {
+    engineHolding(10_000 + CENSUS_TOLERANCE, true, [41]);
+
+    const census = await censusIndex({
+      scopedDb: databaseHolding(10_000, undefined, "complete", 42, {
+        count: CENSUS_TOLERANCE,
+        oldest: new Date(Date.now() - DELETE_SETTLEMENT_STALE_MS - 1),
+      }),
+      generation: GENERATION,
+      indexId: INDEX_ID,
+    });
+    if (census.isErr()) {
+      throw census.error;
+    }
+
+    expect(census.value.disposition).toBe(CENSUS_DISPOSITION.aligned);
+    expect(census.value.deleteSettlement?.stale).toBe(true);
+
+    reportIndexCensus({
+      generation: GENERATION,
+      previous: CENSUS_DISPOSITION.aligned,
+      census: census.value,
+    });
+
     expect(warn.mock.calls.at(0)?.at(0)).toBe(
       "case_law.corpus_index.delete_settlement_stalled",
     );

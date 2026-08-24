@@ -38,6 +38,7 @@ import {
   asc,
   count,
   eq,
+  exists,
   gt,
   inArray,
   lte,
@@ -442,12 +443,19 @@ const censusPopulation = (generation: string, indexId: string): SQL =>
 const countMarkedIndexed = async (
   scopedDb: ScopedDb,
   { generation, indexId }: { generation: string; indexId: string },
-): Promise<number> => {
+): Promise<{ markedIndexed: number; hasPendingDelete: boolean }> => {
   const rows = await scopedDb((tx) =>
     tx
       .select({
         marked: caseLawCorpusIndexCounts.markedIndexed,
         status: caseLawCorpusIndexCountBackfills.status,
+        hasPendingDelete: exists(
+          tx
+            .select({ indexId: caseLawCorpusIndexPendingDeletes.indexId })
+            .from(caseLawCorpusIndexPendingDeletes)
+            .where(eq(caseLawCorpusIndexPendingDeletes.indexId, indexId))
+            .limit(1),
+        ),
       })
       .from(caseLawCorpusIndexCountBackfills)
       .leftJoin(
@@ -469,7 +477,10 @@ const countMarkedIndexed = async (
       message: `Corpus-index count for ${generation} is not ready`,
     });
   }
-  return row.marked ?? 0;
+  return {
+    markedIndexed: row.marked ?? 0,
+    hasPendingDelete: row.hasPendingDelete,
+  };
 };
 
 export type CensusIndexOptions = {
@@ -499,7 +510,7 @@ export const censusIndex = async ({
   // is still visible to the engine count that follows. The other order
   // would need a tolerance the size of a batch, which is exactly the
   // size of the smallest loss worth finding.
-  const markedIndexed = await countMarkedIndexed(scopedDb, {
+  const marked = await countMarkedIndexed(scopedDb, {
     generation,
     indexId,
   });
@@ -512,9 +523,9 @@ export const censusIndex = async ({
     return Result.err(counted.error);
   }
 
-  const shortfall = markedIndexed - counted.value.numHits;
+  const shortfall = marked.markedIndexed - counted.value.numHits;
   const deleteSettlementResult =
-    shortfall < -CENSUS_TOLERANCE
+    shortfall < -CENSUS_TOLERANCE || marked.hasPendingDelete
       ? await readDeleteSettlement(scopedDb, indexId)
       : Result.ok(null);
   if (Result.isError(deleteSettlementResult)) {
@@ -525,7 +536,7 @@ export const censusIndex = async ({
   return Result.ok({
     indexId,
     engineDocuments: counted.value.numHits,
-    markedIndexed,
+    markedIndexed: marked.markedIndexed,
     shortfall,
     disposition: dispositionOf(shortfall, deleteSettlement),
     deleteSettlement,
