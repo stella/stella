@@ -279,25 +279,36 @@ const policyCte = (): SQL =>
     sql`, `,
   )})`;
 
-type CitationCandidateHoldersSqlOptions = {
+type CitationMatchingHoldersSqlOptions = {
   holder: SQL;
   citationKey: SQL;
   identifierType: SQL;
   normalizedIdentifierValue: SQL;
   citingDecisionId: SQL;
   citingDate: SQL;
-  resolvesTo: SQL;
+  jurisdictionPredicate: SQL;
+  limit: number;
 };
 
-export const citationCandidateHoldersSql = ({
+/**
+ * Holders of one citation identity through two independently indexed paths.
+ *
+ * Keeping the canonical-identifier and legacy case-number bridges as UNION
+ * branches is load-bearing. Combining them with OR lets PostgreSQL choose a
+ * corpus scan for each citation. The caller supplies only the jurisdiction
+ * predicate, so allowed-candidate and blocked-candidate diagnostics cannot
+ * drift into different identity matching logic.
+ */
+const citationMatchingHoldersSql = ({
   holder,
   citationKey,
   identifierType,
   normalizedIdentifierValue,
   citingDecisionId,
   citingDate,
-  resolvesTo,
-}: CitationCandidateHoldersSqlOptions): SQL => sql`
+  jurisdictionPredicate,
+  limit,
+}: CitationMatchingHoldersSqlOptions): SQL => sql`
   SELECT candidate.id, candidate.court, candidate.decision_type
   FROM (
     SELECT ${holder}.id, ${holder}.court, ${holder}.decision_type
@@ -306,7 +317,7 @@ export const citationCandidateHoldersSql = ({
         ON ${holder}.id = identifier.decision_id
      WHERE identifier.type = coalesce(${identifierType}, 'case-number')
        AND identifier.normalized_value = coalesce(${normalizedIdentifierValue}, ${citationKey})
-       AND ${holder}.country = ANY (${resolvesTo})
+       AND ${jurisdictionPredicate}
        AND ${holder}.id <> ${citingDecisionId}
        AND (
              ${holder}.decision_date IS NULL
@@ -318,7 +329,7 @@ export const citationCandidateHoldersSql = ({
       FROM ${caseLawDecisions} ${holder}
      WHERE (${identifierType} IS NULL OR ${identifierType} = 'case-number')
        AND ${holder}.citation_key = ${citationKey}
-       AND ${holder}.country = ANY (${resolvesTo})
+       AND ${jurisdictionPredicate}
        AND ${holder}.id <> ${citingDecisionId}
        AND (
              ${holder}.decision_date IS NULL
@@ -333,7 +344,7 @@ export const citationCandidateHoldersSql = ({
            AND existing_identifier.normalized_value = ${citationKey}
        )
   ) candidate
-  LIMIT ${CITATION_CANDIDATE_SCAN_CAP}`;
+  LIMIT ${limit}`;
 
 /**
  * The one statement. `selection` names which pending rows this call settles;
@@ -423,7 +434,7 @@ const resolutionStatement = (selection: SQL): SQL => sql`
                  WHERE lower(k.decision_type) = ANY (${decisionTypeArray(PROCEDURAL_DECISION_TYPES)})
                )::int AS procedural_n
           FROM (
-            ${citationCandidateHoldersSql({
+            ${citationMatchingHoldersSql({
               holder: sql.raw("cited"),
               citationKey: sql.raw("b.citation_key"),
               identifierType: sql.raw("b.identifier_type"),
@@ -432,37 +443,27 @@ const resolutionStatement = (selection: SQL): SQL => sql`
               ),
               citingDecisionId: sql.raw("b.citing_decision_id"),
               citingDate: sql.raw("b.citing_date"),
-              resolvesTo: sql.raw("pol.resolves_to"),
+              jurisdictionPredicate: sql`cited.country = ANY (pol.resolves_to)`,
+              limit: CITATION_CANDIDATE_SCAN_CAP,
             })}
           ) k
       ) m ON true
       LEFT JOIN LATERAL (
         SELECT 1 AS blocked
-          FROM ${caseLawDecisions} other
-         WHERE (
-               EXISTS (
-                 SELECT 1
-                 FROM ${caseLawDecisionIdentifiers} other_identifier
-                 WHERE other_identifier.decision_id = other.id
-                   AND other_identifier.type = coalesce(b.identifier_type, 'case-number')
-                   AND other_identifier.normalized_value = coalesce(
-                     b.normalized_identifier_value,
-                     b.citation_key
-                   )
-               )
-               OR (
-                 (b.identifier_type IS NULL OR b.identifier_type = 'case-number')
-                 AND other.citation_key = b.citation_key
-               )
-             )
-           AND NOT (other.country = ANY (pol.resolves_to))
-           AND other.id <> b.citing_decision_id
-           AND (
-                 other.decision_date IS NULL
-              OR b.citing_date IS NULL
-              OR b.citing_date >= other.decision_date
-               )
-         LIMIT 1
+          FROM (
+            ${citationMatchingHoldersSql({
+              holder: sql.raw("other"),
+              citationKey: sql.raw("b.citation_key"),
+              identifierType: sql.raw("b.identifier_type"),
+              normalizedIdentifierValue: sql.raw(
+                "b.normalized_identifier_value",
+              ),
+              citingDecisionId: sql.raw("b.citing_decision_id"),
+              citingDate: sql.raw("b.citing_date"),
+              jurisdictionPredicate: sql`NOT (other.country = ANY (pol.resolves_to))`,
+              limit: 1,
+            })}
+          ) blocked_candidate
       ) j ON true
   ),
   classified AS (
