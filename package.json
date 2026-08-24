@@ -88,7 +88,7 @@
   },
   "devDependencies": {
     "@changesets/changelog-github": "^1.0.0",
-    "@changesets/cli": "^3.0.0",
+    "@changesets/cli": "^3.0.1",
     "@oxlint/plugins": "catalog:",
     "@stll/calculations": "workspace:*",
     "@stll/money": "workspace:*",
