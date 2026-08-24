@@ -567,7 +567,8 @@ export const reportIndexCensus = ({
       generation,
       indexId: census.indexId,
       deleteLaggingSplits: census.deleteSettlement.laggingSplits,
-      deleteOldestPendingAt: census.deleteSettlement.oldestPendingAt,
+      deleteOldestPendingAt:
+        census.deleteSettlement.oldestPendingAt?.toISOString() ?? "unknown",
       deletePendingDocuments: census.deleteSettlement.pendingDocuments,
       deleteRequiredOpstamp: census.deleteSettlement.requiredOpstamp,
     });
@@ -579,6 +580,13 @@ export const reportIndexCensus = ({
   ) {
     return;
   }
+  const deleteSettlementAttributes =
+    census.deleteSettlement === null
+      ? {}
+      : {
+          deleteLaggingSplits: census.deleteSettlement.laggingSplits,
+          deleteRequiredOpstamp: census.deleteSettlement.requiredOpstamp,
+        };
   logger.warn("case_law.corpus_index.census_drift", {
     generation,
     disposition: census.disposition,
@@ -586,8 +594,7 @@ export const reportIndexCensus = ({
     engineDocuments: census.engineDocuments,
     markedIndexed: census.markedIndexed,
     shortfall: census.shortfall,
-    deleteLaggingSplits: census.deleteSettlement?.laggingSplits,
-    deleteRequiredOpstamp: census.deleteSettlement?.requiredOpstamp,
+    ...deleteSettlementAttributes,
     tolerance: CENSUS_TOLERANCE,
   });
 };

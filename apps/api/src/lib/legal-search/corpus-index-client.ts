@@ -521,8 +521,9 @@ const buildClient = (): CorpusIndexClient => ({
             init: { method: "GET" },
             timeoutMs: ADMIN_TIMEOUT_MS,
           });
-          const splits =
-            isRecord(response) ? parseRecordArray(response["splits"]) : null;
+          const splits = isRecord(response)
+            ? parseRecordArray(response["splits"])
+            : null;
           if (splits === null) {
             throw new CorpusIndexError({
               message: "corpus index split list returned an invalid response",

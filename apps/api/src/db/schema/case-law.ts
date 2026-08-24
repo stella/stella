@@ -1581,10 +1581,9 @@ export const caseLawCorpusIndexPendingDeletes = p.pgTable(
   },
   (t) => [
     p.primaryKey({ columns: [t.indexId, t.decisionId] }),
-    p.index("case_law_corpus_index_pending_deletes_settlement_idx").on(
-      t.indexId,
-      t.opstamp,
-    ),
+    p
+      .index("case_law_corpus_index_pending_deletes_settlement_idx")
+      .on(t.indexId, t.opstamp),
     p.check(
       "case_law_corpus_index_pending_deletes_nonnegative",
       sql`${t.opstamp} >= 0`,

@@ -143,8 +143,8 @@ const databaseHolding = (
                   },
                 ]
               : "opstamp" in selection && deleteOpstamp !== undefined
-              ? [{ opstamp: deleteOpstamp }]
-              : [];
+                ? [{ opstamp: deleteOpstamp }]
+                : [];
         return chain;
       },
       selectDistinct: () => {
