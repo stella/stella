@@ -94,6 +94,7 @@ pub enum DesktopTelemetryErrorCode {
   FormatReadFailed,
   PersistenceFailed,
   WindowUnavailable,
+  WindowLabelMismatch,
   ShortcutUnavailable,
 }
 
@@ -114,6 +115,7 @@ impl DesktopTelemetryErrorCode {
       Self::FormatReadFailed => "formatReadFailed",
       Self::PersistenceFailed => "persistenceFailed",
       Self::WindowUnavailable => "windowUnavailable",
+      Self::WindowLabelMismatch => "windowLabelMismatch",
       Self::ShortcutUnavailable => "shortcutUnavailable",
     }
   }

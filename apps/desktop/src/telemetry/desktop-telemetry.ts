@@ -1,5 +1,4 @@
 import { invoke } from "@tauri-apps/api/core";
-import { panic } from "better-result";
 
 export const DESKTOP_TELEMETRY_WINDOWS = {
   clipboard: "clipboard",
@@ -31,6 +30,7 @@ export const DESKTOP_TELEMETRY_ERROR_CODES = {
   reactUncaught: "reactUncaught",
   unhandledError: "unhandledError",
   unhandledRejection: "unhandledRejection",
+  windowLabelMismatch: "windowLabelMismatch",
 } as const;
 
 type DesktopTelemetryWindow =
@@ -99,6 +99,11 @@ export const desktopTelemetryWindowFromLabel = (
     case "takeover-dialog":
       return DESKTOP_TELEMETRY_WINDOWS.takeoverDialog;
     default:
-      return panic("Unknown stella desktop window label.");
+      reportDesktopError({
+        code: DESKTOP_TELEMETRY_ERROR_CODES.windowLabelMismatch,
+        operation: DESKTOP_TELEMETRY_OPERATIONS.runtime,
+        window: DESKTOP_TELEMETRY_WINDOWS.main,
+      });
+      return DESKTOP_TELEMETRY_WINDOWS.main;
   }
 };
