@@ -633,6 +633,52 @@ describe("parseNssDecisionHtml", () => {
       });
     });
 
+    test("does not reopen holdings for takto text quoted in reasoning", () => {
+      const html = `<html><body>
+        <p>Soud rozhodl takto:</p>
+        <p>Kasační stížnost se zamítá.</p>
+        <p>Odůvodnění:</p>
+        <p>Napadený soud rozhodl takto:</p>
+        <p>[1] Citované rozhodnutí soud přezkoumal.</p>
+        <p>Další část odůvodnění.</p>
+      </body></html>`;
+
+      const { documentAst } = parseNssDecisionHtml(baseInput(html));
+      const holdings = findAllByRole(documentAst.blocks, "holding");
+
+      expect(holdings.map((holding) => holding.plainText)).toEqual([
+        "Kasační stížnost se zamítá.",
+      ]);
+      expect(documentAst.blocks.map((block) => block.plainText)).toContain(
+        "Napadený soud rozhodl takto:",
+      );
+      expect(documentAst.blocks.map((block) => block.plainText)).toContain(
+        "Citované rozhodnutí soud přezkoumal.",
+      );
+    });
+
+    test("uses a numbered paragraph to end a holding with no separator", () => {
+      const html = `<html><body>
+        <p>Soud rozhodl takto:</p>
+        <p>Kasační stížnost se zamítá.</p>
+        <p>[1] Soud přezkoumal napadené rozhodnutí.</p>
+        <p>Další část odůvodnění.</p>
+      </body></html>`;
+
+      const { documentAst } = parseNssDecisionHtml(baseInput(html));
+      const holdings = findAllByRole(documentAst.blocks, "holding");
+
+      expect(holdings.map((holding) => holding.plainText)).toEqual([
+        "Kasační stížnost se zamítá.",
+      ]);
+      expect(documentAst.blocks.map((block) => block.plainText)).toContain(
+        "Soud přezkoumal napadené rozhodnutí.",
+      );
+      expect(documentAst.blocks.map((block) => block.plainText)).toContain(
+        "Další část odůvodnění.",
+      );
+    });
+
     test("gives every paragraph in one publisher footnote a unique anchor", () => {
       const html = `<html><body>
         <p>Text<a href="#_ftn1">[1]</a>.</p>

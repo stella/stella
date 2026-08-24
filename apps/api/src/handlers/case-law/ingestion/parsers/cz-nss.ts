@@ -496,6 +496,15 @@ const SECTION_HEADING_RE =
 /** Numbered paragraph: [1], [2], ... */
 const NUMBERED_PARA_RE = /^\[(?:\d+)\]\s*/u;
 
+const DOCUMENT_PHASE = {
+  PREAMBLE: "preamble",
+  HOLDING: "holding",
+  REASONING: "reasoning",
+  INSTRUCTION: "instruction",
+} as const;
+
+type DocumentPhase = (typeof DOCUMENT_PHASE)[keyof typeof DOCUMENT_PHASE];
+
 /**
  * Closing line: "V Brně dne ...", "Praha 10. březen 2026",
  * or just "City + date" pattern.
@@ -520,9 +529,7 @@ const classifyChunks = (chunks: readonly PChunk[]): Block[] => {
   const blocks: Block[] = [];
   let blockIndex = 0;
 
-  let inOduvodneni = false;
-  let inPouceni = false;
-  let inHolding = false;
+  let phase: DocumentPhase = DOCUMENT_PHASE.PREAMBLE;
   const footnoteOccurrences = new Map<string, number>();
   let sawCaseNumber = false;
   let sawTitle = false;
@@ -601,8 +608,11 @@ const classifyChunks = (chunks: readonly PChunk[]): Block[] => {
     }
 
     // "takto:" separator (centered, bold, letter-spaced)
-    if (TAKTO_STANDALONE_RE.test(plainText)) {
-      inHolding = true;
+    if (
+      phase === DOCUMENT_PHASE.PREAMBLE &&
+      TAKTO_STANDALONE_RE.test(plainText)
+    ) {
+      phase = DOCUMENT_PHASE.HOLDING;
       blockIndex += 1;
       blocks.push({
         id: makeBlockId(),
@@ -619,7 +629,10 @@ const classifyChunks = (chunks: readonly PChunk[]): Block[] => {
     // Some exports keep the introductory sentence and separator in one
     // paragraph. Preserve that prose as prose, then open the same structural
     // zone for the ordered or unnumbered holdings that follow it.
-    if (TAKTO_SUFFIX_RE.test(plainText)) {
+    if (
+      phase === DOCUMENT_PHASE.PREAMBLE &&
+      TAKTO_SUFFIX_RE.test(plainText)
+    ) {
       blockIndex += 1;
       blocks.push({
         id: makeBlockId(),
@@ -628,14 +641,13 @@ const classifyChunks = (chunks: readonly PChunk[]): Block[] => {
         inlines,
         plainText,
       });
-      inHolding = true;
+      phase = DOCUMENT_PHASE.HOLDING;
       continue;
     }
 
     // "Odůvodnění:" separator
     if (ODUVODNENI_RE.test(plainText)) {
-      inHolding = false;
-      inOduvodneni = true;
+      phase = DOCUMENT_PHASE.REASONING;
       blockIndex += 1;
       blocks.push({
         id: makeBlockId(),
@@ -651,8 +663,7 @@ const classifyChunks = (chunks: readonly PChunk[]): Block[] => {
 
     // "Poučení:" standalone
     if (POUCENI_STANDALONE_RE.test(plainText)) {
-      inHolding = false;
-      inPouceni = true;
+      phase = DOCUMENT_PHASE.INSTRUCTION;
       blockIndex += 1;
       blocks.push({
         id: makeBlockId(),
@@ -668,8 +679,7 @@ const classifyChunks = (chunks: readonly PChunk[]): Block[] => {
 
     // "Poučení:" inline (bold prefix + text in same <p>)
     if (POUCENI_INLINE_RE.test(plainText) && bold) {
-      inHolding = false;
-      inPouceni = true;
+      phase = DOCUMENT_PHASE.INSTRUCTION;
       blockIndex += 1;
       blocks.push({
         id: makeBlockId(),
@@ -732,7 +742,7 @@ const classifyChunks = (chunks: readonly PChunk[]): Block[] => {
     if (
       centered &&
       plainText.length < 60 &&
-      !inPouceni &&
+      phase !== DOCUMENT_PHASE.INSTRUCTION &&
       chunks.indexOf(chunk) < chunks.length - 1
     ) {
       const nextChunk = chunks[chunks.indexOf(chunk) + 1];
@@ -753,7 +763,7 @@ const classifyChunks = (chunks: readonly PChunk[]): Block[] => {
     // <ol> list items: holding paragraphs before Odůvodnění,
     // numbered paragraphs after
     if (chunk.listItemIndex !== null) {
-      if (inHolding) {
+      if (phase === DOCUMENT_PHASE.HOLDING) {
         // Reconstruct the full text with Roman numeral prefix
         const roman = `${toRoman(chunk.listItemIndex)}.`;
         const fullInlines: Inline[] = [
@@ -783,9 +793,19 @@ const classifyChunks = (chunks: readonly PChunk[]): Block[] => {
       continue;
     }
 
+    // A numbered paragraph starts reasoning even when the publisher omitted
+    // or misspelled its separator. Keep the phase transition durable so later
+    // unnumbered reasoning cannot leak back into the holding section.
+    if (
+      phase === DOCUMENT_PHASE.HOLDING &&
+      NUMBERED_PARA_RE.test(plainText)
+    ) {
+      phase = DOCUMENT_PHASE.REASONING;
+    }
+
     // A single unnumbered výrok is a regular paragraph in Aspose HTML.
     // Its position, between the two structural separators, is definitive.
-    if (inHolding) {
+    if (phase === DOCUMENT_PHASE.HOLDING) {
       blockIndex += 1;
       blocks.push({
         id: makeBlockId(),
@@ -801,7 +821,10 @@ const classifyChunks = (chunks: readonly PChunk[]): Block[] => {
     // Ruling items by text pattern (before Odůvodnění):
     // detected by Roman numeral prefix, emitted as holding
     // paragraphs with the full original text preserved.
-    if (!inOduvodneni && !inPouceni && RULING_ITEM_RE.test(plainText)) {
+    if (
+      phase === DOCUMENT_PHASE.PREAMBLE &&
+      RULING_ITEM_RE.test(plainText)
+    ) {
       blockIndex += 1;
       blocks.push({
         id: makeBlockId(),
@@ -817,8 +840,7 @@ const classifyChunks = (chunks: readonly PChunk[]): Block[] => {
     // Section headings in Odůvodnění (centered or bold,
     // short, matching Roman numeral pattern)
     if (
-      inOduvodneni &&
-      !inPouceni &&
+      phase === DOCUMENT_PHASE.REASONING &&
       SECTION_HEADING_RE.test(plainText) &&
       plainText.length < 120
     ) {
