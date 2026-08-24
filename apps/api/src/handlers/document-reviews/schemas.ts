@@ -4,7 +4,10 @@ import type { Static } from "elysia";
 import { DOCUMENT_REVIEW_LIMITS } from "@stll/api-contract";
 
 import { tSafeId } from "@/api/lib/custom-schema";
-import { REVIEW_PERSPECTIVES } from "@/api/lib/document-review/contract";
+import {
+  REVIEW_PARTY_NAME_MAX_LENGTH,
+  REVIEW_PARTY_ROLE_MAX_LENGTH,
+} from "@/api/lib/document-review/contract";
 import type { DocumentReviewTopic as ReviewEngineTopic } from "@/api/lib/document-review/contract";
 import { DOCUMENT_REVIEW_DECISIONS } from "@/api/lib/document-review/run-contract";
 import type { DocumentReviewDecision } from "@/api/lib/document-review/run-contract";
@@ -72,9 +75,17 @@ export type DocumentReviewDecisionInput = Assignable<
   DocumentReviewDecision
 >;
 
-// Required, never optional: an absent optional UnionEnum coerces to its first
-// member, and `buyer` is not a safe default for `neutral`.
-const reviewPerspectiveSchema = t.UnionEnum([...REVIEW_PERSPECTIVES]);
+// The side a comparison is judged for: one of the target's parties by the
+// role the document gives it, or no side. Required so a client cannot leave
+// it out and get a side by default.
+const reviewPerspectiveSchema = t.Union([
+  t.Object({ type: t.Literal("neutral") }),
+  t.Object({
+    type: t.Literal("party"),
+    role: t.String({ minLength: 1, maxLength: REVIEW_PARTY_ROLE_MAX_LENGTH }),
+    name: t.Nullable(t.String({ maxLength: REVIEW_PARTY_NAME_MAX_LENGTH })),
+  }),
+]);
 
 const reviewDocumentsSchema = {
   target: documentReviewTargetSchema,
@@ -82,7 +93,6 @@ const reviewDocumentsSchema = {
     minItems: 1,
     maxItems: DOCUMENT_REVIEW_LIMITS.referencesMax,
   }),
-  perspective: reviewPerspectiveSchema,
 };
 
 export const proposeReviewTopicsBodySchema = t.Object({

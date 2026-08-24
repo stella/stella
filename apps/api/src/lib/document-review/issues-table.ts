@@ -16,6 +16,10 @@ import {
 } from "@stll/folio-core/server";
 import type { TableCellSpec } from "@stll/folio-core/server";
 
+import {
+  NEUTRAL_PERSPECTIVE,
+  perspectivePartyPhrase,
+} from "@/api/lib/document-review/contract";
 import type {
   ReferenceAssessment,
   ReferenceImpact,
@@ -136,17 +140,7 @@ const DECISION_LABEL = {
   dismissed: "Dismissed",
 } as const satisfies Record<DocumentReviewDecision, string>;
 
-const PERSPECTIVE_SIDE = {
-  buyer: "the buyer",
-  seller: "the seller",
-  neutral: null,
-} as const satisfies Record<ReviewPerspective, string | null>;
-
-const PERSPECTIVE_LABEL = {
-  buyer: "Reviewed for the buyer",
-  seller: "Reviewed for the seller",
-  neutral: "Reviewed from a neutral position",
-} as const satisfies Record<ReviewPerspective, string>;
+const NEUTRAL_PERSPECTIVE_LABEL = "Reviewed from a neutral position";
 
 const INSUFFICIENT_EVIDENCE_LABEL = "Insufficient evidence to compare";
 const PASSAGE_SEPARATOR = "\n\n";
@@ -156,11 +150,25 @@ const impactLabel = (
   impact: ReferenceImpact,
   perspective: ReviewPerspective,
 ): string => {
-  const side = PERSPECTIVE_SIDE[perspective];
-  if (side === null || impact === "neutral" || impact === "unknown") {
+  if (
+    perspective.type === "neutral" ||
+    impact === "neutral" ||
+    impact === "unknown"
+  ) {
     return IMPACT_LABEL[impact];
   }
-  return `${IMPACT_LABEL[impact]} to ${side}`;
+  return `${IMPACT_LABEL[impact]} to the ${perspective.role}`;
+};
+
+const perspectiveLabel = (perspective: ReviewPerspective): string => {
+  switch (perspective.type) {
+    case "party":
+      return `Reviewed for ${perspectivePartyPhrase(perspective)}`;
+    case "neutral":
+      return NEUTRAL_PERSPECTIVE_LABEL;
+    default:
+      return perspective satisfies never;
+  }
 };
 
 export type IssuesTableFinding = {
@@ -268,7 +276,7 @@ export const buildIssuesTableRows = ({
   const referenceNameByFieldId = new Map(
     references.map((reference) => [reference.fileFieldId, reference.name]),
   );
-  const perspective = basisPerspective(basis) ?? "neutral";
+  const perspective = basisPerspective(basis) ?? NEUTRAL_PERSPECTIVE;
   const playbookName = basisPlaybook(basis)?.definitionSnapshot.name ?? "";
   const ranked: RankedRow[] = [];
   for (const { topicTitle, payload, decision } of findings) {
@@ -333,7 +341,7 @@ export const describeIssuesTableBasis = (
   }
   const perspective = basisPerspective(basis);
   if (perspective !== null) {
-    parts.push(PERSPECTIVE_LABEL[perspective]);
+    parts.push(perspectiveLabel(perspective));
   }
   return parts.join(" · ");
 };

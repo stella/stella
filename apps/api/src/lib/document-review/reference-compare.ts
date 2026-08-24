@@ -11,6 +11,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import {
   REFERENCE_ASSESSMENTS,
   REFERENCE_CONSENSUS_VALUES,
+  perspectivePartyPhrase,
   REFERENCE_IMPACTS,
   REFERENCE_SEVERITIES,
 } from "@/api/lib/document-review/contract";
@@ -364,11 +365,18 @@ Assess every supplied review topic exactly once. Preserve its topicId exactly. C
 // The topics come after the shared document region: they are what changes
 // between calls, and anything placed before the documents would push them out
 // of the cached prefix.
-const PERSPECTIVE_LINE = {
-  buyer: "The drafter acts for the buyer.",
-  seller: "The drafter acts for the seller.",
-  neutral: "No side is named; report impact as unknown.",
-} as const satisfies Record<ReviewPerspective, string>;
+const NEUTRAL_PERSPECTIVE_LINE = "No side is named; report impact as unknown.";
+
+const perspectiveLine = (perspective: ReviewPerspective): string => {
+  switch (perspective.type) {
+    case "party":
+      return `The drafter acts for ${perspectivePartyPhrase(perspective)}, a party to the target. A reference may name that side differently; judge impact for the side that plays the same role there.`;
+    case "neutral":
+      return NEUTRAL_PERSPECTIVE_LINE;
+    default:
+      return perspective satisfies never;
+  }
+};
 
 const buildTopicsPart = (
   topics: readonly DocumentReviewTopic[],
@@ -380,7 +388,7 @@ const buildTopicsPart = (
         `- topicId=${topic.topicId}\n  title=${topic.title}\n  reviewer context=${topic.context || "(none)"}`,
     )
     .join("\n");
-  return `${PERSPECTIVE_LINE[perspective]}\n\nReview topics:\n${topicGuide}`;
+  return `${perspectiveLine(perspective)}\n\nReview topics:\n${topicGuide}`;
 };
 
 type CompareReferenceDocumentsArgs = {

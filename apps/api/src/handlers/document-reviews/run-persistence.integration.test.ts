@@ -68,7 +68,7 @@ const REFERENCE_FILE_FIELD_ID = toSafeId<"field">(Bun.randomUUIDv7());
 
 const referenceBasis: DocumentReviewRunBasis = {
   type: "references",
-  perspective: "buyer",
+  perspective: { type: "party", role: "Buyer", name: null },
   references: [
     {
       workspaceId: toSafeId<"workspace">(Bun.randomUUIDv7()),

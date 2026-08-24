@@ -188,7 +188,7 @@ const cachedRun = (
     contentSha256: CONTENT_SHA256,
     basis: {
       type: "references",
-      perspective: "buyer",
+      perspective: { type: "party", role: "Buyer", name: null },
       references: [
         {
           workspaceId: toSafeId<"workspace">(

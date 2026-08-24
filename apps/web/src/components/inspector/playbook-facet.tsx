@@ -51,12 +51,15 @@ import {
 } from "@/components/ai-suggestions/active-docx-store";
 import {
   createReviewBasis,
+  isSamePerspective,
+  NEUTRAL_PERSPECTIVE,
+  perspectiveFromBasis,
   playbookIdFromBasis,
-  REVIEW_PERSPECTIVES,
 } from "@/components/ai-suggestions/document-review-basis.logic";
 import type {
   ReferenceFile,
   ReviewBasis,
+  ReviewParty,
   ReviewPerspective,
 } from "@/components/ai-suggestions/document-review-basis.logic";
 import {
@@ -183,6 +186,9 @@ export const PlaybookFacet = ({
   );
   const confirmTopics = usePlaybookReviewStore((state) => state.confirmTopics);
   const setTopics = usePlaybookReviewStore((state) => state.setTopics);
+  const setPerspective = usePlaybookReviewStore(
+    (state) => state.setPerspective,
+  );
   const setFixState = usePlaybookReviewStore((state) => state.setFixState);
   const beginComment = usePlaybookReviewStore((state) => state.beginComment);
   const completeComment = usePlaybookReviewStore(
@@ -511,6 +517,15 @@ export const PlaybookFacet = ({
         error={session.error}
         onBack={() => resetSession(entityId, fileFieldId)}
         onChange={(topics) => setTopics(entityId, fileFieldId, topics)}
+        onPerspectiveChange={(perspective) =>
+          setPerspective(entityId, fileFieldId, perspective)
+        }
+        parties={session.parties}
+        perspective={
+          session.basis === null
+            ? NEUTRAL_PERSPECTIVE
+            : perspectiveFromBasis(session.basis)
+        }
         onConfirm={() => {
           detached(
             (async () => {
@@ -964,11 +979,12 @@ const Launcher = ({
     null,
   );
   const [references, setReferences] = useState<ReferenceFile[]>([]);
-  const [perspective, setPerspective] = useState<ReviewPerspective>("neutral");
+  // The side is chosen while confirming topics, once the proposal has read
+  // the target's parties; until then the basis carries no side.
   const basis = createReviewBasis({
     playbookId: selectedPlaybookId,
     references,
-    perspective,
+    perspective: NEUTRAL_PERSPECTIVE,
   });
   const user = useAuthenticatedUser();
   const { data: selectedPlaybook } = useQuery({
@@ -1020,9 +1036,6 @@ const Launcher = ({
           target={target}
           workspaceId={workspaceId}
         />
-        {references.length > 0 && (
-          <PerspectivePicker onSelect={setPerspective} value={perspective} />
-        )}
       </div>
       {/* Pinned right above the action it describes, outside the scroll. */}
       <div className="shrink-0 px-4 pb-2">
@@ -1057,54 +1070,127 @@ const Launcher = ({
 
 // English until the launcher copy settles; then it joins the catalog.
 const PERSPECTIVE_SECTION_LABEL = "We act for";
-const PERSPECTIVE_OPTION_LABEL = {
-  buyer: "Buyer",
-  seller: "Seller",
-  neutral: "Not specified",
-} as const satisfies Record<ReviewPerspective, string>;
+const PERSPECTIVE_NEUTRAL_LABEL = "Not specified";
+const PERSPECTIVE_OTHER_LABEL = "Other…";
+const PERSPECTIVE_OTHER_PLACEHOLDER = "Role as the document names it";
+const PERSPECTIVE_CHIP_CLASS =
+  "min-h-8 rounded-full border px-3 text-xs transition-colors duration-150";
+const PERSPECTIVE_CHIP_CHECKED_CLASS =
+  "border-foreground bg-foreground text-background";
+const PERSPECTIVE_CHIP_IDLE_CLASS =
+  "border-border text-muted-foreground hover:text-foreground hover:bg-muted/50";
 
-/**
- * Whose side the comparison judges. A difference between two drafts has no
- * direction on its own, so without this the results can only say "different";
- * with it they can say "worse for the buyer", which is what gets acted on.
- */
-const PerspectivePicker = ({
-  value,
-  onSelect,
-}: {
+const partyLabel = (party: ReviewParty): string =>
+  party.name === null ? party.role : `${party.role} (${party.name})`;
+
+type PerspectivePickerProps = {
+  /** The target's parties as the proposal read them. */
+  parties: readonly ReviewParty[];
   value: ReviewPerspective;
   onSelect: (perspective: ReviewPerspective) => void;
-}) => (
-  <section className="space-y-2">
-    <h3 className={SECTION_LABEL_CLASS}>{PERSPECTIVE_SECTION_LABEL}</h3>
-    <div
-      aria-label={PERSPECTIVE_SECTION_LABEL}
-      className="flex flex-wrap gap-1"
-      role="radiogroup"
-    >
-      {REVIEW_PERSPECTIVES.map((option) => {
-        const checked = option === value;
-        return (
-          <button
-            aria-checked={checked}
-            className={cn(
-              "min-h-8 rounded-full border px-3 text-xs transition-colors duration-150",
-              checked
-                ? "border-foreground bg-foreground text-background"
-                : "border-border text-muted-foreground hover:text-foreground hover:bg-muted/50",
-            )}
-            key={option}
-            onClick={() => onSelect(option)}
-            role="radio"
-            type="button"
-          >
-            {PERSPECTIVE_OPTION_LABEL[option]}
-          </button>
-        );
-      })}
-    </div>
-  </section>
-);
+};
+
+/**
+ * Whose side the comparison judges, picked from the target's own parties. A
+ * difference between two drafts has no direction on its own, so without this
+ * the results can only say "different"; with it they can say "worse for the
+ * Purchaser", which is what gets acted on. A role the proposal missed can be
+ * typed in.
+ */
+const PerspectivePicker = ({
+  parties,
+  value,
+  onSelect,
+}: PerspectivePickerProps) => {
+  const listed =
+    value.type === "party" &&
+    parties.some((party) =>
+      isSamePerspective({ type: "party", ...party }, value),
+    );
+  const [other, setOther] = useState(value.type === "party" && !listed);
+  const options: {
+    key: string;
+    label: string;
+    perspective: ReviewPerspective;
+  }[] = [
+    {
+      key: "neutral",
+      label: PERSPECTIVE_NEUTRAL_LABEL,
+      perspective: NEUTRAL_PERSPECTIVE,
+    },
+    ...parties.map((party, index) => ({
+      key: `party-${index}`,
+      label: partyLabel(party),
+      perspective: { type: "party" as const, ...party },
+    })),
+  ];
+  return (
+    <section className="space-y-2">
+      <h3 className={SECTION_LABEL_CLASS}>{PERSPECTIVE_SECTION_LABEL}</h3>
+      <div
+        aria-label={PERSPECTIVE_SECTION_LABEL}
+        className="flex flex-wrap gap-1"
+        role="radiogroup"
+      >
+        {options.map((option) => {
+          const checked =
+            !other && isSamePerspective(option.perspective, value);
+          return (
+            <button
+              aria-checked={checked}
+              className={cn(
+                PERSPECTIVE_CHIP_CLASS,
+                checked
+                  ? PERSPECTIVE_CHIP_CHECKED_CLASS
+                  : PERSPECTIVE_CHIP_IDLE_CLASS,
+              )}
+              key={option.key}
+              onClick={() => {
+                setOther(false);
+                onSelect(option.perspective);
+              }}
+              role="radio"
+              type="button"
+            >
+              {option.label}
+            </button>
+          );
+        })}
+        <button
+          aria-checked={other}
+          className={cn(
+            PERSPECTIVE_CHIP_CLASS,
+            other
+              ? PERSPECTIVE_CHIP_CHECKED_CLASS
+              : PERSPECTIVE_CHIP_IDLE_CLASS,
+          )}
+          onClick={() => setOther(true)}
+          role="radio"
+          type="button"
+        >
+          {PERSPECTIVE_OTHER_LABEL}
+        </button>
+      </div>
+      {other && (
+        <Input
+          aria-label={PERSPECTIVE_OTHER_PLACEHOLDER}
+          autoFocus
+          className="h-8 text-xs"
+          onChange={(event) => {
+            const role = event.target.value.trim();
+            onSelect(
+              role.length === 0
+                ? NEUTRAL_PERSPECTIVE
+                : { type: "party", role, name: null },
+            );
+          }}
+          placeholder={PERSPECTIVE_OTHER_PLACEHOLDER}
+          value={value.type === "party" && !listed ? value.role : ""}
+        />
+      )}
+    </section>
+  );
+};
 
 /** One line saying what the review will be measured against, so the reviewer
  *  reads the basis back before starting. Nothing chosen yet renders nothing:
@@ -1428,8 +1514,11 @@ const ReferenceFilePicker = ({
 
 type TopicEditorProps = {
   topics: readonly ReviewTopic[];
+  parties: readonly ReviewParty[];
+  perspective: ReviewPerspective;
   error: string | null;
   onChange: (topics: ReviewTopic[]) => void;
+  onPerspectiveChange: (perspective: ReviewPerspective) => void;
   onConfirm: () => void;
   onBack: () => void;
 };
@@ -1442,8 +1531,11 @@ type TopicEditorProps = {
  */
 const TopicEditor = ({
   topics,
+  parties,
+  perspective,
   error,
   onChange,
+  onPerspectiveChange,
   onConfirm,
   onBack,
 }: TopicEditorProps) => {
@@ -1493,6 +1585,13 @@ const TopicEditor = ({
             {error}
           </p>
         )}
+        <div className="mx-1 mb-3">
+          <PerspectivePicker
+            onSelect={onPerspectiveChange}
+            parties={parties}
+            value={perspective}
+          />
+        </div>
         <ul className="space-y-0.5">
           {topics.map((topic, index) => (
             <TopicRow
@@ -3314,27 +3413,23 @@ const isDirectedImpact = (
 // English until the results copy settles; then it joins the catalog. Labels
 // name the side so "worse" is never ambiguous on a printed or shared card.
 const IMPACT_LABEL = {
-  buyer: {
-    unfavourable: "Worse for buyer",
-    favourable: "Better for buyer",
-    neutral: "No effect for buyer",
-  },
-  seller: {
-    unfavourable: "Worse for seller",
-    favourable: "Better for seller",
-    neutral: "No effect for seller",
-  },
-  neutral: {
-    unfavourable: "Unfavourable",
-    favourable: "Favourable",
-    neutral: "No effect",
-  },
-} as const satisfies Record<ReviewPerspective, Record<DirectedImpact, string>>;
+  unfavourable: "Unfavourable",
+  favourable: "Favourable",
+  neutral: "No effect",
+} as const satisfies Record<DirectedImpact, string>;
+const IMPACT_FOR_SIDE_LABEL = {
+  unfavourable: "Worse for",
+  favourable: "Better for",
+  neutral: "No effect for",
+} as const satisfies Record<DirectedImpact, string>;
 
 const impactLabel = (
   impact: DirectedImpact,
   perspective: ReviewPerspective,
-): string => IMPACT_LABEL[perspective][impact];
+): string =>
+  perspective.type === "party"
+    ? `${IMPACT_FOR_SIDE_LABEL[impact]} ${perspective.role}`
+    : IMPACT_LABEL[impact];
 
 const IMPACT_CHIP_CLASS = {
   unfavourable: "border-warning/30 text-warning-foreground",

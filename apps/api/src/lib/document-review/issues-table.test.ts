@@ -33,7 +33,7 @@ const OTHER_FIELD = "55555555-5555-4555-8555-555555555555";
 const basis: DocumentReviewRunBasis = {
   type: "references",
   references: [reference("Elixir SPA", ELIXIR_FIELD)],
-  perspective: "buyer",
+  perspective: { type: "party", role: "Buyer", name: null },
 };
 
 const referenceFinding = (
@@ -84,7 +84,7 @@ describe("buildIssuesTableRows", () => {
     });
     expect(row).toEqual({
       topic: "Leakage",
-      impact: "Unfavourable to the buyer",
+      impact: "Unfavourable to the Buyer",
       severity: "High",
       draftPosition: "Leakage is capped.",
       precedentPosition: "Leakage is uncapped.",
@@ -130,7 +130,7 @@ describe("buildIssuesTableRows", () => {
           reference("Elixir SPA", ELIXIR_FIELD),
           reference("Orion SPA", OTHER_FIELD),
         ],
-        perspective: "neutral",
+        perspective: { type: "neutral" },
       },
       findings: [
         referenceFinding("Leakage", { impact: "unknown", severity: "medium" }),
@@ -144,7 +144,7 @@ describe("buildIssuesTableRows", () => {
 describe("describeIssuesTableBasis", () => {
   test("names the precedent and the side", () => {
     expect(describeIssuesTableBasis(basis)).toBe(
-      "Precedent: Elixir SPA · Reviewed for the buyer",
+      "Precedent: Elixir SPA · Reviewed for the Buyer",
     );
   });
 });

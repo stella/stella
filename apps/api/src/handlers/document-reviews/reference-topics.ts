@@ -10,7 +10,12 @@ import {
   type AIUsageMetering,
 } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
-import type { ReviewPerspective } from "@/api/lib/document-review/contract";
+import {
+  REVIEW_PARTIES_MAX,
+  REVIEW_PARTY_NAME_MAX_LENGTH,
+  REVIEW_PARTY_ROLE_MAX_LENGTH,
+} from "@/api/lib/document-review/contract";
+import type { ReviewParty } from "@/api/lib/document-review/contract";
 import {
   buildReviewDocumentParts,
   reviewDocumentsScopeKey,
@@ -27,27 +32,43 @@ const proposedTopicSchema = v.strictObject({
   context: v.pipe(v.string(), v.maxLength(2000)),
 });
 
+const proposedPartySchema = v.strictObject({
+  role: v.pipe(
+    v.string(),
+    v.trim(),
+    v.minLength(1),
+    v.maxLength(REVIEW_PARTY_ROLE_MAX_LENGTH),
+  ),
+  name: v.nullable(
+    v.pipe(v.string(), v.trim(), v.maxLength(REVIEW_PARTY_NAME_MAX_LENGTH)),
+  ),
+});
+
 const proposedTopicsSchema = v.strictObject({
   // Cardinality is normalized by mergeProposedReviewTopics. Providers do not
   // reliably honor JSON Schema array limits, so excess suggestions stay recoverable.
   topics: v.array(proposedTopicSchema),
+  // The target's parties, so the lawyer can say which one they act for.
+  parties: v.array(proposedPartySchema),
 });
 
-const SYSTEM_PROMPT = `You help a lawyer define the issues for a structured comparison of one target legal document and one or more reference documents.
+const SYSTEM_PROMPT = `You help a lawyer define the issues for a structured comparison of one target legal document (F0) and one or more reference documents.
 
-Propose a concise, non-overlapping list of material legal or commercial topics that the supplied documents make useful to compare. When the input names the side the lawyer acts for, favour the topics where that side's position differs between the documents. References are examples, not policy or proof of market practice. Do not make findings, score the target, or propose wording yet. Do not repeat any seeded topic. context is a short explanation of what the later comparison should examine.`;
+Propose a concise, non-overlapping list of material legal or commercial topics that the supplied documents make useful to compare. References are examples, not policy or proof of market practice. Do not make findings, score the target, or propose wording yet. Do not repeat any seeded topic. context is a short explanation of what the later comparison should examine.
 
-const PERSPECTIVE_LINE = {
-  buyer: "The lawyer acts for the buyer.",
-  seller: "The lawyer acts for the seller.",
-  neutral: "No side is named.",
-} as const satisfies Record<ReviewPerspective, string>;
+Also list the parties to the target document only: role is the defined term the target uses for that side (for example Purchaser, Seller, Landlord, Licensee, Borrower), name is the party's legal name when the target states it, otherwise null. One entry per side; omit guarantors, agents and notaries unless they are principal parties.`;
+
+/** What the proposal pass hands back: the plan to confirm and the sides the
+ *  lawyer can act for. */
+export type ReviewTopicProposal = {
+  topics: DocumentReviewTopic[];
+  parties: ReviewParty[];
+};
 
 type ProposeReferenceTopicsArgs = {
   target: PreparedDocxFile;
   references: readonly PreparedDocxFile[];
   seededTopics: readonly DocumentReviewTopic[];
-  perspective: ReviewPerspective;
   targetEntityVersionId: SafeId<"entityVersion">;
   referenceEntityVersionIds: readonly SafeId<"entityVersion">[];
   organizationId: SafeId<"organization">;
@@ -63,7 +84,6 @@ export const proposeReferenceTopics = async ({
   target,
   references,
   seededTopics,
-  perspective,
   targetEntityVersionId,
   referenceEntityVersionIds,
   organizationId,
@@ -74,7 +94,7 @@ export const proposeReferenceTopics = async ({
   usageMetering,
   abortSignal,
 }: ProposeReferenceTopicsArgs): Promise<
-  Result<DocumentReviewTopic[], WorkflowIntegrationError>
+  Result<ReviewTopicProposal, WorkflowIntegrationError>
 > => {
   const caching = resolveCaching({
     promptCachingEnabled,
@@ -121,7 +141,7 @@ export const proposeReferenceTopics = async ({
               ...buildReviewDocumentParts({ target, references, caching }),
               {
                 type: "text",
-                content: `${PERSPECTIVE_LINE[perspective]}\n\nSeeded topics (do not repeat):\n${seeded || "(none)"}`,
+                content: `Seeded topics (do not repeat):\n${seeded || "(none)"}`,
               },
             ],
           },
@@ -132,7 +152,10 @@ export const proposeReferenceTopics = async ({
         ]),
         outputSchema: proposedTopicsSchema,
       });
-      return mergeProposedReviewTopics(seededTopics, output.topics);
+      return {
+        topics: mergeProposedReviewTopics(seededTopics, output.topics),
+        parties: output.parties.slice(0, REVIEW_PARTIES_MAX),
+      };
     },
     catch: (cause) => {
       aiAnalytics.captureError(cause);

@@ -10,13 +10,30 @@ export type ReferenceFile = {
   fileName: string;
 };
 
+/** A party to the reviewed document, by the role the document gives it and,
+ *  when stated, its name. Proposed by the topic pass, chosen by the lawyer. */
+export type ReviewParty = { role: string; name: string | null };
+
 /**
- * Whose interest a reference comparison is judged for. Mirrors the API's
- * `REVIEW_PERSPECTIVES`; the request body is typed against the API, so a
- * value missing here fails to compile at the call site.
+ * Whose interest a reference comparison is judged for: one of the target's
+ * parties, or no side. Mirrors the API's `ReviewPerspective`; the request
+ * body is typed against the API, so a drift fails to compile at the call
+ * site.
  */
-export const REVIEW_PERSPECTIVES = ["buyer", "seller", "neutral"] as const;
-export type ReviewPerspective = (typeof REVIEW_PERSPECTIVES)[number];
+export type ReviewPerspective =
+  | { type: "neutral" }
+  | ({ type: "party" } & ReviewParty);
+
+export const NEUTRAL_PERSPECTIVE: ReviewPerspective = { type: "neutral" };
+
+/** Whether two perspectives name the same side. */
+export const isSamePerspective = (
+  a: ReviewPerspective,
+  b: ReviewPerspective,
+): boolean =>
+  a.type === "neutral"
+    ? b.type === "neutral"
+    : b.type === "party" && a.role === b.role && a.name === b.name;
 
 export type ReviewBasis =
   | { type: "playbook"; playbookId: string }
@@ -79,10 +96,10 @@ export const perspectiveFromBasis = (basis: ReviewBasis): ReviewPerspective => {
     case "combined":
       return basis.perspective;
     case "playbook":
-      return "neutral";
+      return NEUTRAL_PERSPECTIVE;
     default: {
       basis satisfies never;
-      return "neutral";
+      return NEUTRAL_PERSPECTIVE;
     }
   }
 };

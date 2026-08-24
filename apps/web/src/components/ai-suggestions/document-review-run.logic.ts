@@ -8,6 +8,7 @@
  * an already active run (409).
  */
 
+import { NEUTRAL_PERSPECTIVE } from "@/components/ai-suggestions/document-review-basis.logic";
 import type {
   ReferenceFile,
   ReviewPerspective,
@@ -192,7 +193,7 @@ export const restoreReviewBasis = (
         playbookId: basis.playbook.definitionId,
         playbookName: basis.playbook.definitionSnapshot.name,
         references: [],
-        perspective: "neutral",
+        perspective: NEUTRAL_PERSPECTIVE,
       };
     case "references":
       return {
@@ -214,7 +215,7 @@ export const restoreReviewBasis = (
         playbookId: null,
         playbookName: "",
         references: [],
-        perspective: "neutral",
+        perspective: NEUTRAL_PERSPECTIVE,
       };
   }
 };
