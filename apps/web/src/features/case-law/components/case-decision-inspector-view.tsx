@@ -1,3 +1,5 @@
+import type { MouseEvent } from "react";
+
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Maximize2Icon } from "lucide-react";
@@ -9,7 +11,12 @@ import { ScrollArea } from "@stll/ui/scroll-area";
 import { Skeleton } from "@stll/ui/skeleton";
 
 import type { CaseDecisionViewPayload } from "@/components/inspector/case-decision-view";
+import {
+  createCaseDecisionViewTab,
+  isPlainPrimaryClick,
+} from "@/components/inspector/case-decision-view";
 import { InspectorTabHeader } from "@/components/inspector/inspector-tab-header";
+import { useInspectorView } from "@/components/inspector/use-inspector-view";
 import type { InspectorViewRenderProps } from "@/components/inspector/view-registry";
 import Tooltip from "@/components/tooltip";
 import { CitationHeader } from "@/features/case-law/components/case-viewer/citation-header";
@@ -18,6 +25,7 @@ import { DecisionText } from "@/features/case-law/components/case-viewer/decisio
 import { ProvisionsCited } from "@/features/case-law/components/case-viewer/provisions-cited";
 import { useDecisionCitationAnchors } from "@/features/case-law/components/case-viewer/use-decision-citation-anchors";
 import { decisionOptions } from "@/features/case-law/queries/decisions";
+import { useMainCaseLawDecision } from "@/features/case-law/use-main-decision";
 import { detached } from "@/lib/detached";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -36,10 +44,40 @@ export const CaseDecisionInspectorView = ({
     isPending,
     refetch,
   } = useQuery(decisionOptions(decisionId));
+  const inspector = useInspectorView();
+  const mainDecision = useMainCaseLawDecision();
+  const swapTarget =
+    mainDecision !== undefined && mainDecision.id !== payload.decisionId
+      ? mainDecision
+      : undefined;
+
+  // Plain primary click moves this decision to main; when the main view
+  // already shows another decision, the two exchange places instead of
+  // the main one being silently dropped. Modified clicks stay native
+  // (new browser tab) and leave the inspector untouched.
+  const onMainNavigation = (event: MouseEvent<HTMLAnchorElement>) => {
+    if (!isPlainPrimaryClick(event)) {
+      return;
+    }
+    onClose();
+    if (swapTarget !== undefined) {
+      inspector.open(
+        createCaseDecisionViewTab({
+          caseNumber: swapTarget.caseNumber,
+          country: swapTarget.country,
+          court: swapTarget.court,
+          decisionId: swapTarget.id,
+          language: swapTarget.language,
+          languageAlternates: swapTarget.languageAlternates,
+          slug: swapTarget.slug,
+        }),
+      );
+    }
+  };
   const mainLink =
     payload.language === undefined ? (
       <Link
-        onClick={onClose}
+        onClick={onMainNavigation}
         params={{
           country: payload.country,
           court: payload.court,
@@ -49,7 +87,7 @@ export const CaseDecisionInspectorView = ({
       />
     ) : (
       <Link
-        onClick={onClose}
+        onClick={onMainNavigation}
         params={{
           country: payload.country,
           court: payload.court,
@@ -65,10 +103,18 @@ export const CaseDecisionInspectorView = ({
       <InspectorTabHeader
         actions={
           <Tooltip
-            content={t("chat.moveToMain")}
+            content={
+              swapTarget === undefined
+                ? t("chat.moveToMain")
+                : t("inspector.swapViews")
+            }
             render={
               <Button
-                aria-label={t("chat.moveToMain")}
+                aria-label={
+                  swapTarget === undefined
+                    ? t("chat.moveToMain")
+                    : t("inspector.swapViews")
+                }
                 render={mainLink}
                 size="icon-xs"
                 variant="ghost"

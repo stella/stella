@@ -6,7 +6,12 @@ import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 
-import { createCaseDecisionViewTab } from "@/components/inspector/case-decision-view";
+import {
+  createCaseDecisionViewTab,
+  isCaseDecisionGenericTab,
+  navigateToCaseDecisionMain,
+} from "@/components/inspector/case-decision-view";
+import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { useInspectorView } from "@/components/inspector/use-inspector-view";
 import Tooltip from "@/components/tooltip";
 import { DecisionWorkspace } from "@/features/case-law/components/case-viewer/decision-workspace";
@@ -40,7 +45,30 @@ export function PublicDecisionViewer({
   const navigate = useNavigate();
   const t = useTranslations();
 
+  // When the inspector's active tab is another decision, the two swap
+  // places: this one moves to the side and the side one takes over the
+  // main view. Otherwise the main view falls back to the case list.
+  const willSwap = useInspectorTabsStore((s) => {
+    const activeTab = s.tabs.find((tab) => tab.id === s.activeId);
+    return (
+      activeTab !== undefined &&
+      isCaseDecisionGenericTab(activeTab) &&
+      activeTab.payload.decisionId !== decision.id
+    );
+  });
+
   const moveToSide = () => {
+    const { activeId, tabs } = useInspectorTabsStore.getState();
+    const activeTab = tabs.find((tab) => tab.id === activeId);
+    const swapTarget =
+      activeTab !== undefined &&
+      isCaseDecisionGenericTab(activeTab) &&
+      activeTab.payload.decisionId !== decision.id
+        ? activeTab
+        : undefined;
+    if (swapTarget !== undefined) {
+      inspector.close(swapTarget.id);
+    }
     inspector.open(
       createCaseDecisionViewTab({
         caseNumber: decision.caseNumber,
@@ -52,6 +80,13 @@ export function PublicDecisionViewer({
         slug: decision.slug,
       }),
     );
+    if (swapTarget !== undefined) {
+      detached(
+        navigateToCaseDecisionMain(navigate, swapTarget.payload),
+        "case-law.swap-with-side",
+      );
+      return;
+    }
     detached(
       navigate({
         to: "/law/cases",
@@ -65,10 +100,12 @@ export function PublicDecisionViewer({
     <main className="flex min-h-0 flex-1 overflow-hidden">
       <ChromeHeaderActions>
         <Tooltip
-          content={t("chat.moveToSide")}
+          content={willSwap ? t("inspector.swapViews") : t("chat.moveToSide")}
           render={
             <Button
-              aria-label={t("chat.moveToSide")}
+              aria-label={
+                willSwap ? t("inspector.swapViews") : t("chat.moveToSide")
+              }
               className="hidden md:inline-flex"
               onClick={moveToSide}
               size="icon-sm"

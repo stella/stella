@@ -2267,6 +2267,7 @@ type Messages = {
       "topicsTitle": "What should this review cover?";
     };
     "showPane": "Show pane";
+    "swapViews": "Swap main and side views";
     "title": "Inspector";
   };
   "knowledge": {
