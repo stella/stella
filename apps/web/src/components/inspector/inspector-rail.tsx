@@ -142,7 +142,7 @@ export const InspectorRail = ({
       </div>
       <ScrollArea className="flex-1">
         <div
-          className="flex h-full flex-col items-center gap-1 py-2"
+          className="flex h-full flex-col"
           onContextMenu={(event) => {
             event.preventDefault();
             railContextMenu.openAt(event);

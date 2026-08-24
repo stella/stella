@@ -23,7 +23,6 @@ export const SIDE_RAIL_WIDTH = "w-12" as const;
 export const SIDE_RAIL_CONTAINER_CLASS =
   `bg-sidebar flex shrink-0 flex-col border-s border-e ${SIDE_RAIL_WIDTH}` as const;
 export const SIDE_RAIL_ICON_BUTTON_SIZE = "size-8" as const;
-export const SIDE_RAIL_TAB_HIT_TARGET_SIZE = "size-12" as const;
 export const SIDE_RAIL_TAB_ICON_SIZE = "size-3.5" as const;
 
 /** Two-column grid the key/value rows share. */
