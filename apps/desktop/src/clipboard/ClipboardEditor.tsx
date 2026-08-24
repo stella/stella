@@ -118,7 +118,9 @@ const editorPlainText = (editor: HTMLDivElement) => {
       parts.push("\n");
     }
   };
-  const appendNode = (node: Node, hasFollowingSibling: boolean) => {
+  const isBlock = (node: Node) =>
+    node instanceof HTMLElement && EDITOR_BLOCK_TAGS.has(node.tagName);
+  const appendNode = (node: Node) => {
     if (node instanceof Text) {
       parts.push(node.data);
       return;
@@ -132,16 +134,21 @@ const editorPlainText = (editor: HTMLDivElement) => {
     }
     const children = Array.from(node.childNodes);
     for (const [index, child] of children.entries()) {
-      appendNode(child, index < children.length - 1);
-    }
-    if (EDITOR_BLOCK_TAGS.has(node.tagName) && hasFollowingSibling) {
-      appendLineBreak();
+      appendNode(child);
+      const nextChild = children.at(index + 1);
+      if (nextChild && (isBlock(child) || isBlock(nextChild))) {
+        appendLineBreak();
+      }
     }
   };
 
   const children = Array.from(editor.childNodes);
   for (const [index, child] of children.entries()) {
-    appendNode(child, index < children.length - 1);
+    appendNode(child);
+    const nextChild = children.at(index + 1);
+    if (nextChild && (isBlock(child) || isBlock(nextChild))) {
+      appendLineBreak();
+    }
   }
   return parts.join("");
 };
@@ -303,6 +310,9 @@ const ClipboardEditor = () => {
   };
 
   const handleKeyDown = (event: KeyboardEvent) => {
+    if (event.isComposing) {
+      return;
+    }
     if (event.key === "Escape") {
       event.preventDefault();
       requestClose();

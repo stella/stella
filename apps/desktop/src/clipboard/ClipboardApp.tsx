@@ -149,6 +149,7 @@ const focusCard = (id: string) => {
 
 type ClipboardCardProps = {
   active: boolean;
+  ageReferenceTime: number;
   dragging: boolean;
   groupColor: ClipboardGroupColor | null;
   groupName: string | null;
@@ -175,6 +176,7 @@ type ClipboardGroupStyle = CSSProperties & {
 
 const ClipboardCard = ({
   active,
+  ageReferenceTime,
   dragging,
   groupColor,
   groupName,
@@ -187,7 +189,7 @@ const ClipboardCard = ({
   sourceVisual,
 }: ClipboardCardProps) => {
   const t = useTranslations("clipboard");
-  const age = formatClipboardAge(item.copiedAt);
+  const age = formatClipboardAge(item.copiedAt, ageReferenceTime);
   const formattedAge = new Intl.NumberFormat(undefined, {
     style: "unit",
     unit: age.unit,
@@ -806,6 +808,7 @@ const ClipboardApp = () => {
   const timelineRef = useRef<HTMLDivElement>(null);
   const contextMenuTriggerRef = useRef<HTMLElement>(null);
   const [snapshot, setSnapshot] = useState<ClipboardSnapshot>(EMPTY_SNAPSHOT);
+  const [ageReferenceTime, setAgeReferenceTime] = useState(() => Date.now());
   const [query, setQuery] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
@@ -901,7 +904,11 @@ const ClipboardApp = () => {
       }
       timelineRef.current?.focus();
     };
-    window.addEventListener("focus", focusActiveCard);
+    const handleWindowFocus = () => {
+      setAgeReferenceTime(Date.now());
+      focusActiveCard();
+    };
+    window.addEventListener("focus", handleWindowFocus);
     if (
       document.hasFocus() &&
       (document.activeElement === document.body ||
@@ -909,7 +916,7 @@ const ClipboardApp = () => {
     ) {
       focusActiveCard();
     }
-    return () => window.removeEventListener("focus", focusActiveCard);
+    return () => window.removeEventListener("focus", handleWindowFocus);
   }, [activeItemId]);
 
   const nextGroupColor =
@@ -1223,7 +1230,7 @@ const ClipboardApp = () => {
   };
 
   const handleKeyDownCapture = (event: KeyboardEvent) => {
-    if (event.key !== "Escape") {
+    if (event.key !== "Escape" || event.isComposing) {
       return;
     }
     event.preventDefault();
@@ -1446,6 +1453,7 @@ const ClipboardApp = () => {
               return (
                 <ClipboardCard
                   active={index === activeIndex}
+                  ageReferenceTime={ageReferenceTime}
                   dragging={
                     dragState.type === "dragging" &&
                     dragState.itemId === item.id

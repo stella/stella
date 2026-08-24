@@ -572,7 +572,7 @@ impl ClipboardManager {
       item.replace_content(plain_text.to_string(), html);
     }
     item.set_group_id(group_id);
-    prune_items(&mut self.items, Utc::now());
+    prune_items_preserving(&mut self.items, Utc::now(), Some(id));
     self.persist_or_restore(checkpoint)?;
     Ok(true)
   }
@@ -729,16 +729,40 @@ impl ClipboardManager {
 }
 
 fn prune_items(items: &mut Vec<ClipboardItem>, now: DateTime<Utc>) -> bool {
+  prune_items_preserving(items, now, None)
+}
+
+fn prune_items_preserving(
+  items: &mut Vec<ClipboardItem>,
+  now: DateTime<Utc>,
+  preserved_id: Option<&str>,
+) -> bool {
   let original_len = items.len();
   let oldest = now - Duration::days(RETENTION_DAYS);
-  items.retain(|item| item.copied_at() >= oldest);
-  items.truncate(MAX_HISTORY_ITEMS);
-
-  let mut total_bytes = 0;
   items.retain(|item| {
-    total_bytes += item.byte_len();
-    total_bytes <= MAX_HISTORY_BYTES
+    Some(item.id()) == preserved_id || item.copied_at() >= oldest
   });
+
+  while items.len() > MAX_HISTORY_ITEMS {
+    let Some(index) = items
+      .iter()
+      .rposition(|item| Some(item.id()) != preserved_id)
+    else {
+      break;
+    };
+    items.remove(index);
+  }
+
+  let mut total_bytes = items.iter().map(ClipboardItem::byte_len).sum::<usize>();
+  while total_bytes > MAX_HISTORY_BYTES {
+    let Some(index) = items
+      .iter()
+      .rposition(|item| Some(item.id()) != preserved_id)
+    else {
+      break;
+    };
+    total_bytes -= items.remove(index).byte_len();
+  }
   items.len() != original_len
 }
 
@@ -1440,33 +1464,27 @@ mod tests {
     let now = Utc::now();
     let mut manager = ClipboardManager::new();
     manager.persistence = ClipboardPersistence::MemoryOnly;
-    manager.items.push(text_item(now, "editable"));
     let large_text = "x".repeat(MAX_ITEM_TEXT_BYTES);
-    loop {
-      let candidate = text_item(now, &large_text);
-      let next_total = manager
-        .items
-        .iter()
-        .map(ClipboardItem::byte_len)
-        .sum::<usize>()
-        + candidate.byte_len();
-      if next_total > MAX_HISTORY_BYTES {
-        break;
-      }
-      manager.items.push(candidate);
+    for _ in 0..(MAX_HISTORY_BYTES / MAX_ITEM_TEXT_BYTES - 1) {
+      manager.items.push(text_item(now, &large_text));
     }
+    manager.items.push(text_item(now, "x"));
+    manager
+      .items
+      .push(text_item(now - Duration::minutes(1), "editable"));
 
     assert!(
       !manager
         .update_item("missing", &large_text, None, None)
         .unwrap()
     );
-    let editable_id = manager.items[0].id().to_string();
+    let editable_id = manager.items.last().unwrap().id().to_string();
     assert!(
       manager
         .update_item(&editable_id, &large_text, None, None)
         .unwrap()
     );
+    assert!(manager.items.iter().any(|item| item.id() == editable_id));
     assert!(
       manager
         .items
