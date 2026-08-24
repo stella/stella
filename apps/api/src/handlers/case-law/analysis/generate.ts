@@ -31,6 +31,10 @@ import { rootDb } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawDecisions } from "@/api/db/schema";
 import { envBase } from "@/api/env-base";
+import {
+  devReparseEnabled,
+  reparseForDev,
+} from "@/api/handlers/case-law/decisions/dev-reparse";
 import { resolveCaching, type OrgAIConfig } from "@/api/lib/ai-config";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
@@ -53,6 +57,92 @@ import { normalizeAnalysisHeadingLabels } from "./category-catalog";
 import { getSystemPrompt } from "./prompts/prompt-registry";
 
 const SENTINEL_STALE_MS = 5 * 60 * 1000;
+
+/**
+ * Where an analysis and its in-flight sentinel live: the decision row in
+ * the local database, normally. A shared corpus read through the read-only
+ * handle cannot take that write, so production reports the analysis
+ * unavailable there, and a development process keeps it in memory instead.
+ */
+type AnalysisStore = {
+  /** Sets the sentinel if none is set; false when another run holds it. */
+  claim: (decisionId: SafeId<"caseLawDecision">) => Promise<boolean>;
+  save: (
+    decisionId: SafeId<"caseLawDecision">,
+    analysis: DecisionAnalysis,
+  ) => Promise<void>;
+  clear: (decisionId: SafeId<"caseLawDecision">) => Promise<void>;
+  /** What the store holds beside the row; null where the row is the store. */
+  peek: (decisionId: SafeId<"caseLawDecision">) => unknown;
+};
+
+const sentinel = () => ({
+  version: 1 as const,
+  status: "generating" as const,
+  startedAt: new Date().toISOString(),
+});
+
+const dbAnalysisStore: AnalysisStore = {
+  claim: async (decisionId) => {
+    // audit: skip — background AI analysis sentinel; no user-facing state change
+    // Atomic: WHERE analysis IS NULL closes the read-decide-write race.
+    const [updated] = await rootDb
+      .update(caseLawDecisions)
+      .set({ analysis: sentinel() })
+      .where(
+        and(
+          eq(caseLawDecisions.id, decisionId),
+          isNull(caseLawDecisions.analysis),
+        ),
+      )
+      .returning({ id: caseLawDecisions.id });
+    return updated !== undefined;
+  },
+  // Use rootDb (not scopedDb) because case-law analysis is global,
+  // not workspace-scoped.
+  save: async (decisionId, analysis) => {
+    // audit: skip — background AI analysis output; no user-facing state change
+    await rootDb
+      .update(caseLawDecisions)
+      .set({ analysis })
+      .where(eq(caseLawDecisions.id, decisionId));
+  },
+  clear: async (decisionId) => {
+    // audit: skip — background AI analysis sentinel cleanup; no user-facing state change
+    await rootDb
+      .update(caseLawDecisions)
+      .set({ analysis: null })
+      .where(eq(caseLawDecisions.id, decisionId));
+  },
+  peek: () => null,
+};
+
+const memoryAnalyses = new Map<SafeId<"caseLawDecision">, unknown>();
+
+const memoryAnalysisStore: AnalysisStore = {
+  claim: async (decisionId) => {
+    if (memoryAnalyses.has(decisionId)) {
+      return await Promise.resolve(false);
+    }
+    memoryAnalyses.set(decisionId, sentinel());
+    return await Promise.resolve(true);
+  },
+  save: async (decisionId, analysis) => {
+    memoryAnalyses.set(decisionId, analysis);
+    await Promise.resolve();
+  },
+  clear: async (decisionId) => {
+    memoryAnalyses.delete(decisionId);
+    await Promise.resolve();
+  },
+  peek: (decisionId) => memoryAnalyses.get(decisionId) ?? null,
+};
+
+const readsSharedCorpus = (): boolean =>
+  envBase.PUBLIC_LAW_DATABASE_URL !== undefined;
+
+const analysisStore = (): AnalysisStore =>
+  readsSharedCorpus() ? memoryAnalysisStore : dbAnalysisStore;
 
 type StreamedAnalysisHeading = Omit<AnalysisHeading, "children">;
 
@@ -174,22 +264,15 @@ ${decisionText}`;
       tree: finalTree,
     };
 
-    // Use rootDb (not scopedDb) because case-law analysis is global,
-    // not workspace-scoped.
-    await rootDb
-      .update(caseLawDecisions)
-      .set({ analysis })
-      .where(eq(caseLawDecisions.id, decisionId));
+    await analysisStore().save(decisionId, analysis);
   } catch (error) {
     captureError(error, {
       source: "case-law-analysis",
       decisionId,
     });
     aiAnalytics.captureError(error);
-    await rootDb
-      .update(caseLawDecisions)
-      .set({ analysis: null })
-      .where(eq(caseLawDecisions.id, decisionId))
+    await analysisStore()
+      .clear(decisionId)
       .catch((cleanupError: unknown) => {
         // Best-effort sentinel cleanup. Capture rather than swallow: a
         // failure here leaves the decision pinned in the generating state,
@@ -227,7 +310,9 @@ export const generateAnalysis = async (
     return Result.ok({ status: "error", error: "Decision not found" });
   }
 
-  const analysis = parsePersistedDecisionAnalysis(decision.analysis);
+  const analysis = parsePersistedDecisionAnalysis(
+    analysisStore().peek(decisionId) ?? decision.analysis,
+  );
 
   // Return cached analysis (complete or partial with progress)
   if (analysis !== null && "status" in analysis && "tree" in analysis) {
@@ -248,8 +333,9 @@ export const generateAnalysis = async (
 
   // A shared corpus connection is deliberately read-only. It may serve an
   // analysis already persisted by the owning environment, but this process
-  // must never try to create or update one in that database.
-  if (envBase.PUBLIC_LAW_DATABASE_URL !== undefined) {
+  // must never try to create or update one in that database. A development
+  // process keeps its analyses in memory instead (`memoryAnalysisStore`).
+  if (readsSharedCorpus() && !envBase.isDev) {
     return Result.ok({
       status: "error",
       error: "Analysis is unavailable for this decision",
@@ -268,8 +354,22 @@ export const generateAnalysis = async (
     return Result.err(available.error);
   }
 
-  // Check AST
-  const ast = parseUsableDocumentAst(decision.documentAst);
+  // The text the reader sees: in development that may be the tree's own
+  // parse rather than the stored one, and the anchors must agree.
+  const reparsed = devReparseEnabled()
+    ? await reparseForDev({
+        adapterKey: decision.source.adapterKey,
+        caseNumber: decision.caseNumber,
+        court: decision.court,
+        decisionDate: decision.decisionDate,
+        decisionType: decision.decisionType,
+        documentUrl: decision.documentUrl,
+        ecli: decision.ecli,
+        id: decisionId,
+        metadata: decision.metadata,
+      })
+    : null;
+  const ast = reparsed ?? parseUsableDocumentAst(decision.documentAst);
   if (ast === null) {
     return Result.ok({
       status: "error",
@@ -277,26 +377,8 @@ export const generateAnalysis = async (
     });
   }
 
-  // Set sentinel atomically (WHERE analysis IS NULL prevents TOCTOU race)
-  const [updated] = await rootDb
-    .update(caseLawDecisions)
-    .set({
-      analysis: {
-        version: 1,
-        status: "generating",
-        startedAt: new Date().toISOString(),
-      },
-    })
-    .where(
-      and(
-        eq(caseLawDecisions.id, decisionId),
-        isNull(caseLawDecisions.analysis),
-      ),
-    )
-    .returning({ id: caseLawDecisions.id });
-
-  // Another request won the race — return generating
-  if (!updated) {
+  // Another request won the race: return generating.
+  if (!(await analysisStore().claim(decisionId))) {
     return Result.ok({ status: "generating" });
   }
 
