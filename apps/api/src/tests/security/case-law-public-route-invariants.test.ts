@@ -324,7 +324,7 @@ describe("public case-law route boundary", () => {
       "const searchPostgresDecisions",
     );
     const postgresSearchEnd = searchSource.indexOf(
-      "const resolveCorpusIndexQuery",
+      "const buildCorpusIndexQuery",
     );
     const corpusIndexSearchStart = searchSource.indexOf(
       "const searchCorpusIndexDecisions",

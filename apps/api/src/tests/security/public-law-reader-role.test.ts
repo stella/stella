@@ -232,6 +232,7 @@ describe("public-law reader role", () => {
       canUseSequence: false,
       canUseSchema: true,
       canWritePublicLaw: false,
+      isPublicLawReaderMember: true,
     });
     expect(await asRole(stella.name)).toMatchObject({
       canReadOtherData: true,
@@ -342,6 +343,7 @@ describe("public-law reader role", () => {
       canAssumeOtherRole: false,
       canReadPublicLaw: true,
       canReadOtherData: false,
+      isPublicLawReaderMember: true,
     });
   });
 

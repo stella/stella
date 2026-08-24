@@ -15,6 +15,7 @@ const VALID_PERMISSIONS = {
   canUseSequence: false,
   canUseSchema: true,
   canWritePublicLaw: false,
+  isPublicLawReaderMember: true,
 } as const satisfies PublicLawDatabaseRolePermissions;
 
 describe("external public-law database boundary", () => {
@@ -55,6 +56,7 @@ describe("external public-law database boundary", () => {
     { ...VALID_PERMISSIONS, canUseSequence: true },
     { ...VALID_PERMISSIONS, canUseSchema: false },
     { ...VALID_PERMISSIONS, canWritePublicLaw: true },
+    { ...VALID_PERMISSIONS, isPublicLawReaderMember: false },
   ] satisfies PublicLawDatabaseRolePermissions[])(
     "rejects an over- or under-privileged role",
     (permissions) => {

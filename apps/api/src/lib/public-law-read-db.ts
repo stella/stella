@@ -47,6 +47,7 @@ export type PublicLawDatabaseRolePermissions = {
   canUseSequence: boolean;
   canUseSchema: boolean;
   canWritePublicLaw: boolean;
+  isPublicLawReaderMember: boolean;
 };
 
 export const assertPublicLawDatabaseRolePermissions = ({
@@ -58,6 +59,7 @@ export const assertPublicLawDatabaseRolePermissions = ({
   canUseSequence,
   canUseSchema,
   canWritePublicLaw,
+  isPublicLawReaderMember,
 }: PublicLawDatabaseRolePermissions): void => {
   if (
     canAssumeOtherRole ||
@@ -67,7 +69,8 @@ export const assertPublicLawDatabaseRolePermissions = ({
     canReadOtherData ||
     canUseSequence ||
     !canUseSchema ||
-    canWritePublicLaw
+    canWritePublicLaw ||
+    !isPublicLawReaderMember
   ) {
     panic(
       "PUBLIC_LAW_DATABASE_URL must use a role that can only read the public-law corpus",
@@ -201,6 +204,11 @@ export const publicLawDatabaseRolePermissionsSql = (): SqlFragment => {
         ) AS "canReadOtherData",
         has_schema_privilege(current_user, 'public', 'USAGE')
           AS "canUseSchema",
+        pg_has_role(
+          current_user,
+          ${stellaPublicLawReader.name},
+          'MEMBER'
+        ) AS "isPublicLawReaderMember",
         has_database_privilege(
           current_user,
           current_database(),
