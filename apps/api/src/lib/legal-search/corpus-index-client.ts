@@ -46,6 +46,8 @@ const ADMIN_TIMEOUT_MS = 30_000;
  * hold the request open for the full search timeout.
  */
 const AGGREGATION_TIMEOUT_MS = 10_000;
+const SPLIT_PAGE_SIZE = 1000;
+const MAX_SETTLEMENT_SPLITS = 10_000;
 
 /**
  * What "the engine accepted this batch" is allowed to mean.
@@ -106,6 +108,25 @@ export type CorpusIndexSearchResponse = {
   snippets: Record<string, unknown>[];
 };
 
+/**
+ * Durable identity of one asynchronous engine deletion.
+ *
+ * Quickwit applies delete tasks to published splits after accepting the
+ * request. Retaining the returned opstamp is the bounded proof boundary;
+ * discarding it forces operators to list the engine's ever-growing task log.
+ */
+export type CorpusIndexDeleteTask = {
+  opstamp: number;
+};
+
+export type CorpusIndexDeleteSettlement = {
+  requiredOpstamp: number;
+  publishedSplits: number;
+  laggingSplits: number;
+  minAppliedOpstamp: number | null;
+  settled: boolean;
+};
+
 export type CorpusIndexClient = {
   createIndex: (
     config: CorpusIndexConfig,
@@ -131,7 +152,11 @@ export type CorpusIndexClient = {
   deleteByQuery: (
     indexId: string,
     query: string,
-  ) => Promise<Result<void, CorpusIndexError>>;
+  ) => Promise<Result<CorpusIndexDeleteTask, CorpusIndexError>>;
+  readDeleteSettlement: (
+    indexId: string,
+    requiredOpstamp: number,
+  ) => Promise<Result<CorpusIndexDeleteSettlement, CorpusIndexError>>;
 };
 
 const mutationBaseUrl = (): string => {
@@ -452,7 +477,7 @@ const buildClient = (): CorpusIndexClient => ({
   deleteByQuery: async (indexId, query) =>
     await Result.tryPromise({
       try: async () => {
-        await requestJson({
+        const response = await requestJson({
           baseUrl: mutationBaseUrl(),
           path: `/api/v1/${indexId}/delete-tasks`,
           init: {
@@ -462,6 +487,88 @@ const buildClient = (): CorpusIndexClient => ({
           },
           timeoutMs: ADMIN_TIMEOUT_MS,
         });
+        if (
+          !isRecord(response) ||
+          typeof response["opstamp"] !== "number" ||
+          !Number.isSafeInteger(response["opstamp"]) ||
+          response["opstamp"] < 0
+        ) {
+          throw new CorpusIndexError({
+            message: "corpus index delete task returned an invalid response",
+          });
+        }
+        return { opstamp: response["opstamp"] };
+      },
+      catch: toCorpusIndexError,
+    }),
+
+  readDeleteSettlement: async (indexId, requiredOpstamp) =>
+    await Result.tryPromise({
+      try: async () => {
+        if (
+          !Number.isSafeInteger(requiredOpstamp) ||
+          requiredOpstamp < 0
+        ) {
+          throw new CorpusIndexError({
+            message: "corpus index delete settlement received an invalid opstamp",
+          });
+        }
+        let offset = 0;
+        let publishedSplits = 0;
+        let laggingSplits = 0;
+        let minAppliedOpstamp: number | null = null;
+        for (;;) {
+          const response = await requestJson({
+            baseUrl: mutationBaseUrl(),
+            path: `/api/v1/indexes/${indexId}/splits?offset=${offset}&limit=${SPLIT_PAGE_SIZE}&split_states=Published`,
+            init: { method: "GET" },
+            timeoutMs: ADMIN_TIMEOUT_MS,
+          });
+          const splits =
+            isRecord(response) ? parseRecordArray(response["splits"]) : null;
+          if (splits === null) {
+            throw new CorpusIndexError({
+              message: "corpus index split list returned an invalid response",
+            });
+          }
+          for (const split of splits) {
+            const opstamp = split["delete_opstamp"];
+            if (
+              split["split_state"] !== "Published" ||
+              typeof opstamp !== "number" ||
+              !Number.isSafeInteger(opstamp) ||
+              opstamp < 0
+            ) {
+              throw new CorpusIndexError({
+                message: "corpus index split list returned an invalid response",
+              });
+            }
+            minAppliedOpstamp =
+              minAppliedOpstamp === null
+                ? opstamp
+                : Math.min(minAppliedOpstamp, opstamp);
+            if (opstamp < requiredOpstamp) {
+              laggingSplits += 1;
+            }
+          }
+          publishedSplits += splits.length;
+          if (splits.length < SPLIT_PAGE_SIZE) {
+            break;
+          }
+          if (publishedSplits >= MAX_SETTLEMENT_SPLITS) {
+            throw new CorpusIndexError({
+              message: `corpus index split list exceeds ${MAX_SETTLEMENT_SPLITS} published splits`,
+            });
+          }
+          offset += splits.length;
+        }
+        return {
+          requiredOpstamp,
+          publishedSplits,
+          laggingSplits,
+          minAppliedOpstamp,
+          settled: laggingSplits === 0,
+        };
       },
       catch: toCorpusIndexError,
     }),

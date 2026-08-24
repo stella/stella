@@ -592,6 +592,20 @@ export type CorpusIndexAdapter<
     jobs: readonly CorpusJobInput<TBrand>[],
     generation: string,
   ) => Promise<void>;
+  /**
+   * Atomically record document audit rows and the engine task that carries
+   * their asynchronous deletion. A successful task without this durable
+   * watermark is not settled evidence, so persistence failure must fail the
+   * page and let replay create a newer task.
+   */
+  recordDeleteJobs: (
+    scopedDb: ScopedDb,
+    args: {
+      indexId: string;
+      jobs: readonly CorpusJobInput<TBrand>[];
+      opstamp: number | null;
+    },
+  ) => Promise<void>;
 };
 
 export type LoadedBatch<TBrand extends SafeIdType, TRow> = {
@@ -980,24 +994,29 @@ export const createCorpusIndexer = <
     // avoids retrying an index that can no longer contain the document.
     const result =
       deleted.isErr() && deleted.error.status === 404
-        ? Result.ok(undefined)
+        ? Result.ok(null)
         : deleted;
     // One audit row per entity however many entities shared the task: the
     // trail records what happened to a document, not what carried it.
-    await adapter.recordJobs(
+    await adapter.recordDeleteJobs(
       scopedDb,
-      entityIds.map((entityId) => ({
-        entityId,
-        contentHash: null,
-        operation,
-        status: result.isErr() ? ("failed" as const) : ("succeeded" as const),
-        ...(result.isErr()
-          ? { errorMessage: result.error.message.slice(0, 2048) }
-          : {}),
-      })),
-      indexId,
+      {
+        indexId,
+        jobs: entityIds.map((entityId) => ({
+          entityId,
+          contentHash: null,
+          operation,
+          status: result.isErr()
+            ? ("failed" as const)
+            : ("succeeded" as const),
+          ...(result.isErr()
+            ? { errorMessage: result.error.message.slice(0, 2048) }
+            : {}),
+        })),
+        opstamp: result.isOk() ? (result.value?.opstamp ?? null) : null,
+      },
     );
-    return result;
+    return result.isErr() ? result : Result.ok(undefined);
   };
 
   // Narrows on `args`, not on destructured locals: destructuring splits the

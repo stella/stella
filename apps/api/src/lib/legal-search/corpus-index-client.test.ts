@@ -249,7 +249,7 @@ test("ingest fails when the engine reports rejected documents", async () => {
 });
 
 test("delete-by-query posts one document-scoped delete task", async () => {
-  responseBody = {};
+  responseBody = { opstamp: 42 };
 
   const result = await getCorpusIndexClient().deleteByQuery(
     "legal_corpus_v1_cze",
@@ -257,6 +257,9 @@ test("delete-by-query posts one document-scoped delete task", async () => {
   );
 
   expect(result.isOk()).toBe(true);
+  if (result.isOk()) {
+    expect(result.value).toEqual({ opstamp: 42 });
+  }
   // One task per document, whatever the index layout: a passage-split
   // document is removed by the same single query as a whole one, so the
   // indexer never has to know how many documents a row previously emitted.
@@ -266,6 +269,54 @@ test("delete-by-query posts one document-scoped delete task", async () => {
   expect(request?.path).toBe("/api/v1/legal_corpus_v1_cze/delete-tasks");
   const body: Record<string, unknown> = JSON.parse(request?.body ?? "{}");
   expect(body["query"]).toBe('document_id:"dec-1"');
+});
+
+test("delete-by-query rejects a response without a usable opstamp", async () => {
+  responseBody = {};
+
+  const result = await getCorpusIndexClient().deleteByQuery(
+    "legal_corpus_v1_cze",
+    'document_id:"dec-1"',
+  );
+
+  expect(result.isErr()).toBe(true);
+  if (result.isErr()) {
+    expect(result.error.message).toContain("invalid response");
+  }
+});
+
+test("delete settlement compares every published split with the retained task", async () => {
+  responseBody = {
+    offset: 0,
+    size: 3,
+    splits: [
+      { split_state: "Published", delete_opstamp: 42 },
+      { split_state: "Published", delete_opstamp: 41 },
+      { split_state: "Published", delete_opstamp: 45 },
+    ],
+  };
+
+  const result = await getCorpusIndexClient().readDeleteSettlement(
+    "legal_corpus_v1_cze",
+    42,
+  );
+
+  expect(result.isOk()).toBe(true);
+  if (result.isOk()) {
+    expect(result.value).toEqual({
+      requiredOpstamp: 42,
+      publishedSplits: 3,
+      laggingSplits: 1,
+      minAppliedOpstamp: 41,
+      settled: false,
+    });
+  }
+  expect(requests.at(0)?.path).toBe(
+    "/api/v1/indexes/legal_corpus_v1_cze/splits",
+  );
+  expect(requests.at(0)?.search).toBe(
+    "?offset=0&limit=1000&split_states=Published",
+  );
 });
 
 test("ingest sends the commit mode the caller asked for", async () => {

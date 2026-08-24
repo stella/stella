@@ -1543,6 +1543,27 @@ export const caseLawIndexJobs = p.pgTable(
   ],
 );
 
+/**
+ * Highest Quickwit delete task durably observed for each physical case-law
+ * index. One row replaces an unbounded scan of the engine's task history:
+ * settlement means every published split has reached this opstamp.
+ */
+export const caseLawCorpusIndexDeleteWatermarks = p.pgTable(
+  "case_law_corpus_index_delete_watermarks",
+  {
+    indexId: p.varchar("index_id", { length: 64 }).primaryKey(),
+    opstamp: p.bigint({ mode: "number" }).notNull(),
+    updatedAt: timestamptz("updated_at").defaultNow().notNull(),
+  },
+  (t) => [
+    p.check(
+      "case_law_corpus_index_delete_watermarks_nonnegative",
+      sql`${t.opstamp} >= 0`,
+    ),
+    ...globalCaseLawPolicies(),
+  ],
+);
+
 export const CASE_LAW_CORPUS_INDEX_BACKFILL_STATUSES = [
   "running",
   "complete",

@@ -43,6 +43,7 @@ import {
   caseLawCorpusIndexBackfills,
   caseLawCorpusIndexCountBackfills,
   caseLawCorpusIndexCounts,
+  caseLawCorpusIndexDeleteWatermarks,
   caseLawCorpusIndexProjections,
   caseLawDecisions,
 } from "@/api/db/schema";
@@ -297,6 +298,8 @@ export const CENSUS_DISPOSITION = {
   aligned: "aligned",
   /** The engine holds fewer documents than the corpus claims. */
   short: "short",
+  /** Surplus is explained by a recorded delete not yet applied to every split. */
+  pendingDelete: "surplus_pending_delete",
   /** The engine holds documents the corpus does not account for. */
   surplus: "surplus",
 } as const;
@@ -313,15 +316,53 @@ export type IndexCensus = {
   /** Positive where the corpus claims more than the engine holds. */
   shortfall: number;
   disposition: CensusDisposition;
+  deleteSettlement: {
+    requiredOpstamp: number;
+    publishedSplits: number;
+    laggingSplits: number;
+    minAppliedOpstamp: number | null;
+    settled: boolean;
+  } | null;
 };
 
-const dispositionOf = (shortfall: number): CensusDisposition => {
+const dispositionOf = (
+  shortfall: number,
+  deleteSettlement: IndexCensus["deleteSettlement"],
+): CensusDisposition => {
   if (shortfall > CENSUS_TOLERANCE) {
     return CENSUS_DISPOSITION.short;
   }
-  return shortfall < -CENSUS_TOLERANCE
-    ? CENSUS_DISPOSITION.surplus
-    : CENSUS_DISPOSITION.aligned;
+  if (shortfall >= -CENSUS_TOLERANCE) {
+    return CENSUS_DISPOSITION.aligned;
+  }
+  return deleteSettlement?.settled === false
+    ? CENSUS_DISPOSITION.pendingDelete
+    : CENSUS_DISPOSITION.surplus;
+};
+
+const readDeleteSettlement = async (
+  scopedDb: ScopedDb,
+  indexId: string,
+): Promise<IndexCensus["deleteSettlement"]> => {
+  const watermark = (
+    await scopedDb((tx) =>
+      tx
+        .select({ opstamp: caseLawCorpusIndexDeleteWatermarks.opstamp })
+        .from(caseLawCorpusIndexDeleteWatermarks)
+        .where(eq(caseLawCorpusIndexDeleteWatermarks.indexId, indexId)),
+    )
+  ).at(0);
+  if (watermark === undefined) {
+    return null;
+  }
+  const settlement = await getCorpusIndexClient().readDeleteSettlement(
+    indexId,
+    watermark.opstamp,
+  );
+  if (Result.isError(settlement)) {
+    throw settlement.error;
+  }
+  return settlement.value;
 };
 
 /**
@@ -415,13 +456,18 @@ export const censusIndex = async ({
   }
 
   const shortfall = markedIndexed - counted.value.numHits;
+  const deleteSettlement =
+    shortfall < -CENSUS_TOLERANCE
+      ? await readDeleteSettlement(scopedDb, indexId)
+      : null;
 
   return Result.ok({
     indexId,
     engineDocuments: counted.value.numHits,
     markedIndexed,
     shortfall,
-    disposition: dispositionOf(shortfall),
+    disposition: dispositionOf(shortfall, deleteSettlement),
+    deleteSettlement,
   });
 };
 
@@ -457,6 +503,7 @@ export const reportIndexCensus = ({
 }: ReportIndexCensusOptions): void => {
   if (
     census.disposition === CENSUS_DISPOSITION.aligned ||
+    census.disposition === CENSUS_DISPOSITION.pendingDelete ||
     census.disposition !== previous
   ) {
     return;
@@ -468,6 +515,8 @@ export const reportIndexCensus = ({
     engineDocuments: census.engineDocuments,
     markedIndexed: census.markedIndexed,
     shortfall: census.shortfall,
+    deleteLaggingSplits: census.deleteSettlement?.laggingSplits,
+    deleteRequiredOpstamp: census.deleteSettlement?.requiredOpstamp,
     tolerance: CENSUS_TOLERANCE,
   });
 };

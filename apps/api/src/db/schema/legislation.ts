@@ -242,4 +242,21 @@ export const legislationIndexJobs = p.pgTable(
   ],
 );
 
+/** Highest engine delete task observed for each physical legislation index. */
+export const legislationCorpusIndexDeleteWatermarks = p.pgTable(
+  "legislation_corpus_index_delete_watermarks",
+  {
+    indexId: p.varchar("index_id", { length: 64 }).primaryKey(),
+    opstamp: p.bigint({ mode: "number" }).notNull(),
+    updatedAt: timestamptz("updated_at").defaultNow().notNull(),
+  },
+  (t) => [
+    p.check(
+      "legislation_corpus_index_delete_watermarks_nonnegative",
+      sql`${t.opstamp} >= 0`,
+    ),
+    ...globalCaseLawPolicies(),
+  ],
+);
+
 // -- Chat --

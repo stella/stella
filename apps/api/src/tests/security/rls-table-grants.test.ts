@@ -66,10 +66,12 @@ const POST_BOOTSTRAP_SELECT_ONLY_TABLES = new Set([
   // and the bounded seed worker; request handlers may observe its status.
   "case_law_corpus_index_counts",
   "case_law_corpus_index_count_backfills",
+  "case_law_corpus_index_delete_watermarks",
   "legislation_sources",
   "legislation_documents",
   "legislation_search_documents",
   "legislation_index_jobs",
+  "legislation_corpus_index_delete_watermarks",
   // Crawl bookkeeping: the app role reads coverage for reporting, only
   // ingestion writes it.
   "case_law_coverage_slices",

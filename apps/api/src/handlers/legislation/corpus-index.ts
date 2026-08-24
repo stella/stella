@@ -1,6 +1,7 @@
 import { and, eq, isNotNull, isNull, sql } from "drizzle-orm";
 
 import {
+  legislationCorpusIndexDeleteWatermarks,
   legislationDocuments,
   legislationIndexJobs,
   legislationSources,
@@ -278,6 +279,39 @@ const indexer = createCorpusIndexer<"legislationDocument", IndexableRow>({
           errorMessage: job.errorMessage ?? null,
         })),
       );
+    });
+  },
+  recordDeleteJobs: async (scopedDb, { indexId, jobs, opstamp }) => {
+    if (jobs.length === 0) {
+      return;
+    }
+    await scopedDb(async (tx) => {
+      // audit: skip — append-only index-job rows ARE the indexing audit trail
+      await tx.insert(legislationIndexJobs).values(
+        jobs.map((job) => ({
+          documentId: job.entityId,
+          generation: indexId,
+          operation: job.operation,
+          status: job.status,
+          contentHash: job.contentHash,
+          errorMessage: job.errorMessage ?? null,
+        })),
+      );
+      if (opstamp === null) {
+        return;
+      }
+      // audit: skip — derived engine-settlement watermark; the job rows above
+      // are the document-level audit trail for the same remote effect
+      await tx
+        .insert(legislationCorpusIndexDeleteWatermarks)
+        .values({ indexId, opstamp })
+        .onConflictDoUpdate({
+          target: legislationCorpusIndexDeleteWatermarks.indexId,
+          set: {
+            opstamp: sql`GREATEST(${legislationCorpusIndexDeleteWatermarks.opstamp}, excluded.opstamp)`,
+            updatedAt: new Date(),
+          },
+        });
     });
   },
 });

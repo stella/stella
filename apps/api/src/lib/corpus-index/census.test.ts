@@ -45,7 +45,11 @@ const indexIdOfCountRequest = (url: string): string | undefined =>
   /\/api\/v1\/(?<indexId>[^/]+)\/search/u.exec(url)?.groups?.["indexId"];
 
 /** Serves the engine's document count, and nothing else. */
-const engineHolding = (numHits: number, ok = true): void => {
+const engineHolding = (
+  numHits: number,
+  ok = true,
+  splitOpstamps: readonly number[] = [],
+): void => {
   const resolveUrl = (input: Parameters<typeof fetch>[0]): string => {
     if (typeof input === "string") {
       return input;
@@ -77,6 +81,19 @@ const engineHolding = (numHits: number, ok = true): void => {
         { status: 200 },
       );
     }
+    if (url.includes("/splits")) {
+      return new Response(
+        JSON.stringify({
+          offset: 0,
+          size: splitOpstamps.length,
+          splits: splitOpstamps.map((opstamp) => ({
+            split_state: "Published",
+            delete_opstamp: opstamp,
+          })),
+        }),
+        { status: 200 },
+      );
+    }
     return new Response(JSON.stringify({}), { status: 200 });
   };
   globalThis.fetch = Object.assign(stub, {
@@ -92,6 +109,7 @@ const databaseHolding = (
   marked: number,
   jurisdictions?: string[],
   countStatus = "complete",
+  deleteOpstamp?: number,
 ): ScopedDb => {
   const handle = async (callback: (tx: Transaction) => Promise<unknown>) => {
     let rows: Record<string, unknown>[] = [];
@@ -104,7 +122,12 @@ const databaseHolding = (
     };
     const tx = {
       select: (selection: Record<string, unknown>) => {
-        rows = "status" in selection ? [{ marked, status: countStatus }] : [];
+        rows =
+          "status" in selection
+            ? [{ marked, status: countStatus }]
+            : "opstamp" in selection && deleteOpstamp !== undefined
+              ? [{ opstamp: deleteOpstamp }]
+              : [];
         return chain;
       },
       selectDistinct: () => {
@@ -243,6 +266,27 @@ describe("index census", () => {
     );
   });
 
+  test("a retained delete task explains surplus until every split applies it", async () => {
+    engineHolding(50_000, true, [42, 41, 45]);
+
+    const census = await censusIndex({
+      scopedDb: databaseHolding(10_000, undefined, "complete", 42),
+      generation: GENERATION,
+      indexId: INDEX_ID,
+    });
+
+    expect(census.isOk() && census.value.disposition).toBe(
+      CENSUS_DISPOSITION.pendingDelete,
+    );
+    expect(census.isOk() && census.value.deleteSettlement).toEqual({
+      requiredOpstamp: 42,
+      publishedSplits: 3,
+      laggingSplits: 1,
+      minAppliedOpstamp: 41,
+      settled: false,
+    });
+  });
+
   test("an unreachable index is a failure, not an empty index", async () => {
     // Counting it as empty would report the whole index as drifted and
     // point the repair at rows that are perfectly indexed.
@@ -295,6 +339,7 @@ describe("census reporting", () => {
         markedIndexed: 10_000,
         shortfall: 9100,
         disposition: CENSUS_DISPOSITION.short,
+        deleteSettlement: null,
       },
     });
 
@@ -322,6 +367,7 @@ describe("census reporting", () => {
         markedIndexed: 10_000,
         shortfall: 0,
         disposition: CENSUS_DISPOSITION.aligned,
+        deleteSettlement: null,
       },
     });
 
@@ -341,6 +387,7 @@ describe("census reporting", () => {
         markedIndexed: 10_000,
         shortfall: 9100,
         disposition: CENSUS_DISPOSITION.short,
+        deleteSettlement: null,
       },
     });
 
@@ -357,12 +404,36 @@ describe("census reporting", () => {
         markedIndexed: 10_000,
         shortfall: -2000,
         disposition: CENSUS_DISPOSITION.surplus,
+        deleteSettlement: null,
       },
     });
 
     expect(warn.mock.calls.at(0)?.at(1)).toMatchObject({
       disposition: CENSUS_DISPOSITION.surplus,
     });
+  });
+
+  test("a surplus with an unapplied retained delete is not reported as drift", () => {
+    reportIndexCensus({
+      generation: GENERATION,
+      previous: CENSUS_DISPOSITION.pendingDelete,
+      census: {
+        indexId: INDEX_ID,
+        engineDocuments: 12_000,
+        markedIndexed: 10_000,
+        shortfall: -2000,
+        disposition: CENSUS_DISPOSITION.pendingDelete,
+        deleteSettlement: {
+          requiredOpstamp: 42,
+          publishedSplits: 3,
+          laggingSplits: 1,
+          minAppliedOpstamp: 41,
+          settled: false,
+        },
+      },
+    });
+
+    expect(warn).not.toHaveBeenCalled();
   });
 
   test("an unreachable index reports separately from drift", async () => {
