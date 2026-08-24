@@ -15,6 +15,7 @@ import {
   ChevronRightIcon,
   ClipboardCheckIcon,
   FileTextIcon,
+  MessageSquareIcon,
   PlusIcon,
   RotateCcwIcon,
   ScanSearchIcon,
@@ -557,6 +558,7 @@ export const PlaybookFacet = ({
           onScrollToFix={scrollToFix}
           organizationId={user.activeOrganizationId}
           runId={trackedRunId}
+          targetFileFieldId={fileFieldId}
           workspaceId={workspaceId}
         />
       </>
@@ -593,6 +595,8 @@ type ReviewRunPanelProps = {
   workspaceId: string;
   runId: string;
   organizationId: string;
+  /** The reviewed document's file field: where "Ask in chat" drafts land. */
+  targetFileFieldId: string;
   /** The document's current version, or `null` while it is not known yet. */
   currentEntityVersionId: string | null;
   editorAvailable: boolean;
@@ -624,6 +628,7 @@ const ReviewRunPanel = ({
   workspaceId,
   runId,
   organizationId,
+  targetFileFieldId,
   currentEntityVersionId,
   editorAvailable,
   commentStateByFinding,
@@ -760,6 +765,7 @@ const ReviewRunPanel = ({
       perspective={restored.basis.perspective}
       playbookFindings={restored.results.playbook}
       playbookName={restored.basis.playbookName}
+      targetFileFieldId={targetFileFieldId}
       referenceFindings={restored.results.references}
       references={restored.basis.references}
       topics={restored.topics}
@@ -784,6 +790,82 @@ const LAUNCHER_BASIS_DIVIDER_LABEL = "and / or";
 const TARGET_AS_REFERENCE_LABEL =
   "The reviewed document cannot be its own reference.";
 const RECOMMENDATION_LABEL = "Recommendation:";
+const ASK_IN_CHAT_LABEL = "Ask in chat";
+const CHAT_DRAFT_QUESTION = "How should I redraft the target on this point?";
+const CHAT_DRAFT_PASSAGES_PER_DOCUMENT = 2;
+
+const escapeHtml = (value: string): string =>
+  value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
+
+const paragraph = (label: string, value: string): string =>
+  `<p><strong>${escapeHtml(label)}</strong> ${escapeHtml(value)}</p>`;
+
+/**
+ * The finding as a chat draft: the topic, the cited passages of each
+ * document, the rationale and the recommendation, then a question the
+ * reviewer can keep or rewrite. The chat over the document carries the
+ * document itself, so the draft only needs to say which point is at issue.
+ */
+const buildFindingChatDraft = ({
+  item,
+  references,
+  perspective,
+  targetLabel,
+  referenceLabel,
+}: {
+  item: ReviewResultItem;
+  references: readonly ReferenceFile[];
+  perspective: ReviewPerspective;
+  targetLabel: string;
+  referenceLabel: string;
+}): string => {
+  const parts: string[] = [paragraph("Topic:", item.title)];
+  const { playbook, reference } = item;
+  if (reference !== null) {
+    for (const citation of reference.targetCitations.slice(
+      0,
+      CHAT_DRAFT_PASSAGES_PER_DOCUMENT,
+    )) {
+      parts.push(paragraph(`${targetLabel}:`, `"${citation.text.trim()}"`));
+    }
+    for (const group of reference.referenceCitations) {
+      const name =
+        references.find(
+          (candidate) => candidate.fileFieldId === group.fileFieldId,
+        )?.name ?? referenceLabel;
+      for (const citation of group.citations.slice(
+        0,
+        CHAT_DRAFT_PASSAGES_PER_DOCUMENT,
+      )) {
+        parts.push(paragraph(`${name}:`, `"${citation.text.trim()}"`));
+      }
+    }
+    if (reference.explanation.type === "comparison") {
+      parts.push(paragraph("Finding:", reference.explanation.text));
+    }
+    if (isDirectedImpact(reference.impact)) {
+      parts.push(
+        paragraph("Impact:", impactLabel(reference.impact, perspective)),
+      );
+    }
+    if (typeof reference.recommendation === "string") {
+      parts.push(paragraph("Recommendation:", reference.recommendation));
+    }
+  }
+  if (playbook !== null) {
+    if (playbook.extracted !== null && playbook.extracted.text.length > 0) {
+      parts.push(paragraph("Extracted:", playbook.extracted.text));
+    }
+    if (playbook.rationale !== null && playbook.rationale.length > 0) {
+      parts.push(paragraph("Playbook finding:", playbook.rationale));
+    }
+  }
+  parts.push(`<p>${escapeHtml(CHAT_DRAFT_QUESTION)}</p>`);
+  return parts.join("");
+};
 
 type LauncherPlaybook = Pick<PlaybookListItem, "id" | "name" | "status">;
 
@@ -1621,6 +1703,7 @@ type ResultsViewProps = {
   playbookName: string;
   /** The side the run's comparison was judged for; labels impacts. */
   perspective: ReviewPerspective;
+  targetFileFieldId: string;
   editorAvailable: boolean;
   topics: readonly ReviewTopic[];
   onDecide: (
@@ -1654,6 +1737,7 @@ const ResultsView = ({
   negotiationBySourceId,
   playbookName,
   perspective,
+  targetFileFieldId,
   editorAvailable,
   topics,
   onDecide,
@@ -1732,6 +1816,7 @@ const ResultsView = ({
             onScrollToFix={onScrollToFix}
             perspective={perspective}
             references={references}
+            targetFileFieldId={targetFileFieldId}
           />
         ) : (
           <NoReviewIssues />
@@ -1860,6 +1945,7 @@ type ReviewResultListProps = {
   items: readonly ReviewResultItem[];
   references: readonly ReferenceFile[];
   perspective: ReviewPerspective;
+  targetFileFieldId: string;
   commentStateByFinding: Record<string, ReviewCommentState>;
   decisionPending: boolean;
   fixStateByFinding: Record<string, ReviewFixState>;
@@ -1982,6 +2068,7 @@ const ReviewResultList = ({
             }
             perspective={perspective}
             references={references}
+            targetFileFieldId={targetFileFieldId}
           />
         ))}
       </ul>
@@ -2006,6 +2093,7 @@ type ReviewResultCardProps = {
   item: ReviewResultItem;
   references: readonly ReferenceFile[];
   perspective: ReviewPerspective;
+  targetFileFieldId: string;
   commentStateByFinding: Record<string, ReviewCommentState>;
   decisionPending: boolean;
   fixStateByFinding: Record<string, ReviewFixState>;
@@ -2034,6 +2122,7 @@ const ReviewResultCard = ({
   item,
   references,
   perspective,
+  targetFileFieldId,
   commentStateByFinding,
   decisionPending,
   fixStateByFinding,
@@ -2271,6 +2360,18 @@ const ReviewResultCard = ({
           />
           <ReviewDecisionActions
             decision={decision}
+            onAskInChat={() =>
+              useInspectorCommandStore.getState().requestFileChatDraft({
+                fileFieldId: targetFileFieldId,
+                html: buildFindingChatDraft({
+                  item,
+                  references,
+                  perspective,
+                  targetLabel: t("inspector.review.targetDocument"),
+                  referenceLabel: t("inspector.review.referenceDocument"),
+                }),
+              })
+            }
             onDecide={(next) =>
               onDecide(
                 item.decisions.map((row) => row.id),
@@ -2309,10 +2410,13 @@ const DECISION_LABEL = {
 const ReviewDecisionActions = ({
   decision,
   pending,
+  onAskInChat,
   onDecide,
 }: {
   decision: DocumentReviewDecision;
   pending: boolean;
+  /** Hand the finding to the chat over the document, as a draft to edit. */
+  onAskInChat: () => void;
   onDecide: (decision: DocumentReviewDecision) => void;
 }) => {
   const t = useTranslations();
@@ -2321,6 +2425,15 @@ const ReviewDecisionActions = ({
       aria-label={t("inspector.review.decision")}
       className="flex flex-wrap items-center gap-2 border-t pt-3"
     >
+      <Button
+        className="text-muted-foreground hover:text-foreground order-last ms-auto h-7 px-2 text-xs"
+        onClick={onAskInChat}
+        size="sm"
+        variant="ghost"
+      >
+        <MessageSquareIcon className="me-1 size-3.5" />
+        {ASK_IN_CHAT_LABEL}
+      </Button>
       {decision === REVIEW_DECISION.OPEN ? (
         <>
           <Button

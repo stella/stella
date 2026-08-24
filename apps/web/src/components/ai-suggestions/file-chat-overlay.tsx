@@ -99,6 +99,7 @@ import {
 } from "@/components/chat/create-document-draft-runtime";
 import { useChatModelSelection } from "@/components/chat/use-chat-model-selection";
 import type { DocxComments } from "@/components/docx/app-docx-editor";
+import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { useAIKeyGate } from "@/components/require-ai-key";
 import type {
@@ -2136,6 +2137,29 @@ const FileChatOverlayInner = ({
       window.removeEventListener("keydown", handler);
     };
   }, [panelOpen]);
+  // A draft handed over from another surface (a review finding's "Ask in
+  // chat"): it lands in this file's composer, opens the thread, and is
+  // acknowledged so a later mount does not replay it.
+  const pendingFileChatDraft = useInspectorCommandStore(
+    (state) => state.pendingFileChatDraft,
+  );
+  const activeFileFieldId = activeFile?.fileFieldId;
+  useExternalSyncEffect(() => {
+    if (
+      pendingFileChatDraft === null ||
+      activeFileFieldId === undefined ||
+      pendingFileChatDraft.fileFieldId !== activeFileFieldId
+    ) {
+      return undefined;
+    }
+    editorController.setContent(pendingFileChatDraft.html);
+    editorController.focus();
+    setPanelOpen(true);
+    useInspectorCommandStore
+      .getState()
+      .clearFileChatDraft(pendingFileChatDraft.sequence);
+    return undefined;
+  }, [activeFileFieldId, editorController, pendingFileChatDraft]);
   // One handler for every new-thread entry point (dock icon and the
   // `/new` reserved command): abort any live stream first — the
   // rotation remount only swaps the surface, while the old Chat
