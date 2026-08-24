@@ -1,0 +1,66 @@
+name: autofix.ci # autofix.ci uses this exact name as a security boundary
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - "bun.lock"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  dependabot-bun-dedupe:
+    name: Dedupe Dependabot Bun lockfile
+    if: >-
+      github.actor == 'dependabot[bot]'
+      && github.event.pull_request.user.login == 'dependabot[bot]'
+      && github.event.pull_request.head.repo.full_name == github.repository
+      && startsWith(github.event.pull_request.head.ref, 'dependabot/bun/')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      # autofix-ci/action v1.3.4 declares Node 24 support, but its action
+      # metadata still names node20 for compatibility with older runners.
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+    steps:
+      - name: Checkout Dependabot head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: "package.json"
+
+      # No install is needed. --lockfile-only and --ignore-scripts keep the
+      # fixer from materializing dependencies or running PR-controlled hooks.
+      - name: Dedupe lockfile
+        run: bun --no-env-file dedupe --lockfile-only --ignore-scripts
+
+      - name: Restrict generated changes to the lockfile
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          unexpected_tracked="$(git diff --name-only -- . ':(exclude)bun.lock')"
+          unexpected_untracked="$(git ls-files --others --exclude-standard)"
+          if [[ -n "${unexpected_tracked}${unexpected_untracked}" ]]; then
+            echo "::error::Bun dedupe changed files outside bun.lock."
+            git status --short
+            exit 1
+          fi
+
+          git diff --check -- bun.lock
+
+      - name: Push dedupe fix
+        uses: autofix-ci/action@c5b2d67aa2274e7b5a18224e8171550871fc7e4a # v1.3.4
+        with:
+          commit-message: "chore: dedupe Bun lockfile"
