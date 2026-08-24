@@ -428,6 +428,147 @@ export const gradeTierMatch = async ({
   });
 };
 
+// ── Tier-match (LLM) grading, several positions per call ──
+/** How many positions one grading call carries. Enough to cut a playbook's
+ *  call count several-fold, few enough that the model keeps each item apart. */
+export const TIER_MATCH_BATCH_SIZE = 8;
+
+const TIER_MATCH_BATCH_SYSTEM_PROMPT =
+  `${TIER_MATCH_SYSTEM_PROMPT} ` +
+  "The input lists several independent items, each numbered and carrying its " +
+  "own rules, ideal language, fallback options, red lines, and extracted value. " +
+  "Grade every item on its own, keep its item number, and return exactly one " +
+  "verdict per item.";
+
+const tierMatchBatchSchema = v.strictObject({
+  verdicts: v.array(
+    v.strictObject({
+      item: v.pipe(v.number(), v.integer(), v.minValue(1)),
+      ...tierMatchSchema.entries,
+    }),
+  ),
+});
+
+export type TierMatchItem = {
+  /** The caller's handle for the position; verdicts come back keyed by it. */
+  key: string;
+  askValue: string;
+  tiers: ResolvedTiers;
+};
+
+export type GradeTierMatchesArgs = Omit<
+  GradeTierMatchArgs,
+  "askValue" | "tiers" | "propertyId"
+> & {
+  items: readonly TierMatchItem[];
+};
+
+const NO_CRITERIA_VERDICT: TierMatchVerdict = {
+  tier: "deviation",
+  rationale:
+    "No acceptable, fallback, or red-line criteria were configured to compare against.",
+};
+
+/**
+ * Grade up to {@link TIER_MATCH_BATCH_SIZE} positions in one model call. Each
+ * item is numbered in the prompt and the model answers per number; an item
+ * the model leaves out is absent from the result, so the caller decides what
+ * an ungraded position means rather than this function inventing a tier.
+ * Items with nothing authored to compare against are decided here without a
+ * call, exactly as {@link gradeTierMatch} does.
+ */
+export const gradeTierMatches = async ({
+  items,
+  abortSignal,
+  organizationId,
+  workspaceId,
+  entityVersionId,
+  orgAIConfig,
+  promptCachingEnabled,
+  serviceTier,
+  usageMetering,
+}: GradeTierMatchesArgs): Promise<
+  Result<ReadonlyMap<string, TierMatchVerdict>, WorkflowIntegrationError>
+> => {
+  const verdicts = new Map<string, TierMatchVerdict>();
+  const pending: TierMatchItem[] = [];
+  for (const item of items) {
+    if (tiersHaveContent(item.tiers)) {
+      pending.push(item);
+    } else {
+      verdicts.set(item.key, NO_CRITERIA_VERDICT);
+    }
+  }
+  if (pending.length === 0) {
+    return Result.ok(verdicts);
+  }
+
+  const aiAnalytics = createTanStackAIAnalyticsCallbacks({
+    feature: "playbook.verdict",
+    modelRole: "pdf",
+    orgAIConfig: orgAIConfig ?? null,
+    properties: {
+      entity_version_id: entityVersionId,
+      item_count: pending.length,
+      organization_id: organizationId,
+      workspace_id: workspaceId,
+    },
+    sessionId: entityVersionId,
+    traceId: Bun.randomUUIDv7(),
+    ...(usageMetering ? { usageMetering } : {}),
+  });
+
+  return await Result.tryPromise({
+    try: async (): Promise<ReadonlyMap<string, TierMatchVerdict>> => {
+      const result = await generateTanStackObjectForRole({
+        role: "pdf",
+        orgAIConfig,
+        organizationId,
+        tenantWorkspaceIds: [workspaceId],
+        analytics: aiAnalytics,
+        caching: resolveCaching({
+          promptCachingEnabled,
+          role: "pdf",
+          scopeKey: entityVersionId,
+        }),
+        serviceTier,
+        system: TIER_MATCH_BATCH_SYSTEM_PROMPT,
+        prompt: pending
+          .map(
+            (item, index) =>
+              `Item ${String(index + 1)}:\n${buildTierMatchUserMessage(item)}`,
+          )
+          .join("\n\n"),
+        abortSignal,
+        outputSchema: tierMatchBatchSchema,
+      });
+
+      for (const verdict of result.verdicts) {
+        const item = pending.at(verdict.item - 1);
+        // A number outside the batch, or a second answer for one item, is
+        // model error: the first answer stands, the stray is dropped.
+        if (item === undefined || verdicts.has(item.key)) {
+          continue;
+        }
+        const matchedRef = resolveMatchedRef(verdict.matched, item.tiers);
+        verdicts.set(item.key, {
+          tier: verdict.tier,
+          rationale: verdict.rationale,
+          ...(matchedRef === undefined ? {} : { matchedRef }),
+        });
+      }
+      return verdicts;
+    },
+    catch: (error) => {
+      aiAnalytics.captureError(error);
+      return new WorkflowIntegrationError({
+        message: "Playbook verdict grading failed",
+        cause: error,
+      });
+    },
+  });
+};
+
 // ── Batch entry point ─────────────────────────────────
 const buildVerdictResult = (
   propertyId: SafeId<"property">,
