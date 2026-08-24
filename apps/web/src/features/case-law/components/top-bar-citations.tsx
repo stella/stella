@@ -95,7 +95,7 @@ const TopBarCitationsFor = ({
   return (
     <button
       aria-label={label}
-      className="text-muted-foreground hover:text-foreground ms-auto flex shrink-0 items-center gap-2 rounded-sm px-1 py-0.5 font-sans text-xs transition-colors"
+      className="text-muted-foreground hover:text-foreground ms-3 flex shrink-0 items-center gap-2 rounded-sm px-1 py-0.5 font-sans text-xs transition-colors"
       onClick={openDetails}
       type="button"
     >
