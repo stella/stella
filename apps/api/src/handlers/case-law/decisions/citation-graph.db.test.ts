@@ -12,6 +12,7 @@ import {
   CITATION_TIMELINE_MAX_YEARS,
   CITATION_TREATMENTS,
   listDecisionCitationsHandler,
+  listLeadingCitationsHandler,
   summarizeDecisionCitationsHandler,
   treatmentOf,
 } from "@/api/handlers/case-law/decisions/citation-graph";
@@ -397,4 +398,70 @@ test("a restricted subject decision cannot be resolved as a subject", async () =
       async () => true,
     ),
   ).toBe(true);
+});
+
+// Last on purpose: it adds a citing decision the page tests above do not
+// expect to see.
+test("leading citations rank one decision per treatment by authority", async () => {
+  const leadId = createSafeId<"caseLawDecision">();
+  await db.insert(caseLawDecisions).values({
+    caseNumber: "lead",
+    citationAuthority: 4.2,
+    country: "CZE",
+    court: "High court",
+    id: leadId,
+    language: "cs",
+    slug: "lead",
+    sourceId: openSourceId,
+  });
+  await db.insert(caseLawCitations).values({
+    citedDecisionId: subjectId,
+    citingDecisionId: leadId,
+    citationText: "lead-incoming",
+    id: citationId(900),
+    polarity: POLARITY.NEGATIVE,
+  });
+
+  const incoming = await withSubject(
+    subjectId,
+    async (subject) =>
+      await listLeadingCitationsHandler({
+        subject,
+        query: { direction: "incoming" },
+      }),
+  );
+  // Nine citations from one decision collapse to one row per treatment;
+  // the higher authority leads the negative group.
+  const byTreatment = new Map<string, string[]>();
+  for (const item of incoming.items) {
+    const ids = byTreatment.get(item.treatment) ?? [];
+    ids.push(item.decision.id);
+    byTreatment.set(item.treatment, ids);
+  }
+  expect(byTreatment.get("negative")).toEqual([leadId, openRelatedId]);
+  for (const treatment of CITATION_TREATMENTS) {
+    if (treatment === "negative") {
+      continue;
+    }
+    expect(byTreatment.get(treatment)).toEqual([openRelatedId]);
+  }
+  expect(
+    incoming.items.find((item) => item.decision.id === leadId)?.decision
+      .citationAuthority,
+  ).toBe(4.2);
+  expect(
+    incoming.items.some((item) => item.citationText === "restricted-incoming"),
+  ).toBe(false);
+
+  const outgoing = await withSubject(
+    subjectId,
+    async (subject) =>
+      await listLeadingCitationsHandler({
+        subject,
+        query: { direction: "outgoing" },
+      }),
+  );
+  expect(outgoing.items.map((item) => item.citationText)).toEqual([
+    "outgoing-resolved",
+  ]);
 });
