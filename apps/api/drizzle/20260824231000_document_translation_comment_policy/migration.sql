@@ -12,4 +12,4 @@ ALTER TABLE "document_translation_runs"
       "source_mime_type" = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
       AND "comment_policy" IN ('original', 'original-and-translated', 'translated')
     )
-  );
+  ) NOT VALID;
