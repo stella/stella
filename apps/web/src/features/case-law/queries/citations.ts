@@ -26,6 +26,12 @@ export const decisionCitationKeys = {
     decisionId,
     "summary",
   ],
+  leading: (decisionId: string, direction: CitationDirection) => [
+    ...decisionCitationKeys.all,
+    decisionId,
+    "leading",
+    direction,
+  ],
 };
 
 /** One direction of a decision's citations, a page at a time. */
@@ -55,6 +61,30 @@ export const decisionCitationsInfiniteOptions = (
     getNextPageParam: (lastPage) => lastPage.nextCursor,
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
   });
+
+/** The few most authoritative decisions per treatment, one direction. */
+export const decisionLeadingCitationsOptions = (
+  decisionId: string,
+  direction: CitationDirection,
+) =>
+  queryOptions({
+    queryKey: decisionCitationKeys.leading(decisionId, direction),
+    queryFn: async ({ signal }) => {
+      const response = await api.case
+        .decisions({ decisionId: toSafeId<"caseLawDecision">(decisionId) })
+        .citations.leading.get({ query: { direction }, fetch: { signal } });
+
+      const data = unwrapEden(response);
+      assertPublicLawApiData(data, "listLeadingDecisionCitations");
+
+      return data.items;
+    },
+    staleTime: ROUTE_QUERY_STALE_TIME_MS,
+  });
+
+export type LeadingCitation = Awaited<
+  ReturnType<ReturnType<typeof decisionLeadingCitationsOptions>["queryFn"]>
+>[number];
 
 /** How many citations each direction holds, by treatment. */
 export const decisionCitationSummaryOptions = (decisionId: string) =>

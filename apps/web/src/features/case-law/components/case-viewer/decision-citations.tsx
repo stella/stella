@@ -34,7 +34,7 @@ import { formatDecisionDate } from "@/lib/decision-date";
 import { detached } from "@/lib/detached";
 import type { SafeId } from "@/lib/safe-id";
 
-const DIRECTION_TITLE = {
+export const DIRECTION_TITLE = {
   incoming: "caseLaw.viewer.citedBy",
   outgoing: "caseLaw.viewer.cites",
 } as const satisfies Record<CitationDirection, TranslationKey>;
@@ -209,7 +209,7 @@ const groupByTreatment = (
   return ordered;
 };
 
-const CitationList = ({
+export const CitationList = ({
   decisionId,
   direction,
 }: {

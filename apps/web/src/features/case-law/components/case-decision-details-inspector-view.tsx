@@ -10,9 +10,8 @@ import { Skeleton } from "@stll/ui/skeleton";
 import type { CaseDecisionViewPayload } from "@/components/inspector/case-decision-view";
 import { InspectorTabHeader } from "@/components/inspector/inspector-tab-header";
 import type { InspectorViewRenderProps } from "@/components/inspector/view-registry";
-import { CitationHeader } from "@/features/case-law/components/case-viewer/citation-header";
-import { DecisionCitations } from "@/features/case-law/components/case-viewer/decision-citations";
 import { DecisionFacts } from "@/features/case-law/components/case-viewer/decision-facts";
+import { LeadingCitations } from "@/features/case-law/components/case-viewer/leading-citations";
 import { decisionOptions } from "@/features/case-law/queries/decisions";
 import { useFormatter } from "@/i18n/formatting-context";
 import { parseDeterministicDate } from "@/lib/deterministic-date";
@@ -68,11 +67,20 @@ export const CaseDecisionDetailsInspectorView = ({
               {/* Who cites this decision and what it cites, off the page
                   so the text starts at the top and the lists have room. */}
               <div className="mt-6">
-                <CitationHeader
-                  decisionDate={decision.decisionDate}
+                <LeadingCitations
+                  decision={{
+                    caseNumber: decision.caseNumber,
+                    country: decision.country,
+                    court: decision.court,
+                    decisionDate: decision.decisionDate,
+                    decisionType: decision.decisionType,
+                    ecli: decision.ecli,
+                    id: decision.id,
+                    language: decision.language,
+                    slug: decision.slug,
+                  }}
                   decisionId={decisionId}
                 />
-                <DecisionCitations decisionId={decisionId} />
               </div>
             </>
           )}

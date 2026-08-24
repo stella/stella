@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import type { MouseEvent } from "react";
 
 import { useQuery } from "@tanstack/react-query";
@@ -28,8 +29,10 @@ import { useDecisionCitationAnchors } from "@/features/case-law/components/case-
 import { useDecisionProvisionAnchors } from "@/features/case-law/components/case-viewer/use-decision-provision-anchors";
 import { decisionOptions } from "@/features/case-law/queries/decisions";
 import { useMainCaseLawDecision } from "@/features/case-law/use-main-decision";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { detached } from "@/lib/detached";
 import { toSafeId } from "@/lib/safe-id";
+import { forceReflow } from "@/lib/utils";
 
 /** A compact decision reader composed for the inspector's bounded width. */
 export const CaseDecisionInspectorView = ({
@@ -49,6 +52,26 @@ export const CaseDecisionInspectorView = ({
   } = useQuery(decisionOptions(decisionId));
   const inspector = useInspectorView();
   const mainDecision = useMainCaseLawDecision();
+  const mainRef = useRef<HTMLElement>(null);
+  // Opened at a passage (a citation of the decision on the main view): once
+  // the text is there, go to it and flash it, the way a margin jump does.
+  const anchorId = payload.anchorId ?? null;
+  const textShown = decision !== undefined;
+  useExternalSyncEffect(() => {
+    if (anchorId === null || !textShown) {
+      return;
+    }
+    const element = mainRef.current?.querySelector<HTMLElement>(
+      `#${CSS.escape(anchorId)}`,
+    );
+    if (!element) {
+      return;
+    }
+    element.scrollIntoView({ block: "center" });
+    delete element.dataset["highlight"];
+    forceReflow(element);
+    element.dataset["highlight"] = "";
+  }, [anchorId, textShown]);
   const swapTarget =
     mainDecision !== undefined && mainDecision.id !== payload.decisionId
       ? mainDecision
@@ -131,7 +154,7 @@ export const CaseDecisionInspectorView = ({
         onClose={onClose}
       />
       <ScrollArea className="min-h-0 flex-1">
-        <main className="reader-paper min-h-full px-4 py-6">
+        <main className="reader-paper min-h-full px-4 py-6" ref={mainRef}>
           <h1 className="sr-only">
             <BidiText as="span">{payload.caseNumber}</BidiText>
           </h1>

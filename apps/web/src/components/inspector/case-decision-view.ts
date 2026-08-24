@@ -10,6 +10,8 @@ import { createCaseLawDecisionRouteParams } from "@/lib/case-law-route";
 export const CASE_DECISION_VIEW = "case-law-decision";
 
 export type CaseDecisionViewPayload = {
+  /** A block to scroll to and flash once the text is shown. */
+  anchorId?: string | undefined;
   caseNumber: string;
   country: string;
   court: string;
@@ -19,6 +21,7 @@ export type CaseDecisionViewPayload = {
 };
 
 type CaseDecisionTarget = {
+  anchorId?: string | undefined;
   caseNumber: string;
   country: string;
   court: string;
@@ -52,7 +55,10 @@ export const isCaseDecisionViewPayload = (
     isNonEmptyString(value.slug) &&
     (!("language" in value) ||
       value.language === undefined ||
-      isNonEmptyString(value.language))
+      isNonEmptyString(value.language)) &&
+    (!("anchorId" in value) ||
+      value.anchorId === undefined ||
+      isNonEmptyString(value.anchorId))
   );
 };
 
@@ -102,6 +108,7 @@ export type CaseDecisionViewTab = {
  * then survives inspector synchronization as plain structured-clone data.
  */
 export const createCaseDecisionViewTab = ({
+  anchorId,
   caseNumber,
   country,
   court,
@@ -133,6 +140,7 @@ export const createCaseDecisionViewTab = ({
       decisionId,
       slug: route.slug,
       ...(route.language === undefined ? {} : { language: route.language }),
+      ...(anchorId === undefined ? {} : { anchorId }),
     },
   };
 };
