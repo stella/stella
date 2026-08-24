@@ -10,6 +10,7 @@ declare const configureReadTransaction: (
   isolation: string,
 ) => Promise<void>;
 declare const envBase: { PUBLIC_LAW_DATABASE_URL?: string };
+declare const shouldConfigureExternalReadTransaction: () => boolean;
 declare const database: {
   transaction: <T>(fn: (tx: unknown) => Promise<T>) => Promise<T>;
 };
@@ -31,7 +32,7 @@ export const publicLawReadDb = async <T>(
   await database.transaction(async (tx) => {
     const isolation = "read-committed";
     if (envBase.PUBLIC_LAW_DATABASE_URL !== undefined) {
-      if (isolation === "read-committed") {
+      if (shouldConfigureExternalReadTransaction()) {
         await configureExternalReadTransaction(tx, isolation);
       }
     } else {
