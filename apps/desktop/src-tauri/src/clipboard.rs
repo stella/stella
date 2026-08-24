@@ -739,9 +739,7 @@ fn prune_items_preserving(
 ) -> bool {
   let original_len = items.len();
   let oldest = now - Duration::days(RETENTION_DAYS);
-  items.retain(|item| {
-    Some(item.id()) == preserved_id || item.copied_at() >= oldest
-  });
+  items.retain(|item| Some(item.id()) == preserved_id || item.copied_at() >= oldest);
 
   while items.len() > MAX_HISTORY_ITEMS {
     let Some(index) = items
