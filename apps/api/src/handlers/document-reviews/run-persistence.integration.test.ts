@@ -72,7 +72,7 @@ const referenceBasis: DocumentReviewRunBasis = {
   references: [
     {
       workspaceId: toSafeId<"workspace">(Bun.randomUUIDv7()),
-      workspaceName: "Project Elixir",
+      workspaceName: "Precedent matter",
       entityId: toSafeId<"entity">(Bun.randomUUIDv7()),
       fileFieldId: REFERENCE_FILE_FIELD_ID,
       entityVersionId: toSafeId<"entityVersion">(Bun.randomUUIDv7()),

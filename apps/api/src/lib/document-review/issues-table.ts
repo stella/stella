@@ -392,7 +392,7 @@ export const renderIssuesTableDocx = async ({
   title,
   basisLine,
   rows,
-}: RenderIssuesTableDocxArgs): Promise<Buffer> => {
+}: RenderIssuesTableDocxArgs): Promise<ArrayBuffer> => {
   const doc = createEmptyDocument({
     preset: createStellaStyleDocumentPreset(),
   });
@@ -414,5 +414,6 @@ export const renderIssuesTableDocx = async ({
     // A body must end with a paragraph (Word rejects a trailing table).
     paragraph(NO_VALUE),
   ];
-  return Buffer.from(await createDocx(doc));
+  // A fresh copy owns a plain ArrayBuffer, which is what a Response body takes.
+  return new Uint8Array(await createDocx(doc)).buffer;
 };

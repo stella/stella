@@ -175,7 +175,8 @@ const SEARCH_RESULTS_MIN_WIDTH = 320;
  *  pin: the hit's own when it names one, else the entity's current file. */
 export type PickedSearchDocument = {
   workspaceId: string;
-  workspaceName: string;
+  /** `null` when the index carries no matter name for the hit. */
+  workspaceName: string | null;
   entityId: string;
   fileFieldId: string;
   name: string;
@@ -870,7 +871,11 @@ export const SearchDialog = ({
     if (mode.type === "pick") {
       // Pick mode never navigates: only an accepted document hit does
       // anything, and it goes back to the caller with a pinnable file field.
-      if (hit.type !== "document" || !mode.mimeTypes.includes(hit.mimeType)) {
+      if (hit.type !== "document") {
+        return;
+      }
+      const { mimeType } = hit;
+      if (mimeType === null || !mode.mimeTypes.includes(mimeType)) {
         return;
       }
       navigateAfterClose(async () => {
@@ -882,13 +887,17 @@ export const SearchDialog = ({
                 entityId: hit.entityId,
                 fileFieldId: hit.fileFieldId,
                 filePropertyId: hit.filePropertyId,
-                mimeType: hit.mimeType,
+                mimeType,
                 organizationId: searchRecentsScope.organizationId,
                 userId: searchRecentsScope.userId,
                 workspaceId: hit.workspaceId,
               }),
             ),
         });
+        // A hit whose current file cannot be resolved has nothing to pin.
+        if (fileFieldId === null) {
+          return;
+        }
         mode.onPick({
           workspaceId: hit.workspaceId,
           workspaceName: hit.workspaceName,

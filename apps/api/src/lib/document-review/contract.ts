@@ -64,7 +64,7 @@ export const REVIEW_PARTY_NAME_MAX_LENGTH = 200;
 export const REVIEW_PARTIES_MAX = 8;
 
 /** The role and, when known, the party, as one phrase: "the Purchaser
- *  (Fusion Holdings a.s.)". */
+ *  (Example Holdings a.s.)". */
 export const perspectivePartyPhrase = (party: ReviewParty): string =>
   party.name === null
     ? `the ${party.role}`

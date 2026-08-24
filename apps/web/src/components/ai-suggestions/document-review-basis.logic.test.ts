@@ -2,11 +2,14 @@ import { describe, expect, test } from "bun:test";
 
 import {
   createReviewBasis,
+  NEUTRAL_PERSPECTIVE,
   playbookIdFromBasis,
   referencesFromBasis,
 } from "@/components/ai-suggestions/document-review-basis.logic";
 
 const reference = {
+  workspaceId: "workspace-1",
+  workspaceName: null,
   entityId: "entity-1",
   fileFieldId: "field-1",
   name: "Reference agreement",
@@ -15,25 +18,42 @@ const reference = {
 
 describe("document review basis", () => {
   test("makes the empty review basis unrepresentable", () => {
-    expect(createReviewBasis({ playbookId: null, references: [] })).toBeNull();
+    expect(
+      createReviewBasis({
+        playbookId: null,
+        references: [],
+        perspective: NEUTRAL_PERSPECTIVE,
+      }),
+    ).toBeNull();
   });
 
   test("constructs each supported source combination", () => {
+    const perspective = { type: "party", role: "Buyer", name: null } as const;
     expect(
-      createReviewBasis({ playbookId: "playbook-1", references: [] }),
+      createReviewBasis({
+        playbookId: "playbook-1",
+        references: [],
+        perspective,
+      }),
     ).toEqual({ type: "playbook", playbookId: "playbook-1" });
     expect(
-      createReviewBasis({ playbookId: null, references: [reference] }),
-    ).toEqual({ type: "references", references: [reference] });
+      createReviewBasis({
+        playbookId: null,
+        references: [reference],
+        perspective,
+      }),
+    ).toEqual({ type: "references", references: [reference], perspective });
     expect(
       createReviewBasis({
         playbookId: "playbook-1",
         references: [reference],
+        perspective,
       }),
     ).toEqual({
       type: "combined",
       playbookId: "playbook-1",
       references: [reference],
+      perspective,
     });
   });
 
@@ -46,11 +66,13 @@ describe("document review basis", () => {
     const basis = createReviewBasis({
       playbookId: null,
       references: [reference, other, reference],
+      perspective: NEUTRAL_PERSPECTIVE,
     });
 
     expect(basis).toEqual({
       type: "references",
       references: [reference, other],
+      perspective: NEUTRAL_PERSPECTIVE,
     });
   });
 
@@ -59,12 +81,17 @@ describe("document review basis", () => {
       type: "combined" as const,
       playbookId: "playbook-1",
       references: [reference],
+      perspective: NEUTRAL_PERSPECTIVE,
     };
 
     expect(playbookIdFromBasis(combined)).toBe("playbook-1");
     expect(referencesFromBasis(combined)).toEqual([reference]);
     expect(
-      playbookIdFromBasis({ type: "references", references: [reference] }),
+      playbookIdFromBasis({
+        type: "references",
+        references: [reference],
+        perspective: NEUTRAL_PERSPECTIVE,
+      }),
     ).toBeNull();
     expect(
       referencesFromBasis({ type: "playbook", playbookId: "playbook-1" }),

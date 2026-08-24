@@ -17,7 +17,7 @@ import type {
 
 const reference = (name: string, fileFieldId: string): PinnedReference => ({
   workspaceId: toSafeId<"workspace">("11111111-1111-4111-8111-111111111111"),
-  workspaceName: "Project Elixir",
+  workspaceName: "Precedent matter",
   entityId: toSafeId<"entity">("22222222-2222-4222-8222-222222222222"),
   fileFieldId: toSafeId<"field">(fileFieldId),
   entityVersionId: toSafeId<"entityVersion">(
@@ -27,12 +27,12 @@ const reference = (name: string, fileFieldId: string): PinnedReference => ({
   name,
 });
 
-const ELIXIR_FIELD = "44444444-4444-4444-8444-444444444444";
+const PRECEDENT_FIELD = "44444444-4444-4444-8444-444444444444";
 const OTHER_FIELD = "55555555-5555-4555-8555-555555555555";
 
 const basis: DocumentReviewRunBasis = {
   type: "references",
-  references: [reference("Elixir SPA", ELIXIR_FIELD)],
+  references: [reference("Precedent SPA", PRECEDENT_FIELD)],
   perspective: { type: "party", role: "Buyer", name: null },
 };
 
@@ -61,7 +61,7 @@ const referenceFinding = (
       targetCitations: [{ blockId: "p-1", text: "Leakage is capped." }],
       referenceCitations: [
         {
-          fileFieldId: toSafeId<"field">(ELIXIR_FIELD),
+          fileFieldId: toSafeId<"field">(PRECEDENT_FIELD),
           citations: [{ blockId: "p-9", text: "Leakage is uncapped." }],
         },
       ],
@@ -127,8 +127,8 @@ describe("buildIssuesTableRows", () => {
       basis: {
         type: "references",
         references: [
-          reference("Elixir SPA", ELIXIR_FIELD),
-          reference("Orion SPA", OTHER_FIELD),
+          reference("Precedent SPA", PRECEDENT_FIELD),
+          reference("Second precedent SPA", OTHER_FIELD),
         ],
         perspective: { type: "neutral" },
       },
@@ -136,7 +136,7 @@ describe("buildIssuesTableRows", () => {
         referenceFinding("Leakage", { impact: "unknown", severity: "medium" }),
       ],
     });
-    expect(row?.precedentPosition).toBe("[Elixir SPA] Leakage is uncapped.");
+    expect(row?.precedentPosition).toBe("[Precedent SPA] Leakage is uncapped.");
     expect(row?.impact).toBe("Unclear");
   });
 });
@@ -144,7 +144,7 @@ describe("buildIssuesTableRows", () => {
 describe("describeIssuesTableBasis", () => {
   test("names the precedent and the side", () => {
     expect(describeIssuesTableBasis(basis)).toBe(
-      "Precedent: Elixir SPA · Reviewed for the Buyer",
+      "Precedent: Precedent SPA · Reviewed for the Buyer",
     );
   });
 });
@@ -167,11 +167,12 @@ describe("renderIssuesTableDocx", () => {
       ],
     });
     const docx = await renderIssuesTableDocx({
-      title: "Fusion SPA - review issues",
+      title: "Draft SPA - review issues",
       basisLine: describeIssuesTableBasis(basis),
       rows,
     });
-    expect(docx.subarray(0, 2).toString("latin1")).toBe("PK");
+    // A ZIP container starts with the local file header signature "PK".
+    expect(Array.from(new Uint8Array(docx, 0, 2))).toEqual([0x50, 0x4b]);
     expect(ISSUES_TABLE_COLUMNS).toHaveLength(9);
   });
 });

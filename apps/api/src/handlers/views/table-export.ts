@@ -89,10 +89,16 @@ const CELL_FLAG_IDS = [
 
 type CellFlagId = (typeof CELL_FLAG_IDS)[number];
 
+export type ExportTable = {
+  columns: ExportColumn[];
+  rows: ExportRow[];
+};
+
 // The writers read nothing but the header off a column, so any tabular
 // export (a view, a review's issues table) can share them.
-export type ExportTable = {
-  columns: Pick<ExportColumn, "header">[];
+type ExportHeader = Pick<ExportColumn, "header">;
+export type ExportTableInput = {
+  columns: (ExportColumn | ExportHeader)[];
   rows: ExportRow[];
 };
 
@@ -470,7 +476,7 @@ export const buildExportTable = (
   }),
 });
 
-export const buildCsvExport = ({ columns, rows }: ExportTable): string => {
+export const buildCsvExport = ({ columns, rows }: ExportTableInput): string => {
   const lines = [
     columns
       .map((column) => escapeCSV(sanitizeSpreadsheetHeader(column.header)))
@@ -487,7 +493,7 @@ export const buildCsvExport = ({ columns, rows }: ExportTable): string => {
 export const buildDocxExport = async ({
   columns,
   rows,
-}: ExportTable): Promise<ArrayBuffer> => {
+}: ExportTableInput): Promise<ArrayBuffer> => {
   const zip = new JSZip();
   zip.file("[Content_Types].xml", docxContentTypesXml);
   zip.file("_rels/.rels", docxRootRelationshipsXml);
@@ -503,7 +509,7 @@ type CellHyperlink = { ref: string; url: string; relId: string };
 type CellComment = { ref: string; text: string; row: number; column: number };
 
 const collectCellAnnotations = (
-  columns: ExportColumn[],
+  columns: ExportHeader[],
   rows: ExportRow[],
 ): { hyperlinks: CellHyperlink[]; comments: CellComment[] } => {
   const hyperlinks: CellHyperlink[] = [];
@@ -546,7 +552,7 @@ export const buildXlsxExport = async ({
   columns,
   rows,
   worksheetName,
-}: ExportTable & { worksheetName?: string }): Promise<ArrayBuffer> => {
+}: ExportTableInput & { worksheetName?: string }): Promise<ArrayBuffer> => {
   const zip = new JSZip();
   const styleRegistry = buildStyleRegistry(rows);
   const { hyperlinks, comments } = collectCellAnnotations(columns, rows);
@@ -834,7 +840,7 @@ const buildDocxCellXml = (value: string, header: boolean): string => {
 };
 
 const buildDocxDocumentXml = (
-  columns: ExportColumn[],
+  columns: ExportHeader[],
   rows: ExportRow[],
 ): string => {
   const headerRow = `<w:tr><w:trPr><w:tblHeader/></w:trPr>${columns
@@ -940,7 +946,7 @@ const cellDisplayValue = (cell: ExportCell): string => {
 };
 
 const calculateColumnWidths = (
-  columns: ExportColumn[],
+  columns: ExportHeader[],
   rows: ExportRow[],
 ): number[] => {
   const longestByColumn = columns.map(
@@ -964,7 +970,7 @@ const calculateColumnWidths = (
 };
 
 const buildColumnsXml = (
-  columns: ExportColumn[],
+  columns: ExportHeader[],
   rows: ExportRow[],
 ): string => {
   if (columns.length === 0) {
@@ -1018,7 +1024,7 @@ const buildNumberCellXml = ({
 }: BuildNumberCellXmlOptions): string =>
   `<c r="${columnName(columnIndex)}${rowIndex}" s="${styleId}"><v>${value}</v></c>`;
 
-const buildHeaderRowXml = (columns: ExportColumn[]): string => {
+const buildHeaderRowXml = (columns: ExportHeader[]): string => {
   const cells = columns
     .map((column, columnIndex) =>
       buildInlineStringCellXml({
@@ -1073,7 +1079,7 @@ const buildBodyRowsXml = (
     .join("");
 
 type BuildSheetXmlParams = {
-  columns: ExportColumn[];
+  columns: ExportHeader[];
   rows: ExportRow[];
   styleRegistry: StyleRegistry;
   hyperlinks: CellHyperlink[];

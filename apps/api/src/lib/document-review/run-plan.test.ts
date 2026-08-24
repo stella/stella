@@ -58,7 +58,7 @@ const playbook: PinnedPlaybook = {
 
 const reference: PinnedReference = {
   workspaceId: toSafeId<"workspace">(Bun.randomUUIDv7()),
-  workspaceName: "Project Elixir",
+  workspaceName: "Precedent matter",
   entityId: toSafeId<"entity">(Bun.randomUUIDv7()),
   fileFieldId: toSafeId<"field">(Bun.randomUUIDv7()),
   entityVersionId: toSafeId<"entityVersion">(Bun.randomUUIDv7()),

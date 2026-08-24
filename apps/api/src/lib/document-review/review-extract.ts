@@ -10,6 +10,7 @@ import type { AIUsageMetering } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
 import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
 import { createDefaultTool } from "@/api/lib/properties/create-schema";
+import { brandDerivedPropertyId } from "@/api/lib/safe-id-boundaries";
 import { generateWorkflowData } from "@/api/lib/workflow/ai-generate-batch";
 import { validateAIOutput } from "@/api/lib/workflow/ai-validators";
 import type { ValidatedResult } from "@/api/lib/workflow/ai-validators";

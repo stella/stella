@@ -4,6 +4,7 @@ import { describe, expect, mock, test } from "bun:test";
 import type { SafeDb } from "@/api/db/safe-db";
 import type { AIUsageMetering } from "@/api/lib/analytics/tanstack-ai";
 import { toSafeId, type SafeId } from "@/api/lib/branded-types";
+import { NEUTRAL_PERSPECTIVE } from "@/api/lib/document-review/contract";
 
 type CapturedGenerateOptions = {
   tenantWorkspaceIds: readonly SafeId<"workspace">[];
@@ -56,6 +57,7 @@ describe("reference review AI boundary", () => {
     capturedGenerateOptions.length = 0;
 
     const result = await compareReferenceDocuments({
+      perspective: NEUTRAL_PERSPECTIVE,
       target: {
         kind: "docx",
         fileFieldId: targetFieldId,

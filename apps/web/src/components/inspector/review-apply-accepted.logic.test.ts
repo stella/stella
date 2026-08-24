@@ -15,15 +15,17 @@ import {
 import { toSafeId } from "@/lib/safe-id";
 
 const TOPIC_ID = "11111111-1111-4111-8111-111111111111";
-const ELIXIR_FIELD = toSafeId<"field">("22222222-2222-4222-8222-222222222222");
+const PRECEDENT_FIELD = toSafeId<"field">(
+  "22222222-2222-4222-8222-222222222222",
+);
 
-const elixir: ReferenceFile = {
+const precedent: ReferenceFile = {
   workspaceId: "33333333-3333-4333-8333-333333333333",
   workspaceName: null,
   entityId: "44444444-4444-4444-8444-444444444444",
-  fileFieldId: ELIXIR_FIELD,
-  name: "Elixir SPA",
-  fileName: "Elixir SPA.docx",
+  fileFieldId: PRECEDENT_FIELD,
+  name: "Precedent SPA",
+  fileName: "Precedent SPA.docx",
 };
 
 const referenceFinding: ReferenceFinding = {
@@ -39,7 +41,7 @@ const referenceFinding: ReferenceFinding = {
   targetCitations: [{ blockId: "p-1", text: "Leakage is capped." }],
   referenceCitations: [
     {
-      fileFieldId: ELIXIR_FIELD,
+      fileFieldId: PRECEDENT_FIELD,
       citations: [
         { blockId: "p-9", text: "Leakage is uncapped." },
         { blockId: "p-10", text: "A second passage." },
@@ -77,8 +79,8 @@ const item = (overrides: Partial<ReviewResultItem> = {}): ReviewResultItem => ({
 
 describe("buildPrecedentComment", () => {
   test("cites the recommendation and one passage per named reference", () => {
-    expect(buildPrecedentComment(referenceFinding, [elixir])).toBe(
-      "Remove the cap.\n\nPrecedent (Elixir SPA): “Leakage is uncapped.”",
+    expect(buildPrecedentComment(referenceFinding, [precedent])).toBe(
+      "Remove the cap.\n\nPrecedent (Precedent SPA): “Leakage is uncapped.”",
     );
   });
 
@@ -86,7 +88,7 @@ describe("buildPrecedentComment", () => {
     expect(
       buildPrecedentComment(
         { ...referenceFinding, recommendation: null, referenceCitations: [] },
-        [elixir],
+        [precedent],
       ),
     ).toBeNull();
   });
@@ -108,7 +110,7 @@ describe("collectAcceptedFixes", () => {
       fixStateByFinding: {
         "finding-applied": { status: "applied", revisionIds: [4] },
       },
-      references: [elixir],
+      references: [precedent],
       playbookName: "Buy-side SPA",
     });
     expect(plans.map((plan) => plan.findingKey)).toEqual(["finding-leakage"]);
@@ -118,7 +120,7 @@ describe("collectAcceptedFixes", () => {
     const plans = collectAcceptedFixes({
       items: [item({ playbook: playbookFinding })],
       fixStateByFinding: {},
-      references: [elixir],
+      references: [precedent],
       playbookName: "Buy-side SPA",
     });
     expect(plans.map((plan) => [plan.findingKey, plan.comment])).toEqual([
@@ -128,7 +130,7 @@ describe("collectAcceptedFixes", () => {
       ],
       [
         "finding-leakage",
-        "Remove the cap.\n\nPrecedent (Elixir SPA): “Leakage is uncapped.”",
+        "Remove the cap.\n\nPrecedent (Precedent SPA): “Leakage is uncapped.”",
       ],
     ]);
   });
@@ -140,7 +142,7 @@ describe("buildAcceptedFixBatch", () => {
     const plans = collectAcceptedFixes({
       items: [item()],
       fixStateByFinding: {},
-      references: [elixir],
+      references: [precedent],
       playbookName: "",
     });
     const batch = buildAcceptedFixBatch({
@@ -160,7 +162,7 @@ describe("buildAcceptedFixBatch", () => {
         type: "commentOnBlock",
         blockId: "p-1",
         comment: {
-          text: "Remove the cap.\n\nPrecedent (Elixir SPA): “Leakage is uncapped.”",
+          text: "Remove the cap.\n\nPrecedent (Precedent SPA): “Leakage is uncapped.”",
         },
       },
     ]);

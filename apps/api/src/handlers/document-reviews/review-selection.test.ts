@@ -34,9 +34,14 @@ const fileContent = (mimeType: string) => ({
   pdfFileId: "00000000-0000-0000-0000-000000000008",
 });
 
+const workspaceId = toSafeId<"workspace">(
+  "00000000-0000-0000-0000-000000000009",
+);
+
 const entityRows = (referenceMimeType: string = DOCX_MIME_TYPE) => [
   {
     id: targetEntityId,
+    workspaceId,
     currentVersion: {
       id: targetVersionId,
       fields: [{ id: targetFieldId, content: fileContent(DOCX_MIME_TYPE) }],
@@ -44,6 +49,7 @@ const entityRows = (referenceMimeType: string = DOCX_MIME_TYPE) => [
   },
   {
     id: referenceEntityId,
+    workspaceId,
     currentVersion: {
       id: referenceVersionId,
       fields: [
@@ -53,8 +59,13 @@ const entityRows = (referenceMimeType: string = DOCX_MIME_TYPE) => [
   },
 ];
 
-const target = { entityId: targetEntityId, fileFieldId: targetFieldId };
+const target = {
+  workspaceId,
+  entityId: targetEntityId,
+  fileFieldId: targetFieldId,
+};
 const reference = {
+  workspaceId,
   entityId: referenceEntityId,
   fileFieldId: referenceFieldId,
 };
@@ -104,6 +115,7 @@ describe("document review selection", () => {
       target,
       references: [
         {
+          workspaceId,
           entityId: referenceEntityId,
           fileFieldId: toSafeId<"field">(
             "00000000-0000-0000-0000-000000000009",

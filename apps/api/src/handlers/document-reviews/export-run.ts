@@ -18,7 +18,7 @@ import {
   buildCsvExport,
   buildXlsxExport,
 } from "@/api/handlers/views/table-export";
-import type { ExportTable } from "@/api/handlers/views/table-export";
+import type { ExportTableInput } from "@/api/handlers/views/table-export";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -118,7 +118,7 @@ const exportDocumentReviewRun = createSafeHandler(
 
     const rows = buildIssuesTableRows({ basis: run.basis, findings });
     const exportName = `${withoutExtension(run.targetName)}${FILE_SUFFIX}`;
-    const table: ExportTable = {
+    const table: ExportTableInput = {
       columns: ISSUES_TABLE_COLUMNS.map(({ header }) => ({ header })),
       rows: rows.map((row) =>
         ISSUES_TABLE_COLUMNS.map(({ key }) => ({
@@ -129,7 +129,7 @@ const exportDocumentReviewRun = createSafeHandler(
       ),
     };
 
-    let body: string | ArrayBuffer | Buffer;
+    let body: string | ArrayBuffer;
     switch (query.format) {
       case "csv":
         body = buildCsvExport(table);
