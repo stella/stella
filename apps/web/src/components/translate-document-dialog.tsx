@@ -52,6 +52,7 @@ import { entitiesKeys } from "@/lib/workspaces/queries/entities";
 
 type TranslationOutput = "translated" | "bilingual";
 type TranslationEngine = "deepl" | "ai";
+type CommentPolicy = "original" | "original-and-translated" | "translated";
 const TRANSLATION_CHOICES = {
   "translated:deepl": { output: "translated", engine: "deepl" },
   "translated:ai": { output: "translated", engine: "ai" },
@@ -103,6 +104,10 @@ export const TranslateDocumentDialog = ({
     () => defaultLanguagePair(locale).target,
   );
   const [runId, setRunId] = useState<string | null>(null);
+  const [commentsFound, setCommentsFound] = useState(false);
+  const [commentPolicy, setCommentPolicy] = useState<CommentPolicy | null>(
+    null,
+  );
   const terminalNotifiedRunRef = useRef<string | null>(null);
   const pollingErrorRunRef = useRef<string | null>(null);
 
@@ -209,12 +214,18 @@ export const TranslateDocumentDialog = ({
           fieldId: toSafeId<"field">(fieldId),
           output,
           engine,
+          ...(commentPolicy === null ? {} : { commentPolicy }),
           ...(!isDeepL ? { sourceLang } : {}),
           targetLang,
         });
       return unwrapEden(response);
     },
     onSuccess: (data) => {
+      if (data.type === "commentPolicyRequired") {
+        setCommentsFound(true);
+        setOpen(true);
+        return;
+      }
       setRunId(data.runId);
       setOpen(true);
     },
@@ -240,6 +251,8 @@ export const TranslateDocumentDialog = ({
     isLoadingRun,
     isRunning,
     isStarting,
+    hasCommentPolicy: commentPolicy !== null,
+    requiresCommentPolicy: commentsFound,
     sameLanguage,
   });
 
@@ -248,6 +261,8 @@ export const TranslateDocumentDialog = ({
       onOpenChange={(nextOpen) => {
         if (nextOpen && run && !isRunning) {
           setRunId(null);
+          setCommentsFound(false);
+          setCommentPolicy(null);
         }
         setOpen(nextOpen);
       }}
@@ -367,6 +382,47 @@ export const TranslateDocumentDialog = ({
                 onChange={setTargetLang}
                 value={targetLang}
               />
+              {commentsFound ? (
+                <fieldset className="flex flex-col gap-2">
+                  <legend className="text-sm font-medium">
+                    {t("folio.comments.visibility")}
+                  </legend>
+                  <p className="text-muted-foreground text-xs">
+                    {t("translate.dialog.commentsDescription")}
+                  </p>
+                  <RadioCard
+                    checked={commentPolicy === "original"}
+                    disabled={false}
+                    label={t("translate.dialog.commentsOriginal")}
+                    onChange={() => setCommentPolicy("original")}
+                    description={t(
+                      "translate.dialog.commentsOriginalDescription",
+                    )}
+                    name="comment-policy"
+                    value="original"
+                  />
+                  <RadioCard
+                    checked={commentPolicy === "original-and-translated"}
+                    disabled={false}
+                    label={t("translate.dialog.commentsBoth")}
+                    onChange={() => setCommentPolicy("original-and-translated")}
+                    description={t("translate.dialog.commentsBothDescription")}
+                    name="comment-policy"
+                    value="original-and-translated"
+                  />
+                  <RadioCard
+                    checked={commentPolicy === "translated"}
+                    disabled={false}
+                    label={t("translate.dialog.commentsTranslated")}
+                    onChange={() => setCommentPolicy("translated")}
+                    description={t(
+                      "translate.dialog.commentsTranslatedDescription",
+                    )}
+                    name="comment-policy"
+                    value="translated"
+                  />
+                </fieldset>
+              ) : null}
               {sameLanguage ? (
                 <p className="text-destructive text-sm">
                   {t("bilingual.dialog.sameLanguage")}
@@ -403,7 +459,8 @@ type RadioCardProps = {
   disabled: boolean;
   label: string;
   description: string;
-  value: TranslationChoice;
+  name?: string | undefined;
+  value: string;
   onChange: () => void;
 };
 
@@ -412,6 +469,7 @@ const RadioCard = ({
   disabled,
   label,
   description,
+  name = "translation-choice",
   value,
   onChange,
 }: RadioCardProps) => (
@@ -423,7 +481,7 @@ const RadioCard = ({
       checked={checked}
       className="accent-primary mt-0.5 size-4 shrink-0"
       disabled={disabled}
-      name="translation-choice"
+      name={name}
       onChange={onChange}
       type="radio"
       value={value}

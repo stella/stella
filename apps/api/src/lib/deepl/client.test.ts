@@ -2,7 +2,13 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { DeepLDocumentError, DeepLUpstreamError } from "@/api/lib/deepl/errors";
 
-import { translateDocument } from "./client";
+import {
+  DEEPL_TEXT_REQUEST_MAX_BYTES,
+  partitionDeepLTextBatches,
+  translateDocument,
+  translateTextBatch,
+  translateTextBatches,
+} from "./client";
 
 const originalFetch = globalThis.fetch;
 const originalSleep = Bun.sleep;
@@ -143,5 +149,100 @@ describe("DeepL document translation status errors", () => {
         "DeepL returned a malformed document status response",
       );
     }
+  });
+});
+
+describe("DeepL text translation", () => {
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  test("translates comment text in input order", async () => {
+    installFetchMock(async (input) => {
+      expect(toFetchUrl(input)).toEndWith("/v2/translate");
+      return jsonResponse({
+        translations: [
+          { detected_source_language: "EN", text: "Erste" },
+          { detected_source_language: "EN", text: "Zweite" },
+        ],
+      });
+    });
+
+    expect(
+      await translateTextBatch({
+        apiKey: "deepl-key",
+        texts: ["First", "Second"],
+        targetLang: "DE",
+        sourceLang: "EN",
+      }),
+    ).toEqual(["Erste", "Zweite"]);
+  });
+
+  test("rejects incomplete comment translations", async () => {
+    installFetchMock(async () =>
+      jsonResponse({
+        translations: [{ detected_source_language: "EN", text: "Erste" }],
+      }),
+    );
+
+    const resultError = await translateTextBatch({
+      apiKey: "deepl-key",
+      texts: ["First", "Second"],
+      targetLang: "DE",
+    }).then(
+      () => null,
+      (error: unknown) => error,
+    );
+    expect(DeepLUpstreamError.is(resultError)).toBeTrue();
+  });
+
+  test("partitions requests by serialized UTF-8 bytes and preserves order", async () => {
+    const texts = ["a".repeat(70_000), "b".repeat(70_000)];
+    expect(
+      partitionDeepLTextBatches({ texts, targetLang: "DE" }).map(
+        (batch) => batch.length,
+      ),
+    ).toEqual([1, 1]);
+
+    let call = 0;
+    installFetchMock(async () => {
+      call += 1;
+      return jsonResponse({
+        translations: [
+          {
+            detected_source_language: "EN",
+            text: call === 1 ? "Erste" : "Zweite",
+          },
+        ],
+      });
+    });
+
+    expect(
+      await translateTextBatches({
+        apiKey: "deepl-key",
+        texts,
+        targetLang: "DE",
+      }),
+    ).toEqual(["Erste", "Zweite"]);
+    expect(call).toBe(2);
+  });
+
+  test("rejects an oversized request before sending it", async () => {
+    let called = false;
+    installFetchMock(async () => {
+      called = true;
+      return jsonResponse({ translations: [] });
+    });
+
+    const resultError = await translateTextBatch({
+      apiKey: "deepl-key",
+      texts: ["x".repeat(DEEPL_TEXT_REQUEST_MAX_BYTES)],
+      targetLang: "DE",
+    }).then(
+      () => null,
+      (error: unknown) => error,
+    );
+    expect(DeepLDocumentError.is(resultError)).toBeTrue();
+    expect(called).toBeFalse();
   });
 });

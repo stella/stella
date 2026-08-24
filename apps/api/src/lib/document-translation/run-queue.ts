@@ -47,20 +47,33 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
 import { createLazyBullMqQueue } from "@/api/lib/bullmq-queue";
 import { decryptContent } from "@/api/lib/content-encryption";
-import { translateDocument } from "@/api/lib/deepl/deepl";
+import { translateDocument, translateTextBatches } from "@/api/lib/deepl/deepl";
 import { translateTaggedSegments } from "@/api/lib/document-translation/ai";
 import {
+  commentTaggedText,
+  unwrapCommentTranslation,
+} from "@/api/lib/document-translation/comment-markers";
+import {
+  DOCUMENT_TRANSLATION_COMMENT_POLICY,
   DOCUMENT_TRANSLATION_ENGINE,
   DOCUMENT_TRANSLATION_LIMITS,
   DOCUMENT_TRANSLATION_OUTPUT,
   DOCUMENT_TRANSLATION_RUN_ACTIVE_STATUSES,
 } from "@/api/lib/document-translation/contract";
 import type {
+  DocumentTranslationCommentPolicy,
   DocumentTranslationEngine,
   DocumentTranslationOutput,
   DocumentTranslationRunErrorCode,
   DocumentTranslationRunStatus,
 } from "@/api/lib/document-translation/contract";
+import {
+  applyDocxCommentPolicy,
+  type DocxCommentTranslationUnit,
+  DocxReviewError,
+  readDocxCommentTranslationUnits,
+  resolveDocxToFinal,
+} from "@/api/lib/document-translation/docx-review";
 import {
   buildBilingualFileName,
   resolveTranslatedOutput,
@@ -252,6 +265,7 @@ type ClaimedRun = {
   sourceMimeType: string;
   output: DocumentTranslationOutput;
   engine: DocumentTranslationEngine;
+  commentPolicy: DocumentTranslationCommentPolicy | null;
   sourceLang: string;
   targetLang: string;
 };
@@ -278,6 +292,7 @@ const claimRun = async (actor: RunActor): Promise<ClaimedRun | null> => {
         sourceMimeType: documentTranslationRuns.sourceMimeType,
         output: documentTranslationRuns.output,
         engine: documentTranslationRuns.engine,
+        commentPolicy: documentTranslationRuns.commentPolicy,
         sourceLang: documentTranslationRuns.sourceLang,
         targetLang: documentTranslationRuns.targetLang,
       });
@@ -499,11 +514,9 @@ const copyToArrayBuffer = (bytes: Uint8Array): ArrayBuffer => {
   return buffer;
 };
 
-const translateWithDeepL = async (
+const loadDeepLApiKey = async (
   actor: RunActor,
-  run: ClaimedRun,
-  source: ArrayBuffer,
-): Promise<Result<TranslationOutput, DocumentTranslationRunErrorCode>> => {
+): Promise<Result<string, "provider_unavailable">> => {
   const settings = await actor.safeDb((tx) =>
     tx.query.organizationSettings.findFirst({
       where: { organizationId: { eq: actor.organizationId } },
@@ -518,10 +531,123 @@ const translateWithDeepL = async (
   if (!ciphertext || !iv) {
     return Result.err("provider_unavailable");
   }
+  const decrypted = await Result.tryPromise({
+    try: async () => await decryptContent(actor.organizationId, ciphertext, iv),
+    catch: (cause) => cause,
+  });
+  if (Result.isError(decrypted)) {
+    captureError(decrypted.error, { runId: actor.runId });
+    return Result.err("provider_unavailable");
+  }
+  return Result.ok(decrypted.value);
+};
+
+const translateCommentsWithAI = async (
+  actor: RunActor,
+  comments: readonly DocxCommentTranslationUnit[],
+  run: ClaimedRun,
+  context: BilingualAIContext,
+): Promise<Result<Map<number, string>, "translation_failed">> => {
+  const translated = new Map<number, string>();
+  for (const comment of comments) {
+    if (comment.text === "") {
+      translated.set(comment.id, "");
+    }
+  }
+  const pending = comments.filter((comment) => comment.text !== "");
+  const translateNextBatch = async (
+    index: number,
+  ): Promise<Result<void, "translation_failed">> => {
+    if (index >= pending.length) {
+      return Result.ok();
+    }
+    const batch = pending.slice(
+      index,
+      index + DOCUMENT_TRANSLATION_LIMITS.batchSize,
+    );
+    const response = await Result.tryPromise({
+      try: async () =>
+        await translateTaggedSegments({
+          segments: batch.map((comment) => ({
+            id: `comment:${comment.id}`,
+            taggedText: commentTaggedText(comment),
+          })),
+          preceding: [],
+          sourceLang: run.sourceLang,
+          targetLang: run.targetLang,
+          context,
+        }),
+      catch: (cause) => cause,
+    });
+    if (Result.isError(response)) {
+      captureError(response.error, { runId: actor.runId });
+      return Result.err("translation_failed");
+    }
+    for (const comment of batch) {
+      const tagged = response.value.get(`comment:${comment.id}`);
+      const text =
+        tagged === undefined ? null : unwrapCommentTranslation(comment, tagged);
+      if (text === null) {
+        return Result.err("translation_failed");
+      }
+      translated.set(comment.id, text);
+    }
+    return await translateNextBatch(
+      index + DOCUMENT_TRANSLATION_LIMITS.batchSize,
+    );
+  };
+  const result = await translateNextBatch(0);
+  return Result.isError(result) ? result : Result.ok(translated);
+};
+
+const translateCommentsWithDeepL = async (
+  actor: RunActor,
+  comments: readonly DocxCommentTranslationUnit[],
+  run: ClaimedRun,
+  apiKey: string,
+): Promise<Result<Map<number, string>, "translation_failed">> => {
+  const translated = new Map<number, string>();
+  for (const comment of comments) {
+    if (comment.text === "") {
+      translated.set(comment.id, "");
+    }
+  }
+  const pending = comments.filter((comment) => comment.text !== "");
+  const response = await Result.tryPromise({
+    try: async () =>
+      await translateTextBatches({
+        apiKey,
+        texts: pending.map((comment) => comment.text),
+        targetLang: run.targetLang,
+        sourceLang: run.sourceLang === "auto" ? undefined : run.sourceLang,
+        formality: "prefer_more",
+      }),
+    catch: (cause) => cause,
+  });
+  if (Result.isError(response)) {
+    captureError(response.error, { runId: actor.runId });
+    return Result.err("translation_failed");
+  }
+  for (const [index, comment] of pending.entries()) {
+    const text = response.value.at(index);
+    if (text === undefined) {
+      return Result.err("translation_failed");
+    }
+    translated.set(comment.id, text);
+  }
+  return Result.ok(translated);
+};
+
+const translateWithDeepL = async (
+  actor: RunActor,
+  run: ClaimedRun,
+  source: ArrayBuffer,
+  apiKey: string,
+): Promise<Result<TranslationOutput, DocumentTranslationRunErrorCode>> => {
   const translated = await Result.tryPromise({
     try: async () =>
       await translateDocument({
-        apiKey: await decryptContent(actor.organizationId, ciphertext, iv),
+        apiKey,
         file: new Uint8Array(source),
         fileName: run.sourceFileName,
         mimeType: run.sourceMimeType,
@@ -869,13 +995,67 @@ const executeRun = async (
   if (Result.isError(loaded)) {
     return loaded.error;
   }
+  let source = loaded.value.buffer;
+  let comments: DocxCommentTranslationUnit[] = [];
+  if (run.sourceMimeType === DOCX_MIME_TYPE) {
+    const prepared = await Result.tryPromise({
+      try: async () => await resolveDocxToFinal(source),
+      catch: (cause) => cause,
+    });
+    if (Result.isError(prepared)) {
+      captureError(prepared.error, { runId: actor.runId });
+      return DocxReviewError.is(prepared.error)
+        ? "unsupported_review_markup"
+        : "unsupported_format";
+    }
+    source = prepared.value;
+    const readComments = await Result.tryPromise({
+      try: async () => await readDocxCommentTranslationUnits(source),
+      catch: (cause) => cause,
+    });
+    if (Result.isError(readComments)) {
+      captureError(readComments.error, { runId: actor.runId });
+      return "unsupported_format";
+    }
+    comments = readComments.value;
+    if (
+      comments.length > DOCUMENT_TRANSLATION_LIMITS.unitsMax ||
+      comments.some(
+        (comment) =>
+          comment.text.length > DOCUMENT_TRANSLATION_LIMITS.unitTextMax,
+      )
+    ) {
+      return "unsupported_format";
+    }
+  }
+  // Runs queued before comment-policy support preserve source comments. New
+  // requests cannot omit the choice when the pinned DOCX contains comments.
+  const commentPolicy =
+    run.commentPolicy ?? DOCUMENT_TRANSLATION_COMMENT_POLICY.ORIGINAL;
   if (!(await transitionStage(actor, "preparing", "translating"))) {
     return "internal";
   }
 
   let output: Result<TranslationOutput, DocumentTranslationRunErrorCode>;
+  let commentTranslations = new Map<number, string>();
   if (run.engine === DOCUMENT_TRANSLATION_ENGINE.DEEPL) {
-    output = await translateWithDeepL(actor, run, loaded.value.buffer);
+    const apiKey = await loadDeepLApiKey(actor);
+    if (Result.isError(apiKey)) {
+      return apiKey.error;
+    }
+    if (comments.length > 0 && commentPolicy !== "original") {
+      const translatedComments = await translateCommentsWithDeepL(
+        actor,
+        comments,
+        run,
+        apiKey.value,
+      );
+      if (Result.isError(translatedComments)) {
+        return translatedComments.error;
+      }
+      commentTranslations = translatedComments.value;
+    }
+    output = await translateWithDeepL(actor, run, source, apiKey.value);
   } else {
     const context = await Result.tryPromise({
       try: async () => await createAIContext(actor, run),
@@ -884,24 +1064,52 @@ const executeRun = async (
     if (Result.isError(context)) {
       return "provider_unavailable";
     }
-    if (run.output === DOCUMENT_TRANSLATION_OUTPUT.TRANSLATED) {
-      output = await translateDocxWithAI(
+    if (comments.length > 0 && commentPolicy !== "original") {
+      const translatedComments = await translateCommentsWithAI(
         actor,
+        comments,
         run,
-        loaded.value.buffer,
         context.value,
       );
+      if (Result.isError(translatedComments)) {
+        return translatedComments.error;
+      }
+      commentTranslations = translatedComments.value;
+    }
+    if (run.output === DOCUMENT_TRANSLATION_OUTPUT.TRANSLATED) {
+      output = await translateDocxWithAI(actor, run, source, context.value);
     } else {
       output = await translateBilingualWithAI(
         actor,
         run,
-        loaded.value.buffer,
+        source,
         context.value,
       );
     }
   }
   if (Result.isError(output)) {
     return output.error;
+  }
+  let completedOutput = output.value;
+  if (comments.length > 0) {
+    const withComments = await Result.tryPromise({
+      try: async () =>
+        await applyDocxCommentPolicy({
+          source,
+          output:
+            completedOutput.buffer instanceof Uint8Array
+              ? copyToArrayBuffer(completedOutput.buffer)
+              : completedOutput.buffer,
+          policy: commentPolicy,
+          translations: commentTranslations,
+        }),
+      catch: (cause) => cause,
+    });
+    if (Result.isError(withComments)) {
+      captureError(withComments.error, { runId: actor.runId });
+      return "format_validation_failed";
+    }
+    completedOutput = { ...completedOutput, buffer: withComments.value };
   }
 
   const outputStage =
@@ -911,11 +1119,11 @@ const executeRun = async (
   if (!(await transitionStage(actor, outputStage, "validating"))) {
     return "internal";
   }
-  if (output.value.mimeType === DOCX_MIME_TYPE) {
+  if (completedOutput.mimeType === DOCX_MIME_TYPE) {
     const validation = await validateDocxBuffer(
-      output.value.buffer instanceof Uint8Array
-        ? copyToArrayBuffer(output.value.buffer)
-        : output.value.buffer,
+      completedOutput.buffer instanceof Uint8Array
+        ? copyToArrayBuffer(completedOutput.buffer)
+        : completedOutput.buffer,
     );
     if (!validation.valid) {
       return "format_validation_failed";
@@ -923,11 +1131,11 @@ const executeRun = async (
   }
   const scan = await scanFile({
     buffer:
-      output.value.buffer instanceof Uint8Array
-        ? output.value.buffer
-        : new Uint8Array(output.value.buffer),
-    declaredMimeType: output.value.mimeType,
-    fileName: output.value.fileName,
+      completedOutput.buffer instanceof Uint8Array
+        ? completedOutput.buffer
+        : new Uint8Array(completedOutput.buffer),
+    declaredMimeType: completedOutput.mimeType,
+    fileName: completedOutput.fileName,
   });
   if (Result.isError(scan) || scan.value.verdict === "reject") {
     return "format_validation_failed";
@@ -958,9 +1166,9 @@ const executeRun = async (
       request: new Request("http://document-translation.internal/"),
       server: null,
     }),
-    buffer: output.value.buffer,
-    fileName: output.value.fileName,
-    mimeType: output.value.mimeType,
+    buffer: completedOutput.buffer,
+    fileName: completedOutput.fileName,
+    mimeType: completedOutput.mimeType,
     scanWarnings: getScanWarnings(scan.value) ?? undefined,
     afterCreate: async (tx, createdOutput) => {
       // audit: skip — lifecycle bookkeeping committed atomically with the
@@ -971,7 +1179,7 @@ const executeRun = async (
           status: "completed",
           errorCode: null,
           finishedAt: new Date(),
-          warnings: output.value.warnings,
+          warnings: completedOutput.warnings,
           outputEntityId: createdOutput.entityId,
           outputFieldId: createdOutput.fieldId,
           outputFileName: createdOutput.fileName,

@@ -4,6 +4,8 @@ type CanStartDocumentTranslationOptions = {
   isLoadingRun: boolean;
   isRunning: boolean;
   isStarting: boolean;
+  hasCommentPolicy: boolean;
+  requiresCommentPolicy: boolean;
   sameLanguage: boolean;
 };
 
@@ -13,10 +15,13 @@ export const canStartDocumentTranslation = ({
   isLoadingRun,
   isRunning,
   isStarting,
+  hasCommentPolicy,
+  requiresCommentPolicy,
   sameLanguage,
 }: CanStartDocumentTranslationOptions): boolean =>
   !isStarting &&
   !isLoadingRun &&
   (!isDeepL || canUseDeepL) &&
+  (!requiresCommentPolicy || hasCommentPolicy) &&
   !sameLanguage &&
   !isRunning;

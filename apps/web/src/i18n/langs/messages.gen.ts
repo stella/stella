@@ -3940,9 +3940,16 @@ type Messages = {
       "backgroundHint": "You can close this window. stella will notify you when the document is ready.";
       "bilingualDescription": "Create two columns with the source and its AI translation.";
       "bilingualDocument": "Bilingual columns · stella AI";
+      "commentsBoth": "Keep original and translated comments";
+      "commentsBothDescription": "Keep each original comment and add its translation.";
+      "commentsDescription": "This document contains comments. Choose what the translated copy should keep.";
+      "commentsOriginal": "Keep original comments";
+      "commentsOriginalDescription": "Keep comment text in its source language.";
+      "commentsTranslated": "Keep translated comments";
+      "commentsTranslatedDescription": "Replace source comment text with its translation.";
       "completed": "Translation ready";
       "deeplDescription": "Translate the complete file with DeepL.";
-      "description": "Create a translated copy of the open document. The original is unchanged.";
+      "description": "Create a translated copy of the open document. The original is unchanged; tracked changes use the Final view.";
       "docxOnly": "stella AI translation is currently available for DOCX files only.";
       "noLanguagesFound": "No languages found";
       "notConfigured": "DeepL is not configured for this organisation. Add a DeepL API key in organisation settings to enable translation.";

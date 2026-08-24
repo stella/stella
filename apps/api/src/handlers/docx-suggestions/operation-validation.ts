@@ -6,7 +6,7 @@ import { FOLIO_DOCUMENT_OPERATION_CONTRACT_VERSION } from "@stll/folio-core/serv
  * canonical output, rather than retaining the untrusted input objects. */
 export const validateDocxSuggestionOperations = (
   operations: readonly unknown[],
-): FolioAIEditOperation[] | undefined => {
+): readonly FolioAIEditOperation[] | undefined => {
   const validation = folioDocumentOperationBatchSchema["~standard"].validate({
     version: FOLIO_DOCUMENT_OPERATION_CONTRACT_VERSION,
     operations,

@@ -44,6 +44,8 @@ void mock.module("@/api/lib/deepl/client", () => ({
   maskDeepLKey: (key: string) => `${key.slice(0, 8)}****************`,
   resolveDeepLBaseUrl: () => "https://api.deepl.com",
   translateDocument: translateDocumentMock,
+  translateTextBatch: mock(async () => []),
+  translateTextBatches: mock(async () => []),
 }));
 
 void mock.module("@/api/lib/content-encryption", () => ({

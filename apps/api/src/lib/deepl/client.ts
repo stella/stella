@@ -34,6 +34,8 @@ const FREE_KEY_SUFFIX = ":fx";
 const UPLOAD_TIMEOUT_MS = 60_000;
 const STATUS_TIMEOUT_MS = 15_000;
 const RESULT_TIMEOUT_MS = 120_000;
+const TEXT_TRANSLATION_TIMEOUT_MS = 60_000;
+export const DEEPL_TEXT_REQUEST_MAX_BYTES = 128 * 1024;
 
 const POLL_INITIAL_DELAY_MS = 2000;
 const POLL_MAX_DELAY_MS = 10_000;
@@ -83,6 +85,16 @@ export type TranslateDocumentResult = {
   billedCharacters: number | null;
 };
 
+export type TranslateTextBatchInput = {
+  apiKey: string;
+  texts: readonly string[];
+  targetLang: string;
+  sourceLang?: string | undefined;
+  formality?: DeepLFormality | undefined;
+};
+
+type TranslateTextRequestInput = Omit<TranslateTextBatchInput, "apiKey">;
+
 type DocumentHandle = { documentId: string; documentKey: string };
 
 type DocumentStatus = {
@@ -114,6 +126,15 @@ const languagesResponseSchema = v.array(
     supports_formality: v.boolean(),
   }),
 );
+
+const textTranslationResponseSchema = v.object({
+  translations: v.array(
+    v.object({
+      detected_source_language: v.string(),
+      text: v.string(),
+    }),
+  ),
+});
 
 const authHeader = (apiKey: string): Record<string, string> => ({
   Authorization: `DeepL-Auth-Key ${apiKey}`,
@@ -420,6 +441,132 @@ export const translateDocument = async (
       };
     }
   }
+};
+
+const textRequestBody = ({
+  texts,
+  targetLang,
+  sourceLang,
+  formality = "prefer_more",
+}: TranslateTextRequestInput): string =>
+  JSON.stringify({
+    text: texts,
+    target_lang: targetLang.toUpperCase(),
+    ...(sourceLang ? { source_lang: sourceLang.toUpperCase() } : {}),
+    formality,
+  });
+
+const utf8Bytes = (value: string): number =>
+  new TextEncoder().encode(value).byteLength;
+
+/** Partition text so every serialized DeepL request stays within 128 KiB. */
+export const partitionDeepLTextBatches = ({
+  texts,
+  targetLang,
+  sourceLang,
+  formality,
+}: TranslateTextRequestInput): string[][] => {
+  if (texts.length === 0) {
+    return [];
+  }
+  const emptyBodyBytes = utf8Bytes(
+    textRequestBody({ texts: [], targetLang, sourceLang, formality }),
+  );
+  const batches: string[][] = [];
+  let batch: string[] = [];
+  let batchBytes = emptyBodyBytes;
+  for (const text of texts) {
+    const itemBytes = utf8Bytes(JSON.stringify(text));
+    const candidateBytes = batchBytes + itemBytes + (batch.length > 0 ? 1 : 0);
+    if (candidateBytes <= DEEPL_TEXT_REQUEST_MAX_BYTES) {
+      batch.push(text);
+      batchBytes = candidateBytes;
+      continue;
+    }
+    if (batch.length === 0) {
+      throw new DeepLDocumentError({
+        message: "DeepL text input exceeds the request-size limit",
+      });
+    }
+    batches.push(batch);
+    batch = [text];
+    batchBytes = emptyBodyBytes + itemBytes;
+    if (batchBytes > DEEPL_TEXT_REQUEST_MAX_BYTES) {
+      throw new DeepLDocumentError({
+        message: "DeepL text input exceeds the request-size limit",
+      });
+    }
+  }
+  batches.push(batch);
+  return batches;
+};
+
+/** Translate one byte-bounded batch of plain text, preserving input order. */
+export const translateTextBatch = async ({
+  apiKey,
+  texts,
+  targetLang,
+  sourceLang,
+  formality = "prefer_more",
+}: TranslateTextBatchInput): Promise<string[]> => {
+  if (texts.length === 0) {
+    return [];
+  }
+  const body = textRequestBody({
+    texts,
+    targetLang,
+    sourceLang,
+    formality,
+  });
+  if (utf8Bytes(body) > DEEPL_TEXT_REQUEST_MAX_BYTES) {
+    throw new DeepLDocumentError({
+      message: "DeepL text request exceeds the request-size limit",
+    });
+  }
+  const response = await deeplFetch(
+    `${resolveDeepLBaseUrl(apiKey)}/v2/translate`,
+    {
+      method: "POST",
+      headers: {
+        ...authHeader(apiKey),
+        "Content-Type": "application/json",
+      },
+      body,
+      timeoutMs: TEXT_TRANSLATION_TIMEOUT_MS,
+    },
+  );
+  if (!response.ok) {
+    mapHttpError(response.status, await readDeepLText(response));
+  }
+  const json = parseDeepLJson({
+    body: await readDeepLJson(response),
+    responseName: "text translation",
+    schema: textTranslationResponseSchema,
+  });
+  if (json.translations.length !== texts.length) {
+    throw new DeepLUpstreamError({
+      message: "DeepL returned an incomplete text translation response",
+    });
+  }
+  return json.translations.map((translation) => translation.text);
+};
+
+/** Translate any bounded input set using sequential byte-safe requests. */
+export const translateTextBatches = async (
+  input: TranslateTextBatchInput,
+): Promise<string[]> => {
+  const batches = partitionDeepLTextBatches(input);
+  let pending = Promise.resolve<string[]>([]);
+  for (const texts of batches) {
+    pending = pending.then(async (translated) => {
+      const batch = await translateTextBatch({ ...input, texts });
+      for (const text of batch) {
+        translated.push(text);
+      }
+      return translated;
+    });
+  }
+  return pending;
 };
 
 /** List of supported target languages, used for the UI dropdown. */
