@@ -25,7 +25,7 @@ export const DecisionFacts = (input: DecisionFactsInput) => {
   }
 
   return (
-    <dl className="text-muted-foreground mb-6 grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-1 font-sans text-xs print:mb-4">
+    <dl className="text-muted-foreground mb-6 grid grid-cols-[9rem_minmax(0,1fr)] gap-x-4 gap-y-1 font-sans text-xs print:mb-4">
       {facts.decisionType !== null && (
         <Fact label={t("common.type")}>
           <span className="capitalize">{facts.decisionType}</span>

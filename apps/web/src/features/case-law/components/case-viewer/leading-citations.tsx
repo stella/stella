@@ -6,6 +6,7 @@ import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
+import { Skeleton } from "@stll/ui/skeleton";
 import { cn } from "@stll/ui/utils";
 
 import { createCaseDecisionViewTab } from "@/components/inspector/case-decision-view";
@@ -126,17 +127,21 @@ const DirectionSection = ({
                 {format.number(counts[treatment])}
               </span>
             </p>
-            <ul className="m-0 flex list-none flex-col p-0">
-              {rows.map((row) => (
-                <LeadingRow
-                  decision={decision}
-                  decisionId={decisionId}
-                  direction={direction}
-                  key={row.id}
-                  row={row}
-                />
-              ))}
-            </ul>
+            {leading === undefined ? (
+              <LeadingRowsLoader count={Math.min(counts[treatment], 3)} />
+            ) : (
+              <ul className="m-0 flex list-none flex-col p-0">
+                {rows.map((row) => (
+                  <LeadingRow
+                    decision={decision}
+                    decisionId={decisionId}
+                    direction={direction}
+                    key={row.id}
+                    row={row}
+                  />
+                ))}
+              </ul>
+            )}
           </div>
         );
       })}
@@ -146,7 +151,7 @@ const DirectionSection = ({
         </div>
       ) : (
         <Button
-          className="w-fit px-0 text-xs"
+          className="text-muted-foreground hover:text-foreground h-auto w-fit p-0 text-xs font-normal"
           onClick={() => setShowingAll(true)}
           size="sm"
           variant="link"
@@ -157,6 +162,18 @@ const DirectionSection = ({
     </section>
   );
 };
+
+/** The shape of the rows to come, so a heading never stands over nothing. */
+const LeadingRowsLoader = ({ count }: { count: number }) => (
+  <div className="flex flex-col gap-2 py-1 ps-4">
+    {Array.from({ length: count }, (_, index) => (
+      <div className="flex flex-col gap-1" key={index}>
+        <Skeleton className="h-3 w-40" />
+        <Skeleton className="h-2.5 w-28" />
+      </div>
+    ))}
+  </div>
+);
 
 const LeadingRow = ({
   decision,
