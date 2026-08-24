@@ -419,7 +419,12 @@
       "citedSummary": "{count, plural, =0 {Nav citēts} zero {Citēts # reižu} one {Citēts vienu reizi} other {Citēts # reizes}}",
       "decisionCount": "{count, plural, =0 {Nav nolēmumu} zero {# nolēmumu} one {# nolēmums} other {# nolēmumi}}",
       "lastNegative": "pēdējā negatīvā atsauce {year}. gadā",
+      "leading": "Nozīmīgākie nolēmumi",
       "negativeCount": "{count, plural, zero {# negatīvu} one {# negatīva} other {# negatīvas}}",
+      "openAtCitation": "Atvērt citāta vietā",
+      "passageNotFound": "Citējošais fragments tekstā netika atrasts",
+      "positiveCount": "{count, plural, zero {# pozitīvu} one {# pozitīvs} other {# pozitīvi}}",
+      "showAll": "{count, plural, zero {Rādīt visus # nolēmumus} one {Rādīt # nolēmumu} other {Rādīt visus # nolēmumus}}",
       "stripLabel": "Atsauces pa gadiem",
       "treatment": {
         "negative": "Negatīvs",
@@ -429,6 +434,7 @@
         "unclassified": "Neklasificēts"
       },
       "unresolved": "Nav piesaistīts nolēmumam",
+      "whereCited": "Kur tiek citēts šis nolēmums",
       "yearTitle": "{year}: {count, plural, zero {# atsauču} one {# atsauce} other {# atsauces}}"
     },
     "columns": {

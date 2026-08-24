@@ -419,7 +419,12 @@
       "citedSummary": "{count, plural, =0 {Necitované} one {Citované raz} few {Citované #-krát} other {Citované #-krát}}",
       "decisionCount": "{count, plural, =0 {Žiadne rozhodnutia} one {# rozhodnutie} few {# rozhodnutia} other {# rozhodnutí}}",
       "lastNegative": "posledná negatívna citácia v roku {year}",
+      "leading": "Najvýznamnejšie rozhodnutia",
       "negativeCount": "{count, plural, one {# negatívna} few {# negatívne} many {# negatívnych} other {# negatívnych}}",
+      "openAtCitation": "Otvoriť na mieste citácie",
+      "passageNotFound": "Citujúcu pasáž sa v texte nepodarilo nájsť",
+      "positiveCount": "{count, plural, one {# pozitívna} few {# pozitívne} many {# pozitívnych} other {# pozitívnych}}",
+      "showAll": "{count, plural, one {Zobraziť # rozhodnutie} few {Zobraziť všetky # rozhodnutia} many {Zobraziť všetkých # rozhodnutí} other {Zobraziť všetkých # rozhodnutí}}",
       "stripLabel": "Citácie podľa rokov",
       "treatment": {
         "negative": "Negatívne",
@@ -429,6 +434,7 @@
         "unclassified": "Neklasifikované"
       },
       "unresolved": "Nepriradené k rozhodnutiu",
+      "whereCited": "Kde cituje toto rozhodnutie",
       "yearTitle": "{year}: {count, plural, one {# citácia} few {# citácie} other {# citácií}}"
     },
     "columns": {

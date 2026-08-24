@@ -419,7 +419,12 @@
       "citedSummary": "{count, plural, =0 {Nem hivatkozták} one {Egyszer hivatkozták} other {#-szor hivatkozták}}",
       "decisionCount": "{count, plural, =0 {Nincs határozat} one {# határozat} other {# határozat}}",
       "lastNegative": "utolsó elutasító hivatkozás: {year}",
+      "leading": "Meghatározó határozatok",
       "negativeCount": "{count, plural, one {# elutasító} other {# elutasító}}",
+      "openAtCitation": "Megnyitás a hivatkozásnál",
+      "passageNotFound": "A hivatkozó szövegrész nem található a szövegben",
+      "positiveCount": "{count, plural, one {# támogató} other {# támogató}}",
+      "showAll": "{count, plural, one {Mind a # határozat megjelenítése} other {Mind a # határozat megjelenítése}}",
       "stripLabel": "Hivatkozások évenként",
       "treatment": {
         "negative": "Elutasító",
@@ -429,6 +434,7 @@
         "unclassified": "Besorolatlan"
       },
       "unresolved": "Nincs határozathoz rendelve",
+      "whereCited": "Hol hivatkozik erre a határozatra",
       "yearTitle": "{year}: {count, plural, one {# hivatkozás} other {# hivatkozás}}"
     },
     "columns": {

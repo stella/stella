@@ -422,7 +422,12 @@ type Messages = {
       "citedSummary": "{count, plural, =0 {Not cited} one {Cited once} other {Cited # times}}";
       "decisionCount": "{count, plural, =0 {No decisions} one {# decision} other {# decisions}}";
       "lastNegative": "last negative treatment in {year}";
+      "leading": "Leading decisions";
       "negativeCount": "{count, plural, one {# negative} other {# negative}}";
+      "openAtCitation": "Open at the citation";
+      "passageNotFound": "The citing passage was not located in the text";
+      "positiveCount": "{count, plural, one {# positive} other {# positive}}";
+      "showAll": "{count, plural, one {Show all # decision} other {Show all # decisions}}";
       "stripLabel": "Citations by year";
       "treatment": {
         "negative": "Negative";
@@ -432,6 +437,7 @@ type Messages = {
         "unclassified": "Unclassified";
       };
       "unresolved": "Not resolved to a decision";
+      "whereCited": "Where it cites this decision";
       "yearTitle": "{year}: {count, plural, one {# citation} other {# citations}}";
     };
     "columns": {

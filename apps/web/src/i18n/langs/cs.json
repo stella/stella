@@ -419,7 +419,12 @@
       "citedSummary": "{count, plural, =0 {Necitováno} one {Citováno jednou} few {Citováno #krát} other {Citováno #krát}}",
       "decisionCount": "{count, plural, =0 {Žádná rozhodnutí} one {# rozhodnutí} few {# rozhodnutí} other {# rozhodnutí}}",
       "lastNegative": "poslední negativní citace v roce {year}",
+      "leading": "Nejvýznamnější rozhodnutí",
       "negativeCount": "{count, plural, one {# negativní} few {# negativní} many {# negativních} other {# negativních}}",
+      "openAtCitation": "Otevřít na místě citace",
+      "passageNotFound": "Citující pasáž se v textu nepodařilo najít",
+      "positiveCount": "{count, plural, one {# pozitivní} few {# pozitivní} many {# pozitivních} other {# pozitivních}}",
+      "showAll": "{count, plural, one {Zobrazit # rozhodnutí} few {Zobrazit všechna # rozhodnutí} many {Zobrazit všech # rozhodnutí} other {Zobrazit všech # rozhodnutí}}",
       "stripLabel": "Citace podle let",
       "treatment": {
         "negative": "Negativní",
@@ -429,6 +434,7 @@
         "unclassified": "Neklasifikováno"
       },
       "unresolved": "Nepřiřazeno k rozhodnutí",
+      "whereCited": "Kde cituje toto rozhodnutí",
       "yearTitle": "{year}: {count, plural, one {# citace} few {# citace} other {# citací}}"
     },
     "columns": {

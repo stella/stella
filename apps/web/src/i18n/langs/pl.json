@@ -419,7 +419,12 @@
       "citedSummary": "{count, plural, =0 {Niecytowane} one {Cytowane raz} few {Cytowane # razy} many {Cytowane # razy} other {Cytowane # razy}}",
       "decisionCount": "{count, plural, =0 {Brak orzeczeń} one {# orzeczenie} few {# orzeczenia} many {# orzeczeń} other {# orzeczenia}}",
       "lastNegative": "ostatnie negatywne powołanie w {year} r.",
+      "leading": "Wiodące orzeczenia",
       "negativeCount": "{count, plural, one {# negatywne} few {# negatywne} many {# negatywnych} other {# negatywnych}}",
+      "openAtCitation": "Otwórz w miejscu cytowania",
+      "passageNotFound": "Nie znaleziono cytującego fragmentu w tekście",
+      "positiveCount": "{count, plural, one {# pozytywne} few {# pozytywne} many {# pozytywnych} other {# pozytywnych}}",
+      "showAll": "{count, plural, one {Pokaż # orzeczenie} few {Pokaż wszystkie # orzeczenia} many {Pokaż wszystkie # orzeczeń} other {Pokaż wszystkie # orzeczeń}}",
       "stripLabel": "Powołania według lat",
       "treatment": {
         "negative": "Negatywne",
@@ -429,6 +434,7 @@
         "unclassified": "Niesklasyfikowane"
       },
       "unresolved": "Nieprzypisane do orzeczenia",
+      "whereCited": "Gdzie cytuje to orzeczenie",
       "yearTitle": "{year}: {count, plural, one {# powołanie} few {# powołania} many {# powołań} other {# powołania}}"
     },
     "columns": {

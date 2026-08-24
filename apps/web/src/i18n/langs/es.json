@@ -419,7 +419,12 @@
       "citedSummary": "{count, plural, =0 {Sin citas} one {Citada una vez} other {Citada # veces}}",
       "decisionCount": "{count, plural, =0 {Ninguna resolución} one {# resolución} other {# resoluciones}}",
       "lastNegative": "última cita negativa en {year}",
+      "leading": "Resoluciones de referencia",
       "negativeCount": "{count, plural, one {# negativa} many {# negativas} other {# negativas}}",
+      "openAtCitation": "Abrir en la cita",
+      "passageNotFound": "No se encontró el pasaje citante en el texto",
+      "positiveCount": "{count, plural, one {# positiva} many {# positivas} other {# positivas}}",
+      "showAll": "{count, plural, one {Mostrar la resolución} many {Mostrar las # resoluciones} other {Mostrar las # resoluciones}}",
       "stripLabel": "Citas por año",
       "treatment": {
         "negative": "Negativa",
@@ -429,6 +434,7 @@
         "unclassified": "Sin clasificar"
       },
       "unresolved": "Sin resolución asociada",
+      "whereCited": "Dónde cita esta resolución",
       "yearTitle": "{year}: {count, plural, one {# cita} other {# citas}}"
     },
     "columns": {

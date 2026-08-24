@@ -5,6 +5,7 @@ import { Separator } from "@stll/ui/separator";
 
 import { PublicWorkspaceShell } from "@/components/public-workspace-shell";
 import { SidebarTrigger, useSidebar } from "@/components/sidebar";
+import { TopBarCitations } from "@/features/case-law/components/top-bar-citations";
 import { ChromeHeaderActionsSlot } from "@/lib/chrome-header-actions";
 import { toStatuteCountrySegment } from "@/lib/statute-route";
 import { PublicLawInspector } from "@/routes/law/-components/public-law-inspector";
@@ -106,6 +107,7 @@ function PublicLawTopBar() {
             )}
           </>
         )}
+        <TopBarCitations />
       </nav>
       <ChromeHeaderActionsSlot />
     </header>
