@@ -392,6 +392,7 @@ type Messages = {
   };
   "caseLaw": {
     "analysis": {
+      "backToSection": "Back to the start of this section";
       "categories": {
         "facts": "Facts";
         "holding": "Holding";

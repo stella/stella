@@ -389,6 +389,7 @@
   },
   "caseLaw": {
     "analysis": {
+      "backToSection": "Zpět na začátek této části",
       "categories": {
         "facts": "Skutkový stav",
         "holding": "Právní věta",

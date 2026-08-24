@@ -389,6 +389,7 @@
   },
   "caseLaw": {
     "analysis": {
+      "backToSection": "Wróć do początku tej części",
       "categories": {
         "facts": "Stan faktyczny",
         "holding": "Teza",

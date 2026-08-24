@@ -389,6 +389,7 @@
   },
   "caseLaw": {
     "analysis": {
+      "backToSection": "العودة إلى بداية هذا القسم",
       "categories": {
         "facts": "الوقائع",
         "holding": "المبدأ القانوني",

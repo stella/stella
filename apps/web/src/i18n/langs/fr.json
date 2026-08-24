@@ -389,6 +389,7 @@
   },
   "caseLaw": {
     "analysis": {
+      "backToSection": "Revenir au début de cette partie",
       "categories": {
         "facts": "Faits",
         "holding": "Solution",

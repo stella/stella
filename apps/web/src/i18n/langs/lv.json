@@ -389,6 +389,7 @@
   },
   "caseLaw": {
     "analysis": {
+      "backToSection": "Atgriezties šīs sadaļas sākumā",
       "categories": {
         "facts": "Fakti",
         "holding": "Nolēmums",

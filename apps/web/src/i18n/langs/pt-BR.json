@@ -389,6 +389,7 @@
   },
   "caseLaw": {
     "analysis": {
+      "backToSection": "Voltar ao início desta seção",
       "categories": {
         "facts": "Fatos",
         "holding": "Entendimento",

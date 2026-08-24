@@ -389,6 +389,7 @@
   },
   "caseLaw": {
     "analysis": {
+      "backToSection": "Tagasi selle osa algusesse",
       "categories": {
         "facts": "Asjaolud",
         "holding": "Lahend",

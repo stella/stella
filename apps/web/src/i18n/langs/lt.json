@@ -389,6 +389,7 @@
   },
   "caseLaw": {
     "analysis": {
+      "backToSection": "Grįžti į šios dalies pradžią",
       "categories": {
         "facts": "Faktinės aplinkybės",
         "holding": "Teismo išvada",

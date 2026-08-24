@@ -12,6 +12,7 @@ import type { OutlineItem } from "@stll/ui/outline-rail";
 
 import type { SelectionAnchor } from "@/features/case-law/annotations/selection-anchor";
 import { isPendingAnnotationId } from "@/features/case-law/annotations/use-decision-annotations";
+import { CurrentSection } from "@/features/case-law/components/case-viewer/analysis/current-section";
 import { MarginNotes } from "@/features/case-law/components/case-viewer/analysis/margin-notes";
 import type {
   AnalysisMarginItem,
@@ -394,6 +395,13 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
         )}
 
         <div className="reader-scroll h-full overflow-y-auto" ref={mainRef}>
+          {hasAnalysis && flatAnalysisHeadings.length > 0 && (
+            <CurrentSection
+              anchorById={analysisOutline.anchorById}
+              headings={flatAnalysisHeadings}
+              scrollContainerRef={mainRef}
+            />
+          )}
           <div
             className="grid max-lg:!grid-cols-[1fr]"
             style={{ gridTemplateColumns: `${panelWidth}px minmax(0, 1fr)` }}

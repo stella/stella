@@ -389,6 +389,7 @@
   },
   "caseLaw": {
     "analysis": {
+      "backToSection": "Zurück zum Anfang dieses Abschnitts",
       "categories": {
         "facts": "Sachverhalt",
         "holding": "Spruch",

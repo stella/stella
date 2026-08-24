@@ -389,6 +389,7 @@
   },
   "caseLaw": {
     "analysis": {
+      "backToSection": "Vissza a szakasz elejére",
       "categories": {
         "facts": "Tényállás",
         "holding": "Jogi álláspont",

@@ -389,6 +389,7 @@
   },
   "caseLaw": {
     "analysis": {
+      "backToSection": "Volver al inicio de esta sección",
       "categories": {
         "facts": "Hechos",
         "holding": "Doctrina",
