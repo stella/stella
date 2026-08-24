@@ -198,16 +198,14 @@ const normalizeNssInlines = (
         spacedEmphasis && SPACED_EMPHASIS_RE.test(whitespaceNormalized)
           ? whitespaceNormalized
               .trim()
-              .replace(/ {2,}/gu, MULTI_SPACE_MARKER)
+              .replace(/ {2,}/gu, () => MULTI_SPACE_MARKER)
               .replace(/(?<=\p{L}) (?=\p{L})/gu, "")
               .replaceAll(MULTI_SPACE_MARKER, " ")
               .replace(/\s+([,:;.!?])/gu, "$1")
           : collapseSpacedLetters(whitespaceNormalized);
-      return {
-        type: "text",
-        text,
-        ...(node.anonymized === true && { anonymized: true as const }),
-      };
+      return node.anonymized === true
+        ? { type: "text", text, anonymized: true }
+        : { type: "text", text };
     }
     if (node.type === "bold") {
       return {
