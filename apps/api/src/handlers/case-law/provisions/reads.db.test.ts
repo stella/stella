@@ -8,6 +8,7 @@ import {
   caseLawSources,
 } from "@/api/db/schema";
 import { withRedistributableSubject } from "@/api/handlers/case-law/decisions/public-subject";
+import type { RedistributableDecisionSubject } from "@/api/handlers/case-law/decisions/public-subject";
 import { listCitingDecisionsHandler } from "@/api/handlers/case-law/provisions/citing-decisions";
 import { listDecisionProvisionsHandler } from "@/api/handlers/case-law/provisions/list-for-decision";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -204,18 +205,20 @@ afterAll(async () => {
   await client.close();
 });
 
-const subjectFor = async (id: SafeId<"caseLawDecision">) =>
-  (await withRedistributableSubject(
-    caseLawDb,
-    { kind: "id", id },
-    async (subject) => subject,
-  )) ?? panic("expected a redistributable subject");
+const withSubject = async <T>(
+  id: SafeId<"caseLawDecision">,
+  read: (subject: RedistributableDecisionSubject) => Promise<T>,
+): Promise<T> =>
+  (await withRedistributableSubject(caseLawDb, { kind: "id", id }, read)) ??
+  panic("expected a redistributable subject");
 
 const decisionProvisions = async (cursor?: string) => {
-  const page = await listDecisionProvisionsHandler({
-    subject: await subjectFor(highAuthorityId),
-    query: { limit: 2, ...(cursor === undefined ? {} : { cursor }) },
-  });
+  const page = await withSubject(highAuthorityId, async (subject) =>
+    await listDecisionProvisionsHandler({
+      subject,
+      query: { limit: 2, ...(cursor === undefined ? {} : { cursor }) },
+    }),
+  );
 
   if ("items" in page) {
     return page;
@@ -279,10 +282,12 @@ test("decision provisions page by span start", async () => {
 });
 
 test("decision provisions reject a malformed cursor", async () => {
-  const response = await listDecisionProvisionsHandler({
-    subject: await subjectFor(highAuthorityId),
-    query: { cursor: "not-a-cursor" },
-  });
+  const response = await withSubject(highAuthorityId, async (subject) =>
+    await listDecisionProvisionsHandler({
+      subject,
+      query: { cursor: "not-a-cursor" },
+    }),
+  );
 
   expect("items" in response).toBe(false);
 });
