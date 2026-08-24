@@ -20,6 +20,7 @@ import { onDemandDocumentDeps } from "@/api/handlers/case-law/decisions/document
 import { readDecisionHandler } from "@/api/handlers/case-law/decisions/get";
 import type { DecisionSubjectLocator } from "@/api/handlers/case-law/decisions/public-subject";
 import { withRedistributableSubject } from "@/api/handlers/case-law/decisions/public-subject";
+import { omitDerivablePlainText } from "@/api/handlers/case-law/document-ast";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 
 type DecisionRead = Awaited<ReturnType<typeof readDecisionHandler>>;
@@ -72,7 +73,9 @@ const hydrate = async (
 
   return {
     ...decision,
-    documentAst: document.documentAst,
+    // Same omission the read applies to a stored AST: a document fetched
+    // on demand must not answer with a fatter payload than a cached one.
+    documentAst: omitDerivablePlainText(document.documentAst),
     documentPending: false,
     // Mirrors the read: text is the fallback for a decision without a
     // usable AST, and a parsed document always has one.

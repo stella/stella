@@ -16,12 +16,19 @@ export type {
   ParagraphRole,
   TableBlock,
   TableCell,
+  WireBlock,
+  WireDocumentAst,
+  WireTableCell,
 } from "@/api/lib/case-law/document-ast";
 
 export {
   getDocumentAstMetadata,
   hasUsableAst,
   isDocumentAst,
+  omitDerivablePlainText,
   parseDocumentAst,
   parseUsableDocumentAst,
+  plainTextOf,
+  projectPlainText,
+  withProjectedPlainText,
 } from "@/api/lib/case-law/document-ast";

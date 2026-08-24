@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { plainTextOf } from "@stll/legal-ast/document-ast";
 import type { Block, HeadingLevel, Inline } from "@stll/legal-ast/document-ast";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
@@ -75,29 +76,16 @@ type SynchronousNode =
   | undefined;
 
 /**
- * Flatten `inlines` into the same character sequence that `renderInline`
- * walks through when it tracks offsets: text nodes contribute verbatim,
- * line-breaks are a single "\n", bold/italic/link children are recursed
- * into.
+ * The raw inline flattening, re-exported under the name this reader has
+ * always used for it.
  *
- * Search pieces must come from this, NOT from `block.plainText`: the API
- * pipeline collapses spaced-letter runs in `plainText` (for DB FTS) while
- * leaving inline text untouched, so `plainText` offsets would not line up
- * with the offsets the highlight renderer uses.
+ * Search pieces and citation anchors must come from this, NOT from
+ * `block.plainText`: ingestion derives `plainText` with
+ * `projectPlainText`, which trims and collapses letter-spaced runs for
+ * search, so its offsets would not line up with the ones the highlight
+ * renderer walks.
  */
-export const inlinesToPlainText = (inlines: readonly Inline[]): string => {
-  let out = "";
-  for (const node of inlines) {
-    if (node.type === "text") {
-      out += node.text;
-    } else if (node.type === "line-break") {
-      out += "\n";
-    } else {
-      out += inlinesToPlainText(node.children);
-    }
-  }
-  return out;
-};
+export const inlinesToPlainText = plainTextOf;
 
 export const getParagraphNumberPieceId = (blockId: string): string =>
   `paragraph-number:${blockId}`;

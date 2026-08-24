@@ -9,7 +9,10 @@ import {
 } from "@stll/legal-ast/decision-identifier";
 import { collapseSpacedLetters } from "@stll/text-normalize";
 
-import { isDocumentAst } from "@/api/lib/case-law/document-ast";
+import {
+  isDocumentAst,
+  withProjectedPlainText,
+} from "@/api/lib/case-law/document-ast";
 import { canonicalDecisionDate } from "@/api/lib/dates";
 import {
   DANGEROUS_CHARS,
@@ -145,12 +148,9 @@ export const sanitizeResult = (result: IngestionResult): IngestionResult => {
     return canonicalDecisionDate(raw) ?? undefined;
   };
 
-  const deepSanitize = (value: unknown, key?: string): unknown => {
+  const deepSanitize = (value: unknown): unknown => {
     if (typeof value === "string") {
-      const stripped = value
-        .replace(DANGEROUS_CHARS, "")
-        .replace(/\u00A0/gu, " ");
-      return key === "plainText" ? collapseSpacedLetters(stripped) : stripped;
+      return value.replace(DANGEROUS_CHARS, "").replace(/\u00A0/gu, " ");
     }
     if (Array.isArray(value)) {
       return value.map((item) => deepSanitize(item));
@@ -158,16 +158,22 @@ export const sanitizeResult = (result: IngestionResult): IngestionResult => {
     if (isRecord(value)) {
       const sanitized: Record<string, unknown> = {};
       for (const [entryKey, entryValue] of Object.entries(value)) {
-        sanitized[entryKey] = deepSanitize(entryValue, entryKey);
+        sanitized[entryKey] = deepSanitize(entryValue);
       }
       return sanitized;
     }
     return value;
   };
 
+  // Block text is derived here, not sanitized in place: `projectPlainText`
+  // recomputes every rebuildable `plainText` from the `inlines` stored
+  // beside it, so the two can never drift and a public read may drop the
+  // field entirely. It runs after `deepSanitize` because sanitization
+  // rewrites inline text (no-break spaces become spaces), which can turn a
+  // run into a collapsible one.
   const sanitizedDocumentAst = deepSanitize(result.documentAst);
   const documentAst = isDocumentAst(sanitizedDocumentAst)
-    ? sanitizedDocumentAst
+    ? withProjectedPlainText(sanitizedDocumentAst)
     : EMPTY_AST;
 
   const identifiers = sanitizeDecisionIdentifiers(result.identifiers);

@@ -61,6 +61,7 @@
     "format": "oxfmt ."
   },
   "dependencies": {
+    "@stll/text-normalize": "workspace:*",
     "valibot": "catalog:"
   },
   "devDependencies": {

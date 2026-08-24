@@ -15,7 +15,10 @@ import {
   normalizePublicDecisionLanguage,
   type RedistributableDecisionSubject,
 } from "@/api/handlers/case-law/decisions/public-subject";
-import { hasUsableAst } from "@/api/handlers/case-law/document-ast";
+import {
+  hasUsableAst,
+  omitDerivablePlainText,
+} from "@/api/handlers/case-law/document-ast";
 import { corpusCarriesDocument } from "@/api/handlers/case-law/stored-payload";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -374,12 +377,19 @@ export const readDecisionHandler = definePublicLawSharedQuery(
       pgAst: decision.documentAst,
       decisionId,
     });
-    const documentAst = astRead.payload;
+    const storedAst = astRead.payload;
+    const astIsUsable = hasUsableAst(storedAst);
+    // Block text a reader can rebuild from the `inlines` beside it does
+    // not travel: ingestion derives every `plainText` with
+    // `projectPlainText`, and `parseDocumentAst` refills them on arrival.
+    const documentAst = astIsUsable
+      ? omitDerivablePlainText(storedAst)
+      : storedAst;
 
     // Only fetch fulltext if no usable documentAst (fallback).
     let fulltext: string | null = null;
     let corpusPayloadUnavailable = astRead.unavailable;
-    if (!hasUsableAst(documentAst)) {
+    if (!astIsUsable) {
       const textRead = await resolveFulltext({
         textS3Key: decision.textS3Key,
         contentHash: decision.contentHash,
@@ -402,7 +412,7 @@ export const readDecisionHandler = definePublicLawSharedQuery(
     const { documentPending, documentReadFailed, documentUnavailable } =
       decision.redactedAt === null
         ? await resolveDocumentState({
-            hasReadableDocument: hasUsableAst(documentAst) || Boolean(fulltext),
+            hasReadableDocument: astIsUsable || Boolean(fulltext),
             corpusPayloadUnavailable,
             documentUrl: decision.documentUrl,
             corpusServed:

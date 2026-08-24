@@ -4,8 +4,10 @@ import {
   getDocumentAstMetadata,
   hasUsableAst,
   isDocumentAst,
+  omitDerivablePlainText,
   parseDocumentAst,
   parseUsableDocumentAst,
+  withProjectedPlainText,
 } from "./document-ast";
 import type { DocumentAst } from "./document-ast";
 
@@ -289,5 +291,62 @@ describe("parseUsableDocumentAst", () => {
     expect(
       parseUsableDocumentAst({ version: 1, blocks: [{ junk: true }] }),
     ).toBe(null);
+  });
+});
+
+describe("withProjectedPlainText", () => {
+  const tableAst = (cellText: string): DocumentAst => ({
+    ...documentAst,
+    blocks: [
+      {
+        id: "t1",
+        anchorId: "t-1",
+        type: "table",
+        role: "metadata-table",
+        rows: [
+          [
+            { inlines: [{ type: "text", text: cellText }], plainText: "stale" },
+            { inlines: [{ type: "text", text: "NS" }], plainText: "stale" },
+          ],
+          [{ inlines: [{ type: "text", text: "Rok" }], plainText: "stale" }],
+        ],
+        plainText: "stale table text",
+      },
+    ],
+  });
+
+  test("collapses a letter-spaced table cell into the table's own text", () => {
+    const [block] = withProjectedPlainText(tableAst("z a m i e t a")).blocks;
+
+    if (block?.type !== "table") {
+      throw new Error("expected a table block");
+    }
+    // The corpus index reads the table-level field for a table, so a
+    // letter-spaced cell has to be findable by its collapsed form here,
+    // not only inside the cell.
+    expect(block.rows[0]?.[0]?.plainText).toBe("zamieta");
+    expect(block.plainText).toBe("zamieta\tNS\nRok");
+  });
+
+  test("derives the table text from the projected cells, not the parser's", () => {
+    const [block] = withProjectedPlainText(tableAst("Soud")).blocks;
+
+    if (block?.type !== "table") {
+      throw new Error("expected a table block");
+    }
+    expect(block.plainText).toBe("Soud\tNS\nRok");
+  });
+
+  test("keeps the table's own text on the wire, being unrebuildable", () => {
+    const projected = withProjectedPlainText(tableAst("z a m i e t a"));
+    const wireAst = omitDerivablePlainText(projected);
+    const [wire] = wireAst.blocks;
+
+    if (wire?.type !== "table") {
+      throw new Error("expected a table block");
+    }
+    expect(wire.plainText).toBe("zamieta\tNS\nRok");
+    expect(wire.rows[0]?.[0]).not.toHaveProperty("plainText");
+    expect(parseDocumentAst(JSON.stringify(wireAst))).toEqual(projected);
   });
 });
