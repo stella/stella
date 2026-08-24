@@ -83,9 +83,13 @@ const staticStrings = (node: unknown, out: string[]): void => {
   }
   if (node.type === "TemplateLiteral" && Array.isArray(node.quasis)) {
     for (const quasi of node.quasis) {
-      const cooked = isAstNode(quasi)
-        ? (quasi.value as { cooked?: unknown } | undefined)?.cooked
-        : undefined;
+      // A quasi's `value` is a plain `{ raw, cooked }` record, not an AST
+      // node, so it is narrowed by shape rather than by `type`.
+      const value: unknown = isAstNode(quasi) ? quasi.value : undefined;
+      const cooked =
+        typeof value === "object" && value !== null && "cooked" in value
+          ? value.cooked
+          : undefined;
       if (typeof cooked === "string") {
         out.push(cooked);
       }
@@ -154,7 +158,7 @@ export default eslintCompatPlugin({
       createOnce(context) {
         return {
           before() {
-            const options = context.options?.at(0);
+            const options = context.options.at(0);
             const allowedFiles =
               typeof options === "object" &&
               options !== null &&
