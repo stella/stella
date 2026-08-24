@@ -132,6 +132,32 @@ const extractWords = (text: string): Set<string> => {
   return words;
 };
 
+// NSS renders decorative figures with the alt text "obrázek" (Czech for
+// "image"). When one sits flush against its neighbour — as bracketless
+// text, or across an inline-element boundary that cheerio's .text()
+// concatenates with no space ("<span>Obrázek</span>Česká" →
+// "ObrázekČeská") — there is no bracket for separateSkipMarkers to split
+// on, so the fused token ("obrázekčeská") matches no AST word and no
+// SKIP_WORDS entry and reads as missing. Peeling leading markers recovers
+// the real remainder; the caller keeps a word only when that remainder is
+// itself unaccounted for, so peeling can clear a phantom but never hides
+// genuine loss.
+const DECORATIVE_MARKERS = ["obrázek"];
+const peelDecorativeMarkers = (word: string): string => {
+  let peeled = word;
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const marker of DECORATIVE_MARKERS) {
+      if (peeled.length > marker.length && peeled.startsWith(marker)) {
+        peeled = peeled.slice(marker.length);
+        changed = true;
+      }
+    }
+  }
+  return peeled;
+};
+
 /** Flatten inline nodes to text (line-break → space). */
 const inlineText = (inlines: readonly Inline[]): string => {
   let text = "";
@@ -257,7 +283,21 @@ export const validateAst = (
 
   const originalWords = extractWords(originalText);
   const astWords = extractWords(astText);
-  const missingWords = [...originalWords].filter((w) => !astWords.has(w));
+  // A decorative marker fused to its neighbour must not read as missing
+  // when the peeled remainder is itself in the AST or is a skip word.
+  // Peeling only ever clears a phantom: a genuinely absent word survives,
+  // because its remainder resolves to neither, so real loss is still
+  // reported.
+  const missingWords = [...originalWords].filter((w) => {
+    if (astWords.has(w)) {
+      return false;
+    }
+    const peeled = peelDecorativeMarkers(w);
+    if (peeled === w) {
+      return true;
+    }
+    return !(astWords.has(peeled) || SKIP_WORDS.has(peeled));
+  });
 
   if (retainedPct < minRetainedPct) {
     issues.push({

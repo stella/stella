@@ -196,6 +196,73 @@ describe("validateAst", () => {
       expect(result.stats.missingWords).toEqual([]);
     });
 
+    test("treats a bracketless decorative marker as a boundary, not glue", () => {
+      // NSS also serves the emblem placeholder without brackets, flush
+      // against the following word ("OBRÁZEKČeská", "OBRÁZEKaplikační").
+      // cheerio's .text() concatenates it with no space, so the fused
+      // token reaches the word set with no bracket for the marker split
+      // to act on. The AST is right to drop the decoration, so the
+      // remainder ("česká", "aplikační") must not read as missing.
+      const html = wrapInHtml(
+        "OBRÁZEKČeská republika rozsudek jménem republiky " +
+          "OBRÁZEKaplikační doložka OBRÁZEKpro úplnost",
+      );
+      const blocks: Block[] = [
+        makeHeading("H"),
+        makeBlock({
+          plainText:
+            "Česká republika rozsudek jménem republiky " +
+            "aplikační doložka pro úplnost",
+        }),
+      ];
+
+      const result = validateAst(html, blocks);
+
+      expect(result.stats.missingWords).toEqual([]);
+    });
+
+    test("treats an inline-element marker boundary as glue, not loss", () => {
+      // The same placeholder wrapped in an inline element
+      // ("<span>Obrázek</span>Česká") glues the same way: .text()
+      // joins the span's text to the next node with no space.
+      const html = wrapInHtml(
+        "<span>Obrázek</span>Česká republika rozsudek jménem republiky " +
+          "<span>Obrázek</span>aplikační doložka",
+      );
+      const blocks: Block[] = [
+        makeHeading("H"),
+        makeBlock({
+          plainText:
+            "Česká republika rozsudek jménem republiky aplikační doložka",
+        }),
+      ];
+
+      const result = validateAst(html, blocks);
+
+      expect(result.stats.missingWords).toEqual([]);
+    });
+
+    test("still reports a real word lost behind a decorative marker", () => {
+      // Peeling the marker must not swallow genuine loss: the remainder
+      // is absent from the AST, so it stays missing.
+      const html = wrapInHtml(
+        "OBRÁZEKžaloba byla podána včas a je důvodná podle soudu",
+      );
+      const blocks: Block[] = [
+        makeHeading("H"),
+        makeBlock({ plainText: "byla podána včas a je důvodná podle soudu" }),
+      ];
+
+      const result = validateAst(html, blocks);
+
+      // The genuinely absent word still surfaces (as the fused token,
+      // since its peeled remainder resolves to neither the AST nor a
+      // skip word): peeling clears phantoms, it does not hide loss.
+      expect(result.stats.missingWords.some((w) => w.includes("žaloba"))).toBe(
+        true,
+      );
+    });
+
     test("keeps a mid-word anonymization marker joined", () => {
       // "[o]rganizace" anonymizes one letter inside a word: the
       // brackets are removed, not treated as a boundary, or the
