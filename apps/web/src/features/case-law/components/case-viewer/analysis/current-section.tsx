@@ -24,9 +24,9 @@ type CurrentSectionProps = {
 /**
  * The AI-generated heading of the passage under the reader's eye, held at
  * the top of the text while they scroll, with its parent for the path. A
- * click returns to where the section starts. Placed at the top of the text
- * column, inside the scroll container so `sticky` can hold it; nothing
- * shows until a heading has scrolled past the top.
+ * click returns to where the section starts. Pinned at the top of the notes
+ * column beside the text, inside the scroll container so `sticky` can hold
+ * it; nothing shows until a heading has scrolled past the top.
  */
 export const CurrentSection = ({
   anchorById,
@@ -111,37 +111,36 @@ export const CurrentSection = ({
   };
 
   return (
-    // Out of the flow (a sticky box of no height), so the text keeps its
-    // place and the bar lies over its top edge, on the paper's own colour.
-    <div className="sticky top-0 z-10 -mx-4 h-0 max-sm:-mx-3">
+    // Out of the flow (a sticky box of no height) at the top of the notes
+    // column, so the notes keep their places and the text stays untouched.
+    <div className="sticky top-0 z-10 h-0">
       <div
         aria-hidden={current === null}
         className={cn(
-          "reader-paper border-border/60 absolute inset-x-0 top-0 border-b transition-opacity duration-150",
+          "bg-background absolute inset-x-0 top-0 pb-2 transition-opacity duration-150",
           current === null ? "pointer-events-none opacity-0" : "opacity-100",
         )}
       >
         <button
-          className="text-foreground-strong-muted hover:text-foreground flex w-full items-center gap-2 px-4 py-1.5 text-start font-sans text-xs max-sm:px-3"
+          className="text-foreground-strong-muted hover:text-foreground flex w-full items-center gap-1.5 border-s-[3px] py-1 ps-2.5 pe-2 text-start font-sans text-xs"
           disabled={current === null}
           onClick={jumpBack}
+          style={{
+            borderInlineStartColor:
+              current === null
+                ? "transparent"
+                : `var(${getCategoryVar(current.category)})`,
+          }}
           title={t("caseLaw.analysis.backToSection")}
           type="button"
         >
-          {current !== null && (
-            <span
-              aria-hidden="true"
-              className="h-3 w-[3px] shrink-0 rounded-full"
-              style={{
-                backgroundColor: `var(${getCategoryVar(current.category)})`,
-              }}
-            />
-          )}
-          <span className="min-w-0 flex-1 truncate">
+          <span className="min-w-0 flex-1">
             {parent !== undefined && parent !== null && (
-              <span className="text-muted-foreground">{parent.label} › </span>
+              <span className="text-muted-foreground block text-[0.7rem]">
+                {parent.label}
+              </span>
             )}
-            {current?.label}
+            <span className="block truncate font-medium">{current?.label}</span>
           </span>
           <ChevronUpIcon
             aria-hidden="true"

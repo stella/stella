@@ -400,6 +400,13 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
             style={{ gridTemplateColumns: `${panelWidth}px minmax(0, 1fr)` }}
           >
             <aside className="relative max-lg:hidden">
+              {hasAnalysis && flatAnalysisHeadings.length > 0 && (
+                <CurrentSection
+                  anchorById={analysisOutline.anchorById}
+                  headings={flatAnalysisHeadings}
+                  scrollContainerRef={mainRef}
+                />
+              )}
               {((hasAnalysis && marginItems.length > 0) ||
                 commentItems.length > 0 ||
                 composerItem.length > 0) && (
@@ -474,13 +481,6 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
             </aside>
 
             <main className="reader-paper min-w-0 px-4 py-8 max-sm:px-3">
-              {hasAnalysis && flatAnalysisHeadings.length > 0 && (
-                <CurrentSection
-                  anchorById={analysisOutline.anchorById}
-                  headings={flatAnalysisHeadings}
-                  scrollContainerRef={mainRef}
-                />
-              )}
               <ProvisionsCited decisionId={decisionId} />
               <DecisionText
                 activeMatchIndex={activeMatchIndex}
