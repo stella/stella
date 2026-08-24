@@ -617,20 +617,20 @@ describe("parseNssDecisionHtml", () => {
       </body></html>`;
 
       const { documentAst } = parseNssDecisionHtml(baseInput(html));
+      const inlineIntro = documentAst.blocks.find(
+        (block) => block.plainText === "Soud rozhodl takto:",
+      );
+      const holding = documentAst.blocks.find(
+        (block) => block.type === "paragraph" && block.role === "holding",
+      );
 
       expect(documentAst.blocks.map((block) => block.plainText)).toContain(
         "Soud rozhodl takto:",
       );
-      expect(
-        documentAst.blocks.find(
-          (block) => block.plainText === "Soud rozhodl takto:",
-        ),
-      ).toMatchObject({ type: "paragraph" });
-      expect(
-        documentAst.blocks.find(
-          (block) => block.type === "paragraph" && block.role === "holding",
-        ),
-      ).toMatchObject({ plainText: "I. Kasační stížnost se zamítá." });
+      expect(inlineIntro).toMatchObject({ type: "paragraph" });
+      expect(holding).toMatchObject({
+        plainText: "I. Kasační stížnost se zamítá.",
+      });
     });
 
     test("gives every paragraph in one publisher footnote a unique anchor", () => {
