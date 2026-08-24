@@ -142,6 +142,11 @@ export type PinnedPlaybook = {
 
 /** One reference document pinned to the exact version that was compared. */
 export type PinnedReference = {
+  /** The matter the reference lives in; not necessarily the run's own. */
+  workspaceId: SafeId<"workspace">;
+  /** That matter's name at pin time, so a restored run can say where the
+   *  reference came from after the matter is renamed or gone. */
+  workspaceName: string;
   entityId: SafeId<"entity">;
   fileFieldId: SafeId<"field">;
   entityVersionId: SafeId<"entityVersion">;

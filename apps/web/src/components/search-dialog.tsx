@@ -171,16 +171,64 @@ const SEARCH_PREVIEW_MAX_WIDTH = 800;
 const SEARCH_PREVIEW_DEFAULT_WIDTH = 512;
 const SEARCH_RESULTS_MIN_WIDTH = 320;
 
+/** A document chosen in pick mode, resolved to the file field the caller can
+ *  pin: the hit's own when it names one, else the entity's current file. */
+export type PickedSearchDocument = {
+  workspaceId: string;
+  workspaceName: string;
+  entityId: string;
+  fileFieldId: string;
+  name: string;
+};
+
+/**
+ * What activating a result does. `browse` navigates to it; `pick` hands a
+ * document back to the caller instead, so another surface (a reference
+ * picker) can reuse the whole search without navigating away.
+ */
+export type SearchDialogMode =
+  | { type: "browse" }
+  | {
+      type: "pick";
+      /** Only documents of these MIME types are offered and accepted. */
+      mimeTypes: readonly string[];
+      /** Documents that must not appear at all: the one being reviewed and
+       *  those already chosen. */
+      excludeEntityIds: readonly string[];
+      onPick: (document: PickedSearchDocument) => void;
+    };
+
+const BROWSE_MODE: SearchDialogMode = { type: "browse" };
+
+// English until the picker copy settles; then it joins the catalog.
+const PICK_HINT_LABEL = "add as reference";
+const PICK_MODE_LABEL =
+  "Click a document to select it as a reference. The reviewed document is not listed.";
+const NO_EXCLUDED_ENTITY_IDS: readonly string[] = [];
+
+const initialFiltersForMode = (
+  mode: SearchDialogMode,
+  initialWorkspaceId: string | undefined,
+): SearchFilters => {
+  const filters = initialSearchFilters(initialWorkspaceId);
+  if (mode.type === "pick") {
+    return { ...filters, types: ["document"], mimeTypes: [...mode.mimeTypes] };
+  }
+  return filters;
+};
+
 type SearchDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   initialWorkspaceId?: string | undefined;
+  mode?: SearchDialogMode;
 };
 
 export const SearchDialog = ({
   open,
   onOpenChange,
   initialWorkspaceId,
+  mode = BROWSE_MODE,
 }: SearchDialogProps) => {
   const t = useTranslations();
   const locale = useLocale();
@@ -245,7 +293,7 @@ export const SearchDialog = ({
     null,
   );
   const [filters, setFilters] = useState<SearchFilters>(() =>
-    initialSearchFilters(initialWorkspaceId),
+    initialFiltersForMode(mode, initialWorkspaceId),
   );
   const searchInputRef = useRef<HTMLInputElement>(null);
 
@@ -337,12 +385,24 @@ export const SearchDialog = ({
   );
   const isBlockingSearchError = isSearchError && !isFetchNextPageError;
 
+  // Keyed by value: the caller rebuilds the mode object every render, and the
+  // exclusion only needs to invalidate when the excluded set itself changes.
+  const excludedEntityIds =
+    mode.type === "pick" ? mode.excludeEntityIds : NO_EXCLUDED_ENTITY_IDS;
+  const excludedEntityIdsKey = excludedEntityIds.join("|");
   const allHits = useMemo(() => {
     if (!data) {
       return EMPTY_SEARCH_HITS;
     }
-    return data.pages.flatMap((page) => page.hits);
-  }, [data]);
+    const hits = data.pages.flatMap((page) => page.hits);
+    if (excludedEntityIdsKey.length === 0) {
+      return hits;
+    }
+    const excluded = new Set(excludedEntityIdsKey.split("|"));
+    return hits.filter(
+      (hit) => !("entityId" in hit) || !excluded.has(hit.entityId),
+    );
+  }, [data, excludedEntityIdsKey]);
   const previewLocatorCandidates =
     data?.pages.at(0)?.previewLocatorCandidates ??
     EMPTY_SEARCH_PREVIEW_LOCATOR_CANDIDATES;
@@ -568,7 +628,7 @@ export const SearchDialog = ({
 
   const clearSearch = () => {
     clearSearchQuery();
-    setFilters(initialSearchFilters(initialWorkspaceId));
+    setFilters(initialFiltersForMode(mode, initialWorkspaceId));
   };
 
   const handleSummarizeResults = () => {
@@ -805,6 +865,39 @@ export const SearchDialog = ({
   ) => {
     if (query.trim()) {
       setRecentSearches(recordRecentSearch(query, searchRecentsScope));
+    }
+
+    if (mode.type === "pick") {
+      // Pick mode never navigates: only an accepted document hit does
+      // anything, and it goes back to the caller with a pinnable file field.
+      if (hit.type !== "document" || !mode.mimeTypes.includes(hit.mimeType)) {
+        return;
+      }
+      navigateAfterClose(async () => {
+        const { fileFieldId } = await resolveEntityDocumentRoute({
+          hit,
+          resolveCurrentFileFieldId: async () =>
+            await queryClient.fetchQuery(
+              recentFilePreviewFieldOptions({
+                entityId: hit.entityId,
+                fileFieldId: hit.fileFieldId,
+                filePropertyId: hit.filePropertyId,
+                mimeType: hit.mimeType,
+                organizationId: searchRecentsScope.organizationId,
+                userId: searchRecentsScope.userId,
+                workspaceId: hit.workspaceId,
+              }),
+            ),
+        });
+        mode.onPick({
+          workspaceId: hit.workspaceId,
+          workspaceName: hit.workspaceName,
+          entityId: hit.entityId,
+          fileFieldId,
+          name: hit.title || hit.id,
+        });
+      });
+      return;
     }
 
     if (locationModifierHeld || options?.locationModifier === true) {
@@ -1210,6 +1303,11 @@ export const SearchDialog = ({
             value={query}
             virtualized
           >
+            {mode.type === "pick" && (
+              <p className="bg-muted/50 text-muted-foreground shrink-0 border-b px-4 py-2 text-xs italic">
+                {PICK_MODE_LABEL}
+              </p>
+            )}
             {/* Search input */}
             <div className="flex shrink-0 items-center gap-3 border-b px-4 py-3">
               <CommandInput
@@ -1621,11 +1719,22 @@ export const SearchDialog = ({
             <div className="flex shrink-0 items-center gap-4 border-t px-4 py-1.5">
               <div className="text-muted-foreground flex items-center gap-4 text-xs">
                 <SearchFooterHint translationKey="search.hintNavigate" />
-                <SearchFooterHint translationKey="search.hintOpen" />
-                {canAskAI && (
+                {mode.type === "pick" ? (
+                  <span className="hidden items-center gap-1 sm:inline-flex">
+                    <kbd className="border-border bg-muted rounded border px-1 py-0.5 text-[0.625rem] leading-none">
+                      ↵
+                    </kbd>
+                    {PICK_HINT_LABEL}
+                  </span>
+                ) : (
+                  <SearchFooterHint translationKey="search.hintOpen" />
+                )}
+                {canAskAI && mode.type === "browse" && (
                   <Button
                     aria-keyshortcuts="Tab"
-                    className="text-muted-foreground hover:text-foreground h-auto gap-1.5 px-1 py-0.5 text-xs font-normal"
+                    // The button's own `sm:text-sm` would outsize the sibling
+                    // hints at desktop widths, so both breakpoints are pinned.
+                    className="text-muted-foreground hover:text-foreground h-auto gap-1.5 px-1 py-0.5 text-xs font-normal sm:text-xs"
                     disabled={askAIMutation.isPending}
                     onClick={handleAskAI}
                     variant="ghost"

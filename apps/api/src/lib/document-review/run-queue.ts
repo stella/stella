@@ -44,6 +44,8 @@ import {
   upsertDocumentReviewFindings,
 } from "@/api/lib/document-review/finding-write";
 import type { DocumentReviewFindingRow } from "@/api/lib/document-review/finding-write";
+import { fetchAndPrepareReviewFiles } from "@/api/lib/document-review/prepare-review-files";
+import type { ReviewFile } from "@/api/lib/document-review/prepare-review-files";
 import { compareReferenceDocuments } from "@/api/lib/document-review/reference-compare";
 import { extractAskContents } from "@/api/lib/document-review/review-extract";
 import type { ReviewAsk } from "@/api/lib/document-review/review-extract";
@@ -72,7 +74,6 @@ import {
   brandPersistedUserId,
   brandValidatedWorkflowActorKey,
 } from "@/api/lib/safe-id-boundaries";
-import { fetchAndPrepareFiles } from "@/api/lib/workflow/generate-batch";
 import type { PreparedDocxFile } from "@/api/lib/workflow/generate-batch";
 import type { ResolvedFile } from "@/api/lib/workflow/generate-batch-shared";
 import type { ResolvedTiers } from "@/api/lib/workflow/playbook-positions";
@@ -377,13 +378,14 @@ const processDocumentReviewRunJob = async (
 
 /** A pinned document, as recorded on the run. */
 type PinnedDocument = {
+  workspaceId: SafeId<"workspace">;
   fileFieldId: SafeId<"field">;
   entityVersionId: SafeId<"entityVersion">;
   contentSha256: string;
 };
 
 type ResolvePinnedFilesResult =
-  | { type: "resolved"; files: ResolvedFile[] }
+  | { type: "resolved"; files: ReviewFile[] }
   | { type: "failed"; errorCode: DocumentReviewRunErrorCode };
 
 /**
@@ -391,22 +393,32 @@ type ResolvePinnedFilesResult =
  * that has moved. `pdfFileId` is forced to null exactly as the interactive
  * path does: reference comparison and playbook citations both need folio block
  * identities, which the PDF preparation path does not carry.
+ *
+ * References pinned from other matters are read under a scope widened to
+ * exactly the pinned matters, each pin held to the matter it was pinned in.
  */
 const resolvePinnedFiles = async (
   actor: RunActor,
   pins: readonly PinnedDocument[],
 ): Promise<ResolvePinnedFilesResult> => {
-  const rows = await actor.scopedDb((tx) =>
+  const pinnedWorkspaceIds = [...new Set(pins.map((pin) => pin.workspaceId))];
+  const pinScopedDb = createRootScopedDb({
+    organizationId: actor.organizationId,
+    userId: actor.userId,
+    workspaceIds: pinnedWorkspaceIds,
+  });
+  const rows = await pinScopedDb((tx) =>
     tx
       .select({
         id: fields.id,
+        workspaceId: fields.workspaceId,
         entityVersionId: fields.entityVersionId,
         content: fields.content,
       })
       .from(fields)
       .where(
         and(
-          eq(fields.workspaceId, actor.workspaceId),
+          inArray(fields.workspaceId, pinnedWorkspaceIds),
           inArray(
             fields.id,
             pins.map((pin) => pin.fileFieldId),
@@ -421,13 +433,16 @@ const resolvePinnedFiles = async (
 
   const contentByPin = new Map<string, FieldContent>();
   for (const row of rows) {
-    contentByPin.set(`${row.id}:${row.entityVersionId}`, row.content);
+    contentByPin.set(
+      `${row.workspaceId}:${row.id}:${row.entityVersionId}`,
+      row.content,
+    );
   }
 
-  const files: ResolvedFile[] = [];
+  const files: ReviewFile[] = [];
   for (const pin of pins) {
     const content = contentByPin.get(
-      `${pin.fileFieldId}:${pin.entityVersionId}`,
+      `${pin.workspaceId}:${pin.fileFieldId}:${pin.entityVersionId}`,
     );
     if (content?.type !== "file") {
       return { type: "failed", errorCode: "pin_unresolved" };
@@ -439,6 +454,7 @@ const resolvePinnedFiles = async (
       return { type: "failed", errorCode: "unsupported_format" };
     }
     files.push({
+      workspaceId: pin.workspaceId,
       fileFieldId: pin.fileFieldId,
       fileId: content.id,
       mimeType: content.mimeType,
@@ -477,11 +493,13 @@ const executeRun = async (
   const references = basisReferences(run.basis);
   const pins: PinnedDocument[] = [
     {
+      workspaceId: actor.workspaceId,
       fileFieldId: run.fileFieldId,
       entityVersionId: run.entityVersionId,
       contentSha256: run.contentSha256,
     },
     ...references.map((reference) => ({
+      workspaceId: reference.workspaceId,
       fileFieldId: reference.fileFieldId,
       entityVersionId: reference.entityVersionId,
       contentSha256: reference.contentSha256,
@@ -493,10 +511,9 @@ const executeRun = async (
     return resolved.errorCode;
   }
 
-  const prepared = await fetchAndPrepareFiles(
+  const prepared = await fetchAndPrepareReviewFiles(
     resolved.files,
     actor.organizationId,
-    actor.workspaceId,
   );
   const preparedTarget = prepared.at(0);
   if (preparedTarget?.kind !== "docx") {

@@ -1,4 +1,9 @@
 export type ReferenceFile = {
+  /** The matter the document lives in; may differ from the reviewed one. */
+  workspaceId: string;
+  /** That matter's name, or `null` for a document picked from the matter
+   *  being reviewed, where naming it would only repeat the page. */
+  workspaceName: string | null;
   entityId: string;
   fileFieldId: string;
   name: string;

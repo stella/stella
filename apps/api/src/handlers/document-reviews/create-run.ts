@@ -87,18 +87,20 @@ const createDocumentReviewRun = createSafeHandler(
       return Result.err(validTopics.error);
     }
 
+    const target = { ...body.target, workspaceId };
     const entityIds = [
-      body.target.entityId,
+      target.entityId,
       ...body.references.map((reference) => reference.entityId),
     ];
+    // References may come from other matters. The membership-scoped
+    // transaction only returns rows from matters the caller can read, and the
+    // selection then holds each row to the matter its reference named, so an
+    // inaccessible or misattributed document resolves to "not found".
     const entities = yield* Result.await(
       safeDb((tx) =>
         tx.query.entities.findMany({
-          where: {
-            id: { in: [...new Set(entityIds)] },
-            workspaceId: { eq: workspaceId },
-          },
-          columns: { id: true, name: true },
+          where: { id: { in: [...new Set(entityIds)] } },
+          columns: { id: true, name: true, workspaceId: true },
           limit: body.references.length + 1,
           with: {
             currentVersion: {
@@ -111,7 +113,7 @@ const createDocumentReviewRun = createSafeHandler(
     );
 
     const selection = resolveReviewSelection({
-      target: body.target,
+      target,
       references: body.references,
       entities,
     });
@@ -119,18 +121,40 @@ const createDocumentReviewRun = createSafeHandler(
       return Result.err(selection.error);
     }
 
+    const referenceWorkspaceIds = [
+      ...new Set(
+        selection.value.references.map((reference) => reference.workspaceId),
+      ),
+    ];
+    const referenceWorkspaces = yield* Result.await(
+      safeDb((tx) =>
+        referenceWorkspaceIds.length === 0
+          ? Promise.resolve([])
+          : tx.query.workspaces.findMany({
+              where: { id: { in: referenceWorkspaceIds } },
+              columns: { id: true, name: true },
+              limit: referenceWorkspaceIds.length,
+            }),
+      ),
+    );
+    const workspaceNameById = new Map(
+      referenceWorkspaces.map((workspace) => [workspace.id, workspace.name]),
+    );
     const nameByEntityId = new Map(
       entities.map((entity) => [entity.id, entity.name]),
     );
     const references: PinnedReference[] = [];
     for (const reference of selection.value.references) {
       const name = nameByEntityId.get(reference.entityId);
-      if (name === undefined) {
+      const workspaceName = workspaceNameById.get(reference.workspaceId);
+      if (name === undefined || workspaceName === undefined) {
         // Selection resolved this entity from the same rows, so a miss here
         // means the two disagree about what was loaded.
         return panic("Resolved review reference has no loaded entity row");
       }
       references.push({
+        workspaceId: reference.workspaceId,
+        workspaceName,
         entityId: reference.entityId,
         fileFieldId: reference.file.fileFieldId,
         entityVersionId: reference.entityVersionId,
@@ -222,7 +246,7 @@ const createDocumentReviewRun = createSafeHandler(
       return Result.err(sizeError);
     }
 
-    const target = selection.value.target;
+    const pinnedTarget = selection.value.target;
     const runId = createSafeId<"documentReviewRun">();
     const inserted = yield* Result.await(
       safeDb(async (tx) => {
@@ -235,8 +259,8 @@ const createDocumentReviewRun = createSafeHandler(
           .where(
             and(
               eq(documentReviewRuns.workspaceId, workspaceId),
-              eq(documentReviewRuns.entityId, target.entityId),
-              eq(documentReviewRuns.fileFieldId, target.file.fileFieldId),
+              eq(documentReviewRuns.entityId, pinnedTarget.entityId),
+              eq(documentReviewRuns.fileFieldId, pinnedTarget.file.fileFieldId),
               inArray(documentReviewRuns.status, [
                 ...DOCUMENT_REVIEW_RUN_ACTIVE_STATUSES,
               ]),
@@ -251,10 +275,10 @@ const createDocumentReviewRun = createSafeHandler(
           id: runId,
           organizationId,
           workspaceId,
-          entityId: target.entityId,
-          fileFieldId: target.file.fileFieldId,
-          entityVersionId: target.entityVersionId,
-          contentSha256: target.file.sha256Hex,
+          entityId: pinnedTarget.entityId,
+          fileFieldId: pinnedTarget.file.fileFieldId,
+          entityVersionId: pinnedTarget.entityVersionId,
+          contentSha256: pinnedTarget.file.sha256Hex,
           playbookDefinitionId: playbook?.definitionId,
           basis,
           topics,

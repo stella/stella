@@ -150,6 +150,7 @@
     "inspector.review.decision",
     "inspector.review.decisions.accepted",
     "inspector.review.dismiss",
+    "inspector.review.playbookSection",
     "knowledge.agentSkills.enabled",
     "knowledge.agentSkills.newFolder",
     "knowledge.mcp.off",
@@ -164,6 +165,7 @@
     "knowledge.playbooks.extractionAuto",
     "knowledge.playbooks.extractionManual",
     "knowledge.playbooks.review.fixAccepted",
+    "knowledge.playbooks.review.playbookLabel",
     "knowledge.playbooks.review.reject",
     "knowledge.playbooks.risk.riskLevel.high",
     "knowledge.playbooks.risk.riskLevel.low",
@@ -607,6 +609,15 @@
     ],
     "inspector.metadata.documentProperties.keys.slides": [
       "pt-BR"
+    ],
+    "inspector.review.playbookSection": [
+      "cs",
+      "es",
+      "fr",
+      "hu",
+      "pl",
+      "pt-BR",
+      "sk"
     ],
     "knowledge.agentSkills.formDescription": [
       "fr"

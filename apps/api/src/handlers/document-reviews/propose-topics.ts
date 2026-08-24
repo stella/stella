@@ -9,9 +9,9 @@ import {
   createSafeHandler,
 } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { fetchAndPrepareReviewFiles } from "@/api/lib/document-review/prepare-review-files";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { requireTanStackAIAvailableForRole } from "@/api/lib/tanstack-ai-models";
-import { fetchAndPrepareFiles } from "@/api/lib/workflow/generate-batch";
 import type { PreparedDocxFile } from "@/api/lib/workflow/generate-batch";
 
 const TIMEOUT_MS = 120_000;
@@ -44,18 +44,19 @@ const proposeTopics = createSafeHandler(
       role: "pdf",
     });
 
+    const targetRef = { ...body.target, workspaceId };
     const entityIds = [
-      body.target.entityId,
+      targetRef.entityId,
       ...body.references.map((reference) => reference.entityId),
     ];
+    // Same cross-matter rule as run creation: the membership-scoped read
+    // returns only matters the caller can see, and the selection holds each
+    // row to the matter its reference named.
     const loadedEntities = yield* Result.await(
       safeDb((tx) =>
         tx.query.entities.findMany({
-          where: {
-            id: { in: [...new Set(entityIds)] },
-            workspaceId: { eq: workspaceId },
-          },
-          columns: { id: true },
+          where: { id: { in: [...new Set(entityIds)] } },
+          columns: { id: true, workspaceId: true },
           limit: body.references.length + 1,
           with: {
             currentVersion: {
@@ -69,7 +70,7 @@ const proposeTopics = createSafeHandler(
       ),
     );
     const selection = resolveReviewSelection({
-      target: body.target,
+      target: targetRef,
       references: body.references,
       entities: loadedEntities,
     });
@@ -90,12 +91,12 @@ const proposeTopics = createSafeHandler(
     }
 
     const resolvedFiles = [
-      selection.value.target.file,
-      ...selection.value.references.map((reference) => reference.file),
-    ];
+      selection.value.target,
+      ...selection.value.references,
+    ].map((document) => document.file);
     const preparedResult = await Result.tryPromise({
       try: async () =>
-        await fetchAndPrepareFiles(resolvedFiles, organizationId, workspaceId),
+        await fetchAndPrepareReviewFiles(resolvedFiles, organizationId),
       catch: (cause) =>
         new HandlerError({
           status: 500,

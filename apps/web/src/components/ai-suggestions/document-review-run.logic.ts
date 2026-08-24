@@ -159,12 +159,16 @@ export type RestoredReviewBasis = {
 
 const pinnedReferenceFiles = (
   references: readonly {
+    workspaceId: string;
+    workspaceName: string;
     entityId: string;
     fileFieldId: string;
     name: string;
   }[],
 ): ReferenceFile[] =>
   references.map((reference) => ({
+    workspaceId: reference.workspaceId,
+    workspaceName: reference.workspaceName,
     entityId: reference.entityId,
     fileFieldId: reference.fileFieldId,
     name: reference.name,

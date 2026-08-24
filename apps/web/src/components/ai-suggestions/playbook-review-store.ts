@@ -318,6 +318,7 @@ const requestRun = async ({
           ? {}
           : { playbookId: toSafeId<"playbookDefinition">(playbookId) }),
         references: references.map((reference) => ({
+          workspaceId: toSafeId<"workspace">(reference.workspaceId),
           entityId: toSafeId<"entity">(reference.entityId),
           fileFieldId: toSafeId<"field">(reference.fileFieldId),
         })),
@@ -413,6 +414,7 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => ({
               fileFieldId: toSafeId<"field">(fileFieldId),
             },
             references: references.map((reference) => ({
+              workspaceId: toSafeId<"workspace">(reference.workspaceId),
               entityId: toSafeId<"entity">(reference.entityId),
               fileFieldId: toSafeId<"field">(reference.fileFieldId),
             })),

@@ -8,7 +8,18 @@ import type { DocumentReviewTopic as ReviewEngineTopic } from "@/api/lib/documen
 import { DOCUMENT_REVIEW_DECISIONS } from "@/api/lib/document-review/run-contract";
 import type { DocumentReviewDecision } from "@/api/lib/document-review/run-contract";
 
+// The target always belongs to the route's matter, so it carries no workspace
+// of its own; the handler stamps the route's onto it.
+export const documentReviewTargetSchema = t.Object({
+  entityId: tSafeId("entity"),
+  fileFieldId: tSafeId("field"),
+});
+
+// A reference may live in another matter than the target (a signed precedent
+// against a new draft), so it names its own workspace; the handler checks the
+// caller can read that workspace before pinning anything from it.
 export const documentReviewRefSchema = t.Object({
+  workspaceId: tSafeId("workspace"),
   entityId: tSafeId("entity"),
   fileFieldId: tSafeId("field"),
 });
@@ -61,7 +72,7 @@ export type DocumentReviewDecisionInput = Assignable<
 >;
 
 const reviewDocumentsSchema = {
-  target: documentReviewRefSchema,
+  target: documentReviewTargetSchema,
   references: t.Array(documentReviewRefSchema, {
     minItems: 1,
     maxItems: DOCUMENT_REVIEW_LIMITS.referencesMax,
@@ -80,7 +91,7 @@ export const proposeReviewTopicsBodySchema = t.Object({
 // the empty basis with the reason, rather than the schema rejecting it as a
 // shape error.
 export const createDocumentReviewRunBodySchema = t.Object({
-  target: documentReviewRefSchema,
+  target: documentReviewTargetSchema,
   playbookId: t.Optional(tSafeId("playbookDefinition")),
   references: t.Array(documentReviewRefSchema, {
     maxItems: DOCUMENT_REVIEW_LIMITS.referencesMax,

@@ -8,19 +8,19 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { Result } from "better-result";
 import {
   CheckIcon,
   ChevronRightIcon,
+  ClipboardCheckIcon,
   FileTextIcon,
   PlusIcon,
   RotateCcwIcon,
   ScanSearchIcon,
   SearchIcon,
-  Trash2Icon,
   XIcon,
 } from "lucide-react";
-import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 import { v7 as uuidv7 } from "uuid";
 import { useShallow } from "zustand/react/shallow";
@@ -30,23 +30,16 @@ import type { FolioAIEditOperation } from "@stll/folio-react";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
-import {
-  Combobox,
-  ComboboxEmpty,
-  ComboboxInput,
-  ComboboxItem,
-  ComboboxList,
-  ComboboxPopup,
-} from "@stll/ui/combobox";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { Input } from "@stll/ui/input";
 import {
-  Select,
-  SelectItem,
-  SelectPopup,
-  SelectTrigger,
-  SelectValue,
-} from "@stll/ui/select";
+  InspectorHeader,
+  InspectorHeaderText,
+  InspectorTitle,
+} from "@stll/ui/inspector";
+import { LoaderState } from "@stll/ui/loader";
+import { TextSeparator } from "@stll/ui/separator";
+import { Skeleton } from "@stll/ui/skeleton";
 import { Textarea } from "@stll/ui/textarea";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
@@ -122,10 +115,11 @@ import {
 import type { ReviewResultItem } from "@/components/inspector/playbook-review-results.logic";
 import type { OverallRisk } from "@/components/inspector/playbook-risk-rollup";
 import { computeRiskRollup } from "@/components/inspector/playbook-risk-rollup";
+import { PlaybookStatusBadge } from "@/components/playbook-status-badge";
+import { SearchDialog } from "@/components/search-dialog";
 import Tooltip from "@/components/tooltip";
 import { RunSizeConfirmDialog } from "@/components/usage/run-size-confirm-dialog";
 import { getWordEditAuthorName } from "@/features/chat/hooks/use-chat-user-context";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import { useAnalytics } from "@/lib/analytics/provider";
@@ -135,6 +129,7 @@ import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import type {
   Negotiation,
+  PlaybookListItem,
   PlaybookPositionsValue,
 } from "@/lib/knowledge/playbook-types";
 import {
@@ -297,7 +292,8 @@ export const PlaybookFacet = ({
       fileName: reference.fileName,
       mimeType: DOCX_MIME,
       pdfFileId: null,
-      workspaceId,
+      // The reference opens in its own matter, which may not be this one.
+      workspaceId: reference.workspaceId,
       facet: "preview",
     });
   };
@@ -767,8 +763,25 @@ const ReviewRunPanel = ({
 
 // -- Launcher --
 
+/** Above this many playbooks the picker grows a filter box; below it, the
+ *  whole list fits the panel and a filter would only add a control. */
+const PLAYBOOK_FILTER_THRESHOLD = 6;
+/** How many of the matter's own documents the picker offers as one-click
+ *  references before the reviewer has typed anything. */
+const REFERENCE_SUGGESTION_LIMIT = 3;
+
+const SECTION_LABEL_CLASS =
+  "text-foreground-strong-muted text-[11px] font-medium tracking-[0.06em] uppercase";
+// English until the launcher copy settles; then it joins the catalog with
+// the rest of the launcher strings.
+const LAUNCHER_BASIS_DIVIDER_LABEL = "and / or";
+const TARGET_AS_REFERENCE_LABEL =
+  "The reviewed document cannot be its own reference.";
+
+type LauncherPlaybook = Pick<PlaybookListItem, "id" | "name" | "status">;
+
 type LauncherProps = {
-  playbooks: readonly { id: string; name: string }[];
+  playbooks: readonly LauncherPlaybook[];
   target: { entityId: string; fileFieldId: string };
   workspaceId: string;
   onReview: (basis: ReviewBasis, seededTopics: ReviewTopic[]) => void;
@@ -818,65 +831,198 @@ const Launcher = ({
         );
   const playbookReady =
     selectedPlaybookId === null || selectedPlaybook !== undefined;
+  const selectedPlaybookName =
+    playbooks.find((playbook) => playbook.id === selectedPlaybookId)?.name ??
+    "";
 
   return (
-    <div className="bg-background flex h-full flex-col gap-4 overflow-y-auto p-4">
-      <div className="space-y-1">
-        <h2 className="text-foreground text-sm font-semibold">
-          {t("inspector.review.title")}
-        </h2>
-        <p className="text-muted-foreground text-xs">
-          {t("inspector.review.description")}
-        </p>
+    <div className="bg-background flex h-full flex-col">
+      <div className="flex-1 space-y-4 overflow-y-auto p-4">
+        <PlaybookPicker
+          onSelect={setSelectedPlaybookId}
+          playbooks={playbooks}
+          selectedId={selectedPlaybookId}
+        />
+        {/* The divider is the whole instruction: either basis alone starts a
+            review, both together combine them. */}
+        <TextSeparator>{LAUNCHER_BASIS_DIVIDER_LABEL}</TextSeparator>
+        <ReferenceFilePicker
+          onChange={setReferences}
+          references={references}
+          target={target}
+          workspaceId={workspaceId}
+        />
       </div>
-      <section className="space-y-2">
-        <label className="text-foreground-strong-muted text-xs font-medium">
-          {t("inspector.review.playbookLabel")}
-        </label>
-        <Select
-          onValueChange={(value) =>
-            setSelectedPlaybookId(value === "none" ? null : value)
-          }
-          value={selectedPlaybookId ?? "none"}
-        >
-          <SelectTrigger
-            aria-label={t("inspector.review.playbookLabel")}
-            className="min-h-11 w-full"
-          >
-            <SelectValue />
-          </SelectTrigger>
-          <SelectPopup>
-            <SelectItem value="none">
-              {t("inspector.review.noPlaybook")}
-            </SelectItem>
-            {playbooks.map((playbook) => (
-              <SelectItem key={playbook.id} value={playbook.id}>
-                {playbook.name}
-              </SelectItem>
-            ))}
-          </SelectPopup>
-        </Select>
-      </section>
-      <ReferenceFilePicker
-        onChange={setReferences}
-        references={references}
-        target={target}
-        workspaceId={workspaceId}
-      />
-      <Button
-        className="min-h-11 w-full"
-        disabled={basis === null || !playbookReady}
-        onClick={() => {
-          if (basis !== null && playbookReady) {
-            onReview(basis, seededTopics);
-          }
-        }}
-        size="sm"
+      {/* Pinned right above the action it describes, outside the scroll. */}
+      <div className="shrink-0 px-4 pb-2">
+        <LaunchBasisSummary
+          playbookName={selectedPlaybookName}
+          referenceCount={references.length}
+        />
+      </div>
+      <footer
+        className={cn(
+          "flex shrink-0 items-center gap-2 border-t px-3",
+          TOOLBAR_ROW_HEIGHT,
+        )}
       >
-        <ScanSearchIcon className="me-1 size-3.5" />
-        {t("inspector.review.run")}
-      </Button>
+        <Button
+          className="flex-1"
+          disabled={basis === null || !playbookReady}
+          onClick={() => {
+            if (basis !== null && playbookReady) {
+              onReview(basis, seededTopics);
+            }
+          }}
+          size="sm"
+        >
+          <ScanSearchIcon className="me-1 size-3.5" />
+          {t("inspector.review.run")}
+        </Button>
+      </footer>
     </div>
+  );
+};
+
+/** One line saying what the review will be measured against, so the reviewer
+ *  reads the basis back before starting. Nothing chosen yet renders nothing:
+ *  the disabled button already says the review cannot start. */
+const LaunchBasisSummary = ({
+  playbookName,
+  referenceCount,
+}: {
+  playbookName: string;
+  referenceCount: number;
+}) => {
+  const t = useTranslations();
+  if (playbookName.length > 0 && referenceCount > 0) {
+    return (
+      <p className="text-muted-foreground truncate text-xs">
+        {t("inspector.review.basisCombined", {
+          name: playbookName,
+          count: referenceCount,
+        })}
+      </p>
+    );
+  }
+  if (playbookName.length > 0) {
+    return (
+      <p className="text-muted-foreground truncate text-xs">
+        {t("inspector.review.basisPlaybook", { name: playbookName })}
+      </p>
+    );
+  }
+  if (referenceCount > 0) {
+    return (
+      <p className="text-muted-foreground truncate text-xs">
+        {t("inspector.review.basisReferences", { count: referenceCount })}
+      </p>
+    );
+  }
+  return null;
+};
+
+type PlaybookPickerProps = {
+  playbooks: readonly LauncherPlaybook[];
+  selectedId: string | null;
+  onSelect: (playbookId: string | null) => void;
+};
+
+/**
+ * The organization's playbooks as a single-select list: the reviewer sees what
+ * exists (with its approval status) instead of opening a menu to find out, and
+ * clicking the chosen row again clears it, which is what makes the playbook
+ * optional without a "none" entry.
+ */
+const PlaybookPicker = ({
+  playbooks,
+  selectedId,
+  onSelect,
+}: PlaybookPickerProps) => {
+  const t = useTranslations();
+  const [filter, setFilter] = useState("");
+  const normalizedFilter = filter.trim().toLocaleLowerCase();
+  const visiblePlaybooks =
+    normalizedFilter.length === 0
+      ? playbooks
+      : playbooks.filter((playbook) =>
+          playbook.name.toLocaleLowerCase().includes(normalizedFilter),
+        );
+
+  return (
+    <section className="space-y-2">
+      <h3 className={SECTION_LABEL_CLASS}>
+        {t("inspector.review.playbookSection")}
+      </h3>
+      {playbooks.length === 0 ? (
+        <div className="bg-muted/50 flex min-h-11 items-center justify-between gap-2 rounded-lg ps-3 pe-1">
+          <p className="text-muted-foreground text-xs">
+            {t("knowledge.playbooks.empty")}
+          </p>
+          <Button
+            render={<Link to="/knowledge/playbooks" />}
+            size="xs"
+            variant="ghost"
+          >
+            <PlusIcon className="me-1 size-3.5" />
+            {t("knowledge.playbooks.createPlaybook")}
+          </Button>
+        </div>
+      ) : (
+        <>
+          {playbooks.length > PLAYBOOK_FILTER_THRESHOLD && (
+            <Input
+              aria-label={t("inspector.review.searchPlaybooks")}
+              className="min-h-11"
+              onChange={(event) => setFilter(event.target.value)}
+              placeholder={t("inspector.review.searchPlaybooks")}
+              value={filter}
+            />
+          )}
+          <ul
+            aria-label={t("inspector.review.playbookSection")}
+            className="space-y-0.5"
+            role="radiogroup"
+          >
+            {visiblePlaybooks.map((playbook) => {
+              const checked = playbook.id === selectedId;
+              return (
+                <li key={playbook.id}>
+                  <button
+                    aria-checked={checked}
+                    className={cn(
+                      "hover:bg-muted/50 flex min-h-11 w-full items-center gap-2.5 rounded-lg px-2.5 text-start transition-colors duration-150",
+                      checked && "bg-muted",
+                    )}
+                    onClick={() => onSelect(checked ? null : playbook.id)}
+                    role="radio"
+                    type="button"
+                  >
+                    <ClipboardCheckIcon className="text-muted-foreground size-3.5 shrink-0" />
+                    <BidiText className="min-w-0 flex-1 truncate text-sm">
+                      {playbook.name}
+                    </BidiText>
+                    <PlaybookStatusBadge status={playbook.status} />
+                    <CheckIcon
+                      aria-hidden="true"
+                      className={cn(
+                        "size-3.5 shrink-0 transition-opacity duration-150",
+                        checked ? "opacity-100" : "opacity-0",
+                      )}
+                    />
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+          {visiblePlaybooks.length === 0 && (
+            <p className="text-muted-foreground px-2.5 text-xs">
+              {t("inspector.review.noPlaybooksMatch")}
+            </p>
+          )}
+        </>
+      )}
+    </section>
   );
 };
 
@@ -894,19 +1040,12 @@ const ReferenceFilePicker = ({
   onChange,
 }: ReferenceFilePickerProps) => {
   const t = useTranslations();
-  const [query, setQuery] = useState("");
-  const [debouncedQuery, setDebouncedQuery] = useState("");
-  const debouncedSetQuery = useDebouncedCallback(
-    (value: string) => setDebouncedQuery(value),
-    250,
-  );
-  const {
-    data: sourcePages,
-    fetchNextPage,
-    hasNextPage,
-    isFetchingNextPage,
-  } = useInfiniteQuery(
-    documentReviewSourcesOptions({ workspaceId, q: debouncedQuery }),
+  const [pickerOpen, setPickerOpen] = useState(false);
+  // The matter's own DOCX documents, offered as one-click references so the
+  // common case (compare with the signed version sitting next to the draft)
+  // needs no search at all. Anything else goes through the full search.
+  const { data: sourcePages } = useInfiniteQuery(
+    documentReviewSourcesOptions({ workspaceId, q: "" }),
   );
   const sources =
     sourcePages === undefined
@@ -915,28 +1054,34 @@ const ReferenceFilePicker = ({
   const selectedIds = new Set(
     references.map((reference) => reference.fileFieldId),
   );
-  const availableSources = sources.filter(
-    (source) =>
-      source.fileFieldId !== target.fileFieldId &&
-      !selectedIds.has(source.fileFieldId),
-  );
   const atLimit = references.length >= DOCUMENT_REVIEW_LIMITS.referencesMax;
+  const suggestedSources = atLimit
+    ? []
+    : sources
+        .filter(
+          (source) =>
+            source.fileFieldId !== target.fileFieldId &&
+            !selectedIds.has(source.fileFieldId),
+        )
+        .slice(0, REFERENCE_SUGGESTION_LIMIT);
 
-  const selectReference = (reference: ReferenceFile | null) => {
-    if (reference === null || atLimit) {
+  const selectReference = (reference: ReferenceFile) => {
+    if (atLimit || selectedIds.has(reference.fileFieldId)) {
+      return;
+    }
+    if (reference.fileFieldId === target.fileFieldId) {
+      stellaToast.add({ type: "error", title: TARGET_AS_REFERENCE_LABEL });
       return;
     }
     onChange([...references, reference]);
-    setQuery("");
-    setDebouncedQuery("");
   };
 
   return (
     <section className="space-y-2">
       <div className="flex items-center justify-between gap-2">
-        <label className="text-foreground-strong-muted text-xs font-medium">
-          {t("inspector.review.referencesLabel")}
-        </label>
+        <h3 className={SECTION_LABEL_CLASS}>
+          {t("inspector.review.referencesSection")}
+        </h3>
         <span className="text-muted-foreground text-[11px] tabular-nums">
           {t("inspector.review.referencesCount", {
             count: references.length,
@@ -944,84 +1089,11 @@ const ReferenceFilePicker = ({
           })}
         </span>
       </div>
-      <Combobox<ReferenceFile>
-        disabled={atLimit}
-        // The server already filters by `q`; without `items` Base UI's
-        // filtered list stays empty and ComboboxEmpty renders permanently.
-        filter={null}
-        isItemEqualToValue={(a, b) => a.fileFieldId === b.fileFieldId}
-        items={availableSources}
-        itemToStringLabel={(item) => item.name}
-        onInputValueChange={(value) => {
-          setQuery(value);
-          debouncedSetQuery(value);
-        }}
-        onValueChange={selectReference}
-        value={null}
-      >
-        <ComboboxInput
-          aria-label={t("inspector.review.referencesLabel")}
-          className="min-h-11"
-          placeholder={
-            atLimit
-              ? t("inspector.review.referenceLimitReached")
-              : t("inspector.review.referencePlaceholder")
-          }
-          showTrigger={false}
-          startAddon={<SearchIcon />}
-          value={query}
-        />
-        <ComboboxPopup>
-          <ComboboxList>
-            {availableSources.map((source) => (
-              <ComboboxItem key={source.fileFieldId} value={source}>
-                <div className="flex min-w-0 items-center gap-2">
-                  <DocumentIcon
-                    className="size-3.5 shrink-0"
-                    mimeType={DOCX_MIME}
-                  />
-                  <div className="min-w-0">
-                    <BidiText className="block truncate text-sm">
-                      {source.name}
-                    </BidiText>
-                    {source.fileName !== source.name && (
-                      <BidiText className="text-muted-foreground block truncate text-xs">
-                        {source.fileName}
-                      </BidiText>
-                    )}
-                  </div>
-                </div>
-              </ComboboxItem>
-            ))}
-          </ComboboxList>
-          <ComboboxEmpty>
-            {t("inspector.review.noReferencesFound")}
-          </ComboboxEmpty>
-          {hasNextPage && (
-            <div className="border-t p-1">
-              <Button
-                className="w-full"
-                disabled={isFetchingNextPage}
-                onClick={() =>
-                  detached(fetchNextPage(), "playbook-facet.fetch-next-page")
-                }
-                size="sm"
-                type="button"
-                variant="ghost"
-              >
-                {isFetchingNextPage
-                  ? t("common.loading")
-                  : t("common.loadMore")}
-              </Button>
-            </div>
-          )}
-        </ComboboxPopup>
-      </Combobox>
       {references.length > 0 && (
         <ul className="space-y-1">
           {references.map((reference) => (
             <li
-              className="bg-muted/50 flex min-h-11 items-center gap-2 rounded-md px-2"
+              className="bg-muted/50 flex min-h-11 items-center gap-2 rounded-lg ps-2.5 pe-1"
               key={reference.fileFieldId}
             >
               <DocumentIcon
@@ -1031,6 +1103,12 @@ const ReferenceFilePicker = ({
               <BidiText className="min-w-0 flex-1 truncate text-xs">
                 {reference.name}
               </BidiText>
+              {reference.workspaceId !== workspaceId &&
+                reference.workspaceName !== null && (
+                  <BidiText className="text-muted-foreground max-w-28 shrink-0 truncate text-[11px]">
+                    {reference.workspaceName}
+                  </BidiText>
+                )}
               <Tooltip
                 content={t("inspector.review.removeReference", {
                   name: reference.name,
@@ -1058,6 +1136,70 @@ const ReferenceFilePicker = ({
           ))}
         </ul>
       )}
+      {/* The full search (content, previews, every matter) is the picker;
+          a document from another matter is the usual case, not the edge. */}
+      <button
+        className="hover:bg-muted/50 text-muted-foreground hover:text-foreground flex min-h-11 w-full items-center gap-2 rounded-lg border border-dashed px-2.5 text-start text-xs transition-colors duration-150 disabled:pointer-events-none disabled:opacity-60"
+        disabled={atLimit}
+        onClick={() => setPickerOpen(true)}
+        type="button"
+      >
+        <SearchIcon className="size-3.5 shrink-0" />
+        {atLimit
+          ? t("inspector.review.referenceLimitReached")
+          : t("inspector.review.referencePlaceholder")}
+      </button>
+      <SearchDialog
+        mode={{
+          type: "pick",
+          mimeTypes: [DOCX_MIME],
+          excludeEntityIds: [
+            target.entityId,
+            ...references.map((reference) => reference.entityId),
+          ],
+          onPick: (document) => {
+            selectReference({ ...document, fileName: document.name });
+          },
+        }}
+        onOpenChange={setPickerOpen}
+        open={pickerOpen}
+      />
+      {suggestedSources.length > 0 && (
+        <div className="space-y-0.5">
+          <p className="text-muted-foreground px-2.5 text-[11px]">
+            {t("inspector.review.fromThisMatter")}
+          </p>
+          <ul className="space-y-0.5">
+            {suggestedSources.map((source) => (
+              <li key={source.fileFieldId}>
+                <button
+                  aria-label={t("inspector.review.addReference", {
+                    name: source.name,
+                  })}
+                  className="hover:bg-muted/50 group flex min-h-11 w-full items-center gap-2 rounded-lg px-2.5 text-start transition-colors duration-150"
+                  onClick={() =>
+                    selectReference({
+                      ...source,
+                      workspaceId,
+                      workspaceName: null,
+                    })
+                  }
+                  type="button"
+                >
+                  <DocumentIcon
+                    className="size-3.5 shrink-0"
+                    mimeType={DOCX_MIME}
+                  />
+                  <BidiText className="min-w-0 flex-1 truncate text-xs">
+                    {source.name}
+                  </BidiText>
+                  <PlusIcon className="text-muted-foreground size-3.5 shrink-0 opacity-60 transition-opacity duration-150 group-hover:opacity-100" />
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </section>
   );
 };
@@ -1070,6 +1212,12 @@ type TopicEditorProps = {
   onBack: () => void;
 };
 
+/**
+ * The proposed topics as a list to read, not a form to fill: each row is a
+ * title with its context in two lines, ticked on by default. A row opens
+ * inline for the few edits a reviewer actually makes; nothing else asks for
+ * attention until hovered.
+ */
 const TopicEditor = ({
   topics,
   error,
@@ -1078,130 +1226,79 @@ const TopicEditor = ({
   onBack,
 }: TopicEditorProps) => {
   const t = useTranslations();
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const atTopicLimit = topics.length >= DOCUMENT_REVIEW_LIMITS.topicsMax;
+  const includedCount = topics.filter((topic) => topic.included).length;
+  const canConfirm =
+    includedCount > 0 &&
+    !topics.some((topic) => topic.included && topic.title.trim().length === 0);
 
   const updateTopic = (topicId: string, next: ReviewTopic) => {
     onChange(topics.map((topic) => (topic.topicId === topicId ? next : topic)));
   };
 
+  const removeTopic = (topicId: string) => {
+    onChange(topics.filter((topic) => topic.topicId !== topicId));
+    setExpandedId((current) => (current === topicId ? null : current));
+  };
+
+  // A new topic opens straight into its (empty) title: the row is the form.
+  const addTopic = () => {
+    const topicId = crypto.randomUUID();
+    onChange([
+      ...topics,
+      { type: "custom", topicId, title: "", context: "", included: true },
+    ]);
+    setExpandedId(topicId);
+  };
+
   return (
     <div className="bg-background flex h-full flex-col">
-      <header className="space-y-1 border-b px-4 py-3">
-        <h2 className="text-sm font-semibold">
-          {t("inspector.review.topicsTitle")}
-        </h2>
-        <p className="text-muted-foreground text-xs">
-          {t("inspector.review.topicsDescription")}
-        </p>
-      </header>
-      <div className="flex-1 space-y-2 overflow-y-auto p-3">
+      <InspectorHeader className="px-4">
+        <InspectorHeaderText>
+          <InspectorTitle>{t("inspector.review.topicsTitle")}</InspectorTitle>
+        </InspectorHeaderText>
+        <span className="text-muted-foreground shrink-0 text-[11px] tabular-nums">
+          {t("inspector.review.referencesCount", {
+            count: includedCount,
+            max: topics.length,
+          })}
+        </span>
+      </InspectorHeader>
+      <div className="flex-1 overflow-y-auto px-2 py-2">
         {error && (
-          <p className="text-destructive rounded-md border px-3 py-2 text-xs">
+          <p className="text-destructive mx-1 mb-2 rounded-md border px-3 py-2 text-xs">
             {error}
           </p>
         )}
-        {topics.map((topic) => (
-          <section
-            className={cn(
-              "bg-card space-y-2 rounded-lg border p-3",
-              !topic.included && "opacity-60",
-            )}
-            key={topic.topicId}
-          >
-            <div className="flex items-start gap-2">
-              <Checkbox
-                aria-label={topic.title}
-                checked={topic.included}
-                onCheckedChange={(checked) =>
-                  updateTopic(topic.topicId, {
-                    ...topic,
-                    included: checked,
-                  })
-                }
-              />
-              <div className="min-w-0 flex-1">
-                {topic.type === "playbook" ? (
-                  <p className="text-foreground text-sm font-medium">
-                    {topic.title}
-                  </p>
-                ) : (
-                  <Input
-                    aria-label={t("inspector.review.topicName")}
-                    className="border-input bg-background min-h-9 w-full rounded-md border px-2 text-sm"
-                    maxLength={256}
-                    onChange={(event) =>
-                      updateTopic(topic.topicId, {
-                        ...topic,
-                        title: event.target.value,
-                      })
-                    }
-                    value={topic.title}
-                  />
-                )}
-                {topic.type === "playbook" && (
-                  <p className="text-muted-foreground mt-0.5 text-[11px]">
-                    {t("inspector.review.playbookTopic")}
-                  </p>
-                )}
-              </div>
-              <Tooltip
-                content={t("inspector.review.removeTopic", {
-                  name: topic.title,
-                })}
-                render={
-                  <button
-                    aria-label={t("inspector.review.removeTopic", {
-                      name: topic.title,
-                    })}
-                    className="hover:bg-muted inline-flex size-9 shrink-0 items-center justify-center rounded-md"
-                    onClick={() =>
-                      onChange(
-                        topics.filter((item) => item.topicId !== topic.topicId),
-                      )
-                    }
-                    type="button"
-                  >
-                    <Trash2Icon className="size-3.5" />
-                  </button>
-                }
-              />
-            </div>
-            <Textarea
-              aria-label={t("inspector.review.topicContext")}
-              maxLength={2000}
-              onChange={(event) =>
-                updateTopic(topic.topicId, {
-                  ...topic,
-                  context: event.target.value,
-                })
+        <ul className="space-y-0.5">
+          {topics.map((topic, index) => (
+            <TopicRow
+              expanded={expandedId === topic.topicId}
+              index={index}
+              key={topic.topicId}
+              onChange={(next) => updateTopic(topic.topicId, next)}
+              onRemove={() => removeTopic(topic.topicId)}
+              onToggleExpanded={() =>
+                setExpandedId((current) =>
+                  current === topic.topicId ? null : topic.topicId,
+                )
               }
-              placeholder={t("inspector.review.topicContextPlaceholder")}
-              rows={2}
-              value={topic.context}
+              topic={topic}
             />
-          </section>
-        ))}
-        <Button
-          className="w-full"
-          disabled={atTopicLimit}
-          onClick={() =>
-            onChange([
-              ...topics,
-              {
-                type: "custom",
-                topicId: crypto.randomUUID(),
-                title: t("inspector.review.newTopic"),
-                context: "",
-                included: true,
-              },
-            ])
-          }
-          size="sm"
-          variant="outline"
-        >
-          <PlusIcon className="me-1 size-3.5" />
-          {t("inspector.review.addTopic")}
-        </Button>
+          ))}
+        </ul>
+        {!atTopicLimit && (
+          <Button
+            className="text-muted-foreground hover:text-foreground mt-1 w-full justify-start"
+            onClick={addTopic}
+            size="sm"
+            variant="ghost"
+          >
+            <PlusIcon className="size-3.5" />
+            {t("inspector.review.addTopic")}
+          </Button>
+        )}
       </div>
       <footer
         className={cn(
@@ -1214,12 +1311,7 @@ const TopicEditor = ({
         </Button>
         <Button
           className="flex-1"
-          disabled={
-            !topics.some((topic) => topic.included) ||
-            topics.some(
-              (topic) => topic.included && topic.title.trim().length === 0,
-            )
-          }
+          disabled={!canConfirm}
           onClick={onConfirm}
           size="sm"
         >
@@ -1231,61 +1323,143 @@ const TopicEditor = ({
   );
 };
 
-// -- Reviewing --
+const TOPIC_STAGGER_MS = 40;
+const TOPIC_STAGGER_CAP = 8;
 
-const REVIEW_PROGRESS_CEILING = 92;
+type TopicRowProps = {
+  topic: ReviewTopic;
+  index: number;
+  expanded: boolean;
+  onToggleExpanded: () => void;
+  onChange: (next: ReviewTopic) => void;
+  onRemove: () => void;
+};
 
-const ReviewingState = ({ sourceName }: { sourceName: string }) => {
+const TopicRow = ({
+  topic,
+  index,
+  expanded,
+  onToggleExpanded,
+  onChange,
+  onRemove,
+}: TopicRowProps) => {
   const t = useTranslations();
-  const [progress, setProgress] = useState(6);
-
-  // Determinate-ish creep toward the ceiling: proposing topics is one
-  // synchronous server call with no progress channel, so the bar
-  // eases asymptotically while we wait rather than claiming a real
-  // percentage. The run itself reports real progress (see
-  // `ReviewProgressState`).
-  useExternalSyncEffect(() => {
-    const id = window.setInterval(() => {
-      setProgress((current) =>
-        current >= REVIEW_PROGRESS_CEILING
-          ? current
-          : current + Math.max(1, (REVIEW_PROGRESS_CEILING - current) * 0.06),
-      );
-    }, 600);
-    return () => window.clearInterval(id);
-  }, []);
+  const hasTitle = topic.title.trim().length > 0;
+  const removeLabel = t("inspector.review.removeTopic", { name: topic.title });
 
   return (
-    <div className="bg-background flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
-      <div className="w-full max-w-xs space-y-2">
-        <p className="text-foreground text-sm font-medium">
-          {t("inspector.review.reviewing")}
-        </p>
-        {sourceName.length > 0 && (
-          <p className="text-muted-foreground truncate text-xs">{sourceName}</p>
-        )}
-        <div
-          aria-busy="true"
-          aria-label={t("inspector.review.reviewing")}
-          className="bg-muted h-1.5 w-full overflow-hidden rounded-full"
-          role="progressbar"
+    <li
+      className={cn(
+        "group/topic animate-rise rounded-lg transition-colors duration-150",
+        expanded ? "bg-muted/50" : "hover:bg-muted/40",
+      )}
+      style={{
+        animationDelay: `${String(
+          Math.min(index, TOPIC_STAGGER_CAP) * TOPIC_STAGGER_MS,
+        )}ms`,
+      }}
+    >
+      <div className="flex min-h-11 items-start gap-2 py-2 ps-2.5 pe-1">
+        <Checkbox
+          aria-label={hasTitle ? topic.title : t("inspector.review.newTopic")}
+          checked={topic.included}
+          className="mt-0.5"
+          onCheckedChange={(checked) =>
+            onChange({ ...topic, included: checked })
+          }
+        />
+        <button
+          aria-expanded={expanded}
+          className={cn(
+            "min-w-0 flex-1 text-start transition-opacity duration-150",
+            !topic.included && "opacity-60",
+          )}
+          onClick={onToggleExpanded}
+          type="button"
         >
-          <div
-            className="bg-primary h-full w-full rounded-full transition-transform duration-500 ease-out"
-            style={{ transform: `scaleX(${String(progress / 100)})` }}
+          <p
+            className={cn(
+              "truncate text-sm font-medium",
+              hasTitle ? "text-foreground" : "text-muted-foreground",
+            )}
+          >
+            {hasTitle ? topic.title : t("inspector.review.newTopic")}
+          </p>
+          {!expanded && topic.context.trim().length > 0 && (
+            <p className="text-muted-foreground mt-0.5 line-clamp-2 text-xs text-pretty">
+              {topic.context}
+            </p>
+          )}
+          {topic.type === "playbook" && (
+            <p className="text-muted-foreground mt-0.5 text-[11px]">
+              {t("inspector.review.playbookTopic")}
+            </p>
+          )}
+        </button>
+        <Tooltip
+          content={removeLabel}
+          render={
+            <button
+              aria-label={removeLabel}
+              className="hover:bg-muted text-muted-foreground hover:text-foreground relative inline-flex size-8 shrink-0 items-center justify-center rounded-md opacity-0 transition-opacity duration-150 group-hover/topic:opacity-100 after:absolute after:min-h-11 after:min-w-11 focus-visible:opacity-100"
+              onClick={onRemove}
+              type="button"
+            >
+              <XIcon className="size-3.5" />
+            </button>
+          }
+        />
+      </div>
+      {expanded && (
+        <div className="space-y-2 px-2.5 pb-2.5">
+          {topic.type === "custom" && (
+            <Input
+              aria-label={t("inspector.review.topicName")}
+              autoFocus
+              className="min-h-9"
+              maxLength={256}
+              onChange={(event) =>
+                onChange({ ...topic, title: event.target.value })
+              }
+              placeholder={t("inspector.review.newTopic")}
+              value={topic.title}
+            />
+          )}
+          <Textarea
+            aria-label={t("inspector.review.topicContext")}
+            maxLength={2000}
+            onChange={(event) =>
+              onChange({ ...topic, context: event.target.value })
+            }
+            placeholder={t("inspector.review.topicContextPlaceholder")}
+            rows={3}
+            value={topic.context}
           />
         </div>
-        <p className="text-muted-foreground text-[11px]">
-          {t("inspector.review.reviewingHint")}
-        </p>
-      </div>
-    </div>
+      )}
+    </li>
+  );
+};
+
+// -- Reviewing --
+
+// Proposing topics is one server call with no progress channel, so this
+// state claims nothing beyond "in progress".
+const ReviewingState = ({ sourceName }: { sourceName: string }) => {
+  const t = useTranslations();
+  return (
+    <LoaderState
+      className="bg-background"
+      detail={sourceName.length > 0 ? sourceName : undefined}
+      hint={t("inspector.review.reviewingHint")}
+      label={t("inspector.review.reviewing")}
+    />
   );
 };
 
 // The run's own progress: the worker commits one finding per confirmed topic
-// per check kind and counts them on the row, so this is a real fraction of the
-// work rather than a timer pretending to be one.
+// per check kind and counts them on the row, so the percentage is a real
+// fraction of the work rather than a timer pretending to be one.
 type ReviewProgressStateProps = {
   sourceName: string;
   completed: number;
@@ -1300,42 +1474,21 @@ const ReviewProgressState = ({
   const t = useTranslations();
   const format = useFormatter();
   const ratio = total === 0 ? 0 : Math.min(1, completed / total);
+  const percent = format.number(ratio, { style: "percent" });
 
   return (
-    <div className="bg-background flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
-      <div className="w-full max-w-xs space-y-2">
-        <p className="text-foreground text-sm font-medium">
-          {t("inspector.review.reviewing")}
-        </p>
-        {sourceName.length > 0 && (
-          <p className="text-muted-foreground truncate text-xs">{sourceName}</p>
-        )}
-        <div
-          aria-label={t("inspector.review.reviewing")}
-          aria-valuemax={total}
-          aria-valuemin={0}
-          aria-valuenow={completed}
-          className="bg-muted h-1.5 w-full overflow-hidden rounded-full"
-          role="progressbar"
-        >
-          <div
-            className="bg-primary h-full w-full origin-left rounded-full transition-transform duration-500 ease-out"
-            style={{ transform: `scaleX(${String(ratio)})` }}
-          />
-        </div>
-        <p className="text-muted-foreground text-[11px] tabular-nums">
-          {format.number(ratio, { style: "percent" })}
-        </p>
-        <p className="text-muted-foreground text-[11px]">
-          {t("inspector.review.reviewingHint")}
-        </p>
-      </div>
-    </div>
+    <LoaderState
+      className="bg-background"
+      detail={sourceName.length > 0 ? `${sourceName} · ${percent}` : percent}
+      hint={t("inspector.review.reviewingHint")}
+      label={t("inspector.review.reviewing")}
+    />
   );
 };
 
 // The facet is asking the server what this document's latest run is; the
-// answer decides between a restored review and the launcher.
+// answer decides between a restored review and the launcher, so the skeleton
+// is the launcher's own shape: a section label and two option groups.
 const ReviewLoadingState = () => {
   const t = useTranslations();
   return (
@@ -1344,9 +1497,9 @@ const ReviewLoadingState = () => {
       aria-label={t("common.loading")}
       className="bg-background flex h-full flex-col gap-3 p-4"
     >
-      <div className="bg-muted h-4 w-1/3 animate-pulse rounded" />
-      <div className="bg-muted h-20 w-full animate-pulse rounded-lg" />
-      <div className="bg-muted h-20 w-full animate-pulse rounded-lg" />
+      <Skeleton className="h-4 w-1/3" />
+      <Skeleton className="h-20 w-full rounded-lg" />
+      <Skeleton className="h-20 w-full rounded-lg" />
     </div>
   );
 };
