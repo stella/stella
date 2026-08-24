@@ -1617,7 +1617,8 @@ const ActivityTriplet = ({ detail, group, size }: ActivityTripletProps) => {
   return (
     <span
       className={cn(
-        compact ? "min-w-0 text-[13px] leading-5" : "min-w-0 text-sm leading-5",
+        "min-w-0 wrap-anywhere",
+        compact ? "text-[13px] leading-5" : "text-sm leading-5",
       )}
     >
       <span className="block min-h-5 font-medium">
