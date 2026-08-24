@@ -53,6 +53,7 @@ pub enum DesktopTelemetryOperation {
   ClipboardWatcherStart,
   ClipboardWatcherRead,
   ClipboardWindowOpen,
+  ClipboardWindowHide,
   ClipboardShortcutRegister,
 }
 
@@ -72,6 +73,7 @@ impl DesktopTelemetryOperation {
       Self::ClipboardWatcherStart => "clipboardWatcherStart",
       Self::ClipboardWatcherRead => "clipboardWatcherRead",
       Self::ClipboardWindowOpen => "clipboardWindowOpen",
+      Self::ClipboardWindowHide => "clipboardWindowHide",
       Self::ClipboardShortcutRegister => "clipboardShortcutRegister",
     }
   }

@@ -604,6 +604,11 @@ const ClipboardContextMenu = ({
       onClose();
       return;
     }
+    if (event.key === "Tab") {
+      event.preventDefault();
+      onClose();
+      return;
+    }
     if (
       event.key !== "ArrowDown" &&
       event.key !== "ArrowUp" &&
@@ -838,6 +843,7 @@ const ClipboardApp = () => {
             return undefined;
           }
           setSnapshot(value);
+          setError(null);
           return undefined;
         })
         .catch(() => {
@@ -900,7 +906,7 @@ const ClipboardApp = () => {
     void invoke("clipboard_hide").catch(() => {
       reportDesktopError({
         code: DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
-        operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardHistoryUpdate,
+        operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardWindowHide,
         window: DESKTOP_TELEMETRY_WINDOWS.clipboard,
       });
       setError(t("errorUpdateHistory"));
@@ -1163,6 +1169,17 @@ const ClipboardApp = () => {
       searchInputRef.current?.select();
       return;
     }
+    if (primaryModifier) {
+      const quickIndex = quickCopyIndex(event.key, filteredItems.length);
+      if (quickIndex !== null) {
+        event.preventDefault();
+        const item = filteredItems.at(quickIndex);
+        if (item) {
+          copyItem(item);
+        }
+        return;
+      }
+    }
     if (event.target instanceof HTMLInputElement) {
       if (event.key === "Enter" && activeItem) {
         if (event.isComposing) {
@@ -1177,17 +1194,6 @@ const ClipboardApp = () => {
       event.preventDefault();
       copyItem(activeItem);
       return;
-    }
-    if (primaryModifier) {
-      const quickIndex = quickCopyIndex(event.key, filteredItems.length);
-      if (quickIndex !== null) {
-        event.preventDefault();
-        const item = filteredItems.at(quickIndex);
-        if (item) {
-          copyItem(item);
-        }
-        return;
-      }
     }
     if (
       event.target instanceof HTMLTextAreaElement ||

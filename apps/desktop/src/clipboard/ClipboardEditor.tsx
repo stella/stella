@@ -1,7 +1,6 @@
 import { Fragment, forwardRef, memo, useEffect, useRef, useState } from "react";
 
 import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
 import {
   BoldIcon,
   ItalicIcon,
@@ -63,6 +62,52 @@ type FormatCommand =
   | "bulletedList"
   | "numberedList";
 
+const EDITOR_BLOCK_TAGS = new Set([
+  "BLOCKQUOTE",
+  "DIV",
+  "LI",
+  "OL",
+  "P",
+  "PRE",
+  "UL",
+]);
+
+const listItemsFromSelection = (fragment: DocumentFragment) => {
+  const items: HTMLLIElement[] = [];
+  let item = document.createElement("li");
+  const finishItem = (includeEmpty = false) => {
+    if (!item.hasChildNodes() && !includeEmpty) {
+      return;
+    }
+    if (!item.hasChildNodes()) {
+      item.append(document.createElement("br"));
+    }
+    items.push(item);
+    item = document.createElement("li");
+  };
+  const appendNode = (node: Node) => {
+    if (node instanceof HTMLElement && node.tagName === "BR") {
+      finishItem(true);
+      return;
+    }
+    if (node instanceof HTMLElement && EDITOR_BLOCK_TAGS.has(node.tagName)) {
+      finishItem();
+      for (const child of Array.from(node.childNodes)) {
+        appendNode(child);
+      }
+      finishItem();
+      return;
+    }
+    item.append(node);
+  };
+
+  for (const node of Array.from(fragment.childNodes)) {
+    appendNode(node);
+  }
+  finishItem();
+  return items;
+};
+
 const applyFormat = (editor: HTMLDivElement, command: FormatCommand) => {
   const selection = window.getSelection();
   if (!selection || selection.rangeCount === 0) {
@@ -70,6 +115,21 @@ const applyFormat = (editor: HTMLDivElement, command: FormatCommand) => {
   }
   const range = selection.getRangeAt(0);
   if (range.collapsed || !editor.contains(range.commonAncestorContainer)) {
+    return;
+  }
+  if (command === "bulletedList" || command === "numberedList") {
+    const formatted = document.createElement(
+      command === "bulletedList" ? "ul" : "ol",
+    );
+    for (const item of listItemsFromSelection(range.extractContents())) {
+      formatted.append(item);
+    }
+    range.insertNode(formatted);
+    selection.removeAllRanges();
+    const formattedRange = document.createRange();
+    formattedRange.selectNodeContents(formatted);
+    selection.addRange(formattedRange);
+    editor.focus();
     return;
   }
   const inlineTags = {
@@ -81,18 +141,8 @@ const applyFormat = (editor: HTMLDivElement, command: FormatCommand) => {
     Exclude<FormatCommand, "bulletedList" | "numberedList">,
     string
   >;
-  let formatted: HTMLElement;
-  if (command === "bulletedList" || command === "numberedList") {
-    formatted = document.createElement(
-      command === "bulletedList" ? "ul" : "ol",
-    );
-    const item = document.createElement("li");
-    item.append(range.extractContents());
-    formatted.append(item);
-  } else {
-    formatted = document.createElement(inlineTags[command]);
-    formatted.append(range.extractContents());
-  }
+  const formatted = document.createElement(inlineTags[command]);
+  formatted.append(range.extractContents());
   range.insertNode(formatted);
   selection.removeAllRanges();
   const formattedRange = document.createRange();
@@ -100,16 +150,6 @@ const applyFormat = (editor: HTMLDivElement, command: FormatCommand) => {
   selection.addRange(formattedRange);
   editor.focus();
 };
-
-const EDITOR_BLOCK_TAGS = new Set([
-  "BLOCKQUOTE",
-  "DIV",
-  "LI",
-  "OL",
-  "P",
-  "PRE",
-  "UL",
-]);
 
 const editorPlainText = (editor: HTMLDivElement) => {
   const parts: string[] = [];
@@ -210,53 +250,26 @@ const ClipboardEditor = () => {
 
   useEffect(() => {
     let disposed = false;
-    let latestLoad = 0;
-    const load = () => {
-      latestLoad += 1;
-      const loadId = latestLoad;
-      void invoke<unknown>("clipboard_get_editor_context")
-        .then((value) => {
-          if (disposed || loadId !== latestLoad) {
-            return undefined;
-          }
-          if (!isClipboardEditorContext(value)) {
-            reportDesktopError({
-              code: DESKTOP_TELEMETRY_ERROR_CODES.invalidResponse,
-              operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardEditorRead,
-              window: DESKTOP_TELEMETRY_WINDOWS.clipboardEditor,
-            });
-            setState({ message: loadError, type: "error" });
-            return undefined;
-          }
-          setState({
-            context: value,
-            groupId: value.item.groupId,
-            save: { type: "idle" },
-            type: "ready",
-          });
+    void invoke<unknown>("clipboard_get_editor_context")
+      .then((value) => {
+        if (disposed) {
           return undefined;
-        })
-        .catch(() => {
-          if (disposed || loadId !== latestLoad) {
-            return;
-          }
+        }
+        if (!isClipboardEditorContext(value)) {
           reportDesktopError({
-            code: DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
+            code: DESKTOP_TELEMETRY_ERROR_CODES.invalidResponse,
             operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardEditorRead,
             window: DESKTOP_TELEMETRY_WINDOWS.clipboardEditor,
           });
           setState({ message: loadError, type: "error" });
-        });
-    };
-    load();
-    let stopListening: (() => void) | undefined;
-    void listen("clipboard-editor-changed", load)
-      .then((unlisten) => {
-        if (disposed) {
-          unlisten();
           return undefined;
         }
-        stopListening = unlisten;
+        setState({
+          context: value,
+          groupId: value.item.groupId,
+          save: { type: "idle" },
+          type: "ready",
+        });
         return undefined;
       })
       .catch(() => {
@@ -264,7 +277,7 @@ const ClipboardEditor = () => {
           return;
         }
         reportDesktopError({
-          code: DESKTOP_TELEMETRY_ERROR_CODES.eventSubscriptionFailed,
+          code: DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
           operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardEditorRead,
           window: DESKTOP_TELEMETRY_WINDOWS.clipboardEditor,
         });
@@ -272,7 +285,6 @@ const ClipboardEditor = () => {
       });
     return () => {
       disposed = true;
-      stopListening?.();
     };
   }, [loadError]);
 

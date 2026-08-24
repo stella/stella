@@ -71,6 +71,7 @@ const IGNORED_FORMATS: &[&str] = &[
   "com.typeit4me.clipping",
   "de.petermaurer.transientpasteboardtype",
   "net.antelle.keeweb",
+  "x-kde-passwordmanagerhint",
 ];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -1387,6 +1388,9 @@ mod tests {
     ]));
     assert!(should_ignore_formats(&[
       WINDOWS_MONITOR_PROCESSING_EXCLUSION_FORMAT.to_string()
+    ]));
+    assert!(should_ignore_formats(&[
+      "x-kde-passwordManagerHint".to_string()
     ]));
     assert!(!should_ignore_formats(&[
       "public.utf8-plain-text".to_string()

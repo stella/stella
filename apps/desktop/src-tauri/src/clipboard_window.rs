@@ -1,5 +1,5 @@
 use tauri::{
-  AppHandle, Emitter, LogicalPosition, LogicalSize, Manager, WebviewWindow,
+  AppHandle, LogicalPosition, LogicalSize, Manager, WebviewWindow,
   webview::PageLoadEvent,
   window::{Effect, EffectState, EffectsBuilder},
 };
@@ -15,11 +15,15 @@ const CLIPBOARD_WINDOW_HEIGHT: f64 = 326.0;
 const CLIPBOARD_WINDOW_INSET: f64 = 18.0;
 const CLIPBOARD_WINDOW_RADIUS: f64 = 28.0;
 
-fn capture_window_error(app: &AppHandle, window: DesktopTelemetryWindow) {
+fn capture_window_error(
+  app: &AppHandle,
+  operation: DesktopTelemetryOperation,
+  window: DesktopTelemetryWindow,
+) {
   if let Some(telemetry) = app.try_state::<DesktopTelemetry>() {
     telemetry.capture(DesktopErrorReport {
       window,
-      operation: DesktopTelemetryOperation::ClipboardWindowOpen,
+      operation,
       code: DesktopTelemetryErrorCode::WindowUnavailable,
     });
   }
@@ -62,7 +66,11 @@ pub fn show(app: &AppHandle) {
   if let Some(window) = app.get_webview_window(CLIPBOARD_WINDOW_LABEL) {
     position_window(app, &window);
     if window.show().and_then(|()| window.set_focus()).is_err() {
-      capture_window_error(app, DesktopTelemetryWindow::Clipboard);
+      capture_window_error(
+        app,
+        DesktopTelemetryOperation::ClipboardWindowOpen,
+        DesktopTelemetryWindow::Clipboard,
+      );
     }
     return;
   }
@@ -103,7 +111,11 @@ pub fn show(app: &AppHandle) {
     }
     position_window(window.app_handle(), &window);
     if window.show().and_then(|()| window.set_focus()).is_err() {
-      capture_window_error(window.app_handle(), DesktopTelemetryWindow::Clipboard);
+      capture_window_error(
+        window.app_handle(),
+        DesktopTelemetryOperation::ClipboardWindowOpen,
+        DesktopTelemetryWindow::Clipboard,
+      );
     }
   });
 
@@ -112,15 +124,25 @@ pub fn show(app: &AppHandle) {
       position_window(app, &window);
       let window_to_hide = window.clone();
       window.on_window_event(move |event| {
-        if matches!(event, tauri::WindowEvent::Focused(false)) {
-          let _ = window_to_hide.hide();
+        if matches!(event, tauri::WindowEvent::Focused(false))
+          && hide(&window_to_hide).is_err()
+        {
+          capture_window_error(
+            window_to_hide.app_handle(),
+            DesktopTelemetryOperation::ClipboardWindowHide,
+            DesktopTelemetryWindow::Clipboard,
+          );
         }
       });
       let _ = window.set_focus();
     }
     Err(error) => {
       tracing::error!(error = %error, "clipboard window could not be created");
-      capture_window_error(app, DesktopTelemetryWindow::Clipboard);
+      capture_window_error(
+        app,
+        DesktopTelemetryOperation::ClipboardWindowOpen,
+        DesktopTelemetryWindow::Clipboard,
+      );
     }
   }
 }
@@ -129,27 +151,44 @@ pub fn toggle(app: &AppHandle) {
   if let Some(window) = app.get_webview_window(CLIPBOARD_WINDOW_LABEL)
     && window.is_visible().unwrap_or(false)
   {
-    hide(&window);
+    if hide(&window).is_err() {
+      capture_window_error(
+        app,
+        DesktopTelemetryOperation::ClipboardWindowHide,
+        DesktopTelemetryWindow::Clipboard,
+      );
+    }
     return;
   }
   show(app);
 }
 
-pub fn hide(window: &WebviewWindow) {
-  let _ = window.hide();
+pub fn hide(window: &WebviewWindow) -> Result<(), String> {
+  window.hide().map_err(|error| {
+    tracing::warn!(error = %error, "clipboard window could not be hidden");
+    "clipboard window could not be hidden".to_string()
+  })
+}
+
+pub fn editor_is_open(app: &AppHandle) -> bool {
+  app
+    .get_webview_window(CLIPBOARD_EDITOR_WINDOW_LABEL)
+    .is_some()
 }
 
 pub fn show_editor(app: &AppHandle) -> Result<(), String> {
   if let Some(window) = app.get_webview_window(CLIPBOARD_EDITOR_WINDOW_LABEL) {
-    if window.show().and_then(|()| window.set_focus()).is_err() {
-      capture_window_error(app, DesktopTelemetryWindow::ClipboardEditor);
-    }
-    let _ = app.emit_to(
-      CLIPBOARD_EDITOR_WINDOW_LABEL,
-      "clipboard-editor-changed",
-      (),
-    );
-    return Ok(());
+    return window
+      .show()
+      .and_then(|()| window.set_focus())
+      .map_err(|error| {
+        capture_window_error(
+          app,
+          DesktopTelemetryOperation::ClipboardWindowOpen,
+          DesktopTelemetryWindow::ClipboardEditor,
+        );
+        format!("clipboard editor could not be focused: {error}")
+      });
   }
 
   #[cfg(debug_assertions)]
@@ -178,6 +217,7 @@ pub fn show_editor(app: &AppHandle) -> Result<(), String> {
     if window.show().and_then(|()| window.set_focus()).is_err() {
       capture_window_error(
         window.app_handle(),
+        DesktopTelemetryOperation::ClipboardWindowOpen,
         DesktopTelemetryWindow::ClipboardEditor,
       );
     }
@@ -189,7 +229,11 @@ pub fn show_editor(app: &AppHandle) -> Result<(), String> {
     .hidden_title(true);
 
   builder.build().map(|_| ()).map_err(|error| {
-    capture_window_error(app, DesktopTelemetryWindow::ClipboardEditor);
+    capture_window_error(
+      app,
+      DesktopTelemetryOperation::ClipboardWindowOpen,
+      DesktopTelemetryWindow::ClipboardEditor,
+    );
     format!("clipboard editor could not be opened: {error}")
   })
 }

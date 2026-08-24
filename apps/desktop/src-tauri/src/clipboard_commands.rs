@@ -178,6 +178,9 @@ pub fn clipboard_open_editor(
   editor_state: State<'_, ClipboardEditorState>,
   state: State<'_, ClipboardAppState>,
 ) -> Result<(), String> {
+  if clipboard_window::editor_is_open(&app) {
+    return clipboard_window::show_editor(&app);
+  }
   if state.lock().map_err(|_| lock_error())?.item(&id).is_none() {
     return Err(ITEM_NOT_FOUND_ERROR.to_string());
   }
@@ -255,13 +258,12 @@ pub fn clipboard_copy_item(
   window: WebviewWindow,
 ) -> Result<(), String> {
   write_history_item(state.inner(), &id)?;
-  clipboard_window::hide(&window);
-  Ok(())
+  clipboard_window::hide(&window)
 }
 
 #[tauri::command]
-pub fn clipboard_hide(window: WebviewWindow) {
-  clipboard_window::hide(&window);
+pub fn clipboard_hide(window: WebviewWindow) -> Result<(), String> {
+  clipboard_window::hide(&window)
 }
 
 #[tauri::command]
@@ -275,6 +277,5 @@ pub fn clipboard_open_stella(window: WebviewWindow) -> Result<(), String> {
     tracing::warn!(error = %error, "stella web app could not be opened");
     "stella web app could not be opened".to_string()
   })?;
-  clipboard_window::hide(&window);
-  Ok(())
+  clipboard_window::hide(&window)
 }
