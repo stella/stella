@@ -16,6 +16,7 @@ import {
   ClipboardCheckIcon,
   FileTextIcon,
   MessageSquareIcon,
+  PenLineIcon,
   PlusIcon,
   RotateCcwIcon,
   ScanSearchIcon,
@@ -27,7 +28,6 @@ import { v7 as uuidv7 } from "uuid";
 import { useShallow } from "zustand/react/shallow";
 
 import { DOCUMENT_REVIEW_LIMITS } from "@stll/api-contract";
-import type { FolioAIEditOperation } from "@stll/folio-react";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
@@ -104,7 +104,6 @@ import type {
   ReferenceFinding,
   ReviewCommentState,
   ReviewTopic,
-  ReviewFindingFix,
   ReviewFixState,
   StartReviewResult,
 } from "@/components/ai-suggestions/playbook-review-store";
@@ -123,7 +122,10 @@ import type { OverallRisk } from "@/components/inspector/playbook-risk-rollup";
 import { computeRiskRollup } from "@/components/inspector/playbook-risk-rollup";
 import {
   buildAcceptedFixBatch,
+  buildDraftNote,
   collectAcceptedFixes,
+  playbookFixPlan,
+  referenceFixPlan,
 } from "@/components/inspector/review-apply-accepted.logic";
 import type { AcceptedFixPlan } from "@/components/inspector/review-apply-accepted.logic";
 import { ReviewExportMenu } from "@/components/inspector/review-export-menu";
@@ -324,76 +326,29 @@ export const PlaybookFacet = ({
     });
   };
 
-  const insertFix = async (findingId: string, fix: ReviewFindingFix | null) => {
-    if (fix === null || registration === undefined) {
-      return;
-    }
-    const editor = registration.editorRef.current;
-    if (!editor) {
-      return;
-    }
-    // Reuse the document's unlock flow before writing — applying a
-    // tracked change against a locked editor would no-op.
-    const unlocked = registration.editable
-      ? true
-      : await registration.requestEditMode();
-    if (!unlocked) {
-      return;
-    }
-    const snapshot = editor.createAIEditSnapshot();
-    if (!snapshot) {
-      stellaToast.add({
-        type: "error",
-        title: t("inspector.review.insertFailed"),
-      });
-      return;
-    }
-    const result = editor.applyAIEditOperations({
-      snapshot,
-      operations: [toFolioFixOperation(fix)],
-      mode: "tracked-changes",
-      ...(author.length > 0 && { author }),
-    });
-    const revisionIds = result.applied.at(0)?.revisionIds ?? null;
-    if (revisionIds === null || revisionIds.length === 0) {
-      stellaToast.add({
-        type: "error",
-        title: t("inspector.review.insertFailed"),
-      });
-      return;
-    }
-    setFixState(entityId, fileFieldId, findingId, {
-      status: "applied",
-      revisionIds,
-    });
-    stellaToast.add({
-      type: "success",
-      title: FIX_INSERTED_TITLE,
-      action: {
-        label: SHOW_IN_DOCUMENT_LABEL,
-        onClick: () => scrollToFix(revisionIds),
-      },
-    });
-  };
-
-  const applyAcceptedFixes = async (plans: readonly AcceptedFixPlan[]) => {
+  /** Redline the plans into the draft as one tracked-changes batch, each
+   *  with its margin note. Resolves to how many landed. Reuses the
+   *  document's unlock flow first: a write against a locked editor no-ops. */
+  const applyAcceptedFixes = async (
+    plans: readonly AcceptedFixPlan[],
+  ): Promise<number> => {
     if (plans.length === 0 || registration === undefined) {
-      return;
+      return 0;
     }
     const editor = registration.editorRef.current;
     if (!editor) {
-      return;
+      return 0;
     }
     const unlocked = registration.editable
       ? true
       : await registration.requestEditMode();
     if (!unlocked) {
-      return;
+      return 0;
     }
     const snapshot = editor.createAIEditSnapshot();
     if (!snapshot) {
       stellaToast.add({ type: "error", title: APPLY_ACCEPTED_FAILED });
-      return;
+      return 0;
     }
     const batch = buildAcceptedFixBatch({ plans, newId: uuidv7 });
     const result = editor.applyAIEditOperations({
@@ -447,17 +402,20 @@ export const PlaybookFacet = ({
         },
       });
     }
+    return appliedCount;
   };
 
-  const addFindingComment = async (finding: ReferenceFinding) => {
+  const addFindingComment = async (
+    finding: ReferenceFinding,
+    note: string,
+  ): Promise<boolean> => {
     const blockId = finding.targetCitations.at(0)?.blockId;
-    const { explanation } = finding;
-    if (!blockId || !registration || explanation.type !== "comparison") {
-      return;
+    if (!blockId || !registration) {
+      return false;
     }
     const editor = registration.editorRef.current;
     if (!editor || !beginComment(entityId, fileFieldId, finding.findingId)) {
-      return;
+      return false;
     }
     const application = await Result.tryPromise(async () => {
       const unlocked = registration.editable
@@ -477,7 +435,7 @@ export const PlaybookFacet = ({
             id: `review-comment-${uuidv7()}`,
             type: "commentOnBlock",
             blockId,
-            comment: { text: explanation.text },
+            comment: { text: note },
           },
         ],
         mode: "tracked-changes",
@@ -492,19 +450,19 @@ export const PlaybookFacet = ({
         type: "error",
         title: t("inspector.review.commentFailed"),
       });
-      return;
+      return false;
     }
     if (application.value === "applied") {
       completeComment(entityId, fileFieldId, finding.findingId);
       stellaToast.add({
         type: "success",
-        title: COMMENT_ADDED_TITLE,
+        title: NOTE_ADDED_TITLE,
         action: {
           label: SHOW_IN_DOCUMENT_LABEL,
           onClick: () => scrollToBlock(blockId),
         },
       });
-      return;
+      return true;
     }
     cancelComment(entityId, fileFieldId, finding.findingId);
     if (application.value === "failed") {
@@ -513,6 +471,7 @@ export const PlaybookFacet = ({
         title: t("inspector.review.commentFailed"),
       });
     }
+    return false;
   };
 
   const scrollToFix = (revisionIds: readonly number[]) => {
@@ -662,21 +621,8 @@ export const PlaybookFacet = ({
           editorAvailable={editorAvailable}
           fixStateByFinding={session === undefined ? {} : session.fixState}
           onAcceptFix={acceptFix}
-          onAddReferenceComment={(finding) => {
-            detached(
-              addFindingComment(finding),
-              "playbook-facet.add-finding-comment",
-            );
-          }}
-          onApplyAccepted={(plans) => {
-            detached(
-              applyAcceptedFixes(plans),
-              "playbook-facet.apply-accepted",
-            );
-          }}
-          onInsertFix={(findingId, fix) => {
-            detached(insertFix(findingId, fix), "playbook-facet.insert-fix");
-          }}
+          onAddReferenceComment={addFindingComment}
+          onApplyAccepted={applyAcceptedFixes}
           onOpenReferenceCitation={openReferenceCitation}
           onRejectFix={rejectFix}
           onRetry={(retry) => {
@@ -732,9 +678,14 @@ type ReviewRunPanelProps = {
   commentStateByFinding: Record<string, ReviewCommentState>;
   fixStateByFinding: Record<string, ReviewFixState>;
   onAcceptFix: (findingId: string, revisionIds: readonly number[]) => void;
-  onAddReferenceComment: (finding: ReferenceFinding) => void;
-  onApplyAccepted: (plans: readonly AcceptedFixPlan[]) => void;
-  onInsertFix: (findingId: string, fix: ReviewFindingFix | null) => void;
+  /** Writes a drafting note on the finding's clause; resolves to whether it
+   *  landed. */
+  onAddReferenceComment: (
+    finding: ReferenceFinding,
+    note: string,
+  ) => Promise<boolean>;
+  /** Inserts the plans as tracked changes; resolves to how many landed. */
+  onApplyAccepted: (plans: readonly AcceptedFixPlan[]) => Promise<number>;
   onOpenReferenceCitation: (
     reference: ReferenceFile,
     blockId: string,
@@ -766,7 +717,6 @@ const ReviewRunPanel = ({
   onAcceptFix,
   onAddReferenceComment,
   onApplyAccepted,
-  onInsertFix,
   onOpenReferenceCitation,
   onRejectFix,
   onRetry,
@@ -875,12 +825,47 @@ const ReviewRunPanel = ({
       freshness={resolveReviewRunFreshness({ run, currentEntityVersionId })}
       negotiationBySourceId={negotiationLookup(playbookDetail)}
       onAcceptFix={onAcceptFix}
-      onAddReferenceComment={onAddReferenceComment}
-      onApplyAccepted={onApplyAccepted}
+      // Writing into the draft is the reviewer's answer to the finding, so a
+      // write that lands also records the decision; nothing is recorded for
+      // one that did not.
+      onAddReferenceComment={(finding, findingIds) => {
+        const note = buildDraftNote(finding, restored.basis.references);
+        if (note === null) {
+          return;
+        }
+        detached(
+          (async () => {
+            if (await onAddReferenceComment(finding, note)) {
+              decide.mutate({
+                workspaceId,
+                findingIds,
+                decision: REVIEW_DECISION.ACCEPTED,
+              });
+            }
+          })(),
+          "playbook-facet.add-draft-note",
+        );
+      }}
+      onApplyAccepted={(plans) => {
+        detached(onApplyAccepted(plans), "playbook-facet.apply-accepted");
+      }}
       onDecide={(findingIds, decision) => {
         decide.mutate({ workspaceId, findingIds, decision });
       }}
-      onInsertFix={onInsertFix}
+      onInsertFix={(plan, findingIds) => {
+        detached(
+          (async () => {
+            if ((await onApplyAccepted([plan])) > 0) {
+              decide.mutate({
+                workspaceId,
+                findingIds,
+                decision: REVIEW_DECISION.ACCEPTED,
+              });
+            }
+          })(),
+          "playbook-facet.redline",
+        );
+      }}
       onOpenReferenceCitation={(referenceFieldId, blockId, text) => {
         const reference = restored.basis.references.find(
           (candidate) => candidate.fileFieldId === referenceFieldId,
@@ -1939,10 +1924,18 @@ type ResultsViewProps = {
   ) => void;
   onReviewAgain: () => void;
   onScrollToBlock: (blockId: string) => void;
-  onInsertFix: (findingId: string, fix: ReviewFindingFix | null) => void;
+  /** Redline one finding's proposed wording into the draft. */
+  onInsertFix: (
+    plan: AcceptedFixPlan,
+    findingIds: readonly DocumentReviewFindingRow["id"][],
+  ) => void;
   onScrollToFix: (revisionIds: readonly number[]) => void;
   onAcceptFix: (findingId: string, revisionIds: readonly number[]) => void;
-  onAddReferenceComment: (finding: ReferenceFinding) => void;
+  /** Write a drafting note for a finding with no wording to propose. */
+  onAddReferenceComment: (
+    finding: ReferenceFinding,
+    findingIds: readonly DocumentReviewFindingRow["id"][],
+  ) => void;
   onApplyAccepted: (plans: readonly AcceptedFixPlan[]) => void;
   onOpenReferenceCitation: (
     referenceFieldId: string,
@@ -2054,6 +2047,7 @@ const ResultsView = ({
             onAddComment={onAddReferenceComment}
             onDecide={onDecide}
             onInsertFix={onInsertFix}
+            playbookName={playbookName}
             onOpenReferenceCitation={onOpenReferenceCitation}
             onRejectFix={onRejectFix}
             onScrollToBlock={onScrollToBlock}
@@ -2075,13 +2069,17 @@ const APPLY_ACCEPTED_LABEL = "Apply all as tracked changes";
 const APPLY_ACCEPTED_FAILED = "Some accepted changes could not be applied";
 // The editor sits hidden under this facet, so every write into the document
 // confirms itself and offers the way there.
-const FIX_INSERTED_TITLE = "Inserted into the draft as a tracked change";
-const COMMENT_ADDED_TITLE = "Comment added to the draft";
+const NOTE_ADDED_TITLE = "Drafting note added to the draft";
 const SHOW_IN_DOCUMENT_LABEL = "Show in document";
 const applyAcceptedDoneTitle = (count: number): string =>
   count === 1
-    ? "1 change inserted as a tracked change"
-    : `${count} changes inserted as tracked changes`;
+    ? "Redlined in the draft, with a note citing the precedent"
+    : `${count} changes redlined in the draft, each with a note`;
+// Card actions, named by what they do to the draft.
+const REDLINE_LABEL = "Redline";
+const NOTE_TO_DRAFT_LABEL = "Note to draft";
+const NOTE_ADDED_LABEL = "Note added";
+const NO_CHANGE_LABEL = "No change needed";
 const applyAcceptedPendingDescription = (count: number): string =>
   count === 1
     ? "1 accepted change is not in the document yet"
@@ -2228,6 +2226,7 @@ const NoReviewIssues = () => {
 type ReviewResultListProps = {
   items: readonly ReviewResultItem[];
   references: readonly ReferenceFile[];
+  playbookName: string;
   perspective: ReviewPerspective;
   targetFileFieldId: string;
   commentStateByFinding: Record<string, ReviewCommentState>;
@@ -2240,10 +2239,16 @@ type ReviewResultListProps = {
     decision: DocumentReviewDecision,
   ) => void;
   onScrollToBlock: (blockId: string) => void;
-  onInsertFix: (findingId: string, fix: ReviewFindingFix | null) => void;
+  onInsertFix: (
+    plan: AcceptedFixPlan,
+    findingIds: readonly DocumentReviewFindingRow["id"][],
+  ) => void;
   onScrollToFix: (revisionIds: readonly number[]) => void;
   onAcceptFix: (findingId: string, revisionIds: readonly number[]) => void;
-  onAddComment: (finding: ReferenceFinding) => void;
+  onAddComment: (
+    finding: ReferenceFinding,
+    findingIds: readonly DocumentReviewFindingRow["id"][],
+  ) => void;
   onOpenReferenceCitation: (
     referenceFieldId: string,
     blockId: string,
@@ -2272,6 +2277,7 @@ const ReviewResultList = ({
   onAddComment,
   onOpenReferenceCitation,
   onRejectFix,
+  playbookName,
 }: ReviewResultListProps) => {
   const t = useTranslations();
   const format = useFormatter();
@@ -2345,6 +2351,7 @@ const ReviewResultList = ({
             onAddComment={onAddComment}
             onDecide={onDecide}
             onInsertFix={onInsertFix}
+            playbookName={playbookName}
             onOpenReferenceCitation={onOpenReferenceCitation}
             onRejectFix={onRejectFix}
             onScrollToBlock={onScrollToBlock}
@@ -2378,6 +2385,7 @@ const ReviewResultList = ({
 type ReviewResultCardProps = {
   item: ReviewResultItem;
   references: readonly ReferenceFile[];
+  playbookName: string;
   perspective: ReviewPerspective;
   targetFileFieldId: string;
   commentStateByFinding: Record<string, ReviewCommentState>;
@@ -2392,10 +2400,16 @@ type ReviewResultCardProps = {
   ) => void;
   onToggle: () => void;
   onScrollToBlock: (blockId: string) => void;
-  onInsertFix: (findingId: string, fix: ReviewFindingFix | null) => void;
+  onInsertFix: (
+    plan: AcceptedFixPlan,
+    findingIds: readonly DocumentReviewFindingRow["id"][],
+  ) => void;
   onScrollToFix: (revisionIds: readonly number[]) => void;
   onAcceptFix: (findingId: string, revisionIds: readonly number[]) => void;
-  onAddComment: (finding: ReferenceFinding) => void;
+  onAddComment: (
+    finding: ReferenceFinding,
+    findingIds: readonly DocumentReviewFindingRow["id"][],
+  ) => void;
   onOpenReferenceCitation: (
     referenceFieldId: string,
     blockId: string,
@@ -2424,6 +2438,7 @@ const ReviewResultCard = ({
   onAddComment,
   onOpenReferenceCitation,
   onRejectFix,
+  playbookName,
 }: ReviewResultCardProps) => {
   const t = useTranslations();
   const verdictLabels = useVerdictLabels();
@@ -2635,6 +2650,7 @@ const ReviewResultCard = ({
           <ReviewResultActions
             editorAvailable={editorAvailable}
             commentStateByFinding={commentStateByFinding}
+            findingIds={item.decisions.map((row) => row.id)}
             fixStateByFinding={fixStateByFinding}
             onAcceptFix={onAcceptFix}
             onAddComment={onAddComment}
@@ -2642,7 +2658,9 @@ const ReviewResultCard = ({
             onRejectFix={onRejectFix}
             onScrollToFix={onScrollToFix}
             playbook={playbook}
+            playbookName={playbookName}
             reference={reference}
+            references={references}
           />
           <ReviewDecisionActions
             decision={decision}
@@ -2686,9 +2704,10 @@ const DECISION_LABEL = {
 } as const satisfies Record<DecidedReviewDecision, TranslationKey>;
 
 /**
- * The reviewer's disposition on one card. Accepting and dismissing are the
- * same gesture with different meanings — the finding was dealt with, or it was
- * judged not to matter — and both are withdrawn by reopening it.
+ * The reviewer's disposition on one card. "Accepted" is not a button: a
+ * finding is accepted by acting on it (a redline or a drafting note in the
+ * draft). The only standalone verdict is that no change is needed, and it is
+ * withdrawn by reopening the card.
  *
  * A card joins one finding per check kind, so the decision is recorded against
  * every row behind it: a reviewer answers the topic, not the executor.
@@ -2721,28 +2740,16 @@ const ReviewDecisionActions = ({
         {ASK_IN_CHAT_LABEL}
       </Button>
       {decision === REVIEW_DECISION.OPEN ? (
-        <>
-          <Button
-            className="h-7 px-2.5 text-xs"
-            disabled={pending}
-            onClick={() => onDecide(REVIEW_DECISION.ACCEPTED)}
-            size="sm"
-            variant="outline"
-          >
-            <CheckIcon className="me-1 size-3.5" />
-            {t("common.accept")}
-          </Button>
-          <Button
-            className="h-7 px-2.5 text-xs"
-            disabled={pending}
-            onClick={() => onDecide(REVIEW_DECISION.DISMISSED)}
-            size="sm"
-            variant="ghost"
-          >
-            <XIcon className="me-1 size-3.5" />
-            {t("inspector.review.dismiss")}
-          </Button>
-        </>
+        <Button
+          className="h-7 px-2.5 text-xs"
+          disabled={pending}
+          onClick={() => onDecide(REVIEW_DECISION.DISMISSED)}
+          size="sm"
+          variant="ghost"
+        >
+          <XIcon className="me-1 size-3.5" />
+          {NO_CHANGE_LABEL}
+        </Button>
       ) : (
         <Button
           className="h-7 px-2.5 text-xs"
@@ -2904,19 +2911,32 @@ const CitationGroup = ({
 type ReviewResultActionsProps = {
   playbook: PlaybookFinding | null;
   reference: ReferenceFinding | null;
+  references: readonly ReferenceFile[];
+  playbookName: string;
+  /** Every finding row the card stands for; acting on the card answers all. */
+  findingIds: readonly DocumentReviewFindingRow["id"][];
   commentStateByFinding: Record<string, ReviewCommentState>;
   fixStateByFinding: Record<string, ReviewFixState>;
   editorAvailable: boolean;
-  onInsertFix: (findingId: string, fix: ReviewFindingFix | null) => void;
+  onInsertFix: (
+    plan: AcceptedFixPlan,
+    findingIds: readonly DocumentReviewFindingRow["id"][],
+  ) => void;
   onScrollToFix: (revisionIds: readonly number[]) => void;
   onAcceptFix: (findingId: string, revisionIds: readonly number[]) => void;
-  onAddComment: (finding: ReferenceFinding) => void;
+  onAddComment: (
+    finding: ReferenceFinding,
+    findingIds: readonly DocumentReviewFindingRow["id"][],
+  ) => void;
   onRejectFix: (findingId: string, revisionIds: readonly number[]) => void;
 };
 
 const ReviewResultActions = ({
   playbook,
   reference,
+  references,
+  playbookName,
+  findingIds,
   commentStateByFinding,
   fixStateByFinding,
   editorAvailable,
@@ -2927,6 +2947,12 @@ const ReviewResultActions = ({
   onRejectFix,
 }: ReviewResultActionsProps) => {
   const t = useTranslations();
+  const playbookPlan =
+    playbook === null ? null : playbookFixPlan(playbook, playbookName);
+  const referencePlan =
+    reference === null ? null : referenceFixPlan(reference, references);
+  const noteState =
+    reference === null ? undefined : commentStateByFinding[reference.findingId];
   const playbookRevisionIds =
     playbook === null
       ? null
@@ -2966,7 +2992,11 @@ const ReviewResultActions = ({
                 onAcceptFix(playbook.positionId, playbookRevisionIds);
               }
             }}
-            onInsert={() => onInsertFix(playbook.positionId, playbook.fix)}
+            onInsert={() => {
+              if (playbookPlan !== null) {
+                onInsertFix(playbookPlan, findingIds);
+              }
+            }}
             onReject={() => {
               if (playbookRevisionIds !== null) {
                 onRejectFix(playbook.positionId, playbookRevisionIds);
@@ -2999,7 +3029,11 @@ const ReviewResultActions = ({
                   onAcceptFix(reference.findingId, referenceRevisionIds);
                 }
               }}
-              onInsert={() => onInsertFix(reference.findingId, reference.fix)}
+              onInsert={() => {
+                if (referencePlan !== null) {
+                  onInsertFix(referencePlan, findingIds);
+                }
+              }}
               onReject={() => {
                 if (referenceRevisionIds !== null) {
                   onRejectFix(reference.findingId, referenceRevisionIds);
@@ -3012,22 +3046,31 @@ const ReviewResultActions = ({
               }}
             />
           )}
-          {reference.targetCitations.length > 0 &&
-            reference.explanation.type === "comparison" &&
-            reference.explanation.text.length > 0 && (
-              <Button
-                className="mt-2 h-7 px-2.5 text-xs"
-                disabled={
-                  !editorAvailable ||
-                  commentStateByFinding[reference.findingId] !== undefined
-                }
-                onClick={() => onAddComment(reference)}
-                size="sm"
-                variant="ghost"
-              >
-                {t("inspector.review.addComment")}
-              </Button>
-            )}
+          {/* No wording to propose: the finding still earns a drafting
+              note on the clause, with the precedent, for the drafter to
+              resolve. A finding with wording carries its note with the
+              redline instead. */}
+          {reference.fix === null &&
+            reference.targetCitations.length > 0 &&
+            buildDraftNote(reference, references) !== null &&
+            (noteState?.status === "applied" ? (
+              <div className="text-muted-foreground mt-2 flex items-center gap-1 text-[11px]">
+                <CheckIcon className="size-3" />
+                {NOTE_ADDED_LABEL}
+              </div>
+            ) : (
+              <div className="mt-2">
+                <Button
+                  className="h-7 px-2.5 text-xs"
+                  disabled={!editorAvailable || noteState !== undefined}
+                  onClick={() => onAddComment(reference, findingIds)}
+                  size="sm"
+                >
+                  <MessageSquareIcon className="me-1 size-3.5" />
+                  {NOTE_TO_DRAFT_LABEL}
+                </Button>
+              </div>
+            ))}
         </div>
       )}
     </section>
@@ -3289,6 +3332,8 @@ const FixActions = ({
     );
   }
 
+  // One primary gesture, named by its effect on the draft: the wording goes
+  // in as a tracked change with a margin note citing its source.
   return (
     <div className="mt-2">
       <Button
@@ -3296,12 +3341,14 @@ const FixActions = ({
         disabled={!editorAvailable}
         onClick={onInsert}
         size="sm"
-        variant="outline"
+        title={
+          fixKind === "playbook"
+            ? t("knowledge.playbooks.review.insertPreferred")
+            : t("inspector.review.insertSuggestion")
+        }
       >
-        <CheckIcon className="me-1 size-3.5" />
-        {fixKind === "playbook"
-          ? t("knowledge.playbooks.review.insertPreferred")
-          : t("inspector.review.insertSuggestion")}
+        <PenLineIcon className="me-1 size-3.5" />
+        {REDLINE_LABEL}
       </Button>
     </div>
   );
@@ -3412,14 +3459,6 @@ const negotiationLookup = (
 };
 
 // -- helpers --
-
-const toFolioFixOperation = (fix: ReviewFindingFix): FolioAIEditOperation => {
-  const id = `pb-fix-${uuidv7()}`;
-  if (fix.kind === "replaceBlock") {
-    return { id, type: "replaceBlock", blockId: fix.blockId, text: fix.text };
-  }
-  return { id, type: "insertAfterBlock", blockId: fix.blockId, text: fix.text };
-};
 
 const useVerdictLabels = (): Record<PlaybookVerdict, string> => {
   const t = useTranslations();

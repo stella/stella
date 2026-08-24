@@ -9,6 +9,7 @@ import type {
 import type { ReviewResultItem } from "@/components/inspector/playbook-review-results.logic";
 import {
   buildAcceptedFixBatch,
+  buildDraftNote,
   buildPrecedentComment,
   collectAcceptedFixes,
 } from "@/components/inspector/review-apply-accepted.logic";
@@ -62,6 +63,9 @@ const playbookFinding: PlaybookFinding = {
   fix: { kind: "insertAfterBlock", blockId: "p-2", text: "Added wording." },
 };
 
+const REDLINE_NOTE =
+  "NTD: Remove the cap.\n\nPrecedent (Precedent SPA): “Leakage is uncapped.”";
+
 const decision = (value: ReviewFindingDecisionRow["decision"]) => ({
   id: toSafeId<"documentReviewFinding">("0198f2c4-6a55-7c31-9a10-3b1d2f4c5e70"),
   topicId: TOPIC_ID,
@@ -80,7 +84,7 @@ const item = (overrides: Partial<ReviewResultItem> = {}): ReviewResultItem => ({
 describe("buildPrecedentComment", () => {
   test("cites the recommendation and one passage per named reference", () => {
     expect(buildPrecedentComment(referenceFinding, [precedent])).toBe(
-      "Remove the cap.\n\nPrecedent (Precedent SPA): “Leakage is uncapped.”",
+      REDLINE_NOTE,
     );
   });
 
@@ -91,6 +95,21 @@ describe("buildPrecedentComment", () => {
         [precedent],
       ),
     ).toBeNull();
+  });
+});
+
+describe("buildDraftNote", () => {
+  test("leads with the recommendation and quotes the precedent", () => {
+    expect(buildDraftNote(referenceFinding, [precedent])).toBe(REDLINE_NOTE);
+  });
+
+  test("falls back to the comparison when there is no recommendation", () => {
+    expect(
+      buildDraftNote(
+        { ...referenceFinding, recommendation: null, referenceCitations: [] },
+        [precedent],
+      ),
+    ).toBe("NTD: The draft caps leakage.");
   });
 });
 
@@ -126,12 +145,9 @@ describe("collectAcceptedFixes", () => {
     expect(plans.map((plan) => [plan.findingKey, plan.comment])).toEqual([
       [
         "position-leakage",
-        "Playbook (Buy-side SPA): Shorter than the preferred position.",
+        "NTD: Playbook (Buy-side SPA): Shorter than the preferred position.",
       ],
-      [
-        "finding-leakage",
-        "Remove the cap.\n\nPrecedent (Precedent SPA): “Leakage is uncapped.”",
-      ],
+      ["finding-leakage", REDLINE_NOTE],
     ]);
   });
 });
@@ -161,9 +177,7 @@ describe("buildAcceptedFixBatch", () => {
         id: "review-comment-2",
         type: "commentOnBlock",
         blockId: "p-1",
-        comment: {
-          text: "Remove the cap.\n\nPrecedent (Precedent SPA): “Leakage is uncapped.”",
-        },
+        comment: { text: REDLINE_NOTE },
       },
     ]);
   });

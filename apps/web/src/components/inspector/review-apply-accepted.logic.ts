@@ -9,6 +9,7 @@ import type { FolioAIEditOperation } from "@stll/folio-react";
 import type { ReferenceFile } from "@/components/ai-suggestions/document-review-basis.logic";
 import { REVIEW_DECISION } from "@/components/ai-suggestions/document-review-queries";
 import type {
+  PlaybookFinding,
   ReferenceFinding,
   ReviewFindingFix,
   ReviewFixState,
@@ -27,6 +28,10 @@ export type AcceptedFixPlan = {
 };
 
 // TODO(i18n): English until the review surface is localized as a whole.
+/** "Note to draft": the drafting convention for an internal margin note, so
+ *  a reader of the markup knows the comment is for the drafting side, not
+ *  the counterparty. */
+const NOTE_TO_DRAFT_PREFIX = "NTD:";
 const PRECEDENT_LABEL = "Precedent";
 const PLAYBOOK_LABEL = "Playbook";
 /** Passages quoted per reference; a comment is a pointer, not a reprint. */
@@ -36,7 +41,26 @@ const PARAGRAPH_SEPARATOR = "\n\n";
 const isPending = (state: ReviewFixState | undefined): boolean =>
   state === undefined || state.status === "pending";
 
-/** The comment that travels with an applied change: the recommendation and
+const precedentQuotes = (
+  finding: ReferenceFinding,
+  references: readonly ReferenceFile[],
+): string[] => {
+  const nameByFieldId = new Map(
+    references.map((reference) => [reference.fileFieldId, reference.name]),
+  );
+  const quotes: string[] = [];
+  for (const group of finding.referenceCitations) {
+    const name = nameByFieldId.get(group.fileFieldId);
+    for (const citation of group.citations.slice(0, PASSAGES_PER_REFERENCE)) {
+      const label =
+        name === undefined ? PRECEDENT_LABEL : `${PRECEDENT_LABEL} (${name})`;
+      quotes.push(`${label}: “${citation.text}”`);
+    }
+  }
+  return quotes;
+};
+
+/** The margin note that travels with a redline: what the change does and
  *  the precedent clause it was drawn from, named per reference. */
 export const buildPrecedentComment = (
   finding: ReferenceFinding,
@@ -45,21 +69,66 @@ export const buildPrecedentComment = (
   const parts: string[] = [];
   const recommendation = finding.recommendation?.trim() ?? "";
   if (recommendation.length > 0) {
-    parts.push(recommendation);
+    parts.push(`${NOTE_TO_DRAFT_PREFIX} ${recommendation}`);
   }
-  const nameByFieldId = new Map(
-    references.map((reference) => [reference.fileFieldId, reference.name]),
-  );
-  for (const group of finding.referenceCitations) {
-    const name = nameByFieldId.get(group.fileFieldId);
-    for (const citation of group.citations.slice(0, PASSAGES_PER_REFERENCE)) {
-      const label =
-        name === undefined ? PRECEDENT_LABEL : `${PRECEDENT_LABEL} (${name})`;
-      parts.push(`${label}: “${citation.text}”`);
-    }
-  }
+  parts.push(...precedentQuotes(finding, references));
   return parts.length === 0 ? null : parts.join(PARAGRAPH_SEPARATOR);
 };
+
+/** A drafting note for a finding with no wording to propose: the point to
+ *  resolve, then the precedent, so the drafter can act on it later. */
+export const buildDraftNote = (
+  finding: ReferenceFinding,
+  references: readonly ReferenceFile[],
+): string | null => {
+  const recommendation = finding.recommendation?.trim() ?? "";
+  const comparison =
+    finding.explanation.type === "comparison"
+      ? finding.explanation.text.trim()
+      : "";
+  const point = recommendation.length > 0 ? recommendation : comparison;
+  if (point.length === 0) {
+    return null;
+  }
+  return [
+    `${NOTE_TO_DRAFT_PREFIX} ${point}`,
+    ...precedentQuotes(finding, references),
+  ].join(PARAGRAPH_SEPARATOR);
+};
+
+/** The redline a playbook finding proposes, with its rationale as the note. */
+export const playbookFixPlan = (
+  playbook: PlaybookFinding,
+  playbookName: string,
+): AcceptedFixPlan | null => {
+  if (playbook.fix === null) {
+    return null;
+  }
+  const rationale = playbook.rationale?.trim() ?? "";
+  return {
+    findingKey: playbook.positionId,
+    referenceFindingId: null,
+    fix: playbook.fix,
+    comment:
+      rationale.length === 0
+        ? null
+        : `${NOTE_TO_DRAFT_PREFIX} ${PLAYBOOK_LABEL} (${playbookName}): ${rationale}`,
+  };
+};
+
+/** The redline a reference finding proposes, with the precedent as the note. */
+export const referenceFixPlan = (
+  reference: ReferenceFinding,
+  references: readonly ReferenceFile[],
+): AcceptedFixPlan | null =>
+  reference.fix === null
+    ? null
+    : {
+        findingKey: reference.findingId,
+        referenceFindingId: reference.findingId,
+        fix: reference.fix,
+        comment: buildPrecedentComment(reference, references),
+      };
 
 type CollectAcceptedFixesArgs = {
   items: readonly ReviewResultItem[];
@@ -82,33 +151,21 @@ export const collectAcceptedFixes = ({
       continue;
     }
     const { playbook, reference } = item;
+    const playbookPlan =
+      playbook === null ? null : playbookFixPlan(playbook, playbookName);
     if (
-      playbook !== null &&
-      playbook.fix !== null &&
-      isPending(fixStateByFinding[playbook.positionId])
+      playbookPlan !== null &&
+      isPending(fixStateByFinding[playbookPlan.findingKey])
     ) {
-      const rationale = playbook.rationale?.trim() ?? "";
-      plans.push({
-        findingKey: playbook.positionId,
-        referenceFindingId: null,
-        fix: playbook.fix,
-        comment:
-          rationale.length === 0
-            ? null
-            : `${PLAYBOOK_LABEL} (${playbookName}): ${rationale}`,
-      });
+      plans.push(playbookPlan);
     }
+    const referencePlan =
+      reference === null ? null : referenceFixPlan(reference, references);
     if (
-      reference !== null &&
-      reference.fix !== null &&
-      isPending(fixStateByFinding[reference.findingId])
+      referencePlan !== null &&
+      isPending(fixStateByFinding[referencePlan.findingKey])
     ) {
-      plans.push({
-        findingKey: reference.findingId,
-        referenceFindingId: reference.findingId,
-        fix: reference.fix,
-        comment: buildPrecedentComment(reference, references),
-      });
+      plans.push(referencePlan);
     }
   }
   return plans;
