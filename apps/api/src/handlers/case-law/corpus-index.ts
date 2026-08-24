@@ -6,6 +6,7 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import {
   caseLawCorpusIndexBackfills,
   caseLawCorpusIndexDeleteWatermarks,
+  caseLawCorpusIndexPendingDeletes,
   caseLawCorpusIndexProjections,
   caseLawCorpusIndexSourceReconciliations,
   caseLawCorpusIndexWriterLeases,
@@ -899,6 +900,26 @@ export const caseLawCorpusIndexAdapter = {
           set: {
             opstamp: sql`GREATEST(${caseLawCorpusIndexDeleteWatermarks.opstamp}, excluded.opstamp)`,
             updatedAt: new Date(),
+          },
+        });
+      // audit: skip — bounded settlement state; append-only index jobs above
+      // remain the audit trail after settled rows are removed by census
+      await tx
+        .insert(caseLawCorpusIndexPendingDeletes)
+        .values(
+          jobs.map((job) => ({
+            indexId,
+            decisionId: job.entityId,
+            opstamp,
+          })),
+        )
+        .onConflictDoUpdate({
+          target: [
+            caseLawCorpusIndexPendingDeletes.indexId,
+            caseLawCorpusIndexPendingDeletes.decisionId,
+          ],
+          set: {
+            opstamp: sql`GREATEST(${caseLawCorpusIndexPendingDeletes.opstamp}, excluded.opstamp)`,
           },
         });
     });

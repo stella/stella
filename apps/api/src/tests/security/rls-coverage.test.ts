@@ -766,5 +766,11 @@ describe("policy coverage", () => {
         "UPDATE",
       ]);
     }
+    expect(
+      privilegesForTable(
+        tablePrivileges,
+        "case_law_corpus_index_pending_deletes",
+      ),
+    ).toEqual(["DELETE", "INSERT", "SELECT", "UPDATE"]);
   });
 });

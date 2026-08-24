@@ -118,6 +118,7 @@ const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
   // the owner connection.
   "apikey",
   "case_law_corpus_upload_intents",
+  "case_law_corpus_index_pending_deletes",
   // Internal ingestion coordination: publisher aliases are reserved before
   // decision writes and must never be queried through the request role.
   "case_law_decision_source_identities",

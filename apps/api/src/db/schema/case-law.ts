@@ -1564,6 +1564,35 @@ export const caseLawCorpusIndexDeleteWatermarks = p.pgTable(
   ],
 );
 
+/**
+ * Documents whose accepted Quickwit delete task has not been observed on
+ * every published split. The composite key makes task replay idempotent;
+ * census removes a row only after the split watermark reaches its opstamp.
+ */
+export const caseLawCorpusIndexPendingDeletes = p.pgTable(
+  "case_law_corpus_index_pending_deletes",
+  {
+    indexId: p.varchar("index_id", { length: 64 }).notNull(),
+    // No foreign key: a source deletion must not erase settlement ownership
+    // before the engine has removed the decision from every published split.
+    decisionId: safeUuid<"caseLawDecision">("decision_id").notNull(),
+    opstamp: p.bigint({ mode: "number" }).notNull(),
+    createdAt: timestamptz("created_at").defaultNow().notNull(),
+  },
+  (t) => [
+    p.primaryKey({ columns: [t.indexId, t.decisionId] }),
+    p.index("case_law_corpus_index_pending_deletes_settlement_idx").on(
+      t.indexId,
+      t.opstamp,
+    ),
+    p.check(
+      "case_law_corpus_index_pending_deletes_nonnegative",
+      sql`${t.opstamp} >= 0`,
+    ),
+    ...caseLawIngestionOnlyPolicies(),
+  ],
+);
+
 export const CASE_LAW_CORPUS_INDEX_BACKFILL_STATUSES = [
   "running",
   "complete",

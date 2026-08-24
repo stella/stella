@@ -25,6 +25,29 @@ GRANT SELECT ON TABLE "case_law_corpus_index_delete_watermarks" TO stella;--> st
 GRANT SELECT, INSERT, UPDATE
   ON TABLE "case_law_corpus_index_delete_watermarks" TO stella_ingestion;--> statement-breakpoint
 
+CREATE TABLE "case_law_corpus_index_pending_deletes" (
+  "index_id" varchar(64) NOT NULL,
+  "decision_id" uuid NOT NULL,
+  "opstamp" bigint NOT NULL,
+  "created_at" timestamptz DEFAULT now() NOT NULL,
+  CONSTRAINT "case_law_corpus_index_pending_deletes_pkey"
+    PRIMARY KEY ("index_id", "decision_id"),
+  CONSTRAINT "case_law_corpus_index_pending_deletes_nonnegative"
+    CHECK ("opstamp" >= 0)
+);--> statement-breakpoint
+
+CREATE INDEX "case_law_corpus_index_pending_deletes_settlement_idx"
+  ON "case_law_corpus_index_pending_deletes" ("index_id", "opstamp");--> statement-breakpoint
+ALTER TABLE "case_law_corpus_index_pending_deletes" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+CREATE POLICY "case_law_ingestion_access"
+  ON "case_law_corpus_index_pending_deletes"
+  AS PERMISSIVE FOR ALL TO stella_ingestion
+  USING (true) WITH CHECK (true);--> statement-breakpoint
+REVOKE ALL PRIVILEGES
+  ON TABLE "case_law_corpus_index_pending_deletes" FROM stella;--> statement-breakpoint
+GRANT SELECT, INSERT, UPDATE, DELETE
+  ON TABLE "case_law_corpus_index_pending_deletes" TO stella_ingestion;--> statement-breakpoint
+
 CREATE TABLE "legislation_corpus_index_delete_watermarks" (
   "index_id" varchar(64) PRIMARY KEY,
   "opstamp" bigint NOT NULL,
