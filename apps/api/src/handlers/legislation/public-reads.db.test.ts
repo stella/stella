@@ -297,7 +297,13 @@ beforeAll(
     ]);
 
     workspaceDb = async (read) =>
-      await db.transaction(async (tx) => await read(tx));
+      await db.transaction(
+        async (tx) =>
+          // SAFETY: the PGlite transaction has the statement surface under
+          // test; only its driver-specific execute result differs nominally.
+          // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- embedded owner transaction stands in for LegislationReadTransaction
+          await read(tx as unknown as LegislationReadTransaction),
+      );
 
     const readDb = async <T>(
       fn: (tx: LegislationReadTransaction) => Promise<T>,
