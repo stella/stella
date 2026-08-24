@@ -43,6 +43,8 @@ const HISTORY_EVENT: &str = "clipboard-history-changed";
 const INTERNAL_CLIPBOARD_FORMAT: &str = "legal.stella.desktop.clipboard";
 #[cfg(target_os = "windows")]
 const WINDOWS_CLIPBOARD_HISTORY_CONTROL_FORMAT: &str = "CanIncludeInClipboardHistory";
+const WINDOWS_MONITOR_PROCESSING_EXCLUSION_FORMAT: &str =
+  "ExcludeClipboardContentFromMonitorProcessing";
 const MAX_HISTORY_ITEMS: usize = 500;
 const MAX_ITEM_TEXT_BYTES: usize = 64 * 1024;
 const MAX_ITEM_HTML_BYTES: usize = 128 * 1024;
@@ -762,7 +764,8 @@ fn sanitized_html(raw_html: &str) -> Option<String> {
 fn should_ignore_formats(formats: &[String]) -> bool {
   formats.iter().any(|format| {
     let normalized = format.to_lowercase();
-    IGNORED_FORMATS.iter().any(|ignored| normalized == *ignored)
+    format.eq_ignore_ascii_case(WINDOWS_MONITOR_PROCESSING_EXCLUSION_FORMAT)
+      || IGNORED_FORMATS.iter().any(|ignored| normalized == *ignored)
   })
 }
 
@@ -1315,6 +1318,9 @@ mod tests {
     ]));
     assert!(should_ignore_formats(&[
       "com.agilebits.onepassword".to_string()
+    ]));
+    assert!(should_ignore_formats(&[
+      WINDOWS_MONITOR_PROCESSING_EXCLUSION_FORMAT.to_string()
     ]));
     assert!(!should_ignore_formats(&[
       "public.utf8-plain-text".to_string()

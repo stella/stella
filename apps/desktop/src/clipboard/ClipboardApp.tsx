@@ -1128,6 +1128,13 @@ const ClipboardApp = () => {
       searchInputRef.current?.select();
       return;
     }
+    if (event.target instanceof HTMLInputElement) {
+      if (event.key === "Enter" && activeItem) {
+        event.preventDefault();
+        copyItem(activeItem);
+      }
+      return;
+    }
     if (isClipboardCopyShortcut(event) && activeItem) {
       event.preventDefault();
       copyItem(activeItem);
@@ -1143,13 +1150,6 @@ const ClipboardApp = () => {
         }
         return;
       }
-    }
-    if (event.target instanceof HTMLInputElement) {
-      if (event.key === "Enter" && activeItem) {
-        event.preventDefault();
-        copyItem(activeItem);
-      }
-      return;
     }
     if (
       event.target instanceof HTMLTextAreaElement ||

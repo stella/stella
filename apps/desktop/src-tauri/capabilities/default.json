@@ -5,6 +5,7 @@
   "permissions": [
     "core:default",
     "allow-get-state",
+    "allow-desktop-report-error",
     "allow-update-notification-preferences",
     "allow-copy-diagnostics",
     "allow-email-support",
