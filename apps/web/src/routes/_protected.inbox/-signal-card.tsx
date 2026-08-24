@@ -136,8 +136,8 @@ export const SignalCard = ({
       t("inspector.review.decisions.accepted"),
     );
 
-  const assign = (assigneeUserId: string) =>
-    run(async () => {
+  const assign = async (assigneeUserId: string) =>
+    await run(async () => {
       const assigned = await assignSignal({
         ...mutationArgs,
         assigneeUserId,
@@ -151,8 +151,11 @@ export const SignalCard = ({
       });
     }, t("inspector.review.decisions.accepted"));
 
-  const dismiss = (reason: string | null) =>
-    run(async () => await dismissSignal({ ...mutationArgs, reason }), null);
+  const dismiss = async (reason: string | null) =>
+    await run(
+      async () => await dismissSignal({ ...mutationArgs, reason }),
+      null,
+    );
 
   const scoutKey = scoutLabelKey(signal.scoutKey);
 
