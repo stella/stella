@@ -1,7 +1,9 @@
-import type { Context, Generator } from "elysia-rate-limit";
-
 import { resolveClientIp } from "@/api/lib/client-ip";
 import { API_RATE_LIMITS } from "@/api/lib/limits";
+import type {
+  RateLimitContext,
+  RateLimitGenerator,
+} from "@/api/lib/rate-limit/rate-limit";
 import {
   createRedisRateLimit,
   createRedisRateLimitRequestKey,
@@ -20,7 +22,7 @@ const skillSourceRateLimitCounterKey = (clientIp: string | null): string =>
     ? `${SKILL_SOURCE_RATE_LIMIT_SCOPE}:${clientIp}`
     : SKILL_SOURCE_RATE_LIMIT_SCOPE;
 
-const skillSourceCounterKeyGenerator: Generator = (request, server) =>
+const skillSourceCounterKeyGenerator: RateLimitGenerator = (request, server) =>
   skillSourceRateLimitCounterKey(resolveClientIp(request, server ?? null));
 
 export const skillSourceRateLimitBinding = createRedisRateLimit({
@@ -40,7 +42,7 @@ export const consumeSkillSourceRateLimit = async ({
   requestId = Bun.randomUUIDv7(),
 }: {
   clientIp: string | null;
-  context?: Pick<Context, "increment">;
+  context?: Pick<RateLimitContext, "increment">;
   requestId?: string;
 }): Promise<SkillSourceRateLimitResult> => {
   const counterKey = skillSourceRateLimitCounterKey(clientIp);

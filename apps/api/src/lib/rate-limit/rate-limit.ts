@@ -1,4 +1,46 @@
-import type { Context, Generator, Options } from "elysia-rate-limit";
+import { Elysia, type Context } from "elysia";
+
+import { resolveResponseStatus } from "@/api/lib/observability/response-status";
+
+type MaybePromise<T> = T | Promise<T>;
+
+export type RateLimitCounter = {
+  count: number;
+  nextReset: Date;
+  start: number;
+};
+
+export type RateLimitContextConfig = {
+  duration: number;
+};
+
+export type RateLimitContext = {
+  decrement: (key: string) => MaybePromise<void>;
+  increment: (
+    key: string,
+    duration?: number,
+    requestTime?: number,
+  ) => MaybePromise<RateLimitCounter>;
+  init: (options: RateLimitContextConfig) => void;
+  kill: () => MaybePromise<void>;
+};
+
+export type RequestIpServer = {
+  requestIP: (request: Request) => { address: string } | null;
+};
+
+export type RateLimitGenerator = (
+  request: Request,
+  server: RequestIpServer | null,
+) => MaybePromise<string>;
+
+export type RateLimitOptions = {
+  context: RateLimitContext;
+  duration: number;
+  generator: RateLimitGenerator;
+  max: number;
+  skip?: (request: Request) => MaybePromise<boolean>;
+};
 
 type RateLimitEntry = {
   count: number;
@@ -14,13 +56,9 @@ const CLEANUP_INTERVAL_MS = 60_000;
  * counters.
  */
 export const scopedGenerator =
-  (scope: string): Generator =>
+  (scope: string): RateLimitGenerator =>
   (request, server) =>
     scopedRateLimitKey(scope, request, server);
-
-type RequestIpServer = {
-  requestIP: (request: Request) => { address: string } | null;
-};
 
 export const scopedRateLimitKey = (
   scope: string,
@@ -37,7 +75,7 @@ export const scopedRateLimitKey = (
  * to N× the configured limit. The hard global limit is
  * enforced at the network edge.
  */
-export class InMemoryRateLimitContext implements Context {
+export class InMemoryRateLimitContext implements RateLimitContext {
   private durationMs = 60_000;
   private readonly store = new Map<string, RateLimitEntry>();
   private readonly cleanupTimer: ReturnType<typeof setInterval>;
@@ -50,10 +88,8 @@ export class InMemoryRateLimitContext implements Context {
     this.cleanupTimer.unref();
   }
 
-  init(options: Omit<Options, "context">) {
-    if (typeof options.duration === "number") {
-      this.durationMs = options.duration;
-    }
+  init({ duration }: RateLimitContextConfig) {
+    this.durationMs = duration;
   }
 
   increment(key: string, duration?: number, requestTime?: number) {
@@ -109,3 +145,244 @@ export class InMemoryRateLimitContext implements Context {
     }
   }
 }
+
+type RateLimitResponseSet = Context["set"];
+
+type RateLimitRequestState =
+  | { type: "counted"; key: string }
+  | { type: "counted_early_failure" }
+  | { type: "limited" }
+  | { type: "refunded" }
+  | { type: "skipped" };
+
+type RateLimitApplicationPhase = "before_handler" | "early_failure";
+
+const DEFAULT_RATE_LIMIT_ERROR_RESPONSE = "rate-limit reached";
+
+const writeRateLimitHeaders = ({
+  max,
+  remaining,
+  reset,
+  retryAfter,
+  set,
+}: {
+  max: number;
+  remaining: number;
+  reset: number;
+  retryAfter: boolean;
+  set: RateLimitResponseSet;
+}): void => {
+  set.headers["RateLimit-Limit"] = String(max);
+  set.headers["RateLimit-Remaining"] = String(remaining);
+  set.headers["RateLimit-Reset"] = String(reset);
+  if (retryAfter) {
+    set.headers["Retry-After"] = String(reset);
+  }
+};
+
+const rateLimitErrorStatus = (error: unknown): number | undefined => {
+  if (typeof error !== "object" || error === null) {
+    return undefined;
+  }
+  if ("status" in error && typeof error.status === "number") {
+    return error.status;
+  }
+  if ("statusCode" in error && typeof error.statusCode === "number") {
+    return error.statusCode;
+  }
+  return undefined;
+};
+
+const isResponseValidationError = (error: unknown): boolean =>
+  typeof error === "object" &&
+  error !== null &&
+  "type" in error &&
+  error.type === "response";
+
+const isEarlyFailureStatus = (statusCode: number): boolean =>
+  statusCode === 400 || statusCode === 404 || statusCode === 422;
+
+/**
+ * Stella's Elysia adapter for its replica-safe rate-limit contexts.
+ *
+ * The adapter deliberately exposes only the static fixed-window policy Stella
+ * uses. Counter storage, outage behavior, and refund identity remain owned by
+ * the supplied context rather than by framework middleware.
+ */
+export const rateLimit = ({
+  context,
+  duration,
+  generator,
+  max,
+  skip = () => false,
+}: RateLimitOptions) => {
+  context.init({ duration });
+  const requestState = new WeakMap<Request, RateLimitRequestState>();
+
+  // Each registration owns a route subtree even when two subtrees share the
+  // same counter key and limits. Keeping the plugin unnamed prevents Elysia's
+  // named-plugin deduplication from dropping either scoped hook.
+  const plugin = new Elysia();
+
+  const applyRateLimit = async ({
+    phase,
+    request,
+    server,
+    set,
+  }: {
+    phase: RateLimitApplicationPhase;
+    request: Request;
+    server: RequestIpServer | null;
+    set: RateLimitResponseSet;
+  }): Promise<string | undefined> => {
+    if (await skip(request)) {
+      requestState.set(request, { type: "skipped" });
+      return undefined;
+    }
+
+    const key = await generator(request, server);
+    const { count, nextReset } = await context.increment(
+      key,
+      duration,
+      Date.now(),
+    );
+    const remaining = Math.max(max - count, 0);
+    const reset = Math.max(
+      0,
+      Math.ceil((nextReset.getTime() - Date.now()) / 1000),
+    );
+    const exceeded = count > max;
+
+    writeRateLimitHeaders({
+      max,
+      remaining,
+      reset,
+      retryAfter: exceeded,
+      set,
+    });
+
+    if (exceeded) {
+      requestState.set(request, { type: "limited" });
+      set.status = 429;
+      return DEFAULT_RATE_LIMIT_ERROR_RESPONSE;
+    }
+
+    requestState.set(
+      request,
+      phase === "before_handler"
+        ? { type: "counted", key }
+        : { type: "counted_early_failure" },
+    );
+    return undefined;
+  };
+
+  plugin.onBeforeHandle(
+    { as: "scoped" },
+    async ({ request, server, set }) =>
+      await applyRateLimit({
+        phase: "before_handler",
+        request,
+        server,
+        set,
+      }),
+  );
+
+  plugin.onError(
+    { as: "scoped" },
+    async ({ code, error, request, server, set }) => {
+      const state = requestState.get(request);
+      if (state !== undefined) {
+        switch (state.type) {
+          case "counted":
+            requestState.set(request, { type: "refunded" });
+            await context.decrement(state.key);
+            return undefined;
+          case "counted_early_failure":
+          case "limited":
+          case "refunded":
+          case "skipped":
+            return undefined;
+          default: {
+            const unreachable: never = state;
+            return unreachable;
+          }
+        }
+      }
+
+      const currentStatus =
+        typeof set.status === "number" ? set.status : undefined;
+      const failedBeforeRateLimit =
+        code === "NOT_FOUND" ||
+        code === "PARSE" ||
+        (code === "VALIDATION" && !isResponseValidationError(error)) ||
+        currentStatus === 404 ||
+        rateLimitErrorStatus(error) === 404;
+
+      if (failedBeforeRateLimit) {
+        return await applyRateLimit({
+          phase: "early_failure",
+          request,
+          server,
+          set,
+        });
+      }
+      return undefined;
+    },
+  );
+
+  plugin.mapResponse({ as: "scoped" }, async (lifecycle) => {
+    const { request, responseValue, server, set } = lifecycle;
+    const handledError = Object.hasOwn(lifecycle, "code");
+    const statusCode = resolveResponseStatus({
+      response: responseValue,
+      set,
+    });
+    const state = requestState.get(request);
+
+    if (state === undefined) {
+      if (handledError && isEarlyFailureStatus(statusCode)) {
+        const rateLimitResponse = await applyRateLimit({
+          phase: "early_failure",
+          request,
+          server,
+          set,
+        });
+        if (rateLimitResponse !== undefined) {
+          const headers = new Headers();
+          for (const [name, value] of Object.entries(set.headers)) {
+            headers.set(name, String(value));
+          }
+          return new Response(rateLimitResponse, {
+            headers,
+            status: 429,
+          });
+        }
+      }
+      return undefined;
+    }
+
+    switch (state.type) {
+      case "counted":
+        if (handledError) {
+          requestState.set(request, { type: "refunded" });
+          await context.decrement(state.key);
+        }
+        return undefined;
+      case "counted_early_failure":
+      case "limited":
+      case "refunded":
+      case "skipped":
+        return undefined;
+      default: {
+        state satisfies never;
+        return undefined;
+      }
+    }
+  });
+
+  plugin.onStop(async () => {
+    await context.kill();
+  });
+
+  return plugin;
+};

@@ -1,5 +1,4 @@
 import { Result, TaggedError } from "better-result";
-import type { Context, Generator, Options } from "elysia-rate-limit";
 
 import { detached } from "@/api/lib/detached";
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
@@ -7,6 +6,10 @@ import { connectionErrorFields, errorTag } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
 import {
   InMemoryRateLimitContext,
+  type RateLimitContext,
+  type RateLimitContextConfig,
+  type RateLimitGenerator,
+  type RateLimitOptions,
   scopedGenerator,
 } from "@/api/lib/rate-limit/rate-limit";
 import {
@@ -89,12 +92,12 @@ type RedisRateLimitContextOptions = {
 };
 
 type CreateRedisRateLimitOptions = {
-  counterKeyGenerator?: Generator;
+  counterKeyGenerator?: RateLimitGenerator;
   failurePolicy: RedisRateLimitFailurePolicy;
   scope: string;
 };
 
-type RedisRateLimitBinding = Pick<Options, "context" | "generator">;
+type RedisRateLimitBinding = Pick<RateLimitOptions, "context" | "generator">;
 
 type RateLimitCounter = {
   count: number;
@@ -125,7 +128,7 @@ class RedisRateLimitReplyError extends TaggedError("RedisRateLimitReplyError")<{
 }> {}
 
 /** Replica-safe fixed-window context with a bounded, explicit outage policy. */
-export class RedisRateLimitContext implements Context {
+export class RedisRateLimitContext implements RateLimitContext {
   private readonly commandTimeoutMs: number;
   private readonly createRedis: () => RedisRateLimitClient;
   private readonly failurePolicy: RedisRateLimitFailurePolicy;
@@ -180,10 +183,8 @@ export class RedisRateLimitContext implements Context {
     this.openRedis();
   }
 
-  init(options: Omit<Options, "context">): void {
-    if (typeof options.duration === "number") {
-      this.durationMs = options.duration;
-    }
+  init(options: RateLimitContextConfig): void {
+    this.durationMs = options.duration;
     this.fallback.init(options);
   }
 
@@ -413,11 +414,11 @@ const parseRequestScopedKey = (key: string): ParsedRequestScopedKey => {
 const requestScopedGenerator = (
   scope: string,
   counterKeyGenerator = scopedGenerator(scope),
-): Generator => {
+): RateLimitGenerator => {
   const requestIds = new WeakMap<Request, string>();
 
-  return async (request, server, derived) => {
-    const counterKey = await counterKeyGenerator(request, server, derived);
+  return async (request, server) => {
+    const counterKey = await counterKeyGenerator(request, server);
     let requestId = requestIds.get(request);
     if (requestId === undefined) {
       requestId = Bun.randomUUIDv7();

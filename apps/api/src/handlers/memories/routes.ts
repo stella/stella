@@ -1,5 +1,4 @@
 import Elysia from "elysia";
-import { rateLimit } from "elysia-rate-limit";
 
 import { env } from "@/api/env";
 import createMemory from "@/api/handlers/memories/create";
@@ -9,6 +8,7 @@ import { createMemoriesRateLimitOptions } from "@/api/handlers/memories/rate-lim
 import updateMemory from "@/api/handlers/memories/update";
 import { authMacro, permissionMacro } from "@/api/lib/auth";
 import { deploymentFeatureGate } from "@/api/lib/deployment-feature-route";
+import { rateLimit } from "@/api/lib/rate-limit/rate-limit";
 
 // Mounted at `/v1/memories` directly at the root because folding another
 // `.use()` into the large `/v1` group tips Elysia's inferred type past

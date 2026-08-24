@@ -1,5 +1,4 @@
 import Elysia from "elysia";
-import { rateLimit } from "elysia-rate-limit";
 
 import { RESOURCE_TYPE } from "@stll/api-contract";
 
@@ -28,6 +27,7 @@ import updateSkill from "@/api/handlers/skills/update";
 import uploadSkill from "@/api/handlers/skills/upload";
 import { authMacro, permissionMacro } from "@/api/lib/auth";
 import { API_RATE_LIMITS } from "@/api/lib/limits";
+import { rateLimit } from "@/api/lib/rate-limit/rate-limit";
 import {
   organizationResourceSetUpdates,
   resourceRealtime,
@@ -44,7 +44,6 @@ export const skillsRoute = new Elysia({ prefix: "/skills" })
   .use(resourceRealtime)
   .use(
     rateLimit({
-      scoping: "scoped",
       duration: API_RATE_LIMITS.skillSource.duration,
       max: API_RATE_LIMITS.skillSource.max,
       ...skillSourceRateLimitBinding,

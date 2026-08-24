@@ -516,7 +516,7 @@ export const AUTH_RATE_LIMIT_MAX_WINDOW = Math.max(
 );
 
 /**
- * Rate limits for API endpoints (elysia-rate-limit).
+ * Rate limits for API endpoints.
  * Duration is in milliseconds, max is the request ceiling
  * per duration window.
  */

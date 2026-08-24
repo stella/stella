@@ -1,10 +1,10 @@
 import { disposableEmailBlocklistSet } from "disposable-email-domains-js";
-import type { Context } from "elysia-rate-limit";
 import { Address4, Address6 } from "ip-address";
 import { isIP } from "node:net";
 
 import { env } from "@/api/env";
 import { NEW_ACCOUNT_OTP_RATE_LIMITS } from "@/api/lib/limits";
+import type { RateLimitContext } from "@/api/lib/rate-limit/rate-limit";
 import { RedisRateLimitContext } from "@/api/lib/rate-limit/redis-context";
 
 const DISPOSABLE_EMAIL_DOMAINS = disposableEmailBlocklistSet();
@@ -92,7 +92,7 @@ export const consumeSignupOtpRateLimit = async ({
   identity,
   kind,
 }: {
-  context?: Pick<Context, "increment">;
+  context?: Pick<RateLimitContext, "increment">;
   identity: string;
   kind: "email" | "ip";
 }): Promise<SignupOtpRateLimitResult> => {
@@ -126,7 +126,7 @@ export const evaluateNewAccountOtpPolicy = async ({
 }: {
   accountExists: (normalizedEmail: string) => Promise<boolean>;
   clientIp: string | null;
-  context?: Pick<Context, "increment">;
+  context?: Pick<RateLimitContext, "increment">;
   email: string;
 }): Promise<NewAccountOtpPolicyResult> => {
   const normalizedEmail = normalizeAuthEmail(email);

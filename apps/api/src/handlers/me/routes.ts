@@ -1,5 +1,4 @@
 import Elysia from "elysia";
-import { rateLimit } from "elysia-rate-limit";
 
 import disconnectOAuthConnection from "@/api/handlers/me/disconnect-oauth-connection";
 import listOAuthConnections from "@/api/handlers/me/list-oauth-connections";
@@ -10,6 +9,7 @@ import updateGuideProgress from "@/api/handlers/me/update-guide-progress";
 import deleteAccountVerify from "@/api/handlers/me/verify-delete";
 import { sessionAuthMacro } from "@/api/lib/auth";
 import { API_RATE_LIMITS } from "@/api/lib/limits";
+import { rateLimit } from "@/api/lib/rate-limit/rate-limit";
 import { createRedisRateLimit } from "@/api/lib/rate-limit/redis-context";
 
 const isDeleteAccountOtpSendPath = (pathname: string): boolean =>
@@ -33,7 +33,6 @@ export const meRoute = new Elysia({ prefix: "/me" })
       .get("/pending-tasks", deleteAccountPendingTasks.handler)
       .use(
         rateLimit({
-          scoping: "scoped",
           duration: API_RATE_LIMITS.deleteAccountOtp.duration,
           max: API_RATE_LIMITS.deleteAccountOtp.max,
           ...createRedisRateLimit({
@@ -52,7 +51,6 @@ export const meRoute = new Elysia({ prefix: "/me" })
     app
       .use(
         rateLimit({
-          scoping: "scoped",
           duration: API_RATE_LIMITS.twoFactorManageOtp.duration,
           max: API_RATE_LIMITS.twoFactorManageOtp.max,
           ...createRedisRateLimit({

@@ -1,8 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import Elysia from "elysia";
-import type { Options } from "elysia-rate-limit";
-import { rateLimit } from "elysia-rate-limit";
+import Elysia, { status, t } from "elysia";
 
+import {
+  rateLimit,
+  type RateLimitContext,
+  type RateLimitContextConfig,
+  type RateLimitOptions,
+} from "@/api/lib/rate-limit/rate-limit";
 import {
   createRedisRateLimit,
   createRedisRateLimitRequestKey,
@@ -11,15 +15,11 @@ import {
 
 const WINDOW_MS = 1000;
 const RATE_LIMIT_OPTIONS = {
-  countFailedRequest: false,
   duration: WINDOW_MS,
-  errorResponse: "rate limit reached",
   generator: () => "shared-client",
-  headers: true,
   max: 2,
-  scoping: "scoped",
   skip: () => false,
-} as const satisfies Omit<Options, "context">;
+} as const satisfies Omit<RateLimitOptions, "context">;
 
 describe("RedisRateLimitContext", () => {
   test("keeps one refund identity per request while sharing the counter key", async () => {
@@ -34,9 +34,9 @@ describe("RedisRateLimitContext", () => {
       cookie: {},
     });
 
-    const firstKey = await generator(firstRequest, null, {});
-    const repeatedKey = await generator(firstRequest, null, {});
-    const secondKey = await generator(secondRequest, null, {});
+    const firstKey = await generator(firstRequest, null);
+    const repeatedKey = await generator(firstRequest, null);
+    const secondKey = await generator(secondRequest, null);
 
     expect(firstKey).toBe(repeatedKey);
     expect(secondKey).not.toBe(firstKey);
@@ -396,10 +396,361 @@ describe("RedisRateLimitContext", () => {
     expect(limited.headers.get("RateLimit-Remaining")).toBe("0");
     expect(limited.headers.get("RateLimit-Reset")).toBe("1");
     expect(limited.headers.get("Retry-After")).toBe("1");
+    expect(await limited.text()).toBe("rate-limit reached");
     firstContext.kill();
     secondContext.kill();
   });
+
+  test("refunds only requests that reached a failing handler", async () => {
+    const context = new TrackingRateLimitContext();
+    const app = createTrackingRateLimitedApp({ context, max: 1 })
+      .get("/fails", () => {
+        throw new TypeError("handler failed");
+      })
+      .get("/passes", () => "ok");
+
+    const failed = await app.handle(new Request("http://localhost/fails"));
+    const passed = await app.handle(new Request("http://localhost/passes"));
+    const limited = await app.handle(new Request("http://localhost/passes"));
+
+    expect(failed.status).toBe(500);
+    expect(passed.status).toBe(200);
+    expect(limited.status).toBe(429);
+    expect(context.decrementedKeys).toEqual(["shared-client"]);
+  });
+
+  test("counts handlers that return a failed status", async () => {
+    const context = new TrackingRateLimitContext();
+    const app = createTrackingRateLimitedApp({ context, max: 1 })
+      .get("/fails", () => status(400, { message: "failed" }))
+      .get("/passes", () => "ok");
+
+    const failed = await app.handle(new Request("http://localhost/fails"));
+    const limited = await app.handle(new Request("http://localhost/passes"));
+
+    expect(failed.status).toBe(400);
+    expect(limited.status).toBe(429);
+    expect(context.decrementedKeys).toEqual([]);
+  });
+
+  test("refunds thrown failures after an earlier error handler returns", async () => {
+    const context = new TrackingRateLimitContext();
+    const app = new Elysia()
+      .onError(({ set }) => {
+        set.status = 500;
+        return { message: "sanitized" };
+      })
+      .use(
+        rateLimit({
+          context,
+          duration: WINDOW_MS,
+          generator: () => "shared-client",
+          max: 1,
+        }),
+      )
+      .get("/fails", () => {
+        throw new TypeError("handler failed");
+      })
+      .get("/passes", () => "ok");
+
+    const failed = await app.handle(new Request("http://localhost/fails"));
+    const passed = await app.handle(new Request("http://localhost/passes"));
+    const limited = await app.handle(new Request("http://localhost/passes"));
+
+    expect(failed.status).toBe(500);
+    expect(passed.status).toBe(200);
+    expect(limited.status).toBe(429);
+    expect(context.decrementedKeys).toEqual(["shared-client"]);
+  });
+
+  test("skipped failing requests cannot refund another request", async () => {
+    const context = new TrackingRateLimitContext();
+    const app = createTrackingRateLimitedApp({
+      context,
+      max: 1,
+      skip: (request) => new URL(request.url).pathname === "/skipped",
+    })
+      .get("/skipped", () => {
+        throw new TypeError("skipped handler failed");
+      })
+      .get("/limited", () => "ok");
+
+    const skipped = await app.handle(new Request("http://localhost/skipped"));
+    const passed = await app.handle(new Request("http://localhost/limited"));
+    const limited = await app.handle(new Request("http://localhost/limited"));
+
+    expect(skipped.status).toBe(500);
+    expect(passed.status).toBe(200);
+    expect(limited.status).toBe(429);
+    expect(context.incrementedKeys).toEqual(["shared-client", "shared-client"]);
+    expect(context.decrementedKeys).toEqual([]);
+  });
+
+  test("counts malformed and request-validation failures", async () => {
+    const context = new TrackingRateLimitContext();
+    const app = createTrackingRateLimitedApp({ context, max: 2 }).post(
+      "/",
+      () => "ok",
+      { body: t.Object({ name: t.String() }) },
+    );
+
+    const malformed = await app.handle(
+      new Request("http://localhost/", {
+        body: "{",
+        headers: { "content-type": "application/json" },
+        method: "POST",
+      }),
+    );
+    const invalid = await app.handle(
+      new Request("http://localhost/", {
+        body: JSON.stringify({ name: 42 }),
+        headers: { "content-type": "application/json" },
+        method: "POST",
+      }),
+    );
+    const limited = await app.handle(
+      new Request("http://localhost/", {
+        body: JSON.stringify({ name: "Stella" }),
+        headers: { "content-type": "application/json" },
+        method: "POST",
+      }),
+    );
+
+    expect(malformed.status).toBe(400);
+    expect(invalid.status).toBe(422);
+    expect(limited.status).toBe(429);
+    expect(context.incrementedKeys).toEqual([
+      "shared-client",
+      "shared-client",
+      "shared-client",
+    ]);
+  });
+
+  test("accounts for early failures after an earlier error handler returns", async () => {
+    const context = new TrackingRateLimitContext();
+    const app = new Elysia()
+      .onError(({ code, set }) => {
+        switch (code) {
+          case "NOT_FOUND":
+            set.status = 404;
+            break;
+          case "PARSE":
+            set.status = 400;
+            break;
+          case "VALIDATION":
+            set.status = 422;
+            break;
+          case "INTERNAL_SERVER_ERROR":
+          case "INVALID_COOKIE_SIGNATURE":
+          case "INVALID_FILE_TYPE":
+          case "UNKNOWN":
+            set.status = 500;
+            break;
+          default:
+            set.status = 500;
+        }
+        return { message: "sanitized" };
+      })
+      .use(
+        rateLimit({
+          context,
+          duration: WINDOW_MS,
+          generator: () => "shared-client",
+          max: 3,
+        }),
+      )
+      .post("/known", () => "ok", {
+        body: t.Object({ name: t.String() }),
+      });
+
+    const malformed = await app.handle(
+      new Request("http://localhost/known", {
+        body: "{",
+        headers: { "content-type": "application/json" },
+        method: "POST",
+      }),
+    );
+    const invalid = await app.handle(
+      new Request("http://localhost/known", {
+        body: JSON.stringify({ name: 42 }),
+        headers: { "content-type": "application/json" },
+        method: "POST",
+      }),
+    );
+    const missing = await app.handle(
+      new Request("http://localhost/missing", { method: "POST" }),
+    );
+    const limited = await app.handle(
+      new Request("http://localhost/known", {
+        body: JSON.stringify({ name: "Stella" }),
+        headers: { "content-type": "application/json" },
+        method: "POST",
+      }),
+    );
+
+    expect(malformed.status).toBe(400);
+    expect(invalid.status).toBe(422);
+    expect(missing.status).toBe(404);
+    expect(limited.status).toBe(429);
+    expect(context.incrementedKeys).toEqual([
+      "shared-client",
+      "shared-client",
+      "shared-client",
+      "shared-client",
+    ]);
+  });
+
+  test("returns the rate-limit body when an early failure exceeds the quota", async () => {
+    const context = new TrackingRateLimitContext();
+    const app = new Elysia()
+      .onError(({ set }) => {
+        set.status = 400;
+        return { message: "sanitized" };
+      })
+      .use(
+        rateLimit({
+          context,
+          duration: WINDOW_MS,
+          generator: () => "shared-client",
+          max: 1,
+        }),
+      )
+      .post("/known", () => "ok", {
+        body: t.Object({ name: t.String() }),
+      });
+
+    const first = await app.handle(
+      new Request("http://localhost/known", {
+        body: "{",
+        headers: { "content-type": "application/json" },
+        method: "POST",
+      }),
+    );
+    const limited = await app.handle(
+      new Request("http://localhost/known", {
+        body: "{",
+        headers: { "content-type": "application/json" },
+        method: "POST",
+      }),
+    );
+
+    expect(first.status).toBe(400);
+    expect(limited.status).toBe(429);
+    expect(limited.headers.get("RateLimit-Limit")).toBe("1");
+    expect(limited.headers.get("RateLimit-Remaining")).toBe("0");
+    expect(limited.headers.get("Retry-After")).toBe("1");
+    expect(await limited.text()).toBe("rate-limit reached");
+  });
+
+  test("counts unknown routes that bypass before-handle hooks", async () => {
+    const context = new TrackingRateLimitContext();
+    const app = createTrackingRateLimitedApp({ context, max: 1 }).get(
+      "/known",
+      () => "ok",
+    );
+
+    const missing = await app.handle(new Request("http://localhost/missing"));
+    const limited = await app.handle(new Request("http://localhost/known"));
+
+    expect(missing.status).toBe(404);
+    expect(limited.status).toBe(429);
+    expect(context.incrementedKeys).toEqual(["shared-client", "shared-client"]);
+  });
+
+  test("registers equal-limit scoped plugins independently", async () => {
+    const firstContext = new TrackingRateLimitContext();
+    const secondContext = new TrackingRateLimitContext();
+    const app = new Elysia()
+      .use(
+        createTrackingRateLimitedApp({
+          context: firstContext,
+          max: 1,
+          prefix: "/first",
+        }).get("/", () => "first"),
+      )
+      .use(
+        createTrackingRateLimitedApp({
+          context: secondContext,
+          max: 1,
+          prefix: "/second",
+        }).get("/", () => "second"),
+      );
+
+    const first = await app.handle(new Request("http://localhost/first/"));
+    const second = await app.handle(new Request("http://localhost/second/"));
+
+    expect(first.status).toBe(200);
+    expect(second.status).toBe(200);
+    expect(firstContext.incrementedKeys).toEqual(["shared-client"]);
+    expect(secondContext.incrementedKeys).toEqual(["shared-client"]);
+  });
+
+  test("cleans up its context when the app stops", async () => {
+    const context = new TrackingRateLimitContext();
+    const app = createTrackingRateLimitedApp({ context, max: 1 })
+      .get("/", () => "ok")
+      .listen({ hostname: "127.0.0.1", port: 0 });
+
+    await app.stop();
+
+    expect(context.killCount).toBe(1);
+  });
 });
+
+class TrackingRateLimitContext implements RateLimitContext {
+  readonly decrementedKeys: string[] = [];
+  readonly incrementedKeys: string[] = [];
+  killCount = 0;
+  private readonly counts = new Map<string, number>();
+  private duration = WINDOW_MS;
+
+  decrement(key: string): void {
+    this.decrementedKeys.push(key);
+    const count = this.counts.get(key) ?? 0;
+    this.counts.set(key, Math.max(0, count - 1));
+  }
+
+  increment(key: string, duration = this.duration, requestTime = Date.now()) {
+    this.incrementedKeys.push(key);
+    const count = (this.counts.get(key) ?? 0) + 1;
+    this.counts.set(key, count);
+    return {
+      count,
+      nextReset: new Date(requestTime + duration),
+      start: requestTime,
+    };
+  }
+
+  init({ duration }: RateLimitContextConfig): void {
+    this.duration = duration;
+  }
+
+  kill(): void {
+    this.killCount += 1;
+    this.counts.clear();
+  }
+}
+
+const createTrackingRateLimitedApp = ({
+  context,
+  max,
+  prefix,
+  skip,
+}: {
+  context: TrackingRateLimitContext;
+  max: number;
+  prefix?: string;
+  skip?: RateLimitOptions["skip"];
+}) =>
+  new Elysia(prefix === undefined ? {} : { prefix }).use(
+    rateLimit({
+      context,
+      duration: WINDOW_MS,
+      generator: () => "shared-client",
+      max,
+      ...(skip === undefined ? {} : { skip }),
+    }),
+  );
 
 type FakeRedisEntry = {
   attempts: Set<string>;

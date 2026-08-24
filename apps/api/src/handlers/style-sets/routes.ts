@@ -1,5 +1,4 @@
 import Elysia from "elysia";
-import { rateLimit } from "elysia-rate-limit";
 
 import createStyleSet from "@/api/handlers/style-sets/create";
 import createStyleSetFromEditor from "@/api/handlers/style-sets/create-from-editor";
@@ -14,6 +13,7 @@ import updateStyleSetFromEditor from "@/api/handlers/style-sets/update-from-edit
 import { isStyleSetUploadRateLimitedRequest } from "@/api/handlers/style-sets/upload-rate-limit";
 import { authMacro, permissionMacro } from "@/api/lib/auth";
 import { API_RATE_LIMITS } from "@/api/lib/limits";
+import { rateLimit } from "@/api/lib/rate-limit/rate-limit";
 import { createRedisRateLimit } from "@/api/lib/rate-limit/redis-context";
 
 export const styleSetsRoute = new Elysia({ prefix: "/style-sets" })
@@ -21,7 +21,6 @@ export const styleSetsRoute = new Elysia({ prefix: "/style-sets" })
   .use(permissionMacro)
   .use(
     rateLimit({
-      scoping: "scoped",
       duration: API_RATE_LIMITS.upload.duration,
       max: API_RATE_LIMITS.upload.max,
       ...createRedisRateLimit({
