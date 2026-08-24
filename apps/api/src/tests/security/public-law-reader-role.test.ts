@@ -547,23 +547,23 @@ describe("public-law reader role", () => {
         await readDecisionAnalysis(tx, decisionId);
         exercised.add(readDecisionAnalysis.publicLawSharedQuery);
 
-      await readPgFtsBrowseFacets(tx, { excludedSourceIds: [], limit: 10 });
-      exercised.add(readPgFtsBrowseFacets.publicLawSharedQuery);
+        await readPgFtsBrowseFacets(tx, { excludedSourceIds: [], limit: 10 });
+        exercised.add(readPgFtsBrowseFacets.publicLawSharedQuery);
 
-      await readDecisionLanguageAlternateCountsQuery(tx, [
-        "reader-role-census",
-      ]);
-      exercised.add(
-        readDecisionLanguageAlternateCountsQuery.publicLawSharedQuery,
-      );
+        await readDecisionLanguageAlternateCountsQuery(tx, [
+          "reader-role-census",
+        ]);
+        exercised.add(
+          readDecisionLanguageAlternateCountsQuery.publicLawSharedQuery,
+        );
 
-      await readDocumentContextDecision(tx, decisionId);
-      exercised.add(readDocumentContextDecision.publicLawSharedQuery);
+        await readDocumentContextDecision(tx, decisionId);
+        exercised.add(readDocumentContextDecision.publicLawSharedQuery);
 
-      await readNonRedistributableCaseLawSourceIdsQuery(tx);
-      exercised.add(
-        readNonRedistributableCaseLawSourceIdsQuery.publicLawSharedQuery,
-      );
+        await readNonRedistributableCaseLawSourceIdsQuery(tx);
+        exercised.add(
+          readNonRedistributableCaseLawSourceIdsQuery.publicLawSharedQuery,
+        );
 
         await rehydrateCorpusIndexProviderCandidates(tx, {
           generation: "case_law_v3",
@@ -581,7 +581,9 @@ describe("public-law reader role", () => {
       await testDb
         .delete(caseLawDecisions)
         .where(eq(caseLawDecisions.id, decisionId));
-      await testDb.delete(caseLawSources).where(eq(caseLawSources.id, sourceId));
+      await testDb
+        .delete(caseLawSources)
+        .where(eq(caseLawSources.id, sourceId));
     }
   });
 

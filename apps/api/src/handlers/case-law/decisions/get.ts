@@ -261,147 +261,148 @@ export const readDecisionHandler = definePublicLawSharedQuery(
       return status(400, { message: "Invalid cursor" });
     }
 
-  const decision = await tx.query.caseLawDecisions.findFirst({
-    where: { id: { eq: decisionId } },
-    columns: {
-      id: true,
-      caseNumber: true,
-      slug: true,
-      ecli: true,
-      court: true,
-      country: true,
-      language: true,
-      languageGroupKey: true,
-      decisionDate: true,
-      decisionType: true,
-      documentAst: true,
-      sourceUrl: true,
-      documentUrl: true,
-      metadata: true,
-      createdAt: true,
-      updatedAt: true,
-      // Object-storage keys: never returned to the client, only used
-      // to fetch canonical payloads when corpus storage is enabled.
-      astS3Key: true,
-      textS3Key: true,
-      contentHash: true,
-      redactedAt: true,
-      // fulltext: only as fallback when no AST
-      // sections: frontend doesn't use these
-    },
-    with: {
-      source: {
-        // descriptor: only for `allowsDerivedAi` below, never returned to
-        // the client. Redistribution was decided when the subject was
-        // resolved.
-        columns: { id: true, name: true, adapterKey: true, descriptor: true },
+    const decision = await tx.query.caseLawDecisions.findFirst({
+      where: { id: { eq: decisionId } },
+      columns: {
+        id: true,
+        caseNumber: true,
+        slug: true,
+        ecli: true,
+        court: true,
+        country: true,
+        language: true,
+        languageGroupKey: true,
+        decisionDate: true,
+        decisionType: true,
+        documentAst: true,
+        sourceUrl: true,
+        documentUrl: true,
+        metadata: true,
+        createdAt: true,
+        updatedAt: true,
+        // Object-storage keys: never returned to the client, only used
+        // to fetch canonical payloads when corpus storage is enabled.
+        astS3Key: true,
+        textS3Key: true,
+        contentHash: true,
+        redactedAt: true,
+        // fulltext: only as fallback when no AST
+        // sections: frontend doesn't use these
       },
-    },
-  });
-
-  if (!decision) {
-    // The subject existed moments ago; a redaction can race the read.
-    return status(404, DECISION_NOT_FOUND);
-  }
-
-  const source =
-    decision.source ?? panic("Case-law decision has no source relation");
-
-  const [languageAlternates, citationsFromPage, citationsToPage] =
-    await Promise.all([
-      listPublicDecisionLanguageAlternates({
-        tx,
-        languageGroupKey: decision.languageGroupKey,
-      }),
-      citationCursors.from.status === CITATION_STREAM_CURSOR_STATUS.EXHAUSTED
-        ? emptyCitationPage()
-        : listOutgoingDecisionCitations({
-            tx,
-            cursor: citationPageCursor(citationCursors.from),
-            decisionId,
-          }),
-      citationCursors.to.status === CITATION_STREAM_CURSOR_STATUS.EXHAUSTED
-        ? emptyCitationPage()
-        : listIncomingDecisionCitations({
-            tx,
-            cursor: citationPageCursor(citationCursors.to),
-            decisionId,
-          }),
-    ]);
-
-  if (!("items" in citationsFromPage)) {
-    return citationsFromPage;
-  }
-  if (!("items" in citationsToPage)) {
-    return citationsToPage;
-  }
-  const citationsNextCursor = encodeDecisionCitationCursor({
-    from: citationStreamCursorFromNext(citationsFromPage.nextCursor),
-    to: citationStreamCursorFromNext(citationsToPage.nextCursor),
-  });
-
-  // Prefer canonical AST from object storage when corpus storage is
-  // enabled; fall back to the Postgres column so a read is never harder
-  // than today.
-  const astRead = await resolveAst({
-    astS3Key: decision.astS3Key,
-    contentHash: decision.contentHash,
-    pgAst: decision.documentAst,
-    decisionId,
-  });
-  const documentAst = astRead.payload;
-
-  // Only fetch fulltext if no usable documentAst (fallback).
-  let fulltext: string | null = null;
-  let corpusPayloadUnavailable = astRead.unavailable;
-  if (!hasUsableAst(documentAst)) {
-    const textRead = await resolveFulltext({
-      textS3Key: decision.textS3Key,
-      contentHash: decision.contentHash,
-      decisionId,
-      tx,
+      with: {
+        source: {
+          // descriptor: only for `allowsDerivedAi` below, never returned to
+          // the client. Redistribution was decided when the subject was
+          // resolved.
+          columns: { id: true, name: true, adapterKey: true, descriptor: true },
+        },
+      },
     });
-    fulltext = textRead.payload;
-    corpusPayloadUnavailable = corpusPayloadUnavailable || textRead.unavailable;
-  }
 
-  // Nothing readable resolved, and there is a document to fetch. Which
-  // of the two that is decides everything downstream: a decision nobody
-  // has fetched yet is worth fetching for this reader
-  // (`get-deferred-document.ts` turns `documentPending` into that
-  // fetch), while one the source had nothing for is terminal, and
-  // re-entering the fetch path on every view would cost a claim that can
-  // never succeed. Kept as derived booleans rather than a call so this
-  // module stays a read.
-  const { documentPending, documentReadFailed, documentUnavailable } =
-    decision.redactedAt === null
-      ? await resolveDocumentState({
-          hasReadableDocument: hasUsableAst(documentAst) || Boolean(fulltext),
-          corpusPayloadUnavailable,
-          documentUrl: decision.documentUrl,
-          corpusServed:
-            corpusReadEnabled() &&
-            decision.textS3Key !== null &&
-            decision.contentHash !== null,
-          contentHash: decision.contentHash,
-          pgAstPresent: decision.documentAst !== null,
-          resolvedFulltext: fulltext,
-          readTextColumnWritten: async () => {
-            const [row] = await tx
-              .select({
-                written: sql<boolean>`${caseLawDecisions.fulltext} IS NOT NULL`,
-              })
-              .from(caseLawDecisions)
-              .where(eq(caseLawDecisions.id, decisionId))
-              .limit(1);
-            return row?.written ?? null;
-          },
-        })
-      : {
-          documentPending: false,
-          documentReadFailed: false,
-          documentUnavailable: false,
-        };
+    if (!decision) {
+      // The subject existed moments ago; a redaction can race the read.
+      return status(404, DECISION_NOT_FOUND);
+    }
+
+    const source =
+      decision.source ?? panic("Case-law decision has no source relation");
+
+    const [languageAlternates, citationsFromPage, citationsToPage] =
+      await Promise.all([
+        listPublicDecisionLanguageAlternates({
+          tx,
+          languageGroupKey: decision.languageGroupKey,
+        }),
+        citationCursors.from.status === CITATION_STREAM_CURSOR_STATUS.EXHAUSTED
+          ? emptyCitationPage()
+          : listOutgoingDecisionCitations({
+              tx,
+              cursor: citationPageCursor(citationCursors.from),
+              decisionId,
+            }),
+        citationCursors.to.status === CITATION_STREAM_CURSOR_STATUS.EXHAUSTED
+          ? emptyCitationPage()
+          : listIncomingDecisionCitations({
+              tx,
+              cursor: citationPageCursor(citationCursors.to),
+              decisionId,
+            }),
+      ]);
+
+    if (!("items" in citationsFromPage)) {
+      return citationsFromPage;
+    }
+    if (!("items" in citationsToPage)) {
+      return citationsToPage;
+    }
+    const citationsNextCursor = encodeDecisionCitationCursor({
+      from: citationStreamCursorFromNext(citationsFromPage.nextCursor),
+      to: citationStreamCursorFromNext(citationsToPage.nextCursor),
+    });
+
+    // Prefer canonical AST from object storage when corpus storage is
+    // enabled; fall back to the Postgres column so a read is never harder
+    // than today.
+    const astRead = await resolveAst({
+      astS3Key: decision.astS3Key,
+      contentHash: decision.contentHash,
+      pgAst: decision.documentAst,
+      decisionId,
+    });
+    const documentAst = astRead.payload;
+
+    // Only fetch fulltext if no usable documentAst (fallback).
+    let fulltext: string | null = null;
+    let corpusPayloadUnavailable = astRead.unavailable;
+    if (!hasUsableAst(documentAst)) {
+      const textRead = await resolveFulltext({
+        textS3Key: decision.textS3Key,
+        contentHash: decision.contentHash,
+        decisionId,
+        tx,
+      });
+      fulltext = textRead.payload;
+      corpusPayloadUnavailable =
+        corpusPayloadUnavailable || textRead.unavailable;
+    }
+
+    // Nothing readable resolved, and there is a document to fetch. Which
+    // of the two that is decides everything downstream: a decision nobody
+    // has fetched yet is worth fetching for this reader
+    // (`get-deferred-document.ts` turns `documentPending` into that
+    // fetch), while one the source had nothing for is terminal, and
+    // re-entering the fetch path on every view would cost a claim that can
+    // never succeed. Kept as derived booleans rather than a call so this
+    // module stays a read.
+    const { documentPending, documentReadFailed, documentUnavailable } =
+      decision.redactedAt === null
+        ? await resolveDocumentState({
+            hasReadableDocument: hasUsableAst(documentAst) || Boolean(fulltext),
+            corpusPayloadUnavailable,
+            documentUrl: decision.documentUrl,
+            corpusServed:
+              corpusReadEnabled() &&
+              decision.textS3Key !== null &&
+              decision.contentHash !== null,
+            contentHash: decision.contentHash,
+            pgAstPresent: decision.documentAst !== null,
+            resolvedFulltext: fulltext,
+            readTextColumnWritten: async () => {
+              const [row] = await tx
+                .select({
+                  written: sql<boolean>`${caseLawDecisions.fulltext} IS NOT NULL`,
+                })
+                .from(caseLawDecisions)
+                .where(eq(caseLawDecisions.id, decisionId))
+                .limit(1);
+              return row?.written ?? null;
+            },
+          })
+        : {
+            documentPending: false,
+            documentReadFailed: false,
+            documentUnavailable: false,
+          };
 
     return {
       documentPending,
