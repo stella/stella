@@ -1,7 +1,11 @@
 import { panic } from "better-result";
 import { sql } from "drizzle-orm";
 
-import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
+import {
+  DECISION_IDENTIFIER_MAX_COUNT,
+  DECISION_IDENTIFIER_TYPES,
+} from "@stll/legal-ast/decision-identifier";
+import type { DecisionIdentifiers } from "@stll/legal-ast/decision-identifier";
 
 import type { Transaction } from "@/api/db/root";
 import {
@@ -21,8 +25,20 @@ import type { CaseLawRootHandle } from "@/api/lib/case-law/maintenance-lane";
 import { isRecord } from "@/api/lib/type-guards";
 
 export const DECISION_IDENTIFIER_BACKFILL_VERSION = "typed-identifiers-v1";
-export const DEFAULT_DECISION_IDENTIFIER_BACKFILL_BATCH_SIZE = 1000;
-export const MAX_DECISION_IDENTIFIER_BACKFILL_BATCH_SIZE = 5000;
+const POSTGRESQL_MAX_BIND_PARAMETERS = 65_535;
+// Leave more than one thousand bind slots for statuses, checkpoint values,
+// and future fixed query parameters beyond the page-expanded VALUES lists.
+const POSTGRESQL_BIND_PARAMETER_RESERVE = 1024;
+const DECISION_IDENTIFIER_BIND_PARAMETERS = 4;
+const DECISION_PAGE_BIND_PARAMETERS = 1;
+export const MAX_DECISION_IDENTIFIER_BACKFILL_BATCH_SIZE = Math.floor(
+  (POSTGRESQL_MAX_BIND_PARAMETERS - POSTGRESQL_BIND_PARAMETER_RESERVE) /
+    (DECISION_IDENTIFIER_MAX_COUNT * DECISION_IDENTIFIER_BIND_PARAMETERS +
+      DECISION_PAGE_BIND_PARAMETERS),
+);
+export const DEFAULT_DECISION_IDENTIFIER_BACKFILL_BATCH_SIZE =
+  MAX_DECISION_IDENTIFIER_BACKFILL_BATCH_SIZE;
+const MAX_DECISION_IDENTIFIER_BACKFILL_RESTARTS = 3;
 
 type RunningBackfillPhase = Exclude<
   CaseLawDecisionIdentifierBackfillPhase,
@@ -76,11 +92,22 @@ export type DecisionIdentifierBackfillVerification =
       gaps: DecisionIdentifierBackfillGaps;
     };
 
-export type DecisionIdentifierBackfillProgress = {
+type DecisionIdentifierBackfillPageProgress = {
   phase: RunningBackfillPhase;
   decisionsScanned: number;
   citationsScanned: number;
 };
+
+export type DecisionIdentifierBackfillProgress =
+  | { type: "page"; progress: DecisionIdentifierBackfillPageProgress }
+  | {
+      type: "retry";
+      attempt: number;
+      verification: Exclude<
+        DecisionIdentifierBackfillVerification,
+        { status: "ready-for-cutover" | "awaiting-resolution-drain" }
+      >;
+    };
 
 export type DecisionIdentifierBackfillResult = {
   status: "complete";
@@ -270,7 +297,7 @@ const decisionRowsSql = (
   ${cursorId === null ? sql`` : sql`WHERE decision.id > ${cursorId}::uuid`}
   ORDER BY decision.id
   LIMIT ${batchSize}
-  ${lock ? sql`FOR UPDATE OF decision` : sql``}
+  ${lock ? sql`FOR NO KEY UPDATE OF decision` : sql``}
 `;
 
 const citationRowsSql = (
@@ -310,7 +337,7 @@ const projectDecisionPage = async (
   tx: Transaction,
   checkpoint: RunningBackfillCheckpoint,
   batchSize: number,
-): Promise<DecisionIdentifierBackfillProgress> => {
+): Promise<DecisionIdentifierBackfillPageProgress> => {
   const rows = readDecisionRows(
     await tx.execute(decisionRowsSql(checkpoint.cursorId, batchSize, true)),
   );
@@ -328,31 +355,30 @@ const projectDecisionPage = async (
       citationsScanned: checkpoint.citationsScanned,
     };
   }
-  const identifiers = rows.flatMap((row) =>
-    decisionIdentifiersFromStoredMetadata(row).map((identifier) => ({
-      decisionId: row.id,
-      identifier,
-    })),
-  );
-  if (identifiers.length === 0) {
-    return panic("Decision identifier projection produced an empty page");
-  }
-  const expected = sql.join(
-    identifiers.map(
-      ({ decisionId, identifier }) =>
-        sql`(${decisionId}::uuid, ${identifier.type}::varchar, ${identifier.value}::varchar, ${normalizeDecisionIdentifier(identifier)}::varchar)`,
-    ),
-    sql`, `,
-  );
-  const page = sql.join(
-    rows.map(({ id }) => sql`(${id}::uuid)`),
-    sql`, `,
-  );
+  const projections = rows.flatMap((row) => {
+    const identifiers = identifiersForStoredDecision(row);
+    return identifiers === null ? [] : [{ decisionId: row.id, identifiers }];
+  });
+  if (projections.length > 0) {
+    const expected = sql.join(
+      projections.flatMap(({ decisionId, identifiers }) =>
+        identifiers.map(
+          (identifier) =>
+            sql`(${decisionId}::uuid, ${identifier.type}::varchar, ${identifier.value}::varchar, ${normalizeDecisionIdentifier(identifier)}::varchar)`,
+        ),
+      ),
+      sql`, `,
+    );
+    const page = sql.join(
+      projections.map(({ decisionId }) => sql`(${decisionId}::uuid)`),
+      sql`, `,
+    );
 
-  // Match ingestion's decision-row-then-graph lock order. A concurrent
-  // refresh therefore cannot be overwritten from an older projection.
-  await lockCitationGraph(tx);
-  await tx.execute(sql`
+    // Match ingestion's decision-row-then-graph lock order. NO KEY UPDATE
+    // excludes concurrent refreshes while remaining compatible with the
+    // resolver's foreign-key KEY SHARE checks.
+    await lockCitationGraph(tx);
+    await tx.execute(sql`
     WITH expected(decision_id, type, value, normalized_value) AS (
       VALUES ${expected}
     ), page(decision_id) AS (VALUES ${page}),
@@ -386,8 +412,14 @@ const projectDecisionPage = async (
       WHERE citation.resolution_status <> ${CITATION_RESOLUTION_STATUS.PENDING}
         AND EXISTS (
           SELECT 1 FROM changed_identifiers changed
-          WHERE changed.type = citation.identifier_type
-            AND changed.normalized_value = citation.normalized_identifier_value
+          WHERE changed.type = coalesce(
+                  citation.identifier_type,
+                  ${DECISION_IDENTIFIER_TYPES.CASE_NUMBER}
+                )
+            AND changed.normalized_value = coalesce(
+                  citation.normalized_identifier_value,
+                  citation.citation_key
+                )
         )
       RETURNING citation.id
     ), changed_decisions AS (
@@ -397,6 +429,7 @@ const projectDecisionPage = async (
     SET indexed_hash = NULL, updated_at = clock_timestamp()
     WHERE decision.id IN (SELECT decision_id FROM changed_decisions)
   `);
+  }
   const decisionsScanned = checkpoint.decisionsScanned + rows.length;
   await tx.execute(sql`
     UPDATE case_law_decision_identifier_backfills
@@ -423,7 +456,7 @@ const projectCitationPage = async (
   tx: Transaction,
   checkpoint: RunningBackfillCheckpoint,
   batchSize: number,
-): Promise<DecisionIdentifierBackfillProgress> => {
+): Promise<DecisionIdentifierBackfillPageProgress> => {
   // Resolver batches take the graph lock before citation row locks too.
   await lockCitationGraph(tx);
   const rows = readCitationRows(
@@ -513,6 +546,18 @@ const identifierKey = ({
 }: Omit<StoredIdentifierRow, "decisionId">): string =>
   `${type}\u0000${normalizedValue}\u0000${value}`;
 
+const identifiersForStoredDecision = (
+  row: DecisionRow,
+): DecisionIdentifiers | null => {
+  const caseNumberIdentifier = {
+    type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+    value: row.caseNumber,
+  } as const;
+  return normalizeDecisionIdentifier(caseNumberIdentifier)
+    ? decisionIdentifiersFromStoredMetadata(row)
+    : null;
+};
+
 const decisionMismatchCount = async (
   tx: Transaction,
   rows: readonly DecisionRow[],
@@ -534,8 +579,12 @@ const decisionMismatchCount = async (
   );
   const storedByDecision = Map.groupBy(stored, ({ decisionId }) => decisionId);
   return rows.filter((row) => {
+    const identifiers = identifiersForStoredDecision(row);
+    if (identifiers === null) {
+      return true;
+    }
     const expected = new Set(
-      decisionIdentifiersFromStoredMetadata(row).map((identifier) =>
+      identifiers.map((identifier) =>
         identifierKey({
           type: identifier.type,
           value: identifier.value,
@@ -561,7 +610,7 @@ const citationMismatchCount = (rows: readonly CitationRow[]): number =>
   }).length;
 
 type VerificationPageResult =
-  | { status: "progress"; progress: DecisionIdentifierBackfillProgress }
+  | { status: "progress"; progress: DecisionIdentifierBackfillPageProgress }
   | { status: "retry" };
 
 const verifyDecisionPage = async (
@@ -653,7 +702,7 @@ const verifyCitationPage = async (
 };
 
 type BackfillPageResult =
-  | { status: "progress"; progress: DecisionIdentifierBackfillProgress }
+  | { status: "progress"; progress: DecisionIdentifierBackfillPageProgress }
   | { status: "retry" }
   | { status: "completed" };
 
@@ -845,8 +894,14 @@ const restartCompletedBackfill = async (
 };
 
 type BackfillIteration =
-  | { status: "progress"; progress: DecisionIdentifierBackfillProgress }
-  | { status: "retry" }
+  | { status: "progress"; progress: DecisionIdentifierBackfillPageProgress }
+  | {
+      status: "retry";
+      verification: Exclude<
+        DecisionIdentifierBackfillVerification,
+        { status: "ready-for-cutover" | "awaiting-resolution-drain" }
+      >;
+    }
   | {
       status: "complete";
       verification: DecisionIdentifierBackfillResult["verification"];
@@ -857,7 +912,7 @@ const advanceBackfill = async (
   batchSize: number,
 ): Promise<BackfillIteration> => {
   const result = await runBackfillPage(rootDb, batchSize);
-  if (result.status !== "completed") {
+  if (result.status === "progress") {
     return result;
   }
   const verification = await verifyDecisionIdentifierBackfill(
@@ -870,10 +925,7 @@ const advanceBackfill = async (
   ) {
     return { status: "complete", verification };
   }
-  if (verification.status === "backfill-required") {
-    await restartCompletedBackfill(rootDb, verification);
-  }
-  return { status: "retry" };
+  return { status: "retry", verification };
 };
 
 const backfillIterations = (
@@ -903,27 +955,29 @@ export const runDecisionIdentifierBackfill = async (
   if (checkpoint === null) {
     return panic("Decision identifier backfill checkpoint was not created");
   }
-  if (
-    checkpoint.phase === CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.COMPLETE
-  ) {
-    const initial = await verifyDecisionIdentifierBackfill(rootDb, batchSize);
-    if (
-      initial.status === "ready-for-cutover" ||
-      initial.status === "awaiting-resolution-drain"
-    ) {
-      return { status: "complete", verification: initial };
-    }
-    if (initial.status === "backfill-required") {
-      await restartCompletedBackfill(rootDb, initial);
-    }
-  }
+  let retryCount = 0;
   for await (const result of backfillIterations(rootDb, batchSize)) {
     switch (result.status) {
       case "progress":
-        onProgress?.(result.progress);
+        onProgress?.({ type: "page", progress: result.progress });
         break;
-      case "retry":
+      case "retry": {
+        retryCount += 1;
+        if (retryCount > MAX_DECISION_IDENTIFIER_BACKFILL_RESTARTS) {
+          return panic(
+            `Decision identifier backfill did not converge after ${MAX_DECISION_IDENTIFIER_BACKFILL_RESTARTS} retries: ${JSON.stringify({ status: result.verification.status, gaps: result.verification.gaps })}`,
+          );
+        }
+        onProgress?.({
+          type: "retry",
+          attempt: retryCount,
+          verification: result.verification,
+        });
+        if (result.verification.status === "backfill-required") {
+          await restartCompletedBackfill(rootDb, result.verification);
+        }
         break;
+      }
       case "complete":
         return { status: "complete", verification: result.verification };
       default: {

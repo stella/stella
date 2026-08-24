@@ -10,6 +10,7 @@ import {
   extractCitations,
   isSelfCitation,
 } from "@/api/handlers/case-law/ingestion/citation-extractor";
+import { storeDecisionIdentifiersInMetadata } from "@/api/lib/legal-search/decision-identifier-metadata";
 
 describe("extractCitations", () => {
   test("deduplicates sp. zn. and č. j. for the same case number", () => {
@@ -1924,6 +1925,53 @@ describe("stored decision identifier projection", () => {
       {
         type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
         value: "I ACz 2/24",
+      },
+    ]);
+  });
+
+  test("recovers legacy reporter citations from publisher metadata", () => {
+    expect(
+      decisionIdentifiersFromStoredMetadata({
+        caseNumber: "1 As 2/2024",
+        ecli: null,
+        metadata: { citation: "12 Test Reporter 34" },
+      }),
+    ).toEqual([
+      {
+        type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+        value: "1 As 2/2024",
+      },
+      {
+        type: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
+        value: "12 Test Reporter 34",
+      },
+    ]);
+  });
+
+  test("reads the exact identifier set persisted by ingestion", () => {
+    const metadata = storeDecisionIdentifiersInMetadata(
+      { citation: "legacy reporter spelling" },
+      [
+        {
+          type: DECISION_IDENTIFIER_TYPES.NEUTRAL_CITATION,
+          value: "[2024] Test 12",
+        },
+      ],
+    );
+    expect(
+      decisionIdentifiersFromStoredMetadata({
+        caseNumber: "1 As 2/2024",
+        ecli: null,
+        metadata,
+      }),
+    ).toEqual([
+      {
+        type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+        value: "1 As 2/2024",
+      },
+      {
+        type: DECISION_IDENTIFIER_TYPES.NEUTRAL_CITATION,
+        value: "[2024] Test 12",
       },
     ]);
   });

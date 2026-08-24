@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import { afterEach, describe, expect, mock, test } from "bun:test";
 
+import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
+
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
@@ -11,6 +13,7 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapter";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { czNsAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
+import { decisionIdentifiersFromStoredMetadata } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import {
   corpusWriteErrorDetail,
   processDecision,
@@ -113,6 +116,37 @@ describe("sanitizeResult — adapter-supplied sections", () => {
     });
 
     expect(sanitized.sections?.at(0)?.title).toBeNull();
+  });
+});
+
+describe("sanitizeResult — decision identifiers", () => {
+  test("persists the complete source identifier set for exact replay", () => {
+    const sanitized = sanitizeResult({
+      ...baseResult(EMPTY_AST),
+      identifiers: [
+        {
+          type: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
+          value: "12 Test Reporter 34",
+        },
+      ],
+    });
+
+    expect(
+      decisionIdentifiersFromStoredMetadata({
+        caseNumber: sanitized.caseNumber,
+        ecli: sanitized.ecli ?? null,
+        metadata: sanitized.metadata,
+      }),
+    ).toEqual([
+      {
+        type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+        value: "X/1/2026",
+      },
+      {
+        type: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
+        value: "12 Test Reporter 34",
+      },
+    ]);
   });
 });
 
