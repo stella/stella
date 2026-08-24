@@ -1,5 +1,7 @@
 import { panic, Result } from "better-result";
 
+import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
+
 import {
   ADAPTER_KEYS,
   ADAPTER_TIMEOUT,
@@ -765,6 +767,16 @@ const rowToResult = (
 
   return {
     caseNumber: row.caseNumber,
+    ...(detail.citation === undefined
+      ? {}
+      : {
+          identifiers: [
+            {
+              type: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
+              value: detail.citation,
+            },
+          ],
+        }),
     sourceDocumentId,
     // What every row this adapter wrote before it stated an id was stored
     // under: one row per docket, carrying the detail URL of whichever document

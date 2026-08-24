@@ -87,6 +87,9 @@ const POST_BOOTSTRAP_SELECT_ONLY_TABLES = new Set([
   // Provision references extracted from decision text: global legal data read
   // by the public case-law reads, written only by the extraction loop.
   "case_law_provision_citations",
+  // Publisher-stated decision identifiers: global legal data read by public
+  // case-law projections, written only by ingestion and the bounded backfill.
+  "case_law_decision_identifiers",
 ]);
 
 // Internal handoff tables whose scoped role needs INSERT but not table-wide

@@ -5,6 +5,7 @@ import type { Static } from "elysia";
 
 import {
   caseLawCorpusIndexProjections,
+  caseLawDecisionIdentifiers,
   caseLawDecisions,
   caseLawSources,
 } from "@/api/db/schema";
@@ -19,6 +20,7 @@ import { arrayOrEmpty } from "@/api/lib/array";
 // eslint-disable-next-line no-restricted-imports -- search boundary: brands document ids returned by the corpus index before re-hydrating from Postgres
 import { toSafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
+import { decisionIdentifierProjection } from "@/api/lib/case-law/decision-identifiers";
 import { readDecisionLanguageAlternateCounts } from "@/api/lib/case-law/language-alternate-counts";
 import {
   redistributableCaseLawSource,
@@ -199,6 +201,17 @@ const searchPostgresDecisions = async (
       d.case_number,
       d.slug,
       d.ecli,
+      (
+        SELECT coalesce(
+          jsonb_agg(
+            jsonb_build_object('type', identifier.type, 'value', identifier.value)
+            ORDER BY identifier.type, identifier.value
+          ),
+          '[]'::jsonb
+        )
+        FROM case_law_decision_identifiers identifier
+        WHERE identifier.decision_id = d.id
+      ) AS identifiers,
       d.court,
       d.country,
       d.language,
@@ -368,6 +381,10 @@ const searchPostgresDecisions = async (
       caseNumber: String(row["case_number"]),
       slug: toNullableString(row["slug"]),
       ecli: toNullableString(row["ecli"]),
+      identifiers: decisionIdentifierProjection(row["identifiers"], {
+        caseNumber: String(row["case_number"]),
+        ecli: toNullableString(row["ecli"]),
+      }),
       court: String(row["court"]),
       country: String(row["country"]),
       language: String(row["language"]),
@@ -535,6 +552,17 @@ export const rehydrateCaseLawCandidates = async ({
               caseNumber: caseLawDecisions.caseNumber,
               slug: caseLawDecisions.slug,
               ecli: caseLawDecisions.ecli,
+              identifiers: sql<unknown>`coalesce((
+                SELECT jsonb_agg(
+                  jsonb_build_object(
+                    'type', identifier.type,
+                    'value', identifier.value
+                  )
+                  ORDER BY identifier.type, identifier.value
+                )
+                FROM ${caseLawDecisionIdentifiers} identifier
+                WHERE identifier.decision_id = ${caseLawDecisions.id}
+              ), '[]'::jsonb)`,
               court: caseLawDecisions.court,
               country: caseLawDecisions.country,
               language: caseLawDecisions.language,
@@ -679,6 +707,10 @@ const searchCorpusIndexDecisions = async (
         caseNumber: row.caseNumber,
         slug: row.slug,
         ecli: row.ecli,
+        identifiers: decisionIdentifierProjection(row.identifiers, {
+          caseNumber: row.caseNumber,
+          ecli: row.ecli,
+        }),
         court: row.court,
         country: row.country,
         language: row.language,

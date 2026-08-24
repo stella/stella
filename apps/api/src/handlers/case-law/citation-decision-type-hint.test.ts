@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
+
 import {
   CITATION_DECISION_TYPE_HINT,
   CITATION_DECISION_TYPE_HINT_FAMILIES,
@@ -96,6 +98,7 @@ describe("cited decision type hint", () => {
         citationText: "II. ÚS 2766/14",
         sectionIndex: 3,
         citedDecisionTypeHint: CITATION_DECISION_TYPE_HINT.MERITS,
+        identifierType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
       },
     ]);
   });

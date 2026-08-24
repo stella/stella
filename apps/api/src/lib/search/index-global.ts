@@ -13,6 +13,7 @@ import type {
 } from "@/api/db/schema-validators";
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
+import { decisionIdentifierProjection } from "@/api/lib/case-law/decision-identifiers";
 import { redistributableSourceJoin } from "@/api/lib/case-law/search-sql";
 import { compareCodepoint } from "@/api/lib/collation";
 import {
@@ -321,6 +322,10 @@ const mapCaseLawHit = (row: RawRow): ScoredGlobalSearchHit => {
     type: "case-law",
     decisionId,
     caseNumber: String(row["case_number"]),
+    identifiers: decisionIdentifierProjection(row["identifiers"], {
+      caseNumber: String(row["case_number"]),
+      ecli: toNullableString(row["ecli"]),
+    }),
     court: String(row["court"]),
     country: String(row["country"]),
     decisionDate: toNullableString(row["decision_date"]),
@@ -808,9 +813,21 @@ export const searchGlobal = async ({
       SELECT
         clsd.decision_id AS id,
         d.case_number,
+        d.ecli,
         d.court,
         d.country,
         d.decision_date,
+        (
+          SELECT coalesce(
+            jsonb_agg(
+              jsonb_build_object('type', identifier.type, 'value', identifier.value)
+              ORDER BY identifier.type, identifier.value
+            ),
+            '[]'::jsonb
+          )
+          FROM case_law_decision_identifiers identifier
+          WHERE identifier.decision_id = d.id
+        ) AS identifiers,
         ${searchHeadline(sql`coalesce(nullif(body_preview.text, ''), d.fulltext, clsd.searchable_text)`)},
         ${searchScore({ tsv: sql`clsd.tsv`, updatedAt: sql`d.updated_at` })},
         d.updated_at

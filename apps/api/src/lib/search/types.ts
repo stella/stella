@@ -7,6 +7,7 @@ import {
   type ResourceName,
   type ResourceRef,
 } from "@stll/api-contract";
+import type { DecisionIdentifiers } from "@stll/legal-ast/decision-identifier";
 
 import type { ContactType } from "@/api/db/schema";
 import type { EntityKind, FieldContent } from "@/api/db/schema-validators";
@@ -232,6 +233,7 @@ export type CaseLawGlobalSearchHit = GlobalSearchHitBase & {
   resource: ResourceRef<"case_law_decision">;
   decisionId: string;
   caseNumber: string;
+  identifiers: DecisionIdentifiers;
   court: string;
   country: string;
   decisionDate: string | null;

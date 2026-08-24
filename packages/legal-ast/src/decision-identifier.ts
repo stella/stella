@@ -44,11 +44,31 @@ export type DecisionIdentifiers = readonly [
   ...DecisionIdentifier[],
 ];
 
+/** Shared storage boundary for every identifier spelling. */
+export const DECISION_IDENTIFIER_MAX_LENGTH = 256;
+export const DECISION_IDENTIFIER_MAX_COUNT = 32;
+
+const normalizeStructuredCitation = (value: string): string =>
+  stripDangerousChars(value)
+    .normalize("NFKC")
+    .toLocaleLowerCase("und")
+    .replace(/[\p{P}\p{Z}\s]+/gu, "")
+    .trim();
+
 const identifierValueSchema = v.pipe(
   v.string(),
+  v.maxLength(DECISION_IDENTIFIER_MAX_LENGTH),
   v.check(
     (value) => /\S/u.test(stripDangerousChars(value)),
     "Identifier values must contain visible content",
+  ),
+);
+
+const structuredIdentifierValueSchema = v.pipe(
+  identifierValueSchema,
+  v.check(
+    (value) => normalizeStructuredCitation(value).length > 0,
+    "Structured identifier values must contain searchable content",
   ),
 );
 
@@ -60,15 +80,15 @@ export const decisionIdentifierSchema: v.GenericSchema<DecisionIdentifier> =
     }),
     v.strictObject({
       type: v.literal(DECISION_IDENTIFIER_TYPES.ECLI),
-      value: identifierValueSchema,
+      value: structuredIdentifierValueSchema,
     }),
     v.strictObject({
       type: v.literal(DECISION_IDENTIFIER_TYPES.NEUTRAL_CITATION),
-      value: identifierValueSchema,
+      value: structuredIdentifierValueSchema,
     }),
     v.strictObject({
       type: v.literal(DECISION_IDENTIFIER_TYPES.REPORTER_CITATION),
-      value: identifierValueSchema,
+      value: structuredIdentifierValueSchema,
     }),
   ]);
 
@@ -76,3 +96,29 @@ export const isDecisionIdentifier = (
   value: unknown,
 ): value is DecisionIdentifier =>
   v.safeParse(decisionIdentifierSchema, value).success;
+
+/**
+ * Canonical lookup spelling for identifiers whose syntax is globally stable.
+ *
+ * Case numbers are intentionally excluded: their meaningful separators and
+ * prefixes are jurisdiction-specific, so the owning ingestion adapter must
+ * normalize them with its case-number policy.
+ */
+export const normalizeStructuredDecisionIdentifier = (
+  identifier: Exclude<DecisionIdentifier, CaseNumberIdentifier>,
+): string => {
+  switch (identifier.type) {
+    case DECISION_IDENTIFIER_TYPES.ECLI:
+      return normalizeStructuredCitation(identifier.value).replace(
+        /^ecli/u,
+        "",
+      );
+    case DECISION_IDENTIFIER_TYPES.NEUTRAL_CITATION:
+    case DECISION_IDENTIFIER_TYPES.REPORTER_CITATION:
+      return normalizeStructuredCitation(identifier.value);
+    default: {
+      const exhaustive: never = identifier;
+      return exhaustive;
+    }
+  }
+};

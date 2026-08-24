@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 
 import { rootDb } from "@/api/db/root";
+import { decisionIdentifierProjection } from "@/api/lib/case-law/decision-identifiers";
 import {
   bodyPreviewJoin,
   redistributableSourceJoin,
@@ -96,6 +97,17 @@ const search = async (query: LegalSearchQuery): Promise<LegalSearchResult> => {
       sd.decision_id,
       d.case_number,
       d.ecli,
+      (
+        SELECT coalesce(
+          jsonb_agg(
+            jsonb_build_object('type', identifier.type, 'value', identifier.value)
+            ORDER BY identifier.type, identifier.value
+          ),
+          '[]'::jsonb
+        )
+        FROM case_law_decision_identifiers identifier
+        WHERE identifier.decision_id = d.id
+      ) AS identifiers,
       d.court,
       d.country,
       d.language,
@@ -170,6 +182,10 @@ const search = async (query: LegalSearchQuery): Promise<LegalSearchResult> => {
     decisionId: String(row["decision_id"]),
     caseNumber: String(row["case_number"]),
     ecli: toNullableString(row["ecli"]),
+    identifiers: decisionIdentifierProjection(row["identifiers"], {
+      caseNumber: String(row["case_number"]),
+      ecli: toNullableString(row["ecli"]),
+    }),
     court: String(row["court"]),
     country: String(row["country"]),
     language: String(row["language"]),

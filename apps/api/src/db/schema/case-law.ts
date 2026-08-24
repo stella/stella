@@ -1,5 +1,11 @@
 import { eq } from "drizzle-orm";
 
+import {
+  DECISION_IDENTIFIER_MAX_LENGTH,
+  DECISION_IDENTIFIER_TYPES,
+} from "@stll/legal-ast/decision-identifier";
+import type { DecisionIdentifierType } from "@stll/legal-ast/decision-identifier";
+
 import { CITATION_DECISION_TYPE_HINTS } from "@/api/handlers/case-law/citation-decision-type-hint";
 import { CITATION_KINDS } from "@/api/handlers/case-law/citation-kind";
 import {
@@ -40,6 +46,7 @@ import {
   p,
   pUuid,
   publicCaseLawReaderPolicies,
+  publicLawReaderPolicies,
   safeUuid,
   safeWorkspaceId,
   sql,
@@ -152,6 +159,10 @@ const CITATION_RESOLUTION_SCOPE_SQL_VALUES = CITATION_RESOLUTION_SCOPES.map(
 const RULE_SOURCE_SQL_VALUES = RULE_SOURCES.map((source) =>
   sql.raw(`'${source}'`),
 );
+
+const DECISION_IDENTIFIER_TYPE_SQL_VALUES = Object.values(
+  DECISION_IDENTIFIER_TYPES,
+).map((type) => sql.raw(`'${type}'`));
 
 export const caseLawSources = p.pgTable(
   "case_law_sources",
@@ -544,6 +555,48 @@ export const caseLawDecisions = p.pgTable(
   ],
 );
 
+/** Searchable identifiers stated by a decision's publisher. */
+export const caseLawDecisionIdentifiers = p.pgTable(
+  "case_law_decision_identifiers",
+  {
+    decisionId: safeUuid<"caseLawDecision">("decision_id").notNull(),
+    type: p.varchar({ length: 32 }).$type<DecisionIdentifierType>().notNull(),
+    value: p.varchar({ length: DECISION_IDENTIFIER_MAX_LENGTH }).notNull(),
+    normalizedValue: p
+      .varchar("normalized_value", {
+        length: DECISION_IDENTIFIER_MAX_LENGTH,
+      })
+      .notNull(),
+    createdAt: timestamptz("created_at").defaultNow().notNull(),
+  },
+  (t) => [
+    p.primaryKey({
+      columns: [t.decisionId, t.type, t.normalizedValue],
+      name: "case_law_decision_identifiers_pk",
+    }),
+    p
+      .foreignKey({
+        columns: [t.decisionId],
+        foreignColumns: [caseLawDecisions.id],
+        name: "case_law_decision_identifiers_decision_id_fk",
+      })
+      .onDelete("cascade"),
+    p
+      .index("case_law_decision_identifiers_lookup_idx")
+      .on(t.type, t.normalizedValue, t.decisionId),
+    p.check(
+      "case_law_decision_identifiers_type_values",
+      sql`${t.type} IN (${sql.join(DECISION_IDENTIFIER_TYPE_SQL_VALUES, sql`, `)})`,
+    ),
+    p.check(
+      "case_law_decision_identifiers_value_non_empty",
+      sql`${t.value} <> '' AND ${t.normalizedValue} <> ''`,
+    ),
+    ...globalCaseLawPolicies(),
+    ...publicLawReaderPolicies(),
+  ],
+);
+
 /**
  * Durable ownership for every exact publisher identity observed for a
  * decision. `decisionId` intentionally has no foreign key: identity is
@@ -797,6 +850,13 @@ export const caseLawCitations = p.pgTable(
     citationText: p.varchar("citation_text", { length: 512 }).notNull(),
     /** `citationText` under `bareCitationKey`; joins to a decision's own key. */
     citationKey: p.varchar("citation_key", { length: 128 }),
+    /** Typed lookup identity; null only on rows written before its rollout. */
+    identifierType: p
+      .varchar("identifier_type", { length: 32 })
+      .$type<DecisionIdentifierType>(),
+    normalizedIdentifierValue: p.varchar("normalized_identifier_value", {
+      length: DECISION_IDENTIFIER_MAX_LENGTH,
+    }),
     /**
      * Whether this citation invokes authority or names the case's own
      * procedural history. Only `precedent` belongs in the citation graph:
@@ -888,6 +948,10 @@ export const caseLawCitations = p.pgTable(
       .index("case_law_citations_reopenable_key_idx")
       .on(t.citationKey)
       .where(citationReopenableByKeySql(t.resolutionStatus)),
+    p
+      .index("case_law_citations_reopenable_identifier_idx")
+      .on(t.identifierType, t.normalizedIdentifierValue)
+      .where(citationReopenableByKeySql(t.resolutionStatus)),
     p.check(
       "citations_polarity_values",
       sql`${t.polarity} IN (${sql.join(POLARITY_SQL_VALUES, sql.raw(","))})`,
@@ -923,6 +987,14 @@ export const caseLawCitations = p.pgTable(
     // "no key"; this makes the second spelling unrepresentable rather than
     // merely discouraged.
     p.check("citations_citation_key_non_empty", sql`${t.citationKey} <> ''`),
+    p.check(
+      "citations_identifier_shape",
+      sql`(${t.identifierType} IS NULL) = (${t.normalizedIdentifierValue} IS NULL) AND ${t.normalizedIdentifierValue} <> ''`,
+    ),
+    p.check(
+      "citations_identifier_type_values",
+      sql`${t.identifierType} IN (${sql.join(DECISION_IDENTIFIER_TYPE_SQL_VALUES, sql`, `)})`,
+    ),
     // Authority reads precedent only, so the index covers that arm.
     p
       .index("case_law_citations_precedent_cited_idx")

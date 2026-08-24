@@ -39,6 +39,7 @@ const makeRow = ({
   sourceId: toSafeId<"caseLawSource">("src_1"),
   caseNumber: `case-${id}`,
   ecli,
+  identifiers: [`case-${id}`, ...(ecli === null ? [] : [ecli])],
   court: "Test Court",
   country: "CZ",
   language: "cs",

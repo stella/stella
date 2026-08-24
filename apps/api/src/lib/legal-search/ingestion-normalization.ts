@@ -1,6 +1,12 @@
 import type { Column, SQL } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 
+import {
+  DECISION_IDENTIFIER_MAX_COUNT,
+  isDecisionIdentifier,
+  type DecisionIdentifier,
+  type DecisionIdentifiers,
+} from "@stll/legal-ast/decision-identifier";
 import { collapseSpacedLetters } from "@stll/text-normalize";
 
 import { isDocumentAst } from "@/api/lib/case-law/document-ast";
@@ -23,6 +29,35 @@ const PARTIAL_OBSERVATION_KEY = "_stellaPartialObservation";
 export type PartialObservation = {
   caseNumberIsPlaceholder: boolean;
   isListingOnly: boolean;
+};
+
+const sanitizeDecisionIdentifier = (
+  identifier: DecisionIdentifier,
+): DecisionIdentifier => {
+  const sanitized = {
+    type: identifier.type,
+    value: stripDangerousChars(identifier.value).trim(),
+  };
+  if (!isDecisionIdentifier(sanitized)) {
+    throw new TypeError("Decision identifier is not persistable");
+  }
+  return sanitized;
+};
+
+const sanitizeDecisionIdentifiers = (
+  identifiers: DecisionIdentifiers | undefined,
+): DecisionIdentifiers | undefined => {
+  if (identifiers === undefined) {
+    return undefined;
+  }
+  if (identifiers.length > DECISION_IDENTIFIER_MAX_COUNT) {
+    throw new TypeError("Decision has too many publisher identifiers");
+  }
+  const [first, ...rest] = identifiers;
+  return [
+    sanitizeDecisionIdentifier(first),
+    ...rest.map(sanitizeDecisionIdentifier),
+  ];
 };
 
 /**
@@ -169,6 +204,7 @@ export const sanitizeResult = (result: IngestionResult): IngestionResult => {
   return {
     ...result,
     caseNumber: result.caseNumber.replace(DANGEROUS_CHARS, ""),
+    identifiers: sanitizeDecisionIdentifiers(result.identifiers),
     sourceDocumentId,
     sourceDocumentIdAliases: result.sourceDocumentIdAliases?.filter(
       (identity): identity is string =>

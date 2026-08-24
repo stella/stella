@@ -1,5 +1,6 @@
 import type { Result } from "better-result";
 
+import type { DecisionIdentifiers } from "@stll/legal-ast/decision-identifier";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import type { SafeId } from "@/api/lib/branded-types";
@@ -39,6 +40,7 @@ export type LegalSearchHit = {
   decisionId: string;
   caseNumber: string;
   ecli: string | null;
+  identifiers: DecisionIdentifiers;
   court: string;
   country: string;
   language: string;
