@@ -4,6 +4,7 @@ import { useRouterState } from "@tanstack/react-router";
 import { PanelRightIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { InspectorRailTab } from "@stll/ui/inspector";
 import { cn } from "@stll/ui/utils";
 
 import {
@@ -68,7 +69,7 @@ export const PublicLawInspector = () => {
 
   const viewTabs = tabs.filter(isGenericInspectorTab);
 
-  if (viewTabs.length === 0 || caseReaderOwnsDock) {
+  if (viewTabs.length === 0) {
     // `requestSignIn` is provided by the public shell this dock renders in;
     // without it the rail's affordances would lead nowhere.
     return requestSignIn === null ? null : (
@@ -173,16 +174,10 @@ const RailTabButton = ({ active, onActivate, tab }: RailTabButtonProps) => {
     <Tooltip
       content={tab.label}
       render={
-        <button
-          aria-current={active ? "true" : undefined}
+        <InspectorRailTab
+          active={active}
           aria-label={tab.label}
-          className={cn(
-            "text-muted-foreground hover:bg-accent hover:text-foreground flex items-center justify-center rounded-md transition-colors",
-            SIDE_RAIL_ICON_BUTTON_SIZE,
-            active && "bg-accent text-foreground",
-          )}
           onClick={onActivate}
-          type="button"
         />
       }
     >

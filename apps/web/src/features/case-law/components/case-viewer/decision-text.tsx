@@ -3,10 +3,11 @@ import type { ReactNode } from "react";
 
 import { useTranslations } from "use-intl";
 
-import type { Block, DocumentAst } from "@stll/legal-ast/document-ast";
+import type { Block } from "@stll/legal-ast/document-ast";
 import { parseDocumentAst } from "@stll/legal-ast/document-ast";
 import { cn } from "@stll/ui/utils";
 
+import { CitedDecisionLink } from "@/components/legal-reader/cited-decision-link";
 import {
   BlockRenderer,
   FulltextFallback,
@@ -23,7 +24,7 @@ import type {
 import { buildSearchResults } from "@/components/legal-reader/reader-search";
 import { locateCitationAnchors } from "@/features/case-law/citation-anchors";
 import type { CitationAnchorSource } from "@/features/case-law/citation-anchors";
-import { CitedDecisionLink } from "@/features/case-law/components/cited-decision-link";
+import { visibleDecisionBlocks } from "@/features/case-law/components/case-viewer/decision-text.logic";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 
 type Decision = {
@@ -70,22 +71,6 @@ const cleanSupplement = (value: unknown): string | null => {
     return null;
   }
   return trimmed;
-};
-
-const getVisibleBlocks = (ast: DocumentAst | null): Block[] => {
-  if (!ast) {
-    return [];
-  }
-
-  return ast.blocks.filter(
-    (block) =>
-      !(block.type === "paragraph" && block.role === "case-number") &&
-      !(
-        block.type === "heading" &&
-        block.plainText.toUpperCase() === "JMÉNEM REPUBLIKY"
-      ) &&
-      !(block.type === "table" && block.role === "related-proceedings"),
-  );
 };
 
 const EditorialSupplement = ({
@@ -267,7 +252,7 @@ export const DecisionText = ({
   const t = useTranslations();
 
   const ast = parseDocumentAst(decision.documentAst);
-  const visibleBlocks = getVisibleBlocks(ast);
+  const visibleBlocks = visibleDecisionBlocks(ast);
   const articleRef = useRef<HTMLElement>(null);
 
   const caseNumberBlock = ast?.blocks.find(

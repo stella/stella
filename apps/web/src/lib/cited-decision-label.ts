@@ -1,9 +1,8 @@
-import type { CitedDecision } from "@/features/case-law/citation-treatment";
-
-type LabelSource = Pick<
-  CitedDecision,
-  "caseNumber" | "decisionDate" | "decisionType"
->;
+type CitedDecisionLabelSource = {
+  caseNumber: string;
+  decisionDate: string | null;
+  decisionType?: string | null | undefined;
+};
 
 /**
  * The label a cited decision is shown under.
@@ -19,7 +18,7 @@ export const citedDecisionLabel = ({
   caseNumber,
   decisionDate,
   decisionType,
-}: LabelSource): string => {
+}: CitedDecisionLabelSource): string => {
   const type = decisionType?.trim();
   if (!type) {
     return caseNumber;

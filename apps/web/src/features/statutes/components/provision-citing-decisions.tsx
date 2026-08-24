@@ -1,7 +1,6 @@
 import { useState } from "react";
 
 import { useInfiniteQuery } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
@@ -9,12 +8,12 @@ import { Button } from "@stll/ui/button";
 import { Input } from "@stll/ui/input";
 import { Skeleton } from "@stll/ui/skeleton";
 
+import { CitedDecisionLink } from "@/components/legal-reader/cited-decision-link";
 import { filterCitingDecisions } from "@/features/statutes/provision-inspector.logic";
 import { citingDecisionsInfiniteOptions } from "@/features/statutes/queries/citing-decisions";
 import { formatValidityDate } from "@/features/statutes/statute-format";
 import { useFormatter } from "@/i18n/formatting-context";
 import { optionalArray } from "@/lib/arrays";
-import { createCaseLawDecisionRouteParams } from "@/lib/case-law-route";
 import { detached } from "@/lib/detached";
 
 type ProvisionCitingDecisionsProps = {
@@ -106,25 +105,20 @@ export const ProvisionCitingDecisions = ({
       )}
       <ul className="m-0 flex list-none flex-col p-0">
         {visible.map((decision) => {
-          const params = createCaseLawDecisionRouteParams({
-            caseNumber: decision.caseNumber,
-            country: decision.country,
-            court: decision.court,
-            decisionId: decision.decisionId,
-            slug: decision.slug,
-          });
           const decided = formatValidityDate(decision.decisionDate, format);
 
           return (
             <li key={`${decision.decisionId}-${decision.spanStart}`}>
-              <Link
+              <CitedDecisionLink
                 className="hover:bg-accent -mx-2 flex flex-col gap-0.5 rounded-md px-2 py-1.5 no-underline"
-                params={{
-                  country: params.country,
-                  court: params.court,
-                  slug: params.slug,
+                decision={{
+                  caseNumber: decision.caseNumber,
+                  country: decision.country,
+                  court: decision.court,
+                  decisionDate: decision.decisionDate,
+                  id: decision.decisionId,
+                  slug: decision.slug,
                 }}
-                to="/law/$country/cases/$court/$slug"
               >
                 <BidiText
                   as="span"
@@ -140,7 +134,7 @@ export const ProvisionCitingDecisions = ({
                 <span className="text-foreground-strong-muted line-clamp-3 text-[0.72rem] leading-snug">
                   {decision.sentenceText}
                 </span>
-              </Link>
+              </CitedDecisionLink>
             </li>
           );
         })}

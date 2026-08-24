@@ -5,6 +5,7 @@ import { Separator } from "@stll/ui/separator";
 
 import { PublicWorkspaceShell } from "@/components/public-workspace-shell";
 import { SidebarTrigger, useSidebar } from "@/components/sidebar";
+import { ChromeHeaderActionsSlot } from "@/lib/chrome-header-actions";
 import { toStatuteCountrySegment } from "@/lib/statute-route";
 import { PublicLawInspector } from "@/routes/law/-components/public-law-inspector";
 
@@ -59,7 +60,7 @@ function PublicLawTopBar() {
       )}
       <nav
         aria-label={t("common.legalDatabase")}
-        className="flex min-w-0 items-center gap-1.5 text-sm"
+        className="flex min-w-0 flex-1 items-center gap-1.5 text-sm"
       >
         <Link
           activeProps={{ className: "text-foreground font-medium" }}
@@ -86,6 +87,7 @@ function PublicLawTopBar() {
           </>
         )}
       </nav>
+      <ChromeHeaderActionsSlot />
     </header>
   );
 }
