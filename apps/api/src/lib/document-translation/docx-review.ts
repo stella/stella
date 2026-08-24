@@ -6,6 +6,8 @@ import {
   FOLIO_DOCX_CONFORMANCE_PROFILE,
   FolioDocxReviewer,
   inspectDocxPackage,
+  type FolioReviewComment,
+  type FolioReviewCommentReply,
 } from "@stll/folio-core/server";
 
 import type { DocumentTranslationCommentPolicy } from "@/api/lib/document-translation/contract";
@@ -54,6 +56,54 @@ const flattenComments = (
     );
   }
   return units;
+};
+
+const projectReplyMetadata = (reply: FolioReviewCommentReply) =>
+  ({
+    id: reply.id,
+    author: reply.author,
+    date: reply.date,
+    text: null,
+  }) satisfies Record<keyof FolioReviewCommentReply, unknown>;
+
+const projectCommentMetadata = (comment: FolioReviewComment) =>
+  ({
+    id: comment.id,
+    author: comment.author,
+    date: comment.date,
+    text: null,
+    anchoredText: null,
+    blockId: null,
+    replies: comment.replies
+      .toSorted((left, right) => left.id - right.id)
+      .map(projectReplyMetadata),
+    done: comment.done,
+  }) satisfies Record<keyof FolioReviewComment, unknown>;
+
+const serializedCommentMetadata = (reviewer: FolioDocxReviewer): string =>
+  JSON.stringify(
+    reviewer
+      .getComments()
+      .toSorted((left, right) => left.id - right.id)
+      .map(projectCommentMetadata),
+  );
+
+const assertCommentMetadataPreserved = async (
+  source: ArrayBuffer,
+  output: ArrayBuffer,
+): Promise<void> => {
+  const [sourceReviewer, outputReviewer] = await Promise.all([
+    openReviewer(source),
+    openReviewer(output),
+  ]);
+  if (
+    serializedCommentMetadata(sourceReviewer) !==
+    serializedCommentMetadata(outputReviewer)
+  ) {
+    throw new DocxReviewError({
+      message: "The translated document changed comment metadata or threading",
+    });
+  }
 };
 
 export const inspectDocxComments = async (
@@ -200,6 +250,54 @@ const createCommentParagraphs = (
     return paragraph;
   });
 
+const directCommentParagraphs = (
+  comment: slimdom.Element,
+  namespace: string,
+): slimdom.Element[] => {
+  const paragraphs: slimdom.Element[] = [];
+  for (
+    let child = comment.firstElementChild;
+    child !== null;
+    child = child.nextElementSibling
+  ) {
+    if (child.namespaceURI === namespace && child.localName === "p") {
+      paragraphs.push(child);
+    }
+  }
+  return paragraphs;
+};
+
+const transferLastParagraphIds = (
+  part: ParsedCommentsPart,
+  comment: slimdom.Element,
+  translatedContent: readonly slimdom.Element[],
+): void => {
+  const sourceParagraph = directCommentParagraphs(comment, part.namespace).at(
+    -1,
+  );
+  const targetParagraph = translatedContent.at(-1);
+  if (!sourceParagraph || !targetParagraph) {
+    return;
+  }
+  const paraIdAttributes: slimdom.Attr[] = [];
+  for (const attribute of sourceParagraph.attributes) {
+    if (attribute.localName === "paraId") {
+      paraIdAttributes.push(attribute);
+    }
+  }
+  for (const attribute of paraIdAttributes) {
+    sourceParagraph.removeAttributeNS(
+      attribute.namespaceURI,
+      attribute.localName,
+    );
+    targetParagraph.setAttributeNS(
+      attribute.namespaceURI,
+      attribute.name,
+      attribute.value,
+    );
+  }
+};
+
 const replaceCommentContent = (
   comment: slimdom.Element,
   content: readonly slimdom.Element[],
@@ -277,6 +375,7 @@ export const applyDocxCommentPolicy = async ({
       });
     }
     const translatedContent = createCommentParagraphs(sourcePart, translation);
+    transferLastParagraphIds(sourcePart, comment, translatedContent);
     if (policy === "translated") {
       replaceCommentContent(comment, translatedContent);
       continue;
@@ -319,5 +418,6 @@ export const applyDocxCommentPolicy = async ({
   patchedBytes.set(application.bytes);
   const patched = patchedBytes.buffer;
   await assertCommentAnchorsPreserved(source, patched);
+  await assertCommentMetadataPreserved(source, patched);
   return patched;
 };

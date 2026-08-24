@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
-import { canStartDocumentTranslation } from "./translate-document-dialog.logic";
+import {
+  canStartDocumentTranslation,
+  commentPolicyStateForSource,
+} from "./translate-document-dialog.logic";
 
 describe("document translation start availability", () => {
   test("blocks a repeat submission while the created run is loading", () => {
@@ -34,5 +37,38 @@ describe("document translation start availability", () => {
     expect(
       canStartDocumentTranslation({ ...options, hasCommentPolicy: true }),
     ).toBeTrue();
+  });
+});
+
+describe("document translation comment policy ownership", () => {
+  const selectedForFirstDocument = {
+    type: "required",
+    entityId: "entity-a",
+    fieldId: "field-a",
+    policy: "translated",
+  } as const;
+
+  test("retains the selection only for the source that required it", () => {
+    expect(
+      commentPolicyStateForSource({
+        state: selectedForFirstDocument,
+        entityId: "entity-a",
+        fieldId: "field-a",
+      }),
+    ).toBe(selectedForFirstDocument);
+  });
+
+  test.each([
+    ["entity-b", "field-a"],
+    ["entity-a", "field-b"],
+    ["entity-b", "field-b"],
+  ])("clears the selection for source %s/%s", (entityId, fieldId) => {
+    expect(
+      commentPolicyStateForSource({
+        state: selectedForFirstDocument,
+        entityId,
+        fieldId,
+      }),
+    ).toEqual({ type: "unchecked" });
   });
 });

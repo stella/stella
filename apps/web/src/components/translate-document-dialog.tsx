@@ -36,7 +36,12 @@ import {
   isDocumentTranslationRunActive,
   type DocumentTranslationRun,
 } from "@/components/document-translation-queries";
-import { canStartDocumentTranslation } from "@/components/translate-document-dialog.logic";
+import {
+  canStartDocumentTranslation,
+  commentPolicyStateForSource,
+  type DocumentTranslationCommentPolicy,
+  type DocumentTranslationCommentPolicyState,
+} from "@/components/translate-document-dialog.logic";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useLocale } from "@/i18n/formatting-context";
@@ -52,7 +57,6 @@ import { entitiesKeys } from "@/lib/workspaces/queries/entities";
 
 type TranslationOutput = "translated" | "bilingual";
 type TranslationEngine = "deepl" | "ai";
-type CommentPolicy = "original" | "original-and-translated" | "translated";
 const TRANSLATION_CHOICES = {
   "translated:deepl": { output: "translated", engine: "deepl" },
   "translated:ai": { output: "translated", engine: "ai" },
@@ -104,10 +108,25 @@ export const TranslateDocumentDialog = ({
     () => defaultLanguagePair(locale).target,
   );
   const [runId, setRunId] = useState<string | null>(null);
-  const [commentsFound, setCommentsFound] = useState(false);
-  const [commentPolicy, setCommentPolicy] = useState<CommentPolicy | null>(
-    null,
-  );
+  const [commentPolicyState, setCommentPolicyState] =
+    useState<DocumentTranslationCommentPolicyState>({ type: "unchecked" });
+  const activeCommentPolicyState = commentPolicyStateForSource({
+    state: commentPolicyState,
+    entityId,
+    fieldId,
+  });
+  const commentsFound = activeCommentPolicyState.type === "required";
+  const commentPolicy =
+    activeCommentPolicyState.type === "required"
+      ? activeCommentPolicyState.policy
+      : null;
+  const selectCommentPolicy = (policy: DocumentTranslationCommentPolicy) =>
+    setCommentPolicyState({
+      type: "required",
+      entityId,
+      fieldId,
+      policy,
+    });
   const terminalNotifiedRunRef = useRef<string | null>(null);
   const pollingErrorRunRef = useRef<string | null>(null);
 
@@ -218,11 +237,20 @@ export const TranslateDocumentDialog = ({
           ...(!isDeepL ? { sourceLang } : {}),
           targetLang,
         });
-      return unwrapEden(response);
+      return {
+        data: unwrapEden(response),
+        sourceEntityId: entityId,
+        sourceFieldId: fieldId,
+      };
     },
-    onSuccess: (data) => {
+    onSuccess: ({ data, sourceEntityId, sourceFieldId }) => {
       if (data.type === "commentPolicyRequired") {
-        setCommentsFound(true);
+        setCommentPolicyState({
+          type: "required",
+          entityId: sourceEntityId,
+          fieldId: sourceFieldId,
+          policy: null,
+        });
         setOpen(true);
         return;
       }
@@ -261,8 +289,7 @@ export const TranslateDocumentDialog = ({
       onOpenChange={(nextOpen) => {
         if (nextOpen && run && !isRunning) {
           setRunId(null);
-          setCommentsFound(false);
-          setCommentPolicy(null);
+          setCommentPolicyState({ type: "unchecked" });
         }
         setOpen(nextOpen);
       }}
@@ -394,7 +421,7 @@ export const TranslateDocumentDialog = ({
                     checked={commentPolicy === "original"}
                     disabled={false}
                     label={t("translate.dialog.commentsOriginal")}
-                    onChange={() => setCommentPolicy("original")}
+                    onChange={() => selectCommentPolicy("original")}
                     description={t(
                       "translate.dialog.commentsOriginalDescription",
                     )}
@@ -405,7 +432,9 @@ export const TranslateDocumentDialog = ({
                     checked={commentPolicy === "original-and-translated"}
                     disabled={false}
                     label={t("translate.dialog.commentsBoth")}
-                    onChange={() => setCommentPolicy("original-and-translated")}
+                    onChange={() =>
+                      selectCommentPolicy("original-and-translated")
+                    }
                     description={t("translate.dialog.commentsBothDescription")}
                     name="comment-policy"
                     value="original-and-translated"
@@ -414,7 +443,7 @@ export const TranslateDocumentDialog = ({
                     checked={commentPolicy === "translated"}
                     disabled={false}
                     label={t("translate.dialog.commentsTranslated")}
-                    onChange={() => setCommentPolicy("translated")}
+                    onChange={() => selectCommentPolicy("translated")}
                     description={t(
                       "translate.dialog.commentsTranslatedDescription",
                     )}

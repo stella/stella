@@ -35,6 +35,7 @@ const UPLOAD_TIMEOUT_MS = 60_000;
 const STATUS_TIMEOUT_MS = 15_000;
 const RESULT_TIMEOUT_MS = 120_000;
 const TEXT_TRANSLATION_TIMEOUT_MS = 60_000;
+export const DEEPL_TEXT_REQUEST_MAX_ITEMS = 50;
 export const DEEPL_TEXT_REQUEST_MAX_BYTES = 128 * 1024;
 
 const POLL_INITIAL_DELAY_MS = 2000;
@@ -459,7 +460,7 @@ const textRequestBody = ({
 const utf8Bytes = (value: string): number =>
   new TextEncoder().encode(value).byteLength;
 
-/** Partition text so every serialized DeepL request stays within 128 KiB. */
+/** Partition text so every DeepL request stays within its item and byte caps. */
 export const partitionDeepLTextBatches = ({
   texts,
   targetLang,
@@ -478,7 +479,10 @@ export const partitionDeepLTextBatches = ({
   for (const text of texts) {
     const itemBytes = utf8Bytes(JSON.stringify(text));
     const candidateBytes = batchBytes + itemBytes + (batch.length > 0 ? 1 : 0);
-    if (candidateBytes <= DEEPL_TEXT_REQUEST_MAX_BYTES) {
+    if (
+      batch.length < DEEPL_TEXT_REQUEST_MAX_ITEMS &&
+      candidateBytes <= DEEPL_TEXT_REQUEST_MAX_BYTES
+    ) {
       batch.push(text);
       batchBytes = candidateBytes;
       continue;
@@ -511,6 +515,11 @@ export const translateTextBatch = async ({
 }: TranslateTextBatchInput): Promise<string[]> => {
   if (texts.length === 0) {
     return [];
+  }
+  if (texts.length > DEEPL_TEXT_REQUEST_MAX_ITEMS) {
+    throw new DeepLDocumentError({
+      message: "DeepL text request exceeds the item-count limit",
+    });
   }
   const body = textRequestBody({
     texts,

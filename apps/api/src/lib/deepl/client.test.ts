@@ -4,6 +4,7 @@ import { DeepLDocumentError, DeepLUpstreamError } from "@/api/lib/deepl/errors";
 
 import {
   DEEPL_TEXT_REQUEST_MAX_BYTES,
+  DEEPL_TEXT_REQUEST_MAX_ITEMS,
   partitionDeepLTextBatches,
   translateDocument,
   translateTextBatch,
@@ -225,6 +226,42 @@ describe("DeepL text translation", () => {
       }),
     ).toEqual(["Erste", "Zweite"]);
     expect(call).toBe(2);
+  });
+
+  test("partitions every request at the provider's item-count limit", () => {
+    const texts = Array.from(
+      { length: DEEPL_TEXT_REQUEST_MAX_ITEMS * 3 + 1 },
+      (_, index) => `comment-${String(index)}`,
+    );
+    const batches = partitionDeepLTextBatches({ texts, targetLang: "DE" });
+
+    expect(batches.map((batch) => batch.length)).toEqual([50, 50, 50, 1]);
+    expect(batches.flat()).toEqual(texts);
+    expect(
+      batches.every((batch) => batch.length <= DEEPL_TEXT_REQUEST_MAX_ITEMS),
+    ).toBeTrue();
+  });
+
+  test("rejects too many text entries before sending them", async () => {
+    let called = false;
+    installFetchMock(async () => {
+      called = true;
+      return jsonResponse({ translations: [] });
+    });
+
+    const resultError = await translateTextBatch({
+      apiKey: "deepl-key",
+      texts: Array.from(
+        { length: DEEPL_TEXT_REQUEST_MAX_ITEMS + 1 },
+        () => "comment",
+      ),
+      targetLang: "DE",
+    }).then(
+      () => null,
+      (error: unknown) => error,
+    );
+    expect(DeepLDocumentError.is(resultError)).toBeTrue();
+    expect(called).toBeFalse();
   });
 
   test("rejects an oversized request before sending it", async () => {

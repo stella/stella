@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import * as slimdom from "slimdom";
 
 import {
   createDocx,
@@ -60,6 +61,60 @@ const createReviewedDocx = async (): Promise<ArrayBuffer> => {
     },
   ];
   return await createDocx(document);
+};
+
+const createThreadedReviewedDocx = async (): Promise<{
+  replyId: number;
+  source: ArrayBuffer;
+}> => {
+  const reviewer = await FolioDocxReviewer.fromBuffer(
+    await resolveDocxToFinal(await createReviewedDocx()),
+  );
+  const reply = reviewer.replyTo(10, {
+    author: "Reply reviewer",
+    text: "Original reply",
+  });
+  if (!reply || !reviewer.resolveComment("10")) {
+    throw new Error("Could not construct the threaded comment fixture");
+  }
+  return { replyId: reply.id, source: await reviewer.toBuffer() };
+};
+
+const W14_NAMESPACE = "http://schemas.microsoft.com/office/word/2010/wordml";
+const W15_NAMESPACE = "http://schemas.microsoft.com/office/word/2012/wordml";
+
+const referencedCommentParaIds = (commentsExtendedXml: string): string[] => {
+  const document = slimdom.parseXmlDocument(commentsExtendedXml);
+  const ids: string[] = [];
+  for (const comment of document.getElementsByTagNameNS(
+    W15_NAMESPACE,
+    "commentEx",
+  )) {
+    const paraId = comment.getAttributeNS(W15_NAMESPACE, "paraId");
+    const parentParaId = comment.getAttributeNS(W15_NAMESPACE, "paraIdParent");
+    if (paraId) {
+      ids.push(paraId);
+    }
+    if (parentParaId) {
+      ids.push(parentParaId);
+    }
+  }
+  return [...new Set(ids)].toSorted();
+};
+
+const commentParagraphIds = (commentsXml: string): string[] => {
+  const document = slimdom.parseXmlDocument(commentsXml);
+  const ids: string[] = [];
+  for (const commentParagraph of document.getElementsByTagNameNS(
+    "http://schemas.openxmlformats.org/wordprocessingml/2006/main",
+    "p",
+  )) {
+    const paraId = commentParagraph.getAttributeNS(W14_NAMESPACE, "paraId");
+    if (paraId) {
+      ids.push(paraId);
+    }
+  }
+  return [...new Set(ids)].toSorted();
 };
 
 describe("DOCX final-view and comment handling", () => {
@@ -150,6 +205,79 @@ describe("DOCX final-view and comment handling", () => {
     expect(inspected[1]?.commentsXml).toContain("Original comment");
     expect(inspected[1]?.commentsXml).toContain("Translated comment");
     expect(inspected[2]?.commentsXml).not.toContain("Original comment");
+  });
+
+  test("preserves threaded and resolved comment metadata for every policy", async () => {
+    const { replyId, source } = await createThreadedReviewedDocx();
+    const sourceArchive = await loadDocxArchive(source);
+    const sourceExtendedXml = await sourceArchive.readEntryString(
+      "word/commentsExtended.xml",
+    );
+    const translations = new Map([
+      [10, "Translated root"],
+      [replyId, "Translated reply"],
+    ]);
+    const cases = [
+      ["original", "Original comment", "Original reply"],
+      [
+        "original-and-translated",
+        "Original comment\nTranslated root",
+        "Original reply\nTranslated reply",
+      ],
+      ["translated", "Translated root", "Translated reply"],
+    ] as const;
+
+    const inspected = await Promise.all(
+      cases.map(async ([policy, expectedRoot, expectedReply]) => {
+        const output = await applyDocxCommentPolicy({
+          source,
+          output: source,
+          policy,
+          translations,
+        });
+        const [reviewer, archive] = await Promise.all([
+          FolioDocxReviewer.fromBuffer(output),
+          loadDocxArchive(output),
+        ]);
+        const [commentsXml, extendedXml] = await Promise.all([
+          archive.readEntryString("word/comments.xml"),
+          archive.readEntryString("word/commentsExtended.xml"),
+        ]);
+        return {
+          commentsXml,
+          expectedReply,
+          expectedRoot,
+          extendedXml,
+          root: reviewer.getComments().at(0),
+        };
+      }),
+    );
+
+    for (const {
+      commentsXml,
+      expectedReply,
+      expectedRoot,
+      extendedXml,
+      root,
+    } of inspected) {
+      expect(root).toMatchObject({
+        id: 10,
+        author: "Reviewer",
+        done: true,
+        text: expectedRoot,
+        replies: [
+          {
+            id: replyId,
+            author: "Reply reviewer",
+            text: expectedReply,
+          },
+        ],
+      });
+      expect(extendedXml).toBe(sourceExtendedXml);
+      expect(commentParagraphIds(commentsXml)).toEqual(
+        referencedCommentParaIds(extendedXml),
+      );
+    }
   });
 
   test("persists Final for tracked revisions in a secondary story", async () => {
