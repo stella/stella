@@ -20,10 +20,7 @@ import {
   caseLawSources,
   relations,
 } from "@/api/db/schema";
-import {
-  ADAPTER_KEYS,
-  PARSER_VERSIONS,
-} from "@/api/handlers/case-law/consts";
+import { ADAPTER_KEYS, PARSER_VERSIONS } from "@/api/handlers/case-law/consts";
 import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
 import type { SafeId } from "@/api/lib/branded-types";
 import { EMPTY_CORPUS_CONTENT_HASHES } from "@/api/lib/legal-search/corpus-storage";

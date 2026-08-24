@@ -528,6 +528,9 @@ describe("parseNssDecisionHtml", () => {
           <span style="font-weight:bold">ROZSUDEK</span>
         </p>
         <p style="text-align:center">
+          <span style="font-weight:bold">J M É N E M&nbsp;&nbsp;&nbsp;&nbsp;R E P U B L I K Y</span>
+        </p>
+        <p style="text-align:center">
           <span style="font-weight:bold">t a k t o :</span>
         </p>
         <p>
@@ -569,7 +572,8 @@ describe("parseNssDecisionHtml", () => {
         baseInput(html, { caseNumber: "4 As 3/2008" }),
       );
       const holding = documentAst.blocks.find(
-        (block) => block.type === "paragraph" && block.role === "holding",
+        (block): block is Extract<Block, { type: "paragraph" }> =>
+          block.type === "paragraph" && block.role === "holding",
       );
       const republicTitle = documentAst.blocks.find(
         (block) => block.plainText === "JMÉNEM REPUBLIKY",
@@ -594,15 +598,63 @@ describe("parseNssDecisionHtml", () => {
       expect(
         reference?.type === "paragraph" ? reference.inlines : [],
       ).toContainEqual({
-          type: "link",
-          href: "#_ftn1",
-          children: [{ type: "text", text: "[1]" }],
+        type: "link",
+        href: "#_ftn1",
+        children: [{ type: "text", text: "[1]" }],
       });
       expect(footnote).toMatchObject({
         anchorId: "_ftn1",
         note: { type: "footnote", label: "1" },
         plainText: "[1] Poznámka pod čarou.",
       });
+    });
+
+    test("keeps inline takto prose and marks its ordered ruling as a holding", () => {
+      const html = `<html><body>
+        <p>Soud rozhodl takto:</p>
+        <ol type="I"><li>Kasační stížnost se zamítá.</li></ol>
+        <p>Odůvodnění:</p>
+      </body></html>`;
+
+      const { documentAst } = parseNssDecisionHtml(baseInput(html));
+
+      expect(documentAst.blocks.map((block) => block.plainText)).toContain(
+        "Soud rozhodl takto:",
+      );
+      expect(
+        documentAst.blocks.find(
+          (block) => block.plainText === "Soud rozhodl takto:",
+        ),
+      ).toMatchObject({ type: "paragraph" });
+      expect(
+        documentAst.blocks.find(
+          (block) => block.type === "paragraph" && block.role === "holding",
+        ),
+      ).toMatchObject({ plainText: "I. Kasační stížnost se zamítá." });
+    });
+
+    test("gives every paragraph in one publisher footnote a unique anchor", () => {
+      const html = `<html><body>
+        <p>Text<a href="#_ftn1">[1]</a>.</p>
+        <div id="_ftn1">
+          <p><a href="#_ftnref1">[1]</a> První odstavec.</p>
+          <p>Druhý odstavec.</p>
+        </div>
+      </body></html>`;
+
+      const { documentAst } = parseNssDecisionHtml(baseInput(html));
+      const footnotes = documentAst.blocks.filter(
+        (block): block is Extract<Block, { type: "paragraph" }> =>
+          block.type === "paragraph" && block.note?.type === "footnote",
+      );
+
+      expect(footnotes.map((footnote) => footnote.anchorId)).toEqual([
+        "_ftn1",
+        "_ftn1-2",
+      ]);
+      expect(new Set(footnotes.map((footnote) => footnote.anchorId)).size).toBe(
+        footnotes.length,
+      );
     });
   });
 

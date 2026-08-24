@@ -135,9 +135,7 @@ type PChunk = {
 const FOOTNOTE_CONTAINER_SELECTOR = "div[id^='_ftn']";
 const FOOTNOTE_ID_RE = /^_ftn(?<label>\d+)$/u;
 
-const footnoteOf = (
-  el: cheerio.Cheerio<AnyNode>,
-): PChunk["footnote"] => {
+const footnoteOf = (el: cheerio.Cheerio<AnyNode>): PChunk["footnote"] => {
   const container = el.closest(FOOTNOTE_CONTAINER_SELECTOR).first();
   const id = container.attr("id");
   const label =
@@ -469,8 +467,9 @@ const canonicalDecisionTitle = (
     : null;
 };
 
-/** "takto:" separator. */
-const TAKTO_RE = /^t\s*a\s*k\s*t\s*o\s*(?::\s*)?$/iu;
+/** "takto:" alone, or at the end of introductory prose. */
+const TAKTO_STANDALONE_RE = /^t\s*a\s*k\s*t\s*o\s*(?::\s*)?$/iu;
+const TAKTO_SUFFIX_RE = /(?:^|\s)t\s*a\s*k\s*t\s*o\s*(?::\s*)?$/iu;
 
 /** "Odůvodnění:" separator. */
 const ODUVODNENI_RE =
@@ -524,6 +523,7 @@ const classifyChunks = (chunks: readonly PChunk[]): Block[] => {
   let inOduvodneni = false;
   let inPouceni = false;
   let inHolding = false;
+  const footnoteOccurrences = new Map<string, number>();
   let sawCaseNumber = false;
   let sawTitle = false;
 
@@ -542,10 +542,16 @@ const classifyChunks = (chunks: readonly PChunk[]): Block[] => {
     }
 
     if (chunk.footnote !== null) {
+      const occurrence =
+        (footnoteOccurrences.get(chunk.footnote.anchorId) ?? 0) + 1;
+      footnoteOccurrences.set(chunk.footnote.anchorId, occurrence);
       blockIndex += 1;
       blocks.push({
         id: makeBlockId(),
-        anchorId: chunk.footnote.anchorId,
+        anchorId:
+          occurrence === 1
+            ? chunk.footnote.anchorId
+            : `${chunk.footnote.anchorId}-${occurrence}`,
         type: "paragraph",
         note: { type: "footnote", label: chunk.footnote.label },
         inlines,
@@ -595,7 +601,7 @@ const classifyChunks = (chunks: readonly PChunk[]): Block[] => {
     }
 
     // "takto:" separator (centered, bold, letter-spaced)
-    if (TAKTO_RE.test(plainText)) {
+    if (TAKTO_STANDALONE_RE.test(plainText)) {
       inHolding = true;
       blockIndex += 1;
       blocks.push({
@@ -607,6 +613,22 @@ const classifyChunks = (chunks: readonly PChunk[]): Block[] => {
         inlines: [{ type: "text", text: "takto:" }],
         plainText: "takto:",
       });
+      continue;
+    }
+
+    // Some exports keep the introductory sentence and separator in one
+    // paragraph. Preserve that prose as prose, then open the same structural
+    // zone for the ordered or unnumbered holdings that follow it.
+    if (TAKTO_SUFFIX_RE.test(plainText)) {
+      blockIndex += 1;
+      blocks.push({
+        id: makeBlockId(),
+        anchorId: makeAnchorId("p", blockIndex),
+        type: "paragraph",
+        inlines,
+        plainText,
+      });
+      inHolding = true;
       continue;
     }
 
