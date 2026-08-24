@@ -67,6 +67,7 @@ import type {
   DocumentTranslationRunErrorCode,
   DocumentTranslationRunStatus,
 } from "@/api/lib/document-translation/contract";
+import { mapDeepLCommentTranslations } from "@/api/lib/document-translation/deepl-comments";
 import {
   applyDocxCommentPolicy,
   type DocxCommentTranslationUnit,
@@ -606,12 +607,6 @@ const translateCommentsWithDeepL = async (
   run: ClaimedRun,
   apiKey: string,
 ): Promise<Result<Map<number, string>, "translation_failed">> => {
-  const translated = new Map<number, string>();
-  for (const comment of comments) {
-    if (comment.text === "") {
-      translated.set(comment.id, "");
-    }
-  }
   const pending = comments.filter((comment) => comment.text !== "");
   const response = await Result.tryPromise({
     try: async () =>
@@ -628,14 +623,7 @@ const translateCommentsWithDeepL = async (
     captureError(response.error, { runId: actor.runId });
     return Result.err("translation_failed");
   }
-  for (const [index, comment] of pending.entries()) {
-    const text = response.value.at(index);
-    if (text === undefined) {
-      return Result.err("translation_failed");
-    }
-    translated.set(comment.id, text);
-  }
-  return Result.ok(translated);
+  return mapDeepLCommentTranslations(comments, response.value);
 };
 
 const translateWithDeepL = async (

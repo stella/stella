@@ -213,6 +213,9 @@ describe("DOCX final-view and comment handling", () => {
     const sourceExtendedXml = await sourceArchive.readEntryString(
       "word/commentsExtended.xml",
     );
+    if (sourceExtendedXml === null) {
+      throw new Error("Threaded fixture is missing its comments extension");
+    }
     const translations = new Map([
       [10, "Translated root"],
       [replyId, "Translated reply"],
@@ -243,6 +246,9 @@ describe("DOCX final-view and comment handling", () => {
           archive.readEntryString("word/comments.xml"),
           archive.readEntryString("word/commentsExtended.xml"),
         ]);
+        if (commentsXml === null || extendedXml === null) {
+          throw new Error("Translated fixture lost its comment parts");
+        }
         return {
           commentsXml,
           expectedReply,
