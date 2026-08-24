@@ -578,8 +578,8 @@ describe("parseNssDecisionHtml", () => {
       const republicTitle = documentAst.blocks.find(
         (block) => block.plainText === "JMÉNEM REPUBLIKY",
       );
-      const reference = documentAst.blocks.find(
-        (block) => block.plainText.includes("Historický text"),
+      const reference = documentAst.blocks.find((block) =>
+        block.plainText.includes("Historický text"),
       );
       const footnote = documentAst.blocks.find(
         (block) =>

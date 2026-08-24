@@ -139,17 +139,14 @@ const footnoteOf = (el: cheerio.Cheerio<AnyNode>): PChunk["footnote"] => {
   const container = el.closest(FOOTNOTE_CONTAINER_SELECTOR).first();
   const id = container.attr("id");
   const label =
-    id === undefined
-      ? undefined
-      : FOOTNOTE_ID_RE.exec(id)?.groups?.["label"];
+    id === undefined ? undefined : FOOTNOTE_ID_RE.exec(id)?.groups?.["label"];
 
   return id === undefined || label === undefined
     ? null
     : { anchorId: id, label };
 };
 
-const SPACED_EMPHASIS_RE =
-  /^\s*(?:\p{L}\s+){1,}\p{L}\s*(?:[,:;.!?])?\s*$/u;
+const SPACED_EMPHASIS_RE = /^\s*(?:\p{L}\s+){1,}\p{L}\s*(?:[,:;.!?])?\s*$/u;
 const MULTI_SPACE_MARKER = "\u0000";
 
 /**
@@ -627,10 +624,7 @@ const classifyChunks = (chunks: readonly PChunk[]): Block[] => {
     // Some exports keep the introductory sentence and separator in one
     // paragraph. Preserve that prose as prose, then open the same structural
     // zone for the ordered or unnumbered holdings that follow it.
-    if (
-      phase === DOCUMENT_PHASE.PREAMBLE &&
-      TAKTO_SUFFIX_RE.test(plainText)
-    ) {
+    if (phase === DOCUMENT_PHASE.PREAMBLE && TAKTO_SUFFIX_RE.test(plainText)) {
       blockIndex += 1;
       blocks.push({
         id: makeBlockId(),
@@ -794,10 +788,7 @@ const classifyChunks = (chunks: readonly PChunk[]): Block[] => {
     // A numbered paragraph starts reasoning even when the publisher omitted
     // or misspelled its separator. Keep the phase transition durable so later
     // unnumbered reasoning cannot leak back into the holding section.
-    if (
-      phase === DOCUMENT_PHASE.HOLDING &&
-      NUMBERED_PARA_RE.test(plainText)
-    ) {
+    if (phase === DOCUMENT_PHASE.HOLDING && NUMBERED_PARA_RE.test(plainText)) {
       phase = DOCUMENT_PHASE.REASONING;
     }
 
@@ -819,10 +810,7 @@ const classifyChunks = (chunks: readonly PChunk[]): Block[] => {
     // Ruling items by text pattern (before Odůvodnění):
     // detected by Roman numeral prefix, emitted as holding
     // paragraphs with the full original text preserved.
-    if (
-      phase === DOCUMENT_PHASE.PREAMBLE &&
-      RULING_ITEM_RE.test(plainText)
-    ) {
+    if (phase === DOCUMENT_PHASE.PREAMBLE && RULING_ITEM_RE.test(plainText)) {
       blockIndex += 1;
       blocks.push({
         id: makeBlockId(),
