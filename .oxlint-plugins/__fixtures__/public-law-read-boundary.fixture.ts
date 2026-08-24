@@ -5,10 +5,6 @@ declare const configureExternalReadTransaction: (
   tx: unknown,
   isolation: string,
 ) => Promise<void>;
-declare const configureReadTransaction: (
-  tx: unknown,
-  isolation: string,
-) => Promise<void>;
 declare const envBase: { PUBLIC_LAW_DATABASE_URL?: string };
 declare const database: {
   transaction: <T>(fn: (tx: unknown) => Promise<T>) => Promise<T>;

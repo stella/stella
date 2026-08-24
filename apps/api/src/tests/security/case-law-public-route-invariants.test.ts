@@ -329,12 +329,10 @@ describe("public case-law route boundary", () => {
   });
 
   test("public language alternate counts only include route-safe languages", async () => {
-    const [listSource, searchSource, languageAlternateCountsSource] =
-      await Promise.all([
-        readListSource(),
-        readSearchSource(),
-        readLanguageAlternateCountsSource(),
-      ]);
+    const [listSource, languageAlternateCountsSource] = await Promise.all([
+      readListSource(),
+      readLanguageAlternateCountsSource(),
+    ]);
 
     expect(listSource).toContain("readDecisionLanguageAlternateCounts");
     expect(languageAlternateCountsSource).toContain(
