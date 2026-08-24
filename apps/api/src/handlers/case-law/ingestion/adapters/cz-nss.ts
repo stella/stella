@@ -5,13 +5,14 @@ import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import {
   ADAPTER_KEYS,
   ADAPTER_TIMEOUT,
-  PARSER_VERSION,
+  PARSER_VERSIONS,
 } from "@/api/handlers/case-law/consts";
 import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
 import {
   defineSourceAdapter,
   EMPTY_AST,
   isPersistableSourceDocumentId,
+  STORED_RAW_REPARSE_REJECTION,
   SOURCE_TOTAL_PROBE_FAILURE,
   sourceTotalProbeFailed,
   sourceTotalRead,
@@ -23,6 +24,8 @@ import type {
   ReconciliationBuildOutcome,
   ReconciliationSlicePage,
   ReconciliationSlicePageOptions,
+  StoredRawReparseInput,
+  StoredRawReparseOutcome,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import { createCalendarDaySliceWalk } from "@/api/handlers/case-law/ingestion/adapters/calendar-day-slice-walk";
 import {
@@ -529,6 +532,25 @@ type DecisionContent = {
   sourceRaw: string | undefined;
 };
 
+const CZ_NSS_REPARSABLE_CONTENT_TYPES = new Set(["text/html"]);
+
+const nonEmptyString = (value: unknown): string | undefined =>
+  typeof value === "string" && value.length > 0 ? value : undefined;
+
+type CzNssSourceHashOptions = {
+  caseNumber: string;
+  decisionDate: string | undefined;
+  decisionType: string | undefined;
+};
+
+/** Stable source-side fields shared by a crawl and a stored-raw replay. */
+const czNssSourceHash = ({
+  caseNumber,
+  decisionDate,
+  decisionType,
+}: CzNssSourceHashOptions): string =>
+  hashContent(`${caseNumber}|${decisionDate ?? ""}|${decisionType ?? ""}`);
+
 /**
  * Fetch rich HTML from /DokumentOriginal/Html/{id} and parse
  * it into a DocumentAst. Falls back to /Text/{id} for plain
@@ -759,11 +781,18 @@ const rowToResult = (
   content: DecisionContent,
   detail: DetailMetadata,
 ): IngestionResult => {
-  // Hash must be stable across runs regardless of transient
-  // network failures — never include fulltext in the hash.
-  const raw = `${row.caseNumber}|${row.decisionDate ?? ""}|${row.decisionType ?? ""}`;
   const sourceDocumentId = czNssSourceDocumentId(row);
   const court = courtFromEcli(detail.ecli);
+  const decisionDate = (() => {
+    if (detail.decisionDate) {
+      return parseCeDate(detail.decisionDate);
+    }
+    if (row.decisionDate) {
+      return parseCeDate(row.decisionDate);
+    }
+    return undefined;
+  })();
+  const decisionType = (detail.decisionType ?? row.decisionType)?.toLowerCase();
 
   return {
     caseNumber: row.caseNumber,
@@ -793,18 +822,10 @@ const rowToResult = (
     court,
     country: "CZE",
     language: CZ_NSS_LANGUAGE,
-    decisionDate: (() => {
-      if (detail.decisionDate) {
-        return parseCeDate(detail.decisionDate);
-      }
-      if (row.decisionDate) {
-        return parseCeDate(row.decisionDate);
-      }
-      return undefined;
-    })(),
+    decisionDate,
     // Prefer structured decisionType from detail page over
     // the heuristic cell match from the search results table
-    decisionType: (detail.decisionType ?? row.decisionType)?.toLowerCase(),
+    decisionType,
     fulltext: content.fulltext,
     sourceUrl: row.documentUrl,
     documentUrl: row.documentUrl,
@@ -824,11 +845,100 @@ const rowToResult = (
       administrativeAuthority: detail.administrativeAuthority,
       citation: detail.citation,
     },
-    rawHash: hashContent(raw),
-    parserVersion: PARSER_VERSION,
+    // Fulltext is parser output, not publisher identity. Keeping it out makes
+    // crawl and replay converge on the same source hash after parser changes.
+    rawHash: czNssSourceHash({
+      caseNumber: row.caseNumber,
+      decisionDate,
+      decisionType,
+    }),
+    parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.CZ_NSS],
     documentAst: content.documentAst ?? EMPTY_AST,
     sourceRaw: content.sourceRaw,
     sourceRawContentType: "text/html",
+  };
+};
+
+/** Rebuild one NSS decision from the exact HTML the crawl stored. */
+const reparseStoredRaw = (
+  stored: StoredRawReparseInput,
+): StoredRawReparseOutcome => {
+  if (
+    stored.contentType !== null &&
+    !CZ_NSS_REPARSABLE_CONTENT_TYPES.has(stored.contentType)
+  ) {
+    return {
+      type: "rejected",
+      rejection: STORED_RAW_REPARSE_REJECTION.UNSUPPORTED_CONTENT,
+      detail: `stored content type ${stored.contentType}`,
+    };
+  }
+
+  const html = new TextDecoder().decode(stored.raw);
+  const sourceUrl = stored.sourceUrl ?? undefined;
+  const decisionDate = stored.decisionDate ?? undefined;
+  const decisionType = stored.decisionType ?? undefined;
+  const ecli = stored.ecli ?? undefined;
+  const parsed = parseNssDecisionHtml({
+    caseNumber: stored.caseNumber,
+    ecli,
+    court: stored.court,
+    decisionDate,
+    decisionType,
+    sourceUrl,
+    html,
+    detailMetadata: stored.metadata,
+  });
+
+  if (parsed.documentAst.blocks.length === 0) {
+    return {
+      type: "rejected",
+      rejection: STORED_RAW_REPARSE_REJECTION.NO_DOCUMENT,
+      detail: `no blocks parsed from the stored payload for ${stored.caseNumber}`,
+    };
+  }
+
+  const citation = nonEmptyString(stored.metadata["citation"]);
+  const sourceDocumentId = stored.sourceDocumentId ?? undefined;
+
+  return {
+    type: "parsed",
+    result: {
+      caseNumber: stored.caseNumber,
+      ...(citation === undefined
+        ? {}
+        : {
+            identifiers: [
+              {
+                type: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
+                value: citation,
+              },
+            ],
+          }),
+      sourceDocumentId,
+      ...(sourceDocumentId === undefined
+        ? {}
+        : { legacySourceUrls: [detailUrl(sourceDocumentId)] }),
+      ecli,
+      court: stored.court,
+      country: "CZE",
+      language: stored.language,
+      decisionDate,
+      decisionType,
+      fulltext: parsed.fulltext,
+      sourceUrl,
+      documentUrl: stored.documentUrl ?? undefined,
+      metadata: stored.metadata,
+      rawHash: czNssSourceHash({
+        caseNumber: stored.caseNumber,
+        decisionDate,
+        decisionType,
+      }),
+      parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.CZ_NSS],
+      documentAst: parsed.documentAst,
+      sourceRaw: html,
+      sourceRawContentType: "text/html",
+    },
   };
 };
 
@@ -1403,6 +1513,9 @@ export const czNssAdapter = defineSourceAdapter({
   // With ~20 decisions/day and fulltext fetches, ~30s/page.
   pageTimeoutMs: 120_000,
   maxSyncPages: 20,
+  // One stored NSS HTML payload is exactly one decision, so parser upgrades
+  // can replay it locally without re-contacting or rate-limiting the court.
+  reparseStoredRaw,
 
   /**
    * The portal aggregates several courts, and its search filters cannot be

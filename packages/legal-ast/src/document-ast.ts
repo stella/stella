@@ -44,11 +44,21 @@ export type ParagraphRole =
   | "signature"
   | "unknown";
 
+export type ParagraphNote = {
+  type: "footnote";
+  label: string;
+};
+
 export type ParagraphBlock = {
   id: string;
   anchorId: string;
   type: "paragraph";
   role?: ParagraphRole | undefined;
+  /**
+   * Publisher-authored note metadata. Kept separate from `role`: notes can
+   * occur in any positional section.
+   */
+  note?: ParagraphNote | undefined;
   /**
    * Paragraph number assigned by the publishing court, when the source
    * numbers its paragraphs (CJEU judgments, opinions and orders do).
@@ -129,6 +139,14 @@ const blockSchema: v.GenericSchema<Block> = v.variant("type", [
         "closing",
         "signature",
         "unknown",
+      ]),
+    ),
+    note: v.optional(
+      v.variant("type", [
+        v.object({
+          type: v.literal("footnote"),
+          label: v.string(),
+        }),
       ]),
     ),
     number: v.optional(v.pipe(v.number(), v.finite())),

@@ -217,6 +217,27 @@ describe("parseDocumentAst", () => {
     expect(parsed).toEqual(documentAst);
     expect(parsed === null ? false : isDocumentAst(parsed)).toBe(true);
   });
+
+  test("round-trips additive footnote metadata on a v1 paragraph", () => {
+    const withFootnote = {
+      ...documentAst,
+      blocks: [
+        ...documentAst.blocks,
+        {
+          id: "fn1",
+          anchorId: "_ftn1",
+          type: "paragraph",
+          note: { type: "footnote", label: "1" },
+          inlines: [{ type: "text", text: "[1] Note" }],
+          plainText: "[1] Note",
+        },
+      ],
+    } as const satisfies DocumentAst;
+
+    expect(parseDocumentAst(JSON.stringify(withFootnote))).toEqual(
+      withFootnote,
+    );
+  });
 });
 
 describe("getDocumentAstMetadata", () => {

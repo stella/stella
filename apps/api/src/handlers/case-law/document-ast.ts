@@ -12,6 +12,7 @@ export type {
   InlineLink,
   InlineText,
   ParagraphBlock,
+  ParagraphNote,
   ParagraphRole,
   TableBlock,
   TableCell,

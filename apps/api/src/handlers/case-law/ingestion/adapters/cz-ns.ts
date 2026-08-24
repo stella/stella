@@ -3,7 +3,7 @@ import { Result, panic } from "better-result";
 import {
   ADAPTER_KEYS,
   ADAPTER_TIMEOUT,
-  PARSER_VERSION,
+  PARSER_VERSIONS,
 } from "@/api/handlers/case-law/consts";
 import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
 import {
@@ -416,7 +416,7 @@ export const buildCzNsDecision = async (
         category: meta["category"]?.trim(),
       },
       rawHash: hashContent(raw),
-      parserVersion: PARSER_VERSION,
+      parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.CZ_NS],
       documentAst,
       sourceRaw: JSON.stringify({ webHtml, printHtml }),
       sourceRawContentType: "text/html",

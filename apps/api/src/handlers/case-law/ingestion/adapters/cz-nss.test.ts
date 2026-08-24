@@ -19,6 +19,7 @@ import {
   test,
 } from "bun:test";
 
+import type { StoredRawReparseInput } from "@/api/handlers/case-law/ingestion/adapter";
 import {
   buildCzNssDecision,
   courtFromEcli,
@@ -985,6 +986,46 @@ describe("cz-nss buildDecision", () => {
     expect(built.decision.sourceUrl).toBe(
       `${BASE_URL}/DokumentDetail/Index/${MUNICIPAL_ROW.documentId}`,
     );
+  });
+
+  test("replays stored HTML to the same result without contacting the court", async () => {
+    const payload = await listedRow();
+    installStub({ search: [] });
+    const built = await reconciliation.buildDecision(payload);
+    if (built.type !== "built") {
+      throw new TypeError("Expected the fixture decision to build");
+    }
+    const decision = built.decision;
+    const reparse = czNssAdapter.reparseStoredRaw;
+    if (reparse === undefined) {
+      throw new TypeError("Expected cz-nss to implement stored-raw replay");
+    }
+
+    globalThis.fetch = asFetchMock(() => {
+      throw new TypeError("Stored-raw replay must not contact the publisher");
+    });
+
+    const stored = {
+      raw: new TextEncoder().encode(decision.sourceRaw ?? ""),
+      contentType: decision.sourceRawContentType ?? null,
+      caseNumber: decision.caseNumber,
+      sourceDocumentId: decision.sourceDocumentId ?? null,
+      language: decision.language,
+      court: decision.court,
+      ecli: decision.ecli ?? null,
+      decisionDate: decision.decisionDate ?? null,
+      decisionType: decision.decisionType ?? null,
+      sourceUrl: decision.sourceUrl ?? null,
+      documentUrl: decision.documentUrl ?? null,
+      metadata: decision.metadata,
+    } satisfies StoredRawReparseInput;
+    const outcome = await reparse(stored);
+
+    expect(outcome.type).toBe("parsed");
+    if (outcome.type !== "parsed") {
+      return;
+    }
+    expect(outcome.result).toEqual(decision);
   });
 
   test("refuses to write a row whose document the court did not serve", async () => {

@@ -5,7 +5,7 @@ import { drizzle } from "drizzle-orm/bun-sql";
 import { authRelationsPart } from "@/api/db/auth-schema";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawDecisions, caseLawSources, relations } from "@/api/db/schema";
-import { ADAPTER_KEYS, PARSER_VERSION } from "@/api/handlers/case-law/consts";
+import { ADAPTER_KEYS, PARSER_VERSIONS } from "@/api/handlers/case-law/consts";
 import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline";
@@ -65,7 +65,7 @@ const ingestionResult = {
   metadata: { source: "regression" },
   rawHash: "jsonb-regression-hash",
   documentAst,
-  parserVersion: PARSER_VERSION,
+  parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.CZ_NS],
 } satisfies IngestionResult;
 
 if (!databaseUrl || !runPostgresTests) {

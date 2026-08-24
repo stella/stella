@@ -3,7 +3,7 @@ import { panic, Result } from "better-result";
 import {
   ADAPTER_KEYS,
   ADAPTER_TIMEOUT,
-  PARSER_VERSION,
+  PARSER_VERSIONS,
 } from "@/api/handlers/case-law/consts";
 import {
   defineSourceAdapter,
@@ -542,7 +542,7 @@ const buildListingOnly = (
     },
     rawHash: hashContent(sourceRaw),
     documentAst: EMPTY_AST,
-    parserVersion: PARSER_VERSION,
+    parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.AT_FINDOK],
     sourceRaw,
     sourceRawContentType: "application/json",
   };
@@ -651,7 +651,7 @@ const buildDecision = async ({
     rawHash: hashContent(sourceRaw),
     documentAst: parsed.documentAst,
     sections: sectionsFromAst(parsed.documentAst.blocks),
-    parserVersion: PARSER_VERSION,
+    parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.AT_FINDOK],
     sourceRaw,
     sourceRawContentType: "application/json",
   };

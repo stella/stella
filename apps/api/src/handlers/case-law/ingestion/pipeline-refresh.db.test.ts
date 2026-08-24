@@ -22,7 +22,7 @@ import { drizzle } from "drizzle-orm/bun-sql";
 import { authRelationsPart } from "@/api/db/auth-schema";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawDecisions, caseLawSources, relations } from "@/api/db/schema";
-import { ADAPTER_KEYS, PARSER_VERSION } from "@/api/handlers/case-law/consts";
+import { ADAPTER_KEYS, PARSER_VERSIONS } from "@/api/handlers/case-law/consts";
 import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { EMPTY_AST } from "@/api/handlers/case-law/ingestion/adapter";
@@ -102,7 +102,7 @@ if (!databaseUrl || !runPostgresTests) {
           sections: [
             { index: 0, type: "header", title: null, text: "Rozsudok" },
           ],
-          parserVersion: PARSER_VERSION,
+          parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.SK_COURTS],
           documentUrl: "https://example.test/refresh.pdf",
           metadata: { judge: "Old Judge" },
           sourceHash: "hash-before",
@@ -151,7 +151,7 @@ if (!databaseUrl || !runPostgresTests) {
       documentUrl: "https://example.test/refresh.pdf",
       metadata: { judge: "New Judge" },
       rawHash: "hash-after",
-      parserVersion: PARSER_VERSION,
+      parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.SK_COURTS],
       documentAst: EMPTY_AST,
     });
 

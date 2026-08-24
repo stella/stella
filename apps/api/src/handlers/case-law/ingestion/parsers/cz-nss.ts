@@ -26,6 +26,8 @@
 import * as cheerio from "cheerio";
 import type { AnyNode } from "domhandler";
 
+import { collapseSpacedLetters } from "@stll/text-normalize";
+
 import type {
   Block,
   DocumentAst,
@@ -127,6 +129,184 @@ type PChunk = {
   fontSize: number;
   /** Set when the chunk comes from an <ol type="I"><li>. */
   listItemIndex: number | null;
+  footnote: { anchorId: string; label: string } | null;
+};
+
+const FOOTNOTE_CONTAINER_SELECTOR = "div[id^='_ftn']";
+const FOOTNOTE_ID_RE = /^_ftn(?<label>\d+)$/u;
+
+const footnoteOf = (el: cheerio.Cheerio<AnyNode>): PChunk["footnote"] => {
+  const container = el.closest(FOOTNOTE_CONTAINER_SELECTOR).first();
+  const id = container.attr("id");
+  const label =
+    id === undefined ? undefined : FOOTNOTE_ID_RE.exec(id)?.groups?.["label"];
+
+  return id === undefined || label === undefined
+    ? null
+    : { anchorId: id, label };
+};
+
+const SPACED_EMPHASIS_RE = /^(?:\p{L} +)+\p{L}(?: *[,:;.!?])?$/u;
+const SINGLE_LETTER_RE = /^\p{L}$/u;
+const MULTI_SPACE_MARKER = "\u0000";
+
+type SpacedBoldRun = {
+  children: Inline[];
+  endIndex: number;
+};
+
+const collectSpacedBoldRun = (
+  source: readonly Inline[],
+  startIndex: number,
+): SpacedBoldRun | null => {
+  const first = source.at(startIndex);
+  if (first?.type !== "bold") {
+    return null;
+  }
+
+  const firstText = inlinesToPlainText(first.children).replace(/\s/gu, " ");
+  if (!SINGLE_LETTER_RE.test(firstText.trim())) {
+    return null;
+  }
+
+  const children = [...first.children];
+  let endIndex = startIndex;
+
+  while (endIndex + 1 < source.length) {
+    let separatorIndex = endIndex + 1;
+    const gapBeforeSeparator = source.at(separatorIndex);
+    if (
+      gapBeforeSeparator?.type === "text" &&
+      gapBeforeSeparator.text.trim().length === 0
+    ) {
+      separatorIndex += 1;
+    }
+
+    const separator = source.at(separatorIndex);
+    if (
+      separator?.type !== "bold" ||
+      inlinesToPlainText(separator.children).trim().length !== 0
+    ) {
+      break;
+    }
+
+    let letterIndex = separatorIndex + 1;
+    const gapBeforeLetter = source.at(letterIndex);
+    if (
+      gapBeforeLetter?.type === "text" &&
+      gapBeforeLetter.text.trim().length === 0
+    ) {
+      letterIndex += 1;
+    }
+
+    const letter = source.at(letterIndex);
+    if (letter?.type !== "bold") {
+      break;
+    }
+    const letterText = inlinesToPlainText(letter.children).replace(/\s/gu, " ");
+    if (!SINGLE_LETTER_RE.test(letterText.trim())) {
+      break;
+    }
+
+    children.push(...separator.children, ...letter.children);
+    endIndex = letterIndex;
+  }
+
+  if (endIndex === startIndex) {
+    return null;
+  }
+
+  const text = inlinesToPlainText(children).replace(/\s/gu, " ").trim();
+  return SPACED_EMPHASIS_RE.test(text) ? { children, endIndex } : null;
+};
+
+/**
+ * Aspose expresses letter-spacing as one emphasized node per letter. Merge
+ * identical wrappers first, ignoring indentation between single-letter
+ * wrappers only when their complete run proves the pattern. Then recover word
+ * boundaries: one source space joins letters, while two or more source spaces
+ * separate words.
+ */
+const normalizeNssInlines = (
+  source: Inline[],
+  spacedEmphasis = false,
+): Inline[] => {
+  const merged: Inline[] = [];
+
+  for (let index = 0; index < source.length; index++) {
+    const node = source[index];
+    if (node === undefined) {
+      continue;
+    }
+
+    const spacedBoldRun = collectSpacedBoldRun(source, index);
+    if (spacedBoldRun !== null) {
+      merged.push({ type: "bold", children: spacedBoldRun.children });
+      index = spacedBoldRun.endIndex;
+      continue;
+    }
+
+    const previous = merged.at(-1);
+    if (node.type === "text" && previous?.type === "text") {
+      previous.text += node.text;
+      continue;
+    }
+    if (node.type === "bold" && previous?.type === "bold") {
+      previous.children.push(...node.children);
+      continue;
+    }
+    if (node.type === "italic" && previous?.type === "italic") {
+      previous.children.push(...node.children);
+      continue;
+    }
+    if (
+      node.type === "link" &&
+      previous?.type === "link" &&
+      previous.href === node.href
+    ) {
+      previous.children.push(...node.children);
+      continue;
+    }
+    merged.push(node);
+  }
+
+  return merged.map((node): Inline => {
+    if (node.type === "line-break") {
+      return node;
+    }
+    if (node.type === "text") {
+      const whitespaceNormalized = node.text.replace(/\s/gu, " ");
+      const trimmed = whitespaceNormalized.trim();
+      const text =
+        spacedEmphasis && SPACED_EMPHASIS_RE.test(trimmed)
+          ? trimmed
+              .replace(/ {2,}/gu, () => MULTI_SPACE_MARKER)
+              .replace(/(?<=\p{L}) (?=\p{L})/gu, "")
+              .replaceAll(MULTI_SPACE_MARKER, " ")
+              .replace(/(?<=\p{L}) +(?=[,:;.!?])/gu, "")
+          : collapseSpacedLetters(whitespaceNormalized);
+      return node.anonymized === true
+        ? { type: "text", text, anonymized: true }
+        : { type: "text", text };
+    }
+    if (node.type === "bold") {
+      return {
+        type: "bold",
+        children: normalizeNssInlines(node.children, true),
+      };
+    }
+    if (node.type === "italic") {
+      return {
+        type: "italic",
+        children: normalizeNssInlines(node.children, spacedEmphasis),
+      };
+    }
+    return {
+      type: "link",
+      href: node.href,
+      children: normalizeNssInlines(node.children, spacedEmphasis),
+    };
+  });
 };
 
 /** Convert a 1-based index to a Roman numeral. */
@@ -179,7 +359,7 @@ const extractChunks = ($: cheerio.CheerioAPI): PChunk[] => {
       }
 
       const style = $el.attr("style") ?? "";
-      const inlines = walkInlines($, $el);
+      const inlines = normalizeNssInlines(walkInlines($, $el));
       const plainText = inlinesToPlainText(inlines).trim();
       if (!plainText) {
         return;
@@ -203,6 +383,7 @@ const extractChunks = ($: cheerio.CheerioAPI): PChunk[] => {
         letterSpacing,
         fontSize,
         listItemIndex: null,
+        footnote: footnoteOf($el),
       });
       return;
     }
@@ -247,6 +428,7 @@ const extractChunks = ($: cheerio.CheerioAPI): PChunk[] => {
           letterSpacing: false,
           fontSize: 12,
           listItemIndex: null,
+          footnote: footnoteOf($el),
         });
       });
       return;
@@ -259,7 +441,7 @@ const extractChunks = ($: cheerio.CheerioAPI): PChunk[] => {
 
       $el.find("> li").each((_li, liEl) => {
         const $li = $(liEl);
-        const inlines = walkInlines($, $li);
+        const inlines = normalizeNssInlines(walkInlines($, $li));
         const plainText = inlinesToPlainText(inlines).trim();
 
         if (!plainText) {
@@ -275,6 +457,7 @@ const extractChunks = ($: cheerio.CheerioAPI): PChunk[] => {
           letterSpacing: false,
           fontSize: 12,
           listItemIndex: listStart,
+          footnote: footnoteOf($li),
         });
         listStart++;
       });
@@ -283,7 +466,7 @@ const extractChunks = ($: cheerio.CheerioAPI): PChunk[] => {
 
     // Regular <p>
     const style = $el.attr("style") ?? "";
-    const inlines = walkInlines($, $el);
+    const inlines = normalizeNssInlines(walkInlines($, $el));
     const plainText = inlinesToPlainText(inlines).trim();
 
     if (!plainText) {
@@ -310,6 +493,7 @@ const extractChunks = ($: cheerio.CheerioAPI): PChunk[] => {
       letterSpacing,
       fontSize,
       listItemIndex: null,
+      footnote: footnoteOf($el),
     });
   });
 
@@ -363,8 +547,9 @@ const canonicalDecisionTitle = (
     : null;
 };
 
-/** "takto:" separator. */
-const TAKTO_RE = /^t\s*a\s*k\s*t\s*o\s*(?::\s*)?$/iu;
+/** "takto:" alone, or at the end of introductory prose. */
+const TAKTO_STANDALONE_RE = /^t\s*a\s*k\s*t\s*o\s*(?::\s*)?$/iu;
+const TAKTO_SUFFIX_RE = /(?:^|\s)t\s*a\s*k\s*t\s*o\s*(?::\s*)?$/iu;
 
 /** "Odůvodnění:" separator. */
 const ODUVODNENI_RE =
@@ -391,6 +576,15 @@ const SECTION_HEADING_RE =
 /** Numbered paragraph: [1], [2], ... */
 const NUMBERED_PARA_RE = /^\[(?:\d+)\]\s*/u;
 
+const DOCUMENT_PHASE = {
+  PREAMBLE: "preamble",
+  HOLDING: "holding",
+  REASONING: "reasoning",
+  INSTRUCTION: "instruction",
+} as const;
+
+type DocumentPhase = (typeof DOCUMENT_PHASE)[keyof typeof DOCUMENT_PHASE];
+
 /**
  * Closing line: "V Brně dne ...", "Praha 10. březen 2026",
  * or just "City + date" pattern.
@@ -415,8 +609,8 @@ const classifyChunks = (chunks: readonly PChunk[]): Block[] => {
   const blocks: Block[] = [];
   let blockIndex = 0;
 
-  let inOduvodneni = false;
-  let inPouceni = false;
+  let phase: DocumentPhase = DOCUMENT_PHASE.PREAMBLE;
+  const footnoteOccurrences = new Map<string, number>();
   let sawCaseNumber = false;
   let sawTitle = false;
 
@@ -431,6 +625,25 @@ const classifyChunks = (chunks: readonly PChunk[]): Block[] => {
 
     // Skip decorative lines
     if (SKIP_RE.test(plainText)) {
+      continue;
+    }
+
+    if (chunk.footnote !== null) {
+      const occurrence =
+        (footnoteOccurrences.get(chunk.footnote.anchorId) ?? 0) + 1;
+      footnoteOccurrences.set(chunk.footnote.anchorId, occurrence);
+      blockIndex += 1;
+      blocks.push({
+        id: makeBlockId(),
+        anchorId:
+          occurrence === 1
+            ? chunk.footnote.anchorId
+            : `${chunk.footnote.anchorId}-${occurrence}`,
+        type: "paragraph",
+        note: { type: "footnote", label: chunk.footnote.label },
+        inlines,
+        plainText,
+      });
       continue;
     }
 
@@ -475,7 +688,11 @@ const classifyChunks = (chunks: readonly PChunk[]): Block[] => {
     }
 
     // "takto:" separator (centered, bold, letter-spaced)
-    if (TAKTO_RE.test(plainText)) {
+    if (
+      phase === DOCUMENT_PHASE.PREAMBLE &&
+      TAKTO_STANDALONE_RE.test(plainText)
+    ) {
+      phase = DOCUMENT_PHASE.HOLDING;
       blockIndex += 1;
       blocks.push({
         id: makeBlockId(),
@@ -489,9 +706,25 @@ const classifyChunks = (chunks: readonly PChunk[]): Block[] => {
       continue;
     }
 
+    // Some exports keep the introductory sentence and separator in one
+    // paragraph. Preserve that prose as prose, then open the same structural
+    // zone for the ordered or unnumbered holdings that follow it.
+    if (phase === DOCUMENT_PHASE.PREAMBLE && TAKTO_SUFFIX_RE.test(plainText)) {
+      blockIndex += 1;
+      blocks.push({
+        id: makeBlockId(),
+        anchorId: makeAnchorId("p", blockIndex),
+        type: "paragraph",
+        inlines,
+        plainText,
+      });
+      phase = DOCUMENT_PHASE.HOLDING;
+      continue;
+    }
+
     // "Odůvodnění:" separator
     if (ODUVODNENI_RE.test(plainText)) {
-      inOduvodneni = true;
+      phase = DOCUMENT_PHASE.REASONING;
       blockIndex += 1;
       blocks.push({
         id: makeBlockId(),
@@ -507,7 +740,7 @@ const classifyChunks = (chunks: readonly PChunk[]): Block[] => {
 
     // "Poučení:" standalone
     if (POUCENI_STANDALONE_RE.test(plainText)) {
-      inPouceni = true;
+      phase = DOCUMENT_PHASE.INSTRUCTION;
       blockIndex += 1;
       blocks.push({
         id: makeBlockId(),
@@ -523,7 +756,7 @@ const classifyChunks = (chunks: readonly PChunk[]): Block[] => {
 
     // "Poučení:" inline (bold prefix + text in same <p>)
     if (POUCENI_INLINE_RE.test(plainText) && bold) {
-      inPouceni = true;
+      phase = DOCUMENT_PHASE.INSTRUCTION;
       blockIndex += 1;
       blocks.push({
         id: makeBlockId(),
@@ -586,7 +819,7 @@ const classifyChunks = (chunks: readonly PChunk[]): Block[] => {
     if (
       centered &&
       plainText.length < 60 &&
-      !inPouceni &&
+      phase !== DOCUMENT_PHASE.INSTRUCTION &&
       chunks.indexOf(chunk) < chunks.length - 1
     ) {
       const nextChunk = chunks[chunks.indexOf(chunk) + 1];
@@ -607,7 +840,7 @@ const classifyChunks = (chunks: readonly PChunk[]): Block[] => {
     // <ol> list items: holding paragraphs before Odůvodnění,
     // numbered paragraphs after
     if (chunk.listItemIndex !== null) {
-      if (!inOduvodneni && !inPouceni) {
+      if (phase === DOCUMENT_PHASE.HOLDING) {
         // Reconstruct the full text with Roman numeral prefix
         const roman = `${toRoman(chunk.listItemIndex)}.`;
         const fullInlines: Inline[] = [
@@ -637,10 +870,32 @@ const classifyChunks = (chunks: readonly PChunk[]): Block[] => {
       continue;
     }
 
+    // A numbered paragraph starts reasoning even when the publisher omitted
+    // or misspelled its separator. Keep the phase transition durable so later
+    // unnumbered reasoning cannot leak back into the holding section.
+    if (phase === DOCUMENT_PHASE.HOLDING && NUMBERED_PARA_RE.test(plainText)) {
+      phase = DOCUMENT_PHASE.REASONING;
+    }
+
+    // A single unnumbered výrok is a regular paragraph in Aspose HTML.
+    // Its position, between the two structural separators, is definitive.
+    if (phase === DOCUMENT_PHASE.HOLDING) {
+      blockIndex += 1;
+      blocks.push({
+        id: makeBlockId(),
+        anchorId: makeAnchorId("p", blockIndex),
+        type: "paragraph",
+        role: "holding",
+        inlines,
+        plainText,
+      });
+      continue;
+    }
+
     // Ruling items by text pattern (before Odůvodnění):
     // detected by Roman numeral prefix, emitted as holding
     // paragraphs with the full original text preserved.
-    if (!inOduvodneni && !inPouceni && RULING_ITEM_RE.test(plainText)) {
+    if (phase === DOCUMENT_PHASE.PREAMBLE && RULING_ITEM_RE.test(plainText)) {
       blockIndex += 1;
       blocks.push({
         id: makeBlockId(),
@@ -656,8 +911,7 @@ const classifyChunks = (chunks: readonly PChunk[]): Block[] => {
     // Section headings in Odůvodnění (centered or bold,
     // short, matching Roman numeral pattern)
     if (
-      inOduvodneni &&
-      !inPouceni &&
+      phase === DOCUMENT_PHASE.REASONING &&
       SECTION_HEADING_RE.test(plainText) &&
       plainText.length < 120
     ) {

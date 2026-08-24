@@ -6,7 +6,7 @@ import type { DecisionIdentifier } from "@stll/legal-ast/decision-identifier";
 import {
   ADAPTER_KEYS,
   ADAPTER_TIMEOUT,
-  PARSER_VERSION,
+  PARSER_VERSIONS,
 } from "@/api/handlers/case-law/consts";
 import {
   defineSourceAdapter,
@@ -915,7 +915,7 @@ const buildPlDecision = ({
       }),
     },
     rawHash,
-    parserVersion: PARSER_VERSION,
+    parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.PL_COURTS],
     documentAst,
     sourceRaw: rawPayload,
     sourceRawContentType: "application/json",

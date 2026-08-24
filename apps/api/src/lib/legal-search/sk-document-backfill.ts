@@ -70,7 +70,7 @@ import type {
 } from "@/api/lib/legal-search/corpus-storage";
 import {
   ADAPTER_KEYS,
-  PARSER_VERSION,
+  PARSER_VERSIONS,
 } from "@/api/lib/legal-search/ingestion-constants";
 import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";
 import { parseSkDecisionPdf } from "@/api/lib/legal-search/parsers/sk-courts";
@@ -648,7 +648,7 @@ export const storeBackfilledDocument = async ({
       .update(caseLawDecisions)
       .set({
         ...payloadColumns,
-        parserVersion: PARSER_VERSION,
+        parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.SK_COURTS],
         ...corpusMirrorColumns({
           status: CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED,
           written,

@@ -161,7 +161,7 @@ describe("module mock factories", () => {
 
     // consts.ts declares nothing itself; every name comes through `export *`.
     expect([...readModuleExports(constsFile, API_ROOT)]).toContain(
-      "PARSER_VERSION",
+      "PARSER_VERSIONS",
     );
   });
 

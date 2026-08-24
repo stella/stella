@@ -31,6 +31,7 @@ export type {
   HeadingBlock,
   HeadingLevel,
   ParagraphBlock,
+  ParagraphNote,
   ParagraphRole,
   TableBlock,
   TableCell,
