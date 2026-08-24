@@ -416,12 +416,14 @@ type ClipboardDialogProps = {
     args?: Record<string, unknown>,
     onSuccess?: () => void,
   ) => void;
+  onGroupDeleted: (groupId: string) => void;
 };
 
 const ClipboardDialog = ({
   dialog,
   onChange,
   onCommand,
+  onGroupDeleted,
 }: ClipboardDialogProps) => {
   const t = useTranslations("clipboard");
   const close = () => onChange({ type: "closed" });
@@ -529,7 +531,10 @@ const ClipboardDialog = ({
           destructive
           onClose={close}
           onSubmit={() => {
-            onCommand("clipboard_delete_group", { id: dialog.groupId }, close);
+            onCommand("clipboard_delete_group", { id: dialog.groupId }, () => {
+              onGroupDeleted(dialog.groupId);
+              close();
+            });
           }}
           submitLabel={t("deleteGroup")}
           title={t("deleteGroup")}
@@ -1142,6 +1147,9 @@ const ClipboardApp = () => {
     }
     if (event.target instanceof HTMLInputElement) {
       if (event.key === "Enter" && activeItem) {
+        if (event.isComposing) {
+          return;
+        }
         event.preventDefault();
         copyItem(activeItem);
       }
@@ -1285,6 +1293,11 @@ const ClipboardApp = () => {
         dialog={dialog}
         onChange={setDialog}
         onCommand={applySnapshotCommand}
+        onGroupDeleted={(groupId) => {
+          setSelectedGroupId((currentGroupId) =>
+            currentGroupId === groupId ? null : currentGroupId,
+          );
+        }}
       />
       {contextMenu.type === "closed" ? null : (
         <>
@@ -1374,7 +1387,6 @@ const ClipboardApp = () => {
                     groupId: group.id,
                     groupName: group.name,
                   });
-                  setSelectedGroupId(null);
                 }
               }}
               size="icon"
@@ -1416,7 +1428,7 @@ const ClipboardApp = () => {
               )}
             </span>
             <p className="text-foreground/82 text-wrap-balance max-w-sm text-sm font-medium">
-              {query ? emptyStateTitle : t("emptyDescription")}
+              {query || activeGroupId ? emptyStateTitle : t("emptyDescription")}
             </p>
           </div>
         ) : (
