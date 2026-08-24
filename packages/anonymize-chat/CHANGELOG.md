@@ -1,5 +1,11 @@
 # @stll/anonymize-chat
 
+## 0.1.1
+
+### Patch Changes
+
+- [#2372](https://github.com/stella/stella/pull/2372) [`425b628`](https://github.com/stella/stella/commit/425b6285ee00f22cebcb5635f4433dcb1938d841) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Use canonical Valibot guards and discard unmodeled registry and OAuth response fields.
+
 ## 0.1.0
 
 ### Minor Changes

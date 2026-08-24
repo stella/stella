@@ -453,7 +453,7 @@
     },
     "packages/anonymize-chat": {
       "name": "@stll/anonymize-chat",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "dependencies": {
         "@stll/anonymize-wasm": "catalog:",
         "better-result": "catalog:",
@@ -515,7 +515,7 @@
     },
     "packages/business-registries": {
       "name": "@stll/business-registries",
-      "version": "0.3.0",
+      "version": "0.3.1",
       "dependencies": {
         "@stll/country-codes": "workspace:*",
         "@stll/stdnum": "^2.3.2",
@@ -562,7 +562,7 @@
     },
     "packages/cli": {
       "name": "@stll/cli",
-      "version": "0.6.5",
+      "version": "0.6.6",
       "bin": {
         "stella": "./dist/cli.js",
       },
@@ -807,7 +807,7 @@
     },
     "packages/ui": {
       "name": "@stll/ui",
-      "version": "0.5.1",
+      "version": "0.5.2",
       "dependencies": {
         "class-variance-authority": "^0.7.1",
         "clsx": "^2.1.1",
