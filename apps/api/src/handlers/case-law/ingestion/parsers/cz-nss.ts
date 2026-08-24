@@ -149,10 +149,59 @@ const footnoteOf = (el: cheerio.Cheerio<AnyNode>): PChunk["footnote"] => {
 const SPACED_EMPHASIS_RE = /^(?:\p{L} +)+\p{L}(?: *[,:;.!?])?$/u;
 const MULTI_SPACE_MARKER = "\u0000";
 
+type SpacedBoldRun = {
+  children: Inline[];
+  endIndex: number;
+};
+
+const collectSpacedBoldRun = (
+  source: readonly Inline[],
+  startIndex: number,
+): SpacedBoldRun | null => {
+  const first = source.at(startIndex);
+  if (first?.type !== "bold") {
+    return null;
+  }
+
+  const children = [...first.children];
+  let endIndex = startIndex;
+
+  for (let index = startIndex + 1; index < source.length; index++) {
+    const node = source[index];
+    if (node?.type === "bold") {
+      children.push(...node.children);
+      endIndex = index;
+      continue;
+    }
+
+    const next = source.at(index + 1);
+    if (
+      node?.type === "text" &&
+      node.text.trim().length === 0 &&
+      next?.type === "bold"
+    ) {
+      children.push(...next.children);
+      endIndex = index + 1;
+      index += 1;
+      continue;
+    }
+    break;
+  }
+
+  if (endIndex === startIndex) {
+    return null;
+  }
+
+  const text = inlinesToPlainText(children).replace(/\s/gu, " ").trim();
+  return SPACED_EMPHASIS_RE.test(text) ? { children, endIndex } : null;
+};
+
 /**
  * Aspose expresses letter-spacing as one emphasized node per letter. Merge
- * identical wrappers first, then recover word boundaries: one source space
- * joins letters, while two or more source spaces separate words.
+ * identical wrappers first, ignoring indentation between single-letter
+ * wrappers only when their complete run proves the pattern. Then recover word
+ * boundaries: one source space joins letters, while two or more source spaces
+ * separate words.
  */
 const normalizeNssInlines = (
   source: Inline[],
@@ -160,7 +209,19 @@ const normalizeNssInlines = (
 ): Inline[] => {
   const merged: Inline[] = [];
 
-  for (const node of source) {
+  for (let index = 0; index < source.length; index++) {
+    const node = source[index];
+    if (node === undefined) {
+      continue;
+    }
+
+    const spacedBoldRun = collectSpacedBoldRun(source, index);
+    if (spacedBoldRun !== null) {
+      merged.push({ type: "bold", children: spacedBoldRun.children });
+      index = spacedBoldRun.endIndex;
+      continue;
+    }
+
     const previous = merged.at(-1);
     if (node.type === "text" && previous?.type === "text") {
       previous.text += node.text;
