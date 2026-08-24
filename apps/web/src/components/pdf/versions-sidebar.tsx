@@ -36,9 +36,8 @@ import { api } from "@/lib/api";
 import { DOCX_MIME, TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { toAPIError, unwrapEden } from "@/lib/errors/api";
-import { ClientOperationError } from "@/lib/errors/client";
-import { fetchWithTimeout } from "@/lib/fetch";
 import { filesKeys } from "@/lib/files/queries";
+import { uploadEntityVersion } from "@/lib/files/upload-entity-version";
 import { openIsolatedWindow } from "@/lib/open-isolated-window";
 import { toSafeId } from "@/lib/safe-id";
 import {
@@ -82,10 +81,6 @@ const LABEL_PRESETS: LabelPreset[] = [
   { key: "final", color: "bg-success dark:bg-success" },
   { key: "signed", color: "bg-warning" },
 ];
-
-// Stall ceiling, not a target duration: a healthy slow upload of a large
-// file can legitimately take several minutes.
-const UPLOAD_PUT_TIMEOUT_MS = 30 * 60 * 1000;
 
 export const VersionsSidebar = ({
   workspaceId,
@@ -238,59 +233,7 @@ export const VersionsSidebar = ({
   const handleUploadVersion = async (file: File) => {
     setIsUploading(true);
     try {
-      // 1. SHA-256 of file bytes.
-      const fileBuffer = await file.arrayBuffer();
-      const sha256Buffer = await crypto.subtle.digest("SHA-256", fileBuffer);
-      const sha256Hex = Array.from(new Uint8Array(sha256Buffer))
-        .map((byte) => byte.toString(16).padStart(2, "0"))
-        .join("");
-
-      // 2. Presign.
-      const wsClient = api.uploads({
-        workspaceId: toSafeId<"workspace">(workspaceId),
-      });
-      const presign = await wsClient.presign.post({
-        purpose: "entity_version",
-        entityId: toSafeId<"entity">(entityId),
-        name: file.name,
-        mimeType: file.type || "application/octet-stream",
-        size: file.size,
-        sha256Hex,
-      });
-      const { uploadId, url, headers } = unwrapEden(presign);
-
-      // 3. PUT to S3.
-      const putResponse = await fetchWithTimeout(url, {
-        method: "PUT",
-        headers,
-        body: file,
-        timeoutMs: UPLOAD_PUT_TIMEOUT_MS,
-      });
-      if (!putResponse.ok) {
-        // Best-effort: the bucket lifecycle rule and daily prune already
-        // reclaim the tmp object and row, so a failed abort here is not
-        // fatal. We swallow errors to avoid masking the original S3
-        // rejection with a follow-up rejection.
-        try {
-          // SAFETY: best-effort abort; the bucket lifecycle rule and daily
-          // prune already reclaim the tmp object and row, so a failed abort
-          // here is not fatal and has no user-facing outcome.
-          // eslint-disable-next-line require-eden-error-check/require-eden-error-check
-          await wsClient({ uploadId }).abort.post({});
-        } catch {
-          // Intentionally swallowed; see comment above.
-        }
-        throw new ClientOperationError({
-          action: "upload-version-to-s3",
-          message: `S3 rejected upload (${putResponse.status})`,
-        });
-      }
-
-      // 4. Finalize.
-      const finalize = await wsClient({ uploadId }).finalize.post({});
-      if (finalize.error) {
-        throw toAPIError(finalize.error);
-      }
+      await uploadEntityVersion({ workspaceId, entityId, file });
 
       await invalidateVersions();
     } finally {

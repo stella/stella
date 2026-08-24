@@ -72,6 +72,7 @@ import { api } from "@/lib/api";
 import {
   DOCX_MIME,
   getNativeOfficeViewerFormat,
+  PDF_MIME,
   PPTX_MIME,
   TOOLBAR_ROW_HEIGHT,
   XLSX_MIME,
@@ -120,6 +121,12 @@ const DocxBrowserEditor = lazy(async () => {
 const OfficeFileViewer = lazy(async () => {
   const m = await import("@/components/office/office-file-viewer");
   return { default: m.OfficeFileViewer };
+});
+
+const PDFPageOrganizer = lazy(async () => {
+  const m =
+    await import("@/routes/_protected.workspaces/$workspaceId/-components/pdf-page-organizer-container");
+  return { default: m.PDFPageOrganizerContainer };
 });
 
 export const Route = createFileRoute(
@@ -625,6 +632,7 @@ function RouteComponentInner({
   const [, setDocxUnlocked] = useState(false);
   const [docxLatestVersionDialogOpen, setDocxLatestVersionDialogOpen] =
     useState(false);
+  const [isPDFPageOrganizerOpen, setIsPDFPageOrganizerOpen] = useState(false);
 
   // Reset the docx-unlocked flag when fieldId changes, using React's
   // adjust-state-during-render pattern instead of a reset effect. setDocxUnlocked
@@ -635,6 +643,7 @@ function RouteComponentInner({
   if (fieldId !== prevFieldId) {
     setPrevFieldId(fieldId);
     setDocxUnlocked(false);
+    setIsPDFPageOrganizerOpen(false);
   }
 
   // Find the active file field to determine mimeType and propertyId
@@ -814,31 +823,38 @@ function RouteComponentInner({
 
         {/* Center: DOCX editor, PDF viewer, or redline comparison */}
         <section className="flex h-full min-w-0 flex-1 flex-col">
-          {!usesEmbeddedDocumentToolbar && !showsReviewPane && (
-            <div
-              className={cn(
-                "bg-background/80 supports-[backdrop-filter]:bg-background/65 flex shrink-0 items-center justify-center gap-2 border-b px-4 backdrop-blur",
-                TOOLBAR_ROW_HEIGHT,
-              )}
-            >
-              <PdfViewerControls
-                currentPage={pageNumber}
-                extraControls={
-                  <TranslateDocumentDialog
-                    disabled={!canCreateEntity}
-                    entityId={entityId}
-                    entityVersionKey={entity.currentVersionId}
-                    fieldId={fieldId}
-                    isDocx={isDocxFile}
-                    viewId={viewId}
-                    workspaceId={workspaceId}
-                  />
-                }
-                fieldId={fieldId}
-                workspaceId={workspaceId}
-              />
-            </div>
-          )}
+          {!usesEmbeddedDocumentToolbar &&
+            !showsReviewPane &&
+            !isPDFPageOrganizerOpen && (
+              <div
+                className={cn(
+                  "bg-background/80 supports-[backdrop-filter]:bg-background/65 flex shrink-0 items-center justify-center gap-2 border-b px-4 backdrop-blur",
+                  TOOLBAR_ROW_HEIGHT,
+                )}
+              >
+                <PdfViewerControls
+                  currentPage={pageNumber}
+                  extraControls={
+                    <TranslateDocumentDialog
+                      disabled={!canCreateEntity}
+                      entityId={entityId}
+                      entityVersionKey={entity.currentVersionId}
+                      fieldId={fieldId}
+                      isDocx={isDocxFile}
+                      viewId={viewId}
+                      workspaceId={workspaceId}
+                    />
+                  }
+                  fieldId={fieldId}
+                  onEditPages={
+                    activeMimeType === PDF_MIME
+                      ? () => setIsPDFPageOrganizerOpen(true)
+                      : undefined
+                  }
+                  workspaceId={workspaceId}
+                />
+              </div>
+            )}
           <div className="relative min-h-0 flex-1">
             {(() => {
               if (showsReviewPane) {
@@ -1040,9 +1056,25 @@ function RouteComponentInner({
                       ),
                     }}
                   >
-                    <AnonymizeScrollSync />
-                    <JustificationScrollSync />
-                    <PdfViewer />
+                    {isPDFPageOrganizerOpen ? (
+                      <Suspense fallback={<PDFSuspenseFallback />}>
+                        <PDFPageOrganizer
+                          canCreateDocument={canCreateEntity}
+                          canSaveVersion={canUpdateEntity}
+                          entityId={entityId}
+                          fieldId={fieldId}
+                          fileName={activeFileLabel}
+                          onClose={() => setIsPDFPageOrganizerOpen(false)}
+                          workspaceId={workspaceId}
+                        />
+                      </Suspense>
+                    ) : (
+                      <>
+                        <AnonymizeScrollSync />
+                        <JustificationScrollSync />
+                        <PdfViewer />
+                      </>
+                    )}
                   </PDFProvider>
                 </VersionDropZone>
               );

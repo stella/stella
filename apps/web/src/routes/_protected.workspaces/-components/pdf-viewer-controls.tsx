@@ -8,6 +8,7 @@ import {
   ChevronDownIcon,
   ChevronUpIcon,
   DownloadIcon,
+  FilePenLineIcon,
   PrinterIcon,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
@@ -47,6 +48,7 @@ type PdfViewerControlsProps = {
   showFileActions?: boolean | undefined;
   onPrint?: (() => void) | undefined;
   printDisabled?: boolean | undefined;
+  onEditPages?: (() => void) | undefined;
   extraControls?: ReactNode | undefined;
 };
 
@@ -58,6 +60,7 @@ export const PdfViewerControls = ({
   showFileActions = true,
   onPrint,
   printDisabled = false,
+  onEditPages,
   extraControls,
 }: PdfViewerControlsProps) => {
   const t = useTranslations();
@@ -257,6 +260,17 @@ export const PdfViewerControls = ({
       <div className="flex items-center">
         {showFileActions && (
           <>
+            {onEditPages && !isDocx && (
+              <Button
+                disabled={totalPages === 0}
+                onClick={onEditPages}
+                size="sm"
+                variant="ghost"
+              >
+                <FilePenLineIcon />
+                {t("workspaces.pdf.pageEditor.editPages")}
+              </Button>
+            )}
             <Button
               disabled={!fileMetadata || isDownloading || fieldId.length === 0}
               onClick={() => {

@@ -1,0 +1,149 @@
+import { describe, expect, test } from "bun:test";
+
+import {
+  createPageOrganizerState,
+  reducePageOrganizer,
+  type OrganizerPage,
+  type PageOrganizerState,
+} from "./page-organizer.logic";
+
+const pages = (count: number): OrganizerPage[] =>
+  Array.from({ length: count }, (_, index) => ({
+    id: `page-${index + 1}`,
+    sourceId: "source-a",
+    sourcePageIndex: index,
+    rotation: 0 as const,
+  }));
+
+const stateWith = (count = 4): PageOrganizerState =>
+  createPageOrganizerState({ pages: pages(count), splitBeforePageIds: [] });
+
+const ids = (state: PageOrganizerState) =>
+  state.history.present.pages.map((page) => page.id);
+
+const expectInvariant = (state: PageOrganizerState) => {
+  const plan = state.history.present;
+  const pageIds = plan.pages.map((page) => page.id);
+  expect(new Set(pageIds).size).toBe(pageIds.length);
+  expect(state.ui.selectedPageIds.every((id) => pageIds.includes(id))).toBe(
+    true,
+  );
+  expect(plan.splitBeforePageIds.every((id) => pageIds.includes(id))).toBe(
+    true,
+  );
+  expect(plan.splitBeforePageIds).not.toContain(pageIds.at(0));
+};
+
+describe("page organizer state transitions", () => {
+  test("preserves invariants and range selection follows the current order", () => {
+    let state = stateWith();
+    state = reducePageOrganizer(state, {
+      type: "replaceSelection",
+      pageIds: ["page-2"],
+    });
+    state = reducePageOrganizer(state, {
+      type: "moveSelectedBefore",
+      targetPageId: "page-4",
+    });
+    state = reducePageOrganizer(state, {
+      type: "selectRange",
+      pageId: "page-3",
+    });
+
+    expect(ids(state)).toEqual(["page-1", "page-3", "page-2", "page-4"]);
+    expect(state.ui.selectedPageIds).toEqual(["page-3", "page-2"]);
+    expectInvariant(state);
+  });
+
+  test("moves a multi-page selection one step without changing its internal order", () => {
+    let state = stateWith();
+    state = reducePageOrganizer(state, {
+      type: "replaceSelection",
+      pageIds: ["page-2", "page-3"],
+    });
+    state = reducePageOrganizer(state, {
+      type: "moveSelectedStep",
+      direction: "forward",
+    });
+    expect(ids(state)).toEqual(["page-1", "page-4", "page-2", "page-3"]);
+    state = reducePageOrganizer(state, {
+      type: "moveSelectedStep",
+      direction: "backward",
+    });
+    expect(ids(state)).toEqual(["page-1", "page-2", "page-3", "page-4"]);
+    expectInvariant(state);
+  });
+
+  test("duplicates selected pages with caller-provided stable ids and preserves order", () => {
+    let state = stateWith();
+    state = reducePageOrganizer(state, {
+      type: "replaceSelection",
+      pageIds: ["page-2", "page-3"],
+    });
+    state = reducePageOrganizer(state, {
+      type: "duplicateSelected",
+      newPageIds: ["copy-2", "copy-3"],
+    });
+    expect(ids(state)).toEqual([
+      "page-1",
+      "page-2",
+      "copy-2",
+      "page-3",
+      "copy-3",
+      "page-4",
+    ]);
+    expect(state.ui.selectedPageIds).toEqual(["copy-2", "copy-3"]);
+    expectInvariant(state);
+  });
+
+  test("refuses deleting every page and normalizes split markers", () => {
+    let state = stateWith(2);
+    state = reducePageOrganizer(state, { type: "selectAll" });
+    const unchanged = reducePageOrganizer(state, { type: "deleteSelected" });
+    expect(ids(unchanged)).toEqual(["page-1", "page-2"]);
+    state = reducePageOrganizer(state, {
+      type: "toggleSplit",
+      pageId: "page-1",
+    });
+    expect(state.history.present.splitBeforePageIds).toEqual([]);
+    expectInvariant(state);
+  });
+
+  test("undo and redo return to exact fixed points", () => {
+    let state = stateWith();
+    state = reducePageOrganizer(state, {
+      type: "replaceSelection",
+      pageIds: ["page-2"],
+    });
+    const original = state;
+    state = reducePageOrganizer(state, { type: "rotateSelected", degrees: 90 });
+    state = reducePageOrganizer(state, {
+      type: "toggleSplit",
+      pageId: "page-2",
+    });
+    const changed = state;
+    state = reducePageOrganizer(state, { type: "undo" });
+    state = reducePageOrganizer(state, { type: "undo" });
+    expect(state.history.present).toEqual(original.history.present);
+    state = reducePageOrganizer(state, { type: "redo" });
+    state = reducePageOrganizer(state, { type: "redo" });
+    expect(state.history.present).toEqual(changed.history.present);
+    expectInvariant(state);
+  });
+
+  test("bounds retained history for long editing sessions", () => {
+    let state = stateWith();
+    state = reducePageOrganizer(state, {
+      type: "replaceSelection",
+      pageIds: ["page-1"],
+    });
+    for (let index = 0; index < 120; index += 1) {
+      state = reducePageOrganizer(state, {
+        type: "rotateSelected",
+        degrees: 90,
+      });
+    }
+    expect(state.history.past).toHaveLength(100);
+    expectInvariant(state);
+  });
+});
