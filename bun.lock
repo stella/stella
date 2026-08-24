@@ -650,6 +650,7 @@
       "name": "@stll/legal-ast",
       "version": "0.0.0",
       "dependencies": {
+        "@stll/text-normalize": "workspace:*",
         "valibot": "catalog:",
       },
       "devDependencies": {

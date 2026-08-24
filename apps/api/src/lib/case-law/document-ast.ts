@@ -16,12 +16,19 @@ export type {
   ParagraphRole,
   TableBlock,
   TableCell,
+  WireBlock,
+  WireDocumentAst,
+  WireTableCell,
 } from "@stll/legal-ast/document-ast";
 
 export {
   getDocumentAstMetadata,
   hasUsableAst,
   isDocumentAst,
+  omitDerivablePlainText,
   parseDocumentAst,
   parseUsableDocumentAst,
+  plainTextOf,
+  projectPlainText,
+  withProjectedPlainText,
 } from "@stll/legal-ast/document-ast";

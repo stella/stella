@@ -4,6 +4,8 @@
 
 import * as v from "valibot";
 
+import { collapseSpacedLetters } from "@stll/text-normalize";
+
 import { inlineSchema } from "./inline.js";
 import type { Inline } from "./inline.js";
 
@@ -110,6 +112,184 @@ export type DocumentAst = {
   blocks: Block[];
 };
 
+/**
+ * Flatten `inlines` into the character sequence a renderer walks: text
+ * nodes verbatim, a line break as a single "\n", bold/italic/link
+ * children recursed into.
+ *
+ * This is the *raw* axis. Search highlight ranges, citation anchors and
+ * annotation offsets all index it, because it is what a renderer emits
+ * character for character. Nothing here may normalize, trim or collapse:
+ * one character of drift moves every anchor after it.
+ */
+export const plainTextOf = (inlines: readonly Inline[]): string => {
+  let out = "";
+  for (const node of inlines) {
+    if (node.type === "text") {
+      out += node.text;
+    } else if (node.type === "line-break") {
+      out += "\n";
+    } else {
+      out += plainTextOf(node.children);
+    }
+  }
+  return out;
+};
+
+/**
+ * Trailing spaces and tabs before a line break, which carry no meaning
+ * in rendered text and would otherwise survive into the search text.
+ * The lookbehind anchors the match at the run's first character.
+ */
+const SPACE_BEFORE_NEWLINE = /(?<![ \t])[ \t]+\n/gu;
+const NO_BREAK_SPACE = /\u00a0/gu;
+
+/**
+ * `inlines` reduced to the text that feeds search and AI reads: the raw
+ * flattening with no-break spaces normalized, spaces before a line break
+ * dropped, the ends trimmed, and letter-spaced runs collapsed so a
+ * court's "R O Z S U D E K" is findable as "ROZSUDEK".
+ *
+ * This is deliberately NOT the axis offsets index — see `plainTextOf`.
+ * The two are separate because they answer different questions: what a
+ * reader sees at position N, versus what a search matches.
+ *
+ * Every parser and the AST wire format derive `plainText` from this one
+ * function, so a stored value is always rebuildable from the `inlines`
+ * stored beside it.
+ */
+export const projectPlainText = (inlines: readonly Inline[]): string =>
+  collapseSpacedLetters(
+    plainTextOf(inlines)
+      .replace(NO_BREAK_SPACE, " ")
+      .replace(SPACE_BEFORE_NEWLINE, "\n")
+      .trim(),
+  );
+
+/**
+ * A table cell on the wire, with the rebuildable `plainText` absent.
+ */
+export type WireTableCell = {
+  inlines: Inline[];
+  plainText?: string | undefined;
+};
+
+/**
+ * A block on the wire.
+ *
+ * Heading and paragraph text, and a table cell's text, are rebuildable
+ * from the `inlines` beside them, so they do not travel. A table's own
+ * `plainText` spans the whole grid and no single inline run produces it,
+ * so that one does.
+ */
+export type WireBlock =
+  | (Omit<HeadingBlock, "plainText"> & { plainText?: string | undefined })
+  | (Omit<ParagraphBlock, "plainText"> & { plainText?: string | undefined })
+  | (Omit<TableBlock, "rows"> & { rows: WireTableCell[][] });
+
+export type WireDocumentAst = Omit<DocumentAst, "blocks"> & {
+  blocks: WireBlock[];
+};
+
+const fillBlockPlainText = (block: WireBlock): Block => {
+  switch (block.type) {
+    case "heading": {
+      return {
+        ...block,
+        plainText: block.plainText ?? projectPlainText(block.inlines),
+      };
+    }
+    case "paragraph": {
+      return {
+        ...block,
+        plainText: block.plainText ?? projectPlainText(block.inlines),
+      };
+    }
+    case "table": {
+      return {
+        ...block,
+        rows: block.rows.map((row) =>
+          row.map(({ inlines, plainText }) => ({
+            inlines,
+            plainText: plainText ?? projectPlainText(inlines),
+          })),
+        ),
+      };
+    }
+    default: {
+      const exhaustive: never = block;
+      return exhaustive;
+    }
+  }
+};
+
+/**
+ * Every rebuildable `plainText` recomputed from the `inlines` beside it.
+ *
+ * Applied once at the ingestion boundary, after text sanitization, which
+ * is what makes dropping those fields from a response lossless: a stored
+ * value is by construction what `projectPlainText` yields, so a reader
+ * rebuilds it exactly. Parsers need not agree on a normalization, only
+ * on producing correct `inlines`.
+ *
+ * A table block's own `plainText` spans the grid and is not rebuildable
+ * from any single inline run, so it is left as the parser wrote it.
+ */
+export const withProjectedPlainText = (ast: DocumentAst): DocumentAst => ({
+  ...ast,
+  blocks: ast.blocks.map((block): Block => {
+    if (block.type === "table") {
+      return {
+        ...block,
+        rows: block.rows.map((row) =>
+          row.map(({ inlines }) => ({
+            inlines,
+            plainText: projectPlainText(inlines),
+          })),
+        ),
+      };
+    }
+    return { ...block, plainText: projectPlainText(block.inlines) };
+  }),
+});
+
+/**
+ * The same AST with every rebuildable `plainText` dropped.
+ *
+ * Sound only because `projectPlainText` is the single producer of those
+ * fields: a reader rebuilds exactly what a parser wrote. `parseDocumentAst`
+ * is the other half and refills them, so the parsed `DocumentAst` keeps
+ * `plainText` required and no consumer of a parsed AST sees the omission.
+ */
+export const omitDerivablePlainText = (ast: DocumentAst): WireDocumentAst => ({
+  ...ast,
+  blocks: ast.blocks.map((block): WireBlock => {
+    if (block.type === "table") {
+      return {
+        ...block,
+        rows: block.rows.map((row) => row.map(({ inlines }) => ({ inlines }))),
+      };
+    }
+    return block.type === "heading"
+      ? {
+          id: block.id,
+          anchorId: block.anchorId,
+          type: "heading",
+          level: block.level,
+          role: block.role,
+          inlines: block.inlines,
+        }
+      : {
+          id: block.id,
+          anchorId: block.anchorId,
+          type: "paragraph",
+          role: block.role,
+          number: block.number,
+          inlines: block.inlines,
+        };
+  }),
+});
+
 const inlineArraySchema = v.array(v.lazy(() => inlineSchema));
 const tableCellSchema: v.GenericSchema<TableCell> = v.object({
   inlines: inlineArraySchema,
@@ -163,6 +343,52 @@ const blockSchema: v.GenericSchema<Block> = v.variant("type", [
   }),
 ]);
 
+const wireTableCellSchema: v.GenericSchema<WireTableCell> = v.object({
+  inlines: inlineArraySchema,
+  plainText: v.optional(v.string()),
+});
+
+/** `blockSchema` with the rebuildable `plainText` fields made optional. */
+const wireBlockSchema: v.GenericSchema<WireBlock> = v.variant("type", [
+  v.object({
+    id: v.string(),
+    anchorId: v.string(),
+    type: v.literal("heading"),
+    level: v.picklist([1, 2, 3, 4, 5, 6]),
+    role: v.optional(v.picklist(["decision-title", "section-heading"])),
+    inlines: inlineArraySchema,
+    plainText: v.optional(v.string()),
+  }),
+  v.object({
+    id: v.string(),
+    anchorId: v.string(),
+    type: v.literal("paragraph"),
+    role: v.optional(
+      v.picklist([
+        "case-number",
+        "intro",
+        "history",
+        "argumentation",
+        "holding",
+        "closing",
+        "signature",
+        "unknown",
+      ]),
+    ),
+    number: v.optional(v.pipe(v.number(), v.finite())),
+    inlines: inlineArraySchema,
+    plainText: v.optional(v.string()),
+  }),
+  v.object({
+    id: v.string(),
+    anchorId: v.string(),
+    type: v.literal("table"),
+    role: v.optional(v.picklist(["related-proceedings", "metadata-table"])),
+    rows: v.array(v.array(wireTableCellSchema)),
+    plainText: v.string(),
+  }),
+]);
+
 const documentAstSourceSchema: v.GenericSchema<DocumentAstSource> = v.object({
   system: v.string(),
   documentId: v.string(),
@@ -211,13 +437,18 @@ const persistedDocumentAstWireSchema = v.object({
   version: v.literal(1),
   source: v.optional(documentAstSourceSchema),
   metadata: v.optional(documentAstMetadataSchema),
-  blocks: v.array(blockSchema),
+  blocks: v.array(wireBlockSchema),
 });
 
 /**
  * Persisted version-1 ASTs predate required source and metadata fields.
  * Normalize those sparse historical rows at the storage boundary while
  * keeping the canonical runtime guard sound.
+ *
+ * A block whose rebuildable `plainText` the sender dropped is refilled
+ * here from its `inlines`, so the parsed `DocumentAst` keeps
+ * `plainText` required and no consumer of a parsed AST can observe the
+ * omission.
  */
 export const persistedDocumentAstSchema: v.GenericSchema<unknown, DocumentAst> =
   v.pipe(
@@ -226,7 +457,7 @@ export const persistedDocumentAstSchema: v.GenericSchema<unknown, DocumentAst> =
       version: 1,
       source: source ?? emptyDocumentAstSource(),
       metadata: metadata ?? emptyDocumentAstMetadata(),
-      blocks,
+      blocks: blocks.map(fillBlockPlainText),
     })),
   );
 
