@@ -29,6 +29,15 @@ const CS_DECISION_ANCHOR =
 const SK_DECISION_ANCHOR =
   "(?:záver|rozsud|uznesen|nález|judikat|rozhodnut|stanovisk)";
 
+/**
+ * What may stand between a cue and its object: up to three plain words,
+ * no punctuation. Nearness alone is not binding: "na rozdíl od krajského
+ * soudu, jehož rozsudek…" has a decision word within reach but the comma
+ * says the cue's object is the court; "Rozsudek uvádí, že § 1765 nelze
+ * aplikovat" likewise. A clause break ends the search.
+ */
+const WORDS_BETWEEN = "(?:[^\\s,;.()]+\\s+){0,3}?";
+
 export const SEED_RULES: readonly SeedRule[] = [
   // -- Czech: positive -------------------------------------------
   { pattern: "v\\s+souladu\\s+s", polarity: "positive", language: "cs" },
@@ -77,21 +86,21 @@ export const SEED_RULES: readonly SeedRule[] = [
   // decision, so the anchor is part of the pattern (see the regression
   // corpus in `__tests__/polarity-classifier.test.ts`).
   {
-    pattern: `na\\s+rozdíl\\s+od[^.;]{0,30}\\b${CS_DECISION_ANCHOR}`,
+    pattern: `na\\s+rozdíl\\s+od\\s+${WORDS_BETWEEN}${CS_DECISION_ANCHOR}`,
     polarity: "negative",
     language: "cs",
   },
   { pattern: "překonán[aouy]?", polarity: "negative", language: "cs" },
   { pattern: "odchyluje\\s+se", polarity: "negative", language: "cs" },
   {
-    pattern: `nelze\\s+aplikovat[^.;]{0,40}\\b${CS_DECISION_ANCHOR}`,
+    pattern: `nelze\\s+aplikovat\\s+${WORDS_BETWEEN}${CS_DECISION_ANCHOR}`,
     polarity: "negative",
     language: "cs",
   },
   // The decision may be named before the cue ("tento rozsudek však nelze
-  // aplikovat"); within the same clause the anchor still binds it.
+  // aplikovat"); within the same clause the object still binds.
   {
-    pattern: `\\b${CS_DECISION_ANCHOR}\\w*[^.;]{0,40}\\bnelze\\s+aplikovat`,
+    pattern: `\\b${CS_DECISION_ANCHOR}\\w*\\s+${WORDS_BETWEEN}nelze\\s+aplikovat`,
     polarity: "negative",
     language: "cs",
   },
@@ -111,7 +120,7 @@ export const SEED_RULES: readonly SeedRule[] = [
 
   // -- Slovak: negative ------------------------------------------
   {
-    pattern: `na\\s+rozdiel\\s+od[^.;]{0,30}\\b${SK_DECISION_ANCHOR}`,
+    pattern: `na\\s+rozdiel\\s+od\\s+${WORDS_BETWEEN}${SK_DECISION_ANCHOR}`,
     polarity: "negative",
     language: "sk",
   },

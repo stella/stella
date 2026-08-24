@@ -158,6 +158,8 @@ describe("seed rules", () => {
       "nález Ústavního soudu vydaný v listopadu 2008 nelze aplikovat na daňovou kontrolu zahájenou v březnu téhož roku.",
       "Ustanovení § 1765 o. z. nelze aplikovat na daný případ (srov. rozsudek Nejvyššího soudu ze dne 11. 4. 2018, sp. zn. 31 Cdo 927/2016).",
       "Na rozdíl od situace v projednávané věci šlo o jednostranný zápočet; k tomu srov. rozsudek Nejvyššího soudu sp. zn. 31 Cdo 927/2016.",
+      "Na rozdíl od krajského soudu, jehož rozsudek ze dne 3. 5. 2019 vycházel z jiného skutkového stavu, Nejvyšší soud dospěl k závěru, že žaloba je důvodná.",
+      "Rozsudek uvádí, že § 1765 nelze aplikovat na závazky vzniklé před účinností zákona (srov. usnesení Nejvyššího soudu sp. zn. 29 Cdo 2303/2013).",
     ];
 
     for (const text of windows) {

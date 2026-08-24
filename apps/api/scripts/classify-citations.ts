@@ -74,7 +74,13 @@ const parseArgs = (): Args => {
       result.seed = true;
     } else if (args[i] === "--dry-run") {
       result.dryRun = true;
-    } else if (args[i] === "--ids" && next) {
+    } else if (args[i] === "--ids") {
+      // Without the file the run would fall back to the newest unclassified
+      // rows and classify the wrong set: refuse rather than guess.
+      if (!next) {
+        console.error("Missing file path after --ids");
+        process.exit(1);
+      }
       result.idsFile = next;
       i++;
     }
