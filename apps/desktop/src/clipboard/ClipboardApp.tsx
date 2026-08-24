@@ -37,6 +37,15 @@ import {
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import {
+  Dialog,
+  DialogClose,
+  DialogFooter,
+  DialogHeader,
+  DialogPanel,
+  DialogPopup,
+  DialogTitle,
+} from "@stll/ui/dialog";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { Input } from "@stll/ui/input";
 import {
@@ -100,6 +109,9 @@ const MAX_GROUP_NAME_CHARACTERS = 64;
 const CLIPBOARD_CARD_SELECTOR = "[data-clipboard-id]";
 const CLIPBOARD_GROUP_DROP_SELECTOR = "[data-clipboard-group-id]";
 const CLIPBOARD_NO_GROUP_DROP_ID = "__no_group__";
+const PRIMARY_MODIFIER_LABEL = navigator.userAgent.includes("Mac")
+  ? "⌘"
+  : "Ctrl+";
 
 const EMPTY_SNAPSHOT = {
   captureStatus: "active",
@@ -307,7 +319,8 @@ const ClipboardCard = ({
           </time>
           {index < 9 ? (
             <kbd className="bg-muted text-muted-foreground ms-auto rounded-md px-1.5 py-0.5 font-mono text-[10px] tabular-nums">
-              ⌘{index + 1}
+              {PRIMARY_MODIFIER_LABEL}
+              {index + 1}
             </kbd>
           ) : null}
         </footer>
@@ -343,33 +356,47 @@ const DialogShell = ({
 }: DialogShellProps) => {
   const t = useTranslations("clipboard");
   return (
-    <div className="bg-background/50 absolute inset-0 z-40 grid place-items-center p-5 backdrop-blur-xl">
-      <form
-        aria-label={title}
-        aria-modal="true"
-        className="bg-popover/92 w-full max-w-sm rounded-[26px] p-5 shadow-2xl backdrop-blur-3xl"
-        onSubmit={(event) => {
-          event.preventDefault();
-          onSubmit();
-        }}
-        role="dialog"
+    <Dialog
+      onOpenChange={(open) => {
+        if (!open) {
+          onClose();
+        }
+      }}
+      open
+    >
+      <DialogPopup
+        backdropClassName="bg-background/50 backdrop-blur-xl"
+        bottomStickOnMobile={false}
+        className="bg-popover/92 max-w-sm rounded-[26px] border-0 shadow-2xl backdrop-blur-3xl"
+        showCloseButton={false}
+        viewportClassName="grid-rows-[1fr_auto_1fr] p-5"
       >
-        <h2 className="text-sm font-semibold">{title}</h2>
-        <div className="mt-4">{children}</div>
-        <div className="mt-5 flex justify-end gap-2">
-          <Button onClick={onClose} type="button" variant="ghost">
-            {t("cancel")}
-          </Button>
-          <Button
-            disabled={submitDisabled}
-            type="submit"
-            variant={destructive ? "destructive" : "default"}
-          >
-            {submitLabel}
-          </Button>
-        </div>
-      </form>
-    </div>
+        <form
+          className="flex min-h-0 flex-col"
+          onSubmit={(event) => {
+            event.preventDefault();
+            onSubmit();
+          }}
+        >
+          <DialogHeader className="p-5 pb-0">
+            <DialogTitle className="text-sm">{title}</DialogTitle>
+          </DialogHeader>
+          <DialogPanel className="p-5 pt-4">{children}</DialogPanel>
+          <DialogFooter className="px-5 pb-5" variant="bare">
+            <DialogClose render={<Button type="button" variant="ghost" />}>
+              {t("cancel")}
+            </DialogClose>
+            <Button
+              disabled={submitDisabled}
+              type="submit"
+              variant={destructive ? "destructive" : "default"}
+            >
+              {submitLabel}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogPopup>
+    </Dialog>
   );
 };
 
@@ -1504,7 +1531,7 @@ const ClipboardApp = () => {
           />
           <InputGroupAddon align="inline-end" className="pe-4 [&>kbd]:me-0">
             <kbd className="text-foreground-muted me-0 font-mono text-[10px]">
-              ⌘K
+              {PRIMARY_MODIFIER_LABEL}K
             </kbd>
           </InputGroupAddon>
         </InputGroup>

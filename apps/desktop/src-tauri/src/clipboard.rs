@@ -41,6 +41,8 @@ use winsafe::{HPROCESS, HVERSIONINFO, HWND, co};
 
 const HISTORY_EVENT: &str = "clipboard-history-changed";
 const INTERNAL_CLIPBOARD_FORMAT: &str = "legal.stella.desktop.clipboard";
+#[cfg(target_os = "windows")]
+const WINDOWS_CLIPBOARD_HISTORY_CONTROL_FORMAT: &str = "CanIncludeInClipboardHistory";
 const MAX_HISTORY_ITEMS: usize = 500;
 const MAX_ITEM_TEXT_BYTES: usize = 64 * 1024;
 const MAX_ITEM_HTML_BYTES: usize = 128 * 1024;
@@ -764,6 +766,30 @@ fn should_ignore_formats(formats: &[String]) -> bool {
   })
 }
 
+#[cfg(any(target_os = "windows", test))]
+fn windows_history_control_allows_capture(value: &[u8]) -> bool {
+  let [first, second, third, fourth, ..] = value else {
+    return false;
+  };
+  u32::from_le_bytes([*first, *second, *third, *fourth]) != 0
+}
+
+#[cfg(target_os = "windows")]
+fn windows_clipboard_history_allows_capture(
+  clipboard: &ClipboardContext,
+  formats: &[String],
+) -> bool {
+  if !formats
+    .iter()
+    .any(|format| format.eq_ignore_ascii_case(WINDOWS_CLIPBOARD_HISTORY_CONTROL_FORMAT))
+  {
+    return true;
+  }
+  clipboard
+    .get_buffer(WINDOWS_CLIPBOARD_HISTORY_CONTROL_FORMAT)
+    .is_ok_and(|value| windows_history_control_allows_capture(&value))
+}
+
 fn bounded_metadata(value: &str, max_bytes: usize) -> Option<String> {
   let value = value.trim();
   if value.is_empty() {
@@ -1036,6 +1062,10 @@ impl ClipboardHandler for HistoryClipboardHandler {
     if should_ignore_formats(&formats) || self.clipboard.has(ContentFormat::Files) {
       return;
     }
+    #[cfg(target_os = "windows")]
+    if !windows_clipboard_history_allows_capture(&self.clipboard, &formats) {
+      return;
+    }
     let plain_text = match self.clipboard.get_text() {
       Ok(text) if !text.trim().is_empty() && text.len() <= MAX_ITEM_TEXT_BYTES => text,
       Ok(_) => return,
@@ -1289,6 +1319,15 @@ mod tests {
     assert!(!should_ignore_formats(&[
       "public.utf8-plain-text".to_string()
     ]));
+  }
+
+  #[test]
+  fn windows_clipboard_history_control_is_privacy_preserving() {
+    assert!(!windows_history_control_allows_capture(
+      &0_u32.to_le_bytes()
+    ));
+    assert!(windows_history_control_allows_capture(&1_u32.to_le_bytes()));
+    assert!(!windows_history_control_allows_capture(&[1, 0, 0]));
   }
 
   #[test]
