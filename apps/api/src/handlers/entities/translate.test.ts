@@ -39,7 +39,9 @@ const enqueuePdfDerivativeMock = mock(async () => {});
 const enqueuePdfDerivativeOrMarkFailedMock = mock(async () => {});
 const captureErrorMock = mock(() => {});
 
+const realDeepLClient = await import("@/api/lib/deepl/client");
 void mock.module("@/api/lib/deepl/client", () => ({
+  ...realDeepLClient,
   fetchTargetLanguages: mock(async () => []),
   maskDeepLKey: (key: string) => `${key.slice(0, 8)}****************`,
   resolveDeepLBaseUrl: () => "https://api.deepl.com",
