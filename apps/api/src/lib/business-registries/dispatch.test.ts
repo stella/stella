@@ -12,6 +12,7 @@ import {
   isBusinessRegistryNativeToolDeployAvailable,
   type RegistryHandler,
 } from "@/api/lib/business-registries/dispatch";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const ARES_COMPANY_FIXTURE: AresCompany = {
   ico: "27082440",
@@ -366,7 +367,7 @@ describe("executeRegistryLookup — canonical-id guard", () => {
       query: "27082440",
     });
 
-    if (!(result instanceof Error)) {
+    if (!(result instanceof HandlerError)) {
       throw new TypeError("expected a handler error");
     }
     expect(result.status).toBe(500);
