@@ -213,11 +213,13 @@ const withSubject = async <T>(
   panic("expected a redistributable subject");
 
 const decisionProvisions = async (cursor?: string) => {
-  const page = await withSubject(highAuthorityId, async (subject) =>
-    await listDecisionProvisionsHandler({
-      subject,
-      query: { limit: 2, ...(cursor === undefined ? {} : { cursor }) },
-    }),
+  const page = await withSubject(
+    highAuthorityId,
+    async (subject) =>
+      await listDecisionProvisionsHandler({
+        subject,
+        query: { limit: 2, ...(cursor === undefined ? {} : { cursor }) },
+      }),
   );
 
   if ("items" in page) {
@@ -282,11 +284,13 @@ test("decision provisions page by span start", async () => {
 });
 
 test("decision provisions reject a malformed cursor", async () => {
-  const response = await withSubject(highAuthorityId, async (subject) =>
-    await listDecisionProvisionsHandler({
-      subject,
-      query: { cursor: "not-a-cursor" },
-    }),
+  const response = await withSubject(
+    highAuthorityId,
+    async (subject) =>
+      await listDecisionProvisionsHandler({
+        subject,
+        query: { cursor: "not-a-cursor" },
+      }),
   );
 
   expect("items" in response).toBe(false);
