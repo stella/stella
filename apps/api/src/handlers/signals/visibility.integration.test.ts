@@ -259,6 +259,20 @@ describe("signal visibility", () => {
     );
     expect(Result.isError(hiddenParentInsert)).toBe(true);
 
+    await createScopedDb(
+      testDb,
+      [ids.wsA1],
+      ids.orgA,
+      ids.userA1,
+    )(async (tx) => {
+      await tx.insert(signalEvents).values({
+        id: createSafeId<"signalEvent">(),
+        organizationId: ids.orgA,
+        signalId,
+        type: SIGNAL_EVENT_TYPE.ASSIGNED,
+      });
+    });
+
     const countVisibleToA1 = await createScopedDb(
       testDb,
       [ids.wsA1],
@@ -268,6 +282,6 @@ describe("signal visibility", () => {
       async (tx) =>
         await tx.$count(signalEvents, eq(signalEvents.signalId, signalId)),
     );
-    expect(countVisibleToA1).toBe(1);
+    expect(countVisibleToA1).toBe(2);
   });
 });
