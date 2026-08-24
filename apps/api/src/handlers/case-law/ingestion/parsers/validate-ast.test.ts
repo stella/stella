@@ -242,6 +242,25 @@ describe("validateAst", () => {
       expect(result.stats.missingWords).toEqual([]);
     });
 
+    test("clears a marker glued to a word too short to be meaningful", () => {
+      // "OBRÁZEKje" fuses the marker to "je" (2 chars). The AST is right
+      // to carry only "je", which is below the meaningful-word length, so
+      // it never enters the AST word set. The peeled remainder must be
+      // judged by that same length rule and the phantom cleared, not left
+      // missing for want of an AST match.
+      const html = wrapInHtml(
+        "OBRÁZEKje rozsudek jménem republiky OBRÁZEKna úplnost",
+      );
+      const blocks: Block[] = [
+        makeHeading("H"),
+        makeBlock({ plainText: "je rozsudek jménem republiky na úplnost" }),
+      ];
+
+      const result = validateAst(html, blocks);
+
+      expect(result.stats.missingWords).toEqual([]);
+    });
+
     test("still reports a real word lost behind a decorative marker", () => {
       // Peeling the marker must not swallow genuine loss: the remainder
       // is absent from the AST, so it stays missing.
