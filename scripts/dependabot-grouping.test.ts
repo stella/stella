@@ -12,7 +12,7 @@ const dependencyFields = [
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
-const readElysiaGroupPatterns = async (): Promise<string[]> => {
+const readElysiaGroupPatterns = async () => {
   const dependabot = await Bun.file(
     new URL("../.github/dependabot.yml", import.meta.url),
   ).text();
@@ -29,10 +29,7 @@ const readElysiaGroupPatterns = async (): Promise<string[]> => {
   ].flatMap((match) => (match[1] === undefined ? [] : [match[1]]));
 };
 
-const matchesDependabotPattern = (
-  dependency: string,
-  pattern: string,
-): boolean => {
+const matchesDependabotPattern = (dependency: string, pattern: string) => {
   const escaped = pattern.replace(/[.+?^${}()|[\]\\]/gu, "\\$&");
   return new RegExp(`^${escaped.replaceAll("*", ".*")}$`, "u").test(dependency);
 };

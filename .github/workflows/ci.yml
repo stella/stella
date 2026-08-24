@@ -468,7 +468,6 @@ jobs:
       - name: Dependabot group guard
         # Related framework and plugin updates must stay in one PR even when
         # upstream moves packages between scopes.
-        if: needs.ci-plan.outputs.package_checks_required == 'true'
         run: bun test scripts/dependabot-grouping.test.ts
 
       - name: Lockfile workspace-version guard
