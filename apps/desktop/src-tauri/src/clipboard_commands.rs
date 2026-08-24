@@ -229,8 +229,11 @@ pub fn clipboard_save_editor_item(
 }
 
 #[tauri::command]
-pub fn clipboard_close_editor(window: WebviewWindow) {
-  let _ = window.destroy();
+pub fn clipboard_close_editor(window: WebviewWindow) -> Result<(), String> {
+  window.destroy().map_err(|error| {
+    tracing::warn!(error = %error, "clipboard editor could not be closed");
+    format!("clipboard editor could not be closed: {error}")
+  })
 }
 
 fn write_history_item(state: &ClipboardAppState, id: &str) -> Result<(), String> {

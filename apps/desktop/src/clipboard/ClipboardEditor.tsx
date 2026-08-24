@@ -85,24 +85,50 @@ const listItemsFromSelection = (fragment: DocumentFragment) => {
     items.push(item);
     item = document.createElement("li");
   };
-  const appendNode = (node: Node) => {
+  const appendWithInlineAncestors = (node: Node, ancestors: HTMLElement[]) => {
+    let parent: HTMLElement = item;
+    for (const ancestor of ancestors) {
+      const wrapper = document.createElement(ancestor.localName);
+      for (const attribute of Array.from(ancestor.attributes)) {
+        wrapper.setAttribute(attribute.name, attribute.value);
+      }
+      parent.append(wrapper);
+      parent = wrapper;
+    }
+    parent.append(node.cloneNode(true));
+  };
+  const appendNode = (node: Node, ancestors: HTMLElement[]) => {
+    if (node instanceof Text) {
+      appendWithInlineAncestors(node, ancestors);
+      return;
+    }
+    if (!(node instanceof HTMLElement)) {
+      return;
+    }
     if (node instanceof HTMLElement && node.tagName === "BR") {
       finishItem(true);
       return;
     }
-    if (node instanceof HTMLElement && EDITOR_BLOCK_TAGS.has(node.tagName)) {
+    if (EDITOR_BLOCK_TAGS.has(node.tagName)) {
       finishItem();
       for (const child of Array.from(node.childNodes)) {
-        appendNode(child);
+        appendNode(child, ancestors);
       }
       finishItem();
       return;
     }
-    item.append(node);
+    if (!node.hasChildNodes()) {
+      appendWithInlineAncestors(node, ancestors);
+      return;
+    }
+    const nestedAncestors = ancestors.concat(node);
+    for (const child of Array.from(node.childNodes)) {
+      appendNode(child, nestedAncestors);
+    }
   };
 
   for (const node of Array.from(fragment.childNodes)) {
-    appendNode(node);
+    appendNode(node, []);
   }
   finishItem();
   return items;
@@ -244,6 +270,17 @@ const ClipboardEditor = () => {
         code: DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
         operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardEditorClose,
         window: DESKTOP_TELEMETRY_WINDOWS.clipboardEditor,
+      });
+      setState((current) => {
+        if (current.type !== "ready") {
+          return current;
+        }
+        return {
+          context: current.context,
+          groupId: current.groupId,
+          save: { message: t("errorUpdateHistory"), type: "error" },
+          type: "ready",
+        };
       });
     });
   };

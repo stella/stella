@@ -119,6 +119,11 @@ const EMPTY_SNAPSHOT = {
   sourceAppVisuals: [],
 } satisfies ClipboardSnapshot;
 
+type ClipboardAppError = {
+  message: string;
+  source: "operation" | "read";
+};
+
 const focusTimeline = (node: HTMLDivElement | null) => {
   if (node && document.activeElement === document.body) {
     node.focus();
@@ -812,12 +817,13 @@ const ClipboardApp = () => {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const timelineRef = useRef<HTMLDivElement>(null);
   const contextMenuTriggerRef = useRef<HTMLElement>(null);
+  const snapshotRequestIdRef = useRef(0);
   const [snapshot, setSnapshot] = useState<ClipboardSnapshot>(EMPTY_SNAPSHOT);
   const [ageReferenceTime, setAgeReferenceTime] = useState(() => Date.now());
   const [query, setQuery] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<ClipboardAppError | null>(null);
   const [dialog, setDialog] = useState<ClipboardDialogState>({
     type: "closed",
   });
@@ -830,33 +836,41 @@ const ClipboardApp = () => {
   const errorReadHistory = t("errorReadHistory");
 
   useEffect(() => {
+    let disposed = false;
     const readSnapshot = () => {
+      const requestId = snapshotRequestIdRef.current + 1;
+      snapshotRequestIdRef.current = requestId;
       void invoke<unknown>("clipboard_get_snapshot")
         .then((value) => {
+          if (disposed || requestId !== snapshotRequestIdRef.current) {
+            return undefined;
+          }
           if (!isClipboardSnapshot(value)) {
             reportDesktopError({
               code: DESKTOP_TELEMETRY_ERROR_CODES.invalidResponse,
               operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardHistoryRead,
               window: DESKTOP_TELEMETRY_WINDOWS.clipboard,
             });
-            setError(errorReadHistory);
+            setError({ message: errorReadHistory, source: "read" });
             return undefined;
           }
           setSnapshot(value);
-          setError(null);
+          setError((current) => (current?.source === "read" ? null : current));
           return undefined;
         })
         .catch(() => {
+          if (disposed || requestId !== snapshotRequestIdRef.current) {
+            return;
+          }
           reportDesktopError({
             code: DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
             operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardHistoryRead,
             window: DESKTOP_TELEMETRY_WINDOWS.clipboard,
           });
-          setError(errorReadHistory);
+          setError({ message: errorReadHistory, source: "read" });
         });
     };
     readSnapshot();
-    let disposed = false;
     let stopListening: (() => void) | undefined;
     void listen("clipboard-history-changed", readSnapshot)
       .then((unlisten) => {
@@ -873,7 +887,7 @@ const ClipboardApp = () => {
           operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardHistorySubscribe,
           window: DESKTOP_TELEMETRY_WINDOWS.clipboard,
         });
-        setError(errorReadHistory);
+        setError({ message: errorReadHistory, source: "read" });
       });
     return () => {
       disposed = true;
@@ -909,7 +923,7 @@ const ClipboardApp = () => {
         operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardWindowHide,
         window: DESKTOP_TELEMETRY_WINDOWS.clipboard,
       });
-      setError(t("errorUpdateHistory"));
+      setError({ message: t("errorUpdateHistory"), source: "operation" });
     });
   };
 
@@ -953,7 +967,7 @@ const ClipboardApp = () => {
       args: Record<string, unknown> = {},
       onSuccess?: () => void,
     ) => {
-      setError(null);
+      setError((current) => (current?.source === "operation" ? null : current));
       void invoke<unknown>(command, args)
         .then((value) => {
           if (isClipboardSnapshot(value)) {
@@ -966,7 +980,10 @@ const ClipboardApp = () => {
             operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardHistoryUpdate,
             window: DESKTOP_TELEMETRY_WINDOWS.clipboard,
           });
-          setError(t("errorUpdateHistory"));
+          setError({
+            message: t("errorUpdateHistory"),
+            source: "operation",
+          });
           return undefined;
         })
         .catch(() => {
@@ -975,33 +992,36 @@ const ClipboardApp = () => {
             operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardHistoryUpdate,
             window: DESKTOP_TELEMETRY_WINDOWS.clipboard,
           });
-          setError(t("errorUpdateHistory"));
+          setError({
+            message: t("errorUpdateHistory"),
+            source: "operation",
+          });
         });
     },
     [t],
   );
 
   const copyItem = (item: ClipboardItem) => {
-    setError(null);
+    setError((current) => (current?.source === "operation" ? null : current));
     void invoke("clipboard_copy_item", { id: item.id }).catch(() => {
       reportDesktopError({
         code: DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
         operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardCopy,
         window: DESKTOP_TELEMETRY_WINDOWS.clipboard,
       });
-      setError(t("errorPaste"));
+      setError({ message: t("errorPaste"), source: "operation" });
     });
   };
 
   const openEditor = (id: string) => {
-    setError(null);
+    setError((current) => (current?.source === "operation" ? null : current));
     void invoke("clipboard_open_editor", { id }).catch(() => {
       reportDesktopError({
         code: DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
         operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardHistoryUpdate,
         window: DESKTOP_TELEMETRY_WINDOWS.clipboard,
       });
-      setError(t("errorUpdateHistory"));
+      setError({ message: t("errorUpdateHistory"), source: "operation" });
     });
   };
 
@@ -1297,7 +1317,7 @@ const ClipboardApp = () => {
         className="bg-destructive text-destructive-foreground absolute inset-x-0 top-0 z-20 px-5 py-1.5 text-center text-xs"
         role="alert"
       >
-        {error}
+        {error.message}
       </div>
     );
   }
@@ -1512,7 +1532,10 @@ const ClipboardApp = () => {
                   operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardExternalOpen,
                   window: DESKTOP_TELEMETRY_WINDOWS.clipboard,
                 });
-                setError(t("errorOpenStella"));
+                setError({
+                  message: t("errorOpenStella"),
+                  source: "operation",
+                });
               });
             }}
           >
