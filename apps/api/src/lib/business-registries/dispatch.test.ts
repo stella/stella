@@ -12,6 +12,7 @@ import {
   isBusinessRegistryNativeToolDeployAvailable,
   type RegistryHandler,
 } from "@/api/lib/business-registries/dispatch";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const ARES_COMPANY_FIXTURE: AresCompany = {
   ico: "27082440",
@@ -352,5 +353,23 @@ describe("DENUE deployment gating", () => {
         process.env["INEGI_DENUE_API_TOKEN"] = previous;
       }
     }
+  });
+});
+
+describe("executeRegistryLookup — canonical-id guard", () => {
+  test("maps an isCanonicalId failure to a handler error instead of throwing", async () => {
+    const result = await executeRegistryLookup({
+      handler: stubHandler({
+        isCanonicalId: () => {
+          throw new Error("native binding unavailable");
+        },
+      }),
+      query: "27082440",
+    });
+
+    if (!(result instanceof HandlerError)) {
+      throw new TypeError("expected a handler error");
+    }
+    expect(result.status).toBe(500);
   });
 });
