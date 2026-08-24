@@ -1,9 +1,8 @@
-import type { CitedDecision } from "@/features/case-law/citation-treatment";
-
-type LabelSource = Pick<
-  CitedDecision,
-  "caseNumber" | "decisionDate" | "decisionType"
->;
+type LabelSource = {
+  caseNumber: string;
+  decisionDate: string | null;
+  decisionType?: string | null | undefined;
+};
 
 /**
  * The label a cited decision is shown under.

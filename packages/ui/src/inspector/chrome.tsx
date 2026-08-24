@@ -91,11 +91,7 @@ export const InspectorRailIconButton = ({
   />
 );
 
-/**
- * A rail tab. The active tab carries a 2px spine on the rail's inline-start
- * edge — the same affordance the workspace rail uses to say "this pane is
- * showing that tab".
- */
+/** A square rail chip. Active state uses the same filled box in every dock. */
 export const InspectorRailTab = ({
   active = false,
   className,
@@ -104,10 +100,10 @@ export const InspectorRailTab = ({
   <button
     aria-current={active ? "true" : undefined}
     className={cn(
-      "group/tab relative flex min-h-8 w-full items-center justify-center border-b transition-colors",
-      TOOLBAR_ROW_HEIGHT,
+      "group/tab relative flex items-center justify-center rounded-md transition-colors",
+      SIDE_RAIL_ICON_BUTTON_SIZE,
       active
-        ? "bg-background text-foreground before:bg-primary before:absolute before:inset-y-0 before:inset-s-0 before:w-0.5"
+        ? "bg-accent text-foreground"
         : "text-muted-foreground hover:bg-accent hover:text-foreground",
       className,
     )}

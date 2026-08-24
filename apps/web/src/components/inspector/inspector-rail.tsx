@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { InspectorRailTab } from "@stll/ui/inspector";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { containedEventHandler } from "@stll/ui/use-contained-handler";
 import { cn } from "@stll/ui/utils";
@@ -141,7 +142,7 @@ export const InspectorRail = ({
       </div>
       <ScrollArea className="flex-1">
         <div
-          className="flex h-full flex-col"
+          className="flex h-full flex-col items-center gap-1 py-2"
           onContextMenu={(event) => {
             event.preventDefault();
             railContextMenu.openAt(event);
@@ -516,21 +517,10 @@ const VerticalTab = ({
       <Tooltip
         content={tooltipLabel}
         render={
-          <button
+          <InspectorRailTab
+            active={active}
             ref={tabRef}
             aria-label={tooltipLabel}
-            className={cn(
-              "group/tab relative flex min-h-8 w-full items-center justify-center border-b transition-colors",
-              "text-muted-foreground hover:bg-accent hover:text-foreground",
-              TOOLBAR_ROW_HEIGHT,
-              active &&
-                cn(
-                  "bg-background text-foreground before:bg-primary",
-                  "before:absolute",
-                  "before:inset-y-0",
-                  "before:inset-s-0 before:w-0.5",
-                ),
-            )}
             onAuxClick={(e) => {
               if (e.button === 1) {
                 e.preventDefault();
@@ -539,7 +529,6 @@ const VerticalTab = ({
             }}
             onClick={containedEventHandler(onActivate)}
             onContextMenu={containedEventHandler(contextMenu.openAt)}
-            type="button"
           />
         }
         side="left"

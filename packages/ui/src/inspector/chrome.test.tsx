@@ -59,7 +59,6 @@ describe("row rhythm", () => {
     ["inspector-empty-row", <InspectorEmptyRow key="e" />],
     ["inspector-header", <InspectorHeader key="h" />],
     ["inspector-rail-cell", <InspectorRailCell key="c" />],
-    ["inspector-rail-tab", <InspectorRailTab key="t" />],
   ])("%s is exactly one row tall", (slot, element) => {
     const classes = classesOf(renderToStaticMarkup(element), slot);
     expect(classes).toContain(TOOLBAR_ROW_HEIGHT);
@@ -88,6 +87,21 @@ describe("row rhythm", () => {
 });
 
 describe("rail", () => {
+  test("uses one square filled chip for the active tab", () => {
+    const classes = classesOf(
+      renderToStaticMarkup(<InspectorRailTab active />),
+      "inspector-rail-tab",
+    );
+
+    expect(classes).toEqual(
+      expect.arrayContaining(["size-8", "rounded-md", "bg-accent"]),
+    );
+    expect(classes).not.toContain("w-full");
+    expect(classes.some((className) => className.startsWith("before:"))).toBe(
+      false,
+    );
+  });
+
   test("occupies exactly the reserved 48px and is desktop-only", () => {
     const classes = classesOf(
       renderToStaticMarkup(<InspectorRail />),

@@ -1,6 +1,5 @@
 import { useCallback, useRef, useState } from "react";
 
-import { useInfiniteQuery } from "@tanstack/react-query";
 import { Loader2Icon, SparklesIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/react/shallow";
@@ -11,7 +10,6 @@ import { Button } from "@stll/ui/button";
 import { OutlineRail } from "@stll/ui/outline-rail";
 import type { OutlineItem } from "@stll/ui/outline-rail";
 
-import type { CitationAnchorSource } from "@/features/case-law/citation-anchors";
 import { MarginNotes } from "@/features/case-law/components/case-viewer/analysis/margin-notes";
 import {
   buildSectionMap,
@@ -23,9 +21,8 @@ import { CitationHeader } from "@/features/case-law/components/case-viewer/citat
 import { DecisionCitations } from "@/features/case-law/components/case-viewer/decision-citations";
 import { DecisionText } from "@/features/case-law/components/case-viewer/decision-text";
 import { ProvisionsCited } from "@/features/case-law/components/case-viewer/provisions-cited";
-import { decisionCitationsInfiniteOptions } from "@/features/case-law/queries/citations";
+import { useDecisionCitationAnchors } from "@/features/case-law/components/case-viewer/use-decision-citation-anchors";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
-import { optionalArray } from "@/lib/arrays";
 import { useCaseSearchStore } from "@/lib/case-search-store";
 import { detached } from "@/lib/detached";
 import type { SafeId } from "@/lib/safe-id";
@@ -100,21 +97,7 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
 
   // The text links every cited decision the first outgoing page resolves;
   // the panel below pages further, the links stop at what is already read.
-  const { data: outgoingCitations } = useInfiniteQuery(
-    decisionCitationsInfiniteOptions(decisionId, "outgoing"),
-  );
-  const citationAnchors: CitationAnchorSource[] = [];
-  for (const page of optionalArray(outgoingCitations?.pages)) {
-    for (const item of page.items) {
-      if (item.decision !== null) {
-        citationAnchors.push({
-          citationText: item.citationText,
-          decision: item.decision,
-          id: item.id,
-        });
-      }
-    }
-  }
+  const citationAnchors = useDecisionCitationAnchors(decisionId);
 
   const { state: analysisState, generate: generateDecisionAnalysis } =
     useDecisionAnalysis(decisionId, decision.analysis ?? null);

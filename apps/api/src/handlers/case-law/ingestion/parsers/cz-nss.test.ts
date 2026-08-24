@@ -123,6 +123,40 @@ describe("parseNssDecisionHtml", () => {
       expect(fulltext).toContain("stěžovatel");
       expect(fulltext).toContain("Krajský soud");
     });
+
+    test("canonicalizes publisher-spaced decision titles as centred headings", () => {
+      const html = `<html><body>
+        <p style="text-align:center">4 As 3/2008 - 78</p>
+        <p style="text-align:center">
+          <span style="font-weight:bold">R O Z</span>
+          <span style="font-weight:bold">&nbsp;</span>
+          <span style="font-weight:bold">S</span>
+          <span style="font-weight:bold">&nbsp;</span>
+          <span style="font-weight:bold">U D E K</span>
+        </p>
+        <p style="text-align:center">
+          <span style="font-weight:bold">J M É N E M</span>
+          <span style="font-weight:bold; -aw-import:spaces">&nbsp;&nbsp;&nbsp;</span>
+          <span style="font-weight:bold">R E P U B L I K</span>
+          <span style="font-weight:bold">&nbsp;</span>
+          <span style="font-weight:bold">Y</span>
+        </p>
+        <p>Nejvyšší správní soud rozhodl v rozšířeném senátě složeném z předsedy
+        senátu a soudců v právní věci žalobkyně proti žalovanému o kasační
+        stížnosti proti rozsudku městského soudu a po posouzení věci rozhodl.</p>
+      </body></html>`;
+
+      const { documentAst } = parseNssDecisionHtml(baseInput(html));
+      const titles = documentAst.blocks.filter(
+        (block) => block.type === "heading" && block.role === "decision-title",
+      );
+
+      expect(titles.map((title) => title.plainText)).toEqual([
+        "ROZSUDEK",
+        "JMÉNEM REPUBLIKY",
+      ]);
+      expect(titles.map((title) => title.level)).toEqual([1, 1]);
+    });
   });
 
   describe("skip patterns", () => {

@@ -330,8 +330,38 @@ const parseFontSize = (style: string): number => {
  */
 const SKIP_RE = /^\[OBRÁZEK\]|^pokračování$|^ČESKÁ REPUBLIKA$/u;
 
-/** Decision title. */
-const TITLE_RE = /^(?:ROZSUDEK|USNESENÍ|JMÉNEM REPUBLIKY)$/u;
+/**
+ * Decision titles keyed by their semantic letters. Older Aspose exports split
+ * one title across spans and insert ordinary or non-breaking spaces between
+ * letters. Comparing the compact form keeps that presentation noise out of
+ * the AST while preserving one canonical title for readers and search.
+ */
+const DECISION_TITLE_BY_COMPACT_TEXT = {
+  ROZSUDEK: "ROZSUDEK",
+  USNESENÍ: "USNESENÍ",
+  JMÉNEMREPUBLIKY: "JMÉNEM REPUBLIKY",
+} as const;
+
+type CanonicalDecisionTitle =
+  (typeof DECISION_TITLE_BY_COMPACT_TEXT)[keyof typeof DECISION_TITLE_BY_COMPACT_TEXT];
+
+const isDecisionTitleKey = (
+  value: string,
+): value is keyof typeof DECISION_TITLE_BY_COMPACT_TEXT =>
+  value in DECISION_TITLE_BY_COMPACT_TEXT;
+
+const canonicalDecisionTitle = (
+  plainText: string,
+): CanonicalDecisionTitle | null => {
+  const compact = plainText
+    .normalize("NFKC")
+    .toLocaleUpperCase("cs-CZ")
+    .replace(/\s+/gu, "");
+
+  return isDecisionTitleKey(compact)
+    ? DECISION_TITLE_BY_COMPACT_TEXT[compact]
+    : null;
+};
 
 /** "takto:" separator. */
 const TAKTO_RE = /^t\s*a\s*k\s*t\s*o\s*(?::\s*)?$/iu;
@@ -404,12 +434,14 @@ const classifyChunks = (chunks: readonly PChunk[]): Block[] => {
       continue;
     }
 
+    const decisionTitle = canonicalDecisionTitle(plainText);
+
     // Case number: first content before the title, centered
     // Case number line (e.g. "2 As 3/2025 - 56")
     if (
       !sawTitle &&
       centered &&
-      !TITLE_RE.test(plainText) &&
+      decisionTitle === null &&
       !sawCaseNumber &&
       /\d/u.test(plainText)
     ) {
@@ -427,7 +459,7 @@ const classifyChunks = (chunks: readonly PChunk[]): Block[] => {
     }
 
     // Decision title: ROZSUDEK, USNESENÍ, JMÉNEM REPUBLIKY
-    if (TITLE_RE.test(plainText)) {
+    if (decisionTitle !== null) {
       sawTitle = true;
       blockIndex += 1;
       blocks.push({
@@ -436,8 +468,8 @@ const classifyChunks = (chunks: readonly PChunk[]): Block[] => {
         type: "heading",
         level: 1,
         role: "decision-title",
-        inlines,
-        plainText,
+        inlines: [{ type: "text", text: decisionTitle }],
+        plainText: decisionTitle,
       });
       continue;
     }
