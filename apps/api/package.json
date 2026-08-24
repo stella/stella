@@ -52,7 +52,7 @@
     "@aws-sdk/s3-request-presigner": "^3.1113.0",
     "@better-auth/api-key": "catalog:",
     "@better-auth/oauth-provider": "catalog:",
-    "@elysiajs/cors": "^1.4.2",
+    "@elysia/cors": "^1.4.2",
     "@firecrawl/anydoc": "0.1.9",
     "@google/genai": "^2.17.1",
     "@hyzyla/pdfium": "2.1.13",

@@ -196,6 +196,7 @@ updates:
       elysia:
         patterns:
           - "elysia"
+          - "@elysia/*"
           - "@elysiajs/*"
       react-email:
         patterns:

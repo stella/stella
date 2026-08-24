@@ -17,7 +17,7 @@
     "format": "oxfmt ."
   },
   "dependencies": {
-    "@elysiajs/eden": "^1.4.9"
+    "@elysia/eden": "^1.4.10"
   },
   "devDependencies": {
     "@stll/typescript-config": "workspace:*",

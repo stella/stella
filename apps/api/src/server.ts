@@ -1,4 +1,4 @@
-import cors from "@elysiajs/cors";
+import cors from "@elysia/cors";
 import { Elysia } from "elysia";
 import type { Context } from "elysia";
 
