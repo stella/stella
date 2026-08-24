@@ -8,6 +8,7 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
 const captureErrorMock = mock();
+const rehydrateCaseLawCandidatesMock = mock();
 const searchDecisionsHandlerMock = mock();
 const readDecisionHandlerMock = mock();
 const APP_BASE_URL = env.FRONTEND_URL.replace(/\/$/u, "");
@@ -20,6 +21,7 @@ void mock.module("@/api/lib/analytics/capture", () => ({
 }));
 
 void mock.module("@/api/handlers/case-law/decisions/search", () => ({
+  rehydrateCaseLawCandidates: rehydrateCaseLawCandidatesMock,
   searchDecisionsHandler: searchDecisionsHandlerMock,
 }));
 
