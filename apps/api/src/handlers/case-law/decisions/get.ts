@@ -116,6 +116,23 @@ const listPublicDecisionLanguageAlternates = async ({
 
 const corpusReadEnabled = (): boolean => corpusStorageMode !== "off";
 
+export const readDecisionTextColumnWritten = definePublicLawSharedQuery(
+  PUBLIC_LAW_SHARED_QUERY.caseLawDecisionTextPresence,
+  async (
+    tx: CaseLawPublicReadTransaction,
+    decisionId: SafeId<"caseLawDecision">,
+  ): Promise<boolean | null> => {
+    const [row] = await tx
+      .select({
+        written: sql<boolean>`${caseLawDecisions.fulltext} IS NOT NULL`,
+      })
+      .from(caseLawDecisions)
+      .where(eq(caseLawDecisions.id, decisionId))
+      .limit(1);
+    return row?.written ?? null;
+  },
+);
+
 export const readDecisionQuerySchema = t.Object({
   citationsCursor: t.Optional(tPaginationCursor()),
 });
@@ -387,16 +404,8 @@ export const readDecisionHandler = definePublicLawSharedQuery(
             contentHash: decision.contentHash,
             pgAstPresent: decision.documentAst !== null,
             resolvedFulltext: fulltext,
-            readTextColumnWritten: async () => {
-              const [row] = await tx
-                .select({
-                  written: sql<boolean>`${caseLawDecisions.fulltext} IS NOT NULL`,
-                })
-                .from(caseLawDecisions)
-                .where(eq(caseLawDecisions.id, decisionId))
-                .limit(1);
-              return row?.written ?? null;
-            },
+            readTextColumnWritten: async () =>
+              await readDecisionTextColumnWritten(tx, decisionId),
           })
         : {
             documentPending: false,

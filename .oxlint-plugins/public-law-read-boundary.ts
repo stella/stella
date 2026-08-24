@@ -145,36 +145,39 @@ const invokesSharedCallback = (node: unknown): boolean => {
   return false;
 };
 
-const hasCallInOwnBranch = (
+const directAwaitedCall = (statement: unknown): AstNode | undefined => {
+  if (!isAstNode(statement) || statement.type !== "ExpressionStatement") {
+    return undefined;
+  }
+  const expression = unwrapExpression(statement.expression);
+  if (expression?.type !== "AwaitExpression") {
+    return undefined;
+  }
+  const call = unwrapExpression(expression.argument);
+  return call?.type === "CallExpression" ? call : undefined;
+};
+
+const isUnconditionalConfigurationBranch = (
   branch: unknown,
-  matcher: (node: AstNode) => boolean,
+  name: string,
 ): boolean => {
-  if (!isAstNode(branch)) {
+  const statements = statementsIn(branch);
+  return (
+    statements.length === 1 &&
+    callsConfiguration(directAwaitedCall(statements.at(0)), name)
+  );
+};
+
+const directlyReturnsSharedCallback = (statement: unknown): boolean => {
+  if (!isAstNode(statement) || statement.type !== "ReturnStatement") {
     return false;
   }
-  let found = false;
-  const walk = (value: unknown): void => {
-    if (Array.isArray(value)) {
-      for (const item of value) {
-        walk(item);
-      }
-      return;
-    }
-    if (!isAstNode(value) || isFunctionLike(value)) {
-      return;
-    }
-    if (matcher(value)) {
-      found = true;
-    }
-    for (const [key, child] of Object.entries(value)) {
-      if (key !== "parent") {
-        walk(child);
-      }
-    }
-  };
-
-  walk(branch);
-  return found;
+  const returned = unwrapExpression(statement.argument);
+  const call =
+    returned?.type === "AwaitExpression"
+      ? unwrapExpression(returned.argument)
+      : returned;
+  return invokesSharedCallback(call);
 };
 
 const transactionCallbackIsConfigured = (functionNode: AstNode): boolean => {
@@ -198,11 +201,13 @@ const transactionCallbackIsConfigured = (functionNode: AstNode): boolean => {
     (statement) =>
       statement.type === "IfStatement" &&
       isPublicLawDatabaseUrlCheck(statement.test) &&
-      hasCallInOwnBranch(statement.consequent, (node) =>
-        callsConfiguration(node, "configureExternalReadTransaction"),
+      isUnconditionalConfigurationBranch(
+        statement.consequent,
+        "configureExternalReadTransaction",
       ) &&
-      hasCallInOwnBranch(statement.alternate, (node) =>
-        callsConfiguration(node, "configureReadTransaction"),
+      isUnconditionalConfigurationBranch(
+        statement.alternate,
+        "configureReadTransaction",
       ),
   );
   if (configurationIndex === -1) {
@@ -211,7 +216,7 @@ const transactionCallbackIsConfigured = (functionNode: AstNode): boolean => {
 
   return statements
     .slice(configurationIndex + 1)
-    .some((statement) => hasCallInOwnBranch(statement, invokesSharedCallback));
+    .some(directlyReturnsSharedCallback);
 };
 
 export default eslintCompatPlugin({

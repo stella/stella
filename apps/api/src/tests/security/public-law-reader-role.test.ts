@@ -9,7 +9,10 @@ import {
   stellaPublicLawReader,
 } from "@/api/db/rls";
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
-import { readDecisionHandler } from "@/api/handlers/case-law/decisions/get";
+import {
+  readDecisionHandler,
+  readDecisionTextColumnWritten,
+} from "@/api/handlers/case-law/decisions/get";
 import { listDecisionsHandler } from "@/api/handlers/case-law/decisions/list";
 import { withRedistributableSubject } from "@/api/handlers/case-law/decisions/public-subject";
 import { rehydrateCaseLawCandidates } from "@/api/handlers/case-law/decisions/search";
@@ -99,12 +102,29 @@ const expectedQualifiedColumns = Object.entries(PUBLIC_LAW_COLUMNS_BY_RELATION)
 
 let testDb: TestDatabase;
 
+const revokeOtherDatabaseConnectFromPublic = async (
+  tx: TestDatabaseTransaction,
+): Promise<void> => {
+  const result = await tx.execute<{ name: string }>(sql`
+    SELECT datname AS name
+    FROM pg_database
+    WHERE NOT datistemplate
+      AND datallowconn
+      AND datname <> current_database()
+  `);
+  for (const { name } of result.rows) {
+    // oxlint-disable-next-line no-await-in-loop -- database privileges are separate statements and the test transaction rolls them back together
+    await tx.execute(sql.raw(`REVOKE CONNECT ON DATABASE ${quoted(name)} FROM PUBLIC`));
+  }
+};
+
 const rolePermissionsAfter = async (
   setup: (tx: TestDatabaseTransaction) => Promise<void>,
 ): Promise<PublicLawDatabaseRolePermissions | undefined> => {
   let permissions: PublicLawDatabaseRolePermissions | undefined;
   try {
     await testDb.transaction(async (tx) => {
+      await revokeOtherDatabaseConnectFromPublic(tx);
       await setup(tx);
       await tx.execute(sql.raw(`SET LOCAL ROLE ${quoted(READER_ROLE)}`));
       const result = await tx.execute<PublicLawDatabaseRolePermissions>(
@@ -219,6 +239,7 @@ describe("public-law reader role", () => {
   test("passes startup attestation, while the application role does not", async () => {
     const asRole = async (role: string) =>
       await testDb.transaction(async (tx) => {
+        await revokeOtherDatabaseConnectFromPublic(tx);
         await tx.execute(sql.raw(`SET LOCAL ROLE ${quoted(role)}`));
         const result = await tx.execute<PublicLawDatabaseRolePermissions>(
           publicLawDatabaseRolePermissionsSql(),
@@ -227,6 +248,7 @@ describe("public-law reader role", () => {
       });
 
     expect(await asRole(READER_ROLE)).toEqual({
+      canAccessOtherDatabase: false,
       canUseOtherRole: false,
       canConnect: true,
       canDelegatePublicLaw: false,
@@ -241,6 +263,31 @@ describe("public-law reader role", () => {
     expect(await asRole(stella.name)).toMatchObject({
       canReadOtherData: true,
     });
+  });
+
+  test("startup attestation rejects access to another database", async () => {
+    const permissions = await rolePermissionsAfter(async (tx) => {
+      const result = await tx.execute<{ name: string }>(sql`
+        SELECT datname AS name
+        FROM pg_database
+        WHERE NOT datistemplate
+          AND datallowconn
+          AND datname <> current_database()
+        ORDER BY datname
+        LIMIT 1
+      `);
+      const databaseName = result.rows.at(0)?.name;
+      if (databaseName === undefined) {
+        throw new Error("another non-template database is required for the attestation test");
+      }
+      await tx.execute(
+        sql.raw(
+          `GRANT CONNECT ON DATABASE ${quoted(databaseName)} TO ${quoted(READER_ROLE)}`,
+        ),
+      );
+    });
+
+    expect(permissions).toMatchObject({ canAccessOtherDatabase: true });
   });
 
   test("startup attestation rejects column writes and reads in other schemas", async () => {
@@ -544,6 +591,9 @@ describe("public-law reader role", () => {
       exercised.add(readDecisionHandler.publicLawSharedQuery);
 
       await caseLawDb(async (tx) => {
+        await readDecisionTextColumnWritten(tx, decisionId);
+        exercised.add(readDecisionTextColumnWritten.publicLawSharedQuery);
+
         await readDecisionAnalysis(tx, decisionId);
         exercised.add(readDecisionAnalysis.publicLawSharedQuery);
 

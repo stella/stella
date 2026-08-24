@@ -7,6 +7,7 @@ import {
 import { PUBLIC_LAW_COLUMNS_BY_RELATION } from "@/api/lib/public-law-relations";
 
 const VALID_PERMISSIONS = {
+  canAccessOtherDatabase: false,
   canUseOtherRole: false,
   canConnect: true,
   canDelegatePublicLaw: false,
@@ -49,6 +50,7 @@ describe("external public-law database boundary", () => {
   });
 
   test.each([
+    { ...VALID_PERMISSIONS, canAccessOtherDatabase: true },
     { ...VALID_PERMISSIONS, canUseOtherRole: true },
     { ...VALID_PERMISSIONS, canConnect: false },
     { ...VALID_PERMISSIONS, canDelegatePublicLaw: true },

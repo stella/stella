@@ -39,6 +39,7 @@ type PublicLawSharedReadTransaction = Pick<
 };
 
 export type PublicLawDatabaseRolePermissions = {
+  canAccessOtherDatabase: boolean;
   canUseOtherRole: boolean;
   canConnect: boolean;
   canDelegatePublicLaw: boolean;
@@ -52,6 +53,7 @@ export type PublicLawDatabaseRolePermissions = {
 };
 
 export const assertPublicLawDatabaseRolePermissions = ({
+  canAccessOtherDatabase,
   canUseOtherRole,
   canConnect,
   canDelegatePublicLaw,
@@ -64,6 +66,7 @@ export const assertPublicLawDatabaseRolePermissions = ({
   hasPublicLawReaderUsage,
 }: PublicLawDatabaseRolePermissions): void => {
   if (
+    canAccessOtherDatabase ||
     canUseOtherRole ||
     !canConnect ||
     canDelegatePublicLaw ||
@@ -112,6 +115,18 @@ export const publicLawDatabaseRolePermissionsSql = (): SqlFragment => {
         VALUES ${expectedValues}
       )
       SELECT
+        EXISTS (
+          SELECT 1
+          FROM pg_database AS databases
+          WHERE NOT databases.datistemplate
+            AND databases.datallowconn
+            AND databases.datname <> current_database()
+            AND has_database_privilege(
+              current_user,
+              databases.oid,
+              'CONNECT,CREATE'
+            )
+        ) AS "canAccessOtherDatabase",
         EXISTS (
           SELECT 1
           FROM pg_roles AS roles
