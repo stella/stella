@@ -403,6 +403,12 @@ jobs:
           # Read at compile time by config.rs via option_env!(); builds
           # without this variable default to loopback-only.
           STELLA_DESKTOP_DEFAULT_ORIGINS: "https://my.stll.app,https://app.stll.app"
+          # Public browser-ingestion configuration, compiled into the desktop
+          # adapter. The adapter accepts fixed error codes only and creates no
+          # person profile, persistence, autocapture, or session recording.
+          VITE_POSTHOG_HOST: "https://eu.i.posthog.com"
+          VITE_POSTHOG_KEY: ${{ secrets.VITE_POSTHOG_KEY }}
+          STELLA_COMMIT_SHA: ${{ needs.resolve.outputs.release_sha }}
         # `--verbose --verbose` surfaces the per-line stdout/stderr
         # Tauri captures from signCommand but otherwise hides behind
         # log::debug. Without it, a trusted-signing-cli failure
@@ -487,6 +493,11 @@ jobs:
           # Read at compile time by config.rs via option_env!(); builds
           # without this variable default to loopback-only.
           STELLA_DESKTOP_DEFAULT_ORIGINS: "https://my.stll.app,https://app.stll.app"
+          # Public browser-ingestion configuration; see the Windows build
+          # environment above for the desktop adapter's privacy boundary.
+          VITE_POSTHOG_HOST: "https://eu.i.posthog.com"
+          VITE_POSTHOG_KEY: ${{ secrets.VITE_POSTHOG_KEY }}
+          STELLA_COMMIT_SHA: ${{ needs.resolve.outputs.release_sha }}
         # `--verbose --verbose` surfaces signing/notarization log
         # lines (Tauri otherwise hides them behind log::debug). Same
         # rationale as the Windows build step above.

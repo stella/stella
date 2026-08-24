@@ -21,6 +21,7 @@
     "@stll/ui": "workspace:*",
     "@tauri-apps/api": "^2.11.1",
     "better-result": "catalog:",
+    "lucide-react": "catalog:",
     "react": "catalog:react19",
     "react-dom": "catalog:react19",
     "use-intl": "catalog:"

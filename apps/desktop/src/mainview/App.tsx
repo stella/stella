@@ -87,36 +87,6 @@ const getAccountInitials = (linkedAccount: LinkedAccountSnapshot | null) => {
   return linkedAccount.email.slice(0, 2).toUpperCase();
 };
 
-const suppressTransitions = () => {
-  const style = document.createElement("style");
-  style.textContent = "*, *::before, *::after { transition: none !important; }";
-  document.head.append(style);
-  void getComputedStyle(document.documentElement).opacity;
-  return () => requestAnimationFrame(() => style.remove());
-};
-
-const useSystemTheme = () => {
-  useEffect(() => {
-    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
-    const root = document.documentElement;
-
-    const updateTheme = () => {
-      const restore = suppressTransitions();
-      const isDark = mediaQuery.matches;
-      root.classList.toggle("dark", isDark);
-      root.style.colorScheme = isDark ? "dark" : "light";
-      restore();
-    };
-
-    updateTheme();
-    mediaQuery.addEventListener("change", updateTheme);
-
-    return () => {
-      mediaQuery.removeEventListener("change", updateTheme);
-    };
-  }, []);
-};
-
 type SettingRowProps = {
   helper?: string;
   label: string;
@@ -404,8 +374,6 @@ const AboutPane = ({
 };
 
 const App = () => {
-  useSystemTheme();
-
   const t = useTranslations("settings");
   const [error, setError] = useState<string | null>(null);
   const [state, setState] = useState<AppSnapshot | null>(null);

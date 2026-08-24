@@ -8,6 +8,7 @@ use crate::types::{AppSnapshot, SessionSnapshot};
 
 const QUIT_ACTION: &str = "quit";
 const OPEN_PREFERENCES_ACTION: &str = "open-preferences";
+const OPEN_CLIPBOARD_ACTION: &str = "open-clipboard";
 const OPEN_ABOUT_ACTION: &str = "open-about";
 const CHECK_FOR_UPDATES_ACTION: &str = "check-for-updates";
 const OPEN_EDIT_ROOT_ACTION: &str = "open-edit-root";
@@ -98,6 +99,10 @@ pub fn build_tray_menu(
       .build(app)?,
   );
   builder = builder.separator();
+
+  builder = builder.item(
+    &MenuItemBuilder::with_id(OPEN_CLIPBOARD_ACTION, t("tray.clipboard")).build(app)?,
+  );
 
   // Settings
   builder = builder.item(
@@ -223,6 +228,9 @@ pub fn handle_menu_action(action: &str) -> MenuAction {
   if action == OPEN_PREFERENCES_ACTION {
     return MenuAction::OpenPreferences("general");
   }
+  if action == OPEN_CLIPBOARD_ACTION {
+    return MenuAction::OpenClipboard;
+  }
   if action == OPEN_ABOUT_ACTION {
     return MenuAction::OpenPreferences("about");
   }
@@ -261,6 +269,7 @@ pub fn handle_menu_action(action: &str) -> MenuAction {
 pub enum MenuAction {
   Quit,
   OpenPreferences(&'static str),
+  OpenClipboard,
   CheckForUpdates,
   OpenEditRoot,
   CopyDiagnostics,
@@ -484,6 +493,14 @@ mod tests {
     assert!(matches!(
       handle_menu_action("open-preferences"),
       MenuAction::OpenPreferences("general")
+    ));
+  }
+
+  #[test]
+  fn test_handle_menu_action_clipboard() {
+    assert!(matches!(
+      handle_menu_action("open-clipboard"),
+      MenuAction::OpenClipboard
     ));
   }
 

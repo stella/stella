@@ -56,20 +56,34 @@ incremental = false
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = ["tray-icon", "webview-data-url"] }
+tauri = { version = "2", features = [
+  "macos-private-api",
+  "tray-icon",
+  "webview-data-url",
+] }
 tauri-plugin-autostart = "2"
 tauri-plugin-clipboard-manager = "2"
 tauri-plugin-deep-link = "2"
+tauri-plugin-global-shortcut = "2"
 tauri-plugin-notification = "2"
 tauri-plugin-opener = "2"
 tauri-plugin-process = "2"
 tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }
 tauri-plugin-updater = "2"
 axum = "0.8"
+aes-gcm = "0.10"
+ammonia = "4"
+base64 = "0.22"
 chrono = { version = "0.4", features = ["serde"] }
+clipboard-rs = { version = "0.3.5", default-features = false }
 dirs = "6"
+enigo = "0.6.1"
 futures-util = "0.3"
 hex = "0.4"
+image = { version = "0.25", default-features = false, features = [
+  "png",
+  "tiff",
+] }
 keyring-core = "1"
 opener = "0.8"
 notify = "8"
@@ -91,8 +105,22 @@ zbus-secret-service-keyring-store = { version = "1", features = [
 
 [target.'cfg(target_os = "macos")'.dependencies]
 apple-native-keyring-store = { version = "1", features = ["keychain"] }
+icns = { version = "0.4", default-features = false, features = ["pngio"] }
+objc2 = "0.6"
+objc2-app-kit = { version = "0.3", default-features = false, features = [
+  "NSApplication",
+  "NSRunningApplication",
+  "NSWorkspace",
+  "libc",
+] }
+objc2-foundation = { version = "0.3", default-features = false, features = [
+  "NSURL",
+] }
+plist = "1.10"
 
 [target.'cfg(target_os = "windows")'.dependencies]
+active-win-pos-rs = "0.11.0"
+windows-icons = "0.4.0"
 windows-native-keyring-store = "1"
 
 [dev-dependencies]
