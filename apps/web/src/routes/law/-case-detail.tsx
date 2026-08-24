@@ -67,7 +67,13 @@ export function PublicDecisionViewer({
         <Tooltip
           content={t("chat.moveToSide")}
           render={
-            <Button onClick={moveToSide} size="icon-sm" variant="ghost">
+            <Button
+              aria-label={t("chat.moveToSide")}
+              className="hidden md:inline-flex"
+              onClick={moveToSide}
+              size="icon-sm"
+              variant="ghost"
+            >
               <Minimize2Icon className="size-4" />
             </Button>
           }

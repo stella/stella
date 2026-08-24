@@ -57,11 +57,18 @@ describe("case decision inspector", () => {
       shiftKey: false,
     };
 
-    expect(opensCitationInInspector(primary)).toBe(true);
-    expect(opensCitationInInspector({ ...primary, button: 1 })).toBe(false);
-    expect(opensCitationInInspector({ ...primary, metaKey: true })).toBe(false);
-    expect(opensCitationInInspector({ ...primary, ctrlKey: true })).toBe(false);
-    expect(opensCitationInInspector({ ...primary, shiftKey: true })).toBe(
+    expect(opensCitationInInspector(primary, true)).toBe(true);
+    expect(opensCitationInInspector(primary, false)).toBe(false);
+    expect(opensCitationInInspector({ ...primary, button: 1 }, true)).toBe(
+      false,
+    );
+    expect(opensCitationInInspector({ ...primary, metaKey: true }, true)).toBe(
+      false,
+    );
+    expect(opensCitationInInspector({ ...primary, ctrlKey: true }, true)).toBe(
+      false,
+    );
+    expect(opensCitationInInspector({ ...primary, shiftKey: true }, true)).toBe(
       false,
     );
   });

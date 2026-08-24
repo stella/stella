@@ -106,11 +106,13 @@ type CitationClick = Pick<
 >;
 
 /** Plain primary clicks stay in context; browser navigation gestures remain native. */
-export const opensCitationInInspector = ({
-  altKey,
-  button,
-  ctrlKey,
-  metaKey,
-  shiftKey,
-}: CitationClick): boolean =>
-  button === 0 && !altKey && !ctrlKey && !metaKey && !shiftKey;
+export const opensCitationInInspector = (
+  { altKey, button, ctrlKey, metaKey, shiftKey }: CitationClick,
+  inspectorAvailable: boolean,
+): boolean =>
+  inspectorAvailable &&
+  button === 0 &&
+  !altKey &&
+  !ctrlKey &&
+  !metaKey &&
+  !shiftKey;

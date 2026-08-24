@@ -8,6 +8,7 @@ import {
   PreviewCardPopup,
   PreviewCardTrigger,
 } from "@stll/ui/preview-card";
+import { useIsMobile } from "@stll/ui/use-mobile";
 import { cn } from "@stll/ui/utils";
 
 import {
@@ -48,6 +49,7 @@ export const CitedDecisionLink = ({
   decision,
 }: CitedDecisionLinkProps) => {
   const format = useFormatter();
+  const isMobile = useIsMobile();
   const inspector = useInspectorView();
   const params = createCaseLawDecisionRouteParams({
     caseNumber: decision.caseNumber,
@@ -61,7 +63,7 @@ export const CitedDecisionLink = ({
   });
   const decided = formatDecisionDate(decision.decisionDate, format);
   const onCitationClick = (event: MouseEvent<HTMLAnchorElement>) => {
-    if (!opensCitationInInspector(event)) {
+    if (!opensCitationInInspector(event, !isMobile)) {
       return;
     }
 

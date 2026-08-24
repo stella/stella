@@ -5,6 +5,7 @@ import {
   PROPERTY_ROW_GRID,
   SIDE_RAIL_CONTAINER_CLASS,
   SIDE_RAIL_ICON_BUTTON_SIZE,
+  SIDE_RAIL_TAB_HIT_TARGET_SIZE,
   TOOLBAR_ROW_HEIGHT,
 } from "./layout-tokens";
 
@@ -100,11 +101,11 @@ export const InspectorRailTab = ({
   <button
     aria-current={active ? "true" : undefined}
     className={cn(
-      "group/tab relative flex items-center justify-center rounded-md transition-colors",
-      SIDE_RAIL_ICON_BUTTON_SIZE,
+      "group/tab relative flex items-center justify-center rounded-md transition-colors before:pointer-events-none before:absolute before:inset-2 before:rounded-md before:transition-colors before:content-[''] [&>*]:relative [&>*]:z-10",
+      SIDE_RAIL_TAB_HIT_TARGET_SIZE,
       active
-        ? "bg-accent text-foreground"
-        : "text-muted-foreground hover:bg-accent hover:text-foreground",
+        ? "text-foreground before:bg-accent"
+        : "text-muted-foreground hover:text-foreground hover:before:bg-accent",
       className,
     )}
     data-active={active ? "" : undefined}

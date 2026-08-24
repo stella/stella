@@ -94,12 +94,14 @@ describe("rail", () => {
     );
 
     expect(classes).toEqual(
-      expect.arrayContaining(["size-8", "rounded-md", "bg-accent"]),
+      expect.arrayContaining([
+        "size-12",
+        "rounded-md",
+        "before:inset-2",
+        "before:bg-accent",
+      ]),
     );
     expect(classes).not.toContain("w-full");
-    expect(classes.some((className) => className.startsWith("before:"))).toBe(
-      false,
-    );
   });
 
   test("occupies exactly the reserved 48px and is desktop-only", () => {
