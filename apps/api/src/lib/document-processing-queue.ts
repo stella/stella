@@ -630,17 +630,6 @@ const completeDocumentProcessingRun = async ({
   claimToken: string;
   run: typeof documentProcessingRuns.$inferSelect;
 }): Promise<boolean> => {
-  if (documentScoutsEnabled(envDocumentProcessingWorker)) {
-    await enqueueDocumentDeadlineScout({
-      sourceRunId: run.id,
-      entityId: run.entityId,
-      workspaceId: run.workspaceId,
-      organizationId: run.organizationId,
-      requestedBy: run.requestedBy
-        ? brandPersistedUserId(run.requestedBy)
-        : null,
-    });
-  }
   const completed = await rootDb
     .update(documentProcessingRuns)
     .set({
@@ -663,6 +652,26 @@ const completeDocumentProcessingRun = async ({
     .returning({ id: documentProcessingRuns.id });
   if (!completed.at(0)) {
     return false;
+  }
+  if (documentScoutsEnabled(envDocumentProcessingWorker)) {
+    const enqueued = await Result.tryPromise(async () => {
+      await enqueueDocumentDeadlineScout({
+        sourceRunId: run.id,
+        entityId: run.entityId,
+        workspaceId: run.workspaceId,
+        organizationId: run.organizationId,
+        requestedBy: run.requestedBy
+          ? brandPersistedUserId(run.requestedBy)
+          : null,
+      });
+    });
+    if (Result.isError(enqueued)) {
+      captureError(enqueued.error, { runId: run.id });
+      logger.error("document_processing.deadline_scout_enqueue_failed", {
+        "error.type": errorTag(enqueued.error),
+        runId: run.id,
+      });
+    }
   }
   broadcastWorkspaceResourceUpdated(
     run.workspaceId,

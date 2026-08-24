@@ -99,6 +99,37 @@ const source = {
   versionDeletedAt: null,
 };
 
+describe("document scout dispatch isolation", () => {
+  test("makes source completion terminal before dispatching its scout", () => {
+    const completionStart = queueSource.indexOf(
+      "const completeDocumentProcessingRun",
+    );
+    const completionEnd = queueSource.indexOf(
+      "\nexport const processDocumentProcessingRun",
+      completionStart,
+    );
+    const completionSource = queueSource.slice(completionStart, completionEnd);
+    const succeededTransition = completionSource.indexOf('status: "succeeded"');
+    const completedGuard = completionSource.indexOf(
+      "if (!completed.at(0))",
+      succeededTransition,
+    );
+    const scoutDispatch = completionSource.indexOf(
+      "await enqueueDocumentDeadlineScout",
+      completedGuard,
+    );
+
+    expect(completionStart).toBeGreaterThan(-1);
+    expect(completionEnd).toBeGreaterThan(completionStart);
+    expect(succeededTransition).toBeGreaterThan(-1);
+    expect(completedGuard).toBeGreaterThan(succeededTransition);
+    expect(scoutDispatch).toBeGreaterThan(completedGuard);
+    expect(completionSource).toContain(
+      'logger.error("document_processing.deadline_scout_enqueue_failed"',
+    );
+  });
+});
+
 describe("OCR derivative durability", () => {
   // A failed search index leaves a run that `recoverFailedSearchIndex` later
   // completes without revisiting storage. Building the derivative after

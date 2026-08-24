@@ -123,10 +123,7 @@ export const enqueueDocumentDeadlineScoutJob = async ({
   await scoutQueue.add(DEADLINE_SCOUT_JOB_NAME, job, { jobId });
 };
 
-/**
- * Persist one deterministic scout job before the source processing run becomes
- * terminal. Replaying completion converges on the source run's existing job.
- */
+/** Enqueue one deterministic scout job; duplicate delivery converges by run ID. */
 export const enqueueDocumentDeadlineScout = async (
   job: DocumentDeadlineScoutJobData,
 ): Promise<void> => {
