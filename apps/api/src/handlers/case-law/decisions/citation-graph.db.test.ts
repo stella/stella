@@ -214,6 +214,19 @@ const withSubject = async <T>(
   (await withRedistributableSubject(caseLawDb, { kind: "id", id }, read)) ??
   panic("expected a redistributable subject");
 
+const readCitationPage = async (
+  direction: CitationDirection,
+  cursor: string | undefined,
+) =>
+  await withSubject(
+    subjectId,
+    async (subject) =>
+      await listDecisionCitationsHandler({
+        subject,
+        query: { direction, ...(cursor === undefined ? {} : { cursor }) },
+      }),
+  );
+
 const collect = async (direction: CitationDirection) => {
   const items: DecisionCitationRow[] = [];
   let cursor: string | undefined;
@@ -221,14 +234,7 @@ const collect = async (direction: CitationDirection) => {
 
   for (let request = 0; request < 4; request += 1) {
     // oxlint-disable-next-line no-await-in-loop -- cursor pages are sequential
-    const page = await withSubject(
-      subjectId,
-      async (subject) =>
-        await listDecisionCitationsHandler({
-          subject,
-          query: { direction, ...(cursor === undefined ? {} : { cursor }) },
-        }),
-    );
+    const page = await readCitationPage(direction, cursor);
     if (!("items" in page)) {
       throw new Error("expected a citation page");
     }

@@ -41,6 +41,7 @@ import {
 
 let client: Awaited<ReturnType<typeof createTestPglite>> | undefined;
 let legislationDb: LegislationReadDb;
+let workspaceDb: LegislationReadDb;
 
 const openSourceId = createSafeId<"legislationSource">();
 const closedSourceId = createSafeId<"legislationSource">();
@@ -294,6 +295,9 @@ beforeAll(
         versionValidTo: null,
       }),
     ]);
+
+    workspaceDb = async (read) =>
+      await db.transaction(async (tx) => await read(tx));
 
     const readDb = async <T>(
       fn: (tx: LegislationReadTransaction) => Promise<T>,
@@ -643,7 +647,7 @@ describe("public statute read", () => {
   test("keeps the stored publisher metadata off the public response", async () => {
     const workspaceRead = await readLegislationHandler(
       civilCodeCurrent,
-      legislationDb,
+      workspaceDb,
     );
     const publicRead = await readPublicLegislationHandler(
       civilCodeCurrent,
@@ -661,7 +665,7 @@ describe("public statute read", () => {
   test("returns full text only as the AST fallback", async () => {
     const workspaceRead = await readLegislationHandler(
       civilCodeCurrent,
-      legislationDb,
+      workspaceDb,
     );
     const structuredPublicRead = await readPublicLegislationHandler(
       civilCodeCurrent,
