@@ -66,7 +66,9 @@ import { isRecord } from "@/api/lib/type-guards";
  * `reconciliation` at the bottom of this file.
  */
 
-const BASE_URL = "https://vyhledavac.nssoud.cz";
+/** The publisher's origin; every document URL is rebuilt from it (rule 21). */
+export const NSS_BASE_URL = "https://vyhledavac.nssoud.cz";
+const BASE_URL = NSS_BASE_URL;
 
 /** The only language this source publishes. */
 const CZ_NSS_LANGUAGE = "cs";
