@@ -253,6 +253,24 @@ export const caseLawSources = p.pgTable(
   ],
 );
 
+/**
+ * Jurisdictions ever observed in the case-law corpus.
+ *
+ * A migration-owned trigger derives this registry from decision writes. Census
+ * reads it instead of scanning the multi-million-row decision table merely to
+ * rediscover a handful of country codes. Rows are intentionally append-only:
+ * an emptied jurisdiction still names an index whose surplus must remain
+ * visible to the rollout gate.
+ */
+export const caseLawCorpusJurisdictions = p.pgTable(
+  "case_law_corpus_jurisdictions",
+  {
+    country: p.varchar({ length: 3 }).primaryKey(),
+    firstObservedAt: timestamptz("first_observed_at").defaultNow().notNull(),
+  },
+  () => [...globalCaseLawPolicies()],
+);
+
 export const caseLawDecisions = p.pgTable(
   "case_law_decisions",
   {
