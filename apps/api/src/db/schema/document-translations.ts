@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 
 import {
+  DOCUMENT_TRANSLATION_COMMENT_POLICIES,
   DOCUMENT_TRANSLATION_ENGINES,
   DOCUMENT_TRANSLATION_OUTPUTS,
   DOCUMENT_TRANSLATION_RUN_ACTIVE_STATUSES,
@@ -12,6 +13,7 @@ import type {
   DocumentTranslationRunErrorCode,
   DocumentTranslationUnitApplication,
 } from "@/api/lib/document-translation/contract";
+import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 import {
   jsonb,
@@ -39,6 +41,7 @@ const ACTIVE_STATUS_VALUES = quoted(DOCUMENT_TRANSLATION_RUN_ACTIVE_STATUSES);
 const ERROR_CODE_VALUES = quoted(DOCUMENT_TRANSLATION_RUN_ERROR_CODES);
 const OUTPUT_VALUES = quoted(DOCUMENT_TRANSLATION_OUTPUTS);
 const ENGINE_VALUES = quoted(DOCUMENT_TRANSLATION_ENGINES);
+const COMMENT_POLICY_VALUES = quoted(DOCUMENT_TRANSLATION_COMMENT_POLICIES);
 const UNIT_STATUS_VALUES = quoted(DOCUMENT_TRANSLATION_UNIT_STATUSES);
 
 export const documentTranslationRuns = p.pgTable(
@@ -61,6 +64,9 @@ export const documentTranslationRuns = p.pgTable(
     sourceMimeType: p.varchar("source_mime_type", { length: 256 }).notNull(),
     output: p.text("output", { enum: DOCUMENT_TRANSLATION_OUTPUTS }).notNull(),
     engine: p.text("engine", { enum: DOCUMENT_TRANSLATION_ENGINES }).notNull(),
+    commentPolicy: p.text("comment_policy", {
+      enum: DOCUMENT_TRANSLATION_COMMENT_POLICIES,
+    }),
     sourceLang: p.varchar("source_lang", { length: 16 }),
     targetLang: p.varchar("target_lang", { length: 16 }).notNull(),
     status: p
@@ -117,6 +123,10 @@ export const documentTranslationRuns = p.pgTable(
     p.check(
       "document_translation_runs_engine_values_check",
       sql`${table.engine} IN (${ENGINE_VALUES})`,
+    ),
+    p.check(
+      "document_translation_runs_comment_policy_check",
+      sql`${table.commentPolicy} IS NULL OR (${table.sourceMimeType} = ${DOCX_MIME_TYPE} AND ${table.commentPolicy} IN (${COMMENT_POLICY_VALUES}))`,
     ),
     p.check(
       "document_translation_runs_combination_check",

@@ -1,14 +1,38 @@
 import { TaggedError } from "better-result";
 import * as slimdom from "slimdom";
 
+import type { FolioReviewChangeKind } from "@stll/folio-core/server";
+
 import { loadDocxArchive } from "@/api/lib/docx-archive";
 
 const W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
 const MAIN_PART = "word/document.xml";
 const CONTENT_PART_RE = /^word\/(?:header|footer)\d+\.xml$/u;
 const NOTE_PART_RE = /^word\/(?:footnotes|endnotes)\.xml$/u;
-const COMMENT_PART_RE = /^word\/comments[^/]*\.xml$/u;
 const MARKER_PREFIX = "stella-translation";
+
+export const TRACKED_CHANGE_TAGS_BY_KIND = {
+  insertion: ["ins", "moveTo", "moveToRangeStart", "moveToRangeEnd"],
+  deletion: ["del", "moveFrom", "moveFromRangeStart", "moveFromRangeEnd"],
+  formatting: ["rPrChange"],
+  rowInserted: ["ins"],
+  rowDeleted: ["del"],
+  cellInserted: ["cellIns"],
+  cellDeleted: ["cellDel"],
+  cellMerged: ["cellMerge"],
+  paragraphMarkInserted: ["ins"],
+  paragraphMarkDeleted: ["del"],
+  paragraphPropertiesChanged: ["pPrChange"],
+  sectionPropertiesChanged: ["sectPrChange"],
+  tablePropertiesChanged: ["tblPrChange"],
+  rowPropertiesChanged: ["trPrChange"],
+  cellPropertiesChanged: ["tcPrChange"],
+} as const satisfies Record<FolioReviewChangeKind, readonly string[]>;
+
+const TRACKED_CHANGE_TAGS = new Set(
+  Object.values(TRACKED_CHANGE_TAGS_BY_KIND).flat(),
+);
+
 type DocxTranslationErrorReason =
   | "archive"
   | "missing-document"
@@ -84,21 +108,8 @@ const loadTranslationArchive = async (buffer: ArrayBuffer) => {
   }
 };
 
-const hasReviewMarkup = (doc: slimdom.Document): boolean => {
-  for (const name of [
-    "ins",
-    "del",
-    "moveFrom",
-    "moveTo",
-    "moveFromRangeStart",
-    "moveFromRangeEnd",
-    "moveToRangeStart",
-    "moveToRangeEnd",
-    "commentRangeStart",
-    "commentRangeEnd",
-    "commentReference",
-    "comment",
-  ]) {
+const hasTrackedChanges = (doc: slimdom.Document): boolean => {
+  for (const name of TRACKED_CHANGE_TAGS) {
     if (doc.getElementsByTagNameNS(W_NS, name).length > 0) {
       return true;
     }
@@ -126,15 +137,10 @@ const inspectXmlParts = async (
   const inspected = await Promise.all(
     paths
       .filter((path) => path.endsWith(".xml"))
-      .map(async (path) => {
-        if (COMMENT_PART_RE.test(path)) {
-          return fail(
-            "unsupported-review-markup",
-            "DOCX archive contains tracked changes or comments",
-          );
-        }
-        return { path, xml: await archive.readEntryString(path) };
-      }),
+      .map(async (path) => ({
+        path,
+        xml: await archive.readEntryString(path),
+      })),
   );
   for (const { path, xml } of inspected) {
     if (xml === null) {
@@ -150,10 +156,10 @@ const inspectXmlParts = async (
       // Required content parts are parsed again below so they can report the
       // exact malformed path. Other XML parts are not translation inputs.
     }
-    if (doc !== null && hasReviewMarkup(doc)) {
+    if (doc !== null && contentPathSet.has(path) && hasTrackedChanges(doc)) {
       return fail(
         "unsupported-review-markup",
-        "DOCX archive contains tracked changes or comments",
+        "DOCX archive contains unresolved tracked changes",
       );
     }
   }
@@ -247,10 +253,10 @@ const makeSegment = (
 
 const parsePart = (path: string, xml: string): DocxTranslationSegment[] => {
   const doc = parseXml(path, xml);
-  if (hasReviewMarkup(doc)) {
+  if (hasTrackedChanges(doc)) {
     fail(
       "unsupported-review-markup",
-      `DOCX part ${path} contains tracked changes or comments`,
+      `DOCX part ${path} contains unresolved tracked changes`,
     );
   }
   const segments: DocxTranslationSegment[] = [];

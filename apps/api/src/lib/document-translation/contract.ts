@@ -19,6 +19,19 @@ export const DOCUMENT_TRANSLATION_ENGINE = {
   AI: "ai",
 } as const satisfies ConstantMap<DocumentTranslationEngine>;
 
+export const DOCUMENT_TRANSLATION_COMMENT_POLICIES = [
+  "original",
+  "original-and-translated",
+  "translated",
+] as const;
+export type DocumentTranslationCommentPolicy =
+  (typeof DOCUMENT_TRANSLATION_COMMENT_POLICIES)[number];
+export const DOCUMENT_TRANSLATION_COMMENT_POLICY = {
+  ORIGINAL: "original",
+  ORIGINAL_AND_TRANSLATED: "original-and-translated",
+  TRANSLATED: "translated",
+} as const satisfies ConstantMap<DocumentTranslationCommentPolicy>;
+
 export const DOCUMENT_TRANSLATION_RUN_STATUSES = [
   "queued",
   "preparing",

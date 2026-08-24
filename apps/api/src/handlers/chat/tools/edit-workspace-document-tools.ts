@@ -284,7 +284,7 @@ type ValidatedEditWorkspaceDocumentInput = {
 };
 
 const restoreOmittedOperationIds = (
-  validated: FolioAIEditOperation[],
+  validated: readonly FolioAIEditOperation[],
   original: JsonObject[],
 ): WithOptionalOperationId<FolioAIEditOperation>[] =>
   validated.map((operation, index) => {

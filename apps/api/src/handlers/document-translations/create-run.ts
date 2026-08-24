@@ -8,6 +8,7 @@ import {
   fields,
 } from "@/api/db/schema";
 import { createDocumentTranslationRunBodySchema } from "@/api/handlers/document-translations/schemas";
+import { captureError } from "@/api/lib/analytics/capture";
 import {
   assertUsageAvailableForHandler,
   createSafeHandler,
@@ -15,6 +16,7 @@ import {
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
+import type { SafeId } from "@/api/lib/branded-types";
 import { workspaceParams } from "@/api/lib/custom-schema";
 import {
   DOCUMENT_TRANSLATION_ENGINE,
@@ -22,8 +24,11 @@ import {
   isExecutableTranslationCombination,
 } from "@/api/lib/document-translation/contract";
 import { isDeepLSupportedMimeType } from "@/api/lib/document-translation/deepl-formats";
+import { inspectDocxComments } from "@/api/lib/document-translation/docx-review";
 import { handoffCommittedDocumentTranslationRun } from "@/api/lib/document-translation/handoff";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { createFileKey } from "@/api/lib/files/utils";
+import { readS3ArrayBuffer } from "@/api/lib/s3";
 import { brandPersistedUserFileId } from "@/api/lib/safe-id-boundaries";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
@@ -37,7 +42,14 @@ const config = {
   body: createDocumentTranslationRunBodySchema,
 } satisfies HandlerConfig;
 
-const createDocumentTranslationRun = createSafeHandler(
+type CreateDocumentTranslationRunResult =
+  | { type: "commentPolicyRequired" }
+  | { type: "started"; runId: SafeId<"documentTranslationRun"> };
+
+const createDocumentTranslationRun = createSafeHandler<
+  typeof config,
+  CreateDocumentTranslationRunResult
+>(
   config,
   async function* ({
     body,
@@ -66,20 +78,6 @@ const createDocumentTranslationRun = createSafeHandler(
           message: "AI translation requires a source language",
         }),
       );
-    }
-
-    if (body.engine === DOCUMENT_TRANSLATION_ENGINE.AI) {
-      const usageError = await assertUsageAvailableForHandler({
-        metering: { actionType: "doc_review", modelRole: "chat" },
-        organizationId: session.activeOrganizationId,
-        orgAIConfig,
-        workspaceId,
-        userId: user.id,
-        safeDb,
-      });
-      if (usageError !== null) {
-        return Result.err(usageError);
-      }
     }
 
     const sources = yield* Result.await(
@@ -162,8 +160,66 @@ const createDocumentTranslationRun = createSafeHandler(
         }),
       );
     }
+    if (
+      body.commentPolicy !== undefined &&
+      sourceContent.mimeType !== DOCX_MIME_TYPE
+    ) {
+      return Result.err(
+        new HandlerError({
+          status: 422,
+          message: "Comment translation policy requires a DOCX file",
+        }),
+      );
+    }
 
     const organizationId = session.activeOrganizationId;
+    const sourceFileId = brandPersistedUserFileId(sourceContent.id);
+    if (
+      sourceContent.mimeType === DOCX_MIME_TYPE &&
+      body.commentPolicy === undefined
+    ) {
+      const inspection = await Result.tryPromise({
+        try: async () => {
+          const buffer = await readS3ArrayBuffer(
+            createFileKey({
+              organizationId,
+              workspaceId,
+              fileId: sourceFileId,
+              mimeType: sourceContent.mimeType,
+            }),
+          );
+          return await inspectDocxComments(buffer);
+        },
+        catch: (cause) => cause,
+      });
+      if (Result.isError(inspection)) {
+        captureError(inspection.error, { entityId: body.entityId });
+        return Result.err(
+          new HandlerError({
+            status: 422,
+            message: "The DOCX file could not be inspected for comments",
+          }),
+        );
+      }
+      if (inspection.value.hasComments) {
+        return Result.ok({ type: "commentPolicyRequired" as const });
+      }
+    }
+
+    if (body.engine === DOCUMENT_TRANSLATION_ENGINE.AI) {
+      const usageError = await assertUsageAvailableForHandler({
+        metering: { actionType: "doc_review", modelRole: "chat" },
+        organizationId,
+        orgAIConfig,
+        workspaceId,
+        userId: user.id,
+        safeDb,
+      });
+      if (usageError !== null) {
+        return Result.err(usageError);
+      }
+    }
+
     const runId = createSafeId<"documentTranslationRun">();
     const inserted = yield* Result.await(
       safeDb(async (tx) => {
@@ -176,11 +232,12 @@ const createDocumentTranslationRun = createSafeHandler(
             entityId: body.entityId,
             fileFieldId: body.fieldId,
             entityVersionId: source.entityVersionId,
-            sourceFileId: brandPersistedUserFileId(sourceContent.id),
+            sourceFileId,
             sourceFileName: sourceContent.fileName,
             sourceMimeType: sourceContent.mimeType,
             output: body.output,
             engine: body.engine,
+            commentPolicy: body.commentPolicy,
             sourceLang: body.sourceLang ?? "auto",
             targetLang: body.targetLang,
             requestedBy: user.id,
@@ -199,6 +256,7 @@ const createDocumentTranslationRun = createSafeHandler(
             output: body.output,
             engine: body.engine,
             targetLang: body.targetLang,
+            commentPolicy: body.commentPolicy ?? null,
           },
         });
         return true;
@@ -219,7 +277,7 @@ const createDocumentTranslationRun = createSafeHandler(
       workspaceId,
       userId: user.id,
     });
-    return Result.ok({ runId });
+    return Result.ok({ type: "started" as const, runId });
   },
 );
 

@@ -5,6 +5,7 @@ import {
   applyDocxTranslationSegments,
   DocxTranslationError,
   extractDocxTranslationSegments,
+  TRACKED_CHANGE_TAGS_BY_KIND,
 } from "./segments";
 
 const W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
@@ -161,7 +162,7 @@ describe("DOCX translation segments", () => {
     );
   });
 
-  test("rejects tracked changes and comments before exposing source text", async () => {
+  test("rejects unresolved tracked changes but preserves comment markup", async () => {
     const tracked = await createDocx({
       "word/document.xml": part(
         '<w:ins w:id="1"><w:p><w:r><w:t>hidden</w:t></w:r></w:p></w:ins>',
@@ -175,28 +176,29 @@ describe("DOCX translation segments", () => {
       "word/document.xml": part("<w:p><w:r><w:t>source</w:t></w:r></w:p>"),
       "word/comments.xml": part('<w:comment w:id="1"/>'),
     });
-    const commentRejection = await captureRejection(
-      extractDocxTranslationSegments(comments),
-    );
-    expect(commentRejection).toBeInstanceOf(DocxTranslationError);
-    expect(commentRejection).toMatchObject({
-      message: expect.stringContaining("tracked changes or comments"),
-    });
+    const commented = await extractDocxTranslationSegments(comments);
+    expect(commented.segments.map((segment) => segment.text)).toEqual([
+      "source",
+    ]);
 
-    const movedRejections = await Promise.all(
-      ["moveFrom", "moveTo"].map(async (movedElement) => {
-        const moved = await createDocx({
-          "word/document.xml": part(
-            `<w:${movedElement}><w:p><w:r><w:t>moved</w:t></w:r></w:p></w:${movedElement}>`,
-          ),
-        });
-        return await captureRejection(extractDocxTranslationSegments(moved));
-      }),
+    const trackedChangeRejections = await Promise.all(
+      [...new Set(Object.values(TRACKED_CHANGE_TAGS_BY_KIND).flat())].map(
+        async (trackedChangeElement) => {
+          const trackedChange = await createDocx({
+            "word/document.xml": part(
+              `<w:p><w:${trackedChangeElement} w:id="1"/><w:r><w:t>reviewed</w:t></w:r></w:p>`,
+            ),
+          });
+          return await captureRejection(
+            extractDocxTranslationSegments(trackedChange),
+          );
+        },
+      ),
     );
-    for (const rejection of movedRejections) {
+    for (const rejection of trackedChangeRejections) {
       expect(rejection).toBeInstanceOf(DocxTranslationError);
       expect(rejection).toMatchObject({
-        message: expect.stringContaining("tracked changes or comments"),
+        message: expect.stringContaining("unresolved tracked changes"),
       });
     }
   });
