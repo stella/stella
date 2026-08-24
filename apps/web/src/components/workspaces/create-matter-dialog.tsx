@@ -181,7 +181,7 @@ export const CreateMatterDialog = () => {
           closeDialog={closeDialog}
           draftClient={draftClient}
           key={draftClient?.id ?? "new"}
-          onCreated={onCreated}
+          {...(onCreated === undefined ? {} : { onCreated })}
         />
       ) : null}
     </Dialog>
