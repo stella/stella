@@ -822,21 +822,12 @@ const buildPlDecision = ({
     item.courtReporters,
     dumpItem.courtReporters,
   );
-  const reporterIdentifiers: DecisionIdentifier[] = courtReporters.map(
-    (value) => ({
-      type: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
-      value,
-    }),
-  );
   const publisherIdentifiers: DecisionIdentifier[] = additionalCaseNumbers
-    ? [
-        ...additionalCaseNumbers.map((value) => ({
-          type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
-          value,
-        })),
-        ...reporterIdentifiers,
-      ]
-    : reporterIdentifiers;
+    ? additionalCaseNumbers.map((value) => ({
+        type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+        value,
+      }))
+    : [];
   const [firstPublisherIdentifier, ...otherPublisherIdentifiers] =
     publisherIdentifiers;
 

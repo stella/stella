@@ -3,6 +3,7 @@ import { panic } from "better-result";
 import {
   DECISION_IDENTIFIER_MAX_COUNT,
   DECISION_IDENTIFIER_TYPES,
+  isDecisionIdentifier,
   normalizeStructuredDecisionIdentifier,
 } from "@stll/legal-ast/decision-identifier";
 import type {
@@ -653,6 +654,14 @@ type DecisionMetadata = {
   identifiers?: DecisionIdentifiers | undefined;
 };
 
+type StoredDecisionMetadata = {
+  caseNumber: string;
+  ecli: string | null;
+  metadata: Record<string, unknown>;
+};
+
+const PUBLISHER_CASE_NUMBER_ALIASES_METADATA_KEY = "additionalCaseNumbers";
+
 export const decisionIdentifiersFromMetadata = ({
   caseNumber,
   ecli,
@@ -672,11 +681,20 @@ export const decisionIdentifiersFromMetadata = ({
   if (identifiers !== undefined) {
     candidates.push(...identifiers);
   }
+  const normalizedCaseNumber =
+    normalizeDecisionIdentifier(caseNumberIdentifier);
+  if (!normalizedCaseNumber) {
+    throw new TypeError("Decision case number has no searchable content");
+  }
   const seen = new Set([
-    `${caseNumberIdentifier.type}:${normalizeDecisionIdentifier(caseNumberIdentifier)}`,
+    `${caseNumberIdentifier.type}:${normalizedCaseNumber}`,
   ]);
   const additional = candidates.slice(1).filter((identifier) => {
-    const key = `${identifier.type}:${normalizeDecisionIdentifier(identifier)}`;
+    const normalized = normalizeDecisionIdentifier(identifier);
+    if (!normalized) {
+      return false;
+    }
+    const key = `${identifier.type}:${normalized}`;
     if (seen.has(key)) {
       return false;
     }
@@ -687,6 +705,55 @@ export const decisionIdentifiersFromMetadata = ({
     throw new TypeError("Decision has too many identifiers");
   }
   return [caseNumberIdentifier, ...additional];
+};
+
+export const decisionIdentifiersFromStoredMetadata = ({
+  caseNumber,
+  ecli,
+  metadata,
+}: StoredDecisionMetadata): DecisionIdentifiers => {
+  const storedAliasesValue =
+    metadata[PUBLISHER_CASE_NUMBER_ALIASES_METADATA_KEY];
+  if (!Array.isArray(storedAliasesValue)) {
+    return decisionIdentifiersFromMetadata({ caseNumber, ecli });
+  }
+  // Array.isArray narrows to any[]; keep publisher-owned JSON unknown until
+  // each candidate passes the shared identifier schema.
+  const storedAliases: unknown[] = storedAliasesValue;
+
+  const capacity = DECISION_IDENTIFIER_MAX_COUNT - (ecli ? 2 : 1);
+  const seen = new Set([
+    normalizeDecisionIdentifier({
+      type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+      value: caseNumber,
+    }),
+  ]);
+  const aliases: DecisionIdentifier[] = [];
+  for (const value of storedAliases) {
+    const candidate = {
+      type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+      value,
+    };
+    if (!isDecisionIdentifier(candidate)) {
+      continue;
+    }
+    const normalized = normalizeDecisionIdentifier(candidate);
+    if (seen.has(normalized)) {
+      continue;
+    }
+    seen.add(normalized);
+    aliases.push(candidate);
+    if (aliases.length === capacity) {
+      break;
+    }
+  }
+  const [firstAlias, ...otherAliases] = aliases;
+  return decisionIdentifiersFromMetadata({
+    caseNumber,
+    ecli,
+    identifiers:
+      firstAlias === undefined ? undefined : [firstAlias, ...otherAliases],
+  });
 };
 
 /**

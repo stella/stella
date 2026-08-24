@@ -48,12 +48,27 @@ export type DecisionIdentifiers = readonly [
 export const DECISION_IDENTIFIER_MAX_LENGTH = 256;
 export const DECISION_IDENTIFIER_MAX_COUNT = 32;
 
+const normalizeStructuredCitation = (value: string): string =>
+  stripDangerousChars(value)
+    .normalize("NFKC")
+    .toLocaleLowerCase("und")
+    .replace(/[\p{P}\p{Z}\s]+/gu, "")
+    .trim();
+
 const identifierValueSchema = v.pipe(
   v.string(),
   v.maxLength(DECISION_IDENTIFIER_MAX_LENGTH),
   v.check(
     (value) => /\S/u.test(stripDangerousChars(value)),
     "Identifier values must contain visible content",
+  ),
+);
+
+const structuredIdentifierValueSchema = v.pipe(
+  identifierValueSchema,
+  v.check(
+    (value) => normalizeStructuredCitation(value).length > 0,
+    "Structured identifier values must contain searchable content",
   ),
 );
 
@@ -65,15 +80,15 @@ export const decisionIdentifierSchema: v.GenericSchema<DecisionIdentifier> =
     }),
     v.strictObject({
       type: v.literal(DECISION_IDENTIFIER_TYPES.ECLI),
-      value: identifierValueSchema,
+      value: structuredIdentifierValueSchema,
     }),
     v.strictObject({
       type: v.literal(DECISION_IDENTIFIER_TYPES.NEUTRAL_CITATION),
-      value: identifierValueSchema,
+      value: structuredIdentifierValueSchema,
     }),
     v.strictObject({
       type: v.literal(DECISION_IDENTIFIER_TYPES.REPORTER_CITATION),
-      value: identifierValueSchema,
+      value: structuredIdentifierValueSchema,
     }),
   ]);
 
@@ -81,13 +96,6 @@ export const isDecisionIdentifier = (
   value: unknown,
 ): value is DecisionIdentifier =>
   v.safeParse(decisionIdentifierSchema, value).success;
-
-const normalizeStructuredCitation = (value: string): string =>
-  stripDangerousChars(value)
-    .normalize("NFKC")
-    .toLocaleLowerCase("und")
-    .replace(/[\p{P}\p{Z}\s]+/gu, "")
-    .trim();
 
 /**
  * Canonical lookup spelling for identifiers whose syntax is globally stable.

@@ -13,6 +13,8 @@
 
 import { afterEach, describe, expect, test } from "bun:test";
 
+import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
+
 import type { SaosItem } from "@/api/handlers/case-law/ingestion/adapters/pl-courts";
 import {
   PL_COURTS_FIRST_SLICE,
@@ -424,6 +426,45 @@ describe("pl-courts listSlicePage", () => {
 });
 
 describe("pl-courts buildDecision", () => {
+  test("keeps court reporters as people metadata and projects only docket aliases", async () => {
+    const item = {
+      ...COMMON_COURT_ITEM,
+      courtCases: [
+        { caseNumber: "II Co 433/15" },
+        { caseNumber: "II Cz 100/15" },
+      ],
+      courtReporters: ["Ewa Popławska-Kośla", "Jerzy Adam Porowski"],
+    } as const satisfies SaosItem;
+    mockFetchWithBodies([
+      {
+        pattern: DETAIL_PATTERN,
+        body: JSON.stringify({
+          data: {
+            ...item,
+            textContent: "<p>POSTANOWIENIE z dnia 5 marca 2015 r.</p>",
+          },
+        }),
+      },
+    ]);
+
+    const built = await reconciliation.buildDecision(item);
+
+    expect(built.type).toBe("built");
+    if (built.type !== "built") {
+      return;
+    }
+    expect(built.decision.identifiers).toEqual([
+      {
+        type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+        value: "II Cz 100/15",
+      },
+    ]);
+    expect(built.decision.metadata["courtReporters"]).toEqual([
+      "Ewa Popławska-Kośla",
+      "Jerzy Adam Porowski",
+    ]);
+  });
+
   test("builds through the adapter's own detail parse path", async () => {
     mockFetchWithBodies([
       {

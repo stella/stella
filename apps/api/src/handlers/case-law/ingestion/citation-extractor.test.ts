@@ -6,6 +6,7 @@ import type { DecisionIdentifiers } from "@stll/legal-ast/decision-identifier";
 import {
   bareCitationKey,
   decisionIdentifiersFromMetadata,
+  decisionIdentifiersFromStoredMetadata,
   extractCitations,
   isSelfCitation,
 } from "@/api/handlers/case-law/ingestion/citation-extractor";
@@ -1898,6 +1899,61 @@ describe("extractCitations", () => {
     ]) {
       expect(extractCitations([{ index: 0, text }])).toHaveLength(0);
     }
+  });
+});
+
+describe("stored decision identifier projection", () => {
+  test("recovers publisher case-number aliases from stored metadata", () => {
+    expect(
+      decisionIdentifiersFromStoredMetadata({
+        caseNumber: "I ACa 1/24",
+        ecli: "ECLI:PL:TEST:1",
+        metadata: {
+          additionalCaseNumbers: ["I ACz 2/24", "I ACa 1/24"],
+        },
+      }),
+    ).toEqual([
+      {
+        type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+        value: "I ACa 1/24",
+      },
+      {
+        type: DECISION_IDENTIFIER_TYPES.ECLI,
+        value: "ECLI:PL:TEST:1",
+      },
+      {
+        type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+        value: "I ACz 2/24",
+      },
+    ]);
+  });
+
+  test("omits optional identifiers with no searchable normalized value", () => {
+    expect(
+      decisionIdentifiersFromMetadata({
+        caseNumber: "A-123",
+        ecli: "!!!",
+        identifiers: [
+          {
+            type: DECISION_IDENTIFIER_TYPES.NEUTRAL_CITATION,
+            value: "...",
+          },
+          {
+            type: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
+            value: "12 Example Reports 34",
+          },
+        ],
+      }),
+    ).toEqual([
+      {
+        type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+        value: "A-123",
+      },
+      {
+        type: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
+        value: "12 Example Reports 34",
+      },
+    ]);
   });
 });
 

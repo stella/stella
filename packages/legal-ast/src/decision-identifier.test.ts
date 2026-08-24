@@ -36,6 +36,14 @@ describe("decision identifiers", () => {
     },
   );
 
+  test.each([
+    DECISION_IDENTIFIER_TYPES.ECLI,
+    DECISION_IDENTIFIER_TYPES.NEUTRAL_CITATION,
+    DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
+  ])("rejects %s values that normalize to an empty lookup key", (type) => {
+    expect(isDecisionIdentifier({ type, value: "!!!" })).toBe(false);
+  });
+
   test("rejects fields from a different identifier shape", () => {
     expect(
       isDecisionIdentifier({

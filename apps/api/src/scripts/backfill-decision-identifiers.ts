@@ -1,7 +1,7 @@
 /**
  * Populate typed decision and citation identifiers for rows written before
  * the identifier tables landed. The keyset walks are bounded and idempotent;
- * a restart revisits only rows still missing their projection.
+ * a restart may replay earlier pages without duplicating their projection.
  *
  *   bun apps/api/src/scripts/backfill-decision-identifiers.ts
  */
@@ -12,7 +12,7 @@ import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
 import {
   decisionIdentifierTypeOfCitation,
-  decisionIdentifiersFromMetadata,
+  decisionIdentifiersFromStoredMetadata,
   normalizeDecisionIdentifier,
   normalizeDecisionIdentifierValue,
 } from "@/api/handlers/case-law/ingestion/citation-extractor";
@@ -26,6 +26,7 @@ type DecisionRow = {
   id: string;
   caseNumber: string;
   ecli: string | null;
+  metadata: Record<string, unknown>;
 };
 
 const readDecisionRows = (result: unknown): DecisionRow[] =>
@@ -38,6 +39,7 @@ const readDecisionRows = (result: unknown): DecisionRow[] =>
             id: row["id"],
             caseNumber: row["caseNumber"],
             ecli: typeof row["ecli"] === "string" ? row["ecli"] : null,
+            metadata: isRecord(row["metadata"]) ? row["metadata"] : {},
           },
         ]
       : [],
@@ -50,15 +52,10 @@ const backfillDecisionPage = async (
   const result: unknown = await rootDb.execute(sql`
       SELECT decision.id,
              decision.case_number AS "caseNumber",
-             decision.ecli
+             decision.ecli,
+             decision.metadata
       FROM case_law_decisions decision
-      WHERE NOT EXISTS (
-        SELECT 1
-        FROM case_law_decision_identifiers identifier
-        WHERE identifier.decision_id = decision.id
-          AND identifier.type = 'case-number'
-      )
-      ${after === null ? sql`` : sql`AND decision.id > ${after}`}
+      ${after === null ? sql`` : sql`WHERE decision.id > ${after}`}
       ORDER BY decision.id
       LIMIT ${BATCH_SIZE}
     `);
@@ -69,7 +66,7 @@ const backfillDecisionPage = async (
   }
   const values = sql.join(
     rows.flatMap((row) =>
-      decisionIdentifiersFromMetadata(row).map(
+      decisionIdentifiersFromStoredMetadata(row).map(
         (identifier) =>
           sql`(${row.id}::uuid, ${identifier.type}::varchar, ${identifier.value}::varchar, ${normalizeDecisionIdentifier(identifier)}::varchar)`,
       ),
