@@ -20,6 +20,7 @@ import {
   legalLists,
   savedSearches,
   signals,
+  WORK_OBLIGATION_STATUS,
   workObligations,
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
@@ -47,7 +48,7 @@ import getTemplate from "@/api/handlers/templates/get";
 import readTimeEntryById from "@/api/handlers/time-entries/get";
 import readUserFileContent from "@/api/handlers/user-files/read-content";
 import readUserFileThumbnail from "@/api/handlers/user-files/read-thumbnail";
-import listWorkObligations from "@/api/handlers/work-obligations/queues/list";
+import listMyWork from "@/api/handlers/work-obligations/queues/list";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -132,6 +133,9 @@ const documentTranslationRunB = toSafeId<"documentTranslationRun">(
 );
 const documentTranslationSourceFileB = toSafeId<"userFile">(
   "22222222-2222-4222-8222-222222222249",
+);
+const workObligationEntityB = toSafeId<"entity">(
+  "22222222-2222-4222-8222-222222222250",
 );
 
 const savedSearchCriteria = (
@@ -529,6 +533,22 @@ const isolationCases: IsolationCase[] = [
       expectPageContainsField(result, "id", foreignSignalB);
     },
   },
+  {
+    name: "governed work queue",
+    runAAgainstB: async ({ ids: testIds, workspaceA }) =>
+      await runHandler(listMyWork, workspaceA, {
+        user: { id: testIds.userB1 },
+        query: { queue: "upcoming", limit: 100, asOf: "2026-08-24" },
+      }),
+    runBPositive: async ({ workspaceB }) =>
+      await runHandler(listMyWork, workspaceB, {
+        query: { queue: "upcoming", limit: 100, asOf: "2026-08-24" },
+      }),
+    expectDenied: (result) =>
+      expectPageExcludesField(result, "entityId", workObligationEntityB),
+    expectPositive: (result) =>
+      expectPageContainsField(result, "entityId", workObligationEntityB),
+  },
 ];
 
 beforeAll(async () => {
@@ -621,6 +641,18 @@ beforeAll(async () => {
     sourceLang: "auto",
     targetLang: "en",
     status: "completed",
+  });
+  await testDb.insert(entities).values({
+    id: workObligationEntityB,
+    workspaceId: ids.wsB1,
+    kind: "task",
+    name: "governed work B",
+  });
+  await testDb.insert(workObligations).values({
+    entityId: workObligationEntityB,
+    workspaceId: ids.wsB1,
+    status: WORK_OBLIGATION_STATUS.AWAITING_ACKNOWLEDGEMENT,
+    ownerUserId: ids.userB1,
   });
 });
 
