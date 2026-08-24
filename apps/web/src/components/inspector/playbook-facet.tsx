@@ -287,8 +287,18 @@ export const PlaybookFacet = ({
     );
   };
 
+  // The document editor stays mounted under this facet but hidden, so any
+  // jump into the document first brings the preview back; the scroll is
+  // queued as a command because a hidden editor cannot scroll yet.
+  const revealDocument = () => {
+    useInspectorTabsStore.getState().setFileFacet(fileFieldId, "preview");
+  };
+
   const scrollToBlock = (blockId: string) => {
-    registration?.editorRef.current?.scrollToBlock(blockId);
+    revealDocument();
+    useInspectorCommandStore
+      .getState()
+      .requestBlockScroll({ tabId: fileFieldId, blockId });
   };
 
   const openReferenceCitation = (
@@ -356,6 +366,14 @@ export const PlaybookFacet = ({
       status: "applied",
       revisionIds,
     });
+    stellaToast.add({
+      type: "success",
+      title: FIX_INSERTED_TITLE,
+      action: {
+        label: SHOW_IN_DOCUMENT_LABEL,
+        onClick: () => scrollToFix(revisionIds),
+      },
+    });
   };
 
   const applyAcceptedFixes = async (plans: readonly AcceptedFixPlan[]) => {
@@ -388,6 +406,7 @@ export const PlaybookFacet = ({
       result.applied.map((applied) => [applied.id, applied.revisionIds ?? []]),
     );
     let appliedCount = 0;
+    let firstRevisionIds: readonly number[] | null = null;
     for (const plan of plans) {
       const operationId = batch.fixOperationIdByKey.get(plan.findingKey);
       const revisionIds =
@@ -398,6 +417,7 @@ export const PlaybookFacet = ({
         continue;
       }
       appliedCount += 1;
+      firstRevisionIds ??= revisionIds;
       setFixState(entityId, fileFieldId, plan.findingKey, {
         status: "applied",
         revisionIds,
@@ -414,6 +434,17 @@ export const PlaybookFacet = ({
         description: applyAcceptedSkippedDescription(
           plans.length - appliedCount,
         ),
+      });
+    }
+    if (firstRevisionIds !== null) {
+      const revisionIds = firstRevisionIds;
+      stellaToast.add({
+        type: "success",
+        title: applyAcceptedDoneTitle(appliedCount),
+        action: {
+          label: SHOW_IN_DOCUMENT_LABEL,
+          onClick: () => scrollToFix(revisionIds),
+        },
       });
     }
   };
@@ -465,6 +496,14 @@ export const PlaybookFacet = ({
     }
     if (application.value === "applied") {
       completeComment(entityId, fileFieldId, finding.findingId);
+      stellaToast.add({
+        type: "success",
+        title: COMMENT_ADDED_TITLE,
+        action: {
+          label: SHOW_IN_DOCUMENT_LABEL,
+          onClick: () => scrollToBlock(blockId),
+        },
+      });
       return;
     }
     cancelComment(entityId, fileFieldId, finding.findingId);
@@ -477,7 +516,10 @@ export const PlaybookFacet = ({
   };
 
   const scrollToFix = (revisionIds: readonly number[]) => {
-    registration?.editorRef.current?.scrollToAIEditOperation(revisionIds);
+    revealDocument();
+    requestAnimationFrame(() => {
+      registration?.editorRef.current?.scrollToAIEditOperation(revisionIds);
+    });
   };
 
   const acceptFix = (positionId: string, revisionIds: readonly number[]) => {
@@ -2031,6 +2073,15 @@ const ResultsView = ({
 // TODO(i18n): English until the review surface is localized as a whole.
 const APPLY_ACCEPTED_LABEL = "Apply all as tracked changes";
 const APPLY_ACCEPTED_FAILED = "Some accepted changes could not be applied";
+// The editor sits hidden under this facet, so every write into the document
+// confirms itself and offers the way there.
+const FIX_INSERTED_TITLE = "Inserted into the draft as a tracked change";
+const COMMENT_ADDED_TITLE = "Comment added to the draft";
+const SHOW_IN_DOCUMENT_LABEL = "Show in document";
+const applyAcceptedDoneTitle = (count: number): string =>
+  count === 1
+    ? "1 change inserted as a tracked change"
+    : `${count} changes inserted as tracked changes`;
 const applyAcceptedPendingDescription = (count: number): string =>
   count === 1
     ? "1 accepted change is not in the document yet"
