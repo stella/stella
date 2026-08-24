@@ -1,3 +1,6 @@
+SET lock_timeout = '1s';--> statement-breakpoint
+SET statement_timeout = '5s';--> statement-breakpoint
+
 ALTER POLICY "workspace_select" ON "work_obligations" USING (CASE
   WHEN "workspace_id" = ANY(COALESCE(NULLIF((SELECT pg_catalog.current_setting('app.workspace_ids', true)), '')::uuid[], ARRAY[]::uuid[]))
   THEN true
