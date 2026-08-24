@@ -37,6 +37,7 @@ const INDEX_ID = corpusIndexId(GENERATION, JURISDICTION);
 const LAST_CYCLE_START = 0.99;
 
 const originalFetch = globalThis.fetch;
+const NO_PENDING_DELETE = { count: 0, oldest: null } as const;
 
 /** Index ids the engine was asked to count, in request order. */
 let countedIndexIds: string[];
@@ -115,10 +116,7 @@ const databaseHolding = (
   jurisdictions?: string[],
   countStatus = "complete",
   deleteOpstamp?: number,
-  pendingDelete: { count: number; oldest: Date | null } = {
-    count: 0,
-    oldest: null,
-  },
+  pendingDelete: { count: number; oldest: Date | null } = NO_PENDING_DELETE,
 ): ScopedDb => {
   const handle = async (callback: (tx: Transaction) => Promise<unknown>) => {
     let rows: Record<string, unknown>[] = [];
@@ -132,19 +130,20 @@ const databaseHolding = (
     const tx = {
       delete: () => chain,
       select: (selection: Record<string, unknown>) => {
-        rows =
-          "status" in selection
-            ? [{ marked, status: countStatus }]
-            : "pendingDocuments" in selection
-              ? [
-                  {
-                    oldestPendingAt: pendingDelete.oldest,
-                    pendingDocuments: pendingDelete.count,
-                  },
-                ]
-              : "opstamp" in selection && deleteOpstamp !== undefined
-                ? [{ opstamp: deleteOpstamp }]
-                : [];
+        if ("status" in selection) {
+          rows = [{ marked, status: countStatus }];
+        } else if ("pendingDocuments" in selection) {
+          rows = [
+            {
+              oldestPendingAt: pendingDelete.oldest,
+              pendingDocuments: pendingDelete.count,
+            },
+          ];
+        } else if ("opstamp" in selection && deleteOpstamp !== undefined) {
+          rows = [{ opstamp: deleteOpstamp }];
+        } else {
+          rows = [];
+        }
         return chain;
       },
       selectDistinct: () => {

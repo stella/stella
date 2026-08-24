@@ -24,7 +24,8 @@ type RecordedRequest = {
 };
 
 let requests: RecordedRequest[];
-let responseBody: unknown | ((url: URL) => unknown);
+let responseBody: unknown;
+let responseBodyForUrl: ((url: URL) => unknown) | null;
 const originalFetch = globalThis.fetch;
 const originalCorpusIndexEndpoint = envBase.CORPUS_INDEX_ENDPOINT;
 const originalCorpusIndexSearchEndpoint = envBase.CORPUS_INDEX_SEARCH_ENDPOINT;
@@ -32,6 +33,7 @@ const originalCorpusIndexSearchEndpoint = envBase.CORPUS_INDEX_SEARCH_ENDPOINT;
 beforeEach(() => {
   requests = [];
   responseBody = {};
+  responseBodyForUrl = null;
   const resolveUrl = (input: Parameters<typeof fetch>[0]): string => {
     if (typeof input === "string") {
       return input;
@@ -53,7 +55,7 @@ beforeEach(() => {
       body: typeof init?.body === "string" ? init.body : "",
     });
     const body =
-      typeof responseBody === "function" ? responseBody(url) : responseBody;
+      responseBodyForUrl === null ? responseBody : responseBodyForUrl(url);
     return new Response(JSON.stringify(body), { status: 200 });
   };
   globalThis.fetch = Object.assign(stub, {
@@ -333,7 +335,7 @@ const settlementResponse = (splitCount: number) => (url: URL) => {
 };
 
 test("delete settlement accepts exactly the published split ceiling", async () => {
-  responseBody = settlementResponse(10_000);
+  responseBodyForUrl = settlementResponse(10_000);
 
   const result = await getCorpusIndexClient().readDeleteSettlement(
     "legal_corpus_v1_cze",
@@ -348,7 +350,7 @@ test("delete settlement accepts exactly the published split ceiling", async () =
 });
 
 test("delete settlement rejects the first split beyond its ceiling", async () => {
-  responseBody = settlementResponse(10_001);
+  responseBodyForUrl = settlementResponse(10_001);
 
   const result = await getCorpusIndexClient().readDeleteSettlement(
     "legal_corpus_v1_cze",
