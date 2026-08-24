@@ -114,7 +114,9 @@ const revokeOtherDatabaseConnectFromPublic = async (
   `);
   for (const { name } of result.rows) {
     // oxlint-disable-next-line no-await-in-loop -- database privileges are separate statements and the test transaction rolls them back together
-    await tx.execute(sql.raw(`REVOKE CONNECT ON DATABASE ${quoted(name)} FROM PUBLIC`));
+    await tx.execute(
+      sql.raw(`REVOKE CONNECT ON DATABASE ${quoted(name)} FROM PUBLIC`),
+    );
   }
 };
 
@@ -278,7 +280,9 @@ describe("public-law reader role", () => {
       `);
       const databaseName = result.rows.at(0)?.name;
       if (databaseName === undefined) {
-        throw new Error("another non-template database is required for the attestation test");
+        throw new Error(
+          "another non-template database is required for the attestation test",
+        );
       }
       await tx.execute(
         sql.raw(
