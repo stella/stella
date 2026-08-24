@@ -792,22 +792,32 @@ fn sanitized_html(raw_html: &str) -> Option<String> {
     .clean(raw_html)
     .to_string();
   let has_formatting = [
-    "<b",
-    "<blockquote",
-    "<code",
-    "<em",
-    "<i",
-    "<li",
-    "<ol",
-    "<pre",
-    "<s",
-    "<strong",
-    "<u",
-    "<ul",
+    "b",
+    "blockquote",
+    "code",
+    "em",
+    "i",
+    "li",
+    "ol",
+    "pre",
+    "s",
+    "strong",
+    "u",
+    "ul",
   ]
   .iter()
-  .any(|tag| html.contains(tag));
+  .any(|tag| contains_opening_tag(&html, tag));
   if has_formatting { Some(html) } else { None }
+}
+
+fn contains_opening_tag(html: &str, tag: &str) -> bool {
+  let prefix = format!("<{tag}");
+  html.match_indices(&prefix).any(|(index, _)| {
+    html
+      .as_bytes()
+      .get(index + prefix.len())
+      .is_some_and(|byte| *byte == b'>' || byte.is_ascii_whitespace())
+  })
 }
 
 fn should_ignore_formats(formats: &[String]) -> bool {
@@ -1333,6 +1343,13 @@ mod tests {
     assert!(!html.contains("href"));
     assert!(!html.contains("script"));
     assert!(!html.contains("style="));
+  }
+
+  #[test]
+  fn sanitizer_does_not_treat_plain_layout_tags_as_formatting() {
+    assert_eq!(sanitized_html("<span>plain</span>"), None);
+    assert_eq!(sanitized_html("line<br>break"), None);
+    assert!(sanitized_html("<strong>bold</strong>").is_some());
   }
 
   #[test]

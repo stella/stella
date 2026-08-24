@@ -209,9 +209,16 @@ const ClipboardEditor = () => {
   };
 
   useEffect(() => {
+    let disposed = false;
+    let latestLoad = 0;
     const load = () => {
+      latestLoad += 1;
+      const loadId = latestLoad;
       void invoke<unknown>("clipboard_get_editor_context")
         .then((value) => {
+          if (disposed || loadId !== latestLoad) {
+            return undefined;
+          }
           if (!isClipboardEditorContext(value)) {
             reportDesktopError({
               code: DESKTOP_TELEMETRY_ERROR_CODES.invalidResponse,
@@ -230,6 +237,9 @@ const ClipboardEditor = () => {
           return undefined;
         })
         .catch(() => {
+          if (disposed || loadId !== latestLoad) {
+            return;
+          }
           reportDesktopError({
             code: DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
             operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardEditorRead,
@@ -239,7 +249,6 @@ const ClipboardEditor = () => {
         });
     };
     load();
-    let disposed = false;
     let stopListening: (() => void) | undefined;
     void listen("clipboard-editor-changed", load)
       .then((unlisten) => {
@@ -251,6 +260,9 @@ const ClipboardEditor = () => {
         return undefined;
       })
       .catch(() => {
+        if (disposed) {
+          return;
+        }
         reportDesktopError({
           code: DESKTOP_TELEMETRY_ERROR_CODES.eventSubscriptionFailed,
           operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardEditorRead,

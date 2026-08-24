@@ -12,6 +12,8 @@ use crate::{
 
 const HISTORY_EVENT: &str = "clipboard-history-changed";
 const STELLA_WEB_APP_URL: &str = "https://my.stll.app";
+const ITEM_NOT_FOUND_ERROR: &str = "clipboard item no longer exists";
+const GROUP_NOT_FOUND_ERROR: &str = "clipboard group no longer exists";
 
 pub type ClipboardEditorState = Arc<Mutex<Option<String>>>;
 
@@ -58,7 +60,9 @@ pub fn clipboard_delete_item(
 ) -> Result<ClipboardSnapshot, String> {
   let snapshot = {
     let mut manager = state.lock().map_err(|_| lock_error())?;
-    manager.delete_item(&id)?;
+    if !manager.delete_item(&id)? {
+      return Err(ITEM_NOT_FOUND_ERROR.to_string());
+    }
     manager.snapshot()
   };
   let _ = window.emit(HISTORY_EVENT, ());
@@ -74,7 +78,7 @@ pub fn clipboard_duplicate_item(
   let snapshot = {
     let mut manager = state.lock().map_err(|_| lock_error())?;
     if !manager.duplicate_item(&id)? {
-      return Err("clipboard item no longer exists".to_string());
+      return Err(ITEM_NOT_FOUND_ERROR.to_string());
     }
     manager.snapshot()
   };
@@ -120,7 +124,9 @@ pub fn clipboard_delete_group(
 ) -> Result<ClipboardSnapshot, String> {
   let snapshot = {
     let mut manager = state.lock().map_err(|_| lock_error())?;
-    manager.delete_group(&id)?;
+    if !manager.delete_group(&id)? {
+      return Err(GROUP_NOT_FOUND_ERROR.to_string());
+    }
     manager.snapshot()
   };
   let _ = window.emit(HISTORY_EVENT, ());
@@ -138,7 +144,9 @@ pub fn clipboard_update_item(
 ) -> Result<ClipboardSnapshot, String> {
   let snapshot = {
     let mut manager = state.lock().map_err(|_| lock_error())?;
-    manager.update_item(&id, &plain_text, html.as_deref(), group_id)?;
+    if !manager.update_item(&id, &plain_text, html.as_deref(), group_id)? {
+      return Err(ITEM_NOT_FOUND_ERROR.to_string());
+    }
     manager.snapshot()
   };
   let _ = window.emit(HISTORY_EVENT, ());
@@ -154,7 +162,9 @@ pub fn clipboard_set_item_group(
 ) -> Result<ClipboardSnapshot, String> {
   let snapshot = {
     let mut manager = state.lock().map_err(|_| lock_error())?;
-    manager.set_item_group(&id, group_id)?;
+    if !manager.set_item_group(&id, group_id)? {
+      return Err(ITEM_NOT_FOUND_ERROR.to_string());
+    }
     manager.snapshot()
   };
   let _ = window.emit(HISTORY_EVENT, ());
@@ -169,7 +179,7 @@ pub fn clipboard_open_editor(
   state: State<'_, ClipboardAppState>,
 ) -> Result<(), String> {
   if state.lock().map_err(|_| lock_error())?.item(&id).is_none() {
-    return Err("clipboard item no longer exists".to_string());
+    return Err(ITEM_NOT_FOUND_ERROR.to_string());
   }
   *editor_state.lock().map_err(|_| lock_error())? = Some(id);
   clipboard_window::show_editor(&app)
@@ -189,7 +199,7 @@ pub fn clipboard_get_editor_context(
   manager.prune_expired(chrono::Utc::now())?;
   let item = manager
     .item(&id)
-    .ok_or_else(|| "clipboard item no longer exists".to_string())?;
+    .ok_or_else(|| ITEM_NOT_FOUND_ERROR.to_string())?;
   Ok(ClipboardEditorContext {
     groups: manager.snapshot().groups,
     item,
@@ -208,7 +218,7 @@ pub fn clipboard_save_editor_item(
   {
     let mut manager = state.lock().map_err(|_| lock_error())?;
     if !manager.update_item(&id, &plain_text, html.as_deref(), group_id)? {
-      return Err("clipboard item no longer exists".to_string());
+      return Err(ITEM_NOT_FOUND_ERROR.to_string());
     }
   }
   let _ = app.emit(HISTORY_EVENT, ());

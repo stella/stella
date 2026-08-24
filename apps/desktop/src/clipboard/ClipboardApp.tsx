@@ -896,6 +896,17 @@ const ClipboardApp = () => {
   const activeItem = filteredItems.at(activeIndex);
   const activeItemId = activeItem?.id;
 
+  const requestHide = () => {
+    void invoke("clipboard_hide").catch(() => {
+      reportDesktopError({
+        code: DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
+        operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardHistoryUpdate,
+        window: DESKTOP_TELEMETRY_WINDOWS.clipboard,
+      });
+      setError(t("errorUpdateHistory"));
+    });
+  };
+
   useEffect(() => {
     const focusActiveCard = () => {
       if (activeItemId) {
@@ -1249,7 +1260,7 @@ const ClipboardApp = () => {
       searchInputRef.current?.focus();
       return;
     }
-    void invoke("clipboard_hide");
+    requestHide();
   };
 
   useEffect(() => {
@@ -1589,11 +1600,7 @@ const ClipboardApp = () => {
           <Button
             aria-label={t("close")}
             className="size-11 rounded-full"
-            onClick={() => {
-              invoke("clipboard_hide").catch(() =>
-                setError(t("errorUpdateHistory")),
-              );
-            }}
+            onClick={requestHide}
             size="icon"
             title={t("close")}
             variant="ghost"

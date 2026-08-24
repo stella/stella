@@ -40,6 +40,7 @@ body:has(.clipboard-editor-window) {
 .clipboard-window {
   --clipboard-search-placeholder: var(--foreground-placeholder);
   --clipboard-search-text: var(--foreground);
+
   min-height: 100dvh;
   border-radius: 28px;
   clip-path: inset(0 round 28px);
@@ -112,6 +113,7 @@ body:has(.clipboard-editor-window) {
 
 .clipboard-card {
   --clipboard-source-accent: var(--color-neutral-400);
+
   background-color: color-mix(in srgb, var(--card) 88%, transparent);
   box-shadow:
     inset 0 0 0 1px color-mix(in srgb, var(--foreground) 7%, transparent),
