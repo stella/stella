@@ -272,9 +272,7 @@ if (!databaseUrl || !runPostgresTests) {
 
       expect(row?.fulltext).toContain("Odôvodnenie");
       expect(row?.sections).toHaveLength(1);
-      expect(row?.parserVersion).toBe(
-        PARSER_VERSIONS[ADAPTER_KEYS.SK_COURTS],
-      );
+      expect(row?.parserVersion).toBe(PARSER_VERSIONS[ADAPTER_KEYS.SK_COURTS]);
       expect(
         row?.documentAst && "blocks" in row.documentAst
           ? row.documentAst.blocks.length

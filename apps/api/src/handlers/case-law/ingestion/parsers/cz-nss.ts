@@ -148,8 +148,7 @@ const footnoteOf = (el: cheerio.Cheerio<AnyNode>): PChunk["footnote"] => {
     : { anchorId: id, label };
 };
 
-const SPACED_EMPHASIS_RE =
-  /^\s*(?:\p{L}\s+){1,}\p{L}\s*(?:[,:;.!?])?\s*$/u;
+const SPACED_EMPHASIS_RE = /^\s*(?:\p{L}\s+){1,}\p{L}\s*(?:[,:;.!?])?\s*$/u;
 const MULTI_SPACE_MARKER = "\u0000";
 
 /**
