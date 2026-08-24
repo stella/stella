@@ -5,7 +5,7 @@ import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import {
   ADAPTER_KEYS,
   ADAPTER_TIMEOUT,
-  PARSER_VERSION,
+  PARSER_VERSIONS,
 } from "@/api/handlers/case-law/consts";
 import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
 import {
@@ -825,7 +825,7 @@ const rowToResult = (
       citation: detail.citation,
     },
     rawHash: hashContent(raw),
-    parserVersion: PARSER_VERSION,
+    parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.CZ_NSS],
     documentAst: content.documentAst ?? EMPTY_AST,
     sourceRaw: content.sourceRaw,
     sourceRawContentType: "text/html",

@@ -545,6 +545,8 @@ export const BlockRenderer = ({
           "group relative mb-[var(--reader-paragraph-gap)] scroll-mt-[var(--reader-anchor-offset)] last:mb-0",
           shouldJustify && "reader-justify",
           block.role === "holding" && "font-[520]",
+          block.note?.type === "footnote" &&
+            "text-muted-foreground border-border mb-2 border-s-2 ps-4 text-[0.86em] leading-relaxed",
           isRomanNumeralDivider &&
             "mt-[var(--reader-section-gap-top)] mb-[var(--reader-section-gap-bottom)] text-center text-sm font-semibold",
           block.role === "case-number" &&

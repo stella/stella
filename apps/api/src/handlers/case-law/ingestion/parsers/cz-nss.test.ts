@@ -176,6 +176,9 @@ describe("parseNssDecisionHtml", () => {
         <p style="text-align:center">
           <span style="font-weight:bold">ROZSUDEK</span>
         </p>
+        <p style="text-align:center">
+          <span style="font-weight:bold">J M É N E M&nbsp;&nbsp;&nbsp;&nbsp;R E P U B L I K Y</span>
+        </p>
         <p>Soud rozhodl takto:</p>
         <p style="text-align:center">
           <span style="font-weight:bold">Odůvodnění:</span>
@@ -515,6 +518,91 @@ describe("parseNssDecisionHtml", () => {
 
       const texts = documentAst.blocks.map((b) => b.plainText);
       expect(texts).not.toContain("ČESKÁ REPUBLIKA");
+    });
+  });
+
+  describe("Aspose document structure", () => {
+    test("keeps an unnumbered ruling readable and preserves linked footnotes", () => {
+      const html = `<html><body>
+        <p style="text-align:center">
+          <span style="font-weight:bold">ROZSUDEK</span>
+        </p>
+        <p style="text-align:center">
+          <span style="font-weight:bold">t a k t o :</span>
+        </p>
+        <p>
+          Usnesení soudu
+          <span style="font-weight:bold">s</span>
+          <span style="font-weight:bold">&nbsp;</span>
+          <span style="font-weight:bold">e</span>
+          <span style="font-weight:bold">&nbsp;&nbsp;&nbsp;&nbsp;</span>
+          <span style="font-weight:bold">z</span>
+          <span style="font-weight:bold">&nbsp;</span>
+          <span style="font-weight:bold">r</span>
+          <span style="font-weight:bold">&nbsp;</span>
+          <span style="font-weight:bold">u</span>
+          <span style="font-weight:bold">&nbsp;</span>
+          <span style="font-weight:bold">š</span>
+          <span style="font-weight:bold">&nbsp;</span>
+          <span style="font-weight:bold">u</span>
+          <span style="font-weight:bold">&nbsp;</span>
+          <span style="font-weight:bold">j</span>
+          <span style="font-weight:bold">&nbsp;</span>
+          <span style="font-weight:bold">e</span>.
+        </p>
+        <p style="text-align:center">
+          <span style="font-weight:bold">Odůvodnění:</span>
+        </p>
+        <p>
+          Historický text<a id="_ftnref1" href="#_ftn1">[1]</a> pokračuje.
+        </p>
+        <hr style="-aw-footnote-type:0" />
+        <div id="_ftn1" style="-aw-footnote-isauto:1">
+          <p>
+            <a href="#_ftnref1">[1]</a>
+            <span style="font-style:italic">Poznámka pod čarou.</span>
+          </p>
+        </div>
+      </body></html>`;
+
+      const { documentAst } = parseNssDecisionHtml(
+        baseInput(html, { caseNumber: "4 As 3/2008" }),
+      );
+      const holding = documentAst.blocks.find(
+        (block) => block.type === "paragraph" && block.role === "holding",
+      );
+      const republicTitle = documentAst.blocks.find(
+        (block) => block.plainText === "JMÉNEM REPUBLIKY",
+      );
+      const reference = documentAst.blocks.find(
+        (block) => block.plainText.includes("Historický text"),
+      );
+      const footnote = documentAst.blocks.find(
+        (block) =>
+          block.type === "paragraph" && block.note?.type === "footnote",
+      );
+
+      expect(republicTitle).toMatchObject({
+        type: "heading",
+        role: "decision-title",
+      });
+      expect(holding?.plainText).toContain("se zrušuje");
+      expect(holding?.inlines).toContainEqual({
+        type: "bold",
+        children: [{ type: "text", text: "se zrušuje" }],
+      });
+      expect(
+        reference?.type === "paragraph" ? reference.inlines : [],
+      ).toContainEqual({
+          type: "link",
+          href: "#_ftn1",
+          children: [{ type: "text", text: "[1]" }],
+      });
+      expect(footnote).toMatchObject({
+        anchorId: "_ftn1",
+        note: { type: "footnote", label: "1" },
+        plainText: "[1] Poznámka pod čarou.",
+      });
     });
   });
 

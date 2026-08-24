@@ -3,7 +3,7 @@ import { panic } from "better-result";
 import {
   ADAPTER_KEYS,
   ADAPTER_TIMEOUT,
-  PARSER_VERSION,
+  PARSER_VERSIONS,
 } from "@/api/handlers/case-law/consts";
 import {
   defineSourceAdapter,
@@ -438,7 +438,7 @@ const buildDecisionFromParts = ({
       updateDate: toOptionalValue(detail?.updateDate),
     },
     rawHash,
-    parserVersion: PARSER_VERSION,
+    parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.SK_COURTS],
     documentAst: EMPTY_AST,
     sourceRaw: JSON.stringify({ listItem: item, detail }),
     sourceRawContentType: "application/json",

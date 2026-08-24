@@ -4,7 +4,7 @@ import { splitCaseReference } from "@/api/handlers/case-law/case-number";
 import {
   ADAPTER_KEYS,
   ADAPTER_TIMEOUT,
-  PARSER_VERSION,
+  PARSER_VERSIONS,
 } from "@/api/handlers/case-law/consts";
 import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
 import {
@@ -541,7 +541,7 @@ const parseItem = (item: CzRegionalApiItem): IngestionResult | null => {
       mentionedStatutes: item.zminenaUstanoveni,
     },
     rawHash: hashContent(raw),
-    parserVersion: PARSER_VERSION,
+    parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.CZ_REGIONAL],
     // Court-specific AST parsing is not available for regional courts yet.
     documentAst: EMPTY_AST,
   };

@@ -37,7 +37,7 @@ import { Result, panic } from "better-result";
 import {
   ADAPTER_KEYS,
   ADAPTER_TIMEOUT,
-  PARSER_VERSION,
+  PARSER_VERSIONS,
 } from "@/api/handlers/case-law/consts";
 import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
 import {
@@ -444,7 +444,7 @@ export const buildSkUsDecision = async (
       typeOfEntry: doc.mkTypeOfEntry,
     },
     rawHash,
-    parserVersion: PARSER_VERSION,
+    parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.SK_US],
     documentAst,
     sourceRaw: JSON.stringify(doc),
     sourceRawBytes: pdfBytes,

@@ -26,6 +26,8 @@
 import * as cheerio from "cheerio";
 import type { AnyNode } from "domhandler";
 
+import { collapseSpacedLetters } from "@stll/text-normalize";
+
 import type {
   Block,
   DocumentAst,
@@ -127,6 +129,106 @@ type PChunk = {
   fontSize: number;
   /** Set when the chunk comes from an <ol type="I"><li>. */
   listItemIndex: number | null;
+  footnote: { anchorId: string; label: string } | null;
+};
+
+const FOOTNOTE_CONTAINER_SELECTOR = "div[id^='_ftn']";
+const FOOTNOTE_ID_RE = /^_ftn(?<label>\d+)$/u;
+
+const footnoteOf = (
+  el: cheerio.Cheerio<AnyNode>,
+): PChunk["footnote"] => {
+  const container = el.closest(FOOTNOTE_CONTAINER_SELECTOR).first();
+  const id = container.attr("id");
+  const label =
+    id === undefined
+      ? undefined
+      : FOOTNOTE_ID_RE.exec(id)?.groups?.["label"];
+
+  return id === undefined || label === undefined
+    ? null
+    : { anchorId: id, label };
+};
+
+const SPACED_EMPHASIS_RE =
+  /^\s*(?:\p{L}\s+){1,}\p{L}\s*(?:[,:;.!?])?\s*$/u;
+const MULTI_SPACE_MARKER = "\u0000";
+
+/**
+ * Aspose expresses letter-spacing as one emphasized node per letter. Merge
+ * identical wrappers first, then recover word boundaries: one source space
+ * joins letters, while two or more source spaces separate words.
+ */
+const normalizeNssInlines = (
+  source: Inline[],
+  spacedEmphasis = false,
+): Inline[] => {
+  const merged: Inline[] = [];
+
+  for (const node of source) {
+    const previous = merged.at(-1);
+    if (node.type === "text" && previous?.type === "text") {
+      previous.text += node.text;
+      continue;
+    }
+    if (node.type === "bold" && previous?.type === "bold") {
+      previous.children.push(...node.children);
+      continue;
+    }
+    if (node.type === "italic" && previous?.type === "italic") {
+      previous.children.push(...node.children);
+      continue;
+    }
+    if (
+      node.type === "link" &&
+      previous?.type === "link" &&
+      previous.href === node.href
+    ) {
+      previous.children.push(...node.children);
+      continue;
+    }
+    merged.push(node);
+  }
+
+  return merged.map((node): Inline => {
+    if (node.type === "line-break") {
+      return node;
+    }
+    if (node.type === "text") {
+      const whitespaceNormalized = node.text.replace(/\s/gu, " ");
+      const text =
+        spacedEmphasis && SPACED_EMPHASIS_RE.test(whitespaceNormalized)
+          ? whitespaceNormalized
+              .trim()
+              .replace(/ {2,}/gu, MULTI_SPACE_MARKER)
+              .replace(/(?<=\p{L}) (?=\p{L})/gu, "")
+              .replaceAll(MULTI_SPACE_MARKER, " ")
+              .replace(/\s+([,:;.!?])/gu, "$1")
+          : collapseSpacedLetters(whitespaceNormalized);
+      return {
+        type: "text",
+        text,
+        ...(node.anonymized === true && { anonymized: true as const }),
+      };
+    }
+    if (node.type === "bold") {
+      return {
+        type: "bold",
+        children: normalizeNssInlines(node.children, true),
+      };
+    }
+    if (node.type === "italic") {
+      return {
+        type: "italic",
+        children: normalizeNssInlines(node.children, spacedEmphasis),
+      };
+    }
+    return {
+      type: "link",
+      href: node.href,
+      children: normalizeNssInlines(node.children, spacedEmphasis),
+    };
+  });
 };
 
 /** Convert a 1-based index to a Roman numeral. */
@@ -179,7 +281,7 @@ const extractChunks = ($: cheerio.CheerioAPI): PChunk[] => {
       }
 
       const style = $el.attr("style") ?? "";
-      const inlines = walkInlines($, $el);
+      const inlines = normalizeNssInlines(walkInlines($, $el));
       const plainText = inlinesToPlainText(inlines).trim();
       if (!plainText) {
         return;
@@ -203,6 +305,7 @@ const extractChunks = ($: cheerio.CheerioAPI): PChunk[] => {
         letterSpacing,
         fontSize,
         listItemIndex: null,
+        footnote: footnoteOf($el),
       });
       return;
     }
@@ -247,6 +350,7 @@ const extractChunks = ($: cheerio.CheerioAPI): PChunk[] => {
           letterSpacing: false,
           fontSize: 12,
           listItemIndex: null,
+          footnote: footnoteOf($el),
         });
       });
       return;
@@ -259,7 +363,7 @@ const extractChunks = ($: cheerio.CheerioAPI): PChunk[] => {
 
       $el.find("> li").each((_li, liEl) => {
         const $li = $(liEl);
-        const inlines = walkInlines($, $li);
+        const inlines = normalizeNssInlines(walkInlines($, $li));
         const plainText = inlinesToPlainText(inlines).trim();
 
         if (!plainText) {
@@ -275,6 +379,7 @@ const extractChunks = ($: cheerio.CheerioAPI): PChunk[] => {
           letterSpacing: false,
           fontSize: 12,
           listItemIndex: listStart,
+          footnote: footnoteOf($li),
         });
         listStart++;
       });
@@ -283,7 +388,7 @@ const extractChunks = ($: cheerio.CheerioAPI): PChunk[] => {
 
     // Regular <p>
     const style = $el.attr("style") ?? "";
-    const inlines = walkInlines($, $el);
+    const inlines = normalizeNssInlines(walkInlines($, $el));
     const plainText = inlinesToPlainText(inlines).trim();
 
     if (!plainText) {
@@ -310,6 +415,7 @@ const extractChunks = ($: cheerio.CheerioAPI): PChunk[] => {
       letterSpacing,
       fontSize,
       listItemIndex: null,
+      footnote: footnoteOf($el),
     });
   });
 
@@ -417,6 +523,7 @@ const classifyChunks = (chunks: readonly PChunk[]): Block[] => {
 
   let inOduvodneni = false;
   let inPouceni = false;
+  let inHolding = false;
   let sawCaseNumber = false;
   let sawTitle = false;
 
@@ -431,6 +538,19 @@ const classifyChunks = (chunks: readonly PChunk[]): Block[] => {
 
     // Skip decorative lines
     if (SKIP_RE.test(plainText)) {
+      continue;
+    }
+
+    if (chunk.footnote !== null) {
+      blockIndex += 1;
+      blocks.push({
+        id: makeBlockId(),
+        anchorId: chunk.footnote.anchorId,
+        type: "paragraph",
+        note: { type: "footnote", label: chunk.footnote.label },
+        inlines,
+        plainText,
+      });
       continue;
     }
 
@@ -476,6 +596,7 @@ const classifyChunks = (chunks: readonly PChunk[]): Block[] => {
 
     // "takto:" separator (centered, bold, letter-spaced)
     if (TAKTO_RE.test(plainText)) {
+      inHolding = true;
       blockIndex += 1;
       blocks.push({
         id: makeBlockId(),
@@ -491,6 +612,7 @@ const classifyChunks = (chunks: readonly PChunk[]): Block[] => {
 
     // "Odůvodnění:" separator
     if (ODUVODNENI_RE.test(plainText)) {
+      inHolding = false;
       inOduvodneni = true;
       blockIndex += 1;
       blocks.push({
@@ -507,6 +629,7 @@ const classifyChunks = (chunks: readonly PChunk[]): Block[] => {
 
     // "Poučení:" standalone
     if (POUCENI_STANDALONE_RE.test(plainText)) {
+      inHolding = false;
       inPouceni = true;
       blockIndex += 1;
       blocks.push({
@@ -523,6 +646,7 @@ const classifyChunks = (chunks: readonly PChunk[]): Block[] => {
 
     // "Poučení:" inline (bold prefix + text in same <p>)
     if (POUCENI_INLINE_RE.test(plainText) && bold) {
+      inHolding = false;
       inPouceni = true;
       blockIndex += 1;
       blocks.push({
@@ -607,7 +731,7 @@ const classifyChunks = (chunks: readonly PChunk[]): Block[] => {
     // <ol> list items: holding paragraphs before Odůvodnění,
     // numbered paragraphs after
     if (chunk.listItemIndex !== null) {
-      if (!inOduvodneni && !inPouceni) {
+      if (inHolding) {
         // Reconstruct the full text with Roman numeral prefix
         const roman = `${toRoman(chunk.listItemIndex)}.`;
         const fullInlines: Inline[] = [
@@ -634,6 +758,21 @@ const classifyChunks = (chunks: readonly PChunk[]): Block[] => {
           plainText,
         });
       }
+      continue;
+    }
+
+    // A single unnumbered výrok is a regular paragraph in Aspose HTML.
+    // Its position, between the two structural separators, is definitive.
+    if (inHolding) {
+      blockIndex += 1;
+      blocks.push({
+        id: makeBlockId(),
+        anchorId: makeAnchorId("p", blockIndex),
+        type: "paragraph",
+        role: "holding",
+        inlines,
+        plainText,
+      });
       continue;
     }
 

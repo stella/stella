@@ -25,6 +25,37 @@ export const ADAPTER_KEYS = {
 export type AdapterKey = (typeof ADAPTER_KEYS)[keyof typeof ADAPTER_KEYS];
 
 /**
+ * Parser output version for each source.
+ *
+ * A parser change must only make that source's rows eligible for replay. The
+ * total map makes a version decision mandatory whenever an adapter is added;
+ * a single global number would turn one publisher's markup fix into a replay
+ * of every court corpus.
+ */
+export const PARSER_VERSIONS = {
+  [ADAPTER_KEYS.CZ_REGIONAL]: 2,
+  [ADAPTER_KEYS.CZ_NS]: 2,
+  [ADAPTER_KEYS.CZ_NSS]: 3,
+  [ADAPTER_KEYS.CZ_US]: 2,
+  [ADAPTER_KEYS.SK_COURTS]: 2,
+  [ADAPTER_KEYS.SK_US]: 2,
+  [ADAPTER_KEYS.PL_COURTS]: 2,
+  [ADAPTER_KEYS.AT_COURTS]: 2,
+  [ADAPTER_KEYS.AT_VFGH]: 2,
+  [ADAPTER_KEYS.AT_VWGH]: 2,
+  [ADAPTER_KEYS.AT_BVWG]: 2,
+  [ADAPTER_KEYS.AT_LVWG]: 2,
+  [ADAPTER_KEYS.AT_ASYLGH]: 2,
+  [ADAPTER_KEYS.AT_UBAS]: 2,
+  [ADAPTER_KEYS.AT_UVS]: 2,
+  [ADAPTER_KEYS.AT_VERG]: 2,
+  [ADAPTER_KEYS.AT_UMSE]: 2,
+  [ADAPTER_KEYS.AT_BKS]: 2,
+  [ADAPTER_KEYS.AT_FINDOK]: 2,
+  [ADAPTER_KEYS.EU_ECJ]: 2,
+} as const satisfies Record<AdapterKey, number>;
+
+/**
  * The jurisdictions the corpus holds decisions for, and the union every
  * per-jurisdiction decision in the case-law slice is total over.
  *
@@ -83,13 +114,6 @@ export const CASE_LAW_SOURCE_ROWS_BOUND = 64;
 
 export const CASE_LAW_SOURCE_ROWS_INVARIANT =
   "case_law_sources is an operator-curated catalogue of at most a few dozen rows; the adapter registry is validated per row at read time, not by this bound";
-
-/**
- * Global parser version. Bump when ANY parser's AST output
- * changes. Stale decisions (parserVersion < PARSER_VERSION)
- * are re-parsed lazily from sourceRaw on next user access.
- */
-export const PARSER_VERSION = 2;
 
 /** Maximum number of pages to sync per invocation. */
 export const MAX_SYNC_PAGES = 100;

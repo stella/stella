@@ -4,7 +4,7 @@ import * as cheerio from "cheerio";
 import {
   ADAPTER_KEYS,
   ADAPTER_TIMEOUT,
-  PARSER_VERSION,
+  PARSER_VERSIONS,
 } from "@/api/handlers/case-law/consts";
 import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
 import {
@@ -487,7 +487,7 @@ const parseDecisionPage = ({
       nalusSz,
     },
     rawHash: hashContent(raw),
-    parserVersion: PARSER_VERSION,
+    parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.CZ_US],
     documentAst,
     sourceRaw: html,
     sourceRawContentType: "text/html",
@@ -1303,7 +1303,7 @@ const listedOnlyDecision = (
   rawHash: hashContent(
     `${listed.sourceDocumentId}|${listed.caseNumber}|listed-only|${reason}`,
   ),
-  parserVersion: PARSER_VERSION,
+  parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.CZ_US],
   documentAst: EMPTY_AST,
   sourceRaw: rawSource?.sourceRaw ?? listed.listingHtml,
   sourceRawContentType: rawSource?.sourceRawContentType ?? "text/html",

@@ -3,7 +3,7 @@ import { panic, Result } from "better-result";
 import {
   ADAPTER_KEYS,
   ADAPTER_TIMEOUT,
-  PARSER_VERSION,
+  PARSER_VERSIONS,
 } from "@/api/handlers/case-law/consts";
 import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
 import {
@@ -828,7 +828,7 @@ const ecjDecisionFromHtml = ({
     rawHash: hashContent(
       `${celex}|${ecli}|${decisionDate}|${language}|${fulltext}`,
     ),
-    parserVersion: PARSER_VERSION,
+    parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.EU_ECJ],
     documentAst,
     sections,
     sourceRaw: html,

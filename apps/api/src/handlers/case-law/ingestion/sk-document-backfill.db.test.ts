@@ -20,7 +20,10 @@ import {
   caseLawSources,
   relations,
 } from "@/api/db/schema";
-import { ADAPTER_KEYS, PARSER_VERSION } from "@/api/handlers/case-law/consts";
+import {
+  ADAPTER_KEYS,
+  PARSER_VERSIONS,
+} from "@/api/handlers/case-law/consts";
 import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
 import type { SafeId } from "@/api/lib/branded-types";
 import { EMPTY_CORPUS_CONTENT_HASHES } from "@/api/lib/legal-search/corpus-storage";
@@ -272,7 +275,9 @@ if (!databaseUrl || !runPostgresTests) {
 
       expect(row?.fulltext).toContain("Odôvodnenie");
       expect(row?.sections).toHaveLength(1);
-      expect(row?.parserVersion).toBe(PARSER_VERSION);
+      expect(row?.parserVersion).toBe(
+        PARSER_VERSIONS[ADAPTER_KEYS.SK_COURTS],
+      );
       expect(
         row?.documentAst && "blocks" in row.documentAst
           ? row.documentAst.blocks.length
