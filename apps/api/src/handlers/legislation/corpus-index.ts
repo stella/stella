@@ -415,10 +415,9 @@ export const reconcileNextLegislationCorpusIndexDelete = async (
       if (next === undefined) {
         return null;
       }
-      // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
-      await scopedDb((tx) => {
+      await scopedDb(async (tx) => {
         // audit: skip — scheduler-owned, derived settlement scheduling state
-        return tx
+        await tx
           .update(legislationCorpusIndexDeleteWatermarks)
           .set({ lastCheckedAt: new Date() })
           .where(
