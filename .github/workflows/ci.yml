@@ -1927,6 +1927,11 @@ jobs:
             --outfile apps/api/src/db/migrate.js \
             apps/api/src/db/migrate.ts
           test -s apps/api/src/db/migrate.js
+          bun build \
+            --target bun \
+            --outfile /tmp/better-auth-migration-audit.js \
+            apps/api/src/scripts/better-auth-migration-audit.ts
+          test -s /tmp/better-auth-migration-audit.js
           mkdir -p /tmp/runtime-workers
           bun build \
             --target bun \

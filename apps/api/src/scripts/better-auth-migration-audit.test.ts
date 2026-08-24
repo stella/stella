@@ -1,0 +1,184 @@
+import { afterAll, describe, expect, test } from "bun:test";
+import { chmod, mkdtemp, rm, symlink } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
+
+import {
+  parseBetterAuthAuditArgs,
+  persistBetterAuthAuditBaseline,
+  readBetterAuthAuditBaseline,
+} from "@/api/scripts/better-auth-migration-audit";
+import {
+  AUTH_TABLE_AUDIT_POLICY,
+  BETTER_AUTH_AUDIT_CHECKS,
+  BETTER_AUTH_AUDIT_MODES,
+  parseBetterAuthAuditBaseline,
+  renderBetterAuthAuditReport,
+} from "@/api/scripts/better-auth-migration-audit.logic";
+import type { BetterAuthAuditReport } from "@/api/scripts/better-auth-migration-audit.logic";
+
+const temporaryDirectories: string[] = [];
+
+afterAll(async () => {
+  await Promise.all(
+    temporaryDirectories.map(
+      async (directory) => await rm(directory, { recursive: true }),
+    ),
+  );
+});
+
+const baselinePayload = () => ({
+  accessPolicyDigest: "c".repeat(64),
+  formatVersion: 2,
+  tables: Object.fromEntries(
+    Object.entries(AUTH_TABLE_AUDIT_POLICY).map(([model, policy]) => [
+      model,
+      {
+        preservedColumns: [...policy.preservedColumns],
+        primaryKeyDigest: "a".repeat(64),
+        rowContentDigest: "b".repeat(64),
+        rowCount: "7",
+      },
+    ]),
+  ),
+});
+
+describe("Better Auth migration audit command", () => {
+  test("requires one explicit mode and a private baseline path", () => {
+    expect(
+      parseBetterAuthAuditArgs([
+        BETTER_AUTH_AUDIT_MODES.PRE_MIGRATION,
+        "--baseline",
+        "/private/baseline.json",
+      ]),
+    ).toMatchObject({
+      status: "ok",
+      value: {
+        baselinePath: "/private/baseline.json",
+        mode: BETTER_AUTH_AUDIT_MODES.PRE_MIGRATION,
+      },
+    });
+    for (const args of [
+      [],
+      [BETTER_AUTH_AUDIT_MODES.PRE_MIGRATION],
+      ["unknown", "--baseline", "/private/baseline.json"],
+      [BETTER_AUTH_AUDIT_MODES.PRE_MIGRATION, "--output", "x"],
+      [BETTER_AUTH_AUDIT_MODES.PRE_MIGRATION, "--baseline", ""],
+      [BETTER_AUTH_AUDIT_MODES.PRE_MIGRATION, "--baseline", "x", "extra"],
+    ]) {
+      expect(parseBetterAuthAuditArgs(args).status).toBe("error");
+    }
+  });
+
+  test("rejects incomplete, expanded, or malformed private baselines", () => {
+    expect(parseBetterAuthAuditBaseline(baselinePayload()).status).toBe("ok");
+    expect(
+      parseBetterAuthAuditBaseline({ formatVersion: 2, tables: {} }).status,
+    ).toBe("error");
+    const expanded = baselinePayload();
+    expanded.tables["unreviewedAuthTable"] = {
+      preservedColumns: ["id"],
+      primaryKeyDigest: "a".repeat(64),
+      rowContentDigest: "b".repeat(64),
+      rowCount: "0",
+    };
+    expect(parseBetterAuthAuditBaseline(expanded).status).toBe("error");
+    const malformed = baselinePayload();
+    const first = Object.values(malformed.tables).at(0);
+    if (first) {
+      first.primaryKeyDigest = "not-a-digest";
+    }
+    expect(parseBetterAuthAuditBaseline(malformed).status).toBe("error");
+
+    const unknownColumn = baselinePayload();
+    const unknownColumnTable = Object.values(unknownColumn.tables).at(0);
+    if (unknownColumnTable) {
+      unknownColumnTable.preservedColumns.push("unreviewed_column");
+    }
+    expect(parseBetterAuthAuditBaseline(unknownColumn).status).toBe("error");
+
+    const duplicateColumn = baselinePayload();
+    const duplicateColumnTable = Object.values(duplicateColumn.tables).at(0);
+    const duplicated = duplicateColumnTable?.preservedColumns.at(0);
+    if (duplicateColumnTable && duplicated) {
+      duplicateColumnTable.preservedColumns.push(duplicated);
+    }
+    expect(parseBetterAuthAuditBaseline(duplicateColumn).status).toBe("error");
+  });
+
+  test("creates the baseline once, accepts an identical rerun, and refuses replacement", async () => {
+    const directory = await mkdtemp(
+      path.join(tmpdir(), "stella-better-auth-audit-"),
+    );
+    temporaryDirectories.push(directory);
+    const baselinePath = path.join(directory, "baseline.json");
+    const parsed = parseBetterAuthAuditBaseline(baselinePayload());
+    expect(parsed.status).toBe("ok");
+    if (parsed.status === "error") {
+      return;
+    }
+
+    expect(
+      (await persistBetterAuthAuditBaseline(baselinePath, parsed.value)).status,
+    ).toBe("ok");
+    expect(
+      (await persistBetterAuthAuditBaseline(baselinePath, parsed.value)).status,
+    ).toBe("ok");
+    expect((await readBetterAuthAuditBaseline(baselinePath)).status).toBe("ok");
+
+    const changedPayload = baselinePayload();
+    const first = Object.values(changedPayload.tables).at(0);
+    if (first) {
+      first.rowCount = "8";
+    }
+    const changed = parseBetterAuthAuditBaseline(changedPayload);
+    expect(changed.status).toBe("ok");
+    if (changed.status === "ok") {
+      const conflict = await persistBetterAuthAuditBaseline(
+        baselinePath,
+        changed.value,
+      );
+      expect(conflict).toMatchObject({
+        error: { code: "baseline-conflict" },
+        status: "error",
+      });
+    }
+
+    await chmod(baselinePath, 0o644);
+    expect((await readBetterAuthAuditBaseline(baselinePath)).status).toBe(
+      "error",
+    );
+    await chmod(baselinePath, 0o600);
+    const linkedPath = path.join(directory, "linked-baseline.json");
+    await symlink(baselinePath, linkedPath);
+    expect((await readBetterAuthAuditBaseline(linkedPath)).status).toBe(
+      "error",
+    );
+  });
+
+  test("renders only stable names and statuses", () => {
+    const report = {
+      checks: [
+        {
+          name: BETTER_AUTH_AUDIT_CHECKS.AUTH_ROWS_PRESERVED,
+          status: "failed",
+        },
+      ],
+      mode: BETTER_AUTH_AUDIT_MODES.POST_MIGRATION,
+      status: "failed",
+    } as const satisfies BetterAuthAuditReport;
+    const rendered = renderBetterAuthAuditReport(report);
+
+    expect(JSON.parse(rendered)).toEqual(report);
+    for (const forbidden of [
+      "person@example.invalid",
+      "client-secret-sentinel",
+      "token-sentinel",
+      "postgres://database.invalid",
+      "primary-key-digest-sentinel",
+      '"rowCount"',
+    ]) {
+      expect(rendered).not.toContain(forbidden);
+    }
+  });
+});

@@ -1,6 +1,6 @@
 import { PGlite } from "@electric-sql/pglite";
 import { pg_trgm } from "@electric-sql/pglite/contrib/pg_trgm";
-import { sql } from "drizzle-orm";
+import { getTableName, sql } from "drizzle-orm";
 import type { SQLWrapper } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
@@ -64,19 +64,7 @@ export const withPublicLawReaderRole = async <
   });
 
 const AUTH_TABLES_SQL = [
-  "user",
-  "organization",
-  "member",
-  "session",
-  "account",
-  "verification",
-  "invitation",
-  "jwks",
-  "oauth_client",
-  "oauth_refresh_token",
-  "oauth_access_token",
-  "oauth_consent",
-  "two_factor",
+  ...Object.values(authSchema.authSchema).map((table) => getTableName(table)),
   "agent_registration",
   "agent_trusted_issuer",
   "agent_delegation",
