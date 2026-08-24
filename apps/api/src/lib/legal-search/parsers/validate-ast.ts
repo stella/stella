@@ -112,6 +112,14 @@ const separateSkipMarkers = (text: string): string => {
   return separated;
 };
 
+// What counts as a missing-word candidate: long enough to be meaningful,
+// not a bare number, not a skip word. Shared so extractWords and the
+// missing-word check judge a peeled remainder by the same rule; a short
+// or numeric remainder is not a meaningful word, so a marker glued to one
+// ("OBRÁZEKje") is not a lost word.
+const isMeaningfulWord = (clean: string): boolean =>
+  clean.length >= 3 && !/^\d+$/u.test(clean) && !SKIP_WORDS.has(clean);
+
 const extractWords = (text: string): Set<string> => {
   const words = new Set<string>();
   for (const w of separateSkipMarkers(text).split(/\s+/u)) {
@@ -120,16 +128,37 @@ const extractWords = (text: string): Set<string> => {
     // non-letter chars from edges.
     const noBrackets = w.replace(/[[\]]/gu, "");
     const clean = trimNonLetters(noBrackets.toLowerCase());
-    if (
-      clean.length >= 3 &&
-      !/^\d+$/u.test(clean) &&
-      !/^\[\d+\]$/u.test(w.toLowerCase()) &&
-      !SKIP_WORDS.has(clean)
-    ) {
+    if (isMeaningfulWord(clean) && !/^\[\d+\]$/u.test(w.toLowerCase())) {
       words.add(clean);
     }
   }
   return words;
+};
+
+// NSS renders decorative figures with the alt text "obrázek" (Czech for
+// "image"). When one sits flush against its neighbour — as bracketless
+// text, or across an inline-element boundary that cheerio's .text()
+// concatenates with no space ("<span>Obrázek</span>Česká" →
+// "ObrázekČeská") — there is no bracket for separateSkipMarkers to split
+// on, so the fused token ("obrázekčeská") matches no AST word and no
+// SKIP_WORDS entry and reads as missing. Peeling leading markers recovers
+// the real remainder; the caller keeps a word only when that remainder is
+// itself unaccounted for, so peeling can clear a phantom but never hides
+// genuine loss.
+const DECORATIVE_MARKERS = ["obrázek"];
+const peelDecorativeMarkers = (word: string): string => {
+  let peeled = word;
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const marker of DECORATIVE_MARKERS) {
+      if (peeled.length > marker.length && peeled.startsWith(marker)) {
+        peeled = peeled.slice(marker.length);
+        changed = true;
+      }
+    }
+  }
+  return peeled;
 };
 
 /** Flatten inline nodes to text (line-break → space). */
@@ -257,7 +286,20 @@ export const validateAst = (
 
   const originalWords = extractWords(originalText);
   const astWords = extractWords(astText);
-  const missingWords = [...originalWords].filter((w) => !astWords.has(w));
+  // A decorative marker fused to its neighbour must not read as missing
+  // when the peeled remainder is accounted for. It is accounted for when
+  // it is present in the AST, or when it is not a meaningful word in its
+  // own right (a skip word, or too short/numeric to count) — judged by
+  // the same rule extractWords applies. Peeling only ever clears a
+  // phantom: a genuinely absent meaningful word keeps a remainder that is
+  // meaningful and not in the AST, so real loss is still reported.
+  const missingWords = [...originalWords].filter((w) => {
+    if (astWords.has(w)) {
+      return false;
+    }
+    const peeled = peelDecorativeMarkers(w);
+    return isMeaningfulWord(peeled) && !astWords.has(peeled);
+  });
 
   if (retainedPct < minRetainedPct) {
     issues.push({
