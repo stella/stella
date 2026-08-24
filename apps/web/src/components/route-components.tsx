@@ -7,6 +7,7 @@ import { CopyIcon, MailIcon, RefreshCcwIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { Loader } from "@stll/ui/loader";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
@@ -454,12 +455,18 @@ type DefaultPendingComponentProps = {
 
 export const DefaultPendingComponent = ({
   className,
-}: DefaultPendingComponentProps) => (
-  <div
-    className={cn("flex h-full w-full items-center justify-center", className)}
-  >
-    <StellaMark className="text-muted-foreground size-8 animate-pulse" />
-  </div>
-);
+}: DefaultPendingComponentProps) => {
+  const t = useTranslations();
+  return (
+    <div
+      className={cn(
+        "flex h-full w-full items-center justify-center",
+        className,
+      )}
+    >
+      <Loader label={t("common.loading")} size="lg" />
+    </div>
+  );
+};
 
 export const DefaultNotFoundComponent = () => <Navigate to="/workspaces" />;
