@@ -30,6 +30,7 @@ import {
 import { contactsRoute } from "@/api/handlers/contacts/routes";
 import { devPublicRoute, devRoute } from "@/api/handlers/dev/routes";
 import { documentReviewsRoute } from "@/api/handlers/document-reviews/routes";
+import { documentTranslationsRoute } from "@/api/handlers/document-translations/routes";
 import { documentTypesRoute } from "@/api/handlers/document-types/routes";
 import { docxSuggestionsRoute } from "@/api/handlers/docx-suggestions/routes";
 import { desktopEditSessionsRoute } from "@/api/handlers/entities/desktop-edit-sessions-route";
@@ -111,6 +112,7 @@ import { assertMigrationsApplied } from "@/api/lib/db/assert-migrations-applied"
 import { detached } from "@/api/lib/detached";
 import { DEV_INSPECTOR_ORIGINS, frontendOrigins } from "@/api/lib/dev-origins";
 import { initDocumentReviewRunWorker } from "@/api/lib/document-review/run-queue";
+import { initDocumentTranslationRunWorker } from "@/api/lib/document-translation/run-queue";
 import { initEntityDeletionCleanupWorker } from "@/api/lib/entity-deletion-cleanup-queue";
 import { httpError } from "@/api/lib/errors/http-error";
 import { errorFingerprint, errorTag } from "@/api/lib/errors/utils";
@@ -599,6 +601,7 @@ const api = new Elysia()
       .use(playbooksRoute)
       .use(playbookRunsRoute)
       .use(documentReviewsRoute)
+      .use(documentTranslationsRoute)
       .use(bilingualTranslationsRoute)
       .use(reportsRoute)
       .use(flowsRoute)
@@ -777,6 +780,9 @@ const startServer = async (): Promise<void> => {
   // BullMQ worker for durable document review runs.
   const documentReviewRunWorker = initDocumentReviewRunWorker();
 
+  // BullMQ worker for unified document translation runs.
+  const documentTranslationRunWorker = initDocumentTranslationRunWorker();
+
   // BullMQ worker for durable bilingual translation runs.
   const bilingualRunWorker = initBilingualRunWorker();
 
@@ -836,6 +842,7 @@ const startServer = async (): Promise<void> => {
         styleSetPackageCleanupWorker.close(),
         reportExportWorker.close(),
         documentReviewRunWorker.close(),
+        documentTranslationRunWorker.close(),
         bilingualRunWorker.close(),
       ]),
       Bun.sleep(WORKER_SHUTDOWN_TIMEOUT_MS),

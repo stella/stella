@@ -13,6 +13,7 @@ import {
   getRecentFileRoute,
   getRecentFilePreviewDateVisibility,
   getRecentFilePreviewHit,
+  rememberSelectedFacetLabels,
   resolveEntityDocumentRoute,
   toAskAIMessageHtml,
 } from "./search-dialog.logic";
@@ -92,6 +93,21 @@ describe("search dialog close actions", () => {
     queue.complete(false);
 
     expect(runCount).toBe(0);
+  });
+});
+
+describe("search facet labels", () => {
+  test("retains a controlled selection label after later results omit it", () => {
+    const selected = ["user-1"];
+    const resolved = rememberSelectedFacetLabels(
+      {},
+      selected,
+      new Map([["user-1", "Ada Lovelace"]]),
+    );
+
+    expect(rememberSelectedFacetLabels(resolved, selected, new Map())).toEqual({
+      "user-1": "Ada Lovelace",
+    });
   });
 });
 

@@ -3936,12 +3936,25 @@ type Messages = {
   };
   "translate": {
     "dialog": {
-      "description": "Translate the open document via DeepL. The translated copy lands in this matter as a new document.";
+      "aiDescription": "Use stella AI while keeping the document structure and formatting.";
+      "backgroundHint": "You can close this window. stella will notify you when the document is ready.";
+      "bilingualDescription": "Create two columns with the source and its AI translation.";
+      "bilingualDocument": "Bilingual columns · stella AI";
+      "completed": "Translation ready";
+      "deeplDescription": "Translate the complete file with DeepL.";
+      "description": "Create a translated copy of the open document. The original is unchanged.";
+      "docxOnly": "stella AI translation is currently available for DOCX files only.";
       "noLanguagesFound": "No languages found";
       "notConfigured": "DeepL is not configured for this organisation. Add a DeepL API key in organisation settings to enable translation.";
+      "outputLabel": "Translation type";
+      "progress": "Translation progress";
+      "progressCount": "{completed} of {total} completed";
+      "runFailed": "The translation could not be completed.";
       "selectPlaceholder": "Choose a language";
       "targetLanguage": "Target language";
       "title": "Translate document";
+      "translatedDocument": "Translated document · DeepL";
+      "translatedDocumentAi": "Translated document · stella AI";
       "translating": "Translating…";
     };
     "error": {

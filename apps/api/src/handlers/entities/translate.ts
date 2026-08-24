@@ -14,7 +14,6 @@ import { and, eq, isNull } from "drizzle-orm";
 import { t } from "elysia";
 
 import { entities, entityVersions, fields } from "@/api/db/schema";
-import { resolveTranslatedOutput } from "@/api/handlers/entities/translate-output";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -29,26 +28,13 @@ import {
   DeepLUpstreamError,
   translateDocument,
 } from "@/api/lib/deepl/deepl";
+import { isDeepLSupportedMimeType } from "@/api/lib/document-translation/deepl-formats";
+import { resolveTranslatedOutput } from "@/api/lib/document-translation/output";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { getScanWarnings, scanFile } from "@/api/lib/file-scan/scan";
 import { createFileKey } from "@/api/lib/files/utils";
 import { readS3ArrayBuffer } from "@/api/lib/s3";
-import { DOC_MIME_TYPE, DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
-
-// Mime types DeepL's /v2/document endpoint accepts. Anything
-// outside this set is rejected before we waste an upload round
-// trip (and DeepL's 50k-char minimum bill).
-const DEEPL_SUPPORTED_MIME_TYPES = new Set<string>([
-  DOC_MIME_TYPE,
-  DOCX_MIME_TYPE,
-  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  PDF_MIME_TYPE,
-  "text/plain",
-  "text/html",
-  "application/xliff+xml",
-]);
 
 const TRANSLATION_ERROR_CODE = {
   deeplKeyRejected: "deepl_key_rejected",
@@ -172,7 +158,7 @@ const translateEntity = createSafeHandler(
       );
     }
 
-    if (!DEEPL_SUPPORTED_MIME_TYPES.has(sourceContent.mimeType)) {
+    if (!isDeepLSupportedMimeType(sourceContent.mimeType)) {
       return Result.err(
         new HandlerError({
           status: 400,

@@ -40,8 +40,6 @@ import { stellaToast } from "@stll/ui/toast";
 import "@stll/folio-react/editor.css";
 import { cn, composeRefs } from "@stll/ui/utils";
 
-import { BilingualDocumentDialog } from "@/components/bilingual-document-dialog";
-import { BilingualTranslateDialog } from "@/components/bilingual-translate-dialog";
 import { openEntityInInspector } from "@/components/chat/entity-open";
 import {
   useDocxFitZoom,
@@ -424,8 +422,8 @@ const JustificationScrollSync = () => {
 };
 
 function RouteComponent() {
-  const workspaceId = Route.useParams({
-    select: (p) => p.workspaceId,
+  const { viewId, workspaceId } = Route.useParams({
+    select: (p) => ({ viewId: p.viewId, workspaceId: p.workspaceId }),
   });
   const initialFieldId = Route.useSearch({ select: (s) => s.field });
   const entityId = Route.useSearch({ select: (s) => s.entity });
@@ -440,6 +438,7 @@ function RouteComponent() {
       entityId={entityId}
       initialFieldId={initialFieldId}
       key={initialFieldId}
+      viewId={viewId}
       workspaceId={workspaceId}
     />
   );
@@ -447,10 +446,12 @@ function RouteComponent() {
 
 function RouteComponentInner({
   workspaceId,
+  viewId,
   entityId,
   initialFieldId,
 }: {
   workspaceId: string;
+  viewId: string;
   entityId: string;
   initialFieldId: string;
 }) {
@@ -458,7 +459,6 @@ function RouteComponentInner({
   const fieldId = activeFieldId;
   const t = useTranslations();
   const canUpdateEntity = usePermissions({ entity: ["update"] });
-  // Both bilingual actions create a document or a new version of one.
   const canCreateEntity = usePermissions({ entity: ["create"] });
   useSyncJustifications({ workspaceId, entityIds: [entityId] });
   const scaleOffset = useWorkspaceStore((s) => s.pdfViewer.scaleOffset);
@@ -737,24 +737,14 @@ function RouteComponentInner({
               <PdfViewerControls
                 currentPage={pageNumber}
                 extraControls={
-                  <>
-                    <TranslateDocumentDialog
-                      fieldId={fieldId}
-                      workspaceId={workspaceId}
-                    />
-                    <BilingualDocumentDialog
-                      disabled={!isDocxFile || !canCreateEntity}
-                      entityId={entityId}
-                      fieldId={fieldId}
-                      workspaceId={workspaceId}
-                    />
-                    <BilingualTranslateDialog
-                      disabled={!isDocxFile || !canCreateEntity}
-                      entityId={entityId}
-                      fieldId={fieldId}
-                      workspaceId={workspaceId}
-                    />
-                  </>
+                  <TranslateDocumentDialog
+                    disabled={!canCreateEntity}
+                    entityId={entityId}
+                    fieldId={fieldId}
+                    isDocx={isDocxFile}
+                    viewId={viewId}
+                    workspaceId={workspaceId}
+                  />
                 }
                 fieldId={fieldId}
                 workspaceId={workspaceId}
@@ -803,24 +793,14 @@ function RouteComponentInner({
                           <PdfViewerControls
                             currentPage={pageNumber}
                             extraControls={
-                              <>
-                                <TranslateDocumentDialog
-                                  fieldId={fieldId}
-                                  workspaceId={workspaceId}
-                                />
-                                <BilingualDocumentDialog
-                                  disabled={!canCreateEntity}
-                                  entityId={entityId}
-                                  fieldId={fieldId}
-                                  workspaceId={workspaceId}
-                                />
-                                <BilingualTranslateDialog
-                                  disabled={!canCreateEntity}
-                                  entityId={entityId}
-                                  fieldId={fieldId}
-                                  workspaceId={workspaceId}
-                                />
-                              </>
+                              <TranslateDocumentDialog
+                                disabled={!canCreateEntity}
+                                entityId={entityId}
+                                fieldId={fieldId}
+                                isDocx
+                                viewId={viewId}
+                                workspaceId={workspaceId}
+                              />
                             }
                             fieldId={fieldId}
                             variant="inline"

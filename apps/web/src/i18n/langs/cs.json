@@ -3933,12 +3933,25 @@
   },
   "translate": {
     "dialog": {
-      "description": "Přeložte otevřený dokument pomocí DeepL. Přeložená kopie se uloží do tohoto spisu jako nový dokument.",
+      "aiDescription": "Použít stella AI se zachováním struktury a formátování dokumentu.",
+      "backgroundHint": "Toto okno můžete zavřít. stella vás upozorní, až bude dokument připraven.",
+      "bilingualDescription": "Vytvořit dva sloupce se zdrojem a jeho překladem pomocí AI.",
+      "bilingualDocument": "Dvojjazyčné sloupce · stella AI",
+      "completed": "Překlad je připraven",
+      "deeplDescription": "Přeložit celý soubor pomocí DeepL.",
+      "description": "Vytvořte přeloženou kopii otevřeného dokumentu. Originál zůstane beze změny.",
+      "docxOnly": "Překlad pomocí stella AI je v současnosti dostupný pouze pro soubory DOCX.",
       "noLanguagesFound": "Žádné jazyky nenalezeny",
       "notConfigured": "DeepL není pro tuto organizaci nastaven. Pro povolení překladu přidejte v nastavení organizace API klíč DeepL.",
+      "outputLabel": "Typ překladu",
+      "progress": "Průběh překladu",
+      "progressCount": "Dokončeno {completed} z {total}",
+      "runFailed": "Překlad se nepodařilo dokončit.",
       "selectPlaceholder": "Vyberte jazyk",
       "targetLanguage": "Cílový jazyk",
       "title": "Přeložit dokument",
+      "translatedDocument": "Přeložený dokument · DeepL",
+      "translatedDocumentAi": "Přeložený dokument · stella AI",
       "translating": "Překládání…"
     },
     "error": {

@@ -173,9 +173,8 @@
     }
   },
   "no-db-await-in-loop-suppressions": {
-    "count": 45,
+    "count": 44,
     "files": {
-      "apps/api/src/handlers/case-law/decisions/sitemap.ts": 1,
       "apps/api/src/handlers/case-law/decisions/slug-backfill.ts": 2,
       "apps/api/src/handlers/case-law/ingestion/pipeline.ts": 1,
       "apps/api/src/handlers/case-law/ingestion/status.ts": 8,
@@ -242,7 +241,7 @@
     "files": {}
   },
   "lint-suppression-directives": {
-    "count": 749,
+    "count": 747,
     "files": {
       "apps/api/scripts/ai-provider-canary-config.ts": 1,
       "apps/api/scripts/ai-provider-canary.ts": 4,
@@ -273,6 +272,7 @@
       "apps/api/src/handlers/case-law/analysis/generate.ts": 1,
       "apps/api/src/handlers/case-law/corpus-index.ts": 1,
       "apps/api/src/handlers/case-law/decisions/search.ts": 1,
+      "apps/api/src/handlers/case-law/decisions/sitemap.ts": 1,
       "apps/api/src/handlers/case-law/decisions/slug-backfill.ts": 1,
       "apps/api/src/handlers/case-law/erasure.ts": 6,
       "apps/api/src/handlers/case-law/ingestion/adapters/cz-ns.ts": 2,
@@ -474,7 +474,7 @@
       "apps/web/src/components/legal-reader/document-ast-text.tsx": 1,
       "apps/web/src/components/pdf/page-citation.tsx": 1,
       "apps/web/src/components/pdf/versions-sidebar.tsx": 1,
-      "apps/web/src/components/search-dialog.tsx": 3,
+      "apps/web/src/components/search-dialog.tsx": 1,
       "apps/web/src/components/templates/template-form.tsx": 3,
       "apps/web/src/components/workspaces/copy-to-matter-dialog.tsx": 1,
       "apps/web/src/components/workspaces/hooks/use-create-b-boxes.ts": 1,
@@ -552,7 +552,6 @@
       "packages/cli/src/cli.ts": 1,
       "packages/cli/src/generated/route-map.ts": 1,
       "packages/cli/src/generated/tool-annotations.ts": 1,
-      "packages/cli/src/run-capability-command.ts": 1,
       "packages/cli/src/run-leaf-command.ts": 2,
       "packages/cli/src/upload-document.ts": 1,
       "packages/errors/src/dev-error.ts": 1,

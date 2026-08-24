@@ -2,9 +2,9 @@ import { describe, expect, test } from "bun:test";
 
 import { DOC_MIME_TYPE, DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 
-import { resolveTranslatedOutput } from "./translate-output";
+import { buildBilingualFileName, resolveTranslatedOutput } from "./output";
 
-describe("translated DeepL output metadata", () => {
+describe("document translation output metadata", () => {
   test("normalizes legacy DOC translations to DOCX", () => {
     expect(
       resolveTranslatedOutput({
@@ -18,7 +18,7 @@ describe("translated DeepL output metadata", () => {
     });
   });
 
-  test("adds a DOCX extension when legacy DOC metadata has no filename extension", () => {
+  test("adds a DOCX extension when legacy DOC metadata has no extension", () => {
     expect(
       resolveTranslatedOutput({
         sourceFileName: "Agreement",
@@ -39,5 +39,15 @@ describe("translated DeepL output metadata", () => {
       fileName: "Bundle (FR).pdf",
       mimeType: PDF_MIME_TYPE,
     });
+  });
+
+  test("names bilingual DOCX output with both language tags", () => {
+    expect(
+      buildBilingualFileName({
+        sourceFileName: "Agreement.docx",
+        sourceLang: "cs",
+        targetLang: "en",
+      }),
+    ).toBe("Agreement (CS-EN).docx");
   });
 });

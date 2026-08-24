@@ -70,6 +70,8 @@ export type SafeIdType =
   | "documentProcessingRun"
   | "documentReviewFinding"
   | "documentReviewRun"
+  | "documentTranslationRun"
+  | "documentTranslationUnit"
   | "documentType"
   | "entity"
   | "entityVersionAiSummary"
