@@ -412,6 +412,34 @@ export const orgPolicies = () => [
   }),
 ];
 
+/**
+ * A reader's own notes on shared material. Rows belong to the organization,
+ * but a private one is the author's alone: the organization sees it only
+ * once its author shares it, and only the author ever changes or removes it.
+ */
+export const authoredNotePolicies = () => [
+  p.pgPolicy("organization_select", {
+    for: "select",
+    to: stella,
+    using: sql`${organizationCheck} AND (visibility = 'shared' OR ${userCheck})`,
+  }),
+  p.pgPolicy("author_insert", {
+    for: "insert",
+    to: stella,
+    withCheck: sql`${organizationCheck} AND ${userCheck}`,
+  }),
+  p.pgPolicy("author_update", {
+    for: "update",
+    to: stella,
+    using: sql`${organizationCheck} AND ${userCheck}`,
+  }),
+  p.pgPolicy("author_delete", {
+    for: "delete",
+    to: stella,
+    using: sql`${organizationCheck} AND ${userCheck}`,
+  }),
+];
+
 export const orgReadOnlyPolicies = (tableName: string) => [
   p.pgPolicy(`${tableName}_organization_select`, {
     for: "select",

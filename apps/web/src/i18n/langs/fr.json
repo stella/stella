@@ -397,6 +397,24 @@
       }
     },
     "analyzing": "Analyse en cours...",
+    "annotations": {
+      "colorGreen": "Vert",
+      "colorRed": "Rouge",
+      "colorSky": "Bleu",
+      "colorViolet": "Violet",
+      "colorYellow": "Jaune",
+      "comment": "Commentaire",
+      "commentPlaceholder": "Écrire un commentaire…",
+      "highlight": "Surligner",
+      "removeHighlight": "Retirer le surlignage",
+      "sharedBadge": "Partagé",
+      "styleHighlight": "Surlignage",
+      "styleSquiggly": "Ondulé",
+      "styleStrikethrough": "Barré",
+      "styleUnderline": "Soulignement",
+      "visibilityPrivate": "Moi uniquement",
+      "visibilityShared": "Partagé avec l’organisation"
+    },
     "citation": {
       "citedSummary": "{count, plural, =0 {Non citée} one {Citée une fois} other {Citée # fois}}",
       "decisionCount": "{count, plural, =0 {Aucune décision} one {# décision} other {# décisions}}",

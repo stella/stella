@@ -397,6 +397,24 @@
       }
     },
     "analyzing": "Elemzés folyamatban...",
+    "annotations": {
+      "colorGreen": "Zöld",
+      "colorRed": "Piros",
+      "colorSky": "Kék",
+      "colorViolet": "Lila",
+      "colorYellow": "Sárga",
+      "comment": "Megjegyzés",
+      "commentPlaceholder": "Írj megjegyzést…",
+      "highlight": "Kiemelés",
+      "removeHighlight": "Kiemelés eltávolítása",
+      "sharedBadge": "Megosztva",
+      "styleHighlight": "Kiemelés",
+      "styleSquiggly": "Hullámos vonal",
+      "styleStrikethrough": "Áthúzás",
+      "styleUnderline": "Aláhúzás",
+      "visibilityPrivate": "Csak én",
+      "visibilityShared": "Megosztva a szervezettel"
+    },
     "citation": {
       "citedSummary": "{count, plural, =0 {Nem hivatkozták} one {Egyszer hivatkozták} other {#-szor hivatkozták}}",
       "decisionCount": "{count, plural, =0 {Nincs határozat} one {# határozat} other {# határozat}}",

@@ -397,6 +397,24 @@
       }
     },
     "analyzing": "Analizowanie...",
+    "annotations": {
+      "colorGreen": "Zielony",
+      "colorRed": "Czerwony",
+      "colorSky": "Niebieski",
+      "colorViolet": "Fioletowy",
+      "colorYellow": "Żółty",
+      "comment": "Komentarz",
+      "commentPlaceholder": "Napisz komentarz…",
+      "highlight": "Wyróżnij",
+      "removeHighlight": "Usuń wyróżnienie",
+      "sharedBadge": "Udostępnione",
+      "styleHighlight": "Wyróżnienie",
+      "styleSquiggly": "Falista linia",
+      "styleStrikethrough": "Przekreślenie",
+      "styleUnderline": "Podkreślenie",
+      "visibilityPrivate": "Tylko ja",
+      "visibilityShared": "Udostępnione organizacji"
+    },
     "citation": {
       "citedSummary": "{count, plural, =0 {Niecytowane} one {Cytowane raz} few {Cytowane # razy} many {Cytowane # razy} other {Cytowane # razy}}",
       "decisionCount": "{count, plural, =0 {Brak orzeczeń} one {# orzeczenie} few {# orzeczenia} many {# orzeczeń} other {# orzeczenia}}",

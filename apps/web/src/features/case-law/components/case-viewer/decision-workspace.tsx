@@ -11,18 +11,26 @@ import { OutlineRail } from "@stll/ui/outline-rail";
 import type { OutlineItem } from "@stll/ui/outline-rail";
 
 import { MarginNotes } from "@/features/case-law/components/case-viewer/analysis/margin-notes";
+import type {
+  AnalysisMarginItem,
+  CommentMarginItem,
+} from "@/features/case-law/components/case-viewer/analysis/margin-notes";
 import {
   buildSectionMap,
   flattenAnalysisHeadings,
   getCategoryVar,
 } from "@/features/case-law/components/case-viewer/analysis/types";
 import { useDecisionAnalysis } from "@/features/case-law/components/case-viewer/analysis/use-decision-analysis";
+import { AnnotationToolbar } from "@/features/case-law/components/case-viewer/annotation-toolbar";
+import type { AnnotationToolbarController } from "@/features/case-law/components/case-viewer/annotation-toolbar";
 import { CitationHeader } from "@/features/case-law/components/case-viewer/citation-header";
 import { DecisionCitations } from "@/features/case-law/components/case-viewer/decision-citations";
+import type { AnnotationAnchorSource } from "@/features/case-law/components/case-viewer/decision-text";
 import { DecisionText } from "@/features/case-law/components/case-viewer/decision-text";
 import { ProvisionsCited } from "@/features/case-law/components/case-viewer/provisions-cited";
 import { useDecisionCitationAnchors } from "@/features/case-law/components/case-viewer/use-decision-citation-anchors";
 import { useDecisionProvisionAnchors } from "@/features/case-law/components/case-viewer/use-decision-provision-anchors";
+import type { DecisionAnnotation } from "@/features/case-law/queries/annotations";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useCaseSearchStore } from "@/lib/case-search-store";
 import { detached } from "@/lib/detached";
@@ -40,7 +48,15 @@ type DecisionWorkspaceDecision = {
   metadata?: Record<string, unknown> | null;
 };
 
+/** A signed-in reader's marks on the decision and the means to change them. */
+export type DecisionWorkspaceAnnotations = {
+  annotations: readonly DecisionAnnotation[];
+  controller: AnnotationToolbarController;
+};
+
 type DecisionWorkspaceBaseProps = {
+  /** Absent for a visitor: reading is public, marking needs an account. */
+  annotations?: DecisionWorkspaceAnnotations | undefined;
   decision: DecisionWorkspaceDecision;
   decisionId: SafeId<"caseLawDecision">;
   initialSearchQuery?: string | undefined;
@@ -68,8 +84,53 @@ const getHeadingDisplayAnchorId = ({
 }) => annotations.at(0)?.startAnchorId ?? startAnchorId;
 
 export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
-  const { decision, decisionId, initialSearchQuery } = props;
+  const { annotations, decision, decisionId, initialSearchQuery } = props;
   const t = useTranslations();
+  const [activeAnnotationId, setActiveAnnotationId] = useState<string | null>(
+    null,
+  );
+  const activeAnnotation =
+    annotations?.annotations.find((item) => item.id === activeAnnotationId) ??
+    null;
+  const annotationAnchors: AnnotationAnchorSource[] = (
+    annotations?.annotations ?? []
+  ).map((item) => ({
+    blockAnchorId: item.blockAnchorId,
+    color: item.color,
+    endOffset: item.endOffset,
+    id: item.id,
+    kind: item.kind,
+    onActivate: () => setActiveAnnotationId(item.id),
+    startOffset: item.startOffset,
+    style: item.style,
+  }));
+  const commentItems: CommentMarginItem[] = (annotations?.annotations ?? [])
+    .filter((item) => item.kind === "comment")
+    .map((item) => ({
+      author: { image: item.authorImage, name: item.authorName },
+      id: item.id,
+      kind: "comment",
+      mine: item.mine,
+      onDelete: () => {
+        detached(
+          annotations?.controller.remove(item.id) ?? Promise.resolve(),
+          "case-law.annotation-remove",
+        );
+      },
+      onToggleVisibility: () => {
+        detached(
+          annotations?.controller.update({
+            change: "visibility",
+            id: item.id,
+            visibility: item.visibility === "shared" ? "private" : "shared",
+          }) ?? Promise.resolve(),
+          "case-law.annotation-visibility",
+        );
+      },
+      startAnchorId: item.blockAnchorId,
+      text: item.body ?? "",
+      visibility: item.visibility,
+    }));
   const aiEnabled = props.aiMode === "enabled";
   const ensureAIAvailable =
     props.aiMode === "enabled" ? props.ensureAIAvailable : null;
@@ -164,17 +225,7 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
   })();
 
   const marginItems = flatAnalysisHeadings.flatMap((heading) => {
-    type Item = {
-      kind: "card" | "annotation";
-      id: string;
-      heading?: string;
-      text: string;
-      category: string;
-      depth: number;
-      startAnchorId: string;
-    };
-
-    const items: Item[] = [];
+    const items: AnalysisMarginItem[] = [];
     const first = heading.annotations.at(0);
 
     items.push({
@@ -277,8 +328,12 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
             style={{ gridTemplateColumns: `${panelWidth}px minmax(0, 1fr)` }}
           >
             <aside className="relative max-lg:hidden">
-              {hasAnalysis && marginItems.length > 0 && (
-                <MarginNotes items={marginItems} scrollContainerRef={mainRef} />
+              {((hasAnalysis && marginItems.length > 0) ||
+                commentItems.length > 0) && (
+                <MarginNotes
+                  items={[...(hasAnalysis ? marginItems : []), ...commentItems]}
+                  scrollContainerRef={mainRef}
+                />
               )}
               {isAnalyzing && (
                 <div className="px-2 pt-8">
@@ -350,6 +405,7 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
               <ProvisionsCited decisionId={decisionId} />
               <DecisionText
                 activeMatchIndex={activeMatchIndex}
+                annotationAnchors={annotationAnchors}
                 citationAnchors={citationAnchors}
                 decision={decision}
                 onMatchCountChange={setMatchCount}
@@ -360,6 +416,19 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
             </main>
           </div>
         </div>
+        {annotations !== undefined && (
+          <AnnotationToolbar
+            activeAnnotation={activeAnnotation}
+            controller={annotations.controller}
+            decision={{
+              caseNumber: decision.caseNumber,
+              court: decision.court,
+              id: decisionId,
+            }}
+            onClearActive={() => setActiveAnnotationId(null)}
+            scrollContainerRef={mainRef}
+          />
+        )}
       </div>
     </div>
   );

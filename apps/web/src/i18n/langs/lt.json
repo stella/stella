@@ -397,6 +397,24 @@
       }
     },
     "analyzing": "Analizuojama...",
+    "annotations": {
+      "colorGreen": "Žalia",
+      "colorRed": "Raudona",
+      "colorSky": "Mėlyna",
+      "colorViolet": "Violetinė",
+      "colorYellow": "Geltona",
+      "comment": "Komentaras",
+      "commentPlaceholder": "Rašykite komentarą…",
+      "highlight": "Paryškinti",
+      "removeHighlight": "Pašalinti paryškinimą",
+      "sharedBadge": "Bendrinama",
+      "styleHighlight": "Paryškinimas",
+      "styleSquiggly": "Banguota linija",
+      "styleStrikethrough": "Perbraukimas",
+      "styleUnderline": "Pabraukimas",
+      "visibilityPrivate": "Tik aš",
+      "visibilityShared": "Bendrinama su organizacija"
+    },
     "citation": {
       "citedSummary": "{count, plural, =0 {Necituota} one {Cituota kartą} few {Cituota # kartus} many {Cituota # karto} other {Cituota # kartų}}",
       "decisionCount": "{count, plural, =0 {Sprendimų nėra} one {# sprendimas} few {# sprendimai} many {# sprendimo} other {# sprendimų}}",

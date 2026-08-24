@@ -397,6 +397,24 @@
       }
     },
     "analyzing": "جارٍ التحليل...",
+    "annotations": {
+      "colorGreen": "أخضر",
+      "colorRed": "أحمر",
+      "colorSky": "أزرق",
+      "colorViolet": "بنفسجي",
+      "colorYellow": "أصفر",
+      "comment": "تعليق",
+      "commentPlaceholder": "اكتب تعليقًا…",
+      "highlight": "تمييز",
+      "removeHighlight": "إزالة التمييز",
+      "sharedBadge": "مشارك",
+      "styleHighlight": "تمييز",
+      "styleSquiggly": "خط متموج",
+      "styleStrikethrough": "يتوسطه خط",
+      "styleUnderline": "تسطير",
+      "visibilityPrivate": "أنا فقط",
+      "visibilityShared": "مشارك مع المؤسسة"
+    },
     "citation": {
       "citedSummary": "{count, plural, =0 {لم يُستشهد به} zero {لم يُستشهد به} one {استُشهد به مرة واحدة} two {استُشهد به مرتين} few {استُشهد به # مرات} many {استُشهد به # مرة} other {استُشهد به # مرة}}",
       "decisionCount": "{count, plural, =0 {لا توجد أحكام} zero {لا توجد أحكام} one {حكم واحد} two {حكمان} few {# أحكام} many {# حكمًا} other {# حكم}}",

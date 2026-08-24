@@ -41,15 +41,18 @@ import {
 } from "@/api/lib/decision-date-bounds-sql";
 
 import {
+  authoredNotePolicies,
   caseLawIngestionOnlyPolicies,
   globalCaseLawPolicies,
   isNotNull,
   isNull,
   jsonb,
+  organization,
   p,
   pUuid,
   publicCaseLawReaderPolicies,
   publicLawReaderPolicies,
+  safeOrganizationId,
   safeUuid,
   safeWorkspaceId,
   sql,
@@ -1482,6 +1485,129 @@ export const caseLawMatterLinks = p.pgTable(
 // ---------------------------------------------------------------------------
 // Case Law — Search index (global, no tenant column)
 // ---------------------------------------------------------------------------
+
+/** What a reader leaves on a decision's text. */
+export const CASE_LAW_ANNOTATION_KINDS = ["highlight", "comment"] as const;
+export type CaseLawAnnotationKind = (typeof CASE_LAW_ANNOTATION_KINDS)[number];
+
+/** Who besides the author sees an annotation. */
+export const CASE_LAW_ANNOTATION_VISIBILITIES = ["private", "shared"] as const;
+export type CaseLawAnnotationVisibility =
+  (typeof CASE_LAW_ANNOTATION_VISIBILITIES)[number];
+
+/** Highlight swatches, named after the design system's option palette. */
+export const CASE_LAW_ANNOTATION_COLORS = [
+  "yellow",
+  "green",
+  "sky",
+  "violet",
+  "red",
+] as const;
+export type CaseLawAnnotationColor =
+  (typeof CASE_LAW_ANNOTATION_COLORS)[number];
+
+/** How a highlight is drawn, the way a PDF reader offers mark-up styles. */
+export const CASE_LAW_ANNOTATION_STYLES = [
+  "highlight",
+  "underline",
+  "squiggly",
+  "strikethrough",
+] as const;
+export type CaseLawAnnotationStyle =
+  (typeof CASE_LAW_ANNOTATION_STYLES)[number];
+
+const CASE_LAW_ANNOTATION_KIND_SQL_VALUES = CASE_LAW_ANNOTATION_KINDS.map(
+  (value) => sql.raw(`'${value}'`),
+);
+const CASE_LAW_ANNOTATION_VISIBILITY_SQL_VALUES =
+  CASE_LAW_ANNOTATION_VISIBILITIES.map((value) => sql.raw(`'${value}'`));
+const CASE_LAW_ANNOTATION_COLOR_SQL_VALUES = CASE_LAW_ANNOTATION_COLORS.map(
+  (value) => sql.raw(`'${value}'`),
+);
+const CASE_LAW_ANNOTATION_STYLE_SQL_VALUES = CASE_LAW_ANNOTATION_STYLES.map(
+  (value) => sql.raw(`'${value}'`),
+);
+
+/** Long enough for a paragraph a reader marks, short enough to stay a quote. */
+export const CASE_LAW_ANNOTATION_QUOTE_MAX_LENGTH = 2000;
+export const CASE_LAW_ANNOTATION_BODY_MAX_LENGTH = 10_000;
+
+/**
+ * A reader's highlights and comments on a decision. Organization-owned,
+ * author-controlled: private by default, visible to the organization once
+ * shared, and only ever edited by its author (`authoredNotePolicies`).
+ *
+ * The decision is referenced by id without a foreign key: the public-law
+ * corpus may live in another database (`PUBLIC_LAW_DATABASE_URL`), and a
+ * decision withdrawn from the corpus leaves its notes behind rather than
+ * deleting a reader's own words.
+ *
+ * The anchor is the block's stable anchor plus offsets into its rendered
+ * text and the quoted text itself, so a re-parse that moves offsets can
+ * still find the words.
+ */
+export const caseLawDecisionAnnotations = p.pgTable(
+  "case_law_decision_annotations",
+  {
+    id: pUuid<"caseLawDecisionAnnotation">().primaryKey(),
+    organizationId: safeOrganizationId("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    userId: p
+      .text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    decisionId: safeUuid<"caseLawDecision">("decision_id").notNull(),
+    kind: p.text("kind", { enum: CASE_LAW_ANNOTATION_KINDS }).notNull(),
+    visibility: p
+      .text("visibility", { enum: CASE_LAW_ANNOTATION_VISIBILITIES })
+      .notNull()
+      .default("private"),
+    color: p.text("color", { enum: CASE_LAW_ANNOTATION_COLORS }),
+    style: p.text("style", { enum: CASE_LAW_ANNOTATION_STYLES }),
+    blockAnchorId: p.varchar("block_anchor_id", { length: 64 }).notNull(),
+    startOffset: p.integer("start_offset").notNull(),
+    endOffset: p.integer("end_offset").notNull(),
+    quote: p
+      .varchar({ length: CASE_LAW_ANNOTATION_QUOTE_MAX_LENGTH })
+      .notNull(),
+    body: p.varchar({ length: CASE_LAW_ANNOTATION_BODY_MAX_LENGTH }),
+    createdAt: timestamptz("created_at").defaultNow().notNull(),
+    updatedAt: timestamptz("updated_at").defaultNow().notNull(),
+  },
+  (t) => [
+    p
+      .index("case_law_decision_annotations_decision_idx")
+      .on(t.organizationId, t.decisionId, t.createdAt, t.id),
+    p.check(
+      "case_law_decision_annotations_kind_values",
+      sql`${t.kind} IN (${sql.join(CASE_LAW_ANNOTATION_KIND_SQL_VALUES, sql`, `)})`,
+    ),
+    p.check(
+      "case_law_decision_annotations_visibility_values",
+      sql`${t.visibility} IN (${sql.join(CASE_LAW_ANNOTATION_VISIBILITY_SQL_VALUES, sql`, `)})`,
+    ),
+    p.check(
+      "case_law_decision_annotations_color_values",
+      sql`${t.color} IS NULL OR ${t.color} IN (${sql.join(CASE_LAW_ANNOTATION_COLOR_SQL_VALUES, sql`, `)})`,
+    ),
+    p.check(
+      "case_law_decision_annotations_style_values",
+      sql`${t.style} IS NULL OR ${t.style} IN (${sql.join(CASE_LAW_ANNOTATION_STYLE_SQL_VALUES, sql`, `)})`,
+    ),
+    // A highlight is a colour and a style on the text; a comment is words.
+    p.check(
+      "case_law_decision_annotations_kind_shape",
+      sql`(${t.kind} = 'highlight' AND ${t.color} IS NOT NULL AND ${t.style} IS NOT NULL AND ${t.body} IS NULL)
+        OR (${t.kind} = 'comment' AND ${t.body} IS NOT NULL AND ${t.body} <> '' AND ${t.style} IS NULL)`,
+    ),
+    p.check(
+      "case_law_decision_annotations_span_shape",
+      sql`${t.startOffset} >= 0 AND ${t.endOffset} > ${t.startOffset} AND ${t.quote} <> ''`,
+    ),
+    ...authoredNotePolicies(),
+  ],
+);
 
 export const caseLawCourtWeights = p.pgTable(
   "case_law_court_weights",

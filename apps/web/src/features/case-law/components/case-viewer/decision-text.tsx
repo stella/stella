@@ -1,5 +1,5 @@
 import { useRef } from "react";
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 
 import { useTranslations } from "use-intl";
 
@@ -42,8 +42,23 @@ type Decision = {
   metadata?: Record<string, unknown> | null;
 };
 
+/** A reader's highlight or comment, as a span to draw over the text. */
+export type AnnotationAnchorSource = {
+  blockAnchorId: string;
+  color: string | null;
+  endOffset: number;
+  id: string;
+  kind: "highlight" | "comment";
+  onActivate: () => void;
+  startOffset: number;
+  /** How a highlight is drawn; null for a comment. */
+  style: "highlight" | "underline" | "squiggly" | "strikethrough" | null;
+};
+
 type DecisionTextProps = {
   activeMatchIndex: number;
+  /** The reader's own marks and what colleagues shared. */
+  annotationAnchors?: readonly AnnotationAnchorSource[] | undefined;
   /** Resolved citations whose mentions in the text become links. */
   citationAnchors?: readonly CitationAnchorSource[] | undefined;
   decision: Decision;
@@ -143,24 +158,113 @@ const EditorialSupplement = ({
  * decision citation and a provision reference cannot share characters in
  * honest text, so whichever starts first simply wins.
  */
+/**
+ * A mark on the text, drawn the way PDF readers draw mark-up: a colour and a
+ * style. A comment is a dotted underline in the margin colour; the words
+ * stay readable under every style, including a strike, since the reader's
+ * own mark must never hide the court's text.
+ */
+const annotationClassName = ({
+  kind,
+  style,
+}: AnnotationAnchorSource): string => {
+  if (kind === "comment") {
+    return "cursor-pointer bg-transparent text-inherit underline decoration-dotted decoration-2 underline-offset-4";
+  }
+  switch (style) {
+    case "underline": {
+      return "cursor-pointer bg-transparent text-inherit underline decoration-2 underline-offset-3";
+    }
+    case "squiggly": {
+      return "cursor-pointer bg-transparent text-inherit underline decoration-wavy decoration-2 underline-offset-3";
+    }
+    case "strikethrough": {
+      return "cursor-pointer bg-transparent text-inherit line-through decoration-2";
+    }
+    case "highlight":
+    case null: {
+      return "cursor-pointer rounded-sm px-px text-inherit";
+    }
+    default: {
+      const unreachable: never = style;
+      return unreachable;
+    }
+  }
+};
+
+const annotationStyle = ({
+  color,
+  kind,
+  style,
+}: AnnotationAnchorSource): CSSProperties => {
+  if (kind === "comment") {
+    return { textDecorationColor: "var(--option-sky)" };
+  }
+  const swatch = `var(--option-${color ?? "yellow"})`;
+  return style === "highlight" || style === null
+    ? { backgroundColor: `color-mix(in srgb, ${swatch} 32%, transparent)` }
+    : { textDecorationColor: swatch };
+};
+
 const buildAnchorsByPieceId = ({
+  annotations,
   blocks,
   citations,
   provisions,
 }: {
+  annotations: readonly AnnotationAnchorSource[];
   blocks: readonly Block[];
   citations: readonly CitationAnchorSource[];
   provisions: readonly DecisionProvisionAnchor[];
 }): Record<string, TextAnchor[]> => {
   const citationSpans = locateCitationAnchors({ blocks, citations });
   const provisionSpans = locateProvisionAnchors({ blocks, provisions });
+  const blockIdByAnchor = new Map(
+    blocks.map((block) => [block.anchorId, block.id] as const),
+  );
+  const annotationsByBlock = new Map<string, AnnotationAnchorSource[]>();
+  for (const annotation of annotations) {
+    const blockId = blockIdByAnchor.get(annotation.blockAnchorId);
+    if (blockId === undefined) {
+      continue;
+    }
+    const list = annotationsByBlock.get(blockId) ?? [];
+    list.push(annotation);
+    annotationsByBlock.set(blockId, list);
+  }
   const anchorsByPieceId: Record<string, TextAnchor[]> = {};
   const blockIds = new Set([
     ...Object.keys(citationSpans),
     ...Object.keys(provisionSpans),
+    ...annotationsByBlock.keys(),
   ]);
   for (const blockId of blockIds) {
     const anchors: TextAnchor[] = [];
+    // A reader's mark over a link keeps the link: links are the text's own
+    // structure, and the mark is still visible in the margin.
+    for (const annotation of annotationsByBlock.get(blockId) ?? []) {
+      anchors.push({
+        end: annotation.endOffset,
+        key: `annotation:${annotation.id}`,
+        // A mark is a control: clicking (or Enter on it) opens the bar that
+        // changes or removes it.
+        render: (children) => (
+          <button
+            className={cn(
+              "inline appearance-none border-0 p-0 text-start align-baseline font-[inherit] text-[length:inherit] leading-[inherit]",
+              annotationClassName(annotation),
+            )}
+            data-annotation-id={annotation.id}
+            onClick={annotation.onActivate}
+            style={annotationStyle(annotation)}
+            type="button"
+          >
+            {children}
+          </button>
+        ),
+        start: annotation.startOffset,
+      });
+    }
     for (const span of citationSpans[blockId] ?? []) {
       anchors.push({
         end: span.end,
@@ -185,7 +289,19 @@ const buildAnchorsByPieceId = ({
         start: span.start,
       });
     }
-    anchorsByPieceId[blockId] = dropOverlappingSpans(anchors);
+    // Links first: a link and a mark on the same words keep the link, since
+    // the mark still reads in the margin while a lost link is gone.
+    const links = dropOverlappingSpans(
+      anchors.filter((anchor) => !anchor.key.startsWith("annotation:")),
+    );
+    const marks = anchors.filter(
+      (anchor) =>
+        anchor.key.startsWith("annotation:") &&
+        !links.some(
+          (link) => anchor.start < link.end && link.start < anchor.end,
+        ),
+    );
+    anchorsByPieceId[blockId] = dropOverlappingSpans([...links, ...marks]);
   }
   return anchorsByPieceId;
 };
@@ -278,9 +394,11 @@ const renderBlocksWithHoldingZone = ({
 
 const NO_CITATION_ANCHORS: readonly CitationAnchorSource[] = [];
 const NO_PROVISION_ANCHORS: readonly DecisionProvisionAnchor[] = [];
+const NO_ANNOTATION_ANCHORS: readonly AnnotationAnchorSource[] = [];
 
 export const DecisionText = ({
   activeMatchIndex,
+  annotationAnchors = NO_ANNOTATION_ANCHORS,
   citationAnchors = NO_CITATION_ANCHORS,
   decision,
   onMatchCountChange,
@@ -409,6 +527,7 @@ export const DecisionText = ({
         {renderBlocksWithHoldingZone({
           activeMatchIndex,
           anchorsByPieceId: buildAnchorsByPieceId({
+            annotations: annotationAnchors,
             blocks: visibleBlocks,
             citations: citationAnchors,
             provisions: provisionAnchors,

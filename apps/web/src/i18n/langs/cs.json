@@ -397,6 +397,24 @@
       }
     },
     "analyzing": "Analyzuji...",
+    "annotations": {
+      "colorGreen": "Zelená",
+      "colorRed": "Červená",
+      "colorSky": "Modrá",
+      "colorViolet": "Fialová",
+      "colorYellow": "Žlutá",
+      "comment": "Komentář",
+      "commentPlaceholder": "Napište komentář…",
+      "highlight": "Zvýraznit",
+      "removeHighlight": "Odebrat zvýraznění",
+      "sharedBadge": "Sdíleno",
+      "styleHighlight": "Zvýraznění",
+      "styleSquiggly": "Vlnovka",
+      "styleStrikethrough": "Přeškrtnutí",
+      "styleUnderline": "Podtržení",
+      "visibilityPrivate": "Jen já",
+      "visibilityShared": "Sdíleno s organizací"
+    },
     "citation": {
       "citedSummary": "{count, plural, =0 {Necitováno} one {Citováno jednou} few {Citováno #krát} other {Citováno #krát}}",
       "decisionCount": "{count, plural, =0 {Žádná rozhodnutí} one {# rozhodnutí} few {# rozhodnutí} other {# rozhodnutí}}",
