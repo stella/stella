@@ -114,7 +114,7 @@
     "cobe": "^2.0.1",
     "diff": "catalog:",
     "driver.js": "1.8.0",
-    "immer": "^11.1.17",
+    "immer": "^11.1.18",
     "jszip": "catalog:",
     "lucide-react": "catalog:",
     "pdfjs-dist": "^6.2.108",
