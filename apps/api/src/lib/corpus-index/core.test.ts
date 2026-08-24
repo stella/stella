@@ -686,6 +686,9 @@ describe("failed index jobs always reach the audit trail", () => {
           status: 200,
         });
       }
+      if (lastUrl.includes("/delete-tasks")) {
+        return new Response(JSON.stringify({ opstamp: 1 }), { status: 200 });
+      }
       return new Response(JSON.stringify({}), { status: 200 });
     };
     globalThis.fetch = Object.assign(stub, {
@@ -1215,7 +1218,11 @@ describe("first-ever fenced appends", () => {
     input: Parameters<typeof fetch>[0],
     init?: Parameters<typeof fetch>[1],
   ) => {
-    if (!requestUrl(input).includes("/ingest")) {
+    const url = requestUrl(input);
+    if (url.includes("/delete-tasks")) {
+      return new Response(JSON.stringify({ opstamp: 1 }), { status: 200 });
+    }
+    if (!url.includes("/ingest")) {
       return new Response(JSON.stringify({}), { status: 200 });
     }
     const body = typeof init?.body === "string" ? init.body : "";
