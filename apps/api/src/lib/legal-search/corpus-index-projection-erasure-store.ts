@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { and, asc, eq, inArray, notExists, notInArray, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import {
@@ -8,7 +8,7 @@ import {
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";
-import { CORPUS_INDEX_QUIESCENT_INTENT_STATUSES } from "@/api/lib/legal-search/corpus-index-projection-contract";
+import { CORPUS_INDEX_APPEND_PRODUCING_INTENT_STATUSES } from "@/api/lib/legal-search/corpus-index-projection-contract";
 import { readRegisteredCorpusProjectionManifestForCleanup } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import { corpusIndexUnknownAppendBarrierAt } from "@/api/lib/legal-search/corpus-index-projection-engine";
 
@@ -129,9 +129,9 @@ export const advanceCorpusProjectionErasuresTx = async (
         eq(corpusIndexProjectionIntents.generation, generation),
         inArray(corpusIndexProjectionIntents.entityId, entityIds),
         sql`${corpusIndexProjectionIntents.epoch} <= ${corpusIndexProjectionStates.desiredEpoch}`,
-        notInArray(
+        inArray(
           corpusIndexProjectionIntents.status,
-          CORPUS_INDEX_QUIESCENT_INTENT_STATUSES,
+          CORPUS_INDEX_APPEND_PRODUCING_INTENT_STATUSES,
         ),
       ),
     )
@@ -249,13 +249,15 @@ export const advanceCorpusProjectionErasuresTx = async (
         eq(corpusIndexProjectionStates.generation, generation),
         inArray(corpusIndexProjectionStates.entityId, entityIds),
         eq(corpusIndexProjectionStates.desiredAction, "erase"),
-        notExists(sql`SELECT 1
+        sql`NOT EXISTS (
+          SELECT 1
           FROM ${corpusIndexProjectionIntents} outstanding
           WHERE outstanding.family = ${corpusIndexProjectionStates.family}
             AND outstanding.generation = ${corpusIndexProjectionStates.generation}
             AND outstanding.entity_id = ${corpusIndexProjectionStates.entityId}
             AND outstanding.epoch <= ${corpusIndexProjectionStates.desiredEpoch}
-            AND outstanding.status NOT IN ('settled', 'cancelled')`),
+            AND outstanding.status NOT IN ('settled', 'cancelled')
+        )`,
       ),
     )
     .returning({ entityId: corpusIndexProjectionStates.entityId });

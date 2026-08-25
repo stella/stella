@@ -269,7 +269,8 @@ type ClaimCorpusProjectionCleanupSettlementOptions = {
   indexId: string;
   limit: number;
   leaseMs: number;
-  now?: Date;
+  /** Deterministic database-test clock; production expiry uses PostgreSQL. */
+  testNow?: Date;
   newLeaseToken?: () => string;
 };
 
@@ -281,7 +282,7 @@ export const claimCorpusProjectionCleanupSettlementTx = async (
     indexId,
     limit: requestedLimit,
     leaseMs: requestedLeaseMs,
-    now = new Date(),
+    testNow,
     newLeaseToken = () => Bun.randomUUIDv7(),
   }: ClaimCorpusProjectionCleanupSettlementOptions,
 ): Promise<CorpusProjectionCleanupSettlementLease | null> => {
@@ -343,11 +344,15 @@ export const claimCorpusProjectionCleanupSettlementTx = async (
     return null;
   }
   const leaseToken = newLeaseToken();
-  const leaseExpiresAt = new Date(now.getTime() + leaseMs);
+  const claimAt = testNow ?? sql<Date>`clock_timestamp()`;
+  const leaseExpiresAt =
+    testNow === undefined
+      ? sql<Date>`clock_timestamp() + ${leaseMs} * INTERVAL '1 millisecond'`
+      : new Date(testNow.getTime() + leaseMs);
   const intentIds = candidates.map(({ id }) => id);
   const claimed = await tx
     .update(corpusIndexProjectionIntents)
-    .set({ leaseToken, leaseExpiresAt, updatedAt: now })
+    .set({ leaseToken, leaseExpiresAt, updatedAt: claimAt })
     .where(
       and(
         inArray(corpusIndexProjectionIntents.id, intentIds),

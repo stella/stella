@@ -1,14 +1,5 @@
 import { panic } from "better-result";
-import {
-  and,
-  asc,
-  eq,
-  gt,
-  inArray,
-  isNotNull,
-  notExists,
-  sql,
-} from "drizzle-orm";
+import { and, asc, eq, gt, inArray, isNotNull, sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import {
@@ -51,7 +42,8 @@ type ReserveCorpusProjectionIntentsOptions = {
   generation: string;
   limit: number;
   leaseMs: number;
-  now?: Date;
+  /** Deterministic database-test clock; production expiry uses PostgreSQL. */
+  testNow?: Date;
   newIntentId?: () => ProjectionIntentId;
   newLeaseToken?: () => string;
 };
@@ -90,14 +82,14 @@ const pendingDesiredState = sql`(
   OR ${corpusIndexProjectionStates.appliedIndexId} IS DISTINCT FROM ${corpusIndexProjectionStates.desiredIndexId}
 )`;
 
-const noOutstandingIntent = notExists(
-  sql`SELECT 1
+const noOutstandingIntent = sql`NOT EXISTS (
+      SELECT 1
       FROM ${corpusIndexProjectionIntents} outstanding
       WHERE outstanding.family = ${corpusIndexProjectionStates.family}
         AND outstanding.generation = ${corpusIndexProjectionStates.generation}
         AND outstanding.entity_id = ${corpusIndexProjectionStates.entityId}
-        AND outstanding.status NOT IN ('settled', 'cancelled')`,
-);
+        AND outstanding.status NOT IN ('settled', 'cancelled')
+    )`;
 
 /**
  * Reserve exact append attempts only after every earlier revision for the
@@ -111,7 +103,7 @@ export const reserveCorpusProjectionIntentsTx = async (
     generation,
     limit: requestedLimit,
     leaseMs: requestedLeaseMs,
-    now = new Date(),
+    testNow,
     newIntentId = () => createSafeId<"corpusIndexProjectionIntent">(),
     newLeaseToken = () => Bun.randomUUIDv7(),
   }: ReserveCorpusProjectionIntentsOptions,
@@ -161,8 +153,11 @@ export const reserveCorpusProjectionIntentsTx = async (
   if (candidates.length === 0) {
     return [];
   }
-  const leaseExpiresAt = new Date(now.getTime() + leaseMs);
-  const leases = candidates.map((candidate) => {
+  const leaseExpiresAt =
+    testNow === undefined
+      ? sql<Date>`clock_timestamp() + ${leaseMs} * INTERVAL '1 millisecond'`
+      : new Date(testNow.getTime() + leaseMs);
+  const reservations = candidates.map((candidate) => {
     if (candidate.fingerprint === null || candidate.indexId === null) {
       return panic(
         `Upsert projection state is missing its fingerprint or index: ${family}/${generation}/${candidate.entityId}`,
@@ -177,35 +172,56 @@ export const reserveCorpusProjectionIntentsTx = async (
       fingerprint: candidate.fingerprint,
       indexId: candidate.indexId,
       leaseToken: newLeaseToken(),
-      leaseExpiresAt,
-    } satisfies CorpusProjectionIntentLease;
+    };
   });
   const inserted = await tx
     .insert(corpusIndexProjectionIntents)
     .values(
-      leases.map(
-        (lease) =>
+      reservations.map(
+        (reservation) =>
           ({
-            id: lease.intentId,
-            family: lease.family,
-            generation: lease.generation,
-            entityId: lease.entityId,
-            epoch: lease.epoch,
-            fingerprint: lease.fingerprint,
-            indexId: lease.indexId,
+            id: reservation.intentId,
+            family: reservation.family,
+            generation: reservation.generation,
+            entityId: reservation.entityId,
+            epoch: reservation.epoch,
+            fingerprint: reservation.fingerprint,
+            indexId: reservation.indexId,
             status: "reserved",
-            leaseToken: lease.leaseToken,
-            leaseExpiresAt: lease.leaseExpiresAt,
+            leaseToken: reservation.leaseToken,
+            leaseExpiresAt,
           }) satisfies typeof corpusIndexProjectionIntents.$inferInsert,
       ),
     )
-    .returning({ id: corpusIndexProjectionIntents.id });
-  if (inserted.length !== leases.length) {
+    .returning({
+      id: corpusIndexProjectionIntents.id,
+      leaseExpiresAt: corpusIndexProjectionIntents.leaseExpiresAt,
+    });
+  if (inserted.length !== reservations.length) {
     return panic(
-      `Corpus projection reservation inserted ${inserted.length} of ${leases.length} intents`,
+      `Corpus projection reservation inserted ${inserted.length} of ${reservations.length} intents`,
     );
   }
-  return leases;
+  const expiryByIntentId = new Map(
+    inserted.map(({ id, leaseExpiresAt: insertedExpiry }) => {
+      if (insertedExpiry === null) {
+        return panic(`Reserved projection intent has no lease expiry: ${id}`);
+      }
+      return [id, insertedExpiry] as const;
+    }),
+  );
+  return reservations.map((reservation) => {
+    const insertedExpiry = expiryByIntentId.get(reservation.intentId);
+    if (insertedExpiry === undefined) {
+      return panic(
+        `Reserved projection intent was not returned: ${reservation.intentId}`,
+      );
+    }
+    return {
+      ...reservation,
+      leaseExpiresAt: insertedExpiry,
+    } satisfies CorpusProjectionIntentLease;
+  });
 };
 
 export type CorpusProjectionReplacementCleanup = {

@@ -16,6 +16,14 @@ export const CORPUS_INDEX_INTENT_STATUSES = [
 export type CorpusIndexIntentStatus =
   (typeof CORPUS_INDEX_INTENT_STATUSES)[number];
 
+/** Phases that can create or expose one exact append revision. */
+export const CORPUS_INDEX_APPEND_PRODUCING_INTENT_STATUSES = [
+  "reserved",
+  "append_started",
+  "append_committed",
+  "applied",
+] as const satisfies readonly CorpusIndexIntentStatus[];
+
 export const CORPUS_INDEX_QUIESCENT_INTENT_STATUSES = [
   "settled",
   "cancelled",
