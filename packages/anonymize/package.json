@@ -1,6 +1,6 @@
 {
   "name": "@stll/anonymize",
-  "version": "2.8.2",
+  "version": "2.8.3",
   "description": "Deterministic PII detection and anonymization with regex, deny lists, and coreference resolution",
   "keywords": [
     "anonymization",
@@ -113,11 +113,11 @@
     }
   },
   "optionalDependencies": {
-    "@stll/anonymize-darwin-arm64": "2.8.2",
-    "@stll/anonymize-darwin-x64": "2.8.2",
-    "@stll/anonymize-linux-arm64-gnu": "2.8.2",
-    "@stll/anonymize-linux-x64-gnu": "2.8.2",
-    "@stll/anonymize-win32-x64-msvc": "2.8.2"
+    "@stll/anonymize-darwin-arm64": "2.8.3",
+    "@stll/anonymize-darwin-x64": "2.8.3",
+    "@stll/anonymize-linux-arm64-gnu": "2.8.3",
+    "@stll/anonymize-linux-x64-gnu": "2.8.3",
+    "@stll/anonymize-win32-x64-msvc": "2.8.3"
   },
   "devDependencies": {
     "@napi-rs/cli": "^3.8.6",

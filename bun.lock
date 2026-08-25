@@ -20,7 +20,7 @@
     },
     "packages/anonymize": {
       "name": "@stll/anonymize",
-      "version": "2.8.2",
+      "version": "2.8.3",
       "bin": {
         "stella-anonymize-build-native-package": "./scripts/build-native-pipeline-package.mjs",
       },
@@ -36,11 +36,11 @@
         "vite": "^8.2.1",
       },
       "optionalDependencies": {
-        "@stll/anonymize-darwin-arm64": "2.8.2",
-        "@stll/anonymize-darwin-x64": "2.8.2",
-        "@stll/anonymize-linux-arm64-gnu": "2.8.2",
-        "@stll/anonymize-linux-x64-gnu": "2.8.2",
-        "@stll/anonymize-win32-x64-msvc": "2.8.2",
+        "@stll/anonymize-darwin-arm64": "2.8.3",
+        "@stll/anonymize-darwin-x64": "2.8.3",
+        "@stll/anonymize-linux-arm64-gnu": "2.8.3",
+        "@stll/anonymize-linux-x64-gnu": "2.8.3",
+        "@stll/anonymize-win32-x64-msvc": "2.8.3",
       },
       "peerDependencies": {
         "@stll/anonymize-data": "^0.0.10",
@@ -51,27 +51,27 @@
     },
     "packages/anonymize-darwin-arm64": {
       "name": "@stll/anonymize-darwin-arm64",
-      "version": "2.8.2",
+      "version": "2.8.3",
     },
     "packages/anonymize-darwin-x64": {
       "name": "@stll/anonymize-darwin-x64",
-      "version": "2.8.2",
+      "version": "2.8.3",
     },
     "packages/anonymize-linux-arm64-gnu": {
       "name": "@stll/anonymize-linux-arm64-gnu",
-      "version": "2.8.2",
+      "version": "2.8.3",
     },
     "packages/anonymize-linux-x64-gnu": {
       "name": "@stll/anonymize-linux-x64-gnu",
-      "version": "2.8.2",
+      "version": "2.8.3",
     },
     "packages/anonymize-win32-x64-msvc": {
       "name": "@stll/anonymize-win32-x64-msvc",
-      "version": "2.8.2",
+      "version": "2.8.3",
     },
     "packages/anonymize/wasm": {
       "name": "@stll/anonymize-wasm",
-      "version": "2.8.2",
+      "version": "2.8.3",
       "peerDependencies": {
         "vite": ">=5 <10",
       },
@@ -97,15 +97,15 @@
     },
     "packages/cli": {
       "name": "@stll/anonymize-cli",
-      "version": "2.8.2",
+      "version": "2.8.3",
       "bin": {
         "anonymize": "./dist/cli.mjs",
       },
       "dependencies": {
-        "@stll/anonymize": "^2.8.2",
+        "@stll/anonymize": "^2.8.3",
         "@stll/anonymize-data": "^0.0.10",
-        "@stll/anonymize-docx": "^2.8.2",
-        "@stll/anonymize-pdf": "^2.8.2",
+        "@stll/anonymize-docx": "^2.8.3",
+        "@stll/anonymize-pdf": "^2.8.3",
       },
       "devDependencies": {
         "@types/node": "^26.2.0",
@@ -139,9 +139,9 @@
     },
     "packages/document-docx": {
       "name": "@stll/anonymize-docx",
-      "version": "2.8.2",
+      "version": "2.8.3",
       "dependencies": {
-        "@stll/anonymize": "^2.8.2",
+        "@stll/anonymize": "^2.8.3",
         "fflate": "^0.8.3",
       },
       "devDependencies": {
@@ -154,9 +154,9 @@
     },
     "packages/document-pdf": {
       "name": "@stll/anonymize-pdf",
-      "version": "2.8.2",
+      "version": "2.8.3",
       "dependencies": {
-        "@stll/anonymize": "2.8.2",
+        "@stll/anonymize": "2.8.3",
       },
       "devDependencies": {
         "@types/node": "^26.2.0",
@@ -167,15 +167,15 @@
     },
     "packages/mcp": {
       "name": "@stll/anonymize-mcp",
-      "version": "2.8.2",
+      "version": "2.8.3",
       "bin": {
         "stella-anonymize-mcp": "./dist/server-entry.mjs",
       },
       "dependencies": {
         "@modelcontextprotocol/sdk": "^1.30.0",
-        "@stll/anonymize": "2.8.2",
-        "@stll/anonymize-docx": "^2.8.2",
-        "@stll/anonymize-pdf": "2.8.2",
+        "@stll/anonymize": "2.8.3",
+        "@stll/anonymize-docx": "^2.8.3",
+        "@stll/anonymize-pdf": "2.8.3",
         "fs-native-extensions": "^1.5.0",
         "zod": "^4.4.3",
       },
