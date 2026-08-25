@@ -4,6 +4,7 @@ import { LegalBrowseFacetsError } from "@/api/lib/legal-search/browse-facets";
 import { corpusGeneration } from "@/api/lib/legal-search/corpus-family";
 import { corpusIndexClusterForGeneration } from "@/api/lib/legal-search/corpus-generation-contract";
 import { getCorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client";
+import { corpusIndexReadContract } from "@/api/lib/legal-search/corpus-index-read-contract";
 import { quoteCorpusValue } from "@/api/lib/legal-search/corpus-query";
 import { corpusIndexRoute } from "@/api/lib/legal-search/index-naming";
 import type {
@@ -21,9 +22,10 @@ import { isRecord } from "@/api/lib/type-guards";
  *
  * The index is passage-granular: every passage carries its decision's shared
  * fields, so an unrestricted terms aggregation counts passages, not decisions.
- * `seq:0` restricts it to each decision's opening passage — `chunkDocument`
- * numbers passages from zero and always emits at least one, so exactly one
- * document per decision matches — and every bucket then counts decisions.
+ * The serving generation's opening-passage predicate restricts it to exactly
+ * one document per decision, so every bucket counts decisions rather than
+ * passages. The predicate is generation-owned because final manifests do not
+ * retain legacy sequence fields.
  *
  * Projection is only the first half of the redistribution gate: it keeps
  * ineligible sources out of the index, but revoking a source's redistribution
@@ -39,12 +41,11 @@ import { isRecord } from "@/api/lib/type-guards";
  * is the set these filters exist to narrow.
  */
 
-const OPENING_PASSAGE_QUERY = "seq:0";
-
 type BrowseFacetsQueryOptions = {
   excludedSourceIds: readonly string[];
   /** Set when the selected index holds other jurisdictions too. */
   jurisdictionClause: string | undefined;
+  openingPassageQuery: string;
 };
 
 /**
@@ -57,8 +58,9 @@ type BrowseFacetsQueryOptions = {
 const browseFacetsQuery = ({
   excludedSourceIds,
   jurisdictionClause,
+  openingPassageQuery,
 }: BrowseFacetsQueryOptions): string => {
-  const clauses = [OPENING_PASSAGE_QUERY];
+  const clauses = [openingPassageQuery];
   if (jurisdictionClause !== undefined) {
     clauses.push(`jurisdiction:${quoteCorpusValue(jurisdictionClause)}`);
   }
@@ -92,27 +94,33 @@ type BrowseFacetSpec = {
  * and the parse cannot drift. `country` reads `jurisdiction` because that is
  * the index's name for the decision's country.
  */
-const BROWSE_FACETS = {
-  country: { field: "jurisdiction", order: { _count: "desc" } },
-  court: { field: "court", order: { _count: "desc" } },
-  year: { field: "year", order: { _key: "desc" } },
-} as const satisfies Record<keyof LegalBrowseFacets, BrowseFacetSpec>;
+const browseFacetSpecs = (yearFacetField: string) =>
+  ({
+    country: { field: "jurisdiction", order: { _count: "desc" } },
+    court: { field: "court", order: { _count: "desc" } },
+    year: { field: yearFacetField, order: { _key: "desc" } },
+  }) as const satisfies Record<keyof LegalBrowseFacets, BrowseFacetSpec>;
 
-export const browseFacetNames = Object.keys(BROWSE_FACETS);
+export const browseFacetNames = Object.keys(browseFacetSpecs("year"));
 
-const buildAggregations = (limit: number): Record<string, unknown> =>
+const buildAggregations = (
+  limit: number,
+  yearFacetField: string,
+): Record<string, unknown> =>
   Object.fromEntries(
-    Object.entries(BROWSE_FACETS).map(([name, { field, order }]) => [
-      name,
-      {
-        terms: {
-          field,
-          size: limit,
-          segment_size: FACET_SEGMENT_SIZE,
-          order,
+    Object.entries(browseFacetSpecs(yearFacetField)).map(
+      ([name, { field, order }]) => [
+        name,
+        {
+          terms: {
+            field,
+            size: limit,
+            segment_size: FACET_SEGMENT_SIZE,
+            order,
+          },
         },
-      },
-    ]),
+      ],
+    ),
   );
 
 /**
@@ -162,7 +170,16 @@ const parseTermsBuckets = (aggregation: unknown): FacetBucket[] | null => {
 export const corpusIndexBrowseFacets = async (
   query: LegalBrowseFacetsQuery,
 ): Promise<Result<LegalBrowseFacets, LegalBrowseFacetsError>> => {
-  const generation = corpusGeneration(query.documentFamily ?? "case_law");
+  const family = query.documentFamily ?? "case_law";
+  const generation = corpusGeneration(family);
+  const readContract = corpusIndexReadContract(family, generation);
+  if (readContract.family !== "case_law") {
+    return Result.err(
+      new LegalBrowseFacetsError({
+        message: "browse facets are only defined for the case-law corpus",
+      }),
+    );
+  }
   // Scoped query → that jurisdiction's index, plus a jurisdiction clause when
   // that index holds other jurisdictions; unscoped → the generation glob (one
   // multi-index aggregation across every index of the generation).
@@ -172,17 +189,15 @@ export const corpusIndexBrowseFacets = async (
   );
 
   const aggregated = await getCorpusIndexClient(
-    corpusIndexClusterForGeneration(
-      query.documentFamily ?? "case_law",
-      generation,
-    ),
+    corpusIndexClusterForGeneration(family, generation),
   ).aggregate({
     indexId,
     query: browseFacetsQuery({
       excludedSourceIds: query.excludedSourceIds,
       jurisdictionClause,
+      openingPassageQuery: readContract.openingPassageQuery,
     }),
-    aggs: buildAggregations(query.limit),
+    aggs: buildAggregations(query.limit, readContract.yearFacetField),
   });
   if (Result.isError(aggregated)) {
     return Result.err(

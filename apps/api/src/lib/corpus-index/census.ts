@@ -69,20 +69,13 @@ import {
 import { corpusIndexClusterForGeneration } from "@/api/lib/legal-search/corpus-generation-contract";
 import type { CorpusIndexError } from "@/api/lib/legal-search/corpus-index-client";
 import { getCorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client";
+import { corpusIndexReadContract } from "@/api/lib/legal-search/corpus-index-read-contract";
 import {
   corpusIndexIdsFor,
   corpusIndexJurisdictions,
 } from "@/api/lib/legal-search/index-naming";
 import { logger } from "@/api/lib/observability/logger";
 import { isRecord } from "@/api/lib/type-guards";
-
-/**
- * Counts documents rather than passages. A passage-granular index holds
- * one entry per chunk and exactly one of them per document carries
- * `seq:0`, so this is the document count on the engine side whichever
- * granularity the family is indexed at.
- */
-const DOCUMENT_COUNT_QUERY = "seq:0";
 
 /** One short transaction's maximum accounting seed work. */
 export const CASE_LAW_CORPUS_INDEX_COUNT_BACKFILL_BATCH_SIZE = 1000;
@@ -517,7 +510,11 @@ export const censusIndex = async ({
   });
   const counted = await getCorpusIndexClient(
     corpusIndexClusterForGeneration("case_law", generation),
-  ).search({ indexId, query: DOCUMENT_COUNT_QUERY, maxHits: 1 });
+  ).search({
+    indexId,
+    query: corpusIndexReadContract("case_law", generation).openingPassageQuery,
+    maxHits: 1,
+  });
   if (Result.isError(counted)) {
     return Result.err(counted.error);
   }

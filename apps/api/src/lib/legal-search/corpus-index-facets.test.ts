@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { afterEach, beforeEach, expect, spyOn, test } from "bun:test";
 import * as v from "valibot";
 
+import { envBase } from "@/api/env-base";
 import * as corpusFamily from "@/api/lib/legal-search/corpus-family";
 import { corpusGeneration } from "@/api/lib/legal-search/corpus-family";
 import {
@@ -104,6 +105,29 @@ test("aggregates over opening passages only, so buckets count decisions", async 
   // an unrestricted aggregation would count a long judgment once per passage.
   expect(requests.at(0)?.body["query"]).toBe("seq:0");
   expect(requests.at(0)?.body["max_hits"]).toBe(0);
+});
+
+test("v5 facets use only manifest-owned fields", async () => {
+  responseBody = engineResponse();
+  const generation = spyOn(corpusFamily, "corpusGeneration").mockReturnValue(
+    "case_law_v5",
+  );
+  const originalEndpoint = envBase.CORPUS_INDEX_Q09_ENDPOINT;
+  Object.assign(envBase, {
+    CORPUS_INDEX_Q09_ENDPOINT: "http://localhost:7291",
+  });
+  try {
+    await corpusIndexBrowseFacets({ excludedSourceIds: [], limit: 20 });
+  } finally {
+    generation.mockRestore();
+    Object.assign(envBase, { CORPUS_INDEX_Q09_ENDPOINT: originalEndpoint });
+  }
+
+  expect(requests.at(0)?.url).toContain("/case_law_v5_*/search");
+  expect(requests.at(0)?.body["query"]).toBe("is_opening:true");
+  expect(requestedAggregations()["year"]).toMatchObject({
+    terms: { field: "decision_year" },
+  });
 });
 
 test("requests exactly the aggregations the response is read from", async () => {

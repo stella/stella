@@ -11,7 +11,7 @@ import {
 
 const EXPECTED_DIGESTS = {
   case_law_v5:
-    "98d516f3f4ee413bf716e6cbec345fb217390a3ae516dba20a5ae1bd2ac77741",
+    "c4ce8a1f9b80f87639af82d6c3a4c426b3bf553e0398ab8ff08c663d7ad0a87b",
   legislation_v2:
     "fc0d1e8e972d95cae450f4863d5a9902db7c9634517e65f57748027a4ca2a265",
 } as const satisfies Record<keyof typeof CORPUS_INDEX_MANIFESTS, string>;
@@ -192,6 +192,14 @@ test("v5 removes stale and repeated physical fields", () => {
     fast: true,
     fast_precision: "seconds",
   });
+  expect(fields.get("decision_year")).toEqual({
+    name: "decision_year",
+    type: "u64",
+    indexed: false,
+    stored: false,
+    fast: true,
+  });
+  expect(manifest.projection.yearFacetField).toBe("decision_year");
 });
 
 test("final manifests make every storage and index cost explicit", () => {

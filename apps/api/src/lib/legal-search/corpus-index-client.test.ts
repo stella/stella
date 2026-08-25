@@ -126,6 +126,23 @@ test("q09 uses only its registered endpoint pair", async () => {
   expect(requests.at(0)?.host).toBe("localhost:7292");
 });
 
+test("q09 search falls back to its mutation endpoint", async () => {
+  responseBody = { num_hits: 0, hits: [], snippets: [] };
+  Object.assign(envBase, {
+    CORPUS_INDEX_Q09_ENDPOINT: "http://localhost:7291",
+    CORPUS_INDEX_Q09_SEARCH_ENDPOINT: undefined,
+  });
+
+  const result = await getCorpusIndexClient("q09").search({
+    indexId: "case_law_v5_cs_sk",
+    query: "text:smlouva",
+    maxHits: 10,
+  });
+
+  expect(result.isOk()).toBe(true);
+  expect(requests.at(0)?.host).toBe("localhost:7291");
+});
+
 test("q09 mutations cannot leak onto its read endpoint", async () => {
   responseBody = {
     num_docs_for_processing: 1,

@@ -457,6 +457,9 @@ export const envBaseInvariantViolation = ({
   ) {
     return "Serving case_law_v5 on q09 requires CORPUS_INDEX_Q09_SEARCH_ENDPOINT or CORPUS_INDEX_Q09_ENDPOINT.";
   }
+  if (CORPUS_INDEXING_ENABLED && CORPUS_INDEX_ENDPOINT === undefined) {
+    return "Corpus indexing requires CORPUS_INDEX_ENDPOINT for legislation_v1 on q08.";
+  }
   if (
     CORPUS_INDEXING_ENABLED &&
     caseLawCluster === "q09" &&

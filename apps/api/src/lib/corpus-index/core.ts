@@ -759,6 +759,17 @@ export const createCorpusIndexer = <
     );
   const clientForIndexId = (indexId: string): CorpusIndexClient =>
     clientForGeneration(corpusIndexGeneration(indexId));
+  const legacyWriterClientForGeneration = (
+    generation: string,
+  ): CorpusIndexClient => {
+    const cluster = corpusIndexClusterForGeneration(adapter.family, generation);
+    if (cluster !== "q08") {
+      return panic(
+        `Legacy ${adapter.family} corpus indexer cannot write final generation ${generation}`,
+      );
+    }
+    return getCorpusIndexClient(cluster);
+  };
 
   // Per-jurisdiction indexes are created on first write. Cache the ids we
   // have confirmed this process so we don't probe corpus index every batch.
@@ -1255,7 +1266,7 @@ export const createCorpusIndexer = <
     options: BackfillSelectedRowsOptions<TBrand, TRow>,
     timing: CorpusBackfillTiming,
   ): Promise<CorpusBackfillOutcome> => {
-    const client = clientForGeneration(generation);
+    const client = legacyWriterClientForGeneration(generation);
     // Load text (S3) with bounded concurrency, then ingest one NDJSON batch.
     // A per-document read failure fails only that document; record it and let
     // the rest still commit.

@@ -417,10 +417,18 @@ describe("environment doctor output", () => {
       expected:
         "Indexing case_law_v5 on q09 requires CORPUS_INDEX_Q09_ENDPOINT.",
       overrides: {
+        CORPUS_INDEX_ENDPOINT: "https://quickwit-08.example.com",
         CORPUS_INDEXING_ENABLED: "true",
         CORPUS_INDEX_Q09_SEARCH_ENDPOINT:
           "https://quickwit-09-search.example.com",
         LEGAL_SEARCH_INDEX_GENERATION: "case_law_v5",
+      },
+    },
+    {
+      expected:
+        "Corpus indexing requires CORPUS_INDEX_ENDPOINT for legislation_v1 on q08.",
+      overrides: {
+        CORPUS_INDEXING_ENABLED: "true",
       },
     },
     // Removed together with the invariant, in the PR that makes a corpus
@@ -510,6 +518,22 @@ describe("environment doctor output", () => {
         "CORPUS_INDEX_Q09_ENDPOINT must use HTTPS unless it targets a loopback address.",
       overrides: {
         CORPUS_INDEX_Q09_ENDPOINT: "http://quickwit-admin.example.com",
+      },
+    },
+    {
+      expected:
+        "CORPUS_INDEX_Q09_SEARCH_ENDPOINT must use HTTPS unless it targets a loopback address.",
+      overrides: {
+        CORPUS_INDEX_Q09_SEARCH_ENDPOINT: "http://quickwit-search.example.com",
+      },
+    },
+    {
+      expected:
+        "CORPUS_INDEX_Q09_SEARCH_ENDPOINT is only supported in local development.",
+      overrides: {
+        CONTENT_ENCRYPTION_KEY: "a".repeat(64),
+        CORPUS_INDEX_Q09_SEARCH_ENDPOINT: "https://quickwit-search.example.com",
+        NODE_ENV: "staging",
       },
     },
     {

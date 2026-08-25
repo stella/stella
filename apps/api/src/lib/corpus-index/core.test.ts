@@ -506,7 +506,7 @@ describe("generation mutation routing", () => {
     });
   });
 
-  test("rebuild writes v5 to q09 and a legacy generation to q08", async () => {
+  test("legacy rebuild rejects v5 and writes a legacy generation to q08", async () => {
     Object.assign(envBase, {
       CORPUS_INDEX_ENDPOINT: "http://localhost:7281",
       CORPUS_INDEX_Q09_ENDPOINT: "http://localhost:7291",
@@ -591,18 +591,20 @@ describe("generation mutation routing", () => {
         ),
     };
 
-    expect(
-      await indexer.backfillRows(scopedDb, [row], "case_law_v5", {
+    await expect(
+      indexer.backfillRows(scopedDb, [row], "case_law_v5", {
         ...rebuildOptions,
       }),
-    ).toMatchObject({ indexed: 1 });
+    ).rejects.toThrow(
+      "Legacy case_law corpus indexer cannot write final generation case_law_v5",
+    );
     expect(
       await indexer.backfillRows(scopedDb, [row], "case_law_v4", {
         ...rebuildOptions,
       }),
     ).toMatchObject({ indexed: 1 });
-    expect(createHosts).toEqual(["localhost:7291", "localhost:7281"]);
-    expect(ingestHosts).toEqual(["localhost:7291", "localhost:7281"]);
+    expect(createHosts).toEqual(["localhost:7281"]);
+    expect(ingestHosts).toEqual(["localhost:7281"]);
   });
 });
 
