@@ -105,18 +105,27 @@ test("append rejects a document carrying another attempt revision", async () => 
   expect(result.isErr()).toBe(true);
   if (result.isErr()) {
     expect(result.error.message).toContain("does not belong to revision");
+    expect(result.error.code).toBe("invalid_document");
     expect(result.error.stage).toBe("validation");
     expect(result.error.unattemptedRevisions).toEqual([FIRST_REVISION]);
   }
 });
 
 test("append failure reports the exact revisions with unknown outcomes", async () => {
+  const unknownOutcomeObservedAt = new Date("2026-08-25T12:00:00.000Z");
+  let appendReturned = false;
   const result = await appendCorpusProjectionBatch({
     client: {
-      ingestCommittedBatch: async () =>
-        Result.err(new CorpusIndexError({ message: "response lost" })),
+      ingestCommittedBatch: async () => {
+        appendReturned = true;
+        return Result.err(new CorpusIndexError({ message: "response lost" }));
+      },
     },
     indexId: "case_law_v5_cs_sk",
+    clock: () => {
+      expect(appendReturned).toBe(true);
+      return unknownOutcomeObservedAt;
+    },
     entries: [
       {
         revision: FIRST_REVISION,
@@ -142,12 +151,16 @@ test("append failure reports the exact revisions with unknown outcomes", async (
   expect(result.isErr()).toBe(true);
   if (result.isErr()) {
     expect(result.error.stage).toBe("append");
+    expect(result.error.code).toBe("append_unknown");
     expect(result.error.committedRevisions).toEqual([]);
     expect(result.error.unknownRevisions).toEqual([
       FIRST_REVISION,
       SECOND_REVISION,
     ]);
     expect(result.error.unattemptedRevisions).toEqual([]);
+    expect(result.error.unknownOutcomeObservedAt).toEqual(
+      unknownOutcomeObservedAt,
+    );
   }
 });
 

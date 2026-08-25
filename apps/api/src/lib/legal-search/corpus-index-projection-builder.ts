@@ -90,16 +90,21 @@ export const buildCaseLawV5ProjectionDocuments = ({
     ...(input.ecli === null ? {} : { ecli: input.ecli }),
   };
   const title = caseLawV5Title(input);
-  return chunkDocument({
+  const chunks = chunkDocument({
     ast: hasUsableAst(payload.ast) ? payload.ast : null,
     fallbackText: payload.text,
-  }).map((chunk) => ({
-    ...shared,
-    text: chunk.text,
-    is_opening: chunk.seq === 0,
-    ...(chunk.seq === 0 ? { title } : {}),
-    ...(chunk.anchorId === null ? {} : { anchor_id: chunk.anchorId }),
-  }));
+  });
+  const documents: CaseLawV5ProjectionDocument[] = [];
+  for (const chunk of chunks) {
+    documents.push({
+      ...shared,
+      text: chunk.text,
+      is_opening: chunk.seq === 0,
+      ...(chunk.seq === 0 ? { title } : {}),
+      ...(chunk.anchorId === null ? {} : { anchor_id: chunk.anchorId }),
+    });
+  }
+  return documents;
 };
 
 type BuildLegislationV2Options = ProjectionBuildBase & {

@@ -6,7 +6,7 @@ import { splitIngestRequests } from "@/api/lib/corpus-index/core";
 import { isUuid } from "@/api/lib/custom-schema";
 import {
   CORPUS_INDEX_INGEST_TIMEOUT_MS,
-  CorpusIndexError,
+  type CorpusIndexError,
   type CorpusIndexClient,
   type CorpusIndexDeleteSettlement,
   type CorpusIndexDeleteTask,
@@ -20,7 +20,7 @@ export const CORPUS_PROJECTION_APPEND_MAX_REVISIONS = 512;
 export const CORPUS_PROJECTION_APPEND_MAX_SINGLE_REVISION_BYTES =
   LIMITS.corpusPayloadMaxDecompressedBytes;
 export const CORPUS_PROJECTION_DELETE_MAX_REVISIONS = 128;
-export const CORPUS_PROJECTION_UNKNOWN_APPEND_MARGIN_MS = 5_000;
+export const CORPUS_PROJECTION_UNKNOWN_APPEND_MARGIN_MS = 5000;
 
 type CorpusProjectionAppendEntry = {
   revision: ProjectionRevision;
@@ -36,6 +36,7 @@ type AppendCorpusProjectionBatchOptions = {
   client: CorpusProjectionAppendClient;
   indexId: string;
   entries: readonly CorpusProjectionAppendEntry[];
+  clock?: () => Date;
 };
 
 export type CorpusProjectionAppendReceipt = {
@@ -48,24 +49,34 @@ export class CorpusProjectionAppendError extends TaggedError(
   "CorpusProjectionAppendError",
 )<{
   message: string;
+  code:
+    | "invalid_batch"
+    | "invalid_revision"
+    | "invalid_document"
+    | "revision_too_large"
+    | "append_unknown";
   stage: "validation" | "append";
   committedRevisions: ProjectionRevision[];
   unknownRevisions: ProjectionRevision[];
   unattemptedRevisions: ProjectionRevision[];
+  unknownOutcomeObservedAt: Date | null;
   cause?: CorpusIndexError | undefined;
 }> {}
 
 const invalidAppend = (
+  code: Exclude<CorpusProjectionAppendError["code"], "append_unknown">,
   message: string,
   unattemptedRevisions: ProjectionRevision[],
 ): Result<never, CorpusProjectionAppendError> =>
   Result.err(
     new CorpusProjectionAppendError({
       message,
+      code,
       stage: "validation",
       committedRevisions: [],
       unknownRevisions: [],
       unattemptedRevisions,
+      unknownOutcomeObservedAt: null,
     }),
   );
 
@@ -73,6 +84,7 @@ export const appendCorpusProjectionBatch = async ({
   client,
   indexId,
   entries,
+  clock = () => new Date(),
 }: AppendCorpusProjectionBatchOptions): Promise<
   Result<CorpusProjectionAppendReceipt, CorpusProjectionAppendError>
 > => {
@@ -82,6 +94,7 @@ export const appendCorpusProjectionBatch = async ({
     entries.length > CORPUS_PROJECTION_APPEND_MAX_REVISIONS
   ) {
     return invalidAppend(
+      "invalid_batch",
       `corpus projection append requires 1-${CORPUS_PROJECTION_APPEND_MAX_REVISIONS} revisions`,
       revisions,
     );
@@ -96,6 +109,7 @@ export const appendCorpusProjectionBatch = async ({
       entry.documents.length === 0
     ) {
       return invalidAppend(
+        "invalid_revision",
         `corpus projection append received an invalid, duplicate, or empty revision: ${entry.revision}`,
         revisions,
       );
@@ -108,6 +122,7 @@ export const appendCorpusProjectionBatch = async ({
         typeof document["document_id"] !== "string"
       ) {
         return invalidAppend(
+          "invalid_document",
           `corpus projection document does not belong to revision ${entry.revision}`,
           revisions,
         );
@@ -121,10 +136,11 @@ export const appendCorpusProjectionBatch = async ({
   );
   for (const request of requests) {
     if (
-      Buffer.byteLength(request.ndjson, "utf8") >
+      Buffer.byteLength(request.ndjson, "utf-8") >
       CORPUS_PROJECTION_APPEND_MAX_SINGLE_REVISION_BYTES
     ) {
       return invalidAppend(
+        "revision_too_large",
         "one corpus projection revision exceeds the append safety ceiling",
         revisions,
       );
@@ -141,6 +157,7 @@ export const appendCorpusProjectionBatch = async ({
     }
     const ingested = await client.ingestCommittedBatch(indexId, request.ndjson);
     if (ingested.isErr()) {
+      const unknownOutcomeObservedAt = clock();
       const unknownRevisions = request.entries.map(
         ({ row: { revision } }) => revision,
       );
@@ -152,10 +169,12 @@ export const appendCorpusProjectionBatch = async ({
       return Result.err(
         new CorpusProjectionAppendError({
           message: "corpus projection append outcome is partially unknown",
+          code: "append_unknown",
           stage: "append",
           committedRevisions,
           unknownRevisions,
           unattemptedRevisions,
+          unknownOutcomeObservedAt,
           cause: ingested.error,
         }),
       );
