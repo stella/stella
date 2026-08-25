@@ -1320,39 +1320,44 @@ const columnInventoryStatement = sql`
 
 const PRIMARY_KEY_PAGE_SIZE = 1000;
 
-const foreignKeyOrphanStatements = AUTH_TABLE_POLICIES.flatMap((policy) =>
-  policy.foreignKeys.map(({ column, referencedColumn, referencedModel }) => {
-    const referenced = AUTH_TABLE_AUDIT_POLICY[referencedModel];
-    return sql`
-      EXISTS (
-        SELECT 1
-          FROM ${sql.identifier(policy.tableName)} child
-          LEFT JOIN ${sql.identifier(referenced.tableName)} parent
-            ON child.${sql.identifier(column)} = parent.${sql.identifier(referencedColumn)}
-         WHERE child.${sql.identifier(column)} IS NOT NULL
-           AND parent.${sql.identifier(referencedColumn)} IS NULL
-      )
-    `;
-  }),
-);
+const noForeignKeyOrphansStatement = (
+  policies: readonly AuthTableAuditPolicy[],
+) => {
+  const orphanStatements = policies.flatMap((policy) =>
+    policy.foreignKeys.map(({ column, referencedColumn, referencedModel }) => {
+      const referenced = AUTH_TABLE_AUDIT_POLICY[referencedModel];
+      return sql`
+        EXISTS (
+          SELECT 1
+            FROM ${sql.identifier(policy.tableName)} child
+            LEFT JOIN ${sql.identifier(referenced.tableName)} parent
+              ON child.${sql.identifier(column)} = parent.${sql.identifier(referencedColumn)}
+           WHERE child.${sql.identifier(column)} IS NOT NULL
+             AND parent.${sql.identifier(referencedColumn)} IS NULL
+        )
+      `;
+    }),
+  );
+  return sql`
+    SELECT NOT (${sql.join(orphanStatements, sql` OR `)}) AS "passed"
+  `;
+};
 
-const noForeignKeyOrphansStatement = sql`
-  SELECT NOT (${sql.join(foreignKeyOrphanStatements, sql` OR `)}) AS "passed"
-`;
-
-const expectedForeignKeys = AUTH_TABLE_POLICIES.flatMap((policy) =>
-  policy.foreignKeys.map(({ column, referencedColumn, referencedModel }) => {
-    const referenced = AUTH_TABLE_AUDIT_POLICY[referencedModel];
-    return sql`(
-      ${policy.tableName}::text,
-      ${column}::text,
-      ${referenced.tableName}::text,
-      ${referencedColumn}::text
-    )`;
-  }),
-);
-
-const foreignKeysValidatedStatement = sql`
+const foreignKeysValidatedStatement = (
+  policies: readonly AuthTableAuditPolicy[],
+) => {
+  const expectedForeignKeys = policies.flatMap((policy) =>
+    policy.foreignKeys.map(({ column, referencedColumn, referencedModel }) => {
+      const referenced = AUTH_TABLE_AUDIT_POLICY[referencedModel];
+      return sql`(
+        ${policy.tableName}::text,
+        ${column}::text,
+        ${referenced.tableName}::text,
+        ${referencedColumn}::text
+      )`;
+    }),
+  );
+  return sql`
   WITH expected(child_table, child_column, parent_table, parent_column) AS (
     VALUES ${sql.join(expectedForeignKeys, sql`, `)}
   )
@@ -1386,7 +1391,8 @@ const foreignKeysValidatedStatement = sql`
           AND parent_attribute.attname = expected.parent_column
      )
   ) AS "passed"
-`;
+  `;
+};
 
 const accessBoundariesStatement = (includeFutureTables: boolean) => {
   const policies: readonly AuthAccessPolicy[] = Object.values(
@@ -2254,11 +2260,11 @@ export const runBetterAuthMigrationAudit = async ({
   const commonChecks = [
     [
       BETTER_AUTH_AUDIT_CHECKS.AUTH_FOREIGN_KEYS_REACHABLE,
-      noForeignKeyOrphansStatement,
+      noForeignKeyOrphansStatement(requiredTablePolicies),
     ],
     [
       BETTER_AUTH_AUDIT_CHECKS.AUTH_FOREIGN_KEYS_VALIDATED,
-      foreignKeysValidatedStatement,
+      foreignKeysValidatedStatement(requiredTablePolicies),
     ],
     [
       BETTER_AUTH_AUDIT_CHECKS.ACCOUNT_PROVIDERS_CLASSIFIED,

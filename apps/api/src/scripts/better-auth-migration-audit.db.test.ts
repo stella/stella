@@ -46,6 +46,36 @@ const checkStatus = (
     ?.status;
 };
 
+test("pre-migration audit never queries tables introduced by the bridge", async () => {
+  try {
+    await database.transaction(async (transaction) => {
+      await transaction.execute(sql`
+        ALTER TABLE oauth_client_resource
+          RENAME TO oauth_client_resource_not_yet_migrated
+      `);
+      const audit = await runBetterAuthMigrationAudit({
+        baseline: null,
+        database: {
+          execute: async (statement) => await transaction.execute(statement),
+        },
+        expectedOAuthResources: TEST_OAUTH_RESOURCES,
+        mode: BETTER_AUTH_AUDIT_MODES.PRE_MIGRATION,
+        trustedIdentityMap: EMPTY_TRUSTED_IDENTITY_MAP,
+      });
+      if (audit.status === "error") {
+        throw audit.error;
+      }
+
+      expect(audit.value.report.status).toBe("passed");
+      transaction.rollback();
+    });
+  } catch (error) {
+    if (!(error instanceof TransactionRollbackError)) {
+      throw error;
+    }
+  }
+});
+
 test("pre-migration audit is repeatable and rejects ownership corruption and an orphan", async () => {
   try {
     await database.transaction(async (transaction) => {

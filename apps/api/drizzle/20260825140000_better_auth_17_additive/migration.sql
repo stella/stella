@@ -100,6 +100,6 @@ CREATE POLICY "auth_no_stella_access" ON "oauth_client_assertion"
   AS PERMISSIVE FOR ALL TO "stella"
   USING (false) WITH CHECK (false);--> statement-breakpoint
 
-REVOKE ALL PRIVILEGES ON TABLE "oauth_resource" FROM "stella";--> statement-breakpoint
-REVOKE ALL PRIVILEGES ON TABLE "oauth_client_resource" FROM "stella";--> statement-breakpoint
-REVOKE ALL PRIVILEGES ON TABLE "oauth_client_assertion" FROM "stella";
+REVOKE ALL PRIVILEGES ON TABLE "oauth_resource" FROM stella;--> statement-breakpoint
+REVOKE ALL PRIVILEGES ON TABLE "oauth_client_resource" FROM stella;--> statement-breakpoint
+REVOKE ALL PRIVILEGES ON TABLE "oauth_client_assertion" FROM stella;
