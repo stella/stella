@@ -1,4 +1,5 @@
 import { parsePartialJSON } from "@tanstack/ai-client";
+import type { ChatClientState } from "@tanstack/ai-client";
 import { v5 as uuidv5 } from "uuid";
 
 import type {
@@ -6,6 +7,7 @@ import type {
   ChatPart,
   ChatUITools,
 } from "@/components/chat/chat-ui-tools";
+import { isChatClientRequestActive } from "@/components/chat/chat-ui-tools";
 import { type ChatThreadId, toChatThreadId } from "@/lib/chat-thread-ref";
 
 type CreateDocumentInput = ChatUITools["create-document"]["input"];
@@ -608,6 +610,14 @@ export const selectUnsettledCreateDocumentDrafts = (
   }
   return drafts;
 };
+
+export const selectSettleableCreateDocumentDrafts = (
+  messages: Parameters<typeof selectUnsettledCreateDocumentDrafts>[0],
+  status: ChatClientState,
+): CreateDocumentDraft[] =>
+  isChatClientRequestActive(status)
+    ? []
+    : selectUnsettledCreateDocumentDrafts(messages);
 
 /** IDs of create-document calls that can no longer produce a usable draft. */
 export const selectTerminalCreateDocumentDraftIds = (

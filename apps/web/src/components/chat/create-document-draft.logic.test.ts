@@ -13,6 +13,7 @@ import {
   replaceReadyCreateDocumentDraftOutput,
   resolveCreateDocumentDraftOverlayChatThreadId,
   selectCreateDocumentDrafts,
+  selectSettleableCreateDocumentDrafts,
   selectTerminalCreateDocumentDraftIds,
   selectUnsettledCreateDocumentDrafts,
   setCreateDocumentDraftChatThreadId,
@@ -144,6 +145,12 @@ describe("create-document drafts", () => {
     ]);
     expect(selectUnsettledCreateDocumentDrafts(readyDraft)).toEqual([]);
     expect(selectUnsettledCreateDocumentDrafts(unresolved)).toHaveLength(1);
+    expect(
+      selectSettleableCreateDocumentDrafts(unresolved, "streaming"),
+    ).toEqual([]);
+    expect(
+      selectSettleableCreateDocumentDrafts(unresolved, "ready"),
+    ).toHaveLength(1);
     expect(
       selectUnsettledCreateDocumentDrafts([
         ...unresolved,
