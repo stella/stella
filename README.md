@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <strong>Local PII detection and anonymization for text and legal documents.</strong>
+  <strong>Local PII detection and anonymization for text.</strong>
 </p>
 
 <p align="center">
@@ -22,22 +22,19 @@
   <a href="https://discord.gg/8dZjmVFjTK"><img src="https://img.shields.io/badge/discord-join%20chat-5865F2?logo=discord&logoColor=white" alt="Discord" /></a>
 </p>
 
-stella anonymize is an open-source PII redaction toolkit for applications that
-need to process sensitive text locally. It is designed with contracts, court
-filings, correspondence, and other legal documents in mind. Coverage varies by
+stella anonymize is an open-source, local-first PII redaction toolkit for legal
+and regulated workflows. Detection and replacement are implemented in a shared
+Rust core, with bindings for Node.js, Python, and browsers. The default pipeline
+is deterministic and makes no model or remote-service calls. Coverage varies by
 language, entity type, and document structure.
 
-Detection and replacement live in one Rust core. Node.js, Python, and browser
-bindings call that same implementation; the repository tests their public
-surfaces and normalized behavior for parity. The default pipeline is
-deterministic and does not call a model or remote service.
+No detector catches everything. Reversible placeholder replacement is
+pseudonymization, and its maps contain original PII; do not log or treat them as
+anonymous output. The default pipeline targets personal identifiers, not
+passwords, authentication tokens, API keys, or private cryptographic material.
+IP addresses, MAC addresses, and URLs require explicit opt-in capabilities.
 
-No detector catches everything. Review coverage reports and output when a miss
-would matter, especially with OCR or partially supported document formats.
-
-Reversible placeholder replacement is pseudonymization, not anonymization.
-Redaction can support anonymization, but whether output is anonymous depends on
-the remaining information, its context, and applicable law.
+Contributing to the project is welcome.
 
 ## Quickstart
 
@@ -70,12 +67,6 @@ data covers `cs`, `de`, `en`, `es`, `fr`, `hu`, `it`, `pl`, `pt-br`, `ro`,
 sessions, custom detections, operators, diagnostics, and prepared packages; the
 [capability manifest](packages/anonymize/src/capabilities.ts) is the exact list
 of public runtime surfaces and entity types.
-
-The default pipeline targets personal identifiers, not general secret scanning.
-It does not claim to detect passwords, authentication tokens, API keys, or
-private cryptographic material. IP addresses, MAC addresses, and URLs are
-available only through explicit opt-in capabilities; inspect the manifest before
-using redaction as a security boundary.
 
 ### Browser
 
@@ -203,29 +194,6 @@ recall. The certificate therefore never claims that the output is PII-free.
 See [`@stll/anonymize-pdf`](packages/document-pdf/README.md) for the inspection,
 rendering, OCR, resource-limit, and verification contracts.
 
-The full runtime and format matrix, including known gaps, lives in
-[PII redaction surfaces](docs/pii-redaction-surfaces.md).
-
-## Runtime and privacy model
-
-- Rust crates own text detection, replacement, and DOCX/PDF planning. Node.js,
-  Python, and WASM bindings are checked by capability-profile parity tests.
-- Prepared language data is bundled into versioned `.stlanonpkg` artifacts; the
-  default SDKs and CLI do not send document text to a remote service.
-- Reversible redaction maps contain original PII. Encrypted session archives
-  protect persisted mappings, but applications still own key generation,
-  storage, rotation, and authorization.
-- Diagnostic events omit matched text, but redaction results and reversible maps
-  can contain original PII. Do not send those values to ordinary logs or
-  telemetry.
-- Optional model or service detections enter through a validated, digest-bound
-  sidecar. stella does not bundle a model runner.
-
-The machine-readable public contract is exported as `CAPABILITY_MANIFEST` from
-`@stll/anonymize/capabilities` and printed by `anonymize --capabilities`. The
-[architecture guide](packages/anonymize/ARCHITECTURE.md) describes the native
-package graph and parity boundaries.
-
 ## Packages
 
 | Package                                                              | Purpose                                             |
@@ -250,28 +218,13 @@ you need the browser runtime.
 
 ## Benchmarks
 
-The held-out public-evaluation suite compares stella with OpenRedaction, Presidio,
-base scrubadub, DataFog's model-free regex engine, and redact-pii on TAB-ECHR,
-RedactionBench, MEDDOCAN, MultiGraSCCo, and German Legal Entity Recognition.
-Each corpus keeps its own task and metrics; MultiGraSCCo reports direct and
-indirect identifier recall separately, while German LER is legal-entity
-coverage, not PII recall. Holdout reports contain aggregate values only. PII-Shield is
-included when its external CLI and model are installed. The German runner can
-also report an optional pinned Nym ONNX model as an assisted stella lane.
-
-Quality-suite timings are one-shot corpus passes, so they are directional
-rather than speed rankings. The separate cross-provider harness runs stella's
-full pipeline, stella's built-in regex detectors, base scrubadub, and DataFog's
-regex engine in fresh processes with discarded warmups and repeated samples.
-It reports startup, initialization, calls, process CPU, and end-to-end wall
-time; read speed alongside output counts because detector scope differs.
-
-Read the [benchmark methodology](packages/benchmark/README.md), browse the
-[committed aggregate results](packages/benchmark/results/), or follow the
-[reproduction guide](packages/benchmark/REPRODUCING.md). Results describe
-particular datasets and versions; they are not a guarantee of performance on
-your documents. The project-authored synthetic fixture is a regression test.
-Its scores are not necessarily representative.
+The deterministic pipeline is evaluated against publicly available tools on
+TAB-ECHR, RedactionBench, MEDDOCAN, MultiGraSCCo, and German Legal Entity
+Recognition. Tracks use different task semantics, and synthetic scores are not
+necessarily representative or directly comparable. Read the
+[methodology](packages/benchmark/README.md), browse the [aggregate
+results](packages/benchmark/results/), or follow the [reproduction
+guide](packages/benchmark/REPRODUCING.md).
 
 ## Development
 
@@ -291,7 +244,4 @@ check runs on pull requests.
 
 ## License
 
-Apache-2.0. See [`LICENSE`](LICENSE) and [`NOTICE`](NOTICE). Third-party
-attributions are recorded with the relevant packages, including the [core and browser runtime](packages/anonymize/ATTRIBUTION.md),
-[data](packages/data/ATTRIBUTION.md), [DOCX](packages/document-docx/ATTRIBUTION.md),
-and [PDF](packages/document-pdf/ATTRIBUTION.md).
+Apache-2.0. See [`LICENSE`](LICENSE).

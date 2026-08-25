@@ -6,8 +6,6 @@ minimumReleaseAge = 432_000
 # First-party stella packages ship in coordinated release
 # waves, so allow fresh internal versions immediately.
 minimumReleaseAgeExcludes = [
-  # Keep Bun's compiler contract aligned with the runtime during this upgrade.
-  "bun-types", # quarantine-expires: 2026-08-25T14:11:33.785Z
   "@stll/typescript-config",
   "@stll/oxlint-config",
   "@stll/aho-corasick",
