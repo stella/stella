@@ -68,7 +68,7 @@ test("manifest digests pin every semantic array and ignore object key order", ()
           ...manifest.engine.indexConfig.doc_mapping,
           tag_fields: [
             ...manifest.engine.indexConfig.doc_mapping.tag_fields,
-          ].reverse(),
+          ].toReversed(),
         },
       },
     },

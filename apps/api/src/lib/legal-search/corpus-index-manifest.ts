@@ -244,8 +244,18 @@ export const requireCorpusIndexManifest = (
         ? CORPUS_INDEX_MANIFESTS.legislation_v2
         : panic(`Unknown legislation index manifest: ${generation}`);
     default:
-      return family satisfies never;
+      return panic(`Unknown corpus index manifest family: ${family}`);
   }
+};
+
+const compareCanonicalJsonKeys = (left: string, right: string): number => {
+  if (left < right) {
+    return -1;
+  }
+  if (left > right) {
+    return 1;
+  }
+  return 0;
 };
 
 const canonicalJson = (value: unknown): string => {
@@ -254,11 +264,11 @@ const canonicalJson = (value: unknown): string => {
     typeof value === "boolean" ||
     typeof value === "string"
   ) {
-    return JSON.stringify(value) ?? panic("Canonical JSON primitive failed");
+    return JSON.stringify(value);
   }
   if (typeof value === "number") {
     return Number.isFinite(value)
-      ? (JSON.stringify(value) ?? panic("Canonical JSON number failed"))
+      ? JSON.stringify(value)
       : panic("Canonical JSON forbids non-finite numbers");
   }
   if (Array.isArray(value)) {
@@ -267,17 +277,17 @@ const canonicalJson = (value: unknown): string => {
   if (typeof value !== "object") {
     return panic(`Canonical JSON forbids ${typeof value}`);
   }
-  const prototype = Object.getPrototypeOf(value);
+  const prototype = Reflect.getPrototypeOf(value);
   if (prototype !== Object.prototype && prototype !== null) {
     return panic("Canonical JSON accepts plain objects only");
   }
   const entries = Object.entries(value).sort(([left], [right]) =>
-    left < right ? -1 : left > right ? 1 : 0,
+    compareCanonicalJsonKeys(left, right),
   );
   return `{${entries
     .map(
       ([key, entry]) =>
-        `${JSON.stringify(key) ?? panic("Canonical JSON key failed")}:${canonicalJson(entry)}`,
+        `${JSON.stringify(key)}:${canonicalJson(entry)}`,
     )
     .join(",")}}`;
 };
