@@ -44,6 +44,10 @@ const isDirectClassNameValue = (node) => {
   const container = template?.parent;
   return (
     template?.type === "TemplateLiteral" &&
+    // A later quasi may continue an arbitrary bracket payload opened before
+    // or by an interpolation. Its class-token boundaries are not independently
+    // provable, so keep those matches diagnostic-only.
+    template.quasis.at(0) === node &&
     container?.type === "JSXExpressionContainer" &&
     container.expression === template &&
     isClassNameAttribute(container.parent)
