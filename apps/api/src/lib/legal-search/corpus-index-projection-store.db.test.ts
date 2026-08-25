@@ -18,9 +18,11 @@ import {
   corpusIndexManifestDigest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import {
+  claimCorpusProjectionCleanupSettlementTx,
   claimCorpusProjectionCleanupTx,
   CorpusProjectionCleanupSettlementProof,
   recordCorpusProjectionDeleteTx,
+  releaseCorpusProjectionCleanupSettlementTx,
   reopenCorpusProjectionCleanupTx,
   settleCorpusProjectionCleanupTx,
 } from "@/api/lib/legal-search/corpus-index-projection-cleanup-store";
@@ -94,11 +96,27 @@ const verifySettlement = async ({
   intentIds: readonly SafeId<"corpusIndexProjectionIntent">[];
   deleteOpstamp: number;
 }) => {
+  const lease = await db.transaction(
+    async (tx) =>
+      await claimCorpusProjectionCleanupSettlementTx(
+        asTestRaw<Transaction>(tx),
+        {
+          family: "case_law",
+          generation: "case_law_v5",
+          indexId: INDEX_ID,
+          limit: 10,
+          leaseMs: 60_000,
+        },
+      ),
+  );
+  if (lease === null) {
+    return panic("Expected a projection settlement lease");
+  }
+  expect(lease.intentIds).toEqual(intentIds);
+  expect(lease.deleteOpstamp).toBe(deleteOpstamp);
   const result = await CorpusProjectionCleanupSettlementProof.verify({
     client: settledProjectionClient,
-    indexId: INDEX_ID,
-    intentIds,
-    deleteOpstamp,
+    lease,
   });
   if (result.isErr()) {
     return panic(`Projection settlement verification failed: ${result.error}`);
@@ -271,6 +289,31 @@ test("replacement deletes and settles the old revision before reserving the new 
           leaseToken: CLEANUP_LEASE_TOKEN,
           deleteOpstamp: 42,
         }),
+    ),
+  ).toBe(1);
+  const releasedSettlementLease = await db.transaction(
+    async (tx) =>
+      await claimCorpusProjectionCleanupSettlementTx(
+        asTestRaw<Transaction>(tx),
+        {
+          family: "case_law",
+          generation: "case_law_v5",
+          indexId: INDEX_ID,
+          limit: 10,
+          leaseMs: 60_000,
+        },
+      ),
+  );
+  if (releasedSettlementLease === null) {
+    return panic("Expected a releasable projection settlement lease");
+  }
+  expect(
+    await db.transaction(
+      async (tx) =>
+        await releaseCorpusProjectionCleanupSettlementTx(
+          asTestRaw<Transaction>(tx),
+          { lease: releasedSettlementLease },
+        ),
     ),
   ).toBe(1);
   const firstSettlementProof = await verifySettlement({

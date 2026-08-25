@@ -247,9 +247,128 @@ export const retryCorpusProjectionCleanupTx = async (
 
 type VerifyCorpusProjectionCleanupSettlementOptions = {
   client: Pick<CorpusIndexClient, "readDeleteSettlement" | "search">;
+  lease: CorpusProjectionCleanupSettlementLease;
+};
+
+export type CorpusProjectionCleanupSettlementLease = {
+  family: CorpusFamily;
+  generation: string;
   indexId: string;
   intentIds: readonly ProjectionIntentId[];
   deleteOpstamp: number;
+  leaseToken: string;
+};
+
+type ClaimCorpusProjectionCleanupSettlementOptions = {
+  family: CorpusFamily;
+  generation: string;
+  indexId: string;
+  limit: number;
+  leaseMs: number;
+  now?: Date;
+  newLeaseToken?: () => string;
+};
+
+export const claimCorpusProjectionCleanupSettlementTx = async (
+  tx: Transaction,
+  {
+    family,
+    generation,
+    indexId,
+    limit: requestedLimit,
+    leaseMs: requestedLeaseMs,
+    now = new Date(),
+    newLeaseToken = () => Bun.randomUUIDv7(),
+  }: ClaimCorpusProjectionCleanupSettlementOptions,
+): Promise<CorpusProjectionCleanupSettlementLease | null> => {
+  const limit = validateCleanupBatchSize(requestedLimit);
+  const leaseMs = validateLeaseMs(requestedLeaseMs);
+  await readRegisteredCorpusProjectionManifestForCleanup(
+    tx,
+    family,
+    generation,
+  );
+  const first = await tx
+    .select({ deleteOpstamp: corpusIndexProjectionIntents.deleteOpstamp })
+    .from(corpusIndexProjectionIntents)
+    .where(
+      and(
+        eq(corpusIndexProjectionIntents.family, family),
+        eq(corpusIndexProjectionIntents.generation, generation),
+        eq(corpusIndexProjectionIntents.indexId, indexId),
+        eq(corpusIndexProjectionIntents.status, "cleanup_committed"),
+        or(
+          isNull(corpusIndexProjectionIntents.leaseExpiresAt),
+          sql`${corpusIndexProjectionIntents.leaseExpiresAt} <= clock_timestamp()`,
+        ),
+      ),
+    )
+    .orderBy(
+      asc(corpusIndexProjectionIntents.cleanupStartedAt),
+      asc(corpusIndexProjectionIntents.createdAt),
+    )
+    .limit(1)
+    .for("update", { skipLocked: true });
+  const deleteOpstamp = first.at(0)?.deleteOpstamp;
+  if (deleteOpstamp === undefined) {
+    return null;
+  }
+  if (deleteOpstamp === null) {
+    return panic("Committed corpus projection cleanup has no delete opstamp");
+  }
+  const candidates = await tx
+    .select({ id: corpusIndexProjectionIntents.id })
+    .from(corpusIndexProjectionIntents)
+    .where(
+      and(
+        eq(corpusIndexProjectionIntents.family, family),
+        eq(corpusIndexProjectionIntents.generation, generation),
+        eq(corpusIndexProjectionIntents.indexId, indexId),
+        eq(corpusIndexProjectionIntents.status, "cleanup_committed"),
+        eq(corpusIndexProjectionIntents.deleteOpstamp, deleteOpstamp),
+        or(
+          isNull(corpusIndexProjectionIntents.leaseExpiresAt),
+          sql`${corpusIndexProjectionIntents.leaseExpiresAt} <= clock_timestamp()`,
+        ),
+      ),
+    )
+    .orderBy(asc(corpusIndexProjectionIntents.createdAt))
+    .limit(limit)
+    .for("update", { skipLocked: true });
+  if (candidates.length === 0) {
+    return null;
+  }
+  const leaseToken = newLeaseToken();
+  const leaseExpiresAt = new Date(now.getTime() + leaseMs);
+  const intentIds = candidates.map(({ id }) => id);
+  const claimed = await tx
+    .update(corpusIndexProjectionIntents)
+    .set({ leaseToken, leaseExpiresAt, updatedAt: now })
+    .where(
+      and(
+        inArray(corpusIndexProjectionIntents.id, intentIds),
+        eq(corpusIndexProjectionIntents.status, "cleanup_committed"),
+        eq(corpusIndexProjectionIntents.deleteOpstamp, deleteOpstamp),
+      ),
+    )
+    .returning({ id: corpusIndexProjectionIntents.id });
+  if (claimed.length !== candidates.length) {
+    return panic(
+      `Corpus projection settlement claimed ${claimed.length} of ${candidates.length} revisions`,
+    );
+  }
+  const numericOpstamp = Number(deleteOpstamp);
+  if (!Number.isSafeInteger(numericOpstamp) || numericOpstamp < 0) {
+    return panic("Corpus projection delete opstamp exceeds safe integer range");
+  }
+  return {
+    family,
+    generation,
+    indexId,
+    intentIds,
+    deleteOpstamp: numericOpstamp,
+    leaseToken,
+  };
 };
 
 export type CorpusProjectionCleanupSettlementResult =
@@ -272,16 +391,16 @@ export class CorpusProjectionCleanupSettlementProof {
     readonly indexId: string,
     readonly intentIds: readonly ProjectionIntentId[],
     readonly deleteOpstamp: number,
+    readonly leaseToken: string,
   ) {}
 
   static async verify({
     client,
-    indexId,
-    intentIds,
-    deleteOpstamp,
+    lease,
   }: VerifyCorpusProjectionCleanupSettlementOptions): Promise<
     Result<CorpusProjectionCleanupSettlementResult, CorpusIndexError>
   > {
+    const { indexId, intentIds, deleteOpstamp, leaseToken } = lease;
     if (
       intentIds.length === 0 ||
       intentIds.length > CORPUS_PROJECTION_DELETE_MAX_REVISIONS ||
@@ -326,10 +445,44 @@ export class CorpusProjectionCleanupSettlementProof {
         indexId,
         [...intentIds],
         deleteOpstamp,
+        leaseToken,
       ),
     });
   }
 }
+
+type ReleaseCorpusProjectionCleanupSettlementOptions = {
+  lease: CorpusProjectionCleanupSettlementLease;
+  now?: Date;
+};
+
+export const releaseCorpusProjectionCleanupSettlementTx = async (
+  tx: Transaction,
+  { lease, now = new Date() }: ReleaseCorpusProjectionCleanupSettlementOptions,
+): Promise<number> => {
+  const rows = await tx
+    .update(corpusIndexProjectionIntents)
+    .set({ leaseToken: null, leaseExpiresAt: null, updatedAt: now })
+    .where(
+      and(
+        inArray(corpusIndexProjectionIntents.id, lease.intentIds),
+        eq(corpusIndexProjectionIntents.indexId, lease.indexId),
+        eq(corpusIndexProjectionIntents.status, "cleanup_committed"),
+        eq(
+          corpusIndexProjectionIntents.deleteOpstamp,
+          BigInt(lease.deleteOpstamp),
+        ),
+        eq(corpusIndexProjectionIntents.leaseToken, lease.leaseToken),
+      ),
+    )
+    .returning({ id: corpusIndexProjectionIntents.id });
+  if (rows.length !== lease.intentIds.length) {
+    return panic(
+      `Corpus projection settlement release matched ${rows.length} of ${lease.intentIds.length} leased revisions`,
+    );
+  }
+  return rows.length;
+};
 
 type SettleCorpusProjectionCleanupOptions = {
   proof: CorpusProjectionCleanupSettlementProof;
@@ -342,7 +495,13 @@ export const settleCorpusProjectionCleanupTx = async (
 ): Promise<number> => {
   const rows = await tx
     .update(corpusIndexProjectionIntents)
-    .set({ status: "settled", settledAt: now, updatedAt: now })
+    .set({
+      status: "settled",
+      leaseToken: null,
+      leaseExpiresAt: null,
+      settledAt: now,
+      updatedAt: now,
+    })
     .where(
       and(
         inArray(corpusIndexProjectionIntents.id, proof.intentIds),
@@ -352,6 +511,7 @@ export const settleCorpusProjectionCleanupTx = async (
           corpusIndexProjectionIntents.deleteOpstamp,
           BigInt(proof.deleteOpstamp),
         ),
+        eq(corpusIndexProjectionIntents.leaseToken, proof.leaseToken),
       ),
     )
     .returning({ id: corpusIndexProjectionIntents.id });
