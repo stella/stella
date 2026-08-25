@@ -37,6 +37,7 @@ import {
   currentCaseLawCorpusProjection,
 } from "@/api/lib/legal-search/case-law-corpus-projection";
 import { corpusGeneration } from "@/api/lib/legal-search/corpus-family";
+import { corpusIndexClusterForGeneration } from "@/api/lib/legal-search/corpus-generation-contract";
 import { readCorpusIndexSearchPage } from "@/api/lib/legal-search/corpus-index-pagination";
 import {
   caseLawCorpusQuery,
@@ -634,6 +635,7 @@ const searchCorpusIndexDecisions = async (
   }
 
   const searchPage = await readCorpusIndexSearchPage({
+    cluster: corpusIndexClusterForGeneration("case_law", generation),
     indexId,
     query,
     limit,

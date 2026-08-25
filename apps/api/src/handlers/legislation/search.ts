@@ -19,6 +19,7 @@ import {
 } from "@/api/lib/custom-schema";
 import { blendedRankSql } from "@/api/lib/legal-search/authority-sql";
 import { corpusGeneration } from "@/api/lib/legal-search/corpus-family";
+import { corpusIndexClusterForGeneration } from "@/api/lib/legal-search/corpus-generation-contract";
 import { readCorpusIndexSearchPage } from "@/api/lib/legal-search/corpus-index-pagination";
 import {
   corpusFreeTextClause,
@@ -364,6 +365,7 @@ const corpusIndexSearch = async (
   }
 
   const searchPage = await readCorpusIndexSearchPage({
+    cluster: corpusIndexClusterForGeneration("legislation", generation),
     indexId,
     query,
     limit,

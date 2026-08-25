@@ -401,8 +401,17 @@ describe("environment doctor output", () => {
     },
     {
       expected:
-        "LEGAL_SEARCH_PROVIDER=corpus-index requires CORPUS_INDEX_SEARCH_ENDPOINT or CORPUS_INDEX_ENDPOINT to be set.",
+        "Serving legislation_v1 on q08 requires CORPUS_INDEX_SEARCH_ENDPOINT or CORPUS_INDEX_ENDPOINT.",
       overrides: { LEGAL_SEARCH_PROVIDER: "corpus-index" },
+    },
+    {
+      expected:
+        "Serving case_law_v5 on q09 requires CORPUS_INDEX_Q09_SEARCH_ENDPOINT or CORPUS_INDEX_Q09_ENDPOINT.",
+      overrides: {
+        CORPUS_INDEX_SEARCH_ENDPOINT: "https://quickwit-08.example.com",
+        LEGAL_SEARCH_INDEX_GENERATION: "case_law_v5",
+        LEGAL_SEARCH_PROVIDER: "corpus-index",
+      },
     },
     // Removed together with the invariant, in the PR that makes a corpus
     // cursor carry the dictionary version it was built against.

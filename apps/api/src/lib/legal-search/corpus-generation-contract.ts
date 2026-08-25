@@ -30,6 +30,36 @@ export const parseCorpusFamily = (value: unknown): CorpusFamily | null =>
 export const parseQuickwitCluster = (value: unknown): QuickwitCluster | null =>
   memberOf(QUICKWIT_CLUSTERS, value);
 
+const LEGACY_Q08_GENERATIONS = {
+  case_law: ["case_law_v1", "case_law_v2", "case_law_v3", "case_law_v4"],
+  legislation: ["legislation_v1"],
+} as const satisfies Record<CorpusFamily, readonly string[]>;
+
+const FINAL_Q09_GENERATIONS = {
+  case_law: ["case_law_v5"],
+  legislation: ["legislation_v2"],
+} as const satisfies Record<CorpusFamily, readonly string[]>;
+
+export const parseCorpusIndexClusterForGeneration = (
+  family: CorpusFamily,
+  generation: string,
+): QuickwitCluster | null => {
+  if (FINAL_Q09_GENERATIONS[family].some((value) => value === generation)) {
+    return "q09";
+  }
+  if (LEGACY_Q08_GENERATIONS[family].some((value) => value === generation)) {
+    return "q08";
+  }
+  return null;
+};
+
+export const corpusIndexClusterForGeneration = (
+  family: CorpusFamily,
+  generation: string,
+): QuickwitCluster =>
+  parseCorpusIndexClusterForGeneration(family, generation) ??
+  panic(`Unknown ${family} corpus index generation: ${generation}`);
+
 export const requireQuickwitCluster = (value: unknown): QuickwitCluster =>
   parseQuickwitCluster(value) ??
   panic(`Unknown Quickwit cluster reference: ${String(value)}`);

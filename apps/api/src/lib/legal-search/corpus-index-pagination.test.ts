@@ -60,6 +60,7 @@ afterEach(() => {
 
 const readPage = async (limit = 10) =>
   await readCorpusIndexSearchPage({
+    cluster: "q08",
     indexId: "case_law_v2_cze",
     query: "text:promlčení",
     limit,

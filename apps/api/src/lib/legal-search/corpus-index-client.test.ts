@@ -270,6 +270,7 @@ test("search pagination always requests BM25 relevance order", async () => {
   };
 
   await readCorpusIndexSearchPage({
+    cluster: "q08",
     indexId: "legal_corpus_v1_cze",
     query: "text:smlouva",
     limit: 10,

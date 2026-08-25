@@ -16,6 +16,7 @@ import {
   corpusStorageInvariantViolation,
   resolveCorpusStorageMode,
 } from "@/api/lib/corpus-storage-mode";
+import { parseCorpusIndexClusterForGeneration } from "@/api/lib/legal-search/corpus-generation-contract";
 import {
   QUERY_EXPANSION_MODES,
   type QueryExpansionMode,
@@ -268,6 +269,7 @@ type EnvBaseInvariantInput = {
   CORPUS_STORAGE_MODE?: CorpusStorageMode | undefined;
   DATABASE_URL: string;
   LEGAL_CORPUS_S3_BUCKET?: string | undefined;
+  LEGAL_SEARCH_INDEX_GENERATION: string;
   LEGAL_SEARCH_PROVIDER: "pg-fts" | "corpus-index";
   QUERY_EXPANSION_MODE: QueryExpansionMode;
   S3_ACCESS_KEY_ID?: string | undefined;
@@ -294,6 +296,7 @@ export const envBaseInvariantViolation = ({
   CORPUS_STORAGE_MODE,
   DATABASE_URL,
   LEGAL_CORPUS_S3_BUCKET,
+  LEGAL_SEARCH_INDEX_GENERATION,
   LEGAL_SEARCH_PROVIDER,
   QUERY_EXPANSION_MODE,
   S3_ACCESS_KEY_ID,
@@ -423,14 +426,27 @@ export const envBaseInvariantViolation = ({
   if (S3_CREDENTIALS_PROVIDER === "env" && !(hasAccessKey && hasSecretKey)) {
     return 'S3_CREDENTIALS_PROVIDER="env" requires static S3 credentials.';
   }
+  const caseLawCluster = parseCorpusIndexClusterForGeneration(
+    "case_law",
+    LEGAL_SEARCH_INDEX_GENERATION,
+  );
+  if (LEGAL_SEARCH_PROVIDER === "corpus-index" && caseLawCluster === null) {
+    return `Unknown case-law corpus index generation: ${LEGAL_SEARCH_INDEX_GENERATION}.`;
+  }
   if (
     LEGAL_SEARCH_PROVIDER === "corpus-index" &&
     CORPUS_INDEX_SEARCH_ENDPOINT === undefined &&
-    CORPUS_INDEX_ENDPOINT === undefined &&
+    CORPUS_INDEX_ENDPOINT === undefined
+  ) {
+    return "Serving legislation_v1 on q08 requires CORPUS_INDEX_SEARCH_ENDPOINT or CORPUS_INDEX_ENDPOINT.";
+  }
+  if (
+    LEGAL_SEARCH_PROVIDER === "corpus-index" &&
+    caseLawCluster === "q09" &&
     CORPUS_INDEX_Q09_SEARCH_ENDPOINT === undefined &&
     CORPUS_INDEX_Q09_ENDPOINT === undefined
   ) {
-    return "LEGAL_SEARCH_PROVIDER=corpus-index requires a configured corpus-index endpoint.";
+    return "Serving case_law_v5 on q09 requires CORPUS_INDEX_Q09_SEARCH_ENDPOINT or CORPUS_INDEX_Q09_ENDPOINT.";
   }
 
   return corpusStorageInvariantViolation({

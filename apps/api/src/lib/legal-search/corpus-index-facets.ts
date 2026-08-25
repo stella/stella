@@ -2,6 +2,7 @@ import { Result } from "better-result";
 
 import { LegalBrowseFacetsError } from "@/api/lib/legal-search/browse-facets";
 import { corpusGeneration } from "@/api/lib/legal-search/corpus-family";
+import { corpusIndexClusterForGeneration } from "@/api/lib/legal-search/corpus-generation-contract";
 import { getCorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client";
 import { quoteCorpusValue } from "@/api/lib/legal-search/corpus-query";
 import { corpusIndexRoute } from "@/api/lib/legal-search/index-naming";
@@ -170,7 +171,12 @@ export const corpusIndexBrowseFacets = async (
     query.jurisdiction,
   );
 
-  const aggregated = await getCorpusIndexClient().aggregate({
+  const aggregated = await getCorpusIndexClient(
+    corpusIndexClusterForGeneration(
+      query.documentFamily ?? "case_law",
+      generation,
+    ),
+  ).aggregate({
     indexId,
     query: browseFacetsQuery({
       excludedSourceIds: query.excludedSourceIds,
