@@ -79,6 +79,26 @@ export const advanceCorpusProjectionErasuresTx = async (
           ${corpusIndexProjectionStates.appliedAction} IS DISTINCT FROM 'erase'
           OR ${corpusIndexProjectionStates.appliedEpoch} IS DISTINCT FROM ${corpusIndexProjectionStates.desiredEpoch}
         )`,
+        sql`(
+          NOT EXISTS (
+            SELECT 1
+            FROM ${corpusIndexProjectionIntents} outstanding
+            WHERE outstanding.family = ${corpusIndexProjectionStates.family}
+              AND outstanding.generation = ${corpusIndexProjectionStates.generation}
+              AND outstanding.entity_id = ${corpusIndexProjectionStates.entityId}
+              AND outstanding.epoch <= ${corpusIndexProjectionStates.desiredEpoch}
+              AND outstanding.status NOT IN ('settled', 'cancelled')
+          )
+          OR EXISTS (
+            SELECT 1
+            FROM ${corpusIndexProjectionIntents} actionable
+            WHERE actionable.family = ${corpusIndexProjectionStates.family}
+              AND actionable.generation = ${corpusIndexProjectionStates.generation}
+              AND actionable.entity_id = ${corpusIndexProjectionStates.entityId}
+              AND actionable.epoch <= ${corpusIndexProjectionStates.desiredEpoch}
+              AND actionable.status IN ('reserved', 'append_started', 'append_committed', 'applied')
+          )
+        )`,
       ),
     )
     .orderBy(

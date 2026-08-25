@@ -25,7 +25,12 @@ BEGIN
       RAISE EXCEPTION 'changed corpus index desired state requires a newer epoch';
     END IF;
     IF OLD."applied_epoch" IS NOT NULL
-       AND (NEW."applied_epoch" IS NULL OR NEW."applied_epoch" < OLD."applied_epoch") THEN
+       AND (NEW."applied_epoch" IS NULL OR NEW."applied_epoch" < OLD."applied_epoch")
+       AND NOT (
+         OLD."applied_action" = 'erase'
+         AND NEW."applied_action" IS NULL
+         AND NEW."desired_action" = 'erase'
+       ) THEN
       RAISE EXCEPTION 'corpus index applied epoch cannot decrease';
     END IF;
   END IF;

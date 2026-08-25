@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { and, asc, eq, gt, inArray, isNotNull, sql } from "drizzle-orm";
+import { and, asc, eq, exists, gt, inArray, isNotNull, sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import {
@@ -278,6 +278,21 @@ export const prepareCorpusProjectionReplacementsTx = async (
         isNotNull(corpusIndexProjectionStates.appliedRevision),
         isNotNull(corpusIndexProjectionStates.appliedIndexId),
         sql`${corpusIndexProjectionStates.desiredEpoch} > ${corpusIndexProjectionStates.appliedEpoch}`,
+        exists(
+          tx
+            .select({ id: corpusIndexProjectionIntents.id })
+            .from(corpusIndexProjectionIntents)
+            .where(
+              and(
+                eq(
+                  corpusIndexProjectionIntents.id,
+                  corpusIndexProjectionStates.appliedRevision,
+                ),
+                eq(corpusIndexProjectionIntents.status, "applied"),
+              ),
+            )
+            .limit(1),
+        ),
       ),
     )
     .orderBy(

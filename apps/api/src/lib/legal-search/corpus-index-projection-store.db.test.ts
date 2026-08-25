@@ -297,6 +297,19 @@ test("replacement deletes and settles the old revision before reserving the new 
   expect(prepared.map(({ intentId }) => intentId)).toEqual([
     firstLease.intentId,
   ]);
+  expect(
+    await db.transaction(
+      async (tx) =>
+        await prepareCorpusProjectionReplacementsTx(
+          asTestRaw<Transaction>(tx),
+          {
+            family: "case_law",
+            generation: "case_law_v5",
+            limit: 10,
+          },
+        ),
+    ),
+  ).toEqual([]);
 
   const cleanup = await db.transaction(
     async (tx) =>
@@ -887,6 +900,16 @@ test("erasure fences an unknown append and applies only after cleanup settlement
     scheduledRevisions: [lease.intentId],
     appliedEntityIds: [],
   });
+  expect(
+    await withDatabaseClock(
+      async (tx) =>
+        await advanceCorpusProjectionErasuresTx(tx, {
+          family: "case_law",
+          generation: "case_law_v5",
+          limit: 10,
+        }),
+    ),
+  ).toMatchObject({ claimedCount: 0 });
   const fencedIntent = await db
     .select({ updatedAt: corpusIndexProjectionIntents.updatedAt })
     .from(corpusIndexProjectionIntents)
@@ -950,6 +973,38 @@ test("erasure fences an unknown append and applies only after cleanup settlement
   expect(state).toEqual([
     { action: "erase", epoch: 2n, revision: null, appliedAt: erasureNow },
   ]);
+
+  expect(
+    await db.transaction(
+      async (tx) =>
+        await reopenCorpusProjectionCleanupTx(asTestRaw<Transaction>(tx), {
+          intentIds: [lease.intentId],
+          indexId: INDEX_ID,
+          errorMessage: "orphan census rediscovered an erased revision",
+        }),
+    ),
+  ).toBe(1);
+  const reopenedState = await db
+    .select({
+      action: corpusIndexProjectionStates.appliedAction,
+      epoch: corpusIndexProjectionStates.appliedEpoch,
+      appliedAt: corpusIndexProjectionStates.appliedAt,
+    })
+    .from(corpusIndexProjectionStates)
+    .where(eq(corpusIndexProjectionStates.entityId, ERASE_DECISION_ID));
+  expect(reopenedState).toEqual([
+    { action: null, epoch: null, appliedAt: null },
+  ]);
+  await db.transaction(async (tx) => {
+    await tx
+      .update(caseLawDecisions)
+      .set({ projectionEpoch: 3n })
+      .where(eq(caseLawDecisions.id, ERASE_DECISION_ID));
+    await tx
+      .update(corpusIndexProjectionStates)
+      .set({ desiredEpoch: 3n })
+      .where(eq(corpusIndexProjectionStates.entityId, ERASE_DECISION_ID));
+  });
 });
 
 test("cleanup-owned revisions do not consume the erasure action cap", async () => {

@@ -2,7 +2,10 @@ import { panic, Result } from "better-result";
 import { and, asc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
-import { corpusIndexProjectionIntents } from "@/api/db/schema";
+import {
+  corpusIndexProjectionIntents,
+  corpusIndexProjectionStates,
+} from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";
 import type {
@@ -585,8 +588,78 @@ export const reopenCorpusProjectionCleanupTx = async (
   ) {
     return panic("Corpus projection cleanup reopen request is invalid");
   }
+  const identities = await tx
+    .select({
+      family: corpusIndexProjectionIntents.family,
+      generation: corpusIndexProjectionIntents.generation,
+      entityId: corpusIndexProjectionIntents.entityId,
+    })
+    .from(corpusIndexProjectionIntents)
+    .where(
+      and(
+        inArray(corpusIndexProjectionIntents.id, intentIds),
+        eq(corpusIndexProjectionIntents.indexId, indexId),
+        eq(corpusIndexProjectionIntents.status, "settled"),
+      ),
+    );
+  if (identities.length !== intentIds.length) {
+    return panic("Corpus projection cleanup reopen identities changed");
+  }
+  const statePredicate = or(
+    ...identities.map(({ family, generation, entityId }) =>
+      and(
+        eq(corpusIndexProjectionStates.family, family),
+        eq(corpusIndexProjectionStates.generation, generation),
+        eq(corpusIndexProjectionStates.entityId, entityId),
+      ),
+    ),
+  );
+  if (statePredicate === undefined) {
+    return panic("Corpus projection cleanup reopen state predicate is empty");
+  }
+  await tx
+    .select({ entityId: corpusIndexProjectionStates.entityId })
+    .from(corpusIndexProjectionStates)
+    .where(statePredicate)
+    .orderBy(
+      asc(corpusIndexProjectionStates.family),
+      asc(corpusIndexProjectionStates.generation),
+      asc(corpusIndexProjectionStates.entityId),
+    )
+    .for("update");
   await lockCorpusProjectionIntentsById(tx, intentIds);
   const transitionAt = testNow ?? sql<Date>`clock_timestamp()`;
+  const reopenedIdsSql = sql.join(
+    intentIds.map((intentId) => sql`${intentId}`),
+    sql.raw(", "),
+  );
+  await tx
+    .update(corpusIndexProjectionStates)
+    .set({
+      appliedAction: null,
+      appliedEpoch: null,
+      appliedRevision: null,
+      appliedFingerprint: null,
+      appliedIndexId: null,
+      appliedAt: null,
+      updatedAt: transitionAt,
+    })
+    .where(
+      and(
+        statePredicate,
+        eq(corpusIndexProjectionStates.appliedAction, "erase"),
+        sql`EXISTS (
+          SELECT 1
+          FROM ${corpusIndexProjectionIntents} reopened
+          WHERE reopened.id IN (${reopenedIdsSql})
+            AND reopened.family = ${corpusIndexProjectionStates.family}
+            AND reopened.generation = ${corpusIndexProjectionStates.generation}
+            AND reopened.entity_id = ${corpusIndexProjectionStates.entityId}
+            AND reopened.epoch <= ${corpusIndexProjectionStates.appliedEpoch}
+            AND reopened.status = 'settled'
+        )`,
+      ),
+    );
   const rows = await tx
     .update(corpusIndexProjectionIntents)
     .set({
