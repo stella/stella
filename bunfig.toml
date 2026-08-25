@@ -15,16 +15,6 @@ minimumReleaseAgeExcludes = [
   # Keep Astro's framework and Markdown packages on one patch line while
   # verifying their Vite 8.2/Rolldown 1.2 compatibility. Remove these
   # exceptions once the normal quarantine admits them.
-  "satteri", # quarantine-expires: 2026-08-24T20:38:24.126Z
-  "@bruits/satteri-darwin-arm64", # quarantine-expires: 2026-08-24T20:35:12.975Z
-  "@bruits/satteri-darwin-x64", # quarantine-expires: 2026-08-24T20:35:18.993Z
-  "@bruits/satteri-linux-arm64-gnu", # quarantine-expires: 2026-08-24T20:35:23.376Z
-  "@bruits/satteri-linux-arm64-musl", # quarantine-expires: 2026-08-24T20:35:28.010Z
-  "@bruits/satteri-linux-x64-gnu", # quarantine-expires: 2026-08-24T20:38:39.385Z
-  "@bruits/satteri-linux-x64-musl", # quarantine-expires: 2026-08-24T20:35:37.342Z
-  "@bruits/satteri-wasm32-wasi", # quarantine-expires: 2026-08-24T20:35:42.122Z
-  "@bruits/satteri-win32-arm64-msvc", # quarantine-expires: 2026-08-24T20:35:46.076Z
-  "@bruits/satteri-win32-x64-msvc", # quarantine-expires: 2026-08-24T20:35:50.904Z
   # bun-types 1.4.0 keeps the compiler contract aligned with Bun 1.4.0.
   # Remove this exception once the normal quarantine admits it.
   "bun-types", # quarantine-expires: 2026-08-25T14:11:33.785Z
