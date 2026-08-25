@@ -1,6 +1,7 @@
 import { twoFactor as betterAuthTwoFactor } from "better-auth/plugins";
 import { describe, expect, test } from "bun:test";
 import { getColumns } from "drizzle-orm";
+import type { InferSelectModel } from "drizzle-orm";
 import { getTableConfig, PgDialect } from "drizzle-orm/pg-core";
 import type { AnyPgTable } from "drizzle-orm/pg-core";
 
@@ -19,6 +20,7 @@ import type {
 import {
   AUTH_USER_STELLA_SELECT_COLUMN_NAMES,
   AUTH_USER_STELLA_SELECT_COLUMNS,
+  BETTER_AUTH_17_BRIDGE_MODEL_NAMES,
   account,
   authSchema,
   invitation,
@@ -51,6 +53,12 @@ const PRODUCT_AUTH_MODEL_NAMES = [
 const CORE_AUTH_MODEL_NAMES: readonly string[] = Object.keys(
   BETTER_AUTH_CORE_SCHEMA,
 );
+
+const BETTER_AUTH_17_BRIDGE_CORE_FIELD_NAMES = {
+  account: ["issuer"],
+} as const satisfies {
+  account: readonly (keyof InferSelectModel<typeof account>)[];
+};
 
 const normalizeDateStorage = (
   storage: BetterAuthFieldContract["database"]["storage"] | undefined,
@@ -271,11 +279,20 @@ const referenceTo = (tableName: string): BetterAuthFieldReference => {
   throw new Error(`Unsupported core auth reference: ${tableName}`);
 };
 
-const normalizeModel = (
-  modelName: string,
-  table: AnyPgTable,
-  expectedFields: Record<string, BetterAuthFieldContract>,
-) => {
+type NormalizeModelOptions = {
+  bridgeFieldNames?: readonly string[];
+  expectedFields: Record<string, BetterAuthFieldContract>;
+  modelName: string;
+  table: AnyPgTable;
+};
+
+const normalizeModel = ({
+  bridgeFieldNames = [],
+  expectedFields,
+  modelName,
+  table,
+}: NormalizeModelOptions) => {
+  const bridgeFields = new Set(bridgeFieldNames);
   const columns = getColumns(table);
   const config = getTableConfig(table);
   const logicalNameByColumn = new Map(
@@ -309,6 +326,9 @@ const normalizeModel = (
 
   const fields: Record<string, BetterAuthFieldContract> = {};
   for (const [logicalName, column] of Object.entries(columns)) {
+    if (bridgeFields.has(logicalName)) {
+      continue;
+    }
     const expected = expectedFields[logicalName];
     if (!expected) {
       throw new Error(`Undeclared auth field ${modelName}.${logicalName}`);
@@ -382,42 +402,56 @@ describe("auth schema", () => {
       Object.keys(authSchema)
         .filter((modelName) => !CORE_AUTH_MODEL_NAMES.includes(modelName))
         .toSorted(),
-    ).toEqual(PRODUCT_AUTH_MODEL_NAMES.toSorted());
+    ).toEqual(
+      [
+        ...PRODUCT_AUTH_MODEL_NAMES,
+        ...BETTER_AUTH_17_BRIDGE_MODEL_NAMES,
+      ].toSorted(),
+    );
 
     const models: Record<string, BetterAuthModelContract> = {
-      user: normalizeModel("user", user, {
-        ...BETTER_AUTH_CORE_SCHEMA.user.fields,
-        ...HOST_USER_FIELDS,
+      user: normalizeModel({
+        expectedFields: {
+          ...BETTER_AUTH_CORE_SCHEMA.user.fields,
+          ...HOST_USER_FIELDS,
+        },
+        modelName: "user",
+        table: user,
       }),
-      session: normalizeModel(
-        "session",
-        session,
-        BETTER_AUTH_CORE_SCHEMA.session.fields,
-      ),
-      account: normalizeModel(
-        "account",
-        account,
-        BETTER_AUTH_CORE_SCHEMA.account.fields,
-      ),
-      verification: normalizeModel(
-        "verification",
-        verification,
-        BETTER_AUTH_CORE_SCHEMA.verification.fields,
-      ),
-      organization: normalizeModel(
-        "organization",
-        organization,
-        BETTER_AUTH_CORE_SCHEMA.organization.fields,
-      ),
-      member: normalizeModel("member", member, {
-        ...BETTER_AUTH_CORE_SCHEMA.member.fields,
-        ...HOST_MEMBER_FIELDS,
+      session: normalizeModel({
+        expectedFields: BETTER_AUTH_CORE_SCHEMA.session.fields,
+        modelName: "session",
+        table: session,
       }),
-      invitation: normalizeModel(
-        "invitation",
-        invitation,
-        BETTER_AUTH_CORE_SCHEMA.invitation.fields,
-      ),
+      account: normalizeModel({
+        bridgeFieldNames: BETTER_AUTH_17_BRIDGE_CORE_FIELD_NAMES.account,
+        expectedFields: BETTER_AUTH_CORE_SCHEMA.account.fields,
+        modelName: "account",
+        table: account,
+      }),
+      verification: normalizeModel({
+        expectedFields: BETTER_AUTH_CORE_SCHEMA.verification.fields,
+        modelName: "verification",
+        table: verification,
+      }),
+      organization: normalizeModel({
+        expectedFields: BETTER_AUTH_CORE_SCHEMA.organization.fields,
+        modelName: "organization",
+        table: organization,
+      }),
+      member: normalizeModel({
+        expectedFields: {
+          ...BETTER_AUTH_CORE_SCHEMA.member.fields,
+          ...HOST_MEMBER_FIELDS,
+        },
+        modelName: "member",
+        table: member,
+      }),
+      invitation: normalizeModel({
+        expectedFields: BETTER_AUTH_CORE_SCHEMA.invitation.fields,
+        modelName: "invitation",
+        table: invitation,
+      }),
     };
     for (const modelName of PRODUCT_AUTH_MODEL_NAMES) {
       models[modelName] = PRODUCT_MODEL_PLACEHOLDER;

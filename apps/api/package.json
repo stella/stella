@@ -31,6 +31,7 @@
     "bench:chat-read-surface": "NODE_ENV=development bun scripts/benchmark-chat-read-surface.ts",
     "db:migrate": "bun run --env-file=.env src/db/migrate.ts",
     "db:audit-better-auth": "bun run --env-file=.env src/scripts/better-auth-migration-audit.ts",
+    "db:backfill-better-auth-17": "bun run --env-file=.env src/scripts/better-auth-17-backfill.ts",
     "db:push": "bun run db:migrate && bun run --env-file=.env drizzle-kit push",
     "db:seed-test-user": "bun scripts/seed-test-user.ts",
     "db:seed-dev": "bun scripts/seed-dev.ts",

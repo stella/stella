@@ -12,6 +12,7 @@ import type { SQL, Table } from "drizzle-orm";
 import * as v from "valibot";
 
 import { authSchema } from "@/api/db/auth-schema";
+import { compareCodepoint } from "@/api/lib/collation";
 import { isRecord } from "@/api/lib/type-guards";
 
 export const BETTER_AUTH_AUDIT_MODES = {
@@ -35,6 +36,44 @@ const ACCOUNT_ISSUERS = {
   MICROSOFT_PREFIX: "https://login.microsoftonline.com/",
   MICROSOFT_SUFFIX: "/v2.0",
 } as const;
+
+const TRANSFORMED_ACCOUNT_COLUMNS = new Set(["issuer"]);
+const INTRODUCED_OAUTH_COLUMNS = {
+  oauthAccessToken: new Set([
+    "authorization_code_id",
+    "confirmation",
+    "requested_user_info_claims",
+    "resources",
+    "revoked",
+  ]),
+  oauthClient: new Set([
+    "application_type",
+    "backchannel_logout_session_required",
+    "backchannel_logout_uri",
+    "client_credentials_scopes",
+    "client_discovery_id",
+    "dpop_bound_access_tokens",
+    "jwks",
+    "jwks_uri",
+  ]),
+  oauthConsent: new Set(["requested_user_info_claims", "resources"]),
+  oauthRefreshToken: new Set([
+    "authorization_code_id",
+    "confirmation",
+    "requested_user_info_claims",
+    "resources",
+    "rotated_at",
+    "rotation_replay_expires_at",
+    "rotation_replay_response",
+  ]),
+} as const;
+const MICROSOFT_ACCOUNT_ID_CENSUS_SENTINEL =
+  "better-auth-1.7-trusted-microsoft-identity";
+
+const preservedAccountColumnNames = () =>
+  columnNames(authSchema.account).filter(
+    (column) => !TRANSFORMED_ACCOUNT_COLUMNS.has(column),
+  );
 
 type AuthModel = keyof typeof authSchema;
 
@@ -65,6 +104,9 @@ type AuthPolicyRule = {
 const columnNames = (table: Table) =>
   Object.values(getColumns(table)).map(({ name }) => name);
 
+const preservedColumnNames = (table: Table, introduced: ReadonlySet<string>) =>
+  columnNames(table).filter((column) => !introduced.has(column));
+
 /**
  * Total by construction: adding a table to `authSchema` fails typechecking
  * until its preservation and reachability policy is chosen here.
@@ -74,7 +116,11 @@ export const AUTH_TABLE_AUDIT_POLICY = {
     foreignKeys: [
       { column: "user_id", referencedColumn: "id", referencedModel: "user" },
     ],
-    preservedColumns: columnNames(authSchema.account),
+    // Better Auth 1.7 adds issuer. Microsoft account_id deliberately changes
+    // from sub to a verified oid, so the census masks only that provider's
+    // value while preserving Google and credential account IDs byte-for-byte.
+    // The trusted identity projection below owns the Microsoft transition.
+    preservedColumns: preservedAccountColumnNames(),
     tableName: getTableName(authSchema.account),
   },
   apikey: {
@@ -136,14 +182,20 @@ export const AUTH_TABLE_AUDIT_POLICY = {
         referencedModel: "oauthRefreshToken",
       },
     ],
-    preservedColumns: columnNames(authSchema.oauthAccessToken),
+    preservedColumns: preservedColumnNames(
+      authSchema.oauthAccessToken,
+      INTRODUCED_OAUTH_COLUMNS.oauthAccessToken,
+    ),
     tableName: getTableName(authSchema.oauthAccessToken),
   },
   oauthClient: {
     foreignKeys: [
       { column: "user_id", referencedColumn: "id", referencedModel: "user" },
     ],
-    preservedColumns: columnNames(authSchema.oauthClient),
+    preservedColumns: preservedColumnNames(
+      authSchema.oauthClient,
+      INTRODUCED_OAUTH_COLUMNS.oauthClient,
+    ),
     tableName: getTableName(authSchema.oauthClient),
   },
   oauthConsent: {
@@ -155,7 +207,10 @@ export const AUTH_TABLE_AUDIT_POLICY = {
       },
       { column: "user_id", referencedColumn: "id", referencedModel: "user" },
     ],
-    preservedColumns: columnNames(authSchema.oauthConsent),
+    preservedColumns: preservedColumnNames(
+      authSchema.oauthConsent,
+      INTRODUCED_OAUTH_COLUMNS.oauthConsent,
+    ),
     tableName: getTableName(authSchema.oauthConsent),
   },
   oauthRefreshToken: {
@@ -172,13 +227,42 @@ export const AUTH_TABLE_AUDIT_POLICY = {
       },
       { column: "user_id", referencedColumn: "id", referencedModel: "user" },
     ],
-    preservedColumns: columnNames(authSchema.oauthRefreshToken),
+    preservedColumns: preservedColumnNames(
+      authSchema.oauthRefreshToken,
+      INTRODUCED_OAUTH_COLUMNS.oauthRefreshToken,
+    ),
     tableName: getTableName(authSchema.oauthRefreshToken),
   },
   organization: {
     foreignKeys: [],
     preservedColumns: columnNames(authSchema.organization),
     tableName: getTableName(authSchema.organization),
+  },
+  oauthClientAssertion: {
+    foreignKeys: [],
+    preservedColumns: columnNames(authSchema.oauthClientAssertion),
+    tableName: getTableName(authSchema.oauthClientAssertion),
+  },
+  oauthClientResource: {
+    foreignKeys: [
+      {
+        column: "client_id",
+        referencedColumn: "client_id",
+        referencedModel: "oauthClient",
+      },
+      {
+        column: "resource_id",
+        referencedColumn: "identifier",
+        referencedModel: "oauthResource",
+      },
+    ],
+    preservedColumns: columnNames(authSchema.oauthClientResource),
+    tableName: getTableName(authSchema.oauthClientResource),
+  },
+  oauthResource: {
+    foreignKeys: [],
+    preservedColumns: columnNames(authSchema.oauthResource),
+    tableName: getTableName(authSchema.oauthResource),
   },
   session: {
     foreignKeys: [
@@ -222,8 +306,11 @@ const AUTH_BASELINE_DISPOSITION = {
   member: "preserve",
   oauthAccessToken: "preserve",
   oauthClient: "preserve",
+  oauthClientAssertion: "introduced",
+  oauthClientResource: "introduced",
   oauthConsent: "preserve",
   oauthRefreshToken: "preserve",
+  oauthResource: "introduced",
   organization: "preserve",
   session: "preserve",
   twoFactor: "preserve",
@@ -234,12 +321,12 @@ const AUTH_BASELINE_DISPOSITION = {
 const isPreservedDisposition = (value: "introduced" | "preserve") =>
   value === "preserve";
 
-const AUTH_MODEL_NAMES = Object.keys(AUTH_BASELINE_DISPOSITION)
+export const AUTH_BASELINE_MODEL_NAMES = Object.keys(AUTH_BASELINE_DISPOSITION)
   .filter(isAuthModel)
   .filter((model) => isPreservedDisposition(AUTH_BASELINE_DISPOSITION[model]));
 const AUTH_TABLE_POLICIES = Object.values(AUTH_TABLE_AUDIT_POLICY);
 
-const PRESERVED_AUTH_TABLE_NAMES = AUTH_MODEL_NAMES.flatMap((model) =>
+const PRESERVED_AUTH_TABLE_NAMES = AUTH_BASELINE_MODEL_NAMES.flatMap((model) =>
   isAuthModel(model) ? [AUTH_TABLE_AUDIT_POLICY[model].tableName] : [],
 );
 
@@ -326,6 +413,28 @@ const AUTH_ACCESS_POLICY = {
     ],
     tableName: AUTH_TABLE_AUDIT_POLICY.oauthClient.tableName,
   },
+  oauthClientAssertion: {
+    access: "denied",
+    policies: [
+      {
+        command: "ALL",
+        name: "auth_no_stella_access",
+        predicate: "deny",
+      },
+    ],
+    tableName: AUTH_TABLE_AUDIT_POLICY.oauthClientAssertion.tableName,
+  },
+  oauthClientResource: {
+    access: "denied",
+    policies: [
+      {
+        command: "ALL",
+        name: "auth_no_stella_access",
+        predicate: "deny",
+      },
+    ],
+    tableName: AUTH_TABLE_AUDIT_POLICY.oauthClientResource.tableName,
+  },
   oauthConsent: {
     access: "denied",
     policies: [
@@ -347,6 +456,17 @@ const AUTH_ACCESS_POLICY = {
       },
     ],
     tableName: AUTH_TABLE_AUDIT_POLICY.oauthRefreshToken.tableName,
+  },
+  oauthResource: {
+    access: "denied",
+    policies: [
+      {
+        command: "ALL",
+        name: "auth_no_stella_access",
+        predicate: "deny",
+      },
+    ],
+    tableName: AUTH_TABLE_AUDIT_POLICY.oauthResource.tableName,
   },
   organization: {
     access: "scoped",
@@ -410,20 +530,6 @@ const FUTURE_AUTH_TABLES = {
   OAUTH_CLIENT_RESOURCE: "oauth_client_resource",
   OAUTH_RESOURCE: "oauth_resource",
 } as const;
-
-const FUTURE_AUTH_ACCESS_POLICY = Object.values(FUTURE_AUTH_TABLES).map(
-  (tableName) => ({
-    access: "denied" as const,
-    policies: [
-      {
-        command: "ALL" as const,
-        name: "auth_no_stella_access",
-        predicate: "deny" as const,
-      },
-    ],
-    tableName,
-  }),
-);
 
 const POST_BACKFILL_COLUMNS = {
   account: ["issuer"],
@@ -496,6 +602,10 @@ const POST_MIGRATION_COLUMNS = {
 
 export const BETTER_AUTH_AUDIT_CHECKS = {
   ACCOUNT_IDENTITY_COMPLETE: "account-identity-complete",
+  ACCOUNT_IDENTITY_MAPPING_COMPLETE: "account-identity-mapping-complete",
+  ACCOUNT_IDENTITY_PROJECTED_UNIQUE: "account-identity-projected-unique",
+  ACCOUNT_IDENTITIES_MATCH_TRUSTED_PROJECTION:
+    "account-identities-match-trusted-projection",
   ACCOUNT_IDENTITY_UNIQUE: "account-identity-unique",
   ACCOUNT_ISSUERS_TRUSTED: "account-issuers-trusted",
   ACCOUNT_PROVIDERS_CLASSIFIED: "account-providers-classified",
@@ -511,6 +621,9 @@ export const BETTER_AUTH_AUDIT_CHECKS = {
   OAUTH_CLIENTS_CLASSIFIED: "oauth-clients-classified",
   OAUTH_CLIENT_RESOURCE_LINKS: "oauth-client-resource-links-complete",
   OAUTH_RESOURCE_REFERENCES: "oauth-resource-references-reachable",
+  OAUTH_POLICY_MATCHES_TRUSTED_PROJECTION:
+    "oauth-policy-matches-trusted-projection",
+  OAUTH_POLICY_PROJECTED_VALID: "oauth-policy-projected-valid",
   POST_BACKFILL_SCHEMA_COMPLETE: "post-backfill-schema-complete",
   POST_MIGRATION_CONSTRAINTS: "post-migration-constraints",
 } as const;
@@ -526,6 +639,9 @@ const CHECKS_BY_MODE = {
     BETTER_AUTH_AUDIT_CHECKS.AUTH_FOREIGN_KEYS_VALIDATED,
     BETTER_AUTH_AUDIT_CHECKS.ACCOUNT_PROVIDERS_CLASSIFIED,
     BETTER_AUTH_AUDIT_CHECKS.CREDENTIAL_ACCOUNT_OWNERSHIP,
+    BETTER_AUTH_AUDIT_CHECKS.ACCOUNT_IDENTITY_MAPPING_COMPLETE,
+    BETTER_AUTH_AUDIT_CHECKS.ACCOUNT_IDENTITY_PROJECTED_UNIQUE,
+    BETTER_AUTH_AUDIT_CHECKS.OAUTH_POLICY_PROJECTED_VALID,
     BETTER_AUTH_AUDIT_CHECKS.AUTH_ROWS_BASELINED,
   ],
   [BETTER_AUTH_AUDIT_MODES.POST_BACKFILL]: [
@@ -539,6 +655,8 @@ const CHECKS_BY_MODE = {
     BETTER_AUTH_AUDIT_CHECKS.ACCOUNT_IDENTITY_COMPLETE,
     BETTER_AUTH_AUDIT_CHECKS.ACCOUNT_IDENTITY_UNIQUE,
     BETTER_AUTH_AUDIT_CHECKS.ACCOUNT_ISSUERS_TRUSTED,
+    BETTER_AUTH_AUDIT_CHECKS.ACCOUNT_IDENTITIES_MATCH_TRUSTED_PROJECTION,
+    BETTER_AUTH_AUDIT_CHECKS.OAUTH_POLICY_MATCHES_TRUSTED_PROJECTION,
     BETTER_AUTH_AUDIT_CHECKS.OAUTH_CLIENT_RESOURCE_LINKS,
     BETTER_AUTH_AUDIT_CHECKS.OAUTH_CLIENTS_CLASSIFIED,
     BETTER_AUTH_AUDIT_CHECKS.OAUTH_RESOURCE_REFERENCES,
@@ -555,6 +673,8 @@ const CHECKS_BY_MODE = {
     BETTER_AUTH_AUDIT_CHECKS.ACCOUNT_IDENTITY_COMPLETE,
     BETTER_AUTH_AUDIT_CHECKS.ACCOUNT_IDENTITY_UNIQUE,
     BETTER_AUTH_AUDIT_CHECKS.ACCOUNT_ISSUERS_TRUSTED,
+    BETTER_AUTH_AUDIT_CHECKS.ACCOUNT_IDENTITIES_MATCH_TRUSTED_PROJECTION,
+    BETTER_AUTH_AUDIT_CHECKS.OAUTH_POLICY_MATCHES_TRUSTED_PROJECTION,
     BETTER_AUTH_AUDIT_CHECKS.OAUTH_CLIENT_RESOURCE_LINKS,
     BETTER_AUTH_AUDIT_CHECKS.OAUTH_CLIENTS_CLASSIFIED,
     BETTER_AUTH_AUDIT_CHECKS.OAUTH_RESOURCE_REFERENCES,
@@ -574,8 +694,17 @@ export type BetterAuthAuditCheck = {
 };
 
 export type BetterAuthAuditBaseline = {
+  accountIdentityProjection: {
+    digest: string;
+    rowCount: string;
+  };
   accessPolicyDigest: string;
-  formatVersion: 2;
+  formatVersion: 4;
+  oauthPolicyProjection: {
+    clientCount: string;
+    digest: string;
+    resourceCount: string;
+  };
   tables: Record<
     string,
     {
@@ -587,6 +716,22 @@ export type BetterAuthAuditBaseline = {
   >;
 };
 
+export type BetterAuthTrustedIdentityMap = {
+  formatVersion: 1;
+  microsoftAccounts: readonly {
+    accountId: string;
+    accountRowId: string;
+    issuer: string;
+    legacyAccountId: string;
+  }[];
+};
+
+export type BetterAuthExpectedOAuthResource = {
+  allowedScopes: readonly string[];
+  identifier: string;
+  name: string;
+};
+
 export type BetterAuthAuditReport = {
   checks: readonly BetterAuthAuditCheck[];
   mode: BetterAuthAuditMode;
@@ -595,7 +740,7 @@ export type BetterAuthAuditReport = {
 
 export class BetterAuthAuditError extends TaggedError("BetterAuthAuditError")<{
   cause?: unknown;
-  code: "database-query-failed" | "invalid-baseline";
+  code: "database-query-failed" | "invalid-baseline" | "invalid-identity-map";
   message: string;
 }> {}
 
@@ -608,7 +753,12 @@ type AuditRunResult = {
   report: BetterAuthAuditReport;
 };
 
-const queryRows = async (database: BetterAuthAuditDatabase, statement: SQL) => {
+type AuditRowsResult = Result<unknown[], BetterAuthAuditError>;
+
+const queryRows = async (
+  database: BetterAuthAuditDatabase,
+  statement: SQL,
+): Promise<AuditRowsResult> => {
   const queried = await Result.tryPromise({
     try: async () => await database.execute(statement),
     catch: (cause) =>
@@ -644,6 +794,542 @@ const requiredString = (value: unknown): string | null =>
 const requiredBoolean = (value: unknown): boolean | null =>
   typeof value === "boolean" ? value : null;
 
+const requiredStringArray = (value: unknown): readonly string[] | null =>
+  Array.isArray(value) && value.every((entry) => typeof entry === "string")
+    ? value
+    : null;
+
+const optionalStringArray = (value: unknown): readonly string[] | null =>
+  value === null ? [] : requiredStringArray(value);
+
+type AccountIdentityProjection = {
+  collisionFree: boolean;
+  digest: string;
+  mappingComplete: boolean;
+  rowCount: string;
+};
+
+const ACCOUNT_IDENTITY_PAGE_SIZE = 1000;
+
+const accountIdentityKeyDigest = (issuer: string, accountId: string) => {
+  const hasher = new Bun.CryptoHasher("sha256");
+  hasher.update(issuer);
+  hasher.update("\0");
+  hasher.update(accountId);
+  return hasher.digest("hex");
+};
+
+const updateAccountIdentityProjection = (
+  hasher: Bun.CryptoHasher,
+  accountRowId: string,
+  issuer: string,
+  accountId: string,
+) => {
+  hasher.update(accountRowId);
+  hasher.update("\0");
+  hasher.update(issuer);
+  hasher.update("\0");
+  hasher.update(accountId);
+  hasher.update("\0");
+};
+
+const readProjectedAccountIdentities = async (
+  database: BetterAuthAuditDatabase,
+  trustedIdentityMap: BetterAuthTrustedIdentityMap,
+) => {
+  const microsoftByAccountRowId = new Map(
+    trustedIdentityMap.microsoftAccounts.map((identity) => [
+      identity.accountRowId,
+      identity,
+    ]),
+  );
+  let mappingComplete =
+    microsoftByAccountRowId.size ===
+    trustedIdentityMap.microsoftAccounts.length;
+  const seenMicrosoftAccountRowIds = new Set<string>();
+  const projectionHasher = new Bun.CryptoHasher("sha256");
+  const microsoftIdentityKeys = new Set(
+    trustedIdentityMap.microsoftAccounts.map(({ accountId, issuer }) =>
+      accountIdentityKeyDigest(issuer, accountId),
+    ),
+  );
+  const collisionFree =
+    microsoftIdentityKeys.size === trustedIdentityMap.microsoftAccounts.length;
+  let after: string | null = null;
+  let rowCount = 0n;
+
+  const readNextPage = async (): Promise<
+    Result<void, BetterAuthAuditError>
+  > => {
+    const statement =
+      after === null
+        ? sql`
+            SELECT id AS "accountRowId",
+                   account_id AS "accountId",
+                   provider_id AS "providerId",
+                   user_id AS "userId"
+              FROM account
+             ORDER BY id
+             LIMIT ${ACCOUNT_IDENTITY_PAGE_SIZE}
+          `
+        : sql`
+            SELECT id AS "accountRowId",
+                   account_id AS "accountId",
+                   provider_id AS "providerId",
+                   user_id AS "userId"
+              FROM account
+             WHERE id > ${after}
+             ORDER BY id
+             LIMIT ${ACCOUNT_IDENTITY_PAGE_SIZE}
+          `;
+    const queried = await queryRows(database, statement);
+    if (Result.isError(queried)) {
+      return Result.err(queried.error);
+    }
+
+    for (const row of queried.value) {
+      const accountRowId = isRecord(row)
+        ? requiredString(row["accountRowId"])
+        : null;
+      const currentAccountId = isRecord(row)
+        ? requiredString(row["accountId"])
+        : null;
+      const providerId = isRecord(row)
+        ? requiredString(row["providerId"])
+        : null;
+      const userId = isRecord(row) ? requiredString(row["userId"]) : null;
+      if (
+        accountRowId === null ||
+        currentAccountId === null ||
+        providerId === null ||
+        userId === null
+      ) {
+        return Result.err(
+          new BetterAuthAuditError({
+            code: "database-query-failed",
+            message:
+              "Better Auth account identity projection returned invalid data",
+          }),
+        );
+      }
+
+      let projectedIssuer = "local:invalid";
+      let projectedAccountId = currentAccountId;
+      const microsoftIdentity = microsoftByAccountRowId.get(accountRowId);
+      switch (providerId) {
+        case AUTH_PROVIDER_IDS.CREDENTIAL:
+          projectedIssuer = ACCOUNT_ISSUERS.CREDENTIAL;
+          projectedAccountId = userId;
+          if (microsoftIdentity !== undefined) {
+            mappingComplete = false;
+          }
+          break;
+        case AUTH_PROVIDER_IDS.GOOGLE:
+          projectedIssuer = ACCOUNT_ISSUERS.GOOGLE;
+          if (microsoftIdentity !== undefined) {
+            mappingComplete = false;
+          }
+          break;
+        case AUTH_PROVIDER_IDS.MICROSOFT:
+          if (
+            microsoftIdentity === undefined ||
+            microsoftIdentity.legacyAccountId !== currentAccountId
+          ) {
+            mappingComplete = false;
+            break;
+          }
+          seenMicrosoftAccountRowIds.add(accountRowId);
+          projectedIssuer = microsoftIdentity.issuer;
+          projectedAccountId = microsoftIdentity.accountId;
+          break;
+        default:
+          mappingComplete = false;
+      }
+
+      updateAccountIdentityProjection(
+        projectionHasher,
+        accountRowId,
+        projectedIssuer,
+        projectedAccountId,
+      );
+      after = accountRowId;
+      rowCount += 1n;
+    }
+
+    return queried.value.length < ACCOUNT_IDENTITY_PAGE_SIZE
+      ? Result.ok(undefined)
+      : readNextPage();
+  };
+  const pagesRead = await readNextPage();
+  if (Result.isError(pagesRead)) {
+    return Result.err(pagesRead.error);
+  }
+
+  if (
+    seenMicrosoftAccountRowIds.size !==
+    trustedIdentityMap.microsoftAccounts.length
+  ) {
+    mappingComplete = false;
+  }
+
+  return Result.ok({
+    collisionFree,
+    digest: projectionHasher.digest("hex"),
+    mappingComplete,
+    rowCount: rowCount.toString(),
+  } satisfies AccountIdentityProjection);
+};
+
+const readActualAccountIdentities = async (
+  database: BetterAuthAuditDatabase,
+) => {
+  const projectionHasher = new Bun.CryptoHasher("sha256");
+  let after: string | null = null;
+  let rowCount = 0n;
+
+  const readNextPage = async (): Promise<
+    Result<void, BetterAuthAuditError>
+  > => {
+    const statement =
+      after === null
+        ? sql`
+            SELECT id AS "accountRowId",
+                   issuer,
+                   account_id AS "accountId"
+              FROM account
+             ORDER BY id
+             LIMIT ${ACCOUNT_IDENTITY_PAGE_SIZE}
+          `
+        : sql`
+            SELECT id AS "accountRowId",
+                   issuer,
+                   account_id AS "accountId"
+              FROM account
+             WHERE id > ${after}
+             ORDER BY id
+             LIMIT ${ACCOUNT_IDENTITY_PAGE_SIZE}
+          `;
+    const queried = await queryRows(database, statement);
+    if (Result.isError(queried)) {
+      return Result.err(queried.error);
+    }
+    for (const row of queried.value) {
+      const accountRowId = isRecord(row)
+        ? requiredString(row["accountRowId"])
+        : null;
+      const issuer = isRecord(row) ? requiredString(row["issuer"]) : null;
+      const accountId = isRecord(row) ? requiredString(row["accountId"]) : null;
+      if (accountRowId === null || issuer === null || accountId === null) {
+        return Result.err(
+          new BetterAuthAuditError({
+            code: "database-query-failed",
+            message:
+              "Better Auth account identity census returned invalid data",
+          }),
+        );
+      }
+      updateAccountIdentityProjection(
+        projectionHasher,
+        accountRowId,
+        issuer,
+        accountId,
+      );
+      after = accountRowId;
+      rowCount += 1n;
+    }
+    return queried.value.length < ACCOUNT_IDENTITY_PAGE_SIZE
+      ? Result.ok(undefined)
+      : readNextPage();
+  };
+  const pagesRead = await readNextPage();
+  if (Result.isError(pagesRead)) {
+    return Result.err(pagesRead.error);
+  }
+  return Result.ok({
+    digest: projectionHasher.digest("hex"),
+    rowCount: rowCount.toString(),
+  });
+};
+
+type OAuthPolicyProjection =
+  BetterAuthAuditBaseline["oauthPolicyProjection"] & {
+    valid: boolean;
+  };
+
+const OAUTH_POLICY_PAGE_SIZE = 1000;
+const OAUTH_PROTOCOL_SCOPES = new Set([
+  "email",
+  "offline_access",
+  "openid",
+  "profile",
+]);
+
+const updateOAuthPolicyValue = (
+  hasher: Bun.CryptoHasher,
+  values: readonly string[],
+) => {
+  for (const value of values) {
+    hasher.update(value);
+    hasher.update("\0");
+  }
+};
+
+const sortedUnique = (values: readonly string[]) =>
+  [...new Set(values)].toSorted();
+
+const initializeOAuthPolicyProjection = (
+  expectedResources: readonly BetterAuthExpectedOAuthResource[],
+) => {
+  const hasher = new Bun.CryptoHasher("sha256");
+  const sortedResources = [...expectedResources].toSorted((left, right) =>
+    compareCodepoint(left.identifier, right.identifier),
+  );
+  let valid =
+    sortedResources.length > 0 &&
+    new Set(sortedResources.map(({ identifier }) => identifier)).size ===
+      sortedResources.length;
+  for (const resource of sortedResources) {
+    const scopes = sortedUnique(resource.allowedScopes);
+    valid &&=
+      resource.identifier.length > 0 &&
+      resource.name.length > 0 &&
+      scopes.length > 0 &&
+      scopes.length === resource.allowedScopes.length;
+    updateOAuthPolicyValue(hasher, [
+      "resource",
+      resource.identifier,
+      resource.name,
+      ...scopes,
+    ]);
+  }
+  return { hasher, resourceCount: BigInt(sortedResources.length), valid };
+};
+
+const readProjectedOAuthPolicy = async (
+  database: BetterAuthAuditDatabase,
+  expectedResources: readonly BetterAuthExpectedOAuthResource[],
+) => {
+  const initialized = initializeOAuthPolicyProjection(expectedResources);
+  const resourceIdentifiers = expectedResources
+    .map(({ identifier }) => identifier)
+    .toSorted();
+  let after: string | null = null;
+  let clientCount = 0n;
+  let valid = initialized.valid;
+
+  const readNextPage = async (): Promise<
+    Result<void, BetterAuthAuditError>
+  > => {
+    const statement =
+      after === null
+        ? sql`
+            SELECT client_id AS "clientId",
+                   type AS "applicationType",
+                   scopes,
+                   grant_types AS "grantTypes"
+              FROM oauth_client
+             ORDER BY client_id
+             LIMIT ${OAUTH_POLICY_PAGE_SIZE}
+          `
+        : sql`
+            SELECT client_id AS "clientId",
+                   type AS "applicationType",
+                   scopes,
+                   grant_types AS "grantTypes"
+              FROM oauth_client
+             WHERE client_id > ${after}
+             ORDER BY client_id
+             LIMIT ${OAUTH_POLICY_PAGE_SIZE}
+          `;
+    const queried = await queryRows(database, statement);
+    if (Result.isError(queried)) {
+      return Result.err(queried.error);
+    }
+    for (const row of queried.value) {
+      const clientId = isRecord(row) ? requiredString(row["clientId"]) : null;
+      const applicationType = isRecord(row)
+        ? requiredString(row["applicationType"])
+        : null;
+      const scopes = isRecord(row) ? optionalStringArray(row["scopes"]) : null;
+      const grantTypes = isRecord(row)
+        ? optionalStringArray(row["grantTypes"])
+        : null;
+      if (clientId === null || scopes === null || grantTypes === null) {
+        return Result.err(
+          new BetterAuthAuditError({
+            code: "database-query-failed",
+            message:
+              "Better Auth OAuth policy projection returned invalid data",
+          }),
+        );
+      }
+      const classifiedApplicationType =
+        applicationType === "native" || applicationType === "web"
+          ? applicationType
+          : "invalid";
+      valid &&= classifiedApplicationType !== "invalid";
+      const clientCredentialsScopes = grantTypes.includes("client_credentials")
+        ? sortedUnique(
+            scopes.filter((scope) => !OAUTH_PROTOCOL_SCOPES.has(scope)),
+          )
+        : [];
+      updateOAuthPolicyValue(initialized.hasher, [
+        "client",
+        clientId,
+        classifiedApplicationType,
+        ...clientCredentialsScopes,
+        "resources",
+        ...resourceIdentifiers,
+      ]);
+      after = clientId;
+      clientCount += 1n;
+    }
+    return queried.value.length < OAUTH_POLICY_PAGE_SIZE
+      ? Result.ok(undefined)
+      : readNextPage();
+  };
+  const pagesRead = await readNextPage();
+  if (Result.isError(pagesRead)) {
+    return Result.err(pagesRead.error);
+  }
+
+  return Result.ok({
+    clientCount: clientCount.toString(),
+    digest: initialized.hasher.digest("hex"),
+    resourceCount: initialized.resourceCount.toString(),
+    valid,
+  } satisfies OAuthPolicyProjection);
+};
+
+const readActualOAuthPolicy = async (database: BetterAuthAuditDatabase) => {
+  const resourceRows = await queryRows(
+    database,
+    sql`
+      SELECT identifier, name, allowed_scopes AS "allowedScopes"
+        FROM oauth_resource
+       ORDER BY identifier
+    `,
+  );
+  if (Result.isError(resourceRows)) {
+    return resourceRows;
+  }
+  const resources: BetterAuthExpectedOAuthResource[] = [];
+  for (const row of resourceRows.value) {
+    const identifier = isRecord(row) ? requiredString(row["identifier"]) : null;
+    const name = isRecord(row) ? requiredString(row["name"]) : null;
+    const allowedScopes = isRecord(row)
+      ? requiredStringArray(row["allowedScopes"])
+      : null;
+    if (identifier === null || name === null || allowedScopes === null) {
+      return Result.err(
+        new BetterAuthAuditError({
+          code: "database-query-failed",
+          message: "Better Auth OAuth resource census returned invalid data",
+        }),
+      );
+    }
+    resources.push({ allowedScopes, identifier, name });
+  }
+
+  const initialized = initializeOAuthPolicyProjection(resources);
+  let after: string | null = null;
+  let clientCount = 0n;
+  let valid = initialized.valid;
+  const readNextPage = async (): Promise<
+    Result<void, BetterAuthAuditError>
+  > => {
+    const statement =
+      after === null
+        ? sql`
+            SELECT client.client_id AS "clientId",
+                   client.application_type AS "applicationType",
+                   client.client_credentials_scopes AS "clientCredentialsScopes",
+                   ARRAY(
+                     SELECT link.resource_id
+                       FROM oauth_client_resource link
+                      WHERE link.client_id = client.client_id
+                      ORDER BY link.resource_id
+                   ) AS "resourceIdentifiers"
+              FROM oauth_client client
+             ORDER BY client.client_id
+             LIMIT ${OAUTH_POLICY_PAGE_SIZE}
+          `
+        : sql`
+            SELECT client.client_id AS "clientId",
+                   client.application_type AS "applicationType",
+                   client.client_credentials_scopes AS "clientCredentialsScopes",
+                   ARRAY(
+                     SELECT link.resource_id
+                       FROM oauth_client_resource link
+                      WHERE link.client_id = client.client_id
+                      ORDER BY link.resource_id
+                   ) AS "resourceIdentifiers"
+              FROM oauth_client client
+             WHERE client.client_id > ${after}
+             ORDER BY client.client_id
+             LIMIT ${OAUTH_POLICY_PAGE_SIZE}
+          `;
+    const queried = await queryRows(database, statement);
+    if (Result.isError(queried)) {
+      return Result.err(queried.error);
+    }
+    for (const row of queried.value) {
+      const clientId = isRecord(row) ? requiredString(row["clientId"]) : null;
+      const applicationType = isRecord(row)
+        ? requiredString(row["applicationType"])
+        : null;
+      const clientCredentialsScopes = isRecord(row)
+        ? requiredStringArray(row["clientCredentialsScopes"])
+        : null;
+      const resourceIdentifiers = isRecord(row)
+        ? requiredStringArray(row["resourceIdentifiers"])
+        : null;
+      if (
+        clientId === null ||
+        applicationType === null ||
+        clientCredentialsScopes === null ||
+        resourceIdentifiers === null
+      ) {
+        return Result.err(
+          new BetterAuthAuditError({
+            code: "database-query-failed",
+            message:
+              "Better Auth OAuth client policy census returned invalid data",
+          }),
+        );
+      }
+      valid &&=
+        (applicationType === "native" || applicationType === "web") &&
+        sortedUnique(clientCredentialsScopes).length ===
+          clientCredentialsScopes.length &&
+        sortedUnique(resourceIdentifiers).length === resourceIdentifiers.length;
+      updateOAuthPolicyValue(initialized.hasher, [
+        "client",
+        clientId,
+        applicationType,
+        ...clientCredentialsScopes.toSorted(),
+        "resources",
+        ...resourceIdentifiers.toSorted(),
+      ]);
+      after = clientId;
+      clientCount += 1n;
+    }
+    return queried.value.length < OAUTH_POLICY_PAGE_SIZE
+      ? Result.ok(undefined)
+      : readNextPage();
+  };
+  const pagesRead = await readNextPage();
+  if (Result.isError(pagesRead)) {
+    return Result.err(pagesRead.error);
+  }
+  return Result.ok({
+    clientCount: clientCount.toString(),
+    digest: initialized.hasher.digest("hex"),
+    resourceCount: initialized.resourceCount.toString(),
+    valid,
+  } satisfies OAuthPolicyProjection);
+};
+
 const tableInventoryStatement = sql`
   SELECT table_name AS "tableName"
     FROM information_schema.tables
@@ -659,39 +1345,44 @@ const columnInventoryStatement = sql`
 
 const PRIMARY_KEY_PAGE_SIZE = 1000;
 
-const foreignKeyOrphanStatements = AUTH_TABLE_POLICIES.flatMap((policy) =>
-  policy.foreignKeys.map(({ column, referencedColumn, referencedModel }) => {
-    const referenced = AUTH_TABLE_AUDIT_POLICY[referencedModel];
-    return sql`
-      EXISTS (
-        SELECT 1
-          FROM ${sql.identifier(policy.tableName)} child
-          LEFT JOIN ${sql.identifier(referenced.tableName)} parent
-            ON child.${sql.identifier(column)} = parent.${sql.identifier(referencedColumn)}
-         WHERE child.${sql.identifier(column)} IS NOT NULL
-           AND parent.${sql.identifier(referencedColumn)} IS NULL
-      )
-    `;
-  }),
-);
+const noForeignKeyOrphansStatement = (
+  policies: readonly AuthTableAuditPolicy[],
+) => {
+  const orphanStatements = policies.flatMap((policy) =>
+    policy.foreignKeys.map(({ column, referencedColumn, referencedModel }) => {
+      const referenced = AUTH_TABLE_AUDIT_POLICY[referencedModel];
+      return sql`
+        EXISTS (
+          SELECT 1
+            FROM ${sql.identifier(policy.tableName)} child
+            LEFT JOIN ${sql.identifier(referenced.tableName)} parent
+              ON child.${sql.identifier(column)} = parent.${sql.identifier(referencedColumn)}
+           WHERE child.${sql.identifier(column)} IS NOT NULL
+             AND parent.${sql.identifier(referencedColumn)} IS NULL
+        )
+      `;
+    }),
+  );
+  return sql`
+    SELECT NOT (${sql.join(orphanStatements, sql` OR `)}) AS "passed"
+  `;
+};
 
-const noForeignKeyOrphansStatement = sql`
-  SELECT NOT (${sql.join(foreignKeyOrphanStatements, sql` OR `)}) AS "passed"
-`;
-
-const expectedForeignKeys = AUTH_TABLE_POLICIES.flatMap((policy) =>
-  policy.foreignKeys.map(({ column, referencedColumn, referencedModel }) => {
-    const referenced = AUTH_TABLE_AUDIT_POLICY[referencedModel];
-    return sql`(
-      ${policy.tableName}::text,
-      ${column}::text,
-      ${referenced.tableName}::text,
-      ${referencedColumn}::text
-    )`;
-  }),
-);
-
-const foreignKeysValidatedStatement = sql`
+const foreignKeysValidatedStatement = (
+  policies: readonly AuthTableAuditPolicy[],
+) => {
+  const expectedForeignKeys = policies.flatMap((policy) =>
+    policy.foreignKeys.map(({ column, referencedColumn, referencedModel }) => {
+      const referenced = AUTH_TABLE_AUDIT_POLICY[referencedModel];
+      return sql`(
+        ${policy.tableName}::text,
+        ${column}::text,
+        ${referenced.tableName}::text,
+        ${referencedColumn}::text
+      )`;
+    }),
+  );
+  return sql`
   WITH expected(child_table, child_column, parent_table, parent_column) AS (
     VALUES ${sql.join(expectedForeignKeys, sql`, `)}
   )
@@ -725,12 +1416,16 @@ const foreignKeysValidatedStatement = sql`
           AND parent_attribute.attname = expected.parent_column
      )
   ) AS "passed"
-`;
+  `;
+};
 
 const accessBoundariesStatement = (includeFutureTables: boolean) => {
-  const policies: readonly AuthAccessPolicy[] = includeFutureTables
-    ? [...Object.values(AUTH_ACCESS_POLICY), ...FUTURE_AUTH_ACCESS_POLICY]
-    : Object.values(AUTH_ACCESS_POLICY);
+  const policies: readonly AuthAccessPolicy[] = Object.values(
+    AUTH_ACCESS_POLICY,
+  ).filter(
+    ({ tableName }) =>
+      includeFutureTables || PRESERVED_AUTH_TABLE_NAMES.includes(tableName),
+  );
   const expectedTables = policies.map(
     ({ access, tableName }) => sql`(${tableName}::text, ${access}::text)`,
   );
@@ -919,6 +1614,25 @@ const credentialOwnershipStatement = sql`
      FROM account
      WHERE provider_id = ${AUTH_PROVIDER_IDS.CREDENTIAL}
        AND account_id IS DISTINCT FROM user_id
+  ) AS "passed"
+`;
+
+const nonMicrosoftProjectedIdentityUniqueStatement = sql`
+  SELECT NOT EXISTS (
+    SELECT 1
+      FROM account
+     WHERE provider_id <> ${AUTH_PROVIDER_IDS.MICROSOFT}
+     GROUP BY
+       CASE provider_id
+         WHEN ${AUTH_PROVIDER_IDS.CREDENTIAL} THEN ${ACCOUNT_ISSUERS.CREDENTIAL}
+         WHEN ${AUTH_PROVIDER_IDS.GOOGLE} THEN ${ACCOUNT_ISSUERS.GOOGLE}
+         ELSE 'local:invalid'
+       END,
+       CASE provider_id
+         WHEN ${AUTH_PROVIDER_IDS.CREDENTIAL} THEN user_id
+         ELSE account_id
+       END
+    HAVING count(*) > 1
   ) AS "passed"
 `;
 
@@ -1262,7 +1976,14 @@ const readTableCensus = async (
   const primaryKeyHasher = new Bun.CryptoHasher("sha256");
   const rowContentHasher = new Bun.CryptoHasher("sha256");
   const preservedValues = preservedColumns.map((column) =>
-    sql.identifier(column),
+    tableName === AUTH_TABLE_AUDIT_POLICY.account.tableName &&
+    column === "account_id"
+      ? sql`CASE
+              WHEN provider_id = ${AUTH_PROVIDER_IDS.MICROSOFT}
+                THEN ${MICROSOFT_ACCOUNT_ID_CENSUS_SENTINEL}
+              ELSE account_id
+            END`
+      : sql.identifier(column),
   );
   let after: string | null = null;
   let rowCount = 0n;
@@ -1361,7 +2082,7 @@ const readAuthCensus = async (
   ): Promise<
     Result<BetterAuthAuditBaseline["tables"], BetterAuthAuditError>
   > => {
-    const model = AUTH_MODEL_NAMES.at(index);
+    const model = AUTH_BASELINE_MODEL_NAMES.at(index);
     if (model === undefined) {
       return Result.ok(entries);
     }
@@ -1411,19 +2132,23 @@ const report = (
 const createBaseline = (
   tables: BetterAuthAuditBaseline["tables"],
   accessPolicyDigest: string,
+  accountIdentityProjection: BetterAuthAuditBaseline["accountIdentityProjection"],
+  oauthPolicyProjection: BetterAuthAuditBaseline["oauthPolicyProjection"],
 ): BetterAuthAuditBaseline => ({
+  accountIdentityProjection,
   accessPolicyDigest,
-  formatVersion: 2,
+  formatVersion: 4,
+  oauthPolicyProjection,
   tables,
 });
 
 const emptyBaseline = (): BetterAuthAuditBaseline =>
   createBaseline(
     Object.fromEntries(
-      Object.entries(AUTH_TABLE_AUDIT_POLICY).map(([model, policy]) => [
+      AUTH_BASELINE_MODEL_NAMES.map((model) => [
         model,
         {
-          preservedColumns: policy.preservedColumns,
+          preservedColumns: AUTH_TABLE_AUDIT_POLICY[model].preservedColumns,
           primaryKeyDigest: "",
           rowContentDigest: "",
           rowCount: "0",
@@ -1431,6 +2156,12 @@ const emptyBaseline = (): BetterAuthAuditBaseline =>
       ]),
     ),
     "0".repeat(64),
+    { digest: "0".repeat(64), rowCount: "0" },
+    {
+      clientCount: "0",
+      digest: "0".repeat(64),
+      resourceCount: "0",
+    },
   );
 
 type NamedAuditStatement = readonly [BetterAuthAuditCheckName, SQL];
@@ -1457,13 +2188,17 @@ const evaluateBooleanChecks = async (
 type RunBetterAuthMigrationAuditOptions = {
   baseline: BetterAuthAuditBaseline | null;
   database: BetterAuthAuditDatabase;
+  expectedOAuthResources: readonly BetterAuthExpectedOAuthResource[];
   mode: BetterAuthAuditMode;
+  trustedIdentityMap: BetterAuthTrustedIdentityMap | null;
 };
 
 export const runBetterAuthMigrationAudit = async ({
   baseline,
   database,
+  expectedOAuthResources,
   mode,
+  trustedIdentityMap,
 }: RunBetterAuthMigrationAuditOptions): Promise<
   Result<AuditRunResult, BetterAuthAuditError>
 > => {
@@ -1473,7 +2208,13 @@ export const runBetterAuthMigrationAudit = async ({
     return tables;
   }
 
-  const currentSchemaComplete = AUTH_TABLE_POLICIES.every(({ tableName }) =>
+  const requiredTablePolicies =
+    mode === BETTER_AUTH_AUDIT_MODES.PRE_MIGRATION
+      ? AUTH_TABLE_POLICIES.filter(({ tableName }) =>
+          PRESERVED_AUTH_TABLE_NAMES.includes(tableName),
+        )
+      : AUTH_TABLE_POLICIES;
+  const currentSchemaComplete = requiredTablePolicies.every(({ tableName }) =>
     tables.value.has(tableName),
   );
   checks.push(
@@ -1544,11 +2285,11 @@ export const runBetterAuthMigrationAudit = async ({
   const commonChecks = [
     [
       BETTER_AUTH_AUDIT_CHECKS.AUTH_FOREIGN_KEYS_REACHABLE,
-      noForeignKeyOrphansStatement,
+      noForeignKeyOrphansStatement(requiredTablePolicies),
     ],
     [
       BETTER_AUTH_AUDIT_CHECKS.AUTH_FOREIGN_KEYS_VALIDATED,
-      foreignKeysValidatedStatement,
+      foreignKeysValidatedStatement(requiredTablePolicies),
     ],
     [
       BETTER_AUTH_AUDIT_CHECKS.ACCOUNT_PROVIDERS_CLASSIFIED,
@@ -1566,6 +2307,109 @@ export const runBetterAuthMigrationAudit = async ({
   );
   if (Result.isError(commonChecksEvaluated)) {
     return commonChecksEvaluated;
+  }
+
+  let expectedAccountIdentityProjection: BetterAuthAuditBaseline["accountIdentityProjection"];
+  let expectedOAuthPolicyProjection: BetterAuthAuditBaseline["oauthPolicyProjection"];
+  if (mode === BETTER_AUTH_AUDIT_MODES.PRE_MIGRATION) {
+    if (trustedIdentityMap === null) {
+      return Result.err(
+        new BetterAuthAuditError({
+          code: "invalid-identity-map",
+          message:
+            "Better Auth trusted identity map is required before migration",
+        }),
+      );
+    }
+    const projection = await readProjectedAccountIdentities(
+      database,
+      trustedIdentityMap,
+    );
+    if (Result.isError(projection)) {
+      return projection;
+    }
+    const nonMicrosoftUnique = await booleanCheck(
+      database,
+      BETTER_AUTH_AUDIT_CHECKS.ACCOUNT_IDENTITY_PROJECTED_UNIQUE,
+      nonMicrosoftProjectedIdentityUniqueStatement,
+    );
+    if (Result.isError(nonMicrosoftUnique)) {
+      return nonMicrosoftUnique;
+    }
+    checks.push(
+      check(
+        BETTER_AUTH_AUDIT_CHECKS.ACCOUNT_IDENTITY_MAPPING_COMPLETE,
+        projection.value.mappingComplete,
+      ),
+      check(
+        BETTER_AUTH_AUDIT_CHECKS.ACCOUNT_IDENTITY_PROJECTED_UNIQUE,
+        projection.value.mappingComplete &&
+          projection.value.collisionFree &&
+          nonMicrosoftUnique.value.status === "passed",
+      ),
+    );
+    expectedAccountIdentityProjection = {
+      digest: projection.value.digest,
+      rowCount: projection.value.rowCount,
+    };
+    const oauthProjection = await readProjectedOAuthPolicy(
+      database,
+      expectedOAuthResources,
+    );
+    if (Result.isError(oauthProjection)) {
+      return oauthProjection;
+    }
+    checks.push(
+      check(
+        BETTER_AUTH_AUDIT_CHECKS.OAUTH_POLICY_PROJECTED_VALID,
+        oauthProjection.value.valid,
+      ),
+    );
+    expectedOAuthPolicyProjection = {
+      clientCount: oauthProjection.value.clientCount,
+      digest: oauthProjection.value.digest,
+      resourceCount: oauthProjection.value.resourceCount,
+    };
+  } else {
+    if (baseline === null) {
+      return Result.err(
+        new BetterAuthAuditError({
+          code: "invalid-baseline",
+          message: "Better Auth audit baseline is required after migration",
+        }),
+      );
+    }
+    const actualProjection = await readActualAccountIdentities(database);
+    if (Result.isError(actualProjection)) {
+      return actualProjection;
+    }
+    expectedAccountIdentityProjection = baseline.accountIdentityProjection;
+    checks.push(
+      check(
+        BETTER_AUTH_AUDIT_CHECKS.ACCOUNT_IDENTITIES_MATCH_TRUSTED_PROJECTION,
+        actualProjection.value.digest ===
+          baseline.accountIdentityProjection.digest &&
+          actualProjection.value.rowCount ===
+            baseline.accountIdentityProjection.rowCount,
+      ),
+    );
+    const actualOAuthPolicy = await readActualOAuthPolicy(database);
+    if (Result.isError(actualOAuthPolicy)) {
+      return actualOAuthPolicy;
+    }
+    expectedOAuthPolicyProjection = baseline.oauthPolicyProjection;
+    checks.push(
+      check(
+        BETTER_AUTH_AUDIT_CHECKS.OAUTH_POLICY_MATCHES_TRUSTED_PROJECTION,
+        actualOAuthPolicy.value.valid &&
+          actualOAuthPolicy.value.digest ===
+            baseline.oauthPolicyProjection.digest &&
+          actualOAuthPolicy.value.clientCount ===
+            baseline.oauthPolicyProjection.clientCount &&
+          actualOAuthPolicy.value.resourceCount ===
+            baseline.oauthPolicyProjection.resourceCount,
+      ),
+    );
   }
 
   if (mode !== BETTER_AUTH_AUDIT_MODES.PRE_MIGRATION) {
@@ -1645,13 +2489,18 @@ export const runBetterAuthMigrationAudit = async ({
   if (Result.isError(census)) {
     return census;
   }
-  const nextBaseline = createBaseline(census.value, accessPolicyDigest.value);
+  const nextBaseline = createBaseline(
+    census.value,
+    accessPolicyDigest.value,
+    expectedAccountIdentityProjection,
+    expectedOAuthPolicyProjection,
+  );
   if (mode === BETTER_AUTH_AUDIT_MODES.PRE_MIGRATION) {
     checks.push(check(BETTER_AUTH_AUDIT_CHECKS.AUTH_ROWS_BASELINED, true));
   } else {
     const preserved =
       baseline !== null &&
-      AUTH_MODEL_NAMES.every((model) => {
+      AUTH_BASELINE_MODEL_NAMES.every((model) => {
         const expected = baseline.tables[model];
         const actual = census.value[model];
         return (
@@ -1717,11 +2566,65 @@ const betterAuthAuditBaselineSchema: v.GenericSchema<
   unknown,
   BetterAuthAuditBaseline
 > = v.strictObject({
+  accountIdentityProjection: v.strictObject({
+    digest: digestSchema,
+    rowCount: rowCountSchema,
+  }),
   accessPolicyDigest: digestSchema,
-  formatVersion: v.literal(2),
+  formatVersion: v.literal(4),
+  oauthPolicyProjection: v.strictObject({
+    clientCount: rowCountSchema,
+    digest: digestSchema,
+    resourceCount: rowCountSchema,
+  }),
   tables: v.strictObject(
     Object.fromEntries(
-      AUTH_MODEL_NAMES.map((model) => [model, tableCensusSchema(model)]),
+      AUTH_BASELINE_MODEL_NAMES.map((model) => [
+        model,
+        tableCensusSchema(model),
+      ]),
+    ),
+  ),
+});
+
+const GUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u;
+const MICROSOFT_ISSUER_PATTERN =
+  /^https:\/\/login\.microsoftonline\.com\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/v2\.0$/u;
+const nonEmptyStringSchema = v.pipe(
+  v.string(),
+  v.minLength(1),
+  v.maxLength(512),
+);
+const MAX_MICROSOFT_IDENTITY_MAPPINGS = 100_000;
+
+const betterAuthTrustedIdentityMapSchema: v.GenericSchema<
+  unknown,
+  BetterAuthTrustedIdentityMap
+> = v.strictObject({
+  formatVersion: v.literal(1),
+  microsoftAccounts: v.pipe(
+    v.array(
+      v.strictObject({
+        accountId: v.pipe(v.string(), v.regex(GUID_PATTERN)),
+        accountRowId: nonEmptyStringSchema,
+        issuer: v.pipe(v.string(), v.regex(MICROSOFT_ISSUER_PATTERN)),
+        legacyAccountId: nonEmptyStringSchema,
+      }),
+    ),
+    v.maxLength(MAX_MICROSOFT_IDENTITY_MAPPINGS),
+    v.check(
+      (accounts) =>
+        new Set(accounts.map(({ accountRowId }) => accountRowId)).size ===
+        accounts.length,
+      "Microsoft account row IDs must be unique",
+    ),
+    v.check(
+      (accounts) =>
+        new Set(
+          accounts.map(({ accountId, issuer }) => `${issuer}\0${accountId}`),
+        ).size === accounts.length,
+      "Microsoft account identities must be unique",
     ),
   ),
 });
@@ -1738,6 +2641,20 @@ export const parseBetterAuthAuditBaseline = (
     );
   const parsed = v.safeParse(betterAuthAuditBaselineSchema, value);
   return parsed.success ? Result.ok(parsed.output) : invalidBaseline();
+};
+
+export const parseBetterAuthTrustedIdentityMap = (
+  value: unknown,
+): Result<BetterAuthTrustedIdentityMap, BetterAuthAuditError> => {
+  const parsed = v.safeParse(betterAuthTrustedIdentityMapSchema, value);
+  return parsed.success
+    ? Result.ok(parsed.output)
+    : Result.err(
+        new BetterAuthAuditError({
+          code: "invalid-identity-map",
+          message: "Better Auth trusted identity map is invalid",
+        }),
+      );
 };
 
 export const renderBetterAuthAuditReport = (
