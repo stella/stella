@@ -6,6 +6,8 @@ import {
   CORPUS_INDEX_APPEND_PRODUCING_INTENT_STATUSES,
   CORPUS_INDEX_DESIRED_ACTIONS,
   CORPUS_INDEX_INTENT_STATUSES,
+  CORPUS_INDEX_PROJECTION_FAILURE_KINDS,
+  CORPUS_INDEX_PROJECTION_WORK_STATUSES,
 } from "@/api/lib/legal-search/corpus-index-projection-contract";
 
 import {
@@ -300,6 +302,15 @@ export const corpusIndexProjectionStates = p.pgTable(
     desiredEpoch: p.bigint("desired_epoch", { mode: "bigint" }).notNull(),
     desiredFingerprint: p.varchar("desired_fingerprint", { length: 64 }),
     desiredIndexId: p.varchar("desired_index_id", { length: 64 }),
+    workStatus: p
+      .text("work_status", { enum: CORPUS_INDEX_PROJECTION_WORK_STATUSES })
+      .default("eligible")
+      .notNull(),
+    retryNotBefore: timestamptz("retry_not_before"),
+    lastFailureKind: p.text("last_failure_kind", {
+      enum: CORPUS_INDEX_PROJECTION_FAILURE_KINDS,
+    }),
+    lastFailureMessage: p.varchar("last_failure_message", { length: 2048 }),
     appliedAction: p.text("applied_action", {
       enum: CORPUS_INDEX_DESIRED_ACTIONS,
     }),
@@ -362,12 +373,22 @@ export const corpusIndexProjectionStates = p.pgTable(
       .where(sql`${t.appliedRevision} IS NOT NULL`),
     p
       .index("corpus_index_projection_states_pending_idx")
-      .on(t.family, t.generation, t.updatedAt, t.entityId).where(sql`
-        ${t.appliedAction} IS NULL
-        OR ${t.appliedAction} IS DISTINCT FROM ${t.desiredAction}
-        OR ${t.appliedEpoch} IS DISTINCT FROM ${t.desiredEpoch}
-        OR ${t.appliedFingerprint} IS DISTINCT FROM ${t.desiredFingerprint}
-        OR ${t.appliedIndexId} IS DISTINCT FROM ${t.desiredIndexId}
+      .on(
+        t.family,
+        t.generation,
+        t.workStatus,
+        t.retryNotBefore,
+        t.updatedAt,
+        t.entityId,
+      ).where(sql`
+        ${t.workStatus} IN ('eligible', 'retry_scheduled')
+        AND (
+          ${t.appliedAction} IS NULL
+          OR ${t.appliedAction} IS DISTINCT FROM ${t.desiredAction}
+          OR ${t.appliedEpoch} IS DISTINCT FROM ${t.desiredEpoch}
+          OR ${t.appliedFingerprint} IS DISTINCT FROM ${t.desiredFingerprint}
+          OR ${t.appliedIndexId} IS DISTINCT FROM ${t.desiredIndexId}
+        )
       `),
     p.check(
       "corpus_index_projection_states_family_values",
@@ -380,6 +401,32 @@ export const corpusIndexProjectionStates = p.pgTable(
     p.check(
       "corpus_index_projection_states_applied_action_values",
       sql`${t.appliedAction} IS NULL OR ${t.appliedAction} IN (${sqlValues(CORPUS_INDEX_DESIRED_ACTIONS)})`,
+    ),
+    p.check(
+      "corpus_index_projection_states_work_status_values",
+      sql`${t.workStatus} IN (${sqlValues(CORPUS_INDEX_PROJECTION_WORK_STATUSES)})`,
+    ),
+    p.check(
+      "corpus_index_projection_states_failure_kind_values",
+      sql`${t.lastFailureKind} IS NULL OR ${t.lastFailureKind} IN (${sqlValues(CORPUS_INDEX_PROJECTION_FAILURE_KINDS)})`,
+    ),
+    p.check(
+      "corpus_index_projection_states_work_shape",
+      sql`CASE ${t.workStatus}
+        WHEN 'eligible' THEN
+          ${t.retryNotBefore} IS NULL
+          AND ${t.lastFailureKind} IS NULL
+          AND ${t.lastFailureMessage} IS NULL
+        WHEN 'retry_scheduled' THEN
+          ${t.retryNotBefore} IS NOT NULL
+          AND ${t.lastFailureKind} IS NOT NULL
+          AND ${t.lastFailureMessage} IS NOT NULL
+        WHEN 'blocked' THEN
+          ${t.retryNotBefore} IS NULL
+          AND ${t.lastFailureKind} IS NOT NULL
+          AND ${t.lastFailureMessage} IS NOT NULL
+        ELSE false
+      END`,
     ),
     p.check(
       "corpus_index_projection_states_epoch_order",

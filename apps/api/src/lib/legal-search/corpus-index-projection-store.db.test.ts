@@ -32,8 +32,10 @@ import {
   advanceCorpusProjectionErasuresTx,
   CORPUS_PROJECTION_ERASURE_MAX_REVISIONS,
 } from "@/api/lib/legal-search/corpus-index-projection-erasure-store";
+import { corpusIndexUnknownAppendBarrierAt } from "@/api/lib/legal-search/corpus-index-projection-engine";
 import {
   abandonCorpusProjectionAppendTx,
+  classifyCorpusProjectionReservationFailureTx,
   commitCorpusProjectionAppendTx,
   prepareCorpusProjectionReplacementsTx,
   reserveCorpusProjectionIntentsTx,
@@ -79,6 +81,10 @@ const PROJECTION_MIGRATION_URLS = [
   ),
   new URL(
     "../../../drizzle/20260826003530_corpus_projection_replacement_order/migration.sql",
+    import.meta.url,
+  ),
+  new URL(
+    "../../../drizzle/20260825211500_corpus_projection_work_schedule/migration.sql",
     import.meta.url,
   ),
   new URL(
@@ -228,6 +234,161 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await client.close();
+});
+
+test("retry classification defers poison work without starving later reservations", async () => {
+  const startedAt = new Date("2026-08-25T12:00:00.000Z");
+  await db.insert(caseLawDecisions).values({
+    id: ERASE_DECISION_ID,
+    sourceId: SOURCE_ID,
+    caseNumber: "2 A 2/2026",
+    court: "Test court",
+    country: "CZE",
+    language: "cs",
+    contentHash: "d".repeat(64),
+    projectionEpoch: 1n,
+  });
+  await db.insert(corpusIndexProjectionStates).values({
+    family: "case_law",
+    generation: "case_law_v5",
+    entityId: ERASE_DECISION_ID,
+    desiredAction: "upsert",
+    desiredEpoch: 1n,
+    desiredFingerprint: SECOND_FINGERPRINT,
+    desiredIndexId: INDEX_ID,
+  });
+  const leases = await db.transaction(
+    async (tx) =>
+      await reserveCorpusProjectionIntentsTx(asTestRaw<Transaction>(tx), {
+        family: "case_law",
+        generation: "case_law_v5",
+        limit: 1,
+        leaseMs: 60_000,
+        now: startedAt,
+        newIntentId: () => FIRST_INTENT_ID,
+        newLeaseToken: () => FIRST_LEASE_TOKEN,
+      }),
+  );
+  const lease = leases.at(0) ?? panic("Expected projection lease");
+  expect(
+    await db.transaction(
+      async (tx) =>
+        await classifyCorpusProjectionReservationFailureTx(
+          asTestRaw<Transaction>(tx),
+          {
+            intentId: lease.intentId,
+            leaseToken: lease.leaseToken,
+            failure: {
+              status: "retry_scheduled",
+              kind: "payload_unavailable",
+              retryDelayMs: 60_000,
+              message: "canonical payload is temporarily unavailable",
+            },
+            now: startedAt,
+          },
+        ),
+    ),
+  ).toBe("classified");
+
+  const state = await db
+    .select({
+      workStatus: corpusIndexProjectionStates.workStatus,
+      retryNotBefore: corpusIndexProjectionStates.retryNotBefore,
+    })
+    .from(corpusIndexProjectionStates)
+    .where(eq(corpusIndexProjectionStates.entityId, DECISION_ID));
+  expect(state.at(0)).toEqual({
+    workStatus: "retry_scheduled",
+    retryNotBefore: new Date("2026-08-25T12:01:00.000Z"),
+  });
+  const laterWork = await db.transaction(
+    async (tx) =>
+      await reserveCorpusProjectionIntentsTx(asTestRaw<Transaction>(tx), {
+        family: "case_law",
+        generation: "case_law_v5",
+        limit: 1,
+        leaseMs: 60_000,
+        now: new Date("2026-08-25T12:00:59.999Z"),
+        newIntentId: () => SECOND_INTENT_ID,
+        newLeaseToken: () => SECOND_LEASE_TOKEN,
+      }),
+  );
+  expect(laterWork.map(({ entityId }) => entityId)).toEqual([
+    ERASE_DECISION_ID,
+  ]);
+  const retried = await db.transaction(
+    async (tx) =>
+      await reserveCorpusProjectionIntentsTx(asTestRaw<Transaction>(tx), {
+        family: "case_law",
+        generation: "case_law_v5",
+        limit: 1,
+        leaseMs: 60_000,
+        now: new Date("2026-08-25T12:01:00.000Z"),
+        newIntentId: () => ERASE_INTENT_ID,
+        newLeaseToken: () => ERASE_LEASE_TOKEN,
+      }),
+  );
+  expect(retried.map(({ entityId }) => entityId)).toEqual([DECISION_ID]);
+});
+
+test("unknown append cleanup starts its barrier at failure observation", async () => {
+  const appendStartedAt = new Date("2026-08-25T12:00:00.000Z");
+  const failureObservedAt = new Date("2026-08-25T12:00:10.000Z");
+  const leases = await db.transaction(
+    async (tx) =>
+      await reserveCorpusProjectionIntentsTx(asTestRaw<Transaction>(tx), {
+        family: "case_law",
+        generation: "case_law_v5",
+        limit: 1,
+        leaseMs: 5 * 60_000,
+        now: appendStartedAt,
+        newIntentId: () => FIRST_INTENT_ID,
+        newLeaseToken: () => FIRST_LEASE_TOKEN,
+      }),
+  );
+  const lease = leases.at(0) ?? panic("Expected projection lease");
+  expect(
+    await db.transaction(
+      async (tx) =>
+        await startCorpusProjectionAppendTx(asTestRaw<Transaction>(tx), {
+          intentId: lease.intentId,
+          leaseToken: lease.leaseToken,
+          now: appendStartedAt,
+        }),
+    ),
+  ).toBe("started");
+  expect(
+    await db.transaction(
+      async (tx) =>
+        await abandonCorpusProjectionAppendTx(asTestRaw<Transaction>(tx), {
+          intentId: lease.intentId,
+          leaseToken: lease.leaseToken,
+          now: failureObservedAt,
+          errorMessage: "append response was lost",
+        }),
+    ),
+  ).toBe("cleanup_pending");
+
+  const intents = await db
+    .select({
+      appendStartedAt: corpusIndexProjectionIntents.appendStartedAt,
+      appendPublishBarrierAt:
+        corpusIndexProjectionIntents.appendPublishBarrierAt,
+      cleanupNotBefore: corpusIndexProjectionIntents.cleanupNotBefore,
+    })
+    .from(corpusIndexProjectionIntents)
+    .where(eq(corpusIndexProjectionIntents.id, lease.intentId));
+  const expectedBarrier = corpusIndexUnknownAppendBarrierAt(
+    failureObservedAt,
+    CORPUS_INDEX_MANIFESTS.case_law_v5,
+  );
+  expect(intents).toEqual([
+    {
+      appendStartedAt,
+      appendPublishBarrierAt: expectedBarrier,
+      cleanupNotBefore: expectedBarrier,
+    },
+  ]);
 });
 
 test("replacement deletes and settles the old revision before reserving the new append", async () => {

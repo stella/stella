@@ -1,6 +1,7 @@
 import { panic, Result } from "better-result";
 
 import type { Transaction } from "@/api/db/root";
+import { settleBoth } from "@/api/lib/corpus-index/core";
 import type { CorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client";
 import { buildCorpusProjectionDocuments } from "@/api/lib/legal-search/corpus-index-projection-builder";
 import {
@@ -14,10 +15,14 @@ import {
 import {
   abandonCorpusProjectionAppendTx,
   cancelCorpusProjectionReservationTx,
+  classifyCorpusProjectionReservationFailureTx,
   commitCorpusProjectionAppendTx,
+  CORPUS_PROJECTION_RETRY_MAX_MS,
+  CORPUS_PROJECTION_RETRY_MIN_MS,
   prepareCorpusProjectionReplacementsTx,
   reserveCorpusProjectionIntentsTx,
   startCorpusProjectionAppendTx,
+  type CorpusProjectionReservationFailure,
   type CorpusProjectionIntentLease,
 } from "@/api/lib/legal-search/corpus-index-projection-store";
 import {
@@ -44,6 +49,29 @@ const mapSequentially = async <Input, Output>(
   return mapSequentially(values, operation, index + 1, outputs);
 };
 
+export const CORPUS_PROJECTION_PAYLOAD_READ_CONCURRENCY_MAX = 32;
+
+const mapWithConcurrency = async <Input, Output>(
+  values: readonly Input[],
+  concurrency: number,
+  operation: (value: Input) => Promise<Output>,
+  index = 0,
+  outputs: Output[] = [],
+): Promise<Output[]> => {
+  const current = values.slice(index, index + concurrency);
+  if (current.length === 0) {
+    return outputs;
+  }
+  outputs.push(...(await Promise.all(current.map(operation))));
+  return mapWithConcurrency(
+    values,
+    concurrency,
+    operation,
+    index + concurrency,
+    outputs,
+  );
+};
+
 type ExecuteCorpusProjectionAppendCycleOptions = {
   runInTransaction: ProjectionTransactionRunner;
   client: ProjectionAppendClient;
@@ -51,6 +79,8 @@ type ExecuteCorpusProjectionAppendCycleOptions = {
   generation: string;
   limit: number;
   leaseMs: number;
+  payloadReadConcurrency: number;
+  retryDelayMs: number;
 };
 
 export type CorpusProjectionAppendCycleResult = {
@@ -63,6 +93,8 @@ export type CorpusProjectionAppendCycleResult = {
   cancelled: number;
   leaseLost: number;
   unread: number;
+  retryScheduled: number;
+  blocked: number;
   requestCount: number;
 };
 
@@ -78,8 +110,34 @@ const emptyResult = (
   cancelled: 0,
   leaseLost: 0,
   unread: 0,
+  retryScheduled: 0,
+  blocked: 0,
   requestCount: 0,
 });
+
+const validateExecutorPolicy = (
+  payloadReadConcurrency: number,
+  retryDelayMs: number,
+): void => {
+  if (
+    !Number.isSafeInteger(payloadReadConcurrency) ||
+    payloadReadConcurrency < 1 ||
+    payloadReadConcurrency > CORPUS_PROJECTION_PAYLOAD_READ_CONCURRENCY_MAX
+  ) {
+    return panic(
+      `Corpus projection payload read concurrency must be an integer from 1 to ${CORPUS_PROJECTION_PAYLOAD_READ_CONCURRENCY_MAX}`,
+    );
+  }
+  if (
+    !Number.isSafeInteger(retryDelayMs) ||
+    retryDelayMs < CORPUS_PROJECTION_RETRY_MIN_MS ||
+    retryDelayMs > CORPUS_PROJECTION_RETRY_MAX_MS
+  ) {
+    return panic(
+      `Corpus projection retry delay must be an integer from ${CORPUS_PROJECTION_RETRY_MIN_MS} to ${CORPUS_PROJECTION_RETRY_MAX_MS} milliseconds`,
+    );
+  }
+};
 
 const cancelReservations = async ({
   runInTransaction,
@@ -103,6 +161,43 @@ const cancelReservations = async ({
     );
     return {
       cancelled: outcomes.filter((outcome) => outcome === "cancelled").length,
+      leaseLost: outcomes.filter((outcome) => outcome === "lease_lost").length,
+    };
+  });
+};
+
+type ReservationFailure = {
+  lease: CorpusProjectionIntentLease;
+  failure: CorpusProjectionReservationFailure;
+};
+
+const classifyReservationFailures = async ({
+  runInTransaction,
+  failures,
+}: {
+  runInTransaction: ProjectionTransactionRunner;
+  failures: readonly ReservationFailure[];
+}): Promise<{
+  classified: number;
+  staleCancelled: number;
+  leaseLost: number;
+}> => {
+  if (failures.length === 0) {
+    return { classified: 0, staleCancelled: 0, leaseLost: 0 };
+  }
+  return await runInTransaction(async (tx) => {
+    const outcomes = await mapSequentially(failures, async (failure) =>
+      classifyCorpusProjectionReservationFailureTx(tx, {
+        intentId: failure.lease.intentId,
+        leaseToken: failure.lease.leaseToken,
+        failure: failure.failure,
+      }),
+    );
+    return {
+      classified: outcomes.filter((outcome) => outcome === "classified").length,
+      staleCancelled: outcomes.filter(
+        (outcome) => outcome === "stale_cancelled",
+      ).length,
       leaseLost: outcomes.filter((outcome) => outcome === "lease_lost").length,
     };
   });
@@ -144,7 +239,7 @@ const loadCorpusProjectionPayload = async (
       return replacement?.family === "case_law" ? replacement.astS3Key : null;
     },
   });
-  const [text, ast] = await Promise.all([textPromise, astPromise]);
+  const [text, ast] = await settleBoth(textPromise, astPromise);
   return { text, ast };
 };
 
@@ -156,6 +251,11 @@ type PreparedProjectionEntry = {
 type PreparedProjectionRequest = {
   indexId: string;
   entries: readonly PreparedProjectionEntry[];
+};
+
+type PreparedProjectionPlan = {
+  requests: PreparedProjectionRequest[];
+  blocked: PreparedProjectionEntry[];
 };
 
 const buildPreparedEntry = async (
@@ -196,9 +296,22 @@ const buildPreparedEntry = async (
 
 const planPreparedRequests = (
   entries: readonly PreparedProjectionEntry[],
-): PreparedProjectionRequest[] => {
-  const byIndex = new Map<string, PreparedProjectionEntry[]>();
+): PreparedProjectionPlan => {
+  const eligible: PreparedProjectionEntry[] = [];
+  const blocked: PreparedProjectionEntry[] = [];
   for (const prepared of entries) {
+    const planned = planCorpusProjectionAppendRequests([prepared.entry]);
+    if (planned.isOk()) {
+      eligible.push(prepared);
+      continue;
+    }
+    if (planned.error.code !== "revision_too_large") {
+      return panic(planned.error.message);
+    }
+    blocked.push(prepared);
+  }
+  const byIndex = new Map<string, PreparedProjectionEntry[]>();
+  for (const prepared of eligible) {
     const group = byIndex.get(prepared.material.lease.indexId);
     if (group === undefined) {
       byIndex.set(prepared.material.lease.indexId, [prepared]);
@@ -229,7 +342,7 @@ const planPreparedRequests = (
       });
     }
   }
-  return requests;
+  return { requests, blocked };
 };
 
 const addCancellation = (
@@ -251,7 +364,10 @@ export const executeCorpusProjectionAppendCycle = async ({
   generation,
   limit,
   leaseMs,
+  payloadReadConcurrency,
+  retryDelayMs,
 }: ExecuteCorpusProjectionAppendCycleOptions): Promise<CorpusProjectionAppendCycleResult> => {
+  validateExecutorPolicy(payloadReadConcurrency, retryDelayMs);
   const { replacements, leases } = await runInTransaction(async (tx) => ({
     replacements: await prepareCorpusProjectionReplacementsTx(tx, {
       family,
@@ -277,12 +393,15 @@ export const executeCorpusProjectionAppendCycle = async ({
     async (tx) => await readReservedCorpusProjectionMaterialsTx(tx, { leases }),
   );
   const rejectedLeases = materials.rejected
-    .filter(({ status }) => status !== "lease_lost")
+    .filter(({ status }) => status === "stale")
     .map(({ lease }) => lease);
-  result.leaseLost += materials.rejected.length - rejectedLeases.length;
-  result.unread += materials.rejected.filter(
-    ({ status }) => status === "unreadable",
+  result.leaseLost += materials.rejected.filter(
+    ({ status }) => status === "lease_lost",
   ).length;
+  const unreadableMaterials = materials.rejected.filter(
+    ({ status }) => status === "unreadable",
+  );
+  result.unread += unreadableMaterials.length;
   addCancellation(
     result,
     await cancelReservations({
@@ -291,32 +410,69 @@ export const executeCorpusProjectionAppendCycle = async ({
       errorMessage: "projection material is no longer readable or current",
     }),
   );
+  const materialRetries = await classifyReservationFailures({
+    runInTransaction,
+    failures: unreadableMaterials.map(({ lease, reason }) => ({
+      lease,
+      failure: {
+        status: "retry_scheduled",
+        kind: "payload_unavailable",
+        retryDelayMs,
+        message: reason,
+      },
+    })),
+  });
+  result.retryScheduled += materialRetries.classified;
+  result.cancelled += materialRetries.staleCancelled;
+  result.leaseLost += materialRetries.leaseLost;
 
-  const loaded = await Promise.all(
-    materials.ready.map(
-      async (material) =>
-        ({
-          material,
-          loaded: await buildPreparedEntry(runInTransaction, material),
-        }) as const,
-    ),
+  const loaded = await mapWithConcurrency(
+    materials.ready,
+    payloadReadConcurrency,
+    async (material) =>
+      ({
+        material,
+        loaded: await buildPreparedEntry(runInTransaction, material),
+      }) as const,
   );
   const unreadLeases = loaded
     .filter(({ loaded: entry }) => entry.isErr())
     .map(({ material }) => material.lease);
   result.unread += unreadLeases.length;
-  addCancellation(
-    result,
-    await cancelReservations({
-      runInTransaction,
-      leases: unreadLeases,
-      errorMessage: "projection payload read failed before append",
-    }),
-  );
+  const payloadRetries = await classifyReservationFailures({
+    runInTransaction,
+    failures: unreadLeases.map((lease) => ({
+      lease,
+      failure: {
+        status: "retry_scheduled",
+        kind: "payload_unavailable",
+        retryDelayMs,
+        message: "projection payload read failed before append",
+      },
+    })),
+  });
+  result.retryScheduled += payloadRetries.classified;
+  result.cancelled += payloadRetries.staleCancelled;
+  result.leaseLost += payloadRetries.leaseLost;
   const prepared = loaded.flatMap(({ loaded: entry }) =>
     entry.isOk() ? [entry.value] : [],
   );
-  const requests = planPreparedRequests(prepared);
+  const plan = planPreparedRequests(prepared);
+  const blocked = await classifyReservationFailures({
+    runInTransaction,
+    failures: plan.blocked.map(({ material }) => ({
+      lease: material.lease,
+      failure: {
+        status: "blocked",
+        kind: "revision_too_large",
+        message: "projection revision exceeds the append safety ceiling",
+      },
+    })),
+  });
+  result.blocked += blocked.classified;
+  result.cancelled += blocked.staleCancelled;
+  result.leaseLost += blocked.leaseLost;
+  const requests = plan.requests;
 
   const executeRequestAt = async (
     requestIndex: number,

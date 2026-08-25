@@ -1,5 +1,16 @@
 import { panic } from "better-result";
-import { and, asc, eq, inArray, isNotNull, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  eq,
+  exists,
+  gt,
+  inArray,
+  isNotNull,
+  lte,
+  or,
+  sql,
+} from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import {
@@ -9,6 +20,7 @@ import {
 } from "@/api/db/schema";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";
+import type { CorpusIndexProjectionFailureKind } from "@/api/lib/legal-search/corpus-index-projection-contract";
 import {
   readActiveCorpusProjectionManifest,
   readRegisteredCorpusProjectionManifestForCleanup,
@@ -135,6 +147,13 @@ export const reserveCorpusProjectionIntentsTx = async (
         eq(corpusIndexProjectionStates.family, family),
         eq(corpusIndexProjectionStates.generation, generation),
         eq(corpusIndexProjectionStates.desiredAction, "upsert"),
+        or(
+          eq(corpusIndexProjectionStates.workStatus, "eligible"),
+          and(
+            eq(corpusIndexProjectionStates.workStatus, "retry_scheduled"),
+            lte(corpusIndexProjectionStates.retryNotBefore, now),
+          ),
+        ),
         inArray(corpusIndexGenerations.status, ["building", "serving"]),
         pendingDesiredState,
         noOutstandingIntent,
@@ -678,6 +697,10 @@ export const commitCorpusProjectionAppendTx = async (
       appliedFingerprint: intent.fingerprint,
       appliedIndexId: intent.indexId,
       appliedAt: transitionAt,
+      workStatus: "eligible",
+      retryNotBefore: null,
+      lastFailureKind: null,
+      lastFailureMessage: null,
       updatedAt: transitionAt,
     })
     .where(
@@ -745,4 +768,115 @@ export const cancelCorpusProjectionReservationTx = async (
     )
     .returning({ id: corpusIndexProjectionIntents.id });
   return rows.length === 1 ? "cancelled" : "lease_lost";
+};
+
+export type CorpusProjectionReservationFailure =
+  | {
+      status: "retry_scheduled";
+      kind: CorpusIndexProjectionFailureKind;
+      retryDelayMs: number;
+      message: string;
+    }
+  | {
+      status: "blocked";
+      kind: CorpusIndexProjectionFailureKind;
+      message: string;
+    };
+
+type ClassifyCorpusProjectionReservationFailureOptions = {
+  intentId: ProjectionIntentId;
+  leaseToken: string;
+  failure: CorpusProjectionReservationFailure;
+  now?: Date;
+};
+
+export const CORPUS_PROJECTION_RETRY_MIN_MS = 1_000;
+export const CORPUS_PROJECTION_RETRY_MAX_MS = 7 * 24 * 60 * 60_000;
+
+/**
+ * Finish one unattempted revision and durably move its exact desired state out
+ * of the eligible queue. A newer desired epoch resets this classification.
+ */
+export const classifyCorpusProjectionReservationFailureTx = async (
+  tx: Transaction,
+  {
+    intentId,
+    leaseToken,
+    failure,
+    now,
+  }: ClassifyCorpusProjectionReservationFailureOptions,
+): Promise<"classified" | "stale_cancelled" | "lease_lost"> => {
+  if (
+    failure.status === "retry_scheduled" &&
+    (!Number.isSafeInteger(failure.retryDelayMs) ||
+      failure.retryDelayMs < CORPUS_PROJECTION_RETRY_MIN_MS ||
+      failure.retryDelayMs > CORPUS_PROJECTION_RETRY_MAX_MS)
+  ) {
+    return panic(
+      `Corpus projection retry delay must be an integer from ${CORPUS_PROJECTION_RETRY_MIN_MS} to ${CORPUS_PROJECTION_RETRY_MAX_MS} milliseconds`,
+    );
+  }
+  const transitionAt = now ?? sql<Date>`clock_timestamp()`;
+  const intents = await tx
+    .select({
+      family: corpusIndexProjectionIntents.family,
+      generation: corpusIndexProjectionIntents.generation,
+      entityId: corpusIndexProjectionIntents.entityId,
+      epoch: corpusIndexProjectionIntents.epoch,
+      fingerprint: corpusIndexProjectionIntents.fingerprint,
+      indexId: corpusIndexProjectionIntents.indexId,
+    })
+    .from(corpusIndexProjectionIntents)
+    .where(
+      and(
+        eq(corpusIndexProjectionIntents.id, intentId),
+        eq(corpusIndexProjectionIntents.status, "reserved"),
+        eq(corpusIndexProjectionIntents.leaseToken, leaseToken),
+      ),
+    )
+    .limit(1)
+    .for("update");
+  const intent = intents.at(0);
+  if (intent === undefined) {
+    return "lease_lost";
+  }
+  await tx
+    .update(corpusIndexProjectionIntents)
+    .set({
+      status: "cancelled",
+      leaseToken: null,
+      leaseExpiresAt: null,
+      cancelledAt: transitionAt,
+      lastError: failure.message.slice(0, 2048),
+      updatedAt: transitionAt,
+    })
+    .where(eq(corpusIndexProjectionIntents.id, intentId));
+  const retryNotBefore =
+    failure.status === "retry_scheduled"
+      ? now === undefined
+        ? sql<Date>`clock_timestamp() + (${failure.retryDelayMs} * interval '1 millisecond')`
+        : new Date(now.getTime() + failure.retryDelayMs)
+      : null;
+  const states = await tx
+    .update(corpusIndexProjectionStates)
+    .set({
+      workStatus: failure.status,
+      retryNotBefore,
+      lastFailureKind: failure.kind,
+      lastFailureMessage: failure.message.slice(0, 2048),
+      updatedAt: transitionAt,
+    })
+    .where(
+      and(
+        eq(corpusIndexProjectionStates.family, intent.family),
+        eq(corpusIndexProjectionStates.generation, intent.generation),
+        eq(corpusIndexProjectionStates.entityId, intent.entityId),
+        eq(corpusIndexProjectionStates.desiredAction, "upsert"),
+        eq(corpusIndexProjectionStates.desiredEpoch, intent.epoch),
+        eq(corpusIndexProjectionStates.desiredFingerprint, intent.fingerprint),
+        eq(corpusIndexProjectionStates.desiredIndexId, intent.indexId),
+      ),
+    )
+    .returning({ entityId: corpusIndexProjectionStates.entityId });
+  return states.length === 1 ? "classified" : "stale_cancelled";
 };

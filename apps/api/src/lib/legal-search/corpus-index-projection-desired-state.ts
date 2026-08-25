@@ -469,6 +469,17 @@ const writeDesiredStates = async (
   if (values.length === 0) {
     return;
   }
+  const desiredStateUnchanged = sql`(
+    ${corpusIndexProjectionStates.desiredAction},
+    ${corpusIndexProjectionStates.desiredEpoch},
+    ${corpusIndexProjectionStates.desiredFingerprint},
+    ${corpusIndexProjectionStates.desiredIndexId}
+  ) IS NOT DISTINCT FROM (
+    excluded.desired_action,
+    excluded.desired_epoch,
+    excluded.desired_fingerprint,
+    excluded.desired_index_id
+  )`;
   await tx
     .insert(corpusIndexProjectionStates)
     .values(values)
@@ -483,6 +494,10 @@ const writeDesiredStates = async (
         desiredEpoch: sql`excluded.desired_epoch`,
         desiredFingerprint: sql`excluded.desired_fingerprint`,
         desiredIndexId: sql`excluded.desired_index_id`,
+        workStatus: sql`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.workStatus} ELSE 'eligible' END`,
+        retryNotBefore: sql`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.retryNotBefore} ELSE NULL END`,
+        lastFailureKind: sql`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.lastFailureKind} ELSE NULL END`,
+        lastFailureMessage: sql`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.lastFailureMessage} ELSE NULL END`,
         updatedAt: sql<Date>`clock_timestamp()`,
       },
     });

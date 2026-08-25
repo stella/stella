@@ -156,6 +156,14 @@ test("one canonical mutation advances every active family generation once", asyn
     .select({ fingerprint: corpusIndexProjectionStates.desiredFingerprint })
     .from(corpusIndexProjectionStates)
     .where(eq(corpusIndexProjectionStates.entityId, CASE_LAW_DECISION_ID));
+  await db
+    .update(corpusIndexProjectionStates)
+    .set({
+      workStatus: "blocked",
+      lastFailureKind: "revision_too_large",
+      lastFailureMessage: "projection revision exceeds the safety ceiling",
+    })
+    .where(eq(corpusIndexProjectionStates.entityId, CASE_LAW_DECISION_ID));
 
   const advanced = await db.transaction(async (tx) => {
     await tx
@@ -172,13 +180,24 @@ test("one canonical mutation advances every active family generation once", asyn
       epoch: corpusIndexProjectionStates.desiredEpoch,
       fingerprint: corpusIndexProjectionStates.desiredFingerprint,
       indexId: corpusIndexProjectionStates.desiredIndexId,
+      workStatus: corpusIndexProjectionStates.workStatus,
+      retryNotBefore: corpusIndexProjectionStates.retryNotBefore,
+      lastFailureKind: corpusIndexProjectionStates.lastFailureKind,
     })
     .from(corpusIndexProjectionStates)
     .where(eq(corpusIndexProjectionStates.entityId, CASE_LAW_DECISION_ID));
 
   expect(first.epoch).toBe(1n);
   expect(advanced).toEqual({ epoch: 2n, generationCount: 1 });
-  expect(after).toMatchObject([{ epoch: 2n, indexId: "case_law_v5_cs_sk" }]);
+  expect(after).toMatchObject([
+    {
+      epoch: 2n,
+      indexId: "case_law_v5_cs_sk",
+      workStatus: "eligible",
+      retryNotBefore: null,
+      lastFailureKind: null,
+    },
+  ]);
   expect(after.at(0)?.fingerprint).not.toBe(before.at(0)?.fingerprint);
 });
 

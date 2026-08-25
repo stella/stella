@@ -24,6 +24,21 @@ export const CORPUS_INDEX_APPEND_PRODUCING_INTENT_STATUSES = [
   "applied",
 ] as const satisfies readonly CorpusIndexIntentStatus[];
 
+export const CORPUS_INDEX_PROJECTION_WORK_STATUSES = [
+  "eligible",
+  "retry_scheduled",
+  "blocked",
+] as const;
+export type CorpusIndexProjectionWorkStatus =
+  (typeof CORPUS_INDEX_PROJECTION_WORK_STATUSES)[number];
+
+export const CORPUS_INDEX_PROJECTION_FAILURE_KINDS = [
+  "payload_unavailable",
+  "revision_too_large",
+] as const;
+export type CorpusIndexProjectionFailureKind =
+  (typeof CORPUS_INDEX_PROJECTION_FAILURE_KINDS)[number];
+
 export const CORPUS_INDEX_QUIESCENT_INTENT_STATUSES = [
   "settled",
   "cancelled",

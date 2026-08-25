@@ -297,20 +297,30 @@ export const corpusIndexUnknownAppendBarrierAt = (
   appendStartedAt: Date,
   manifest: CorpusIndexManifest,
 ): Date => {
+  if (!Number.isFinite(appendStartedAt.getTime())) {
+    return panic("Corpus projection append barrier contract is invalid");
+  }
+  return new Date(
+    appendStartedAt.getTime() +
+      corpusIndexUnknownAppendBarrierDelayMs(manifest),
+  );
+};
+
+export const corpusIndexUnknownAppendBarrierDelayMs = (
+  manifest: CorpusIndexManifest,
+): number => {
   const commitTimeoutSecs =
     manifest.engine.indexConfig.indexing_settings.commit_timeout_secs;
   if (
-    !Number.isFinite(appendStartedAt.getTime()) ||
     commitTimeoutSecs === undefined ||
     !Number.isSafeInteger(commitTimeoutSecs) ||
     commitTimeoutSecs <= 0
   ) {
     return panic("Corpus projection append barrier contract is invalid");
   }
-  return new Date(
-    appendStartedAt.getTime() +
-      CORPUS_INDEX_INGEST_TIMEOUT_MS +
-      commitTimeoutSecs * 1000 +
-      CORPUS_PROJECTION_UNKNOWN_APPEND_MARGIN_MS,
+  return (
+    CORPUS_INDEX_INGEST_TIMEOUT_MS +
+    commitTimeoutSecs * 1000 +
+    CORPUS_PROJECTION_UNKNOWN_APPEND_MARGIN_MS
   );
 };
