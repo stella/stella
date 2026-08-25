@@ -428,6 +428,25 @@ jobs:
         # only the .exe lands and no .nsis.zip is created.
         run: bun run build -- --target ${{ matrix.target }} --bundles nsis --verbose --verbose
 
+      # GitHub-hosted Windows runners can start without the default PSGallery
+      # registration. The Azure action installs ArtifactSigning from PSGallery
+      # and otherwise fails before authentication or signing begins.
+      - name: Ensure PSGallery is registered (Windows only)
+        if: matrix.os == 'windows'
+        shell: pwsh
+        run: |
+          $expectedSourceLocation = "https://www.powershellgallery.com/api/v2"
+          $repository = Get-PSRepository -Name PSGallery -ErrorAction SilentlyContinue
+
+          if (-not $repository) {
+            Register-PSRepository -Default
+            $repository = Get-PSRepository -Name PSGallery -ErrorAction Stop
+          }
+
+          if ($repository.SourceLocation.TrimEnd("/") -ne $expectedSourceLocation) {
+            throw "PSGallery has an unexpected source location: $($repository.SourceLocation)"
+          }
+
       - name: Sign Windows installers via Azure Trusted Signing
         if: matrix.os == 'windows'
         uses: azure/trusted-signing-action@c7ab2a863ab5f9a846ddb8265964877ef296ee82 # v2.0.0
