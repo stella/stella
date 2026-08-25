@@ -30,6 +30,20 @@ import type { IngestionTransactionRunner } from "@/api/lib/replay-safe-ingestion
 type ProjectionTransactionRunner = IngestionTransactionRunner<Transaction>;
 type ProjectionAppendClient = Pick<CorpusIndexClient, "ingestCommittedBatch">;
 
+const mapSequentially = async <Input, Output>(
+  values: readonly Input[],
+  operation: (value: Input) => Promise<Output>,
+  index = 0,
+  outputs: Output[] = [],
+): Promise<Output[]> => {
+  const value = values.at(index);
+  if (value === undefined) {
+    return outputs;
+  }
+  outputs.push(await operation(value));
+  return mapSequentially(values, operation, index + 1, outputs);
+};
+
 type ExecuteCorpusProjectionAppendCycleOptions = {
   runInTransaction: ProjectionTransactionRunner;
   client: ProjectionAppendClient;
@@ -80,22 +94,17 @@ const cancelReservations = async ({
     return { cancelled: 0, leaseLost: 0 };
   }
   return await runInTransaction(async (tx) => {
-    let cancelled = 0;
-    let leaseLost = 0;
-    for (const lease of leases) {
-      // oxlint-disable-next-line no-await-in-loop -- one transaction serializes exact lease transitions
-      const outcome = await cancelCorpusProjectionReservationTx(tx, {
+    const outcomes = await mapSequentially(leases, async (lease) =>
+      cancelCorpusProjectionReservationTx(tx, {
         intentId: lease.intentId,
         leaseToken: lease.leaseToken,
         errorMessage,
-      });
-      if (outcome === "cancelled") {
-        cancelled += 1;
-      } else {
-        leaseLost += 1;
-      }
-    }
-    return { cancelled, leaseLost };
+      }),
+    );
+    return {
+      cancelled: outcomes.filter((outcome) => outcome === "cancelled").length,
+      leaseLost: outcomes.filter((outcome) => outcome === "lease_lost").length,
+    };
   });
 };
 
@@ -309,25 +318,24 @@ export const executeCorpusProjectionAppendCycle = async ({
   );
   const requests = planPreparedRequests(prepared);
 
-  for (const [requestIndex, request] of requests.entries()) {
+  const executeRequestAt = async (
+    requestIndex: number,
+  ): Promise<CorpusProjectionAppendCycleResult> => {
+    const request = requests.at(requestIndex);
+    if (request === undefined) {
+      return result;
+    }
     // Start only this physical request. A crash leaves every later request in
     // `reserved`, so recovery never mistakes unattempted work for an append.
-    // oxlint-disable-next-line no-await-in-loop -- request outcomes are durably serialized by design
-    const starts = await runInTransaction(async (tx) => {
-      const outcomes: {
-        prepared: PreparedProjectionEntry;
-        status: "started" | "stale_cancelled" | "lease_lost";
-      }[] = [];
-      for (const preparedEntry of request.entries) {
-        // oxlint-disable-next-line no-await-in-loop -- exact state locks share one short transaction
+    const starts = await runInTransaction(async (tx) =>
+      mapSequentially(request.entries, async (preparedEntry) => {
         const status = await startCorpusProjectionAppendTx(tx, {
           intentId: preparedEntry.material.lease.intentId,
           leaseToken: preparedEntry.material.lease.leaseToken,
         });
-        outcomes.push({ prepared: preparedEntry, status });
-      }
-      return outcomes;
-    });
+        return { prepared: preparedEntry, status };
+      }),
+    );
     result.cancelled += starts.filter(
       ({ status }) => status === "stale_cancelled",
     ).length;
@@ -338,7 +346,7 @@ export const executeCorpusProjectionAppendCycle = async ({
       .filter(({ status }) => status === "started")
       .map(({ prepared: preparedEntry }) => preparedEntry);
     if (started.length === 0) {
-      continue;
+      return executeRequestAt(requestIndex + 1);
     }
     const startedPlan = planCorpusProjectionAppendRequests(
       started.map(({ entry }) => entry),
@@ -348,31 +356,27 @@ export const executeCorpusProjectionAppendCycle = async ({
     }
     result.requestCount += 1;
     // External I/O occurs after the start transaction has released every lock.
-    // oxlint-disable-next-line no-await-in-loop -- stop after the first unknown physical request outcome
     const appended = await client.ingestCommittedBatch(
       request.indexId,
       startedPlan.value.at(0)?.ndjson ??
         panic("Projection request plan is empty"),
     );
     if (appended.isErr()) {
-      // oxlint-disable-next-line no-await-in-loop -- persist the exact unknown set before returning
       const abandoned = await runInTransaction(async (tx) => {
-        let cleanupPending = 0;
-        let leaseLost = 0;
-        for (const preparedEntry of started) {
-          // oxlint-disable-next-line no-await-in-loop -- exact unknown outcomes share one short transaction
-          const outcome = await abandonCorpusProjectionAppendTx(tx, {
+        const outcomes = await mapSequentially(started, async (preparedEntry) =>
+          abandonCorpusProjectionAppendTx(tx, {
             intentId: preparedEntry.material.lease.intentId,
             leaseToken: preparedEntry.material.lease.leaseToken,
             errorMessage: appended.error.message,
-          });
-          if (outcome === "cleanup_pending") {
-            cleanupPending += 1;
-          } else {
-            leaseLost += 1;
-          }
-        }
-        return { cleanupPending, leaseLost };
+          }),
+        );
+        return {
+          cleanupPending: outcomes.filter(
+            (outcome) => outcome === "cleanup_pending",
+          ).length,
+          leaseLost: outcomes.filter((outcome) => outcome === "lease_lost")
+            .length,
+        };
       });
       result.unknownCleanupPending += abandoned.cleanupPending;
       result.leaseLost += abandoned.leaseLost;
@@ -383,7 +387,6 @@ export const executeCorpusProjectionAppendCycle = async ({
         );
       addCancellation(
         result,
-        // oxlint-disable-next-line no-await-in-loop -- stop path cancels every provably unattempted reservation
         await cancelReservations({
           runInTransaction,
           leases: laterLeases,
@@ -394,36 +397,35 @@ export const executeCorpusProjectionAppendCycle = async ({
       return result;
     }
 
-    // oxlint-disable-next-line no-await-in-loop -- finalize the exact committed request before starting another
     const committed = await runInTransaction(async (tx) => {
-      let applied = 0;
-      let staleCleanupPending = 0;
-      let leaseLost = 0;
-      for (const preparedEntry of started) {
-        // oxlint-disable-next-line no-await-in-loop -- desired-state CAS transitions share one short transaction
-        const outcome = await commitCorpusProjectionAppendTx(tx, {
+      const outcomes = await mapSequentially(started, async (preparedEntry) =>
+        commitCorpusProjectionAppendTx(tx, {
           intentId: preparedEntry.material.lease.intentId,
           leaseToken: preparedEntry.material.lease.leaseToken,
-        });
+        }),
+      );
+      const counts = { applied: 0, staleCleanupPending: 0, leaseLost: 0 };
+      for (const outcome of outcomes) {
         switch (outcome.status) {
           case "applied":
-            applied += 1;
+            counts.applied += 1;
             break;
           case "stale_cleanup_pending":
-            staleCleanupPending += 1;
+            counts.staleCleanupPending += 1;
             break;
           case "lease_lost":
-            leaseLost += 1;
+            counts.leaseLost += 1;
             break;
           default:
             outcome satisfies never;
         }
       }
-      return { applied, staleCleanupPending, leaseLost };
+      return counts;
     });
     result.applied += committed.applied;
     result.staleCleanupPending += committed.staleCleanupPending;
     result.leaseLost += committed.leaseLost;
-  }
-  return result;
+    return executeRequestAt(requestIndex + 1);
+  };
+  return executeRequestAt(0);
 };
