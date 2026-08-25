@@ -42,9 +42,10 @@ const createDecisionAnnotation = createSafeRootHandler(
 
     const groupId = body.spans.length > 1 ? randomUUIDv7() : null;
     const rows = yield* Result.await(
-      safeDb((tx) => {
+      safeDb((tx) => 
         // audit: skip — a reader's own mark on public text, private by default; no tenant configuration or shared record changes.
-        tx.insert(caseLawDecisionAnnotations)
+        tx
+          .insert(caseLawDecisionAnnotations)
           .values(
             body.spans.map((span, index) => ({
               id: createSafeId<"caseLawDecisionAnnotation">(),
@@ -73,8 +74,8 @@ const createDecisionAnnotation = createSafeRootHandler(
               quote: span.quote,
             })),
           )
-          .returning({ id: caseLawDecisionAnnotations.id });
-      }),
+          .returning({ id: caseLawDecisionAnnotations.id })
+      ),
     );
 
     const first = rows.at(0);

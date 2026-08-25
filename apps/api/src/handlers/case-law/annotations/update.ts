@@ -59,9 +59,10 @@ const updateDecisionAnnotation = createSafeRootHandler(
   config,
   async function* ({ body, params: { annotationId }, safeDb, session, user }) {
     const rows = yield* Result.await(
-      safeDb((tx) => {
+      safeDb((tx) => 
         // audit: skip — the author editing their own mark on public text; no tenant configuration or shared record changes.
-        tx.update(caseLawDecisionAnnotations)
+        tx
+          .update(caseLawDecisionAnnotations)
           .set({ ...changesFor(body), updatedAt: new Date() })
           .where(
             wholeAnnotationSql({
@@ -70,8 +71,8 @@ const updateDecisionAnnotation = createSafeRootHandler(
               userId: user.id,
             }),
           )
-          .returning({ id: caseLawDecisionAnnotations.id });
-      }),
+          .returning({ id: caseLawDecisionAnnotations.id })
+      ),
     );
 
     if (rows.length === 0) {
