@@ -8,7 +8,7 @@ import {
   setDefaultTimeout,
   test,
 } from "bun:test";
-import { eq, inArray } from "drizzle-orm";
+import { inArray } from "drizzle-orm";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 
@@ -75,6 +75,7 @@ let safeDb: SafeDb;
 
 const ownFileId = toSafeId<"userFile">(Bun.randomUUIDv7());
 const ownXlsxFileId = toSafeId<"userFile">(Bun.randomUUIDv7());
+const secondOwnXlsxFileId = toSafeId<"userFile">(Bun.randomUUIDv7());
 const foreignFileId = toSafeId<"userFile">(Bun.randomUUIDv7());
 
 const attachmentMessage = (
@@ -123,6 +124,16 @@ beforeAll(async () => {
       threadId: ids.chatThreadWorkspaceA1,
     },
     {
+      id: secondOwnXlsxFileId,
+      userId: ids.userA1,
+      fileName: "second-schedule.xlsx",
+      mimeType: XLSX_MIME_TYPE,
+      sizeBytes: xlsxBuffer.byteLength,
+      sha256Hex: "d".repeat(64),
+      s3Key: `chat/${ids.userA1}/${secondOwnXlsxFileId}.xlsx`,
+      threadId: ids.chatThreadWorkspaceA1,
+    },
+    {
       id: foreignFileId,
       userId: ids.userB1,
       fileName: sanitizeFilename("other-tenant-brief.txt"),
@@ -138,7 +149,14 @@ beforeAll(async () => {
 afterAll(async () => {
   await testDb
     .delete(userFiles)
-    .where(inArray(userFiles.id, [ownFileId, ownXlsxFileId, foreignFileId]));
+    .where(
+      inArray(userFiles.id, [
+        ownFileId,
+        ownXlsxFileId,
+        secondOwnXlsxFileId,
+        foreignFileId,
+      ]),
+    );
   await releaseRlsFixture();
 });
 
@@ -187,7 +205,7 @@ describe("chat attachment hydration provenance", () => {
     expect(hydrated).not.toContain("../../etc/passwd");
   });
 
-  test("hydrates a legacy XLSX once and persists the tenant-scoped cache", async () => {
+  test("hydrates legacy XLSX files and persists their tenant-scoped cache in a batch", async () => {
     const message = asTestRaw<ChatMessage>({
       id: toSafeId<"chatMessage">(Bun.randomUUIDv7()),
       role: "user",
@@ -196,6 +214,11 @@ describe("chat attachment hydration provenance", () => {
           filename: "schedule.xlsx",
           mimeType: XLSX_MIME_TYPE,
           url: toUserFileUrl(ownXlsxFileId),
+        }),
+        createChatAttachmentPart({
+          filename: "second-schedule.xlsx",
+          mimeType: XLSX_MIME_TYPE,
+          url: toUserFileUrl(secondOwnXlsxFileId),
         }),
       ],
     });
@@ -206,9 +229,11 @@ describe("chat attachment hydration provenance", () => {
     const cachedRows = await testDb
       .select({ extractedText: userFiles.extractedText })
       .from(userFiles)
-      .where(eq(userFiles.id, ownXlsxFileId));
-    const cachedText = cachedRows.at(0)?.extractedText;
-    expect(cachedText).toContain("Acme s.r.o.");
+      .where(inArray(userFiles.id, [ownXlsxFileId, secondOwnXlsxFileId]));
+    expect(cachedRows).toHaveLength(2);
+    for (const { extractedText } of cachedRows) {
+      expect(extractedText).toContain("Acme s.r.o.");
+    }
 
     const readsAfterFirstHydration = readS3ArrayBufferMock.mock.calls.length;
     const secondHydration = textOf(await hydrate(message));

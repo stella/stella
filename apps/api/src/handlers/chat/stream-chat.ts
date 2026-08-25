@@ -16,7 +16,7 @@ import type {
   UIMessage,
 } from "@tanstack/ai";
 import { panic, Result } from "better-result";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, or, sql } from "drizzle-orm";
 
 import {
   resolveStellaSandboxRun,
@@ -3023,6 +3023,52 @@ type HydrateMessagesProps = {
   userId: SafeId<"user">;
 };
 
+type XlsxCacheWrite = {
+  file: StoredUserFile;
+  text: string;
+};
+
+const persistXlsxCacheWrites = async ({
+  cacheWrites,
+  safeDb,
+  userId,
+}: {
+  cacheWrites: readonly XlsxCacheWrite[];
+  safeDb: SafeDb;
+  userId: SafeId<"user">;
+}) => {
+  if (cacheWrites.length === 0) {
+    return Result.ok(undefined);
+  }
+
+  const cacheTextByFileId = sql.join(
+    cacheWrites.map(({ file, text }) => sql`WHEN ${file.id} THEN ${text}`),
+    sql` `,
+  );
+  const fileOwnership = or(
+    ...cacheWrites.map(({ file }) =>
+      and(eq(userFiles.id, file.id), eq(userFiles.threadId, file.threadId)),
+    ),
+  );
+
+  return await safeDb((tx) => {
+    // audit: skip — derived text cache; no user-visible or source-file state changes
+    const update = tx
+      .update(userFiles)
+      .set({
+        extractedText: sql`CASE ${userFiles.id} ${cacheTextByFileId} END`,
+      })
+      .where(
+        and(
+          eq(userFiles.userId, userId),
+          isNull(userFiles.extractedText),
+          fileOwnership,
+        ),
+      );
+    return update;
+  });
+};
+
 export const hydrateMessages = async ({
   messages,
   safeDb,
@@ -3038,6 +3084,7 @@ export const hydrateMessages = async ({
       }),
     );
     const hydratedMessages: ChatMessage[] = [];
+    const cacheWrites: XlsxCacheWrite[] = [];
 
     for (const message of messages) {
       const parts: ChatMessage["parts"] = [];
@@ -3093,26 +3140,7 @@ export const hydrateMessages = async ({
               break;
             case "write": {
               const { text } = hydratedPart.cache;
-              // SAFETY: legacy XLSX rows populate this cache once; each write
-              // is tenant-scoped and compare-and-set on the nullable field.
-              // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop
-              yield* Result.await(
-                // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
-                safeDb((tx) => {
-                  // audit: skip -- derived text cache; no user-visible or source-file state changes
-                  return tx
-                    .update(userFiles)
-                    .set({ extractedText: text })
-                    .where(
-                      and(
-                        eq(userFiles.id, file.id),
-                        eq(userFiles.userId, userId),
-                        eq(userFiles.threadId, file.threadId),
-                        isNull(userFiles.extractedText),
-                      ),
-                    );
-                }),
-              );
+              cacheWrites.push({ file, text });
               userFilesById.set(fileId, {
                 ...file,
                 extractedText: text,
@@ -3133,6 +3161,14 @@ export const hydrateMessages = async ({
         parts,
       });
     }
+
+    yield* Result.await(
+      persistXlsxCacheWrites({
+        cacheWrites,
+        safeDb,
+        userId,
+      }),
+    );
 
     return Result.ok(hydratedMessages);
   });
