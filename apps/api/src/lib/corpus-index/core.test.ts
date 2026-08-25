@@ -591,11 +591,19 @@ describe("generation mutation routing", () => {
         ),
     };
 
-    await expect(
-      indexer.backfillRows(scopedDb, [row], "case_law_v5", {
+    const finalGenerationRejection: unknown = await indexer
+      .backfillRows(scopedDb, [row], "case_law_v5", {
         ...rebuildOptions,
-      }),
-    ).rejects.toThrow(
+      })
+      .then(
+        () => null,
+        (error: unknown) => error,
+      );
+    expect(
+      finalGenerationRejection instanceof Error
+        ? finalGenerationRejection.message
+        : null,
+    ).toBe(
       "Legacy case_law corpus indexer cannot write final generation case_law_v5",
     );
     expect(
