@@ -185,6 +185,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-unbranded-ownership-id-param.fixture.ts", [
     "no-unbranded-ownership-id-param/no-unbranded-ownership-id-param",
   ]),
+  fixtureRuleOverride("no-unjustified-double-assertion.fixture.ts", [
+    "no-unjustified-double-assertion/no-unjustified-double-assertion",
+  ]),
   fixtureRuleOverride("no-untranslated-jsx-literal.fixture.tsx", [
     "no-untranslated-jsx-literal/no-untranslated-jsx-literal",
   ]),
@@ -498,6 +501,7 @@ export default defineConfig({
     "no-raw-date-input/no-raw-date-input": "error",
     "stella-lowercase/stella-lowercase": "error",
     "no-unvalidated-json-domain-cast/no-unvalidated-json-domain-cast": "error",
+    "no-unjustified-double-assertion/no-unjustified-double-assertion": "error",
     "no-partial-record-satisfies/no-partial-record-satisfies": "error",
     "no-raw-public-law-seo/no-raw-public-law-seo": "off",
     "public-case-law-db-boundary/public-case-law-db-boundary": "off",
@@ -734,6 +738,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-inline-endpoint-in-routes.ts",
     "./.oxlint-plugins/security-guards.ts",
     "./.oxlint-plugins/no-unbranded-ownership-id-param.ts",
+    "./.oxlint-plugins/no-unjustified-double-assertion.ts",
     "./.oxlint-plugins/no-raw-user-id-schema.ts",
     "./.oxlint-plugins/no-offset-pagination.ts",
     "./.oxlint-plugins/require-query-limit.ts",
@@ -3001,6 +3006,18 @@ export default defineConfig({
       },
     },
     {
+      // The fixture deliberately asserts open inputs into closed contracts to
+      // exercise the justification rule. Native assertion diagnostics would
+      // duplicate those expected violations rather than test this detector.
+      files: [
+        ".oxlint-plugins/__fixtures__/no-unjustified-double-assertion.fixture.ts",
+      ],
+      rules: {
+        "typescript/no-unsafe-type-assertion": "off",
+        "typescript/no-unnecessary-type-assertion": "off",
+      },
+    },
+    {
       files: [
         "**/*.{test,spec}.{ts,tsx,js,jsx}",
         "**/__tests__/**/*.{ts,tsx,js,jsx}",
@@ -3024,6 +3041,8 @@ export default defineConfig({
         "no-raw-user-id-schema/no-raw-user-id-schema": "off",
         "no-untyped-updates/no-untyped-updates": "off",
         "no-unbranded-ownership-id-param/no-unbranded-ownership-id-param":
+          "off",
+        "no-unjustified-double-assertion/no-unjustified-double-assertion":
           "off",
         "no-raw-colors/no-raw-colors": "off",
         "no-physical-properties/no-physical-properties": "off",

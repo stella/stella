@@ -52,6 +52,11 @@ enforcement, branded types) live in
 - Prefer plain fakes over mocking libraries for simple cases;
   use mocks when simulating failure modes, testing varied
   edge-case inputs, or isolating external services
+- Assert observable behavior or an invariant, not the implementation sequence.
+  A test that only proves "does not throw" or re-encodes the production algorithm
+  needs a stronger assertion.
+- Use snapshots only when the serialized output is itself a stable, reviewable
+  contract. Do not use snapshots as a substitute for behavioral assertions.
 - Test tenant isolation and ownership-source rules at the
   highest meaningful layer, not only as pure helper tests
 - Every bug fix needs a durable guard, but not necessarily an example test:
