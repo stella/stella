@@ -85,6 +85,8 @@ const INTERNAL_SERVER_KEYS = new Set([
   "CORPUS_INDEX_BATCH_SIZE",
   "CORPUS_INDEX_ENDPOINT",
   "CORPUS_INDEX_INTERVAL_MS",
+  "CORPUS_INDEX_Q09_ENDPOINT",
+  "CORPUS_INDEX_Q09_SEARCH_ENDPOINT",
   "CORPUS_INDEX_READ_CONCURRENCY",
   "CORPUS_INDEX_SEARCH_ENDPOINT",
   "CORPUS_INDEX_S3_BUCKET",
@@ -271,6 +273,10 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "CloudWatch namespace of the pacing metric.",
   CORPUS_INDEX_BACKPRESSURE_SAMPLE_INTERVAL_MS:
     "Minimum interval between pacing-metric samples.",
+  CORPUS_INDEX_Q09_ENDPOINT:
+    "Isolated Quickwit 0.9 mutation endpoint. Final generations registered on q09 use this endpoint; it never falls back to the legacy cluster.",
+  CORPUS_INDEX_Q09_SEARCH_ENDPOINT:
+    "Local-development-only read endpoint for Quickwit 0.9. Unset uses CORPUS_INDEX_Q09_ENDPOINT; never used for mutations.",
   CORPUS_INDEX_SEARCH_ENDPOINT:
     "Local-development-only search endpoint for a shared corpus index. Unset uses CORPUS_INDEX_ENDPOINT; this endpoint is never used for index mutations.",
   DATABASE_URL:
