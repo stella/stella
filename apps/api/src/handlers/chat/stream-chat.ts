@@ -16,6 +16,7 @@ import type {
   UIMessage,
 } from "@tanstack/ai";
 import { panic, Result } from "better-result";
+import { and, eq, isNull } from "drizzle-orm";
 
 import {
   resolveStellaSandboxRun,
@@ -30,6 +31,7 @@ import {
 import type { ChatSendMode } from "@stll/anonymize-chat";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
+import { userFiles } from "@/api/db/schema";
 import type { UsageEventLane } from "@/api/db/schema";
 import { modelAcceptsDocumentAttachment } from "@/api/handlers/chat/attachment-modality";
 import {
@@ -155,14 +157,16 @@ const CHAT_LOOP_DETECTED_MESSAGE =
 const CHAT_EMPTY_COMPLETION_MESSAGE =
   "Model returned finish_reason=stop with zero output";
 
-type StoredUserFile = {
-  fileName: string;
-  id: SafeId<"userFile">;
-  mimeType: string;
-  s3Key: string;
-  threadId: SafeId<"chatThread">;
-  userId: string;
-};
+type StoredUserFile = Pick<
+  typeof userFiles.$inferSelect,
+  | "extractedText"
+  | "fileName"
+  | "id"
+  | "mimeType"
+  | "s3Key"
+  | "threadId"
+  | "userId"
+>;
 
 type AssistantValueRefResolver = ChatRefRegistry["resolveAssistantValueRefs"];
 type AssistantToolInputRefResolver = (props: {
@@ -3057,6 +3061,7 @@ export const hydrateMessages = async ({
 
         const hydratedPart = yield* Result.await(
           hydrateFilePart({
+            extractedText: file.extractedText,
             // eslint-disable-next-line security-guards/no-raw-filename-write -- DB read-back from user_files, already sanitized on upload
             fileName: file.fileName,
             mimeType: file.mimeType,
@@ -3080,6 +3085,44 @@ export const hydrateMessages = async ({
               message: THIRD_PARTY_BOUNDARY_REFUSAL_MESSAGE,
             }),
           );
+        }
+
+        if (hydratedPart.type === "anonymizable") {
+          switch (hydratedPart.cache.status) {
+            case "unchanged":
+              break;
+            case "write": {
+              const { text } = hydratedPart.cache;
+              // SAFETY: legacy XLSX rows populate this cache once; each write
+              // is tenant-scoped and compare-and-set on the nullable field.
+              // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop
+              yield* Result.await(
+                // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
+                safeDb((tx) => {
+                  // audit: skip -- derived text cache; no user-visible or source-file state changes
+                  return tx
+                    .update(userFiles)
+                    .set({ extractedText: text })
+                    .where(
+                      and(
+                        eq(userFiles.id, file.id),
+                        eq(userFiles.userId, userId),
+                        eq(userFiles.threadId, file.threadId),
+                        isNull(userFiles.extractedText),
+                      ),
+                    );
+                }),
+              );
+              userFilesById.set(fileId, {
+                ...file,
+                extractedText: text,
+              });
+              break;
+            }
+            default:
+              hydratedPart.cache satisfies never;
+              return panic("Unsupported XLSX cache status");
+          }
         }
 
         parts.push(hydratedPart.part);
@@ -3124,6 +3167,7 @@ const readUserFilesByIds = async ({
         userId: true,
         threadId: true,
         fileName: true,
+        extractedText: true,
         mimeType: true,
         s3Key: true,
       },

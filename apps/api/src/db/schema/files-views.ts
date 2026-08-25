@@ -39,6 +39,7 @@ export const userFiles = p.pgTable(
     // image; rendered directly in an <img src> with no client decoder.
     placeholder: p.text("placeholder"),
     scanWarnings: p.text("scan_warnings").array(),
+    extractedText: p.text("extracted_text"),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
     updatedAt: timestamptz("updated_at")
       .notNull()

@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { and, eq, inArray } from "drizzle-orm";
 
 import {
@@ -240,6 +240,7 @@ export const deleteUploadedChatFiles = async ({
 };
 
 type HydrateFilePartProps = {
+  extractedText: string | null;
   fileName: string;
   mimeType: string;
   sendMode: ChatSendMode;
@@ -251,6 +252,7 @@ export type HydratedFilePart =
       // A text-extractable attachment (docx/xlsx/txt/csv/md) hydrated to a `text`
       // content part, or any part that carries anonymizable text. Text is
       // universal across provider adapters, so this is never modality-gated.
+      cache: { status: "unchanged" } | { status: "write"; text: string };
       part: ChatPart;
       type: "anonymizable";
     }
@@ -348,7 +350,14 @@ const attachmentText = ({
   content: string;
 }): string => `Attached file "${fileName}":\n\n${content}`;
 
+const extractXlsxAttachmentText = async (buffer: ArrayBuffer) =>
+  (await extractFileTextResult(buffer, XLSX_MIME_TYPE)).map((extracted) => {
+    const text = extracted?.trim();
+    return text ? text.slice(0, LIMITS.chatContextFileMaxChars) : null;
+  });
+
 export const hydrateFilePart = async ({
+  extractedText,
   fileName,
   mimeType,
   sendMode,
@@ -358,6 +367,25 @@ export const hydrateFilePart = async ({
     const requiresPlainText = sendMode === CHAT_SEND_MODE.anonymized;
     if (requiresPlainText && !canHydrateFilePartAsPlainText(mimeType)) {
       return Result.ok<HydratedFilePart>(createBlockedHydratedFilePart());
+    }
+
+    if (mimeType !== XLSX_MIME_TYPE && extractedText !== null) {
+      return panic(
+        "Only XLSX chat attachments may carry cached extracted text",
+      );
+    }
+
+    if (mimeType === XLSX_MIME_TYPE && extractedText !== null) {
+      const text = extractedText.trim();
+      if (!text) {
+        return panic("Cached XLSX chat attachment text must not be empty");
+      }
+
+      return Result.ok<HydratedFilePart>({
+        cache: { status: "unchanged" },
+        part: createChatTextPart(attachmentText({ fileName, content: text })),
+        type: "anonymizable",
+      });
     }
 
     const buffer = yield* Result.await(
@@ -386,6 +414,7 @@ export const hydrateFilePart = async ({
     // attachment chip; only the provider-bound copy becomes text.
     if (isDirectTextMimeType(mimeType)) {
       return Result.ok<HydratedFilePart>({
+        cache: { status: "unchanged" },
         part: createChatTextPart(
           attachmentText({
             fileName,
@@ -434,6 +463,7 @@ export const hydrateFilePart = async ({
       }
 
       return Result.ok<HydratedFilePart>({
+        cache: { status: "unchanged" },
         part: createChatTextPart(attachmentText({ fileName, content: text })),
         type: "anonymizable",
       });
@@ -441,7 +471,7 @@ export const hydrateFilePart = async ({
 
     if (mimeType === XLSX_MIME_TYPE) {
       const extracted = yield* Result.await(
-        extractFileTextResult(buffer, mimeType).then((result) =>
+        extractXlsxAttachmentText(buffer).then((result) =>
           Result.mapError(
             result,
             (cause) =>
@@ -466,10 +496,11 @@ export const hydrateFilePart = async ({
       }
 
       return Result.ok<HydratedFilePart>({
+        cache: { status: "write", text },
         part: createChatTextPart(
           attachmentText({
             fileName,
-            content: text.slice(0, LIMITS.chatContextFileMaxChars),
+            content: text,
           }),
         ),
         type: "anonymizable",
@@ -564,6 +595,33 @@ export const uploadUserFile = async ({
 
     const scanWarnings = getScanWarnings(scanResult.value);
 
+    const extractedText =
+      file.mimeType === XLSX_MIME_TYPE
+        ? yield* Result.await(
+            extractXlsxAttachmentText(new Uint8Array(file.bytes).buffer).then(
+              (result) =>
+                Result.mapError(
+                  result,
+                  (cause) =>
+                    new HandlerError({
+                      status: 500,
+                      message:
+                        "Failed to extract text from chat XLSX attachment",
+                      cause,
+                    }),
+                ),
+            ),
+          )
+        : null;
+    if (file.mimeType === XLSX_MIME_TYPE && extractedText === null) {
+      return Result.err(
+        new HandlerError({
+          status: 422,
+          message: "Chat XLSX attachment did not contain extractable text",
+        }),
+      );
+    }
+
     yield* Result.await(
       Result.tryPromise({
         try: async () =>
@@ -627,6 +685,7 @@ export const uploadUserFile = async ({
       await tx.insert(userFiles).values({
         id,
         userId,
+        extractedText,
         fileName: sanitizedFileName,
         mimeType: file.mimeType,
         scanWarnings,

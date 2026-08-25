@@ -105,6 +105,7 @@ describe("chat attachment hydration", () => {
 
   test("coerces text-like attachments to a text content part (universal, never modality-gated)", async () => {
     const result = await hydrateFilePart({
+      extractedText: null,
       fileName: "contacts.csv",
       mimeType: TEXT_CSV_MIME_TYPE,
       sendMode: CHAT_SEND_MODE.anonymized,
@@ -129,6 +130,7 @@ describe("chat attachment hydration", () => {
 
   test("blocks non-extractable attachments before reading bytes in anonymized mode", async () => {
     const result = await hydrateFilePart({
+      extractedText: null,
       fileName: "scan.pdf",
       mimeType: PDF_MIME_TYPE,
       sendMode: CHAT_SEND_MODE.anonymized,
@@ -145,6 +147,7 @@ describe("chat attachment hydration", () => {
 
   test("hydrates non-extractable attachments as raw override when the user allows it", async () => {
     const result = await hydrateFilePart({
+      extractedText: null,
       fileName: "scan.pdf",
       mimeType: PDF_MIME_TYPE,
       sendMode: CHAT_SEND_MODE.rawOverride,
@@ -171,6 +174,7 @@ describe("chat attachment hydration", () => {
 
   test("keeps raw image attachments URL-backed for provider adapters", async () => {
     const result = await hydrateFilePart({
+      extractedText: null,
       fileName: "scan.png",
       mimeType: IMAGE_PNG_MIME_TYPE,
       sendMode: CHAT_SEND_MODE.rawOverride,
@@ -210,6 +214,7 @@ describe("chat attachment hydration", () => {
       });
 
       const result = await hydrateFilePart({
+        extractedText: null,
         fileName: "draft.docx",
         mimeType: DOCX_MIME_TYPE,
         sendMode,
@@ -246,6 +251,7 @@ describe("chat attachment hydration", () => {
       arrayBufferMock.mockImplementationOnce(async () => xlsx);
 
       const result = await hydrateFilePart({
+        extractedText: null,
         fileName: "schedule.xlsx",
         mimeType: XLSX_MIME_TYPE,
         sendMode,
@@ -273,6 +279,53 @@ describe("chat attachment hydration", () => {
       );
     },
   );
+
+  test("persists XLSX text at upload and hydrates it without rereading the workbook", async () => {
+    const values = mock(
+      async (_row: { extractedText: string | null }) => undefined,
+    );
+    const testTx = asTestRaw<Transaction>({
+      insert: mock(() => ({ values })),
+    });
+    const safeDb: SafeDb = async (callback) =>
+      await Result.tryPromise(async () => await callback(testTx));
+    const bytes = new Uint8Array(
+      await Bun.file(
+        new URL("../../lib/search/__fixtures__/schedule.xlsx", import.meta.url),
+      ).arrayBuffer(),
+    );
+
+    const uploadResult = await uploadUserFile({
+      file: {
+        bytes,
+        fileName: "schedule.xlsx",
+        mimeType: XLSX_MIME_TYPE,
+      },
+      recordAuditEvent: mock(async () => undefined),
+      safeDb,
+      threadId: toSafeId<"chatThread">("11111111-1111-4111-8111-111111111112"),
+      userId: toSafeId<"user">("11111111-1111-4111-8111-111111111113"),
+      workspaceId,
+    });
+
+    expect(Result.isOk(uploadResult)).toBe(true);
+    const extractedText = values.mock.calls.at(0)?.at(0)?.extractedText;
+    if (typeof extractedText !== "string") {
+      throw new TypeError("Expected upload to persist extracted XLSX text");
+    }
+    expect(extractedText).toContain("Acme s.r.o.");
+
+    const hydrateResult = await hydrateFilePart({
+      extractedText,
+      fileName: "schedule.xlsx",
+      mimeType: XLSX_MIME_TYPE,
+      sendMode: CHAT_SEND_MODE.rawOverride,
+      s3Key: "user/file",
+    });
+
+    expect(Result.isOk(hydrateResult)).toBe(true);
+    expect(arrayBufferMock).not.toHaveBeenCalled();
+  });
 
   test("cleans up already uploaded files when a later attachment fails", async () => {
     const valuesMock = mock(async () => undefined);

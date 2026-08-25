@@ -2758,6 +2758,7 @@ describe("chat message hydration", () => {
         userFiles: {
           findMany: async () => [
             {
+              extractedText: null,
               id: userFileId,
               userId,
               threadId,

@@ -8,7 +8,7 @@ import {
   setDefaultTimeout,
   test,
 } from "bun:test";
-import { inArray } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 
@@ -22,6 +22,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { toUserFileUrl } from "@/api/lib/user-files/types";
+import { XLSX_MIME_TYPE } from "@/api/mime-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -41,6 +42,17 @@ import type { TestDatabase } from "@/api/tests/security/test-utils";
 setDefaultTimeout(120_000);
 
 const attachmentBytes = new TextEncoder().encode("Attachment body");
+const xlsxBuffer = await Bun.file(
+  new URL("../../lib/search/__fixtures__/schedule.xlsx", import.meta.url),
+).arrayBuffer();
+const readS3ArrayBufferMock = mock(async (s3Key: string) =>
+  s3Key.endsWith(".xlsx")
+    ? xlsxBuffer
+    : attachmentBytes.buffer.slice(
+        attachmentBytes.byteOffset,
+        attachmentBytes.byteOffset + attachmentBytes.byteLength,
+      ),
+);
 
 // Spread the real module so only the object read is overridden: `mock.module`
 // is process-global and never auto-restored, so a partial mock would delete the
@@ -48,13 +60,7 @@ const attachmentBytes = new TextEncoder().encode("Attachment body");
 const realS3 = await import("@/api/lib/s3");
 void mock.module("@/api/lib/s3", () => ({
   ...realS3,
-  readS3ArrayBuffer: async () =>
-    await Promise.resolve(
-      attachmentBytes.buffer.slice(
-        attachmentBytes.byteOffset,
-        attachmentBytes.byteOffset + attachmentBytes.byteLength,
-      ),
-    ),
+  readS3ArrayBuffer: readS3ArrayBufferMock,
 }));
 
 const { hydrateMessages } = await import("./stream-chat");
@@ -68,6 +74,7 @@ let ids: TestIds;
 let safeDb: SafeDb;
 
 const ownFileId = toSafeId<"userFile">(Bun.randomUUIDv7());
+const ownXlsxFileId = toSafeId<"userFile">(Bun.randomUUIDv7());
 const foreignFileId = toSafeId<"userFile">(Bun.randomUUIDv7());
 
 const attachmentMessage = (
@@ -106,6 +113,16 @@ beforeAll(async () => {
       threadId: ids.chatThreadWorkspaceA1,
     },
     {
+      id: ownXlsxFileId,
+      userId: ids.userA1,
+      fileName: "schedule.xlsx",
+      mimeType: XLSX_MIME_TYPE,
+      sizeBytes: xlsxBuffer.byteLength,
+      sha256Hex: "c".repeat(64),
+      s3Key: `chat/${ids.userA1}/${ownXlsxFileId}.xlsx`,
+      threadId: ids.chatThreadWorkspaceA1,
+    },
+    {
       id: foreignFileId,
       userId: ids.userB1,
       fileName: sanitizeFilename("other-tenant-brief.txt"),
@@ -121,7 +138,7 @@ beforeAll(async () => {
 afterAll(async () => {
   await testDb
     .delete(userFiles)
-    .where(inArray(userFiles.id, [ownFileId, foreignFileId]));
+    .where(inArray(userFiles.id, [ownFileId, ownXlsxFileId, foreignFileId]));
   await releaseRlsFixture();
 });
 
@@ -168,6 +185,37 @@ describe("chat attachment hydration provenance", () => {
 
     expect(hydrated).toContain(STORED_NAME);
     expect(hydrated).not.toContain("../../etc/passwd");
+  });
+
+  test("hydrates a legacy XLSX once and persists the tenant-scoped cache", async () => {
+    const message = asTestRaw<ChatMessage>({
+      id: toSafeId<"chatMessage">(Bun.randomUUIDv7()),
+      role: "user",
+      parts: [
+        createChatAttachmentPart({
+          filename: "schedule.xlsx",
+          mimeType: XLSX_MIME_TYPE,
+          url: toUserFileUrl(ownXlsxFileId),
+        }),
+      ],
+    });
+
+    const firstHydration = textOf(await hydrate(message));
+    expect(firstHydration).toContain("Acme s.r.o.");
+
+    const cachedRows = await testDb
+      .select({ extractedText: userFiles.extractedText })
+      .from(userFiles)
+      .where(eq(userFiles.id, ownXlsxFileId));
+    const cachedText = cachedRows.at(0)?.extractedText;
+    expect(cachedText).toContain("Acme s.r.o.");
+
+    const readsAfterFirstHydration = readS3ArrayBufferMock.mock.calls.length;
+    const secondHydration = textOf(await hydrate(message));
+    expect(secondHydration).toContain("Acme s.r.o.");
+    expect(readS3ArrayBufferMock).toHaveBeenCalledTimes(
+      readsAfterFirstHydration,
+    );
   });
 
   test("another user's file id hydrates nothing", async () => {
