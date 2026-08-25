@@ -350,7 +350,7 @@ const FolderPicker = ({ value, onChange }: FolderPickerProps) => {
     newFolderSlot === null ? null : (
       <div
         className="flex items-center gap-1"
-        style={{ paddingLeft: `${depth * 16 + 8}px` }}
+        style={{ paddingInlineStart: `${depth * 16 + 8}px` }}
       >
         <span className="w-4" />
         {newFolderSlot}
@@ -388,7 +388,7 @@ const FolderPicker = ({ value, onChange }: FolderPickerProps) => {
       <div key={folder.entityId}>
         <div
           className="flex items-center gap-1"
-          style={{ paddingLeft: `${depth * 16 + 8}px` }}
+          style={{ paddingInlineStart: `${depth * 16 + 8}px` }}
         >
           {hasChildren ? (
             <Tooltip
