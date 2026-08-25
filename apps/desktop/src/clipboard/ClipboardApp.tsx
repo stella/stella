@@ -1489,7 +1489,7 @@ const ClipboardApp = () => {
           <div className="flex shrink-0 items-center gap-0.5">
             <a
               aria-label="Stella"
-              className="text-foreground grid size-10 place-items-center"
+              className="text-foreground grid size-11 place-items-center"
               href={STELLA_WEB_APP_URL}
               onClick={(event) => {
                 event.preventDefault();
@@ -1523,7 +1523,7 @@ const ClipboardApp = () => {
             ) : null}
             <Button
               aria-label={t("welcomeHelp")}
-              className="size-10 rounded-full"
+              className="size-11 rounded-full"
               onClick={() => {
                 setWelcomeDismissed(false);
                 setWelcomeRequested(true);
@@ -1542,7 +1542,7 @@ const ClipboardApp = () => {
           >
             <Button
               aria-pressed={activeGroupId === null}
-              className="h-10 shrink-0 rounded-full px-3 text-xs"
+              className="h-11 shrink-0 rounded-full px-3 text-xs"
               data-clipboard-group-id={CLIPBOARD_NO_GROUP_DROP_ID}
               data-drop-target={isDropTarget(null) ? "" : undefined}
               onClick={() => {
@@ -1561,7 +1561,7 @@ const ClipboardApp = () => {
               return (
                 <Button
                   aria-pressed={activeGroupId === group.id}
-                  className="clipboard-group-chip h-10 shrink-0 rounded-full px-3 text-xs"
+                  className="clipboard-group-chip h-11 shrink-0 rounded-full px-3 text-xs"
                   data-clipboard-group-id={group.id}
                   data-drop-target={isDropTarget(group.id) ? "" : undefined}
                   data-group-chip=""
@@ -1584,7 +1584,7 @@ const ClipboardApp = () => {
             {activeGroupId ? (
               <Button
                 aria-label={t("deleteGroup")}
-                className="size-10 shrink-0 rounded-full"
+                className="size-11 shrink-0 rounded-full"
                 onClick={() => {
                   const group = snapshot.groups.find(
                     (candidate) => candidate.id === activeGroupId,
@@ -1606,7 +1606,7 @@ const ClipboardApp = () => {
             ) : null}
             <Button
               aria-label={t("createGroup")}
-              className="size-10 shrink-0 rounded-full"
+              className="size-11 shrink-0 rounded-full"
               disabled={snapshot.groups.length >= 24}
               onClick={() =>
                 setDialog({
@@ -1624,7 +1624,7 @@ const ClipboardApp = () => {
           </nav>
         </div>
 
-        <InputGroup className="clipboard-search h-9 w-full rounded-full">
+        <InputGroup className="clipboard-search h-11 w-full rounded-full">
           <InputGroupAddon className="text-foreground/65">
             <SearchIcon aria-hidden="true" className="size-4" />
           </InputGroupAddon>
@@ -1654,7 +1654,7 @@ const ClipboardApp = () => {
             aria-label={
               snapshot.captureStatus === "active" ? t("pause") : t("resume")
             }
-            className="size-10 rounded-full"
+            className="size-11 rounded-full"
             onClick={() => {
               applySnapshotCommand("clipboard_set_capture_status", {
                 status: nextCaptureStatus,
@@ -1674,7 +1674,7 @@ const ClipboardApp = () => {
           </Button>
           <Button
             aria-label={t("clear")}
-            className="size-10 rounded-full"
+            className="size-11 rounded-full"
             disabled={
               snapshot.items.length === 0 &&
               snapshot.persistence.status !== "deletionOnly"
@@ -1690,7 +1690,7 @@ const ClipboardApp = () => {
           </Button>
           <Button
             aria-label={t("close")}
-            className="size-10 rounded-full"
+            className="size-11 rounded-full"
             onClick={requestHide}
             size="icon"
             title={t("close")}
