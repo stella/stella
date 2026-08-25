@@ -18,11 +18,6 @@ fn restrict_marker_permissions(file: &fs::File) -> Result<(), String> {
     .map_err(|error| format!("clipboard welcome state permissions failed: {error}"))
 }
 
-#[cfg(not(unix))]
-fn restrict_marker_permissions(_file: &fs::File) -> Result<(), String> {
-  Ok(())
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum ClipboardWelcomeStatus {
@@ -69,7 +64,10 @@ impl ClipboardWelcome {
       .create_new(true)
       .open(path)
     {
+      #[cfg(unix)]
       Ok(file) => restrict_marker_permissions(&file)?,
+      #[cfg(not(unix))]
+      Ok(_) => {}
       Err(error)
         if error.kind() == std::io::ErrorKind::AlreadyExists
           && is_regular_marker(path) => {}
