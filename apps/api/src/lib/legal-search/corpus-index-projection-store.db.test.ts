@@ -90,7 +90,7 @@ const PROJECTION_MIGRATION_URLS = [
     import.meta.url,
   ),
   new URL(
-    "../../../drizzle/20260825211500_corpus_projection_work_schedule/migration.sql",
+    "../../../drizzle/20260826003700_corpus_projection_work_schedule/migration.sql",
     import.meta.url,
   ),
   new URL(
