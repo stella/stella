@@ -4587,7 +4587,7 @@ dependencies = [
  "ammonia",
  "apple-native-keyring-store",
  "axum",
- "base64 0.22.1",
+ "base64 0.23.1",
  "chrono",
  "clipboard-rs",
  "dirs 6.0.0",

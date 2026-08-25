@@ -73,7 +73,7 @@ tauri-plugin-updater = "2"
 axum = "0.8"
 aes-gcm = "0.10"
 ammonia = "4"
-base64 = "0.22"
+base64 = "0.23"
 chrono = { version = "0.4", features = ["serde"] }
 clipboard-rs = { version = "0.3.5", default-features = false }
 dirs = "6"
