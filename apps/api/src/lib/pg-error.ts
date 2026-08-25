@@ -41,6 +41,35 @@ const sqlStateOf = (node: object): string | undefined => {
   return undefined;
 };
 
+/**
+ * Every node in `error`'s `.cause` chain, outermost first.
+ *
+ * Bounded by `MAX_CAUSE_DEPTH` and guarded by `seen`: a self-referential
+ * `cause` is an infinite loop on a runtime with proper tail calls, not a
+ * fast throw, so the cycle guard is load-bearing rather than defensive.
+ * Never throws: property access is fully guarded.
+ */
+const causeChain = (error: unknown): object[] => {
+  const nodes: object[] = [];
+  const seen = new WeakSet<object>();
+  let current: unknown = error;
+  let depth = 0;
+
+  while (
+    current !== null &&
+    typeof current === "object" &&
+    depth < MAX_CAUSE_DEPTH &&
+    !seen.has(current)
+  ) {
+    seen.add(current);
+    nodes.push(current);
+    current = readProperty(current, "cause");
+    depth += 1;
+  }
+
+  return nodes;
+};
+
 type PgErrorNode = { node: object; sqlState: string };
 
 /**
@@ -61,25 +90,12 @@ type PgErrorNode = { node: object; sqlState: string };
  */
 const pgErrorNodes = (error: unknown): PgErrorNode[] => {
   const nodes: PgErrorNode[] = [];
-  const seen = new WeakSet<object>();
-  let current: unknown = error;
-  let depth = 0;
-
-  while (
-    current !== null &&
-    typeof current === "object" &&
-    depth < MAX_CAUSE_DEPTH &&
-    !seen.has(current)
-  ) {
-    seen.add(current);
-    const sqlState = sqlStateOf(current);
+  for (const node of causeChain(error)) {
+    const sqlState = sqlStateOf(node);
     if (sqlState !== undefined) {
-      nodes.push({ node: current, sqlState });
+      nodes.push({ node, sqlState });
     }
-    current = readProperty(current, "cause");
-    depth += 1;
   }
-
   return nodes;
 };
 
@@ -112,6 +128,59 @@ export const isPgConstraintError = (
       sqlState === code &&
       readNonEmptyString(node, "constraint") === constraint,
   );
+
+/**
+ * Bun driver codes for a connection that is gone, as opposed to a query the
+ * server rejected. The driver reports this category in `code`; a SQLSTATE,
+ * when there is one, lives in `errno`, so these never collide with `PG_ERROR`.
+ *
+ * Retirement by the pool's own `idleTimeout` and `maxLifetime` bounds belongs
+ * with the server-side closures: Bun retires a connection when the timer
+ * expires whether or not a caller still holds it, so the interrupted work is
+ * neither lost nor invalid, and the next attempt gets a fresh connection.
+ *
+ * `CONNECTION_FAILED` is the same story at the other end of the connection's
+ * life: the driver documents it as accepted but closed before the handshake
+ * completed, which is what a server that is still starting up looks like.
+ * Which of these a given failure surfaces as is not stable across driver
+ * versions, so callers must treat the set as one condition rather than
+ * branching on a member.
+ */
+export const PG_DRIVER_ERROR = {
+  CONNECTION_CLOSED: "ERR_POSTGRES_CONNECTION_CLOSED",
+  CONNECTION_FAILED: "ERR_POSTGRES_CONNECTION_FAILED",
+  CONNECTION_TIMEOUT: "ERR_POSTGRES_CONNECTION_TIMEOUT",
+  IDLE_TIMEOUT: "ERR_POSTGRES_IDLE_TIMEOUT",
+  LIFETIME_TIMEOUT: "ERR_POSTGRES_LIFETIME_TIMEOUT",
+} as const;
+
+/**
+ * `ERR_POSTGRES_CONNECTION_REFUSED` is deliberately absent: the driver
+ * documents it as nothing listening at the address, fails it immediately, and
+ * does not retry. Treating it as transient would turn a wrong host or port
+ * into a silent retry loop rather than a failure someone reads.
+ */
+
+const CONNECTION_LIFECYCLE_CODES: ReadonlySet<string> = new Set(
+  Object.values(PG_DRIVER_ERROR),
+);
+
+/**
+ * True when `error`, or anything in its `.cause` chain, is a driver error
+ * reporting a lost or retired connection: the work is retryable as-is.
+ *
+ * Reads the driver's `code` rather than the message. A `PostgresError`'s
+ * message is the failure alone ("Idle timeout reached after 2m") and never
+ * names its own type, so matching message text for a type name cannot fire;
+ * the wording is also the driver's to change between releases, while the code
+ * is its stable contract. Walks the chain because a failure raised inside
+ * prepared-query execution arrives wrapped in a `DrizzleQueryError`.
+ */
+export const isTransientPgConnectionError = (error: unknown): boolean =>
+  causeChain(error).some((node) => {
+    const code = readNonEmptyString(node, "code");
+    return code !== undefined && CONNECTION_LIFECYCLE_CODES.has(code);
+  });
 
 export const PG_ERROR = {
   DEADLOCK_DETECTED: "40P01",

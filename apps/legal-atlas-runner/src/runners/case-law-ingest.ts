@@ -56,10 +56,7 @@ import {
   createCaseLawCensus,
   createCaseLawCorpusIndexCountSeed,
 } from "@/api/lib/corpus-index/census";
-import {
-  IngestionStallError,
-  TimeoutError,
-} from "@/api/lib/errors/tagged-errors";
+import { IngestionStallError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { backfillSearchIndex } from "@/api/lib/legal-search/case-law-search-index";
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
@@ -136,6 +133,7 @@ import {
   SOURCE_TOTAL_POLL_TIMING,
   runSourceTotalPoll,
 } from "./source-total-poll";
+import { isTransientConnectionError } from "./transient-connection-error";
 
 const logInfo = (message: string): void => {
   void Bun.write(Bun.stdout, `${message}\n`);
@@ -145,33 +143,6 @@ const logError = (message: string, detail?: unknown): void => {
   const formattedDetail = formatLogDetail(detail);
   const line = formattedDetail ? `${message} ${formattedDetail}` : message;
   void Bun.write(Bun.stderr, `${line}\n`);
-};
-
-/**
- * Bun's native Postgres pool emits unhandled errors when the
- * server closes a connection (e.g. database failover or
- * network interruption). The internal `#onClose` callback
- * throws a PostgresError that isn't caught by query-level
- * try/catch. Without this handler, the process crashes on
- * any connection drop.
- *
- * A TimeoutError is the same failure class surfacing differently: a
- * connection the server reaped silently never errors, so the bounded
- * DB handle in `../db` rejects the wedged await. Both retry next cycle.
- *
- * Adapter loops already retry on the next cycle, so the
- * daemon self-heals within CYCLE_DELAY_MS (5s).
- */
-const isTransientConnectionError = (error: unknown): boolean => {
-  if (error instanceof TimeoutError) {
-    return true;
-  }
-  const msg = error instanceof Error ? error.message : String(error);
-  return (
-    msg.includes("Connection closed") ||
-    msg.includes("ERR_POSTGRES_CONNECTION_CLOSED") ||
-    msg.includes("PostgresError")
-  );
 };
 
 /** Set to true once daemon mode starts; single-adapter mode exits on all errors. */

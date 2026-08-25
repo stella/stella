@@ -1,3 +1,4 @@
+import { SQL } from "bun";
 import { describe, expect, it } from "bun:test";
 import { DrizzleQueryError } from "drizzle-orm";
 
@@ -6,6 +7,8 @@ import {
   getPgErrorCode,
   isPgConstraintError,
   isPgError,
+  isTransientPgConnectionError,
+  PG_DRIVER_ERROR,
   PG_ERROR,
   pgErrorFields,
 } from "./pg-error";
@@ -292,5 +295,131 @@ describe("pgErrorFields", () => {
     });
     expect(() => pgErrorFields(hostile)).not.toThrow();
     expect(pgErrorFields(hostile)).toEqual({});
+  });
+});
+
+describe("PG_DRIVER_ERROR", () => {
+  /**
+   * Pinned as literals rather than derived from the map, because
+   * `isTransientPgConnectionError` matches on exactly these values: a test
+   * that spelled them `PG_DRIVER_ERROR.IDLE_TIMEOUT` would agree with a typo
+   * and stay green while production stopped matching. The whole object is
+   * asserted so a rename, a removal, or a silent addition all fail here.
+   *
+   * Source: Bun's documented connection-error codes (`runtime/sql`), and
+   * `CONNECTION_CLOSED` is additionally pinned against the live runtime by
+   * the integration test below.
+   */
+  it("matches the driver's documented connection-error codes", () => {
+    expect(PG_DRIVER_ERROR).toEqual({
+      CONNECTION_CLOSED: "ERR_POSTGRES_CONNECTION_CLOSED",
+      CONNECTION_FAILED: "ERR_POSTGRES_CONNECTION_FAILED",
+      CONNECTION_TIMEOUT: "ERR_POSTGRES_CONNECTION_TIMEOUT",
+      IDLE_TIMEOUT: "ERR_POSTGRES_IDLE_TIMEOUT",
+      LIFETIME_TIMEOUT: "ERR_POSTGRES_LIFETIME_TIMEOUT",
+    });
+  });
+});
+
+describe("isTransientPgConnectionError", () => {
+  it("reads a hand-built driver error through the cause chain", () => {
+    const retired = Object.assign(new Error("Idle timeout reached after 2m"), {
+      name: "PostgresError",
+      code: PG_DRIVER_ERROR.IDLE_TIMEOUT,
+    });
+    expect(isTransientPgConnectionError(retired)).toBe(true);
+    expect(
+      isTransientPgConnectionError(
+        new DrizzleQueryError("query failed", [], retired),
+      ),
+    ).toBe(true);
+  });
+
+  /**
+   * Total over the map rather than a list of examples, so a code added to
+   * `PG_DRIVER_ERROR` without the predicate recognising it fails here.
+   */
+  it("classifies every connection-lifecycle code, bare or wrapped", () => {
+    for (const code of Object.values(PG_DRIVER_ERROR)) {
+      const failure = Object.assign(new Error("connection gone"), {
+        name: "PostgresError",
+        code,
+      });
+      expect(isTransientPgConnectionError(failure)).toBe(true);
+      expect(
+        isTransientPgConnectionError(
+          new DrizzleQueryError("query failed", [], failure),
+        ),
+      ).toBe(true);
+    }
+  });
+
+  it("does not match a query the server rejected", () => {
+    expect(
+      isTransientPgConnectionError(
+        drizzleError({ errno: "23505", code: "ERR_POSTGRES_SERVER_ERROR" }),
+      ),
+    ).toBe(false);
+  });
+
+  /**
+   * The load-bearing test for this predicate, and the only one that touches a
+   * value this repo does not author: it drives the real `Bun.sql` pool against
+   * a socket that accepts and closes before the Postgres handshake, then
+   * asserts against whatever the driver actually threw.
+   *
+   * Two things are verified that a synthetic fixture cannot. First, that
+   * whatever code the driver really emits is one this predicate recognises, so
+   * a rename or a new member fails here rather than in production. Second,
+   * that the driver's `message` does NOT contain its own type name — which is
+   * precisely why matching `message` for `"PostgresError"` never fired, and
+   * why this predicate reads `code` instead.
+   *
+   * The exact member is deliberately not asserted. This scenario surfaces as
+   * `CONNECTION_FAILED` on Bun 1.4 (accepted, then closed before the
+   * handshake, retried until `connectionTimeout`) and as `CONNECTION_CLOSED`
+   * on 1.3, so pinning one would test the driver's version rather than this
+   * predicate. Membership plus the classification is the stable claim.
+   */
+  it("classifies an error the live Bun driver actually threw", async () => {
+    const server = Bun.listen({
+      hostname: "127.0.0.1",
+      port: 0,
+      socket: {
+        open: (socket) => {
+          socket.end();
+        },
+        data: () => {},
+        close: () => {},
+      },
+    });
+    const sql = new SQL({
+      url: `postgres://user:pass@127.0.0.1:${server.port}/db`,
+      max: 1,
+      connectionTimeout: 1,
+    });
+
+    const failure = await Promise.resolve(sql`select 1`).then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+    server.stop(true);
+    await sql.end();
+
+    // Doubles as the assertion that the driver rejected at all, and narrows
+    // the caught value without asserting a shape onto it.
+    if (!(failure instanceof Error)) {
+      throw new Error(`expected a driver rejection, got ${String(failure)}`);
+    }
+    const code = "code" in failure ? failure.code : undefined;
+    if (typeof code !== "string") {
+      throw new TypeError(`expected a driver error code, got ${String(code)}`);
+    }
+    // Widened so the assertion compares runtime strings rather than narrowing
+    // the argument to the map's own literal union.
+    const lifecycleCodes: readonly string[] = Object.values(PG_DRIVER_ERROR);
+    expect(lifecycleCodes).toContain(code);
+    expect(failure.message).not.toContain("PostgresError");
+    expect(isTransientPgConnectionError(failure)).toBe(true);
   });
 });
