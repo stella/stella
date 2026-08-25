@@ -35,6 +35,7 @@ import type {
   LeadingCitation,
 } from "@/features/case-law/queries/citations";
 import { useFormatter } from "@/i18n/formatting-context";
+import { optionalArray } from "@/lib/arrays";
 import { citedDecisionLabel } from "@/lib/cited-decision-label";
 import { formatDecisionDate } from "@/lib/decision-date";
 import type { SafeId } from "@/lib/safe-id";
@@ -109,7 +110,7 @@ const DirectionSection = ({
         <TreatmentBar counts={counts} total={total} />
       </div>
       {CITATION_TREATMENT_ORDER.map((treatment) => {
-        const rows = (leading === undefined ? [] : leading).filter(
+        const rows = optionalArray(leading).filter(
           (row) => row.treatment === treatment,
         );
         if (counts[treatment] === 0) {

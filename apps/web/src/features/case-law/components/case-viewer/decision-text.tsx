@@ -33,6 +33,7 @@ import type { DecisionProvisionAnchor } from "@/features/case-law/components/cas
 import { locateProvisionAnchors } from "@/features/case-law/provision-anchors";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useHydrated } from "@/hooks/use-hydrated";
+import { optionalArray } from "@/lib/arrays";
 
 type Decision = {
   caseNumber: string;
@@ -310,9 +311,7 @@ const buildAnchorsByPieceId = ({
     const blockAnnotations = annotationsByBlock.get(blockId);
     // A reader's mark over a link keeps the link: links are the text's own
     // structure, and the mark is still visible in the margin.
-    for (const annotation of blockAnnotations === undefined
-      ? []
-      : blockAnnotations) {
+    for (const annotation of optionalArray(blockAnnotations)) {
       anchors.push({
         end: annotation.endOffset,
         key: `annotation:${annotation.id}`,
@@ -325,12 +324,8 @@ const buildAnchorsByPieceId = ({
         start: annotation.startOffset,
       });
     }
-    for (const span of citationSpans[blockId] === undefined
-      ? []
-      : citationSpans[blockId]) {
-      const exactAnnotations = (
-        blockAnnotations === undefined ? [] : blockAnnotations
-      ).filter(
+    for (const span of optionalArray(citationSpans[blockId])) {
+      const exactAnnotations = optionalArray(blockAnnotations).filter(
         (annotation) =>
           annotation.startOffset === span.start &&
           annotation.endOffset === span.end,
@@ -352,12 +347,8 @@ const buildAnchorsByPieceId = ({
         start: span.start,
       });
     }
-    for (const span of provisionSpans[blockId] === undefined
-      ? []
-      : provisionSpans[blockId]) {
-      const exactAnnotations = (
-        blockAnnotations === undefined ? [] : blockAnnotations
-      ).filter(
+    for (const span of optionalArray(provisionSpans[blockId])) {
+      const exactAnnotations = optionalArray(blockAnnotations).filter(
         (annotation) =>
           annotation.startOffset === span.start &&
           annotation.endOffset === span.end,

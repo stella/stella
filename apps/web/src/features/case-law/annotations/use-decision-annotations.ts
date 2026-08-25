@@ -11,6 +11,7 @@ import {
 import type { DecisionAnnotation } from "@/features/case-law/queries/annotations";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
+import { optionalArray } from "@/lib/arrays";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { unwrapEden } from "@/lib/errors/api";
 import type { SafeId } from "@/lib/safe-id";
@@ -171,7 +172,7 @@ export const useDecisionAnnotations = (
     await queryClient.cancelQueries({ queryKey });
     const previous = queryClient.getQueryData<DecisionAnnotation[]>(queryKey);
     queryClient.setQueryData<DecisionAnnotation[]>(queryKey, (rows) =>
-      patch(rows === undefined ? [] : rows),
+      patch(optionalArray(rows)),
     );
     return { previous };
   };
@@ -251,8 +252,7 @@ export const useDecisionAnnotations = (
     ...settle,
   });
 
-  const annotations: readonly DecisionAnnotation[] =
-    data === undefined ? [] : data;
+  const annotations: readonly DecisionAnnotation[] = optionalArray(data);
 
   return { annotations, create, remove, update };
 };
