@@ -128,7 +128,7 @@ describe("Playbook save payload", () => {
     const payload = buildPlaybookSavePayload(base);
     expect(payload).toEqual({
       name: "NDA review",
-      positions: { version: 2, items: [] },
+      positions: { version: 3, items: [] },
     });
     expect(Object.hasOwn(payload, "scope")).toBe(false);
     expect(Object.hasOwn(payload, "description")).toBe(false);
@@ -154,7 +154,7 @@ describe("Playbook save payload", () => {
       {
         name: "NDA review",
         scope: { perspective: "buyer", trigger: "manual" },
-        positions: { version: 2, items: [] },
+        positions: { version: 3, items: [] },
       },
     );
   });

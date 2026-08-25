@@ -10,6 +10,7 @@ import { Result } from "better-result";
 import { and, asc, eq, sql } from "drizzle-orm";
 
 import {
+  docxSuggestions,
   documentReviewFindings,
   documentReviewRuns,
   playbookDefinitions,
@@ -87,8 +88,21 @@ const readDocumentReviewRun = createSafeHandler(
             applicationStatus: documentReviewFindings.applicationStatus,
             appliedBy: documentReviewFindings.appliedBy,
             appliedAt: documentReviewFindings.appliedAt,
+            // The staged redline, when the run produced one. At most one row
+            // can match: `origin_review_finding_id` is uniquely indexed.
+            suggestionId: docxSuggestions.id,
           })
           .from(documentReviewFindings)
+          .leftJoin(
+            docxSuggestions,
+            and(
+              eq(
+                docxSuggestions.originReviewFindingId,
+                documentReviewFindings.id,
+              ),
+              eq(docxSuggestions.workspaceId, workspaceId),
+            ),
+          )
           .where(
             and(
               eq(documentReviewFindings.runId, params.runId),
@@ -171,6 +185,7 @@ const readDocumentReviewRun = createSafeHandler(
         appliedBy: finding.appliedBy,
         appliedAt:
           finding.appliedAt === null ? null : finding.appliedAt.toISOString(),
+        suggestionId: finding.suggestionId,
       })),
     });
   },

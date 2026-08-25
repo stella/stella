@@ -43,7 +43,7 @@ export type ReviewTermRowProps = {
   label: string;
   delta: ParameterDelta;
   impact: ReviewImpact;
-  onShowInDocument?: (blockId: string) => void;
+  onShowInDocument?: ((blockId: string) => void) | undefined;
 };
 
 /**
@@ -80,7 +80,7 @@ export const ReviewTermRow = ({
 
 type TermValueProps = {
   value: ParameterDelta["target"];
-  onShowInDocument?: (blockId: string) => void;
+  onShowInDocument?: ((blockId: string) => void) | undefined;
 };
 
 const TermValue = ({ value, onShowInDocument }: TermValueProps) => {
@@ -106,7 +106,7 @@ export type ReviewTermTableProps = {
   targetLabel: string;
   standardLabel: string;
   rows: readonly ReviewTermRowData[];
-  onShowInDocument?: (blockId: string) => void;
+  onShowInDocument?: ((blockId: string) => void) | undefined;
 };
 
 /** Renders the shared header once, then one `ReviewTermRow` per term. */

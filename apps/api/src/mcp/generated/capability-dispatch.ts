@@ -502,6 +502,9 @@ export const CAPABILITY_DISPATCH = {
   "playbooks.delete": {
     load: async () => await import("@/api/handlers/playbooks/delete"),
   },
+  "playbooks.from-run": {
+    load: async () => await import("@/api/handlers/playbooks/from-run"),
+  },
   "playbooks.from-starter": {
     load: async () => await import("@/api/handlers/playbooks/from-starter"),
   },

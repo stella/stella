@@ -1,39 +1,27 @@
 /**
- * Temporary mirror of the API-derived delta contract from
- * `.agents/plans/055-review-position-spine.md` (Contracts section). Slice 1
- * (`packages/api-contract`) defines the real type; slice 3's presentation
- * components import this local copy until that lands, then switch over.
+ * The delta vocabulary the presentation components render, derived from the
+ * finding the run persisted rather than restated here. A shape change on the
+ * engine fails to compile in the component that draws it.
  */
 
-export type DeltaCitation = { blockId: string; text: string };
+import type { ReviewFinding } from "@/components/ai-suggestions/document-review-queries";
 
-export type DeltaValue = {
-  text: string;
-  value: number | null;
-  unit: string | null;
-  citation: DeltaCitation;
-};
+/** What differs between the document and the standard, typed by the shape of
+ *  the difference. */
+export type ReviewDelta = ReviewFinding["delta"];
+export type ReviewDeltaKind = ReviewDelta["kind"];
 
-export type ReviewDelta =
-  | {
-      kind: "parameter";
-      target: DeltaValue | null;
-      standard: DeltaValue | null;
-    }
-  | {
-      kind: "enumeration";
-      items: {
-        label: string;
-        inTarget: boolean;
-        inStandard: boolean;
-        citation: DeltaCitation | null;
-      }[];
-    }
-  | { kind: "presence"; term: string; inTarget: boolean; inStandard: boolean }
-  | { kind: "language" };
+/** One side of a parameter difference: the term as the block reads it, plus
+ *  its parsed form when the model could resolve one. */
+export type DeltaValue = NonNullable<
+  Extract<ReviewDelta, { kind: "parameter" }>["target"]
+>;
 
-export type ReviewImpact =
-  | "favourable"
-  | "unfavourable"
-  | "neutral"
-  | "unknown";
+/** One quoted block, by id and text. */
+export type DeltaCitation = DeltaValue["citation"];
+
+/** Which way a difference cuts for the side the run was judged for. */
+export type ReviewImpact = NonNullable<ReviewFinding["impact"]>;
+
+/** How consistently the standard's own passages agreed. */
+export type ReviewConsensus = NonNullable<ReviewFinding["consensus"]>;

@@ -29,8 +29,12 @@ export type ReviewAlignedPairSide = {
 export type ReviewAlignedPairProps = {
   target: ReviewAlignedPairSide;
   standard: ReviewAlignedPairSide;
-  onShowInDocument?: (blockId: string) => void;
-  diff?: boolean;
+  onShowInDocument?: ((blockId: string) => void) | undefined;
+  /** Opens a standard passage where it lives — the reference document it was
+   *  quoted from. Absent when the standard is authored language, which has no
+   *  document to open. */
+  onShowStandardPassage?: ((blockId: string) => void) | undefined;
+  diff?: boolean | undefined;
 };
 
 /**
@@ -43,14 +47,17 @@ export const ReviewAlignedPair = ({
   target,
   standard,
   onShowInDocument,
+  onShowStandardPassage,
   diff = false,
 }: ReviewAlignedPairProps) => {
-  const canDiff =
-    diff && target.passages.length === 1 && standard.passages.length === 1;
+  // A merged reading needs exactly one passage on each side; anything else
+  // has no single pair to diff, so the two columns stay side by side.
+  const targetPassage =
+    target.passages.length === 1 ? target.passages.at(0) : undefined;
+  const standardPassage =
+    standard.passages.length === 1 ? standard.passages.at(0) : undefined;
 
-  if (canDiff) {
-    const targetPassage = target.passages[0];
-    const standardPassage = standard.passages[0];
+  if (diff && targetPassage !== undefined && standardPassage !== undefined) {
     return (
       <div className="space-y-1">
         <PairLegend standardLabel={standard.label} targetLabel={target.label} />
@@ -71,7 +78,11 @@ export const ReviewAlignedPair = ({
         onActivate={onShowInDocument}
         passages={target.passages}
       />
-      <PassageColumn label={standard.label} passages={standard.passages} />
+      <PassageColumn
+        label={standard.label}
+        onActivate={onShowStandardPassage}
+        passages={standard.passages}
+      />
     </div>
   );
 };
@@ -92,7 +103,7 @@ const passageFrameClass =
 type PassageColumnProps = {
   label: string;
   passages: readonly DeltaCitation[];
-  onActivate?: (blockId: string) => void;
+  onActivate?: ((blockId: string) => void) | undefined;
 };
 
 const PassageColumn = ({ label, passages, onActivate }: PassageColumnProps) => (
@@ -145,7 +156,7 @@ type WordDiffPassageProps = {
   targetText: string;
   standardText: string;
   targetBlockId: string;
-  onShowInDocument?: (blockId: string) => void;
+  onShowInDocument?: ((blockId: string) => void) | undefined;
 };
 
 const WordDiffPassage = ({

@@ -249,6 +249,7 @@ here as its CLI form). Projected from the same handler enumeration that builds
 | `playbooks.auto-run`        | write              | stella:knowledge_write | —       | generic invoke → `stella capability playbooks auto-run`        |
 | `playbooks.create`          | write              | stella:knowledge_write | —       | generic invoke → `stella capability playbooks create`          |
 | `playbooks.delete`          | write, destructive | stella:knowledge_write | —       | generic invoke → `stella capability playbooks delete`          |
+| `playbooks.from-run`        | write              | stella:knowledge_write | —       | generic invoke → `stella capability playbooks from-run`        |
 | `playbooks.from-starter`    | write              | stella:knowledge_write | —       | generic invoke → `stella capability playbooks from-starter`    |
 | `playbooks.get`             | read               | stella:read            | —       | covered by `list_playbooks`                                    |
 | `playbooks.list`            | read               | stella:read            | —       | curated tool `list_playbooks`                                  |

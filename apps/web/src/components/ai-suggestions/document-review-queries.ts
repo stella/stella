@@ -136,6 +136,18 @@ export type DocumentReviewRunRow = DocumentReviewRunDetail["run"];
 export type DocumentReviewFindingRow =
   DocumentReviewRunDetail["findings"][number];
 
+/** What the run was measured against, read back from the row's own pin. */
+export type DocumentReviewRunBasis = DocumentReviewRunRow["basis"];
+
+/** The engine's judgment for one position, exactly as the run persisted it.
+ *  Inferred from the run read rather than restated, so a card cannot drift
+ *  from the shape the engine writes. */
+export type ReviewFinding = DocumentReviewFindingRow["payload"]["finding"];
+
+export type ReviewVerdict = NonNullable<ReviewFinding["verdict"]>;
+export type ReviewSeverity = ReviewFinding["severity"];
+export type ReviewCitation = ReviewFinding["citations"][number];
+
 /** What a reviewer decided about one finding, and how many findings sit in
  *  each decision. Both read back from the run itself, so the client cannot
  *  name a disposition the endpoint does not accept. */
@@ -174,61 +186,31 @@ export type DecidedReviewDecision = Exclude<
   typeof REVIEW_DECISION.OPEN
 >;
 
-type DecideReviewFindingsArgs = {
+type DecideReviewFindingArgs = {
   workspaceId: string;
-  /** Every finding row behind the card being decided: one per check kind that
-   *  judged the topic, so a combined run decides both in one gesture. */
-  findingIds: readonly DocumentReviewFindingRow["id"][];
+  /** The one finding row behind the card being decided: a run holds exactly
+   *  one finding per confirmed position. */
+  findingId: DocumentReviewFindingRow["id"];
   decision: DocumentReviewDecision;
 };
 
-/**
- * Record one decision against a card's findings. The endpoint decides a single
- * finding, and a card joins at most one finding per check kind, so this is a
- * bounded fan-out rather than an unbounded loop.
- */
-export const decideReviewFindings = async ({
-  workspaceId,
-  findingIds,
-  decision,
-}: DecideReviewFindingsArgs) =>
-  await Promise.all(
-    findingIds.map(async (findingId) =>
-      unwrapEden(
-        await api
-          .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
-          ["document-reviews"].findings({ findingId })
-          .patch({ decision }),
-      ),
-    ),
-  );
-
-type RecordReviewFindingApplicationArgs = {
-  workspaceId: string;
-  findingId: DocumentReviewFindingRow["id"];
-};
-
-/** Persist that a proposed edit landed. The same write also accepts this
- *  finding, so its application identity and reviewer disposition cannot race
- *  each other across a reload. */
-export const recordReviewFindingApplication = async ({
+/** Record one decision against one finding. */
+export const decideReviewFinding = async ({
   workspaceId,
   findingId,
-}: RecordReviewFindingApplicationArgs) =>
+  decision,
+}: DecideReviewFindingArgs) =>
   unwrapEden(
     await api
       .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
       ["document-reviews"].findings({ findingId })
-      .patch({
-        decision: REVIEW_DECISION.ACCEPTED,
-        applicationStatus: REVIEW_APPLICATION_STATUS.APPLIED,
-      }),
+      .patch({ decision }),
   );
 
 /** One recorded decision as the endpoint answers it. */
 export type DecidedReviewFinding = Awaited<
-  ReturnType<typeof decideReviewFindings>
->[number];
+  ReturnType<typeof decideReviewFinding>
+>;
 
 export const documentReviewRunOptions = (ref: DocumentReviewRunRef) =>
   queryOptions({
@@ -245,3 +227,30 @@ export const documentReviewRunOptions = (ref: DocumentReviewRunRef) =>
       return documentReviewRunPollInterval(run.status);
     },
   });
+
+const SAVE_AS_PLAYBOOK_TIMEOUT_MS = 20_000;
+
+type SaveRunAsPlaybookArgs = {
+  workspaceId: string;
+  runId: string;
+  name?: string | undefined;
+};
+
+/** Keep the positions a run was executed against as an org playbook. The run
+ *  snapshot is the whole input: the endpoint reads it through the caller's own
+ *  workspace access and copies it into a draft definition. */
+export const saveRunAsPlaybook = async ({
+  workspaceId,
+  runId,
+  name,
+}: SaveRunAsPlaybookArgs) =>
+  unwrapEden(
+    await api.playbooks["from-run"].post(
+      {
+        workspaceId: toSafeId<"workspace">(workspaceId),
+        runId: toSafeId<"documentReviewRun">(runId),
+        ...(name === undefined ? {} : { name }),
+      },
+      { fetch: { signal: AbortSignal.timeout(SAVE_AS_PLAYBOOK_TIMEOUT_MS) } },
+    ),
+  );

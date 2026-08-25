@@ -13,9 +13,19 @@ const tokenize = (text: string): string[] =>
 export const diffWords = (before: string, after: string): WordDiffOp[] => {
   const a = tokenize(before);
   const b = tokenize(after);
-  const lcsLengths = lcsLengthTable(a, b);
-  return backtrack(a, b, lcsLengths);
+  return backtrack(a, b, lcsLengthTable(a, b));
 };
+
+/**
+ * The LCS of two suffixes, or 0 past either end — which is the base case, not
+ * a fallback: the longest common subsequence of an empty suffix is empty. That
+ * makes the reads past the table's edge exact rather than defensive.
+ */
+const cellAt = (
+  table: readonly (readonly number[])[],
+  i: number,
+  j: number,
+): number => table[i]?.[j] ?? 0;
 
 const lcsLengthTable = (
   a: readonly string[],
@@ -25,11 +35,15 @@ const lcsLengthTable = (
     Array.from({ length: b.length + 1 }, () => 0),
   );
   for (let i = a.length - 1; i >= 0; i--) {
+    const row = table[i];
+    if (row === undefined) {
+      continue;
+    }
     for (let j = b.length - 1; j >= 0; j--) {
-      table[i][j] =
+      row[j] =
         a[i] === b[j]
-          ? table[i + 1][j + 1] + 1
-          : Math.max(table[i + 1][j], table[i][j + 1]);
+          ? cellAt(table, i + 1, j + 1) + 1
+          : Math.max(cellAt(table, i + 1, j), cellAt(table, i, j + 1));
     }
   }
   return table;
@@ -38,31 +52,36 @@ const lcsLengthTable = (
 const backtrack = (
   a: readonly string[],
   b: readonly string[],
-  lengths: readonly number[][],
+  lengths: readonly (readonly number[])[],
 ): WordDiffOp[] => {
   const ops: WordDiffOp[] = [];
   let i = 0;
   let j = 0;
   while (i < a.length && j < b.length) {
-    if (a[i] === b[j]) {
-      ops.push({ token: a[i], type: "equal" });
-      i++;
-      j++;
-    } else if (lengths[i + 1][j] >= lengths[i][j + 1]) {
-      ops.push({ token: a[i], type: "delete" });
-      i++;
-    } else {
-      ops.push({ token: b[j], type: "insert" });
-      j++;
+    const tokenA = a[i];
+    const tokenB = b[j];
+    if (tokenA === undefined || tokenB === undefined) {
+      break;
     }
-  }
-  while (i < a.length) {
-    ops.push({ token: a[i], type: "delete" });
-    i++;
-  }
-  while (j < b.length) {
-    ops.push({ token: b[j], type: "insert" });
+    if (tokenA === tokenB) {
+      ops.push({ token: tokenA, type: "equal" });
+      i++;
+      j++;
+      continue;
+    }
+    if (cellAt(lengths, i + 1, j) >= cellAt(lengths, i, j + 1)) {
+      ops.push({ token: tokenA, type: "delete" });
+      i++;
+      continue;
+    }
+    ops.push({ token: tokenB, type: "insert" });
     j++;
+  }
+  for (const token of a.slice(i)) {
+    ops.push({ token, type: "delete" });
+  }
+  for (const token of b.slice(j)) {
+    ops.push({ token, type: "insert" });
   }
   return ops;
 };

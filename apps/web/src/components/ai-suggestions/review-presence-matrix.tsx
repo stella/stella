@@ -25,7 +25,7 @@ export type ReviewPresenceMatrixProps = {
   delta: EnumerationDelta | PresenceDelta;
   targetLabel: string;
   standardLabel: string;
-  onShowInDocument?: (blockId: string) => void;
+  onShowInDocument?: ((blockId: string) => void) | undefined;
 };
 
 /**
@@ -125,7 +125,7 @@ const presenceMatrixRows = (
 type RowLabelProps = {
   label: string;
   citation: { blockId: string } | null;
-  onShowInDocument?: (blockId: string) => void;
+  onShowInDocument?: ((blockId: string) => void) | undefined;
 };
 
 const RowLabel = ({ label, citation, onShowInDocument }: RowLabelProps) => {

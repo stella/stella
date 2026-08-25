@@ -1,13 +1,13 @@
 import { describe, expect, test } from "bun:test";
 
 import type {
-  PlaybookFinding,
-  PlaybookSeverity,
-} from "@/components/ai-suggestions/playbook-review-store";
+  ReviewFinding,
+  ReviewSeverity,
+} from "@/components/ai-suggestions/document-review-queries";
 
 import {
   computeRiskRollup,
-  isFlaggedPlaybookFinding,
+  isFlaggedReviewFinding,
 } from "./playbook-risk-rollup";
 
 // A large input space (any combination of severity x verdict across an
@@ -15,11 +15,13 @@ import {
 // this suite instead pins the documented threshold invariants of
 // `computeOverallRisk` plus the counts/topIssues contract.
 const finding = (
-  overrides: Partial<PlaybookFinding> & { positionId: string },
-): PlaybookFinding => ({
+  overrides: Partial<ReviewFinding> & { positionId: string },
+): ReviewFinding => ({
   issue: "issue",
   severity: "low",
+  standardSource: "tiers",
   verdict: "compliant",
+  delta: { kind: "language" },
   extracted: null,
   rationale: null,
   citations: [],
@@ -149,8 +151,21 @@ describe("computeRiskRollup — counts", () => {
       fallback: 1,
       deviation: 1,
       missing: 1,
+      additional: 0,
       "not-applicable": 1,
     });
+  });
+
+  test("an additional term sits outside the ladder, like not-applicable", () => {
+    const rollup = computeRiskRollup([
+      finding({ positionId: "1", severity: "blocker", verdict: "additional" }),
+      finding({ positionId: "2", verdict: "compliant" }),
+    ]);
+
+    expect(rollup.flaggedCount).toBe(0);
+    expect(rollup.overallRisk).toBe("none");
+    expect(rollup.compliance.scored).toBe(1);
+    expect(rollup.compliance.notApplicable).toBe(1);
   });
 
   test("a not-applicable position is never a flag or a top issue", () => {
@@ -165,7 +180,7 @@ describe("computeRiskRollup — counts", () => {
     expect(rollup.flaggedCount).toBe(0);
     expect(rollup.topIssues).toHaveLength(0);
     expect(
-      isFlaggedPlaybookFinding(
+      isFlaggedReviewFinding(
         finding({ positionId: "na", verdict: "not-applicable" }),
       ),
     ).toBe(false);
@@ -243,7 +258,7 @@ describe("review issue selection", () => {
 
     expect(
       findings
-        .filter(isFlaggedPlaybookFinding)
+        .filter(isFlaggedReviewFinding)
         .map((result) => result.positionId),
     ).toEqual(["fallback", "deviation", "missing"]);
   });
@@ -281,7 +296,7 @@ describe("computeRiskRollup — topIssues", () => {
   });
 
   test("caps top issues to 5 even with more flagged findings", () => {
-    const severities: PlaybookSeverity[] = [
+    const severities: ReviewSeverity[] = [
       "blocker",
       "blocker",
       "high",

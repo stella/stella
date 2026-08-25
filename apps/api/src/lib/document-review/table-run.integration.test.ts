@@ -32,6 +32,7 @@ import {
 } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { DOCUMENT_REVIEW_RUN_EXECUTOR } from "@/api/lib/document-review/run-contract";
 import type {
   DocumentReviewFindingPayload,
   PinnedPlaybook,
@@ -394,9 +395,15 @@ describe("opening runs for a files table", () => {
       runId: firstRunId,
       entityId: ids.entityA1,
       fileFieldId: ids.fileFieldA1,
+      executor: DOCUMENT_REVIEW_RUN_EXECUTOR.TABLE,
       expectedFindingCount: 1,
     });
-    expect(finalized).toEqual({ type: "completed", committed: 1, carried: 0 });
+    expect(finalized).toEqual({
+      type: "completed",
+      committed: 1,
+      carried: 0,
+      staged: 0,
+    });
 
     const decidedAt = new Date();
     await testDb
@@ -425,12 +432,14 @@ describe("opening runs for a files table", () => {
       runId: secondRunId,
       entityId: ids.entityA1,
       fileFieldId: ids.fileFieldA1,
+      executor: DOCUMENT_REVIEW_RUN_EXECUTOR.TABLE,
       expectedFindingCount: 1,
     });
     expect(refinalized).toEqual({
       type: "completed",
       committed: 1,
       carried: 1,
+      staged: 0,
     });
 
     const carried = await testDb

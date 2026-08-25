@@ -183,6 +183,7 @@ export const DOMAIN_ACTION_VERBS = new Set([
   "fill-preview",
   "fill-to-workspace",
   "from-blueprint",
+  "from-run",
   "from-starter",
   "generate",
   "generate-draft",

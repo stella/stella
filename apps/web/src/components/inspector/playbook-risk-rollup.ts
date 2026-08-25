@@ -4,9 +4,9 @@
  * reviewer sees the contract's shape (an overall risk level, what got
  * flagged, and the handful of issues that matter most) without reading
  * every finding. No LLM call: every field is derived straight from the
- * `PlaybookFinding[]` the review endpoint already returned.
+ * `ReviewFinding[]` the review endpoint already returned.
  *
- * `PlaybookFinding.severity` already carries the reviewed position's
+ * `ReviewFinding.severity` already carries the reviewed position's
  * authored severity (it mirrors `PositionSeverity` from
  * `playbook-types.ts`), so this does not need a separate
  * positionId -> severity lookup against the playbook definition;
@@ -14,29 +14,29 @@
  */
 
 import type {
-  FlaggedPlaybookVerdict,
-  PlaybookFinding,
-  PlaybookSeverity,
-  PlaybookVerdict,
-} from "@/components/ai-suggestions/playbook-review-store";
+  ReviewFinding,
+  ReviewSeverity,
+  ReviewVerdict,
+} from "@/components/ai-suggestions/document-review-queries";
+import type { FlaggedReviewVerdict } from "@/components/ai-suggestions/review-verdict";
 import {
-  isFlaggedPlaybookVerdict,
+  isFlaggedVerdict,
   SEVERITY_ORDER,
-} from "@/components/ai-suggestions/playbook-review-store";
+} from "@/components/ai-suggestions/review-verdict";
 
 export type OverallRisk = "critical" | "high" | "medium" | "low" | "none";
 
-export type FlaggedPlaybookFinding = PlaybookFinding & {
-  verdict: FlaggedPlaybookVerdict;
+export type FlaggedReviewFinding = ReviewFinding & {
+  verdict: FlaggedReviewVerdict;
 };
 
-export type RiskVerdictCounts = Record<PlaybookVerdict, number>;
+export type RiskVerdictCounts = Record<ReviewVerdict, number>;
 
 export type RiskTopIssue = {
   positionId: string;
   issue: string;
-  severity: PlaybookSeverity;
-  verdict: FlaggedPlaybookVerdict;
+  severity: ReviewSeverity;
+  verdict: FlaggedReviewVerdict;
 };
 
 // A Met / Not-met / Not-applicable compliance score over the reviewed positions.
@@ -64,7 +64,7 @@ export type RiskRollup = {
 };
 
 const computeCompliance = (
-  findings: readonly PlaybookFinding[],
+  findings: readonly ReviewFinding[],
 ): ComplianceScore => {
   let met = 0;
   let notMet = 0;
@@ -85,6 +85,10 @@ const computeCompliance = (
       case "missing":
         notMet += 1;
         break;
+      // Both sit outside the compliance ladder: `additional` is something the
+      // standard never spoke to, `not-applicable` a position that does not
+      // pertain here. Neither is a pass nor a gap, so neither is scored.
+      case "additional":
       case "not-applicable":
         notApplicable += 1;
         break;
@@ -104,21 +108,22 @@ const computeCompliance = (
 
 const TOP_ISSUES_LIMIT = 5;
 
-export const isFlaggedPlaybookFinding = (
-  finding: PlaybookFinding,
-): finding is FlaggedPlaybookFinding =>
-  finding.verdict !== null && isFlaggedPlaybookVerdict(finding.verdict);
+export const isFlaggedReviewFinding = (
+  finding: ReviewFinding,
+): finding is FlaggedReviewFinding =>
+  finding.verdict !== null && isFlaggedVerdict(finding.verdict);
 
 export const computeRiskRollup = (
-  findings: readonly PlaybookFinding[],
+  findings: readonly ReviewFinding[],
 ): RiskRollup => {
-  const flagged = findings.filter(isFlaggedPlaybookFinding);
+  const flagged = findings.filter(isFlaggedReviewFinding);
 
   const verdictCounts: RiskVerdictCounts = {
     compliant: 0,
     fallback: 0,
     deviation: 0,
     missing: 0,
+    additional: 0,
     "not-applicable": 0,
   };
   for (const finding of findings) {
@@ -168,7 +173,7 @@ export const computeRiskRollup = (
 //      handled above).
 //   5. "none" — nothing flagged.
 const computeOverallRisk = (
-  flagged: readonly FlaggedPlaybookFinding[],
+  flagged: readonly FlaggedReviewFinding[],
 ): OverallRisk => {
   const hasBlockerViolation = flagged.some(
     (finding) =>

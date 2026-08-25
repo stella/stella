@@ -241,6 +241,7 @@ export const recordTableRunVerdicts = async ({
       runId: run.id,
       entityId,
       fileFieldId: run.fileFieldId,
+      executor: DOCUMENT_REVIEW_RUN_EXECUTOR.TABLE,
       expectedFindingCount: plan.expectedFindingCount,
     });
     if (finalized.type === "completed" && finalized.carried > 0) {

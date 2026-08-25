@@ -18,7 +18,7 @@ export type ReviewDeltaViewProps = {
   impact: ReviewImpact;
   target: ReviewDeltaSide;
   standard: ReviewDeltaSide;
-  onShowInDocument?: (blockId: string) => void;
+  onShowInDocument?: ((blockId: string) => void) | undefined;
 };
 
 /**

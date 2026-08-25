@@ -2,11 +2,10 @@
  * Document-review sessions: a client cache over durable server runs.
  *
  * A review is a row on the server, not a promise in this tab. The store keeps
- * only what the server does not: the basis and topics a reviewer is still
- * assembling, the id of the run the facet is tracking, and the fix/comment
- * state of the open editor session (revision ids are editor-scoped and mean
- * nothing after a reload, so they never leave the client). Status, progress
- * and findings are read back from the run itself.
+ * only what the server does not: the setup and the position list a reviewer is
+ * still assembling, and the id of the run the facet is tracking. Status,
+ * progress, findings and the staged redlines are read back from the run and
+ * from the AI-suggestions store.
  *
  * A session key with no entry means "the facet has not decided yet" — that is
  * what lets a freshly opened facet restore the document's latest run instead of
@@ -17,26 +16,22 @@ import { Result } from "better-result";
 import { create } from "zustand";
 
 import type {
-  ReviewBasis,
+  ReferenceFile,
   ReviewParty,
   ReviewPerspective,
-} from "@/components/ai-suggestions/document-review-basis.logic";
-import {
-  perspectiveFromBasis,
-  playbookIdFromBasis,
-  referencesFromBasis,
+  ReviewSetup,
 } from "@/components/ai-suggestions/document-review-basis.logic";
 import { fetchDocumentReviewRuns } from "@/components/ai-suggestions/document-review-queries";
-import type { DocumentReviewFindingRow } from "@/components/ai-suggestions/document-review-queries";
 import { resolveRunConflictAttachment } from "@/components/ai-suggestions/document-review-run.logic";
 import { runSizeConfirmationDetail } from "@/components/usage/run-size-confirmation";
 import type { RunSizeConfirmationDetail } from "@/components/usage/run-size-confirmation";
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
+import type { Position } from "@/lib/knowledge/playbook-types";
 import { toSafeId } from "@/lib/safe-id";
 
-const TOPIC_PROPOSAL_TIMEOUT_MS = 130_000;
+const POSITION_PROPOSAL_TIMEOUT_MS = 130_000;
 const RUN_CREATE_TIMEOUT_MS = 30_000;
 
 /** The create endpoint answers this when the document already has a run in
@@ -44,109 +39,10 @@ const RUN_CREATE_TIMEOUT_MS = 30_000;
  *  findings, so the client attaches to the active one instead. */
 const RUN_ALREADY_ACTIVE_STATUS = 409;
 
-export const SEVERITY_ORDER = ["blocker", "high", "medium", "low"] as const;
-
-export type PlaybookSeverity = (typeof SEVERITY_ORDER)[number];
-
-const PLAYBOOK_VERDICT_POLICY = {
-  compliant: { risk: "clear", negotiation: "unavailable" },
-  fallback: { risk: "flagged", negotiation: "available" },
-  deviation: { risk: "flagged", negotiation: "available" },
-  missing: { risk: "flagged", negotiation: "unavailable" },
-  // Outside the compliance ladder: the position does not pertain to this
-  // document, so it is neither a pass nor a flagged gap and is excluded from
-  // the compliance denominator (see `computeRiskRollup`).
-  "not-applicable": { risk: "clear", negotiation: "unavailable" },
-} as const satisfies Record<
-  string,
-  {
-    risk: "clear" | "flagged";
-    negotiation: "available" | "unavailable";
-  }
->;
-
-export type PlaybookVerdict = keyof typeof PLAYBOOK_VERDICT_POLICY;
-
-export type FlaggedPlaybookVerdict = {
-  [TVerdict in PlaybookVerdict]: (typeof PLAYBOOK_VERDICT_POLICY)[TVerdict]["risk"] extends "flagged"
-    ? TVerdict
-    : never;
-}[PlaybookVerdict];
-
-type NegotiablePlaybookVerdict = {
-  [TVerdict in PlaybookVerdict]: (typeof PLAYBOOK_VERDICT_POLICY)[TVerdict]["negotiation"] extends "available"
-    ? TVerdict
-    : never;
-}[PlaybookVerdict];
-
-export const isFlaggedPlaybookVerdict = (
-  verdict: PlaybookVerdict,
-): verdict is FlaggedPlaybookVerdict =>
-  PLAYBOOK_VERDICT_POLICY[verdict].risk === "flagged";
-
-export const isNegotiablePlaybookVerdict = (
-  verdict: PlaybookVerdict,
-): verdict is NegotiablePlaybookVerdict =>
-  PLAYBOOK_VERDICT_POLICY[verdict].negotiation === "available";
-
-export type PlaybookCitation = { blockId: string; text: string };
-export type ReviewFindingFix = {
-  kind: "replaceBlock" | "insertAfterBlock";
-  blockId: string;
-  text: string;
-};
-
-export type PlaybookMatchedRef =
-  | { kind: "fallback"; label?: string; text: string }
-  | { kind: "redLine"; ruleId: string; text: string };
-
-export type PlaybookFinding = {
-  positionId: string;
-  issue: string;
-  severity: PlaybookSeverity;
-  verdict: PlaybookVerdict | null;
-  extracted: { value: string; text: string } | null;
-  rationale: string | null;
-  citations: PlaybookCitation[];
-  fix: ReviewFindingFix | null;
-  matchedRef?: PlaybookMatchedRef | null;
-};
-
-/** The reference-comparison finding as the run persisted it. Inferred from the
- *  run read rather than restated here, so the card cannot drift from the shape
- *  the engine writes. */
-export type ReferenceFinding = Extract<
-  DocumentReviewFindingRow["payload"],
-  { checkKind: "reference" }
->["finding"];
-export type ReferenceAssessment = ReferenceFinding["assessment"];
-export type ReferenceConsensus = ReferenceFinding["consensus"];
-
-export type ReviewFixStatus = "pending" | "applied" | "accepted";
-
-export type ReviewFixState = {
-  status: ReviewFixStatus;
-  revisionIds: readonly number[] | null;
-};
-
-export type ReviewCommentState = { status: "applying" } | { status: "applied" };
-
-export type ReviewTopic =
-  | {
-      type: "playbook";
-      topicId: string;
-      positionId: string;
-      title: string;
-      context: string;
-      included: boolean;
-    }
-  | {
-      type: "reference" | "custom";
-      topicId: string;
-      title: string;
-      context: string;
-      included: boolean;
-    };
+export const reviewSessionKey = (
+  entityId: string,
+  fileFieldId: string,
+): string => `${entityId}:${fileFieldId}`;
 
 /**
  * Where the client-side flow stands. It deliberately does not mirror the run's
@@ -155,15 +51,10 @@ export type ReviewTopic =
  */
 export type ReviewStatus =
   | "idle"
-  | "proposing-topics"
-  | "editing-topics"
+  | "proposing-positions"
+  | "editing-positions"
   | "starting"
   | "error";
-
-export type ReviewResults = {
-  playbook: PlaybookFinding[] | null;
-  references: ReferenceFinding[] | null;
-};
 
 /**
  * Whether the facet may still adopt the document's latest server run. A
@@ -175,18 +66,17 @@ export type ReviewRestoreMode = "allowed" | "dismissed";
 
 export type DocumentReviewSession = {
   status: ReviewStatus;
-  basis: ReviewBasis | null;
-  fixState: Record<string, ReviewFixState>;
-  commentState: Record<string, ReviewCommentState>;
+  setup: ReviewSetup | null;
   error: string | null;
   /** The durable run this facet tracks, or `null` while none has started. */
   runId: string | null;
   restore: ReviewRestoreMode;
   /** Guards a stale response from overwriting a newer request's session. */
   requestId: string | null;
-  topics: ReviewTopic[];
-  /** The target's parties as the topic proposal read them; what the
-   *  reviewer picks a side from while confirming topics. */
+  /** The list the run will be measured by, while the reviewer confirms it. */
+  positions: Position[];
+  /** The target's parties as the position proposal read them; what the
+   *  reviewer picks a side from while confirming. */
   parties: ReviewParty[];
   /**
    * A refused start whose estimated size needs the reviewer's explicit
@@ -209,38 +99,33 @@ export type RunSizeConfirmation = RunSizeConfirmationDetail & {
   args: StartRunArgs;
 };
 
-export const reviewSessionKey = (
-  entityId: string,
-  fileFieldId: string,
-): string => `${entityId}:${fileFieldId}`;
-
 export type StartReviewResult =
   | { ok: true }
   | { ok: false; message: string; error: ReviewRequestError | null };
 
 type StartReviewArgs = {
   workspaceId: string;
-  basis: ReviewBasis;
+  setup: ReviewSetup;
   entityId: string;
   fileFieldId: string;
   unexpectedErrorMessage: string;
-  seededTopics: ReviewTopic[];
+  /** The picked playbook's enabled positions, when there is one. */
+  seededPositions: Position[];
 };
 
 /** What a run needs, flattened from whatever produced it: the launcher's
- *  basis, the confirmed topic editor, or a failed run being retried. */
+ *  setup, the confirmed position list, or a failed run being retried. */
 export type StartRunArgs = {
   workspaceId: string;
   entityId: string;
   fileFieldId: string;
   playbookId: string | null;
-  references: readonly {
-    workspaceId: string;
-    entityId: string;
-    fileFieldId: string;
-  }[];
+  references: readonly Pick<
+    ReferenceFile,
+    "workspaceId" | "entityId" | "fileFieldId"
+  >[];
   perspective: ReviewPerspective;
-  topics: readonly ReviewTopic[];
+  positions: readonly Position[];
   unexpectedErrorMessage: string;
   /** Restated size estimate after a confirmation answer. */
   confirmedUnits?: number;
@@ -251,21 +136,6 @@ type State = {
 };
 
 type Actions = {
-  beginComment: (
-    entityId: string,
-    fileFieldId: string,
-    findingId: string,
-  ) => boolean;
-  completeComment: (
-    entityId: string,
-    fileFieldId: string,
-    findingId: string,
-  ) => void;
-  cancelComment: (
-    entityId: string,
-    fileFieldId: string,
-    findingId: string,
-  ) => void;
   startReview: (args: StartReviewArgs) => Promise<StartReviewResult>;
   startRun: (args: StartRunArgs) => Promise<StartReviewResult>;
   /** Replay the parked request with its estimate restated. */
@@ -274,46 +144,51 @@ type Actions = {
     fileFieldId: string,
   ) => Promise<StartReviewResult>;
   dismissRunSize: (entityId: string, fileFieldId: string) => void;
-  confirmTopics: (
+  confirmPositions: (
     workspaceId: string,
     entityId: string,
     fileFieldId: string,
     unexpectedErrorMessage: string,
   ) => Promise<StartReviewResult>;
-  setTopics: (
+  setPositions: (
     entityId: string,
     fileFieldId: string,
-    topics: ReviewTopic[],
+    positions: Position[],
   ) => void;
   /** Which of the target's sides the run will be judged for; only while
-   *  the topics are being confirmed, which is when the sides are known. */
+   *  the positions are being confirmed, which is when the sides are known. */
   setPerspective: (
     entityId: string,
     fileFieldId: string,
     perspective: ReviewPerspective,
-  ) => void;
-  setFixState: (
-    entityId: string,
-    fileFieldId: string,
-    findingId: string,
-    next: ReviewFixState,
   ) => void;
   resetSession: (entityId: string, fileFieldId: string) => void;
 };
 
 const blankSession = (): DocumentReviewSession => ({
   status: "idle",
-  basis: null,
-  fixState: {},
-  commentState: {},
+  setup: null,
   error: null,
   runId: null,
   restore: "allowed",
   requestId: null,
-  topics: [],
+  positions: [],
   parties: [],
   sizeConfirmation: null,
 });
+
+const referenceRefs = (
+  references: StartRunArgs["references"],
+): {
+  workspaceId: ReturnType<typeof toSafeId<"workspace">>;
+  entityId: ReturnType<typeof toSafeId<"entity">>;
+  fileFieldId: ReturnType<typeof toSafeId<"field">>;
+}[] =>
+  references.map((reference) => ({
+    workspaceId: toSafeId<"workspace">(reference.workspaceId),
+    entityId: toSafeId<"entity">(reference.entityId),
+    fileFieldId: toSafeId<"field">(reference.fileFieldId),
+  }));
 
 const requestRun = async ({
   workspaceId,
@@ -322,7 +197,7 @@ const requestRun = async ({
   playbookId,
   references,
   perspective,
-  topics,
+  positions,
   confirmedUnits,
 }: Omit<StartRunArgs, "unexpectedErrorMessage">) => {
   // Both channels are read here rather than handed on as one response: the
@@ -336,18 +211,16 @@ const requestRun = async ({
           entityId: toSafeId<"entity">(entityId),
           fileFieldId: toSafeId<"field">(fileFieldId),
         },
-        ...(playbookId === null
-          ? {}
-          : { playbookId: toSafeId<"playbookDefinition">(playbookId) }),
-        references: references.map((reference) => ({
-          workspaceId: toSafeId<"workspace">(reference.workspaceId),
-          entityId: toSafeId<"entity">(reference.entityId),
-          fileFieldId: toSafeId<"field">(reference.fileFieldId),
-        })),
+        playbookId:
+          playbookId === null
+            ? null
+            : toSafeId<"playbookDefinition">(playbookId),
+        // The whole confirmed list, disabled entries included: the run pins it
+        // as its snapshot, and "Save as playbook" keeps exactly what was
+        // confirmed. Grading skips the disabled ones server-side.
+        positions: [...positions],
+        references: referenceRefs(references),
         perspective,
-        // The run stores the confirmed plan, and the endpoint rejects an
-        // unconfirmed topic: send exactly what the reviewer approved.
-        topics: topics.filter((topic) => topic.included),
         ...(confirmedUnits === undefined ? {} : { confirmedUnits }),
       },
       { fetch: { signal: AbortSignal.timeout(RUN_CREATE_TIMEOUT_MS) } },
@@ -360,50 +233,38 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => ({
 
   startReview: async ({
     workspaceId,
-    basis,
+    setup,
     entityId,
     fileFieldId,
     unexpectedErrorMessage,
-    seededTopics,
+    seededPositions,
   }) => {
     const key = reviewSessionKey(entityId, fileFieldId);
     const existing = get().sessions[key];
     if (
       existing?.status === "starting" ||
-      existing?.status === "proposing-topics"
+      existing?.status === "proposing-positions"
     ) {
       return { ok: true };
     }
 
-    const references = referencesFromBasis(basis);
-    const playbookId = playbookIdFromBasis(basis);
-    if (references.length === 0) {
-      // No reference documents means no topics to agree on: the playbook's
+    if (setup.references.length === 0) {
+      // No reference documents means no positions to agree on: the playbook's
       // enabled positions are the plan, so the run starts immediately.
       set((state) => ({
         sessions: {
           ...state.sessions,
-          [key]: {
-            ...blankSession(),
-            ...(existing === undefined
-              ? {}
-              : {
-                  fixState: existing.fixState,
-                  commentState: existing.commentState,
-                }),
-            basis,
-            topics: seededTopics,
-          },
+          [key]: { ...blankSession(), setup, positions: seededPositions },
         },
       }));
       return await get().startRun({
         workspaceId,
         entityId,
         fileFieldId,
-        playbookId,
+        playbookId: setup.playbookId,
         references: [],
-        perspective: perspectiveFromBasis(basis),
-        topics: seededTopics,
+        perspective: setup.perspective,
+        positions: seededPositions,
         unexpectedErrorMessage,
       });
     }
@@ -414,16 +275,10 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => ({
         ...state.sessions,
         [key]: {
           ...blankSession(),
-          ...(existing === undefined
-            ? {}
-            : {
-                fixState: existing.fixState,
-                commentState: existing.commentState,
-              }),
-          status: "proposing-topics",
-          basis,
+          status: "proposing-positions",
+          setup,
           requestId,
-          topics: seededTopics,
+          positions: seededPositions,
         },
       },
     }));
@@ -431,22 +286,18 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => ({
     const proposalResult = await Result.tryPromise(async () => {
       const { data, error } = await api
         .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        ["document-reviews"].topics.post(
+        ["document-reviews"].positions.post(
           {
             target: {
               entityId: toSafeId<"entity">(entityId),
               fileFieldId: toSafeId<"field">(fileFieldId),
             },
-            references: references.map((reference) => ({
-              workspaceId: toSafeId<"workspace">(reference.workspaceId),
-              entityId: toSafeId<"entity">(reference.entityId),
-              fileFieldId: toSafeId<"field">(reference.fileFieldId),
-            })),
-            seededTopics,
+            references: referenceRefs(setup.references),
+            seededPositions: [...seededPositions],
           },
           {
             fetch: {
-              signal: AbortSignal.timeout(TOPIC_PROPOSAL_TIMEOUT_MS),
+              signal: AbortSignal.timeout(POSITION_PROPOSAL_TIMEOUT_MS),
             },
           },
         );
@@ -490,8 +341,10 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => ({
           ...state.sessions,
           [key]: {
             ...current,
-            status: "editing-topics",
-            topics: proposed === null ? seededTopics : proposed.topics,
+            status: "editing-positions",
+            // The proposal carries the seeds back, so its list is the whole
+            // plan rather than an addition to one.
+            positions: proposed === null ? seededPositions : proposed.positions,
             parties: proposed === null ? [] : proposed.parties,
             requestId: null,
           },
@@ -536,7 +389,7 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => ({
     playbookId,
     references,
     perspective,
-    topics,
+    positions,
     unexpectedErrorMessage,
     confirmedUnits,
   }) => {
@@ -553,7 +406,7 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => ({
             error: null,
             runId: null,
             requestId,
-            topics: [...topics],
+            positions: [...positions],
             sizeConfirmation: null,
           },
         },
@@ -569,7 +422,7 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => ({
           playbookId,
           references,
           perspective,
-          topics,
+          positions,
           ...(confirmedUnits === undefined ? {} : { confirmedUnits }),
         }),
     );
@@ -605,7 +458,7 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => ({
                     playbookId,
                     references,
                     perspective,
-                    topics,
+                    positions,
                     unexpectedErrorMessage,
                   },
                 },
@@ -710,10 +563,6 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => ({
             ...current,
             status: "idle",
             error: null,
-            // A new run supersedes whatever the previous one left applied: the
-            // fixes it proposes are keyed by its own findings.
-            fixState: {},
-            commentState: {},
             runId,
             requestId: null,
           },
@@ -723,7 +572,7 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => ({
     return { ok: true };
   },
 
-  confirmTopics: async (
+  confirmPositions: async (
     workspaceId,
     entityId,
     fileFieldId,
@@ -731,17 +580,17 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => ({
   ) => {
     const key = reviewSessionKey(entityId, fileFieldId);
     const session = get().sessions[key];
-    if (!session?.basis || session.status !== "editing-topics") {
+    if (!session?.setup || session.status !== "editing-positions") {
       return { ok: true };
     }
     return await get().startRun({
       workspaceId,
       entityId,
       fileFieldId,
-      playbookId: playbookIdFromBasis(session.basis),
-      references: referencesFromBasis(session.basis),
-      perspective: perspectiveFromBasis(session.basis),
-      topics: session.topics,
+      playbookId: session.setup.playbookId,
+      references: session.setup.references,
+      perspective: session.setup.perspective,
+      positions: session.positions,
       unexpectedErrorMessage,
     });
   },
@@ -750,114 +599,29 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => ({
     const key = reviewSessionKey(entityId, fileFieldId);
     set((state) => {
       const current = state.sessions[key];
-      if (
-        !current?.basis ||
-        current.status !== "editing-topics" ||
-        current.basis.type === "playbook"
-      ) {
+      if (!current?.setup || current.status !== "editing-positions") {
         return state;
       }
       return {
         sessions: {
           ...state.sessions,
-          [key]: { ...current, basis: { ...current.basis, perspective } },
+          [key]: { ...current, setup: { ...current.setup, perspective } },
         },
       };
     });
   },
 
-  setTopics: (entityId, fileFieldId, topics) => {
+  setPositions: (entityId, fileFieldId, positions) => {
     const key = reviewSessionKey(entityId, fileFieldId);
     set((state) => {
       const current = state.sessions[key];
-      if (!current || current.status !== "editing-topics") {
+      if (!current || current.status !== "editing-positions") {
         return state;
       }
       return {
         sessions: {
           ...state.sessions,
-          [key]: { ...current, topics, error: null },
-        },
-      };
-    });
-  },
-
-  // Fix and comment state can be the first thing a restored review writes:
-  // the facet adopts a server run without a session, so these upsert one
-  // rather than dropping the reviewer's edit on the floor.
-  setFixState: (entityId, fileFieldId, findingId, next) => {
-    const key = reviewSessionKey(entityId, fileFieldId);
-    set((state) => {
-      const current = state.sessions[key] ?? blankSession();
-      return {
-        sessions: {
-          ...state.sessions,
-          [key]: {
-            ...current,
-            fixState: { ...current.fixState, [findingId]: next },
-          },
-        },
-      };
-    });
-  },
-
-  beginComment: (entityId, fileFieldId, findingId) => {
-    const key = reviewSessionKey(entityId, fileFieldId);
-    if (get().sessions[key]?.commentState[findingId] !== undefined) {
-      return false;
-    }
-    set((state) => {
-      const session = state.sessions[key] ?? blankSession();
-      return {
-        sessions: {
-          ...state.sessions,
-          [key]: {
-            ...session,
-            commentState: {
-              ...session.commentState,
-              [findingId]: { status: "applying" },
-            },
-          },
-        },
-      };
-    });
-    return true;
-  },
-
-  completeComment: (entityId, fileFieldId, findingId) => {
-    const key = reviewSessionKey(entityId, fileFieldId);
-    set((state) => {
-      const current = state.sessions[key];
-      if (current?.commentState[findingId]?.status !== "applying") {
-        return state;
-      }
-      return {
-        sessions: {
-          ...state.sessions,
-          [key]: {
-            ...current,
-            commentState: {
-              ...current.commentState,
-              [findingId]: { status: "applied" },
-            },
-          },
-        },
-      };
-    });
-  },
-
-  cancelComment: (entityId, fileFieldId, findingId) => {
-    const key = reviewSessionKey(entityId, fileFieldId);
-    set((state) => {
-      const current = state.sessions[key];
-      if (current?.commentState[findingId]?.status !== "applying") {
-        return state;
-      }
-      const { [findingId]: _cancelled, ...commentState } = current.commentState;
-      return {
-        sessions: {
-          ...state.sessions,
-          [key]: { ...current, commentState },
+          [key]: { ...current, positions, error: null },
         },
       };
     });
@@ -865,7 +629,7 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => ({
 
   /**
    * Back to the launcher. The blank session stays in the map with the restore
-   * dismissed: choosing a new basis is a decision the facet must remember, or
+   * dismissed: choosing a new setup is a decision the facet must remember, or
    * the document's finished run would be put straight back on screen.
    */
   resetSession: (entityId, fileFieldId) => {

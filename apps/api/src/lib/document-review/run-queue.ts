@@ -783,6 +783,7 @@ const finalizeRun = async (
         runId: actor.runId,
         entityId: run.entityId,
         fileFieldId: run.fileFieldId,
+        executor: DOCUMENT_REVIEW_RUN_EXECUTOR.WORKER,
         expectedFindingCount: plan.expectedFindingCount,
       }),
   );

@@ -7,8 +7,8 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError, unreachable } from "@/api/lib/errors/tagged-errors";
+import { validateDocxSuggestionOperations } from "@/api/lib/folio-operation-validation";
 
-import { validateDocxSuggestionOperations } from "./operation-validation";
 import { tCreateDocxSuggestionsBody } from "./schemas";
 
 type CreatedSuggestion = { ref: string; id: SafeId<"docxSuggestion"> };

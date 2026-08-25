@@ -84,8 +84,18 @@ import {
   type PositionAskContent,
   type PositionErrors,
   type PositionSeverity,
+  type PositionStandard,
+  type PositionTiers,
+  positionTiers,
+  type ReferencePassage,
+  referencePassagesText,
   type TierRule,
 } from "@/lib/knowledge/playbook-types";
+import {
+  adoptableIdealText,
+  isUnsettledPosition,
+  type PositionDecisionSummary,
+} from "@/lib/knowledge/position-decisions";
 import { clauseDetailOptions, clausesOptions } from "@/lib/knowledge/queries";
 
 // Drag payload shared by the position cards; the parent list interprets a drop
@@ -211,6 +221,23 @@ const InlineAction = ({
 
 // ── Root: position card ───────────────────────────────
 
+// TODO(i18n): English until the review surface is localized as a whole.
+const REFERENCE_STANDARD_LABEL = "From the reference";
+const REFERENCE_DOCUMENT_LABEL = "Reference document";
+const CONVERT_TO_RULES_LABEL = "Convert to rules";
+const ADOPT_AS_IDEAL_LABEL = "Adopt as ideal language";
+const NO_SETTLED_POSITION_LABEL = "No settled position";
+const decisionLine = ({
+  accepted,
+  dismissed,
+  runs,
+}: PositionDecisionSummary): string =>
+  `accepted ${String(accepted)} · dismissed ${String(dismissed)} · across ${String(runs)} ${runs === 1 ? "review" : "reviews"}`;
+
+/** Reference passages carry the document they were quoted from by id only, so
+ *  a caller that knows the run's pinned references can name them. */
+export type ReferenceNameLookup = ReadonlyMap<string, string>;
+
 type PositionEditorProps = {
   organizationId: string;
   position: Position;
@@ -219,6 +246,10 @@ type PositionEditorProps = {
   open: boolean;
   errors: PositionErrors;
   showErrors: boolean;
+  /** What the org's reviewers have done with this position, when the playbook
+   *  detail carries the projection. */
+  decision?: PositionDecisionSummary | undefined;
+  referenceNames?: ReferenceNameLookup | undefined;
   onOpenChange: (open: boolean) => void;
   onChange: (position: Position) => void;
   onRemove: () => void;
@@ -237,6 +268,8 @@ export const PositionEditor = ({
   open,
   errors,
   showErrors,
+  decision,
+  referenceNames,
   onOpenChange,
   onChange,
   onRemove,
@@ -433,11 +466,13 @@ export const PositionEditor = ({
         <div className="space-y-3 px-3 pt-1 pb-3" id={bodyId}>
           {position.mode === "graded" ? (
             <GradedBody
+              decision={decision}
               errors={errors}
               onChange={onChange}
               onConvertMode={onConvertMode}
               organizationId={organizationId}
               position={position}
+              referenceNames={referenceNames}
               showErrors={showErrors}
             />
           ) : (
@@ -463,7 +498,16 @@ export const PositionEditor = ({
 // ── Collapsed tier dots ───────────────────────────────
 
 const CollapsedTierDots = ({ position }: { position: GradedPosition }) => {
-  const { tiers } = position;
+  const tiers = positionTiers(position);
+  // A reference standard has no ladder to count; the collapsed row says where
+  // the standard comes from instead.
+  if (tiers === null) {
+    return (
+      <span className="bg-muted text-muted-foreground hidden shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium sm:inline">
+        {REFERENCE_STANDARD_LABEL}
+      </span>
+    );
+  }
   const counts = [
     { key: "ok", value: tiers.acceptable.rules.length, cls: "bg-success" },
     { key: "warn", value: tiers.fallback.entries.length, cls: "bg-warning" },
@@ -533,13 +577,15 @@ const SeverityChip = ({
   );
 };
 
-// ── Graded body (tier ladder + footer) ────────────────
+// ── Graded body (standard + footer) ───────────────────
 
 const GradedBody = ({
   organizationId,
   position,
   errors,
   showErrors,
+  decision,
+  referenceNames,
   onChange,
   onConvertMode,
 }: {
@@ -547,35 +593,34 @@ const GradedBody = ({
   position: GradedPosition;
   errors: PositionErrors;
   showErrors: boolean;
+  decision: PositionDecisionSummary | undefined;
+  referenceNames: ReferenceNameLookup | undefined;
   onChange: (position: Position) => void;
   onConvertMode: () => void;
 }) => {
   const t = useTranslations();
-  const { tiers } = position;
+  const { standard } = position;
 
-  const setAcceptableRules = (rules: TierRule[]) =>
-    onChange({
-      ...position,
-      tiers: { ...tiers, acceptable: { ...tiers.acceptable, rules } },
-    });
-  const setNotAcceptableRules = (rules: TierRule[]) =>
-    onChange({
-      ...position,
-      tiers: { ...tiers, notAcceptable: { rules } },
-    });
-  const setEntries = (entries: FallbackEntry[]) =>
-    onChange({ ...position, tiers: { ...tiers, fallback: { entries } } });
-  const setIdeal = (ideal: IdealLanguage | undefined) =>
-    onChange({
-      ...position,
+  const setStandard = (next: PositionStandard) =>
+    onChange({ ...position, standard: next });
+
+  // Adopting accepted language is an ordinary playbook edit: it writes the
+  // wording a reviewer already accepted into the acceptable tier's ideal.
+  const adoptIdeal = (text: string) => {
+    if (standard.source !== "tiers") {
+      return;
+    }
+    setStandard({
+      source: "tiers",
       tiers: {
-        ...tiers,
+        ...standard.tiers,
         acceptable: {
-          ...tiers.acceptable,
-          ...(ideal !== undefined ? { ideal } : {}),
+          ...standard.tiers.acceptable,
+          ideal: { source: "inline", text },
         },
       },
     });
+  };
 
   return (
     <>
@@ -585,6 +630,254 @@ const GradedBody = ({
         </p>
       )}
 
+      <PositionDecisionLine
+        decision={decision}
+        onAdoptIdeal={adoptIdeal}
+        standard={standard}
+      />
+
+      {standard.source === "reference" ? (
+        <ReferenceStandardSection
+          onConvertToRules={() =>
+            setStandard({
+              source: "tiers",
+              tiers: {
+                acceptable: {
+                  rules: [],
+                  ideal: {
+                    source: "inline",
+                    text: referencePassagesText(standard.passages),
+                  },
+                },
+                fallback: { entries: [] },
+                notAcceptable: { rules: [] },
+              },
+            })
+          }
+          passages={standard.passages}
+          referenceNames={referenceNames}
+        />
+      ) : (
+        <TierLadder
+          clauseInvalid={showErrors && errors.clause !== undefined}
+          onChange={(tiers) => setStandard({ source: "tiers", tiers })}
+          organizationId={organizationId}
+          tiers={standard.tiers}
+        />
+      )}
+
+      <NegotiationSection onChange={onChange} position={position} />
+
+      <GradedFooter
+        onChange={onChange}
+        onConvertMode={onConvertMode}
+        position={position}
+      />
+    </>
+  );
+};
+
+// ── Decision overlay ──────────────────────────────────
+// What the org's reviewers actually did with this position, over the findings
+// already durable on their runs. One line, and — when they settled on wording
+// this position has none of — the one action that turns that into a standard.
+
+const PositionDecisionLine = ({
+  decision,
+  standard,
+  onAdoptIdeal,
+}: {
+  decision: PositionDecisionSummary | undefined;
+  standard: PositionStandard;
+  onAdoptIdeal: (text: string) => void;
+}) => {
+  if (decision === undefined) {
+    return null;
+  }
+  const adoptable = adoptableIdealText({ standard, summary: decision });
+  return (
+    <div className="text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+      <span className="tabular-nums">
+        {isUnsettledPosition(decision)
+          ? NO_SETTLED_POSITION_LABEL
+          : decisionLine(decision)}
+      </span>
+      {adoptable !== null && (
+        <InlineAction onClick={() => onAdoptIdeal(adoptable)}>
+          {ADOPT_AS_IDEAL_LABEL}
+        </InlineAction>
+      )}
+    </div>
+  );
+};
+
+// ── Reference standard: the passages a position was derived from ──
+// Read-only: the passages are pinned quotes of a document someone already
+// negotiated, not rows to edit. Turning them into an authored ladder is an
+// explicit conversion, which seeds the acceptable tier's ideal language.
+
+const ReferenceStandardSection = ({
+  passages,
+  referenceNames,
+  onConvertToRules,
+}: {
+  passages: readonly ReferencePassage[];
+  referenceNames: ReferenceNameLookup | undefined;
+  onConvertToRules: () => void;
+}) => (
+  <section className="border-border rounded-lg border">
+    <div className="flex items-center gap-2 px-3 py-2">
+      <span className="text-foreground text-[13px] font-semibold">
+        {REFERENCE_STANDARD_LABEL}
+      </span>
+      <div className="ms-auto">
+        <InlineAction onClick={onConvertToRules}>
+          {CONVERT_TO_RULES_LABEL}
+        </InlineAction>
+      </div>
+    </div>
+    <div className="px-3 pb-3">
+      <ReferencePassageList
+        passages={passages}
+        referenceNames={referenceNames}
+      />
+    </div>
+  </section>
+);
+
+export const ReferencePassageList = ({
+  passages,
+  referenceNames,
+}: {
+  passages: readonly ReferencePassage[];
+  referenceNames: ReferenceNameLookup | undefined;
+}) => (
+  <ul className="space-y-1.5">
+    {passages.map((passage) => (
+      <li
+        className="space-y-0.5"
+        key={`${passage.fileFieldId}:${passage.blockId}`}
+      >
+        <p className="text-muted-foreground text-[11px] font-medium">
+          <bdi>
+            {referenceNames?.get(passage.fileFieldId) ??
+              REFERENCE_DOCUMENT_LABEL}
+          </bdi>
+        </p>
+        <p className="border-border bg-muted/40 rounded-e-md border-s-2 py-1.5 ps-2.5 pe-2 font-serif text-sm leading-relaxed">
+          <bdi>
+            <q>{passage.text}</q>
+          </bdi>
+        </p>
+      </li>
+    ))}
+  </ul>
+);
+
+// ── Quick row: the confirm step's one-line position ───
+// The run's confirm step edits the same Position the playbook editor does, but
+// only the four fields a reviewer actually changes before starting a review.
+// It reuses this file's field components rather than forking the editor.
+
+export const PositionQuickRow = ({
+  position,
+  index,
+  referenceNames,
+  onChange,
+  onRemove,
+}: {
+  position: Position;
+  index: number;
+  referenceNames: ReferenceNameLookup | undefined;
+  onChange: (position: Position) => void;
+  onRemove: () => void;
+}) => {
+  const t = useTranslations();
+  const passages =
+    position.mode === "graded" && position.standard.source === "reference"
+      ? position.standard.passages
+      : null;
+
+  return (
+    <div
+      className={cn(
+        "bg-card space-y-2 rounded-lg border px-3 py-2.5 transition-opacity duration-150",
+        !position.enabled && "opacity-60",
+      )}
+    >
+      <div className="flex items-center gap-2">
+        <span className="text-muted-foreground shrink-0 text-xs tabular-nums">
+          {String(index + 1).padStart(2, "0")}
+        </span>
+        <Input
+          aria-label={t("knowledge.playbooks.issueLabel")}
+          className="hover:border-input focus-visible:bg-background h-8 flex-1 border-transparent bg-transparent px-1.5 text-sm font-medium shadow-none"
+          maxLength={256}
+          onChange={(e) => onChange({ ...position, issue: e.target.value })}
+          placeholder={t("knowledge.playbooks.issuePlaceholder")}
+          value={position.issue}
+        />
+        {position.mode === "graded" && (
+          <SeverityChip
+            onChange={(severity) => onChange({ ...position, severity })}
+            severity={position.severity}
+          />
+        )}
+        <Switch
+          aria-label={t("knowledge.playbooks.enablePosition")}
+          checked={position.enabled}
+          className="shrink-0"
+          onCheckedChange={(enabled) => onChange({ ...position, enabled })}
+        />
+        <Button
+          aria-label={t("knowledge.playbooks.deletePosition")}
+          onClick={onRemove}
+          size="icon-xs"
+          type="button"
+          variant="ghost"
+        >
+          <Trash2Icon />
+        </Button>
+      </div>
+      {passages !== null && (
+        <ReferencePassageList
+          passages={passages}
+          referenceNames={referenceNames}
+        />
+      )}
+    </div>
+  );
+};
+
+// ── Tier ladder ───────────────────────────────────────
+
+const TierLadder = ({
+  organizationId,
+  tiers,
+  clauseInvalid,
+  onChange,
+}: {
+  organizationId: string;
+  tiers: PositionTiers;
+  clauseInvalid: boolean;
+  onChange: (tiers: PositionTiers) => void;
+}) => {
+  const t = useTranslations();
+
+  const setAcceptableRules = (rules: TierRule[]) =>
+    onChange({ ...tiers, acceptable: { ...tiers.acceptable, rules } });
+  const setNotAcceptableRules = (rules: TierRule[]) =>
+    onChange({ ...tiers, notAcceptable: { rules } });
+  const setEntries = (entries: FallbackEntry[]) =>
+    onChange({ ...tiers, fallback: { entries } });
+  const setIdeal = (ideal: IdealLanguage) =>
+    onChange({
+      ...tiers,
+      acceptable: { ...tiers.acceptable, ideal },
+    });
+
+  return (
+    <>
       <TierSection
         icon={<CheckMark />}
         onAddRule={() =>
@@ -626,16 +919,13 @@ const GradedBody = ({
         ))}
         {tiers.acceptable.ideal !== undefined && (
           <IdealEditor
-            clauseInvalid={showErrors && errors.clause !== undefined}
+            clauseInvalid={clauseInvalid}
             ideal={tiers.acceptable.ideal}
             onChange={setIdeal}
             onRemove={() =>
               onChange({
-                ...position,
-                tiers: {
-                  ...tiers,
-                  acceptable: { rules: tiers.acceptable.rules },
-                },
+                ...tiers,
+                acceptable: { rules: tiers.acceptable.rules },
               })
             }
             organizationId={organizationId}
@@ -724,14 +1014,6 @@ const GradedBody = ({
           />
         ))}
       </TierSection>
-
-      <NegotiationSection onChange={onChange} position={position} />
-
-      <GradedFooter
-        onChange={onChange}
-        onConvertMode={onConvertMode}
-        position={position}
-      />
     </>
   );
 };

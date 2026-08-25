@@ -1,6 +1,6 @@
 /** Composable document review: playbook, reference documents, or both. */
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import {
   useInfiniteQuery,
@@ -8,15 +8,13 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { Result } from "better-result";
 import {
   CheckIcon,
   ChevronRightIcon,
   ClipboardCheckIcon,
-  FileTextIcon,
   MessageSquareIcon,
-  PenLineIcon,
   PlusIcon,
   RotateCcwIcon,
   ScanSearchIcon,
@@ -28,9 +26,9 @@ import { v7 as uuidv7 } from "uuid";
 import { useShallow } from "zustand/react/shallow";
 
 import { DOCUMENT_REVIEW_LIMITS } from "@stll/api-contract";
+import type { DocxEditorRef } from "@stll/folio-react";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
-import { Checkbox } from "@stll/ui/checkbox";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { Input } from "@stll/ui/input";
 import {
@@ -39,16 +37,7 @@ import {
   InspectorTitle,
 } from "@stll/ui/inspector";
 import { LoaderState } from "@stll/ui/loader";
-import { ReviewOutOfDateNotice } from "@stll/ui/review-out-of-date-notice";
-import type { ReviewOutOfDateReason } from "@stll/ui/review-out-of-date-notice";
-import type { ReviewSeverityLevel } from "@stll/ui/review-severity-dot";
-import {
-  ReviewSeverityDot,
-  reviewSeverityTone,
-  ReviewStatusDot,
-} from "@stll/ui/review-severity-dot";
-import type { ReviewStatusTone } from "@stll/ui/review-status-badge";
-import { ReviewStatusBadge } from "@stll/ui/review-status-badge";
+import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 import { TextSeparator } from "@stll/ui/separator";
 import { Skeleton } from "@stll/ui/skeleton";
 import { Textarea } from "@stll/ui/textarea";
@@ -60,36 +49,36 @@ import {
   useActiveDocxStore,
 } from "@/components/ai-suggestions/active-docx-store";
 import {
-  createReviewBasis,
   customPerspectiveInput,
+  emptyReviewSetup,
+  isReviewSetupRunnable,
   isSamePerspective,
   NEUTRAL_PERSPECTIVE,
-  perspectiveFromBasis,
-  playbookIdFromBasis,
 } from "@/components/ai-suggestions/document-review-basis.logic";
 import type {
   ReferenceFile,
-  ReviewBasis,
   ReviewParty,
   ReviewPerspective,
+  ReviewSetup,
 } from "@/components/ai-suggestions/document-review-basis.logic";
 import {
-  decideReviewFindings,
+  decideReviewFinding,
   documentReviewRunOptions,
   documentReviewRunsOptions,
   documentReviewSourcesOptions,
-  recordReviewFindingApplication,
-  REVIEW_APPLICATION_STATUS,
   REVIEW_DECISION,
+  saveRunAsPlaybook,
 } from "@/components/ai-suggestions/document-review-queries";
 import type {
   DecidedReviewDecision,
   DocumentReviewDecision,
-  DocumentReviewDecisionCounts,
   DocumentReviewFindingRow,
+  ReviewFinding,
+  ReviewSeverity,
+  ReviewVerdict,
 } from "@/components/ai-suggestions/document-review-queries";
 import {
-  applyFindingDecisions,
+  applyFindingDecision,
   resolveReviewRunFreshness,
   resolveReviewRunRestore,
   restoreReviewRun,
@@ -98,49 +87,43 @@ import {
   reviewRunView,
 } from "@/components/ai-suggestions/document-review-run.logic";
 import type {
-  ReviewFindingDecisionRow,
+  PinnedPosition,
+  RestoredReviewBasis,
+  RestoredReviewFinding,
   ReviewPlaybookFreshness,
   ReviewRunFreshness,
 } from "@/components/ai-suggestions/document-review-run.logic";
 import {
-  isNegotiablePlaybookVerdict,
   reviewSessionKey,
   usePlaybookReviewStore,
 } from "@/components/ai-suggestions/playbook-review-store";
+import type { StartReviewResult } from "@/components/ai-suggestions/playbook-review-store";
+import { ReviewAlignedPair } from "@/components/ai-suggestions/review-aligned-pair";
 import type {
-  PlaybookFinding,
-  PlaybookCitation,
-  PlaybookMatchedRef,
-  PlaybookSeverity,
-  PlaybookVerdict,
-  ReferenceAssessment,
-  ReferenceFinding,
-  ReviewCommentState,
-  ReviewTopic,
-  ReviewFixState,
-  StartReviewResult,
-} from "@/components/ai-suggestions/playbook-review-store";
+  DeltaCitation,
+  ReviewImpact,
+} from "@/components/ai-suggestions/review-delta";
+import { ReviewDeltaView } from "@/components/ai-suggestions/review-delta-view";
+import { useReviewStore } from "@/components/ai-suggestions/review-store";
+import type { ReviewSuggestion } from "@/components/ai-suggestions/review-store";
+import { isNegotiableVerdict } from "@/components/ai-suggestions/review-verdict";
+import { useReviewActions } from "@/components/ai-suggestions/use-review-actions";
 import { DocumentIcon } from "@/components/document-icon";
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import {
   buildReviewResultItems,
-  isReviewResultActionable,
-  isReviewResultActionNeeded,
-  reviewItemDecision,
+  buildRunSummarySentence,
+  isReviewDeviation,
+  isUndecidedDeviation,
   sortReviewResultItems,
 } from "@/components/inspector/playbook-review-results.logic";
-import type { ReviewResultItem } from "@/components/inspector/playbook-review-results.logic";
+import type {
+  ReviewResultFilter,
+  ReviewResultItem,
+} from "@/components/inspector/playbook-review-results.logic";
 import type { OverallRisk } from "@/components/inspector/playbook-risk-rollup";
 import { computeRiskRollup } from "@/components/inspector/playbook-risk-rollup";
-import {
-  buildAcceptedFixBatch,
-  buildDraftNote,
-  collectAcceptedFixes,
-  playbookFixPlan,
-  referenceFixPlan,
-} from "@/components/inspector/review-apply-accepted.logic";
-import type { AcceptedFixPlan } from "@/components/inspector/review-apply-accepted.logic";
 import { ReviewExportMenu } from "@/components/inspector/review-export-menu";
 import { PlaybookStatusBadge } from "@/components/playbook-status-badge";
 import { SearchDialog } from "@/components/search-dialog";
@@ -157,6 +140,7 @@ import { toAPIError } from "@/lib/errors/api";
 import type {
   Negotiation,
   PlaybookListItem,
+  Position,
   PlaybookPositionsValue,
 } from "@/lib/knowledge/playbook-types";
 import {
@@ -164,7 +148,12 @@ import {
   playbookDetailOptions,
   playbooksOptions,
 } from "@/lib/knowledge/queries";
+import type { EntityVersion } from "@/lib/workspaces/queries/entity-versions";
 import { entityVersionsOptions } from "@/lib/workspaces/queries/entity-versions";
+import {
+  PositionQuickRow,
+  type ReferenceNameLookup,
+} from "@/routes/_protected.knowledge/-components/position-editor";
 
 type PlaybookFacetProps = {
   entityId: string;
@@ -191,26 +180,43 @@ export const PlaybookFacet = ({
   const session = usePlaybookReviewStore(
     (state) => state.sessions[reviewSessionKey(entityId, fileFieldId)],
   );
-  const startReview = usePlaybookReviewStore((state) => state.startReview);
-  const startRun = usePlaybookReviewStore((state) => state.startRun);
-  const confirmRunSize = usePlaybookReviewStore(
-    (state) => state.confirmRunSize,
+  const {
+    startReview,
+    startRun,
+    confirmRunSize,
+    dismissRunSize,
+    confirmPositions,
+    setPositions,
+    setPerspective,
+    resetSession,
+  } = usePlaybookReviewStore(
+    useShallow((state) => ({
+      startReview: state.startReview,
+      startRun: state.startRun,
+      confirmRunSize: state.confirmRunSize,
+      dismissRunSize: state.dismissRunSize,
+      confirmPositions: state.confirmPositions,
+      setPositions: state.setPositions,
+      setPerspective: state.setPerspective,
+      resetSession: state.resetSession,
+    })),
   );
-  const dismissRunSize = usePlaybookReviewStore(
-    (state) => state.dismissRunSize,
+
+  // Findings with a fix arrive as ordinary persisted DOCX suggestions, so
+  // accepting one from a review card goes through the same owner the panel and
+  // the floating bar use. The editor may not be mounted yet (the facet renders
+  // over a hidden preview), which the fallback ref stands in for.
+  const fallbackEditorRef = useRef<DocxEditorRef | null>(null);
+  const reviewActions = useReviewActions({
+    entityId,
+    persistence: { type: "workspace", workspaceId },
+    docxEditorRef: registration?.editorRef ?? fallbackEditorRef,
+    docxEditable: registration?.editable ?? false,
+    requestDocxEditMode: registration?.requestEditMode,
+  });
+  const suggestions = useReviewStore(
+    (state) => state.sessions[entityId] ?? EMPTY_SUGGESTIONS,
   );
-  const confirmTopics = usePlaybookReviewStore((state) => state.confirmTopics);
-  const setTopics = usePlaybookReviewStore((state) => state.setTopics);
-  const setPerspective = usePlaybookReviewStore(
-    (state) => state.setPerspective,
-  );
-  const setFixState = usePlaybookReviewStore((state) => state.setFixState);
-  const beginComment = usePlaybookReviewStore((state) => state.beginComment);
-  const completeComment = usePlaybookReviewStore(
-    (state) => state.completeComment,
-  );
-  const cancelComment = usePlaybookReviewStore((state) => state.cancelComment);
-  const resetSession = usePlaybookReviewStore((state) => state.resetSession);
 
   // Which version of the document is on screen now. The tab's facet bar reads
   // the same query for its version badge, so a restored run learns whether it
@@ -246,9 +252,7 @@ export const PlaybookFacet = ({
     sessionRunId === null && restoreAllowed ? restoredRun : sessionRunId;
 
   const editorAvailable = registration !== undefined;
-  const pendingBasis = session?.basis ?? null;
-  const pendingPlaybookId =
-    pendingBasis === null ? null : playbookIdFromBasis(pendingBasis);
+  const pendingPlaybookId = session?.setup?.playbookId ?? null;
   const pendingPlaybookName =
     pendingPlaybookId === null
       ? ""
@@ -271,32 +275,32 @@ export const PlaybookFacet = ({
     });
   };
 
-  const runReview = async (basis: ReviewBasis, seededTopics: ReviewTopic[]) => {
+  const runReview = async (setup: ReviewSetup, seededPositions: Position[]) => {
     reportStartFailure(
       await startReview({
         workspaceId,
-        basis,
+        setup,
         entityId,
         fileFieldId,
         unexpectedErrorMessage: t("common.unexpectedError"),
-        seededTopics,
+        seededPositions,
       }),
     );
   };
 
   // Retrying a failed run starts a new one from the same pinned basis and the
-  // same confirmed topics: the run row is immutable, so a retry is a new run
+  // same confirmed positions: the run row is immutable, so a retry is a new run
   // rather than a resumed one.
-  const retryRun = async (retry: ReviewRunRetry) => {
+  const retryRun = async (basis: RestoredReviewBasis) => {
     reportStartFailure(
       await startRun({
         workspaceId,
         entityId,
         fileFieldId,
-        playbookId: retry.playbookId,
-        references: retry.references,
-        perspective: retry.perspective,
-        topics: retry.topics,
+        playbookId: basis.playbookId,
+        references: basis.references,
+        perspective: basis.perspective,
+        positions: basis.positions,
         unexpectedErrorMessage: t("common.unexpectedError"),
       }),
     );
@@ -316,15 +320,10 @@ export const PlaybookFacet = ({
       .requestBlockScroll({ tabId: fileFieldId, blockId });
   };
 
-  const openReferenceCitation = (
-    reference: ReferenceFile,
-    blockId: string,
-    text: string,
-  ) => {
+  const openReferenceCitation = (reference: ReferenceFile, blockId: string) => {
     useInspectorCommandStore.getState().requestBlockScroll({
       tabId: reference.fileFieldId,
       blockId,
-      text,
     });
     useInspectorTabsStore.getState().openFile({
       id: reference.fileFieldId,
@@ -339,114 +338,19 @@ export const PlaybookFacet = ({
     });
   };
 
-  /** Redline the plans into the draft as one tracked-changes batch, each
-   *  with its margin note. Resolves to how many landed. Reuses the
-   *  document's unlock flow first: a write against a locked editor no-ops. */
-  const applyAcceptedFixes = async (
-    plans: readonly AcceptedFixPlan[],
-  ): Promise<number> => {
-    if (plans.length === 0 || registration === undefined) {
-      return 0;
-    }
-    const editor = registration.editorRef.current;
-    if (!editor) {
-      return 0;
-    }
-    const unlocked = registration.editable
-      ? true
-      : await registration.requestEditMode();
-    if (!unlocked) {
-      return 0;
-    }
-    const snapshot = editor.createAIEditSnapshot();
-    if (!snapshot) {
-      stellaToast.add({ type: "error", title: APPLY_ACCEPTED_FAILED });
-      return 0;
-    }
-    const batch = buildAcceptedFixBatch({ plans, newId: uuidv7 });
-    const result = editor.applyAIEditOperations({
-      snapshot,
-      operations: batch.operations,
-      mode: "tracked-changes",
-      ...(author.length > 0 && { author }),
-    });
-    const revisionIdsByOperationId = new Map(
-      result.applied.map((applied) => [applied.id, applied.revisionIds ?? []]),
-    );
-    let appliedCount = 0;
-    const appliedPlans: AcceptedFixPlan[] = [];
-    let firstRevisionIds: readonly number[] | null = null;
-    for (const plan of plans) {
-      const operationId = batch.fixOperationIdByKey.get(plan.findingKey);
-      const revisionIds =
-        operationId === undefined
-          ? undefined
-          : revisionIdsByOperationId.get(operationId);
-      if (revisionIds === undefined || revisionIds.length === 0) {
-        continue;
-      }
-      appliedCount += 1;
-      appliedPlans.push(plan);
-      firstRevisionIds = firstRevisionIds ?? revisionIds;
-      setFixState(entityId, fileFieldId, plan.findingKey, {
-        status: "applied",
-        revisionIds,
-      });
-      if (plan.referenceFindingId !== null && plan.comment !== null) {
-        beginComment(entityId, fileFieldId, plan.referenceFindingId);
-        completeComment(entityId, fileFieldId, plan.referenceFindingId);
-      }
-    }
-    const persisted = await Result.tryPromise({
-      try: async () =>
-        await Promise.all(
-          appliedPlans.map(
-            async ({ findingId }) =>
-              await recordReviewFindingApplication({ workspaceId, findingId }),
-          ),
-        ),
-      catch: (cause) => cause,
-    });
-    if (Result.isError(persisted)) {
-      analytics.captureError(persisted.error);
-      stellaToast.add({
-        type: "error",
-        title: t("common.unexpectedError"),
-      });
-    }
-    if (appliedCount < plans.length) {
-      stellaToast.add({
-        type: "error",
-        title: APPLY_ACCEPTED_FAILED,
-        description: applyAcceptedSkippedDescription(
-          plans.length - appliedCount,
-        ),
-      });
-    }
-    if (firstRevisionIds !== null) {
-      const revisionIds = firstRevisionIds;
-      stellaToast.add({
-        type: "success",
-        title: applyAcceptedDoneTitle(appliedCount),
-        action: {
-          label: SHOW_IN_DOCUMENT_LABEL,
-          onClick: () => scrollToFix(revisionIds),
-        },
-      });
-    }
-    return appliedCount;
-  };
-
-  const addFindingComment = async (
-    finding: ReferenceFinding,
+  /**
+   * Write the reviewer's note on the cited clause as a DOCX comment.
+   *
+   * The reviewer's own text is the whole input: nothing derived from the
+   * review — no precedent quote, no verdict, no rationale — has a path into
+   * the document, which is what keeps another client's deal out of this one.
+   */
+  const addCounterpartyNote = async (
+    blockId: string,
     note: string,
   ): Promise<boolean> => {
-    const blockId = finding.targetCitations.at(0)?.blockId;
-    if (!blockId || !registration) {
-      return false;
-    }
-    const editor = registration.editorRef.current;
-    if (!editor || !beginComment(entityId, fileFieldId, finding.findingId)) {
+    const editor = registration?.editorRef.current;
+    if (registration === undefined || !editor) {
       return false;
     }
     const application = await Result.tryPromise(async () => {
@@ -464,7 +368,7 @@ export const PlaybookFacet = ({
         snapshot,
         operations: [
           {
-            id: `review-comment-${uuidv7()}`,
+            id: `review-note-${uuidv7()}`,
             type: "commentOnBlock",
             blockId,
             comment: { text: note },
@@ -477,7 +381,6 @@ export const PlaybookFacet = ({
     });
     if (Result.isError(application)) {
       analytics.captureError(application.error);
-      cancelComment(entityId, fileFieldId, finding.findingId);
       stellaToast.add({
         type: "error",
         title: t("inspector.review.commentFailed"),
@@ -485,7 +388,6 @@ export const PlaybookFacet = ({
       return false;
     }
     if (application.value === "applied") {
-      completeComment(entityId, fileFieldId, finding.findingId);
       stellaToast.add({
         type: "success",
         title: NOTE_ADDED_TITLE,
@@ -496,7 +398,6 @@ export const PlaybookFacet = ({
       });
       return true;
     }
-    cancelComment(entityId, fileFieldId, finding.findingId);
     if (application.value === "failed") {
       stellaToast.add({
         type: "error",
@@ -506,63 +407,23 @@ export const PlaybookFacet = ({
     return false;
   };
 
-  const scrollToFix = (revisionIds: readonly number[]) => {
-    revealDocument();
-    requestAnimationFrame(() => {
-      registration?.editorRef.current?.scrollToAIEditOperation(revisionIds);
-    });
-  };
-
-  const acceptFix = (positionId: string, revisionIds: readonly number[]) => {
-    const accepted =
-      registration?.editorRef.current?.acceptAIEditOperation(revisionIds);
-    if (accepted !== true) {
-      return;
-    }
-    setFixState(entityId, fileFieldId, positionId, {
-      status: "accepted",
-      revisionIds: null,
-    });
-  };
-
-  const rejectFix = (positionId: string, revisionIds: readonly number[]) => {
-    const rejected =
-      registration?.editorRef.current?.rejectAIEditOperation(revisionIds);
-    if (rejected !== true) {
-      return;
-    }
-    setFixState(entityId, fileFieldId, positionId, {
-      status: "pending",
-      revisionIds: null,
-    });
-  };
-
   if (
     session?.status === "starting" ||
-    session?.status === "proposing-topics"
+    session?.status === "proposing-positions"
   ) {
     return <ReviewingState sourceName={pendingPlaybookName} />;
   }
 
-  if (session?.status === "editing-topics") {
+  if (session?.status === "editing-positions") {
     return (
-      <TopicEditor
+      <PositionConfirmStep
         error={session.error}
         onBack={() => resetSession(entityId, fileFieldId)}
-        onChange={(topics) => setTopics(entityId, fileFieldId, topics)}
-        onPerspectiveChange={(perspective) =>
-          setPerspective(entityId, fileFieldId, perspective)
-        }
-        parties={session.parties}
-        perspective={
-          session.basis === null
-            ? NEUTRAL_PERSPECTIVE
-            : perspectiveFromBasis(session.basis)
-        }
+        onChange={(positions) => setPositions(entityId, fileFieldId, positions)}
         onConfirm={() => {
           detached(
             (async () => {
-              const result = await confirmTopics(
+              const result = await confirmPositions(
                 workspaceId,
                 entityId,
                 fileFieldId,
@@ -579,10 +440,16 @@ export const PlaybookFacet = ({
                 });
               }
             })(),
-            "playbook-facet.confirm-topics",
+            "playbook-facet.confirm-positions",
           );
         }}
-        topics={session.topics}
+        onPerspectiveChange={(perspective) =>
+          setPerspective(entityId, fileFieldId, perspective)
+        }
+        parties={session.parties}
+        perspective={session.setup?.perspective ?? NEUTRAL_PERSPECTIVE}
+        positions={session.positions}
+        referenceNames={referenceNameLookup(session.setup?.references ?? [])}
       />
     );
   }
@@ -593,9 +460,9 @@ export const PlaybookFacet = ({
         message={session.error ?? t("common.unexpectedError")}
         onChangeBasis={() => resetSession(entityId, fileFieldId)}
         onRetry={() => {
-          if (session.basis !== null) {
+          if (session.setup !== null) {
             detached(
-              runReview(session.basis, session.topics),
+              runReview(session.setup, session.positions),
               "playbook-facet.run-review",
             );
           }
@@ -646,26 +513,27 @@ export const PlaybookFacet = ({
       <>
         {sizeConfirmDialog}
         <ReviewRunPanel
-          commentStateByFinding={
-            session === undefined ? {} : session.commentState
-          }
           currentEntityVersionId={currentEntityVersionId}
           editorAvailable={editorAvailable}
-          fixStateByFinding={session === undefined ? {} : session.fixState}
-          onAcceptFix={acceptFix}
-          onAddReferenceComment={addFindingComment}
-          onApplyAccepted={applyAcceptedFixes}
+          onAcceptSuggestion={(suggestion) => {
+            detached(
+              reviewActions.acceptOne(suggestion),
+              "playbook-facet.accept-suggestion",
+            );
+          }}
+          onAddCounterpartyNote={addCounterpartyNote}
           onOpenReferenceCitation={openReferenceCitation}
-          onRejectFix={rejectFix}
-          onRetry={(retry) => {
-            detached(retryRun(retry), "playbook-facet.retry-run");
+          onRejectSuggestion={reviewActions.rejectOne}
+          onRetry={(basis) => {
+            detached(retryRun(basis), "playbook-facet.retry-run");
           }}
           onReviewAgain={() => resetSession(entityId, fileFieldId)}
           onScrollToBlock={scrollToBlock}
-          onScrollToFix={scrollToFix}
           organizationId={user.activeOrganizationId}
           runId={trackedRunId}
+          suggestions={suggestions}
           targetFileFieldId={fileFieldId}
+          versions={versions?.versions ?? EMPTY_VERSIONS}
           workspaceId={workspaceId}
         />
       </>
@@ -679,24 +547,30 @@ export const PlaybookFacet = ({
         playbooks={playbooks}
         target={{ entityId, fileFieldId }}
         workspaceId={workspaceId}
-        onReview={(basis, seededTopics) => {
-          detached(runReview(basis, seededTopics), "playbook-facet.run-review");
+        onReview={(setup, seededPositions) => {
+          detached(
+            runReview(setup, seededPositions),
+            "playbook-facet.run-review",
+          );
         }}
       />
     </>
   );
 };
 
-// -- Durable run --
+// Stable empty reads: a `?? []` inside a store selector would hand Zustand a
+// fresh array on every call and re-render forever.
+const EMPTY_SUGGESTIONS: readonly ReviewSuggestion[] = [];
+const EMPTY_VERSIONS: readonly EntityVersion[] = [];
 
-/** What a retry needs to start an equivalent run: the same pinned basis and
- *  the same confirmed topics the failed run carried. */
-export type ReviewRunRetry = {
-  playbookId: string | null;
-  references: readonly ReferenceFile[];
-  perspective: ReviewPerspective;
-  topics: readonly ReviewTopic[];
-};
+const referenceNameLookup = (
+  references: readonly ReferenceFile[],
+): ReferenceNameLookup =>
+  new Map(
+    references.map((reference) => [reference.fileFieldId, reference.name]),
+  );
+
+// -- Durable run --
 
 type ReviewRunPanelProps = {
   workspaceId: string;
@@ -704,57 +578,46 @@ type ReviewRunPanelProps = {
   organizationId: string;
   /** The reviewed document's file field: where "Ask in chat" drafts land. */
   targetFileFieldId: string;
+  /** The document's version history, so the run can name the version it
+   *  pinned rather than whichever one is current. */
+  versions: readonly EntityVersion[];
   /** The document's current version, or `null` while it is not known yet. */
   currentEntityVersionId: string | null;
   editorAvailable: boolean;
-  commentStateByFinding: Record<string, ReviewCommentState>;
-  fixStateByFinding: Record<string, ReviewFixState>;
-  onAcceptFix: (findingId: string, revisionIds: readonly number[]) => void;
-  /** Writes a drafting note on the finding's clause; resolves to whether it
-   *  landed. */
-  onAddReferenceComment: (
-    finding: ReferenceFinding,
-    note: string,
-  ) => Promise<boolean>;
-  /** Inserts the plans as tracked changes; resolves to how many landed. */
-  onApplyAccepted: (plans: readonly AcceptedFixPlan[]) => Promise<number>;
-  onOpenReferenceCitation: (
-    reference: ReferenceFile,
-    blockId: string,
-    text: string,
-  ) => void;
-  onRejectFix: (findingId: string, revisionIds: readonly number[]) => void;
-  onRetry: (retry: ReviewRunRetry) => void;
+  suggestions: readonly ReviewSuggestion[];
+  onAcceptSuggestion: (suggestion: ReviewSuggestion) => void;
+  onRejectSuggestion: (suggestion: ReviewSuggestion) => void;
+  /** Writes the reviewer's note on a clause; resolves to whether it landed. */
+  onAddCounterpartyNote: (blockId: string, note: string) => Promise<boolean>;
+  onOpenReferenceCitation: (reference: ReferenceFile, blockId: string) => void;
+  onRetry: (basis: RestoredReviewBasis) => void;
   onReviewAgain: () => void;
   onScrollToBlock: (blockId: string) => void;
-  onScrollToFix: (revisionIds: readonly number[]) => void;
 };
 
 /**
  * One durable review run: its progress while the worker executes it, its
  * findings once it completes, its error code if it fails. Everything rendered
- * here comes from the run row — including the playbook name and the reference
- * documents, which the run pinned — so a completed review still describes
- * itself after the playbook or the documents have moved on.
+ * here comes from the run row — including the playbook name, the confirmed
+ * positions and the reference documents, which the run pinned — so a completed
+ * review still describes itself after any of them has moved on.
  */
 const ReviewRunPanel = ({
   workspaceId,
   runId,
   organizationId,
   targetFileFieldId,
+  versions,
   currentEntityVersionId,
   editorAvailable,
-  commentStateByFinding,
-  fixStateByFinding,
-  onAcceptFix,
-  onAddReferenceComment,
-  onApplyAccepted,
+  suggestions,
+  onAcceptSuggestion,
+  onAddCounterpartyNote,
   onOpenReferenceCitation,
-  onRejectFix,
+  onRejectSuggestion,
   onRetry,
   onReviewAgain,
   onScrollToBlock,
-  onScrollToFix,
 }: ReviewRunPanelProps) => {
   const t = useTranslations();
   const analytics = useAnalytics();
@@ -766,14 +629,14 @@ const ReviewRunPanel = ({
     refetch: refetchRun,
   } = useQuery(runQuery);
 
-  // The endpoint answers with the rows it wrote, so the decision lands in the
+  // The endpoint answers with the row it wrote, so the decision lands in the
   // run's cache entry directly: refetching the run per click would re-read
   // every finding to learn what this response already says.
   const decide = useMutation({
-    mutationFn: decideReviewFindings,
+    mutationFn: decideReviewFinding,
     onSuccess: (decided) => {
       queryClient.setQueryData(runQuery.queryKey, (previous) =>
-        applyFindingDecisions(previous, decided),
+        applyFindingDecision(previous, decided),
       );
     },
     // `unwrapEden` already localized and tagged what the endpoint returned, so
@@ -799,6 +662,30 @@ const ReviewRunPanel = ({
     enabled: restoredPlaybookId !== null,
   });
 
+  const navigate = useNavigate();
+  const saveAsPlaybook = useMutation({
+    mutationFn: saveRunAsPlaybook,
+    onSuccess: () => {
+      stellaToast.add({
+        type: "success",
+        title: SAVED_AS_PLAYBOOK_TITLE,
+        action: {
+          label: OPEN_PLAYBOOKS_LABEL,
+          onClick: () => {
+            detached(
+              navigate({ to: "/knowledge/playbooks" }),
+              "playbook-facet.open-playbooks",
+            );
+          },
+        },
+      });
+    },
+    onError: (error) => {
+      analytics.captureError(error);
+      stellaToast.add({ type: "error", title: SAVE_AS_PLAYBOOK_FAILED });
+    },
+  });
+
   // A poll that fails once must not blank a review already on screen, so the
   // read error only surfaces while there is nothing to show.
   if (runDetail === undefined || restored === null) {
@@ -817,6 +704,11 @@ const ReviewRunPanel = ({
 
   const { run } = runDetail;
   const view = reviewRunView(run.status);
+  // The version the run measured, not whichever one is current: a completed
+  // review names what it actually read.
+  const reviewedVersion = versions.find(
+    (version) => version.id === run.entityVersionId,
+  );
 
   if (view === "progress") {
     return (
@@ -834,92 +726,63 @@ const ReviewRunPanel = ({
         detail={run.errorCode}
         message={t("inspector.review.failed")}
         onChangeBasis={onReviewAgain}
-        onRetry={() =>
-          onRetry({
-            playbookId: restored.basis.playbookId,
-            references: restored.basis.references,
-            perspective: restored.basis.perspective,
-            topics: run.topics,
-          })
-        }
+        onRetry={() => onRetry(restored.basis)}
       />
     );
   }
 
   return (
     <ResultsView
-      commentStateByFinding={commentStateByFinding}
+      basis={restored.basis}
       decisionCounts={run.decisionCounts}
       decisionPending={decide.isPending}
-      decisions={restored.decisions}
       editorAvailable={editorAvailable}
-      fixStateByFinding={fixStateByFinding}
+      findings={restored.findings}
       freshness={resolveReviewRunFreshness({ run, currentEntityVersionId })}
       negotiationBySourceId={negotiationLookup(playbookDetail)}
-      onAcceptFix={onAcceptFix}
-      // Writing into the draft is the reviewer's answer to the finding, so a
-      // write that lands also records the decision; nothing is recorded for
-      // one that did not.
-      onAddReferenceComment={(finding, findingIds) => {
-        const note = buildDraftNote(finding, restored.basis.references);
-        if (note === null) {
-          return;
-        }
+      onAcceptSuggestion={onAcceptSuggestion}
+      // Writing the note into the draft is the reviewer's answer to the
+      // finding, so a write that lands also records the decision; nothing is
+      // recorded for one that did not.
+      onAddCounterpartyNote={(findingId, blockId, note) => {
         detached(
           (async () => {
-            if (await onAddReferenceComment(finding, note)) {
+            if (await onAddCounterpartyNote(blockId, note)) {
               decide.mutate({
                 workspaceId,
-                findingIds,
+                findingId,
                 decision: REVIEW_DECISION.ACCEPTED,
               });
             }
           })(),
-          "playbook-facet.add-draft-note",
+          "playbook-facet.add-counterparty-note",
         );
       }}
-      onApplyAccepted={(plans) => {
-        detached(onApplyAccepted(plans), "playbook-facet.apply-accepted");
+      onDecide={(findingId, decision) => {
+        decide.mutate({ workspaceId, findingId, decision });
       }}
-      onDecide={(findingIds, decision) => {
-        decide.mutate({ workspaceId, findingIds, decision });
-      }}
-      onInsertFix={(plan, findingIds) => {
-        detached(
-          (async () => {
-            if ((await onApplyAccepted([plan])) > 0) {
-              decide.mutate({
-                workspaceId,
-                findingIds,
-                decision: REVIEW_DECISION.ACCEPTED,
-              });
-            }
-          })(),
-          "playbook-facet.redline",
-        );
-      }}
-      onOpenReferenceCitation={(referenceFieldId, blockId, text) => {
+      onOpenReferenceCitation={(referenceFieldId, blockId) => {
         const reference = restored.basis.references.find(
           (candidate) => candidate.fileFieldId === referenceFieldId,
         );
         if (reference === undefined) {
           return;
         }
-        onOpenReferenceCitation(reference, blockId, text);
+        onOpenReferenceCitation(reference, blockId);
       }}
-      onRejectFix={onRejectFix}
+      onRejectSuggestion={onRejectSuggestion}
       onReviewAgain={onReviewAgain}
+      onSaveAsPlaybook={() => {
+        saveAsPlaybook.mutate({ workspaceId, runId: run.id });
+      }}
       onScrollToBlock={onScrollToBlock}
-      onScrollToFix={onScrollToFix}
-      perspective={restored.basis.perspective}
-      playbookFindings={restored.results.playbook}
-      playbookName={restored.basis.playbookName}
       runId={run.id}
+      saveAsPlaybookPending={saveAsPlaybook.isPending}
+      suggestions={suggestions}
       targetFileFieldId={targetFileFieldId}
+      targetName={reviewedVersion?.file?.fileName ?? ""}
+      targetVersionNumber={reviewedVersion?.versionNumber ?? null}
       workspaceId={workspaceId}
-      referenceFindings={restored.results.references}
-      references={restored.basis.references}
-      topics={restored.topics}
     />
   );
 };
@@ -935,8 +798,7 @@ const REFERENCE_SUGGESTION_LIMIT = 3;
 
 const SECTION_LABEL_CLASS =
   "text-foreground-strong-muted text-[11px] font-medium tracking-[0.06em] uppercase";
-// English until the launcher copy settles; then it joins the catalog with
-// the rest of the launcher strings.
+// TODO(i18n): English until the review surface is localized as a whole.
 const LAUNCHER_BASIS_DIVIDER_LABEL = "and / or";
 const TARGET_AS_REFERENCE_LABEL =
   "The reviewed document cannot be its own reference.";
@@ -955,10 +817,10 @@ const paragraph = (label: string, value: string): string =>
   `<p><strong>${escapeHtml(label)}</strong> ${escapeHtml(value)}</p>`;
 
 /**
- * The finding as a chat draft: the topic, the cited passages of each
- * document, the rationale and the recommendation, then a question the
- * reviewer can keep or rewrite. The chat over the document carries the
- * document itself, so the draft only needs to say which point is at issue.
+ * The finding as a chat draft: the issue, the cited passages of each document,
+ * the explanation and the recommendation, then a question the reviewer can
+ * keep or rewrite. The chat over the document carries the document itself, so
+ * the draft only needs to say which point is at issue.
  */
 const buildFindingChatDraft = ({
   item,
@@ -973,46 +835,37 @@ const buildFindingChatDraft = ({
   targetLabel: string;
   referenceLabel: string;
 }): string => {
-  const parts: string[] = [paragraph("Topic:", item.title)];
-  const { playbook, reference } = item;
-  if (reference !== null) {
-    for (const citation of reference.targetCitations.slice(
+  const { finding } = item;
+  const parts: string[] = [paragraph("Issue:", item.title)];
+  for (const citation of finding.citations.slice(
+    0,
+    CHAT_DRAFT_PASSAGES_PER_DOCUMENT,
+  )) {
+    parts.push(paragraph(`${targetLabel}:`, `"${citation.text.trim()}"`));
+  }
+  for (const group of finding.referenceCitations ?? []) {
+    const name =
+      references.find(
+        (candidate) => candidate.fileFieldId === group.fileFieldId,
+      )?.name ?? referenceLabel;
+    for (const citation of group.citations.slice(
       0,
       CHAT_DRAFT_PASSAGES_PER_DOCUMENT,
     )) {
-      parts.push(paragraph(`${targetLabel}:`, `"${citation.text.trim()}"`));
-    }
-    for (const group of reference.referenceCitations) {
-      const name =
-        references.find(
-          (candidate) => candidate.fileFieldId === group.fileFieldId,
-        )?.name ?? referenceLabel;
-      for (const citation of group.citations.slice(
-        0,
-        CHAT_DRAFT_PASSAGES_PER_DOCUMENT,
-      )) {
-        parts.push(paragraph(`${name}:`, `"${citation.text.trim()}"`));
-      }
-    }
-    if (reference.explanation.type === "comparison") {
-      parts.push(paragraph("Finding:", reference.explanation.text));
-    }
-    if (isDirectedImpact(reference.impact)) {
-      parts.push(
-        paragraph("Impact:", impactLabel(reference.impact, perspective)),
-      );
-    }
-    if (typeof reference.recommendation === "string") {
-      parts.push(paragraph("Recommendation:", reference.recommendation));
+      parts.push(paragraph(`${name}:`, `"${citation.text.trim()}"`));
     }
   }
-  if (playbook !== null) {
-    if (playbook.extracted !== null && playbook.extracted.text.length > 0) {
-      parts.push(paragraph("Extracted:", playbook.extracted.text));
-    }
-    if (playbook.rationale !== null && playbook.rationale.length > 0) {
-      parts.push(paragraph("Playbook finding:", playbook.rationale));
-    }
+  if (finding.explanation?.type === "comparison") {
+    parts.push(paragraph("Finding:", finding.explanation.text));
+  }
+  if (finding.rationale !== null && finding.rationale.length > 0) {
+    parts.push(paragraph("Rationale:", finding.rationale));
+  }
+  if (isDirectedImpact(finding.impact)) {
+    parts.push(paragraph("Impact:", impactLabel(finding.impact, perspective)));
+  }
+  if (typeof finding.recommendation === "string") {
+    parts.push(paragraph(RECOMMENDATION_LABEL, finding.recommendation));
   }
   parts.push(`<p>${escapeHtml(CHAT_DRAFT_QUESTION)}</p>`);
   return parts.join("");
@@ -1024,7 +877,7 @@ type LauncherProps = {
   playbooks: readonly LauncherPlaybook[];
   target: { entityId: string; fileFieldId: string };
   workspaceId: string;
-  onReview: (basis: ReviewBasis, seededTopics: ReviewTopic[]) => void;
+  onReview: (setup: ReviewSetup, seededPositions: Position[]) => void;
 };
 
 const Launcher = ({
@@ -1038,13 +891,13 @@ const Launcher = ({
     null,
   );
   const [references, setReferences] = useState<ReferenceFile[]>([]);
-  // The side is chosen while confirming topics, once the proposal has read
-  // the target's parties; until then the basis carries no side.
-  const basis = createReviewBasis({
+  // The side is chosen while confirming positions, once the proposal has read
+  // the target's parties; until then the setup carries no side.
+  const setup: ReviewSetup = {
+    ...emptyReviewSetup(),
     playbookId: selectedPlaybookId,
     references,
-    perspective: NEUTRAL_PERSPECTIVE,
-  });
+  };
   const user = useAuthenticatedUser();
   const { data: selectedPlaybook } = useQuery({
     ...playbookDetailOptions(
@@ -1053,30 +906,24 @@ const Launcher = ({
     ),
     enabled: selectedPlaybookId !== null,
   });
-  // No playbook selected, or its detail is still loading: seed no topics. The
+  // No playbook selected, or its detail is still loading: seed nothing. The
   // `playbookReady` flag below is what holds the review back meanwhile.
-  const seededTopics: ReviewTopic[] =
+  const seededPositions: Position[] =
     selectedPlaybook === undefined
       ? []
-      : selectedPlaybook.positions.items.flatMap((position) =>
-          position.enabled
-            ? [
-                {
-                  type: "playbook" as const,
-                  topicId: position.sourceId,
-                  positionId: position.sourceId,
-                  title: position.issue,
-                  context: position.guidance ?? "",
-                  included: true,
-                },
-              ]
-            : [],
-        );
+      : selectedPlaybook.positions.items.filter((position) => position.enabled);
   const playbookReady =
     selectedPlaybookId === null || selectedPlaybook !== undefined;
   const selectedPlaybookName =
     playbooks.find((playbook) => playbook.id === selectedPlaybookId)?.name ??
     "";
+  // A playbook with nothing enabled has no positions to send, and the create
+  // endpoint requires at least one; without references there is nothing to
+  // propose either, so the start is held rather than refused server-side.
+  const canStart =
+    isReviewSetupRunnable(setup) &&
+    playbookReady &&
+    (references.length > 0 || seededPositions.length > 0);
 
   return (
     <div className="bg-background flex h-full flex-col">
@@ -1086,7 +933,7 @@ const Launcher = ({
           playbooks={playbooks}
           selectedId={selectedPlaybookId}
         />
-        {/* The divider is the whole instruction: either basis alone starts a
+        {/* The divider is the whole instruction: either source alone starts a
             review, both together combine them. */}
         <TextSeparator>{LAUNCHER_BASIS_DIVIDER_LABEL}</TextSeparator>
         <ReferenceFilePicker
@@ -1111,10 +958,10 @@ const Launcher = ({
       >
         <Button
           className="flex-1"
-          disabled={basis === null || !playbookReady}
+          disabled={!canStart}
           onClick={() => {
-            if (basis !== null && playbookReady) {
-              onReview(basis, seededTopics);
+            if (canStart) {
+              onReview(setup, seededPositions);
             }
           }}
           size="sm"
@@ -1127,7 +974,7 @@ const Launcher = ({
   );
 };
 
-// English until the launcher copy settles; then it joins the catalog.
+// TODO(i18n): English until the review surface is localized as a whole.
 const PERSPECTIVE_SECTION_LABEL = "We act for";
 const PERSPECTIVE_NEUTRAL_LABEL = "Not specified";
 const PERSPECTIVE_OTHER_LABEL = "Other…";
@@ -1575,58 +1422,51 @@ const ReferenceFilePicker = ({
   );
 };
 
-type TopicEditorProps = {
-  topics: readonly ReviewTopic[];
+// -- Confirm step --
+
+const POSITION_STAGGER_MS = 40;
+const POSITION_STAGGER_CAP = 8;
+
+type PositionConfirmStepProps = {
+  positions: readonly Position[];
   parties: readonly ReviewParty[];
   perspective: ReviewPerspective;
+  referenceNames: ReferenceNameLookup;
   error: string | null;
-  onChange: (topics: ReviewTopic[]) => void;
+  onChange: (positions: Position[]) => void;
   onPerspectiveChange: (perspective: ReviewPerspective) => void;
   onConfirm: () => void;
   onBack: () => void;
 };
 
 /**
- * The proposed topics as a list to read, not a form to fill: each row is a
- * title with its context in two lines, ticked on by default. A row opens
- * inline for the few edits a reviewer actually makes; nothing else asks for
- * attention until hovered.
+ * The proposed positions as a list to read, not a form to fill: the issue, how
+ * much it matters, the passages that state the standard, and whether the run
+ * measures it. Everything else a position can carry (tiers, ask, negotiation,
+ * the deterministic check) belongs to the playbook editor, not to the ten
+ * seconds before a run starts.
  */
-const TopicEditor = ({
-  topics,
+const PositionConfirmStep = ({
+  positions,
   parties,
   perspective,
+  referenceNames,
   error,
   onChange,
   onPerspectiveChange,
   onConfirm,
   onBack,
-}: TopicEditorProps) => {
+}: PositionConfirmStepProps) => {
   const t = useTranslations();
-  const [expandedId, setExpandedId] = useState<string | null>(null);
-  const atTopicLimit = topics.length >= DOCUMENT_REVIEW_LIMITS.positionsMax;
-  const includedCount = topics.filter((topic) => topic.included).length;
+  const enabledCount = positions.filter((position) => position.enabled).length;
   const canConfirm =
-    includedCount > 0 &&
-    !topics.some((topic) => topic.included && topic.title.trim().length === 0);
+    enabledCount > 0 &&
+    !positions.some(
+      (position) => position.enabled && position.issue.trim().length === 0,
+    );
 
-  const updateTopic = (topicId: string, next: ReviewTopic) => {
-    onChange(topics.map((topic) => (topic.topicId === topicId ? next : topic)));
-  };
-
-  const removeTopic = (topicId: string) => {
-    onChange(topics.filter((topic) => topic.topicId !== topicId));
-    setExpandedId((current) => (current === topicId ? null : current));
-  };
-
-  // A new topic opens straight into its (empty) title: the row is the form.
-  const addTopic = () => {
-    const topicId = crypto.randomUUID();
-    onChange([
-      ...topics,
-      { type: "custom", topicId, title: "", context: "", included: true },
-    ]);
-    setExpandedId(topicId);
+  const updateAt = (index: number, next: Position) => {
+    onChange(positions.map((position, at) => (at === index ? next : position)));
   };
 
   return (
@@ -1637,8 +1477,8 @@ const TopicEditor = ({
         </InspectorHeaderText>
         <span className="text-muted-foreground shrink-0 text-[11px] tabular-nums">
           {t("inspector.review.referencesCount", {
-            count: includedCount,
-            max: topics.length,
+            count: enabledCount,
+            max: positions.length,
           })}
         </span>
       </InspectorHeader>
@@ -1655,34 +1495,29 @@ const TopicEditor = ({
             value={perspective}
           />
         </div>
-        <ul className="space-y-0.5">
-          {topics.map((topic, index) => (
-            <TopicRow
-              expanded={expandedId === topic.topicId}
-              index={index}
-              key={topic.topicId}
-              onChange={(next) => updateTopic(topic.topicId, next)}
-              onRemove={() => removeTopic(topic.topicId)}
-              onToggleExpanded={() =>
-                setExpandedId((current) =>
-                  current === topic.topicId ? null : topic.topicId,
-                )
-              }
-              topic={topic}
-            />
+        <ul className="space-y-1.5">
+          {positions.map((position, index) => (
+            <li
+              className="animate-rise"
+              key={position.sourceId}
+              style={{
+                animationDelay: `${String(
+                  Math.min(index, POSITION_STAGGER_CAP) * POSITION_STAGGER_MS,
+                )}ms`,
+              }}
+            >
+              <PositionQuickRow
+                index={index}
+                onChange={(next) => updateAt(index, next)}
+                onRemove={() =>
+                  onChange(positions.filter((_, at) => at !== index))
+                }
+                position={position}
+                referenceNames={referenceNames}
+              />
+            </li>
           ))}
         </ul>
-        {!atTopicLimit && (
-          <Button
-            className="text-muted-foreground hover:text-foreground mt-1 w-full justify-start"
-            onClick={addTopic}
-            size="sm"
-            variant="ghost"
-          >
-            <PlusIcon className="size-3.5" />
-            {t("inspector.review.addTopic")}
-          </Button>
-        )}
       </div>
       <footer
         className={cn(
@@ -1700,134 +1535,16 @@ const TopicEditor = ({
           size="sm"
         >
           <ScanSearchIcon className="me-1 size-3.5" />
-          {t("inspector.review.scoreTopics")}
+          {t("inspector.review.run")}
         </Button>
       </footer>
     </div>
   );
 };
 
-const TOPIC_STAGGER_MS = 40;
-const TOPIC_STAGGER_CAP = 8;
-
-type TopicRowProps = {
-  topic: ReviewTopic;
-  index: number;
-  expanded: boolean;
-  onToggleExpanded: () => void;
-  onChange: (next: ReviewTopic) => void;
-  onRemove: () => void;
-};
-
-const TopicRow = ({
-  topic,
-  index,
-  expanded,
-  onToggleExpanded,
-  onChange,
-  onRemove,
-}: TopicRowProps) => {
-  const t = useTranslations();
-  const hasTitle = topic.title.trim().length > 0;
-  const removeLabel = t("inspector.review.removeTopic", { name: topic.title });
-
-  return (
-    <li
-      className={cn(
-        "group/topic animate-rise rounded-lg transition-colors duration-150",
-        expanded ? "bg-muted/50" : "hover:bg-muted/40",
-      )}
-      style={{
-        animationDelay: `${String(
-          Math.min(index, TOPIC_STAGGER_CAP) * TOPIC_STAGGER_MS,
-        )}ms`,
-      }}
-    >
-      <div className="flex min-h-11 items-start gap-2 py-2 ps-2.5 pe-1">
-        <Checkbox
-          aria-label={hasTitle ? topic.title : t("inspector.review.newTopic")}
-          checked={topic.included}
-          className="mt-0.5"
-          onCheckedChange={(checked) =>
-            onChange({ ...topic, included: checked })
-          }
-        />
-        <button
-          aria-expanded={expanded}
-          className={cn(
-            "min-w-0 flex-1 text-start transition-opacity duration-150",
-            !topic.included && "opacity-60",
-          )}
-          onClick={onToggleExpanded}
-          type="button"
-        >
-          <p
-            className={cn(
-              "truncate text-sm font-medium",
-              hasTitle ? "text-foreground" : "text-muted-foreground",
-            )}
-          >
-            {hasTitle ? topic.title : t("inspector.review.newTopic")}
-          </p>
-          {!expanded && topic.context.trim().length > 0 && (
-            <p className="text-muted-foreground mt-0.5 line-clamp-2 text-xs text-pretty">
-              {topic.context}
-            </p>
-          )}
-          {topic.type === "playbook" && (
-            <p className="text-muted-foreground mt-0.5 text-[11px]">
-              {t("inspector.review.playbookTopic")}
-            </p>
-          )}
-        </button>
-        <Tooltip
-          content={removeLabel}
-          render={
-            <button
-              aria-label={removeLabel}
-              className="hover:bg-muted text-muted-foreground hover:text-foreground relative inline-flex size-8 shrink-0 items-center justify-center rounded-md opacity-0 transition-opacity duration-150 group-hover/topic:opacity-100 after:absolute after:min-h-11 after:min-w-11 focus-visible:opacity-100"
-              onClick={onRemove}
-              type="button"
-            >
-              <XIcon className="size-3.5" />
-            </button>
-          }
-        />
-      </div>
-      {expanded && (
-        <div className="space-y-2 px-2.5 pb-2.5">
-          {topic.type === "custom" && (
-            <Input
-              aria-label={t("inspector.review.topicName")}
-              autoFocus
-              className="min-h-9"
-              maxLength={256}
-              onChange={(event) =>
-                onChange({ ...topic, title: event.target.value })
-              }
-              placeholder={t("inspector.review.newTopic")}
-              value={topic.title}
-            />
-          )}
-          <Textarea
-            aria-label={t("inspector.review.topicContext")}
-            maxLength={2000}
-            onChange={(event) =>
-              onChange({ ...topic, context: event.target.value })
-            }
-            placeholder={t("inspector.review.topicContextPlaceholder")}
-            rows={3}
-            value={topic.context}
-          />
-        </div>
-      )}
-    </li>
-  );
-};
-
 // -- Reviewing --
 
-// Proposing topics is one server call with no progress channel, so this
+// Proposing positions is one server call with no progress channel, so this
 // state claims nothing beyond "in progress".
 const ReviewingState = ({ sourceName }: { sourceName: string }) => {
   const t = useTranslations();
@@ -1841,9 +1558,9 @@ const ReviewingState = ({ sourceName }: { sourceName: string }) => {
   );
 };
 
-// The run's own progress: the worker commits one finding per confirmed topic
-// per check kind and counts them on the row, so the percentage is a real
-// fraction of the work rather than a timer pretending to be one.
+// The run's own progress: the worker commits one finding per confirmed
+// position and counts them on the row, so the percentage is a real fraction of
+// the work rather than a timer pretending to be one.
 type ReviewProgressStateProps = {
   sourceName: string;
   completed: number;
@@ -1935,95 +1652,88 @@ const ErrorState = ({
 
 // -- Results --
 
+// TODO(i18n): English until the review surface is localized as a whole.
+const SHOW_IN_DOCUMENT_LABEL = "Show in document";
+const NOTE_ADDED_TITLE = "Note added for the counterparty";
+const ADD_NOTE_LABEL = "Add note for counterparty";
+const ADD_NOTE_PLACEHOLDER = "What the counterparty should see";
+const ADD_NOTE_SUBMIT_LABEL = "Add note";
+const NO_CHANGE_LABEL = "No change needed";
+const SAVE_AS_PLAYBOOK_LABEL = "Save as playbook";
+const SAVED_AS_PLAYBOOK_TITLE = "Saved as a playbook";
+const SAVE_AS_PLAYBOOK_FAILED = "Could not save this review as a playbook";
+const OPEN_PLAYBOOKS_LABEL = "Open playbooks";
+const COVERAGE_FILTER_LABEL = "Coverage";
+const DEVIATIONS_FILTER_LABEL = "Deviations";
+const TARGET_COLUMN_LABEL = "This document";
+const STANDARD_COLUMN_LABEL = "Standard";
+const SUGGESTION_ACCEPTED_LABEL = "Accepted";
+const SUGGESTION_REJECTED_LABEL = "Rejected";
+const SUGGESTION_SKIPPED_LABEL = "No longer matches the document";
+const SUGGESTION_STAGED_LABEL = "Staged as a tracked change in the document";
+
 type ResultsViewProps = {
-  playbookFindings: readonly PlaybookFinding[] | null;
-  referenceFindings: readonly ReferenceFinding[] | null;
-  references: readonly ReferenceFile[];
-  commentStateByFinding: Record<string, ReviewCommentState>;
-  decisions: readonly ReviewFindingDecisionRow[];
-  decisionCounts: DocumentReviewDecisionCounts;
+  basis: RestoredReviewBasis;
+  findings: readonly RestoredReviewFinding[];
+  decisionCounts: Parameters<typeof reviewDecisionProgress>[0];
   decisionPending: boolean;
-  fixStateByFinding: Record<string, ReviewFixState>;
   freshness: ReviewRunFreshness;
   negotiationBySourceId: ReadonlyMap<string, Negotiation>;
-  playbookName: string;
-  /** The side the run's comparison was judged for; labels impacts. */
-  perspective: ReviewPerspective;
   targetFileFieldId: string;
+  targetName: string;
+  targetVersionNumber: number | null;
   runId: string;
   workspaceId: string;
   editorAvailable: boolean;
-  topics: readonly ReviewTopic[];
+  saveAsPlaybookPending: boolean;
+  suggestions: readonly ReviewSuggestion[];
+  onAcceptSuggestion: (suggestion: ReviewSuggestion) => void;
+  onRejectSuggestion: (suggestion: ReviewSuggestion) => void;
+  onAddCounterpartyNote: (
+    findingId: DocumentReviewFindingRow["id"],
+    blockId: string,
+    note: string,
+  ) => void;
   onDecide: (
-    findingIds: readonly DocumentReviewFindingRow["id"][],
+    findingId: DocumentReviewFindingRow["id"],
     decision: DocumentReviewDecision,
   ) => void;
+  onOpenReferenceCitation: (referenceFieldId: string, blockId: string) => void;
   onReviewAgain: () => void;
+  onSaveAsPlaybook: () => void;
   onScrollToBlock: (blockId: string) => void;
-  /** Redline one finding's proposed wording into the draft. */
-  onInsertFix: (
-    plan: AcceptedFixPlan,
-    findingIds: readonly DocumentReviewFindingRow["id"][],
-  ) => void;
-  onScrollToFix: (revisionIds: readonly number[]) => void;
-  onAcceptFix: (findingId: string, revisionIds: readonly number[]) => void;
-  /** Write a drafting note for a finding with no wording to propose. */
-  onAddReferenceComment: (
-    finding: ReferenceFinding,
-    findingIds: readonly DocumentReviewFindingRow["id"][],
-  ) => void;
-  onApplyAccepted: (plans: readonly AcceptedFixPlan[]) => void;
-  onOpenReferenceCitation: (
-    referenceFieldId: string,
-    blockId: string,
-    text: string,
-  ) => void;
-  onRejectFix: (findingId: string, revisionIds: readonly number[]) => void;
 };
 
 const ResultsView = ({
-  playbookFindings,
-  referenceFindings,
-  references,
-  commentStateByFinding,
-  decisions,
+  basis,
+  findings,
   decisionCounts,
   decisionPending,
-  fixStateByFinding,
   freshness,
   negotiationBySourceId,
-  playbookName,
-  perspective,
   targetFileFieldId,
+  targetName,
+  targetVersionNumber,
   runId,
   workspaceId,
   editorAvailable,
-  topics,
+  saveAsPlaybookPending,
+  suggestions,
+  onAcceptSuggestion,
+  onAddCounterpartyNote,
   onDecide,
-  onReviewAgain,
-  onScrollToBlock,
-  onInsertFix,
-  onScrollToFix,
-  onAcceptFix,
-  onAddReferenceComment,
-  onApplyAccepted,
   onOpenReferenceCitation,
-  onRejectFix,
+  onRejectSuggestion,
+  onReviewAgain,
+  onSaveAsPlaybook,
+  onScrollToBlock,
 }: ResultsViewProps) => {
   const t = useTranslations();
   const results = buildReviewResultItems({
-    topics,
-    playbookFindings,
-    referenceFindings,
-    decisions,
+    positions: basis.positions,
+    findings,
   });
   const progress = reviewDecisionProgress(decisionCounts);
-  const acceptedPlans = collectAcceptedFixes({
-    items: results,
-    fixStateByFinding,
-    references,
-    playbookName,
-  });
 
   return (
     <div className="bg-background flex h-full flex-col">
@@ -2032,10 +1742,18 @@ const ResultsView = ({
           <h2 className="truncate text-sm font-semibold">
             {t("inspector.review.title")}
           </h2>
-          <ReviewBasisDescription
-            playbookName={playbookName}
-            referenceCount={references.length}
-          />
+          <p className="text-muted-foreground truncate text-xs">
+            <BidiText as="span">
+              {buildRunSummarySentence({
+                targetName,
+                targetVersionNumber,
+                references: basis.references,
+                playbookName: basis.playbookName,
+                playbookProposed: basis.provenance === "ephemeral",
+                perspective: basis.perspective,
+              })}
+            </BidiText>
+          </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
           {progress.total > 0 && (
@@ -2045,6 +1763,18 @@ const ResultsView = ({
                 total: progress.total,
               })}
             </span>
+          )}
+          {/* Only a run whose positions were never saved has a playbook to
+              make; one that ran against a definition already has one. */}
+          {basis.provenance === "ephemeral" && (
+            <Button
+              disabled={saveAsPlaybookPending}
+              onClick={onSaveAsPlaybook}
+              size="xs"
+              variant="outline"
+            >
+              {SAVE_AS_PLAYBOOK_LABEL}
+            </Button>
           )}
           <ReviewExportMenu runId={runId} workspaceId={workspaceId} />
           <Button onClick={onReviewAgain} size="xs" variant="outline">
@@ -2058,38 +1788,28 @@ const ResultsView = ({
           freshness={freshness}
           onReviewAgain={onReviewAgain}
         />
-        {editorAvailable && acceptedPlans.length > 0 && (
-          <ApplyAcceptedBar
-            count={acceptedPlans.length}
-            onApply={() => onApplyAccepted(acceptedPlans)}
-          />
-        )}
-        {playbookFindings !== null && playbookFindings.length > 0 && (
+        {results.length > 0 && (
           <RiskSummaryCard
             editorAvailable={editorAvailable}
-            findings={playbookFindings}
+            findings={results.map((item) => item.finding)}
             onScrollToBlock={onScrollToBlock}
           />
         )}
         {results.length > 0 ? (
           <ReviewResultList
-            editorAvailable={editorAvailable}
-            commentStateByFinding={commentStateByFinding}
             decisionPending={decisionPending}
-            fixStateByFinding={fixStateByFinding}
+            editorAvailable={editorAvailable}
             items={results}
             negotiationBySourceId={negotiationBySourceId}
-            onAcceptFix={onAcceptFix}
-            onAddComment={onAddReferenceComment}
+            onAcceptSuggestion={onAcceptSuggestion}
+            onAddCounterpartyNote={onAddCounterpartyNote}
             onDecide={onDecide}
-            onInsertFix={onInsertFix}
-            playbookName={playbookName}
             onOpenReferenceCitation={onOpenReferenceCitation}
-            onRejectFix={onRejectFix}
+            onRejectSuggestion={onRejectSuggestion}
             onScrollToBlock={onScrollToBlock}
-            onScrollToFix={onScrollToFix}
-            perspective={perspective}
-            references={references}
+            perspective={basis.perspective}
+            references={basis.references}
+            suggestions={suggestions}
             targetFileFieldId={targetFileFieldId}
           />
         ) : (
@@ -2099,50 +1819,6 @@ const ResultsView = ({
     </div>
   );
 };
-
-// TODO(i18n): English until the review surface is localized as a whole.
-const APPLY_ACCEPTED_LABEL = "Apply all as tracked changes";
-const APPLY_ACCEPTED_FAILED = "Some accepted changes could not be applied";
-// The editor sits hidden under this facet, so every write into the document
-// confirms itself and offers the way there.
-const NOTE_ADDED_TITLE = "Drafting note added to the draft";
-const SHOW_IN_DOCUMENT_LABEL = "Show in document";
-const applyAcceptedDoneTitle = (count: number): string =>
-  count === 1
-    ? "Redlined in the draft, with a note citing the precedent"
-    : `${count} changes redlined in the draft, each with a note`;
-// Card actions, named by what they do to the draft.
-const REDLINE_LABEL = "Redline";
-const NOTE_TO_DRAFT_LABEL = "Note to draft";
-const NOTE_ADDED_LABEL = "Note added";
-const NO_CHANGE_LABEL = "No change needed";
-const applyAcceptedPendingDescription = (count: number): string =>
-  count === 1
-    ? "1 accepted change is not in the document yet"
-    : `${count} accepted changes are not in the document yet`;
-const applyAcceptedSkippedDescription = (count: number): string =>
-  count === 1
-    ? "1 change no longer matches the document"
-    : `${count} changes no longer match the document`;
-
-type ApplyAcceptedBarProps = {
-  count: number;
-  onApply: () => void;
-};
-
-/** Accepted findings whose wording is still outside the document: one
- *  action puts every one of them in as tracked changes, each with a
- *  comment citing its precedent. */
-const ApplyAcceptedBar = ({ count, onApply }: ApplyAcceptedBarProps) => (
-  <div className="bg-muted/50 mb-2 flex items-center justify-between gap-2 rounded-md border px-3 py-2">
-    <span className="text-muted-foreground min-w-0 text-xs tabular-nums">
-      {applyAcceptedPendingDescription(count)}
-    </span>
-    <Button onClick={onApply} size="xs" variant="default">
-      {APPLY_ACCEPTED_LABEL}
-    </Button>
-  </div>
-);
 
 /** Which notice a pinned playbook calls for, or none while it is still the one
  *  an author would run today. Total over the freshness vocabulary. */
@@ -2181,59 +1857,31 @@ const ReviewFreshnessNotice = ({
   if (playbookNotice !== null) {
     notices.push(playbookNotice);
   }
-  const reasons: ReviewOutOfDateReason[] = notices.map((notice) => ({
-    id: notice,
-    label: t(notice),
-  }));
+  if (notices.length === 0) {
+    return null;
+  }
 
   return (
-    <ReviewOutOfDateNotice
-      actionLabel={t("inspector.review.reviewAgain")}
-      // A run whose playbook was deleted is a record of what was reviewed,
-      // not something that can be measured again against that playbook.
-      onAction={freshness.playbook === "missing" ? undefined : onReviewAgain}
-      reasons={reasons}
-    />
+    <div className="border-warning/30 bg-warning/10 mb-2 rounded-lg border px-3 py-2">
+      <ul className="text-warning-foreground space-y-1 text-xs">
+        {notices.map((notice) => (
+          <li key={notice}>{t(notice)}</li>
+        ))}
+      </ul>
+      {/* A run whose playbook was deleted is a record of what was reviewed,
+          not something that can be measured again against that playbook. */}
+      {freshness.playbook !== "missing" && (
+        <Button
+          className="mt-2"
+          onClick={onReviewAgain}
+          size="xs"
+          variant="outline"
+        >
+          {t("inspector.review.reviewAgain")}
+        </Button>
+      )}
+    </div>
   );
-};
-
-const ReviewBasisDescription = ({
-  playbookName,
-  referenceCount,
-}: {
-  playbookName: string;
-  referenceCount: number;
-}) => {
-  const t = useTranslations();
-  if (playbookName.length > 0 && referenceCount > 0) {
-    return (
-      <p className="text-muted-foreground truncate text-xs">
-        {t("inspector.review.reviewedAgainstCombined", {
-          name: playbookName,
-          count: referenceCount,
-        })}
-      </p>
-    );
-  }
-  if (playbookName.length > 0) {
-    return (
-      <p className="text-muted-foreground truncate text-xs">
-        {t("knowledge.playbooks.review.reviewedAgainst", {
-          name: playbookName,
-        })}
-      </p>
-    );
-  }
-  if (referenceCount > 0) {
-    return (
-      <p className="text-muted-foreground truncate text-xs">
-        {t("inspector.review.comparedWithReferences", {
-          count: referenceCount,
-        })}
-      </p>
-    );
-  }
-  return null;
 };
 
 const NoReviewIssues = () => {
@@ -2251,73 +1899,54 @@ const NoReviewIssues = () => {
 type ReviewResultListProps = {
   items: readonly ReviewResultItem[];
   references: readonly ReferenceFile[];
-  playbookName: string;
   perspective: ReviewPerspective;
   targetFileFieldId: string;
-  commentStateByFinding: Record<string, ReviewCommentState>;
   decisionPending: boolean;
-  fixStateByFinding: Record<string, ReviewFixState>;
   negotiationBySourceId: ReadonlyMap<string, Negotiation>;
   editorAvailable: boolean;
+  suggestions: readonly ReviewSuggestion[];
+  onAcceptSuggestion: (suggestion: ReviewSuggestion) => void;
+  onRejectSuggestion: (suggestion: ReviewSuggestion) => void;
+  onAddCounterpartyNote: (
+    findingId: DocumentReviewFindingRow["id"],
+    blockId: string,
+    note: string,
+  ) => void;
   onDecide: (
-    findingIds: readonly DocumentReviewFindingRow["id"][],
+    findingId: DocumentReviewFindingRow["id"],
     decision: DocumentReviewDecision,
   ) => void;
+  onOpenReferenceCitation: (referenceFieldId: string, blockId: string) => void;
   onScrollToBlock: (blockId: string) => void;
-  onInsertFix: (
-    plan: AcceptedFixPlan,
-    findingIds: readonly DocumentReviewFindingRow["id"][],
-  ) => void;
-  onScrollToFix: (revisionIds: readonly number[]) => void;
-  onAcceptFix: (findingId: string, revisionIds: readonly number[]) => void;
-  onAddComment: (
-    finding: ReferenceFinding,
-    findingIds: readonly DocumentReviewFindingRow["id"][],
-  ) => void;
-  onOpenReferenceCitation: (
-    referenceFieldId: string,
-    blockId: string,
-    text: string,
-  ) => void;
-  onRejectFix: (findingId: string, revisionIds: readonly number[]) => void;
 };
-
-type ReviewResultFilter = "actionable" | "all";
 
 const ReviewResultList = ({
   items,
   references,
   perspective,
   targetFileFieldId,
-  commentStateByFinding,
   decisionPending,
-  fixStateByFinding,
   negotiationBySourceId,
   editorAvailable,
+  suggestions,
+  onAcceptSuggestion,
+  onAddCounterpartyNote,
   onDecide,
-  onScrollToBlock,
-  onInsertFix,
-  onScrollToFix,
-  onAcceptFix,
-  onAddComment,
   onOpenReferenceCitation,
-  onRejectFix,
-  playbookName,
+  onRejectSuggestion,
+  onScrollToBlock,
 }: ReviewResultListProps) => {
   const t = useTranslations();
-  const format = useFormatter();
-  // What cuts against the reviewer's side comes first, worst on top; the run's
-  // own order only breaks ties.
+  // Severity first, then the order the positions were confirmed in; nothing
+  // about the verdict moves a row, so a position keeps its place across runs.
   const orderedItems = sortReviewResultItems(items);
-  // Deciding a card takes it out of this list without changing what the run
-  // found: "Action needed" counts findings nobody has answered yet.
-  const actionableItems = orderedItems.filter(isReviewResultActionNeeded);
+  const deviations = orderedItems.filter(isUndecidedDeviation);
   const [filter, setFilter] = useState<ReviewResultFilter>(
-    actionableItems.length > 0 ? "actionable" : "all",
+    deviations.length > 0 ? "deviations" : "coverage",
   );
-  const visibleItems = filter === "actionable" ? actionableItems : orderedItems;
+  const visibleItems = filter === "deviations" ? deviations : orderedItems;
   const [expandedId, setExpandedId] = useState(
-    actionableItems.at(0)?.id ?? items.at(0)?.id ?? null,
+    deviations.at(0)?.id ?? orderedItems.at(0)?.id ?? null,
   );
   const visibleExpandedId =
     expandedId === null || visibleItems.some((item) => item.id === expandedId)
@@ -2331,61 +1960,43 @@ const ReviewResultList = ({
           {t("inspector.review.results")}
         </h3>
         <div className="bg-muted flex rounded-lg p-0.5">
-          <button
-            aria-pressed={filter === "actionable"}
-            className={cn(
-              "text-muted-foreground min-h-11 rounded-md px-2 text-[11px] font-medium tabular-nums",
-              filter === "actionable" &&
-                "bg-background text-foreground shadow-xs",
-            )}
-            onClick={() => setFilter("actionable")}
-            type="button"
-          >
-            {t("inspector.review.actionNeeded")}{" "}
-            {format.number(actionableItems.length)}
-          </button>
-          <button
-            aria-pressed={filter === "all"}
-            className={cn(
-              "text-muted-foreground min-h-11 rounded-md px-2 text-[11px] font-medium tabular-nums",
-              filter === "all" && "bg-background text-foreground shadow-xs",
-            )}
-            onClick={() => setFilter("all")}
-            type="button"
-          >
-            {t("common.all")} {format.number(items.length)}
-          </button>
+          <FilterTab
+            active={filter === "coverage"}
+            count={orderedItems.length}
+            label={COVERAGE_FILTER_LABEL}
+            onSelect={() => setFilter("coverage")}
+          />
+          <FilterTab
+            active={filter === "deviations"}
+            count={deviations.length}
+            label={DEVIATIONS_FILTER_LABEL}
+            onSelect={() => setFilter("deviations")}
+          />
         </div>
       </div>
       <ul className="space-y-1.5">
         {visibleItems.map((item) => (
           <ReviewResultCard
             editorAvailable={editorAvailable}
-            commentStateByFinding={commentStateByFinding}
             decisionPending={decisionPending}
             expanded={visibleExpandedId === item.id}
-            fixStateByFinding={fixStateByFinding}
             item={item}
             key={item.id}
-            negotiation={
-              item.playbook === null
-                ? undefined
-                : negotiationBySourceId.get(item.playbook.positionId)
-            }
-            onAcceptFix={onAcceptFix}
-            onAddComment={onAddComment}
+            negotiation={negotiationBySourceId.get(item.positionId)}
+            onAcceptSuggestion={onAcceptSuggestion}
+            onAddCounterpartyNote={onAddCounterpartyNote}
             onDecide={onDecide}
-            onInsertFix={onInsertFix}
-            playbookName={playbookName}
             onOpenReferenceCitation={onOpenReferenceCitation}
-            onRejectFix={onRejectFix}
+            onRejectSuggestion={onRejectSuggestion}
             onScrollToBlock={onScrollToBlock}
-            onScrollToFix={onScrollToFix}
             onToggle={() =>
               setExpandedId(visibleExpandedId === item.id ? null : item.id)
             }
             perspective={perspective}
             references={references}
+            suggestion={suggestions.find(
+              (candidate) => candidate.id === item.suggestionId,
+            )}
             targetFileFieldId={targetFileFieldId}
           />
         ))}
@@ -2394,10 +2005,10 @@ const ReviewResultList = ({
         <div className="flex flex-col items-center justify-center gap-1 px-6 py-8 text-center">
           <CheckIcon className="text-success mb-1 size-5" />
           <p className="text-foreground text-sm font-medium">
-            {/* An empty "Action needed" list means one of two different
-                things: the run flagged nothing, or a reviewer has answered
-                everything it flagged. */}
-            {items.some(isReviewResultActionable)
+            {/* An empty "Deviations" list means one of two different things:
+                the run flagged nothing, or a reviewer has answered everything
+                it flagged. */}
+            {items.some(isReviewDeviation)
               ? t("inspector.review.allDecided")
               : t("inspector.review.noMaterialDifferences")}
           </p>
@@ -2407,80 +2018,97 @@ const ReviewResultList = ({
   );
 };
 
+const FilterTab = ({
+  active,
+  count,
+  label,
+  onSelect,
+}: {
+  active: boolean;
+  count: number;
+  label: string;
+  onSelect: () => void;
+}) => {
+  const format = useFormatter();
+  return (
+    <button
+      aria-pressed={active}
+      className={cn(
+        "text-muted-foreground min-h-11 rounded-md px-2 text-[11px] font-medium tabular-nums",
+        active && "bg-background text-foreground shadow-xs",
+      )}
+      onClick={onSelect}
+      type="button"
+    >
+      {label} {format.number(count)}
+    </button>
+  );
+};
+
 type ReviewResultCardProps = {
   item: ReviewResultItem;
   references: readonly ReferenceFile[];
-  playbookName: string;
   perspective: ReviewPerspective;
   targetFileFieldId: string;
-  commentStateByFinding: Record<string, ReviewCommentState>;
   decisionPending: boolean;
-  fixStateByFinding: Record<string, ReviewFixState>;
   negotiation: Negotiation | undefined;
   editorAvailable: boolean;
   expanded: boolean;
+  suggestion: ReviewSuggestion | undefined;
+  onAcceptSuggestion: (suggestion: ReviewSuggestion) => void;
+  onRejectSuggestion: (suggestion: ReviewSuggestion) => void;
+  onAddCounterpartyNote: (
+    findingId: DocumentReviewFindingRow["id"],
+    blockId: string,
+    note: string,
+  ) => void;
   onDecide: (
-    findingIds: readonly DocumentReviewFindingRow["id"][],
+    findingId: DocumentReviewFindingRow["id"],
     decision: DocumentReviewDecision,
   ) => void;
   onToggle: () => void;
+  onOpenReferenceCitation: (referenceFieldId: string, blockId: string) => void;
   onScrollToBlock: (blockId: string) => void;
-  onInsertFix: (
-    plan: AcceptedFixPlan,
-    findingIds: readonly DocumentReviewFindingRow["id"][],
-  ) => void;
-  onScrollToFix: (revisionIds: readonly number[]) => void;
-  onAcceptFix: (findingId: string, revisionIds: readonly number[]) => void;
-  onAddComment: (
-    finding: ReferenceFinding,
-    findingIds: readonly DocumentReviewFindingRow["id"][],
-  ) => void;
-  onOpenReferenceCitation: (
-    referenceFieldId: string,
-    blockId: string,
-    text: string,
-  ) => void;
-  onRejectFix: (findingId: string, revisionIds: readonly number[]) => void;
 };
 
+/**
+ * One finding: what the document says, what the standard says, and what the
+ * difference is. The judgment is one glyph in the header — the row's place in
+ * the list already carries severity — so nothing here is a chip stack.
+ */
 const ReviewResultCard = ({
   item,
   references,
   perspective,
   targetFileFieldId,
-  commentStateByFinding,
   decisionPending,
-  fixStateByFinding,
   negotiation,
   editorAvailable,
   expanded,
+  suggestion,
+  onAcceptSuggestion,
+  onAddCounterpartyNote,
   onDecide,
-  onToggle,
-  onScrollToBlock,
-  onInsertFix,
-  onScrollToFix,
-  onAcceptFix,
-  onAddComment,
   onOpenReferenceCitation,
-  onRejectFix,
-  playbookName,
+  onRejectSuggestion,
+  onScrollToBlock,
+  onToggle,
 }: ReviewResultCardProps) => {
   const t = useTranslations();
-  const verdictLabels = useVerdictLabels();
-  const severityLabels = useSeverityLabels();
-  const assessmentLabels = useReferenceAssessmentLabels();
   const detailId = `review-result-${item.id}`;
-  const { playbook, reference } = item;
-  const decision = reviewItemDecision(item);
-  const citations: PlaybookCitation[] = [];
-  if (playbook !== null) {
-    citations.push(...playbook.citations);
-  }
-  if (reference !== null) {
-    citations.push(...reference.targetCitations);
-  }
-  const targetCitations = uniqueCitations(citations);
-  const hasBothSources = playbook !== null && reference !== null;
+  const { finding } = item;
+  const glyph = findingGlyph(finding, perspective);
+  const standardPassages = standardPassagesFor(item);
+  const targetBlockId = finding.citations.at(0)?.blockId ?? null;
+  const caption = findingCaption(
+    finding,
+    t("inspector.review.insufficientEvidence"),
+  );
+  const referenceFieldIdByBlockId = new Map(
+    (finding.referenceCitations ?? []).flatMap((group) =>
+      group.citations.map((citation) => [citation.blockId, group.fileFieldId]),
+    ),
+  );
 
   return (
     <li
@@ -2489,7 +2117,7 @@ const ReviewResultCard = ({
         // A decided card recedes while it is collapsed; opening it puts the
         // finding back at full strength so the reviewer can read what they
         // decided about.
-        decision !== REVIEW_DECISION.OPEN && !expanded && "opacity-60",
+        item.decision !== REVIEW_DECISION.OPEN && !expanded && "opacity-60",
       )}
     >
       <button
@@ -2499,81 +2127,26 @@ const ReviewResultCard = ({
         onClick={onToggle}
         type="button"
       >
-        <div className="min-w-0 flex-1 space-y-1.5">
-          <BidiText className="text-foreground text-sm leading-snug font-medium">
-            {item.title}
-          </BidiText>
-          <div className="flex flex-wrap items-center gap-1.5">
-            {playbook?.verdict !== null && playbook?.verdict !== undefined && (
-              <ReviewStatusBadge
-                // Not-applicable reads as "out of scope" rather than a gap.
-                className={cn(
-                  playbook.verdict === "not-applicable" && "border-dashed",
-                )}
-                icon={<ReviewStatusDot tone={VERDICT_TONE[playbook.verdict]} />}
-                tone={VERDICT_TONE[playbook.verdict]}
-              >
-                {verdictLabels[playbook.verdict]}
-              </ReviewStatusBadge>
-            )}
-            {playbook !== null && (
-              <span className="text-muted-foreground inline-flex items-center gap-1 text-[11px] font-medium">
-                <ReviewSeverityDot
-                  level={PLAYBOOK_SEVERITY_LEVEL[playbook.severity]}
-                />
-                {severityLabels[playbook.severity]}
-              </span>
-            )}
-            {/* A comparison judged for a side says which way it cuts and how
-                much; only an undirected one falls back to the bare
-                assessment. */}
-            {reference !== null &&
-              (isDirectedImpact(reference.impact) ? (
-                <>
-                  <ReviewStatusBadge
-                    icon={
-                      <ReviewStatusDot tone={IMPACT_TONE[reference.impact]} />
-                    }
-                    tone={IMPACT_TONE[reference.impact]}
-                  >
-                    {impactLabel(reference.impact, perspective)}
-                  </ReviewStatusBadge>
-                  {reference.severity !== undefined && (
-                    <span className="text-muted-foreground inline-flex items-center gap-1 text-[11px] font-medium">
-                      <ReviewSeverityDot
-                        level={PLAYBOOK_SEVERITY_LEVEL[reference.severity]}
-                      />
-                      {severityLabels[reference.severity]}
-                    </span>
-                  )}
-                </>
-              ) : (
-                <ReviewStatusBadge
-                  icon={
-                    <ReviewStatusDot
-                      tone={REFERENCE_ASSESSMENT_TONE[reference.assessment]}
-                    />
-                  }
-                  tone={REFERENCE_ASSESSMENT_TONE[reference.assessment]}
-                >
-                  {assessmentLabels[reference.assessment]}
-                </ReviewStatusBadge>
-              ))}
-            {reference?.consensus === "mixed" && (
-              <ReviewStatusBadge tone="warning">
-                {t("inspector.review.referencesDisagree")}
-              </ReviewStatusBadge>
-            )}
-            {decision !== REVIEW_DECISION.OPEN && (
-              <ReviewStatusBadge tone={DECISION_TONE[decision]}>
-                {t(DECISION_LABEL[decision])}
-              </ReviewStatusBadge>
-            )}
-          </div>
-        </div>
+        <span
+          className={cn(
+            "mt-0.5 w-4 shrink-0 text-center text-sm font-medium",
+            glyph.className,
+          )}
+        >
+          <span aria-hidden="true">{glyph.symbol}</span>
+          <span className="sr-only">{glyph.label}</span>
+        </span>
+        <BidiText className="text-foreground min-w-0 flex-1 text-sm leading-snug font-medium">
+          {item.title}
+        </BidiText>
+        {item.decision !== REVIEW_DECISION.OPEN && (
+          <span className="text-muted-foreground shrink-0 text-[11px] font-medium">
+            {t(DECISION_LABEL[item.decision])}
+          </span>
+        )}
         <DirectionalIcon
           className={cn(
-            "text-muted-foreground mt-1 size-4 shrink-0 transition-transform",
+            "text-muted-foreground mt-0.5 size-4 shrink-0 transition-transform",
             expanded && "rotate-90",
           )}
           flip={!expanded}
@@ -2582,83 +2155,72 @@ const ReviewResultCard = ({
       </button>
       {expanded && (
         <div className="space-y-3 border-t px-3 py-3" id={detailId}>
-          {playbook !== null && (
-            <section className="space-y-1.5">
-              {hasBothSources && (
-                <h4 className="text-foreground-strong-muted text-[11px] font-medium tracking-[0.06em] uppercase">
-                  {t("inspector.review.playbookFindings")}
-                </h4>
-              )}
-              {playbook.extracted !== null &&
-                playbook.extracted.text.length > 0 && (
-                  <p className="text-muted-foreground text-xs">
-                    <span className="text-foreground-strong-muted">
-                      {t("knowledge.playbooks.review.extractedLabel")}
-                    </span>{" "}
-                    {playbook.extracted.text}
-                  </p>
-                )}
-              {playbook.rationale !== null && playbook.rationale.length > 0 && (
-                <p className="text-muted-foreground text-xs leading-snug text-pretty">
-                  {playbook.rationale}
-                </p>
-              )}
-              <MatchedRefLine matchedRef={playbook.matchedRef} />
-              <NegotiationBlock
-                negotiation={negotiation}
-                verdict={playbook.verdict}
-              />
-            </section>
-          )}
-          {reference !== null && (
-            <section
-              className={cn("space-y-1.5", hasBothSources && "border-t pt-3")}
-            >
-              {hasBothSources && (
-                <h4 className="text-foreground-strong-muted text-[11px] font-medium tracking-[0.06em] uppercase">
-                  {t("inspector.review.referenceFindings")}
-                </h4>
-              )}
-              <p className="text-muted-foreground text-xs leading-snug text-pretty">
-                {reference.explanation.type === "comparison"
-                  ? reference.explanation.text
-                  : t("inspector.review.insufficientEvidence")}
-              </p>
-              {typeof reference.recommendation === "string" && (
-                <p className="text-foreground text-xs leading-snug text-pretty">
-                  <span className="text-foreground-strong-muted font-medium">
-                    {RECOMMENDATION_LABEL}
-                  </span>{" "}
-                  {reference.recommendation}
-                </p>
-              )}
-            </section>
-          )}
-          <ReviewEvidence
-            editorAvailable={editorAvailable}
-            onOpenReferenceCitation={onOpenReferenceCitation}
-            onScrollToBlock={onScrollToBlock}
-            reference={reference}
-            references={references}
-            targetCitations={targetCitations}
+          <ReviewAlignedPair
+            onShowInDocument={editorAvailable ? onScrollToBlock : undefined}
+            onShowStandardPassage={(blockId) => {
+              const fieldId = referenceFieldIdByBlockId.get(blockId);
+              if (fieldId !== undefined) {
+                onOpenReferenceCitation(fieldId, blockId);
+              }
+            }}
+            standard={{
+              label: STANDARD_COLUMN_LABEL,
+              passages: standardPassages,
+            }}
+            target={{
+              label: TARGET_COLUMN_LABEL,
+              passages: finding.citations,
+            }}
           />
-          <ReviewResultActions
-            editorAvailable={editorAvailable}
-            commentStateByFinding={commentStateByFinding}
-            findingRows={item.decisions}
-            fixStateByFinding={fixStateByFinding}
-            onAcceptFix={onAcceptFix}
-            onAddComment={onAddComment}
-            onInsertFix={onInsertFix}
-            onRejectFix={onRejectFix}
-            onScrollToFix={onScrollToFix}
-            playbook={playbook}
-            playbookName={playbookName}
-            reference={reference}
-            references={references}
+          <ReviewDeltaView
+            delta={finding.delta}
+            impact={finding.impact ?? "unknown"}
+            label={item.title}
+            onShowInDocument={editorAvailable ? onScrollToBlock : undefined}
+            standard={{
+              label: STANDARD_COLUMN_LABEL,
+              passages: standardPassages,
+            }}
+            target={{
+              label: TARGET_COLUMN_LABEL,
+              passages: finding.citations,
+            }}
           />
-          <FindingDecisionFooter
-            decision={decision}
+          {caption !== null && (
+            <p className="text-muted-foreground text-xs leading-snug text-pretty">
+              <BidiText as="span">{caption}</BidiText>
+            </p>
+          )}
+          {/* The standard's own passages did not agree with each other, which
+              a reviewer weighing them has to know. */}
+          {finding.consensus === "mixed" && (
+            <p className="text-muted-foreground text-[11px]">
+              {t("inspector.review.referencesDisagree")}
+            </p>
+          )}
+          {typeof finding.recommendation === "string" && (
+            <p className="text-foreground text-xs leading-snug text-pretty">
+              <span className="text-foreground-strong-muted font-medium">
+                {RECOMMENDATION_LABEL}
+              </span>{" "}
+              {finding.recommendation}
+            </p>
+          )}
+          <MatchedRefLine matchedRef={finding.matchedRef} />
+          <NegotiationBlock
+            negotiation={negotiation}
+            verdict={finding.verdict}
+          />
+          <ReviewCardActions
+            decisionPending={decisionPending}
+            editorAvailable={editorAvailable}
+            item={item}
+            onAcceptSuggestion={onAcceptSuggestion}
+            onAddCounterpartyNote={(note) => {
+              if (targetBlockId !== null) {
+                onAddCounterpartyNote(item.id, targetBlockId, note);
+              }
+            }}
             onAskInChat={() =>
               useInspectorCommandStore.getState().requestFileChatDraft({
                 fileFieldId: targetFileFieldId,
@@ -2671,13 +2233,11 @@ const ReviewResultCard = ({
                 }),
               })
             }
-            onDecide={(next) =>
-              onDecide(
-                item.decisions.map((row) => row.id),
-                next,
-              )
-            }
-            pending={decisionPending}
+            onDecide={(decision) => onDecide(item.id, decision)}
+            onRejectSuggestion={onRejectSuggestion}
+            onScrollToBlock={onScrollToBlock}
+            suggestion={suggestion}
+            targetBlockId={targetBlockId}
           />
         </div>
       )}
@@ -2685,46 +2245,82 @@ const ReviewResultCard = ({
   );
 };
 
-/** How a recorded decision reads on the card. Both maps are total over the
- *  decisions a reviewer can take, so a new disposition must state its label
- *  and its weight here rather than rendering as nothing. */
-const DECISION_TONE = {
-  accepted: "success",
-  dismissed: "neutral",
-} as const satisfies Record<DecidedReviewDecision, ReviewStatusTone>;
-
+/** How a recorded decision reads on the card. Total over the decisions a
+ *  reviewer can take, so a new disposition must state its label here rather
+ *  than rendering as nothing. */
 const DECISION_LABEL = {
   accepted: "inspector.review.decisions.accepted",
   dismissed: "inspector.review.decisions.dismissed",
 } as const satisfies Record<DecidedReviewDecision, TranslationKey>;
 
-/**
- * The reviewer's disposition on one card. "Accepted" is not a button: a
- * finding is accepted by acting on it (a redline or a drafting note in the
- * draft). The only standalone verdict is that no change is needed, and it is
- * withdrawn by reopening the card.
- *
- * A card joins one finding per check kind, so the decision is recorded against
- * every row behind it: a reviewer answers the topic, not the executor.
- */
-const FindingDecisionFooter = ({
-  decision,
-  pending,
-  onAskInChat,
-  onDecide,
-}: {
-  decision: DocumentReviewDecision;
-  pending: boolean;
-  /** Hand the finding to the chat over the document, as a draft to edit. */
+type ReviewCardActionsProps = {
+  item: ReviewResultItem;
+  suggestion: ReviewSuggestion | undefined;
+  decisionPending: boolean;
+  editorAvailable: boolean;
+  targetBlockId: string | null;
+  onAcceptSuggestion: (suggestion: ReviewSuggestion) => void;
+  onRejectSuggestion: (suggestion: ReviewSuggestion) => void;
+  onAddCounterpartyNote: (note: string) => void;
   onAskInChat: () => void;
   onDecide: (decision: DocumentReviewDecision) => void;
-}) => {
+  onScrollToBlock: (blockId: string) => void;
+};
+
+/**
+ * What a reviewer can do about one finding.
+ *
+ * A finding whose fix was staged as a DOCX suggestion is accepted and rejected
+ * through that suggestion — the same gesture as the panel and the floating bar,
+ * resolving the finding on the server in the same write. A finding with no
+ * wording to propose keeps its own disposition.
+ */
+const ReviewCardActions = ({
+  item,
+  suggestion,
+  decisionPending,
+  editorAvailable,
+  targetBlockId,
+  onAcceptSuggestion,
+  onAddCounterpartyNote,
+  onAskInChat,
+  onDecide,
+  onRejectSuggestion,
+  onScrollToBlock,
+}: ReviewCardActionsProps) => {
   const t = useTranslations();
+
   return (
     <section
       aria-label={t("inspector.review.decision")}
       className="flex flex-wrap items-center gap-2 border-t pt-3"
     >
+      <FindingResolution
+        decisionPending={decisionPending}
+        editorAvailable={editorAvailable}
+        item={item}
+        onAcceptSuggestion={onAcceptSuggestion}
+        onDecide={onDecide}
+        onRejectSuggestion={onRejectSuggestion}
+        suggestion={suggestion}
+      />
+      {targetBlockId !== null && (
+        <>
+          <Button
+            className="text-muted-foreground hover:text-foreground h-7 px-2 text-xs"
+            disabled={!editorAvailable}
+            onClick={() => onScrollToBlock(targetBlockId)}
+            size="sm"
+            variant="ghost"
+          >
+            {SHOW_IN_DOCUMENT_LABEL}
+          </Button>
+          <CounterpartyNotePopover
+            disabled={!editorAvailable}
+            onSubmit={onAddCounterpartyNote}
+          />
+        </>
+      )}
       <Button
         className="text-muted-foreground hover:text-foreground order-last ms-auto h-7 px-2 text-xs"
         onClick={onAskInChat}
@@ -2734,364 +2330,236 @@ const FindingDecisionFooter = ({
         <MessageSquareIcon className="me-1 size-3.5" />
         {ASK_IN_CHAT_LABEL}
       </Button>
-      {decision === REVIEW_DECISION.OPEN ? (
-        <Button
-          className="h-7 px-2.5 text-xs"
-          disabled={pending}
-          onClick={() => onDecide(REVIEW_DECISION.DISMISSED)}
-          size="sm"
-          variant="ghost"
-        >
-          <XIcon className="me-1 size-3.5" />
-          {NO_CHANGE_LABEL}
-        </Button>
-      ) : (
-        <Button
-          className="h-7 px-2.5 text-xs"
-          disabled={pending}
-          onClick={() => onDecide(REVIEW_DECISION.OPEN)}
-          size="sm"
-          variant="ghost"
-        >
-          <RotateCcwIcon className="me-1 size-3.5" />
-          {t("inspector.review.reopen")}
-        </Button>
-      )}
     </section>
   );
-};
-
-const uniqueCitations = (
-  citations: readonly PlaybookCitation[],
-): PlaybookCitation[] => {
-  const byBlockId = new Map<string, PlaybookCitation>();
-  for (const citation of citations) {
-    if (!byBlockId.has(citation.blockId)) {
-      byBlockId.set(citation.blockId, citation);
-    }
-  }
-  return [...byBlockId.values()];
-};
-
-type ReviewEvidenceProps = {
-  targetCitations: readonly PlaybookCitation[];
-  reference: ReferenceFinding | null;
-  references: readonly ReferenceFile[];
-  editorAvailable: boolean;
-  onScrollToBlock: (blockId: string) => void;
-  onOpenReferenceCitation: (
-    referenceFieldId: string,
-    blockId: string,
-    text: string,
-  ) => void;
-};
-
-const ReviewEvidence = ({
-  targetCitations,
-  reference,
-  references,
-  editorAvailable,
-  onScrollToBlock,
-  onOpenReferenceCitation,
-}: ReviewEvidenceProps) => {
-  const t = useTranslations();
-  if (
-    targetCitations.length === 0 &&
-    (reference === null || reference.referenceCitations.length === 0)
-  ) {
-    return null;
-  }
-  return (
-    <section className="space-y-2 border-t pt-3">
-      {targetCitations.length > 0 && (
-        <CitationGroup
-          citations={targetCitations}
-          label={t("inspector.review.targetDocument")}
-          onActivate={
-            editorAvailable
-              ? (citation) => onScrollToBlock(citation.blockId)
-              : undefined
-          }
-        />
-      )}
-      {reference?.referenceCitations.map((group) => {
-        const source = references.find(
-          (candidate) => candidate.fileFieldId === group.fileFieldId,
-        );
-        return (
-          <CitationGroup
-            citations={group.citations}
-            key={group.fileFieldId}
-            label={source?.name ?? t("inspector.review.referenceDocument")}
-            onActivate={(citation) =>
-              onOpenReferenceCitation(
-                group.fileFieldId,
-                citation.blockId,
-                citation.text,
-              )
-            }
-          />
-        );
-      })}
-    </section>
-  );
-};
-
-const CITATION_ARIA_CHARS = 72;
-
-type CitationGroupProps = {
-  label: string;
-  citations: readonly PlaybookCitation[];
-  onActivate: ((citation: PlaybookCitation) => void) | undefined;
 };
 
 /**
- * The cited passages of one document, quoted in full: the point of the card
- * is to see how the topic is drafted here and there, so the text is on the
- * card, not behind a chip. Each passage is the affordance that scrolls its
- * document to the block.
+ * Which resolution a finding offers, decided by what its fix became.
+ *
+ * A staged suggestion owns the answer: accepting it resolves the finding in
+ * the same server write, so the card never records a second, parallel
+ * disposition. Only a finding that proposed no wording decides for itself.
  */
-const CitationGroup = ({
-  label,
-  citations,
-  onActivate,
-}: CitationGroupProps) => {
-  const t = useTranslations();
+const FindingResolution = ({
+  item,
+  suggestion,
+  decisionPending,
+  editorAvailable,
+  onAcceptSuggestion,
+  onDecide,
+  onRejectSuggestion,
+}: {
+  item: ReviewResultItem;
+  suggestion: ReviewSuggestion | undefined;
+  decisionPending: boolean;
+  editorAvailable: boolean;
+  onAcceptSuggestion: (suggestion: ReviewSuggestion) => void;
+  onRejectSuggestion: (suggestion: ReviewSuggestion) => void;
+  onDecide: (decision: DocumentReviewDecision) => void;
+}) => {
+  if (suggestion !== undefined) {
+    return (
+      <SuggestionButtons
+        editorAvailable={editorAvailable}
+        onAccept={() => onAcceptSuggestion(suggestion)}
+        onReject={() => onRejectSuggestion(suggestion)}
+        suggestion={suggestion}
+      />
+    );
+  }
+  if (item.suggestionId === null) {
+    return (
+      <FindingDecisionButtons
+        decision={item.decision}
+        onDecide={onDecide}
+        pending={decisionPending}
+      />
+    );
+  }
+  // The run staged a redline for this finding, but the document has not been
+  // opened in this session yet, so the suggestion it lives on is not loaded.
+  // Deciding here would answer the finding without touching the change it
+  // stands for; the reviewer opens the document and resolves it there.
   return (
-    <div className="space-y-1">
-      <p className="text-foreground-strong-muted flex items-center gap-1 text-[11px] font-medium">
-        <FileTextIcon className="size-3 shrink-0" />
-        <BidiText className="truncate">{label}</BidiText>
-      </p>
-      <ul className="space-y-1">
-        {citations.map((citation) => {
-          const trimmed = citation.text.trim();
-          const ariaLabel = t("chat.openCitation", {
-            label:
-              trimmed.length > CITATION_ARIA_CHARS
-                ? `${trimmed.slice(0, CITATION_ARIA_CHARS).trimEnd()}…`
-                : trimmed || t("knowledge.playbooks.review.viewClause"),
-          });
-          const passageClass =
-            "border-s-2 border-border bg-muted/40 block w-full rounded-e-md ps-2.5 pe-2 py-1.5 text-start text-xs leading-relaxed";
-          return (
-            <li key={citation.blockId}>
-              {onActivate === undefined ? (
-                <BidiText as="p" className={passageClass}>
-                  {trimmed || t("knowledge.playbooks.review.viewClause")}
-                </BidiText>
-              ) : (
-                <button
-                  aria-label={ariaLabel}
-                  className={cn(
-                    passageClass,
-                    "hover:border-ring hover:bg-muted transition-colors duration-150",
-                  )}
-                  onClick={() => onActivate(citation)}
-                  type="button"
-                >
-                  <BidiText>
-                    {trimmed || t("knowledge.playbooks.review.viewClause")}
-                  </BidiText>
-                </button>
-              )}
-            </li>
-          );
-        })}
-      </ul>
-    </div>
+    <span className="text-muted-foreground text-[11px]">
+      {SUGGESTION_STAGED_LABEL}
+    </span>
   );
 };
 
-type ReviewResultActionsProps = {
-  playbook: PlaybookFinding | null;
-  reference: ReferenceFinding | null;
-  references: readonly ReferenceFile[];
-  playbookName: string;
-  /** Every finding row the card stands for; acting on the card answers all. */
-  findingRows: readonly ReviewFindingDecisionRow[];
-  commentStateByFinding: Record<string, ReviewCommentState>;
-  fixStateByFinding: Record<string, ReviewFixState>;
-  editorAvailable: boolean;
-  onInsertFix: (
-    plan: AcceptedFixPlan,
-    findingIds: readonly DocumentReviewFindingRow["id"][],
-  ) => void;
-  onScrollToFix: (revisionIds: readonly number[]) => void;
-  onAcceptFix: (findingId: string, revisionIds: readonly number[]) => void;
-  onAddComment: (
-    finding: ReferenceFinding,
-    findingIds: readonly DocumentReviewFindingRow["id"][],
-  ) => void;
-  onRejectFix: (findingId: string, revisionIds: readonly number[]) => void;
+const FindingDecisionButtons = ({
+  decision,
+  pending,
+  onDecide,
+}: {
+  decision: DocumentReviewDecision;
+  pending: boolean;
+  onDecide: (decision: DocumentReviewDecision) => void;
+}) => {
+  const t = useTranslations();
+  if (decision !== REVIEW_DECISION.OPEN) {
+    return (
+      <Button
+        className="h-7 px-2.5 text-xs"
+        disabled={pending}
+        onClick={() => onDecide(REVIEW_DECISION.OPEN)}
+        size="sm"
+        variant="ghost"
+      >
+        <RotateCcwIcon className="me-1 size-3.5" />
+        {t("inspector.review.reopen")}
+      </Button>
+    );
+  }
+  return (
+    <>
+      <Button
+        className="h-7 px-2.5 text-xs"
+        disabled={pending}
+        onClick={() => onDecide(REVIEW_DECISION.ACCEPTED)}
+        size="sm"
+      >
+        <CheckIcon className="me-1 size-3.5" />
+        {t("common.accept")}
+      </Button>
+      <Button
+        className="h-7 px-2.5 text-xs"
+        disabled={pending}
+        onClick={() => onDecide(REVIEW_DECISION.DISMISSED)}
+        size="sm"
+        variant="ghost"
+      >
+        <XIcon className="me-1 size-3.5" />
+        {NO_CHANGE_LABEL}
+      </Button>
+    </>
+  );
 };
 
-const ReviewResultActions = ({
-  playbook,
-  reference,
-  references,
-  playbookName,
-  findingRows,
-  commentStateByFinding,
-  fixStateByFinding,
+/** The card mirrors the staged suggestion rather than tracking a second copy
+ *  of its state: accepting from the panel and accepting from here are the same
+ *  write, and both surfaces read the same row. */
+const SuggestionButtons = ({
+  suggestion,
   editorAvailable,
-  onInsertFix,
-  onScrollToFix,
-  onAcceptFix,
-  onAddComment,
-  onRejectFix,
-}: ReviewResultActionsProps) => {
+  onAccept,
+  onReject,
+}: {
+  suggestion: ReviewSuggestion;
+  editorAvailable: boolean;
+  onAccept: () => void;
+  onReject: () => void;
+}) => {
   const t = useTranslations();
-  const findingIds = findingRows.map((row) => row.id);
-  const playbookRow = findingRows.find((row) => row.checkKind === "playbook");
-  const referenceRow = findingRows.find((row) => row.checkKind === "reference");
-  const playbookPlan =
-    playbook === null || playbookRow === undefined
-      ? null
-      : playbookFixPlan({
-          findingId: playbookRow.id,
-          playbook,
-          playbookName,
-        });
-  const referencePlan =
-    reference === null || referenceRow === undefined
-      ? null
-      : referenceFixPlan({
-          findingId: referenceRow.id,
-          reference,
-          references,
-        });
-  const noteState =
-    reference === null ? undefined : commentStateByFinding[reference.findingId];
-  const playbookRevisionIds =
-    playbook === null
-      ? null
-      : (fixStateByFinding[playbook.positionId]?.revisionIds ?? null);
-  const referenceRevisionIds =
-    reference === null
-      ? null
-      : (fixStateByFinding[reference.findingId]?.revisionIds ?? null);
-  const showPlaybookActions = playbook !== null && playbook.fix !== null;
-  const showReferenceActions =
-    reference !== null &&
-    (reference.fix !== null ||
-      (reference.targetCitations.length > 0 &&
-        reference.explanation.type === "comparison" &&
-        reference.explanation.text.length > 0));
-  if (!showPlaybookActions && !showReferenceActions) {
-    return null;
+  switch (suggestion.status) {
+    case "accepted":
+      return (
+        <span className="text-muted-foreground flex items-center gap-1 text-[11px]">
+          <CheckIcon className="size-3" />
+          {SUGGESTION_ACCEPTED_LABEL}
+        </span>
+      );
+    case "rejected":
+      return (
+        <span className="text-muted-foreground text-[11px]">
+          {SUGGESTION_REJECTED_LABEL}
+        </span>
+      );
+    case "skipped":
+      return (
+        <span className="text-muted-foreground text-[11px]">
+          {SUGGESTION_SKIPPED_LABEL}
+        </span>
+      );
+    case "pending":
+    case "applying":
+      return (
+        <>
+          <Button
+            className="h-7 px-2.5 text-xs"
+            disabled={!editorAvailable || suggestion.status === "applying"}
+            onClick={onAccept}
+            size="sm"
+          >
+            <CheckIcon className="me-1 size-3.5" />
+            {t("common.accept")}
+          </Button>
+          <Button
+            className="h-7 px-2.5 text-xs"
+            disabled={suggestion.status === "applying"}
+            onClick={onReject}
+            size="sm"
+            variant="outline"
+          >
+            <XIcon className="me-1 size-3.5" />
+            {t("knowledge.playbooks.review.reject")}
+          </Button>
+        </>
+      );
+    default:
+      suggestion.status satisfies never;
+      return null;
   }
-  const hasBothActionSources = showPlaybookActions && showReferenceActions;
+};
+
+/**
+ * The one path from a review to a comment in the document, and it carries the
+ * reviewer's typed text and nothing else: no precedent quote, no verdict, no
+ * rationale. Everything the review knows stays in Stella.
+ */
+const CounterpartyNotePopover = ({
+  disabled,
+  onSubmit,
+}: {
+  disabled: boolean;
+  onSubmit: (note: string) => void;
+}) => {
+  const [open, setOpen] = useState(false);
+  const [note, setNote] = useState("");
+  const trimmed = note.trim();
+
   return (
-    <section className="space-y-2 border-t pt-3">
-      {showPlaybookActions && playbook.fix !== null && (
-        <div>
-          {hasBothActionSources && (
-            <p className="text-foreground-strong-muted text-[11px] font-medium">
-              {t("inspector.review.playbookFindings")}
-            </p>
-          )}
-          <FixActions
-            editorAvailable={editorAvailable}
-            fixKind="playbook"
-            fixStatus={
-              fixStateByFinding[playbook.positionId]?.status ??
-              (playbookRow?.applicationStatus ===
-              REVIEW_APPLICATION_STATUS.APPLIED
-                ? "accepted"
-                : "pending")
-            }
-            onAccept={() => {
-              if (playbookRevisionIds !== null) {
-                onAcceptFix(playbook.positionId, playbookRevisionIds);
-              }
-            }}
-            onInsert={() => {
-              if (playbookPlan !== null) {
-                onInsertFix(playbookPlan, findingIds);
-              }
-            }}
-            onReject={() => {
-              if (playbookRevisionIds !== null) {
-                onRejectFix(playbook.positionId, playbookRevisionIds);
-              }
-            }}
-            onScroll={() => {
-              if (playbookRevisionIds !== null) {
-                onScrollToFix(playbookRevisionIds);
-              }
-            }}
+    <Popover onOpenChange={setOpen} open={open}>
+      <PopoverTrigger
+        disabled={disabled}
+        render={
+          <Button
+            className="text-muted-foreground hover:text-foreground h-7 px-2 text-xs"
+            size="sm"
+            variant="ghost"
           />
+        }
+      >
+        <MessageSquareIcon className="me-1 size-3.5" />
+        {ADD_NOTE_LABEL}
+      </PopoverTrigger>
+      <PopoverPopup align="start" className="w-72 p-3">
+        <div className="space-y-2">
+          <Textarea
+            aria-label={ADD_NOTE_LABEL}
+            autoFocus
+            className="min-h-[72px] text-sm"
+            maxLength={2000}
+            onChange={(event) => setNote(event.target.value)}
+            placeholder={ADD_NOTE_PLACEHOLDER}
+            value={note}
+          />
+          <Button
+            className="w-full"
+            disabled={trimmed.length === 0}
+            onClick={() => {
+              onSubmit(trimmed);
+              setNote("");
+              setOpen(false);
+            }}
+            size="sm"
+          >
+            {ADD_NOTE_SUBMIT_LABEL}
+          </Button>
         </div>
-      )}
-      {showReferenceActions && (
-        <div>
-          {hasBothActionSources && (
-            <p className="text-foreground-strong-muted text-[11px] font-medium">
-              {t("inspector.review.referenceFindings")}
-            </p>
-          )}
-          {reference.fix !== null && (
-            <FixActions
-              editorAvailable={editorAvailable}
-              fixKind="reference"
-              fixStatus={
-                fixStateByFinding[reference.findingId]?.status ??
-                (referenceRow?.applicationStatus ===
-                REVIEW_APPLICATION_STATUS.APPLIED
-                  ? "accepted"
-                  : "pending")
-              }
-              onAccept={() => {
-                if (referenceRevisionIds !== null) {
-                  onAcceptFix(reference.findingId, referenceRevisionIds);
-                }
-              }}
-              onInsert={() => {
-                if (referencePlan !== null) {
-                  onInsertFix(referencePlan, findingIds);
-                }
-              }}
-              onReject={() => {
-                if (referenceRevisionIds !== null) {
-                  onRejectFix(reference.findingId, referenceRevisionIds);
-                }
-              }}
-              onScroll={() => {
-                if (referenceRevisionIds !== null) {
-                  onScrollToFix(referenceRevisionIds);
-                }
-              }}
-            />
-          )}
-          {/* No wording to propose: the finding still earns a drafting
-              note on the clause, with the precedent, for the drafter to
-              resolve. A finding with wording carries its note with the
-              redline instead. */}
-          {reference.fix === null &&
-            reference.targetCitations.length > 0 &&
-            buildDraftNote(reference, references) !== null &&
-            (noteState?.status === "applied" ? (
-              <div className="text-muted-foreground mt-2 flex items-center gap-1 text-[11px]">
-                <CheckIcon className="size-3" />
-                {NOTE_ADDED_LABEL}
-              </div>
-            ) : (
-              <div className="mt-2">
-                <Button
-                  className="h-7 px-2.5 text-xs"
-                  disabled={!editorAvailable || noteState !== undefined}
-                  onClick={() => onAddComment(reference, findingIds)}
-                  size="sm"
-                >
-                  <MessageSquareIcon className="me-1 size-3.5" />
-                  {NOTE_TO_DRAFT_LABEL}
-                </Button>
-              </div>
-            ))}
-        </div>
-      )}
-    </section>
+      </PopoverPopup>
+    </Popover>
   );
 };
 
@@ -3105,7 +2573,7 @@ const ReviewResultActions = ({
 // finding to make a top issue clickable through the same `onScrollToBlock`
 // the finding cards use, rather than adding a second query.
 type RiskSummaryCardProps = {
-  findings: readonly PlaybookFinding[];
+  findings: readonly ReviewFinding[];
   editorAvailable: boolean;
   onScrollToBlock: (blockId: string) => void;
 };
@@ -3115,11 +2583,12 @@ const RISK_BREAKDOWN_ORDER = [
   "missing",
   "fallback",
   "compliant",
+  "additional",
   "not-applicable",
-] as const satisfies readonly PlaybookVerdict[];
+] as const satisfies readonly ReviewVerdict[];
 
 type MissingRiskBreakdownVerdict = Exclude<
-  PlaybookVerdict,
+  ReviewVerdict,
   (typeof RISK_BREAKDOWN_ORDER)[number]
 >;
 
@@ -3132,7 +2601,6 @@ const RiskSummaryCard = ({
 }: RiskSummaryCardProps) => {
   const t = useTranslations();
   const format = useFormatter();
-  const verdictLabels = useVerdictLabels();
   const riskLabels = useRiskLevelLabels();
 
   const rollup = computeRiskRollup(findings);
@@ -3146,17 +2614,21 @@ const RiskSummaryCard = ({
         <h3 className="text-foreground-strong-muted text-[11px] font-medium tracking-[0.06em] uppercase">
           {t("knowledge.playbooks.risk.summaryTitle")}
         </h3>
-        {/* The overall-risk badge escalates with the level: "critical" is the
-            one filled state (an outright violation of a non-negotiable
-            position), the rest stay outlined like the finding cards below. */}
-        <ReviewStatusBadge
-          icon={<ReviewSeverityDot level={rollup.overallRisk} />}
-          size="sm"
-          tone={reviewSeverityTone(rollup.overallRisk)}
-          variant={rollup.overallRisk === "critical" ? "strong" : "outline"}
+        <span
+          className={cn(
+            "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium",
+            riskChipClass(rollup.overallRisk),
+          )}
         >
+          <span
+            aria-hidden="true"
+            className={cn(
+              "size-1.5 rounded-full",
+              riskDotClass(rollup.overallRisk),
+            )}
+          />
           {riskLabels[rollup.overallRisk]}
-        </ReviewStatusBadge>
+        </span>
       </div>
 
       <p className="text-muted-foreground text-xs">
@@ -3197,8 +2669,14 @@ const RiskSummaryCard = ({
                 className="text-muted-foreground flex items-center gap-1 text-[11px]"
                 key={verdict}
               >
-                <ReviewStatusDot tone={VERDICT_TONE[verdict]} />
-                {verdictLabels[verdict]}
+                <span
+                  aria-hidden="true"
+                  className={cn(
+                    "size-1.5 rounded-full",
+                    verdictDotClass(verdict),
+                  )}
+                />
+                {VERDICT_LABEL[verdict]}
                 <span className="text-foreground-ghost tabular-nums">
                   {format.number(count)}
                 </span>
@@ -3236,7 +2714,7 @@ const RiskSummaryCard = ({
 
 type TopIssueRowProps = {
   text: string;
-  severity: PlaybookSeverity;
+  severity: ReviewSeverity;
   blockId: string | null;
   editorAvailable: boolean;
   onScrollToBlock: (blockId: string) => void;
@@ -3249,7 +2727,15 @@ const TopIssueRow = ({
   editorAvailable,
   onScrollToBlock,
 }: TopIssueRowProps) => {
-  const dot = <ReviewSeverityDot level={PLAYBOOK_SEVERITY_LEVEL[severity]} />;
+  const dot = (
+    <span
+      aria-hidden="true"
+      className={cn(
+        "size-1.5 shrink-0 rounded-full",
+        severityDotClass(severity),
+      )}
+    />
+  );
 
   if (blockId === null || !editorAvailable) {
     return (
@@ -3274,96 +2760,16 @@ const TopIssueRow = ({
   );
 };
 
-type FixActionsProps = {
-  fixStatus: ReviewFixState["status"];
-  fixKind: "playbook" | "reference";
-  editorAvailable: boolean;
-  onInsert: () => void;
-  onScroll: () => void;
-  onAccept: () => void;
-  onReject: () => void;
-};
-
-const FixActions = ({
-  fixStatus,
-  fixKind,
-  editorAvailable,
-  onInsert,
-  onScroll,
-  onAccept,
-  onReject,
-}: FixActionsProps) => {
-  const t = useTranslations();
-
-  if (fixStatus === "accepted") {
-    return (
-      <div className="text-muted-foreground mt-2 flex items-center gap-1 text-[11px]">
-        <CheckIcon className="size-3" />
-        {t("knowledge.playbooks.review.fixAccepted")}
-      </div>
-    );
-  }
-
-  if (fixStatus === "applied") {
-    return (
-      <div className="mt-2 flex flex-wrap items-center gap-1.5">
-        <Button className="h-7 px-2.5 text-xs" onClick={onAccept} size="sm">
-          <CheckIcon className="me-1 size-3.5" />
-          {t("common.accept")}
-        </Button>
-        <Button
-          className="h-7 px-2.5 text-xs"
-          onClick={onReject}
-          size="sm"
-          variant="outline"
-        >
-          <XIcon className="me-1 size-3.5" />
-          {t("knowledge.playbooks.review.reject")}
-        </Button>
-        <Button
-          className="h-7 px-2.5 text-xs"
-          onClick={onScroll}
-          size="sm"
-          variant="ghost"
-        >
-          {t("knowledge.playbooks.review.scrollToChange")}
-        </Button>
-      </div>
-    );
-  }
-
-  // One primary gesture, named by its effect on the draft: the wording goes
-  // in as a tracked change with a margin note citing its source.
-  return (
-    <div className="mt-2">
-      <Button
-        className="h-7 px-2.5 text-xs"
-        disabled={!editorAvailable}
-        onClick={onInsert}
-        size="sm"
-        title={
-          fixKind === "playbook"
-            ? t("knowledge.playbooks.review.insertPreferred")
-            : t("inspector.review.insertSuggestion")
-        }
-      >
-        <PenLineIcon className="me-1 size-3.5" />
-        {REDLINE_LABEL}
-      </Button>
-    </div>
-  );
-};
-
-// Additive line under the rationale: the fallback that matched or the red line
-// that was violated. Tolerant of `matchedRef` being absent (older findings) or
-// null (verdicts that were not decided by a specific tier reference).
+// Additive line under the caption: the fallback that matched or the red line
+// that was violated. Tolerant of `matchedRef` being absent (a verdict not
+// decided by a specific tier reference).
 const MatchedRefLine = ({
   matchedRef,
 }: {
-  matchedRef: PlaybookMatchedRef | null | undefined;
+  matchedRef: ReviewFinding["matchedRef"];
 }) => {
   const t = useTranslations();
-  if (matchedRef === undefined || matchedRef === null) {
+  if (matchedRef === undefined) {
     return null;
   }
   const label =
@@ -3382,22 +2788,21 @@ const MatchedRefLine = ({
 };
 
 // Reviewer-facing "what to say" guidance authored on the position, not the
-// finding: surfaced only for the two verdicts a reviewer would actually raise
-// with the counterparty (a compliant/missing verdict has nothing to
-// negotiate). Tolerant of `negotiation` being absent (position authored no
-// guidance) the same way `MatchedRefLine` tolerates a missing `matchedRef`.
+// finding: surfaced only for the verdicts a reviewer would actually raise with
+// the counterparty. Tolerant of `negotiation` being absent (the position
+// authored no guidance).
 const NegotiationBlock = ({
   negotiation,
   verdict,
 }: {
   negotiation: Negotiation | undefined;
-  verdict: PlaybookVerdict | null;
+  verdict: ReviewVerdict | null;
 }) => {
   const t = useTranslations();
   if (
     negotiation === undefined ||
     verdict === null ||
-    !isNegotiablePlaybookVerdict(verdict)
+    !isNegotiableVerdict(verdict)
   ) {
     return null;
   }
@@ -3460,54 +2865,159 @@ const negotiationLookup = (
 
 // -- helpers --
 
-const useVerdictLabels = (): Record<PlaybookVerdict, string> => {
-  const t = useTranslations();
+/** A synthetic block id for a standard that lives in the playbook rather than
+ *  in a document: it keys the list row and never resolves to a block. */
+const AUTHORED_STANDARD_BLOCK_ID = "authored-standard";
+
+/**
+ * What the standard column quotes.
+ *
+ * A reference standard quotes the passages the run cited. A tier ladder quotes
+ * its ideal language when it is inline (that is the wording the position asks
+ * for); failing that, the tier rule the verdict actually matched — the one
+ * sentence the finding was decided by.
+ */
+const standardPassagesFor = ({
+  finding,
+  position,
+}: ReviewResultItem): readonly DeltaCitation[] => {
+  const referenced = (finding.referenceCitations ?? []).flatMap(
+    (group) => group.citations,
+  );
+  if (referenced.length > 0) {
+    return referenced;
+  }
+  const ideal = tieredIdeal(position);
+  if (ideal !== null) {
+    return [{ blockId: AUTHORED_STANDARD_BLOCK_ID, text: ideal }];
+  }
+  const { matchedRef } = finding;
+  if (matchedRef !== undefined) {
+    return [{ blockId: AUTHORED_STANDARD_BLOCK_ID, text: matchedRef.text }];
+  }
+  return [];
+};
+
+const tieredIdeal = (position: PinnedPosition | null): string | null => {
+  if (position?.mode !== "graded") {
+    return null;
+  }
+  const { standard } = position;
+  if (standard.source !== "tiers") {
+    return null;
+  }
+  const ideal = standard.tiers.acceptable.ideal;
+  if (ideal?.source !== "inline") {
+    return null;
+  }
+  const text = ideal.text.trim();
+  return text.length === 0 ? null : text;
+};
+
+/**
+ * The one line under the pair: the comparison in prose, the statement that
+ * there was not enough to compare, or the tier match's own reasoning.
+ *
+ * Takes the already-resolved "not enough evidence" wording rather than the
+ * translator: threading `useTranslations`' return type through a helper
+ * signature is what makes the message-key union too large to instantiate.
+ */
+const findingCaption = (
+  finding: ReviewFinding,
+  insufficientEvidenceLabel: string,
+): string | null => {
+  const { explanation } = finding;
+  if (explanation?.type === "comparison") {
+    return explanation.text;
+  }
+  if (explanation?.type === "insufficient-evidence") {
+    return insufficientEvidenceLabel;
+  }
+  const { rationale } = finding;
+  return rationale !== null && rationale.length > 0 ? rationale : null;
+};
+
+type FindingGlyph = { symbol: string; className: string; label: string };
+
+// TODO(i18n): English until the review surface is localized as a whole.
+const VERDICT_LABEL = {
+  compliant: "Compliant",
+  fallback: "Fallback",
+  deviation: "Deviation",
+  missing: "Missing",
+  additional: "Additional",
+  "not-applicable": "Not applicable",
+} as const satisfies Record<ReviewVerdict, string>;
+
+const VERDICT_GLYPH = {
+  compliant: "✓",
+  fallback: "≈",
+  deviation: "✕",
+  missing: "○",
+  additional: "+",
+  "not-applicable": "–",
+} as const satisfies Record<ReviewVerdict, string>;
+
+const VERDICT_GLYPH_CLASS = {
+  compliant: "text-success",
+  fallback: "text-warning-foreground",
+  deviation: "text-destructive",
+  missing: "text-muted-foreground",
+  additional: "text-muted-foreground",
+  "not-applicable": "text-border",
+} as const satisfies Record<ReviewVerdict, string>;
+
+const IMPACT_GLYPH = {
+  favourable: "▲",
+  unfavourable: "▼",
+  neutral: "–",
+} as const satisfies Record<DirectedImpact, string>;
+
+const IMPACT_GLYPH_CLASS = {
+  favourable: "text-success",
+  unfavourable: "text-destructive",
+  neutral: "text-muted-foreground",
+} as const satisfies Record<DirectedImpact, string>;
+
+/**
+ * The single mark that carries the judgment.
+ *
+ * A run judged for a side has already answered the only question that matters
+ * — which way this cuts for us — so the arrow wins. Without a side there is
+ * nothing to point at, and the verdict speaks for itself.
+ */
+const findingGlyph = (
+  finding: ReviewFinding,
+  perspective: ReviewPerspective,
+): FindingGlyph => {
+  const { impact } = finding;
+  if (isDirectedImpact(impact)) {
+    return {
+      symbol: IMPACT_GLYPH[impact],
+      className: IMPACT_GLYPH_CLASS[impact],
+      label: impactLabel(impact, perspective),
+    };
+  }
+  const { verdict } = finding;
+  if (verdict === null) {
+    return { symbol: "–", className: "text-muted-foreground", label: "" };
+  }
   return {
-    compliant: t("knowledge.playbooks.verdict.compliant"),
-    fallback: t("knowledge.playbooks.verdict.fallback"),
-    deviation: t("knowledge.playbooks.verdict.deviation"),
-    missing: t("knowledge.playbooks.verdict.missing"),
-    "not-applicable": t("knowledge.playbooks.verdict.notApplicable"),
+    symbol: VERDICT_GLYPH[verdict],
+    className: VERDICT_GLYPH_CLASS[verdict],
+    label: VERDICT_LABEL[verdict],
   };
 };
 
-const useSeverityLabels = (): Record<PlaybookSeverity, string> => {
-  const t = useTranslations();
-  return {
-    blocker: t("knowledge.playbooks.severity.blocker"),
-    high: t("knowledge.playbooks.severity.high"),
-    medium: t("knowledge.playbooks.severity.medium"),
-    low: t("knowledge.playbooks.severity.low"),
-  };
-};
+type DirectedImpact = Exclude<ReviewImpact, "unknown">;
 
-const useReferenceAssessmentLabels = (): Record<
-  ReferenceAssessment,
-  string
-> => {
-  const t = useTranslations();
-  return {
-    aligned: t("inspector.review.assessment.aligned"),
-    different: t("inspector.review.assessment.different"),
-    "missing-from-target": t("inspector.review.assessment.missingFromTarget"),
-    "additional-in-target": t("inspector.review.assessment.additionalInTarget"),
-    "deal-specific": t("inspector.review.assessment.dealSpecific"),
-    "not-comparable": t("inspector.review.assessment.notComparable"),
-  };
-};
-
-type DirectedImpact = Exclude<
-  NonNullable<ReferenceFinding["impact"]>,
-  "unknown"
->;
-
-/** An impact the card can put a direction on; `unknown` and findings that
- *  predate impacts fall back to the assessment chip. */
+/** An impact the card can put a direction on; `unknown` and findings the run
+ *  never judged for a side fall back to the verdict. */
 const isDirectedImpact = (
-  impact: ReferenceFinding["impact"],
+  impact: ReviewFinding["impact"],
 ): impact is DirectedImpact => impact !== undefined && impact !== "unknown";
 
-// English until the results copy settles; then it joins the catalog. Labels
+// TODO(i18n): English until the review surface is localized as a whole. Labels
 // name the side so "worse" is never ambiguous on a printed or shared card.
 const IMPACT_LABEL = {
   unfavourable: "Unfavourable",
@@ -3528,24 +3038,6 @@ const impactLabel = (
     ? `${IMPACT_FOR_SIDE_LABEL[impact]} ${perspective.role}`
     : IMPACT_LABEL[impact];
 
-/** Which way a directed comparison cuts, on the shared review palette. */
-const IMPACT_TONE = {
-  unfavourable: "warning",
-  favourable: "success",
-  neutral: "neutral",
-} as const satisfies Record<DirectedImpact, ReviewStatusTone>;
-
-/** How a clause compares to its references. "Additional", "deal-specific" and
- *  "not comparable" are observations, not problems, so they stay neutral. */
-const REFERENCE_ASSESSMENT_TONE = {
-  aligned: "success",
-  different: "warning",
-  "missing-from-target": "warning",
-  "additional-in-target": "neutral",
-  "deal-specific": "neutral",
-  "not-comparable": "neutral",
-} as const satisfies Record<ReferenceAssessment, ReviewStatusTone>;
-
 const useRiskLevelLabels = (): Record<OverallRisk, string> => {
   const t = useTranslations();
   return {
@@ -3557,22 +3049,91 @@ const useRiskLevelLabels = (): Record<OverallRisk, string> => {
   };
 };
 
-/** Verdict tiers on the shared review palette. Not-applicable is neutral and
- *  distinct from missing: out of scope, not a gap — the dashed border at the
- *  call site carries that difference. */
-const VERDICT_TONE = {
-  compliant: "success",
-  fallback: "warning",
-  deviation: "destructive",
-  missing: "neutral",
-  "not-applicable": "neutral",
-} as const satisfies Record<PlaybookVerdict, ReviewStatusTone>;
+// The overall-risk chip escalates visually with the level: "critical" is the
+// one solid-fill state (it means an outright violation of a non-negotiable
+// position), the rest reuse the same outlined verdict/severity token pairs
+// as the finding cards below.
+const RISK_CHIP_CRITICAL =
+  "border-transparent bg-destructive text-destructive-foreground";
+const RISK_CHIP_HIGH = "border-destructive/30 text-destructive";
+const RISK_CHIP_MEDIUM = "border-warning/30 text-warning-foreground";
+const RISK_CHIP_LOW = "border-border text-muted-foreground";
+const RISK_CHIP_NONE = "border-success/30 text-success";
 
-/** A playbook severity stops at "blocker"; the shared scale calls that level
- *  "critical" and adds a "none" the playbook vocabulary has no word for. */
-const PLAYBOOK_SEVERITY_LEVEL = {
-  blocker: "critical",
-  high: "high",
-  medium: "medium",
-  low: "low",
-} as const satisfies Record<PlaybookSeverity, ReviewSeverityLevel>;
+const riskChipClass = (risk: OverallRisk): string => {
+  switch (risk) {
+    case "critical":
+      return RISK_CHIP_CRITICAL;
+    case "high":
+      return RISK_CHIP_HIGH;
+    case "medium":
+      return RISK_CHIP_MEDIUM;
+    case "low":
+      return RISK_CHIP_LOW;
+    case "none":
+      return RISK_CHIP_NONE;
+    default:
+      risk satisfies never;
+      return "";
+  }
+};
+
+const riskDotClass = (risk: OverallRisk): string => {
+  switch (risk) {
+    // The "critical" dot sits on the chip's own solid destructive
+    // background, so it needs the foreground shade for contrast; "high"
+    // sits on a transparent chip like the severity dots elsewhere.
+    case "critical":
+      return "bg-destructive-foreground";
+    case "high":
+      return "bg-destructive";
+    case "medium":
+      return "bg-warning";
+    case "low":
+      return "bg-foreground-strong-muted";
+    case "none":
+      return "bg-success";
+    default:
+      risk satisfies never;
+      return "";
+  }
+};
+
+// Verdict tiers map to the same green/amber/red/gray semantic
+// tokens the verdict property uses elsewhere. Each `dark:`-safe pair
+// is declared as a constant so the hardcoded-colour rule treats it
+// as a token reference, not a raw value.
+const verdictDotClass = (verdict: ReviewVerdict): string => {
+  switch (verdict) {
+    case "compliant":
+      return "bg-success";
+    case "fallback":
+      return "bg-warning";
+    case "deviation":
+      return "bg-destructive";
+    case "missing":
+      return "bg-muted-foreground";
+    // Neutral, distinct from missing: neither is a gap in the standard.
+    case "additional":
+    case "not-applicable":
+      return "bg-border";
+    default:
+      verdict satisfies never;
+      return "";
+  }
+};
+
+const severityDotClass = (severity: ReviewSeverity): string => {
+  switch (severity) {
+    case "blocker":
+    case "high":
+      return "bg-destructive";
+    case "medium":
+      return "bg-warning";
+    case "low":
+      return "bg-foreground-strong-muted";
+    default:
+      severity satisfies never;
+      return "";
+  }
+};

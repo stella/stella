@@ -4,6 +4,7 @@ import { and, eq, ne } from "drizzle-orm";
 import { docxSuggestions } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { syncReviewFindingForSuggestion } from "@/api/lib/document-review/suggestion-finding-sync";
 
 /**
  * Revert a resolved suggestion back to pending, clearing the resolution
@@ -12,6 +13,10 @@ import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
  * authoritative): a revert only wins when the row is actually terminal, so
  * an already-pending row is a no-op `{ updated: false }` and a revert can't
  * silently override a resolve that lands concurrently.
+ *
+ * A suggestion staged by a document review takes its finding back with it: the
+ * decision and the application are both withdrawn, leaving the finding as the
+ * engine produced it.
  */
 const revertDocxSuggestion = createSafeHandler(
   {
@@ -22,12 +27,14 @@ const revertDocxSuggestion = createSafeHandler(
       suggestionId: tSafeId("docxSuggestion"),
     }),
   },
-  async function* ({ workspaceId, params, safeDb }) {
+  async function* ({ workspaceId, params, recordAuditEvent, safeDb, user }) {
     const updated = yield* Result.await(
       safeDb(async (tx) => {
         // audit: skip — inverse of resolve; clears the row's own resolution
         // trail (resolvedByUserId / resolvedAt) back to pending. No separate
-        // audit_log row, matching the create/resolve handlers.
+        // audit_log row, matching the create/resolve handlers. Reopening a
+        // linked review finding is audited by the sync below, as taking the
+        // decision was.
         const rows = await tx
           .update(docxSuggestions)
           .set({
@@ -44,7 +51,22 @@ const revertDocxSuggestion = createSafeHandler(
               ne(docxSuggestions.status, "pending"),
             ),
           )
-          .returning({ id: docxSuggestions.id });
+          .returning({
+            id: docxSuggestions.id,
+            originReviewFindingId: docxSuggestions.originReviewFindingId,
+          });
+
+        const reverted = rows.at(0);
+        if (reverted !== undefined && reverted.originReviewFindingId !== null) {
+          await syncReviewFindingForSuggestion({
+            tx,
+            workspaceId,
+            findingId: reverted.originReviewFindingId,
+            status: "pending",
+            userId: user.id,
+            recordAuditEvent,
+          });
+        }
         return rows;
       }),
     );

@@ -63,8 +63,11 @@ import {
   type Position,
   type PositionErrors,
   type PositionSeverity,
+  positionTiers,
   validatePosition,
 } from "@/lib/knowledge/playbook-types";
+import type { PositionDecisionSummary } from "@/lib/knowledge/position-decisions";
+import { readPositionDecisions } from "@/lib/knowledge/position-decisions";
 import {
   documentTypesOptions,
   knowledgeKeys,
@@ -198,6 +201,9 @@ const PlaybookEditorLoader = ({
       initialPositions={detail.positions.items}
       key={reloadKey}
       onBack={onBack}
+      // Derived from the org's findings on every read, so it tracks the cache
+      // rather than freezing at mount like the `initial*` seeds.
+      positionDecisions={readPositionDecisions(detail.positionDecisions)}
       onReload={() => setReloadKey((current) => current + 1)}
       onSaved={onSaved}
       organizationId={organizationId}
@@ -227,6 +233,9 @@ type PlaybookEditorFormProps = {
   initialPositions: Position[];
   initialStatus: PlaybookApprovalStatus;
   initialApprovedAt: string | null;
+  /** What the org's reviewers did with each position, by `sourceId`; empty
+   *  for a playbook that has never been run. */
+  positionDecisions?: ReadonlyMap<string, PositionDecisionSummary> | undefined;
   /** Concurrency token; tracks the cached detail, null for a new playbook. */
   updatedAt: string | null;
   onBack: () => void;
@@ -248,6 +257,7 @@ const PlaybookEditorForm = ({
   initialPositions,
   initialStatus,
   initialApprovedAt,
+  positionDecisions,
   updatedAt,
   onBack,
   onSaved,
@@ -411,13 +421,16 @@ const PlaybookEditorForm = ({
       updatePosition(sourceId, extractToGraded(position));
       return;
     }
-    const { tiers } = position;
-    const hasTierContent =
+    const tiers = positionTiers(position);
+    // A reference standard always carries content (its passages are the
+    // standard), so converting it to an extract position always confirms.
+    const hasStandardContent =
+      tiers === null ||
       tiers.acceptable.rules.length > 0 ||
       tiers.fallback.entries.length > 0 ||
       tiers.notAcceptable.rules.length > 0 ||
       tiers.acceptable.ideal !== undefined;
-    if (hasTierContent) {
+    if (hasStandardContent) {
       setConvertConfirmId(sourceId);
       return;
     }
@@ -916,6 +929,7 @@ const PlaybookEditorForm = ({
               <ul className="space-y-3">
                 {positions.map((position, index) => (
                   <PositionEditor
+                    decision={positionDecisions?.get(position.sourceId)}
                     errors={errorsById.get(position.sourceId) ?? {}}
                     index={index}
                     key={position.sourceId}

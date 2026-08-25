@@ -27,7 +27,7 @@ describe("review delta view dispatch", () => {
       standard: side,
       target: side,
     });
-    expect(element.type).toBe(ReviewTermTable);
+    expect(element?.type).toBe(ReviewTermTable);
   });
 
   test("enumeration delta renders a presence matrix", () => {
@@ -39,7 +39,7 @@ describe("review delta view dispatch", () => {
       standard: side,
       target: side,
     });
-    expect(element.type).toBe(ReviewPresenceMatrix);
+    expect(element?.type).toBe(ReviewPresenceMatrix);
   });
 
   test("presence delta renders a presence matrix", () => {
@@ -56,7 +56,7 @@ describe("review delta view dispatch", () => {
       standard: side,
       target: side,
     });
-    expect(element.type).toBe(ReviewPresenceMatrix);
+    expect(element?.type).toBe(ReviewPresenceMatrix);
   });
 
   test("language delta falls back to the diffed aligned pair", () => {
@@ -68,7 +68,7 @@ describe("review delta view dispatch", () => {
       standard: side,
       target: side,
     });
-    expect(element.type).toBe(ReviewAlignedPair);
-    expect(element.props.diff).toBe(true);
+    expect(element?.type).toBe(ReviewAlignedPair);
+    expect(element?.props.diff).toBe(true);
   });
 });
