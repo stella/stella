@@ -13,7 +13,10 @@ import { eslintCompatPlugin } from "@oxlint/plugins";
 // ESM resolver as well as Bun's, and Node does not infer one. Without it the
 // whole plugin set fails to load under Node, and the error names this file's
 // import rather than whatever the caller was linting.
-import { hasPhysicalProperty } from "./physical-properties.ts";
+import {
+  hasPhysicalProperty,
+  replacePhysicalProperties,
+} from "./physical-properties.ts";
 
 export default eslintCompatPlugin({
   meta: { name: "no-physical-properties" },
@@ -21,6 +24,7 @@ export default eslintCompatPlugin({
     "no-physical-properties": {
       meta: {
         type: "problem",
+        fixable: "code",
         messages: {
           physicalProperty:
             "Physical directional CSS property breaks RTL. " +
@@ -42,6 +46,13 @@ export default eslintCompatPlugin({
               context.report({
                 node,
                 messageId: "physicalProperty",
+                fix: (fixer) => {
+                  const source = context.sourceCode.getText(node);
+                  const replacement = replacePhysicalProperties(source);
+                  return replacement === source
+                    ? null
+                    : fixer.replaceText(node, replacement);
+                },
               });
             }
           },
@@ -50,6 +61,13 @@ export default eslintCompatPlugin({
               context.report({
                 node,
                 messageId: "physicalProperty",
+                fix: (fixer) => {
+                  const source = context.sourceCode.getText(node);
+                  const replacement = replacePhysicalProperties(source);
+                  return replacement === source
+                    ? null
+                    : fixer.replaceText(node, replacement);
+                },
               });
             }
           },

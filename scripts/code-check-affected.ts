@@ -55,6 +55,7 @@ export const PLUGIN_FIXTURE_INPUTS = [
   ...SHARED_COMPILER_CACHE_INPUTS,
   ...OXLINT_CONFIGURATION_CACHE_INPUTS,
   "$TURBO_ROOT$/scripts/lint-oxlint-fixtures.sh",
+  "$TURBO_ROOT$/scripts/oxlint-safe-fixers.test.ts",
   "$TURBO_ROOT$/tsconfig.json",
   "$TURBO_ROOT$/tsconfig.oxlint-plugins.json",
 ] as const;

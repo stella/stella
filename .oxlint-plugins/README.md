@@ -12,6 +12,24 @@ local links in sync. `bash scripts/lint-oxlint-fixtures.sh` proves the positive 
 if a detector stops reporting, its intentionally suppressed fixture becomes an unused
 directive and CI fails.
 
+## Automatic fixes
+
+`oxlint --fix` repairs violations only when the rule can derive one local,
+deterministic result without choosing a domain value, dependency, or control-flow
+contract:
+
+- `no-physical-properties` maps physical Tailwind directions, including logical
+  corner radii and scroll spacing.
+- `no-awaited-builder-union` moves `await` into the leaves of a directly wrapped
+  conditional.
+- `no-coerced-optional-union-enum` expands inline string values in a namespaced
+  `t.Optional(t.UnionEnum(...))` call.
+
+Context-dependent forms remain diagnostics. `scripts/oxlint-safe-fixers.test.ts`
+runs the real CLI twice per repair, checks the exact output, and proves each fixer
+reaches a fixed point. It also checks representative ambiguous forms remain
+unchanged for a human or coding agent to resolve.
+
 ## How to read the catalogue
 
 The text below is a concise contract, not a claim that syntax analysis proves more

@@ -27,6 +27,11 @@
 //   await (paged ? loadRows(1) : loadRows(2))        // same call, one type
 //   const q = lock ? query.for("update") : query     // not awaited
 //
+// `--fix` performs the branchwise-await rewrite when the await directly wraps
+// the conditional. TypeScript wrappers around the whole conditional remain a
+// diagnostic because moving the wrapper into each branch requires a semantic
+// choice about which expression the assertion should constrain.
+//
 // Also allowed, and the reason detection is not merely "steps differ":
 //   await (json ? response.json() : response.text())  // siblings, no builder
 //   await (primary ? jobs.primary : jobs.secondary)   // siblings, no builder
@@ -48,6 +53,8 @@
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
 import { getPropertyName } from "./utils.ts";
+
+const AWAIT_KEYWORD_LENGTH = "await".length;
 
 // Peel TS-only and optional-chain wrappers so a shape check sees the
 // underlying expression.
@@ -172,6 +179,7 @@ export default eslintCompatPlugin({
     "no-awaited-builder-union": {
       meta: {
         type: "problem",
+        fixable: "code",
         messages: {
           awaitedBuilderUnion:
             "Awaiting a ternary over two chain states of `{{root}}` makes " +
@@ -204,10 +212,34 @@ export default eslintCompatPlugin({
             if (!isBuilderChainUnion(chains)) {
               return;
             }
+            if (node.argument.type !== "ConditionalExpression") {
+              context.report({
+                node,
+                messageId: "awaitedBuilderUnion",
+                data: { root: first.root },
+              });
+              return;
+            }
             context.report({
               node,
               messageId: "awaitedBuilderUnion",
               data: { root: first.root },
+              fix: (fixer) => {
+                const awaitEnd = node.range[0] + AWAIT_KEYWORD_LENGTH;
+                let removalEnd = awaitEnd;
+                while (
+                  /\s/u.test(context.sourceCode.text.at(removalEnd) ?? "")
+                ) {
+                  removalEnd += 1;
+                }
+                const branches = collectBranches(node.argument, []);
+                return [
+                  fixer.removeRange([node.range[0], removalEnd]),
+                  ...branches.map((branch) =>
+                    fixer.insertTextBefore(branch, "await "),
+                  ),
+                ];
+              },
             });
           },
         };
