@@ -502,7 +502,7 @@ export type CorpusProjectionAppendStart = {
 
 type StartCorpusProjectionAppendBatchOptions = {
   leases: readonly CorpusProjectionIntentLease[];
-  now?: Date;
+  testNow?: Date;
 };
 
 /**
@@ -513,7 +513,7 @@ type StartCorpusProjectionAppendBatchOptions = {
  */
 export const startCorpusProjectionAppendBatchTx = async (
   tx: Transaction,
-  { leases, now }: StartCorpusProjectionAppendBatchOptions,
+  { leases, testNow }: StartCorpusProjectionAppendBatchOptions,
 ): Promise<CorpusProjectionAppendStart[]> => {
   const first = leases.at(0);
   if (
@@ -555,10 +555,6 @@ export const startCorpusProjectionAppendBatchTx = async (
     )
     .orderBy(asc(corpusIndexProjectionStates.entityId))
     .for("update");
-  const transitionAt =
-    now ??
-    (await tx.select({ value: sql<Date>`clock_timestamp()` })).at(0)?.value ??
-    panic("Corpus projection append-start lost the database clock");
   const exactLeases = or(
     ...leases.map(({ intentId, leaseToken }) =>
       and(
@@ -570,6 +566,22 @@ export const startCorpusProjectionAppendBatchTx = async (
   if (exactLeases === undefined) {
     return panic("Corpus projection append-start lease predicate is empty");
   }
+  await tx
+    .select({ id: corpusIndexProjectionIntents.id })
+    .from(corpusIndexProjectionIntents)
+    .where(
+      and(
+        exactLeases,
+        eq(corpusIndexProjectionIntents.family, first.family),
+        eq(corpusIndexProjectionIntents.generation, first.generation),
+      ),
+    )
+    .orderBy(asc(corpusIndexProjectionIntents.id))
+    .for("update");
+  const transitionAt =
+    testNow ??
+    (await tx.select({ value: sql<Date>`clock_timestamp()` })).at(0)?.value ??
+    panic("Corpus projection append-start lost the database clock");
   const started = await tx
     .update(corpusIndexProjectionIntents)
     .set({
@@ -932,7 +944,7 @@ type ClassifyCorpusProjectionReservationFailureOptions = {
   intentId: ProjectionIntentId;
   leaseToken: string;
   failure: CorpusProjectionReservationFailure;
-  now?: Date;
+  testNow?: Date;
 };
 
 export const CORPUS_PROJECTION_RETRY_MIN_MS = 1_000;
@@ -956,7 +968,7 @@ export const classifyCorpusProjectionReservationFailureTx = async (
     intentId,
     leaseToken,
     failure,
-    now,
+    testNow,
   }: ClassifyCorpusProjectionReservationFailureOptions,
 ): Promise<CorpusProjectionReservationFailureResult> => {
   if (
@@ -1030,7 +1042,10 @@ export const classifyCorpusProjectionReservationFailureTx = async (
   if (intent === undefined) {
     return "lease_lost";
   }
-  const transitionAt = now ?? sql<Date>`clock_timestamp()`;
+  const transitionAt =
+    testNow ??
+    (await tx.select({ value: sql<Date>`clock_timestamp()` })).at(0)?.value ??
+    panic("Corpus projection failure classification lost the database clock");
   await tx
     .update(corpusIndexProjectionIntents)
     .set({
@@ -1062,9 +1077,7 @@ export const classifyCorpusProjectionReservationFailureTx = async (
   END`;
   const retryAt =
     failure.status === "retry_scheduled"
-      ? now === undefined
-        ? sql<Date>`clock_timestamp() + (${failure.retryDelayMs} * interval '1 millisecond')`
-        : new Date(now.getTime() + failure.retryDelayMs)
+      ? new Date(transitionAt.getTime() + failure.retryDelayMs)
       : null;
   const retryNotBefore = sql<Date | null>`CASE
     WHEN ${retryExhausted} THEN NULL

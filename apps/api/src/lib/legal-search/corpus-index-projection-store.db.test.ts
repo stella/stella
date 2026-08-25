@@ -293,7 +293,7 @@ test("retry classification defers poison work, then blocks the exhausted desired
               maxAttempts: 2,
               message: "canonical payload is temporarily unavailable",
             },
-            now: startedAt,
+            testNow: startedAt,
           },
         ),
     ),
@@ -357,7 +357,7 @@ test("retry classification defers poison work, then blocks the exhausted desired
               maxAttempts: 2,
               message: "canonical payload remains unavailable",
             },
-            now: new Date("2026-08-25T12:01:00.000Z"),
+            testNow: new Date("2026-08-25T12:01:00.000Z"),
           },
         ),
     ),
@@ -374,6 +374,62 @@ test("retry classification defers poison work, then blocks the exhausted desired
   ).toEqual([
     { workStatus: "blocked", retryNotBefore: null, failureAttempts: 2 },
   ]);
+});
+
+test("failure classification locks projection state before its intent", async () => {
+  const classifiedAt = new Date("2026-08-25T12:00:00.000Z");
+  const leases = await db.transaction(
+    async (tx) =>
+      await reserveCorpusProjectionIntentsTx(asTestRaw<Transaction>(tx), {
+        family: "case_law",
+        generation: "case_law_v5",
+        limit: 1,
+        leaseMs: 60_000,
+        testNow: classifiedAt,
+        newIntentId: () => FIRST_INTENT_ID,
+        newLeaseToken: () => FIRST_LEASE_TOKEN,
+      }),
+  );
+  const lease = leases.at(0) ?? panic("Expected projection lease");
+  const statements: string[] = [];
+  const loggedDb = drizzle({
+    client,
+    logger: {
+      logQuery(query) {
+        statements.push(query);
+      },
+    },
+  });
+  expect(
+    await loggedDb.transaction(
+      async (tx) =>
+        await classifyCorpusProjectionReservationFailureTx(
+          asTestRaw<Transaction>(tx),
+          {
+            intentId: lease.intentId,
+            leaseToken: lease.leaseToken,
+            failure: {
+              status: "blocked",
+              kind: "revision_too_large",
+              message: "payload exceeds the structural ceiling",
+            },
+            testNow: classifiedAt,
+          },
+        ),
+    ),
+  ).toBe("blocked");
+  const stateLock = statements.findIndex(
+    (query) =>
+      query.includes('from "corpus_index_projection_states"') &&
+      query.includes("for update"),
+  );
+  const intentLock = statements.findIndex(
+    (query) =>
+      query.includes('from "corpus_index_projection_intents"') &&
+      query.includes("for update"),
+  );
+  expect(stateLock).toBeGreaterThanOrEqual(0);
+  expect(intentLock).toBeGreaterThan(stateLock);
 });
 
 test("unknown append cleanup starts its barrier at failure observation", async () => {
@@ -398,7 +454,7 @@ test("unknown append cleanup starts its barrier at failure observation", async (
         await startCorpusProjectionAppendTx(asTestRaw<Transaction>(tx), {
           intentId: lease.intentId,
           leaseToken: lease.leaseToken,
-          now: appendStartedAt,
+          testNow: appendStartedAt,
         }),
     ),
   ).toBe("started");
@@ -408,7 +464,7 @@ test("unknown append cleanup starts its barrier at failure observation", async (
         await abandonCorpusProjectionAppendTx(asTestRaw<Transaction>(tx), {
           intentId: lease.intentId,
           leaseToken: lease.leaseToken,
-          now: failureObservedAt,
+          testNow: failureObservedAt,
           errorMessage: "append response was lost",
         }),
     ),
@@ -482,7 +538,7 @@ test("one append request receives one post-lock database timestamp", async () =>
       async (tx) =>
         await startCorpusProjectionAppendBatchTx(asTestRaw<Transaction>(tx), {
           leases,
-          now: requestStartedAt,
+          testNow: requestStartedAt,
         }),
     ),
   ).toEqual(leases.map(({ intentId }) => ({ intentId, status: "started" })));
