@@ -478,6 +478,46 @@ test("ingest succeeds when every document is accepted", async () => {
   expect(result.isOk()).toBe(true);
 });
 
+test("final-generation ingest requires the exact committed V2 receipt", async () => {
+  responseBody = {
+    num_docs_for_processing: 2,
+    num_ingested_docs: 2,
+    num_rejected_docs: 0,
+  };
+
+  const result = await getCorpusIndexClient().ingestCommittedBatch(
+    "case_law_v5_cs_sk",
+    '{"document_id":"a"}\n{"document_id":"b"}',
+  );
+
+  expect(result.isOk()).toBe(true);
+  expect(requests.at(0)?.search).toBe("?commit=wait_for");
+});
+
+test("final-generation ingest rejects missing or partial V2 counters", async () => {
+  for (const receipt of [
+    { num_docs_for_processing: 2, num_rejected_docs: 0 },
+    {
+      num_docs_for_processing: 2,
+      num_ingested_docs: 1,
+      num_rejected_docs: 0,
+    },
+    {
+      num_docs_for_processing: 2,
+      num_ingested_docs: 2,
+      num_rejected_docs: 1,
+    },
+  ]) {
+    responseBody = receipt;
+    // oxlint-disable-next-line no-await-in-loop -- each malformed receipt is observed independently by the request recorder
+    const result = await getCorpusIndexClient().ingestCommittedBatch(
+      "case_law_v5_cs_sk",
+      '{"document_id":"a"}\n{"document_id":"b"}',
+    );
+    expect(result.isErr()).toBe(true);
+  }
+});
+
 // Bun rejects a request whose timeout fires with the abort reason alone —
 // a DOMException reading "The operation timed out." and nothing else. On
 // the backfill path that reaches the log as the whole story, so the client
