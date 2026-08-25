@@ -4,10 +4,7 @@ import type { Static } from "elysia";
 
 import {
   CASE_LAW_ANNOTATION_BODY_MAX_LENGTH,
-  CASE_LAW_ANNOTATION_COLORS,
   CASE_LAW_ANNOTATION_QUOTE_MAX_LENGTH,
-  CASE_LAW_ANNOTATION_STYLES,
-  CASE_LAW_ANNOTATION_VISIBILITIES,
 } from "@/api/db/schema";
 import type {
   CaseLawAnnotationColor,
@@ -16,23 +13,23 @@ import type {
 } from "@/api/db/schema";
 import { tSafeId } from "@/api/lib/custom-schema";
 
-// The database tuples provide both the runtime enum and the static domain;
-// `t.Unsafe` preserves that domain through Elysia's route contract, unlike a
-// mapped `t.Union`, whose array element type widens to `never`.
-export const annotationColorSchema = t.Unsafe<CaseLawAnnotationColor>({
-  type: "string",
-  enum: CASE_LAW_ANNOTATION_COLORS,
-});
-export const annotationStyleSchema = t.Unsafe<CaseLawAnnotationStyle>({
-  type: "string",
-  enum: CASE_LAW_ANNOTATION_STYLES,
-});
-export const annotationVisibilitySchema = t.Unsafe<CaseLawAnnotationVisibility>(
-  {
-    type: "string",
-    enum: CASE_LAW_ANNOTATION_VISIBILITIES,
-  },
-);
+export const annotationColorSchema = t.Union([
+  t.Literal("yellow"),
+  t.Literal("green"),
+  t.Literal("sky"),
+  t.Literal("violet"),
+  t.Literal("red"),
+]);
+export const annotationStyleSchema = t.Union([
+  t.Literal("highlight"),
+  t.Literal("underline"),
+  t.Literal("squiggly"),
+  t.Literal("strikethrough"),
+]);
+export const annotationVisibilitySchema = t.Union([
+  t.Literal("private"),
+  t.Literal("shared"),
+]);
 
 /** The route schema has validated these values; preserve its closed domain. */
 export const requireAnnotationColor = (
