@@ -175,14 +175,13 @@ pub fn get_or_create_clipboard_key() -> Result<[u8; 32], String> {
       .try_into()
       .map_err(|_| "clipboard key has an invalid length".to_string()),
     Err(Error::NoEntry) => {
-      use aes_gcm::aead::{OsRng, rand_core::RngCore};
+      use aes_gcm::{Aes256Gcm, Key, aead::Generate};
 
-      let mut key = [0_u8; 32];
-      OsRng.fill_bytes(&mut key);
+      let key = Key::<Aes256Gcm>::generate();
       key_entry
         .set_secret(&key)
         .map_err(|e| format!("keychain store error: {e}"))?;
-      Ok(key)
+      Ok(key.into())
     }
     Err(e) => Err(format!("keychain read error: {e}")),
   }

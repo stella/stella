@@ -30,6 +30,10 @@ import { panic, Result, TaggedError } from "better-result";
 import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 
+import {
+  CHAT_FILE_INPUT_ACCEPT,
+  isChatFileMimeType,
+} from "@stll/api-contract/chat-file-types";
 import { CHAT_CONTEXT_FILE_MAX_BYTES } from "@stll/chat-limits";
 
 import {
@@ -91,26 +95,7 @@ const CHAT_MAX_FILE_BYTES = CHAT_CONTEXT_FILE_MAX_BYTES;
 const CHAT_DRAFT_PERSIST_DEBOUNCE_MS = 250;
 const CHAT_DRAFT_PERSIST_MAX_WAIT_MS = 1500;
 
-const DOCX_MIME_TYPE =
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
-const TEXT_PLAIN_MIME_TYPE = "text/plain";
-const TEXT_CSV_MIME_TYPE = "text/csv";
-const TEXT_MARKDOWN_MIME_TYPE = "text/markdown";
-
-const ALLOWED_CHAT_FILE_MIME_TYPES = {
-  "image/png": true,
-  "image/jpeg": true,
-  "image/webp": true,
-  "image/gif": true,
-  "application/pdf": true,
-  [DOCX_MIME_TYPE]: true,
-  [TEXT_PLAIN_MIME_TYPE]: true,
-  [TEXT_CSV_MIME_TYPE]: true,
-  [TEXT_MARKDOWN_MIME_TYPE]: true,
-} as const;
-
-export const CHAT_FILE_INPUT_ACCEPT =
-  ".png,.jpg,.jpeg,.webp,.gif,.pdf,.docx,.txt,.csv,.md";
+export { CHAT_FILE_INPUT_ACCEPT };
 const EMPTY_ATTACHMENTS: ChatDraftAttachment[] = [];
 const EMPTY_SENT_MESSAGE_HISTORY: readonly string[] = [];
 const EMPTY_CHAT_DRAFT_DOC = createEmptyChatDraftDoc();
@@ -1348,10 +1333,7 @@ export const useChatEditor = ({
           break;
         }
 
-        if (
-          !Object.hasOwn(ALLOWED_CHAT_FILE_MIME_TYPES, file.type) ||
-          file.size > CHAT_MAX_FILE_BYTES
-        ) {
+        if (!isChatFileMimeType(file.type) || file.size > CHAT_MAX_FILE_BYTES) {
           continue;
         }
 

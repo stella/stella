@@ -5,6 +5,7 @@ import { describe, expect, test } from "bun:test";
 import {
   type NetworkBaseline,
   type RouteNetworkMetrics,
+  browserRequestInterval,
   diffNetworkBaseline,
   mergeNetworkBaseline,
   normalizeApiPath,
@@ -215,6 +216,38 @@ describe("waterfallDepth", () => {
   });
 });
 
+describe("browserRequestInterval", () => {
+  const timing = (
+    startTime: number,
+    responseEnd: number,
+  ): Parameters<typeof browserRequestInterval>[0] => ({
+    startTime,
+    domainLookupStart: -1,
+    domainLookupEnd: -1,
+    connectStart: -1,
+    secureConnectionStart: -1,
+    connectEnd: -1,
+    requestStart: -1,
+    responseStart: -1,
+    responseEnd,
+  });
+
+  test("resolves the relative response end against the epoch start", () => {
+    expect(browserRequestInterval(timing(1_700_000_000_000, 42))).toEqual({
+      start: 1_700_000_000_000,
+      end: 1_700_000_000_042,
+    });
+  });
+
+  test("rejects an unavailable response end", () => {
+    expect(browserRequestInterval(timing(1_700_000_000_000, -1))).toBeNull();
+  });
+
+  test("rejects an unavailable start", () => {
+    expect(browserRequestInterval(timing(-1, 42))).toBeNull();
+  });
+});
+
 describe("waitForQuietPeriod", () => {
   test("observes the minimum window before returning idle", async () => {
     let current = 100;
@@ -339,21 +372,20 @@ describe("diffNetworkBaseline", () => {
     expect(problems.some((p) => p.includes("GET /v1/contacts/:id"))).toBe(true);
   });
 
-  test("a waterfall within the launch-jitter allowance passes", () => {
+  test("a waterfall at the committed depth passes", () => {
     const { problems } = diffNetworkBaseline(
       baseline,
-      new Map([["/contacts", metrics(["GET /v1/contacts"], 3)]]),
+      new Map([["/contacts", metrics(["GET /v1/contacts"], 2)]]),
     );
     expect(problems).toEqual([]);
   });
 
-  test("a waterfall beyond the launch-jitter allowance is a problem", () => {
+  test("a single extra level is a problem", () => {
     const { problems } = diffNetworkBaseline(
       baseline,
-      new Map([["/contacts", metrics(["GET /v1/contacts"], 4)]]),
+      new Map([["/contacts", metrics(["GET /v1/contacts"], 3)]]),
     );
-    expect(problems.some((p) => p.includes("2 -> 4"))).toBe(true);
-    expect(problems.some((p) => p.includes("launch jitter"))).toBe(true);
+    expect(problems.some((p) => p.includes("2 -> 3"))).toBe(true);
   });
 
   test("a repeated API request is a problem", () => {
@@ -759,9 +791,7 @@ describe("mergeNetworkBaseline", () => {
     });
   });
 
-  test("merge records the raw observed depth, no jitter allowance baked in", () => {
-    // The diff check tolerates +1 as launch jitter, but the committed baseline
-    // must stay exact so the allowance is re-evaluated against a true value.
+  test("merge records the raw observed depth", () => {
     const existing: NetworkBaseline = {
       "/contacts": { depth: 2, requests: ["GET /v1/contacts"] },
     };

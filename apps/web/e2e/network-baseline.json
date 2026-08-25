@@ -1,6 +1,6 @@
 {
   "/chat": {
-    "depth": 3,
+    "depth": 6,
     "requests": [
       "GET /api/auth/get-session",
       "GET /api/auth/organization/get-active-member-role",
@@ -47,7 +47,7 @@
     }
   },
   "/chat/$threadId": {
-    "depth": 5,
+    "depth": 6,
     "requests": [
       "GET /api/auth/get-session",
       "GET /api/auth/organization/get-active-member-role",
@@ -161,7 +161,7 @@
     }
   },
   "/chat/workspaces/$workspaceId/$threadId": {
-    "depth": 5,
+    "depth": 7,
     "requests": [
       "GET /api/auth/get-session",
       "GET /api/auth/organization/get-active-member-role",
@@ -228,7 +228,7 @@
     }
   },
   "/chat/workspaces/$workspaceId/new": {
-    "depth": 4,
+    "depth": 7,
     "requests": [
       "GET /api/auth/get-session",
       "GET /api/auth/organization/get-active-member-role",
@@ -291,7 +291,7 @@
     }
   },
   "/contacts": {
-    "depth": 3,
+    "depth": 5,
     "requests": [
       "GET /api/auth/get-session",
       "GET /api/auth/organization/get-active-member-role",
@@ -338,7 +338,7 @@
     }
   },
   "/contacts/$contactId": {
-    "depth": 4,
+    "depth": 6,
     "requests": [
       "GET /api/auth/get-session",
       "GET /api/auth/organization/get-active-member-role",
@@ -424,7 +424,7 @@
     }
   },
   "/dev/autocomplete": {
-    "depth": 3,
+    "depth": 6,
     "requests": [
       "GET /api/auth/get-session",
       "GET /api/auth/organization/get-active-member-role",
@@ -557,7 +557,7 @@
     }
   },
   "/knowledge/mcp target": {
-    "depth": 5,
+    "depth": 6,
     "requests": [
       "GET /api/auth/get-session",
       "GET /api/auth/organization/get-active-member-role",
@@ -608,7 +608,7 @@
     }
   },
   "/knowledge/playbooks": {
-    "depth": 3,
+    "depth": 4,
     "requests": [
       "GET /api/auth/get-session",
       "GET /api/auth/organization/get-active-member-role",
@@ -659,7 +659,7 @@
     }
   },
   "/knowledge/prompts target": {
-    "depth": 5,
+    "depth": 6,
     "requests": [
       "GET /api/auth/get-session",
       "GET /api/auth/organization/get-active-member-role",
@@ -761,7 +761,7 @@
     }
   },
   "/knowledge/styles": {
-    "depth": 2,
+    "depth": 3,
     "requests": [
       "GET /api/auth/get-session",
       "GET /api/auth/organization/get-active-member-role",
@@ -804,7 +804,7 @@
     }
   },
   "/knowledge/templates": {
-    "depth": 3,
+    "depth": 4,
     "requests": [
       "GET /api/auth/get-session",
       "GET /api/auth/organization/get-active-member-role",
@@ -851,7 +851,7 @@
     }
   },
   "/knowledge/tools": {
-    "depth": 5,
+    "depth": 6,
     "requests": [
       "GET /api/auth/get-session",
       "GET /api/auth/organization/get-active-member-role",
@@ -945,7 +945,7 @@
     }
   },
   "/settings target": {
-    "depth": 4,
+    "depth": 6,
     "requests": [
       "GET /api/auth/get-session",
       "GET /api/auth/list-sessions",
@@ -988,7 +988,7 @@
     }
   },
   "/settings/account/beta": {
-    "depth": 3,
+    "depth": 6,
     "requests": [
       "GET /api/auth/get-session",
       "GET /api/auth/list-sessions",
@@ -1113,7 +1113,7 @@
     }
   },
   "/settings/account/memory target": {
-    "depth": 4,
+    "depth": 5,
     "requests": [
       "GET /api/auth/get-session",
       "GET /api/auth/list-sessions",
@@ -1156,7 +1156,7 @@
     }
   },
   "/settings/account/profile": {
-    "depth": 4,
+    "depth": 6,
     "requests": [
       "GET /api/auth/get-session",
       "GET /api/auth/list-sessions",
@@ -1199,7 +1199,7 @@
     }
   },
   "/settings/organization target": {
-    "depth": 4,
+    "depth": 5,
     "requests": [
       "GET /api/auth/get-session",
       "GET /api/auth/organization/get-active-member-role",
@@ -1344,7 +1344,7 @@
     }
   },
   "/settings/organization/audit-logs": {
-    "depth": 4,
+    "depth": 5,
     "requests": [
       "GET /api/auth/get-session",
       "GET /api/auth/organization/get-active-member-role",
@@ -1387,7 +1387,7 @@
     }
   },
   "/settings/organization/catalogue target": {
-    "depth": 5,
+    "depth": 6,
     "requests": [
       "GET /api/auth/get-session",
       "GET /api/auth/organization/get-active-member-role",
@@ -1438,7 +1438,7 @@
     }
   },
   "/settings/organization/document-types": {
-    "depth": 3,
+    "depth": 4,
     "requests": [
       "GET /api/auth/get-session",
       "GET /api/auth/organization/get-active-member-role",
@@ -1481,7 +1481,7 @@
     }
   },
   "/settings/organization/matter-numbering": {
-    "depth": 4,
+    "depth": 5,
     "requests": [
       "GET /api/auth/get-session",
       "GET /api/auth/organization/get-active-member-role",
@@ -1528,7 +1528,7 @@
     }
   },
   "/settings/organization/members": {
-    "depth": 4,
+    "depth": 6,
     "requests": [
       "GET /api/auth/get-session",
       "GET /api/auth/organization/get-active-member-role",
@@ -1575,7 +1575,7 @@
     }
   },
   "/settings/organization/usage": {
-    "depth": 3,
+    "depth": 4,
     "requests": [
       "GET /api/auth/get-session",
       "GET /api/auth/organization/get-active-member-role",
@@ -1618,7 +1618,7 @@
     }
   },
   "/todos": {
-    "depth": 3,
+    "depth": 4,
     "requests": [
       "GET /api/auth/get-session",
       "GET /api/auth/organization/get-active-member-role",
@@ -1665,7 +1665,7 @@
     }
   },
   "/workspaces": {
-    "depth": 3,
+    "depth": 6,
     "requests": [
       "GET /api/auth/get-session",
       "GET /api/auth/organization/get-active-member-role",
@@ -1802,7 +1802,7 @@
     }
   },
   "/workspaces/$workspaceId/$viewId": {
-    "depth": 7,
+    "depth": 8,
     "requests": [
       "GET /api/auth/get-session",
       "GET /api/auth/organization/get-active-member-role",
@@ -2012,7 +2012,7 @@
     }
   },
   "/workspaces/$workspaceId/expenses": {
-    "depth": 6,
+    "depth": 7,
     "requests": [
       "GET /api/auth/get-session",
       "GET /api/auth/organization/get-active-member-role",
@@ -2064,7 +2064,7 @@
       "GET /v1/organization-settings": 6,
       "GET /v1/organization-settings/ai-availability": 4,
       "GET /v1/properties/:id": 6,
-      "GET /v1/views/:id": 8,
+      "GET /v1/views/:id": 11,
       "GET /v1/workspaces/:id": 6,
       "GET /v1/workspaces/:id/activity": 7,
       "GET /v1/workspaces/:id/overview": 7,

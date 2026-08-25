@@ -69,7 +69,7 @@ import {
   replaceReadyCreateDocumentDraftOutput,
   selectCreateDocumentDrafts,
   selectTerminalCreateDocumentDraftIds,
-  selectUnsettledCreateDocumentDrafts,
+  selectSettleableCreateDocumentDrafts,
   setCreateDocumentDraftPayloadStatus,
   terminalizeUnsettledCreateDocumentDraft,
 } from "@/components/chat/create-document-draft.logic";
@@ -428,7 +428,14 @@ export const useChatSession = ({
   const settlingCreateDocumentDraftIdsRef = useRef(new Set<string>());
   const addToolResult = chat.addToolResult;
   useExternalSyncEffect(() => {
-    for (const draft of selectUnsettledCreateDocumentDrafts(messages)) {
+    // TanStack can accept a client tool result while the parent stream is
+    // active without issuing its continuation after that stream settles.
+    // Wait for the runtime's status transition so the result and resume stay
+    // one atomic client operation.
+    for (const draft of selectSettleableCreateDocumentDrafts(
+      messages,
+      status,
+    )) {
       if (
         settlingCreateDocumentDraftIdsRef.current.has(draft.toolCallId) ||
         !draft.source.trim()
@@ -492,7 +499,7 @@ export const useChatSession = ({
         "use-chat-session.settle-create-document-draft-with-retry",
       );
     }
-  }, [addToolResult, chat, messages, t]);
+  }, [addToolResult, chat, messages, status, t]);
   const sendChatMessage = useCallback(
     async (message: ChatUserMessageInput, options?: ChatSendMessageOptions) => {
       await sendThreadChatMessage(chat, message, options);

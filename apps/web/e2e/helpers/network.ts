@@ -116,17 +116,40 @@ type NetworkCollectorOptions = {
   apiOrigin?: string;
 };
 
-// Request boundaries are stamped when this process handles the corresponding
-// CDP event, so they carry the driver's event-loop latency. Playwright also
-// exposes the browser's own network-stack timings (`request.timing()`), which
-// are immune to a driver stall but measure a visibly shorter interval, so
-// adopting them shifts the whole depth scale and needs a deliberate baseline
-// re-derivation rather than riding along with a metric fix.
+// Playwright does not export its resource-timing shape as a named type, so it
+// is derived from the method that produces it.
+type ResourceTiming = ReturnType<Request["timing"]>;
+
+// The browser reports -1 for a value it never recorded (a request that failed
+// before the response, or an engine that does not populate the field).
+const TIMING_UNAVAILABLE = -1;
+
+// Depth is measured from timestamps taken inside the browser's network stack,
+// not from when this process handles the corresponding CDP event. The driver
+// competes with the browser and every other shard on a CI runner, so delayed
+// event delivery used to merge real launch waves on busy runs and expose them
+// again on fast runs. `startTime` is epoch ms; `responseEnd` is relative to it.
+export const browserRequestInterval = (
+  timing: ResourceTiming,
+): { start: number; end: number } | null => {
+  if (timing.startTime <= 0 || timing.responseEnd === TIMING_UNAVAILABLE) {
+    return null;
+  }
+  return {
+    start: timing.startTime,
+    end: timing.startTime + timing.responseEnd,
+  };
+};
+
 type NetworkRecord = {
   method: string;
   pathname: string;
   start: number;
   end: number | null;
+  // Browser-measured interval, present once the request settles and the
+  // network stack times it. Untimed requests retain both driver timestamps,
+  // so an interval is never assembled from two different clocks.
+  browserInterval: { start: number; end: number } | null;
   // From the API's dev/test-only `x-db-queries` response header (the
   // per-request Drizzle query counter); null when no response arrived.
   dbQueries: number | null;
@@ -194,6 +217,7 @@ export const createNetworkCollector = (
           pathname: new URL(request.url()).pathname,
           start: Date.now(),
           end: null,
+          browserInterval: null,
           dbQueries: null,
           dbQueryHeaderMissing: false,
           responseBytes: null,
@@ -208,6 +232,8 @@ export const createNetworkCollector = (
         const record = byRequest.get(request);
         if (record) {
           record.end = Date.now();
+          // `responseEnd` becomes available when the request finishes.
+          record.browserInterval = browserRequestInterval(request.timing());
           markActivity();
         }
       };
@@ -273,10 +299,10 @@ export const createNetworkCollector = (
             responseBytesUnavailable,
           }),
         ),
-        intervals: records.map(({ start, end }) => ({
-          start,
-          end: end ?? now,
-        })),
+        intervals: records.map(
+          ({ browserInterval, start, end }) =>
+            browserInterval ?? { start, end: end ?? now },
+        ),
       };
     },
   };
@@ -492,16 +518,6 @@ const pushNewRequestProblems = ({
   );
 };
 
-// Launch jitter is the one residual `waterfallDepth` cannot remove: two
-// requests issued from different ticks may overlap on one run and not the next,
-// which shifts a route by exactly one block. No metric reading launch times can
-// tell that apart from a real added round, and reading response ends instead is
-// what made the previous formulation accumulate false depth without bound.
-// One level is therefore the whole budget and must stay there: since the metric
-// can no longer carry a count across an observation boundary, a route reporting
-// two extra levels has genuinely grown one.
-const DEPTH_JITTER_ALLOWANCE = 1;
-
 const pushWaterfallDepthProblems = ({
   route,
   entry,
@@ -513,11 +529,11 @@ const pushWaterfallDepthProblems = ({
   metrics: RouteNetworkMetrics;
   problems: string[];
 }) => {
-  if (metrics.depth <= entry.depth + DEPTH_JITTER_ALLOWANCE) {
+  if (metrics.depth <= entry.depth) {
     return;
   }
   problems.push(
-    `Request waterfall got deeper on ${route}: ${entry.depth} -> ${metrics.depth} (already tolerating +${DEPTH_JITTER_ALLOWANCE} for launch jitter)\n` +
+    `Request waterfall got deeper on ${route}: ${entry.depth} -> ${metrics.depth}\n` +
       `  Each extra level is one more sequential network round the user waits\n` +
       `  through before the page can finish. Usually the fix is to start the\n` +
       `  query in the route loader (ensureRouteQueryData / prefetchRouteQuery in\n` +

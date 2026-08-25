@@ -2,6 +2,12 @@ import type { TokenUsage } from "@tanstack/ai";
 import type { MessagePart, UIMessage } from "@tanstack/ai-client";
 import type { DocumentPart, ImagePart } from "@tanstack/ai/client";
 
+import type { FolioAgentToolName } from "@stll/folio-agents";
+import type {
+  FolioAgentToolInputByName,
+  FolioToolCallResultFor,
+} from "@stll/folio-agents/tool-contract";
+
 import type { ChatSourceDocument } from "@/api/handlers/chat/tools/chat-source-document";
 import type {
   ChatBuiltinApprovalToolName,
@@ -51,7 +57,30 @@ export type ChatAnonRestorationsData = {
   pairs: ChatAnonRestoration[];
 };
 
-export type ChatUITools = ChatUIToolsFor<ChatTools>;
+type SchemaInferredChatUITools = ChatUIToolsFor<ChatTools>;
+type RegisteredFolioAgentToolName = Extract<
+  keyof SchemaInferredChatUITools,
+  FolioAgentToolName
+>;
+type FolioAgentChatUITools = {
+  [TName in RegisteredFolioAgentToolName]: {
+    input: FolioAgentToolInputByName[TName];
+    output: FolioToolCallResultFor<TName>;
+  };
+};
+
+/**
+ * Raw JSON Schema does not carry a TypeScript input/output parameter through
+ * TanStack's Standard Schema inference. Restore Folio's exact contract from
+ * its exported name-indexed maps for only the Folio tools actually registered
+ * in ChatTools; adding or removing a registered Folio name changes this map
+ * automatically.
+ */
+export type ChatUITools = Omit<
+  SchemaInferredChatUITools,
+  RegisteredFolioAgentToolName
+> &
+  FolioAgentChatUITools;
 export type ChatClientTools = ChatClientToolsFor<
   ChatTools,
   ChatBuiltinApprovalToolName

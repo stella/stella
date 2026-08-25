@@ -36,7 +36,10 @@ import { v7 as uuidv7 } from "uuid";
 import {
   createEditorRefBridge,
   executeFolioToolCall,
+  FOLIO_AGENT_TOOL_NAMES,
 } from "@stll/folio-agents";
+import type { FolioAgentBridge, FolioAgentToolName } from "@stll/folio-agents";
+import type { FolioAgentToolInputByName } from "@stll/folio-agents/tool-contract";
 import type {
   DocxEditorRef,
   FolioAIEditOperation,
@@ -89,6 +92,7 @@ import type {
   ApprovalToolName,
   ApprovalToolPart,
   PersistedChatMessage,
+  RegisteredFolioAgentToolCallPart,
   UnresolvedActiveDocxEditToolCallPart,
   UnresolvedFolioAgentDocToolCallPart,
 } from "@/components/chat/chat-ui-tools";
@@ -828,8 +832,30 @@ const persistQueuedSuggestions = async ({
 // same shape as `apply-active-docx-edits`. Names mirror the server-side
 // registration in `folio-agent-tools.ts`; kept as local literals like the
 // other tool names this surface matches on.
-const FOLIO_AGENT_COMMENT_MUTATION_TOOL_NAMES: readonly string[] =
-  Object.freeze(["add_comment", "reply_comment", "resolve_comment"]);
+const FOLIO_AGENT_COMMENT_MUTATION_TOOL_NAMES = [
+  FOLIO_AGENT_TOOL_NAMES.addComment,
+  FOLIO_AGENT_TOOL_NAMES.replyComment,
+  FOLIO_AGENT_TOOL_NAMES.resolveComment,
+] as const satisfies readonly FolioAgentToolName[];
+type FolioAgentCommentMutationToolName =
+  (typeof FOLIO_AGENT_COMMENT_MUTATION_TOOL_NAMES)[number];
+
+const isFolioAgentCommentMutationToolName = (
+  toolName: ApprovalToolName,
+): toolName is FolioAgentCommentMutationToolName =>
+  FOLIO_AGENT_COMMENT_MUTATION_TOOL_NAMES.some(
+    (folioToolName) => folioToolName === toolName,
+  );
+
+type ExecutableFolioAgentToolCall<TName extends FolioAgentToolName> = {
+  input: FolioAgentToolInputByName[TName];
+  name: TName;
+};
+
+const executeTypedFolioToolCall = <TName extends FolioAgentToolName>(
+  part: ExecutableFolioAgentToolCall<TName>,
+  bridge: FolioAgentBridge,
+) => executeFolioToolCall(part.name, part.input, bridge);
 
 // Stable empty context returned by `getContextMatterIds` before the picker
 // has seeded (its state is `string[] | null`). A named constant, not a `?? []`
@@ -1795,10 +1821,20 @@ const FileChatOverlayInner = ({
   // Latest approval-requested/responded tool-call part matching the given
   // approval id and tool name (newest message first). Used to recover the
   // streamed input of a client-executed approval tool once the user approves.
-  const findFolioAgentApprovalPart = (
+  const isFolioAgentApprovalPart = <
+    TName extends FolioAgentCommentMutationToolName,
+  >(
+    part: unknown,
+    toolName: TName,
+  ): part is ApprovalToolPart & RegisteredFolioAgentToolCallPart<TName> =>
+    isApprovalPart(part) && part.name === toolName && part.input !== undefined;
+
+  const findFolioAgentApprovalPart = <
+    TName extends FolioAgentCommentMutationToolName,
+  >(
     approvalId: string,
-    toolName: string,
-  ): ApprovalToolPart | null => {
+    toolName: TName,
+  ): (ApprovalToolPart & RegisteredFolioAgentToolCallPart<TName>) | null => {
     for (let index = messages.length - 1; index >= 0; index -= 1) {
       const message = messages.at(index);
       if (!message || message.role !== "assistant") {
@@ -1806,8 +1842,7 @@ const FileChatOverlayInner = ({
       }
       for (const part of message.parts) {
         if (
-          isApprovalPart(part) &&
-          part.name === toolName &&
+          isFolioAgentApprovalPart(part, toolName) &&
           part.approval.id === approvalId
         ) {
           return part;
@@ -1817,12 +1852,14 @@ const FileChatOverlayInner = ({
     return null;
   };
 
-  const runFolioAgentCommentMutationTool = async (part: ApprovalToolPart) => {
+  const runFolioAgentCommentMutationTool = async (
+    part: ApprovalToolPart &
+      RegisteredFolioAgentToolCallPart<FolioAgentCommentMutationToolName>,
+  ) => {
     try {
       const bridge = createFolioAgentBridge();
-      const args: unknown = part.input ?? {};
       const output = bridge
-        ? await Promise.resolve(executeFolioToolCall(part.name, args, bridge))
+        ? await Promise.resolve(executeTypedFolioToolCall(part, bridge))
         : { ok: false, error: "No document is open." };
       await addToolResult({ output, tool: part.name, toolCallId: part.id });
     } catch (toolCallError) {
@@ -1854,7 +1891,7 @@ const FileChatOverlayInner = ({
     approve: () => Promise<void>;
     toolName: ApprovalToolName;
   }) => {
-    if (!FOLIO_AGENT_COMMENT_MUTATION_TOOL_NAMES.includes(toolName)) {
+    if (!isFolioAgentCommentMutationToolName(toolName)) {
       await approve();
       return;
     }
@@ -1899,7 +1936,7 @@ const FileChatOverlayInner = ({
     // the user approves, run the operation against the live editor bridge and
     // answer the tool call with its result (same shape as apply-active-docx-
     // edits). The read tools never reach here — they are auto-run, no approval.
-    if (FOLIO_AGENT_COMMENT_MUTATION_TOOL_NAMES.includes(toolName)) {
+    if (isFolioAgentCommentMutationToolName(toolName)) {
       await approveAndRunFolioAgentCommentMutation({
         approvalId,
         approve: async () => await handleApprove(approvalId, toolName),
@@ -1961,9 +1998,8 @@ const FileChatOverlayInner = ({
           return;
         }
 
-        const args = part.input ?? {};
         const result = await Promise.resolve(
-          executeFolioToolCall(part.name, args, bridge),
+          executeTypedFolioToolCall(part, bridge),
         );
         await addToolResult({
           tool: part.name,

@@ -1,5 +1,7 @@
 import { Result } from "better-result";
 
+import { isChatFileMimeType } from "@stll/api-contract/chat-file-types";
+
 import {
   getChatAttachmentMimeType,
   getChatAttachmentUrl,
@@ -12,28 +14,11 @@ import { validateDataUrl } from "@/api/lib/data-url";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
 import { isUserFileUrl } from "@/api/lib/user-files/types";
-import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 
 export const TEXT_PLAIN_MIME_TYPE = "text/plain" as const;
 export const TEXT_CSV_MIME_TYPE = "text/csv" as const;
 export const TEXT_MARKDOWN_MIME_TYPE = "text/markdown" as const;
 export const CHAT_MAX_FILE_BYTES = FILE_SIZE_LIMIT_BYTES.chatContextFile;
-
-const IMAGE_MIME_TYPES = new Set([
-  "image/png",
-  "image/jpeg",
-  "image/webp",
-  "image/gif",
-]);
-
-export const USER_FILE_ALLOWED_MIME_TYPES = new Set([
-  ...IMAGE_MIME_TYPES,
-  PDF_MIME_TYPE,
-  DOCX_MIME_TYPE,
-  TEXT_PLAIN_MIME_TYPE,
-  TEXT_CSV_MIME_TYPE,
-  TEXT_MARKDOWN_MIME_TYPE,
-]);
 
 export type StoredFileRef = {
   id: SafeId<"userFile">;
@@ -89,7 +74,7 @@ export const validateChatFileParts = ({
         );
       }
 
-      if (!USER_FILE_ALLOWED_MIME_TYPES.has(mimeType)) {
+      if (!isChatFileMimeType(mimeType)) {
         return Result.err(
           new HandlerError({
             status: 400,
@@ -108,7 +93,7 @@ export const validateChatFileParts = ({
         return Result.err(fileIdResult.error);
       }
 
-      if (!USER_FILE_ALLOWED_MIME_TYPES.has(mimeType)) {
+      if (!isChatFileMimeType(mimeType)) {
         return Result.err(
           new HandlerError({
             status: 400,

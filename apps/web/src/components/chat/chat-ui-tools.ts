@@ -14,6 +14,7 @@ import type {
   ChatUITools,
 } from "@stll/api/types";
 import { FOLIO_AGENT_TOOL_NAMES } from "@stll/folio-agents";
+import type { FolioAgentToolName } from "@stll/folio-agents";
 
 import type { TranslationKey } from "@/i18n/types";
 
@@ -60,6 +61,20 @@ export type OpaquePersistedChatToolCallPart = TanStackChatToolCallPart & {
 export type RegisteredChatUIToolCallPart =
   | BuiltInChatToolCallPart
   | ExternalMcpChatToolCallPart;
+type RegisteredFolioAgentToolName = Extract<
+  keyof ChatUITools,
+  FolioAgentToolName
+>;
+export type RegisteredFolioAgentToolCallPart<
+  TName extends RegisteredFolioAgentToolName = RegisteredFolioAgentToolName,
+> = {
+  [TCurrentName in TName]: Extract<
+    RegisteredChatUIToolCallPart,
+    { name: TCurrentName }
+  > & {
+    input: ChatUITools[TCurrentName]["input"];
+  };
+}[TName];
 export type ChatUIToolCallPart =
   | RegisteredChatUIToolCallPart
   | OpaquePersistedChatToolCallPart;
@@ -710,10 +725,10 @@ export const hasRunningToolCallInLatestAssistantMessage = ({
  * An unresolved `read_document` / `find_text` tool-call part, narrowed by
  * {@link isUnresolvedFolioAgentDocToolCallPart}.
  */
-export type UnresolvedFolioAgentDocToolCallPart = ChatToolCallPart & {
-  name: keyof typeof FOLIO_AGENT_DOC_TOOL_NAMES;
-  state: "input-complete";
-};
+export type UnresolvedFolioAgentDocToolCallPart =
+  RegisteredFolioAgentToolCallPart<keyof typeof FOLIO_AGENT_DOC_TOOL_NAMES> & {
+    state: "input-complete";
+  };
 
 /**
  * A `read_document` / `find_text` tool-call part whose input has fully
@@ -733,8 +748,10 @@ export const isUnresolvedFolioAgentDocToolCallPart = (
     part === null ||
     !("type" in part) ||
     !("state" in part) ||
+    !("input" in part) ||
     typeof part.type !== "string" ||
-    typeof part.state !== "string"
+    typeof part.state !== "string" ||
+    part.input === undefined
   ) {
     return false;
   }

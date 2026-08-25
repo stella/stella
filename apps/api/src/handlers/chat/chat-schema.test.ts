@@ -35,6 +35,7 @@ import { CHAT_REF_ENCODING } from "@/api/lib/chat/ref-token";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { toUserFileUrl } from "@/api/lib/user-files/types";
+import { XLSX_MIME_TYPE } from "@/api/mime-types";
 
 import { richChatParts, unsafeScriptUrl } from "./__fixtures__/rich-chat-parts";
 import type { StoredChatFile, StoredFileRef } from "./attachment-validation";
@@ -269,6 +270,23 @@ describe("native AG-UI request envelope", () => {
 });
 
 describe("validateChatFileParts", () => {
+  test("accepts XLSX attachments for server-side text extraction", () => {
+    const result = validateChatFileParts({
+      parts: createUserFilePart({
+        fileId: "file_xlsx",
+        mediaType: XLSX_MIME_TYPE,
+      }),
+    });
+
+    expect(Result.isOk(result)).toBe(true);
+    if (Result.isError(result)) {
+      throw result.error;
+    }
+    expect(result.value).toEqual([
+      { id: userFileId("file_xlsx"), mediaType: XLSX_MIME_TYPE },
+    ]);
+  });
+
   test("rejects too many attachments in one message", () => {
     const parts = Array.from(
       { length: LIMITS.chatContextFilesPerMessage + 1 },

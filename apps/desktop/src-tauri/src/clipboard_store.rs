@@ -1,6 +1,6 @@
 use aes_gcm::{
   Aes256Gcm, Nonce,
-  aead::{Aead, KeyInit, OsRng, rand_core::RngCore},
+  aead::{Aead, Generate, KeyInit},
 };
 use serde::{Deserialize, Serialize};
 use std::{
@@ -47,12 +47,14 @@ impl ClipboardStore {
     if nonce.len() != 12 {
       return Err("clipboard nonce has an invalid length".to_string());
     }
+    let nonce = Nonce::try_from(nonce.as_slice())
+      .map_err(|_| "clipboard nonce has an invalid length".to_string())?;
     let ciphertext = hex::decode(envelope.ciphertext)
       .map_err(|error| format!("clipboard ciphertext is invalid: {error}"))?;
     let cipher = Aes256Gcm::new_from_slice(&self.key)
       .map_err(|_| "clipboard encryption key is invalid".to_string())?;
     let plaintext = cipher
-      .decrypt(Nonce::from_slice(&nonce), ciphertext.as_ref())
+      .decrypt(&nonce, ciphertext.as_ref())
       .map_err(|_| "clipboard history could not be decrypted".to_string())?;
     serde_json::from_slice(&plaintext)
       .map(Some)
@@ -77,10 +79,9 @@ impl ClipboardStore {
       .map_err(|error| format!("clipboard serialization failed: {error}"))?;
     let cipher = Aes256Gcm::new_from_slice(&self.key)
       .map_err(|_| "clipboard encryption key is invalid".to_string())?;
-    let mut nonce = [0_u8; 12];
-    OsRng.fill_bytes(&mut nonce);
+    let nonce = Nonce::generate();
     let ciphertext = cipher
-      .encrypt(Nonce::from_slice(&nonce), plaintext.as_ref())
+      .encrypt(&nonce, plaintext.as_ref())
       .map_err(|_| "clipboard encryption failed".to_string())?;
     let envelope = EncryptedClipboardEnvelope {
       ciphertext: hex::encode(ciphertext),
