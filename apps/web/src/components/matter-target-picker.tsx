@@ -15,6 +15,7 @@ import { cn } from "@stll/ui/utils";
 import { MatterIcon } from "@/components/matter-icon";
 import {
   MAX_FOLDER_NAME_LENGTH,
+  matterFolderPath,
   resolveMatterTarget,
   stageMatterFolder,
 } from "@/components/matter-target-picker.logic";
@@ -259,6 +260,22 @@ const FolderPicker = ({ value, onChange }: FolderPickerProps) => {
   };
 
   /**
+   * Reveal a destination: the folder itself and every folder above it. The
+   * new-folder row lives inside `value.parentId`, so a collapsed ancestor
+   * anywhere up the chain would hide it.
+   */
+  const expandFolderPath = (folderId: string | null) => {
+    if (folders === undefined) {
+      return;
+    }
+    const path = matterFolderPath(folders, folderId);
+    if (path.length === 0) {
+      return;
+    }
+    setExpandedFolders((prev) => new Set([...prev, ...path]));
+  };
+
+  /**
    * Stage a folder under whatever is selected now; it is created on submit.
    * Runs on Enter and on blur, so a name typed straight before clicking the
    * dialog's submit button is not dropped. An empty name closes the input.
@@ -270,86 +287,99 @@ const FolderPicker = ({ value, onChange }: FolderPickerProps) => {
       return;
     }
     onChange(staged);
-    if (staged.parentId !== null) {
-      const parentId = staged.parentId;
-      setExpandedFolders((prev) => new Set(prev).add(parentId));
-    }
+    expandFolderPath(staged.parentId);
     setDraftName(null);
   };
 
-  const newFolderRow = (() => {
-    if (!canCreate) {
-      return null;
-    }
-    if (draftName === null) {
+  /**
+   * The folder about to be created: the draft input while its name is typed,
+   * then the staged row. Both are the same thing at different moments, so one
+   * node renders them and the preview cannot sit somewhere the folder will not.
+   */
+  const newFolderSlot = (() => {
+    if (draftName !== null) {
       return (
-        <button
-          className="hover:bg-accent text-muted-foreground flex w-full items-center gap-1 rounded px-2 py-1 text-start text-sm"
-          onClick={() => {
-            draftCancelledRef.current = false;
-            setDraftName("");
+        <Input
+          aria-label={t("workspaces.newFolder")}
+          autoFocus
+          className="h-7 min-w-0 flex-1 px-2 text-sm"
+          maxLength={MAX_FOLDER_NAME_LENGTH}
+          onBlur={() => {
+            if (draftCancelledRef.current) {
+              draftCancelledRef.current = false;
+              return;
+            }
+            stageFolder();
           }}
-          type="button"
-        >
-          <FolderPlusIcon className="size-4 shrink-0" />
-          <span className="truncate">{t("workspaces.newFolder")}</span>
-        </button>
+          onChange={(e) => setDraftName(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              stageFolder();
+            }
+            if (e.key === "Escape") {
+              // Cancel only the draft; the enclosing dialog dismisses on Escape.
+              e.stopPropagation();
+              draftCancelledRef.current = true;
+              setDraftName(null);
+            }
+          }}
+          placeholder={t("workspaces.newFolder")}
+          value={draftName}
+        />
       );
     }
-    return (
-      <Input
-        aria-label={t("workspaces.newFolder")}
-        autoFocus
-        className="h-7 px-2 text-sm"
-        maxLength={MAX_FOLDER_NAME_LENGTH}
-        onBlur={() => {
-          if (draftCancelledRef.current) {
-            draftCancelledRef.current = false;
-            return;
-          }
-          stageFolder();
-        }}
-        onChange={(e) => setDraftName(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") {
-            e.preventDefault();
-            stageFolder();
-          }
-          if (e.key === "Escape") {
-            // Cancel only the draft; the enclosing dialog dismisses on Escape.
-            e.stopPropagation();
-            draftCancelledRef.current = true;
-            setDraftName(null);
-          }
-        }}
-        placeholder={t("workspaces.newFolder")}
-        value={draftName}
-      />
-    );
+    if (pendingFolder !== null) {
+      return (
+        <div className="bg-accent flex min-w-0 flex-1 items-center gap-1 rounded px-2 py-1 text-sm">
+          <EntityKindIcon className="size-4 shrink-0" kind="folder" />
+          <BidiText as="span" className="truncate">
+            {pendingFolder.name}
+          </BidiText>
+        </div>
+      );
+    }
+    return null;
   })();
 
-  const renderPendingFolder = (name: string, depth: number) => (
-    <div
-      className="flex items-center gap-1"
-      style={{ paddingLeft: `${depth * 16 + 8}px` }}
-    >
-      <span className="w-4" />
-      <div className="bg-accent flex min-w-0 flex-1 items-center gap-1 rounded px-2 py-1 text-sm">
-        <EntityKindIcon className="size-4 shrink-0" kind="folder" />
-        <BidiText as="span" className="truncate">
-          {name}
-        </BidiText>
+  /**
+   * Called from the two positions that can hold the slot, both keyed off
+   * `value.parentId`: the destination the folder will be created in.
+   */
+  const renderNewFolderSlot = (depth: number) =>
+    newFolderSlot === null ? null : (
+      <div
+        className="flex items-center gap-1"
+        style={{ paddingLeft: `${depth * 16 + 8}px` }}
+      >
+        <span className="w-4" />
+        {newFolderSlot}
       </div>
-    </div>
-  );
+    );
+
+  const newFolderButton =
+    canCreate && draftName === null ? (
+      <button
+        className="hover:bg-accent text-muted-foreground flex w-full items-center gap-1 rounded px-2 py-1 text-start text-sm"
+        onClick={() => {
+          draftCancelledRef.current = false;
+          setDraftName("");
+          expandFolderPath(value.parentId);
+        }}
+        type="button"
+      >
+        <FolderPlusIcon className="size-4 shrink-0" />
+        <span className="truncate">{t("workspaces.newFolder")}</span>
+      </button>
+    ) : null;
 
   const renderFolder = (folder: WorkspaceFolder, depth: number) => {
     const children = folders
       ? folders.filter((f) => f.parentId === folder.entityId)
       : [];
-    const pendingChild =
-      pendingFolder?.parentId === folder.entityId ? pendingFolder : null;
-    const hasChildren = children.length > 0 || pendingChild !== null;
+    const hasNewFolderSlot =
+      newFolderSlot !== null && value.parentId === folder.entityId;
+    const hasChildren = children.length > 0 || hasNewFolderSlot;
     const isExpanded = expandedFolders.has(folder.entityId);
     const isSelected =
       value.type === "existing" && value.parentId === folder.entityId;
@@ -411,8 +441,7 @@ const FolderPicker = ({ value, onChange }: FolderPickerProps) => {
         {hasChildren && isExpanded && (
           <div>
             {children.map((child) => renderFolder(child, depth + 1))}
-            {pendingChild !== null &&
-              renderPendingFolder(pendingChild.name, depth + 1)}
+            {hasNewFolderSlot && renderNewFolderSlot(depth + 1)}
           </div>
         )}
       </div>
@@ -437,10 +466,8 @@ const FolderPicker = ({ value, onChange }: FolderPickerProps) => {
           </span>
         </button>
         {rootFolders.map((folder) => renderFolder(folder, 0))}
-        {pendingFolder !== null &&
-          pendingFolder.parentId === null &&
-          renderPendingFolder(pendingFolder.name, 0)}
-        {newFolderRow}
+        {value.parentId === null && renderNewFolderSlot(0)}
+        {newFolderButton}
       </div>
     </ScrollArea>
   );

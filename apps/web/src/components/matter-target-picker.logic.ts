@@ -47,6 +47,39 @@ export const stageMatterFolder = (
   };
 };
 
+/** The shape of a folder row the path walk needs; `WorkspaceFolder` satisfies it. */
+type FolderLink = {
+  entityId: string;
+  parentId: string | null;
+};
+
+/**
+ * A folder and every folder above it, root-first. Expanding this whole path is
+ * what keeps the new-folder row visible: expanding only the immediate parent
+ * still leaves it inside a collapsed grandparent. `null` (the matter root) has
+ * no path. An id the tree does not contain is left out and ends the walk, and a
+ * cycle in a malformed tree terminates instead of hanging.
+ */
+export const matterFolderPath = (
+  folders: readonly FolderLink[],
+  folderId: string | null,
+): string[] => {
+  const byId = new Map(folders.map((folder) => [folder.entityId, folder]));
+  const path: string[] = [];
+  const seen = new Set<string>();
+  let current = folderId;
+  while (current !== null && !seen.has(current)) {
+    const folder = byId.get(current);
+    if (folder === undefined) {
+      break;
+    }
+    seen.add(current);
+    path.push(current);
+    current = folder.parentId;
+  }
+  return path.toReversed();
+};
+
 type CreateFolder = (folder: {
   workspaceId: string;
   parentId: string | null;

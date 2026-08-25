@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import {
+  matterFolderPath,
   resolveMatterTarget,
   stageMatterFolder,
 } from "@/components/matter-target-picker.logic";
@@ -75,6 +76,40 @@ describe("staging a folder in the matter picker", () => {
     });
     expect(stageMatterFolder(root, "   ")).toBeNull();
     expect(stageMatterFolder(root, "")).toBeNull();
+  });
+});
+
+describe("revealing a folder's path in the matter picker", () => {
+  const TREE = [
+    { entityId: "root", parentId: null },
+    { entityId: "child", parentId: "root" },
+    { entityId: "grandchild", parentId: "child" },
+  ];
+
+  test("returns the folder and every folder above it, root-first", () => {
+    expect(matterFolderPath(TREE, "grandchild")).toEqual([
+      "root",
+      "child",
+      "grandchild",
+    ]);
+  });
+
+  test("has no path for the matter root", () => {
+    expect(matterFolderPath(TREE, null)).toEqual([]);
+  });
+
+  test("stops at a parent the tree does not contain", () => {
+    expect(
+      matterFolderPath([{ entityId: "orphan", parentId: "gone" }], "orphan"),
+    ).toEqual(["orphan"]);
+  });
+
+  test("terminates on a cycle instead of hanging", () => {
+    const cycle = [
+      { entityId: "a", parentId: "b" },
+      { entityId: "b", parentId: "a" },
+    ];
+    expect(matterFolderPath(cycle, "a")).toEqual(["b", "a"]);
   });
 });
 
