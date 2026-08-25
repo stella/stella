@@ -159,6 +159,13 @@ test("default search fields are title + text", () => {
   ).toEqual(["title", "text"]);
 });
 
+test("case-law indexes do not persist canonical storage locations", () => {
+  const names = caseLawIndexConfig(
+    "case_law_v4_cze",
+  ).doc_mapping.field_mappings.map(({ name }) => name);
+  expect(names.filter((name) => name.startsWith("canonical_"))).toEqual([]);
+});
+
 test("no field repeated across a document's passages is free-text searchable", () => {
   const config = caseLawIndexConfig("case_law_v2");
   const defaults = new Set(config.search_settings.default_search_fields);

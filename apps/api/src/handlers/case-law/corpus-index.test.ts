@@ -369,8 +369,6 @@ describe("case-law passage projection", () => {
     // a passage (opening, continuation) appear.
     for (const field of [
       "anchor_id",
-      "canonical_ast_key",
-      "canonical_text_key",
       "case_number",
       "decision_date",
       "document_type",
@@ -381,6 +379,9 @@ describe("case-law passage projection", () => {
     ]) {
       expect(emitted.has(field)).toBe(true);
     }
+    expect(
+      [...emitted].filter((name) => name.startsWith("canonical_")),
+    ).toEqual([]);
     expect(
       docs.filter((doc) => doc["title"] === undefined).length,
     ).toBeGreaterThan(0);

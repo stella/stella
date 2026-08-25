@@ -154,8 +154,6 @@ const CORE_FIELDS: CorpusIndexFieldMapping[] = [
   // the citation graph; other families can populate an analogous signal).
   { name: "citation_authority", type: "f64", fast: true },
   { name: "citation_count", type: "u64", fast: true },
-  { name: "canonical_text_key", type: "text", tokenizer: "raw", stored: true },
-  { name: "canonical_ast_key", type: "text", tokenizer: "raw", stored: true },
   // Passage fields. A passage-granular family emits one document per passage,
   // all sharing `document_id`; a document-granular family simply never sets
   // them and, in lenient mode, the index carries them empty. The read path is
@@ -248,6 +246,17 @@ const FAMILY_FIELDS: Record<CorpusFamily, CorpusIndexFieldMapping[]> = {
     { name: "ecli", type: "text", tokenizer: "raw" },
   ],
   legislation: [
+    // Compatibility boundary for the serving legislation_v1 indexes. Unlike
+    // case law, legislation has no configurable blue-green generation yet;
+    // removing these fields from only new writes would leave a permanently
+    // mixed physical index. Remove them with that family's generation bump.
+    {
+      name: "canonical_text_key",
+      type: "text",
+      tokenizer: "raw",
+      stored: true,
+    },
+    { name: "canonical_ast_key", type: "text", tokenizer: "raw", stored: true },
     // current | historical | repealed
     { name: "status", type: "text", tokenizer: "raw", fast: true },
     {
