@@ -87,7 +87,7 @@ type CorpusIndexFieldMapping = {
  * the engine's defaults, restated: a merge policy declared by halves is harder
  * to reason about than one declared whole.
  */
-const MERGE_POLICY = {
+export const CORPUS_INDEX_MERGE_POLICY = {
   type: "stable_log",
   maturation_period: "7days",
   merge_factor: 10,
@@ -114,7 +114,7 @@ export type CorpusIndexConfig = {
     store_source: boolean;
   };
   indexing_settings: {
-    merge_policy: typeof MERGE_POLICY;
+    merge_policy: typeof CORPUS_INDEX_MERGE_POLICY;
   };
   search_settings: {
     default_search_fields: string[];
@@ -123,7 +123,11 @@ export type CorpusIndexConfig = {
 
 export const CORPUS_INDEX_CONFIG_VERSION = "0.8";
 
-const DATE_INPUT_FORMATS = ["%Y-%m-%d", "rfc3339", "unix_timestamp"];
+export const CORPUS_INDEX_DATE_INPUT_FORMATS = [
+  "%Y-%m-%d",
+  "rfc3339",
+  "unix_timestamp",
+];
 
 // Fields every family shares. `document_id` is the stable join key back
 // to Postgres; `text`/`title` carry BM25.
@@ -337,7 +341,7 @@ const FAMILY_FIELDS: Record<CorpusFamily, CorpusIndexFieldMapping[]> = {
       indexed: true,
       stored: true,
       fast: true,
-      input_formats: DATE_INPUT_FORMATS,
+      input_formats: CORPUS_INDEX_DATE_INPUT_FORMATS,
     },
     {
       name: DECISION_TIMESTAMP_FIELD,
@@ -346,7 +350,7 @@ const FAMILY_FIELDS: Record<CorpusFamily, CorpusIndexFieldMapping[]> = {
       stored: true,
       fast: true,
       fast_precision: "seconds",
-      input_formats: DATE_INPUT_FORMATS,
+      input_formats: CORPUS_INDEX_DATE_INPUT_FORMATS,
     },
     {
       name: "ecli",
@@ -393,7 +397,7 @@ const FAMILY_FIELDS: Record<CorpusFamily, CorpusIndexFieldMapping[]> = {
       indexed: true,
       stored: true,
       fast: true,
-      input_formats: DATE_INPUT_FORMATS,
+      input_formats: CORPUS_INDEX_DATE_INPUT_FORMATS,
     },
     // The consolidation's point-in-time validity window, half-open
     // `[version_valid_from, version_valid_to)`: the text in force on date D is
@@ -418,7 +422,7 @@ const FAMILY_FIELDS: Record<CorpusFamily, CorpusIndexFieldMapping[]> = {
       indexed: true,
       stored: true,
       fast: true,
-      input_formats: DATE_INPUT_FORMATS,
+      input_formats: CORPUS_INDEX_DATE_INPUT_FORMATS,
     },
     {
       name: "version_valid_to",
@@ -426,7 +430,7 @@ const FAMILY_FIELDS: Record<CorpusFamily, CorpusIndexFieldMapping[]> = {
       indexed: true,
       stored: true,
       fast: true,
-      input_formats: DATE_INPUT_FORMATS,
+      input_formats: CORPUS_INDEX_DATE_INPUT_FORMATS,
     },
     // European Legislation Identifier / national statute number.
     {
@@ -525,7 +529,7 @@ export const corpusIndexConfig = (
       ...(timestampField === null ? {} : { timestamp_field: timestampField }),
       store_source: false,
     },
-    indexing_settings: { merge_policy: MERGE_POLICY },
+    indexing_settings: { merge_policy: CORPUS_INDEX_MERGE_POLICY },
     search_settings: {
       // The rule under a passage layout: no field that repeats across a
       // document's passages may be a default search field. One free-text term
