@@ -15,6 +15,7 @@ import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
 import { EMPTY_AST } from "@/api/handlers/case-law/ingestion/adapter";
 import type { SourceAdapter } from "@/api/handlers/case-law/ingestion/adapter";
 import {
+  CASE_LAW_REPLAY_SCOPE,
   REPLAY_ROW_OUTCOME,
   replayCaseLawSource,
 } from "@/api/handlers/case-law/ingestion/replay";
@@ -172,6 +173,7 @@ test("a writing replay goes through the pipeline, and replaying again converges"
       adapter,
       scopedDb,
       sourceId,
+      scope: CASE_LAW_REPLAY_SCOPE.SOURCE,
       readStoredRaw: async () =>
         await Promise.resolve(new TextEncoder().encode(STORED_PAYLOAD)),
       sourceLease,
@@ -361,6 +363,7 @@ test("a restructure the flattened text does not show is still applied", async ()
     adapter: restructuringAdapter,
     scopedDb,
     sourceId,
+    scope: CASE_LAW_REPLAY_SCOPE.SOURCE,
     readStoredRaw: async () =>
       await Promise.resolve(new TextEncoder().encode(STORED_PAYLOAD)),
     sourceLease,
@@ -394,6 +397,7 @@ test("a restructure the flattened text does not show is still applied", async ()
     adapter: restructuringAdapter,
     scopedDb,
     sourceId,
+    scope: CASE_LAW_REPLAY_SCOPE.SOURCE,
     readStoredRaw: async () =>
       await Promise.resolve(new TextEncoder().encode(STORED_PAYLOAD)),
     sourceLease,

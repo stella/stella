@@ -18,12 +18,16 @@ import { EMPTY_AST } from "@/api/handlers/case-law/ingestion/adapter";
 import type { SourceAdapter } from "@/api/handlers/case-law/ingestion/adapter";
 import { czNsAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
 import {
+  CASE_LAW_REPLAY_SCOPE,
   countReplayability,
   REPLAY_ROW_OUTCOME,
   replayCaseLawSource,
   selectReplayPage,
 } from "@/api/handlers/case-law/ingestion/replay";
-import type { StoredRawReader } from "@/api/handlers/case-law/ingestion/replay";
+import type {
+  CaseLawReplayScope,
+  StoredRawReader,
+} from "@/api/handlers/case-law/ingestion/replay";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
@@ -67,6 +71,7 @@ type InsertDecisionOptions = {
   /** Sub-millisecond digits, 0-999. */
   sub: number;
   caseNumber: string;
+  court?: string | undefined;
   storedRaw: boolean;
   sourceHash: string;
 };
@@ -80,6 +85,7 @@ const insertDecision = async ({
   id,
   sub,
   caseNumber,
+  court = "Court of Justice",
   storedRaw,
   sourceHash,
 }: InsertDecisionOptions): Promise<void> => {
@@ -93,7 +99,7 @@ const insertDecision = async ({
        source_raw_s3_key, source_raw_content_type, source_hash,
        document_ast, metadata, created_at)
     values (
-      ${id}, ${sourceId}, ${caseNumber}, 'Court of Justice', 'EU', 'en',
+      ${id}, ${sourceId}, ${caseNumber}, ${court}, 'EU', 'en',
       ${storedRaw ? `case-law/raw/${sourceId}/${id}` : null},
       ${storedRaw ? "application/xhtml+xml" : null},
       ${sourceHash},
@@ -127,6 +133,7 @@ const walkIds = async (
     const page = await selectReplayPage({
       scopedDb,
       sourceId,
+      scope: CASE_LAW_REPLAY_SCOPE.SOURCE,
       after,
       limit: pageSize,
     });
@@ -225,6 +232,7 @@ describe("replay walk boundary", () => {
     const exact = await selectReplayPage({
       scopedDb,
       sourceId,
+      scope: CASE_LAW_REPLAY_SCOPE.SOURCE,
       after: boundaryId,
       limit: 10,
     });
@@ -314,6 +322,7 @@ describe("replay of a source", () => {
       adapter: czNsAdapter,
       scopedDb,
       sourceId,
+      scope: CASE_LAW_REPLAY_SCOPE.SOURCE,
       readStoredRaw: storedRawReader(refusedReads),
       sourceLease: null,
       limit: 10,
@@ -339,6 +348,7 @@ describe("replay of a source", () => {
       }),
       scopedDb,
       sourceId,
+      scope: CASE_LAW_REPLAY_SCOPE.SOURCE,
       readStoredRaw: storedRawReader(capableReads),
       sourceLease: null,
       limit: 10,
@@ -387,6 +397,7 @@ describe("replay of a source", () => {
         adapter,
         scopedDb,
         sourceId,
+        scope: CASE_LAW_REPLAY_SCOPE.SOURCE,
         readStoredRaw,
         sourceLease: null,
         limit: 10,
@@ -454,6 +465,7 @@ describe("replay of a source", () => {
         adapter,
         scopedDb,
         sourceId,
+        scope: CASE_LAW_REPLAY_SCOPE.SOURCE,
         readStoredRaw: storedRawReader(reads),
         sourceLease: null,
         limit: 10,
@@ -474,6 +486,100 @@ describe("replay of a source", () => {
       after: unknownId,
     });
     expect(reads).toEqual([]);
+  });
+
+  test("a court scope selects, counts, and resumes inside that court only", async () => {
+    const sourceId = await createSource();
+    const matchingId = createSafeId<"caseLawDecision">();
+    const matchingWithoutRawId = createSafeId<"caseLawDecision">();
+    const otherCourtId = createSafeId<"caseLawDecision">();
+    const court = "Nejvyšší správní soud";
+    await insertDecision({
+      sourceId,
+      id: matchingId,
+      sub: 11,
+      caseNumber: "4 As 3/2008",
+      court,
+      storedRaw: true,
+      sourceHash: "nss-stored",
+    });
+    await insertDecision({
+      sourceId,
+      id: matchingWithoutRawId,
+      sub: 12,
+      caseNumber: "5 As 4/2009",
+      court,
+      storedRaw: false,
+      sourceHash: "nss-refetch",
+    });
+    await insertDecision({
+      sourceId,
+      id: otherCourtId,
+      sub: 13,
+      caseNumber: "30 Cdo 1/2010",
+      court: "Nejvyšší soud",
+      storedRaw: true,
+      sourceHash: "ns-stored",
+    });
+    const scope = {
+      type: "court",
+      court,
+    } as const satisfies CaseLawReplayScope;
+
+    const selected = await selectReplayPage({
+      scopedDb,
+      sourceId,
+      scope,
+      after: null,
+      limit: 10,
+    });
+    expect(selected.map(({ id }) => id)).toEqual([matchingId]);
+    expect(await countReplayability({ scopedDb, sourceId, scope })).toEqual({
+      storedLocally: 1,
+      needsRefetch: 1,
+    });
+
+    const reads: string[] = [];
+    const adapter = stubAdapter({
+      reparse: () => ({
+        type: "rejected",
+        rejection: "no-document",
+        detail: "stub",
+      }),
+    });
+    const outsideBoundary = await replayCaseLawSource({
+      adapter,
+      scopedDb,
+      sourceId,
+      scope,
+      readStoredRaw: storedRawReader(reads),
+      sourceLease: null,
+      limit: 10,
+      pageSize: 10,
+      after: otherCourtId,
+    });
+    expect(outsideBoundary).toEqual({
+      type: "unknown-boundary",
+      after: otherCourtId,
+    });
+    expect(reads).toEqual([]);
+
+    const ran = await replayCaseLawSource({
+      adapter,
+      scopedDb,
+      sourceId,
+      scope,
+      readStoredRaw: storedRawReader(reads),
+      sourceLease: null,
+      limit: 10,
+      pageSize: 10,
+    });
+    if (ran.type !== "ran") {
+      throw new TypeError("Expected the court-scoped adapter to run");
+    }
+    expect(ran.report.visited).toBe(1);
+    expect(ran.report.resumeAfter).toBe(matchingId);
+    expect(reads).toHaveLength(1);
   });
 
   test("a dry run classifies each row by its re-parsed hash and writes nothing", async () => {
@@ -517,6 +623,7 @@ describe("replay of a source", () => {
       }),
       scopedDb,
       sourceId,
+      scope: CASE_LAW_REPLAY_SCOPE.SOURCE,
       readStoredRaw: storedRawReader([]),
       sourceLease: null,
       limit: 10,
@@ -574,6 +681,7 @@ describe("replay of a source", () => {
       }),
       scopedDb,
       sourceId,
+      scope: CASE_LAW_REPLAY_SCOPE.SOURCE,
       readStoredRaw: storedRawReader([]),
       sourceLease: null,
       limit: 10,
@@ -622,6 +730,7 @@ describe("replay of a source", () => {
       }),
       scopedDb,
       sourceId,
+      scope: CASE_LAW_REPLAY_SCOPE.SOURCE,
       readStoredRaw: storedRawReader([]),
       sourceLease: null,
       limit: 10,
@@ -662,6 +771,7 @@ describe("replay of a source", () => {
       }),
       scopedDb,
       sourceId,
+      scope: CASE_LAW_REPLAY_SCOPE.SOURCE,
       readStoredRaw: storedRawReader([]),
       sourceLease: null,
       limit: inserted.length,
@@ -698,7 +808,13 @@ describe("replay of a source", () => {
       });
     }
 
-    expect(await countReplayability(scopedDb, sourceId)).toEqual({
+    expect(
+      await countReplayability({
+        scopedDb,
+        sourceId,
+        scope: CASE_LAW_REPLAY_SCOPE.SOURCE,
+      }),
+    ).toEqual({
       storedLocally: 2,
       needsRefetch: 3,
     });
