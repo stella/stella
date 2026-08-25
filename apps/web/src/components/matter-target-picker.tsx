@@ -38,10 +38,13 @@ import type { WorkspaceFolder } from "@/lib/workspaces/queries/entities";
  * matters arrive ordered by most recent activity (the workspaces endpoint
  * sorts by lastActivityAt).
  *
- * `useResolveMatterTarget` creates a staged folder before a write and
- * refreshes the target's folder tree. Callers must replace a `pending` target
- * with the resolved one, or a retry after a failed write creates the folder
- * again; the folder is kept on failure since an empty folder beats a duplicate.
+ * `useResolveMatterTarget` exists for one case: the user typed a new folder
+ * name in the picker (a `pending` target). The folder is created here, just
+ * before the caller's write (copy, move, save), and the matter's folder tree
+ * is refreshed. An `existing` target passes straight through. Callers must
+ * replace a `pending` target with the resolved one, or a retry after a failed
+ * write creates the folder again; the folder is kept on failure since an
+ * empty folder beats a duplicate.
  */
 export const useResolveMatterTarget = () => {
   const createEntities = useCreateEntities();
