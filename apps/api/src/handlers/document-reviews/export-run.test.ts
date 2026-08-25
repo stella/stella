@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
-import { SPREADSHEET_EXPORT_LIMITS } from "@/api/handlers/views/table-export";
 import { toSafeId } from "@/api/lib/branded-types";
+import { SPREADSHEET_EXPORT_LIMITS } from "@/api/lib/views/table-export";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 

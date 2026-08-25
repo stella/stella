@@ -14,12 +14,6 @@ import {
   documentReviewRuns,
   entities,
 } from "@/api/db/schema";
-import {
-  buildCsvExport,
-  buildXlsxExport,
-  sanitizeSpreadsheetCell,
-} from "@/api/handlers/views/table-export";
-import type { ExportTableInput } from "@/api/handlers/views/table-export";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -34,6 +28,12 @@ import { DOCUMENT_REVIEW_FINDINGS_PER_RUN_MAX } from "@/api/lib/document-review/
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { secureDocumentResponse } from "@/api/lib/secure-document-response";
+import {
+  buildCsvExport,
+  buildXlsxExport,
+  sanitizeSpreadsheetCell,
+} from "@/api/lib/views/table-export";
+import type { ExportTableInput } from "@/api/lib/views/table-export";
 import { DOCX_MIME_TYPE, XLSX_MIME_TYPE } from "@/api/mime-types";
 
 const ISSUES_TABLE_FORMATS = ["xlsx", "docx", "csv"] as const;

@@ -21,9 +21,12 @@ export const fetchAndPrepareReviewFiles = async (
 ): Promise<PreparedInputFile[]> => {
   const groups = new Map<SafeId<"workspace">, IndexedReviewFile[]>();
   for (const [index, file] of files.entries()) {
-    const group = groups.get(file.workspaceId) ?? [];
+    let group = groups.get(file.workspaceId);
+    if (group === undefined) {
+      group = [];
+      groups.set(file.workspaceId, group);
+    }
     group.push({ index, file });
-    groups.set(file.workspaceId, group);
   }
 
   const prepared = new Map<number, PreparedInputFile>();
