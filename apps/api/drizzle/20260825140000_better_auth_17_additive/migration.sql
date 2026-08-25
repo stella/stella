@@ -62,8 +62,6 @@ CREATE TABLE "oauth_client_resource" (
   "resource_id" text NOT NULL,
   "metadata" jsonb,
   "created_at" timestamptz DEFAULT now() NOT NULL,
-  CONSTRAINT "oauth_client_resource_client_id_resource_id_unique"
-    UNIQUE ("client_id", "resource_id"),
   CONSTRAINT "oauth_client_resource_client_id_oauth_client_client_id_fk"
     FOREIGN KEY ("client_id") REFERENCES "oauth_client"("client_id")
     ON DELETE CASCADE,
@@ -77,10 +75,8 @@ CREATE TABLE "oauth_client_assertion" (
   "expires_at" timestamptz NOT NULL
 );--> statement-breakpoint
 
-CREATE INDEX "oauth_refresh_token_authorization_code_id_idx"
-  ON "oauth_refresh_token" ("authorization_code_id");--> statement-breakpoint
-CREATE INDEX "oauth_access_token_authorization_code_id_idx"
-  ON "oauth_access_token" ("authorization_code_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "oauth_client_resource_client_id_resource_id_unique"
+  ON "oauth_client_resource" ("client_id", "resource_id");--> statement-breakpoint
 CREATE INDEX "oauth_client_resource_client_id_idx"
   ON "oauth_client_resource" ("client_id");--> statement-breakpoint
 CREATE INDEX "oauth_client_resource_resource_id_idx"
