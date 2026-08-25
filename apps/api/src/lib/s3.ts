@@ -508,6 +508,13 @@ class S3ObjectReadError extends TaggedError("S3ObjectReadError")<{
   code?: string;
 }> {}
 
+export class S3ObjectBudgetError extends TaggedError("S3ObjectBudgetError")<{
+  message: string;
+  key: string;
+  declaredBytes: number;
+  maxBytes: number;
+}> {}
+
 export class MissingCorpusObjectError extends TaggedError(
   "MissingCorpusObjectError",
 )<{
@@ -722,8 +729,11 @@ export const readS3ObjectBounded = async ({
     });
   }
   if (declared > maxBytes) {
-    throw new S3ObjectReadError({
+    throw new S3ObjectBudgetError({
       message: `Object read for ${key} declares ${declared} bytes, past the ${maxBytes}-byte ceiling`,
+      key,
+      declaredBytes: declared,
+      maxBytes,
     });
   }
   if (!response.Body) {

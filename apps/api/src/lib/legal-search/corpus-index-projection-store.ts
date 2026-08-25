@@ -130,7 +130,7 @@ export const reserveCorpusProjectionIntentsTx = async (
   const limit = validateBatchSize(requestedLimit);
   const leaseMs = validateLeaseMs(requestedLeaseMs);
   await readActiveCorpusProjectionManifest(tx, family, generation, true);
-  const eligibilityAt = testNow ?? sql<Date>`clock_timestamp()`;
+  const eligibilityAt = testNow ?? (await readPostgresClock(tx));
   const runnableAt = sql<Date>`coalesce(
     ${corpusIndexProjectionStates.retryNotBefore},
     ${corpusIndexProjectionStates.updatedAt}
@@ -731,6 +731,7 @@ export const abandonCorpusProjectionAppendTx = async (
 type CommitCorpusProjectionAppendOptions = {
   intentId: ProjectionIntentId;
   leaseToken: string;
+  documentCount: number;
   testNow?: Date;
 };
 
@@ -746,8 +747,16 @@ export type CommitCorpusProjectionAppendResult =
  */
 export const commitCorpusProjectionAppendTx = async (
   tx: Transaction,
-  { intentId, leaseToken, testNow }: CommitCorpusProjectionAppendOptions,
+  {
+    intentId,
+    leaseToken,
+    documentCount,
+    testNow,
+  }: CommitCorpusProjectionAppendOptions,
 ): Promise<CommitCorpusProjectionAppendResult> => {
+  if (!Number.isSafeInteger(documentCount) || documentCount < 1) {
+    return panic("Projection append document count must be a positive integer");
+  }
   const identities = await tx
     .select({
       family: corpusIndexProjectionIntents.family,
@@ -789,6 +798,12 @@ export const commitCorpusProjectionAppendTx = async (
   if (intent === undefined) {
     return { status: "lease_lost" };
   }
+  if (
+    intent.expectedDocumentCount !== null &&
+    intent.expectedDocumentCount !== documentCount
+  ) {
+    return panic(`Projection append document count changed: ${intent.id}`);
+  }
   if (intent.status === "applied" && state?.appliedRevision === intent.id) {
     return { status: "applied", entityId: intent.entityId };
   }
@@ -818,6 +833,7 @@ export const commitCorpusProjectionAppendTx = async (
         leaseExpiresAt: null,
         appendPublishBarrierAt: transitionAt,
         cleanupNotBefore: transitionAt,
+        expectedDocumentCount: documentCount,
         lastError: "projection desired state changed after append committed",
         updatedAt: transitionAt,
       })
@@ -834,6 +850,7 @@ export const commitCorpusProjectionAppendTx = async (
       .set({
         status: "append_committed",
         appendCommittedAt: transitionAt,
+        expectedDocumentCount: documentCount,
         updatedAt: transitionAt,
       })
       .where(eq(corpusIndexProjectionIntents.id, intent.id));

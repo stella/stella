@@ -8,6 +8,9 @@ ALTER TABLE "corpus_index_projection_states"
   ADD COLUMN "last_failure_kind" text,
   ADD COLUMN "last_failure_message" varchar(2048);--> statement-breakpoint
 
+ALTER TABLE "corpus_index_projection_intents"
+  ADD COLUMN "expected_document_count" integer;--> statement-breakpoint
+
 ALTER TABLE "corpus_index_projection_states"
   ADD CONSTRAINT "corpus_index_projection_states_work_status_values"
     CHECK ("work_status" IN ('eligible', 'retry_scheduled', 'blocked')) NOT VALID,
@@ -37,6 +40,43 @@ ALTER TABLE "corpus_index_projection_states"
         AND "last_failure_message" IS NOT NULL
       ELSE false
     END) NOT VALID;--> statement-breakpoint
+
+ALTER TABLE "corpus_index_projection_intents"
+  ADD CONSTRAINT "corpus_index_projection_intents_expected_document_count_shape"
+    CHECK (CASE
+      WHEN "status" IN ('append_committed', 'applied') THEN
+        "expected_document_count" IS NOT NULL
+        AND "expected_document_count" > 0
+      WHEN "expected_document_count" IS NOT NULL THEN
+        "expected_document_count" > 0
+      ELSE true
+    END) NOT VALID;--> statement-breakpoint
+
+CREATE FUNCTION "guard_corpus_index_projection_expected_document_count"()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  IF NEW."status" IN ('append_committed', 'applied')
+     AND NEW."expected_document_count" IS NULL THEN
+    RAISE EXCEPTION 'committed corpus projection intent requires its expected document count';
+  END IF;
+  IF NEW."expected_document_count" IS NOT NULL
+     AND NEW."expected_document_count" <= 0 THEN
+    RAISE EXCEPTION 'corpus projection expected document count must be positive';
+  END IF;
+  IF TG_OP = 'UPDATE'
+     AND OLD."expected_document_count" IS NOT NULL
+     AND NEW."expected_document_count" IS DISTINCT FROM OLD."expected_document_count" THEN
+    RAISE EXCEPTION 'corpus projection expected document count is immutable once recorded';
+  END IF;
+  RETURN NEW;
+END;
+$$;--> statement-breakpoint
+
+CREATE TRIGGER "corpus_index_projection_intents_expected_document_count_guard"
+  BEFORE INSERT OR UPDATE ON "corpus_index_projection_intents"
+  FOR EACH ROW EXECUTE FUNCTION "guard_corpus_index_projection_expected_document_count"();--> statement-breakpoint
 
 -- The table remains inert until the executor ships. Replace the original
 -- pending index before bootstrap so one partial index owns runnable work and

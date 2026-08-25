@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { and, asc, eq, gt, isNotNull } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, isNotNull } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import {
@@ -17,6 +17,7 @@ type ProjectionRevision = SafeId<"corpusIndexProjectionIntent">;
 export type AppliedCorpusProjectionCensusCandidate = {
   entityId: string;
   revision: ProjectionRevision;
+  expectedDocumentCount: number;
 };
 
 export type SettledCorpusProjectionCensusCandidate = {
@@ -70,6 +71,23 @@ const censusPage = <TCandidate extends { revision: string }>(
   complete: candidates.length < limit,
 });
 
+const requireAppliedCandidateDocumentCount = ({
+  entityId,
+  revision,
+  expectedDocumentCount,
+}: {
+  entityId: string;
+  revision: ProjectionRevision;
+  expectedDocumentCount: number | null;
+}): AppliedCorpusProjectionCensusCandidate => {
+  if (expectedDocumentCount === null) {
+    return panic(
+      `Applied projection has no expected document count: ${revision}`,
+    );
+  }
+  return { entityId, revision, expectedDocumentCount };
+};
+
 /** Bounded authoritative revisions that the engine must currently contain. */
 export const readAppliedCorpusProjectionCensusPageTx = async (
   tx: Transaction,
@@ -87,6 +105,7 @@ export const readAppliedCorpusProjectionCensusPageTx = async (
     .select({
       entityId: corpusIndexProjectionStates.entityId,
       revision: corpusIndexProjectionIntents.id,
+      expectedDocumentCount: corpusIndexProjectionIntents.expectedDocumentCount,
     })
     .from(corpusIndexProjectionStates)
     .innerJoin(
@@ -111,7 +130,58 @@ export const readAppliedCorpusProjectionCensusPageTx = async (
     )
     .orderBy(asc(corpusIndexProjectionStates.entityId))
     .limit(options.limit);
-  return censusPage(candidates, options.limit, ({ entityId }) => entityId);
+  return censusPage(
+    candidates.map(requireAppliedCandidateDocumentCount),
+    options.limit,
+    ({ entityId }) => entityId,
+  );
+};
+
+type RevalidateAppliedCorpusProjectionCensusOptions = {
+  family: CorpusFamily;
+  generation: string;
+  indexId: string;
+  revisions: readonly ProjectionRevision[];
+};
+
+/** Re-read exact applied identities after the engine observation. */
+export const revalidateAppliedCorpusProjectionCensusTx = async (
+  tx: Transaction,
+  options: RevalidateAppliedCorpusProjectionCensusOptions,
+): Promise<AppliedCorpusProjectionCensusCandidate[]> => {
+  if (
+    options.revisions.length === 0 ||
+    options.revisions.length > CORPUS_PROJECTION_DELETE_MAX_REVISIONS
+  ) {
+    return panic("Corpus projection census revalidation batch is invalid");
+  }
+  const candidates = await tx
+    .select({
+      entityId: corpusIndexProjectionStates.entityId,
+      revision: corpusIndexProjectionIntents.id,
+      expectedDocumentCount: corpusIndexProjectionIntents.expectedDocumentCount,
+    })
+    .from(corpusIndexProjectionStates)
+    .innerJoin(
+      corpusIndexProjectionIntents,
+      eq(
+        corpusIndexProjectionIntents.id,
+        corpusIndexProjectionStates.appliedRevision,
+      ),
+    )
+    .where(
+      and(
+        eq(corpusIndexProjectionStates.family, options.family),
+        eq(corpusIndexProjectionStates.generation, options.generation),
+        eq(corpusIndexProjectionStates.appliedAction, "upsert"),
+        eq(corpusIndexProjectionStates.appliedIndexId, options.indexId),
+        inArray(corpusIndexProjectionIntents.id, options.revisions),
+        eq(corpusIndexProjectionIntents.status, "applied"),
+      ),
+    )
+    .orderBy(asc(corpusIndexProjectionStates.entityId))
+    .limit(options.revisions.length);
+  return candidates.map(requireAppliedCandidateDocumentCount);
 };
 
 /** Bounded retired revisions that the engine must no longer contain. */

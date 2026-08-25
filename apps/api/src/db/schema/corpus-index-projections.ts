@@ -48,6 +48,7 @@ export const corpusIndexProjectionIntents = p.pgTable(
     leaseExpiresAt: timestamptz("lease_expires_at"),
     appendStartedAt: timestamptz("append_started_at"),
     appendCommittedAt: timestamptz("append_committed_at"),
+    expectedDocumentCount: p.integer("expected_document_count"),
     appliedAt: timestamptz("applied_at"),
     appendPublishBarrierAt: timestamptz("append_publish_barrier_at"),
     cleanupNotBefore: timestamptz("cleanup_not_before"),
@@ -178,6 +179,17 @@ export const corpusIndexProjectionIntents = p.pgTable(
     p.check(
       "corpus_index_projection_intents_delete_opstamp_nonnegative",
       sql`${t.deleteOpstamp} IS NULL OR ${t.deleteOpstamp} >= 0`,
+    ),
+    p.check(
+      "corpus_index_projection_intents_expected_document_count_shape",
+      sql`CASE
+        WHEN ${t.status} IN ('append_committed', 'applied') THEN
+          ${t.expectedDocumentCount} IS NOT NULL
+          AND ${t.expectedDocumentCount} > 0
+        WHEN ${t.expectedDocumentCount} IS NOT NULL THEN
+          ${t.expectedDocumentCount} > 0
+        ELSE true
+      END`,
     ),
     p.check(
       "corpus_index_projection_intents_status_shape",

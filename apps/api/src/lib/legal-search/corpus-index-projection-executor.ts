@@ -35,6 +35,7 @@ import {
   readCorpusText,
 } from "@/api/lib/legal-search/corpus-storage";
 import type { IngestionTransactionRunner } from "@/api/lib/replay-safe-ingestion";
+import { S3ObjectBudgetError } from "@/api/lib/s3";
 
 type ProjectionTransactionRunner = IngestionTransactionRunner<Transaction>;
 type ProjectionAppendClient = Pick<CorpusIndexClient, "ingestCommittedBatch">;
@@ -259,7 +260,7 @@ type PreparedProjectionFailure = {
 export const classifyCorpusProjectionPayloadReadFailure = (
   error: unknown,
 ): PreparedProjectionFailure =>
-  error instanceof PayloadBudgetError
+  error instanceof PayloadBudgetError || error instanceof S3ObjectBudgetError
     ? {
         kind: "revision_too_large",
         message: "projection payload exceeds the transfer or decode ceiling",
@@ -629,6 +630,7 @@ export const executeCorpusProjectionAppendCycle = async ({
             await commitCorpusProjectionAppendTx(tx, {
               intentId: preparedEntry.material.lease.intentId,
               leaseToken: preparedEntry.material.lease.leaseToken,
+              documentCount: preparedEntry.entry.documents.length,
             }),
         );
         const counts = { applied: 0, staleCleanupPending: 0, leaseLost: 0 };

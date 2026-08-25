@@ -9,6 +9,7 @@ import type {
 import {
   readAppliedCorpusProjectionCensusPageTx,
   readSettledCorpusProjectionCensusPageTx,
+  revalidateAppliedCorpusProjectionCensusTx,
 } from "@/api/lib/legal-search/corpus-index-projection-census-store";
 import { censusCorpusProjectionRevisions } from "@/api/lib/legal-search/corpus-index-projection-engine";
 import type { IngestionTransactionRunner } from "@/api/lib/replay-safe-ingestion";
@@ -73,16 +74,37 @@ export const censusAppliedCorpusProjections = async ({
     indexId,
     revisions: page.candidates.map(({ revision }) => revision),
   });
-  return census.map(
-    ({ missing }) =>
-      ({
-        expected: "present",
-        inspected: page.candidates.length,
-        driftRevisions: missing,
-        nextCursor: page.nextCursor,
-        complete: page.complete,
-      }) satisfies CorpusProjectionCensusResult,
+  if (census.isErr()) {
+    return Result.err(census.error);
+  }
+  const observedCounts = new Map(
+    census.value.present.map(
+      ({ revision, documentCount }) => [revision, documentCount] as const,
+    ),
   );
+  const suspectedDrift = page.candidates.filter(
+    ({ revision, expectedDocumentCount }) =>
+      observedCounts.get(revision) !== expectedDocumentCount,
+  );
+  const currentDrift =
+    suspectedDrift.length === 0
+      ? []
+      : await runInTransaction(
+          async (tx) =>
+            await revalidateAppliedCorpusProjectionCensusTx(tx, {
+              family,
+              generation,
+              indexId,
+              revisions: suspectedDrift.map(({ revision }) => revision),
+            }),
+        );
+  return Result.ok({
+    expected: "present",
+    inspected: page.candidates.length,
+    driftRevisions: currentDrift.map(({ revision }) => revision),
+    nextCursor: page.nextCursor,
+    complete: page.complete,
+  } satisfies CorpusProjectionCensusResult);
 };
 
 /** Exact settled revisions observed again are durable orphan-index drift. */

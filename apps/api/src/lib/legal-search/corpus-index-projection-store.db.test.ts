@@ -17,9 +17,11 @@ import {
   CORPUS_INDEX_MANIFESTS,
   corpusIndexManifestDigest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
+import { censusAppliedCorpusProjections } from "@/api/lib/legal-search/corpus-index-projection-census";
 import {
   readAppliedCorpusProjectionCensusPageTx,
   readSettledCorpusProjectionCensusPageTx,
+  revalidateAppliedCorpusProjectionCensusTx,
 } from "@/api/lib/legal-search/corpus-index-projection-census-store";
 import {
   claimCorpusProjectionCleanupSettlementTx,
@@ -90,11 +92,11 @@ const PROJECTION_MIGRATION_URLS = [
     import.meta.url,
   ),
   new URL(
-    "../../../drizzle/20260826003700_corpus_projection_work_schedule/migration.sql",
+    "../../../drizzle/20260826003600_corpus_projection_applied_history_guard/migration.sql",
     import.meta.url,
   ),
   new URL(
-    "../../../drizzle/20260826003600_corpus_projection_applied_history_guard/migration.sql",
+    "../../../drizzle/20260826003700_corpus_projection_work_schedule/migration.sql",
     import.meta.url,
   ),
 ] as const;
@@ -490,6 +492,40 @@ test("unknown append cleanup starts its barrier at failure observation", async (
       cleanupNotBefore: expectedBarrier,
     },
   ]);
+  const runInTransaction = async <TResult>(
+    operation: (tx: Transaction) => Promise<TResult>,
+  ): Promise<TResult> =>
+    await db.transaction(
+      async (tx) => await operation(asTestRaw<Transaction>(tx)),
+    );
+  expect(
+    await censusAppliedCorpusProjections({
+      runInTransaction,
+      client: {
+        aggregate: async () =>
+          Result.ok({
+            projection_revisions: {
+              buckets: [{ key: FIRST_INTENT_ID, doc_count: 2 }],
+              doc_count_error_upper_bound: 0,
+              sum_other_doc_count: 0,
+            },
+          }),
+      },
+      family: "case_law",
+      generation: "case_law_v5",
+      indexId: INDEX_ID,
+      after: null,
+      limit: 1,
+    }),
+  ).toEqual(
+    Result.ok({
+      expected: "present",
+      inspected: 1,
+      driftRevisions: [FIRST_INTENT_ID],
+      nextCursor: DECISION_ID,
+      complete: false,
+    }),
+  );
 });
 
 test("one append request receives one post-lock database timestamp", async () => {
@@ -582,6 +618,7 @@ test("replacement deletes and settles the old revision before reserving the new 
         await commitCorpusProjectionAppendTx(asTestRaw<Transaction>(tx), {
           intentId: firstLease.intentId,
           leaseToken: firstLease.leaseToken,
+          documentCount: 1,
         }),
     ),
   ).toMatchObject({ status: "applied", entityId: DECISION_ID });
@@ -600,10 +637,36 @@ test("replacement deletes and settles the old revision before reserving the new 
         ),
     ),
   ).toEqual({
-    candidates: [{ entityId: DECISION_ID, revision: FIRST_INTENT_ID }],
+    candidates: [
+      {
+        entityId: DECISION_ID,
+        revision: FIRST_INTENT_ID,
+        expectedDocumentCount: 1,
+      },
+    ],
     nextCursor: DECISION_ID,
     complete: false,
   });
+  expect(
+    await db.transaction(
+      async (tx) =>
+        await revalidateAppliedCorpusProjectionCensusTx(
+          asTestRaw<Transaction>(tx),
+          {
+            family: "case_law",
+            generation: "case_law_v5",
+            indexId: INDEX_ID,
+            revisions: [FIRST_INTENT_ID],
+          },
+        ),
+    ),
+  ).toEqual([
+    {
+      entityId: DECISION_ID,
+      revision: FIRST_INTENT_ID,
+      expectedDocumentCount: 1,
+    },
+  ]);
 
   await db.transaction(async (tx) => {
     await tx
@@ -642,6 +705,20 @@ test("replacement deletes and settles the old revision before reserving the new 
   expect(prepared.map(({ intentId }) => intentId)).toEqual([
     firstLease.intentId,
   ]);
+  expect(
+    await db.transaction(
+      async (tx) =>
+        await revalidateAppliedCorpusProjectionCensusTx(
+          asTestRaw<Transaction>(tx),
+          {
+            family: "case_law",
+            generation: "case_law_v5",
+            indexId: INDEX_ID,
+            revisions: [FIRST_INTENT_ID],
+          },
+        ),
+    ),
+  ).toEqual([]);
   expect(
     await db.transaction(
       async (tx) =>
@@ -994,6 +1071,7 @@ test("production transitions preserve PostgreSQL clock ordering under process sk
         await commitCorpusProjectionAppendTx(tx, {
           intentId: lease.intentId,
           leaseToken: lease.leaseToken,
+          documentCount: 1,
         }),
     ),
   ).toMatchObject({ status: "applied" });
@@ -1292,6 +1370,7 @@ test("a settled same-epoch attempt reopens after its retry is applied", async ()
         await commitCorpusProjectionAppendTx(asTestRaw<Transaction>(tx), {
           intentId: retryLease.intentId,
           leaseToken: retryLease.leaseToken,
+          documentCount: 1,
         }),
     ),
   ).toMatchObject({ status: "applied" });
