@@ -3,6 +3,9 @@ SET statement_timeout = '5s';--> statement-breakpoint
 
 -- The table is still inert until the projection executor ships; build the
 -- recovery index before that launch so expired-lease scans stay bounded.
+-- This projection table has no producer until the private runner ships after
+-- this migration; the empty-table build cannot block corpus ingestion.
+-- squawk-ignore require-concurrent-index-creation
 CREATE INDEX "corpus_index_projection_intents_expired_lease_idx"
   ON "corpus_index_projection_intents" (
     "family", "generation", "status", "lease_expires_at"
