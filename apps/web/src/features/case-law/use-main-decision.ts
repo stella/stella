@@ -1,6 +1,6 @@
 import { useMatch } from "@tanstack/react-router";
 
-import type { PublicCaseLawDecision } from "@/routes/law/-case-detail.logic";
+import type { PublicCaseLawDecision } from "@/features/case-law/public-decision";
 
 /**
  * The decision the main view currently renders, when the active route

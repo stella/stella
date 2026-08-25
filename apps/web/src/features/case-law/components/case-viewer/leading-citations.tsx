@@ -109,7 +109,7 @@ const DirectionSection = ({
         <TreatmentBar counts={counts} total={total} />
       </div>
       {CITATION_TREATMENT_ORDER.map((treatment) => {
-        const rows = (leading ?? []).filter(
+        const rows = (leading === undefined ? [] : leading).filter(
           (row) => row.treatment === treatment,
         );
         if (counts[treatment] === 0) {

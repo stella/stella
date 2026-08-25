@@ -42,11 +42,9 @@ const createDecisionAnnotation = createSafeRootHandler(
 
     const groupId = body.spans.length > 1 ? randomUUIDv7() : null;
     const rows = yield* Result.await(
-      // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
       safeDb((tx) => {
         // audit: skip — a reader's own mark on public text, private by default; no tenant configuration or shared record changes.
-        return tx
-          .insert(caseLawDecisionAnnotations)
+        tx.insert(caseLawDecisionAnnotations)
           .values(
             body.spans.map((span, index) => ({
               id: createSafeId<"caseLawDecisionAnnotation">(),

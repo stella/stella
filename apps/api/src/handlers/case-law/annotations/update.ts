@@ -59,11 +59,9 @@ const updateDecisionAnnotation = createSafeRootHandler(
   config,
   async function* ({ body, params: { annotationId }, safeDb, session, user }) {
     const rows = yield* Result.await(
-      // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
       safeDb((tx) => {
         // audit: skip — the author editing their own mark on public text; no tenant configuration or shared record changes.
-        return tx
-          .update(caseLawDecisionAnnotations)
+        tx.update(caseLawDecisionAnnotations)
           .set({ ...changesFor(body), updatedAt: new Date() })
           .where(
             wholeAnnotationSql({

@@ -171,7 +171,7 @@ export const useDecisionAnnotations = (
     await queryClient.cancelQueries({ queryKey });
     const previous = queryClient.getQueryData<DecisionAnnotation[]>(queryKey);
     queryClient.setQueryData<DecisionAnnotation[]>(queryKey, (rows) =>
-      patch(rows ?? []),
+      patch(rows === undefined ? [] : rows),
     );
     return { previous };
   };
@@ -251,7 +251,8 @@ export const useDecisionAnnotations = (
     ...settle,
   });
 
-  const annotations: readonly DecisionAnnotation[] = data ?? [];
+  const annotations: readonly DecisionAnnotation[] =
+    data === undefined ? [] : data;
 
   return { annotations, create, remove, update };
 };

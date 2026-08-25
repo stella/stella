@@ -18,11 +18,9 @@ const deleteDecisionAnnotation = createSafeRootHandler(
   config,
   async function* ({ params: { annotationId }, safeDb, session, user }) {
     const rows = yield* Result.await(
-      // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
       safeDb((tx) => {
         // audit: skip — the author removing their own mark on public text; no tenant configuration or shared record changes.
-        return tx
-          .delete(caseLawDecisionAnnotations)
+        tx.delete(caseLawDecisionAnnotations)
           .where(
             wholeAnnotationSql({
               annotationId,

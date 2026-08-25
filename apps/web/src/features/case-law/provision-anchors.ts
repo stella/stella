@@ -130,9 +130,14 @@ export const locateProvisionAnchors = <T>({
         break;
       }
       const start = sentenceStart + match.index;
-      const spans = hitsByBlock.get(block.id) ?? [];
+      const spans = hitsByBlock.get(block.id);
+      if (spans === undefined) {
+        hitsByBlock.set(block.id, [
+          { end: start + match[0].length, source, start },
+        ]);
+        break;
+      }
       spans.push({ end: start + match[0].length, source, start });
-      hitsByBlock.set(block.id, spans);
       break;
     }
   }

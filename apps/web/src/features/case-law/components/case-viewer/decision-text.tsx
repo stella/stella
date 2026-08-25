@@ -292,9 +292,12 @@ const buildAnchorsByPieceId = ({
     if (blockId === undefined) {
       continue;
     }
-    const list = annotationsByBlock.get(blockId) ?? [];
+    const list = annotationsByBlock.get(blockId);
+    if (list === undefined) {
+      annotationsByBlock.set(blockId, [annotation]);
+      continue;
+    }
     list.push(annotation);
-    annotationsByBlock.set(blockId, list);
   }
   const anchorsByPieceId: Record<string, TextAnchor[]> = {};
   const blockIds = new Set([
@@ -304,9 +307,12 @@ const buildAnchorsByPieceId = ({
   ]);
   for (const blockId of blockIds) {
     const anchors: TextAnchor[] = [];
+    const blockAnnotations = annotationsByBlock.get(blockId);
     // A reader's mark over a link keeps the link: links are the text's own
     // structure, and the mark is still visible in the margin.
-    for (const annotation of annotationsByBlock.get(blockId) ?? []) {
+    for (const annotation of blockAnnotations === undefined
+      ? []
+      : blockAnnotations) {
       anchors.push({
         end: annotation.endOffset,
         key: `annotation:${annotation.id}`,
@@ -319,8 +325,12 @@ const buildAnchorsByPieceId = ({
         start: annotation.startOffset,
       });
     }
-    for (const span of citationSpans[blockId] ?? []) {
-      const exactAnnotations = (annotationsByBlock.get(blockId) ?? []).filter(
+    for (const span of citationSpans[blockId] === undefined
+      ? []
+      : citationSpans[blockId]) {
+      const exactAnnotations = (
+        blockAnnotations === undefined ? [] : blockAnnotations
+      ).filter(
         (annotation) =>
           annotation.startOffset === span.start &&
           annotation.endOffset === span.end,
@@ -342,8 +352,12 @@ const buildAnchorsByPieceId = ({
         start: span.start,
       });
     }
-    for (const span of provisionSpans[blockId] ?? []) {
-      const exactAnnotations = (annotationsByBlock.get(blockId) ?? []).filter(
+    for (const span of provisionSpans[blockId] === undefined
+      ? []
+      : provisionSpans[blockId]) {
+      const exactAnnotations = (
+        blockAnnotations === undefined ? [] : blockAnnotations
+      ).filter(
         (annotation) =>
           annotation.startOffset === span.start &&
           annotation.endOffset === span.end,

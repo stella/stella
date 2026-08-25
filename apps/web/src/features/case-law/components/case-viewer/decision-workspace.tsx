@@ -124,14 +124,14 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
       (item) =>
         item.id === activeAnnotationId && !isPendingAnnotationId(item.id),
     ) ?? null;
+  const annotationRows =
+    annotations === undefined ? [] : annotations.annotations;
   // A mark over several paragraphs is several rows under one group; the bar
   // acts on all of them, and a comment left from the mark covers them all.
   const rowsOf = (item: DecisionAnnotation): DecisionAnnotation[] =>
     item.groupId === null
       ? [item]
-      : (annotations?.annotations ?? []).filter(
-          (row) => row.groupId === item.groupId,
-        );
+      : annotationRows.filter((row) => row.groupId === item.groupId);
   const activeSpans = activeAnnotation === null ? [] : rowsOf(activeAnnotation);
   // Select the words the mark covers, exactly as if the reader had dragged
   // over them, so the bar reads as acting on that selection. Runs from the
@@ -163,20 +163,20 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
     selection?.removeAllRanges();
     selection?.addRange(range);
   }, [activeRowIds]);
-  const annotationAnchors: AnnotationAnchorSource[] = (
-    annotations?.annotations ?? []
-  ).map((item) => ({
-    blockAnchorId: item.blockAnchorId,
-    color: item.color,
-    endOffset: item.endOffset,
-    id: item.id,
-    kind: item.kind,
-    startOffset: item.startOffset,
-    style: item.style,
-  }));
+  const annotationAnchors: AnnotationAnchorSource[] = annotationRows.map(
+    (item) => ({
+      blockAnchorId: item.blockAnchorId,
+      color: item.color,
+      endOffset: item.endOffset,
+      id: item.id,
+      kind: item.kind,
+      startOffset: item.startOffset,
+      style: item.style,
+    }),
+  );
   // A comment over several paragraphs is several rows; its words sit on the
   // first, and that is the one the margin shows.
-  const commentItems: CommentMarginItem[] = (annotations?.annotations ?? [])
+  const commentItems: CommentMarginItem[] = annotationRows
     .filter((item) => item.kind === "comment" && item.body !== null)
     .map((item) => ({
       author: { image: item.authorImage, name: item.authorName },
