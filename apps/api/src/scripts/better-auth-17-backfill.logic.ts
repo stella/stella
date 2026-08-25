@@ -324,8 +324,9 @@ const backfillAccounts = async (
   );
   let after: string | null = null;
   let changed = false;
-  while (true) {
-    // eslint-disable-next-line no-await-in-loop -- the keyset page is bounded while the outer all-or-nothing transaction retains its write fence
+  const readNextPage = async (): Promise<
+    Result<boolean, BetterAuthBackfillError>
+  > => {
     const page = await backfillAccountPage({
       after,
       batchSize,
@@ -333,23 +334,27 @@ const backfillAccounts = async (
       transaction,
     });
     if (Result.isError(page)) {
-      return page;
+      return Result.err(page.error);
     }
     changed ||= page.value.changed;
     after = page.value.nextAfter;
-    if (page.value.complete) {
-      return Result.ok(changed);
-    }
-  }
+    return page.value.complete ? Result.ok(changed) : readNextPage();
+  };
+  return readNextPage();
 };
 
 const seedOAuthResources = async (
   transaction: BetterAuthBackfillTransaction,
   expectedResources: readonly BetterAuthExpectedOAuthResource[],
 ) => {
-  let changed = false;
-  for (const resource of expectedResources) {
-    // eslint-disable-next-line no-await-in-loop -- resource validation and insert must remain ordered under one write-fenced transaction
+  const seedResource = async (
+    index: number,
+    changed: boolean,
+  ): Promise<Result<boolean, BetterAuthBackfillError>> => {
+    const resource = expectedResources.at(index);
+    if (resource === undefined) {
+      return Result.ok(changed);
+    }
     const existing = await queryRows(
       transaction,
       sql`
@@ -377,9 +382,8 @@ const seedOAuthResources = async (
       ) {
         return invalidSourceState();
       }
-      continue;
+      return seedResource(index + 1, changed);
     }
-    // eslint-disable-next-line no-await-in-loop -- each validated resource is inserted before the next conflict check
     const inserted = await queryRows(
       transaction,
       sql`
@@ -400,9 +404,9 @@ const seedOAuthResources = async (
     if (Result.isError(inserted)) {
       return inserted;
     }
-    changed = true;
-  }
-  return Result.ok(changed);
+    return seedResource(index + 1, true);
+  };
+  return seedResource(0, false);
 };
 
 type OAuthClientBackfillValue = {
@@ -564,8 +568,9 @@ const backfillOAuthClients = async (
 ) => {
   let after: string | null = null;
   let changed = false;
-  while (true) {
-    // eslint-disable-next-line no-await-in-loop -- the keyset page is bounded while the outer all-or-nothing transaction retains its write fence
+  const readNextPage = async (): Promise<
+    Result<boolean, BetterAuthBackfillError>
+  > => {
     const page = await backfillOAuthClientPage({
       after,
       batchSize,
@@ -573,14 +578,13 @@ const backfillOAuthClients = async (
       transaction,
     });
     if (Result.isError(page)) {
-      return page;
+      return Result.err(page.error);
     }
     changed ||= page.value.changed;
     after = page.value.nextAfter;
-    if (page.value.complete) {
-      return Result.ok(changed);
-    }
-  }
+    return page.value.complete ? Result.ok(changed) : readNextPage();
+  };
+  return readNextPage();
 };
 
 type BetterAuthBackfillTransactionOptions = Omit<

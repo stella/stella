@@ -753,7 +753,12 @@ type AuditRunResult = {
   report: BetterAuthAuditReport;
 };
 
-const queryRows = async (database: BetterAuthAuditDatabase, statement: SQL) => {
+type AuditRowsResult = Result<unknown[], BetterAuthAuditError>;
+
+const queryRows = async (
+  database: BetterAuthAuditDatabase,
+  statement: SQL,
+): Promise<AuditRowsResult> => {
   const queried = await Result.tryPromise({
     try: async () => await database.execute(statement),
     catch: (cause) =>
@@ -853,7 +858,9 @@ const readProjectedAccountIdentities = async (
   let after: string | null = null;
   let rowCount = 0n;
 
-  while (true) {
+  const readNextPage = async (): Promise<
+    Result<void, BetterAuthAuditError>
+  > => {
     const statement =
       after === null
         ? sql`
@@ -875,10 +882,9 @@ const readProjectedAccountIdentities = async (
              ORDER BY id
              LIMIT ${ACCOUNT_IDENTITY_PAGE_SIZE}
           `;
-    // eslint-disable-next-line no-await-in-loop -- keyset pages must be read in primary-key order for one stable digest
     const queried = await queryRows(database, statement);
     if (Result.isError(queried)) {
-      return queried;
+      return Result.err(queried.error);
     }
 
     for (const row of queried.value) {
@@ -950,9 +956,13 @@ const readProjectedAccountIdentities = async (
       rowCount += 1n;
     }
 
-    if (queried.value.length < ACCOUNT_IDENTITY_PAGE_SIZE) {
-      break;
-    }
+    return queried.value.length < ACCOUNT_IDENTITY_PAGE_SIZE
+      ? Result.ok(undefined)
+      : readNextPage();
+  };
+  const pagesRead = await readNextPage();
+  if (Result.isError(pagesRead)) {
+    return Result.err(pagesRead.error);
   }
 
   if (
@@ -977,7 +987,9 @@ const readActualAccountIdentities = async (
   let after: string | null = null;
   let rowCount = 0n;
 
-  while (true) {
+  const readNextPage = async (): Promise<
+    Result<void, BetterAuthAuditError>
+  > => {
     const statement =
       after === null
         ? sql`
@@ -997,10 +1009,9 @@ const readActualAccountIdentities = async (
              ORDER BY id
              LIMIT ${ACCOUNT_IDENTITY_PAGE_SIZE}
           `;
-    // eslint-disable-next-line no-await-in-loop -- keyset pages must be read in primary-key order for one stable digest
     const queried = await queryRows(database, statement);
     if (Result.isError(queried)) {
-      return queried;
+      return Result.err(queried.error);
     }
     for (const row of queried.value) {
       const accountRowId = isRecord(row)
@@ -1026,9 +1037,13 @@ const readActualAccountIdentities = async (
       after = accountRowId;
       rowCount += 1n;
     }
-    if (queried.value.length < ACCOUNT_IDENTITY_PAGE_SIZE) {
-      break;
-    }
+    return queried.value.length < ACCOUNT_IDENTITY_PAGE_SIZE
+      ? Result.ok(undefined)
+      : readNextPage();
+  };
+  const pagesRead = await readNextPage();
+  if (Result.isError(pagesRead)) {
+    return Result.err(pagesRead.error);
   }
   return Result.ok({
     digest: projectionHasher.digest("hex"),
@@ -1102,7 +1117,9 @@ const readProjectedOAuthPolicy = async (
   let clientCount = 0n;
   let valid = initialized.valid;
 
-  while (true) {
+  const readNextPage = async (): Promise<
+    Result<void, BetterAuthAuditError>
+  > => {
     const statement =
       after === null
         ? sql`
@@ -1124,10 +1141,9 @@ const readProjectedOAuthPolicy = async (
              ORDER BY client_id
              LIMIT ${OAUTH_POLICY_PAGE_SIZE}
           `;
-    // eslint-disable-next-line no-await-in-loop -- keyset pages must feed one ordered policy digest
     const queried = await queryRows(database, statement);
     if (Result.isError(queried)) {
-      return queried;
+      return Result.err(queried.error);
     }
     for (const row of queried.value) {
       const clientId = isRecord(row) ? requiredString(row["clientId"]) : null;
@@ -1168,9 +1184,13 @@ const readProjectedOAuthPolicy = async (
       after = clientId;
       clientCount += 1n;
     }
-    if (queried.value.length < OAUTH_POLICY_PAGE_SIZE) {
-      break;
-    }
+    return queried.value.length < OAUTH_POLICY_PAGE_SIZE
+      ? Result.ok(undefined)
+      : readNextPage();
+  };
+  const pagesRead = await readNextPage();
+  if (Result.isError(pagesRead)) {
+    return Result.err(pagesRead.error);
   }
 
   return Result.ok({
@@ -1215,7 +1235,9 @@ const readActualOAuthPolicy = async (database: BetterAuthAuditDatabase) => {
   let after: string | null = null;
   let clientCount = 0n;
   let valid = initialized.valid;
-  while (true) {
+  const readNextPage = async (): Promise<
+    Result<void, BetterAuthAuditError>
+  > => {
     const statement =
       after === null
         ? sql`
@@ -1247,10 +1269,9 @@ const readActualOAuthPolicy = async (database: BetterAuthAuditDatabase) => {
              ORDER BY client.client_id
              LIMIT ${OAUTH_POLICY_PAGE_SIZE}
           `;
-    // eslint-disable-next-line no-await-in-loop -- keyset pages must feed one ordered policy digest
     const queried = await queryRows(database, statement);
     if (Result.isError(queried)) {
-      return queried;
+      return Result.err(queried.error);
     }
     for (const row of queried.value) {
       const clientId = isRecord(row) ? requiredString(row["clientId"]) : null;
@@ -1293,9 +1314,13 @@ const readActualOAuthPolicy = async (database: BetterAuthAuditDatabase) => {
       after = clientId;
       clientCount += 1n;
     }
-    if (queried.value.length < OAUTH_POLICY_PAGE_SIZE) {
-      break;
-    }
+    return queried.value.length < OAUTH_POLICY_PAGE_SIZE
+      ? Result.ok(undefined)
+      : readNextPage();
+  };
+  const pagesRead = await readNextPage();
+  if (Result.isError(pagesRead)) {
+    return Result.err(pagesRead.error);
   }
   return Result.ok({
     clientCount: clientCount.toString(),
