@@ -78,7 +78,7 @@ const PROJECTION_MIGRATION_URLS = [
     import.meta.url,
   ),
   new URL(
-    "../../../drizzle/20260825211400_corpus_projection_replacement_order/migration.sql",
+    "../../../drizzle/20260826003530_corpus_projection_replacement_order/migration.sql",
     import.meta.url,
   ),
   new URL(
@@ -742,11 +742,12 @@ test("production transitions preserve PostgreSQL clock ordering under process sk
   if (verified.value.status !== "verified") {
     return panic("Expected verified settlement proof");
   }
+  const proof = verified.value.proof;
   expect(
     await withDatabaseClock(
       async (tx) =>
         await settleCorpusProjectionCleanupTx(tx, {
-          proof: verified.value.proof,
+          proof,
         }),
     ),
   ).toBe(1);
