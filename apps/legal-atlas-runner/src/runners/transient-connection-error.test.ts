@@ -11,6 +11,12 @@ import { isTransientConnectionError } from "./transient-connection-error";
  * failure and never names the type, and the driver category is in `code`. The
  * `name` matters because it is what the runner's log line renders, which is
  * how these reach an operator ("PostgresError: Idle timeout reached after 2m").
+ *
+ * These fixtures spell the code as `PG_DRIVER_ERROR.*`, so on their own they
+ * would agree with a typo in that map. They are not the guard against it:
+ * `pg-error.test.ts` pins the map to literals and drives the live `Bun.sql`
+ * pool to check one code against what the driver really emits. What is left
+ * for these tests is the classifier's own behaviour, which is what they cover.
  */
 const postgresError = (code: string, message: string) =>
   Object.assign(new Error(message), { name: "PostgresError", code });
