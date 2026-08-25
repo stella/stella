@@ -1550,13 +1550,8 @@ export const caseLawDecisionAnnotations = p.pgTable(
   "case_law_decision_annotations",
   {
     id: pUuid<"caseLawDecisionAnnotation">().primaryKey(),
-    organizationId: safeOrganizationId("organization_id")
-      .notNull()
-      .references(() => organization.id, { onDelete: "cascade" }),
-    userId: p
-      .text("user_id")
-      .notNull()
-      .references(() => user.id, { onDelete: "cascade" }),
+    organizationId: safeOrganizationId("organization_id").notNull(),
+    userId: p.text("user_id").notNull(),
     decisionId: safeUuid<"caseLawDecision">("decision_id").notNull(),
     /**
      * Ties the rows of one mark that spans several paragraphs; null for a
@@ -1581,6 +1576,20 @@ export const caseLawDecisionAnnotations = p.pgTable(
     updatedAt: timestamptz("updated_at").defaultNow().notNull(),
   },
   (t) => [
+    p
+      .foreignKey({
+        name: "case_law_decision_annotations_organization_id_fk",
+        columns: [t.organizationId],
+        foreignColumns: [organization.id],
+      })
+      .onDelete("cascade"),
+    p
+      .foreignKey({
+        name: "case_law_decision_annotations_user_id_fk",
+        columns: [t.userId],
+        foreignColumns: [user.id],
+      })
+      .onDelete("cascade"),
     p
       .index("case_law_decision_annotations_decision_idx")
       .on(t.organizationId, t.decisionId, t.createdAt, t.id),
