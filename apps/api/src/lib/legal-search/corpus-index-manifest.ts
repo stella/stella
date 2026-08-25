@@ -285,10 +285,7 @@ const canonicalJson = (value: unknown): string => {
     compareCanonicalJsonKeys(left, right),
   );
   return `{${entries
-    .map(
-      ([key, entry]) =>
-        `${JSON.stringify(key)}:${canonicalJson(entry)}`,
-    )
+    .map(([key, entry]) => `${JSON.stringify(key)}:${canonicalJson(entry)}`)
     .join(",")}}`;
 };
 

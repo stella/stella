@@ -66,9 +66,8 @@ test("manifest digests pin every semantic array and ignore object key order", ()
         ...manifest.engine.indexConfig,
         doc_mapping: {
           ...manifest.engine.indexConfig.doc_mapping,
-          tag_fields: [
-            ...manifest.engine.indexConfig.doc_mapping.tag_fields,
-          ].toReversed(),
+          tag_fields:
+            manifest.engine.indexConfig.doc_mapping.tag_fields.toReversed(),
         },
       },
     },
@@ -172,7 +171,6 @@ test("v5 removes stale and repeated physical fields", () => {
     fast: true,
     fast_precision: "seconds",
   });
-
 });
 
 test("final manifests make every storage and index cost explicit", () => {
