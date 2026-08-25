@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
-import { propertyConfig, propertyTestTimeout } from "./index";
+import {
+  PROPERTY_TEST_TIMEOUT_BASE_MS_ENV,
+  propertyConfig,
+  propertyTestDefaultTimeout,
+  propertyTestTimeout,
+} from "./index";
 
 const FACTOR_ENV = "PROPERTY_TEST_NUM_RUNS_FACTOR";
 
@@ -98,5 +103,46 @@ describe("propertyTestTimeout", () => {
     withEnv({ [FACTOR_ENV]: "10" }, () => {
       expect(propertyTestTimeout(15_000)).toBe(150_000);
     });
+  });
+
+  test("scales the owning runner's baseline without lowering it", () => {
+    withEnv(
+      {
+        [FACTOR_ENV]: undefined,
+        [PROPERTY_TEST_TIMEOUT_BASE_MS_ENV]: "30000",
+      },
+      () => {
+        expect(propertyTestDefaultTimeout()).toBe(30_000);
+      },
+    );
+    withEnv(
+      {
+        [FACTOR_ENV]: "10",
+        [PROPERTY_TEST_TIMEOUT_BASE_MS_ENV]: "30000",
+      },
+      () => {
+        expect(propertyTestDefaultTimeout()).toBe(300_000);
+      },
+    );
+  });
+
+  test("uses the default timeout baseline", () => {
+    withEnv(
+      {
+        [FACTOR_ENV]: undefined,
+        [PROPERTY_TEST_TIMEOUT_BASE_MS_ENV]: undefined,
+      },
+      () => {
+        expect(propertyTestDefaultTimeout()).toBe(5000);
+      },
+    );
+  });
+
+  test("rejects an invalid owning-runner baseline", () => {
+    for (const raw of ["0", "-1", "1.5", "not-a-number"]) {
+      withEnv({ [PROPERTY_TEST_TIMEOUT_BASE_MS_ENV]: raw }, () => {
+        expect(propertyTestDefaultTimeout).toThrow(TypeError);
+      });
+    }
   });
 });

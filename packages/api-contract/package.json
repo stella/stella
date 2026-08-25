@@ -20,7 +20,7 @@
   "scripts": {
     "clean": "git clean -xdf .cache .turbo node_modules",
     "test": "bun test src",
-    "test:property": "bun test $(grep -rlF 'fc.assert' src --include='*.test.ts')",
+    "test:property": "bun test --preload @stll/property-testing/preload $(grep -rlF 'fc.assert' src --include='*.test.ts')",
     "typecheck": "bun ../../packages/scripts/src/tsc-native.ts --noEmit",
     "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --deny-warnings --type-aware packages/api-contract",
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/api-contract",

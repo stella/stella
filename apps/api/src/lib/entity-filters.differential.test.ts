@@ -129,7 +129,7 @@ beforeAll(
       })),
     );
   },
-  { timeout: 30_000 },
+  { timeout: propertyTestTimeout(30_000) },
 );
 
 afterAll(async () => {

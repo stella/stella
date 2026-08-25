@@ -2,12 +2,22 @@ import { readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { PROPERTY_TEST_TIMEOUT_BASE_MS_ENV } from "@stll/property-testing";
+
 import {
   batchModuleMockTests,
   readModuleMockMetadata,
   type ModuleMockTest,
 } from "../src/tests/module-mock-batching";
+import { API_TEST_TIMEOUT_MS } from "../src/tests/test-timeouts";
 import { maxRssBytesToMb } from "./resource-usage";
+import {
+  classifyTestBatch,
+  composeTestBatches,
+  dbTestBatchSize,
+  isDbTest,
+  TEST_BATCH_KIND,
+} from "./test-batch-plan";
 import { partitionRunnerArguments, selectTestPaths } from "./test-path-filters";
 
 const PROPERTY_FLAG = "--property";
@@ -37,7 +47,6 @@ const MODULE_MOCK_TEST_BATCH_SIZE = 3;
 // db via context, and module-level singletons are lazy per the side-effect
 // conventions). The path fallback catches integration suites that reach the
 // db through their own local setup.
-const DB_TEST_BATCH_SIZE = 3;
 // Some protocol conformance tests intentionally load an independent client
 // implementation alongside the API server graph, while sandbox tests exercise
 // hard memory limits. Keep both classes in fresh processes so their retained
@@ -47,20 +56,6 @@ const HEAVY_LOGIC_SOURCE_MARKERS = ["@modelcontextprotocol/client"] as const;
 const HEAVY_LOGIC_PATH_MARKERS = [
   "handlers/chat/tools/execute/sandbox/",
 ] as const;
-const DB_TEST_MARKERS = [
-  "tests/security/rls-helpers",
-  "tests/security/rls-fixture",
-  "tests/security/test-utils",
-  "tests/pglite-schema",
-  "@/api/db/root",
-  "@/api/db/scoped",
-  "pglite",
-] as const;
-const DB_TEST_PATH_RE = /\.(?:integration|db)\.test\.tsx?$/u;
-// Spans multi-line type imports (formatters wrap long ones), up to and
-// including the module specifier so it cannot leak into marker matching.
-const TYPE_ONLY_IMPORT_RE =
-  /^[ \t]*import\s+type\b[\s\S]*?from\s+["'][^"']+["']/gmu;
 // Hard per-batch peak-RSS budgets. A batch that outgrows its budget fails
 // the run even when every test passes, so memory growth surfaces here as a
 // readable error instead of an opaque exit-137 kill when the hosted
@@ -183,14 +178,6 @@ const classifiedTests = await Promise.all(
   })),
 );
 
-const isDbTest = (testPath: string, source: string): boolean => {
-  if (DB_TEST_PATH_RE.test(testPath)) {
-    return true;
-  }
-  const valueImportsOnly = source.replace(TYPE_ONLY_IMPORT_RE, "");
-  return DB_TEST_MARKERS.some((marker) => valueImportsOnly.includes(marker));
-};
-
 const regularTests: string[] = [];
 const heavyLogicTests: string[] = [];
 const dbTests: string[] = [];
@@ -200,28 +187,33 @@ for (const { source, testPath } of classifiedTests) {
     continue;
   }
 
-  if (installsModuleMock(source)) {
-    moduleMockTests.push({
-      ...readTestModuleMockMetadata(source, testPath),
-      testPath,
-    });
-    continue;
+  const batchKind = classifyTestBatch({
+    dbBacked: isDbTest(testPath, source),
+    heavyLogic:
+      HEAVY_LOGIC_SOURCE_MARKERS.some((marker) => source.includes(marker)) ||
+      HEAVY_LOGIC_PATH_MARKERS.some((marker) => testPath.includes(marker)),
+    installsModuleMock: installsModuleMock(source),
+    propertyOnly,
+  });
+  switch (batchKind) {
+    case TEST_BATCH_KIND.moduleMock:
+      moduleMockTests.push({
+        ...readTestModuleMockMetadata(source, testPath),
+        testPath,
+      });
+      break;
+    case TEST_BATCH_KIND.db:
+      dbTests.push(testPath);
+      break;
+    case TEST_BATCH_KIND.heavyLogic:
+      heavyLogicTests.push(testPath);
+      break;
+    case TEST_BATCH_KIND.regular:
+      regularTests.push(testPath);
+      break;
+    default:
+      batchKind satisfies never;
   }
-
-  if (isDbTest(testPath, source)) {
-    dbTests.push(testPath);
-    continue;
-  }
-
-  if (
-    HEAVY_LOGIC_SOURCE_MARKERS.some((marker) => source.includes(marker)) ||
-    HEAVY_LOGIC_PATH_MARKERS.some((marker) => testPath.includes(marker))
-  ) {
-    heavyLogicTests.push(testPath);
-    continue;
-  }
-
-  regularTests.push(testPath);
 }
 
 // Mirrors PGLITE_TEST_SNAPSHOT_ENV in src/tests/pglite-test-db.ts; a
@@ -267,6 +259,7 @@ const buildTestDbSnapshot = async (): Promise<string> => {
 
 const testProcessEnv: Record<string, string | undefined> = {
   ...process.env,
+  [PROPERTY_TEST_TIMEOUT_BASE_MS_ENV]: String(API_TEST_TIMEOUT_MS),
 };
 if (dbTests.length > 0 || moduleMockTests.length > 0) {
   testProcessEnv[PGLITE_TEST_SNAPSHOT_ENV] = await buildTestDbSnapshot();
@@ -341,7 +334,6 @@ const runTests = async ({
 
 type RunTestBatchesOptions = {
   batchSize: number;
-  batchStart: number;
   isolate: boolean;
   maxPeakRssMb: number;
   testFiles: string[];
@@ -349,31 +341,16 @@ type RunTestBatchesOptions = {
 
 const runTestBatches = async ({
   batchSize,
-  batchStart,
   isolate,
   maxPeakRssMb,
   testFiles,
-}: RunTestBatchesOptions): Promise<number> => {
-  if (batchStart >= testFiles.length) {
-    return 0;
-  }
-
-  const batch = selectWithinBatch(
-    testFiles.slice(batchStart, batchStart + batchSize),
-  );
-  const exitCode = await runTests({ isolate, maxPeakRssMb, testFiles: batch });
-  if (exitCode !== 0) {
-    return exitCode;
-  }
-
-  return runTestBatches({
-    batchSize,
-    batchStart: batchStart + batchSize,
+}: RunTestBatchesOptions): Promise<number> =>
+  await runPreparedTestBatches({
+    batchStart: 0,
     isolate,
     maxPeakRssMb,
-    testFiles,
+    testBatches: composeTestBatches(testFiles, batchSize),
   });
-};
 
 type RunPreparedTestBatchesOptions = {
   batchStart: number;
@@ -417,7 +394,6 @@ const runPreparedTestBatches = async ({
 // process for the full suite grows until the hosted runner terminates it.
 const regularExitCode = await runTestBatches({
   batchSize: REGULAR_TEST_BATCH_SIZE,
-  batchStart: 0,
   isolate: false,
   maxPeakRssMb: MAX_LOGIC_BATCH_PEAK_RSS_MB,
   testFiles: regularTests,
@@ -428,7 +404,6 @@ if (regularExitCode !== 0) {
 
 const heavyLogicExitCode = await runTestBatches({
   batchSize: HEAVY_LOGIC_TEST_BATCH_SIZE,
-  batchStart: 0,
   isolate: false,
   maxPeakRssMb: MAX_HEAVY_LOGIC_BATCH_PEAK_RSS_MB,
   testFiles: heavyLogicTests,
@@ -438,8 +413,7 @@ if (heavyLogicExitCode !== 0) {
 }
 
 const dbExitCode = await runTestBatches({
-  batchSize: DB_TEST_BATCH_SIZE,
-  batchStart: 0,
+  batchSize: dbTestBatchSize(propertyOnly),
   isolate: false,
   maxPeakRssMb: MAX_DB_BATCH_PEAK_RSS_MB,
   testFiles: dbTests,

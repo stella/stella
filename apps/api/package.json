@@ -15,7 +15,7 @@
     "build:analyze": "bun build --target bun --outdir .cache/server-build --entry-naming=server.js --metafile-md=.cache/server-metafile.md src/server.ts",
     "test": "bun scripts/run-tests.ts",
     "test:postgres": "bun scripts/run-postgres-tests.ts",
-    "test:property": "bun scripts/run-tests.ts --property",
+    "test:property": "bun scripts/run-tests.ts --property --preload @stll/property-testing/preload",
     "dev": "bun run docker:dev && NODE_ENV=development bun --port 3001 --preload ./src/dev/register-mock-ai.ts --watch src/server.ts",
     "docker:dev": "docker compose --profile dev up -d",
     "docker:reset-dev": "docker compose --profile dev down -v && docker compose --profile dev up -d",
