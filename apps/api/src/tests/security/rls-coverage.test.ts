@@ -761,6 +761,7 @@ describe("policy coverage", () => {
       "legislation_corpus_index_delete_watermarks",
     ]) {
       expect(privilegesForTable(tablePrivileges, table)).toEqual([
+        "DELETE",
         "INSERT",
         "SELECT",
         "UPDATE",
