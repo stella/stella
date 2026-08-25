@@ -98,6 +98,9 @@ const POST_BOOTSTRAP_SELECT_ONLY_TABLES = new Set([
   // Durable operator progress: request code may inspect the rollout receipt;
   // only the ingestion role and the maintenance script may advance it.
   "case_law_decision_identifier_backfills",
+  // Corpus-index generation identity is immutable control-plane state. The
+  // request role resolves serving generations but never mutates the registry.
+  "corpus_index_generations",
 ]);
 
 // Internal handoff tables whose scoped role needs INSERT but not table-wide
