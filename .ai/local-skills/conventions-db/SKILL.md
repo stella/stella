@@ -41,8 +41,13 @@ transactions, or tenant-scoped persistence.
   compatible with the migrated schema, and a failed rollout must have a safe
   forward-fix path.
 - Keep irreversible schema operations out of the same release as risky
-  application changes. Destructive SQL requires the reviewed annotation
-  enforced by `scripts/check-migration-safety.ts`.
+  application changes. Destructive, bulk-backfill, and access-control SQL
+  requires a statement-scoped acknowledgement enforced by
+  `scripts/check-migration-safety.ts`, placed in the comment block directly
+  above the statement:
+  `-- stella-migration-safety: reviewed <rule-id> - <why this is safe>`.
+  An acknowledgement that clears nothing is an error. Every migration sets
+  `lock_timeout` and `statement_timeout` first.
 - For large live tables, follow the repository's guarded concurrent-index
   protocol: either split and reopen the migrator transaction exactly as
   enforced by `migration-concurrent-index.test.ts`, or put repairable work in
