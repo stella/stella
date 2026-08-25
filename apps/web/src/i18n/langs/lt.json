@@ -389,6 +389,7 @@
   },
   "caseLaw": {
     "analysis": {
+      "backToSection": "Grįžti į šios dalies pradžią",
       "categories": {
         "facts": "Faktinės aplinkybės",
         "holding": "Teismo išvada",
@@ -397,11 +398,30 @@
       }
     },
     "analyzing": "Analizuojama...",
+    "annotations": {
+      "colorGreen": "Žalia",
+      "colorRed": "Raudona",
+      "colorSky": "Mėlyna",
+      "colorViolet": "Violetinė",
+      "colorYellow": "Geltona",
+      "commentPlaceholder": "Rašykite komentarą…",
+      "highlight": "Paryškinti",
+      "removeHighlight": "Pašalinti paryškinimą",
+      "sharedBadge": "Bendrinama",
+      "styleHighlight": "Paryškinimas",
+      "styleSquiggly": "Banguota linija",
+      "styleStrikethrough": "Perbraukimas",
+      "visibilityShared": "Bendrinama su organizacija"
+    },
     "citation": {
       "citedSummary": "{count, plural, =0 {Necituota} one {Cituota kartą} few {Cituota # kartus} many {Cituota # karto} other {Cituota # kartų}}",
       "decisionCount": "{count, plural, =0 {Sprendimų nėra} one {# sprendimas} few {# sprendimai} many {# sprendimo} other {# sprendimų}}",
       "lastNegative": "paskutinė neigiama citata {year} m.",
       "negativeCount": "{count, plural, one {# neigiama} few {# neigiamos} many {# neigiamos} other {# neigiamų}}",
+      "openAtCitation": "Atverti citatos vietoje",
+      "passageNotFound": "Cituojanti ištrauka tekste nerasta",
+      "positiveCount": "{count, plural, one {# teigiama} few {# teigiamos} many {# teigiamos} other {# teigiamų}}",
+      "showAll": "{count, plural, one {Rodyti # sprendimą} few {Rodyti visus # sprendimus} many {Rodyti visus # sprendimo} other {Rodyti visus # sprendimų}}",
       "stripLabel": "Citatos pagal metus",
       "treatment": {
         "negative": "Neigiamas",
@@ -411,6 +431,7 @@
         "unclassified": "Neklasifikuota"
       },
       "unresolved": "Nesusieta su sprendimu",
+      "whereCited": "Kur cituojamas šis sprendimas",
       "yearTitle": "{year}: {count, plural, one {# citata} few {# citatos} many {# citatos} other {# citatų}}"
     },
     "columns": {
@@ -442,6 +463,8 @@
       "abstract": "Santrauka",
       "citedBy": "Cituojama",
       "cites": "Cituoja",
+      "judgeRapporteur": "Teisėjas pranešėjas",
+      "legalArea": "Teisės sritis",
       "legalSentence": "Teisinė tezė",
       "nalusDisclaimer": "Source: NALUS, Constitutional Court of the Czech Republic. Free of charge. This electronic version is not authentic.",
       "popularName": "Populiarus pavadinimas",
@@ -2264,6 +2287,7 @@
       "topicsTitle": "Ką turėtų apimti ši peržiūra?"
     },
     "showPane": "Rodyti polangį",
+    "swapViews": "Sukeisti pagrindinį rodinį ir šoninį skydelį",
     "title": "Inspektorius"
   },
   "knowledge": {
@@ -3385,11 +3409,13 @@
     "emptyDocument": "Ši redakcija neturi teksto.",
     "emptyState": "Teisės aktų nerasta.",
     "inForceSince": "Galioja nuo {date}",
+    "leadingDecisions": "Pagrindiniai sprendimai",
     "noVersionInForce": "Pasirinktą dieną negaliojo nė viena šio akto redakcija.",
     "openEnded": "dabar",
     "outline": "Turinys",
     "outlineJumpLabel": "Pereiti prie nuostatos",
     "outlineJumpPlaceholder": "§ 10 arba pavadinimas",
+    "provisionAskContextPrompt": "\n\nIštraukos, kuriose nuostata taikoma autoritetingiausiuose sprendimuose:\n{passages}\n\nNaudok teismų praktikos įrankius, kad perskaitytum bet kurį iš šių sprendimų visą arba rastum daugiau sprendimų, kuriuose nuostata cituojama.",
     "provisionAskPlaceholder": "Klauskite apie šią nuostatą",
     "provisionAskQuestionPrompt": "Dėl {subject}: {question}",
     "provisionAskSignIn": "Prisijunkite, kad galėtumėte klausti apie šią nuostatą.",

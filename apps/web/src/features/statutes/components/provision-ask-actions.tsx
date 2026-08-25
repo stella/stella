@@ -17,17 +17,31 @@ import { useFormatter } from "@/i18n/formatting-context";
 
 const QUESTION_MAX_LENGTH = 2000;
 
+type AskPassage = {
+  caseNumber: string;
+  court: string;
+  decisionDate: string | null;
+  sentenceText: string;
+};
+
 type ProvisionAskActionsProps = {
+  /** The passages applying the provision in its leading decisions. */
+  passages: readonly AskPassage[];
   payload: ProvisionViewPayload;
 };
 
 /**
  * The two ways to ask about a provision: a canned request for how courts
  * apply it, and a question of the reader's own. Both open a chat with the
- * prompt in the composer; the provision is named in the prompt, which is
- * what the chat's corpus tools look it up by.
+ * prompt in the composer. The prompt names the provision, which is what the
+ * chat's corpus tools look it up by, and leads with the passages of the
+ * leading decisions, so the answer starts from what the courts said and the
+ * tools are reached for the rest.
  */
-export const ProvisionAskActions = ({ payload }: ProvisionAskActionsProps) => {
+export const ProvisionAskActions = ({
+  passages,
+  payload,
+}: ProvisionAskActionsProps) => {
   const t = useTranslations();
   const format = useFormatter();
   const [question, setQuestion] = useState("");
@@ -47,11 +61,26 @@ export const ProvisionAskActions = ({ payload }: ProvisionAskActionsProps) => {
           statute: payload.statuteTitle,
         });
   const label = provisionTabLabel(payload);
+  const context =
+    passages.length === 0
+      ? ""
+      : t("statutes.provisionAskContextPrompt", {
+          passages: passages
+            .map((passage) => {
+              const decided = formatValidityDate(passage.decisionDate, format);
+              const source =
+                decided === null
+                  ? `${passage.caseNumber} (${passage.court})`
+                  : `${passage.caseNumber} (${passage.court}, ${decided})`;
+              return `- ${source}: ${passage.sentenceText}`;
+            })
+            .join("\n"),
+        });
 
   const summarize = () => {
     openProvisionChat({
       label,
-      prompt: t("statutes.provisionAskSummarizePrompt", { subject }),
+      prompt: `${t("statutes.provisionAskSummarizePrompt", { subject })}${context}`,
     });
   };
 
@@ -62,10 +91,10 @@ export const ProvisionAskActions = ({ payload }: ProvisionAskActionsProps) => {
     }
     openProvisionChat({
       label,
-      prompt: t("statutes.provisionAskQuestionPrompt", {
+      prompt: `${t("statutes.provisionAskQuestionPrompt", {
         question: trimmed,
         subject,
-      }),
+      })}${context}`,
     });
     setQuestion("");
   };

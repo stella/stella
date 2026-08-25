@@ -5,6 +5,7 @@ import { Separator } from "@stll/ui/separator";
 
 import { PublicWorkspaceShell } from "@/components/public-workspace-shell";
 import { SidebarTrigger, useSidebar } from "@/components/sidebar";
+import { TopBarCitations } from "@/features/case-law/components/top-bar-citations";
 import { ChromeHeaderActionsSlot } from "@/lib/chrome-header-actions";
 import { toStatuteCountrySegment } from "@/lib/statute-route";
 import { PublicLawInspector } from "@/routes/law/-components/public-law-inspector";
@@ -40,6 +41,21 @@ function PublicLawTopBar() {
         readStringField(loaderData, "caseNumber") ??
         readStringField(loaderData, "title")
       );
+    },
+  });
+  // The area of law is the one fact that belongs next to the name; the rest
+  // of a decision's facts live in the inspector.
+  const legalArea = useRouterState({
+    select: (state) => {
+      const loaderData: unknown = state.matches.at(-1)?.loaderData;
+      const metadata: unknown =
+        typeof loaderData === "object" &&
+        loaderData !== null &&
+        "metadata" in loaderData
+          ? loaderData.metadata
+          : null;
+
+      return readStringField(metadata, "legalArea");
     },
   });
   const country = useRouterState({
@@ -84,8 +100,14 @@ function PublicLawTopBar() {
             <span className="text-foreground truncate font-medium">
               {documentLabel}
             </span>
+            {legalArea !== null && (
+              <span className="text-muted-foreground min-w-0 truncate">
+                · {legalArea}
+              </span>
+            )}
           </>
         )}
+        <TopBarCitations />
       </nav>
       <ChromeHeaderActionsSlot />
     </header>

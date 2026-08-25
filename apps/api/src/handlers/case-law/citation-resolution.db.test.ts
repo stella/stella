@@ -21,7 +21,10 @@ import {
   resolveCitationsForDecision,
   tryResolveCitationBatch,
 } from "@/api/handlers/case-law/citation-resolution";
-import { CITATION_RESOLUTION_STATUS } from "@/api/handlers/case-law/citation-resolution-status";
+import {
+  CITATION_RESOLUTION_RULE,
+  CITATION_RESOLUTION_STATUS,
+} from "@/api/handlers/case-law/citation-resolution-status";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
@@ -63,6 +66,12 @@ const unkeyedCitation = createSafeId<"caseLawCitation">();
 const supranationalCitation = createSafeId<"caseLawCitation">();
 const euToNationalCitation = createSafeId<"caseLawCitation">();
 const undeclaredCitation = createSafeId<"caseLawCitation">();
+// One regional docket number at two courts: the key alone is ambiguous, the
+// court named in the citing sentence is not.
+const regionalBrno = createSafeId<"caseLawDecision">();
+const regionalBudejovice = createSafeId<"caseLawDecision">();
+const courtHintedCitation = createSafeId<"caseLawCitation">();
+const courtMissedCitation = createSafeId<"caseLawCitation">();
 
 // The pglite handle stands in for a transaction, matching the pattern the
 // other case-law database tests use for their fakes.
@@ -188,6 +197,29 @@ beforeAll(
         slug: "undeclared",
         languageGroupKey: "undeclared",
       },
+      {
+        ...base,
+        id: regionalBrno,
+        court: "Krajský soud v Brně",
+        caseNumber: "65 A 3/2019",
+        citationKey: "65a/3/2019",
+        country: "CZE",
+        decisionDate: "2019-06-02",
+        slug: "regional-brno",
+        languageGroupKey: "regional-brno",
+      },
+      {
+        ...base,
+        id: regionalBudejovice,
+        sourceId: otherSourceId,
+        court: "Krajský soud v Českých Budějovicích",
+        caseNumber: "65 A 3/2019",
+        citationKey: "65a/3/2019",
+        country: "CZE",
+        decisionDate: "2019-05-21",
+        slug: "regional-budejovice",
+        languageGroupKey: "regional-budejovice",
+      },
     ]);
 
     await db.insert(caseLawCitations).values([
@@ -246,6 +278,24 @@ beforeAll(
         citingDecisionId: undeclaredCiting,
         citationText: "21 Cdo 5/2019",
         citationKey: "21cdo/5/2019",
+      },
+      {
+        // The sentence declines the court name; the stored court is in the
+        // nominative. The comparison must not care.
+        id: courtHintedCitation,
+        citingDecisionId: citing,
+        citationText: "č. j. 65 A 3/2019-226",
+        citationKey: "65a/3/2019",
+        citedCourtHint: "Krajského soudu v Českých Budějovicích",
+      },
+      {
+        // A court the corpus does not hold this docket for: no candidate
+        // matches, and the key stays ambiguous rather than guessing.
+        id: courtMissedCitation,
+        citingDecisionId: citing,
+        citationText: "č. j. 65 A 3/2019-12",
+        citationKey: "65a/3/2019",
+        citedCourtHint: "Městského soudu v Praze",
       },
     ]);
   },
@@ -420,12 +470,12 @@ test("counts a structured identifier blocked only by jurisdiction", async () => 
 
 test("the walk settles every keyed citation and terminates", async () => {
   const totals = await drain();
-  // Eight keyed rows, one of which belongs to an undeclared jurisdiction and
+  // Ten keyed rows, one of which belongs to an undeclared jurisdiction and
   // is therefore examined by the scan but settled by nothing.
-  expect(totals.scanned).toBe(8);
+  expect(totals.scanned).toBe(10);
   expect(totals.undeclaredJurisdiction).toBe(1);
-  expect(totals.resolved).toBe(2);
-  expect(totals.ambiguous).toBe(1);
+  expect(totals.resolved).toBe(3);
+  expect(totals.ambiguous).toBe(2);
   expect(totals.unmatched).toBe(4);
   // A second walk finds only the row it is not allowed to settle: everything
   // it did settle left the predicate, which is the whole point of recording
@@ -478,6 +528,26 @@ test("an ambiguous key links to neither candidate and says so", async () => {
   // adjudication tier reads this queue, and "no candidate" would send it
   // looking for a decision that is already there twice.
   expect(await rowOf(ambiguousCitation)).toMatchObject({
+    cited: null,
+    status: CITATION_RESOLUTION_STATUS.AMBIGUOUS,
+  });
+});
+
+test("a docket shared by regional courts links to the court the text names", async () => {
+  expect(await rowOf(courtHintedCitation)).toMatchObject({
+    cited: regionalBudejovice,
+    status: CITATION_RESOLUTION_STATUS.RESOLVED,
+  });
+  const rule = await db
+    .select({ rule: caseLawCitations.resolutionRuleId })
+    .from(caseLawCitations)
+    .where(eq(caseLawCitations.id, courtHintedCitation))
+    .limit(1);
+  expect(rule.at(0)?.rule).toBe(CITATION_RESOLUTION_RULE.COURT_HINT);
+});
+
+test("a court hint that names no holder leaves the key ambiguous", async () => {
+  expect(await rowOf(courtMissedCitation)).toMatchObject({
     cited: null,
     status: CITATION_RESOLUTION_STATUS.AMBIGUOUS,
   });

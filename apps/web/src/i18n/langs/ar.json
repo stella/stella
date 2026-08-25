@@ -389,6 +389,7 @@
   },
   "caseLaw": {
     "analysis": {
+      "backToSection": "العودة إلى بداية هذا القسم",
       "categories": {
         "facts": "الوقائع",
         "holding": "المبدأ القانوني",
@@ -397,11 +398,30 @@
       }
     },
     "analyzing": "جارٍ التحليل...",
+    "annotations": {
+      "colorGreen": "أخضر",
+      "colorRed": "أحمر",
+      "colorSky": "أزرق",
+      "colorViolet": "بنفسجي",
+      "colorYellow": "أصفر",
+      "commentPlaceholder": "اكتب تعليقًا…",
+      "highlight": "تمييز",
+      "removeHighlight": "إزالة التمييز",
+      "sharedBadge": "مشارك",
+      "styleHighlight": "تمييز",
+      "styleSquiggly": "خط متموج",
+      "styleStrikethrough": "يتوسطه خط",
+      "visibilityShared": "مشارك مع المؤسسة"
+    },
     "citation": {
       "citedSummary": "{count, plural, =0 {لم يُستشهد به} zero {لم يُستشهد به} one {استُشهد به مرة واحدة} two {استُشهد به مرتين} few {استُشهد به # مرات} many {استُشهد به # مرة} other {استُشهد به # مرة}}",
       "decisionCount": "{count, plural, =0 {لا توجد أحكام} zero {لا توجد أحكام} one {حكم واحد} two {حكمان} few {# أحكام} many {# حكمًا} other {# حكم}}",
       "lastNegative": "آخر استشهاد سلبي في {year}",
       "negativeCount": "{count, plural, zero {لا سلبية} one {سلبي واحد} two {سلبيان} few {# سلبية} many {# سلبيًا} other {# سلبي}}",
+      "openAtCitation": "فتح عند موضع الاستشهاد",
+      "passageNotFound": "لم يُعثر على المقطع المستشهِد في النص",
+      "positiveCount": "{count, plural, zero {لا إيجابية} one {إيجابي واحد} two {إيجابيان} few {# إيجابية} many {# إيجابيًا} other {# إيجابي}}",
+      "showAll": "{count, plural, zero {عرض كل الأحكام} one {عرض الحكم} two {عرض الحكمين} few {عرض كل # أحكام} many {عرض كل # حكمًا} other {عرض كل # حكم}}",
       "stripLabel": "الاستشهادات حسب السنة",
       "treatment": {
         "negative": "سلبي",
@@ -411,6 +431,7 @@
         "unclassified": "غير مصنَّف"
       },
       "unresolved": "غير مرتبط بحكم",
+      "whereCited": "أين يستشهد بهذا الحكم",
       "yearTitle": "{year}: {count, plural, zero {لا استشهادات} one {استشهاد واحد} two {استشهادان} few {# استشهادات} many {# استشهادًا} other {# استشهاد}}"
     },
     "columns": {
@@ -442,6 +463,8 @@
       "abstract": "الملخّص",
       "citedBy": "مستشهَد به في",
       "cites": "يستشهد بـ",
+      "judgeRapporteur": "القاضي المقرر",
+      "legalArea": "المجال القانوني",
       "legalSentence": "الجملة القانونية",
       "nalusDisclaimer": "المصدر: NALUS، المحكمة الدستورية للجمهورية التشيكية. مجانًا. هذه النسخة الإلكترونية غير رسمية؛ النسخ الأصلية المحمَّلة بشعار الدولة وتوقيع الشخص المخوَّل هي وحدها الرسمية.",
       "popularName": "الاسم الشائع",
@@ -2264,6 +2287,7 @@
       "topicsTitle": "ما الذي ينبغي أن تغطيه هذه المراجعة؟"
     },
     "showPane": "إظهار اللوحة",
+    "swapViews": "تبديل العرض الرئيسي واللوحة الجانبية",
     "title": "لوحة الفحص"
   },
   "knowledge": {
@@ -3385,11 +3409,13 @@
     "emptyDocument": "لا يتوفر نص لهذه النسخة.",
     "emptyState": "لم يُعثر على تشريعات.",
     "inForceSince": "نافذ منذ {date}",
+    "leadingDecisions": "القرارات الرائدة",
     "noVersionInForce": "لم تكن أي نسخة من هذا النص نافذة في التاريخ المحدد.",
     "openEnded": "الآن",
     "outline": "المحتويات",
     "outlineJumpLabel": "الانتقال إلى حكم",
     "outlineJumpPlaceholder": "§ 10 أو عنوان",
+    "provisionAskContextPrompt": "\n\nمقاطع تطبّق هذا الحكم في أكثر القرارات حجية:\n{passages}\n\nاستخدم أدوات السوابق القضائية لقراءة أي من هذه القرارات كاملاً أو للعثور على قرارات أخرى تستشهد بهذا الحكم.",
     "provisionAskPlaceholder": "اسأل عن هذه المادة",
     "provisionAskQuestionPrompt": "بخصوص {subject}: {question}",
     "provisionAskSignIn": "سجّل الدخول لطرح سؤال عن هذه المادة.",

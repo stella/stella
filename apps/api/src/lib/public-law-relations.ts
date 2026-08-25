@@ -61,6 +61,7 @@ export const PUBLIC_LAW_COLUMNS_BY_RELATION = {
     "decision_date",
     "decision_type",
     "fulltext",
+    "sections",
     "document_ast",
     "analysis",
     "source_url",

@@ -389,6 +389,7 @@
   },
   "caseLaw": {
     "analysis": {
+      "backToSection": "Wróć do początku tej części",
       "categories": {
         "facts": "Stan faktyczny",
         "holding": "Teza",
@@ -397,11 +398,30 @@
       }
     },
     "analyzing": "Analizowanie...",
+    "annotations": {
+      "colorGreen": "Zielony",
+      "colorRed": "Czerwony",
+      "colorSky": "Niebieski",
+      "colorViolet": "Fioletowy",
+      "colorYellow": "Żółty",
+      "commentPlaceholder": "Napisz komentarz…",
+      "highlight": "Wyróżnij",
+      "removeHighlight": "Usuń wyróżnienie",
+      "sharedBadge": "Udostępnione",
+      "styleHighlight": "Wyróżnienie",
+      "styleSquiggly": "Falista linia",
+      "styleStrikethrough": "Przekreślenie",
+      "visibilityShared": "Udostępnione organizacji"
+    },
     "citation": {
       "citedSummary": "{count, plural, =0 {Niecytowane} one {Cytowane raz} few {Cytowane # razy} many {Cytowane # razy} other {Cytowane # razy}}",
       "decisionCount": "{count, plural, =0 {Brak orzeczeń} one {# orzeczenie} few {# orzeczenia} many {# orzeczeń} other {# orzeczenia}}",
       "lastNegative": "ostatnie negatywne powołanie w {year} r.",
       "negativeCount": "{count, plural, one {# negatywne} few {# negatywne} many {# negatywnych} other {# negatywnych}}",
+      "openAtCitation": "Otwórz w miejscu cytowania",
+      "passageNotFound": "Nie znaleziono cytującego fragmentu w tekście",
+      "positiveCount": "{count, plural, one {# pozytywne} few {# pozytywne} many {# pozytywnych} other {# pozytywnych}}",
+      "showAll": "{count, plural, one {Pokaż # orzeczenie} few {Pokaż wszystkie # orzeczenia} many {Pokaż wszystkie # orzeczeń} other {Pokaż wszystkie # orzeczeń}}",
       "stripLabel": "Powołania według lat",
       "treatment": {
         "negative": "Negatywne",
@@ -411,6 +431,7 @@
         "unclassified": "Niesklasyfikowane"
       },
       "unresolved": "Nieprzypisane do orzeczenia",
+      "whereCited": "Gdzie cytuje to orzeczenie",
       "yearTitle": "{year}: {count, plural, one {# powołanie} few {# powołania} many {# powołań} other {# powołania}}"
     },
     "columns": {
@@ -442,6 +463,8 @@
       "abstract": "Streszczenie",
       "citedBy": "Cytowane przez",
       "cites": "Cytuje",
+      "judgeRapporteur": "Sędzia sprawozdawca",
+      "legalArea": "Dziedzina prawa",
       "legalSentence": "Teza orzeczenia",
       "nalusDisclaimer": "Źródło: NALUS, Trybunał Konstytucyjny Republiki Czeskiej. Bezpłatnie. Niniejsza wersja elektroniczna nie jest autentyczna; autentyczne są wyłącznie oryginały z godłem państwowym i podpisem upoważnionej osoby.",
       "popularName": "Nazwa potoczna",
@@ -2264,6 +2287,7 @@
       "topicsTitle": "Co ma obejmować ten przegląd?"
     },
     "showPane": "Pokaż panel",
+    "swapViews": "Zamień widok główny z panelem bocznym",
     "title": "Inspektor"
   },
   "knowledge": {
@@ -3385,11 +3409,13 @@
     "emptyDocument": "Ta wersja nie ma dostępnego tekstu.",
     "emptyState": "Nie znaleziono aktów prawnych.",
     "inForceSince": "Obowiązuje od {date}",
+    "leadingDecisions": "Orzeczenia wiodące",
     "noVersionInForce": "W wybranym dniu nie obowiązywała żadna wersja tego aktu.",
     "openEnded": "nadal",
     "outline": "Spis treści",
     "outlineJumpLabel": "Przejdź do przepisu",
     "outlineJumpPlaceholder": "§ 10 lub tytuł",
+    "provisionAskContextPrompt": "\n\nFragmenty stosujące przepis w najbardziej miarodajnych orzeczeniach:\n{passages}\n\nSkorzystaj z narzędzi orzecznictwa, aby przeczytać w całości którekolwiek z tych orzeczeń lub znaleźć kolejne orzeczenia powołujące ten przepis.",
     "provisionAskPlaceholder": "Zapytaj o ten przepis",
     "provisionAskQuestionPrompt": "W sprawie {subject}: {question}",
     "provisionAskSignIn": "Zaloguj się, aby zapytać o ten przepis.",

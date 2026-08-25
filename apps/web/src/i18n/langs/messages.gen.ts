@@ -392,6 +392,7 @@ type Messages = {
   };
   "caseLaw": {
     "analysis": {
+      "backToSection": "Back to the start of this section";
       "categories": {
         "facts": "Facts";
         "holding": "Holding";
@@ -400,11 +401,30 @@ type Messages = {
       };
     };
     "analyzing": "Analyzing...";
+    "annotations": {
+      "colorGreen": "Green";
+      "colorRed": "Red";
+      "colorSky": "Blue";
+      "colorViolet": "Violet";
+      "colorYellow": "Yellow";
+      "commentPlaceholder": "Write a comment…";
+      "highlight": "Highlight";
+      "removeHighlight": "Remove highlight";
+      "sharedBadge": "Shared";
+      "styleHighlight": "Highlight";
+      "styleSquiggly": "Squiggly";
+      "styleStrikethrough": "Strikethrough";
+      "visibilityShared": "Shared with organization";
+    };
     "citation": {
       "citedSummary": "{count, plural, =0 {Not cited} one {Cited once} other {Cited # times}}";
       "decisionCount": "{count, plural, =0 {No decisions} one {# decision} other {# decisions}}";
       "lastNegative": "last negative treatment in {year}";
       "negativeCount": "{count, plural, one {# negative} other {# negative}}";
+      "openAtCitation": "Open at the citation";
+      "passageNotFound": "The citing passage was not located in the text";
+      "positiveCount": "{count, plural, one {# positive} other {# positive}}";
+      "showAll": "{count, plural, one {Show all # decision} other {Show all # decisions}}";
       "stripLabel": "Citations by year";
       "treatment": {
         "negative": "Negative";
@@ -414,6 +434,7 @@ type Messages = {
         "unclassified": "Unclassified";
       };
       "unresolved": "Not resolved to a decision";
+      "whereCited": "Where it cites this decision";
       "yearTitle": "{year}: {count, plural, one {# citation} other {# citations}}";
     };
     "columns": {
@@ -445,6 +466,8 @@ type Messages = {
       "abstract": "Abstract";
       "citedBy": "Cited by";
       "cites": "Cites";
+      "judgeRapporteur": "Judge rapporteur";
+      "legalArea": "Legal area";
       "legalSentence": "Legal sentence";
       "nalusDisclaimer": "Source: NALUS, Constitutional Court of the Czech Republic. Free of charge. This electronic version is not authentic; only originals with the state emblem and signature of the authorized person are authentic.";
       "popularName": "Popular name";
@@ -2267,6 +2290,7 @@ type Messages = {
       "topicsTitle": "What should this review cover?";
     };
     "showPane": "Show pane";
+    "swapViews": "Swap main and side views";
     "title": "Inspector";
   };
   "knowledge": {
@@ -3388,11 +3412,13 @@ type Messages = {
     "emptyDocument": "This version has no text available.";
     "emptyState": "No statutes found.";
     "inForceSince": "In force since {date}";
+    "leadingDecisions": "Leading decisions";
     "noVersionInForce": "No version of this act was in force on the selected date.";
     "openEnded": "present";
     "outline": "Contents";
     "outlineJumpLabel": "Jump to a provision";
     "outlineJumpPlaceholder": "§ 10 or a heading";
+    "provisionAskContextPrompt": "\n\nPassages applying it in the most authoritative decisions:\n{passages}\n\nUse the case-law tools to read any of these decisions in full or to find further decisions citing the provision.";
     "provisionAskPlaceholder": "Ask about this provision";
     "provisionAskQuestionPrompt": "About {subject}: {question}";
     "provisionAskSignIn": "Sign in to ask about this provision.";

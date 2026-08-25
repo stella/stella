@@ -17,6 +17,7 @@ export const AUDIT_RESOURCE_TYPE = {
   AI_MEMORY: "ai_memory",
   BILLING_CODE: "billing_code",
   CASE_LAW_MATTER_LINK: "case_law_matter_link",
+  CASE_LAW_DECISION_ANNOTATION: "case_law_decision_annotation",
   CHAT_FILE: "chat_file",
   CHAT_MESSAGE: "chat_message",
   CHAT_THREAD: "chat_thread",

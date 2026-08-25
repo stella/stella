@@ -37,6 +37,12 @@ export const listCitingDecisionsQuerySchema = t.Object({
   anchor: t.Optional(t.String({ minLength: 1, maxLength: 256 })),
   limit: t.Optional(tPaginationLimit(LIMITS.caseLawSearchPageSizeMax)),
   cursor: t.Optional(tPaginationCursor()),
+  /**
+   * `newest` (default) pages by application date. `authority` returns one
+   * page of the most authoritative citing decisions and no cursor: the
+   * authority signal is refreshed in place, so it cannot key a walk.
+   */
+  sort: t.Optional(t.Union([t.Literal("newest"), t.Literal("authority")])),
 });
 
 type ListCitingDecisionsQuery = Static<typeof listCitingDecisionsQuerySchema>;
@@ -117,6 +123,10 @@ export const listCitingDecisionsHandler = async (
   }
 
   const limit = query.limit ?? LIMITS.caseLawSearchPageSizeDefault;
+  const byAuthority = query.sort === "authority";
+  if (byAuthority && query.cursor !== undefined) {
+    return status(400, { message: "Authority order has no cursor" });
+  }
   const conditions: SQL[] = [
     eq(caseLawProvisionCitations.jurisdiction, query.jurisdiction),
     work,
@@ -148,8 +158,8 @@ export const listCitingDecisionsHandler = async (
     );
   }
 
-  const rows = await caseLawDb((tx) =>
-    tx
+  const rows = await caseLawDb(async (tx) => {
+    const mentions = tx
       .select({
         decisionId: caseLawProvisionCitations.decisionId,
         caseNumber: caseLawDecisions.caseNumber,
@@ -165,6 +175,10 @@ export const listCitingDecisionsHandler = async (
         spanEnd: caseLawProvisionCitations.spanEnd,
         anchor: caseLawProvisionCitations.anchor,
         decisionDateCursor: decisionDateCursorSql.as("decision_date_cursor"),
+        mentionRank: sql<number>`row_number() OVER (
+          PARTITION BY ${caseLawProvisionCitations.decisionId}
+          ORDER BY ${caseLawProvisionCitations.spanStart}, ${caseLawProvisionCitations.anchor}
+        )`.as("mention_rank"),
       })
       .from(caseLawProvisionCitations)
       .innerJoin(
@@ -176,14 +190,36 @@ export const listCitingDecisionsHandler = async (
         eq(caseLawSources.id, caseLawDecisions.sourceId),
       )
       .where(and(...conditions))
+      .as("citing_decision_mentions");
+
+    return await tx
+      .select({
+        decisionId: mentions.decisionId,
+        caseNumber: mentions.caseNumber,
+        slug: mentions.slug,
+        court: mentions.court,
+        country: mentions.country,
+        decisionDate: mentions.decisionDate,
+        citationAuthority: mentions.citationAuthority,
+        sentenceText: mentions.sentenceText,
+        spanStart: mentions.spanStart,
+        spanEnd: mentions.spanEnd,
+        anchor: mentions.anchor,
+        decisionDateCursor: mentions.decisionDateCursor,
+      })
+      .from(mentions)
+      .where(byAuthority ? eq(mentions.mentionRank, 1) : undefined)
       .orderBy(
-        desc(decisionDateKeySql),
-        desc(caseLawProvisionCitations.decisionId),
-        desc(caseLawProvisionCitations.spanStart),
-        desc(caseLawProvisionCitations.anchor),
+        ...(byAuthority
+          ? [sql`coalesce(${mentions.citationAuthority}, 0) DESC`]
+          : []),
+        desc(mentions.decisionDateCursor),
+        desc(mentions.decisionId),
+        desc(mentions.spanStart),
+        desc(mentions.anchor),
       )
-      .limit(limit + 1),
-  );
+      .limit(limit + 1);
+  });
 
   const page = createCursorPage({
     rows,
@@ -199,6 +235,7 @@ export const listCitingDecisionsHandler = async (
 
   return {
     ...page,
+    nextCursor: byAuthority ? null : page.nextCursor,
     items: page.items.map(
       ({ anchor: _anchor, decisionDateCursor: _decisionDateCursor, ...item }) =>
         item,

@@ -10,18 +10,29 @@ import { Button } from "@stll/ui/button";
 import { OutlineRail } from "@stll/ui/outline-rail";
 import type { OutlineItem } from "@stll/ui/outline-rail";
 
+import type { SelectionAnchor } from "@/features/case-law/annotations/selection-anchor";
+import { isPendingAnnotationId } from "@/features/case-law/annotations/use-decision-annotations";
+import { CurrentSection } from "@/features/case-law/components/case-viewer/analysis/current-section";
 import { MarginNotes } from "@/features/case-law/components/case-viewer/analysis/margin-notes";
+import type {
+  AnalysisMarginItem,
+  CommentMarginItem,
+  ComposerMarginItem,
+} from "@/features/case-law/components/case-viewer/analysis/margin-notes";
 import {
   buildSectionMap,
   flattenAnalysisHeadings,
   getCategoryVar,
 } from "@/features/case-law/components/case-viewer/analysis/types";
 import { useDecisionAnalysis } from "@/features/case-law/components/case-viewer/analysis/use-decision-analysis";
-import { CitationHeader } from "@/features/case-law/components/case-viewer/citation-header";
-import { DecisionCitations } from "@/features/case-law/components/case-viewer/decision-citations";
+import { AnnotationToolbar } from "@/features/case-law/components/case-viewer/annotation-toolbar";
+import type { AnnotationToolbarController } from "@/features/case-law/components/case-viewer/annotation-toolbar";
+import type { AnnotationAnchorSource } from "@/features/case-law/components/case-viewer/decision-text";
 import { DecisionText } from "@/features/case-law/components/case-viewer/decision-text";
 import { ProvisionsCited } from "@/features/case-law/components/case-viewer/provisions-cited";
 import { useDecisionCitationAnchors } from "@/features/case-law/components/case-viewer/use-decision-citation-anchors";
+import { useDecisionProvisionAnchors } from "@/features/case-law/components/case-viewer/use-decision-provision-anchors";
+import type { DecisionAnnotation } from "@/features/case-law/queries/annotations";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useCaseSearchStore } from "@/lib/case-search-store";
 import { detached } from "@/lib/detached";
@@ -39,7 +50,15 @@ type DecisionWorkspaceDecision = {
   metadata?: Record<string, unknown> | null;
 };
 
+/** A signed-in reader's marks on the decision and the means to change them. */
+export type DecisionWorkspaceAnnotations = {
+  annotations: readonly DecisionAnnotation[];
+  controller: AnnotationToolbarController;
+};
+
 type DecisionWorkspaceBaseProps = {
+  /** Absent for a visitor: reading is public, marking needs an account. */
+  annotations?: DecisionWorkspaceAnnotations | undefined;
   decision: DecisionWorkspaceDecision;
   decisionId: SafeId<"caseLawDecision">;
   initialSearchQuery?: string | undefined;
@@ -67,8 +86,123 @@ const getHeadingDisplayAnchorId = ({
 }) => annotations.at(0)?.startAnchorId ?? startAnchorId;
 
 export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
-  const { decision, decisionId, initialSearchQuery } = props;
+  const { annotations, decision, decisionId, initialSearchQuery } = props;
   const t = useTranslations();
+  const [activeAnnotationId, setActiveAnnotationId] = useState<string | null>(
+    null,
+  );
+  // The comment being written: its paragraphs, so the margin can sit the
+  // composer beside the first and the saved comment covers them all.
+  const [composing, setComposing] = useState<SelectionAnchor[] | null>(null);
+  const composerItem: ComposerMarginItem[] =
+    composing?.[0] === undefined
+      ? []
+      : [
+          {
+            id: "composer",
+            kind: "composer",
+            onCancel: () => setComposing(null),
+            onSubmit: (body, visibility) => {
+              detached(
+                annotations?.controller.create({
+                  body,
+                  kind: "comment",
+                  spans: composing,
+                  visibility,
+                }) ?? Promise.resolve(),
+                "case-law.annotation-comment",
+              );
+              setComposing(null);
+            },
+            startAnchorId: composing[0].blockAnchorId,
+          },
+        ];
+  // A mark the server has not stored yet has no id to act on, so it is not
+  // active even if clicked.
+  const activeAnnotation =
+    annotations?.annotations.find(
+      (item) =>
+        item.id === activeAnnotationId && !isPendingAnnotationId(item.id),
+    ) ?? null;
+  const annotationRows =
+    annotations === undefined ? [] : annotations.annotations;
+  // A mark over several paragraphs is several rows under one group; the bar
+  // acts on all of them, and a comment left from the mark covers them all.
+  const rowsOf = (item: DecisionAnnotation): DecisionAnnotation[] =>
+    item.groupId === null
+      ? [item]
+      : annotationRows.filter((row) => row.groupId === item.groupId);
+  const activeSpans = activeAnnotation === null ? [] : rowsOf(activeAnnotation);
+  // Select the words the mark covers, exactly as if the reader had dragged
+  // over them, so the bar reads as acting on that selection. Runs from the
+  // id in state, so the toolbar's once-installed document listener never
+  // holds a stale list.
+  const activeRowIds = activeSpans.map((row) => row.id).join(" ");
+  useExternalSyncEffect(() => {
+    const container = mainRef.current;
+    if (!container || activeRowIds === "") {
+      return;
+    }
+    const pieces: HTMLElement[] = [];
+    for (const id of activeRowIds.split(" ")) {
+      pieces.push(
+        ...container.querySelectorAll<HTMLElement>(
+          `[data-annotation-id="${CSS.escape(id)}"]`,
+        ),
+      );
+    }
+    const first = pieces.at(0);
+    const last = pieces.at(-1);
+    if (first === undefined || last === undefined) {
+      return;
+    }
+    const range = container.ownerDocument.createRange();
+    range.setStartBefore(first);
+    range.setEndAfter(last);
+    const selection = container.ownerDocument.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+  }, [activeRowIds]);
+  const annotationAnchors: AnnotationAnchorSource[] = annotationRows.map(
+    (item) => ({
+      blockAnchorId: item.blockAnchorId,
+      color: item.color,
+      endOffset: item.endOffset,
+      id: item.id,
+      kind: item.kind,
+      startOffset: item.startOffset,
+      style: item.style,
+    }),
+  );
+  // A comment over several paragraphs is several rows; its words sit on the
+  // first, and that is the one the margin shows.
+  const commentItems: CommentMarginItem[] = annotationRows
+    .filter((item) => item.kind === "comment" && item.body !== null)
+    .map((item) => ({
+      author: { image: item.authorImage, name: item.authorName },
+      id: item.id,
+      kind: "comment",
+      mine: item.mine,
+      onDelete: () => {
+        detached(
+          annotations?.controller.remove(item.id) ?? Promise.resolve(),
+          "case-law.annotation-remove",
+        );
+      },
+      onToggleVisibility: () => {
+        detached(
+          annotations?.controller.update({
+            change: "visibility",
+            id: item.id,
+            visibility: item.visibility === "shared" ? "private" : "shared",
+          }) ?? Promise.resolve(),
+          "case-law.annotation-visibility",
+        );
+      },
+      startAnchorId: item.blockAnchorId,
+      text: item.body ?? "",
+      visibility: item.visibility,
+    }));
   const aiEnabled = props.aiMode === "enabled";
   const ensureAIAvailable =
     props.aiMode === "enabled" ? props.ensureAIAvailable : null;
@@ -98,6 +232,7 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
   // The text links every cited decision the first outgoing page resolves;
   // the panel below pages further, the links stop at what is already read.
   const citationAnchors = useDecisionCitationAnchors(decisionId);
+  const provisionAnchors = useDecisionProvisionAnchors(decisionId);
 
   const { state: analysisState, generate: generateDecisionAnalysis } =
     useDecisionAnalysis(decisionId, decision.analysis ?? null);
@@ -162,17 +297,7 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
   })();
 
   const marginItems = flatAnalysisHeadings.flatMap((heading) => {
-    type Item = {
-      kind: "card" | "annotation";
-      id: string;
-      heading?: string;
-      text: string;
-      category: string;
-      depth: number;
-      startAnchorId: string;
-    };
-
-    const items: Item[] = [];
+    const items: AnalysisMarginItem[] = [];
     const first = heading.annotations.at(0);
 
     items.push({
@@ -275,8 +400,24 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
             style={{ gridTemplateColumns: `${panelWidth}px minmax(0, 1fr)` }}
           >
             <aside className="relative max-lg:hidden">
-              {hasAnalysis && marginItems.length > 0 && (
-                <MarginNotes items={marginItems} scrollContainerRef={mainRef} />
+              {hasAnalysis && flatAnalysisHeadings.length > 0 && (
+                <CurrentSection
+                  anchorById={analysisOutline.anchorById}
+                  headings={flatAnalysisHeadings}
+                  scrollContainerRef={mainRef}
+                />
+              )}
+              {((hasAnalysis && marginItems.length > 0) ||
+                commentItems.length > 0 ||
+                composerItem.length > 0) && (
+                <MarginNotes
+                  items={[
+                    ...(hasAnalysis ? marginItems : []),
+                    ...commentItems,
+                    ...composerItem,
+                  ]}
+                  scrollContainerRef={mainRef}
+                />
               )}
               {isAnalyzing && (
                 <div className="px-2 pt-8">
@@ -340,23 +481,37 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
             </aside>
 
             <main className="reader-paper min-w-0 px-4 py-8 max-sm:px-3">
-              <CitationHeader
-                decisionDate={decision.decisionDate}
-                decisionId={decisionId}
-              />
-              <DecisionCitations decisionId={decisionId} />
               <ProvisionsCited decisionId={decisionId} />
               <DecisionText
                 activeMatchIndex={activeMatchIndex}
+                annotationAnchors={annotationAnchors}
                 citationAnchors={citationAnchors}
                 decision={decision}
+                onAnnotationActivate={setActiveAnnotationId}
                 onMatchCountChange={setMatchCount}
+                provisionAnchors={provisionAnchors}
                 searchQuery={searchOpen ? searchQuery : ""}
                 sectionMap={sectionMap}
               />
             </main>
           </div>
         </div>
+        {annotations !== undefined && (
+          <AnnotationToolbar
+            activeAnnotation={activeAnnotation}
+            activeSpans={activeSpans}
+            controller={annotations.controller}
+            decision={{
+              caseNumber: decision.caseNumber,
+              court: decision.court,
+              id: decisionId,
+            }}
+            onActivateAnnotation={setActiveAnnotationId}
+            onClearActive={() => setActiveAnnotationId(null)}
+            onCompose={setComposing}
+            scrollContainerRef={mainRef}
+          />
+        )}
       </div>
     </div>
   );

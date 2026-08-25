@@ -1,9 +1,17 @@
+import type { useNavigate } from "@tanstack/react-router";
+
+import type {
+  GenericTab,
+  InspectorTab,
+} from "@/components/inspector/inspector-store-types";
 import { createCaseLawDecisionRouteParams } from "@/lib/case-law-route";
 
 /** Registered inspector view kind for one public case-law decision. */
 export const CASE_DECISION_VIEW = "case-law-decision";
 
 export type CaseDecisionViewPayload = {
+  /** A block to scroll to and flash once the text is shown. */
+  anchorId?: string | undefined;
   caseNumber: string;
   country: string;
   court: string;
@@ -13,6 +21,7 @@ export type CaseDecisionViewPayload = {
 };
 
 type CaseDecisionTarget = {
+  anchorId?: string | undefined;
   caseNumber: string;
   country: string;
   court: string;
@@ -46,12 +55,46 @@ export const isCaseDecisionViewPayload = (
     isNonEmptyString(value.slug) &&
     (!("language" in value) ||
       value.language === undefined ||
-      isNonEmptyString(value.language))
+      isNonEmptyString(value.language)) &&
+    (!("anchorId" in value) ||
+      value.anchorId === undefined ||
+      isNonEmptyString(value.anchorId))
   );
 };
 
 export const caseDecisionTabId = (decisionId: string): string =>
   `${CASE_DECISION_VIEW}:${decisionId}`;
+
+export type CaseDecisionGenericTab = GenericTab & {
+  viewType: typeof CASE_DECISION_VIEW;
+  payload: CaseDecisionViewPayload;
+};
+
+export const isCaseDecisionGenericTab = (
+  tab: InspectorTab,
+): tab is CaseDecisionGenericTab =>
+  tab.type === "view" &&
+  tab.viewType === CASE_DECISION_VIEW &&
+  isCaseDecisionViewPayload(tab.payload);
+
+/**
+ * Navigate the main view to the decision an inspector tab holds. The
+ * payload's route identity was resolved at tab creation, so this is a
+ * pure param mapping onto the two public decision routes.
+ */
+export const navigateToCaseDecisionMain = async (
+  navigate: ReturnType<typeof useNavigate>,
+  { country, court, language, slug }: CaseDecisionViewPayload,
+): Promise<void> =>
+  language === undefined
+    ? await navigate({
+        to: "/law/$country/cases/$court/$slug",
+        params: { country, court, slug },
+      })
+    : await navigate({
+        to: "/law/$country/cases/$court/$language/$slug",
+        params: { country, court, language, slug },
+      });
 
 export type CaseDecisionViewTab = {
   type: typeof CASE_DECISION_VIEW;
@@ -65,6 +108,7 @@ export type CaseDecisionViewTab = {
  * then survives inspector synchronization as plain structured-clone data.
  */
 export const createCaseDecisionViewTab = ({
+  anchorId,
   caseNumber,
   country,
   court,
@@ -96,6 +140,7 @@ export const createCaseDecisionViewTab = ({
       decisionId,
       slug: route.slug,
       ...(route.language === undefined ? {} : { language: route.language }),
+      ...(anchorId === undefined ? {} : { anchorId }),
     },
   };
 };
@@ -105,14 +150,18 @@ type CitationClick = Pick<
   "altKey" | "button" | "ctrlKey" | "metaKey" | "shiftKey"
 >;
 
+/** True only for an unmodified primary click; every other gesture stays native. */
+export const isPlainPrimaryClick = ({
+  altKey,
+  button,
+  ctrlKey,
+  metaKey,
+  shiftKey,
+}: CitationClick): boolean =>
+  button === 0 && !altKey && !ctrlKey && !metaKey && !shiftKey;
+
 /** Plain primary clicks stay in context; browser navigation gestures remain native. */
 export const opensCitationInInspector = (
-  { altKey, button, ctrlKey, metaKey, shiftKey }: CitationClick,
+  click: CitationClick,
   inspectorAvailable: boolean,
-): boolean =>
-  inspectorAvailable &&
-  button === 0 &&
-  !altKey &&
-  !ctrlKey &&
-  !metaKey &&
-  !shiftKey;
+): boolean => inspectorAvailable && isPlainPrimaryClick(click);

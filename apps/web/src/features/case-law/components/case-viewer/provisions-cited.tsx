@@ -2,7 +2,6 @@ import { useState } from "react";
 
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { panic } from "better-result";
 import { ChevronRightIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -23,6 +22,8 @@ import {
   pickVersionAt,
   versionCoversDate,
 } from "@/features/case-law/statute-version";
+import { useProvisionPartRenderer } from "@/features/case-law/use-provision-part-renderer";
+import { useHydrated } from "@/hooks/use-hydrated";
 import { optionalArray } from "@/lib/arrays";
 import { detached } from "@/lib/detached";
 import type { SafeId } from "@/lib/safe-id";
@@ -91,39 +92,7 @@ export const ProvisionsCited = ({
 }) => {
   const t = useTranslations();
   const [open, setOpen] = useState(false);
-
-  /**
-   * The catalog's word for each named subdivision. A switch rather than a key
-   * map, so every branch names a literal message and a subdivision the corpus
-   * starts recording fails the exhaustiveness check instead of reaching the
-   * page unnamed.
-   */
-  const renderPart: RenderProvisionPart = (key, value) => {
-    switch (key) {
-      case "article": {
-        return t("caseLaw.provision.article", { value });
-      }
-      case "letter": {
-        return t("caseLaw.provision.letter", { value });
-      }
-      case "openEnded": {
-        return t("caseLaw.provision.openEnded");
-      }
-      case "point": {
-        return t("caseLaw.provision.point", { value });
-      }
-      case "sentence": {
-        return t("caseLaw.provision.sentence", { value });
-      }
-      case "subsection": {
-        return t("caseLaw.provision.subsection", { value });
-      }
-      default: {
-        const unreachable: never = key;
-        return panic("Unnamed provision subdivision", unreachable);
-      }
-    }
-  };
+  const renderPart = useProvisionPartRenderer();
 
   const {
     data,
@@ -140,8 +109,11 @@ export const ProvisionsCited = ({
 
   // Absent is the answer for a decision that applies no provisions. A failed
   // read is not that answer, so it keeps the panel and says so instead of
-  // disappearing as though the decision cited nothing.
-  if (groups.length === 0 && !isError) {
+  // disappearing as though the decision cited nothing. Until hydrated the
+  // panel is absent either way: the non-blocking prefetch may be known on
+  // one side of hydration and not the other.
+  const hydrated = useHydrated();
+  if (!hydrated || (groups.length === 0 && !isError)) {
     return null;
   }
 

@@ -2028,6 +2028,51 @@ describe("stored decision identifier projection", () => {
   });
 });
 
+describe("court hint", () => {
+  test("keeps the court the citing sentence names", () => {
+    const citations = extractCitations([
+      {
+        index: 1,
+        text: "srov. rozsudek Krajského soudu v Českých Budějovicích ze dne 21. 5. 2025, č. j. 65 A 3/2025-226, body 99 a 100",
+      },
+    ]);
+
+    expect(citations).toHaveLength(1);
+    expect(citations[0]?.citedCourtHint).toBe(
+      "Krajského soudu v Českých Budějovicích",
+    );
+  });
+
+  test("a later occurrence that names the court fills a bare first mention", () => {
+    const citations = extractCitations([
+      { index: 0, text: "sp. zn. 65 A 3/2025" },
+      {
+        index: 3,
+        text: "rozsudek Krajského soudu v Brně ze dne 2. 6. 2025, č. j. 65 A 3/2025-30",
+      },
+    ]);
+
+    expect(citations).toHaveLength(1);
+    expect(citations[0]?.citedCourtHint).toBe("Krajského soudu v Brně");
+  });
+
+  test("two courts for one number leave no hint", () => {
+    const citations = extractCitations([
+      {
+        index: 1,
+        text: "rozsudek Krajského soudu v Brně ze dne 2. 6. 2025, č. j. 65 A 3/2025-30",
+      },
+      {
+        index: 2,
+        text: "rozsudek Krajského soudu v Ostravě ze dne 28. 5. 2025, č. j. 65 A 3/2025-40",
+      },
+    ]);
+
+    expect(citations).toHaveLength(1);
+    expect(citations[0]?.citedCourtHint).toBeNull();
+  });
+});
+
 describe("isSelfCitation", () => {
   const decision = decisionIdentifiersFromMetadata({
     caseNumber: "21 Cdo 1234/2020",

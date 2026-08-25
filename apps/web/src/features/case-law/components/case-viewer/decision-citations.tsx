@@ -25,6 +25,7 @@ import {
   decisionCitationSummaryOptions,
 } from "@/features/case-law/queries/citations";
 import type { CitationDirection } from "@/features/case-law/queries/citations";
+import { useHydrated } from "@/hooks/use-hydrated";
 import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import { optionalArray } from "@/lib/arrays";
@@ -33,7 +34,7 @@ import { formatDecisionDate } from "@/lib/decision-date";
 import { detached } from "@/lib/detached";
 import type { SafeId } from "@/lib/safe-id";
 
-const DIRECTION_TITLE = {
+export const DIRECTION_TITLE = {
   incoming: "caseLaw.viewer.citedBy",
   outgoing: "caseLaw.viewer.cites",
 } as const satisfies Record<CitationDirection, TranslationKey>;
@@ -56,11 +57,15 @@ export const DecisionCitations = ({ decisionId }: DecisionCitationsProps) => {
     isError,
     refetch,
   } = useQuery(decisionCitationSummaryOptions(decisionId));
+  // The summary is prefetched without blocking the route, so whether it is
+  // known differs between the server pass and the client's hydration pass.
+  // Rendering nothing until hydrated keeps the two passes identical.
+  const hydrated = useHydrated();
 
   // Absent is the answer for a decision nobody cites. A failed read is not
   // that answer, so it says so and offers a retry instead of disappearing.
-  if (summary === undefined) {
-    if (!isError) {
+  if (!hydrated || summary === undefined) {
+    if (!hydrated || !isError) {
       return null;
     }
     return (
@@ -204,7 +209,7 @@ const groupByTreatment = (
   return ordered;
 };
 
-const CitationList = ({
+export const CitationList = ({
   decisionId,
   direction,
 }: {

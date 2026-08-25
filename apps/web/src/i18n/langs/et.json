@@ -389,6 +389,7 @@
   },
   "caseLaw": {
     "analysis": {
+      "backToSection": "Tagasi selle osa algusesse",
       "categories": {
         "facts": "Asjaolud",
         "holding": "Lahend",
@@ -397,11 +398,30 @@
       }
     },
     "analyzing": "Analüüsin...",
+    "annotations": {
+      "colorGreen": "Roheline",
+      "colorRed": "Punane",
+      "colorSky": "Sinine",
+      "colorViolet": "Lilla",
+      "colorYellow": "Kollane",
+      "commentPlaceholder": "Kirjuta kommentaar…",
+      "highlight": "Tõsta esile",
+      "removeHighlight": "Eemalda esiletõst",
+      "sharedBadge": "Jagatud",
+      "styleHighlight": "Esiletõst",
+      "styleSquiggly": "Laineline joon",
+      "styleStrikethrough": "Läbikriipsutus",
+      "visibilityShared": "Jagatud organisatsiooniga"
+    },
     "citation": {
       "citedSummary": "{count, plural, =0 {Viitamata} one {Viidatud üks kord} other {Viidatud # korda}}",
       "decisionCount": "{count, plural, =0 {Lahendeid pole} one {# lahend} other {# lahendit}}",
       "lastNegative": "viimane negatiivne viide aastal {year}",
       "negativeCount": "{count, plural, one {# negatiivne} other {# negatiivset}}",
+      "openAtCitation": "Ava viite kohal",
+      "passageNotFound": "Viitavat lõiku tekstist ei leitud",
+      "positiveCount": "{count, plural, one {# positiivne} other {# positiivset}}",
+      "showAll": "{count, plural, one {Näita # lahendit} other {Näita kõiki # lahendit}}",
       "stripLabel": "Viited aastate kaupa",
       "treatment": {
         "negative": "Negatiivne",
@@ -411,6 +431,7 @@
         "unclassified": "Liigitamata"
       },
       "unresolved": "Lahendiga sidumata",
+      "whereCited": "Kus sellele lahendile viidatakse",
       "yearTitle": "{year}: {count, plural, one {# viide} other {# viidet}}"
     },
     "columns": {
@@ -442,6 +463,8 @@
       "abstract": "Kokkuvõte",
       "citedBy": "Viidatud",
       "cites": "Viitab",
+      "judgeRapporteur": "Ettekandja-kohtunik",
+      "legalArea": "Õigusvaldkond",
       "legalSentence": "Õiguslause",
       "nalusDisclaimer": "Source: NALUS, Constitutional Court of the Czech Republic. Free of charge. This electronic version is not authentic.",
       "popularName": "Rahvanimi",
@@ -2264,6 +2287,7 @@
       "topicsTitle": "Mida peaks see läbivaatus hõlmama?"
     },
     "showPane": "Kuva paneel",
+    "swapViews": "Vaheta põhivaade ja külgpaneel",
     "title": "Inspektor"
   },
   "knowledge": {
@@ -3385,11 +3409,13 @@
     "emptyDocument": "Sellel redaktsioonil puudub tekst.",
     "emptyState": "Õigusakte ei leitud.",
     "inForceSince": "Kehtib alates {date}",
+    "leadingDecisions": "Juhtivad lahendid",
     "noVersionInForce": "Valitud kuupäeval ei kehtinud ükski selle õigusakti redaktsioon.",
     "openEnded": "praeguseni",
     "outline": "Sisukord",
     "outlineJumpLabel": "Liigu sättele",
     "outlineJumpPlaceholder": "§ 10 või pealkiri",
+    "provisionAskContextPrompt": "\n\nSätet kohaldavad lõigud kõige autoriteetsemates lahendites:\n{passages}\n\nKasuta kohtupraktika tööriistu, et lugeda mõnda neist lahenditest tervikuna või leida teisi sätet viitavaid lahendeid.",
     "provisionAskPlaceholder": "Küsi selle sätte kohta",
     "provisionAskQuestionPrompt": "{subject} kohta: {question}",
     "provisionAskSignIn": "Sätte kohta küsimiseks logi sisse.",

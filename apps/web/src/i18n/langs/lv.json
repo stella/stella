@@ -389,6 +389,7 @@
   },
   "caseLaw": {
     "analysis": {
+      "backToSection": "Atgriezties šīs sadaļas sākumā",
       "categories": {
         "facts": "Fakti",
         "holding": "Nolēmums",
@@ -397,11 +398,30 @@
       }
     },
     "analyzing": "Analizē...",
+    "annotations": {
+      "colorGreen": "Zaļš",
+      "colorRed": "Sarkans",
+      "colorSky": "Zils",
+      "colorViolet": "Violets",
+      "colorYellow": "Dzeltens",
+      "commentPlaceholder": "Rakstiet komentāru…",
+      "highlight": "Izcelt",
+      "removeHighlight": "Noņemt izcēlumu",
+      "sharedBadge": "Kopīgots",
+      "styleHighlight": "Izcēlums",
+      "styleSquiggly": "Viļņota līnija",
+      "styleStrikethrough": "Pārsvītrojums",
+      "visibilityShared": "Kopīgots ar organizāciju"
+    },
     "citation": {
       "citedSummary": "{count, plural, =0 {Nav citēts} zero {Citēts # reižu} one {Citēts vienu reizi} other {Citēts # reizes}}",
       "decisionCount": "{count, plural, =0 {Nav nolēmumu} zero {# nolēmumu} one {# nolēmums} other {# nolēmumi}}",
       "lastNegative": "pēdējā negatīvā atsauce {year}. gadā",
       "negativeCount": "{count, plural, zero {# negatīvu} one {# negatīva} other {# negatīvas}}",
+      "openAtCitation": "Atvērt citāta vietā",
+      "passageNotFound": "Citējošais fragments tekstā netika atrasts",
+      "positiveCount": "{count, plural, zero {# pozitīvu} one {# pozitīvs} other {# pozitīvi}}",
+      "showAll": "{count, plural, zero {Rādīt visus # nolēmumus} one {Rādīt # nolēmumu} other {Rādīt visus # nolēmumus}}",
       "stripLabel": "Atsauces pa gadiem",
       "treatment": {
         "negative": "Negatīvs",
@@ -411,6 +431,7 @@
         "unclassified": "Neklasificēts"
       },
       "unresolved": "Nav piesaistīts nolēmumam",
+      "whereCited": "Kur tiek citēts šis nolēmums",
       "yearTitle": "{year}: {count, plural, zero {# atsauču} one {# atsauce} other {# atsauces}}"
     },
     "columns": {
@@ -442,6 +463,8 @@
       "abstract": "Kopsavilkums",
       "citedBy": "Atsaucas uz",
       "cites": "Citē",
+      "judgeRapporteur": "Tiesnesis referents",
+      "legalArea": "Tiesību joma",
       "legalSentence": "Tiesību tēze",
       "nalusDisclaimer": "Source: NALUS, Constitutional Court of the Czech Republic. Free of charge. This electronic version is not authentic.",
       "popularName": "Populārais nosaukums",
@@ -2264,6 +2287,7 @@
       "topicsTitle": "Kas jāaptver šajā pārbaudē?"
     },
     "showPane": "Rādīt paneli",
+    "swapViews": "Apmainīt galveno skatu un sānu paneli",
     "title": "Inspektors"
   },
   "knowledge": {
@@ -3385,11 +3409,13 @@
     "emptyDocument": "Šai redakcijai nav pieejams teksts.",
     "emptyState": "Tiesību akti nav atrasti.",
     "inForceSince": "Spēkā no {date}",
+    "leadingDecisions": "Vadošie nolēmumi",
     "noVersionInForce": "Izvēlētajā dienā neviena šā akta redakcija nebija spēkā.",
     "openEnded": "šobrīd",
     "outline": "Saturs",
     "outlineJumpLabel": "Pāriet uz normu",
     "outlineJumpPlaceholder": "§ 10 vai virsraksts",
+    "provisionAskContextPrompt": "\n\nFragmenti, kuros norma piemērota autoritatīvākajos nolēmumos:\n{passages}\n\nIzmanto judikatūras rīkus, lai izlasītu jebkuru no šiem nolēmumiem pilnībā vai atrastu citus nolēmumus, kas atsaucas uz normu.",
     "provisionAskPlaceholder": "Jautājiet par šo normu",
     "provisionAskQuestionPrompt": "Par {subject}: {question}",
     "provisionAskSignIn": "Piesakieties, lai jautātu par šo normu.",

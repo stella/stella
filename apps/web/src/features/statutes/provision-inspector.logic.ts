@@ -16,6 +16,11 @@ export type ProvisionViewPayload = {
   jurisdiction: string;
   /** The provision heading's anchor in the statute text. */
   anchorId: string;
+  /**
+   * The subdivision to land on and flash (`par_90-odst_5`), when the opener
+   * cited one; the heading itself otherwise.
+   */
+  highlightAnchorId?: string | undefined;
   /** The heading's own text, e.g. `§ 47`. */
   provisionLabel: string;
   statuteTitle: string;
@@ -44,6 +49,9 @@ export const isProvisionViewPayload = (
     isNonEmptyString(value.jurisdiction) &&
     "anchorId" in value &&
     isNonEmptyString(value.anchorId) &&
+    (!("highlightAnchorId" in value) ||
+      value.highlightAnchorId === undefined ||
+      isNonEmptyString(value.highlightAnchorId)) &&
     "provisionLabel" in value &&
     typeof value.provisionLabel === "string" &&
     "statuteTitle" in value &&

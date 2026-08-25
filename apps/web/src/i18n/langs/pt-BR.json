@@ -389,6 +389,7 @@
   },
   "caseLaw": {
     "analysis": {
+      "backToSection": "Voltar ao início desta seção",
       "categories": {
         "facts": "Fatos",
         "holding": "Entendimento",
@@ -397,11 +398,30 @@
       }
     },
     "analyzing": "Analisando...",
+    "annotations": {
+      "colorGreen": "Verde",
+      "colorRed": "Vermelho",
+      "colorSky": "Azul",
+      "colorViolet": "Violeta",
+      "colorYellow": "Amarelo",
+      "commentPlaceholder": "Escreva um comentário…",
+      "highlight": "Destacar",
+      "removeHighlight": "Remover destaque",
+      "sharedBadge": "Compartilhado",
+      "styleHighlight": "Destaque",
+      "styleSquiggly": "Ondulado",
+      "styleStrikethrough": "Tachado",
+      "visibilityShared": "Compartilhado com a organização"
+    },
     "citation": {
       "citedSummary": "{count, plural, =0 {Não citada} one {Citada uma vez} other {Citada # vezes}}",
       "decisionCount": "{count, plural, =0 {Nenhuma decisão} one {# decisão} other {# decisões}}",
       "lastNegative": "última citação negativa em {year}",
       "negativeCount": "{count, plural, one {# negativa} many {# negativas} other {# negativas}}",
+      "openAtCitation": "Abrir na citação",
+      "passageNotFound": "O trecho citante não foi encontrado no texto",
+      "positiveCount": "{count, plural, one {# positiva} many {# positivas} other {# positivas}}",
+      "showAll": "{count, plural, one {Mostrar a decisão} many {Mostrar todas as # decisões} other {Mostrar todas as # decisões}}",
       "stripLabel": "Citações por ano",
       "treatment": {
         "negative": "Negativa",
@@ -411,6 +431,7 @@
         "unclassified": "Não classificada"
       },
       "unresolved": "Sem decisão associada",
+      "whereCited": "Onde cita esta decisão",
       "yearTitle": "{year}: {count, plural, one {# citação} other {# citações}}"
     },
     "columns": {
@@ -442,6 +463,8 @@
       "abstract": "Resumo",
       "citedBy": "Citado por",
       "cites": "Cita",
+      "judgeRapporteur": "Juiz relator",
+      "legalArea": "Área jurídica",
       "legalSentence": "Tese jurídica",
       "nalusDisclaimer": "Fonte: NALUS, Tribunal Constitucional da República Checa. Gratuito. Esta versão eletrônica não é autêntica; somente os originais com o emblema do estado e assinatura da pessoa autorizada são autênticos.",
       "popularName": "Nome popular",
@@ -2264,6 +2287,7 @@
       "topicsTitle": "O que esta revisão deve abranger?"
     },
     "showPane": "Mostrar painel",
+    "swapViews": "Trocar a visualização principal e o painel lateral",
     "title": "Inspetor"
   },
   "knowledge": {
@@ -3385,11 +3409,13 @@
     "emptyDocument": "Esta versão não tem texto disponível.",
     "emptyState": "Nenhuma norma encontrada.",
     "inForceSince": "Em vigor desde {date}",
+    "leadingDecisions": "Decisões de referência",
     "noVersionInForce": "Nenhuma versão desta norma estava em vigor na data escolhida.",
     "openEnded": "hoje",
     "outline": "Sumário",
     "outlineJumpLabel": "Ir para um dispositivo",
     "outlineJumpPlaceholder": "§ 10 ou um título",
+    "provisionAskContextPrompt": "\n\nTrechos que aplicam o dispositivo nas decisões de maior autoridade:\n{passages}\n\nUse as ferramentas de jurisprudência para ler qualquer uma dessas decisões na íntegra ou encontrar outras decisões que citem o dispositivo.",
     "provisionAskPlaceholder": "Pergunte sobre este dispositivo",
     "provisionAskQuestionPrompt": "Sobre {subject}: {question}",
     "provisionAskSignIn": "Faça login para perguntar sobre este dispositivo.",

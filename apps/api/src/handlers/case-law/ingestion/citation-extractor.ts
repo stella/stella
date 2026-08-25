@@ -12,6 +12,7 @@ import type {
   DecisionIdentifierType,
 } from "@stll/legal-ast/decision-identifier";
 
+import { detectCitationCourtHint } from "@/api/handlers/case-law/citation-court-hint";
 import {
   type CitationDecisionTypeHint,
   detectCitationDecisionTypeHint,
@@ -33,6 +34,13 @@ type ExtractedCitation = {
    */
   citedDecisionTypeHint: CitationDecisionTypeHint | null;
   identifierType: DecisionIdentifierType;
+  /**
+   * The court phrase the text introduced the number with, verbatim, when
+   * the sentence takes the standard form; see `citation-court-hint.ts`.
+   * Null is "the text did not say", and also what two occurrences naming
+   * different courts collapse to.
+   */
+  citedCourtHint: string | null;
 };
 
 /**
@@ -889,6 +897,9 @@ export const extractCitations = (
   // same docket both a nález and an usnesení is naming two documents, and a
   // single hint would pick one of them by occurrence order.
   const conflictingHints = new Set<string>();
+  // Same rule for the court: one docket number attributed to two courts in
+  // one text names two files, and a single hint would pick one by order.
+  const conflictingCourtHints = new Set<string>();
 
   for (const section of sections) {
     for (const pattern of CITATION_PATTERNS) {
@@ -920,6 +931,10 @@ export const extractCitations = (
           section.text,
           match.index,
         );
+        const citedCourtHint = detectCitationCourtHint(
+          section.text,
+          match.index,
+        );
 
         const existing = byKey.get(dedupKey);
         if (!existing) {
@@ -928,8 +943,20 @@ export const extractCitations = (
             sectionIndex: section.index,
             citedDecisionTypeHint,
             identifierType,
+            citedCourtHint,
           });
           continue;
+        }
+        if (citedCourtHint !== null && !conflictingCourtHints.has(dedupKey)) {
+          if (
+            existing.citedCourtHint !== null &&
+            existing.citedCourtHint !== citedCourtHint
+          ) {
+            conflictingCourtHints.add(dedupKey);
+            existing.citedCourtHint = null;
+          } else {
+            existing.citedCourtHint = citedCourtHint;
+          }
         }
         // Prefer a later occurrence over an earlier one: a case is often
         // listed bare in the header (low section index) and then discussed

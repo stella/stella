@@ -11,6 +11,7 @@ import {
   AIAvailabilityProvider,
   useAIKeyGate,
 } from "@/components/require-ai-key";
+import { useDecisionAnnotations } from "@/features/case-law/annotations/use-decision-annotations";
 import { DecisionWorkspace } from "@/features/case-law/components/case-viewer/decision-workspace";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { AuthenticatedUserProvider } from "@/lib/authenticated-user-context";
@@ -60,10 +61,20 @@ const AuthenticatedDecisionWorkspace = ({
   "decision" | "decisionId" | "initialSearchQuery"
 >) => {
   const { ensureAIAvailable } = useAIKeyGate();
+  const { annotations, create, remove, update } =
+    useDecisionAnnotations(decisionId);
 
   return (
     <DecisionWorkspace
       aiMode="enabled"
+      annotations={{
+        annotations,
+        controller: {
+          create: create.mutateAsync,
+          remove: remove.mutateAsync,
+          update: update.mutateAsync,
+        },
+      }}
       decision={decision}
       decisionId={decisionId}
       ensureAIAvailable={ensureAIAvailable}

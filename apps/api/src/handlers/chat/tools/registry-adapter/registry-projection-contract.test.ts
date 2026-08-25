@@ -1281,6 +1281,7 @@ const CONTRACT_CORPUS = {
             },
           ],
           fulltext: "Full decision text.",
+          sections: null,
           language: "cs",
           languageGroupKey: null,
           languageAlternates: [],

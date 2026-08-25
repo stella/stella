@@ -389,6 +389,7 @@
   },
   "caseLaw": {
     "analysis": {
+      "backToSection": "Vissza a szakasz elejére",
       "categories": {
         "facts": "Tényállás",
         "holding": "Jogi álláspont",
@@ -397,11 +398,30 @@
       }
     },
     "analyzing": "Elemzés folyamatban...",
+    "annotations": {
+      "colorGreen": "Zöld",
+      "colorRed": "Piros",
+      "colorSky": "Kék",
+      "colorViolet": "Lila",
+      "colorYellow": "Sárga",
+      "commentPlaceholder": "Írj megjegyzést…",
+      "highlight": "Kiemelés",
+      "removeHighlight": "Kiemelés eltávolítása",
+      "sharedBadge": "Megosztva",
+      "styleHighlight": "Kiemelés",
+      "styleSquiggly": "Hullámos vonal",
+      "styleStrikethrough": "Áthúzás",
+      "visibilityShared": "Megosztva a szervezettel"
+    },
     "citation": {
       "citedSummary": "{count, plural, =0 {Nem hivatkozták} one {Egyszer hivatkozták} other {#-szor hivatkozták}}",
       "decisionCount": "{count, plural, =0 {Nincs határozat} one {# határozat} other {# határozat}}",
       "lastNegative": "utolsó elutasító hivatkozás: {year}",
       "negativeCount": "{count, plural, one {# elutasító} other {# elutasító}}",
+      "openAtCitation": "Megnyitás a hivatkozásnál",
+      "passageNotFound": "A hivatkozó szövegrész nem található a szövegben",
+      "positiveCount": "{count, plural, one {# támogató} other {# támogató}}",
+      "showAll": "{count, plural, one {Mind a # határozat megjelenítése} other {Mind a # határozat megjelenítése}}",
       "stripLabel": "Hivatkozások évenként",
       "treatment": {
         "negative": "Elutasító",
@@ -411,6 +431,7 @@
         "unclassified": "Besorolatlan"
       },
       "unresolved": "Nincs határozathoz rendelve",
+      "whereCited": "Hol hivatkozik erre a határozatra",
       "yearTitle": "{year}: {count, plural, one {# hivatkozás} other {# hivatkozás}}"
     },
     "columns": {
@@ -442,6 +463,8 @@
       "abstract": "Kivonat",
       "citedBy": "Hivatkozik rá",
       "cites": "Hivatkozásai",
+      "judgeRapporteur": "Előadó bíró",
+      "legalArea": "Jogterület",
       "legalSentence": "Elvi bírósági határozat",
       "nalusDisclaimer": "Source: NALUS, Constitutional Court of the Czech Republic. Free of charge. This electronic version is not authentic.",
       "popularName": "Népszerű név",
@@ -2264,6 +2287,7 @@
       "topicsTitle": "Mire terjedjen ki az ellenőrzés?"
     },
     "showPane": "Panel megjelenítése",
+    "swapViews": "A fő nézet és az oldalsó panel felcserélése",
     "title": "Ellenőrző panel"
   },
   "knowledge": {
@@ -3385,11 +3409,13 @@
     "emptyDocument": "Ehhez a változathoz nem érhető el szöveg.",
     "emptyState": "Nem található jogszabály.",
     "inForceSince": "Hatályos {date} óta",
+    "leadingDecisions": "Irányadó határozatok",
     "noVersionInForce": "A kiválasztott napon a jogszabály egyetlen változata sem volt hatályban.",
     "openEnded": "jelenleg is",
     "outline": "Tartalom",
     "outlineJumpLabel": "Ugrás rendelkezéshez",
     "outlineJumpPlaceholder": "§ 10 vagy cím",
+    "provisionAskContextPrompt": "\n\nA rendelkezést alkalmazó részletek a legnagyobb súlyú határozatokból:\n{passages}\n\nAz ítélkezési gyakorlat eszközeivel bármelyik határozatot teljes terjedelmében elolvashatod, vagy további, a rendelkezésre hivatkozó határozatokat kereshetsz.",
     "provisionAskPlaceholder": "Kérdezzen erről a rendelkezésről",
     "provisionAskQuestionPrompt": "{subject} kapcsán: {question}",
     "provisionAskSignIn": "A rendelkezéssel kapcsolatos kérdéshez jelentkezzen be.",

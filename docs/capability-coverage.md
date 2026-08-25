@@ -516,7 +516,8 @@ mechanics, and similar), not gaps in coverage.
 | mcp_transport          | 11    |
 | native_tool_ui         | 3     |
 | provider_secret        | 20    |
-| public_indexing        | 2     |
+| public_indexing        | 3     |
+| reader_annotations     | 4     |
 | realtime_stream        | 2     |
 | search_ui              | 5     |
 | session_token_exchange | 13    |
@@ -524,4 +525,4 @@ mechanics, and similar), not gaps in coverage.
 | upload_mechanics       | 14    |
 | url_preview            | 2     |
 
-Total: 141
+Total: 146

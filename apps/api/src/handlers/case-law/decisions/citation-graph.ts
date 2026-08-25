@@ -433,3 +433,134 @@ export const summarizeDecisionCitationsHandler = async ({
     incomingByYear: [...byYear.values()].sort((a, b) => a.year - b.year),
   };
 };
+
+/** How many decisions each treatment shows before the reader asks for all. */
+export const LEADING_CITATIONS_PER_TREATMENT = 3;
+
+export const listLeadingCitationsQuerySchema = t.Object({
+  direction: t.Union(CITATION_DIRECTIONS.map((value) => t.Literal(value))),
+});
+
+type ListLeadingCitationsQuery = Static<typeof listLeadingCitationsQuerySchema>;
+
+export type LeadingCitationRow = {
+  id: SafeId<"caseLawCitation">;
+  citationText: string;
+  sectionIndex: number | null;
+  treatment: CitationTreatment;
+  /** Resolved by construction: only a held decision can lead. */
+  decision: RelatedDecision & { citationAuthority: number };
+};
+
+type ListLeadingCitationsOptions = {
+  subject: RedistributableDecisionSubject;
+  query: ListLeadingCitationsQuery;
+};
+
+/**
+ * The treatment a row counts under, as SQL, grouping in the database the
+ * way `treatmentOf` groups in code. The literal is a constant of this
+ * module and is rendered inline rather than bound: the expression appears
+ * twice in one statement and the planner must see the same text.
+ */
+const treatmentSql = sql<string>`CASE
+  WHEN ${caseLawCitations.polarity} IS NULL
+    OR ${caseLawCitations.polarity} = ${sql.raw(`'${POLARITY.UNKNOWN}'`)}
+  THEN 'unclassified'
+  ELSE ${caseLawCitations.polarity}
+END`;
+
+/**
+ * The few decisions per treatment a reader should see first: the most
+ * authoritative decisions citing this one (or cited by it), one row per
+ * decision even where it cites the case several times. Ranked by the far
+ * decision's materialized citation authority, which search ranks by too,
+ * so the two surfaces agree on what "leading" means.
+ */
+export const listLeadingCitationsHandler = async ({
+  subject: { id: decisionId, tx },
+  query,
+}: ListLeadingCitationsOptions): Promise<{ items: LeadingCitationRow[] }> => {
+  const spec = DIRECTION_SPECS[query.direction];
+
+  // One row per (treatment, far decision): its first citation in the text.
+  const mentions = tx
+    .select({
+      id: caseLawCitations.id,
+      citationText: caseLawCitations.citationText,
+      sectionIndex: caseLawCitations.sectionIndex,
+      polarity: caseLawCitations.polarity,
+      treatment: treatmentSql.as("treatment"),
+      relatedId: sql<string>`${spec.related}`.as("related_id"),
+      authority: relatedDecision.citationAuthority,
+      mentionRank: sql<number>`row_number() OVER (
+        PARTITION BY ${treatmentSql}, ${spec.related}
+        ORDER BY ${caseLawCitations.id}
+      )`.as("mention_rank"),
+    })
+    .from(caseLawCitations)
+    .innerJoin(relatedDecision, eq(relatedDecision.id, spec.related))
+    .innerJoin(relatedSource, eq(relatedSource.id, relatedDecision.sourceId))
+    .where(
+      and(
+        eq(spec.anchor, decisionId),
+        precedentOnly,
+        redistributableCaseLawSourceFor(relatedSource.descriptor),
+      ),
+    )
+    .as("leading_mentions");
+
+  const ranked = tx
+    .select({
+      id: mentions.id,
+      citationText: mentions.citationText,
+      sectionIndex: mentions.sectionIndex,
+      polarity: mentions.polarity,
+      relatedId: mentions.relatedId,
+      rank: sql<number>`row_number() OVER (
+        PARTITION BY ${mentions.treatment}
+        ORDER BY ${mentions.authority} DESC, ${mentions.id}
+      )`.as("authority_rank"),
+    })
+    .from(mentions)
+    .where(eq(mentions.mentionRank, 1))
+    .as("leading_ranked");
+
+  const rows = await tx
+    .select({
+      id: ranked.id,
+      citationText: ranked.citationText,
+      sectionIndex: ranked.sectionIndex,
+      polarity: ranked.polarity,
+      decision: {
+        id: relatedDecision.id,
+        caseNumber: relatedDecision.caseNumber,
+        country: relatedDecision.country,
+        court: relatedDecision.court,
+        decisionDate: relatedDecision.decisionDate,
+        decisionType: relatedDecision.decisionType,
+        ecli: relatedDecision.ecli,
+        language: relatedDecision.language,
+        slug: relatedDecision.slug,
+        citationAuthority: relatedDecision.citationAuthority,
+      },
+    })
+    .from(ranked)
+    .innerJoin(
+      relatedDecision,
+      sql`${relatedDecision.id} = ${ranked.relatedId}::uuid`,
+    )
+    .where(sql`${ranked.rank} <= ${LEADING_CITATIONS_PER_TREATMENT}`)
+    .orderBy(asc(ranked.rank), asc(ranked.id))
+    .limit(CITATION_TREATMENTS.length * LEADING_CITATIONS_PER_TREATMENT);
+
+  return {
+    items: rows.map((row) => ({
+      id: row.id,
+      citationText: row.citationText,
+      sectionIndex: row.sectionIndex,
+      treatment: treatmentOf(row.polarity),
+      decision: row.decision,
+    })),
+  };
+};

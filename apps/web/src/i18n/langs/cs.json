@@ -389,6 +389,7 @@
   },
   "caseLaw": {
     "analysis": {
+      "backToSection": "Zpět na začátek této části",
       "categories": {
         "facts": "Skutkový stav",
         "holding": "Právní věta",
@@ -397,11 +398,30 @@
       }
     },
     "analyzing": "Analyzuji...",
+    "annotations": {
+      "colorGreen": "Zelená",
+      "colorRed": "Červená",
+      "colorSky": "Modrá",
+      "colorViolet": "Fialová",
+      "colorYellow": "Žlutá",
+      "commentPlaceholder": "Napište komentář…",
+      "highlight": "Zvýraznit",
+      "removeHighlight": "Odebrat zvýraznění",
+      "sharedBadge": "Sdíleno",
+      "styleHighlight": "Zvýraznění",
+      "styleSquiggly": "Vlnovka",
+      "styleStrikethrough": "Přeškrtnutí",
+      "visibilityShared": "Sdíleno s organizací"
+    },
     "citation": {
       "citedSummary": "{count, plural, =0 {Necitováno} one {Citováno jednou} few {Citováno #krát} other {Citováno #krát}}",
       "decisionCount": "{count, plural, =0 {Žádná rozhodnutí} one {# rozhodnutí} few {# rozhodnutí} other {# rozhodnutí}}",
       "lastNegative": "poslední negativní citace v roce {year}",
       "negativeCount": "{count, plural, one {# negativní} few {# negativní} many {# negativních} other {# negativních}}",
+      "openAtCitation": "Otevřít na místě citace",
+      "passageNotFound": "Citující pasáž se v textu nepodařilo najít",
+      "positiveCount": "{count, plural, one {# pozitivní} few {# pozitivní} many {# pozitivních} other {# pozitivních}}",
+      "showAll": "{count, plural, one {Zobrazit # rozhodnutí} few {Zobrazit všechna # rozhodnutí} many {Zobrazit všech # rozhodnutí} other {Zobrazit všech # rozhodnutí}}",
       "stripLabel": "Citace podle let",
       "treatment": {
         "negative": "Negativní",
@@ -411,6 +431,7 @@
         "unclassified": "Neklasifikováno"
       },
       "unresolved": "Nepřiřazeno k rozhodnutí",
+      "whereCited": "Kde cituje toto rozhodnutí",
       "yearTitle": "{year}: {count, plural, one {# citace} few {# citace} other {# citací}}"
     },
     "columns": {
@@ -442,6 +463,8 @@
       "abstract": "Abstrakt",
       "citedBy": "Citováno v",
       "cites": "Cituje",
+      "judgeRapporteur": "Soudce zpravodaj",
+      "legalArea": "Oblast práva",
       "legalSentence": "Právní věta",
       "nalusDisclaimer": "Zdroj: NALUS, Ústavní soud ČR. Bezplatné. Elektronická verze není autentická; autentické jsou pouze originály a stejnopisy se státním znakem a podpisem příslušné úřední osoby.",
       "popularName": "Populární název",
@@ -2264,6 +2287,7 @@
       "topicsTitle": "Co má kontrola zahrnout?"
     },
     "showPane": "Zobrazit panel",
+    "swapViews": "Prohodit hlavní zobrazení a boční panel",
     "title": "Inspektor"
   },
   "knowledge": {
@@ -3385,11 +3409,13 @@
     "emptyDocument": "Toto znění nemá dostupný text.",
     "emptyState": "Nenalezeny žádné předpisy.",
     "inForceSince": "Účinné od {date}",
+    "leadingDecisions": "Klíčová rozhodnutí",
     "noVersionInForce": "K vybranému dni nebylo účinné žádné znění tohoto předpisu.",
     "openEnded": "současnost",
     "outline": "Obsah",
     "outlineJumpLabel": "Přejít na ustanovení",
     "outlineJumpPlaceholder": "§ 10 nebo název",
+    "provisionAskContextPrompt": "\n\nPasáže, které toto ustanovení aplikují v nejvlivnějších rozhodnutích:\n{passages}\n\nPomocí nástrojů pro judikaturu si můžeš přečíst kterékoli z těchto rozhodnutí celé nebo dohledat další rozhodnutí, která ustanovení citují.",
     "provisionAskPlaceholder": "Zeptejte se na toto ustanovení",
     "provisionAskQuestionPrompt": "K {subject}: {question}",
     "provisionAskSignIn": "Chcete-li se na ustanovení zeptat, přihlaste se.",

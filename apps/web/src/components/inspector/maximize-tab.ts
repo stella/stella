@@ -1,6 +1,10 @@
 import type { QueryClient } from "@tanstack/react-query";
 import type { useNavigate } from "@tanstack/react-router";
 
+import {
+  isCaseDecisionGenericTab,
+  navigateToCaseDecisionMain,
+} from "@/components/inspector/case-decision-view";
 import type { InspectorTab } from "@/components/inspector/inspector-tabs-store";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { chatKeys } from "@/features/chat/chat-query-contract";
@@ -22,6 +26,7 @@ type MaximizeContext = {
  *   `/chat/workspaces/$workspaceId/$threadId` (workspace).
  *   Cross-scope cache is invalidated so the destination doesn't
  *   read stale data; the inspector tab is closed afterwards.
+ * - Case-law decision tabs land on their public decision route.
  * - Task and PDF tabs are not maximized through this entry point
  *   (PDF has its own "open full view" button in the ribbon, task
  *   tabs have no full-page surface yet) — the helper returns
@@ -31,6 +36,15 @@ export const buildMaximizeTabAction = (
   tab: InspectorTab,
   { activeOrganizationId, navigate, queryClient }: MaximizeContext,
 ): (() => void) | undefined => {
+  if (isCaseDecisionGenericTab(tab)) {
+    return () => {
+      useInspectorTabsStore.getState().closeTab(tab.id);
+      detached(
+        navigateToCaseDecisionMain(navigate, tab.payload),
+        "maximize-tab.navigate-case-decision",
+      );
+    };
+  }
   if (tab.type !== "chat") {
     return undefined;
   }

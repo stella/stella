@@ -13,6 +13,13 @@ const decisionAnalysisColumns = {
   decisionType: true,
   documentAst: true,
   analysis: true,
+  // The rest identifies the document to its publisher, for the
+  // development-only re-parse on read (`decisions/dev-reparse.ts`).
+  caseNumber: true,
+  ecli: true,
+  decisionDate: true,
+  documentUrl: true,
+  metadata: true,
 } as const;
 
 export const readDecisionAnalysis = definePublicLawSharedQuery(
@@ -24,5 +31,6 @@ export const readDecisionAnalysis = definePublicLawSharedQuery(
     await tx.query.caseLawDecisions.findFirst({
       where: { id: { eq: decisionId } },
       columns: decisionAnalysisColumns,
+      with: { source: { columns: { adapterKey: true } } },
     }),
 );

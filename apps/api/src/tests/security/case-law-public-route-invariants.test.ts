@@ -63,6 +63,7 @@ const PUBLIC_CASE_LAW_ROUTES = [
   "GET /case/decisions",
   "GET /case/decisions/:decisionId",
   "GET /case/decisions/:decisionId/citations",
+  "GET /case/decisions/:decisionId/citations/leading",
   "GET /case/decisions/:decisionId/citations/summary",
   "GET /case/decisions/:decisionId/provisions",
   "GET /case/decisions/by-slug/:slug",

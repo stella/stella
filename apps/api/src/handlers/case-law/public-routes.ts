@@ -11,6 +11,7 @@ import {
   readDecisionQuerySchema,
 } from "@/api/handlers/case-law/decisions/get";
 import { hydrateDeferredDocument } from "@/api/handlers/case-law/decisions/get-deferred-document";
+import listLeadingCitations from "@/api/handlers/case-law/decisions/leading-citations";
 import {
   listDecisionsHandler,
   listDecisionsQuerySchema,
@@ -221,6 +222,14 @@ export const publicCaseLawRoute = new Elysia({
     "/decisions/:decisionId/citations/summary",
     summarizeDecisionCitations.handler,
     { params: summarizeDecisionCitations.config.params },
+  )
+  .get(
+    "/decisions/:decisionId/citations/leading",
+    listLeadingCitations.handler,
+    {
+      params: listLeadingCitations.config.params,
+      query: listLeadingCitations.config.query,
+    },
   )
   .get("/decisions/:decisionId/provisions", listDecisionProvisions.handler, {
     params: listDecisionProvisions.config.params,

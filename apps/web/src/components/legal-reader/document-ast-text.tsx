@@ -467,6 +467,7 @@ const BlockPermalink = ({ anchorId }: { anchorId: string }) => {
     <a
       aria-label={t("common.copyLink")}
       className="text-foreground-disabled hover:text-foreground focus-visible:ring-ring absolute end-full top-0 me-1 rounded-sm px-1 leading-[inherit] no-underline opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:outline-none print:hidden [@media(hover:none)]:opacity-100"
+      data-reader-chrome=""
       href={`#${anchorId}`}
       onClick={() => {
         detached(copyPermalink(), "legal-reader.permalink-copy");
@@ -555,6 +556,7 @@ export const BlockRenderer = ({
           <HighlightedText
             activeMatchIndex={activeMatchIndex}
             className="text-muted-foreground absolute start-0 font-sans text-[0.8em] select-none"
+            data-reader-chrome=""
             pieceId={getParagraphNumberPieceId(block.id)}
             ranges={rangesForPiece(
               rangesByPieceId,

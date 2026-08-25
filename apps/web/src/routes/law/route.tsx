@@ -1,5 +1,6 @@
 import { createFileRoute, notFound } from "@tanstack/react-router";
 
+import "@/features/case-law/case-decision-details-inspector-registration";
 import "@/features/case-law/case-decision-inspector-registration";
 import "@/features/statutes/provision-inspector-registration";
 import { isPublicLawRouteEnabled } from "@/lib/public-law-launch";

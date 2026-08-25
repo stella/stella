@@ -389,6 +389,7 @@
   },
   "caseLaw": {
     "analysis": {
+      "backToSection": "Zurück zum Anfang dieses Abschnitts",
       "categories": {
         "facts": "Sachverhalt",
         "holding": "Spruch",
@@ -397,11 +398,30 @@
       }
     },
     "analyzing": "Analyse läuft...",
+    "annotations": {
+      "colorGreen": "Grün",
+      "colorRed": "Rot",
+      "colorSky": "Blau",
+      "colorViolet": "Violett",
+      "colorYellow": "Gelb",
+      "commentPlaceholder": "Kommentar schreiben…",
+      "highlight": "Hervorheben",
+      "removeHighlight": "Hervorhebung entfernen",
+      "sharedBadge": "Geteilt",
+      "styleHighlight": "Markierung",
+      "styleSquiggly": "Wellenlinie",
+      "styleStrikethrough": "Durchstreichung",
+      "visibilityShared": "Mit der Organisation geteilt"
+    },
     "citation": {
       "citedSummary": "{count, plural, =0 {Nicht zitiert} one {Einmal zitiert} other {#-mal zitiert}}",
       "decisionCount": "{count, plural, =0 {Keine Entscheidungen} one {# Entscheidung} other {# Entscheidungen}}",
       "lastNegative": "zuletzt ablehnend zitiert {year}",
       "negativeCount": "{count, plural, one {# ablehnend} other {# ablehnend}}",
+      "openAtCitation": "An der Zitatstelle öffnen",
+      "passageNotFound": "Die zitierende Stelle wurde im Text nicht gefunden",
+      "positiveCount": "{count, plural, one {# zustimmend} other {# zustimmend}}",
+      "showAll": "{count, plural, one {Alle # Entscheidung anzeigen} other {Alle # Entscheidungen anzeigen}}",
       "stripLabel": "Zitate nach Jahr",
       "treatment": {
         "negative": "Ablehnend",
@@ -411,6 +431,7 @@
         "unclassified": "Nicht eingeordnet"
       },
       "unresolved": "Keiner Entscheidung zugeordnet",
+      "whereCited": "Wo diese Entscheidung zitiert wird",
       "yearTitle": "{year}: {count, plural, one {# Zitat} other {# Zitate}}"
     },
     "columns": {
@@ -442,6 +463,8 @@
       "abstract": "Zusammenfassung",
       "citedBy": "Zitiert von",
       "cites": "Zitiert",
+      "judgeRapporteur": "Berichterstatter",
+      "legalArea": "Rechtsgebiet",
       "legalSentence": "Leitsatz",
       "nalusDisclaimer": "Source: NALUS, Constitutional Court of the Czech Republic. Free of charge. This electronic version is not authentic.",
       "popularName": "Populärer Name",
@@ -2264,6 +2287,7 @@
       "topicsTitle": "Was soll diese Prüfung abdecken?"
     },
     "showPane": "Bereich anzeigen",
+    "swapViews": "Hauptansicht und Seitenleiste tauschen",
     "title": "Inspektor"
   },
   "knowledge": {
@@ -3385,11 +3409,13 @@
     "emptyDocument": "Für diese Fassung ist kein Text verfügbar.",
     "emptyState": "Keine Rechtsvorschriften gefunden.",
     "inForceSince": "In Kraft seit {date}",
+    "leadingDecisions": "Leitentscheidungen",
     "noVersionInForce": "Am gewählten Tag galt keine Fassung dieses Gesetzes.",
     "openEnded": "heute",
     "outline": "Inhalt",
     "outlineJumpLabel": "Zu einer Vorschrift springen",
     "outlineJumpPlaceholder": "§ 10 oder Überschrift",
+    "provisionAskContextPrompt": "\n\nPassagen, die die Vorschrift in den maßgeblichsten Entscheidungen anwenden:\n{passages}\n\nNutze die Rechtsprechungswerkzeuge, um eine dieser Entscheidungen vollständig zu lesen oder weitere Entscheidungen zu finden, die die Vorschrift zitieren.",
     "provisionAskPlaceholder": "Zu dieser Vorschrift fragen",
     "provisionAskQuestionPrompt": "Zu {subject}: {question}",
     "provisionAskSignIn": "Melden Sie sich an, um zu dieser Vorschrift zu fragen.",

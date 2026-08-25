@@ -389,6 +389,7 @@
   },
   "caseLaw": {
     "analysis": {
+      "backToSection": "Revenir au début de cette partie",
       "categories": {
         "facts": "Faits",
         "holding": "Solution",
@@ -397,11 +398,30 @@
       }
     },
     "analyzing": "Analyse en cours...",
+    "annotations": {
+      "colorGreen": "Vert",
+      "colorRed": "Rouge",
+      "colorSky": "Bleu",
+      "colorViolet": "Pourpre",
+      "colorYellow": "Jaune",
+      "commentPlaceholder": "Écrire un commentaire…",
+      "highlight": "Surligner",
+      "removeHighlight": "Retirer le surlignage",
+      "sharedBadge": "Partagé",
+      "styleHighlight": "Surlignage",
+      "styleSquiggly": "Ondulé",
+      "styleStrikethrough": "Barré",
+      "visibilityShared": "Partagé avec l’organisation"
+    },
     "citation": {
       "citedSummary": "{count, plural, =0 {Non citée} one {Citée une fois} other {Citée # fois}}",
       "decisionCount": "{count, plural, =0 {Aucune décision} one {# décision} other {# décisions}}",
       "lastNegative": "dernière citation négative en {year}",
       "negativeCount": "{count, plural, one {# négative} many {# négatives} other {# négatives}}",
+      "openAtCitation": "Ouvrir à la citation",
+      "passageNotFound": "Le passage citant n'a pas été trouvé dans le texte",
+      "positiveCount": "{count, plural, one {# positive} many {# positives} other {# positives}}",
+      "showAll": "{count, plural, one {Afficher la décision} many {Afficher les # décisions} other {Afficher les # décisions}}",
       "stripLabel": "Citations par année",
       "treatment": {
         "negative": "Négative",
@@ -411,6 +431,7 @@
         "unclassified": "Non classée"
       },
       "unresolved": "Non rattachée à une décision",
+      "whereCited": "Où elle cite cette décision",
       "yearTitle": "{year} : {count, plural, one {# citation} other {# citations}}"
     },
     "columns": {
@@ -442,6 +463,8 @@
       "abstract": "Résumé",
       "citedBy": "Cité par",
       "cites": "Cite",
+      "judgeRapporteur": "Juge rapporteur",
+      "legalArea": "Domaine juridique",
       "legalSentence": "Attendu",
       "nalusDisclaimer": "Source: NALUS, Constitutional Court of the Czech Republic. Free of charge. This electronic version is not authentic.",
       "popularName": "Nom courant",
@@ -2264,6 +2287,7 @@
       "topicsTitle": "Que doit couvrir cette revue ?"
     },
     "showPane": "Afficher le volet",
+    "swapViews": "Échanger la vue principale et le panneau latéral",
     "title": "Inspecteur"
   },
   "knowledge": {
@@ -3385,11 +3409,13 @@
     "emptyDocument": "Aucun texte disponible pour cette version.",
     "emptyState": "Aucun texte trouvé.",
     "inForceSince": "En vigueur depuis le {date}",
+    "leadingDecisions": "Décisions de principe",
     "noVersionInForce": "Aucune version de ce texte n'était en vigueur à la date choisie.",
     "openEnded": "aujourd’hui",
     "outline": "Sommaire",
     "outlineJumpLabel": "Aller à une disposition",
     "outlineJumpPlaceholder": "§ 10 ou un intitulé",
+    "provisionAskContextPrompt": "\n\nPassages appliquant la disposition dans les décisions les plus autorisées :\n{passages}\n\nUtilise les outils de jurisprudence pour lire l’une de ces décisions en entier ou pour trouver d’autres décisions citant la disposition.",
     "provisionAskPlaceholder": "Poser une question sur cette disposition",
     "provisionAskQuestionPrompt": "À propos de {subject} : {question}",
     "provisionAskSignIn": "Connectez-vous pour poser une question sur cette disposition.",

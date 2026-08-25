@@ -68,6 +68,18 @@ describe("isProvisionViewPayload", () => {
       expect(isProvisionViewPayload(value)).toBe(false);
     }
   });
+
+  test("accepts a subdivision to land on and refuses an empty one", () => {
+    expect(
+      isProvisionViewPayload({
+        ...payload,
+        highlightAnchorId: "paragraf-47-odst_2",
+      }),
+    ).toBe(true);
+    expect(isProvisionViewPayload({ ...payload, highlightAnchorId: "" })).toBe(
+      false,
+    );
+  });
 });
 
 describe("provisionTabId", () => {

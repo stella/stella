@@ -13,6 +13,10 @@
 
 import { envBase } from "@/api/env-base";
 import {
+  devReparseEnabled,
+  reparseForDev,
+} from "@/api/handlers/case-law/decisions/dev-reparse";
+import {
   isDeferredDocumentFetchable,
   readThroughDeferredDocument,
 } from "@/api/handlers/case-law/decisions/document-on-demand";
@@ -26,6 +30,32 @@ import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 type DecisionRead = Awaited<ReturnType<typeof readDecisionHandler>>;
 type ReadableDecision = Extract<DecisionRead, { documentPending: boolean }>;
 
+/**
+ * A development process reading a shared corpus shows the parser in this
+ * tree rather than the one that ingested the row; see `dev-reparse.ts`.
+ */
+const reparsedForDev = async (
+  decision: ReadableDecision,
+): Promise<ReadableDecision> => {
+  if (!devReparseEnabled()) {
+    return decision;
+  }
+  const documentAst = await reparseForDev({
+    adapterKey: decision.source.adapterKey,
+    caseNumber: decision.caseNumber,
+    court: decision.court,
+    decisionDate: decision.decisionDate,
+    decisionType: decision.decisionType,
+    documentUrl: decision.documentUrl,
+    ecli: decision.ecli,
+    id: decision.id,
+    metadata: decision.metadata,
+  });
+  return documentAst === null
+    ? decision
+    : { ...decision, documentAst, documentPending: false, fulltext: null };
+};
+
 const hydrate = async (
   decision: ReadableDecision,
   recordDemand: boolean,
@@ -35,7 +65,7 @@ const hydrate = async (
   // which would otherwise crawl the publisher and write through the local
   // ingestion database.
   if (envBase.PUBLIC_LAW_DATABASE_URL !== undefined) {
-    return decision;
+    return await reparsedForDev(decision);
   }
 
   if (
