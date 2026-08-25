@@ -6,7 +6,7 @@ import {
   corpusIndexProjectionIntents,
   corpusIndexProjectionStates,
 } from "@/api/db/schema";
-import type { SafeId } from "@/api/lib/branded-types";
+import { toSafeId, type SafeId } from "@/api/lib/branded-types";
 import { isUuid } from "@/api/lib/custom-schema";
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";
 import { readRegisteredCorpusProjectionManifestForCleanup } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
@@ -127,6 +127,10 @@ export const readSettledCorpusProjectionCensusPageTx = async (
     options.family,
     options.generation,
   );
+  const afterRevision =
+    options.after === null
+      ? null
+      : toSafeId<"corpusIndexProjectionIntent">(options.after);
   const candidates = await tx
     .select({ revision: corpusIndexProjectionIntents.id })
     .from(corpusIndexProjectionIntents)
@@ -136,9 +140,9 @@ export const readSettledCorpusProjectionCensusPageTx = async (
         eq(corpusIndexProjectionIntents.generation, options.generation),
         eq(corpusIndexProjectionIntents.indexId, options.indexId),
         eq(corpusIndexProjectionIntents.status, "settled"),
-        options.after === null
+        afterRevision === null
           ? undefined
-          : gt(corpusIndexProjectionIntents.id, options.after),
+          : gt(corpusIndexProjectionIntents.id, afterRevision),
       ),
     )
     .orderBy(asc(corpusIndexProjectionIntents.id))

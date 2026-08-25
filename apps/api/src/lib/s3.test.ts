@@ -475,10 +475,9 @@ describe("readCorpusS3Range", () => {
           await Promise.resolve(
             new Response(body, {
               status: 404,
-              headers:
-                body === null
-                  ? undefined
-                  : { "content-type": "application/xml" },
+              ...(body === null
+                ? {}
+                : { headers: { "content-type": "application/xml" } }),
             }),
           ),
       );

@@ -6,7 +6,7 @@ import { splitIngestRequests } from "@/api/lib/corpus-index/core";
 import { isUuid } from "@/api/lib/custom-schema";
 import {
   CORPUS_INDEX_INGEST_TIMEOUT_MS,
-  type CorpusIndexError,
+  CorpusIndexError,
   type CorpusIndexClient,
   type CorpusIndexDeleteSettlement,
   type CorpusIndexDeleteTask,

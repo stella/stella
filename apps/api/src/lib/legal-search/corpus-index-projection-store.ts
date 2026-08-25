@@ -86,6 +86,13 @@ const validateLeaseMs = (leaseMs: number): number => {
   return leaseMs;
 };
 
+const readPostgresClock = async (tx: Transaction): Promise<Date> => {
+  const rows = await tx.select({ value: sql<Date>`clock_timestamp()` });
+  return (
+    rows.at(0)?.value ?? panic("PostgreSQL did not return the projection clock")
+  );
+};
+
 const pendingDesiredState = sql`(
   ${corpusIndexProjectionStates.appliedAction} IS NULL
   OR ${corpusIndexProjectionStates.appliedAction} IS DISTINCT FROM ${corpusIndexProjectionStates.desiredAction}
@@ -578,10 +585,7 @@ export const startCorpusProjectionAppendBatchTx = async (
     )
     .orderBy(asc(corpusIndexProjectionIntents.id))
     .for("update");
-  const transitionAt =
-    testNow ??
-    (await tx.select({ value: sql<Date>`clock_timestamp()` })).at(0)?.value ??
-    panic("Corpus projection append-start lost the database clock");
+  const transitionAt = testNow ?? (await readPostgresClock(tx));
   const started = await tx
     .update(corpusIndexProjectionIntents)
     .set({
@@ -762,7 +766,7 @@ export const commitCorpusProjectionAppendTx = async (
     identity.family,
     identity.generation,
   );
-  await tx
+  const states = await tx
     .select()
     .from(corpusIndexProjectionStates)
     .where(
@@ -774,6 +778,7 @@ export const commitCorpusProjectionAppendTx = async (
     )
     .limit(1)
     .for("update");
+  const state = states.at(0);
   const intents = await tx
     .select()
     .from(corpusIndexProjectionIntents)
@@ -1042,10 +1047,7 @@ export const classifyCorpusProjectionReservationFailureTx = async (
   if (intent === undefined) {
     return "lease_lost";
   }
-  const transitionAt =
-    testNow ??
-    (await tx.select({ value: sql<Date>`clock_timestamp()` })).at(0)?.value ??
-    panic("Corpus projection failure classification lost the database clock");
+  const transitionAt = testNow ?? (await readPostgresClock(tx));
   await tx
     .update(corpusIndexProjectionIntents)
     .set({

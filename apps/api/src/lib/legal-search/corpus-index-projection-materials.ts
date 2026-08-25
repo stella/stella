@@ -13,6 +13,7 @@ import {
   legislationDocuments,
   legislationSources,
 } from "@/api/db/schema";
+import { toSafeId } from "@/api/lib/branded-types";
 import type { CorpusIndexManifest } from "@/api/lib/legal-search/corpus-index-manifest";
 import { deriveCorpusIndexProjectionDescriptor } from "@/api/lib/legal-search/corpus-index-projection-descriptor";
 import {
@@ -152,7 +153,9 @@ const readCaseLawMaterials = async (
   intents: ReadonlyMap<string, IntentSnapshot>,
   states: ReadonlyMap<string, StateSnapshot>,
 ): Promise<CorpusProjectionMaterialsResult> => {
-  const entityIds = leases.map(({ entityId }) => entityId);
+  const entityIds = leases.map(({ entityId }) =>
+    toSafeId<"caseLawDecision">(entityId),
+  );
   const rows = await tx
     .select({
       documentId: caseLawDecisions.id,
@@ -197,7 +200,7 @@ const readCaseLawMaterials = async (
   const identifiersByDecision = new Map<
     string,
     { type: string; value: string }[]
-  >(entityIds.map((entityId) => [entityId, []]));
+  >(entityIds.map((entityId) => [String(entityId), []]));
   for (const identifier of identifiers) {
     const values = identifiersByDecision.get(identifier.decisionId);
     if (
@@ -210,7 +213,7 @@ const readCaseLawMaterials = async (
     }
     values.push({ type: identifier.type, value: identifier.value });
   }
-  const byEntityId = new Map(rows.map((row) => [row.documentId, row]));
+  const byEntityId = new Map(rows.map((row) => [String(row.documentId), row]));
   const ready: CorpusProjectionMaterial[] = [];
   const rejected: CorpusProjectionMaterialRejection[] = [];
   for (const lease of leases) {
@@ -265,7 +268,9 @@ const readLegislationMaterials = async (
   intents: ReadonlyMap<string, IntentSnapshot>,
   states: ReadonlyMap<string, StateSnapshot>,
 ): Promise<CorpusProjectionMaterialsResult> => {
-  const entityIds = leases.map(({ entityId }) => entityId);
+  const entityIds = leases.map(({ entityId }) =>
+    toSafeId<"legislationDocument">(entityId),
+  );
   const rows = await tx
     .select({
       documentId: legislationDocuments.id,
@@ -291,7 +296,7 @@ const readLegislationMaterials = async (
     )
     .where(inArray(legislationDocuments.id, entityIds))
     .limit(entityIds.length);
-  const byEntityId = new Map(rows.map((row) => [row.documentId, row]));
+  const byEntityId = new Map(rows.map((row) => [String(row.documentId), row]));
   const ready: CorpusProjectionMaterial[] = [];
   const rejected: CorpusProjectionMaterialRejection[] = [];
   for (const lease of leases) {
