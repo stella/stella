@@ -149,6 +149,11 @@ export type CorpusIndexClient = {
     ndjson: string,
     commit: CorpusIndexCommitMode,
   ) => Promise<Result<void, CorpusIndexError>>;
+  /** Final-generation append: durable commit plus an exact V2 receipt. */
+  ingestCommittedBatch: (
+    indexId: string,
+    ndjson: string,
+  ) => Promise<Result<void, CorpusIndexError>>;
   search: (
     input: CorpusIndexSearchInput,
   ) => Promise<Result<CorpusIndexSearchResponse, CorpusIndexError>>;
@@ -284,6 +289,81 @@ const parseRecordArray = (value: unknown): Record<string, unknown>[] | null => {
   return records;
 };
 
+type IngestReceiptMode = "compatible" | "exact-v2";
+
+type IngestBatchOptions = {
+  indexId: string;
+  ndjson: string;
+  commit: CorpusIndexCommitMode;
+  receiptMode: IngestReceiptMode;
+};
+
+const ingestBatch = async ({
+  indexId,
+  ndjson,
+  commit,
+  receiptMode,
+}: IngestBatchOptions): Promise<Result<void, CorpusIndexError>> =>
+  await Result.tryPromise({
+    try: async () => {
+      const sentDocs = ndjson
+        .split("\n")
+        .filter((line) => line.trim().length > 0).length;
+      const response = await requestJson({
+        baseUrl: mutationBaseUrl(),
+        path: `/api/v1/${indexId}/ingest?commit=${commit}`,
+        init: {
+          method: "POST",
+          headers: { "content-type": "application/x-ndjson" },
+          body: ndjson,
+        },
+        timeoutMs: CORPUS_INDEX_INGEST_TIMEOUT_MS,
+      });
+      if (!isRecord(response)) {
+        throw new CorpusIndexError({
+          message: "corpus index ingest returned an invalid response",
+        });
+      }
+      const processing = response["num_docs_for_processing"];
+      const ingested = response["num_ingested_docs"];
+      const rejectedValue = response["num_rejected_docs"];
+      const parseFailures = response["parse_failures"];
+      let rejected = 0;
+      if (typeof rejectedValue === "number") {
+        rejected = rejectedValue;
+      } else if (Array.isArray(parseFailures)) {
+        rejected = parseFailures.length;
+      }
+      if (receiptMode === "exact-v2") {
+        if (
+          sentDocs === 0 ||
+          processing !== sentDocs ||
+          ingested !== sentDocs ||
+          rejectedValue !== 0
+        ) {
+          throw new CorpusIndexError({
+            message: `corpus index ingest receipt did not commit all ${sentDocs} documents (processing=${String(processing)}, ingested=${String(ingested)}, rejected=${String(rejectedValue)})`,
+          });
+        }
+        return;
+      }
+      // The legacy engine can accept the HTTP request while dropping
+      // documents. v0.8 reports fewer counters than v0.9, so this path keeps
+      // the compatible checks until the old cluster is retired.
+      if (rejected > 0) {
+        throw new CorpusIndexError({
+          message: `corpus index ingest rejected ${rejected} of ${sentDocs} documents`,
+        });
+      }
+      if (typeof processing === "number" && processing < sentDocs) {
+        throw new CorpusIndexError({
+          message: `corpus index ingest accepted ${processing} of ${sentDocs} documents`,
+        });
+      }
+    },
+    catch: toCorpusIndexError,
+  });
+
 const buildClient = (): CorpusIndexClient => ({
   createIndex: async (config) =>
     await Result.tryPromise({
@@ -339,51 +419,19 @@ const buildClient = (): CorpusIndexClient => ({
     }),
 
   ingestBatch: async (indexId, ndjson, commit) =>
-    await Result.tryPromise({
-      try: async () => {
-        const sentDocs = ndjson
-          .split("\n")
-          .filter((line) => line.trim().length > 0).length;
-        const response = await requestJson({
-          baseUrl: mutationBaseUrl(),
-          path: `/api/v1/${indexId}/ingest?commit=${commit}`,
-          init: {
-            method: "POST",
-            headers: { "content-type": "application/x-ndjson" },
-            body: ndjson,
-          },
-          timeoutMs: CORPUS_INDEX_INGEST_TIMEOUT_MS,
-        });
-        if (!isRecord(response)) {
-          throw new CorpusIndexError({
-            message: "corpus index ingest returned an invalid response",
-          });
-        }
-        // The engine can accept the HTTP request while dropping documents.
-        // v0.8 only reports num_docs_for_processing (per-document parse
-        // failures surface in server logs, not the response); newer engines
-        // report rejections explicitly. Fail the batch on any signal that
-        // not every document was accepted so the backfill retries instead
-        // of committing indexedHash for documents that never landed.
-        let rejected = 0;
-        if (typeof response["num_rejected_docs"] === "number") {
-          rejected = response["num_rejected_docs"];
-        } else if (Array.isArray(response["parse_failures"])) {
-          rejected = response["parse_failures"].length;
-        }
-        if (rejected > 0) {
-          throw new CorpusIndexError({
-            message: `corpus index ingest rejected ${rejected} of ${sentDocs} documents`,
-          });
-        }
-        const accepted = response["num_docs_for_processing"];
-        if (typeof accepted === "number" && accepted < sentDocs) {
-          throw new CorpusIndexError({
-            message: `corpus index ingest accepted ${accepted} of ${sentDocs} documents`,
-          });
-        }
-      },
-      catch: toCorpusIndexError,
+    await ingestBatch({
+      indexId,
+      ndjson,
+      commit,
+      receiptMode: "compatible",
+    }),
+
+  ingestCommittedBatch: async (indexId, ndjson) =>
+    await ingestBatch({
+      indexId,
+      ndjson,
+      commit: CORPUS_INDEX_COMMIT.waitFor,
+      receiptMode: "exact-v2",
     }),
 
   search: async ({
