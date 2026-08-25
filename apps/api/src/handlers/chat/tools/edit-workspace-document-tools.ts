@@ -22,6 +22,7 @@ import {
   type DocxEditRepresentation,
 } from "@/api/handlers/chat/chat-schema";
 import { FOLIO_AI_EDIT_SKIP_REASONS } from "@/api/handlers/chat/tools/folio-ai-edit-skip-reasons";
+import { getFolioDocumentOperationJsonSchemaVariants } from "@/api/handlers/chat/tools/folio-operation-schema";
 import { resolveDocxEditAuthorName } from "@/api/handlers/chat/tools/resolve-docx-edit-author-name";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -116,7 +117,7 @@ const deriveOperationVariant = (
 };
 
 const ACCEPTED_OPERATION_VARIANTS =
-  FOLIO_DOCUMENT_OPERATION_JSON_SCHEMA.oneOf.map((variant) =>
+  getFolioDocumentOperationJsonSchemaVariants().map((variant) =>
     deriveOperationVariant(variant),
   );
 

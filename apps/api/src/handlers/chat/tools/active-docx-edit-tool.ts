@@ -18,6 +18,7 @@ import { FOLIO_DOCUMENT_OPERATION_CONTRACT_VERSION } from "@stll/folio-core/serv
 
 import { normalizeActiveDocxEditToolInput } from "@/api/handlers/chat/tools/active-docx-edit-tool-repair";
 import { FOLIO_AI_EDIT_SKIP_REASONS } from "@/api/handlers/chat/tools/folio-ai-edit-skip-reasons";
+import { getFolioDocumentOperationJsonSchemaVariants } from "@/api/handlers/chat/tools/folio-operation-schema";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import { projectToProviderSafeJsonSchema } from "@/api/lib/provider-safe-json-schema";
 
@@ -271,9 +272,12 @@ const isValidatedActiveDocxEditOperation = (
   typeof operation.area === "string" &&
   operation.area.length > 0;
 
-const ACCEPTED_OPERATION_VARIANTS = FOLIO_DOCUMENT_OPERATION_JSON_SCHEMA.oneOf
-  .map((variant) => deriveOperationVariant(variant))
-  .filter((variant) => !REJECTED_OPERATION_TYPE_SET.has(variant.operationType));
+const ACCEPTED_OPERATION_VARIANTS =
+  getFolioDocumentOperationJsonSchemaVariants()
+    .map((variant) => deriveOperationVariant(variant))
+    .filter(
+      (variant) => !REJECTED_OPERATION_TYPE_SET.has(variant.operationType),
+    );
 
 const OPERATION_VARIANTS_BY_TYPE = new Map(
   ACCEPTED_OPERATION_VARIANTS.map((variant) => [

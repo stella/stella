@@ -84,7 +84,7 @@
     "@stll/chat-limits": "workspace:*",
     "@stll/conditions": "workspace:*",
     "@stll/country-codes": "workspace:*",
-    "@stll/docx-core": "^0.15.0",
+    "@stll/docx-core": "catalog:",
     "@stll/docx-utils": "workspace:*",
     "@stll/errors": "workspace:*",
     "@stll/fetch": "workspace:*",
