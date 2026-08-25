@@ -5,6 +5,7 @@ import * as search from "@/lib/search";
 import {
   canShowSearchSummary,
   clearTime,
+  enforceDocumentPickFilters,
   hasUnavailableSearchType,
   resolveActiveSearchTypes,
   resolveUpdatedFrom,
@@ -24,6 +25,40 @@ const baseFilters = (
   editedByUserIds: [],
   mimeTypes: [],
   ...overrides,
+});
+
+describe("document pick filters", () => {
+  test("reasserts document and MIME constraints over saved filters", () => {
+    const constrained = enforceDocumentPickFilters(
+      baseFilters({
+        workspaceIds: ["workspace-1"],
+        types: ["contact"],
+        mimeTypes: ["application/pdf"],
+      }),
+      [
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      ],
+    );
+
+    expect(constrained).toEqual(
+      baseFilters({
+        workspaceIds: ["workspace-1"],
+        types: ["document"],
+        mimeTypes: [
+          "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        ],
+      }),
+    );
+  });
+
+  test("is a fixed point after any later filter update", () => {
+    const mimeTypes = ["application/pdf"];
+    const constrained = enforceDocumentPickFilters(baseFilters(), mimeTypes);
+
+    expect(enforceDocumentPickFilters(constrained, mimeTypes)).toEqual(
+      constrained,
+    );
+  });
 });
 
 describe("active search types", () => {

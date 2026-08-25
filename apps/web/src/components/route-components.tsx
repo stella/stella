@@ -7,6 +7,7 @@ import { CopyIcon, MailIcon, RefreshCcwIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { Loader } from "@stll/ui/loader";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
@@ -452,13 +453,18 @@ type DefaultPendingComponentProps = {
   className?: string | undefined;
 };
 
+// The router's pending fallback renders before the intl provider exists (it
+// covers the root route's own load), so it cannot read a translation: the
+// label is a constant.
+const PENDING_LABEL = "Loading";
+
 export const DefaultPendingComponent = ({
   className,
 }: DefaultPendingComponentProps) => (
   <div
     className={cn("flex h-full w-full items-center justify-center", className)}
   >
-    <StellaMark className="text-muted-foreground size-8 animate-pulse" />
+    <Loader label={PENDING_LABEL} size="lg" />
   </div>
 );
 

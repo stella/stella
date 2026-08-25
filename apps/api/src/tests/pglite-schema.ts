@@ -110,7 +110,7 @@ export const installPgliteWorkspaceAccessObjects = async (
   }
 };
 
-const installPgliteMigration = async ({
+export const installPgliteMigration = async ({
   db,
   migrationPath,
 }: {
@@ -125,12 +125,12 @@ const installPgliteMigration = async ({
     }
     if (isTransactionControlStatement(executable)) {
       panic(
-        "Workspace authorization migration cannot control Drizzle's outer transaction",
+        "A test-installed migration cannot control Drizzle's outer transaction",
       );
     }
     if (/\bCONCURRENTLY\b/iu.test(executable)) {
       panic(
-        "Workspace authorization migration cannot run concurrent DDL inside Drizzle's transaction",
+        "A test-installed migration cannot run concurrent DDL inside Drizzle's transaction",
       );
     }
     if (/^SET LOCAL\b/iu.test(executable)) {

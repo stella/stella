@@ -16,8 +16,13 @@
 import { Result } from "better-result";
 import { create } from "zustand";
 
-import type { ReviewBasis } from "@/components/ai-suggestions/document-review-basis.logic";
+import type {
+  ReviewBasis,
+  ReviewParty,
+  ReviewPerspective,
+} from "@/components/ai-suggestions/document-review-basis.logic";
 import {
+  perspectiveFromBasis,
   playbookIdFromBasis,
   referencesFromBasis,
 } from "@/components/ai-suggestions/document-review-basis.logic";
@@ -180,6 +185,9 @@ export type DocumentReviewSession = {
   /** Guards a stale response from overwriting a newer request's session. */
   requestId: string | null;
   topics: ReviewTopic[];
+  /** The target's parties as the topic proposal read them; what the
+   *  reviewer picks a side from while confirming topics. */
+  parties: ReviewParty[];
   /**
    * A refused start whose estimated size needs the reviewer's explicit
    * go-ahead; the dialog re-issues the stored request with the estimate
@@ -226,7 +234,12 @@ export type StartRunArgs = {
   entityId: string;
   fileFieldId: string;
   playbookId: string | null;
-  references: readonly { entityId: string; fileFieldId: string }[];
+  references: readonly {
+    workspaceId: string;
+    entityId: string;
+    fileFieldId: string;
+  }[];
+  perspective: ReviewPerspective;
   topics: readonly ReviewTopic[];
   unexpectedErrorMessage: string;
   /** Restated size estimate after a confirmation answer. */
@@ -272,6 +285,13 @@ type Actions = {
     fileFieldId: string,
     topics: ReviewTopic[],
   ) => void;
+  /** Which of the target's sides the run will be judged for; only while
+   *  the topics are being confirmed, which is when the sides are known. */
+  setPerspective: (
+    entityId: string,
+    fileFieldId: string,
+    perspective: ReviewPerspective,
+  ) => void;
   setFixState: (
     entityId: string,
     fileFieldId: string,
@@ -291,6 +311,7 @@ const blankSession = (): DocumentReviewSession => ({
   restore: "allowed",
   requestId: null,
   topics: [],
+  parties: [],
   sizeConfirmation: null,
 });
 
@@ -300,6 +321,7 @@ const requestRun = async ({
   fileFieldId,
   playbookId,
   references,
+  perspective,
   topics,
   confirmedUnits,
 }: Omit<StartRunArgs, "unexpectedErrorMessage">) => {
@@ -318,9 +340,11 @@ const requestRun = async ({
           ? {}
           : { playbookId: toSafeId<"playbookDefinition">(playbookId) }),
         references: references.map((reference) => ({
+          workspaceId: toSafeId<"workspace">(reference.workspaceId),
           entityId: toSafeId<"entity">(reference.entityId),
           fileFieldId: toSafeId<"field">(reference.fileFieldId),
         })),
+        perspective,
         // The run stores the confirmed plan, and the endpoint rejects an
         // unconfirmed topic: send exactly what the reviewer approved.
         topics: topics.filter((topic) => topic.included),
@@ -378,6 +402,7 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => ({
         fileFieldId,
         playbookId,
         references: [],
+        perspective: perspectiveFromBasis(basis),
         topics: seededTopics,
         unexpectedErrorMessage,
       });
@@ -413,6 +438,7 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => ({
               fileFieldId: toSafeId<"field">(fileFieldId),
             },
             references: references.map((reference) => ({
+              workspaceId: toSafeId<"workspace">(reference.workspaceId),
               entityId: toSafeId<"entity">(reference.entityId),
               fileFieldId: toSafeId<"field">(reference.fileFieldId),
             })),
@@ -466,6 +492,7 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => ({
             ...current,
             status: "editing-topics",
             topics: proposed === null ? seededTopics : proposed.topics,
+            parties: proposed === null ? [] : proposed.parties,
             requestId: null,
           },
         },
@@ -508,6 +535,7 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => ({
     fileFieldId,
     playbookId,
     references,
+    perspective,
     topics,
     unexpectedErrorMessage,
     confirmedUnits,
@@ -540,6 +568,7 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => ({
           fileFieldId,
           playbookId,
           references,
+          perspective,
           topics,
           ...(confirmedUnits === undefined ? {} : { confirmedUnits }),
         }),
@@ -575,6 +604,7 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => ({
                     fileFieldId,
                     playbookId,
                     references,
+                    perspective,
                     topics,
                     unexpectedErrorMessage,
                   },
@@ -710,8 +740,29 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => ({
       fileFieldId,
       playbookId: playbookIdFromBasis(session.basis),
       references: referencesFromBasis(session.basis),
+      perspective: perspectiveFromBasis(session.basis),
       topics: session.topics,
       unexpectedErrorMessage,
+    });
+  },
+
+  setPerspective: (entityId, fileFieldId, perspective) => {
+    const key = reviewSessionKey(entityId, fileFieldId);
+    set((state) => {
+      const current = state.sessions[key];
+      if (
+        !current?.basis ||
+        current.status !== "editing-topics" ||
+        current.basis.type === "playbook"
+      ) {
+        return state;
+      }
+      return {
+        sessions: {
+          ...state.sessions,
+          [key]: { ...current, basis: { ...current.basis, perspective } },
+        },
+      };
     });
   },
 

@@ -10,6 +10,7 @@ import {
   buildTierMatchUserMessage,
   computeVerdictBatch,
   gradeTierMatch,
+  gradeTierMatches,
   resolveMatchedRef,
 } from "@/api/lib/workflow/verdict-engine";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -183,6 +184,40 @@ describe("computeVerdictBatch — pre-v2 verdict row without tiers", () => {
       rationale:
         "No acceptable, fallback, or red-line criteria were configured to compare against.",
     });
+  });
+});
+
+describe("gradeTierMatches — batch grading", () => {
+  test("decides empty-tier items without a model call and keeps their keys", async () => {
+    const result = await gradeTierMatches({
+      items: [
+        {
+          key: "position-a",
+          askValue: "A present but ungradeable value.",
+          tiers: { fallbacks: [], acceptableRules: [], notAcceptableRules: [] },
+        },
+        {
+          key: "position-b",
+          askValue: "Another one.",
+          tiers: { fallbacks: [], acceptableRules: [], notAcceptableRules: [] },
+        },
+      ],
+      // A pre-aborted signal proves no external call is attempted.
+      abortSignal: AbortSignal.abort(),
+      organizationId: toSafeId<"organization">("org_1"),
+      workspaceId: toSafeId<"workspace">("ws_1"),
+      entityVersionId: toSafeId<"entityVersion">("ev_1"),
+      orgAIConfig: null,
+      promptCachingEnabled: false,
+      serviceTier: "standard",
+    });
+
+    expect(Result.isOk(result)).toBe(true);
+    if (Result.isOk(result)) {
+      expect([...result.value.keys()]).toEqual(["position-a", "position-b"]);
+      expect(result.value.get("position-a")?.tier).toBe("deviation");
+      expect(result.value.get("position-b")?.matchedRef).toBeUndefined();
+    }
   });
 });
 

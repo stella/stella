@@ -217,6 +217,19 @@ export const toAskAIMessageHtml = (query: string): string =>
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;");
 
+type CanUseAskAIShortcutOptions = {
+  canAskAI: boolean;
+  mode: "browse" | "pick";
+  query: string;
+};
+
+export const canUseAskAIShortcut = ({
+  canAskAI,
+  mode,
+  query,
+}: CanUseAskAIShortcutOptions): boolean =>
+  mode === "browse" && canAskAI && query.trim().length > 0;
+
 export const rememberSelectedFacetLabels = (
   current: Record<string, string>,
   selected: readonly string[],

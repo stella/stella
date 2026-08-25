@@ -166,6 +166,13 @@ export type InspectorCommandState = {
     pageNumber: number;
   } | null;
   pendingDocxEditTabId: string | null;
+  /** A composer draft handed to the chat over one document (a review
+   *  finding to discuss); the overlay for that file consumes it. */
+  pendingFileChatDraft: {
+    fileFieldId: string;
+    html: string;
+    sequence: number;
+  } | null;
 };
 
 export type InspectorAnonymizationState = {
@@ -283,6 +290,11 @@ export type InspectorCommandActions = {
   clearRenameRequest: () => void;
   requestDocxEdit: (tabId: string) => void;
   clearDocxEditRequest: () => void;
+  requestFileChatDraft: (request: {
+    fileFieldId: string;
+    html: string;
+  }) => void;
+  clearFileChatDraft: (sequence: number) => void;
   requestBlockScroll: (request: {
     tabId: string;
     blockId: string;

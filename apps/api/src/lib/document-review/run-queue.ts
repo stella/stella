@@ -17,15 +17,19 @@
  * wrote before.
  */
 
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { Worker } from "bullmq";
-import { and, eq, inArray, lt, or } from "drizzle-orm";
+import { and, eq, inArray, lt, or, sql } from "drizzle-orm";
 
 import { DAY_IN_MS } from "@stll/time";
 
 import { rootDb } from "@/api/db/root";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
-import { documentReviewRuns, fields } from "@/api/db/schema";
+import {
+  documentReviewFindings,
+  documentReviewRuns,
+  fields,
+} from "@/api/db/schema";
 import { isAiExtractablePropertyContent } from "@/api/db/schema-validators";
 import type { FieldContent } from "@/api/db/schema-validators";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
@@ -41,15 +45,19 @@ import { createLazyBullMqQueue } from "@/api/lib/bullmq-queue";
 import type { DocumentReviewTopic } from "@/api/lib/document-review/contract";
 import {
   buildDocumentReviewFindingRow,
+  recountDocumentReviewFindingProgress,
   upsertDocumentReviewFindings,
 } from "@/api/lib/document-review/finding-write";
 import type { DocumentReviewFindingRow } from "@/api/lib/document-review/finding-write";
+import { fetchAndPrepareReviewFiles } from "@/api/lib/document-review/prepare-review-files";
+import type { ReviewFile } from "@/api/lib/document-review/prepare-review-files";
 import { compareReferenceDocuments } from "@/api/lib/document-review/reference-compare";
 import { extractAskContents } from "@/api/lib/document-review/review-extract";
 import type { ReviewAsk } from "@/api/lib/document-review/review-extract";
 import { buildFindings } from "@/api/lib/document-review/review-grade";
 import type { ReviewFinding } from "@/api/lib/document-review/review-grade";
 import {
+  basisPerspective,
   basisPlaybook,
   basisReferences,
   DOCUMENT_REVIEW_RUN_EXECUTOR,
@@ -72,7 +80,6 @@ import {
   brandPersistedUserId,
   brandValidatedWorkflowActorKey,
 } from "@/api/lib/safe-id-boundaries";
-import { fetchAndPrepareFiles } from "@/api/lib/workflow/generate-batch";
 import type { PreparedDocxFile } from "@/api/lib/workflow/generate-batch";
 import type { ResolvedFile } from "@/api/lib/workflow/generate-batch-shared";
 import type { ResolvedTiers } from "@/api/lib/workflow/playbook-positions";
@@ -83,9 +90,22 @@ import {
 } from "@/api/lib/workflow/resolve-standards";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
-const QUEUE_NAME = "document-review-runs";
+/**
+ * Rolling-deploy boundary for the cross-matter reference contract.
+ *
+ * Old workers listen only to the legacy queue and assume every reference is
+ * in the target matter. New producers therefore publish to a new queue; new
+ * workers drain both until no deployed release can publish v1. Remove the
+ * legacy worker and the migration's compatibility trigger together after
+ * that boundary, then restore the current worker's concurrency to two.
+ */
+const LEGACY_QUEUE_NAME = "document-review-runs";
+const QUEUE_NAME = "document-review-runs-v2";
+const QUEUE_CONTRACT_VERSION = 2;
 const JOB_NAME = "run-document-review";
-const WORKER_CONCURRENCY = 2;
+// One slot per queue preserves the previous total concurrency of two while
+// the rolling-deploy bridge listens to both contracts.
+const WORKER_CONCURRENCY = 1;
 // One attempt: every pass runs metered model calls, so a BullMQ retry would
 // double the spend. Failures are persisted on the row instead.
 const JOB_ATTEMPTS = 1;
@@ -103,11 +123,19 @@ const STUCK_TABLE_RUNNING_MS = 6 * 60 * 60 * 1000;
  *  may simply be backlogged and must be left for the worker. */
 const STUCK_QUEUED_MS = DAY_IN_MS;
 
-type DocumentReviewRunJobData = {
+type DocumentReviewRunJobDataV1 = {
   runId: string;
   workspaceId: string;
   organizationId: string;
   userId: string;
+};
+
+type DocumentReviewRunJobDataV2 = DocumentReviewRunJobDataV1 & {
+  contractVersion: typeof QUEUE_CONTRACT_VERSION;
+};
+
+type DocumentReviewRunWorkerJobData = DocumentReviewRunJobDataV1 & {
+  contractVersion?: unknown;
 };
 
 export type EnqueueDocumentReviewRunArgs = {
@@ -117,7 +145,7 @@ export type EnqueueDocumentReviewRunArgs = {
   userId: SafeId<"user">;
 };
 
-const getQueue = createLazyBullMqQueue<DocumentReviewRunJobData>({
+const getQueue = createLazyBullMqQueue<DocumentReviewRunJobDataV2>({
   name: QUEUE_NAME,
   defaultJobOptions: {
     attempts: JOB_ATTEMPTS,
@@ -136,7 +164,13 @@ const runJob = ({
   userId,
 }: EnqueueDocumentReviewRunArgs) => ({
   name: JOB_NAME,
-  data: { runId, workspaceId, organizationId, userId },
+  data: {
+    contractVersion: QUEUE_CONTRACT_VERSION,
+    runId,
+    workspaceId,
+    organizationId,
+    userId,
+  } satisfies DocumentReviewRunJobDataV2,
   opts: { jobId: createBullMqJobId(workspaceId, runId) },
 });
 
@@ -210,43 +244,58 @@ export const reconcileStuckDocumentReviewRuns = async (): Promise<number> => {
 };
 
 export const initDocumentReviewRunWorker = () => {
-  const workerConnection = createBullMqConnection();
-
-  const worker = new Worker<DocumentReviewRunJobData>(
-    QUEUE_NAME,
-    async (job) => {
-      await processDocumentReviewRunJob(job.data);
-    },
-    { connection: workerConnection, concurrency: WORKER_CONCURRENCY },
-  );
-
-  worker.on("failed", (job, error) => {
-    // The job body already persists failures onto the row; this is the last
-    // resort if the process itself threw before that could run.
-    if (job) {
-      markRunFailed(job.data, "internal").catch((markError: unknown) => {
-        captureError(markError, {
-          runId: job.data.runId,
-          workspaceId: job.data.workspaceId,
-        });
-      });
-    }
-    const runId = job ? job.data.runId : "";
-    const workspaceId = job ? job.data.workspaceId : "";
-    captureError(error, { runId, workspaceId });
-    logger.error("document_review_run.failed", {
-      runId,
-      "error.type": errorTag(error),
-      workspaceId,
-    });
-  });
-
-  worker.on("error", (error) => {
-    logger.error(
-      "document_review_run.worker_error",
-      connectionErrorFields(error),
+  const createWorker = (
+    queueName: typeof LEGACY_QUEUE_NAME | typeof QUEUE_NAME,
+  ) => {
+    const worker = new Worker<DocumentReviewRunWorkerJobData>(
+      queueName,
+      async (job) => {
+        if (
+          queueName === QUEUE_NAME &&
+          job.data.contractVersion !== QUEUE_CONTRACT_VERSION
+        ) {
+          panic("Document review v2 queue received a non-v2 job");
+        }
+        await processDocumentReviewRunJob(job.data);
+      },
+      {
+        connection: createBullMqConnection(),
+        concurrency: WORKER_CONCURRENCY,
+      },
     );
-  });
+
+    worker.on("failed", (job, error) => {
+      // The job body already persists failures onto the row; this is the last
+      // resort if the process itself threw before that could run.
+      if (job) {
+        markRunFailed(job.data, "internal").catch((markError: unknown) => {
+          captureError(markError, {
+            runId: job.data.runId,
+            workspaceId: job.data.workspaceId,
+          });
+        });
+      }
+      const runId = job ? job.data.runId : "";
+      const workspaceId = job ? job.data.workspaceId : "";
+      captureError(error, { runId, workspaceId });
+      logger.error("document_review_run.failed", {
+        runId,
+        "error.type": errorTag(error),
+        queueName,
+        workspaceId,
+      });
+    });
+
+    worker.on("error", (error) => {
+      logger.error("document_review_run.worker_error", {
+        ...connectionErrorFields(error),
+        queueName,
+      });
+    });
+    return worker;
+  };
+
+  const workers = [createWorker(LEGACY_QUEUE_NAME), createWorker(QUEUE_NAME)];
 
   const runReconcile = async (): Promise<void> => {
     const recovered = await reconcileStuckDocumentReviewRuns();
@@ -265,13 +314,14 @@ export const initDocumentReviewRunWorker = () => {
   });
 
   logger.info("document_review_run.worker_started", {
-    concurrency: String(WORKER_CONCURRENCY),
+    concurrency: String(WORKER_CONCURRENCY * workers.length),
+    queueCount: String(workers.length),
   });
 
   return {
     close: async () => {
       await closeReconcile();
-      await worker.close();
+      await Promise.all(workers.map(async (worker) => await worker.close()));
     },
   };
 };
@@ -285,7 +335,7 @@ type RunActor = {
   runId: SafeId<"documentReviewRun">;
 };
 
-const brandActor = (data: DocumentReviewRunJobData): RunActor => {
+const brandActor = (data: DocumentReviewRunJobDataV1): RunActor => {
   const branded = brandValidatedWorkflowActorKey({
     organizationId: data.organizationId,
     workspaceId: data.workspaceId,
@@ -348,7 +398,7 @@ const claimRun = async (actor: RunActor): Promise<ClaimedRun | null> => {
 };
 
 const processDocumentReviewRunJob = async (
-  data: DocumentReviewRunJobData,
+  data: DocumentReviewRunJobDataV1,
 ): Promise<void> => {
   const actor = brandActor(data);
   const claimed = await claimRun(actor);
@@ -377,13 +427,14 @@ const processDocumentReviewRunJob = async (
 
 /** A pinned document, as recorded on the run. */
 type PinnedDocument = {
+  workspaceId: SafeId<"workspace">;
   fileFieldId: SafeId<"field">;
   entityVersionId: SafeId<"entityVersion">;
   contentSha256: string;
 };
 
 type ResolvePinnedFilesResult =
-  | { type: "resolved"; files: ResolvedFile[] }
+  | { type: "resolved"; files: ReviewFile[] }
   | { type: "failed"; errorCode: DocumentReviewRunErrorCode };
 
 /**
@@ -391,22 +442,32 @@ type ResolvePinnedFilesResult =
  * that has moved. `pdfFileId` is forced to null exactly as the interactive
  * path does: reference comparison and playbook citations both need folio block
  * identities, which the PDF preparation path does not carry.
+ *
+ * References pinned from other matters are read under a scope widened to
+ * exactly the pinned matters, each pin held to the matter it was pinned in.
  */
 const resolvePinnedFiles = async (
   actor: RunActor,
   pins: readonly PinnedDocument[],
 ): Promise<ResolvePinnedFilesResult> => {
-  const rows = await actor.scopedDb((tx) =>
+  const pinnedWorkspaceIds = [...new Set(pins.map((pin) => pin.workspaceId))];
+  const pinScopedDb = createRootScopedDb({
+    organizationId: actor.organizationId,
+    userId: actor.userId,
+    workspaceIds: pinnedWorkspaceIds,
+  });
+  const rows = await pinScopedDb((tx) =>
     tx
       .select({
         id: fields.id,
+        workspaceId: fields.workspaceId,
         entityVersionId: fields.entityVersionId,
         content: fields.content,
       })
       .from(fields)
       .where(
         and(
-          eq(fields.workspaceId, actor.workspaceId),
+          inArray(fields.workspaceId, pinnedWorkspaceIds),
           inArray(
             fields.id,
             pins.map((pin) => pin.fileFieldId),
@@ -421,13 +482,16 @@ const resolvePinnedFiles = async (
 
   const contentByPin = new Map<string, FieldContent>();
   for (const row of rows) {
-    contentByPin.set(`${row.id}:${row.entityVersionId}`, row.content);
+    contentByPin.set(
+      `${row.workspaceId}:${row.id}:${row.entityVersionId}`,
+      row.content,
+    );
   }
 
-  const files: ResolvedFile[] = [];
+  const files: ReviewFile[] = [];
   for (const pin of pins) {
     const content = contentByPin.get(
-      `${pin.fileFieldId}:${pin.entityVersionId}`,
+      `${pin.workspaceId}:${pin.fileFieldId}:${pin.entityVersionId}`,
     );
     if (content?.type !== "file") {
       return { type: "failed", errorCode: "pin_unresolved" };
@@ -439,6 +503,7 @@ const resolvePinnedFiles = async (
       return { type: "failed", errorCode: "unsupported_format" };
     }
     files.push({
+      workspaceId: pin.workspaceId,
       fileFieldId: pin.fileFieldId,
       fileId: content.id,
       mimeType: content.mimeType,
@@ -477,11 +542,13 @@ const executeRun = async (
   const references = basisReferences(run.basis);
   const pins: PinnedDocument[] = [
     {
+      workspaceId: actor.workspaceId,
       fileFieldId: run.fileFieldId,
       entityVersionId: run.entityVersionId,
       contentSha256: run.contentSha256,
     },
     ...references.map((reference) => ({
+      workspaceId: reference.workspaceId,
       fileFieldId: reference.fileFieldId,
       entityVersionId: reference.entityVersionId,
       contentSha256: reference.contentSha256,
@@ -493,10 +560,9 @@ const executeRun = async (
     return resolved.errorCode;
   }
 
-  const prepared = await fetchAndPrepareFiles(
+  const prepared = await fetchAndPrepareReviewFiles(
     resolved.files,
     actor.organizationId,
-    actor.workspaceId,
   );
   const preparedTarget = prepared.at(0);
   if (preparedTarget?.kind !== "docx") {
@@ -566,6 +632,14 @@ const executeRun = async (
       target: preparedTarget,
     }),
   ]);
+  await actor.scopedDb(
+    async (tx) =>
+      await recountDocumentReviewFindingProgress({
+        tx,
+        workspaceId: actor.workspaceId,
+        runId: actor.runId,
+      }),
+  );
   if (playbookOutcome !== null) {
     return playbookOutcome;
   }
@@ -680,10 +754,18 @@ const runReferencePass = async ({
     return null;
   }
 
+  const perspective = basisPerspective(run.basis);
+  if (perspective === null) {
+    // The plan only schedules reference topics for a basis that pins
+    // references, and every such basis names a side.
+    return panic("Reference pass planned for a basis without a perspective");
+  }
+
   const comparison = await compareReferenceDocuments({
     abortSignal: deps.abortSignal,
     orgAIConfig: deps.orgAIConfig,
     organizationId: deps.organizationId,
+    perspective,
     promptCachingEnabled: deps.promptCachingEnabled,
     references,
     referenceEntityVersionIds: basisReferences(run.basis).map(
@@ -754,13 +836,33 @@ const buildFindingRow = ({
     payload,
   });
 
+/** Commit a pass's findings and record how many the run holds so far, so a
+ *  client polling the run sees progress land pass by pass rather than only
+ *  at the end. Counted in the same transaction as the write, so the number
+ *  can never run ahead of the rows. */
 const upsertFindings = async (
   actor: RunActor,
   rows: readonly FindingRow[],
 ): Promise<void> => {
-  await actor.scopedDb(
-    async (tx) => await upsertDocumentReviewFindings(tx, rows),
-  );
+  await actor.scopedDb(async (tx) => {
+    await upsertDocumentReviewFindings(tx, rows);
+    // audit: skip — progress bookkeeping on the run row audited at create.
+    await tx
+      .update(documentReviewRuns)
+      .set({
+        completed: sql<number>`(
+          select count(*)::int from ${documentReviewFindings}
+          where ${documentReviewFindings.runId} = ${documentReviewRuns.id}
+        )`,
+      })
+      .where(
+        and(
+          eq(documentReviewRuns.id, actor.runId),
+          eq(documentReviewRuns.workspaceId, actor.workspaceId),
+          eq(documentReviewRuns.status, "running"),
+        ),
+      );
+  });
 };
 
 /**
@@ -820,7 +922,7 @@ const setRunFailed = async (
 /** Last-resort failure marker used from the worker `failed` handler: rebrands
  *  the actor from raw job data. */
 const markRunFailed = async (
-  data: DocumentReviewRunJobData,
+  data: DocumentReviewRunJobDataV1,
   errorCode: DocumentReviewRunErrorCode,
 ): Promise<void> => {
   await setRunFailed(brandActor(data), errorCode);

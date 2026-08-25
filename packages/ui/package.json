@@ -73,6 +73,7 @@
     "./select": "./src/components/select.tsx",
     "./separator": "./src/components/separator.tsx",
     "./sheet": "./src/components/sheet.tsx",
+    "./loader": "./src/components/loader.tsx",
     "./skeleton": "./src/components/skeleton.tsx",
     "./stella-mark": "./src/components/stella-mark.tsx",
     "./stella-wordmark": "./src/components/stella-wordmark.tsx",

@@ -57,6 +57,8 @@ const playbook: PinnedPlaybook = {
 };
 
 const reference: PinnedReference = {
+  workspaceId: toSafeId<"workspace">(Bun.randomUUIDv7()),
+  workspaceName: "Precedent matter",
   entityId: toSafeId<"entity">(Bun.randomUUIDv7()),
   fileFieldId: toSafeId<"field">(Bun.randomUUIDv7()),
   entityVersionId: toSafeId<"entityVersion">(Bun.randomUUIDv7()),
@@ -111,6 +113,7 @@ describe("planReviewRun", () => {
     const basis: DocumentReviewRunBasis = {
       type: "references",
       references: [reference],
+      perspective: { type: "party", role: "Buyer", name: null },
     };
     const plan = planReviewRun({ basis, topics: allTopics });
 
@@ -129,6 +132,7 @@ describe("planReviewRun", () => {
       type: "combined",
       playbook,
       references: [reference],
+      perspective: { type: "party", role: "Buyer", name: null },
     };
     const plan = planReviewRun({ basis, topics: allTopics });
 
@@ -143,6 +147,7 @@ describe("planReviewRun", () => {
       type: "combined",
       playbook,
       references: [reference],
+      perspective: { type: "party", role: "Buyer", name: null },
     };
     const plan = planReviewRun({
       basis,

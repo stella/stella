@@ -5,7 +5,6 @@ import type { FieldContent } from "@/api/db/schema-validators";
 import type { AIRequestServiceTier, OrgAIConfig } from "@/api/lib/ai-config";
 import type { AIUsageMetering } from "@/api/lib/analytics/tanstack-ai";
 import { arrayOrEmpty } from "@/api/lib/array";
-import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import type {
   AskExtraction,
@@ -20,15 +19,14 @@ import type {
   PositionSeverity,
   ResolvedTiers,
 } from "@/api/lib/workflow/playbook-positions";
-import type { GradedPosition } from "@/api/lib/workflow/position-runtime";
 import {
   askPresence,
   askText,
   extractedFromContent,
   gradePresence,
   gradePropertyConstraint,
-  gradeTierMatch,
-  POSITION_MATCH_CONCURRENCY,
+  gradeTierMatches,
+  TIER_MATCH_BATCH_SIZE,
 } from "@/api/lib/workflow/verdict-engine";
 import type { ExtractedAskValue } from "@/api/lib/workflow/verdict-engine";
 import type { VerdictTier } from "@/api/lib/workflow/verdict-tiers";
@@ -76,11 +74,18 @@ export type BuildFindingsArgs = AiGradingDeps & {
   tiersBySourceId: ReadonlyMap<string, ResolvedTiers>;
 };
 
-type GradedVerdict = {
-  verdict: VerdictTier | null;
-  rationale: string | null;
-  matchedRef?: VerdictMatchedRef;
-};
+type GradingOutcome =
+  | {
+      status: "graded";
+      verdict: VerdictTier | null;
+      rationale: string | null;
+      matchedRef?: VerdictMatchedRef;
+    }
+  | {
+      status: "ungraded";
+      verdict: "deviation";
+      rationale: string;
+    };
 
 // A replacement is safe only for a located deviation. A missing clause has no
 // semantically verified insertion anchor, so it remains a finding until the
@@ -105,32 +110,44 @@ const buildFix = ({
   });
 };
 
-// A graded position grades by its deterministic `check` (presence/constraint,
-// no LLM) or, without a check, by LLM tier-match against the resolved tiers.
-const gradedNeedsTierMatch = (position: Position): position is GradedPosition =>
-  position.mode === "graded" && position.check === undefined;
+const EMPTY_TIERS: ResolvedTiers = {
+  fallbacks: [],
+  acceptableRules: [],
+  notAcceptableRules: [],
+};
 
-const gradePosition = async ({
+// A failed or absent compare must not silently pass: the finding is flagged
+// for human review, mirroring the engine's "no criteria configured" fallback.
+const UNGRADED_VERDICT: GradingOutcome = {
+  status: "ungraded",
+  verdict: "deviation",
+  rationale:
+    "Automated comparison against the standard could not be completed.",
+};
+
+/**
+ * Everything a position decides without a model: extract-only positions,
+ * deterministic checks, and a tier-match position whose value is missing.
+ * `null` means the position needs the model's tier-match.
+ */
+const gradeWithoutModel = ({
   position,
-  tiers,
   askContent,
   fieldContentBySourceId,
-  deps,
 }: {
   position: Position;
-  tiers: ResolvedTiers | undefined;
   askContent: FieldContent | undefined;
   fieldContentBySourceId: ReadonlyMap<string, FieldContent>;
-  deps: AiGradingDeps;
-}): Promise<GradedVerdict> => {
+}): GradingOutcome | null => {
   // Extract-only positions capture a value with no verdict.
   if (position.mode === "extract") {
-    return { verdict: null, rationale: null };
+    return { status: "graded", verdict: null, rationale: null };
   }
 
   const { check } = position;
   if (check?.kind === "presence") {
     return {
+      status: "graded",
       verdict: gradePresence(check.expectation, askPresence(askContent)),
       rationale: null,
     };
@@ -140,6 +157,7 @@ const gradePosition = async ({
     // whose id is the position sourceId, so it resolves against the
     // sourceId-keyed content map directly (no materialized-property remap).
     return {
+      status: "graded",
       verdict: gradePropertyConstraint(
         check.condition,
         askContent,
@@ -149,46 +167,115 @@ const gradePosition = async ({
     };
   }
 
-  // No check: LLM tier-match.
   const askValue = askText(askContent);
   if (askValue === null || askValue.trim().length === 0) {
-    return { verdict: "missing", rationale: null };
+    return { status: "graded", verdict: "missing", rationale: null };
   }
-  const graded = await gradeTierMatch({
-    askValue,
-    tiers: tiers ?? {
-      fallbacks: [],
-      acceptableRules: [],
-      notAcceptableRules: [],
-    },
-    abortSignal: deps.abortSignal,
-    organizationId: deps.organizationId,
-    workspaceId: deps.workspaceId,
-    entityVersionId: deps.entityVersionId,
-    // Ephemeral grading materializes no property; this id only tags the
-    // analytics trace for the targeted compare.
-    propertyId: createSafeId<"property">(),
-    orgAIConfig: deps.orgAIConfig,
-    promptCachingEnabled: deps.promptCachingEnabled,
-    serviceTier: deps.serviceTier,
-    usageMetering: deps.usageMetering,
-  });
-  if (Result.isError(graded)) {
-    // A failed compare must not silently pass: flag it for human review,
-    // mirroring the engine's "no criteria configured" deviation fallback.
-    return {
-      verdict: "deviation",
-      rationale:
-        "Automated comparison against the standard could not be completed.",
-    };
+  return null;
+};
+
+const toGradedVerdict = (graded: {
+  tier: VerdictTier;
+  rationale: string;
+  matchedRef?: VerdictMatchedRef;
+}): GradingOutcome => ({
+  status: "graded",
+  verdict: graded.tier,
+  rationale: graded.rationale,
+  ...(graded.matchedRef === undefined ? {} : { matchedRef: graded.matchedRef }),
+});
+
+/**
+ * Tier-match the positions the model has to decide, several per call: one
+ * call per {@link TIER_MATCH_BATCH_SIZE} positions instead of one per
+ * position, every call under the document's cache scope.
+ */
+const gradeTierMatchPositions = async ({
+  positions,
+  contentBySourceId,
+  tiersBySourceId,
+  deps,
+}: {
+  positions: readonly Position[];
+  contentBySourceId: ReadonlyMap<string, AskExtraction>;
+  tiersBySourceId: ReadonlyMap<string, ResolvedTiers>;
+  deps: AiGradingDeps;
+}): Promise<ReadonlyMap<string, GradingOutcome>> => {
+  const verdicts = new Map<string, GradingOutcome>();
+  for (
+    let cursor = 0;
+    cursor < positions.length;
+    cursor += TIER_MATCH_BATCH_SIZE
+  ) {
+    if (deps.abortSignal.aborted) {
+      break;
+    }
+    const batch = positions.slice(cursor, cursor + TIER_MATCH_BATCH_SIZE);
+    // oxlint-disable-next-line no-await-in-loop -- one model call per batch, in order, keeps the single-doc review's fan-out bounded
+    const graded = await gradeTierMatches({
+      items: batch.map((position) => ({
+        key: position.sourceId,
+        askValue:
+          askText(contentBySourceId.get(position.sourceId)?.content) ?? "",
+        tiers: tiersBySourceId.get(position.sourceId) ?? EMPTY_TIERS,
+      })),
+      abortSignal: deps.abortSignal,
+      organizationId: deps.organizationId,
+      workspaceId: deps.workspaceId,
+      entityVersionId: deps.entityVersionId,
+      orgAIConfig: deps.orgAIConfig,
+      promptCachingEnabled: deps.promptCachingEnabled,
+      serviceTier: deps.serviceTier,
+      usageMetering: deps.usageMetering,
+    });
+    for (const position of batch) {
+      const verdict = Result.isOk(graded)
+        ? graded.value.get(position.sourceId)
+        : undefined;
+      verdicts.set(
+        position.sourceId,
+        verdict === undefined ? UNGRADED_VERDICT : toGradedVerdict(verdict),
+      );
+    }
   }
-  return {
-    verdict: graded.value.tier,
-    rationale: graded.value.rationale,
-    ...(graded.value.matchedRef === undefined
-      ? {}
-      : { matchedRef: graded.value.matchedRef }),
-  };
+  return verdicts;
+};
+
+type ProjectGradingArgs = {
+  grading: GradingOutcome;
+  citations: readonly DocxFolioCitation[];
+  ideal: string | undefined;
+};
+
+type ProjectedGrading = Pick<
+  ReviewFinding,
+  "verdict" | "rationale" | "matchedRef" | "fix"
+>;
+
+const projectGrading = ({
+  grading,
+  citations,
+  ideal,
+}: ProjectGradingArgs): ProjectedGrading => {
+  switch (grading.status) {
+    case "graded":
+      return {
+        verdict: grading.verdict,
+        rationale: grading.rationale,
+        ...(grading.matchedRef === undefined
+          ? {}
+          : { matchedRef: grading.matchedRef }),
+        fix: buildFix({ verdict: grading.verdict, citations, ideal }),
+      };
+    case "ungraded":
+      return {
+        verdict: grading.verdict,
+        rationale: grading.rationale,
+        fix: null,
+      };
+    default:
+      return grading satisfies never;
+  }
 };
 
 export const buildFindings = async ({
@@ -202,7 +289,30 @@ export const buildFindings = async ({
     fieldContentBySourceId.set(sourceId, extraction.content);
   }
 
-  const buildFinding = async (position: Position): Promise<ReviewFinding> => {
+  // Everything decidable without the model is decided first; what is left
+  // goes to the model in batches. Findings keep the input `positions` order.
+  const decided = new Map<string, GradingOutcome>();
+  const forModel: Position[] = [];
+  for (const position of positions) {
+    const verdict = gradeWithoutModel({
+      position,
+      askContent: contentBySourceId.get(position.sourceId)?.content,
+      fieldContentBySourceId,
+    });
+    if (verdict === null) {
+      forModel.push(position);
+    } else {
+      decided.set(position.sourceId, verdict);
+    }
+  }
+  const modelVerdicts = await gradeTierMatchPositions({
+    positions: forModel,
+    contentBySourceId,
+    tiersBySourceId,
+    deps,
+  });
+
+  return positions.map((position): ReviewFinding => {
     const extraction = contentBySourceId.get(position.sourceId);
     const askContent = extraction?.content;
     const tiers = tiersBySourceId.get(position.sourceId);
@@ -212,13 +322,14 @@ export const buildFindings = async ({
     const citations = arrayOrEmpty(extraction?.citations)
       .filter((citation) => citation.kind === "docx-folio")
       .map(({ blockId, text }): DocxFolioCitation => ({ blockId, text }));
-
-    const { verdict, rationale, matchedRef } = await gradePosition({
-      position,
-      tiers,
-      askContent,
-      fieldContentBySourceId,
-      deps,
+    const grading =
+      decided.get(position.sourceId) ??
+      modelVerdicts.get(position.sourceId) ??
+      UNGRADED_VERDICT;
+    const { verdict, rationale, matchedRef, fix } = projectGrading({
+      grading,
+      citations,
+      ideal: tiers?.ideal,
     });
 
     return {
@@ -232,51 +343,7 @@ export const buildFindings = async ({
       rationale,
       ...(matchedRef === undefined ? {} : { matchedRef }),
       citations,
-      fix: buildFix({
-        verdict,
-        citations,
-        ideal: tiers?.ideal,
-      }),
+      fix,
     };
-  };
-
-  // Deterministic rules resolve without an LLM call, so grade them all in
-  // parallel. Tier-match positions each issue one targeted LLM compare; drain
-  // them in bounded chunks so this single-doc review's fan-out stays capped the
-  // same way `computeVerdictBatch` bounds its per-entity fan-out (see
-  // POSITION_MATCH_CONCURRENCY). Findings are re-sorted by original index to
-  // preserve the input `positions` order.
-  const indexedFindings: { index: number; finding: ReviewFinding }[] = [];
-  const tierMatchTasks: { index: number; position: Position }[] = [];
-
-  await Promise.all(
-    positions.map(async (position, index) => {
-      if (gradedNeedsTierMatch(position)) {
-        tierMatchTasks.push({ index, position });
-        return;
-      }
-      indexedFindings.push({ index, finding: await buildFinding(position) });
-    }),
-  );
-
-  for (
-    let cursor = 0;
-    cursor < tierMatchTasks.length;
-    cursor += POSITION_MATCH_CONCURRENCY
-  ) {
-    const chunk = tierMatchTasks.slice(
-      cursor,
-      cursor + POSITION_MATCH_CONCURRENCY,
-    );
-    // oxlint-disable-next-line no-await-in-loop -- sequential chunk drain bounds the single-doc review's Promise.all fan-out of LLM compares
-    await Promise.all(
-      chunk.map(async ({ index, position }) => {
-        indexedFindings.push({ index, finding: await buildFinding(position) });
-      }),
-    );
-  }
-
-  return indexedFindings
-    .sort((a, b) => a.index - b.index)
-    .map(({ finding }) => finding);
+  });
 };

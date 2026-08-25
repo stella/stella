@@ -8,45 +8,39 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { Result } from "better-result";
 import {
   CheckIcon,
   ChevronRightIcon,
+  ClipboardCheckIcon,
   FileTextIcon,
+  MessageSquareIcon,
+  PenLineIcon,
   PlusIcon,
   RotateCcwIcon,
   ScanSearchIcon,
   SearchIcon,
-  Trash2Icon,
   XIcon,
 } from "lucide-react";
-import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 import { v7 as uuidv7 } from "uuid";
 import { useShallow } from "zustand/react/shallow";
 
 import { DOCUMENT_REVIEW_LIMITS } from "@stll/api-contract";
-import type { FolioAIEditOperation } from "@stll/folio-react";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
-import {
-  Combobox,
-  ComboboxEmpty,
-  ComboboxInput,
-  ComboboxItem,
-  ComboboxList,
-  ComboboxPopup,
-} from "@stll/ui/combobox";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { Input } from "@stll/ui/input";
 import {
-  Select,
-  SelectItem,
-  SelectPopup,
-  SelectTrigger,
-  SelectValue,
-} from "@stll/ui/select";
+  InspectorHeader,
+  InspectorHeaderText,
+  InspectorTitle,
+} from "@stll/ui/inspector";
+import { LoaderState } from "@stll/ui/loader";
+import { TextSeparator } from "@stll/ui/separator";
+import { Skeleton } from "@stll/ui/skeleton";
 import { Textarea } from "@stll/ui/textarea";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
@@ -57,17 +51,25 @@ import {
 } from "@/components/ai-suggestions/active-docx-store";
 import {
   createReviewBasis,
+  customPerspectiveInput,
+  isSamePerspective,
+  NEUTRAL_PERSPECTIVE,
+  perspectiveFromBasis,
   playbookIdFromBasis,
 } from "@/components/ai-suggestions/document-review-basis.logic";
 import type {
   ReferenceFile,
   ReviewBasis,
+  ReviewParty,
+  ReviewPerspective,
 } from "@/components/ai-suggestions/document-review-basis.logic";
 import {
   decideReviewFindings,
   documentReviewRunOptions,
   documentReviewRunsOptions,
   documentReviewSourcesOptions,
+  recordReviewFindingApplication,
+  REVIEW_APPLICATION_STATUS,
   REVIEW_DECISION,
 } from "@/components/ai-suggestions/document-review-queries";
 import type {
@@ -105,12 +107,10 @@ import type {
   ReferenceFinding,
   ReviewCommentState,
   ReviewTopic,
-  ReviewFindingFix,
   ReviewFixState,
   StartReviewResult,
 } from "@/components/ai-suggestions/playbook-review-store";
 import { DocumentIcon } from "@/components/document-icon";
-import { InlinePill } from "@/components/inline-pill";
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import {
@@ -118,14 +118,25 @@ import {
   isReviewResultActionable,
   isReviewResultActionNeeded,
   reviewItemDecision,
+  sortReviewResultItems,
 } from "@/components/inspector/playbook-review-results.logic";
 import type { ReviewResultItem } from "@/components/inspector/playbook-review-results.logic";
 import type { OverallRisk } from "@/components/inspector/playbook-risk-rollup";
 import { computeRiskRollup } from "@/components/inspector/playbook-risk-rollup";
+import {
+  buildAcceptedFixBatch,
+  buildDraftNote,
+  collectAcceptedFixes,
+  playbookFixPlan,
+  referenceFixPlan,
+} from "@/components/inspector/review-apply-accepted.logic";
+import type { AcceptedFixPlan } from "@/components/inspector/review-apply-accepted.logic";
+import { ReviewExportMenu } from "@/components/inspector/review-export-menu";
+import { PlaybookStatusBadge } from "@/components/playbook-status-badge";
+import { SearchDialog } from "@/components/search-dialog";
 import Tooltip from "@/components/tooltip";
 import { RunSizeConfirmDialog } from "@/components/usage/run-size-confirm-dialog";
 import { getWordEditAuthorName } from "@/features/chat/hooks/use-chat-user-context";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import { useAnalytics } from "@/lib/analytics/provider";
@@ -135,6 +146,7 @@ import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import type {
   Negotiation,
+  PlaybookListItem,
   PlaybookPositionsValue,
 } from "@/lib/knowledge/playbook-types";
 import {
@@ -179,6 +191,9 @@ export const PlaybookFacet = ({
   );
   const confirmTopics = usePlaybookReviewStore((state) => state.confirmTopics);
   const setTopics = usePlaybookReviewStore((state) => state.setTopics);
+  const setPerspective = usePlaybookReviewStore(
+    (state) => state.setPerspective,
+  );
   const setFixState = usePlaybookReviewStore((state) => state.setFixState);
   const beginComment = usePlaybookReviewStore((state) => state.beginComment);
   const completeComment = usePlaybookReviewStore(
@@ -270,14 +285,25 @@ export const PlaybookFacet = ({
         fileFieldId,
         playbookId: retry.playbookId,
         references: retry.references,
+        perspective: retry.perspective,
         topics: retry.topics,
         unexpectedErrorMessage: t("common.unexpectedError"),
       }),
     );
   };
 
+  // The document editor stays mounted under this facet but hidden, so any
+  // jump into the document first brings the preview back; the scroll is
+  // queued as a command because a hidden editor cannot scroll yet.
+  const revealDocument = () => {
+    useInspectorTabsStore.getState().setFileFacet(fileFieldId, "preview");
+  };
+
   const scrollToBlock = (blockId: string) => {
-    registration?.editorRef.current?.scrollToBlock(blockId);
+    revealDocument();
+    useInspectorCommandStore
+      .getState()
+      .requestBlockScroll({ tabId: fileFieldId, blockId });
   };
 
   const openReferenceCitation = (
@@ -297,64 +323,121 @@ export const PlaybookFacet = ({
       fileName: reference.fileName,
       mimeType: DOCX_MIME,
       pdfFileId: null,
-      workspaceId,
+      // The reference opens in its own matter, which may not be this one.
+      workspaceId: reference.workspaceId,
       facet: "preview",
     });
   };
 
-  const insertFix = async (findingId: string, fix: ReviewFindingFix | null) => {
-    if (fix === null || registration === undefined) {
-      return;
+  /** Redline the plans into the draft as one tracked-changes batch, each
+   *  with its margin note. Resolves to how many landed. Reuses the
+   *  document's unlock flow first: a write against a locked editor no-ops. */
+  const applyAcceptedFixes = async (
+    plans: readonly AcceptedFixPlan[],
+  ): Promise<number> => {
+    if (plans.length === 0 || registration === undefined) {
+      return 0;
     }
     const editor = registration.editorRef.current;
     if (!editor) {
-      return;
+      return 0;
     }
-    // Reuse the document's unlock flow before writing — applying a
-    // tracked change against a locked editor would no-op.
     const unlocked = registration.editable
       ? true
       : await registration.requestEditMode();
     if (!unlocked) {
-      return;
+      return 0;
     }
     const snapshot = editor.createAIEditSnapshot();
     if (!snapshot) {
-      stellaToast.add({
-        type: "error",
-        title: t("inspector.review.insertFailed"),
-      });
-      return;
+      stellaToast.add({ type: "error", title: APPLY_ACCEPTED_FAILED });
+      return 0;
     }
+    const batch = buildAcceptedFixBatch({ plans, newId: uuidv7 });
     const result = editor.applyAIEditOperations({
       snapshot,
-      operations: [toFolioFixOperation(fix)],
+      operations: batch.operations,
       mode: "tracked-changes",
       ...(author.length > 0 && { author }),
     });
-    const revisionIds = result.applied.at(0)?.revisionIds ?? null;
-    if (revisionIds === null || revisionIds.length === 0) {
+    const revisionIdsByOperationId = new Map(
+      result.applied.map((applied) => [applied.id, applied.revisionIds ?? []]),
+    );
+    let appliedCount = 0;
+    const appliedPlans: AcceptedFixPlan[] = [];
+    let firstRevisionIds: readonly number[] | null = null;
+    for (const plan of plans) {
+      const operationId = batch.fixOperationIdByKey.get(plan.findingKey);
+      const revisionIds =
+        operationId === undefined
+          ? undefined
+          : revisionIdsByOperationId.get(operationId);
+      if (revisionIds === undefined || revisionIds.length === 0) {
+        continue;
+      }
+      appliedCount += 1;
+      appliedPlans.push(plan);
+      firstRevisionIds = firstRevisionIds ?? revisionIds;
+      setFixState(entityId, fileFieldId, plan.findingKey, {
+        status: "applied",
+        revisionIds,
+      });
+      if (plan.referenceFindingId !== null && plan.comment !== null) {
+        beginComment(entityId, fileFieldId, plan.referenceFindingId);
+        completeComment(entityId, fileFieldId, plan.referenceFindingId);
+      }
+    }
+    const persisted = await Result.tryPromise({
+      try: async () =>
+        await Promise.all(
+          appliedPlans.map(
+            async ({ findingId }) =>
+              await recordReviewFindingApplication({ workspaceId, findingId }),
+          ),
+        ),
+      catch: (cause) => cause,
+    });
+    if (Result.isError(persisted)) {
+      analytics.captureError(persisted.error);
       stellaToast.add({
         type: "error",
-        title: t("inspector.review.insertFailed"),
+        title: t("common.unexpectedError"),
       });
-      return;
     }
-    setFixState(entityId, fileFieldId, findingId, {
-      status: "applied",
-      revisionIds,
-    });
+    if (appliedCount < plans.length) {
+      stellaToast.add({
+        type: "error",
+        title: APPLY_ACCEPTED_FAILED,
+        description: applyAcceptedSkippedDescription(
+          plans.length - appliedCount,
+        ),
+      });
+    }
+    if (firstRevisionIds !== null) {
+      const revisionIds = firstRevisionIds;
+      stellaToast.add({
+        type: "success",
+        title: applyAcceptedDoneTitle(appliedCount),
+        action: {
+          label: SHOW_IN_DOCUMENT_LABEL,
+          onClick: () => scrollToFix(revisionIds),
+        },
+      });
+    }
+    return appliedCount;
   };
 
-  const addFindingComment = async (finding: ReferenceFinding) => {
+  const addFindingComment = async (
+    finding: ReferenceFinding,
+    note: string,
+  ): Promise<boolean> => {
     const blockId = finding.targetCitations.at(0)?.blockId;
-    const { explanation } = finding;
-    if (!blockId || !registration || explanation.type !== "comparison") {
-      return;
+    if (!blockId || !registration) {
+      return false;
     }
     const editor = registration.editorRef.current;
     if (!editor || !beginComment(entityId, fileFieldId, finding.findingId)) {
-      return;
+      return false;
     }
     const application = await Result.tryPromise(async () => {
       const unlocked = registration.editable
@@ -374,7 +457,7 @@ export const PlaybookFacet = ({
             id: `review-comment-${uuidv7()}`,
             type: "commentOnBlock",
             blockId,
-            comment: { text: explanation.text },
+            comment: { text: note },
           },
         ],
         mode: "tracked-changes",
@@ -389,11 +472,19 @@ export const PlaybookFacet = ({
         type: "error",
         title: t("inspector.review.commentFailed"),
       });
-      return;
+      return false;
     }
     if (application.value === "applied") {
       completeComment(entityId, fileFieldId, finding.findingId);
-      return;
+      stellaToast.add({
+        type: "success",
+        title: NOTE_ADDED_TITLE,
+        action: {
+          label: SHOW_IN_DOCUMENT_LABEL,
+          onClick: () => scrollToBlock(blockId),
+        },
+      });
+      return true;
     }
     cancelComment(entityId, fileFieldId, finding.findingId);
     if (application.value === "failed") {
@@ -402,10 +493,14 @@ export const PlaybookFacet = ({
         title: t("inspector.review.commentFailed"),
       });
     }
+    return false;
   };
 
   const scrollToFix = (revisionIds: readonly number[]) => {
-    registration?.editorRef.current?.scrollToAIEditOperation(revisionIds);
+    revealDocument();
+    requestAnimationFrame(() => {
+      registration?.editorRef.current?.scrollToAIEditOperation(revisionIds);
+    });
   };
 
   const acceptFix = (positionId: string, revisionIds: readonly number[]) => {
@@ -445,6 +540,15 @@ export const PlaybookFacet = ({
         error={session.error}
         onBack={() => resetSession(entityId, fileFieldId)}
         onChange={(topics) => setTopics(entityId, fileFieldId, topics)}
+        onPerspectiveChange={(perspective) =>
+          setPerspective(entityId, fileFieldId, perspective)
+        }
+        parties={session.parties}
+        perspective={
+          session.basis === null
+            ? NEUTRAL_PERSPECTIVE
+            : perspectiveFromBasis(session.basis)
+        }
         onConfirm={() => {
           detached(
             (async () => {
@@ -539,15 +643,8 @@ export const PlaybookFacet = ({
           editorAvailable={editorAvailable}
           fixStateByFinding={session === undefined ? {} : session.fixState}
           onAcceptFix={acceptFix}
-          onAddReferenceComment={(finding) => {
-            detached(
-              addFindingComment(finding),
-              "playbook-facet.add-finding-comment",
-            );
-          }}
-          onInsertFix={(findingId, fix) => {
-            detached(insertFix(findingId, fix), "playbook-facet.insert-fix");
-          }}
+          onAddReferenceComment={addFindingComment}
+          onApplyAccepted={applyAcceptedFixes}
           onOpenReferenceCitation={openReferenceCitation}
           onRejectFix={rejectFix}
           onRetry={(retry) => {
@@ -558,6 +655,7 @@ export const PlaybookFacet = ({
           onScrollToFix={scrollToFix}
           organizationId={user.activeOrganizationId}
           runId={trackedRunId}
+          targetFileFieldId={fileFieldId}
           workspaceId={workspaceId}
         />
       </>
@@ -586,6 +684,7 @@ export const PlaybookFacet = ({
 export type ReviewRunRetry = {
   playbookId: string | null;
   references: readonly ReferenceFile[];
+  perspective: ReviewPerspective;
   topics: readonly ReviewTopic[];
 };
 
@@ -593,14 +692,22 @@ type ReviewRunPanelProps = {
   workspaceId: string;
   runId: string;
   organizationId: string;
+  /** The reviewed document's file field: where "Ask in chat" drafts land. */
+  targetFileFieldId: string;
   /** The document's current version, or `null` while it is not known yet. */
   currentEntityVersionId: string | null;
   editorAvailable: boolean;
   commentStateByFinding: Record<string, ReviewCommentState>;
   fixStateByFinding: Record<string, ReviewFixState>;
   onAcceptFix: (findingId: string, revisionIds: readonly number[]) => void;
-  onAddReferenceComment: (finding: ReferenceFinding) => void;
-  onInsertFix: (findingId: string, fix: ReviewFindingFix | null) => void;
+  /** Writes a drafting note on the finding's clause; resolves to whether it
+   *  landed. */
+  onAddReferenceComment: (
+    finding: ReferenceFinding,
+    note: string,
+  ) => Promise<boolean>;
+  /** Inserts the plans as tracked changes; resolves to how many landed. */
+  onApplyAccepted: (plans: readonly AcceptedFixPlan[]) => Promise<number>;
   onOpenReferenceCitation: (
     reference: ReferenceFile,
     blockId: string,
@@ -624,13 +731,14 @@ const ReviewRunPanel = ({
   workspaceId,
   runId,
   organizationId,
+  targetFileFieldId,
   currentEntityVersionId,
   editorAvailable,
   commentStateByFinding,
   fixStateByFinding,
   onAcceptFix,
   onAddReferenceComment,
-  onInsertFix,
+  onApplyAccepted,
   onOpenReferenceCitation,
   onRejectFix,
   onRetry,
@@ -720,6 +828,7 @@ const ReviewRunPanel = ({
           onRetry({
             playbookId: restored.basis.playbookId,
             references: restored.basis.references,
+            perspective: restored.basis.perspective,
             topics: run.topics,
           })
         }
@@ -738,11 +847,47 @@ const ReviewRunPanel = ({
       freshness={resolveReviewRunFreshness({ run, currentEntityVersionId })}
       negotiationBySourceId={negotiationLookup(playbookDetail)}
       onAcceptFix={onAcceptFix}
-      onAddReferenceComment={onAddReferenceComment}
+      // Writing into the draft is the reviewer's answer to the finding, so a
+      // write that lands also records the decision; nothing is recorded for
+      // one that did not.
+      onAddReferenceComment={(finding, findingIds) => {
+        const note = buildDraftNote(finding, restored.basis.references);
+        if (note === null) {
+          return;
+        }
+        detached(
+          (async () => {
+            if (await onAddReferenceComment(finding, note)) {
+              decide.mutate({
+                workspaceId,
+                findingIds,
+                decision: REVIEW_DECISION.ACCEPTED,
+              });
+            }
+          })(),
+          "playbook-facet.add-draft-note",
+        );
+      }}
+      onApplyAccepted={(plans) => {
+        detached(onApplyAccepted(plans), "playbook-facet.apply-accepted");
+      }}
       onDecide={(findingIds, decision) => {
         decide.mutate({ workspaceId, findingIds, decision });
       }}
-      onInsertFix={onInsertFix}
+      onInsertFix={(plan, findingIds) => {
+        detached(
+          (async () => {
+            if ((await onApplyAccepted([plan])) > 0) {
+              decide.mutate({
+                workspaceId,
+                findingIds,
+                decision: REVIEW_DECISION.ACCEPTED,
+              });
+            }
+          })(),
+          "playbook-facet.redline",
+        );
+      }}
       onOpenReferenceCitation={(referenceFieldId, blockId, text) => {
         const reference = restored.basis.references.find(
           (candidate) => candidate.fileFieldId === referenceFieldId,
@@ -756,8 +901,12 @@ const ReviewRunPanel = ({
       onReviewAgain={onReviewAgain}
       onScrollToBlock={onScrollToBlock}
       onScrollToFix={onScrollToFix}
+      perspective={restored.basis.perspective}
       playbookFindings={restored.results.playbook}
       playbookName={restored.basis.playbookName}
+      runId={run.id}
+      targetFileFieldId={targetFileFieldId}
+      workspaceId={workspaceId}
       referenceFindings={restored.results.references}
       references={restored.basis.references}
       topics={restored.topics}
@@ -767,8 +916,102 @@ const ReviewRunPanel = ({
 
 // -- Launcher --
 
+/** Above this many playbooks the picker grows a filter box; below it, the
+ *  whole list fits the panel and a filter would only add a control. */
+const PLAYBOOK_FILTER_THRESHOLD = 6;
+/** How many of the matter's own documents the picker offers as one-click
+ *  references before the reviewer has typed anything. */
+const REFERENCE_SUGGESTION_LIMIT = 3;
+
+const SECTION_LABEL_CLASS =
+  "text-foreground-strong-muted text-[11px] font-medium tracking-[0.06em] uppercase";
+// English until the launcher copy settles; then it joins the catalog with
+// the rest of the launcher strings.
+const LAUNCHER_BASIS_DIVIDER_LABEL = "and / or";
+const TARGET_AS_REFERENCE_LABEL =
+  "The reviewed document cannot be its own reference.";
+const RECOMMENDATION_LABEL = "Recommendation:";
+const ASK_IN_CHAT_LABEL = "Ask in chat";
+const CHAT_DRAFT_QUESTION = "How should I redraft the target on this point?";
+const CHAT_DRAFT_PASSAGES_PER_DOCUMENT = 2;
+
+const escapeHtml = (value: string): string =>
+  value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
+
+const paragraph = (label: string, value: string): string =>
+  `<p><strong>${escapeHtml(label)}</strong> ${escapeHtml(value)}</p>`;
+
+/**
+ * The finding as a chat draft: the topic, the cited passages of each
+ * document, the rationale and the recommendation, then a question the
+ * reviewer can keep or rewrite. The chat over the document carries the
+ * document itself, so the draft only needs to say which point is at issue.
+ */
+const buildFindingChatDraft = ({
+  item,
+  references,
+  perspective,
+  targetLabel,
+  referenceLabel,
+}: {
+  item: ReviewResultItem;
+  references: readonly ReferenceFile[];
+  perspective: ReviewPerspective;
+  targetLabel: string;
+  referenceLabel: string;
+}): string => {
+  const parts: string[] = [paragraph("Topic:", item.title)];
+  const { playbook, reference } = item;
+  if (reference !== null) {
+    for (const citation of reference.targetCitations.slice(
+      0,
+      CHAT_DRAFT_PASSAGES_PER_DOCUMENT,
+    )) {
+      parts.push(paragraph(`${targetLabel}:`, `"${citation.text.trim()}"`));
+    }
+    for (const group of reference.referenceCitations) {
+      const name =
+        references.find(
+          (candidate) => candidate.fileFieldId === group.fileFieldId,
+        )?.name ?? referenceLabel;
+      for (const citation of group.citations.slice(
+        0,
+        CHAT_DRAFT_PASSAGES_PER_DOCUMENT,
+      )) {
+        parts.push(paragraph(`${name}:`, `"${citation.text.trim()}"`));
+      }
+    }
+    if (reference.explanation.type === "comparison") {
+      parts.push(paragraph("Finding:", reference.explanation.text));
+    }
+    if (isDirectedImpact(reference.impact)) {
+      parts.push(
+        paragraph("Impact:", impactLabel(reference.impact, perspective)),
+      );
+    }
+    if (typeof reference.recommendation === "string") {
+      parts.push(paragraph("Recommendation:", reference.recommendation));
+    }
+  }
+  if (playbook !== null) {
+    if (playbook.extracted !== null && playbook.extracted.text.length > 0) {
+      parts.push(paragraph("Extracted:", playbook.extracted.text));
+    }
+    if (playbook.rationale !== null && playbook.rationale.length > 0) {
+      parts.push(paragraph("Playbook finding:", playbook.rationale));
+    }
+  }
+  parts.push(`<p>${escapeHtml(CHAT_DRAFT_QUESTION)}</p>`);
+  return parts.join("");
+};
+
+type LauncherPlaybook = Pick<PlaybookListItem, "id" | "name" | "status">;
+
 type LauncherProps = {
-  playbooks: readonly { id: string; name: string }[];
+  playbooks: readonly LauncherPlaybook[];
   target: { entityId: string; fileFieldId: string };
   workspaceId: string;
   onReview: (basis: ReviewBasis, seededTopics: ReviewTopic[]) => void;
@@ -785,9 +1028,12 @@ const Launcher = ({
     null,
   );
   const [references, setReferences] = useState<ReferenceFile[]>([]);
+  // The side is chosen while confirming topics, once the proposal has read
+  // the target's parties; until then the basis carries no side.
   const basis = createReviewBasis({
     playbookId: selectedPlaybookId,
     references,
+    perspective: NEUTRAL_PERSPECTIVE,
   });
   const user = useAuthenticatedUser();
   const { data: selectedPlaybook } = useQuery({
@@ -818,65 +1064,326 @@ const Launcher = ({
         );
   const playbookReady =
     selectedPlaybookId === null || selectedPlaybook !== undefined;
+  const selectedPlaybookName =
+    playbooks.find((playbook) => playbook.id === selectedPlaybookId)?.name ??
+    "";
 
   return (
-    <div className="bg-background flex h-full flex-col gap-4 overflow-y-auto p-4">
-      <div className="space-y-1">
-        <h2 className="text-foreground text-sm font-semibold">
-          {t("inspector.review.title")}
-        </h2>
-        <p className="text-muted-foreground text-xs">
-          {t("inspector.review.description")}
-        </p>
+    <div className="bg-background flex h-full flex-col">
+      <div className="flex-1 space-y-4 overflow-y-auto p-4">
+        <PlaybookPicker
+          onSelect={setSelectedPlaybookId}
+          playbooks={playbooks}
+          selectedId={selectedPlaybookId}
+        />
+        {/* The divider is the whole instruction: either basis alone starts a
+            review, both together combine them. */}
+        <TextSeparator>{LAUNCHER_BASIS_DIVIDER_LABEL}</TextSeparator>
+        <ReferenceFilePicker
+          onChange={setReferences}
+          references={references}
+          target={target}
+          workspaceId={workspaceId}
+        />
       </div>
-      <section className="space-y-2">
-        <label className="text-foreground-strong-muted text-xs font-medium">
-          {t("inspector.review.playbookLabel")}
-        </label>
-        <Select
-          onValueChange={(value) =>
-            setSelectedPlaybookId(value === "none" ? null : value)
-          }
-          value={selectedPlaybookId ?? "none"}
-        >
-          <SelectTrigger
-            aria-label={t("inspector.review.playbookLabel")}
-            className="min-h-11 w-full"
-          >
-            <SelectValue />
-          </SelectTrigger>
-          <SelectPopup>
-            <SelectItem value="none">
-              {t("inspector.review.noPlaybook")}
-            </SelectItem>
-            {playbooks.map((playbook) => (
-              <SelectItem key={playbook.id} value={playbook.id}>
-                {playbook.name}
-              </SelectItem>
-            ))}
-          </SelectPopup>
-        </Select>
-      </section>
-      <ReferenceFilePicker
-        onChange={setReferences}
-        references={references}
-        target={target}
-        workspaceId={workspaceId}
-      />
-      <Button
-        className="min-h-11 w-full"
-        disabled={basis === null || !playbookReady}
-        onClick={() => {
-          if (basis !== null && playbookReady) {
-            onReview(basis, seededTopics);
-          }
-        }}
-        size="sm"
+      {/* Pinned right above the action it describes, outside the scroll. */}
+      <div className="shrink-0 px-4 pb-2">
+        <LaunchBasisSummary
+          playbookName={selectedPlaybookName}
+          referenceCount={references.length}
+        />
+      </div>
+      <footer
+        className={cn(
+          "flex shrink-0 items-center gap-2 border-t px-3",
+          TOOLBAR_ROW_HEIGHT,
+        )}
       >
-        <ScanSearchIcon className="me-1 size-3.5" />
-        {t("inspector.review.run")}
-      </Button>
+        <Button
+          className="flex-1"
+          disabled={basis === null || !playbookReady}
+          onClick={() => {
+            if (basis !== null && playbookReady) {
+              onReview(basis, seededTopics);
+            }
+          }}
+          size="sm"
+        >
+          <ScanSearchIcon className="me-1 size-3.5" />
+          {t("inspector.review.run")}
+        </Button>
+      </footer>
     </div>
+  );
+};
+
+// English until the launcher copy settles; then it joins the catalog.
+const PERSPECTIVE_SECTION_LABEL = "We act for";
+const PERSPECTIVE_NEUTRAL_LABEL = "Not specified";
+const PERSPECTIVE_OTHER_LABEL = "Other…";
+const PERSPECTIVE_OTHER_PLACEHOLDER = "Role as the document names it";
+const PERSPECTIVE_CHIP_CLASS =
+  "min-h-8 rounded-full border px-3 text-xs transition-colors duration-150";
+const PERSPECTIVE_CHIP_CHECKED_CLASS =
+  "border-foreground bg-foreground text-background";
+const PERSPECTIVE_CHIP_IDLE_CLASS =
+  "border-border text-muted-foreground hover:text-foreground hover:bg-muted/50";
+
+const partyLabel = (party: ReviewParty): string =>
+  party.name === null ? party.role : `${party.role} (${party.name})`;
+
+type PerspectivePickerProps = {
+  /** The target's parties as the proposal read them. */
+  parties: readonly ReviewParty[];
+  value: ReviewPerspective;
+  onSelect: (perspective: ReviewPerspective) => void;
+};
+
+/**
+ * Whose side the comparison judges, picked from the target's own parties. A
+ * difference between two drafts has no direction on its own, so without this
+ * the results can only say "different"; with it they can say "worse for the
+ * Purchaser", which is what gets acted on. A role the proposal missed can be
+ * typed in.
+ */
+const PerspectivePicker = ({
+  parties,
+  value,
+  onSelect,
+}: PerspectivePickerProps) => {
+  const listed =
+    value.type === "party" &&
+    parties.some((party) =>
+      isSamePerspective({ type: "party", ...party }, value),
+    );
+  const [other, setOther] = useState(value.type === "party" && !listed);
+  const [otherRole, setOtherRole] = useState(
+    value.type === "party" && !listed ? value.role : "",
+  );
+  const options: {
+    key: string;
+    label: string;
+    perspective: ReviewPerspective;
+  }[] = [
+    {
+      key: "neutral",
+      label: PERSPECTIVE_NEUTRAL_LABEL,
+      perspective: NEUTRAL_PERSPECTIVE,
+    },
+    ...parties.map((party, index) => ({
+      key: `party-${index}`,
+      label: partyLabel(party),
+      perspective: { type: "party" as const, ...party },
+    })),
+  ];
+  return (
+    <section className="space-y-2">
+      <h3 className={SECTION_LABEL_CLASS}>{PERSPECTIVE_SECTION_LABEL}</h3>
+      <div
+        aria-label={PERSPECTIVE_SECTION_LABEL}
+        className="flex flex-wrap gap-1"
+        role="radiogroup"
+      >
+        {options.map((option) => {
+          const checked =
+            !other && isSamePerspective(option.perspective, value);
+          return (
+            <button
+              aria-checked={checked}
+              className={cn(
+                PERSPECTIVE_CHIP_CLASS,
+                checked
+                  ? PERSPECTIVE_CHIP_CHECKED_CLASS
+                  : PERSPECTIVE_CHIP_IDLE_CLASS,
+              )}
+              key={option.key}
+              onClick={() => {
+                setOther(false);
+                setOtherRole("");
+                onSelect(option.perspective);
+              }}
+              role="radio"
+              type="button"
+            >
+              {option.label}
+            </button>
+          );
+        })}
+        <button
+          aria-checked={other}
+          className={cn(
+            PERSPECTIVE_CHIP_CLASS,
+            other
+              ? PERSPECTIVE_CHIP_CHECKED_CLASS
+              : PERSPECTIVE_CHIP_IDLE_CLASS,
+          )}
+          onClick={() => {
+            setOther(true);
+            onSelect(customPerspectiveInput(otherRole).perspective);
+          }}
+          role="radio"
+          type="button"
+        >
+          {PERSPECTIVE_OTHER_LABEL}
+        </button>
+      </div>
+      {other && (
+        <Input
+          aria-label={PERSPECTIVE_OTHER_PLACEHOLDER}
+          autoFocus
+          className="h-8 text-xs"
+          onChange={(event) => {
+            const input = customPerspectiveInput(event.target.value);
+            setOtherRole(input.rawRole);
+            onSelect(input.perspective);
+          }}
+          placeholder={PERSPECTIVE_OTHER_PLACEHOLDER}
+          value={otherRole}
+        />
+      )}
+    </section>
+  );
+};
+
+/** One line saying what the review will be measured against, so the reviewer
+ *  reads the basis back before starting. Nothing chosen yet renders nothing:
+ *  the disabled button already says the review cannot start. */
+const LaunchBasisSummary = ({
+  playbookName,
+  referenceCount,
+}: {
+  playbookName: string;
+  referenceCount: number;
+}) => {
+  const t = useTranslations();
+  if (playbookName.length > 0 && referenceCount > 0) {
+    return (
+      <p className="text-muted-foreground truncate text-xs">
+        {t("inspector.review.basisCombined", {
+          name: playbookName,
+          count: referenceCount,
+        })}
+      </p>
+    );
+  }
+  if (playbookName.length > 0) {
+    return (
+      <p className="text-muted-foreground truncate text-xs">
+        {t("inspector.review.basisPlaybook", { name: playbookName })}
+      </p>
+    );
+  }
+  if (referenceCount > 0) {
+    return (
+      <p className="text-muted-foreground truncate text-xs">
+        {t("inspector.review.basisReferences", { count: referenceCount })}
+      </p>
+    );
+  }
+  return null;
+};
+
+type PlaybookPickerProps = {
+  playbooks: readonly LauncherPlaybook[];
+  selectedId: string | null;
+  onSelect: (playbookId: string | null) => void;
+};
+
+/**
+ * The organization's playbooks as a single-select list: the reviewer sees what
+ * exists (with its approval status) instead of opening a menu to find out, and
+ * clicking the chosen row again clears it, which is what makes the playbook
+ * optional without a "none" entry.
+ */
+const PlaybookPicker = ({
+  playbooks,
+  selectedId,
+  onSelect,
+}: PlaybookPickerProps) => {
+  const t = useTranslations();
+  const [filter, setFilter] = useState("");
+  const normalizedFilter = filter.trim().toLocaleLowerCase();
+  const visiblePlaybooks =
+    normalizedFilter.length === 0
+      ? playbooks
+      : playbooks.filter((playbook) =>
+          playbook.name.toLocaleLowerCase().includes(normalizedFilter),
+        );
+
+  return (
+    <section className="space-y-2">
+      <h3 className={SECTION_LABEL_CLASS}>
+        {t("inspector.review.playbookSection")}
+      </h3>
+      {playbooks.length === 0 ? (
+        <div className="bg-muted/50 flex min-h-11 items-center justify-between gap-2 rounded-lg ps-3 pe-1">
+          <p className="text-muted-foreground text-xs">
+            {t("knowledge.playbooks.empty")}
+          </p>
+          <Button
+            render={<Link to="/knowledge/playbooks" />}
+            size="xs"
+            variant="ghost"
+          >
+            <PlusIcon className="me-1 size-3.5" />
+            {t("knowledge.playbooks.createPlaybook")}
+          </Button>
+        </div>
+      ) : (
+        <>
+          {playbooks.length > PLAYBOOK_FILTER_THRESHOLD && (
+            <Input
+              aria-label={t("inspector.review.searchPlaybooks")}
+              className="min-h-11"
+              onChange={(event) => setFilter(event.target.value)}
+              placeholder={t("inspector.review.searchPlaybooks")}
+              value={filter}
+            />
+          )}
+          <ul
+            aria-label={t("inspector.review.playbookSection")}
+            className="space-y-0.5"
+            role="radiogroup"
+          >
+            {visiblePlaybooks.map((playbook) => {
+              const checked = playbook.id === selectedId;
+              return (
+                <li key={playbook.id}>
+                  <button
+                    aria-checked={checked}
+                    className={cn(
+                      "hover:bg-muted/50 flex min-h-11 w-full items-center gap-2.5 rounded-lg px-2.5 text-start transition-colors duration-150",
+                      checked && "bg-muted",
+                    )}
+                    onClick={() => onSelect(checked ? null : playbook.id)}
+                    role="radio"
+                    type="button"
+                  >
+                    <ClipboardCheckIcon className="text-muted-foreground size-3.5 shrink-0" />
+                    <BidiText className="min-w-0 flex-1 truncate text-sm">
+                      {playbook.name}
+                    </BidiText>
+                    <PlaybookStatusBadge status={playbook.status} />
+                    <CheckIcon
+                      aria-hidden="true"
+                      className={cn(
+                        "size-3.5 shrink-0 transition-opacity duration-150",
+                        checked ? "opacity-100" : "opacity-0",
+                      )}
+                    />
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+          {visiblePlaybooks.length === 0 && (
+            <p className="text-muted-foreground px-2.5 text-xs">
+              {t("inspector.review.noPlaybooksMatch")}
+            </p>
+          )}
+        </>
+      )}
+    </section>
   );
 };
 
@@ -894,19 +1401,12 @@ const ReferenceFilePicker = ({
   onChange,
 }: ReferenceFilePickerProps) => {
   const t = useTranslations();
-  const [query, setQuery] = useState("");
-  const [debouncedQuery, setDebouncedQuery] = useState("");
-  const debouncedSetQuery = useDebouncedCallback(
-    (value: string) => setDebouncedQuery(value),
-    250,
-  );
-  const {
-    data: sourcePages,
-    fetchNextPage,
-    hasNextPage,
-    isFetchingNextPage,
-  } = useInfiniteQuery(
-    documentReviewSourcesOptions({ workspaceId, q: debouncedQuery }),
+  const [pickerOpen, setPickerOpen] = useState(false);
+  // The matter's own DOCX documents, offered as one-click references so the
+  // common case (compare with the signed version sitting next to the draft)
+  // needs no search at all. Anything else goes through the full search.
+  const { data: sourcePages } = useInfiniteQuery(
+    documentReviewSourcesOptions({ workspaceId, q: "" }),
   );
   const sources =
     sourcePages === undefined
@@ -915,28 +1415,34 @@ const ReferenceFilePicker = ({
   const selectedIds = new Set(
     references.map((reference) => reference.fileFieldId),
   );
-  const availableSources = sources.filter(
-    (source) =>
-      source.fileFieldId !== target.fileFieldId &&
-      !selectedIds.has(source.fileFieldId),
-  );
   const atLimit = references.length >= DOCUMENT_REVIEW_LIMITS.referencesMax;
+  const suggestedSources = atLimit
+    ? []
+    : sources
+        .filter(
+          (source) =>
+            source.fileFieldId !== target.fileFieldId &&
+            !selectedIds.has(source.fileFieldId),
+        )
+        .slice(0, REFERENCE_SUGGESTION_LIMIT);
 
-  const selectReference = (reference: ReferenceFile | null) => {
-    if (reference === null || atLimit) {
+  const selectReference = (reference: ReferenceFile) => {
+    if (atLimit || selectedIds.has(reference.fileFieldId)) {
+      return;
+    }
+    if (reference.fileFieldId === target.fileFieldId) {
+      stellaToast.add({ type: "error", title: TARGET_AS_REFERENCE_LABEL });
       return;
     }
     onChange([...references, reference]);
-    setQuery("");
-    setDebouncedQuery("");
   };
 
   return (
     <section className="space-y-2">
       <div className="flex items-center justify-between gap-2">
-        <label className="text-foreground-strong-muted text-xs font-medium">
-          {t("inspector.review.referencesLabel")}
-        </label>
+        <h3 className={SECTION_LABEL_CLASS}>
+          {t("inspector.review.referencesSection")}
+        </h3>
         <span className="text-muted-foreground text-[11px] tabular-nums">
           {t("inspector.review.referencesCount", {
             count: references.length,
@@ -944,84 +1450,11 @@ const ReferenceFilePicker = ({
           })}
         </span>
       </div>
-      <Combobox<ReferenceFile>
-        disabled={atLimit}
-        // The server already filters by `q`; without `items` Base UI's
-        // filtered list stays empty and ComboboxEmpty renders permanently.
-        filter={null}
-        isItemEqualToValue={(a, b) => a.fileFieldId === b.fileFieldId}
-        items={availableSources}
-        itemToStringLabel={(item) => item.name}
-        onInputValueChange={(value) => {
-          setQuery(value);
-          debouncedSetQuery(value);
-        }}
-        onValueChange={selectReference}
-        value={null}
-      >
-        <ComboboxInput
-          aria-label={t("inspector.review.referencesLabel")}
-          className="min-h-11"
-          placeholder={
-            atLimit
-              ? t("inspector.review.referenceLimitReached")
-              : t("inspector.review.referencePlaceholder")
-          }
-          showTrigger={false}
-          startAddon={<SearchIcon />}
-          value={query}
-        />
-        <ComboboxPopup>
-          <ComboboxList>
-            {availableSources.map((source) => (
-              <ComboboxItem key={source.fileFieldId} value={source}>
-                <div className="flex min-w-0 items-center gap-2">
-                  <DocumentIcon
-                    className="size-3.5 shrink-0"
-                    mimeType={DOCX_MIME}
-                  />
-                  <div className="min-w-0">
-                    <BidiText className="block truncate text-sm">
-                      {source.name}
-                    </BidiText>
-                    {source.fileName !== source.name && (
-                      <BidiText className="text-muted-foreground block truncate text-xs">
-                        {source.fileName}
-                      </BidiText>
-                    )}
-                  </div>
-                </div>
-              </ComboboxItem>
-            ))}
-          </ComboboxList>
-          <ComboboxEmpty>
-            {t("inspector.review.noReferencesFound")}
-          </ComboboxEmpty>
-          {hasNextPage && (
-            <div className="border-t p-1">
-              <Button
-                className="w-full"
-                disabled={isFetchingNextPage}
-                onClick={() =>
-                  detached(fetchNextPage(), "playbook-facet.fetch-next-page")
-                }
-                size="sm"
-                type="button"
-                variant="ghost"
-              >
-                {isFetchingNextPage
-                  ? t("common.loading")
-                  : t("common.loadMore")}
-              </Button>
-            </div>
-          )}
-        </ComboboxPopup>
-      </Combobox>
       {references.length > 0 && (
         <ul className="space-y-1">
           {references.map((reference) => (
             <li
-              className="bg-muted/50 flex min-h-11 items-center gap-2 rounded-md px-2"
+              className="bg-muted/50 flex min-h-11 items-center gap-2 rounded-lg ps-2.5 pe-1"
               key={reference.fileFieldId}
             >
               <DocumentIcon
@@ -1031,6 +1464,12 @@ const ReferenceFilePicker = ({
               <BidiText className="min-w-0 flex-1 truncate text-xs">
                 {reference.name}
               </BidiText>
+              {reference.workspaceId !== workspaceId &&
+                reference.workspaceName !== null && (
+                  <BidiText className="text-muted-foreground max-w-28 shrink-0 truncate text-[11px]">
+                    {reference.workspaceName}
+                  </BidiText>
+                )}
               <Tooltip
                 content={t("inspector.review.removeReference", {
                   name: reference.name,
@@ -1058,150 +1497,182 @@ const ReferenceFilePicker = ({
           ))}
         </ul>
       )}
+      {/* The full search (content, previews, every matter) is the picker;
+          a document from another matter is the usual case, not the edge. */}
+      <button
+        className="hover:bg-muted/50 text-muted-foreground hover:text-foreground flex min-h-11 w-full items-center gap-2 rounded-lg border border-dashed px-2.5 text-start text-xs transition-colors duration-150 disabled:pointer-events-none disabled:opacity-60"
+        disabled={atLimit}
+        onClick={() => setPickerOpen(true)}
+        type="button"
+      >
+        <SearchIcon className="size-3.5 shrink-0" />
+        {atLimit
+          ? t("inspector.review.referenceLimitReached")
+          : t("inspector.review.referencePlaceholder")}
+      </button>
+      <SearchDialog
+        mode={{
+          type: "pick",
+          mimeTypes: [DOCX_MIME],
+          excludeEntityIds: [
+            target.entityId,
+            ...references.map((reference) => reference.entityId),
+          ],
+          onPick: (document) => {
+            selectReference({ ...document, fileName: document.name });
+          },
+        }}
+        onOpenChange={setPickerOpen}
+        open={pickerOpen}
+      />
+      {suggestedSources.length > 0 && (
+        <div className="space-y-0.5">
+          <p className="text-muted-foreground px-2.5 text-[11px]">
+            {t("inspector.review.fromThisMatter")}
+          </p>
+          <ul className="space-y-0.5">
+            {suggestedSources.map((source) => (
+              <li key={source.fileFieldId}>
+                <button
+                  aria-label={t("inspector.review.addReference", {
+                    name: source.name,
+                  })}
+                  className="hover:bg-muted/50 group flex min-h-11 w-full items-center gap-2 rounded-lg px-2.5 text-start transition-colors duration-150"
+                  onClick={() =>
+                    selectReference({
+                      ...source,
+                      workspaceId,
+                      workspaceName: null,
+                    })
+                  }
+                  type="button"
+                >
+                  <DocumentIcon
+                    className="size-3.5 shrink-0"
+                    mimeType={DOCX_MIME}
+                  />
+                  <BidiText className="min-w-0 flex-1 truncate text-xs">
+                    {source.name}
+                  </BidiText>
+                  <PlusIcon className="text-muted-foreground size-3.5 shrink-0 opacity-60 transition-opacity duration-150 group-hover:opacity-100" />
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </section>
   );
 };
 
 type TopicEditorProps = {
   topics: readonly ReviewTopic[];
+  parties: readonly ReviewParty[];
+  perspective: ReviewPerspective;
   error: string | null;
   onChange: (topics: ReviewTopic[]) => void;
+  onPerspectiveChange: (perspective: ReviewPerspective) => void;
   onConfirm: () => void;
   onBack: () => void;
 };
 
+/**
+ * The proposed topics as a list to read, not a form to fill: each row is a
+ * title with its context in two lines, ticked on by default. A row opens
+ * inline for the few edits a reviewer actually makes; nothing else asks for
+ * attention until hovered.
+ */
 const TopicEditor = ({
   topics,
+  parties,
+  perspective,
   error,
   onChange,
+  onPerspectiveChange,
   onConfirm,
   onBack,
 }: TopicEditorProps) => {
   const t = useTranslations();
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const atTopicLimit = topics.length >= DOCUMENT_REVIEW_LIMITS.topicsMax;
+  const includedCount = topics.filter((topic) => topic.included).length;
+  const canConfirm =
+    includedCount > 0 &&
+    !topics.some((topic) => topic.included && topic.title.trim().length === 0);
 
   const updateTopic = (topicId: string, next: ReviewTopic) => {
     onChange(topics.map((topic) => (topic.topicId === topicId ? next : topic)));
   };
 
+  const removeTopic = (topicId: string) => {
+    onChange(topics.filter((topic) => topic.topicId !== topicId));
+    setExpandedId((current) => (current === topicId ? null : current));
+  };
+
+  // A new topic opens straight into its (empty) title: the row is the form.
+  const addTopic = () => {
+    const topicId = crypto.randomUUID();
+    onChange([
+      ...topics,
+      { type: "custom", topicId, title: "", context: "", included: true },
+    ]);
+    setExpandedId(topicId);
+  };
+
   return (
     <div className="bg-background flex h-full flex-col">
-      <header className="space-y-1 border-b px-4 py-3">
-        <h2 className="text-sm font-semibold">
-          {t("inspector.review.topicsTitle")}
-        </h2>
-        <p className="text-muted-foreground text-xs">
-          {t("inspector.review.topicsDescription")}
-        </p>
-      </header>
-      <div className="flex-1 space-y-2 overflow-y-auto p-3">
+      <InspectorHeader className="px-4">
+        <InspectorHeaderText>
+          <InspectorTitle>{t("inspector.review.topicsTitle")}</InspectorTitle>
+        </InspectorHeaderText>
+        <span className="text-muted-foreground shrink-0 text-[11px] tabular-nums">
+          {t("inspector.review.referencesCount", {
+            count: includedCount,
+            max: topics.length,
+          })}
+        </span>
+      </InspectorHeader>
+      <div className="flex-1 overflow-y-auto px-2 py-2">
         {error && (
-          <p className="text-destructive rounded-md border px-3 py-2 text-xs">
+          <p className="text-destructive mx-1 mb-2 rounded-md border px-3 py-2 text-xs">
             {error}
           </p>
         )}
-        {topics.map((topic) => (
-          <section
-            className={cn(
-              "bg-card space-y-2 rounded-lg border p-3",
-              !topic.included && "opacity-60",
-            )}
-            key={topic.topicId}
-          >
-            <div className="flex items-start gap-2">
-              <Checkbox
-                aria-label={topic.title}
-                checked={topic.included}
-                onCheckedChange={(checked) =>
-                  updateTopic(topic.topicId, {
-                    ...topic,
-                    included: checked,
-                  })
-                }
-              />
-              <div className="min-w-0 flex-1">
-                {topic.type === "playbook" ? (
-                  <p className="text-foreground text-sm font-medium">
-                    {topic.title}
-                  </p>
-                ) : (
-                  <Input
-                    aria-label={t("inspector.review.topicName")}
-                    className="border-input bg-background min-h-9 w-full rounded-md border px-2 text-sm"
-                    maxLength={256}
-                    onChange={(event) =>
-                      updateTopic(topic.topicId, {
-                        ...topic,
-                        title: event.target.value,
-                      })
-                    }
-                    value={topic.title}
-                  />
-                )}
-                {topic.type === "playbook" && (
-                  <p className="text-muted-foreground mt-0.5 text-[11px]">
-                    {t("inspector.review.playbookTopic")}
-                  </p>
-                )}
-              </div>
-              <Tooltip
-                content={t("inspector.review.removeTopic", {
-                  name: topic.title,
-                })}
-                render={
-                  <button
-                    aria-label={t("inspector.review.removeTopic", {
-                      name: topic.title,
-                    })}
-                    className="hover:bg-muted inline-flex size-9 shrink-0 items-center justify-center rounded-md"
-                    onClick={() =>
-                      onChange(
-                        topics.filter((item) => item.topicId !== topic.topicId),
-                      )
-                    }
-                    type="button"
-                  >
-                    <Trash2Icon className="size-3.5" />
-                  </button>
-                }
-              />
-            </div>
-            <Textarea
-              aria-label={t("inspector.review.topicContext")}
-              maxLength={2000}
-              onChange={(event) =>
-                updateTopic(topic.topicId, {
-                  ...topic,
-                  context: event.target.value,
-                })
+        <div className="mx-1 mb-3">
+          <PerspectivePicker
+            onSelect={onPerspectiveChange}
+            parties={parties}
+            value={perspective}
+          />
+        </div>
+        <ul className="space-y-0.5">
+          {topics.map((topic, index) => (
+            <TopicRow
+              expanded={expandedId === topic.topicId}
+              index={index}
+              key={topic.topicId}
+              onChange={(next) => updateTopic(topic.topicId, next)}
+              onRemove={() => removeTopic(topic.topicId)}
+              onToggleExpanded={() =>
+                setExpandedId((current) =>
+                  current === topic.topicId ? null : topic.topicId,
+                )
               }
-              placeholder={t("inspector.review.topicContextPlaceholder")}
-              rows={2}
-              value={topic.context}
+              topic={topic}
             />
-          </section>
-        ))}
-        <Button
-          className="w-full"
-          disabled={atTopicLimit}
-          onClick={() =>
-            onChange([
-              ...topics,
-              {
-                type: "custom",
-                topicId: crypto.randomUUID(),
-                title: t("inspector.review.newTopic"),
-                context: "",
-                included: true,
-              },
-            ])
-          }
-          size="sm"
-          variant="outline"
-        >
-          <PlusIcon className="me-1 size-3.5" />
-          {t("inspector.review.addTopic")}
-        </Button>
+          ))}
+        </ul>
+        {!atTopicLimit && (
+          <Button
+            className="text-muted-foreground hover:text-foreground mt-1 w-full justify-start"
+            onClick={addTopic}
+            size="sm"
+            variant="ghost"
+          >
+            <PlusIcon className="size-3.5" />
+            {t("inspector.review.addTopic")}
+          </Button>
+        )}
       </div>
       <footer
         className={cn(
@@ -1214,12 +1685,7 @@ const TopicEditor = ({
         </Button>
         <Button
           className="flex-1"
-          disabled={
-            !topics.some((topic) => topic.included) ||
-            topics.some(
-              (topic) => topic.included && topic.title.trim().length === 0,
-            )
-          }
+          disabled={!canConfirm}
           onClick={onConfirm}
           size="sm"
         >
@@ -1231,61 +1697,143 @@ const TopicEditor = ({
   );
 };
 
-// -- Reviewing --
+const TOPIC_STAGGER_MS = 40;
+const TOPIC_STAGGER_CAP = 8;
 
-const REVIEW_PROGRESS_CEILING = 92;
+type TopicRowProps = {
+  topic: ReviewTopic;
+  index: number;
+  expanded: boolean;
+  onToggleExpanded: () => void;
+  onChange: (next: ReviewTopic) => void;
+  onRemove: () => void;
+};
 
-const ReviewingState = ({ sourceName }: { sourceName: string }) => {
+const TopicRow = ({
+  topic,
+  index,
+  expanded,
+  onToggleExpanded,
+  onChange,
+  onRemove,
+}: TopicRowProps) => {
   const t = useTranslations();
-  const [progress, setProgress] = useState(6);
-
-  // Determinate-ish creep toward the ceiling: proposing topics is one
-  // synchronous server call with no progress channel, so the bar
-  // eases asymptotically while we wait rather than claiming a real
-  // percentage. The run itself reports real progress (see
-  // `ReviewProgressState`).
-  useExternalSyncEffect(() => {
-    const id = window.setInterval(() => {
-      setProgress((current) =>
-        current >= REVIEW_PROGRESS_CEILING
-          ? current
-          : current + Math.max(1, (REVIEW_PROGRESS_CEILING - current) * 0.06),
-      );
-    }, 600);
-    return () => window.clearInterval(id);
-  }, []);
+  const hasTitle = topic.title.trim().length > 0;
+  const removeLabel = t("inspector.review.removeTopic", { name: topic.title });
 
   return (
-    <div className="bg-background flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
-      <div className="w-full max-w-xs space-y-2">
-        <p className="text-foreground text-sm font-medium">
-          {t("inspector.review.reviewing")}
-        </p>
-        {sourceName.length > 0 && (
-          <p className="text-muted-foreground truncate text-xs">{sourceName}</p>
-        )}
-        <div
-          aria-busy="true"
-          aria-label={t("inspector.review.reviewing")}
-          className="bg-muted h-1.5 w-full overflow-hidden rounded-full"
-          role="progressbar"
+    <li
+      className={cn(
+        "group/topic animate-rise rounded-lg transition-colors duration-150",
+        expanded ? "bg-muted/50" : "hover:bg-muted/40",
+      )}
+      style={{
+        animationDelay: `${String(
+          Math.min(index, TOPIC_STAGGER_CAP) * TOPIC_STAGGER_MS,
+        )}ms`,
+      }}
+    >
+      <div className="flex min-h-11 items-start gap-2 py-2 ps-2.5 pe-1">
+        <Checkbox
+          aria-label={hasTitle ? topic.title : t("inspector.review.newTopic")}
+          checked={topic.included}
+          className="mt-0.5"
+          onCheckedChange={(checked) =>
+            onChange({ ...topic, included: checked })
+          }
+        />
+        <button
+          aria-expanded={expanded}
+          className={cn(
+            "min-w-0 flex-1 text-start transition-opacity duration-150",
+            !topic.included && "opacity-60",
+          )}
+          onClick={onToggleExpanded}
+          type="button"
         >
-          <div
-            className="bg-primary h-full w-full rounded-full transition-transform duration-500 ease-out"
-            style={{ transform: `scaleX(${String(progress / 100)})` }}
+          <p
+            className={cn(
+              "truncate text-sm font-medium",
+              hasTitle ? "text-foreground" : "text-muted-foreground",
+            )}
+          >
+            {hasTitle ? topic.title : t("inspector.review.newTopic")}
+          </p>
+          {!expanded && topic.context.trim().length > 0 && (
+            <p className="text-muted-foreground mt-0.5 line-clamp-2 text-xs text-pretty">
+              {topic.context}
+            </p>
+          )}
+          {topic.type === "playbook" && (
+            <p className="text-muted-foreground mt-0.5 text-[11px]">
+              {t("inspector.review.playbookTopic")}
+            </p>
+          )}
+        </button>
+        <Tooltip
+          content={removeLabel}
+          render={
+            <button
+              aria-label={removeLabel}
+              className="hover:bg-muted text-muted-foreground hover:text-foreground relative inline-flex size-8 shrink-0 items-center justify-center rounded-md opacity-0 transition-opacity duration-150 group-hover/topic:opacity-100 after:absolute after:min-h-11 after:min-w-11 focus-visible:opacity-100"
+              onClick={onRemove}
+              type="button"
+            >
+              <XIcon className="size-3.5" />
+            </button>
+          }
+        />
+      </div>
+      {expanded && (
+        <div className="space-y-2 px-2.5 pb-2.5">
+          {topic.type === "custom" && (
+            <Input
+              aria-label={t("inspector.review.topicName")}
+              autoFocus
+              className="min-h-9"
+              maxLength={256}
+              onChange={(event) =>
+                onChange({ ...topic, title: event.target.value })
+              }
+              placeholder={t("inspector.review.newTopic")}
+              value={topic.title}
+            />
+          )}
+          <Textarea
+            aria-label={t("inspector.review.topicContext")}
+            maxLength={2000}
+            onChange={(event) =>
+              onChange({ ...topic, context: event.target.value })
+            }
+            placeholder={t("inspector.review.topicContextPlaceholder")}
+            rows={3}
+            value={topic.context}
           />
         </div>
-        <p className="text-muted-foreground text-[11px]">
-          {t("inspector.review.reviewingHint")}
-        </p>
-      </div>
-    </div>
+      )}
+    </li>
+  );
+};
+
+// -- Reviewing --
+
+// Proposing topics is one server call with no progress channel, so this
+// state claims nothing beyond "in progress".
+const ReviewingState = ({ sourceName }: { sourceName: string }) => {
+  const t = useTranslations();
+  return (
+    <LoaderState
+      className="bg-background"
+      detail={sourceName.length > 0 ? sourceName : undefined}
+      hint={t("inspector.review.reviewingHint")}
+      label={t("inspector.review.reviewing")}
+    />
   );
 };
 
 // The run's own progress: the worker commits one finding per confirmed topic
-// per check kind and counts them on the row, so this is a real fraction of the
-// work rather than a timer pretending to be one.
+// per check kind and counts them on the row, so the percentage is a real
+// fraction of the work rather than a timer pretending to be one.
 type ReviewProgressStateProps = {
   sourceName: string;
   completed: number;
@@ -1299,43 +1847,29 @@ const ReviewProgressState = ({
 }: ReviewProgressStateProps) => {
   const t = useTranslations();
   const format = useFormatter();
-  const ratio = total === 0 ? 0 : Math.min(1, completed / total);
+  // The worker commits findings a pass at a time, so a count is honest only
+  // once something has landed; before that the loader alone says "working".
+  const progress =
+    completed > 0 && total > 0
+      ? `${format.number(completed)}/${format.number(total)}`
+      : null;
+  const detail = [sourceName, progress]
+    .filter((part) => part !== null && part.length > 0)
+    .join(" · ");
 
   return (
-    <div className="bg-background flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
-      <div className="w-full max-w-xs space-y-2">
-        <p className="text-foreground text-sm font-medium">
-          {t("inspector.review.reviewing")}
-        </p>
-        {sourceName.length > 0 && (
-          <p className="text-muted-foreground truncate text-xs">{sourceName}</p>
-        )}
-        <div
-          aria-label={t("inspector.review.reviewing")}
-          aria-valuemax={total}
-          aria-valuemin={0}
-          aria-valuenow={completed}
-          className="bg-muted h-1.5 w-full overflow-hidden rounded-full"
-          role="progressbar"
-        >
-          <div
-            className="bg-primary h-full w-full origin-left rounded-full transition-transform duration-500 ease-out"
-            style={{ transform: `scaleX(${String(ratio)})` }}
-          />
-        </div>
-        <p className="text-muted-foreground text-[11px] tabular-nums">
-          {format.number(ratio, { style: "percent" })}
-        </p>
-        <p className="text-muted-foreground text-[11px]">
-          {t("inspector.review.reviewingHint")}
-        </p>
-      </div>
-    </div>
+    <LoaderState
+      className="bg-background"
+      detail={detail.length > 0 ? detail : undefined}
+      hint={t("inspector.review.reviewingHint")}
+      label={t("inspector.review.reviewing")}
+    />
   );
 };
 
 // The facet is asking the server what this document's latest run is; the
-// answer decides between a restored review and the launcher.
+// answer decides between a restored review and the launcher, so the skeleton
+// is the launcher's own shape: a section label and two option groups.
 const ReviewLoadingState = () => {
   const t = useTranslations();
   return (
@@ -1344,9 +1878,9 @@ const ReviewLoadingState = () => {
       aria-label={t("common.loading")}
       className="bg-background flex h-full flex-col gap-3 p-4"
     >
-      <div className="bg-muted h-4 w-1/3 animate-pulse rounded" />
-      <div className="bg-muted h-20 w-full animate-pulse rounded-lg" />
-      <div className="bg-muted h-20 w-full animate-pulse rounded-lg" />
+      <Skeleton className="h-4 w-1/3" />
+      <Skeleton className="h-20 w-full rounded-lg" />
+      <Skeleton className="h-20 w-full rounded-lg" />
     </div>
   );
 };
@@ -1403,6 +1937,11 @@ type ResultsViewProps = {
   freshness: ReviewRunFreshness;
   negotiationBySourceId: ReadonlyMap<string, Negotiation>;
   playbookName: string;
+  /** The side the run's comparison was judged for; labels impacts. */
+  perspective: ReviewPerspective;
+  targetFileFieldId: string;
+  runId: string;
+  workspaceId: string;
   editorAvailable: boolean;
   topics: readonly ReviewTopic[];
   onDecide: (
@@ -1411,10 +1950,19 @@ type ResultsViewProps = {
   ) => void;
   onReviewAgain: () => void;
   onScrollToBlock: (blockId: string) => void;
-  onInsertFix: (findingId: string, fix: ReviewFindingFix | null) => void;
+  /** Redline one finding's proposed wording into the draft. */
+  onInsertFix: (
+    plan: AcceptedFixPlan,
+    findingIds: readonly DocumentReviewFindingRow["id"][],
+  ) => void;
   onScrollToFix: (revisionIds: readonly number[]) => void;
   onAcceptFix: (findingId: string, revisionIds: readonly number[]) => void;
-  onAddReferenceComment: (finding: ReferenceFinding) => void;
+  /** Write a drafting note for a finding with no wording to propose. */
+  onAddReferenceComment: (
+    finding: ReferenceFinding,
+    findingIds: readonly DocumentReviewFindingRow["id"][],
+  ) => void;
+  onApplyAccepted: (plans: readonly AcceptedFixPlan[]) => void;
   onOpenReferenceCitation: (
     referenceFieldId: string,
     blockId: string,
@@ -1435,6 +1983,10 @@ const ResultsView = ({
   freshness,
   negotiationBySourceId,
   playbookName,
+  perspective,
+  targetFileFieldId,
+  runId,
+  workspaceId,
   editorAvailable,
   topics,
   onDecide,
@@ -1444,6 +1996,7 @@ const ResultsView = ({
   onScrollToFix,
   onAcceptFix,
   onAddReferenceComment,
+  onApplyAccepted,
   onOpenReferenceCitation,
   onRejectFix,
 }: ResultsViewProps) => {
@@ -1455,6 +2008,12 @@ const ResultsView = ({
     decisions,
   });
   const progress = reviewDecisionProgress(decisionCounts);
+  const acceptedPlans = collectAcceptedFixes({
+    items: results,
+    fixStateByFinding,
+    references,
+    playbookName,
+  });
 
   return (
     <div className="bg-background flex h-full flex-col">
@@ -1477,6 +2036,7 @@ const ResultsView = ({
               })}
             </span>
           )}
+          <ReviewExportMenu runId={runId} workspaceId={workspaceId} />
           <Button onClick={onReviewAgain} size="xs" variant="outline">
             {t("inspector.review.reviewAgain")}
           </Button>
@@ -1488,6 +2048,12 @@ const ResultsView = ({
           freshness={freshness}
           onReviewAgain={onReviewAgain}
         />
+        {editorAvailable && acceptedPlans.length > 0 && (
+          <ApplyAcceptedBar
+            count={acceptedPlans.length}
+            onApply={() => onApplyAccepted(acceptedPlans)}
+          />
+        )}
         {playbookFindings !== null && playbookFindings.length > 0 && (
           <RiskSummaryCard
             editorAvailable={editorAvailable}
@@ -1507,11 +2073,14 @@ const ResultsView = ({
             onAddComment={onAddReferenceComment}
             onDecide={onDecide}
             onInsertFix={onInsertFix}
+            playbookName={playbookName}
             onOpenReferenceCitation={onOpenReferenceCitation}
             onRejectFix={onRejectFix}
             onScrollToBlock={onScrollToBlock}
             onScrollToFix={onScrollToFix}
+            perspective={perspective}
             references={references}
+            targetFileFieldId={targetFileFieldId}
           />
         ) : (
           <NoReviewIssues />
@@ -1520,6 +2089,50 @@ const ResultsView = ({
     </div>
   );
 };
+
+// TODO(i18n): English until the review surface is localized as a whole.
+const APPLY_ACCEPTED_LABEL = "Apply all as tracked changes";
+const APPLY_ACCEPTED_FAILED = "Some accepted changes could not be applied";
+// The editor sits hidden under this facet, so every write into the document
+// confirms itself and offers the way there.
+const NOTE_ADDED_TITLE = "Drafting note added to the draft";
+const SHOW_IN_DOCUMENT_LABEL = "Show in document";
+const applyAcceptedDoneTitle = (count: number): string =>
+  count === 1
+    ? "Redlined in the draft, with a note citing the precedent"
+    : `${count} changes redlined in the draft, each with a note`;
+// Card actions, named by what they do to the draft.
+const REDLINE_LABEL = "Redline";
+const NOTE_TO_DRAFT_LABEL = "Note to draft";
+const NOTE_ADDED_LABEL = "Note added";
+const NO_CHANGE_LABEL = "No change needed";
+const applyAcceptedPendingDescription = (count: number): string =>
+  count === 1
+    ? "1 accepted change is not in the document yet"
+    : `${count} accepted changes are not in the document yet`;
+const applyAcceptedSkippedDescription = (count: number): string =>
+  count === 1
+    ? "1 change no longer matches the document"
+    : `${count} changes no longer match the document`;
+
+type ApplyAcceptedBarProps = {
+  count: number;
+  onApply: () => void;
+};
+
+/** Accepted findings whose wording is still outside the document: one
+ *  action puts every one of them in as tracked changes, each with a
+ *  comment citing its precedent. */
+const ApplyAcceptedBar = ({ count, onApply }: ApplyAcceptedBarProps) => (
+  <div className="bg-muted/50 mb-2 flex items-center justify-between gap-2 rounded-md border px-3 py-2">
+    <span className="text-muted-foreground min-w-0 text-xs tabular-nums">
+      {applyAcceptedPendingDescription(count)}
+    </span>
+    <Button onClick={onApply} size="xs" variant="default">
+      {APPLY_ACCEPTED_LABEL}
+    </Button>
+  </div>
+);
 
 /** Which notice a pinned playbook calls for, or none while it is still the one
  *  an author would run today. Total over the freshness vocabulary. */
@@ -1639,6 +2252,9 @@ const NoReviewIssues = () => {
 type ReviewResultListProps = {
   items: readonly ReviewResultItem[];
   references: readonly ReferenceFile[];
+  playbookName: string;
+  perspective: ReviewPerspective;
+  targetFileFieldId: string;
   commentStateByFinding: Record<string, ReviewCommentState>;
   decisionPending: boolean;
   fixStateByFinding: Record<string, ReviewFixState>;
@@ -1649,10 +2265,16 @@ type ReviewResultListProps = {
     decision: DocumentReviewDecision,
   ) => void;
   onScrollToBlock: (blockId: string) => void;
-  onInsertFix: (findingId: string, fix: ReviewFindingFix | null) => void;
+  onInsertFix: (
+    plan: AcceptedFixPlan,
+    findingIds: readonly DocumentReviewFindingRow["id"][],
+  ) => void;
   onScrollToFix: (revisionIds: readonly number[]) => void;
   onAcceptFix: (findingId: string, revisionIds: readonly number[]) => void;
-  onAddComment: (finding: ReferenceFinding) => void;
+  onAddComment: (
+    finding: ReferenceFinding,
+    findingIds: readonly DocumentReviewFindingRow["id"][],
+  ) => void;
   onOpenReferenceCitation: (
     referenceFieldId: string,
     blockId: string,
@@ -1666,6 +2288,8 @@ type ReviewResultFilter = "actionable" | "all";
 const ReviewResultList = ({
   items,
   references,
+  perspective,
+  targetFileFieldId,
   commentStateByFinding,
   decisionPending,
   fixStateByFinding,
@@ -1679,16 +2303,20 @@ const ReviewResultList = ({
   onAddComment,
   onOpenReferenceCitation,
   onRejectFix,
+  playbookName,
 }: ReviewResultListProps) => {
   const t = useTranslations();
   const format = useFormatter();
+  // What cuts against the reviewer's side comes first, worst on top; the run's
+  // own order only breaks ties.
+  const orderedItems = sortReviewResultItems(items);
   // Deciding a card takes it out of this list without changing what the run
   // found: "Action needed" counts findings nobody has answered yet.
-  const actionableItems = items.filter(isReviewResultActionNeeded);
+  const actionableItems = orderedItems.filter(isReviewResultActionNeeded);
   const [filter, setFilter] = useState<ReviewResultFilter>(
     actionableItems.length > 0 ? "actionable" : "all",
   );
-  const visibleItems = filter === "actionable" ? actionableItems : items;
+  const visibleItems = filter === "actionable" ? actionableItems : orderedItems;
   const [expandedId, setExpandedId] = useState(
     actionableItems.at(0)?.id ?? items.at(0)?.id ?? null,
   );
@@ -1749,6 +2377,7 @@ const ReviewResultList = ({
             onAddComment={onAddComment}
             onDecide={onDecide}
             onInsertFix={onInsertFix}
+            playbookName={playbookName}
             onOpenReferenceCitation={onOpenReferenceCitation}
             onRejectFix={onRejectFix}
             onScrollToBlock={onScrollToBlock}
@@ -1756,7 +2385,9 @@ const ReviewResultList = ({
             onToggle={() =>
               setExpandedId(visibleExpandedId === item.id ? null : item.id)
             }
+            perspective={perspective}
             references={references}
+            targetFileFieldId={targetFileFieldId}
           />
         ))}
       </ul>
@@ -1780,6 +2411,9 @@ const ReviewResultList = ({
 type ReviewResultCardProps = {
   item: ReviewResultItem;
   references: readonly ReferenceFile[];
+  playbookName: string;
+  perspective: ReviewPerspective;
+  targetFileFieldId: string;
   commentStateByFinding: Record<string, ReviewCommentState>;
   decisionPending: boolean;
   fixStateByFinding: Record<string, ReviewFixState>;
@@ -1792,10 +2426,16 @@ type ReviewResultCardProps = {
   ) => void;
   onToggle: () => void;
   onScrollToBlock: (blockId: string) => void;
-  onInsertFix: (findingId: string, fix: ReviewFindingFix | null) => void;
+  onInsertFix: (
+    plan: AcceptedFixPlan,
+    findingIds: readonly DocumentReviewFindingRow["id"][],
+  ) => void;
   onScrollToFix: (revisionIds: readonly number[]) => void;
   onAcceptFix: (findingId: string, revisionIds: readonly number[]) => void;
-  onAddComment: (finding: ReferenceFinding) => void;
+  onAddComment: (
+    finding: ReferenceFinding,
+    findingIds: readonly DocumentReviewFindingRow["id"][],
+  ) => void;
   onOpenReferenceCitation: (
     referenceFieldId: string,
     blockId: string,
@@ -1807,6 +2447,8 @@ type ReviewResultCardProps = {
 const ReviewResultCard = ({
   item,
   references,
+  perspective,
+  targetFileFieldId,
   commentStateByFinding,
   decisionPending,
   fixStateByFinding,
@@ -1822,6 +2464,7 @@ const ReviewResultCard = ({
   onAddComment,
   onOpenReferenceCitation,
   onRejectFix,
+  playbookName,
 }: ReviewResultCardProps) => {
   const t = useTranslations();
   const verdictLabels = useVerdictLabels();
@@ -1891,23 +2534,57 @@ const ReviewResultCard = ({
                 {severityLabels[playbook.severity]}
               </span>
             )}
-            {reference !== null && (
-              <span
-                className={cn(
-                  "inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[11px] font-medium",
-                  referenceAssessmentChipClass(reference.assessment),
-                )}
-              >
-                <span
-                  aria-hidden="true"
-                  className={cn(
-                    "size-1.5 rounded-full",
-                    referenceAssessmentDotClass(reference.assessment),
+            {/* A comparison judged for a side says which way it cuts and how
+                much; only an undirected one falls back to the bare
+                assessment. */}
+            {reference !== null &&
+              (isDirectedImpact(reference.impact) ? (
+                <>
+                  <span
+                    className={cn(
+                      "inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[11px] font-medium",
+                      impactChipClass(reference.impact),
+                    )}
+                  >
+                    <span
+                      aria-hidden="true"
+                      className={cn(
+                        "size-1.5 rounded-full",
+                        impactDotClass(reference.impact),
+                      )}
+                    />
+                    {impactLabel(reference.impact, perspective)}
+                  </span>
+                  {reference.severity !== undefined && (
+                    <span className="text-muted-foreground inline-flex items-center gap-1 text-[11px] font-medium">
+                      <span
+                        aria-hidden="true"
+                        className={cn(
+                          "size-1.5 rounded-full",
+                          severityDotClass(reference.severity),
+                        )}
+                      />
+                      {severityLabels[reference.severity]}
+                    </span>
                   )}
-                />
-                {assessmentLabels[reference.assessment]}
-              </span>
-            )}
+                </>
+              ) : (
+                <span
+                  className={cn(
+                    "inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[11px] font-medium",
+                    referenceAssessmentChipClass(reference.assessment),
+                  )}
+                >
+                  <span
+                    aria-hidden="true"
+                    className={cn(
+                      "size-1.5 rounded-full",
+                      referenceAssessmentDotClass(reference.assessment),
+                    )}
+                  />
+                  {assessmentLabels[reference.assessment]}
+                </span>
+              ))}
             {reference?.consensus === "mixed" && (
               <span className="border-warning/30 text-warning-foreground inline-flex items-center rounded-full border px-1.5 py-0.5 text-[11px] font-medium">
                 {t("inspector.review.referencesDisagree")}
@@ -1978,6 +2655,14 @@ const ReviewResultCard = ({
                   ? reference.explanation.text
                   : t("inspector.review.insufficientEvidence")}
               </p>
+              {typeof reference.recommendation === "string" && (
+                <p className="text-foreground text-xs leading-snug text-pretty">
+                  <span className="text-foreground-strong-muted font-medium">
+                    {RECOMMENDATION_LABEL}
+                  </span>{" "}
+                  {reference.recommendation}
+                </p>
+              )}
             </section>
           )}
           <ReviewEvidence
@@ -1991,6 +2676,7 @@ const ReviewResultCard = ({
           <ReviewResultActions
             editorAvailable={editorAvailable}
             commentStateByFinding={commentStateByFinding}
+            findingRows={item.decisions}
             fixStateByFinding={fixStateByFinding}
             onAcceptFix={onAcceptFix}
             onAddComment={onAddComment}
@@ -1998,10 +2684,24 @@ const ReviewResultCard = ({
             onRejectFix={onRejectFix}
             onScrollToFix={onScrollToFix}
             playbook={playbook}
+            playbookName={playbookName}
             reference={reference}
+            references={references}
           />
           <ReviewDecisionActions
             decision={decision}
+            onAskInChat={() =>
+              useInspectorCommandStore.getState().requestFileChatDraft({
+                fileFieldId: targetFileFieldId,
+                html: buildFindingChatDraft({
+                  item,
+                  references,
+                  perspective,
+                  targetLabel: t("inspector.review.targetDocument"),
+                  referenceLabel: t("inspector.review.referenceDocument"),
+                }),
+              })
+            }
             onDecide={(next) =>
               onDecide(
                 item.decisions.map((row) => row.id),
@@ -2030,9 +2730,10 @@ const DECISION_LABEL = {
 } as const satisfies Record<DecidedReviewDecision, TranslationKey>;
 
 /**
- * The reviewer's disposition on one card. Accepting and dismissing are the
- * same gesture with different meanings — the finding was dealt with, or it was
- * judged not to matter — and both are withdrawn by reopening it.
+ * The reviewer's disposition on one card. "Accepted" is not a button: a
+ * finding is accepted by acting on it (a redline or a drafting note in the
+ * draft). The only standalone verdict is that no change is needed, and it is
+ * withdrawn by reopening the card.
  *
  * A card joins one finding per check kind, so the decision is recorded against
  * every row behind it: a reviewer answers the topic, not the executor.
@@ -2040,10 +2741,13 @@ const DECISION_LABEL = {
 const ReviewDecisionActions = ({
   decision,
   pending,
+  onAskInChat,
   onDecide,
 }: {
   decision: DocumentReviewDecision;
   pending: boolean;
+  /** Hand the finding to the chat over the document, as a draft to edit. */
+  onAskInChat: () => void;
   onDecide: (decision: DocumentReviewDecision) => void;
 }) => {
   const t = useTranslations();
@@ -2052,29 +2756,26 @@ const ReviewDecisionActions = ({
       aria-label={t("inspector.review.decision")}
       className="flex flex-wrap items-center gap-2 border-t pt-3"
     >
+      <Button
+        className="text-muted-foreground hover:text-foreground order-last ms-auto h-7 px-2 text-xs"
+        onClick={onAskInChat}
+        size="sm"
+        variant="ghost"
+      >
+        <MessageSquareIcon className="me-1 size-3.5" />
+        {ASK_IN_CHAT_LABEL}
+      </Button>
       {decision === REVIEW_DECISION.OPEN ? (
-        <>
-          <Button
-            className="h-7 px-2.5 text-xs"
-            disabled={pending}
-            onClick={() => onDecide(REVIEW_DECISION.ACCEPTED)}
-            size="sm"
-            variant="outline"
-          >
-            <CheckIcon className="me-1 size-3.5" />
-            {t("common.accept")}
-          </Button>
-          <Button
-            className="h-7 px-2.5 text-xs"
-            disabled={pending}
-            onClick={() => onDecide(REVIEW_DECISION.DISMISSED)}
-            size="sm"
-            variant="ghost"
-          >
-            <XIcon className="me-1 size-3.5" />
-            {t("inspector.review.dismiss")}
-          </Button>
-        </>
+        <Button
+          className="h-7 px-2.5 text-xs"
+          disabled={pending}
+          onClick={() => onDecide(REVIEW_DECISION.DISMISSED)}
+          size="sm"
+          variant="ghost"
+        >
+          <XIcon className="me-1 size-3.5" />
+          {NO_CHANGE_LABEL}
+        </Button>
       ) : (
         <Button
           className="h-7 px-2.5 text-xs"
@@ -2167,7 +2868,7 @@ const ReviewEvidence = ({
   );
 };
 
-const CITATION_PREVIEW_CHARS = 72;
+const CITATION_ARIA_CHARS = 72;
 
 type CitationGroupProps = {
   label: string;
@@ -2175,6 +2876,12 @@ type CitationGroupProps = {
   onActivate: ((citation: PlaybookCitation) => void) | undefined;
 };
 
+/**
+ * The cited passages of one document, quoted in full: the point of the card
+ * is to see how the topic is drafted here and there, so the text is on the
+ * card, not behind a chip. Each passage is the affordance that scrolls its
+ * document to the block.
+ */
 const CitationGroup = ({
   label,
   citations,
@@ -2182,36 +2889,47 @@ const CitationGroup = ({
 }: CitationGroupProps) => {
   const t = useTranslations();
   return (
-    <div className="space-y-1.5">
+    <div className="space-y-1">
       <p className="text-foreground-strong-muted flex items-center gap-1 text-[11px] font-medium">
         <FileTextIcon className="size-3 shrink-0" />
-        <BidiText>{label}</BidiText>
+        <BidiText className="truncate">{label}</BidiText>
       </p>
-      <div className="flex flex-wrap gap-1">
+      <ul className="space-y-1">
         {citations.map((citation) => {
           const trimmed = citation.text.trim();
-          const preview =
-            trimmed.length > CITATION_PREVIEW_CHARS
-              ? `${trimmed.slice(0, CITATION_PREVIEW_CHARS).trimEnd()}…`
-              : trimmed || t("knowledge.playbooks.review.viewClause");
+          const ariaLabel = t("chat.openCitation", {
+            label:
+              trimmed.length > CITATION_ARIA_CHARS
+                ? `${trimmed.slice(0, CITATION_ARIA_CHARS).trimEnd()}…`
+                : trimmed || t("knowledge.playbooks.review.viewClause"),
+          });
+          const passageClass =
+            "border-s-2 border-border bg-muted/40 block w-full rounded-e-md ps-2.5 pe-2 py-1.5 text-start text-xs leading-relaxed";
           return (
-            <InlinePill
-              ariaLabel={t("chat.openCitation", { label: preview })}
-              key={citation.blockId}
-              leadingIcon={<FileTextIcon className="size-3 shrink-0" />}
-              onActivate={
-                onActivate === undefined
-                  ? undefined
-                  : () => onActivate(citation)
-              }
-              tooltip={trimmed || undefined}
-              truncate
-            >
-              <BidiText>{preview}</BidiText>
-            </InlinePill>
+            <li key={citation.blockId}>
+              {onActivate === undefined ? (
+                <BidiText as="p" className={passageClass}>
+                  {trimmed || t("knowledge.playbooks.review.viewClause")}
+                </BidiText>
+              ) : (
+                <button
+                  aria-label={ariaLabel}
+                  className={cn(
+                    passageClass,
+                    "hover:border-ring hover:bg-muted transition-colors duration-150",
+                  )}
+                  onClick={() => onActivate(citation)}
+                  type="button"
+                >
+                  <BidiText>
+                    {trimmed || t("knowledge.playbooks.review.viewClause")}
+                  </BidiText>
+                </button>
+              )}
+            </li>
           );
         })}
-      </div>
+      </ul>
     </div>
   );
 };
@@ -2219,19 +2937,32 @@ const CitationGroup = ({
 type ReviewResultActionsProps = {
   playbook: PlaybookFinding | null;
   reference: ReferenceFinding | null;
+  references: readonly ReferenceFile[];
+  playbookName: string;
+  /** Every finding row the card stands for; acting on the card answers all. */
+  findingRows: readonly ReviewFindingDecisionRow[];
   commentStateByFinding: Record<string, ReviewCommentState>;
   fixStateByFinding: Record<string, ReviewFixState>;
   editorAvailable: boolean;
-  onInsertFix: (findingId: string, fix: ReviewFindingFix | null) => void;
+  onInsertFix: (
+    plan: AcceptedFixPlan,
+    findingIds: readonly DocumentReviewFindingRow["id"][],
+  ) => void;
   onScrollToFix: (revisionIds: readonly number[]) => void;
   onAcceptFix: (findingId: string, revisionIds: readonly number[]) => void;
-  onAddComment: (finding: ReferenceFinding) => void;
+  onAddComment: (
+    finding: ReferenceFinding,
+    findingIds: readonly DocumentReviewFindingRow["id"][],
+  ) => void;
   onRejectFix: (findingId: string, revisionIds: readonly number[]) => void;
 };
 
 const ReviewResultActions = ({
   playbook,
   reference,
+  references,
+  playbookName,
+  findingRows,
   commentStateByFinding,
   fixStateByFinding,
   editorAvailable,
@@ -2242,6 +2973,27 @@ const ReviewResultActions = ({
   onRejectFix,
 }: ReviewResultActionsProps) => {
   const t = useTranslations();
+  const findingIds = findingRows.map((row) => row.id);
+  const playbookRow = findingRows.find((row) => row.checkKind === "playbook");
+  const referenceRow = findingRows.find((row) => row.checkKind === "reference");
+  const playbookPlan =
+    playbook === null || playbookRow === undefined
+      ? null
+      : playbookFixPlan({
+          findingId: playbookRow.id,
+          playbook,
+          playbookName,
+        });
+  const referencePlan =
+    reference === null || referenceRow === undefined
+      ? null
+      : referenceFixPlan({
+          findingId: referenceRow.id,
+          reference,
+          references,
+        });
+  const noteState =
+    reference === null ? undefined : commentStateByFinding[reference.findingId];
   const playbookRevisionIds =
     playbook === null
       ? null
@@ -2274,14 +3026,22 @@ const ReviewResultActions = ({
             editorAvailable={editorAvailable}
             fixKind="playbook"
             fixStatus={
-              fixStateByFinding[playbook.positionId]?.status ?? "pending"
+              fixStateByFinding[playbook.positionId]?.status ??
+              (playbookRow?.applicationStatus ===
+              REVIEW_APPLICATION_STATUS.APPLIED
+                ? "accepted"
+                : "pending")
             }
             onAccept={() => {
               if (playbookRevisionIds !== null) {
                 onAcceptFix(playbook.positionId, playbookRevisionIds);
               }
             }}
-            onInsert={() => onInsertFix(playbook.positionId, playbook.fix)}
+            onInsert={() => {
+              if (playbookPlan !== null) {
+                onInsertFix(playbookPlan, findingIds);
+              }
+            }}
             onReject={() => {
               if (playbookRevisionIds !== null) {
                 onRejectFix(playbook.positionId, playbookRevisionIds);
@@ -2307,14 +3067,22 @@ const ReviewResultActions = ({
               editorAvailable={editorAvailable}
               fixKind="reference"
               fixStatus={
-                fixStateByFinding[reference.findingId]?.status ?? "pending"
+                fixStateByFinding[reference.findingId]?.status ??
+                (referenceRow?.applicationStatus ===
+                REVIEW_APPLICATION_STATUS.APPLIED
+                  ? "accepted"
+                  : "pending")
               }
               onAccept={() => {
                 if (referenceRevisionIds !== null) {
                   onAcceptFix(reference.findingId, referenceRevisionIds);
                 }
               }}
-              onInsert={() => onInsertFix(reference.findingId, reference.fix)}
+              onInsert={() => {
+                if (referencePlan !== null) {
+                  onInsertFix(referencePlan, findingIds);
+                }
+              }}
               onReject={() => {
                 if (referenceRevisionIds !== null) {
                   onRejectFix(reference.findingId, referenceRevisionIds);
@@ -2327,22 +3095,31 @@ const ReviewResultActions = ({
               }}
             />
           )}
-          {reference.targetCitations.length > 0 &&
-            reference.explanation.type === "comparison" &&
-            reference.explanation.text.length > 0 && (
-              <Button
-                className="mt-2 h-7 px-2.5 text-xs"
-                disabled={
-                  !editorAvailable ||
-                  commentStateByFinding[reference.findingId] !== undefined
-                }
-                onClick={() => onAddComment(reference)}
-                size="sm"
-                variant="ghost"
-              >
-                {t("inspector.review.addComment")}
-              </Button>
-            )}
+          {/* No wording to propose: the finding still earns a drafting
+              note on the clause, with the precedent, for the drafter to
+              resolve. A finding with wording carries its note with the
+              redline instead. */}
+          {reference.fix === null &&
+            reference.targetCitations.length > 0 &&
+            buildDraftNote(reference, references) !== null &&
+            (noteState?.status === "applied" ? (
+              <div className="text-muted-foreground mt-2 flex items-center gap-1 text-[11px]">
+                <CheckIcon className="size-3" />
+                {NOTE_ADDED_LABEL}
+              </div>
+            ) : (
+              <div className="mt-2">
+                <Button
+                  className="h-7 px-2.5 text-xs"
+                  disabled={!editorAvailable || noteState !== undefined}
+                  onClick={() => onAddComment(reference, findingIds)}
+                  size="sm"
+                >
+                  <MessageSquareIcon className="me-1 size-3.5" />
+                  {NOTE_TO_DRAFT_LABEL}
+                </Button>
+              </div>
+            ))}
         </div>
       )}
     </section>
@@ -2604,6 +3381,8 @@ const FixActions = ({
     );
   }
 
+  // One primary gesture, named by its effect on the draft: the wording goes
+  // in as a tracked change with a margin note citing its source.
   return (
     <div className="mt-2">
       <Button
@@ -2611,12 +3390,14 @@ const FixActions = ({
         disabled={!editorAvailable}
         onClick={onInsert}
         size="sm"
-        variant="outline"
+        title={
+          fixKind === "playbook"
+            ? t("knowledge.playbooks.review.insertPreferred")
+            : t("inspector.review.insertSuggestion")
+        }
       >
-        <CheckIcon className="me-1 size-3.5" />
-        {fixKind === "playbook"
-          ? t("knowledge.playbooks.review.insertPreferred")
-          : t("inspector.review.insertSuggestion")}
+        <PenLineIcon className="me-1 size-3.5" />
+        {REDLINE_LABEL}
       </Button>
     </div>
   );
@@ -2728,14 +3509,6 @@ const negotiationLookup = (
 
 // -- helpers --
 
-const toFolioFixOperation = (fix: ReviewFindingFix): FolioAIEditOperation => {
-  const id = `pb-fix-${uuidv7()}`;
-  if (fix.kind === "replaceBlock") {
-    return { id, type: "replaceBlock", blockId: fix.blockId, text: fix.text };
-  }
-  return { id, type: "insertAfterBlock", blockId: fix.blockId, text: fix.text };
-};
-
 const useVerdictLabels = (): Record<PlaybookVerdict, string> => {
   const t = useTranslations();
   return {
@@ -2771,6 +3544,55 @@ const useReferenceAssessmentLabels = (): Record<
     "not-comparable": t("inspector.review.assessment.notComparable"),
   };
 };
+
+type DirectedImpact = Exclude<
+  NonNullable<ReferenceFinding["impact"]>,
+  "unknown"
+>;
+
+/** An impact the card can put a direction on; `unknown` and findings that
+ *  predate impacts fall back to the assessment chip. */
+const isDirectedImpact = (
+  impact: ReferenceFinding["impact"],
+): impact is DirectedImpact => impact !== undefined && impact !== "unknown";
+
+// English until the results copy settles; then it joins the catalog. Labels
+// name the side so "worse" is never ambiguous on a printed or shared card.
+const IMPACT_LABEL = {
+  unfavourable: "Unfavourable",
+  favourable: "Favourable",
+  neutral: "No effect",
+} as const satisfies Record<DirectedImpact, string>;
+const IMPACT_FOR_SIDE_LABEL = {
+  unfavourable: "Worse for",
+  favourable: "Better for",
+  neutral: "No effect for",
+} as const satisfies Record<DirectedImpact, string>;
+
+const impactLabel = (
+  impact: DirectedImpact,
+  perspective: ReviewPerspective,
+): string =>
+  perspective.type === "party"
+    ? `${IMPACT_FOR_SIDE_LABEL[impact]} ${perspective.role}`
+    : IMPACT_LABEL[impact];
+
+const IMPACT_CHIP_CLASS = {
+  unfavourable: "border-warning/30 text-warning-foreground",
+  favourable: "border-success/30 text-success",
+  neutral: "border-border text-muted-foreground",
+} as const satisfies Record<DirectedImpact, string>;
+
+const IMPACT_DOT_CLASS = {
+  unfavourable: "bg-warning",
+  favourable: "bg-success",
+  neutral: "bg-muted-foreground",
+} as const satisfies Record<DirectedImpact, string>;
+
+const impactChipClass = (impact: DirectedImpact): string =>
+  IMPACT_CHIP_CLASS[impact];
+const impactDotClass = (impact: DirectedImpact): string =>
+  IMPACT_DOT_CLASS[impact];
 
 const REFERENCE_ASSESSMENT_ALIGNED = "border-success/30 text-success";
 const REFERENCE_ASSESSMENT_DIFFERENT =

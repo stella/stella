@@ -133,7 +133,7 @@ const AnonymousViewDock = ({ tabs }: { tabs: readonly GenericTab[] }) => {
               <PanelRightIcon className="size-4" />
             </Tooltip>
           </div>
-          <div className="flex flex-col items-center gap-1 py-2">
+          <div className="flex flex-col">
             {tabs.map((tab) => (
               <RailTabButton
                 active={tab.id === active?.id && !minimized}

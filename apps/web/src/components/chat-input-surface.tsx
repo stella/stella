@@ -270,7 +270,7 @@ export const ChatInputSurface = ({
                   className={cn(
                     COMPOSER_PLACEHOLDER_CLASS,
                     variant === "compact"
-                      ? "start-0 end-0 top-1"
+                      ? "start-0 end-0 top-1/2 -translate-y-1/2"
                       : "start-3 end-3 top-2",
                   )}
                 >

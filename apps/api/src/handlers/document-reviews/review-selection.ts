@@ -3,12 +3,13 @@ import { Result } from "better-result";
 import type { FieldContent } from "@/api/db/schema-validators";
 import type { DocumentReviewRef } from "@/api/handlers/document-reviews/schemas";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { ReviewFile } from "@/api/lib/document-review/prepare-review-files";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import type { ResolvedFile } from "@/api/lib/workflow/generate-batch-shared";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 type ReviewEntityRow = {
   id: SafeId<"entity">;
+  workspaceId: SafeId<"workspace">;
   currentVersion: {
     id: SafeId<"entityVersion">;
     fields: {
@@ -19,9 +20,10 @@ type ReviewEntityRow = {
 };
 
 export type ResolvedReviewDocument = {
+  workspaceId: SafeId<"workspace">;
   entityId: SafeId<"entity">;
   entityVersionId: SafeId<"entityVersion">;
-  file: ResolvedFile;
+  file: ReviewFile;
   /** Pinned file's stored size, for pre-flight run sizing. */
   fileSizeBytes: number;
 };
@@ -29,6 +31,8 @@ export type ResolvedReviewDocument = {
 type ResolveReviewSelectionArgs = {
   target: DocumentReviewRef;
   references: readonly DocumentReviewRef[];
+  /** Entity rows the caller loaded under its own access scope: a document the
+   *  caller may not read is simply absent here and resolves to 404. */
   entities: readonly ReviewEntityRow[];
 };
 
@@ -41,7 +45,9 @@ const resolveOne = (
 ): Result<ResolvedReviewDocument, HandlerError> => {
   const entity = entityById.get(ref.entityId);
   const currentVersion = entity?.currentVersion;
-  if (!entity || !currentVersion) {
+  // A row from a different matter than the reference claims is treated like
+  // a missing one: the client's workspace is part of the document's identity.
+  if (!entity || !currentVersion || entity.workspaceId !== ref.workspaceId) {
     return Result.err(
       new HandlerError({ status: 404, message: "Document not found" }),
     );
@@ -64,10 +70,12 @@ const resolveOne = (
   }
 
   return Result.ok({
+    workspaceId: entity.workspaceId,
     entityId: entity.id,
     entityVersionId: currentVersion.id,
     fileSizeBytes: field.content.sizeBytes,
     file: {
+      workspaceId: entity.workspaceId,
       fileFieldId: field.id,
       fileId: field.content.id,
       mimeType: field.content.mimeType,

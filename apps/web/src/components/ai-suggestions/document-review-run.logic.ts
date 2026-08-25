@@ -8,7 +8,11 @@
  * an already active run (409).
  */
 
-import type { ReferenceFile } from "@/components/ai-suggestions/document-review-basis.logic";
+import { NEUTRAL_PERSPECTIVE } from "@/components/ai-suggestions/document-review-basis.logic";
+import type {
+  ReferenceFile,
+  ReviewPerspective,
+} from "@/components/ai-suggestions/document-review-basis.logic";
 import type {
   DecidedReviewFinding,
   DocumentReviewDecision,
@@ -155,16 +159,23 @@ export type RestoredReviewBasis = {
   playbookId: string | null;
   playbookName: string;
   references: ReferenceFile[];
+  /** The side the run's comparison was judged for; `neutral` for a
+   *  playbook-only run, which had no comparison. */
+  perspective: ReviewPerspective;
 };
 
 const pinnedReferenceFiles = (
   references: readonly {
+    workspaceId: string;
+    workspaceName: string;
     entityId: string;
     fileFieldId: string;
     name: string;
   }[],
 ): ReferenceFile[] =>
   references.map((reference) => ({
+    workspaceId: reference.workspaceId,
+    workspaceName: reference.workspaceName,
     entityId: reference.entityId,
     fileFieldId: reference.fileFieldId,
     name: reference.name,
@@ -182,22 +193,30 @@ export const restoreReviewBasis = (
         playbookId: basis.playbook.definitionId,
         playbookName: basis.playbook.definitionSnapshot.name,
         references: [],
+        perspective: NEUTRAL_PERSPECTIVE,
       };
     case "references":
       return {
         playbookId: null,
         playbookName: "",
         references: pinnedReferenceFiles(basis.references),
+        perspective: basis.perspective,
       };
     case "combined":
       return {
         playbookId: basis.playbook.definitionId,
         playbookName: basis.playbook.definitionSnapshot.name,
         references: pinnedReferenceFiles(basis.references),
+        perspective: basis.perspective,
       };
     default:
       basis satisfies never;
-      return { playbookId: null, playbookName: "", references: [] };
+      return {
+        playbookId: null,
+        playbookName: "",
+        references: [],
+        perspective: NEUTRAL_PERSPECTIVE,
+      };
   }
 };
 
@@ -206,7 +225,7 @@ export const restoreReviewBasis = (
  *  to the judgment the model produced. */
 export type ReviewFindingDecisionRow = Pick<
   DocumentReviewFindingRow,
-  "id" | "topicId" | "decision"
+  "id" | "topicId" | "checkKind" | "decision" | "applicationStatus"
 >;
 
 export type RestoredReviewRun = {
@@ -236,7 +255,9 @@ export const restoreReviewRun = ({
     decisions.push({
       id: finding.id,
       topicId: finding.topicId,
+      checkKind: finding.checkKind,
       decision: finding.decision,
+      applicationStatus: finding.applicationStatus,
     });
     switch (finding.payload.checkKind) {
       case "playbook":
@@ -343,6 +364,9 @@ export const applyFindingDecisions = (
       decision: update.decision,
       decidedBy: update.decidedBy,
       decidedAt: update.decidedAt,
+      applicationStatus: update.applicationStatus,
+      appliedBy: update.appliedBy,
+      appliedAt: update.appliedAt,
     };
   });
   return {

@@ -34,9 +34,17 @@ const fileContent = (mimeType: string) => ({
   pdfFileId: "00000000-0000-0000-0000-000000000008",
 });
 
+const workspaceId = toSafeId<"workspace">(
+  "00000000-0000-0000-0000-000000000009",
+);
+const otherWorkspaceId = toSafeId<"workspace">(
+  "00000000-0000-0000-0000-000000000010",
+);
+
 const entityRows = (referenceMimeType: string = DOCX_MIME_TYPE) => [
   {
     id: targetEntityId,
+    workspaceId,
     currentVersion: {
       id: targetVersionId,
       fields: [{ id: targetFieldId, content: fileContent(DOCX_MIME_TYPE) }],
@@ -44,6 +52,7 @@ const entityRows = (referenceMimeType: string = DOCX_MIME_TYPE) => [
   },
   {
     id: referenceEntityId,
+    workspaceId,
     currentVersion: {
       id: referenceVersionId,
       fields: [
@@ -53,8 +62,13 @@ const entityRows = (referenceMimeType: string = DOCX_MIME_TYPE) => [
   },
 ];
 
-const target = { entityId: targetEntityId, fileFieldId: targetFieldId };
+const target = {
+  workspaceId,
+  entityId: targetEntityId,
+  fileFieldId: targetFieldId,
+};
 const reference = {
+  workspaceId,
   entityId: referenceEntityId,
   fileFieldId: referenceFieldId,
 };
@@ -104,6 +118,7 @@ describe("document review selection", () => {
       target,
       references: [
         {
+          workspaceId,
           entityId: referenceEntityId,
           fileFieldId: toSafeId<"field">(
             "00000000-0000-0000-0000-000000000009",
@@ -123,6 +138,23 @@ describe("document review selection", () => {
       message: "Document not found",
     });
     expect(mismatchedField.error).toMatchObject({
+      status: 404,
+      message: "Document not found",
+    });
+  });
+
+  test("rejects a reference whose claimed workspace does not own its entity", () => {
+    const result = resolveReviewSelection({
+      target,
+      references: [{ ...reference, workspaceId: otherWorkspaceId }],
+      entities: entityRows(),
+    });
+
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isOk(result)) {
+      return;
+    }
+    expect(result.error).toMatchObject({
       status: 404,
       message: "Document not found",
     });

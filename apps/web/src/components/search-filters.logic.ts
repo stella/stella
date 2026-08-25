@@ -16,6 +16,15 @@ export type SearchFilters = {
   time?: TimeFilter;
 };
 
+export const enforceDocumentPickFilters = (
+  filters: SearchFilters,
+  mimeTypes: readonly string[],
+): SearchFilters => ({
+  ...filters,
+  types: ["document"],
+  mimeTypes: [...mimeTypes],
+});
+
 type ResolveActiveSearchTypesParams = {
   availableTypes: readonly GlobalSearchResultType[];
   kinds: readonly EntityKind[];

@@ -2226,6 +2226,7 @@ type Messages = {
     "review": {
       "actionNeeded": "Action needed";
       "addComment": "Add as comment";
+      "addReference": "Add {name} as a reference";
       "addTopic": "Add topic";
       "allDecided": "Every finding here has been decided.";
       "assessment": {
@@ -2236,6 +2237,9 @@ type Messages = {
         "missingFromTarget": "Missing from target";
         "notComparable": "Not comparable";
       };
+      "basisCombined": "{count, plural, one {Reviews against {name} and compares with # reference document} other {Reviews against {name} and compares with # reference documents}}";
+      "basisPlaybook": "Reviews against {name}";
+      "basisReferences": "{count, plural, one {Compares with # reference document} other {Compares with # reference documents}}";
       "changeBasis": "Change review basis";
       "commentFailed": "Couldn't add the comment";
       "comparedWithReferences": "{count, plural, one {Compared with # reference document} other {Compared with # reference documents}}";
@@ -2250,17 +2254,18 @@ type Messages = {
       "dismiss": "Dismiss";
       "documentChanged": "This document changed after this review.";
       "failed": "Document review failed";
+      "fromThisMatter": "From this matter";
       "insertFailed": "Couldn't insert the suggested wording";
       "insertSuggestion": "Insert suggested wording";
       "insufficientEvidence": "The supplied documents do not provide enough evidence for this topic.";
       "newTopic": "New review topic";
       "noMaterialDifferences": "No material differences found";
-      "noPlaybook": "No playbook";
+      "noPlaybooksMatch": "No matching playbooks.";
       "noReferencesFound": "No matching DOCX documents.";
       "playbookDeleted": "This playbook no longer exists; the review is kept as a record.";
       "playbookFindings": "Playbook findings";
-      "playbookLabel": "Playbook (optional)";
       "playbookOutdated": "A newer approved version of this playbook exists.";
+      "playbookSection": "Playbook";
       "playbookTopic": "Seeded from the playbook";
       "referenceDocument": "Reference document";
       "referenceFindings": "Reference comparison";
@@ -2268,7 +2273,7 @@ type Messages = {
       "referencePlaceholder": "Search reference documents";
       "referencesCount": "{count, number}/{max, number}";
       "referencesDisagree": "References disagree";
-      "referencesLabel": "Reference documents (optional)";
+      "referencesSection": "Reference documents";
       "removeReference": "Remove reference {name}";
       "removeTopic": "Remove topic {name}";
       "reopen": "Reopen";
@@ -2279,6 +2284,7 @@ type Messages = {
       "reviewingHint": "This can take up to a couple of minutes for large documents.";
       "run": "Start review";
       "scoreTopics": "Review these topics";
+      "searchPlaybooks": "Search playbooks";
       "sizeConfirmStart": "Start review";
       "sizeConfirmTitle": "Large review";
       "targetDocument": "Target document";

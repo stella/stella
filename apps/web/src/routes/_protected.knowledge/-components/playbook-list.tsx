@@ -9,8 +9,8 @@ import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import { Skeleton } from "@stll/ui/skeleton";
-import { cn } from "@stll/ui/utils";
 
+import { PlaybookStatusBadge } from "@/components/playbook-status-badge";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useFormatter } from "@/i18n/formatting-context";
 import type {
@@ -267,28 +267,5 @@ const PlaybookRow = ({
         <span className="sr-only">{t("common.edit")}</span>
       </button>
     </li>
-  );
-};
-
-const PlaybookStatusBadge = ({
-  status,
-}: {
-  status: PlaybookListItem["status"];
-}) => {
-  const t = useTranslations();
-  const approved = status === "approved";
-  return (
-    <span
-      className={cn(
-        "inline-flex shrink-0 rounded-full px-2 py-0.5 text-xs font-medium",
-        approved
-          ? "bg-success/15 text-success"
-          : "bg-muted text-muted-foreground",
-      )}
-    >
-      {approved
-        ? t("knowledge.playbooks.approval.statusApproved")
-        : t("knowledge.playbooks.approval.statusDraft")}
-    </span>
   );
 };

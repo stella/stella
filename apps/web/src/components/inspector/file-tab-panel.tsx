@@ -215,10 +215,16 @@ export const FileTabPanel = ({
     fileName: tab.fileName,
     mimeType: tab.mimeType,
   });
+  // A DOCX tab opened by a caller that knows only the file field (a review's
+  // reference, a search hit) still needs the field's property to mount the
+  // editor; read it off the entity rather than leaving the viewer empty.
+  const needsPropertyResolution =
+    isNativeDocxDisplay && tab.propertyId === undefined;
   const entityQuery = useQuery({
     ...entityOptions(tab.workspaceId, tab.entityId),
     enabled:
       isEmailViewerActive ||
+      needsPropertyResolution ||
       (isActive &&
         !minimized &&
         canUpdateEntity &&
@@ -229,6 +235,12 @@ export const FileTabPanel = ({
         isEmailViewerActive,
       }),
   });
+  const filePropertyId =
+    tab.propertyId ??
+    (needsPropertyResolution
+      ? entityQuery.data?.fields.find((field) => field.id === tab.id)
+          ?.propertyId
+      : undefined);
   const resolvedEmailChatMode = getEmailChatMode({
     extractionFileFieldId: entityQuery.data?.extractionFileFieldId,
     fieldId: tab.id,
@@ -397,26 +409,26 @@ export const FileTabPanel = ({
   const isEditingNativeDocx =
     isNativeDocxDisplay &&
     editingDocxTabId === tab.id &&
-    tab.propertyId !== undefined;
+    filePropertyId !== undefined;
   const canUnlockNativeDocx =
     canUpdateEntity &&
     isNativeDocxDisplay &&
-    tab.propertyId !== undefined &&
+    filePropertyId !== undefined &&
     !isEditingNativeDocx;
   const isPromptingDocxUnlock = flashingDocxEditTabId === tab.id;
   const metadataLane = tab.metadataLane ?? "closed";
   const isMetadataLaneExpanded = metadataLane === "expanded";
   const isCurrentDesktopEditField =
-    tab.propertyId !== undefined &&
+    filePropertyId !== undefined &&
     entityQuery.data?.fields.some(
-      (field) => field.id === tab.id && field.propertyId === tab.propertyId,
+      (field) => field.id === tab.id && field.propertyId === filePropertyId,
     ) === true;
   const desktopEditTarget =
     canUpdateEntity &&
     desktopEditFileType !== null &&
-    tab.propertyId !== undefined &&
+    filePropertyId !== undefined &&
     isCurrentDesktopEditField
-      ? { fileType: desktopEditFileType, propertyId: tab.propertyId }
+      ? { fileType: desktopEditFileType, propertyId: filePropertyId }
       : null;
   const desktopOpenButton =
     desktopEditTarget !== null ? (
@@ -557,7 +569,7 @@ export const FileTabPanel = ({
             <Suspense fallback={<MetadataPanelSkeleton />}>
               <EntityMetadataPanel
                 activeJustificationFieldId={pdfRouteJustification}
-                currentFilePropertyId={tab.propertyId ?? null}
+                currentFilePropertyId={filePropertyId ?? null}
                 entityId={tab.entityId}
                 fileFieldId={tab.id}
                 onAiFieldClick={({ fieldId, propertyId }) => {
@@ -706,7 +718,7 @@ export const FileTabPanel = ({
                 entityId: tab.entityId,
                 fieldId: tab.id,
                 fileName: tab.fileName,
-                propertyId: tab.propertyId,
+                propertyId: filePropertyId,
                 text: markdownDraft,
                 workspaceId: tab.workspaceId,
               });
@@ -945,7 +957,17 @@ export const FileTabPanel = ({
         </QuerySuspenseBoundary>
       );
     }
-    if (isNativeDocxDisplay && tab.propertyId !== undefined) {
+    if (isNativeDocxDisplay) {
+      if (filePropertyId === undefined) {
+        // Still resolving the field's property, or the entity no longer
+        // holds this field: never fall through to the PDF viewer, which has
+        // nothing to draw for a DOCX.
+        return entityQuery.data === undefined && !entityQuery.isError ? (
+          <PeekSuspenseFallback />
+        ) : (
+          <InspectorPdfErrorFallback />
+        );
+      }
       return (
         <DocxBrowserEditor
           actionsKey={tab.id}
@@ -1002,7 +1024,7 @@ export const FileTabPanel = ({
             }
           }}
           onScrollTopChange={handleDocxScrollTopChange}
-          propertyId={tab.propertyId}
+          propertyId={filePropertyId}
           scaleOffset={scaleOffsets.get(tab.id) ?? 0}
           showActionBar={false}
           surface="inspector"
@@ -1012,11 +1034,11 @@ export const FileTabPanel = ({
     }
     return (
       <PeekPdfViewer
-        activePropertyId={tab.propertyId ?? ""}
+        activePropertyId={filePropertyId ?? ""}
         entityId={tab.entityId}
         errorFallback={viewerErrorFallback}
         fieldId={tab.id}
-        filePurpose={isNativeDocxDisplay ? "native-display" : "display"}
+        filePurpose="display"
         mimeType={tab.mimeType ?? undefined}
         onDocxScrollTopChange={handleDocxScrollTopChange}
         onError={handleViewerError}
@@ -1114,7 +1136,7 @@ export const FileTabPanel = ({
             <Suspense fallback={<MetadataPanelSkeleton />}>
               <EntityMetadataPanel
                 activeJustificationFieldId={pdfRouteJustification}
-                currentFilePropertyId={tab.propertyId ?? null}
+                currentFilePropertyId={filePropertyId ?? null}
                 entityId={tab.entityId}
                 fileFieldId={tab.id}
                 onAiFieldClick={({ fieldId, propertyId }) => {

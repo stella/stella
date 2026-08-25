@@ -1471,6 +1471,27 @@ export const buildPersistentSteps = ({
     });
   }
 
+  // Uploads only become searchable, extractable, and readable by AI once the
+  // document-processing worker drains their runs; without it every upload
+  // stays queued forever. It has no HTTP surface, so it goes after the
+  // readiness-checked steps: checks pair with steps by position.
+  if (modeIncludesApi(mode)) {
+    primary.push({
+      cmd: [
+        resolveCommandPath("bun"),
+        "--no-clear-screen",
+        "--no-env-file",
+        "--preload",
+        "./src/dev/register-mock-ai.ts",
+        "--watch",
+        "src/scripts/document-processing-worker.ts",
+      ],
+      cwd: path.resolve(rootDir, "apps/api"),
+      env: apiEnv,
+      label: "Document processing worker",
+    });
+  }
+
   if (modeIncludesDesktop(mode)) {
     // Tauri's beforeDevCommand spawns dev:view itself; we override devUrl
     // so Tauri waits for the runner-allocated port instead of the static

@@ -11,19 +11,28 @@ import type { SafeId } from "@/api/lib/branded-types";
 import {
   REFERENCE_ASSESSMENTS,
   REFERENCE_CONSENSUS_VALUES,
+  perspectivePartyPhrase,
+  REFERENCE_IMPACTS,
+  REFERENCE_SEVERITIES,
 } from "@/api/lib/document-review/contract";
 import type {
   DocumentReviewTopic,
   ReferenceAssessment,
   ReferenceConsensus,
+  ReferenceImpact,
+  ReferenceSeverity,
+  ReviewPerspective,
 } from "@/api/lib/document-review/contract";
+import {
+  buildReviewDocumentParts,
+  reviewDocumentsScopeKey,
+} from "@/api/lib/document-review/review-document-messages";
 import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
 import {
   buildGroundedReviewFix,
   type GroundedReviewFix,
 } from "@/api/lib/grounded-review-fix";
 import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
-import { buildDocxBlocksMessage } from "@/api/lib/workflow/ai-prompts";
 import type { PreparedDocxFile } from "@/api/lib/workflow/generate-batch";
 
 const REFERENCE_REVIEW_TIMEOUT_MS = 120_000;
@@ -40,6 +49,13 @@ const rawFindingSchema = v.strictObject({
   assessment: v.picklist(REFERENCE_ASSESSMENTS),
   consensus: v.picklist(REFERENCE_CONSENSUS_VALUES),
   rationale: v.string(),
+  // What to change in the target, as one instruction; empty when nothing
+  // should change.
+  recommendation: v.string(),
+  // Which way the difference cuts for the chosen side, and how much it
+  // matters. `unknown` when no side was chosen or the direction is unclear.
+  impact: v.picklist(REFERENCE_IMPACTS),
+  severity: v.picklist(REFERENCE_SEVERITIES),
   // Model-owned arrays are normalized below. A provider may ignore JSON Schema
   // cardinality constraints; rejecting the whole run would discard valid output.
   targetCitations: v.array(rawCitationSchema),
@@ -74,6 +90,14 @@ export type ReferenceReviewFinding = {
   explanation:
     | { type: "comparison"; text: string }
     | { type: "insufficient-evidence" };
+  /** One instruction for the drafter: what to change in the target and in
+   *  which direction, or `null` when the target needs no change. Optional
+   *  only because findings persisted before it existed carry no value. */
+  recommendation?: string | null;
+  /** Direction and weight of the difference for the run's side. Optional
+   *  only because findings persisted before they existed carry neither. */
+  impact?: ReferenceImpact;
+  severity?: ReferenceSeverity;
   targetCitations: ReferenceCitation[];
   referenceCitations: {
     fileFieldId: SafeId<"field">;
@@ -308,6 +332,14 @@ export const normalizeReferenceReview = ({
       explanation: hasGroundedEvidence
         ? { type: "comparison", text: raw.rationale.trim() }
         : { type: "insufficient-evidence" },
+      recommendation:
+        hasGroundedEvidence && raw.recommendation.trim().length > 0
+          ? raw.recommendation.trim()
+          : null,
+      // An ungrounded finding cannot cut either way; a topic the target
+      // handles the same way has nothing to weigh.
+      impact: hasGroundedEvidence ? raw.impact : "unknown",
+      ...(hasGroundedEvidence ? { severity: raw.severity } : {}),
       targetCitations,
       referenceCitations,
       fix: hasGroundedEvidence
@@ -328,41 +360,42 @@ const SYSTEM_PROMPT = `You compare one target legal document with one or more re
 
 References are examples, not policy and not proof of market practice. Never call the target compliant, non-compliant, standard, or non-standard. Compare substantive drafting only.
 
-Assess every supplied review topic exactly once. Preserve its topicId exactly. Classify the target as aligned, different, missing-from-target, additional-in-target, deal-specific, or not-comparable. Set consensus to mixed when the reference documents materially disagree with each other. Cite only exact block IDs supplied in the input. F0 is always the target; every other source is a reference. proposedText must be null unless the cited reference language directly supports a concrete target edit. For missing-from-target proposed text, the first target citation must identify the verified block after which the new text belongs; without a safe target anchor, proposedText must be null. Use not-comparable when the documents do not support a grounded conclusion.`;
+Assess every supplied review topic exactly once. Preserve its topicId exactly. Classify the target as aligned, different, missing-from-target, additional-in-target, deal-specific, or not-comparable. Set consensus to mixed when the reference documents materially disagree with each other. Cite only exact block IDs supplied in the input. F0 is always the target; every other source is a reference. In rationale and recommendation, write "the target" and "the reference" (or "reference 1", "reference 2" when there are several); never write source keys such as F0 or F1. rationale states what each document does on the topic and how they differ, in plain drafting terms. recommendation is one imperative sentence telling the drafter what to change in the target and in which direction (which clause, what to add, tighten, or remove), grounded in the reference; it is an empty string when the target needs no change. The input names the side the drafter acts for. impact says which way the target's difference from the reference cuts for that side: unfavourable when the target leaves that side worse off than the reference does, favourable when better off, neutral when it makes no difference to that side, unknown when no side was named or the direction cannot be told. severity says how much the difference matters for that side: high for money, liability, or deal certainty at stake, medium for a material but bounded term, low for drafting or convenience. proposedText must be null unless the cited reference language directly supports a concrete target edit. For missing-from-target proposed text, the first target citation must identify the verified block after which the new text belongs; without a safe target anchor, proposedText must be null. Use not-comparable when the documents do not support a grounded conclusion.`;
 
-const buildReferencePrompt = (
-  target: PreparedDocxFile,
-  references: readonly PreparedDocxFile[],
+// The topics come after the shared document region: they are what changes
+// between calls, and anything placed before the documents would push them out
+// of the cached prefix.
+const NEUTRAL_PERSPECTIVE_LINE = "No side is named; report impact as unknown.";
+
+const perspectiveLine = (perspective: ReviewPerspective): string => {
+  switch (perspective.type) {
+    case "party":
+      return `The drafter acts for ${perspectivePartyPhrase(perspective)}, a party to the target. A reference may name that side differently; judge impact for the side that plays the same role there.`;
+    case "neutral":
+      return NEUTRAL_PERSPECTIVE_LINE;
+    default:
+      return perspective satisfies never;
+  }
+};
+
+const buildTopicsPart = (
   topics: readonly DocumentReviewTopic[],
+  perspective: ReviewPerspective,
 ): string => {
-  const sourceGuide = [
-    `${target.simplifiedName}: target document`,
-    ...references.map(
-      (reference, index) =>
-        `${reference.simplifiedName}: reference document ${String(index + 1)}`,
-    ),
-  ].join("\n");
-  const documents = [target, ...references]
-    .map((file) =>
-      buildDocxBlocksMessage({
-        simplifiedName: file.simplifiedName,
-        blocks: file.blocks,
-      }),
-    )
-    .join("\n\n");
   const topicGuide = topics
     .map(
       (topic) =>
         `- topicId=${topic.topicId}\n  title=${topic.title}\n  reviewer context=${topic.context || "(none)"}`,
     )
     .join("\n");
-  return `Review topics:\n${topicGuide}\n\nSource roles:\n${sourceGuide}\n\n${documents}`;
+  return `${perspectiveLine(perspective)}\n\nReview topics:\n${topicGuide}`;
 };
 
 type CompareReferenceDocumentsArgs = {
   target: PreparedDocxFile;
   references: readonly PreparedDocxFile[];
   topics: readonly DocumentReviewTopic[];
+  perspective: ReviewPerspective;
   targetEntityVersionId: SafeId<"entityVersion">;
   referenceEntityVersionIds: readonly SafeId<"entityVersion">[];
   organizationId: SafeId<"organization">;
@@ -378,6 +411,7 @@ export const compareReferenceDocuments = async ({
   target,
   references,
   topics,
+  perspective,
   targetEntityVersionId,
   referenceEntityVersionIds,
   organizationId,
@@ -390,12 +424,14 @@ export const compareReferenceDocuments = async ({
 }: CompareReferenceDocumentsArgs): Promise<
   Result<ReferenceReviewFinding[], WorkflowIntegrationError>
 > => {
-  const scopeHasher = new Bun.CryptoHasher("sha256");
-  scopeHasher.update(targetEntityVersionId);
-  for (const versionId of referenceEntityVersionIds) {
-    scopeHasher.update(versionId);
-  }
-  const scopeKey = `document-review:${scopeHasher.digest("hex")}`;
+  const caching = resolveCaching({
+    promptCachingEnabled,
+    role: REFERENCE_REVIEW_ROLE,
+    scopeKey: reviewDocumentsScopeKey(
+      targetEntityVersionId,
+      referenceEntityVersionIds,
+    ),
+  });
   const aiAnalytics = createTanStackAIAnalyticsCallbacks({
     feature: "document-review.references",
     modelRole: REFERENCE_REVIEW_ROLE,
@@ -416,15 +452,22 @@ export const compareReferenceDocuments = async ({
         orgAIConfig,
         organizationId,
         analytics: aiAnalytics,
-        caching: resolveCaching({
-          promptCachingEnabled,
-          role: REFERENCE_REVIEW_ROLE,
-          scopeKey,
-        }),
+        caching,
         serviceTier,
         tenantWorkspaceIds: [workspaceId],
         system: SYSTEM_PROMPT,
-        prompt: buildReferencePrompt(target, references, topics),
+        messages: [
+          {
+            role: "user",
+            content: [
+              ...buildReviewDocumentParts({ target, references, caching }),
+              {
+                type: "text",
+                content: buildTopicsPart(topics, perspective),
+              },
+            ],
+          },
+        ],
         abortSignal: AbortSignal.any([
           abortSignal,
           AbortSignal.timeout(REFERENCE_REVIEW_TIMEOUT_MS),

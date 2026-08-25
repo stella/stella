@@ -12,6 +12,23 @@ export const createInspectorCommandSlice = (
   pendingBlockScroll: null,
   pendingPdfPageScroll: null,
   pendingDocxEditTabId: null,
+  pendingFileChatDraft: null,
+
+  requestFileChatDraft: ({ fileFieldId, html }) =>
+    set((state) => {
+      state.pendingFileChatDraft = {
+        fileFieldId,
+        html,
+        sequence: (state.pendingFileChatDraft?.sequence ?? 0) + 1,
+      };
+    }),
+
+  clearFileChatDraft: (sequence) =>
+    set((state) => {
+      if (state.pendingFileChatDraft?.sequence === sequence) {
+        state.pendingFileChatDraft = null;
+      }
+    }),
 
   requestDesktopOpenAttention: (fieldId) =>
     set((state) => {
@@ -99,6 +116,12 @@ export const createInspectorCommandSlice = (
         !tabIds.has(state.desktopOpenAttention.fieldId)
       ) {
         state.desktopOpenAttention = null;
+      }
+      if (
+        state.pendingFileChatDraft !== null &&
+        !tabIds.has(state.pendingFileChatDraft.fileFieldId)
+      ) {
+        state.pendingFileChatDraft = null;
       }
     }),
 });

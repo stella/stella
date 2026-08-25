@@ -816,6 +816,48 @@ describe("dev env factories", () => {
     expect(webSteps.secondary).toEqual([]);
   });
 
+  test("starts the document processing worker with the API, after the readiness-checked steps", () => {
+    const rootDir = createTempDir();
+    mkdirSync(path.resolve(rootDir, "apps/api"), { recursive: true });
+    const build = (mode: "dev" | "dev:api" | "dev:web") =>
+      buildPersistentSteps({
+        infraOffset: 10,
+        infraPorts: infraPortsForOffset(10),
+        mode,
+        ports: portsForOffset(10),
+        rootDir,
+      });
+
+    const devLabels = build("dev").primary.map((step) => step.label);
+    expect(devLabels).toEqual([
+      "API server",
+      "Web server",
+      "Document processing worker",
+    ]);
+    expect(build("dev:api").primary.map((step) => step.label)).toEqual([
+      "API server",
+      "Document processing worker",
+    ]);
+    expect(build("dev:web").primary.map((step) => step.label)).toEqual([
+      "Web server",
+    ]);
+
+    const worker = build("dev").primary.at(-1);
+    expect(worker?.cmd.slice(1)).toEqual([
+      "--no-clear-screen",
+      "--no-env-file",
+      "--preload",
+      "./src/dev/register-mock-ai.ts",
+      "--watch",
+      "src/scripts/document-processing-worker.ts",
+    ]);
+    expect(worker?.cwd).toBe(path.resolve(rootDir, "apps/api"));
+    expect(worker?.env).toMatchObject({
+      DATABASE_URL: "postgres://postgres:postgres@localhost:5442/stella",
+      REDIS_URL: "redis://localhost:6389",
+    });
+  });
+
   test("prepares API databases by applying migrations", () => {
     const rootDir = createTempDir();
     mkdirSync(path.resolve(rootDir, "apps/api"), { recursive: true });

@@ -56,8 +56,11 @@ const VISIBLE_POSITIONS = [POSITION_LAW, POSITION_TERM];
 
 const basis: DocumentReviewRunBasis = {
   type: "references",
+  perspective: { type: "neutral" },
   references: [
     {
+      workspaceId: toSafeId<"workspace">(Bun.randomUUIDv7()),
+      workspaceName: "Precedent matter",
       entityId: toSafeId<"entity">(Bun.randomUUIDv7()),
       fileFieldId: toSafeId<"field">(Bun.randomUUIDv7()),
       entityVersionId: toSafeId<"entityVersion">(Bun.randomUUIDv7()),

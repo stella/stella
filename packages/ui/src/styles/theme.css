@@ -69,6 +69,32 @@
      affordance the user has to notice, not merely acknowledge. */
   --animate-attention-flash: attention-flash 700ms ease-out;
   --animate-attention-flash-twice: attention-flash 700ms ease-out 2;
+  /* The Stella mark breathing: the one indeterminate loading motion.
+     Opacity and scale only, so it never triggers layout. */
+  --animate-loader: loader 1.8s ease-in-out infinite;
+  /* A list item settling into place; callers stagger it by index. */
+  --animate-rise: rise 240ms ease-out both;
+  @keyframes loader {
+    0%,
+    100% {
+      opacity: 0.35;
+      transform: scale(0.94);
+    }
+    50% {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+  @keyframes rise {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
   @keyframes skeleton {
     to {
       background-position: -200% 0;

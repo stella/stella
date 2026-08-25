@@ -510,7 +510,7 @@ mechanics, and similar), not gaps in coverage.
 | chat_thread_ui         | 2     |
 | compound_consent       | 1     |
 | deploy_mechanics       | 1     |
-| document_processing    | 22    |
+| document_processing    | 23    |
 | health_infra           | 1     |
 | hosted_billing         | 6     |
 | mcp_transport          | 11    |
@@ -525,4 +525,4 @@ mechanics, and similar), not gaps in coverage.
 | upload_mechanics       | 14    |
 | url_preview            | 2     |
 
-Total: 146
+Total: 147

@@ -10,9 +10,18 @@ import {
   type AIUsageMetering,
 } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  REVIEW_PARTIES_MAX,
+  REVIEW_PARTY_NAME_MAX_LENGTH,
+  REVIEW_PARTY_ROLE_MAX_LENGTH,
+} from "@/api/lib/document-review/contract";
+import type { ReviewParty } from "@/api/lib/document-review/contract";
+import {
+  buildReviewDocumentParts,
+  reviewDocumentsScopeKey,
+} from "@/api/lib/document-review/review-document-messages";
 import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
 import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
-import { buildDocxBlocksMessage } from "@/api/lib/workflow/ai-prompts";
 import type { PreparedDocxFile } from "@/api/lib/workflow/generate-batch";
 
 const ROLE = "pdf" as const;
@@ -23,15 +32,57 @@ const proposedTopicSchema = v.strictObject({
   context: v.pipe(v.string(), v.maxLength(2000)),
 });
 
-const proposedTopicsSchema = v.strictObject({
+// No transforms here: the schema is handed to the provider as JSON Schema,
+// which cannot express them. Whitespace is normalized in `normalizeParties`.
+const proposedPartySchema = v.strictObject({
+  role: v.pipe(
+    v.string(),
+    v.minLength(1),
+    v.maxLength(REVIEW_PARTY_ROLE_MAX_LENGTH),
+  ),
+  name: v.nullable(
+    v.pipe(v.string(), v.maxLength(REVIEW_PARTY_NAME_MAX_LENGTH)),
+  ),
+});
+
+type ProposedParty = v.InferOutput<typeof proposedPartySchema>;
+
+/** Trims the model's text and drops entries left without a role. */
+export const normalizeParties = (
+  parties: readonly ProposedParty[],
+): ReviewParty[] => {
+  const normalized: ReviewParty[] = [];
+  for (const party of parties.slice(0, REVIEW_PARTIES_MAX)) {
+    const role = party.role.trim();
+    if (role.length === 0) {
+      continue;
+    }
+    const name = party.name?.trim() ?? "";
+    normalized.push({ role, name: name.length === 0 ? null : name });
+  }
+  return normalized;
+};
+
+export const proposedTopicsSchema = v.strictObject({
   // Cardinality is normalized by mergeProposedReviewTopics. Providers do not
   // reliably honor JSON Schema array limits, so excess suggestions stay recoverable.
   topics: v.array(proposedTopicSchema),
+  // The target's parties, so the lawyer can say which one they act for.
+  parties: v.array(proposedPartySchema),
 });
 
-const SYSTEM_PROMPT = `You help a lawyer define the issues for a structured comparison of one target legal document and one or more reference documents.
+const SYSTEM_PROMPT = `You help a lawyer define the issues for a structured comparison of one target legal document (F0) and one or more reference documents.
 
-Propose a concise, non-overlapping list of material legal or commercial topics that the supplied documents make useful to compare. References are examples, not policy or proof of market practice. Do not make findings, score the target, or propose wording yet. Do not repeat any seeded topic. context is a short explanation of what the later comparison should examine.`;
+Propose a concise, non-overlapping list of material legal or commercial topics that the supplied documents make useful to compare. References are examples, not policy or proof of market practice. Do not make findings, score the target, or propose wording yet. Do not repeat any seeded topic. context is a short explanation of what the later comparison should examine.
+
+Also list the parties to the target document only: role is the defined term the target uses for that side (for example Purchaser, Seller, Landlord, Licensee, Borrower), name is the party's legal name when the target states it, otherwise null. One entry per side; omit guarantors, agents and notaries unless they are principal parties.`;
+
+/** What the proposal pass hands back: the plan to confirm and the sides the
+ *  lawyer can act for. */
+export type ReviewTopicProposal = {
+  topics: DocumentReviewTopic[];
+  parties: ReviewParty[];
+};
 
 type ProposeReferenceTopicsArgs = {
   target: PreparedDocxFile;
@@ -62,14 +113,16 @@ export const proposeReferenceTopics = async ({
   usageMetering,
   abortSignal,
 }: ProposeReferenceTopicsArgs): Promise<
-  Result<DocumentReviewTopic[], WorkflowIntegrationError>
+  Result<ReviewTopicProposal, WorkflowIntegrationError>
 > => {
-  const scopeHasher = new Bun.CryptoHasher("sha256");
-  scopeHasher.update(targetEntityVersionId);
-  for (const versionId of referenceEntityVersionIds) {
-    scopeHasher.update(versionId);
-  }
-  const scopeKey = `document-review-topics:${scopeHasher.digest("hex")}`;
+  const caching = resolveCaching({
+    promptCachingEnabled,
+    role: ROLE,
+    scopeKey: reviewDocumentsScopeKey(
+      targetEntityVersionId,
+      referenceEntityVersionIds,
+    ),
+  });
   const aiAnalytics = createTanStackAIAnalyticsCallbacks({
     feature: "document-review.topics",
     modelRole: ROLE,
@@ -87,14 +140,6 @@ export const proposeReferenceTopics = async ({
       (topic) => `- ${topic.title}: ${topic.context || "(no extra context)"}`,
     )
     .join("\n");
-  const documents = [target, ...references]
-    .map((file) =>
-      buildDocxBlocksMessage({
-        simplifiedName: file.simplifiedName,
-        blocks: file.blocks,
-      }),
-    )
-    .join("\n\n");
 
   return await Result.tryPromise({
     try: async () => {
@@ -103,22 +148,33 @@ export const proposeReferenceTopics = async ({
         orgAIConfig,
         organizationId,
         analytics: aiAnalytics,
-        caching: resolveCaching({
-          promptCachingEnabled,
-          role: ROLE,
-          scopeKey,
-        }),
+        caching,
         serviceTier,
         tenantWorkspaceIds: [workspaceId],
         system: SYSTEM_PROMPT,
-        prompt: `Seeded topics (do not repeat):\n${seeded || "(none)"}\n\n${documents}`,
+        // Documents first (the shared, cached region), the seeded topics last.
+        messages: [
+          {
+            role: "user",
+            content: [
+              ...buildReviewDocumentParts({ target, references, caching }),
+              {
+                type: "text",
+                content: `Seeded topics (do not repeat):\n${seeded || "(none)"}`,
+              },
+            ],
+          },
+        ],
         abortSignal: AbortSignal.any([
           abortSignal,
           AbortSignal.timeout(TIMEOUT_MS),
         ]),
         outputSchema: proposedTopicsSchema,
       });
-      return mergeProposedReviewTopics(seededTopics, output.topics);
+      return {
+        topics: mergeProposedReviewTopics(seededTopics, output.topics),
+        parties: normalizeParties(output.parties),
+      };
     },
     catch: (cause) => {
       aiAnalytics.captureError(cause);

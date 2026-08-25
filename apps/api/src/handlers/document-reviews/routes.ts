@@ -2,6 +2,7 @@ import Elysia from "elysia";
 
 import createDocumentReviewRun from "@/api/handlers/document-reviews/create-run";
 import decideDocumentReviewFinding from "@/api/handlers/document-reviews/decide-finding";
+import exportDocumentReviewRun from "@/api/handlers/document-reviews/export-run";
 import listDocumentReviewRuns from "@/api/handlers/document-reviews/list-runs";
 import listDocumentReviewSources from "@/api/handlers/document-reviews/list-sources";
 import proposeTopics from "@/api/handlers/document-reviews/propose-topics";
@@ -35,6 +36,11 @@ export const documentReviewsRoute = new Elysia({
   .get("/runs/:runId", readDocumentReviewRun.handler, {
     params: readDocumentReviewRun.config.params,
     permissions: readDocumentReviewRun.config.permissions,
+  })
+  .get("/runs/:runId/export", exportDocumentReviewRun.handler, {
+    params: exportDocumentReviewRun.config.params,
+    permissions: exportDocumentReviewRun.config.permissions,
+    query: exportDocumentReviewRun.config.query,
   })
   .patch("/findings/:findingId", decideDocumentReviewFinding.handler, {
     body: decideDocumentReviewFinding.config.body,

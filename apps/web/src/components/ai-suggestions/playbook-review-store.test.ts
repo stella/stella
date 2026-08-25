@@ -21,6 +21,7 @@ const session = (): DocumentReviewSession => ({
   restore: "allowed",
   requestId: null,
   topics: [],
+  parties: [],
   sizeConfirmation: null,
 });
 

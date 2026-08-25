@@ -7,10 +7,10 @@ import type {
 } from "@/api/db/schema-validators";
 import type { AIRequestServiceTier, OrgAIConfig } from "@/api/lib/ai-config";
 import type { AIUsageMetering } from "@/api/lib/analytics/tanstack-ai";
-import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
 import { createDefaultTool } from "@/api/lib/properties/create-schema";
+import { brandDerivedPropertyId } from "@/api/lib/safe-id-boundaries";
 import { generateWorkflowData } from "@/api/lib/workflow/ai-generate-batch";
 import { validateAIOutput } from "@/api/lib/workflow/ai-validators";
 import type { ValidatedResult } from "@/api/lib/workflow/ai-validators";
@@ -274,7 +274,11 @@ export const extractAskContents = async ({
     const properties: AIBatchProperty[] = [];
     const sourceIdByPropertyId = new Map<string, string>();
     for (const ask of asks) {
-      const propertyId = createSafeId<"property">();
+      // Derived from the ask, not minted per call: the ids name the output
+      // schema and the prompts message, both of which sit in the model
+      // request, so a fresh id per run would make two extractions of the
+      // same document look different to the prompt cache.
+      const propertyId = brandDerivedPropertyId(ask.sourceId);
       sourceIdByPropertyId.set(propertyId, ask.sourceId);
       properties.push({
         id: propertyId,

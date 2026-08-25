@@ -173,6 +173,9 @@ const finding = (
   decision,
   decidedBy: null,
   decidedAt: null,
+  applicationStatus: "pending",
+  appliedBy: null,
+  appliedAt: null,
 });
 
 const cachedRun = (
@@ -188,8 +191,13 @@ const cachedRun = (
     contentSha256: CONTENT_SHA256,
     basis: {
       type: "references",
+      perspective: { type: "party", role: "Buyer", name: null },
       references: [
         {
+          workspaceId: toSafeId<"workspace">(
+            "0198f2c4-1e55-7c31-9a10-3b1d2f4c5eb5",
+          ),
+          workspaceName: "Precedent matter",
           entityId: toSafeId<"entity">("0198f2c4-1e55-7c31-9a10-3b1d2f4c5eb2"),
           fileFieldId: toSafeId<"field">(
             "0198f2c4-1e55-7c31-9a10-3b1d2f4c5eb3",
@@ -236,6 +244,9 @@ const decided = (
   decision,
   decidedBy: decision === "open" ? null : REVIEWER_ID,
   decidedAt: decision === "open" ? null : "2026-08-12T09:00:00.000Z",
+  applicationStatus: "pending",
+  appliedBy: null,
+  appliedAt: null,
 });
 
 describe("recording a decision in the cached run", () => {
