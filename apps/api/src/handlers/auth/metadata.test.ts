@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
 import {
@@ -18,6 +18,13 @@ import {
   OPENID_CONFIGURATION_DISCOVERY_PATH,
   ROOT_OAUTH_AUTHORIZATION_SERVER_DISCOVERY_PATH,
 } from "@/api/lib/auth-paths";
+import {
+  initAgentAuthTestDb,
+  releaseAgentAuthTestDb,
+} from "@/api/tests/helpers/mock-agent-auth-db";
+
+beforeAll(initAgentAuthTestDb);
+afterAll(releaseAgentAuthTestDb);
 
 describe("OAuth authorization server metadata", () => {
   const assertMetadataResponse = async (path: string) => {
