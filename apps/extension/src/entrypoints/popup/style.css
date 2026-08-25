@@ -1,0 +1,66 @@
+:root {
+  color: #171717;
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+}
+
+main {
+  display: grid;
+  gap: 16px;
+  padding: 18px;
+}
+
+.mark {
+  align-items: center;
+  background: #171717;
+  border-radius: 9px;
+  color: #fff;
+  display: flex;
+  font-size: 18px;
+  font-weight: 700;
+  height: 36px;
+  justify-content: center;
+  width: 36px;
+}
+
+h1 {
+  font-size: 16px;
+  margin: 0 0 6px;
+}
+
+p {
+  color: #525252;
+  font-size: 13px;
+  line-height: 1.45;
+  margin: 0;
+}
+
+button {
+  background: #171717;
+  border: 0;
+  border-radius: 8px;
+  color: #fff;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 600;
+  padding: 10px 14px;
+}
+
+.actions {
+  display: grid;
+  gap: 8px;
+}
+
+button.secondary {
+  background: #e5e5e5;
+  color: #171717;
+}
+
+button:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}

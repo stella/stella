@@ -1,0 +1,35 @@
+{
+  "name": "@stll/extension",
+  "version": "0.0.0",
+  "private": true,
+  "license": "Apache-2.0",
+  "type": "module",
+  "scripts": {
+    "build": "wxt build -b chrome && bun scripts/assert-manifest.ts",
+    "clean": "git clean -xdf .output .wxt .cache .turbo node_modules",
+    "dev": "wxt -b chrome",
+    "format": "bun ../../scripts/run-oxfmt.ts .",
+    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --deny-warnings --type-aware apps/extension",
+    "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix apps/extension",
+    "postinstall": "wxt prepare",
+    "test": "bun run test:unit && bun run test:e2e",
+    "test:e2e": "bun run build && playwright test -c playwright.config.ts",
+    "test:unit": "bun test src scripts",
+    "typecheck": "wxt prepare && bun ../../packages/scripts/src/tsc-native.ts --noEmit",
+    "zip": "wxt zip -b chrome"
+  },
+  "dependencies": {
+    "@stll/api-contract": "workspace:*"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.62.0",
+    "@stll/typescript-config": "workspace:*",
+    "@types/chrome": "0.2.6",
+    "better-result": "catalog:",
+    "bun-types": "catalog:",
+    "vite": "catalog:",
+    "web-ext": "10.6.0",
+    "wxt": "0.21.4"
+  },
+  "crawlPosture": "unserved"
+}

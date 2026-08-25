@@ -83,6 +83,7 @@ import type {
 import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
+import { mountBrowserExtensionBridge } from "@/features/chat/browser-control/browser-extension-bridge";
 import {
   isChatMessageStartError,
   sendThreadChatMessage,
@@ -108,7 +109,7 @@ import {
   type SendQueueState,
 } from "@/features/chat/hooks/use-chat-session-send-queue.logic";
 import { fetchOlderMessages } from "@/features/chat/queries";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
@@ -276,6 +277,7 @@ export const useChatSession = ({
   threadRef,
   workspaceId,
 }: UseChatSessionOptions) => {
+  useMountEffect(mountBrowserExtensionBridge);
   const t = useTranslations();
   const organizationId = useAuthenticatedUser().activeOrganizationId;
   const { data: mcpCatalog } = useQuery(mcpConnectorsOptions(organizationId));

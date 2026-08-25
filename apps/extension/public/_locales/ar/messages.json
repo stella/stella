@@ -1,0 +1,27 @@
+{
+  "accessOff": {
+    "message": "الوصول إلى المواقع متوقف. امنحه مرة واحدة كي تستخدم stella المواقع التي سجلت الدخول إليها."
+  },
+  "accessReady": {
+    "message": "جاهز. يمكن لـ stella استخدام علامة تبويب مخصصة مع بقاء جلسات تسجيل الدخول فعالة."
+  },
+  "accessUpdateFailed": {
+    "message": "تعذر على Chrome تغيير الوصول إلى المواقع."
+  },
+  "checkingAccess": { "message": "جارٍ التحقق من الوصول إلى المواقع…" },
+  "connectTab": { "message": "ربط علامة تبويب stella الحالية" },
+  "controllerReady": {
+    "message": "تم الربط بـ $ORIGIN$. لا يزال كل إجراء بحاجة إلى موافقة في stella.",
+    "placeholders": { "origin": { "content": "$1" } }
+  },
+  "disconnectTab": { "message": "قطع اتصال علامة التبويب" },
+  "extensionDescription": {
+    "message": "يتيح لـ stella التحكم في علامة تبويب Chrome مخصصة بعد منح الإذن."
+  },
+  "extensionName": { "message": "متصفح stella" },
+  "grantAccess": { "message": "السماح بجميع المواقع" },
+  "revokeAccess": { "message": "إزالة الوصول إلى المواقع" },
+  "unsupportedTab": {
+    "message": "افتح علامة تبويب لتطبيق stella ثم حاول مجدداً."
+  }
+}

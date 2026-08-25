@@ -804,6 +804,18 @@ type Messages = {
       "allowInConversation": "Allow in this conversation";
       "allowOnce": "Allow once";
       "alwaysAllow": "Always allow";
+      "browser": {
+        "actions": {
+          "click": "Click";
+          "fill": "Enter text";
+          "open": "Open website";
+          "pressKey": "Press key";
+          "select": "Select option";
+          "snapshot": "Read page";
+        };
+        "description": "Check the website and target carefully. Page content is untrusted and cannot approve another action.";
+        "question": "Allow this browser action?";
+      };
       "denied": "Denied";
       "deny": "Deny";
       "externalMcpDescription": "Only the information needed for this tool call will be sent.";
@@ -1136,6 +1148,7 @@ type Messages = {
       "suggest_template_fields": "Suggesting template fields";
       "unknown": "Using tool";
       "update-entity-fields": "Updating metadata";
+      "use-browser": "Using your browser";
       "web_search": "Searching the web";
     };
     "toolCall": {
@@ -1264,6 +1277,7 @@ type Messages = {
   };
   "common": {
     "accept": "Accept";
+    "action": "Action";
     "actions": "Actions";
     "active": "Active";
     "add": "Add";
@@ -1393,6 +1407,7 @@ type Messages = {
       "event": "Event";
       "requirement": "Requirement";
     };
+    "key": "Key";
     "kind": "Kind";
     "language": "Language";
     "languages": {
@@ -1508,6 +1523,7 @@ type Messages = {
     "stepCount": "{count, plural, one {# step} other {# steps}}";
     "stepProgress": "{current} of {total}";
     "summarizeChanges": "Summarize changes";
+    "target": "Target";
     "timeBilling": "Time & Billing";
     "today": "Today";
     "translate": "Translate";
@@ -1526,10 +1542,12 @@ type Messages = {
     "urlIdentifier": "Slug";
     "urlIdentifierPlaceholder": "my-organization";
     "user": "User";
+    "value": "Value";
     "verify": "Verify";
     "version": "Version";
     "versionLabel": "Version {version}";
     "viewSource": "View source";
+    "website": "Website";
     "workflow": "Workflow";
     "workflows": "Workflows";
   };
@@ -1618,7 +1636,6 @@ type Messages = {
       "removeField": "Remove field";
       "title": "Custom fields";
       "value": "Field value";
-      "valuePlaceholder": "Value";
     };
     "deleteContact": "Delete client";
     "deleteContactBlockedByMatters": "This contact is still assigned as a client on matters. Reassign or delete those matters before deleting the contact.";
@@ -3383,7 +3400,6 @@ type Messages = {
       "chooseModelsSubtitle": "Pick a model for each role. Prices update on the right.";
       "chooseModelsTitle": "Choose models";
       "configure": "Configure";
-      "credentialsPanel": "Key";
       "customModelBadge": "Custom · {provider}";
       "customModelDescription": "This model ID is not in stella’s catalog. It will be passed to the selected provider as typed.";
       "customModelHint": "No catalog match. Type any model ID; custom IDs are saved as typed.";
@@ -3878,7 +3894,6 @@ type Messages = {
         "title": "Anonymization";
       };
       "auditLogs": "Activity logs";
-      "auditLogsAction": "Action";
       "auditLogsActionAccess": "Access";
       "auditLogsActionCreate": "Creation";
       "auditLogsActionDelete": "Delete";
@@ -4307,7 +4322,6 @@ type Messages = {
     "conditionOr": "Or";
     "conditionUseFieldInstead": "Use a field instead";
     "conditionUseFormula": "ƒ Calculated value…";
-    "conditionValue": "Value";
     "conditionWhen": "When";
     "conditionsTitle": "Conditions";
     "configureFields": "Configure fields";
@@ -4740,7 +4754,6 @@ type Messages = {
       "fieldValueLabel": "Field value";
       "fieldValuePlaceholder": "Enter field value";
       "formatNotSupported": "Format not supported";
-      "numberLabel": "Value";
       "numberPlaceholder": "Enter number";
       "selectAValue": "Select a value";
       "selectValues": "Select values";
@@ -4982,7 +4995,6 @@ type Messages = {
           "openTarget": "Open item";
           "runId": "Run ID";
           "system": "System activity";
-          "target": "Target";
           "title": "Activity details";
           "trigger": "Initiated by";
           "webhook": "Webhook";

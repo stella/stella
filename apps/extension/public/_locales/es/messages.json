@@ -1,0 +1,27 @@
+{
+  "accessOff": {
+    "message": "El acceso a sitios web está desactivado. Concédelo una vez para que stella use los sitios donde has iniciado sesión."
+  },
+  "accessReady": {
+    "message": "Listo. stella puede usar una pestaña dedicada mientras mantienes tus sesiones abiertas."
+  },
+  "accessUpdateFailed": {
+    "message": "Chrome no pudo actualizar el acceso a sitios web."
+  },
+  "checkingAccess": { "message": "Comprobando el acceso a sitios web…" },
+  "connectTab": { "message": "Conectar la pestaña actual de stella" },
+  "controllerReady": {
+    "message": "Conectado a $ORIGIN$. Cada acción sigue necesitando aprobación en stella.",
+    "placeholders": { "origin": { "content": "$1" } }
+  },
+  "disconnectTab": { "message": "Desconectar pestaña" },
+  "extensionDescription": {
+    "message": "Permite a stella controlar una pestaña dedicada de Chrome después de que concedas acceso."
+  },
+  "extensionName": { "message": "Navegador de stella" },
+  "grantAccess": { "message": "Permitir todos los sitios" },
+  "revokeAccess": { "message": "Quitar acceso a sitios web" },
+  "unsupportedTab": {
+    "message": "Abre una pestaña de la aplicación stella y vuelve a intentarlo."
+  }
+}
