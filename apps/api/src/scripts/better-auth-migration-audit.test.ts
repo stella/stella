@@ -1,5 +1,5 @@
 import { afterAll, describe, expect, test } from "bun:test";
-import { chmod, mkdtemp, rm, symlink } from "node:fs/promises";
+import { chmod, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -7,12 +7,14 @@ import {
   parseBetterAuthAuditArgs,
   persistBetterAuthAuditBaseline,
   readBetterAuthAuditBaseline,
+  readBetterAuthTrustedIdentityMap,
 } from "@/api/scripts/better-auth-migration-audit";
 import {
   AUTH_TABLE_AUDIT_POLICY,
   BETTER_AUTH_AUDIT_CHECKS,
   BETTER_AUTH_AUDIT_MODES,
   parseBetterAuthAuditBaseline,
+  parseBetterAuthTrustedIdentityMap,
   renderBetterAuthAuditReport,
 } from "@/api/scripts/better-auth-migration-audit.logic";
 import type { BetterAuthAuditReport } from "@/api/scripts/better-auth-migration-audit.logic";
@@ -28,8 +30,12 @@ afterAll(async () => {
 });
 
 const baselinePayload = () => ({
+  accountIdentityProjection: {
+    digest: "d".repeat(64),
+    rowCount: "7",
+  },
   accessPolicyDigest: "c".repeat(64),
-  formatVersion: 2,
+  formatVersion: 3,
   tables: Object.fromEntries(
     Object.entries(AUTH_TABLE_AUDIT_POLICY).map(([model, policy]) => [
       model,
@@ -43,27 +49,58 @@ const baselinePayload = () => ({
   ),
 });
 
+const identityMapPayload = () =>
+  ({
+    formatVersion: 1,
+    microsoftAccounts: [
+      {
+        accountId: "71c02436-6600-42fd-84d0-417484a177b0",
+        accountRowId: "account-row-1",
+        issuer:
+          "https://login.microsoftonline.com/3a893563-0d4e-4309-9a31-b6e4e9f64479/v2.0",
+        legacyAccountId: "legacy-subject",
+      },
+    ],
+  }) as const;
+
 describe("Better Auth migration audit command", () => {
-  test("requires one explicit mode and a private baseline path", () => {
+  test("requires an identity map before migration and only a baseline after it", () => {
     expect(
       parseBetterAuthAuditArgs([
         BETTER_AUTH_AUDIT_MODES.PRE_MIGRATION,
         "--baseline",
         "/private/baseline.json",
+        "--identity-map",
+        "/private/identity-map.json",
       ]),
     ).toMatchObject({
       status: "ok",
       value: {
         baselinePath: "/private/baseline.json",
+        identityMapPath: "/private/identity-map.json",
         mode: BETTER_AUTH_AUDIT_MODES.PRE_MIGRATION,
       },
     });
+    expect(
+      parseBetterAuthAuditArgs([
+        BETTER_AUTH_AUDIT_MODES.POST_BACKFILL,
+        "--baseline",
+        "/private/baseline.json",
+      ]).status,
+    ).toBe("ok");
     for (const args of [
       [],
       [BETTER_AUTH_AUDIT_MODES.PRE_MIGRATION],
       ["unknown", "--baseline", "/private/baseline.json"],
       [BETTER_AUTH_AUDIT_MODES.PRE_MIGRATION, "--output", "x"],
       [BETTER_AUTH_AUDIT_MODES.PRE_MIGRATION, "--baseline", ""],
+      [
+        BETTER_AUTH_AUDIT_MODES.PRE_MIGRATION,
+        "--baseline",
+        "x",
+        "--identity-map",
+        "",
+      ],
       [BETTER_AUTH_AUDIT_MODES.PRE_MIGRATION, "--baseline", "x", "extra"],
     ]) {
       expect(parseBetterAuthAuditArgs(args).status).toBe("error");
@@ -73,7 +110,7 @@ describe("Better Auth migration audit command", () => {
   test("rejects incomplete, expanded, or malformed private baselines", () => {
     expect(parseBetterAuthAuditBaseline(baselinePayload()).status).toBe("ok");
     expect(
-      parseBetterAuthAuditBaseline({ formatVersion: 2, tables: {} }).status,
+      parseBetterAuthAuditBaseline({ formatVersion: 3, tables: {} }).status,
     ).toBe("error");
     const expanded = baselinePayload();
     expanded.tables["unreviewedAuthTable"] = {
@@ -104,6 +141,52 @@ describe("Better Auth migration audit command", () => {
       duplicateColumnTable.preservedColumns.push(duplicated);
     }
     expect(parseBetterAuthAuditBaseline(duplicateColumn).status).toBe("error");
+  });
+
+  test("accepts only canonical, unique Microsoft identity mappings", () => {
+    const mapping = identityMapPayload();
+
+    expect(parseBetterAuthTrustedIdentityMap(mapping).status).toBe("ok");
+    expect(
+      parseBetterAuthTrustedIdentityMap({
+        ...mapping,
+        microsoftAccounts: [
+          ...mapping.microsoftAccounts,
+          mapping.microsoftAccounts[0],
+        ],
+      }).status,
+    ).toBe("error");
+    expect(
+      parseBetterAuthTrustedIdentityMap({
+        ...mapping,
+        microsoftAccounts: [
+          { ...mapping.microsoftAccounts[0], accountId: "not-an-oid" },
+        ],
+      }).status,
+    ).toBe("error");
+  });
+
+  test("reads the trusted map only from a private regular file", async () => {
+    const directory = await mkdtemp(
+      path.join(tmpdir(), "stella-better-auth-identity-map-"),
+    );
+    temporaryDirectories.push(directory);
+    const mapPath = path.join(directory, "identity-map.json");
+    await writeFile(mapPath, JSON.stringify(identityMapPayload()), {
+      mode: 0o600,
+    });
+    expect((await readBetterAuthTrustedIdentityMap(mapPath)).status).toBe("ok");
+
+    await chmod(mapPath, 0o644);
+    expect((await readBetterAuthTrustedIdentityMap(mapPath)).status).toBe(
+      "error",
+    );
+    await chmod(mapPath, 0o600);
+    const linkedPath = path.join(directory, "linked-identity-map.json");
+    await symlink(mapPath, linkedPath);
+    expect((await readBetterAuthTrustedIdentityMap(linkedPath)).status).toBe(
+      "error",
+    );
   });
 
   test("creates the baseline once, accepts an identical rerun, and refuses replacement", async () => {

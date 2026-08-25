@@ -12,6 +12,11 @@ import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 
 let database: TestDatabase;
 
+const EMPTY_TRUSTED_IDENTITY_MAP = {
+  formatVersion: 1,
+  microsoftAccounts: [],
+} as const;
+
 setDefaultTimeout(120_000);
 
 beforeAll(async () => {
@@ -67,6 +72,7 @@ test("pre-migration audit is repeatable and rejects ownership corruption and an 
         baseline: null,
         database: auditDatabase,
         mode: BETTER_AUTH_AUDIT_MODES.PRE_MIGRATION,
+        trustedIdentityMap: EMPTY_TRUSTED_IDENTITY_MAP,
       });
       if (first.status === "error") {
         throw first.error;
@@ -78,6 +84,7 @@ test("pre-migration audit is repeatable and rejects ownership corruption and an 
         baseline: null,
         database: auditDatabase,
         mode: BETTER_AUTH_AUDIT_MODES.PRE_MIGRATION,
+        trustedIdentityMap: EMPTY_TRUSTED_IDENTITY_MAP,
       });
       if (second.status === "error") {
         throw second.error;
@@ -98,6 +105,7 @@ test("pre-migration audit is repeatable and rejects ownership corruption and an 
         baseline: null,
         database: auditDatabase,
         mode: BETTER_AUTH_AUDIT_MODES.PRE_MIGRATION,
+        trustedIdentityMap: EMPTY_TRUSTED_IDENTITY_MAP,
       });
       expect(
         checkStatus(
@@ -128,6 +136,7 @@ test("pre-migration audit is repeatable and rejects ownership corruption and an 
         baseline: null,
         database: auditDatabase,
         mode: BETTER_AUTH_AUDIT_MODES.PRE_MIGRATION,
+        trustedIdentityMap: EMPTY_TRUSTED_IDENTITY_MAP,
       });
       expect(
         checkStatus(
@@ -144,6 +153,7 @@ test("pre-migration audit is repeatable and rejects ownership corruption and an 
         baseline: null,
         database: auditDatabase,
         mode: BETTER_AUTH_AUDIT_MODES.PRE_MIGRATION,
+        trustedIdentityMap: EMPTY_TRUSTED_IDENTITY_MAP,
       });
       expect(
         checkStatus(
@@ -184,6 +194,7 @@ test("census crosses page boundaries with stable database-native ordering", asyn
         baseline: null,
         database: auditDatabase,
         mode: BETTER_AUTH_AUDIT_MODES.PRE_MIGRATION,
+        trustedIdentityMap: EMPTY_TRUSTED_IDENTITY_MAP,
       });
       if (first.status === "error") {
         throw first.error;
@@ -192,6 +203,7 @@ test("census crosses page boundaries with stable database-native ordering", asyn
         baseline: null,
         database: auditDatabase,
         mode: BETTER_AUTH_AUDIT_MODES.PRE_MIGRATION,
+        trustedIdentityMap: EMPTY_TRUSTED_IDENTITY_MAP,
       });
       if (second.status === "error") {
         throw second.error;
@@ -317,6 +329,11 @@ test("post phases require resource links, final constraints, and the exact basel
       const suffix = Bun.randomUUIDv7();
       const userId = `audit-post-user-${suffix}`;
       const accountRowId = `audit-post-account-${suffix}`;
+      const microsoftAccountRowId = `audit-post-microsoft-${suffix}`;
+      const microsoftLegacySub = `legacy-microsoft-sub-${suffix}`;
+      const microsoftOid = "71c02436-6600-42fd-84d0-417484a177b0";
+      const microsoftIssuer =
+        "https://login.microsoftonline.com/3a893563-0d4e-4309-9a31-b6e4e9f64479/v2.0";
       const clientId = `audit-post-client-${suffix}`;
       const resourceId = `https://audit-${suffix}.example.invalid`;
       await transaction.insert(user).values({
@@ -328,6 +345,12 @@ test("post phases require resource links, final constraints, and the exact basel
         id: accountRowId,
         accountId: userId,
         providerId: "credential",
+        userId,
+      });
+      await transaction.insert(account).values({
+        id: microsoftAccountRowId,
+        accountId: microsoftLegacySub,
+        providerId: "microsoft",
         userId,
       });
       await transaction.execute(
@@ -355,10 +378,22 @@ test("post phases require resource links, final constraints, and the exact basel
         execute: async (statement: Parameters<typeof transaction.execute>[0]) =>
           await transaction.execute(statement),
       };
+      const trustedIdentityMap = {
+        formatVersion: 1,
+        microsoftAccounts: [
+          {
+            accountId: microsoftOid,
+            accountRowId: microsoftAccountRowId,
+            issuer: microsoftIssuer,
+            legacyAccountId: microsoftLegacySub,
+          },
+        ],
+      } as const;
       const preMigration = await runBetterAuthMigrationAudit({
         baseline: null,
         database: auditDatabase,
         mode: BETTER_AUTH_AUDIT_MODES.PRE_MIGRATION,
+        trustedIdentityMap,
       });
       expect(preMigration.status).toBe("ok");
       if (preMigration.status === "error") {
@@ -367,11 +402,20 @@ test("post phases require resource links, final constraints, and the exact basel
       expect(
         preMigration.value.baseline.tables["account"]?.preservedColumns,
       ).not.toContain("issuer");
+      expect(
+        preMigration.value.baseline.tables["account"]?.preservedColumns,
+      ).toContain("account_id");
+      await transaction.execute(sql`
+        UPDATE account
+           SET account_id = ${microsoftOid}, issuer = ${microsoftIssuer}
+         WHERE id = ${microsoftAccountRowId}
+      `);
 
       const postBackfill = await runBetterAuthMigrationAudit({
         baseline: preMigration.value.baseline,
         database: auditDatabase,
         mode: BETTER_AUTH_AUDIT_MODES.POST_BACKFILL,
+        trustedIdentityMap: null,
       });
       if (postBackfill.status === "error") {
         throw postBackfill.error;
@@ -379,10 +423,40 @@ test("post phases require resource links, final constraints, and the exact basel
       expect(postBackfill.status).toBe("ok");
       expect(postBackfill.value.report.status).toBe("passed");
 
+      await transaction.execute(sql`
+        UPDATE account
+           SET account_id = ${microsoftLegacySub}
+         WHERE id = ${microsoftAccountRowId}
+      `);
+      const wrongMicrosoftIdentity = await runBetterAuthMigrationAudit({
+        baseline: preMigration.value.baseline,
+        database: auditDatabase,
+        mode: BETTER_AUTH_AUDIT_MODES.POST_BACKFILL,
+        trustedIdentityMap: null,
+      });
+      expect(
+        checkStatus(
+          wrongMicrosoftIdentity,
+          BETTER_AUTH_AUDIT_CHECKS.ACCOUNT_IDENTITIES_MATCH_TRUSTED_PROJECTION,
+        ),
+      ).toBe("failed");
+      expect(
+        checkStatus(
+          wrongMicrosoftIdentity,
+          BETTER_AUTH_AUDIT_CHECKS.AUTH_ROWS_PRESERVED,
+        ),
+      ).toBe("passed");
+      await transaction.execute(sql`
+        UPDATE account
+           SET account_id = ${microsoftOid}
+         WHERE id = ${microsoftAccountRowId}
+      `);
+
       const beforeConstraints = await runBetterAuthMigrationAudit({
         baseline: preMigration.value.baseline,
         database: auditDatabase,
         mode: BETTER_AUTH_AUDIT_MODES.POST_MIGRATION,
+        trustedIdentityMap: null,
       });
       expect(
         checkStatus(
@@ -401,6 +475,7 @@ test("post phases require resource links, final constraints, and the exact basel
         baseline: preMigration.value.baseline,
         database: auditDatabase,
         mode: BETTER_AUTH_AUDIT_MODES.POST_MIGRATION,
+        trustedIdentityMap: null,
       });
       expect(
         checkStatus(
@@ -418,6 +493,7 @@ test("post phases require resource links, final constraints, and the exact basel
         baseline: preMigration.value.baseline,
         database: auditDatabase,
         mode: BETTER_AUTH_AUDIT_MODES.POST_MIGRATION,
+        trustedIdentityMap: null,
       });
       expect(postMigration.status).toBe("ok");
       if (postMigration.status === "error") {
@@ -433,6 +509,7 @@ test("post phases require resource links, final constraints, and the exact basel
         baseline: preMigration.value.baseline,
         database: auditDatabase,
         mode: BETTER_AUTH_AUDIT_MODES.POST_BACKFILL,
+        trustedIdentityMap: null,
       });
       expect(
         checkStatus(
@@ -459,6 +536,7 @@ test("post phases require resource links, final constraints, and the exact basel
         baseline: preMigration.value.baseline,
         database: auditDatabase,
         mode: BETTER_AUTH_AUDIT_MODES.POST_MIGRATION,
+        trustedIdentityMap: null,
       });
       expect(
         checkStatus(
@@ -480,6 +558,7 @@ test("post phases require resource links, final constraints, and the exact basel
         baseline: preMigration.value.baseline,
         database: auditDatabase,
         mode: BETTER_AUTH_AUDIT_MODES.POST_BACKFILL,
+        trustedIdentityMap: null,
       });
       expect(
         checkStatus(changedRow, BETTER_AUTH_AUDIT_CHECKS.AUTH_ROWS_PRESERVED),
@@ -493,6 +572,7 @@ test("post phases require resource links, final constraints, and the exact basel
         baseline: preMigration.value.baseline,
         database: auditDatabase,
         mode: BETTER_AUTH_AUDIT_MODES.POST_BACKFILL,
+        trustedIdentityMap: null,
       });
       expect(
         checkStatus(
@@ -511,6 +591,7 @@ test("post phases require resource links, final constraints, and the exact basel
         baseline: preMigration.value.baseline,
         database: auditDatabase,
         mode: BETTER_AUTH_AUDIT_MODES.POST_BACKFILL,
+        trustedIdentityMap: null,
       });
       expect(
         checkStatus(
@@ -541,6 +622,7 @@ test("post phases require resource links, final constraints, and the exact basel
         baseline: preMigration.value.baseline,
         database: auditDatabase,
         mode: BETTER_AUTH_AUDIT_MODES.POST_BACKFILL,
+        trustedIdentityMap: null,
       });
       expect(
         checkStatus(replacedRow, BETTER_AUTH_AUDIT_CHECKS.AUTH_ROWS_PRESERVED),

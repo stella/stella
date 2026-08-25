@@ -36,6 +36,15 @@ const ACCOUNT_ISSUERS = {
   MICROSOFT_SUFFIX: "/v2.0",
 } as const;
 
+const TRANSFORMED_ACCOUNT_COLUMNS = new Set(["issuer"]);
+const MICROSOFT_ACCOUNT_ID_CENSUS_SENTINEL =
+  "better-auth-1.7-trusted-microsoft-identity";
+
+const preservedAccountColumnNames = () =>
+  columnNames(authSchema.account).filter(
+    (column) => !TRANSFORMED_ACCOUNT_COLUMNS.has(column),
+  );
+
 type AuthModel = keyof typeof authSchema;
 
 type ForeignKeyPolicy = {
@@ -74,7 +83,11 @@ export const AUTH_TABLE_AUDIT_POLICY = {
     foreignKeys: [
       { column: "user_id", referencedColumn: "id", referencedModel: "user" },
     ],
-    preservedColumns: columnNames(authSchema.account),
+    // Better Auth 1.7 adds issuer. Microsoft account_id deliberately changes
+    // from sub to a verified oid, so the census masks only that provider's
+    // value while preserving Google and credential account IDs byte-for-byte.
+    // The trusted identity projection below owns the Microsoft transition.
+    preservedColumns: preservedAccountColumnNames(),
     tableName: getTableName(authSchema.account),
   },
   apikey: {
@@ -496,6 +509,10 @@ const POST_MIGRATION_COLUMNS = {
 
 export const BETTER_AUTH_AUDIT_CHECKS = {
   ACCOUNT_IDENTITY_COMPLETE: "account-identity-complete",
+  ACCOUNT_IDENTITY_MAPPING_COMPLETE: "account-identity-mapping-complete",
+  ACCOUNT_IDENTITY_PROJECTED_UNIQUE: "account-identity-projected-unique",
+  ACCOUNT_IDENTITIES_MATCH_TRUSTED_PROJECTION:
+    "account-identities-match-trusted-projection",
   ACCOUNT_IDENTITY_UNIQUE: "account-identity-unique",
   ACCOUNT_ISSUERS_TRUSTED: "account-issuers-trusted",
   ACCOUNT_PROVIDERS_CLASSIFIED: "account-providers-classified",
@@ -526,6 +543,8 @@ const CHECKS_BY_MODE = {
     BETTER_AUTH_AUDIT_CHECKS.AUTH_FOREIGN_KEYS_VALIDATED,
     BETTER_AUTH_AUDIT_CHECKS.ACCOUNT_PROVIDERS_CLASSIFIED,
     BETTER_AUTH_AUDIT_CHECKS.CREDENTIAL_ACCOUNT_OWNERSHIP,
+    BETTER_AUTH_AUDIT_CHECKS.ACCOUNT_IDENTITY_MAPPING_COMPLETE,
+    BETTER_AUTH_AUDIT_CHECKS.ACCOUNT_IDENTITY_PROJECTED_UNIQUE,
     BETTER_AUTH_AUDIT_CHECKS.AUTH_ROWS_BASELINED,
   ],
   [BETTER_AUTH_AUDIT_MODES.POST_BACKFILL]: [
@@ -539,6 +558,7 @@ const CHECKS_BY_MODE = {
     BETTER_AUTH_AUDIT_CHECKS.ACCOUNT_IDENTITY_COMPLETE,
     BETTER_AUTH_AUDIT_CHECKS.ACCOUNT_IDENTITY_UNIQUE,
     BETTER_AUTH_AUDIT_CHECKS.ACCOUNT_ISSUERS_TRUSTED,
+    BETTER_AUTH_AUDIT_CHECKS.ACCOUNT_IDENTITIES_MATCH_TRUSTED_PROJECTION,
     BETTER_AUTH_AUDIT_CHECKS.OAUTH_CLIENT_RESOURCE_LINKS,
     BETTER_AUTH_AUDIT_CHECKS.OAUTH_CLIENTS_CLASSIFIED,
     BETTER_AUTH_AUDIT_CHECKS.OAUTH_RESOURCE_REFERENCES,
@@ -555,6 +575,7 @@ const CHECKS_BY_MODE = {
     BETTER_AUTH_AUDIT_CHECKS.ACCOUNT_IDENTITY_COMPLETE,
     BETTER_AUTH_AUDIT_CHECKS.ACCOUNT_IDENTITY_UNIQUE,
     BETTER_AUTH_AUDIT_CHECKS.ACCOUNT_ISSUERS_TRUSTED,
+    BETTER_AUTH_AUDIT_CHECKS.ACCOUNT_IDENTITIES_MATCH_TRUSTED_PROJECTION,
     BETTER_AUTH_AUDIT_CHECKS.OAUTH_CLIENT_RESOURCE_LINKS,
     BETTER_AUTH_AUDIT_CHECKS.OAUTH_CLIENTS_CLASSIFIED,
     BETTER_AUTH_AUDIT_CHECKS.OAUTH_RESOURCE_REFERENCES,
@@ -574,8 +595,12 @@ export type BetterAuthAuditCheck = {
 };
 
 export type BetterAuthAuditBaseline = {
+  accountIdentityProjection: {
+    digest: string;
+    rowCount: string;
+  };
   accessPolicyDigest: string;
-  formatVersion: 2;
+  formatVersion: 3;
   tables: Record<
     string,
     {
@@ -587,6 +612,16 @@ export type BetterAuthAuditBaseline = {
   >;
 };
 
+export type BetterAuthTrustedIdentityMap = {
+  formatVersion: 1;
+  microsoftAccounts: readonly {
+    accountId: string;
+    accountRowId: string;
+    issuer: string;
+    legacyAccountId: string;
+  }[];
+};
+
 export type BetterAuthAuditReport = {
   checks: readonly BetterAuthAuditCheck[];
   mode: BetterAuthAuditMode;
@@ -595,7 +630,7 @@ export type BetterAuthAuditReport = {
 
 export class BetterAuthAuditError extends TaggedError("BetterAuthAuditError")<{
   cause?: unknown;
-  code: "database-query-failed" | "invalid-baseline";
+  code: "database-query-failed" | "invalid-baseline" | "invalid-identity-map";
   message: string;
 }> {}
 
@@ -643,6 +678,245 @@ const requiredString = (value: unknown): string | null =>
 
 const requiredBoolean = (value: unknown): boolean | null =>
   typeof value === "boolean" ? value : null;
+
+type AccountIdentityProjection = {
+  collisionFree: boolean;
+  digest: string;
+  mappingComplete: boolean;
+  rowCount: string;
+};
+
+const ACCOUNT_IDENTITY_PAGE_SIZE = 1000;
+
+const accountIdentityKeyDigest = (issuer: string, accountId: string) => {
+  const hasher = new Bun.CryptoHasher("sha256");
+  hasher.update(issuer);
+  hasher.update("\0");
+  hasher.update(accountId);
+  return hasher.digest("hex");
+};
+
+const updateAccountIdentityProjection = (
+  hasher: Bun.CryptoHasher,
+  accountRowId: string,
+  issuer: string,
+  accountId: string,
+) => {
+  hasher.update(accountRowId);
+  hasher.update("\0");
+  hasher.update(issuer);
+  hasher.update("\0");
+  hasher.update(accountId);
+  hasher.update("\0");
+};
+
+const readProjectedAccountIdentities = async (
+  database: BetterAuthAuditDatabase,
+  trustedIdentityMap: BetterAuthTrustedIdentityMap,
+) => {
+  const microsoftByAccountRowId = new Map(
+    trustedIdentityMap.microsoftAccounts.map((identity) => [
+      identity.accountRowId,
+      identity,
+    ]),
+  );
+  let mappingComplete =
+    microsoftByAccountRowId.size ===
+    trustedIdentityMap.microsoftAccounts.length;
+  const seenMicrosoftAccountRowIds = new Set<string>();
+  const projectionHasher = new Bun.CryptoHasher("sha256");
+  const microsoftIdentityKeys = new Set(
+    trustedIdentityMap.microsoftAccounts.map(({ accountId, issuer }) =>
+      accountIdentityKeyDigest(issuer, accountId),
+    ),
+  );
+  const collisionFree =
+    microsoftIdentityKeys.size === trustedIdentityMap.microsoftAccounts.length;
+  let after: string | null = null;
+  let rowCount = 0n;
+
+  while (true) {
+    const statement =
+      after === null
+        ? sql`
+            SELECT id AS "accountRowId",
+                   account_id AS "accountId",
+                   provider_id AS "providerId",
+                   user_id AS "userId"
+              FROM account
+             ORDER BY id
+             LIMIT ${ACCOUNT_IDENTITY_PAGE_SIZE}
+          `
+        : sql`
+            SELECT id AS "accountRowId",
+                   account_id AS "accountId",
+                   provider_id AS "providerId",
+                   user_id AS "userId"
+              FROM account
+             WHERE id > ${after}
+             ORDER BY id
+             LIMIT ${ACCOUNT_IDENTITY_PAGE_SIZE}
+          `;
+    // eslint-disable-next-line no-await-in-loop -- keyset pages must be read in primary-key order for one stable digest
+    const queried = await queryRows(database, statement);
+    if (Result.isError(queried)) {
+      return queried;
+    }
+
+    for (const row of queried.value) {
+      const accountRowId = isRecord(row)
+        ? requiredString(row["accountRowId"])
+        : null;
+      const currentAccountId = isRecord(row)
+        ? requiredString(row["accountId"])
+        : null;
+      const providerId = isRecord(row)
+        ? requiredString(row["providerId"])
+        : null;
+      const userId = isRecord(row) ? requiredString(row["userId"]) : null;
+      if (
+        accountRowId === null ||
+        currentAccountId === null ||
+        providerId === null ||
+        userId === null
+      ) {
+        return Result.err(
+          new BetterAuthAuditError({
+            code: "database-query-failed",
+            message:
+              "Better Auth account identity projection returned invalid data",
+          }),
+        );
+      }
+
+      let projectedIssuer = "local:invalid";
+      let projectedAccountId = currentAccountId;
+      const microsoftIdentity = microsoftByAccountRowId.get(accountRowId);
+      switch (providerId) {
+        case AUTH_PROVIDER_IDS.CREDENTIAL:
+          projectedIssuer = ACCOUNT_ISSUERS.CREDENTIAL;
+          projectedAccountId = userId;
+          if (microsoftIdentity !== undefined) {
+            mappingComplete = false;
+          }
+          break;
+        case AUTH_PROVIDER_IDS.GOOGLE:
+          projectedIssuer = ACCOUNT_ISSUERS.GOOGLE;
+          if (microsoftIdentity !== undefined) {
+            mappingComplete = false;
+          }
+          break;
+        case AUTH_PROVIDER_IDS.MICROSOFT:
+          if (
+            microsoftIdentity === undefined ||
+            microsoftIdentity.legacyAccountId !== currentAccountId
+          ) {
+            mappingComplete = false;
+            break;
+          }
+          seenMicrosoftAccountRowIds.add(accountRowId);
+          projectedIssuer = microsoftIdentity.issuer;
+          projectedAccountId = microsoftIdentity.accountId;
+          break;
+        default:
+          mappingComplete = false;
+      }
+
+      updateAccountIdentityProjection(
+        projectionHasher,
+        accountRowId,
+        projectedIssuer,
+        projectedAccountId,
+      );
+      after = accountRowId;
+      rowCount += 1n;
+    }
+
+    if (queried.value.length < ACCOUNT_IDENTITY_PAGE_SIZE) {
+      break;
+    }
+  }
+
+  if (
+    seenMicrosoftAccountRowIds.size !==
+    trustedIdentityMap.microsoftAccounts.length
+  ) {
+    mappingComplete = false;
+  }
+
+  return Result.ok({
+    collisionFree,
+    digest: projectionHasher.digest("hex"),
+    mappingComplete,
+    rowCount: rowCount.toString(),
+  } satisfies AccountIdentityProjection);
+};
+
+const readActualAccountIdentities = async (
+  database: BetterAuthAuditDatabase,
+) => {
+  const projectionHasher = new Bun.CryptoHasher("sha256");
+  let after: string | null = null;
+  let rowCount = 0n;
+
+  while (true) {
+    const statement =
+      after === null
+        ? sql`
+            SELECT id AS "accountRowId",
+                   issuer,
+                   account_id AS "accountId"
+              FROM account
+             ORDER BY id
+             LIMIT ${ACCOUNT_IDENTITY_PAGE_SIZE}
+          `
+        : sql`
+            SELECT id AS "accountRowId",
+                   issuer,
+                   account_id AS "accountId"
+              FROM account
+             WHERE id > ${after}
+             ORDER BY id
+             LIMIT ${ACCOUNT_IDENTITY_PAGE_SIZE}
+          `;
+    // eslint-disable-next-line no-await-in-loop -- keyset pages must be read in primary-key order for one stable digest
+    const queried = await queryRows(database, statement);
+    if (Result.isError(queried)) {
+      return queried;
+    }
+    for (const row of queried.value) {
+      const accountRowId = isRecord(row)
+        ? requiredString(row["accountRowId"])
+        : null;
+      const issuer = isRecord(row) ? requiredString(row["issuer"]) : null;
+      const accountId = isRecord(row) ? requiredString(row["accountId"]) : null;
+      if (accountRowId === null || issuer === null || accountId === null) {
+        return Result.err(
+          new BetterAuthAuditError({
+            code: "database-query-failed",
+            message:
+              "Better Auth account identity census returned invalid data",
+          }),
+        );
+      }
+      updateAccountIdentityProjection(
+        projectionHasher,
+        accountRowId,
+        issuer,
+        accountId,
+      );
+      after = accountRowId;
+      rowCount += 1n;
+    }
+    if (queried.value.length < ACCOUNT_IDENTITY_PAGE_SIZE) {
+      break;
+    }
+  }
+  return Result.ok({
+    digest: projectionHasher.digest("hex"),
+    rowCount: rowCount.toString(),
+  });
+};
 
 const tableInventoryStatement = sql`
   SELECT table_name AS "tableName"
@@ -919,6 +1193,25 @@ const credentialOwnershipStatement = sql`
      FROM account
      WHERE provider_id = ${AUTH_PROVIDER_IDS.CREDENTIAL}
        AND account_id IS DISTINCT FROM user_id
+  ) AS "passed"
+`;
+
+const nonMicrosoftProjectedIdentityUniqueStatement = sql`
+  SELECT NOT EXISTS (
+    SELECT 1
+      FROM account
+     WHERE provider_id <> ${AUTH_PROVIDER_IDS.MICROSOFT}
+     GROUP BY
+       CASE provider_id
+         WHEN ${AUTH_PROVIDER_IDS.CREDENTIAL} THEN ${ACCOUNT_ISSUERS.CREDENTIAL}
+         WHEN ${AUTH_PROVIDER_IDS.GOOGLE} THEN ${ACCOUNT_ISSUERS.GOOGLE}
+         ELSE 'local:invalid'
+       END,
+       CASE provider_id
+         WHEN ${AUTH_PROVIDER_IDS.CREDENTIAL} THEN user_id
+         ELSE account_id
+       END
+    HAVING count(*) > 1
   ) AS "passed"
 `;
 
@@ -1262,7 +1555,14 @@ const readTableCensus = async (
   const primaryKeyHasher = new Bun.CryptoHasher("sha256");
   const rowContentHasher = new Bun.CryptoHasher("sha256");
   const preservedValues = preservedColumns.map((column) =>
-    sql.identifier(column),
+    tableName === AUTH_TABLE_AUDIT_POLICY.account.tableName &&
+    column === "account_id"
+      ? sql`CASE
+              WHEN provider_id = ${AUTH_PROVIDER_IDS.MICROSOFT}
+                THEN ${MICROSOFT_ACCOUNT_ID_CENSUS_SENTINEL}
+              ELSE account_id
+            END`
+      : sql.identifier(column),
   );
   let after: string | null = null;
   let rowCount = 0n;
@@ -1411,9 +1711,11 @@ const report = (
 const createBaseline = (
   tables: BetterAuthAuditBaseline["tables"],
   accessPolicyDigest: string,
+  accountIdentityProjection: BetterAuthAuditBaseline["accountIdentityProjection"],
 ): BetterAuthAuditBaseline => ({
+  accountIdentityProjection,
   accessPolicyDigest,
-  formatVersion: 2,
+  formatVersion: 3,
   tables,
 });
 
@@ -1431,6 +1733,7 @@ const emptyBaseline = (): BetterAuthAuditBaseline =>
       ]),
     ),
     "0".repeat(64),
+    { digest: "0".repeat(64), rowCount: "0" },
   );
 
 type NamedAuditStatement = readonly [BetterAuthAuditCheckName, SQL];
@@ -1458,12 +1761,14 @@ type RunBetterAuthMigrationAuditOptions = {
   baseline: BetterAuthAuditBaseline | null;
   database: BetterAuthAuditDatabase;
   mode: BetterAuthAuditMode;
+  trustedIdentityMap: BetterAuthTrustedIdentityMap | null;
 };
 
 export const runBetterAuthMigrationAudit = async ({
   baseline,
   database,
   mode,
+  trustedIdentityMap,
 }: RunBetterAuthMigrationAuditOptions): Promise<
   Result<AuditRunResult, BetterAuthAuditError>
 > => {
@@ -1568,6 +1873,73 @@ export const runBetterAuthMigrationAudit = async ({
     return commonChecksEvaluated;
   }
 
+  let expectedAccountIdentityProjection: BetterAuthAuditBaseline["accountIdentityProjection"];
+  if (mode === BETTER_AUTH_AUDIT_MODES.PRE_MIGRATION) {
+    if (trustedIdentityMap === null) {
+      return Result.err(
+        new BetterAuthAuditError({
+          code: "invalid-identity-map",
+          message:
+            "Better Auth trusted identity map is required before migration",
+        }),
+      );
+    }
+    const projection = await readProjectedAccountIdentities(
+      database,
+      trustedIdentityMap,
+    );
+    if (Result.isError(projection)) {
+      return projection;
+    }
+    const nonMicrosoftUnique = await booleanCheck(
+      database,
+      BETTER_AUTH_AUDIT_CHECKS.ACCOUNT_IDENTITY_PROJECTED_UNIQUE,
+      nonMicrosoftProjectedIdentityUniqueStatement,
+    );
+    if (Result.isError(nonMicrosoftUnique)) {
+      return nonMicrosoftUnique;
+    }
+    checks.push(
+      check(
+        BETTER_AUTH_AUDIT_CHECKS.ACCOUNT_IDENTITY_MAPPING_COMPLETE,
+        projection.value.mappingComplete,
+      ),
+      check(
+        BETTER_AUTH_AUDIT_CHECKS.ACCOUNT_IDENTITY_PROJECTED_UNIQUE,
+        projection.value.mappingComplete &&
+          projection.value.collisionFree &&
+          nonMicrosoftUnique.value.status === "passed",
+      ),
+    );
+    expectedAccountIdentityProjection = {
+      digest: projection.value.digest,
+      rowCount: projection.value.rowCount,
+    };
+  } else {
+    if (baseline === null) {
+      return Result.err(
+        new BetterAuthAuditError({
+          code: "invalid-baseline",
+          message: "Better Auth audit baseline is required after migration",
+        }),
+      );
+    }
+    const actualProjection = await readActualAccountIdentities(database);
+    if (Result.isError(actualProjection)) {
+      return actualProjection;
+    }
+    expectedAccountIdentityProjection = baseline.accountIdentityProjection;
+    checks.push(
+      check(
+        BETTER_AUTH_AUDIT_CHECKS.ACCOUNT_IDENTITIES_MATCH_TRUSTED_PROJECTION,
+        actualProjection.value.digest ===
+          baseline.accountIdentityProjection.digest &&
+          actualProjection.value.rowCount ===
+            baseline.accountIdentityProjection.rowCount,
+      ),
+    );
+  }
+
   if (mode !== BETTER_AUTH_AUDIT_MODES.PRE_MIGRATION) {
     const postBackfillChecks = [
       [
@@ -1645,7 +2017,11 @@ export const runBetterAuthMigrationAudit = async ({
   if (Result.isError(census)) {
     return census;
   }
-  const nextBaseline = createBaseline(census.value, accessPolicyDigest.value);
+  const nextBaseline = createBaseline(
+    census.value,
+    accessPolicyDigest.value,
+    expectedAccountIdentityProjection,
+  );
   if (mode === BETTER_AUTH_AUDIT_MODES.PRE_MIGRATION) {
     checks.push(check(BETTER_AUTH_AUDIT_CHECKS.AUTH_ROWS_BASELINED, true));
   } else {
@@ -1717,11 +2093,57 @@ const betterAuthAuditBaselineSchema: v.GenericSchema<
   unknown,
   BetterAuthAuditBaseline
 > = v.strictObject({
+  accountIdentityProjection: v.strictObject({
+    digest: digestSchema,
+    rowCount: rowCountSchema,
+  }),
   accessPolicyDigest: digestSchema,
-  formatVersion: v.literal(2),
+  formatVersion: v.literal(3),
   tables: v.strictObject(
     Object.fromEntries(
       AUTH_MODEL_NAMES.map((model) => [model, tableCensusSchema(model)]),
+    ),
+  ),
+});
+
+const GUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u;
+const MICROSOFT_ISSUER_PATTERN =
+  /^https:\/\/login\.microsoftonline\.com\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/v2\.0$/u;
+const nonEmptyStringSchema = v.pipe(
+  v.string(),
+  v.minLength(1),
+  v.maxLength(512),
+);
+const MAX_MICROSOFT_IDENTITY_MAPPINGS = 100_000;
+
+const betterAuthTrustedIdentityMapSchema: v.GenericSchema<
+  unknown,
+  BetterAuthTrustedIdentityMap
+> = v.strictObject({
+  formatVersion: v.literal(1),
+  microsoftAccounts: v.pipe(
+    v.array(
+      v.strictObject({
+        accountId: v.pipe(v.string(), v.regex(GUID_PATTERN)),
+        accountRowId: nonEmptyStringSchema,
+        issuer: v.pipe(v.string(), v.regex(MICROSOFT_ISSUER_PATTERN)),
+        legacyAccountId: nonEmptyStringSchema,
+      }),
+    ),
+    v.maxLength(MAX_MICROSOFT_IDENTITY_MAPPINGS),
+    v.check(
+      (accounts) =>
+        new Set(accounts.map(({ accountRowId }) => accountRowId)).size ===
+        accounts.length,
+      "Microsoft account row IDs must be unique",
+    ),
+    v.check(
+      (accounts) =>
+        new Set(
+          accounts.map(({ accountId, issuer }) => `${issuer}\0${accountId}`),
+        ).size === accounts.length,
+      "Microsoft account identities must be unique",
     ),
   ),
 });
@@ -1738,6 +2160,20 @@ export const parseBetterAuthAuditBaseline = (
     );
   const parsed = v.safeParse(betterAuthAuditBaselineSchema, value);
   return parsed.success ? Result.ok(parsed.output) : invalidBaseline();
+};
+
+export const parseBetterAuthTrustedIdentityMap = (
+  value: unknown,
+): Result<BetterAuthTrustedIdentityMap, BetterAuthAuditError> => {
+  const parsed = v.safeParse(betterAuthTrustedIdentityMapSchema, value);
+  return parsed.success
+    ? Result.ok(parsed.output)
+    : Result.err(
+        new BetterAuthAuditError({
+          code: "invalid-identity-map",
+          message: "Better Auth trusted identity map is invalid",
+        }),
+      );
 };
 
 export const renderBetterAuthAuditReport = (
