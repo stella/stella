@@ -1,5 +1,7 @@
 import { panic } from "better-result";
 
+import type { CorpusIndexManifest } from "@/api/lib/legal-search/corpus-index-manifest";
+
 /** Document families sharing the corpus storage and search substrate. */
 export const CORPUS_FAMILIES = ["case_law", "legislation"] as const;
 export type CorpusFamily = (typeof CORPUS_FAMILIES)[number];
@@ -35,10 +37,41 @@ const LEGACY_Q08_GENERATIONS = {
   legislation: ["legislation_v1"],
 } as const satisfies Record<CorpusFamily, readonly string[]>;
 
+type FinalManifestGenerationByFamily = {
+  [Family in CorpusFamily]: Extract<
+    CorpusIndexManifest,
+    { family: Family; cluster: "q09" }
+  >["generation"];
+};
+
 const FINAL_Q09_GENERATIONS = {
   case_law: ["case_law_v5"],
   legislation: ["legislation_v2"],
-} as const satisfies Record<CorpusFamily, readonly string[]>;
+} as const satisfies {
+  [Family in CorpusFamily]: readonly FinalManifestGenerationByFamily[Family][];
+};
+
+type DeclaredFinalManifestGeneration =
+  (typeof FINAL_Q09_GENERATIONS)[CorpusFamily][number];
+type MissingFinalManifestGeneration = Exclude<
+  CorpusIndexManifest["generation"],
+  DeclaredFinalManifestGeneration
+>;
+type UnexpectedFinalManifestGeneration = Exclude<
+  DeclaredFinalManifestGeneration,
+  CorpusIndexManifest["generation"]
+>;
+
+/**
+ * Keep the explicit legacy boundary below, but make every final manifest
+ * generation require a corresponding cluster declaration here. The manifest
+ * contract currently restricts final generations to q09.
+ */
+true satisfies MissingFinalManifestGeneration extends never
+  ? UnexpectedFinalManifestGeneration extends never
+    ? true
+    : never
+  : never;
 
 export const parseCorpusIndexClusterForGeneration = (
   family: CorpusFamily,

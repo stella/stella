@@ -12,6 +12,7 @@ import {
   QUICKWIT_CLUSTERS,
   requireQuickwitCluster,
 } from "@/api/lib/legal-search/corpus-generation-contract";
+import { CORPUS_INDEX_MANIFESTS } from "@/api/lib/legal-search/corpus-index-manifest";
 
 test("closed corpus and cluster values parse without a fallback", () => {
   for (const family of CORPUS_FAMILIES) {
@@ -64,4 +65,12 @@ test("every deployable generation selects one explicit Quickwit cluster", () => 
   expect(() =>
     corpusIndexClusterForGeneration("case_law", "case_law_v6"),
   ).toThrow("Unknown case_law corpus index generation");
+});
+
+test("every final manifest generation selects its declared cluster", () => {
+  for (const manifest of Object.values(CORPUS_INDEX_MANIFESTS)) {
+    expect(
+      corpusIndexClusterForGeneration(manifest.family, manifest.generation),
+    ).toBe(manifest.cluster);
+  }
 });
