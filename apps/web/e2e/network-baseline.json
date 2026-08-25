@@ -291,7 +291,7 @@
     }
   },
   "/contacts": {
-    "depth": 4,
+    "depth": 5,
     "requests": [
       "GET /api/auth/get-session",
       "GET /api/auth/organization/get-active-member-role",
@@ -945,7 +945,7 @@
     }
   },
   "/settings target": {
-    "depth": 4,
+    "depth": 6,
     "requests": [
       "GET /api/auth/get-session",
       "GET /api/auth/list-sessions",
@@ -1665,7 +1665,7 @@
     }
   },
   "/workspaces": {
-    "depth": 5,
+    "depth": 6,
     "requests": [
       "GET /api/auth/get-session",
       "GET /api/auth/organization/get-active-member-role",
