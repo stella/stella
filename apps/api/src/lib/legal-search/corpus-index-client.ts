@@ -2,7 +2,10 @@ import { panic, Result, TaggedError } from "better-result";
 
 import { envBase } from "@/api/env-base";
 import { fetchWithTimeout } from "@/api/lib/fetch";
-import type { CorpusIndexConfig } from "@/api/lib/legal-search/corpus-index-config";
+import {
+  CORPUS_INDEX_COMMIT_TIMEOUT_SECS,
+  type CorpusIndexConfig,
+} from "@/api/lib/legal-search/corpus-index-config";
 import { isRecord } from "@/api/lib/type-guards";
 
 /**
@@ -30,7 +33,8 @@ const SEARCH_TIMEOUT_MS = 30_000;
  * does not override it, so raising it engine-side means raising the
  * budget with it.
  */
-export const CORPUS_INDEX_COMMIT_WAIT_TIMEOUT_MS = 60_000;
+export const CORPUS_INDEX_COMMIT_WAIT_TIMEOUT_MS =
+  CORPUS_INDEX_COMMIT_TIMEOUT_SECS * 1000;
 
 /**
  * Whole-request budget for an ingest. Must exceed the commit wait above,

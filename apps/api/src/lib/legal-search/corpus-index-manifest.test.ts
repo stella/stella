@@ -1,17 +1,19 @@
 import { expect, test } from "bun:test";
 
+import { CORPUS_INDEX_COMMIT_TIMEOUT_SECS } from "@/api/lib/legal-search/corpus-index-config";
 import {
   CORPUS_INDEX_MANIFESTS,
   corpusIndexConfigFromManifest,
+  corpusIndexIdFromManifest,
   corpusIndexManifestDigest,
   requireCorpusIndexManifest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
 
 const EXPECTED_DIGESTS = {
   case_law_v5:
-    "95c84d0c4a841ab65b69469824cdde3c0c438e310fa004927ddf26af1ea4b60d",
+    "98d516f3f4ee413bf716e6cbec345fb217390a3ae516dba20a5ae1bd2ac77741",
   legislation_v2:
-    "9ab1f962750f78cd4472a05551f6e265d55f428e0fb94de9b15467b61f24f9dd",
+    "fc0d1e8e972d95cae450f4863d5a9902db7c9634517e65f57748027a4ca2a265",
 } as const satisfies Record<keyof typeof CORPUS_INDEX_MANIFESTS, string>;
 
 test("the final-generation registry is exact and fails closed", () => {
@@ -105,6 +107,24 @@ test("physical index ids are deployment state, not manifest identity", () => {
   ]);
 });
 
+test("manifest routing is exact and case-law additions fail closed", () => {
+  expect(
+    corpusIndexIdFromManifest(CORPUS_INDEX_MANIFESTS.case_law_v5, "CZE"),
+  ).toBe("case_law_v5_cs_sk");
+  expect(
+    corpusIndexIdFromManifest(CORPUS_INDEX_MANIFESTS.case_law_v5, "SVK"),
+  ).toBe("case_law_v5_cs_sk");
+  expect(() =>
+    corpusIndexIdFromManifest(CORPUS_INDEX_MANIFESTS.case_law_v5, "HUN"),
+  ).toThrow("Unrouted case-law jurisdiction: HUN");
+  expect(
+    corpusIndexIdFromManifest(CORPUS_INDEX_MANIFESTS.legislation_v2, "HUN"),
+  ).toBe("legislation_v2_hun");
+  expect(() =>
+    corpusIndexIdFromManifest(CORPUS_INDEX_MANIFESTS.legislation_v2, "cz;drop"),
+  ).toThrow("Invalid corpus jurisdiction");
+});
+
 test("v5 removes stale and repeated physical fields", () => {
   const manifest = CORPUS_INDEX_MANIFESTS.case_law_v5;
   const fields = new Map(
@@ -114,6 +134,7 @@ test("v5 removes stale and repeated physical fields", () => {
     ]),
   );
   expect(manifest.engine.binaryVersion).toBe("0.9.0");
+  expect(manifest.projection.builderVersion).toBe("case-law-passages-v1");
   expect(manifest.engine.indexConfig.version).toBe("0.8");
   expect(manifest.engine.indexConfig.doc_mapping.mode).toBe("strict");
   expect(manifest.engine.indexConfig.doc_mapping.timestamp_field).toBe(
@@ -135,8 +156,8 @@ test("v5 removes stale and repeated physical fields", () => {
   expect(fields.get("projection_revision")).toMatchObject({
     tokenizer: "raw",
     indexed: true,
-    stored: true,
-    fast: false,
+    stored: false,
+    fast: true,
   });
   expect(fields.get("is_opening")).toEqual({
     name: "is_opening",
@@ -246,11 +267,15 @@ test("route topology and tag pruning are part of the manifest", () => {
     "court",
     "language",
   ]);
+  expect(caseLaw.engine.indexConfig.indexing_settings.commit_timeout_secs).toBe(
+    CORPUS_INDEX_COMMIT_TIMEOUT_SECS,
+  );
 
   const legislation = CORPUS_INDEX_MANIFESTS.legislation_v2;
   // Plane may add a jurisdiction without changing the public routing rule:
   // every legislation jurisdiction always receives its own physical index.
   expect(legislation.route).toEqual({ type: "jurisdiction" });
+  expect(legislation.projection.builderVersion).toBe("legislation-document-v1");
   expect(legislation.engine.indexConfig.doc_mapping.mode).toBe("strict");
   expect(legislation.engine.indexConfig.doc_mapping.tag_fields).toEqual([
     "jurisdiction",

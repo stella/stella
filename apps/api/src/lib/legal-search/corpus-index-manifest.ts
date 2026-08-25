@@ -4,12 +4,17 @@ import { CASE_LAW_INDEX_GROUP_OF } from "@/api/lib/legal-search/case-law-index-g
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";
 import {
   CORPUS_INDEX_CONFIG_VERSION,
+  CORPUS_INDEX_COMMIT_TIMEOUT_SECS,
   CORPUS_INDEX_DATE_INPUT_FORMATS,
   CORPUS_INDEX_MERGE_POLICY,
   DECISION_TIMESTAMP_FIELD,
   FOLDED_TOKENIZER,
   type CorpusIndexConfig,
 } from "@/api/lib/legal-search/corpus-index-config";
+import {
+  CORPUS_INDEX_ID_MAX_LENGTH,
+  isCorpusIndexJurisdiction,
+} from "@/api/lib/legal-search/index-naming";
 
 export const CORPUS_INDEX_MANIFEST_SCHEMA_VERSION = 1;
 export const QUICKWIT_V09_BINARY_VERSION = "0.9.0";
@@ -32,7 +37,10 @@ type CorpusIndexManifestBase = {
 type CaseLawV5Manifest = CorpusIndexManifestBase & {
   family: "case_law";
   generation: "case_law_v5";
-  projection: CorpusIndexProjectionContract & { layout: "passage" };
+  projection: CorpusIndexProjectionContract & {
+    layout: "passage";
+    builderVersion: "case-law-passages-v1";
+  };
   route: {
     type: "case_law_group";
     byJurisdiction: typeof CASE_LAW_INDEX_GROUP_OF;
@@ -42,7 +50,10 @@ type CaseLawV5Manifest = CorpusIndexManifestBase & {
 type LegislationV2Manifest = CorpusIndexManifestBase & {
   family: "legislation";
   generation: "legislation_v2";
-  projection: CorpusIndexProjectionContract & { layout: "document" };
+  projection: CorpusIndexProjectionContract & {
+    layout: "document";
+    builderVersion: "legislation-document-v1";
+  };
   // The routing rule is fixed while the jurisdiction set is deliberately
   // open: adding a corpus creates another jurisdiction index without changing
   // the manifest. Plane decides which jurisdictions to build and when.
@@ -78,7 +89,9 @@ const dateField = (name: string): CorpusIndexFieldMapping => ({
 
 const commonFields = (): CorpusIndexFieldMapping[] => [
   rawField("document_id", { stored: true, fast: false }),
-  rawField("projection_revision", { stored: true, fast: false }),
+  // Exact cleanup queries and the standing orphan-revision census need this
+  // attempt identity in the columnar store. It is never returned to readers.
+  rawField("projection_revision", { stored: false, fast: true }),
   rawField("jurisdiction", { stored: false, fast: true }),
   rawField("document_type", { stored: false, fast: true }),
   rawField("source", { stored: false, fast: true }),
@@ -128,7 +141,10 @@ const indexConfig = (
       : { timestamp_field: timestampField }),
     store_source: false,
   },
-  indexing_settings: { merge_policy: CORPUS_INDEX_MERGE_POLICY },
+  indexing_settings: {
+    merge_policy: CORPUS_INDEX_MERGE_POLICY,
+    commit_timeout_secs: CORPUS_INDEX_COMMIT_TIMEOUT_SECS,
+  },
   search_settings: { default_search_fields: ["title", "text"] },
 });
 
@@ -198,6 +214,7 @@ export const CORPUS_INDEX_MANIFESTS = deepFreeze({
     },
     projection: {
       layout: "passage",
+      builderVersion: "case-law-passages-v1",
       documentIdField: "document_id",
       projectionRevisionField: "projection_revision",
       openingField: "is_opening",
@@ -218,6 +235,7 @@ export const CORPUS_INDEX_MANIFESTS = deepFreeze({
     },
     projection: {
       layout: "document",
+      builderVersion: "legislation-document-v1",
       documentIdField: "document_id",
       projectionRevisionField: "projection_revision",
       openingField: "is_opening",
@@ -288,10 +306,22 @@ const canonicalJson = (value: unknown): string => {
     .join(",")}}`;
 };
 
+export const corpusIndexContractDigest = (value: unknown): string =>
+  new Bun.CryptoHasher("sha256").update(canonicalJson(value)).digest("hex");
+
+const manifestDigestByIdentity = new WeakMap<CorpusIndexManifest, string>();
+
 export const corpusIndexManifestDigest = (
   manifest: CorpusIndexManifest,
-): string =>
-  new Bun.CryptoHasher("sha256").update(canonicalJson(manifest)).digest("hex");
+): string => {
+  const cachedDigest = manifestDigestByIdentity.get(manifest);
+  if (cachedDigest !== undefined) {
+    return cachedDigest;
+  }
+  const digest = corpusIndexContractDigest(manifest);
+  manifestDigestByIdentity.set(manifest, digest);
+  return digest;
+};
 
 export const corpusIndexConfigFromManifest = (
   manifest: CorpusIndexManifest,
@@ -299,4 +329,42 @@ export const corpusIndexConfigFromManifest = (
 ): CorpusIndexConfig => {
   const config = structuredClone(manifest.engine.indexConfig);
   return { ...config, index_id: indexId };
+};
+
+/**
+ * Resolve a canonical jurisdiction through the immutable generation route.
+ * Case-law topology is closed over the manifest; a new court corpus requires
+ * an explicit manifest decision. Legislation keeps the deliberate one-index-
+ * per-jurisdiction rule and therefore accepts any valid jurisdiction code.
+ */
+export const corpusIndexIdFromManifest = (
+  manifest: CorpusIndexManifest,
+  jurisdiction: string,
+): string => {
+  const canonical = jurisdiction.toUpperCase();
+  if (!isCorpusIndexJurisdiction(canonical)) {
+    return panic(`Invalid corpus jurisdiction: ${jurisdiction}`);
+  }
+
+  let suffix: string;
+  switch (manifest.route.type) {
+    case "case_law_group": {
+      const route = Object.entries(manifest.route.byJurisdiction).find(
+        ([candidate]) => candidate === canonical,
+      );
+      suffix =
+        route?.at(1) ?? panic(`Unrouted case-law jurisdiction: ${canonical}`);
+      break;
+    }
+    case "jurisdiction":
+      suffix = canonical.toLowerCase();
+      break;
+    default:
+      return manifest.route satisfies never;
+  }
+
+  const indexId = `${manifest.generation}_${suffix}`;
+  return indexId.length <= CORPUS_INDEX_ID_MAX_LENGTH
+    ? indexId
+    : panic(`Corpus index id exceeds storage limit: ${indexId}`);
 };

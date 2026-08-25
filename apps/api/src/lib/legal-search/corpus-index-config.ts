@@ -95,6 +95,9 @@ export const CORPUS_INDEX_MERGE_POLICY = {
   min_level_num_docs: 100_000,
 } as const;
 
+/** Engine commit window pinned by final-generation manifests and clients. */
+export const CORPUS_INDEX_COMMIT_TIMEOUT_SECS = 60;
+
 type CorpusIndexDocMappingMode = "lenient" | "strict" | "dynamic";
 
 export type CorpusIndexConfig = {
@@ -115,6 +118,7 @@ export type CorpusIndexConfig = {
   };
   indexing_settings: {
     merge_policy: typeof CORPUS_INDEX_MERGE_POLICY;
+    commit_timeout_secs?: number;
   };
   search_settings: {
     default_search_fields: string[];
