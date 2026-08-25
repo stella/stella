@@ -26,14 +26,16 @@ type ClipboardInputKey = {
   key: string;
 };
 
+export const isClipboardNameInput = (
+  dataset: Readonly<Record<string, string | undefined>>,
+) => Object.hasOwn(dataset, "clipboardNameInput");
+
 export const shouldCopyFromClipboardInput = ({
   dataset,
   isComposing,
   key,
 }: ClipboardInputKey) =>
-  !Object.hasOwn(dataset, "clipboardNameInput") &&
-  key === "Enter" &&
-  !isComposing;
+  !isClipboardNameInput(dataset) && key === "Enter" && !isComposing;
 
 export const isClipboardCopyShortcut = (shortcut: ClipboardCopyShortcut) =>
   (shortcut.metaKey || shortcut.ctrlKey) &&

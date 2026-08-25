@@ -9,6 +9,20 @@ fn is_regular_marker(path: &std::path::Path) -> bool {
   fs::symlink_metadata(path).is_ok_and(|metadata| metadata.file_type().is_file())
 }
 
+#[cfg(unix)]
+fn restrict_marker_permissions(file: &fs::File) -> Result<(), String> {
+  use std::os::unix::fs::PermissionsExt;
+
+  file
+    .set_permissions(fs::Permissions::from_mode(0o600))
+    .map_err(|error| format!("clipboard welcome state permissions failed: {error}"))
+}
+
+#[cfg(not(unix))]
+fn restrict_marker_permissions(_file: &fs::File) -> Result<(), String> {
+  Ok(())
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum ClipboardWelcomeStatus {
@@ -55,17 +69,7 @@ impl ClipboardWelcome {
       .create_new(true)
       .open(path)
     {
-      Ok(file) => {
-        #[cfg(unix)]
-        {
-          use std::os::unix::fs::PermissionsExt;
-          file
-            .set_permissions(fs::Permissions::from_mode(0o600))
-            .map_err(|error| {
-              format!("clipboard welcome state permissions failed: {error}")
-            })?;
-        }
-      }
+      Ok(file) => restrict_marker_permissions(&file)?,
       Err(error)
         if error.kind() == std::io::ErrorKind::AlreadyExists
           && is_regular_marker(path) => {}

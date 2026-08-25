@@ -20,6 +20,7 @@ import { useHydrationSafeDesktopPlatform } from "@/hooks/use-hydration-safe-desk
 import { getAnalytics } from "@/lib/analytics/provider";
 import { externalApiOrigin } from "@/lib/api-origins";
 import { connectSelfHostedDesktop } from "@/lib/desktop-bridge";
+import type { DesktopPlatform } from "@/lib/desktop-downloads";
 import { detached } from "@/lib/detached";
 import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
 
@@ -35,10 +36,17 @@ function DesktopPage() {
   >("idle");
 
   const shortcut = platform === "mac" ? "⌘ ⇧ V" : "Ctrl + Shift + V";
-  const installStep =
-    platform === "windows"
-      ? t("settings.account.desktopInstallWindowsStep")
-      : t("settings.account.desktopInstallMacStep");
+  const installOpenStep = t("settings.account.desktopInstallOpenStep");
+  const installStepsByPlatform = {
+    mac: [t("settings.account.desktopInstallMacStep"), installOpenStep],
+    other: [
+      t("settings.account.desktopInstallWindowsStep"),
+      t("settings.account.desktopInstallMacStep"),
+      installOpenStep,
+    ],
+    windows: [t("settings.account.desktopInstallWindowsStep"), installOpenStep],
+  } as const satisfies Record<DesktopPlatform, readonly string[]>;
+  const installSteps = installStepsByPlatform[platform];
 
   const handleConnectSelfHostedDesktop = async () => {
     setSelfHostConnectStatus("connecting");
@@ -130,19 +138,17 @@ function DesktopPage() {
               {t("settings.account.desktopInstallTitle")}
             </h2>
             <ol className="grid gap-3 sm:grid-cols-2">
-              {[installStep, t("settings.account.desktopInstallOpenStep")].map(
-                (step) => (
-                  <li
-                    className="bg-muted/48 flex items-start gap-3 rounded-xl p-4 text-sm leading-relaxed"
-                    key={step}
-                  >
-                    <span className="bg-foreground text-background mt-0.5 grid size-5 shrink-0 place-items-center rounded-full">
-                      <CheckIcon aria-hidden="true" className="size-3" />
-                    </span>
-                    <span>{step}</span>
-                  </li>
-                ),
-              )}
+              {installSteps.map((step) => (
+                <li
+                  className="bg-muted/48 flex items-start gap-3 rounded-xl p-4 text-sm leading-relaxed"
+                  key={step}
+                >
+                  <span className="bg-foreground text-background mt-0.5 grid size-5 shrink-0 place-items-center rounded-full">
+                    <CheckIcon aria-hidden="true" className="size-3" />
+                  </span>
+                  <span>{step}</span>
+                </li>
+              ))}
             </ol>
           </section>
         </FramePanel>

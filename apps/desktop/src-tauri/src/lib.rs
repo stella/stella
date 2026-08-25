@@ -31,7 +31,8 @@ macro_rules! generate_stella_handler {
 
 use std::sync::Arc;
 use tauri::{Emitter, Manager};
-use tauri_plugin_autostart::MacosLauncher;
+use tauri_plugin_autostart::{MacosLauncher, ManagerExt as AutostartManagerExt};
+use tauri_plugin_deep_link::DeepLinkExt;
 use tauri_plugin_notification::NotificationExt;
 use tokio::sync::Mutex;
 use tracing_subscriber::EnvFilter;
@@ -56,9 +57,6 @@ pub fn run() {
   let manager = Arc::new(Mutex::new(SessionManager::new()));
   let clipboard_manager = Arc::new(std::sync::Mutex::new(ClipboardManager::new()));
   let launch_args = std::env::args().collect::<Vec<_>>();
-  let reveal_clipboard_on_launch = app_lifecycle::should_reveal_clipboard_on_launch(
-    launch_args.iter().map(String::as_str),
-  );
   #[cfg(target_os = "macos")]
   let manager_for_single_instance = Arc::clone(&manager);
 
@@ -67,6 +65,7 @@ pub fn run() {
       move |app, args, _cwd| {
         let reveal_clipboard = app_lifecycle::should_reveal_clipboard_on_launch(
           args.iter().map(String::as_str),
+          false,
         );
         #[cfg(target_os = "macos")]
         {
@@ -105,6 +104,14 @@ pub fn run() {
     .manage::<ClipboardEditorState>(Arc::new(std::sync::Mutex::new(None)))
     .setup(move |app| {
       let handle = app.handle().clone();
+      let initial_deep_links = app.deep_link().get_current()?;
+      let reveal_clipboard_on_launch =
+        app_lifecycle::should_reveal_clipboard_on_launch(
+          launch_args.iter().map(String::as_str),
+          initial_deep_links
+            .as_ref()
+            .is_some_and(|urls| !urls.is_empty()),
+        );
       let desktop_telemetry = desktop_telemetry::DesktopTelemetry::start();
       app.manage(desktop_telemetry.clone());
 
@@ -316,6 +323,24 @@ pub fn run() {
         });
       }
 
+      // Keep an enabled native registration synchronized with the plugin's
+      // configured background-launch argument. Enabling overwrites the
+      // existing registration without changing one the user disabled.
+      {
+        let autostart = handle.autolaunch();
+        match autostart.is_enabled() {
+          Ok(true) => {
+            if let Err(error) = autostart.enable() {
+              tracing::warn!(error = %error, "auto-start registration could not be refreshed");
+            }
+          }
+          Ok(false) => {}
+          Err(error) => {
+            tracing::warn!(error = %error, "auto-start registration could not be checked");
+          }
+        }
+      }
+
       // Check for updates in the background after launch settles.
       updater::schedule_startup_check(handle.clone(), Arc::clone(&manager));
 
@@ -327,7 +352,6 @@ pub fn run() {
 
       // Register deep link handler
       {
-        use tauri_plugin_deep_link::DeepLinkExt;
         let manager_for_deep_link = Arc::clone(&manager);
         let handle_for_deep_link = handle.clone();
         let handle_deep_link_urls = move |urls: Vec<reqwest::Url>| {
@@ -344,7 +368,7 @@ pub fn run() {
           }
         };
 
-        if let Some(urls) = app.deep_link().get_current()? {
+        if let Some(urls) = initial_deep_links {
           handle_deep_link_urls(urls);
         }
 

@@ -2,10 +2,12 @@ pub const BACKGROUND_LAUNCH_ARGUMENT: &str = "--stella-background-launch";
 
 pub fn should_reveal_clipboard_on_launch<'a>(
   args: impl IntoIterator<Item = &'a str>,
+  has_current_deep_link: bool,
 ) -> bool {
-  !args
-    .into_iter()
-    .any(|arg| arg == BACKGROUND_LAUNCH_ARGUMENT || arg.starts_with("stella://"))
+  !has_current_deep_link
+    && !args
+      .into_iter()
+      .any(|arg| arg == BACKGROUND_LAUNCH_ARGUMENT || arg.starts_with("stella://"))
 }
 
 pub fn should_prevent_exit(code: Option<i32>) -> bool {
@@ -27,14 +29,15 @@ mod tests {
 
   #[test]
   fn explicit_launch_reveals_clipboard_but_background_and_deep_links_do_not() {
-    assert!(should_reveal_clipboard_on_launch(["stella-desktop"]));
-    assert!(!should_reveal_clipboard_on_launch([
-      "stella-desktop",
-      BACKGROUND_LAUNCH_ARGUMENT,
-    ]));
-    assert!(!should_reveal_clipboard_on_launch([
-      "stella-desktop",
-      "stella://open/session",
-    ]));
+    assert!(should_reveal_clipboard_on_launch(["stella-desktop"], false));
+    assert!(!should_reveal_clipboard_on_launch(
+      ["stella-desktop", BACKGROUND_LAUNCH_ARGUMENT,],
+      false
+    ));
+    assert!(!should_reveal_clipboard_on_launch(
+      ["stella-desktop", "stella://open/session",],
+      false
+    ));
+    assert!(!should_reveal_clipboard_on_launch(["stella-desktop"], true));
   }
 }

@@ -81,6 +81,7 @@ import {
   formatClipboardAge,
   highlightClipboardText,
   isClipboardCopyShortcut,
+  isClipboardNameInput,
   nextClipboardIndex,
   quickCopyIndex,
   shouldCopyFromClipboardInput,
@@ -1330,6 +1331,12 @@ const ClipboardApp = () => {
 
   const handleKeyDownCapture = (event: KeyboardEvent) => {
     if (event.key !== "Escape" || event.isComposing) {
+      return;
+    }
+    if (
+      event.target instanceof HTMLInputElement &&
+      isClipboardNameInput(event.target.dataset)
+    ) {
       return;
     }
     event.preventDefault();

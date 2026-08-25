@@ -8,6 +8,7 @@ import {
   formatClipboardAge,
   highlightClipboardText,
   isClipboardCopyShortcut,
+  isClipboardNameInput,
   nextClipboardIndex,
   quickCopyIndex,
   shouldCopyFromClipboardInput,
@@ -196,6 +197,11 @@ describe("keyboard indexes", () => {
 });
 
 describe("clipboard input keyboard handling", () => {
+  test("recognizes a clip name editor from its data attribute", () => {
+    expect(isClipboardNameInput({ clipboardNameInput: "" })).toBe(true);
+    expect(isClipboardNameInput({})).toBe(false);
+  });
+
   test("Enter in a clip name editor never triggers timeline copy", () => {
     expect(
       shouldCopyFromClipboardInput({
