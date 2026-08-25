@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 
 import {
   getS3,
+  isMissingCorpusObjectError,
   isMissingS3ObjectError,
   isS3Stale,
   readCorpusS3Range,
@@ -465,6 +466,48 @@ describe("readCorpusS3Range", () => {
     expect(rejection).toMatchObject({
       message: expect.stringContaining("not 206"),
     });
+  });
+
+  test("distinguishes an absent corpus object from other 404 responses", async () => {
+    const readRejection = async (body: string | null) => {
+      installFetch(
+        async () =>
+          await Promise.resolve(
+            new Response(body, {
+              status: 404,
+              headers:
+                body === null
+                  ? undefined
+                  : { "content-type": "application/xml" },
+            }),
+          ),
+      );
+      return await readCorpusS3Range({
+        key: "legal-corpus/packs/jurisdiction=SVK/missing.pack",
+        offset: 0,
+        length: 8,
+        signal: new AbortController().signal,
+      }).then(
+        () => null,
+        (error: unknown) => error,
+      );
+    };
+
+    expect(
+      isMissingCorpusObjectError(
+        await readRejection(
+          "<Error><Code>NoSuchKey</Code><Message>missing</Message></Error>",
+        ),
+      ),
+    ).toBe(true);
+    expect(
+      isMissingCorpusObjectError(
+        await readRejection(
+          "<Error><Code>NoSuchBucket</Code><Message>missing</Message></Error>",
+        ),
+      ),
+    ).toBe(false);
+    expect(isMissingCorpusObjectError(await readRejection(null))).toBe(false);
   });
 
   test("refuses a 206 whose Content-Range is not the requested range", async () => {

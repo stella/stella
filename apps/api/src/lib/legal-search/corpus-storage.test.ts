@@ -28,6 +28,7 @@ import {
   parsePersistedCorpusAst,
   parsePersistedCorpusSections,
   planCorpusDocumentWrite,
+  readCorpusAtAuthoritativePointer,
   readCorpusBytesAt,
   readCorpusPayloadOrFallback,
   readCorpusText,
@@ -40,6 +41,7 @@ import type {
 } from "@/api/lib/legal-search/corpus-storage";
 import { EMPTY_AST } from "@/api/lib/legal-search/document-types";
 import { LIMITS } from "@/api/lib/limits";
+import { MissingCorpusObjectError } from "@/api/lib/s3";
 
 describe("corpus mirror state columns", () => {
   test("partition pending and settled pointer states", () => {
@@ -179,6 +181,76 @@ describe("readCorpusText bounded corpus read", () => {
     expect(CORPUS_TRANSFER_MAX_BYTES).toBeGreaterThan(
       LIMITS.corpusPayloadMaxDecompressedBytes,
     );
+  });
+});
+
+describe("authoritative corpus pointer reread", () => {
+  const missing = (key: string) =>
+    new MissingCorpusObjectError({
+      message: `Corpus object is absent: ${key}`,
+      key,
+    });
+
+  test("retries one changed pointer after a confirmed absence", async () => {
+    const oldKey =
+      "pack:legal-corpus/packs/old.pack#offset=10&length=20&sha256=" +
+      "a".repeat(64);
+    const replacementKey =
+      "pack:legal-corpus/packs/new.pack#offset=30&length=20&sha256=" +
+      "b".repeat(64);
+    const reads: string[] = [];
+    const value = await readCorpusAtAuthoritativePointer({
+      storedKey: oldKey,
+      read: async (key) => {
+        reads.push(key);
+        if (key === oldKey) {
+          throw missing(key);
+        }
+        return "payload";
+      },
+      rereadStoredKey: async () => await Promise.resolve(replacementKey),
+    });
+
+    expect(value).toBe("payload");
+    expect(reads).toEqual([oldKey, replacementKey]);
+  });
+
+  test("preserves the first absence when authority is unchanged", async () => {
+    const first = missing("legal-corpus/current.zst");
+    let rereads = 0;
+    const rejection: unknown = await readCorpusAtAuthoritativePointer({
+      storedKey: first.key,
+      read: async () => await Promise.reject(first),
+      rereadStoredKey: async () => {
+        rereads += 1;
+        return first.key;
+      },
+    }).then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+    expect(rejection).toBe(first);
+    expect(rereads).toBe(1);
+  });
+
+  test("does not reread authority for another storage failure", async () => {
+    const failure = new Error("authorization failed");
+    let rereads = 0;
+    const rejection: unknown = await readCorpusAtAuthoritativePointer({
+      storedKey: "legal-corpus/current.zst",
+      read: async () => await Promise.reject(failure),
+      rereadStoredKey: async () => {
+        rereads += 1;
+        return "legal-corpus/replacement.zst";
+      },
+    }).then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+    expect(rejection).toBe(failure);
+    expect(rereads).toBe(0);
   });
 });
 

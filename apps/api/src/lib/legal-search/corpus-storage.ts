@@ -33,6 +33,7 @@ import type {
 import { LIMITS } from "@/api/lib/limits";
 import {
   deleteCorpusS3ObjectWithSignal,
+  isMissingCorpusObjectError,
   putCorpusS3ObjectWithSignal,
   readCorpusS3BytesBounded,
   readCorpusS3Range,
@@ -684,6 +685,40 @@ export const readCorpusAst = async (
     await zstdDecompressToStringBounded(bytes, PAYLOAD_MAX_BYTES),
   );
   return parsePersistedCorpusAst(parsed);
+};
+
+type ReadCorpusAtAuthoritativePointerOptions<T> = {
+  storedKey: string;
+  read: (storedKey: string) => Promise<T>;
+  rereadStoredKey: () => Promise<string | null>;
+};
+
+/**
+ * Recover the one legitimate read/repoint race. Only a confirmed absent
+ * object permits one authoritative pointer reread and one replacement read.
+ */
+export const readCorpusAtAuthoritativePointer = async <T>({
+  storedKey,
+  read,
+  rereadStoredKey,
+}: ReadCorpusAtAuthoritativePointerOptions<T>): Promise<T> => {
+  const first = await Result.tryPromise({
+    try: async () => await read(storedKey),
+    catch: (cause) => cause,
+  });
+  if (first.isOk()) {
+    return first.value;
+  }
+  if (!isMissingCorpusObjectError(first.error)) {
+    // eslint-disable-next-line no-throw-literal -- preserve the storage boundary's structured rejection
+    throw first.error;
+  }
+  const replacement = await rereadStoredKey();
+  if (replacement === null || replacement === storedKey) {
+    // eslint-disable-next-line no-throw-literal -- unchanged authority preserves the original confirmed absence
+    throw first.error;
+  }
+  return await read(replacement);
 };
 
 type CorpusReadWithFallbackInput<T> = {

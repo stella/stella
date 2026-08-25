@@ -13,7 +13,9 @@ import {
   corpusProjectionRevisionsQuery,
   CORPUS_PROJECTION_DELETE_MAX_REVISIONS,
   CORPUS_PROJECTION_UNKNOWN_APPEND_MARGIN_MS,
+  planCorpusProjectionAppendRequests,
 } from "@/api/lib/legal-search/corpus-index-projection-engine";
+import { LIMITS } from "@/api/lib/limits";
 
 const FIRST_REVISION = toSafeId<"corpusIndexProjectionIntent">(
   "0198e331-e578-7000-8000-000000000001",
@@ -80,6 +82,43 @@ test("committed appends preserve row boundaries and exact revision ownership", a
   );
   expect(requests).toHaveLength(1);
   expect(requests.at(0)?.split("\n")).toHaveLength(3);
+});
+
+test("append requests are byte-planned before any external effect", () => {
+  const largeText = "x".repeat(
+    Math.floor(LIMITS.corpusIndexIngestMaxBytes * 0.6),
+  );
+  const planned = planCorpusProjectionAppendRequests([
+    {
+      revision: FIRST_REVISION,
+      documents: [
+        {
+          document_id: "0198e331-e578-7000-8000-000000000011",
+          projection_revision: FIRST_REVISION,
+          text: largeText,
+        },
+      ],
+    },
+    {
+      revision: SECOND_REVISION,
+      documents: [
+        {
+          document_id: "0198e331-e578-7000-8000-000000000012",
+          projection_revision: SECOND_REVISION,
+          text: largeText,
+        },
+      ],
+    },
+  ]);
+
+  expect(planned.isOk()).toBe(true);
+  if (planned.isOk()) {
+    expect(
+      planned.value.map(({ entries }) =>
+        entries.map(({ revision }) => revision),
+      ),
+    ).toEqual([[FIRST_REVISION], [SECOND_REVISION]]);
+  }
 });
 
 test("append rejects a document carrying another attempt revision", async () => {

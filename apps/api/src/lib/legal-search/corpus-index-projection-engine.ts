@@ -22,9 +22,14 @@ export const CORPUS_PROJECTION_APPEND_MAX_SINGLE_REVISION_BYTES =
 export const CORPUS_PROJECTION_DELETE_MAX_REVISIONS = 128;
 export const CORPUS_PROJECTION_UNKNOWN_APPEND_MARGIN_MS = 5000;
 
-type CorpusProjectionAppendEntry = {
+export type CorpusProjectionAppendEntry = {
   revision: ProjectionRevision;
   documents: readonly Record<string, unknown>[];
+};
+
+export type CorpusProjectionAppendRequest = {
+  entries: readonly CorpusProjectionAppendEntry[];
+  ndjson: string;
 };
 
 type CorpusProjectionAppendClient = Pick<
@@ -80,14 +85,14 @@ const invalidAppend = (
     }),
   );
 
-export const appendCorpusProjectionBatch = async ({
-  client,
-  indexId,
-  entries,
-  clock = () => new Date(),
-}: AppendCorpusProjectionBatchOptions): Promise<
-  Result<CorpusProjectionAppendReceipt, CorpusProjectionAppendError>
-> => {
+/**
+ * Validate and byte-partition exact append attempts before any intent enters
+ * `append_started`. A caller can then durably start only the next request;
+ * later plans remain provably unattempted if that request fails or crashes.
+ */
+export const planCorpusProjectionAppendRequests = (
+  entries: readonly CorpusProjectionAppendEntry[],
+): Result<CorpusProjectionAppendRequest[], CorpusProjectionAppendError> => {
   const revisions = entries.map(({ revision }) => revision);
   if (
     entries.length === 0 ||
@@ -101,7 +106,6 @@ export const appendCorpusProjectionBatch = async ({
   }
 
   const uniqueRevisions = new Set<ProjectionRevision>();
-  let documentCount = 0;
   for (const entry of entries) {
     if (
       !isUuid(entry.revision) ||
@@ -115,7 +119,6 @@ export const appendCorpusProjectionBatch = async ({
       );
     }
     uniqueRevisions.add(entry.revision);
-    documentCount += entry.documents.length;
     for (const document of entry.documents) {
       if (
         document["projection_revision"] !== entry.revision ||
@@ -146,25 +149,47 @@ export const appendCorpusProjectionBatch = async ({
       );
     }
   }
+  return Result.ok(
+    requests.map(({ entries: requestEntries, ndjson }) => ({
+      entries: requestEntries.map(({ row }) => row),
+      ndjson,
+    })),
+  );
+};
 
+export const appendCorpusProjectionBatch = async ({
+  client,
+  indexId,
+  entries,
+  clock = () => new Date(),
+}: AppendCorpusProjectionBatchOptions): Promise<
+  Result<CorpusProjectionAppendReceipt, CorpusProjectionAppendError>
+> => {
+  const planned = planCorpusProjectionAppendRequests(entries);
+  if (planned.isErr()) {
+    return Result.err(planned.error);
+  }
+
+  const documentCount = entries.reduce(
+    (total, entry) => total + entry.documents.length,
+    0,
+  );
   const committedRevisions: ProjectionRevision[] = [];
   const appendRequestAt = async (
     requestIndex: number,
   ): Promise<Result<void, CorpusProjectionAppendError>> => {
-    const request = requests.at(requestIndex);
+    const request = planned.value.at(requestIndex);
     if (request === undefined) {
       return Result.ok(undefined);
     }
     const ingested = await client.ingestCommittedBatch(indexId, request.ndjson);
     if (ingested.isErr()) {
       const unknownOutcomeObservedAt = clock();
-      const unknownRevisions = request.entries.map(
-        ({ row: { revision } }) => revision,
-      );
-      const unattemptedRevisions = requests
+      const unknownRevisions = request.entries.map(({ revision }) => revision);
+      const unattemptedRevisions = planned.value
         .slice(requestIndex + 1)
         .flatMap(({ entries: laterEntries }) =>
-          laterEntries.map(({ row: { revision } }) => revision),
+          laterEntries.map(({ revision }) => revision),
         );
       return Result.err(
         new CorpusProjectionAppendError({
@@ -179,9 +204,7 @@ export const appendCorpusProjectionBatch = async ({
         }),
       );
     }
-    committedRevisions.push(
-      ...request.entries.map(({ row: { revision } }) => revision),
-    );
+    committedRevisions.push(...request.entries.map(({ revision }) => revision));
     return appendRequestAt(requestIndex + 1);
   };
   const appendResult = await appendRequestAt(0);
@@ -191,7 +214,7 @@ export const appendCorpusProjectionBatch = async ({
   return Result.ok({
     revisionCount: entries.length,
     documentCount,
-    requestCount: requests.length,
+    requestCount: planned.value.length,
   });
 };
 

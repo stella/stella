@@ -504,7 +504,21 @@ export const writeS3ObjectWithRetry = async (
 
 class S3ObjectReadError extends TaggedError("S3ObjectReadError")<{
   message: string;
+  status?: number;
+  code?: string;
 }> {}
+
+export class MissingCorpusObjectError extends TaggedError(
+  "MissingCorpusObjectError",
+)<{
+  message: string;
+  key: string;
+}> {}
+
+export const isMissingCorpusObjectError = (
+  error: unknown,
+): error is MissingCorpusObjectError =>
+  error instanceof MissingCorpusObjectError;
 
 /**
  * Size of one object without reading it, so a caller can refuse an
@@ -747,6 +761,83 @@ export const getCorpusS3 = (): S3Client => {
 // outlive one read.
 const OBJECT_READ_PRESIGN_TTL_SECONDS = 300;
 export const OBJECT_READ_TIMEOUT_MS = 5 * 60 * 1000;
+const S3_ERROR_BODY_PREFIX_MAX_BYTES = 8 * 1024;
+const S3_ERROR_CODE_PATTERN = /<Code>\s*(?<code>[^<]+?)\s*<\/Code>/u;
+const MISSING_CORPUS_OBJECT_CODES: ReadonlySet<string> = new Set([
+  "NoSuchKey",
+  "NotFound",
+]);
+
+const readS3ErrorBodyPrefix = async (response: Response): Promise<string> => {
+  const reader = response.body?.getReader();
+  if (reader === undefined) {
+    return "";
+  }
+  const chunks: Uint8Array[] = [];
+  let byteCount = 0;
+  while (byteCount < S3_ERROR_BODY_PREFIX_MAX_BYTES) {
+    // oxlint-disable-next-line no-await-in-loop -- stream consumption is inherently ordered and byte-bounded
+    const chunk = await reader.read();
+    if (chunk.done) {
+      break;
+    }
+    const remaining = S3_ERROR_BODY_PREFIX_MAX_BYTES - byteCount;
+    const value = chunk.value.subarray(0, remaining);
+    chunks.push(value);
+    byteCount += value.byteLength;
+    if (value.byteLength < chunk.value.byteLength) {
+      break;
+    }
+  }
+  await reader.cancel();
+  const bytes = new Uint8Array(byteCount);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return new TextDecoder().decode(bytes);
+};
+
+const readS3ResponseErrorCode = async (
+  response: Response,
+): Promise<string | null> => {
+  const headerCode = response.headers.get("x-amz-error-code");
+  if (headerCode !== null) {
+    return headerCode.trim();
+  }
+  const body = await Result.tryPromise(
+    async () => await readS3ErrorBodyPrefix(response),
+  );
+  if (body.isErr()) {
+    return null;
+  }
+  return S3_ERROR_CODE_PATTERN.exec(body.value)?.groups?.["code"] ?? null;
+};
+
+const throwCorpusObjectResponseError = async ({
+  response,
+  key,
+  message,
+}: {
+  response: Response;
+  key: string;
+  message: string;
+}): Promise<never> => {
+  const code =
+    response.status === 404 ? await readS3ResponseErrorCode(response) : null;
+  if (code !== null && MISSING_CORPUS_OBJECT_CODES.has(code)) {
+    throw new MissingCorpusObjectError({
+      message: `Corpus object is absent: ${key}`,
+      key,
+    });
+  }
+  throw new S3ObjectReadError({
+    message,
+    status: response.status,
+    ...(code === null ? {} : { code }),
+  });
+};
 
 /**
  * Fetch an object body over a presigned URL when the caller needs response
@@ -766,7 +857,9 @@ const fetchObject = async (
     { signal, timeoutMs: OBJECT_READ_TIMEOUT_MS },
   );
   if (!response.ok) {
-    throw new S3ObjectReadError({
+    return await throwCorpusObjectResponseError({
+      response,
+      key,
       message: `Object read for ${key} failed with ${response.status}`,
     });
   }
@@ -877,7 +970,9 @@ export const readCorpusS3Range = async ({
     },
   );
   if (response.status !== 206) {
-    throw new S3ObjectReadError({
+    return await throwCorpusObjectResponseError({
+      response,
+      key,
       message: `Range read for ${key} answered ${response.status}, not 206`,
     });
   }
