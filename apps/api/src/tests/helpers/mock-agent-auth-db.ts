@@ -1,6 +1,8 @@
 import { panic } from "better-result";
 import { mock } from "bun:test";
 
+import { oauthResource } from "@/api/db/auth-schema";
+import { getBetterAuthOAuthResources } from "@/api/lib/oauth-resource-policy";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
@@ -25,7 +27,19 @@ let testDb: TestDatabase | undefined;
  * `rootDb` access, so the proxy below resolves to a ready instance.
  */
 export const initAgentAuthTestDb = async (): Promise<TestDatabase> => {
-  testDb ??= await getTestDb();
+  if (testDb !== undefined) {
+    return testDb;
+  }
+  const db = await getTestDb();
+  await db.insert(oauthResource).values(
+    getBetterAuthOAuthResources().map((resource) => ({
+      id: Bun.randomUUIDv7(),
+      allowedScopes: resource.allowedScopes,
+      identifier: resource.identifier,
+      name: resource.name,
+    })),
+  );
+  testDb = db;
   return testDb;
 };
 

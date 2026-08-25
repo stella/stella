@@ -124,18 +124,16 @@ export const createAgentOAuthClient = async ({
   }
 
   await rootDb.transaction(async (transaction) => {
-    // A fresh installation may receive an agent registration before the OAuth
-    // provider's first request seeds resources. Insert-only matches the plugin
-    // policy; the migration audit rejects any conflicting persisted policy.
-    await transaction
-      .insert(oauthResource)
-      .values({
-        id: Bun.randomUUIDv7(),
-        allowedScopes: [...resourcePolicy.allowedScopes],
-        identifier: resourcePolicy.identifier,
-        name: resourcePolicy.name,
-      })
-      .onConflictDoNothing({ target: oauthResource.identifier });
+    const resource = (
+      await transaction
+        .select({ identifier: oauthResource.identifier })
+        .from(oauthResource)
+        .where(eq(oauthResource.identifier, resourcePolicy.identifier))
+        .limit(1)
+    ).at(0);
+    if (!resource) {
+      panic("Agent OAuth resource is absent from the migrated auth schema");
+    }
     await transaction.insert(oauthClient).values({
       id: createSafeId<"mcpOAuthClient">(),
       applicationType: "web",
