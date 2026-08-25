@@ -87,7 +87,7 @@ const pendingRows = ({
   return input.spans.map((span, index) => ({
     authorId: author.id,
     authorImage: author.image,
-    authorName: author.name,
+    authorName: author.name ?? "",
     blockAnchorId: span.blockAnchorId,
     body: input.kind === "comment" && index === 0 ? input.body : null,
     color: input.kind === "highlight" ? input.color : null,
