@@ -142,6 +142,7 @@ describe.serial("custom oxlint safe fixers", () => {
       "const schema = t.Optional(t.UnionEnum(VALUES));",
       'const guidance = "Use right-click to open the menu";',
       `const arbitraryContent = <span className="before:content-['right-click']" />;`,
+      `const quotedBracketContent = <span className="before:content-['a] right-click']" />;`,
       "const interpolatedArbitrary = <span className={`content-[$" +
         "{prefix} right-click] mr-2`} />;",
       "",

@@ -105,11 +105,27 @@ const replaceOutsideArbitraryBrackets = (
   let bracketStart = 0;
   let depth = 0;
   let escaped = false;
+  let quote: string | null = null;
 
   for (let index = 0; index < value.length; index += 1) {
     const character = value[index];
     if (character === "\\" && !escaped) {
       escaped = true;
+      continue;
+    }
+    if (depth > 0 && quote !== null) {
+      if (!escaped && character === quote) {
+        quote = null;
+      }
+      escaped = false;
+      continue;
+    }
+    if (
+      !escaped &&
+      depth > 0 &&
+      (character === '"' || character === "'" || character === "`")
+    ) {
+      quote = character;
       continue;
     }
     if (!escaped && character === "[") {
