@@ -1484,143 +1484,147 @@ const ClipboardApp = () => {
         )}
       </main>
 
-      <footer className="clipboard-controls flex h-14 shrink-0 items-center gap-2 px-3">
-        <div className="flex shrink-0 items-center gap-0.5">
-          <a
-            aria-label="Stella"
-            className="text-foreground grid size-10 place-items-center"
-            href={STELLA_WEB_APP_URL}
-            onClick={(event) => {
-              event.preventDefault();
-              void invoke("clipboard_open_stella").catch(() => {
-                reportDesktopError({
-                  code: DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
-                  operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardExternalOpen,
-                  window: DESKTOP_TELEMETRY_WINDOWS.clipboard,
-                });
-                setError({
-                  message: t("errorOpenStella"),
-                  source: "operation",
-                });
-              });
-            }}
-            title="Stella"
-          >
-            <StellaMark className="size-5" />
-          </a>
-          {snapshot.persistence.status === "memoryOnly" ||
-          snapshot.persistence.status === "deletionOnly" ? (
-            <span
-              aria-label={persistenceWarningLabel}
-              className="bg-warning/12 text-warning grid size-7 place-items-center rounded-full"
-              role="status"
-              title={persistenceWarningLabel}
-            >
-              <ShieldAlertIcon aria-hidden="true" className="size-3.5" />
-            </span>
-          ) : null}
-          <Button
-            aria-label={t("welcomeHelp")}
-            className="size-10 rounded-full"
-            onClick={() => {
-              setWelcomeDismissed(false);
-              setWelcomeRequested(true);
-            }}
-            size="icon"
-            title={t("welcomeHelp")}
-            variant="ghost"
-          >
-            <CircleHelpIcon aria-hidden="true" className="size-4" />
-          </Button>
-        </div>
-
-        <nav
-          aria-label={t("groups")}
-          className="clipboard-groups-rail flex min-w-0 flex-1 scrollbar-none items-center gap-1 overflow-x-auto"
-        >
-          <Button
-            aria-pressed={activeGroupId === null}
-            className="h-10 shrink-0 rounded-full px-3 text-xs"
-            data-clipboard-group-id={CLIPBOARD_NO_GROUP_DROP_ID}
-            data-drop-target={isDropTarget(null) ? "" : undefined}
-            onClick={() => {
-              setSelectedGroupId(null);
-              setSelectedIndex(0);
-            }}
-            variant={activeGroupId === null ? "secondary" : "ghost"}
-          >
-            {t("allClips")}
-          </Button>
-          {snapshot.groups.map((group) => {
-            const groupStyle: ClipboardGroupStyle = {
-              "--clipboard-group-accent": CLIPBOARD_GROUP_ACCENTS[group.color],
-            };
-            return (
-              <Button
-                aria-pressed={activeGroupId === group.id}
-                className="clipboard-group-chip h-10 shrink-0 rounded-full px-3 text-xs"
-                data-clipboard-group-id={group.id}
-                data-drop-target={isDropTarget(group.id) ? "" : undefined}
-                data-group-chip=""
-                key={group.id}
-                onClick={() => {
-                  setSelectedGroupId(group.id);
-                  setSelectedIndex(0);
-                }}
-                style={groupStyle}
-                variant="ghost"
-              >
-                <span
-                  aria-hidden="true"
-                  className="clipboard-group-chip-dot size-2 shrink-0 rounded-full"
-                />
-                {group.name}
-              </Button>
-            );
-          })}
-          {activeGroupId ? (
-            <Button
-              aria-label={t("deleteGroup")}
-              className="size-10 shrink-0 rounded-full"
-              onClick={() => {
-                const group = snapshot.groups.find(
-                  (candidate) => candidate.id === activeGroupId,
-                );
-                if (group) {
-                  setDialog({
-                    type: "deleteGroup",
-                    groupId: group.id,
-                    groupName: group.name,
+      <footer className="clipboard-controls grid h-14 shrink-0 grid-cols-[minmax(0,1fr)_minmax(12rem,22rem)_minmax(0,1fr)] items-center gap-2 px-3">
+        <div className="flex min-w-0 items-center gap-2">
+          <div className="flex shrink-0 items-center gap-0.5">
+            <a
+              aria-label="Stella"
+              className="text-foreground grid size-10 place-items-center"
+              href={STELLA_WEB_APP_URL}
+              onClick={(event) => {
+                event.preventDefault();
+                void invoke("clipboard_open_stella").catch(() => {
+                  reportDesktopError({
+                    code: DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
+                    operation:
+                      DESKTOP_TELEMETRY_OPERATIONS.clipboardExternalOpen,
+                    window: DESKTOP_TELEMETRY_WINDOWS.clipboard,
                   });
-                }
+                  setError({
+                    message: t("errorOpenStella"),
+                    source: "operation",
+                  });
+                });
+              }}
+              title="Stella"
+            >
+              <StellaMark className="size-5" />
+            </a>
+            {snapshot.persistence.status === "memoryOnly" ||
+            snapshot.persistence.status === "deletionOnly" ? (
+              <span
+                aria-label={persistenceWarningLabel}
+                className="bg-warning/12 text-warning grid size-7 place-items-center rounded-full"
+                role="status"
+                title={persistenceWarningLabel}
+              >
+                <ShieldAlertIcon aria-hidden="true" className="size-3.5" />
+              </span>
+            ) : null}
+            <Button
+              aria-label={t("welcomeHelp")}
+              className="size-10 rounded-full"
+              onClick={() => {
+                setWelcomeDismissed(false);
+                setWelcomeRequested(true);
               }}
               size="icon"
-              title={t("deleteGroup")}
+              title={t("welcomeHelp")}
               variant="ghost"
             >
-              <Trash2Icon aria-hidden="true" className="size-3.5" />
+              <CircleHelpIcon aria-hidden="true" className="size-4" />
             </Button>
-          ) : null}
-          <Button
-            aria-label={t("createGroup")}
-            className="size-10 shrink-0 rounded-full"
-            disabled={snapshot.groups.length >= 24}
-            onClick={() =>
-              setDialog({
-                color: nextGroupColor,
-                name: "",
-                type: "createGroup",
-              })
-            }
-            size="icon"
-            title={t("createGroup")}
-            variant="ghost"
-          >
-            <FolderPlusIcon aria-hidden="true" className="size-4" />
-          </Button>
-        </nav>
+          </div>
 
-        <InputGroup className="clipboard-search h-9 w-[clamp(12rem,24vw,22rem)] shrink-0 rounded-full">
+          <nav
+            aria-label={t("groups")}
+            className="clipboard-groups-rail flex min-w-0 flex-1 scrollbar-none items-center gap-1 overflow-x-auto"
+          >
+            <Button
+              aria-pressed={activeGroupId === null}
+              className="h-10 shrink-0 rounded-full px-3 text-xs"
+              data-clipboard-group-id={CLIPBOARD_NO_GROUP_DROP_ID}
+              data-drop-target={isDropTarget(null) ? "" : undefined}
+              onClick={() => {
+                setSelectedGroupId(null);
+                setSelectedIndex(0);
+              }}
+              variant={activeGroupId === null ? "secondary" : "ghost"}
+            >
+              {t("allClips")}
+            </Button>
+            {snapshot.groups.map((group) => {
+              const groupStyle: ClipboardGroupStyle = {
+                "--clipboard-group-accent":
+                  CLIPBOARD_GROUP_ACCENTS[group.color],
+              };
+              return (
+                <Button
+                  aria-pressed={activeGroupId === group.id}
+                  className="clipboard-group-chip h-10 shrink-0 rounded-full px-3 text-xs"
+                  data-clipboard-group-id={group.id}
+                  data-drop-target={isDropTarget(group.id) ? "" : undefined}
+                  data-group-chip=""
+                  key={group.id}
+                  onClick={() => {
+                    setSelectedGroupId(group.id);
+                    setSelectedIndex(0);
+                  }}
+                  style={groupStyle}
+                  variant="ghost"
+                >
+                  <span
+                    aria-hidden="true"
+                    className="clipboard-group-chip-dot size-2 shrink-0 rounded-full"
+                  />
+                  {group.name}
+                </Button>
+              );
+            })}
+            {activeGroupId ? (
+              <Button
+                aria-label={t("deleteGroup")}
+                className="size-10 shrink-0 rounded-full"
+                onClick={() => {
+                  const group = snapshot.groups.find(
+                    (candidate) => candidate.id === activeGroupId,
+                  );
+                  if (group) {
+                    setDialog({
+                      type: "deleteGroup",
+                      groupId: group.id,
+                      groupName: group.name,
+                    });
+                  }
+                }}
+                size="icon"
+                title={t("deleteGroup")}
+                variant="ghost"
+              >
+                <Trash2Icon aria-hidden="true" className="size-3.5" />
+              </Button>
+            ) : null}
+            <Button
+              aria-label={t("createGroup")}
+              className="size-10 shrink-0 rounded-full"
+              disabled={snapshot.groups.length >= 24}
+              onClick={() =>
+                setDialog({
+                  color: nextGroupColor,
+                  name: "",
+                  type: "createGroup",
+                })
+              }
+              size="icon"
+              title={t("createGroup")}
+              variant="ghost"
+            >
+              <FolderPlusIcon aria-hidden="true" className="size-4" />
+            </Button>
+          </nav>
+        </div>
+
+        <InputGroup className="clipboard-search h-9 w-full rounded-full">
           <InputGroupAddon className="text-foreground/65">
             <SearchIcon aria-hidden="true" className="size-4" />
           </InputGroupAddon>
@@ -1645,7 +1649,7 @@ const ClipboardApp = () => {
           </InputGroupAddon>
         </InputGroup>
 
-        <div className="flex shrink-0 items-center justify-end gap-0.5">
+        <div className="flex shrink-0 items-center gap-0.5 justify-self-end">
           <Button
             aria-label={
               snapshot.captureStatus === "active" ? t("pause") : t("resume")

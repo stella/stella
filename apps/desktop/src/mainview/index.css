@@ -45,13 +45,13 @@ body:has(.clipboard-editor-window) {
   border-radius: 28px;
   clip-path: inset(0 round 28px);
   color-scheme: inherit;
-  background-color: color-mix(in srgb, var(--background) 58%, transparent);
+  background-color: color-mix(in srgb, var(--background) 34%, transparent);
   box-shadow: none;
   isolation: isolate;
 }
 
 .dark .clipboard-window {
-  background-color: color-mix(in srgb, var(--background) 64%, transparent);
+  background-color: color-mix(in srgb, var(--background) 42%, transparent);
 }
 
 .clipboard-groups-rail {
