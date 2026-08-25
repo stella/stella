@@ -157,7 +157,10 @@ export const AnnotationToolbar = ({
       }
       const element = event.target instanceof Element ? event.target : null;
       const mark = element?.closest("[data-annotation-id]") ?? null;
-      const id = mark instanceof HTMLElement ? mark.dataset.annotationId : null;
+      const id =
+        mark instanceof HTMLElement
+          ? (mark.dataset["annotationId"] ?? null)
+          : null;
       if (mark !== null && id !== null && root.contains(mark)) {
         event.preventDefault();
         onActivateAnnotation(id);
@@ -175,7 +178,10 @@ export const AnnotationToolbar = ({
             ? target.parentNode
             : null;
       const mark = element?.closest("[data-annotation-id]") ?? null;
-      const id = mark instanceof HTMLElement ? mark.dataset.annotationId : null;
+      const id =
+        mark instanceof HTMLElement
+          ? (mark.dataset["annotationId"] ?? null)
+          : null;
       if (mark !== null && id !== null && root.contains(mark)) {
         onActivateAnnotation(id);
         return;

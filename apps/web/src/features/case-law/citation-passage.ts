@@ -41,7 +41,7 @@ export const findCitationPassage = ({
         );
   for (const block of sourceBlocks) {
     const hit = spans[block.id]?.at(0);
-    if (hit === undefined) {
+    if (hit === undefined || block.type === "table") {
       continue;
     }
     return {

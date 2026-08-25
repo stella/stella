@@ -94,7 +94,9 @@ const pendingRows = ({
     createdAt: now,
     endOffset: span.endOffset,
     groupId,
-    id: `${PENDING_ID_PREFIX}${stamp}:${index}`,
+    id: toSafeId<"caseLawDecisionAnnotation">(
+      `${PENDING_ID_PREFIX}${stamp}:${index}`,
+    ),
     kind: input.kind,
     mine: true,
     quote: span.quote,
