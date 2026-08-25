@@ -28,6 +28,7 @@ import { rootDb } from "@/api/db/root";
 import { env } from "@/api/env";
 import { sessionCookieName } from "@/api/lib/auth-cookie-name";
 import { toSafeId } from "@/api/lib/branded-types";
+import { assertConfiguredBetterAuthOAuthPolicy } from "@/api/lib/db/assert-better-auth-oauth-policy";
 import { ensureDefaultDocumentTypes } from "@/api/lib/document-types/defaults";
 
 import {
@@ -257,6 +258,11 @@ export async function ensurePrimarySeedUserInOrganization({
  * never hits FK violations on `entities.created_by`.
  */
 export async function ensureTestUsers(organizationId: string = TEST_ORG.id) {
+  // Test fixtures must establish the same OAuth resource policy as API
+  // startup before creating the first identity. This keeps fresh E2E databases
+  // valid without weakening the fail-closed census for existing databases.
+  await assertConfiguredBetterAuthOAuthPolicy();
+
   await ensureUserExists(TEST_USER);
   await ensureOrganizationExists(organizationId);
   await ensureMembershipExists({
