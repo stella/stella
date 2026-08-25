@@ -71,7 +71,7 @@ type Acknowledgement = {
   line: number;
   ruleIds: string[];
   reason: string;
-  used: boolean;
+  usedRuleIds: Set<string>;
 };
 
 type SingleQuoteScanInput = {
@@ -145,8 +145,16 @@ const BROAD_GRANT_PATTERNS = [
   ),
   /\bALTER\s+DEFAULT\s+PRIVILEGES\b/iu,
 ];
-const PERMISSIVE_POLICY_PATTERN =
-  /\bCREATE\s+POLICY\b[\s\S]*\b(?:USING|WITH\s+CHECK)\s*\(\s*TRUE\s*\)/iu;
+const CREATE_POLICY_PATTERN = /\bCREATE\s+POLICY\b/iu;
+const POLICY_PREDICATE_PATTERN = /\b(?:USING|WITH\s+CHECK)\s*\(/iu;
+const POLICY_TRUE_PREDICATE_PATTERN =
+  /\b(?:USING|WITH\s+CHECK)\s*\(\s*TRUE\s*\)/iu;
+// A policy with no USING and no WITH CHECK permits every row, the same as an
+// explicit `USING (true)`.
+const isUnconditionalPolicy = (statement: string): boolean =>
+  CREATE_POLICY_PATTERN.test(statement) &&
+  (POLICY_TRUE_PREDICATE_PATTERN.test(statement) ||
+    !POLICY_PREDICATE_PATTERN.test(statement));
 // `TO` cannot occur in a policy header except as the role clause, so its
 // presence before the predicate is enough even when the role name is a masked
 // quoted identifier.
@@ -501,7 +509,7 @@ const GUARDED_RULES: GuardedRule[] = [
       "creates an unconditionally true policy that is not restricted to a named role",
     category: "access-control",
     matches: (statement) =>
-      PERMISSIVE_POLICY_PATTERN.test(statement) &&
+      isUnconditionalPolicy(statement) &&
       (!POLICY_ROLE_CLAUSE_PATTERN.test(statement) ||
         POLICY_PUBLIC_ROLE_PATTERN.test(statement)),
   },
@@ -535,24 +543,43 @@ const STATEMENT_INVARIANT_RULES: StatementInvariantRule[] = [
   },
 ];
 
+// Statements allowed before the timeouts are set: only other SET commands. The
+// timeouts must precede the first migration operation, or that operation runs
+// without them.
+const SET_STATEMENT_PATTERN = /^\s*SET\b/iu;
+
+const isTimeoutSetBeforeFirstOperation = (
+  statements: Statement[],
+  timeoutPattern: RegExp,
+): boolean => {
+  for (const statement of statements) {
+    if (timeoutPattern.test(statement.text)) {
+      return true;
+    }
+    if (!SET_STATEMENT_PATTERN.test(statement.text)) {
+      return false;
+    }
+  }
+
+  return false;
+};
+
 const FILE_INVARIANT_RULES: FileInvariantRule[] = [
   {
     id: "missing-lock-timeout",
-    description: "does not set lock_timeout",
+    description:
+      "does not set lock_timeout before the first migration operation",
     matches: (statements) =>
-      !statements.some((statement) =>
-        LOCK_TIMEOUT_PATTERN.test(statement.text),
-      ),
+      !isTimeoutSetBeforeFirstOperation(statements, LOCK_TIMEOUT_PATTERN),
     guidance:
       "Start the migration with SET LOCAL lock_timeout = '<short>'; so a blocked DDL lock fails fast instead of queueing behind live traffic.",
   },
   {
     id: "missing-statement-timeout",
-    description: "does not set statement_timeout",
+    description:
+      "does not set statement_timeout before the first migration operation",
     matches: (statements) =>
-      !statements.some((statement) =>
-        STATEMENT_TIMEOUT_PATTERN.test(statement.text),
-      ),
+      !isTimeoutSetBeforeFirstOperation(statements, STATEMENT_TIMEOUT_PATTERN),
     guidance:
       "Start the migration with SET LOCAL statement_timeout = '<bound>'; so a slow statement cannot hold locks indefinitely.",
   },
@@ -916,11 +943,10 @@ const parseStatements = (source: string): Statement[] => {
   return statements;
 };
 
-const normalizeIndexName = (quotedOrBare: string): string => {
-  const lastSegment = quotedOrBare.split(".").at(-1) ?? quotedOrBare;
-
-  return lastSegment.replace(/"/gu, "").toLowerCase();
-};
+// Keeps the schema qualifier: `audit.old_idx` and `old_idx` are different
+// objects, so a drop of one is not rebuilt by a create of the other.
+const normalizeIndexName = (quotedOrBare: string): string =>
+  quotedOrBare.replace(/"/gu, "").toLowerCase();
 
 // Index names created by statements later in the file than the given position.
 // A `DROP INDEX [IF EXISTS] x` followed by `CREATE INDEX x` is a rebuild (the
@@ -1029,7 +1055,12 @@ const parseAcknowledgements = (
       continue;
     }
 
-    acknowledgements.push({ line: lineNumber, ruleIds, reason, used: false });
+    acknowledgements.push({
+      line: lineNumber,
+      ruleIds,
+      reason,
+      usedRuleIds: new Set(),
+    });
   }
 
   return { acknowledgements, errors };
@@ -1159,7 +1190,7 @@ const checkFile = (file: string): FileCheckResult => {
 
       const acknowledgement = findAcknowledgement(statement, rule.id);
       if (acknowledgement) {
-        acknowledgement.used = true;
+        acknowledgement.usedRuleIds.add(rule.id);
         continue;
       }
 
@@ -1174,7 +1205,10 @@ const checkFile = (file: string): FileCheckResult => {
   }
 
   for (const acknowledgement of acknowledgements) {
-    if (acknowledgement.used) {
+    const unusedRuleIds = acknowledgement.ruleIds.filter(
+      (ruleId) => !acknowledgement.usedRuleIds.has(ruleId),
+    );
+    if (unusedRuleIds.length === 0) {
       continue;
     }
 
@@ -1182,7 +1216,7 @@ const checkFile = (file: string): FileCheckResult => {
       file,
       line: acknowledgement.line,
       ruleId: "unused-acknowledgement",
-      description: `acknowledgement for ${acknowledgement.ruleIds.join(", ")} clears no statement; place it directly above the statement it reviews, or remove it`,
+      description: `acknowledgement for ${unusedRuleIds.join(", ")} clears no statement; place it directly above the statement it reviews, or remove the rule id`,
     });
   }
 

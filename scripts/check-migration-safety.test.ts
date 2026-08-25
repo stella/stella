@@ -11,6 +11,8 @@ type CheckerResult = {
 };
 
 const decoder = new TextDecoder();
+// Each property run spawns the checker as a subprocess.
+const PROPERTY_TEST_TIMEOUT_MS = 60_000;
 
 const TIMEOUTS = `
 SET LOCAL lock_timeout = '1s';
@@ -93,6 +95,17 @@ describe("check-migration-safety", () => {
     it("requires lock_timeout and statement_timeout", () => {
       const result = runCheckerOnSource(`
         ALTER TABLE "documents" ADD COLUMN "status" text;
+      `);
+
+      expectFinding(result, "missing-lock-timeout");
+      expect(result.stderr).toContain("[missing-statement-timeout]");
+    });
+
+    it("requires the timeouts before the first migration operation", () => {
+      const result = runCheckerOnSource(`
+        ALTER TABLE "documents" ADD COLUMN "status" text;
+        SET LOCAL lock_timeout = '1s';
+        SET LOCAL statement_timeout = '30s';
       `);
 
       expectFinding(result, "missing-lock-timeout");
@@ -371,6 +384,16 @@ describe("check-migration-safety", () => {
       );
     });
 
+    it("does not match a rebuild across schemas", () => {
+      expectFinding(
+        runChecker(`
+          DROP INDEX IF EXISTS "audit"."documents_status_idx";
+          CREATE INDEX IF NOT EXISTS "documents_status_idx" ON "documents" ("status");
+        `),
+        "drop-object",
+      );
+    });
+
     it("still flags a DROP INDEX with no matching CREATE", () => {
       expectFinding(
         runChecker(`
@@ -431,6 +454,11 @@ describe("check-migration-safety", () => {
         ),
         "permissive-policy",
       );
+      // No USING and no WITH CHECK defaults to permitting every row for PUBLIC.
+      expectFinding(
+        runChecker(`CREATE POLICY "documents_open" ON "documents";`),
+        "permissive-policy",
+      );
       expectFinding(
         runChecker(
           `ALTER POLICY "documents_select" ON "documents" USING (true);`,
@@ -475,12 +503,10 @@ describe("check-migration-safety", () => {
     it("clears several rules on one statement", () => {
       expectClean(
         runChecker(`
-          -- stella-migration-safety: reviewed drop-object, security-definer - replaced below,
-          -- the definer form is required for the RLS bypass documented in auth.md
-          DROP FUNCTION IF EXISTS "lookup"();
-          -- stella-migration-safety: reviewed security-definer - bypasses RLS for the
-          -- audit reader role only
-          CREATE FUNCTION "lookup"() RETURNS void LANGUAGE sql SECURITY DEFINER AS $$ SELECT 1; $$;
+          -- stella-migration-safety: reviewed drop-column, disable-trigger - column unused
+          -- since v0.7; trigger re-enabled in the next statement after the rewrite
+          ALTER TABLE "documents" DROP COLUMN "legacy_status", DISABLE TRIGGER ALL;
+          ALTER TABLE "documents" ENABLE TRIGGER ALL;
         `),
       );
     });
@@ -530,6 +556,16 @@ describe("check-migration-safety", () => {
           DROP TABLE "documents_old";
         `),
       );
+    });
+
+    it("rejects a listed rule id that clears nothing on a multi-rule acknowledgement", () => {
+      const result = runChecker(`
+        -- stella-migration-safety: reviewed drop-object, security-definer - replaced by documents_v2
+        DROP TABLE "documents";
+      `);
+
+      expectFinding(result, "unused-acknowledgement");
+      expect(result.stderr).toContain("acknowledgement for security-definer");
     });
 
     it("rejects an acknowledgement that clears nothing", () => {
@@ -592,36 +628,46 @@ describe("check-migration-safety", () => {
       (fragment) => `SELECT $tag$${fragment}$tag$;`,
     ];
 
-    it("never fires on unsafe SQL inside comments, literals, or identifiers", () => {
-      fc.assert(
-        fc.property(
-          fc.constantFrom(...UNSAFE_FRAGMENTS),
-          fc.constantFrom(...wrappers),
-          fc.constantFrom(...wrappers),
-          (fragment, first, second) => {
-            expectClean(runChecker(`${first(fragment)}\n${second(fragment)}`));
-          },
-        ),
-        { numRuns: 30 },
-      );
-    });
+    it(
+      "never fires on unsafe SQL inside comments, literals, or identifiers",
+      () => {
+        fc.assert(
+          fc.property(
+            fc.constantFrom(...UNSAFE_FRAGMENTS),
+            fc.constantFrom(...wrappers),
+            fc.constantFrom(...wrappers),
+            (fragment, first, second) => {
+              expectClean(
+                runChecker(`${first(fragment)}\n${second(fragment)}`),
+              );
+            },
+          ),
+          { numRuns: 30 },
+        );
+      },
+      PROPERTY_TEST_TIMEOUT_MS,
+    );
 
-    it("always fires on the same unsafe SQL when it executes", () => {
-      fc.assert(
-        fc.property(
-          fc.constantFrom(...UNSAFE_FRAGMENTS.slice(0, 5)),
-          fc.constantFrom(...wrappers),
-          (fragment, wrapper) => {
-            const executable = fragment.startsWith("ON CONFLICT")
-              ? `INSERT INTO "documents" ("slug") VALUES ('x') ${fragment};`
-              : `${fragment};`;
-            const result = runChecker(`${wrapper(fragment)}\n${executable}`);
+    it(
+      "always fires on the same unsafe SQL when it executes",
+      () => {
+        fc.assert(
+          fc.property(
+            fc.constantFrom(...UNSAFE_FRAGMENTS.slice(0, 5)),
+            fc.constantFrom(...wrappers),
+            (fragment, wrapper) => {
+              const executable = fragment.startsWith("ON CONFLICT")
+                ? `INSERT INTO "documents" ("slug") VALUES ('x') ${fragment};`
+                : `${fragment};`;
+              const result = runChecker(`${wrapper(fragment)}\n${executable}`);
 
-            expect(result.exitCode).toBe(1);
-          },
-        ),
-        { numRuns: 20 },
-      );
-    });
+              expect(result.exitCode).toBe(1);
+            },
+          ),
+          { numRuns: 20 },
+        );
+      },
+      PROPERTY_TEST_TIMEOUT_MS,
+    );
   });
 });

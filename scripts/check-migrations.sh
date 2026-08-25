@@ -185,6 +185,23 @@ fi
 # migrator on live databases. The baseline (scripts/migration-baseline.txt) exempts
 # those; every NEW migration (not listed) is still fully linted.
 BASELINE_FILE="scripts/migration-baseline.txt"
+
+# A PR must not baseline a migration it adds or modifies: that would skip both
+# linters for exactly the file that needs them. Entries for untouched, already
+# applied migrations may still be added (for example when the rule set changes).
+BASE_BASELINE="$(git show "$BASE_REF:$BASELINE_FILE" 2>/dev/null || true)"
+while IFS= read -r entry; do
+  [[ -z "$entry" || "$entry" == \#* ]] && continue
+  if grep -qxF "$entry" <<< "$BASE_BASELINE"; then
+    continue
+  fi
+  if grep -qxF "$entry" <<< "$CHANGED_FILES"; then
+    echo "ERROR: $entry is added to $BASELINE_FILE in the same change that adds or modifies it." >&2
+    echo "The baseline exempts only migrations applied before the current rule set; lint the new migration instead." >&2
+    exit 1
+  fi
+done < "$BASELINE_FILE"
+
 LINT_SQL_FILES=()
 for migration_file in "${MIGRATION_SQL_FILES[@]+"${MIGRATION_SQL_FILES[@]}"}"; do
   if [[ -f "$BASELINE_FILE" ]] && grep -qxF "$migration_file" "$BASELINE_FILE"; then
