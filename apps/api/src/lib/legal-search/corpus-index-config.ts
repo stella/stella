@@ -154,8 +154,9 @@ const CORE_FIELDS: CorpusIndexFieldMapping[] = [
   // the citation graph; other families can populate an analogous signal).
   { name: "citation_authority", type: "f64", fast: true },
   { name: "citation_count", type: "u64", fast: true },
-  { name: "canonical_text_key", type: "text", tokenizer: "raw", stored: true },
-  { name: "canonical_ast_key", type: "text", tokenizer: "raw", stored: true },
+  // Canonical object locations deliberately stay out of the search index.
+  // Packing may repoint them without changing the document's content, while
+  // every search read rehydrates the authoritative row from Postgres.
   // Passage fields. A passage-granular family emits one document per passage,
   // all sharing `document_id`; a document-granular family simply never sets
   // them and, in lenient mode, the index carries them empty. The read path is

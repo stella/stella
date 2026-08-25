@@ -624,12 +624,6 @@ const buildSharedFields = (row: IndexableRow): Record<string, unknown> => {
   if (row.ecli !== null) {
     doc["ecli"] = row.ecli;
   }
-  if (row.textS3Key !== null) {
-    doc["canonical_text_key"] = row.textS3Key;
-  }
-  if (row.astS3Key !== null) {
-    doc["canonical_ast_key"] = row.astS3Key;
-  }
   return doc;
 };
 

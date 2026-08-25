@@ -161,8 +161,6 @@ describe("legislation loadDocsForBatch read-failure isolation", () => {
     // The fixtures reach the conditional fields, so the assertion is over the
     // writer's whole shape rather than its required half.
     for (const field of [
-      "canonical_ast_key",
-      "canonical_text_key",
       "document_type",
       "effective_date",
       "eli",
@@ -173,6 +171,9 @@ describe("legislation loadDocsForBatch read-failure isolation", () => {
     ]) {
       expect(emitted.has(field)).toBe(true);
     }
+    expect(
+      [...emitted].filter((name) => name.startsWith("canonical_")),
+    ).toEqual([]);
   });
 
   test("the validity window is written verbatim, open where the source left it open", async () => {

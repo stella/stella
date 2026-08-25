@@ -138,12 +138,6 @@ const buildDoc = (
   if (dateForYear !== null) {
     doc["year"] = Number(dateForYear.slice(0, 4));
   }
-  if (row.textS3Key !== null) {
-    doc["canonical_text_key"] = row.textS3Key;
-  }
-  if (row.astS3Key !== null) {
-    doc["canonical_ast_key"] = row.astS3Key;
-  }
   return doc;
 };
 
