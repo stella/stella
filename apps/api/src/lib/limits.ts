@@ -506,18 +506,6 @@ export const NEW_ACCOUNT_OTP_RATE_LIMITS = {
 export const EMAIL_OTP_MIN_RESPONSE_DURATION_MS = 1000;
 
 /**
- * Max window (seconds) across all auth rate-limit rules.
- * Used as the Redis TTL for better-auth's customStorage,
- * which does not pass per-endpoint window to `set`.
- * The actual window logic is handled by better-auth via
- * `lastRequest` timestamps; the TTL only controls key
- * cleanup.
- */
-export const AUTH_RATE_LIMIT_MAX_WINDOW = Math.max(
-  ...Object.values(AUTH_RATE_LIMITS).map((r) => r.window),
-);
-
-/**
  * Rate limits for API endpoints.
  * Duration is in milliseconds, max is the request ceiling
  * per duration window.

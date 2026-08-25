@@ -19,15 +19,11 @@ import {
 import { createRedisClient } from "@/api/lib/redis-client";
 import { coordinationKey, type CoordinationKey } from "@/api/lib/redis-keys";
 
-type RateLimitValue = {
-  key: string;
-  count: number;
-  lastRequest: number;
-};
-
 type AuthRateLimitStorage = {
-  get: (key: string) => Promise<RateLimitValue | null>;
-  set: (key: string, value: RateLimitValue) => Promise<void>;
+  consume: (
+    key: string,
+    rule: { max: number; window: number },
+  ) => Promise<{ allowed: boolean; retryAfter: number | null }>;
 };
 
 // The typed client methods are outside the `send(command, args)` shape the
@@ -35,12 +31,9 @@ type AuthRateLimitStorage = {
 // the type instead: a hand-written string does not satisfy `CoordinationKey`.
 // `expiryMode` is likewise non-optional, which is this path's TTL discipline.
 type AuthRateLimitRedisClient = {
-  get: (key: CoordinationKey) => Promise<string | null>;
-  set: (
-    key: CoordinationKey,
-    value: string,
-    expiryMode: "PX",
-    ttlMs: number,
+  send: (
+    command: "EVAL",
+    args: [string, "1", CoordinationKey, string, string],
   ) => Promise<unknown>;
 };
 
@@ -67,38 +60,61 @@ const DEFAULT_COMMAND_TIMER: CommandTimer = {
   clear: (timeoutId) => clearTimeout(timeoutId),
 };
 
+// Fixed-window consume. INCR and first-write expiry execute in one Redis
+// script, so concurrent replicas cannot all observe the same stale counter.
+// The remaining TTL is returned with the decision for Better Auth's exact
+// Retry-After response.
+const CONSUME_SCRIPT = `
+local current = redis.call("INCR", KEYS[1])
+if current == 1 then
+  redis.call("PEXPIRE", KEYS[1], ARGV[1])
+end
+local ttl = redis.call("PTTL", KEYS[1])
+if ttl < 0 then
+  redis.call("PEXPIRE", KEYS[1], ARGV[1])
+  ttl = tonumber(ARGV[1])
+end
+if current <= tonumber(ARGV[2]) then
+  return {1, 0}
+end
+return {0, math.max(1, math.ceil(ttl / 1000))}
+`;
+
 // better-auth's key already identifies one limited client, so it is the
 // colocation unit; each key is read and written alone.
 const authRateLimitKey = (key: string) =>
   coordinationKey({ scope: "auth-ratelimit", slot: key });
 
-const isRateLimitValue = (value: unknown): value is RateLimitValue =>
-  typeof value === "object" &&
-  value !== null &&
-  "key" in value &&
-  "count" in value &&
-  "lastRequest" in value &&
-  typeof value.key === "string" &&
-  typeof value.count === "number" &&
-  typeof value.lastRequest === "number";
-
-const isStricterRateLimitValue = (
-  candidate: RateLimitValue,
-  current: RateLimitValue,
-): boolean =>
-  candidate.count > current.count ||
-  (candidate.count === current.count &&
-    candidate.lastRequest > current.lastRequest);
+const parseRedisDecision = (
+  value: unknown,
+): { allowed: boolean; retryAfter: number | null } | null => {
+  if (!Array.isArray(value) || value.length !== 2) {
+    return null;
+  }
+  const allowed = Number(value.at(0));
+  const retryAfter = Number(value.at(1));
+  if (
+    (allowed !== 0 && allowed !== 1) ||
+    !Number.isSafeInteger(retryAfter) ||
+    retryAfter < 0
+  ) {
+    return null;
+  }
+  return {
+    allowed: allowed === 1,
+    retryAfter: allowed === 1 ? null : Math.max(1, retryAfter),
+  };
+};
 
 /**
- * Build the better-auth rate-limit storage. `ttlMs` is the longest
- * rate-limit window; it expires both Redis keys and fallback entries.
+ * Build Better Auth's atomic rate-limit storage. Redis is authoritative while
+ * reachable. A synchronized per-process counter remains warm on every request
+ * and becomes the fail-open fallback if Redis is unavailable.
  */
 export const createAuthRateLimitStorage = (
-  ttlMs: number,
   options: AuthRateLimitStorageOptions = {},
 ): AuthRateLimitStorage => {
-  const redis =
+  const redis: AuthRateLimitRedisClient =
     options.redis ??
     createRedisClient({
       connectionTimeout: COMMAND_TIMEOUT_MS,
@@ -113,7 +129,7 @@ export const createAuthRateLimitStorage = (
   // and exposes errors through rejected commands. Leaving onclose unset
   // is safe; per-command rejections drive the fail-open path below.
 
-  type FallbackEntry = { value: RateLimitValue; expiresAt: number };
+  type FallbackEntry = { count: number; expiresAt: number };
   const fallback = new Map<string, FallbackEntry>();
   const cleanup = setInterval(() => {
     const now = Date.now();
@@ -125,78 +141,55 @@ export const createAuthRateLimitStorage = (
   }, FALLBACK_CLEANUP_INTERVAL_MS);
   cleanup.unref();
 
-  const readFallback = (key: string): RateLimitValue | null => {
+  const consumeFallback = (
+    key: string,
+    rule: { max: number; window: number },
+  ): { allowed: boolean; retryAfter: number | null } => {
+    const now = Date.now();
     const entry = fallback.get(key);
-    if (!entry || entry.expiresAt <= Date.now()) {
-      return null;
+    if (!entry || entry.expiresAt <= now) {
+      fallback.set(key, {
+        count: 1,
+        expiresAt: now + rule.window * 1000,
+      });
+      return { allowed: true, retryAfter: null };
     }
-    return { ...entry.value };
-  };
-
-  const writeRedis = async (key: string, value: RateLimitValue) => {
-    await withCommandTimeout({
-      command: redis.set(
-        authRateLimitKey(key),
-        JSON.stringify(value),
-        "PX",
-        ttlMs,
-      ),
-      commandTimeoutMs: COMMAND_TIMEOUT_MS,
-      label: "auth-rate-limit-redis-command",
-      scheduleTimeout,
-    });
+    entry.count += 1;
+    return entry.count <= rule.max
+      ? { allowed: true, retryAfter: null }
+      : {
+          allowed: false,
+          retryAfter: Math.max(1, Math.ceil((entry.expiresAt - now) / 1000)),
+        };
   };
 
   return {
-    get: async (key) => {
+    consume: async (key, rule) => {
+      const fallbackDecision = consumeFallback(key, rule);
       try {
-        const fallbackValue = readFallback(key);
         const raw = await withCommandTimeout({
-          command: redis.get(authRateLimitKey(key)),
+          command: redis.send("EVAL", [
+            CONSUME_SCRIPT,
+            "1",
+            authRateLimitKey(key),
+            String(rule.window * 1000),
+            String(rule.max),
+          ]),
           commandTimeoutMs: COMMAND_TIMEOUT_MS,
           label: "auth-rate-limit-redis-command",
           scheduleTimeout,
         });
-        if (raw === null) {
-          return fallbackValue;
+        const decision = parseRedisDecision(raw);
+        if (decision === null) {
+          logger.warn("auth.rate_limit.redis_invalid_response");
+          return fallbackDecision;
         }
-        const parsed: unknown = JSON.parse(raw);
-        if (!isRateLimitValue(parsed)) {
-          return fallbackValue;
-        }
-        const redisValue = { ...parsed };
-        if (
-          fallbackValue &&
-          isStricterRateLimitValue(fallbackValue, redisValue)
-        ) {
-          try {
-            await writeRedis(key, fallbackValue);
-          } catch (error: unknown) {
-            logger.warn("auth.rate_limit.redis_reconcile_failed", {
-              "error.type": errorTag(error),
-            });
-          }
-          return fallbackValue;
-        }
-        return redisValue;
+        return decision;
       } catch (error: unknown) {
-        logger.warn("auth.rate_limit.redis_get_failed", {
+        logger.warn("auth.rate_limit.redis_consume_failed", {
           "error.type": errorTag(error),
         });
-        return readFallback(key);
-      }
-    },
-    set: async (key, value) => {
-      const snapshot = { ...value };
-      // Keep the fallback warm so a later Redis outage still has data
-      // from this instance to limit against.
-      fallback.set(key, { value: snapshot, expiresAt: Date.now() + ttlMs });
-      try {
-        await writeRedis(key, snapshot);
-      } catch (error: unknown) {
-        logger.warn("auth.rate_limit.redis_set_failed", {
-          "error.type": errorTag(error),
-        });
+        return fallbackDecision;
       }
     },
   };

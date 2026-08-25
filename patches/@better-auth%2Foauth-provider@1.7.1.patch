@@ -1,0 +1,34 @@
+diff --git a/dist/introspect-6ew7sakf.mjs b/dist/introspect-6ew7sakf.mjs
+index 8786e0d65d7d61e2b1537a959fc43f0a3e624e33..8a14147f46b2d5411c322eab5aab3ae888fb7e0c 100644
+--- a/dist/introspect-6ew7sakf.mjs
++++ b/dist/introspect-6ew7sakf.mjs
+@@ -806,6 +806,7 @@ async function seedResources(ctx, opts) {
+ 	const inputs = collectResourceInputs(opts);
+ 	if (inputs.length === 0) return;
+ 	const mode = opts.resourceSeedMode ?? "insertOnly";
++	if (mode === "none") return;
+ 	const modelName = opts.schema?.oauthResource?.modelName ?? "oauthResource";
+ 	for (const rawInput of inputs) {
+ 		const check = await checkIdentifier(opts, rawInput.identifier);
+diff --git a/dist/oauth-1Ud-hvZY.d.mts b/dist/oauth-1Ud-hvZY.d.mts
+index 130fd5d8f3ddd36d1b776338367af5b8cb7f0e79..131bb887b6fe106aaf3c1ca0987be91764bb7d64 100644
+--- a/dist/oauth-1Ud-hvZY.d.mts
++++ b/dist/oauth-1Ud-hvZY.d.mts
+@@ -1118,6 +1118,8 @@ interface OAuthOptions<Scopes extends readonly Scope[] = InternallySupportedScop
+   /**
+    * Controls whether boot-time `resources` config overwrites DB-edited rows.
+    *
++   * - `"none"`: never seeds resources at runtime. Use when committed migrations
++   *   provision and validate every configured resource before application boot.
+    * - `"insertOnly"` (default, safe): only inserts rows whose `identifier` is
+    *   not already present. Existing rows are untouched — admin edits via CRUD
+    *   are never reverted on restart.
+@@ -1131,7 +1133,7 @@ interface OAuthOptions<Scopes extends readonly Scope[] = InternallySupportedScop
+    *
+    * @default "insertOnly"
+    */
+-  resourceSeedMode?: "insertOnly" | "merge" | "overwrite";
++  resourceSeedMode?: "none" | "insertOnly" | "merge" | "overwrite";
+   /**
+    * Opt-in cache membership for resources by `identifier`. Mirrors the
+    * {@link OAuthOptions.cachedTrustedClients} pattern.

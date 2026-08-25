@@ -201,16 +201,18 @@ describe("rate limiting during a Valkey outage", () => {
   });
 
   test("auth rate limiting keeps limiting from its per-process fallback", async () => {
-    const storage = createAuthRateLimitStorage(60_000);
-    const value = { key: "ip:203.0.113.1", count: 3, lastRequest: 1 };
+    const storage = createAuthRateLimitStorage();
+    const key = "ip:203.0.113.1";
+    const rule = { max: 2, window: 60 };
 
-    expect((await settle(storage.set(value.key, value))).status).toBe("ok");
+    expect((await settle(storage.consume(key, rule))).status).toBe("ok");
+    expect((await settle(storage.consume(key, rule))).status).toBe("ok");
 
-    const read = await settle(storage.get(value.key));
-    expect(read.status).toBe("ok");
-    // Sign-in stays bounded: the write survived in-process, so the outage
-    // cannot be used to reset a brute-force counter by tipping Valkey over.
-    expect(read.status === "ok" ? read.value : null).toEqual(value);
+    const denied = await settle(storage.consume(key, rule));
+    expect(denied.status).toBe("ok");
+    // Sign-in stays bounded: the local atomic counter survives the outage, so
+    // tipping Valkey over cannot reset the brute-force budget on this replica.
+    expect(denied.status === "ok" ? denied.value.allowed : null).toBe(false);
   });
 
   test("the MCP gateway limiter admits and keeps counting locally", async () => {

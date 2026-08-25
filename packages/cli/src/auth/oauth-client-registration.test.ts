@@ -6,6 +6,7 @@ import { registerLoopbackClient } from "./oauth-client-registration.js";
 import type { AuthorizationServerMetadata } from "./oauth-metadata.js";
 
 const registrationBodySchema = v.record(v.string(), v.unknown());
+const MCP_RESOURCE = "https://stella.example/mcp";
 
 // Dynamic client registration (RFC 7591). The failure paths are what matter:
 // a server that does not advertise a registration endpoint, a rejected
@@ -53,7 +54,11 @@ describe("registerLoopbackClient", () => {
       token_endpoint: "https://stella.example/token",
     };
 
-    const result = await registerLoopbackClient(metadata, ["stella:read"]);
+    const result = await registerLoopbackClient(
+      metadata,
+      ["stella:read"],
+      MCP_RESOURCE,
+    );
     expect(Result.isError(result)).toBe(true);
     if (Result.isError(result)) {
       expect(result.error._tag).toBe("ClientRegistrationError");
@@ -67,9 +72,11 @@ describe("registerLoopbackClient", () => {
     );
     active = server;
 
-    const result = await registerLoopbackClient(server.metadata, [
-      "stella:read",
-    ]);
+    const result = await registerLoopbackClient(
+      server.metadata,
+      ["stella:read"],
+      MCP_RESOURCE,
+    );
     if (Result.isError(result)) {
       expect(result.error._tag).toBe("ClientRegistrationError");
       expect(result.error.message).toContain("403");
@@ -89,9 +96,11 @@ describe("registerLoopbackClient", () => {
     );
     active = server;
 
-    const result = await registerLoopbackClient(server.metadata, [
-      "stella:read",
-    ]);
+    const result = await registerLoopbackClient(
+      server.metadata,
+      ["stella:read"],
+      MCP_RESOURCE,
+    );
     expect(Result.isError(result)).toBe(true);
     if (Result.isError(result)) {
       expect(result.error._tag).toBe("ClientRegistrationError");
@@ -109,10 +118,11 @@ describe("registerLoopbackClient", () => {
     });
     active = server;
 
-    const result = await registerLoopbackClient(server.metadata, [
-      "stella:read",
-      "stella:search",
-    ]);
+    const result = await registerLoopbackClient(
+      server.metadata,
+      ["stella:read", "stella:search"],
+      MCP_RESOURCE,
+    );
     expect(Result.isOk(result)).toBe(true);
     if (Result.isOk(result)) {
       expect(result.value).toBe("dyn-client-9");
@@ -120,6 +130,8 @@ describe("registerLoopbackClient", () => {
     // A CLI login is a public native client: no secret, loopback redirect, and
     // the negotiated scopes are documented in the request body.
     expect(sent?.["token_endpoint_auth_method"]).toBe("none");
+    expect(sent?.["application_type"]).toBe("native");
+    expect(sent?.["resources"]).toEqual([MCP_RESOURCE]);
     expect(sent?.["scope"]).toBe("stella:read stella:search");
     expect(sent?.["redirect_uris"]).toEqual(["http://127.0.0.1/callback"]);
   });

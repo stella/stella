@@ -349,8 +349,9 @@ describe("agent-auth anonymous flow", () => {
     const accessToken = String(body["access_token"]);
     expect(accessToken.split(".")).toHaveLength(3);
     const payload = decodeJwt(accessToken);
-    // No org principal on an anonymous token.
-    expect(payload["sub"]).toBeUndefined();
+    // The M2M subject is the OAuth client, never a Stella user or organization.
+    expect(payload["sub"]).toBe(payload["client_id"]);
+    expect(payload["sub"]).toBe(payload["azp"]);
     expect(payload["org_id"]).toBeUndefined();
     expect(payload["aud"]).toBe(getMcpResourceUrl("anonymized"));
     // It cannot carry default (member-scoped) scopes.

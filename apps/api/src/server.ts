@@ -108,6 +108,7 @@ import {
   currentQueryCount,
   DB_QUERY_COUNT_HEADER,
 } from "@/api/lib/db-query-counter";
+import { assertConfiguredBetterAuthOAuthPolicy } from "@/api/lib/db/assert-better-auth-oauth-policy";
 import { assertMigrationsApplied } from "@/api/lib/db/assert-migrations-applied";
 import { detached } from "@/api/lib/detached";
 import { DEV_INSPECTOR_ORIGINS, frontendOrigins } from "@/api/lib/dev-origins";
@@ -747,6 +748,11 @@ const startServer = async (): Promise<void> => {
   // the database has not received, exit before serving any
   // request against a stale schema.
   await assertMigrationsApplied();
+
+  // The OAuth resource backfill is deployment-owned rather than a committed
+  // migration. Refuse readiness when it was skipped or only partially ran;
+  // otherwise agent authorization would fail on first use after deployment.
+  await assertConfiguredBetterAuthOAuthPolicy();
 
   await Promise.all([refreshS3(), refreshCorpusS3()]);
   startS3RefreshLoop();

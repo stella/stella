@@ -13,13 +13,20 @@ import type {
   AgentRegistrationType,
 } from "@/api/agent-auth/constants";
 import { agentRegistration } from "@/api/db/agent-auth-schema";
-import { oauthClient, session, user } from "@/api/db/auth-schema";
+import {
+  oauthClient,
+  oauthClientResource,
+  oauthResource,
+  session,
+  user,
+} from "@/api/db/auth-schema";
 import { rootDb } from "@/api/db/root";
 import { env } from "@/api/env";
 import { getAuth } from "@/api/lib/auth";
 import { sessionCookieName } from "@/api/lib/auth-cookie-name";
 import { getAuthEndpointUrl, getAuthIssuerUrl } from "@/api/lib/auth-paths";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
+import { getBetterAuthOAuthResources } from "@/api/lib/oauth-resource-policy";
 import { getMcpResourceUrl } from "@/api/mcp/constants";
 import type { McpMode } from "@/api/mcp/constants";
 
@@ -59,7 +66,7 @@ export const hashClaimToken = (token: string): string => sha256Hex(token);
 
 const getResourceModeForType = (
   registrationType: AgentRegistrationType,
-): McpMode => (registrationType === "service_auth" ? "default" : "anonymized");
+): McpMode => (registrationType === "anonymous" ? "anonymized" : "default");
 
 type OAuth2TokenBody = Record<string, string>;
 
@@ -106,22 +113,56 @@ export const createAgentOAuthClient = async ({
 }): Promise<AgentClientCredentials> => {
   const clientId = Bun.randomUUIDv7().replaceAll("-", "");
   const clientSecret = generateOpaqueToken();
+  const resourceId = getMcpResourceUrl(
+    getResourceModeForType(registrationType),
+  );
+  const resourcePolicy = getBetterAuthOAuthResources().find(
+    ({ identifier }) => identifier === resourceId,
+  );
+  if (!resourcePolicy) {
+    panic("Agent OAuth resource is absent from the Better Auth policy");
+  }
 
-  await rootDb.insert(oauthClient).values({
-    id: createSafeId<"mcpOAuthClient">(),
-    clientId,
-    clientSecret: hashClientSecret(clientSecret),
-    public: false,
-    skipConsent: true,
-    requirePKCE: false,
-    type: "web",
-    name: "stella agent",
-    scopes: [...scopes],
-    redirectUris: [AGENT_REDIRECT_URI],
-    grantTypes: [...grantTypes],
-    responseTypes: ["code"],
-    tokenEndpointAuthMethod: "client_secret_post",
-    metadata: { agent: true, identityType: registrationType, registrationId },
+  await rootDb.transaction(async (transaction) => {
+    const resource = (
+      await transaction
+        .select({ identifier: oauthResource.identifier })
+        .from(oauthResource)
+        .where(eq(oauthResource.identifier, resourcePolicy.identifier))
+        .limit(1)
+    ).at(0);
+    if (!resource) {
+      panic("Agent OAuth resource is absent from the migrated auth schema");
+    }
+    await transaction.insert(oauthClient).values({
+      id: createSafeId<"mcpOAuthClient">(),
+      applicationType: "web",
+      clientId,
+      clientSecret: hashClientSecret(clientSecret),
+      clientCredentialsScopes: grantTypes.includes("client_credentials")
+        ? [...scopes]
+        : [],
+      public: false,
+      skipConsent: true,
+      requirePKCE: false,
+      type: "web",
+      name: "stella agent",
+      scopes: [...scopes],
+      redirectUris: [AGENT_REDIRECT_URI],
+      grantTypes: [...grantTypes],
+      responseTypes: ["code"],
+      tokenEndpointAuthMethod: "client_secret_post",
+      metadata: {
+        agent: true,
+        identityType: registrationType,
+        registrationId,
+      },
+    });
+    await transaction.insert(oauthClientResource).values({
+      id: Bun.randomUUIDv7(),
+      clientId,
+      resourceId,
+    });
   });
 
   return { clientId, clientSecret };
@@ -201,8 +242,8 @@ export const exchangeAuthorizationCode = async ({
 /**
  * Mint an audience-bound JWT for an anonymous agent via the
  * client_credentials grant. The token carries anonymized scopes and the
- * anonymized resource audience but no `sub`/`org_id` (anonymous agents
- * have no org principal). It cannot widen to default scopes — the
+ * anonymized resource audience and an OAuth-client `sub`, but no `org_id`
+ * (anonymous agents have no user or org principal). It cannot widen to default scopes — the
  * client's scope allow-list rejects them — and so cannot reach the
  * member-scoped MCP surface until the agent is later claimed.
  */
@@ -420,6 +461,7 @@ export const confirmServiceAuthRegistration = async ({
 
   const codeResult = await issueAuthorizationCode({
     clientId: registration.clientId,
+    registrationType: toRegistrationType(registration.registrationType),
     scopes: registration.grantedScopes,
     sessionCookieHeader,
   });
@@ -527,10 +569,12 @@ export const mintInternalSessionCookieHeader = async ({
  */
 export const issueAuthorizationCode = async ({
   clientId,
+  registrationType,
   scopes,
   sessionCookieHeader,
 }: {
   clientId: string;
+  registrationType: AgentRegistrationType;
   scopes: readonly string[];
   sessionCookieHeader: string;
 }): Promise<Result<string, AuthorizeCodeError>> => {
@@ -539,6 +583,10 @@ export const issueAuthorizationCode = async ({
   authorizeUrl.searchParams.set("client_id", clientId);
   authorizeUrl.searchParams.set("redirect_uri", AGENT_REDIRECT_URI);
   authorizeUrl.searchParams.set("scope", scopes.join(" "));
+  authorizeUrl.searchParams.set(
+    "resource",
+    getMcpResourceUrl(getResourceModeForType(registrationType)),
+  );
 
   const responseResult = await Result.tryPromise(
     async () =>
@@ -749,8 +797,16 @@ const exchangeClaimedCode = async (
   return Result.ok(reshapeTokenResponse(result.value));
 };
 
-const toRegistrationType = (value: string): AgentRegistrationType =>
-  value === "anonymous" ? "anonymous" : "service_auth";
+const toRegistrationType = (value: string): AgentRegistrationType => {
+  switch (value) {
+    case "anonymous":
+    case "identity_assertion":
+    case "service_auth":
+      return value;
+    default:
+      return panic("Stored agent registration has an unknown identity type");
+  }
+};
 
 /**
  * Start an email-bound claim ceremony for an already-issued anonymous

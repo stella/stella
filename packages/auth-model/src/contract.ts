@@ -1,5 +1,5 @@
 /** Better Auth version whose logical schema this contract describes. */
-export const BETTER_AUTH_CONTRACT_VERSION = "1.6.26";
+export const BETTER_AUTH_CONTRACT_VERSION = "1.7.1";
 
 export const ORGANIZATION_ROLE_NAMES = [
   "owner",
@@ -345,6 +345,7 @@ export const BETTER_AUTH_CORE_SCHEMA = {
     primaryKey: ["id"],
     fields: withPhysicalNames({
       id: idField,
+      issuer: field("string", { required: true }),
       accountId: field("string", { required: true }),
       providerId: field("string", { required: true }),
       userId: field("string", {
@@ -362,7 +363,10 @@ export const BETTER_AUTH_CORE_SCHEMA = {
       createdAt: runtimeDate,
       updatedAt: updatedDate,
     }),
-    indexes: [{ fields: ["userId"], predicate: null, unique: false }],
+    indexes: [
+      { fields: ["issuer", "accountId"], predicate: null, unique: true },
+      { fields: ["userId"], predicate: null, unique: false },
+    ],
   },
   verification: {
     tableName: "verification",

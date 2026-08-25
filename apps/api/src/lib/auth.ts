@@ -73,7 +73,6 @@ import {
 import { handoffCommittedEntityDeletionCleanupBatch } from "@/api/lib/entity-deletion-cleanup-handoff";
 import { enqueueEntityDeletionCleanup } from "@/api/lib/entity-deletion-cleanup-queue";
 import {
-  AUTH_RATE_LIMIT_MAX_WINDOW,
   AUTH_RATE_LIMITS,
   EMAIL_OTP_MIN_RESPONSE_DURATION_MS,
   LIMITS,
@@ -89,6 +88,7 @@ import {
   MACHINE_API_KEY_START_LENGTH,
 } from "@/api/lib/machine-api-key-config";
 import { isMemberRole } from "@/api/lib/member-roles";
+import { getBetterAuthOAuthResources } from "@/api/lib/oauth-resource-policy";
 import {
   enrichRequestContext,
   getRequestContext,
@@ -123,11 +123,7 @@ import {
 import { closeRemovedMemberActiveTimer } from "@/api/lib/time-entry-offboarding";
 import { includes } from "@/api/lib/type-guards";
 import { normalizeUserShortcutsField } from "@/api/lib/user-shortcuts";
-import {
-  getMcpResourceUrls,
-  MCP_ALL_RESOURCE_SCOPES,
-  MCP_OAUTH_SCOPES,
-} from "@/api/mcp/constants";
+import { MCP_ALL_RESOURCE_SCOPES, MCP_OAUTH_SCOPES } from "@/api/mcp/constants";
 
 /** Access token lifetime in seconds (15 minutes). */
 const ACCESS_TOKEN_EXPIRES_IN = 15 * 60;
@@ -746,6 +742,10 @@ const socialSignInTwoFactorRedirectPlugin = {
 // first use prevents the TDZ error when the test runner
 // evaluates this module before db/index.ts finishes.
 const createAuth = () => {
+  const oauthResources = getBetterAuthOAuthResources();
+  const oauthResourceIdentifiers = oauthResources.map(
+    ({ identifier }) => identifier,
+  );
   const twoFactorPlugin = twoFactor({
     // Stella is passwordless (email OTP is the first factor), so 2FA
     // enable/disable/verify never require a password fallback.
@@ -855,9 +855,7 @@ const createAuth = () => {
       enabled: !env.E2E_DISABLE_AUTH_RATE_LIMIT,
       window: AUTH_RATE_LIMITS.global.window,
       max: AUTH_RATE_LIMITS.global.max,
-      customStorage: createAuthRateLimitStorage(
-        AUTH_RATE_LIMIT_MAX_WINDOW * 1000,
-      ),
+      customStorage: createAuthRateLimitStorage(),
       customRules: {
         "/sign-in/email-otp": AUTH_RATE_LIMITS.signIn,
         "/sign-in/email": AUTH_RATE_LIMITS.signIn,
@@ -1175,14 +1173,18 @@ const createAuth = () => {
           });
         },
       }),
-      // SAFETY: The oauth-provider plugin's generated OpenAPI metadata
-      // is still slightly too wide for Better Auth's plugin type here.
-      // The runtime plugin value is valid for betterAuth().
       oauthProvider({
         loginPage: OAUTH_UI_LOGIN_PATH,
         consentPage: OAUTH_UI_CONSENT_PATH,
         scopes: [...MCP_OAUTH_SCOPES],
-        validAudiences: getMcpResourceUrls(),
+        resources: oauthResources,
+        // The additive bridge/backfill owns resource creation and proves its
+        // fixed point before this candidate runs. Runtime seeding would hide
+        // a missed migration and add an owner-DB write to auth startup.
+        resourceSeedMode: "none",
+        enforcePerClientResources: true,
+        clientRegistrationDefaultResources: oauthResourceIdentifiers,
+        clientRegistrationAllowedResources: oauthResourceIdentifiers,
         allowDynamicClientRegistration: true,
         allowUnauthenticatedClientRegistration: true,
         accessTokenExpiresIn: ACCESS_TOKEN_EXPIRES_IN,
@@ -1235,9 +1237,6 @@ const createAuth = () => {
         customAccessTokenClaims: ({ referenceId }) => ({
           org_id: referenceId,
         }),
-        silenceWarnings: {
-          oauthAuthServerConfig: true,
-        },
       }),
     ],
     hooks: {

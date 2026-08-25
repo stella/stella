@@ -2,161 +2,153 @@ import { beforeEach, describe, expect, test } from "bun:test";
 
 import { createAuthRateLimitStorage } from "@/api/lib/rate-limit/auth-storage";
 
-// A controllable fake of Bun's RedisClient: `redisDown` toggles whether
-// get/set reject, simulating an unreachable Redis without real I/O.
-// `commandLatencyMs` makes commands hang for the test, exercising the
-// per-command timeout that auth-storage layers on top of the client.
 let redisDown = false;
 let commandLatencyMs = 0;
-const redisStore = new Map<string, string>();
+let invalidResponse = false;
+const redisCounters = new Map<string, { count: number; expiresAt: number }>();
 
 class FakeRedisClient {
-  onclose: ((error: Error) => void) | null = null;
-  onconnect: (() => void) | null = null;
-
-  private async maybeDelay<T>(value: T): Promise<T> {
-    if (commandLatencyMs > 0) {
-      return new Promise<T>((resolve) => {
-        setTimeout(() => {
-          resolve(value);
-        }, commandLatencyMs);
-      });
-    }
-    return value;
-  }
-
-  async get(key: string): Promise<string | null> {
+  async send(
+    command: "EVAL",
+    args: [string, "1", string, string, string],
+  ): Promise<unknown> {
     if (redisDown) {
       throw new Error("redis unreachable");
     }
-    return this.maybeDelay(redisStore.get(key) ?? null);
-  }
-
-  async set(
-    key: string,
-    value: string,
-    _expiryMode: "PX",
-    _ttlMs: number,
-  ): Promise<"OK"> {
-    if (redisDown) {
-      throw new Error("redis unreachable");
+    expect(command).toBe("EVAL");
+    const key = args[2];
+    const windowMs = Number(args[3]);
+    const max = Number(args[4]);
+    const now = Date.now();
+    const existing = redisCounters.get(key);
+    const entry =
+      existing && existing.expiresAt > now
+        ? existing
+        : { count: 0, expiresAt: now + windowMs };
+    entry.count += 1;
+    redisCounters.set(key, entry);
+    const result = invalidResponse
+      ? { invalid: true }
+      : [
+          entry.count <= max ? 1 : 0,
+          Math.max(1, Math.ceil((entry.expiresAt - now) / 1000)),
+        ];
+    if (commandLatencyMs === 0) {
+      return result;
     }
-    redisStore.set(key, value);
-    return this.maybeDelay("OK" as const);
+    return await new Promise((resolve) => {
+      setTimeout(() => resolve(result), commandLatencyMs);
+    });
   }
 }
 
 const createStorage = () =>
-  createAuthRateLimitStorage(60_000, { redis: new FakeRedisClient() });
+  createAuthRateLimitStorage({ redis: new FakeRedisClient() });
 
-const value = (count: number, lastRequest = 1000) => ({
-  key: "ip:1.2.3.4",
-  count,
-  lastRequest,
-});
+const RULE = { max: 3, window: 60 } as const;
 
 describe("auth rate-limit storage", () => {
   beforeEach(() => {
     redisDown = false;
     commandLatencyMs = 0;
-    redisStore.clear();
+    invalidResponse = false;
+    redisCounters.clear();
   });
 
-  test("round-trips through Redis when it is reachable", async () => {
+  test("atomically consumes the Redis budget and returns retry timing", async () => {
     const storage = createStorage();
 
-    await storage.set("ip:1.2.3.4", value(3));
-
-    expect(await storage.get("ip:1.2.3.4")).toEqual(value(3));
+    expect(await storage.consume("ip:1.2.3.4", RULE)).toEqual({
+      allowed: true,
+      retryAfter: null,
+    });
+    expect(await storage.consume("ip:1.2.3.4", RULE)).toEqual({
+      allowed: true,
+      retryAfter: null,
+    });
+    expect(await storage.consume("ip:1.2.3.4", RULE)).toEqual({
+      allowed: true,
+      retryAfter: null,
+    });
+    expect(await storage.consume("ip:1.2.3.4", RULE)).toEqual({
+      allowed: false,
+      retryAfter: 60,
+    });
   });
 
-  test("returns null for an unknown key", async () => {
+  test("admits exactly the configured number under concurrent load", async () => {
     const storage = createStorage();
+    const decisions = await Promise.all(
+      Array.from(
+        { length: 20 },
+        async () => await storage.consume("ip:concurrent", RULE),
+      ),
+    );
 
-    expect(await storage.get("ip:9.9.9.9")).toBeNull();
-  });
-
-  test("fails open: a get after Redis goes down reads the fallback", async () => {
-    const storage = createStorage();
-
-    // A successful set warms both Redis and the in-memory fallback.
-    await storage.set("ip:1.2.3.4", value(5));
-    redisDown = true;
-
-    // Redis get throws; the storage must still return the counter so a
-    // Redis outage degrades to per-instance limiting, not a hard lock.
-    expect(await storage.get("ip:1.2.3.4")).toEqual(value(5));
-  });
-
-  test("fails open: set never throws when Redis is down", async () => {
-    const storage = createStorage();
-    redisDown = true;
-
-    // set must resolve (not reject) even though the Redis write fails.
-    await storage.set("ip:1.2.3.4", value(2));
-
-    // The fallback was still written, so a subsequent get resolves it.
-    expect(await storage.get("ip:1.2.3.4")).toEqual(value(2));
-  });
-
-  test("falls back when Redis is reachable but missing a warmed key", async () => {
-    const storage = createStorage();
-    redisDown = true;
-
-    await storage.set("ip:1.2.3.4", value(4));
-    redisDown = false;
-
-    expect(await storage.get("ip:1.2.3.4")).toEqual(value(4));
-  });
-
-  test("stores fallback values as snapshots", async () => {
-    const storage = createStorage();
-    const counter = value(7);
-
-    await storage.set("ip:1.2.3.4", counter);
-    counter.count = 99;
-    redisDown = true;
-
-    expect(await storage.get("ip:1.2.3.4")).toEqual(value(7));
-  });
-
-  test("keeps the stricter fallback counter when Redis has stale data", async () => {
-    const storage = createStorage();
-
-    await storage.set("ip:1.2.3.4", value(5, 1000));
-    redisDown = true;
-    await storage.set("ip:1.2.3.4", value(6, 2000));
-    redisDown = false;
-
-    expect(await storage.get("ip:1.2.3.4")).toEqual(value(6, 2000));
-    expect(redisStore.get("auth-ratelimit:{ip:1.2.3.4}")).toBe(
-      JSON.stringify(value(6, 2000)),
+    expect(decisions.filter(({ allowed }) => allowed)).toHaveLength(RULE.max);
+    expect(decisions.filter(({ allowed }) => !allowed)).toHaveLength(
+      20 - RULE.max,
     );
   });
 
-  test("fails open when a Redis command hangs past the timeout", async () => {
+  test("fails open to a bounded per-process counter during an outage", async () => {
+    const storage = createStorage();
+    redisDown = true;
+
+    expect(await storage.consume("ip:outage", RULE)).toMatchObject({
+      allowed: true,
+    });
+    expect(await storage.consume("ip:outage", RULE)).toMatchObject({
+      allowed: true,
+    });
+    expect(await storage.consume("ip:outage", RULE)).toMatchObject({
+      allowed: true,
+    });
+    expect(await storage.consume("ip:outage", RULE)).toMatchObject({
+      allowed: false,
+    });
+  });
+
+  test("keeps the fallback warm before Redis becomes unavailable", async () => {
     const storage = createStorage();
 
-    // Warm the fallback.
-    await storage.set("ip:1.2.3.4", value(8));
+    await storage.consume("ip:warm", RULE);
+    await storage.consume("ip:warm", RULE);
+    redisDown = true;
 
-    // Now make Redis "hang" — get() will not resolve. The per-command
-    // timeout must reject internally and the storage must surface the
-    // fallback value within a bounded window.
+    expect(await storage.consume("ip:warm", RULE)).toMatchObject({
+      allowed: true,
+    });
+    expect(await storage.consume("ip:warm", RULE)).toMatchObject({
+      allowed: false,
+    });
+  });
+
+  test("uses the bounded fallback when Redis returns an invalid response", async () => {
+    const storage = createStorage();
+    invalidResponse = true;
+
+    await storage.consume("ip:invalid", { max: 1, window: 60 });
+    expect(
+      await storage.consume("ip:invalid", { max: 1, window: 60 }),
+    ).toMatchObject({ allowed: false });
+  });
+
+  test("falls back within a bounded time when a Redis command hangs", async () => {
+    const storage = createStorage();
+    await storage.consume("ip:slow", RULE);
     commandLatencyMs = 5000;
-    const start = Date.now();
-    const result = await storage.get("ip:1.2.3.4");
-    const elapsed = Date.now() - start;
 
-    expect(result).toEqual(value(8));
-    // 500ms timeout + scheduler slack. If this fails, the timeout
-    // wrapper has regressed and auth could hang on a slow Redis.
-    expect(elapsed).toBeLessThan(1500);
+    const start = Date.now();
+    const decision = await storage.consume("ip:slow", RULE);
+
+    expect(decision).toMatchObject({ allowed: true });
+    expect(Date.now() - start).toBeLessThan(1500);
   });
 
   test("clears command timeout timers after Redis resolves", async () => {
     let activeTimerCount = 0;
-    const storage = createAuthRateLimitStorage(60_000, {
+    const storage = createAuthRateLimitStorage({
       redis: new FakeRedisClient(),
       commandTimer: {
         set: (callback, delayMs) => {
@@ -170,7 +162,7 @@ describe("auth rate-limit storage", () => {
       },
     });
 
-    await storage.set("ip:1.2.3.4", value(9));
+    await storage.consume("ip:timer", RULE);
 
     expect(activeTimerCount).toBe(0);
   });

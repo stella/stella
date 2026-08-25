@@ -26,16 +26,16 @@ export type McpSession = {
   workspaceIds?: string[];
 };
 
-let verifyAccessToken:
+let verifyBearerToken:
   | ReturnType<
       ReturnType<typeof oauthProviderResourceClient>["getActions"]
-    >["verifyAccessToken"]
+    >["verifyBearerToken"]
   | undefined;
 
-const getVerifyAccessToken = () => {
-  verifyAccessToken ??=
-    oauthProviderResourceClient().getActions().verifyAccessToken;
-  return verifyAccessToken;
+const getVerifyBearerToken = () => {
+  verifyBearerToken ??=
+    oauthProviderResourceClient().getActions().verifyBearerToken;
+  return verifyBearerToken;
 };
 
 export const getMcpAccessTokenVerificationOptions = (
@@ -152,7 +152,7 @@ export const extractMcpSession = (payload: JWTPayload): McpSession => {
 
 /**
  * A genuine token rejection surfaces as a better-call `APIError` with an
- * `UNAUTHORIZED` (401) status: `verifyAccessToken` maps expired tokens, invalid
+ * `UNAUTHORIZED` (401) status: `verifyBearerToken` maps expired tokens, invalid
  * signatures, wrong audience/issuer, no-matching-key, and a missing payload to
  * that shape. Everything else the verifier can throw is an infrastructure fault
  * (a JWKS fetch/network error re-thrown as a plain `Error`, or a jose JWKS
@@ -219,7 +219,7 @@ export const authenticateMcpRequest = async (
   }
 
   try {
-    const payload = await getVerifyAccessToken()(
+    const payload = await getVerifyBearerToken()(
       bearerToken,
       getMcpAccessTokenVerificationOptions(mode),
     );

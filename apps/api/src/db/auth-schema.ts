@@ -121,7 +121,7 @@ export const account = pgTable(
   "account",
   {
     id: text("id").primaryKey(),
-    issuer: text("issuer"),
+    issuer: text("issuer").notNull(),
     accountId: text("account_id").notNull(),
     providerId: text("provider_id").notNull(),
     userId: text("user_id")
@@ -141,6 +141,10 @@ export const account = pgTable(
   },
   (table) => [
     index("account_userId_idx").on(table.userId),
+    uniqueIndex("account_issuer_account_id_uidx").on(
+      table.issuer,
+      table.accountId,
+    ),
     uniqueIndex("account_credential_singleton_uidx")
       .on(table.providerId)
       .where(sql`${table.providerId} = 'credential'`),
@@ -618,17 +622,6 @@ export const authSchema = {
   oauthRefreshToken,
   oauthConsent,
 };
-
-/**
- * Additive tables staged before the Better Auth 1.7 runtime cutover. The
- * current 1.6 runtime ignores them; the follow-up cutover promotes them into
- * the shared Better Auth contract after rehearsal and backfill validation.
- */
-export const BETTER_AUTH_17_BRIDGE_MODEL_NAMES = [
-  "oauthResource",
-  "oauthClientResource",
-  "oauthClientAssertion",
-] as const satisfies readonly (keyof typeof authSchema)[];
 
 export const authRelationsPart = defineRelationsPart(authSchema, (r) => ({
   user: {

@@ -151,11 +151,14 @@ const autoProvision = async (
   const provisioned = await Result.tryPromise(async () => {
     const ctx = await auth.$context;
     const localPart = email.split("@").at(0)?.trim() ?? "";
-    const createdUser = await ctx.internalAdapter.createUser({
-      email,
-      name: localPart.length > 0 ? localPart : email,
-      emailVerified: true,
-    });
+    const createdUser = await ctx.internalAdapter.createUser(
+      {
+        email,
+        name: localPart.length > 0 ? localPart : email,
+        emailVerified: true,
+      },
+      { method: "agent-idjag" },
+    );
 
     // If org bootstrap fails the user is already persisted; delete it so a
     // failed provision never leaves an orgless, unreachable account behind.
@@ -284,6 +287,7 @@ const issueRegistrationForPrincipal = async (
   });
   const codeResult = await issueAuthorizationCode({
     clientId: credentials.clientId,
+    registrationType: "identity_assertion",
     scopes: AGENT_AUTH_SERVICE_SCOPES,
     sessionCookieHeader,
   });
