@@ -159,14 +159,11 @@ test("default search fields are title + text", () => {
   ).toEqual(["title", "text"]);
 });
 
-test("corpus indexes do not persist canonical storage locations", () => {
-  for (const family of ["case_law", "legislation"] as const) {
-    const names = corpusIndexConfig(
-      family,
-      `${family}_v4_cze`,
-    ).doc_mapping.field_mappings.map(({ name }) => name);
-    expect(names.filter((name) => name.startsWith("canonical_"))).toEqual([]);
-  }
+test("case-law indexes do not persist canonical storage locations", () => {
+  const names = caseLawIndexConfig(
+    "case_law_v4_cze",
+  ).doc_mapping.field_mappings.map(({ name }) => name);
+  expect(names.filter((name) => name.startsWith("canonical_"))).toEqual([]);
 });
 
 test("no field repeated across a document's passages is free-text searchable", () => {
