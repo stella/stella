@@ -166,6 +166,8 @@ export const envBaseServerSchema = {
   // admin endpoint below, which shared-corpus mode requires to stay unset.
   CORPUS_INDEX_SEARCH_ENDPOINT: v.optional(v.pipe(v.string(), v.url())),
   CORPUS_INDEX_ENDPOINT: v.optional(v.pipe(v.string(), v.url())),
+  CORPUS_INDEX_Q09_SEARCH_ENDPOINT: v.optional(v.pipe(v.string(), v.url())),
+  CORPUS_INDEX_Q09_ENDPOINT: v.optional(v.pipe(v.string(), v.url())),
   CORPUS_INDEX_S3_BUCKET: v.optional(v.string()),
   // Falls back to S3_BUCKET when unset (dev). Required when corpus
   // storage is on (enforced post-validation).
@@ -258,6 +260,8 @@ type EnvBaseInvariantInput = {
   CORPUS_INDEX_BACKPRESSURE_METRIC?: string | undefined;
   CORPUS_INDEX_BACKPRESSURE_NAMESPACE?: string | undefined;
   CORPUS_INDEX_ENDPOINT?: string | undefined;
+  CORPUS_INDEX_Q09_ENDPOINT?: string | undefined;
+  CORPUS_INDEX_Q09_SEARCH_ENDPOINT?: string | undefined;
   CORPUS_INDEX_SEARCH_ENDPOINT?: string | undefined;
   CORPUS_INDEXING_ENABLED: boolean;
   CORPUS_STORAGE_ENABLED: boolean;
@@ -282,6 +286,8 @@ export const envBaseInvariantViolation = ({
   CORPUS_INDEX_BACKPRESSURE_METRIC,
   CORPUS_INDEX_BACKPRESSURE_NAMESPACE,
   CORPUS_INDEX_ENDPOINT,
+  CORPUS_INDEX_Q09_ENDPOINT,
+  CORPUS_INDEX_Q09_SEARCH_ENDPOINT,
   CORPUS_INDEX_SEARCH_ENDPOINT,
   CORPUS_INDEXING_ENABLED,
   CORPUS_STORAGE_ENABLED,
@@ -355,6 +361,18 @@ export const envBaseInvariantViolation = ({
   if (!isDev && CORPUS_INDEX_SEARCH_ENDPOINT !== undefined) {
     return "CORPUS_INDEX_SEARCH_ENDPOINT is only supported in local development.";
   }
+  if (
+    CORPUS_INDEX_Q09_SEARCH_ENDPOINT !== undefined &&
+    !isTlsOrLoopbackUrl(CORPUS_INDEX_Q09_SEARCH_ENDPOINT, {
+      plaintextProtocol: "http:",
+      tlsProtocol: "https:",
+    })
+  ) {
+    return "CORPUS_INDEX_Q09_SEARCH_ENDPOINT must use HTTPS unless it targets a loopback address.";
+  }
+  if (!isDev && CORPUS_INDEX_Q09_SEARCH_ENDPOINT !== undefined) {
+    return "CORPUS_INDEX_Q09_SEARCH_ENDPOINT is only supported in local development.";
+  }
   // REMOVAL CONDITION: delete this invariant in the PR that makes a corpus
   // cursor carry the dictionary version it was built against.
   //
@@ -371,11 +389,19 @@ export const envBaseInvariantViolation = ({
   if (hasPublicLawDatabaseUrl && LEGAL_SEARCH_PROVIDER !== "corpus-index") {
     return 'Public-law database URLs require LEGAL_SEARCH_PROVIDER="corpus-index".';
   }
-  if (hasPublicLawDatabaseUrl && CORPUS_INDEX_SEARCH_ENDPOINT === undefined) {
-    return "Public-law database URLs require CORPUS_INDEX_SEARCH_ENDPOINT.";
+  if (
+    hasPublicLawDatabaseUrl &&
+    CORPUS_INDEX_SEARCH_ENDPOINT === undefined &&
+    CORPUS_INDEX_Q09_SEARCH_ENDPOINT === undefined
+  ) {
+    return "Public-law database URLs require a corpus-index search endpoint.";
   }
-  if (hasPublicLawDatabaseUrl && CORPUS_INDEX_ENDPOINT !== undefined) {
-    return "CORPUS_INDEX_ENDPOINT must be unset when a public-law database URL is configured.";
+  if (
+    hasPublicLawDatabaseUrl &&
+    (CORPUS_INDEX_ENDPOINT !== undefined ||
+      CORPUS_INDEX_Q09_ENDPOINT !== undefined)
+  ) {
+    return "Corpus-index mutation endpoints must be unset when a public-law database URL is configured.";
   }
   if (hasPublicLawDatabaseUrl && CORPUS_INDEXING_ENABLED) {
     return "CORPUS_INDEXING_ENABLED must be false when a public-law database URL is configured.";
@@ -400,9 +426,11 @@ export const envBaseInvariantViolation = ({
   if (
     LEGAL_SEARCH_PROVIDER === "corpus-index" &&
     CORPUS_INDEX_SEARCH_ENDPOINT === undefined &&
-    CORPUS_INDEX_ENDPOINT === undefined
+    CORPUS_INDEX_ENDPOINT === undefined &&
+    CORPUS_INDEX_Q09_SEARCH_ENDPOINT === undefined &&
+    CORPUS_INDEX_Q09_ENDPOINT === undefined
   ) {
-    return "LEGAL_SEARCH_PROVIDER=corpus-index requires CORPUS_INDEX_SEARCH_ENDPOINT or CORPUS_INDEX_ENDPOINT to be set.";
+    return "LEGAL_SEARCH_PROVIDER=corpus-index requires a configured corpus-index endpoint.";
   }
 
   return corpusStorageInvariantViolation({
