@@ -27,6 +27,7 @@ afterEach(async () => {
 
 type FixCase = {
   expected: string;
+  fileName?: string;
   source: string;
 };
 
@@ -72,9 +73,9 @@ const writeHarness = async () => {
   return { configPath, directory };
 };
 
-const expectFixedPoint = async ({ expected, source }: FixCase) => {
+const expectFixedPoint = async ({ expected, fileName, source }: FixCase) => {
   const { configPath, directory } = await writeHarness();
-  const sourcePath = path.join(directory, "subject.ts");
+  const sourcePath = path.join(directory, fileName ?? "subject.ts");
   await Bun.write(sourcePath, source);
 
   const firstRun = await runOxlint(configPath, sourcePath);
@@ -95,10 +96,11 @@ const expectFixedPoint = async ({ expected, source }: FixCase) => {
 describe.serial("custom oxlint safe fixers", () => {
   test("rewrites every supported physical Tailwind direction", async () => {
     await expectFixedPoint({
+      fileName: "subject.tsx",
       source:
-        'const classes = "ml-2 mr-3 pl-4 pr-5 -left-1 right-[2px] text-left text-right border-l border-r-2 rounded-l rounded-r-xl rounded-tl-md rounded-tr rounded-bl-lg rounded-br scroll-ml-2 scroll-mr-2 scroll-pl-3 hover:scroll-pr-3";\nconst template = `hover:pr-4 md:rounded-l-lg`;\n',
+        'export const view = <div className="ml-2 mr-3 pl-4 pr-5 -left-1 right-[2px] text-left text-right border-l border-r-2 rounded-l rounded-r-xl rounded-tl-md rounded-tr rounded-bl-lg rounded-br scroll-ml-2 scroll-mr-2 scroll-pl-3 hover:scroll-pr-3" />;\nexport const template = <div className={`hover:pr-4 md:rounded-l-lg`} />;\n',
       expected:
-        'const classes = "ms-2 me-3 ps-4 pe-5 -start-1 end-[2px] text-start text-end border-s border-e-2 rounded-s rounded-e-xl rounded-ss-md rounded-se rounded-es-lg rounded-ee scroll-ms-2 scroll-me-2 scroll-ps-3 hover:scroll-pe-3";\nconst template = `hover:pe-4 md:rounded-s-lg`;\n',
+        'export const view = <div className="ms-2 me-3 ps-4 pe-5 -start-1 end-[2px] text-start text-end border-s border-e-2 rounded-s rounded-e-xl rounded-ss-md rounded-se rounded-es-lg rounded-ee scroll-ms-2 scroll-me-2 scroll-ps-3 hover:scroll-pe-3" />;\nexport const template = <div className={`hover:pe-4 md:rounded-s-lg`} />;\n',
     });
   });
 
@@ -127,7 +129,15 @@ describe.serial("custom oxlint safe fixers", () => {
       "async function load() {",
       "  return await ((lock ? query.for('update') : query) satisfies Builder);",
       "}",
+      "async function loadWithRationale() {",
+      "  return await // preserve rationale",
+      "    (lock ? query : query.limit(1));",
+      "}",
+      "async function loadWithBranchWrappers() {",
+      "  return await (lock ? (query as Builder) : (query.limit(1) satisfies Builder));",
+      "}",
       "const schema = t.Optional(t.UnionEnum(VALUES));",
+      'const guidance = "Use right-click to open the menu";',
       "",
     ].join("\n");
     await Bun.write(sourcePath, source);
@@ -136,6 +146,7 @@ describe.serial("custom oxlint safe fixers", () => {
     expect(result.exitCode).toBe(1);
     expect(result.output).toContain("no-awaited-builder-union");
     expect(result.output).toContain("no-coerced-optional-union-enum");
+    expect(result.output).toContain("no-physical-properties");
     expect(await Bun.file(sourcePath).text()).toBe(source);
   });
 });

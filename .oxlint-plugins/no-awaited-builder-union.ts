@@ -28,9 +28,9 @@
 //   const q = lock ? query.for("update") : query     // not awaited
 //
 // `--fix` performs the branchwise-await rewrite when the await directly wraps
-// the conditional. TypeScript wrappers around the whole conditional remain a
-// diagnostic because moving the wrapper into each branch requires a semantic
-// choice about which expression the assertion should constrain.
+// the conditional. TypeScript wrappers around the whole conditional or either
+// branch remain a diagnostic because moving them requires a semantic choice
+// about which expression the assertion should constrain.
 //
 // Also allowed, and the reason detection is not merely "steps differ":
 //   await (json ? response.json() : response.text())  // siblings, no builder
@@ -80,7 +80,9 @@ const collectBranches = (node, branches) => {
     collectBranches(expression.alternate, branches);
     return branches;
   }
-  branches.push(expression);
+  // Keep the original leaf so the fixer can refuse branch-local TypeScript
+  // wrappers. describeChain still unwraps it for detection.
+  branches.push(node);
   return branches;
 };
 
@@ -226,13 +228,28 @@ export default eslintCompatPlugin({
               data: { root: first.root },
               fix: (fixer) => {
                 const awaitEnd = node.range[0] + AWAIT_KEYWORD_LENGTH;
+                const branches = collectBranches(node.argument, []);
+                if (
+                  branches.some((branch) => unwrapWrappers(branch) !== branch)
+                ) {
+                  return null;
+                }
+                const hasInterveningComment = context.sourceCode
+                  .getAllComments()
+                  .some(
+                    (comment) =>
+                      comment.range[0] >= awaitEnd &&
+                      comment.range[0] < node.argument.range[0],
+                  );
+                if (hasInterveningComment) {
+                  return null;
+                }
                 let removalEnd = awaitEnd;
                 while (
                   /\s/u.test(context.sourceCode.text.at(removalEnd) ?? "")
                 ) {
                   removalEnd += 1;
                 }
-                const branches = collectBranches(node.argument, []);
                 return [
                   fixer.removeRange([node.range[0], removalEnd]),
                   ...branches.map((branch) =>

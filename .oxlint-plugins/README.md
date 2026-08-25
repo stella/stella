@@ -18,8 +18,8 @@ directive and CI fails.
 deterministic result without choosing a domain value, dependency, or control-flow
 contract:
 
-- `no-physical-properties` maps physical Tailwind directions, including logical
-  corner radii and scroll spacing.
+- `no-physical-properties` maps physical Tailwind directions in direct JSX
+  `className` values, including logical corner radii and scroll spacing.
 - `no-awaited-builder-union` moves `await` into the leaves of a directly wrapped
   conditional.
 - `no-coerced-optional-union-enum` expands inline string values in a namespaced

@@ -18,6 +18,56 @@ import {
   replacePhysicalProperties,
 } from "./physical-properties.ts";
 
+const isClassNameAttribute = (node) =>
+  node?.type === "JSXAttribute" &&
+  node.name.type === "JSXIdentifier" &&
+  node.name.name === "className";
+
+// Only direct JSX className values prove that a matched token is a Tailwind
+// class. Other strings still receive the diagnostic, but not a potentially
+// meaning-changing fix (for example, prose containing "right-click").
+const isDirectClassNameValue = (node) => {
+  if (isClassNameAttribute(node.parent) && node.parent.value === node) {
+    return true;
+  }
+  if (
+    node.parent?.type === "JSXExpressionContainer" &&
+    node.parent.expression === node &&
+    isClassNameAttribute(node.parent.parent)
+  ) {
+    return true;
+  }
+  if (node.type !== "TemplateElement") {
+    return false;
+  }
+  const template = node.parent;
+  const container = template?.parent;
+  return (
+    template?.type === "TemplateLiteral" &&
+    container?.type === "JSXExpressionContainer" &&
+    container.expression === template &&
+    isClassNameAttribute(container.parent)
+  );
+};
+
+const reportPhysicalProperty = (context, node) => {
+  if (!isDirectClassNameValue(node)) {
+    context.report({ node, messageId: "physicalProperty" });
+    return;
+  }
+  context.report({
+    node,
+    messageId: "physicalProperty",
+    fix: (fixer) => {
+      const source = context.sourceCode.getText(node);
+      const replacement = replacePhysicalProperties(source);
+      return replacement === source
+        ? null
+        : fixer.replaceText(node, replacement);
+    },
+  });
+};
+
 export default eslintCompatPlugin({
   meta: { name: "no-physical-properties" },
   rules: {
@@ -43,32 +93,12 @@ export default eslintCompatPlugin({
               return;
             }
             if (hasPhysicalProperty(node.value)) {
-              context.report({
-                node,
-                messageId: "physicalProperty",
-                fix: (fixer) => {
-                  const source = context.sourceCode.getText(node);
-                  const replacement = replacePhysicalProperties(source);
-                  return replacement === source
-                    ? null
-                    : fixer.replaceText(node, replacement);
-                },
-              });
+              reportPhysicalProperty(context, node);
             }
           },
           TemplateElement(node) {
             if (hasPhysicalProperty(node.value.raw)) {
-              context.report({
-                node,
-                messageId: "physicalProperty",
-                fix: (fixer) => {
-                  const source = context.sourceCode.getText(node);
-                  const replacement = replacePhysicalProperties(source);
-                  return replacement === source
-                    ? null
-                    : fixer.replaceText(node, replacement);
-                },
-              });
+              reportPhysicalProperty(context, node);
             }
           },
         };
