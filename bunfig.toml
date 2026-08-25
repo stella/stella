@@ -45,7 +45,6 @@ minimumReleaseAgeExcludes = [
   # Permanent exclusions record their original introduction for auditability.
   # @vitejs/plugin-react 6.1.0 is required for the Oxc React Compiler Vite
   # integration. Remove this exception once the normal quarantine admits it.
-  "@vitejs/plugin-react", # quarantine-expires: 2026-08-25T02:49:46.306Z
   # oxc-transform-react 0.145.0 replaces the Babel React Compiler transform.
   # Keep every napi binding in the same temporary exception: Bun otherwise
   # skips quarantined optional bindings and leaves the parent unusable.
