@@ -239,3 +239,45 @@ test("bulk bootstrap uses the same contract for legislation", async () => {
   });
   expect(result.entityIds).toHaveLength(2);
 });
+
+test("bootstrap locks source policy before canonical rows for every family", async () => {
+  const statements: string[] = [];
+  const loggedDb = drizzle({
+    client,
+    logger: {
+      logQuery(query) {
+        statements.push(query);
+      },
+    },
+  });
+  await loggedDb.transaction(
+    async (tx) =>
+      await bootstrapCorpusProjectionDesiredStateBatchTx(
+        asTestRaw<Transaction>(tx),
+        { family: "case_law", generation: "case_law_v5", limit: 1 },
+      ),
+  );
+  await loggedDb.transaction(
+    async (tx) =>
+      await bootstrapCorpusProjectionDesiredStateBatchTx(
+        asTestRaw<Transaction>(tx),
+        { family: "legislation", generation: "legislation_v2", limit: 1 },
+      ),
+  );
+
+  const assertSourceBeforeDocument = (
+    sourceTable: string,
+    documentTable: string,
+  ): void => {
+    const sourceLock = statements.findIndex((query) =>
+      query.includes(`for share of "${sourceTable}"`),
+    );
+    const documentLock = statements.findIndex((query) =>
+      query.includes(`for update of "${documentTable}"`),
+    );
+    expect(sourceLock).toBeGreaterThanOrEqual(0);
+    expect(documentLock).toBeGreaterThan(sourceLock);
+  };
+  assertSourceBeforeDocument("case_law_sources", "case_law_decisions");
+  assertSourceBeforeDocument("legislation_sources", "legislation_documents");
+});

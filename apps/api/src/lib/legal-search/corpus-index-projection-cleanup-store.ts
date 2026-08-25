@@ -51,6 +51,18 @@ const validateLeaseMs = (leaseMs: number): number => {
   return leaseMs;
 };
 
+const lockCorpusProjectionIntentsById = async (
+  tx: Transaction,
+  intentIds: readonly ProjectionIntentId[],
+): Promise<void> => {
+  await tx
+    .select({ id: corpusIndexProjectionIntents.id })
+    .from(corpusIndexProjectionIntents)
+    .where(inArray(corpusIndexProjectionIntents.id, intentIds))
+    .orderBy(asc(corpusIndexProjectionIntents.id))
+    .for("update");
+};
+
 export type CorpusProjectionCleanupLease = {
   intentId: ProjectionIntentId;
   family: CorpusFamily;
@@ -66,7 +78,7 @@ type ClaimCorpusProjectionCleanupOptions = {
   indexId: string;
   limit: number;
   leaseMs: number;
-  now?: Date;
+  testNow?: Date;
   newLeaseToken?: () => string;
 };
 
@@ -78,7 +90,7 @@ export const claimCorpusProjectionCleanupTx = async (
     indexId,
     limit: requestedLimit,
     leaseMs: requestedLeaseMs,
-    now,
+    testNow,
     newLeaseToken = () => Bun.randomUUIDv7(),
   }: ClaimCorpusProjectionCleanupOptions,
 ): Promise<CorpusProjectionCleanupLease[]> => {
@@ -117,12 +129,12 @@ export const claimCorpusProjectionCleanupTx = async (
   if (candidates.length === 0) {
     return [];
   }
-  const claimAt = now ?? sql<Date>`clock_timestamp()`;
+  const claimAt = testNow ?? sql<Date>`clock_timestamp()`;
   const leaseToken = newLeaseToken();
   const leaseExpiresAt =
-    now === undefined
+    testNow === undefined
       ? sql<Date>`clock_timestamp() + ${leaseMs} * INTERVAL '1 millisecond'`
-      : new Date(now.getTime() + leaseMs);
+      : new Date(testNow.getTime() + leaseMs);
   const ids = candidates.map(({ id }) => id);
   const updated = await tx
     .update(corpusIndexProjectionIntents)
@@ -161,7 +173,7 @@ type RecordCorpusProjectionDeleteOptions = {
   indexId: string;
   leaseToken: string;
   deleteOpstamp: number;
-  now?: Date;
+  testNow?: Date;
 };
 
 export const recordCorpusProjectionDeleteTx = async (
@@ -171,7 +183,7 @@ export const recordCorpusProjectionDeleteTx = async (
     indexId,
     leaseToken,
     deleteOpstamp,
-    now = new Date(),
+    testNow,
   }: RecordCorpusProjectionDeleteOptions,
 ): Promise<number> => {
   if (
@@ -182,6 +194,8 @@ export const recordCorpusProjectionDeleteTx = async (
   ) {
     return panic("Corpus projection delete receipt is invalid");
   }
+  await lockCorpusProjectionIntentsById(tx, intentIds);
+  const transitionAt = testNow ?? sql<Date>`clock_timestamp()`;
   const rows = await tx
     .update(corpusIndexProjectionIntents)
     .set({
@@ -190,7 +204,7 @@ export const recordCorpusProjectionDeleteTx = async (
       leaseExpiresAt: null,
       deleteOpstamp: BigInt(deleteOpstamp),
       lastError: null,
-      updatedAt: now,
+      updatedAt: transitionAt,
     })
     .where(
       and(
@@ -213,7 +227,7 @@ type RetryCorpusProjectionCleanupOptions = {
   intentIds: readonly ProjectionIntentId[];
   leaseToken: string;
   errorMessage: string;
-  now?: Date;
+  testNow?: Date;
 };
 
 export const retryCorpusProjectionCleanupTx = async (
@@ -222,12 +236,14 @@ export const retryCorpusProjectionCleanupTx = async (
     intentIds,
     leaseToken,
     errorMessage,
-    now = new Date(),
+    testNow,
   }: RetryCorpusProjectionCleanupOptions,
 ): Promise<number> => {
   if (intentIds.length === 0) {
     return 0;
   }
+  await lockCorpusProjectionIntentsById(tx, intentIds);
+  const transitionAt = testNow ?? sql<Date>`clock_timestamp()`;
   const rows = await tx
     .update(corpusIndexProjectionIntents)
     .set({
@@ -236,7 +252,7 @@ export const retryCorpusProjectionCleanupTx = async (
       leaseExpiresAt: null,
       cleanupStartedAt: null,
       lastError: errorMessage.slice(0, 2048),
-      updatedAt: now,
+      updatedAt: transitionAt,
     })
     .where(
       and(
@@ -462,16 +478,18 @@ export class CorpusProjectionCleanupSettlementProof {
 
 type ReleaseCorpusProjectionCleanupSettlementOptions = {
   lease: CorpusProjectionCleanupSettlementLease;
-  now?: Date;
+  testNow?: Date;
 };
 
 export const releaseCorpusProjectionCleanupSettlementTx = async (
   tx: Transaction,
-  { lease, now = new Date() }: ReleaseCorpusProjectionCleanupSettlementOptions,
+  { lease, testNow }: ReleaseCorpusProjectionCleanupSettlementOptions,
 ): Promise<number> => {
+  await lockCorpusProjectionIntentsById(tx, lease.intentIds);
+  const transitionAt = testNow ?? sql<Date>`clock_timestamp()`;
   const rows = await tx
     .update(corpusIndexProjectionIntents)
-    .set({ leaseToken: null, leaseExpiresAt: null, updatedAt: now })
+    .set({ leaseToken: null, leaseExpiresAt: null, updatedAt: transitionAt })
     .where(
       and(
         inArray(corpusIndexProjectionIntents.id, lease.intentIds),
@@ -495,21 +513,23 @@ export const releaseCorpusProjectionCleanupSettlementTx = async (
 
 type SettleCorpusProjectionCleanupOptions = {
   proof: CorpusProjectionCleanupSettlementProof;
-  now?: Date;
+  testNow?: Date;
 };
 
 export const settleCorpusProjectionCleanupTx = async (
   tx: Transaction,
-  { proof, now = new Date() }: SettleCorpusProjectionCleanupOptions,
+  { proof, testNow }: SettleCorpusProjectionCleanupOptions,
 ): Promise<number> => {
+  await lockCorpusProjectionIntentsById(tx, proof.intentIds);
+  const transitionAt = testNow ?? sql<Date>`clock_timestamp()`;
   const rows = await tx
     .update(corpusIndexProjectionIntents)
     .set({
       status: "settled",
       leaseToken: null,
       leaseExpiresAt: null,
-      settledAt: now,
-      updatedAt: now,
+      settledAt: transitionAt,
+      updatedAt: transitionAt,
     })
     .where(
       and(
@@ -536,7 +556,7 @@ type ReopenCorpusProjectionCleanupOptions = {
   intentIds: readonly ProjectionIntentId[];
   indexId: string;
   errorMessage: string;
-  now?: Date;
+  testNow?: Date;
 };
 
 /** Reopen exact settled revisions when a later census observes them again. */
@@ -546,7 +566,7 @@ export const reopenCorpusProjectionCleanupTx = async (
     intentIds,
     indexId,
     errorMessage,
-    now = new Date(),
+    testNow,
   }: ReopenCorpusProjectionCleanupOptions,
 ): Promise<number> => {
   if (
@@ -555,18 +575,20 @@ export const reopenCorpusProjectionCleanupTx = async (
   ) {
     return panic("Corpus projection cleanup reopen request is invalid");
   }
+  await lockCorpusProjectionIntentsById(tx, intentIds);
+  const transitionAt = testNow ?? sql<Date>`clock_timestamp()`;
   const rows = await tx
     .update(corpusIndexProjectionIntents)
     .set({
       status: "cleanup_pending",
       leaseToken: null,
       leaseExpiresAt: null,
-      cleanupNotBefore: now,
+      cleanupNotBefore: transitionAt,
       cleanupStartedAt: null,
       deleteOpstamp: null,
       settledAt: null,
       lastError: errorMessage.slice(0, 2048),
-      updatedAt: now,
+      updatedAt: transitionAt,
     })
     .where(
       and(
@@ -596,7 +618,7 @@ type RecoverExpiredCorpusProjectionIntentsOptions = {
   family: CorpusFamily;
   generation: string;
   limit: number;
-  now?: Date;
+  testNow?: Date;
 };
 
 /**
@@ -610,7 +632,7 @@ export const recoverExpiredCorpusProjectionIntentsTx = async (
     family,
     generation,
     limit: requestedLimit,
-    now = new Date(),
+    testNow,
   }: RecoverExpiredCorpusProjectionIntentsOptions,
 ): Promise<CorpusProjectionExpiredIntent[]> => {
   const limit = validateCleanupBatchSize(requestedLimit);
@@ -642,6 +664,8 @@ export const recoverExpiredCorpusProjectionIntentsTx = async (
     .limit(limit)
     .for("update", { skipLocked: true });
 
+  const transitionAt = testNow ?? sql<Date>`clock_timestamp()`;
+
   const reserved = rows.filter(({ status }) => status === "reserved");
   if (reserved.length > 0) {
     await tx
@@ -650,9 +674,9 @@ export const recoverExpiredCorpusProjectionIntentsTx = async (
         status: "cancelled",
         leaseToken: null,
         leaseExpiresAt: null,
-        cancelledAt: now,
+        cancelledAt: transitionAt,
         lastError: "projection reservation lease expired before append",
-        updatedAt: now,
+        updatedAt: transitionAt,
       })
       .where(
         and(
@@ -677,7 +701,7 @@ export const recoverExpiredCorpusProjectionIntentsTx = async (
         leaseExpiresAt: null,
         cleanupStartedAt: null,
         lastError: "projection cleanup lease expired with unknown outcome",
-        updatedAt: now,
+        updatedAt: transitionAt,
       })
       .where(
         and(
@@ -723,7 +747,7 @@ export const recoverExpiredCorpusProjectionIntentsTx = async (
         appendPublishBarrierAt: barrierSql,
         cleanupNotBefore: barrierSql,
         lastError: "projection append lease expired with unknown outcome",
-        updatedAt: now,
+        updatedAt: transitionAt,
       })
       .where(
         and(

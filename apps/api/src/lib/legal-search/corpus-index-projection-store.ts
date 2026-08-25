@@ -236,7 +236,7 @@ type PrepareCorpusProjectionReplacementsOptions = {
   family: CorpusFamily;
   generation: string;
   limit: number;
-  now?: Date;
+  testNow?: Date;
 };
 
 /**
@@ -250,7 +250,7 @@ export const prepareCorpusProjectionReplacementsTx = async (
     family,
     generation,
     limit: requestedLimit,
-    now = new Date(),
+    testNow,
   }: PrepareCorpusProjectionReplacementsOptions,
 ): Promise<CorpusProjectionReplacementCleanup[]> => {
   const limit = validateBatchSize(requestedLimit);
@@ -300,6 +300,13 @@ export const prepareCorpusProjectionReplacementsTx = async (
     } satisfies CorpusProjectionReplacementCleanup;
   });
   const intentIds = cleanups.map(({ intentId }) => intentId);
+  await tx
+    .select({ id: corpusIndexProjectionIntents.id })
+    .from(corpusIndexProjectionIntents)
+    .where(inArray(corpusIndexProjectionIntents.id, intentIds))
+    .orderBy(asc(corpusIndexProjectionIntents.id))
+    .for("update");
+  const transitionAt = testNow ?? sql<Date>`clock_timestamp()`;
   const updated = await tx
     .update(corpusIndexProjectionIntents)
     .set({
@@ -307,9 +314,9 @@ export const prepareCorpusProjectionReplacementsTx = async (
       leaseToken: null,
       leaseExpiresAt: null,
       appendPublishBarrierAt: sql`${corpusIndexProjectionIntents.appendCommittedAt}`,
-      cleanupNotBefore: now,
+      cleanupNotBefore: transitionAt,
       lastError: null,
-      updatedAt: now,
+      updatedAt: transitionAt,
     })
     .where(
       and(
@@ -325,12 +332,12 @@ export const prepareCorpusProjectionReplacementsTx = async (
 type StartCorpusProjectionAppendOptions = {
   intentId: ProjectionIntentId;
   leaseToken: string;
-  now?: Date;
+  testNow?: Date;
 };
 
 export const startCorpusProjectionAppendTx = async (
   tx: Transaction,
-  { intentId, leaseToken, now }: StartCorpusProjectionAppendOptions,
+  { intentId, leaseToken, testNow }: StartCorpusProjectionAppendOptions,
 ): Promise<"started" | "stale_cancelled" | "lease_lost"> => {
   const identities = await tx
     .select({
@@ -369,7 +376,22 @@ export const startCorpusProjectionAppendTx = async (
     )
     .limit(1)
     .for("update");
-  const transitionAt = now ?? sql<Date>`clock_timestamp()`;
+  const lockedIntents = await tx
+    .select({ id: corpusIndexProjectionIntents.id })
+    .from(corpusIndexProjectionIntents)
+    .where(
+      and(
+        eq(corpusIndexProjectionIntents.id, intentId),
+        eq(corpusIndexProjectionIntents.status, "reserved"),
+        eq(corpusIndexProjectionIntents.leaseToken, leaseToken),
+      ),
+    )
+    .limit(1)
+    .for("update");
+  if (lockedIntents.length === 0) {
+    return "lease_lost";
+  }
+  const transitionAt = testNow ?? sql<Date>`clock_timestamp()`;
   const rows = await tx
     .update(corpusIndexProjectionIntents)
     .set({
@@ -424,7 +446,7 @@ export const startCorpusProjectionAppendTx = async (
 type AbandonCorpusProjectionAppendOptions = {
   intentId: ProjectionIntentId;
   leaseToken: string;
-  now?: Date;
+  testNow?: Date;
   errorMessage: string;
 };
 
@@ -434,7 +456,7 @@ export const abandonCorpusProjectionAppendTx = async (
   {
     intentId,
     leaseToken,
-    now = new Date(),
+    testNow,
     errorMessage,
   }: AbandonCorpusProjectionAppendOptions,
 ): Promise<"cleanup_pending" | "lease_lost"> => {
@@ -481,6 +503,7 @@ export const abandonCorpusProjectionAppendTx = async (
     intent.appendStartedAt,
     manifest,
   );
+  const transitionAt = testNow ?? sql<Date>`clock_timestamp()`;
   await tx
     .update(corpusIndexProjectionIntents)
     .set({
@@ -490,7 +513,7 @@ export const abandonCorpusProjectionAppendTx = async (
       appendPublishBarrierAt: barrier,
       cleanupNotBefore: barrier,
       lastError: errorMessage.slice(0, 2048),
-      updatedAt: now,
+      updatedAt: transitionAt,
     })
     .where(eq(corpusIndexProjectionIntents.id, intentId));
   return "cleanup_pending";
@@ -499,7 +522,7 @@ export const abandonCorpusProjectionAppendTx = async (
 type CommitCorpusProjectionAppendOptions = {
   intentId: ProjectionIntentId;
   leaseToken: string;
-  now?: Date;
+  testNow?: Date;
 };
 
 export type CommitCorpusProjectionAppendResult =
@@ -514,11 +537,7 @@ export type CommitCorpusProjectionAppendResult =
  */
 export const commitCorpusProjectionAppendTx = async (
   tx: Transaction,
-  {
-    intentId,
-    leaseToken,
-    now = new Date(),
-  }: CommitCorpusProjectionAppendOptions,
+  { intentId, leaseToken, testNow }: CommitCorpusProjectionAppendOptions,
 ): Promise<CommitCorpusProjectionAppendResult> => {
   const identities = await tx
     .select({
@@ -577,6 +596,7 @@ export const commitCorpusProjectionAppendTx = async (
     state.desiredEpoch === intent.epoch &&
     state.desiredFingerprint === intent.fingerprint &&
     state.desiredIndexId === intent.indexId;
+  const transitionAt = testNow ?? sql<Date>`clock_timestamp()`;
   if (!stillDesired) {
     if (intent.appendStartedAt === null) {
       return panic(`Started projection intent has no start time: ${intent.id}`);
@@ -587,10 +607,10 @@ export const commitCorpusProjectionAppendTx = async (
         status: "cleanup_pending",
         leaseToken: null,
         leaseExpiresAt: null,
-        appendPublishBarrierAt: now,
-        cleanupNotBefore: now,
+        appendPublishBarrierAt: transitionAt,
+        cleanupNotBefore: transitionAt,
         lastError: "projection desired state changed after append committed",
-        updatedAt: now,
+        updatedAt: transitionAt,
       })
       .where(eq(corpusIndexProjectionIntents.id, intent.id));
     return {
@@ -604,8 +624,8 @@ export const commitCorpusProjectionAppendTx = async (
       .update(corpusIndexProjectionIntents)
       .set({
         status: "append_committed",
-        appendCommittedAt: now,
-        updatedAt: now,
+        appendCommittedAt: transitionAt,
+        updatedAt: transitionAt,
       })
       .where(eq(corpusIndexProjectionIntents.id, intent.id));
   }
@@ -615,8 +635,8 @@ export const commitCorpusProjectionAppendTx = async (
       status: "applied",
       leaseToken: null,
       leaseExpiresAt: null,
-      appliedAt: now,
-      updatedAt: now,
+      appliedAt: transitionAt,
+      updatedAt: transitionAt,
     })
     .where(eq(corpusIndexProjectionIntents.id, intent.id));
   const applied = await tx
@@ -627,8 +647,8 @@ export const commitCorpusProjectionAppendTx = async (
       appliedRevision: intent.id,
       appliedFingerprint: intent.fingerprint,
       appliedIndexId: intent.indexId,
-      appliedAt: now,
-      updatedAt: now,
+      appliedAt: transitionAt,
+      updatedAt: transitionAt,
     })
     .where(
       and(
@@ -653,7 +673,7 @@ export const commitCorpusProjectionAppendTx = async (
 type CancelCorpusProjectionReservationOptions = {
   intentId: ProjectionIntentId;
   leaseToken: string;
-  now?: Date;
+  testNow?: Date;
   errorMessage?: string;
 };
 
@@ -662,19 +682,29 @@ export const cancelCorpusProjectionReservationTx = async (
   {
     intentId,
     leaseToken,
-    now = new Date(),
+    testNow,
     errorMessage,
   }: CancelCorpusProjectionReservationOptions,
 ): Promise<"cancelled" | "lease_lost"> => {
+  const locked = await tx
+    .select({ id: corpusIndexProjectionIntents.id })
+    .from(corpusIndexProjectionIntents)
+    .where(eq(corpusIndexProjectionIntents.id, intentId))
+    .limit(1)
+    .for("update");
+  if (locked.length === 0) {
+    return "lease_lost";
+  }
+  const transitionAt = testNow ?? sql<Date>`clock_timestamp()`;
   const rows = await tx
     .update(corpusIndexProjectionIntents)
     .set({
       status: "cancelled",
       leaseToken: null,
       leaseExpiresAt: null,
-      cancelledAt: now,
+      cancelledAt: transitionAt,
       lastError: errorMessage?.slice(0, 2048),
-      updatedAt: now,
+      updatedAt: transitionAt,
     })
     .where(
       and(

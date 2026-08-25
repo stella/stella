@@ -410,7 +410,7 @@ const writeDesiredStates = async (
         desiredEpoch: sql`excluded.desired_epoch`,
         desiredFingerprint: sql`excluded.desired_fingerprint`,
         desiredIndexId: sql`excluded.desired_index_id`,
-        updatedAt: new Date(),
+        updatedAt: sql<Date>`clock_timestamp()`,
       },
     });
 };

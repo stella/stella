@@ -21,7 +21,7 @@ type AdvanceCorpusProjectionErasuresOptions = {
   family: CorpusFamily;
   generation: string;
   limit: number;
-  now?: Date;
+  testNow?: Date;
 };
 
 export type AdvanceCorpusProjectionErasuresResult = {
@@ -55,7 +55,7 @@ export const advanceCorpusProjectionErasuresTx = async (
     family,
     generation,
     limit: requestedLimit,
-    now = new Date(),
+    testNow,
   }: AdvanceCorpusProjectionErasuresOptions,
 ): Promise<AdvanceCorpusProjectionErasuresResult> => {
   const limit = validateLimit(requestedLimit);
@@ -139,6 +139,8 @@ export const advanceCorpusProjectionErasuresTx = async (
     .limit(CORPUS_PROJECTION_ERASURE_MAX_REVISIONS)
     .for("update", { of: corpusIndexProjectionIntents });
 
+  const transitionAt = testNow ?? sql<Date>`clock_timestamp()`;
+
   const reserved = intents.filter(({ status }) => status === "reserved");
   if (reserved.length > 0) {
     await tx
@@ -147,9 +149,9 @@ export const advanceCorpusProjectionErasuresTx = async (
         status: "cancelled",
         leaseToken: null,
         leaseExpiresAt: null,
-        cancelledAt: now,
+        cancelledAt: transitionAt,
         lastError: "projection reservation cancelled by erasure",
-        updatedAt: now,
+        updatedAt: transitionAt,
       })
       .where(
         and(
@@ -190,7 +192,7 @@ export const advanceCorpusProjectionErasuresTx = async (
         appendPublishBarrierAt: barrierSql,
         cleanupNotBefore: barrierSql,
         lastError: "projection append fenced by erasure",
-        updatedAt: now,
+        updatedAt: transitionAt,
       })
       .where(
         and(
@@ -214,9 +216,9 @@ export const advanceCorpusProjectionErasuresTx = async (
         leaseToken: null,
         leaseExpiresAt: null,
         appendPublishBarrierAt: sql`${corpusIndexProjectionIntents.appendCommittedAt}`,
-        cleanupNotBefore: now,
+        cleanupNotBefore: transitionAt,
         lastError: "projection revision scheduled by erasure",
-        updatedAt: now,
+        updatedAt: transitionAt,
       })
       .where(
         and(
@@ -240,8 +242,8 @@ export const advanceCorpusProjectionErasuresTx = async (
       appliedRevision: null,
       appliedFingerprint: null,
       appliedIndexId: null,
-      appliedAt: now,
-      updatedAt: now,
+      appliedAt: transitionAt,
+      updatedAt: transitionAt,
     })
     .where(
       and(
