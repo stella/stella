@@ -155,11 +155,9 @@ export const AnnotationToolbar = ({
       if (event.key !== "Enter" && event.key !== " ") {
         return;
       }
-      const target = event.target;
-      const element =
-        target instanceof Element ? target : target?.parentElement;
+      const element = event.target instanceof Element ? event.target : null;
       const mark = element?.closest("[data-annotation-id]") ?? null;
-      const id = mark?.dataset.annotationId ?? null;
+      const id = mark instanceof HTMLElement ? mark.dataset.annotationId : null;
       if (mark !== null && id !== null && root.contains(mark)) {
         event.preventDefault();
         onActivateAnnotation(id);
@@ -170,9 +168,14 @@ export const AnnotationToolbar = ({
       if (!(target instanceof Node) || barRef.current?.contains(target)) {
         return;
       }
-      const element = target instanceof Element ? target : target.parentElement;
+      const element =
+        target instanceof Element
+          ? target
+          : target.parentNode instanceof Element
+            ? target.parentNode
+            : null;
       const mark = element?.closest("[data-annotation-id]") ?? null;
-      const id = mark?.dataset.annotationId ?? null;
+      const id = mark instanceof HTMLElement ? mark.dataset.annotationId : null;
       if (mark !== null && id !== null && root.contains(mark)) {
         onActivateAnnotation(id);
         return;

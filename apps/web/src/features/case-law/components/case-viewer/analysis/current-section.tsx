@@ -78,7 +78,7 @@ export const CurrentSection = ({
   }, [anchorById, headings, scrollContainerRef]);
 
   const index = headings.findIndex((heading) => heading.id === currentId);
-  const current = index === -1 ? null : headings[index];
+  const current = index === -1 ? null : (headings.at(index) ?? null);
   const parent =
     current === null || current.depth === 0
       ? null

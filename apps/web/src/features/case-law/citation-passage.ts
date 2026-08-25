@@ -30,15 +30,18 @@ export const findCitationPassage = ({
   sectionText: string | undefined;
 }): CitationPassage | null => {
   const spans = locateCitationAnchors({ blocks, citations: [citation] });
+  const textBlocks = blocks.filter((block) => block.type !== "table");
   const sourceBlocks =
     sectionText === undefined
-      ? blocks
-      : blocks.filter((block) =>
-          sectionText.includes(inlinesToPlainText(block.inlines)),
+      ? textBlocks
+      : blocks.filter(
+          (block) =>
+            block.type !== "table" &&
+            sectionText.includes(inlinesToPlainText(block.inlines)),
         );
   for (const block of sourceBlocks) {
     const hit = spans[block.id]?.at(0);
-    if (hit === undefined || block.type === "table") {
+    if (hit === undefined) {
       continue;
     }
     return {

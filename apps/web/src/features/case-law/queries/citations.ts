@@ -83,7 +83,9 @@ export const decisionLeadingCitationsOptions = (
   });
 
 export type LeadingCitation = Awaited<
-  ReturnType<ReturnType<typeof decisionLeadingCitationsOptions>["queryFn"]>
+  ReturnType<
+    NonNullable<ReturnType<typeof decisionLeadingCitationsOptions>["queryFn"]>
+  >
 >[number];
 
 /** How many citations each direction holds, by treatment. */

@@ -74,5 +74,7 @@ export const decisionAnnotationsOptions = (key: DecisionAnnotationsKey) =>
   });
 
 export type DecisionAnnotation = Awaited<
-  ReturnType<ReturnType<typeof decisionAnnotationsOptions>["queryFn"]>
+  ReturnType<
+    NonNullable<ReturnType<typeof decisionAnnotationsOptions>["queryFn"]>
+  >
 >[number];

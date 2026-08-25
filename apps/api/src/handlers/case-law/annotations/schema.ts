@@ -16,13 +16,22 @@ import type {
 } from "@/api/db/schema";
 import { tSafeId } from "@/api/lib/custom-schema";
 
-const tLiterals = <const T extends readonly string[]>(values: T) =>
-  t.Union(values.map((value) => t.Literal(value)));
-
-export const annotationColorSchema = tLiterals(CASE_LAW_ANNOTATION_COLORS);
-export const annotationStyleSchema = tLiterals(CASE_LAW_ANNOTATION_STYLES);
-export const annotationVisibilitySchema = tLiterals(
-  CASE_LAW_ANNOTATION_VISIBILITIES,
+// The database tuples provide both the runtime enum and the static domain;
+// `t.Unsafe` preserves that domain through Elysia's route contract, unlike a
+// mapped `t.Union`, whose array element type widens to `never`.
+export const annotationColorSchema = t.Unsafe<CaseLawAnnotationColor>({
+  type: "string",
+  enum: CASE_LAW_ANNOTATION_COLORS,
+});
+export const annotationStyleSchema = t.Unsafe<CaseLawAnnotationStyle>({
+  type: "string",
+  enum: CASE_LAW_ANNOTATION_STYLES,
+});
+export const annotationVisibilitySchema = t.Unsafe<CaseLawAnnotationVisibility>(
+  {
+    type: "string",
+    enum: CASE_LAW_ANNOTATION_VISIBILITIES,
+  },
 );
 
 /** The route schema has validated these values; preserve its closed domain. */
