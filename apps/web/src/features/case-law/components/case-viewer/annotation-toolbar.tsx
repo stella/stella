@@ -171,12 +171,12 @@ export const AnnotationToolbar = ({
       if (!(target instanceof Node) || barRef.current?.contains(target)) {
         return;
       }
-      const element =
-        target instanceof Element
-          ? target
-          : target.parentNode instanceof Element
-            ? target.parentNode
-            : null;
+      let element: Element | null = null;
+      if (target instanceof Element) {
+        element = target;
+      } else if (target.parentNode instanceof Element) {
+        element = target.parentNode;
+      }
       const mark = element?.closest("[data-annotation-id]") ?? null;
       const id =
         mark instanceof HTMLElement

@@ -4,7 +4,7 @@ import { collectAnnotationPages } from "@/features/case-law/queries/annotations"
 
 describe("collectAnnotationPages", () => {
   test("returns every cursor page before the reader receives annotations", async () => {
-    const requestedCursors: Array<string | undefined> = [];
+    const requestedCursors: (string | undefined)[] = [];
 
     const items = await collectAnnotationPages(async (cursor) => {
       requestedCursors.push(cursor);

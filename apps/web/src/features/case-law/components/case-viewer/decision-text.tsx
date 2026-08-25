@@ -1,5 +1,5 @@
 import { useRef } from "react";
-import type { CSSProperties, ReactNode } from "react";
+import type { CSSProperties, ReactElement, ReactNode } from "react";
 
 import { useTranslations } from "use-intl";
 
@@ -211,17 +211,33 @@ const annotationStyle = ({
 const renderAnnotation = (
   annotation: AnnotationAnchorSource,
   children: ReactNode,
-): ReactNode => (
+): ReactElement => (
   <mark
     className={cn(annotationClassName(annotation))}
     data-annotation-id={annotation.id}
-    role="button"
     style={annotationStyle(annotation)}
     tabIndex={0}
   >
     {children}
   </mark>
 );
+
+const renderExactAnnotations = ({
+  annotations,
+  children,
+}: {
+  annotations: readonly AnnotationAnchorSource[];
+  children: ReactNode;
+}): ReactNode => {
+  let marked = children;
+  for (let index = annotations.length - 1; index >= 0; index -= 1) {
+    const annotation = annotations.at(index);
+    if (annotation !== undefined) {
+      marked = renderAnnotation(annotation, marked);
+    }
+  }
+  return marked;
+};
 
 /** The pieces of a mark left once the links inside it are cut out. */
 const splitAroundLinks = (
@@ -295,10 +311,11 @@ const buildAnchorsByPieceId = ({
         end: annotation.endOffset,
         key: `annotation:${annotation.id}`,
         // Plain inline markup so the words keep wrapping and justifying as
-        // the paragraph's own; a button cannot break across lines. A click
+        // the paragraph's own; an inline button cannot break across lines. A click
         // on a mark is handled by the toolbar, which listens on the document
         // and reads the id off the element.
-        render: (children) => renderAnnotation(annotation, children),
+        render: (children): ReactElement =>
+          renderAnnotation(annotation, children),
         start: annotation.startOffset,
       });
     }
@@ -311,11 +328,11 @@ const buildAnchorsByPieceId = ({
       anchors.push({
         end: span.end,
         key: `decision:${span.source.id}`,
-        render: (children) => {
-          const marked = exactAnnotations.reduceRight(
-            (content, annotation) => renderAnnotation(annotation, content),
+        render: (children): ReactElement => {
+          const marked = renderExactAnnotations({
+            annotations: exactAnnotations,
             children,
-          );
+          });
           return (
             <CitedDecisionLink decision={span.source.decision}>
               {marked}
@@ -334,11 +351,11 @@ const buildAnchorsByPieceId = ({
       anchors.push({
         end: span.end,
         key: `provision:${span.source.id}`,
-        render: (children) => {
-          const marked = exactAnnotations.reduceRight(
-            (content, annotation) => renderAnnotation(annotation, content),
+        render: (children): ReactElement => {
+          const marked = renderExactAnnotations({
+            annotations: exactAnnotations,
             children,
-          );
+          });
           return (
             <CitedProvisionLink provision={span.source.target}>
               {marked}

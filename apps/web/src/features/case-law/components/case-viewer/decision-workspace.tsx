@@ -95,7 +95,7 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
   // composer beside the first and the saved comment covers them all.
   const [composing, setComposing] = useState<SelectionAnchor[] | null>(null);
   const composerItem: ComposerMarginItem[] =
-    composing === null || composing[0] === undefined
+    composing?.[0] === undefined
       ? []
       : [
           {

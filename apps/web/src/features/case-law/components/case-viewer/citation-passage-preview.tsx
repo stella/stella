@@ -52,8 +52,7 @@ export const CitationPassagePreview = ({
   if (error !== null) {
     throw error;
   }
-  const ast =
-    decision === undefined ? null : parseDocumentAst(decision.documentAst);
+  const ast = parseDocumentAst(decision.documentAst);
   const passage =
     ast === null
       ? null

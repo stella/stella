@@ -23,15 +23,14 @@ export const collectAnnotationPages = async <T>(
   fetchPage: FetchAnnotationPage<T>,
 ): Promise<T[]> => {
   const items: T[] = [];
-  let cursor: string | undefined;
-
-  do {
+  const collectPage = async (cursor: string | undefined): Promise<T[]> => {
     const page = await fetchPage(cursor);
     items.push(...page.items);
-    cursor = page.nextCursor ?? undefined;
-  } while (cursor !== undefined);
 
-  return items;
+    return page.nextCursor === null ? items : collectPage(page.nextCursor);
+  };
+
+  return collectPage(undefined);
 };
 
 const ANNOTATIONS_PAGE_SIZE = 100;
@@ -55,8 +54,8 @@ export const decisionAnnotationKeys = {
 export const decisionAnnotationsOptions = (key: DecisionAnnotationsKey) =>
   queryOptions({
     queryKey: decisionAnnotationKeys.forDecision(key),
-    queryFn: ({ signal }) =>
-      collectAnnotationPages(async (cursor) => {
+    queryFn: async ({ signal }) => {
+      const annotations = await collectAnnotationPages(async (cursor) => {
         const response = await api.case
           .decisions({
             decisionId: toSafeId<"caseLawDecision">(key.decisionId),
@@ -69,7 +68,9 @@ export const decisionAnnotationsOptions = (key: DecisionAnnotationsKey) =>
             fetch: { signal },
           });
         return unwrapEden(response);
-      }),
+      });
+      return annotations;
+    },
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
   });
 

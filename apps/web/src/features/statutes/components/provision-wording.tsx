@@ -36,7 +36,7 @@ export const provisionBlocks = (
   const start = blocks.findIndex(
     (block) => block.type === "heading" && block.anchorId === anchorId,
   );
-  const heading = blocks[start];
+  const heading = blocks.at(start);
   if (heading === undefined || heading.type !== "heading") {
     return null;
   }
@@ -119,7 +119,7 @@ export const ProvisionWording = ({
   return (
     <article
       className="reader-paper reader-statute text-card-foreground text-start"
-      lang={statute?.language}
+      lang={statute.language}
       ref={containerRef}
       style={READER_STYLE}
     >
