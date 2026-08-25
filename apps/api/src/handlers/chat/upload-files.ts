@@ -6,6 +6,7 @@ import {
   CHAT_TRANSPORT_ERROR_CODE,
 } from "@stll/anonymize-chat";
 import type { ChatSendMode } from "@stll/anonymize-chat";
+import { isChatFileMimeType } from "@stll/api-contract/chat-file-types";
 import { docxToMarkdown } from "@stll/folio-core/server";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
@@ -15,7 +16,6 @@ import {
   TEXT_CSV_MIME_TYPE,
   TEXT_MARKDOWN_MIME_TYPE,
   TEXT_PLAIN_MIME_TYPE,
-  USER_FILE_ALLOWED_MIME_TYPES,
 } from "@/api/handlers/chat/attachment-validation";
 import {
   createChatAttachmentPart,
@@ -47,8 +47,9 @@ import { createUserFileKey, deleteS3Keys } from "@/api/lib/files/utils";
 import { FILE_SIZE_LIMITS, LIMITS } from "@/api/lib/limits";
 import { getS3, readS3ArrayBuffer, writeS3ObjectWithRetry } from "@/api/lib/s3";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
+import { extractFileTextResult } from "@/api/lib/search/extract-content";
 import { isUserFileUrl, toUserFileUrl } from "@/api/lib/user-files/types";
-import { DOCX_MIME_TYPE } from "@/api/mime-types";
+import { DOCX_MIME_TYPE, XLSX_MIME_TYPE } from "@/api/mime-types";
 
 import type {
   ChatAttachmentPart,
@@ -247,7 +248,7 @@ type HydrateFilePartProps = {
 
 export type HydratedFilePart =
   | {
-      // A text-extractable attachment (docx/txt/csv/md) hydrated to a `text`
+      // A text-extractable attachment (docx/xlsx/txt/csv/md) hydrated to a `text`
       // content part, or any part that carries anonymizable text. Text is
       // universal across provider adapters, so this is never modality-gated.
       part: ChatPart;
@@ -262,16 +263,34 @@ export type HydratedFilePart =
       type: "rawOverride";
     };
 
-const DIRECT_TEXT_MIME_TYPES: ReadonlySet<string> = new Set([
+const DIRECT_TEXT_MIME_TYPES = [
   TEXT_CSV_MIME_TYPE,
   TEXT_MARKDOWN_MIME_TYPE,
   TEXT_PLAIN_MIME_TYPE,
-]);
+] as const;
+
+type DirectTextMimeType = (typeof DIRECT_TEXT_MIME_TYPES)[number];
+type PlainTextHydratableMimeType =
+  | DirectTextMimeType
+  | typeof DOCX_MIME_TYPE
+  | typeof XLSX_MIME_TYPE;
+
+const isDirectTextMimeType = (
+  mimeType: string,
+): mimeType is DirectTextMimeType =>
+  DIRECT_TEXT_MIME_TYPES.some(
+    (directTextMimeType) => directTextMimeType === mimeType,
+  );
+
 const THIRD_PARTY_BOUNDARY_REFUSAL_MESSAGE =
   "Cannot send this attachment to the AI in anonymized mode because stella cannot extract and anonymize it safely.";
 
-export const canHydrateFilePartAsPlainText = (mimeType: string): boolean =>
-  DIRECT_TEXT_MIME_TYPES.has(mimeType) || mimeType === DOCX_MIME_TYPE;
+export const canHydrateFilePartAsPlainText = (
+  mimeType: string,
+): mimeType is PlainTextHydratableMimeType =>
+  isDirectTextMimeType(mimeType) ||
+  mimeType === DOCX_MIME_TYPE ||
+  mimeType === XLSX_MIME_TYPE;
 
 const createBlockedHydratedFilePart = (): HydratedFilePart => ({
   error: new HandlerError({
@@ -358,14 +377,14 @@ export const hydrateFilePart = async ({
     // never modality-gated and never crashes a stream (unlike a `document`
     // part, which the Mistral adapter rejects unless it is a PDF). rawOverride
     // ("anonymization off") means "skip anonymization", NOT "ship raw bytes":
-    // no adapter ingests raw docx/csv/md. Only genuine binary formats (image,
+    // no adapter ingests raw docx/xlsx/csv/md. Only genuine binary formats (image,
     // PDF) are sent raw, in the fallthrough below. Ordering is load-bearing —
     // a rawOverride short-circuit placed before these branches (the previous
     // shape) made the extraction dead code whenever anonymization was off (the
     // default), shipping raw docx that every adapter rejects. The persisted
     // `userfile://` reference part (see `uploadMessageFiles`) still renders the
     // attachment chip; only the provider-bound copy becomes text.
-    if (DIRECT_TEXT_MIME_TYPES.has(mimeType)) {
+    if (isDirectTextMimeType(mimeType)) {
       return Result.ok<HydratedFilePart>({
         part: createChatTextPart(
           attachmentText({
@@ -420,6 +439,43 @@ export const hydrateFilePart = async ({
       });
     }
 
+    if (mimeType === XLSX_MIME_TYPE) {
+      const extracted = yield* Result.await(
+        extractFileTextResult(buffer, mimeType).then((result) =>
+          Result.mapError(
+            result,
+            (cause) =>
+              new ChatError({
+                message: "Failed to extract text from chat XLSX attachment",
+                cause,
+              }),
+          ),
+        ),
+      );
+      const text = extracted?.trim();
+      if (!text) {
+        if (requiresPlainText) {
+          return Result.ok<HydratedFilePart>(createBlockedHydratedFilePart());
+        }
+        return Result.err(
+          new HandlerError({
+            status: 422,
+            message: "Chat XLSX attachment did not contain extractable text",
+          }),
+        );
+      }
+
+      return Result.ok<HydratedFilePart>({
+        part: createChatTextPart(
+          attachmentText({
+            fileName,
+            content: text.slice(0, LIMITS.chatContextFileMaxChars),
+          }),
+        ),
+        type: "anonymizable",
+      });
+    }
+
     // Remaining formats are genuine binary (image, PDF). Anonymized mode
     // blocked them above (they cannot be reduced to plain text), so only
     // rawOverride reaches here; send them raw for the model to ingest natively.
@@ -460,7 +516,7 @@ export const uploadUserFile = async ({
     // inline (Content-Disposition without a filename), so a stored
     // text/html or image/svg+xml would render in the bucket origin. Any
     // caller reaching this function must be held to the same allowlist.
-    if (!USER_FILE_ALLOWED_MIME_TYPES.has(file.mimeType)) {
+    if (!isChatFileMimeType(file.mimeType)) {
       return Result.err(
         new HandlerError({
           status: 422,

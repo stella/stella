@@ -19,7 +19,11 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { toDataUrl } from "@/api/lib/data-url";
 import { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
-import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
+import {
+  DOCX_MIME_TYPE,
+  PDF_MIME_TYPE,
+  XLSX_MIME_TYPE,
+} from "@/api/mime-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const fileBytes = new TextEncoder().encode("Jan Novak,Acme");
@@ -95,6 +99,7 @@ describe("chat attachment hydration", () => {
     expect(canHydrateFilePartAsPlainText(TEXT_CSV_MIME_TYPE)).toBe(true);
     expect(canHydrateFilePartAsPlainText(TEXT_MARKDOWN_MIME_TYPE)).toBe(true);
     expect(canHydrateFilePartAsPlainText(DOCX_MIME_TYPE)).toBe(true);
+    expect(canHydrateFilePartAsPlainText(XLSX_MIME_TYPE)).toBe(true);
     expect(canHydrateFilePartAsPlainText(PDF_MIME_TYPE)).toBe(false);
   });
 
@@ -229,6 +234,43 @@ describe("chat attachment hydration", () => {
       expect(extracted).toContain('Attached file "draft.docx":');
       expect(extracted).toContain("# Agreement");
       expect(extracted).toContain("Jan Novak signs here.");
+    },
+  );
+
+  test.each([CHAT_SEND_MODE.rawOverride, CHAT_SEND_MODE.anonymized])(
+    "extracts XLSX to text and never ships raw bytes (%s mode)",
+    async (sendMode) => {
+      const xlsx = await Bun.file(
+        new URL("../../lib/search/__fixtures__/schedule.xlsx", import.meta.url),
+      ).arrayBuffer();
+      arrayBufferMock.mockImplementationOnce(async () => xlsx);
+
+      const result = await hydrateFilePart({
+        fileName: "schedule.xlsx",
+        mimeType: XLSX_MIME_TYPE,
+        sendMode,
+        s3Key: "user/file",
+      });
+
+      expect(Result.isOk(result)).toBe(true);
+      if (Result.isError(result)) {
+        throw result.error;
+      }
+      expect(result.value.type).toBe("anonymizable");
+      if (
+        result.value.type !== "anonymizable" ||
+        result.value.part.type !== "text"
+      ) {
+        throw new Error("Expected extracted XLSX text as a text content part");
+      }
+      expect(result.value.part.content).toContain(
+        'Attached file "schedule.xlsx":',
+      );
+      expect(result.value.part.content).toContain("Counterparty");
+      expect(result.value.part.content).toContain("Acme s.r.o.");
+      expect(result.value.part.content).toContain(
+        "Termination notice period is three months.",
+      );
     },
   );
 
