@@ -124,6 +124,10 @@ export const reserveCorpusProjectionIntentsTx = async (
   const leaseMs = validateLeaseMs(requestedLeaseMs);
   await readActiveCorpusProjectionManifest(tx, family, generation, true);
   const eligibilityAt = testNow ?? sql<Date>`clock_timestamp()`;
+  const runnableAt = sql<Date>`coalesce(
+    ${corpusIndexProjectionStates.retryNotBefore},
+    ${corpusIndexProjectionStates.updatedAt}
+  )`;
 
   const candidates = await tx
     .select({
@@ -148,22 +152,17 @@ export const reserveCorpusProjectionIntentsTx = async (
         eq(corpusIndexProjectionStates.family, family),
         eq(corpusIndexProjectionStates.generation, generation),
         eq(corpusIndexProjectionStates.desiredAction, "upsert"),
-        or(
-          eq(corpusIndexProjectionStates.workStatus, "eligible"),
-          and(
-            eq(corpusIndexProjectionStates.workStatus, "retry_scheduled"),
-            lte(corpusIndexProjectionStates.retryNotBefore, eligibilityAt),
-          ),
-        ),
+        inArray(corpusIndexProjectionStates.workStatus, [
+          "eligible",
+          "retry_scheduled",
+        ]),
+        lte(runnableAt, eligibilityAt),
         inArray(corpusIndexGenerations.status, ["building", "serving"]),
         pendingDesiredState,
         noOutstandingIntent,
       ),
     )
-    .orderBy(
-      asc(corpusIndexProjectionStates.updatedAt),
-      asc(corpusIndexProjectionStates.entityId),
-    )
+    .orderBy(asc(runnableAt), asc(corpusIndexProjectionStates.entityId))
     .limit(limit)
     .for("update", {
       of: corpusIndexProjectionStates,

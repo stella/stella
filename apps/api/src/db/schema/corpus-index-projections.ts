@@ -377,9 +377,7 @@ export const corpusIndexProjectionStates = p.pgTable(
       .on(
         t.family,
         t.generation,
-        t.workStatus,
-        t.retryNotBefore,
-        t.updatedAt,
+        sql`coalesce(${t.retryNotBefore}, ${t.updatedAt})`,
         t.entityId,
       ).where(sql`
         ${t.workStatus} IN ('eligible', 'retry_scheduled')

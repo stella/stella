@@ -75,6 +75,7 @@ const ERASE_CLEANUP_TOKEN = "0198e331-e578-7000-8000-000000000211";
 const FIRST_FINGERPRINT = "a".repeat(64);
 const SECOND_FINGERPRINT = "b".repeat(64);
 const INDEX_ID = "case_law_v5_cs_sk";
+const INITIAL_RUNNABLE_AT = new Date("2026-08-25T00:00:00.000Z");
 const PROJECTION_MIGRATION_URLS = [
   new URL(
     "../../../drizzle/20260825142000_corpus_index_projection_intents/migration.sql",
@@ -230,6 +231,7 @@ beforeEach(async () => {
     desiredEpoch: 1n,
     desiredFingerprint: FIRST_FINGERPRINT,
     desiredIndexId: INDEX_ID,
+    updatedAt: INITIAL_RUNNABLE_AT,
   });
 });
 
@@ -257,6 +259,7 @@ test("retry classification defers poison work, then blocks the exhausted desired
     desiredEpoch: 1n,
     desiredFingerprint: SECOND_FINGERPRINT,
     desiredIndexId: INDEX_ID,
+    updatedAt: INITIAL_RUNNABLE_AT,
   });
   const leases = await db.transaction(
     async (tx) =>
@@ -448,6 +451,7 @@ test("one append request receives one post-lock database timestamp", async () =>
     desiredEpoch: 1n,
     desiredFingerprint: SECOND_FINGERPRINT,
     desiredIndexId: INDEX_ID,
+    updatedAt: INITIAL_RUNNABLE_AT,
   });
   const intentIds = [FIRST_INTENT_ID, SECOND_INTENT_ID] as const;
   const leaseTokens = [FIRST_LEASE_TOKEN, SECOND_LEASE_TOKEN] as const;
@@ -1236,6 +1240,7 @@ test("erasure fences an unknown append and applies only after cleanup settlement
     desiredEpoch: 1n,
     desiredFingerprint: FIRST_FINGERPRINT,
     desiredIndexId: INDEX_ID,
+    updatedAt: INITIAL_RUNNABLE_AT,
   });
   const startedAt = new Date(Date.now() - 10 * 60_000);
   const intentIds = [FIRST_INTENT_ID, ERASE_INTENT_ID][Symbol.iterator]();

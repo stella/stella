@@ -1,10 +1,6 @@
 SET lock_timeout = '1s';--> statement-breakpoint
 SET statement_timeout = '5s';--> statement-breakpoint
 
--- stella-migration-safety: reviewed destructive-change - the projection table
--- has no production writer until Plane ships; replacing its original pending
--- index is transactional, so rollback restores the old index.
-
 ALTER TABLE "corpus_index_projection_states"
   ADD COLUMN "work_status" text DEFAULT 'eligible' NOT NULL,
   ADD COLUMN "retry_not_before" timestamptz,
@@ -53,9 +49,7 @@ CREATE INDEX "corpus_index_projection_states_pending_idx"
   ON "corpus_index_projection_states" (
     "family",
     "generation",
-    "work_status",
-    "retry_not_before",
-    "updated_at",
+    (coalesce("retry_not_before", "updated_at")),
     "entity_id"
   )
   WHERE "work_status" IN ('eligible', 'retry_scheduled')
