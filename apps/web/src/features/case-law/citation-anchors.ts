@@ -8,6 +8,8 @@ export type CitationAnchorSource = {
   citationText: string;
   decision: CitedDecision;
   id: string;
+  /** The source section the classifier used for this citation's treatment. */
+  sectionIndex?: number | null | undefined;
 };
 
 export type CitationAnchorSpan = {

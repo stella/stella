@@ -1503,7 +1503,7 @@ const formatAnnotationsForPrompt = (
     if (first === undefined) {
       continue;
     }
-    const quote = sanitizePromptValue({
+    const quote = sanitizePromptBlock({
       maxLength: ANNOTATION_QUOTE_MAX_CHARS,
       text: group.map((row) => row.quote).join(" "),
     });
@@ -1516,8 +1516,8 @@ const formatAnnotationsForPrompt = (
     const note =
       body === null
         ? ""
-        : ` — note: ${sanitizePromptValue({ maxLength: ANNOTATION_BODY_MAX_CHARS, text: body })}`;
-    lines.push(`- ${label}: „${quote}“${note}`);
+        : `\nNote:\n${sanitizePromptBlock({ maxLength: ANNOTATION_BODY_MAX_CHARS, text: body })}`;
+    lines.push(`- ${label}\nQuoted passage:\n${quote}${note}`);
   }
   return lines.join("\n");
 };

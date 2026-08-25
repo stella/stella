@@ -276,6 +276,7 @@ const LeadingRow = ({
               citationText: row.citationText,
               decision: cited,
               id: row.id,
+              sectionIndex: row.sectionIndex,
             }}
             onOpen={(passage) => {
               if (direction === "incoming") {

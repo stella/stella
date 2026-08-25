@@ -5,6 +5,9 @@ import { caseLawDecisionAnnotations } from "@/api/db/schema";
 import {
   createAnnotationBodySchema,
   decisionParamsSchema,
+  requireAnnotationColor,
+  requireAnnotationStyle,
+  requireAnnotationVisibility,
 } from "@/api/handlers/case-law/annotations/schema";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
@@ -52,9 +55,17 @@ const createDecisionAnnotation = createSafeRootHandler(
               decisionId,
               groupId,
               kind: body.kind,
-              visibility: body.visibility ?? "private",
-              color: body.kind === "highlight" ? body.color : null,
-              style: body.kind === "highlight" ? body.style : null,
+              visibility: requireAnnotationVisibility(
+                body.visibility ?? "private",
+              ),
+              color:
+                body.kind === "highlight"
+                  ? requireAnnotationColor(body.color)
+                  : null,
+              style:
+                body.kind === "highlight"
+                  ? requireAnnotationStyle(body.style)
+                  : null,
               // A comment's words belong to the passage once, on its first
               // paragraph; the other rows only mark where it continues.
               body: body.kind === "comment" && index === 0 ? body.body : null,

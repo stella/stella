@@ -4,6 +4,9 @@ import { caseLawDecisionAnnotations } from "@/api/db/schema";
 import { wholeAnnotationSql } from "@/api/handlers/case-law/annotations/group";
 import {
   annotationParamsSchema,
+  requireAnnotationColor,
+  requireAnnotationStyle,
+  requireAnnotationVisibility,
   updateAnnotationBodySchema,
 } from "@/api/handlers/case-law/annotations/schema";
 import type { UpdateAnnotationBody } from "@/api/handlers/case-law/annotations/schema";
@@ -31,13 +34,13 @@ const changesFor = (
       return { body: body.body };
     }
     case "color": {
-      return { color: body.color };
+      return { color: requireAnnotationColor(body.color) };
     }
     case "style": {
-      return { style: body.style };
+      return { style: requireAnnotationStyle(body.style) };
     }
     case "visibility": {
-      return { visibility: body.visibility };
+      return { visibility: requireAnnotationVisibility(body.visibility) };
     }
     default: {
       const unreachable: never = body;

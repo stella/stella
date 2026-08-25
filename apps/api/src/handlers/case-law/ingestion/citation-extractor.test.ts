@@ -2025,6 +2025,9 @@ describe("stored decision identifier projection", () => {
         value: "12 Example Reports 34",
       },
     ]);
+  });
+});
+
 describe("court hint", () => {
   test("keeps the court the citing sentence names", () => {
     const citations = extractCitations([

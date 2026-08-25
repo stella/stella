@@ -150,6 +150,19 @@ export const AnnotationToolbar = ({
       if (event.key === "Escape") {
         onClearActive();
         ownerDoc.getSelection()?.removeAllRanges();
+        return;
+      }
+      if (event.key !== "Enter" && event.key !== " ") {
+        return;
+      }
+      const target = event.target;
+      const element =
+        target instanceof Element ? target : target?.parentElement;
+      const mark = element?.closest("[data-annotation-id]") ?? null;
+      const id = mark?.dataset.annotationId ?? null;
+      if (mark !== null && id !== null && root.contains(mark)) {
+        event.preventDefault();
+        onActivateAnnotation(id);
       }
     };
     const onPointerDown = (event: PointerEvent) => {
@@ -290,98 +303,121 @@ export const AnnotationToolbar = ({
 
   let content: ReactNode;
   if (activeAnnotation !== null) {
-    const removeLabel =
-      activeAnnotation.kind === "highlight"
-        ? t("caseLaw.annotations.removeHighlight")
-        : t("common.delete");
-    content = (
-      <div className="flex items-center gap-1">
-        {activeAnnotation.kind === "highlight" && (
-          <>
-            {styleButtons(activeAnnotation.style ?? "highlight", (next) => {
-              detached(
-                controller.update({
-                  change: "style",
-                  id: activeAnnotation.id,
-                  style: next,
-                }),
-                "case-law.annotation-restyle",
-              );
-            })}
-            <span className="bg-border mx-1 h-4 w-px" />
-            <div className="flex items-center gap-1.5 px-1">
-              {colorSwatches((color) => {
+    if (!activeAnnotation.mine) {
+      content = (
+        <div className="flex items-center gap-1">
+          <Button
+            onClick={() => {
+              askAboutSelection({
+                caseNumber: decision.caseNumber,
+                court: decision.court,
+                decisionId: decision.id,
+                quote: activeSpans.map((span) => span.quote).join(" "),
+              });
+              onClearActive();
+            }}
+            size="sm"
+            variant="ghost"
+          >
+            <SparklesIcon className="size-3.5" />
+            {t("common.askAI")}
+          </Button>
+        </div>
+      );
+    } else {
+      const removeLabel =
+        activeAnnotation.kind === "highlight"
+          ? t("caseLaw.annotations.removeHighlight")
+          : t("common.delete");
+      content = (
+        <div className="flex items-center gap-1">
+          {activeAnnotation.kind === "highlight" && (
+            <>
+              {styleButtons(activeAnnotation.style ?? "highlight", (next) => {
                 detached(
                   controller.update({
-                    change: "color",
-                    color,
+                    change: "style",
                     id: activeAnnotation.id,
+                    style: next,
                   }),
-                  "case-law.annotation-recolor",
+                  "case-law.annotation-restyle",
                 );
               })}
-            </div>
-            <span className="bg-border mx-1 h-4 w-px" />
-          </>
-        )}
-        {activeAnnotation.kind === "highlight" && (
-          <>
-            <Button
-              onClick={() => {
-                onCompose(
-                  activeSpans.map((span) => ({
-                    blockAnchorId: span.blockAnchorId,
-                    endOffset: span.endOffset,
-                    quote: span.quote,
-                    startOffset: span.startOffset,
-                  })),
-                );
-                onClearActive();
-              }}
-              size="sm"
-              variant="ghost"
-            >
-              <MessageSquarePlusIcon className="size-3.5" />
-              {t("caseLaw.annotations.comment")}
-            </Button>
-            <span className="bg-border mx-1 h-4 w-px" />
-          </>
-        )}
-        <VisibilityToggle
-          onChange={(next) => {
-            detached(
-              controller.update({
-                change: "visibility",
-                id: activeAnnotation.id,
-                visibility: next,
-              }),
-              "case-law.annotation-visibility",
-            );
-          }}
-          value={activeAnnotation.visibility}
-        />
-        <Tooltip
-          content={removeLabel}
-          render={
-            <Button
-              aria-label={removeLabel}
-              className="hover:text-destructive"
-              onClick={() => {
-                detached(
-                  controller.remove(activeAnnotation.id),
-                  "case-law.annotation-remove",
-                );
-                onClearActive();
-              }}
-              size="icon-xs"
-              variant="ghost"
-            />
-          }
-        >
-          <Trash2Icon className="size-3.5" />
-        </Tooltip>
-      </div>
-    );
+              <span className="bg-border mx-1 h-4 w-px" />
+              <div className="flex items-center gap-1.5 px-1">
+                {colorSwatches((color) => {
+                  detached(
+                    controller.update({
+                      change: "color",
+                      color,
+                      id: activeAnnotation.id,
+                    }),
+                    "case-law.annotation-recolor",
+                  );
+                })}
+              </div>
+              <span className="bg-border mx-1 h-4 w-px" />
+            </>
+          )}
+          {activeAnnotation.kind === "highlight" && (
+            <>
+              <Button
+                onClick={() => {
+                  onCompose(
+                    activeSpans.map((span) => ({
+                      blockAnchorId: span.blockAnchorId,
+                      endOffset: span.endOffset,
+                      quote: span.quote,
+                      startOffset: span.startOffset,
+                    })),
+                  );
+                  onClearActive();
+                }}
+                size="sm"
+                variant="ghost"
+              >
+                <MessageSquarePlusIcon className="size-3.5" />
+                {t("caseLaw.annotations.comment")}
+              </Button>
+              <span className="bg-border mx-1 h-4 w-px" />
+            </>
+          )}
+          <VisibilityToggle
+            onChange={(next) => {
+              detached(
+                controller.update({
+                  change: "visibility",
+                  id: activeAnnotation.id,
+                  visibility: next,
+                }),
+                "case-law.annotation-visibility",
+              );
+            }}
+            value={activeAnnotation.visibility}
+          />
+          <Tooltip
+            content={removeLabel}
+            render={
+              <Button
+                aria-label={removeLabel}
+                className="hover:text-destructive"
+                onClick={() => {
+                  detached(
+                    controller.remove(activeAnnotation.id),
+                    "case-law.annotation-remove",
+                  );
+                  onClearActive();
+                }}
+                size="icon-xs"
+                variant="ghost"
+              />
+            }
+          >
+            <Trash2Icon className="size-3.5" />
+          </Tooltip>
+        </div>
+      );
+    }
   } else if (selected !== null) {
     const spans = selected.spans;
     content = (

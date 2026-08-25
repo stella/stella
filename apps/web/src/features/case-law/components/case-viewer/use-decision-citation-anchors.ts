@@ -21,6 +21,7 @@ export const useDecisionCitationAnchors = (
           citationText: item.citationText,
           decision: item.decision,
           id: item.id,
+          sectionIndex: item.sectionIndex,
         });
       }
     }

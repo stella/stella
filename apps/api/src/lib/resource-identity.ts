@@ -56,6 +56,7 @@ export const RESOURCE_IDENTITY_DISPOSITION = {
     type: "resource",
     resourceType: RESOURCE_TYPE.CASE_LAW_DECISION,
   },
+  caseLawDecisionAnnotation: { type: "non_resource", reason: "subresource" },
   caseLawCorpusUploadIntent: { type: "non_resource", reason: "workflow" },
   caseLawIndexJob: { type: "non_resource", reason: "job" },
   caseLawIngestionEvent: { type: "non_resource", reason: "event" },

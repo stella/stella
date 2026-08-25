@@ -296,6 +296,7 @@ export const readDecisionHandler = definePublicLawSharedQuery(
         decisionDate: true,
         decisionType: true,
         documentAst: true,
+        sections: true,
         sourceUrl: true,
         documentUrl: true,
         metadata: true,
@@ -308,7 +309,6 @@ export const readDecisionHandler = definePublicLawSharedQuery(
         contentHash: true,
         redactedAt: true,
         // fulltext: only as fallback when no AST
-        // sections: frontend doesn't use these
       },
       with: {
         identifiers: {
@@ -447,6 +447,7 @@ export const readDecisionHandler = definePublicLawSharedQuery(
       decisionDate: decision.decisionDate,
       decisionType: decision.decisionType,
       documentAst,
+      sections: decision.sections,
       sourceUrl: decision.sourceUrl,
       documentUrl: decision.documentUrl,
       metadata: decision.metadata,

@@ -35,9 +35,11 @@ export const CitationPassagePreview = ({
   textDecisionId,
 }: CitationPassagePreviewProps) => {
   const t = useTranslations();
-  const { data: decision, isPending } = useQuery(
-    decisionOptions(textDecisionId),
-  );
+  const {
+    data: decision,
+    error,
+    isPending,
+  } = useQuery(decisionOptions(textDecisionId));
   if (isPending) {
     return (
       <div className="flex flex-col gap-1.5 py-1">
@@ -47,10 +49,24 @@ export const CitationPassagePreview = ({
       </div>
     );
   }
+  if (error !== null) {
+    throw error;
+  }
   const ast =
     decision === undefined ? null : parseDocumentAst(decision.documentAst);
   const passage =
-    ast === null ? null : findCitationPassage({ blocks: ast.blocks, citation });
+    ast === null
+      ? null
+      : findCitationPassage({
+          blocks: ast.blocks,
+          citation,
+          sectionText:
+            citation.sectionIndex === undefined || decision.sections === null
+              ? undefined
+              : decision.sections.find(
+                  (section) => section.index === citation.sectionIndex,
+                )?.text,
+        });
   if (passage === null) {
     return (
       <p className="text-muted-foreground py-1 text-xs">

@@ -350,12 +350,14 @@ const rowOf = async (id: SafeId<"caseLawCitation">) => {
 };
 
 const byRule = (counts: {
+  courtHint?: number;
   uniqueKey?: number;
   typeHint?: number;
   oneFileMerits?: number;
 }) => ({
   [CITATION_RESOLUTION_RULE.UNIQUE_KEY]: counts.uniqueKey ?? 0,
   [CITATION_RESOLUTION_RULE.TYPE_HINT]: counts.typeHint ?? 0,
+  [CITATION_RESOLUTION_RULE.COURT_HINT]: counts.courtHint ?? 0,
   [CITATION_RESOLUTION_RULE.ONE_FILE_MERITS]: counts.oneFileMerits ?? 0,
 });
 

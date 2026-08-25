@@ -22,12 +22,21 @@ export type CitationPassage = {
 export const findCitationPassage = ({
   blocks,
   citation,
+  sectionText,
 }: {
   blocks: readonly Block[];
   citation: CitationAnchorSource;
+  /** The stored source section the citation classifier used, when present. */
+  sectionText: string | undefined;
 }): CitationPassage | null => {
   const spans = locateCitationAnchors({ blocks, citations: [citation] });
-  for (const block of blocks) {
+  const sourceBlocks =
+    sectionText === undefined
+      ? blocks
+      : blocks.filter((block) =>
+          sectionText.includes(inlinesToPlainText(block.inlines)),
+        );
+  for (const block of sourceBlocks) {
     const hit = spans[block.id]?.at(0);
     if (hit === undefined || block.type === "table") {
       continue;

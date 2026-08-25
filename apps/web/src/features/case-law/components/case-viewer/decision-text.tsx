@@ -208,6 +208,21 @@ const annotationStyle = ({
     : { textDecorationColor: swatch };
 };
 
+const renderAnnotation = (
+  annotation: AnnotationAnchorSource,
+  children: ReactNode,
+): ReactNode => (
+  <mark
+    className={cn(annotationClassName(annotation))}
+    data-annotation-id={annotation.id}
+    role="button"
+    style={annotationStyle(annotation)}
+    tabIndex={0}
+  >
+    {children}
+  </mark>
+);
+
 /** The pieces of a mark left once the links inside it are cut out. */
 const splitAroundLinks = (
   mark: TextAnchor,
@@ -283,39 +298,53 @@ const buildAnchorsByPieceId = ({
         // the paragraph's own; a button cannot break across lines. A click
         // on a mark is handled by the toolbar, which listens on the document
         // and reads the id off the element.
-        render: (children) => (
-          <mark
-            className={cn(annotationClassName(annotation))}
-            data-annotation-id={annotation.id}
-            style={annotationStyle(annotation)}
-          >
-            {children}
-          </mark>
-        ),
+        render: (children) => renderAnnotation(annotation, children),
         start: annotation.startOffset,
       });
     }
     for (const span of citationSpans[blockId] ?? []) {
+      const exactAnnotations = (annotationsByBlock.get(blockId) ?? []).filter(
+        (annotation) =>
+          annotation.startOffset === span.start &&
+          annotation.endOffset === span.end,
+      );
       anchors.push({
         end: span.end,
         key: `decision:${span.source.id}`,
-        render: (children) => (
-          <CitedDecisionLink decision={span.source.decision}>
-            {children}
-          </CitedDecisionLink>
-        ),
+        render: (children) => {
+          const marked = exactAnnotations.reduceRight(
+            (content, annotation) => renderAnnotation(annotation, content),
+            children,
+          );
+          return (
+            <CitedDecisionLink decision={span.source.decision}>
+              {marked}
+            </CitedDecisionLink>
+          );
+        },
         start: span.start,
       });
     }
     for (const span of provisionSpans[blockId] ?? []) {
+      const exactAnnotations = (annotationsByBlock.get(blockId) ?? []).filter(
+        (annotation) =>
+          annotation.startOffset === span.start &&
+          annotation.endOffset === span.end,
+      );
       anchors.push({
         end: span.end,
         key: `provision:${span.source.id}`,
-        render: (children) => (
-          <CitedProvisionLink provision={span.source.target}>
-            {children}
-          </CitedProvisionLink>
-        ),
+        render: (children) => {
+          const marked = exactAnnotations.reduceRight(
+            (content, annotation) => renderAnnotation(annotation, content),
+            children,
+          );
+          return (
+            <CitedProvisionLink provision={span.source.target}>
+              {marked}
+            </CitedProvisionLink>
+          );
+        },
         start: span.start,
       });
     }

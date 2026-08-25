@@ -82,21 +82,11 @@ export const useDecisionProvisionAnchors = (
     }
   }
 
-  // Only a reference reaching a consolidation the current one does not cover
-  // needs the work's other versions; the wording in force answers the rest.
-  const versionedWorks = works.filter((work) => {
-    const statute = statuteByWork.get(workKeyOf(work));
-    if (statute === undefined) {
-      return false;
-    }
-    return rows.some(
-      (row) =>
-        row.workEli === work.eli &&
-        row.jurisdiction === work.jurisdiction &&
-        row.versionValidFrom !== null &&
-        !versionCoversDate(statute, row.versionValidFrom),
-    );
-  });
+  // The inspector also needs the count when the current consolidation covers
+  // the cited date, so every linked work reads its version list once.
+  const versionedWorks = works.filter((work) =>
+    statuteByWork.has(workKeyOf(work)),
+  );
   const versions = useQueries({
     queries: versionedWorks.map((work) => {
       const statute = statuteByWork.get(workKeyOf(work));

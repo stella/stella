@@ -98,6 +98,7 @@ describe("cited decision type hint", () => {
         citationText: "II. ÚS 2766/14",
         sectionIndex: 3,
         citedDecisionTypeHint: CITATION_DECISION_TYPE_HINT.MERITS,
+        citedCourtHint: null,
         identifierType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
       },
     ]);

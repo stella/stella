@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
@@ -7,6 +8,11 @@ import {
   CASE_LAW_ANNOTATION_QUOTE_MAX_LENGTH,
   CASE_LAW_ANNOTATION_STYLES,
   CASE_LAW_ANNOTATION_VISIBILITIES,
+} from "@/api/db/schema";
+import type {
+  CaseLawAnnotationColor,
+  CaseLawAnnotationStyle,
+  CaseLawAnnotationVisibility,
 } from "@/api/db/schema";
 import { tSafeId } from "@/api/lib/custom-schema";
 
@@ -18,6 +24,48 @@ export const annotationStyleSchema = tLiterals(CASE_LAW_ANNOTATION_STYLES);
 export const annotationVisibilitySchema = tLiterals(
   CASE_LAW_ANNOTATION_VISIBILITIES,
 );
+
+/** The route schema has validated these values; preserve its closed domain. */
+export const requireAnnotationColor = (
+  value: string,
+): CaseLawAnnotationColor => {
+  switch (value) {
+    case "yellow":
+    case "green":
+    case "sky":
+    case "violet":
+    case "red":
+      return value;
+    default:
+      return panic(`Invalid annotation color: ${value}`);
+  }
+};
+
+export const requireAnnotationStyle = (
+  value: string,
+): CaseLawAnnotationStyle => {
+  switch (value) {
+    case "highlight":
+    case "underline":
+    case "squiggly":
+    case "strikethrough":
+      return value;
+    default:
+      return panic(`Invalid annotation style: ${value}`);
+  }
+};
+
+export const requireAnnotationVisibility = (
+  value: string,
+): CaseLawAnnotationVisibility => {
+  switch (value) {
+    case "private":
+    case "shared":
+      return value;
+    default:
+      return panic(`Invalid annotation visibility: ${value}`);
+  }
+};
 
 /** Where on the decision one paragraph's share of the annotation sits. */
 const spanSchema = t.Object({

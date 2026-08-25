@@ -158,8 +158,8 @@ export const listCitingDecisionsHandler = async (
     );
   }
 
-  const rows = await caseLawDb((tx) =>
-    tx
+  const rows = await caseLawDb(async (tx) => {
+    const mentions = tx
       .select({
         decisionId: caseLawProvisionCitations.decisionId,
         caseNumber: caseLawDecisions.caseNumber,
@@ -175,6 +175,10 @@ export const listCitingDecisionsHandler = async (
         spanEnd: caseLawProvisionCitations.spanEnd,
         anchor: caseLawProvisionCitations.anchor,
         decisionDateCursor: decisionDateCursorSql.as("decision_date_cursor"),
+        mentionRank: sql<number>`row_number() OVER (
+          PARTITION BY ${caseLawProvisionCitations.decisionId}
+          ORDER BY ${caseLawProvisionCitations.spanStart}, ${caseLawProvisionCitations.anchor}
+        )`.as("mention_rank"),
       })
       .from(caseLawProvisionCitations)
       .innerJoin(
@@ -186,17 +190,36 @@ export const listCitingDecisionsHandler = async (
         eq(caseLawSources.id, caseLawDecisions.sourceId),
       )
       .where(and(...conditions))
+      .as("citing_decision_mentions");
+
+    return await tx
+      .select({
+        decisionId: mentions.decisionId,
+        caseNumber: mentions.caseNumber,
+        slug: mentions.slug,
+        court: mentions.court,
+        country: mentions.country,
+        decisionDate: mentions.decisionDate,
+        citationAuthority: mentions.citationAuthority,
+        sentenceText: mentions.sentenceText,
+        spanStart: mentions.spanStart,
+        spanEnd: mentions.spanEnd,
+        anchor: mentions.anchor,
+        decisionDateCursor: mentions.decisionDateCursor,
+      })
+      .from(mentions)
+      .where(byAuthority ? eq(mentions.mentionRank, 1) : undefined)
       .orderBy(
         ...(byAuthority
-          ? [sql`coalesce(${caseLawDecisions.citationAuthority}, 0) DESC`]
+          ? [sql`coalesce(${mentions.citationAuthority}, 0) DESC`]
           : []),
-        desc(decisionDateKeySql),
-        desc(caseLawProvisionCitations.decisionId),
-        desc(caseLawProvisionCitations.spanStart),
-        desc(caseLawProvisionCitations.anchor),
+        desc(mentions.decisionDateCursor),
+        desc(mentions.decisionId),
+        desc(mentions.spanStart),
+        desc(mentions.anchor),
       )
-      .limit(limit + 1),
-  );
+      .limit(limit + 1);
+  });
 
   const page = createCursorPage({
     rows,
