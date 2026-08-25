@@ -28,17 +28,18 @@ import {
   settleCorpusProjectionCleanupTx,
 } from "@/api/lib/legal-search/corpus-index-projection-cleanup-store";
 import { advanceCorpusProjectionDesiredStateTx } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
+import { corpusIndexUnknownAppendBarrierAt } from "@/api/lib/legal-search/corpus-index-projection-engine";
 import {
   advanceCorpusProjectionErasuresTx,
   CORPUS_PROJECTION_ERASURE_MAX_REVISIONS,
 } from "@/api/lib/legal-search/corpus-index-projection-erasure-store";
-import { corpusIndexUnknownAppendBarrierAt } from "@/api/lib/legal-search/corpus-index-projection-engine";
 import {
   abandonCorpusProjectionAppendTx,
   classifyCorpusProjectionReservationFailureTx,
   commitCorpusProjectionAppendTx,
   prepareCorpusProjectionReplacementsTx,
   reserveCorpusProjectionIntentsTx,
+  startCorpusProjectionAppendBatchTx,
   startCorpusProjectionAppendTx,
 } from "@/api/lib/legal-search/corpus-index-projection-store";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -236,7 +237,7 @@ afterEach(async () => {
   await client.close();
 });
 
-test("retry classification defers poison work without starving later reservations", async () => {
+test("retry classification defers poison work, then blocks the exhausted desired state", async () => {
   const startedAt = new Date("2026-08-25T12:00:00.000Z");
   await db.insert(caseLawDecisions).values({
     id: ERASE_DECISION_ID,
@@ -264,7 +265,7 @@ test("retry classification defers poison work without starving later reservation
         generation: "case_law_v5",
         limit: 1,
         leaseMs: 60_000,
-        now: startedAt,
+        testNow: startedAt,
         newIntentId: () => FIRST_INTENT_ID,
         newLeaseToken: () => FIRST_LEASE_TOKEN,
       }),
@@ -282,24 +283,27 @@ test("retry classification defers poison work without starving later reservation
               status: "retry_scheduled",
               kind: "payload_unavailable",
               retryDelayMs: 60_000,
+              maxAttempts: 2,
               message: "canonical payload is temporarily unavailable",
             },
             now: startedAt,
           },
         ),
     ),
-  ).toBe("classified");
+  ).toBe("retry_scheduled");
 
   const state = await db
     .select({
       workStatus: corpusIndexProjectionStates.workStatus,
       retryNotBefore: corpusIndexProjectionStates.retryNotBefore,
+      failureAttempts: corpusIndexProjectionStates.failureAttempts,
     })
     .from(corpusIndexProjectionStates)
     .where(eq(corpusIndexProjectionStates.entityId, DECISION_ID));
   expect(state.at(0)).toEqual({
     workStatus: "retry_scheduled",
     retryNotBefore: new Date("2026-08-25T12:01:00.000Z"),
+    failureAttempts: 1,
   });
   const laterWork = await db.transaction(
     async (tx) =>
@@ -308,7 +312,7 @@ test("retry classification defers poison work without starving later reservation
         generation: "case_law_v5",
         limit: 1,
         leaseMs: 60_000,
-        now: new Date("2026-08-25T12:00:59.999Z"),
+        testNow: new Date("2026-08-25T12:00:59.999Z"),
         newIntentId: () => SECOND_INTENT_ID,
         newLeaseToken: () => SECOND_LEASE_TOKEN,
       }),
@@ -323,12 +327,46 @@ test("retry classification defers poison work without starving later reservation
         generation: "case_law_v5",
         limit: 1,
         leaseMs: 60_000,
-        now: new Date("2026-08-25T12:01:00.000Z"),
+        testNow: new Date("2026-08-25T12:01:00.000Z"),
         newIntentId: () => ERASE_INTENT_ID,
         newLeaseToken: () => ERASE_LEASE_TOKEN,
       }),
   );
   expect(retried.map(({ entityId }) => entityId)).toEqual([DECISION_ID]);
+  const retriedLease =
+    retried.at(0) ?? panic("Expected retry projection lease");
+  expect(
+    await db.transaction(
+      async (tx) =>
+        await classifyCorpusProjectionReservationFailureTx(
+          asTestRaw<Transaction>(tx),
+          {
+            intentId: retriedLease.intentId,
+            leaseToken: retriedLease.leaseToken,
+            failure: {
+              status: "retry_scheduled",
+              kind: "payload_unavailable",
+              retryDelayMs: 60_000,
+              maxAttempts: 2,
+              message: "canonical payload remains unavailable",
+            },
+            now: new Date("2026-08-25T12:01:00.000Z"),
+          },
+        ),
+    ),
+  ).toBe("blocked");
+  expect(
+    await db
+      .select({
+        workStatus: corpusIndexProjectionStates.workStatus,
+        retryNotBefore: corpusIndexProjectionStates.retryNotBefore,
+        failureAttempts: corpusIndexProjectionStates.failureAttempts,
+      })
+      .from(corpusIndexProjectionStates)
+      .where(eq(corpusIndexProjectionStates.entityId, DECISION_ID)),
+  ).toEqual([
+    { workStatus: "blocked", retryNotBefore: null, failureAttempts: 2 },
+  ]);
 });
 
 test("unknown append cleanup starts its barrier at failure observation", async () => {
@@ -341,7 +379,7 @@ test("unknown append cleanup starts its barrier at failure observation", async (
         generation: "case_law_v5",
         limit: 1,
         leaseMs: 5 * 60_000,
-        now: appendStartedAt,
+        testNow: appendStartedAt,
         newIntentId: () => FIRST_INTENT_ID,
         newLeaseToken: () => FIRST_LEASE_TOKEN,
       }),
@@ -388,6 +426,66 @@ test("unknown append cleanup starts its barrier at failure observation", async (
       appendPublishBarrierAt: expectedBarrier,
       cleanupNotBefore: expectedBarrier,
     },
+  ]);
+});
+
+test("one append request receives one post-lock database timestamp", async () => {
+  await db.insert(caseLawDecisions).values({
+    id: ERASE_DECISION_ID,
+    sourceId: SOURCE_ID,
+    caseNumber: "2 A 2/2026",
+    court: "Test court",
+    country: "CZE",
+    language: "cs",
+    contentHash: "d".repeat(64),
+    projectionEpoch: 1n,
+  });
+  await db.insert(corpusIndexProjectionStates).values({
+    family: "case_law",
+    generation: "case_law_v5",
+    entityId: ERASE_DECISION_ID,
+    desiredAction: "upsert",
+    desiredEpoch: 1n,
+    desiredFingerprint: SECOND_FINGERPRINT,
+    desiredIndexId: INDEX_ID,
+  });
+  const intentIds = [FIRST_INTENT_ID, SECOND_INTENT_ID] as const;
+  const leaseTokens = [FIRST_LEASE_TOKEN, SECOND_LEASE_TOKEN] as const;
+  let intentIndex = 0;
+  let tokenIndex = 0;
+  const reservedAt = new Date("2026-08-25T12:00:00.000Z");
+  const leases = await db.transaction(
+    async (tx) =>
+      await reserveCorpusProjectionIntentsTx(asTestRaw<Transaction>(tx), {
+        family: "case_law",
+        generation: "case_law_v5",
+        limit: 2,
+        leaseMs: 60_000,
+        testNow: reservedAt,
+        newIntentId: () =>
+          intentIds.at(intentIndex++) ?? panic("Lost test intent id"),
+        newLeaseToken: () =>
+          leaseTokens.at(tokenIndex++) ?? panic("Lost test lease token"),
+      }),
+  );
+  const requestStartedAt = new Date("2026-08-25T12:00:10.000Z");
+  expect(
+    await db.transaction(
+      async (tx) =>
+        await startCorpusProjectionAppendBatchTx(asTestRaw<Transaction>(tx), {
+          leases,
+          now: requestStartedAt,
+        }),
+    ),
+  ).toEqual(leases.map(({ intentId }) => ({ intentId, status: "started" })));
+  expect(
+    await db
+      .select({ appendStartedAt: corpusIndexProjectionIntents.appendStartedAt })
+      .from(corpusIndexProjectionIntents)
+      .orderBy(corpusIndexProjectionIntents.id),
+  ).toEqual([
+    { appendStartedAt: requestStartedAt },
+    { appendStartedAt: requestStartedAt },
   ]);
 });
 

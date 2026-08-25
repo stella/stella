@@ -160,6 +160,7 @@ test("one canonical mutation advances every active family generation once", asyn
     .update(corpusIndexProjectionStates)
     .set({
       workStatus: "blocked",
+      failureAttempts: 1,
       lastFailureKind: "revision_too_large",
       lastFailureMessage: "projection revision exceeds the safety ceiling",
     })
@@ -182,6 +183,7 @@ test("one canonical mutation advances every active family generation once", asyn
       indexId: corpusIndexProjectionStates.desiredIndexId,
       workStatus: corpusIndexProjectionStates.workStatus,
       retryNotBefore: corpusIndexProjectionStates.retryNotBefore,
+      failureAttempts: corpusIndexProjectionStates.failureAttempts,
       lastFailureKind: corpusIndexProjectionStates.lastFailureKind,
     })
     .from(corpusIndexProjectionStates)
@@ -195,6 +197,7 @@ test("one canonical mutation advances every active family generation once", asyn
       indexId: "case_law_v5_cs_sk",
       workStatus: "eligible",
       retryNotBefore: null,
+      failureAttempts: 0,
       lastFailureKind: null,
     },
   ]);

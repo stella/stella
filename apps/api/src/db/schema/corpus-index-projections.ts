@@ -307,6 +307,7 @@ export const corpusIndexProjectionStates = p.pgTable(
       .default("eligible")
       .notNull(),
     retryNotBefore: timestamptz("retry_not_before"),
+    failureAttempts: p.integer("failure_attempts").default(0).notNull(),
     lastFailureKind: p.text("last_failure_kind", {
       enum: CORPUS_INDEX_PROJECTION_FAILURE_KINDS,
     }),
@@ -411,18 +412,25 @@ export const corpusIndexProjectionStates = p.pgTable(
       sql`${t.lastFailureKind} IS NULL OR ${t.lastFailureKind} IN (${sqlValues(CORPUS_INDEX_PROJECTION_FAILURE_KINDS)})`,
     ),
     p.check(
+      "corpus_index_projection_states_failure_attempts_nonnegative",
+      sql`${t.failureAttempts} >= 0`,
+    ),
+    p.check(
       "corpus_index_projection_states_work_shape",
       sql`CASE ${t.workStatus}
         WHEN 'eligible' THEN
           ${t.retryNotBefore} IS NULL
+          AND ${t.failureAttempts} = 0
           AND ${t.lastFailureKind} IS NULL
           AND ${t.lastFailureMessage} IS NULL
         WHEN 'retry_scheduled' THEN
           ${t.retryNotBefore} IS NOT NULL
+          AND ${t.failureAttempts} > 0
           AND ${t.lastFailureKind} IS NOT NULL
           AND ${t.lastFailureMessage} IS NOT NULL
         WHEN 'blocked' THEN
           ${t.retryNotBefore} IS NULL
+          AND ${t.failureAttempts} > 0
           AND ${t.lastFailureKind} IS NOT NULL
           AND ${t.lastFailureMessage} IS NOT NULL
         ELSE false

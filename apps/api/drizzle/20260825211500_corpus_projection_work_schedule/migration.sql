@@ -8,6 +8,7 @@ SET statement_timeout = '5s';--> statement-breakpoint
 ALTER TABLE "corpus_index_projection_states"
   ADD COLUMN "work_status" text DEFAULT 'eligible' NOT NULL,
   ADD COLUMN "retry_not_before" timestamptz,
+  ADD COLUMN "failure_attempts" integer DEFAULT 0 NOT NULL,
   ADD COLUMN "last_failure_kind" text,
   ADD COLUMN "last_failure_message" varchar(2048);--> statement-breakpoint
 
@@ -19,18 +20,23 @@ ALTER TABLE "corpus_index_projection_states"
       "last_failure_kind" IS NULL
       OR "last_failure_kind" IN ('payload_unavailable', 'revision_too_large')
     ) NOT VALID,
+  ADD CONSTRAINT "corpus_index_projection_states_failure_attempts_nonnegative"
+    CHECK ("failure_attempts" >= 0) NOT VALID,
   ADD CONSTRAINT "corpus_index_projection_states_work_shape"
     CHECK (CASE "work_status"
       WHEN 'eligible' THEN
         "retry_not_before" IS NULL
+        AND "failure_attempts" = 0
         AND "last_failure_kind" IS NULL
         AND "last_failure_message" IS NULL
       WHEN 'retry_scheduled' THEN
         "retry_not_before" IS NOT NULL
+        AND "failure_attempts" > 0
         AND "last_failure_kind" IS NOT NULL
         AND "last_failure_message" IS NOT NULL
       WHEN 'blocked' THEN
         "retry_not_before" IS NULL
+        AND "failure_attempts" > 0
         AND "last_failure_kind" IS NOT NULL
         AND "last_failure_message" IS NOT NULL
       ELSE false
@@ -72,6 +78,7 @@ BEGIN
      AND (
        NEW."work_status" <> 'eligible'
        OR NEW."retry_not_before" IS NOT NULL
+       OR NEW."failure_attempts" <> 0
        OR NEW."last_failure_kind" IS NOT NULL
        OR NEW."last_failure_message" IS NOT NULL
      ) THEN

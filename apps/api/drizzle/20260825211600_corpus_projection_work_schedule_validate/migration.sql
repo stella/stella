@@ -11,4 +11,7 @@ ALTER TABLE "corpus_index_projection_states"
   VALIDATE CONSTRAINT "corpus_index_projection_states_failure_kind_values";--> statement-breakpoint
 
 ALTER TABLE "corpus_index_projection_states"
+  VALIDATE CONSTRAINT "corpus_index_projection_states_failure_attempts_nonnegative";--> statement-breakpoint
+
+ALTER TABLE "corpus_index_projection_states"
   VALIDATE CONSTRAINT "corpus_index_projection_states_work_shape";--> statement-breakpoint

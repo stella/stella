@@ -1,6 +1,7 @@
 import { panic, Result } from "better-result";
 
 import type { Transaction } from "@/api/db/root";
+import { ChunkBudgetError } from "@/api/lib/corpus-index/chunking";
 import { settleBoth } from "@/api/lib/corpus-index/core";
 import type { CorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client";
 import { buildCorpusProjectionDocuments } from "@/api/lib/legal-search/corpus-index-projection-builder";
@@ -18,10 +19,12 @@ import {
   classifyCorpusProjectionReservationFailureTx,
   commitCorpusProjectionAppendTx,
   CORPUS_PROJECTION_RETRY_MAX_MS,
+  CORPUS_PROJECTION_RETRY_ATTEMPT_LIMIT_MAX,
+  CORPUS_PROJECTION_RETRY_ATTEMPT_LIMIT_MIN,
   CORPUS_PROJECTION_RETRY_MIN_MS,
   prepareCorpusProjectionReplacementsTx,
   reserveCorpusProjectionIntentsTx,
-  startCorpusProjectionAppendTx,
+  startCorpusProjectionAppendBatchTx,
   type CorpusProjectionReservationFailure,
   type CorpusProjectionIntentLease,
 } from "@/api/lib/legal-search/corpus-index-projection-store";
@@ -51,27 +54,6 @@ const mapSequentially = async <Input, Output>(
 
 export const CORPUS_PROJECTION_PAYLOAD_READ_CONCURRENCY_MAX = 32;
 
-const mapWithConcurrency = async <Input, Output>(
-  values: readonly Input[],
-  concurrency: number,
-  operation: (value: Input) => Promise<Output>,
-  index = 0,
-  outputs: Output[] = [],
-): Promise<Output[]> => {
-  const current = values.slice(index, index + concurrency);
-  if (current.length === 0) {
-    return outputs;
-  }
-  outputs.push(...(await Promise.all(current.map(operation))));
-  return mapWithConcurrency(
-    values,
-    concurrency,
-    operation,
-    index + concurrency,
-    outputs,
-  );
-};
-
 type ExecuteCorpusProjectionAppendCycleOptions = {
   runInTransaction: ProjectionTransactionRunner;
   client: ProjectionAppendClient;
@@ -81,6 +63,7 @@ type ExecuteCorpusProjectionAppendCycleOptions = {
   leaseMs: number;
   payloadReadConcurrency: number;
   retryDelayMs: number;
+  payloadRetryLimit: number;
 };
 
 export type CorpusProjectionAppendCycleResult = {
@@ -118,6 +101,7 @@ const emptyResult = (
 const validateExecutorPolicy = (
   payloadReadConcurrency: number,
   retryDelayMs: number,
+  payloadRetryLimit: number,
 ): void => {
   if (
     !Number.isSafeInteger(payloadReadConcurrency) ||
@@ -135,6 +119,15 @@ const validateExecutorPolicy = (
   ) {
     return panic(
       `Corpus projection retry delay must be an integer from ${CORPUS_PROJECTION_RETRY_MIN_MS} to ${CORPUS_PROJECTION_RETRY_MAX_MS} milliseconds`,
+    );
+  }
+  if (
+    !Number.isSafeInteger(payloadRetryLimit) ||
+    payloadRetryLimit < CORPUS_PROJECTION_RETRY_ATTEMPT_LIMIT_MIN ||
+    payloadRetryLimit > CORPUS_PROJECTION_RETRY_ATTEMPT_LIMIT_MAX
+  ) {
+    return panic(
+      `Corpus projection payload retry limit must be an integer from ${CORPUS_PROJECTION_RETRY_ATTEMPT_LIMIT_MIN} to ${CORPUS_PROJECTION_RETRY_ATTEMPT_LIMIT_MAX}`,
     );
   }
 };
@@ -178,12 +171,18 @@ const classifyReservationFailures = async ({
   runInTransaction: ProjectionTransactionRunner;
   failures: readonly ReservationFailure[];
 }): Promise<{
-  classified: number;
+  retryScheduled: number;
+  blocked: number;
   staleCancelled: number;
   leaseLost: number;
 }> => {
   if (failures.length === 0) {
-    return { classified: 0, staleCancelled: 0, leaseLost: 0 };
+    return {
+      retryScheduled: 0,
+      blocked: 0,
+      staleCancelled: 0,
+      leaseLost: 0,
+    };
   }
   return await runInTransaction(async (tx) => {
     const outcomes = await mapSequentially(failures, async (failure) =>
@@ -194,7 +193,10 @@ const classifyReservationFailures = async ({
       }),
     );
     return {
-      classified: outcomes.filter((outcome) => outcome === "classified").length,
+      retryScheduled: outcomes.filter(
+        (outcome) => outcome === "retry_scheduled",
+      ).length,
+      blocked: outcomes.filter((outcome) => outcome === "blocked").length,
       staleCancelled: outcomes.filter(
         (outcome) => outcome === "stale_cancelled",
       ).length,
@@ -248,6 +250,11 @@ type PreparedProjectionEntry = {
   entry: CorpusProjectionAppendEntry;
 };
 
+type PreparedProjectionFailure = {
+  kind: "payload_unavailable" | "revision_too_large";
+  message: string;
+};
+
 type PreparedProjectionRequest = {
   indexId: string;
   entries: readonly PreparedProjectionEntry[];
@@ -261,14 +268,17 @@ type PreparedProjectionPlan = {
 const buildPreparedEntry = async (
   runInTransaction: ProjectionTransactionRunner,
   material: CorpusProjectionMaterial,
-): Promise<Result<PreparedProjectionEntry, unknown>> => {
+): Promise<Result<PreparedProjectionEntry, PreparedProjectionFailure>> => {
   const payload = await Result.tryPromise(
     async () => await loadCorpusProjectionPayload(runInTransaction, material),
   );
   if (payload.isErr()) {
-    return Result.err(payload.error);
+    return Result.err({
+      kind: "payload_unavailable",
+      message: "projection payload read failed before append",
+    });
   }
-  const documents = (() => {
+  const built = Result.try(() => {
     switch (material.family) {
       case "case_law":
         return buildCorpusProjectionDocuments({
@@ -287,10 +297,19 @@ const buildPreparedEntry = async (
       default:
         return material satisfies never;
     }
-  })();
+  });
+  if (built.isErr()) {
+    if (built.error instanceof ChunkBudgetError) {
+      return Result.err({
+        kind: "revision_too_large",
+        message: "projection payload exceeds the structural build ceiling",
+      });
+    }
+    return panic("Corpus projection builder violated its manifest contract");
+  }
   return Result.ok({
     material,
-    entry: { revision: material.lease.intentId, documents },
+    entry: { revision: material.lease.intentId, documents: built.value },
   });
 };
 
@@ -366,8 +385,13 @@ export const executeCorpusProjectionAppendCycle = async ({
   leaseMs,
   payloadReadConcurrency,
   retryDelayMs,
+  payloadRetryLimit,
 }: ExecuteCorpusProjectionAppendCycleOptions): Promise<CorpusProjectionAppendCycleResult> => {
-  validateExecutorPolicy(payloadReadConcurrency, retryDelayMs);
+  validateExecutorPolicy(
+    payloadReadConcurrency,
+    retryDelayMs,
+    payloadRetryLimit,
+  );
   const { replacements, leases } = await runInTransaction(async (tx) => ({
     replacements: await prepareCorpusProjectionReplacementsTx(tx, {
       family,
@@ -418,170 +442,204 @@ export const executeCorpusProjectionAppendCycle = async ({
         status: "retry_scheduled",
         kind: "payload_unavailable",
         retryDelayMs,
+        maxAttempts: payloadRetryLimit,
         message: reason,
       },
     })),
   });
-  result.retryScheduled += materialRetries.classified;
+  result.retryScheduled += materialRetries.retryScheduled;
+  result.blocked += materialRetries.blocked;
   result.cancelled += materialRetries.staleCancelled;
   result.leaseLost += materialRetries.leaseLost;
 
-  const loaded = await mapWithConcurrency(
-    materials.ready,
-    payloadReadConcurrency,
-    async (material) =>
-      ({
+  for (
+    let windowStart = 0;
+    windowStart < materials.ready.length;
+    windowStart += payloadReadConcurrency
+  ) {
+    // A window is fully classified and appended before the next payload is
+    // read. Peak residency therefore follows Plane's bounded concurrency,
+    // rather than the reservation limit of up to hundreds of documents.
+    const windowEnd = Math.min(
+      windowStart + payloadReadConcurrency,
+      materials.ready.length,
+    );
+    const window = materials.ready.slice(windowStart, windowEnd);
+    const loaded = await Promise.all(
+      window.map(async (material) => ({
         material,
         loaded: await buildPreparedEntry(runInTransaction, material),
-      }) as const,
-  );
-  const unreadLeases = loaded
-    .filter(({ loaded: entry }) => entry.isErr())
-    .map(({ material }) => material.lease);
-  result.unread += unreadLeases.length;
-  const payloadRetries = await classifyReservationFailures({
-    runInTransaction,
-    failures: unreadLeases.map((lease) => ({
-      lease,
-      failure: {
-        status: "retry_scheduled",
-        kind: "payload_unavailable",
-        retryDelayMs,
-        message: "projection payload read failed before append",
-      },
-    })),
-  });
-  result.retryScheduled += payloadRetries.classified;
-  result.cancelled += payloadRetries.staleCancelled;
-  result.leaseLost += payloadRetries.leaseLost;
-  const prepared = loaded.flatMap(({ loaded: entry }) =>
-    entry.isOk() ? [entry.value] : [],
-  );
-  const plan = planPreparedRequests(prepared);
-  const blocked = await classifyReservationFailures({
-    runInTransaction,
-    failures: plan.blocked.map(({ material }) => ({
-      lease: material.lease,
-      failure: {
-        status: "blocked",
-        kind: "revision_too_large",
-        message: "projection revision exceeds the append safety ceiling",
-      },
-    })),
-  });
-  result.blocked += blocked.classified;
-  result.cancelled += blocked.staleCancelled;
-  result.leaseLost += blocked.leaseLost;
-  const requests = plan.requests;
-
-  const executeRequestAt = async (
-    requestIndex: number,
-  ): Promise<CorpusProjectionAppendCycleResult> => {
-    const request = requests.at(requestIndex);
-    if (request === undefined) {
-      return result;
-    }
-    // Start only this physical request. A crash leaves every later request in
-    // `reserved`, so recovery never mistakes unattempted work for an append.
-    const starts = await runInTransaction(async (tx) =>
-      mapSequentially(request.entries, async (preparedEntry) => {
-        const status = await startCorpusProjectionAppendTx(tx, {
-          intentId: preparedEntry.material.lease.intentId,
-          leaseToken: preparedEntry.material.lease.leaseToken,
+      })),
+    );
+    const preparationFailures: ReservationFailure[] = [];
+    const prepared: PreparedProjectionEntry[] = [];
+    for (const item of loaded) {
+      if (item.loaded.isOk()) {
+        prepared.push(item.loaded.value);
+        continue;
+      }
+      const failure = item.loaded.error;
+      if (failure.kind === "payload_unavailable") {
+        result.unread += 1;
+        preparationFailures.push({
+          lease: item.material.lease,
+          failure: {
+            status: "retry_scheduled",
+            kind: failure.kind,
+            retryDelayMs,
+            maxAttempts: payloadRetryLimit,
+            message: failure.message,
+          },
         });
-        return { prepared: preparedEntry, status };
-      }),
-    );
-    result.cancelled += starts.filter(
-      ({ status }) => status === "stale_cancelled",
-    ).length;
-    result.leaseLost += starts.filter(
-      ({ status }) => status === "lease_lost",
-    ).length;
-    const started = starts
-      .filter(({ status }) => status === "started")
-      .map(({ prepared: preparedEntry }) => preparedEntry);
-    if (started.length === 0) {
-      return executeRequestAt(requestIndex + 1);
+        continue;
+      }
+      preparationFailures.push({
+        lease: item.material.lease,
+        failure: {
+          status: "blocked",
+          kind: failure.kind,
+          message: failure.message,
+        },
+      });
     }
-    const startedPlan = planCorpusProjectionAppendRequests(
-      started.map(({ entry }) => entry),
-    );
-    if (startedPlan.isErr() || startedPlan.value.length !== 1) {
-      return panic("Started projection request no longer fits its plan");
+    const plan = planPreparedRequests(prepared);
+    for (const { material } of plan.blocked) {
+      preparationFailures.push({
+        lease: material.lease,
+        failure: {
+          status: "blocked",
+          kind: "revision_too_large",
+          message: "projection revision exceeds the append safety ceiling",
+        },
+      });
     }
-    result.requestCount += 1;
-    // External I/O occurs after the start transaction has released every lock.
-    const appended = await client.ingestCommittedBatch(
-      request.indexId,
-      startedPlan.value.at(0)?.ndjson ??
-        panic("Projection request plan is empty"),
-    );
-    if (appended.isErr()) {
-      const abandoned = await runInTransaction(async (tx) => {
-        const outcomes = await mapSequentially(started, async (preparedEntry) =>
-          abandonCorpusProjectionAppendTx(tx, {
-            intentId: preparedEntry.material.lease.intentId,
-            leaseToken: preparedEntry.material.lease.leaseToken,
-            errorMessage: appended.error.message,
+    const classified = await classifyReservationFailures({
+      runInTransaction,
+      failures: preparationFailures,
+    });
+    result.retryScheduled += classified.retryScheduled;
+    result.blocked += classified.blocked;
+    result.cancelled += classified.staleCancelled;
+    result.leaseLost += classified.leaseLost;
+
+    const requests = plan.requests;
+    for (let requestIndex = 0; requestIndex < requests.length; requestIndex++) {
+      const request =
+        requests.at(requestIndex) ?? panic("Lost planned projection request");
+      // Start one physical request as a batch. Its shared timestamp is read
+      // from PostgreSQL only after all state locks are held, immediately before
+      // external I/O; crash recovery cannot settle ahead of a late append.
+      const starts = await runInTransaction(
+        async (tx) =>
+          await startCorpusProjectionAppendBatchTx(tx, {
+            leases: request.entries.map(({ material }) => material.lease),
+          }),
+      );
+      result.cancelled += starts.filter(
+        ({ status }) => status === "stale_cancelled",
+      ).length;
+      result.leaseLost += starts.filter(
+        ({ status }) => status === "lease_lost",
+      ).length;
+      const entriesByIntent = new Map(
+        request.entries.map((entry) => [entry.material.lease.intentId, entry]),
+      );
+      const started = starts.flatMap(({ intentId, status }) => {
+        if (status !== "started") {
+          return [];
+        }
+        return [
+          entriesByIntent.get(intentId) ??
+            panic(`Lost started projection revision ${intentId}`),
+        ];
+      });
+      if (started.length === 0) {
+        continue;
+      }
+      const startedPlan = planCorpusProjectionAppendRequests(
+        started.map(({ entry }) => entry),
+      );
+      if (startedPlan.isErr() || startedPlan.value.length !== 1) {
+        return panic("Started projection request no longer fits its plan");
+      }
+      result.requestCount += 1;
+      const appended = await client.ingestCommittedBatch(
+        request.indexId,
+        startedPlan.value.at(0)?.ndjson ??
+          panic("Projection request plan is empty"),
+      );
+      if (appended.isErr()) {
+        const abandoned = await runInTransaction(async (tx) => {
+          const outcomes = await mapSequentially(
+            started,
+            async (preparedEntry) =>
+              await abandonCorpusProjectionAppendTx(tx, {
+                intentId: preparedEntry.material.lease.intentId,
+                leaseToken: preparedEntry.material.lease.leaseToken,
+                errorMessage: appended.error.message,
+              }),
+          );
+          return {
+            cleanupPending: outcomes.filter(
+              (outcome) => outcome === "cleanup_pending",
+            ).length,
+            leaseLost: outcomes.filter((outcome) => outcome === "lease_lost")
+              .length,
+          };
+        });
+        result.unknownCleanupPending += abandoned.cleanupPending;
+        result.leaseLost += abandoned.leaseLost;
+        const laterLeases = requests
+          .slice(requestIndex + 1)
+          .flatMap(({ entries: laterEntries }) =>
+            laterEntries.map(({ material }) => material.lease),
+          );
+        for (const { lease } of materials.ready.slice(windowEnd)) {
+          laterLeases.push(lease);
+        }
+        addCancellation(
+          result,
+          await cancelReservations({
+            runInTransaction,
+            leases: laterLeases,
+            errorMessage: "projection append stopped after an unknown request",
           }),
         );
-        return {
-          cleanupPending: outcomes.filter(
-            (outcome) => outcome === "cleanup_pending",
-          ).length,
-          leaseLost: outcomes.filter((outcome) => outcome === "lease_lost")
-            .length,
-        };
-      });
-      result.unknownCleanupPending += abandoned.cleanupPending;
-      result.leaseLost += abandoned.leaseLost;
-      const laterLeases = requests
-        .slice(requestIndex + 1)
-        .flatMap(({ entries: laterEntries }) =>
-          laterEntries.map(({ material }) => material.lease),
-        );
-      addCancellation(
-        result,
-        await cancelReservations({
-          runInTransaction,
-          leases: laterLeases,
-          errorMessage: "projection append stopped after an unknown request",
-        }),
-      );
-      result.status = "append_unknown";
-      return result;
-    }
-
-    const committed = await runInTransaction(async (tx) => {
-      const outcomes = await mapSequentially(started, async (preparedEntry) =>
-        commitCorpusProjectionAppendTx(tx, {
-          intentId: preparedEntry.material.lease.intentId,
-          leaseToken: preparedEntry.material.lease.leaseToken,
-        }),
-      );
-      const counts = { applied: 0, staleCleanupPending: 0, leaseLost: 0 };
-      for (const outcome of outcomes) {
-        switch (outcome.status) {
-          case "applied":
-            counts.applied += 1;
-            break;
-          case "stale_cleanup_pending":
-            counts.staleCleanupPending += 1;
-            break;
-          case "lease_lost":
-            counts.leaseLost += 1;
-            break;
-          default:
-            outcome satisfies never;
-        }
+        result.status = "append_unknown";
+        return result;
       }
-      return counts;
-    });
-    result.applied += committed.applied;
-    result.staleCleanupPending += committed.staleCleanupPending;
-    result.leaseLost += committed.leaseLost;
-    return executeRequestAt(requestIndex + 1);
-  };
-  return executeRequestAt(0);
+
+      const committed = await runInTransaction(async (tx) => {
+        const outcomes = await mapSequentially(
+          started,
+          async (preparedEntry) =>
+            await commitCorpusProjectionAppendTx(tx, {
+              intentId: preparedEntry.material.lease.intentId,
+              leaseToken: preparedEntry.material.lease.leaseToken,
+            }),
+        );
+        const counts = { applied: 0, staleCleanupPending: 0, leaseLost: 0 };
+        for (const outcome of outcomes) {
+          switch (outcome.status) {
+            case "applied":
+              counts.applied += 1;
+              break;
+            case "stale_cleanup_pending":
+              counts.staleCleanupPending += 1;
+              break;
+            case "lease_lost":
+              counts.leaseLost += 1;
+              break;
+            default:
+              outcome satisfies never;
+          }
+        }
+        return counts;
+      });
+      result.applied += committed.applied;
+      result.staleCleanupPending += committed.staleCleanupPending;
+      result.leaseLost += committed.leaseLost;
+    }
+  }
+  return result;
 };

@@ -123,6 +123,7 @@ export const reserveCorpusProjectionIntentsTx = async (
   const limit = validateBatchSize(requestedLimit);
   const leaseMs = validateLeaseMs(requestedLeaseMs);
   await readActiveCorpusProjectionManifest(tx, family, generation, true);
+  const eligibilityAt = testNow ?? sql<Date>`clock_timestamp()`;
 
   const candidates = await tx
     .select({
@@ -151,7 +152,7 @@ export const reserveCorpusProjectionIntentsTx = async (
           eq(corpusIndexProjectionStates.workStatus, "eligible"),
           and(
             eq(corpusIndexProjectionStates.workStatus, "retry_scheduled"),
-            lte(corpusIndexProjectionStates.retryNotBefore, now),
+            lte(corpusIndexProjectionStates.retryNotBefore, eligibilityAt),
           ),
         ),
         inArray(corpusIndexGenerations.status, ["building", "serving"]),
@@ -495,6 +496,150 @@ export const startCorpusProjectionAppendTx = async (
   return cancelled.length === 1 ? "stale_cancelled" : "lease_lost";
 };
 
+export type CorpusProjectionAppendStart = {
+  intentId: ProjectionIntentId;
+  status: "started" | "stale_cancelled" | "lease_lost";
+};
+
+type StartCorpusProjectionAppendBatchOptions = {
+  leases: readonly CorpusProjectionIntentLease[];
+  now?: Date;
+};
+
+/**
+ * Fence one physical append request and give every included revision one DB
+ * timestamp after all state locks are held. Recovery can therefore anchor its
+ * unknown-outcome barrier to the actual request boundary, not to an earlier
+ * per-revision lock wait.
+ */
+export const startCorpusProjectionAppendBatchTx = async (
+  tx: Transaction,
+  { leases, now }: StartCorpusProjectionAppendBatchOptions,
+): Promise<CorpusProjectionAppendStart[]> => {
+  const first = leases.at(0);
+  if (
+    first === undefined ||
+    leases.length > CORPUS_PROJECTION_STORE_MAX_BATCH_SIZE
+  ) {
+    return panic("Corpus projection append-start batch is invalid");
+  }
+  const intentIds = new Set(leases.map(({ intentId }) => intentId));
+  const entityIds = new Set(leases.map(({ entityId }) => entityId));
+  if (
+    intentIds.size !== leases.length ||
+    entityIds.size !== leases.length ||
+    leases.some(
+      ({ family, generation }) =>
+        family !== first.family || generation !== first.generation,
+    )
+  ) {
+    return panic(
+      "Corpus projection append-start leases must be unique and scoped",
+    );
+  }
+  await readActiveCorpusProjectionManifest(
+    tx,
+    first.family,
+    first.generation,
+    true,
+  );
+  const orderedEntityIds = [...entityIds].sort();
+  await tx
+    .select({ entityId: corpusIndexProjectionStates.entityId })
+    .from(corpusIndexProjectionStates)
+    .where(
+      and(
+        eq(corpusIndexProjectionStates.family, first.family),
+        eq(corpusIndexProjectionStates.generation, first.generation),
+        inArray(corpusIndexProjectionStates.entityId, orderedEntityIds),
+      ),
+    )
+    .orderBy(asc(corpusIndexProjectionStates.entityId))
+    .for("update");
+  const transitionAt =
+    now ??
+    (await tx.select({ value: sql<Date>`clock_timestamp()` })).at(0)?.value ??
+    panic("Corpus projection append-start lost the database clock");
+  const exactLeases = or(
+    ...leases.map(({ intentId, leaseToken }) =>
+      and(
+        eq(corpusIndexProjectionIntents.id, intentId),
+        eq(corpusIndexProjectionIntents.leaseToken, leaseToken),
+      ),
+    ),
+  );
+  if (exactLeases === undefined) {
+    return panic("Corpus projection append-start lease predicate is empty");
+  }
+  const started = await tx
+    .update(corpusIndexProjectionIntents)
+    .set({
+      status: "append_started",
+      appendStartedAt: transitionAt,
+      updatedAt: transitionAt,
+    })
+    .where(
+      and(
+        exactLeases,
+        eq(corpusIndexProjectionIntents.family, first.family),
+        eq(corpusIndexProjectionIntents.generation, first.generation),
+        eq(corpusIndexProjectionIntents.status, "reserved"),
+        gt(corpusIndexProjectionIntents.leaseExpiresAt, transitionAt),
+        sql`EXISTS (
+          SELECT 1
+          FROM ${corpusIndexProjectionStates} state
+          WHERE state.family = ${corpusIndexProjectionIntents.family}
+            AND state.generation = ${corpusIndexProjectionIntents.generation}
+            AND state.entity_id = ${corpusIndexProjectionIntents.entityId}
+            AND state.desired_action = 'upsert'
+            AND state.desired_epoch = ${corpusIndexProjectionIntents.epoch}
+            AND state.desired_fingerprint = ${corpusIndexProjectionIntents.fingerprint}
+            AND state.desired_index_id = ${corpusIndexProjectionIntents.indexId}
+        )`,
+      ),
+    )
+    .returning({ id: corpusIndexProjectionIntents.id });
+  const startedIds = new Set(started.map(({ id }) => id));
+  const cancelled = await tx
+    .update(corpusIndexProjectionIntents)
+    .set({
+      status: "cancelled",
+      leaseToken: null,
+      leaseExpiresAt: null,
+      cancelledAt: transitionAt,
+      lastError: "projection desired state changed before append",
+      updatedAt: transitionAt,
+    })
+    .where(
+      and(
+        exactLeases,
+        eq(corpusIndexProjectionIntents.family, first.family),
+        eq(corpusIndexProjectionIntents.generation, first.generation),
+        eq(corpusIndexProjectionIntents.status, "reserved"),
+      ),
+    )
+    .returning({ id: corpusIndexProjectionIntents.id });
+  const cancelledIds = new Set(cancelled.map(({ id }) => id));
+  return leases.map(({ intentId }) => {
+    if (startedIds.has(intentId)) {
+      return {
+        intentId,
+        status: "started",
+      } satisfies CorpusProjectionAppendStart;
+    }
+    if (cancelledIds.has(intentId)) {
+      return {
+        intentId,
+        status: "stale_cancelled",
+      } satisfies CorpusProjectionAppendStart;
+    }
+    return {
+      intentId,
+      status: "lease_lost",
+    } satisfies CorpusProjectionAppendStart;
+  });
+};
+
 type AbandonCorpusProjectionAppendOptions = {
   intentId: ProjectionIntentId;
   leaseToken: string;
@@ -699,6 +844,7 @@ export const commitCorpusProjectionAppendTx = async (
       appliedAt: transitionAt,
       workStatus: "eligible",
       retryNotBefore: null,
+      failureAttempts: 0,
       lastFailureKind: null,
       lastFailureMessage: null,
       updatedAt: transitionAt,
@@ -775,6 +921,7 @@ export type CorpusProjectionReservationFailure =
       status: "retry_scheduled";
       kind: CorpusIndexProjectionFailureKind;
       retryDelayMs: number;
+      maxAttempts: number;
       message: string;
     }
   | {
@@ -792,6 +939,14 @@ type ClassifyCorpusProjectionReservationFailureOptions = {
 
 export const CORPUS_PROJECTION_RETRY_MIN_MS = 1_000;
 export const CORPUS_PROJECTION_RETRY_MAX_MS = 7 * 24 * 60 * 60_000;
+export const CORPUS_PROJECTION_RETRY_ATTEMPT_LIMIT_MIN = 1;
+export const CORPUS_PROJECTION_RETRY_ATTEMPT_LIMIT_MAX = 100;
+
+export type CorpusProjectionReservationFailureResult =
+  | "retry_scheduled"
+  | "blocked"
+  | "stale_cancelled"
+  | "lease_lost";
 
 /**
  * Finish one unattempted revision and durably move its exact desired state out
@@ -805,7 +960,7 @@ export const classifyCorpusProjectionReservationFailureTx = async (
     failure,
     now,
   }: ClassifyCorpusProjectionReservationFailureOptions,
-): Promise<"classified" | "stale_cancelled" | "lease_lost"> => {
+): Promise<CorpusProjectionReservationFailureResult> => {
   if (
     failure.status === "retry_scheduled" &&
     (!Number.isSafeInteger(failure.retryDelayMs) ||
@@ -814,6 +969,16 @@ export const classifyCorpusProjectionReservationFailureTx = async (
   ) {
     return panic(
       `Corpus projection retry delay must be an integer from ${CORPUS_PROJECTION_RETRY_MIN_MS} to ${CORPUS_PROJECTION_RETRY_MAX_MS} milliseconds`,
+    );
+  }
+  if (
+    failure.status === "retry_scheduled" &&
+    (!Number.isSafeInteger(failure.maxAttempts) ||
+      failure.maxAttempts < CORPUS_PROJECTION_RETRY_ATTEMPT_LIMIT_MIN ||
+      failure.maxAttempts > CORPUS_PROJECTION_RETRY_ATTEMPT_LIMIT_MAX)
+  ) {
+    return panic(
+      `Corpus projection retry attempt limit must be an integer from ${CORPUS_PROJECTION_RETRY_ATTEMPT_LIMIT_MIN} to ${CORPUS_PROJECTION_RETRY_ATTEMPT_LIMIT_MAX}`,
     );
   }
   const transitionAt = now ?? sql<Date>`clock_timestamp()`;
@@ -851,17 +1016,31 @@ export const classifyCorpusProjectionReservationFailureTx = async (
       updatedAt: transitionAt,
     })
     .where(eq(corpusIndexProjectionIntents.id, intentId));
-  const retryNotBefore =
+  const nextFailureAttempts = sql<number>`${corpusIndexProjectionStates.failureAttempts} + 1`;
+  const retryExhausted =
+    failure.status === "retry_scheduled"
+      ? sql<boolean>`${nextFailureAttempts} >= ${failure.maxAttempts}`
+      : sql<boolean>`true`;
+  const nextWorkStatus = sql<"retry_scheduled" | "blocked">`CASE
+    WHEN ${retryExhausted} THEN 'blocked'
+    ELSE 'retry_scheduled'
+  END`;
+  const retryAt =
     failure.status === "retry_scheduled"
       ? now === undefined
         ? sql<Date>`clock_timestamp() + (${failure.retryDelayMs} * interval '1 millisecond')`
         : new Date(now.getTime() + failure.retryDelayMs)
       : null;
+  const retryNotBefore = sql<Date | null>`CASE
+    WHEN ${retryExhausted} THEN NULL
+    ELSE ${retryAt}
+  END`;
   const states = await tx
     .update(corpusIndexProjectionStates)
     .set({
-      workStatus: failure.status,
+      workStatus: nextWorkStatus,
       retryNotBefore,
+      failureAttempts: nextFailureAttempts,
       lastFailureKind: failure.kind,
       lastFailureMessage: failure.message.slice(0, 2048),
       updatedAt: transitionAt,
@@ -877,6 +1056,17 @@ export const classifyCorpusProjectionReservationFailureTx = async (
         eq(corpusIndexProjectionStates.desiredIndexId, intent.indexId),
       ),
     )
-    .returning({ entityId: corpusIndexProjectionStates.entityId });
-  return states.length === 1 ? "classified" : "stale_cancelled";
+    .returning({ workStatus: corpusIndexProjectionStates.workStatus });
+  const workStatus = states.at(0)?.workStatus;
+  switch (workStatus) {
+    case "retry_scheduled":
+    case "blocked":
+      return workStatus;
+    case undefined:
+      return "stale_cancelled";
+    case "eligible":
+      return panic("Projection failure classification returned eligible work");
+    default:
+      return workStatus satisfies never;
+  }
 };
