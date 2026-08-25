@@ -748,13 +748,8 @@ type CompatibleOAuthProviderPlugin = Omit<OAuthProviderPlugin, "endpoints"> & {
 };
 
 const withCompatibleOAuthEndpointTypes = (
-  plugin: OAuthProviderPlugin,
-): CompatibleOAuthProviderPlugin =>
-  // SAFETY: Better Auth 1.7.1's generated OAuth OpenAPI metadata models an
-  // absent schema.items field as explicit undefined, while better-call
-  // requires that field to be omitted. The runtime endpoint objects are valid.
-  // eslint-disable-next-line typescript/no-unsafe-type-assertion -- The cast repairs only the upstream endpoint declaration and preserves every concrete endpoint key.
-  plugin as CompatibleOAuthProviderPlugin;
+  plugin: CompatibleOAuthProviderPlugin,
+): CompatibleOAuthProviderPlugin => plugin;
 
 // Lazy singleton: `betterAuth()` eagerly resolves the
 // database adapter, which accesses `rootDb`. Deferring to

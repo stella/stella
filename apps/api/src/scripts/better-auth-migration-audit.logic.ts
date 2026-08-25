@@ -955,7 +955,6 @@ const readProjectedAccountIdentities = async (
       after = accountRowId;
       rowCount += 1n;
     }
-
     return queried.value.length < ACCOUNT_IDENTITY_PAGE_SIZE
       ? Result.ok(undefined)
       : readNextPage();
