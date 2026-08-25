@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Result } from "better-result";
@@ -213,6 +213,8 @@ const FolderPicker = ({ value, onChange }: FolderPickerProps) => {
   );
   /** `null` while the new-folder row is a button; a string while it is an input. */
   const [draftName, setDraftName] = useState<string | null>(null);
+  /** Set by Escape so the blur that follows unmounting does not stage the draft. */
+  const draftCancelledRef = useRef(false);
 
   if (isLoading) {
     return (
@@ -245,10 +247,15 @@ const FolderPicker = ({ value, onChange }: FolderPickerProps) => {
     });
   };
 
-  /** Stage a folder under whatever is selected now; it is created on submit. */
+  /**
+   * Stage a folder under whatever is selected now; it is created on submit.
+   * Runs on Enter and on blur, so a name typed straight before clicking the
+   * dialog's submit button is not dropped. An empty name closes the input.
+   */
   const stageFolder = () => {
     const staged = stageMatterFolder(value, draftName ?? "");
     if (staged === null) {
+      setDraftName(null);
       return;
     }
     onChange(staged);
@@ -267,7 +274,10 @@ const FolderPicker = ({ value, onChange }: FolderPickerProps) => {
       return (
         <button
           className="hover:bg-accent text-muted-foreground flex w-full items-center gap-1 rounded px-2 py-1 text-start text-sm"
-          onClick={() => setDraftName("")}
+          onClick={() => {
+            draftCancelledRef.current = false;
+            setDraftName("");
+          }}
           type="button"
         >
           <FolderPlusIcon className="size-4 shrink-0" />
@@ -281,6 +291,13 @@ const FolderPicker = ({ value, onChange }: FolderPickerProps) => {
         autoFocus
         className="h-7 px-2 text-sm"
         maxLength={MAX_FOLDER_NAME_LENGTH}
+        onBlur={() => {
+          if (draftCancelledRef.current) {
+            draftCancelledRef.current = false;
+            return;
+          }
+          stageFolder();
+        }}
         onChange={(e) => setDraftName(e.target.value)}
         onKeyDown={(e) => {
           if (e.key === "Enter") {
@@ -290,6 +307,7 @@ const FolderPicker = ({ value, onChange }: FolderPickerProps) => {
           if (e.key === "Escape") {
             // Cancel only the draft; the enclosing dialog dismisses on Escape.
             e.stopPropagation();
+            draftCancelledRef.current = true;
             setDraftName(null);
           }
         }}
