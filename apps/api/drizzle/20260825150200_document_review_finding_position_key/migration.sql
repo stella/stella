@@ -36,7 +36,7 @@ UPDATE "document_review_findings"
        -- which is all a pre-lift row can honestly claim.
        "payload" = jsonb_build_object(
          'finding',
-         ("payload"->'finding' - 'assessment' - 'targetCitations' - 'findingId' - 'topicId')
+         (("payload"->'finding') - 'assessment' - 'targetCitations' - 'findingId' - 'topicId')
          || jsonb_build_object(
               'positionId', to_jsonb("topic_id"::text),
               'standardSource', 'reference',
