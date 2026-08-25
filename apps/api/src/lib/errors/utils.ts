@@ -276,6 +276,20 @@ const stackFrameLines = (error: Error, stack: string): string[] => {
     return [];
   }
 
+  if (message === "") {
+    const name = safeErrorStringProperty(error, "name");
+    if (
+      name === undefined ||
+      name.includes("\n") ||
+      name.includes("\r") ||
+      name !== errorClassName(error) ||
+      firstLine !== name
+    ) {
+      return [];
+    }
+    return lines.slice(1);
+  }
+
   const messageLines = message.split("\n");
   const firstMessageLine = messageLines.at(0);
   if (firstMessageLine && !firstLine.endsWith(firstMessageLine)) {

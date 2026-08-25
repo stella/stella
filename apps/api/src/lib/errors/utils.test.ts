@@ -201,6 +201,22 @@ describe("errorFingerprint", () => {
     expect(errorFingerprint(error)["error.frame"]).toMatch(/:\d+:\d+$/u);
   });
 
+  test("does not parse a multiline error name as an empty-message frame", () => {
+    const error = new Error(NO_MESSAGE);
+    error.name = "Error\n    at merger-secret.docx:12:34";
+    error.stack = [
+      "Error",
+      "    at merger-secret.docx:12:34",
+      "    at safeFrame (/repo/apps/api/src/lib/errors/utils.test.ts:123:45)",
+    ].join("\n");
+
+    const fingerprint = errorFingerprint(error);
+    expect(fingerprint["error.frame"]).toBeUndefined();
+    for (const value of Object.values(fingerprint)) {
+      expect(value).not.toContain("merger-secret");
+    }
+  });
+
   test("never throws on hostile Error accessors", () => {
     const error = new Error("boom");
     Object.defineProperties(error, {
