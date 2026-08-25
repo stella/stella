@@ -134,6 +134,16 @@
     "search": "Otsi lõikelaua ajaloost",
     "searchPlaceholder": "Otsi kopeeritud teksti",
     "timeline": "Lõikelaua ajajoon",
-    "title": "Lõikelaud"
+    "title": "Lõikelaud",
+    "welcomeCaptureDescription": "Igas rakenduses kopeeritud tekst ilmub siia automaatselt.",
+    "welcomeCaptureTitle": "Kopeeri nagu tavaliselt.",
+    "welcomeDescription": "Stella hoiab kopeeritud teksti käepärast ega sega sinu tööd.",
+    "welcomeHelp": "Kuidas lõikelaud töötab",
+    "welcomeLocalDescription": "Lõikelaua ajalugu jääb sellesse arvutisse.",
+    "welcomeLocalTitle": "Säilitatakse selles seadmes.",
+    "welcomeShortcutDescription": "Vajuta {shortcut}, et sirvida ajalugu ja valida lõige.",
+    "welcomeShortcutTitle": "Ava see kõikjal.",
+    "welcomeStart": "Alusta kopeerimist",
+    "welcomeTitle": "Sinu uus lõikelaud"
   }
 }

@@ -134,6 +134,16 @@
     "search": "Meklēt starpliktuves vēsturē",
     "searchPlaceholder": "Meklēt kopēto tekstu",
     "timeline": "Starpliktuves laika skala",
-    "title": "Starpliktuve"
+    "title": "Starpliktuve",
+    "welcomeCaptureDescription": "Jebkurā lietotnē kopētais teksts šeit parādās automātiski.",
+    "welcomeCaptureTitle": "Kopējiet kā ierasts.",
+    "welcomeDescription": "Stella glabā kopēto tekstu pa rokai, netraucējot darbam.",
+    "welcomeHelp": "Kā darbojas starpliktuve",
+    "welcomeLocalDescription": "Starpliktuves vēsture paliek šajā datorā.",
+    "welcomeLocalTitle": "Glabājas šajā ierīcē.",
+    "welcomeShortcutDescription": "Nospiediet {shortcut}, lai pārlūkotu vēsturi un izvēlētos izgriezumu.",
+    "welcomeShortcutTitle": "Atveriet to jebkur.",
+    "welcomeStart": "Sākt kopēšanu",
+    "welcomeTitle": "Iepazīstiet savu starpliktuvi"
   }
 }

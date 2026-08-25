@@ -16,11 +16,13 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import {
   ClipboardIcon,
+  CircleHelpIcon,
   CopyPlusIcon,
   CheckIcon,
   FileTextIcon,
   FolderInputIcon,
   FolderPlusIcon,
+  KeyboardIcon,
   LockKeyholeIcon,
   PauseIcon,
   PencilIcon,
@@ -37,6 +39,7 @@ import { Button } from "@stll/ui/button";
 import {
   Dialog,
   DialogClose,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogPanel,
@@ -119,6 +122,9 @@ const CLIPBOARD_NO_GROUP_DROP_ID = "__no_group__";
 const PRIMARY_MODIFIER_LABEL = navigator.userAgent.includes("Mac")
   ? "⌘"
   : "Ctrl+";
+const CLIPBOARD_SHORTCUT_LABEL = navigator.userAgent.includes("Mac")
+  ? "⌘⇧V"
+  : "Ctrl+Shift+V";
 
 const EMPTY_SNAPSHOT = {
   captureStatus: "active",
@@ -126,6 +132,7 @@ const EMPTY_SNAPSHOT = {
   items: [],
   persistence: { status: "initializing" },
   sourceAppVisuals: [],
+  welcomeStatus: "initializing",
 } satisfies ClipboardSnapshot;
 
 type ClipboardAppError = {
@@ -758,6 +765,94 @@ const ClipboardContextMenu = ({
   );
 };
 
+type ClipboardWelcomeDialogProps = {
+  onClose: () => void;
+};
+
+const ClipboardWelcomeDialog = ({ onClose }: ClipboardWelcomeDialogProps) => {
+  const t = useTranslations("clipboard");
+  const features = [
+    {
+      description: t("welcomeCaptureDescription"),
+      icon: ClipboardIcon,
+      title: t("welcomeCaptureTitle"),
+    },
+    {
+      description: t("welcomeShortcutDescription", {
+        shortcut: CLIPBOARD_SHORTCUT_LABEL,
+      }),
+      icon: KeyboardIcon,
+      title: t("welcomeShortcutTitle"),
+    },
+    {
+      description: t("welcomeLocalDescription"),
+      icon: LockKeyholeIcon,
+      title: t("welcomeLocalTitle"),
+    },
+  ];
+
+  return (
+    <Dialog
+      onOpenChange={(open) => {
+        if (!open) {
+          onClose();
+        }
+      }}
+      open
+    >
+      <DialogPopup
+        backdropClassName="bg-background/54 backdrop-blur-xl"
+        bottomStickOnMobile={false}
+        className="bg-popover/94 max-w-xl rounded-[28px] border-0 shadow-2xl backdrop-blur-3xl"
+        showCloseButton={false}
+        viewportClassName="grid-rows-[1fr_auto_1fr] p-4"
+      >
+        <DialogHeader className="flex-row items-start gap-4 px-5 pt-5 pb-2 text-start">
+          <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-[var(--option-blue-bg)] text-[var(--option-blue-fg)] shadow-sm">
+            <ClipboardIcon aria-hidden="true" className="size-5" />
+          </span>
+          <span className="min-w-0">
+            <DialogTitle className="text-wrap-balance text-lg leading-tight">
+              {t("welcomeTitle")}
+            </DialogTitle>
+            <DialogDescription className="mt-1 leading-relaxed text-pretty">
+              {t("welcomeDescription")}
+            </DialogDescription>
+          </span>
+        </DialogHeader>
+        <DialogPanel className="px-5 pt-2 pb-1" scrollFade={false}>
+          <div className="bg-muted/48 divide-border/70 divide-y rounded-2xl px-4 shadow-sm">
+            {features.map(({ description, icon: Icon, title }) => (
+              <div
+                className="flex min-h-14 items-center gap-3 py-2"
+                key={title}
+              >
+                <Icon
+                  aria-hidden="true"
+                  className="size-4 shrink-0 text-[var(--option-blue)]"
+                />
+                <p className="min-w-0 text-sm leading-snug text-pretty">
+                  <span className="text-foreground font-semibold">{title}</span>{" "}
+                  <span className="text-muted-foreground">{description}</span>
+                </p>
+              </div>
+            ))}
+          </div>
+        </DialogPanel>
+        <DialogFooter className="px-5 pb-5" variant="bare">
+          <Button
+            className="min-h-11 rounded-xl"
+            onClick={onClose}
+            type="button"
+          >
+            {t("welcomeStart")}
+          </Button>
+        </DialogFooter>
+      </DialogPopup>
+    </Dialog>
+  );
+};
+
 const ClipboardApp = () => {
   const t = useTranslations("clipboard");
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -779,7 +874,12 @@ const ClipboardApp = () => {
   const [dragState, setDragState] = useState<ClipboardDragState>({
     type: "idle",
   });
+  const [welcomeDismissed, setWelcomeDismissed] = useState(false);
+  const [welcomeRequested, setWelcomeRequested] = useState(false);
   const errorReadHistory = t("errorReadHistory");
+  const welcomeOpen =
+    welcomeRequested ||
+    (snapshot.welcomeStatus === "pending" && !welcomeDismissed);
 
   useEffect(() => {
     let disposed = false;
@@ -883,10 +983,14 @@ const ClipboardApp = () => {
     };
     const handleWindowFocus = () => {
       setAgeReferenceTime(Date.now());
+      if (welcomeOpen) {
+        return;
+      }
       focusActiveCard();
     };
     window.addEventListener("focus", handleWindowFocus);
     if (
+      !welcomeOpen &&
       document.hasFocus() &&
       (document.activeElement === document.body ||
         document.activeElement === timelineRef.current)
@@ -894,7 +998,7 @@ const ClipboardApp = () => {
       focusActiveCard();
     }
     return () => window.removeEventListener("focus", handleWindowFocus);
-  }, [activeItemId]);
+  }, [activeItemId, welcomeOpen]);
 
   const nextGroupColor =
     CLIPBOARD_GROUP_COLORS.at(
@@ -946,6 +1050,14 @@ const ClipboardApp = () => {
     },
     [t],
   );
+
+  const closeWelcome = () => {
+    setWelcomeDismissed(true);
+    setWelcomeRequested(false);
+    if (snapshot.welcomeStatus === "pending") {
+      applySnapshotCommand("clipboard_complete_welcome");
+    }
+  };
 
   const copyItem = (item: ClipboardItem) => {
     setError((current) => (current?.source === "operation" ? null : current));
@@ -1125,7 +1237,7 @@ const ClipboardApp = () => {
   };
 
   const handleKeyDown = (event: KeyboardEvent) => {
-    if (dialog.type !== "closed") {
+    if (dialog.type !== "closed" || welcomeOpen) {
       return;
     }
     const primaryModifier = event.metaKey || event.ctrlKey;
@@ -1293,6 +1405,7 @@ const ClipboardApp = () => {
           );
         }}
       />
+      {welcomeOpen ? <ClipboardWelcomeDialog onClose={closeWelcome} /> : null}
       {contextMenu.type === "closed" ? null : (
         <ClipboardContextMenu
           groups={snapshot.groups}
@@ -1313,97 +1426,8 @@ const ClipboardApp = () => {
       <main className="relative min-h-0 flex-1">
         {feedback}
 
-        <nav
-          aria-label={t("groups")}
-          className="clipboard-groups-rail absolute inset-x-0 top-0 z-10 flex h-13 scrollbar-none items-center gap-1.5 overflow-x-auto px-4"
-        >
-          <Button
-            aria-pressed={activeGroupId === null}
-            className="h-11 shrink-0 rounded-full px-4 text-xs"
-            data-clipboard-group-id={CLIPBOARD_NO_GROUP_DROP_ID}
-            data-drop-target={isDropTarget(null) ? "" : undefined}
-            onClick={() => {
-              setSelectedGroupId(null);
-              setSelectedIndex(0);
-            }}
-            variant={activeGroupId === null ? "secondary" : "ghost"}
-          >
-            {t("allClips")}
-          </Button>
-          {snapshot.groups.map((group) => {
-            const groupStyle: ClipboardGroupStyle = {
-              "--clipboard-group-accent": CLIPBOARD_GROUP_ACCENTS[group.color],
-            };
-            return (
-              <Button
-                aria-pressed={activeGroupId === group.id}
-                className="clipboard-group-chip h-11 shrink-0 rounded-full px-4 text-xs"
-                data-clipboard-group-id={group.id}
-                data-drop-target={isDropTarget(group.id) ? "" : undefined}
-                data-group-chip=""
-                key={group.id}
-                onClick={() => {
-                  setSelectedGroupId(group.id);
-                  setSelectedIndex(0);
-                }}
-                style={groupStyle}
-                variant="ghost"
-              >
-                <span
-                  aria-hidden="true"
-                  className="clipboard-group-chip-dot size-2 shrink-0 rounded-full"
-                />
-                {group.name}
-              </Button>
-            );
-          })}
-          {activeGroupId ? (
-            <Button
-              aria-label={t("deleteGroup")}
-              className="size-11 shrink-0 rounded-full"
-              onClick={() => {
-                const group = snapshot.groups.find(
-                  (candidate) => candidate.id === activeGroupId,
-                );
-                if (group) {
-                  setDialog({
-                    type: "deleteGroup",
-                    groupId: group.id,
-                    groupName: group.name,
-                  });
-                }
-              }}
-              size="icon"
-              title={t("deleteGroup")}
-              variant="ghost"
-            >
-              <Trash2Icon aria-hidden="true" className="size-3.5" />
-            </Button>
-          ) : null}
-          <Button
-            className="sticky end-0 z-10 ms-auto h-11 shrink-0 rounded-full px-4 text-xs shadow-sm"
-            disabled={snapshot.groups.length >= 24}
-            onClick={() =>
-              setDialog({
-                color: nextGroupColor,
-                name: "",
-                type: "createGroup",
-              })
-            }
-            variant="default"
-          >
-            <FolderPlusIcon aria-hidden="true" className="size-4" />
-            {t("createGroup")}
-          </Button>
-        </nav>
-
         {filteredItems.length === 0 ? (
-          <div
-            className={cn(
-              "text-foreground absolute inset-0 flex flex-col items-center justify-center gap-3 px-6 text-center",
-              "pt-13",
-            )}
-          >
+          <div className="text-foreground absolute inset-0 flex flex-col items-center justify-center gap-3 px-6 text-center">
             <span className="bg-foreground/6 text-foreground/70 grid size-11 place-items-center rounded-2xl shadow-sm/5">
               {query ? (
                 <SearchIcon aria-hidden="true" className="size-5" />
@@ -1418,9 +1442,7 @@ const ClipboardApp = () => {
         ) : (
           <div
             aria-label={t("timeline")}
-            className={cn(
-              "absolute inset-0 flex snap-x scrollbar-none items-stretch gap-3 overflow-x-auto px-5 pt-13 pb-1",
-            )}
+            className="absolute inset-0 flex snap-x scrollbar-none items-stretch gap-3 overflow-x-auto px-5 py-1"
             role="list"
           >
             {filteredItems.map((item, index) => {
@@ -1464,11 +1486,11 @@ const ClipboardApp = () => {
         )}
       </main>
 
-      <footer className="clipboard-controls flex h-16 shrink-0 items-center gap-3 px-4">
-        <div className="flex min-w-32 items-center gap-1">
+      <footer className="clipboard-controls flex h-14 shrink-0 items-center gap-2 px-3">
+        <div className="flex shrink-0 items-center gap-0.5">
           <a
             aria-label="Stella"
-            className="text-foreground grid size-11 place-items-center"
+            className="text-foreground grid size-10 place-items-center"
             href={STELLA_WEB_APP_URL}
             onClick={(event) => {
               event.preventDefault();
@@ -1484,8 +1506,9 @@ const ClipboardApp = () => {
                 });
               });
             }}
+            title="Stella"
           >
-            <StellaMark className="size-6" />
+            <StellaMark className="size-5" />
           </a>
           {snapshot.persistence.status === "initializing" ? null : (
             <span
@@ -1506,9 +1529,108 @@ const ClipboardApp = () => {
               )}
             </span>
           )}
+          <Button
+            aria-label={t("welcomeHelp")}
+            className="size-10 rounded-full"
+            onClick={() => {
+              setWelcomeDismissed(false);
+              setWelcomeRequested(true);
+            }}
+            size="icon"
+            title={t("welcomeHelp")}
+            variant="ghost"
+          >
+            <CircleHelpIcon aria-hidden="true" className="size-4" />
+          </Button>
         </div>
 
-        <InputGroup className="clipboard-search mx-auto h-10 w-full max-w-[440px] rounded-full">
+        <nav
+          aria-label={t("groups")}
+          className="clipboard-groups-rail flex min-w-0 flex-1 scrollbar-none items-center gap-1 overflow-x-auto"
+        >
+          <Button
+            aria-pressed={activeGroupId === null}
+            className="h-10 shrink-0 rounded-full px-3 text-xs"
+            data-clipboard-group-id={CLIPBOARD_NO_GROUP_DROP_ID}
+            data-drop-target={isDropTarget(null) ? "" : undefined}
+            onClick={() => {
+              setSelectedGroupId(null);
+              setSelectedIndex(0);
+            }}
+            variant={activeGroupId === null ? "secondary" : "ghost"}
+          >
+            {t("allClips")}
+          </Button>
+          {snapshot.groups.map((group) => {
+            const groupStyle: ClipboardGroupStyle = {
+              "--clipboard-group-accent": CLIPBOARD_GROUP_ACCENTS[group.color],
+            };
+            return (
+              <Button
+                aria-pressed={activeGroupId === group.id}
+                className="clipboard-group-chip h-10 shrink-0 rounded-full px-3 text-xs"
+                data-clipboard-group-id={group.id}
+                data-drop-target={isDropTarget(group.id) ? "" : undefined}
+                data-group-chip=""
+                key={group.id}
+                onClick={() => {
+                  setSelectedGroupId(group.id);
+                  setSelectedIndex(0);
+                }}
+                style={groupStyle}
+                variant="ghost"
+              >
+                <span
+                  aria-hidden="true"
+                  className="clipboard-group-chip-dot size-2 shrink-0 rounded-full"
+                />
+                {group.name}
+              </Button>
+            );
+          })}
+          {activeGroupId ? (
+            <Button
+              aria-label={t("deleteGroup")}
+              className="size-10 shrink-0 rounded-full"
+              onClick={() => {
+                const group = snapshot.groups.find(
+                  (candidate) => candidate.id === activeGroupId,
+                );
+                if (group) {
+                  setDialog({
+                    type: "deleteGroup",
+                    groupId: group.id,
+                    groupName: group.name,
+                  });
+                }
+              }}
+              size="icon"
+              title={t("deleteGroup")}
+              variant="ghost"
+            >
+              <Trash2Icon aria-hidden="true" className="size-3.5" />
+            </Button>
+          ) : null}
+          <Button
+            aria-label={t("createGroup")}
+            className="size-10 shrink-0 rounded-full"
+            disabled={snapshot.groups.length >= 24}
+            onClick={() =>
+              setDialog({
+                color: nextGroupColor,
+                name: "",
+                type: "createGroup",
+              })
+            }
+            size="icon"
+            title={t("createGroup")}
+            variant="ghost"
+          >
+            <FolderPlusIcon aria-hidden="true" className="size-4" />
+          </Button>
+        </nav>
+
+        <InputGroup className="clipboard-search h-9 w-[clamp(12rem,24vw,22rem)] shrink-0 rounded-full">
           <InputGroupAddon className="text-foreground/65">
             <SearchIcon aria-hidden="true" className="size-4" />
           </InputGroupAddon>
@@ -1533,12 +1655,12 @@ const ClipboardApp = () => {
           </InputGroupAddon>
         </InputGroup>
 
-        <div className="flex min-w-32 items-center justify-end gap-1">
+        <div className="flex shrink-0 items-center justify-end gap-0.5">
           <Button
             aria-label={
               snapshot.captureStatus === "active" ? t("pause") : t("resume")
             }
-            className="size-11 rounded-full"
+            className="size-10 rounded-full"
             onClick={() => {
               applySnapshotCommand("clipboard_set_capture_status", {
                 status: nextCaptureStatus,
@@ -1558,7 +1680,7 @@ const ClipboardApp = () => {
           </Button>
           <Button
             aria-label={t("clear")}
-            className="size-11 rounded-full"
+            className="size-10 rounded-full"
             disabled={
               snapshot.items.length === 0 &&
               snapshot.persistence.status !== "deletionOnly"
@@ -1574,7 +1696,7 @@ const ClipboardApp = () => {
           </Button>
           <Button
             aria-label={t("close")}
-            className="size-11 rounded-full"
+            className="size-10 rounded-full"
             onClick={requestHide}
             size="icon"
             title={t("close")}

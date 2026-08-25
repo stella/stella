@@ -134,6 +134,16 @@
     "search": "Przeszukaj historię schowka",
     "searchPlaceholder": "Szukaj skopiowanego tekstu",
     "timeline": "Oś czasu schowka",
-    "title": "Schowek"
+    "title": "Schowek",
+    "welcomeCaptureDescription": "Tekst skopiowany w dowolnej aplikacji pojawi się tutaj automatycznie.",
+    "welcomeCaptureTitle": "Kopiuj jak zwykle.",
+    "welcomeDescription": "Stella przechowuje skopiowany tekst pod ręką, nie przeszkadzając w pracy.",
+    "welcomeHelp": "Jak działa schowek",
+    "welcomeLocalDescription": "Historia schowka pozostaje na tym komputerze.",
+    "welcomeLocalTitle": "Przechowywane na tym urządzeniu.",
+    "welcomeShortcutDescription": "Naciśnij {shortcut}, aby przejrzeć historię i wybrać wycinek.",
+    "welcomeShortcutTitle": "Otwórz go z dowolnego miejsca.",
+    "welcomeStart": "Zacznij kopiować",
+    "welcomeTitle": "Poznaj swój schowek"
   }
 }

@@ -38,6 +38,15 @@ pub fn clipboard_get_snapshot(
 }
 
 #[tauri::command]
+pub fn clipboard_complete_welcome(
+  state: State<'_, ClipboardAppState>,
+) -> Result<ClipboardSnapshot, String> {
+  let mut manager = state.lock().map_err(|_| lock_error())?;
+  manager.complete_welcome()?;
+  Ok(manager.snapshot())
+}
+
+#[tauri::command]
 pub fn clipboard_set_capture_status(
   status: ClipboardCaptureStatus,
   state: State<'_, ClipboardAppState>,

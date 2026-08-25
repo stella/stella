@@ -134,6 +134,16 @@
     "search": "Hledat v historii schránky",
     "searchPlaceholder": "Hledat zkopírovaný text",
     "timeline": "Časová osa schránky",
-    "title": "Schránka"
+    "title": "Schránka",
+    "welcomeCaptureDescription": "Text zkopírovaný v libovolné aplikaci se zde objeví automaticky.",
+    "welcomeCaptureTitle": "Kopírujte jako obvykle.",
+    "welcomeDescription": "Stella uchovává zkopírovaný text po ruce, aniž by vás rušila při práci.",
+    "welcomeHelp": "Jak schránka funguje",
+    "welcomeLocalDescription": "Historie schránky zůstává v tomto počítači.",
+    "welcomeLocalTitle": "Zůstává v tomto zařízení.",
+    "welcomeShortcutDescription": "Stisknutím {shortcut} procházejte historii a vyberte výstřižek.",
+    "welcomeShortcutTitle": "Otevřete ji odkudkoli.",
+    "welcomeStart": "Začít kopírovat",
+    "welcomeTitle": "Seznamte se se schránkou"
   }
 }

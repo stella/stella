@@ -52,12 +52,15 @@ export type ClipboardPersistence =
   | { status: "memoryOnly" }
   | { status: "deletionOnly" };
 
+export type ClipboardWelcomeStatus = "initializing" | "pending" | "completed";
+
 export type ClipboardSnapshot = {
   captureStatus: ClipboardCaptureStatus;
   groups: ClipboardGroup[];
   items: ClipboardItem[];
   persistence: ClipboardPersistence;
   sourceAppVisuals: ClipboardSourceAppVisual[];
+  welcomeStatus: ClipboardWelcomeStatus;
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -158,6 +161,8 @@ export const isClipboardSnapshot = (
     value["items"].every(isClipboardItem) &&
     isPersistence(value["persistence"]) &&
     Array.isArray(value["sourceAppVisuals"]) &&
-    value["sourceAppVisuals"].every(isClipboardSourceAppVisual)
+    value["sourceAppVisuals"].every(isClipboardSourceAppVisual) &&
+    (value["welcomeStatus"] === "pending" ||
+      value["welcomeStatus"] === "completed")
   );
 };

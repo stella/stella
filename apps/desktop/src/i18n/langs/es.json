@@ -134,6 +134,16 @@
     "search": "Buscar en el historial del portapapeles",
     "searchPlaceholder": "Buscar texto copiado",
     "timeline": "Cronología del portapapeles",
-    "title": "Portapapeles"
+    "title": "Portapapeles",
+    "welcomeCaptureDescription": "El texto que copies en cualquier aplicación aparecerá aquí automáticamente.",
+    "welcomeCaptureTitle": "Copia como siempre.",
+    "welcomeDescription": "Stella mantiene a mano el texto copiado sin interrumpir tu trabajo.",
+    "welcomeHelp": "Cómo funciona el portapapeles",
+    "welcomeLocalDescription": "El historial del portapapeles permanece en este ordenador.",
+    "welcomeLocalTitle": "Guardado en este dispositivo.",
+    "welcomeShortcutDescription": "Pulsa {shortcut} para consultar el historial y elegir un recorte.",
+    "welcomeShortcutTitle": "Ábrelo desde cualquier lugar.",
+    "welcomeStart": "Empezar a copiar",
+    "welcomeTitle": "Conoce tu portapapeles"
   }
 }

@@ -15,6 +15,7 @@ use tauri::{AppHandle, Emitter};
 
 use crate::{
   clipboard_store::ClipboardStore,
+  clipboard_welcome::{ClipboardWelcome, ClipboardWelcomeStatus},
   config::APP_DATA_DIR_NAME,
   desktop_telemetry::{
     DesktopErrorReport, DesktopTelemetry, DesktopTelemetryErrorCode,
@@ -337,6 +338,7 @@ pub struct ClipboardSnapshot {
   pub items: Vec<ClipboardItem>,
   pub persistence: ClipboardPersistenceStatus,
   pub source_app_visuals: Vec<ClipboardSourceAppVisual>,
+  pub welcome_status: ClipboardWelcomeStatus,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -355,6 +357,7 @@ pub struct ClipboardManager {
   persistence: ClipboardPersistence,
   source_app_visuals: HashMap<String, ClipboardSourceAppVisual>,
   suppressed_content: Option<(String, Option<String>)>,
+  welcome: ClipboardWelcome,
 }
 
 enum ClipboardPersistence {
@@ -402,6 +405,7 @@ impl ClipboardManager {
       persistence: ClipboardPersistence::Initializing,
       source_app_visuals: HashMap::new(),
       suppressed_content: None,
+      welcome: ClipboardWelcome::new(),
     }
   }
 
@@ -475,7 +479,12 @@ impl ClipboardManager {
       items: self.items.clone(),
       persistence: self.persistence.status(),
       source_app_visuals,
+      welcome_status: self.welcome.status(),
     }
+  }
+
+  pub fn complete_welcome(&mut self) -> Result<(), String> {
+    self.welcome.complete()
   }
 
   pub fn set_capture_status(

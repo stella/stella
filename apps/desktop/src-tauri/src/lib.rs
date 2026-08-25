@@ -3,6 +3,7 @@ mod bridge;
 mod clipboard;
 mod clipboard_commands;
 mod clipboard_store;
+mod clipboard_welcome;
 mod clipboard_window;
 mod commands;
 mod config;
