@@ -120,11 +120,11 @@ const pageSize = positiveInteger(
 );
 const celex = flagValue("celex");
 const court = flagValue("court");
-if (celex !== undefined && celex.length === 0) {
+if (celex?.length === 0) {
   console.error("--celex requires a non-empty value");
   process.exit(1);
 }
-if (court !== undefined && court.length === 0) {
+if (court?.length === 0) {
   console.error("--court requires a non-empty value");
   process.exit(1);
 }
@@ -132,12 +132,16 @@ if (celex !== undefined && court !== undefined) {
   console.error("--celex and --court are mutually exclusive replay scopes");
   process.exit(1);
 }
-const scope =
-  court !== undefined
-    ? ({ type: "court", court } as const satisfies CaseLawReplayScope)
-    : celex !== undefined
-      ? ({ type: "celex", celex } as const satisfies CaseLawReplayScope)
-      : CASE_LAW_REPLAY_SCOPE.SOURCE;
+const replayScope = (): CaseLawReplayScope => {
+  if (court !== undefined) {
+    return { type: "court", court };
+  }
+  if (celex !== undefined) {
+    return { type: "celex", celex };
+  }
+  return CASE_LAW_REPLAY_SCOPE.SOURCE;
+};
+const scope = replayScope();
 const afterArgument = flagValue("after");
 const after =
   afterArgument === undefined
