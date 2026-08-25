@@ -52,6 +52,14 @@ const CUSTOM_TOKENIZERS = [FOLDED_TOKENIZER] as const;
 type CorpusIndexFieldMapping = {
   name: string;
   type: CorpusIndexFieldType;
+  /**
+   * Quickwit defaults `indexed` and `stored` to true, and `fast` to false.
+   * Those defaults carry index, object-storage, and heap costs, so every field
+   * must make each decision explicitly rather than inherit engine behavior.
+   */
+  indexed: boolean;
+  stored: boolean;
+  fast: boolean;
   // Built-in names plus whatever `CUSTOM_TOKENIZERS` declares, so a field can
   // never name a tokenizer the doc mapping does not ship.
   tokenizer?:
@@ -61,10 +69,8 @@ type CorpusIndexFieldMapping = {
     | (typeof CUSTOM_TOKENIZERS)[number]["name"];
   record?: "basic" | "freq" | "position";
   fieldnorms?: boolean;
-  fast?: boolean;
   /** Fast-field resolution for a datetime; coarser truncates harder. */
   fast_precision?: "seconds" | "milliseconds" | "microseconds" | "nanoseconds";
-  stored?: boolean;
   input_formats?: string[];
 };
 
@@ -122,12 +128,53 @@ const DATE_INPUT_FORMATS = ["%Y-%m-%d", "rfc3339", "unix_timestamp"];
 // Fields every family shares. `document_id` is the stable join key back
 // to Postgres; `text`/`title` carry BM25.
 const CORE_FIELDS: CorpusIndexFieldMapping[] = [
-  { name: "document_id", type: "text", tokenizer: "raw", fast: true },
-  { name: "jurisdiction", type: "text", tokenizer: "raw", fast: true },
-  { name: "document_type", type: "text", tokenizer: "raw", fast: true },
-  { name: "source", type: "text", tokenizer: "raw", fast: true },
-  { name: "language", type: "text", tokenizer: "raw", fast: true },
-  { name: "year", type: "u64", fast: true },
+  {
+    name: "document_id",
+    type: "text",
+    tokenizer: "raw",
+    indexed: true,
+    stored: true,
+    fast: true,
+  },
+  {
+    name: "jurisdiction",
+    type: "text",
+    tokenizer: "raw",
+    indexed: true,
+    stored: true,
+    fast: true,
+  },
+  {
+    name: "document_type",
+    type: "text",
+    tokenizer: "raw",
+    indexed: true,
+    stored: true,
+    fast: true,
+  },
+  {
+    name: "source",
+    type: "text",
+    tokenizer: "raw",
+    indexed: true,
+    stored: true,
+    fast: true,
+  },
+  {
+    name: "language",
+    type: "text",
+    tokenizer: "raw",
+    indexed: true,
+    stored: true,
+    fast: true,
+  },
+  {
+    name: "year",
+    type: "u64",
+    indexed: true,
+    stored: true,
+    fast: true,
+  },
   // Searchable, and therefore fan-out sensitive. Under a passage layout a
   // document-level field copied onto every passage lets one document answer a
   // broad query with as many hits as it has passages, crowding every other
@@ -142,6 +189,9 @@ const CORE_FIELDS: CorpusIndexFieldMapping[] = [
     tokenizer: FOLDED_TOKENIZER.name,
     record: "position",
     fieldnorms: true,
+    indexed: true,
+    stored: true,
+    fast: false,
   },
   {
     name: "text",
@@ -149,11 +199,26 @@ const CORE_FIELDS: CorpusIndexFieldMapping[] = [
     tokenizer: FOLDED_TOKENIZER.name,
     record: "position",
     fieldnorms: true,
+    indexed: true,
+    stored: true,
+    fast: false,
   },
   // Authority ranking signal, blended in the API rerank (case law uses
   // the citation graph; other families can populate an analogous signal).
-  { name: "citation_authority", type: "f64", fast: true },
-  { name: "citation_count", type: "u64", fast: true },
+  {
+    name: "citation_authority",
+    type: "f64",
+    indexed: true,
+    stored: true,
+    fast: true,
+  },
+  {
+    name: "citation_count",
+    type: "u64",
+    indexed: true,
+    stored: true,
+    fast: true,
+  },
   // Passage fields. A passage-granular family emits one document per passage,
   // all sharing `document_id`; a document-granular family simply never sets
   // them and, in lenient mode, the index carries them empty. The read path is
@@ -163,11 +228,31 @@ const CORE_FIELDS: CorpusIndexFieldMapping[] = [
   // `<document_id>:<seq>`. A deterministic, greppable identity for one
   // passage; not a primary key — the engine appends and replaces by
   // delete-by-query on `document_id`.
-  { name: "chunk_id", type: "text", tokenizer: "raw", stored: true },
-  { name: "seq", type: "u64", fast: true, stored: true },
+  {
+    name: "chunk_id",
+    type: "text",
+    tokenizer: "raw",
+    indexed: true,
+    stored: true,
+    fast: false,
+  },
+  {
+    name: "seq",
+    type: "u64",
+    indexed: true,
+    stored: true,
+    fast: true,
+  },
   // The AST block anchor the reader deep-links to, so a hit can open the
   // document scrolled to the passage that matched.
-  { name: "anchor_id", type: "text", tokenizer: "raw", stored: true },
+  {
+    name: "anchor_id",
+    type: "text",
+    tokenizer: "raw",
+    indexed: true,
+    stored: true,
+    fast: false,
+  },
   // Heading ancestry of the passage's section. Tokenized so a query can target
   // it explicitly (`heading_path:...`), but deliberately NOT a default search
   // field: it repeats on every continuation passage of a section, so a
@@ -182,7 +267,9 @@ const CORE_FIELDS: CorpusIndexFieldMapping[] = [
     tokenizer: FOLDED_TOKENIZER.name,
     record: "position",
     fieldnorms: true,
+    indexed: true,
     stored: true,
+    fast: false,
   },
 ];
 
@@ -228,22 +315,47 @@ const FAMILY_FIELDS: Record<CorpusFamily, CorpusIndexFieldMapping[]> = {
     // it exists: the query layer builds its filters explicitly and strips
     // engine field syntax out of free text, so a docket filter is added there
     // with, or after, the flip.
-    { name: "case_number", type: "text", tokenizer: "raw" },
-    { name: "court", type: "text", tokenizer: "raw", fast: true },
+    {
+      name: "case_number",
+      type: "text",
+      tokenizer: "raw",
+      indexed: true,
+      stored: true,
+      fast: false,
+    },
+    {
+      name: "court",
+      type: "text",
+      tokenizer: "raw",
+      indexed: true,
+      stored: true,
+      fast: true,
+    },
     {
       name: "decision_date",
       type: "datetime",
+      indexed: true,
+      stored: true,
       fast: true,
       input_formats: DATE_INPUT_FORMATS,
     },
     {
       name: DECISION_TIMESTAMP_FIELD,
       type: "datetime",
+      indexed: true,
+      stored: true,
       fast: true,
       fast_precision: "seconds",
       input_formats: DATE_INPUT_FORMATS,
     },
-    { name: "ecli", type: "text", tokenizer: "raw" },
+    {
+      name: "ecli",
+      type: "text",
+      tokenizer: "raw",
+      indexed: true,
+      stored: true,
+      fast: false,
+    },
   ],
   legislation: [
     // Compatibility boundary for the serving legislation_v1 indexes. Unlike
@@ -254,14 +366,32 @@ const FAMILY_FIELDS: Record<CorpusFamily, CorpusIndexFieldMapping[]> = {
       name: "canonical_text_key",
       type: "text",
       tokenizer: "raw",
+      indexed: true,
       stored: true,
+      fast: false,
     },
-    { name: "canonical_ast_key", type: "text", tokenizer: "raw", stored: true },
+    {
+      name: "canonical_ast_key",
+      type: "text",
+      tokenizer: "raw",
+      indexed: true,
+      stored: true,
+      fast: false,
+    },
     // current | historical | repealed
-    { name: "status", type: "text", tokenizer: "raw", fast: true },
+    {
+      name: "status",
+      type: "text",
+      tokenizer: "raw",
+      indexed: true,
+      stored: true,
+      fast: true,
+    },
     {
       name: "effective_date",
       type: "datetime",
+      indexed: true,
+      stored: true,
       fast: true,
       input_formats: DATE_INPUT_FORMATS,
     },
@@ -285,17 +415,28 @@ const FAMILY_FIELDS: Record<CorpusFamily, CorpusIndexFieldMapping[]> = {
     {
       name: "version_valid_from",
       type: "datetime",
+      indexed: true,
+      stored: true,
       fast: true,
       input_formats: DATE_INPUT_FORMATS,
     },
     {
       name: "version_valid_to",
       type: "datetime",
+      indexed: true,
+      stored: true,
       fast: true,
       input_formats: DATE_INPUT_FORMATS,
     },
     // European Legislation Identifier / national statute number.
-    { name: "eli", type: "text", tokenizer: "raw" },
+    {
+      name: "eli",
+      type: "text",
+      tokenizer: "raw",
+      indexed: true,
+      stored: true,
+      fast: false,
+    },
   ],
 };
 

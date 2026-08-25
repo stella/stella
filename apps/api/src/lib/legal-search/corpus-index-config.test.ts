@@ -57,6 +57,9 @@ test("the docket is its own raw field, reachable only by an exact query", () => 
     name: "case_number",
     type: "text",
     tokenizer: "raw",
+    indexed: true,
+    stored: true,
+    fast: false,
   });
   // Raw and not a default search field: a docket answers `case_number:"..."`,
   // and no free-text term reaches it. It repeats across a decision's passages,
@@ -283,6 +286,8 @@ test("case law names decision_date_ts as its timestamp field, mapped verbatim", 
   ).toEqual({
     name: "decision_date_ts",
     type: "datetime",
+    indexed: true,
+    stored: true,
     fast: true,
     fast_precision: "seconds",
     input_formats: ["%Y-%m-%d", "rfc3339", "unix_timestamp"],
@@ -353,6 +358,8 @@ test("the legislation validity window is a pair of fast datetimes", () => {
     ).toEqual({
       name,
       type: "datetime",
+      indexed: true,
+      stored: true,
       fast: true,
       input_formats: ["%Y-%m-%d", "rfc3339", "unix_timestamp"],
     });
