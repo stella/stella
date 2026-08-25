@@ -27,6 +27,11 @@
 //   await (paged ? loadRows(1) : loadRows(2))        // same call, one type
 //   const q = lock ? query.for("update") : query     // not awaited
 //
+// `--fix` performs the branchwise-await rewrite when the await directly wraps
+// the conditional. TypeScript wrappers around the whole conditional or either
+// branch remain a diagnostic because moving them requires a semantic choice
+// about which expression the assertion should constrain.
+//
 // Also allowed, and the reason detection is not merely "steps differ":
 //   await (json ? response.json() : response.text())  // siblings, no builder
 //   await (primary ? jobs.primary : jobs.secondary)   // siblings, no builder
@@ -48,6 +53,8 @@
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
 import { getPropertyName } from "./utils.ts";
+
+const AWAIT_KEYWORD_LENGTH = "await".length;
 
 // Peel TS-only and optional-chain wrappers so a shape check sees the
 // underlying expression.
@@ -73,8 +80,28 @@ const collectBranches = (node, branches) => {
     collectBranches(expression.alternate, branches);
     return branches;
   }
-  branches.push(expression);
+  // Keep the original leaf so the fixer can refuse branch-local TypeScript
+  // wrappers. describeChain still unwraps it for detection.
+  branches.push(node);
   return branches;
+};
+
+// A wrapper anywhere inside the conditional tree can change what a TypeScript
+// assertion constrains after branchwise `await` insertion. Keep the diagnostic,
+// but refuse the fix even when the wrapped expression is itself a nested
+// conditional rather than a final leaf.
+const hasFixUnsafeWrapper = (node) => {
+  const expression = unwrapWrappers(node);
+  if (expression !== node) {
+    return true;
+  }
+  if (expression?.type !== "ConditionalExpression") {
+    return false;
+  }
+  return (
+    hasFixUnsafeWrapper(expression.consequent) ||
+    hasFixUnsafeWrapper(expression.alternate)
+  );
 };
 
 // Resolve an expression to its root plus the member/call steps applied to it,
@@ -172,6 +199,7 @@ export default eslintCompatPlugin({
     "no-awaited-builder-union": {
       meta: {
         type: "problem",
+        fixable: "code",
         messages: {
           awaitedBuilderUnion:
             "Awaiting a ternary over two chain states of `{{root}}` makes " +
@@ -204,10 +232,47 @@ export default eslintCompatPlugin({
             if (!isBuilderChainUnion(chains)) {
               return;
             }
+            if (node.argument.type !== "ConditionalExpression") {
+              context.report({
+                node,
+                messageId: "awaitedBuilderUnion",
+                data: { root: first.root },
+              });
+              return;
+            }
             context.report({
               node,
               messageId: "awaitedBuilderUnion",
               data: { root: first.root },
+              fix: (fixer) => {
+                const awaitEnd = node.range[0] + AWAIT_KEYWORD_LENGTH;
+                const branches = collectBranches(node.argument, []);
+                if (hasFixUnsafeWrapper(node.argument)) {
+                  return null;
+                }
+                const hasInterveningComment = context.sourceCode
+                  .getAllComments()
+                  .some(
+                    (comment) =>
+                      comment.range[0] >= awaitEnd &&
+                      comment.range[0] < node.argument.range[0],
+                  );
+                if (hasInterveningComment) {
+                  return null;
+                }
+                let removalEnd = awaitEnd;
+                while (
+                  /\s/u.test(context.sourceCode.text.at(removalEnd) ?? "")
+                ) {
+                  removalEnd += 1;
+                }
+                return [
+                  fixer.removeRange([node.range[0], removalEnd]),
+                  ...branches.map((branch) =>
+                    fixer.insertTextBefore(branch, "await "),
+                  ),
+                ];
+              },
             });
           },
         };

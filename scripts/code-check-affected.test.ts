@@ -183,6 +183,7 @@ describe("affected code-check planning", () => {
   test.each([
     ["scripts/check-oxlint-plugin-registry.ts", "plugin-registry"],
     ["scripts/lint-oxlint-fixtures.sh", "plugin-fixtures"],
+    ["scripts/oxlint-safe-fixers.test.ts", "plugin-fixtures"],
     ["scripts/lint-root-scripts.sh", "root-script-lint"],
     ["scripts/tsconfig.json", "root-script-lint"],
     ["tsconfig.json", "plugin-fixtures"],
@@ -333,6 +334,9 @@ describe("Turbo cache input contract", () => {
     );
     expect(PLUGIN_FIXTURE_INPUTS).toContain(
       "$TURBO_ROOT$/scripts/lint-oxlint-fixtures.sh",
+    );
+    expect(PLUGIN_FIXTURE_INPUTS).toContain(
+      "$TURBO_ROOT$/scripts/oxlint-safe-fixers.test.ts",
     );
   });
 

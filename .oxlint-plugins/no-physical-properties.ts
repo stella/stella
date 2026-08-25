@@ -13,7 +13,74 @@ import { eslintCompatPlugin } from "@oxlint/plugins";
 // ESM resolver as well as Bun's, and Node does not infer one. Without it the
 // whole plugin set fails to load under Node, and the error names this file's
 // import rather than whatever the caller was linting.
-import { hasPhysicalProperty } from "./physical-properties.ts";
+import {
+  hasPhysicalProperty,
+  replacePhysicalProperties,
+} from "./physical-properties.ts";
+
+const isClassNameAttribute = (node) =>
+  node?.type === "JSXAttribute" &&
+  node.name.type === "JSXIdentifier" &&
+  node.name.name === "className";
+
+// Only direct JSX className values prove that a matched token is a Tailwind
+// class. Other strings still receive the diagnostic, but not a potentially
+// meaning-changing fix (for example, prose containing "right-click").
+const isDirectClassNameValue = (node) => {
+  if (isClassNameAttribute(node.parent) && node.parent.value === node) {
+    return true;
+  }
+  if (
+    node.parent?.type === "JSXExpressionContainer" &&
+    node.parent.expression === node &&
+    isClassNameAttribute(node.parent.parent)
+  ) {
+    return true;
+  }
+  if (node.type !== "TemplateElement") {
+    return false;
+  }
+  const template = node.parent;
+  const container = template?.parent;
+  return (
+    template?.type === "TemplateLiteral" &&
+    // A later quasi may continue an arbitrary bracket payload opened before
+    // or by an interpolation. Its class-token boundaries are not independently
+    // provable, so keep those matches diagnostic-only.
+    template.quasis.at(0) === node &&
+    container?.type === "JSXExpressionContainer" &&
+    container.expression === template &&
+    isClassNameAttribute(container.parent)
+  );
+};
+
+const reportPhysicalProperty = (context, node) => {
+  if (!isDirectClassNameValue(node)) {
+    context.report({ node, messageId: "physicalProperty" });
+    return;
+  }
+  context.report({
+    node,
+    messageId: "physicalProperty",
+    fix: (fixer) => {
+      const source = context.sourceCode.getText(node);
+      // The rule detects literals from their cooked value, while a fixer edits
+      // raw source. Escapes or JSX character references can therefore hide an
+      // arbitrary-value bracket from the source scanner. Keep such values
+      // diagnostic-only instead of guessing at their decoded boundaries.
+      if (
+        source.includes("\\") ||
+        /&(?:#(?:x[\da-f]+|\d+)|[a-z][\da-z]+);/iu.test(source)
+      ) {
+        return null;
+      }
+      const replacement = replacePhysicalProperties(source);
+      return replacement === source
+        ? null
+        : fixer.replaceText(node, replacement);
+    },
+  });
+};
 
 export default eslintCompatPlugin({
   meta: { name: "no-physical-properties" },
@@ -21,6 +88,7 @@ export default eslintCompatPlugin({
     "no-physical-properties": {
       meta: {
         type: "problem",
+        fixable: "code",
         messages: {
           physicalProperty:
             "Physical directional CSS property breaks RTL. " +
@@ -39,18 +107,12 @@ export default eslintCompatPlugin({
               return;
             }
             if (hasPhysicalProperty(node.value)) {
-              context.report({
-                node,
-                messageId: "physicalProperty",
-              });
+              reportPhysicalProperty(context, node);
             }
           },
           TemplateElement(node) {
             if (hasPhysicalProperty(node.value.raw)) {
-              context.report({
-                node,
-                messageId: "physicalProperty",
-              });
+              reportPhysicalProperty(context, node);
             }
           },
         };
