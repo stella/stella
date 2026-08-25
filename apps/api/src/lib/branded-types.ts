@@ -51,6 +51,7 @@ export type SafeIdType =
   | "contactExtractionUpload"
   | "contactImportRequest"
   | "contactRelationship"
+  | "corpusIndexProjectionIntent"
   | "usageAllocation"
   | "usageLaneCounter"
   | "usageSeatAssignment"

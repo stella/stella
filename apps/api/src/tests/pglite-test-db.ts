@@ -94,6 +94,14 @@ const CORPUS_PENDING_DELETE_TABLES_SQL = [
   .map(quoteSqlIdentifier)
   .join(", ");
 
+const CORPUS_PROJECTION_HISTORY_TABLES_SQL = [
+  schema.corpusIndexProjectionIntents,
+  schema.corpusIndexProjectionStates,
+]
+  .map(getTableName)
+  .map(quoteSqlIdentifier)
+  .join(", ");
+
 // The snapshot bakes in the superset every suite needs: RLS roles, schema,
 // workspace-access objects, and the role grants. Suites that never SET ROLE
 // simply ignore the grants.
@@ -235,6 +243,33 @@ const ROLE_GRANT_STATEMENTS = [
   `
     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE
       ${CORPUS_PENDING_DELETE_TABLES_SQL}
+    TO stella_ingestion
+  `,
+  // Final-generation state is observable by request code but mutated only by
+  // ingestion. A narrowly scoped database function owns retirement deletes.
+  `
+    REVOKE INSERT, UPDATE, DELETE ON TABLE
+      "corpus_index_generations",
+      ${CORPUS_PROJECTION_HISTORY_TABLES_SQL}
+    FROM stella
+  `,
+  `
+    GRANT SELECT ON TABLE
+      "corpus_index_generations",
+      ${CORPUS_PROJECTION_HISTORY_TABLES_SQL}
+    TO stella_ingestion
+  `,
+  `
+    GRANT INSERT, DELETE ON TABLE "corpus_index_generations"
+    TO stella_ingestion
+  `,
+  `
+    GRANT UPDATE (status, updated_at)
+      ON TABLE "corpus_index_generations" TO stella_ingestion
+  `,
+  `
+    GRANT INSERT, UPDATE ON TABLE
+      ${CORPUS_PROJECTION_HISTORY_TABLES_SQL}
     TO stella_ingestion
   `,
   // Preserve the v0.7.22 reader contract until its rollback window closes.

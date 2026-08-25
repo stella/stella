@@ -100,6 +100,7 @@ export const RESOURCE_IDENTITY_DISPOSITION = {
   contactExtractionUpload: { type: "non_resource", reason: "workflow" },
   contactImportRequest: { type: "non_resource", reason: "workflow" },
   contactRelationship: { type: "non_resource", reason: "association" },
+  corpusIndexProjectionIntent: { type: "non_resource", reason: "workflow" },
   usageAllocation: { type: "non_resource", reason: "policy" },
   usageLaneCounter: { type: "non_resource", reason: "event" },
   usageSeatAssignment: { type: "non_resource", reason: "policy" },

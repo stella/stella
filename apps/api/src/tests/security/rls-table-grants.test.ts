@@ -101,6 +101,11 @@ const POST_BOOTSTRAP_SELECT_ONLY_TABLES = new Set([
   // Corpus-index generation identity is immutable control-plane state. The
   // request role resolves serving generations but never mutates the registry.
   "corpus_index_generations",
+  // Final-generation desired/applied state and append intents are durable
+  // control-plane records. Request handlers may observe them; ingestion alone
+  // mutates the state machine.
+  "corpus_index_projection_states",
+  "corpus_index_projection_intents",
 ]);
 
 // Internal handoff tables whose scoped role needs INSERT but not table-wide

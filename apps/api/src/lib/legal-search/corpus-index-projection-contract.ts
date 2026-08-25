@@ -1,0 +1,135 @@
+export const CORPUS_INDEX_DESIRED_ACTIONS = ["upsert", "erase"] as const;
+export type CorpusIndexDesiredAction =
+  (typeof CORPUS_INDEX_DESIRED_ACTIONS)[number];
+
+export const CORPUS_INDEX_INTENT_STATUSES = [
+  "reserved",
+  "append_started",
+  "append_committed",
+  "applied",
+  "cleanup_pending",
+  "cleanup_started",
+  "cleanup_committed",
+  "settled",
+  "cancelled",
+] as const;
+export type CorpusIndexIntentStatus =
+  (typeof CORPUS_INDEX_INTENT_STATUSES)[number];
+
+export const CORPUS_INDEX_QUIESCENT_INTENT_STATUSES = [
+  "settled",
+  "cancelled",
+] as const satisfies readonly CorpusIndexIntentStatus[];
+
+/**
+ * Legal intent transitions. A response lost after an append never returns to
+ * `reserved`: its revision is assumed written and must pass through exact
+ * cleanup before the same desired epoch can be attempted again.
+ */
+export const CORPUS_INDEX_INTENT_TRANSITIONS = {
+  reserved: ["append_started", "cancelled"],
+  append_started: ["append_committed", "cleanup_pending"],
+  append_committed: ["applied", "cleanup_pending"],
+  applied: ["cleanup_pending"],
+  cleanup_pending: ["cleanup_started"],
+  cleanup_started: ["cleanup_pending", "cleanup_committed"],
+  cleanup_committed: ["settled"],
+  // A zero-hit census may later disprove settlement if an append was still in
+  // an ingester tail. Reopening exact-revision cleanup is safe and makes that
+  // engine edge self-healing.
+  settled: ["cleanup_pending"],
+  cancelled: [],
+} as const satisfies Record<
+  CorpusIndexIntentStatus,
+  readonly CorpusIndexIntentStatus[]
+>;
+
+export const canTransitionCorpusIndexIntent = (
+  from: CorpusIndexIntentStatus,
+  to: CorpusIndexIntentStatus,
+): boolean =>
+  CORPUS_INDEX_INTENT_TRANSITIONS[from].some((candidate) => candidate === to);
+
+export const corpusIndexIntentStatusAfterUnknownAppend = (
+  status: CorpusIndexIntentStatus,
+): CorpusIndexIntentStatus =>
+  status === "append_started" || status === "append_committed"
+    ? "cleanup_pending"
+    : status;
+
+type CorpusIndexIntentOutstandingInput = {
+  status: CorpusIndexIntentStatus;
+  revision: string;
+  appliedRevision: string | null;
+};
+
+/**
+ * `applied` is quiet only while PostgreSQL names that exact revision as
+ * authoritative. A crash before the state CAS, or a replaced revision not yet
+ * queued for cleanup, remains visible work for the reconciler.
+ */
+export const isCorpusIndexIntentOutstanding = ({
+  status,
+  revision,
+  appliedRevision,
+}: CorpusIndexIntentOutstandingInput): boolean => {
+  if (
+    CORPUS_INDEX_QUIESCENT_INTENT_STATUSES.some((value) => value === status)
+  ) {
+    return false;
+  }
+  return status !== "applied" || revision !== appliedRevision;
+};
+
+export type CorpusIndexDesiredProjection =
+  | {
+      action: "upsert";
+      epoch: bigint;
+      fingerprint: string;
+      indexId: string;
+    }
+  | { action: "erase"; epoch: bigint };
+
+export type CorpusIndexAppliedProjection =
+  | { action: "missing" }
+  | {
+      action: "upsert";
+      epoch: bigint;
+      fingerprint: string;
+      indexId: string;
+      revision: string;
+    }
+  | { action: "erase"; epoch: bigint };
+
+type CorpusIndexConvergenceInput = {
+  desired: CorpusIndexDesiredProjection;
+  applied: CorpusIndexAppliedProjection;
+  /**
+   * Every nonterminal intent except the exact revision currently referenced by
+   * `applied`. An unreferenced `applied` intent is outstanding cleanup work.
+   */
+  outstandingIntentCount: number;
+};
+
+/**
+ * A generation is current for one entity only when PostgreSQL desired and
+ * applied state agree and no append or cleanup can still change Quickwit.
+ */
+export const isCorpusIndexProjectionConverged = ({
+  desired,
+  applied,
+  outstandingIntentCount,
+}: CorpusIndexConvergenceInput): boolean => {
+  if (outstandingIntentCount !== 0 || applied.action !== desired.action) {
+    return false;
+  }
+  if (desired.action === "erase") {
+    return applied.action === "erase" && applied.epoch === desired.epoch;
+  }
+  return (
+    applied.action === "upsert" &&
+    applied.epoch === desired.epoch &&
+    applied.fingerprint === desired.fingerprint &&
+    applied.indexId === desired.indexId
+  );
+};

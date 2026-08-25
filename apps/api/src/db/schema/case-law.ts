@@ -425,6 +425,15 @@ export const caseLawDecisions = p.pgTable(
     indexedHash: p.varchar("indexed_hash", { length: 64 }),
     indexedGeneration: p.varchar("indexed_generation", { length: 64 }),
     indexedAt: timestamptz("indexed_at"),
+    /**
+     * Monotonic fence captured by final-generation projection intents. Any
+     * desired-state transaction increments it before changing the projection,
+     * so a worker leased against an older value cannot publish stale content.
+     */
+    projectionEpoch: p
+      .bigint("projection_epoch", { mode: "bigint" })
+      .default(0n)
+      .notNull(),
     createdAt: timestamptz("created_at")
       .default(sql`clock_timestamp()`)
       .notNull(),
@@ -434,6 +443,10 @@ export const caseLawDecisions = p.pgTable(
       .$onUpdate(() => new Date()),
   },
   (t) => [
+    p.check(
+      "case_law_decisions_projection_epoch_nonnegative",
+      sql`${t.projectionEpoch} >= 0`,
+    ),
     p.check(
       "case_law_decisions_corpus_mirror_status_values",
       sql`${t.corpusMirrorStatus} IN (${sql.join(CASE_LAW_CORPUS_MIRROR_STATUS_SQL_VALUES, sql`, `)})`,
