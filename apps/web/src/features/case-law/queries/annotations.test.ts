@@ -16,6 +16,8 @@ describe("collectAnnotationPages", () => {
           return { items: ["second"], nextCursor: "third-page" };
         case "third-page":
           return { items: ["third"], nextCursor: null };
+        default:
+          return { items: [], nextCursor: null };
       }
     });
 
