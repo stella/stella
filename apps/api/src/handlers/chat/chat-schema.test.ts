@@ -5,6 +5,7 @@ import * as v from "valibot";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import {
+  BROWSER_CONTROL_PROTOCOL_VERSION,
   CHAT_RICH_PART_LIMITS,
   CHAT_TURN_INTENT,
   resourceRef,
@@ -187,6 +188,43 @@ describe("chat turn intent", () => {
       Value.Check(sendMessageBodySchema, {
         ...request,
         turnIntent: "retry",
+      }),
+    ).toBe(false);
+  });
+});
+
+describe("browser client capability", () => {
+  const request = {
+    threadId: "019fc771-8b17-74bf-b85e-559afc54cfe5",
+    runId: "run-browser-1",
+    sendMode: CHAT_SEND_MODE.rawOverride,
+    message: {
+      id: "019fc771-8b17-7000-b85e-559afc54cfe5",
+      role: "user",
+      parts: [{ type: "text", content: "Read this page" }],
+    },
+  };
+
+  test("accepts only the supported extension protocol", () => {
+    expect(
+      Value.Check(sendMessageBodySchema, {
+        ...request,
+        browserClient: { protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION },
+      }),
+    ).toBe(true);
+    expect(
+      Value.Check(sendMessageBodySchema, {
+        ...request,
+        browserClient: { protocolVersion: 1 },
+      }),
+    ).toBe(false);
+    expect(
+      Value.Check(sendMessageBodySchema, {
+        ...request,
+        browserClient: {
+          protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+          arbitraryJavaScript: true,
+        },
       }),
     ).toBe(false);
   });

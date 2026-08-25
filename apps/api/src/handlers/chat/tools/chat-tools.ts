@@ -1,6 +1,7 @@
 import {
   BUILT_IN_CHAT_TOOL_POLICY_KINDS,
   type ApprovalRequiredBuiltInChatToolName,
+  type BrowserClientCapability,
   type BuiltInChatToolPolicyKindByName,
 } from "@stll/api-contract";
 import type { DocxSuggestionSurface } from "@stll/api-contract/chat-docx-suggestions";
@@ -21,6 +22,7 @@ import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-bou
 import type { AuthorizedToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
 import { createAutoApplySuggestChangesTools } from "@/api/handlers/chat/tools/auto-apply-suggest-changes-tools";
 import { createBoeTools } from "@/api/handlers/chat/tools/boe-tools";
+import { createBrowserControlTool } from "@/api/handlers/chat/tools/browser-control-tool";
 import { createBusinessRegistryTools } from "@/api/handlers/chat/tools/business-registry-tools";
 import { createChatHistoryTools } from "@/api/handlers/chat/tools/chat-history-tools";
 import {
@@ -209,6 +211,7 @@ type ChatExecutionTools = ChatCodeModeToolMap;
 type SkillTools = ReturnType<typeof createSkillTools>;
 type BusinessRegistryTools = ReturnType<typeof createBusinessRegistryTools>;
 type BoeTools = ReturnType<typeof createBoeTools>;
+type BrowserControlTools = ReturnType<typeof createBrowserControlTool>;
 type InfosoudTools = ReturnType<typeof createInfosoudTools>;
 /**
  * `suggest_changes` is one tool name with two registrations: the manual,
@@ -248,6 +251,7 @@ type BuiltInChatTools = OrgTools &
   CurrentSkillEditTools &
   BusinessRegistryTools &
   BoeTools &
+  BrowserControlTools &
   InfosoudTools &
   WorkspaceTools &
   SuggestChangesTools &
@@ -363,6 +367,11 @@ type GetChatToolsProps = {
    * Studio does handle that one.
    */
   hasActiveDocxFileClient: boolean;
+  /**
+   * Present only when the requesting web surface has a live, permissioned
+   * extension executor; absent means the tool is not registered.
+   */
+  browserClient?: BrowserClientCapability | undefined;
   /**
    * Which client executor resolves `suggest_changes` this turn, and so
    * which per-surface schema the model sees. Not derivable from the two
@@ -597,6 +606,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
     hasActiveDocxEditClient,
     hasActiveDocxFileClient,
     docxSuggestionSurface,
+    browserClient,
     webSearchEnabled,
     webSearchProviders,
     externalTools = {},
@@ -679,6 +689,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
   });
   const boeDisabled = disabledNativeToolSlugs?.includes("boe") ?? false;
   const boeTools = boeDisabled ? {} : createBoeTools();
+  const browserControlTools = browserClient ? createBrowserControlTool() : {};
   const infosoudDisabled =
     disabledNativeToolSlugs?.includes("infosoud") ?? false;
   const infosoudTools = infosoudDisabled ? {} : createInfosoudTools();
@@ -978,6 +989,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
           projectToolMapForSubagent(
             getChatTools({
               ...props,
+              browserClient: undefined,
               hasActiveDocxEditClient: false,
               delegationDepth: delegationDepth + 1,
             }),
@@ -1002,6 +1014,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
       ...skillTools,
       ...businessRegistryTools,
       ...boeTools,
+      ...browserControlTools,
       ...infosoudTools,
       ...workspaceTools,
       ...templateTools,

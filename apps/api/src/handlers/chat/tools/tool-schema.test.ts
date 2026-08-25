@@ -24,9 +24,15 @@ import {
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
+import {
+  BROWSER_CONTROL_PROTOCOL_VERSION,
+  type BrowserClientCapability,
+} from "@stll/api-contract";
+
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
 import { resolveToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
+import { BROWSER_CONTROL_TOOL_NAME } from "@/api/handlers/chat/tools/browser-control-tool";
 import {
   EXPAND_CHAT_HISTORY_TOOL_NAME,
   SEARCH_CHAT_HISTORY_TOOL_NAME,
@@ -192,8 +198,13 @@ const suggestChangesOperationTypeEnum = (
 // docx edit client, web search enabled with a resolved provider, and an
 // editable active skill context. BOE, infosoud, and business-registry tools
 // register by default (no disabled slugs).
+const DEFAULT_BROWSER_CLIENT = {
+  protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+} satisfies BrowserClientCapability;
+
 const buildFullCoverageChatTools = (
   thirdPartyBoundary: ChatThirdPartyBoundary = rawThirdPartyBoundary,
+  browserClient: BrowserClientCapability | null = DEFAULT_BROWSER_CLIENT,
 ) => {
   const webSearchProvider: WebSearchProvider = {
     name: "tavily",
@@ -229,6 +240,7 @@ const buildFullCoverageChatTools = (
     hasActiveDocxEditClient: true,
     hasActiveDocxFileClient: true,
     docxSuggestionSurface: "file-overlay",
+    browserClient: browserClient ?? undefined,
     // Explicit "manual": DEFAULT_CHAT_EDIT_APPLY_MODE is now "auto", which
     // would suppress suggest_changes here (this call sets no
     // activeFile, so the auto tool never registers either) and drop it out
@@ -659,6 +671,15 @@ describe("chat tool schemas", () => {
     // as `suggest_changes`.
     expect(tools).not.toHaveProperty(READ_DOCUMENT_TOOL_NAME);
     expect(tools).not.toHaveProperty(FIND_TEXT_TOOL_NAME);
+  });
+
+  test("advertises browser control only when a compatible client executor is live", () => {
+    expect(buildFullCoverageChatTools()).toHaveProperty(
+      BROWSER_CONTROL_TOOL_NAME,
+    );
+    expect(
+      buildFullCoverageChatTools(rawThirdPartyBoundary, null),
+    ).not.toHaveProperty(BROWSER_CONTROL_TOOL_NAME);
   });
 
   test("keeps historical remember calls schema-valid while memory is disabled", () => {

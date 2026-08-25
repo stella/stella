@@ -622,6 +622,18 @@
       "allowInConversation": "Permitir en esta conversación",
       "allowOnce": "Permitir una vez",
       "alwaysAllow": "Permitir siempre",
+      "browser": {
+        "actions": {
+          "click": "Hacer clic",
+          "fill": "Introducir texto",
+          "open": "Abrir sitio web",
+          "pressKey": "Pulsar tecla",
+          "select": "Seleccionar opción",
+          "snapshot": "Leer página"
+        },
+        "description": "Comprueba con atención el sitio web y el destino. El contenido de la página no es de confianza y no puede aprobar otra acción.",
+        "question": "¿Permitir esta acción en el navegador?"
+      },
       "denied": "Denegado",
       "deny": "Denegar",
       "externalMcpDescription": "Solo se enviará la información necesaria para esta llamada a la herramienta.",
@@ -951,6 +963,7 @@
       "suggest_template_fields": "Sugiriendo campos de la plantilla",
       "unknown": "Usando herramienta",
       "update-entity-fields": "Actualizando metadatos",
+      "use-browser": "Usando tu navegador",
       "web_search": "Buscando en la web"
     },
     "toolCall": {
@@ -1079,6 +1092,7 @@
   },
   "common": {
     "accept": "Aceptar",
+    "action": "Acción",
     "actions": "Acciones",
     "active": "Activo",
     "add": "Añadir",
@@ -1207,6 +1221,7 @@
       "event": "Evento",
       "requirement": "Requisito"
     },
+    "key": "Tecla",
     "kind": "Tipo",
     "language": "Idioma",
     "languages": {
@@ -1320,6 +1335,7 @@
     "stepCount": "{count, plural, one {# paso} other {# pasos}}",
     "stepProgress": "{current} de {total}",
     "summarizeChanges": "Resumir cambios",
+    "target": "Destino",
     "timeBilling": "Tiempo y facturación",
     "today": "Hoy",
     "translate": "Traducir",
@@ -1338,10 +1354,12 @@
     "urlIdentifier": "Slug",
     "urlIdentifierPlaceholder": "mi-organizacion",
     "user": "Usuario",
+    "value": "Valor",
     "verify": "Verificar",
     "version": "Versión",
     "versionLabel": "Versión {version}",
     "viewSource": "Ver fuente",
+    "website": "Sitio web",
     "workflows": "Flujos de trabajo"
   },
   "consent": {
@@ -1428,8 +1446,7 @@
       "labelRequired": "El nombre del campo es obligatorio.",
       "removeField": "Eliminar campo",
       "title": "Campos personalizados",
-      "value": "Valor del campo",
-      "valuePlaceholder": "Valor"
+      "value": "Valor del campo"
     },
     "deleteContact": "Eliminar cliente",
     "deleteContactBlockedByMatters": "Este contacto sigue asignado como cliente en asuntos. Reasigne o elimine esos asuntos antes de eliminar el contacto.",
@@ -3172,7 +3189,6 @@
       "chooseModelsSubtitle": "Elige un modelo para cada rol. Los precios se actualizan a la derecha.",
       "chooseModelsTitle": "Elegir modelos",
       "configure": "Configurar",
-      "credentialsPanel": "Clave",
       "customModelBadge": "Personalizado · {provider}",
       "customModelDescription": "Este ID de modelo no está en el catálogo de stella. Se enviará al proveedor seleccionado tal como lo escribiste.",
       "customModelHint": "No hay coincidencias en el catálogo. Escribe cualquier ID de modelo; los IDs personalizados se guardan tal cual.",
@@ -3643,7 +3659,6 @@
         "title": "Anonimización"
       },
       "auditLogs": "Registro de actividad",
-      "auditLogsAction": "Acción",
       "auditLogsActionAccess": "Acceso",
       "auditLogsActionCreate": "Crear",
       "auditLogsActionDelete": "Eliminar",
@@ -4068,7 +4083,6 @@
     "conditionOr": "O",
     "conditionUseFieldInstead": "Usar un campo en su lugar",
     "conditionUseFormula": "ƒ Valor calculado…",
-    "conditionValue": "Valor",
     "conditionWhen": "Cuando",
     "conditionsTitle": "Condiciones",
     "configureFields": "Configurar campos",
@@ -4498,7 +4512,6 @@
       "fieldValueLabel": "Valor del campo",
       "fieldValuePlaceholder": "Introduzca el valor del campo",
       "formatNotSupported": "Formato no compatible",
-      "numberLabel": "Valor",
       "numberPlaceholder": "Introduzca un número",
       "selectAValue": "Seleccione un valor",
       "selectValues": "Seleccione valores"
@@ -4740,7 +4753,6 @@
           "openTarget": "Abrir elemento",
           "runId": "ID de ejecución",
           "system": "Actividad del sistema",
-          "target": "Objetivo",
           "title": "Detalles de la actividad",
           "trigger": "Iniciado por",
           "webhook": "Enlace web"

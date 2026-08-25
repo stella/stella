@@ -215,6 +215,7 @@ const CHAT_TOOL_TITLE_KEYS = {
   boe_search_legislation: "chat.tool.boe_search_legislation",
   borme_get_summary: "chat.tool.borme_get_summary",
   business_registry_lookup: "chat.tool.business_registry_lookup",
+  "use-browser": "chat.tool.use-browser",
   compare_versions: "chat.tool.compare_versions",
   review_folder_consistency: "chat.tool.review_folder_consistency",
   "create-document": "chat.tool.create-document",
@@ -318,6 +319,7 @@ const PUBLIC_OFFICIAL_CHAT_TOOL_NAMES = {
 const EXTERNAL_INPUT_CHAT_TOOL_NAMES = {
   boe_search_legislation: true,
   fetch_url: true,
+  "use-browser": true,
   web_search: true,
 } as const satisfies Record<ExternalInputToolName, true>;
 
@@ -428,6 +430,7 @@ const CHAT_TOOL_GRANT_POLICY = {
   "update-current-skill-body": CHAT_TOOL_GRANT_POLICY_KIND.grantable,
   "update-current-skill-resource": CHAT_TOOL_GRANT_POLICY_KIND.grantable,
   "update-entity-fields": CHAT_TOOL_GRANT_POLICY_KIND.grantable,
+  "use-browser": CHAT_TOOL_GRANT_POLICY_KIND.neverAuto,
   web_search: CHAT_TOOL_GRANT_POLICY_KIND.grantable,
 } as const satisfies Record<
   Extract<BuiltInApprovalToolName, ApprovalRequiredBuiltInChatToolName>,
@@ -512,6 +515,7 @@ const REGISTRY_WRITE_SUMMARY_TOOL_NAMES = {
   "update-current-skill-body": false,
   "update-current-skill-resource": false,
   "update-entity-fields": false,
+  "use-browser": false,
   web_search: false,
 } as const satisfies Record<
   Extract<BuiltInApprovalToolName, ApprovalRequiredBuiltInChatToolName>,

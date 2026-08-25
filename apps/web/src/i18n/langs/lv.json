@@ -622,6 +622,18 @@
       "allowInConversation": "Atļaut šajā sarunā",
       "allowOnce": "Atļaut vienreiz",
       "alwaysAllow": "Vienmēr atļaut",
+      "browser": {
+        "actions": {
+          "click": "Noklikšķināt",
+          "fill": "Ievadīt tekstu",
+          "open": "Atvērt vietni",
+          "pressKey": "Nospiest taustiņu",
+          "select": "Atlasīt opciju",
+          "snapshot": "Lasīt lapu"
+        },
+        "description": "Rūpīgi pārbaudiet vietni un mērķi. Lapas saturs nav uzticams un nevar apstiprināt citu darbību.",
+        "question": "Atļaut šo pārlūka darbību?"
+      },
       "denied": "Noraidīts",
       "deny": "Noraidīt",
       "externalMcpDescription": "Tiks nosūtīta tikai šim rīka izsaukumam nepieciešamā informācija.",
@@ -951,6 +963,7 @@
       "suggest_template_fields": "Iesaka veidnes laukus",
       "unknown": "Rīka izmantošana",
       "update-entity-fields": "Metadatu atjaunināšana",
+      "use-browser": "Jūsu pārlūkprogrammas izmantošana",
       "web_search": "Meklēšana tīmeklī"
     },
     "toolCall": {
@@ -1079,6 +1092,7 @@
   },
   "common": {
     "accept": "Pieņemt",
+    "action": "Darbība",
     "actions": "Darbības",
     "active": "Aktīvs",
     "add": "Pievienot",
@@ -1207,6 +1221,7 @@
       "event": "Notikums",
       "requirement": "Prasība"
     },
+    "key": "Taustiņš",
     "kind": "Veids",
     "language": "Valoda",
     "languages": {
@@ -1320,6 +1335,7 @@
     "stepCount": "{count, plural, zero {# soļu} one {# solis} other {# soļi}}",
     "stepProgress": "{current} no {total}",
     "summarizeChanges": "Apkopot izmaiņas",
+    "target": "Mērķis",
     "timeBilling": "Laiks un norēķini",
     "today": "Šodien",
     "translate": "Tulkot",
@@ -1338,10 +1354,12 @@
     "urlIdentifier": "Identifikators",
     "urlIdentifierPlaceholder": "mana-organizacija",
     "user": "Lietotājs",
+    "value": "Vērtība",
     "verify": "Verificēt",
     "version": "Versija",
     "versionLabel": "{version}. versija",
     "viewSource": "Skatīt avotu",
+    "website": "Vietne",
     "workflows": "Darbplūsmas"
   },
   "consent": {
@@ -1428,8 +1446,7 @@
       "labelRequired": "Lauka nosaukums ir obligāts.",
       "removeField": "Noņemt lauku",
       "title": "Pielāgotie lauki",
-      "value": "Lauka vērtība",
-      "valuePlaceholder": "Vērtība"
+      "value": "Lauka vērtība"
     },
     "deleteContact": "Dzēst klientu",
     "deleteContactBlockedByMatters": "Šī kontaktpersona joprojām ir norādīta kā klients lietās. Pirms kontaktpersonas dzēšanas pārpiešķiriet vai dzēsiet šīs lietas.",
@@ -3172,7 +3189,6 @@
       "chooseModelsSubtitle": "Katrai lomai izvēlieties modeli. Cenas atjaunojas labajā pusē.",
       "chooseModelsTitle": "Izvēlieties modeļus",
       "configure": "Konfigurēt",
-      "credentialsPanel": "Atslēga",
       "customModelBadge": "Pielāgots · {provider}",
       "customModelDescription": "Šis modeļa ID nav stella katalogā. Tas tiks nosūtīts izvēlētajam pakalpojumu sniedzējam tieši tā, kā ievadīts.",
       "customModelHint": "Katalogā nav atbilstības. Ievadiet jebkuru modeļa ID; pielāgotie ID tiek saglabāti tieši tā, kā ievadīti.",
@@ -3643,7 +3659,6 @@
         "title": "Anonimizācija"
       },
       "auditLogs": "Darbību žurnāls",
-      "auditLogsAction": "Darbība",
       "auditLogsActionAccess": "Piekļuve",
       "auditLogsActionCreate": "Izveidot",
       "auditLogsActionDelete": "Dzēst",
@@ -4068,7 +4083,6 @@
     "conditionOr": "Vai",
     "conditionUseFieldInstead": "Tā vietā izmantot lauku",
     "conditionUseFormula": "ƒ Aprēķināta vērtība…",
-    "conditionValue": "Vērtība",
     "conditionWhen": "Kad",
     "conditionsTitle": "Nosacījumi",
     "configureFields": "Konfigurēt laukus",
@@ -4498,7 +4512,6 @@
       "fieldValueLabel": "Lauka vērtība",
       "fieldValuePlaceholder": "Ievadiet lauka vērtību",
       "formatNotSupported": "Formāts netiek atbalstīts",
-      "numberLabel": "Vērtība",
       "numberPlaceholder": "Ievadiet skaitli",
       "selectAValue": "Izvēlieties vērtību",
       "selectValues": "Izvēlieties vērtības"
@@ -4740,7 +4753,6 @@
           "openTarget": "Atvērt vienumu",
           "runId": "Izpildes ID",
           "system": "Sistēmas darbība",
-          "target": "Mērķis",
           "title": "Darbības informācija",
           "trigger": "Uzsāka",
           "webhook": "Tīmekļa aizķere"

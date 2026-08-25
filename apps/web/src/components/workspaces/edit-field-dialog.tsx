@@ -285,9 +285,7 @@ export const EditFieldDialog = ({
                     <form.Field
                       children={(field) => (
                         <Field name={field.name}>
-                          <FieldLabel>
-                            {t("workspaces.fields.numberLabel")}
-                          </FieldLabel>
+                          <FieldLabel>{t("common.value")}</FieldLabel>
                           <Input
                             onBlur={field.handleBlur}
                             onChange={(e) =>

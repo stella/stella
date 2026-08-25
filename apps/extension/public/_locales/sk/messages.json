@@ -1,0 +1,27 @@
+{
+  "accessOff": {
+    "message": "Prístup k webom je vypnutý. Jednorazovým povolením umožníte stelle používať weby, na ktorých ste prihlásení."
+  },
+  "accessReady": {
+    "message": "Pripravené. stella môže používať vyhradenú kartu a vaše prihlásenia zostanú aktívne."
+  },
+  "accessUpdateFailed": {
+    "message": "Chromu sa nepodarilo zmeniť prístup k webom."
+  },
+  "checkingAccess": { "message": "Kontrola prístupu k webom…" },
+  "connectTab": { "message": "Pripojiť aktuálnu kartu stella" },
+  "controllerReady": {
+    "message": "Pripojené k $ORIGIN$. Každá akcia stále vyžaduje schválenie v stelle.",
+    "placeholders": { "origin": { "content": "$1" } }
+  },
+  "disconnectTab": { "message": "Odpojiť kartu" },
+  "extensionDescription": {
+    "message": "Po udelení prístupu umožní stelle ovládať vyhradenú kartu Chromu."
+  },
+  "extensionName": { "message": "Prehliadač stella" },
+  "grantAccess": { "message": "Povoliť všetky weby" },
+  "revokeAccess": { "message": "Odobrať prístup k webom" },
+  "unsupportedTab": {
+    "message": "Otvorte kartu aplikácie stella a skúste to znova."
+  }
+}

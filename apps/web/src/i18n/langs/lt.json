@@ -622,6 +622,18 @@
       "allowInConversation": "Leisti šiame pokalbyje",
       "allowOnce": "Leisti vieną kartą",
       "alwaysAllow": "Visada leisti",
+      "browser": {
+        "actions": {
+          "click": "Spustelėti",
+          "fill": "Įvesti tekstą",
+          "open": "Atverti svetainę",
+          "pressKey": "Paspausti klavišą",
+          "select": "Pasirinkti parinktį",
+          "snapshot": "Perskaityti puslapį"
+        },
+        "description": "Atidžiai patikrinkite svetainę ir taikinį. Puslapio turinys nėra patikimas ir negali patvirtinti kito veiksmo.",
+        "question": "Leisti šį naršyklės veiksmą?"
+      },
       "denied": "Atmesta",
       "deny": "Atmesti",
       "externalMcpDescription": "Bus išsiųsta tik šiam įrankio iškvietimui reikalinga informacija.",
@@ -951,6 +963,7 @@
       "suggest_template_fields": "Siūlomi šablono laukai",
       "unknown": "Naudojamas įrankis",
       "update-entity-fields": "Atnaujinami metaduomenys",
+      "use-browser": "Jūsų naršyklės naudojimas",
       "web_search": "Ieškoma internete"
     },
     "toolCall": {
@@ -1079,6 +1092,7 @@
   },
   "common": {
     "accept": "Priimti",
+    "action": "Veiksmas",
     "actions": "Veiksmai",
     "active": "Aktyvus",
     "add": "Pridėti",
@@ -1207,6 +1221,7 @@
       "event": "Įvykis",
       "requirement": "Reikalavimas"
     },
+    "key": "Klavišas",
     "kind": "Rūšis",
     "language": "Kalba",
     "languages": {
@@ -1320,6 +1335,7 @@
     "stepCount": "{count, plural, one {# žingsnis} few {# žingsniai} other {# žingsnių}}",
     "stepProgress": "{current} iš {total}",
     "summarizeChanges": "Apibendrinti pakeitimus",
+    "target": "Taikinys",
     "timeBilling": "Laikas ir atsiskaitymai",
     "today": "Šiandien",
     "translate": "Versti",
@@ -1338,10 +1354,12 @@
     "urlIdentifier": "URL identifikatorius",
     "urlIdentifierPlaceholder": "mano-organizacija",
     "user": "Naudotojas",
+    "value": "Reikšmė",
     "verify": "Patvirtinti",
     "version": "Versija",
     "versionLabel": "{version} versija",
     "viewSource": "Žiūrėti šaltinį",
+    "website": "Svetainė",
     "workflows": "Darbo eigos"
   },
   "consent": {
@@ -1428,8 +1446,7 @@
       "labelRequired": "Lauko pavadinimas privalomas.",
       "removeField": "Pašalinti lauką",
       "title": "Pasirinktiniai laukai",
-      "value": "Lauko reikšmė",
-      "valuePlaceholder": "Reikšmė"
+      "value": "Lauko reikšmė"
     },
     "deleteContact": "Ištrinti klientą",
     "deleteContactBlockedByMatters": "Šis kontaktas vis dar priskirtas kaip klientas bylose. Prieš ištrindami kontaktą, perskirkite arba ištrinkite tas bylas.",
@@ -3172,7 +3189,6 @@
       "chooseModelsSubtitle": "Kiekvienai rolei pasirinkite modelį. Kainos atnaujinamos dešinėje.",
       "chooseModelsTitle": "Pasirinkite modelius",
       "configure": "Konfigūruoti",
-      "credentialsPanel": "Raktas",
       "customModelBadge": "Pasirinktinis · {provider}",
       "customModelDescription": "Šio modelio ID nėra stella kataloge. Jis bus perduotas pasirinktam teikėjui taip, kaip įvestas.",
       "customModelHint": "Kataloge atitikmens nėra. Įveskite bet kokį modelio ID; pasirinktiniai ID išsaugomi taip, kaip įvesti.",
@@ -3643,7 +3659,6 @@
         "title": "Anonimizavimas"
       },
       "auditLogs": "Veiklos žurnalas",
-      "auditLogsAction": "Veiksmas",
       "auditLogsActionAccess": "Prieiga",
       "auditLogsActionCreate": "Sukurti",
       "auditLogsActionDelete": "Ištrinti",
@@ -4068,7 +4083,6 @@
     "conditionOr": "Arba",
     "conditionUseFieldInstead": "Vietoje to naudoti lauką",
     "conditionUseFormula": "ƒ Apskaičiuota reikšmė…",
-    "conditionValue": "Reikšmė",
     "conditionWhen": "Kai",
     "conditionsTitle": "Sąlygos",
     "configureFields": "Konfigūruoti laukus",
@@ -4498,7 +4512,6 @@
       "fieldValueLabel": "Lauko reikšmė",
       "fieldValuePlaceholder": "Įveskite lauko reikšmę",
       "formatNotSupported": "Formatas nepalaikomas",
-      "numberLabel": "Reikšmė",
       "numberPlaceholder": "Įveskite skaičių",
       "selectAValue": "Pasirinkite reikšmę",
       "selectValues": "Pasirinkite reikšmes"
@@ -4740,7 +4753,6 @@
           "openTarget": "Atidaryti elementą",
           "runId": "Vykdymo ID",
           "system": "Sistemos veikla",
-          "target": "Objektas",
           "title": "Veiklos informacija",
           "trigger": "Inicijavo",
           "webhook": "Saityno jungtis"

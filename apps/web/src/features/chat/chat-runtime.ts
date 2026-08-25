@@ -24,6 +24,8 @@ import {
   isChatClientRequestActive,
   sanitizeRunningToolCalls,
 } from "@/components/chat/chat-ui-tools";
+import { createBrowserClientTool } from "@/features/chat/browser-control/browser-client-tool";
+import { getBrowserClientCapability } from "@/features/chat/browser-control/browser-extension-bridge";
 import { apiUrl } from "@/lib/api-url";
 import {
   CHAT_EDIT_APPLY_MODE,
@@ -334,6 +336,7 @@ export const createChatRuntime = ({
     onSessionGeneratingChange: (sessionGenerating) =>
       setSnapshot({ sessionGenerating }),
     onStatusChange: (status) => setSnapshot({ status }),
+    tools: [createBrowserClientTool()],
   });
 
   const withBody = async (
@@ -628,6 +631,11 @@ export const buildSendRequestBody = ({
     runId: run.runId,
     threadId: key.threadId,
   };
+
+  const browserClient = getBrowserClientCapability();
+  if (browserClient) {
+    body.browserClient = browserClient;
+  }
 
   if (requestBody?.truncateAfterMessageId !== undefined) {
     body.truncateAfterMessageId = requestBody.truncateAfterMessageId;

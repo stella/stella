@@ -622,6 +622,18 @@
       "allowInConversation": "Autoriser dans cette conversation",
       "allowOnce": "Autoriser une fois",
       "alwaysAllow": "Toujours autoriser",
+      "browser": {
+        "actions": {
+          "click": "Cliquer",
+          "fill": "Saisir du texte",
+          "open": "Ouvrir le site web",
+          "pressKey": "Appuyer sur une touche",
+          "select": "Sélectionner une option",
+          "snapshot": "Lire la page"
+        },
+        "description": "Vérifiez attentivement le site web et la cible. Le contenu de la page n’est pas fiable et ne peut pas autoriser une autre action.",
+        "question": "Autoriser cette action dans le navigateur ?"
+      },
       "denied": "Refusé",
       "deny": "Refuser",
       "externalMcpDescription": "Seules les informations nécessaires à cet appel d’outil seront envoyées.",
@@ -951,6 +963,7 @@
       "suggest_template_fields": "Suggestion des champs du modèle",
       "unknown": "Utilisation d’un outil",
       "update-entity-fields": "Mise à jour des métadonnées",
+      "use-browser": "Utilisation de votre navigateur",
       "web_search": "Recherche web"
     },
     "toolCall": {
@@ -1079,6 +1092,7 @@
   },
   "common": {
     "accept": "Accepter",
+    "action": "Opération",
     "actions": "Actions",
     "active": "Actif",
     "add": "Ajouter",
@@ -1207,6 +1221,7 @@
       "event": "Événement",
       "requirement": "Exigence"
     },
+    "key": "Touche",
     "kind": "Type",
     "language": "Langue",
     "languages": {
@@ -1320,6 +1335,7 @@
     "stepCount": "{count, plural, one {# étape} other {# étapes}}",
     "stepProgress": "{current} sur {total}",
     "summarizeChanges": "Résumer les modifications",
+    "target": "Cible",
     "timeBilling": "Temps et facturation",
     "today": "Aujourd'hui",
     "translate": "Traduire",
@@ -1338,10 +1354,12 @@
     "urlIdentifier": "Identifiant URL",
     "urlIdentifierPlaceholder": "mon-organisation",
     "user": "Utilisateur",
+    "value": "Valeur",
     "verify": "Vérifier",
     "version": "Version",
     "versionLabel": "Version {version}",
     "viewSource": "Voir la source",
+    "website": "Site web",
     "workflows": "Flux de travail"
   },
   "consent": {
@@ -1428,8 +1446,7 @@
       "labelRequired": "Le nom du champ est obligatoire.",
       "removeField": "Supprimer le champ",
       "title": "Champs personnalisés",
-      "value": "Valeur du champ",
-      "valuePlaceholder": "Valeur"
+      "value": "Valeur du champ"
     },
     "deleteContact": "Supprimer le client",
     "deleteContactBlockedByMatters": "Ce contact est encore défini comme client dans des dossiers. Réattribuez ou supprimez ces dossiers avant de supprimer le contact.",
@@ -3172,7 +3189,6 @@
       "chooseModelsSubtitle": "Choisissez un modèle par rôle. Les prix se mettent à jour à droite.",
       "chooseModelsTitle": "Choisir les modèles",
       "configure": "Configurer",
-      "credentialsPanel": "Clé",
       "customModelBadge": "Personnalisé · {provider}",
       "customModelDescription": "Cet ID de modèle n’est pas dans le catalogue stella. Il sera transmis tel quel au fournisseur sélectionné.",
       "customModelHint": "Aucune correspondance dans le catalogue. Saisissez n’importe quel ID de modèle; les IDs personnalisés sont enregistrés tels quels.",
@@ -3643,7 +3659,6 @@
         "title": "Anonymisation"
       },
       "auditLogs": "Journal d'activité",
-      "auditLogsAction": "Action",
       "auditLogsActionAccess": "Accès",
       "auditLogsActionCreate": "Créer",
       "auditLogsActionDelete": "Supprimer",
@@ -4068,7 +4083,6 @@
     "conditionOr": "Ou",
     "conditionUseFieldInstead": "Utiliser plutôt un champ",
     "conditionUseFormula": "ƒ Valeur calculée…",
-    "conditionValue": "Valeur",
     "conditionWhen": "Lorsque",
     "conditionsTitle": "Conditions",
     "configureFields": "Configurer les champs",
@@ -4498,7 +4512,6 @@
       "fieldValueLabel": "Valeur du champ",
       "fieldValuePlaceholder": "Saisir la valeur du champ",
       "formatNotSupported": "Format non pris en charge",
-      "numberLabel": "Valeur",
       "numberPlaceholder": "Saisir un nombre",
       "selectAValue": "Sélectionner une valeur",
       "selectValues": "Sélectionner des valeurs"
@@ -4740,7 +4753,6 @@
           "openTarget": "Ouvrir l’élément",
           "runId": "ID d’exécution",
           "system": "Activité système",
-          "target": "Cible",
           "title": "Détails de l’activité",
           "trigger": "Initiée par",
           "webhook": "Déclencheur web"

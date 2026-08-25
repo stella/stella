@@ -8,6 +8,29 @@ export { SKILL_RESOURCE_PATH_PATTERN } from "./agent-skills";
 export { AI_ERROR_KINDS } from "./ai-errors";
 export type { AIErrorKind } from "./ai-errors";
 export {
+  BROWSER_CONTROL_ACTION,
+  BROWSER_CONTROL_CONTENT_TRUST,
+  BROWSER_CONTROL_ERROR_CODE,
+  BROWSER_CONTROL_KEYS,
+  BROWSER_CONTROL_LIMITS,
+  BROWSER_CONTROL_PROTOCOL_VERSION,
+  BROWSER_CONTROL_TOOL_NAME,
+  BROWSER_EXTENSION_MESSAGE_SOURCE,
+  parseBrowserControlCommand,
+  parseBrowserControlResult,
+  parseBrowserExtensionRequest,
+  parseBrowserExtensionResponse,
+} from "./browser-control";
+export type {
+  BrowserClientCapability,
+  BrowserControlCommand,
+  BrowserControlErrorCode,
+  BrowserControlResult,
+  BrowserControlSnapshot,
+  BrowserExtensionRequest,
+  BrowserExtensionResponse,
+} from "./browser-control";
+export {
   BILLING_STATUS,
   EXPENSE_CATEGORIES,
   INVOICE_STATUS,

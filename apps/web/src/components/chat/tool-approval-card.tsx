@@ -11,6 +11,12 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import {
+  BROWSER_CONTROL_ACTION,
+  BROWSER_CONTROL_TOOL_NAME,
+  parseBrowserControlCommand,
+} from "@stll/api-contract/browser-control";
+import type { BrowserControlCommand } from "@stll/api-contract/browser-control";
 import { Button } from "@stll/ui/button";
 import { cn } from "@stll/ui/utils";
 
@@ -45,6 +51,10 @@ import {
   humanizeIdentifier,
 } from "@/components/chat/tool-approval-summary";
 import { MatterIcon } from "@/components/matter-icon";
+import {
+  getBrowserApprovalDetails,
+  type BrowserApprovalDetail,
+} from "@/features/chat/browser-control/browser-approval-summary";
 import { useMountEffect } from "@/hooks/use-effect";
 import type { DocxEditRepresentation } from "@/lib/chat-edit-mode";
 import { DOCX_EDIT_REPRESENTATION } from "@/lib/chat-edit-mode";
@@ -633,6 +643,9 @@ const ToolApprovalSummary = ({
           subagents={part.input.subagents}
         />
       )}
+      {name === BROWSER_CONTROL_TOOL_NAME && input !== undefined && (
+        <BrowserControlInputSummary input={input} />
+      )}
       {externalInput !== undefined && (
         <ExternalMcpInputSummary
           input={externalInput}
@@ -708,8 +721,11 @@ const getToolApprovalState = ({
     (part.state === "approval-responded" && part.approval.approved === false);
   const isBlocked = blockedApprovalTools?.has(name) ?? false;
   const isExternalMcpApproval = isExternalMcpToolName(name);
+  // Browser commands render their own structured summary instead of the
+  // generic external-input rows.
   const showsExternalInput =
-    isExternalMcpApproval || isExternalInputChatToolName(name);
+    name !== BROWSER_CONTROL_TOOL_NAME &&
+    (isExternalMcpApproval || isExternalInputChatToolName(name));
   // High-impact writes may only be approved once or denied: no persistent
   // grant can auto-approve a later call.
   const isApprovalOnce = isApprovalOnceChatToolName(name);
@@ -860,6 +876,87 @@ const ExternalMcpInputSummary = ({
           </dl>
         </div>
       </details>
+    </div>
+  );
+};
+
+const browserActionTranslationKey = (
+  action: BrowserControlCommand["action"],
+) => {
+  switch (action) {
+    case BROWSER_CONTROL_ACTION.click:
+      return "chat.approval.browser.actions.click";
+    case BROWSER_CONTROL_ACTION.fill:
+      return "chat.approval.browser.actions.fill";
+    case BROWSER_CONTROL_ACTION.goBack:
+      return "common.goBack";
+    case BROWSER_CONTROL_ACTION.open:
+      return "chat.approval.browser.actions.open";
+    case BROWSER_CONTROL_ACTION.pressKey:
+      return "chat.approval.browser.actions.pressKey";
+    case BROWSER_CONTROL_ACTION.select:
+      return "chat.approval.browser.actions.select";
+    case BROWSER_CONTROL_ACTION.snapshot:
+      return "chat.approval.browser.actions.snapshot";
+    default:
+      action satisfies never;
+      return panic("Unhandled browser-control action");
+  }
+};
+
+const BrowserControlInputSummary = ({ input }: { input: unknown }) => {
+  const t = useTranslations();
+  const command = parseBrowserControlCommand(input);
+  if (!command) {
+    return null;
+  }
+
+  const labelForDetail = ({ type: detailType }: BrowserApprovalDetail) => {
+    switch (detailType) {
+      case "key":
+        return t("common.key");
+      case "target":
+        return t("common.target");
+      case "value":
+        return t("common.value");
+      case "website":
+        return t("common.website");
+      default:
+        detailType satisfies never;
+        return panic("Unhandled browser approval detail");
+    }
+  };
+  const rows = [
+    {
+      label: t("common.action"),
+      value: t(browserActionTranslationKey(command.action)),
+    },
+    ...getBrowserApprovalDetails(command).map((detail) => ({
+      label: labelForDetail(detail),
+      value: detail.value,
+    })),
+  ];
+
+  return (
+    <div className="border-border/50 space-y-2 border-t px-3 py-2">
+      <div>
+        <p className="text-sm font-medium">
+          {t("chat.approval.browser.question")}
+        </p>
+        <p className="text-muted-foreground mt-0.5 text-xs">
+          {t("chat.approval.browser.description")}
+        </p>
+      </div>
+      <dl className="bg-background/60 space-y-1.5 rounded-md border p-2">
+        {rows.map((row) => (
+          <div className="grid gap-1 sm:grid-cols-[9rem_1fr]" key={row.label}>
+            <dt className="text-muted-foreground text-xs">{row.label}</dt>
+            <dd className="text-xs wrap-break-word" dir="auto">
+              {row.value}
+            </dd>
+          </div>
+        ))}
+      </dl>
     </div>
   );
 };

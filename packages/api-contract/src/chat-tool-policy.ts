@@ -86,6 +86,10 @@ export const BUILT_IN_CHAT_TOOL_POLICY_KINDS = {
   "update-current-skill-body": CHAT_TOOL_POLICY_KIND.mutation,
   "update-current-skill-resource": CHAT_TOOL_POLICY_KIND.mutation,
   "update-entity-fields": CHAT_TOOL_POLICY_KIND.mutation,
+  // Client-executed Chrome control. Each command reaches a signed-in website
+  // with model-authored input, so it uses the external-service policy and
+  // stays on per-call approval in the UI grant policy.
+  "use-browser": CHAT_TOOL_POLICY_KIND.external,
   web_search: CHAT_TOOL_POLICY_KIND.external,
   // Registry write projections must all stay mutation-classified. The exact
   // key-set check in the server binds this map to registered built-in tools,

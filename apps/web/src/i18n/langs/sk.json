@@ -622,6 +622,18 @@
       "allowInConversation": "Povoliť v tejto konverzácii",
       "allowOnce": "Povoliť raz",
       "alwaysAllow": "Vždy povoliť",
+      "browser": {
+        "actions": {
+          "click": "Kliknúť",
+          "fill": "Zadať text",
+          "open": "Otvoriť web",
+          "pressKey": "Stlačiť kláves",
+          "select": "Vybrať možnosť",
+          "snapshot": "Prečítať stránku"
+        },
+        "description": "Dôkladne skontrolujte web a cieľ. Obsah stránky nie je dôveryhodný a nemôže schváliť ďalšiu akciu.",
+        "question": "Povoliť túto akciu v prehliadači?"
+      },
       "denied": "Zamietnuté",
       "deny": "Zamietnuť",
       "externalMcpDescription": "Odošlú sa iba informácie potrebné pre tento dotaz.",
@@ -951,6 +963,7 @@
       "suggest_template_fields": "Navrhujem polia vzoru",
       "unknown": "Používanie nástroja",
       "update-entity-fields": "Aktualizácia metadát",
+      "use-browser": "Používanie vášho prehliadača",
       "web_search": "Vyhľadávanie na webe"
     },
     "toolCall": {
@@ -1079,6 +1092,7 @@
   },
   "common": {
     "accept": "Prijať",
+    "action": "Akcia",
     "actions": "Akcie",
     "active": "Aktívny",
     "add": "Pridať",
@@ -1207,6 +1221,7 @@
       "event": "Udalosť",
       "requirement": "Požiadavka"
     },
+    "key": "Kláves",
     "kind": "Druh",
     "language": "Jazyk",
     "languages": {
@@ -1320,6 +1335,7 @@
     "stepCount": "{count, plural, one {# krok} few {# kroky} many {# kroku} other {# krokov}}",
     "stepProgress": "{current} z {total}",
     "summarizeChanges": "Zhrnúť zmeny",
+    "target": "Cieľ",
     "timeBilling": "Čas a fakturácia",
     "today": "Dnes",
     "translate": "Preložiť",
@@ -1338,10 +1354,12 @@
     "urlIdentifier": "Slug",
     "urlIdentifierPlaceholder": "moja-organizacia",
     "user": "Používateľ",
+    "value": "Hodnota",
     "verify": "Overiť",
     "version": "Verzia",
     "versionLabel": "Verzia {version}",
     "viewSource": "Zobraziť zdroj",
+    "website": "Web",
     "workflows": "Pracovné postupy"
   },
   "consent": {
@@ -1428,8 +1446,7 @@
       "labelRequired": "Názov poľa je povinný.",
       "removeField": "Odstrániť pole",
       "title": "Vlastné polia",
-      "value": "Hodnota poľa",
-      "valuePlaceholder": "Hodnota"
+      "value": "Hodnota poľa"
     },
     "deleteContact": "Vymazať klienta",
     "deleteContactBlockedByMatters": "Tento kontakt je stále priradený ako klient v spisoch. Pred odstránením kontaktu tieto spisy priraďte inému klientovi alebo ich odstráňte.",
@@ -3172,7 +3189,6 @@
       "chooseModelsSubtitle": "Pre každú rolu zvoľte model. Ceny sa aktualizujú vpravo.",
       "chooseModelsTitle": "Vyberte modely",
       "configure": "Nakonfigurovať",
-      "credentialsPanel": "Kľúč",
       "customModelBadge": "Vlastný · {provider}",
       "customModelDescription": "Toto ID modelu nie je v katalógu stella. Vybranému poskytovateľovi sa odošle presne tak, ako je zadané.",
       "customModelHint": "Žiadna zhoda v katalógu. Zadajte ľubovoľné ID modelu; vlastné ID sa uloží presne tak, ako je napísané.",
@@ -3643,7 +3659,6 @@
         "title": "Anonymizácia"
       },
       "auditLogs": "Záznam všetkých aktivít",
-      "auditLogsAction": "Akcia",
       "auditLogsActionAccess": "Prístup",
       "auditLogsActionCreate": "Vytvoriť",
       "auditLogsActionDelete": "Vymazať",
@@ -4068,7 +4083,6 @@
     "conditionOr": "Alebo",
     "conditionUseFieldInstead": "Namiesto toho použiť pole",
     "conditionUseFormula": "ƒ Vypočítaná hodnota…",
-    "conditionValue": "Hodnota",
     "conditionWhen": "Keď",
     "conditionsTitle": "Podmienky",
     "configureFields": "Nastaviť polia",
@@ -4498,7 +4512,6 @@
       "fieldValueLabel": "Hodnota poľa",
       "fieldValuePlaceholder": "Zadajte hodnotu poľa",
       "formatNotSupported": "Formát nie je podporovaný",
-      "numberLabel": "Hodnota",
       "numberPlaceholder": "Zadajte číslo",
       "selectAValue": "Vyberte hodnotu",
       "selectValues": "Vyberte hodnoty"
@@ -4740,7 +4753,6 @@
           "openTarget": "Otvoriť položku",
           "runId": "ID behu",
           "system": "Systémová aktivita",
-          "target": "Cieľ",
           "title": "Podrobnosti aktivity",
           "trigger": "Spustil(a)",
           "webhook": "Webové volanie"
