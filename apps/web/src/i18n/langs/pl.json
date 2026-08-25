@@ -404,7 +404,6 @@
       "colorSky": "Niebieski",
       "colorViolet": "Fioletowy",
       "colorYellow": "Żółty",
-      "comment": "Komentarz",
       "commentPlaceholder": "Napisz komentarz…",
       "highlight": "Wyróżnij",
       "removeHighlight": "Usuń wyróżnienie",
@@ -412,15 +411,12 @@
       "styleHighlight": "Wyróżnienie",
       "styleSquiggly": "Falista linia",
       "styleStrikethrough": "Przekreślenie",
-      "styleUnderline": "Podkreślenie",
-      "visibilityPrivate": "Tylko ja",
       "visibilityShared": "Udostępnione organizacji"
     },
     "citation": {
       "citedSummary": "{count, plural, =0 {Niecytowane} one {Cytowane raz} few {Cytowane # razy} many {Cytowane # razy} other {Cytowane # razy}}",
       "decisionCount": "{count, plural, =0 {Brak orzeczeń} one {# orzeczenie} few {# orzeczenia} many {# orzeczeń} other {# orzeczenia}}",
       "lastNegative": "ostatnie negatywne powołanie w {year} r.",
-      "leading": "Wiodące orzeczenia",
       "negativeCount": "{count, plural, one {# negatywne} few {# negatywne} many {# negatywnych} other {# negatywnych}}",
       "openAtCitation": "Otwórz w miejscu cytowania",
       "passageNotFound": "Nie znaleziono cytującego fragmentu w tekście",

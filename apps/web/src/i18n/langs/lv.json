@@ -404,7 +404,6 @@
       "colorSky": "Zils",
       "colorViolet": "Violets",
       "colorYellow": "Dzeltens",
-      "comment": "Komentārs",
       "commentPlaceholder": "Rakstiet komentāru…",
       "highlight": "Izcelt",
       "removeHighlight": "Noņemt izcēlumu",
@@ -412,15 +411,12 @@
       "styleHighlight": "Izcēlums",
       "styleSquiggly": "Viļņota līnija",
       "styleStrikethrough": "Pārsvītrojums",
-      "styleUnderline": "Pasvītrojums",
-      "visibilityPrivate": "Tikai es",
       "visibilityShared": "Kopīgots ar organizāciju"
     },
     "citation": {
       "citedSummary": "{count, plural, =0 {Nav citēts} zero {Citēts # reižu} one {Citēts vienu reizi} other {Citēts # reizes}}",
       "decisionCount": "{count, plural, =0 {Nav nolēmumu} zero {# nolēmumu} one {# nolēmums} other {# nolēmumi}}",
       "lastNegative": "pēdējā negatīvā atsauce {year}. gadā",
-      "leading": "Nozīmīgākie nolēmumi",
       "negativeCount": "{count, plural, zero {# negatīvu} one {# negatīva} other {# negatīvas}}",
       "openAtCitation": "Atvērt citāta vietā",
       "passageNotFound": "Citējošais fragments tekstā netika atrasts",

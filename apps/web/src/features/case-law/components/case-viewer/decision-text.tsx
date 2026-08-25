@@ -594,7 +594,7 @@ export const DecisionText = ({
                 type="button"
               >
                 {annotation.kind === "comment"
-                  ? t("caseLaw.annotations.comment")
+                  ? t("folio.comment")
                   : t("caseLaw.annotations.highlight")}
               </button>
             ))}

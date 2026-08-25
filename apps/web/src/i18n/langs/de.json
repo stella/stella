@@ -404,7 +404,6 @@
       "colorSky": "Blau",
       "colorViolet": "Violett",
       "colorYellow": "Gelb",
-      "comment": "Kommentar",
       "commentPlaceholder": "Kommentar schreiben…",
       "highlight": "Hervorheben",
       "removeHighlight": "Hervorhebung entfernen",
@@ -412,15 +411,12 @@
       "styleHighlight": "Markierung",
       "styleSquiggly": "Wellenlinie",
       "styleStrikethrough": "Durchstreichung",
-      "styleUnderline": "Unterstreichung",
-      "visibilityPrivate": "Nur ich",
       "visibilityShared": "Mit der Organisation geteilt"
     },
     "citation": {
       "citedSummary": "{count, plural, =0 {Nicht zitiert} one {Einmal zitiert} other {#-mal zitiert}}",
       "decisionCount": "{count, plural, =0 {Keine Entscheidungen} one {# Entscheidung} other {# Entscheidungen}}",
       "lastNegative": "zuletzt ablehnend zitiert {year}",
-      "leading": "Maßgebliche Entscheidungen",
       "negativeCount": "{count, plural, one {# ablehnend} other {# ablehnend}}",
       "openAtCitation": "An der Zitatstelle öffnen",
       "passageNotFound": "Die zitierende Stelle wurde im Text nicht gefunden",

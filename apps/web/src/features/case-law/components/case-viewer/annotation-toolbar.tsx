@@ -386,7 +386,7 @@ export const AnnotationToolbar = ({
                 variant="ghost"
               >
                 <MessageSquarePlusIcon className="size-3.5" />
-                {t("caseLaw.annotations.comment")}
+                {t("folio.comment")}
               </Button>
               <span className="bg-border mx-1 h-4 w-px" />
             </>
@@ -464,7 +464,7 @@ export const AnnotationToolbar = ({
               variant="ghost"
             >
               <MessageSquarePlusIcon className="size-3.5" />
-              {t("caseLaw.annotations.comment")}
+              {t("folio.comment")}
             </Button>
           </>
         )}
@@ -502,7 +502,7 @@ const VisibilityToggle = ({
   const shared = value === "shared";
   const label = shared
     ? t("caseLaw.annotations.visibilityShared")
-    : t("caseLaw.annotations.visibilityPrivate");
+    : t("knowledge.agentSkills.scopePrivate");
 
   return (
     <Tooltip
@@ -558,7 +558,7 @@ const styleLabelKey = (style: AnnotationStyle) => {
       return "caseLaw.annotations.styleHighlight" as const;
     }
     case "underline": {
-      return "caseLaw.annotations.styleUnderline" as const;
+      return "folio.underline" as const;
     }
     case "squiggly": {
       return "caseLaw.annotations.styleSquiggly" as const;

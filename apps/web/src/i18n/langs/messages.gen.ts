@@ -407,7 +407,6 @@ type Messages = {
       "colorSky": "Blue";
       "colorViolet": "Violet";
       "colorYellow": "Yellow";
-      "comment": "Comment";
       "commentPlaceholder": "Write a comment…";
       "highlight": "Highlight";
       "removeHighlight": "Remove highlight";
@@ -415,15 +414,12 @@ type Messages = {
       "styleHighlight": "Highlight";
       "styleSquiggly": "Squiggly";
       "styleStrikethrough": "Strikethrough";
-      "styleUnderline": "Underline";
-      "visibilityPrivate": "Only me";
       "visibilityShared": "Shared with organization";
     };
     "citation": {
       "citedSummary": "{count, plural, =0 {Not cited} one {Cited once} other {Cited # times}}";
       "decisionCount": "{count, plural, =0 {No decisions} one {# decision} other {# decisions}}";
       "lastNegative": "last negative treatment in {year}";
-      "leading": "Leading decisions";
       "negativeCount": "{count, plural, one {# negative} other {# negative}}";
       "openAtCitation": "Open at the citation";
       "passageNotFound": "The citing passage was not located in the text";

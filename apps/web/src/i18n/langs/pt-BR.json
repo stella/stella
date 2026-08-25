@@ -404,7 +404,6 @@
       "colorSky": "Azul",
       "colorViolet": "Violeta",
       "colorYellow": "Amarelo",
-      "comment": "Comentário",
       "commentPlaceholder": "Escreva um comentário…",
       "highlight": "Destacar",
       "removeHighlight": "Remover destaque",
@@ -412,15 +411,12 @@
       "styleHighlight": "Destaque",
       "styleSquiggly": "Ondulado",
       "styleStrikethrough": "Tachado",
-      "styleUnderline": "Sublinhado",
-      "visibilityPrivate": "Somente eu",
       "visibilityShared": "Compartilhado com a organização"
     },
     "citation": {
       "citedSummary": "{count, plural, =0 {Não citada} one {Citada uma vez} other {Citada # vezes}}",
       "decisionCount": "{count, plural, =0 {Nenhuma decisão} one {# decisão} other {# decisões}}",
       "lastNegative": "última citação negativa em {year}",
-      "leading": "Decisões de referência",
       "negativeCount": "{count, plural, one {# negativa} many {# negativas} other {# negativas}}",
       "openAtCitation": "Abrir na citação",
       "passageNotFound": "O trecho citante não foi encontrado no texto",

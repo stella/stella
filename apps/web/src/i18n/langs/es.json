@@ -404,7 +404,6 @@
       "colorSky": "Azul",
       "colorViolet": "Violeta",
       "colorYellow": "Amarillo",
-      "comment": "Comentario",
       "commentPlaceholder": "Escribe un comentario…",
       "highlight": "Resaltar",
       "removeHighlight": "Quitar resaltado",
@@ -412,15 +411,12 @@
       "styleHighlight": "Resaltado",
       "styleSquiggly": "Ondulado",
       "styleStrikethrough": "Tachado",
-      "styleUnderline": "Subrayado",
-      "visibilityPrivate": "Solo yo",
       "visibilityShared": "Compartido con la organización"
     },
     "citation": {
       "citedSummary": "{count, plural, =0 {Sin citas} one {Citada una vez} other {Citada # veces}}",
       "decisionCount": "{count, plural, =0 {Ninguna resolución} one {# resolución} other {# resoluciones}}",
       "lastNegative": "última cita negativa en {year}",
-      "leading": "Resoluciones de referencia",
       "negativeCount": "{count, plural, one {# negativa} many {# negativas} other {# negativas}}",
       "openAtCitation": "Abrir en la cita",
       "passageNotFound": "No se encontró el pasaje citante en el texto",

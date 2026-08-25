@@ -404,7 +404,6 @@
       "colorSky": "Modrá",
       "colorViolet": "Fialová",
       "colorYellow": "Žlutá",
-      "comment": "Komentář",
       "commentPlaceholder": "Napište komentář…",
       "highlight": "Zvýraznit",
       "removeHighlight": "Odebrat zvýraznění",
@@ -412,15 +411,12 @@
       "styleHighlight": "Zvýraznění",
       "styleSquiggly": "Vlnovka",
       "styleStrikethrough": "Přeškrtnutí",
-      "styleUnderline": "Podtržení",
-      "visibilityPrivate": "Jen já",
       "visibilityShared": "Sdíleno s organizací"
     },
     "citation": {
       "citedSummary": "{count, plural, =0 {Necitováno} one {Citováno jednou} few {Citováno #krát} other {Citováno #krát}}",
       "decisionCount": "{count, plural, =0 {Žádná rozhodnutí} one {# rozhodnutí} few {# rozhodnutí} other {# rozhodnutí}}",
       "lastNegative": "poslední negativní citace v roce {year}",
-      "leading": "Nejvýznamnější rozhodnutí",
       "negativeCount": "{count, plural, one {# negativní} few {# negativní} many {# negativních} other {# negativních}}",
       "openAtCitation": "Otevřít na místě citace",
       "passageNotFound": "Citující pasáž se v textu nepodařilo najít",

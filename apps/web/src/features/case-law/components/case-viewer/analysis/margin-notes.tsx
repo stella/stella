@@ -263,7 +263,7 @@ const ComposerNote = ({
   const shared = visibility === "shared";
   const visibilityLabel = shared
     ? t("caseLaw.annotations.visibilityShared")
-    : t("caseLaw.annotations.visibilityPrivate");
+    : t("knowledge.agentSkills.scopePrivate");
   const submit = () => {
     const trimmed = body.trim();
     if (trimmed !== "") {
@@ -285,7 +285,7 @@ const ComposerNote = ({
       }}
     >
       <Textarea
-        aria-label={t("caseLaw.annotations.comment")}
+        aria-label={t("folio.comment")}
         autoFocus
         className="min-h-14 text-xs"
         onChange={(event) => setBody(event.target.value)}
@@ -406,14 +406,14 @@ const CommentNote = ({
           <Tooltip
             content={
               shared
-                ? t("caseLaw.annotations.visibilityPrivate")
+                ? t("knowledge.agentSkills.scopePrivate")
                 : t("caseLaw.annotations.visibilityShared")
             }
             render={
               <button
                 aria-label={
                   shared
-                    ? t("caseLaw.annotations.visibilityPrivate")
+                    ? t("knowledge.agentSkills.scopePrivate")
                     : t("caseLaw.annotations.visibilityShared")
                 }
                 className="text-foreground-disabled hover:text-foreground rounded-sm p-0.5"

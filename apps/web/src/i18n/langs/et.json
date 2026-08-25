@@ -404,7 +404,6 @@
       "colorSky": "Sinine",
       "colorViolet": "Lilla",
       "colorYellow": "Kollane",
-      "comment": "Kommentaar",
       "commentPlaceholder": "Kirjuta kommentaar…",
       "highlight": "Tõsta esile",
       "removeHighlight": "Eemalda esiletõst",
@@ -412,15 +411,12 @@
       "styleHighlight": "Esiletõst",
       "styleSquiggly": "Laineline joon",
       "styleStrikethrough": "Läbikriipsutus",
-      "styleUnderline": "Allajoonimine",
-      "visibilityPrivate": "Ainult mina",
       "visibilityShared": "Jagatud organisatsiooniga"
     },
     "citation": {
       "citedSummary": "{count, plural, =0 {Viitamata} one {Viidatud üks kord} other {Viidatud # korda}}",
       "decisionCount": "{count, plural, =0 {Lahendeid pole} one {# lahend} other {# lahendit}}",
       "lastNegative": "viimane negatiivne viide aastal {year}",
-      "leading": "Olulisimad lahendid",
       "negativeCount": "{count, plural, one {# negatiivne} other {# negatiivset}}",
       "openAtCitation": "Ava viite kohal",
       "passageNotFound": "Viitavat lõiku tekstist ei leitud",
