@@ -20,7 +20,7 @@
     "format": "oxfmt ."
   },
   "dependencies": {
-    "@formatjs/icu-messageformat-parser": "^3.5.15",
+    "@formatjs/icu-messageformat-parser": "^3.5.17",
     "@stll/ai-catalog": "workspace:*",
     "@stll/locales": "workspace:*",
     "better-result": "catalog:"
