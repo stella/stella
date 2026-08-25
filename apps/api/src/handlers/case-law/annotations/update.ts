@@ -12,6 +12,7 @@ import {
 import type { UpdateAnnotationBody } from "@/api/handlers/case-law/annotations/schema";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
@@ -57,11 +58,17 @@ const changesFor = (
  */
 const updateDecisionAnnotation = createSafeRootHandler(
   config,
-  async function* ({ body, params: { annotationId }, safeDb, session, user }) {
+  async function* ({
+    body,
+    params: { annotationId },
+    recordAuditEvent,
+    safeDb,
+    session,
+    user,
+  }) {
     const rows = yield* Result.await(
-      safeDb((tx) => 
-        // audit: skip — the author editing their own mark on public text; no tenant configuration or shared record changes.
-        tx
+      safeDb(async (tx) => {
+        const mutatedRows = await tx
           .update(caseLawDecisionAnnotations)
           .set({ ...changesFor(body), updatedAt: new Date() })
           .where(
@@ -71,8 +78,17 @@ const updateDecisionAnnotation = createSafeRootHandler(
               userId: user.id,
             }),
           )
-          .returning({ id: caseLawDecisionAnnotations.id })
-      ),
+          .returning({ id: caseLawDecisionAnnotations.id });
+        if (mutatedRows.length > 0) {
+          await recordAuditEvent(tx, {
+            action: AUDIT_ACTION.UPDATE,
+            resourceType: AUDIT_RESOURCE_TYPE.CASE_LAW_DECISION_ANNOTATION,
+            resourceId: annotationId,
+            metadata: { change: body.change },
+          });
+        }
+        return mutatedRows;
+      }),
     );
 
     if (rows.length === 0) {

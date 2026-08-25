@@ -11,6 +11,7 @@ import {
 } from "@/api/handlers/case-law/annotations/schema";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
@@ -30,7 +31,14 @@ const config = {
  */
 const createDecisionAnnotation = createSafeRootHandler(
   config,
-  async function* ({ body, params: { decisionId }, safeDb, session, user }) {
+  async function* ({
+    body,
+    params: { decisionId },
+    recordAuditEvent,
+    safeDb,
+    session,
+    user,
+  }) {
     if (body.spans.some((span) => span.endOffset <= span.startOffset)) {
       return Result.err(
         new HandlerError({
@@ -42,9 +50,8 @@ const createDecisionAnnotation = createSafeRootHandler(
 
     const groupId = body.spans.length > 1 ? randomUUIDv7() : null;
     const rows = yield* Result.await(
-      safeDb((tx) => 
-        // audit: skip — a reader's own mark on public text, private by default; no tenant configuration or shared record changes.
-        tx
+      safeDb(async (tx) => {
+        const mutatedRows = await tx
           .insert(caseLawDecisionAnnotations)
           .values(
             body.spans.map((span, index) => ({
@@ -74,8 +81,23 @@ const createDecisionAnnotation = createSafeRootHandler(
               quote: span.quote,
             })),
           )
-          .returning({ id: caseLawDecisionAnnotations.id })
-      ),
+          .returning({ id: caseLawDecisionAnnotations.id });
+        const first = mutatedRows.at(0);
+        if (first !== undefined) {
+          await recordAuditEvent(tx, {
+            action: AUDIT_ACTION.CREATE,
+            resourceType: AUDIT_RESOURCE_TYPE.CASE_LAW_DECISION_ANNOTATION,
+            resourceId: first.id,
+            metadata: {
+              decisionId,
+              kind: body.kind,
+              spanCount: body.spans.length,
+              visibility: body.visibility ?? "private",
+            },
+          });
+        }
+        return mutatedRows;
+      }),
     );
 
     const first = rows.at(0);
