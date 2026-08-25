@@ -13,6 +13,7 @@ export const PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT = {
   caseLawDecisions: "case_law_decisions",
   caseLawProvisionCitations: "case_law_provision_citations",
   caseLawSources: "case_law_sources",
+  corpusIndexGenerations: "corpus_index_generations",
   legislationDocuments: "legislation_documents",
   legislationSources: "legislation_sources",
 } as const;
@@ -103,6 +104,12 @@ export const PUBLIC_LAW_COLUMNS_BY_RELATION = {
     "confidence",
   ],
   case_law_sources: ["id", "name", "adapter_key", "descriptor"],
+  corpus_index_generations: [
+    "family",
+    "generation",
+    "cluster",
+    "status",
+  ],
   legislation_documents: [
     "id",
     "source_id",

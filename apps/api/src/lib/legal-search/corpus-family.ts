@@ -1,18 +1,11 @@
 import { envBase } from "@/api/env-base";
+import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";
 
-/**
- * Document families served by the corpus / corpus index DB. The search,
- * index, storage, and rerank substrate is generic over these; each
- * family differs only in its index field mappings (below) and its
- * ingestion source (a per-family slice). Adding "gazette", "regulation",
- * etc. is: extend this union + register an index field spec + a doc
- * source — not a re-architecture.
- */
-export const CORPUS_FAMILIES = ["case_law", "legislation"] as const;
-export type CorpusFamily = (typeof CORPUS_FAMILIES)[number];
-
-export const parseCorpusFamily = (value: unknown): CorpusFamily | null =>
-  CORPUS_FAMILIES.find((family) => family === value) ?? null;
+export {
+  CORPUS_FAMILIES,
+  parseCorpusFamily,
+} from "@/api/lib/legal-search/corpus-generation-contract";
+export type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";
 
 /**
  * Blue-green generation prefix per family. Index ids are
