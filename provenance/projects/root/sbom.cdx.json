@@ -85,6 +85,9 @@
         ],
         "occurrences": [
           {
+            "location": "apps/desktop/src/shared/use-system-theme.ts#1"
+          },
+          {
             "location": "apps/web/src/components/ai-suggestions/active-docx-store.ts#19"
           },
           {
@@ -338,6 +341,15 @@
           },
           {
             "location": "packages/ui/src/lib/utils.ts#1"
+          },
+          {
+            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#1"
+          },
+          {
+            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#7"
+          },
+          {
+            "location": "apps/desktop/src/clipboard/ClipboardEditor.tsx#1"
           },
           {
             "location": "apps/desktop/src/mainview/App.tsx#1"
@@ -781,6 +793,9 @@
             "location": "apps/web/src/components/keyboard-shortcuts-dialog.tsx#1"
           },
           {
+            "location": "apps/web/src/components/legal-reader/cited-decision-link.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/legal-reader/document-ast-text.tsx#1"
           },
           {
@@ -937,7 +952,7 @@
             "location": "apps/web/src/components/tooltip.tsx#1"
           },
           {
-            "location": "apps/web/src/components/translate-document-dialog.tsx#10"
+            "location": "apps/web/src/components/translate-document-dialog.tsx#9"
           },
           {
             "location": "apps/web/src/components/user-avatar.tsx#1"
@@ -1024,6 +1039,9 @@
             "location": "apps/web/src/components/workspaces/workflow-start-confirmation-prompt.tsx#2"
           },
           {
+            "location": "apps/web/src/features/case-law/case-decision-inspector-registration.tsx#1"
+          },
+          {
             "location": "apps/web/src/features/case-law/components/case-viewer/analysis/margin-notes.tsx#8"
           },
           {
@@ -1043,9 +1061,6 @@
           },
           {
             "location": "apps/web/src/features/case-law/components/case-viewer/provisions-cited.tsx#1"
-          },
-          {
-            "location": "apps/web/src/features/case-law/components/cited-decision-link.tsx#1"
           },
           {
             "location": "apps/web/src/features/case-law/components/decision-filters.tsx#1"
@@ -2338,14 +2353,14 @@
       "evidence": {
         "identity": [
           {
-            "concludedValue": "apps/web/node_modules/@atlaskit/pragmatic-drag-and-drop/package.json",
+            "concludedValue": "apps/desktop/node_modules/@atlaskit/pragmatic-drag-and-drop/package.json",
             "confidence": 0.7,
             "field": "purl",
             "methods": [
               {
                 "confidence": 0.7,
                 "technique": "manifest-analysis",
-                "value": "apps/web/node_modules/@atlaskit/pragmatic-drag-and-drop/package.json"
+                "value": "apps/desktop/node_modules/@atlaskit/pragmatic-drag-and-drop/package.json"
               }
             ]
           }
@@ -2367,6 +2382,9 @@
             "location": "packages/ui/src/kanban/drag-interactions.ts#3"
           },
           {
+            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#9"
+          },
+          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-column.tsx#9"
           },
           {
@@ -2377,6 +2395,9 @@
           },
           {
             "location": "packages/ui/src/kanban/drag-interactions.ts#4"
+          },
+          {
+            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#13"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-column.tsx#13"
@@ -2392,6 +2413,18 @@
           },
           {
             "location": "packages/ui/src/kanban/drag-interactions.ts#6"
+          },
+          {
+            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#14"
+          },
+          {
+            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#15"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/-components/position-editor.tsx#8"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/-components/organization/document-types-card.tsx#16"
           },
           {
             "location": "apps/web/src/components/app-sidebar.tsx#15"
@@ -2448,12 +2481,6 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/index.tsx#13"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/position-editor.tsx#8"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/document-types-card.tsx#16"
-          },
-          {
             "location": "apps/web/src/routes/_protected.knowledge/-components/position-editor.tsx#9"
           },
           {
@@ -2508,6 +2535,10 @@
         {
           "name": "SrcFile",
           "value": "apps/web/node_modules/@atlaskit/pragmatic-drag-and-drop/package.json"
+        },
+        {
+          "name": "SrcFile",
+          "value": "apps/desktop/node_modules/@atlaskit/pragmatic-drag-and-drop/package.json"
         }
       ],
       "purl": "pkg:npm/%40atlaskit/pragmatic-drag-and-drop@3.0.0",
@@ -2521,7 +2552,7 @@
           "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/client-cloudwatch@3.1111.0",
+      "bom-ref": "pkg:npm/@aws-sdk/client-cloudwatch@3.1113.0",
       "description": "AWS SDK for JavaScript Cloudwatch Client for Node.js, Browser and React Native",
       "evidence": {
         "identity": [
@@ -2574,13 +2605,13 @@
           "value": "apps/api/node_modules/@aws-sdk/client-cloudwatch/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/client-cloudwatch@3.1111.0",
+      "purl": "pkg:npm/%40aws-sdk/client-cloudwatch@3.1113.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1111.0"
+      "version": "3.1113.0"
     },
     {
       "authors": [
@@ -2588,7 +2619,7 @@
           "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/client-s3@3.1111.0",
+      "bom-ref": "pkg:npm/@aws-sdk/client-s3@3.1113.0",
       "description": "AWS SDK for JavaScript S3 Client for Node.js, Browser and React Native",
       "evidence": {
         "identity": [
@@ -2644,13 +2675,13 @@
           "value": "apps/api/node_modules/@aws-sdk/client-s3/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/client-s3@3.1111.0",
+      "purl": "pkg:npm/%40aws-sdk/client-s3@3.1113.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1111.0"
+      "version": "3.1113.0"
     },
     {
       "authors": [
@@ -2658,7 +2689,7 @@
           "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/client-sesv2@3.1111.0",
+      "bom-ref": "pkg:npm/@aws-sdk/client-sesv2@3.1113.0",
       "description": "AWS SDK for JavaScript Sesv2 Client for Node.js, Browser and React Native",
       "evidence": {
         "identity": [
@@ -2711,13 +2742,13 @@
           "value": "apps/api/node_modules/@aws-sdk/client-sesv2/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/client-sesv2@3.1111.0",
+      "purl": "pkg:npm/%40aws-sdk/client-sesv2@3.1113.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1111.0"
+      "version": "3.1113.0"
     },
     {
       "authors": [
@@ -2725,7 +2756,7 @@
           "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/client-sts@3.1111.0",
+      "bom-ref": "pkg:npm/@aws-sdk/client-sts@3.1113.0",
       "description": "AWS SDK for JavaScript Sts Client for Node.js, Browser and React Native",
       "evidence": {
         "identity": [
@@ -2778,13 +2809,13 @@
           "value": "apps/api/node_modules/@aws-sdk/client-sts/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/client-sts@3.1111.0",
+      "purl": "pkg:npm/%40aws-sdk/client-sts@3.1113.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1111.0"
+      "version": "3.1113.0"
     },
     {
       "authors": [
@@ -2792,7 +2823,7 @@
           "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/s3-request-presigner@3.1111.0",
+      "bom-ref": "pkg:npm/@aws-sdk/s3-request-presigner@3.1113.0",
       "evidence": {
         "identity": [
           {
@@ -2844,13 +2875,13 @@
           "value": "apps/api/node_modules/@aws-sdk/s3-request-presigner/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/s3-request-presigner@3.1111.0",
+      "purl": "pkg:npm/%40aws-sdk/s3-request-presigner@3.1113.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1111.0"
+      "version": "3.1113.0"
     },
     {
       "authors": [
@@ -2876,6 +2907,9 @@
           }
         ],
         "occurrences": [
+          {
+            "location": "apps/desktop/src/shared/use-system-theme.ts#1"
+          },
           {
             "location": "apps/web/src/components/ai-suggestions/active-docx-store.ts#19"
           },
@@ -3130,6 +3164,15 @@
           },
           {
             "location": "packages/ui/src/lib/utils.ts#1"
+          },
+          {
+            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#1"
+          },
+          {
+            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#7"
+          },
+          {
+            "location": "apps/desktop/src/clipboard/ClipboardEditor.tsx#1"
           },
           {
             "location": "apps/desktop/src/mainview/App.tsx#1"
@@ -3573,6 +3616,9 @@
             "location": "apps/web/src/components/keyboard-shortcuts-dialog.tsx#1"
           },
           {
+            "location": "apps/web/src/components/legal-reader/cited-decision-link.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/legal-reader/document-ast-text.tsx#1"
           },
           {
@@ -3729,7 +3775,7 @@
             "location": "apps/web/src/components/tooltip.tsx#1"
           },
           {
-            "location": "apps/web/src/components/translate-document-dialog.tsx#10"
+            "location": "apps/web/src/components/translate-document-dialog.tsx#9"
           },
           {
             "location": "apps/web/src/components/user-avatar.tsx#1"
@@ -3816,6 +3862,9 @@
             "location": "apps/web/src/components/workspaces/workflow-start-confirmation-prompt.tsx#2"
           },
           {
+            "location": "apps/web/src/features/case-law/case-decision-inspector-registration.tsx#1"
+          },
+          {
             "location": "apps/web/src/features/case-law/components/case-viewer/analysis/margin-notes.tsx#8"
           },
           {
@@ -3835,9 +3884,6 @@
           },
           {
             "location": "apps/web/src/features/case-law/components/case-viewer/provisions-cited.tsx#1"
-          },
-          {
-            "location": "apps/web/src/features/case-law/components/cited-decision-link.tsx#1"
           },
           {
             "location": "apps/web/src/features/case-law/components/decision-filters.tsx#1"
@@ -4921,19 +4967,19 @@
           "name": "saltyAom <saltyaom@gmail.com> (https://github.com/SaltyAom)"
         }
       ],
-      "bom-ref": "pkg:npm/@elysiajs/cors@1.4.2",
+      "bom-ref": "pkg:npm/@elysia/cors@1.4.2",
       "description": "Elysia plugin to support Cross Origin Requests (CORs)",
       "evidence": {
         "identity": [
           {
-            "concludedValue": "apps/api/node_modules/@elysiajs/cors/package.json",
+            "concludedValue": "apps/api/node_modules/@elysia/cors/package.json",
             "confidence": 0.7,
             "field": "purl",
             "methods": [
               {
                 "confidence": 0.7,
                 "technique": "manifest-analysis",
-                "value": "apps/api/node_modules/@elysiajs/cors/package.json"
+                "value": "apps/api/node_modules/@elysia/cors/package.json"
               }
             ]
           }
@@ -4954,7 +5000,7 @@
           "url": "https://github.com/elysiajs/elysia-cors"
         }
       ],
-      "group": "@elysiajs",
+      "group": "@elysia",
       "licenses": [
         {
           "license": {
@@ -4967,14 +5013,14 @@
       "properties": [
         {
           "name": "SrcFile",
-          "value": "node_modules/@elysiajs/cors/package.json"
+          "value": "node_modules/@elysia/cors/package.json"
         },
         {
           "name": "SrcFile",
-          "value": "apps/api/node_modules/@elysiajs/cors/package.json"
+          "value": "apps/api/node_modules/@elysia/cors/package.json"
         }
       ],
-      "purl": "pkg:npm/%40elysiajs/cors@1.4.2",
+      "purl": "pkg:npm/%40elysia/cors@1.4.2",
       "scope": "required",
       "type": "library",
       "version": "1.4.2"
@@ -4985,19 +5031,19 @@
           "name": "saltyAom <saltyaom@gmail.com> (https://github.com/SaltyAom)"
         }
       ],
-      "bom-ref": "pkg:npm/@elysiajs/eden@1.4.9",
+      "bom-ref": "pkg:npm/@elysia/eden@1.4.10",
       "description": "Fully type-safe Elysia client",
       "evidence": {
         "identity": [
           {
-            "concludedValue": "node_modules/@elysiajs/eden/package.json",
+            "concludedValue": "node_modules/@elysia/eden/package.json",
             "confidence": 0.7,
             "field": "purl",
             "methods": [
               {
                 "confidence": 0.7,
                 "technique": "manifest-analysis",
-                "value": "node_modules/@elysiajs/eden/package.json"
+                "value": "node_modules/@elysia/eden/package.json"
               }
             ]
           }
@@ -5021,7 +5067,7 @@
           "url": "https://github.com/elysiajs/eden"
         }
       ],
-      "group": "@elysiajs",
+      "group": "@elysia",
       "licenses": [
         {
           "license": {
@@ -5034,17 +5080,17 @@
       "properties": [
         {
           "name": "SrcFile",
-          "value": "packages/api-client/node_modules/@elysiajs/eden/package.json"
+          "value": "packages/api-client/node_modules/@elysia/eden/package.json"
         },
         {
           "name": "SrcFile",
-          "value": "node_modules/@elysiajs/eden/package.json"
+          "value": "node_modules/@elysia/eden/package.json"
         }
       ],
-      "purl": "pkg:npm/%40elysiajs/eden@1.4.9",
+      "purl": "pkg:npm/%40elysia/eden@1.4.10",
       "scope": "required",
       "type": "library",
-      "version": "1.4.9"
+      "version": "1.4.10"
     },
     {
       "bom-ref": "pkg:npm/@firecrawl/anydoc@0.1.9",
@@ -5133,6 +5179,9 @@
             "location": "apps/desktop/src/mainview/main.tsx#2"
           },
           {
+            "location": "apps/desktop/src/mainview/main.tsx#3"
+          },
+          {
             "location": "apps/playground/src/main.tsx#3"
           },
           {
@@ -5143,6 +5192,9 @@
           },
           {
             "location": "apps/desktop/src/mainview/main.tsx#2"
+          },
+          {
+            "location": "apps/desktop/src/mainview/main.tsx#3"
           },
           {
             "location": "apps/playground/src/main.tsx#3"
@@ -6189,6 +6241,9 @@
         ],
         "occurrences": [
           {
+            "location": "apps/desktop/src/shared/use-system-theme.ts#1"
+          },
+          {
             "location": "apps/web/src/components/ai-suggestions/active-docx-store.ts#19"
           },
           {
@@ -6442,6 +6497,15 @@
           },
           {
             "location": "packages/ui/src/lib/utils.ts#1"
+          },
+          {
+            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#1"
+          },
+          {
+            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#7"
+          },
+          {
+            "location": "apps/desktop/src/clipboard/ClipboardEditor.tsx#1"
           },
           {
             "location": "apps/desktop/src/mainview/App.tsx#1"
@@ -6885,6 +6949,9 @@
             "location": "apps/web/src/components/keyboard-shortcuts-dialog.tsx#1"
           },
           {
+            "location": "apps/web/src/components/legal-reader/cited-decision-link.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/legal-reader/document-ast-text.tsx#1"
           },
           {
@@ -7041,7 +7108,7 @@
             "location": "apps/web/src/components/tooltip.tsx#1"
           },
           {
-            "location": "apps/web/src/components/translate-document-dialog.tsx#10"
+            "location": "apps/web/src/components/translate-document-dialog.tsx#9"
           },
           {
             "location": "apps/web/src/components/user-avatar.tsx#1"
@@ -7128,6 +7195,9 @@
             "location": "apps/web/src/components/workspaces/workflow-start-confirmation-prompt.tsx#2"
           },
           {
+            "location": "apps/web/src/features/case-law/case-decision-inspector-registration.tsx#1"
+          },
+          {
             "location": "apps/web/src/features/case-law/components/case-viewer/analysis/margin-notes.tsx#8"
           },
           {
@@ -7147,9 +7217,6 @@
           },
           {
             "location": "apps/web/src/features/case-law/components/case-viewer/provisions-cited.tsx#1"
-          },
-          {
-            "location": "apps/web/src/features/case-law/components/cited-decision-link.tsx#1"
           },
           {
             "location": "apps/web/src/features/case-law/components/decision-filters.tsx#1"
@@ -10457,6 +10524,9 @@
             "location": "apps/web/src/components/contact-picker-queries.ts#1"
           },
           {
+            "location": "apps/web/src/components/document-translation-queries.ts#1"
+          },
+          {
             "location": "apps/web/src/components/docx/use-edit-session.ts#10"
           },
           {
@@ -10485,6 +10555,9 @@
           },
           {
             "location": "apps/web/src/features/case-law/components/case-viewer/analysis/use-decision-analysis.ts#10"
+          },
+          {
+            "location": "apps/web/src/features/case-law/components/case-viewer/use-decision-citation-anchors.ts#1"
           },
           {
             "location": "apps/web/src/features/case-law/queries/citations.ts#1"
@@ -11030,7 +11103,7 @@
             "location": "apps/web/src/components/templates/template-prefill-panel.tsx#3"
           },
           {
-            "location": "apps/web/src/components/translate-document-dialog.tsx#12"
+            "location": "apps/web/src/components/translate-document-dialog.tsx#11"
           },
           {
             "location": "apps/web/src/components/usage/usage-fallback-notice.tsx#1"
@@ -11084,13 +11157,13 @@
             "location": "apps/web/src/components/workspaces/tasks/task-metadata.tsx#1"
           },
           {
+            "location": "apps/web/src/features/case-law/components/case-decision-inspector-view.tsx#1"
+          },
+          {
             "location": "apps/web/src/features/case-law/components/case-viewer/citation-header.tsx#1"
           },
           {
             "location": "apps/web/src/features/case-law/components/case-viewer/decision-citations.tsx#3"
-          },
-          {
-            "location": "apps/web/src/features/case-law/components/case-viewer/decision-workspace.tsx#3"
           },
           {
             "location": "apps/web/src/features/case-law/components/case-viewer/provisions-cited.tsx#3"
@@ -11659,7 +11732,7 @@
           "name": "Tanner Linsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/react-router@1.170.29",
+      "bom-ref": "pkg:npm/@tanstack/react-router@1.170.30",
       "description": "Modern and scalable routing for React applications",
       "evidence": {
         "identity": [
@@ -11825,6 +11898,9 @@
             "location": "apps/web/src/components/inspector/versions-facet.tsx#14"
           },
           {
+            "location": "apps/web/src/components/legal-reader/cited-decision-link.tsx#3"
+          },
+          {
             "location": "apps/web/src/components/matter-number-hint.tsx#2"
           },
           {
@@ -11861,7 +11937,7 @@
             "location": "apps/web/src/components/templates/template-form.tsx#4"
           },
           {
-            "location": "apps/web/src/components/translate-document-dialog.tsx#13"
+            "location": "apps/web/src/components/translate-document-dialog.tsx#12"
           },
           {
             "location": "apps/web/src/components/workspaces/copy-to-matter-dialog.tsx#4"
@@ -11882,16 +11958,13 @@
             "location": "apps/web/src/components/workspaces/tasks/task-detail-panel.tsx#4"
           },
           {
+            "location": "apps/web/src/features/case-law/components/case-decision-inspector-view.tsx#2"
+          },
+          {
             "location": "apps/web/src/features/case-law/components/case-viewer/provisions-cited.tsx#4"
           },
           {
-            "location": "apps/web/src/features/case-law/components/cited-decision-link.tsx#3"
-          },
-          {
             "location": "apps/web/src/features/case-law/components/decision-table.tsx#1"
-          },
-          {
-            "location": "apps/web/src/features/statutes/components/provision-citing-decisions.tsx#4"
           },
           {
             "location": "apps/web/src/features/statutes/components/provision-inspector-view.tsx#4"
@@ -12251,6 +12324,9 @@
             "location": "apps/web/src/routes/law/$country/statutes/index.tsx#4"
           },
           {
+            "location": "apps/web/src/routes/law/-case-detail.tsx#3"
+          },
+          {
             "location": "apps/web/src/routes/law/-components/public-law-inspector.tsx#3"
           },
           {
@@ -12327,10 +12403,10 @@
           "value": "apps/web/node_modules/@tanstack/react-router/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/react-router@1.170.29",
+      "purl": "pkg:npm/%40tanstack/react-router@1.170.30",
       "scope": "required",
       "type": "library",
-      "version": "1.170.29"
+      "version": "1.170.30"
     },
     {
       "authors": [
@@ -12338,7 +12414,7 @@
           "name": "Tanner Linsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/react-start@1.168.46",
+      "bom-ref": "pkg:npm/@tanstack/react-start@1.168.47",
       "description": "Modern and scalable routing for React applications",
       "evidence": {
         "identity": [
@@ -12406,10 +12482,10 @@
           "value": "apps/web/node_modules/@tanstack/react-start/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/react-start@1.168.46",
+      "purl": "pkg:npm/%40tanstack/react-start@1.168.47",
       "scope": "required",
       "type": "library",
-      "version": "1.168.46"
+      "version": "1.168.47"
     },
     {
       "authors": [
@@ -12688,7 +12764,7 @@
           "name": "Tanner Linsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/react-virtual@3.14.9",
+      "bom-ref": "pkg:npm/@tanstack/react-virtual@3.14.10",
       "description": "Headless UI for virtualizing scrollable elements in React",
       "evidence": {
         "identity": [
@@ -12753,10 +12829,10 @@
           "value": "apps/web/node_modules/@tanstack/react-virtual/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/react-virtual@3.14.9",
+      "purl": "pkg:npm/%40tanstack/react-virtual@3.14.10",
       "scope": "required",
       "type": "library",
-      "version": "3.14.9"
+      "version": "3.14.10"
     },
     {
       "bom-ref": "pkg:npm/@tauri-apps/api@2.11.1",
@@ -12778,10 +12854,25 @@
         ],
         "occurrences": [
           {
+            "location": "apps/desktop/src/telemetry/desktop-telemetry.ts#1"
+          },
+          {
+            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#16"
+          },
+          {
+            "location": "apps/desktop/src/clipboard/ClipboardEditor.tsx#3"
+          },
+          {
             "location": "apps/desktop/src/mainview/App.tsx#3"
           },
           {
+            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#17"
+          },
+          {
             "location": "apps/desktop/src/mainview/App.tsx#4"
+          },
+          {
+            "location": "apps/desktop/src/mainview/main.tsx#5"
           }
         ]
       },
@@ -12821,7 +12912,7 @@
       "version": "2.11.1"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/core@3.30.1",
+      "bom-ref": "pkg:npm/@tiptap/core@3.30.2",
       "description": "headless rich text editor",
       "evidence": {
         "identity": [
@@ -12910,13 +13001,13 @@
           "value": "apps/web/node_modules/@tiptap/core/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/core@3.30.1",
+      "purl": "pkg:npm/%40tiptap/core@3.30.2",
       "scope": "required",
       "type": "library",
-      "version": "3.30.1"
+      "version": "3.30.2"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-bold@3.30.1",
+      "bom-ref": "pkg:npm/@tiptap/extension-bold@3.30.2",
       "description": "bold extension for tiptap",
       "evidence": {
         "identity": [
@@ -12975,13 +13066,13 @@
           "value": "apps/web/node_modules/@tiptap/extension-bold/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-bold@3.30.1",
+      "purl": "pkg:npm/%40tiptap/extension-bold@3.30.2",
       "scope": "required",
       "type": "library",
-      "version": "3.30.1"
+      "version": "3.30.2"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-document@3.30.1",
+      "bom-ref": "pkg:npm/@tiptap/extension-document@3.30.2",
       "description": "document extension for tiptap",
       "evidence": {
         "identity": [
@@ -13037,13 +13128,13 @@
           "value": "apps/web/node_modules/@tiptap/extension-document/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-document@3.30.1",
+      "purl": "pkg:npm/%40tiptap/extension-document@3.30.2",
       "scope": "required",
       "type": "library",
-      "version": "3.30.1"
+      "version": "3.30.2"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-hard-break@3.30.1",
+      "bom-ref": "pkg:npm/@tiptap/extension-hard-break@3.30.2",
       "description": "hard break extension for tiptap",
       "evidence": {
         "identity": [
@@ -13096,13 +13187,13 @@
           "value": "apps/web/node_modules/@tiptap/extension-hard-break/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-hard-break@3.30.1",
+      "purl": "pkg:npm/%40tiptap/extension-hard-break@3.30.2",
       "scope": "required",
       "type": "library",
-      "version": "3.30.1"
+      "version": "3.30.2"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-heading@3.30.1",
+      "bom-ref": "pkg:npm/@tiptap/extension-heading@3.30.2",
       "description": "heading extension for tiptap",
       "evidence": {
         "identity": [
@@ -13155,13 +13246,13 @@
           "value": "apps/web/node_modules/@tiptap/extension-heading/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-heading@3.30.1",
+      "purl": "pkg:npm/%40tiptap/extension-heading@3.30.2",
       "scope": "required",
       "type": "library",
-      "version": "3.30.1"
+      "version": "3.30.2"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-history@3.30.1",
+      "bom-ref": "pkg:npm/@tiptap/extension-history@3.30.2",
       "description": "history extension for tiptap",
       "evidence": {
         "identity": [
@@ -13220,13 +13311,13 @@
           "value": "apps/web/node_modules/@tiptap/extension-history/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-history@3.30.1",
+      "purl": "pkg:npm/%40tiptap/extension-history@3.30.2",
       "scope": "required",
       "type": "library",
-      "version": "3.30.1"
+      "version": "3.30.2"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-italic@3.30.1",
+      "bom-ref": "pkg:npm/@tiptap/extension-italic@3.30.2",
       "description": "italic extension for tiptap",
       "evidence": {
         "identity": [
@@ -13279,13 +13370,13 @@
           "value": "apps/web/node_modules/@tiptap/extension-italic/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-italic@3.30.1",
+      "purl": "pkg:npm/%40tiptap/extension-italic@3.30.2",
       "scope": "required",
       "type": "library",
-      "version": "3.30.1"
+      "version": "3.30.2"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-list@3.30.1",
+      "bom-ref": "pkg:npm/@tiptap/extension-list@3.30.2",
       "description": "List extension for tiptap",
       "evidence": {
         "identity": [
@@ -13338,13 +13429,13 @@
           "value": "apps/web/node_modules/@tiptap/extension-list/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-list@3.30.1",
+      "purl": "pkg:npm/%40tiptap/extension-list@3.30.2",
       "scope": "required",
       "type": "library",
-      "version": "3.30.1"
+      "version": "3.30.2"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-mention@3.30.1",
+      "bom-ref": "pkg:npm/@tiptap/extension-mention@3.30.2",
       "description": "mention extension for tiptap",
       "evidence": {
         "identity": [
@@ -13415,13 +13506,13 @@
           "value": "apps/web/node_modules/@tiptap/extension-mention/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-mention@3.30.1",
+      "purl": "pkg:npm/%40tiptap/extension-mention@3.30.2",
       "scope": "required",
       "type": "library",
-      "version": "3.30.1"
+      "version": "3.30.2"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-paragraph@3.30.1",
+      "bom-ref": "pkg:npm/@tiptap/extension-paragraph@3.30.2",
       "description": "paragraph extension for tiptap",
       "evidence": {
         "identity": [
@@ -13480,13 +13571,13 @@
           "value": "apps/web/node_modules/@tiptap/extension-paragraph/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-paragraph@3.30.1",
+      "purl": "pkg:npm/%40tiptap/extension-paragraph@3.30.2",
       "scope": "required",
       "type": "library",
-      "version": "3.30.1"
+      "version": "3.30.2"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-placeholder@3.30.1",
+      "bom-ref": "pkg:npm/@tiptap/extension-placeholder@3.30.2",
       "description": "placeholder extension for tiptap",
       "evidence": {
         "identity": [
@@ -13545,13 +13636,13 @@
           "value": "apps/web/node_modules/@tiptap/extension-placeholder/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-placeholder@3.30.1",
+      "purl": "pkg:npm/%40tiptap/extension-placeholder@3.30.2",
       "scope": "required",
       "type": "library",
-      "version": "3.30.1"
+      "version": "3.30.2"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-text@3.30.1",
+      "bom-ref": "pkg:npm/@tiptap/extension-text@3.30.2",
       "description": "text extension for tiptap",
       "evidence": {
         "identity": [
@@ -13610,13 +13701,13 @@
           "value": "apps/web/node_modules/@tiptap/extension-text/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-text@3.30.1",
+      "purl": "pkg:npm/%40tiptap/extension-text@3.30.2",
       "scope": "required",
       "type": "library",
-      "version": "3.30.1"
+      "version": "3.30.2"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/pm@3.30.1",
+      "bom-ref": "pkg:npm/@tiptap/pm@3.30.2",
       "description": "prosemirror wrapper package for tiptap",
       "evidence": {
         "identity": [
@@ -13687,13 +13778,13 @@
           "value": "apps/web/node_modules/@tiptap/pm/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/pm@3.30.1",
+      "purl": "pkg:npm/%40tiptap/pm@3.30.2",
       "scope": "required",
       "type": "library",
-      "version": "3.30.1"
+      "version": "3.30.2"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/react@3.30.1",
+      "bom-ref": "pkg:npm/@tiptap/react@3.30.2",
       "description": "React components for tiptap",
       "evidence": {
         "identity": [
@@ -13711,6 +13802,9 @@
           }
         ],
         "occurrences": [
+          {
+            "location": "apps/desktop/src/shared/use-system-theme.ts#1"
+          },
           {
             "location": "apps/web/src/components/ai-suggestions/active-docx-store.ts#19"
           },
@@ -13965,6 +14059,15 @@
           },
           {
             "location": "packages/ui/src/lib/utils.ts#1"
+          },
+          {
+            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#1"
+          },
+          {
+            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#7"
+          },
+          {
+            "location": "apps/desktop/src/clipboard/ClipboardEditor.tsx#1"
           },
           {
             "location": "apps/desktop/src/mainview/App.tsx#1"
@@ -14408,6 +14511,9 @@
             "location": "apps/web/src/components/keyboard-shortcuts-dialog.tsx#1"
           },
           {
+            "location": "apps/web/src/components/legal-reader/cited-decision-link.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/legal-reader/document-ast-text.tsx#1"
           },
           {
@@ -14564,7 +14670,7 @@
             "location": "apps/web/src/components/tooltip.tsx#1"
           },
           {
-            "location": "apps/web/src/components/translate-document-dialog.tsx#10"
+            "location": "apps/web/src/components/translate-document-dialog.tsx#9"
           },
           {
             "location": "apps/web/src/components/user-avatar.tsx#1"
@@ -14651,6 +14757,9 @@
             "location": "apps/web/src/components/workspaces/workflow-start-confirmation-prompt.tsx#2"
           },
           {
+            "location": "apps/web/src/features/case-law/case-decision-inspector-registration.tsx#1"
+          },
+          {
             "location": "apps/web/src/features/case-law/components/case-viewer/analysis/margin-notes.tsx#8"
           },
           {
@@ -14670,9 +14779,6 @@
           },
           {
             "location": "apps/web/src/features/case-law/components/case-viewer/provisions-cited.tsx#1"
-          },
-          {
-            "location": "apps/web/src/features/case-law/components/cited-decision-link.tsx#1"
           },
           {
             "location": "apps/web/src/features/case-law/components/decision-filters.tsx#1"
@@ -15603,13 +15709,13 @@
           "value": "apps/web/node_modules/@tiptap/react/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/react@3.30.1",
+      "purl": "pkg:npm/%40tiptap/react@3.30.2",
       "scope": "required",
       "type": "library",
-      "version": "3.30.1"
+      "version": "3.30.2"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/suggestion@3.30.1",
+      "bom-ref": "pkg:npm/@tiptap/suggestion@3.30.2",
       "description": "suggestion plugin for tiptap",
       "evidence": {
         "identity": [
@@ -15680,10 +15786,10 @@
           "value": "apps/web/node_modules/@tiptap/suggestion/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/suggestion@3.30.1",
+      "purl": "pkg:npm/%40tiptap/suggestion@3.30.2",
       "scope": "required",
       "type": "library",
-      "version": "3.30.1"
+      "version": "3.30.2"
     },
     {
       "authors": [
@@ -16301,6 +16407,9 @@
             "location": "apps/api/src/handlers/case-law/ingestion/citation-extractor.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/case-law/ingestion/decision-identifier-backfill.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/case-law/ingestion/pipeline.ts#1"
           },
           {
@@ -16673,6 +16782,12 @@
             "location": "apps/api/src/handlers/document-reviews/review-topics.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/document-translations/create-run.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/document-translations/read-run.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/document-types/create.ts#1"
           },
           {
@@ -17001,6 +17116,9 @@
           },
           {
             "location": "apps/api/src/handlers/legislation/borme-summary.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/legislation/corpus-index.ts#1"
           },
           {
             "location": "apps/api/src/handlers/legislation/get.ts#1"
@@ -18056,6 +18174,21 @@
             "location": "apps/api/src/lib/document-review/run-queue.ts#20"
           },
           {
+            "location": "apps/api/src/lib/document-translation/deepl-comments.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/document-translation/docx-review.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/document-translation/handoff.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/document-translation/run-queue.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/document-translation/segments.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/docx/discover-template.ts#11"
           },
           {
@@ -18540,6 +18673,15 @@
           },
           {
             "location": "apps/api/src/scripts/backfill-citation-authority.ts#27"
+          },
+          {
+            "location": "apps/api/src/scripts/backfill-decision-identifiers.ts#11"
+          },
+          {
+            "location": "apps/api/src/scripts/better-auth-migration-audit.logic.ts#9"
+          },
+          {
+            "location": "apps/api/src/scripts/better-auth-migration-audit.ts#10"
           },
           {
             "location": "apps/api/src/scripts/case-law-source-total.ts#1"
@@ -19034,7 +19176,7 @@
             "location": "apps/api/src/lib/email/email.tsx#2"
           },
           {
-            "location": "apps/desktop/src/mainview/main.tsx#4"
+            "location": "apps/desktop/src/mainview/main.tsx#6"
           },
           {
             "location": "apps/web/src/components/ai-suggestions/file-chat-overlay.tsx#31"
@@ -19343,7 +19485,7 @@
           "name": "Taskforce.sh Inc."
         }
       ],
-      "bom-ref": "pkg:npm/bullmq@6.1.1",
+      "bom-ref": "pkg:npm/bullmq@6.1.2",
       "description": "Queue for messages and jobs based on Redis",
       "evidence": {
         "identity": [
@@ -19381,6 +19523,9 @@
           },
           {
             "location": "apps/api/src/lib/document-review/run-queue.ts#21"
+          },
+          {
+            "location": "apps/api/src/lib/document-translation/run-queue.ts#2"
           },
           {
             "location": "apps/api/src/lib/entity-deletion-cleanup-queue.ts#2"
@@ -19438,10 +19583,10 @@
           "value": "apps/api/node_modules/bullmq/package.json"
         }
       ],
-      "purl": "pkg:npm/bullmq@6.1.1",
+      "purl": "pkg:npm/bullmq@6.1.2",
       "scope": "required",
       "type": "library",
-      "version": "6.1.1"
+      "version": "6.1.2"
     },
     {
       "authors": [
@@ -20191,7 +20336,7 @@
             "location": "apps/api/scripts/backfill-search-previews.ts#11"
           },
           {
-            "location": "apps/api/scripts/classify-citations.ts#20"
+            "location": "apps/api/scripts/classify-citations.ts#23"
           },
           {
             "location": "apps/api/scripts/ingestion-status.ts#12"
@@ -20291,6 +20436,9 @@
           },
           {
             "location": "apps/api/src/db/schema/document-reviews.ts#1"
+          },
+          {
+            "location": "apps/api/src/db/schema/document-translations.ts#1"
           },
           {
             "location": "apps/api/src/db/schema/extraction-runs.ts#1"
@@ -20414,6 +20562,9 @@
           },
           {
             "location": "apps/api/src/handlers/case-law/ingestion/coverage-ledger.ts#15"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/ingestion/decision-identifier-backfill.ts#2"
           },
           {
             "location": "apps/api/src/handlers/case-law/ingestion/pipeline.ts#2"
@@ -20633,6 +20784,12 @@
           },
           {
             "location": "apps/api/src/handlers/document-reviews/read-run.ts#10"
+          },
+          {
+            "location": "apps/api/src/handlers/document-translations/create-run.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/document-translations/read-run.ts#2"
           },
           {
             "location": "apps/api/src/handlers/document-types/create.ts#2"
@@ -20875,7 +21032,7 @@
             "location": "apps/api/src/handlers/legislation/by-eli.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/legislation/corpus-index.ts#1"
+            "location": "apps/api/src/handlers/legislation/corpus-index.ts#12"
           },
           {
             "location": "apps/api/src/handlers/legislation/get.ts#2"
@@ -21559,7 +21716,7 @@
             "location": "apps/api/src/lib/confirmation-otp.ts#3"
           },
           {
-            "location": "apps/api/src/lib/corpus-index/census.ts#36"
+            "location": "apps/api/src/lib/corpus-index/census.ts#48"
           },
           {
             "location": "apps/api/src/lib/corpus-ingestion-checkpoint.ts#1"
@@ -21644,6 +21801,9 @@
           },
           {
             "location": "apps/api/src/lib/document-review/table-run-findings.ts#18"
+          },
+          {
+            "location": "apps/api/src/lib/document-translation/run-queue.ts#3"
           },
           {
             "location": "apps/api/src/lib/entities/create-from-buffer.ts#2"
@@ -22117,6 +22277,18 @@
             "location": "apps/api/src/scripts/backfill-source-document-ids.ts#24"
           },
           {
+            "location": "apps/api/src/scripts/better-auth-migration-audit.logic.ts#10"
+          },
+          {
+            "location": "apps/api/src/scripts/better-auth-migration-audit.logic.ts#11"
+          },
+          {
+            "location": "apps/api/src/scripts/better-auth-migration-audit.ts#12"
+          },
+          {
+            "location": "apps/api/src/scripts/better-auth-migration-audit.ts#13"
+          },
+          {
             "location": "apps/api/src/scripts/build-expansion-dictionary.ts#25"
           },
           {
@@ -22156,7 +22328,7 @@
             "location": "apps/api/src/scripts/replay-case-law-source.ts#2"
           },
           {
-            "location": "apps/api/src/scripts/seed-polarity-rules.ts#13"
+            "location": "apps/api/src/scripts/seed-polarity-rules.ts#14"
           },
           {
             "location": "apps/legal-atlas-runner/src/db.ts#1"
@@ -22225,6 +22397,9 @@
             "location": "apps/api/src/lib/public-law-read-db.ts#5"
           },
           {
+            "location": "apps/api/src/scripts/better-auth-migration-audit.ts#13"
+          },
+          {
             "location": "apps/api/src/db/migrate.ts#5"
           }
         ]
@@ -22267,105 +22442,6 @@
       ],
       "type": "library",
       "version": "1.0.0-rc.4"
-    },
-    {
-      "authors": [
-        {
-          "name": "rayriffy <mail@rayriffy.com> (https://github.com/rayriffy)"
-        }
-      ],
-      "bom-ref": "pkg:npm/elysia-rate-limit@4.6.2",
-      "description": "Rate-limiter for Elysia.js",
-      "evidence": {
-        "identity": [
-          {
-            "concludedValue": "apps/api/node_modules/elysia-rate-limit/package.json",
-            "confidence": 0.7,
-            "field": "purl",
-            "methods": [
-              {
-                "confidence": 0.7,
-                "technique": "manifest-analysis",
-                "value": "apps/api/node_modules/elysia-rate-limit/package.json"
-              }
-            ]
-          }
-        ],
-        "occurrences": [
-          {
-            "location": "apps/api/src/handlers/entities/routes.ts#2"
-          },
-          {
-            "location": "apps/api/src/handlers/hosted-usage-webhook/routes.ts#14"
-          },
-          {
-            "location": "apps/api/src/handlers/me/routes.ts#2"
-          },
-          {
-            "location": "apps/api/src/handlers/memories/rate-limit.ts#1"
-          },
-          {
-            "location": "apps/api/src/handlers/memories/routes.ts#2"
-          },
-          {
-            "location": "apps/api/src/handlers/skills/routes.ts#2"
-          },
-          {
-            "location": "apps/api/src/handlers/skills/source-rate-limit.ts#1"
-          },
-          {
-            "location": "apps/api/src/handlers/style-sets/routes.ts#2"
-          },
-          {
-            "location": "apps/api/src/handlers/uploads/routes.ts#2"
-          },
-          {
-            "location": "apps/api/src/lib/auth.ts#24"
-          },
-          {
-            "location": "apps/api/src/lib/rate-limit/rate-limit.ts#1"
-          },
-          {
-            "location": "apps/api/src/lib/rate-limit/redis-context.ts#2"
-          },
-          {
-            "location": "apps/api/src/lib/signup-abuse.ts#2"
-          },
-          {
-            "location": "apps/api/src/server.ts#4"
-          }
-        ]
-      },
-      "externalReferences": [
-        {
-          "type": "vcs",
-          "url": "git+https://github.com/rayriffy/elysia-rate-limit.git"
-        }
-      ],
-      "group": "",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT",
-            "url": "https://opensource.org/licenses/MIT"
-          }
-        }
-      ],
-      "name": "elysia-rate-limit",
-      "properties": [
-        {
-          "name": "SrcFile",
-          "value": "node_modules/elysia-rate-limit/package.json"
-        },
-        {
-          "name": "SrcFile",
-          "value": "apps/api/node_modules/elysia-rate-limit/package.json"
-        }
-      ],
-      "purl": "pkg:npm/elysia-rate-limit@4.6.2",
-      "scope": "required",
-      "type": "library",
-      "version": "4.6.2"
     },
     {
       "authors": [
@@ -22786,6 +22862,12 @@
           },
           {
             "location": "apps/api/src/handlers/document-reviews/schemas.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/document-translations/routes.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/document-translations/schemas.ts#1"
           },
           {
             "location": "apps/api/src/handlers/document-types/routes.ts#1"
@@ -24000,6 +24082,9 @@
             "location": "apps/api/src/lib/properties/create-schema.ts#2"
           },
           {
+            "location": "apps/api/src/lib/rate-limit/rate-limit.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/resource-realtime-macro.ts#1"
           },
           {
@@ -24416,7 +24501,7 @@
           "name": "Michel Weststrate <info@michel.codes>"
         }
       ],
-      "bom-ref": "pkg:npm/immer@11.1.17",
+      "bom-ref": "pkg:npm/immer@11.1.18",
       "description": "Create your next immutable state by mutating the current one",
       "evidence": {
         "identity": [
@@ -24487,10 +24572,10 @@
           "value": "apps/web/node_modules/immer/package.json"
         }
       ],
-      "purl": "pkg:npm/immer@11.1.17",
+      "purl": "pkg:npm/immer@11.1.18",
       "scope": "required",
       "type": "library",
-      "version": "11.1.17"
+      "version": "11.1.18"
     },
     {
       "authors": [
@@ -24498,7 +24583,7 @@
           "name": "Guilherme Rodz <g@rodz.dev>"
         }
       ],
-      "bom-ref": "pkg:npm/input-otp@1.4.2",
+      "bom-ref": "pkg:npm/input-otp@1.5.0",
       "description": "One-time password input component for React.",
       "evidence": {
         "identity": [
@@ -24551,10 +24636,10 @@
           "value": "node_modules/input-otp/package.json"
         }
       ],
-      "purl": "pkg:npm/input-otp@1.4.2",
+      "purl": "pkg:npm/input-otp@1.5.0",
       "scope": "required",
       "type": "library",
-      "version": "1.4.2"
+      "version": "1.5.0"
     },
     {
       "authors": [
@@ -24581,7 +24666,7 @@
         ],
         "occurrences": [
           {
-            "location": "apps/api/src/lib/signup-abuse.ts#3"
+            "location": "apps/api/src/lib/signup-abuse.ts#2"
           }
         ]
       },
@@ -24815,14 +24900,14 @@
       "evidence": {
         "identity": [
           {
-            "concludedValue": "apps/landing/node_modules/lucide-react/package.json",
+            "concludedValue": "apps/desktop/node_modules/lucide-react/package.json",
             "confidence": 0.7,
             "field": "purl",
             "methods": [
               {
                 "confidence": 0.7,
                 "technique": "manifest-analysis",
-                "value": "apps/landing/node_modules/lucide-react/package.json"
+                "value": "apps/desktop/node_modules/lucide-react/package.json"
               }
             ]
           }
@@ -24845,6 +24930,12 @@
           },
           {
             "location": "apps/web/src/lib/value-types.ts#22"
+          },
+          {
+            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#36"
+          },
+          {
+            "location": "apps/desktop/src/clipboard/ClipboardEditor.tsx#12"
           },
           {
             "location": "apps/playground/src/App.tsx#3"
@@ -25138,7 +25229,7 @@
             "location": "apps/web/src/components/theme-picker.tsx#1"
           },
           {
-            "location": "apps/web/src/components/translate-document-dialog.tsx#14"
+            "location": "apps/web/src/components/translate-document-dialog.tsx#13"
           },
           {
             "location": "apps/web/src/components/versions/version-list.tsx#19"
@@ -25213,10 +25304,16 @@
             "location": "apps/web/src/components/workspaces/tasks/task-subtasks.tsx#1"
           },
           {
+            "location": "apps/web/src/features/case-law/case-decision-inspector-registration.tsx#3"
+          },
+          {
+            "location": "apps/web/src/features/case-law/components/case-decision-inspector-view.tsx#3"
+          },
+          {
             "location": "apps/web/src/features/case-law/components/case-viewer/decision-citations.tsx#4"
           },
           {
-            "location": "apps/web/src/features/case-law/components/case-viewer/decision-workspace.tsx#4"
+            "location": "apps/web/src/features/case-law/components/case-viewer/decision-workspace.tsx#3"
           },
           {
             "location": "apps/web/src/features/case-law/components/case-viewer/provisions-cited.tsx#6"
@@ -25660,6 +25757,9 @@
             "location": "apps/web/src/routes/dev/-components/ui-playground.tsx#21"
           },
           {
+            "location": "apps/web/src/routes/law/-case-detail.tsx#4"
+          },
+          {
             "location": "apps/web/src/routes/law/-components/public-law-inspector.tsx#4"
           },
           {
@@ -25816,6 +25916,10 @@
         {
           "name": "SrcFile",
           "value": "apps/landing/node_modules/lucide-react/package.json"
+        },
+        {
+          "name": "SrcFile",
+          "value": "apps/desktop/node_modules/lucide-react/package.json"
         }
       ],
       "purl": "pkg:npm/lucide-react@1.30.0",
@@ -26162,7 +26266,7 @@
           "name": "engineering@posthog.com"
         }
       ],
-      "bom-ref": "pkg:npm/posthog-js@1.417.1",
+      "bom-ref": "pkg:npm/posthog-js@1.418.1",
       "description": "Posthog-js allows you to automatically capture usage and send events to PostHog.",
       "evidence": {
         "identity": [
@@ -26221,10 +26325,10 @@
           "value": "apps/web/node_modules/posthog-js/package.json"
         }
       ],
-      "purl": "pkg:npm/posthog-js@1.417.1",
+      "purl": "pkg:npm/posthog-js@1.418.1",
       "scope": "required",
       "type": "library",
-      "version": "1.417.1"
+      "version": "1.418.1"
     },
     {
       "authors": [
@@ -26924,6 +27028,9 @@
             "location": "apps/desktop/src/mainview/main.tsx#2"
           },
           {
+            "location": "apps/desktop/src/mainview/main.tsx#3"
+          },
+          {
             "location": "apps/playground/src/main.tsx#3"
           },
           {
@@ -26934,6 +27041,9 @@
           },
           {
             "location": "apps/desktop/src/mainview/main.tsx#2"
+          },
+          {
+            "location": "apps/desktop/src/mainview/main.tsx#3"
           },
           {
             "location": "apps/playground/src/main.tsx#3"
@@ -27196,6 +27306,9 @@
         ],
         "occurrences": [
           {
+            "location": "apps/desktop/src/shared/use-system-theme.ts#1"
+          },
+          {
             "location": "apps/web/src/components/ai-suggestions/active-docx-store.ts#19"
           },
           {
@@ -27449,6 +27562,15 @@
           },
           {
             "location": "packages/ui/src/lib/utils.ts#1"
+          },
+          {
+            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#1"
+          },
+          {
+            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#7"
+          },
+          {
+            "location": "apps/desktop/src/clipboard/ClipboardEditor.tsx#1"
           },
           {
             "location": "apps/desktop/src/mainview/App.tsx#1"
@@ -27892,6 +28014,9 @@
             "location": "apps/web/src/components/keyboard-shortcuts-dialog.tsx#1"
           },
           {
+            "location": "apps/web/src/components/legal-reader/cited-decision-link.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/legal-reader/document-ast-text.tsx#1"
           },
           {
@@ -28048,7 +28173,7 @@
             "location": "apps/web/src/components/tooltip.tsx#1"
           },
           {
-            "location": "apps/web/src/components/translate-document-dialog.tsx#10"
+            "location": "apps/web/src/components/translate-document-dialog.tsx#9"
           },
           {
             "location": "apps/web/src/components/user-avatar.tsx#1"
@@ -28135,6 +28260,9 @@
             "location": "apps/web/src/components/workspaces/workflow-start-confirmation-prompt.tsx#2"
           },
           {
+            "location": "apps/web/src/features/case-law/case-decision-inspector-registration.tsx#1"
+          },
+          {
             "location": "apps/web/src/features/case-law/components/case-viewer/analysis/margin-notes.tsx#8"
           },
           {
@@ -28154,9 +28282,6 @@
           },
           {
             "location": "apps/web/src/features/case-law/components/case-viewer/provisions-cited.tsx#1"
-          },
-          {
-            "location": "apps/web/src/features/case-law/components/cited-decision-link.tsx#1"
           },
           {
             "location": "apps/web/src/features/case-law/components/decision-filters.tsx#1"
@@ -29208,6 +29333,12 @@
         ],
         "occurrences": [
           {
+            "location": "apps/api/src/lib/document-translation/docx-review.ts#2"
+          },
+          {
+            "location": "apps/api/src/lib/document-translation/segments.ts#2"
+          },
+          {
             "location": "apps/api/src/lib/docx/block-directives.ts#49"
           },
           {
@@ -30035,9 +30166,6 @@
             "location": "apps/web/src/components/workspaces/hooks/use-start-workflow.ts#3"
           },
           {
-            "location": "apps/web/src/features/case-law/decision-date.ts#1"
-          },
-          {
             "location": "apps/web/src/features/chat/hooks/use-chat-session.ts#13"
           },
           {
@@ -30060,6 +30188,9 @@
           },
           {
             "location": "apps/web/src/hooks/use-sign-out.ts#3"
+          },
+          {
+            "location": "apps/web/src/lib/decision-date.ts#1"
           },
           {
             "location": "apps/web/src/lib/folio-ui-components.ts#3"
@@ -30102,6 +30233,12 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/-hooks/use-sort-labels.ts#1"
+          },
+          {
+            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#37"
+          },
+          {
+            "location": "apps/desktop/src/clipboard/ClipboardEditor.tsx#13"
           },
           {
             "location": "apps/desktop/src/mainview/App.tsx#5"
@@ -30506,7 +30643,7 @@
             "location": "apps/web/src/components/theme-picker.tsx#2"
           },
           {
-            "location": "apps/web/src/components/translate-document-dialog.tsx#15"
+            "location": "apps/web/src/components/translate-document-dialog.tsx#14"
           },
           {
             "location": "apps/web/src/components/usage/run-size-confirm-dialog.tsx#1"
@@ -30620,6 +30757,9 @@
             "location": "apps/web/src/components/workspaces/workflow-start-confirmation-prompt.tsx#4"
           },
           {
+            "location": "apps/web/src/features/case-law/components/case-decision-inspector-view.tsx#4"
+          },
+          {
             "location": "apps/web/src/features/case-law/components/case-viewer/citation-header.tsx#2"
           },
           {
@@ -30629,7 +30769,7 @@
             "location": "apps/web/src/features/case-law/components/case-viewer/decision-text.tsx#4"
           },
           {
-            "location": "apps/web/src/features/case-law/components/case-viewer/decision-workspace.tsx#5"
+            "location": "apps/web/src/features/case-law/components/case-viewer/decision-workspace.tsx#4"
           },
           {
             "location": "apps/web/src/features/case-law/components/case-viewer/provisions-cited.tsx#7"
@@ -30665,7 +30805,7 @@
             "location": "apps/web/src/features/statutes/components/provision-ask-actions.tsx#4"
           },
           {
-            "location": "apps/web/src/features/statutes/components/provision-citing-decisions.tsx#5"
+            "location": "apps/web/src/features/statutes/components/provision-citing-decisions.tsx#4"
           },
           {
             "location": "apps/web/src/features/statutes/components/provision-history.tsx#4"
@@ -31286,6 +31426,9 @@
             "location": "apps/web/src/routes/law/$country/statutes/index.tsx#6"
           },
           {
+            "location": "apps/web/src/routes/law/-case-detail.tsx#5"
+          },
+          {
             "location": "apps/web/src/routes/law/-components/public-law-inspector.tsx#5"
           },
           {
@@ -31364,10 +31507,10 @@
             "location": "packages/workspace-ui/src/field-value.tsx#3"
           },
           {
-            "location": "apps/web/src/features/case-law/decision-date.ts#1"
+            "location": "apps/web/src/features/statutes/statute-format.ts#1"
           },
           {
-            "location": "apps/web/src/features/statutes/statute-format.ts#1"
+            "location": "apps/web/src/lib/decision-date.ts#1"
           }
         ]
       },
@@ -31719,6 +31862,9 @@
             "location": "apps/api/src/lib/document-source.ts#20"
           },
           {
+            "location": "apps/api/src/lib/document-translation/ai.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/docx/ai-field-generator.ts#14"
           },
           {
@@ -31858,6 +32004,9 @@
           },
           {
             "location": "apps/api/src/mcp/valibot-tool-definition.ts#3"
+          },
+          {
+            "location": "apps/api/src/scripts/better-auth-migration-audit.logic.ts#12"
           },
           {
             "location": "apps/api/src/scripts/corpus-column-trim-plan.ts#1"
@@ -32531,7 +32680,7 @@
             "location": "apps/web/src/components/workspaces/create-matter-dialog.tsx#14"
           },
           {
-            "location": "apps/web/src/features/case-law/components/case-viewer/decision-workspace.tsx#6"
+            "location": "apps/web/src/features/case-law/components/case-viewer/decision-workspace.tsx#5"
           },
           {
             "location": "apps/web/src/lib/chrome-header-actions.tsx#5"
@@ -32615,7 +32764,7 @@
             "location": "apps/web/src/components/pdf/page-citation.tsx#3"
           },
           {
-            "location": "apps/web/src/features/case-law/components/case-viewer/decision-workspace.tsx#6"
+            "location": "apps/web/src/features/case-law/components/case-viewer/decision-workspace.tsx#5"
           },
           {
             "location": "apps/web/src/lib/pdf/pdf-page.tsx#5"
