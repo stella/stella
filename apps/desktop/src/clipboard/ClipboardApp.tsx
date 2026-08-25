@@ -1366,11 +1366,9 @@ const ClipboardApp = () => {
 
   const nextCaptureStatus: ClipboardCaptureStatus =
     snapshot.captureStatus === "active" ? "paused" : "active";
-  let persistenceLabel = t("memoryOnly");
-  if (snapshot.persistence.status === "encrypted") {
-    persistenceLabel = t("encryptedHistory");
-  } else if (snapshot.persistence.status === "deletionOnly") {
-    persistenceLabel = t("errorReadHistory");
+  let persistenceWarningLabel = t("memoryOnly");
+  if (snapshot.persistence.status === "deletionOnly") {
+    persistenceWarningLabel = t("errorReadHistory");
   }
   let feedback: ReactNode = null;
   if (error) {
@@ -1510,25 +1508,17 @@ const ClipboardApp = () => {
           >
             <StellaMark className="size-5" />
           </a>
-          {snapshot.persistence.status === "initializing" ? null : (
+          {snapshot.persistence.status === "memoryOnly" ||
+          snapshot.persistence.status === "deletionOnly" ? (
             <span
-              aria-label={persistenceLabel}
-              className={cn(
-                "grid size-7 place-items-center rounded-full",
-                snapshot.persistence.status === "encrypted"
-                  ? "text-muted-foreground"
-                  : "bg-warning/12 text-warning",
-              )}
+              aria-label={persistenceWarningLabel}
+              className="bg-warning/12 text-warning grid size-7 place-items-center rounded-full"
               role="status"
-              title={persistenceLabel}
+              title={persistenceWarningLabel}
             >
-              {snapshot.persistence.status === "encrypted" ? (
-                <LockKeyholeIcon aria-hidden="true" className="size-3.5" />
-              ) : (
-                <ShieldAlertIcon aria-hidden="true" className="size-3.5" />
-              )}
+              <ShieldAlertIcon aria-hidden="true" className="size-3.5" />
             </span>
-          )}
+          ) : null}
           <Button
             aria-label={t("welcomeHelp")}
             className="size-10 rounded-full"
