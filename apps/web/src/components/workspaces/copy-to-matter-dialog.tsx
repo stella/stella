@@ -20,8 +20,9 @@ import { stellaToast } from "@stll/ui/toast";
 
 import {
   MatterTargetPicker,
-  type MatterTarget,
+  useResolveMatterTarget,
 } from "@/components/matter-target-picker";
+import type { MatterTarget } from "@/components/matter-target-picker.logic";
 import {
   getCopyToMatterRootEntities,
   type CopyToMatterEntity,
@@ -57,10 +58,15 @@ export const CopyToMatterDialog = ({
   const [mode, setMode] = useState<MoveMode>("copy");
   const [target, setTarget] = useState<MatterTarget | null>(
     initialTargetWorkspaceId
-      ? { workspaceId: initialTargetWorkspaceId, parentId: null }
+      ? {
+          type: "existing",
+          workspaceId: initialTargetWorkspaceId,
+          parentId: null,
+        }
       : null,
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const resolveTarget = useResolveMatterTarget();
 
   // The dialog is mounted once and reused across drops, so re-seed the target
   // matter each time it opens with a fresh preset (drag-onto-matter path).
@@ -68,7 +74,11 @@ export const CopyToMatterDialog = ({
     if (open) {
       setTarget(
         initialTargetWorkspaceId
-          ? { workspaceId: initialTargetWorkspaceId, parentId: null }
+          ? {
+              type: "existing",
+              workspaceId: initialTargetWorkspaceId,
+              parentId: null,
+            }
           : null,
       );
     }
@@ -82,9 +92,26 @@ export const CopyToMatterDialog = ({
     if (!target) {
       return;
     }
-    const { workspaceId: targetWorkspaceId, parentId: targetParentId } = target;
 
     setIsSubmitting(true);
+
+    const resolved = await resolveTarget(target);
+    if (Result.isError(resolved)) {
+      setIsSubmitting(false);
+      stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
+      return;
+    }
+    const { workspaceId: targetWorkspaceId, parentId: targetParentId } =
+      resolved.value;
+    if (target.type === "pending") {
+      // A staged folder now exists; keep it so a retry after a failed transfer
+      // does not create a second one.
+      setTarget({
+        type: "existing",
+        workspaceId: targetWorkspaceId,
+        parentId: targetParentId,
+      });
+    }
 
     let failedCount = 0;
     let firstErrorMessage: string | null = null;

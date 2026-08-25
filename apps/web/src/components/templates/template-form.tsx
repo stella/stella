@@ -46,8 +46,11 @@ import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
 import { DatePickerPopover } from "@/components/date-picker-popover";
-import { MatterTargetPicker } from "@/components/matter-target-picker";
-import type { MatterTarget } from "@/components/matter-target-picker";
+import {
+  MatterTargetPicker,
+  useResolveMatterTarget,
+} from "@/components/matter-target-picker";
+import type { MatterTarget } from "@/components/matter-target-picker.logic";
 import type { ClauseBody } from "@/components/templates/clause-editor-types";
 import {
   buildAutofillUpdates,
@@ -2136,6 +2139,7 @@ export const TemplateForm = ({
   // ── Save to matter ────────────────────────────────
   const [matterDialogOpen, setMatterDialogOpen] = useState(false);
   const [matterTarget, setMatterTarget] = useState<MatterTarget | null>(null);
+  const resolveTarget = useResolveMatterTarget();
 
   /** Fill server-side and persist the result as a document entity in the
    *  given matter (the fill-to endpoint). Validates like a download. */
@@ -2237,9 +2241,26 @@ export const TemplateForm = ({
     }
   };
 
-  const fillToMatter = async (workspaceId: string, parentId: string | null) => {
+  const fillToMatter = async (target: MatterTarget) => {
     await runLeadingSingleFlight(fillToMatterFlight, async () => {
-      await performFillToMatter(workspaceId, parentId);
+      const resolved = await resolveTarget(target);
+      if (Result.isError(resolved)) {
+        stellaToast.add({ type: "error", title: t("errors.actionFailed") });
+        return;
+      }
+      if (target.type === "pending") {
+        // A staged folder now exists; keep it so a retry after a failed fill
+        // does not create a second one.
+        setMatterTarget({
+          type: "existing",
+          workspaceId: resolved.value.workspaceId,
+          parentId: resolved.value.parentId,
+        });
+      }
+      await performFillToMatter(
+        resolved.value.workspaceId,
+        resolved.value.parentId,
+      );
     });
   };
 
@@ -2276,7 +2297,11 @@ export const TemplateForm = ({
         return;
       }
       detached(
-        fillToMatter(saveTarget.workspaceId, saveTarget.parentId ?? null),
+        fillToMatter({
+          type: "existing",
+          workspaceId: saveTarget.workspaceId,
+          parentId: saveTarget.parentId ?? null,
+        }),
         "template-form.fill-to-matter",
       );
       return;
@@ -2308,7 +2333,11 @@ export const TemplateForm = ({
     }
     if (saveTarget?.kind === "matter") {
       detached(
-        fillToMatter(saveTarget.workspaceId, saveTarget.parentId ?? null),
+        fillToMatter({
+          type: "existing",
+          workspaceId: saveTarget.workspaceId,
+          parentId: saveTarget.parentId ?? null,
+        }),
         "template-form.fill-to-matter",
       );
     }
@@ -2591,10 +2620,7 @@ export const TemplateForm = ({
               onClick={() => {
                 if (matterTarget !== null) {
                   detached(
-                    fillToMatter(
-                      matterTarget.workspaceId,
-                      matterTarget.parentId,
-                    ),
+                    fillToMatter(matterTarget),
                     "template-form.fill-to-matter",
                   );
                 }

@@ -24,7 +24,6 @@ export const useCreateEntities = () => {
   const analytics = useAnalytics();
 
   return useMutation({
-    retry: 3,
     mutationFn: async ({ workspaceId, ...body }: CreateEntitiesVars) => {
       const response = await api
         .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
