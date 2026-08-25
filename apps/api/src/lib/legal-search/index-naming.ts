@@ -8,6 +8,7 @@ import {
   isCaseLawIndexGroup,
   POSTGRES_INTEGER_MAX,
 } from "@/api/lib/legal-search/case-law-index-groups";
+import { CORPUS_INDEX_GENERATION_MAX_LENGTH } from "@/api/lib/legal-search/corpus-generation-contract";
 
 /**
  * corpus index index naming, generic over document family. The `generation`
@@ -26,7 +27,7 @@ import {
 // Corpus index ids must match ^[a-zA-Z][a-zA-Z0-9._-]{2,254}$. Database
 // columns use the tighter bound below so every constructed physical id has
 // one storage contract across decisions, audit rows, and projection state.
-export const CORPUS_INDEX_GENERATION_MAX_LENGTH = 32;
+export { CORPUS_INDEX_GENERATION_MAX_LENGTH };
 export const CORPUS_INDEX_ID_MAX_LENGTH = 64;
 
 const GENERATION_PATTERN = new RegExp(
