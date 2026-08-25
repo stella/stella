@@ -107,8 +107,10 @@ const GUARDED_CATEGORY_GUIDANCE = {
 
 const ACKNOWLEDGEMENT_MARKER_PATTERN =
   /^\s*--\s*stella-migration-safety:\s*reviewed\b(?<rest>.*)$/iu;
-const ACKNOWLEDGEMENT_BODY_PATTERN =
-  /^\s+(?<ids>[a-z][a-z0-9-]*(?:\s*,\s*[a-z][a-z0-9-]*)*)\s+-\s*(?<reason>.*)$/iu;
+// `<ids> - <reason>`: ids and reason split at the first ` - ` (whitespace,
+// hyphen, whitespace), ids validated one by one.
+const ACKNOWLEDGEMENT_SEPARATOR_PATTERN = /\s-\s/u;
+const RULE_ID_PATTERN = /^[a-z][a-z0-9-]*$/iu;
 const LINE_COMMENT_PATTERN = /^\s*--/u;
 const MIN_ACKNOWLEDGEMENT_REASON_LENGTH = 12;
 
@@ -362,6 +364,29 @@ const isInsertFromQuery = (statement: string): boolean => {
   return false;
 };
 
+const CREATE_TABLE_PATTERN =
+  /\bCREATE\s+(?:UNLOGGED\s+|TEMP(?:ORARY)?\s+)?TABLE\b/iu;
+const TABLE_AS_QUERY_PATTERN =
+  /\bAS\s*(?:\(\s*)?(?:SELECT|WITH|TABLE|VALUES|EXECUTE)\b/iu;
+
+// `CREATE TABLE name AS <query>`: the AS query comes before any column list
+// parenthesis. A plain `CREATE TABLE name (...)` has its first `(` first.
+const isCreateTableAsQuery = (statement: string): boolean => {
+  const create = CREATE_TABLE_PATTERN.exec(statement);
+  if (!create) {
+    return false;
+  }
+
+  const rest = statement.slice(create.index + create[0].length);
+  const asQuery = TABLE_AS_QUERY_PATTERN.exec(rest);
+  if (!asQuery) {
+    return false;
+  }
+
+  const firstParenthesis = rest.indexOf("(");
+  return firstParenthesis === -1 || asQuery.index < firstParenthesis;
+};
+
 const GUARDED_RULES: GuardedRule[] = [
   {
     id: "drop-object",
@@ -456,8 +481,7 @@ const GUARDED_RULES: GuardedRule[] = [
     id: "create-table-as",
     description: "materialises a query into a new table (CREATE TABLE AS)",
     category: "bulk-backfill",
-    pattern:
-      /\bCREATE\s+(?:UNLOGGED\s+|TEMP(?:ORARY)?\s+)?TABLE\b[^(]*\bAS\s*\(?\s*(?:SELECT|WITH|TABLE|VALUES|EXECUTE)\b/iu,
+    matches: isCreateTableAsQuery,
   },
   {
     id: "materialized-view-populate",
@@ -598,7 +622,8 @@ const toRepoPath = (file: string): string =>
 
 const readBaseline = (): Set<string> => {
   if (!existsSync(BASELINE_FILE)) {
-    return new Set();
+    console.error(`ERROR: ${BASELINE_FILE} is missing.`);
+    process.exit(1);
   }
 
   return new Set(
@@ -979,6 +1004,32 @@ const guardedRuleMatches = (rule: GuardedRule, statement: string): boolean =>
     ? rule.matches(statement)
     : (rule.pattern?.test(statement) ?? false);
 
+type AcknowledgementBody = { ruleIds: string[]; reason: string };
+
+const parseAcknowledgementBody = (rest: string): AcknowledgementBody | null => {
+  if (!/^\s/u.test(rest)) {
+    return null;
+  }
+
+  const separator = ACKNOWLEDGEMENT_SEPARATOR_PATTERN.exec(rest);
+  if (!separator) {
+    return null;
+  }
+
+  const ruleIds = rest
+    .slice(0, separator.index)
+    .split(",")
+    .map((id) => id.trim().toLowerCase());
+  if (ruleIds.some((id) => !RULE_ID_PATTERN.test(id))) {
+    return null;
+  }
+
+  return {
+    ruleIds,
+    reason: rest.slice(separator.index + separator[0].length),
+  };
+};
+
 type AcknowledgementParseResult = {
   acknowledgements: Acknowledgement[];
   errors: Finding[];
@@ -1001,9 +1052,7 @@ const parseAcknowledgements = (
     }
 
     const lineNumber = index + 1;
-    const body = ACKNOWLEDGEMENT_BODY_PATTERN.exec(
-      marker.groups?.["rest"] ?? "",
-    );
+    const body = parseAcknowledgementBody(marker.groups?.["rest"] ?? "");
 
     if (!body) {
       errors.push({
@@ -1016,7 +1065,7 @@ const parseAcknowledgements = (
       continue;
     }
 
-    const reasonLines = [body.groups?.["reason"] ?? ""];
+    const reasonLines = [body.reason];
     for (let next = index + 1; next < lines.length; next++) {
       const candidate = lines[next] ?? "";
       if (
@@ -1028,9 +1077,7 @@ const parseAcknowledgements = (
       reasonLines.push(candidate.replace(/^\s*--\s?/u, ""));
     }
 
-    const ruleIds = (body.groups?.["ids"] ?? "")
-      .split(",")
-      .map((id) => id.trim().toLowerCase());
+    const { ruleIds } = body;
     const unknownIds = ruleIds.filter((id) => !KNOWN_RULE_IDS.has(id));
 
     if (unknownIds.length > 0) {
@@ -1107,7 +1154,7 @@ const createAcknowledgementLookup = (
   };
 
   return (statement, ruleId) => {
-    const candidateLines = blockFor(statement.line);
+    const candidateLines = new Set(blockFor(statement.line));
     if (statement.enclosingLine !== undefined) {
       for (const lineNumber of blockFor(statement.enclosingLine)) {
         candidateLines.add(lineNumber);
