@@ -83,6 +83,7 @@ describe("public decision routes are gated by construction", () => {
     expect(gated).toEqual([
       "GET /case/decisions/:decisionId",
       "GET /case/decisions/:decisionId/citations",
+      "GET /case/decisions/:decisionId/citations/leading",
       "GET /case/decisions/:decisionId/citations/summary",
       "GET /case/decisions/:decisionId/provisions",
       "GET /case/decisions/by-slug/:slug",
