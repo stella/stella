@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type {
   CSSProperties,
-  KeyboardEvent as ReactKeyboardEvent,
   MouseEvent as ReactMouseEvent,
   ReactNode,
 } from "react";
@@ -19,8 +18,6 @@ import {
   ClipboardIcon,
   CopyPlusIcon,
   CheckIcon,
-  ChevronLeftIcon,
-  ChevronRightIcon,
   FileTextIcon,
   FolderInputIcon,
   FolderPlusIcon,
@@ -46,13 +43,24 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/dialog";
-import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { Input } from "@stll/ui/input";
 import {
   InputGroup,
   InputGroupAddon,
   InputGroupInput,
 } from "@stll/ui/input-group";
+import {
+  Menu,
+  MenuItem,
+  MenuPopup,
+  MenuRadioGroup,
+  MenuRadioItem,
+  MenuSeparator,
+  MenuSub,
+  MenuSubPopup,
+  MenuSubTrigger,
+  MenuTrigger,
+} from "@stll/ui/menu";
 import { StellaMark } from "@stll/ui/stella-mark";
 import { cn } from "@stll/ui/utils";
 
@@ -64,7 +72,6 @@ import {
 } from "../telemetry/desktop-telemetry";
 import {
   CLIPBOARD_ITEM_DRAG_TYPE,
-  clipboardContextMenuPosition,
   clipboardDraggedItemId,
   clipboardSourceTintIndex,
   filterClipboardItems,
@@ -73,6 +80,7 @@ import {
   isClipboardCopyShortcut,
   nextClipboardIndex,
   quickCopyIndex,
+  shouldCopyFromClipboardInput,
 } from "./clipboard-logic";
 import { isClipboardSnapshot } from "./clipboard-types";
 import type {
@@ -104,6 +112,7 @@ const CLIPBOARD_GROUP_ACCENTS = {
 
 const STELLA_WEB_APP_URL = "https://my.stll.app";
 const MAX_GROUP_NAME_CHARACTERS = 64;
+const MAX_ITEM_NAME_CHARACTERS = 80;
 const CLIPBOARD_CARD_SELECTOR = "[data-clipboard-id]";
 const CLIPBOARD_GROUP_DROP_SELECTOR = "[data-clipboard-group-id]";
 const CLIPBOARD_NO_GROUP_DROP_ID = "__no_group__";
@@ -166,6 +175,7 @@ type ClipboardCardProps = {
     index: number,
   ) => void;
   onCopy: (item: ClipboardItem) => void;
+  onRename: (id: string, name: string) => void;
   onSelect: (index: number) => void;
   query: string;
   sourceVisual: ClipboardSourceAppVisual | null;
@@ -189,11 +199,15 @@ const ClipboardCard = ({
   item,
   onOpenMenu,
   onCopy,
+  onRename,
   onSelect,
   query,
   sourceVisual,
 }: ClipboardCardProps) => {
   const t = useTranslations("clipboard");
+  const cancelNameEditRef = useRef(false);
+  const [editingName, setEditingName] = useState(false);
+  const [nameDraft, setNameDraft] = useState(item.name ?? "");
   const age = formatClipboardAge(item.copiedAt, ageReferenceTime);
   const formattedAge = new Intl.NumberFormat(undefined, {
     style: "unit",
@@ -278,11 +292,31 @@ const ClipboardCard = ({
     );
   }
 
+  const beginNameEdit = () => {
+    cancelNameEditRef.current = false;
+    setNameDraft(item.name ?? "");
+    setEditingName(true);
+    onSelect(index);
+  };
+
+  const finishNameEdit = () => {
+    setEditingName(false);
+    if (cancelNameEditRef.current) {
+      cancelNameEditRef.current = false;
+      setNameDraft(item.name ?? "");
+      return;
+    }
+    const nextName = nameDraft.trim();
+    if (nextName !== (item.name ?? "")) {
+      onRename(item.id, nextName);
+    }
+  };
+
   return (
     <article
       aria-current={active ? "true" : undefined}
       className={cn(
-        "clipboard-card group relative w-[246px] shrink-0 self-stretch overflow-hidden rounded-[24px]",
+        "clipboard-card group relative flex w-[246px] shrink-0 flex-col self-stretch overflow-hidden rounded-[24px]",
         "motion-safe:transition-opacity motion-safe:duration-150",
         active ? "opacity-100" : "opacity-86 hover:opacity-100",
       )}
@@ -294,7 +328,7 @@ const ClipboardCard = ({
     >
       <button
         aria-label={t("copyItem", { number: index + 1 })}
-        className="flex size-full flex-col text-start focus-visible:outline-none"
+        className="flex min-h-0 flex-1 flex-col self-stretch text-start focus-visible:outline-none"
         data-clipboard-card-trigger=""
         onClick={() => onCopy(item)}
         onContextMenu={(event) => onOpenMenu(event, item, index)}
@@ -305,41 +339,77 @@ const ClipboardCard = ({
         <div className="relative min-h-0 flex-1 self-stretch overflow-hidden p-5">
           {previewContent}
         </div>
-
-        <footer className="clipboard-card-footer flex h-12 shrink-0 items-center gap-3 px-4">
-          <span
-            className="relative flex min-w-0 items-center gap-2"
-            title={sourceAppName ?? groupName ?? undefined}
-          >
-            {metadataIcon}
-            <span
-              className={cn(
-                "text-muted-foreground truncate text-xs",
-                sourceAppName && "clipboard-source-name",
-              )}
-              dir="auto"
-            >
-              {sourceAppName ??
-                groupName ??
-                (item.type === "formattedText"
-                  ? t("formattedText")
-                  : t("plainText"))}
-            </span>
-          </span>
-          <time
-            className="text-muted-foreground shrink-0 text-xs tabular-nums"
-            dateTime={item.copiedAt}
-          >
-            {relativeTime}
-          </time>
-          {index < 9 ? (
-            <kbd className="bg-muted text-muted-foreground ms-auto rounded-md px-1.5 py-0.5 font-mono text-[10px] tabular-nums">
-              {PRIMARY_MODIFIER_LABEL}
-              {index + 1}
-            </kbd>
-          ) : null}
-        </footer>
       </button>
+
+      <footer className="clipboard-card-footer flex h-12 shrink-0 items-center gap-2 px-4">
+        <span
+          className="relative flex shrink-0 items-center"
+          title={
+            sourceAppName ??
+            groupName ??
+            (item.type === "formattedText"
+              ? t("formattedText")
+              : t("plainText"))
+          }
+        >
+          {metadataIcon}
+        </span>
+        {editingName ? (
+          <Input
+            aria-label={t("editItem")}
+            autoFocus
+            className="h-8 min-w-0 flex-1 rounded-lg px-2 text-sm font-semibold"
+            data-clipboard-name-input=""
+            maxLength={MAX_ITEM_NAME_CHARACTERS}
+            onBlur={finishNameEdit}
+            onChange={(event) => setNameDraft(event.target.value)}
+            onFocus={() => onSelect(index)}
+            onKeyDown={(event) => {
+              event.stopPropagation();
+              if (event.key === "Enter") {
+                event.preventDefault();
+                event.currentTarget.blur();
+              } else if (event.key === "Escape") {
+                event.preventDefault();
+                cancelNameEditRef.current = true;
+                event.currentTarget.blur();
+              }
+            }}
+            value={nameDraft}
+          />
+        ) : (
+          <button
+            className={cn(
+              "text-foreground focus-visible:ring-ring flex min-w-0 flex-1 items-center gap-1.5 rounded-md text-start text-sm font-semibold focus-visible:ring-2 focus-visible:outline-none",
+              !item.name && "text-muted-foreground",
+            )}
+            onClick={beginNameEdit}
+            onFocus={() => onSelect(index)}
+            title={t("editItem")}
+            type="button"
+          >
+            <span className="truncate" dir="auto">
+              {item.name ?? t("unnamedClip")}
+            </span>
+            <PencilIcon
+              aria-hidden="true"
+              className="size-3 shrink-0 opacity-0 transition-opacity group-focus-within:opacity-60 group-hover:opacity-60"
+            />
+          </button>
+        )}
+        <time
+          className="text-muted-foreground shrink-0 text-xs tabular-nums"
+          dateTime={item.copiedAt}
+        >
+          {relativeTime}
+        </time>
+        {index < 9 ? (
+          <kbd className="bg-muted text-muted-foreground shrink-0 rounded-md px-1.5 py-0.5 font-mono text-[10px] tabular-nums">
+            {PRIMARY_MODIFIER_LABEL}
+            {index + 1}
+          </kbd>
+        ) : null}
+      </footer>
     </article>
   );
 };
@@ -560,8 +630,7 @@ const ClipboardDialog = ({
 
 type ClipboardContextMenuState =
   | { type: "closed" }
-  | { item: ClipboardItem; type: "actions"; x: number; y: number }
-  | { item: ClipboardItem; type: "groups"; x: number; y: number };
+  | { item: ClipboardItem; type: "open"; x: number; y: number };
 
 type ClipboardDragState =
   | { type: "idle" }
@@ -574,7 +643,6 @@ type ClipboardDragState =
 type ClipboardContextMenuProps = {
   groups: ClipboardGroup[];
   menu: Exclude<ClipboardContextMenuState, { type: "closed" }>;
-  onChange: (menu: ClipboardContextMenuState) => void;
   onClose: () => void;
   onDelete: (id: string) => void;
   onDuplicate: (id: string) => void;
@@ -585,7 +653,6 @@ type ClipboardContextMenuProps = {
 const ClipboardContextMenu = ({
   groups,
   menu,
-  onChange,
   onClose,
   onDelete,
   onDuplicate,
@@ -593,222 +660,101 @@ const ClipboardContextMenu = ({
   onMove,
 }: ClipboardContextMenuProps) => {
   const t = useTranslations("clipboard");
-  const position = clipboardContextMenuPosition({
-    anchorX: menu.x,
-    anchorY: menu.y,
-    type: menu.type,
-    viewportHeight: window.innerHeight,
-    viewportWidth: window.innerWidth,
-  });
-  const itemClassName =
-    "text-foreground hover:bg-foreground/8 focus-visible:bg-foreground/8 flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-start text-sm outline-none";
-  const handleKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
-    event.stopPropagation();
-    if (event.key === "Escape") {
-      event.preventDefault();
-      onClose();
-      return;
-    }
-    if (event.key === "Tab") {
-      event.preventDefault();
-      onClose();
-      return;
-    }
-    if (
-      event.key !== "ArrowDown" &&
-      event.key !== "ArrowUp" &&
-      event.key !== "Home" &&
-      event.key !== "End"
-    ) {
-      return;
-    }
-    event.preventDefault();
-    const items = Array.from(
-      event.currentTarget.querySelectorAll<HTMLElement>(
-        '[role="menuitem"], [role="menuitemradio"]',
-      ),
-    ).filter((item) => !item.hasAttribute("disabled"));
-    if (items.length === 0) {
-      return;
-    }
-    const activeItem =
-      document.activeElement instanceof HTMLElement
-        ? document.activeElement
-        : null;
-    const activeIndex = activeItem ? items.indexOf(activeItem) : -1;
-    let nextIndex = 0;
-    if (event.key === "ArrowDown") {
-      nextIndex = (activeIndex + 1) % items.length;
-    } else if (event.key === "ArrowUp") {
-      nextIndex = (activeIndex - 1 + items.length) % items.length;
-    } else if (event.key === "End") {
-      nextIndex = items.length - 1;
-    }
-    items.at(nextIndex)?.focus();
+  const anchor = {
+    getBoundingClientRect: () => new DOMRect(menu.x, menu.y, 0, 0),
   };
+
   return (
-    <div
-      className="bg-popover ring-border fixed z-30 flex w-56 flex-col overflow-hidden rounded-2xl p-1.5 shadow-2xl ring-1"
-      onContextMenu={(event) => event.preventDefault()}
-      onKeyDown={handleKeyDown}
-      onPointerDown={(event) => event.stopPropagation()}
-      role="menu"
-      style={{
-        insetInlineStart: position.x,
-        maxHeight: position.maxHeight,
-        top: position.y,
+    <Menu
+      onOpenChange={(open) => {
+        if (!open) {
+          onClose();
+        }
       }}
-      tabIndex={-1}
+      open
     >
-      {menu.type === "actions" ? (
-        <>
-          <button
-            autoFocus
-            className={itemClassName}
-            onClick={() => {
-              onEdit(menu.item.id);
-              onClose();
-            }}
-            role="menuitem"
-            type="button"
-          >
-            <PencilIcon
-              aria-hidden="true"
-              className="text-muted-foreground size-4"
-            />
-            {t("editItem")}
-          </button>
-          <button
-            className={itemClassName}
-            onClick={() => {
-              onDuplicate(menu.item.id);
-              onClose();
-            }}
-            role="menuitem"
-            type="button"
-          >
-            <CopyPlusIcon
-              aria-hidden="true"
-              className="text-muted-foreground size-4"
-            />
-            {t("duplicateItem")}
-          </button>
-          <button
-            className={itemClassName}
-            onClick={() =>
-              onChange({
-                item: menu.item,
-                type: "groups",
-                x: menu.x,
-                y: menu.y,
-              })
-            }
-            onPointerEnter={() =>
-              onChange({
-                item: menu.item,
-                type: "groups",
-                x: menu.x,
-                y: menu.y,
-              })
-            }
-            role="menuitem"
-            type="button"
-          >
-            <FolderInputIcon
-              aria-hidden="true"
-              className="text-muted-foreground size-4"
-            />
-            <span className="flex-1">{t("moveToGroup")}</span>
-            <DirectionalIcon
-              className="text-muted-foreground size-4"
-              icon={ChevronRightIcon}
-            />
-          </button>
-          <div className="bg-border my-1 h-px" />
-          <button
-            className={`${itemClassName} hover:text-destructive focus-visible:text-destructive`}
-            onClick={() => {
-              onDelete(menu.item.id);
-              onClose();
-            }}
-            role="menuitem"
-            type="button"
-          >
-            <Trash2Icon aria-hidden="true" className="size-4" />
-            {t("deleteItem")}
-          </button>
-        </>
-      ) : (
-        <>
-          <button
-            autoFocus
-            className={itemClassName}
-            onClick={() =>
-              onChange({
-                item: menu.item,
-                type: "actions",
-                x: menu.x,
-                y: menu.y,
-              })
-            }
-            role="menuitem"
-            type="button"
-          >
-            <DirectionalIcon
-              className="text-muted-foreground size-4"
-              icon={ChevronLeftIcon}
-            />
+      <MenuTrigger nativeButton={false} render={<span className="sr-only" />} />
+      <MenuPopup anchor={anchor} className="w-56">
+        <MenuItem
+          className="min-h-11 rounded-xl"
+          onClick={() => {
+            onEdit(menu.item.id);
+            onClose();
+          }}
+        >
+          <PencilIcon />
+          {t("editItem")}
+        </MenuItem>
+        <MenuItem
+          className="min-h-11 rounded-xl"
+          onClick={() => {
+            onDuplicate(menu.item.id);
+            onClose();
+          }}
+        >
+          <CopyPlusIcon />
+          {t("duplicateItem")}
+        </MenuItem>
+        <MenuSub>
+          <MenuSubTrigger className="min-h-11 rounded-xl">
+            <FolderInputIcon />
             {t("moveToGroup")}
-          </button>
-          <div className="bg-border my-1 h-px" />
-          <div className="min-h-0 flex-1 overflow-y-auto">
-            {[{ color: null, id: null, name: t("noGroup") }, ...groups].map(
-              (group) => (
-                <button
-                  aria-checked={menu.item.groupId === group.id}
-                  className={itemClassName}
-                  key={group.id ?? "none"}
-                  onClick={() => {
-                    onMove(menu.item.id, group.id);
-                    onClose();
-                  }}
-                  role="menuitemradio"
-                  type="button"
-                >
-                  <CheckIcon
-                    aria-hidden="true"
-                    className={cn(
-                      "size-4",
-                      menu.item.groupId === group.id
-                        ? "opacity-100"
-                        : "opacity-0",
-                    )}
-                  />
-                  <span
-                    aria-hidden="true"
-                    className={cn(
-                      "size-2.5 shrink-0 rounded-full",
-                      group.color === null && "border-border border",
-                    )}
-                    style={
-                      group.color === null
-                        ? undefined
-                        : {
-                            backgroundColor:
-                              CLIPBOARD_GROUP_ACCENTS[group.color],
-                          }
-                    }
-                  />
-                  <span className="truncate" dir="auto">
-                    {group.name}
-                  </span>
-                </button>
-              ),
-            )}
-          </div>
-        </>
-      )}
-    </div>
+          </MenuSubTrigger>
+          <MenuSubPopup className="max-h-72 w-56">
+            <MenuRadioGroup
+              value={menu.item.groupId ?? CLIPBOARD_NO_GROUP_DROP_ID}
+            >
+              {[{ color: null, id: null, name: t("noGroup") }, ...groups].map(
+                (group) => (
+                  <MenuRadioItem
+                    className="min-h-11 rounded-xl"
+                    key={group.id ?? CLIPBOARD_NO_GROUP_DROP_ID}
+                    onClick={() => {
+                      onMove(menu.item.id, group.id);
+                      onClose();
+                    }}
+                    value={group.id ?? CLIPBOARD_NO_GROUP_DROP_ID}
+                  >
+                    <span className="flex min-w-0 items-center gap-2">
+                      <span
+                        aria-hidden="true"
+                        className={cn(
+                          "size-2.5 shrink-0 rounded-full",
+                          group.color === null && "border-border border",
+                        )}
+                        style={
+                          group.color === null
+                            ? undefined
+                            : {
+                                backgroundColor:
+                                  CLIPBOARD_GROUP_ACCENTS[group.color],
+                              }
+                        }
+                      />
+                      <span className="truncate" dir="auto">
+                        {group.name}
+                      </span>
+                    </span>
+                  </MenuRadioItem>
+                ),
+              )}
+            </MenuRadioGroup>
+          </MenuSubPopup>
+        </MenuSub>
+        <MenuSeparator />
+        <MenuItem
+          className="min-h-11 rounded-xl"
+          onClick={() => {
+            onDelete(menu.item.id);
+            onClose();
+          }}
+          variant="destructive"
+        >
+          <Trash2Icon />
+          {t("deleteItem")}
+        </MenuItem>
+      </MenuPopup>
+    </Menu>
   );
 };
 
@@ -1035,7 +981,7 @@ const ClipboardApp = () => {
     setSelectedIndex(index);
     setContextMenu({
       item,
-      type: "actions",
+      type: "open",
       x: event.clientX,
       y: event.clientY,
     });
@@ -1201,10 +1147,14 @@ const ClipboardApp = () => {
       }
     }
     if (event.target instanceof HTMLInputElement) {
-      if (event.key === "Enter" && activeItem) {
-        if (event.isComposing) {
-          return;
-        }
+      if (
+        activeItem &&
+        shouldCopyFromClipboardInput({
+          dataset: event.target.dataset,
+          isComposing: event.isComposing,
+          key: event.key,
+        })
+      ) {
         event.preventDefault();
         copyItem(activeItem);
       }
@@ -1344,31 +1294,21 @@ const ClipboardApp = () => {
         }}
       />
       {contextMenu.type === "closed" ? null : (
-        <>
-          <button
-            aria-label={t("close")}
-            className="fixed inset-0 z-20 cursor-default"
-            onClick={closeContextMenu}
-            tabIndex={-1}
-            type="button"
-          />
-          <ClipboardContextMenu
-            groups={snapshot.groups}
-            menu={contextMenu}
-            onChange={setContextMenu}
-            onClose={closeContextMenu}
-            onDelete={(id) =>
-              applySnapshotCommand("clipboard_delete_item", { id })
-            }
-            onDuplicate={(id) =>
-              applySnapshotCommand("clipboard_duplicate_item", { id })
-            }
-            onEdit={openEditor}
-            onMove={(id, groupId) =>
-              applySnapshotCommand("clipboard_set_item_group", { groupId, id })
-            }
-          />
-        </>
+        <ClipboardContextMenu
+          groups={snapshot.groups}
+          menu={contextMenu}
+          onClose={closeContextMenu}
+          onDelete={(id) =>
+            applySnapshotCommand("clipboard_delete_item", { id })
+          }
+          onDuplicate={(id) =>
+            applySnapshotCommand("clipboard_duplicate_item", { id })
+          }
+          onEdit={openEditor}
+          onMove={(id, groupId) =>
+            applySnapshotCommand("clipboard_set_item_group", { groupId, id })
+          }
+        />
       )}
       <main className="relative min-h-0 flex-1">
         {feedback}
@@ -1502,6 +1442,12 @@ const ClipboardApp = () => {
                   key={item.id}
                   onOpenMenu={openContextMenu}
                   onCopy={copyItem}
+                  onRename={(id, name) =>
+                    applySnapshotCommand("clipboard_set_item_name", {
+                      id,
+                      name,
+                    })
+                  }
                   onSelect={setSelectedIndex}
                   query={query}
                   sourceVisual={

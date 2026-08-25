@@ -521,25 +521,52 @@ jobs:
         # lines (Tauri otherwise hides them behind log::debug). Same
         # rationale as the Windows build step above.
         #
-        # `app` produces the .app.tar.gz updater archive; `dmg` is
-        # the human-installable image. Bundling `dmg` alone makes
-        # Tauri warn "no updater-enabled targets were built. Please
-        # enable: app, appimage, msi, nsis" and skip the archive,
-        # which is what broke rc.6/7/8's manifest job. Yaak ships
-        # both for the same reason.
+        # `app` produces the signed .app and its .app.tar.gz updater
+        # archive. The human-installable DMG is built in the next
+        # step: Tauri styles DMGs through Finder automation, which is
+        # unavailable on CI and silently falls back to an uncomposed
+        # Finder window (tauri-apps/tauri#1731).
         run: |
           printf '%s' "$APPLE_API_KEY_BASE64" | base64 -d > "$APPLE_API_KEY_PATH"
-          bun run build -- --target ${{ matrix.target }} --bundles app,dmg --verbose --verbose
+          bun run build -- --target ${{ matrix.target }} --bundles app --verbose --verbose
+
+      - name: Build styled DMG without Finder automation
+        if: matrix.os == 'macos'
+        working-directory: apps/desktop
+        shell: bash
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          dmgbuild_env="$RUNNER_TEMP/stella-dmgbuild"
+          python3 -m venv "$dmgbuild_env"
+          "$dmgbuild_env/bin/python" -m pip install \
+            --disable-pip-version-check \
+            --only-binary=:all: \
+            --require-hashes \
+            -r dmg/requirements.txt
+
+          app_bundle=$(find "src-tauri/target/$TARGET/release/bundle/macos" \
+            -maxdepth 1 -type d -name '*.app' -print -quit)
+          if [[ -z "$app_bundle" ]]; then
+            echo "::error::Signed macOS app bundle not found"
+            exit 1
+          fi
+
+          ../../scripts/build-desktop-dmg.sh \
+            "$dmgbuild_env/bin/python" \
+            "$app_bundle" \
+            "src-tauri/target/$TARGET/release/bundle/dmg/stella-desktop.dmg"
 
       # Tauri 2's bundler notarizes + staples the inner .app but
       # leaves the DMG wrapper unnotarized (tauri-apps/tauri#7533,
       # PR #15118 still open). Submit the DMG ourselves and staple
       # the resulting ticket so users on a cold network at first
       # mount don't hit Apple's online Gatekeeper check.
-      - name: Notarize and staple DMG
+      - name: Sign, notarize, and staple DMG
         if: matrix.os == 'macos'
         working-directory: apps/desktop
         env:
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
           APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
           APPLE_API_KEY_BASE64: ${{ secrets.APPLE_API_KEY }}
@@ -550,6 +577,9 @@ jobs:
           bundle_dir="src-tauri/target/${{ matrix.target }}/release/bundle"
           for dmg in "$bundle_dir"/dmg/*.dmg; do
             [[ -f "$dmg" ]] || continue
+            echo "Signing $dmg"
+            codesign --force --sign "$APPLE_SIGNING_IDENTITY" --timestamp "$dmg"
+            codesign --verify --strict --verbose=2 "$dmg"
             echo "Notarizing $dmg"
             xcrun notarytool submit "$dmg" \
               --key      "$APPLE_API_KEY_PATH" \

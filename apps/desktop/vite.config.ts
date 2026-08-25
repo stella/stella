@@ -1,7 +1,9 @@
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
+import path from "node:path";
 import { defineConfig } from "vite";
 
+const DESKTOP_ROOT = path.resolve(import.meta.dirname, "src/mainview");
 const DESKTOP_VIEW_PORT = Number(
   process.env["STELLA_DESKTOP_VIEW_PORT"] ?? "5177",
 );
@@ -9,15 +11,18 @@ const DESKTOP_VIEW_PORT = Number(
 export default defineConfig({
   base: "./",
   plugins: [tailwindcss(), react()],
-  root: "src/mainview",
+  root: DESKTOP_ROOT,
   build: {
     emptyOutDir: true,
     outDir: "../../dist",
     rolldownOptions: {
       input: {
-        main: "src/mainview/index.html",
-        "takeover-dialog": "src/mainview/takeover-dialog.html",
-        "selfhost-connect-dialog": "src/mainview/selfhost-connect-dialog.html",
+        main: path.join(DESKTOP_ROOT, "index.html"),
+        "takeover-dialog": path.join(DESKTOP_ROOT, "takeover-dialog.html"),
+        "selfhost-connect-dialog": path.join(
+          DESKTOP_ROOT,
+          "selfhost-connect-dialog.html",
+        ),
       },
     },
   },

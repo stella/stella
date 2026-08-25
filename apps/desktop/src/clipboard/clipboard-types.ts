@@ -14,6 +14,7 @@ export type ClipboardItem =
       copiedAt: string;
       groupId: string | null;
       id: string;
+      name: string | null;
       plainText: string;
       sourceApp: ClipboardSourceApp | null;
       type: "text";
@@ -23,6 +24,7 @@ export type ClipboardItem =
       groupId: string | null;
       html: string;
       id: string;
+      name: string | null;
       plainText: string;
       sourceApp: ClipboardSourceApp | null;
       type: "formattedText";
@@ -85,6 +87,7 @@ export const isClipboardItem = (value: unknown): value is ClipboardItem => {
     typeof value["copiedAt"] !== "string" ||
     (value["groupId"] !== null && typeof value["groupId"] !== "string") ||
     typeof value["id"] !== "string" ||
+    (value["name"] !== null && typeof value["name"] !== "string") ||
     typeof value["plainText"] !== "string" ||
     (value["sourceApp"] !== null && !isClipboardSourceApp(value["sourceApp"]))
   ) {

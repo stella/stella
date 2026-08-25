@@ -523,7 +523,7 @@ impl SessionManager {
   pub fn new() -> Self {
     let data_dir = dirs::data_dir()
       .unwrap_or_else(|| PathBuf::from("."))
-      .join("legal.stella.desktop");
+      .join(config::APP_DATA_DIR_NAME);
 
     let bridge_port = config::resolve_bridge_port();
 

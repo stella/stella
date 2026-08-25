@@ -5,19 +5,13 @@ import { useTranslations } from "use-intl";
 
 import { MCP_HTTP_PATH } from "@stll/api-contract";
 import { Button } from "@stll/ui/button";
-import { buttonVariants } from "@stll/ui/button-variants";
 import { cn } from "@stll/ui/utils";
 
 import { CopyField } from "@/components/copy-field";
+import { DesktopDownloadButtons } from "@/components/desktop-download-buttons";
 import { useHydrationSafeDesktopPlatform } from "@/hooks/use-hydration-safe-desktop-platform";
 import type { TranslationKey } from "@/i18n/types";
 import { externalApiOrigin } from "@/lib/api-origins";
-import {
-  MACOS_DMG_URL,
-  WINDOWS_EXE_URL,
-  WINDOWS_MSI_URL,
-} from "@/lib/desktop-downloads";
-import { sanitizeHref } from "@/lib/sanitize-href";
 
 /**
  * Single source of truth for the card order: drives the rendered card
@@ -246,50 +240,9 @@ const DesktopSetupPanel = () => {
   const t = useTranslations();
   const platform = useHydrationSafeDesktopPlatform();
 
-  const primaryClass = cn(buttonVariants(), "w-full");
-  const secondaryClass =
-    "text-muted-foreground hover:text-foreground text-xs underline-offset-2 hover:underline self-center";
-
-  let downloads: React.ReactNode = (
-    <>
-      <a className={primaryClass} href={sanitizeHref(WINDOWS_EXE_URL)}>
-        {t("settings.account.desktopDownloadWindows")}
-      </a>
-      <a
-        className={cn(buttonVariants({ variant: "outline" }), "w-full")}
-        href={sanitizeHref(MACOS_DMG_URL)}
-      >
-        {t("settings.account.desktopDownloadMac")}
-      </a>
-    </>
-  );
-  if (platform === "mac") {
-    downloads = (
-      <>
-        <a className={primaryClass} href={sanitizeHref(MACOS_DMG_URL)}>
-          {t("settings.account.desktopDownloadMac")}
-        </a>
-        <a className={secondaryClass} href={sanitizeHref(WINDOWS_EXE_URL)}>
-          {t("settings.account.desktopDownloadOtherMac")}
-        </a>
-      </>
-    );
-  } else if (platform === "windows") {
-    downloads = (
-      <>
-        <a className={primaryClass} href={sanitizeHref(WINDOWS_EXE_URL)}>
-          {t("settings.account.desktopDownloadWindows")}
-        </a>
-        <a className={secondaryClass} href={sanitizeHref(WINDOWS_MSI_URL)}>
-          {t("settings.account.desktopDownloadOtherWindows")}
-        </a>
-      </>
-    );
-  }
-
   return (
     <SetupPanel title={t("settings.account.desktop")}>
-      <div className="flex flex-col gap-2">{downloads}</div>
+      <DesktopDownloadButtons platform={platform} />
     </SetupPanel>
   );
 };

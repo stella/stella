@@ -172,6 +172,24 @@ pub fn clipboard_set_item_group(
 }
 
 #[tauri::command]
+pub fn clipboard_set_item_name(
+  id: String,
+  name: String,
+  state: State<'_, ClipboardAppState>,
+  window: WebviewWindow,
+) -> Result<ClipboardSnapshot, String> {
+  let snapshot = {
+    let mut manager = state.lock().map_err(|_| lock_error())?;
+    if !manager.set_item_name(&id, &name)? {
+      return Err(ITEM_NOT_FOUND_ERROR.to_string());
+    }
+    manager.snapshot()
+  };
+  let _ = window.emit(HISTORY_EVENT, ());
+  Ok(snapshot)
+}
+
+#[tauri::command]
 pub fn clipboard_open_editor(
   id: String,
   app: AppHandle,

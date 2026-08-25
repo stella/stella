@@ -2,7 +2,6 @@ import { describe, expect, test } from "bun:test";
 
 import {
   CLIPBOARD_ITEM_DRAG_TYPE,
-  clipboardContextMenuPosition,
   clipboardDraggedItemId,
   clipboardSourceTintIndex,
   filterClipboardItems,
@@ -11,6 +10,7 @@ import {
   isClipboardCopyShortcut,
   nextClipboardIndex,
   quickCopyIndex,
+  shouldCopyFromClipboardInput,
 } from "../src/clipboard/clipboard-logic";
 import type { ClipboardItem } from "../src/clipboard/clipboard-types";
 
@@ -18,6 +18,7 @@ const TEXT_ITEM = {
   copiedAt: "2026-08-23T10:00:00Z",
   groupId: null,
   id: "one",
+  name: "Acquisition draft",
   plainText: "Share purchase agreement",
   sourceApp: null,
   type: "text",
@@ -28,38 +29,13 @@ const FORMATTED_ITEM = {
   groupId: null,
   html: "<strong>Closing date</strong>",
   id: "two",
+  name: null,
   plainText: "Closing date",
   sourceApp: null,
   type: "formattedText",
 } satisfies ClipboardItem;
 
 const ITEMS = [TEXT_ITEM, FORMATTED_ITEM] satisfies ClipboardItem[];
-
-describe("clipboardContextMenuPosition", () => {
-  test("repositions a tall group menu within a compact viewport", () => {
-    expect(
-      clipboardContextMenuPosition({
-        anchorX: 600,
-        anchorY: 300,
-        type: "groups",
-        viewportHeight: 326,
-        viewportWidth: 800,
-      }),
-    ).toEqual({ maxHeight: 310, x: 568, y: 8 });
-  });
-
-  test("keeps the shorter action menu near its anchor", () => {
-    expect(
-      clipboardContextMenuPosition({
-        anchorX: 100,
-        anchorY: 100,
-        type: "actions",
-        viewportHeight: 326,
-        viewportWidth: 800,
-      }),
-    ).toEqual({ maxHeight: 224, x: 100, y: 94 });
-  });
-});
 
 describe("clipboardDraggedItemId", () => {
   const itemIds = new Set(["one", "two"]);
@@ -125,6 +101,12 @@ describe("clipboard search highlighting", () => {
 describe("filterClipboardItems", () => {
   test("matches every search term without case sensitivity", () => {
     expect(filterClipboardItems(ITEMS, "PURCHASE share")).toEqual([TEXT_ITEM]);
+  });
+
+  test("matches an editable clip name", () => {
+    expect(filterClipboardItems(ITEMS, "acquisition draft")).toEqual([
+      TEXT_ITEM,
+    ]);
   });
 
   test("preserves the source order for an empty query", () => {
@@ -208,6 +190,35 @@ describe("keyboard indexes", () => {
         key: "c",
         metaKey: false,
         shiftKey: true,
+      }),
+    ).toBe(false);
+  });
+});
+
+describe("clipboard input keyboard handling", () => {
+  test("Enter in a clip name editor never triggers timeline copy", () => {
+    expect(
+      shouldCopyFromClipboardInput({
+        dataset: { clipboardNameInput: "" },
+        isComposing: false,
+        key: "Enter",
+      }),
+    ).toBe(false);
+  });
+
+  test("Enter in search copies unless an input method is composing", () => {
+    expect(
+      shouldCopyFromClipboardInput({
+        dataset: {},
+        isComposing: false,
+        key: "Enter",
+      }),
+    ).toBe(true);
+    expect(
+      shouldCopyFromClipboardInput({
+        dataset: {},
+        isComposing: true,
+        key: "Enter",
       }),
     ).toBe(false);
   });
