@@ -21,6 +21,7 @@ import {
   claimCorpusProjectionCleanupTx,
   CorpusProjectionCleanupSettlementProof,
   recordCorpusProjectionDeleteTx,
+  reopenCorpusProjectionCleanupTx,
   settleCorpusProjectionCleanupTx,
 } from "@/api/lib/legal-search/corpus-index-projection-cleanup-store";
 import { advanceCorpusProjectionErasuresTx } from "@/api/lib/legal-search/corpus-index-projection-erasure-store";
@@ -44,6 +45,7 @@ const FIRST_INTENT_ID = toSafeId<"corpusIndexProjectionIntent">(
 );
 const FIRST_LEASE_TOKEN = "0198e331-e578-7000-8000-000000000204";
 const CLEANUP_LEASE_TOKEN = "0198e331-e578-7000-8000-000000000205";
+const REOPEN_CLEANUP_LEASE_TOKEN = "0198e331-e578-7000-8000-000000000212";
 const SECOND_INTENT_ID = toSafeId<"corpusIndexProjectionIntent">(
   "0198e331-e578-7000-8000-000000000206",
 );
@@ -280,6 +282,65 @@ test("replacement deletes and settles the old revision before reserving the new 
       async (tx) =>
         await settleCorpusProjectionCleanupTx(asTestRaw<Transaction>(tx), {
           proof: firstSettlementProof,
+        }),
+    ),
+  ).toBe(1);
+
+  expect(
+    await db.transaction(
+      async (tx) =>
+        await reopenCorpusProjectionCleanupTx(asTestRaw<Transaction>(tx), {
+          intentIds: [firstLease.intentId],
+          indexId: INDEX_ID,
+          errorMessage: "orphan census observed the settled revision again",
+        }),
+    ),
+  ).toBe(1);
+  const reopened = await db
+    .select({
+      status: corpusIndexProjectionIntents.status,
+      deleteOpstamp: corpusIndexProjectionIntents.deleteOpstamp,
+      settledAt: corpusIndexProjectionIntents.settledAt,
+    })
+    .from(corpusIndexProjectionIntents)
+    .where(eq(corpusIndexProjectionIntents.id, firstLease.intentId));
+  expect(reopened).toEqual([
+    { status: "cleanup_pending", deleteOpstamp: null, settledAt: null },
+  ]);
+  const reclaimed = await db.transaction(
+    async (tx) =>
+      await claimCorpusProjectionCleanupTx(asTestRaw<Transaction>(tx), {
+        family: "case_law",
+        generation: "case_law_v5",
+        indexId: INDEX_ID,
+        limit: 10,
+        leaseMs: 60_000,
+        newLeaseToken: () => REOPEN_CLEANUP_LEASE_TOKEN,
+      }),
+  );
+  expect(reclaimed.map(({ intentId }) => intentId)).toEqual([
+    firstLease.intentId,
+  ]);
+  expect(
+    await db.transaction(
+      async (tx) =>
+        await recordCorpusProjectionDeleteTx(asTestRaw<Transaction>(tx), {
+          intentIds: [firstLease.intentId],
+          indexId: INDEX_ID,
+          leaseToken: REOPEN_CLEANUP_LEASE_TOKEN,
+          deleteOpstamp: 43,
+        }),
+    ),
+  ).toBe(1);
+  const reopenedSettlementProof = await verifySettlement({
+    intentIds: [firstLease.intentId],
+    deleteOpstamp: 43,
+  });
+  expect(
+    await db.transaction(
+      async (tx) =>
+        await settleCorpusProjectionCleanupTx(asTestRaw<Transaction>(tx), {
+          proof: reopenedSettlementProof,
         }),
     ),
   ).toBe(1);

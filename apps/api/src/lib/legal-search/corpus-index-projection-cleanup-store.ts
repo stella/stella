@@ -363,6 +363,58 @@ export const settleCorpusProjectionCleanupTx = async (
   return rows.length;
 };
 
+type ReopenCorpusProjectionCleanupOptions = {
+  intentIds: readonly ProjectionIntentId[];
+  indexId: string;
+  errorMessage: string;
+  now?: Date;
+};
+
+/** Reopen exact settled revisions when a later census observes them again. */
+export const reopenCorpusProjectionCleanupTx = async (
+  tx: Transaction,
+  {
+    intentIds,
+    indexId,
+    errorMessage,
+    now = new Date(),
+  }: ReopenCorpusProjectionCleanupOptions,
+): Promise<number> => {
+  if (
+    intentIds.length === 0 ||
+    intentIds.length > CORPUS_PROJECTION_DELETE_MAX_REVISIONS
+  ) {
+    return panic("Corpus projection cleanup reopen request is invalid");
+  }
+  const rows = await tx
+    .update(corpusIndexProjectionIntents)
+    .set({
+      status: "cleanup_pending",
+      leaseToken: null,
+      leaseExpiresAt: null,
+      cleanupNotBefore: now,
+      cleanupStartedAt: null,
+      deleteOpstamp: null,
+      settledAt: null,
+      lastError: errorMessage.slice(0, 2048),
+      updatedAt: now,
+    })
+    .where(
+      and(
+        inArray(corpusIndexProjectionIntents.id, intentIds),
+        eq(corpusIndexProjectionIntents.indexId, indexId),
+        eq(corpusIndexProjectionIntents.status, "settled"),
+      ),
+    )
+    .returning({ id: corpusIndexProjectionIntents.id });
+  if (rows.length !== intentIds.length) {
+    return panic(
+      `Corpus projection cleanup reopen matched ${rows.length} of ${intentIds.length} settled revisions`,
+    );
+  }
+  return rows.length;
+};
+
 export type CorpusProjectionExpiredIntent = {
   intentId: ProjectionIntentId;
   status: Extract<
