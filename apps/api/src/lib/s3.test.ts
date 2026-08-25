@@ -5,7 +5,9 @@ import {
   isMissingCorpusObjectError,
   isMissingS3ObjectError,
   isS3Stale,
+  readCorpusS3BytesBounded,
   readCorpusS3Range,
+  S3ObjectBudgetError,
   readS3ArrayBuffer,
   resolveS3Credentials,
   writeS3ObjectWithRetry,
@@ -35,6 +37,42 @@ const requestUrl = (input: string | URL | Request): string => {
 
   return input.url;
 };
+
+describe("readCorpusS3BytesBounded", () => {
+  const originalFetch = globalThis.fetch;
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  test("reports a declared transfer overrun as a terminal budget error", async () => {
+    const stub = async (): Promise<Response> =>
+      await Promise.resolve(
+        new Response(new Uint8Array(8), {
+          headers: { "content-length": "8" },
+        }),
+      );
+    globalThis.fetch = Object.assign(stub, {
+      preconnect: originalFetch.preconnect,
+    });
+
+    const rejection = await readCorpusS3BytesBounded({
+      key: "legal-corpus/oversized.zst",
+      maxBytes: 4,
+      signal: new AbortController().signal,
+    }).then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+    expect(rejection).toBeInstanceOf(S3ObjectBudgetError);
+    expect(rejection).toMatchObject({
+      key: "legal-corpus/oversized.zst",
+      declaredBytes: 8,
+      maxBytes: 4,
+    });
+  });
+});
 
 const createTrackedEcsCredentialsFetch =
   (requestedUrls: string[]) =>

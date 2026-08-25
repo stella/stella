@@ -1,16 +1,5 @@
 import { panic } from "better-result";
-import {
-  and,
-  asc,
-  eq,
-  exists,
-  gt,
-  inArray,
-  isNotNull,
-  lte,
-  or,
-  sql,
-} from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull, lte, or, sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import {
@@ -87,10 +76,15 @@ const validateLeaseMs = (leaseMs: number): number => {
 };
 
 const readPostgresClock = async (tx: Transaction): Promise<Date> => {
-  const rows = await tx.select({ value: sql<Date>`clock_timestamp()` });
-  return (
-    rows.at(0)?.value ?? panic("PostgreSQL did not return the projection clock")
-  );
+  const rows = await tx
+    .select({ value: sql<Date | string>`clock_timestamp()` })
+    .from(sql`(SELECT 1) AS projection_clock`);
+  const raw = rows.at(0)?.value;
+  const value = raw instanceof Date ? raw : new Date(raw ?? Number.NaN);
+  if (!Number.isFinite(value.getTime())) {
+    return panic("PostgreSQL did not return the projection clock");
+  }
+  return value;
 };
 
 const pendingDesiredState = sql`(
@@ -561,6 +555,7 @@ export const startCorpusProjectionAppendBatchTx = async (
       ),
     )
     .orderBy(asc(corpusIndexProjectionStates.entityId))
+    .limit(leases.length)
     .for("update");
   const exactLeases = or(
     ...leases.map(({ intentId, leaseToken }) =>
@@ -584,6 +579,7 @@ export const startCorpusProjectionAppendBatchTx = async (
       ),
     )
     .orderBy(asc(corpusIndexProjectionIntents.id))
+    .limit(leases.length)
     .for("update");
   const transitionAt = testNow ?? (await readPostgresClock(tx));
   const started = await tx
@@ -599,7 +595,7 @@ export const startCorpusProjectionAppendBatchTx = async (
         eq(corpusIndexProjectionIntents.family, first.family),
         eq(corpusIndexProjectionIntents.generation, first.generation),
         eq(corpusIndexProjectionIntents.status, "reserved"),
-        gt(corpusIndexProjectionIntents.leaseExpiresAt, transitionAt),
+        sql`${corpusIndexProjectionIntents.leaseExpiresAt} > ${transitionAt}::timestamptz`,
         sql`EXISTS (
           SELECT 1
           FROM ${corpusIndexProjectionStates} state
@@ -969,7 +965,7 @@ type ClassifyCorpusProjectionReservationFailureOptions = {
   testNow?: Date;
 };
 
-export const CORPUS_PROJECTION_RETRY_MIN_MS = 1_000;
+export const CORPUS_PROJECTION_RETRY_MIN_MS = 1000;
 export const CORPUS_PROJECTION_RETRY_MAX_MS = 7 * 24 * 60 * 60_000;
 export const CORPUS_PROJECTION_RETRY_ATTEMPT_LIMIT_MIN = 1;
 export const CORPUS_PROJECTION_RETRY_ATTEMPT_LIMIT_MAX = 100;
@@ -1099,8 +1095,8 @@ export const classifyCorpusProjectionReservationFailureTx = async (
       ? new Date(transitionAt.getTime() + failure.retryDelayMs)
       : null;
   const retryNotBefore = sql<Date | null>`CASE
-    WHEN ${retryExhausted} THEN NULL
-    ELSE ${retryAt}
+    WHEN ${retryExhausted} THEN NULL::timestamptz
+    ELSE ${retryAt}::timestamptz
   END`;
   const updatedStates = await tx
     .update(corpusIndexProjectionStates)

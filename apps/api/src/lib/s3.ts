@@ -779,34 +779,42 @@ const MISSING_CORPUS_OBJECT_CODES: ReadonlySet<string> = new Set([
 ]);
 
 const readS3ErrorBodyPrefix = async (response: Response): Promise<string> => {
-  const reader = response.body?.getReader();
-  if (reader === undefined) {
+  const body = response.body;
+  if (body === null) {
     return "";
   }
-  const chunks: Uint8Array[] = [];
-  let byteCount = 0;
-  while (byteCount < S3_ERROR_BODY_PREFIX_MAX_BYTES) {
-    // oxlint-disable-next-line no-await-in-loop -- stream consumption is inherently ordered and byte-bounded
-    const chunk = await reader.read();
-    if (chunk.done) {
-      break;
+  const reader = body.getReader();
+  try {
+    const chunks: Uint8Array[] = [];
+    let byteCount = 0;
+    while (byteCount < S3_ERROR_BODY_PREFIX_MAX_BYTES) {
+      // oxlint-disable-next-line no-await-in-loop -- stream consumption is inherently ordered and byte-bounded
+      const chunk = await reader.read();
+      if (chunk.done) {
+        break;
+      }
+      const remaining = S3_ERROR_BODY_PREFIX_MAX_BYTES - byteCount;
+      const value = chunk.value.subarray(0, remaining);
+      chunks.push(value);
+      byteCount += value.byteLength;
+      if (value.byteLength < chunk.value.byteLength) {
+        break;
+      }
     }
-    const remaining = S3_ERROR_BODY_PREFIX_MAX_BYTES - byteCount;
-    const value = chunk.value.subarray(0, remaining);
-    chunks.push(value);
-    byteCount += value.byteLength;
-    if (value.byteLength < chunk.value.byteLength) {
-      break;
+    const bytes = new Uint8Array(byteCount);
+    let offset = 0;
+    for (const chunk of chunks) {
+      bytes.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+    return new TextDecoder().decode(bytes);
+  } finally {
+    try {
+      await reader.cancel();
+    } finally {
+      reader.releaseLock();
     }
   }
-  await reader.cancel();
-  const bytes = new Uint8Array(byteCount);
-  let offset = 0;
-  for (const chunk of chunks) {
-    bytes.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  return new TextDecoder().decode(bytes);
 };
 
 const readS3ResponseErrorCode = async (
@@ -922,8 +930,11 @@ export const readCorpusS3BytesBounded = async ({
     });
   }
   if (declared > maxBytes) {
-    throw new S3ObjectReadError({
+    throw new S3ObjectBudgetError({
       message: `Object read for ${key} declares ${declared} bytes, past the ${maxBytes}-byte ceiling`,
+      key,
+      declaredBytes: declared,
+      maxBytes,
     });
   }
   return await response.bytes();

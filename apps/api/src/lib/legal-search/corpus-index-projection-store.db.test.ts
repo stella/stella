@@ -492,6 +492,45 @@ test("unknown append cleanup starts its barrier at failure observation", async (
       cleanupNotBefore: expectedBarrier,
     },
   ]);
+});
+
+test("applied census rejects an incomplete multi-document revision", async () => {
+  const appliedAt = new Date("2026-08-25T12:00:00.000Z");
+  const leases = await db.transaction(
+    async (tx) =>
+      await reserveCorpusProjectionIntentsTx(asTestRaw<Transaction>(tx), {
+        family: "case_law",
+        generation: "case_law_v5",
+        limit: 1,
+        leaseMs: 5 * 60_000,
+        testNow: appliedAt,
+        newIntentId: () => FIRST_INTENT_ID,
+        newLeaseToken: () => FIRST_LEASE_TOKEN,
+      }),
+  );
+  const lease = leases.at(0) ?? panic("Expected projection lease");
+  expect(
+    await db.transaction(
+      async (tx) =>
+        await startCorpusProjectionAppendTx(asTestRaw<Transaction>(tx), {
+          intentId: lease.intentId,
+          leaseToken: lease.leaseToken,
+          testNow: appliedAt,
+        }),
+    ),
+  ).toBe("started");
+  expect(
+    await db.transaction(
+      async (tx) =>
+        await commitCorpusProjectionAppendTx(asTestRaw<Transaction>(tx), {
+          intentId: lease.intentId,
+          leaseToken: lease.leaseToken,
+          documentCount: 1,
+          testNow: appliedAt,
+        }),
+    ),
+  ).toMatchObject({ status: "applied" });
+
   const runInTransaction = async <TResult>(
     operation: (tx: Transaction) => Promise<TResult>,
   ): Promise<TResult> =>
@@ -976,6 +1015,7 @@ test("cleanup-owned replacement work rotates behind a bounded queue window", asy
           await commitCorpusProjectionAppendTx(asTestRaw<Transaction>(tx), {
             intentId: lease.intentId,
             leaseToken: lease.leaseToken,
+            documentCount: 1,
           }),
       ),
     ).toMatchObject({ status: "applied" });
@@ -1304,6 +1344,7 @@ test("a settled same-epoch attempt reopens after its retry is applied", async ()
         await abandonCorpusProjectionAppendTx(asTestRaw<Transaction>(tx), {
           intentId: firstLease.intentId,
           leaseToken: firstLease.leaseToken,
+          testNow: appendStartedAt,
           errorMessage: "append response was lost",
         }),
     ),
