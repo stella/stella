@@ -17,7 +17,7 @@ CREATE TABLE "corpus_index_generations" (
   CONSTRAINT "corpus_index_generations_family_values"
     CHECK ("family" IN ('case_law','legislation')),
   CONSTRAINT "corpus_index_generations_cluster_values"
-    CHECK ("cluster" IN ('quickwit_08','quickwit_09')),
+    CHECK ("cluster" IN ('q08','q09')),
   CONSTRAINT "corpus_index_generations_status_values"
     CHECK ("status" IN ('building','serving','retiring','retired')),
   CONSTRAINT "corpus_index_generations_manifest_digest_shape"

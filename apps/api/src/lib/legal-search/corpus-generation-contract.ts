@@ -4,7 +4,7 @@ import { panic } from "better-result";
 export const CORPUS_FAMILIES = ["case_law", "legislation"] as const;
 export type CorpusFamily = (typeof CORPUS_FAMILIES)[number];
 
-export const QUICKWIT_CLUSTERS = ["quickwit_08", "quickwit_09"] as const;
+export const QUICKWIT_CLUSTERS = ["q08", "q09"] as const;
 export type QuickwitCluster = (typeof QUICKWIT_CLUSTERS)[number];
 
 /** Shared persistence bound for generation names and derived physical ids. */

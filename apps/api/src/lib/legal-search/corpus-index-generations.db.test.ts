@@ -24,21 +24,21 @@ afterAll(async () => {
 test("each family can serve exactly one independently routed generation", async () => {
   await db.insert(corpusIndexGenerations).values([
     {
-      cluster: "quickwit_08",
+      cluster: "q08",
       family: "case_law",
       generation: "case_law_v2",
       manifestDigest: MANIFEST_DIGEST,
       status: "serving",
     },
     {
-      cluster: "quickwit_09",
+      cluster: "q09",
       family: "case_law",
       generation: "case_law_v5",
       manifestDigest: MANIFEST_DIGEST,
       status: "building",
     },
     {
-      cluster: "quickwit_08",
+      cluster: "q08",
       family: "legislation",
       generation: "legislation_v1",
       manifestDigest: MANIFEST_DIGEST,
@@ -48,7 +48,7 @@ test("each family can serve exactly one independently routed generation", async 
 
   await expect(
     db.insert(corpusIndexGenerations).values({
-      cluster: "quickwit_09",
+      cluster: "q09",
       family: "case_law",
       generation: "case_law_v6",
       manifestDigest: MANIFEST_DIGEST,
@@ -68,12 +68,12 @@ test("each family can serve exactly one independently routed generation", async 
 
   expect(serving).toEqual([
     {
-      cluster: "quickwit_08",
+      cluster: "q08",
       family: "case_law",
       generation: "case_law_v2",
     },
     {
-      cluster: "quickwit_08",
+      cluster: "q08",
       family: "legislation",
       generation: "legislation_v1",
     },
@@ -84,7 +84,7 @@ test("database constraints reject drift outside the TypeScript contract", async 
   await expect(
     db.execute(sql`
       INSERT INTO corpus_index_generations (family, generation, cluster, manifest_digest, status)
-      VALUES ('case_law', 'legislation_v2', 'quickwit_09', ${MANIFEST_DIGEST}, 'building')
+      VALUES ('case_law', 'legislation_v2', 'q09', ${MANIFEST_DIGEST}, 'building')
     `),
   ).rejects.toThrow();
 
@@ -98,28 +98,28 @@ test("database constraints reject drift outside the TypeScript contract", async 
   await expect(
     db.execute(sql`
       INSERT INTO corpus_index_generations (family, generation, cluster, manifest_digest, status)
-      VALUES ('legislation', 'legislation_v2', 'quickwit_09', ${MANIFEST_DIGEST}, 'ready')
+      VALUES ('legislation', 'legislation_v2', 'q09', ${MANIFEST_DIGEST}, 'ready')
     `),
   ).rejects.toThrow();
 
   await expect(
     db.execute(sql`
       INSERT INTO corpus_index_generations (family, generation, cluster, manifest_digest, status)
-      VALUES ('case_law', 'case_law_v11111111111111111111111111111111', 'quickwit_09', ${MANIFEST_DIGEST}, 'building')
+      VALUES ('case_law', 'case_law_v11111111111111111111111111111111', 'q09', ${MANIFEST_DIGEST}, 'building')
     `),
   ).rejects.toThrow();
 
   await expect(
     db.execute(sql`
       INSERT INTO corpus_index_generations (family, generation, cluster, manifest_digest, status)
-      VALUES ('case_law', 'case_law_v8', 'quickwit_09', 'not-a-digest', 'building')
+      VALUES ('case_law', 'case_law_v8', 'q09', 'not-a-digest', 'building')
     `),
   ).rejects.toThrow();
 });
 
 test("generation identity cannot be retargeted after registration", async () => {
   await db.insert(corpusIndexGenerations).values({
-    cluster: "quickwit_09",
+    cluster: "q09",
     family: "case_law",
     generation: "case_law_v7",
     manifestDigest: MANIFEST_DIGEST,
@@ -134,7 +134,7 @@ test("generation identity cannot be retargeted after registration", async () => 
   await expect(
     db.execute(sql`
       UPDATE corpus_index_generations
-      SET cluster = 'quickwit_08'
+      SET cluster = 'q08'
       WHERE family = 'case_law' AND generation = 'case_law_v7'
     `),
   ).rejects.toThrow("corpus index generation identity is immutable");
