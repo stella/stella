@@ -216,7 +216,41 @@ const bootstrapCaseLaw = async (
       ? []
       : [gt(caseLawDecisions.id, afterEntityId)]),
   ];
-  const rows = await tx
+  const candidates = await tx
+    .select({
+      documentId: caseLawDecisions.id,
+      sourceId: caseLawDecisions.sourceId,
+      sourceDescriptor: caseLawSources.descriptor,
+    })
+    .from(caseLawDecisions)
+    .innerJoin(caseLawSources, eq(caseLawSources.id, caseLawDecisions.sourceId))
+    .leftJoin(
+      corpusIndexProjectionStates,
+      and(
+        eq(corpusIndexProjectionStates.family, "case_law"),
+        eq(corpusIndexProjectionStates.generation, generation),
+        eq(corpusIndexProjectionStates.entityId, caseLawDecisions.id),
+      ),
+    )
+    .where(and(...conditions))
+    .orderBy(asc(caseLawDecisions.id))
+    .limit(limit)
+    // Canonical mutations lock source policy before the decision. Bootstrap
+    // uses the same order; a short policy update may delay this bounded claim.
+    .for("share", { of: caseLawSources });
+  if (candidates.length === 0) {
+    if (afterEntityId !== undefined) {
+      return emptyBootstrapResult("range_complete", "case_law", generation);
+    }
+    return emptyBootstrapResult(
+      (await hasUnseededCaseLawRows(tx, generation)) ? "busy" : "complete",
+      "case_law",
+      generation,
+    );
+  }
+
+  const candidateIds = candidates.map(({ documentId }) => documentId);
+  const lockedRows = await tx
     .select({
       documentId: caseLawDecisions.id,
       sourceId: caseLawDecisions.sourceId,
@@ -240,39 +274,32 @@ const bootstrapCaseLaw = async (
         eq(corpusIndexProjectionStates.entityId, caseLawDecisions.id),
       ),
     )
-    .where(and(...conditions))
+    .where(and(...conditions, inArray(caseLawDecisions.id, candidateIds)))
     .orderBy(asc(caseLawDecisions.id))
     .limit(limit)
     .for("update", { of: caseLawDecisions, skipLocked: true });
-  if (rows.length === 0) {
-    if (afterEntityId !== undefined) {
-      return emptyBootstrapResult("range_complete", "case_law", generation);
+  const lockedById = new Map(lockedRows.map((row) => [row.documentId, row]));
+  // Advance only across the contiguous prefix actually locked. Skipping past
+  // an earlier busy row would make a keyset cursor strand it indefinitely.
+  const rows: BootstrapCaseLawRow[] = [];
+  for (const candidate of candidates) {
+    const row = lockedById.get(candidate.documentId);
+    if (row === undefined) {
+      break;
     }
-    return emptyBootstrapResult(
-      (await hasUnseededCaseLawRows(tx, generation)) ? "busy" : "complete",
-      "case_law",
-      generation,
-    );
+    rows.push(row);
+  }
+  if (rows.length === 0) {
+    return emptyBootstrapResult("busy", "case_law", generation);
   }
 
   const entityIds = rows.map(({ documentId }) => documentId);
-  const sourceIds = [...new Set(rows.map(({ sourceId }) => sourceId))];
-  const sourceRows = await tx
-    .select({ id: caseLawSources.id, descriptor: caseLawSources.descriptor })
-    .from(caseLawSources)
-    .where(inArray(caseLawSources.id, sourceIds))
-    .orderBy(asc(caseLawSources.id))
-    .limit(sourceIds.length)
-    // A source-policy writer may already hold this row after another worker
-    // claimed one of its decisions. Do not wait in the opposite lock order;
-    // retry the bounded claim instead.
-    .for("share", { skipLocked: true });
   const descriptors = new Map(
-    sourceRows.map(({ id, descriptor }) => [id, descriptor]),
+    candidates.map(({ sourceId, sourceDescriptor }) => [
+      sourceId,
+      sourceDescriptor,
+    ]),
   );
-  if (descriptors.size !== sourceIds.length) {
-    return emptyBootstrapResult("busy", "case_law", generation);
-  }
 
   const identifiers = await tx
     .select({
@@ -387,7 +414,42 @@ const bootstrapLegislation = async (
       ? []
       : [gt(legislationDocuments.id, afterEntityId)]),
   ];
-  const rows = await tx
+  const candidates = await tx
+    .select({
+      documentId: legislationDocuments.id,
+      sourceId: legislationDocuments.sourceId,
+      sourceDescriptor: legislationSources.descriptor,
+    })
+    .from(legislationDocuments)
+    .innerJoin(
+      legislationSources,
+      eq(legislationSources.id, legislationDocuments.sourceId),
+    )
+    .leftJoin(
+      corpusIndexProjectionStates,
+      and(
+        eq(corpusIndexProjectionStates.family, "legislation"),
+        eq(corpusIndexProjectionStates.generation, generation),
+        eq(corpusIndexProjectionStates.entityId, legislationDocuments.id),
+      ),
+    )
+    .where(and(...conditions))
+    .orderBy(asc(legislationDocuments.id))
+    .limit(limit)
+    .for("share", { of: legislationSources });
+  if (candidates.length === 0) {
+    if (afterEntityId !== undefined) {
+      return emptyBootstrapResult("range_complete", "legislation", generation);
+    }
+    return emptyBootstrapResult(
+      (await hasUnseededLegislationRows(tx, generation)) ? "busy" : "complete",
+      "legislation",
+      generation,
+    );
+  }
+
+  const candidateIds = candidates.map(({ documentId }) => documentId);
+  const lockedRows = await tx
     .select({
       documentId: legislationDocuments.id,
       sourceId: legislationDocuments.sourceId,
@@ -412,40 +474,31 @@ const bootstrapLegislation = async (
         eq(corpusIndexProjectionStates.entityId, legislationDocuments.id),
       ),
     )
-    .where(and(...conditions))
+    .where(and(...conditions, inArray(legislationDocuments.id, candidateIds)))
     .orderBy(asc(legislationDocuments.id))
     .limit(limit)
     .for("update", { of: legislationDocuments, skipLocked: true });
-  if (rows.length === 0) {
-    if (afterEntityId !== undefined) {
-      return emptyBootstrapResult("range_complete", "legislation", generation);
+  const lockedById = new Map(lockedRows.map((row) => [row.documentId, row]));
+  // See the case-law path: the cursor may cross only a fully claimed prefix.
+  const rows: BootstrapLegislationRow[] = [];
+  for (const candidate of candidates) {
+    const row = lockedById.get(candidate.documentId);
+    if (row === undefined) {
+      break;
     }
-    return emptyBootstrapResult(
-      (await hasUnseededLegislationRows(tx, generation)) ? "busy" : "complete",
-      "legislation",
-      generation,
-    );
+    rows.push(row);
+  }
+  if (rows.length === 0) {
+    return emptyBootstrapResult("busy", "legislation", generation);
   }
 
   const entityIds = rows.map(({ documentId }) => documentId);
-  const sourceIds = [...new Set(rows.map(({ sourceId }) => sourceId))];
-  const sourceRows = await tx
-    .select({
-      id: legislationSources.id,
-      descriptor: legislationSources.descriptor,
-    })
-    .from(legislationSources)
-    .where(inArray(legislationSources.id, sourceIds))
-    .orderBy(asc(legislationSources.id))
-    .limit(sourceIds.length)
-    // Keep source-policy updates from deadlocking a decision-first claim.
-    .for("share", { skipLocked: true });
   const descriptors = new Map(
-    sourceRows.map(({ id, descriptor }) => [id, descriptor]),
+    candidates.map(({ sourceId, sourceDescriptor }) => [
+      sourceId,
+      sourceDescriptor,
+    ]),
   );
-  if (descriptors.size !== sourceIds.length) {
-    return emptyBootstrapResult("busy", "legislation", generation);
-  }
 
   await readActiveCorpusProjectionManifest(tx, "legislation", generation, true);
   await setZeroLegislationProjectionEpochs(tx, entityIds);
