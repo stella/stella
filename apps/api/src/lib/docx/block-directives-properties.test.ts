@@ -12,7 +12,7 @@ import fc from "fast-check";
 import JSZip from "jszip";
 import * as slimdom from "slimdom";
 
-import { propertyConfig } from "@stll/property-testing";
+import { propertyConfig, propertyTestTimeout } from "@stll/property-testing";
 
 import {
   evaluateCondition,
@@ -25,7 +25,7 @@ import { paragraphText, W_NS } from "./ooxml";
 import { fillTemplate } from "./patch-template";
 import type { TemplateDataValue } from "./types";
 
-setDefaultTimeout(30_000);
+setDefaultTimeout(propertyTestTimeout(30_000));
 
 // ── Helpers ──────────────────────────────────────────────
 

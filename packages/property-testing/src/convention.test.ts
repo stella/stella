@@ -63,9 +63,37 @@ const collectPropertyScriptWorkspaces = async (): Promise<Set<string>> => {
   return workspaces;
 };
 
+const collectPropertyScriptCommands = async (): Promise<
+  Map<string, string>
+> => {
+  const glob = new Bun.Glob(PACKAGE_JSON_GLOB);
+  const commands = new Map<string, string>();
+  for await (const relativePath of glob.scan({ cwd: REPO_ROOT })) {
+    const manifest: { scripts?: Record<string, string> } = await Bun.file(
+      path.resolve(REPO_ROOT, relativePath),
+    ).json();
+    const command = manifest.scripts?.[PROPERTY_SCRIPT];
+    if (command !== undefined) {
+      commands.set(workspaceOf(relativePath), command);
+    }
+  }
+  return commands;
+};
+
 describe("property-test convention", () => {
   test("every fc.assert test imports propertyConfig", async () => {
     expect(await collectViolations()).toEqual([]);
+  });
+
+  test("property runners preload the factor-scaled Bun timeout", async () => {
+    const commands = await collectPropertyScriptCommands();
+    const violations = [...commands].flatMap(([workspace, command]) =>
+      /--preload\s+@stll\/property-testing\/preload(?:\s|$)/u.test(command)
+        ? []
+        : [`${workspace}: test:property does not preload property-testing`],
+    );
+
+    expect(violations).toEqual([]);
   });
 
   /**

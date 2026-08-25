@@ -19,9 +19,12 @@ import type fc from "fast-check";
  */
 
 const NUM_RUNS_FACTOR_ENV = "PROPERTY_TEST_NUM_RUNS_FACTOR";
+export const PROPERTY_TEST_TIMEOUT_BASE_MS_ENV =
+  "PROPERTY_TEST_TIMEOUT_BASE_MS";
 
 /** fast-check's own default when a property does not specify `numRuns`. */
 const FAST_CHECK_DEFAULT_NUM_RUNS = 100;
+const DEFAULT_PROPERTY_TEST_TIMEOUT_MS = 5000;
 
 const readNumRunsFactor = (raw: string | undefined): number => {
   if (raw === undefined) {
@@ -72,3 +75,18 @@ export const propertyConfig = <Ts>(
  */
 export const propertyTestTimeout = (baseMs: number): number =>
   Math.ceil(baseMs * readNumRunsFactor(process.env[NUM_RUNS_FACTOR_ENV]));
+
+/** Resolve the owning test runner's baseline before applying nightly scaling. */
+export const propertyTestDefaultTimeout = (): number => {
+  const rawBaseMs = process.env[PROPERTY_TEST_TIMEOUT_BASE_MS_ENV];
+  const baseMs =
+    rawBaseMs === undefined
+      ? DEFAULT_PROPERTY_TEST_TIMEOUT_MS
+      : Number(rawBaseMs);
+  if (!Number.isSafeInteger(baseMs) || baseMs <= 0) {
+    throw new TypeError(
+      `${PROPERTY_TEST_TIMEOUT_BASE_MS_ENV} must be a positive integer`,
+    );
+  }
+  return propertyTestTimeout(baseMs);
+};

@@ -19,7 +19,7 @@
     "i18n:sync": "bun ../../packages/scripts/src/i18n-check.ts src/i18n/langs --sync && bun ../../packages/scripts/src/i18n-typegen.ts src/i18n/langs && bun ../../packages/scripts/src/glossary-gen.ts src/i18n && bun scripts/sync-prepaint-locales.ts",
     "test": "bun test --path-ignore-patterns='e2e/**' && bun test --parallel=2 e2e/unit",
     "test:timings": "mkdir -p .cache && bun test --parallel=2 --timings=.cache/e2e-unit-timings.json --update-timings e2e/unit",
-    "test:property": "bun test $(grep -rlF 'fc.assert' src --include='*.test.ts' --include='*.test.tsx')",
+    "test:property": "bun test --preload @stll/property-testing/preload $(grep -rlF 'fc.assert' src --include='*.test.ts' --include='*.test.tsx')",
     "test:e2e": "playwright test --config e2e/playwright.config.ts",
     "test:e2e:marketing": "playwright test --config e2e/playwright.marketing.config.ts --project app",
     "test:e2e:marketing:update": "playwright test --config e2e/playwright.marketing.config.ts --project app --update-snapshots=all",

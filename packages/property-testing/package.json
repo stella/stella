@@ -4,9 +4,12 @@
   "private": true,
   "license": "Apache-2.0",
   "type": "module",
-  "sideEffects": false,
+  "sideEffects": [
+    "./src/preload.ts"
+  ],
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./preload": "./src/preload.ts"
   },
   "scripts": {
     "clean": "git clean -xdf .cache .turbo node_modules",

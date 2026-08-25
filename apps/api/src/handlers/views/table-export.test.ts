@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 import JSZip from "jszip";
 
-import { propertyConfig } from "@stll/property-testing";
+import { propertyConfig, propertyTestTimeout } from "@stll/property-testing";
 
 import type { JustificationContent } from "@/api/db/schema";
 import type { PropertyTool } from "@/api/db/schema-validators";
@@ -548,185 +548,203 @@ describe("table export", () => {
     }
   });
 
-  test("xlsx uses the same flag color family as table metadata flags", async () => {
-    await fc.assert(
-      fc.asyncProperty(fc.constantFrom(...cellFlagIds), async (flagId) => {
-        const columns = buildExportColumns(tableLayout(), [
-          { id: "p1", name: "AI status", tool: manualTool },
-        ]);
-        const table = buildExportTable(
-          columns,
-          [
-            entity(
-              [
-                {
-                  id: "field-1",
-                  entityId: "entity-1",
-                  propertyId: "p1",
-                  content: {
-                    version: 1,
-                    type: "text",
-                    value: "Flagged value",
-                  },
-                },
-              ],
-              {
-                cellMetadata: [
+  test(
+    "xlsx uses the same flag color family as table metadata flags",
+    async () => {
+      await fc.assert(
+        fc.asyncProperty(fc.constantFrom(...cellFlagIds), async (flagId) => {
+          const columns = buildExportColumns(tableLayout(), [
+            { id: "p1", name: "AI status", tool: manualTool },
+          ]);
+          const table = buildExportTable(
+            columns,
+            [
+              entity(
+                [
                   {
+                    id: "field-1",
+                    entityId: "entity-1",
                     propertyId: "p1",
-                    metadata: {
+                    content: {
                       version: 1,
-                      manualFlags: [flagId],
+                      type: "text",
+                      value: "Flagged value",
                     },
                   },
                 ],
-              },
-            ),
-          ],
-          "en",
-          exportOptions(),
-        );
-
-        const bytes = await buildXlsxExport(table);
-        const zip = await JSZip.loadAsync(bytes);
-        const sheet = await zip.file("xl/worksheets/sheet1.xml")?.async("text");
-        const styles = await zip.file("xl/styles.xml")?.async("text");
-
-        expect(sheet).toContain(
-          `<c r="A2" s="${flagStyleIds[flagId]}" t="inlineStr">`,
-        );
-        expect(styles).toContain(`fgColor rgb="${flagFillColors[flagId]}"`);
-      }),
-      propertyConfig({ numRuns: cellFlagIds.length }),
-    );
-  });
-
-  test("xlsx property: arbitrary text remains inline string data", async () => {
-    await fc.assert(
-      fc.asyncProperty(
-        fc.array(fc.string({ maxLength: 80 }), {
-          minLength: 1,
-          maxLength: 20,
-        }),
-        async (values) => {
-          const bytes = await buildXlsxExport({
-            columns: [
-              {
-                type: "property",
-                id: "p1",
-                propertyId: "p1",
-                header: "Value",
-              },
+                {
+                  cellMetadata: [
+                    {
+                      propertyId: "p1",
+                      metadata: {
+                        version: 1,
+                        manualFlags: [flagId],
+                      },
+                    },
+                  ],
+                },
+              ),
             ],
-            rows: values.map((value) => [
-              textCell(sanitizeSpreadsheetCellForTest(value)),
-            ]),
-          });
+            "en",
+            exportOptions(),
+          );
+
+          const bytes = await buildXlsxExport(table);
           const zip = await JSZip.loadAsync(bytes);
           const sheet = await zip
             .file("xl/worksheets/sheet1.xml")
             ?.async("text");
-          const workbookRels = await zip
-            .file("xl/_rels/workbook.xml.rels")
-            ?.async("text");
-          const rootRels = await zip.file("_rels/.rels")?.async("text");
+          const styles = await zip.file("xl/styles.xml")?.async("text");
 
-          expect(sheet).not.toContain("<f>");
-          expect(sheet).not.toContain("<hyperlink");
-          expect(sheet === undefined || hasInvalidXmlTextChar(sheet)).toBe(
-            false,
+          expect(sheet).toContain(
+            `<c r="A2" s="${flagStyleIds[flagId]}" t="inlineStr">`,
           );
-          expect(workbookRels).not.toContain('TargetMode="External"');
-          expect(rootRels).not.toContain('TargetMode="External"');
-          expect(Object.keys(zip.files)).not.toContain("xl/vbaProject.bin");
-          expect(sheet?.match(/t="inlineStr"/gu)?.length).toBe(
-            values.length + 1,
-          );
-        },
-      ),
-      propertyConfig({ numRuns: 50 }),
-    );
-    // 50 zip builds + parses brush the default 5s timeout on loaded CI
-    // runners; the explicit timeout keeps the property run deterministic.
-  }, 20_000);
-
-  test("xlsx property: long arbitrary values are capped before XML output", async () => {
-    await fc.assert(
-      fc.asyncProperty(
-        fc
-          .integer({ min: 1, max: 200 })
-          .map((extraChars) =>
-            "x".repeat(SPREADSHEET_EXPORT_LIMITS.cellTextChars + extraChars),
-          ),
-        async (value) => {
-          const bytes = await buildXlsxExport({
-            columns: [
-              {
-                type: "property",
-                id: "p1",
-                propertyId: "p1",
-                header: "Value",
-              },
-            ],
-            rows: [[textCell(sanitizeSpreadsheetCellForTest(value))]],
-          });
-          const zip = await JSZip.loadAsync(bytes);
-          const sheet = await zip
-            .file("xl/worksheets/sheet1.xml")
-            ?.async("text");
-
-          expect(sheet).toContain("[truncated]");
-          expect(sheet).not.toContain(value);
-        },
-      ),
-      propertyConfig({ numRuns: 20 }),
-    );
-  }, 20_000);
-
-  test("xlsx property: generated column widths stay readable and bounded", async () => {
-    await fc.assert(
-      fc.asyncProperty(
-        fc.array(fc.string({ minLength: 1, maxLength: 40 }), {
-          minLength: 1,
-          maxLength: 8,
+          expect(styles).toContain(`fgColor rgb="${flagFillColors[flagId]}"`);
         }),
-        fc.array(fc.array(fc.string({ maxLength: 120 }), { maxLength: 8 }), {
-          maxLength: 12,
-        }),
-        async (headers, rowValues) => {
-          const columns = headers.map((header, index) => ({
-            type: "property" as const,
-            id: `p${index}`,
-            propertyId: `p${index}`,
-            header,
-          }));
-          const rows = rowValues.map((row) =>
-            headers.map((_, index) =>
-              textCell(sanitizeSpreadsheetCellForTest(row.at(index) ?? "")),
+        propertyConfig({ numRuns: cellFlagIds.length }),
+      );
+    },
+    propertyTestTimeout(20_000),
+  );
+
+  test(
+    "xlsx property: arbitrary text remains inline string data",
+    async () => {
+      await fc.assert(
+        fc.asyncProperty(
+          fc.array(fc.string({ maxLength: 80 }), {
+            minLength: 1,
+            maxLength: 20,
+          }),
+          async (values) => {
+            const bytes = await buildXlsxExport({
+              columns: [
+                {
+                  type: "property",
+                  id: "p1",
+                  propertyId: "p1",
+                  header: "Value",
+                },
+              ],
+              rows: values.map((value) => [
+                textCell(sanitizeSpreadsheetCellForTest(value)),
+              ]),
+            });
+            const zip = await JSZip.loadAsync(bytes);
+            const sheet = await zip
+              .file("xl/worksheets/sheet1.xml")
+              ?.async("text");
+            const workbookRels = await zip
+              .file("xl/_rels/workbook.xml.rels")
+              ?.async("text");
+            const rootRels = await zip.file("_rels/.rels")?.async("text");
+
+            expect(sheet).not.toContain("<f>");
+            expect(sheet).not.toContain("<hyperlink");
+            expect(sheet === undefined || hasInvalidXmlTextChar(sheet)).toBe(
+              false,
+            );
+            expect(workbookRels).not.toContain('TargetMode="External"');
+            expect(rootRels).not.toContain('TargetMode="External"');
+            expect(Object.keys(zip.files)).not.toContain("xl/vbaProject.bin");
+            expect(sheet?.match(/t="inlineStr"/gu)?.length).toBe(
+              values.length + 1,
+            );
+          },
+        ),
+        propertyConfig({ numRuns: 50 }),
+      );
+      // 50 zip builds + parses brush the default 5s timeout on loaded CI
+      // runners; the explicit timeout keeps the property run deterministic.
+    },
+    propertyTestTimeout(20_000),
+  );
+
+  test(
+    "xlsx property: long arbitrary values are capped before XML output",
+    async () => {
+      await fc.assert(
+        fc.asyncProperty(
+          fc
+            .integer({ min: 1, max: 200 })
+            .map((extraChars) =>
+              "x".repeat(SPREADSHEET_EXPORT_LIMITS.cellTextChars + extraChars),
             ),
-          );
-          const bytes = await buildXlsxExport({ columns, rows });
-          const zip = await JSZip.loadAsync(bytes);
-          const sheet = await zip
-            .file("xl/worksheets/sheet1.xml")
-            ?.async("text");
-          const widthMatches = [
-            ...(sheet?.matchAll(/ width="(?<width>\d+)"/gu) ?? []),
-          ];
+          async (value) => {
+            const bytes = await buildXlsxExport({
+              columns: [
+                {
+                  type: "property",
+                  id: "p1",
+                  propertyId: "p1",
+                  header: "Value",
+                },
+              ],
+              rows: [[textCell(sanitizeSpreadsheetCellForTest(value))]],
+            });
+            const zip = await JSZip.loadAsync(bytes);
+            const sheet = await zip
+              .file("xl/worksheets/sheet1.xml")
+              ?.async("text");
 
-          expect(widthMatches).toHaveLength(headers.length);
-          for (const match of widthMatches) {
-            const width = Number(match.groups?.["width"]);
-            expect(width).toBeGreaterThanOrEqual(12);
-            expect(width).toBeLessThanOrEqual(42);
-          }
-        },
-      ),
-      propertyConfig({ numRuns: 50 }),
-    );
-    // 50 zip builds + parses can exceed Bun's default 5s timeout on loaded
-    // CI runners; keep the invariant broad while making runtime deterministic.
-  }, 20_000);
+            expect(sheet).toContain("[truncated]");
+            expect(sheet).not.toContain(value);
+          },
+        ),
+        propertyConfig({ numRuns: 20 }),
+      );
+    },
+    propertyTestTimeout(20_000),
+  );
+
+  test(
+    "xlsx property: generated column widths stay readable and bounded",
+    async () => {
+      await fc.assert(
+        fc.asyncProperty(
+          fc.array(fc.string({ minLength: 1, maxLength: 40 }), {
+            minLength: 1,
+            maxLength: 8,
+          }),
+          fc.array(fc.array(fc.string({ maxLength: 120 }), { maxLength: 8 }), {
+            maxLength: 12,
+          }),
+          async (headers, rowValues) => {
+            const columns = headers.map((header, index) => ({
+              type: "property" as const,
+              id: `p${index}`,
+              propertyId: `p${index}`,
+              header,
+            }));
+            const rows = rowValues.map((row) =>
+              headers.map((_, index) =>
+                textCell(sanitizeSpreadsheetCellForTest(row.at(index) ?? "")),
+              ),
+            );
+            const bytes = await buildXlsxExport({ columns, rows });
+            const zip = await JSZip.loadAsync(bytes);
+            const sheet = await zip
+              .file("xl/worksheets/sheet1.xml")
+              ?.async("text");
+            const widthMatches = [
+              ...(sheet?.matchAll(/ width="(?<width>\d+)"/gu) ?? []),
+            ];
+
+            expect(widthMatches).toHaveLength(headers.length);
+            for (const match of widthMatches) {
+              const width = Number(match.groups?.["width"]);
+              expect(width).toBeGreaterThanOrEqual(12);
+              expect(width).toBeLessThanOrEqual(42);
+            }
+          },
+        ),
+        propertyConfig({ numRuns: 50 }),
+      );
+      // 50 zip builds + parses can exceed Bun's default 5s timeout on loaded
+      // CI runners; keep the invariant broad while making runtime deterministic.
+    },
+    propertyTestTimeout(20_000),
+  );
 
   test("merges a graded position into one column with its verdict tier and rationale", () => {
     const verdictTool: PropertyTool = {

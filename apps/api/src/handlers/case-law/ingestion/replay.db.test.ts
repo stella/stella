@@ -153,7 +153,7 @@ const walkIds = async (
 beforeAll(async () => {
   client = await createTestPglite();
   db = connect(client);
-}, 120_000);
+}, propertyTestTimeout(120_000));
 
 afterAll(async () => {
   await client.close();

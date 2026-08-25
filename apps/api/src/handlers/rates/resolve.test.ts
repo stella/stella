@@ -35,7 +35,7 @@ import type { TestDatabase } from "@/api/tests/security/test-utils";
 
 import resolveRateHandler from "./resolve";
 
-setDefaultTimeout(120_000);
+setDefaultTimeout(propertyTestTimeout(120_000));
 
 // ── Effective-dated rate resolution contract (pinned after reading resolve.ts)
 //
