@@ -33,15 +33,10 @@ import {
 import type { WorkspaceFolder } from "@/lib/workspaces/queries/entities";
 
 /**
- * Shared "pick a matter (and optionally a folder in it)" control. Matter rows
- * show the matter icon in its colour, the list filters as you type, and
- * matters arrive ordered by most recent activity (the workspaces endpoint
- * sorts by lastActivityAt).
- *
- * `useResolveMatterTarget` exists for one case: the user typed a new folder
- * name in the picker (a `pending` target). The folder is created here, just
- * before the caller's write (copy, move, save), and the matter's folder tree
- * is refreshed. An `existing` target passes straight through. Callers must
+ * Exists for one case: the user typed a new folder name in the picker (a
+ * `pending` target). The folder is created here, just before the caller's
+ * write (copy, move, save), and the matter's folder tree is refreshed. An
+ * `existing` target passes straight through. Callers must
  * replace a `pending` target with the resolved one, or a retry after a failed
  * write creates the folder again; the folder is kept on failure since an
  * empty folder beats a duplicate.
@@ -85,6 +80,13 @@ type MatterTargetPickerProps = {
   showFolderPicker?: boolean | undefined;
 };
 
+/**
+ * Shared "pick a matter (and optionally a folder in it)" control. Matter rows
+ * show the matter icon in its colour, the list filters as you type, and
+ * matters arrive ordered by most recent activity (the workspaces endpoint
+ * sorts by lastActivityAt). Used by the copy/move dialog, the template
+ * "save to matter" form, and the email-attachments facet.
+ */
 export const MatterTargetPicker = ({
   value,
   onChange,
