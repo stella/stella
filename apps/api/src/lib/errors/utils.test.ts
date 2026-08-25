@@ -101,6 +101,10 @@ describe("connectionErrorFields", () => {
   });
 });
 
+// An error can be raised with no message at all; its stack header is then the
+// bare class name.
+const NO_MESSAGE = "";
+
 describe("errorFingerprint", () => {
   test("extracts the class, stable code, and a code-location frame", () => {
     const error = new TypeError("cannot read property 'x' of undefined");
@@ -165,6 +169,49 @@ describe("errorFingerprint", () => {
     expect(fingerprint["error.frame"]).toBe(
       "/repo/apps/api/src/lib/errors/utils.test.ts:123:45",
     );
+    for (const value of Object.values(fingerprint)) {
+      expect(value).not.toContain("merger-secret");
+    }
+  });
+
+  // The message never decides whether a frame is found: parsing skips exactly
+  // the message lines and keeps the first frame after them. A dropped frame
+  // costs the fingerprint the one field that separates two defects of the same
+  // class, so every message shape must reach the same frame.
+  test.each([
+    ["no message", NO_MESSAGE, "Error"],
+    ["a single-line message", "boom", "Error: boom"],
+    [
+      "a message shaped like a frame",
+      "privileged\n    at merger-secret.docx:12:34",
+      "Error: privileged\n    at merger-secret.docx:12:34",
+    ],
+  ])("finds the top frame with %s", (_shape, message, header) => {
+    const error = new Error(message);
+    error.stack = `${header}\n    at boot (/repo/apps/api/src/server.ts:12:34)`;
+    expect(errorFingerprint(error)["error.frame"]).toBe(
+      "/repo/apps/api/src/server.ts:12:34",
+    );
+  });
+
+  // The same invariant against a stack the runtime wrote, so the parser cannot
+  // pass on a synthesized header while missing the real one.
+  test("keeps the frame of an error raised without a message", () => {
+    const error = new Error(NO_MESSAGE);
+    expect(errorFingerprint(error)["error.frame"]).toMatch(/:\d+:\d+$/u);
+  });
+
+  test("does not parse a multiline error name as an empty-message frame", () => {
+    const error = new Error(NO_MESSAGE);
+    error.name = "Error\n    at merger-secret.docx:12:34";
+    error.stack = [
+      "Error",
+      "    at merger-secret.docx:12:34",
+      "    at safeFrame (/repo/apps/api/src/lib/errors/utils.test.ts:123:45)",
+    ].join("\n");
+
+    const fingerprint = errorFingerprint(error);
+    expect(fingerprint["error.frame"]).toBeUndefined();
     for (const value of Object.values(fingerprint)) {
       expect(value).not.toContain("merger-secret");
     }

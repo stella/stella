@@ -110,40 +110,28 @@ export const safeErrorTelemetryFields = (
   return { ...fields, exitCode: String(error.exitCode) };
 };
 
+const safeErrorProperty = (error: Error, key: string): unknown => {
+  try {
+    return key in error ? Reflect.get(error, key) : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
 const safeErrorStringProperty = (
   error: Error,
   key: string,
 ): string | undefined => {
-  try {
-    if (!(key in error)) {
-      return undefined;
-    }
-    const value: unknown = Reflect.get(error, key);
-    if (typeof value === "string" && value) {
-      return value;
-    }
-  } catch {
-    return undefined;
-  }
-  return undefined;
+  const value = safeErrorProperty(error, key);
+  return typeof value === "string" && value !== "" ? value : undefined;
 };
 
 const safeErrorNumberProperty = (
   error: Error,
   key: string,
 ): number | undefined => {
-  try {
-    if (!(key in error)) {
-      return undefined;
-    }
-    const value: unknown = Reflect.get(error, key);
-    if (typeof value === "number") {
-      return value;
-    }
-  } catch {
-    return undefined;
-  }
-  return undefined;
+  const value = safeErrorProperty(error, key);
+  return typeof value === "number" ? value : undefined;
 };
 
 export const safeErrorCause = (error: Error): unknown => {
@@ -159,6 +147,18 @@ export const safeErrorCode = (error: Error): string | undefined =>
 
 const safeErrorMessage = (error: Error): string | undefined =>
   safeErrorStringProperty(error, "message");
+
+/**
+ * The message exactly as the stack's own header carries it, empty string
+ * included. `safeErrorMessage` reports an empty message as absent, which is
+ * what the telemetry fields want; frame parsing needs the distinction, because
+ * an error raised without a message still has a stack whose header line is the
+ * bare class name and whose frames follow it.
+ */
+const safeErrorMessageText = (error: Error): string | undefined => {
+  const value = safeErrorProperty(error, "message");
+  return typeof value === "string" ? value : undefined;
+};
 
 const safeErrorStack = (error: Error): string | undefined =>
   safeErrorStringProperty(error, "stack");
@@ -265,7 +265,7 @@ const frameLocation = (line: string): string | undefined => {
 };
 
 const stackFrameLines = (error: Error, stack: string): string[] => {
-  const message = safeErrorMessage(error);
+  const message = safeErrorMessageText(error);
   if (message === undefined) {
     return [];
   }
@@ -274,6 +274,20 @@ const stackFrameLines = (error: Error, stack: string): string[] => {
   const firstLine = lines.at(0);
   if (firstLine === undefined) {
     return [];
+  }
+
+  if (message === "") {
+    const name = safeErrorStringProperty(error, "name");
+    if (
+      name === undefined ||
+      name.includes("\n") ||
+      name.includes("\r") ||
+      name !== errorClassName(error) ||
+      firstLine !== name
+    ) {
+      return [];
+    }
+    return lines.slice(1);
   }
 
   const messageLines = message.split("\n");
