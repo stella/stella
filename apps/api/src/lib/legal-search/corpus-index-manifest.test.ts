@@ -37,9 +37,9 @@ test("manifest digests pin every semantic array and ignore object key order", ()
   expect(corpusIndexManifestDigest(CORPUS_INDEX_MANIFESTS.case_law_v5)).toBe(
     EXPECTED_DIGESTS.case_law_v5,
   );
-  expect(
-    corpusIndexManifestDigest(CORPUS_INDEX_MANIFESTS.legislation_v2),
-  ).toBe(EXPECTED_DIGESTS.legislation_v2);
+  expect(corpusIndexManifestDigest(CORPUS_INDEX_MANIFESTS.legislation_v2)).toBe(
+    EXPECTED_DIGESTS.legislation_v2,
+  );
   for (const digest of Object.values(EXPECTED_DIGESTS)) {
     expect(digest).toMatch(/^[0-9a-f]{64}$/u);
   }
@@ -180,7 +180,8 @@ test("final manifests make every storage and index cost explicit", () => {
         ({ name }) => name,
       ),
     );
-    for (const field of manifest.engine.indexConfig.doc_mapping.field_mappings) {
+    for (const field of manifest.engine.indexConfig.doc_mapping
+      .field_mappings) {
       expect(typeof field.indexed).toBe("boolean");
       expect(typeof field.stored).toBe("boolean");
       expect(typeof field.fast).toBe("boolean");

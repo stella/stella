@@ -50,8 +50,7 @@ type LegislationV2Manifest = CorpusIndexManifestBase & {
 };
 
 export type CorpusIndexManifest = CaseLawV5Manifest | LegislationV2Manifest;
-export type CorpusIndexManifestGeneration =
-  CorpusIndexManifest["generation"];
+export type CorpusIndexManifestGeneration = CorpusIndexManifest["generation"];
 
 type CorpusIndexFieldMapping =
   CorpusIndexConfig["doc_mapping"]["field_mappings"][number];
@@ -292,9 +291,7 @@ const canonicalJson = (value: unknown): string => {
 export const corpusIndexManifestDigest = (
   manifest: CorpusIndexManifest,
 ): string =>
-  new Bun.CryptoHasher("sha256")
-    .update(canonicalJson(manifest))
-    .digest("hex");
+  new Bun.CryptoHasher("sha256").update(canonicalJson(manifest)).digest("hex");
 
 export const corpusIndexConfigFromManifest = (
   manifest: CorpusIndexManifest,
