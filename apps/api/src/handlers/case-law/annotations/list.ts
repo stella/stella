@@ -1,23 +1,35 @@
 import { Result } from "better-result";
 import { and, asc, eq, sql } from "drizzle-orm";
+import { t } from "elysia";
 
 import { member, user } from "@/api/db/auth-schema";
 import { caseLawDecisionAnnotations } from "@/api/db/schema";
 import { decisionParamsSchema } from "@/api/handlers/case-law/annotations/schema";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { tPaginationCursor, tPaginationLimit } from "@/api/lib/custom-schema";
+import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { LIMITS } from "@/api/lib/limits";
+import { createCursorPage } from "@/api/lib/pagination";
+import { brandPersistedCaseLawDecisionAnnotationId } from "@/api/lib/safe-id-boundaries";
 
-/**
- * A reader marks a handful of passages, not hundreds; the bound keeps a
- * runaway client from turning one decision into an unbounded read.
- */
-const ANNOTATIONS_LIMIT = 500;
+const querySchema = t.Object({
+  cursor: t.Optional(tPaginationCursor()),
+  limit: t.Optional(tPaginationLimit(LIMITS.caseLawAnnotationsPageSizeMax)),
+});
 
 const config = {
   permissions: { workspace: ["read"] },
   mcp: { type: "internal", reason: "reader_annotations" },
   params: decisionParamsSchema,
+  query: querySchema,
 } satisfies HandlerConfig;
+
+const annotationCursor = createTimestampIdCursorCodec({
+  column: caseLawDecisionAnnotations.createdAt,
+  brandId: brandPersistedCaseLawDecisionAnnotationId,
+});
 
 /**
  * Every annotation on one decision the caller may see: their own, and what
@@ -28,7 +40,39 @@ const config = {
  */
 const listDecisionAnnotations = createSafeRootHandler(
   config,
-  async function* ({ params: { decisionId }, safeDb, session, user: me }) {
+  async function* ({
+    params: { decisionId },
+    query,
+    safeDb,
+    session,
+    user: me,
+  }) {
+    const limit = query.limit ?? LIMITS.caseLawAnnotationsPageSizeDefault;
+    const conditions = [
+      eq(
+        caseLawDecisionAnnotations.organizationId,
+        session.activeOrganizationId,
+      ),
+      eq(caseLawDecisionAnnotations.decisionId, decisionId),
+    ];
+
+    if (query.cursor) {
+      const cursor = annotationCursor.decode(query.cursor);
+      if (!cursor) {
+        return Result.err(
+          new HandlerError({ status: 400, message: "Invalid cursor" }),
+        );
+      }
+      const cursorCondition = annotationCursor.keysetAfter({
+        cursor,
+        direction: "ascending",
+        idColumn: caseLawDecisionAnnotations.id,
+      });
+      if (cursorCondition) {
+        conditions.push(cursorCondition);
+      }
+    }
+
     const rows = yield* Result.await(
       safeDb((tx) =>
         tx
@@ -50,6 +94,8 @@ const listDecisionAnnotations = createSafeRootHandler(
             authorName: user.name,
             authorImage: user.image,
             mine: sql<boolean>`${caseLawDecisionAnnotations.userId} = ${me.id}`,
+            createdAtCursor:
+              annotationCursor.cursorValue.as("created_at_cursor"),
           })
           .from(caseLawDecisionAnnotations)
           .innerJoin(
@@ -60,24 +106,26 @@ const listDecisionAnnotations = createSafeRootHandler(
             ),
           )
           .innerJoin(user, eq(user.id, member.userId))
-          .where(
-            and(
-              eq(
-                caseLawDecisionAnnotations.organizationId,
-                session.activeOrganizationId,
-              ),
-              eq(caseLawDecisionAnnotations.decisionId, decisionId),
-            ),
-          )
+          .where(and(...conditions))
           .orderBy(
             asc(caseLawDecisionAnnotations.createdAt),
             asc(caseLawDecisionAnnotations.id),
           )
-          .limit(ANNOTATIONS_LIMIT),
+          .limit(limit + 1),
       ),
     );
 
-    return Result.ok({ items: rows });
+    const page = createCursorPage({
+      rows,
+      limit,
+      cursorForItem: (item) =>
+        annotationCursor.encode(item.createdAtCursor, item.id),
+    });
+
+    return Result.ok({
+      ...page,
+      items: page.items.map(({ createdAtCursor: _, ...item }) => item),
+    });
   },
 );
 

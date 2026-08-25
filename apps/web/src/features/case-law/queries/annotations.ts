@@ -10,6 +10,32 @@ export type DecisionAnnotationsKey = {
   decisionId: string;
 };
 
+type AnnotationPage<T> = {
+  items: readonly T[];
+  nextCursor: string | null;
+};
+
+type FetchAnnotationPage<T> = (
+  cursor: string | undefined,
+) => Promise<AnnotationPage<T>>;
+
+export const collectAnnotationPages = async <T>(
+  fetchPage: FetchAnnotationPage<T>,
+): Promise<T[]> => {
+  const items: T[] = [];
+  let cursor: string | undefined;
+
+  do {
+    const page = await fetchPage(cursor);
+    items.push(...page.items);
+    cursor = page.nextCursor ?? undefined;
+  } while (cursor !== undefined);
+
+  return items;
+};
+
+const ANNOTATIONS_PAGE_SIZE = 100;
+
 export const decisionAnnotationKeys = {
   all: ["case-law", "annotations"],
   forDecision: ({
@@ -29,12 +55,21 @@ export const decisionAnnotationKeys = {
 export const decisionAnnotationsOptions = (key: DecisionAnnotationsKey) =>
   queryOptions({
     queryKey: decisionAnnotationKeys.forDecision(key),
-    queryFn: async ({ signal }) => {
-      const response = await api.case
-        .decisions({ decisionId: toSafeId<"caseLawDecision">(key.decisionId) })
-        .annotations.get({ fetch: { signal } });
-      return unwrapEden(response).items;
-    },
+    queryFn: ({ signal }) =>
+      collectAnnotationPages(async (cursor) => {
+        const response = await api.case
+          .decisions({
+            decisionId: toSafeId<"caseLawDecision">(key.decisionId),
+          })
+          .annotations.get({
+            query: {
+              limit: ANNOTATIONS_PAGE_SIZE,
+              ...(cursor === undefined ? {} : { cursor }),
+            },
+            fetch: { signal },
+          });
+        return unwrapEden(response);
+      }),
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
   });
 
