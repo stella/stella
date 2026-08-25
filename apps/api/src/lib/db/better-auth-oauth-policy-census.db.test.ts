@@ -6,9 +6,11 @@ import {
   oauthClientResource,
   oauthResource,
 } from "@/api/db/auth-schema";
+import { compareCodepoint } from "@/api/lib/collation";
 import {
   assertBetterAuthOAuthPolicyCensus,
   BetterAuthOAuthPolicyCensusError,
+  ensureBetterAuthOAuthPolicy,
 } from "@/api/lib/db/better-auth-oauth-policy-census";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
@@ -45,6 +47,56 @@ const captureCensusRejection = async (
     () => null,
     (error: unknown) => error,
   );
+
+test("startup initializes only a pristine Better Auth database", async () => {
+  try {
+    await database.transaction(async (transaction) => {
+      await transaction.execute(sql`
+        TRUNCATE "user", account, oauth_client_resource, oauth_resource,
+                 oauth_client CASCADE
+      `);
+
+      await ensureBetterAuthOAuthPolicy(transaction, EXPECTED_RESOURCES);
+      await ensureBetterAuthOAuthPolicy(transaction, EXPECTED_RESOURCES);
+      const initialized = await transaction.execute(sql`
+        SELECT identifier
+          FROM oauth_resource
+         ORDER BY identifier
+      `);
+      expect(initialized.rows).toEqual(
+        EXPECTED_RESOURCES.map(({ identifier }) => ({ identifier })).toSorted(
+          (left, right) => compareCodepoint(left.identifier, right.identifier),
+        ),
+      );
+
+      await transaction.execute(sql`TRUNCATE oauth_resource CASCADE`);
+      await transaction.execute(sql`
+        INSERT INTO "user" (id, name, email, email_verified)
+        VALUES (
+          'startup-census-existing-user',
+          'Existing user',
+          'startup-census@example.invalid',
+          false
+        )
+      `);
+      expect(
+        await captureCensusRejection(
+          ensureBetterAuthOAuthPolicy(transaction, EXPECTED_RESOURCES),
+        ),
+      ).toMatchObject({ failedChecks: ["resources-match"] });
+      const resourcesAfterRejection = await transaction.execute(sql`
+        SELECT identifier FROM oauth_resource
+      `);
+      expect(resourcesAfterRejection.rows).toEqual([]);
+
+      transaction.rollback();
+    });
+  } catch (error) {
+    if (!(error instanceof TransactionRollbackError)) {
+      throw error;
+    }
+  }
+});
 
 test("startup rejects incomplete Better Auth OAuth resource migrations", async () => {
   try {

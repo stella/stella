@@ -1,4 +1,4 @@
-import { TaggedError } from "better-result";
+import { Result, TaggedError } from "better-result";
 import { sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
@@ -13,6 +13,13 @@ type BetterAuthOAuthResourcePolicy = {
 export type BetterAuthOAuthPolicyDatabase = {
   execute: (statement: SQL) => Promise<unknown>;
 };
+
+export type BetterAuthOAuthPolicyTransactionalDatabase =
+  BetterAuthOAuthPolicyDatabase & {
+    transaction: <T>(
+      callback: (transaction: BetterAuthOAuthPolicyDatabase) => Promise<T>,
+    ) => Promise<T>;
+  };
 
 const BETTER_AUTH_OAUTH_POLICY_CHECKS = {
   CLIENTS_LINKED: "clients-linked",
@@ -63,6 +70,9 @@ const parseCensusRow = (
     resourcesMatch: value["resourcesMatch"],
   };
 };
+
+const requiredBooleanRow = (value: unknown, key: string): boolean | null =>
+  isRecord(value) && typeof value[key] === "boolean" ? value[key] : null;
 
 const failedCensusChecks = ({
   clientsLinked,
@@ -152,5 +162,94 @@ export const assertBetterAuthOAuthPolicyCensus = async (
   throw new BetterAuthOAuthPolicyCensusError({
     failedChecks,
     message: "Better Auth OAuth policy migration is incomplete",
+  });
+};
+
+const initializePristineBetterAuthOAuthPolicy = async (
+  database: BetterAuthOAuthPolicyDatabase,
+  expectedResources: readonly BetterAuthOAuthResourcePolicy[],
+): Promise<void> => {
+  await database.execute(sql`
+    LOCK TABLE "user",
+               account,
+               oauth_client,
+               oauth_client_resource,
+               oauth_resource
+      IN SHARE ROW EXCLUSIVE MODE
+  `);
+  const stateResult = await database.execute(sql`
+    SELECT NOT EXISTS (SELECT 1 FROM "user")
+       AND NOT EXISTS (SELECT 1 FROM account)
+       AND NOT EXISTS (SELECT 1 FROM oauth_client)
+       AND NOT EXISTS (SELECT 1 FROM oauth_client_resource)
+       AND NOT EXISTS (SELECT 1 FROM oauth_resource)
+      AS "isPristine"
+  `);
+  const isPristine = requiredBooleanRow(
+    rowsFromQueryResult(stateResult)?.at(0),
+    "isPristine",
+  );
+  if (isPristine === null) {
+    throw new BetterAuthOAuthPolicyCensusError({
+      failedChecks: [],
+      message: "Better Auth OAuth policy census returned an invalid result",
+    });
+  }
+  if (!isPristine) {
+    return;
+  }
+
+  const resourcesWithIds = expectedResources.map((resource) => ({
+    ...resource,
+    id: Bun.randomUUIDv7(),
+  }));
+  const serializedResources = JSON.stringify(resourcesWithIds);
+  await database.execute(sql`
+    INSERT INTO oauth_resource (id, identifier, name, allowed_scopes)
+    SELECT resource.id,
+           resource.identifier,
+           resource.name,
+           ARRAY(
+             SELECT jsonb_array_elements_text(resource."allowedScopes")
+             ORDER BY 1
+           )
+      FROM jsonb_to_recordset(${serializedResources}::text::jsonb)
+        AS resource(
+          id text,
+          identifier text,
+          name text,
+          "allowedScopes" jsonb
+        )
+  `);
+};
+
+/**
+ * New installations have no pre-migration baseline from which to run the
+ * deployment backfill. Initialize only an entirely empty auth database, under
+ * locks that make the decision atomic. Existing or partial databases remain
+ * read-only and fail the same census instead of being repaired at startup.
+ */
+export const ensureBetterAuthOAuthPolicy = async (
+  database: BetterAuthOAuthPolicyTransactionalDatabase,
+  expectedResources: readonly BetterAuthOAuthResourcePolicy[],
+): Promise<void> => {
+  const initialCensus = await Result.tryPromise({
+    try: async () =>
+      await assertBetterAuthOAuthPolicyCensus(database, expectedResources),
+    catch: (cause) => cause,
+  });
+  if (Result.isOk(initialCensus)) {
+    return;
+  }
+  if (!(initialCensus.error instanceof BetterAuthOAuthPolicyCensusError)) {
+    throw initialCensus.error;
+  }
+
+  await database.transaction(async (transaction) => {
+    await initializePristineBetterAuthOAuthPolicy(
+      transaction,
+      expectedResources,
+    );
+    await assertBetterAuthOAuthPolicyCensus(transaction, expectedResources);
   });
 };
