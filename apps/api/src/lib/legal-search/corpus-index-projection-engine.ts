@@ -132,8 +132,13 @@ export const appendCorpusProjectionBatch = async ({
   }
 
   const committedRevisions: ProjectionRevision[] = [];
-  for (const [requestIndex, request] of requests.entries()) {
-    // oxlint-disable-next-line no-await-in-loop -- ordered committed requests bound search-engine pressure and make the returned prefix authoritative
+  const appendRequestAt = async (
+    requestIndex: number,
+  ): Promise<Result<void, CorpusProjectionAppendError>> => {
+    const request = requests.at(requestIndex);
+    if (request === undefined) {
+      return Result.ok(undefined);
+    }
     const ingested = await client.ingestCommittedBatch(indexId, request.ndjson);
     if (ingested.isErr()) {
       const unknownRevisions = request.entries.map(
@@ -158,6 +163,11 @@ export const appendCorpusProjectionBatch = async ({
     committedRevisions.push(
       ...request.entries.map(({ row: { revision } }) => revision),
     );
+    return appendRequestAt(requestIndex + 1);
+  };
+  const appendResult = await appendRequestAt(0);
+  if (appendResult.isErr()) {
+    return Result.err(appendResult.error);
   }
   return Result.ok({
     revisionCount: entries.length,

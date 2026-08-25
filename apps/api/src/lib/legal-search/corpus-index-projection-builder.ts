@@ -133,18 +133,24 @@ export const buildLegislationV2ProjectionDocuments = ({
 export const buildCorpusProjectionDocuments = (
   options: BuildCorpusProjectionDocumentsOptions,
 ): Record<string, unknown>[] => {
-  switch (options.manifest.projection.builderVersion) {
-    case "case-law-passages-v1":
-      if (options.input.family !== "case_law") {
-        return panic("Case-law projection builder received legislation input");
-      }
-      return buildCaseLawV5ProjectionDocuments(options);
-    case "legislation-document-v1":
-      if (options.input.family !== "legislation") {
-        return panic("Legislation projection builder received case-law input");
-      }
-      return buildLegislationV2ProjectionDocuments(options);
-    default:
-      return options.manifest.projection.builderVersion satisfies never;
+  if (options.input.family === "case_law") {
+    if (options.manifest.projection.builderVersion !== "case-law-passages-v1") {
+      return panic("Case-law projection input has a non-case-law manifest");
+    }
+    return buildCaseLawV5ProjectionDocuments({
+      input: options.input,
+      payload: options.payload,
+      revision: options.revision,
+    });
   }
+  if (
+    options.manifest.projection.builderVersion !== "legislation-document-v1"
+  ) {
+    return panic("Legislation projection input has a non-legislation manifest");
+  }
+  return buildLegislationV2ProjectionDocuments({
+    input: options.input,
+    payload: options.payload,
+    revision: options.revision,
+  });
 };
