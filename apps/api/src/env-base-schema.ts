@@ -376,6 +376,15 @@ export const envBaseInvariantViolation = ({
   if (!isDev && CORPUS_INDEX_Q09_SEARCH_ENDPOINT !== undefined) {
     return "CORPUS_INDEX_Q09_SEARCH_ENDPOINT is only supported in local development.";
   }
+  if (
+    CORPUS_INDEX_Q09_ENDPOINT !== undefined &&
+    !isTlsOrLoopbackUrl(CORPUS_INDEX_Q09_ENDPOINT, {
+      plaintextProtocol: "http:",
+      tlsProtocol: "https:",
+    })
+  ) {
+    return "CORPUS_INDEX_Q09_ENDPOINT must use HTTPS unless it targets a loopback address.";
+  }
   // REMOVAL CONDITION: delete this invariant in the PR that makes a corpus
   // cursor carry the dictionary version it was built against.
   //
@@ -447,6 +456,13 @@ export const envBaseInvariantViolation = ({
     CORPUS_INDEX_Q09_ENDPOINT === undefined
   ) {
     return "Serving case_law_v5 on q09 requires CORPUS_INDEX_Q09_SEARCH_ENDPOINT or CORPUS_INDEX_Q09_ENDPOINT.";
+  }
+  if (
+    CORPUS_INDEXING_ENABLED &&
+    caseLawCluster === "q09" &&
+    CORPUS_INDEX_Q09_ENDPOINT === undefined
+  ) {
+    return "Indexing case_law_v5 on q09 requires CORPUS_INDEX_Q09_ENDPOINT.";
   }
 
   return corpusStorageInvariantViolation({

@@ -322,7 +322,10 @@ export const redactCaseLawDecision = async ({
   // index) and from the current-country index in case a move was
   // mid-flight; the recorded pointer is only cleared once both succeed.
   let auditedViaCorpusIndex = false;
-  if (envBase.CORPUS_INDEX_ENDPOINT !== undefined) {
+  if (
+    envBase.CORPUS_INDEX_ENDPOINT !== undefined ||
+    envBase.CORPUS_INDEX_Q09_ENDPOINT !== undefined
+  ) {
     const projectionTargets = await scopedDb((tx) =>
       tx
         .select({

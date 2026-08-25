@@ -149,7 +149,7 @@ test("q09 mutations cannot leak onto its read endpoint", async () => {
 test("search sends the documented sort_by parameter", async () => {
   responseBody = { num_hits: 0, hits: [], snippets: [] };
 
-  const result = await getCorpusIndexClient().search({
+  const result = await getCorpusIndexClient("q08").search({
     indexId: "legal_corpus_v1_cze",
     query: "text:smlouva",
     maxHits: 10,
@@ -177,7 +177,7 @@ test("search accepts a response without snippets", async () => {
     errors: [],
   };
 
-  const result = await getCorpusIndexClient().search({
+  const result = await getCorpusIndexClient("q08").search({
     indexId: "legal_corpus_v1_cze",
     query: "seq:0",
     maxHits: 0,
@@ -193,7 +193,7 @@ test("search accepts a response without snippets", async () => {
 test("search rejects a response without snippets when snippet fields were requested", async () => {
   responseBody = { num_hits: 1, hits: [{ id: "a" }] };
 
-  const result = await getCorpusIndexClient().search({
+  const result = await getCorpusIndexClient("q08").search({
     indexId: "legal_corpus_v1_cze",
     query: "text:smlouva",
     maxHits: 10,
@@ -206,7 +206,7 @@ test("search rejects a response without snippets when snippet fields were reques
 test("search rejects a malformed snippets value", async () => {
   responseBody = { num_hits: 1, hits: [], snippets: "no" };
 
-  const result = await getCorpusIndexClient().search({
+  const result = await getCorpusIndexClient("q08").search({
     indexId: "legal_corpus_v1_cze",
     query: "seq:0",
     maxHits: 0,
@@ -222,7 +222,7 @@ test("search falls back to the shared corpus index endpoint", async () => {
     CORPUS_INDEX_SEARCH_ENDPOINT: undefined,
   });
 
-  const result = await getCorpusIndexClient().search({
+  const result = await getCorpusIndexClient("q08").search({
     indexId: "legal_corpus_v1_cze",
     query: "text:smlouva",
     maxHits: 10,
@@ -235,7 +235,7 @@ test("search falls back to the shared corpus index endpoint", async () => {
 test("search rejects a malformed external response", async () => {
   responseBody = [];
 
-  const result = await getCorpusIndexClient().search({
+  const result = await getCorpusIndexClient("q08").search({
     indexId: "legal_corpus_v1_cze",
     query: "text:smlouva",
     maxHits: 10,
@@ -250,7 +250,7 @@ test("search rejects a malformed external response", async () => {
 test("search rejects a malformed object response", async () => {
   responseBody = { error: "index unavailable" };
 
-  const result = await getCorpusIndexClient().search({
+  const result = await getCorpusIndexClient("q08").search({
     indexId: "legal_corpus_v1_cze",
     query: "text:smlouva",
     maxHits: 10,
@@ -301,7 +301,7 @@ test("search pagination always requests BM25 relevance order", async () => {
 test("ingest fails when the engine accepts fewer documents than sent", async () => {
   responseBody = { num_docs_for_processing: 1 };
 
-  const result = await getCorpusIndexClient().ingestBatch(
+  const result = await getCorpusIndexClient("q08").ingestBatch(
     "legal_corpus_v1_cze",
     '{"document_id":"a"}\n{"document_id":"b"}',
     CORPUS_INDEX_COMMIT.waitFor,
@@ -316,7 +316,7 @@ test("ingest fails when the engine accepts fewer documents than sent", async () 
 test("ingest fails when the engine reports rejected documents", async () => {
   responseBody = { num_docs_for_processing: 2, num_rejected_docs: 1 };
 
-  const result = await getCorpusIndexClient().ingestBatch(
+  const result = await getCorpusIndexClient("q08").ingestBatch(
     "legal_corpus_v1_cze",
     '{"document_id":"a"}\n{"document_id":"b"}',
     CORPUS_INDEX_COMMIT.waitFor,
@@ -331,7 +331,7 @@ test("ingest fails when the engine reports rejected documents", async () => {
 test("delete-by-query posts one document-scoped delete task", async () => {
   responseBody = { opstamp: 42 };
 
-  const result = await getCorpusIndexClient().deleteByQuery(
+  const result = await getCorpusIndexClient("q08").deleteByQuery(
     "legal_corpus_v1_cze",
     'document_id:"dec-1"',
   );
@@ -354,7 +354,7 @@ test("delete-by-query posts one document-scoped delete task", async () => {
 test("delete-by-query rejects a response without a usable opstamp", async () => {
   responseBody = {};
 
-  const result = await getCorpusIndexClient().deleteByQuery(
+  const result = await getCorpusIndexClient("q08").deleteByQuery(
     "legal_corpus_v1_cze",
     'document_id:"dec-1"',
   );
@@ -388,7 +388,7 @@ test("delete settlement compares every published split with the retained task", 
     ],
   };
 
-  const result = await getCorpusIndexClient().readDeleteSettlement(
+  const result = await getCorpusIndexClient("q08").readDeleteSettlement(
     "legal_corpus_v1_cze",
     42,
   );
@@ -412,7 +412,7 @@ test("delete settlement compares every published split with the retained task", 
 });
 
 test("delete settlement rejects an invalid required opstamp", async () => {
-  const result = await getCorpusIndexClient().readDeleteSettlement(
+  const result = await getCorpusIndexClient("q08").readDeleteSettlement(
     "legal_corpus_v1_cze",
     -1,
   );
@@ -428,7 +428,7 @@ test("delete settlement rejects a split without a usable delete opstamp", async 
     splits: [{ split_id: "split-1", split_state: "Published" }],
   };
 
-  const result = await getCorpusIndexClient().readDeleteSettlement(
+  const result = await getCorpusIndexClient("q08").readDeleteSettlement(
     "legal_corpus_v1_cze",
     42,
   );
@@ -469,7 +469,7 @@ test("delete settlement repeats an offset scan until split identities stabilize"
     return { splits: [] };
   };
 
-  const result = await getCorpusIndexClient().readDeleteSettlement(
+  const result = await getCorpusIndexClient("q08").readDeleteSettlement(
     "legal_corpus_v1_cze",
     42,
   );
@@ -484,7 +484,7 @@ test("delete settlement repeats an offset scan until split identities stabilize"
 test("delete settlement accepts exactly the published split ceiling", async () => {
   responseBodyForUrl = settlementResponse(10_000);
 
-  const result = await getCorpusIndexClient().readDeleteSettlement(
+  const result = await getCorpusIndexClient("q08").readDeleteSettlement(
     "legal_corpus_v1_cze",
     42,
   );
@@ -499,7 +499,7 @@ test("delete settlement accepts exactly the published split ceiling", async () =
 test("delete settlement rejects the first split beyond its ceiling", async () => {
   responseBodyForUrl = settlementResponse(10_001);
 
-  const result = await getCorpusIndexClient().readDeleteSettlement(
+  const result = await getCorpusIndexClient("q08").readDeleteSettlement(
     "legal_corpus_v1_cze",
     42,
   );
@@ -515,7 +515,7 @@ test("ingest sends the commit mode the caller asked for", async () => {
 
   for (const commit of Object.values(CORPUS_INDEX_COMMIT)) {
     // oxlint-disable-next-line no-await-in-loop -- one request per mode; the recorder is order-sensitive
-    await getCorpusIndexClient().ingestBatch(
+    await getCorpusIndexClient("q08").ingestBatch(
       "legal_corpus_v1_cze",
       '{"document_id":"a"}',
       commit,
@@ -545,7 +545,7 @@ test("the ingest budget outlasts the engine's commit wait", () => {
 test("ingest succeeds when every document is accepted", async () => {
   responseBody = { num_docs_for_processing: 2 };
 
-  const result = await getCorpusIndexClient().ingestBatch(
+  const result = await getCorpusIndexClient("q08").ingestBatch(
     "legal_corpus_v1_cze",
     '{"document_id":"a"}\n{"document_id":"b"}',
     CORPUS_INDEX_COMMIT.waitFor,
@@ -561,7 +561,7 @@ test("final-generation ingest requires the exact committed V2 receipt", async ()
     num_rejected_docs: 0,
   };
 
-  const result = await getCorpusIndexClient().ingestCommittedBatch(
+  const result = await getCorpusIndexClient("q08").ingestCommittedBatch(
     "case_law_v5_cs_sk",
     '{"document_id":"a"}\n{"document_id":"b"}',
   );
@@ -586,7 +586,7 @@ test("final-generation ingest rejects missing or partial V2 counters", async () 
   ]) {
     responseBody = receipt;
     // oxlint-disable-next-line no-await-in-loop -- each malformed receipt is observed independently by the request recorder
-    const result = await getCorpusIndexClient().ingestCommittedBatch(
+    const result = await getCorpusIndexClient("q08").ingestCommittedBatch(
       "case_law_v5_cs_sk",
       '{"document_id":"a"}\n{"document_id":"b"}',
     );
@@ -610,7 +610,7 @@ const rejectFetchWith = (reason: unknown): void => {
 test("ingest names the request and its budget when the transport fails", async () => {
   rejectFetchWith(new DOMException("The operation timed out.", "TimeoutError"));
 
-  const result = await getCorpusIndexClient().ingestBatch(
+  const result = await getCorpusIndexClient("q08").ingestBatch(
     "legal_corpus_v1_cze",
     '{"document_id":"a"}',
     CORPUS_INDEX_COMMIT.waitFor,
@@ -627,7 +627,7 @@ test("ingest names the request and its budget when the transport fails", async (
 test("each request reports its own budget, not a shared one", async () => {
   rejectFetchWith(new DOMException("The operation timed out.", "TimeoutError"));
 
-  const result = await getCorpusIndexClient().search({
+  const result = await getCorpusIndexClient("q08").search({
     indexId: "legal_corpus_v1_cze",
     query: "text:smlouva",
     maxHits: 10,
@@ -650,7 +650,7 @@ test("an unreadable success body names the request too", async () => {
     preconnect: originalFetch.preconnect,
   });
 
-  const result = await getCorpusIndexClient().search({
+  const result = await getCorpusIndexClient("q08").search({
     indexId: "legal_corpus_v1_cze",
     query: "text:smlouva",
     maxHits: 10,
@@ -683,7 +683,7 @@ test("a body that stalls past the budget is a timeout, not an unreadable body", 
     preconnect: originalFetch.preconnect,
   });
 
-  const result = await getCorpusIndexClient().search({
+  const result = await getCorpusIndexClient("q08").search({
     indexId: "legal_corpus_v1_cze",
     query: "text:smlouva",
     maxHits: 10,
@@ -702,7 +702,7 @@ test("a request that never reaches the engine is not reported as a timeout", asy
     new Error("Unable to connect. Is the computer able to access the url?"),
   );
 
-  const result = await getCorpusIndexClient().search({
+  const result = await getCorpusIndexClient("q08").search({
     indexId: "legal_corpus_v1_cze",
     query: "text:smlouva",
     maxHits: 10,

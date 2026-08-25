@@ -715,13 +715,8 @@ const buildClient = (cluster: QuickwitCluster): CorpusIndexClient => ({
 
 const cachedClients = new Map<QuickwitCluster, CorpusIndexClient>();
 
-/**
- * The default is the concrete compatibility boundary for the still-serving
- * v2/legislation-v1 cluster. Final generations always pass their registered
- * cluster explicitly; remove the default when q08 has no serving generation.
- */
 export const getCorpusIndexClient = (
-  cluster: QuickwitCluster = "q08",
+  cluster: QuickwitCluster,
 ): CorpusIndexClient => {
   const cached = cachedClients.get(cluster);
   if (cached !== undefined) {

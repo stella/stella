@@ -426,6 +426,8 @@ const CONDITIONAL_REQUIREMENT_NOTES: Record<string, string> = {
   CONTENT_ENCRYPTION_KEY: "NODE_ENV is production or staging",
   CORPUS_INDEX_SEARCH_ENDPOINT:
     "LEGAL_SEARCH_PROVIDER is corpus-index and CORPUS_INDEX_ENDPOINT is unset",
+  CORPUS_INDEX_Q09_ENDPOINT:
+    "CORPUS_INDEXING_ENABLED is true and LEGAL_SEARCH_INDEX_GENERATION is case_law_v5",
   LEGAL_CORPUS_S3_BUCKET: "corpus storage is enabled in a deployed environment",
   MICROSOFT_AUTH_TENANT_ID: "Microsoft OAuth credentials are configured",
   S3_ACCESS_KEY_ID: 'S3_CREDENTIALS_PROVIDER is "env"',

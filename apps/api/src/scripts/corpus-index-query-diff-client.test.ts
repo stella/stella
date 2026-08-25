@@ -15,18 +15,19 @@ const originalEndpoints = {
 
 let requests: RecordedRequest[];
 
+const requestUrl = (input: Parameters<typeof fetch>[0]): string => {
+  if (typeof input === "string") {
+    return input;
+  }
+  return input instanceof URL ? input.href : input.url;
+};
+
 beforeEach(() => {
   requests = [];
   const stub = async (
     input: Parameters<typeof fetch>[0],
   ): Promise<Response> => {
-    const url = new URL(
-      typeof input === "string"
-        ? input
-        : input instanceof URL
-          ? input.href
-          : input.url,
-    );
+    const url = new URL(requestUrl(input));
     requests.push({ host: url.host });
     return new Response(
       JSON.stringify({ num_hits: 0, hits: [], snippets: [] }),

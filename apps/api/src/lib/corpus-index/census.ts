@@ -66,6 +66,7 @@ import {
   caseLawCorpusProjectionJoin,
   currentCaseLawCorpusProjection,
 } from "@/api/lib/legal-search/case-law-corpus-projection";
+import { corpusIndexClusterForGeneration } from "@/api/lib/legal-search/corpus-generation-contract";
 import type { CorpusIndexError } from "@/api/lib/legal-search/corpus-index-client";
 import { getCorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client";
 import {
@@ -365,6 +366,7 @@ const dispositionOf = (
 
 const readDeleteSettlement = async (
   scopedDb: ScopedDb,
+  generation: string,
   indexId: string,
 ): Promise<Result<IndexCensus["deleteSettlement"], CorpusIndexError>> => {
   const watermark = (
@@ -378,10 +380,9 @@ const readDeleteSettlement = async (
   if (watermark === undefined) {
     return Result.ok(null);
   }
-  const settlement = await getCorpusIndexClient().readDeleteSettlement(
-    indexId,
-    watermark.opstamp,
-  );
+  const settlement = await getCorpusIndexClient(
+    corpusIndexClusterForGeneration("case_law", generation),
+  ).readDeleteSettlement(indexId, watermark.opstamp);
   if (Result.isError(settlement)) {
     return Result.err(settlement.error);
   }
@@ -514,18 +515,16 @@ export const censusIndex = async ({
     generation,
     indexId,
   });
-  const counted = await getCorpusIndexClient().search({
-    indexId,
-    query: DOCUMENT_COUNT_QUERY,
-    maxHits: 1,
-  });
+  const counted = await getCorpusIndexClient(
+    corpusIndexClusterForGeneration("case_law", generation),
+  ).search({ indexId, query: DOCUMENT_COUNT_QUERY, maxHits: 1 });
   if (Result.isError(counted)) {
     return Result.err(counted.error);
   }
 
   const shortfall = marked.markedIndexed - counted.value.numHits;
   const deleteSettlementResult = marked.hasPendingDelete
-    ? await readDeleteSettlement(scopedDb, indexId)
+    ? await readDeleteSettlement(scopedDb, generation, indexId)
     : Result.ok(null);
   if (Result.isError(deleteSettlementResult)) {
     return Result.err(deleteSettlementResult.error);

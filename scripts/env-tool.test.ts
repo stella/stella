@@ -413,6 +413,16 @@ describe("environment doctor output", () => {
         LEGAL_SEARCH_PROVIDER: "corpus-index",
       },
     },
+    {
+      expected:
+        "Indexing case_law_v5 on q09 requires CORPUS_INDEX_Q09_ENDPOINT.",
+      overrides: {
+        CORPUS_INDEXING_ENABLED: "true",
+        CORPUS_INDEX_Q09_SEARCH_ENDPOINT:
+          "https://quickwit-09-search.example.com",
+        LEGAL_SEARCH_INDEX_GENERATION: "case_law_v5",
+      },
+    },
     // Removed together with the invariant, in the PR that makes a corpus
     // cursor carry the dictionary version it was built against.
     {
@@ -493,6 +503,13 @@ describe("environment doctor output", () => {
         CONTENT_ENCRYPTION_KEY: "a".repeat(64),
         CORPUS_INDEX_SEARCH_ENDPOINT: "https://search.example.com",
         NODE_ENV: "staging",
+      },
+    },
+    {
+      expected:
+        "CORPUS_INDEX_Q09_ENDPOINT must use HTTPS unless it targets a loopback address.",
+      overrides: {
+        CORPUS_INDEX_Q09_ENDPOINT: "http://quickwit-admin.example.com",
       },
     },
     {

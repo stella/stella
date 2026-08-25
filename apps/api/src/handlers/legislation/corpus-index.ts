@@ -31,11 +31,13 @@ import {
   timestampCasToken,
   type TimestampCasToken,
 } from "@/api/lib/db/timestamp-cas";
+import { corpusIndexClusterForGeneration } from "@/api/lib/legal-search/corpus-generation-contract";
 import {
   CorpusIndexError,
   getCorpusIndexClient,
 } from "@/api/lib/legal-search/corpus-index-client";
 import { readCorpusText } from "@/api/lib/legal-search/corpus-storage";
+import { corpusIndexGeneration } from "@/api/lib/legal-search/index-naming";
 import { logger } from "@/api/lib/observability/logger";
 
 /**
@@ -425,10 +427,12 @@ export const reconcileNextLegislationCorpusIndexDelete = async (
           );
       });
 
-      const settlement = await getCorpusIndexClient().readDeleteSettlement(
-        next.indexId,
-        next.opstamp,
-      );
+      const settlement = await getCorpusIndexClient(
+        corpusIndexClusterForGeneration(
+          "legislation",
+          corpusIndexGeneration(next.indexId),
+        ),
+      ).readDeleteSettlement(next.indexId, next.opstamp);
       if (settlement.isErr()) {
         throw settlement.error;
       }

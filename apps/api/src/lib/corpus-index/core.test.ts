@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
+import { envBase } from "@/api/env-base";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import type {
@@ -241,9 +242,13 @@ describe("settleAllCleanup", () => {
 
 describe("idempotent corpus removals", () => {
   const originalFetch = globalThis.fetch;
+  const originalQ09Endpoint = envBase.CORPUS_INDEX_Q09_ENDPOINT;
 
   afterEach(() => {
     globalThis.fetch = originalFetch;
+    Object.assign(envBase, {
+      CORPUS_INDEX_Q09_ENDPOINT: originalQ09Endpoint,
+    });
   });
 
   test("a missing retired index is recorded as an achieved deletion", async () => {
@@ -290,7 +295,7 @@ describe("idempotent corpus removals", () => {
     const removed = await indexer.remove(
       row.id,
       scopedDb,
-      corpusIndexId("case_law_retired", "CZ"),
+      corpusIndexId("case_law_v4", "CZ"),
     );
 
     expect(removed.isOk()).toBe(true);
@@ -362,6 +367,60 @@ describe("idempotent corpus removals", () => {
     ]);
   });
 
+  test("a final-generation deletion uses the q09 mutation endpoint", async () => {
+    const row = {
+      id: toSafeId<"caseLawDecision">("q09-delete-row"),
+      country: "CZ",
+      textS3Key: null,
+      astS3Key: null,
+      contentHash: null,
+      indexedHash: null,
+      indexedGeneration: null,
+      // SAFETY: the removal path never reads the fabricated timestamp token.
+      // eslint-disable-next-line typescript/no-unsafe-type-assertion
+      updatedAtToken: "2026-01-01 00:00:00" as TimestampCasToken,
+    };
+    Object.assign(envBase, {
+      CORPUS_INDEX_Q09_ENDPOINT: "http://localhost:7291",
+    });
+    let requestHost = "";
+    globalThis.fetch = Object.assign(
+      async (input: Parameters<typeof fetch>[0]) => {
+        const url = requestUrl(input);
+        requestHost = new URL(url).host;
+        return new Response(JSON.stringify({ opstamp: 7 }), { status: 200 });
+      },
+      { preconnect: originalFetch.preconnect },
+    );
+    const indexer = createCorpusIndexer<"caseLawDecision", typeof row>({
+      family: "case_law",
+      captureStep: "test",
+      granularity: "document",
+      generationProjectionIndexIds: () => [],
+      buildDocs: () => [],
+      readCorpusText: async () => "unused",
+      selectMissing: async () => [],
+      selectStale: async () => [],
+      fetchFulltext: async () => null,
+      markIndexedBatch: async () => new Set(),
+      insertSucceededJobs: async () => undefined,
+      recordJobs: async () => undefined,
+      recordDeleteJobs: async () => undefined,
+    });
+    const scopedDb: ScopedDb = async () => {
+      throw new Error("removal should not open a database transaction");
+    };
+
+    const removed = await indexer.remove(
+      row.id,
+      scopedDb,
+      corpusIndexId("case_law_v5", "CZ"),
+    );
+
+    expect(removed.isOk()).toBe(true);
+    expect(requestHost).toBe("localhost:7291");
+  });
+
   test("a fenced removal records guard failures after the remote effect", async () => {
     const row = {
       id: toSafeId<"caseLawDecision">("expired-removal-lease-row"),
@@ -431,6 +490,119 @@ describe("idempotent corpus removals", () => {
         status: "failed",
       },
     ]);
+  });
+});
+
+describe("generation mutation routing", () => {
+  const originalFetch = globalThis.fetch;
+  const originalQ08Endpoint = envBase.CORPUS_INDEX_ENDPOINT;
+  const originalQ09Endpoint = envBase.CORPUS_INDEX_Q09_ENDPOINT;
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+    Object.assign(envBase, {
+      CORPUS_INDEX_ENDPOINT: originalQ08Endpoint,
+      CORPUS_INDEX_Q09_ENDPOINT: originalQ09Endpoint,
+    });
+  });
+
+  test("rebuild writes v5 to q09 and a legacy generation to q08", async () => {
+    Object.assign(envBase, {
+      CORPUS_INDEX_ENDPOINT: "http://localhost:7281",
+      CORPUS_INDEX_Q09_ENDPOINT: "http://localhost:7291",
+    });
+    const createHosts: string[] = [];
+    const ingestHosts: string[] = [];
+    globalThis.fetch = Object.assign(
+      async (
+        input: Parameters<typeof fetch>[0],
+        init?: Parameters<typeof fetch>[1],
+      ) => {
+        const url = requestUrl(input);
+        const parsed = new URL(url);
+        if (parsed.pathname === "/api/v1/indexes") {
+          createHosts.push(parsed.host);
+        }
+        if (parsed.pathname.includes("/ingest")) {
+          ingestHosts.push(parsed.host);
+          return new Response(JSON.stringify({ num_docs_for_processing: 1 }), {
+            status: 200,
+          });
+        }
+        if ((init?.method ?? "GET") === "GET") {
+          return new Response("missing", { status: 404 });
+        }
+        return new Response("{}", { status: 200 });
+      },
+      { preconnect: originalFetch.preconnect },
+    );
+    const row = {
+      id: toSafeId<"caseLawDecision">("generation-routing-row"),
+      country: "CZ",
+      textS3Key: null,
+      astS3Key: null,
+      contentHash: "hash",
+      indexedHash: null,
+      indexedGeneration: null,
+      // SAFETY: the adapter ignores this fabricated token in the test.
+      // eslint-disable-next-line typescript/no-unsafe-type-assertion
+      updatedAtToken: "2026-01-01 00:00:00" as TimestampCasToken,
+    };
+    const scopedDb: ScopedDb = async (callback) =>
+      // SAFETY: this test only observes the external routing and the adapter
+      // callbacks do not inspect the inert transaction.
+      // eslint-disable-next-line typescript/no-unsafe-type-assertion
+      await callback({} as Transaction);
+    const indexer = createCorpusIndexer<"caseLawDecision", typeof row>({
+      family: "case_law",
+      captureStep: "test",
+      granularity: "document",
+      generationProjectionIndexIds: () => [],
+      buildDocs: (selected) => [{ document_id: selected.id, text: "body" }],
+      readCorpusText: async () => "body",
+      selectMissing: async () => [],
+      selectStale: async () => [],
+      fetchFulltext: async () => "body",
+      markIndexedBatch: async (_tx, { rows }) =>
+        new Set(rows.map((selected) => selected.id)),
+      insertSucceededJobs: async () => undefined,
+      recordJobs: async () => undefined,
+      recordDeleteJobs: async () => undefined,
+    });
+    const rebuildOptions = {
+      commit: CORPUS_INDEX_COMMIT.auto,
+      beforeDatabaseMark: async () => await Promise.resolve(),
+      beforeRemoteEffect: async <T>({ effect }: FencedRemoteEffect<T>) =>
+        await effect(),
+      recoverRemoteEffectLeaseLoss: async () => await Promise.resolve(),
+      reserveExternalAppend: async (
+        _tx: Transaction,
+        { rows: reservedRows }: { rows: readonly (typeof row)[] },
+      ) =>
+        new Map(
+          reservedRows.map((selected) => [
+            selected.id,
+            {
+              indexIds: [],
+              revision: 1,
+              mayHaveCopy: false,
+            },
+          ]),
+        ),
+    };
+
+    expect(
+      await indexer.backfillRows(scopedDb, [row], "case_law_v5", {
+        ...rebuildOptions,
+      }),
+    ).toMatchObject({ indexed: 1 });
+    expect(
+      await indexer.backfillRows(scopedDb, [row], "case_law_v4", {
+        ...rebuildOptions,
+      }),
+    ).toMatchObject({ indexed: 1 });
+    expect(createHosts).toEqual(["localhost:7291", "localhost:7281"]);
+    expect(ingestHosts).toEqual(["localhost:7291", "localhost:7281"]);
   });
 });
 
