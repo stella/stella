@@ -209,6 +209,7 @@ const activityCategoryForEvent = (event: AuditEvent): AuditActivityCategory => {
     case "workspace_contact":
       return "team";
     case "case_law_matter_link":
+    case "case_law_decision_annotation":
       return "court";
     case "bilingual_translation_run":
     case "document_translation_run":
