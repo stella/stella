@@ -8,6 +8,10 @@ import { createTestPglite } from "@/api/tests/pglite-test-db";
 let client: Awaited<ReturnType<typeof createTestPglite>>;
 let db: ReturnType<typeof drizzle>;
 const MANIFEST_DIGEST = "a".repeat(64);
+const MIGRATION_URL = new URL(
+  "../../../drizzle/20260825137100_corpus_index_generations/migration.sql",
+  import.meta.url,
+);
 
 const errorMessageChain = (error: unknown): string => {
   const messages: string[] = [];
@@ -29,6 +33,23 @@ beforeAll(
   async () => {
     client = await createTestPglite();
     db = drizzle({ client });
+
+    // drizzle-kit reconstructs tables and constraints for the lightweight
+    // PGlite snapshot, but triggers exist only in committed migrations. Apply
+    // the exact migration-owned function and trigger so this suite exercises
+    // the production immutability boundary rather than a test-only copy.
+    const migration = await Bun.file(MIGRATION_URL).text();
+    for (const statement of migration.split("--> statement-breakpoint")) {
+      const ddl = statement.trim();
+      if (
+        !ddl.startsWith("CREATE FUNCTION") &&
+        !ddl.startsWith("CREATE TRIGGER")
+      ) {
+        continue;
+      }
+      // oxlint-disable-next-line no-await-in-loop -- the trigger depends on the function created immediately before it
+      await db.execute(sql.raw(ddl));
+    }
   },
   { timeout: 120_000 },
 );
