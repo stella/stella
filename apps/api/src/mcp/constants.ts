@@ -10,6 +10,17 @@ import {
 import { env } from "@/api/env";
 import { REQUEST_ID_HEADER } from "@/api/lib/observability/request-context";
 import { declareCliSupportBand } from "@/api/mcp/cli-support-band";
+import {
+  getMcpResourceModeConfig,
+  getMcpResourceScopes,
+  MCP_ANONYMIZED_DISCOVERY_PATH,
+  MCP_DISCOVERY_PATH,
+  MCP_DOCUMENTS_RESOURCE_SCOPES,
+  MCP_DOCUMENTS_DISCOVERY_PATH,
+  MCP_MODES,
+  ROOT_MCP_DISCOVERY_PATH,
+} from "@/api/mcp/resource-policy-contract";
+import type { McpMode } from "@/api/mcp/resource-policy-contract";
 
 export {
   MCP_ANONYMIZED_RESOURCE_SCOPES,
@@ -17,20 +28,8 @@ export {
   MCP_DEFAULT_RESOURCE_SCOPES,
 };
 
-/**
- * Least-privilege remote-host surface for document workflows. Hosted clients
- * commonly request every scope in protected-resource metadata, so this
- * resource advertises only the grants its projected tool registry can use.
- */
-export const MCP_DOCUMENTS_RESOURCE_SCOPES = [
-  "stella:read",
-  "stella:documents_write",
-  // The canonical presigned-upload lifecycle currently owns one scope across
-  // entity-create and entity-version purposes. The documents MCP audience
-  // restricts invoke_capability to the three lifecycle IDs, so this grant does
-  // not expose unrelated matter mutations through that endpoint.
-  "stella:matters_write",
-] as const;
+export { MCP_DOCUMENTS_RESOURCE_SCOPES, MCP_MODES };
+export type { McpMode };
 
 export const MCP_ALL_RESOURCE_SCOPES = [
   ...MCP_DEFAULT_RESOURCE_SCOPES,
@@ -80,17 +79,12 @@ export const MCP_STATELESS_ALLOW_HEADER = "OPTIONS, GET, POST";
  */
 export const MCP_NOTIFICATION_KEEP_ALIVE_MS = 5000;
 
-export const ROOT_MCP_DISCOVERY_PATH =
-  "/.well-known/oauth-protected-resource" as const;
-
-export const MCP_DISCOVERY_PATH =
-  `/.well-known/oauth-protected-resource${MCP_HTTP_PATH}` as const;
-
-export const MCP_DOCUMENTS_DISCOVERY_PATH =
-  `/.well-known/oauth-protected-resource${MCP_DOCUMENTS_HTTP_PATH}` as const;
-
-export const MCP_ANONYMIZED_DISCOVERY_PATH =
-  `/.well-known/oauth-protected-resource${MCP_ANONYMIZED_HTTP_PATH}` as const;
+export {
+  MCP_ANONYMIZED_DISCOVERY_PATH,
+  MCP_DISCOVERY_PATH,
+  MCP_DOCUMENTS_DISCOVERY_PATH,
+  ROOT_MCP_DISCOVERY_PATH,
+};
 
 export const MCP_ALLOWED_HEADERS = [
   "Authorization",
@@ -153,48 +147,13 @@ export const MCP_EXPOSE_HEADERS = [
   REQUEST_ID_HEADER,
 ] as const;
 
-const MCP_MODE_CONFIG = {
-  default: {
-    discoveryPath: MCP_DISCOVERY_PATH,
-    httpPath: MCP_HTTP_PATH,
-    resourceScopes: MCP_DEFAULT_RESOURCE_SCOPES,
-  },
-  documents: {
-    discoveryPath: MCP_DOCUMENTS_DISCOVERY_PATH,
-    httpPath: MCP_DOCUMENTS_HTTP_PATH,
-    resourceScopes: MCP_DOCUMENTS_RESOURCE_SCOPES,
-  },
-  anonymized: {
-    discoveryPath: MCP_ANONYMIZED_DISCOVERY_PATH,
-    httpPath: MCP_ANONYMIZED_HTTP_PATH,
-    resourceScopes: MCP_ANONYMIZED_RESOURCE_SCOPES,
-  },
-} as const;
-
-export type McpMode = keyof typeof MCP_MODE_CONFIG;
-
-const MCP_MODE_VALUES = [
-  "default",
-  "documents",
-  "anonymized",
-] as const satisfies readonly McpMode[];
-
-type MissingMcpMode = Exclude<McpMode, (typeof MCP_MODE_VALUES)[number]>;
-
-true satisfies MissingMcpMode extends never ? true : never;
-
-export const MCP_MODES = MCP_MODE_VALUES;
-
-const getMcpModeConfig = (mode: McpMode) => MCP_MODE_CONFIG[mode];
-
-export const getMcpResourceScopes = (mode: McpMode) =>
-  getMcpModeConfig(mode).resourceScopes;
+export { getMcpResourceScopes };
 
 export const getMcpBaseUrl = () => env.PUBLIC_URL ?? env.BETTER_AUTH_URL;
 
 export const getMcpResourceUrl = (mode: McpMode = "default") =>
   new URL(
-    getMcpModeConfig(mode).httpPath,
+    getMcpResourceModeConfig(mode).httpPath,
     `${getMcpBaseUrl().replace(/\/$/u, "")}/`,
   ).toString();
 
@@ -203,6 +162,6 @@ export const getMcpResourceUrls = () =>
 
 export const getMcpProtectedResourceMetadataUrl = (mode: McpMode = "default") =>
   new URL(
-    getMcpModeConfig(mode).discoveryPath,
+    getMcpResourceModeConfig(mode).discoveryPath,
     `${getMcpBaseUrl().replace(/\/$/u, "")}/`,
   ).toString();

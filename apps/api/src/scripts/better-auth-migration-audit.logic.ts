@@ -38,6 +38,35 @@ const ACCOUNT_ISSUERS = {
 } as const;
 
 const TRANSFORMED_ACCOUNT_COLUMNS = new Set(["issuer"]);
+const INTRODUCED_OAUTH_COLUMNS = {
+  oauthAccessToken: new Set([
+    "authorization_code_id",
+    "confirmation",
+    "requested_user_info_claims",
+    "resources",
+    "revoked",
+  ]),
+  oauthClient: new Set([
+    "application_type",
+    "backchannel_logout_session_required",
+    "backchannel_logout_uri",
+    "client_credentials_scopes",
+    "client_discovery_id",
+    "dpop_bound_access_tokens",
+    "jwks",
+    "jwks_uri",
+  ]),
+  oauthConsent: new Set(["requested_user_info_claims", "resources"]),
+  oauthRefreshToken: new Set([
+    "authorization_code_id",
+    "confirmation",
+    "requested_user_info_claims",
+    "resources",
+    "rotated_at",
+    "rotation_replay_expires_at",
+    "rotation_replay_response",
+  ]),
+} as const;
 const MICROSOFT_ACCOUNT_ID_CENSUS_SENTINEL =
   "better-auth-1.7-trusted-microsoft-identity";
 
@@ -74,6 +103,9 @@ type AuthPolicyRule = {
 
 const columnNames = (table: Table) =>
   Object.values(getColumns(table)).map(({ name }) => name);
+
+const preservedColumnNames = (table: Table, introduced: ReadonlySet<string>) =>
+  columnNames(table).filter((column) => !introduced.has(column));
 
 /**
  * Total by construction: adding a table to `authSchema` fails typechecking
@@ -150,14 +182,20 @@ export const AUTH_TABLE_AUDIT_POLICY = {
         referencedModel: "oauthRefreshToken",
       },
     ],
-    preservedColumns: columnNames(authSchema.oauthAccessToken),
+    preservedColumns: preservedColumnNames(
+      authSchema.oauthAccessToken,
+      INTRODUCED_OAUTH_COLUMNS.oauthAccessToken,
+    ),
     tableName: getTableName(authSchema.oauthAccessToken),
   },
   oauthClient: {
     foreignKeys: [
       { column: "user_id", referencedColumn: "id", referencedModel: "user" },
     ],
-    preservedColumns: columnNames(authSchema.oauthClient),
+    preservedColumns: preservedColumnNames(
+      authSchema.oauthClient,
+      INTRODUCED_OAUTH_COLUMNS.oauthClient,
+    ),
     tableName: getTableName(authSchema.oauthClient),
   },
   oauthConsent: {
@@ -169,7 +207,10 @@ export const AUTH_TABLE_AUDIT_POLICY = {
       },
       { column: "user_id", referencedColumn: "id", referencedModel: "user" },
     ],
-    preservedColumns: columnNames(authSchema.oauthConsent),
+    preservedColumns: preservedColumnNames(
+      authSchema.oauthConsent,
+      INTRODUCED_OAUTH_COLUMNS.oauthConsent,
+    ),
     tableName: getTableName(authSchema.oauthConsent),
   },
   oauthRefreshToken: {
@@ -186,13 +227,42 @@ export const AUTH_TABLE_AUDIT_POLICY = {
       },
       { column: "user_id", referencedColumn: "id", referencedModel: "user" },
     ],
-    preservedColumns: columnNames(authSchema.oauthRefreshToken),
+    preservedColumns: preservedColumnNames(
+      authSchema.oauthRefreshToken,
+      INTRODUCED_OAUTH_COLUMNS.oauthRefreshToken,
+    ),
     tableName: getTableName(authSchema.oauthRefreshToken),
   },
   organization: {
     foreignKeys: [],
     preservedColumns: columnNames(authSchema.organization),
     tableName: getTableName(authSchema.organization),
+  },
+  oauthClientAssertion: {
+    foreignKeys: [],
+    preservedColumns: columnNames(authSchema.oauthClientAssertion),
+    tableName: getTableName(authSchema.oauthClientAssertion),
+  },
+  oauthClientResource: {
+    foreignKeys: [
+      {
+        column: "client_id",
+        referencedColumn: "client_id",
+        referencedModel: "oauthClient",
+      },
+      {
+        column: "resource_id",
+        referencedColumn: "identifier",
+        referencedModel: "oauthResource",
+      },
+    ],
+    preservedColumns: columnNames(authSchema.oauthClientResource),
+    tableName: getTableName(authSchema.oauthClientResource),
+  },
+  oauthResource: {
+    foreignKeys: [],
+    preservedColumns: columnNames(authSchema.oauthResource),
+    tableName: getTableName(authSchema.oauthResource),
   },
   session: {
     foreignKeys: [
@@ -236,8 +306,11 @@ const AUTH_BASELINE_DISPOSITION = {
   member: "preserve",
   oauthAccessToken: "preserve",
   oauthClient: "preserve",
+  oauthClientAssertion: "introduced",
+  oauthClientResource: "introduced",
   oauthConsent: "preserve",
   oauthRefreshToken: "preserve",
+  oauthResource: "introduced",
   organization: "preserve",
   session: "preserve",
   twoFactor: "preserve",
@@ -248,12 +321,12 @@ const AUTH_BASELINE_DISPOSITION = {
 const isPreservedDisposition = (value: "introduced" | "preserve") =>
   value === "preserve";
 
-const AUTH_MODEL_NAMES = Object.keys(AUTH_BASELINE_DISPOSITION)
+export const AUTH_BASELINE_MODEL_NAMES = Object.keys(AUTH_BASELINE_DISPOSITION)
   .filter(isAuthModel)
   .filter((model) => isPreservedDisposition(AUTH_BASELINE_DISPOSITION[model]));
 const AUTH_TABLE_POLICIES = Object.values(AUTH_TABLE_AUDIT_POLICY);
 
-const PRESERVED_AUTH_TABLE_NAMES = AUTH_MODEL_NAMES.flatMap((model) =>
+const PRESERVED_AUTH_TABLE_NAMES = AUTH_BASELINE_MODEL_NAMES.flatMap((model) =>
   isAuthModel(model) ? [AUTH_TABLE_AUDIT_POLICY[model].tableName] : [],
 );
 
@@ -340,6 +413,28 @@ const AUTH_ACCESS_POLICY = {
     ],
     tableName: AUTH_TABLE_AUDIT_POLICY.oauthClient.tableName,
   },
+  oauthClientAssertion: {
+    access: "denied",
+    policies: [
+      {
+        command: "ALL",
+        name: "auth_no_stella_access",
+        predicate: "deny",
+      },
+    ],
+    tableName: AUTH_TABLE_AUDIT_POLICY.oauthClientAssertion.tableName,
+  },
+  oauthClientResource: {
+    access: "denied",
+    policies: [
+      {
+        command: "ALL",
+        name: "auth_no_stella_access",
+        predicate: "deny",
+      },
+    ],
+    tableName: AUTH_TABLE_AUDIT_POLICY.oauthClientResource.tableName,
+  },
   oauthConsent: {
     access: "denied",
     policies: [
@@ -361,6 +456,17 @@ const AUTH_ACCESS_POLICY = {
       },
     ],
     tableName: AUTH_TABLE_AUDIT_POLICY.oauthRefreshToken.tableName,
+  },
+  oauthResource: {
+    access: "denied",
+    policies: [
+      {
+        command: "ALL",
+        name: "auth_no_stella_access",
+        predicate: "deny",
+      },
+    ],
+    tableName: AUTH_TABLE_AUDIT_POLICY.oauthResource.tableName,
   },
   organization: {
     access: "scoped",
@@ -424,20 +530,6 @@ const FUTURE_AUTH_TABLES = {
   OAUTH_CLIENT_RESOURCE: "oauth_client_resource",
   OAUTH_RESOURCE: "oauth_resource",
 } as const;
-
-const FUTURE_AUTH_ACCESS_POLICY = Object.values(FUTURE_AUTH_TABLES).map(
-  (tableName) => ({
-    access: "denied" as const,
-    policies: [
-      {
-        command: "ALL" as const,
-        name: "auth_no_stella_access",
-        predicate: "deny" as const,
-      },
-    ],
-    tableName,
-  }),
-);
 
 const POST_BACKFILL_COLUMNS = {
   account: ["issuer"],
@@ -1297,9 +1389,12 @@ const foreignKeysValidatedStatement = sql`
 `;
 
 const accessBoundariesStatement = (includeFutureTables: boolean) => {
-  const policies: readonly AuthAccessPolicy[] = includeFutureTables
-    ? [...Object.values(AUTH_ACCESS_POLICY), ...FUTURE_AUTH_ACCESS_POLICY]
-    : Object.values(AUTH_ACCESS_POLICY);
+  const policies: readonly AuthAccessPolicy[] = Object.values(
+    AUTH_ACCESS_POLICY,
+  ).filter(
+    ({ tableName }) =>
+      includeFutureTables || PRESERVED_AUTH_TABLE_NAMES.includes(tableName),
+  );
   const expectedTables = policies.map(
     ({ access, tableName }) => sql`(${tableName}::text, ${access}::text)`,
   );
@@ -1956,7 +2051,7 @@ const readAuthCensus = async (
   ): Promise<
     Result<BetterAuthAuditBaseline["tables"], BetterAuthAuditError>
   > => {
-    const model = AUTH_MODEL_NAMES.at(index);
+    const model = AUTH_BASELINE_MODEL_NAMES.at(index);
     if (model === undefined) {
       return Result.ok(entries);
     }
@@ -2019,10 +2114,10 @@ const createBaseline = (
 const emptyBaseline = (): BetterAuthAuditBaseline =>
   createBaseline(
     Object.fromEntries(
-      Object.entries(AUTH_TABLE_AUDIT_POLICY).map(([model, policy]) => [
+      AUTH_BASELINE_MODEL_NAMES.map((model) => [
         model,
         {
-          preservedColumns: policy.preservedColumns,
+          preservedColumns: AUTH_TABLE_AUDIT_POLICY[model].preservedColumns,
           primaryKeyDigest: "",
           rowContentDigest: "",
           rowCount: "0",
@@ -2082,7 +2177,13 @@ export const runBetterAuthMigrationAudit = async ({
     return tables;
   }
 
-  const currentSchemaComplete = AUTH_TABLE_POLICIES.every(({ tableName }) =>
+  const requiredTablePolicies =
+    mode === BETTER_AUTH_AUDIT_MODES.PRE_MIGRATION
+      ? AUTH_TABLE_POLICIES.filter(({ tableName }) =>
+          PRESERVED_AUTH_TABLE_NAMES.includes(tableName),
+        )
+      : AUTH_TABLE_POLICIES;
+  const currentSchemaComplete = requiredTablePolicies.every(({ tableName }) =>
     tables.value.has(tableName),
   );
   checks.push(
@@ -2368,7 +2469,7 @@ export const runBetterAuthMigrationAudit = async ({
   } else {
     const preserved =
       baseline !== null &&
-      AUTH_MODEL_NAMES.every((model) => {
+      AUTH_BASELINE_MODEL_NAMES.every((model) => {
         const expected = baseline.tables[model];
         const actual = census.value[model];
         return (
@@ -2447,7 +2548,10 @@ const betterAuthAuditBaselineSchema: v.GenericSchema<
   }),
   tables: v.strictObject(
     Object.fromEntries(
-      AUTH_MODEL_NAMES.map((model) => [model, tableCensusSchema(model)]),
+      AUTH_BASELINE_MODEL_NAMES.map((model) => [
+        model,
+        tableCensusSchema(model),
+      ]),
     ),
   ),
 });

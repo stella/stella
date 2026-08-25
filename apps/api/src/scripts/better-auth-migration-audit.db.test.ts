@@ -53,17 +53,18 @@ test("pre-migration audit is repeatable and rejects ownership corruption and an 
       const userId = `audit-user-${suffix}`;
       const accountId = `audit-account-${suffix}`;
       const sessionId = `audit-session-${suffix}`;
+      await transaction.execute(sql`
+        ALTER TABLE account ALTER COLUMN issuer DROP NOT NULL
+      `);
       await transaction.insert(user).values({
         id: userId,
         email: `audit-${suffix}@example.invalid`,
         name: "Audit fixture",
       });
-      await transaction.insert(account).values({
-        id: accountId,
-        accountId: userId,
-        providerId: "credential",
-        userId,
-      });
+      await transaction.execute(sql`
+        INSERT INTO account (id, account_id, provider_id, user_id, updated_at)
+        VALUES (${accountId}, ${userId}, 'credential', ${userId}, now())
+      `);
       await transaction.insert(session).values({
         id: sessionId,
         expiresAt: new Date(Date.now() + 60_000),
@@ -240,16 +241,15 @@ test("census crosses page boundaries with stable database-native ordering", asyn
 test("post phases require resource links, final constraints, and the exact baseline row set", async () => {
   try {
     await database.transaction(async (transaction) => {
-      const migration = await Bun.file(
-        new URL(
-          "../../drizzle/20260825140000_better_auth_17_additive/migration.sql",
-          import.meta.url,
-        ),
-      ).text();
-      for (const statement of migration.split("--> statement-breakpoint")) {
-        // eslint-disable-next-line no-await-in-loop -- migration statements must execute in committed order on one transaction
-        await transaction.execute(sql.raw(statement));
-      }
+      // The shared schema is the final 1.7 shape. Recreate the additive bridge
+      // state inside this rollback-only transaction before exercising each
+      // audit phase.
+      await transaction.execute(sql`
+        ALTER TABLE account ALTER COLUMN issuer DROP NOT NULL
+      `);
+      await transaction.execute(sql`
+        DROP INDEX IF EXISTS account_issuer_account_id_uidx
+      `);
 
       const suffix = Bun.randomUUIDv7();
       const userId = `audit-post-user-${suffix}`;
@@ -266,18 +266,12 @@ test("post phases require resource links, final constraints, and the exact basel
         email: `audit-post-${suffix}@example.invalid`,
         name: "Audit post fixture",
       });
-      await transaction.insert(account).values({
-        id: accountRowId,
-        accountId: userId,
-        providerId: "credential",
-        userId,
-      });
-      await transaction.insert(account).values({
-        id: microsoftAccountRowId,
-        accountId: microsoftLegacySub,
-        providerId: "microsoft",
-        userId,
-      });
+      await transaction.execute(sql`
+        INSERT INTO account (id, account_id, provider_id, user_id, updated_at)
+        VALUES
+          (${accountRowId}, ${userId}, 'credential', ${userId}, now()),
+          (${microsoftAccountRowId}, ${microsoftLegacySub}, 'microsoft', ${userId}, now())
+      `);
       await transaction.execute(
         sql`UPDATE account SET issuer = 'local:credential' WHERE id = ${accountRowId}`,
       );
@@ -486,7 +480,7 @@ test("post phases require resource links, final constraints, and the exact basel
 
       await transaction.execute(sql`
         ALTER TABLE oauth_client_resource
-          DROP CONSTRAINT oauth_client_resource_client_id_oauth_client_client_id_fk,
+          DROP CONSTRAINT oauth_client_resource_client_id_oauth_client_client_id_fkey,
           ADD CONSTRAINT oauth_client_resource_resource_duplicate_fk
             FOREIGN KEY (resource_id) REFERENCES oauth_resource(identifier)
       `);
@@ -506,7 +500,7 @@ test("post phases require resource links, final constraints, and the exact basel
       await transaction.execute(sql`
         ALTER TABLE oauth_client_resource
           DROP CONSTRAINT oauth_client_resource_resource_duplicate_fk,
-          ADD CONSTRAINT oauth_client_resource_client_id_oauth_client_client_id_fk
+          ADD CONSTRAINT oauth_client_resource_client_id_oauth_client_client_id_fkey
             FOREIGN KEY (client_id) REFERENCES oauth_client(client_id)
             ON DELETE CASCADE
       `);

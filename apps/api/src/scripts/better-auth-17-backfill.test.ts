@@ -11,6 +11,8 @@ test("the Better Auth backfill requires private evidence, a bound, and an explic
       "/private/identity-map.json",
       "--batch-size",
       "500",
+      "--oauth-base-url",
+      "https://api.stll.app/",
       "--writes-frozen",
     ]),
   ).toMatchObject({
@@ -19,6 +21,7 @@ test("the Better Auth backfill requires private evidence, a bound, and an explic
       baselinePath: "/private/baseline.json",
       batchSize: 500,
       identityMapPath: "/private/identity-map.json",
+      oauthBaseUrl: "https://api.stll.app",
     },
   });
 
@@ -31,6 +34,8 @@ test("the Better Auth backfill requires private evidence, a bound, and an explic
       "map",
       "--batch-size",
       "0",
+      "--oauth-base-url",
+      "https://api.stll.app",
       "--writes-frozen",
     ],
     [
@@ -40,9 +45,22 @@ test("the Better Auth backfill requires private evidence, a bound, and an explic
       "map",
       "--batch-size",
       "1001",
+      "--oauth-base-url",
+      "https://api.stll.app",
       "--writes-frozen",
     ],
     ["--baseline", "baseline", "--identity-map", "map", "--batch-size", "500"],
+    [
+      "--baseline",
+      "baseline",
+      "--identity-map",
+      "map",
+      "--batch-size",
+      "500",
+      "--oauth-base-url",
+      "https://api.stll.app/path",
+      "--writes-frozen",
+    ],
   ]) {
     expect(parseBetterAuthBackfillArgs(args).status).toBe("error");
   }

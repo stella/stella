@@ -1,7 +1,7 @@
 /**
  * Usage:
- *   bun src/scripts/better-auth-migration-audit.ts pre-migration --baseline <path> --identity-map <path>
- *   bun src/scripts/better-auth-migration-audit.ts <post-mode> --baseline <path>
+ *   bun src/scripts/better-auth-migration-audit.ts pre-migration --baseline <path> --identity-map <path> --oauth-base-url <https-origin>
+ *   bun src/scripts/better-auth-migration-audit.ts <post-mode> --baseline <path> --oauth-base-url <https-origin>
  *
  * The baseline belongs on the rehearsal task's private tmpfs. It contains
  * auth-table counts and primary-key digests, and must never be uploaded as an
@@ -17,6 +17,10 @@ import { open, writeFile } from "node:fs/promises";
 
 import { hasSecureDatabaseTransport, resolveDatabaseUrl } from "@/api/db-url";
 import { isRecord } from "@/api/lib/type-guards";
+import {
+  buildBetterAuthOAuthResources,
+  normalizeBetterAuthOAuthBaseUrl,
+} from "@/api/mcp/resource-policy-contract";
 import {
   BETTER_AUTH_AUDIT_MODES,
   BetterAuthAuditError,
@@ -41,7 +45,7 @@ const TRANSACTION_TIMEOUT = "60s";
 const LOCK_TIMEOUT = "2s";
 const MAX_TRUSTED_IDENTITY_MAP_BYTES = 16 * 1024 * 1024;
 
-class BetterAuthAuditCommandError extends TaggedError(
+export class BetterAuthAuditCommandError extends TaggedError(
   "BetterAuthAuditCommandError",
 )<{
   code:
@@ -58,6 +62,7 @@ type BetterAuthAuditCommandArgs =
       baselinePath: string;
       identityMapPath: string;
       mode: typeof BETTER_AUTH_AUDIT_MODES.PRE_MIGRATION;
+      oauthBaseUrl: string;
     }
   | {
       baselinePath: string;
@@ -65,6 +70,7 @@ type BetterAuthAuditCommandArgs =
         BetterAuthAuditMode,
         typeof BETTER_AUTH_AUDIT_MODES.PRE_MIGRATION
       >;
+      oauthBaseUrl: string;
     };
 
 const isAuditMode = (value: string): value is BetterAuthAuditMode =>
@@ -76,12 +82,18 @@ export const parseBetterAuthAuditArgs = (
   const mode = args.at(0);
   const baselineFlag = args.at(1);
   const baselinePath = args.at(2);
+  const oauthBaseUrlFlag = args.at(
+    mode === BETTER_AUTH_AUDIT_MODES.PRE_MIGRATION ? 5 : 3,
+  );
+  const oauthBaseUrl = args.at(
+    mode === BETTER_AUTH_AUDIT_MODES.PRE_MIGRATION ? 6 : 4,
+  );
   const invalidArguments = () =>
     Result.err(
       new BetterAuthAuditCommandError({
         code: "invalid-arguments",
         message:
-          "Usage: better-auth-migration-audit pre-migration --baseline <private-path> --identity-map <private-path> | <post-backfill|post-migration> --baseline <private-path>",
+          "Usage: better-auth-migration-audit pre-migration --baseline <private-path> --identity-map <private-path> --oauth-base-url <https-url> | <post-backfill|post-migration> --baseline <private-path> --oauth-base-url <https-url>",
       }),
     );
   if (
@@ -89,8 +101,14 @@ export const parseBetterAuthAuditArgs = (
     !isAuditMode(mode) ||
     baselineFlag !== "--baseline" ||
     baselinePath === undefined ||
-    baselinePath.length === 0
+    baselinePath.length === 0 ||
+    oauthBaseUrlFlag !== "--oauth-base-url" ||
+    oauthBaseUrl === undefined
   ) {
+    return invalidArguments();
+  }
+  const normalizedOAuthBaseUrl = normalizeBetterAuthOAuthBaseUrl(oauthBaseUrl);
+  if (normalizedOAuthBaseUrl === null) {
     return invalidArguments();
   }
   if (mode === BETTER_AUTH_AUDIT_MODES.PRE_MIGRATION) {
@@ -99,12 +117,21 @@ export const parseBetterAuthAuditArgs = (
     return identityMapFlag === "--identity-map" &&
       identityMapPath !== undefined &&
       identityMapPath.length > 0 &&
-      args.length === 5
-      ? Result.ok({ baselinePath, identityMapPath, mode })
+      args.length === 7
+      ? Result.ok({
+          baselinePath,
+          identityMapPath,
+          mode,
+          oauthBaseUrl: normalizedOAuthBaseUrl,
+        })
       : invalidArguments();
   }
-  return args.length === 3
-    ? Result.ok({ baselinePath, mode })
+  return args.length === 5
+    ? Result.ok({
+        baselinePath,
+        mode,
+        oauthBaseUrl: normalizedOAuthBaseUrl,
+      })
     : invalidArguments();
 };
 
@@ -278,12 +305,9 @@ const run = async (
     );
   }
 
-  // Load runtime OAuth policy only after command validation. Its MCP URL source
-  // owns environment initialization, while this module is also imported by
-  // argument/parser tests that must remain side-effect free.
-  const { getBetterAuthOAuthResources } =
-    await import("@/api/lib/oauth-resource-policy");
-  const expectedOAuthResources = getBetterAuthOAuthResources();
+  const expectedOAuthResources = buildBetterAuthOAuthResources(
+    parsed.value.oauthBaseUrl,
+  );
   const client = new SQL({ url: databaseUrl, max: 1 });
   const database = drizzle({ client });
   const executed = await Result.tryPromise({

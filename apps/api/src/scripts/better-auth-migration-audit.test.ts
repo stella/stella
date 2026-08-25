@@ -11,6 +11,7 @@ import {
 } from "@/api/scripts/better-auth-migration-audit";
 import {
   AUTH_TABLE_AUDIT_POLICY,
+  AUTH_BASELINE_MODEL_NAMES,
   BETTER_AUTH_AUDIT_CHECKS,
   BETTER_AUTH_AUDIT_MODES,
   parseBetterAuthAuditBaseline,
@@ -42,10 +43,10 @@ const baselinePayload = () => ({
     resourceCount: "3",
   },
   tables: Object.fromEntries(
-    Object.entries(AUTH_TABLE_AUDIT_POLICY).map(([model, policy]) => [
+    AUTH_BASELINE_MODEL_NAMES.map((model) => [
       model,
       {
-        preservedColumns: [...policy.preservedColumns],
+        preservedColumns: [...AUTH_TABLE_AUDIT_POLICY[model].preservedColumns],
         primaryKeyDigest: "a".repeat(64),
         rowContentDigest: "b".repeat(64),
         rowCount: "7",
@@ -77,6 +78,8 @@ describe("Better Auth migration audit command", () => {
         "/private/baseline.json",
         "--identity-map",
         "/private/identity-map.json",
+        "--oauth-base-url",
+        "https://api.stll.app",
       ]),
     ).toMatchObject({
       status: "ok",
@@ -84,6 +87,7 @@ describe("Better Auth migration audit command", () => {
         baselinePath: "/private/baseline.json",
         identityMapPath: "/private/identity-map.json",
         mode: BETTER_AUTH_AUDIT_MODES.PRE_MIGRATION,
+        oauthBaseUrl: "https://api.stll.app",
       },
     });
     expect(
@@ -91,6 +95,8 @@ describe("Better Auth migration audit command", () => {
         BETTER_AUTH_AUDIT_MODES.POST_BACKFILL,
         "--baseline",
         "/private/baseline.json",
+        "--oauth-base-url",
+        "https://api.stll.app/",
       ]).status,
     ).toBe("ok");
     for (const args of [
@@ -107,6 +113,20 @@ describe("Better Auth migration audit command", () => {
         "",
       ],
       [BETTER_AUTH_AUDIT_MODES.PRE_MIGRATION, "--baseline", "x", "extra"],
+      [
+        BETTER_AUTH_AUDIT_MODES.POST_BACKFILL,
+        "--baseline",
+        "x",
+        "--oauth-base-url",
+        "http://api.stll.app",
+      ],
+      [
+        BETTER_AUTH_AUDIT_MODES.POST_BACKFILL,
+        "--baseline",
+        "x",
+        "--oauth-base-url",
+        "https://api.stll.app/auth",
+      ],
     ]) {
       expect(parseBetterAuthAuditArgs(args).status).toBe("error");
     }

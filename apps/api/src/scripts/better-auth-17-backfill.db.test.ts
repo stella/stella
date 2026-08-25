@@ -3,6 +3,7 @@ import { eq, sql, TransactionRollbackError } from "drizzle-orm";
 
 import { account, oauthClient, user } from "@/api/db/auth-schema";
 import { runBetterAuth17Backfill } from "@/api/scripts/better-auth-17-backfill.logic";
+import type { BetterAuthBackfillTransaction } from "@/api/scripts/better-auth-17-backfill.logic";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 
@@ -45,31 +46,25 @@ test("the Better Auth bridge backfill is exact, bounded, and reaches a fixed poi
         "https://login.microsoftonline.com/3a893563-0d4e-4309-9a31-b6e4e9f64479/v2.0";
       const clientId = `backfill-client-${suffix}`;
 
+      // The shared test schema represents the final 1.7 state. Relax only the
+      // final constraint inside this rollback-only transaction to recreate the
+      // additive bridge state the backfill consumes.
+      await transaction.execute(sql`
+        ALTER TABLE account ALTER COLUMN issuer DROP NOT NULL
+      `);
+
       await transaction.insert(user).values({
         email: `backfill-${suffix}@example.invalid`,
         id: userId,
         name: "Backfill fixture",
       });
-      await transaction.insert(account).values([
-        {
-          accountId: userId,
-          id: credentialRowId,
-          providerId: "credential",
-          userId,
-        },
-        {
-          accountId: `google-sub-${suffix}`,
-          id: googleRowId,
-          providerId: "google",
-          userId,
-        },
-        {
-          accountId: microsoftLegacySub,
-          id: microsoftRowId,
-          providerId: "microsoft",
-          userId,
-        },
-      ]);
+      await transaction.execute(sql`
+        INSERT INTO account (id, account_id, provider_id, user_id, updated_at)
+        VALUES
+          (${credentialRowId}, ${userId}, 'credential', ${userId}, now()),
+          (${googleRowId}, ${`google-sub-${suffix}`}, 'google', ${userId}, now()),
+          (${microsoftRowId}, ${microsoftLegacySub}, 'microsoft', ${userId}, now())
+      `);
       await transaction.insert(oauthClient).values({
         clientId,
         grantTypes: ["client_credentials"],
@@ -80,22 +75,9 @@ test("the Better Auth bridge backfill is exact, bounded, and reaches a fixed poi
         type: "web",
       });
 
-      const migration = await Bun.file(
-        new URL(
-          "../../drizzle/20260825140000_better_auth_17_additive/migration.sql",
-          import.meta.url,
-        ),
-      ).text();
-      for (const statement of migration.split("--> statement-breakpoint")) {
-        // eslint-disable-next-line no-await-in-loop -- migration order is part of this bridge contract
-        await transaction.execute(sql.raw(statement));
-      }
-
       const backfillDatabase = {
         transaction: async <T>(
-          callback: (nested: {
-            execute: typeof transaction.execute;
-          }) => Promise<T>,
+          callback: (nested: BetterAuthBackfillTransaction) => Promise<T>,
         ) =>
           await transaction.transaction(
             async (nested) =>

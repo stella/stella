@@ -66,7 +66,8 @@ RUN bun build \
 # report. Run on the isolated clone task with command override:
 #   ["bun", "/app/better-auth-migration-audit.js", "pre-migration",
 #    "--baseline", "/tmp/better-auth-baseline.json", "--identity-map",
-#    "/tmp/better-auth-identity-map.json"]
+#    "/tmp/better-auth-identity-map.json", "--oauth-base-url",
+#    "https://api.stll.app"]
 RUN bun build \
     --target bun \
     --outfile /app/better-auth-migration-audit.js \

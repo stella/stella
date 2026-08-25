@@ -645,7 +645,7 @@ export const runBetterAuth17Backfill = async ({
   return await runBackfillTransaction(database, async (transaction) => {
     const locked = await lockBetterAuth17BackfillTables(transaction);
     if (Result.isError(locked)) {
-      return locked;
+      return Result.err(locked.error);
     }
     return await runBetterAuth17BackfillInTransaction({
       batchSize,
