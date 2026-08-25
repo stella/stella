@@ -2,7 +2,10 @@ import { describe, expect, test } from "bun:test";
 
 import {
   createReviewBasis,
+  customPerspectiveInput,
+  isSamePerspective,
   NEUTRAL_PERSPECTIVE,
+  perspectiveFromBasis,
   playbookIdFromBasis,
   referencesFromBasis,
 } from "@/components/ai-suggestions/document-review-basis.logic";
@@ -96,5 +99,36 @@ describe("document review basis", () => {
     expect(
       referencesFromBasis({ type: "playbook", playbookId: "playbook-1" }),
     ).toEqual([]);
+  });
+
+  test("projects a playbook-only review to the neutral perspective", () => {
+    expect(
+      perspectiveFromBasis({ type: "playbook", playbookId: "playbook-1" }),
+    ).toEqual(NEUTRAL_PERSPECTIVE);
+  });
+
+  test("compares neutral and party perspectives at their exact boundaries", () => {
+    const buyer = { type: "party", role: "Buyer", name: null } as const;
+
+    expect(isSamePerspective(NEUTRAL_PERSPECTIVE, NEUTRAL_PERSPECTIVE)).toBe(
+      true,
+    );
+    expect(isSamePerspective(NEUTRAL_PERSPECTIVE, buyer)).toBe(false);
+    expect(isSamePerspective(buyer, NEUTRAL_PERSPECTIVE)).toBe(false);
+    expect(isSamePerspective(buyer, buyer)).toBe(true);
+    expect(isSamePerspective(buyer, { ...buyer, name: "Northwind GmbH" })).toBe(
+      false,
+    );
+  });
+
+  test("preserves editable spaces while normalising a custom perspective", () => {
+    expect(customPerspectiveInput("Purchaser ")).toEqual({
+      rawRole: "Purchaser ",
+      perspective: { type: "party", role: "Purchaser", name: null },
+    });
+    expect(customPerspectiveInput("   ")).toEqual({
+      rawRole: "   ",
+      perspective: NEUTRAL_PERSPECTIVE,
+    });
   });
 });

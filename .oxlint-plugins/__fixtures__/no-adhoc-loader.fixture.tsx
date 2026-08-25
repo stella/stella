@@ -15,6 +15,8 @@ export const AdhocLoaderFixture = ({ busy }: { busy: boolean }) => (
     <div className={busy ? "bg-muted h-4 animate-pulse" : "h-4"} />
     {/* oxlint-disable-next-line no-adhoc-loader/no-adhoc-loader */}
     <div role="progressbar" />
+    {/* oxlint-disable-next-line no-adhoc-loader/no-adhoc-loader */}
+    <div role={"progressbar"} />
 
     <Loader label="Loading" size="sm" />
     <LoaderState label="Review in progress" />

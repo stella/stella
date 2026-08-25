@@ -37,6 +37,9 @@ const fileContent = (mimeType: string) => ({
 const workspaceId = toSafeId<"workspace">(
   "00000000-0000-0000-0000-000000000009",
 );
+const otherWorkspaceId = toSafeId<"workspace">(
+  "00000000-0000-0000-0000-000000000010",
+);
 
 const entityRows = (referenceMimeType: string = DOCX_MIME_TYPE) => [
   {
@@ -135,6 +138,23 @@ describe("document review selection", () => {
       message: "Document not found",
     });
     expect(mismatchedField.error).toMatchObject({
+      status: 404,
+      message: "Document not found",
+    });
+  });
+
+  test("rejects a reference whose claimed workspace does not own its entity", () => {
+    const result = resolveReviewSelection({
+      target,
+      references: [{ ...reference, workspaceId: otherWorkspaceId }],
+      entities: entityRows(),
+    });
+
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isOk(result)) {
+      return;
+    }
+    expect(result.error).toMatchObject({
       status: 404,
       message: "Document not found",
     });

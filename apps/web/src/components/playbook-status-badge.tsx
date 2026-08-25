@@ -4,11 +4,7 @@ import { cn } from "@stll/ui/utils";
 
 import type { PlaybookListItem } from "@/lib/knowledge/playbook-types";
 
-export const PlaybookStatusBadge = ({
-  status,
-}: {
-  status: PlaybookListItem["status"];
-}) => {
+export const PlaybookStatusBadge = ({ status }: Props) => {
   const t = useTranslations();
   const approved = status === "approved";
   return (
@@ -25,4 +21,8 @@ export const PlaybookStatusBadge = ({
         : t("knowledge.playbooks.approval.statusDraft")}
     </span>
   );
+};
+
+type Props = {
+  status: PlaybookListItem["status"];
 };

@@ -9,6 +9,7 @@
  *  - the per-kind outcome vocabularies staying unmerged.
  */
 
+import { panic } from "better-result";
 import {
   afterAll,
   beforeAll,
@@ -17,13 +18,19 @@ import {
   setDefaultTimeout,
   test,
 } from "bun:test";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
+import nodePath from "node:path";
 
 import type { Transaction } from "@/api/db/root";
 import { documentReviewFindings, documentReviewRuns } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { carryOverDecisions } from "@/api/lib/document-review/decision-carry-over";
+import {
+  buildDocumentReviewFindingRow,
+  recountDocumentReviewFindingProgress,
+  upsertDocumentReviewFindings,
+} from "@/api/lib/document-review/finding-write";
 import type {
   DocumentReviewDecision,
   DocumentReviewFindingPayload,
@@ -31,6 +38,7 @@ import type {
   DocumentReviewRunStatus,
 } from "@/api/lib/document-review/run-contract";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { installPgliteMigration } from "@/api/tests/pglite-schema";
 import {
   getRlsFixture,
   releaseRlsFixture,
@@ -42,6 +50,11 @@ setDefaultTimeout(120_000);
 
 let testDb: TestDatabase;
 let ids: TestIds;
+
+const ROLLING_BASIS_BRIDGE_MIGRATION = nodePath.resolve(
+  import.meta.dir,
+  "../../../drizzle/20260825123100_document_review_rolling_basis_bridge/migration.sql",
+);
 
 const seededRunIds: SafeId<"documentReviewRun">[] = [];
 
@@ -140,12 +153,17 @@ const violationText = (error: unknown): string => {
 const ACTIVE_RUN_INDEX = "document_review_runs_active_document_uidx";
 const FINDING_OUTCOME_CHECK = "document_review_findings_outcome_check";
 const DECISION_TIMING_CHECK = "document_review_findings_decision_timing_check";
+const APPLICATION_TIMING_CHECK =
+  "document_review_findings_application_timing_check";
 
-const referencePayload = (text: string): ReferenceFindingPayload => ({
+const referencePayload = (
+  text: string,
+  topicId: string = TOPIC_ID,
+): ReferenceFindingPayload => ({
   checkKind: "reference",
   finding: {
-    findingId: `reference-${TOPIC_ID}`,
-    topicId: TOPIC_ID,
+    findingId: `reference-${topicId}`,
+    topicId,
     issue: "Governing law",
     assessment: "different",
     consensus: "single",
@@ -182,10 +200,12 @@ const seedRun = async ({
   runId,
   status,
   target,
+  total = 1,
 }: {
   runId: SafeId<"documentReviewRun">;
   status: DocumentReviewRunStatus;
   target: ReviewTarget;
+  total?: number;
 }): Promise<void> => {
   seededRunIds.push(runId);
   await testDb.insert(documentReviewRuns).values({
@@ -207,7 +227,7 @@ const seedRun = async ({
       },
     ],
     status,
-    total: 1,
+    total,
     requestedBy: ids.userA1,
     ...(status === "running" ? { startedAt: new Date() } : {}),
   });
@@ -261,6 +281,10 @@ beforeAll(async () => {
   const fixture = await getRlsFixture();
   testDb = fixture.testDb;
   ids = fixture.ids;
+  await installPgliteMigration({
+    db: testDb,
+    migrationPath: ROLLING_BASIS_BRIDGE_MIGRATION,
+  });
 });
 
 afterAll(async () => {
@@ -351,6 +375,73 @@ describe("document review run persistence", () => {
         text: "Replayed pass",
       });
     }
+  });
+
+  test("recounts durable progress after interleaved pass commits", async () => {
+    const target = reviewTarget();
+    const runId = toSafeId<"documentReviewRun">(Bun.randomUUIDv7());
+    await seedRun({ runId, status: "running", target, total: 2 });
+    const topicIds = [
+      "55555555-5555-4555-8555-555555555551",
+      "55555555-5555-4555-8555-555555555552",
+    ];
+    const rows = topicIds.map((topicId, index) =>
+      buildDocumentReviewFindingRow({
+        organizationId: ids.orgA,
+        workspaceId: ids.wsA1,
+        runId,
+        entityId: target.entityId,
+        fileFieldId: target.fileFieldId,
+        entityVersionId: target.entityVersionId,
+        topicId,
+        topicTitle: `Concurrent topic ${index + 1}`,
+        positionId: null,
+        payload: referencePayload(`Concurrent pass ${index + 1}`, topicId),
+      }),
+    );
+
+    await Promise.all(
+      rows.map(async (row) => {
+        await testDb.transaction(
+          async (tx) =>
+            await upsertDocumentReviewFindings(asTestRaw<Transaction>(tx), [
+              row,
+            ]),
+        );
+        // Deterministically model the lost-count result: each overlapping
+        // pass observed only its own row when it wrote intermediate progress.
+        await testDb
+          .update(documentReviewRuns)
+          .set({ completed: 1 })
+          .where(eq(documentReviewRuns.id, runId));
+      }),
+    );
+
+    const beforeRecount = await testDb
+      .select({ completed: documentReviewRuns.completed })
+      .from(documentReviewRuns)
+      .where(eq(documentReviewRuns.id, runId));
+    const committed = await testDb
+      .select({ id: documentReviewFindings.id })
+      .from(documentReviewFindings)
+      .where(eq(documentReviewFindings.runId, runId));
+    expect(committed).toHaveLength(2);
+    expect(beforeRecount.at(0)?.completed).toBe(1);
+
+    await testDb.transaction(
+      async (tx) =>
+        await recountDocumentReviewFindingProgress({
+          tx: asTestRaw<Transaction>(tx),
+          workspaceId: ids.wsA1,
+          runId,
+        }),
+    );
+
+    const afterRecount = await testDb
+      .select({ completed: documentReviewRuns.completed })
+      .from(documentReviewRuns)
+      .where(eq(documentReviewRuns.id, runId));
+    expect(afterRecount.at(0)?.completed).toBe(2);
   });
 
   test("keeps the two outcome vocabularies apart", async () => {
@@ -486,6 +577,155 @@ describe("document review run persistence", () => {
     ).toContain(DECISION_TIMING_CHECK);
 
     await insertDecision({ decision: "dismissed", decidedAt: new Date() });
+  });
+
+  test("normalizes a v1 basis inserted after the migration backfill", async () => {
+    const target = reviewTarget();
+    const runId = toSafeId<"documentReviewRun">(Bun.randomUUIDv7());
+    seededRunIds.push(runId);
+    const legacyReferences = [
+      {
+        entityId: toSafeId<"entity">(Bun.randomUUIDv7()),
+        fileFieldId: toSafeId<"field">(Bun.randomUUIDv7()),
+        entityVersionId: toSafeId<"entityVersion">(Bun.randomUUIDv7()),
+        contentSha256: "c".repeat(64),
+        name: "First legacy precedent",
+      },
+      {
+        entityId: toSafeId<"entity">(Bun.randomUUIDv7()),
+        fileFieldId: toSafeId<"field">(Bun.randomUUIDv7()),
+        entityVersionId: toSafeId<"entityVersion">(Bun.randomUUIDv7()),
+        contentSha256: "d".repeat(64),
+        name: "Second legacy precedent",
+      },
+    ];
+    const legacyBasis = {
+      type: "references",
+      references: legacyReferences,
+    };
+    const topics = [
+      {
+        type: "reference",
+        topicId: TOPIC_ID,
+        title: "Governing law",
+        context: "",
+        included: true,
+      },
+    ];
+
+    await testDb.execute(sql`
+      INSERT INTO "document_review_runs" (
+        "id",
+        "organization_id",
+        "workspace_id",
+        "entity_id",
+        "file_field_id",
+        "entity_version_id",
+        "content_sha256",
+        "basis",
+        "topics",
+        "status",
+        "total",
+        "requested_by"
+      ) VALUES (
+        ${runId},
+        ${ids.orgA},
+        ${ids.wsA1},
+        ${target.entityId},
+        ${target.fileFieldId},
+        ${target.entityVersionId},
+        ${CONTENT_SHA256},
+        ${JSON.stringify(legacyBasis)}::text::jsonb,
+        ${JSON.stringify(topics)}::text::jsonb,
+        'queued',
+        1,
+        ${ids.userA1}
+      )
+    `);
+
+    const rows = await testDb
+      .select({ basis: documentReviewRuns.basis })
+      .from(documentReviewRuns)
+      .where(eq(documentReviewRuns.id, runId));
+    const basis = rows.at(0)?.basis;
+    expect(basis?.type).toBe("references");
+    if (basis?.type !== "references") {
+      panic("The v1 reference basis was not normalized");
+    }
+    expect(basis.perspective).toEqual({ type: "neutral" });
+    expect(basis.references).toEqual(
+      legacyReferences.map((reference) => ({
+        entityId: reference.entityId,
+        fileFieldId: reference.fileFieldId,
+        entityVersionId: reference.entityVersionId,
+        contentSha256: reference.contentSha256,
+        name: reference.name,
+        workspaceId: ids.wsA1,
+        workspaceName: expect.any(String),
+      })),
+    );
+  });
+
+  test("keeps an applied edit and its moment inseparable", async () => {
+    const target = reviewTarget();
+    const runId = toSafeId<"documentReviewRun">(Bun.randomUUIDv7());
+    await seedRun({ runId, status: "running", target });
+
+    const payload = referencePayload("application probe");
+    payload.finding.fix = {
+      kind: "replaceBlock",
+      blockId: "para-7",
+      text: "English law governs.",
+    };
+    const insertApplication = async ({
+      applicationStatus,
+      appliedAt,
+    }: {
+      applicationStatus: "pending" | "applied";
+      appliedAt: Date | null;
+    }): Promise<void> => {
+      await testDb.insert(documentReviewFindings).values({
+        id: toSafeId<"documentReviewFinding">(Bun.randomUUIDv7()),
+        organizationId: ids.orgA,
+        workspaceId: ids.wsA1,
+        runId,
+        entityId: target.entityId,
+        fileFieldId: target.fileFieldId,
+        entityVersionId: target.entityVersionId,
+        topicId: Bun.randomUUIDv7(),
+        topicTitle: "Governing law",
+        checkKind: "reference",
+        positionId: null,
+        outcome: payload.finding.assessment,
+        payload,
+        applicationStatus,
+        appliedBy: ids.userA1,
+        appliedAt,
+      });
+    };
+
+    expect(
+      violationText(
+        await rejectionOf(
+          insertApplication({ applicationStatus: "applied", appliedAt: null }),
+        ),
+      ),
+    ).toContain(APPLICATION_TIMING_CHECK);
+    expect(
+      violationText(
+        await rejectionOf(
+          insertApplication({
+            applicationStatus: "pending",
+            appliedAt: new Date(),
+          }),
+        ),
+      ),
+    ).toContain(APPLICATION_TIMING_CHECK);
+
+    await insertApplication({
+      applicationStatus: "applied",
+      appliedAt: new Date(),
+    });
   });
 
   /**

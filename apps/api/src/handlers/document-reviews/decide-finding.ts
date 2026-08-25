@@ -16,12 +16,15 @@ import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
-import { DOCUMENT_REVIEW_DECISION } from "@/api/lib/document-review/run-contract";
+import {
+  DOCUMENT_REVIEW_APPLICATION_STATUS,
+  DOCUMENT_REVIEW_DECISION,
+} from "@/api/lib/document-review/run-contract";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
   description:
-    "Record a reviewer's decision on one review finding: accept it, dismiss it, or reopen it for review.",
+    "Record a reviewer's decision on one review finding and, when requested, the durable application of its proposed edit.",
   permissions: { workspace: ["read"] },
   // A disposition is a durable judgment on the workspace's review record, so
   // it must never be reachable through a read-only consent even though the
@@ -42,9 +45,12 @@ const decideDocumentReviewFinding = createSafeHandler(
     user,
     workspaceId,
   }) {
-    const { decision } = body;
+    const { applicationStatus, decision } = body;
+    const recordsApplication =
+      applicationStatus === DOCUMENT_REVIEW_APPLICATION_STATUS.APPLIED;
     const reopening = decision === DOCUMENT_REVIEW_DECISION.OPEN;
-    const decidedAt = reopening ? null : new Date();
+    const now = new Date();
+    const decidedAt = reopening ? null : now;
     const decidedBy = reopening ? null : user.id;
 
     const decided = yield* Result.await(
@@ -56,7 +62,13 @@ const decideDocumentReviewFinding = createSafeHandler(
             runId: documentReviewFindings.runId,
             topicId: documentReviewFindings.topicId,
             checkKind: documentReviewFindings.checkKind,
+            payload: documentReviewFindings.payload,
             decision: documentReviewFindings.decision,
+            decidedBy: documentReviewFindings.decidedBy,
+            decidedAt: documentReviewFindings.decidedAt,
+            applicationStatus: documentReviewFindings.applicationStatus,
+            appliedBy: documentReviewFindings.appliedBy,
+            appliedAt: documentReviewFindings.appliedAt,
           })
           .from(documentReviewFindings)
           .where(
@@ -65,21 +77,55 @@ const decideDocumentReviewFinding = createSafeHandler(
               eq(documentReviewFindings.workspaceId, workspaceId),
             ),
           )
-          .limit(1);
+          .limit(1)
+          .for("update");
         const finding = rows.at(0);
         if (finding === undefined) {
-          return null;
+          return { type: "not-found" } as const;
+        }
+        if (recordsApplication && finding.payload.finding.fix === null) {
+          return { type: "no-fix" } as const;
+        }
+        if (
+          recordsApplication &&
+          finding.applicationStatus ===
+            DOCUMENT_REVIEW_APPLICATION_STATUS.APPLIED &&
+          finding.decision === decision
+        ) {
+          return { type: "unchanged", finding } as const;
         }
 
-        await tx
+        const appliedAt =
+          finding.applicationStatus ===
+          DOCUMENT_REVIEW_APPLICATION_STATUS.APPLIED
+            ? finding.appliedAt
+            : now;
+        const appliedBy =
+          finding.applicationStatus ===
+          DOCUMENT_REVIEW_APPLICATION_STATUS.APPLIED
+            ? finding.appliedBy
+            : user.id;
+        const update = tx
           .update(documentReviewFindings)
-          .set({ decision, decidedBy, decidedAt })
+          .set(
+            recordsApplication
+              ? {
+                  decision,
+                  decidedBy,
+                  decidedAt,
+                  applicationStatus: DOCUMENT_REVIEW_APPLICATION_STATUS.APPLIED,
+                  appliedBy,
+                  appliedAt,
+                }
+              : { decision, decidedBy, decidedAt },
+          )
           .where(
             and(
               eq(documentReviewFindings.id, params.findingId),
               eq(documentReviewFindings.workspaceId, workspaceId),
             ),
           );
+        await update;
 
         await recordAuditEvent(tx, {
           action: AUDIT_ACTION.REVIEW,
@@ -88,7 +134,15 @@ const decideDocumentReviewFinding = createSafeHandler(
           // second resource noun for a subresource.
           resourceType: AUDIT_RESOURCE_TYPE.DOCUMENT_REVIEW_RUN,
           resourceId: finding.runId,
-          changes: { decision: { old: finding.decision, new: decision } },
+          changes: recordsApplication
+            ? {
+                decision: { old: finding.decision, new: decision },
+                applicationStatus: {
+                  old: finding.applicationStatus,
+                  new: DOCUMENT_REVIEW_APPLICATION_STATUS.APPLIED,
+                },
+              }
+            : { decision: { old: finding.decision, new: decision } },
           metadata: {
             findingId: params.findingId,
             topicId: finding.topicId,
@@ -96,22 +150,60 @@ const decideDocumentReviewFinding = createSafeHandler(
           },
         });
 
-        return finding;
+        return {
+          type: "updated",
+          finding,
+          applicationStatus: recordsApplication
+            ? DOCUMENT_REVIEW_APPLICATION_STATUS.APPLIED
+            : finding.applicationStatus,
+          appliedBy: recordsApplication ? appliedBy : finding.appliedBy,
+          appliedAt: recordsApplication ? appliedAt : finding.appliedAt,
+          decidedBy,
+          decidedAt,
+        } as const;
       }),
     );
 
-    if (decided === null) {
+    if (decided.type === "not-found") {
       return Result.err(
         new HandlerError({ status: 404, message: "Review finding not found" }),
+      );
+    }
+    if (decided.type === "no-fix") {
+      return Result.err(
+        new HandlerError({
+          status: 422,
+          message: "This review finding has no proposed edit to apply.",
+        }),
       );
     }
 
     return Result.ok({
       id: params.findingId,
-      runId: decided.runId,
+      runId: decided.finding.runId,
       decision,
-      decidedBy,
-      decidedAt: decidedAt === null ? null : decidedAt.toISOString(),
+      decidedBy:
+        decided.type === "unchanged"
+          ? decided.finding.decidedBy
+          : decided.decidedBy,
+      decidedAt:
+        (decided.type === "unchanged"
+          ? decided.finding.decidedAt
+          : decided.decidedAt
+        )?.toISOString() ?? null,
+      applicationStatus:
+        decided.type === "unchanged"
+          ? decided.finding.applicationStatus
+          : decided.applicationStatus,
+      appliedBy:
+        decided.type === "unchanged"
+          ? decided.finding.appliedBy
+          : decided.appliedBy,
+      appliedAt:
+        (decided.type === "unchanged"
+          ? decided.finding.appliedAt
+          : decided.appliedAt
+        )?.toISOString() ?? null,
     });
   },
 );

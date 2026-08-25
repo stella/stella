@@ -60,6 +60,7 @@ import {
   SearchSummaryItem,
 } from "@/components/search-dialog-results";
 import {
+  canUseAskAIShortcut,
   createDialogCloseActionQueue,
   getChatHitRoute,
   getEntityLocationRoute,
@@ -83,6 +84,7 @@ import {
 import {
   canShowSearchSummary,
   clearTime,
+  enforceDocumentPickFilters,
   hasUnavailableSearchType,
   resolveActiveSearchTypes,
   resolveUpdatedFrom,
@@ -213,10 +215,22 @@ const initialFiltersForMode = (
 ): SearchFilters => {
   const filters = initialSearchFilters(initialWorkspaceId);
   if (mode.type === "pick") {
-    return { ...filters, types: ["document"], mimeTypes: [...mode.mimeTypes] };
+    return enforceDocumentPickFilters(filters, mode.mimeTypes);
   }
   return filters;
 };
+
+const filtersForMode = (
+  mode: SearchDialogMode,
+  filters: SearchFilters,
+): SearchFilters =>
+  mode.type === "pick"
+    ? enforceDocumentPickFilters(filters, mode.mimeTypes)
+    : filters;
+
+type SearchFiltersUpdate =
+  | SearchFilters
+  | ((filters: SearchFilters) => SearchFilters);
 
 type SearchDialogProps = {
   open: boolean;
@@ -293,9 +307,17 @@ export const SearchDialog = ({
   const [recentPreviewFile, setRecentPreviewFile] = useState<RecentFile | null>(
     null,
   );
-  const [filters, setFilters] = useState<SearchFilters>(() =>
+  const [filters, setFilterState] = useState<SearchFilters>(() =>
     initialFiltersForMode(mode, initialWorkspaceId),
   );
+  const setFilters = (update: SearchFiltersUpdate) => {
+    setFilterState((current) =>
+      filtersForMode(
+        mode,
+        typeof update === "function" ? update(current) : update,
+      ),
+    );
+  };
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   const debouncedSetQuery = useDebouncedCallback((value: string) => {
@@ -1335,7 +1357,13 @@ export const SearchDialog = ({
                   if (event.key !== "Tab" || event.shiftKey) {
                     return;
                   }
-                  if (!canAskAI || !query.trim()) {
+                  if (
+                    !canUseAskAIShortcut({
+                      canAskAI,
+                      mode: mode.type,
+                      query,
+                    })
+                  ) {
                     return;
                   }
                   event.preventDefault();

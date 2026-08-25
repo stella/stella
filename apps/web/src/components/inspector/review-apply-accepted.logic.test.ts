@@ -16,6 +16,12 @@ import {
 import { toSafeId } from "@/lib/safe-id";
 
 const TOPIC_ID = "11111111-1111-4111-8111-111111111111";
+const PLAYBOOK_FINDING_ID = toSafeId<"documentReviewFinding">(
+  "0198f2c4-6a55-7c31-9a10-3b1d2f4c5e71",
+);
+const REFERENCE_FINDING_ID = toSafeId<"documentReviewFinding">(
+  "0198f2c4-6a55-7c31-9a10-3b1d2f4c5e70",
+);
 const PRECEDENT_FIELD = toSafeId<"field">(
   "22222222-2222-4222-8222-222222222222",
 );
@@ -66,10 +72,16 @@ const playbookFinding: PlaybookFinding = {
 const REDLINE_NOTE =
   "NTD: Remove the cap.\n\nPrecedent (Precedent SPA): “Leakage is uncapped.”";
 
-const decision = (value: ReviewFindingDecisionRow["decision"]) => ({
-  id: toSafeId<"documentReviewFinding">("0198f2c4-6a55-7c31-9a10-3b1d2f4c5e70"),
+const decision = (
+  value: ReviewFindingDecisionRow["decision"],
+  checkKind: ReviewFindingDecisionRow["checkKind"] = "reference",
+  applicationStatus: ReviewFindingDecisionRow["applicationStatus"] = "pending",
+): ReviewFindingDecisionRow => ({
+  id: checkKind === "playbook" ? PLAYBOOK_FINDING_ID : REFERENCE_FINDING_ID,
   topicId: TOPIC_ID,
+  checkKind,
   decision: value,
+  applicationStatus,
 });
 
 const item = (overrides: Partial<ReviewResultItem> = {}): ReviewResultItem => ({
@@ -137,7 +149,15 @@ describe("collectAcceptedFixes", () => {
 
   test("yields both fixes for a topic judged by playbook and precedent", () => {
     const plans = collectAcceptedFixes({
-      items: [item({ playbook: playbookFinding })],
+      items: [
+        item({
+          playbook: playbookFinding,
+          decisions: [
+            decision("accepted", "playbook"),
+            decision("accepted", "reference"),
+          ],
+        }),
+      ],
       fixStateByFinding: {},
       references: [precedent],
       playbookName: "Buy-side SPA",
@@ -149,6 +169,21 @@ describe("collectAcceptedFixes", () => {
       ],
       ["finding-leakage", REDLINE_NOTE],
     ]);
+  });
+
+  test("does not offer an edit whose durable application survived reload", () => {
+    const plans = collectAcceptedFixes({
+      items: [
+        item({
+          decisions: [decision("accepted", "reference", "applied")],
+        }),
+      ],
+      fixStateByFinding: {},
+      references: [precedent],
+      playbookName: "Buy-side SPA",
+    });
+
+    expect(plans).toEqual([]);
   });
 });
 

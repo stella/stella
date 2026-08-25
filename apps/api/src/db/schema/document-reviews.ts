@@ -3,6 +3,8 @@ import { sql } from "drizzle-orm";
 import type { DocumentReviewTopic } from "@/api/lib/document-review/contract";
 import {
   DOCUMENT_REVIEW_BASIS_TYPES,
+  DOCUMENT_REVIEW_APPLICATION_STATUSES,
+  DOCUMENT_REVIEW_APPLICATION_STATUS,
   DOCUMENT_REVIEW_CHECK_KIND,
   DOCUMENT_REVIEW_CHECK_KINDS,
   DOCUMENT_REVIEW_DECISION,
@@ -52,6 +54,9 @@ const PLAYBOOK_OUTCOME_SQL_VALUES = quoted(DOCUMENT_REVIEW_OUTCOMES.playbook);
 const REFERENCE_OUTCOME_SQL_VALUES = quoted(DOCUMENT_REVIEW_OUTCOMES.reference);
 
 const DECISION_SQL_VALUES = quoted(DOCUMENT_REVIEW_DECISIONS);
+const APPLICATION_STATUS_SQL_VALUES = quoted(
+  DOCUMENT_REVIEW_APPLICATION_STATUSES,
+);
 
 const PLAYBOOK_CHECK_KIND_SQL = sql.raw(
   `'${DOCUMENT_REVIEW_CHECK_KIND.PLAYBOOK}'`,
@@ -60,6 +65,9 @@ const REFERENCE_CHECK_KIND_SQL = sql.raw(
   `'${DOCUMENT_REVIEW_CHECK_KIND.REFERENCE}'`,
 );
 const OPEN_DECISION_SQL = sql.raw(`'${DOCUMENT_REVIEW_DECISION.OPEN}'`);
+const PENDING_APPLICATION_STATUS_SQL = sql.raw(
+  `'${DOCUMENT_REVIEW_APPLICATION_STATUS.PENDING}'`,
+);
 
 /**
  * One immutable execution of a document review: a confirmed basis (a playbook,
@@ -252,6 +260,19 @@ export const documentReviewFindings = p.pgTable(
       .text("decided_by")
       .references(() => user.id, { onDelete: "set null" }),
     decidedAt: timestamptz("decided_at"),
+    // Applying a proposed fix is a separate durable action from accepting the
+    // finding. The status survives a reload so the same tracked change cannot
+    // be offered and inserted twice.
+    applicationStatus: p
+      .text("application_status", {
+        enum: DOCUMENT_REVIEW_APPLICATION_STATUSES,
+      })
+      .notNull()
+      .default(DOCUMENT_REVIEW_APPLICATION_STATUS.PENDING),
+    appliedBy: p
+      .text("applied_by")
+      .references(() => user.id, { onDelete: "set null" }),
+    appliedAt: timestamptz("applied_at"),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
     updatedAt: timestamptz("updated_at")
       .notNull()
@@ -296,6 +317,14 @@ export const documentReviewFindings = p.pgTable(
     p.check(
       "document_review_findings_decision_timing_check",
       sql`(${table.decision} = ${OPEN_DECISION_SQL}) = (${table.decidedAt} IS NULL)`,
+    ),
+    p.check(
+      "document_review_findings_application_status_values_check",
+      sql`${table.applicationStatus} IN (${APPLICATION_STATUS_SQL_VALUES})`,
+    ),
+    p.check(
+      "document_review_findings_application_timing_check",
+      sql`(${table.applicationStatus} = ${PENDING_APPLICATION_STATUS_SQL}) = (${table.appliedAt} IS NULL)`,
     ),
     p
       .foreignKey({

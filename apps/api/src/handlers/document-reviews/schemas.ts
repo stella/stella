@@ -9,7 +9,10 @@ import {
   REVIEW_PARTY_ROLE_MAX_LENGTH,
 } from "@/api/lib/document-review/contract";
 import type { DocumentReviewTopic as ReviewEngineTopic } from "@/api/lib/document-review/contract";
-import { DOCUMENT_REVIEW_DECISIONS } from "@/api/lib/document-review/run-contract";
+import {
+  DOCUMENT_REVIEW_APPLICATION_STATUS,
+  DOCUMENT_REVIEW_DECISIONS,
+} from "@/api/lib/document-review/run-contract";
 import type { DocumentReviewDecision } from "@/api/lib/document-review/run-contract";
 
 // The target always belongs to the route's matter, so it carries no workspace
@@ -68,6 +71,9 @@ export type DocumentReviewTopic = Assignable<
 // database refuses.
 export const decideReviewFindingBodySchema = t.Object({
   decision: t.UnionEnum([...DOCUMENT_REVIEW_DECISIONS]),
+  applicationStatus: t.Optional(
+    t.Literal(DOCUMENT_REVIEW_APPLICATION_STATUS.APPLIED),
+  ),
 });
 
 export type DocumentReviewDecisionInput = Assignable<

@@ -7,10 +7,10 @@
  * and the columns a re-delivered write refreshes cannot drift between them.
  */
 
-import { sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
-import { documentReviewFindings } from "@/api/db/schema";
+import { documentReviewFindings, documentReviewRuns } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import { findingOutcome } from "@/api/lib/document-review/run-contract";
@@ -96,4 +96,40 @@ export const upsertDocumentReviewFindings = async (
         updatedAt: new Date(),
       },
     });
+};
+
+type RecountDocumentReviewFindingProgressArgs = {
+  tx: Transaction;
+  workspaceId: SafeId<"workspace">;
+  runId: SafeId<"documentReviewRun">;
+};
+
+/**
+ * Recount after all concurrent review passes settle. Each pass reports useful
+ * intermediate progress, but their transactions may take snapshots before a
+ * sibling commits and leave the last update stale. This final pass runs after
+ * both producers have committed, so the run row reflects the durable set.
+ */
+export const recountDocumentReviewFindingProgress = async ({
+  tx,
+  workspaceId,
+  runId,
+}: RecountDocumentReviewFindingProgressArgs): Promise<void> => {
+  // audit: skip — progress bookkeeping on the run row audited at create.
+  await tx
+    .update(documentReviewRuns)
+    .set({
+      completed: sql<number>`(
+        select count(*)::int from ${documentReviewFindings}
+        where ${documentReviewFindings.runId} = ${documentReviewRuns.id}
+          and ${documentReviewFindings.workspaceId} = ${workspaceId}
+      )`,
+    })
+    .where(
+      and(
+        eq(documentReviewRuns.id, runId),
+        eq(documentReviewRuns.workspaceId, workspaceId),
+        eq(documentReviewRuns.status, "running"),
+      ),
+    );
 };

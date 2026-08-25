@@ -90,6 +90,9 @@ const readDocumentReviewRun = createSafeHandler(
             decision: documentReviewFindings.decision,
             decidedBy: documentReviewFindings.decidedBy,
             decidedAt: documentReviewFindings.decidedAt,
+            applicationStatus: documentReviewFindings.applicationStatus,
+            appliedBy: documentReviewFindings.appliedBy,
+            appliedAt: documentReviewFindings.appliedAt,
           })
           .from(documentReviewFindings)
           .where(
@@ -170,6 +173,10 @@ const readDocumentReviewRun = createSafeHandler(
         decidedBy: finding.decidedBy,
         decidedAt:
           finding.decidedAt === null ? null : finding.decidedAt.toISOString(),
+        applicationStatus: finding.applicationStatus,
+        appliedBy: finding.appliedBy,
+        appliedAt:
+          finding.appliedAt === null ? null : finding.appliedAt.toISOString(),
       })),
     });
   },

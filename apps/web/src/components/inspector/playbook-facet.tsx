@@ -51,6 +51,7 @@ import {
 } from "@/components/ai-suggestions/active-docx-store";
 import {
   createReviewBasis,
+  customPerspectiveInput,
   isSamePerspective,
   NEUTRAL_PERSPECTIVE,
   perspectiveFromBasis,
@@ -67,6 +68,8 @@ import {
   documentReviewRunOptions,
   documentReviewRunsOptions,
   documentReviewSourcesOptions,
+  recordReviewFindingApplication,
+  REVIEW_APPLICATION_STATUS,
   REVIEW_DECISION,
 } from "@/components/ai-suggestions/document-review-queries";
 import type {
@@ -361,6 +364,7 @@ export const PlaybookFacet = ({
       result.applied.map((applied) => [applied.id, applied.revisionIds ?? []]),
     );
     let appliedCount = 0;
+    const appliedPlans: AcceptedFixPlan[] = [];
     let firstRevisionIds: readonly number[] | null = null;
     for (const plan of plans) {
       const operationId = batch.fixOperationIdByKey.get(plan.findingKey);
@@ -372,7 +376,8 @@ export const PlaybookFacet = ({
         continue;
       }
       appliedCount += 1;
-      firstRevisionIds ??= revisionIds;
+      appliedPlans.push(plan);
+      firstRevisionIds = firstRevisionIds ?? revisionIds;
       setFixState(entityId, fileFieldId, plan.findingKey, {
         status: "applied",
         revisionIds,
@@ -381,6 +386,23 @@ export const PlaybookFacet = ({
         beginComment(entityId, fileFieldId, plan.referenceFindingId);
         completeComment(entityId, fileFieldId, plan.referenceFindingId);
       }
+    }
+    const persisted = await Result.tryPromise({
+      try: async () =>
+        await Promise.all(
+          appliedPlans.map(
+            async ({ findingId }) =>
+              await recordReviewFindingApplication({ workspaceId, findingId }),
+          ),
+        ),
+      catch: (cause) => cause,
+    });
+    if (Result.isError(persisted)) {
+      analytics.captureError(persisted.error);
+      stellaToast.add({
+        type: "error",
+        title: t("common.unexpectedError"),
+      });
     }
     if (appliedCount < plans.length) {
       stellaToast.add({
@@ -1135,6 +1157,9 @@ const PerspectivePicker = ({
       isSamePerspective({ type: "party", ...party }, value),
     );
   const [other, setOther] = useState(value.type === "party" && !listed);
+  const [otherRole, setOtherRole] = useState(
+    value.type === "party" && !listed ? value.role : "",
+  );
   const options: {
     key: string;
     label: string;
@@ -1174,6 +1199,7 @@ const PerspectivePicker = ({
               key={option.key}
               onClick={() => {
                 setOther(false);
+                setOtherRole("");
                 onSelect(option.perspective);
               }}
               role="radio"
@@ -1191,7 +1217,10 @@ const PerspectivePicker = ({
               ? PERSPECTIVE_CHIP_CHECKED_CLASS
               : PERSPECTIVE_CHIP_IDLE_CLASS,
           )}
-          onClick={() => setOther(true)}
+          onClick={() => {
+            setOther(true);
+            onSelect(customPerspectiveInput(otherRole).perspective);
+          }}
           role="radio"
           type="button"
         >
@@ -1204,15 +1233,12 @@ const PerspectivePicker = ({
           autoFocus
           className="h-8 text-xs"
           onChange={(event) => {
-            const role = event.target.value.trim();
-            onSelect(
-              role.length === 0
-                ? NEUTRAL_PERSPECTIVE
-                : { type: "party", role, name: null },
-            );
+            const input = customPerspectiveInput(event.target.value);
+            setOtherRole(input.rawRole);
+            onSelect(input.perspective);
           }}
           placeholder={PERSPECTIVE_OTHER_PLACEHOLDER}
-          value={value.type === "party" && !listed ? value.role : ""}
+          value={otherRole}
         />
       )}
     </section>
@@ -2650,7 +2676,7 @@ const ReviewResultCard = ({
           <ReviewResultActions
             editorAvailable={editorAvailable}
             commentStateByFinding={commentStateByFinding}
-            findingIds={item.decisions.map((row) => row.id)}
+            findingRows={item.decisions}
             fixStateByFinding={fixStateByFinding}
             onAcceptFix={onAcceptFix}
             onAddComment={onAddComment}
@@ -2914,7 +2940,7 @@ type ReviewResultActionsProps = {
   references: readonly ReferenceFile[];
   playbookName: string;
   /** Every finding row the card stands for; acting on the card answers all. */
-  findingIds: readonly DocumentReviewFindingRow["id"][];
+  findingRows: readonly ReviewFindingDecisionRow[];
   commentStateByFinding: Record<string, ReviewCommentState>;
   fixStateByFinding: Record<string, ReviewFixState>;
   editorAvailable: boolean;
@@ -2936,7 +2962,7 @@ const ReviewResultActions = ({
   reference,
   references,
   playbookName,
-  findingIds,
+  findingRows,
   commentStateByFinding,
   fixStateByFinding,
   editorAvailable,
@@ -2947,10 +2973,25 @@ const ReviewResultActions = ({
   onRejectFix,
 }: ReviewResultActionsProps) => {
   const t = useTranslations();
+  const findingIds = findingRows.map((row) => row.id);
+  const playbookRow = findingRows.find((row) => row.checkKind === "playbook");
+  const referenceRow = findingRows.find((row) => row.checkKind === "reference");
   const playbookPlan =
-    playbook === null ? null : playbookFixPlan(playbook, playbookName);
+    playbook === null || playbookRow === undefined
+      ? null
+      : playbookFixPlan({
+          findingId: playbookRow.id,
+          playbook,
+          playbookName,
+        });
   const referencePlan =
-    reference === null ? null : referenceFixPlan(reference, references);
+    reference === null || referenceRow === undefined
+      ? null
+      : referenceFixPlan({
+          findingId: referenceRow.id,
+          reference,
+          references,
+        });
   const noteState =
     reference === null ? undefined : commentStateByFinding[reference.findingId];
   const playbookRevisionIds =
@@ -2985,7 +3026,11 @@ const ReviewResultActions = ({
             editorAvailable={editorAvailable}
             fixKind="playbook"
             fixStatus={
-              fixStateByFinding[playbook.positionId]?.status ?? "pending"
+              fixStateByFinding[playbook.positionId]?.status ??
+              (playbookRow?.applicationStatus ===
+              REVIEW_APPLICATION_STATUS.APPLIED
+                ? "accepted"
+                : "pending")
             }
             onAccept={() => {
               if (playbookRevisionIds !== null) {
@@ -3022,7 +3067,11 @@ const ReviewResultActions = ({
               editorAvailable={editorAvailable}
               fixKind="reference"
               fixStatus={
-                fixStateByFinding[reference.findingId]?.status ?? "pending"
+                fixStateByFinding[reference.findingId]?.status ??
+                (referenceRow?.applicationStatus ===
+                REVIEW_APPLICATION_STATUS.APPLIED
+                  ? "accepted"
+                  : "pending")
               }
               onAccept={() => {
                 if (referenceRevisionIds !== null) {

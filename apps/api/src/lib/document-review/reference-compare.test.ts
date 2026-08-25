@@ -231,6 +231,7 @@ describe("reference review normalization", () => {
       recommendation: null,
       impact: "unknown",
     });
+    expect(findings.at(0)?.severity).toBeUndefined();
   });
 
   test("does not invent a document-end anchor for a missing clause", () => {
@@ -324,7 +325,6 @@ describe("reference review normalization", () => {
         explanation: { type: "insufficient-evidence" },
         recommendation: null,
         impact: "unknown",
-        severity: "low",
         targetCitations: [],
         referenceCitations: [],
         fix: null,

@@ -74,11 +74,18 @@ export type BuildFindingsArgs = AiGradingDeps & {
   tiersBySourceId: ReadonlyMap<string, ResolvedTiers>;
 };
 
-type GradedVerdict = {
-  verdict: VerdictTier | null;
-  rationale: string | null;
-  matchedRef?: VerdictMatchedRef;
-};
+type GradingOutcome =
+  | {
+      status: "graded";
+      verdict: VerdictTier | null;
+      rationale: string | null;
+      matchedRef?: VerdictMatchedRef;
+    }
+  | {
+      status: "ungraded";
+      verdict: "deviation";
+      rationale: string;
+    };
 
 // A replacement is safe only for a located deviation. A missing clause has no
 // semantically verified insertion anchor, so it remains a finding until the
@@ -111,7 +118,8 @@ const EMPTY_TIERS: ResolvedTiers = {
 
 // A failed or absent compare must not silently pass: the finding is flagged
 // for human review, mirroring the engine's "no criteria configured" fallback.
-const UNGRADED_VERDICT: GradedVerdict = {
+const UNGRADED_VERDICT: GradingOutcome = {
+  status: "ungraded",
   verdict: "deviation",
   rationale:
     "Automated comparison against the standard could not be completed.",
@@ -130,15 +138,16 @@ const gradeWithoutModel = ({
   position: Position;
   askContent: FieldContent | undefined;
   fieldContentBySourceId: ReadonlyMap<string, FieldContent>;
-}): GradedVerdict | null => {
+}): GradingOutcome | null => {
   // Extract-only positions capture a value with no verdict.
   if (position.mode === "extract") {
-    return { verdict: null, rationale: null };
+    return { status: "graded", verdict: null, rationale: null };
   }
 
   const { check } = position;
   if (check?.kind === "presence") {
     return {
+      status: "graded",
       verdict: gradePresence(check.expectation, askPresence(askContent)),
       rationale: null,
     };
@@ -148,6 +157,7 @@ const gradeWithoutModel = ({
     // whose id is the position sourceId, so it resolves against the
     // sourceId-keyed content map directly (no materialized-property remap).
     return {
+      status: "graded",
       verdict: gradePropertyConstraint(
         check.condition,
         askContent,
@@ -159,7 +169,7 @@ const gradeWithoutModel = ({
 
   const askValue = askText(askContent);
   if (askValue === null || askValue.trim().length === 0) {
-    return { verdict: "missing", rationale: null };
+    return { status: "graded", verdict: "missing", rationale: null };
   }
   return null;
 };
@@ -168,7 +178,8 @@ const toGradedVerdict = (graded: {
   tier: VerdictTier;
   rationale: string;
   matchedRef?: VerdictMatchedRef;
-}): GradedVerdict => ({
+}): GradingOutcome => ({
+  status: "graded",
   verdict: graded.tier,
   rationale: graded.rationale,
   ...(graded.matchedRef === undefined ? {} : { matchedRef: graded.matchedRef }),
@@ -189,13 +200,16 @@ const gradeTierMatchPositions = async ({
   contentBySourceId: ReadonlyMap<string, AskExtraction>;
   tiersBySourceId: ReadonlyMap<string, ResolvedTiers>;
   deps: AiGradingDeps;
-}): Promise<ReadonlyMap<string, GradedVerdict>> => {
-  const verdicts = new Map<string, GradedVerdict>();
+}): Promise<ReadonlyMap<string, GradingOutcome>> => {
+  const verdicts = new Map<string, GradingOutcome>();
   for (
     let cursor = 0;
     cursor < positions.length;
     cursor += TIER_MATCH_BATCH_SIZE
   ) {
+    if (deps.abortSignal.aborted) {
+      break;
+    }
     const batch = positions.slice(cursor, cursor + TIER_MATCH_BATCH_SIZE);
     // oxlint-disable-next-line no-await-in-loop -- one model call per batch, in order, keeps the single-doc review's fan-out bounded
     const graded = await gradeTierMatches({
@@ -227,6 +241,43 @@ const gradeTierMatchPositions = async ({
   return verdicts;
 };
 
+type ProjectGradingArgs = {
+  grading: GradingOutcome;
+  citations: readonly DocxFolioCitation[];
+  ideal: string | undefined;
+};
+
+type ProjectedGrading = Pick<
+  ReviewFinding,
+  "verdict" | "rationale" | "matchedRef" | "fix"
+>;
+
+const projectGrading = ({
+  grading,
+  citations,
+  ideal,
+}: ProjectGradingArgs): ProjectedGrading => {
+  switch (grading.status) {
+    case "graded":
+      return {
+        verdict: grading.verdict,
+        rationale: grading.rationale,
+        ...(grading.matchedRef === undefined
+          ? {}
+          : { matchedRef: grading.matchedRef }),
+        fix: buildFix({ verdict: grading.verdict, citations, ideal }),
+      };
+    case "ungraded":
+      return {
+        verdict: grading.verdict,
+        rationale: grading.rationale,
+        fix: null,
+      };
+    default:
+      return grading satisfies never;
+  }
+};
+
 export const buildFindings = async ({
   positions,
   contentBySourceId,
@@ -240,7 +291,7 @@ export const buildFindings = async ({
 
   // Everything decidable without the model is decided first; what is left
   // goes to the model in batches. Findings keep the input `positions` order.
-  const decided = new Map<string, GradedVerdict>();
+  const decided = new Map<string, GradingOutcome>();
   const forModel: Position[] = [];
   for (const position of positions) {
     const verdict = gradeWithoutModel({
@@ -271,10 +322,15 @@ export const buildFindings = async ({
     const citations = arrayOrEmpty(extraction?.citations)
       .filter((citation) => citation.kind === "docx-folio")
       .map(({ blockId, text }): DocxFolioCitation => ({ blockId, text }));
-    const { verdict, rationale, matchedRef } =
+    const grading =
       decided.get(position.sourceId) ??
       modelVerdicts.get(position.sourceId) ??
       UNGRADED_VERDICT;
+    const { verdict, rationale, matchedRef, fix } = projectGrading({
+      grading,
+      citations,
+      ideal: tiers?.ideal,
+    });
 
     return {
       positionId: position.sourceId,
@@ -287,11 +343,7 @@ export const buildFindings = async ({
       rationale,
       ...(matchedRef === undefined ? {} : { matchedRef }),
       citations,
-      fix: buildFix({
-        verdict,
-        citations,
-        ideal: tiers?.ideal,
-      }),
+      fix,
     };
   });
 };

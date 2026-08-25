@@ -61,13 +61,17 @@ const referenceFinding: ReferenceFinding = {
 const playbookRow: ReviewFindingDecisionRow = {
   id: toSafeId<"documentReviewFinding">("0198f2c4-6a55-7c31-9a10-3b1d2f4c5e70"),
   topicId: playbookTopic.topicId,
+  checkKind: "playbook",
   decision: "open",
+  applicationStatus: "pending",
 };
 
 const referenceRow: ReviewFindingDecisionRow = {
   id: toSafeId<"documentReviewFinding">("0198f2c4-6a55-7c31-9a10-3b1d2f4c5e71"),
   topicId: playbookTopic.topicId,
+  checkKind: "reference",
   decision: "open",
+  applicationStatus: "pending",
 };
 
 describe("review result composition", () => {

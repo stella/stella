@@ -17,6 +17,7 @@ import {
 import {
   buildCsvExport,
   buildXlsxExport,
+  sanitizeSpreadsheetCell,
 } from "@/api/handlers/views/table-export";
 import type { ExportTableInput } from "@/api/handlers/views/table-export";
 import { createSafeHandler } from "@/api/lib/api-handlers";
@@ -123,7 +124,7 @@ const exportDocumentReviewRun = createSafeHandler(
       rows: rows.map((row) =>
         ISSUES_TABLE_COLUMNS.map(({ key }) => ({
           type: "text" as const,
-          value: row[key],
+          value: sanitizeSpreadsheetCell(row[key]),
           style: "default" as const,
         })),
       ),

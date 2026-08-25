@@ -124,6 +124,21 @@ export const DOCUMENT_REVIEW_DECISION = {
   DISMISSED: "dismissed",
 } as const satisfies ConstantMap<DocumentReviewDecision>;
 
+/** Whether a proposed fix has been inserted into the draft. Kept apart from
+ *  the reviewer's decision: accepting a finding does not itself mutate the
+ *  document, while an applied tracked change stays applied if the finding is
+ *  later reopened. */
+export const DOCUMENT_REVIEW_APPLICATION_STATUSES = [
+  "pending",
+  "applied",
+] as const;
+export type DocumentReviewApplicationStatus =
+  (typeof DOCUMENT_REVIEW_APPLICATION_STATUSES)[number];
+export const DOCUMENT_REVIEW_APPLICATION_STATUS = {
+  PENDING: "pending",
+  APPLIED: "applied",
+} as const satisfies ConstantMap<DocumentReviewApplicationStatus>;
+
 /** Whether the pinned playbook came from an approved snapshot or from the
  *  live (draft) definition an author chose to run. */
 export type PlaybookPinProvenance = "approved" | "draft";

@@ -4,10 +4,16 @@
  * the precedent it came from, in a single editor batch.
  */
 
+import { panic } from "better-result";
+
 import type { FolioAIEditOperation } from "@stll/folio-react";
 
 import type { ReferenceFile } from "@/components/ai-suggestions/document-review-basis.logic";
-import { REVIEW_DECISION } from "@/components/ai-suggestions/document-review-queries";
+import {
+  REVIEW_APPLICATION_STATUS,
+  REVIEW_DECISION,
+} from "@/components/ai-suggestions/document-review-queries";
+import type { ReviewFindingDecisionRow } from "@/components/ai-suggestions/document-review-run.logic";
 import type {
   PlaybookFinding,
   ReferenceFinding,
@@ -18,6 +24,8 @@ import { reviewItemDecision } from "@/components/inspector/playbook-review-resul
 import type { ReviewResultItem } from "@/components/inspector/playbook-review-results.logic";
 
 export type AcceptedFixPlan = {
+  /** Durable finding row that records this edit after it lands. */
+  findingId: ReviewFindingDecisionRow["id"];
   /** The key the fix state is kept under: the reference finding id, or the
    *  playbook position id. */
   findingKey: string;
@@ -38,8 +46,12 @@ const PLAYBOOK_LABEL = "Playbook";
 const PASSAGES_PER_REFERENCE = 1;
 const PARAGRAPH_SEPARATOR = "\n\n";
 
-const isPending = (state: ReviewFixState | undefined): boolean =>
-  state === undefined || state.status === "pending";
+const isPending = (
+  applicationStatus: ReviewFindingDecisionRow["applicationStatus"],
+  state: ReviewFixState | undefined,
+): boolean =>
+  applicationStatus === REVIEW_APPLICATION_STATUS.PENDING &&
+  (state === undefined || state.status === "pending");
 
 const precedentQuotes = (
   finding: ReferenceFinding,
@@ -97,15 +109,23 @@ export const buildDraftNote = (
 };
 
 /** The redline a playbook finding proposes, with its rationale as the note. */
-export const playbookFixPlan = (
-  playbook: PlaybookFinding,
-  playbookName: string,
-): AcceptedFixPlan | null => {
+type PlaybookFixPlanArgs = {
+  findingId: ReviewFindingDecisionRow["id"];
+  playbook: PlaybookFinding;
+  playbookName: string;
+};
+
+export const playbookFixPlan = ({
+  findingId,
+  playbook,
+  playbookName,
+}: PlaybookFixPlanArgs): AcceptedFixPlan | null => {
   if (playbook.fix === null) {
     return null;
   }
   const rationale = playbook.rationale?.trim() ?? "";
   return {
+    findingId,
     findingKey: playbook.positionId,
     referenceFindingId: null,
     fix: playbook.fix,
@@ -117,13 +137,21 @@ export const playbookFixPlan = (
 };
 
 /** The redline a reference finding proposes, with the precedent as the note. */
-export const referenceFixPlan = (
-  reference: ReferenceFinding,
-  references: readonly ReferenceFile[],
-): AcceptedFixPlan | null =>
+type ReferenceFixPlanArgs = {
+  findingId: ReviewFindingDecisionRow["id"];
+  reference: ReferenceFinding;
+  references: readonly ReferenceFile[];
+};
+
+export const referenceFixPlan = ({
+  findingId,
+  reference,
+  references,
+}: ReferenceFixPlanArgs): AcceptedFixPlan | null =>
   reference.fix === null
     ? null
     : {
+        findingId,
         findingKey: reference.findingId,
         referenceFindingId: reference.findingId,
         fix: reference.fix,
@@ -151,19 +179,51 @@ export const collectAcceptedFixes = ({
       continue;
     }
     const { playbook, reference } = item;
+    const playbookRow = item.decisions.find(
+      (row) => row.checkKind === "playbook",
+    );
+    const referenceRow = item.decisions.find(
+      (row) => row.checkKind === "reference",
+    );
+    if (playbook !== null && playbookRow === undefined) {
+      return panic(`Playbook result ${item.id} has no finding row`);
+    }
+    if (reference !== null && referenceRow === undefined) {
+      return panic(`Reference result ${item.id} has no finding row`);
+    }
     const playbookPlan =
-      playbook === null ? null : playbookFixPlan(playbook, playbookName);
+      playbook === null || playbookRow === undefined
+        ? null
+        : playbookFixPlan({
+            findingId: playbookRow.id,
+            playbook,
+            playbookName,
+          });
     if (
       playbookPlan !== null &&
-      isPending(fixStateByFinding[playbookPlan.findingKey])
+      playbookRow !== undefined &&
+      isPending(
+        playbookRow.applicationStatus,
+        fixStateByFinding[playbookPlan.findingKey],
+      )
     ) {
       plans.push(playbookPlan);
     }
     const referencePlan =
-      reference === null ? null : referenceFixPlan(reference, references);
+      reference === null || referenceRow === undefined
+        ? null
+        : referenceFixPlan({
+            findingId: referenceRow.id,
+            reference,
+            references,
+          });
     if (
       referencePlan !== null &&
-      isPending(fixStateByFinding[referencePlan.findingKey])
+      referenceRow !== undefined &&
+      isPending(
+        referenceRow.applicationStatus,
+        fixStateByFinding[referencePlan.findingKey],
+      )
     ) {
       plans.push(referencePlan);
     }

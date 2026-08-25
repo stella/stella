@@ -173,6 +173,9 @@ const finding = (
   decision,
   decidedBy: null,
   decidedAt: null,
+  applicationStatus: "pending",
+  appliedBy: null,
+  appliedAt: null,
 });
 
 const cachedRun = (
@@ -241,6 +244,9 @@ const decided = (
   decision,
   decidedBy: decision === "open" ? null : REVIEWER_ID,
   decidedAt: decision === "open" ? null : "2026-08-12T09:00:00.000Z",
+  applicationStatus: "pending",
+  appliedBy: null,
+  appliedAt: null,
 });
 
 describe("recording a decision in the cached run", () => {

@@ -225,7 +225,7 @@ export const restoreReviewBasis = (
  *  to the judgment the model produced. */
 export type ReviewFindingDecisionRow = Pick<
   DocumentReviewFindingRow,
-  "id" | "topicId" | "decision"
+  "id" | "topicId" | "checkKind" | "decision" | "applicationStatus"
 >;
 
 export type RestoredReviewRun = {
@@ -255,7 +255,9 @@ export const restoreReviewRun = ({
     decisions.push({
       id: finding.id,
       topicId: finding.topicId,
+      checkKind: finding.checkKind,
       decision: finding.decision,
+      applicationStatus: finding.applicationStatus,
     });
     switch (finding.payload.checkKind) {
       case "playbook":
@@ -362,6 +364,9 @@ export const applyFindingDecisions = (
       decision: update.decision,
       decidedBy: update.decidedBy,
       decidedAt: update.decidedAt,
+      applicationStatus: update.applicationStatus,
+      appliedBy: update.appliedBy,
+      appliedAt: update.appliedAt,
     };
   });
   return {

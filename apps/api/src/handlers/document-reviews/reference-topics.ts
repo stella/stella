@@ -48,7 +48,9 @@ const proposedPartySchema = v.strictObject({
 type ProposedParty = v.InferOutput<typeof proposedPartySchema>;
 
 /** Trims the model's text and drops entries left without a role. */
-const normalizeParties = (parties: readonly ProposedParty[]): ReviewParty[] => {
+export const normalizeParties = (
+  parties: readonly ProposedParty[],
+): ReviewParty[] => {
   const normalized: ReviewParty[] = [];
   for (const party of parties.slice(0, REVIEW_PARTIES_MAX)) {
     const role = party.role.trim();

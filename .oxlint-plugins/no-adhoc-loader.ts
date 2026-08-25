@@ -176,8 +176,10 @@ export default eslintCompatPlugin({
           },
           JSXAttribute(node) {
             const name = jsxAttributeName(node);
-            if (name === "role" && isStringLiteral(node.value)) {
-              if (node.value.value === "progressbar") {
+            if (name === "role") {
+              const parts: string[] = [];
+              staticStrings(node.value, parts);
+              if (parts.includes("progressbar")) {
                 context.report({ node, messageId: "progressbar" });
               }
               return;

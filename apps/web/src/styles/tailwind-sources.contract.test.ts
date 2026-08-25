@@ -10,6 +10,10 @@ import path from "node:path";
 const appDir = path.resolve(import.meta.dirname, "../..");
 const packagesDir = path.resolve(appDir, "../../packages");
 const appCss = readFileSync(path.join(appDir, "src/styles/app.css"), "utf-8");
+const landingCss = readFileSync(
+  path.resolve(appDir, "../landing/src/styles/global.css"),
+  "utf-8",
+);
 const packageJson: {
   dependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;
@@ -62,4 +66,10 @@ test("every workspace package that renders class names is a Tailwind source", ()
       `@source "../../../../packages/${name}/src/**/*.{ts,tsx}";`,
     );
   }
+});
+
+test("the landing app scans workspace UI classes", () => {
+  expect(landingCss).toContain(
+    '@source "../../../../packages/workspace-ui/src/**/*.{ts,tsx}";',
+  );
 });

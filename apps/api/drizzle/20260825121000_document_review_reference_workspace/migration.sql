@@ -13,9 +13,10 @@ SET "basis" = jsonb_set(
       ref || jsonb_build_object(
         'workspaceId', r."workspace_id",
         'workspaceName', w."name"
-      )
+      ) ORDER BY ordinality
     )
-    FROM jsonb_array_elements(r."basis" -> 'references') AS ref
+    FROM jsonb_array_elements(r."basis" -> 'references')
+      WITH ORDINALITY AS refs(ref, ordinality)
   ),
   true
 )

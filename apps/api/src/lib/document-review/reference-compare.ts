@@ -339,7 +339,7 @@ export const normalizeReferenceReview = ({
       // An ungrounded finding cannot cut either way; a topic the target
       // handles the same way has nothing to weigh.
       impact: hasGroundedEvidence ? raw.impact : "unknown",
-      severity: raw.severity,
+      ...(hasGroundedEvidence ? { severity: raw.severity } : {}),
       targetCitations,
       referenceCitations,
       fix: hasGroundedEvidence

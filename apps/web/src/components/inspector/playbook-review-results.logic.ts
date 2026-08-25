@@ -116,6 +116,16 @@ export const buildReviewResultItems = ({
       // and no row means the two views of the run disagree.
       return panic(`Review topic ${topic.topicId} has no finding row`);
     }
+    const decisionKinds = new Set(topicDecisions.map((row) => row.checkKind));
+    if (decisionKinds.size !== topicDecisions.length) {
+      return panic(`Review topic ${topic.topicId} repeats a finding kind`);
+    }
+    if (playbook !== null && !decisionKinds.has("playbook")) {
+      return panic(`Playbook result ${topic.topicId} has no finding row`);
+    }
+    if (reference !== null && !decisionKinds.has("reference")) {
+      return panic(`Reference result ${topic.topicId} has no finding row`);
+    }
     results.push({
       id: topic.topicId,
       title: topic.title,

@@ -6,6 +6,7 @@ import type { GlobalSearchHit } from "@stll/api/types";
 import { toSafeId } from "@/lib/safe-id";
 
 import {
+  canUseAskAIShortcut,
   createDialogCloseActionQueue,
   getChatHitRoute,
   getEntityLocationRoute,
@@ -290,5 +291,24 @@ describe("toAskAIMessageHtml", () => {
 
   test("leaves plain queries untouched", () => {
     expect(toAskAIMessageHtml("smluvní pokuta")).toBe("smluvní pokuta");
+  });
+});
+
+describe("Ask AI keyboard shortcut", () => {
+  test("is available only while browsing", () => {
+    expect(
+      canUseAskAIShortcut({
+        canAskAI: true,
+        mode: "browse",
+        query: "indemnity",
+      }),
+    ).toBe(true);
+    expect(
+      canUseAskAIShortcut({
+        canAskAI: true,
+        mode: "pick",
+        query: "indemnity",
+      }),
+    ).toBe(false);
   });
 });

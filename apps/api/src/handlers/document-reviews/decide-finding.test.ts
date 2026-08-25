@@ -36,19 +36,49 @@ type StoredFinding = {
   runId: SafeId<"documentReviewRun">;
   topicId: string;
   checkKind: "playbook" | "reference";
+  payload: {
+    checkKind: "playbook";
+    finding: {
+      fix: { kind: "replaceBlock"; blockId: string; text: string } | null;
+    };
+  };
   decision: "open" | "accepted" | "dismissed";
+  decidedBy: SafeId<"user"> | null;
+  decidedAt: Date | null;
+  applicationStatus: "pending" | "applied";
+  appliedBy: SafeId<"user"> | null;
+  appliedAt: Date | null;
 };
 
 const storedFinding = (
   decision: StoredFinding["decision"],
 ): StoredFinding[] => [
-  { runId: RUN_ID, topicId: TOPIC_ID, checkKind: "playbook", decision },
+  {
+    runId: RUN_ID,
+    topicId: TOPIC_ID,
+    checkKind: "playbook",
+    payload: {
+      checkKind: "playbook",
+      finding: {
+        fix: { kind: "replaceBlock", blockId: "p-1", text: "Updated" },
+      },
+    },
+    decision,
+    decidedBy: decision === "open" ? null : USER_ID,
+    decidedAt: decision === "open" ? null : new Date("2026-08-25T08:00:00Z"),
+    applicationStatus: "pending",
+    appliedBy: null,
+    appliedAt: null,
+  },
 ];
 
 type UpdateValues = {
   decision?: unknown;
   decidedBy?: unknown;
   decidedAt?: unknown;
+  applicationStatus?: unknown;
+  appliedBy?: unknown;
+  appliedAt?: unknown;
 };
 
 const createHarness = (rows: StoredFinding[]) => {
@@ -56,7 +86,11 @@ const createHarness = (rows: StoredFinding[]) => {
   const auditEvents: AuditEvent[] = [];
   const { safeDb, scopedDb } = createScopedDbMock({
     select: () => ({
-      from: () => ({ where: () => ({ limit: async () => rows }) }),
+      from: () => ({
+        where: () => ({
+          limit: () => ({ for: async () => rows }),
+        }),
+      }),
     }),
     update: () => ({
       set: (values: UpdateValues) => {
@@ -146,6 +180,83 @@ describe("decideDocumentReviewFinding", () => {
     expect(auditEvents.at(0)).toMatchObject({
       changes: { decision: { old: "dismissed", new: "open" } },
     });
+  });
+
+  test("records an applied edit with the accepting decision", async () => {
+    const { auditEvents, context, updates } = createHarness(
+      storedFinding("open"),
+    );
+
+    const result = await decideDocumentReviewFinding.handler({
+      ...context,
+      body: { decision: "accepted", applicationStatus: "applied" },
+    });
+
+    expect(updates.at(0)).toMatchObject({
+      decision: "accepted",
+      applicationStatus: "applied",
+      appliedBy: USER_ID,
+    });
+    expect(updates.at(0)?.appliedAt).toBeInstanceOf(Date);
+    expect(result).toMatchObject({
+      decision: "accepted",
+      applicationStatus: "applied",
+      appliedBy: USER_ID,
+    });
+    expect(auditEvents.at(0)).toMatchObject({
+      changes: {
+        decision: { old: "open", new: "accepted" },
+        applicationStatus: { old: "pending", new: "applied" },
+      },
+    });
+  });
+
+  test("replaying an applied decision preserves its original actors and moments", async () => {
+    const rows = storedFinding("accepted");
+    const finding = rows.at(0);
+    if (finding !== undefined) {
+      finding.applicationStatus = "applied";
+      finding.appliedBy = USER_ID;
+      finding.appliedAt = new Date("2026-08-25T08:01:00Z");
+    }
+    const { auditEvents, context, updates } = createHarness(rows);
+
+    const result = await decideDocumentReviewFinding.handler({
+      ...context,
+      body: { decision: "accepted", applicationStatus: "applied" },
+    });
+
+    expect(result).toMatchObject({
+      decision: "accepted",
+      decidedAt: "2026-08-25T08:00:00.000Z",
+      applicationStatus: "applied",
+      appliedAt: "2026-08-25T08:01:00.000Z",
+    });
+    expect(updates).toEqual([]);
+    expect(auditEvents).toEqual([]);
+  });
+
+  test("rejects an application mark when the finding has no proposed edit", async () => {
+    const rows = storedFinding("accepted");
+    const finding = rows.at(0);
+    if (finding !== undefined) {
+      finding.payload.finding.fix = null;
+    }
+    const { auditEvents, context, updates } = createHarness(rows);
+
+    const result = await decideDocumentReviewFinding.handler({
+      ...context,
+      body: { decision: "accepted", applicationStatus: "applied" },
+    });
+
+    expect(result).toMatchObject({
+      code: 422,
+      response: {
+        message: "This review finding has no proposed edit to apply.",
+      },
+    });
+    expect(updates).toEqual([]);
+    expect(auditEvents).toEqual([]);
   });
 
   test("answers 404 for a finding outside the workspace, writing nothing", async () => {

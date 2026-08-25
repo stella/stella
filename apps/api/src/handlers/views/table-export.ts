@@ -163,7 +163,7 @@ export const sanitizeSpreadsheetText = (
 const sanitizeSpreadsheetHeader = (value: string): string =>
   sanitizeSpreadsheetText(value, SPREADSHEET_EXPORT_LIMITS.headerTextChars);
 
-const sanitizeSpreadsheetCell = (value: string): string =>
+export const sanitizeSpreadsheetCell = (value: string): string =>
   sanitizeSpreadsheetText(value, SPREADSHEET_EXPORT_LIMITS.cellTextChars);
 
 export const sanitizeWorksheetName = (value: string): string => {

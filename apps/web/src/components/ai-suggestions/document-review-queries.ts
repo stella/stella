@@ -140,6 +140,8 @@ export type DocumentReviewFindingRow =
  *  each decision. Both read back from the run itself, so the client cannot
  *  name a disposition the endpoint does not accept. */
 export type DocumentReviewDecision = DocumentReviewFindingRow["decision"];
+export type DocumentReviewApplicationStatus =
+  DocumentReviewFindingRow["applicationStatus"];
 export type DocumentReviewDecisionCounts =
   DocumentReviewRunRow["decisionCounts"];
 
@@ -155,6 +157,14 @@ export const REVIEW_DECISION = {
 } as const satisfies Record<
   Uppercase<DocumentReviewDecision>,
   DocumentReviewDecision
+>;
+
+export const REVIEW_APPLICATION_STATUS = {
+  PENDING: "pending",
+  APPLIED: "applied",
+} as const satisfies Record<
+  Uppercase<DocumentReviewApplicationStatus>,
+  DocumentReviewApplicationStatus
 >;
 
 /** A decision the reviewer has actually taken: everything the vocabulary holds
@@ -191,6 +201,28 @@ export const decideReviewFindings = async ({
           .patch({ decision }),
       ),
     ),
+  );
+
+type RecordReviewFindingApplicationArgs = {
+  workspaceId: string;
+  findingId: DocumentReviewFindingRow["id"];
+};
+
+/** Persist that a proposed edit landed. The same write also accepts this
+ *  finding, so its application identity and reviewer disposition cannot race
+ *  each other across a reload. */
+export const recordReviewFindingApplication = async ({
+  workspaceId,
+  findingId,
+}: RecordReviewFindingApplicationArgs) =>
+  unwrapEden(
+    await api
+      .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
+      ["document-reviews"].findings({ findingId })
+      .patch({
+        decision: REVIEW_DECISION.ACCEPTED,
+        applicationStatus: REVIEW_APPLICATION_STATUS.APPLIED,
+      }),
   );
 
 /** One recorded decision as the endpoint answers it. */

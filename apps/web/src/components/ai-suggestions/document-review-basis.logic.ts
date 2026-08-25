@@ -26,6 +26,17 @@ export type ReviewPerspective =
 
 export const NEUTRAL_PERSPECTIVE: ReviewPerspective = { type: "neutral" };
 
+/** Preserve the editable role exactly while normalising the perspective sent
+ *  to the review contract. */
+export const customPerspectiveInput = (rawRole: string) => {
+  const role = rawRole.trim();
+  const perspective: ReviewPerspective =
+    role.length === 0
+      ? NEUTRAL_PERSPECTIVE
+      : { type: "party", role, name: null };
+  return { rawRole, perspective };
+};
+
 /** Whether two perspectives name the same side. */
 export const isSamePerspective = (
   a: ReviewPerspective,
