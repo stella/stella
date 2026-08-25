@@ -155,8 +155,15 @@ export const reserveCorpusProjectionIntentsTx = async (
   }
   const leaseExpiresAt =
     testNow === undefined
-      ? sql<Date>`clock_timestamp() + ${leaseMs} * INTERVAL '1 millisecond'`
+      ? (
+          await tx.select({
+            value: sql<Date>`clock_timestamp() + ${leaseMs} * INTERVAL '1 millisecond'`,
+          })
+        ).at(0)?.value
       : new Date(testNow.getTime() + leaseMs);
+  if (leaseExpiresAt === undefined) {
+    return panic("PostgreSQL did not return the projection lease expiry");
+  }
   const reservations = candidates.map((candidate) => {
     if (candidate.fingerprint === null || candidate.indexId === null) {
       return panic(

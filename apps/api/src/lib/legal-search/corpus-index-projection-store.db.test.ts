@@ -594,7 +594,10 @@ test("production transitions preserve PostgreSQL clock ordering under process sk
     client: settledProjectionClient,
     lease: settlement,
   });
-  if (verified.isErr() || verified.value.status !== "verified") {
+  if (verified.isErr()) {
+    return panic("Expected successful settlement verification");
+  }
+  if (verified.value.status !== "verified") {
     return panic("Expected verified settlement proof");
   }
   expect(

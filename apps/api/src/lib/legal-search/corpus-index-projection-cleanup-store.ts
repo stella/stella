@@ -412,12 +412,22 @@ export type CorpusProjectionCleanupSettlementResult =
  * and an exact revision query observed zero remaining documents.
  */
 export class CorpusProjectionCleanupSettlementProof {
+  readonly indexId: string;
+  readonly intentIds: readonly ProjectionIntentId[];
+  readonly deleteOpstamp: number;
+  readonly leaseToken: string;
+
   private constructor(
-    readonly indexId: string,
-    readonly intentIds: readonly ProjectionIntentId[],
-    readonly deleteOpstamp: number,
-    readonly leaseToken: string,
-  ) {}
+    indexId: string,
+    intentIds: readonly ProjectionIntentId[],
+    deleteOpstamp: number,
+    leaseToken: string,
+  ) {
+    this.indexId = indexId;
+    this.intentIds = intentIds;
+    this.deleteOpstamp = deleteOpstamp;
+    this.leaseToken = leaseToken;
+  }
 
   static async verify({
     client,
