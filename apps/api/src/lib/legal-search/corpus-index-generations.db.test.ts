@@ -7,6 +7,7 @@ import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 let client: Awaited<ReturnType<typeof createTestPglite>>;
 let db: ReturnType<typeof drizzle>;
+const MANIFEST_DIGEST = "a".repeat(64);
 
 beforeAll(
   async () => {
@@ -26,18 +27,21 @@ test("each family can serve exactly one independently routed generation", async 
       cluster: "quickwit_08",
       family: "case_law",
       generation: "case_law_v2",
+      manifestDigest: MANIFEST_DIGEST,
       status: "serving",
     },
     {
       cluster: "quickwit_09",
       family: "case_law",
       generation: "case_law_v5",
+      manifestDigest: MANIFEST_DIGEST,
       status: "building",
     },
     {
       cluster: "quickwit_08",
       family: "legislation",
       generation: "legislation_v1",
+      manifestDigest: MANIFEST_DIGEST,
       status: "serving",
     },
   ]);
@@ -47,6 +51,7 @@ test("each family can serve exactly one independently routed generation", async 
       cluster: "quickwit_09",
       family: "case_law",
       generation: "case_law_v6",
+      manifestDigest: MANIFEST_DIGEST,
       status: "serving",
     }),
   ).rejects.toThrow();
@@ -78,22 +83,67 @@ test("each family can serve exactly one independently routed generation", async 
 test("database constraints reject drift outside the TypeScript contract", async () => {
   await expect(
     db.execute(sql`
-      INSERT INTO corpus_index_generations (family, generation, cluster, status)
-      VALUES ('case_law', 'legislation_v2', 'quickwit_09', 'building')
+      INSERT INTO corpus_index_generations (family, generation, cluster, manifest_digest, status)
+      VALUES ('case_law', 'legislation_v2', 'quickwit_09', ${MANIFEST_DIGEST}, 'building')
     `),
   ).rejects.toThrow();
 
   await expect(
     db.execute(sql`
-      INSERT INTO corpus_index_generations (family, generation, cluster, status)
-      VALUES ('legislation', 'legislation_v2', 'quickwit_10', 'building')
+      INSERT INTO corpus_index_generations (family, generation, cluster, manifest_digest, status)
+      VALUES ('legislation', 'legislation_v2', 'quickwit_10', ${MANIFEST_DIGEST}, 'building')
     `),
   ).rejects.toThrow();
 
   await expect(
     db.execute(sql`
-      INSERT INTO corpus_index_generations (family, generation, cluster, status)
-      VALUES ('legislation', 'legislation_v2', 'quickwit_09', 'ready')
+      INSERT INTO corpus_index_generations (family, generation, cluster, manifest_digest, status)
+      VALUES ('legislation', 'legislation_v2', 'quickwit_09', ${MANIFEST_DIGEST}, 'ready')
     `),
   ).rejects.toThrow();
+
+  await expect(
+    db.execute(sql`
+      INSERT INTO corpus_index_generations (family, generation, cluster, manifest_digest, status)
+      VALUES ('case_law', 'case_law_v11111111111111111111111111111111', 'quickwit_09', ${MANIFEST_DIGEST}, 'building')
+    `),
+  ).rejects.toThrow();
+
+  await expect(
+    db.execute(sql`
+      INSERT INTO corpus_index_generations (family, generation, cluster, manifest_digest, status)
+      VALUES ('case_law', 'case_law_v8', 'quickwit_09', 'not-a-digest', 'building')
+    `),
+  ).rejects.toThrow();
+});
+
+test("generation identity cannot be retargeted after registration", async () => {
+  await db.insert(corpusIndexGenerations).values({
+    cluster: "quickwit_09",
+    family: "case_law",
+    generation: "case_law_v7",
+    manifestDigest: MANIFEST_DIGEST,
+    status: "building",
+  });
+
+  await db
+    .update(corpusIndexGenerations)
+    .set({ status: "retiring" })
+    .where(eq(corpusIndexGenerations.generation, "case_law_v7"));
+
+  await expect(
+    db.execute(sql`
+      UPDATE corpus_index_generations
+      SET cluster = 'quickwit_08'
+      WHERE family = 'case_law' AND generation = 'case_law_v7'
+    `),
+  ).rejects.toThrow("corpus index generation identity is immutable");
+
+  await expect(
+    db.execute(sql`
+      UPDATE corpus_index_generations
+      SET manifest_digest = ${"b".repeat(64)}
+      WHERE family = 'case_law' AND generation = 'case_law_v7'
+    `),
+  ).rejects.toThrow("corpus index generation identity is immutable");
 });

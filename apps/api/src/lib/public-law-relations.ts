@@ -108,6 +108,7 @@ export const PUBLIC_LAW_COLUMNS_BY_RELATION = {
     "family",
     "generation",
     "cluster",
+    "manifest_digest",
     "status",
   ],
   legislation_documents: [

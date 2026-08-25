@@ -7,6 +7,9 @@ export type CorpusFamily = (typeof CORPUS_FAMILIES)[number];
 export const QUICKWIT_CLUSTERS = ["quickwit_08", "quickwit_09"] as const;
 export type QuickwitCluster = (typeof QUICKWIT_CLUSTERS)[number];
 
+/** Shared persistence bound for generation names and derived physical ids. */
+export const CORPUS_INDEX_GENERATION_MAX_LENGTH = 32;
+
 export const CORPUS_INDEX_GENERATION_STATUSES = [
   "building",
   "serving",
@@ -24,9 +27,8 @@ const memberOf = <T extends string>(
 export const parseCorpusFamily = (value: unknown): CorpusFamily | null =>
   memberOf(CORPUS_FAMILIES, value);
 
-export const parseQuickwitCluster = (
-  value: unknown,
-): QuickwitCluster | null => memberOf(QUICKWIT_CLUSTERS, value);
+export const parseQuickwitCluster = (value: unknown): QuickwitCluster | null =>
+  memberOf(QUICKWIT_CLUSTERS, value);
 
 export const requireQuickwitCluster = (value: unknown): QuickwitCluster =>
   parseQuickwitCluster(value) ??
@@ -45,4 +47,6 @@ const GENERATION_PATTERNS = {
 export const isCorpusGeneration = (
   family: CorpusFamily,
   generation: string,
-): boolean => GENERATION_PATTERNS[family].test(generation);
+): boolean =>
+  generation.length <= CORPUS_INDEX_GENERATION_MAX_LENGTH &&
+  GENERATION_PATTERNS[family].test(generation);

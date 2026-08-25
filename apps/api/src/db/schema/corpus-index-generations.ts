@@ -1,10 +1,8 @@
 import {
   CORPUS_FAMILIES,
+  CORPUS_INDEX_GENERATION_MAX_LENGTH,
   CORPUS_INDEX_GENERATION_STATUSES,
   QUICKWIT_CLUSTERS,
-  type CorpusFamily,
-  type CorpusIndexGenerationStatus,
-  type QuickwitCluster,
 } from "@/api/lib/legal-search/corpus-generation-contract";
 
 import {
@@ -30,13 +28,13 @@ const sqlValues = (values: readonly string[]) =>
 export const corpusIndexGenerations = p.pgTable(
   "corpus_index_generations",
   {
-    family: p.varchar({ length: 32 }).notNull().$type<CorpusFamily>(),
-    generation: p.varchar({ length: 64 }).notNull(),
-    cluster: p.varchar({ length: 32 }).notNull().$type<QuickwitCluster>(),
-    status: p
-      .varchar({ length: 16 })
-      .notNull()
-      .$type<CorpusIndexGenerationStatus>(),
+    family: p.text({ enum: CORPUS_FAMILIES }).notNull(),
+    generation: p
+      .varchar({ length: CORPUS_INDEX_GENERATION_MAX_LENGTH })
+      .notNull(),
+    cluster: p.text({ enum: QUICKWIT_CLUSTERS }).notNull(),
+    manifestDigest: p.varchar("manifest_digest", { length: 64 }).notNull(),
+    status: p.text({ enum: CORPUS_INDEX_GENERATION_STATUSES }).notNull(),
     createdAt: timestamptz("created_at").defaultNow().notNull(),
     updatedAt: timestamptz("updated_at")
       .defaultNow()
@@ -63,6 +61,10 @@ export const corpusIndexGenerations = p.pgTable(
     p.check(
       "corpus_index_generations_status_values",
       sql`${t.status} IN (${sqlValues(CORPUS_INDEX_GENERATION_STATUSES)})`,
+    ),
+    p.check(
+      "corpus_index_generations_manifest_digest_shape",
+      sql`${t.manifestDigest} ~ '^[0-9a-f]{64}$'`,
     ),
     p.check(
       "corpus_index_generations_name_matches_family",

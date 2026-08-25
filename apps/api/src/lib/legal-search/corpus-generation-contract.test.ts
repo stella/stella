@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 
 import {
   CORPUS_FAMILIES,
+  CORPUS_INDEX_GENERATION_MAX_LENGTH,
   CORPUS_INDEX_GENERATION_STATUSES,
   isCorpusGeneration,
   parseCorpusFamily,
@@ -38,4 +39,10 @@ test("generation names belong to exactly their declared family", () => {
   expect(isCorpusGeneration("legislation", "case_law_v5")).toBe(false);
   expect(isCorpusGeneration("case_law", "case_law_v0")).toBe(false);
   expect(isCorpusGeneration("case_law", "case_law_v5_preview")).toBe(false);
+  expect(
+    isCorpusGeneration(
+      "case_law",
+      `case_law_v${"1".repeat(CORPUS_INDEX_GENERATION_MAX_LENGTH)}`,
+    ),
+  ).toBe(false);
 });
