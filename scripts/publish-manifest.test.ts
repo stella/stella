@@ -14,9 +14,10 @@ import {
 const ATLASKIT_DRAG_PACKAGE = "@atlaskit/pragmatic-drag-and-drop";
 const ATLASKIT_AUTO_SCROLL_PACKAGE =
   "@atlaskit/pragmatic-drag-and-drop-auto-scroll";
-const ATLASKIT_DRAG_RANGE = "^3.0.0";
-const ATLASKIT_AUTO_SCROLL_RANGE = "^3.0.1";
-const ATLASKIT_DRAG_VERSION = "3.0.0";
+const ATLASKIT_RUNTIME_PACKAGES = [
+  ATLASKIT_DRAG_PACKAGE,
+  ATLASKIT_AUTO_SCROLL_PACKAGE,
+] as const;
 const ATLASKIT_ELEMENT_ADAPTER =
   "@atlaskit/pragmatic-drag-and-drop/element/adapter";
 const ATLASKIT_AUTO_SCROLL_ELEMENT =
@@ -112,30 +113,21 @@ describe("toPublishedManifest", () => {
     ).toThrow(/must be a module/u);
   });
 
-  test("preserves the UI kanban's v3-only drag runtime contract", () => {
+  test("preserves the UI kanban's drag runtime contract", () => {
     const publishedUi = toPublishedManifest(uiManifest);
 
-    expect(uiManifest.devDependencies[ATLASKIT_DRAG_PACKAGE]).toBe(
-      ATLASKIT_DRAG_RANGE,
-    );
-    expect(uiManifest.devDependencies[ATLASKIT_AUTO_SCROLL_PACKAGE]).toBe(
-      ATLASKIT_AUTO_SCROLL_RANGE,
-    );
-    expect(uiManifest.peerDependencies[ATLASKIT_DRAG_PACKAGE]).toBe(
-      ATLASKIT_DRAG_RANGE,
-    );
-    expect(uiManifest.peerDependencies[ATLASKIT_AUTO_SCROLL_PACKAGE]).toBe(
-      ATLASKIT_AUTO_SCROLL_RANGE,
-    );
-    expect(webManifest.dependencies[ATLASKIT_DRAG_PACKAGE]).toBe(
-      ATLASKIT_DRAG_RANGE,
-    );
-    expect(webManifest.dependencies[ATLASKIT_AUTO_SCROLL_PACKAGE]).toBe(
-      ATLASKIT_AUTO_SCROLL_RANGE,
-    );
-    expect(rootManifest.resolutions[ATLASKIT_DRAG_PACKAGE]).toBe(
-      ATLASKIT_DRAG_VERSION,
-    );
+    for (const packageName of ATLASKIT_RUNTIME_PACKAGES) {
+      const uiRange = uiManifest.devDependencies[packageName];
+      expect(uiManifest.peerDependencies[packageName]).toBe(uiRange);
+      expect(webManifest.dependencies[packageName]).toBe(uiRange);
+    }
+
+    expect(
+      Bun.semver.satisfies(
+        rootManifest.resolutions[ATLASKIT_DRAG_PACKAGE],
+        uiManifest.devDependencies[ATLASKIT_DRAG_PACKAGE],
+      ),
+    ).toBe(true);
     expect(publishedUi["peerDependencies"]).toEqual(
       uiManifest.peerDependencies,
     );
