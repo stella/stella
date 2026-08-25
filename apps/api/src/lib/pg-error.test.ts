@@ -313,6 +313,7 @@ describe("PG_DRIVER_ERROR", () => {
   it("matches the driver's documented connection-error codes", () => {
     expect(PG_DRIVER_ERROR).toEqual({
       CONNECTION_CLOSED: "ERR_POSTGRES_CONNECTION_CLOSED",
+      CONNECTION_FAILED: "ERR_POSTGRES_CONNECTION_FAILED",
       CONNECTION_TIMEOUT: "ERR_POSTGRES_CONNECTION_TIMEOUT",
       IDLE_TIMEOUT: "ERR_POSTGRES_IDLE_TIMEOUT",
       LIFETIME_TIMEOUT: "ERR_POSTGRES_LIFETIME_TIMEOUT",
@@ -334,6 +335,25 @@ describe("isTransientPgConnectionError", () => {
     ).toBe(true);
   });
 
+  /**
+   * Total over the map rather than a list of examples, so a code added to
+   * `PG_DRIVER_ERROR` without the predicate recognising it fails here.
+   */
+  it("classifies every connection-lifecycle code, bare or wrapped", () => {
+    for (const code of Object.values(PG_DRIVER_ERROR)) {
+      const failure = Object.assign(new Error("connection gone"), {
+        name: "PostgresError",
+        code,
+      });
+      expect(isTransientPgConnectionError(failure)).toBe(true);
+      expect(
+        isTransientPgConnectionError(
+          new DrizzleQueryError("query failed", [], failure),
+        ),
+      ).toBe(true);
+    }
+  });
+
   it("does not match a query the server rejected", () => {
     expect(
       isTransientPgConnectionError(
@@ -348,12 +368,18 @@ describe("isTransientPgConnectionError", () => {
    * a socket that accepts and closes before the Postgres handshake, then
    * asserts against whatever the driver actually threw.
    *
-   * Two things are verified that a synthetic fixture cannot. First, that the
-   * code in `PG_DRIVER_ERROR` is the string Bun really emits, so an upstream
-   * rename fails here rather than in production. Second, that the driver's
-   * `message` does NOT contain its own type name — which is precisely why
-   * matching `message` for `"PostgresError"` never fired, and why this
-   * predicate reads `code` instead.
+   * Two things are verified that a synthetic fixture cannot. First, that
+   * whatever code the driver really emits is one this predicate recognises, so
+   * a rename or a new member fails here rather than in production. Second,
+   * that the driver's `message` does NOT contain its own type name — which is
+   * precisely why matching `message` for `"PostgresError"` never fired, and
+   * why this predicate reads `code` instead.
+   *
+   * The exact member is deliberately not asserted. This scenario surfaces as
+   * `CONNECTION_FAILED` on Bun 1.4 (accepted, then closed before the
+   * handshake, retried until `connectionTimeout`) and as `CONNECTION_CLOSED`
+   * on 1.3, so pinning one would test the driver's version rather than this
+   * predicate. Membership plus the classification is the stable claim.
    */
   it("classifies an error the live Bun driver actually threw", async () => {
     const server = Bun.listen({
@@ -385,9 +411,14 @@ describe("isTransientPgConnectionError", () => {
     if (!(failure instanceof Error)) {
       throw new Error(`expected a driver rejection, got ${String(failure)}`);
     }
-    expect("code" in failure ? failure.code : undefined).toBe(
-      PG_DRIVER_ERROR.CONNECTION_CLOSED,
-    );
+    const code = "code" in failure ? failure.code : undefined;
+    if (typeof code !== "string") {
+      throw new TypeError(`expected a driver error code, got ${String(code)}`);
+    }
+    // Widened so the assertion compares runtime strings rather than narrowing
+    // the argument to the map's own literal union.
+    const lifecycleCodes: readonly string[] = Object.values(PG_DRIVER_ERROR);
+    expect(lifecycleCodes).toContain(code);
     expect(failure.message).not.toContain("PostgresError");
     expect(isTransientPgConnectionError(failure)).toBe(true);
   });

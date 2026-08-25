@@ -138,13 +138,28 @@ export const isPgConstraintError = (
  * with the server-side closures: Bun retires a connection when the timer
  * expires whether or not a caller still holds it, so the interrupted work is
  * neither lost nor invalid, and the next attempt gets a fresh connection.
+ *
+ * `CONNECTION_FAILED` is the same story at the other end of the connection's
+ * life: the driver documents it as accepted but closed before the handshake
+ * completed, which is what a server that is still starting up looks like.
+ * Which of these a given failure surfaces as is not stable across driver
+ * versions, so callers must treat the set as one condition rather than
+ * branching on a member.
  */
 export const PG_DRIVER_ERROR = {
   CONNECTION_CLOSED: "ERR_POSTGRES_CONNECTION_CLOSED",
+  CONNECTION_FAILED: "ERR_POSTGRES_CONNECTION_FAILED",
   CONNECTION_TIMEOUT: "ERR_POSTGRES_CONNECTION_TIMEOUT",
   IDLE_TIMEOUT: "ERR_POSTGRES_IDLE_TIMEOUT",
   LIFETIME_TIMEOUT: "ERR_POSTGRES_LIFETIME_TIMEOUT",
 } as const;
+
+/**
+ * `ERR_POSTGRES_CONNECTION_REFUSED` is deliberately absent: the driver
+ * documents it as nothing listening at the address, fails it immediately, and
+ * does not retry. Treating it as transient would turn a wrong host or port
+ * into a silent retry loop rather than a failure someone reads.
+ */
 
 const CONNECTION_LIFECYCLE_CODES: ReadonlySet<string> = new Set(
   Object.values(PG_DRIVER_ERROR),
