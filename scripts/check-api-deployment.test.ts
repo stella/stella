@@ -42,11 +42,17 @@ describe("API deployment health receipt", () => {
       new URL("../.github/workflows/publish-npm.yml", import.meta.url),
     ).text();
 
-    // Descends from the latest-pointer policy fix and adds the release job
-    // environment input.
-    expect(workflow).toContain(
-      "stella/.github/.github/workflows/npm-independent-release.yml@68f07b8d089564fcbd9383824ddc8af31ff8d4ba # release job environment input",
-    );
+    const setupPin =
+      /stella\/\.github\/actions\/setup-bun-cached@(?<sha>[0-9a-f]{40})/u.exec(
+        workflow,
+      )?.groups?.["sha"];
+    const releasePin =
+      /stella\/\.github\/\.github\/workflows\/npm-independent-release\.yml@(?<sha>[0-9a-f]{40}) # release job environment input/u.exec(
+        workflow,
+      )?.groups?.["sha"];
+
+    expect(setupPin).toBeDefined();
+    expect(releasePin).toBe(setupPin);
   });
 
   test("ties staging promotion to the current health gate", async () => {
