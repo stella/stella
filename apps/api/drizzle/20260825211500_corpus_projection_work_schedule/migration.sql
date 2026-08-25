@@ -1,6 +1,10 @@
 SET lock_timeout = '1s';--> statement-breakpoint
 SET statement_timeout = '5s';--> statement-breakpoint
 
+-- stella-migration-safety: reviewed destructive-change - the projection table
+-- has no production writer until Plane ships; replacing its original pending
+-- index is transactional, so rollback restores the old index.
+
 ALTER TABLE "corpus_index_projection_states"
   ADD COLUMN "work_status" text DEFAULT 'eligible' NOT NULL,
   ADD COLUMN "retry_not_before" timestamptz,
@@ -9,12 +13,12 @@ ALTER TABLE "corpus_index_projection_states"
 
 ALTER TABLE "corpus_index_projection_states"
   ADD CONSTRAINT "corpus_index_projection_states_work_status_values"
-    CHECK ("work_status" IN ('eligible', 'retry_scheduled', 'blocked')),
+    CHECK ("work_status" IN ('eligible', 'retry_scheduled', 'blocked')) NOT VALID,
   ADD CONSTRAINT "corpus_index_projection_states_failure_kind_values"
     CHECK (
       "last_failure_kind" IS NULL
       OR "last_failure_kind" IN ('payload_unavailable', 'revision_too_large')
-    ),
+    ) NOT VALID,
   ADD CONSTRAINT "corpus_index_projection_states_work_shape"
     CHECK (CASE "work_status"
       WHEN 'eligible' THEN
@@ -30,13 +34,15 @@ ALTER TABLE "corpus_index_projection_states"
         AND "last_failure_kind" IS NOT NULL
         AND "last_failure_message" IS NOT NULL
       ELSE false
-    END);--> statement-breakpoint
+    END) NOT VALID;--> statement-breakpoint
 
 -- The table remains inert until the executor ships. Replace the original
 -- pending index before bootstrap so one partial index owns runnable work and
 -- blocked rows never inflate the scheduler's scan surface.
+-- squawk-ignore require-concurrent-index-deletion
 DROP INDEX "corpus_index_projection_states_pending_idx";--> statement-breakpoint
 
+-- squawk-ignore require-concurrent-index-creation
 CREATE INDEX "corpus_index_projection_states_pending_idx"
   ON "corpus_index_projection_states" (
     "family",
