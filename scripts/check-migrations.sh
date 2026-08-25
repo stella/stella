@@ -182,9 +182,9 @@ fi
 # Grandfather already-applied migrations: lint only files NOT in the baseline.
 # Existing migrations are immutable — Drizzle tracks them by content hash, so
 # editing one to satisfy a new lint rule changes its hash and breaks the
-# migrator on live databases. The baseline (scripts/squawk-baseline.txt) exempts
+# migrator on live databases. The baseline (scripts/migration-baseline.txt) exempts
 # those; every NEW migration (not listed) is still fully linted.
-BASELINE_FILE="scripts/squawk-baseline.txt"
+BASELINE_FILE="scripts/migration-baseline.txt"
 LINT_SQL_FILES=()
 for migration_file in "${MIGRATION_SQL_FILES[@]+"${MIGRATION_SQL_FILES[@]}"}"; do
   if [[ -f "$BASELINE_FILE" ]] && grep -qxF "$migration_file" "$BASELINE_FILE"; then
