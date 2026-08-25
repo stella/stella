@@ -1,6 +1,5 @@
 from pathlib import Path
 
-
 APP_ICON_POSITION = (180, 210)
 APPLICATIONS_ICON_POSITION = (480, 210)
 DMG_WINDOW_POSITION = (200, 120)
@@ -16,7 +15,7 @@ symlinks = {"Applications": "/Applications"}
 icon = str(volume_icon_path)
 background = str(background_path)
 
-format = "UDZO"
+format = "UDZO"  # noqa: A001
 filesystem = "HFS+"
 window_rect = (DMG_WINDOW_POSITION, DMG_WINDOW_SIZE)
 default_view = "icon-view"

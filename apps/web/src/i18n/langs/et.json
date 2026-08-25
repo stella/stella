@@ -3222,7 +3222,7 @@
       "desktopDownloadWindows": "Laadi alla Windowsi jaoks",
       "desktopHeroTitle": "Teie lõikelaud, valmis siis, kui seda vajate",
       "desktopInstallMacStep": "Avage DMG ja lohistage stella desktop kausta Applications.",
-      "desktopInstallOpenStep": "Avage stella desktop üks kord. Lõikelaud ilmub kohe ja jääb menüüribalt kättesaadavaks.",
+      "desktopInstallOpenStep": "Avage stella desktop üks kord. Lõikelaud ilmub kohe ja jääb kättesaadavaks macOS-i menüüribalt või Windowsi süsteemisalvest.",
       "desktopInstallTitle": "Installimine ja avamine",
       "desktopInstallWindowsStep": "Käivitage installer ja järgige juhiseid.",
       "desktopPrivacyDescription": "Lõikelaua ajalugu krüpteeritakse ja talletatakse selles seadmes.",

@@ -3222,7 +3222,7 @@
       "desktopDownloadWindows": "Télécharger pour Windows",
       "desktopHeroTitle": "Votre presse-papiers, prêt quand vous en avez besoin",
       "desktopInstallMacStep": "Ouvrez le fichier DMG et faites glisser stella desktop dans Applications.",
-      "desktopInstallOpenStep": "Ouvrez stella desktop une fois. Le presse-papiers apparaît immédiatement et reste accessible depuis la barre des menus.",
+      "desktopInstallOpenStep": "Ouvrez stella desktop une fois. Le presse-papiers apparaît immédiatement et reste accessible depuis la barre des menus de macOS ou la zone de notification de Windows.",
       "desktopInstallTitle": "Installer et ouvrir",
       "desktopInstallWindowsStep": "Lancez le programme d’installation et suivez les instructions.",
       "desktopPrivacyDescription": "L’historique du presse-papiers est chiffré et stocké sur cet appareil.",

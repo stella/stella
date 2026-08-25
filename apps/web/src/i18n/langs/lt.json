@@ -3222,7 +3222,7 @@
       "desktopDownloadWindows": "Atsisiųsti „Windows“",
       "desktopHeroTitle": "Jūsų iškarpinė paruošta, kai jos prireikia",
       "desktopInstallMacStep": "Atidarykite DMG ir nuvilkite „stella desktop“ į aplanką „Applications“.",
-      "desktopInstallOpenStep": "Vieną kartą atidarykite „stella desktop“. Iškarpinė pasirodys iškart ir liks pasiekiama meniu juostoje.",
+      "desktopInstallOpenStep": "Vieną kartą atidarykite „stella desktop“. Iškarpinė pasirodys iškart ir liks pasiekiama macOS meniu juostoje arba Windows sistemos dėkle.",
       "desktopInstallTitle": "Įdiegti ir atidaryti",
       "desktopInstallWindowsStep": "Paleiskite diegimo programą ir vykdykite nurodymus.",
       "desktopPrivacyDescription": "Iškarpinės istorija užšifruojama ir saugoma šiame įrenginyje.",

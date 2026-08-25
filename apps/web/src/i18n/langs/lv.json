@@ -3222,7 +3222,7 @@
       "desktopDownloadWindows": "Lejupielādēt operētājsistēmai Windows",
       "desktopHeroTitle": "Jūsu starpliktuve ir gatava, kad tā vajadzīga",
       "desktopInstallMacStep": "Atveriet DMG un ievelciet stella desktop mapē Applications.",
-      "desktopInstallOpenStep": "Vienreiz atveriet stella desktop. Starpliktuve parādīsies uzreiz un turpmāk būs pieejama izvēļņu joslā.",
+      "desktopInstallOpenStep": "Vienreiz atveriet stella desktop. Starpliktuve parādīsies uzreiz un turpmāk būs pieejama macOS izvēļņu joslā vai Windows sistēmas teknē.",
       "desktopInstallTitle": "Instalēšana un atvēršana",
       "desktopInstallWindowsStep": "Palaidiet instalētāju un izpildiet norādījumus.",
       "desktopPrivacyDescription": "Starpliktuves vēsture tiek šifrēta un glabāta šajā ierīcē.",

@@ -651,6 +651,7 @@ impl ClipboardManager {
       return Ok(false);
     };
     item.set_name((!name.is_empty()).then(|| name.to_string()));
+    prune_items_preserving(&mut self.items, Utc::now(), Some(id));
     self.persist_or_restore(checkpoint)?;
     Ok(true)
   }
@@ -1548,6 +1549,49 @@ mod tests {
         .is_err()
     );
     assert_eq!(manager.items[0].name(), Some("Key clause"));
+  }
+
+  #[test]
+  fn renaming_reapplies_the_total_history_byte_limit() {
+    let now = Utc::now();
+    let mut manager = ClipboardManager::new();
+    manager.persistence = ClipboardPersistence::MemoryOnly;
+    let target = text_item(now, "target");
+    let target_id = target.id().to_string();
+    manager.items.push(target);
+    let large_text = "x".repeat(MAX_ITEM_TEXT_BYTES);
+    for _ in 0..(MAX_HISTORY_BYTES / MAX_ITEM_TEXT_BYTES - 1) {
+      manager.items.push(text_item(now, &large_text));
+    }
+    let bytes_before_filler = manager
+      .items
+      .iter()
+      .map(ClipboardItem::byte_len)
+      .sum::<usize>();
+    let filler_overhead = text_item(now, "").byte_len();
+    let filler_size = MAX_HISTORY_BYTES - bytes_before_filler - filler_overhead - 1;
+    manager.items.push(text_item(now, &"x".repeat(filler_size)));
+    assert_eq!(
+      manager
+        .items
+        .iter()
+        .map(ClipboardItem::byte_len)
+        .sum::<usize>(),
+      MAX_HISTORY_BYTES - 1
+    );
+
+    assert!(manager.set_item_name(&target_id, "Key clause").unwrap());
+
+    let renamed = manager.item(&target_id).unwrap();
+    assert_eq!(renamed.name(), Some("Key clause"));
+    assert!(
+      manager
+        .items
+        .iter()
+        .map(ClipboardItem::byte_len)
+        .sum::<usize>()
+        <= MAX_HISTORY_BYTES
+    );
   }
 
   #[test]

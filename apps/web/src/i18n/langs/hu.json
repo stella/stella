@@ -3222,7 +3222,7 @@
       "desktopDownloadWindows": "Letöltés Windowsra",
       "desktopHeroTitle": "A vágólapja mindig kéznél van",
       "desktopInstallMacStep": "Nyissa meg a DMG-fájlt, és húzza a stella desktop alkalmazást az Alkalmazások mappába.",
-      "desktopInstallOpenStep": "Nyissa meg egyszer a stella desktop alkalmazást. A vágólap azonnal megjelenik, később pedig a menüsorból érhető el.",
+      "desktopInstallOpenStep": "Nyissa meg egyszer a stella desktop alkalmazást. A vágólap azonnal megjelenik, később pedig a macOS menüsorából vagy a Windows értesítési területéről érhető el.",
       "desktopInstallTitle": "Telepítés és megnyitás",
       "desktopInstallWindowsStep": "Indítsa el a telepítőt, és kövesse az utasításokat.",
       "desktopPrivacyDescription": "A vágólapelőzmények titkosítva, ezen az eszközön tárolódnak.",

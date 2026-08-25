@@ -3222,7 +3222,7 @@
       "desktopDownloadWindows": "Für Windows herunterladen",
       "desktopHeroTitle": "Ihre Zwischenablage, wenn Sie sie brauchen",
       "desktopInstallMacStep": "Öffnen Sie die DMG-Datei und ziehen Sie stella desktop in den Ordner Programme.",
-      "desktopInstallOpenStep": "Öffnen Sie stella desktop einmal. Die Zwischenablage erscheint sofort und bleibt über die Menüleiste verfügbar.",
+      "desktopInstallOpenStep": "Öffnen Sie stella desktop einmal. Die Zwischenablage erscheint sofort und bleibt über die macOS-Menüleiste oder den Windows-Infobereich verfügbar.",
       "desktopInstallTitle": "Installieren und öffnen",
       "desktopInstallWindowsStep": "Starten Sie das Installationsprogramm und folgen Sie den Anweisungen.",
       "desktopPrivacyDescription": "Der Zwischenablageverlauf wird verschlüsselt auf diesem Gerät gespeichert.",

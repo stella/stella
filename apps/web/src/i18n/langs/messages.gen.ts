@@ -3225,7 +3225,7 @@ type Messages = {
       "desktopDownloadWindows": "Download for Windows";
       "desktopHeroTitle": "Your clipboard, ready when you need it";
       "desktopInstallMacStep": "Open the DMG and drag stella desktop to Applications.";
-      "desktopInstallOpenStep": "Open stella desktop once. Clipboard appears immediately and remains available from the menu bar.";
+      "desktopInstallOpenStep": "Open stella desktop once. Clipboard appears immediately and remains available from the macOS menu bar or Windows system tray.";
       "desktopInstallTitle": "Install and open";
       "desktopInstallWindowsStep": "Run the installer and follow the prompts.";
       "desktopPrivacyDescription": "Clipboard history is encrypted and stored on this device.";

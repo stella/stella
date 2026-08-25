@@ -3222,7 +3222,7 @@
       "desktopDownloadWindows": "Descargar para Windows",
       "desktopHeroTitle": "Tu portapapeles, listo cuando lo necesites",
       "desktopInstallMacStep": "Abre el DMG y arrastra stella desktop a Aplicaciones.",
-      "desktopInstallOpenStep": "Abre stella desktop una vez. El portapapeles aparece de inmediato y queda disponible en la barra de menús.",
+      "desktopInstallOpenStep": "Abre stella desktop una vez. El portapapeles aparece de inmediato y queda disponible en la barra de menús de macOS o en la bandeja del sistema de Windows.",
       "desktopInstallTitle": "Instalar y abrir",
       "desktopInstallWindowsStep": "Ejecuta el instalador y sigue las instrucciones.",
       "desktopPrivacyDescription": "El historial del portapapeles se cifra y se guarda en este dispositivo.",

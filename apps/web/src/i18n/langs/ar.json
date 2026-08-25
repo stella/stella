@@ -3222,7 +3222,7 @@
       "desktopDownloadWindows": "التنزيل لنظام Windows",
       "desktopHeroTitle": "حافظتك جاهزة عندما تحتاج إليها",
       "desktopInstallMacStep": "افتح ملف DMG واسحب stella desktop إلى مجلد التطبيقات.",
-      "desktopInstallOpenStep": "افتح stella desktop مرة واحدة. تظهر الحافظة فورًا وتبقى متاحة من شريط القوائم.",
+      "desktopInstallOpenStep": "افتح stella desktop مرة واحدة. تظهر الحافظة فورًا وتبقى متاحة من شريط القوائم في macOS أو منطقة الإعلام في Windows.",
       "desktopInstallTitle": "التثبيت والفتح",
       "desktopInstallWindowsStep": "شغّل برنامج التثبيت واتبع التعليمات.",
       "desktopPrivacyDescription": "يُشفَّر سجل الحافظة ويُخزَّن على هذا الجهاز.",

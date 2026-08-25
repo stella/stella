@@ -3222,7 +3222,7 @@
       "desktopDownloadWindows": "Baixar para Windows",
       "desktopHeroTitle": "Sua área de transferência, pronta quando você precisar",
       "desktopInstallMacStep": "Abra o DMG e arraste o stella desktop para Aplicativos.",
-      "desktopInstallOpenStep": "Abra o stella desktop uma vez. A área de transferência aparece na hora e continua disponível na barra de menus.",
+      "desktopInstallOpenStep": "Abra o stella desktop uma vez. A área de transferência aparece na hora e continua disponível pela barra de menus do macOS ou pela bandeja do sistema do Windows.",
       "desktopInstallTitle": "Instalar e abrir",
       "desktopInstallWindowsStep": "Execute o instalador e siga as instruções.",
       "desktopPrivacyDescription": "O histórico da área de transferência é criptografado e armazenado neste dispositivo.",

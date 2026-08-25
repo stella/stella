@@ -3222,7 +3222,7 @@
       "desktopDownloadWindows": "Stáhnout pro Windows",
       "desktopHeroTitle": "Schránka připravená, kdykoli ji potřebujete",
       "desktopInstallMacStep": "Otevřete DMG a přetáhněte stella desktop do složky Aplikace.",
-      "desktopInstallOpenStep": "Jednou otevřete stella desktop. Schránka se zobrazí hned a poté zůstane dostupná v řádku nabídek.",
+      "desktopInstallOpenStep": "Jednou otevřete stella desktop. Schránka se zobrazí hned a poté zůstane dostupná v řádku nabídek macOS nebo v oznamovací oblasti Windows.",
       "desktopInstallTitle": "Instalace a spuštění",
       "desktopInstallWindowsStep": "Spusťte instalační program a postupujte podle pokynů.",
       "desktopPrivacyDescription": "Historie schránky je šifrovaná a uložená v tomto zařízení.",

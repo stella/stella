@@ -3222,7 +3222,7 @@
       "desktopDownloadWindows": "Pobierz dla Windows",
       "desktopHeroTitle": "Schowek gotowy, gdy go potrzebujesz",
       "desktopInstallMacStep": "Otwórz plik DMG i przeciągnij stella desktop do folderu Aplikacje.",
-      "desktopInstallOpenStep": "Otwórz stella desktop jeden raz. Schowek pojawi się od razu i pozostanie dostępny z paska menu.",
+      "desktopInstallOpenStep": "Otwórz stella desktop jeden raz. Schowek pojawi się od razu i pozostanie dostępny z paska menu macOS lub zasobnika systemowego Windows.",
       "desktopInstallTitle": "Instalacja i otwarcie",
       "desktopInstallWindowsStep": "Uruchom instalator i postępuj zgodnie z instrukcjami.",
       "desktopPrivacyDescription": "Historia schowka jest szyfrowana i przechowywana na tym urządzeniu.",
