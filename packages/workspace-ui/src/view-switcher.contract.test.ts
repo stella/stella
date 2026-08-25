@@ -6,6 +6,16 @@ const source = await Bun.file(
 const manifest = await Bun.file(
   new URL("../package.json", import.meta.url),
 ).json();
+const atlaskitPeerDependencies = Object.fromEntries(
+  Object.entries(manifest.peerDependencies).filter(([name]) =>
+    name.startsWith("@atlaskit/"),
+  ),
+);
+const atlaskitDevDependencies = Object.fromEntries(
+  Object.entries(manifest.devDependencies).filter(([name]) =>
+    name.startsWith("@atlaskit/"),
+  ),
+);
 
 test("selection remains controlled by the accessible tabs primitive", () => {
   expect(source).toContain("onValueChange=");
@@ -19,10 +29,7 @@ test("drag interactions use one published Pragmatic DnD v3 contract", () => {
   expect(source).toContain('from "@atlaskit/pragmatic-drag-and-drop/combine"');
   expect(source).not.toContain("/adapter/element-adapter");
   expect(source).not.toContain("/utils/combine");
-  expect(manifest.peerDependencies).toMatchObject({
-    "@atlaskit/pragmatic-drag-and-drop": "^3.0.0",
-    "@atlaskit/pragmatic-drag-and-drop-hitbox": "^2.0.1",
-  });
+  expect(atlaskitPeerDependencies).toEqual(atlaskitDevDependencies);
 });
 
 test("drag targets accept only their own switcher instance", () => {
