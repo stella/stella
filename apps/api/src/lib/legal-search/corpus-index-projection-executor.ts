@@ -1,6 +1,7 @@
 import { panic, Result } from "better-result";
 
 import type { Transaction } from "@/api/db/root";
+import { PayloadBudgetError } from "@/api/lib/compression";
 import { ChunkBudgetError } from "@/api/lib/corpus-index/chunking";
 import { settleBoth } from "@/api/lib/corpus-index/core";
 import type { CorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client";
@@ -255,6 +256,19 @@ type PreparedProjectionFailure = {
   message: string;
 };
 
+export const classifyCorpusProjectionPayloadReadFailure = (
+  error: unknown,
+): PreparedProjectionFailure =>
+  error instanceof PayloadBudgetError
+    ? {
+        kind: "revision_too_large",
+        message: "projection payload exceeds the transfer or decode ceiling",
+      }
+    : {
+        kind: "payload_unavailable",
+        message: "projection payload read failed before append",
+      };
+
 type PreparedProjectionRequest = {
   indexId: string;
   entries: readonly PreparedProjectionEntry[];
@@ -273,10 +287,9 @@ const buildPreparedEntry = async (
     async () => await loadCorpusProjectionPayload(runInTransaction, material),
   );
   if (payload.isErr()) {
-    return Result.err({
-      kind: "payload_unavailable",
-      message: "projection payload read failed before append",
-    });
+    return Result.err(
+      classifyCorpusProjectionPayloadReadFailure(payload.error),
+    );
   }
   const built = Result.try(() => {
     switch (material.family) {

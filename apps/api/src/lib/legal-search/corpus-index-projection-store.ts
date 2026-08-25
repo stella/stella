@@ -750,7 +750,7 @@ export const commitCorpusProjectionAppendTx = async (
     identity.family,
     identity.generation,
   );
-  const states = await tx
+  await tx
     .select()
     .from(corpusIndexProjectionStates)
     .where(
@@ -762,7 +762,6 @@ export const commitCorpusProjectionAppendTx = async (
     )
     .limit(1)
     .for("update");
-  const state = states.at(0);
   const intents = await tx
     .select()
     .from(corpusIndexProjectionIntents)
@@ -980,8 +979,7 @@ export const classifyCorpusProjectionReservationFailureTx = async (
       `Corpus projection retry attempt limit must be an integer from ${CORPUS_PROJECTION_RETRY_ATTEMPT_LIMIT_MIN} to ${CORPUS_PROJECTION_RETRY_ATTEMPT_LIMIT_MAX}`,
     );
   }
-  const transitionAt = now ?? sql<Date>`clock_timestamp()`;
-  const intents = await tx
+  const identities = await tx
     .select({
       family: corpusIndexProjectionIntents.family,
       generation: corpusIndexProjectionIntents.generation,
@@ -998,12 +996,41 @@ export const classifyCorpusProjectionReservationFailureTx = async (
         eq(corpusIndexProjectionIntents.leaseToken, leaseToken),
       ),
     )
+    .limit(1);
+  const identity = identities.at(0);
+  if (identity === undefined) {
+    return "lease_lost";
+  }
+  const states = await tx
+    .select()
+    .from(corpusIndexProjectionStates)
+    .where(
+      and(
+        eq(corpusIndexProjectionStates.family, identity.family),
+        eq(corpusIndexProjectionStates.generation, identity.generation),
+        eq(corpusIndexProjectionStates.entityId, identity.entityId),
+      ),
+    )
+    .limit(1)
+    .for("update");
+  const state = states.at(0);
+  const intents = await tx
+    .select()
+    .from(corpusIndexProjectionIntents)
+    .where(
+      and(
+        eq(corpusIndexProjectionIntents.id, intentId),
+        eq(corpusIndexProjectionIntents.status, "reserved"),
+        eq(corpusIndexProjectionIntents.leaseToken, leaseToken),
+      ),
+    )
     .limit(1)
     .for("update");
   const intent = intents.at(0);
   if (intent === undefined) {
     return "lease_lost";
   }
+  const transitionAt = now ?? sql<Date>`clock_timestamp()`;
   await tx
     .update(corpusIndexProjectionIntents)
     .set({
@@ -1015,6 +1042,15 @@ export const classifyCorpusProjectionReservationFailureTx = async (
       updatedAt: transitionAt,
     })
     .where(eq(corpusIndexProjectionIntents.id, intentId));
+  const stillDesired =
+    state !== undefined &&
+    state.desiredAction === "upsert" &&
+    state.desiredEpoch === intent.epoch &&
+    state.desiredFingerprint === intent.fingerprint &&
+    state.desiredIndexId === intent.indexId;
+  if (!stillDesired) {
+    return "stale_cancelled";
+  }
   const nextFailureAttempts = sql<number>`${corpusIndexProjectionStates.failureAttempts} + 1`;
   const retryExhausted =
     failure.status === "retry_scheduled"
@@ -1034,7 +1070,7 @@ export const classifyCorpusProjectionReservationFailureTx = async (
     WHEN ${retryExhausted} THEN NULL
     ELSE ${retryAt}
   END`;
-  const states = await tx
+  const updatedStates = await tx
     .update(corpusIndexProjectionStates)
     .set({
       workStatus: nextWorkStatus,
@@ -1056,7 +1092,7 @@ export const classifyCorpusProjectionReservationFailureTx = async (
       ),
     )
     .returning({ workStatus: corpusIndexProjectionStates.workStatus });
-  const workStatus = states.at(0)?.workStatus;
+  const workStatus = updatedStates.at(0)?.workStatus;
   switch (workStatus) {
     case "retry_scheduled":
     case "blocked":
