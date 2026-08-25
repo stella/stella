@@ -69,7 +69,7 @@ const PROJECTION_MIGRATION_URLS = [
     import.meta.url,
   ),
   new URL(
-    "../../../drizzle/20260825143000_corpus_projection_replacement_order/migration.sql",
+    "../../../drizzle/20260825211400_corpus_projection_replacement_order/migration.sql",
     import.meta.url,
   ),
 ] as const;
