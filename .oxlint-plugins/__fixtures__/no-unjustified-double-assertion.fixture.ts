@@ -30,6 +30,12 @@ export const unrelatedDirectAssertion = externalValue as MatterSummary;
 // oxlint-disable-next-line no-unjustified-double-assertion/no-unjustified-double-assertion -- fixture: an intervening statement separates this cast from the unrelated rationale
 export const separatedBoundary = externalValue as unknown as MatterSummary;
 
+export const earlierStatement = externalValue as MatterSummary; // SAFETY: this comment documents only the earlier statement.
+
+export const trailingCommentBoundary =
+  // oxlint-disable-next-line no-unjustified-double-assertion/no-unjustified-double-assertion -- fixture: a trailing comment on an earlier statement cannot justify this cast
+  externalValue as unknown as MatterSummary;
+
 export const directAssertion = externalValue as MatterSummary;
 
 declare const identified: { matterId: string };

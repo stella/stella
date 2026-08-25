@@ -12,21 +12,25 @@ import { and, eq, gt, gte, lt, lte, ne, or, sql } from "drizzle-orm";
 // Only the shapes matter: the rule reads `<object>.<columnName>` and the
 // operand's syntax, never their types.
 const createdAt = sql`created_at`;
-const decisions = {
+declare const pgTable: <TColumns extends Record<string, unknown>>(
+  name: string,
+  columns: TColumns,
+) => TColumns;
+const decisions = pgTable("decisions", {
   createdAt,
   updatedAt: sql`updated_at`,
   id: sql`id`,
   sourceId: sql`source_id`,
-};
+});
 const allocations = {
   periodStart: sql`period_start`,
   periodEnd: sql`period_end`,
 };
 const searchDocuments = { updatedAt: sql`updated_at` };
-const projectionIntents = {
+const projectionIntents = pgTable("projection_intents", {
   appendPublishBarrierAt: sql`append_publish_barrier_at`,
   cleanupNotBefore: sql`cleanup_not_before`,
-};
+});
 const cursor = { createdAt: new Date(), id: "row-id" };
 const checkpoint = {
   cursorCreatedAt: new Date(),
@@ -155,6 +159,15 @@ const _sameOwnerColumnTuple = sql`(${decisions.updatedAt}, ${decisions.id}) >= (
 const _sameOwnerColumnCall = gte(decisions.updatedAt, decisions.createdAt);
 const _legacySameOwnerColumn = sql`${projectionIntents.cleanupNotBefore} >= ${projectionIntents.appendPublishBarrierAt}`;
 
+// A plain helper object is not a schema table even when both operands use the
+// same syntactic owner: cursorAt still contains a truncated JavaScript Date.
+const operands = {
+  storedAt: decisions.createdAt,
+  cursorAt: cursor.createdAt,
+};
+// oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison
+const _sameHelperOwner = gt(operands.storedAt, operands.cursorAt);
+
 // A nested SQL fragment can still bind a truncated JS Date; the tag alone
 // does not make every interpolation a database-native expression.
 // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison
@@ -246,6 +259,7 @@ export const __noTruncatedTimestampComparisonFixture = {
   _sameOwnerColumnTuple,
   _sameOwnerColumnCall,
   _legacySameOwnerColumn,
+  _sameHelperOwner,
   _columnOnRight,
   _nestedBoundDate,
   _conditionalClock,

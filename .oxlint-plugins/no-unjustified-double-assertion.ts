@@ -123,11 +123,19 @@ export default eslintCompatPlugin({
             startLine !== undefined &&
             comments.some((comment) => {
               const endLine = locationLine(comment, "end");
+              const commentLineStart =
+                context.sourceCode.text.lastIndexOf(
+                  "\n",
+                  comment.range[0] - 1,
+                ) + 1;
               return (
                 endLine !== undefined &&
                 endLine < startLine &&
                 startLine - endLine <= MAX_SAFETY_COMMENT_DISTANCE &&
                 SAFETY_COMMENT.test(comment.value) &&
+                context.sourceCode.text
+                  .slice(commentLineStart, comment.range[0])
+                  .trim() === "" &&
                 context.sourceCode.text
                   .slice(comment.range[1], assertionLineStart)
                   .replaceAll(COMMENT_TEXT, "")

@@ -144,7 +144,7 @@ const isTimestampColumnExpression = (node: unknown): boolean => {
   return typeof name === "string" && isTimestampColumnName(name);
 };
 
-const timestampColumnOwner = (node: unknown): string | undefined => {
+const timestampColumnOwner = (node: unknown): AstNode | undefined => {
   if (!isTimestampColumnExpression(node) || !isAstNode(node)) {
     return undefined;
   }
@@ -152,16 +152,7 @@ const timestampColumnOwner = (node: unknown): string | undefined => {
   if (!isAstNode(object) || object.type !== "Identifier") {
     return undefined;
   }
-  const name = object.name;
-  return typeof name === "string" ? name : undefined;
-};
-
-const hasSameTimestampColumnOwner = (
-  left: unknown,
-  right: unknown,
-): boolean => {
-  const leftOwner = timestampColumnOwner(left);
-  return leftOwner !== undefined && leftOwner === timestampColumnOwner(right);
+  return typeof object.name === "string" ? object : undefined;
 };
 
 // ── SQL text ─────────────────────────────────────────────────────────────
@@ -482,6 +473,50 @@ export default eslintCompatPlugin({
             scope?.set.get(identifier.name) ??
             (scope?.upper ? findVariable(scope.upper) : null);
           return findVariable(context.sourceCode.getScope(identifier));
+        };
+
+        const isPgTableCall = (node: unknown): boolean =>
+          isAstNode(node) &&
+          node.type === "CallExpression" &&
+          calleeName(node) === "pgTable";
+
+        // The same spelling on both operands is not enough: a helper object
+        // can group a real column and a round-tripped Date under one owner.
+        // Accept the exemption only when that owner resolves to a pgTable
+        // binding or to the table parameter of pgTable's checks callback.
+        const isPgTableOwner = (owner: AstNode): boolean => {
+          const variable = resolveVariable(owner);
+          return (
+            variable !== null &&
+            variable.defs.some((def) => {
+              if (def.type === "Variable" && isAstNode(def.node)) {
+                return (
+                  def.node.type === "VariableDeclarator" &&
+                  isPgTableCall(def.node.init)
+                );
+              }
+              if (def.type !== "Parameter" || !isAstNode(def.node)) {
+                return false;
+              }
+              return isPgTableCall(def.node.parent);
+            })
+          );
+        };
+
+        const hasSameTimestampColumnOwner = (
+          left: unknown,
+          right: unknown,
+        ): boolean => {
+          const leftOwner = timestampColumnOwner(left);
+          const rightOwner = timestampColumnOwner(right);
+          if (
+            leftOwner === undefined ||
+            rightOwner === undefined ||
+            leftOwner.name !== rightOwner.name
+          ) {
+            return false;
+          }
+          return isPgTableOwner(leftOwner) && isPgTableOwner(rightOwner);
         };
 
         // One hop from an identifier to the `const` initializer it was bound
