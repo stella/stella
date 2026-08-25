@@ -338,6 +338,36 @@ export const readActiveCorpusProjectionManifest = async (
   return verifiedManifest(row);
 };
 
+/**
+ * Cleanup outlives serving eligibility. Retiring generations can still carry
+ * unknown append outcomes, so cleanup verifies and share-locks their immutable
+ * registered manifest without requiring an active lifecycle status.
+ */
+export const readRegisteredCorpusProjectionManifestForCleanup = async (
+  tx: Transaction,
+  family: CorpusIndexProjectionSubject["family"],
+  generation: string,
+): Promise<CorpusIndexManifest> => {
+  const rows = await tx
+    .select()
+    .from(corpusIndexGenerations)
+    .where(
+      and(
+        eq(corpusIndexGenerations.family, family),
+        eq(corpusIndexGenerations.generation, generation),
+      ),
+    )
+    .limit(1)
+    .for("share");
+  const row = rows.at(0);
+  if (row === undefined) {
+    return panic(
+      `Corpus generation is not registered for cleanup: ${family}/${generation}`,
+    );
+  }
+  return verifiedManifest(row);
+};
+
 export const buildCorpusIndexProjectionDesiredStateValues = ({
   subject,
   generation,
