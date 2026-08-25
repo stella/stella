@@ -35,7 +35,12 @@ const baselinePayload = () => ({
     rowCount: "7",
   },
   accessPolicyDigest: "c".repeat(64),
-  formatVersion: 3,
+  formatVersion: 4,
+  oauthPolicyProjection: {
+    clientCount: "3",
+    digest: "e".repeat(64),
+    resourceCount: "3",
+  },
   tables: Object.fromEntries(
     Object.entries(AUTH_TABLE_AUDIT_POLICY).map(([model, policy]) => [
       model,
@@ -110,7 +115,7 @@ describe("Better Auth migration audit command", () => {
   test("rejects incomplete, expanded, or malformed private baselines", () => {
     expect(parseBetterAuthAuditBaseline(baselinePayload()).status).toBe("ok");
     expect(
-      parseBetterAuthAuditBaseline({ formatVersion: 3, tables: {} }).status,
+      parseBetterAuthAuditBaseline({ formatVersion: 4, tables: {} }).status,
     ).toBe("error");
     const expanded = baselinePayload();
     expanded.tables["unreviewedAuthTable"] = {

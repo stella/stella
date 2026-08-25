@@ -17,6 +17,14 @@ const EMPTY_TRUSTED_IDENTITY_MAP = {
   microsoftAccounts: [],
 } as const;
 
+const TEST_OAUTH_RESOURCES = [
+  {
+    allowedScopes: ["stella:read"],
+    identifier: "https://audit.example.invalid/mcp",
+    name: "Audit resource",
+  },
+] as const;
+
 setDefaultTimeout(120_000);
 
 beforeAll(async () => {
@@ -71,6 +79,7 @@ test("pre-migration audit is repeatable and rejects ownership corruption and an 
       const first = await runBetterAuthMigrationAudit({
         baseline: null,
         database: auditDatabase,
+        expectedOAuthResources: TEST_OAUTH_RESOURCES,
         mode: BETTER_AUTH_AUDIT_MODES.PRE_MIGRATION,
         trustedIdentityMap: EMPTY_TRUSTED_IDENTITY_MAP,
       });
@@ -83,6 +92,7 @@ test("pre-migration audit is repeatable and rejects ownership corruption and an 
       const second = await runBetterAuthMigrationAudit({
         baseline: null,
         database: auditDatabase,
+        expectedOAuthResources: TEST_OAUTH_RESOURCES,
         mode: BETTER_AUTH_AUDIT_MODES.PRE_MIGRATION,
         trustedIdentityMap: EMPTY_TRUSTED_IDENTITY_MAP,
       });
@@ -104,6 +114,7 @@ test("pre-migration audit is repeatable and rejects ownership corruption and an 
       const corruptedAccessAndOwnership = await runBetterAuthMigrationAudit({
         baseline: null,
         database: auditDatabase,
+        expectedOAuthResources: TEST_OAUTH_RESOURCES,
         mode: BETTER_AUTH_AUDIT_MODES.PRE_MIGRATION,
         trustedIdentityMap: EMPTY_TRUSTED_IDENTITY_MAP,
       });
@@ -135,6 +146,7 @@ test("pre-migration audit is repeatable and rejects ownership corruption and an 
       const missingForeignKey = await runBetterAuthMigrationAudit({
         baseline: null,
         database: auditDatabase,
+        expectedOAuthResources: TEST_OAUTH_RESOURCES,
         mode: BETTER_AUTH_AUDIT_MODES.PRE_MIGRATION,
         trustedIdentityMap: EMPTY_TRUSTED_IDENTITY_MAP,
       });
@@ -152,6 +164,7 @@ test("pre-migration audit is repeatable and rejects ownership corruption and an 
       const orphaned = await runBetterAuthMigrationAudit({
         baseline: null,
         database: auditDatabase,
+        expectedOAuthResources: TEST_OAUTH_RESOURCES,
         mode: BETTER_AUTH_AUDIT_MODES.PRE_MIGRATION,
         trustedIdentityMap: EMPTY_TRUSTED_IDENTITY_MAP,
       });
@@ -193,6 +206,7 @@ test("census crosses page boundaries with stable database-native ordering", asyn
       const first = await runBetterAuthMigrationAudit({
         baseline: null,
         database: auditDatabase,
+        expectedOAuthResources: TEST_OAUTH_RESOURCES,
         mode: BETTER_AUTH_AUDIT_MODES.PRE_MIGRATION,
         trustedIdentityMap: EMPTY_TRUSTED_IDENTITY_MAP,
       });
@@ -202,6 +216,7 @@ test("census crosses page boundaries with stable database-native ordering", asyn
       const second = await runBetterAuthMigrationAudit({
         baseline: null,
         database: auditDatabase,
+        expectedOAuthResources: TEST_OAUTH_RESOURCES,
         mode: BETTER_AUTH_AUDIT_MODES.PRE_MIGRATION,
         trustedIdentityMap: EMPTY_TRUSTED_IDENTITY_MAP,
       });
@@ -225,105 +240,15 @@ test("census crosses page boundaries with stable database-native ordering", asyn
 test("post phases require resource links, final constraints, and the exact baseline row set", async () => {
   try {
     await database.transaction(async (transaction) => {
-      await transaction.execute(
-        sql`ALTER TABLE account ADD COLUMN issuer text`,
-      );
-      await transaction.execute(
-        sql`ALTER TABLE oauth_access_token ADD COLUMN resources text[]`,
-      );
-      await transaction.execute(sql`
-        ALTER TABLE oauth_access_token
-          ADD COLUMN authorization_code_id text,
-          ADD COLUMN requested_user_info_claims text[],
-          ADD COLUMN revoked timestamptz,
-          ADD COLUMN confirmation jsonb
-      `);
-      await transaction.execute(
-        sql`ALTER TABLE oauth_refresh_token ADD COLUMN resources text[]`,
-      );
-      await transaction.execute(sql`
-        ALTER TABLE oauth_refresh_token
-          ADD COLUMN authorization_code_id text,
-          ADD COLUMN requested_user_info_claims text[],
-          ADD COLUMN rotated_at timestamptz,
-          ADD COLUMN rotation_replay_response text,
-          ADD COLUMN rotation_replay_expires_at timestamptz,
-          ADD COLUMN confirmation jsonb
-      `);
-      await transaction.execute(
-        sql`ALTER TABLE oauth_consent ADD COLUMN resources text[]`,
-      );
-      await transaction.execute(sql`
-        ALTER TABLE oauth_consent
-          ADD COLUMN requested_user_info_claims text[]
-      `);
-      await transaction.execute(sql`
-        ALTER TABLE oauth_client
-          ADD COLUMN client_discovery_id text,
-          ADD COLUMN client_credentials_scopes text[] NOT NULL DEFAULT '{}',
-          ADD COLUMN backchannel_logout_uri text,
-          ADD COLUMN backchannel_logout_session_required boolean,
-          ADD COLUMN application_type text,
-          ADD COLUMN jwks text,
-          ADD COLUMN jwks_uri text,
-          ADD COLUMN dpop_bound_access_tokens boolean
-      `);
-      await transaction.execute(sql`
-        CREATE TABLE oauth_resource (
-          id text PRIMARY KEY,
-          identifier text NOT NULL UNIQUE,
-          name text NOT NULL,
-          access_token_ttl integer,
-          refresh_token_ttl integer,
-          signing_algorithm text,
-          signing_key_id text,
-          allowed_scopes text[],
-          custom_claims jsonb,
-          dpop_bound_access_tokens_required boolean,
-          disabled boolean,
-          created_at timestamptz,
-          updated_at timestamptz,
-          policy_version integer,
-          metadata jsonb
-        )
-      `);
-      await transaction.execute(sql`
-        CREATE TABLE oauth_client_resource (
-          id text PRIMARY KEY,
-          client_id text NOT NULL,
-          resource_id text NOT NULL,
-          metadata jsonb,
-          created_at timestamptz,
-          UNIQUE (client_id, resource_id),
-          CONSTRAINT oauth_client_resource_client_fk
-            FOREIGN KEY (client_id) REFERENCES oauth_client(client_id),
-          CONSTRAINT oauth_client_resource_resource_fk
-            FOREIGN KEY (resource_id) REFERENCES oauth_resource(identifier)
-        )
-      `);
-      await transaction.execute(sql`
-        CREATE TABLE oauth_client_assertion (
-          id text PRIMARY KEY,
-          expires_at timestamptz NOT NULL
-        )
-      `);
-      for (const tableName of [
-        "oauth_resource",
-        "oauth_client_resource",
-        "oauth_client_assertion",
-      ]) {
-        // eslint-disable-next-line no-await-in-loop -- transactional DDL must stay ordered on one connection
-        await transaction.execute(
-          sql`ALTER TABLE ${sql.identifier(tableName)} ENABLE ROW LEVEL SECURITY`,
-        );
-        // eslint-disable-next-line no-await-in-loop -- policy creation follows RLS enablement
-        await transaction.execute(
-          sql`CREATE POLICY auth_no_stella_access ON ${sql.identifier(tableName)} FOR ALL TO stella USING (false) WITH CHECK (false)`,
-        );
-        // eslint-disable-next-line no-await-in-loop -- privilege revocation follows policy creation
-        await transaction.execute(
-          sql`REVOKE ALL PRIVILEGES ON TABLE ${sql.identifier(tableName)} FROM stella`,
-        );
+      const migration = await Bun.file(
+        new URL(
+          "../../drizzle/20260825140000_better_auth_17_additive/migration.sql",
+          import.meta.url,
+        ),
+      ).text();
+      for (const statement of migration.split("--> statement-breakpoint")) {
+        // eslint-disable-next-line no-await-in-loop -- migration statements must execute in committed order on one transaction
+        await transaction.execute(sql.raw(statement));
       }
 
       const suffix = Bun.randomUUIDv7();
@@ -335,7 +260,7 @@ test("post phases require resource links, final constraints, and the exact basel
       const microsoftIssuer =
         "https://login.microsoftonline.com/3a893563-0d4e-4309-9a31-b6e4e9f64479/v2.0";
       const clientId = `audit-post-client-${suffix}`;
-      const resourceId = `https://audit-${suffix}.example.invalid`;
+      const resourceId = TEST_OAUTH_RESOURCES[0].identifier;
       await transaction.insert(user).values({
         id: userId,
         email: `audit-post-${suffix}@example.invalid`,
@@ -359,15 +284,22 @@ test("post phases require resource links, final constraints, and the exact basel
       await transaction.insert(oauthClient).values({
         id: `audit-post-client-row-${suffix}`,
         clientId,
+        public: true,
         redirectUris: [`https://client-${suffix}.example.invalid/callback`],
         tokenEndpointAuthMethod: "none",
+        type: "web",
       });
       await transaction.execute(
         sql`UPDATE oauth_client SET application_type = 'web' WHERE client_id = ${clientId}`,
       );
       await transaction.execute(sql`
-        INSERT INTO oauth_resource (id, identifier, name)
-        VALUES (${`audit-resource-${suffix}`}, ${resourceId}, 'Audit resource')
+        INSERT INTO oauth_resource (id, identifier, name, allowed_scopes)
+        VALUES (
+          ${`audit-resource-${suffix}`},
+          ${resourceId},
+          'Audit resource',
+          ARRAY['stella:read']::text[]
+        )
       `);
       await transaction.execute(sql`
         INSERT INTO oauth_client_resource (id, client_id, resource_id)
@@ -392,6 +324,7 @@ test("post phases require resource links, final constraints, and the exact basel
       const preMigration = await runBetterAuthMigrationAudit({
         baseline: null,
         database: auditDatabase,
+        expectedOAuthResources: TEST_OAUTH_RESOURCES,
         mode: BETTER_AUTH_AUDIT_MODES.PRE_MIGRATION,
         trustedIdentityMap,
       });
@@ -405,6 +338,25 @@ test("post phases require resource links, final constraints, and the exact basel
       expect(
         preMigration.value.baseline.tables["account"]?.preservedColumns,
       ).toContain("account_id");
+      await transaction.execute(
+        sql`UPDATE oauth_client SET type = 'invalid' WHERE client_id = ${clientId}`,
+      );
+      const invalidProjectedOAuthPolicy = await runBetterAuthMigrationAudit({
+        baseline: null,
+        database: auditDatabase,
+        expectedOAuthResources: TEST_OAUTH_RESOURCES,
+        mode: BETTER_AUTH_AUDIT_MODES.PRE_MIGRATION,
+        trustedIdentityMap,
+      });
+      expect(
+        checkStatus(
+          invalidProjectedOAuthPolicy,
+          BETTER_AUTH_AUDIT_CHECKS.OAUTH_POLICY_PROJECTED_VALID,
+        ),
+      ).toBe("failed");
+      await transaction.execute(
+        sql`UPDATE oauth_client SET type = 'web' WHERE client_id = ${clientId}`,
+      );
       await transaction.execute(sql`
         UPDATE account
            SET account_id = ${microsoftOid}, issuer = ${microsoftIssuer}
@@ -414,6 +366,7 @@ test("post phases require resource links, final constraints, and the exact basel
       const postBackfill = await runBetterAuthMigrationAudit({
         baseline: preMigration.value.baseline,
         database: auditDatabase,
+        expectedOAuthResources: TEST_OAUTH_RESOURCES,
         mode: BETTER_AUTH_AUDIT_MODES.POST_BACKFILL,
         trustedIdentityMap: null,
       });
@@ -431,6 +384,7 @@ test("post phases require resource links, final constraints, and the exact basel
       const wrongMicrosoftIdentity = await runBetterAuthMigrationAudit({
         baseline: preMigration.value.baseline,
         database: auditDatabase,
+        expectedOAuthResources: TEST_OAUTH_RESOURCES,
         mode: BETTER_AUTH_AUDIT_MODES.POST_BACKFILL,
         trustedIdentityMap: null,
       });
@@ -455,6 +409,7 @@ test("post phases require resource links, final constraints, and the exact basel
       const beforeConstraints = await runBetterAuthMigrationAudit({
         baseline: preMigration.value.baseline,
         database: auditDatabase,
+        expectedOAuthResources: TEST_OAUTH_RESOURCES,
         mode: BETTER_AUTH_AUDIT_MODES.POST_MIGRATION,
         trustedIdentityMap: null,
       });
@@ -474,6 +429,7 @@ test("post phases require resource links, final constraints, and the exact basel
       const partialIdentityIndex = await runBetterAuthMigrationAudit({
         baseline: preMigration.value.baseline,
         database: auditDatabase,
+        expectedOAuthResources: TEST_OAUTH_RESOURCES,
         mode: BETTER_AUTH_AUDIT_MODES.POST_MIGRATION,
         trustedIdentityMap: null,
       });
@@ -492,6 +448,7 @@ test("post phases require resource links, final constraints, and the exact basel
       const postMigration = await runBetterAuthMigrationAudit({
         baseline: preMigration.value.baseline,
         database: auditDatabase,
+        expectedOAuthResources: TEST_OAUTH_RESOURCES,
         mode: BETTER_AUTH_AUDIT_MODES.POST_MIGRATION,
         trustedIdentityMap: null,
       });
@@ -508,6 +465,7 @@ test("post phases require resource links, final constraints, and the exact basel
       const changedScopedPolicy = await runBetterAuthMigrationAudit({
         baseline: preMigration.value.baseline,
         database: auditDatabase,
+        expectedOAuthResources: TEST_OAUTH_RESOURCES,
         mode: BETTER_AUTH_AUDIT_MODES.POST_BACKFILL,
         trustedIdentityMap: null,
       });
@@ -528,13 +486,14 @@ test("post phases require resource links, final constraints, and the exact basel
 
       await transaction.execute(sql`
         ALTER TABLE oauth_client_resource
-          DROP CONSTRAINT oauth_client_resource_client_fk,
+          DROP CONSTRAINT oauth_client_resource_client_id_oauth_client_client_id_fk,
           ADD CONSTRAINT oauth_client_resource_resource_duplicate_fk
             FOREIGN KEY (resource_id) REFERENCES oauth_resource(identifier)
       `);
       const wrongResourceForeignKeys = await runBetterAuthMigrationAudit({
         baseline: preMigration.value.baseline,
         database: auditDatabase,
+        expectedOAuthResources: TEST_OAUTH_RESOURCES,
         mode: BETTER_AUTH_AUDIT_MODES.POST_MIGRATION,
         trustedIdentityMap: null,
       });
@@ -547,8 +506,9 @@ test("post phases require resource links, final constraints, and the exact basel
       await transaction.execute(sql`
         ALTER TABLE oauth_client_resource
           DROP CONSTRAINT oauth_client_resource_resource_duplicate_fk,
-          ADD CONSTRAINT oauth_client_resource_client_fk
+          ADD CONSTRAINT oauth_client_resource_client_id_oauth_client_client_id_fk
             FOREIGN KEY (client_id) REFERENCES oauth_client(client_id)
+            ON DELETE CASCADE
       `);
 
       await transaction.execute(
@@ -557,6 +517,7 @@ test("post phases require resource links, final constraints, and the exact basel
       const changedRow = await runBetterAuthMigrationAudit({
         baseline: preMigration.value.baseline,
         database: auditDatabase,
+        expectedOAuthResources: TEST_OAUTH_RESOURCES,
         mode: BETTER_AUTH_AUDIT_MODES.POST_BACKFILL,
         trustedIdentityMap: null,
       });
@@ -571,6 +532,7 @@ test("post phases require resource links, final constraints, and the exact basel
       const widenedAccess = await runBetterAuthMigrationAudit({
         baseline: preMigration.value.baseline,
         database: auditDatabase,
+        expectedOAuthResources: TEST_OAUTH_RESOURCES,
         mode: BETTER_AUTH_AUDIT_MODES.POST_BACKFILL,
         trustedIdentityMap: null,
       });
@@ -590,6 +552,7 @@ test("post phases require resource links, final constraints, and the exact basel
       const missingLink = await runBetterAuthMigrationAudit({
         baseline: preMigration.value.baseline,
         database: auditDatabase,
+        expectedOAuthResources: TEST_OAUTH_RESOURCES,
         mode: BETTER_AUTH_AUDIT_MODES.POST_BACKFILL,
         trustedIdentityMap: null,
       });
@@ -597,6 +560,12 @@ test("post phases require resource links, final constraints, and the exact basel
         checkStatus(
           missingLink,
           BETTER_AUTH_AUDIT_CHECKS.OAUTH_CLIENT_RESOURCE_LINKS,
+        ),
+      ).toBe("failed");
+      expect(
+        checkStatus(
+          missingLink,
+          BETTER_AUTH_AUDIT_CHECKS.OAUTH_POLICY_MATCHES_TRUSTED_PROJECTION,
         ),
       ).toBe("failed");
       await transaction.execute(sql`
@@ -621,6 +590,7 @@ test("post phases require resource links, final constraints, and the exact basel
       const replacedRow = await runBetterAuthMigrationAudit({
         baseline: preMigration.value.baseline,
         database: auditDatabase,
+        expectedOAuthResources: TEST_OAUTH_RESOURCES,
         mode: BETTER_AUTH_AUDIT_MODES.POST_BACKFILL,
         trustedIdentityMap: null,
       });

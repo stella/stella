@@ -278,6 +278,12 @@ const run = async (
     );
   }
 
+  // Load runtime OAuth policy only after command validation. Its MCP URL source
+  // owns environment initialization, while this module is also imported by
+  // argument/parser tests that must remain side-effect free.
+  const { getBetterAuthOAuthResources } =
+    await import("@/api/lib/oauth-resource-policy");
+  const expectedOAuthResources = getBetterAuthOAuthResources();
   const client = new SQL({ url: databaseUrl, max: 1 });
   const database = drizzle({ client });
   const executed = await Result.tryPromise({
@@ -300,6 +306,7 @@ const run = async (
           database: {
             execute: async (statement) => await transaction.execute(statement),
           },
+          expectedOAuthResources,
           mode: parsed.value.mode,
           trustedIdentityMap,
         });

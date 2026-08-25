@@ -12,6 +12,7 @@ import type { SQL, Table } from "drizzle-orm";
 import * as v from "valibot";
 
 import { authSchema } from "@/api/db/auth-schema";
+import { compareCodepoint } from "@/api/lib/collation";
 import { isRecord } from "@/api/lib/type-guards";
 
 export const BETTER_AUTH_AUDIT_MODES = {
@@ -528,6 +529,9 @@ export const BETTER_AUTH_AUDIT_CHECKS = {
   OAUTH_CLIENTS_CLASSIFIED: "oauth-clients-classified",
   OAUTH_CLIENT_RESOURCE_LINKS: "oauth-client-resource-links-complete",
   OAUTH_RESOURCE_REFERENCES: "oauth-resource-references-reachable",
+  OAUTH_POLICY_MATCHES_TRUSTED_PROJECTION:
+    "oauth-policy-matches-trusted-projection",
+  OAUTH_POLICY_PROJECTED_VALID: "oauth-policy-projected-valid",
   POST_BACKFILL_SCHEMA_COMPLETE: "post-backfill-schema-complete",
   POST_MIGRATION_CONSTRAINTS: "post-migration-constraints",
 } as const;
@@ -545,6 +549,7 @@ const CHECKS_BY_MODE = {
     BETTER_AUTH_AUDIT_CHECKS.CREDENTIAL_ACCOUNT_OWNERSHIP,
     BETTER_AUTH_AUDIT_CHECKS.ACCOUNT_IDENTITY_MAPPING_COMPLETE,
     BETTER_AUTH_AUDIT_CHECKS.ACCOUNT_IDENTITY_PROJECTED_UNIQUE,
+    BETTER_AUTH_AUDIT_CHECKS.OAUTH_POLICY_PROJECTED_VALID,
     BETTER_AUTH_AUDIT_CHECKS.AUTH_ROWS_BASELINED,
   ],
   [BETTER_AUTH_AUDIT_MODES.POST_BACKFILL]: [
@@ -559,6 +564,7 @@ const CHECKS_BY_MODE = {
     BETTER_AUTH_AUDIT_CHECKS.ACCOUNT_IDENTITY_UNIQUE,
     BETTER_AUTH_AUDIT_CHECKS.ACCOUNT_ISSUERS_TRUSTED,
     BETTER_AUTH_AUDIT_CHECKS.ACCOUNT_IDENTITIES_MATCH_TRUSTED_PROJECTION,
+    BETTER_AUTH_AUDIT_CHECKS.OAUTH_POLICY_MATCHES_TRUSTED_PROJECTION,
     BETTER_AUTH_AUDIT_CHECKS.OAUTH_CLIENT_RESOURCE_LINKS,
     BETTER_AUTH_AUDIT_CHECKS.OAUTH_CLIENTS_CLASSIFIED,
     BETTER_AUTH_AUDIT_CHECKS.OAUTH_RESOURCE_REFERENCES,
@@ -576,6 +582,7 @@ const CHECKS_BY_MODE = {
     BETTER_AUTH_AUDIT_CHECKS.ACCOUNT_IDENTITY_UNIQUE,
     BETTER_AUTH_AUDIT_CHECKS.ACCOUNT_ISSUERS_TRUSTED,
     BETTER_AUTH_AUDIT_CHECKS.ACCOUNT_IDENTITIES_MATCH_TRUSTED_PROJECTION,
+    BETTER_AUTH_AUDIT_CHECKS.OAUTH_POLICY_MATCHES_TRUSTED_PROJECTION,
     BETTER_AUTH_AUDIT_CHECKS.OAUTH_CLIENT_RESOURCE_LINKS,
     BETTER_AUTH_AUDIT_CHECKS.OAUTH_CLIENTS_CLASSIFIED,
     BETTER_AUTH_AUDIT_CHECKS.OAUTH_RESOURCE_REFERENCES,
@@ -600,7 +607,12 @@ export type BetterAuthAuditBaseline = {
     rowCount: string;
   };
   accessPolicyDigest: string;
-  formatVersion: 3;
+  formatVersion: 4;
+  oauthPolicyProjection: {
+    clientCount: string;
+    digest: string;
+    resourceCount: string;
+  };
   tables: Record<
     string,
     {
@@ -620,6 +632,12 @@ export type BetterAuthTrustedIdentityMap = {
     issuer: string;
     legacyAccountId: string;
   }[];
+};
+
+export type BetterAuthExpectedOAuthResource = {
+  allowedScopes: readonly string[];
+  identifier: string;
+  name: string;
 };
 
 export type BetterAuthAuditReport = {
@@ -678,6 +696,14 @@ const requiredString = (value: unknown): string | null =>
 
 const requiredBoolean = (value: unknown): boolean | null =>
   typeof value === "boolean" ? value : null;
+
+const requiredStringArray = (value: unknown): readonly string[] | null =>
+  Array.isArray(value) && value.every((entry) => typeof entry === "string")
+    ? value
+    : null;
+
+const optionalStringArray = (value: unknown): readonly string[] | null =>
+  value === null ? [] : requiredStringArray(value);
 
 type AccountIdentityProjection = {
   collisionFree: boolean;
@@ -916,6 +942,275 @@ const readActualAccountIdentities = async (
     digest: projectionHasher.digest("hex"),
     rowCount: rowCount.toString(),
   });
+};
+
+type OAuthPolicyProjection =
+  BetterAuthAuditBaseline["oauthPolicyProjection"] & {
+    valid: boolean;
+  };
+
+const OAUTH_POLICY_PAGE_SIZE = 1000;
+const OAUTH_PROTOCOL_SCOPES = new Set([
+  "email",
+  "offline_access",
+  "openid",
+  "profile",
+]);
+
+const updateOAuthPolicyValue = (
+  hasher: Bun.CryptoHasher,
+  values: readonly string[],
+) => {
+  for (const value of values) {
+    hasher.update(value);
+    hasher.update("\0");
+  }
+};
+
+const sortedUnique = (values: readonly string[]) =>
+  [...new Set(values)].toSorted();
+
+const initializeOAuthPolicyProjection = (
+  expectedResources: readonly BetterAuthExpectedOAuthResource[],
+) => {
+  const hasher = new Bun.CryptoHasher("sha256");
+  const sortedResources = [...expectedResources].toSorted((left, right) =>
+    compareCodepoint(left.identifier, right.identifier),
+  );
+  let valid =
+    sortedResources.length > 0 &&
+    new Set(sortedResources.map(({ identifier }) => identifier)).size ===
+      sortedResources.length;
+  for (const resource of sortedResources) {
+    const scopes = sortedUnique(resource.allowedScopes);
+    valid &&=
+      resource.identifier.length > 0 &&
+      resource.name.length > 0 &&
+      scopes.length > 0 &&
+      scopes.length === resource.allowedScopes.length;
+    updateOAuthPolicyValue(hasher, [
+      "resource",
+      resource.identifier,
+      resource.name,
+      ...scopes,
+    ]);
+  }
+  return { hasher, resourceCount: BigInt(sortedResources.length), valid };
+};
+
+const readProjectedOAuthPolicy = async (
+  database: BetterAuthAuditDatabase,
+  expectedResources: readonly BetterAuthExpectedOAuthResource[],
+) => {
+  const initialized = initializeOAuthPolicyProjection(expectedResources);
+  const resourceIdentifiers = expectedResources
+    .map(({ identifier }) => identifier)
+    .toSorted();
+  let after: string | null = null;
+  let clientCount = 0n;
+  let valid = initialized.valid;
+
+  while (true) {
+    const statement =
+      after === null
+        ? sql`
+            SELECT client_id AS "clientId",
+                   type AS "applicationType",
+                   scopes,
+                   grant_types AS "grantTypes"
+              FROM oauth_client
+             ORDER BY client_id
+             LIMIT ${OAUTH_POLICY_PAGE_SIZE}
+          `
+        : sql`
+            SELECT client_id AS "clientId",
+                   type AS "applicationType",
+                   scopes,
+                   grant_types AS "grantTypes"
+              FROM oauth_client
+             WHERE client_id > ${after}
+             ORDER BY client_id
+             LIMIT ${OAUTH_POLICY_PAGE_SIZE}
+          `;
+    // eslint-disable-next-line no-await-in-loop -- keyset pages must feed one ordered policy digest
+    const queried = await queryRows(database, statement);
+    if (Result.isError(queried)) {
+      return queried;
+    }
+    for (const row of queried.value) {
+      const clientId = isRecord(row) ? requiredString(row["clientId"]) : null;
+      const applicationType = isRecord(row)
+        ? requiredString(row["applicationType"])
+        : null;
+      const scopes = isRecord(row) ? optionalStringArray(row["scopes"]) : null;
+      const grantTypes = isRecord(row)
+        ? optionalStringArray(row["grantTypes"])
+        : null;
+      if (clientId === null || scopes === null || grantTypes === null) {
+        return Result.err(
+          new BetterAuthAuditError({
+            code: "database-query-failed",
+            message:
+              "Better Auth OAuth policy projection returned invalid data",
+          }),
+        );
+      }
+      const classifiedApplicationType =
+        applicationType === "native" || applicationType === "web"
+          ? applicationType
+          : "invalid";
+      valid &&= classifiedApplicationType !== "invalid";
+      const clientCredentialsScopes = grantTypes.includes("client_credentials")
+        ? sortedUnique(
+            scopes.filter((scope) => !OAUTH_PROTOCOL_SCOPES.has(scope)),
+          )
+        : [];
+      updateOAuthPolicyValue(initialized.hasher, [
+        "client",
+        clientId,
+        classifiedApplicationType,
+        ...clientCredentialsScopes,
+        "resources",
+        ...resourceIdentifiers,
+      ]);
+      after = clientId;
+      clientCount += 1n;
+    }
+    if (queried.value.length < OAUTH_POLICY_PAGE_SIZE) {
+      break;
+    }
+  }
+
+  return Result.ok({
+    clientCount: clientCount.toString(),
+    digest: initialized.hasher.digest("hex"),
+    resourceCount: initialized.resourceCount.toString(),
+    valid,
+  } satisfies OAuthPolicyProjection);
+};
+
+const readActualOAuthPolicy = async (database: BetterAuthAuditDatabase) => {
+  const resourceRows = await queryRows(
+    database,
+    sql`
+      SELECT identifier, name, allowed_scopes AS "allowedScopes"
+        FROM oauth_resource
+       ORDER BY identifier
+    `,
+  );
+  if (Result.isError(resourceRows)) {
+    return resourceRows;
+  }
+  const resources: BetterAuthExpectedOAuthResource[] = [];
+  for (const row of resourceRows.value) {
+    const identifier = isRecord(row) ? requiredString(row["identifier"]) : null;
+    const name = isRecord(row) ? requiredString(row["name"]) : null;
+    const allowedScopes = isRecord(row)
+      ? requiredStringArray(row["allowedScopes"])
+      : null;
+    if (identifier === null || name === null || allowedScopes === null) {
+      return Result.err(
+        new BetterAuthAuditError({
+          code: "database-query-failed",
+          message: "Better Auth OAuth resource census returned invalid data",
+        }),
+      );
+    }
+    resources.push({ allowedScopes, identifier, name });
+  }
+
+  const initialized = initializeOAuthPolicyProjection(resources);
+  let after: string | null = null;
+  let clientCount = 0n;
+  let valid = initialized.valid;
+  while (true) {
+    const statement =
+      after === null
+        ? sql`
+            SELECT client.client_id AS "clientId",
+                   client.application_type AS "applicationType",
+                   client.client_credentials_scopes AS "clientCredentialsScopes",
+                   ARRAY(
+                     SELECT link.resource_id
+                       FROM oauth_client_resource link
+                      WHERE link.client_id = client.client_id
+                      ORDER BY link.resource_id
+                   ) AS "resourceIdentifiers"
+              FROM oauth_client client
+             ORDER BY client.client_id
+             LIMIT ${OAUTH_POLICY_PAGE_SIZE}
+          `
+        : sql`
+            SELECT client.client_id AS "clientId",
+                   client.application_type AS "applicationType",
+                   client.client_credentials_scopes AS "clientCredentialsScopes",
+                   ARRAY(
+                     SELECT link.resource_id
+                       FROM oauth_client_resource link
+                      WHERE link.client_id = client.client_id
+                      ORDER BY link.resource_id
+                   ) AS "resourceIdentifiers"
+              FROM oauth_client client
+             WHERE client.client_id > ${after}
+             ORDER BY client.client_id
+             LIMIT ${OAUTH_POLICY_PAGE_SIZE}
+          `;
+    // eslint-disable-next-line no-await-in-loop -- keyset pages must feed one ordered policy digest
+    const queried = await queryRows(database, statement);
+    if (Result.isError(queried)) {
+      return queried;
+    }
+    for (const row of queried.value) {
+      const clientId = isRecord(row) ? requiredString(row["clientId"]) : null;
+      const applicationType = isRecord(row)
+        ? requiredString(row["applicationType"])
+        : null;
+      const clientCredentialsScopes = isRecord(row)
+        ? requiredStringArray(row["clientCredentialsScopes"])
+        : null;
+      const resourceIdentifiers = isRecord(row)
+        ? requiredStringArray(row["resourceIdentifiers"])
+        : null;
+      if (
+        clientId === null ||
+        applicationType === null ||
+        clientCredentialsScopes === null ||
+        resourceIdentifiers === null
+      ) {
+        return Result.err(
+          new BetterAuthAuditError({
+            code: "database-query-failed",
+            message:
+              "Better Auth OAuth client policy census returned invalid data",
+          }),
+        );
+      }
+      valid &&=
+        (applicationType === "native" || applicationType === "web") &&
+        sortedUnique(clientCredentialsScopes).length ===
+          clientCredentialsScopes.length &&
+        sortedUnique(resourceIdentifiers).length === resourceIdentifiers.length;
+      updateOAuthPolicyValue(initialized.hasher, [
+        "client",
+        clientId,
+        applicationType,
+        ...clientCredentialsScopes.toSorted(),
+        "resources",
+        ...resourceIdentifiers.toSorted(),
+      ]);
+      after = clientId;
+      clientCount += 1n;
+    }
+    if (queried.value.length < OAUTH_POLICY_PAGE_SIZE) {
+      break;
+    }
+  }
+  return Result.ok({
+    clientCount: clientCount.toString(),
+    digest: initialized.hasher.digest("hex"),
+    resourceCount: initialized.resourceCount.toString(),
+    valid,
+  } satisfies OAuthPolicyProjection);
 };
 
 const tableInventoryStatement = sql`
@@ -1712,10 +2007,12 @@ const createBaseline = (
   tables: BetterAuthAuditBaseline["tables"],
   accessPolicyDigest: string,
   accountIdentityProjection: BetterAuthAuditBaseline["accountIdentityProjection"],
+  oauthPolicyProjection: BetterAuthAuditBaseline["oauthPolicyProjection"],
 ): BetterAuthAuditBaseline => ({
   accountIdentityProjection,
   accessPolicyDigest,
-  formatVersion: 3,
+  formatVersion: 4,
+  oauthPolicyProjection,
   tables,
 });
 
@@ -1734,6 +2031,11 @@ const emptyBaseline = (): BetterAuthAuditBaseline =>
     ),
     "0".repeat(64),
     { digest: "0".repeat(64), rowCount: "0" },
+    {
+      clientCount: "0",
+      digest: "0".repeat(64),
+      resourceCount: "0",
+    },
   );
 
 type NamedAuditStatement = readonly [BetterAuthAuditCheckName, SQL];
@@ -1760,6 +2062,7 @@ const evaluateBooleanChecks = async (
 type RunBetterAuthMigrationAuditOptions = {
   baseline: BetterAuthAuditBaseline | null;
   database: BetterAuthAuditDatabase;
+  expectedOAuthResources: readonly BetterAuthExpectedOAuthResource[];
   mode: BetterAuthAuditMode;
   trustedIdentityMap: BetterAuthTrustedIdentityMap | null;
 };
@@ -1767,6 +2070,7 @@ type RunBetterAuthMigrationAuditOptions = {
 export const runBetterAuthMigrationAudit = async ({
   baseline,
   database,
+  expectedOAuthResources,
   mode,
   trustedIdentityMap,
 }: RunBetterAuthMigrationAuditOptions): Promise<
@@ -1874,6 +2178,7 @@ export const runBetterAuthMigrationAudit = async ({
   }
 
   let expectedAccountIdentityProjection: BetterAuthAuditBaseline["accountIdentityProjection"];
+  let expectedOAuthPolicyProjection: BetterAuthAuditBaseline["oauthPolicyProjection"];
   if (mode === BETTER_AUTH_AUDIT_MODES.PRE_MIGRATION) {
     if (trustedIdentityMap === null) {
       return Result.err(
@@ -1915,6 +2220,24 @@ export const runBetterAuthMigrationAudit = async ({
       digest: projection.value.digest,
       rowCount: projection.value.rowCount,
     };
+    const oauthProjection = await readProjectedOAuthPolicy(
+      database,
+      expectedOAuthResources,
+    );
+    if (Result.isError(oauthProjection)) {
+      return oauthProjection;
+    }
+    checks.push(
+      check(
+        BETTER_AUTH_AUDIT_CHECKS.OAUTH_POLICY_PROJECTED_VALID,
+        oauthProjection.value.valid,
+      ),
+    );
+    expectedOAuthPolicyProjection = {
+      clientCount: oauthProjection.value.clientCount,
+      digest: oauthProjection.value.digest,
+      resourceCount: oauthProjection.value.resourceCount,
+    };
   } else {
     if (baseline === null) {
       return Result.err(
@@ -1936,6 +2259,23 @@ export const runBetterAuthMigrationAudit = async ({
           baseline.accountIdentityProjection.digest &&
           actualProjection.value.rowCount ===
             baseline.accountIdentityProjection.rowCount,
+      ),
+    );
+    const actualOAuthPolicy = await readActualOAuthPolicy(database);
+    if (Result.isError(actualOAuthPolicy)) {
+      return actualOAuthPolicy;
+    }
+    expectedOAuthPolicyProjection = baseline.oauthPolicyProjection;
+    checks.push(
+      check(
+        BETTER_AUTH_AUDIT_CHECKS.OAUTH_POLICY_MATCHES_TRUSTED_PROJECTION,
+        actualOAuthPolicy.value.valid &&
+          actualOAuthPolicy.value.digest ===
+            baseline.oauthPolicyProjection.digest &&
+          actualOAuthPolicy.value.clientCount ===
+            baseline.oauthPolicyProjection.clientCount &&
+          actualOAuthPolicy.value.resourceCount ===
+            baseline.oauthPolicyProjection.resourceCount,
       ),
     );
   }
@@ -2021,6 +2361,7 @@ export const runBetterAuthMigrationAudit = async ({
     census.value,
     accessPolicyDigest.value,
     expectedAccountIdentityProjection,
+    expectedOAuthPolicyProjection,
   );
   if (mode === BETTER_AUTH_AUDIT_MODES.PRE_MIGRATION) {
     checks.push(check(BETTER_AUTH_AUDIT_CHECKS.AUTH_ROWS_BASELINED, true));
@@ -2098,7 +2439,12 @@ const betterAuthAuditBaselineSchema: v.GenericSchema<
     rowCount: rowCountSchema,
   }),
   accessPolicyDigest: digestSchema,
-  formatVersion: v.literal(3),
+  formatVersion: v.literal(4),
+  oauthPolicyProjection: v.strictObject({
+    clientCount: rowCountSchema,
+    digest: digestSchema,
+    resourceCount: rowCountSchema,
+  }),
   tables: v.strictObject(
     Object.fromEntries(
       AUTH_MODEL_NAMES.map((model) => [model, tableCensusSchema(model)]),
