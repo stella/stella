@@ -1998,7 +1998,6 @@ export const caseLawCorpusIndexSourceReconciliations = p.pgTable(
     ),
     p.check(
       "case_law_source_reconciliations_cursor_upper",
-      // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- column-to-column comparison evaluated in Postgres; no JS Date is bound
       sql`${t.cursorCreatedAt} IS NULL OR (${t.upperCreatedAt} IS NOT NULL AND (${t.cursorCreatedAt}, ${t.cursorId}) <= (${t.upperCreatedAt}, ${t.upperId}))`,
     ),
     p

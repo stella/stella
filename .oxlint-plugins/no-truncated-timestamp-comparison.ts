@@ -65,6 +65,7 @@ import { eslintCompatPlugin } from "@oxlint/plugins";
 //   lte(jobs.nextRunAt, now)          // `const now = new Date()` in this file
 //   lte(sources.leaseExpiresAt, sql`now()`)              // compared in-DB
 //   lt(decisions.createdAt, pgTimestampCursorBoundary(cursor))
+//   gte(table.settledAt, table.cleanupStartedAt)          // same schema owner
 //
 // A comparison against a clock-derived cutoff is the one exemption resolved
 // from syntax rather than from a name: an inequality against a moving cutoff
@@ -95,6 +96,7 @@ const isAstNode = (node: unknown): node is AstNode =>
 // the reason to keep naming new ones `...At`.
 const EXTRA_TIMESTAMP_COLUMN_NAMES = [
   "authTime",
+  "cleanupNotBefore",
   "currentPeriodEnd",
   "currentPeriodStart",
   "lastRequest",
@@ -138,8 +140,28 @@ const isTimestampColumnExpression = (node: unknown): boolean => {
   if (!isAstNode(property) || property.type !== "Identifier") {
     return false;
   }
-  const name = property["name"];
+  const name = property.name;
   return typeof name === "string" && isTimestampColumnName(name);
+};
+
+const timestampColumnOwner = (node: unknown): string | undefined => {
+  if (!isTimestampColumnExpression(node) || !isAstNode(node)) {
+    return undefined;
+  }
+  const { object } = node;
+  if (!isAstNode(object) || object.type !== "Identifier") {
+    return undefined;
+  }
+  const name = object.name;
+  return typeof name === "string" ? name : undefined;
+};
+
+const hasSameTimestampColumnOwner = (
+  left: unknown,
+  right: unknown,
+): boolean => {
+  const leftOwner = timestampColumnOwner(left);
+  return leftOwner !== undefined && leftOwner === timestampColumnOwner(right);
 };
 
 // ── SQL text ─────────────────────────────────────────────────────────────
@@ -286,13 +308,13 @@ const calleeName = (node: unknown): string | undefined => {
     return undefined;
   }
   if (callee.type === "Identifier") {
-    const name = callee["name"];
+    const name = callee.name;
     return typeof name === "string" ? name : undefined;
   }
   if (callee.type === "MemberExpression" && callee.computed !== true) {
     const { property } = callee;
     if (isAstNode(property) && property.type === "Identifier") {
-      const name = property["name"];
+      const name = property.name;
       return typeof name === "string" ? name : undefined;
     }
   }
@@ -311,21 +333,21 @@ const isSqlTaggedTemplate = (node: unknown): boolean => {
     return false;
   }
   if (tag.type === "Identifier") {
-    return tag["name"] === "sql";
+    return tag.name === "sql";
   }
   if (tag.type === "MemberExpression" && tag.computed !== true) {
     const { property } = tag;
     return (
       isAstNode(property) &&
       property.type === "Identifier" &&
-      property["name"] === "sql"
+      property.name === "sql"
     );
   }
   return false;
 };
 
 const isIdentifierNamed = (node: unknown, name: string): boolean =>
-  isAstNode(node) && node.type === "Identifier" && node["name"] === name;
+  isAstNode(node) && node.type === "Identifier" && node.name === name;
 
 const isDateNowCall = (node: unknown): boolean => {
   if (!isAstNode(node) || node.type !== "CallExpression") {
@@ -349,10 +371,10 @@ const isClockAdjustment = (node: unknown): boolean =>
     node.type === "Identifier" ||
     (node.type === "UnaryExpression" && isClockAdjustment(node.argument)) ||
     (node.type === "BinaryExpression" &&
-      (node["operator"] === "+" ||
-        node["operator"] === "-" ||
-        node["operator"] === "*" ||
-        node["operator"] === "/") &&
+      (node.operator === "+" ||
+        node.operator === "-" ||
+        node.operator === "*" ||
+        node.operator === "/") &&
       isClockAdjustment(node.left) &&
       isClockAdjustment(node.right)));
 
@@ -363,7 +385,7 @@ const isClockArithmetic = (node: unknown): boolean => {
   if (!isAstNode(node) || node.type !== "BinaryExpression") {
     return false;
   }
-  const operator = node["operator"];
+  const operator = node.operator;
   if (
     operator !== "+" &&
     operator !== "-" &&
@@ -404,6 +426,18 @@ const isFreshClockRead = (node: unknown): boolean => {
 // because they bind no value; `between` is absent because nothing in this
 // codebase applies it to a timestamp column — add it here if that changes.
 const DRIZZLE_COMPARISONS = new Set(["eq", "ne", "gt", "gte", "lt", "lte"]);
+
+const configuredAllowedOperandCalls = (options: unknown): unknown[] => {
+  if (
+    typeof options !== "object" ||
+    options === null ||
+    Array.isArray(options)
+  ) {
+    return [];
+  }
+  const calls = Reflect.get(options, "allowedOperandCalls");
+  return Array.isArray(calls) ? calls : [];
+};
 
 export default eslintCompatPlugin({
   meta: { name: "no-truncated-timestamp-comparison" },
@@ -457,7 +491,7 @@ export default eslintCompatPlugin({
           if (
             !isAstNode(node) ||
             node.type !== "Identifier" ||
-            typeof node["name"] !== "string"
+            typeof node.name !== "string"
           ) {
             return false;
           }
@@ -501,8 +535,8 @@ export default eslintCompatPlugin({
               staticSql,
             );
           if (
-            selected?.groups?.["name"] !== undefined &&
-            isTimestampColumnName(selected.groups["name"])
+            selected?.groups?.name !== undefined &&
+            isTimestampColumnName(selected.groups.name)
           ) {
             return true;
           }
@@ -531,7 +565,7 @@ export default eslintCompatPlugin({
           if (
             !isAstNode(node) ||
             node.type !== "Identifier" ||
-            typeof node["name"] !== "string"
+            typeof node.name !== "string"
           ) {
             return false;
           }
@@ -616,19 +650,12 @@ export default eslintCompatPlugin({
 
         return {
           before() {
-            const options = context.options?.[0] ?? {};
             allowedOperandCalls.clear();
-            const configuredCalls =
-              typeof options === "object" &&
-              options !== null &&
-              !Array.isArray(options)
-                ? options["allowedOperandCalls"]
-                : undefined;
-            if (Array.isArray(configuredCalls)) {
-              for (const call of configuredCalls) {
-                if (typeof call === "string") {
-                  allowedOperandCalls.add(call);
-                }
+            for (const call of configuredAllowedOperandCalls(
+              context.options[0],
+            )) {
+              if (typeof call === "string") {
+                allowedOperandCalls.add(call);
               }
             }
           },
@@ -675,6 +702,26 @@ export default eslintCompatPlugin({
                   index,
                   precedingSql,
                 )
+              ) {
+                continue;
+              }
+              const comparison = findComparisonOperator(before);
+              const comparisonHead =
+                comparison === undefined
+                  ? ""
+                  : before.slice(0, comparison.index);
+              const tupleFirst = TUPLE_COMPARISON.test(before)
+                ? leftTupleFirstIndex(quasis, index)
+                : undefined;
+              const leftComparisonOperand =
+                tupleFirst !== undefined
+                  ? expressions[tupleFirst]
+                  : comparison !== undefined && comparisonHead.trim() === ""
+                    ? expressions[index - 1]
+                    : undefined;
+              if (
+                leftComparisonOperand !== undefined &&
+                hasSameTimestampColumnOwner(leftComparisonOperand, expression)
               ) {
                 continue;
               }
@@ -726,7 +773,11 @@ export default eslintCompatPlugin({
               : isTimestampColumnExpression(right)
                 ? left
                 : undefined;
-            if (operand === undefined || isAllowedOperand(operand)) {
+            if (
+              operand === undefined ||
+              hasSameTimestampColumnOwner(left, right) ||
+              isAllowedOperand(operand)
+            ) {
               return;
             }
             report(operand);
