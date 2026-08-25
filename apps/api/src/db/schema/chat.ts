@@ -477,12 +477,10 @@ export const chatTurns = p.pgTable(
     ),
     p.check(
       "chat_turns_lease_after_created_check",
-      // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- column-to-column comparison evaluated in Postgres; no JS Date is bound
       sql`${table.leaseExpiresAt} IS NULL OR ${table.leaseExpiresAt} > ${table.createdAt}`,
     ),
     p.check(
       "chat_turns_settled_after_created_check",
-      // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- column-to-column comparison evaluated in Postgres; no JS Date is bound
       sql`${table.settledAt} IS NULL OR ${table.settledAt} >= ${table.createdAt}`,
     ),
     p.index("chat_turns_thread_id_idx").on(table.threadId),

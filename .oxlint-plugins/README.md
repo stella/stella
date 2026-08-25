@@ -56,6 +56,7 @@ runtime validation, or integration tests.
 - [`no-raw-user-id-schema`](./no-raw-user-id-schema.ts) (`no-raw-user-id-schema`): prevents plain string schemas from laundering user IDs across trust boundaries.
 - [`no-secret-in-log-sink`](./no-secret-in-log-sink.ts) (`no-secret-in-log-sink`): traces secret-named values into logging, analytics, error, and serialization sinks.
 - [`no-unbranded-ownership-id-param`](./no-unbranded-ownership-id-param.ts) (`no-unbranded-ownership-id-param`): requires validated workspace and organization IDs to retain their branded type through API parameters.
+- [`no-unjustified-double-assertion`](./no-unjustified-double-assertion.ts) (`no-unjustified-double-assertion`): requires a nearby `SAFETY:` explanation when a direct TypeScript assertion chain widens through `unknown`, `object`, or an open record before asserting a narrower contract.
 - [`no-unowned-file-version-write`](./no-unowned-file-version-write.ts) (`no-unowned-file-version-write`): prevents file-version writes that are not tied to an authorized owning workspace or document.
 - [`no-unsafe-inner-html`](./no-unsafe-inner-html.ts) (`no-unsafe-inner-html`): permits static markup; dynamic HTML requires an adjacent `safe-html:` provenance comment because sanitizer-looking function names are not proof.
 - [`no-unvalidated-json-domain-cast`](./no-unvalidated-json-domain-cast.ts) (`no-unvalidated-json-domain-cast`): rejects assertions that turn unvalidated `response.json()` or `JSON.parse()` output into closed domain types.

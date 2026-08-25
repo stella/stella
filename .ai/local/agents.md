@@ -12,6 +12,21 @@ user-facing strings, ingestion, performance guard failures and hot paths,
 architecture and scale, auth and data access, files and external APIs, tests,
 `apps/web` React effects, and user-facing UI. The skills own the detailed rules.
 
+## Implementation Quality
+
+- Comments explain a non-obvious invariant, trade-off, safety constraint, or why
+  the code exists. Do not narrate the next statement, add empty documentation
+  blocks, or label closing braces.
+- Make abstractions earn their keep. Avoid pass-through wrappers, single-use
+  helpers, and interfaces with one implementation unless they establish a real
+  ownership boundary, contract, or test seam.
+- Prefer deleting concepts, branches, and layers over moving complexity around.
+  Keep feature-specific behavior at its canonical owner; do not scatter flags and
+  special cases through shared flows.
+- Defensive code belongs at real trust and failure boundaries. Do not add null
+  checks, silent fallbacks, or catch-and-log blocks for states already excluded by
+  types, validation, or framework guarantees.
+
 ## Workspace Layout
 
 - `apps/*` contains runnable applications only.
