@@ -2,7 +2,6 @@ import { oauthProvider as betterAuthOAuthProvider } from "@better-auth/oauth-pro
 import { twoFactor as betterAuthTwoFactor } from "better-auth/plugins";
 import { describe, expect, test } from "bun:test";
 import { getColumns } from "drizzle-orm";
-import type { InferSelectModel } from "drizzle-orm";
 import { getTableConfig, PgDialect } from "drizzle-orm/pg-core";
 import type { AnyPgTable } from "drizzle-orm/pg-core";
 
@@ -21,7 +20,6 @@ import type {
 import {
   AUTH_USER_STELLA_SELECT_COLUMN_NAMES,
   AUTH_USER_STELLA_SELECT_COLUMNS,
-  BETTER_AUTH_17_BRIDGE_MODEL_NAMES,
   account,
   authSchema,
   invitation,
@@ -67,12 +65,6 @@ const OAUTH_PROVIDER_MODEL_TABLES = [
 const CORE_AUTH_MODEL_NAMES: readonly string[] = Object.keys(
   BETTER_AUTH_CORE_SCHEMA,
 );
-
-const BETTER_AUTH_17_BRIDGE_CORE_FIELD_NAMES = {
-  account: ["issuer"],
-} as const satisfies {
-  account: readonly (keyof InferSelectModel<typeof account>)[];
-};
 
 const normalizeDateStorage = (
   storage: BetterAuthFieldContract["database"]["storage"] | undefined,
@@ -294,19 +286,16 @@ const referenceTo = (tableName: string): BetterAuthFieldReference => {
 };
 
 type NormalizeModelOptions = {
-  bridgeFieldNames?: readonly string[];
   expectedFields: Record<string, BetterAuthFieldContract>;
   modelName: string;
   table: AnyPgTable;
 };
 
 const normalizeModel = ({
-  bridgeFieldNames = [],
   expectedFields,
   modelName,
   table,
 }: NormalizeModelOptions) => {
-  const bridgeFields = new Set(bridgeFieldNames);
   const columns = getColumns(table);
   const config = getTableConfig(table);
   const logicalNameByColumn = new Map(
@@ -340,9 +329,6 @@ const normalizeModel = ({
 
   const fields: Record<string, BetterAuthFieldContract> = {};
   for (const [logicalName, column] of Object.entries(columns)) {
-    if (bridgeFields.has(logicalName)) {
-      continue;
-    }
     const expected = expectedFields[logicalName];
     if (!expected) {
       throw new Error(`Undeclared auth field ${modelName}.${logicalName}`);
@@ -437,12 +423,7 @@ describe("auth schema", () => {
       Object.keys(authSchema)
         .filter((modelName) => !CORE_AUTH_MODEL_NAMES.includes(modelName))
         .toSorted(),
-    ).toEqual(
-      [
-        ...PRODUCT_AUTH_MODEL_NAMES,
-        ...BETTER_AUTH_17_BRIDGE_MODEL_NAMES,
-      ].toSorted(),
-    );
+    ).toEqual(PRODUCT_AUTH_MODEL_NAMES.toSorted());
 
     const models: Record<string, BetterAuthModelContract> = {
       user: normalizeModel({
@@ -459,7 +440,6 @@ describe("auth schema", () => {
         table: session,
       }),
       account: normalizeModel({
-        bridgeFieldNames: BETTER_AUTH_17_BRIDGE_CORE_FIELD_NAMES.account,
         expectedFields: BETTER_AUTH_CORE_SCHEMA.account.fields,
         modelName: "account",
         table: account,

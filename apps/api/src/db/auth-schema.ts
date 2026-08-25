@@ -623,17 +623,6 @@ export const authSchema = {
   oauthConsent,
 };
 
-/**
- * Additive tables staged before the Better Auth 1.7 runtime cutover. The
- * current 1.6 runtime ignores them; the follow-up cutover promotes them into
- * the shared Better Auth contract after rehearsal and backfill validation.
- */
-export const BETTER_AUTH_17_BRIDGE_MODEL_NAMES = [
-  "oauthResource",
-  "oauthClientResource",
-  "oauthClientAssertion",
-] as const satisfies readonly (keyof typeof authSchema)[];
-
 export const authRelationsPart = defineRelationsPart(authSchema, (r) => ({
   user: {
     sessions: r.many.session({ from: r.user.id, to: r.session.userId }),
