@@ -687,7 +687,7 @@ export const MCP_APP_FRAME_TITLE_MAX_CHARS = 200;
 export const MCP_APP_RESOURCE_MIME_TYPE = "text/html;profile=mcp-app" as const;
 export const DOCUMENT_REVIEW_LIMITS = {
   referencesMax: 3,
-  topicsMax: 200,
+  positionsMax: 200,
 } as const;
 /**
  * Where a playbook run's results land. Shared so the request body's accepted

@@ -59,7 +59,7 @@ const SOURCE_VALUES_CHECK = "playbook_def_versions_source_values_check";
 const POSITION_ID = "11111111-1111-4111-8111-111111111111";
 
 const positionsSaying = (issue: string): PlaybookPositions => ({
-  version: 2,
+  version: 3,
   items: [
     {
       mode: "extract",

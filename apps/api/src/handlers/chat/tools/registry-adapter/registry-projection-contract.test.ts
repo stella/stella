@@ -900,7 +900,7 @@ const CONTRACT_CORPUS = {
               // surfaced (the strict parse requires every declared field).
               status: "draft",
               positions: {
-                version: 2,
+                version: 3,
                 items: [
                   {
                     mode: "graded",
@@ -914,22 +914,25 @@ const CONTRACT_CORPUS = {
                       question: "How long is the term?",
                       content: { version: 1, type: "text" },
                     },
-                    tiers: {
-                      acceptable: {
-                        rules: [{ id: uid(37), text: "Max 3 years" }],
-                        // Exercises the ideal clause link the hand list
-                        // never declared (it licensed a stale pre-v2
-                        // `standard.clauseId` path instead); the backstop
-                        // verifies the schema licenses this handle.
-                        ideal: { source: "clause", clauseId: uid(70) },
-                      },
-                      fallback: {
-                        entries: [
-                          { id: uid(38), text: "5 years", label: "Fallback" },
-                        ],
-                      },
-                      notAcceptable: {
-                        rules: [{ id: uid(39), text: "Indefinite" }],
+                    standard: {
+                      source: "tiers",
+                      tiers: {
+                        acceptable: {
+                          rules: [{ id: uid(37), text: "Max 3 years" }],
+                          // Exercises the ideal clause link the hand list
+                          // never declared (it licensed a stale pre-v2
+                          // `standard.clauseId` path instead); the backstop
+                          // verifies the schema licenses this handle.
+                          ideal: { source: "clause", clauseId: uid(70) },
+                        },
+                        fallback: {
+                          entries: [
+                            { id: uid(38), text: "5 years", label: "Fallback" },
+                          ],
+                        },
+                        notAcceptable: {
+                          rules: [{ id: uid(39), text: "Indefinite" }],
+                        },
                       },
                     },
                   },

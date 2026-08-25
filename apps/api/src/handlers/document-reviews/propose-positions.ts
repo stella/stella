@@ -1,9 +1,11 @@
 import { panic, Result } from "better-result";
 
-import { proposeReferenceTopics } from "@/api/handlers/document-reviews/reference-topics";
+import { DOCUMENT_REVIEW_LIMITS } from "@stll/api-contract";
+
+import { proposeReferencePositions } from "@/api/handlers/document-reviews/reference-positions";
+import type { ReferenceSource } from "@/api/handlers/document-reviews/reference-positions";
 import { resolveReviewSelection } from "@/api/handlers/document-reviews/review-selection";
-import { validateReviewTopics } from "@/api/handlers/document-reviews/review-topics";
-import { proposeReviewTopicsBodySchema } from "@/api/handlers/document-reviews/schemas";
+import { proposeReviewPositionsBodySchema } from "@/api/handlers/document-reviews/schemas";
 import {
   assertUsageAvailableForHandler,
   createSafeHandler,
@@ -12,18 +14,20 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { fetchAndPrepareReviewFiles } from "@/api/lib/document-review/prepare-review-files";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { requireTanStackAIAvailableForRole } from "@/api/lib/tanstack-ai-models";
-import type { PreparedDocxFile } from "@/api/lib/workflow/generate-batch";
+import { findDuplicatePositionSourceId } from "@/api/lib/workflow/playbook-positions-validation";
 
 const TIMEOUT_MS = 120_000;
 
 const config = {
+  description:
+    "Propose review positions from one or more reference documents: an issue, its severity, and the reference passages that state the standard for it.",
   permissions: { workspace: ["read"] },
   access: "read",
   mcp: { type: "internal", reason: "document_processing" },
-  body: proposeReviewTopicsBodySchema,
+  body: proposeReviewPositionsBodySchema,
 } satisfies HandlerConfig;
 
-const proposeTopics = createSafeHandler(
+const proposePositions = createSafeHandler(
   config,
   async function* ({
     safeDb,
@@ -36,9 +40,17 @@ const proposeTopics = createSafeHandler(
     user,
   }) {
     const organizationId = session.activeOrganizationId;
-    const validTopics = validateReviewTopics(body.seededTopics, "proposal");
-    if (Result.isError(validTopics)) {
-      return Result.err(validTopics.error);
+    const duplicateSourceId = findDuplicatePositionSourceId({
+      version: 3,
+      items: body.seededPositions,
+    });
+    if (duplicateSourceId !== null) {
+      return Result.err(
+        new HandlerError({
+          status: 422,
+          message: "Positions must have unique sourceIds",
+        }),
+      );
     }
     yield* requireTanStackAIAvailableForRole({
       configStatus: orgAIConfigStatus,
@@ -113,23 +125,29 @@ const proposeTopics = createSafeHandler(
     if (target?.kind !== "docx") {
       return panic("DOCX review target was not prepared as DOCX blocks");
     }
-    const references: PreparedDocxFile[] = [];
-    for (const file of preparedResult.value.slice(1)) {
-      if (file.kind !== "docx") {
+    // Each prepared reference is rejoined with the document it came from, so a
+    // verified block can be pinned as a passage that outlives this request.
+    const references: ReferenceSource[] = [];
+    for (const [index, file] of preparedResult.value.slice(1).entries()) {
+      const document = selection.value.references[index];
+      if (file.kind !== "docx" || document === undefined) {
         return panic("DOCX review reference was not prepared as DOCX blocks");
       }
-      references.push(file);
+      references.push({
+        workspaceId: document.workspaceId,
+        entityId: document.entityId,
+        entityVersionId: document.entityVersionId,
+        file,
+      });
     }
 
     const serviceTier = "standard" as const;
-    const proposal = await proposeReferenceTopics({
+    const proposal = await proposeReferencePositions({
       target,
       references,
-      seededTopics: body.seededTopics,
+      seededPositions: body.seededPositions,
+      positionsMax: DOCUMENT_REVIEW_LIMITS.positionsMax,
       targetEntityVersionId: selection.value.target.entityVersionId,
-      referenceEntityVersionIds: selection.value.references.map(
-        (reference) => reference.entityVersionId,
-      ),
       organizationId,
       workspaceId,
       orgAIConfig,
@@ -158,4 +176,4 @@ const proposeTopics = createSafeHandler(
   },
 );
 
-export default proposeTopics;
+export default proposePositions;

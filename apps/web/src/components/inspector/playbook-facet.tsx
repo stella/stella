@@ -1604,7 +1604,7 @@ const TopicEditor = ({
 }: TopicEditorProps) => {
   const t = useTranslations();
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const atTopicLimit = topics.length >= DOCUMENT_REVIEW_LIMITS.topicsMax;
+  const atTopicLimit = topics.length >= DOCUMENT_REVIEW_LIMITS.positionsMax;
   const includedCount = topics.filter((topic) => topic.included).length;
   const canConfirm =
     includedCount > 0 &&

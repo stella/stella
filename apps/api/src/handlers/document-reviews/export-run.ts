@@ -98,7 +98,7 @@ const exportDocumentReviewRun = createSafeHandler(
       safeDb((tx) =>
         tx
           .select({
-            topicTitle: documentReviewFindings.topicTitle,
+            positionTitle: documentReviewFindings.positionTitle,
             payload: documentReviewFindings.payload,
             decision: documentReviewFindings.decision,
           })
@@ -110,7 +110,6 @@ const exportDocumentReviewRun = createSafeHandler(
             ),
           )
           .orderBy(
-            asc(documentReviewFindings.checkKind),
             asc(documentReviewFindings.createdAt),
             asc(documentReviewFindings.id),
           )

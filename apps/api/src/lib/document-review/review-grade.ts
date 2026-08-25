@@ -7,6 +7,22 @@ import type { AIUsageMetering } from "@/api/lib/analytics/tanstack-ai";
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
 import type {
+  ReferenceConsensus,
+  ReferenceImpact,
+  ReviewPerspective,
+} from "@/api/lib/document-review/contract";
+import {
+  gradeReferencePositions,
+  REFERENCE_GRADE_BATCH_SIZE,
+  ungradedReferenceGrading,
+} from "@/api/lib/document-review/reference-grade";
+import type {
+  ReferenceGrading,
+  ReferenceStandardPosition,
+} from "@/api/lib/document-review/reference-grade";
+import { LANGUAGE_DELTA } from "@/api/lib/document-review/review-delta";
+import type { ReviewDelta } from "@/api/lib/document-review/review-delta";
+import type {
   AskExtraction,
   DocxFolioCitation,
 } from "@/api/lib/document-review/review-extract";
@@ -14,9 +30,11 @@ import {
   buildGroundedReviewFix,
   type GroundedReviewFix,
 } from "@/api/lib/grounded-review-fix";
+import type { PreparedDocxFile } from "@/api/lib/workflow/generate-batch";
 import type {
   Position,
   PositionSeverity,
+  PositionStandardSource,
   ResolvedTiers,
 } from "@/api/lib/workflow/playbook-positions";
 import {
@@ -31,29 +49,52 @@ import {
 import type { ExtractedAskValue } from "@/api/lib/workflow/verdict-engine";
 import type { VerdictTier } from "@/api/lib/workflow/verdict-tiers";
 
-// Ephemeral grading for the single-doc review: grade each position from the
-// in-memory ASK value (never the DB) using the same per-rule graders
-// `computeVerdictBatch` applies to persisted fields. The output is a `Finding`
-// per position — the single unit the review endpoint returns.
+// Ephemeral grading for one document: every enabled position produces exactly
+// one finding, whether its standard is an authored tier ladder or the passages
+// of a reference document. Grading dispatches on `standard.source`; everything
+// downstream — the row, the fix, the export — sees one finding shape.
 
-// A one-click redline aligned with the folio editor's AI-edit op vocabulary
-// (`packages/folio` ai-edits/types.ts: `replaceBlock` / `insertAfterBlock`) so
-// the frontend can feed it straight into `applyAIEditOperations`.
+/** A one-click redline, derived from the finding's delta, in the folio
+ *  editor's AI-edit op vocabulary. */
 export type ReviewFix = GroundedReviewFix;
 
 export type ReviewFinding = {
   positionId: string;
   issue: string;
   severity: PositionSeverity;
+  /** Where the standard this was graded against came from. Kept on the
+   *  finding so a reader knows what the judgment rests on without re-reading
+   *  the run's pinned position list. */
+  standardSource: PositionStandardSource;
   // null for extract-only positions (a value column with no verdict).
   verdict: VerdictTier | null;
+  /** What differs, typed. The fix is derived from this, never free-formed. */
+  delta: ReviewDelta;
   extracted: ExtractedAskValue | null;
   rationale: string | null;
   // The resolved tier reference a tier-match verdict cited (which fallback
   // matched, or which red line was violated). Absent for deterministic or
   // unmatched verdicts.
   matchedRef?: VerdictMatchedRef;
+  /** How consistently the standard's own passages agreed. Reference standards
+   *  only: an authored ladder is one voice by construction. */
+  consensus?: ReferenceConsensus;
+  /** Which way the difference cuts for the side the run was judged for. */
+  impact?: ReferenceImpact;
+  /** The comparison in prose, or the statement that there was not enough to
+   *  compare. Reference standards only; a tier match explains itself through
+   *  `rationale` and `matchedRef`. */
+  explanation?:
+    | { type: "comparison"; text: string }
+    | { type: "insufficient-evidence" };
+  /** One instruction for the drafter, or `null` when nothing should change. */
+  recommendation?: string | null;
   citations: DocxFolioCitation[];
+  /** The standard's own passages, grouped by the document they came from. */
+  referenceCitations?: {
+    fileFieldId: SafeId<"field">;
+    citations: DocxFolioCitation[];
+  }[];
   fix: ReviewFix | null;
 };
 
@@ -65,14 +106,20 @@ type AiGradingDeps = {
   orgAIConfig: OrgAIConfig | null;
   promptCachingEnabled: boolean;
   serviceTier: AIRequestServiceTier;
-  usageMetering?: AIUsageMetering | undefined;
-  gradeTierMatches?: typeof gradeTierMatches | undefined;
+  usageMetering: AIUsageMetering;
 };
 
 export type BuildFindingsArgs = AiGradingDeps & {
   positions: readonly Position[];
   contentBySourceId: ReadonlyMap<string, AskExtraction>;
   tiersBySourceId: ReadonlyMap<string, ResolvedTiers>;
+  /** The prepared target, compared directly against a reference standard's
+   *  passages. */
+  target: PreparedDocxFile;
+  /** The side reference comparisons are judged for. */
+  perspective: ReviewPerspective;
+  /** Pinned reference versions, for the shared prompt cache scope. */
+  referenceEntityVersionIds: readonly SafeId<"entityVersion">[];
 };
 
 type GradingOutcome =
@@ -88,10 +135,14 @@ type GradingOutcome =
       rationale: string;
     };
 
-// A replacement is safe only for a located deviation. A missing clause has no
-// semantically verified insertion anchor, so it remains a finding until the
-// reviewer chooses where it belongs.
-const buildFix = ({
+/**
+ * A tier deviation replaces the block it was found in with the position's
+ * ideal language: the difference is wording, so the delta is `language` and
+ * the op is a whole-block replacement. A missing clause has no semantically
+ * verified insertion anchor, so it stays a finding until a reviewer chooses
+ * where it belongs.
+ */
+const buildTierFix = ({
   verdict,
   citations,
   ideal,
@@ -104,7 +155,7 @@ const buildFix = ({
     return null;
   }
   return buildGroundedReviewFix({
-    kind: "replaceBlock",
+    delta: LANGUAGE_DELTA,
     proposedText: ideal,
     supportingEvidenceVerified: true,
     targetAnchors: citations,
@@ -202,7 +253,6 @@ const gradeTierMatchPositions = async ({
   tiersBySourceId: ReadonlyMap<string, ResolvedTiers>;
   deps: AiGradingDeps;
 }): Promise<ReadonlyMap<string, GradingOutcome>> => {
-  const gradeTierMatchesForReview = deps.gradeTierMatches ?? gradeTierMatches;
   const verdicts = new Map<string, GradingOutcome>();
   for (
     let cursor = 0;
@@ -214,7 +264,7 @@ const gradeTierMatchPositions = async ({
     }
     const batch = positions.slice(cursor, cursor + TIER_MATCH_BATCH_SIZE);
     // oxlint-disable-next-line no-await-in-loop -- one model call per batch, in order, keeps the single-doc review's fan-out bounded
-    const graded = await gradeTierMatchesForReview({
+    const graded = await gradeTierMatches({
       items: batch.map((position) => ({
         key: position.sourceId,
         askValue:
@@ -243,6 +293,78 @@ const gradeTierMatchPositions = async ({
   return verdicts;
 };
 
+/** A reference-standard position, as the reference grader reads it. */
+const referenceStandardPosition = (
+  position: Position,
+): ReferenceStandardPosition | null => {
+  if (position.mode !== "graded" || position.standard.source !== "reference") {
+    return null;
+  }
+  return {
+    sourceId: position.sourceId,
+    issue: position.issue,
+    guidance: position.guidance,
+    passages: position.standard.passages,
+  };
+};
+
+/**
+ * Compare the target against every reference-standard position, a batch of
+ * positions per model call. A batch that fails, or a position the model
+ * skipped, leaves that position ungraded rather than failing the run: one
+ * unanswerable position must not discard the rest of the review.
+ */
+const gradeReferenceStandards = async ({
+  positions,
+  target,
+  perspective,
+  referenceEntityVersionIds,
+  deps,
+}: {
+  positions: readonly ReferenceStandardPosition[];
+  target: PreparedDocxFile;
+  perspective: ReviewPerspective;
+  referenceEntityVersionIds: readonly SafeId<"entityVersion">[];
+  deps: AiGradingDeps;
+}): Promise<ReadonlyMap<string, ReferenceGrading>> => {
+  const graded = new Map<string, ReferenceGrading>();
+  if (positions.length === 0) {
+    return graded;
+  }
+  for (
+    let cursor = 0;
+    cursor < positions.length;
+    cursor += REFERENCE_GRADE_BATCH_SIZE
+  ) {
+    const batch = positions.slice(cursor, cursor + REFERENCE_GRADE_BATCH_SIZE);
+    // oxlint-disable-next-line no-await-in-loop -- one model call per batch, in order, keeps the review's fan-out bounded
+    const outcome = await gradeReferencePositions({
+      positions: batch,
+      target,
+      perspective,
+      targetEntityVersionId: deps.entityVersionId,
+      referenceEntityVersionIds,
+      organizationId: deps.organizationId,
+      workspaceId: deps.workspaceId,
+      orgAIConfig: deps.orgAIConfig,
+      promptCachingEnabled: deps.promptCachingEnabled,
+      serviceTier: deps.serviceTier,
+      usageMetering: deps.usageMetering,
+      abortSignal: deps.abortSignal,
+    });
+    for (const position of batch) {
+      const grading = Result.isOk(outcome)
+        ? outcome.value.get(position.sourceId)
+        : undefined;
+      graded.set(
+        position.sourceId,
+        grading ?? ungradedReferenceGrading(position),
+      );
+    }
+  }
+  return graded;
+};
+
 type ProjectGradingArgs = {
   grading: GradingOutcome;
   citations: readonly DocxFolioCitation[];
@@ -267,7 +389,7 @@ const projectGrading = ({
         ...(grading.matchedRef === undefined
           ? {}
           : { matchedRef: grading.matchedRef }),
-        fix: buildFix({ verdict: grading.verdict, citations, ideal }),
+        fix: buildTierFix({ verdict: grading.verdict, citations, ideal }),
       };
     case "ungraded":
       return {
@@ -280,10 +402,47 @@ const projectGrading = ({
   }
 };
 
+/** Severity is meaningless on extract-only positions (they never surface a
+ *  verdict); the neutral tier stands in so the field is always present. */
+const findingSeverity = (position: Position): PositionSeverity =>
+  position.mode === "graded" ? position.severity : "medium";
+
+/** An extract-only position measures against nothing, so it has no standard to
+ *  name. It reads as `tiers`: it is an authored playbook entry, and its
+ *  finding carries no verdict for a reader to attribute to a standard. */
+const standardSourceOf = (position: Position): PositionStandardSource =>
+  position.mode === "graded" ? position.standard.source : "tiers";
+
+const referenceFinding = (
+  position: Position,
+  grading: ReferenceGrading,
+): ReviewFinding => ({
+  positionId: position.sourceId,
+  issue: position.issue,
+  severity: findingSeverity(position),
+  standardSource: "reference",
+  verdict: grading.verdict,
+  delta: grading.delta,
+  // A reference comparison reads the document directly; it extracts no value.
+  extracted: null,
+  rationale:
+    grading.explanation.type === "comparison" ? grading.explanation.text : null,
+  consensus: grading.consensus,
+  impact: grading.impact,
+  explanation: grading.explanation,
+  recommendation: grading.recommendation,
+  citations: grading.citations,
+  referenceCitations: grading.referenceCitations,
+  fix: grading.fix,
+});
+
 export const buildFindings = async ({
   positions,
   contentBySourceId,
   tiersBySourceId,
+  target,
+  perspective,
+  referenceEntityVersionIds,
   ...deps
 }: BuildFindingsArgs): Promise<ReviewFinding[]> => {
   const fieldContentBySourceId = new Map<string, FieldContent>();
@@ -291,11 +450,18 @@ export const buildFindings = async ({
     fieldContentBySourceId.set(sourceId, extraction.content);
   }
 
-  // Everything decidable without the model is decided first; what is left
-  // goes to the model in batches. Findings keep the input `positions` order.
+  // Split on where the standard came from, then decide everything that needs
+  // no model, then hand the rest to the two graders. Findings keep the input
+  // `positions` order.
+  const referencePositions: ReferenceStandardPosition[] = [];
   const decided = new Map<string, GradingOutcome>();
   const forModel: Position[] = [];
   for (const position of positions) {
+    const reference = referenceStandardPosition(position);
+    if (reference !== null) {
+      referencePositions.push(reference);
+      continue;
+    }
     const verdict = gradeWithoutModel({
       position,
       askContent: contentBySourceId.get(position.sourceId)?.content,
@@ -307,14 +473,29 @@ export const buildFindings = async ({
       decided.set(position.sourceId, verdict);
     }
   }
-  const modelVerdicts = await gradeTierMatchPositions({
-    positions: forModel,
-    contentBySourceId,
-    tiersBySourceId,
-    deps,
-  });
+
+  const [modelVerdicts, referenceGradings] = await Promise.all([
+    gradeTierMatchPositions({
+      positions: forModel,
+      contentBySourceId,
+      tiersBySourceId,
+      deps,
+    }),
+    gradeReferenceStandards({
+      positions: referencePositions,
+      target,
+      perspective,
+      referenceEntityVersionIds,
+      deps,
+    }),
+  ]);
 
   return positions.map((position): ReviewFinding => {
+    const referenceGrading = referenceGradings.get(position.sourceId);
+    if (referenceGrading !== undefined) {
+      return referenceFinding(position, referenceGrading);
+    }
+
     const extraction = contentBySourceId.get(position.sourceId);
     const askContent = extraction?.content;
     const tiers = tiersBySourceId.get(position.sourceId);
@@ -337,10 +518,13 @@ export const buildFindings = async ({
     return {
       positionId: position.sourceId,
       issue: position.issue,
-      // Severity is meaningless on extract-only positions (they never surface a
-      // verdict finding); use the neutral tier as a placeholder.
-      severity: position.mode === "graded" ? position.severity : "medium",
+      severity: findingSeverity(position),
+      standardSource: standardSourceOf(position),
       verdict,
+      // A tier match compares wording against a ladder of rules, so the
+      // difference it finds is a language one; the structured kinds come from
+      // a reference comparison, which reads both sides' text.
+      delta: LANGUAGE_DELTA,
       extracted: extractedFromContent(askContent),
       rationale,
       ...(matchedRef === undefined ? {} : { matchedRef }),

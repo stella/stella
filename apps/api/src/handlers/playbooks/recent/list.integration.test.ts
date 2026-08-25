@@ -97,7 +97,7 @@ const seedRun = async ({
     INSERT INTO document_review_runs (
       id, organization_id, workspace_id, entity_id, file_field_id,
       entity_version_id, content_sha256, playbook_definition_id, basis,
-      topics, status, requested_by, created_at
+      status, requested_by, created_at
     ) VALUES (
       ${id},
       ${organizationId},
@@ -107,8 +107,7 @@ const seedRun = async ({
       ${Bun.randomUUIDv7()}::uuid,
       ${"a".repeat(64)},
       ${playbookDefinitionId}::uuid,
-      '{"type":"references","references":[]}'::jsonb,
-      '[]'::jsonb,
+      '{"playbook":{"definitionId":null,"versionId":null,"provenance":"ephemeral","definitionSnapshot":{"name":"Positions confirmed for this review","positions":{"version":3,"items":[]}}},"references":[],"perspective":{"type":"neutral"}}'::jsonb,
       'completed',
       ${userId},
       ${createdAt}::timestamptz

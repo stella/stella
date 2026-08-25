@@ -55,7 +55,15 @@ const POSITION_TERM = "22222222-2222-4222-8222-222222222222";
 const VISIBLE_POSITIONS = [POSITION_LAW, POSITION_TERM];
 
 const basis: DocumentReviewRunBasis = {
-  type: "references",
+  playbook: {
+    definitionId: null,
+    versionId: null,
+    provenance: "ephemeral",
+    definitionSnapshot: {
+      name: "Positions confirmed for this review",
+      positions: { version: 3, items: [] },
+    },
+  },
   perspective: { type: "neutral" },
   references: [
     {
@@ -71,12 +79,13 @@ const basis: DocumentReviewRunBasis = {
 };
 
 const playbookPayload = (positionId: string): DocumentReviewFindingPayload => ({
-  checkKind: "playbook",
   finding: {
     positionId,
     issue: "Position",
     severity: "high",
+    standardSource: "tiers",
     verdict: "deviation",
+    delta: { kind: "language" },
     extracted: null,
     rationale: null,
     citations: [],
@@ -110,7 +119,6 @@ const seedRun = async ({
     entityVersionId,
     contentSha256: "a".repeat(64),
     basis,
-    topics: [],
     status,
     total: Object.keys(decisions).length,
     requestedBy: ids.userA1,
@@ -129,10 +137,8 @@ const seedRun = async ({
       entityId: ids.entityA1,
       fileFieldId: FILE_FIELD_ID,
       entityVersionId,
-      topicId: positionId,
-      topicTitle: "Position",
-      checkKind: "playbook" as const,
       positionId,
+      positionTitle: "Position",
       outcome: "deviation",
       payload: playbookPayload(positionId),
       decision,

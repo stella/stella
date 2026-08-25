@@ -1,12 +1,8 @@
 import { sql } from "drizzle-orm";
 
-import type { DocumentReviewTopic } from "@/api/lib/document-review/contract";
 import {
-  DOCUMENT_REVIEW_BASIS_TYPES,
   DOCUMENT_REVIEW_APPLICATION_STATUSES,
   DOCUMENT_REVIEW_APPLICATION_STATUS,
-  DOCUMENT_REVIEW_CHECK_KIND,
-  DOCUMENT_REVIEW_CHECK_KINDS,
   DOCUMENT_REVIEW_DECISION,
   DOCUMENT_REVIEW_DECISIONS,
   DOCUMENT_REVIEW_OUTCOMES,
@@ -15,6 +11,7 @@ import {
   DOCUMENT_REVIEW_RUN_EXECUTOR,
   DOCUMENT_REVIEW_RUN_EXECUTORS,
   DOCUMENT_REVIEW_RUN_STATUSES,
+  PLAYBOOK_PIN_PROVENANCES,
 } from "@/api/lib/document-review/run-contract";
 import type {
   DocumentReviewFindingPayload,
@@ -48,34 +45,26 @@ const RUN_ACTIVE_STATUS_SQL_VALUES = quoted(
 );
 const RUN_ERROR_CODE_SQL_VALUES = quoted(DOCUMENT_REVIEW_RUN_ERROR_CODES);
 const RUN_EXECUTOR_SQL_VALUES = quoted(DOCUMENT_REVIEW_RUN_EXECUTORS);
-const BASIS_TYPE_SQL_VALUES = quoted(DOCUMENT_REVIEW_BASIS_TYPES);
-const CHECK_KIND_SQL_VALUES = quoted(DOCUMENT_REVIEW_CHECK_KINDS);
-const PLAYBOOK_OUTCOME_SQL_VALUES = quoted(DOCUMENT_REVIEW_OUTCOMES.playbook);
-const REFERENCE_OUTCOME_SQL_VALUES = quoted(DOCUMENT_REVIEW_OUTCOMES.reference);
+const PIN_PROVENANCE_SQL_VALUES = quoted(PLAYBOOK_PIN_PROVENANCES);
+const OUTCOME_SQL_VALUES = quoted(DOCUMENT_REVIEW_OUTCOMES);
 
 const DECISION_SQL_VALUES = quoted(DOCUMENT_REVIEW_DECISIONS);
 const APPLICATION_STATUS_SQL_VALUES = quoted(
   DOCUMENT_REVIEW_APPLICATION_STATUSES,
 );
 
-const PLAYBOOK_CHECK_KIND_SQL = sql.raw(
-  `'${DOCUMENT_REVIEW_CHECK_KIND.PLAYBOOK}'`,
-);
-const REFERENCE_CHECK_KIND_SQL = sql.raw(
-  `'${DOCUMENT_REVIEW_CHECK_KIND.REFERENCE}'`,
-);
 const OPEN_DECISION_SQL = sql.raw(`'${DOCUMENT_REVIEW_DECISION.OPEN}'`);
 const PENDING_APPLICATION_STATUS_SQL = sql.raw(
   `'${DOCUMENT_REVIEW_APPLICATION_STATUS.PENDING}'`,
 );
 
 /**
- * One immutable execution of a document review: a confirmed basis (a playbook,
- * a set of reference documents, or both) measured against one pinned document
- * version.
+ * One immutable execution of a document review: a confirmed position list,
+ * with the reference documents those positions came from and the side it was
+ * judged for, measured against one pinned document version.
  *
  * The target and the basis are pinned by value, not by reference: `basis`
- * embeds the whole playbook snapshot and every reference's version, and there
+ * embeds the whole position snapshot and every reference's version, and there
  * is no foreign key from a run to a playbook or to the reviewed documents. A
  * completed review therefore stays readable after the playbook is deleted or
  * the document moves on. Workspace deletion still cascades everything.
@@ -102,9 +91,6 @@ export const documentReviewRuns = p.pgTable(
       "playbook_definition_id",
     ),
     basis: jsonb().$type<DocumentReviewRunBasis>().notNull(),
-    // The confirmed topic list exactly as the reviewer approved it. Capped by
-    // the request schema (`DOCUMENT_REVIEW_LIMITS.topicsMax`).
-    topics: jsonb().$type<DocumentReviewTopic[]>().notNull(),
     status: p
       .text("status", { enum: DOCUMENT_REVIEW_RUN_STATUSES })
       .notNull()
@@ -127,7 +113,7 @@ export const documentReviewRuns = p.pgTable(
       .references(() => user.id, { onDelete: "set null" }),
     // Bumped when the executed pipeline changes shape, so an old run is never
     // silently read as if it had been produced by today's engine.
-    pipelineVersion: p.integer("pipeline_version").notNull().default(1),
+    pipelineVersion: p.integer("pipeline_version").notNull().default(2),
     // The model identity the run resolved to, recorded for reproducibility.
     modelRef: p.varchar("model_ref", { length: 256 }),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
@@ -174,9 +160,12 @@ export const documentReviewRuns = p.pgTable(
       "document_review_runs_executor_values_check",
       sql`${table.executor} IN (${RUN_EXECUTOR_SQL_VALUES})`,
     ),
+    // The basis always pins a playbook snapshot and says where it came from;
+    // an ephemeral pin is the only one without a definition to point at.
     p.check(
-      "document_review_runs_basis_type_check",
-      sql`${table.basis}->>'type' IN (${BASIS_TYPE_SQL_VALUES})`,
+      "document_review_runs_basis_shape_check",
+      sql`${table.basis}->'playbook'->>'provenance' IN (${PIN_PROVENANCE_SQL_VALUES})
+        AND jsonb_typeof(${table.basis}->'playbook'->'definitionSnapshot'->'positions') = 'object'`,
     ),
     p.check(
       "document_review_runs_progress_nonnegative_check",
@@ -209,9 +198,9 @@ export const documentReviewRuns = p.pgTable(
 );
 
 /**
- * One judgment per confirmed topic per check kind. `(runId, topicId,
- * checkKind)` is the upsert key, so a re-delivered job converges onto the rows
- * it already wrote instead of duplicating them.
+ * One judgment per confirmed position. `(runId, positionId)` is the upsert
+ * key, so a re-delivered job converges onto the rows it already wrote instead
+ * of duplicating them.
  *
  * Reads are keyed by document rather than by run: the current review state of a
  * document is the findings of its latest completed run.
@@ -233,17 +222,15 @@ export const documentReviewFindings = p.pgTable(
     entityId: safeUuid<"entity">("entity_id").notNull(),
     fileFieldId: safeUuid<"field">("file_field_id").notNull(),
     entityVersionId: safeUuid<"entityVersion">("entity_version_id").notNull(),
-    topicId: p.uuid("topic_id").notNull(),
-    // Denormalized so a report renders without the run's topic snapshot.
-    topicTitle: p.varchar("topic_title", { length: 256 }).notNull(),
-    checkKind: p
-      .text("check_kind", { enum: DOCUMENT_REVIEW_CHECK_KINDS })
-      .notNull(),
-    // Set only on a playbook-kind row, which grades one playbook position.
-    positionId: p.uuid("position_id"),
-    // Verdict tiers for the playbook kind, the comparison vocabulary for the
-    // reference kind. The two are never merged. Null only for an extract-only
-    // position, which produces a value with no verdict.
+    // The position this judges, by its playbook-stable `sourceId`. Deliberately
+    // no foreign key: the position lives in the run's pinned snapshot, and the
+    // decision overlay reads findings by this id across an organization's runs
+    // long after any definition that held it is gone.
+    positionId: p.uuid("position_id").notNull(),
+    // Denormalized so a report renders without the run's position snapshot.
+    positionTitle: p.varchar("position_title", { length: 256 }).notNull(),
+    // One verdict vocabulary, whatever the standard was. Null only for an
+    // extract-only position, which produces a value with no verdict.
     outcome: p.varchar("outcome", { length: 64 }),
     payload: jsonb().$type<DocumentReviewFindingPayload>().notNull(),
     // Reviewer disposition. Findings are born `open`; a decision names who
@@ -281,30 +268,19 @@ export const documentReviewFindings = p.pgTable(
   },
   (table) => [
     p
-      .uniqueIndex("document_review_findings_run_topic_kind_uidx")
-      .on(table.runId, table.topicId, table.checkKind),
+      .uniqueIndex("document_review_findings_run_position_uidx")
+      .on(table.runId, table.positionId),
     p
       .index("document_review_findings_document_idx")
       .on(table.workspaceId, table.entityId, table.fileFieldId),
-    p.check(
-      "document_review_findings_check_kind_values_check",
-      sql`${table.checkKind} IN (${CHECK_KIND_SQL_VALUES})`,
-    ),
-    // Per-kind outcome vocabulary, plus the invariant that only a playbook-kind
-    // row names a position.
+    // The decision overlay: how an organization has decided one position
+    // across every run that graded it.
+    p
+      .index("document_review_findings_org_position_idx")
+      .on(table.organizationId, table.positionId),
     p.check(
       "document_review_findings_outcome_check",
-      sql`(
-        ${table.checkKind} = ${PLAYBOOK_CHECK_KIND_SQL}
-        AND (
-          ${table.outcome} IS NULL
-          OR ${table.outcome} IN (${PLAYBOOK_OUTCOME_SQL_VALUES})
-        )
-      ) OR (
-        ${table.checkKind} = ${REFERENCE_CHECK_KIND_SQL}
-        AND ${table.outcome} IN (${REFERENCE_OUTCOME_SQL_VALUES})
-        AND ${table.positionId} IS NULL
-      )`,
+      sql`${table.outcome} IS NULL OR ${table.outcome} IN (${OUTCOME_SQL_VALUES})`,
     ),
     p.check(
       "document_review_findings_decision_values_check",

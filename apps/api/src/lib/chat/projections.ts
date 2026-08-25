@@ -890,6 +890,35 @@ const playbookTiersProjection = v.strictObject({
   }),
 });
 
+/**
+ * A graded position's standard (`positionStandardSchema`): the authored tier
+ * ladder, or the passages quoted from a reference document. Passage ids are
+ * stripped like every other internal identifier; the quoted text stays.
+ */
+const playbookStandardProjection = v.variant("source", [
+  projectionBranch(
+    v.strictObject({
+      source: v.literal("tiers"),
+      tiers: playbookTiersProjection,
+    }),
+  ),
+  projectionBranch(
+    v.strictObject({
+      source: v.literal("reference"),
+      passages: v.array(
+        v.strictObject({
+          workspaceId: strippedField(),
+          entityId: strippedField(),
+          fileFieldId: strippedField(),
+          entityVersionId: strippedField(),
+          blockId: strippedField(),
+          text: v.string(),
+        }),
+      ),
+    }),
+  ),
+]);
+
 // `content` is a `PropertyContent` config (a structural type descriptor with
 // no stable leaf grammar across its variants): an unenumerated subtree, so
 // the UUID backstop still guards its contents unlicensed.
@@ -946,7 +975,7 @@ const playbookPositionProjection = v.variant("mode", [
       sourceId: passthroughId(),
       issue: v.string(),
       severity: v.string(),
-      tiers: playbookTiersProjection,
+      standard: playbookStandardProjection,
       check: v.optional(unenumeratedJson()),
       ask: playbookAskConfigProjection,
       guidance: v.optional(v.string()),
@@ -999,7 +1028,7 @@ export const LIST_PLAYBOOKS_DETAIL_PROJECTION = v.strictObject({
       }),
     ),
     positions: v.strictObject({
-      version: v.literal(2),
+      version: v.literal(3),
       items: v.array(playbookPositionProjection),
     }),
     status: v.string(),

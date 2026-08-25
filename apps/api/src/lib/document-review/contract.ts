@@ -1,37 +1,12 @@
-// The review topic shape the document-review engine consumes. It is a plain
-// type, not an Elysia schema: the engine runs from handlers today and from a
-// background worker later, and lib may not import a handler slice. The wire
-// schema in `handlers/document-reviews/schemas.ts` is bound to this type, so a
-// request-shape change that stops matching the engine fails typecheck there.
+// Plain vocabulary shared by the document-review engine and the surfaces that
+// read a run. Plain types, not Elysia schemas: the engine runs from handlers
+// and from a background worker, and lib may not import a handler slice. The
+// wire schemas in `handlers/document-reviews/schemas.ts` are bound to these
+// types, so a request-shape change that stops matching the engine fails
+// typecheck there.
 
-type ReviewTopicBase = {
-  topicId: string;
-  title: string;
-  context: string;
-  included: boolean;
-};
-
-export type DocumentReviewTopic =
-  | (ReviewTopicBase & { type: "playbook"; positionId: string })
-  | (ReviewTopicBase & { type: "reference" })
-  | (ReviewTopicBase & { type: "custom" });
-
-// Reference-comparison outcome vocabulary. It lives here rather than in
-// `reference-compare.ts` so the persisted-run schema can derive its CHECK
-// constraint from the same const the model's output schema is built from,
-// without the database module importing the AI stack.
-export const REFERENCE_ASSESSMENTS = [
-  "aligned",
-  "different",
-  "missing-from-target",
-  "additional-in-target",
-  "deal-specific",
-  "not-comparable",
-] as const;
-export type ReferenceAssessment = (typeof REFERENCE_ASSESSMENTS)[number];
-
-// How consistently the references agreed about a topic. `single` is the
-// degenerate one-reference case, normalized after the model answers.
+// How consistently the reference passages agreed about a position. `single` is
+// the degenerate one-passage-source case, normalized after the model answers.
 export const REFERENCE_CONSENSUS_VALUES = [
   "single",
   "consistent",
@@ -70,7 +45,7 @@ export const perspectivePartyPhrase = (party: ReviewParty): string =>
     ? `the ${party.role}`
     : `the ${party.role} (${party.name})`;
 
-// Which way a topic's difference cuts for the chosen side.
+// Which way a position's difference cuts for the chosen side.
 export const REFERENCE_IMPACTS = [
   "favourable",
   "unfavourable",
@@ -79,6 +54,6 @@ export const REFERENCE_IMPACTS = [
 ] as const;
 export type ReferenceImpact = (typeof REFERENCE_IMPACTS)[number];
 
-// How much the difference matters commercially or legally for that side.
-export const REFERENCE_SEVERITIES = ["high", "medium", "low"] as const;
-export type ReferenceSeverity = (typeof REFERENCE_SEVERITIES)[number];
+// How much a difference matters is a property of the position, not of the
+// comparison: `PositionSeverity` on the position the finding answers is the
+// one severity a reader sees.

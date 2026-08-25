@@ -72,7 +72,15 @@ describe("document review run export", () => {
                       id: RUN_ID,
                       targetName: "Draft agreement.docx",
                       basis: {
-                        type: "references",
+                        playbook: {
+                          definitionId: null,
+                          versionId: null,
+                          provenance: "ephemeral",
+                          definitionSnapshot: {
+                            name: "Positions confirmed for this review",
+                            positions: { version: 3, items: [] },
+                          },
+                        },
                         references: [
                           {
                             workspaceId: WORKSPACE_ID,
@@ -104,24 +112,26 @@ describe("document review run export", () => {
               orderBy: () => ({
                 limit: async () => [
                   {
-                    topicTitle: hostileTopic,
+                    positionTitle: hostileTopic,
                     decision: "open",
                     payload: {
-                      checkKind: "reference",
                       finding: {
-                        findingId: "finding-1",
-                        topicId: "topic-1",
+                        positionId: "11111111-1111-4111-8111-1111111111aa",
                         issue: "Hostile spreadsheet text",
-                        assessment: "different",
+                        severity: "medium",
+                        standardSource: "reference",
+                        verdict: "deviation",
+                        delta: { kind: "language" },
+                        extracted: null,
                         consensus: "single",
+                        rationale: "Different wording.",
                         explanation: {
                           type: "comparison",
                           text: "Different wording.",
                         },
                         recommendation: null,
                         impact: "unknown",
-                        severity: "medium",
-                        targetCitations: [],
+                        citations: [],
                         referenceCitations: [
                           {
                             fileFieldId: REFERENCE_FIELD_ID,

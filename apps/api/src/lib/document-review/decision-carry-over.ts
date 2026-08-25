@@ -26,17 +26,14 @@ import {
   DOCUMENT_REVIEW_FINDINGS_PER_RUN_MAX,
 } from "@/api/lib/document-review/run-contract";
 import type {
-  DocumentReviewCheckKind,
   DocumentReviewDecision,
   DocumentReviewFindingPayload,
-  DocumentReviewRunBasis,
 } from "@/api/lib/document-review/run-contract";
 
 /** What matching needs from a finding row, on either side of the comparison. */
 export type CarryOverFinding = {
   id: SafeId<"documentReviewFinding">;
-  topicId: string;
-  checkKind: DocumentReviewCheckKind;
+  positionId: string;
   outcome: string | null;
   payload: DocumentReviewFindingPayload;
   decision: DocumentReviewDecision;
@@ -48,10 +45,9 @@ export type CarriedDecision = {
   priorFindingId: SafeId<"documentReviewFinding">;
 };
 
-/** A finding answers one topic under one check kind, which is what makes two
- *  findings from different runs comparable at all. */
-const comparisonKey = ({ topicId, checkKind }: CarryOverFinding): string =>
-  `${topicId}:${checkKind}`;
+/** A finding answers one position, which is what makes two findings from
+ *  different runs comparable at all. */
+const comparisonKey = ({ positionId }: CarryOverFinding): string => positionId;
 
 type MatchCarriedDecisionsArgs = {
   current: readonly CarryOverFinding[];
@@ -61,8 +57,8 @@ type MatchCarriedDecisionsArgs = {
 /**
  * Pair each new finding with the decided prior finding it repeats verbatim.
  *
- * Three conditions, all required: the same topic under the same check kind, a
- * prior finding that someone actually decided, and an identical fingerprint
+ * Three conditions, all required: the same position, a prior finding that
+ * someone actually decided, and an identical fingerprint
  * (same outcome over the same cited evidence). A prior finding left `open`
  * carries nothing — the new finding is already open — and a new finding that
  * somehow already carries a decision is never overwritten, which is what makes
@@ -109,17 +105,16 @@ type CarryOverDecisionsArgs = {
   runId: SafeId<"documentReviewRun">;
   entityId: SafeId<"entity">;
   fileFieldId: SafeId<"field">;
-  basisType: DocumentReviewRunBasis["type"];
 };
 
 /**
  * Copy the decisions a completed run inherits from the document's previous
  * review. Returns how many decisions moved.
  *
- * "Previous review" is the newest completed run for the same document that was
- * measured against the same kind of basis: a playbook run and a reference
- * comparison judge different things, so their findings are not each other's
- * history even when they share a topic.
+ * "Previous review" is the newest completed run for the same document. There
+ * is one basis shape and one finding shape now, so any earlier review of the
+ * same document is that document's history; whether the conclusions actually
+ * repeat is the fingerprint's question, not this query's.
  */
 export const carryOverDecisions = async ({
   tx,
@@ -127,7 +122,6 @@ export const carryOverDecisions = async ({
   runId,
   entityId,
   fileFieldId,
-  basisType,
 }: CarryOverDecisionsArgs): Promise<number> => {
   const previousRun = tx
     .select({ id: documentReviewRuns.id })
@@ -139,7 +133,6 @@ export const carryOverDecisions = async ({
         eq(documentReviewRuns.fileFieldId, fileFieldId),
         eq(documentReviewRuns.status, "completed"),
         ne(documentReviewRuns.id, runId),
-        sql`${documentReviewRuns.basis}->>'type' = ${basisType}`,
       ),
     )
     .orderBy(desc(documentReviewRuns.createdAt), desc(documentReviewRuns.id))
@@ -151,8 +144,7 @@ export const carryOverDecisions = async ({
     .select({
       id: documentReviewFindings.id,
       runId: documentReviewFindings.runId,
-      topicId: documentReviewFindings.topicId,
-      checkKind: documentReviewFindings.checkKind,
+      positionId: documentReviewFindings.positionId,
       outcome: documentReviewFindings.outcome,
       payload: documentReviewFindings.payload,
       decision: documentReviewFindings.decision,

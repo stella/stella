@@ -13,12 +13,13 @@ import { tConditionNode } from "@/api/lib/conditions/contract";
 // ── Severity ──────────────────────────────────────────
 // `blocker` is the walk-away / non-negotiable tier; the rest are the
 // conventional 3-tier review scale.
-export const positionSeveritySchema = t.UnionEnum([
+export const POSITION_SEVERITIES = [
   "blocker",
   "high",
   "medium",
   "low",
-]);
+] as const;
+export const positionSeveritySchema = t.UnionEnum([...POSITION_SEVERITIES]);
 export type PositionSeverity = Static<typeof positionSeveritySchema>;
 
 // ── GRADE: how the extracted answer is judged ─────────

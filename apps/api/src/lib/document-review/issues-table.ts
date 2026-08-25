@@ -16,23 +16,12 @@ import {
 } from "@stll/folio-core/server";
 import type { TableCellSpec } from "@stll/folio-core/server";
 
-import {
-  NEUTRAL_PERSPECTIVE,
-  perspectivePartyPhrase,
-} from "@/api/lib/document-review/contract";
+import { perspectivePartyPhrase } from "@/api/lib/document-review/contract";
 import type {
-  ReferenceAssessment,
   ReferenceImpact,
-  ReferenceSeverity,
   ReviewPerspective,
 } from "@/api/lib/document-review/contract";
-import type { ReferenceReviewFinding } from "@/api/lib/document-review/reference-compare";
 import type { ReviewFinding } from "@/api/lib/document-review/review-grade";
-import {
-  basisPerspective,
-  basisPlaybook,
-  basisReferences,
-} from "@/api/lib/document-review/run-contract";
 import type {
   DocumentReviewDecision,
   DocumentReviewFindingPayload,
@@ -81,18 +70,6 @@ const IMPACT_RANK = {
   favourable: 3,
 } as const satisfies Record<ReferenceImpact, number>;
 
-const REFERENCE_SEVERITY_LABEL = {
-  high: "High",
-  medium: "Medium",
-  low: "Low",
-} as const satisfies Record<ReferenceSeverity, string>;
-
-const REFERENCE_SEVERITY_RANK = {
-  high: 0,
-  medium: 1,
-  low: 2,
-} as const satisfies Record<ReferenceSeverity, number>;
-
 const POSITION_SEVERITY_LABEL = {
   blocker: "Blocker",
   high: "High",
@@ -112,27 +89,20 @@ const VERDICT_LABEL = {
   fallback: "Fallback",
   deviation: "Deviation",
   missing: "Missing",
+  additional: "Only in the draft",
   "not-applicable": "Not applicable",
 } as const satisfies Record<VerdictTier, string>;
 
 /** Deviations and gaps read like an unfavourable difference; the rest like a
- *  neutral one, so a combined run interleaves both check kinds sensibly. */
+ *  neutral one, so a run interleaves both kinds of standard sensibly. */
 const VERDICT_RANK = {
   compliant: IMPACT_RANK.favourable,
   fallback: IMPACT_RANK.neutral,
   deviation: IMPACT_RANK.unfavourable,
   missing: IMPACT_RANK.unfavourable,
+  additional: IMPACT_RANK.neutral,
   "not-applicable": IMPACT_RANK.neutral,
 } as const satisfies Record<VerdictTier, number>;
-
-const ASSESSMENT_LABEL = {
-  aligned: "Aligned",
-  different: "Different",
-  "missing-from-target": "Missing from the draft",
-  "additional-in-target": "Only in the draft",
-  "deal-specific": "Deal-specific",
-  "not-comparable": "Not comparable",
-} as const satisfies Record<ReferenceAssessment, string>;
 
 const DECISION_LABEL = {
   open: "Open",
@@ -172,94 +142,153 @@ const perspectiveLabel = (perspective: ReviewPerspective): string => {
 };
 
 export type IssuesTableFinding = {
-  topicTitle: string;
+  positionTitle: string;
   payload: DocumentReviewFindingPayload;
   decision: DocumentReviewDecision;
 };
 
 type RankedRow = { row: IssuesTableRow; rank: [number, number] };
 
-type ReferenceRowArgs = {
-  topicTitle: string;
-  finding: ReferenceReviewFinding;
+/** The precedent column: the standard's own passages when the position was
+ *  derived from a document, otherwise the playbook that authored it. */
+const precedentPosition = ({
+  finding,
+  playbookName,
+  referenceNameByFieldId,
+  labelReferences,
+}: {
+  finding: ReviewFinding;
+  playbookName: string;
+  referenceNameByFieldId: ReadonlyMap<string, string>;
+  labelReferences: boolean;
+}): string => {
+  switch (finding.standardSource) {
+    case "reference": {
+      const passages: string[] = [];
+      for (const group of finding.referenceCitations ?? []) {
+        const name = referenceNameByFieldId.get(group.fileFieldId);
+        const prefix =
+          labelReferences && name !== undefined ? `[${name}] ` : "";
+        for (const citation of group.citations) {
+          passages.push(`${prefix}${citation.text}`);
+        }
+      }
+      return passages.join(PASSAGE_SEPARATOR);
+    }
+    case "tiers":
+      return playbookName.length === 0 ? NO_VALUE : `Playbook: ${playbookName}`;
+    default:
+      finding.standardSource satisfies never;
+      return NO_VALUE;
+  }
+};
+
+/** The draft column: what the reviewed document says, from the passages the
+ *  finding cited or the value it extracted. */
+const draftPosition = (finding: ReviewFinding): string => {
+  if (finding.citations.length > 0) {
+    return finding.citations
+      .map((citation) => citation.text)
+      .join(PASSAGE_SEPARATOR);
+  }
+  return finding.extracted?.text ?? NO_VALUE;
+};
+
+/** The prose behind the verdict: a reference comparison states it outright, a
+ *  tier match leaves it in the rationale. */
+const explanationText = (finding: ReviewFinding): string | null => {
+  const { explanation } = finding;
+  if (explanation === undefined) {
+    return finding.rationale;
+  }
+  switch (explanation.type) {
+    case "comparison":
+      return explanation.text;
+    case "insufficient-evidence":
+      return INSUFFICIENT_EVIDENCE_LABEL;
+    default:
+      explanation satisfies never;
+      return null;
+  }
+};
+
+const assessmentCell = (finding: ReviewFinding): string => {
+  const verdict =
+    finding.verdict === null ? NO_VALUE : VERDICT_LABEL[finding.verdict];
+  const explanation = explanationText(finding);
+  if (verdict.length === 0) {
+    return explanation ?? NO_VALUE;
+  }
+  return explanation === null || explanation.length === 0
+    ? verdict
+    : `${verdict}. ${explanation}`;
+};
+
+/** The proposed wording, as the fix would write it. A parameter fix replaces
+ *  one term, so the cell states the substitution rather than a paragraph. */
+const proposedWording = (finding: ReviewFinding): string => {
+  const { fix } = finding;
+  if (fix === null) {
+    return NO_VALUE;
+  }
+  switch (fix.kind) {
+    case "replaceInBlock":
+      return `${fix.find} → ${fix.replace}`;
+    case "replaceBlock":
+    case "insertAfterBlock":
+      return fix.text;
+    default:
+      fix satisfies never;
+      return NO_VALUE;
+  }
+};
+
+type FindingRowArgs = {
+  positionTitle: string;
+  finding: ReviewFinding;
   decision: DocumentReviewDecision;
   perspective: ReviewPerspective;
+  playbookName: string;
   referenceNameByFieldId: ReadonlyMap<string, string>;
   labelReferences: boolean;
 };
 
-const referenceRow = ({
-  topicTitle,
+const findingRow = ({
+  positionTitle,
   finding,
   decision,
   perspective,
+  playbookName,
   referenceNameByFieldId,
   labelReferences,
-}: ReferenceRowArgs): RankedRow => {
+}: FindingRowArgs): RankedRow => {
+  // The verdict ranks the row; a comparison's impact refines nothing the
+  // verdict does not already say, so it is reported, not ranked on.
+  const verdictRank =
+    finding.verdict === null
+      ? IMPACT_RANK.unknown
+      : VERDICT_RANK[finding.verdict];
   const impact = finding.impact ?? "unknown";
-  const severity = finding.severity ?? "medium";
-  const precedentPassages: string[] = [];
-  for (const group of finding.referenceCitations) {
-    const name = referenceNameByFieldId.get(group.fileFieldId);
-    const prefix = labelReferences && name !== undefined ? `[${name}] ` : "";
-    for (const citation of group.citations) {
-      precedentPassages.push(`${prefix}${citation.text}`);
-    }
-  }
-  const explanation =
-    finding.explanation.type === "comparison"
-      ? finding.explanation.text
-      : INSUFFICIENT_EVIDENCE_LABEL;
   return {
-    rank: [IMPACT_RANK[impact], REFERENCE_SEVERITY_RANK[severity]],
+    rank: [verdictRank, POSITION_SEVERITY_RANK[finding.severity]],
     row: {
-      topic: topicTitle,
+      topic: positionTitle,
       impact: impactLabel(impact, perspective),
-      severity: REFERENCE_SEVERITY_LABEL[severity],
-      draftPosition: finding.targetCitations
-        .map((citation) => citation.text)
-        .join(PASSAGE_SEPARATOR),
-      precedentPosition: precedentPassages.join(PASSAGE_SEPARATOR),
-      assessment: `${ASSESSMENT_LABEL[finding.assessment]}. ${explanation}`,
+      severity: POSITION_SEVERITY_LABEL[finding.severity],
+      draftPosition: draftPosition(finding),
+      precedentPosition: precedentPosition({
+        finding,
+        playbookName,
+        referenceNameByFieldId,
+        labelReferences,
+      }),
+      assessment: assessmentCell(finding),
       recommendation: finding.recommendation ?? NO_VALUE,
-      proposedWording: finding.fix?.text ?? NO_VALUE,
+      proposedWording: proposedWording(finding),
       decision: DECISION_LABEL[decision],
     },
   };
 };
-
-type PlaybookRowArgs = {
-  topicTitle: string;
-  finding: ReviewFinding;
-  decision: DocumentReviewDecision;
-  playbookName: string;
-};
-
-const playbookRow = ({
-  topicTitle,
-  finding,
-  decision,
-  playbookName,
-}: PlaybookRowArgs): RankedRow => ({
-  rank: [
-    finding.verdict === null
-      ? IMPACT_RANK.unknown
-      : VERDICT_RANK[finding.verdict],
-    POSITION_SEVERITY_RANK[finding.severity],
-  ],
-  row: {
-    topic: topicTitle,
-    impact:
-      finding.verdict === null ? NO_VALUE : VERDICT_LABEL[finding.verdict],
-    severity: POSITION_SEVERITY_LABEL[finding.severity],
-    draftPosition: finding.extracted?.text ?? NO_VALUE,
-    precedentPosition: `Playbook: ${playbookName}`,
-    assessment: finding.rationale ?? NO_VALUE,
-    recommendation: NO_VALUE,
-    proposedWording: finding.fix?.text ?? NO_VALUE,
-    decision: DECISION_LABEL[decision],
-  },
-});
 
 type BuildIssuesTableRowsArgs = {
   basis: DocumentReviewRunBasis;
@@ -272,41 +301,22 @@ export const buildIssuesTableRows = ({
   basis,
   findings,
 }: BuildIssuesTableRowsArgs): IssuesTableRow[] => {
-  const references = basisReferences(basis);
+  const { references, perspective } = basis;
   const referenceNameByFieldId = new Map(
     references.map((reference) => [reference.fileFieldId, reference.name]),
   );
-  const perspective = basisPerspective(basis) ?? NEUTRAL_PERSPECTIVE;
-  const playbookName = basisPlaybook(basis)?.definitionSnapshot.name ?? "";
-  const ranked: RankedRow[] = [];
-  for (const { topicTitle, payload, decision } of findings) {
-    switch (payload.checkKind) {
-      case "reference":
-        ranked.push(
-          referenceRow({
-            topicTitle,
-            finding: payload.finding,
-            decision,
-            perspective,
-            referenceNameByFieldId,
-            labelReferences: references.length > 1,
-          }),
-        );
-        break;
-      case "playbook":
-        ranked.push(
-          playbookRow({
-            topicTitle,
-            finding: payload.finding,
-            decision,
-            playbookName,
-          }),
-        );
-        break;
-      default:
-        payload satisfies never;
-    }
-  }
+  const playbookName = basis.playbook.definitionSnapshot.name;
+  const ranked = findings.map(({ positionTitle, payload, decision }) =>
+    findingRow({
+      positionTitle,
+      finding: payload.finding,
+      decision,
+      perspective,
+      playbookName,
+      referenceNameByFieldId,
+      labelReferences: references.length > 1,
+    }),
+  );
   const order = ranked.map((_, index) => index);
   order.sort((a, b) => {
     const left = ranked[a];
@@ -328,21 +338,19 @@ export const buildIssuesTableRows = ({
 export const describeIssuesTableBasis = (
   basis: DocumentReviewRunBasis,
 ): string => {
+  const { playbook, references, perspective } = basis;
   const parts: string[] = [];
-  const playbook = basisPlaybook(basis);
-  if (playbook !== null) {
+  // An ephemeral pin has no saved playbook to name; the references it was
+  // built from say where the standard came from instead.
+  if (playbook.provenance !== "ephemeral") {
     parts.push(`Playbook: ${playbook.definitionSnapshot.name}`);
   }
-  const references = basisReferences(basis);
   if (references.length > 0) {
     parts.push(
       `Precedent: ${references.map((reference) => reference.name).join(", ")}`,
     );
   }
-  const perspective = basisPerspective(basis);
-  if (perspective !== null) {
-    parts.push(perspectiveLabel(perspective));
-  }
+  parts.push(perspectiveLabel(perspective));
   return parts.join(" · ");
 };
 

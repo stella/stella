@@ -5,6 +5,7 @@ import { propertyContentSchema } from "@/api/db/schema-validators";
 import { tConditionNode } from "@/api/lib/conditions/contract";
 import type { ConstantMap } from "@/api/lib/constant-map";
 import {
+  POSITION_SEVERITIES,
   positionRuleSchema,
   positionSeveritySchema,
   resolvedTiersSchema,
@@ -16,12 +17,17 @@ import {
 // property tool (defined in schema-validators) can embed them without an import
 // cycle. The grading engine consumes these too, so re-export them from this one
 // module.
-export { positionRuleSchema, positionSeveritySchema, resolvedTiersSchema };
+export {
+  POSITION_SEVERITIES,
+  positionRuleSchema,
+  positionSeveritySchema,
+  resolvedTiersSchema,
+};
 export type PositionRule = Static<typeof positionRuleSchema>;
 export type PositionSeverity = Static<typeof positionSeveritySchema>;
 export type ResolvedTiers = Static<typeof resolvedTiersSchema>;
 
-const version2 = t.Literal(2);
+const version3 = t.Literal(3);
 
 // ── Tier lines: identified plain-language rules and fallback entries ──
 // `id` is client-generated so reorder/DnD and finding citations reference a
@@ -75,6 +81,35 @@ export const tiersSchema = t.Object({
   }),
 });
 export type Tiers = Static<typeof tiersSchema>;
+
+// ── Reference passage: one quoted block of a reference document ──
+// The text is stored on the position so a playbook saved out of a
+// reference-only run grades later without reading the source document again.
+// The identifiers are provenance: they resolve through the normal entity
+// access checks when a reader asks where the passage came from.
+export const referencePassageSchema = t.Object({
+  workspaceId: t.String({ format: "uuid" }),
+  entityId: t.String({ format: "uuid" }),
+  fileFieldId: t.String({ format: "uuid" }),
+  entityVersionId: t.String({ format: "uuid" }),
+  blockId: t.String({ minLength: 1, maxLength: 128 }),
+  text: t.String({ minLength: 1, maxLength: 10_000 }),
+});
+export type ReferencePassage = Static<typeof referencePassageSchema>;
+
+// ── Standard: what "how it should be" is, for one graded position ──
+// `tiers` is authored (an editor, a starter pack); `reference` is derived from
+// a document someone already negotiated. Grading dispatches on `source`, so a
+// position from either origin produces the same finding.
+export const positionStandardSchema = t.Union([
+  t.Object({ source: t.Literal("tiers"), tiers: tiersSchema }),
+  t.Object({
+    source: t.Literal("reference"),
+    passages: t.Array(referencePassageSchema, { minItems: 1, maxItems: 8 }),
+  }),
+]);
+export type PositionStandard = Static<typeof positionStandardSchema>;
+export type PositionStandardSource = PositionStandard["source"];
 
 // ── Deterministic check: an Advanced-only override ──
 // When present, grading is deterministic (presence/condition, no LLM) and the
@@ -159,7 +194,7 @@ const gradedPositionSchema = t.Object({
   sourceId: t.String({ format: "uuid" }),
   issue: t.String({ minLength: 1, maxLength: 256 }),
   severity: positionSeveritySchema,
-  tiers: tiersSchema,
+  standard: positionStandardSchema,
   check: t.Optional(deterministicCheckSchema),
   ask: askConfigSchema,
   guidance: t.Optional(t.String({ maxLength: 2000 })),
@@ -174,10 +209,10 @@ export const positionSchema = t.Union([
 export type Position = Static<typeof positionSchema>;
 
 // ── Positions container (version-tagged JSONB) ────────
-// Hard `t.Literal(2)`: no multi-version dispatch. Playbooks never shipped
-// publicly, so v1 is migrated once and no runtime v1 read path survives.
+// Hard `t.Literal(3)`: no multi-version dispatch. Each version is lifted once
+// by a migration and no runtime read path for an older one survives.
 export const playbookPositionsSchema = t.Object({
-  version: version2,
+  version: version3,
   items: t.Array(positionSchema, { maxItems: 200 }),
 });
 export type PlaybookPositions = Static<typeof playbookPositionsSchema>;

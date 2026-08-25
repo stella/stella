@@ -41,19 +41,22 @@ const gradedPosition = (
   issue: "Governing law",
   severity: "medium",
   ask: { mode: "manual", question: "Q", content: textContent },
-  tiers: {
-    acceptable: {
-      rules: [{ id: "aaaaaaaa-0000-4000-8000-000000000001", text: "Rule" }],
+  standard: {
+    source: "tiers",
+    tiers: {
+      acceptable: {
+        rules: [{ id: "aaaaaaaa-0000-4000-8000-000000000001", text: "Rule" }],
+      },
+      fallback: { entries: [] },
+      notAcceptable: { rules: [] },
     },
-    fallback: { entries: [] },
-    notAcceptable: { rules: [] },
   },
   enabled: true,
   ...overrides,
 });
 
 const container = (items: Position[]): PlaybookPositions => ({
-  version: 2,
+  version: 3,
   items,
 });
 
@@ -78,10 +81,13 @@ describe("assertPositionsValid", () => {
       noDbTx,
       container([
         gradedPosition({
-          tiers: {
-            acceptable: { rules: [] },
-            fallback: { entries: [] },
-            notAcceptable: { rules: [] },
+          standard: {
+            source: "tiers",
+            tiers: {
+              acceptable: { rules: [] },
+              fallback: { entries: [] },
+              notAcceptable: { rules: [] },
+            },
           },
         }),
       ]),
@@ -94,10 +100,13 @@ describe("assertPositionsValid", () => {
       noDbTx,
       container([
         gradedPosition({
-          tiers: {
-            acceptable: { rules: [] },
-            fallback: { entries: [] },
-            notAcceptable: { rules: [] },
+          standard: {
+            source: "tiers",
+            tiers: {
+              acceptable: { rules: [] },
+              fallback: { entries: [] },
+              notAcceptable: { rules: [] },
+            },
           },
           check: { kind: "presence", expectation: "required" },
         }),
@@ -111,10 +120,16 @@ describe("assertPositionsValid", () => {
       noDbTx,
       container([
         gradedPosition({
-          tiers: {
-            acceptable: { rules: [], ideal: { source: "inline", text: "X" } },
-            fallback: { entries: [] },
-            notAcceptable: { rules: [] },
+          standard: {
+            source: "tiers",
+            tiers: {
+              acceptable: {
+                rules: [],
+                ideal: { source: "inline", text: "X" },
+              },
+              fallback: { entries: [] },
+              notAcceptable: { rules: [] },
+            },
           },
         }),
       ]),
@@ -128,10 +143,13 @@ describe("assertPositionsValid", () => {
       noDbTx,
       container([
         gradedPosition({
-          tiers: {
-            acceptable: { rules: [{ id: duplicateId, text: "A" }] },
-            fallback: { entries: [{ id: duplicateId, text: "B" }] },
-            notAcceptable: { rules: [] },
+          standard: {
+            source: "tiers",
+            tiers: {
+              acceptable: { rules: [{ id: duplicateId, text: "A" }] },
+              fallback: { entries: [{ id: duplicateId, text: "B" }] },
+              notAcceptable: { rules: [] },
+            },
           },
         }),
       ]),
@@ -144,16 +162,19 @@ describe("assertPositionsValid", () => {
       clauseTx([]),
       container([
         gradedPosition({
-          tiers: {
-            acceptable: {
-              rules: [],
-              ideal: {
-                source: "clause",
-                clauseId: "cccccccc-0000-4000-8000-000000000001",
+          standard: {
+            source: "tiers",
+            tiers: {
+              acceptable: {
+                rules: [],
+                ideal: {
+                  source: "clause",
+                  clauseId: "cccccccc-0000-4000-8000-000000000001",
+                },
               },
+              fallback: { entries: [] },
+              notAcceptable: { rules: [] },
             },
-            fallback: { entries: [] },
-            notAcceptable: { rules: [] },
           },
         }),
       ]),
@@ -167,13 +188,16 @@ describe("assertPositionsValid", () => {
       clauseTx([{ id: clauseId }]),
       container([
         gradedPosition({
-          tiers: {
-            acceptable: {
-              rules: [],
-              ideal: { source: "clause", clauseId },
+          standard: {
+            source: "tiers",
+            tiers: {
+              acceptable: {
+                rules: [],
+                ideal: { source: "clause", clauseId },
+              },
+              fallback: { entries: [] },
+              notAcceptable: { rules: [] },
             },
-            fallback: { entries: [] },
-            notAcceptable: { rules: [] },
           },
         }),
       ]),

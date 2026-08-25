@@ -55,7 +55,7 @@ const APPROVED_VERSION_ID = toSafeId<"playbookDefinitionVersion">("pbv_1");
  * one into the next.
  */
 const positionsSaying = (issue: string) => ({
-  version: 2,
+  version: 3,
   items: [
     {
       mode: "extract",

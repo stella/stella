@@ -14,17 +14,11 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { findingFingerprint } from "@/api/lib/document-review/finding-fingerprint";
 import type { DocumentReviewFindingPayload } from "@/api/lib/document-review/run-contract";
 
-type PlaybookPayload = Extract<
-  DocumentReviewFindingPayload,
-  { checkKind: "playbook" }
->;
-type ReferencePayload = Extract<
-  DocumentReviewFindingPayload,
-  { checkKind: "reference" }
->;
+type FindingPayload = DocumentReviewFindingPayload;
+type Finding = FindingPayload["finding"];
 
 const POSITION_ID = "11111111-1111-4111-8111-111111111111";
-const TOPIC_ID = "44444444-4444-4444-8444-444444444444";
+const REFERENCE_POSITION_ID = "44444444-4444-4444-8444-444444444444";
 const REFERENCE_FIELD_A = toSafeId<"field">(
   "22222222-2222-4222-8222-222222222222",
 );
@@ -32,15 +26,14 @@ const REFERENCE_FIELD_B = toSafeId<"field">(
   "33333333-3333-4333-8333-333333333333",
 );
 
-const playbookPayload = (
-  overrides: Partial<PlaybookPayload["finding"]> = {},
-): PlaybookPayload => ({
-  checkKind: "playbook",
+const playbookPayload = (overrides: Partial<Finding> = {}): FindingPayload => ({
   finding: {
     positionId: POSITION_ID,
     issue: "Governing law",
     severity: "high",
+    standardSource: "tiers",
     verdict: "compliant",
+    delta: { kind: "language" },
     extracted: { value: "England and Wales", text: "governed by English law" },
     rationale: "Matches the standard.",
     citations: [{ blockId: "para-7", text: "This Agreement is governed by" }],
@@ -50,17 +43,20 @@ const playbookPayload = (
 });
 
 const referencePayload = (
-  overrides: Partial<ReferencePayload["finding"]> = {},
-): ReferencePayload => ({
-  checkKind: "reference",
+  overrides: Partial<Finding> = {},
+): FindingPayload => ({
   finding: {
-    findingId: `reference-${TOPIC_ID}`,
-    topicId: TOPIC_ID,
+    positionId: REFERENCE_POSITION_ID,
     issue: "Governing law",
-    assessment: "different",
+    severity: "high",
+    standardSource: "reference",
+    verdict: "deviation",
+    delta: { kind: "language" },
+    extracted: null,
     consensus: "single",
+    rationale: "The target picks a new forum.",
     explanation: { type: "comparison", text: "The target picks a new forum." },
-    targetCitations: [{ blockId: "para-7", text: "governed by English law" }],
+    citations: [{ blockId: "para-7", text: "governed by English law" }],
     referenceCitations: [
       {
         fileFieldId: REFERENCE_FIELD_A,
@@ -79,9 +75,29 @@ describe("findingFingerprint", () => {
     );
   });
 
-  test("separates the two check kinds", () => {
+  // Two findings that quote different passages are about different text, even
+  // when they reach the same verdict.
+  test("separates findings resting on different evidence", () => {
     expect(findingFingerprint(playbookPayload(), "compliant")).not.toBe(
       findingFingerprint(referencePayload(), "compliant"),
+    );
+  });
+
+  // The delta is how a difference is rendered and edited, not what the
+  // documents say; retyping it must not reopen a settled decision.
+  test("ignores the delta's typing", () => {
+    expect(findingFingerprint(referencePayload(), "deviation")).toBe(
+      findingFingerprint(
+        referencePayload({
+          delta: {
+            kind: "presence",
+            term: "Losses",
+            inTarget: false,
+            inStandard: true,
+          },
+        }),
+        "deviation",
+      ),
     );
   });
 
@@ -160,19 +176,19 @@ describe("findingFingerprint", () => {
 
   test("ignores citation order but not citation content", () => {
     const forward = referencePayload({
-      targetCitations: [
+      citations: [
         { blockId: "para-7", text: "first passage" },
         { blockId: "para-8", text: "second passage" },
       ],
     });
     const reversed = referencePayload({
-      targetCitations: [
+      citations: [
         { blockId: "para-8", text: "second passage" },
         { blockId: "para-7", text: "first passage" },
       ],
     });
-    expect(findingFingerprint(forward, "different")).toBe(
-      findingFingerprint(reversed, "different"),
+    expect(findingFingerprint(forward, "deviation")).toBe(
+      findingFingerprint(reversed, "deviation"),
     );
   });
 
@@ -185,8 +201,8 @@ describe("findingFingerprint", () => {
         },
       ],
     });
-    expect(findingFingerprint(referencePayload(), "different")).not.toBe(
-      findingFingerprint(moved, "different"),
+    expect(findingFingerprint(referencePayload(), "deviation")).not.toBe(
+      findingFingerprint(moved, "deviation"),
     );
   });
 

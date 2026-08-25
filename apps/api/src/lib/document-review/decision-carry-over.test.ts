@@ -12,25 +12,20 @@ import { matchCarriedDecisions } from "@/api/lib/document-review/decision-carry-
 import type { CarryOverFinding } from "@/api/lib/document-review/decision-carry-over";
 import type { DocumentReviewFindingPayload } from "@/api/lib/document-review/run-contract";
 
-const TOPIC_ID = "44444444-4444-4444-8444-444444444444";
-const OTHER_TOPIC_ID = "55555555-5555-4555-8555-555555555555";
 const POSITION_ID = "11111111-1111-4111-8111-111111111111";
+const OTHER_POSITION_ID = "55555555-5555-4555-8555-555555555555";
 
 const findingId = (): SafeId<"documentReviewFinding"> =>
   toSafeId<"documentReviewFinding">(Bun.randomUUIDv7());
 
-type PlaybookPayload = Extract<
-  DocumentReviewFindingPayload,
-  { checkKind: "playbook" }
->;
-
-const payload = (excerpt: string): PlaybookPayload => ({
-  checkKind: "playbook",
+const payload = (excerpt: string): DocumentReviewFindingPayload => ({
   finding: {
     positionId: POSITION_ID,
     issue: "Governing law",
     severity: "high",
+    standardSource: "tiers",
     verdict: "compliant",
+    delta: { kind: "language" },
     extracted: { value: "England and Wales", text: excerpt },
     rationale: "Matches the standard.",
     citations: [{ blockId: "para-7", text: excerpt }],
@@ -38,21 +33,19 @@ const payload = (excerpt: string): PlaybookPayload => ({
   },
 });
 
-type ReferencePayload = Extract<
-  DocumentReviewFindingPayload,
-  { checkKind: "reference" }
->;
-
-const referencePayload = (excerpt: string): ReferencePayload => ({
-  checkKind: "reference",
+const referencePayload = (excerpt: string): DocumentReviewFindingPayload => ({
   finding: {
-    findingId: `reference-${TOPIC_ID}`,
-    topicId: TOPIC_ID,
+    positionId: POSITION_ID,
     issue: "Governing law",
-    assessment: "aligned",
+    severity: "high",
+    standardSource: "reference",
+    verdict: "compliant",
+    delta: { kind: "language" },
+    extracted: null,
     consensus: "single",
+    rationale: "Both pick the same forum.",
     explanation: { type: "comparison", text: "Both pick the same forum." },
-    targetCitations: [{ blockId: "para-7", text: excerpt }],
+    citations: [{ blockId: "para-7", text: excerpt }],
     referenceCitations: [
       {
         fileFieldId: toSafeId<"field">("22222222-2222-4222-8222-222222222222"),
@@ -69,8 +62,7 @@ const finding = (
   overrides: Partial<CarryOverFinding> = {},
 ): CarryOverFinding => ({
   id: findingId(),
-  topicId: TOPIC_ID,
-  checkKind: "playbook",
+  positionId: POSITION_ID,
   outcome: "compliant",
   payload: payload(EXCERPT),
   decision: "open",
@@ -107,24 +99,30 @@ describe("matchCarriedDecisions", () => {
     ).toEqual([]);
   });
 
-  test("does not carry across topics or check kinds", () => {
-    const priorOtherTopic = finding({
+  test("does not carry across positions", () => {
+    const priorOtherPosition = finding({
       decision: "accepted",
-      topicId: OTHER_TOPIC_ID,
-    });
-    const priorOtherKind = finding({
-      decision: "accepted",
-      checkKind: "reference",
-      outcome: "aligned",
-      payload: referencePayload(EXCERPT),
+      positionId: OTHER_POSITION_ID,
     });
     const current = finding();
 
     expect(
       matchCarriedDecisions({
         current: [current],
-        prior: [priorOtherTopic, priorOtherKind],
+        prior: [priorOtherPosition],
       }),
+    ).toEqual([]);
+  });
+
+  // A reference comparison quotes the standard's own passages, so it rests on
+  // evidence a tier match never had. Same verdict, different evidence: the
+  // reviewer has to look again.
+  test("resets when the evidence behind the same verdict changed", () => {
+    const prior = finding({ decision: "accepted" });
+    const current = finding({ payload: referencePayload(EXCERPT) });
+
+    expect(
+      matchCarriedDecisions({ current: [current], prior: [prior] }),
     ).toEqual([]);
   });
 
@@ -149,11 +147,11 @@ describe("matchCarriedDecisions", () => {
     const priorCarried = finding({ decision: "accepted" });
     const priorChanged = finding({
       decision: "accepted",
-      topicId: OTHER_TOPIC_ID,
+      positionId: OTHER_POSITION_ID,
     });
     const carried = finding();
     const changed = finding({
-      topicId: OTHER_TOPIC_ID,
+      positionId: OTHER_POSITION_ID,
       payload: payload("An entirely different passage"),
     });
 

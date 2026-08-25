@@ -1,9 +1,9 @@
 /**
  * Read one document review run and its findings.
  *
- * Bounded by construction: a run holds at most one finding per confirmed topic
- * per check kind, and the confirmed topic list is capped at creation, so this
- * is a point read rather than an unbounded list.
+ * Bounded by construction: a run holds at most one finding per confirmed
+ * position, and the confirmed position list is capped at creation, so this is
+ * a point read rather than an unbounded list.
  */
 
 import { Result } from "better-result";
@@ -20,11 +20,7 @@ import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { tallyDecisions } from "@/api/lib/document-review/decision-counts";
-import { resolveReferenceScope } from "@/api/lib/document-review/reference-access";
-import {
-  basisPlaybook,
-  DOCUMENT_REVIEW_FINDINGS_PER_RUN_MAX,
-} from "@/api/lib/document-review/run-contract";
+import { DOCUMENT_REVIEW_FINDINGS_PER_RUN_MAX } from "@/api/lib/document-review/run-contract";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { PLAYBOOK_VERSION_SOURCE } from "@/api/lib/workflow/playbook-positions";
 
@@ -52,7 +48,6 @@ const readDocumentReviewRun = createSafeHandler(
             entityVersionId: documentReviewRuns.entityVersionId,
             contentSha256: documentReviewRuns.contentSha256,
             basis: documentReviewRuns.basis,
-            topics: documentReviewRuns.topics,
             total: documentReviewRuns.total,
             completed: documentReviewRuns.completed,
             pipelineVersion: documentReviewRuns.pipelineVersion,
@@ -82,10 +77,8 @@ const readDocumentReviewRun = createSafeHandler(
         tx
           .select({
             id: documentReviewFindings.id,
-            topicId: documentReviewFindings.topicId,
-            topicTitle: documentReviewFindings.topicTitle,
-            checkKind: documentReviewFindings.checkKind,
             positionId: documentReviewFindings.positionId,
+            positionTitle: documentReviewFindings.positionTitle,
             outcome: documentReviewFindings.outcome,
             payload: documentReviewFindings.payload,
             decision: documentReviewFindings.decision,
@@ -103,7 +96,6 @@ const readDocumentReviewRun = createSafeHandler(
             ),
           )
           .orderBy(
-            asc(documentReviewFindings.checkKind),
             asc(documentReviewFindings.createdAt),
             asc(documentReviewFindings.id),
           )
@@ -111,16 +103,15 @@ const readDocumentReviewRun = createSafeHandler(
       ),
     );
 
-    const scopeReference = yield* Result.await(
-      resolveReferenceScope(safeDb, run.basis),
-    );
-
     // Is the pinned playbook still the one an author would run today? One
     // equality between two version ids, so it is answered on read rather than
     // maintained as a flag every future approval would have to invalidate.
-    const pinned = basisPlaybook(run.basis);
+    // An ephemeral pin names no definition, so there is nothing to compare a
+    // later approval against.
+    const pinned = run.basis.playbook;
+    const pinnedDefinitionId = pinned.definitionId;
     const definitions =
-      pinned === null
+      pinnedDefinitionId === null
         ? []
         : yield* Result.await(
             safeDb((tx) =>
@@ -138,7 +129,7 @@ const readDocumentReviewRun = createSafeHandler(
                 .from(playbookDefinitions)
                 .where(
                   and(
-                    eq(playbookDefinitions.id, pinned.definitionId),
+                    eq(playbookDefinitions.id, pinnedDefinitionId),
                     eq(
                       playbookDefinitions.organizationId,
                       session.activeOrganizationId,
@@ -168,12 +159,10 @@ const readDocumentReviewRun = createSafeHandler(
       },
       findings: findings.map((finding) => ({
         id: finding.id,
-        topicId: finding.topicId,
-        topicTitle: finding.topicTitle,
-        checkKind: finding.checkKind,
         positionId: finding.positionId,
+        positionTitle: finding.positionTitle,
         outcome: finding.outcome,
-        payload: scopeReference(finding.payload),
+        payload: finding.payload,
         decision: finding.decision,
         decidedBy: finding.decidedBy,
         decidedAt:

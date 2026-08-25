@@ -116,7 +116,7 @@ const createPlaybook = async (
   name: string,
 ): Promise<SafeId<"playbookDefinition">> => {
   const result = await runHandler(createPlaybookDefinition, context, {
-    body: { name, positions: { version: 2, items: [] } },
+    body: { name, positions: { version: 3, items: [] } },
   });
   expect(getStatusCode(result)).toBeNull();
   if (!isRecord(result) || typeof result["id"] !== "string") {
@@ -198,7 +198,7 @@ describe("POST /playbooks/:playbookId/approve", () => {
       params: { playbookId },
       body: {
         name: "Changed in another editor",
-        positions: { version: 2, items: [] },
+        positions: { version: 3, items: [] },
       },
     });
     expect(getStatusCode(updateResult)).toBeNull();
@@ -266,7 +266,7 @@ describe("PUT /playbooks/:playbookId concurrency", () => {
       params: { playbookId },
       body: {
         name: "Saved by the other editor",
-        positions: { version: 2, items: [] },
+        positions: { version: 3, items: [] },
         expectedUpdatedAt: loaded.updatedAt.toISOString(),
       },
     });
@@ -276,7 +276,7 @@ describe("PUT /playbooks/:playbookId concurrency", () => {
       params: { playbookId },
       body: {
         name: "Stale overwrite",
-        positions: { version: 2, items: [] },
+        positions: { version: 3, items: [] },
         expectedUpdatedAt: loaded.updatedAt.toISOString(),
       },
     });
@@ -298,7 +298,7 @@ describe("PUT /playbooks/:playbookId concurrency", () => {
       params: { playbookId },
       body: {
         name: "First save",
-        positions: { version: 2, items: [] },
+        positions: { version: 3, items: [] },
         expectedUpdatedAt: loaded.updatedAt.toISOString(),
       },
     });
@@ -312,7 +312,7 @@ describe("PUT /playbooks/:playbookId concurrency", () => {
       params: { playbookId },
       body: {
         name: "Second save",
-        positions: { version: 2, items: [] },
+        positions: { version: 3, items: [] },
         expectedUpdatedAt: firstUpdatedAt,
       },
     });
@@ -328,7 +328,7 @@ describe("PUT /playbooks/:playbookId concurrency", () => {
       params: { playbookId },
       body: {
         name: "Written without a token",
-        positions: { version: 2, items: [] },
+        positions: { version: 3, items: [] },
       },
     });
 
@@ -351,7 +351,7 @@ describe("update after approval", () => {
       params: { playbookId },
       body: {
         name: "Revert on edit (edited)",
-        positions: { version: 2, items: [] },
+        positions: { version: 3, items: [] },
       },
     });
     expect(getStatusCode(updateResult)).toBeNull();
@@ -373,7 +373,7 @@ describe("POST /playbooks/:playbookId/versions/:version/restore", () => {
       params: { playbookId },
       body: {
         name: "Mutated after approval",
-        positions: { version: 2, items: [] },
+        positions: { version: 3, items: [] },
       },
     });
     expect((await readPlaybook(playbookId))?.name).toBe(

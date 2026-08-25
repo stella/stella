@@ -19,8 +19,8 @@ export type PlaybookStaleness = {
 };
 
 type ResolvePlaybookStalenessArgs = {
-  /** The playbook the run pinned, or null for a references-only basis. */
-  pinned: PinnedPlaybook | null;
+  /** The playbook the run pinned. */
+  pinned: PinnedPlaybook;
   /** The newest approved version of the pinned definition, or null when the
    *  definition has none. Null with `definitionExists: false` when the
    *  definition itself was deleted. */
@@ -32,7 +32,8 @@ type ResolvePlaybookStalenessArgs = {
  * Staleness is "a newer approval happened", which needs something to compare
  * against on both sides:
  *
- *  - no playbook in the basis: neither stale nor missing;
+ *  - an ephemeral pin (no definition id): neither stale nor missing — nothing
+ *    was ever saved for a later approval to be newer than;
  *  - definition deleted: reported as missing, never as stale — a run cannot be
  *    behind a playbook that no longer exists;
  *  - run pinned a draft (no version id): stale as soon as any approved version
@@ -47,7 +48,7 @@ export const resolvePlaybookStaleness = ({
   latestVersionId,
   definitionExists,
 }: ResolvePlaybookStalenessArgs): PlaybookStaleness => {
-  if (pinned === null) {
+  if (pinned.definitionId === null) {
     return { playbookStale: false, playbookMissing: false };
   }
   if (!definitionExists) {

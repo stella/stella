@@ -152,6 +152,7 @@ const VERDICT_SHADING = {
   fallback: { fill: { rgb: "FFF2CC" }, pattern: "clear" },
   deviation: { fill: { rgb: "F4CCCC" }, pattern: "clear" },
   missing: { fill: { rgb: "F4CCCC" }, pattern: "clear" },
+  additional: { fill: { rgb: "D0E0F0" }, pattern: "clear" },
   "not-applicable": { fill: { rgb: "EDEDED" }, pattern: "clear" },
 } as const satisfies Record<VerdictTier, ShadingProperties>;
 
@@ -160,6 +161,7 @@ const VERDICT_LABELS = {
   fallback: "Fallback",
   deviation: "Deviation",
   missing: "Missing",
+  additional: "Additional",
   "not-applicable": "N/A",
 } as const satisfies Record<VerdictTier, string>;
 

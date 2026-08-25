@@ -29,15 +29,13 @@ const WORKSPACE_ID = toSafeId<"workspace">(
   "88888888-8888-4888-8888-888888888888",
 );
 const USER_ID = toSafeId<"user">("user_01JQ8Z3W6R5K2N4P7T9V1X3Y5A");
-const TOPIC_ID = "44444444-4444-4444-8444-444444444444";
+const POSITION_ID = "44444444-4444-4444-8444-444444444444";
 
 /** The stored row the endpoint reads before it writes. */
 type StoredFinding = {
   runId: SafeId<"documentReviewRun">;
-  topicId: string;
-  checkKind: "playbook" | "reference";
+  positionId: string;
   payload: {
-    checkKind: "playbook";
     finding: {
       fix: { kind: "replaceBlock"; blockId: string; text: string } | null;
     };
@@ -55,10 +53,8 @@ const storedFinding = (
 ): StoredFinding[] => [
   {
     runId: RUN_ID,
-    topicId: TOPIC_ID,
-    checkKind: "playbook",
+    positionId: POSITION_ID,
     payload: {
-      checkKind: "playbook",
       finding: {
         fix: { kind: "replaceBlock", blockId: "p-1", text: "Updated" },
       },
@@ -151,7 +147,7 @@ describe("decideDocumentReviewFinding", () => {
       resourceType: AUDIT_RESOURCE_TYPE.DOCUMENT_REVIEW_RUN,
       resourceId: RUN_ID,
       changes: { decision: { old: "open", new: "accepted" } },
-      metadata: { findingId: FINDING_ID, topicId: TOPIC_ID },
+      metadata: { findingId: FINDING_ID, positionId: POSITION_ID },
     });
   });
 

@@ -6,12 +6,12 @@ import { clauses } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { brandPersistedClauseId } from "@/api/lib/safe-id-boundaries";
+import type { PlaybookPositions } from "@/api/lib/workflow/playbook-positions";
+import { isTierStandard } from "@/api/lib/workflow/position-runtime";
 import type {
-  PlaybookPositions,
-  Position,
-} from "@/api/lib/workflow/playbook-positions";
-
-type GradedPosition = Extract<Position, { mode: "graded" }>;
+  GradedPosition,
+  TierStandardPosition,
+} from "@/api/lib/workflow/position-runtime";
 
 export const findDuplicatePositionSourceId = (
   positions: PlaybookPositions,
@@ -27,15 +27,18 @@ export const findDuplicatePositionSourceId = (
 };
 
 // A graded position needs something to grade against. A deterministic `check`
-// (presence/constraint) grades on its own, so it always satisfies this. Without
-// a check, LLM tier-match needs at least one authored signal — a rule in any
-// tier, a fallback entry, or ideal language — otherwise there is nothing to
-// compare. v1's silent forced-deviation path is rejected here instead.
+// (presence/constraint) grades on its own, so it always satisfies this. A
+// reference standard carries at least one passage by schema. Without either,
+// LLM tier-match needs at least one authored signal — a rule in any tier, a
+// fallback entry, or ideal language — otherwise there is nothing to compare.
 const gradedPositionHasContent = (position: GradedPosition): boolean => {
-  if (position.check !== undefined) {
+  if (
+    position.check !== undefined ||
+    position.standard.source === "reference"
+  ) {
     return true;
   }
-  const { tiers } = position;
+  const { tiers } = position.standard;
   return (
     tiers.acceptable.rules.length > 0 ||
     tiers.notAcceptable.rules.length > 0 ||
@@ -47,8 +50,8 @@ const gradedPositionHasContent = (position: GradedPosition): boolean => {
 // Rule and fallback-entry ids must be unique within a position: findings and DnD
 // reorder cite these ids as stable identity, so a collision would make two lines
 // indistinguishable. Returns the first colliding id, or null when all are unique.
-const findDuplicateTierId = (position: GradedPosition): string | null => {
-  const { tiers } = position;
+const findDuplicateTierId = (position: TierStandardPosition): string | null => {
+  const { tiers } = position.standard;
   const seen = new Set<string>();
   const ids = [
     ...tiers.acceptable.rules.map((rule) => rule.id),
@@ -69,12 +72,12 @@ const collectClauseRefIds = (
 ): SafeId<"clause">[] => {
   const ids = new Set<string>();
   for (const position of positions.items) {
-    // Clause ideal language now lives at tiers.acceptable.ideal (graded only).
+    // Clause ideal language lives at standard.tiers.acceptable.ideal.
     if (
-      position.mode === "graded" &&
-      position.tiers.acceptable.ideal?.source === "clause"
+      isTierStandard(position) &&
+      position.standard.tiers.acceptable.ideal?.source === "clause"
     ) {
-      ids.add(position.tiers.acceptable.ideal.clauseId);
+      ids.add(position.standard.tiers.acceptable.ideal.clauseId);
     }
   }
   return [...ids].map((id) => brandPersistedClauseId(id));
@@ -121,6 +124,9 @@ export const assertPositionsValid = async ({
             "A graded position must have at least one tier rule, fallback entry, or ideal language",
         }),
       );
+    }
+    if (!isTierStandard(position)) {
+      continue;
     }
     const duplicateTierId = findDuplicateTierId(position);
     if (duplicateTierId !== null) {

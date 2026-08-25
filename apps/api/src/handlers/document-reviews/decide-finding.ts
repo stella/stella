@@ -63,8 +63,7 @@ const decideDocumentReviewFinding = createSafeHandler(
         const rows = await tx
           .select({
             runId: documentReviewFindings.runId,
-            topicId: documentReviewFindings.topicId,
-            checkKind: documentReviewFindings.checkKind,
+            positionId: documentReviewFindings.positionId,
             payload: documentReviewFindings.payload,
             decision: documentReviewFindings.decision,
             decidedBy: documentReviewFindings.decidedBy,
@@ -148,8 +147,7 @@ const decideDocumentReviewFinding = createSafeHandler(
             : { decision: { old: finding.decision, new: decision } },
           metadata: {
             findingId: params.findingId,
-            topicId: finding.topicId,
-            checkKind: finding.checkKind,
+            positionId: finding.positionId,
           },
         });
 

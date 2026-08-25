@@ -1,7 +1,8 @@
 /**
- * Staleness has three null-shaped edges — no playbook, no approved version,
- * no definition at all — and each of them must answer something other than
- * "stale", or a reader would be told to re-run against nothing.
+ * Staleness has three null-shaped edges — an unsaved position list, no
+ * approved version, no definition at all — and each of them must answer
+ * something other than "stale", or a reader would be told to re-run against
+ * nothing.
  */
 
 import { describe, expect, test } from "bun:test";
@@ -26,15 +27,23 @@ const pinnedPlaybook = (
   provenance: versionId === null ? "draft" : "approved",
   definitionSnapshot: {
     name: "Sale and purchase",
-    positions: { version: 2, items: [] },
+    positions: { version: 3, items: [] },
   },
 });
 
 describe("resolvePlaybookStaleness", () => {
-  test("a references-only basis is neither stale nor missing", () => {
+  test("an ephemeral pin is neither stale nor missing", () => {
     expect(
       resolvePlaybookStaleness({
-        pinned: null,
+        pinned: {
+          definitionId: null,
+          versionId: null,
+          provenance: "ephemeral",
+          definitionSnapshot: {
+            name: "Positions confirmed for this review",
+            positions: { version: 3, items: [] },
+          },
+        },
         latestVersionId: NEWER_VERSION_ID,
         definitionExists: true,
       }),

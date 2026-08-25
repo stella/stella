@@ -22,8 +22,6 @@ import type { Transaction } from "@/api/db/root";
 import { documentReviewFindings, documentReviewRuns } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { carryOverDecisions } from "@/api/lib/document-review/decision-carry-over";
-import type { DocumentReviewRunBasis } from "@/api/lib/document-review/run-contract";
-import { maybeEmitDocumentReviewSignal } from "@/api/lib/scouts/document-review";
 
 export type FinalizeReviewRunArgs = {
   tx: Transaction;
@@ -31,7 +29,6 @@ export type FinalizeReviewRunArgs = {
   runId: SafeId<"documentReviewRun">;
   entityId: SafeId<"entity">;
   fileFieldId: SafeId<"field">;
-  basisType: DocumentReviewRunBasis["type"];
   /** The exact number of finding rows a completed run holds, from the plan. */
   expectedFindingCount: number;
 };
@@ -46,7 +43,6 @@ export const finalizeReviewRun = async ({
   runId,
   entityId,
   fileFieldId,
-  basisType,
   expectedFindingCount,
 }: FinalizeReviewRunArgs): Promise<FinalizeReviewRunResult> => {
   const counted = await tx
@@ -71,11 +67,10 @@ export const finalizeReviewRun = async ({
     runId,
     entityId,
     fileFieldId,
-    basisType,
   });
 
   // audit: skip — terminal bookkeeping on the run row audited at create.
-  const flipped = await tx
+  await tx
     .update(documentReviewRuns)
     .set({
       status: "completed",
@@ -89,14 +84,7 @@ export const finalizeReviewRun = async ({
         eq(documentReviewRuns.workspaceId, workspaceId),
         eq(documentReviewRuns.status, "running"),
       ),
-    )
-    .returning({ id: documentReviewRuns.id });
-
-  // The single completion point for both producers, so the inbox learns of
-  // every finished review exactly once.
-  if (flipped.length > 0) {
-    await maybeEmitDocumentReviewSignal({ tx, workspaceId, runId });
-  }
+    );
 
   return { type: "completed", committed, carried };
 };

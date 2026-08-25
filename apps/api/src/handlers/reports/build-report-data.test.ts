@@ -582,10 +582,13 @@ describe("assembleReportData findings", () => {
     issue: "Governing law",
     severity: "high",
     ask: { mode: "auto" },
-    tiers: {
-      acceptable: { rules: [] },
-      fallback: { entries: [] },
-      notAcceptable: { rules: [] },
+    standard: {
+      source: "tiers",
+      tiers: {
+        acceptable: { rules: [] },
+        fallback: { entries: [] },
+        notAcceptable: { rules: [] },
+      },
     },
     guidance: "Prefer Czech law.",
     negotiation: {

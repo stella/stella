@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
-import type { Position } from "@/api/lib/workflow/playbook-positions";
-import type { GradedPosition } from "@/api/lib/workflow/position-runtime";
+import type { Tiers } from "@/api/lib/workflow/playbook-positions";
+import type { TierStandardPosition } from "@/api/lib/workflow/position-runtime";
 import { resolveTiers } from "@/api/lib/workflow/resolve-standards";
 
 const CLAUSE_ID = "cccccccc-0000-4000-8000-000000000001";
@@ -13,16 +13,15 @@ type ClauseSnapshot = {
   variants: { rank: number; text: string }[];
 };
 
-const gradedWith = (tiers: GradedPosition["tiers"]): GradedPosition =>
-  ({
-    mode: "graded",
-    sourceId: "11111111-1111-4111-8111-111111111111",
-    issue: "Governing law",
-    severity: "high",
-    ask: { mode: "manual", question: "Which law?", content: textContent },
-    tiers,
-    enabled: true,
-  }) satisfies Position;
+const gradedWith = (tiers: Tiers): TierStandardPosition => ({
+  mode: "graded",
+  sourceId: "11111111-1111-4111-8111-111111111111",
+  issue: "Governing law",
+  severity: "high",
+  ask: { mode: "manual", question: "Which law?", content: textContent },
+  standard: { source: "tiers", tiers },
+  enabled: true,
+});
 
 const emptySnapshots = new Map<string, ClauseSnapshot>();
 

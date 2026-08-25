@@ -139,13 +139,14 @@ const collectAllIds = (positions: PlaybookPositions): string[] => {
   const collected: string[] = [];
   for (const position of positions.items) {
     collected.push(position.sourceId);
-    if (position.mode !== "graded") {
+    if (position.mode !== "graded" || position.standard.source !== "tiers") {
       continue;
     }
+    const { tiers } = position.standard;
     collected.push(
-      ...position.tiers.acceptable.rules.map((rule) => rule.id),
-      ...position.tiers.fallback.entries.map((entry) => entry.id),
-      ...position.tiers.notAcceptable.rules.map((rule) => rule.id),
+      ...tiers.acceptable.rules.map((rule) => rule.id),
+      ...tiers.fallback.entries.map((entry) => entry.id),
+      ...tiers.notAcceptable.rules.map((rule) => rule.id),
     );
   }
   return collected;

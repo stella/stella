@@ -130,25 +130,28 @@ const buildGradedPosition = (
     ask: { mode: "manual", ...ask },
     ...(check ? { check } : {}),
     ...(input.guidance ? { guidance: input.guidance } : {}),
-    tiers: {
-      acceptable: {
-        rules: input.tiers.acceptable.map((text) => ({ id: nextId(), text })),
-        ideal: { source: "inline", text: input.tiers.ideal },
-      },
-      fallback: {
-        entries: input.tiers.fallback.map((entry) => {
-          const id = nextId();
-          if (entry.label === undefined) {
-            return { id, text: entry.text };
-          }
-          return { id, text: entry.text, label: entry.label };
-        }),
-      },
-      notAcceptable: {
-        rules: input.tiers.notAcceptable.map((text) => ({
-          id: nextId(),
-          text,
-        })),
+    standard: {
+      source: "tiers",
+      tiers: {
+        acceptable: {
+          rules: input.tiers.acceptable.map((text) => ({ id: nextId(), text })),
+          ideal: { source: "inline", text: input.tiers.ideal },
+        },
+        fallback: {
+          entries: input.tiers.fallback.map((entry) => {
+            const id = nextId();
+            if (entry.label === undefined) {
+              return { id, text: entry.text };
+            }
+            return { id, text: entry.text, label: entry.label };
+          }),
+        },
+        notAcceptable: {
+          rules: input.tiers.notAcceptable.map((text) => ({
+            id: nextId(),
+            text,
+          })),
+        },
       },
     },
     negotiation: {
@@ -182,7 +185,7 @@ const buildStarterPositions = (
 ): PlaybookPositions => {
   const counter = { next: 1 };
   return {
-    version: 2,
+    version: 3,
     items: inputs.map((input) => buildGradedPosition(prefix, counter, input)),
   };
 };
@@ -1079,7 +1082,7 @@ const buildSaaSPositions = (): PlaybookPositions => {
   const prefix = 4;
   const counter = { next: 1 };
   return {
-    version: 2,
+    version: 3,
     items: [
       ...SAAS_GRADED_POSITIONS.map((input) =>
         buildGradedPosition(prefix, counter, input),

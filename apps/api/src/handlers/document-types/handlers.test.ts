@@ -222,7 +222,7 @@ describe("document-types write handlers", () => {
       organizationId: ids.orgA,
       name: "Distribution review",
       scope: { documentTypeKey: created.key },
-      positions: { version: 2, items: [] },
+      positions: { version: 3, items: [] },
     });
 
     const result = await runHandler(deleteDocumentType, context, {

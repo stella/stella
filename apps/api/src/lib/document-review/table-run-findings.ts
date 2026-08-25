@@ -21,12 +21,12 @@ import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { documentReviewRuns, properties } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
-import type { DocumentReviewTopic } from "@/api/lib/document-review/contract";
 import {
   buildDocumentReviewFindingRow,
   upsertDocumentReviewFindings,
 } from "@/api/lib/document-review/finding-write";
 import type { DocumentReviewFindingRow } from "@/api/lib/document-review/finding-write";
+import { LANGUAGE_DELTA } from "@/api/lib/document-review/review-delta";
 import type { ReviewFinding } from "@/api/lib/document-review/review-grade";
 import {
   DOCUMENT_REVIEW_RUN_ACTIVE_STATUSES,
@@ -65,7 +65,6 @@ type TableRun = {
   entityVersionId: SafeId<"entityVersion">;
   fileFieldId: SafeId<"field">;
   basis: DocumentReviewRunBasis;
-  topics: DocumentReviewTopic[];
 };
 
 const failRun = async (
@@ -111,7 +110,6 @@ export const recordTableRunVerdicts = async ({
         entityVersionId: documentReviewRuns.entityVersionId,
         fileFieldId: documentReviewRuns.fileFieldId,
         basis: documentReviewRuns.basis,
-        topics: documentReviewRuns.topics,
       })
       .from(documentReviewRuns)
       .where(
@@ -138,9 +136,12 @@ export const recordTableRunVerdicts = async ({
       return { type: "failed", errorCode: "pin_unresolved" };
     }
 
-    const plan = planReviewRun({ basis: run.basis, topics: run.topics });
-    const checkByPositionId = new Map(
-      plan.playbookChecks.map((check) => [check.positionId, check]),
+    const plan = planReviewRun({
+      basis: run.basis,
+      executor: DOCUMENT_REVIEW_RUN_EXECUTOR.TABLE,
+    });
+    const plannedByPositionId = new Map(
+      plan.positions.map((planned) => [planned.positionId, planned]),
     );
 
     // A verdict column names its position through `playbookSourceId`; the run's
@@ -169,7 +170,7 @@ export const recordTableRunVerdicts = async ({
     const belongsToRun = (propertyId: SafeId<"property">): boolean => {
       const sourceId = sourceIdByPropertyId.get(propertyId);
       return sourceId !== undefined && sourceId !== null
-        ? checkByPositionId.has(sourceId)
+        ? plannedByPositionId.has(sourceId)
         : false;
     };
 
@@ -187,20 +188,24 @@ export const recordTableRunVerdicts = async ({
       if (sourceId === undefined || sourceId === null) {
         continue;
       }
-      const check = checkByPositionId.get(sourceId);
-      if (check === undefined) {
+      const planned = plannedByPositionId.get(sourceId);
+      if (planned === undefined) {
         // A verdict column from another playbook, or from a position this run
         // did not plan. Not this run's finding.
         continue;
       }
-      const { position } = check;
+      const { position } = planned;
       const finding: ReviewFinding = {
         positionId: sourceId,
         issue: position.issue,
-        // Only graded positions materialize a verdict column, so the neutral
-        // tier is unreachable in practice; it keeps the union total.
+        // The table path plans only graded tier-standard positions, so the
+        // neutral tier is unreachable in practice; it keeps the union total.
         severity: position.mode === "graded" ? position.severity : "medium",
+        standardSource: "tiers",
         verdict: verdict.verdict,
+        // A verdict cell records which tier matched, not what differs; the
+        // structured kinds need both texts, which this path never reads.
+        delta: LANGUAGE_DELTA,
         extracted: verdict.extracted,
         rationale: verdict.rationale,
         ...(verdict.matchedRef === undefined
@@ -221,10 +226,9 @@ export const recordTableRunVerdicts = async ({
           entityId,
           fileFieldId: run.fileFieldId,
           entityVersionId,
-          topicId: check.topicId,
-          topicTitle: check.topicTitle,
           positionId: sourceId,
-          payload: { checkKind: "playbook", finding },
+          positionTitle: planned.title,
+          payload: { finding },
         }),
       );
     }
@@ -237,7 +241,6 @@ export const recordTableRunVerdicts = async ({
       runId: run.id,
       entityId,
       fileFieldId: run.fileFieldId,
-      basisType: run.basis.type,
       expectedFindingCount: plan.expectedFindingCount,
     });
     if (finalized.type === "completed" && finalized.carried > 0) {

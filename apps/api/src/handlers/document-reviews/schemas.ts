@@ -8,12 +8,12 @@ import {
   REVIEW_PARTY_NAME_MAX_LENGTH,
   REVIEW_PARTY_ROLE_MAX_LENGTH,
 } from "@/api/lib/document-review/contract";
-import type { DocumentReviewTopic as ReviewEngineTopic } from "@/api/lib/document-review/contract";
 import {
   DOCUMENT_REVIEW_APPLICATION_STATUS,
   DOCUMENT_REVIEW_DECISIONS,
 } from "@/api/lib/document-review/run-contract";
 import type { DocumentReviewDecision } from "@/api/lib/document-review/run-contract";
+import { positionSchema } from "@/api/lib/workflow/playbook-positions";
 
 // The target always belongs to the route's matter, so it carries no workspace
 // of its own; the handler stamps the route's onto it.
@@ -33,38 +33,7 @@ export const documentReviewRefSchema = t.Object({
 
 export type DocumentReviewRef = Static<typeof documentReviewRefSchema>;
 
-const reviewTopicBase = {
-  topicId: t.String({ format: "uuid" }),
-  title: t.String({ minLength: 1, maxLength: 256 }),
-  context: t.String({ maxLength: 2000 }),
-  included: t.Boolean(),
-};
-
-export const documentReviewTopicSchema = t.Union([
-  t.Object({
-    ...reviewTopicBase,
-    type: t.Literal("playbook"),
-    positionId: t.String({ format: "uuid" }),
-  }),
-  t.Object({
-    ...reviewTopicBase,
-    type: t.Literal("reference"),
-  }),
-  t.Object({
-    ...reviewTopicBase,
-    type: t.Literal("custom"),
-  }),
-]);
-
 type Assignable<Source extends Target, Target> = Source;
-
-// Bind the wire union to the engine contract: if the request schema stops
-// satisfying `ReviewEngineTopic`, this alias fails typecheck instead of the
-// mismatch surfacing inside the engine.
-export type DocumentReviewTopic = Assignable<
-  Static<typeof documentReviewTopicSchema>,
-  ReviewEngineTopic
->;
 
 // The decision vocabulary reaches the wire from the same const the column's
 // CHECK constraint is derived from, so the schema cannot accept a value the
@@ -93,38 +62,46 @@ const reviewPerspectiveSchema = t.Union([
   }),
 ]);
 
-const reviewDocumentsSchema = {
-  target: documentReviewTargetSchema,
-  references: t.Array(documentReviewRefSchema, {
-    minItems: 1,
-    maxItems: DOCUMENT_REVIEW_LIMITS.referencesMax,
-  }),
-};
-
-export const proposeReviewTopicsBodySchema = t.Object({
-  ...reviewDocumentsSchema,
-  seededTopics: t.Array(documentReviewTopicSchema, {
-    maxItems: DOCUMENT_REVIEW_LIMITS.topicsMax,
-  }),
+// The positions a request carries are exactly the positions a playbook holds:
+// one schema, so a list confirmed for one run and a list saved as a playbook
+// cannot diverge.
+const reviewPositionsSchema = t.Array(positionSchema, {
+  maxItems: DOCUMENT_REVIEW_LIMITS.positionsMax,
 });
 
-// A run's basis is a playbook, a set of references, or both, so `references`
-// may be empty here where the topic proposal requires one. The handler rejects
-// the empty basis with the reason, rather than the schema rejecting it as a
-// shape error.
+export const proposeReviewPositionsBodySchema = t.Object({
+  target: documentReviewTargetSchema,
+  references: t.Array(documentReviewRefSchema, {
+    minItems: 1,
+    maxItems: DOCUMENT_REVIEW_LIMITS.referencesMax,
+  }),
+  /** Positions the reviewer already has (a playbook they picked); the proposal
+   *  keeps them and does not repeat their issues. */
+  seededPositions: reviewPositionsSchema,
+});
+
+/**
+ * A run measures one document against a confirmed position list.
+ *
+ * `playbookId` names the playbook those positions came from, or is null when
+ * they were proposed for this run alone and never saved: the run then pins an
+ * ephemeral snapshot of exactly what is sent. `references` are the documents
+ * any reference-standard position was derived from, pinned so the run stays
+ * intelligible; they are read for provenance, not re-read at grading time.
+ */
 export const createDocumentReviewRunBodySchema = t.Object({
   target: documentReviewTargetSchema,
-  playbookId: t.Optional(tSafeId("playbookDefinition")),
+  playbookId: t.Nullable(tSafeId("playbookDefinition")),
+  positions: t.Array(positionSchema, {
+    minItems: 1,
+    maxItems: DOCUMENT_REVIEW_LIMITS.positionsMax,
+  }),
   references: t.Array(documentReviewRefSchema, {
     maxItems: DOCUMENT_REVIEW_LIMITS.referencesMax,
   }),
-  /** The side the reference comparison is judged for. Sent even for a
-   *  playbook-only run, where it is recorded on nothing. */
+  /** The side the review is judged for. Sent even when no reference-derived
+   *  position is in the list, where nothing reads it. */
   perspective: reviewPerspectiveSchema,
-  topics: t.Array(documentReviewTopicSchema, {
-    minItems: 1,
-    maxItems: DOCUMENT_REVIEW_LIMITS.topicsMax,
-  }),
   /**
    * Restated size estimate from a prior 428 `usage_confirmation_required`
    * answer; the run starts only when it covers the current estimate.

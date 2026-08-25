@@ -2,6 +2,8 @@ import type { PropertyContent } from "@/api/db/schema-validators";
 import type {
   Position,
   PositionRule,
+  ReferencePassage,
+  Tiers,
 } from "@/api/lib/workflow/playbook-positions";
 
 // Run-time projection of a v2 position, shared by the files-table materializer
@@ -13,6 +15,31 @@ import type {
 // projecting a whole v1-shaped position.
 
 export type GradedPosition = Extract<Position, { mode: "graded" }>;
+
+// A graded position whose standard is an authored tier ladder. Only these
+// resolve to `ResolvedTiers`, derive an auto ASK from rules, or reach the
+// clause loader; a reference-standard position grades against its passages.
+export type TierStandardPosition = GradedPosition & {
+  standard: { source: "tiers"; tiers: Tiers };
+};
+
+export const isTierStandard = (
+  position: Position,
+): position is TierStandardPosition =>
+  position.mode === "graded" && position.standard.source === "tiers";
+
+/** The authored ladder, or `null` for a position graded against a reference. */
+export const positionTiers = (position: Position): Tiers | null =>
+  isTierStandard(position) ? position.standard.tiers : null;
+
+/** The reference passages a position is graded against, or `null` when its
+ *  standard is an authored ladder. */
+export const positionPassages = (
+  position: Position,
+): readonly ReferencePassage[] | null =>
+  position.mode === "graded" && position.standard.source === "reference"
+    ? position.standard.passages
+    : null;
 
 // Materialize/grade only enabled positions: a disabled position is skipped by
 // run, review, and auto-run. Centralizing the filter keeps the call sites from
