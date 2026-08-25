@@ -29,6 +29,6 @@ jobs:
       )
     uses: stella/.github/.github/workflows/cla.yml@48aacae31829ce15216a6b766b03a92fd2e84da3
     with:
-      allowlist: dependabot[bot],renovate[bot],github-actions[bot],google-labs-jules[bot],cursoragent
+      allowlist: dependabot[bot],renovate[bot],github-actions[bot],google-labs-jules[bot],stella-provenance-updater[bot],cursoragent
     secrets:
       CLA_APP_PRIVATE_KEY: ${{ secrets.CLA_APP_PRIVATE_KEY }}
