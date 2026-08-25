@@ -105,7 +105,9 @@ test("the Better Auth bridge backfill is exact, bounded, and reaches a fixed poi
 
       const first = await runBetterAuth17Backfill(options);
       if (first.status === "error") {
-        throw first.error.cause ?? first.error;
+        throw first.error.cause instanceof Error
+          ? first.error.cause
+          : first.error;
       }
       expect(first).toMatchObject({ status: "ok", value: { changed: true } });
       const second = await runBetterAuth17Backfill(options);

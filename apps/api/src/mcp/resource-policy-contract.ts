@@ -84,8 +84,7 @@ export const buildBetterAuthOAuthResources = (baseUrl: string) =>
 export const normalizeBetterAuthOAuthBaseUrl = (value: string) => {
   const parsed = URL.parse(value);
   if (
-    parsed === null ||
-    parsed.protocol !== "https:" ||
+    parsed?.protocol !== "https:" ||
     parsed.username !== "" ||
     parsed.password !== "" ||
     parsed.pathname !== "/" ||
