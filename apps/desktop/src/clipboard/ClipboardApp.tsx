@@ -323,7 +323,7 @@ const ClipboardCard = ({
     <article
       aria-current={active ? "true" : undefined}
       className={cn(
-        "clipboard-card group relative flex w-[246px] shrink-0 flex-col self-stretch overflow-hidden rounded-[24px]",
+        "clipboard-card group relative flex min-w-[210px] flex-[1_1_246px] snap-start flex-col self-stretch overflow-hidden rounded-[24px]",
         "motion-safe:transition-opacity motion-safe:duration-150",
         active ? "opacity-100" : "opacity-86 hover:opacity-100",
       )}
