@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, asc, eq, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, asc, eq, isNotNull, isNull, sql, type SQL } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
@@ -111,18 +111,39 @@ export type ReplayDecisionRow = {
   corpusMirrorStatus: (typeof CASE_LAW_CORPUS_MIRROR_STATUS)[keyof typeof CASE_LAW_CORPUS_MIRROR_STATUS];
 };
 
+export const CASE_LAW_REPLAY_SCOPE = {
+  SOURCE: { type: "source" },
+} as const;
+
+/**
+ * Exact subset of one source a replay walks. A discriminator makes adding a
+ * future dependency scope an explicit query and cursor-boundary decision.
+ */
+export type CaseLawReplayScope =
+  | (typeof CASE_LAW_REPLAY_SCOPE)[keyof typeof CASE_LAW_REPLAY_SCOPE]
+  | { type: "court"; court: string }
+  | { type: "celex"; celex: string };
+
+const replayScopePredicate = (scope: CaseLawReplayScope): SQL | undefined => {
+  switch (scope.type) {
+    case "source":
+      return undefined;
+    case "court":
+      return eq(caseLawDecisions.court, scope.court);
+    case "celex":
+      return sql`${caseLawDecisions.metadata}->>'celex' = ${scope.celex}`;
+    default:
+      return scope satisfies never;
+  }
+};
+
 type SelectReplayPageOptions = {
   scopedDb: ScopedDb;
   sourceId: SafeId<"caseLawSource">;
+  scope: CaseLawReplayScope;
   /** Boundary row id; the page returns rows strictly after it. */
   after: SafeId<"caseLawDecision"> | null;
   limit: number;
-  /**
-   * Restrict the walk to the decision whose publisher id this is, as the
-   * adapter recorded it in `metadata.celex`. Targets one decision for a
-   * rehearsal before a whole-source run.
-   */
-  celex?: string | undefined;
 };
 
 /**
@@ -136,9 +157,9 @@ type SelectReplayPageOptions = {
 export const selectReplayPage = async ({
   scopedDb,
   sourceId,
+  scope,
   after,
   limit,
-  celex,
 }: SelectReplayPageOptions): Promise<ReplayDecisionRow[]> => {
   const rows = await scopedDb((tx) =>
     tx
@@ -165,11 +186,9 @@ export const selectReplayPage = async ({
       .where(
         and(
           eq(caseLawDecisions.sourceId, sourceId),
+          replayScopePredicate(scope),
           isNotNull(caseLawDecisions.sourceRawS3Key),
           isNull(caseLawDecisions.redactedAt),
-          celex === undefined
-            ? undefined
-            : sql`${caseLawDecisions.metadata}->>'celex' = ${celex}`,
           // The boundary row's `(created_at, id)` is looked up by id inside
           // the database, so the comparison stays at the column's microsecond
           // precision. A boundary carried out as a JS `Date` would be
@@ -196,14 +215,21 @@ export type ReplayabilitySplit = {
   needsRefetch: number;
 };
 
+type CountReplayabilityOptions = {
+  scopedDb: ScopedDb;
+  sourceId: SafeId<"caseLawSource">;
+  scope: CaseLawReplayScope;
+};
+
 /**
- * How much of a source can be replayed without the publisher. Redacted rows
+ * How much of a scope can be replayed without the publisher. Redacted rows
  * are in neither count: they are not re-parsed by any path.
  */
-export const countReplayability = async (
-  scopedDb: ScopedDb,
-  sourceId: SafeId<"caseLawSource">,
-): Promise<ReplayabilitySplit> => {
+export const countReplayability = async ({
+  scopedDb,
+  sourceId,
+  scope,
+}: CountReplayabilityOptions): Promise<ReplayabilitySplit> => {
   const [counts] = await scopedDb((tx) =>
     tx
       .select({
@@ -214,6 +240,7 @@ export const countReplayability = async (
       .where(
         and(
           eq(caseLawDecisions.sourceId, sourceId),
+          replayScopePredicate(scope),
           isNull(caseLawDecisions.redactedAt),
         ),
       ),
@@ -605,7 +632,7 @@ export type ReplayCaseLawSourceOptions = {
   limit: number;
   pageSize: number;
   after?: SafeId<"caseLawDecision"> | null;
-  celex?: string | undefined;
+  scope: CaseLawReplayScope;
 };
 
 export type ReplayRun =
@@ -614,7 +641,7 @@ export type ReplayRun =
   | { type: "ran"; report: ReplayRunReport };
 
 /**
- * A resume boundary must be a row of the source being replayed.
+ * A resume boundary must be a row of the exact scope being replayed.
  *
  * The keyset looks the boundary up by id alone, so an id belonging to
  * another source would position the walk by an unrelated timestamp and skip
@@ -622,14 +649,16 @@ export type ReplayRun =
  * tuple comparison null and return nothing at all. Both read as "no work to
  * do", which is the one thing a resume must never say quietly.
  */
-const boundaryBelongsToSource = async ({
+const boundaryBelongsToScope = async ({
   after,
   scopedDb,
   sourceId,
+  scope,
 }: {
   after: SafeId<"caseLawDecision">;
   scopedDb: ScopedDb;
   sourceId: SafeId<"caseLawSource">;
+  scope: CaseLawReplayScope;
 }): Promise<boolean> => {
   const found = await scopedDb((tx) =>
     tx
@@ -639,6 +668,7 @@ const boundaryBelongsToSource = async ({
         and(
           eq(caseLawDecisions.id, after),
           eq(caseLawDecisions.sourceId, sourceId),
+          replayScopePredicate(scope),
         ),
       )
       .limit(1),
@@ -671,7 +701,7 @@ export const replayCaseLawSource = async ({
   limit,
   pageSize,
   after = null,
-  celex,
+  scope,
 }: ReplayCaseLawSourceOptions): Promise<ReplayRun> => {
   const capability = replayCapability(adapter);
   if (capability.type === "unsupported") {
@@ -680,7 +710,12 @@ export const replayCaseLawSource = async ({
 
   if (
     after !== null &&
-    !(await boundaryBelongsToSource({ after, scopedDb, sourceId }))
+    !(await boundaryBelongsToScope({
+      after,
+      scopedDb,
+      sourceId,
+      scope,
+    }))
   ) {
     return { type: "unknown-boundary", after };
   }
@@ -762,9 +797,9 @@ export const replayCaseLawSource = async ({
     const page = await selectReplayPage({
       scopedDb,
       sourceId,
+      scope,
       after: cursor,
       limit: Math.min(pageSize, limit - visited),
-      celex,
     });
     if (page.length === 0) {
       return;

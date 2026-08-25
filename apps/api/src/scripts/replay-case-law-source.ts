@@ -21,6 +21,10 @@ import { caseLawSources } from "@/api/db/schema";
  *   bun run src/scripts/replay-case-law-source.ts --adapter eu-ecj \
  *     --celex 62022CJ0123 --apply
  *
+ *   # one court after deploying a parser improvement for that court
+ *   bun run src/scripts/replay-case-law-source.ts --adapter cz-nss \
+ *     --court "Nejvyšší správní soud" --apply
+ *
  *   # resume where an interrupted run stopped
  *   bun run src/scripts/replay-case-law-source.ts --adapter eu-ecj \
  *     --after <decisionId> --apply
@@ -30,12 +34,16 @@ import { caseLawSources } from "@/api/db/schema";
  */
 import { getAdapter } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
 import {
+  CASE_LAW_REPLAY_SCOPE,
   countReplayability,
   REPLAY_ROW_OUTCOME,
   replayCapability,
   replayCaseLawSource,
 } from "@/api/handlers/case-law/ingestion/replay";
-import type { StoredRawReader } from "@/api/handlers/case-law/ingestion/replay";
+import type {
+  CaseLawReplayScope,
+  StoredRawReader,
+} from "@/api/handlers/case-law/ingestion/replay";
 import { enterCaseLawMaintenanceLane } from "@/api/lib/case-law/maintenance-lane";
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import {
@@ -60,6 +68,7 @@ const USAGE = `Usage: bun run src/scripts/replay-case-law-source.ts --adapter <k
   --apply           Write the re-parsed results. Omitted, the run reports
                     what it would change and writes nothing.
   --limit <n>       Maximum decisions to visit (default ${DEFAULT_LIMIT}).
+  --court <name>    Replay only decisions from this exact court.
   --celex <value>   Replay only the decision stored under this publisher id
                     (metadata.celex).
   --after <id>      Resume strictly after this decision id.
@@ -110,6 +119,29 @@ const pageSize = positiveInteger(
   "page-size",
 );
 const celex = flagValue("celex");
+const court = flagValue("court");
+if (celex?.length === 0) {
+  console.error("--celex requires a non-empty value");
+  process.exit(1);
+}
+if (court?.length === 0) {
+  console.error("--court requires a non-empty value");
+  process.exit(1);
+}
+if (celex !== undefined && court !== undefined) {
+  console.error("--celex and --court are mutually exclusive replay scopes");
+  process.exit(1);
+}
+const replayScope = (): CaseLawReplayScope => {
+  if (court !== undefined) {
+    return { type: "court", court };
+  }
+  if (celex !== undefined) {
+    return { type: "celex", celex };
+  }
+  return CASE_LAW_REPLAY_SCOPE.SOURCE;
+};
+const scope = replayScope();
 const afterArgument = flagValue("after");
 const after =
   afterArgument === undefined
@@ -156,13 +188,20 @@ if (!source) {
   process.exit(1);
 }
 
-const split = await countReplayability(ingestionDb, source.id);
+const split = await countReplayability({
+  scopedDb: ingestionDb,
+  sourceId: source.id,
+  scope,
+});
 console.log(`=== REPLAY ${adapterKey} (${source.name}) ===`);
 console.log(`mode:                ${apply ? "apply" : "dry run"}`);
 console.log(`replayable locally:  ${split.storedLocally}`);
 console.log(`needs a re-fetch:    ${split.needsRefetch}`);
 if (celex !== undefined) {
   console.log(`targeting celex:     ${celex}`);
+}
+if (court !== undefined) {
+  console.log(`targeting court:     ${court}`);
 }
 
 // `null` only where the store confirmed it holds no such object, which is a
@@ -206,7 +245,7 @@ const replayed = await Result.tryPromise({
       limit,
       pageSize,
       after,
-      celex,
+      scope,
     }),
   catch: (cause) => cause,
 });
@@ -225,8 +264,8 @@ if (replayed.value.type === "unsupported") {
 }
 if (replayed.value.type === "unknown-boundary") {
   console.error(
-    `--after ${replayed.value.after} is not a decision of source ${adapterKey}. ` +
-      "Resume from an id this source's own run reported.",
+    `--after ${replayed.value.after} is outside the selected ${scope.type} scope for ${adapterKey}. ` +
+      "Resume from an id this scope's own run reported.",
   );
   process.exit(1);
 }
