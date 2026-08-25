@@ -9,6 +9,7 @@ export * from "./schema/clauses";
 export * from "./schema/case-law";
 export * from "./schema/legislation";
 export * from "./schema/corpus-index-generations";
+export * from "./schema/corpus-index-projections";
 export * from "./schema/lists";
 export * from "./schema/chat";
 export * from "./schema/docx-suggestions";

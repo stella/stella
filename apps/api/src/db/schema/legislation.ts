@@ -119,6 +119,11 @@ export const legislationDocuments = p.pgTable(
     indexedHash: p.varchar("indexed_hash", { length: 64 }),
     indexedGeneration: p.varchar("indexed_generation", { length: 64 }),
     indexedAt: timestamptz("indexed_at"),
+    /** Monotonic fence advanced by each desired-state transaction. */
+    projectionEpoch: p
+      .bigint("projection_epoch", { mode: "bigint" })
+      .default(0n)
+      .notNull(),
     createdAt: timestamptz("created_at").defaultNow().notNull(),
     updatedAt: timestamptz("updated_at")
       .defaultNow()
@@ -126,6 +131,10 @@ export const legislationDocuments = p.pgTable(
       .$onUpdate(() => new Date()),
   },
   (t) => [
+    p.check(
+      "legislation_documents_projection_epoch_nonnegative",
+      sql`${t.projectionEpoch} >= 0`,
+    ),
     p
       .uniqueIndex("legislation_documents_eli_version_lang_idx")
       .on(t.sourceId, t.eli, t.versionValidFrom, t.language)
