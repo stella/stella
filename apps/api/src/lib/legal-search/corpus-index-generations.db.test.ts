@@ -42,8 +42,8 @@ beforeAll(
     for (const statement of migration.split("--> statement-breakpoint")) {
       const ddl = statement.trim();
       if (
-        !ddl.startsWith("CREATE FUNCTION") &&
-        !ddl.startsWith("CREATE TRIGGER")
+        !/(?:^|\n)\s*CREATE (?:OR REPLACE )?FUNCTION\b/u.test(ddl) &&
+        !/(?:^|\n)\s*CREATE TRIGGER\b/u.test(ddl)
       ) {
         continue;
       }

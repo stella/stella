@@ -526,20 +526,21 @@ BEGIN
     RAISE EXCEPTION 'corpus index projection history requires a retired generation';
   END IF;
 
-  IF TG_TABLE_NAME = 'corpus_index_projection_intents'
-     AND OLD."status" NOT IN ('settled', 'cancelled') THEN
-    RAISE EXCEPTION 'nonterminal corpus index projection intent cannot be deleted';
-  END IF;
-
-  IF TG_TABLE_NAME = 'corpus_index_projection_states' AND EXISTS (
-    SELECT 1
-    FROM "corpus_index_projection_intents" intent
-    WHERE intent."family" = OLD."family"
-      AND intent."generation" = OLD."generation"
-      AND intent."entity_id" = OLD."entity_id"
-      AND intent."status" NOT IN ('settled', 'cancelled')
-  ) THEN
-    RAISE EXCEPTION 'projection state with nonterminal intents cannot be deleted';
+  IF TG_TABLE_NAME = 'corpus_index_projection_intents' THEN
+    IF OLD."status" NOT IN ('settled', 'cancelled') THEN
+      RAISE EXCEPTION 'nonterminal corpus index projection intent cannot be deleted';
+    END IF;
+  ELSIF TG_TABLE_NAME = 'corpus_index_projection_states' THEN
+    IF EXISTS (
+      SELECT 1
+      FROM "corpus_index_projection_intents" intent
+      WHERE intent."family" = OLD."family"
+        AND intent."generation" = OLD."generation"
+        AND intent."entity_id" = OLD."entity_id"
+        AND intent."status" NOT IN ('settled', 'cancelled')
+    ) THEN
+      RAISE EXCEPTION 'projection state with nonterminal intents cannot be deleted';
+    END IF;
   END IF;
 
   RETURN OLD;
