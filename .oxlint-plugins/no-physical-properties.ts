@@ -64,6 +64,16 @@ const reportPhysicalProperty = (context, node) => {
     messageId: "physicalProperty",
     fix: (fixer) => {
       const source = context.sourceCode.getText(node);
+      // The rule detects literals from their cooked value, while a fixer edits
+      // raw source. Escapes or JSX character references can therefore hide an
+      // arbitrary-value bracket from the source scanner. Keep such values
+      // diagnostic-only instead of guessing at their decoded boundaries.
+      if (
+        source.includes("\\") ||
+        /&(?:#(?:x[\da-f]+|\d+)|[a-z][\da-z]+);/iu.test(source)
+      ) {
+        return null;
+      }
       const replacement = replacePhysicalProperties(source);
       return replacement === source
         ? null

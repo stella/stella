@@ -143,6 +143,7 @@ describe.serial("custom oxlint safe fixers", () => {
       'const guidance = "Use right-click to open the menu";',
       `const arbitraryContent = <span className="before:content-['right-click']" />;`,
       `const quotedBracketContent = <span className="before:content-['a] right-click']" />;`,
+      `const escapedBracketContent = <span className={"before:content-\\u005b'right-click'\\u005d"} />;`,
       "const interpolatedArbitrary = <span className={`content-[$" +
         "{prefix} right-click] mr-2`} />;",
       "",
