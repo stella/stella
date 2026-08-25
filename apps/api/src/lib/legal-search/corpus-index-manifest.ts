@@ -244,7 +244,7 @@ export const requireCorpusIndexManifest = (
         ? CORPUS_INDEX_MANIFESTS.legislation_v2
         : panic(`Unknown legislation index manifest: ${generation}`);
     default:
-      return panic(`Unknown corpus index manifest family: ${family}`);
+      return panic("Unknown corpus index manifest family");
   }
 };
 
