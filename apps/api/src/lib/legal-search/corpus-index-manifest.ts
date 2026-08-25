@@ -309,9 +309,19 @@ const canonicalJson = (value: unknown): string => {
 export const corpusIndexContractDigest = (value: unknown): string =>
   new Bun.CryptoHasher("sha256").update(canonicalJson(value)).digest("hex");
 
+const manifestDigestByIdentity = new WeakMap<CorpusIndexManifest, string>();
+
 export const corpusIndexManifestDigest = (
   manifest: CorpusIndexManifest,
-): string => corpusIndexContractDigest(manifest);
+): string => {
+  const cachedDigest = manifestDigestByIdentity.get(manifest);
+  if (cachedDigest !== undefined) {
+    return cachedDigest;
+  }
+  const digest = corpusIndexContractDigest(manifest);
+  manifestDigestByIdentity.set(manifest, digest);
+  return digest;
+};
 
 export const corpusIndexConfigFromManifest = (
   manifest: CorpusIndexManifest,

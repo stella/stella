@@ -332,7 +332,10 @@ const bootstrapCaseLaw = async (
         documentType: row.documentType,
         contentHash: row.contentHash,
         redistributionEligible: isRedistributable(
-          descriptors.get(row.sourceId) ?? null,
+          descriptors.get(row.sourceId) ??
+            panic(
+              `Corpus projection bootstrap lost source descriptor for case-law source ${row.sourceId}`,
+            ),
         ),
         redacted: row.redactedAt !== null,
         caseNumber: row.caseNumber,
@@ -461,7 +464,10 @@ const bootstrapLegislation = async (
         documentType: row.documentType,
         contentHash: row.contentHash,
         redistributionEligible: isRedistributable(
-          descriptors.get(row.sourceId) ?? null,
+          descriptors.get(row.sourceId) ??
+            panic(
+              `Corpus projection bootstrap lost source descriptor for legislation source ${row.sourceId}`,
+            ),
         ),
         title: row.title,
         status: row.status,
