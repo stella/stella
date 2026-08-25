@@ -37,7 +37,7 @@ export const provisionBlocks = (
     (block) => block.type === "heading" && block.anchorId === anchorId,
   );
   const heading = blocks.at(start);
-  if (heading === undefined || heading.type !== "heading") {
+  if (heading?.type !== "heading") {
     return null;
   }
   const owned: Block[] = [heading];

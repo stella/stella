@@ -215,6 +215,7 @@ const renderAnnotation = (
   <mark
     className={cn(annotationClassName(annotation))}
     data-annotation-id={annotation.id}
+    onKeyDown={() => undefined}
     style={annotationStyle(annotation)}
     tabIndex={0}
   >
