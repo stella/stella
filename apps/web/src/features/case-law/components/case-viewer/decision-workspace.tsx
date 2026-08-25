@@ -487,6 +487,7 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
                 annotationAnchors={annotationAnchors}
                 citationAnchors={citationAnchors}
                 decision={decision}
+                onAnnotationActivate={setActiveAnnotationId}
                 onMatchCountChange={setMatchCount}
                 provisionAnchors={provisionAnchors}
                 searchQuery={searchOpen ? searchQuery : ""}

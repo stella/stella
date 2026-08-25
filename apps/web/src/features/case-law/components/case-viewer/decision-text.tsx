@@ -62,6 +62,7 @@ type DecisionTextProps = {
   /** Resolved citations whose mentions in the text become links. */
   citationAnchors?: readonly CitationAnchorSource[] | undefined;
   decision: Decision;
+  onAnnotationActivate?: ((annotationId: string) => void) | undefined;
   onMatchCountChange?: ((count: number) => void) | undefined;
   /** Applied provisions whose statute is held, for inline links. */
   provisionAnchors?: readonly DecisionProvisionAnchor[] | undefined;
@@ -215,9 +216,7 @@ const renderAnnotation = (
   <mark
     className={cn(annotationClassName(annotation))}
     data-annotation-id={annotation.id}
-    onKeyDown={() => undefined}
     style={annotationStyle(annotation)}
-    tabIndex={0}
   >
     {children}
   </mark>
@@ -476,6 +475,7 @@ export const DecisionText = ({
   annotationAnchors = NO_ANNOTATION_ANCHORS,
   citationAnchors = NO_CITATION_ANCHORS,
   decision,
+  onAnnotationActivate,
   onMatchCountChange,
   provisionAnchors = NO_PROVISION_ANCHORS,
   searchQuery,
@@ -585,6 +585,21 @@ export const DecisionText = ({
           lineHeight: "var(--reader-body-line-height)",
         }}
       >
+        {hydrated && onAnnotationActivate !== undefined && (
+          <div className="sr-only">
+            {annotationAnchors.map((annotation) => (
+              <button
+                key={annotation.id}
+                onClick={() => onAnnotationActivate(annotation.id)}
+                type="button"
+              >
+                {annotation.kind === "comment"
+                  ? t("caseLaw.annotations.comment")
+                  : t("caseLaw.annotations.highlight")}
+              </button>
+            ))}
+          </div>
+        )}
         <p className="text-muted-foreground mb-4 text-end font-sans text-xs italic">
           <HighlightedText
             activeMatchIndex={activeMatchIndex}
