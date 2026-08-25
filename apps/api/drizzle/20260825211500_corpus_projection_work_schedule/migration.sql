@@ -61,6 +61,29 @@ CREATE INDEX "corpus_index_projection_states_pending_idx"
       OR "applied_index_id" IS DISTINCT FROM "desired_index_id"
     );--> statement-breakpoint
 
+-- The projection tables are inert until Plane launches the executor. These
+-- cursor indexes make each census page an ordered range rather than a scan of
+-- the generation or its historical intents.
+-- squawk-ignore require-concurrent-index-creation
+CREATE INDEX "corpus_index_projection_states_applied_census_idx"
+  ON "corpus_index_projection_states" (
+    "family",
+    "generation",
+    "applied_index_id",
+    "entity_id"
+  )
+  WHERE "applied_action" = 'upsert' AND "applied_revision" IS NOT NULL;--> statement-breakpoint
+
+-- squawk-ignore require-concurrent-index-creation
+CREATE INDEX "corpus_index_projection_intents_settled_census_idx"
+  ON "corpus_index_projection_intents" (
+    "family",
+    "generation",
+    "index_id",
+    "id"
+  )
+  WHERE "status" = 'settled';--> statement-breakpoint
+
 CREATE FUNCTION "guard_corpus_index_projection_work_state"()
 RETURNS trigger
 LANGUAGE plpgsql

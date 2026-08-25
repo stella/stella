@@ -143,6 +143,10 @@ export const corpusIndexProjectionIntents = p.pgTable(
         t.createdAt,
       )
       .where(sql`${t.status} = 'cleanup_committed'`),
+    p
+      .index("corpus_index_projection_intents_settled_census_idx")
+      .on(t.family, t.generation, t.indexId, t.id)
+      .where(sql`${t.status} = 'settled'`),
     p.check(
       "corpus_index_projection_intents_family_values",
       sql`${t.family} IN (${sqlValues(CORPUS_FAMILIES)})`,
@@ -389,6 +393,12 @@ export const corpusIndexProjectionStates = p.pgTable(
           OR ${t.appliedIndexId} IS DISTINCT FROM ${t.desiredIndexId}
         )
       `),
+    p
+      .index("corpus_index_projection_states_applied_census_idx")
+      .on(t.family, t.generation, t.appliedIndexId, t.entityId)
+      .where(
+        sql`${t.appliedAction} = 'upsert' AND ${t.appliedRevision} IS NOT NULL`,
+      ),
     p.check(
       "corpus_index_projection_states_family_values",
       sql`${t.family} IN (${sqlValues(CORPUS_FAMILIES)})`,

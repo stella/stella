@@ -1,7 +1,7 @@
 import { panic, Result, TaggedError } from "better-result";
 import { Buffer } from "node:buffer";
 
-import type { SafeId } from "@/api/lib/branded-types";
+import { toSafeId, type SafeId } from "@/api/lib/branded-types";
 import { splitIngestRequests } from "@/api/lib/corpus-index/core";
 import { isUuid } from "@/api/lib/custom-schema";
 import {
@@ -13,6 +13,7 @@ import {
 } from "@/api/lib/legal-search/corpus-index-client";
 import type { CorpusIndexManifest } from "@/api/lib/legal-search/corpus-index-manifest";
 import { LIMITS } from "@/api/lib/limits";
+import { isRecord } from "@/api/lib/type-guards";
 
 type ProjectionRevision = SafeId<"corpusIndexProjectionIntent">;
 
@@ -240,10 +241,116 @@ export const corpusProjectionRevisionsQuery = (
 
 type CorpusProjectionDeleteClient = Pick<CorpusIndexClient, "deleteByQuery">;
 
-type ProjectionRevisionOperationOptions = {
-  client: CorpusProjectionDeleteClient;
+type ProjectionRevisionTarget = {
   indexId: string;
   revisions: readonly ProjectionRevision[];
+};
+
+type ProjectionRevisionOperationOptions = ProjectionRevisionTarget & {
+  client: CorpusProjectionDeleteClient;
+};
+
+type ProjectionRevisionCensusOptions = ProjectionRevisionTarget & {
+  client: Pick<CorpusIndexClient, "aggregate">;
+};
+
+const PROJECTION_REVISION_CENSUS_AGGREGATION = "projection_revisions";
+
+type CorpusProjectionRevisionPresence = {
+  revision: ProjectionRevision;
+  documentCount: number;
+};
+
+type CorpusProjectionRevisionCensus = {
+  present: CorpusProjectionRevisionPresence[];
+  missing: ProjectionRevision[];
+};
+
+const malformedProjectionCensus = (message: string) =>
+  Result.err(new CorpusIndexError({ message }));
+
+/**
+ * Read the exact presence of a bounded revision set. The query first narrows
+ * the corpus to those raw revision terms, then a fast-field aggregation
+ * returns one bucket per append attempt. `sum_other_doc_count` and the error
+ * bound must both be zero: approximation is never accepted as a census.
+ */
+export const censusCorpusProjectionRevisions = async ({
+  client,
+  indexId,
+  revisions,
+}: ProjectionRevisionCensusOptions): Promise<
+  Result<CorpusProjectionRevisionCensus, CorpusIndexError>
+> => {
+  const query = corpusProjectionRevisionsQuery(revisions);
+  const aggregated = await client.aggregate({
+    indexId,
+    query,
+    aggs: {
+      [PROJECTION_REVISION_CENSUS_AGGREGATION]: {
+        terms: {
+          field: "projection_revision",
+          size: revisions.length,
+          shard_size: revisions.length,
+          order: { _key: "asc" },
+          show_term_doc_count_error: true,
+        },
+      },
+    },
+  });
+  if (aggregated.isErr()) {
+    return Result.err(aggregated.error);
+  }
+  const census = aggregated.value[PROJECTION_REVISION_CENSUS_AGGREGATION];
+  if (!isRecord(census) || !Array.isArray(census["buckets"])) {
+    return malformedProjectionCensus(
+      "corpus projection revision census returned malformed buckets",
+    );
+  }
+  if (
+    census["sum_other_doc_count"] !== 0 ||
+    census["doc_count_error_upper_bound"] !== 0
+  ) {
+    return malformedProjectionCensus(
+      "corpus projection revision census returned an incomplete or approximate result",
+    );
+  }
+  const requested = new Set(revisions);
+  const seen = new Set<ProjectionRevision>();
+  const present: CorpusProjectionRevisionPresence[] = [];
+  for (const bucket of census["buckets"]) {
+    if (
+      !isRecord(bucket) ||
+      typeof bucket["key"] !== "string" ||
+      !isUuid(bucket["key"]) ||
+      !Number.isSafeInteger(bucket["doc_count"]) ||
+      Number(bucket["doc_count"]) <= 0
+    ) {
+      return malformedProjectionCensus(
+        "corpus projection revision census returned an invalid bucket",
+      );
+    }
+    const revision = toSafeId<"corpusIndexProjectionIntent">(bucket["key"]);
+    if (!requested.has(revision)) {
+      return malformedProjectionCensus(
+        "corpus projection revision census returned an unrequested bucket",
+      );
+    }
+    if (seen.has(revision)) {
+      return malformedProjectionCensus(
+        "corpus projection revision census returned a duplicate bucket",
+      );
+    }
+    seen.add(revision);
+    present.push({
+      revision,
+      documentCount: Number(bucket["doc_count"]),
+    });
+  }
+  return Result.ok({
+    present,
+    missing: revisions.filter((revision) => !seen.has(revision)),
+  });
 };
 
 export const deleteCorpusProjectionRevisions = async ({

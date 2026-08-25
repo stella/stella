@@ -18,6 +18,10 @@ import {
   corpusIndexManifestDigest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import {
+  readAppliedCorpusProjectionCensusPageTx,
+  readSettledCorpusProjectionCensusPageTx,
+} from "@/api/lib/legal-search/corpus-index-projection-census-store";
+import {
   claimCorpusProjectionCleanupSettlementTx,
   claimCorpusProjectionCleanupTx,
   CorpusProjectionCleanupSettlementProof,
@@ -525,6 +529,25 @@ test("replacement deletes and settles the old revision before reserving the new 
         }),
     ),
   ).toMatchObject({ status: "applied", entityId: DECISION_ID });
+  expect(
+    await db.transaction(
+      async (tx) =>
+        await readAppliedCorpusProjectionCensusPageTx(
+          asTestRaw<Transaction>(tx),
+          {
+            family: "case_law",
+            generation: "case_law_v5",
+            indexId: INDEX_ID,
+            after: null,
+            limit: 1,
+          },
+        ),
+    ),
+  ).toEqual({
+    candidates: [{ entityId: DECISION_ID, revision: FIRST_INTENT_ID }],
+    nextCursor: DECISION_ID,
+    complete: false,
+  });
 
   await db.transaction(async (tx) => {
     await tx
@@ -637,6 +660,26 @@ test("replacement deletes and settles the old revision before reserving the new 
         }),
     ),
   ).toBe(1);
+
+  expect(
+    await db.transaction(
+      async (tx) =>
+        await readSettledCorpusProjectionCensusPageTx(
+          asTestRaw<Transaction>(tx),
+          {
+            family: "case_law",
+            generation: "case_law_v5",
+            indexId: INDEX_ID,
+            after: null,
+            limit: 2,
+          },
+        ),
+    ),
+  ).toEqual({
+    candidates: [{ revision: FIRST_INTENT_ID }],
+    nextCursor: FIRST_INTENT_ID,
+    complete: true,
+  });
 
   expect(
     await db.transaction(

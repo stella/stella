@@ -9,6 +9,7 @@ import {
 import { CORPUS_INDEX_MANIFESTS } from "@/api/lib/legal-search/corpus-index-manifest";
 import {
   appendCorpusProjectionBatch,
+  censusCorpusProjectionRevisions,
   corpusIndexUnknownAppendBarrierAt,
   corpusProjectionRevisionsQuery,
   CORPUS_PROJECTION_DELETE_MAX_REVISIONS,
@@ -38,6 +39,68 @@ test("projection deletes select exact unique append attempts", () => {
   expect(() => corpusProjectionRevisionsQuery([])).toThrow(
     `requires 1-${CORPUS_PROJECTION_DELETE_MAX_REVISIONS} revisions`,
   );
+});
+
+test("revision census reports exact present and missing attempts", async () => {
+  const result = await censusCorpusProjectionRevisions({
+    client: {
+      aggregate: async ({ aggs, ...input }) => {
+        expect(input).toMatchObject({
+          indexId: "case_law_v5_cs_sk",
+          query: `projection_revision:"${FIRST_REVISION}" OR projection_revision:"${SECOND_REVISION}"`,
+        });
+        expect(aggs).toEqual({
+          projection_revisions: {
+            terms: {
+              field: "projection_revision",
+              order: { _key: "asc" },
+              shard_size: 2,
+              show_term_doc_count_error: true,
+              size: 2,
+            },
+          },
+        });
+        return Result.ok({
+          projection_revisions: {
+            buckets: [{ key: FIRST_REVISION, doc_count: 4 }],
+            doc_count_error_upper_bound: 0,
+            sum_other_doc_count: 0,
+          },
+        });
+      },
+    },
+    indexId: "case_law_v5_cs_sk",
+    revisions: [FIRST_REVISION, SECOND_REVISION],
+  });
+
+  expect(result).toEqual(
+    Result.ok({
+      present: [{ revision: FIRST_REVISION, documentCount: 4 }],
+      missing: [SECOND_REVISION],
+    }),
+  );
+});
+
+test("revision census fails closed on approximate buckets", async () => {
+  const result = await censusCorpusProjectionRevisions({
+    client: {
+      aggregate: async () =>
+        Result.ok({
+          projection_revisions: {
+            buckets: [{ key: FIRST_REVISION, doc_count: 1 }],
+            doc_count_error_upper_bound: 1,
+            sum_other_doc_count: 0,
+          },
+        }),
+    },
+    indexId: "case_law_v5_cs_sk",
+    revisions: [FIRST_REVISION],
+  });
+
+  expect(result.isErr()).toBe(true);
+  if (result.isErr()) {
+    expect(result.error.message).toContain("approximate");
+  }
 });
 
 test("committed appends preserve row boundaries and exact revision ownership", async () => {
