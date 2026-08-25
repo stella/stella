@@ -285,6 +285,10 @@ describe("API deployment health receipt", () => {
       desktopResolveStart,
       desktopBuildStart,
     );
+    const desktopBuild = releaseDesktopWorkflow.slice(
+      desktopBuildStart,
+      desktopVerifyStart,
+    );
     const desktopVerify = releaseDesktopWorkflow.slice(
       desktopVerifyStart,
       desktopManifestStart,
@@ -309,6 +313,18 @@ describe("API deployment health receipt", () => {
       "github.event.workflow_run.conclusion == 'success'",
     );
     expect(desktopResolve).not.toContain('["success", "failure"]');
+    const psGalleryPreflight = desktopBuild.indexOf(
+      "Ensure PSGallery is registered (Windows only)",
+    );
+    const azureSigning = desktopBuild.indexOf("azure/trusted-signing-action@");
+    expect(psGalleryPreflight).toBeGreaterThanOrEqual(0);
+    expect(azureSigning).toBeGreaterThan(psGalleryPreflight);
+    expect(desktopBuild).toContain(
+      "Get-PSRepository -Name PSGallery -ErrorAction SilentlyContinue",
+    );
+    expect(desktopBuild).toContain("if (-not $repository) {");
+    expect(desktopBuild).toContain("Register-PSRepository -Default");
+    expect(desktopBuild).toContain("https://www.powershellgallery.com/api/v2");
     expect(desktopVerify).toContain("API_DEPLOYMENT_PROBE_PATH: ready");
     expect(desktopVerify).toContain("API_DEPLOYMENT_PROBE_PATH: version.json");
     expect(desktopManifest).toContain(
