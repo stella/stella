@@ -1,10 +1,6 @@
 SET lock_timeout = '1s';--> statement-breakpoint
 SET statement_timeout = '5s';--> statement-breakpoint
 
--- stella-migration-safety: reviewed destructive-change - this replaces only
--- the projection table's original epoch index before Plane introduces its
--- first producer; the transaction restores the old index on rollback.
-
 -- The table is still inert until the projection executor ships; build the
 -- recovery index before that launch so expired-lease scans stay bounded.
 -- This projection table has no producer until the private runner ships after
@@ -19,6 +15,9 @@ CREATE INDEX "corpus_index_projection_intents_expired_lease_idx"
 -- Cleanup owns exact immutable revisions independently. Only phases that can
 -- create or expose an append compete for the epoch's single append slot; this
 -- lets a census reopen exact cleanup after a same-epoch retry is applied.
+-- stella-migration-safety: reviewed drop-object - this replaces only the
+-- projection table's original epoch index before Plane introduces its first
+-- producer; the transaction restores the old index on rollback.
 -- squawk-ignore require-concurrent-index-deletion
 DROP INDEX "corpus_index_projection_intents_live_epoch_uidx";--> statement-breakpoint
 
