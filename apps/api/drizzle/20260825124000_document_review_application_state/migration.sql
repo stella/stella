@@ -17,13 +17,4 @@ ALTER TABLE "document_review_findings"
 ALTER TABLE "document_review_findings"
   ADD CONSTRAINT "document_review_findings_applied_by_user_id_fk"
   FOREIGN KEY ("applied_by") REFERENCES "public"."user" ("id")
-  ON DELETE SET NULL NOT VALID;--> statement-breakpoint
-
-ALTER TABLE "document_review_findings"
-  VALIDATE CONSTRAINT "document_review_findings_application_status_values_check";--> statement-breakpoint
-
-ALTER TABLE "document_review_findings"
-  VALIDATE CONSTRAINT "document_review_findings_application_timing_check";--> statement-breakpoint
-
-ALTER TABLE "document_review_findings"
-  VALIDATE CONSTRAINT "document_review_findings_applied_by_user_id_fk";
+  ON DELETE SET NULL NOT VALID;
