@@ -737,20 +737,6 @@ const socialSignInTwoFactorRedirectPlugin = {
   },
 } satisfies BetterAuthPlugin;
 
-type OAuthProviderPlugin = ReturnType<typeof oauthProvider>;
-type BetterAuthEndpoint = NonNullable<BetterAuthPlugin["endpoints"]>[string];
-type CompatibleOAuthProviderEndpoints = {
-  [Key in keyof OAuthProviderPlugin["endpoints"]]: OAuthProviderPlugin["endpoints"][Key] &
-    BetterAuthEndpoint;
-};
-type CompatibleOAuthProviderPlugin = Omit<OAuthProviderPlugin, "endpoints"> & {
-  endpoints: CompatibleOAuthProviderEndpoints;
-};
-
-const withCompatibleOAuthEndpointTypes = (
-  plugin: CompatibleOAuthProviderPlugin,
-): CompatibleOAuthProviderPlugin => plugin;
-
 // Lazy singleton: `betterAuth()` eagerly resolves the
 // database adapter, which accesses `rootDb`. Deferring to
 // first use prevents the TDZ error when the test runner
@@ -1187,73 +1173,71 @@ const createAuth = () => {
           });
         },
       }),
-      withCompatibleOAuthEndpointTypes(
-        oauthProvider({
-          loginPage: OAUTH_UI_LOGIN_PATH,
-          consentPage: OAUTH_UI_CONSENT_PATH,
-          scopes: [...MCP_OAUTH_SCOPES],
-          resources: oauthResources,
-          // The additive bridge/backfill owns resource creation and proves its
-          // fixed point before this candidate runs. Runtime seeding would hide
-          // a missed migration and add an owner-DB write to auth startup.
-          resourceSeedMode: "none",
-          enforcePerClientResources: true,
-          clientRegistrationDefaultResources: oauthResourceIdentifiers,
-          clientRegistrationAllowedResources: oauthResourceIdentifiers,
-          allowDynamicClientRegistration: true,
-          allowUnauthenticatedClientRegistration: true,
-          accessTokenExpiresIn: ACCESS_TOKEN_EXPIRES_IN,
-          refreshTokenExpiresIn: REFRESH_TOKEN_EXPIRES_IN,
-          clientReference: ({ session }) =>
-            getSessionActiveOrganizationId(session),
-          postLogin: {
-            page: OAUTH_UI_ORGANIZATION_PATH,
-            shouldRedirect: async ({
-              headers,
-              scopes,
-              session,
-            }): Promise<boolean> => {
-              const needsOrganization = scopes.some(isMcpResourceScope);
-              if (!needsOrganization) {
-                return false;
-              }
+      oauthProvider({
+        loginPage: OAUTH_UI_LOGIN_PATH,
+        consentPage: OAUTH_UI_CONSENT_PATH,
+        scopes: [...MCP_OAUTH_SCOPES],
+        resources: oauthResources,
+        // The additive bridge/backfill owns resource creation and proves its
+        // fixed point before this candidate runs. Runtime seeding would hide
+        // a missed migration and add an owner-DB write to auth startup.
+        resourceSeedMode: "none",
+        enforcePerClientResources: true,
+        clientRegistrationDefaultResources: oauthResourceIdentifiers,
+        clientRegistrationAllowedResources: oauthResourceIdentifiers,
+        allowDynamicClientRegistration: true,
+        allowUnauthenticatedClientRegistration: true,
+        accessTokenExpiresIn: ACCESS_TOKEN_EXPIRES_IN,
+        refreshTokenExpiresIn: REFRESH_TOKEN_EXPIRES_IN,
+        clientReference: ({ session }) =>
+          getSessionActiveOrganizationId(session),
+        postLogin: {
+          page: OAUTH_UI_ORGANIZATION_PATH,
+          shouldRedirect: async ({
+            headers,
+            scopes,
+            session,
+          }): Promise<boolean> => {
+            const needsOrganization = scopes.some(isMcpResourceScope);
+            if (!needsOrganization) {
+              return false;
+            }
 
-              const organizations: { id: string }[] =
-                await auth.api.listOrganizations({
-                  headers,
-                });
-              const activeOrganizationId =
-                getSessionActiveOrganizationId(session);
+            const organizations: { id: string }[] =
+              await auth.api.listOrganizations({
+                headers,
+              });
+            const activeOrganizationId =
+              getSessionActiveOrganizationId(session);
 
-              return (
-                organizations.length !== 1 ||
-                organizations.at(0)?.id !== activeOrganizationId
-              );
-            },
-            consentReferenceId: ({ scopes, session }) => {
-              const needsOrganization = scopes.some(isMcpResourceScope);
-              if (!needsOrganization) {
-                return undefined;
-              }
-
-              const activeOrganizationId =
-                getSessionActiveOrganizationId(session);
-              if (!activeOrganizationId) {
-                throw new APIError("BAD_REQUEST", {
-                  error: "set_organization",
-                  message:
-                    "An organization must be selected before granting stella MCP access",
-                });
-              }
-
-              return activeOrganizationId;
-            },
+            return (
+              organizations.length !== 1 ||
+              organizations.at(0)?.id !== activeOrganizationId
+            );
           },
-          customAccessTokenClaims: ({ referenceId }) => ({
-            org_id: referenceId,
-          }),
+          consentReferenceId: ({ scopes, session }) => {
+            const needsOrganization = scopes.some(isMcpResourceScope);
+            if (!needsOrganization) {
+              return undefined;
+            }
+
+            const activeOrganizationId =
+              getSessionActiveOrganizationId(session);
+            if (!activeOrganizationId) {
+              throw new APIError("BAD_REQUEST", {
+                error: "set_organization",
+                message:
+                  "An organization must be selected before granting stella MCP access",
+              });
+            }
+
+            return activeOrganizationId;
+          },
+        },
+        customAccessTokenClaims: ({ referenceId }) => ({
+          org_id: referenceId,
         }),
-      ),
+      }),
     ],
     hooks: {
       before: createAuthMiddleware(async (ctx) => {
