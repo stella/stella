@@ -124,7 +124,7 @@ describe.serial("custom oxlint safe fixers", () => {
 
   test("leaves context-dependent violations for the agent", async () => {
     const { configPath, directory } = await writeHarness();
-    const sourcePath = path.join(directory, "subject.ts");
+    const sourcePath = path.join(directory, "subject.tsx");
     const source = [
       "async function load() {",
       "  return await ((lock ? query.for('update') : query) satisfies Builder);",
@@ -136,8 +136,12 @@ describe.serial("custom oxlint safe fixers", () => {
       "async function loadWithBranchWrappers() {",
       "  return await (lock ? (query as Builder) : (query.limit(1) satisfies Builder));",
       "}",
+      "async function loadWithNestedBranchWrapper() {",
+      "  return await (lock ? ((paged ? query : query.limit(1)) satisfies Builder) : query.offset(2));",
+      "}",
       "const schema = t.Optional(t.UnionEnum(VALUES));",
       'const guidance = "Use right-click to open the menu";',
+      `const arbitraryContent = <span className="before:content-['right-click']" />;`,
       "",
     ].join("\n");
     await Bun.write(sourcePath, source);

@@ -92,10 +92,52 @@ const PHYSICAL_REPLACEMENTS = [
     ),
 ] as const satisfies readonly ((value: string) => string)[];
 
+// Tailwind arbitrary values and selectors may contain prose or CSS whose
+// physical-looking words are data, not utility names. Apply a replacement only
+// outside balanced square brackets; an unclosed bracket conservatively protects
+// the rest of the value.
+const replaceOutsideArbitraryBrackets = (
+  value: string,
+  replace: (segment: string) => string,
+): string => {
+  let result = "";
+  let segmentStart = 0;
+  let bracketStart = 0;
+  let depth = 0;
+  let escaped = false;
+
+  for (let index = 0; index < value.length; index += 1) {
+    const character = value[index];
+    if (character === "\\" && !escaped) {
+      escaped = true;
+      continue;
+    }
+    if (!escaped && character === "[") {
+      if (depth === 0) {
+        result += replace(value.slice(segmentStart, index));
+        bracketStart = index;
+      }
+      depth += 1;
+    } else if (!escaped && character === "]" && depth > 0) {
+      depth -= 1;
+      if (depth === 0) {
+        result += value.slice(bracketStart, index + 1);
+        segmentStart = index + 1;
+      }
+    }
+    escaped = false;
+  }
+
+  if (depth > 0) {
+    return result + value.slice(bracketStart);
+  }
+  return result + replace(value.slice(segmentStart));
+};
+
 export const replacePhysicalProperties = (value: string): string => {
   let replaced = value;
   for (const replace of PHYSICAL_REPLACEMENTS) {
-    replaced = replace(replaced);
+    replaced = replaceOutsideArbitraryBrackets(replaced, replace);
   }
   return replaced;
 };

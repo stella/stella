@@ -86,6 +86,24 @@ const collectBranches = (node, branches) => {
   return branches;
 };
 
+// A wrapper anywhere inside the conditional tree can change what a TypeScript
+// assertion constrains after branchwise `await` insertion. Keep the diagnostic,
+// but refuse the fix even when the wrapped expression is itself a nested
+// conditional rather than a final leaf.
+const hasFixUnsafeWrapper = (node) => {
+  const expression = unwrapWrappers(node);
+  if (expression !== node) {
+    return true;
+  }
+  if (expression?.type !== "ConditionalExpression") {
+    return false;
+  }
+  return (
+    hasFixUnsafeWrapper(expression.consequent) ||
+    hasFixUnsafeWrapper(expression.alternate)
+  );
+};
+
 // Resolve an expression to its root plus the member/call steps applied to it,
 // outermost step last:
 //   query                      -> root "query",      steps [".for()"]…
@@ -229,9 +247,7 @@ export default eslintCompatPlugin({
               fix: (fixer) => {
                 const awaitEnd = node.range[0] + AWAIT_KEYWORD_LENGTH;
                 const branches = collectBranches(node.argument, []);
-                if (
-                  branches.some((branch) => unwrapWrappers(branch) !== branch)
-                ) {
+                if (hasFixUnsafeWrapper(node.argument)) {
                   return null;
                 }
                 const hasInterveningComment = context.sourceCode
