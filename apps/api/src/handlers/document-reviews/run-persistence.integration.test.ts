@@ -53,7 +53,7 @@ let ids: TestIds;
 
 const ROLLING_BASIS_BRIDGE_MIGRATION = nodePath.resolve(
   import.meta.dir,
-  "../../../drizzle/20260825123100_document_review_rolling_basis_bridge/migration.sql",
+  "../../../drizzle/20260825135100_document_review_rolling_basis_bridge/migration.sql",
 );
 
 const seededRunIds: SafeId<"documentReviewRun">[] = [];
