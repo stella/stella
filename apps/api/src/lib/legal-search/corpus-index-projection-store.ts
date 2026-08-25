@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { and, asc, eq, exists, gt, inArray, isNotNull, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull, sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import {
@@ -20,7 +20,7 @@ import {
 
 export const CORPUS_PROJECTION_STORE_MAX_BATCH_SIZE =
   CORPUS_PROJECTION_APPEND_MAX_REVISIONS;
-export const CORPUS_PROJECTION_LEASE_MIN_MS = 5_000;
+export const CORPUS_PROJECTION_LEASE_MIN_MS = 5000;
 export const CORPUS_PROJECTION_LEASE_MAX_MS = 15 * 60_000;
 
 type ProjectionIntentId = SafeId<"corpusIndexProjectionIntent">;
@@ -156,9 +156,11 @@ export const reserveCorpusProjectionIntentsTx = async (
   const leaseExpiresAt =
     testNow === undefined
       ? (
-          await tx.select({
-            value: sql<Date>`clock_timestamp() + ${leaseMs} * INTERVAL '1 millisecond'`,
-          })
+          await tx
+            .select({
+              value: sql<Date>`clock_timestamp() + ${leaseMs} * INTERVAL '1 millisecond'`,
+            })
+            .from(sql`(SELECT 1) AS projection_clock`)
         ).at(0)?.value
       : new Date(testNow.getTime() + leaseMs);
   if (leaseExpiresAt === undefined) {
@@ -225,7 +227,14 @@ export const reserveCorpusProjectionIntentsTx = async (
       );
     }
     return {
-      ...reservation,
+      intentId: reservation.intentId,
+      family: reservation.family,
+      generation: reservation.generation,
+      entityId: reservation.entityId,
+      epoch: reservation.epoch,
+      fingerprint: reservation.fingerprint,
+      indexId: reservation.indexId,
+      leaseToken: reservation.leaseToken,
       leaseExpiresAt: insertedExpiry,
     } satisfies CorpusProjectionIntentLease;
   });
@@ -278,21 +287,6 @@ export const prepareCorpusProjectionReplacementsTx = async (
         isNotNull(corpusIndexProjectionStates.appliedRevision),
         isNotNull(corpusIndexProjectionStates.appliedIndexId),
         sql`${corpusIndexProjectionStates.desiredEpoch} > ${corpusIndexProjectionStates.appliedEpoch}`,
-        exists(
-          tx
-            .select({ id: corpusIndexProjectionIntents.id })
-            .from(corpusIndexProjectionIntents)
-            .where(
-              and(
-                eq(
-                  corpusIndexProjectionIntents.id,
-                  corpusIndexProjectionStates.appliedRevision,
-                ),
-                eq(corpusIndexProjectionIntents.status, "applied"),
-              ),
-            )
-            .limit(1),
-        ),
       ),
     )
     .orderBy(
@@ -327,8 +321,25 @@ export const prepareCorpusProjectionReplacementsTx = async (
     .from(corpusIndexProjectionIntents)
     .where(inArray(corpusIndexProjectionIntents.id, intentIds))
     .orderBy(asc(corpusIndexProjectionIntents.id))
+    .limit(limit)
     .for("update");
   const transitionAt = testNow ?? sql<Date>`clock_timestamp()`;
+  // Rotate every inspected row to the pending queue's tail. A revision that
+  // cleanup already owns can then reduce this batch's result, but it cannot
+  // leave a fixed old prefix that hides later replacements.
+  await tx
+    .update(corpusIndexProjectionStates)
+    .set({ updatedAt: transitionAt })
+    .where(
+      and(
+        eq(corpusIndexProjectionStates.family, family),
+        eq(corpusIndexProjectionStates.generation, generation),
+        inArray(
+          corpusIndexProjectionStates.entityId,
+          cleanups.map(({ entityId }) => entityId),
+        ),
+      ),
+    );
   const updated = await tx
     .update(corpusIndexProjectionIntents)
     .set({
@@ -426,7 +437,7 @@ export const startCorpusProjectionAppendTx = async (
         eq(corpusIndexProjectionIntents.id, intentId),
         eq(corpusIndexProjectionIntents.status, "reserved"),
         eq(corpusIndexProjectionIntents.leaseToken, leaseToken),
-        gt(corpusIndexProjectionIntents.leaseExpiresAt, transitionAt),
+        sql`${corpusIndexProjectionIntents.leaseExpiresAt} > ${transitionAt}::timestamptz`,
         sql`EXISTS (
           SELECT 1
           FROM ${corpusIndexProjectionStates} state

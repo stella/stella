@@ -29,7 +29,6 @@ BEGIN
        AND NOT (
          OLD."applied_action" = 'erase'
          AND NEW."applied_action" IS NULL
-         AND NEW."desired_action" = 'erase'
        ) THEN
       RAISE EXCEPTION 'corpus index applied epoch cannot decrease';
     END IF;

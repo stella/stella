@@ -61,6 +61,9 @@ const SECOND_LEASE_TOKEN = "0198e331-e578-7000-8000-000000000207";
 const ERASE_DECISION_ID = toSafeId<"caseLawDecision">(
   "0198e331-e578-7000-8000-000000000208",
 );
+const ERASE_READY_DECISION_ID = toSafeId<"caseLawDecision">(
+  "0198e331-e578-7000-8000-000000000213",
+);
 const ERASE_INTENT_ID = toSafeId<"corpusIndexProjectionIntent">(
   "0198e331-e578-7000-8000-000000000209",
 );
@@ -457,6 +460,132 @@ test("replacement deletes and settles the old revision before reserving the new 
     .orderBy(corpusIndexProjectionIntents.epoch)
     .limit(2);
   expect(statuses).toEqual([{ status: "settled" }, { status: "reserved" }]);
+});
+
+test("cleanup-owned replacement work rotates behind a bounded queue window", async () => {
+  await db.insert(caseLawDecisions).values({
+    id: ERASE_READY_DECISION_ID,
+    sourceId: SOURCE_ID,
+    caseNumber: "1 A 5/2026",
+    court: "Test court",
+    country: "CZE",
+    language: "cs",
+    contentHash: "1".repeat(64),
+    projectionEpoch: 1n,
+  });
+  await db.insert(corpusIndexProjectionStates).values({
+    family: "case_law",
+    generation: "case_law_v5",
+    entityId: ERASE_READY_DECISION_ID,
+    desiredAction: "upsert",
+    desiredEpoch: 1n,
+    desiredFingerprint: FIRST_FINGERPRINT,
+    desiredIndexId: INDEX_ID,
+  });
+  const intentIds = [FIRST_INTENT_ID, SECOND_INTENT_ID][Symbol.iterator]();
+  const leaseTokens = [FIRST_LEASE_TOKEN, SECOND_LEASE_TOKEN][
+    Symbol.iterator
+  ]();
+  const leases = await db.transaction(
+    async (tx) =>
+      await reserveCorpusProjectionIntentsTx(asTestRaw<Transaction>(tx), {
+        family: "case_law",
+        generation: "case_law_v5",
+        limit: 2,
+        leaseMs: 60_000,
+        testNow: new Date(),
+        newIntentId: () =>
+          intentIds.next().value ?? panic("Expected replacement intent id"),
+        newLeaseToken: () =>
+          leaseTokens.next().value ?? panic("Expected replacement lease token"),
+      }),
+  );
+  expect(leases).toHaveLength(2);
+  const blockedLease =
+    leases.find(({ entityId }) => entityId === DECISION_ID) ??
+    panic("Expected blocked replacement lease");
+  const readyLease =
+    leases.find(({ entityId }) => entityId === ERASE_READY_DECISION_ID) ??
+    panic("Expected ready replacement lease");
+  const applyLeases = async (index: number): Promise<void> => {
+    const lease = leases.at(index);
+    if (lease === undefined) {
+      return;
+    }
+    expect(
+      await db.transaction(
+        async (tx) =>
+          await startCorpusProjectionAppendTx(asTestRaw<Transaction>(tx), {
+            intentId: lease.intentId,
+            leaseToken: lease.leaseToken,
+          }),
+      ),
+    ).toBe("started");
+    expect(
+      await db.transaction(
+        async (tx) =>
+          await commitCorpusProjectionAppendTx(asTestRaw<Transaction>(tx), {
+            intentId: lease.intentId,
+            leaseToken: lease.leaseToken,
+          }),
+      ),
+    ).toMatchObject({ status: "applied" });
+    await applyLeases(index + 1);
+  };
+  await applyLeases(0);
+
+  const blockedAt = new Date(Date.now() - 2 * 60_000);
+  const readyAt = new Date(Date.now() - 60_000);
+  const rotatedAt = new Date();
+  await db.transaction(async (tx) => {
+    await tx
+      .update(caseLawDecisions)
+      .set({ projectionEpoch: 2n })
+      .where(eq(caseLawDecisions.id, DECISION_ID));
+    await tx
+      .update(caseLawDecisions)
+      .set({ projectionEpoch: 2n })
+      .where(eq(caseLawDecisions.id, ERASE_READY_DECISION_ID));
+    await tx
+      .update(corpusIndexProjectionStates)
+      .set({
+        desiredEpoch: 2n,
+        desiredFingerprint: SECOND_FINGERPRINT,
+        updatedAt: blockedAt,
+      })
+      .where(eq(corpusIndexProjectionStates.entityId, DECISION_ID));
+    await tx
+      .update(corpusIndexProjectionStates)
+      .set({
+        desiredEpoch: 2n,
+        desiredFingerprint: SECOND_FINGERPRINT,
+        updatedAt: readyAt,
+      })
+      .where(eq(corpusIndexProjectionStates.entityId, ERASE_READY_DECISION_ID));
+  });
+
+  const first = await db.transaction(
+    async (tx) =>
+      await prepareCorpusProjectionReplacementsTx(asTestRaw<Transaction>(tx), {
+        family: "case_law",
+        generation: "case_law_v5",
+        limit: 1,
+        testNow: rotatedAt,
+      }),
+  );
+  expect(first.map(({ intentId }) => intentId)).toEqual([
+    blockedLease.intentId,
+  ]);
+  const second = await db.transaction(
+    async (tx) =>
+      await prepareCorpusProjectionReplacementsTx(asTestRaw<Transaction>(tx), {
+        family: "case_law",
+        generation: "case_law_v5",
+        limit: 1,
+        testNow: rotatedAt,
+      }),
+  );
+  expect(second.map(({ intentId }) => intentId)).toEqual([readyLease.intentId]);
 });
 
 test("production transitions preserve PostgreSQL clock ordering under process skew", async () => {
@@ -909,7 +1038,12 @@ test("erasure fences an unknown append and applies only after cleanup settlement
           limit: 10,
         }),
     ),
-  ).toMatchObject({ claimedCount: 0 });
+  ).toMatchObject({
+    claimedCount: 1,
+    cancelledRevisions: [],
+    scheduledRevisions: [],
+    appliedEntityIds: [],
+  });
   const fencedIntent = await db
     .select({ updatedAt: corpusIndexProjectionIntents.updatedAt })
     .from(corpusIndexProjectionIntents)
@@ -974,6 +1108,22 @@ test("erasure fences an unknown append and applies only after cleanup settlement
     { action: "erase", epoch: 2n, revision: null, appliedAt: erasureNow },
   ]);
 
+  await db.transaction(async (tx) => {
+    await tx
+      .update(caseLawDecisions)
+      .set({ projectionEpoch: 3n })
+      .where(eq(caseLawDecisions.id, ERASE_DECISION_ID));
+    await tx
+      .update(corpusIndexProjectionStates)
+      .set({
+        desiredAction: "upsert",
+        desiredEpoch: 3n,
+        desiredFingerprint: SECOND_FINGERPRINT,
+        desiredIndexId: INDEX_ID,
+      })
+      .where(eq(corpusIndexProjectionStates.entityId, ERASE_DECISION_ID));
+  });
+
   expect(
     await db.transaction(
       async (tx) =>
@@ -995,36 +1145,52 @@ test("erasure fences an unknown append and applies only after cleanup settlement
   expect(reopenedState).toEqual([
     { action: null, epoch: null, appliedAt: null },
   ]);
-  await db.transaction(async (tx) => {
-    await tx
-      .update(caseLawDecisions)
-      .set({ projectionEpoch: 3n })
-      .where(eq(caseLawDecisions.id, ERASE_DECISION_ID));
-    await tx
-      .update(corpusIndexProjectionStates)
-      .set({ desiredEpoch: 3n })
-      .where(eq(corpusIndexProjectionStates.entityId, ERASE_DECISION_ID));
-  });
 });
 
-test("cleanup-owned revisions do not consume the erasure action cap", async () => {
-  await db.insert(caseLawDecisions).values({
-    id: ERASE_DECISION_ID,
-    sourceId: SOURCE_ID,
-    caseNumber: "1 A 3/2026",
-    court: "Test court",
-    country: "CZE",
-    language: "cs",
-    contentHash: "e".repeat(64),
-    projectionEpoch: 1n,
-  });
-  await db.insert(corpusIndexProjectionStates).values({
-    family: "case_law",
-    generation: "case_law_v5",
-    entityId: ERASE_DECISION_ID,
-    desiredAction: "erase",
-    desiredEpoch: 1n,
-  });
+test("cleanup-owned erasure work rotates behind a bounded queue window", async () => {
+  const blockedAt = new Date(Date.now() - 2 * 60_000);
+  const readyAt = new Date(Date.now() - 60_000);
+  const rotatedAt = new Date();
+  await db.insert(caseLawDecisions).values([
+    {
+      id: ERASE_DECISION_ID,
+      sourceId: SOURCE_ID,
+      caseNumber: "1 A 3/2026",
+      court: "Test court",
+      country: "CZE",
+      language: "cs",
+      contentHash: "e".repeat(64),
+      projectionEpoch: 1n,
+    },
+    {
+      id: ERASE_READY_DECISION_ID,
+      sourceId: SOURCE_ID,
+      caseNumber: "1 A 4/2026",
+      court: "Test court",
+      country: "CZE",
+      language: "cs",
+      contentHash: "f".repeat(64),
+      projectionEpoch: 1n,
+    },
+  ]);
+  await db.insert(corpusIndexProjectionStates).values([
+    {
+      family: "case_law",
+      generation: "case_law_v5",
+      entityId: ERASE_DECISION_ID,
+      desiredAction: "erase",
+      desiredEpoch: 1n,
+      updatedAt: blockedAt,
+    },
+    {
+      family: "case_law",
+      generation: "case_law_v5",
+      entityId: ERASE_READY_DECISION_ID,
+      desiredAction: "erase",
+      desiredEpoch: 1n,
+      updatedAt: readyAt,
+    },
+  ]);
   const cleanupIds = Array.from(
     { length: CORPUS_PROJECTION_ERASURE_MAX_REVISIONS },
     (_, index) =>
@@ -1057,7 +1223,7 @@ test("cleanup-owned revisions do not consume the erasure action cap", async () =
       id: ERASE_INTENT_ID,
       family: "case_law",
       generation: "case_law_v5",
-      entityId: ERASE_DECISION_ID,
+      entityId: ERASE_READY_DECISION_ID,
       epoch: 1n,
       fingerprint: FIRST_FINGERPRINT,
       indexId: INDEX_ID,
@@ -1076,13 +1242,29 @@ test("cleanup-owned revisions do not consume the erasure action cap", async () =
         family: "case_law",
         generation: "case_law_v5",
         limit: 1,
+        testNow: rotatedAt,
       }),
   );
   expect(result).toMatchObject({
     claimedCount: 1,
-    cancelledRevisions: [ERASE_INTENT_ID],
+    cancelledRevisions: [],
     scheduledRevisions: [],
     appliedEntityIds: [],
+  });
+  const nextResult = await db.transaction(
+    async (tx) =>
+      await advanceCorpusProjectionErasuresTx(asTestRaw<Transaction>(tx), {
+        family: "case_law",
+        generation: "case_law_v5",
+        limit: 1,
+        testNow: rotatedAt,
+      }),
+  );
+  expect(nextResult).toMatchObject({
+    claimedCount: 1,
+    cancelledRevisions: [ERASE_INTENT_ID],
+    scheduledRevisions: [],
+    appliedEntityIds: [ERASE_READY_DECISION_ID],
   });
   const actionable = await db
     .select({ status: corpusIndexProjectionIntents.status })
