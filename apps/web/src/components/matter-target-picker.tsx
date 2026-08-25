@@ -91,8 +91,7 @@ type MatterTargetPickerProps = {
  * Shared "pick a matter (and optionally a folder in it)" control. Matter rows
  * show the matter icon in its colour, the list filters as you type, and
  * matters arrive ordered by most recent activity (the workspaces endpoint
- * sorts by lastActivityAt). Used by the copy/move dialog, the template
- * "save to matter" form, and the email-attachments facet.
+ * sorts by lastActivityAt).
  */
 export const MatterTargetPicker = ({
   value,

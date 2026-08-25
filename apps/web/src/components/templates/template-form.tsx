@@ -2241,8 +2241,6 @@ export const TemplateForm = ({
     }
   };
 
-  /** Resolve inside the single flight so a double submit cannot create the
-   *  staged folder twice. */
   const fillToMatter = async (target: MatterTarget) => {
     await runLeadingSingleFlight(fillToMatterFlight, async () => {
       const resolved = await resolveTarget(target);
