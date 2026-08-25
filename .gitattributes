@@ -1,0 +1,2 @@
+# Patch payloads preserve upstream whitespace in their diff context.
+patches/*.patch -whitespace

@@ -1193,7 +1193,10 @@ const createAuth = () => {
           consentPage: OAUTH_UI_CONSENT_PATH,
           scopes: [...MCP_OAUTH_SCOPES],
           resources: oauthResources,
-          resourceSeedMode: "insertOnly",
+          // The additive bridge/backfill owns resource creation and proves its
+          // fixed point before this candidate runs. Runtime seeding would hide
+          // a missed migration and add an owner-DB write to auth startup.
+          resourceSeedMode: "none",
           enforcePerClientResources: true,
           clientRegistrationDefaultResources: oauthResourceIdentifiers,
           clientRegistrationAllowedResources: oauthResourceIdentifiers,

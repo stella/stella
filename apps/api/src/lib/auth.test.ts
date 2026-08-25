@@ -819,6 +819,19 @@ describe("session freshness", () => {
   });
 });
 
+describe("OAuth resource provisioning", () => {
+  test("committed migrations remain the only resource seed owner", () => {
+    const oauthPlugin = getAuth().options.plugins.find(
+      (plugin) => plugin.id === "oauth-provider",
+    );
+    if (!oauthPlugin || !("options" in oauthPlugin)) {
+      throw new Error("OAuth provider plugin missing from auth config");
+    }
+
+    expect(oauthPlugin.options.resourceSeedMode).toBe("none");
+  });
+});
+
 describe("organization lifecycle hook wiring", () => {
   test("the organization plugin runs the lifecycle hooks against the live analytics sink", async () => {
     // Pins the `...organizationLifecycleHooks` spread inside the plugin
