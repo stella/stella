@@ -8,10 +8,16 @@ import {
 } from "@/api/lib/legal-search/corpus-index-projection-contract";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
-const MIGRATION_URL = new URL(
-  "../../../drizzle/20260825142000_corpus_index_projection_intents/migration.sql",
-  import.meta.url,
-);
+const MIGRATION_URLS = [
+  new URL(
+    "../../../drizzle/20260825142000_corpus_index_projection_intents/migration.sql",
+    import.meta.url,
+  ),
+  new URL(
+    "../../../drizzle/20260825211300_corpus_projection_delete_guard_record/migration.sql",
+    import.meta.url,
+  ),
+] as const;
 const SOURCE_ID = "0198e331-e578-7000-8000-000000000001";
 const FIRST_DECISION_ID = "0198e331-e578-7000-8000-000000000002";
 const RACED_DECISION_ID = "0198e331-e578-7000-8000-000000000003";
@@ -87,20 +93,25 @@ beforeAll(
       )
     `);
 
-    const migration = await Bun.file(MIGRATION_URL).text();
-    for (const statement of migration.split("--> statement-breakpoint")) {
-      const ddl = statement.trim();
-      if (
-        !ddl.startsWith("CREATE FUNCTION") &&
-        !ddl.startsWith("CREATE TRIGGER") &&
-        !ddl.includes(
-          'FUNCTION "purge_retired_corpus_index_projection_history"',
-        )
-      ) {
-        continue;
+    for (const migrationUrl of MIGRATION_URLS) {
+      // oxlint-disable-next-line no-await-in-loop -- migrations and their dependent DDL must replay in committed order
+      const migration = await Bun.file(migrationUrl).text();
+      for (const statement of migration.split("--> statement-breakpoint")) {
+        const ddl = statement.trim();
+        const uncommentedDdl = ddl.replace(/^(?:--[^\n]*(?:\n|$)\s*)+/u, "");
+        if (
+          !uncommentedDdl.startsWith("CREATE FUNCTION") &&
+          !uncommentedDdl.startsWith("CREATE OR REPLACE FUNCTION") &&
+          !uncommentedDdl.startsWith("CREATE TRIGGER") &&
+          !uncommentedDdl.includes(
+            'FUNCTION "purge_retired_corpus_index_projection_history"',
+          )
+        ) {
+          continue;
+        }
+        // oxlint-disable-next-line no-await-in-loop -- ordered migration-owned functions and dependent triggers
+        await db.execute(sql.raw(ddl));
       }
-      // oxlint-disable-next-line no-await-in-loop -- ordered migration-owned functions and dependent triggers
-      await db.execute(sql.raw(ddl));
     }
   },
   { timeout: 120_000 },

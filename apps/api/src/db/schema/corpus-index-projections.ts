@@ -227,19 +227,17 @@ export const corpusIndexProjectionIntents = p.pgTable(
     ),
     p.check(
       "corpus_index_projection_intents_cleanup_order",
-      // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- column-to-column comparison evaluated in Postgres; no JS Date is bound
       sql`${t.cleanupNotBefore} IS NULL OR (
-        ${t.cleanupNotBefore} >= ${t.appendPublishBarrierAt}
-        AND (${t.cleanupStartedAt} IS NULL OR ${t.cleanupStartedAt} >= ${t.cleanupNotBefore})
-        AND (${t.settledAt} IS NULL OR ${t.settledAt} >= ${t.cleanupStartedAt})
+        ${t.cleanupNotBefore}::timestamptz >= ${t.appendPublishBarrierAt}::timestamptz
+        AND (${t.cleanupStartedAt} IS NULL OR ${t.cleanupStartedAt}::timestamptz >= ${t.cleanupNotBefore}::timestamptz)
+        AND (${t.settledAt} IS NULL OR ${t.settledAt}::timestamptz >= ${t.cleanupStartedAt}::timestamptz)
       )`,
     ),
     p.check(
       "corpus_index_projection_intents_append_order",
-      // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- column-to-column comparison evaluated in Postgres; no JS Date is bound
-      sql`(${t.appendCommittedAt} IS NULL OR ${t.appendCommittedAt} >= ${t.appendStartedAt})
-        AND (${t.appliedAt} IS NULL OR ${t.appliedAt} >= ${t.appendCommittedAt})
-        AND (${t.appendPublishBarrierAt} IS NULL OR ${t.appendPublishBarrierAt} >= ${t.appendStartedAt})`,
+      sql`(${t.appendCommittedAt} IS NULL OR ${t.appendCommittedAt}::timestamptz >= ${t.appendStartedAt}::timestamptz)
+        AND (${t.appliedAt} IS NULL OR ${t.appliedAt}::timestamptz >= ${t.appendCommittedAt}::timestamptz)
+        AND (${t.appendPublishBarrierAt} IS NULL OR ${t.appendPublishBarrierAt}::timestamptz >= ${t.appendStartedAt}::timestamptz)`,
     ),
     ...globalCaseLawPolicies(),
   ],
