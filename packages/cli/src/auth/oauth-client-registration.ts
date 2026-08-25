@@ -25,6 +25,7 @@ const registrationResponseSchema = v.object({
 export const registerLoopbackClient = async (
   metadata: AuthorizationServerMetadata,
   scopes: readonly string[],
+  resource: string,
 ): Promise<Result<string, ClientRegistrationError>> => {
   if (!metadata.registration_endpoint) {
     return Result.err(
@@ -40,9 +41,10 @@ export const registerLoopbackClient = async (
     grant_types: ["authorization_code", "refresh_token"],
     redirect_uris: [LOOPBACK_REDIRECT_URI],
     response_types: ["code"],
+    resources: [resource],
     scope: scopes.join(" "),
     token_endpoint_auth_method: "none",
-    type: "native",
+    application_type: "native",
   };
 
   return await Result.tryPromise({

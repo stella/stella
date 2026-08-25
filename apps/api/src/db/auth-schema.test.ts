@@ -1,3 +1,4 @@
+import { oauthProvider as betterAuthOAuthProvider } from "@better-auth/oauth-provider";
 import { twoFactor as betterAuthTwoFactor } from "better-auth/plugins";
 import { describe, expect, test } from "bun:test";
 import { getColumns } from "drizzle-orm";
@@ -45,9 +46,22 @@ const PRODUCT_AUTH_MODEL_NAMES = [
   "jwks",
   "apikey",
   "oauthClient",
+  "oauthClientAssertion",
+  "oauthClientResource",
   "oauthAccessToken",
   "oauthRefreshToken",
+  "oauthResource",
   "oauthConsent",
+] as const;
+
+const OAUTH_PROVIDER_MODEL_TABLES = [
+  ["oauthClient", authSchema.oauthClient, ["public", "type"]],
+  ["oauthResource", authSchema.oauthResource, []],
+  ["oauthClientResource", authSchema.oauthClientResource, []],
+  ["oauthRefreshToken", authSchema.oauthRefreshToken, []],
+  ["oauthAccessToken", authSchema.oauthAccessToken, []],
+  ["oauthConsent", authSchema.oauthConsent, []],
+  ["oauthClientAssertion", authSchema.oauthClientAssertion, []],
 ] as const;
 
 const CORE_AUTH_MODEL_NAMES: readonly string[] = Object.keys(
@@ -397,6 +411,27 @@ const PRODUCT_MODEL_PLACEHOLDER = {
 } satisfies BetterAuthModelContract;
 
 describe("auth schema", () => {
+  test("covers every Better Auth 1.7 OAuth-provider model and field", () => {
+    const dependencySchema = betterAuthOAuthProvider({
+      consentPage: "/oauth-ui/consent",
+      loginPage: "/oauth-ui/auth",
+    }).schema;
+
+    expect(Object.keys(dependencySchema).toSorted()).toEqual(
+      OAUTH_PROVIDER_MODEL_TABLES.map(([model]) => model).toSorted(),
+    );
+    for (const [model, table, rollbackColumns] of OAUTH_PROVIDER_MODEL_TABLES) {
+      const dependencyFields = Object.keys(dependencySchema[model].fields);
+      const hostFields = Object.keys(getColumns(table)).filter(
+        (field) =>
+          !rollbackColumns.some((rollbackColumn) => rollbackColumn === field),
+      );
+      expect(hostFields.toSorted(), model).toEqual(
+        ["id", ...dependencyFields].toSorted(),
+      );
+    }
+  });
+
   test("normalized Better Auth core matches the shared contract", () => {
     expect(
       Object.keys(authSchema)

@@ -313,13 +313,15 @@ const EnableTwoFactorDialog = ({
       // Better Auth requires the password for credential accounts; omit it for
       // passwordless users (sending an empty one would be rejected).
       const { data, error } = await authClient.twoFactor.enable(
-        requiresPassword ? { password } : {},
+        requiresPassword ? { method: "totp", password } : { method: "totp" },
       );
 
       if (error) {
         throw toAuthClientError(error);
       }
-
+      if (data.method !== "totp") {
+        panic("TOTP enrollment returned a different two-factor method");
+      }
       return data;
     },
     // Passwordless users generate the QR as soon as the dialog opens; credential

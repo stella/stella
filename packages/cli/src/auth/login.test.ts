@@ -215,7 +215,12 @@ describe("login orchestration", () => {
 
   test("loopback happy path persists a credential with org, scopes, and refresh token", async () => {
     const provider = startProvider();
-    onBrowserOpen = driveCallback();
+    onBrowserOpen = async (authorizeUrl) => {
+      expect(new URL(authorizeUrl).searchParams.get("resource")).toBe(
+        `${provider.url}/mcp`,
+      );
+      await driveCallback()(authorizeUrl);
+    };
 
     try {
       const result = await login(

@@ -86,6 +86,7 @@ const buildAuthorizeUrl = (input: {
   clientId: string;
   codeChallenge: string;
   redirectUri: string;
+  resource: string;
   scopes: readonly string[];
   state: string;
 }): string => {
@@ -97,6 +98,7 @@ const buildAuthorizeUrl = (input: {
   url.searchParams.set("code_challenge_method", "S256");
   url.searchParams.set("prompt", "consent");
   url.searchParams.set("state", input.state);
+  url.searchParams.set("resource", input.resource);
   if (input.scopes.length > 0) {
     url.searchParams.set("scope", input.scopes.join(" "));
   }
@@ -115,7 +117,11 @@ const getOrRegisterClient = async (
     return Result.ok(cached.clientId);
   }
 
-  const registered = await registerLoopbackClient(metadata, registrationScopes);
+  const registered = await registerLoopbackClient(
+    metadata,
+    registrationScopes,
+    getMcpResourceUrl(serverUrl),
+  );
   if (Result.isError(registered)) {
     return registered;
   }
@@ -285,6 +291,7 @@ export const login = async (
       clientId,
       codeChallenge,
       redirectUri,
+      resource: getMcpResourceUrl(serverUrl),
       scopes: scopes.requestedScopes,
       state,
     });

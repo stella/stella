@@ -275,7 +275,7 @@ describe("classifyMcpTokenVerificationError", () => {
   });
 
   test("maps a JWKS fetch outage to a retryable verification error", () => {
-    // `verifyAccessToken` re-throws a JWKS fetch/network failure as a plain
+    // `verifyBearerToken` re-throws a JWKS fetch/network failure as a plain
     // Error (no UNAUTHORIZED status), so it must not present as a bad token.
     const jwksError = new Error("Jwks failed: fetch failed");
 
