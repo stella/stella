@@ -28,16 +28,21 @@ import { isAstNode } from "./utils.ts";
 const BROAD_INTERMEDIATE =
   /^(?:unknown|object|Record<(?:string|number|symbol|PropertyKey),(?:unknown|object)>|Readonly<Record<(?:string|number|symbol|PropertyKey),(?:unknown|object)>>)$/u;
 const SAFETY_COMMENT = /\bSAFETY(?::|\s+comment\b)/u;
+const COMMENT_TEXT = /\/\*[\s\S]*?\*\/|\/\/[^\r\n]*/gu;
 const MAX_SAFETY_COMMENT_DISTANCE = 12;
 
-type Comment = { value: string };
+type Comment = { range: [number, number]; value: string };
 
 const isComment = (value: unknown): value is Comment =>
   typeof value === "object" &&
   value !== null &&
   "value" in value &&
   typeof value.value === "string" &&
-  "loc" in value;
+  "loc" in value &&
+  "range" in value &&
+  Array.isArray(value.range) &&
+  value.range.length === 2 &&
+  value.range.every((offset) => typeof offset === "number");
 
 const locationLine = (
   value: unknown,
@@ -112,6 +117,8 @@ export default eslintCompatPlugin({
             return;
           }
           const startLine = locationLine(node, "start");
+          const assertionLineStart =
+            context.sourceCode.text.lastIndexOf("\n", node.range[0] - 1) + 1;
           if (
             startLine !== undefined &&
             comments.some((comment) => {
@@ -120,7 +127,11 @@ export default eslintCompatPlugin({
                 endLine !== undefined &&
                 endLine < startLine &&
                 startLine - endLine <= MAX_SAFETY_COMMENT_DISTANCE &&
-                SAFETY_COMMENT.test(comment.value)
+                SAFETY_COMMENT.test(comment.value) &&
+                context.sourceCode.text
+                  .slice(comment.range[1], assertionLineStart)
+                  .replaceAll(COMMENT_TEXT, "")
+                  .trim() === ""
               );
             })
           ) {

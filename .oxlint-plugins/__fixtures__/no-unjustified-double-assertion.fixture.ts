@@ -24,6 +24,12 @@ export const reviewedBoundary = externalValue as unknown as MatterSummary;
 // See SAFETY comment on reviewedBoundary above.
 export const referencedBoundary = externalValue as unknown as MatterSummary;
 
+// SAFETY: this rationale belongs only to the direct assertion below.
+export const unrelatedDirectAssertion = externalValue as MatterSummary;
+
+// oxlint-disable-next-line no-unjustified-double-assertion/no-unjustified-double-assertion -- fixture: an intervening statement separates this cast from the unrelated rationale
+export const separatedBoundary = externalValue as unknown as MatterSummary;
+
 export const directAssertion = externalValue as MatterSummary;
 
 declare const identified: { matterId: string };
