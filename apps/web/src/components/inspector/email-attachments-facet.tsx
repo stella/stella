@@ -51,8 +51,9 @@ import {
 import { MeasuredPdfProvider } from "@/components/inspector/measured-pdf-provider";
 import {
   MatterTargetPicker,
-  type MatterTarget,
+  useResolveMatterTarget,
 } from "@/components/matter-target-picker";
+import type { MatterTarget } from "@/components/matter-target-picker.logic";
 import { PeekPdfControls } from "@/components/pdf/peek/peek-pdf-viewer";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { usePermissions } from "@/hooks/use-permissions";
@@ -117,6 +118,7 @@ export const EmailAttachmentsFacet = ({
   const t = useTranslations();
   const canSave = usePermissions({ entity: ["create"] });
   const queryClient = useQueryClient();
+  const resolveTarget = useResolveMatterTarget();
   const [saveTargetId, setSaveTargetId] = useState<string | null>(null);
   const [matterTarget, setMatterTarget] = useState<MatterTarget | null>(null);
   const [saveState, setSaveState] = useState(createInitialSaveState);
@@ -157,12 +159,31 @@ export const EmailAttachmentsFacet = ({
     setSaveState({ status: EMAIL_ATTACHMENT_SAVE_STATUS.saving });
     detached(
       (async () => {
+        const resolved = await resolveTarget(destination);
+        if (Result.isError(resolved)) {
+          savingRef.current = false;
+          setSaveState({ status: EMAIL_ATTACHMENT_SAVE_STATUS.idle });
+          stellaToast.add({
+            title: t("errors.actionFailed"),
+            type: "error",
+          });
+          return;
+        }
+        if (destination.type === "pending") {
+          // A staged folder now exists; keep it so a retry after a failed save
+          // does not create a second one.
+          setMatterTarget({
+            type: "existing",
+            workspaceId: resolved.value.workspaceId,
+            parentId: resolved.value.parentId,
+          });
+        }
         const result = await Result.tryPromise(async () => {
           const saved = await saveEmailAttachment({
             attachmentId: attachment.id,
-            destinationWorkspaceId: destination.workspaceId,
+            destinationWorkspaceId: resolved.value.workspaceId,
             fieldId,
-            parentId: destination.parentId,
+            parentId: resolved.value.parentId,
             sourceWorkspaceId: workspaceId,
           });
           await Promise.all([
@@ -215,7 +236,7 @@ export const EmailAttachmentsFacet = ({
         onSave={() =>
           saveAttachment({
             attachment: selected,
-            destination: { workspaceId, parentId: null },
+            destination: { type: "existing", workspaceId, parentId: null },
           })
         }
         saving={saving}
@@ -235,7 +256,7 @@ export const EmailAttachmentsFacet = ({
         onSave={(attachment) =>
           saveAttachment({
             attachment,
-            destination: { workspaceId, parentId: null },
+            destination: { type: "existing", workspaceId, parentId: null },
           })
         }
         onSelect={onSelectedIdChange}

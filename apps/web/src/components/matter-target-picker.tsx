@@ -1,7 +1,8 @@
 import { useState } from "react";
 
-import { useQuery } from "@tanstack/react-query";
-import { ChevronRightIcon } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Result } from "better-result";
+import { ChevronRightIcon, FolderPlusIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
@@ -12,11 +13,23 @@ import { ScrollArea } from "@stll/ui/scroll-area";
 import { cn } from "@stll/ui/utils";
 
 import { MatterIcon } from "@/components/matter-icon";
+import {
+  MAX_FOLDER_NAME_LENGTH,
+  resolveMatterTarget,
+  stageMatterFolder,
+} from "@/components/matter-target-picker.logic";
+import type { MatterTarget } from "@/components/matter-target-picker.logic";
 import Tooltip from "@/components/tooltip";
 import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
+import { usePermissions } from "@/hooks/use-permissions";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
+import { detached } from "@/lib/detached";
+import { useCreateEntities } from "@/lib/workspaces/mutations/entities";
 import { workspacesOptions } from "@/lib/workspaces/queries";
-import { workspaceFoldersOptions } from "@/lib/workspaces/queries/entities";
+import {
+  entitiesKeys,
+  workspaceFoldersOptions,
+} from "@/lib/workspaces/queries/entities";
 import type { WorkspaceFolder } from "@/lib/workspaces/queries/entities";
 
 /**
@@ -27,9 +40,42 @@ import type { WorkspaceFolder } from "@/lib/workspaces/queries/entities";
  * dialog and the template "save to matter" flow.
  */
 
-export type MatterTarget = {
-  workspaceId: string;
-  parentId: string | null;
+/**
+ * Binds {@link resolveMatterTarget} to the entity-create mutation, then
+ * refreshes the target matter's folder tree so a freshly created folder is a
+ * real row the picker can show as selected. Callers must store the resolved
+ * target in place of a `pending` one, or a retry after a failed write creates
+ * the folder a second time. The folder is kept if the write then fails: an
+ * empty folder is cheaper for the user than a duplicate on retry.
+ */
+export const useResolveMatterTarget = () => {
+  const createEntities = useCreateEntities();
+  const queryClient = useQueryClient();
+
+  return async (target: MatterTarget) => {
+    const resolved = await resolveMatterTarget(
+      target,
+      async ({ workspaceId, parentId, name }) =>
+        await createEntities.mutateAsync({
+          type: "manual-input",
+          kind: "folder",
+          workspaceId,
+          parentId,
+          name,
+        }),
+    );
+    if (target.type === "pending" && Result.isOk(resolved)) {
+      // Not awaited: the active folder-tree query refetches on invalidation,
+      // and the caller's write must not wait behind it.
+      detached(
+        queryClient.invalidateQueries({
+          queryKey: entitiesKeys.all(target.workspaceId),
+        }),
+        "matter-target-picker.invalidate-folders",
+      );
+    }
+    return resolved;
+  };
 };
 
 type MatterTargetPickerProps = {
@@ -105,7 +151,11 @@ export const MatterTargetPicker = ({
                     )}
                     key={workspace.id}
                     onClick={() =>
-                      onChange({ workspaceId: workspace.id, parentId: null })
+                      onChange({
+                        type: "existing",
+                        workspaceId: workspace.id,
+                        parentId: null,
+                      })
                     }
                     type="button"
                   >
@@ -135,12 +185,12 @@ export const MatterTargetPicker = ({
       {showFolderPicker && value !== null && (
         <div className="space-y-2">
           <Label>{t("workspaces.copyToMatter.targetFolder")}</Label>
+          {/* Keyed by matter so expansion and the new-folder draft cannot
+              carry over to a different matter's tree. */}
           <FolderPicker
-            onSelect={(parentId) =>
-              onChange({ workspaceId: value.workspaceId, parentId })
-            }
-            selectedFolderId={value.parentId}
-            workspaceId={value.workspaceId}
+            key={value.workspaceId}
+            onChange={onChange}
+            value={value}
           />
         </div>
       )}
@@ -149,17 +199,14 @@ export const MatterTargetPicker = ({
 };
 
 type FolderPickerProps = {
-  workspaceId: string;
-  selectedFolderId: string | null;
-  onSelect: (folderId: string | null) => void;
+  value: MatterTarget;
+  onChange: (target: MatterTarget) => void;
 };
 
-const FolderPicker = ({
-  workspaceId,
-  selectedFolderId,
-  onSelect,
-}: FolderPickerProps) => {
+const FolderPicker = ({ value, onChange }: FolderPickerProps) => {
   const t = useTranslations();
+  const canCreate = usePermissions({ entity: ["create"] });
+  const workspaceId = value.workspaceId;
   const {
     data: folders,
     isLoading,
@@ -169,6 +216,8 @@ const FolderPicker = ({
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(
     new Set(),
   );
+  /** `null` while the new-folder row is a button; a string while it is an input. */
+  const [draftName, setDraftName] = useState<string | null>(null);
 
   if (isLoading) {
     return (
@@ -187,6 +236,7 @@ const FolderPicker = ({
   }
 
   const rootFolders = folders ? folders.filter((f) => f.parentId === null) : [];
+  const pendingFolder = value.type === "pending" ? value : null;
 
   const toggleExpand = (folderId: string) => {
     setExpandedFolders((prev) => {
@@ -200,11 +250,85 @@ const FolderPicker = ({
     });
   };
 
+  /** Stage a folder under whatever is selected now; it is created on submit. */
+  const stageFolder = () => {
+    const staged = stageMatterFolder(value, draftName ?? "");
+    if (staged === null) {
+      return;
+    }
+    onChange(staged);
+    if (staged.parentId !== null) {
+      const parentId = staged.parentId;
+      setExpandedFolders((prev) => new Set(prev).add(parentId));
+    }
+    setDraftName(null);
+  };
+
+  const newFolderRow = (() => {
+    if (!canCreate) {
+      return null;
+    }
+    if (draftName === null) {
+      return (
+        <button
+          className="hover:bg-accent text-muted-foreground flex w-full items-center gap-1 rounded px-2 py-1 text-start text-sm"
+          onClick={() => setDraftName("")}
+          type="button"
+        >
+          <FolderPlusIcon className="size-4 shrink-0" />
+          <span className="truncate">{t("workspaces.newFolder")}</span>
+        </button>
+      );
+    }
+    return (
+      <Input
+        aria-label={t("workspaces.newFolder")}
+        autoFocus
+        className="h-7 px-2 text-sm"
+        maxLength={MAX_FOLDER_NAME_LENGTH}
+        onChange={(e) => setDraftName(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            stageFolder();
+          }
+          if (e.key === "Escape") {
+            // Cancel only the draft; the enclosing dialog dismisses on Escape.
+            e.stopPropagation();
+            setDraftName(null);
+          }
+        }}
+        placeholder={t("workspaces.newFolder")}
+        value={draftName}
+      />
+    );
+  })();
+
+  const renderPendingFolder = (name: string, depth: number) => (
+    <div
+      className="flex items-center gap-1"
+      style={{ paddingLeft: `${depth * 16 + 8}px` }}
+    >
+      <span className="w-4" />
+      <div className="bg-accent flex min-w-0 flex-1 items-center gap-1 rounded px-2 py-1 text-sm">
+        <EntityKindIcon className="size-4 shrink-0" kind="folder" />
+        <BidiText as="span" className="truncate">
+          {name}
+        </BidiText>
+      </div>
+    </div>
+  );
+
   const renderFolder = (folder: WorkspaceFolder, depth: number) => {
-    const children = folders?.filter((f) => f.parentId === folder.entityId);
-    const hasChildren = children && children.length > 0;
+    const children = folders
+      ? folders.filter((f) => f.parentId === folder.entityId)
+      : [];
+    const pendingChild =
+      pendingFolder?.parentId === folder.entityId ? pendingFolder : null;
+    const hasChildren = children.length > 0 || pendingChild !== null;
     const isExpanded = expandedFolders.has(folder.entityId);
-    const isSelected = selectedFolderId === folder.entityId;
+    const isSelected =
+      value.type === "existing" && value.parentId === folder.entityId;
 
     return (
       <div key={folder.entityId}>
@@ -245,7 +369,13 @@ const FolderPicker = ({
               "hover:bg-accent flex min-w-0 flex-1 items-center gap-1 rounded px-2 py-1 text-start text-sm",
               isSelected && "bg-accent",
             )}
-            onClick={() => onSelect(folder.entityId)}
+            onClick={() =>
+              onChange({
+                type: "existing",
+                workspaceId,
+                parentId: folder.entityId,
+              })
+            }
             type="button"
           >
             <EntityKindIcon className="size-4 shrink-0" kind="folder" />
@@ -255,7 +385,11 @@ const FolderPicker = ({
           </button>
         </div>
         {hasChildren && isExpanded && (
-          <div>{children.map((child) => renderFolder(child, depth + 1))}</div>
+          <div>
+            {children.map((child) => renderFolder(child, depth + 1))}
+            {pendingChild !== null &&
+              renderPendingFolder(pendingChild.name, depth + 1)}
+          </div>
         )}
       </div>
     );
@@ -267,9 +401,11 @@ const FolderPicker = ({
         <button
           className={cn(
             "hover:bg-accent flex w-full items-center gap-1 rounded px-2 py-1 text-start text-sm",
-            selectedFolderId === null && "bg-accent",
+            value.type === "existing" && value.parentId === null && "bg-accent",
           )}
-          onClick={() => onSelect(null)}
+          onClick={() =>
+            onChange({ type: "existing", workspaceId, parentId: null })
+          }
           type="button"
         >
           <span className="text-muted-foreground">
@@ -277,6 +413,10 @@ const FolderPicker = ({
           </span>
         </button>
         {rootFolders.map((folder) => renderFolder(folder, 0))}
+        {pendingFolder !== null &&
+          pendingFolder.parentId === null &&
+          renderPendingFolder(pendingFolder.name, 0)}
+        {newFolderRow}
       </div>
     </ScrollArea>
   );
