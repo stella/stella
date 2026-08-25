@@ -33,20 +33,15 @@ import {
 import type { WorkspaceFolder } from "@/lib/workspaces/queries/entities";
 
 /**
- * Shared "pick a matter (and optionally a folder in it)" control: matter
- * rows show the matter icon in the matter's colour, the list is filterable
- * by typing, and matters arrive ordered by most recent activity (the
- * workspaces endpoint sorts by lastActivityAt). Used by the copy/move
- * dialog and the template "save to matter" flow.
- */
-
-/**
- * Binds {@link resolveMatterTarget} to the entity-create mutation, then
- * refreshes the target matter's folder tree so a freshly created folder is a
- * real row the picker can show as selected. Callers must store the resolved
- * target in place of a `pending` one, or a retry after a failed write creates
- * the folder a second time. The folder is kept if the write then fails: an
- * empty folder is cheaper for the user than a duplicate on retry.
+ * Shared "pick a matter (and optionally a folder in it)" control. Matter rows
+ * show the matter icon in its colour, the list filters as you type, and
+ * matters arrive ordered by most recent activity (the workspaces endpoint
+ * sorts by lastActivityAt).
+ *
+ * `useResolveMatterTarget` creates a staged folder before a write and
+ * refreshes the target's folder tree. Callers must replace a `pending` target
+ * with the resolved one, or a retry after a failed write creates the folder
+ * again; the folder is kept on failure since an empty folder beats a duplicate.
  */
 export const useResolveMatterTarget = () => {
   const createEntities = useCreateEntities();
