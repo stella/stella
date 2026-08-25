@@ -505,7 +505,7 @@ describe("environment doctor output", () => {
     },
     {
       expected:
-        "Public-law database URLs require CORPUS_INDEX_SEARCH_ENDPOINT.",
+        "Public-law database URLs require CORPUS_INDEX_SEARCH_ENDPOINT or CORPUS_INDEX_Q09_SEARCH_ENDPOINT.",
       overrides: {
         PUBLIC_LAW_DATABASE_URL:
           "postgres://case_law_reader:password@db.example.com:5432/stella?sslmode=require",
@@ -514,7 +514,7 @@ describe("environment doctor output", () => {
     },
     {
       expected:
-        "CORPUS_INDEX_ENDPOINT must be unset when a public-law database URL is configured.",
+        "CORPUS_INDEX_ENDPOINT and CORPUS_INDEX_Q09_ENDPOINT must be unset when a public-law database URL is configured.",
       overrides: {
         PUBLIC_LAW_DATABASE_URL:
           "postgres://case_law_reader:password@db.example.com:5432/stella?sslmode=require",

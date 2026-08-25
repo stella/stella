@@ -397,14 +397,14 @@ export const envBaseInvariantViolation = ({
     CORPUS_INDEX_SEARCH_ENDPOINT === undefined &&
     CORPUS_INDEX_Q09_SEARCH_ENDPOINT === undefined
   ) {
-    return "Public-law database URLs require a corpus-index search endpoint.";
+    return "Public-law database URLs require CORPUS_INDEX_SEARCH_ENDPOINT or CORPUS_INDEX_Q09_SEARCH_ENDPOINT.";
   }
   if (
     hasPublicLawDatabaseUrl &&
     (CORPUS_INDEX_ENDPOINT !== undefined ||
       CORPUS_INDEX_Q09_ENDPOINT !== undefined)
   ) {
-    return "Corpus-index mutation endpoints must be unset when a public-law database URL is configured.";
+    return "CORPUS_INDEX_ENDPOINT and CORPUS_INDEX_Q09_ENDPOINT must be unset when a public-law database URL is configured.";
   }
   if (hasPublicLawDatabaseUrl && CORPUS_INDEXING_ENABLED) {
     return "CORPUS_INDEXING_ENABLED must be false when a public-law database URL is configured.";
