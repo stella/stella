@@ -1041,15 +1041,15 @@ export const MODEL_RATES = {
     kind: "input-token-tiered",
     inputTokenThreshold: 272_000,
     standard: {
-      inputPerMTok: 500_000,
-      outputPerMTok: 3_000_000,
-      cachedInputPerMTok: 50_000,
+      inputPerMTok: 400_000,
+      outputPerMTok: 2_000_000,
+      cachedInputPerMTok: 40_000,
     },
     aboveThreshold: {
       // OpenAI prices the entire >272K request at 2x input and 1.5x output.
-      inputPerMTok: 1_000_000,
-      outputPerMTok: 4_500_000,
-      cachedInputPerMTok: 100_000,
+      inputPerMTok: 800_000,
+      outputPerMTok: 3_000_000,
+      cachedInputPerMTok: 80_000,
     },
   },
   // Luna/Terra verified against the published price list 2026-08-16

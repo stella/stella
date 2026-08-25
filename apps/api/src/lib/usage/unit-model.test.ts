@@ -67,7 +67,7 @@ describe("computeRawUsageMicroUnits", () => {
     "gemini-3.1-pro-preview": [200_000, 41_200, 81_801],
     "gpt-5.4": [272_000, 69_500, 138_251],
     "gpt-5.5": [272_000, 139_000, 276_501],
-    "gpt-5.6": [272_000, 139_000, 276_501],
+    "gpt-5.6": [272_000, 110_800, 220_601],
     "gpt-5.6-luna": [272_000, 5560, 11_061],
     "gpt-5.6-terra": [272_000, 55_600, 110_601],
   } as const;
@@ -115,7 +115,7 @@ describe("computeRawUsageMicroUnits", () => {
         outputTokens: 0,
         cacheReadTokens: 300_000,
       }),
-    ).toBe(30_000);
+    ).toBe(24_000);
   });
 
   test("GPT-5.6 Sol canonical ID shares the alias rate schedule", () => {
@@ -285,15 +285,15 @@ describe("normalizeProviderPromptTokens", () => {
     });
     expect(captureErrorMock).not.toHaveBeenCalled();
 
-    // 768 uncached at 500_000/MTok (384) + 31_744 cached at 50_000/MTok
-    // (1588) + 2048 output at 3_000_000/MTok (6144).
+    // 768 uncached at 400_000/MTok (308) + 31_744 cached at 40_000/MTok
+    // (1270) + 2048 output at 2_000_000/MTok (4096).
     expect(
       computeRawUsageMicroUnits({
         modelId: "gpt-5.6",
         outputTokens: 2048,
         ...normalized,
       }),
-    ).toBe(384 + 1588 + 6144);
+    ).toBe(308 + 1270 + 4096);
   });
 
   test("subset-semantics disagreement meters the full prompt and reports", () => {
