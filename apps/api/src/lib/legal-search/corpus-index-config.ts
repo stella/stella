@@ -250,7 +250,12 @@ const FAMILY_FIELDS: Record<CorpusFamily, CorpusIndexFieldMapping[]> = {
     // case law, legislation has no configurable blue-green generation yet;
     // removing these fields from only new writes would leave a permanently
     // mixed physical index. Remove them with that family's generation bump.
-    { name: "canonical_text_key", type: "text", tokenizer: "raw", stored: true },
+    {
+      name: "canonical_text_key",
+      type: "text",
+      tokenizer: "raw",
+      stored: true,
+    },
     { name: "canonical_ast_key", type: "text", tokenizer: "raw", stored: true },
     // current | historical | repealed
     { name: "status", type: "text", tokenizer: "raw", fast: true },
