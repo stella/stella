@@ -78,7 +78,7 @@ export const claimCorpusProjectionCleanupTx = async (
     indexId,
     limit: requestedLimit,
     leaseMs: requestedLeaseMs,
-    now = new Date(),
+    now,
     newLeaseToken = () => Bun.randomUUIDv7(),
   }: ClaimCorpusProjectionCleanupOptions,
 ): Promise<CorpusProjectionCleanupLease[]> => {
@@ -117,8 +117,12 @@ export const claimCorpusProjectionCleanupTx = async (
   if (candidates.length === 0) {
     return [];
   }
+  const claimAt = now ?? sql<Date>`clock_timestamp()`;
   const leaseToken = newLeaseToken();
-  const leaseExpiresAt = new Date(now.getTime() + leaseMs);
+  const leaseExpiresAt =
+    now === undefined
+      ? sql<Date>`clock_timestamp() + ${leaseMs} * INTERVAL '1 millisecond'`
+      : new Date(now.getTime() + leaseMs);
   const ids = candidates.map(({ id }) => id);
   const updated = await tx
     .update(corpusIndexProjectionIntents)
@@ -126,9 +130,9 @@ export const claimCorpusProjectionCleanupTx = async (
       status: "cleanup_started",
       leaseToken,
       leaseExpiresAt,
-      cleanupStartedAt: now,
+      cleanupStartedAt: claimAt,
       cleanupAttempts: sql`${corpusIndexProjectionIntents.cleanupAttempts} + 1`,
-      updatedAt: now,
+      updatedAt: claimAt,
     })
     .where(
       and(

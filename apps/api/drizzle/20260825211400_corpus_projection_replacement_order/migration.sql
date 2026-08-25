@@ -1,6 +1,14 @@
 SET lock_timeout = '1s';--> statement-breakpoint
 SET statement_timeout = '5s';--> statement-breakpoint
 
+-- The table is still inert until the projection executor ships; build the
+-- recovery index before that launch so expired-lease scans stay bounded.
+CREATE INDEX "corpus_index_projection_intents_expired_lease_idx"
+  ON "corpus_index_projection_intents" (
+    "family", "generation", "status", "lease_expires_at"
+  )
+  WHERE "status" IN ('reserved', 'append_started', 'cleanup_started');--> statement-breakpoint
+
 -- A changed upsert must remove and settle the previous exact revision before
 -- the replacement is appended. Desired-state drift already makes the entity
 -- unavailable to readers, so this bounded omission is preferable to exposing

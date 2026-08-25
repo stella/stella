@@ -13,6 +13,7 @@ import { readRegisteredCorpusProjectionManifestForCleanup } from "@/api/lib/lega
 import { corpusIndexUnknownAppendBarrierAt } from "@/api/lib/legal-search/corpus-index-projection-engine";
 
 export const CORPUS_PROJECTION_ERASURE_MAX_BATCH_SIZE = 256;
+export const CORPUS_PROJECTION_ERASURE_MAX_REVISIONS = 1024;
 
 type ProjectionIntentId = SafeId<"corpusIndexProjectionIntent">;
 
@@ -135,13 +136,8 @@ export const advanceCorpusProjectionErasuresTx = async (
       ),
     )
     .orderBy(asc(corpusIndexProjectionIntents.id))
-    .limit(entityIds.length + 1)
+    .limit(CORPUS_PROJECTION_ERASURE_MAX_REVISIONS)
     .for("update", { of: corpusIndexProjectionIntents });
-  if (intents.length > entityIds.length) {
-    return panic(
-      `Corpus projection erasure found multiple outstanding revisions for one entity`,
-    );
-  }
 
   const reserved = intents.filter(({ status }) => status === "reserved");
   if (reserved.length > 0) {

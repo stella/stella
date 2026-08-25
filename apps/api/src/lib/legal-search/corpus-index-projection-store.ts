@@ -314,11 +314,7 @@ type StartCorpusProjectionAppendOptions = {
 
 export const startCorpusProjectionAppendTx = async (
   tx: Transaction,
-  {
-    intentId,
-    leaseToken,
-    now = new Date(),
-  }: StartCorpusProjectionAppendOptions,
+  { intentId, leaseToken, now }: StartCorpusProjectionAppendOptions,
 ): Promise<"started" | "stale_cancelled" | "lease_lost"> => {
   const identities = await tx
     .select({
@@ -357,15 +353,20 @@ export const startCorpusProjectionAppendTx = async (
     )
     .limit(1)
     .for("update");
+  const transitionAt = now ?? sql<Date>`clock_timestamp()`;
   const rows = await tx
     .update(corpusIndexProjectionIntents)
-    .set({ status: "append_started", appendStartedAt: now, updatedAt: now })
+    .set({
+      status: "append_started",
+      appendStartedAt: transitionAt,
+      updatedAt: transitionAt,
+    })
     .where(
       and(
         eq(corpusIndexProjectionIntents.id, intentId),
         eq(corpusIndexProjectionIntents.status, "reserved"),
         eq(corpusIndexProjectionIntents.leaseToken, leaseToken),
-        gt(corpusIndexProjectionIntents.leaseExpiresAt, now),
+        gt(corpusIndexProjectionIntents.leaseExpiresAt, transitionAt),
         sql`EXISTS (
           SELECT 1
           FROM ${corpusIndexProjectionStates} state
@@ -389,9 +390,9 @@ export const startCorpusProjectionAppendTx = async (
       status: "cancelled",
       leaseToken: null,
       leaseExpiresAt: null,
-      cancelledAt: now,
+      cancelledAt: transitionAt,
       lastError: "projection desired state changed before append",
-      updatedAt: now,
+      updatedAt: transitionAt,
     })
     .where(
       and(

@@ -99,6 +99,12 @@ export const corpusIndexProjectionIntents = p.pgTable(
     p
       .index("corpus_index_projection_intents_entity_idx")
       .on(t.family, t.generation, t.entityId, t.createdAt),
+    p
+      .index("corpus_index_projection_intents_expired_lease_idx")
+      .on(t.family, t.generation, t.status, t.leaseExpiresAt)
+      .where(
+        sql`${t.status} IN ('reserved', 'append_started', 'cleanup_started')`,
+      ),
     p.check(
       "corpus_index_projection_intents_family_values",
       sql`${t.family} IN (${sqlValues(CORPUS_FAMILIES)})`,
