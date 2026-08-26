@@ -3,7 +3,13 @@ import { panic } from "better-result";
 import { CASE_LAW_INDEX_GROUP_OF } from "@/api/lib/legal-search/case-law-index-groups";
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";
 import {
-  CORPUS_INDEX_CONFIG_VERSION,
+  CORPUS_FINAL_INDEX_CONFIG_VERSION,
+  CORPUS_FINAL_INDEX_DOCSTORE_BLOCKSIZE,
+  CORPUS_FINAL_INDEX_DOCSTORE_COMPRESSION_LEVEL,
+  CORPUS_FINAL_INDEX_HEAP_SIZE_BYTES,
+  CORPUS_FINAL_INDEX_MAX_PARTITIONS,
+  CORPUS_FINAL_INDEX_MIN_SHARDS,
+  CORPUS_FINAL_INDEX_SPLIT_NUM_DOCS_TARGET,
   CORPUS_INDEX_COMMIT_TIMEOUT_SECS,
   CORPUS_INDEX_DATE_INPUT_FORMATS,
   CORPUS_INDEX_MERGE_POLICY,
@@ -77,6 +83,8 @@ const rawField = (
   indexed: true,
   stored: options.stored,
   fast: options.fast,
+  record: "basic",
+  fieldnorms: false,
 });
 
 const dateField = (name: string): CorpusIndexFieldMapping => ({
@@ -86,6 +94,8 @@ const dateField = (name: string): CorpusIndexFieldMapping => ({
   stored: false,
   fast: true,
   input_formats: CORPUS_INDEX_DATE_INPUT_FORMATS,
+  fast_precision: "seconds",
+  output_format: "rfc3339",
 });
 
 const unsignedIntegerField = (name: string): CorpusIndexFieldMapping => ({
@@ -94,6 +104,8 @@ const unsignedIntegerField = (name: string): CorpusIndexFieldMapping => ({
   indexed: false,
   stored: false,
   fast: true,
+  coerce: true,
+  output_format: "number",
 });
 
 const commonFields = (): CorpusIndexFieldMapping[] => [
@@ -139,22 +151,29 @@ const indexConfig = (
   tagFields: string[],
   timestampField?: string,
 ): Omit<CorpusIndexConfig, "index_id"> => ({
-  version: CORPUS_INDEX_CONFIG_VERSION,
+  version: CORPUS_FINAL_INDEX_CONFIG_VERSION,
   doc_mapping: {
     mode: "strict",
     field_mappings: fieldMappings,
     tokenizers: [FOLDED_TOKENIZER],
     tag_fields: tagFields,
-    ...(timestampField === undefined
-      ? {}
-      : { timestamp_field: timestampField }),
+    timestamp_field: timestampField ?? null,
+    max_num_partitions: CORPUS_FINAL_INDEX_MAX_PARTITIONS,
+    index_field_presence: false,
+    store_document_size: false,
     store_source: false,
   },
   indexing_settings: {
     merge_policy: CORPUS_INDEX_MERGE_POLICY,
     commit_timeout_secs: CORPUS_INDEX_COMMIT_TIMEOUT_SECS,
+    docstore_blocksize: CORPUS_FINAL_INDEX_DOCSTORE_BLOCKSIZE,
+    docstore_compression_level: CORPUS_FINAL_INDEX_DOCSTORE_COMPRESSION_LEVEL,
+    split_num_docs_target: CORPUS_FINAL_INDEX_SPLIT_NUM_DOCS_TARGET,
+    resources: { heap_size: CORPUS_FINAL_INDEX_HEAP_SIZE_BYTES },
   },
+  ingest_settings: { min_shards: CORPUS_FINAL_INDEX_MIN_SHARDS },
   search_settings: { default_search_fields: ["title", "text"] },
+  retention: null,
 });
 
 const deepFreeze = <T>(value: T): T => {
@@ -179,6 +198,7 @@ const CASE_LAW_V5_INDEX_CONFIG = deepFreeze(
           indexed: false,
           stored: true,
           fast: false,
+          fieldnorms: false,
         },
         rawField("case_number", { stored: false, fast: false }),
         rawField("court", { stored: false, fast: true }),

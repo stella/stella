@@ -72,6 +72,8 @@ type CorpusIndexFieldMapping = {
   /** Fast-field resolution for a datetime; coarser truncates harder. */
   fast_precision?: "seconds" | "milliseconds" | "microseconds" | "nanoseconds";
   input_formats?: string[];
+  coerce?: boolean;
+  output_format?: "number" | "string" | "rfc3339";
 };
 
 /**
@@ -101,7 +103,7 @@ export const CORPUS_INDEX_COMMIT_TIMEOUT_SECS = 60;
 type CorpusIndexDocMappingMode = "lenient" | "strict" | "dynamic";
 
 export type CorpusIndexConfig = {
-  version: string;
+  version: "0.8" | "0.9";
   index_id: string;
   doc_mapping: {
     mode: CorpusIndexDocMappingMode;
@@ -113,19 +115,38 @@ export type CorpusIndexConfig = {
      * engine stores its min/max per split and prunes on it, and it is what
      * `start_timestamp` / `end_timestamp` search parameters address.
      */
-    timestamp_field?: string;
+    timestamp_field?: string | null;
+    partition_key?: string | null;
+    max_num_partitions?: number;
+    index_field_presence?: boolean;
+    store_document_size?: boolean;
     store_source: boolean;
   };
   indexing_settings: {
     merge_policy: typeof CORPUS_INDEX_MERGE_POLICY;
     commit_timeout_secs?: number;
+    docstore_blocksize?: number;
+    docstore_compression_level?: number;
+    split_num_docs_target?: number;
+    resources?: { heap_size: number };
   };
+  ingest_settings?: { min_shards: number };
   search_settings: {
     default_search_fields: string[];
   };
+  retention?: null;
 };
 
 export const CORPUS_INDEX_CONFIG_VERSION = "0.8";
+
+/** Config format consumed by the isolated Quickwit 0.9 final generations. */
+export const CORPUS_FINAL_INDEX_CONFIG_VERSION = "0.9";
+export const CORPUS_FINAL_INDEX_MAX_PARTITIONS = 200;
+export const CORPUS_FINAL_INDEX_DOCSTORE_BLOCKSIZE = 1_000_000;
+export const CORPUS_FINAL_INDEX_DOCSTORE_COMPRESSION_LEVEL = 8;
+export const CORPUS_FINAL_INDEX_SPLIT_NUM_DOCS_TARGET = 10_000_000;
+export const CORPUS_FINAL_INDEX_HEAP_SIZE_BYTES = 2_000_000_000;
+export const CORPUS_FINAL_INDEX_MIN_SHARDS = 1;
 
 export const CORPUS_INDEX_DATE_INPUT_FORMATS = [
   "%Y-%m-%d",
