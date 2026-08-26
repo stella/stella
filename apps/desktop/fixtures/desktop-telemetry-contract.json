@@ -1,0 +1,35 @@
+{
+  "windows": [
+    "clipboard",
+    "clipboardEditor",
+    "main",
+    "selfHostConnectDialog",
+    "takeoverDialog"
+  ],
+  "operations": [
+    "autostartRead",
+    "autostartUpdate",
+    "clipboardEditorClose",
+    "clipboardEditorRead",
+    "clipboardEditorSave",
+    "clipboardCopy",
+    "clipboardExternalOpen",
+    "clipboardHistoryRead",
+    "clipboardHistorySubscribe",
+    "clipboardHistoryUpdate",
+    "clipboardWindowHide",
+    "render",
+    "runtime"
+  ],
+  "errorCodes": [
+    "eventSubscriptionFailed",
+    "invalidResponse",
+    "invokeFailed",
+    "reactCaught",
+    "reactRecoverable",
+    "reactUncaught",
+    "unhandledError",
+    "unhandledRejection",
+    "windowLabelMismatch"
+  ]
+}

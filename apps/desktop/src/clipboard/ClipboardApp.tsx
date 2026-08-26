@@ -915,8 +915,8 @@ const ClipboardWelcomeDialog = ({ onClose }: ClipboardWelcomeDialogProps) => {
   return (
     <Dialog
       onOpenChange={(open) => {
-        if (!open && autostartChoice.status !== "saving") {
-          onClose();
+        if (!open) {
+          completeWelcome();
         }
       }}
       open
