@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
-import { isClipboardSnapshot } from "../src/clipboard/clipboard-types";
+import {
+  CLIPBOARD_RETENTIONS,
+  isClipboardSnapshot,
+} from "../src/clipboard/clipboard-types";
 
 const snapshotWithWelcomeStatus = (welcomeStatus: unknown) => ({
   captureStatus: "active",
@@ -34,7 +37,7 @@ describe("clipboard snapshot welcome state", () => {
 
 describe("clipboard snapshot retention", () => {
   test("accepts every native retention and rejects unknown ones", () => {
-    for (const retention of ["week", "month", "year"]) {
+    for (const retention of CLIPBOARD_RETENTIONS) {
       expect(
         isClipboardSnapshot({
           ...snapshotWithWelcomeStatus("completed"),

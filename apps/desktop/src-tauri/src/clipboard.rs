@@ -83,23 +83,37 @@ pub enum ClipboardCaptureStatus {
   Paused,
 }
 
-/// How long copied items stay in history before the hourly sweep drops them.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub enum ClipboardRetention {
-  Week,
-  #[default]
-  Month,
-  Year,
+macro_rules! define_clipboard_retention {
+  ($($variant:ident => $days:literal),+ $(,)?) => {
+    /// How long copied items stay in history before the hourly sweep drops them.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    pub enum ClipboardRetention {
+      $($variant),+
+    }
+
+    impl ClipboardRetention {
+      #[cfg(test)]
+      const ALL: &'static [Self] = &[$(Self::$variant),+];
+
+      fn days(self) -> i64 {
+        match self {
+          $(Self::$variant => $days),+
+        }
+      }
+    }
+  };
 }
 
-impl ClipboardRetention {
-  fn days(self) -> i64 {
-    match self {
-      Self::Week => 7,
-      Self::Month => 30,
-      Self::Year => 365,
-    }
+define_clipboard_retention! {
+  Week => 7,
+  Month => 30,
+  Year => 365,
+}
+
+impl Default for ClipboardRetention {
+  fn default() -> Self {
+    Self::Month
   }
 }
 
@@ -524,6 +538,9 @@ impl ClipboardManager {
   }
 
   pub fn set_retention(&mut self, retention: ClipboardRetention) -> Result<(), String> {
+    if matches!(&self.persistence, ClipboardPersistence::DeletionOnly(_)) {
+      return Err("clipboard history is unavailable".to_string());
+    }
     let checkpoint = self.checkpoint();
     self.retention = retention;
     prune_items(&mut self.items, retention, Utc::now());
@@ -1730,6 +1747,17 @@ mod tests {
   }
 
   #[test]
+  fn deletion_only_rejects_retention_changes() {
+    let mut manager = ClipboardManager::new();
+    manager.persistence = ClipboardPersistence::DeletionOnly(unique_store_path());
+
+    let result = manager.set_retention(ClipboardRetention::Week);
+
+    assert_eq!(result, Err("clipboard history is unavailable".to_string()));
+    assert_eq!(manager.retention, ClipboardRetention::Month);
+  }
+
+  #[test]
   fn retention_pruning_is_written_to_encrypted_history() {
     let store_path = unique_store_path();
     let store = ClipboardStore::new([9; 32], store_path.clone());
@@ -1790,6 +1818,33 @@ mod tests {
     assert_eq!(persisted.items.len(), 1);
 
     std::fs::remove_file(store_path).unwrap();
+  }
+
+  #[test]
+  fn frontend_retention_contract_matches_native_values() {
+    let source = include_str!("../../src/clipboard/clipboard-types.ts");
+    let list_prefix = "export const CLIPBOARD_RETENTIONS = ";
+    let list_start = source
+      .find(list_prefix)
+      .unwrap_or_else(|| panic!("frontend contract has no retention list"));
+    let list = &source[list_start + list_prefix.len()..];
+    let list_end = list
+      .find(" as const;")
+      .unwrap_or_else(|| panic!("frontend retention list has no end"));
+    let frontend_values = serde_json::from_str::<Vec<String>>(&list[..list_end])
+      .unwrap_or_else(|error| panic!("frontend retention list is invalid: {error}"));
+    let native_values = ClipboardRetention::ALL
+      .iter()
+      .map(|retention| {
+        serde_json::to_value(retention)
+          .unwrap()
+          .as_str()
+          .unwrap()
+          .to_string()
+      })
+      .collect::<Vec<_>>();
+
+    assert_eq!(frontend_values, native_values);
   }
 
   #[test]
