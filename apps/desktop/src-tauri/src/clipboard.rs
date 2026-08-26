@@ -52,7 +52,6 @@ const MAX_ITEM_TEXT_BYTES: usize = 64 * 1024;
 const MAX_ITEM_HTML_BYTES: usize = 128 * 1024;
 const MAX_ITEM_NAME_CHARACTERS: usize = 80;
 const MAX_HISTORY_BYTES: usize = 16 * 1024 * 1024;
-const RETENTION_DAYS: i64 = 30;
 const RETENTION_SWEEP_INTERVAL: std::time::Duration =
   std::time::Duration::from_secs(60 * 60);
 const MAX_GROUPS: usize = 24;
@@ -82,6 +81,26 @@ const IGNORED_FORMATS: &[&str] = &[
 pub enum ClipboardCaptureStatus {
   Active,
   Paused,
+}
+
+/// How long copied items stay in history before the hourly sweep drops them.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ClipboardRetention {
+  Week,
+  #[default]
+  Month,
+  Year,
+}
+
+impl ClipboardRetention {
+  fn days(self) -> i64 {
+    match self {
+      Self::Week => 7,
+      Self::Month => 30,
+      Self::Year => 365,
+    }
+  }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -337,6 +356,7 @@ pub struct ClipboardSnapshot {
   pub groups: Vec<ClipboardGroup>,
   pub items: Vec<ClipboardItem>,
   pub persistence: ClipboardPersistenceStatus,
+  pub retention: ClipboardRetention,
   pub source_app_visuals: Vec<ClipboardSourceAppVisual>,
   pub welcome_status: ClipboardWelcomeStatus,
 }
@@ -348,6 +368,8 @@ pub struct PersistedClipboardState {
   #[serde(default)]
   pub groups: Vec<ClipboardGroup>,
   pub items: Vec<ClipboardItem>,
+  #[serde(default)]
+  pub retention: ClipboardRetention,
 }
 
 pub struct ClipboardManager {
@@ -355,6 +377,7 @@ pub struct ClipboardManager {
   groups: Vec<ClipboardGroup>,
   items: Vec<ClipboardItem>,
   persistence: ClipboardPersistence,
+  retention: ClipboardRetention,
   source_app_visuals: HashMap<String, ClipboardSourceAppVisual>,
   suppressed_content: Option<(String, Option<String>)>,
   welcome: ClipboardWelcome,
@@ -382,6 +405,7 @@ struct ClipboardManagerCheckpoint {
   capture_status: ClipboardCaptureStatus,
   groups: Vec<ClipboardGroup>,
   items: Vec<ClipboardItem>,
+  retention: ClipboardRetention,
   source_app_visuals: HashMap<String, ClipboardSourceAppVisual>,
   suppressed_content: Option<(String, Option<String>)>,
 }
@@ -403,6 +427,7 @@ impl ClipboardManager {
       groups: Vec::new(),
       items: Vec::new(),
       persistence: ClipboardPersistence::Initializing,
+      retention: ClipboardRetention::default(),
       source_app_visuals: HashMap::new(),
       suppressed_content: None,
       welcome: ClipboardWelcome::new(),
@@ -445,7 +470,7 @@ impl ClipboardManager {
     let store = ClipboardStore::new(key, store_path.clone());
     match store.load() {
       Ok(Some(mut state)) => {
-        if prune_items(&mut state.items, Utc::now())
+        if prune_items(&mut state.items, state.retention, Utc::now())
           && let Err(error) = store.persist(&state)
         {
           self.persistence = ClipboardPersistence::DeletionOnly(store_path);
@@ -455,6 +480,7 @@ impl ClipboardManager {
         self.capture_status = state.capture_status;
         self.groups = state.groups;
         self.items = state.items;
+        self.retention = state.retention;
       }
       Ok(None) => {}
       Err(error) => {
@@ -478,6 +504,7 @@ impl ClipboardManager {
       groups: self.groups.clone(),
       items: self.items.clone(),
       persistence: self.persistence.status(),
+      retention: self.retention,
       source_app_visuals,
       welcome_status: self.welcome.status(),
     }
@@ -493,6 +520,13 @@ impl ClipboardManager {
   ) -> Result<(), String> {
     let checkpoint = self.checkpoint();
     self.capture_status = status;
+    self.persist_or_restore(checkpoint)
+  }
+
+  pub fn set_retention(&mut self, retention: ClipboardRetention) -> Result<(), String> {
+    let checkpoint = self.checkpoint();
+    self.retention = retention;
+    prune_items(&mut self.items, retention, Utc::now());
     self.persist_or_restore(checkpoint)
   }
 
@@ -523,7 +557,7 @@ impl ClipboardManager {
     let checkpoint = self.checkpoint();
     let duplicate = item.duplicate_at(copied_at);
     self.items.insert(0, duplicate);
-    prune_items(&mut self.items, copied_at);
+    prune_items(&mut self.items, self.retention, copied_at);
     self.persist_or_restore(checkpoint)?;
     Ok(true)
   }
@@ -617,7 +651,7 @@ impl ClipboardManager {
       item.replace_content(plain_text.to_string(), html);
     }
     item.set_group_id(group_id);
-    prune_items_preserving(&mut self.items, Utc::now(), Some(id));
+    prune_items_preserving(&mut self.items, self.retention, Utc::now(), Some(id));
     self.persist_or_restore(checkpoint)?;
     Ok(true)
   }
@@ -651,7 +685,7 @@ impl ClipboardManager {
       return Ok(false);
     };
     item.set_name((!name.is_empty()).then(|| name.to_string()));
-    prune_items_preserving(&mut self.items, Utc::now(), Some(id));
+    prune_items_preserving(&mut self.items, self.retention, Utc::now(), Some(id));
     self.persist_or_restore(checkpoint)?;
     Ok(true)
   }
@@ -737,14 +771,14 @@ impl ClipboardManager {
       },
     };
     self.items.insert(0, item);
-    prune_items(&mut self.items, copied_at);
+    prune_items(&mut self.items, self.retention, copied_at);
     self.persist_or_restore(checkpoint)?;
     Ok(true)
   }
 
   pub fn prune_expired(&mut self, now: DateTime<Utc>) -> Result<bool, String> {
     let checkpoint = self.checkpoint();
-    if !prune_items(&mut self.items, now) {
+    if !prune_items(&mut self.items, self.retention, now) {
       return Ok(false);
     }
     self.persist_or_restore(checkpoint)?;
@@ -756,6 +790,7 @@ impl ClipboardManager {
       capture_status: self.capture_status,
       groups: self.groups.clone(),
       items: self.items.clone(),
+      retention: self.retention,
       source_app_visuals: self.source_app_visuals.clone(),
       suppressed_content: self.suppressed_content.clone(),
     }
@@ -765,6 +800,7 @@ impl ClipboardManager {
     self.capture_status = checkpoint.capture_status;
     self.groups = checkpoint.groups;
     self.items = checkpoint.items;
+    self.retention = checkpoint.retention;
     self.source_app_visuals = checkpoint.source_app_visuals;
     self.suppressed_content = checkpoint.suppressed_content;
   }
@@ -788,6 +824,7 @@ impl ClipboardManager {
       capture_status: self.capture_status,
       groups: self.groups.clone(),
       items: self.items.clone(),
+      retention: self.retention,
     };
     store.persist(&state).map_err(|error| {
       tracing::warn!(error = %error, "clipboard history persistence failed");
@@ -796,17 +833,22 @@ impl ClipboardManager {
   }
 }
 
-fn prune_items(items: &mut Vec<ClipboardItem>, now: DateTime<Utc>) -> bool {
-  prune_items_preserving(items, now, None)
+fn prune_items(
+  items: &mut Vec<ClipboardItem>,
+  retention: ClipboardRetention,
+  now: DateTime<Utc>,
+) -> bool {
+  prune_items_preserving(items, retention, now, None)
 }
 
 fn prune_items_preserving(
   items: &mut Vec<ClipboardItem>,
+  retention: ClipboardRetention,
   now: DateTime<Utc>,
   preserved_id: Option<&str>,
 ) -> bool {
   let original_len = items.len();
-  let oldest = now - Duration::days(RETENTION_DAYS);
+  let oldest = now - Duration::days(retention.days());
   items.retain(|item| Some(item.id()) == preserved_id || item.copied_at() >= oldest);
 
   while items.len() > MAX_HISTORY_ITEMS {
@@ -1610,7 +1652,7 @@ mod tests {
       (0..=MAX_HISTORY_ITEMS).map(|index| text_item(now, &format!("item-{index}"))),
     );
 
-    prune_items(&mut items, now);
+    prune_items(&mut items, ClipboardRetention::Month, now);
 
     assert_eq!(items.len(), MAX_HISTORY_ITEMS);
     assert!(items.iter().all(|item| item.plain_text() != "expired"));
@@ -1696,9 +1738,10 @@ mod tests {
       capture_status: ClipboardCaptureStatus::Active,
       groups: Vec::new(),
       items: vec![
-        text_item(now - Duration::days(RETENTION_DAYS + 1), "expired"),
+        text_item(now - Duration::days(31), "expired"),
         text_item(now, "current"),
       ],
+      retention: ClipboardRetention::Month,
     };
     store.persist(&state).unwrap();
 
@@ -1714,6 +1757,37 @@ mod tests {
       .unwrap();
     assert_eq!(persisted.items.len(), 1);
     assert_eq!(persisted.items[0].plain_text(), "current");
+
+    std::fs::remove_file(store_path).unwrap();
+  }
+
+  #[test]
+  fn retention_choice_bounds_pruning_and_persists() {
+    let store_path = unique_store_path();
+    let now = Utc::now();
+    let mut manager = ClipboardManager::new();
+    manager.items = vec![
+      text_item(now - Duration::days(200), "old"),
+      text_item(now - Duration::days(20), "recent"),
+      text_item(now, "current"),
+    ];
+    manager.persistence =
+      ClipboardPersistence::Encrypted(ClipboardStore::new([9; 32], store_path.clone()));
+
+    manager.set_retention(ClipboardRetention::Year).unwrap();
+    assert_eq!(manager.items.len(), 3);
+    assert!(!manager.prune_expired(now).unwrap());
+
+    manager.set_retention(ClipboardRetention::Week).unwrap();
+    assert_eq!(manager.items.len(), 1);
+    assert_eq!(manager.items[0].plain_text(), "current");
+
+    let persisted = ClipboardStore::new([9; 32], store_path.clone())
+      .load()
+      .unwrap()
+      .unwrap();
+    assert_eq!(persisted.retention, ClipboardRetention::Week);
+    assert_eq!(persisted.items.len(), 1);
 
     std::fs::remove_file(store_path).unwrap();
   }

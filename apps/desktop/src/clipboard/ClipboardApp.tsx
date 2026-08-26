@@ -19,6 +19,7 @@ import {
   CircleHelpIcon,
   CopyPlusIcon,
   CheckIcon,
+  ClockIcon,
   FileTextIcon,
   FolderInputIcon,
   FolderPlusIcon,
@@ -88,9 +89,10 @@ import {
   quickCopyIndex,
   shouldCopyFromClipboardInput,
 } from "./clipboard-logic";
-import { isClipboardSnapshot } from "./clipboard-types";
+import { CLIPBOARD_RETENTIONS, isClipboardSnapshot } from "./clipboard-types";
 import type {
   ClipboardCaptureStatus,
+  ClipboardRetention,
   ClipboardGroup,
   ClipboardGroupColor,
   ClipboardItem,
@@ -119,6 +121,11 @@ const CLIPBOARD_GROUP_ACCENTS = {
 const STELLA_WEB_APP_URL = "https://my.stll.app";
 const MAX_GROUP_NAME_CHARACTERS = 64;
 const MAX_ITEM_NAME_CHARACTERS = 80;
+const RETENTION_LABEL_KEYS = {
+  week: "retentionWeek",
+  month: "retentionMonth",
+  year: "retentionYear",
+} as const satisfies Record<ClipboardRetention, string>;
 const CLIPBOARD_CARD_SELECTOR = "[data-clipboard-id]";
 const CLIPBOARD_GROUP_DROP_SELECTOR = "[data-clipboard-group-id]";
 const CLIPBOARD_NO_GROUP_DROP_ID = "__no_group__";
@@ -134,6 +141,7 @@ const EMPTY_SNAPSHOT = {
   groups: [],
   items: [],
   persistence: { status: "initializing" },
+  retention: "month",
   sourceAppVisuals: [],
   welcomeStatus: "initializing",
 } satisfies ClipboardSnapshot;
@@ -1837,6 +1845,39 @@ const ClipboardApp = () => {
               <PlayIcon aria-hidden="true" className="size-4" />
             )}
           </Button>
+          <Menu>
+            <MenuTrigger
+              render={
+                <Button
+                  aria-label={t("retention")}
+                  className="size-11 rounded-full"
+                  size="icon"
+                  title={t("retention")}
+                  variant="ghost"
+                />
+              }
+            >
+              <ClockIcon aria-hidden="true" className="size-4" />
+            </MenuTrigger>
+            <MenuPopup align="end" className="w-56">
+              <MenuRadioGroup value={snapshot.retention}>
+                {CLIPBOARD_RETENTIONS.map((retention) => (
+                  <MenuRadioItem
+                    className="min-h-11 rounded-xl"
+                    key={retention}
+                    onClick={() => {
+                      applySnapshotCommand("clipboard_set_retention", {
+                        retention,
+                      });
+                    }}
+                    value={retention}
+                  >
+                    {t(RETENTION_LABEL_KEYS[retention])}
+                  </MenuRadioItem>
+                ))}
+              </MenuRadioGroup>
+            </MenuPopup>
+          </Menu>
           <Button
             aria-label={t("clear")}
             className="size-11 rounded-full"
