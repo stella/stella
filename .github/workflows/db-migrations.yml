@@ -137,6 +137,13 @@ jobs:
             exit 1
           }
 
+      - name: Rehearse interrupted Better Auth constraints migration
+        env:
+          DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
+        run: >-
+          bash scripts/rehearse-better-auth-constraint-retry.sh
+          --local-test-database
+
       - name: Reject inconsistent migration history
         env:
           DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella

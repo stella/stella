@@ -10,6 +10,14 @@ on:
         description: "Git tag to publish, for example v1.2.3 or v1.2.3-rc.1"
         required: true
         type: string
+      better_auth_cutover_authorization:
+        description: "Authorize the one-time Better Auth 1.7 production cutover"
+        required: true
+        default: blocked
+        type: choice
+        options:
+          - blocked
+          - approved
 
 # Every job declares its own least-privilege block.
 permissions: {}
@@ -99,6 +107,22 @@ jobs:
           file_version="$(tr -d '[:space:]' < VERSION)"
           if [[ "$file_version" != "$VERSION" ]]; then
             echo "::error::VERSION ($file_version) does not match $RELEASE_REF"
+            exit 1
+          fi
+
+      - name: Guard Better Auth production cutover
+        env:
+          CUTOVER_AUTHORIZATION: ${{ github.event_name == 'workflow_dispatch' && inputs.better_auth_cutover_authorization || 'blocked' }}
+          EVENT_NAME: ${{ github.event_name }}
+          RELEASE_REF: ${{ steps.release.outputs.ref }}
+        run: |
+          if [[ "$RELEASE_REF" == *-* ]] \
+              || [[ ! -f .github/cutovers/better-auth-17-required ]]; then
+            exit 0
+          fi
+          if [[ "$EVENT_NAME" != "workflow_dispatch" \
+              || "$CUTOVER_AUTHORIZATION" != "approved" ]]; then
+            echo "::error::This stable tag is the Better Auth 1.7 production cutover. Re-run this workflow manually with explicit cutover authorization after every rehearsal gate is green."
             exit 1
           fi
 
@@ -960,6 +984,7 @@ jobs:
           release-ref: ${{ needs.resolve.outputs.release_ref }}
           target-environment: production
           web-image-digest: ${{ needs.prepare-web-image.outputs.digest }}
+          better-auth-cutover-authorization: ${{ inputs.better_auth_cutover_authorization || 'blocked' }}
 
       # Swap the workspace to the release being promoted: the verification
       # script must come from that revision, not from the workflow's.

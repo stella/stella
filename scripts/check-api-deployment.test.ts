@@ -362,6 +362,49 @@ describe("API deployment health receipt", () => {
     expect(desktopCarry).toContain("bash scripts/promote-desktop-release.sh");
   });
 
+  test("requires an explicit Better Auth production cutover dispatch", async () => {
+    const [releaseWorkflow, promoteAction, cutoverMarker] = await Promise.all([
+      Bun.file(
+        new URL("../.github/workflows/release.yml", import.meta.url),
+      ).text(),
+      Bun.file(
+        new URL(
+          "../.github/actions/promote-dispatch/action.yml",
+          import.meta.url,
+        ),
+      ).text(),
+      Bun.file(
+        new URL("../.github/cutovers/better-auth-17-required", import.meta.url),
+      ).text(),
+    ]);
+    const guardStart = releaseWorkflow.indexOf(
+      "- name: Guard Better Auth production cutover",
+    );
+    const receiptStart = releaseWorkflow.indexOf(
+      "- name: Write trusted release receipt",
+    );
+
+    expect(cutoverMarker).toContain(
+      "Better Auth 1.7 production cutover has not completed",
+    );
+    expect(releaseWorkflow).toContain("better_auth_cutover_authorization:");
+    expect(releaseWorkflow).toContain("default: blocked");
+    expect(releaseWorkflow).toContain(`EVENT_NAME: \${{ github.event_name }}`);
+    expect(releaseWorkflow).toContain(
+      `[[ "$EVENT_NAME" != "workflow_dispatch"`,
+    );
+    expect(releaseWorkflow).toContain(`"$CUTOVER_AUTHORIZATION" != "approved"`);
+    expect(guardStart).toBeGreaterThanOrEqual(0);
+    expect(receiptStart).toBeGreaterThan(guardStart);
+    expect(releaseWorkflow).toContain(
+      `better-auth-cutover-authorization: \${{ inputs.better_auth_cutover_authorization || 'blocked' }}`,
+    );
+    expect(promoteAction).toContain("better-auth-cutover-authorization:");
+    expect(promoteAction).toContain(
+      `inputs[better_auth_cutover_authorization]=\${BETTER_AUTH_CUTOVER_AUTHORIZATION}`,
+    );
+  });
+
   test("gates API releases on readiness", async () => {
     const [deploymentScript, releaseWorkflow, publishWorkflow] =
       await Promise.all([
