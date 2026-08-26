@@ -116,6 +116,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("forbid-dev-runner-config-reads.fixture.ts", [
     "forbid-dev-runner-config-reads/forbid-dev-runner-config-reads",
   ]),
+  fixtureRuleOverride("docs-source-policy.fixture.ts", [
+    "docs-source-policy/docs-source-policy",
+  ]),
   fixtureRuleOverride("mcp-security.fixture.ts", [
     "mcp-security/no-direct-oauth-client-join",
     "mcp-security/redact-oauth-registration-response",
@@ -470,6 +473,7 @@ export default defineConfig({
     ],
     "no-spread-input-in-query-key/no-spread-input-in-query-key": "error",
     "no-facade-imports/no-facade-imports": "error",
+    "docs-source-policy/docs-source-policy": "error",
     "no-unsafe-inner-html/no-unsafe-inner-html": "error",
     "no-static-devtools-import/no-static-devtools-import": "error",
     "no-static-catalogue-route-import/no-static-catalogue-route-import": [
@@ -751,6 +755,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-untranslated-jsx-literal.ts",
     "./.oxlint-plugins/forbid-process-env-outside-env-ts.ts",
     "./.oxlint-plugins/forbid-dev-runner-config-reads.ts",
+    "./.oxlint-plugins/docs-source-policy.ts",
     "./.oxlint-plugins/no-facade-imports.ts",
     "./.oxlint-plugins/no-secret-in-log-sink.ts",
     "./.oxlint-plugins/no-raw-api-url.ts",

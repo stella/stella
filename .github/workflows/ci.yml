@@ -684,13 +684,12 @@ jobs:
           (cd apps/api && bun run build:mcp-apps)
           git diff --exit-code -- apps/api/src/mcp/apps/document-upload/generated/app.html.txt
 
-      - name: Documentation source dependency guard
+      - name: Documentation source policy rule
         if: needs.ci-plan.outputs.package_checks_required == 'true'
-        # Every documentation source exposed to coding agents must correspond
-        # to a dependency declared by a workspace. This prevents stale SDK
-        # docs from steering implementation after a dependency migration.
+        # Every direct dependency must have an exact llms.txt source or a
+        # time-bounded, explained quarantine.
         run: |
-          bun test scripts/docs-source-dependency-guard.test.ts
+          bun test ./.oxlint-plugins/__tests__/docs-source-policy.test.ts
           bun run check:docs-sources
 
       - name: Capability catalog drift guard
