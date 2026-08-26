@@ -12,6 +12,9 @@ minimumReleaseAge = 432_000
 minimumReleaseAgeExcludes = [
   # Temporary third-party exceptions must carry the exact instant at which
   # the normal five-day quarantine admits the currently pinned release.
+  # @silurus/ooxml 0.82.1 adds host-controlled XLSX viewer chrome colors.
+  # Remove this exception once the normal quarantine admits it.
+  "@silurus/ooxml", # quarantine-expires: 2026-08-31T07:24:25.545Z
   # Keep Astro's framework and Markdown packages on one patch line while
   # verifying their Vite 8.2/Rolldown 1.2 compatibility. Remove these
   # exceptions once the normal quarantine admits them.
