@@ -7,6 +7,7 @@
  */
 
 import { useRef, useState } from "react";
+import type { ReactElement } from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useRouteContext } from "@tanstack/react-router";
@@ -53,6 +54,7 @@ import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { toSafeId } from "@/lib/safe-id";
+import { Slot } from "@/lib/slot";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
 
 type TranslationOutput = "translated" | "bilingual";
@@ -73,6 +75,7 @@ type TranslateDocumentDialogProps = {
   entityId: string;
   fieldId: string;
   isDocx: boolean;
+  trigger?: ReactElement | undefined;
   /** Disable when the underlying field is missing or the user cannot create output. */
   disabled?: boolean | undefined;
 };
@@ -84,6 +87,7 @@ export const TranslateDocumentDialog = ({
   entityId,
   fieldId,
   isDocx,
+  trigger,
   disabled = false,
 }: TranslateDocumentDialogProps) => {
   const t = useTranslations();
@@ -295,19 +299,32 @@ export const TranslateDocumentDialog = ({
       }}
       open={open}
     >
-      <DialogTrigger
-        render={
-          <Button
-            aria-label={t("common.translate")}
-            disabled={disabled}
-            size="icon-xs"
-            tooltip={t("common.translate")}
-            variant="ghost"
-          >
-            <LanguagesIcon className="size-3.5" />
-          </Button>
-        }
-      />
+      {trigger ? (
+        <Slot
+          onClick={(event) => {
+            if (event.defaultPrevented || disabled) {
+              return;
+            }
+            setOpen(true);
+          }}
+        >
+          {trigger}
+        </Slot>
+      ) : (
+        <DialogTrigger
+          render={
+            <Button
+              aria-label={t("common.translate")}
+              disabled={disabled}
+              size="icon-xs"
+              tooltip={t("common.translate")}
+              variant="ghost"
+            >
+              <LanguagesIcon className="size-3.5" />
+            </Button>
+          }
+        />
+      )}
       <DialogPopup>
         <DialogHeader>
           <DialogTitle>{t("translate.dialog.title")}</DialogTitle>

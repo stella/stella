@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useNavigate } from "@tanstack/react-router";
+import { useMatch, useNavigate } from "@tanstack/react-router";
 import { Result } from "better-result";
 import {
   ArchiveIcon,
@@ -15,6 +15,7 @@ import {
   FolderPlusIcon,
   FolderSyncIcon,
   LaptopIcon,
+  LanguagesIcon,
   LockOpenIcon,
   Maximize2Icon,
   MessageSquareIcon,
@@ -55,6 +56,7 @@ import { buildEntityMentionOption } from "@/components/chat-mention-helpers";
 import { useRequestChatAbout } from "@/components/chat/use-request-chat-about";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import Tooltip from "@/components/tooltip";
+import { TranslateDocumentDialog } from "@/components/translate-document-dialog";
 import { CopyToMatterDialog } from "@/components/workspaces/copy-to-matter-dialog";
 import {
   buildSelectionParentLookup,
@@ -68,11 +70,13 @@ import {
 import { useEntitiesCountLimit } from "@/components/workspaces/hooks/use-limits";
 import type { TableTreeNode } from "@/components/workspaces/table/types";
 import { PDF_MIME_TYPE } from "@/consts";
+import { usePermissions } from "@/hooks/use-permissions";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { externalApiOrigin } from "@/lib/api-origins";
 import { apiUrl } from "@/lib/api-url";
 import { getFreshLinkedAccount } from "@/lib/auth-session";
+import { DOCX_MIME } from "@/lib/consts";
 import {
   DesktopBridgeIncompatibleError,
   openFileInDesktop,
@@ -214,6 +218,11 @@ export const RowActions = ({
   const uploadVersion = useUploadVersion();
   const requestChatAbout = useRequestChatAbout(workspaceId);
   const retryCell = useRetryCell(toSafeId<"workspace">(workspaceId));
+  const canCreateEntity = usePermissions({ entity: ["create"] });
+  const viewMatch = useMatch({
+    from: "/_protected/workspaces/$workspaceId/$viewId",
+    shouldThrow: false,
+  });
   const [copyToMatterOpen, setCopyToMatterOpen] = useState(false);
   const [copyToMatterEntities, setCopyToMatterEntities] = useState<
     CopyToMatterEntity[]
@@ -223,6 +232,21 @@ export const RowActions = ({
   const { data: properties } = useQuery(propertiesOptions(workspaceId));
   const uploadVersionInputRef = useRef<HTMLInputElement>(null);
   const file = getFirstFile(entity);
+  const contextField = cellMetadataTarget
+    ? entity.fields[cellMetadataTarget.propertyId]
+    : undefined;
+  const translationFile = (() => {
+    if (!cellMetadataTarget) {
+      return file;
+    }
+    if (contextField?.content.type !== "file") {
+      return null;
+    }
+    return {
+      fieldId: contextField.id,
+      mimeType: contextField.content.mimeType,
+    };
+  })();
   const name = getEntityName(entity);
   const isFolder = entity.kind === "folder";
   const isBulk = selectedEntities !== undefined && selectedEntities.length > 1;
@@ -872,12 +896,17 @@ export const RowActions = ({
 
         {/* --- Features --- */}
         <RowFeatureMenuActions
+          canCreateEntity={canCreateEntity}
+          entityId={entity.entityId}
           file={file}
           isBulk={isBulk}
           isFolder={isFolder}
           kind={entity.kind}
           onChatAbout={handleChatAbout}
           onOpenVersionHistory={openVersionHistory}
+          translationFile={translationFile}
+          viewId={viewMatch?.params.viewId ?? "all"}
+          workspaceId={workspaceId}
         />
         <RowCellOcrExportMenuActions
           isCellContext={isCellContext}
@@ -1128,19 +1157,29 @@ const RowFolderDesktopMenuActions = ({
 };
 
 const RowFeatureMenuActions = ({
+  canCreateEntity,
+  entityId,
   file,
   isBulk,
   isFolder,
   kind,
   onChatAbout,
   onOpenVersionHistory,
+  translationFile,
+  viewId,
+  workspaceId,
 }: {
+  canCreateEntity: boolean;
+  entityId: string;
   file: ReturnType<typeof getFirstFile>;
   isBulk: boolean;
   isFolder: boolean;
   kind: WorkspaceEntity["kind"];
   onChatAbout: () => void;
   onOpenVersionHistory: (() => void) | undefined;
+  translationFile: { fieldId: string; mimeType: string } | null;
+  viewId: string;
+  workspaceId: string;
 }) => {
   const t = useTranslations();
   return (
@@ -1159,6 +1198,22 @@ const RowFeatureMenuActions = ({
         <MessageSquareIcon />
         {t("chat.chatAbout")}
       </MenuItem>
+      {!isBulk && translationFile && (
+        <TranslateDocumentDialog
+          disabled={!canCreateEntity}
+          entityId={entityId}
+          fieldId={translationFile.fieldId}
+          isDocx={translationFile.mimeType === DOCX_MIME}
+          trigger={
+            <MenuItem closeOnClick={false} disabled={!canCreateEntity}>
+              <LanguagesIcon />
+              {t("common.translate")}
+            </MenuItem>
+          }
+          viewId={viewId}
+          workspaceId={workspaceId}
+        />
+      )}
     </>
   );
 };
