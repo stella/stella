@@ -2,9 +2,12 @@ import { afterEach, describe, expect, test } from "bun:test";
 
 import {
   getS3,
+  isMissingCorpusObjectError,
   isMissingS3ObjectError,
   isS3Stale,
+  readCorpusS3BytesBounded,
   readCorpusS3Range,
+  S3ObjectBudgetError,
   readS3ArrayBuffer,
   resolveS3Credentials,
   writeS3ObjectWithRetry,
@@ -34,6 +37,42 @@ const requestUrl = (input: string | URL | Request): string => {
 
   return input.url;
 };
+
+describe("readCorpusS3BytesBounded", () => {
+  const originalFetch = globalThis.fetch;
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  test("reports a declared transfer overrun as a terminal budget error", async () => {
+    const stub = async (): Promise<Response> =>
+      await Promise.resolve(
+        new Response(new Uint8Array(8), {
+          headers: { "content-length": "8" },
+        }),
+      );
+    globalThis.fetch = Object.assign(stub, {
+      preconnect: originalFetch.preconnect,
+    });
+
+    const rejection = await readCorpusS3BytesBounded({
+      key: "legal-corpus/oversized.zst",
+      maxBytes: 4,
+      signal: new AbortController().signal,
+    }).then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+    expect(rejection).toBeInstanceOf(S3ObjectBudgetError);
+    expect(rejection).toMatchObject({
+      key: "legal-corpus/oversized.zst",
+      declaredBytes: 8,
+      maxBytes: 4,
+    });
+  });
+});
 
 const createTrackedEcsCredentialsFetch =
   (requestedUrls: string[]) =>
@@ -465,6 +504,47 @@ describe("readCorpusS3Range", () => {
     expect(rejection).toMatchObject({
       message: expect.stringContaining("not 206"),
     });
+  });
+
+  test("distinguishes an absent corpus object from other 404 responses", async () => {
+    const readRejection = async (body: string | null) => {
+      installFetch(
+        async () =>
+          await Promise.resolve(
+            new Response(body, {
+              status: 404,
+              ...(body === null
+                ? {}
+                : { headers: { "content-type": "application/xml" } }),
+            }),
+          ),
+      );
+      return await readCorpusS3Range({
+        key: "legal-corpus/packs/jurisdiction=SVK/missing.pack",
+        offset: 0,
+        length: 8,
+        signal: new AbortController().signal,
+      }).then(
+        () => null,
+        (error: unknown) => error,
+      );
+    };
+
+    expect(
+      isMissingCorpusObjectError(
+        await readRejection(
+          "<Error><Code>NoSuchKey</Code><Message>missing</Message></Error>",
+        ),
+      ),
+    ).toBe(true);
+    expect(
+      isMissingCorpusObjectError(
+        await readRejection(
+          "<Error><Code>NoSuchBucket</Code><Message>missing</Message></Error>",
+        ),
+      ),
+    ).toBe(false);
+    expect(isMissingCorpusObjectError(await readRejection(null))).toBe(false);
   });
 
   test("refuses a 206 whose Content-Range is not the requested range", async () => {

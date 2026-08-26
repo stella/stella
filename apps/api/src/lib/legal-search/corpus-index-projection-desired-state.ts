@@ -22,8 +22,10 @@ import {
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import {
   deriveCorpusIndexProjectionDescriptor,
+  type CaseLawV5ProjectionInput,
   type CorpusIndexProjectionDescriptor,
   type CorpusIndexProjectionInput,
+  type LegislationV2ProjectionInput,
 } from "@/api/lib/legal-search/corpus-index-projection-descriptor";
 import { isRedistributable } from "@/api/lib/legal-search/corpus-source";
 
@@ -47,6 +49,100 @@ type LockedProjectionInput = {
   epoch: bigint;
   input: CorpusIndexProjectionInput;
 };
+
+export type CaseLawProjectionCanonicalInput = {
+  documentId: SafeId<"caseLawDecision">;
+  sourceId: SafeId<"caseLawSource">;
+  jurisdiction: string;
+  language: string;
+  documentType: string | null;
+  contentHash: string | null;
+  redactedAt: Date | null;
+  caseNumber: string;
+  identifiers: readonly { type: string; value: string }[];
+  court: string;
+  decisionDate: string | null;
+  ecli: string | null;
+  sourceDescriptor: Parameters<typeof isRedistributable>[0];
+};
+
+export const caseLawProjectionInputFromCanonical = ({
+  documentId,
+  sourceId,
+  jurisdiction,
+  language,
+  documentType,
+  contentHash,
+  redactedAt,
+  caseNumber,
+  identifiers,
+  court,
+  decisionDate,
+  ecli,
+  sourceDescriptor,
+}: CaseLawProjectionCanonicalInput): CaseLawV5ProjectionInput => ({
+  family: "case_law",
+  documentId,
+  sourceId,
+  jurisdiction,
+  language,
+  documentType,
+  contentHash,
+  redistributionEligible: isRedistributable(sourceDescriptor),
+  redacted: redactedAt !== null,
+  caseNumber,
+  identifiers,
+  court,
+  decisionDate,
+  ecli,
+});
+
+export type LegislationProjectionCanonicalInput = {
+  documentId: SafeId<"legislationDocument">;
+  sourceId: SafeId<"legislationSource">;
+  jurisdiction: string;
+  language: string;
+  documentType: string | null;
+  contentHash: string | null;
+  title: string;
+  status: string;
+  effectiveDate: string | null;
+  versionValidFrom: string | null;
+  versionValidTo: string | null;
+  eli: string;
+  sourceDescriptor: Parameters<typeof isRedistributable>[0];
+};
+
+export const legislationProjectionInputFromCanonical = ({
+  documentId,
+  sourceId,
+  jurisdiction,
+  language,
+  documentType,
+  contentHash,
+  title,
+  status,
+  effectiveDate,
+  versionValidFrom,
+  versionValidTo,
+  eli,
+  sourceDescriptor,
+}: LegislationProjectionCanonicalInput): LegislationV2ProjectionInput => ({
+  family: "legislation",
+  documentId,
+  sourceId,
+  jurisdiction,
+  language,
+  documentType,
+  contentHash,
+  redistributionEligible: isRedistributable(sourceDescriptor),
+  title,
+  status,
+  effectiveDate,
+  versionValidFrom,
+  versionValidTo,
+  eli,
+});
 
 const lockCaseLawProjectionInput = async (
   tx: Transaction,
@@ -126,22 +222,11 @@ const lockCaseLawProjectionInput = async (
   }
   return {
     epoch: row.projectionEpoch,
-    input: {
-      family: "case_law",
-      documentId: row.documentId,
-      sourceId: row.sourceId,
-      jurisdiction: row.jurisdiction,
-      language: row.language,
-      documentType: row.documentType,
-      contentHash: row.contentHash,
-      redistributionEligible: isRedistributable(source.sourceDescriptor),
-      redacted: row.redactedAt !== null,
-      caseNumber: row.caseNumber,
+    input: caseLawProjectionInputFromCanonical({
+      ...row,
       identifiers,
-      court: row.court,
-      decisionDate: row.decisionDate,
-      ecli: row.ecli,
-    },
+      sourceDescriptor: source.sourceDescriptor,
+    }),
   };
 };
 
@@ -203,22 +288,10 @@ const lockLegislationProjectionInput = async (
   }
   return {
     epoch: row.projectionEpoch,
-    input: {
-      family: "legislation",
-      documentId: row.documentId,
-      sourceId: row.sourceId,
-      jurisdiction: row.jurisdiction,
-      language: row.language,
-      documentType: row.documentType,
-      contentHash: row.contentHash,
-      redistributionEligible: isRedistributable(source.sourceDescriptor),
-      title: row.title,
-      status: row.status,
-      effectiveDate: row.effectiveDate,
-      versionValidFrom: row.versionValidFrom,
-      versionValidTo: row.versionValidTo,
-      eli: row.eli,
-    },
+    input: legislationProjectionInputFromCanonical({
+      ...row,
+      sourceDescriptor: source.sourceDescriptor,
+    }),
   };
 };
 
@@ -396,6 +469,17 @@ const writeDesiredStates = async (
   if (values.length === 0) {
     return;
   }
+  const desiredStateUnchanged = sql`(
+    ${corpusIndexProjectionStates.desiredAction},
+    ${corpusIndexProjectionStates.desiredEpoch},
+    ${corpusIndexProjectionStates.desiredFingerprint},
+    ${corpusIndexProjectionStates.desiredIndexId}
+  ) IS NOT DISTINCT FROM (
+    excluded.desired_action,
+    excluded.desired_epoch,
+    excluded.desired_fingerprint,
+    excluded.desired_index_id
+  )`;
   await tx
     .insert(corpusIndexProjectionStates)
     .values(values)
@@ -410,6 +494,11 @@ const writeDesiredStates = async (
         desiredEpoch: sql`excluded.desired_epoch`,
         desiredFingerprint: sql`excluded.desired_fingerprint`,
         desiredIndexId: sql`excluded.desired_index_id`,
+        workStatus: sql`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.workStatus} ELSE 'eligible' END`,
+        retryNotBefore: sql`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.retryNotBefore} ELSE NULL END`,
+        failureAttempts: sql`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.failureAttempts} ELSE 0 END`,
+        lastFailureKind: sql`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.lastFailureKind} ELSE NULL END`,
+        lastFailureMessage: sql`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.lastFailureMessage} ELSE NULL END`,
         updatedAt: sql<Date>`clock_timestamp()`,
       },
     });

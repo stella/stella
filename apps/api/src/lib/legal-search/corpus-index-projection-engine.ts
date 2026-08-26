@@ -6,13 +6,15 @@ import { splitIngestRequests } from "@/api/lib/corpus-index/core";
 import { isUuid } from "@/api/lib/custom-schema";
 import {
   CORPUS_INDEX_INGEST_TIMEOUT_MS,
-  type CorpusIndexError,
+  CorpusIndexError,
   type CorpusIndexClient,
   type CorpusIndexDeleteSettlement,
   type CorpusIndexDeleteTask,
 } from "@/api/lib/legal-search/corpus-index-client";
 import type { CorpusIndexManifest } from "@/api/lib/legal-search/corpus-index-manifest";
 import { LIMITS } from "@/api/lib/limits";
+import { brandValidatedCorpusIndexProjectionIntentId } from "@/api/lib/safe-id-boundaries";
+import { isRecord } from "@/api/lib/type-guards";
 
 type ProjectionRevision = SafeId<"corpusIndexProjectionIntent">;
 
@@ -22,9 +24,14 @@ export const CORPUS_PROJECTION_APPEND_MAX_SINGLE_REVISION_BYTES =
 export const CORPUS_PROJECTION_DELETE_MAX_REVISIONS = 128;
 export const CORPUS_PROJECTION_UNKNOWN_APPEND_MARGIN_MS = 5000;
 
-type CorpusProjectionAppendEntry = {
+export type CorpusProjectionAppendEntry = {
   revision: ProjectionRevision;
   documents: readonly Record<string, unknown>[];
+};
+
+export type CorpusProjectionAppendRequest = {
+  entries: readonly CorpusProjectionAppendEntry[];
+  ndjson: string;
 };
 
 type CorpusProjectionAppendClient = Pick<
@@ -80,14 +87,14 @@ const invalidAppend = (
     }),
   );
 
-export const appendCorpusProjectionBatch = async ({
-  client,
-  indexId,
-  entries,
-  clock = () => new Date(),
-}: AppendCorpusProjectionBatchOptions): Promise<
-  Result<CorpusProjectionAppendReceipt, CorpusProjectionAppendError>
-> => {
+/**
+ * Validate and byte-partition exact append attempts before any intent enters
+ * `append_started`. A caller can then durably start only the next request;
+ * later plans remain provably unattempted if that request fails or crashes.
+ */
+export const planCorpusProjectionAppendRequests = (
+  entries: readonly CorpusProjectionAppendEntry[],
+): Result<CorpusProjectionAppendRequest[], CorpusProjectionAppendError> => {
   const revisions = entries.map(({ revision }) => revision);
   if (
     entries.length === 0 ||
@@ -101,7 +108,6 @@ export const appendCorpusProjectionBatch = async ({
   }
 
   const uniqueRevisions = new Set<ProjectionRevision>();
-  let documentCount = 0;
   for (const entry of entries) {
     if (
       !isUuid(entry.revision) ||
@@ -115,7 +121,6 @@ export const appendCorpusProjectionBatch = async ({
       );
     }
     uniqueRevisions.add(entry.revision);
-    documentCount += entry.documents.length;
     for (const document of entry.documents) {
       if (
         document["projection_revision"] !== entry.revision ||
@@ -146,25 +151,47 @@ export const appendCorpusProjectionBatch = async ({
       );
     }
   }
+  return Result.ok(
+    requests.map(({ entries: requestEntries, ndjson }) => ({
+      entries: requestEntries.map(({ row }) => row),
+      ndjson,
+    })),
+  );
+};
 
+export const appendCorpusProjectionBatch = async ({
+  client,
+  indexId,
+  entries,
+  clock = () => new Date(),
+}: AppendCorpusProjectionBatchOptions): Promise<
+  Result<CorpusProjectionAppendReceipt, CorpusProjectionAppendError>
+> => {
+  const planned = planCorpusProjectionAppendRequests(entries);
+  if (planned.isErr()) {
+    return Result.err(planned.error);
+  }
+
+  const documentCount = entries.reduce(
+    (total, entry) => total + entry.documents.length,
+    0,
+  );
   const committedRevisions: ProjectionRevision[] = [];
   const appendRequestAt = async (
     requestIndex: number,
   ): Promise<Result<void, CorpusProjectionAppendError>> => {
-    const request = requests.at(requestIndex);
+    const request = planned.value.at(requestIndex);
     if (request === undefined) {
       return Result.ok(undefined);
     }
     const ingested = await client.ingestCommittedBatch(indexId, request.ndjson);
     if (ingested.isErr()) {
       const unknownOutcomeObservedAt = clock();
-      const unknownRevisions = request.entries.map(
-        ({ row: { revision } }) => revision,
-      );
-      const unattemptedRevisions = requests
+      const unknownRevisions = request.entries.map(({ revision }) => revision);
+      const unattemptedRevisions = planned.value
         .slice(requestIndex + 1)
         .flatMap(({ entries: laterEntries }) =>
-          laterEntries.map(({ row: { revision } }) => revision),
+          laterEntries.map(({ revision }) => revision),
         );
       return Result.err(
         new CorpusProjectionAppendError({
@@ -179,9 +206,7 @@ export const appendCorpusProjectionBatch = async ({
         }),
       );
     }
-    committedRevisions.push(
-      ...request.entries.map(({ row: { revision } }) => revision),
-    );
+    committedRevisions.push(...request.entries.map(({ revision }) => revision));
     return appendRequestAt(requestIndex + 1);
   };
   const appendResult = await appendRequestAt(0);
@@ -191,7 +216,7 @@ export const appendCorpusProjectionBatch = async ({
   return Result.ok({
     revisionCount: entries.length,
     documentCount,
-    requestCount: requests.length,
+    requestCount: planned.value.length,
   });
 };
 
@@ -217,10 +242,123 @@ export const corpusProjectionRevisionsQuery = (
 
 type CorpusProjectionDeleteClient = Pick<CorpusIndexClient, "deleteByQuery">;
 
-type ProjectionRevisionOperationOptions = {
-  client: CorpusProjectionDeleteClient;
+type ProjectionRevisionTarget = {
   indexId: string;
   revisions: readonly ProjectionRevision[];
+};
+
+type ProjectionRevisionOperationOptions = ProjectionRevisionTarget & {
+  client: CorpusProjectionDeleteClient;
+};
+
+type ProjectionRevisionCensusOptions = ProjectionRevisionTarget & {
+  client: Pick<CorpusIndexClient, "aggregate">;
+};
+
+const PROJECTION_REVISION_CENSUS_AGGREGATION = "projection_revisions";
+
+type CorpusProjectionRevisionPresence = {
+  revision: ProjectionRevision;
+  documentCount: number;
+};
+
+type CorpusProjectionRevisionCensus = {
+  present: CorpusProjectionRevisionPresence[];
+  missing: ProjectionRevision[];
+};
+
+const malformedProjectionCensus = (message: string) =>
+  Result.err(new CorpusIndexError({ message }));
+
+/**
+ * Read the exact presence of a bounded revision set. The query first narrows
+ * the corpus to those raw revision terms, then a fast-field aggregation
+ * returns one bucket per append attempt. `sum_other_doc_count` and the error
+ * bound must both be zero: approximation is never accepted as a census.
+ */
+export const censusCorpusProjectionRevisions = async ({
+  client,
+  indexId,
+  revisions,
+}: ProjectionRevisionCensusOptions): Promise<
+  Result<CorpusProjectionRevisionCensus, CorpusIndexError>
+> => {
+  const query = corpusProjectionRevisionsQuery(revisions);
+  const aggregated = await client.aggregate({
+    indexId,
+    query,
+    aggs: {
+      [PROJECTION_REVISION_CENSUS_AGGREGATION]: {
+        terms: {
+          field: "projection_revision",
+          size: revisions.length,
+          shard_size: revisions.length,
+          order: { _key: "asc" },
+          show_term_doc_count_error: true,
+        },
+      },
+    },
+  });
+  if (aggregated.isErr()) {
+    return Result.err(aggregated.error);
+  }
+  const census = aggregated.value[PROJECTION_REVISION_CENSUS_AGGREGATION];
+  if (!isRecord(census) || !Array.isArray(census["buckets"])) {
+    return malformedProjectionCensus(
+      "corpus projection revision census returned malformed buckets",
+    );
+  }
+  if (
+    census["sum_other_doc_count"] !== 0 ||
+    census["doc_count_error_upper_bound"] !== 0
+  ) {
+    return malformedProjectionCensus(
+      "corpus projection revision census returned an incomplete or approximate result",
+    );
+  }
+  const requested = new Set(revisions);
+  const seen = new Set<ProjectionRevision>();
+  const present: CorpusProjectionRevisionPresence[] = [];
+  for (const bucket of census["buckets"]) {
+    if (!isRecord(bucket)) {
+      return malformedProjectionCensus(
+        "corpus projection revision census returned an invalid bucket",
+      );
+    }
+    const bucketKey = bucket["key"];
+    const revision =
+      typeof bucketKey === "string"
+        ? brandValidatedCorpusIndexProjectionIntentId(bucketKey)
+        : null;
+    if (
+      revision === null ||
+      !Number.isSafeInteger(bucket["doc_count"]) ||
+      Number(bucket["doc_count"]) <= 0
+    ) {
+      return malformedProjectionCensus(
+        "corpus projection revision census returned an invalid bucket",
+      );
+    }
+    if (!requested.has(revision)) {
+      return malformedProjectionCensus(
+        "corpus projection revision census returned an unrequested bucket",
+      );
+    }
+    if (seen.has(revision)) {
+      return malformedProjectionCensus(
+        "corpus projection revision census returned a duplicate bucket",
+      );
+    }
+    seen.add(revision);
+    present.push({
+      revision,
+      documentCount: Number(bucket["doc_count"]),
+    });
+  }
+  return Result.ok({
+    present,
+    missing: revisions.filter((revision) => !seen.has(revision)),
+  });
 };
 
 export const deleteCorpusProjectionRevisions = async ({
@@ -274,20 +412,30 @@ export const corpusIndexUnknownAppendBarrierAt = (
   appendStartedAt: Date,
   manifest: CorpusIndexManifest,
 ): Date => {
+  if (!Number.isFinite(appendStartedAt.getTime())) {
+    return panic("Corpus projection append barrier contract is invalid");
+  }
+  return new Date(
+    appendStartedAt.getTime() +
+      corpusIndexUnknownAppendBarrierDelayMs(manifest),
+  );
+};
+
+export const corpusIndexUnknownAppendBarrierDelayMs = (
+  manifest: CorpusIndexManifest,
+): number => {
   const commitTimeoutSecs =
     manifest.engine.indexConfig.indexing_settings.commit_timeout_secs;
   if (
-    !Number.isFinite(appendStartedAt.getTime()) ||
     commitTimeoutSecs === undefined ||
     !Number.isSafeInteger(commitTimeoutSecs) ||
     commitTimeoutSecs <= 0
   ) {
     return panic("Corpus projection append barrier contract is invalid");
   }
-  return new Date(
-    appendStartedAt.getTime() +
-      CORPUS_INDEX_INGEST_TIMEOUT_MS +
-      commitTimeoutSecs * 1000 +
-      CORPUS_PROJECTION_UNKNOWN_APPEND_MARGIN_MS,
+  return (
+    CORPUS_INDEX_INGEST_TIMEOUT_MS +
+    commitTimeoutSecs * 1000 +
+    CORPUS_PROJECTION_UNKNOWN_APPEND_MARGIN_MS
   );
 };
