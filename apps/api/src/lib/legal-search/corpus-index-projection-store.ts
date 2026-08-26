@@ -528,14 +528,11 @@ export const abandonCorpusProjectionAppendTx = async (
     )
     .limit(1)
     .for("update");
-  const intent = rows.at(0);
-  if (intent === undefined || intent.appendStartedAt === null) {
+  const appendStartedAt = rows.at(0)?.appendStartedAt ?? null;
+  if (appendStartedAt === null) {
     return "lease_lost";
   }
-  const barrier = corpusIndexUnknownAppendBarrierAt(
-    intent.appendStartedAt,
-    manifest,
-  );
+  const barrier = corpusIndexUnknownAppendBarrierAt(appendStartedAt, manifest);
   const transitionAt = testNow ?? sql<Date>`clock_timestamp()`;
   await tx
     .update(corpusIndexProjectionIntents)

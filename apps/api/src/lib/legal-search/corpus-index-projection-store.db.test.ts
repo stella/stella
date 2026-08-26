@@ -152,7 +152,7 @@ const verifySettlement = async ({
     lease,
   });
   if (result.isErr()) {
-    return panic(`Projection settlement verification failed: ${result.error}`);
+    return panic("Projection settlement verification failed", result.error);
   }
   if (result.value.status !== "verified") {
     return panic("Projection settlement unexpectedly remained pending");
@@ -162,8 +162,8 @@ const verifySettlement = async ({
 
 const installProjectionMigrationDdl = async (): Promise<void> => {
   const migrations = await Promise.all(
-    PROJECTION_MIGRATION_URLS.map((migrationUrl) =>
-      Bun.file(migrationUrl).text(),
+    PROJECTION_MIGRATION_URLS.map(
+      async (migrationUrl) => await Bun.file(migrationUrl).text(),
     ),
   );
   const ddls = migrations.flatMap((migration) =>
@@ -351,7 +351,7 @@ test("replacement deletes and settles the old revision before reserving the new 
       ),
   );
   if (releasedSettlementLease === null) {
-    return panic("Expected a releasable projection settlement lease");
+    panic("Expected a releasable projection settlement lease");
   }
   expect(
     await db.transaction(
@@ -708,7 +708,7 @@ test("production transitions preserve PostgreSQL clock ordering under process sk
       }),
   );
   if (firstSettlement === null) {
-    return panic("Expected first settlement lease");
+    panic("Expected first settlement lease");
   }
   expect(
     await withDatabaseClock(
@@ -730,17 +730,17 @@ test("production transitions preserve PostgreSQL clock ordering under process sk
       }),
   );
   if (settlement === null) {
-    return panic("Expected settlement lease");
+    panic("Expected settlement lease");
   }
   const verified = await CorpusProjectionCleanupSettlementProof.verify({
     client: settledProjectionClient,
     lease: settlement,
   });
   if (verified.isErr()) {
-    return panic("Expected successful settlement verification");
+    panic("Expected successful settlement verification");
   }
   if (verified.value.status !== "verified") {
-    return panic("Expected verified settlement proof");
+    panic("Expected verified settlement proof");
   }
   const proof = verified.value.proof;
   expect(

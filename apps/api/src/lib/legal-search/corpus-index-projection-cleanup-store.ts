@@ -63,6 +63,7 @@ const lockCorpusProjectionIntentsById = async (
     .from(corpusIndexProjectionIntents)
     .where(inArray(corpusIndexProjectionIntents.id, intentIds))
     .orderBy(asc(corpusIndexProjectionIntents.id))
+    .limit(intentIds.length)
     .for("update");
 };
 
@@ -626,6 +627,7 @@ export const reopenCorpusProjectionCleanupTx = async (
       asc(corpusIndexProjectionStates.generation),
       asc(corpusIndexProjectionStates.entityId),
     )
+    .limit(identities.length)
     .for("update");
   await lockCorpusProjectionIntentsById(tx, intentIds);
   const transitionAt = testNow ?? sql<Date>`clock_timestamp()`;
