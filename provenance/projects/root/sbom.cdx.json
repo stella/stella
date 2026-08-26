@@ -346,7 +346,7 @@
             "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#1"
           },
           {
-            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#7"
+            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#6"
           },
           {
             "location": "apps/desktop/src/clipboard/ClipboardEditor.tsx#1"
@@ -769,6 +769,9 @@
             "location": "apps/web/src/components/inspector/playbook-facet.tsx#3"
           },
           {
+            "location": "apps/web/src/components/inspector/review-export-menu.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/inspector/skill-resource-panel.tsx#1"
           },
           {
@@ -794,6 +797,9 @@
           },
           {
             "location": "apps/web/src/components/legal-reader/cited-decision-link.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/legal-reader/cited-provision-link.tsx#1"
           },
           {
             "location": "apps/web/src/components/legal-reader/document-ast-text.tsx#1"
@@ -1039,16 +1045,43 @@
             "location": "apps/web/src/components/workspaces/workflow-start-confirmation-prompt.tsx#2"
           },
           {
+            "location": "apps/web/src/features/case-law/case-decision-details-inspector-registration.tsx#1"
+          },
+          {
             "location": "apps/web/src/features/case-law/case-decision-inspector-registration.tsx#1"
           },
           {
-            "location": "apps/web/src/features/case-law/components/case-viewer/analysis/margin-notes.tsx#8"
+            "location": "apps/web/src/features/case-law/components/case-decision-details-inspector-view.tsx#1"
+          },
+          {
+            "location": "apps/web/src/features/case-law/components/case-decision-inspector-view.tsx#1"
+          },
+          {
+            "location": "apps/web/src/features/case-law/components/case-decision-inspector-view.tsx#2"
+          },
+          {
+            "location": "apps/web/src/features/case-law/components/case-viewer/analysis/current-section.tsx#1"
+          },
+          {
+            "location": "apps/web/src/features/case-law/components/case-viewer/analysis/current-section.tsx#2"
           },
           {
             "location": "apps/web/src/features/case-law/components/case-viewer/analysis/margin-notes.tsx#9"
           },
           {
+            "location": "apps/web/src/features/case-law/components/case-viewer/analysis/margin-notes.tsx#10"
+          },
+          {
+            "location": "apps/web/src/features/case-law/components/case-viewer/annotation-toolbar.tsx#1"
+          },
+          {
+            "location": "apps/web/src/features/case-law/components/case-viewer/annotation-toolbar.tsx#2"
+          },
+          {
             "location": "apps/web/src/features/case-law/components/case-viewer/decision-citations.tsx#1"
+          },
+          {
+            "location": "apps/web/src/features/case-law/components/case-viewer/decision-facts.tsx#1"
           },
           {
             "location": "apps/web/src/features/case-law/components/case-viewer/decision-text.tsx#1"
@@ -1058,6 +1091,9 @@
           },
           {
             "location": "apps/web/src/features/case-law/components/case-viewer/decision-workspace.tsx#1"
+          },
+          {
+            "location": "apps/web/src/features/case-law/components/case-viewer/leading-citations.tsx#1"
           },
           {
             "location": "apps/web/src/features/case-law/components/case-viewer/provisions-cited.tsx#1"
@@ -1085,6 +1121,9 @@
           },
           {
             "location": "apps/web/src/features/statutes/components/provision-inspector-view.tsx#2"
+          },
+          {
+            "location": "apps/web/src/features/statutes/components/provision-wording.tsx#1"
           },
           {
             "location": "apps/web/src/features/statutes/components/statute-text.tsx#1"
@@ -1867,6 +1906,9 @@
             "location": "packages/ui/src/components/input.tsx#3"
           },
           {
+            "location": "packages/ui/src/components/loader.tsx#1"
+          },
+          {
             "location": "packages/ui/src/components/menu.tsx#3"
           },
           {
@@ -2130,7 +2172,7 @@
           "name": "Atlassian Pty Ltd"
         }
       ],
-      "bom-ref": "pkg:npm/@atlaskit/pragmatic-drag-and-drop-auto-scroll@3.0.1",
+      "bom-ref": "pkg:npm/@atlaskit/pragmatic-drag-and-drop-auto-scroll@3.1.0",
       "description": "An optional Pragmatic drag and drop package that enables automatic scrolling during a drag operation",
       "evidence": {
         "identity": [
@@ -2189,10 +2231,10 @@
           "value": "apps/web/node_modules/@atlaskit/pragmatic-drag-and-drop-auto-scroll/package.json"
         }
       ],
-      "purl": "pkg:npm/%40atlaskit/pragmatic-drag-and-drop-auto-scroll@3.0.1",
+      "purl": "pkg:npm/%40atlaskit/pragmatic-drag-and-drop-auto-scroll@3.1.0",
       "scope": "required",
       "type": "library",
-      "version": "3.0.1"
+      "version": "3.1.0"
     },
     {
       "authors": [
@@ -2200,7 +2242,7 @@
           "name": "Atlassian Pty Ltd"
         }
       ],
-      "bom-ref": "pkg:npm/@atlaskit/pragmatic-drag-and-drop-hitbox@2.0.1",
+      "bom-ref": "pkg:npm/@atlaskit/pragmatic-drag-and-drop-hitbox@2.1.0",
       "description": "An optional package for Pragmatic drag and drop that enables the attaching of interaction information to a drop target",
       "evidence": {
         "identity": [
@@ -2277,10 +2319,10 @@
           "value": "apps/web/node_modules/@atlaskit/pragmatic-drag-and-drop-hitbox/package.json"
         }
       ],
-      "purl": "pkg:npm/%40atlaskit/pragmatic-drag-and-drop-hitbox@2.0.1",
+      "purl": "pkg:npm/%40atlaskit/pragmatic-drag-and-drop-hitbox@2.1.0",
       "scope": "required",
       "type": "library",
-      "version": "2.0.1"
+      "version": "2.1.0"
     },
     {
       "authors": [
@@ -2382,7 +2424,7 @@
             "location": "packages/ui/src/kanban/drag-interactions.ts#3"
           },
           {
-            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#9"
+            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#8"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-column.tsx#9"
@@ -2397,7 +2439,7 @@
             "location": "packages/ui/src/kanban/drag-interactions.ts#4"
           },
           {
-            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#13"
+            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#12"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-column.tsx#13"
@@ -2415,10 +2457,10 @@
             "location": "packages/ui/src/kanban/drag-interactions.ts#6"
           },
           {
-            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#14"
+            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#13"
           },
           {
-            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#15"
+            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#14"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/position-editor.tsx#8"
@@ -2552,7 +2594,7 @@
           "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/client-cloudwatch@3.1113.0",
+      "bom-ref": "pkg:npm/@aws-sdk/client-cloudwatch@3.1114.0",
       "description": "AWS SDK for JavaScript Cloudwatch Client for Node.js, Browser and React Native",
       "evidence": {
         "identity": [
@@ -2605,13 +2647,13 @@
           "value": "apps/api/node_modules/@aws-sdk/client-cloudwatch/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/client-cloudwatch@3.1113.0",
+      "purl": "pkg:npm/%40aws-sdk/client-cloudwatch@3.1114.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1113.0"
+      "version": "3.1114.0"
     },
     {
       "authors": [
@@ -2619,7 +2661,7 @@
           "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/client-s3@3.1113.0",
+      "bom-ref": "pkg:npm/@aws-sdk/client-s3@3.1114.0",
       "description": "AWS SDK for JavaScript S3 Client for Node.js, Browser and React Native",
       "evidence": {
         "identity": [
@@ -2675,13 +2717,13 @@
           "value": "apps/api/node_modules/@aws-sdk/client-s3/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/client-s3@3.1113.0",
+      "purl": "pkg:npm/%40aws-sdk/client-s3@3.1114.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1113.0"
+      "version": "3.1114.0"
     },
     {
       "authors": [
@@ -2689,7 +2731,7 @@
           "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/client-sesv2@3.1113.0",
+      "bom-ref": "pkg:npm/@aws-sdk/client-sesv2@3.1114.0",
       "description": "AWS SDK for JavaScript Sesv2 Client for Node.js, Browser and React Native",
       "evidence": {
         "identity": [
@@ -2742,13 +2784,13 @@
           "value": "apps/api/node_modules/@aws-sdk/client-sesv2/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/client-sesv2@3.1113.0",
+      "purl": "pkg:npm/%40aws-sdk/client-sesv2@3.1114.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1113.0"
+      "version": "3.1114.0"
     },
     {
       "authors": [
@@ -2756,7 +2798,7 @@
           "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/client-sts@3.1113.0",
+      "bom-ref": "pkg:npm/@aws-sdk/client-sts@3.1114.0",
       "description": "AWS SDK for JavaScript Sts Client for Node.js, Browser and React Native",
       "evidence": {
         "identity": [
@@ -2809,13 +2851,13 @@
           "value": "apps/api/node_modules/@aws-sdk/client-sts/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/client-sts@3.1113.0",
+      "purl": "pkg:npm/%40aws-sdk/client-sts@3.1114.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1113.0"
+      "version": "3.1114.0"
     },
     {
       "authors": [
@@ -2823,7 +2865,7 @@
           "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/s3-request-presigner@3.1113.0",
+      "bom-ref": "pkg:npm/@aws-sdk/s3-request-presigner@3.1114.0",
       "evidence": {
         "identity": [
           {
@@ -2875,13 +2917,13 @@
           "value": "apps/api/node_modules/@aws-sdk/s3-request-presigner/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/s3-request-presigner@3.1113.0",
+      "purl": "pkg:npm/%40aws-sdk/s3-request-presigner@3.1114.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1113.0"
+      "version": "3.1114.0"
     },
     {
       "authors": [
@@ -3169,7 +3211,7 @@
             "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#1"
           },
           {
-            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#7"
+            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#6"
           },
           {
             "location": "apps/desktop/src/clipboard/ClipboardEditor.tsx#1"
@@ -3592,6 +3634,9 @@
             "location": "apps/web/src/components/inspector/playbook-facet.tsx#3"
           },
           {
+            "location": "apps/web/src/components/inspector/review-export-menu.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/inspector/skill-resource-panel.tsx#1"
           },
           {
@@ -3617,6 +3662,9 @@
           },
           {
             "location": "apps/web/src/components/legal-reader/cited-decision-link.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/legal-reader/cited-provision-link.tsx#1"
           },
           {
             "location": "apps/web/src/components/legal-reader/document-ast-text.tsx#1"
@@ -3862,16 +3910,43 @@
             "location": "apps/web/src/components/workspaces/workflow-start-confirmation-prompt.tsx#2"
           },
           {
+            "location": "apps/web/src/features/case-law/case-decision-details-inspector-registration.tsx#1"
+          },
+          {
             "location": "apps/web/src/features/case-law/case-decision-inspector-registration.tsx#1"
           },
           {
-            "location": "apps/web/src/features/case-law/components/case-viewer/analysis/margin-notes.tsx#8"
+            "location": "apps/web/src/features/case-law/components/case-decision-details-inspector-view.tsx#1"
+          },
+          {
+            "location": "apps/web/src/features/case-law/components/case-decision-inspector-view.tsx#1"
+          },
+          {
+            "location": "apps/web/src/features/case-law/components/case-decision-inspector-view.tsx#2"
+          },
+          {
+            "location": "apps/web/src/features/case-law/components/case-viewer/analysis/current-section.tsx#1"
+          },
+          {
+            "location": "apps/web/src/features/case-law/components/case-viewer/analysis/current-section.tsx#2"
           },
           {
             "location": "apps/web/src/features/case-law/components/case-viewer/analysis/margin-notes.tsx#9"
           },
           {
+            "location": "apps/web/src/features/case-law/components/case-viewer/analysis/margin-notes.tsx#10"
+          },
+          {
+            "location": "apps/web/src/features/case-law/components/case-viewer/annotation-toolbar.tsx#1"
+          },
+          {
+            "location": "apps/web/src/features/case-law/components/case-viewer/annotation-toolbar.tsx#2"
+          },
+          {
             "location": "apps/web/src/features/case-law/components/case-viewer/decision-citations.tsx#1"
+          },
+          {
+            "location": "apps/web/src/features/case-law/components/case-viewer/decision-facts.tsx#1"
           },
           {
             "location": "apps/web/src/features/case-law/components/case-viewer/decision-text.tsx#1"
@@ -3881,6 +3956,9 @@
           },
           {
             "location": "apps/web/src/features/case-law/components/case-viewer/decision-workspace.tsx#1"
+          },
+          {
+            "location": "apps/web/src/features/case-law/components/case-viewer/leading-citations.tsx#1"
           },
           {
             "location": "apps/web/src/features/case-law/components/case-viewer/provisions-cited.tsx#1"
@@ -3908,6 +3986,9 @@
           },
           {
             "location": "apps/web/src/features/statutes/components/provision-inspector-view.tsx#2"
+          },
+          {
+            "location": "apps/web/src/features/statutes/components/provision-wording.tsx#1"
           },
           {
             "location": "apps/web/src/features/statutes/components/statute-text.tsx#1"
@@ -4690,6 +4771,9 @@
             "location": "packages/ui/src/components/input.tsx#3"
           },
           {
+            "location": "packages/ui/src/components/loader.tsx#1"
+          },
+          {
             "location": "packages/ui/src/components/menu.tsx#3"
           },
           {
@@ -4828,7 +4912,7 @@
       "version": "1.7.0"
     },
     {
-      "bom-ref": "pkg:npm/@better-auth/api-key@1.6.26",
+      "bom-ref": "pkg:npm/@better-auth/api-key@1.7.1",
       "description": "API Key plugin for Better Auth.",
       "evidence": {
         "identity": [
@@ -4881,16 +4965,16 @@
           "value": "apps/api/node_modules/@better-auth/api-key/package.json"
         }
       ],
-      "purl": "pkg:npm/%40better-auth/api-key@1.6.26",
+      "purl": "pkg:npm/%40better-auth/api-key@1.7.1",
       "scope": "required",
       "tags": [
         "auth"
       ],
       "type": "library",
-      "version": "1.6.26"
+      "version": "1.7.1"
     },
     {
-      "bom-ref": "pkg:npm/@better-auth/oauth-provider@1.6.26",
+      "bom-ref": "pkg:npm/@better-auth/oauth-provider@1.7.1",
       "description": "An oauth provider plugin for Better Auth",
       "evidence": {
         "identity": [
@@ -4956,10 +5040,10 @@
           "value": "apps/api/node_modules/@better-auth/oauth-provider/package.json"
         }
       ],
-      "purl": "pkg:npm/%40better-auth/oauth-provider@1.6.26",
+      "purl": "pkg:npm/%40better-auth/oauth-provider@1.7.1",
       "scope": "required",
       "type": "library",
-      "version": "1.6.26"
+      "version": "1.7.1"
     },
     {
       "authors": [
@@ -5093,7 +5177,7 @@
       "version": "1.4.10"
     },
     {
-      "bom-ref": "pkg:npm/@firecrawl/anydoc@0.1.9",
+      "bom-ref": "pkg:npm/@firecrawl/anydoc@0.2.3",
       "description": "Convert documents (doc, docx, odt, rtf, epub, pdf, presentations, spreadsheets, csv) to GitHub-Flavored Markdown",
       "evidence": {
         "identity": [
@@ -5146,10 +5230,10 @@
           "value": "apps/api/node_modules/@firecrawl/anydoc/package.json"
         }
       ],
-      "purl": "pkg:npm/%40firecrawl/anydoc@0.1.9",
+      "purl": "pkg:npm/%40firecrawl/anydoc@0.2.3",
       "scope": "required",
       "type": "library",
-      "version": "0.1.9"
+      "version": "0.2.3"
     },
     {
       "authors": [
@@ -5215,6 +5299,9 @@
             "location": "apps/web/src/components/inspector/anonymization-facet.tsx#17"
           },
           {
+            "location": "apps/web/src/features/case-law/components/case-viewer/annotation-toolbar.tsx#3"
+          },
+          {
             "location": "apps/web/src/lib/chrome-header-actions.tsx#3"
           },
           {
@@ -5266,7 +5353,7 @@
       "version": "2.1.9"
     },
     {
-      "bom-ref": "pkg:npm/@formatjs/icu-messageformat-parser@3.5.16",
+      "bom-ref": "pkg:npm/@formatjs/icu-messageformat-parser@3.5.17",
       "evidence": {
         "identity": [
           {
@@ -5323,16 +5410,16 @@
           "value": "node_modules/@formatjs/icu-messageformat-parser/package.json"
         }
       ],
-      "purl": "pkg:npm/%40formatjs/icu-messageformat-parser@3.5.16",
+      "purl": "pkg:npm/%40formatjs/icu-messageformat-parser@3.5.17",
       "scope": "required",
       "tags": [
         "parse"
       ],
       "type": "library",
-      "version": "3.5.16"
+      "version": "3.5.17"
     },
     {
-      "bom-ref": "pkg:npm/@google/genai@2.17.1",
+      "bom-ref": "pkg:npm/@google/genai@2.18.0",
       "evidence": {
         "identity": [
           {
@@ -5384,10 +5471,10 @@
           "value": "apps/api/node_modules/@google/genai/package.json"
         }
       ],
-      "purl": "pkg:npm/%40google/genai@2.17.1",
+      "purl": "pkg:npm/%40google/genai@2.18.0",
       "scope": "required",
       "type": "library",
-      "version": "2.17.1"
+      "version": "2.18.0"
     },
     {
       "bom-ref": "pkg:npm/@hocuspocus/provider@4.6.0",
@@ -6502,7 +6589,7 @@
             "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#1"
           },
           {
-            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#7"
+            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#6"
           },
           {
             "location": "apps/desktop/src/clipboard/ClipboardEditor.tsx#1"
@@ -6925,6 +7012,9 @@
             "location": "apps/web/src/components/inspector/playbook-facet.tsx#3"
           },
           {
+            "location": "apps/web/src/components/inspector/review-export-menu.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/inspector/skill-resource-panel.tsx#1"
           },
           {
@@ -6950,6 +7040,9 @@
           },
           {
             "location": "apps/web/src/components/legal-reader/cited-decision-link.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/legal-reader/cited-provision-link.tsx#1"
           },
           {
             "location": "apps/web/src/components/legal-reader/document-ast-text.tsx#1"
@@ -7195,16 +7288,43 @@
             "location": "apps/web/src/components/workspaces/workflow-start-confirmation-prompt.tsx#2"
           },
           {
+            "location": "apps/web/src/features/case-law/case-decision-details-inspector-registration.tsx#1"
+          },
+          {
             "location": "apps/web/src/features/case-law/case-decision-inspector-registration.tsx#1"
           },
           {
-            "location": "apps/web/src/features/case-law/components/case-viewer/analysis/margin-notes.tsx#8"
+            "location": "apps/web/src/features/case-law/components/case-decision-details-inspector-view.tsx#1"
+          },
+          {
+            "location": "apps/web/src/features/case-law/components/case-decision-inspector-view.tsx#1"
+          },
+          {
+            "location": "apps/web/src/features/case-law/components/case-decision-inspector-view.tsx#2"
+          },
+          {
+            "location": "apps/web/src/features/case-law/components/case-viewer/analysis/current-section.tsx#1"
+          },
+          {
+            "location": "apps/web/src/features/case-law/components/case-viewer/analysis/current-section.tsx#2"
           },
           {
             "location": "apps/web/src/features/case-law/components/case-viewer/analysis/margin-notes.tsx#9"
           },
           {
+            "location": "apps/web/src/features/case-law/components/case-viewer/analysis/margin-notes.tsx#10"
+          },
+          {
+            "location": "apps/web/src/features/case-law/components/case-viewer/annotation-toolbar.tsx#1"
+          },
+          {
+            "location": "apps/web/src/features/case-law/components/case-viewer/annotation-toolbar.tsx#2"
+          },
+          {
             "location": "apps/web/src/features/case-law/components/case-viewer/decision-citations.tsx#1"
+          },
+          {
+            "location": "apps/web/src/features/case-law/components/case-viewer/decision-facts.tsx#1"
           },
           {
             "location": "apps/web/src/features/case-law/components/case-viewer/decision-text.tsx#1"
@@ -7214,6 +7334,9 @@
           },
           {
             "location": "apps/web/src/features/case-law/components/case-viewer/decision-workspace.tsx#1"
+          },
+          {
+            "location": "apps/web/src/features/case-law/components/case-viewer/leading-citations.tsx#1"
           },
           {
             "location": "apps/web/src/features/case-law/components/case-viewer/provisions-cited.tsx#1"
@@ -7241,6 +7364,9 @@
           },
           {
             "location": "apps/web/src/features/statutes/components/provision-inspector-view.tsx#2"
+          },
+          {
+            "location": "apps/web/src/features/statutes/components/provision-wording.tsx#1"
           },
           {
             "location": "apps/web/src/features/statutes/components/statute-text.tsx#1"
@@ -8021,6 +8147,9 @@
           },
           {
             "location": "packages/ui/src/components/input.tsx#3"
+          },
+          {
+            "location": "packages/ui/src/components/loader.tsx#1"
           },
           {
             "location": "packages/ui/src/components/menu.tsx#3"
@@ -9090,6 +9219,9 @@
             "location": "apps/api/src/lib/bbox/ai-generate-b-boxes.ts#2"
           },
           {
+            "location": "apps/api/src/lib/document-review/review-document-messages.ts#2"
+          },
+          {
             "location": "apps/api/src/lib/tanstack-ai-caching.ts#6"
           },
           {
@@ -9251,6 +9383,9 @@
           },
           {
             "location": "apps/web/src/components/chat/create-document-draft.logic.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/chat/create-document-draft.logic.ts#2"
           },
           {
             "location": "apps/web/src/features/chat/chat-runtime.ts#2"
@@ -10035,6 +10170,9 @@
             "location": "apps/api/src/lib/chat/model-ingress-guard.ts#1"
           },
           {
+            "location": "apps/api/src/lib/document-review/review-document-messages.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/docx/ai-field-generator.ts#12"
           },
           {
@@ -10144,7 +10282,7 @@
           "name": "Tanner Linsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/react-devtools@0.10.10",
+      "bom-ref": "pkg:npm/@tanstack/react-devtools@0.10.11",
       "description": "TanStack Devtools is a set of tools for building advanced devtools for your React application.",
       "evidence": {
         "identity": [
@@ -10197,13 +10335,13 @@
           "value": "apps/web/node_modules/@tanstack/react-devtools/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/react-devtools@0.10.10",
+      "purl": "pkg:npm/%40tanstack/react-devtools@0.10.11",
       "scope": "required",
       "tags": [
         "tools"
       ],
       "type": "library",
-      "version": "0.10.10"
+      "version": "0.10.11"
     },
     {
       "authors": [
@@ -10554,10 +10692,19 @@
             "location": "apps/web/src/components/workspaces/hooks/use-sync-justifications.ts#3"
           },
           {
+            "location": "apps/web/src/features/case-law/annotations/use-decision-annotations.ts#1"
+          },
+          {
             "location": "apps/web/src/features/case-law/components/case-viewer/analysis/use-decision-analysis.ts#10"
           },
           {
             "location": "apps/web/src/features/case-law/components/case-viewer/use-decision-citation-anchors.ts#1"
+          },
+          {
+            "location": "apps/web/src/features/case-law/components/case-viewer/use-decision-provision-anchors.ts#1"
+          },
+          {
+            "location": "apps/web/src/features/case-law/queries/annotations.ts#1"
           },
           {
             "location": "apps/web/src/features/case-law/queries/citations.ts#1"
@@ -11157,16 +11304,28 @@
             "location": "apps/web/src/components/workspaces/tasks/task-metadata.tsx#1"
           },
           {
-            "location": "apps/web/src/features/case-law/components/case-decision-inspector-view.tsx#1"
+            "location": "apps/web/src/features/case-law/components/case-decision-details-inspector-view.tsx#3"
+          },
+          {
+            "location": "apps/web/src/features/case-law/components/case-decision-inspector-view.tsx#4"
           },
           {
             "location": "apps/web/src/features/case-law/components/case-viewer/citation-header.tsx#1"
           },
           {
+            "location": "apps/web/src/features/case-law/components/case-viewer/citation-passage-preview.tsx#1"
+          },
+          {
             "location": "apps/web/src/features/case-law/components/case-viewer/decision-citations.tsx#3"
           },
           {
+            "location": "apps/web/src/features/case-law/components/case-viewer/leading-citations.tsx#3"
+          },
+          {
             "location": "apps/web/src/features/case-law/components/case-viewer/provisions-cited.tsx#3"
+          },
+          {
+            "location": "apps/web/src/features/case-law/components/top-bar-citations.tsx#1"
           },
           {
             "location": "apps/web/src/features/chat/components/chat-web-search-toggle.tsx#1"
@@ -11179,6 +11338,12 @@
           },
           {
             "location": "apps/web/src/features/statutes/components/provision-history.tsx#3"
+          },
+          {
+            "location": "apps/web/src/features/statutes/components/provision-inspector-view.tsx#4"
+          },
+          {
+            "location": "apps/web/src/features/statutes/components/provision-wording.tsx#3"
           },
           {
             "location": "apps/web/src/features/style-sets/style-set-editor-dialog.tsx#4"
@@ -11732,7 +11897,7 @@
           "name": "Tanner Linsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/react-router@1.170.30",
+      "bom-ref": "pkg:npm/@tanstack/react-router@1.170.31",
       "description": "Modern and scalable routing for React applications",
       "evidence": {
         "identity": [
@@ -11754,6 +11919,9 @@
             "location": "apps/web/src/components/chat/folder-navigation.ts#1"
           },
           {
+            "location": "apps/web/src/components/inspector/case-decision-view.ts#1"
+          },
+          {
             "location": "apps/web/src/components/inspector/maximize-tab.ts#2"
           },
           {
@@ -11764,6 +11932,9 @@
           },
           {
             "location": "apps/web/src/components/workspaces/hooks/use-start-workflow.ts#2"
+          },
+          {
+            "location": "apps/web/src/features/case-law/use-main-decision.ts#1"
           },
           {
             "location": "apps/web/src/features/guides/use-guide-runner.ts#3"
@@ -11895,10 +12066,16 @@
             "location": "apps/web/src/components/inspector/inspector-rail.tsx#4"
           },
           {
+            "location": "apps/web/src/components/inspector/playbook-facet.tsx#11"
+          },
+          {
             "location": "apps/web/src/components/inspector/versions-facet.tsx#14"
           },
           {
             "location": "apps/web/src/components/legal-reader/cited-decision-link.tsx#3"
+          },
+          {
+            "location": "apps/web/src/components/legal-reader/cited-provision-link.tsx#3"
           },
           {
             "location": "apps/web/src/components/matter-number-hint.tsx#2"
@@ -11958,7 +12135,7 @@
             "location": "apps/web/src/components/workspaces/tasks/task-detail-panel.tsx#4"
           },
           {
-            "location": "apps/web/src/features/case-law/components/case-decision-inspector-view.tsx#2"
+            "location": "apps/web/src/features/case-law/components/case-decision-inspector-view.tsx#5"
           },
           {
             "location": "apps/web/src/features/case-law/components/case-viewer/provisions-cited.tsx#4"
@@ -11967,7 +12144,10 @@
             "location": "apps/web/src/features/case-law/components/decision-table.tsx#1"
           },
           {
-            "location": "apps/web/src/features/statutes/components/provision-inspector-view.tsx#4"
+            "location": "apps/web/src/features/case-law/components/top-bar-citations.tsx#2"
+          },
+          {
+            "location": "apps/web/src/features/statutes/components/provision-inspector-view.tsx#5"
           },
           {
             "location": "apps/web/src/features/style-sets/style-set-editor-dialog.tsx#5"
@@ -12403,10 +12583,10 @@
           "value": "apps/web/node_modules/@tanstack/react-router/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/react-router@1.170.30",
+      "purl": "pkg:npm/%40tanstack/react-router@1.170.31",
       "scope": "required",
       "type": "library",
-      "version": "1.170.30"
+      "version": "1.170.31"
     },
     {
       "authors": [
@@ -12414,7 +12594,7 @@
           "name": "Tanner Linsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/react-start@1.168.47",
+      "bom-ref": "pkg:npm/@tanstack/react-start@1.168.48",
       "description": "Modern and scalable routing for React applications",
       "evidence": {
         "identity": [
@@ -12482,10 +12662,10 @@
           "value": "apps/web/node_modules/@tanstack/react-start/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/react-start@1.168.47",
+      "purl": "pkg:npm/%40tanstack/react-start@1.168.48",
       "scope": "required",
       "type": "library",
-      "version": "1.168.47"
+      "version": "1.168.48"
     },
     {
       "authors": [
@@ -12857,7 +13037,7 @@
             "location": "apps/desktop/src/telemetry/desktop-telemetry.ts#1"
           },
           {
-            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#16"
+            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#15"
           },
           {
             "location": "apps/desktop/src/clipboard/ClipboardEditor.tsx#3"
@@ -12866,7 +13046,7 @@
             "location": "apps/desktop/src/mainview/App.tsx#3"
           },
           {
-            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#17"
+            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#16"
           },
           {
             "location": "apps/desktop/src/mainview/App.tsx#4"
@@ -12941,6 +13121,9 @@
           },
           {
             "location": "apps/web/src/components/chat/prompt-slash-extension.ts#2"
+          },
+          {
+            "location": "apps/web/src/components/chat-decision-passage.ts#8"
           },
           {
             "location": "apps/web/src/components/chat-mention-helpers.ts#1"
@@ -14064,7 +14247,7 @@
             "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#1"
           },
           {
-            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#7"
+            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#6"
           },
           {
             "location": "apps/desktop/src/clipboard/ClipboardEditor.tsx#1"
@@ -14487,6 +14670,9 @@
             "location": "apps/web/src/components/inspector/playbook-facet.tsx#3"
           },
           {
+            "location": "apps/web/src/components/inspector/review-export-menu.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/inspector/skill-resource-panel.tsx#1"
           },
           {
@@ -14512,6 +14698,9 @@
           },
           {
             "location": "apps/web/src/components/legal-reader/cited-decision-link.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/legal-reader/cited-provision-link.tsx#1"
           },
           {
             "location": "apps/web/src/components/legal-reader/document-ast-text.tsx#1"
@@ -14757,16 +14946,43 @@
             "location": "apps/web/src/components/workspaces/workflow-start-confirmation-prompt.tsx#2"
           },
           {
+            "location": "apps/web/src/features/case-law/case-decision-details-inspector-registration.tsx#1"
+          },
+          {
             "location": "apps/web/src/features/case-law/case-decision-inspector-registration.tsx#1"
           },
           {
-            "location": "apps/web/src/features/case-law/components/case-viewer/analysis/margin-notes.tsx#8"
+            "location": "apps/web/src/features/case-law/components/case-decision-details-inspector-view.tsx#1"
+          },
+          {
+            "location": "apps/web/src/features/case-law/components/case-decision-inspector-view.tsx#1"
+          },
+          {
+            "location": "apps/web/src/features/case-law/components/case-decision-inspector-view.tsx#2"
+          },
+          {
+            "location": "apps/web/src/features/case-law/components/case-viewer/analysis/current-section.tsx#1"
+          },
+          {
+            "location": "apps/web/src/features/case-law/components/case-viewer/analysis/current-section.tsx#2"
           },
           {
             "location": "apps/web/src/features/case-law/components/case-viewer/analysis/margin-notes.tsx#9"
           },
           {
+            "location": "apps/web/src/features/case-law/components/case-viewer/analysis/margin-notes.tsx#10"
+          },
+          {
+            "location": "apps/web/src/features/case-law/components/case-viewer/annotation-toolbar.tsx#1"
+          },
+          {
+            "location": "apps/web/src/features/case-law/components/case-viewer/annotation-toolbar.tsx#2"
+          },
+          {
             "location": "apps/web/src/features/case-law/components/case-viewer/decision-citations.tsx#1"
+          },
+          {
+            "location": "apps/web/src/features/case-law/components/case-viewer/decision-facts.tsx#1"
           },
           {
             "location": "apps/web/src/features/case-law/components/case-viewer/decision-text.tsx#1"
@@ -14776,6 +14992,9 @@
           },
           {
             "location": "apps/web/src/features/case-law/components/case-viewer/decision-workspace.tsx#1"
+          },
+          {
+            "location": "apps/web/src/features/case-law/components/case-viewer/leading-citations.tsx#1"
           },
           {
             "location": "apps/web/src/features/case-law/components/case-viewer/provisions-cited.tsx#1"
@@ -14803,6 +15022,9 @@
           },
           {
             "location": "apps/web/src/features/statutes/components/provision-inspector-view.tsx#2"
+          },
+          {
+            "location": "apps/web/src/features/statutes/components/provision-wording.tsx#1"
           },
           {
             "location": "apps/web/src/features/statutes/components/statute-text.tsx#1"
@@ -15585,6 +15807,9 @@
             "location": "packages/ui/src/components/input.tsx#3"
           },
           {
+            "location": "packages/ui/src/components/loader.tsx#1"
+          },
+          {
             "location": "packages/ui/src/components/menu.tsx#3"
           },
           {
@@ -15883,6 +16108,12 @@
         ],
         "occurrences": [
           {
+            "location": "apps/api/scripts/test-batch-plan.ts#2"
+          },
+          {
+            "location": "packages/scripts/src/property-timeout-convention.ts#1"
+          },
+          {
             "location": "packages/scripts/src/result-consumption.ts#4"
           },
           {
@@ -16009,7 +16240,7 @@
       "version": "7.2.4"
     },
     {
-      "bom-ref": "pkg:npm/better-auth@1.6.26",
+      "bom-ref": "pkg:npm/better-auth@1.7.1",
       "description": "The most comprehensive authentication framework for TypeScript.",
       "evidence": {
         "identity": [
@@ -16137,13 +16368,13 @@
           "value": "apps/api/node_modules/better-auth/package.json"
         }
       ],
-      "purl": "pkg:npm/better-auth@1.6.26",
+      "purl": "pkg:npm/better-auth@1.7.1",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "1.6.26"
+      "version": "1.7.1"
     },
     {
       "authors": [
@@ -16216,6 +16447,9 @@
           },
           {
             "location": "apps/api/scripts/seed-utils.ts#8"
+          },
+          {
+            "location": "apps/api/scripts/test-batch-plan.ts#1"
           },
           {
             "location": "apps/api/src/agent-auth/id-jag.ts#1"
@@ -16330,6 +16564,21 @@
           },
           {
             "location": "apps/api/src/handlers/case-law/analysis/generate.ts#9"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/annotations/create.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/annotations/delete.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/annotations/list.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/annotations/schema.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/annotations/update.ts#1"
           },
           {
             "location": "apps/api/src/handlers/case-law/citation-authority.ts#46"
@@ -16617,6 +16866,9 @@
             "location": "apps/api/src/handlers/chat/tools/folio-agent-tools.ts#2"
           },
           {
+            "location": "apps/api/src/handlers/chat/tools/folio-operation-schema.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/chat/tools/registry-adapter/input-ref-hydration.ts#1"
           },
           {
@@ -16759,6 +17011,9 @@
           },
           {
             "location": "apps/api/src/handlers/document-reviews/decide-finding.ts#10"
+          },
+          {
+            "location": "apps/api/src/handlers/document-reviews/export-run.ts#8"
           },
           {
             "location": "apps/api/src/handlers/document-reviews/list-runs.ts#13"
@@ -18126,6 +18381,9 @@
             "location": "apps/api/src/lib/db/assert-migrations-applied.ts#1"
           },
           {
+            "location": "apps/api/src/lib/db/better-auth-oauth-policy-census.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/db/bounded-all.ts#1"
           },
           {
@@ -18160,6 +18418,9 @@
           },
           {
             "location": "apps/api/src/lib/document-processing-readiness.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/document-review/prepare-review-files.ts#1"
           },
           {
             "location": "apps/api/src/lib/document-review/reference-compare.ts#1"
@@ -18318,10 +18579,52 @@
             "location": "apps/api/src/lib/legal-search/case-law-index-groups.ts#17"
           },
           {
+            "location": "apps/api/src/lib/legal-search/corpus-generation-contract.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/legal-search/corpus-index-client.ts#1"
           },
           {
             "location": "apps/api/src/lib/legal-search/corpus-index-facets.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/legal-search/corpus-index-manifest.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/legal-search/corpus-index-projection-bootstrap.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/legal-search/corpus-index-projection-builder.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/legal-search/corpus-index-projection-census-store.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/legal-search/corpus-index-projection-census.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/legal-search/corpus-index-projection-cleanup-store.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/legal-search/corpus-index-projection-descriptor.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/legal-search/corpus-index-projection-desired-state.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/legal-search/corpus-index-projection-engine.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/legal-search/corpus-index-projection-erasure-store.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/legal-search/corpus-index-projection-executor.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/legal-search/corpus-index-projection-materials.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/legal-search/corpus-index-projection-store.ts#1"
           },
           {
             "location": "apps/api/src/lib/legal-search/corpus-location.ts#1"
@@ -18678,10 +18981,16 @@
             "location": "apps/api/src/scripts/backfill-decision-identifiers.ts#11"
           },
           {
+            "location": "apps/api/src/scripts/better-auth-17-backfill.logic.ts#1"
+          },
+          {
+            "location": "apps/api/src/scripts/better-auth-17-backfill.ts#10"
+          },
+          {
             "location": "apps/api/src/scripts/better-auth-migration-audit.logic.ts#9"
           },
           {
-            "location": "apps/api/src/scripts/better-auth-migration-audit.ts#10"
+            "location": "apps/api/src/scripts/better-auth-migration-audit.ts#11"
           },
           {
             "location": "apps/api/src/scripts/case-law-source-total.ts#1"
@@ -18816,6 +19125,15 @@
             "location": "apps/web/src/components/inspector/playbook-review-results.logic.ts#1"
           },
           {
+            "location": "apps/web/src/components/inspector/review-apply-accepted.logic.ts#7"
+          },
+          {
+            "location": "apps/web/src/components/matter-target-picker.logic.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/matter-target-picker.logic.ts#2"
+          },
+          {
             "location": "apps/web/src/components/workspaces/hooks/use-start-workflow.logic.ts#1"
           },
           {
@@ -18829,6 +19147,9 @@
           },
           {
             "location": "apps/web/src/features/case-law/queries/decisions.ts#2"
+          },
+          {
+            "location": "apps/web/src/features/case-law/use-provision-part-renderer.ts#1"
           },
           {
             "location": "apps/web/src/features/chat/chat-runtime.ts#11"
@@ -18874,6 +19195,9 @@
           },
           {
             "location": "apps/web/src/lib/errors/telemetry.ts#1"
+          },
+          {
+            "location": "apps/web/src/lib/export-download.ts#1"
           },
           {
             "location": "apps/web/src/lib/knowledge/queries.ts#2"
@@ -19227,13 +19551,19 @@
             "location": "apps/web/src/components/inspector/email-attachments-facet.tsx#4"
           },
           {
-            "location": "apps/web/src/components/inspector/playbook-facet.tsx#11"
+            "location": "apps/web/src/components/inspector/playbook-facet.tsx#12"
+          },
+          {
+            "location": "apps/web/src/components/inspector/review-export-menu.tsx#3"
           },
           {
             "location": "apps/web/src/components/inspector/versions-facet.tsx#15"
           },
           {
             "location": "apps/web/src/components/legal-reader/document-ast-text.tsx#4"
+          },
+          {
+            "location": "apps/web/src/components/matter-target-picker.tsx#4"
           },
           {
             "location": "apps/web/src/components/office/silurus-office-viewer.tsx#4"
@@ -19261,9 +19591,6 @@
           },
           {
             "location": "apps/web/src/components/workspaces/properties/inline-option-editor.tsx#3"
-          },
-          {
-            "location": "apps/web/src/features/case-law/components/case-viewer/provisions-cited.tsx#5"
           },
           {
             "location": "apps/web/src/lib/analytics/route-error-lifecycle-context.tsx#4"
@@ -20492,10 +20819,25 @@
             "location": "apps/api/src/handlers/case-law/analysis/generate.ts#10"
           },
           {
+            "location": "apps/api/src/handlers/case-law/annotations/group.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/annotations/group.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/annotations/list.ts#2"
+          },
+          {
             "location": "apps/api/src/handlers/case-law/citation-authority.ts#47"
           },
           {
             "location": "apps/api/src/handlers/case-law/citation-authority.ts#48"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/citation-court-hint.ts#18"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/citation-court-hint.ts#19"
           },
           {
             "location": "apps/api/src/handlers/case-law/citation-resolution-status.ts#19"
@@ -20504,10 +20846,10 @@
             "location": "apps/api/src/handlers/case-law/citation-resolution-status.ts#20"
           },
           {
-            "location": "apps/api/src/handlers/case-law/citation-resolution.ts#58"
+            "location": "apps/api/src/handlers/case-law/citation-resolution.ts#67"
           },
           {
-            "location": "apps/api/src/handlers/case-law/citation-resolution.ts#59"
+            "location": "apps/api/src/handlers/case-law/citation-resolution.ts#68"
           },
           {
             "location": "apps/api/src/handlers/case-law/corpus-index.ts#2"
@@ -20684,6 +21026,9 @@
             "location": "apps/api/src/handlers/chat/send-message.ts#3"
           },
           {
+            "location": "apps/api/src/handlers/chat/stream-chat.ts#19"
+          },
+          {
             "location": "apps/api/src/handlers/chat/tools/chat-history-tools.ts#3"
           },
           {
@@ -20772,6 +21117,9 @@
           },
           {
             "location": "apps/api/src/handlers/document-reviews/decide-finding.ts#11"
+          },
+          {
+            "location": "apps/api/src/handlers/document-reviews/export-run.ts#9"
           },
           {
             "location": "apps/api/src/handlers/document-reviews/list-runs.ts#14"
@@ -21725,6 +22073,12 @@
             "location": "apps/api/src/lib/db/assert-migrations-applied.ts#2"
           },
           {
+            "location": "apps/api/src/lib/db/better-auth-oauth-policy-census.ts#2"
+          },
+          {
+            "location": "apps/api/src/lib/db/better-auth-oauth-policy-census.ts#3"
+          },
+          {
             "location": "apps/api/src/lib/db/timestamp-cas.ts#1"
           },
           {
@@ -21936,6 +22290,27 @@
           },
           {
             "location": "apps/api/src/lib/legal-search/case-law-source-ingestion-lease.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/legal-search/corpus-index-projection-bootstrap.ts#2"
+          },
+          {
+            "location": "apps/api/src/lib/legal-search/corpus-index-projection-census-store.ts#2"
+          },
+          {
+            "location": "apps/api/src/lib/legal-search/corpus-index-projection-cleanup-store.ts#2"
+          },
+          {
+            "location": "apps/api/src/lib/legal-search/corpus-index-projection-desired-state.ts#2"
+          },
+          {
+            "location": "apps/api/src/lib/legal-search/corpus-index-projection-erasure-store.ts#2"
+          },
+          {
+            "location": "apps/api/src/lib/legal-search/corpus-index-projection-materials.ts#2"
+          },
+          {
+            "location": "apps/api/src/lib/legal-search/corpus-index-projection-store.ts#2"
           },
           {
             "location": "apps/api/src/lib/legal-search/corpus-index-provider.ts#1"
@@ -22277,16 +22652,28 @@
             "location": "apps/api/src/scripts/backfill-source-document-ids.ts#24"
           },
           {
+            "location": "apps/api/src/scripts/better-auth-17-backfill.logic.ts#2"
+          },
+          {
+            "location": "apps/api/src/scripts/better-auth-17-backfill.logic.ts#3"
+          },
+          {
+            "location": "apps/api/src/scripts/better-auth-17-backfill.ts#12"
+          },
+          {
+            "location": "apps/api/src/scripts/better-auth-17-backfill.ts#13"
+          },
+          {
             "location": "apps/api/src/scripts/better-auth-migration-audit.logic.ts#10"
           },
           {
             "location": "apps/api/src/scripts/better-auth-migration-audit.logic.ts#11"
           },
           {
-            "location": "apps/api/src/scripts/better-auth-migration-audit.ts#12"
+            "location": "apps/api/src/scripts/better-auth-migration-audit.ts#13"
           },
           {
-            "location": "apps/api/src/scripts/better-auth-migration-audit.ts#13"
+            "location": "apps/api/src/scripts/better-auth-migration-audit.ts#14"
           },
           {
             "location": "apps/api/src/scripts/build-expansion-dictionary.ts#25"
@@ -22397,7 +22784,10 @@
             "location": "apps/api/src/lib/public-law-read-db.ts#5"
           },
           {
-            "location": "apps/api/src/scripts/better-auth-migration-audit.ts#13"
+            "location": "apps/api/src/scripts/better-auth-17-backfill.ts#13"
+          },
+          {
+            "location": "apps/api/src/scripts/better-auth-migration-audit.ts#14"
           },
           {
             "location": "apps/api/src/db/migrate.ts#5"
@@ -22567,6 +22957,15 @@
             "location": "apps/api/src/handlers/case-law/analysis/generate.ts#11"
           },
           {
+            "location": "apps/api/src/handlers/case-law/annotations/list.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/annotations/schema.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/annotations/schema.ts#3"
+          },
+          {
             "location": "apps/api/src/handlers/case-law/decisions/citation-graph.ts#4"
           },
           {
@@ -22583,6 +22982,9 @@
           },
           {
             "location": "apps/api/src/handlers/case-law/decisions/get.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/decisions/leading-citations.ts#1"
           },
           {
             "location": "apps/api/src/handlers/case-law/decisions/list-citations.ts#1"
@@ -22847,6 +23249,9 @@
           },
           {
             "location": "apps/api/src/handlers/dev/routes.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/document-reviews/export-run.ts#10"
           },
           {
             "location": "apps/api/src/handlers/document-reviews/list-runs.ts#16"
@@ -24261,7 +24666,7 @@
           "name": " Inc."
         }
       ],
-      "bom-ref": "pkg:npm/expo-router@57.0.13",
+      "bom-ref": "pkg:npm/expo-router@57.0.14",
       "description": "Expo Router is a file-based router for React Native and web applications.",
       "evidence": {
         "identity": [
@@ -24317,13 +24722,13 @@
           "value": "apps/mobile/node_modules/expo-router/package.json"
         }
       ],
-      "purl": "pkg:npm/expo-router@57.0.13",
+      "purl": "pkg:npm/expo-router@57.0.14",
       "scope": "required",
       "tags": [
         "web"
       ],
       "type": "library",
-      "version": "57.0.13"
+      "version": "57.0.14"
     },
     {
       "authors": [
@@ -24813,9 +25218,6 @@
             "location": "apps/api/src/handlers/templates/prepare-template.ts#12"
           },
           {
-            "location": "apps/api/src/handlers/views/table-export.ts#3"
-          },
-          {
             "location": "apps/api/src/lib/docx/adapt-ai-fields.ts#19"
           },
           {
@@ -24841,6 +25243,9 @@
           },
           {
             "location": "apps/api/src/lib/skills/skill-package.ts#2"
+          },
+          {
+            "location": "apps/api/src/lib/views/table-export.ts#1"
           },
           {
             "location": "apps/api/src/scripts/prepare-spa-template.ts#9"
@@ -24932,7 +25337,7 @@
             "location": "apps/web/src/lib/value-types.ts#22"
           },
           {
-            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#36"
+            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#35"
           },
           {
             "location": "apps/desktop/src/clipboard/ClipboardEditor.tsx#12"
@@ -25076,6 +25481,9 @@
             "location": "apps/web/src/components/copy-field.tsx#1"
           },
           {
+            "location": "apps/web/src/components/desktop-download-buttons.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/dev-sidebar-group.tsx#11"
           },
           {
@@ -25145,7 +25553,10 @@
             "location": "apps/web/src/components/inspector/inspector-tab-header.tsx#3"
           },
           {
-            "location": "apps/web/src/components/inspector/playbook-facet.tsx#22"
+            "location": "apps/web/src/components/inspector/playbook-facet.tsx#25"
+          },
+          {
+            "location": "apps/web/src/components/inspector/review-export-menu.tsx#4"
           },
           {
             "location": "apps/web/src/components/inspector/skill-resource-panel.tsx#3"
@@ -25175,7 +25586,7 @@
             "location": "apps/web/src/components/matter-number-hint.tsx#3"
           },
           {
-            "location": "apps/web/src/components/matter-target-picker.tsx#4"
+            "location": "apps/web/src/components/matter-target-picker.tsx#5"
           },
           {
             "location": "apps/web/src/components/organization/invite-member-dialog.tsx#8"
@@ -25304,19 +25715,37 @@
             "location": "apps/web/src/components/workspaces/tasks/task-subtasks.tsx#1"
           },
           {
+            "location": "apps/web/src/features/case-law/case-decision-details-inspector-registration.tsx#3"
+          },
+          {
             "location": "apps/web/src/features/case-law/case-decision-inspector-registration.tsx#3"
           },
           {
-            "location": "apps/web/src/features/case-law/components/case-decision-inspector-view.tsx#3"
+            "location": "apps/web/src/features/case-law/components/case-decision-inspector-view.tsx#6"
+          },
+          {
+            "location": "apps/web/src/features/case-law/components/case-viewer/analysis/current-section.tsx#4"
+          },
+          {
+            "location": "apps/web/src/features/case-law/components/case-viewer/analysis/margin-notes.tsx#12"
+          },
+          {
+            "location": "apps/web/src/features/case-law/components/case-viewer/annotation-toolbar.tsx#15"
           },
           {
             "location": "apps/web/src/features/case-law/components/case-viewer/decision-citations.tsx#4"
           },
           {
+            "location": "apps/web/src/features/case-law/components/case-viewer/decision-facts.tsx#3"
+          },
+          {
             "location": "apps/web/src/features/case-law/components/case-viewer/decision-workspace.tsx#3"
           },
           {
-            "location": "apps/web/src/features/case-law/components/case-viewer/provisions-cited.tsx#6"
+            "location": "apps/web/src/features/case-law/components/case-viewer/leading-citations.tsx#4"
+          },
+          {
+            "location": "apps/web/src/features/case-law/components/case-viewer/provisions-cited.tsx#5"
           },
           {
             "location": "apps/web/src/features/chat/components/chat-anonymized-toggle.tsx#1"
@@ -25526,7 +25955,7 @@
             "location": "apps/web/src/routes/_protected.settings/-components/organization/web-search-keys-card.tsx#16"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/account.desktop.tsx#4"
+            "location": "apps/web/src/routes/_protected.settings/account.desktop.tsx#10"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/organization.members.tsx#14"
@@ -26266,7 +26695,7 @@
           "name": "engineering@posthog.com"
         }
       ],
-      "bom-ref": "pkg:npm/posthog-js@1.418.1",
+      "bom-ref": "pkg:npm/posthog-js@1.418.5",
       "description": "Posthog-js allows you to automatically capture usage and send events to PostHog.",
       "evidence": {
         "identity": [
@@ -26325,10 +26754,10 @@
           "value": "apps/web/node_modules/posthog-js/package.json"
         }
       ],
-      "purl": "pkg:npm/posthog-js@1.418.1",
+      "purl": "pkg:npm/posthog-js@1.418.5",
       "scope": "required",
       "type": "library",
-      "version": "1.418.1"
+      "version": "1.418.5"
     },
     {
       "authors": [
@@ -27064,6 +27493,9 @@
             "location": "apps/web/src/components/inspector/anonymization-facet.tsx#17"
           },
           {
+            "location": "apps/web/src/features/case-law/components/case-viewer/annotation-toolbar.tsx#3"
+          },
+          {
             "location": "apps/web/src/lib/chrome-header-actions.tsx#3"
           },
           {
@@ -27567,7 +27999,7 @@
             "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#1"
           },
           {
-            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#7"
+            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#6"
           },
           {
             "location": "apps/desktop/src/clipboard/ClipboardEditor.tsx#1"
@@ -27990,6 +28422,9 @@
             "location": "apps/web/src/components/inspector/playbook-facet.tsx#3"
           },
           {
+            "location": "apps/web/src/components/inspector/review-export-menu.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/inspector/skill-resource-panel.tsx#1"
           },
           {
@@ -28015,6 +28450,9 @@
           },
           {
             "location": "apps/web/src/components/legal-reader/cited-decision-link.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/legal-reader/cited-provision-link.tsx#1"
           },
           {
             "location": "apps/web/src/components/legal-reader/document-ast-text.tsx#1"
@@ -28260,16 +28698,43 @@
             "location": "apps/web/src/components/workspaces/workflow-start-confirmation-prompt.tsx#2"
           },
           {
+            "location": "apps/web/src/features/case-law/case-decision-details-inspector-registration.tsx#1"
+          },
+          {
             "location": "apps/web/src/features/case-law/case-decision-inspector-registration.tsx#1"
           },
           {
-            "location": "apps/web/src/features/case-law/components/case-viewer/analysis/margin-notes.tsx#8"
+            "location": "apps/web/src/features/case-law/components/case-decision-details-inspector-view.tsx#1"
+          },
+          {
+            "location": "apps/web/src/features/case-law/components/case-decision-inspector-view.tsx#1"
+          },
+          {
+            "location": "apps/web/src/features/case-law/components/case-decision-inspector-view.tsx#2"
+          },
+          {
+            "location": "apps/web/src/features/case-law/components/case-viewer/analysis/current-section.tsx#1"
+          },
+          {
+            "location": "apps/web/src/features/case-law/components/case-viewer/analysis/current-section.tsx#2"
           },
           {
             "location": "apps/web/src/features/case-law/components/case-viewer/analysis/margin-notes.tsx#9"
           },
           {
+            "location": "apps/web/src/features/case-law/components/case-viewer/analysis/margin-notes.tsx#10"
+          },
+          {
+            "location": "apps/web/src/features/case-law/components/case-viewer/annotation-toolbar.tsx#1"
+          },
+          {
+            "location": "apps/web/src/features/case-law/components/case-viewer/annotation-toolbar.tsx#2"
+          },
+          {
             "location": "apps/web/src/features/case-law/components/case-viewer/decision-citations.tsx#1"
+          },
+          {
+            "location": "apps/web/src/features/case-law/components/case-viewer/decision-facts.tsx#1"
           },
           {
             "location": "apps/web/src/features/case-law/components/case-viewer/decision-text.tsx#1"
@@ -28279,6 +28744,9 @@
           },
           {
             "location": "apps/web/src/features/case-law/components/case-viewer/decision-workspace.tsx#1"
+          },
+          {
+            "location": "apps/web/src/features/case-law/components/case-viewer/leading-citations.tsx#1"
           },
           {
             "location": "apps/web/src/features/case-law/components/case-viewer/provisions-cited.tsx#1"
@@ -28306,6 +28774,9 @@
           },
           {
             "location": "apps/web/src/features/statutes/components/provision-inspector-view.tsx#2"
+          },
+          {
+            "location": "apps/web/src/features/statutes/components/provision-wording.tsx#1"
           },
           {
             "location": "apps/web/src/features/statutes/components/statute-text.tsx#1"
@@ -29088,6 +29559,9 @@
             "location": "packages/ui/src/components/input.tsx#3"
           },
           {
+            "location": "packages/ui/src/components/loader.tsx#1"
+          },
+          {
             "location": "packages/ui/src/components/menu.tsx#3"
           },
           {
@@ -29703,6 +30177,12 @@
         ],
         "occurrences": [
           {
+            "location": "apps/api/scripts/test-batch-plan.ts#2"
+          },
+          {
+            "location": "packages/scripts/src/property-timeout-convention.ts#1"
+          },
+          {
             "location": "packages/scripts/src/result-consumption.ts#4"
           },
           {
@@ -29781,6 +30261,12 @@
           }
         ],
         "occurrences": [
+          {
+            "location": "apps/api/scripts/test-batch-plan.ts#2"
+          },
+          {
+            "location": "packages/scripts/src/property-timeout-convention.ts#1"
+          },
           {
             "location": "packages/scripts/src/result-consumption.ts#4"
           },
@@ -30026,9 +30512,6 @@
             "location": "apps/web/src/components/contact-picker.tsx#6"
           },
           {
-            "location": "apps/web/src/components/inspector/playbook-facet.tsx#23"
-          },
-          {
             "location": "apps/web/src/components/markdown/markdown-folio-editor.impl.tsx#4"
           },
           {
@@ -30166,6 +30649,12 @@
             "location": "apps/web/src/components/workspaces/hooks/use-start-workflow.ts#3"
           },
           {
+            "location": "apps/web/src/features/case-law/annotations/use-decision-annotations.ts#2"
+          },
+          {
+            "location": "apps/web/src/features/case-law/use-provision-part-renderer.ts#2"
+          },
+          {
             "location": "apps/web/src/features/chat/hooks/use-chat-session.ts#13"
           },
           {
@@ -30235,7 +30724,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/-hooks/use-sort-labels.ts#1"
           },
           {
-            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#37"
+            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#36"
           },
           {
             "location": "apps/desktop/src/clipboard/ClipboardEditor.tsx#13"
@@ -30454,6 +30943,9 @@
             "location": "apps/web/src/components/date-picker-popover.tsx#1"
           },
           {
+            "location": "apps/web/src/components/desktop-download-buttons.tsx#2"
+          },
+          {
             "location": "apps/web/src/components/document-language-picker.tsx#6"
           },
           {
@@ -30529,7 +31021,10 @@
             "location": "apps/web/src/components/inspector/inspector-tab-header.tsx#4"
           },
           {
-            "location": "apps/web/src/components/inspector/playbook-facet.tsx#24"
+            "location": "apps/web/src/components/inspector/playbook-facet.tsx#26"
+          },
+          {
+            "location": "apps/web/src/components/inspector/review-export-menu.tsx#5"
           },
           {
             "location": "apps/web/src/components/inspector/skill-resource-panel.tsx#4"
@@ -30565,7 +31060,7 @@
             "location": "apps/web/src/components/matter-number-hint.tsx#4"
           },
           {
-            "location": "apps/web/src/components/matter-target-picker.tsx#5"
+            "location": "apps/web/src/components/matter-target-picker.tsx#6"
           },
           {
             "location": "apps/web/src/components/office/office-file-viewer.tsx#8"
@@ -30581,6 +31076,9 @@
           },
           {
             "location": "apps/web/src/components/pdf/versions-sidebar.tsx#12"
+          },
+          {
+            "location": "apps/web/src/components/playbook-status-badge.tsx#1"
           },
           {
             "location": "apps/web/src/components/public-inspector-rail.tsx#5"
@@ -30757,13 +31255,31 @@
             "location": "apps/web/src/components/workspaces/workflow-start-confirmation-prompt.tsx#4"
           },
           {
-            "location": "apps/web/src/features/case-law/components/case-decision-inspector-view.tsx#4"
+            "location": "apps/web/src/features/case-law/components/case-decision-details-inspector-view.tsx#4"
+          },
+          {
+            "location": "apps/web/src/features/case-law/components/case-decision-inspector-view.tsx#7"
+          },
+          {
+            "location": "apps/web/src/features/case-law/components/case-viewer/analysis/current-section.tsx#5"
+          },
+          {
+            "location": "apps/web/src/features/case-law/components/case-viewer/analysis/margin-notes.tsx#13"
+          },
+          {
+            "location": "apps/web/src/features/case-law/components/case-viewer/annotation-toolbar.tsx#16"
           },
           {
             "location": "apps/web/src/features/case-law/components/case-viewer/citation-header.tsx#2"
           },
           {
+            "location": "apps/web/src/features/case-law/components/case-viewer/citation-passage-preview.tsx#2"
+          },
+          {
             "location": "apps/web/src/features/case-law/components/case-viewer/decision-citations.tsx#5"
+          },
+          {
+            "location": "apps/web/src/features/case-law/components/case-viewer/decision-facts.tsx#4"
           },
           {
             "location": "apps/web/src/features/case-law/components/case-viewer/decision-text.tsx#4"
@@ -30772,7 +31288,10 @@
             "location": "apps/web/src/features/case-law/components/case-viewer/decision-workspace.tsx#4"
           },
           {
-            "location": "apps/web/src/features/case-law/components/case-viewer/provisions-cited.tsx#7"
+            "location": "apps/web/src/features/case-law/components/case-viewer/leading-citations.tsx#5"
+          },
+          {
+            "location": "apps/web/src/features/case-law/components/case-viewer/provisions-cited.tsx#6"
           },
           {
             "location": "apps/web/src/features/case-law/components/citation-year-strip.tsx#1"
@@ -30782,6 +31301,9 @@
           },
           {
             "location": "apps/web/src/features/case-law/components/decision-table.tsx#2"
+          },
+          {
+            "location": "apps/web/src/features/case-law/components/top-bar-citations.tsx#3"
           },
           {
             "location": "apps/web/src/features/chat/components/chat-anonymized-toggle.tsx#2"
@@ -30811,7 +31333,10 @@
             "location": "apps/web/src/features/statutes/components/provision-history.tsx#4"
           },
           {
-            "location": "apps/web/src/features/statutes/components/provision-inspector-view.tsx#5"
+            "location": "apps/web/src/features/statutes/components/provision-inspector-view.tsx#6"
+          },
+          {
+            "location": "apps/web/src/features/statutes/components/provision-wording.tsx#4"
           },
           {
             "location": "apps/web/src/features/statutes/components/statute-status-pill.tsx#1"
@@ -31108,7 +31633,7 @@
             "location": "apps/web/src/routes/_protected.settings/account.connections.tsx#2"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/account.desktop.tsx#5"
+            "location": "apps/web/src/routes/_protected.settings/account.desktop.tsx#11"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/account.memory.tsx#2"
@@ -31570,7 +32095,7 @@
       "version": "4.13.5"
     },
     {
-      "bom-ref": "pkg:npm/uuid@14.0.1",
+      "bom-ref": "pkg:npm/uuid@14.0.2",
       "description": "RFC9562 UUIDs",
       "evidence": {
         "identity": [
@@ -31589,7 +32114,7 @@
         ],
         "occurrences": [
           {
-            "location": "apps/web/src/components/chat/create-document-draft.logic.ts#2"
+            "location": "apps/web/src/components/chat/create-document-draft.logic.ts#3"
           },
           {
             "location": "apps/web/src/components/inspector/inspector-broadcast.ts#1"
@@ -31607,7 +32132,7 @@
             "location": "apps/web/src/components/ai-suggestions/file-chat-overlay.tsx#34"
           },
           {
-            "location": "apps/web/src/components/inspector/playbook-facet.tsx#25"
+            "location": "apps/web/src/components/inspector/playbook-facet.tsx#27"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/template-studio-chat.tsx#24"
@@ -31640,10 +32165,10 @@
           "value": "apps/web/node_modules/uuid/package.json"
         }
       ],
-      "purl": "pkg:npm/uuid@14.0.1",
+      "purl": "pkg:npm/uuid@14.0.2",
       "scope": "required",
       "type": "library",
-      "version": "14.0.1"
+      "version": "14.0.2"
     },
     {
       "authors": [
@@ -32025,6 +32550,9 @@
           },
           {
             "location": "apps/collab/src/server.ts#6"
+          },
+          {
+            "location": "apps/web/src/components/chat-decision-passage.ts#9"
           },
           {
             "location": "apps/web/src/env-schema.ts#1"
@@ -32665,7 +33193,7 @@
             "location": "apps/web/src/components/inspector/inspector-panel.tsx#14"
           },
           {
-            "location": "apps/web/src/components/inspector/playbook-facet.tsx#26"
+            "location": "apps/web/src/components/inspector/playbook-facet.tsx#28"
           },
           {
             "location": "apps/web/src/components/inspector/suggestions-facet.tsx#25"
@@ -32752,7 +33280,7 @@
             "location": "apps/web/src/components/inspector/chat-tab-panel.tsx#29"
           },
           {
-            "location": "apps/web/src/components/inspector/playbook-facet.tsx#26"
+            "location": "apps/web/src/components/inspector/playbook-facet.tsx#28"
           },
           {
             "location": "apps/web/src/components/inspector/suggestions-facet.tsx#25"
