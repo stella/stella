@@ -21,6 +21,7 @@ import { censusAppliedCorpusProjections } from "@/api/lib/legal-search/corpus-in
 import {
   readAppliedCorpusProjectionCensusPageTx,
   readSettledCorpusProjectionCensusPageTx,
+  repairAppliedCorpusProjectionDriftTx,
   revalidateAppliedCorpusProjectionCensusTx,
 } from "@/api/lib/legal-search/corpus-index-projection-census-store";
 import {
@@ -82,24 +83,7 @@ const FIRST_FINGERPRINT = "a".repeat(64);
 const SECOND_FINGERPRINT = "b".repeat(64);
 const INDEX_ID = "case_law_v5_cs_sk";
 const INITIAL_RUNNABLE_AT = new Date("2026-08-25T00:00:00.000Z");
-const PROJECTION_MIGRATION_URLS = [
-  new URL(
-    "../../../drizzle/20260825142000_corpus_index_projection_intents/migration.sql",
-    import.meta.url,
-  ),
-  new URL(
-    "../../../drizzle/20260826003530_corpus_projection_replacement_order/migration.sql",
-    import.meta.url,
-  ),
-  new URL(
-    "../../../drizzle/20260826003600_corpus_projection_applied_history_guard/migration.sql",
-    import.meta.url,
-  ),
-  new URL(
-    "../../../drizzle/20260826003700_corpus_projection_work_schedule/migration.sql",
-    import.meta.url,
-  ),
-] as const;
+const DRIZZLE_DIR = new URL("../../../drizzle/", import.meta.url);
 
 let client: Awaited<ReturnType<typeof createTestPglite>>;
 let db: ReturnType<typeof drizzle>;
@@ -175,9 +159,15 @@ const verifySettlement = async ({
 };
 
 const installProjectionMigrationDdl = async (): Promise<void> => {
+  const projectionMigrations = [
+    ...new Bun.Glob("*corpus*projection*/migration.sql").scanSync(
+      Bun.fileURLToPath(DRIZZLE_DIR),
+    ),
+  ].sort();
   const migrations = await Promise.all(
-    PROJECTION_MIGRATION_URLS.map(
-      async (migrationUrl) => await Bun.file(migrationUrl).text(),
+    projectionMigrations.map(
+      async (migration) =>
+        await Bun.file(new URL(migration, DRIZZLE_DIR)).text(),
     ),
   );
   const ddls = migrations.flatMap((migration) =>
@@ -565,6 +555,65 @@ test("applied census rejects an incomplete multi-document revision", async () =>
       complete: false,
     }),
   );
+  await db
+    .update(corpusIndexProjectionStates)
+    .set({
+      workStatus: "blocked",
+      failureAttempts: 2,
+      lastFailureKind: "payload_unavailable",
+      lastFailureMessage: "fixture failure",
+    })
+    .where(eq(corpusIndexProjectionStates.entityId, DECISION_ID));
+  expect(
+    await db.transaction(
+      async (tx) =>
+        await repairAppliedCorpusProjectionDriftTx(asTestRaw<Transaction>(tx), {
+          family: "case_law",
+          generation: "case_law_v5",
+          indexId: INDEX_ID,
+          revisions: [FIRST_INTENT_ID],
+          testNow: appliedAt,
+        }),
+    ),
+  ).toBe(1);
+  const repairedState = await db
+    .select({
+      appliedRevision: corpusIndexProjectionStates.appliedRevision,
+      failureAttempts: corpusIndexProjectionStates.failureAttempts,
+      lastFailureKind: corpusIndexProjectionStates.lastFailureKind,
+      lastFailureMessage: corpusIndexProjectionStates.lastFailureMessage,
+      retryNotBefore: corpusIndexProjectionStates.retryNotBefore,
+      workStatus: corpusIndexProjectionStates.workStatus,
+    })
+    .from(corpusIndexProjectionStates)
+    .where(eq(corpusIndexProjectionStates.entityId, DECISION_ID));
+  const repairedIntent = await db
+    .select({ status: corpusIndexProjectionIntents.status })
+    .from(corpusIndexProjectionIntents)
+    .where(eq(corpusIndexProjectionIntents.id, FIRST_INTENT_ID));
+  expect(repairedState).toEqual([
+    {
+      appliedRevision: FIRST_INTENT_ID,
+      failureAttempts: 0,
+      lastFailureKind: null,
+      lastFailureMessage: null,
+      retryNotBefore: null,
+      workStatus: "repair_scheduled",
+    },
+  ]);
+  expect(repairedIntent).toEqual([{ status: "cleanup_pending" }]);
+  expect(
+    await db.transaction(
+      async (tx) =>
+        await repairAppliedCorpusProjectionDriftTx(asTestRaw<Transaction>(tx), {
+          family: "case_law",
+          generation: "case_law_v5",
+          indexId: INDEX_ID,
+          revisions: [FIRST_INTENT_ID],
+          testNow: appliedAt,
+        }),
+    ),
+  ).toBe(0);
 });
 
 test("one append request receives one post-lock database timestamp", async () => {

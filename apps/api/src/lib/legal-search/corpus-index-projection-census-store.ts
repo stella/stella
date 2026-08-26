@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { and, asc, eq, gt, inArray, isNotNull } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, isNotNull, sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import {
@@ -183,6 +183,115 @@ export const revalidateAppliedCorpusProjectionCensusTx = async (
     .orderBy(asc(corpusIndexProjectionStates.entityId))
     .limit(options.revisions.length);
   return candidates.map(requireAppliedCandidateDocumentCount);
+};
+
+type RepairAppliedCorpusProjectionDriftOptions = {
+  family: CorpusFamily;
+  generation: string;
+  indexId: string;
+  revisions: readonly ProjectionRevision[];
+  testNow?: Date;
+};
+
+/**
+ * Fence still-authoritative broken revisions into exact cleanup. The explicit
+ * repair state makes the unchanged desired epoch runnable again only after
+ * that cleanup settles, without moving applied history backward.
+ */
+export const repairAppliedCorpusProjectionDriftTx = async (
+  tx: Transaction,
+  options: RepairAppliedCorpusProjectionDriftOptions,
+): Promise<number> => {
+  if (
+    options.revisions.length === 0 ||
+    options.revisions.length > CORPUS_PROJECTION_DELETE_MAX_REVISIONS
+  ) {
+    return panic("Corpus projection census repair batch is invalid");
+  }
+  await readRegisteredCorpusProjectionManifestForCleanup(
+    tx,
+    options.family,
+    options.generation,
+  );
+  const candidates = await tx
+    .select({
+      entityId: corpusIndexProjectionStates.entityId,
+      revision: corpusIndexProjectionIntents.id,
+    })
+    .from(corpusIndexProjectionStates)
+    .innerJoin(
+      corpusIndexProjectionIntents,
+      eq(
+        corpusIndexProjectionIntents.id,
+        corpusIndexProjectionStates.appliedRevision,
+      ),
+    )
+    .where(
+      and(
+        eq(corpusIndexProjectionStates.family, options.family),
+        eq(corpusIndexProjectionStates.generation, options.generation),
+        eq(corpusIndexProjectionStates.appliedAction, "upsert"),
+        eq(corpusIndexProjectionStates.appliedIndexId, options.indexId),
+        inArray(corpusIndexProjectionIntents.id, options.revisions),
+        eq(corpusIndexProjectionIntents.status, "applied"),
+      ),
+    )
+    .orderBy(asc(corpusIndexProjectionStates.entityId))
+    .limit(options.revisions.length)
+    .for("update", { of: corpusIndexProjectionStates });
+  if (candidates.length === 0) {
+    return 0;
+  }
+  const revisions = candidates.map(({ revision }) => revision);
+  await tx
+    .select({ id: corpusIndexProjectionIntents.id })
+    .from(corpusIndexProjectionIntents)
+    .where(inArray(corpusIndexProjectionIntents.id, revisions))
+    .orderBy(asc(corpusIndexProjectionIntents.id))
+    .limit(revisions.length)
+    .for("update");
+  const repairAt = options.testNow ?? sql<Date>`clock_timestamp()`;
+  const scheduled = await tx
+    .update(corpusIndexProjectionStates)
+    .set({
+      workStatus: "repair_scheduled",
+      retryNotBefore: null,
+      failureAttempts: 0,
+      lastFailureKind: null,
+      lastFailureMessage: null,
+      updatedAt: repairAt,
+    })
+    .where(
+      and(
+        eq(corpusIndexProjectionStates.family, options.family),
+        eq(corpusIndexProjectionStates.generation, options.generation),
+        inArray(corpusIndexProjectionStates.appliedRevision, revisions),
+      ),
+    )
+    .returning({ entityId: corpusIndexProjectionStates.entityId });
+  const retired = await tx
+    .update(corpusIndexProjectionIntents)
+    .set({
+      status: "cleanup_pending",
+      appendPublishBarrierAt: corpusIndexProjectionIntents.appendCommittedAt,
+      cleanupNotBefore: repairAt,
+      lastError: "applied census observed engine drift",
+      updatedAt: repairAt,
+    })
+    .where(
+      and(
+        inArray(corpusIndexProjectionIntents.id, revisions),
+        eq(corpusIndexProjectionIntents.status, "applied"),
+      ),
+    )
+    .returning({ id: corpusIndexProjectionIntents.id });
+  if (
+    scheduled.length !== candidates.length ||
+    retired.length !== candidates.length
+  ) {
+    return panic("Corpus projection census repair lost its state fence");
+  }
+  return retired.length;
 };
 
 /** Bounded retired revisions that the engine must no longer contain. */

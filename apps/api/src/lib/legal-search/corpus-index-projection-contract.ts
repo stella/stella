@@ -16,6 +16,31 @@ export const CORPUS_INDEX_INTENT_STATUSES = [
 export type CorpusIndexIntentStatus =
   (typeof CORPUS_INDEX_INTENT_STATUSES)[number];
 
+/**
+ * What a generation-level launch probe must do with each intent state.
+ * `applied` still needs the engine census because it may not be the revision
+ * referenced by authoritative projection state.
+ */
+export const CORPUS_INDEX_INTENT_LAUNCH_DISPOSITION = {
+  reserved: "blocking",
+  append_started: "blocking",
+  append_committed: "blocking",
+  applied: "census_required",
+  cleanup_pending: "blocking",
+  cleanup_started: "blocking",
+  cleanup_committed: "blocking",
+  settled: "terminal",
+  cancelled: "terminal",
+} as const satisfies Record<
+  CorpusIndexIntentStatus,
+  "blocking" | "census_required" | "terminal"
+>;
+
+export const CORPUS_INDEX_LAUNCH_BLOCKING_INTENT_STATUSES =
+  CORPUS_INDEX_INTENT_STATUSES.filter(
+    (status) => CORPUS_INDEX_INTENT_LAUNCH_DISPOSITION[status] === "blocking",
+  );
+
 /** Phases that can create or expose one exact append revision. */
 export const CORPUS_INDEX_APPEND_PRODUCING_INTENT_STATUSES = [
   "reserved",
@@ -33,6 +58,7 @@ export const CORPUS_INDEX_DOCUMENT_COUNT_REQUIRED_INTENT_STATUSES = [
 export const CORPUS_INDEX_PROJECTION_WORK_STATUSES = [
   "eligible",
   "retry_scheduled",
+  "repair_scheduled",
   "blocked",
 ] as const;
 export type CorpusIndexProjectionWorkStatus =
