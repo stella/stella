@@ -61,6 +61,7 @@
     "errorEmailSupport": "stella desktop nevarēja atvērt jūsu e-pasta lietotni.",
     "errorReadState": "stella desktop nevarēja nolasīt savu pašreizējo stāvokli.",
     "errorRevealAppData": "stella desktop nevarēja rādīt lietotnes datus.",
+    "errorUpdateAutostart": "stella desktop neizdevās atjaunināt palaišanu piesakoties.",
     "errorUpdatePreferences": "stella desktop nevarēja atjaunināt paziņojumu iestatījumus.",
     "general": "Vispārīgi",
     "lastVerified": "Pēdējo reizi pārbaudīts",

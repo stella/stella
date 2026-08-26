@@ -9,6 +9,8 @@ export const DESKTOP_TELEMETRY_WINDOWS = {
 } as const;
 
 export const DESKTOP_TELEMETRY_OPERATIONS = {
+  autostartRead: "autostartRead",
+  autostartUpdate: "autostartUpdate",
   clipboardEditorClose: "clipboardEditorClose",
   clipboardEditorRead: "clipboardEditorRead",
   clipboardEditorSave: "clipboardEditorSave",

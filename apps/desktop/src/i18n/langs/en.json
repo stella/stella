@@ -63,6 +63,7 @@
     "errorEmailSupport": "stella desktop could not open your mail app.",
     "errorReadState": "stella desktop could not read its current state.",
     "errorRevealAppData": "stella desktop could not reveal app data.",
+    "errorUpdateAutostart": "stella desktop could not update start-on-login.",
     "errorUpdatePreferences": "stella desktop could not update notification settings.",
     "general": "General",
     "lastVerified": "Last verified",

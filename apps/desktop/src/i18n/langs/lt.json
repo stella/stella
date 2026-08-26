@@ -61,6 +61,7 @@
     "errorEmailSupport": "stella desktop nepavyko atidaryti jūsų el. pašto programos.",
     "errorReadState": "stella desktop nepavyko nuskaityti dabartinės būsenos.",
     "errorRevealAppData": "stella desktop nepavyko parodyti programos duomenų.",
+    "errorUpdateAutostart": "stella desktop nepavyko atnaujinti paleidimo prisijungiant.",
     "errorUpdatePreferences": "stella desktop nepavyko atnaujinti pranešimų nustatymų.",
     "general": "Bendra",
     "lastVerified": "Paskutinį kartą patikrinta",

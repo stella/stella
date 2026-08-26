@@ -42,6 +42,8 @@ impl DesktopTelemetryWindow {
 pub enum DesktopTelemetryOperation {
   Runtime,
   Render,
+  AutostartRead,
+  AutostartUpdate,
   ClipboardHistoryRead,
   ClipboardHistorySubscribe,
   ClipboardHistoryUpdate,
@@ -62,6 +64,8 @@ impl DesktopTelemetryOperation {
     match self {
       Self::Runtime => "runtime",
       Self::Render => "render",
+      Self::AutostartRead => "autostartRead",
+      Self::AutostartUpdate => "autostartUpdate",
       Self::ClipboardHistoryRead => "clipboardHistoryRead",
       Self::ClipboardHistorySubscribe => "clipboardHistorySubscribe",
       Self::ClipboardHistoryUpdate => "clipboardHistoryUpdate",
@@ -293,6 +297,14 @@ pub fn desktop_report_error(
 mod tests {
   use super::*;
 
+  #[derive(Deserialize)]
+  #[serde(rename_all = "camelCase")]
+  struct FrontendTelemetryContract {
+    windows: Vec<DesktopTelemetryWindow>,
+    operations: Vec<DesktopTelemetryOperation>,
+    error_codes: Vec<DesktopTelemetryErrorCode>,
+  }
+
   fn config() -> AnalyticsSinkConfig {
     AnalyticsSinkConfig {
       endpoint: Url::parse("https://example.com/capture/").unwrap(),
@@ -344,6 +356,33 @@ mod tests {
         .unwrap()
         .insert(field.to_string(), json!("private"));
       assert!(serde_json::from_value::<DesktopErrorReport>(value).is_err());
+    }
+  }
+
+  #[test]
+  fn frontend_telemetry_contract_deserializes_in_native_code() {
+    let contract: FrontendTelemetryContract = serde_json::from_str(include_str!(
+      "../../fixtures/desktop-telemetry-contract.json"
+    ))
+    .unwrap();
+
+    for window in contract.windows {
+      assert_eq!(
+        serde_json::to_value(window).unwrap(),
+        json!(window.as_str())
+      );
+    }
+    for operation in contract.operations {
+      assert_eq!(
+        serde_json::to_value(operation).unwrap(),
+        json!(operation.as_str())
+      );
+    }
+    for error_code in contract.error_codes {
+      assert_eq!(
+        serde_json::to_value(error_code).unwrap(),
+        json!(error_code.as_str())
+      );
     }
   }
 }
