@@ -4,9 +4,11 @@ import type { JWTVerifyGetKey } from "jose";
 
 import { parseBetterAuthMicrosoftIdentityMapArgs } from "@/api/scripts/better-auth-microsoft-identity-map";
 import {
+  BetterAuthMicrosoftIdentityMapInfrastructureError,
   BetterAuthMicrosoftIdentityMapError,
   deriveBetterAuthMicrosoftIdentityMap,
 } from "@/api/scripts/better-auth-microsoft-identity-map.logic";
+import { MAX_MICROSOFT_IDENTITY_MAPPINGS } from "@/api/scripts/better-auth-migration-audit.logic";
 
 const CLIENT_ID = "11111111-1111-4111-8111-111111111111";
 const TENANT_ID = "22222222-2222-4222-8222-222222222222";
@@ -169,6 +171,59 @@ describe("deriveBetterAuthMicrosoftIdentityMap", () => {
         formatVersion: 1,
         microsoftAccounts: [],
       });
+    }
+  });
+
+  test("rejects an inventory larger than the consumer accepts", async () => {
+    const result = await deriveBetterAuthMicrosoftIdentityMap({
+      clientId: CLIENT_ID,
+      getSigningKey: async () => {
+        throw new Error("unused");
+      },
+      now: NOW,
+      sources: Array.from(
+        { length: MAX_MICROSOFT_IDENTITY_MAPPINGS + 1 },
+        () => ({
+          accountRowId: "account-row",
+          idToken: null,
+          legacyAccountId: "legacy-pairwise-subject",
+        }),
+      ),
+      tenantId: TENANT_ID,
+    });
+
+    expect(result.status).toBe("error");
+    if (result.status === "error") {
+      expect(result.error.code).toBe("identity-map-limit-exceeded");
+    }
+  });
+
+  test("preserves signing-key retrieval failures", async () => {
+    const fixture = await createTokenFixture();
+    const infrastructureError =
+      new BetterAuthMicrosoftIdentityMapInfrastructureError({
+        code: "signing-key-fetch-failed",
+        message: "Microsoft signing keys could not be fetched",
+      });
+    const result = await deriveBetterAuthMicrosoftIdentityMap({
+      clientId: CLIENT_ID,
+      getSigningKey: async () => {
+        throw infrastructureError;
+      },
+      now: NOW,
+      sources: [
+        {
+          accountRowId: "account-row",
+          idToken: fixture.token,
+          legacyAccountId: "legacy-pairwise-subject",
+        },
+      ],
+      tenantId: TENANT_ID,
+    });
+
+    expect(result.status).toBe("error");
+    if (result.status === "error") {
+      expect(result.error).toBe(infrastructureError);
     }
   });
 });

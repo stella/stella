@@ -2595,7 +2595,7 @@ const nonEmptyStringSchema = v.pipe(
   v.minLength(1),
   v.maxLength(512),
 );
-const MAX_MICROSOFT_IDENTITY_MAPPINGS = 100_000;
+export const MAX_MICROSOFT_IDENTITY_MAPPINGS = 100_000;
 
 const betterAuthTrustedIdentityMapSchema: v.GenericSchema<
   unknown,

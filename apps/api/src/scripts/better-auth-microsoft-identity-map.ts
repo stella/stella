@@ -25,6 +25,7 @@ import { hasSecureDatabaseTransport, resolveDatabaseUrl } from "@/api/db-url";
 import { safeOutboundFetchBytes } from "@/api/lib/safe-outbound-fetch";
 import { isRecord } from "@/api/lib/type-guards";
 import {
+  BetterAuthMicrosoftIdentityMapInfrastructureError,
   BetterAuthMicrosoftIdentityMapError,
   deriveBetterAuthMicrosoftIdentityMap,
 } from "@/api/scripts/better-auth-microsoft-identity-map.logic";
@@ -220,9 +221,15 @@ const microsoftJwksFetch: FetchImplementation = async (url, options) => {
     url,
   });
   if (Result.isError(response)) {
-    throw new BetterAuthMicrosoftIdentityMapCommandError({
+    throw new BetterAuthMicrosoftIdentityMapInfrastructureError({
       cause: response.error,
-      code: "database-query-failed",
+      code: "signing-key-fetch-failed",
+      message: "Microsoft signing keys could not be fetched",
+    });
+  }
+  if (response.value.status !== 200) {
+    throw new BetterAuthMicrosoftIdentityMapInfrastructureError({
+      code: "signing-key-fetch-failed",
       message: "Microsoft signing keys could not be fetched",
     });
   }

@@ -2,6 +2,7 @@ import { Result, TaggedError } from "better-result";
 import { decodeJwt, decodeProtectedHeader, jwtVerify } from "jose";
 import type { JWTVerifyGetKey } from "jose";
 
+import { MAX_MICROSOFT_IDENTITY_MAPPINGS } from "@/api/scripts/better-auth-migration-audit.logic";
 import type { BetterAuthTrustedIdentityMap } from "@/api/scripts/better-auth-migration-audit.logic";
 
 const MICROSOFT_AUTHORITY = "https://login.microsoftonline.com";
@@ -39,10 +40,19 @@ export class BetterAuthMicrosoftIdentityMapError extends TaggedError(
   cause?: unknown;
   code:
     | "identity-collision"
+    | "identity-map-limit-exceeded"
     | "invalid-client-id"
     | "invalid-source-state"
     | "invalid-tenant"
     | "token-verification-failed";
+  message: string;
+}> {}
+
+export class BetterAuthMicrosoftIdentityMapInfrastructureError extends TaggedError(
+  "BetterAuthMicrosoftIdentityMapInfrastructureError",
+)<{
+  cause?: unknown;
+  code: "signing-key-fetch-failed";
   message: string;
 }> {}
 
@@ -166,11 +176,13 @@ const verifySource = async ({
         requiredClaims: ["iss", "aud", "sub", "tid", "oid", "iat", "exp"],
       }),
     catch: (cause) =>
-      new BetterAuthMicrosoftIdentityMapError({
-        cause,
-        code: "token-verification-failed",
-        message: "Microsoft identity token did not verify",
-      }),
+      cause instanceof BetterAuthMicrosoftIdentityMapInfrastructureError
+        ? cause
+        : new BetterAuthMicrosoftIdentityMapError({
+            cause,
+            code: "token-verification-failed",
+            message: "Microsoft identity token did not verify",
+          }),
   });
   if (Result.isError(verified)) {
     return verified;
@@ -198,7 +210,11 @@ export const deriveBetterAuthMicrosoftIdentityMap = async ({
   sources,
   tenantId,
 }: DeriveBetterAuthMicrosoftIdentityMapOptions): Promise<
-  Result<BetterAuthTrustedIdentityMap, BetterAuthMicrosoftIdentityMapError>
+  Result<
+    BetterAuthTrustedIdentityMap,
+    | BetterAuthMicrosoftIdentityMapError
+    | BetterAuthMicrosoftIdentityMapInfrastructureError
+  >
 > => {
   if (clientId.length === 0) {
     return Result.err(
@@ -216,6 +232,14 @@ export const deriveBetterAuthMicrosoftIdentityMap = async ({
       }),
     );
   }
+  if (sources.length > MAX_MICROSOFT_IDENTITY_MAPPINGS) {
+    return Result.err(
+      new BetterAuthMicrosoftIdentityMapError({
+        code: "identity-map-limit-exceeded",
+        message: "Microsoft identity source exceeds the supported limit",
+      }),
+    );
+  }
 
   const microsoftAccounts: BetterAuthTrustedIdentityMap["microsoftAccounts"][number][] =
     [];
@@ -223,7 +247,11 @@ export const deriveBetterAuthMicrosoftIdentityMap = async ({
   const identityKeys = new Set<string>();
   const sourceIterator = sources.values();
   const processNextSource = async (): Promise<
-    Result<undefined, BetterAuthMicrosoftIdentityMapError>
+    Result<
+      undefined,
+      | BetterAuthMicrosoftIdentityMapError
+      | BetterAuthMicrosoftIdentityMapInfrastructureError
+    >
   > => {
     const next = sourceIterator.next();
     if (next.done) {
