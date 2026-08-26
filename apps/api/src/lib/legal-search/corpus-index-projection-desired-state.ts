@@ -14,10 +14,9 @@ import {
   legislationSources,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { requireRegisteredCorpusIndexManifest } from "@/api/lib/legal-search/corpus-index-generation-store";
 import {
   CORPUS_INDEX_MANIFESTS,
-  corpusIndexManifestDigest,
-  requireCorpusIndexManifest,
   type CorpusIndexManifest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import {
@@ -337,22 +336,6 @@ type RegisteredManifest = {
   manifest: CorpusIndexManifest;
 };
 
-const verifiedManifest = ({
-  family,
-  generation,
-  cluster,
-  manifestDigest,
-}: typeof corpusIndexGenerations.$inferSelect): CorpusIndexManifest => {
-  const manifest = requireCorpusIndexManifest(family, generation);
-  const expectedDigest = corpusIndexManifestDigest(manifest);
-  if (cluster !== manifest.cluster || manifestDigest !== expectedDigest) {
-    return panic(
-      `Corpus generation contract mismatch: ${family}/${generation}`,
-    );
-  }
-  return manifest;
-};
-
 const activeManifests = async (
   tx: Transaction,
   family: CorpusIndexProjectionSubject["family"],
@@ -377,7 +360,7 @@ const activeManifests = async (
   }
   return rows.map((row) => ({
     generation: row.generation,
-    manifest: verifiedManifest(row),
+    manifest: requireRegisteredCorpusIndexManifest(row),
   }));
 };
 
@@ -408,7 +391,7 @@ export const readActiveCorpusProjectionManifest = async (
       `Active corpus generation is not registered: ${family}/${generation}`,
     );
   }
-  return verifiedManifest(row);
+  return requireRegisteredCorpusIndexManifest(row);
 };
 
 /**
@@ -438,7 +421,7 @@ export const readRegisteredCorpusProjectionManifestForCleanup = async (
       `Corpus generation is not registered for cleanup: ${family}/${generation}`,
     );
   }
-  return verifiedManifest(row);
+  return requireRegisteredCorpusIndexManifest(row);
 };
 
 export const buildCorpusIndexProjectionDesiredStateValues = ({
