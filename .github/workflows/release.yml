@@ -720,122 +720,26 @@ jobs:
           packages-dir: dist
 
   github-release:
-    name: Create GitHub release
+    name: Finalize release
     needs: [verify, publish-native, publish, publish-pypi]
-    if: needs.verify.outputs.publish_runtime == 'true' && needs.verify.result == 'success' && needs.publish-native.result == 'success' && needs.publish.result == 'success' && needs.publish-pypi.result == 'success' && (github.event_name == 'push' || inputs.publish_to_npm == true)
-    runs-on: ubuntu-latest
+    if: needs.verify.outputs.publish_runtime == 'true' && needs.publish-native.result == 'success' && needs.publish.result == 'success' && needs.publish-pypi.result == 'success' && (github.event_name == 'push' || inputs.publish_to_npm == true)
+    uses: stella/.github/.github/workflows/npm-version-finalize.yml@7198083e27bdd963cacc0b7d70ca54fe3ec83393
+    with:
+      package-files: |
+        packages/anonymize/package.json
+        packages/anonymize/wasm/package.json
+        packages/cli/package.json
+        packages/document-docx/package.json
+        packages/document-pdf/package.json
+        packages/mcp/package.json
+        packages/anonymize-linux-x64-gnu/package.json
+        packages/anonymize-linux-arm64-gnu/package.json
+        packages/anonymize-darwin-x64/package.json
+        packages/anonymize-win32-x64-msvc/package.json
+      artifact-pattern: npm-tarball-*
+      publish-to-npm: true
+      update-changelog: false
     permissions:
       contents: write
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
-
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
-        with:
-          pattern: npm-tarball-*
-          path: release-artifacts
-          merge-multiple: true
-
-      - name: Read and validate VERSION
-        id: version
-        run: |
-          if [[ ! -f VERSION ]]; then
-            echo "::error::VERSION file is missing"
-            exit 1
-          fi
-
-          version="$(tr -d '[:space:]' < VERSION)"
-          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-(rc|beta|alpha)\.[0-9]+)?$ ]]; then
-            echo "::error::VERSION must look like 1.2.3, 1.2.3-rc.1, 1.2.3-beta.1, or 1.2.3-alpha.1; got '$version'"
-            exit 1
-          fi
-
-          echo "tag=v$version" >> "$GITHUB_OUTPUT"
-
-      - name: Create tag if needed
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
-          TAG: ${{ steps.version.outputs.tag }}
-        run: |
-          git fetch --force --tags origin
-
-          # /git/ref/{ref} is the exact-match endpoint. The plural
-          # /git/refs/{ref} does prefix matching, so checking for
-          # `v1.2.0` could also match `v1.2.0-rc.1`.
-          if gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/$TAG" >/dev/null 2>&1; then
-            echo "Tag $TAG already exists; nothing to do."
-            exit 0
-          fi
-
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git tag -a "$TAG" -m "$TAG"
-          git push origin "$TAG"
-
-      - name: Resolve release notes range
-        id: release-notes-range
-        env:
-          RELEASE_REF: ${{ steps.version.outputs.tag }}
-        run: |
-          if [[ "$RELEASE_REF" == *-* ]]; then
-            echo "args=--latest --strip header" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          previous_stable="$(
-            git tag --list 'v[0-9]*.[0-9]*.[0-9]*' \
-              --merged "$RELEASE_REF" \
-              --sort=-v:refname \
-              | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' \
-              | grep -v -x "$RELEASE_REF" \
-              | head -n 1
-          )"
-
-          if [[ -z "$previous_stable" ]]; then
-            first_commit="$(git rev-list --max-parents=0 "$RELEASE_REF" | tail -n 1)"
-            echo "args=--tag ${RELEASE_REF} --strip header ${first_commit}..${RELEASE_REF}" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          echo "args=--tag ${RELEASE_REF} --strip header ${previous_stable}..${RELEASE_REF}" >> "$GITHUB_OUTPUT"
-
-      - name: Generate release notes from Conventional Commits
-        uses: orhun/git-cliff-action@f50e11560dce63f7c33227798f90b924471a88b5 # v4.8.0
-        with:
-          config: cliff.toml
-          args: ${{ steps.release-notes-range.outputs.args }}
-        env:
-          OUTPUT: NOTES.md
-
-      - name: Create or update GitHub release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          RELEASE_REF: ${{ steps.version.outputs.tag }}
-        run: |
-          mapfile -t assets < <(find release-artifacts -maxdepth 1 -type f -name '*.tgz' | sort)
-          if ((${#assets[@]} == 0)); then
-            echo "::error::No npm tarball artifacts found for release upload"
-            exit 1
-          fi
-
-          if gh release view "$RELEASE_REF" >/dev/null 2>&1; then
-            gh release edit "$RELEASE_REF" \
-              --title "$RELEASE_REF" \
-              --notes-file NOTES.md
-            gh release upload "$RELEASE_REF" "${assets[@]}" --clobber
-            exit 0
-          fi
-
-          extra_args=()
-          if [[ "$RELEASE_REF" == *-* ]]; then
-            extra_args+=(--prerelease)
-          fi
-
-          gh release create "$RELEASE_REF" \
-            "${assets[@]}" \
-            --title "$RELEASE_REF" \
-            --notes-file NOTES.md \
-            --verify-tag \
-            "${extra_args[@]}"
+      id-token: write
+    secrets: inherit
