@@ -84,12 +84,12 @@ pub enum ClipboardCaptureStatus {
 }
 
 macro_rules! define_clipboard_retention {
-  ($($variant:ident => $days:literal),+ $(,)?) => {
+  ($($(#[$attr:meta])* $variant:ident => $days:literal),+ $(,)?) => {
     /// How long copied items stay in history before the hourly sweep drops them.
-    #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+    #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
     #[serde(rename_all = "camelCase")]
     pub enum ClipboardRetention {
-      $($variant),+
+      $($(#[$attr])* $variant),+
     }
 
     impl ClipboardRetention {
@@ -107,14 +107,9 @@ macro_rules! define_clipboard_retention {
 
 define_clipboard_retention! {
   Week => 7,
+  #[default]
   Month => 30,
   Year => 365,
-}
-
-impl Default for ClipboardRetention {
-  fn default() -> Self {
-    Self::Month
-  }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
