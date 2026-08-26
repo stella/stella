@@ -2327,7 +2327,6 @@
       "changeBasis": "Mainīt pārbaudes pamatu",
       "commentFailed": "Komentāru neizdevās pievienot",
       "comparedWithReferences": "{count, plural, zero {Nav salīdzināts ne ar vienu atsauces dokumentu} one {Salīdzināts ar # atsauces dokumentu} other {Salīdzināts ar # atsauces dokumentiem}}",
-      "decidedCount": "Izlemts: {decided, number}/{total, number}",
       "decision": "Lēmums",
       "decisionFailed": "Lēmumu neizdevās saglabāt",
       "decisions": {
@@ -2640,20 +2639,6 @@
         "scrollToChange": "Pāriet uz izmaiņu",
         "viewClause": "Skatīt klauzulu",
         "violatedRedLine": "Pārkāptā sarkanā līnija:"
-      },
-      "risk": {
-        "complianceLabel": "Atbilstība",
-        "flaggedCount": "Atzīmētas {flagged} no {total} pozīcijām",
-        "notApplicableExcluded": "({count} nav piemērojams, izslēgts)",
-        "riskLevel": {
-          "critical": "Kritisks",
-          "high": "Augsts",
-          "low": "Zems",
-          "medium": "Vidējs",
-          "none": "Nav riska"
-        },
-        "summaryTitle": "Risku kopsavilkums",
-        "topIssuesTitle": "Būtiskākās problēmas"
       },
       "ruleNumber": "Noteikums {index}",
       "rulePlaceholder": "piem. Samaksas termiņš nedrīkst pārsniegt 30 dienas",

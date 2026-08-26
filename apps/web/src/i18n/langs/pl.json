@@ -2327,7 +2327,6 @@
       "changeBasis": "Zmień podstawę weryfikacji",
       "commentFailed": "Nie udało się dodać komentarza",
       "comparedWithReferences": "{count, plural, one {Porównano z # dokumentem referencyjnym} few {Porównano z # dokumentami referencyjnymi} many {Porównano z # dokumentami referencyjnymi} other {Porównano z # dokumentami referencyjnymi}}",
-      "decidedCount": "Rozstrzygnięto {decided, number}/{total, number}",
       "decision": "Decyzja",
       "decisionFailed": "Nie udało się zapisać decyzji",
       "decisions": {
@@ -2640,20 +2639,6 @@
         "scrollToChange": "Przejdź do zmiany",
         "viewClause": "Zobacz klauzulę",
         "violatedRedLine": "Narusza nieakceptowalną regułę:"
-      },
-      "risk": {
-        "complianceLabel": "Zgodność",
-        "flaggedCount": "Oznaczono {flagged} z {total} pozycji",
-        "notApplicableExcluded": "({count} nie dotyczy, wykluczono)",
-        "riskLevel": {
-          "critical": "Krytyczne",
-          "high": "Wysokie",
-          "low": "Niskie",
-          "medium": "Średnie",
-          "none": "Brak ryzyka"
-        },
-        "summaryTitle": "Podsumowanie ryzyka",
-        "topIssuesTitle": "Najważniejsze kwestie"
       },
       "ruleNumber": "Reguła {index}",
       "rulePlaceholder": "np. Termin płatności nie może przekraczać 30 dni",

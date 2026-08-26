@@ -20,7 +20,7 @@ const TIMEOUT_MS = 120_000;
 
 const config = {
   description:
-    "Propose review positions from one or more reference documents: an issue, its severity, and the reference passages that state the standard for it.",
+    "Propose review positions from one or more reference documents: one reviewable term each, with its kind, its severity, and the reference passages that state the standard for it, plus what was read and deliberately not compared.",
   permissions: { workspace: ["read"] },
   access: "read",
   mcp: { type: "internal", reason: "document_processing" },

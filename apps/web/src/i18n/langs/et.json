@@ -2327,7 +2327,6 @@
       "changeBasis": "Muuda ülevaatuse alust",
       "commentFailed": "Kommentaari lisamine ebaõnnestus",
       "comparedWithReferences": "{count, plural, one {Võrreldud # võrdlusdokumendiga} other {Võrreldud # võrdlusdokumendiga}}",
-      "decidedCount": "{decided, number}/{total, number} otsustatud",
       "decision": "Otsus",
       "decisionFailed": "Otsust ei õnnestunud salvestada",
       "decisions": {
@@ -2640,20 +2639,6 @@
         "scrollToChange": "Mine muudatuse juurde",
         "viewClause": "Vaata klauslit",
         "violatedRedLine": "Rikutud punane joon:"
-      },
-      "risk": {
-        "complianceLabel": "Vastavus",
-        "flaggedCount": "{flagged} positsiooni {total}-st on märgitud",
-        "notApplicableExcluded": "({count} ei kohaldu, välja jäetud)",
-        "riskLevel": {
-          "critical": "Kriitiline",
-          "high": "Kõrge",
-          "low": "Madal",
-          "medium": "Keskmine",
-          "none": "Risk puudub"
-        },
-        "summaryTitle": "Riskide kokkuvõte",
-        "topIssuesTitle": "Olulisemad küsimused"
       },
       "ruleNumber": "Reegel {index}",
       "rulePlaceholder": "nt Maksetähtaeg ei tohi ületada 30 päeva",

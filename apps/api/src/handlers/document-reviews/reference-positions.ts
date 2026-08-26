@@ -1,12 +1,18 @@
 /**
  * Turning a reference document into positions.
  *
- * The proposal pass reads the reference documents and returns a draft position
- * per issue they make worth comparing, each carrying the passages that define
- * the standard for it. Every proposed passage is verified against the parsed
- * blocks before it is returned: a position may only quote text the reference
- * actually contains, because that quoted text is what the run — and any
- * playbook saved out of it — will grade against.
+ * One position is ONE reviewable term, typed by the kind of term it is: a
+ * quantity, a list, a protection that exists or does not, or a standard of
+ * wording. That type is what grading answers with, so a clause-level position
+ * ("the warranty framework") is not a position at all — it is several, and it
+ * is what produces whole-block rewrites downstream.
+ *
+ * Every proposed passage is verified against the parsed blocks before it is
+ * returned: a position may only quote text the reference actually contains,
+ * because that quoted text is what the run — and any playbook saved out of it
+ * — will grade against. What the pass deliberately did not turn into a
+ * position comes back as `skipped`, so the reviewer sees the size of what was
+ * left out instead of assuming the checklist is exhaustive.
  */
 
 import { Result } from "better-result";
@@ -23,8 +29,14 @@ import {
   REVIEW_PARTIES_MAX,
   REVIEW_PARTY_NAME_MAX_LENGTH,
   REVIEW_PARTY_ROLE_MAX_LENGTH,
+  REVIEW_SKIP_REASON_MAX_LENGTH,
+  REVIEW_SKIP_SUBJECT_MAX_LENGTH,
+  REVIEW_SKIPPED_MAX,
 } from "@/api/lib/document-review/contract";
-import type { ReviewParty } from "@/api/lib/document-review/contract";
+import type {
+  ReviewParty,
+  ReviewSkippedTerm,
+} from "@/api/lib/document-review/contract";
 import {
   buildReviewDocumentParts,
   reviewDocumentsScopeKey,
@@ -32,9 +44,14 @@ import {
 import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
 import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
 import type { PreparedDocxFile } from "@/api/lib/workflow/generate-batch";
-import { POSITION_SEVERITIES } from "@/api/lib/workflow/playbook-positions";
+import {
+  POSITION_SEVERITIES,
+  POSITION_TERM_KINDS,
+} from "@/api/lib/workflow/playbook-positions";
 import type {
   Position,
+  PositionSeverity,
+  PositionTermKind,
   ReferencePassage,
 } from "@/api/lib/workflow/playbook-positions";
 
@@ -42,21 +59,70 @@ const ROLE = "pdf" as const;
 const TIMEOUT_MS = 120_000;
 
 /** Matches `positionStandardSchema`'s `passages` bound. A position that needs
- *  more than this to state its standard is really several positions. */
-const PASSAGES_PER_POSITION_MAX = 8;
+ *  more than this to state its standard is not one term. */
+const PASSAGES_PER_POSITION_MAX = 12;
 const ISSUE_MAX_LENGTH = 256;
 const GUIDANCE_MAX_LENGTH = 2000;
 
 const proposedPositionSchema = v.strictObject({
+  /** What shape of term this is. Decides how the comparison is expressed and
+   *  edited, so it is chosen here, once, rather than per grading. */
+  termKind: v.picklist(POSITION_TERM_KINDS),
   issue: v.pipe(v.string(), v.minLength(1), v.maxLength(ISSUE_MAX_LENGTH)),
-  /** What the later comparison should examine; becomes the position's
-   *  reviewer guidance. */
+  /** What the later comparison should examine, and why the severity is what
+   *  it is; becomes the position's reviewer guidance. */
   guidance: v.pipe(v.string(), v.maxLength(GUIDANCE_MAX_LENGTH)),
   severity: v.picklist(POSITION_SEVERITIES),
   passages: v.array(
     v.strictObject({ sourceKey: v.string(), blockId: v.string() }),
   ),
 });
+
+const skippedTermSchema = v.strictObject({
+  subject: v.pipe(v.string(), v.maxLength(REVIEW_SKIP_SUBJECT_MAX_LENGTH)),
+  reason: v.pipe(v.string(), v.maxLength(REVIEW_SKIP_REASON_MAX_LENGTH)),
+});
+
+type ProposedSkippedTerm = v.InferOutput<typeof skippedTermSchema>;
+
+/** Trims the model's text, drops half-stated entries, and reports each
+ *  subject once. */
+export const normalizeSkipped = (
+  skipped: readonly ProposedSkippedTerm[],
+): ReviewSkippedTerm[] => {
+  const seen = new Set<string>();
+  const normalized: ReviewSkippedTerm[] = [];
+  for (const entry of skipped) {
+    const subject = entry.subject.trim();
+    const reason = entry.reason.trim();
+    if (subject.length === 0 || reason.length === 0) {
+      continue;
+    }
+    const key = subject.toLocaleLowerCase("und");
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    normalized.push({ subject, reason });
+    if (normalized.length === REVIEW_SKIPPED_MAX) {
+      break;
+    }
+  }
+  return normalized;
+};
+
+/**
+ * Severity, held to what the term can carry. `blocker` is the walk-away tier,
+ * and only a stated quantity — money, a liability cap, a time bar — walks a
+ * deal away on its own. A protection or a wording standard may still be `high`,
+ * but calling every clause a blocker is what turns a review into a list nobody
+ * can triage.
+ */
+export const cappedSeverity = (
+  severity: PositionSeverity,
+  termKind: PositionTermKind,
+): PositionSeverity =>
+  severity === "blocker" && termKind !== "parameter" ? "high" : severity;
 
 // No transforms here: the schema is handed to the provider as JSON Schema,
 // which cannot express them. Whitespace is normalized in `normalizeParties`.
@@ -93,6 +159,8 @@ export const proposedPositionsSchema = v.strictObject({
   // Cardinality is normalized below. Providers do not reliably honor JSON
   // Schema array limits, so excess suggestions stay recoverable.
   positions: v.array(proposedPositionSchema),
+  // What was read and deliberately not compared.
+  skipped: v.array(skippedTermSchema),
   // The target's parties, so the lawyer can say which one they act for.
   parties: v.array(proposedPartySchema),
 });
@@ -211,8 +279,12 @@ export const normalizeProposedPositions = ({
       mode: "graded",
       sourceId: Bun.randomUUIDv7(),
       issue,
-      severity: candidate.severity,
-      standard: { source: "reference", passages },
+      severity: cappedSeverity(candidate.severity, candidate.termKind),
+      standard: {
+        source: "reference",
+        termKind: candidate.termKind,
+        passages,
+      },
       ask: { mode: "auto" },
       ...(guidance.length === 0 ? {} : { guidance }),
       enabled: true,
@@ -221,18 +293,29 @@ export const normalizeProposedPositions = ({
   return merged;
 };
 
-const SYSTEM_PROMPT = `You turn one or more reference legal documents into a checklist of positions for reviewing a new target document (F0).
+const SYSTEM_PROMPT = `You turn reference legal documents into a review checklist for a new target document (F0). References are examples, not policy and not proof of market practice.
 
-A position is one material legal or commercial issue plus the passages of a reference document that state how it should be handled. Propose a concise, non-overlapping list of the positions the supplied documents make useful to compare. References are examples, not policy and not proof of market practice. Do not make findings about the target, score it, or propose wording yet. Do not repeat any position the reviewer already has.
+One position is ONE reviewable term, never a clause, a section or a framework. Split anything larger into its terms. termKind says which shape it is:
+- parameter: one stated quantity — a time bar, a liability cap, de minimis, a basket, a notice period, a long-stop date, a rate. The issue names the term and what it applies to: "Time-bar: leakage claims", "Cap: title warranties".
+- enumeration: one list-shaped definition or set of heads — Leakage limbs, Permitted Leakage items, warranty categories, the components of Losses. One position per list, and quote the block of every limb.
+- presence: a defined term or protection that should exist — a "Losses" definition, a W&I policy, a MAC condition, a gross-up.
+- language: a standard of wording with no parameter behind it — the "Fairly Disclosed" standard, a knowledge qualifier, sandbagging.
 
-For each position: issue is a short noun phrase naming the issue; guidance is a short note on what the later comparison should examine; severity is blocker, high, medium, or low, judged by how much the issue matters commercially or legally. passages are the reference blocks that state the standard for that issue: cite only exact block IDs supplied in the input, only from reference documents (never from F0, the target), and only blocks that actually state the position. One to eight passages, fewest that carry the point. A position whose standard you cannot quote must not be proposed.
+issue is a short noun phrase naming the term. guidance is one line: what the later comparison should examine, and why the severity is what it is. severity is blocker only for money, liability-cap and time-bar terms; everything else is high, medium or low.
 
-Also list the parties to the target document only: role is the defined term the target uses for that side (for example Purchaser, Seller, Landlord, Licensee), name is the party's legal name when the target states it, otherwise null. One entry per side; omit guarantors, agents and notaries unless they are principal parties.`;
+passages are the reference blocks that state the term. Cite only exact block IDs supplied in the input, only from reference documents, never from F0. Fewest that carry the term, up to twelve; for an enumeration, every limb. A term you cannot quote is not a position.
 
-/** What the proposal pass hands back: the plan to confirm and the sides the
- *  lawyer can act for. */
+Put in skipped, and do not propose, anything deal-specific or structural: signing and closing sequence, the difference between a preliminary and a final agreement, party names and addresses, schedule and annex lists, execution mechanics, and pricing particular to one deal. subject names it; reason says in a few words why it is not comparable.
+
+Do not judge the target, score it, or propose wording. Do not repeat a position the reviewer already has.
+
+parties lists the target's sides only: role is the defined term the target uses (Purchaser, Seller, Landlord, Licensee), name is the legal name when the target states it, otherwise null. Omit guarantors, agents and notaries unless they are principal parties.`;
+
+/** What the proposal pass hands back: the plan to confirm, what it left
+ *  uncompared, and the sides the lawyer can act for. */
 export type ReviewPositionProposal = {
   positions: Position[];
+  skipped: ReviewSkippedTerm[];
   parties: ReviewParty[];
 };
 
@@ -333,6 +416,7 @@ export const proposeReferencePositions = async ({
           sources: references,
           positionsMax,
         }),
+        skipped: normalizeSkipped(output.skipped),
         parties: normalizeParties(output.parties),
       };
     },

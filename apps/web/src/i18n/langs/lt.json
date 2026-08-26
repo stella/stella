@@ -2327,7 +2327,6 @@
       "changeBasis": "Keisti peržiūros pagrindą",
       "commentFailed": "Nepavyko pridėti komentaro",
       "comparedWithReferences": "{count, plural, one {Palyginta su # referenciniu dokumentu} few {Palyginta su # referenciniais dokumentais} other {Palyginta su # referencinių dokumentų}}",
-      "decidedCount": "Nuspręsta: {decided, number}/{total, number}",
       "decision": "Sprendimas",
       "decisionFailed": "Nepavyko įrašyti sprendimo",
       "decisions": {
@@ -2640,20 +2639,6 @@
         "scrollToChange": "Eiti į pakeitimą",
         "viewClause": "Žiūrėti sąlygą",
         "violatedRedLine": "Pažeista raudona linija:"
-      },
-      "risk": {
-        "complianceLabel": "Atitiktis",
-        "flaggedCount": "Pažymėta {flagged} iš {total} pozicijų",
-        "notApplicableExcluded": "({count} netaikoma, neįtraukta)",
-        "riskLevel": {
-          "critical": "Kritinė",
-          "high": "Didelė",
-          "low": "Maža",
-          "medium": "Vidutinė",
-          "none": "Rizikos nėra"
-        },
-        "summaryTitle": "Rizikos santrauka",
-        "topIssuesTitle": "Svarbiausi klausimai"
       },
       "ruleNumber": "Taisyklė {index}",
       "rulePlaceholder": "pvz. Mokėjimo terminas negali viršyti 30 dienų",

@@ -1,21 +1,29 @@
 /**
  * A proposed position is only as good as the passages it quotes: what the
  * model returns is a claim about the reference documents, and everything below
- * is about holding it to them.
+ * is about holding it to them — and to the one term it is allowed to be.
  */
 
 import { describe, expect, test } from "bun:test";
 
 import {
+  cappedSeverity,
   normalizeParties,
   normalizeProposedPositions,
+  normalizeSkipped,
   proposedPositionsSchema,
 } from "@/api/handlers/document-reviews/reference-positions";
 import type { ReferenceSource } from "@/api/handlers/document-reviews/reference-positions";
 import { toSafeId } from "@/api/lib/branded-types";
-import { REVIEW_PARTIES_MAX } from "@/api/lib/document-review/contract";
+import {
+  REVIEW_PARTIES_MAX,
+  REVIEW_SKIPPED_MAX,
+} from "@/api/lib/document-review/contract";
 import { toTanStackValibotSchema } from "@/api/lib/tanstack-ai-schema";
-import type { Position } from "@/api/lib/workflow/playbook-positions";
+import {
+  POSITION_TERM_KINDS,
+  type Position,
+} from "@/api/lib/workflow/playbook-positions";
 
 const SOURCE_KEY = "F1";
 const CLAIMS_BLOCK = "Claims must be notified within 6 months of Completion.";
@@ -39,7 +47,8 @@ const source: ReferenceSource = {
 };
 
 const proposed = (overrides: Record<string, unknown> = {}) => ({
-  issue: "Claims time bar",
+  termKind: "parameter" as const,
+  issue: "Time-bar: general warranty claims",
   guidance: " Compare the notification window. ",
   severity: "high" as const,
   passages: [{ sourceKey: SOURCE_KEY, blockId: "r-1" }],
@@ -107,13 +116,14 @@ describe("normalizeProposedPositions", () => {
 
     expect(position).toMatchObject({
       mode: "graded",
-      issue: "Claims time bar",
+      issue: "Time-bar: general warranty claims",
       severity: "high",
       guidance: "Compare the notification window.",
       ask: { mode: "auto" },
       enabled: true,
       standard: {
         source: "reference",
+        termKind: "parameter",
         passages: [
           {
             workspaceId: source.workspaceId,
@@ -171,6 +181,59 @@ describe("normalizeProposedPositions", () => {
     ]);
   });
 
+  // Every position a blocker is a review nobody can triage. Only a stated
+  // quantity — money, a cap, a time bar — walks a deal away by itself.
+  test("only a parameter term may be a blocker", () => {
+    const positions = normalizeProposedPositions({
+      proposed: [
+        proposed({ issue: "Cap: general warranties", severity: "blocker" }),
+        proposed({
+          issue: "W&I policy",
+          termKind: "presence",
+          severity: "blocker",
+        }),
+        proposed({
+          issue: "Leakage limbs",
+          termKind: "enumeration",
+          severity: "blocker",
+        }),
+        proposed({
+          issue: "Fairly Disclosed standard",
+          termKind: "language",
+          severity: "blocker",
+        }),
+      ],
+      seededPositions: [],
+      sources: [source],
+      positionsMax: 10,
+    });
+
+    expect(
+      positions.map((position) =>
+        position.mode === "graded" ? position.severity : null,
+      ),
+    ).toEqual(["blocker", "high", "high", "high"]);
+  });
+
+  test("carries the term kind onto the standard it will be graded as", () => {
+    const positions = normalizeProposedPositions({
+      proposed: POSITION_TERM_KINDS.map((termKind) =>
+        proposed({ issue: `Term ${termKind}`, termKind, severity: "medium" }),
+      ),
+      seededPositions: [],
+      sources: [source],
+      positionsMax: 10,
+    });
+
+    expect(
+      positions.map((position) =>
+        position.mode === "graded" && position.standard.source === "reference"
+          ? position.standard.termKind
+          : null,
+      ),
+    ).toEqual([...POSITION_TERM_KINDS]);
+  });
+
   test("stops at the position cap", () => {
     const positions = normalizeProposedPositions({
       proposed: [
@@ -187,5 +250,45 @@ describe("normalizeProposedPositions", () => {
       "Governing law",
       "First",
     ]);
+  });
+});
+
+describe("cappedSeverity", () => {
+  test("leaves every non-blocker severity alone", () => {
+    for (const termKind of POSITION_TERM_KINDS) {
+      expect(cappedSeverity("high", termKind)).toBe("high");
+      expect(cappedSeverity("medium", termKind)).toBe("medium");
+      expect(cappedSeverity("low", termKind)).toBe("low");
+    }
+  });
+});
+
+describe("normalizeSkipped", () => {
+  test("trims, drops half-stated entries, and reports a subject once", () => {
+    expect(
+      normalizeSkipped([
+        {
+          subject: "  Signing and closing sequence  ",
+          reason: "  Deal mechanics.  ",
+        },
+        { subject: "signing and closing sequence", reason: "Repeated." },
+        { subject: "Schedules", reason: "   " },
+        { subject: "   ", reason: "No subject." },
+      ]),
+    ).toEqual([
+      { subject: "Signing and closing sequence", reason: "Deal mechanics." },
+    ]);
+  });
+
+  test("caps what it reports", () => {
+    const skipped = Array.from(
+      { length: REVIEW_SKIPPED_MAX + 3 },
+      (_, index) => ({
+        subject: `Subject ${String(index)}`,
+        reason: "Deal-specific.",
+      }),
+    );
+
+    expect(normalizeSkipped(skipped)).toHaveLength(REVIEW_SKIPPED_MAX);
   });
 });

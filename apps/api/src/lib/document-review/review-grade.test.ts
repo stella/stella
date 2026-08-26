@@ -120,11 +120,20 @@ const target: PreparedDocxFile = {
   simplifiedName: "F0",
 };
 
+/** What a caller was handed, batch by batch, while the pass was still
+ *  running: the run worker commits exactly this, so progress is durable
+ *  before the last model call returns. */
+let gradedBatches: string[][] = [];
+
 const buildArgs = (
   positions: readonly Position[],
   abortSignal: AbortSignal,
 ) => ({
   positions,
+  onGraded: async (findings: readonly { positionId: string }[]) => {
+    gradedBatches.push(findings.map(({ positionId }) => positionId));
+    await Promise.resolve();
+  },
   contentBySourceId: new Map(
     positions.map(({ sourceId: id }) => [id, extraction()]),
   ),
@@ -155,6 +164,7 @@ beforeEach(() => {
   modelCallCount = 0;
   abortAfterFirstCall = null;
   returnVerdicts = true;
+  gradedBatches = [];
   gradeTierMatchesMock.mockClear();
 });
 
@@ -202,5 +212,33 @@ describe("document review grading", () => {
         "Automated comparison against the standard could not be completed.",
       fix: null,
     });
+  });
+
+  // The reviewer polls `completed/total`. A pass that hands nothing over until
+  // its last model call returns leaves that number at zero for the whole run.
+  test("hands each batch over as it is graded, not once at the end", async () => {
+    const positions = Array.from(
+      { length: realVerdictEngine.TIER_MATCH_BATCH_SIZE + 1 },
+      (_, index) => position(index + 1),
+    );
+
+    const findings = await buildFindings(
+      buildArgs(positions, new AbortController().signal),
+    );
+
+    expect(modelCallCount).toBe(2);
+    expect(gradedBatches).toHaveLength(2);
+    expect(gradedBatches.at(0)).toHaveLength(
+      realVerdictEngine.TIER_MATCH_BATCH_SIZE,
+    );
+    expect(gradedBatches.at(1)).toHaveLength(1);
+    // Every position reaches a caller before the pass returns, and the return
+    // value is still the whole set in position order.
+    expect(gradedBatches.flat()).toEqual(
+      positions.map(({ sourceId: id }) => id),
+    );
+    expect(findings.map(({ positionId }) => positionId)).toEqual(
+      positions.map(({ sourceId: id }) => id),
+    );
   });
 });

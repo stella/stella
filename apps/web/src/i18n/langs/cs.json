@@ -2327,7 +2327,6 @@
       "changeBasis": "Změnit podklady kontroly",
       "commentFailed": "Komentář se nepodařilo přidat",
       "comparedWithReferences": "{count, plural, one {Porovnáno s # referenčním dokumentem} few {Porovnáno s # referenčními dokumenty} other {Porovnáno s # referenčními dokumenty}}",
-      "decidedCount": "Rozhodnuto {decided, number}/{total, number}",
       "decision": "Rozhodnutí",
       "decisionFailed": "Rozhodnutí se nepodařilo uložit",
       "decisions": {
@@ -2640,20 +2639,6 @@
         "scrollToChange": "Přejít na změnu",
         "viewClause": "Zobrazit ustanovení",
         "violatedRedLine": "Porušuje nepřijatelné pravidlo:"
-      },
-      "risk": {
-        "complianceLabel": "Soulad",
-        "flaggedCount": "Označeno {flagged} z {total} pozic",
-        "notApplicableExcluded": "({count} nerelevantní, vyloučeno)",
-        "riskLevel": {
-          "critical": "Kritické",
-          "high": "Vysoké",
-          "low": "Nízké",
-          "medium": "Střední",
-          "none": "Bez rizika"
-        },
-        "summaryTitle": "Souhrn rizik",
-        "topIssuesTitle": "Hlavní problémy"
       },
       "ruleNumber": "Pravidlo {index}",
       "rulePlaceholder": "např. Splatnost faktur nesmí přesáhnout 30 dnů",

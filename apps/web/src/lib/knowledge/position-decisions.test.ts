@@ -34,6 +34,7 @@ const tieredStandard = (ideal?: string): PositionStandard => ({
 
 const referenceStandard: PositionStandard = {
   source: "reference",
+  termKind: "language",
   passages: [
     {
       workspaceId: "11111111-1111-4111-8111-111111111111",

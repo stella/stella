@@ -15,6 +15,11 @@ export type ReferenceFile = {
  *  lawyer. */
 export type ReviewParty = { role: string; name: string | null };
 
+/** Something the reference document covers that the position pass read but
+ *  deliberately did not turn into a position: `subject` names it, `reason`
+ *  says in a few words why it is not comparable. */
+export type ReviewSkippedTerm = { subject: string; reason: string };
+
 /**
  * Whose interest a comparison is judged for: one of the target's parties, or
  * no side. Mirrors the API's `ReviewPerspective`; the request body is typed

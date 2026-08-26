@@ -19,14 +19,19 @@ export type ReviewDeltaViewProps = {
   target: ReviewDeltaSide;
   standard: ReviewDeltaSide;
   onShowInDocument?: ((blockId: string) => void) | undefined;
+  /** Opens a standard passage in the reference it was quoted from. */
+  onShowStandardPassage?: ((blockId: string) => void) | undefined;
+  /** Names the reference the standard was read from, e.g.
+   *  `Standard (Master NDA)`. Falls back to `standard.label`. */
+  standardLabel?: string | undefined;
 };
 
 /**
- * Dispatches a graded finding's delta to the component that renders its
- * shape: a term row for a single parameter, a presence matrix for an
- * enumeration or a bare term, an aligned pair for anything without a
- * structured delta. There is no generic "finding card" here on purpose —
- * the delta's kind fully determines the layout.
+ * A graded finding, read top down: what the delta claims, then the passages
+ * it claims it about. The summary shape is the delta's own — a term row for a
+ * parameter, a presence matrix for an enumeration — and the aligned pair
+ * always follows it, because a reviewer who cannot see the wording cannot
+ * check the claim.
  */
 export const ReviewDeltaView = ({
   label,
@@ -35,36 +40,51 @@ export const ReviewDeltaView = ({
   target,
   standard,
   onShowInDocument,
+  onShowStandardPassage,
+  standardLabel,
 }: ReviewDeltaViewProps) => {
+  const standardHeading = standardLabel ?? standard.label;
+  // A parameter delta names the exact phrase that differs on each side, so
+  // the pair can mark that phrase rather than every figure in the passage.
+  const pair = (
+    <ReviewAlignedPair
+      delta={delta.kind === "parameter" ? delta : undefined}
+      onShowInDocument={onShowInDocument}
+      onShowStandardPassage={onShowStandardPassage}
+      standard={standard}
+      standardLabel={standardHeading}
+      target={target}
+    />
+  );
+
   switch (delta.kind) {
     case "parameter":
       return (
-        <ReviewTermTable
-          onShowInDocument={onShowInDocument}
-          rows={[{ delta, id: label, impact, label }]}
-          standardLabel={standard.label}
-          targetLabel={target.label}
-        />
+        <div className="space-y-3">
+          <ReviewTermTable
+            onShowInDocument={onShowInDocument}
+            rows={[{ delta, id: label, impact, label }]}
+            standardLabel={standardHeading}
+            targetLabel={target.label}
+          />
+          {pair}
+        </div>
       );
     case "enumeration":
     case "presence":
       return (
-        <ReviewPresenceMatrix
-          delta={delta}
-          onShowInDocument={onShowInDocument}
-          standardLabel={standard.label}
-          targetLabel={target.label}
-        />
+        <div className="space-y-3">
+          <ReviewPresenceMatrix
+            delta={delta}
+            onShowInDocument={onShowInDocument}
+            standardLabel={standardHeading}
+            targetLabel={target.label}
+          />
+          {pair}
+        </div>
       );
     case "language":
-      return (
-        <ReviewAlignedPair
-          diff
-          onShowInDocument={onShowInDocument}
-          standard={standard}
-          target={target}
-        />
-      );
+      return pair;
     default:
       delta satisfies never;
       return null;

@@ -12,6 +12,7 @@ import type {
   ReviewPerspective,
 } from "@/api/lib/document-review/contract";
 import type { DocxFolioCitation } from "@/api/lib/document-review/review-extract";
+import type { PositionTermKind } from "@/api/lib/workflow/playbook-position-facets";
 
 /**
  * One side of a parameter difference. `text` is the term exactly as it reads
@@ -44,13 +45,23 @@ export type ReviewDelta =
   | { kind: "presence"; term: string; inTarget: boolean; inStandard: boolean }
   | { kind: "language" };
 
-export const REVIEW_DELTA_KINDS = [
-  "parameter",
-  "enumeration",
-  "presence",
-  "language",
-] as const;
-export type ReviewDeltaKind = (typeof REVIEW_DELTA_KINDS)[number];
+export type ReviewDeltaKind = ReviewDelta["kind"];
+
+/**
+ * The delta kind grading must answer a position with, by the position's term
+ * kind. It is the identity, and that is the point: the two vocabularies are
+ * one list, and this map is what makes it a compile-time fact rather than a
+ * convention — it must cover every term kind, and every value must name a
+ * delta branch. A position typed as a parameter therefore cannot come back as
+ * a whole-clause rewrite; the only other answer grading may give is
+ * {@link LANGUAGE_DELTA}, which claims nothing structural.
+ */
+export const EXPECTED_DELTA_KIND = {
+  parameter: "parameter",
+  enumeration: "enumeration",
+  presence: "presence",
+  language: "language",
+} as const satisfies Record<PositionTermKind, ReviewDeltaKind>;
 
 /** The difference is language until something says otherwise: prose is the
  *  weakest claim about a delta, and the one that needs no structure. */

@@ -89,6 +89,7 @@ import {
   positionTiers,
   type ReferencePassage,
   referencePassagesText,
+  type ReferenceStandard,
   type TierRule,
 } from "@/lib/knowledge/playbook-types";
 import {
@@ -779,6 +780,16 @@ export const ReferencePassageList = ({
 // only the four fields a reviewer actually changes before starting a review.
 // It reuses this file's field components rather than forking the editor.
 
+type PositionTermKind = ReferenceStandard["termKind"];
+
+// TODO(i18n): English until the review surface is localized as a whole.
+const TERM_KIND_LABEL = {
+  parameter: "Parameter",
+  enumeration: "Enumeration",
+  presence: "Presence",
+  language: "Language",
+} as const satisfies Record<PositionTermKind, string>;
+
 export const PositionQuickRow = ({
   position,
   index,
@@ -793,10 +804,11 @@ export const PositionQuickRow = ({
   onRemove: () => void;
 }) => {
   const t = useTranslations();
-  const passages =
+  const referenceStandard =
     position.mode === "graded" && position.standard.source === "reference"
-      ? position.standard.passages
+      ? position.standard
       : null;
+  const passages = referenceStandard?.passages ?? null;
 
   return (
     <div
@@ -817,6 +829,11 @@ export const PositionQuickRow = ({
           placeholder={t("knowledge.playbooks.issuePlaceholder")}
           value={position.issue}
         />
+        {referenceStandard !== null && (
+          <span className="text-muted-foreground shrink-0 text-[11px]">
+            {TERM_KIND_LABEL[referenceStandard.termKind]}
+          </span>
+        )}
         {position.mode === "graded" && (
           <SeverityChip
             onChange={(severity) => onChange({ ...position, severity })}

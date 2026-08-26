@@ -2327,7 +2327,6 @@
       "changeBasis": "Modifier la base de révision",
       "commentFailed": "Impossible d’ajouter le commentaire",
       "comparedWithReferences": "{count, plural, one {Comparé à # document de référence} other {Comparé à # documents de référence}}",
-      "decidedCount": "{decided, number}/{total, number} traités",
       "decision": "Décision",
       "decisionFailed": "Impossible d’enregistrer votre décision",
       "decisions": {
@@ -2640,20 +2639,6 @@
         "scrollToChange": "Aller à la modification",
         "viewClause": "Voir la clause",
         "violatedRedLine": "Viole la ligne rouge :"
-      },
-      "risk": {
-        "complianceLabel": "Conformité",
-        "flaggedCount": "{flagged} positions signalées sur {total}",
-        "notApplicableExcluded": "({count} non applicable, exclu)",
-        "riskLevel": {
-          "critical": "Critique",
-          "high": "Élevé",
-          "low": "Faible",
-          "medium": "Moyen",
-          "none": "Aucun risque"
-        },
-        "summaryTitle": "Synthèse des risques",
-        "topIssuesTitle": "Principaux problèmes"
       },
       "ruleNumber": "Règle {index}",
       "rulePlaceholder": "ex. Le délai de paiement ne doit pas dépasser 30 jours",

@@ -60,6 +60,7 @@ import type {
   ReviewParty,
   ReviewPerspective,
   ReviewSetup,
+  ReviewSkippedTerm,
 } from "@/components/ai-suggestions/document-review-basis.logic";
 import {
   decideReviewFinding,
@@ -74,7 +75,6 @@ import type {
   DocumentReviewDecision,
   DocumentReviewFindingRow,
   ReviewFinding,
-  ReviewSeverity,
   ReviewVerdict,
 } from "@/components/ai-suggestions/document-review-queries";
 import {
@@ -98,7 +98,6 @@ import {
   usePlaybookReviewStore,
 } from "@/components/ai-suggestions/playbook-review-store";
 import type { StartReviewResult } from "@/components/ai-suggestions/playbook-review-store";
-import { ReviewAlignedPair } from "@/components/ai-suggestions/review-aligned-pair";
 import type {
   DeltaCitation,
   ReviewImpact,
@@ -122,14 +121,13 @@ import type {
   ReviewResultFilter,
   ReviewResultItem,
 } from "@/components/inspector/playbook-review-results.logic";
-import type { OverallRisk } from "@/components/inspector/playbook-risk-rollup";
-import { computeRiskRollup } from "@/components/inspector/playbook-risk-rollup";
 import { ReviewExportMenu } from "@/components/inspector/review-export-menu";
 import { PlaybookStatusBadge } from "@/components/playbook-status-badge";
 import { SearchDialog } from "@/components/search-dialog";
 import Tooltip from "@/components/tooltip";
 import { RunSizeConfirmDialog } from "@/components/usage/run-size-confirm-dialog";
 import { getWordEditAuthorName } from "@/features/chat/hooks/use-chat-user-context";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import { useAnalytics } from "@/lib/analytics/provider";
@@ -450,6 +448,7 @@ export const PlaybookFacet = ({
         perspective={session.setup?.perspective ?? NEUTRAL_PERSPECTIVE}
         positions={session.positions}
         referenceNames={referenceNameLookup(session.setup?.references ?? [])}
+        skipped={session.skipped}
       />
     );
   }
@@ -715,6 +714,7 @@ const ReviewRunPanel = ({
       <ReviewProgressState
         completed={run.completed}
         sourceName={restored.basis.playbookName}
+        startedAt={run.startedAt}
         total={run.total}
       />
     );
@@ -979,6 +979,7 @@ const PERSPECTIVE_SECTION_LABEL = "We act for";
 const PERSPECTIVE_NEUTRAL_LABEL = "Not specified";
 const PERSPECTIVE_OTHER_LABEL = "Other…";
 const PERSPECTIVE_OTHER_PLACEHOLDER = "Role as the document names it";
+const NOT_COMPARED_LABEL = "Not compared";
 const PERSPECTIVE_CHIP_CLASS =
   "min-h-8 rounded-full border px-3 text-xs transition-colors duration-150";
 const PERSPECTIVE_CHIP_CHECKED_CLASS =
@@ -1099,6 +1100,48 @@ const PerspectivePicker = ({
         />
       )}
     </section>
+  );
+};
+
+/**
+ * What the position proposal read but deliberately left off the checklist,
+ * collapsed behind a count so it does not compete with the positions
+ * themselves. A reviewer who wants to know why expands it; everyone else
+ * reads past it in one line.
+ */
+const NotComparedDisclosure = ({
+  skipped,
+}: {
+  skipped: readonly ReviewSkippedTerm[];
+}) => {
+  const format = useFormatter();
+  const [open, setOpen] = useState(false);
+  if (skipped.length === 0) {
+    return null;
+  }
+  return (
+    <div className="mt-1.5">
+      <button
+        aria-expanded={open}
+        className="text-muted-foreground hover:text-foreground text-[11px] transition-colors"
+        onClick={() => setOpen((current) => !current)}
+        type="button"
+      >
+        {NOT_COMPARED_LABEL}: {format.number(skipped.length)}
+      </button>
+      {open && (
+        <ul className="mt-1 space-y-0.5">
+          {skipped.map((entry) => (
+            <li
+              className="text-muted-foreground text-[11px]"
+              key={entry.subject}
+            >
+              <BidiText as="span">{`${entry.subject} — ${entry.reason}`}</BidiText>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 };
 
@@ -1432,6 +1475,7 @@ type PositionConfirmStepProps = {
   parties: readonly ReviewParty[];
   perspective: ReviewPerspective;
   referenceNames: ReferenceNameLookup;
+  skipped: readonly ReviewSkippedTerm[];
   error: string | null;
   onChange: (positions: Position[]) => void;
   onPerspectiveChange: (perspective: ReviewPerspective) => void;
@@ -1451,6 +1495,7 @@ const PositionConfirmStep = ({
   parties,
   perspective,
   referenceNames,
+  skipped,
   error,
   onChange,
   onPerspectiveChange,
@@ -1494,6 +1539,7 @@ const PositionConfirmStep = ({
             parties={parties}
             value={perspective}
           />
+          <NotComparedDisclosure skipped={skipped} />
         </div>
         <ul className="space-y-1.5">
           {positions.map((position, index) => (
@@ -1558,30 +1604,65 @@ const ReviewingState = ({ sourceName }: { sourceName: string }) => {
   );
 };
 
+// TODO(i18n): English until the review surface is localized as a whole.
+type ReviewProgressPositionsLabelArgs = { completed: string; total: string };
+const reviewProgressPositionsLabel = ({
+  completed,
+  total,
+}: ReviewProgressPositionsLabelArgs): string =>
+  `${completed} of ${total} positions`;
+
+// mm:ss: a run answers in minutes at most, so hours would only pad the label.
+const formatElapsedMinutesSeconds = (ms: number): string => {
+  const totalSeconds = Math.floor(ms / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+};
+
 // The run's own progress: the worker commits one finding per confirmed
-// position and counts them on the row, so the percentage is a real fraction of
-// the work rather than a timer pretending to be one.
+// position and counts them on the row, so the bar tracks a real fraction of
+// the work rather than a timer pretending to be one. The elapsed clock is a
+// second, independent read of the same "still working" fact.
 type ReviewProgressStateProps = {
   sourceName: string;
   completed: number;
   total: number;
+  /** When the worker claimed the run, or `null` while it still sits queued. */
+  startedAt: string | null;
 };
 
 const ReviewProgressState = ({
   sourceName,
   completed,
   total,
+  startedAt,
 }: ReviewProgressStateProps) => {
   const t = useTranslations();
   const format = useFormatter();
-  // The worker commits findings a pass at a time, so a count is honest only
-  // once something has landed; before that the loader alone says "working".
-  const progress =
-    completed > 0 && total > 0
-      ? `${format.number(completed)}/${format.number(total)}`
-      : null;
-  const detail = [sourceName, progress]
-    .filter((part) => part !== null && part.length > 0)
+
+  const [elapsedMs, setElapsedMs] = useState<number | null>(null);
+  useExternalSyncEffect(() => {
+    if (startedAt === null) {
+      setElapsedMs(null);
+      return undefined;
+    }
+    const startedAtMs = new Date(startedAt).getTime();
+    const tick = () => setElapsedMs(Date.now() - startedAtMs);
+    tick();
+    const interval = setInterval(tick, 1000);
+    return () => clearInterval(interval);
+  }, [startedAt]);
+
+  const detail = [
+    sourceName,
+    reviewProgressPositionsLabel({
+      completed: format.number(completed),
+      total: format.number(total),
+    }),
+    elapsedMs === null ? null : formatElapsedMinutesSeconds(elapsedMs),
+  ]
+    .filter((part): part is string => part !== null && part.length > 0)
     .join(" · ");
 
   return (
@@ -1672,6 +1753,20 @@ const SUGGESTION_REJECTED_LABEL = "Rejected";
 const SUGGESTION_SKIPPED_LABEL = "No longer matches the document";
 const SUGGESTION_STAGED_LABEL = "Staged as a tracked change in the document";
 
+type ReviewResultsSummaryArgs = {
+  flagged: string;
+  total: string;
+  decided: string;
+};
+/** The header's one quiet line in place of a risk-summary card: what the run
+ *  found, and how much of it a reviewer has already answered. */
+const reviewResultsSummarySentence = ({
+  flagged,
+  total,
+  decided,
+}: ReviewResultsSummaryArgs): string =>
+  `${flagged} of ${total} positions flagged · ${decided} decided`;
+
 type ResultsViewProps = {
   basis: RestoredReviewBasis;
   findings: readonly RestoredReviewFinding[];
@@ -1729,11 +1824,13 @@ const ResultsView = ({
   onScrollToBlock,
 }: ResultsViewProps) => {
   const t = useTranslations();
+  const format = useFormatter();
   const results = buildReviewResultItems({
     positions: basis.positions,
     findings,
   });
   const progress = reviewDecisionProgress(decisionCounts);
+  const flaggedCount = results.filter(isReviewDeviation).length;
 
   return (
     <div className="bg-background flex h-full flex-col">
@@ -1754,16 +1851,17 @@ const ResultsView = ({
               })}
             </BidiText>
           </p>
+          {results.length > 0 && (
+            <p className="text-muted-foreground text-xs tabular-nums">
+              {reviewResultsSummarySentence({
+                flagged: format.number(flaggedCount),
+                total: format.number(results.length),
+                decided: format.number(progress.decided),
+              })}
+            </p>
+          )}
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          {progress.total > 0 && (
-            <span className="text-muted-foreground text-[11px] tabular-nums">
-              {t("inspector.review.decidedCount", {
-                decided: progress.decided,
-                total: progress.total,
-              })}
-            </span>
-          )}
           {/* Only a run whose positions were never saved has a playbook to
               make; one that ran against a definition already has one. */}
           {basis.provenance === "ephemeral" && (
@@ -1788,13 +1886,6 @@ const ResultsView = ({
           freshness={freshness}
           onReviewAgain={onReviewAgain}
         />
-        {results.length > 0 && (
-          <RiskSummaryCard
-            editorAvailable={editorAvailable}
-            findings={results.map((item) => item.finding)}
-            onScrollToBlock={onScrollToBlock}
-          />
-        )}
         {results.length > 0 ? (
           <ReviewResultList
             decisionPending={decisionPending}
@@ -2071,6 +2162,17 @@ type ReviewResultCardProps = {
   onScrollToBlock: (blockId: string) => void;
 };
 
+/** The reference a finding's standard was quoted from, when every cited group
+ *  names the same one. `null` when the finding cites no reference, or cites
+ *  more than one — a mixed standard gets no more specific a label than
+ *  `STANDARD_COLUMN_LABEL` on its own. */
+const singleReferenceFieldId = (finding: ReviewFinding): string | null => {
+  const groups = finding.referenceCitations ?? [];
+  const fieldIds = new Set(groups.map((group) => group.fileFieldId));
+  const [first] = groups;
+  return fieldIds.size === 1 && first !== undefined ? first.fileFieldId : null;
+};
+
 /**
  * One finding: what the document says, what the standard says, and what the
  * difference is. The judgment is one glyph in the header — the row's place in
@@ -2109,6 +2211,15 @@ const ReviewResultCard = ({
       group.citations.map((citation) => [citation.blockId, group.fileFieldId]),
     ),
   );
+  const singleReferenceId = singleReferenceFieldId(finding);
+  const singleReferenceName =
+    singleReferenceId === null
+      ? undefined
+      : referenceNameLookup(references).get(singleReferenceId);
+  const standardLabel =
+    singleReferenceName === undefined
+      ? undefined
+      : `${STANDARD_COLUMN_LABEL} (${singleReferenceName})`;
 
   return (
     <li
@@ -2155,7 +2266,10 @@ const ReviewResultCard = ({
       </button>
       {expanded && (
         <div className="space-y-3 border-t px-3 py-3" id={detailId}>
-          <ReviewAlignedPair
+          <ReviewDeltaView
+            delta={finding.delta}
+            impact={finding.impact ?? "unknown"}
+            label={item.title}
             onShowInDocument={editorAvailable ? onScrollToBlock : undefined}
             onShowStandardPassage={(blockId) => {
               const fieldId = referenceFieldIdByBlockId.get(blockId);
@@ -2167,20 +2281,7 @@ const ReviewResultCard = ({
               label: STANDARD_COLUMN_LABEL,
               passages: standardPassages,
             }}
-            target={{
-              label: TARGET_COLUMN_LABEL,
-              passages: finding.citations,
-            }}
-          />
-          <ReviewDeltaView
-            delta={finding.delta}
-            impact={finding.impact ?? "unknown"}
-            label={item.title}
-            onShowInDocument={editorAvailable ? onScrollToBlock : undefined}
-            standard={{
-              label: STANDARD_COLUMN_LABEL,
-              passages: standardPassages,
-            }}
+            standardLabel={standardLabel}
             target={{
               label: TARGET_COLUMN_LABEL,
               passages: finding.citations,
@@ -2563,203 +2664,6 @@ const CounterpartyNotePopover = ({
   );
 };
 
-// -- Risk summary --
-
-// At-a-glance rollup shown above the findings list: the overall risk level,
-// how many of the reviewed positions were flagged, the verdict breakdown, and
-// the handful of issues that matter most — so a reviewer sees the contract's
-// shape without reading every finding. Purely derived from `findings`
-// (`computeRiskRollup`, no LLM call); reuses the citations already on each
-// finding to make a top issue clickable through the same `onScrollToBlock`
-// the finding cards use, rather than adding a second query.
-type RiskSummaryCardProps = {
-  findings: readonly ReviewFinding[];
-  editorAvailable: boolean;
-  onScrollToBlock: (blockId: string) => void;
-};
-
-const RISK_BREAKDOWN_ORDER = [
-  "deviation",
-  "missing",
-  "fallback",
-  "compliant",
-  "additional",
-  "not-applicable",
-] as const satisfies readonly ReviewVerdict[];
-
-type MissingRiskBreakdownVerdict = Exclude<
-  ReviewVerdict,
-  (typeof RISK_BREAKDOWN_ORDER)[number]
->;
-
-true satisfies MissingRiskBreakdownVerdict extends never ? true : never;
-
-const RiskSummaryCard = ({
-  findings,
-  editorAvailable,
-  onScrollToBlock,
-}: RiskSummaryCardProps) => {
-  const t = useTranslations();
-  const format = useFormatter();
-  const riskLabels = useRiskLevelLabels();
-
-  const rollup = computeRiskRollup(findings);
-  const findingByPositionId = new Map(
-    findings.map((finding) => [finding.positionId, finding]),
-  );
-
-  return (
-    <div className="bg-card mb-3 space-y-2.5 rounded-lg border p-3">
-      <div className="flex items-center justify-between gap-2">
-        <h3 className="text-foreground-strong-muted text-[11px] font-medium tracking-[0.06em] uppercase">
-          {t("knowledge.playbooks.risk.summaryTitle")}
-        </h3>
-        <span
-          className={cn(
-            "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium",
-            riskChipClass(rollup.overallRisk),
-          )}
-        >
-          <span
-            aria-hidden="true"
-            className={cn(
-              "size-1.5 rounded-full",
-              riskDotClass(rollup.overallRisk),
-            )}
-          />
-          {riskLabels[rollup.overallRisk]}
-        </span>
-      </div>
-
-      <p className="text-muted-foreground text-xs">
-        {t("knowledge.playbooks.risk.flaggedCount", {
-          flagged: String(rollup.flaggedCount),
-          total: String(rollup.totalPositions),
-        })}
-      </p>
-
-      {rollup.compliance.ratio !== null && (
-        <p className="text-muted-foreground text-xs">
-          <span className="text-foreground-strong-muted">
-            {t("knowledge.playbooks.risk.complianceLabel")}
-          </span>{" "}
-          <span className="text-foreground tabular-nums">
-            {format.number(rollup.compliance.ratio, { style: "percent" })}
-          </span>
-          {rollup.compliance.notApplicable > 0 && (
-            <span>
-              {" "}
-              {t("knowledge.playbooks.risk.notApplicableExcluded", {
-                count: String(rollup.compliance.notApplicable),
-              })}
-            </span>
-          )}
-        </p>
-      )}
-
-      {rollup.flaggedCount > 0 && (
-        <ul className="flex flex-wrap gap-x-3 gap-y-1">
-          {RISK_BREAKDOWN_ORDER.map((verdict) => {
-            const count = rollup.verdictCounts[verdict];
-            if (count === 0) {
-              return null;
-            }
-            return (
-              <li
-                className="text-muted-foreground flex items-center gap-1 text-[11px]"
-                key={verdict}
-              >
-                <span
-                  aria-hidden="true"
-                  className={cn(
-                    "size-1.5 rounded-full",
-                    verdictDotClass(verdict),
-                  )}
-                />
-                {VERDICT_LABEL[verdict]}
-                <span className="text-foreground-ghost tabular-nums">
-                  {format.number(count)}
-                </span>
-              </li>
-            );
-          })}
-        </ul>
-      )}
-
-      {rollup.topIssues.length > 0 && (
-        <div className="space-y-1 border-t pt-2">
-          <p className="text-muted-foreground text-[11px] font-medium tracking-[0.06em] uppercase">
-            {t("knowledge.playbooks.risk.topIssuesTitle")}
-          </p>
-          <ul className="space-y-1">
-            {rollup.topIssues.map((topIssue) => (
-              <TopIssueRow
-                blockId={
-                  findingByPositionId.get(topIssue.positionId)?.citations.at(0)
-                    ?.blockId ?? null
-                }
-                editorAvailable={editorAvailable}
-                key={topIssue.positionId}
-                onScrollToBlock={onScrollToBlock}
-                severity={topIssue.severity}
-                text={topIssue.issue}
-              />
-            ))}
-          </ul>
-        </div>
-      )}
-    </div>
-  );
-};
-
-type TopIssueRowProps = {
-  text: string;
-  severity: ReviewSeverity;
-  blockId: string | null;
-  editorAvailable: boolean;
-  onScrollToBlock: (blockId: string) => void;
-};
-
-const TopIssueRow = ({
-  text,
-  severity,
-  blockId,
-  editorAvailable,
-  onScrollToBlock,
-}: TopIssueRowProps) => {
-  const dot = (
-    <span
-      aria-hidden="true"
-      className={cn(
-        "size-1.5 shrink-0 rounded-full",
-        severityDotClass(severity),
-      )}
-    />
-  );
-
-  if (blockId === null || !editorAvailable) {
-    return (
-      <li className="text-foreground flex items-center gap-1.5 text-xs">
-        {dot}
-        <span className="truncate">{text}</span>
-      </li>
-    );
-  }
-
-  return (
-    <li>
-      <button
-        className="text-foreground hover:bg-muted flex w-full items-center gap-1.5 rounded-md px-1 py-0.5 text-start text-xs transition-colors"
-        onClick={() => onScrollToBlock(blockId)}
-        type="button"
-      >
-        {dot}
-        <span className="truncate">{text}</span>
-      </button>
-    </li>
-  );
-};
-
 // Additive line under the caption: the fallback that matched or the red line
 // that was violated. Tolerant of `matchedRef` being absent (a verdict not
 // decided by a specific tier reference).
@@ -2949,65 +2853,50 @@ const VERDICT_LABEL = {
   "not-applicable": "Not applicable",
 } as const satisfies Record<ReviewVerdict, string>;
 
-const VERDICT_GLYPH = {
-  compliant: "✓",
-  fallback: "≈",
-  deviation: "✕",
-  missing: "○",
-  additional: "+",
-  "not-applicable": "–",
-} as const satisfies Record<ReviewVerdict, string>;
-
-const VERDICT_GLYPH_CLASS = {
-  compliant: "text-success",
-  fallback: "text-warning-foreground",
-  deviation: "text-destructive",
-  missing: "text-muted-foreground",
-  additional: "text-muted-foreground",
-  "not-applicable": "text-border",
-} as const satisfies Record<ReviewVerdict, string>;
-
-const IMPACT_GLYPH = {
+// Muted, total over every impact value: judgment now reads from the arrow's
+// direction, not from colour, so nothing here escalates to green/red.
+const DIRECTION_GLYPH = {
   favourable: "▲",
   unfavourable: "▼",
   neutral: "–",
-} as const satisfies Record<DirectedImpact, string>;
+  unknown: "–",
+} as const satisfies Record<ReviewImpact, string>;
 
-const IMPACT_GLYPH_CLASS = {
-  favourable: "text-success",
-  unfavourable: "text-destructive",
-  neutral: "text-muted-foreground",
-} as const satisfies Record<DirectedImpact, string>;
+const GLYPH_CLASS = "text-muted-foreground";
+const MISSING_VERDICT_GLYPH = "○";
 
 /**
- * The single mark that carries the judgment.
- *
- * A run judged for a side has already answered the only question that matters
- * — which way this cuts for us — so the arrow wins. Without a side there is
- * nothing to point at, and the verdict speaks for itself.
+ * The single mark that carries the judgment: the direction a run judged for
+ * (▼ worse, ▲ better, – no direction or none judged), muted rather than
+ * coloured. A missing standard gets its own hollow mark regardless of
+ * direction — "nothing to compare" is a different finding from "no verdict
+ * either way" — so it is checked before impact rather than folded into it.
  */
 const findingGlyph = (
   finding: ReviewFinding,
   perspective: ReviewPerspective,
 ): FindingGlyph => {
-  const { impact } = finding;
-  if (isDirectedImpact(impact)) {
+  const { verdict, impact } = finding;
+  if (verdict === "missing") {
     return {
-      symbol: IMPACT_GLYPH[impact],
-      className: IMPACT_GLYPH_CLASS[impact],
-      label: impactLabel(impact, perspective),
+      symbol: MISSING_VERDICT_GLYPH,
+      className: GLYPH_CLASS,
+      label: VERDICT_LABEL.missing,
     };
   }
-  const { verdict } = finding;
-  if (verdict === null) {
-    return { symbol: "–", className: "text-muted-foreground", label: "" };
-  }
+  const resolvedImpact = impact ?? "unknown";
+  const label = isDirectedImpact(resolvedImpact)
+    ? impactLabel(resolvedImpact, perspective)
+    : verdictLabel(verdict);
   return {
-    symbol: VERDICT_GLYPH[verdict],
-    className: VERDICT_GLYPH_CLASS[verdict],
-    label: VERDICT_LABEL[verdict],
+    symbol: DIRECTION_GLYPH[resolvedImpact],
+    className: GLYPH_CLASS,
+    label,
   };
 };
+
+const verdictLabel = (verdict: ReviewVerdict | null): string =>
+  verdict === null ? "" : VERDICT_LABEL[verdict];
 
 type DirectedImpact = Exclude<ReviewImpact, "unknown">;
 
@@ -3037,103 +2926,3 @@ const impactLabel = (
   perspective.type === "party"
     ? `${IMPACT_FOR_SIDE_LABEL[impact]} ${perspective.role}`
     : IMPACT_LABEL[impact];
-
-const useRiskLevelLabels = (): Record<OverallRisk, string> => {
-  const t = useTranslations();
-  return {
-    critical: t("knowledge.playbooks.risk.riskLevel.critical"),
-    high: t("knowledge.playbooks.risk.riskLevel.high"),
-    medium: t("knowledge.playbooks.risk.riskLevel.medium"),
-    low: t("knowledge.playbooks.risk.riskLevel.low"),
-    none: t("knowledge.playbooks.risk.riskLevel.none"),
-  };
-};
-
-// The overall-risk chip escalates visually with the level: "critical" is the
-// one solid-fill state (it means an outright violation of a non-negotiable
-// position), the rest reuse the same outlined verdict/severity token pairs
-// as the finding cards below.
-const RISK_CHIP_CRITICAL =
-  "border-transparent bg-destructive text-destructive-foreground";
-const RISK_CHIP_HIGH = "border-destructive/30 text-destructive";
-const RISK_CHIP_MEDIUM = "border-warning/30 text-warning-foreground";
-const RISK_CHIP_LOW = "border-border text-muted-foreground";
-const RISK_CHIP_NONE = "border-success/30 text-success";
-
-const riskChipClass = (risk: OverallRisk): string => {
-  switch (risk) {
-    case "critical":
-      return RISK_CHIP_CRITICAL;
-    case "high":
-      return RISK_CHIP_HIGH;
-    case "medium":
-      return RISK_CHIP_MEDIUM;
-    case "low":
-      return RISK_CHIP_LOW;
-    case "none":
-      return RISK_CHIP_NONE;
-    default:
-      risk satisfies never;
-      return "";
-  }
-};
-
-const riskDotClass = (risk: OverallRisk): string => {
-  switch (risk) {
-    // The "critical" dot sits on the chip's own solid destructive
-    // background, so it needs the foreground shade for contrast; "high"
-    // sits on a transparent chip like the severity dots elsewhere.
-    case "critical":
-      return "bg-destructive-foreground";
-    case "high":
-      return "bg-destructive";
-    case "medium":
-      return "bg-warning";
-    case "low":
-      return "bg-foreground-strong-muted";
-    case "none":
-      return "bg-success";
-    default:
-      risk satisfies never;
-      return "";
-  }
-};
-
-// Verdict tiers map to the same green/amber/red/gray semantic
-// tokens the verdict property uses elsewhere. Each `dark:`-safe pair
-// is declared as a constant so the hardcoded-colour rule treats it
-// as a token reference, not a raw value.
-const verdictDotClass = (verdict: ReviewVerdict): string => {
-  switch (verdict) {
-    case "compliant":
-      return "bg-success";
-    case "fallback":
-      return "bg-warning";
-    case "deviation":
-      return "bg-destructive";
-    case "missing":
-      return "bg-muted-foreground";
-    // Neutral, distinct from missing: neither is a gap in the standard.
-    case "additional":
-    case "not-applicable":
-      return "bg-border";
-    default:
-      verdict satisfies never;
-      return "";
-  }
-};
-
-const severityDotClass = (severity: ReviewSeverity): string => {
-  switch (severity) {
-    case "blocker":
-    case "high":
-      return "bg-destructive";
-    case "medium":
-      return "bg-warning";
-    case "low":
-      return "bg-foreground-strong-muted";
-    default:
-      severity satisfies never;
-      return "";
-  }
-};

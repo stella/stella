@@ -6,8 +6,10 @@ import { tConditionNode } from "@/api/lib/conditions/contract";
 import type { ConstantMap } from "@/api/lib/constant-map";
 import {
   POSITION_SEVERITIES,
+  POSITION_TERM_KINDS,
   positionRuleSchema,
   positionSeveritySchema,
+  positionTermKindSchema,
   resolvedTiersSchema,
 } from "@/api/lib/workflow/playbook-position-facets";
 
@@ -19,12 +21,15 @@ import {
 // module.
 export {
   POSITION_SEVERITIES,
+  POSITION_TERM_KINDS,
   positionRuleSchema,
   positionSeveritySchema,
+  positionTermKindSchema,
   resolvedTiersSchema,
 };
 export type PositionRule = Static<typeof positionRuleSchema>;
 export type PositionSeverity = Static<typeof positionSeveritySchema>;
+export type PositionTermKind = Static<typeof positionTermKindSchema>;
 export type ResolvedTiers = Static<typeof resolvedTiersSchema>;
 
 const version3 = t.Literal(3);
@@ -105,7 +110,15 @@ export const positionStandardSchema = t.Union([
   t.Object({ source: t.Literal("tiers"), tiers: tiersSchema }),
   t.Object({
     source: t.Literal("reference"),
-    passages: t.Array(referencePassageSchema, { minItems: 1, maxItems: 8 }),
+    // What shape of term this position is about. Grading answers a position
+    // with exactly this kind of difference (or `language`, when the term
+    // turned out not to be locatable), so a changed number can never come
+    // back as a whole-clause rewrite.
+    termKind: positionTermKindSchema,
+    // Wide enough for an enumeration to quote every limb: a list-shaped term
+    // graded against a truncated list is graded against the wrong standard.
+    // Anything past this is not one term.
+    passages: t.Array(referencePassageSchema, { minItems: 1, maxItems: 12 }),
   }),
 ]);
 export type PositionStandard = Static<typeof positionStandardSchema>;

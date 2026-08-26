@@ -2327,7 +2327,6 @@
       "changeBasis": "Ellenőrzési alap módosítása",
       "commentFailed": "A megjegyzést nem sikerült hozzáadni",
       "comparedWithReferences": "{count, plural, one {Összevetve # referenciadokumentummal} other {Összevetve # referenciadokumentummal}}",
-      "decidedCount": "{decided, number}/{total, number} eldöntve",
       "decision": "Döntés",
       "decisionFailed": "A döntést nem sikerült rögzíteni",
       "decisions": {
@@ -2640,20 +2639,6 @@
         "scrollToChange": "Ugrás a módosításhoz",
         "viewClause": "Záradék megtekintése",
         "violatedRedLine": "Nem elfogadható szabályt sért:"
-      },
-      "risk": {
-        "complianceLabel": "Megfelelőség",
-        "flaggedCount": "{flagged} megjelölt pozíció a(z) {total} közül",
-        "notApplicableExcluded": "({count} nem alkalmazható, kizárva)",
-        "riskLevel": {
-          "critical": "Kritikus",
-          "high": "Magas",
-          "low": "Alacsony",
-          "medium": "Közepes",
-          "none": "Nincs kockázat"
-        },
-        "summaryTitle": "Kockázati összefoglaló",
-        "topIssuesTitle": "Legfontosabb kérdések"
       },
       "ruleNumber": "{index}. szabály",
       "rulePlaceholder": "pl. A fizetési határidő nem haladhatja meg a 30 napot",

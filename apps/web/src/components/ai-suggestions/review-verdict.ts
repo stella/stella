@@ -38,8 +38,8 @@ const REVIEW_VERDICT_POLICY = {
   // the finding's `impact`, not its verdict.
   additional: { risk: "clear", negotiation: "available" },
   // Also outside the ladder: the position does not pertain to this document,
-  // so it is neither a pass nor a flagged gap and is excluded from the
-  // compliance denominator (see `computeRiskRollup`).
+  // so it is neither a pass nor a flagged gap and is excluded from any
+  // compliance denominator computed over these verdicts.
   "not-applicable": { risk: "clear", negotiation: "unavailable" },
 } as const satisfies Record<
   ReviewVerdict,

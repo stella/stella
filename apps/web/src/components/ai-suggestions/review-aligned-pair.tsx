@@ -1,25 +1,50 @@
+import { Fragment, useCallback, useState } from "react";
+
 import { BidiText } from "@stll/ui/bidi-text";
 import { cn } from "@stll/ui/utils";
 
 import type { DeltaCitation } from "@/components/ai-suggestions/review-delta";
 import {
-  diffWords,
-  type WordDiffOp,
-} from "@/components/ai-suggestions/review-word-diff";
+  buildMarkedPair,
+  type KeyTermKind,
+  type MarkedParagraph,
+  type MarkedSegment,
+} from "@/components/ai-suggestions/review-key-terms";
+import type { ParameterDelta } from "@/components/ai-suggestions/review-term-row";
 
 // TODO(i18n): English until the review surface is localized as a whole.
 const CITATION_ARIA_LABEL = "Show in document";
 const EMPTY_PASSAGE_LABEL = "No passage";
+const SHOW_MORE_LABEL = "Show more";
+const SHOW_LESS_LABEL = "Show less";
 
-// Insertions and deletions are told apart by underline vs strike-through
-// first; colour only repeats that distinction, it never carries it alone.
-const WORD_DIFF_OP_CLASS = {
-  equal: "",
-  insert: "text-success underline decoration-1 underline-offset-2",
-  delete: "text-destructive line-through",
-} as const satisfies Record<WordDiffOp["type"], string>;
-const wordDiffOpClass = (type: WordDiffOp["type"]): string =>
-  WORD_DIFF_OP_CLASS[type];
+/**
+ * Three strengths of one mark, never two competing colours. A diff run is the
+ * quietest: it only says the other side words this differently. A key term
+ * adds weight and a dotted rule because it is the thing being compared. The
+ * delta's own phrase is the strongest, because the finding is about it.
+ *
+ * Nothing is struck through or coloured by direction: neither side is a
+ * correction of the other, so a redline would assert something untrue.
+ */
+const MARK_BASE_CLASS = "rounded-[0.15rem] px-px text-inherit";
+const MARK_CLASS = {
+  diff: "bg-highlight/50",
+  term: "bg-highlight font-medium underline decoration-dotted decoration-1 underline-offset-4",
+  delta:
+    "bg-highlight font-semibold underline decoration-dotted decoration-2 underline-offset-4",
+} as const satisfies Record<KeyTermKind, string>;
+
+/**
+ * Roughly twelve lines at `text-sm`/`leading-relaxed` (0.875rem × 1.625 ≈
+ * 1.42rem a line). Both sides collapse to the same height, so their opening
+ * lines stay level however unevenly the two passages run on.
+ */
+const COLLAPSED_HEIGHT_CLASS = "max-h-[17rem]";
+
+/** The width past which the card can hold two readable columns. */
+const SIDE_BY_SIDE_GRID_CLASS =
+  "@min-[40rem]/review-pair:grid-cols-2 @min-[40rem]/review-pair:gap-x-6";
 
 export type ReviewAlignedPairSide = {
   label: string;
@@ -34,172 +59,212 @@ export type ReviewAlignedPairProps = {
    *  quoted from. Absent when the standard is authored language, which has no
    *  document to open. */
   onShowStandardPassage?: ((blockId: string) => void) | undefined;
-  diff?: boolean | undefined;
+  /** Names the reference the standard was read from, e.g.
+   *  `Standard (Master NDA)`. Falls back to `standard.label`. */
+  standardLabel?: string | undefined;
+  /** The finding's parameter delta, when it names the exact phrase that
+   *  differs on each side. That phrase then carries the strongest mark. */
+  delta?: ParameterDelta | undefined;
 };
 
 /**
- * The point of the pair is to read the two passages, not a verdict about
- * them: two quoted columns, stacked on narrow widths. When `diff` is set and
- * each side has exactly one passage, the columns collapse into a single
- * merged reading with word-level insertions and deletions marked in place.
+ * Two passages to read, not a verdict about them: each side is one continuous
+ * prose block with its clause numbers hanging in the margin, and the words
+ * that carry the difference marked in place on both sides at once.
+ *
+ * Side by side only where the card is wide enough to hold two readable
+ * measures; below that the standard stacks under a rule, because two columns
+ * of forty characters are harder to follow than one of sixty-five.
  */
 export const ReviewAlignedPair = ({
   target,
   standard,
   onShowInDocument,
   onShowStandardPassage,
-  diff = false,
+  standardLabel,
+  delta,
 }: ReviewAlignedPairProps) => {
-  // A merged reading needs exactly one passage on each side; anything else
-  // has no single pair to diff, so the two columns stay side by side.
-  const targetPassage =
-    target.passages.length === 1 ? target.passages.at(0) : undefined;
-  const standardPassage =
-    standard.passages.length === 1 ? standard.passages.at(0) : undefined;
-
-  if (diff && targetPassage !== undefined && standardPassage !== undefined) {
-    return (
-      <div className="space-y-1">
-        <PairLegend standardLabel={standard.label} targetLabel={target.label} />
-        <WordDiffPassage
-          onShowInDocument={onShowInDocument}
-          standardText={standardPassage.text}
-          targetBlockId={targetPassage.blockId}
-          targetText={targetPassage.text}
-        />
-      </div>
-    );
-  }
+  const pair = buildMarkedPair({
+    deltaStandardText: delta?.standard?.text,
+    deltaTargetText: delta?.target?.text,
+    standard: standard.passages,
+    target: target.passages,
+  });
 
   return (
-    <div className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2">
-      <PassageColumn
-        label={target.label}
-        onActivate={onShowInDocument}
-        passages={target.passages}
-      />
-      <PassageColumn
-        label={standard.label}
-        onActivate={onShowStandardPassage}
-        passages={standard.passages}
-      />
+    <div className="@container/review-pair">
+      <div className={cn("grid grid-cols-1 gap-y-3", SIDE_BY_SIDE_GRID_CLASS)}>
+        <PassageSide
+          label={target.label}
+          onActivate={onShowInDocument}
+          paragraphs={pair.target}
+        />
+        <div className="border-border border-t pt-3 @min-[40rem]/review-pair:border-t-0 @min-[40rem]/review-pair:pt-0">
+          <PassageSide
+            label={standardLabel ?? standard.label}
+            onActivate={onShowStandardPassage}
+            paragraphs={pair.standard}
+          />
+        </div>
+      </div>
     </div>
   );
 };
 
-type PairLegendProps = { targetLabel: string; standardLabel: string };
-
-const PairLegend = ({ targetLabel, standardLabel }: PairLegendProps) => (
-  <div className="text-muted-foreground flex items-center gap-1.5 text-xs font-medium tracking-wide uppercase">
-    <BidiText as="span">{targetLabel}</BidiText>
-    <span aria-hidden="true">/</span>
-    <BidiText as="span">{standardLabel}</BidiText>
-  </div>
-);
-
-const passageFrameClass =
-  "border-s-2 border-border bg-muted/40 block w-full rounded-e-md ps-2.5 pe-2 py-1.5 text-start";
-
-type PassageColumnProps = {
+type PassageSideProps = {
   label: string;
-  passages: readonly DeltaCitation[];
+  paragraphs: readonly MarkedParagraph[];
   onActivate?: ((blockId: string) => void) | undefined;
 };
 
-const PassageColumn = ({ label, passages, onActivate }: PassageColumnProps) => (
-  <div className="min-w-0 space-y-1">
-    <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
-      <BidiText as="span">{label}</BidiText>
-    </p>
-    {passages.length === 0 ? (
-      <p className="text-muted-foreground text-sm italic">
-        {EMPTY_PASSAGE_LABEL}
-      </p>
-    ) : (
-      <ul className="space-y-1">
-        {passages.map((passage) => (
-          <li key={passage.blockId}>
-            {onActivate === undefined ? (
-              <p
-                className={cn(
-                  passageFrameClass,
-                  "font-serif text-sm leading-relaxed",
-                )}
-              >
-                <BidiText as="span">
-                  <q>{passage.text}</q>
-                </BidiText>
-              </p>
-            ) : (
-              <button
-                aria-label={CITATION_ARIA_LABEL}
-                className={cn(
-                  passageFrameClass,
-                  "hover:border-ring hover:bg-muted font-serif text-sm leading-relaxed transition-colors duration-150",
-                )}
-                onClick={() => onActivate(passage.blockId)}
-                type="button"
-              >
-                <BidiText as="span">
-                  <q>{passage.text}</q>
-                </BidiText>
-              </button>
-            )}
-          </li>
-        ))}
-      </ul>
-    )}
-  </div>
-);
-
-type WordDiffPassageProps = {
-  targetText: string;
-  standardText: string;
-  targetBlockId: string;
-  onShowInDocument?: ((blockId: string) => void) | undefined;
-};
-
-const WordDiffPassage = ({
-  targetText,
-  standardText,
-  targetBlockId,
-  onShowInDocument,
-}: WordDiffPassageProps) => {
-  const ops = diffWords(standardText, targetText);
-  const content = (
-    <BidiText as="span">
-      <q>
-        {ops.map((op, index) => (
-          // eslint-disable-next-line react/no-array-index-key -- ops is a read-only diff recomputed fresh from the two passages on every render (whole-list replace); tokens are non-interactive with no per-item state.
-          <span className={cn(wordDiffOpClass(op.type))} key={index}>
-            {op.token}
-          </span>
-        ))}
-      </q>
-    </BidiText>
+const PassageSide = ({ label, paragraphs, onActivate }: PassageSideProps) => {
+  const [expanded, setExpanded] = useState(false);
+  const { contentRef, overflows } = useCollapsedOverflow();
+  const hangingLabels = paragraphs.some(
+    (paragraph) => paragraph.label !== null,
   );
 
-  if (onShowInDocument === undefined) {
-    return (
-      <p
-        className={cn(passageFrameClass, "font-serif text-sm leading-relaxed")}
-      >
-        {content}
+  return (
+    <div className="min-w-0 space-y-1.5">
+      <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
+        <BidiText as="span">{label}</BidiText>
       </p>
-    );
+      {paragraphs.length === 0 ? (
+        <p className="text-muted-foreground text-sm italic">
+          {EMPTY_PASSAGE_LABEL}
+        </p>
+      ) : (
+        <>
+          <div
+            className={cn(
+              "max-w-[65ch] space-y-2 overflow-hidden",
+              !expanded && COLLAPSED_HEIGHT_CLASS,
+            )}
+            ref={contentRef}
+          >
+            {paragraphs.map((paragraph) => (
+              <PassageParagraph
+                hangingLabels={hangingLabels}
+                key={paragraph.blockId}
+                onActivate={onActivate}
+                paragraph={paragraph}
+              />
+            ))}
+          </div>
+          {overflows && (
+            <button
+              className="text-muted-foreground hover:text-foreground inline-flex min-h-11 items-center text-xs font-medium"
+              onClick={() => {
+                setExpanded(!expanded);
+              }}
+              type="button"
+            >
+              {expanded ? SHOW_LESS_LABEL : SHOW_MORE_LABEL}
+            </button>
+          )}
+        </>
+      )}
+    </div>
+  );
+};
+
+/**
+ * Whether the collapsed passage has more to show. Sticky once true: expanding
+ * removes the height cap, so a fresh measurement would say "fits" and take
+ * the toggle away mid-read.
+ *
+ * A callback ref rather than an effect: the measured node only appears once
+ * its side has passages, and it must be measured exactly once per node
+ * lifetime regardless of what re-renders the parent.
+ */
+const useCollapsedOverflow = () => {
+  const [overflows, setOverflows] = useState(false);
+  const contentRef = useCallback((node: HTMLElement | null) => {
+    if (node === null) {
+      return undefined;
+    }
+    const measure = () => {
+      setOverflows(
+        (previous) => previous || node.scrollHeight > node.clientHeight,
+      );
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(node);
+    return () => {
+      observer.disconnect();
+    };
+  }, []);
+
+  return { contentRef, overflows };
+};
+
+type PassageParagraphProps = {
+  paragraph: MarkedParagraph;
+  /** Whether any block on this side carries a clause number. When one does,
+   *  every block reserves the same label column, so the prose keeps one edge
+   *  down the passage instead of stepping in at each numbered block. */
+  hangingLabels: boolean;
+  onActivate?: ((blockId: string) => void) | undefined;
+};
+
+const PassageParagraph = ({
+  paragraph,
+  hangingLabels,
+  onActivate,
+}: PassageParagraphProps) => {
+  const prose = (
+    <BidiText as="span" className="min-w-0 flex-1">
+      <MarkedText segments={paragraph.segments} />
+    </BidiText>
+  );
+  const body = hangingLabels ? (
+    <>
+      <span className="text-muted-foreground w-12 shrink-0 font-medium tabular-nums">
+        {paragraph.label ?? ""}
+      </span>
+      {prose}
+    </>
+  ) : (
+    prose
+  );
+  const proseClass =
+    "flex w-full items-baseline gap-2 text-start font-serif text-sm leading-relaxed text-pretty";
+
+  if (onActivate === undefined) {
+    return <p className={proseClass}>{body}</p>;
   }
 
   return (
     <button
       aria-label={CITATION_ARIA_LABEL}
       className={cn(
-        passageFrameClass,
-        "hover:border-ring hover:bg-muted font-serif text-sm leading-relaxed transition-colors duration-150",
+        proseClass,
+        "hover:bg-muted/60 rounded-sm transition-colors duration-150",
       )}
-      onClick={() => onShowInDocument(targetBlockId)}
+      onClick={() => {
+        onActivate(paragraph.blockId);
+      }}
       type="button"
     >
-      {content}
+      {body}
     </button>
   );
 };
+
+const MarkedText = ({ segments }: { segments: readonly MarkedSegment[] }) => (
+  <>
+    {segments.map((segment) =>
+      segment.kind === null ? (
+        <Fragment key={segment.start}>{segment.text}</Fragment>
+      ) : (
+        <mark
+          className={cn(MARK_BASE_CLASS, MARK_CLASS[segment.kind])}
+          key={segment.start}
+        >
+          {segment.text}
+        </mark>
+      ),
+    )}
+  </>
+);

@@ -2327,7 +2327,6 @@
       "changeBasis": "Cambiar la base de revisión",
       "commentFailed": "No se pudo añadir el comentario",
       "comparedWithReferences": "{count, plural, one {Comparado con # documento de referencia} other {Comparado con # documentos de referencia}}",
-      "decidedCount": "{decided, number}/{total, number} decididos",
       "decision": "Decisión",
       "decisionFailed": "No se pudo registrar tu decisión",
       "decisions": {
@@ -2640,20 +2639,6 @@
         "scrollToChange": "Ir al cambio",
         "viewClause": "Ver cláusula",
         "violatedRedLine": "Viola la línea roja:"
-      },
-      "risk": {
-        "complianceLabel": "Cumplimiento",
-        "flaggedCount": "{flagged} de {total} posiciones señaladas",
-        "notApplicableExcluded": "({count} no aplicables, excluidas)",
-        "riskLevel": {
-          "critical": "Crítico",
-          "high": "Alto",
-          "low": "Bajo",
-          "medium": "Medio",
-          "none": "Sin riesgo"
-        },
-        "summaryTitle": "Resumen de riesgos",
-        "topIssuesTitle": "Principales problemas"
       },
       "ruleNumber": "Regla {index}",
       "rulePlaceholder": "p. ej. El plazo de pago no debe superar los 30 días",

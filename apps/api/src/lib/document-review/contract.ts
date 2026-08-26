@@ -38,6 +38,19 @@ export const REVIEW_PARTY_NAME_MAX_LENGTH = 200;
  *  than this is not a two-document comparison. */
 export const REVIEW_PARTIES_MAX = 8;
 
+// Something the reference document covers that the proposal pass deliberately
+// did not turn into a position — deal mechanics, structural differences
+// between a preliminary and a final agreement, party and schedule particulars.
+// Reported rather than dropped: a checklist that silently omits half the
+// document reads as if the other half were compliant.
+export type ReviewSkippedTerm = { subject: string; reason: string };
+
+export const REVIEW_SKIP_SUBJECT_MAX_LENGTH = 256;
+export const REVIEW_SKIP_REASON_MAX_LENGTH = 300;
+/** Skips the proposal pass reports at most. Enough to show the reviewer the
+ *  shape of what was left out; it is not an inventory of the document. */
+export const REVIEW_SKIPPED_MAX = 40;
+
 /** The role and, when known, the party, as one phrase: "the Purchaser
  *  (Example Holdings a.s.)". */
 export const perspectivePartyPhrase = (party: ReviewParty): string =>

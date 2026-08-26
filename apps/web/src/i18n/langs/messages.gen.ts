@@ -2330,7 +2330,6 @@ type Messages = {
       "changeBasis": "Change review basis";
       "commentFailed": "Couldn't add the comment";
       "comparedWithReferences": "{count, plural, one {Compared with # reference document} other {Compared with # reference documents}}";
-      "decidedCount": "{decided, number}/{total, number} decided";
       "decision": "Decision";
       "decisionFailed": "Couldn't record your decision";
       "decisions": {
@@ -2643,20 +2642,6 @@ type Messages = {
         "scrollToChange": "Go to change";
         "viewClause": "View clause";
         "violatedRedLine": "Violates red line:";
-      };
-      "risk": {
-        "complianceLabel": "Compliance";
-        "flaggedCount": "{flagged} of {total} positions flagged";
-        "notApplicableExcluded": "({count} not applicable, excluded)";
-        "riskLevel": {
-          "critical": "Critical";
-          "high": "High";
-          "low": "Low";
-          "medium": "Medium";
-          "none": "No risk";
-        };
-        "summaryTitle": "Risk summary";
-        "topIssuesTitle": "Top issues";
       };
       "ruleNumber": "Rule {index}";
       "rulePlaceholder": "e.g. Payment terms must not exceed 30 days";

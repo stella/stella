@@ -162,6 +162,7 @@ const referencePosition =
     severity: "medium",
     standard: {
       source: "reference",
+      termKind: "language",
       passages: [
         {
           workspaceId: REFERENCE_WORKSPACE_ID,

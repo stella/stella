@@ -2327,7 +2327,6 @@
       "changeBasis": "Zmeniť podklady kontroly",
       "commentFailed": "Komentár sa nepodarilo pridať",
       "comparedWithReferences": "{count, plural, one {Porovnané s # referenčným dokumentom} few {Porovnané s # referenčnými dokumentmi} other {Porovnané s # referenčnými dokumentmi}}",
-      "decidedCount": "Rozhodnuté {decided, number}/{total, number}",
       "decision": "Rozhodnutie",
       "decisionFailed": "Rozhodnutie sa nepodarilo uložiť",
       "decisions": {
@@ -2640,20 +2639,6 @@
         "scrollToChange": "Prejsť na zmenu",
         "viewClause": "Zobraziť ustanovenie",
         "violatedRedLine": "Porušuje neprijateľné pravidlo:"
-      },
-      "risk": {
-        "complianceLabel": "Súlad",
-        "flaggedCount": "Označených {flagged} z {total} pozícií",
-        "notApplicableExcluded": "({count} neaplikovateľné, vylúčené)",
-        "riskLevel": {
-          "critical": "Kritické",
-          "high": "Vysoké",
-          "low": "Nízke",
-          "medium": "Stredné",
-          "none": "Bez rizika"
-        },
-        "summaryTitle": "Súhrn rizík",
-        "topIssuesTitle": "Hlavné problémy"
       },
       "ruleNumber": "Pravidlo {index}",
       "rulePlaceholder": "napr. Splatnosť faktúr nesmie presiahnuť 30 dní",

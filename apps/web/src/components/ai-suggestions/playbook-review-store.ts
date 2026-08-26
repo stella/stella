@@ -20,6 +20,7 @@ import type {
   ReviewParty,
   ReviewPerspective,
   ReviewSetup,
+  ReviewSkippedTerm,
 } from "@/components/ai-suggestions/document-review-basis.logic";
 import { fetchDocumentReviewRuns } from "@/components/ai-suggestions/document-review-queries";
 import { resolveRunConflictAttachment } from "@/components/ai-suggestions/document-review-run.logic";
@@ -78,6 +79,10 @@ export type DocumentReviewSession = {
   /** The target's parties as the position proposal read them; what the
    *  reviewer picks a side from while confirming. */
   parties: ReviewParty[];
+  /** What the position proposal read but deliberately did not turn into a
+   *  position; empty when no proposal ran (a playbook-only setup, or none
+   *  started yet). */
+  skipped: ReviewSkippedTerm[];
   /**
    * A refused start whose estimated size needs the reviewer's explicit
    * go-ahead; the dialog re-issues the stored request with the estimate
@@ -174,6 +179,7 @@ const blankSession = (): DocumentReviewSession => ({
   requestId: null,
   positions: [],
   parties: [],
+  skipped: [],
   sizeConfirmation: null,
 });
 
@@ -346,6 +352,7 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => ({
             // plan rather than an addition to one.
             positions: proposed === null ? seededPositions : proposed.positions,
             parties: proposed === null ? [] : proposed.parties,
+            skipped: proposed === null ? [] : proposed.skipped,
             requestId: null,
           },
         },

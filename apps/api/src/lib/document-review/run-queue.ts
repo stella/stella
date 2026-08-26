@@ -92,7 +92,17 @@ const WORKER_CONCURRENCY = 2;
 // One attempt: every pass runs metered model calls, so a BullMQ retry would
 // double the spend. Failures are persisted on the row instead.
 const JOB_ATTEMPTS = 1;
-const REVIEW_TIMEOUT_MS = 120_000;
+/**
+ * Budget for the whole run, not for one call.
+ *
+ * Grading walks the confirmed positions a batch at a time, so a long review is
+ * many sequential calls; each of those already carries its own timeout. A
+ * budget sized for a single call would abort the rest of the run silently —
+ * every remaining position would come back ungraded and the run would still
+ * report itself complete. This bound only has to stay under the reconciler's
+ * `STUCK_RUNNING_MS`, which is what catches a worker that actually died.
+ */
+const REVIEW_TIMEOUT_MS = 15 * 60 * 1000;
 const SERVICE_TIER = "standard" as const;
 const ORPHAN_RECONCILE_INTERVAL_MS = 5 * 60 * 1000;
 /** A worker-executed `running` row this old lost its worker to a hard death. */
@@ -616,6 +626,11 @@ const executeRun = async (
  * reference standard is compared against the document's own blocks and needs
  * no ASK. `buildFindings` then grades both kinds and returns one finding per
  * position, in the plan's order.
+ *
+ * Grading is several model calls, so its findings are committed as each call
+ * returns rather than in one write at the end: `document_review_runs.completed`
+ * is what the review surface polls, and a review that reports nothing until it
+ * is finished is a review that looks stuck.
  */
 const runGradingPass = async ({
   actor,
@@ -676,6 +691,29 @@ const runGradingPass = async ({
     return "playbook_check_failed";
   }
 
+  const plannedByPositionId = new Map(
+    plan.positions.map((planned) => [planned.positionId, planned]),
+  );
+  const toRows = (findings: readonly ReviewFinding[]): FindingRow[] => {
+    const rows: FindingRow[] = [];
+    for (const finding of findings) {
+      const planned = plannedByPositionId.get(finding.positionId);
+      if (planned === undefined) {
+        continue;
+      }
+      rows.push(
+        buildFindingRow({
+          actor,
+          run,
+          positionId: planned.positionId,
+          positionTitle: planned.title,
+          payload: { finding },
+        }),
+      );
+    }
+    return rows;
+  };
+
   const graded: ReviewFinding[] = await buildFindings({
     positions,
     contentBySourceId: extraction.value.contentBySourceId,
@@ -685,29 +723,17 @@ const runGradingPass = async ({
     referenceEntityVersionIds: run.basis.references.map(
       (reference) => reference.entityVersionId,
     ),
+    // Each model call's findings are committed as it returns, so the run's
+    // `completed` moves through a long review instead of jumping at the end.
+    onGraded: async (findings) => {
+      await upsertFindings(actor, toRows(findings));
+    },
     ...deps,
   });
 
-  const plannedByPositionId = new Map(
-    plan.positions.map((planned) => [planned.positionId, planned]),
-  );
-  const rows: FindingRow[] = [];
-  for (const finding of graded) {
-    const planned = plannedByPositionId.get(finding.positionId);
-    if (planned === undefined) {
-      continue;
-    }
-    rows.push(
-      buildFindingRow({
-        actor,
-        run,
-        positionId: planned.positionId,
-        positionTitle: planned.title,
-        payload: { finding },
-      }),
-    );
-  }
-  await upsertFindings(actor, rows);
+  // The whole set, once: the positions decided without a model are in no
+  // batch, and the upsert converges on rows a batch already wrote.
+  await upsertFindings(actor, toRows(graded));
   return null;
 };
 

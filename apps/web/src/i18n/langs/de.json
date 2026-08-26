@@ -2327,7 +2327,6 @@
       "changeBasis": "Prüfgrundlage ändern",
       "commentFailed": "Kommentar konnte nicht hinzugefügt werden",
       "comparedWithReferences": "{count, plural, one {Mit # Referenzdokument verglichen} other {Mit # Referenzdokumenten verglichen}}",
-      "decidedCount": "{decided, number}/{total, number} entschieden",
       "decision": "Entscheidung",
       "decisionFailed": "Entscheidung konnte nicht gespeichert werden",
       "decisions": {
@@ -2640,20 +2639,6 @@
         "scrollToChange": "Zur Änderung",
         "viewClause": "Klausel anzeigen",
         "violatedRedLine": "Verstößt gegen rote Linie:"
-      },
-      "risk": {
-        "complianceLabel": "Konformität",
-        "flaggedCount": "{flagged} von {total} Positionen gekennzeichnet",
-        "notApplicableExcluded": "({count} nicht zutreffend, ausgeschlossen)",
-        "riskLevel": {
-          "critical": "Kritisch",
-          "high": "Hoch",
-          "low": "Niedrig",
-          "medium": "Mittel",
-          "none": "Kein Risiko"
-        },
-        "summaryTitle": "Risikoübersicht",
-        "topIssuesTitle": "Wichtigste Punkte"
       },
       "ruleNumber": "Regel {index}",
       "rulePlaceholder": "z. B. Das Zahlungsziel darf 30 Tage nicht überschreiten",

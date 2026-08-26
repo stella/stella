@@ -13,13 +13,29 @@
 
 export const INSPECTOR_PANE_DEFAULT_WIDTH = 512;
 export const INSPECTOR_PANE_MIN_WIDTH = 320;
-export const INSPECTOR_PANE_MAX_WIDTH = 800;
+
+/**
+ * Absolute ceiling, reached only on a very wide viewport. Past this the pane
+ * is no longer a reading column, and the two documents it compares stop
+ * being scannable side by side.
+ */
+export const INSPECTOR_PANE_MAX_WIDTH = 1400;
 
 /**
  * Floor for the content column beside the pane. Below this the content
  * surface stops being usable, so the pane yields space first.
  */
 export const INSPECTOR_CONTENT_MIN_WIDTH = 400;
+
+/**
+ * Comfortable measure for the document editor beside the pane, distinct from
+ * {@link INSPECTOR_CONTENT_MIN_WIDTH}: that one is the hard floor any content
+ * surface must keep (and the width the sidebar collapses to protect), this
+ * one is the width a page of prose still reads at. The pane's *ceiling*
+ * respects the readable measure; the hard floor still wins when the viewport
+ * cannot give both.
+ */
+export const INSPECTOR_EDITOR_MIN_WIDTH = 560;
 
 /** Inline size of the collapsed icon rail, in CSS pixels. */
 export const INSPECTOR_RAIL_WIDTH = 48;
@@ -73,10 +89,15 @@ export const resolveInspectorPaneMaxWidth = ({
     return INSPECTOR_PANE_MIN_WIDTH;
   }
 
+  // Two ceilings, both binding. `readable` is viewport-relative and ignores
+  // the sidebar, which yields its width before the pane has to (see
+  // `shouldForceSidebarCollapsed`); `available` is what is actually left in
+  // the row once the sidebar has taken its share.
+  const readable = viewportWidth - INSPECTOR_EDITOR_MIN_WIDTH;
   const available = viewportWidth - sidebarWidth - INSPECTOR_CONTENT_MIN_WIDTH;
   return Math.max(
     INSPECTOR_PANE_MIN_WIDTH,
-    Math.min(INSPECTOR_PANE_MAX_WIDTH, available),
+    Math.min(INSPECTOR_PANE_MAX_WIDTH, readable, available),
   );
 };
 

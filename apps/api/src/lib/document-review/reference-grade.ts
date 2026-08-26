@@ -1,15 +1,19 @@
 /**
  * Grading a position whose standard is a reference document.
  *
- * The comparison is per position, not per run: the position carries the
- * passages it was derived from, so the call sends the target document once and
- * the pinned passages inline. A playbook saved out of such a run therefore
- * grades the next deal without reading the original reference again.
+ * A position carries the passages it was derived from, so the call sends the
+ * target document once and the pinned passages inline. A playbook saved out of
+ * such a run therefore grades the next deal without reading the original
+ * reference again.
  *
- * The model classifies and locates; it never chooses the edit. It returns an
- * assessment (mapped to the one verdict vocabulary), a typed delta, and, for a
- * quantity, only which direction of that quantity favours the side the drafter
- * acts for — the impact itself is arithmetic (`deriveParameterImpact`).
+ * The model classifies and locates; it never chooses the kind of difference
+ * and it never chooses the edit. The position's `termKind` fixes the delta
+ * kind, so a position about a number is answered with that number or with
+ * nothing structural at all — never with a rewritten clause. The model returns
+ * an assessment (mapped to the one verdict vocabulary), the values it located,
+ * and, for a quantity, only which direction of that quantity favours the side
+ * the drafter acts for — the impact itself is arithmetic
+ * (`deriveParameterImpact`).
  */
 
 import { Result } from "better-result";
@@ -34,9 +38,9 @@ import type {
 } from "@/api/lib/document-review/contract";
 import {
   deriveParameterImpact,
+  EXPECTED_DELTA_KIND,
   LANGUAGE_DELTA,
   PARAMETER_DIRECTIONS,
-  REVIEW_DELTA_KINDS,
 } from "@/api/lib/document-review/review-delta";
 import type {
   DeltaEnumerationItem,
@@ -54,16 +58,20 @@ import type { GroundedReviewFix } from "@/api/lib/grounded-review-fix";
 import { brandPersistedFieldId } from "@/api/lib/safe-id-boundaries";
 import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
 import type { PreparedDocxFile } from "@/api/lib/workflow/generate-batch";
-import type { ReferencePassage } from "@/api/lib/workflow/playbook-positions";
+import type {
+  PositionTermKind,
+  ReferencePassage,
+} from "@/api/lib/workflow/playbook-positions";
 import type { VerdictTier } from "@/api/lib/workflow/verdict-tiers";
 
 const REFERENCE_GRADE_TIMEOUT_MS = 120_000;
 const REFERENCE_GRADE_ROLE = "pdf" as const;
 const MAX_VERIFIED_CITATIONS_PER_FINDING = 8;
 /** Positions per model call. The target document dominates the prompt and is
- *  cached, so several positions per call amortise it without letting one
- *  failure take the whole run's grading with it. */
-export const REFERENCE_GRADE_BATCH_SIZE = 8;
+ *  cached, so several term-level positions per call amortise it without
+ *  letting one failure take the whole run's grading with it, and without a
+ *  batch so wide the model starts skipping answers. */
+export const REFERENCE_GRADE_BATCH_SIZE = 6;
 
 /**
  * How the target document handles a position, relative to the standard. The
@@ -107,8 +115,9 @@ const rawDeltaValueSchema = v.strictObject({
   blockId: v.string(),
 });
 
+// No `kind`: the position already says what kind of term it is, and grading
+// answering with a different one is exactly the drift this removes.
 const rawDeltaSchema = v.strictObject({
-  kind: v.picklist(REVIEW_DELTA_KINDS),
   targetValue: v.nullable(rawDeltaValueSchema),
   standardValue: v.nullable(rawDeltaValueSchema),
   items: v.array(
@@ -171,6 +180,9 @@ export type ReferenceGrading = {
 export type ReferenceStandardPosition = {
   sourceId: string;
   issue: string;
+  /** The shape of the term, and so the only delta kind grading may answer
+   *  with. */
+  termKind: PositionTermKind;
   guidance?: string | undefined;
   passages: readonly ReferencePassage[];
 };
@@ -228,17 +240,22 @@ const deltaValue = (
 };
 
 /**
- * Narrow the flat model delta into the typed one, keeping only what the
- * documents actually support. A structured claim that cannot be located
- * degrades to `language`, the weakest claim, rather than being dropped: the
- * difference is still real, it is just no longer a term the engine can point at.
+ * Narrow the flat model answer into the typed delta, keeping only what the
+ * documents actually support.
+ *
+ * The kind comes from the position, not from the answer: a position about a
+ * number is answered with that number or with `language`, never with an
+ * enumeration or a rewrite. `language` is the one degradation, and it is the
+ * weakest claim there is — the difference is still real, it is just no longer
+ * a term the engine can point at.
  */
 const normalizeDelta = (
   raw: RawFinding["delta"],
+  termKind: PositionTermKind,
   targetBlocks: BlockLookup,
   standardBlocks: BlockLookup,
 ): ReviewDelta => {
-  switch (raw.kind) {
+  switch (termKind) {
     case "parameter": {
       const target =
         raw.targetValue === null
@@ -287,9 +304,64 @@ const normalizeDelta = (
     case "language":
       return LANGUAGE_DELTA;
     default:
-      raw.kind satisfies never;
+      termKind satisfies never;
       return LANGUAGE_DELTA;
   }
+};
+
+/**
+ * Whether this conclusion may become an executable edit at all.
+ *
+ * A verdict that asserts nothing about a difference — the target is aligned,
+ * or the clause was not comparable in the first place — has nothing to apply,
+ * and applying the standard's wording over a clause that serves a different
+ * function is the whole-block rewrite this pipeline exists to avoid.
+ */
+const VERDICT_IS_ACTIONABLE = {
+  compliant: false,
+  fallback: true,
+  deviation: true,
+  missing: true,
+  additional: true,
+  "not-applicable": false,
+} as const satisfies Record<VerdictTier, boolean>;
+
+/**
+ * A position edits the term it is about, and only that term: a parameter
+ * replaces a phrase, a limb or a defined term is inserted, and only a wording
+ * standard replaces a whole block.
+ *
+ * So a delta that degraded to `language` because the term could not be located
+ * gets no fix at all unless the position was about wording in the first place.
+ * Otherwise a number nobody could find, or a limb nobody could name, would
+ * come back as a rewrite of the clause it was supposed to be in — which is the
+ * one edit this pipeline exists to make impossible.
+ */
+const referenceFix = ({
+  delta,
+  termKind,
+  verdict,
+  raw,
+  citations,
+}: {
+  delta: ReviewDelta;
+  termKind: PositionTermKind;
+  verdict: VerdictTier;
+  raw: RawFinding;
+  citations: readonly DocxFolioCitation[];
+}): GroundedReviewFix | null => {
+  if (!VERDICT_IS_ACTIONABLE[verdict]) {
+    return null;
+  }
+  if (delta.kind !== EXPECTED_DELTA_KIND[termKind]) {
+    return null;
+  }
+  return buildGroundedReviewFix({
+    delta,
+    proposedText: raw.proposedText,
+    supportingEvidenceVerified: true,
+    targetAnchors: citations,
+  });
 };
 
 /**
@@ -426,12 +498,18 @@ export const normalizeReferenceGrading = ({
   const standardBlocks = new Map(
     position.passages.map((passage) => [passage.blockId, passage.text]),
   );
-  const delta = normalizeDelta(raw.delta, targetBlocks, standardBlocks);
+  const delta = normalizeDelta(
+    raw.delta,
+    position.termKind,
+    targetBlocks,
+    standardBlocks,
+  );
   const impact = referenceImpact({ delta, raw, perspective });
   const recommendation = raw.recommendation.trim();
+  const verdict = ASSESSMENT_VERDICTS[raw.assessment];
 
   return {
-    verdict: ASSESSMENT_VERDICTS[raw.assessment],
+    verdict,
     delta,
     consensus: normalizeConsensus(
       raw.consensus,
@@ -442,35 +520,37 @@ export const normalizeReferenceGrading = ({
     recommendation: recommendation.length > 0 ? recommendation : null,
     citations,
     referenceCitations: passageCitations(position.passages),
-    fix: buildGroundedReviewFix({
+    fix: referenceFix({
       delta,
-      proposedText: raw.proposedText,
-      supportingEvidenceVerified: true,
-      targetAnchors: citations,
+      termKind: position.termKind,
+      verdict,
+      raw,
+      citations,
     }),
   };
 };
 
 // ── The call ──────────────────────────────────────────
 
-const SYSTEM_PROMPT = `You compare one target legal document against a standard, position by position.
+const SYSTEM_PROMPT = `You compare one target legal document against a standard, one term at a time.
 
-Each position gives an issue and the passages that define the standard for it. Those passages come from a document someone already negotiated: they are an example, not policy and not proof of market practice. Never call the target compliant, non-compliant, standard, or non-standard. Compare substantive drafting only.
+Each position names one term, says what KIND of term it is, and gives the passages that define the standard for it. Those passages come from a document someone already negotiated: an example, not policy and not proof of market practice. Never call the target compliant, non-compliant, standard, or non-standard. Compare substantive drafting only.
 
-Answer every supplied position exactly once and preserve its positionId exactly. Classify the target as aligned, different, missing-from-target, additional-in-target, deal-specific, or not-comparable. Set consensus to mixed when the standard's own passages materially disagree with each other. Cite only exact block IDs supplied in the input; target citations must be blocks of the target document, and any standard block ID must be one of that position's passages. In rationale and recommendation write "the target" and "the standard"; never write source keys. rationale states what each side does on the issue and how they differ, in plain drafting terms. recommendation is one imperative sentence telling the drafter what to change in the target, or an empty string when nothing should change.
+Answer every supplied position exactly once, preserving its positionId. Classify the target as aligned, different, missing-from-target, additional-in-target, deal-specific, or not-comparable. Prefer deal-specific or not-comparable over a strained comparison: when the target's clause serves a different function from the standard's, say so in rationale rather than treating it as a deviation. Set consensus to mixed when the standard's own passages materially disagree.
 
-delta says what KIND of difference this is, which decides how it is shown and edited:
-- parameter: one stated quantity differs (a period, a cap, a threshold, a percentage). Set targetValue and standardValue: text is the term exactly as that side's block writes it (for example "12 months"), value is its number, unit is its unit ("months", "PLN", "%"), blockId is the block stating it. Set either side to null when it states no such term.
-- enumeration: a list differs by its limbs. Set items, one entry per limb, with inTarget and inStandard, and blockId of the target block when the target has it.
-- presence: one defined term or concept is present on one side and absent on the other. Set term, inTarget, inStandard.
-- language: the difference is wording, not structure. Set no other delta fields.
-Fill only the fields the chosen kind needs; leave targetValue and standardValue null, items empty, term empty and the booleans false otherwise.
+Cite only exact block IDs supplied in the input; target citations must be blocks of the target document, and any standard block ID must be one of that position's passages. In rationale and recommendation write "the target" and "the standard", never source keys. rationale states what each side does with the term and how they differ. recommendation is one imperative sentence, or empty when nothing should change.
 
-direction applies to a parameter delta only: say whether a HIGHER or a LOWER value of that quantity favours the side the drafter acts for, or unknown when it cannot be told. Do not judge who benefits; the direction plus the numbers decide that.
+Fill only the delta fields the position's termKind needs; leave the rest null, empty or false:
+- parameter: targetValue and standardValue. text is the term exactly as that side's block writes it, character for character, including any words in brackets ("12 (twelve) months", "EUR 1,000,000"); value is its number, unit its unit ("months", "EUR", "%"); blockId is the block stating it. Null on a side that states no such term. Do not paraphrase text — it is matched against the block.
+- enumeration: items, one entry per limb, with inTarget, inStandard, and the target's blockId when the target has that limb.
+- presence: term, inTarget, inStandard.
+- language: nothing else.
 
-impact applies to the other delta kinds: unfavourable when the target leaves the drafter's side worse off than the standard does, favourable when better off, neutral when it makes no difference, unknown when no side was named.
+direction applies to a parameter only: whether a HIGHER or a LOWER value of that quantity favours the side the drafter acts for, or unknown. Do not judge who benefits; the direction plus the numbers decide that.
 
-proposedText is the wording that should replace or be added to the target, taken from or grounded in the standard's passages; null unless the passages directly support a concrete edit. For a parameter delta proposedText is ignored: the term itself is replaced.`;
+impact applies to the other kinds: unfavourable when the target leaves the drafter's side worse off than the standard does, favourable when better off, neutral when it makes no difference, unknown when no side was named.
+
+proposedText is wording taken from or grounded in the standard's passages, and only when they directly support a concrete edit; otherwise null. It is ignored for a parameter, where the term itself is replaced, and it must be null when the clauses are not comparable.`;
 
 const NEUTRAL_PERSPECTIVE_LINE = "No side is named; report impact as unknown.";
 
@@ -503,7 +583,7 @@ const buildPositionsPart = (
         position.guidance === undefined || position.guidance.length === 0
           ? ""
           : `\n  reviewer guidance=${position.guidance}`;
-      return `- positionId=${position.sourceId}\n  issue=${position.issue}${guidance}\n  standard passages:\n${passages}`;
+      return `- positionId=${position.sourceId}\n  termKind=${position.termKind}\n  issue=${position.issue}${guidance}\n  standard passages:\n${passages}`;
     })
     .join("\n");
   return `${perspectiveLine(perspective)}\n\nPositions:\n${guide}`;

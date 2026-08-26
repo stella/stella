@@ -62,7 +62,11 @@ const positions: PlaybookPositions = {
       sourceId: REFERENCE_POSITION_ID,
       issue: "Claims time bar",
       severity: "high",
-      standard: { source: "reference", passages: [passage] },
+      standard: {
+        source: "reference",
+        termKind: "parameter",
+        passages: [passage],
+      },
       ask: { mode: "auto" },
       enabled: true,
     },

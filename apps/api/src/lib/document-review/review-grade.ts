@@ -109,6 +109,16 @@ type AiGradingDeps = {
   usageMetering: AIUsageMetering;
 };
 
+/**
+ * Findings a grading batch has just produced, handed over the moment that
+ * batch returns rather than when the whole pass ends. A review of twenty terms
+ * takes several model calls; the reviewer watching it should see the count
+ * move after each one, not once at the end.
+ */
+export type OnFindingsGraded = (
+  findings: readonly ReviewFinding[],
+) => Promise<void>;
+
 export type BuildFindingsArgs = AiGradingDeps & {
   positions: readonly Position[];
   contentBySourceId: ReadonlyMap<string, AskExtraction>;
@@ -120,6 +130,9 @@ export type BuildFindingsArgs = AiGradingDeps & {
   perspective: ReviewPerspective;
   /** Pinned reference versions, for the shared prompt cache scope. */
   referenceEntityVersionIds: readonly SafeId<"entityVersion">[];
+  /** Progress, per completed batch. The full set still comes back from the
+   *  return value; this only lets a caller commit early. */
+  onGraded: OnFindingsGraded;
 };
 
 type GradingOutcome =
@@ -241,19 +254,25 @@ const toGradedVerdict = (graded: {
  * Tier-match the positions the model has to decide, several per call: one
  * call per {@link TIER_MATCH_BATCH_SIZE} positions instead of one per
  * position, every call under the document's cache scope.
+ *
+ * Verdicts land in `verdicts` as each batch returns, and `emit` is handed the
+ * batch that just landed, so progress is committed per call.
  */
 const gradeTierMatchPositions = async ({
   positions,
   contentBySourceId,
   tiersBySourceId,
   deps,
+  verdicts,
+  emit,
 }: {
   positions: readonly Position[];
   contentBySourceId: ReadonlyMap<string, AskExtraction>;
   tiersBySourceId: ReadonlyMap<string, ResolvedTiers>;
   deps: AiGradingDeps;
-}): Promise<ReadonlyMap<string, GradingOutcome>> => {
-  const verdicts = new Map<string, GradingOutcome>();
+  verdicts: Map<string, GradingOutcome>;
+  emit: (batch: readonly Position[]) => Promise<void>;
+}): Promise<void> => {
   for (
     let cursor = 0;
     cursor < positions.length;
@@ -289,22 +308,32 @@ const gradeTierMatchPositions = async ({
         verdict === undefined ? UNGRADED_VERDICT : toGradedVerdict(verdict),
       );
     }
+    // oxlint-disable-next-line no-await-in-loop -- progress is committed per batch, in order, before the next call starts
+    await emit(batch);
   }
-  return verdicts;
+};
+
+/** A reference-standard position, paired with the position it came from so a
+ *  finished batch can be projected into findings without a second lookup. */
+type ReferencePair = {
+  position: Position;
+  reference: ReferenceStandardPosition;
 };
 
 /** A reference-standard position, as the reference grader reads it. */
-const referenceStandardPosition = (
-  position: Position,
-): ReferenceStandardPosition | null => {
+const referencePair = (position: Position): ReferencePair | null => {
   if (position.mode !== "graded" || position.standard.source !== "reference") {
     return null;
   }
   return {
-    sourceId: position.sourceId,
-    issue: position.issue,
-    guidance: position.guidance,
-    passages: position.standard.passages,
+    position,
+    reference: {
+      sourceId: position.sourceId,
+      issue: position.issue,
+      termKind: position.standard.termKind,
+      guidance: position.guidance,
+      passages: position.standard.passages,
+    },
   };
 };
 
@@ -315,31 +344,34 @@ const referenceStandardPosition = (
  * unanswerable position must not discard the rest of the review.
  */
 const gradeReferenceStandards = async ({
-  positions,
+  pairs,
   target,
   perspective,
   referenceEntityVersionIds,
   deps,
+  gradings,
+  emit,
 }: {
-  positions: readonly ReferenceStandardPosition[];
+  pairs: readonly ReferencePair[];
   target: PreparedDocxFile;
   perspective: ReviewPerspective;
   referenceEntityVersionIds: readonly SafeId<"entityVersion">[];
   deps: AiGradingDeps;
-}): Promise<ReadonlyMap<string, ReferenceGrading>> => {
-  const graded = new Map<string, ReferenceGrading>();
-  if (positions.length === 0) {
-    return graded;
-  }
+  gradings: Map<string, ReferenceGrading>;
+  emit: (batch: readonly Position[]) => Promise<void>;
+}): Promise<void> => {
   for (
     let cursor = 0;
-    cursor < positions.length;
+    cursor < pairs.length;
     cursor += REFERENCE_GRADE_BATCH_SIZE
   ) {
-    const batch = positions.slice(cursor, cursor + REFERENCE_GRADE_BATCH_SIZE);
+    if (deps.abortSignal.aborted) {
+      break;
+    }
+    const batch = pairs.slice(cursor, cursor + REFERENCE_GRADE_BATCH_SIZE);
     // oxlint-disable-next-line no-await-in-loop -- one model call per batch, in order, keeps the review's fan-out bounded
     const outcome = await gradeReferencePositions({
-      positions: batch,
+      positions: batch.map((pair) => pair.reference),
       target,
       perspective,
       targetEntityVersionId: deps.entityVersionId,
@@ -352,17 +384,18 @@ const gradeReferenceStandards = async ({
       usageMetering: deps.usageMetering,
       abortSignal: deps.abortSignal,
     });
-    for (const position of batch) {
+    for (const { reference } of batch) {
       const grading = Result.isOk(outcome)
-        ? outcome.value.get(position.sourceId)
+        ? outcome.value.get(reference.sourceId)
         : undefined;
-      graded.set(
-        position.sourceId,
-        grading ?? ungradedReferenceGrading(position),
+      gradings.set(
+        reference.sourceId,
+        grading ?? ungradedReferenceGrading(reference),
       );
     }
+    // oxlint-disable-next-line no-await-in-loop -- progress is committed per batch, in order, before the next call starts
+    await emit(batch.map((pair) => pair.position));
   }
-  return graded;
 };
 
 type ProjectGradingArgs = {
@@ -443,6 +476,7 @@ export const buildFindings = async ({
   target,
   perspective,
   referenceEntityVersionIds,
+  onGraded,
   ...deps
 }: BuildFindingsArgs): Promise<ReviewFinding[]> => {
   const fieldContentBySourceId = new Map<string, FieldContent>();
@@ -453,13 +487,13 @@ export const buildFindings = async ({
   // Split on where the standard came from, then decide everything that needs
   // no model, then hand the rest to the two graders. Findings keep the input
   // `positions` order.
-  const referencePositions: ReferenceStandardPosition[] = [];
+  const referencePairs: ReferencePair[] = [];
   const decided = new Map<string, GradingOutcome>();
   const forModel: Position[] = [];
   for (const position of positions) {
-    const reference = referenceStandardPosition(position);
-    if (reference !== null) {
-      referencePositions.push(reference);
+    const pair = referencePair(position);
+    if (pair !== null) {
+      referencePairs.push(pair);
       continue;
     }
     const verdict = gradeWithoutModel({
@@ -474,62 +508,112 @@ export const buildFindings = async ({
     }
   }
 
-  const [modelVerdicts, referenceGradings] = await Promise.all([
+  // Both graders fill these as their batches land, and `project` reads them at
+  // call time — which is what lets a completed batch be handed over before the
+  // pass is finished.
+  const modelVerdicts = new Map<string, GradingOutcome>();
+  const referenceGradings = new Map<string, ReferenceGrading>();
+  const project = (position: Position): ReviewFinding =>
+    projectFinding({
+      position,
+      contentBySourceId,
+      tiersBySourceId,
+      decided,
+      modelVerdicts,
+      referenceGradings,
+    });
+  const emit = async (batch: readonly Position[]): Promise<void> => {
+    await onGraded(batch.map(project));
+  };
+
+  await Promise.all([
     gradeTierMatchPositions({
       positions: forModel,
       contentBySourceId,
       tiersBySourceId,
       deps,
+      verdicts: modelVerdicts,
+      emit,
     }),
     gradeReferenceStandards({
-      positions: referencePositions,
+      pairs: referencePairs,
       target,
       perspective,
       referenceEntityVersionIds,
       deps,
+      gradings: referenceGradings,
+      emit,
     }),
   ]);
 
-  return positions.map((position): ReviewFinding => {
-    const referenceGrading = referenceGradings.get(position.sourceId);
-    if (referenceGrading !== undefined) {
-      return referenceFinding(position, referenceGrading);
-    }
+  return positions.map(project);
+};
 
-    const extraction = contentBySourceId.get(position.sourceId);
-    const askContent = extraction?.content;
-    const tiers = tiersBySourceId.get(position.sourceId);
-    // Persisted findings keep the folio-only citation shape used by the
-    // inspector. The ephemeral extractor also retains PDF citations, which
-    // chat consumers read directly before this compatibility projection.
-    const citations = arrayOrEmpty(extraction?.citations)
-      .filter((citation) => citation.kind === "docx-folio")
-      .map(({ blockId, text }): DocxFolioCitation => ({ blockId, text }));
-    const grading =
-      decided.get(position.sourceId) ??
-      modelVerdicts.get(position.sourceId) ??
-      UNGRADED_VERDICT;
-    const { verdict, rationale, matchedRef, fix } = projectGrading({
-      grading,
-      citations,
-      ideal: tiers?.ideal,
-    });
+type ProjectFindingArgs = {
+  position: Position;
+  contentBySourceId: ReadonlyMap<string, AskExtraction>;
+  tiersBySourceId: ReadonlyMap<string, ResolvedTiers>;
+  decided: ReadonlyMap<string, GradingOutcome>;
+  modelVerdicts: ReadonlyMap<string, GradingOutcome>;
+  referenceGradings: ReadonlyMap<string, ReferenceGrading>;
+};
 
-    return {
-      positionId: position.sourceId,
-      issue: position.issue,
-      severity: findingSeverity(position),
-      standardSource: standardSourceOf(position),
-      verdict,
-      // A tier match compares wording against a ladder of rules, so the
-      // difference it finds is a language one; the structured kinds come from
-      // a reference comparison, which reads both sides' text.
-      delta: LANGUAGE_DELTA,
-      extracted: extractedFromContent(askContent),
-      rationale,
-      ...(matchedRef === undefined ? {} : { matchedRef }),
-      citations,
-      fix,
-    };
+/** One position plus whatever has been decided about it, as the single
+ *  finding shape. Pure: called once per position for the batch that graded it,
+ *  and again for the ordered set the pass returns. */
+const projectFinding = ({
+  position,
+  contentBySourceId,
+  tiersBySourceId,
+  decided,
+  modelVerdicts,
+  referenceGradings,
+}: ProjectFindingArgs): ReviewFinding => {
+  const pair = referencePair(position);
+  if (pair !== null) {
+    // A reference position the grader never reached keeps the flagged-for-a-
+    // human answer rather than falling through to the tier path, which would
+    // read its silence as a wording deviation.
+    return referenceFinding(
+      position,
+      referenceGradings.get(position.sourceId) ??
+        ungradedReferenceGrading(pair.reference),
+    );
+  }
+
+  const extraction = contentBySourceId.get(position.sourceId);
+  const askContent = extraction?.content;
+  const tiers = tiersBySourceId.get(position.sourceId);
+  // Persisted findings keep the folio-only citation shape used by the
+  // inspector. The ephemeral extractor also retains PDF citations, which
+  // chat consumers read directly before this compatibility projection.
+  const citations = arrayOrEmpty(extraction?.citations)
+    .filter((citation) => citation.kind === "docx-folio")
+    .map(({ blockId, text }): DocxFolioCitation => ({ blockId, text }));
+  const grading =
+    decided.get(position.sourceId) ??
+    modelVerdicts.get(position.sourceId) ??
+    UNGRADED_VERDICT;
+  const { verdict, rationale, matchedRef, fix } = projectGrading({
+    grading,
+    citations,
+    ideal: tiers?.ideal,
   });
+
+  return {
+    positionId: position.sourceId,
+    issue: position.issue,
+    severity: findingSeverity(position),
+    standardSource: standardSourceOf(position),
+    verdict,
+    // A tier match compares wording against a ladder of rules, so the
+    // difference it finds is a language one; the structured kinds come from
+    // a reference comparison, which reads both sides' text.
+    delta: LANGUAGE_DELTA,
+    extracted: extractedFromContent(askContent),
+    rationale,
+    ...(matchedRef === undefined ? {} : { matchedRef }),
+    citations,
+    fix,
+  };
 };

@@ -2327,7 +2327,6 @@
       "changeBasis": "تغيير أساس المراجعة",
       "commentFailed": "تعذرت إضافة التعليق",
       "comparedWithReferences": "{count, plural, zero {لم تتم المقارنة مع أي مستند مرجعي} one {تمت المقارنة مع مستند مرجعي واحد} two {تمت المقارنة مع مستندين مرجعيين} few {تمت المقارنة مع # مستندات مرجعية} many {تمت المقارنة مع # مستندًا مرجعيًا} other {تمت المقارنة مع # مستند مرجعي}}",
-      "decidedCount": "{decided, number}/{total, number} تم البت فيها",
       "decision": "القرار",
       "decisionFailed": "تعذر تسجيل قرارك",
       "decisions": {
@@ -2640,20 +2639,6 @@
         "scrollToChange": "الانتقال إلى التغيير",
         "viewClause": "عرض البند",
         "violatedRedLine": "الخط الأحمر المخالف:"
-      },
-      "risk": {
-        "complianceLabel": "الامتثال",
-        "flaggedCount": "المواقف المحددة: {flagged} من {total}",
-        "notApplicableExcluded": "({count} غير قابلة للتطبيق، مستبعدة)",
-        "riskLevel": {
-          "critical": "حرج",
-          "high": "مرتفع",
-          "low": "منخفض",
-          "medium": "متوسط",
-          "none": "لا مخاطر"
-        },
-        "summaryTitle": "ملخص المخاطر",
-        "topIssuesTitle": "أهم المسائل"
       },
       "ruleNumber": "القاعدة {index}",
       "rulePlaceholder": "مثال: ألا تتجاوز مهلة السداد 30 يومًا",

@@ -6,8 +6,10 @@ import {
 } from "@/components/sidebar-sizing";
 import {
   INSPECTOR_CONTENT_MIN_WIDTH,
+  INSPECTOR_EDITOR_MIN_WIDTH,
   INSPECTOR_PANE_MAX_WIDTH,
   INSPECTOR_PANE_MIN_WIDTH,
+  resolveInspectorPaneMaxWidth,
   resolveInspectorPaneWidth,
   shouldForceSidebarCollapsed,
 } from "@/routes/-inspector-pane-width";
@@ -79,6 +81,25 @@ describe("resolveInspectorPaneWidth", () => {
         viewportWidth: 0,
       }),
     ).toBe(INSPECTOR_PANE_MIN_WIDTH);
+  });
+
+  // The reviewer's complaint: the pane would not drag any further towards the
+  // middle. On a wide screen it now can, and the editor keeps a readable
+  // column beside it.
+  test("drags past the old fixed cap on a wide viewport", () => {
+    const width = resolveInspectorPaneWidth({
+      desiredWidth: INSPECTOR_PANE_MAX_WIDTH,
+      sidebarWidth: SIDEBAR_WIDTH_ICON_PX,
+      viewportWidth: 2560,
+    });
+    expect(width).toBeGreaterThan(800);
+    expect(2560 - width).toBeGreaterThanOrEqual(INSPECTOR_EDITOR_MIN_WIDTH);
+    expect(width).toBe(
+      resolveInspectorPaneMaxWidth({
+        sidebarWidth: SIDEBAR_WIDTH_ICON_PX,
+        viewportWidth: 2560,
+      }),
+    );
   });
 });
 

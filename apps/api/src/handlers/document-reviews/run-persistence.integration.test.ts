@@ -89,6 +89,7 @@ const referenceBasis: DocumentReviewRunBasis = {
             severity: "high",
             standard: {
               source: "reference",
+              termKind: "parameter",
               passages: [
                 {
                   workspaceId: Bun.randomUUIDv7(),
