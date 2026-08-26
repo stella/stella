@@ -15,6 +15,30 @@ export { KanbanCardShell } from "./card-shell";
 export type { KanbanColumnHeaderProps } from "./column-header";
 export { KanbanColumnHeader } from "./column-header";
 export type {
+  KanbanDragHandleProps,
+  KanbanSortableBindings,
+  KanbanSortableBoardProps,
+  KanbanSortableColumnsProps,
+  KanbanSortableListProps,
+  UseKanbanSortableOptions,
+} from "./sortable-interactions";
+export {
+  KANBAN_POINTER_ACTIVATION_DISTANCE,
+  KANBAN_TOUCH_ACTIVATION_CONSTRAINT,
+  KanbanDragHandle,
+  KanbanSortableBoard,
+  KanbanSortableColumns,
+  KanbanSortableList,
+  useKanbanSortable,
+  useKanbanSortableSensors,
+} from "./sortable-interactions";
+export type { KanbanHorizontalEdge } from "./sortable-edge";
+export {
+  getKanbanHorizontalEdge,
+  getKanbanHorizontalEdgeFromDragEnd,
+  KANBAN_HORIZONTAL_EDGES,
+} from "./sortable-edge";
+export type {
   RegisterKanbanBoardAutoScrollOptions,
   RegisterKanbanCardDragOptions,
 } from "./drag-interactions";
