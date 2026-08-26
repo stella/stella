@@ -1,6 +1,11 @@
 import type * as React from "react";
 
-import { MonitorIcon, PlugIcon, TerminalIcon } from "lucide-react";
+import {
+  ClipboardListIcon,
+  MonitorIcon,
+  PlugIcon,
+  TerminalIcon,
+} from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { MCP_HTTP_PATH } from "@stll/api-contract";
@@ -239,9 +244,38 @@ const AssistantSetupPanel = () => {
 const DesktopSetupPanel = () => {
   const t = useTranslations();
   const platform = useHydrationSafeDesktopPlatform();
+  const shortcut = platform === "mac" ? "⌘ ⇧ V" : "Ctrl + Shift + V";
 
   return (
     <SetupPanel title={t("settings.account.desktop")}>
+      <div className="border-border/60 relative isolate overflow-hidden rounded-xl border p-5 shadow-sm">
+        <img
+          alt=""
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 -z-10 size-full opacity-35"
+          src="/branding/onboarding-gradient-light.svg"
+        />
+        <span className="bg-primary/10 text-primary grid size-10 place-items-center rounded-xl shadow-xs">
+          <ClipboardListIcon aria-hidden="true" className="size-5" />
+        </span>
+        <h4 className="text-foreground mt-4 text-lg font-semibold tracking-tight text-balance">
+          {t("settings.account.desktopHeroTitle")}
+        </h4>
+        <p className="text-muted-foreground mt-2 text-sm leading-relaxed text-pretty">
+          {t("settings.account.desktopClipboardDescription")}
+        </p>
+        <div className="mt-4 flex items-center gap-3">
+          <kbd
+            className="bg-background/75 border-border rounded-lg border px-3 py-1.5 font-mono text-xs shadow-xs backdrop-blur-sm"
+            dir="ltr"
+          >
+            {shortcut}
+          </kbd>
+          <span className="text-muted-foreground text-xs font-medium">
+            {t("settings.account.desktopClipboardTitle")}
+          </span>
+        </div>
+      </div>
       <DesktopDownloadButtons platform={platform} />
     </SetupPanel>
   );
