@@ -1,74 +1,13 @@
 .stella-office-spreadsheet[data-color-scheme="dark"] {
   color-scheme: dark;
-}
-
-.stella-office-spreadsheet[data-color-scheme="dark"] .xlsx-tab-strip {
-  scrollbar-color: var(--border) transparent;
-}
-
-.stella-office-spreadsheet[data-color-scheme="dark"]
-  .stella-office-spreadsheet-tab-bar {
-  background: var(--background) !important;
-  border-color: var(--border) !important;
-  color: var(--muted-foreground) !important;
-}
-
-.stella-office-spreadsheet[data-color-scheme="dark"]
-  .xlsx-tab-strip
-  > div
-  > button {
-  background: var(--muted) !important;
-  border-color: var(--border) !important;
-  color: var(--muted-foreground) !important;
-}
-
-.stella-office-spreadsheet[data-color-scheme="dark"]
-  .xlsx-tab-strip
-  > div
-  > .stella-office-spreadsheet-tab-active {
-  background: var(--background) !important;
-  border-bottom-color: var(--background) !important;
-  color: var(--foreground) !important;
-}
-
-.stella-office-spreadsheet[data-color-scheme="dark"]
-  .stella-office-spreadsheet-tab-bar
-  > div:last-child,
-.stella-office-spreadsheet[data-color-scheme="dark"]
-  .stella-office-spreadsheet-tab-bar
-  > div:last-child
-  > button {
-  color: var(--muted-foreground) !important;
-}
-
-.stella-office-spreadsheet[data-color-scheme="dark"] .xlsx-tab-nav {
-  color: var(--muted-foreground) !important;
-}
-
-.stella-office-spreadsheet[data-color-scheme="dark"] .xlsx-tab-nav:hover {
-  background: color-mix(in srgb, var(--foreground) 8%, transparent) !important;
-}
-
-.stella-office-spreadsheet[data-color-scheme="dark"] .xlsx-zoom-slider {
-  color: var(--muted-foreground);
-}
-
-.stella-office-spreadsheet[data-color-scheme="dark"]
-  .xlsx-zoom-slider::-webkit-slider-runnable-track {
-  background: var(--border);
-}
-
-.stella-office-spreadsheet[data-color-scheme="dark"]
-  .xlsx-zoom-slider::-webkit-slider-thumb {
-  background: var(--muted-foreground);
-}
-
-.stella-office-spreadsheet[data-color-scheme="dark"]
-  .xlsx-zoom-slider::-moz-range-track {
-  background: var(--border);
-}
-
-.stella-office-spreadsheet[data-color-scheme="dark"]
-  .xlsx-zoom-slider::-moz-range-thumb {
-  background: var(--muted-foreground);
+  --ooxml-xlsx-chrome-background: var(--background);
+  --ooxml-xlsx-chrome-surface: var(--background);
+  --ooxml-xlsx-chrome-surface-muted: var(--muted);
+  --ooxml-xlsx-chrome-text: var(--foreground);
+  --ooxml-xlsx-chrome-text-muted: var(--muted-foreground);
+  --ooxml-xlsx-chrome-border: var(--border);
+  --ooxml-xlsx-chrome-selection-background: var(--muted);
+  --ooxml-xlsx-chrome-accent: var(--ring);
+  --ooxml-xlsx-chrome-scrollbar-color: var(--border) transparent;
+  --ooxml-xlsx-focus-ring: var(--ring);
 }

@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 
-import type { Cell, CellRange, Row } from "@silurus/ooxml/xlsx";
+import type { Cell, Row, XlsxSelectionState } from "@silurus/ooxml/xlsx";
 import { panic } from "better-result";
 
 import type { OfficeCitationLocator } from "@stll/api-contract";
@@ -223,7 +223,7 @@ export const SilurusOfficeFileViewer = ({
         const spreadsheetReady = new Promise<void>((resolve) => {
           resolveSpreadsheetReady = resolve;
         });
-        const reportSelection = (selection: CellRange | null) => {
+        const reportSelection = (selection: XlsxSelectionState | null) => {
           if (disposed) {
             return;
           }
@@ -235,7 +235,7 @@ export const SilurusOfficeFileViewer = ({
           }
 
           const sheetIndex = currentSheetIndex;
-          const { col, row } = selection.active;
+          const { col, row } = selection.activeCell;
           detached(
             loadedWorkbook
               .getWorksheet(sheetIndex)
@@ -259,7 +259,7 @@ export const SilurusOfficeFileViewer = ({
         const xlsxViewer = XlsxViewer.fromWorkbook(container, loadedWorkbook, {
           enableHyperlinks: false,
           onError: reportError,
-          onSelectionChange: reportSelection,
+          onSelectionStateChange: reportSelection,
           onSheetChange: (sheetIndex) => {
             if (disposed) {
               return;
@@ -267,7 +267,6 @@ export const SilurusOfficeFileViewer = ({
             currentSheetIndex = sheetIndex;
             selectionRequest += 1;
             onSpreadsheetSelectionChange?.(null);
-            markActiveSpreadsheetTab(container, sheetIndex);
             finishSpreadsheetLoad();
           },
           resizable: true,
@@ -344,7 +343,7 @@ type OfficeNavigationViewer =
       viewer: {
         goToSheet: (index: number) => Promise<void>;
         scrollToCell: (reference: string) => Promise<void>;
-        select: (reference: string) => void;
+        setSelection: (reference: string) => void;
       };
     };
 
@@ -374,7 +373,7 @@ const applyOfficeNavigation = async ({
     if (!isCurrent()) {
       return false;
     }
-    target.viewer.select(locator.range);
+    target.viewer.setSelection(locator.range);
     const separatorIndex = locator.range.indexOf(":");
     const anchor =
       separatorIndex === -1
@@ -457,29 +456,10 @@ const setSpreadsheetFooterHeight = (container: HTMLElement, height: number) => {
     panic("Silurus XLSX tab strip is missing");
   }
 
-  tabBar.classList.add("stella-office-spreadsheet-tab-bar");
   tabBar.style.height = `${String(height)}px`;
   tabBar.style.alignItems = "center";
   const tabList = tabStrip.firstElementChild;
   if (tabList instanceof HTMLElement) {
     tabList.style.alignItems = "center";
-  }
-};
-
-const markActiveSpreadsheetTab = (
-  container: HTMLElement,
-  activeSheetIndex: number,
-) => {
-  const tabStrip = container.querySelector(".xlsx-tab-strip");
-  const tabList = tabStrip?.firstElementChild;
-  if (!(tabList instanceof HTMLElement)) {
-    panic("Silurus XLSX tab list is missing");
-  }
-
-  for (const [index, tab] of [...tabList.children].entries()) {
-    tab.classList.toggle(
-      "stella-office-spreadsheet-tab-active",
-      index === activeSheetIndex,
-    );
   }
 };

@@ -158,7 +158,7 @@
     "@libpdf/core": "0.4.1",
     "@mcp-ui/client": "7.1.1",
     "@oxlint/plugins": "1.77.0",
-    "@silurus/ooxml": "0.76.2",
+    "@silurus/ooxml": "0.82.1",
     "@stll/anonymize": "2.8.1",
     "@stll/anonymize-data": "0.0.10",
     "@stll/anonymize-wasm": "2.8.0",
