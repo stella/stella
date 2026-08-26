@@ -41,10 +41,7 @@ export const registerCorpusIndexGenerationTx = async (
   tx: Transaction,
   target: CorpusIndexGenerationTarget,
 ): Promise<CorpusIndexManifest> => {
-  const manifest = requireCorpusIndexManifest(
-    target.family,
-    target.generation,
-  );
+  const manifest = requireCorpusIndexManifest(target.family, target.generation);
   await tx
     .insert(corpusIndexGenerations)
     .values({

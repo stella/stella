@@ -27,10 +27,7 @@ let db: ReturnType<typeof drizzle>;
 const register = async (target: typeof CASE_LAW_TARGET) =>
   await db.transaction(
     async (tx) =>
-      await registerCorpusIndexGenerationTx(
-        asTestRaw<Transaction>(tx),
-        target,
-      ),
+      await registerCorpusIndexGenerationTx(asTestRaw<Transaction>(tx), target),
   );
 
 beforeAll(async () => {
@@ -57,10 +54,7 @@ test("generation registration is idempotent and manifest-derived", async () => {
     .where(
       and(
         eq(corpusIndexGenerations.family, CASE_LAW_TARGET.family),
-        eq(
-          corpusIndexGenerations.generation,
-          CASE_LAW_TARGET.generation,
-        ),
+        eq(corpusIndexGenerations.generation, CASE_LAW_TARGET.generation),
       ),
     );
   expect(rows).toHaveLength(1);

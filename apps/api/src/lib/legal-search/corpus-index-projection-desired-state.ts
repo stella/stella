@@ -650,7 +650,7 @@ export const ensureCorpusProjectionDesiredStateTx = async (
       `Active corpus generation is not registered: ${subject.family}/${generation}`,
     );
   }
-  const manifest = verifiedManifest(generationRow);
+  const manifest = requireRegisteredCorpusIndexManifest(generationRow);
   const descriptor = deriveCorpusIndexProjectionDescriptor(
     manifest,
     locked.input,
