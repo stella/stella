@@ -372,7 +372,7 @@ export const diffHighlightRanges = ({
 /** Adjacent tokens are one mark, not one mark per token. */
 const extendRun = (runs: KeyTermRange[], start: number, length: number) => {
   const last = runs.at(-1);
-  if (last !== undefined && last.end === start) {
+  if (last?.end === start) {
     last.end = start + length;
     return;
   }
@@ -503,6 +503,20 @@ export const buildMarkedPair = ({
       ...sideRanges(targetSide.text, deltaTargetText),
     ]),
   };
+};
+
+/**
+ * One side on its own: the same clause labels and the same key-term marks the
+ * pair uses, with no diff. What a playbook's reference standard gets, where
+ * there is no second side to be different from — marking every run as
+ * "the other side words this differently" would be a claim about a comparison
+ * that has not happened.
+ */
+export const buildMarkedSide = (
+  passages: readonly PassageInput[],
+): MarkedParagraph[] => {
+  const side = joinSide(passages);
+  return markSide(side, keyTermRanges(side.text));
 };
 
 /** Blocks read as paragraphs of one passage, so they join as paragraphs do. */

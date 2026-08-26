@@ -7,6 +7,7 @@ import type {
 } from "@/components/ai-suggestions/document-review-run.logic";
 import {
   buildReviewResultItems,
+  buildRunHistoryBasisSentence,
   buildRunSummarySentence,
   isReviewDeviation,
   isUndecidedDeviation,
@@ -205,5 +206,42 @@ describe("the order the list is read in", () => {
     expect(sortReviewResultItems(items).map((item) => item.positionId)).toEqual(
       ["position-2", "position-3", "position-1"],
     );
+  });
+});
+
+describe("what a history row says a run was measured against", () => {
+  test("names the playbook a run was executed against", () => {
+    expect(
+      buildRunHistoryBasisSentence({
+        perspectiveRole: "Purchaser",
+        playbookName: "Buy-side SPA",
+        playbookProposed: false,
+        references: null,
+      }),
+    ).toBe("Buy-side SPA · for the Purchaser");
+  });
+
+  test("names the references a run with no saved playbook compared against", () => {
+    expect(
+      buildRunHistoryBasisSentence({
+        perspectiveRole: null,
+        playbookName: "Positions confirmed for this review",
+        playbookProposed: true,
+        references: "2 references",
+      }),
+    ).toBe("2 references · no side");
+  });
+
+  // A run can pin neither: an ephemeral list confirmed against a playbook
+  // whose name was never saved. The row still has to say something.
+  test("falls back to where the positions came from", () => {
+    expect(
+      buildRunHistoryBasisSentence({
+        perspectiveRole: null,
+        playbookName: null,
+        playbookProposed: true,
+        references: null,
+      }),
+    ).toBe("positions proposed from the references · no side");
   });
 });

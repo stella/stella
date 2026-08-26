@@ -65,6 +65,18 @@ export type ReviewStatus =
  */
 export type ReviewRestoreMode = "allowed" | "dismissed";
 
+/**
+ * Which of the document's runs the facet is showing: the one this session
+ * tracks (the newest, or the one it started), or an earlier run the reviewer
+ * opened from the history. A history run is a record, not a workspace: the
+ * facet renders it read-only and offers the way back.
+ */
+export type ReviewRunSelection =
+  | { type: "tracked" }
+  | { type: "history"; runId: string };
+
+export const TRACKED_RUN_SELECTION: ReviewRunSelection = { type: "tracked" };
+
 export type DocumentReviewSession = {
   status: ReviewStatus;
   setup: ReviewSetup | null;
@@ -72,6 +84,8 @@ export type DocumentReviewSession = {
   /** The durable run this facet tracks, or `null` while none has started. */
   runId: string | null;
   restore: ReviewRestoreMode;
+  /** Which run is on screen: the tracked one, or one opened from history. */
+  selection: ReviewRunSelection;
   /** Guards a stale response from overwriting a newer request's session. */
   requestId: string | null;
   /** The list the run will be measured by, while the reviewer confirms it. */
@@ -168,6 +182,14 @@ type Actions = {
     perspective: ReviewPerspective,
   ) => void;
   resetSession: (entityId: string, fileFieldId: string) => void;
+  /** Open one of the document's earlier runs, read-only. */
+  viewHistoricalRun: (
+    entityId: string,
+    fileFieldId: string,
+    runId: string,
+  ) => void;
+  /** Back to the run this session tracks. */
+  viewTrackedRun: (entityId: string, fileFieldId: string) => void;
 };
 
 const blankSession = (): DocumentReviewSession => ({
@@ -176,6 +198,7 @@ const blankSession = (): DocumentReviewSession => ({
   error: null,
   runId: null,
   restore: "allowed",
+  selection: TRACKED_RUN_SELECTION,
   requestId: null,
   positions: [],
   parties: [],
@@ -412,6 +435,7 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => ({
             status: "starting",
             error: null,
             runId: null,
+            selection: TRACKED_RUN_SELECTION,
             requestId,
             positions: [...positions],
             sizeConfirmation: null,
@@ -647,5 +671,39 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => ({
         [key]: { ...blankSession(), restore: "dismissed" },
       },
     }));
+  },
+
+  /**
+   * Show an earlier run. Only the selection moves: the tracked run, the
+   * restore decision and any half-assembled setup stay exactly as they were,
+   * so "Back to latest" is a return rather than a reconstruction.
+   */
+  viewHistoricalRun: (entityId, fileFieldId, runId) => {
+    const key = reviewSessionKey(entityId, fileFieldId);
+    set((state) => {
+      const current = state.sessions[key] ?? blankSession();
+      return {
+        sessions: {
+          ...state.sessions,
+          [key]: { ...current, selection: { type: "history", runId } },
+        },
+      };
+    });
+  },
+
+  viewTrackedRun: (entityId, fileFieldId) => {
+    const key = reviewSessionKey(entityId, fileFieldId);
+    set((state) => {
+      const current = state.sessions[key];
+      if (current === undefined) {
+        return state;
+      }
+      return {
+        sessions: {
+          ...state.sessions,
+          [key]: { ...current, selection: TRACKED_RUN_SELECTION },
+        },
+      };
+    });
   },
 }));

@@ -2,13 +2,21 @@ import { BidiText } from "@stll/ui/bidi-text";
 import { cn } from "@stll/ui/utils";
 
 import type { ReviewDelta } from "@/components/ai-suggestions/review-delta";
+import { ColumnHeader } from "@/components/ai-suggestions/review-term-row";
 
 // TODO(i18n): English until the review surface is localized as a whole.
-const PRESENT_SR_LABEL = "present";
-const ABSENT_SR_LABEL = "absent";
 const CITATION_ARIA_LABEL = "Show in document";
 
-const PRESENCE_MARK = { present: "●", absent: "○" } as const;
+/** Presence in words. A reviewer should not have to work out that a hollow
+ *  circle means the item is missing. */
+const PRESENCE_LABEL = { present: "Yes", absent: "No" } as const;
+
+/** The two mark columns are sized for the word they hold; the item column
+ *  takes the rest, so a term reads across the row instead of wrapping one
+ *  word at a time. */
+const MARK_COLUMN_WIDTH = "5rem";
+
+const CELL_CLASS = "py-1.5 text-sm leading-6";
 
 export type EnumerationDelta = Extract<ReviewDelta, { kind: "enumeration" }>;
 export type PresenceDelta = Extract<ReviewDelta, { kind: "presence" }>;
@@ -29,9 +37,10 @@ export type ReviewPresenceMatrixProps = {
 };
 
 /**
- * One row per item (or the single term for a presence delta), two mark
- * columns. Rows missing from the target lead, with subtle emphasis: that is
- * the part of the matrix a reviewer needs to see first.
+ * One row per item (or the single term for a presence delta), two columns
+ * saying whether each side has it. Rows missing from the target lead, with
+ * subtle emphasis: that is the part of the matrix a reviewer needs to see
+ * first.
  */
 export const ReviewPresenceMatrix = ({
   delta,
@@ -44,22 +53,17 @@ export const ReviewPresenceMatrix = ({
   );
 
   return (
-    <table className="w-full border-collapse">
+    <table className="w-full table-fixed border-collapse">
+      <colgroup>
+        <col />
+        <col style={{ width: MARK_COLUMN_WIDTH }} />
+        <col style={{ width: MARK_COLUMN_WIDTH }} />
+      </colgroup>
       <thead>
         <tr className="border-border border-b">
-          <th className="w-0" scope="col" />
-          <th
-            className="text-muted-foreground py-1 pe-3 text-end text-xs font-medium tracking-wide uppercase"
-            scope="col"
-          >
-            <BidiText as="span">{targetLabel}</BidiText>
-          </th>
-          <th
-            className="text-muted-foreground py-1 text-end text-xs font-medium tracking-wide uppercase"
-            scope="col"
-          >
-            <BidiText as="span">{standardLabel}</BidiText>
-          </th>
+          <th scope="col" />
+          <ColumnHeader label={targetLabel} />
+          <ColumnHeader label={standardLabel} />
         </tr>
       </thead>
       <tbody>
@@ -72,7 +76,7 @@ export const ReviewPresenceMatrix = ({
             key={row.key}
           >
             <th
-              className="min-w-0 py-1.5 pe-3 text-start text-sm font-normal"
+              className={cn(CELL_CLASS, "min-w-0 pe-3 text-start font-normal")}
               scope="row"
             >
               <RowLabel
@@ -81,12 +85,8 @@ export const ReviewPresenceMatrix = ({
                 onShowInDocument={row.inTarget ? onShowInDocument : undefined}
               />
             </th>
-            <td className="py-1.5 pe-3 text-end">
-              <PresenceMark present={row.inTarget} />
-            </td>
-            <td className="py-1.5 text-end">
-              <PresenceMark present={row.inStandard} />
-            </td>
+            <PresenceCell present={row.inTarget} />
+            <PresenceCell present={row.inStandard} />
           </tr>
         ))}
       </tbody>
@@ -144,18 +144,14 @@ const RowLabel = ({ label, citation, onShowInDocument }: RowLabelProps) => {
   );
 };
 
-const PresenceMark = ({ present }: { present: boolean }) => (
-  <span
+const PresenceCell = ({ present }: { present: boolean }) => (
+  <td
     className={cn(
-      "text-sm",
+      CELL_CLASS,
+      "text-center whitespace-nowrap",
       present ? "text-foreground" : "text-muted-foreground",
     )}
   >
-    <span aria-hidden="true">
-      {present ? PRESENCE_MARK.present : PRESENCE_MARK.absent}
-    </span>
-    <span className="sr-only">
-      {present ? PRESENT_SR_LABEL : ABSENT_SR_LABEL}
-    </span>
-  </span>
+    {present ? PRESENCE_LABEL.present : PRESENCE_LABEL.absent}
+  </td>
 );

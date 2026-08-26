@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   buildMarkedPair,
+  buildMarkedSide,
   DIFF_LENGTH_LIMIT,
   diffHighlightRanges,
   KEY_TERM_KIND,
@@ -272,5 +273,29 @@ describe("buildMarkedPair", () => {
         paragraph.segments.map((segment) => segment.text).join(""),
       ),
     ).toEqual(["Cena činí 1 000 000 Kč.", "Splatnost je 30 (třiceti) dnů."]);
+  });
+});
+
+describe("buildMarkedSide", () => {
+  // A playbook's reference standard has no second side. Marking its every run
+  // as a difference would claim a comparison that never happened.
+  test("marks key terms and nothing as differing", () => {
+    const [paragraph] = buildMarkedSide([
+      { blockId: "s1", text: "2.1 The term is 24 months from Closing." },
+    ]);
+    expect(paragraph?.label).toBe("2.1");
+    expect(segmentTexts(paragraph?.segments ?? [], "term")).toContain(
+      "24 months",
+    );
+    expect(segmentTexts(paragraph?.segments ?? [], "diff")).toEqual([]);
+  });
+
+  test("keeps one paragraph per quoted block", () => {
+    expect(
+      buildMarkedSide([
+        { blockId: "s1", text: "First." },
+        { blockId: "s2", text: "Second." },
+      ]).map((paragraph) => paragraph.blockId),
+    ).toEqual(["s1", "s2"]);
   });
 });

@@ -12,6 +12,8 @@ import type {
 } from "@/api/lib/workflow/playbook-positions";
 
 const realVerdictEngine = await import("@/api/lib/workflow/verdict-engine");
+const realReferenceGrade =
+  await import("@/api/lib/document-review/reference-grade");
 
 let modelCallCount = 0;
 let abortAfterFirstCall: AbortController | null = null;
@@ -42,6 +44,36 @@ const gradeTierMatchesMock = mock(
 void mock.module("@/api/lib/workflow/verdict-engine", () => ({
   ...realVerdictEngine,
   gradeTierMatches: gradeTierMatchesMock,
+}));
+
+/** One call the reference grader made, still unresolved: the test decides
+ *  when (and in what order) it lands. */
+type ReferenceGradeCall = {
+  positions: Parameters<
+    typeof realReferenceGrade.gradeReferencePositions
+  >[0]["positions"];
+  resolve: (
+    value: Awaited<
+      ReturnType<typeof realReferenceGrade.gradeReferencePositions>
+    >,
+  ) => void;
+};
+
+let referenceGradeCalls: ReferenceGradeCall[] = [];
+const gradeReferencePositionsMock = mock(
+  async ({
+    positions,
+  }: Parameters<typeof realReferenceGrade.gradeReferencePositions>[0]) =>
+    await new Promise<
+      Awaited<ReturnType<typeof realReferenceGrade.gradeReferencePositions>>
+    >((resolve) => {
+      referenceGradeCalls.push({ positions, resolve });
+    }),
+);
+
+void mock.module("@/api/lib/document-review/reference-grade", () => ({
+  ...realReferenceGrade,
+  gradeReferencePositions: gradeReferencePositionsMock,
 }));
 
 const { buildFindings } =
@@ -82,6 +114,29 @@ const position = (index: number): Position => ({
     question: "What is the notice period?",
     content: { version: 1, type: "text" },
   },
+  enabled: true,
+});
+
+const referencePosition = (index: number): Position => ({
+  mode: "graded",
+  sourceId: sourceId(index),
+  issue: `Reference position ${index}`,
+  severity: "high",
+  standard: {
+    source: "reference",
+    termKind: "language",
+    passages: [
+      {
+        workspaceId: WORKSPACE_ID,
+        entityId: toSafeId<"entity">("77777777-7777-4777-8777-777777777777"),
+        fileFieldId: FILE_FIELD_ID,
+        entityVersionId: ENTITY_VERSION_ID,
+        blockId: `ref-block-${index}`,
+        text: `Standard clause ${index}.`,
+      },
+    ],
+  },
+  ask: { mode: "auto" },
   enabled: true,
 });
 
@@ -166,6 +221,8 @@ beforeEach(() => {
   returnVerdicts = true;
   gradedBatches = [];
   gradeTierMatchesMock.mockClear();
+  referenceGradeCalls = [];
+  gradeReferencePositionsMock.mockClear();
 });
 
 describe("document review grading", () => {
@@ -240,5 +297,56 @@ describe("document review grading", () => {
     expect(findings.map(({ positionId }) => positionId)).toEqual(
       positions.map(({ sourceId: id }) => id),
     );
+  });
+
+  // Reference-standard batches run with bounded concurrency: several model
+  // calls are in flight together, so they do not necessarily land in the
+  // order they were launched. `onGraded` still has to fire once per batch as
+  // it lands, and the pass's return value still has to read as one ordered
+  // set regardless of which model call happened to finish first.
+  test("hands reference batches over as each resolves, out of launch order, but keeps the final findings in position order", async () => {
+    const positions = Array.from(
+      { length: realReferenceGrade.REFERENCE_GRADE_BATCH_SIZE * 2 + 1 },
+      (_, index) => referencePosition(index + 1),
+    );
+
+    const resultPromise = buildFindings(
+      buildArgs(positions, new AbortController().signal),
+    );
+
+    // Bounded concurrency (3) means all three batches launch before any of
+    // them resolves.
+    expect(referenceGradeCalls).toHaveLength(3);
+
+    const gradingFor = (
+      call: (typeof referenceGradeCalls)[number],
+    ): Awaited<ReturnType<typeof realReferenceGrade.gradeReferencePositions>> =>
+      Result.ok(
+        new Map(
+          call.positions.map((referencedPosition) => [
+            referencedPosition.sourceId,
+            realReferenceGrade.ungradedReferenceGrading(referencedPosition),
+          ]),
+        ),
+      );
+
+    // Resolve out of the order the batches were launched in.
+    const [first, second, third] = referenceGradeCalls;
+    if (first === undefined || second === undefined || third === undefined) {
+      throw new Error("expected three reference-grading batches");
+    }
+    third.resolve(gradingFor(third));
+    first.resolve(gradingFor(first));
+    second.resolve(gradingFor(second));
+
+    const findings = await resultPromise;
+
+    const expectedOrder = positions.map(({ sourceId: id }) => id);
+    expect(gradedBatches).toHaveLength(3);
+    // The hand-off order tracked completion, not launch order.
+    expect(gradedBatches.flat()).not.toEqual(expectedOrder);
+    expect(gradedBatches.flat().toSorted()).toEqual([...expectedOrder].sort());
+    // The final findings are still in the positions' original order.
+    expect(findings.map(({ positionId }) => positionId)).toEqual(expectedOrder);
   });
 });

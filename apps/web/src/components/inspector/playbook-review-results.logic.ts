@@ -86,8 +86,8 @@ const severityRank = (severity: ReviewFinding["severity"]): number =>
 /**
  * The list a reviewer reads top to bottom: the most severe positions first,
  * then the order the positions were confirmed in. Direction and verdict are
- * not sorted on — the card's glyph column carries those — so the same position
- * keeps the same place across runs.
+ * not sorted on — the card header's judgment carries those — so the same
+ * position keeps the same place across runs.
  */
 export const sortReviewResultItems = (
   items: readonly ReviewResultItem[],
@@ -103,7 +103,7 @@ export const sortReviewResultItems = (
 // TODO(i18n): English until the review surface is localized as a whole.
 const PROPOSED_FROM_REFERENCES_LABEL = "positions proposed from the references";
 const NO_SIDE_LABEL = "no side";
-const SUMMARY_SEPARATOR = " · ";
+export const SUMMARY_SEPARATOR = " · ";
 
 type RunSummaryArgs = {
   /** The reviewed document's name, or `""` while it is not known yet. */
@@ -155,6 +155,45 @@ export const buildRunSummarySentence = ({
     perspective.type === "party"
       ? `for the ${perspective.role}`
       : NO_SIDE_LABEL,
+  );
+  return parts.join(SUMMARY_SEPARATOR);
+};
+
+type RunHistoryBasisArgs = {
+  /** The pinned playbook's name, as the list endpoint read it out of the
+   *  basis; `null` for a run that pinned no snapshot name. */
+  playbookName: string | null;
+  playbookProposed: boolean;
+  /** `"3 references"`, already formatted in the caller's locale, or `null`
+   *  when the run compared against no document. */
+  references: string | null;
+  /** The party the run was judged for, or `null` for no side. */
+  perspectiveRole: string | null;
+};
+
+/**
+ * What one history row says the run was measured against. The same three facts
+ * as the header's summary sentence, minus the target: every row in the list
+ * belongs to the same document.
+ */
+export const buildRunHistoryBasisSentence = ({
+  playbookName,
+  playbookProposed,
+  references,
+  perspectiveRole,
+}: RunHistoryBasisArgs): string => {
+  const parts: string[] = [];
+  if (references !== null) {
+    parts.push(references);
+  }
+  if (!playbookProposed && playbookName !== null && playbookName.length > 0) {
+    parts.push(playbookName);
+  }
+  if (parts.length === 0) {
+    parts.push(PROPOSED_FROM_REFERENCES_LABEL);
+  }
+  parts.push(
+    perspectiveRole === null ? NO_SIDE_LABEL : `for the ${perspectiveRole}`,
   );
   return parts.join(SUMMARY_SEPARATOR);
 };

@@ -8,13 +8,15 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import { Link, useNavigate } from "@tanstack/react-router";
+import { Link, useMatch, useNavigate } from "@tanstack/react-router";
 import { Result } from "better-result";
 import {
   CheckIcon,
   ChevronRightIcon,
   ClipboardCheckIcon,
   MessageSquareIcon,
+  PanelLeftIcon,
+  PanelRightIcon,
   PlusIcon,
   RotateCcwIcon,
   ScanSearchIcon,
@@ -74,6 +76,8 @@ import type {
   DecidedReviewDecision,
   DocumentReviewDecision,
   DocumentReviewFindingRow,
+  DocumentReviewRunStatus,
+  DocumentReviewRunSummary,
   ReviewFinding,
   ReviewVerdict,
 } from "@/components/ai-suggestions/document-review-queries";
@@ -95,27 +99,43 @@ import type {
 } from "@/components/ai-suggestions/document-review-run.logic";
 import {
   reviewSessionKey,
+  TRACKED_RUN_SELECTION,
   usePlaybookReviewStore,
 } from "@/components/ai-suggestions/playbook-review-store";
 import type { StartReviewResult } from "@/components/ai-suggestions/playbook-review-store";
-import type {
-  DeltaCitation,
-  ReviewImpact,
-} from "@/components/ai-suggestions/review-delta";
+import type { DeltaCitation } from "@/components/ai-suggestions/review-delta";
 import { ReviewDeltaView } from "@/components/ai-suggestions/review-delta-view";
+import {
+  findingHeaderLabel,
+  impactLabel,
+  isDirectedImpact,
+} from "@/components/ai-suggestions/review-finding-label";
+import { REVIEW_SECTION_LABEL_CLASS } from "@/components/ai-suggestions/review-passage-side";
+import {
+  POSITION_HEADER_META_CLASS,
+  PositionHeader,
+} from "@/components/ai-suggestions/review-position-header";
+import {
+  PositionQuickRow,
+  type ReferenceNameLookup,
+} from "@/components/ai-suggestions/review-position-row";
 import { useReviewStore } from "@/components/ai-suggestions/review-store";
 import type { ReviewSuggestion } from "@/components/ai-suggestions/review-store";
 import { isNegotiableVerdict } from "@/components/ai-suggestions/review-verdict";
 import { useReviewActions } from "@/components/ai-suggestions/use-review-actions";
 import { DocumentIcon } from "@/components/document-icon";
+import { DOCUMENT_PANE } from "@/components/inspector/document-pane";
+import type { ReviewPaneSwap } from "@/components/inspector/document-pane";
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import {
   buildReviewResultItems,
+  buildRunHistoryBasisSentence,
   buildRunSummarySentence,
   isReviewDeviation,
   isUndecidedDeviation,
   sortReviewResultItems,
+  SUMMARY_SEPARATOR,
 } from "@/components/inspector/playbook-review-results.logic";
 import type {
   ReviewResultFilter,
@@ -148,10 +168,6 @@ import {
 } from "@/lib/knowledge/queries";
 import type { EntityVersion } from "@/lib/workspaces/queries/entity-versions";
 import { entityVersionsOptions } from "@/lib/workspaces/queries/entity-versions";
-import {
-  PositionQuickRow,
-  type ReferenceNameLookup,
-} from "@/routes/_protected.knowledge/-components/position-editor";
 
 type PlaybookFacetProps = {
   entityId: string;
@@ -168,6 +184,61 @@ export const PlaybookFacet = ({
   const analytics = useAnalytics();
   const user = useAuthenticatedUser();
   const author = getWordEditAuthorName(user);
+  const navigate = useNavigate();
+
+  // The matter view a document opens in. The facet renders in shared chrome,
+  // so it may be mounted on a route that has none.
+  const viewMatch = useMatch({
+    from: "/_protected/workspaces/$workspaceId/$viewId",
+    shouldThrow: false,
+  });
+  const viewId = viewMatch?.params.viewId ?? ALL_VIEW_ID;
+
+  // Which pane this document is reading in. Only the route's own document can
+  // swap panes: another tab's facet has no main pane of its own to move into.
+  const documentMatch = useMatch({
+    from: "/_protected/workspaces/$workspaceId/$viewId/document",
+    shouldThrow: false,
+  });
+  const documentSearch = documentMatch?.search;
+  const routeSearch =
+    documentSearch?.entity === entityId && documentSearch.field === fileFieldId
+      ? documentSearch
+      : null;
+  const currentPane = routeSearch?.pane ?? DOCUMENT_PANE.document;
+  // Where the document itself is being read right now. When the route is
+  // showing it in the main pane, this panel must not reach for the preview:
+  // the document is already on screen and the switch would only take the
+  // review away.
+  const documentInMainPane =
+    routeSearch !== null && currentPane === DOCUMENT_PANE.document;
+  const paneSwap: ReviewPaneSwap | null =
+    routeSearch === null
+      ? null
+      : {
+          pane: currentPane,
+          onToggle: (pane) => {
+            // The two panes trade places in one gesture: the inspector shows the
+            // document exactly when the main pane does not.
+            useInspectorTabsStore
+              .getState()
+              .setFileFacet(
+                fileFieldId,
+                pane === DOCUMENT_PANE.review ? "preview" : "playbook",
+              );
+            detached(
+              navigate({
+                to: "/workspaces/$workspaceId/$viewId/document",
+                params: { workspaceId, viewId },
+                search: (prev) => ({
+                  ...prev,
+                  pane: pane === DOCUMENT_PANE.review ? pane : undefined,
+                }),
+              }),
+              "playbook-facet.swap-pane",
+            );
+          },
+        };
 
   const registration = useActiveDocxStore(
     useShallow(
@@ -187,6 +258,8 @@ export const PlaybookFacet = ({
     setPositions,
     setPerspective,
     resetSession,
+    viewHistoricalRun,
+    viewTrackedRun,
   } = usePlaybookReviewStore(
     useShallow((state) => ({
       startReview: state.startReview,
@@ -197,6 +270,8 @@ export const PlaybookFacet = ({
       setPositions: state.setPositions,
       setPerspective: state.setPerspective,
       resetSession: state.resetSession,
+      viewHistoricalRun: state.viewHistoricalRun,
+      viewTrackedRun: state.viewTrackedRun,
     })),
   );
 
@@ -238,16 +313,27 @@ export const PlaybookFacet = ({
   const restoreAllowed =
     session === undefined ||
     (session.runId === null && session.restore === "allowed");
-  const { data: runHistory, isPending: runHistoryPending } = useQuery({
-    ...documentReviewRunsOptions({ workspaceId, entityId, fileFieldId }),
-    enabled: restoreAllowed,
-  });
+  // Read unconditionally: the same answer decides what to restore and fills
+  // the History section, which a facet already tracking a run still shows.
+  const { data: runHistory, isPending: runHistoryPending } = useQuery(
+    documentReviewRunsOptions({ workspaceId, entityId, fileFieldId }),
+  );
+  const runs = runHistory?.items ?? EMPTY_RUNS;
   const restoredRun =
     runHistory === undefined
       ? null
-      : restoredRunId(resolveReviewRunRestore(runHistory.items));
+      : restoredRunId(resolveReviewRunRestore(runs));
   const trackedRunId =
     sessionRunId === null && restoreAllowed ? restoredRun : sessionRunId;
+  // An earlier run opened from the history is a record: it is shown in place
+  // of the tracked one and answers nothing.
+  const selection = session?.selection ?? TRACKED_RUN_SELECTION;
+  const historyRunId =
+    selection.type === "history" &&
+    runs.some((run) => run.id === selection.runId)
+      ? selection.runId
+      : null;
+  const shownRunId = historyRunId ?? trackedRunId;
 
   const editorAvailable = registration !== undefined;
   const pendingPlaybookId = session?.setup?.playbookId ?? null;
@@ -304,36 +390,57 @@ export const PlaybookFacet = ({
     );
   };
 
-  // The document editor stays mounted under this facet but hidden, so any
-  // jump into the document first brings the preview back; the scroll is
-  // queued as a command because a hidden editor cannot scroll yet.
-  const revealDocument = () => {
-    useInspectorTabsStore.getState().setFileFacet(fileFieldId, "preview");
-  };
-
+  /**
+   * Jump to a clause of the reviewed document.
+   *
+   * Where that document is read decides what has to happen first. Mounted over
+   * a hidden preview, the preview is brought back before the scroll; mounted
+   * beside a main pane that is already showing the document, nothing is
+   * switched — reaching for the preview there would replace this very panel.
+   * Either way the scroll is queued as a command, because an editor that is
+   * not on screen yet cannot scroll.
+   */
   const scrollToBlock = (blockId: string) => {
-    revealDocument();
+    if (!documentInMainPane) {
+      useInspectorTabsStore.getState().setFileFacet(fileFieldId, "preview");
+    }
     useInspectorCommandStore
       .getState()
       .requestBlockScroll({ tabId: fileFieldId, blockId });
   };
 
+  /**
+   * Open the reference where a document is read — the main viewer — at the
+   * block the standard was quoted from.
+   *
+   * The route's own `block` deep link carries the scroll, so it survives the
+   * navigation and the editor mounting after it; the stale reads of the
+   * document being left (page, justification, edit session) are dropped rather
+   * than carried onto another file. The review is keyed by run on the server,
+   * so coming back to the target puts it straight back on screen.
+   */
   const openReferenceCitation = (reference: ReferenceFile, blockId: string) => {
-    useInspectorCommandStore.getState().requestBlockScroll({
-      tabId: reference.fileFieldId,
-      blockId,
-    });
-    useInspectorTabsStore.getState().openFile({
-      id: reference.fileFieldId,
-      entityId: reference.entityId,
-      label: reference.name,
-      fileName: reference.fileName,
-      mimeType: DOCX_MIME,
-      pdfFileId: null,
-      // The reference opens in its own matter, which may not be this one.
-      workspaceId: reference.workspaceId,
-      facet: "preview",
-    });
+    detached(
+      navigate({
+        to: "/workspaces/$workspaceId/$viewId/document",
+        params: {
+          workspaceId: reference.workspaceId,
+          // A reference from another matter has no view of this one to open in.
+          viewId: reference.workspaceId === workspaceId ? viewId : ALL_VIEW_ID,
+        },
+        search: (prev) => ({
+          ...prev,
+          block: blockId,
+          editing: undefined,
+          entity: reference.entityId,
+          field: reference.fileFieldId,
+          justification: undefined,
+          justificationPage: undefined,
+          pdfPage: undefined,
+        }),
+      }),
+      "playbook-facet.open-reference",
+    );
   };
 
   /**
@@ -507,13 +614,21 @@ export const PlaybookFacet = ({
     />
   );
 
-  if (trackedRunId !== null) {
+  if (shownRunId !== null) {
     return (
       <>
         {sizeConfirmDialog}
         <ReviewRunPanel
           currentEntityVersionId={currentEntityVersionId}
           editorAvailable={editorAvailable}
+          history={{
+            mode: historyRunId === null ? "tracked" : "history",
+            onBackToLatest: () => viewTrackedRun(entityId, fileFieldId),
+            onSelect: (runId) =>
+              viewHistoricalRun(entityId, fileFieldId, runId),
+            runs,
+            shownRunId,
+          }}
           onAcceptSuggestion={(suggestion) => {
             detached(
               reviewActions.acceptOne(suggestion),
@@ -529,7 +644,8 @@ export const PlaybookFacet = ({
           onReviewAgain={() => resetSession(entityId, fileFieldId)}
           onScrollToBlock={scrollToBlock}
           organizationId={user.activeOrganizationId}
-          runId={trackedRunId}
+          paneSwap={paneSwap}
+          runId={shownRunId}
           suggestions={suggestions}
           targetFileFieldId={fileFieldId}
           versions={versions?.versions ?? EMPTY_VERSIONS}
@@ -543,6 +659,19 @@ export const PlaybookFacet = ({
     <>
       {sizeConfirmDialog}
       <Launcher
+        history={
+          runs.length === 0
+            ? null
+            : {
+                mode: "tracked",
+                onBackToLatest: () => viewTrackedRun(entityId, fileFieldId),
+                onSelect: (runId) =>
+                  viewHistoricalRun(entityId, fileFieldId, runId),
+                runs,
+                // Nothing is on screen from the history yet; a row opens one.
+                shownRunId: null,
+              }
+        }
         playbooks={playbooks}
         target={{ entityId, fileFieldId }}
         workspaceId={workspaceId}
@@ -561,6 +690,10 @@ export const PlaybookFacet = ({
 // fresh array on every call and re-render forever.
 const EMPTY_SUGGESTIONS: readonly ReviewSuggestion[] = [];
 const EMPTY_VERSIONS: readonly EntityVersion[] = [];
+const EMPTY_RUNS: readonly DocumentReviewRunSummary[] = [];
+
+/** The matter view a document from another matter opens in: all of it. */
+const ALL_VIEW_ID = "all";
 
 const referenceNameLookup = (
   references: readonly ReferenceFile[],
@@ -571,10 +704,29 @@ const referenceNameLookup = (
 
 // -- Durable run --
 
+/**
+ * The document's review history as the facet reads it: every run the list
+ * endpoint returned, which of them is on screen, and whether it is on screen
+ * as the tracked run or as a record opened from the history.
+ */
+export type ReviewRunHistoryView = {
+  runs: readonly DocumentReviewRunSummary[];
+  /** The run on screen, or `null` when the facet is showing no run at all
+   *  (the launcher, after a reviewer chose to start again). */
+  shownRunId: string | null;
+  mode: "tracked" | "history";
+  onSelect: (runId: string) => void;
+  onBackToLatest: () => void;
+};
+
 type ReviewRunPanelProps = {
   workspaceId: string;
   runId: string;
   organizationId: string;
+  history: ReviewRunHistoryView;
+  /** Where this document reads its review, when the facet is looking at the
+   *  route's own document. `null` in every other mounting. */
+  paneSwap: ReviewPaneSwap | null;
   /** The reviewed document's file field: where "Ask in chat" drafts land. */
   targetFileFieldId: string;
   /** The document's version history, so the run can name the version it
@@ -605,6 +757,8 @@ const ReviewRunPanel = ({
   workspaceId,
   runId,
   organizationId,
+  history,
+  paneSwap,
   targetFileFieldId,
   versions,
   currentEntityVersionId,
@@ -709,7 +863,13 @@ const ReviewRunPanel = ({
     (version) => version.id === run.entityVersionId,
   );
 
-  if (view === "progress") {
+  // The worker commits its findings batch by batch, so a run that has answered
+  // some of its positions has something to read: the cards appear as they
+  // land, under a progress line that turns into the run's summary sentence
+  // when the last batch arrives. Only a run with nothing committed yet has
+  // nothing to show but the wait.
+  const executing = view === "progress";
+  if (executing && restored.findings.length === 0) {
     return (
       <ReviewProgressState
         completed={run.completed}
@@ -739,6 +899,7 @@ const ReviewRunPanel = ({
       editorAvailable={editorAvailable}
       findings={restored.findings}
       freshness={resolveReviewRunFreshness({ run, currentEntityVersionId })}
+      history={history}
       negotiationBySourceId={negotiationLookup(playbookDetail)}
       onAcceptSuggestion={onAcceptSuggestion}
       // Writing the note into the draft is the reviewer's answer to the
@@ -776,6 +937,20 @@ const ReviewRunPanel = ({
         saveAsPlaybook.mutate({ workspaceId, runId: run.id });
       }}
       onScrollToBlock={onScrollToBlock}
+      paneSwap={paneSwap}
+      progress={
+        executing
+          ? {
+              completed: run.completed,
+              startedAt: run.startedAt,
+              total: run.total,
+            }
+          : null
+      }
+      // An earlier run is a record of what was reviewed: its decisions were
+      // taken then, and re-answering them here would rewrite history rather
+      // than the document.
+      readOnly={history.mode === "history"}
       runId={run.id}
       saveAsPlaybookPending={saveAsPlaybook.isPending}
       suggestions={suggestions}
@@ -796,8 +971,7 @@ const PLAYBOOK_FILTER_THRESHOLD = 6;
  *  references before the reviewer has typed anything. */
 const REFERENCE_SUGGESTION_LIMIT = 3;
 
-const SECTION_LABEL_CLASS =
-  "text-foreground-strong-muted text-[11px] font-medium tracking-[0.06em] uppercase";
+const SECTION_LABEL_CLASS = REVIEW_SECTION_LABEL_CLASS;
 // TODO(i18n): English until the review surface is localized as a whole.
 const LAUNCHER_BASIS_DIVIDER_LABEL = "and / or";
 const TARGET_AS_REFERENCE_LABEL =
@@ -877,6 +1051,9 @@ type LauncherProps = {
   playbooks: readonly LauncherPlaybook[];
   target: { entityId: string; fileFieldId: string };
   workspaceId: string;
+  /** Runs this document has already had, when it has any: choosing a new basis
+   *  must not be the gesture that hides the reviews already taken. */
+  history: ReviewRunHistoryView | null;
   onReview: (setup: ReviewSetup, seededPositions: Position[]) => void;
 };
 
@@ -884,6 +1061,7 @@ const Launcher = ({
   playbooks,
   target,
   workspaceId,
+  history,
   onReview,
 }: LauncherProps) => {
   const t = useTranslations();
@@ -943,6 +1121,7 @@ const Launcher = ({
           workspaceId={workspaceId}
         />
       </div>
+      {history !== null && <ReviewHistorySection history={history} />}
       {/* Pinned right above the action it describes, outside the scroll. */}
       <div className="shrink-0 px-4 pb-2">
         <LaunchBasisSummary
@@ -1123,7 +1302,7 @@ const NotComparedDisclosure = ({
     <div className="mt-1.5">
       <button
         aria-expanded={open}
-        className="text-muted-foreground hover:text-foreground text-[11px] transition-colors"
+        className="text-muted-foreground hover:text-foreground text-xs transition-colors"
         onClick={() => setOpen((current) => !current)}
         type="button"
       >
@@ -1133,7 +1312,7 @@ const NotComparedDisclosure = ({
         <ul className="mt-1 space-y-0.5">
           {skipped.map((entry) => (
             <li
-              className="text-muted-foreground text-[11px]"
+              className="text-muted-foreground text-xs leading-6"
               key={entry.subject}
             >
               <BidiText as="span">{`${entry.subject} — ${entry.reason}`}</BidiText>
@@ -1520,7 +1699,7 @@ const PositionConfirmStep = ({
         <InspectorHeaderText>
           <InspectorTitle>{t("inspector.review.topicsTitle")}</InspectorTitle>
         </InspectorHeaderText>
-        <span className="text-muted-foreground shrink-0 text-[11px] tabular-nums">
+        <span className="text-muted-foreground shrink-0 text-xs tabular-nums">
           {t("inspector.review.referencesCount", {
             count: enabledCount,
             max: positions.length,
@@ -1612,6 +1791,17 @@ const reviewProgressPositionsLabel = ({
 }: ReviewProgressPositionsLabelArgs): string =>
   `${completed} of ${total} positions`;
 
+/** The same count with the elapsed clock behind it, for the one line a
+ *  streaming results header carries. */
+const reviewProgressSentence = ({
+  completed,
+  total,
+  elapsed,
+}: ReviewProgressPositionsLabelArgs & { elapsed: string | null }): string =>
+  elapsed === null
+    ? reviewProgressPositionsLabel({ completed, total })
+    : `${reviewProgressPositionsLabel({ completed, total })}${SUMMARY_SEPARATOR}${elapsed}`;
+
 // mm:ss: a run answers in minutes at most, so hours would only pad the label.
 const formatElapsedMinutesSeconds = (ms: number): string => {
   const totalSeconds = Math.floor(ms / 1000);
@@ -1632,15 +1822,12 @@ type ReviewProgressStateProps = {
   startedAt: string | null;
 };
 
-const ReviewProgressState = ({
-  sourceName,
-  completed,
-  total,
-  startedAt,
-}: ReviewProgressStateProps) => {
-  const t = useTranslations();
-  const format = useFormatter();
-
+/**
+ * How long the worker has been on this run, ticking once a second, or `null`
+ * while it still sits queued. The clock is an external system — the wall — so
+ * it is synchronized rather than derived.
+ */
+const useElapsedClock = (startedAt: string | null): number | null => {
   const [elapsedMs, setElapsedMs] = useState<number | null>(null);
   useExternalSyncEffect(() => {
     if (startedAt === null) {
@@ -1653,6 +1840,18 @@ const ReviewProgressState = ({
     const interval = setInterval(tick, 1000);
     return () => clearInterval(interval);
   }, [startedAt]);
+  return elapsedMs;
+};
+
+const ReviewProgressState = ({
+  sourceName,
+  completed,
+  total,
+  startedAt,
+}: ReviewProgressStateProps) => {
+  const t = useTranslations();
+  const format = useFormatter();
+  const elapsedMs = useElapsedClock(startedAt);
 
   const detail = [
     sourceName,
@@ -1752,6 +1951,10 @@ const SUGGESTION_ACCEPTED_LABEL = "Accepted";
 const SUGGESTION_REJECTED_LABEL = "Rejected";
 const SUGGESTION_SKIPPED_LABEL = "No longer matches the document";
 const SUGGESTION_STAGED_LABEL = "Staged as a tracked change in the document";
+const READ_ONLY_RUN_LABEL = "Decided on this run";
+/** Why accepting is unavailable: the change is applied to the open document,
+ *  and there is none mounted to apply it to. */
+const NO_EDITOR_TOOLTIP = "Open the document to accept changes";
 
 type ReviewResultsSummaryArgs = {
   flagged: string;
@@ -1767,12 +1970,26 @@ const reviewResultsSummarySentence = ({
 }: ReviewResultsSummaryArgs): string =>
   `${flagged} of ${total} positions flagged · ${decided} decided`;
 
+/** A run still executing: what it has answered so far, and since when. */
+type ReviewRunProgress = {
+  completed: number;
+  total: number;
+  startedAt: string | null;
+};
+
 type ResultsViewProps = {
   basis: RestoredReviewBasis;
   findings: readonly RestoredReviewFinding[];
   decisionCounts: Parameters<typeof reviewDecisionProgress>[0];
   decisionPending: boolean;
   freshness: ReviewRunFreshness;
+  history: ReviewRunHistoryView;
+  /** Set while the worker is still committing findings; `null` once the run
+   *  has settled. */
+  progress: ReviewRunProgress | null;
+  /** An earlier run, shown as the record it is: nothing here decides. */
+  readOnly: boolean;
+  paneSwap: ReviewPaneSwap | null;
   negotiationBySourceId: ReadonlyMap<string, Negotiation>;
   targetFileFieldId: string;
   targetName: string;
@@ -1805,6 +2022,10 @@ const ResultsView = ({
   decisionCounts,
   decisionPending,
   freshness,
+  history,
+  progress: runProgress,
+  readOnly,
+  paneSwap,
   negotiationBySourceId,
   targetFileFieldId,
   targetName,
@@ -1824,12 +2045,11 @@ const ResultsView = ({
   onScrollToBlock,
 }: ResultsViewProps) => {
   const t = useTranslations();
-  const format = useFormatter();
   const results = buildReviewResultItems({
     positions: basis.positions,
     findings,
   });
-  const progress = reviewDecisionProgress(decisionCounts);
+  const decisions = reviewDecisionProgress(decisionCounts);
   const flaggedCount = results.filter(isReviewDeviation).length;
 
   return (
@@ -1851,17 +2071,18 @@ const ResultsView = ({
               })}
             </BidiText>
           </p>
-          {results.length > 0 && (
-            <p className="text-muted-foreground text-xs tabular-nums">
-              {reviewResultsSummarySentence({
-                flagged: format.number(flaggedCount),
-                total: format.number(results.length),
-                decided: format.number(progress.decided),
-              })}
-            </p>
-          )}
+          {/* One line, whichever it is: while the worker runs it counts the
+              positions it has answered, and when the last batch lands it
+              becomes the run's own summary — no row appears or disappears. */}
+          <RunHeaderStatusLine
+            decided={decisions.decided}
+            flagged={flaggedCount}
+            progress={runProgress}
+            total={results.length}
+          />
         </div>
         <div className="flex shrink-0 items-center gap-2">
+          <PaneSwapToggle swap={paneSwap} />
           {/* Only a run whose positions were never saved has a playbook to
               make; one that ran against a definition already has one. */}
           {basis.provenance === "ephemeral" && (
@@ -1881,6 +2102,8 @@ const ResultsView = ({
         </div>
       </header>
 
+      <ReviewHistorySection history={history} />
+
       <div className="flex-1 overflow-y-auto px-2 py-2">
         <ReviewFreshnessNotice
           freshness={freshness}
@@ -1899,6 +2122,7 @@ const ResultsView = ({
             onRejectSuggestion={onRejectSuggestion}
             onScrollToBlock={onScrollToBlock}
             perspective={basis.perspective}
+            readOnly={readOnly}
             references={basis.references}
             suggestions={suggestions}
             targetFileFieldId={targetFileFieldId}
@@ -1908,6 +2132,243 @@ const ResultsView = ({
         )}
       </div>
     </div>
+  );
+};
+
+// TODO(i18n): English until the review surface is localized as a whole.
+const HISTORY_LABEL = "History";
+const BACK_TO_LATEST_LABEL = "Back to latest";
+const HISTORY_REFERENCES_LABEL = (count: string): string =>
+  `${count} references`;
+const HISTORY_DECIDED_LABEL = (decided: string, total: string): string =>
+  `${decided} of ${total} decided`;
+
+/** A run is identified by when it was taken, to the minute: a document can be
+ *  reviewed twice in an afternoon. */
+const HISTORY_RUN_DATE_FORMAT = {
+  day: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+  month: "short",
+} as const satisfies Intl.DateTimeFormatOptions;
+
+/** What each run status reads as in the history list. Total over the run
+ *  lifecycle, so a status added on the server states its word here. */
+const RUN_STATUS_LABEL = {
+  queued: "Queued",
+  running: "Running",
+  completed: "Completed",
+  failed: "Failed",
+  cancelled: "Cancelled",
+} as const satisfies Record<DocumentReviewRunStatus, string>;
+
+/**
+ * Every review this document has had, newest first, collapsed behind its own
+ * count. A run is durable and a document is reviewed more than once, so the
+ * earlier ones have to be reachable — but the current review is what the panel
+ * is for, so the list opens only when asked for.
+ */
+const ReviewHistorySection = ({
+  history,
+}: {
+  history: ReviewRunHistoryView;
+}) => {
+  const format = useFormatter();
+  const [open, setOpen] = useState(false);
+  const viewingHistory = history.mode === "history";
+  // A single run that is already on screen is not a history worth offering.
+  if (history.runs.length === 0) {
+    return null;
+  }
+  if (
+    history.runs.length === 1 &&
+    !viewingHistory &&
+    history.shownRunId !== null
+  ) {
+    return null;
+  }
+
+  return (
+    <section className="shrink-0 border-b px-3 py-1.5">
+      <div className="flex items-center gap-2">
+        <button
+          aria-expanded={open}
+          className="text-muted-foreground hover:text-foreground inline-flex min-h-11 items-center gap-1 text-xs transition-colors"
+          onClick={() => setOpen((current) => !current)}
+          type="button"
+        >
+          <DirectionalIcon
+            className={cn("size-3.5 transition-transform", open && "rotate-90")}
+            flip={!open}
+            icon={ChevronRightIcon}
+          />
+          {HISTORY_LABEL} ({format.number(history.runs.length)})
+        </button>
+        {viewingHistory && (
+          <Button
+            className="ms-auto"
+            onClick={history.onBackToLatest}
+            size="xs"
+            variant="outline"
+          >
+            {BACK_TO_LATEST_LABEL}
+          </Button>
+        )}
+      </div>
+      {open && (
+        <ul className="mb-1 space-y-0.5">
+          {history.runs.map((run) => (
+            <li key={run.id}>
+              <ReviewHistoryRow
+                onSelect={() => history.onSelect(run.id)}
+                run={run}
+                shown={run.id === history.shownRunId}
+              />
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+};
+
+const ReviewHistoryRow = ({
+  run,
+  shown,
+  onSelect,
+}: {
+  run: DocumentReviewRunSummary;
+  shown: boolean;
+  onSelect: () => void;
+}) => {
+  const format = useFormatter();
+  const decisions = reviewDecisionProgress(run.decisionCounts);
+  const basis = buildRunHistoryBasisSentence({
+    perspectiveRole: run.basis.perspectiveRole,
+    playbookName: run.basis.playbookName,
+    playbookProposed: run.basis.playbookProvenance === "ephemeral",
+    references:
+      run.basis.referenceCount === 0
+        ? null
+        : HISTORY_REFERENCES_LABEL(format.number(run.basis.referenceCount)),
+  });
+
+  return (
+    <button
+      aria-current={shown}
+      className={cn(
+        "hover:bg-muted/60 flex min-h-11 w-full flex-col items-start gap-0.5 rounded-md px-2 py-1.5 text-start transition-colors",
+        shown && "bg-muted",
+      )}
+      onClick={onSelect}
+      type="button"
+    >
+      <span className="flex w-full items-baseline gap-2">
+        <span className="text-foreground shrink-0 text-xs tabular-nums">
+          {format.dateTime(new Date(run.createdAt), HISTORY_RUN_DATE_FORMAT)}
+        </span>
+        <BidiText
+          as="span"
+          className="text-muted-foreground min-w-0 flex-1 truncate text-xs"
+        >
+          {basis}
+        </BidiText>
+        <span className="text-muted-foreground shrink-0 text-xs">
+          {RUN_STATUS_LABEL[run.status]}
+        </span>
+      </span>
+      {decisions.total > 0 && (
+        <span className="text-muted-foreground text-xs tabular-nums">
+          {HISTORY_DECIDED_LABEL(
+            format.number(decisions.decided),
+            format.number(decisions.total),
+          )}
+        </span>
+      )}
+    </button>
+  );
+};
+
+type RunHeaderStatusLineProps = {
+  progress: ReviewRunProgress | null;
+  flagged: number;
+  total: number;
+  decided: number;
+};
+
+/** The header's third line. One element in both states, so the cards below it
+ *  do not move when the run finishes. */
+const RunHeaderStatusLine = ({
+  progress,
+  flagged,
+  total,
+  decided,
+}: RunHeaderStatusLineProps) => {
+  const format = useFormatter();
+  const elapsedMs = useElapsedClock(progress?.startedAt ?? null);
+  if (progress !== null) {
+    return (
+      <p className="text-muted-foreground text-xs tabular-nums">
+        {reviewProgressSentence({
+          completed: format.number(progress.completed),
+          elapsed:
+            elapsedMs === null ? null : formatElapsedMinutesSeconds(elapsedMs),
+          total: format.number(progress.total),
+        })}
+      </p>
+    );
+  }
+  if (total === 0) {
+    return null;
+  }
+  return (
+    <p className="text-muted-foreground text-xs tabular-nums">
+      {reviewResultsSummarySentence({
+        decided: format.number(decided),
+        flagged: format.number(flagged),
+        total: format.number(total),
+      })}
+    </p>
+  );
+};
+
+// TODO(i18n): English until the review surface is localized as a whole.
+const SHOW_REVIEW_IN_MAIN_PANE_LABEL = "Show checks in main pane";
+const BACK_TO_DOCUMENT_LABEL = "Back to document";
+
+/**
+ * Move the review between the panes. Two documents' worth of prose does not
+ * fit an inspector column, so a reviewer reading passages side by side wants
+ * the wide pane; a reviewer editing wants the document there instead.
+ */
+const PaneSwapToggle = ({ swap }: { swap: ReviewPaneSwap | null }) => {
+  if (swap === null) {
+    return null;
+  }
+  const showingReview = swap.pane === DOCUMENT_PANE.review;
+  return (
+    <Button
+      onClick={() =>
+        swap.onToggle(
+          showingReview ? DOCUMENT_PANE.document : DOCUMENT_PANE.review,
+        )
+      }
+      size="xs"
+      tooltip={
+        showingReview ? BACK_TO_DOCUMENT_LABEL : SHOW_REVIEW_IN_MAIN_PANE_LABEL
+      }
+      variant="ghost"
+    >
+      <DirectionalIcon
+        className="size-3.5"
+        icon={showingReview ? PanelRightIcon : PanelLeftIcon}
+      />
+      <span className="sr-only">
+        {showingReview
+          ? BACK_TO_DOCUMENT_LABEL
+          : SHOW_REVIEW_IN_MAIN_PANE_LABEL}
+      </span>
+    </Button>
   );
 };
 
@@ -1993,6 +2454,7 @@ type ReviewResultListProps = {
   perspective: ReviewPerspective;
   targetFileFieldId: string;
   decisionPending: boolean;
+  readOnly: boolean;
   negotiationBySourceId: ReadonlyMap<string, Negotiation>;
   editorAvailable: boolean;
   suggestions: readonly ReviewSuggestion[];
@@ -2017,6 +2479,7 @@ const ReviewResultList = ({
   perspective,
   targetFileFieldId,
   decisionPending,
+  readOnly,
   negotiationBySourceId,
   editorAvailable,
   suggestions,
@@ -2047,7 +2510,7 @@ const ReviewResultList = ({
   return (
     <section>
       <div className="mb-2 flex items-center justify-between gap-2 px-1">
-        <h3 className="text-foreground-strong-muted text-[11px] font-medium tracking-[0.06em] uppercase">
+        <h3 className={REVIEW_SECTION_LABEL_CLASS}>
           {t("inspector.review.results")}
         </h3>
         <div className="bg-muted flex rounded-lg p-0.5">
@@ -2084,6 +2547,7 @@ const ReviewResultList = ({
               setExpandedId(visibleExpandedId === item.id ? null : item.id)
             }
             perspective={perspective}
+            readOnly={readOnly}
             references={references}
             suggestion={suggestions.find(
               (candidate) => candidate.id === item.suggestionId,
@@ -2125,7 +2589,7 @@ const FilterTab = ({
     <button
       aria-pressed={active}
       className={cn(
-        "text-muted-foreground min-h-11 rounded-md px-2 text-[11px] font-medium tabular-nums",
+        "text-muted-foreground min-h-11 rounded-md px-2 text-xs font-medium tabular-nums",
         active && "bg-background text-foreground shadow-xs",
       )}
       onClick={onSelect}
@@ -2142,6 +2606,7 @@ type ReviewResultCardProps = {
   perspective: ReviewPerspective;
   targetFileFieldId: string;
   decisionPending: boolean;
+  readOnly: boolean;
   negotiation: Negotiation | undefined;
   editorAvailable: boolean;
   expanded: boolean;
@@ -2175,8 +2640,9 @@ const singleReferenceFieldId = (finding: ReviewFinding): string | null => {
 
 /**
  * One finding: what the document says, what the standard says, and what the
- * difference is. The judgment is one glyph in the header — the row's place in
- * the list already carries severity — so nothing here is a chip stack.
+ * difference is. The judgment is one muted phrase at the end of the header —
+ * words, because a reviewer opening this for the first time has no legend for
+ * a glyph — so nothing here is a chip stack.
  */
 const ReviewResultCard = ({
   item,
@@ -2184,6 +2650,7 @@ const ReviewResultCard = ({
   perspective,
   targetFileFieldId,
   decisionPending,
+  readOnly,
   negotiation,
   editorAvailable,
   expanded,
@@ -2199,7 +2666,7 @@ const ReviewResultCard = ({
   const t = useTranslations();
   const detailId = `review-result-${item.id}`;
   const { finding } = item;
-  const glyph = findingGlyph(finding, perspective);
+  const judgment = findingHeaderLabel(finding, perspective);
   const standardPassages = standardPassagesFor(item);
   const targetBlockId = finding.citations.at(0)?.blockId ?? null;
   const caption = findingCaption(
@@ -2234,34 +2701,38 @@ const ReviewResultCard = ({
       <button
         aria-controls={detailId}
         aria-expanded={expanded}
-        className="hover:bg-muted/70 flex min-h-11 w-full items-start gap-2 px-3 py-2.5 text-start transition-colors"
+        className="hover:bg-muted/70 w-full transition-colors"
         onClick={onToggle}
         type="button"
       >
-        <span
-          className={cn(
-            "mt-0.5 w-4 shrink-0 text-center text-sm font-medium",
-            glyph.className,
-          )}
-        >
-          <span aria-hidden="true">{glyph.symbol}</span>
-          <span className="sr-only">{glyph.label}</span>
-        </span>
-        <BidiText className="text-foreground min-w-0 flex-1 text-sm leading-snug font-medium">
-          {item.title}
-        </BidiText>
-        {item.decision !== REVIEW_DECISION.OPEN && (
-          <span className="text-muted-foreground shrink-0 text-[11px] font-medium">
-            {t(DECISION_LABEL[item.decision])}
-          </span>
-        )}
-        <DirectionalIcon
-          className={cn(
-            "text-muted-foreground mt-0.5 size-4 shrink-0 transition-transform",
-            expanded && "rotate-90",
-          )}
-          flip={!expanded}
-          icon={ChevronRightIcon}
+        <PositionHeader
+          actions={
+            <DirectionalIcon
+              className={cn(
+                "text-muted-foreground size-4 shrink-0 transition-transform",
+                expanded && "rotate-90",
+              )}
+              flip={!expanded}
+              icon={ChevronRightIcon}
+            />
+          }
+          label={
+            <>
+              {item.decision !== REVIEW_DECISION.OPEN && (
+                <span className={POSITION_HEADER_META_CLASS}>
+                  {t(DECISION_LABEL[item.decision])}
+                </span>
+              )}
+              <span className={cn(POSITION_HEADER_META_CLASS, "text-end")}>
+                {judgment}
+              </span>
+            </>
+          }
+          title={
+            <BidiText as="span" className="text-foreground font-medium">
+              {item.title}
+            </BidiText>
+          }
         />
       </button>
       {expanded && (
@@ -2271,12 +2742,19 @@ const ReviewResultCard = ({
             impact={finding.impact ?? "unknown"}
             label={item.title}
             onShowInDocument={editorAvailable ? onScrollToBlock : undefined}
-            onShowStandardPassage={(blockId) => {
-              const fieldId = referenceFieldIdByBlockId.get(blockId);
-              if (fieldId !== undefined) {
-                onOpenReferenceCitation(fieldId, blockId);
-              }
-            }}
+            // Only a standard quoted from a reference has a document to
+            // open; an authored one is language the playbook holds, and
+            // offering to "show" it would lead nowhere.
+            onShowStandardPassage={
+              referenceFieldIdByBlockId.size === 0
+                ? undefined
+                : (blockId) => {
+                    const fieldId = referenceFieldIdByBlockId.get(blockId);
+                    if (fieldId !== undefined) {
+                      onOpenReferenceCitation(fieldId, blockId);
+                    }
+                  }
+            }
             standard={{
               label: STANDARD_COLUMN_LABEL,
               passages: standardPassages,
@@ -2288,19 +2766,19 @@ const ReviewResultCard = ({
             }}
           />
           {caption !== null && (
-            <p className="text-muted-foreground text-xs leading-snug text-pretty">
+            <p className="text-muted-foreground text-sm leading-6 text-pretty">
               <BidiText as="span">{caption}</BidiText>
             </p>
           )}
           {/* The standard's own passages did not agree with each other, which
               a reviewer weighing them has to know. */}
           {finding.consensus === "mixed" && (
-            <p className="text-muted-foreground text-[11px]">
+            <p className="text-muted-foreground text-sm leading-6">
               {t("inspector.review.referencesDisagree")}
             </p>
           )}
           {typeof finding.recommendation === "string" && (
-            <p className="text-foreground text-xs leading-snug text-pretty">
+            <p className="text-foreground text-sm leading-6 text-pretty">
               <span className="text-foreground-strong-muted font-medium">
                 {RECOMMENDATION_LABEL}
               </span>{" "}
@@ -2316,6 +2794,7 @@ const ReviewResultCard = ({
             decisionPending={decisionPending}
             editorAvailable={editorAvailable}
             item={item}
+            readOnly={readOnly}
             onAcceptSuggestion={onAcceptSuggestion}
             onAddCounterpartyNote={(note) => {
               if (targetBlockId !== null) {
@@ -2359,6 +2838,7 @@ type ReviewCardActionsProps = {
   suggestion: ReviewSuggestion | undefined;
   decisionPending: boolean;
   editorAvailable: boolean;
+  readOnly: boolean;
   targetBlockId: string | null;
   onAcceptSuggestion: (suggestion: ReviewSuggestion) => void;
   onRejectSuggestion: (suggestion: ReviewSuggestion) => void;
@@ -2381,6 +2861,7 @@ const ReviewCardActions = ({
   suggestion,
   decisionPending,
   editorAvailable,
+  readOnly,
   targetBlockId,
   onAcceptSuggestion,
   onAddCounterpartyNote,
@@ -2396,15 +2877,21 @@ const ReviewCardActions = ({
       aria-label={t("inspector.review.decision")}
       className="flex flex-wrap items-center gap-2 border-t pt-3"
     >
-      <FindingResolution
-        decisionPending={decisionPending}
-        editorAvailable={editorAvailable}
-        item={item}
-        onAcceptSuggestion={onAcceptSuggestion}
-        onDecide={onDecide}
-        onRejectSuggestion={onRejectSuggestion}
-        suggestion={suggestion}
-      />
+      {readOnly ? (
+        <span className="text-muted-foreground text-xs">
+          {READ_ONLY_RUN_LABEL}
+        </span>
+      ) : (
+        <FindingResolution
+          decisionPending={decisionPending}
+          editorAvailable={editorAvailable}
+          item={item}
+          onAcceptSuggestion={onAcceptSuggestion}
+          onDecide={onDecide}
+          onRejectSuggestion={onRejectSuggestion}
+          suggestion={suggestion}
+        />
+      )}
       {targetBlockId !== null && (
         <>
           <Button
@@ -2483,7 +2970,7 @@ const FindingResolution = ({
   // Deciding here would answer the finding without touching the change it
   // stands for; the reviewer opens the document and resolves it there.
   return (
-    <span className="text-muted-foreground text-[11px]">
+    <span className="text-muted-foreground text-xs">
       {SUGGESTION_STAGED_LABEL}
     </span>
   );
@@ -2556,20 +3043,20 @@ const SuggestionButtons = ({
   switch (suggestion.status) {
     case "accepted":
       return (
-        <span className="text-muted-foreground flex items-center gap-1 text-[11px]">
+        <span className="text-muted-foreground flex items-center gap-1 text-xs">
           <CheckIcon className="size-3" />
           {SUGGESTION_ACCEPTED_LABEL}
         </span>
       );
     case "rejected":
       return (
-        <span className="text-muted-foreground text-[11px]">
+        <span className="text-muted-foreground text-xs">
           {SUGGESTION_REJECTED_LABEL}
         </span>
       );
     case "skipped":
       return (
-        <span className="text-muted-foreground text-[11px]">
+        <span className="text-muted-foreground text-xs">
           {SUGGESTION_SKIPPED_LABEL}
         </span>
       );
@@ -2582,6 +3069,7 @@ const SuggestionButtons = ({
             disabled={!editorAvailable || suggestion.status === "applying"}
             onClick={onAccept}
             size="sm"
+            {...(editorAvailable ? {} : { tooltip: NO_EDITOR_TOOLTIP })}
           >
             <CheckIcon className="me-1 size-3.5" />
             {t("common.accept")}
@@ -2685,7 +3173,7 @@ const MatchedRefLine = ({
       ? `${matchedRef.label}: ${matchedRef.text}`
       : matchedRef.text;
   return (
-    <p className="text-muted-foreground text-xs leading-snug">
+    <p className="text-muted-foreground text-sm leading-6">
       <span className="text-foreground-strong-muted">{label}</span> {text}
     </p>
   );
@@ -2713,11 +3201,11 @@ const NegotiationBlock = ({
   const { talkingPoints } = negotiation;
   return (
     <div className="border-border/70 mt-1 space-y-1.5 rounded-md border border-dashed p-2">
-      <p className="text-foreground-strong-muted text-[11px] font-medium">
+      <p className={REVIEW_SECTION_LABEL_CLASS}>
         {t("knowledge.playbooks.negotiation.title")}
       </p>
       {negotiation.rationale !== undefined && (
-        <p className="text-muted-foreground text-xs leading-snug">
+        <p className="text-muted-foreground text-sm leading-6">
           <span className="text-foreground-strong-muted">
             {t("knowledge.playbooks.negotiation.rationaleLabel")}:
           </span>{" "}
@@ -2725,7 +3213,7 @@ const NegotiationBlock = ({
         </p>
       )}
       {talkingPoints !== undefined && talkingPoints.length > 0 && (
-        <div className="text-xs leading-snug">
+        <div className="text-sm leading-6">
           <span className="text-foreground-strong-muted">
             {t("knowledge.playbooks.negotiation.talkingPointsLabel")}:
           </span>
@@ -2738,7 +3226,7 @@ const NegotiationBlock = ({
         </div>
       )}
       {negotiation.escalation !== undefined && (
-        <p className="text-muted-foreground text-xs leading-snug">
+        <p className="text-muted-foreground text-sm leading-6">
           <span className="text-foreground-strong-muted">
             {t("knowledge.playbooks.negotiation.escalationLabel")}:
           </span>{" "}
@@ -2840,89 +3328,3 @@ const findingCaption = (
   const { rationale } = finding;
   return rationale !== null && rationale.length > 0 ? rationale : null;
 };
-
-type FindingGlyph = { symbol: string; className: string; label: string };
-
-// TODO(i18n): English until the review surface is localized as a whole.
-const VERDICT_LABEL = {
-  compliant: "Compliant",
-  fallback: "Fallback",
-  deviation: "Deviation",
-  missing: "Missing",
-  additional: "Additional",
-  "not-applicable": "Not applicable",
-} as const satisfies Record<ReviewVerdict, string>;
-
-// Muted, total over every impact value: judgment now reads from the arrow's
-// direction, not from colour, so nothing here escalates to green/red.
-const DIRECTION_GLYPH = {
-  favourable: "▲",
-  unfavourable: "▼",
-  neutral: "–",
-  unknown: "–",
-} as const satisfies Record<ReviewImpact, string>;
-
-const GLYPH_CLASS = "text-muted-foreground";
-const MISSING_VERDICT_GLYPH = "○";
-
-/**
- * The single mark that carries the judgment: the direction a run judged for
- * (▼ worse, ▲ better, – no direction or none judged), muted rather than
- * coloured. A missing standard gets its own hollow mark regardless of
- * direction — "nothing to compare" is a different finding from "no verdict
- * either way" — so it is checked before impact rather than folded into it.
- */
-const findingGlyph = (
-  finding: ReviewFinding,
-  perspective: ReviewPerspective,
-): FindingGlyph => {
-  const { verdict, impact } = finding;
-  if (verdict === "missing") {
-    return {
-      symbol: MISSING_VERDICT_GLYPH,
-      className: GLYPH_CLASS,
-      label: VERDICT_LABEL.missing,
-    };
-  }
-  const resolvedImpact = impact ?? "unknown";
-  const label = isDirectedImpact(resolvedImpact)
-    ? impactLabel(resolvedImpact, perspective)
-    : verdictLabel(verdict);
-  return {
-    symbol: DIRECTION_GLYPH[resolvedImpact],
-    className: GLYPH_CLASS,
-    label,
-  };
-};
-
-const verdictLabel = (verdict: ReviewVerdict | null): string =>
-  verdict === null ? "" : VERDICT_LABEL[verdict];
-
-type DirectedImpact = Exclude<ReviewImpact, "unknown">;
-
-/** An impact the card can put a direction on; `unknown` and findings the run
- *  never judged for a side fall back to the verdict. */
-const isDirectedImpact = (
-  impact: ReviewFinding["impact"],
-): impact is DirectedImpact => impact !== undefined && impact !== "unknown";
-
-// TODO(i18n): English until the review surface is localized as a whole. Labels
-// name the side so "worse" is never ambiguous on a printed or shared card.
-const IMPACT_LABEL = {
-  unfavourable: "Unfavourable",
-  favourable: "Favourable",
-  neutral: "No effect",
-} as const satisfies Record<DirectedImpact, string>;
-const IMPACT_FOR_SIDE_LABEL = {
-  unfavourable: "Worse for",
-  favourable: "Better for",
-  neutral: "No effect for",
-} as const satisfies Record<DirectedImpact, string>;
-
-const impactLabel = (
-  impact: DirectedImpact,
-  perspective: ReviewPerspective,
-): string =>
-  perspective.type === "party"
-    ? `${IMPACT_FOR_SIDE_LABEL[impact]} ${perspective.role}`
-    : IMPACT_LABEL[impact];

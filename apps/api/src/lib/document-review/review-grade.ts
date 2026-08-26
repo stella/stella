@@ -337,11 +337,56 @@ const referencePair = (position: Position): ReferencePair | null => {
   };
 };
 
+/** Reference-standard batches in flight at once. Each call sends the shared
+ *  target/reference document parts (cached by scope key) plus one batch's
+ *  passages, so several in flight overlap that latency instead of paying it
+ *  once per batch, without letting one review's fan-out grow unbounded. */
+const REFERENCE_GRADE_CONCURRENCY = 3;
+
+/** Runs `batches` with up to `concurrency` calls in flight. A worker claims
+ *  the next unstarted batch in order — so batches begin in position order —
+ *  then awaits `onBatch` before claiming another, which is what lets a
+ *  finished batch hand its results over the moment it lands rather than when
+ *  the slowest concurrent batch also finishes. Stops claiming new batches,
+ *  without cancelling ones already in flight, once `abortSignal` fires. */
+const runBatchesWithConcurrency = async <Batch>({
+  batches,
+  concurrency,
+  abortSignal,
+  onBatch,
+}: {
+  batches: readonly Batch[];
+  concurrency: number;
+  abortSignal: AbortSignal;
+  onBatch: (batch: Batch) => Promise<void>;
+}): Promise<void> => {
+  let nextIndex = 0;
+  const worker = async (): Promise<void> => {
+    for (;;) {
+      if (abortSignal.aborted) {
+        return;
+      }
+      const index = nextIndex;
+      nextIndex += 1;
+      const batch = batches.at(index);
+      if (batch === undefined) {
+        return;
+      }
+      // oxlint-disable-next-line no-await-in-loop -- one worker's batches run in sequence; concurrency comes from running several workers, not from parallelizing within one
+      await onBatch(batch);
+    }
+  };
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, batches.length) }, worker),
+  );
+};
+
 /**
  * Compare the target against every reference-standard position, a batch of
- * positions per model call. A batch that fails, or a position the model
- * skipped, leaves that position ungraded rather than failing the run: one
- * unanswerable position must not discard the rest of the review.
+ * positions per model call, up to {@link REFERENCE_GRADE_CONCURRENCY} batches
+ * at once. A batch that fails, or a position the model skipped, leaves that
+ * position ungraded rather than failing the run: one unanswerable position
+ * must not discard the rest of the review.
  */
 const gradeReferenceStandards = async ({
   pairs,
@@ -360,42 +405,49 @@ const gradeReferenceStandards = async ({
   gradings: Map<string, ReferenceGrading>;
   emit: (batch: readonly Position[]) => Promise<void>;
 }): Promise<void> => {
+  const batches: ReferencePair[][] = [];
   for (
     let cursor = 0;
     cursor < pairs.length;
     cursor += REFERENCE_GRADE_BATCH_SIZE
   ) {
-    if (deps.abortSignal.aborted) {
-      break;
-    }
-    const batch = pairs.slice(cursor, cursor + REFERENCE_GRADE_BATCH_SIZE);
-    // oxlint-disable-next-line no-await-in-loop -- one model call per batch, in order, keeps the review's fan-out bounded
-    const outcome = await gradeReferencePositions({
-      positions: batch.map((pair) => pair.reference),
-      target,
-      perspective,
-      targetEntityVersionId: deps.entityVersionId,
-      referenceEntityVersionIds,
-      organizationId: deps.organizationId,
-      workspaceId: deps.workspaceId,
-      orgAIConfig: deps.orgAIConfig,
-      promptCachingEnabled: deps.promptCachingEnabled,
-      serviceTier: deps.serviceTier,
-      usageMetering: deps.usageMetering,
-      abortSignal: deps.abortSignal,
-    });
-    for (const { reference } of batch) {
-      const grading = Result.isOk(outcome)
-        ? outcome.value.get(reference.sourceId)
-        : undefined;
-      gradings.set(
-        reference.sourceId,
-        grading ?? ungradedReferenceGrading(reference),
-      );
-    }
-    // oxlint-disable-next-line no-await-in-loop -- progress is committed per batch, in order, before the next call starts
-    await emit(batch.map((pair) => pair.position));
+    batches.push(pairs.slice(cursor, cursor + REFERENCE_GRADE_BATCH_SIZE));
   }
+
+  await runBatchesWithConcurrency({
+    batches,
+    concurrency: REFERENCE_GRADE_CONCURRENCY,
+    abortSignal: deps.abortSignal,
+    onBatch: async (batch) => {
+      const outcome = await gradeReferencePositions({
+        positions: batch.map((pair) => pair.reference),
+        target,
+        perspective,
+        targetEntityVersionId: deps.entityVersionId,
+        referenceEntityVersionIds,
+        organizationId: deps.organizationId,
+        workspaceId: deps.workspaceId,
+        orgAIConfig: deps.orgAIConfig,
+        promptCachingEnabled: deps.promptCachingEnabled,
+        serviceTier: deps.serviceTier,
+        usageMetering: deps.usageMetering,
+        abortSignal: deps.abortSignal,
+      });
+      for (const { reference } of batch) {
+        const grading = Result.isOk(outcome)
+          ? outcome.value.get(reference.sourceId)
+          : undefined;
+        gradings.set(
+          reference.sourceId,
+          grading ?? ungradedReferenceGrading(reference),
+        );
+      }
+      // Findings still land in the caller's `positions` order: `emit` only
+      // hands over progress, and the pass's return value re-projects the
+      // whole set from `gradings` in that order once every worker is done.
+      await emit(batch.map((pair) => pair.position));
+    },
+  });
 };
 
 type ProjectGradingArgs = {

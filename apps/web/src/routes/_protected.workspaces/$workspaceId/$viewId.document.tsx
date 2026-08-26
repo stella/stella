@@ -47,8 +47,14 @@ import {
 } from "@/components/docx-preview-zoom";
 import { shouldUseDocxBrowserEditor } from "@/components/docx/docx-browser-editor.logic";
 import { DocxLoadingShell } from "@/components/docx/docx-loading-shell";
+import {
+  DOCUMENT_PANE,
+  DOCUMENT_PANE_SEARCH_VALUES,
+} from "@/components/inspector/document-pane";
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
+import type { FileFacet } from "@/components/inspector/inspector-store-types";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
+import { PlaybookFacet } from "@/components/inspector/playbook-facet";
 import PdfViewer, { PDFSuspenseFallback } from "@/components/pdf/pdf-viewer";
 import Tooltip from "@/components/tooltip";
 import { TranslateDocumentDialog } from "@/components/translate-document-dialog";
@@ -128,6 +134,9 @@ export const Route = createFileRoute(
     block: v.optional(v.string()),
     panel: v.optional(v.picklist(["versions"])),
     editing: v.optional(v.boolean()),
+    // Which pane reads the document review. Absent is the default
+    // arrangement: the document here, the review in the inspector.
+    pane: v.optional(v.picklist(DOCUMENT_PANE_SEARCH_VALUES)),
   }),
   search: {
     middlewares: [stripSearchParams({ pdfPage: 1 })],
@@ -355,10 +364,13 @@ type InspectorFileOpenLifecycleProps = {
   pdfFileId: string | null;
   propertyId: string;
   workspaceId: string;
+  /** Which facet the tab should open on; the tab's own default otherwise. */
+  facet?: FileFacet | undefined;
 };
 
 const InspectorFileOpenLifecycle = ({
   entityId,
+  facet,
   fieldId,
   fileLabel,
   mimeType,
@@ -378,6 +390,7 @@ const InspectorFileOpenLifecycle = ({
       pdfFileId,
       propertyId,
       metadataLane: "expanded",
+      ...(facet === undefined ? {} : { facet }),
     });
   });
 
@@ -477,6 +490,9 @@ function RouteComponentInner({
   });
   const pageNumber = Route.useSearch({ select: (s) => s.pdfPage ?? 1 });
   const initialBlockId = Route.useSearch({ select: (s) => s.block });
+  const pane = Route.useSearch({
+    select: (s) => s.pane ?? DOCUMENT_PANE.document,
+  });
   const requestBlockScroll = useInspectorCommandStore(
     (s) => s.requestBlockScroll,
   );
@@ -613,6 +629,10 @@ function RouteComponentInner({
   const activeFileLabel =
     activeFileContent?.fileName ?? resolvedVersionFile?.fileName ?? fieldId;
   const isDocxFile = activeMimeType === DOCX_MIME;
+  // The panes have traded places: the findings get this column's full width
+  // and the document moves to the inspector's preview. Only a DOCX has a
+  // review to show, so anything else reads as the default arrangement.
+  const showsReviewPane = pane === DOCUMENT_PANE.review && isDocxFile;
   const usesNativeDocxDisplay = isDocxFile;
   const officeViewerFormat = getNativeOfficeViewerFormat(activeMimeType);
   const filePropertyId =
@@ -708,9 +728,12 @@ function RouteComponentInner({
       {filePropertyId && activeMimeType !== undefined && (
         <InspectorFileOpenLifecycle
           entityId={entityId}
+          // In the swapped arrangement the inspector is where the document is
+          // read, so the tab opens on its preview rather than its metadata.
+          facet={showsReviewPane ? "preview" : undefined}
           fieldId={fieldId}
           fileLabel={activeFileLabel}
-          key={`${fieldId}:${filePropertyId}:${activeMimeType}:${activePdfFileId}:${activeFileLabel}`}
+          key={`${fieldId}:${filePropertyId}:${activeMimeType}:${activePdfFileId}:${activeFileLabel}:${pane}`}
           mimeType={activeMimeType}
           pdfFileId={activePdfFileId}
           propertyId={filePropertyId}
@@ -727,7 +750,7 @@ function RouteComponentInner({
 
         {/* Center: DOCX editor, PDF viewer, or redline comparison */}
         <section className="flex h-full min-w-0 flex-1 flex-col">
-          {!usesEmbeddedDocumentToolbar && (
+          {!usesEmbeddedDocumentToolbar && !showsReviewPane && (
             <div
               className={cn(
                 "bg-background/80 supports-[backdrop-filter]:bg-background/65 flex shrink-0 items-center justify-center gap-2 border-b px-4 backdrop-blur",
@@ -754,6 +777,16 @@ function RouteComponentInner({
           )}
           <div className="relative min-h-0 flex-1">
             {(() => {
+              if (showsReviewPane) {
+                return (
+                  <PlaybookFacet
+                    entityId={entityId}
+                    fileFieldId={fieldId}
+                    workspaceId={workspaceId}
+                  />
+                );
+              }
+
               if (filePreviewState === "error") {
                 const error = versionDataQuery.error;
                 if (error instanceof Error) {

@@ -8,10 +8,15 @@
  * Each summary carries how its findings were decided, aggregated in the same
  * statement: the counts are a fact about the finding rows, and one grouped
  * join keeps them from becoming either a stored duplicate or a second query.
+ *
+ * The pinned basis is projected down to the four values a history row reads —
+ * what the run was measured against and for whom — rather than sent whole: the
+ * snapshot embeds every confirmed position, which a list of ten runs has no
+ * use for.
  */
 
 import { Result } from "better-result";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { t } from "elysia";
 
@@ -24,12 +29,30 @@ import {
   DECISION_COUNT_COLUMNS,
   toDecisionCounts,
 } from "@/api/lib/document-review/decision-counts";
+import type { PlaybookPinProvenance } from "@/api/lib/document-review/run-contract";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { createCursorPage } from "@/api/lib/pagination";
 import { brandPersistedDocumentReviewRunId } from "@/api/lib/safe-id-boundaries";
 
 const RUNS_PAGE_SIZE_DEFAULT = 20;
 const RUNS_PAGE_SIZE_MAX = 50;
+
+/**
+ * What a history row says the run was measured against, read out of the pinned
+ * basis in the same statement. Each accessor chain is parenthesized so a cast
+ * applies to the whole of it rather than to its last operand.
+ */
+const BASIS_SUMMARY_COLUMNS = {
+  playbookName: sql<
+    string | null
+  >`(${documentReviewRuns.basis} -> 'playbook' -> 'definitionSnapshot' ->> 'name')`,
+  playbookProvenance: sql<PlaybookPinProvenance>`(${documentReviewRuns.basis} -> 'playbook' ->> 'provenance')`,
+  referenceCount: sql<number>`coalesce(jsonb_array_length(${documentReviewRuns.basis} -> 'references'), 0)::int`,
+  /** The party the run was judged for; null when it was judged for no side. */
+  perspectiveRole: sql<
+    string | null
+  >`(${documentReviewRuns.basis} -> 'perspective' ->> 'role')`,
+} as const;
 
 const runHistoryCursor = createTimestampIdCursorCodec({
   column: documentReviewRuns.createdAt,
@@ -97,6 +120,10 @@ const listDocumentReviewRuns = createSafeHandler(
             decisionsOpen: DECISION_COUNT_COLUMNS.open,
             decisionsAccepted: DECISION_COUNT_COLUMNS.accepted,
             decisionsDismissed: DECISION_COUNT_COLUMNS.dismissed,
+            basisPlaybookName: BASIS_SUMMARY_COLUMNS.playbookName,
+            basisPlaybookProvenance: BASIS_SUMMARY_COLUMNS.playbookProvenance,
+            basisReferenceCount: BASIS_SUMMARY_COLUMNS.referenceCount,
+            basisPerspectiveRole: BASIS_SUMMARY_COLUMNS.perspectiveRole,
           })
           .from(documentReviewRuns)
           // Decision counts come back with the page rather than in a second
@@ -148,6 +175,12 @@ const listDocumentReviewRuns = createSafeHandler(
         createdAt: run.createdAt.toISOString(),
         finishedAt: run.finishedAt?.toISOString() ?? null,
         decisionCounts: toDecisionCounts(run),
+        basis: {
+          playbookName: run.basisPlaybookName,
+          playbookProvenance: run.basisPlaybookProvenance,
+          referenceCount: run.basisReferenceCount,
+          perspectiveRole: run.basisPerspectiveRole,
+        },
       })),
     });
   },

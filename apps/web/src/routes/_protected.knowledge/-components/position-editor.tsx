@@ -45,8 +45,6 @@ import {
   Menu,
   MenuItem,
   MenuPopup,
-  MenuRadioGroup,
-  MenuRadioItem,
   MenuSeparator,
   MenuTrigger,
 } from "@stll/ui/menu";
@@ -60,6 +58,17 @@ import {
 import { Textarea } from "@stll/ui/textarea";
 import { cn } from "@stll/ui/utils";
 
+import { REVIEW_SECTION_LABEL_CLASS } from "@/components/ai-suggestions/review-passage-side";
+import {
+  POSITION_HEADER_META_CLASS,
+  PositionHeader,
+} from "@/components/ai-suggestions/review-position-header";
+import {
+  positionTermKind,
+  ReferencePassageList,
+  type ReferenceNameLookup,
+  SeverityChip,
+} from "@/components/ai-suggestions/review-position-row";
 import { ConditionBuilder } from "@/components/conditions/condition-builder";
 import type { FieldOption } from "@/components/conditions/condition-builder-logic";
 import {
@@ -83,13 +92,11 @@ import {
   type Position,
   type PositionAskContent,
   type PositionErrors,
-  type PositionSeverity,
   type PositionStandard,
   type PositionTiers,
   positionTiers,
   type ReferencePassage,
   referencePassagesText,
-  type ReferenceStandard,
   type TierRule,
 } from "@/lib/knowledge/playbook-types";
 import {
@@ -121,35 +128,6 @@ const ASK_CONTENT_LABEL_KEYS = {
   "single-select": "knowledge.playbooks.contentType.singleSelect",
 } as const satisfies Record<AskContentType, TranslationKey>;
 
-const SEVERITIES = [
-  "blocker",
-  "high",
-  "medium",
-  "low",
-] as const satisfies readonly PositionSeverity[];
-
-type MissingPositionSeverity = Exclude<
-  PositionSeverity,
-  (typeof SEVERITIES)[number]
->;
-
-true satisfies MissingPositionSeverity extends never ? true : never;
-
-const SEVERITY_LABEL_KEYS = {
-  blocker: "knowledge.playbooks.severity.blocker",
-  high: "knowledge.playbooks.severity.high",
-  medium: "knowledge.playbooks.severity.medium",
-  low: "knowledge.playbooks.severity.low",
-} as const satisfies Record<PositionSeverity, TranslationKey>;
-
-// Static per-key so the hardcoded-colour lint treats each as a token reference.
-const SEVERITY_CHIP_CLASS = {
-  blocker: "bg-destructive/12 text-destructive",
-  high: "bg-warning/15 text-warning-foreground",
-  medium: "bg-primary/12 text-primary",
-  low: "bg-muted text-muted-foreground",
-} as const satisfies Record<PositionSeverity, string>;
-
 // Cycled named colors for single-select choices; every member is in the schema's
 // option-color enum, so the produced content always validates.
 const OPTION_COLORS = [
@@ -179,9 +157,6 @@ const EXPECTATION_LABEL_KEYS = {
 
 const isAskContentType = (value: string): value is AskContentType =>
   ASK_CONTENT_TYPES.some((contentType) => contentType === value);
-
-const isSeverity = (value: string): value is PositionSeverity =>
-  SEVERITIES.some((severity) => severity === value);
 
 // ── Discriminated-union builders (explicit construction) ──
 
@@ -224,7 +199,6 @@ const InlineAction = ({
 
 // TODO(i18n): English until the review surface is localized as a whole.
 const REFERENCE_STANDARD_LABEL = "From the reference";
-const REFERENCE_DOCUMENT_LABEL = "Reference document";
 const CONVERT_TO_RULES_LABEL = "Convert to rules";
 const ADOPT_AS_IDEAL_LABEL = "Adopt as ideal language";
 const NO_SETTLED_POSITION_LABEL = "No settled position";
@@ -234,10 +208,6 @@ const decisionLine = ({
   runs,
 }: PositionDecisionSummary): string =>
   `accepted ${String(accepted)} · dismissed ${String(dismissed)} · across ${String(runs)} ${runs === 1 ? "review" : "reviews"}`;
-
-/** Reference passages carry the document they were quoted from by id only, so
- *  a caller that knows the run's pinned references can name them. */
-export type ReferenceNameLookup = ReadonlyMap<string, string>;
 
 type PositionEditorProps = {
   organizationId: string;
@@ -369,99 +339,106 @@ export const PositionEditor = ({
       id={`position-${sourceId}`}
       ref={setCardRef}
     >
-      <div className="flex items-center gap-2 px-3 py-2.5">
-        <Button
-          aria-label={t("knowledge.playbooks.reorderPosition")}
-          className="shrink-0 cursor-grab"
-          onKeyDown={handleGripKeyDown}
-          ref={setGripRef}
-          size="icon-xs"
-          type="button"
-          variant="ghost"
-        >
-          <GripVerticalIcon />
-        </Button>
-        <span className="text-muted-foreground shrink-0 text-xs tabular-nums">
-          {String(index + 1).padStart(2, "0")}
-        </span>
-
-        <Input
-          aria-invalid={showErrors && errors.issue !== undefined}
-          className="hover:border-input focus-visible:bg-background h-8 flex-1 border-transparent bg-transparent px-1.5 text-sm font-medium shadow-none"
-          onChange={(e) => onChange({ ...position, issue: e.target.value })}
-          onFocus={() => {
-            if (!open) {
-              onOpenChange(true);
-            }
-          }}
-          placeholder={t("knowledge.playbooks.issuePlaceholder")}
-          value={position.issue}
-        />
-
-        {position.mode === "graded" ? (
-          <SeverityChip
-            onChange={(severity) => onChange({ ...position, severity })}
-            severity={position.severity}
+      <PositionHeader
+        actions={
+          <>
+            <Switch
+              aria-label={t("knowledge.playbooks.enablePosition")}
+              checked={position.enabled}
+              className="shrink-0"
+              onCheckedChange={(enabled) => onChange({ ...position, enabled })}
+            />
+            <Button
+              aria-label={t("knowledge.playbooks.duplicatePosition")}
+              onClick={onDuplicate}
+              size="icon-xs"
+              type="button"
+              variant="ghost"
+            >
+              <CopyIcon />
+            </Button>
+            <Button
+              aria-label={t("knowledge.playbooks.deletePosition")}
+              onClick={onRemove}
+              size="icon-xs"
+              type="button"
+              variant="ghost"
+            >
+              <Trash2Icon />
+            </Button>
+            <Button
+              aria-controls={bodyId}
+              aria-expanded={open}
+              aria-label={
+                open
+                  ? t("knowledge.playbooks.collapsePosition")
+                  : t("knowledge.playbooks.expandPosition")
+              }
+              onClick={() => onOpenChange(!open)}
+              size="icon-xs"
+              type="button"
+              variant="ghost"
+            >
+              <ChevronDownIcon
+                className={cn("transition-transform", open && "rotate-180")}
+              />
+            </Button>
+          </>
+        }
+        index={index}
+        label={
+          <>
+            {position.mode === "graded" ? (
+              <SeverityChip
+                onChange={(severity) => onChange({ ...position, severity })}
+                severity={position.severity}
+              />
+            ) : (
+              <span className={POSITION_HEADER_META_CLASS}>
+                {t("knowledge.playbooks.extractOnlyBadge")}
+              </span>
+            )}
+            {!open && position.mode === "graded" && (
+              <CollapsedTierDots position={position} />
+            )}
+            {!position.enabled && (
+              <span
+                className={cn(POSITION_HEADER_META_CLASS, "hidden sm:inline")}
+              >
+                {t("knowledge.playbooks.disabledBadge")}
+              </span>
+            )}
+          </>
+        }
+        leading={
+          <Button
+            aria-label={t("knowledge.playbooks.reorderPosition")}
+            className="shrink-0 cursor-grab"
+            onKeyDown={handleGripKeyDown}
+            ref={setGripRef}
+            size="icon-xs"
+            type="button"
+            variant="ghost"
+          >
+            <GripVerticalIcon />
+          </Button>
+        }
+        termKind={positionTermKind(position)}
+        title={
+          <Input
+            aria-invalid={showErrors && errors.issue !== undefined}
+            className="hover:border-input focus-visible:bg-background h-8 w-full border-transparent bg-transparent px-1.5 text-sm font-medium shadow-none"
+            onChange={(e) => onChange({ ...position, issue: e.target.value })}
+            onFocus={() => {
+              if (!open) {
+                onOpenChange(true);
+              }
+            }}
+            placeholder={t("knowledge.playbooks.issuePlaceholder")}
+            value={position.issue}
           />
-        ) : (
-          <span className="bg-muted text-muted-foreground shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium">
-            {t("knowledge.playbooks.extractOnlyBadge")}
-          </span>
-        )}
-
-        {!open && position.mode === "graded" && (
-          <CollapsedTierDots position={position} />
-        )}
-
-        {!position.enabled && (
-          <span className="bg-muted text-muted-foreground hidden shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium sm:inline">
-            {t("knowledge.playbooks.disabledBadge")}
-          </span>
-        )}
-
-        <Switch
-          aria-label={t("knowledge.playbooks.enablePosition")}
-          checked={position.enabled}
-          className="shrink-0"
-          onCheckedChange={(enabled) => onChange({ ...position, enabled })}
-        />
-
-        <Button
-          aria-label={t("knowledge.playbooks.duplicatePosition")}
-          onClick={onDuplicate}
-          size="icon-xs"
-          type="button"
-          variant="ghost"
-        >
-          <CopyIcon />
-        </Button>
-        <Button
-          aria-label={t("knowledge.playbooks.deletePosition")}
-          onClick={onRemove}
-          size="icon-xs"
-          type="button"
-          variant="ghost"
-        >
-          <Trash2Icon />
-        </Button>
-        <Button
-          aria-controls={bodyId}
-          aria-expanded={open}
-          aria-label={
-            open
-              ? t("knowledge.playbooks.collapsePosition")
-              : t("knowledge.playbooks.expandPosition")
-          }
-          onClick={() => onOpenChange(!open)}
-          size="icon-xs"
-          type="button"
-          variant="ghost"
-        >
-          <ChevronDownIcon
-            className={cn("transition-transform", open && "rotate-180")}
-          />
-        </Button>
-      </div>
+        }
+      />
 
       {open && (
         <div className="space-y-3 px-3 pt-1 pb-3" id={bodyId}>
@@ -504,7 +481,7 @@ const CollapsedTierDots = ({ position }: { position: GradedPosition }) => {
   // the standard comes from instead.
   if (tiers === null) {
     return (
-      <span className="bg-muted text-muted-foreground hidden shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium sm:inline">
+      <span className={cn(POSITION_HEADER_META_CLASS, "hidden sm:inline")}>
         {REFERENCE_STANDARD_LABEL}
       </span>
     );
@@ -528,53 +505,12 @@ const CollapsedTierDots = ({ position }: { position: GradedPosition }) => {
       {counts.map((entry) => (
         <span className="flex items-center gap-1" key={entry.key}>
           <span className={cn("size-1.5 rounded-full", entry.cls)} />
-          <span className="text-muted-foreground text-[11px] tabular-nums">
+          <span className="text-muted-foreground text-xs tabular-nums">
             {entry.value}
           </span>
         </span>
       ))}
     </span>
-  );
-};
-
-// ── Severity chip (menu picker) ───────────────────────
-
-const SeverityChip = ({
-  severity,
-  onChange,
-}: {
-  severity: PositionSeverity;
-  onChange: (severity: PositionSeverity) => void;
-}) => {
-  const t = useTranslations();
-  return (
-    <Menu>
-      <MenuTrigger
-        aria-label={t("knowledge.playbooks.severityLabel")}
-        className={cn(
-          "focus-visible:ring-ring shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold focus-visible:ring-2 focus-visible:outline-none",
-          SEVERITY_CHIP_CLASS[severity],
-        )}
-      >
-        {t(SEVERITY_LABEL_KEYS[severity])}
-      </MenuTrigger>
-      <MenuPopup>
-        <MenuRadioGroup
-          onValueChange={(value) => {
-            if (typeof value === "string" && isSeverity(value)) {
-              onChange(value);
-            }
-          }}
-          value={severity}
-        >
-          {SEVERITIES.map((option) => (
-            <MenuRadioItem key={option} value={option}>
-              {t(SEVERITY_LABEL_KEYS[option])}
-            </MenuRadioItem>
-          ))}
-        </MenuRadioGroup>
-      </MenuPopup>
-    </Menu>
   );
 };
 
@@ -728,7 +664,7 @@ const ReferenceStandardSection = ({
 }) => (
   <section className="border-border rounded-lg border">
     <div className="flex items-center gap-2 px-3 py-2">
-      <span className="text-foreground text-[13px] font-semibold">
+      <span className={REVIEW_SECTION_LABEL_CLASS}>
         {REFERENCE_STANDARD_LABEL}
       </span>
       <div className="ms-auto">
@@ -745,126 +681,6 @@ const ReferenceStandardSection = ({
     </div>
   </section>
 );
-
-export const ReferencePassageList = ({
-  passages,
-  referenceNames,
-}: {
-  passages: readonly ReferencePassage[];
-  referenceNames: ReferenceNameLookup | undefined;
-}) => (
-  <ul className="space-y-1.5">
-    {passages.map((passage) => (
-      <li
-        className="space-y-0.5"
-        key={`${passage.fileFieldId}:${passage.blockId}`}
-      >
-        <p className="text-muted-foreground text-[11px] font-medium">
-          <bdi>
-            {referenceNames?.get(passage.fileFieldId) ??
-              REFERENCE_DOCUMENT_LABEL}
-          </bdi>
-        </p>
-        <p className="border-border bg-muted/40 rounded-e-md border-s-2 py-1.5 ps-2.5 pe-2 font-serif text-sm leading-relaxed">
-          <bdi>
-            <q>{passage.text}</q>
-          </bdi>
-        </p>
-      </li>
-    ))}
-  </ul>
-);
-
-// ── Quick row: the confirm step's one-line position ───
-// The run's confirm step edits the same Position the playbook editor does, but
-// only the four fields a reviewer actually changes before starting a review.
-// It reuses this file's field components rather than forking the editor.
-
-type PositionTermKind = ReferenceStandard["termKind"];
-
-// TODO(i18n): English until the review surface is localized as a whole.
-const TERM_KIND_LABEL = {
-  parameter: "Parameter",
-  enumeration: "Enumeration",
-  presence: "Presence",
-  language: "Language",
-} as const satisfies Record<PositionTermKind, string>;
-
-export const PositionQuickRow = ({
-  position,
-  index,
-  referenceNames,
-  onChange,
-  onRemove,
-}: {
-  position: Position;
-  index: number;
-  referenceNames: ReferenceNameLookup | undefined;
-  onChange: (position: Position) => void;
-  onRemove: () => void;
-}) => {
-  const t = useTranslations();
-  const referenceStandard =
-    position.mode === "graded" && position.standard.source === "reference"
-      ? position.standard
-      : null;
-  const passages = referenceStandard?.passages ?? null;
-
-  return (
-    <div
-      className={cn(
-        "bg-card space-y-2 rounded-lg border px-3 py-2.5 transition-opacity duration-150",
-        !position.enabled && "opacity-60",
-      )}
-    >
-      <div className="flex items-center gap-2">
-        <span className="text-muted-foreground shrink-0 text-xs tabular-nums">
-          {String(index + 1).padStart(2, "0")}
-        </span>
-        <Input
-          aria-label={t("knowledge.playbooks.issueLabel")}
-          className="hover:border-input focus-visible:bg-background h-8 flex-1 border-transparent bg-transparent px-1.5 text-sm font-medium shadow-none"
-          maxLength={256}
-          onChange={(e) => onChange({ ...position, issue: e.target.value })}
-          placeholder={t("knowledge.playbooks.issuePlaceholder")}
-          value={position.issue}
-        />
-        {referenceStandard !== null && (
-          <span className="text-muted-foreground shrink-0 text-[11px]">
-            {TERM_KIND_LABEL[referenceStandard.termKind]}
-          </span>
-        )}
-        {position.mode === "graded" && (
-          <SeverityChip
-            onChange={(severity) => onChange({ ...position, severity })}
-            severity={position.severity}
-          />
-        )}
-        <Switch
-          aria-label={t("knowledge.playbooks.enablePosition")}
-          checked={position.enabled}
-          className="shrink-0"
-          onCheckedChange={(enabled) => onChange({ ...position, enabled })}
-        />
-        <Button
-          aria-label={t("knowledge.playbooks.deletePosition")}
-          onClick={onRemove}
-          size="icon-xs"
-          type="button"
-          variant="ghost"
-        >
-          <Trash2Icon />
-        </Button>
-      </div>
-      {passages !== null && (
-        <ReferencePassageList
-          passages={passages}
-          referenceNames={referenceNames}
-        />
-      )}
-    </div>
-  );
-};
 
 // ── Tier ladder ───────────────────────────────────────
 

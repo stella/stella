@@ -217,8 +217,15 @@ export const documentReviewRunOptions = (ref: DocumentReviewRunRef) =>
     queryKey: documentReviewRunKeys.detail(ref),
     queryFn: async ({ signal }) => await fetchDocumentReviewRun(ref, signal),
     staleTime: 0,
-    // Progress and findings arrive while the worker executes; polling stops on
-    // the first terminal status the run reports.
+    // Progress and findings arrive while the worker executes, and this read
+    // answers with both — so the poll that advances the progress line is the
+    // same one that brings the next batch of findings in.
+    //
+    // Kept running while the tab is hidden: a reviewer who starts a run and
+    // switches away must come back to the findings that landed meanwhile, not
+    // to the progress state the run left when the tab lost focus.
+    refetchIntervalInBackground: true,
+    // Polling stops on the first terminal status the run reports.
     refetchInterval: (query) => {
       const run = query.state.data?.run;
       if (run === undefined) {

@@ -5,30 +5,34 @@ import type {
   ReviewDelta,
   ReviewImpact,
 } from "@/components/ai-suggestions/review-delta";
+import { REVIEW_SECTION_LABEL_CLASS } from "@/components/ai-suggestions/review-passage-side";
 
 // TODO(i18n): English until the review surface is localized as a whole.
 const MISSING_VALUE_LABEL = "—";
 const CITATION_ARIA_LABEL = "Show in document";
+
+/**
+ * Direction as a word. A reader who has never seen this table before has to be
+ * able to read it, and an arrow needs a legend the table does not have. Muted
+ * like every other secondary column: the row's place in the list already
+ * carries how much it matters.
+ */
 const IMPACT_LABEL = {
-  favourable: "favourable",
-  unfavourable: "unfavourable",
-  neutral: "neutral",
-  unknown: "unknown",
+  favourable: "Favourable",
+  unfavourable: "Unfavourable",
+  neutral: "Neutral",
+  unknown: "Not judged",
 } as const satisfies Record<ReviewImpact, string>;
 
-// Direction is encoded once, by this glyph; colour only repeats it.
-const IMPACT_GLYPH = {
-  favourable: "▲",
-  unfavourable: "▼",
-  neutral: "–",
-  unknown: "–",
-} as const satisfies Record<ReviewImpact, string>;
-const IMPACT_GLYPH_CLASS = {
-  favourable: "text-success",
-  unfavourable: "text-destructive",
-  neutral: "text-muted-foreground",
-  unknown: "text-muted-foreground italic",
-} as const satisfies Record<ReviewImpact, string>;
+/**
+ * Fixed geometry, so the term reads across the row rather than wrapping a word
+ * at a time while the value columns spread. The label column takes whatever is
+ * left; the value and direction columns are sized for what they hold.
+ */
+const VALUE_COLUMN_WIDTH = "10rem";
+const DIRECTION_COLUMN_WIDTH = "8rem";
+
+const CELL_CLASS = "py-1.5 text-sm leading-6";
 
 export type ParameterDelta = Extract<ReviewDelta, { kind: "parameter" }>;
 
@@ -47,8 +51,8 @@ export type ReviewTermRowProps = {
 };
 
 /**
- * One term, one row: label, target value, standard value, direction. The
- * table is the only chrome; nothing here is a chip or a pill.
+ * One term, one row: label, target value, standard value, direction in words.
+ * The table is the only chrome; nothing here is a chip or a pill.
  */
 export const ReviewTermRow = ({
   label,
@@ -58,22 +62,32 @@ export const ReviewTermRow = ({
 }: ReviewTermRowProps) => (
   <tr className="border-border border-b last:border-b-0">
     <th
-      className="text-foreground min-w-0 py-1.5 pe-3 text-start text-sm font-normal"
+      className={cn(
+        CELL_CLASS,
+        "text-foreground min-w-0 pe-3 text-start font-normal",
+      )}
       scope="row"
     >
       <BidiText as="span">{label}</BidiText>
     </th>
-    <td className="py-1.5 pe-3 text-end text-sm tabular-nums">
+    <td className={cn(CELL_CLASS, "pe-3 text-end tabular-nums")}>
       <TermValue onShowInDocument={onShowInDocument} value={delta.target} />
     </td>
-    <td className="text-muted-foreground py-1.5 pe-3 text-end text-sm tabular-nums">
+    <td
+      className={cn(
+        CELL_CLASS,
+        "text-muted-foreground pe-3 text-end tabular-nums",
+      )}
+    >
       <TermValue value={delta.standard} />
     </td>
-    <td className="py-1.5 text-end">
-      <span className={cn("text-sm font-medium", IMPACT_GLYPH_CLASS[impact])}>
-        <span aria-hidden="true">{IMPACT_GLYPH[impact]}</span>
-        <span className="sr-only">{IMPACT_LABEL[impact]}</span>
-      </span>
+    <td
+      className={cn(
+        CELL_CLASS,
+        "text-muted-foreground text-end whitespace-nowrap",
+      )}
+    >
+      {IMPACT_LABEL[impact]}
     </td>
   </tr>
 );
@@ -116,23 +130,19 @@ export const ReviewTermTable = ({
   rows,
   onShowInDocument,
 }: ReviewTermTableProps) => (
-  <table className="w-full border-collapse">
+  <table className="w-full table-fixed border-collapse">
+    <colgroup>
+      <col />
+      <col style={{ width: VALUE_COLUMN_WIDTH }} />
+      <col style={{ width: VALUE_COLUMN_WIDTH }} />
+      <col style={{ width: DIRECTION_COLUMN_WIDTH }} />
+    </colgroup>
     <thead>
       <tr className="border-border border-b">
-        <th className="w-0" scope="col" />
-        <th
-          className="text-muted-foreground py-1 pe-3 text-end text-xs font-medium tracking-wide uppercase"
-          scope="col"
-        >
-          <BidiText as="span">{targetLabel}</BidiText>
-        </th>
-        <th
-          className="text-muted-foreground py-1 pe-3 text-end text-xs font-medium tracking-wide uppercase"
-          scope="col"
-        >
-          <BidiText as="span">{standardLabel}</BidiText>
-        </th>
-        <th className="w-0" scope="col" />
+        <th scope="col" />
+        <ColumnHeader label={targetLabel} />
+        <ColumnHeader label={standardLabel} />
+        <th scope="col" />
       </tr>
     </thead>
     <tbody>
@@ -147,4 +157,18 @@ export const ReviewTermTable = ({
       ))}
     </tbody>
   </table>
+);
+
+/** A column heading that names a document: truncated to its column, with the
+ *  full name on the element itself so a long reference name stays readable. */
+export const ColumnHeader = ({ label }: { label: string }) => (
+  <th
+    className={cn(REVIEW_SECTION_LABEL_CLASS, "py-1 pe-3 text-end font-medium")}
+    scope="col"
+    title={label}
+  >
+    <BidiText as="span" className="block truncate">
+      {label}
+    </BidiText>
+  </th>
 );
