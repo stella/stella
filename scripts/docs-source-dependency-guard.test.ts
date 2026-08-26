@@ -13,7 +13,7 @@ describe("documentation source dependency guard", () => {
     expect(checkDocSourceDependencies(`${import.meta.dir}/..`)).toEqual([]);
   });
 
-  test("discovers dependencies declared by the documentation MCP", () => {
+  test("excludes dependencies declared only by the documentation MCP", () => {
     const root = mkdtempSync(path.join(tmpdir(), "stella-doc-sources-"));
     try {
       mkdirSync(path.join(root, ".claude", "mcp"), { recursive: true });
@@ -25,7 +25,7 @@ describe("documentation source dependency guard", () => {
         JSON.stringify({ dependencies: { "mcp-only-dependency": "1.0.0" } }),
       );
 
-      expect(getDeclaredDocSourceDependencies(root)).toContain(
+      expect(getDeclaredDocSourceDependencies(root)).not.toContain(
         "mcp-only-dependency",
       );
     } finally {

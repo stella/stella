@@ -27,7 +27,6 @@ export const DOC_SOURCES = {
     url: "https://atlassian.design/llms.txt",
   },
   Valibot: { dependency: "valibot", url: "https://valibot.dev/llms.txt" },
-  Zod: { dependency: "zod", url: "https://zod.dev/llms.txt" },
   TipTap: {
     dependency: "@tiptap/core",
     url: "https://tiptap.dev/llms.txt",
