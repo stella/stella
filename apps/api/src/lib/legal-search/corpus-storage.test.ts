@@ -192,12 +192,8 @@ describe("authoritative corpus pointer reread", () => {
     });
 
   test("retries one changed pointer after a confirmed absence", async () => {
-    const oldKey =
-      "pack:legal-corpus/packs/old.pack#offset=10&length=20&sha256=" +
-      "a".repeat(64);
-    const replacementKey =
-      "pack:legal-corpus/packs/new.pack#offset=30&length=20&sha256=" +
-      "b".repeat(64);
+    const oldKey = `pack:legal-corpus/packs/old.pack#offset=10&length=20&sha256=${"a".repeat(64)}`;
+    const replacementKey = `pack:legal-corpus/packs/new.pack#offset=30&length=20&sha256=${"b".repeat(64)}`;
     const reads: string[] = [];
     const value = await readCorpusAtAuthoritativePointer({
       storedKey: oldKey,

@@ -1,7 +1,7 @@
 import { panic, Result, TaggedError } from "better-result";
 import { Buffer } from "node:buffer";
 
-import { toSafeId, type SafeId } from "@/api/lib/branded-types";
+import type { SafeId } from "@/api/lib/branded-types";
 import { splitIngestRequests } from "@/api/lib/corpus-index/core";
 import { isUuid } from "@/api/lib/custom-schema";
 import {
@@ -13,6 +13,7 @@ import {
 } from "@/api/lib/legal-search/corpus-index-client";
 import type { CorpusIndexManifest } from "@/api/lib/legal-search/corpus-index-manifest";
 import { LIMITS } from "@/api/lib/limits";
+import { brandValidatedCorpusIndexProjectionIntentId } from "@/api/lib/safe-id-boundaries";
 import { isRecord } from "@/api/lib/type-guards";
 
 type ProjectionRevision = SafeId<"corpusIndexProjectionIntent">;
@@ -319,10 +320,18 @@ export const censusCorpusProjectionRevisions = async ({
   const seen = new Set<ProjectionRevision>();
   const present: CorpusProjectionRevisionPresence[] = [];
   for (const bucket of census["buckets"]) {
+    if (!isRecord(bucket)) {
+      return malformedProjectionCensus(
+        "corpus projection revision census returned an invalid bucket",
+      );
+    }
+    const bucketKey = bucket["key"];
+    const revision =
+      typeof bucketKey === "string"
+        ? brandValidatedCorpusIndexProjectionIntentId(bucketKey)
+        : null;
     if (
-      !isRecord(bucket) ||
-      typeof bucket["key"] !== "string" ||
-      !isUuid(bucket["key"]) ||
+      revision === null ||
       !Number.isSafeInteger(bucket["doc_count"]) ||
       Number(bucket["doc_count"]) <= 0
     ) {
@@ -330,7 +339,6 @@ export const censusCorpusProjectionRevisions = async ({
         "corpus projection revision census returned an invalid bucket",
       );
     }
-    const revision = toSafeId<"corpusIndexProjectionIntent">(bucket["key"]);
     if (!requested.has(revision)) {
       return malformedProjectionCensus(
         "corpus projection revision census returned an unrequested bucket",

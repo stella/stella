@@ -6,11 +6,12 @@ import {
   corpusIndexProjectionIntents,
   corpusIndexProjectionStates,
 } from "@/api/db/schema";
-import { toSafeId, type SafeId } from "@/api/lib/branded-types";
+import type { SafeId } from "@/api/lib/branded-types";
 import { isUuid } from "@/api/lib/custom-schema";
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";
 import { readRegisteredCorpusProjectionManifestForCleanup } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import { CORPUS_PROJECTION_DELETE_MAX_REVISIONS } from "@/api/lib/legal-search/corpus-index-projection-engine";
+import { brandValidatedCorpusIndexProjectionIntentId } from "@/api/lib/safe-id-boundaries";
 
 type ProjectionRevision = SafeId<"corpusIndexProjectionIntent">;
 
@@ -200,7 +201,8 @@ export const readSettledCorpusProjectionCensusPageTx = async (
   const afterRevision =
     options.after === null
       ? null
-      : toSafeId<"corpusIndexProjectionIntent">(options.after);
+      : (brandValidatedCorpusIndexProjectionIntentId(options.after) ??
+        panic("Lost validated corpus projection census cursor"));
   const candidates = await tx
     .select({ revision: corpusIndexProjectionIntents.id })
     .from(corpusIndexProjectionIntents)

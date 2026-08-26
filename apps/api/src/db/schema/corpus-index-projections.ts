@@ -5,6 +5,7 @@ import {
 import {
   CORPUS_INDEX_APPEND_PRODUCING_INTENT_STATUSES,
   CORPUS_INDEX_DESIRED_ACTIONS,
+  CORPUS_INDEX_DOCUMENT_COUNT_REQUIRED_INTENT_STATUSES,
   CORPUS_INDEX_INTENT_STATUSES,
   CORPUS_INDEX_PROJECTION_FAILURE_KINDS,
   CORPUS_INDEX_PROJECTION_WORK_STATUSES,
@@ -183,7 +184,7 @@ export const corpusIndexProjectionIntents = p.pgTable(
     p.check(
       "corpus_index_projection_intents_expected_document_count_shape",
       sql`CASE
-        WHEN ${t.status} IN ('append_committed', 'applied') THEN
+        WHEN ${t.status} IN (${sqlValues(CORPUS_INDEX_DOCUMENT_COUNT_REQUIRED_INTENT_STATUSES)}) THEN
           ${t.expectedDocumentCount} IS NOT NULL
           AND ${t.expectedDocumentCount} > 0
         WHEN ${t.expectedDocumentCount} IS NOT NULL THEN

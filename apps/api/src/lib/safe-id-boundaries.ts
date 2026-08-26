@@ -174,6 +174,11 @@ export const brandPersistedLegislationDocumentId = (
 ): SafeId<"legislationDocument"> =>
   toSafeId<"legislationDocument">(legislationDocumentId);
 
+export const brandValidatedCorpusIndexProjectionIntentId = (
+  intentId: string,
+): SafeId<"corpusIndexProjectionIntent"> | null =>
+  isUuid(intentId) ? toSafeId<"corpusIndexProjectionIntent">(intentId) : null;
+
 export const brandPersistedContactId = (contactId: string): SafeId<"contact"> =>
   toSafeId<"contact">(contactId);
 

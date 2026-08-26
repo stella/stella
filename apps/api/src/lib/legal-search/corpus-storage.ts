@@ -710,12 +710,10 @@ export const readCorpusAtAuthoritativePointer = async <T>({
     return first.value;
   }
   if (!isMissingCorpusObjectError(first.error)) {
-    // eslint-disable-next-line no-throw-literal -- preserve the storage boundary's structured rejection
     throw first.error;
   }
   const replacement = await rereadStoredKey();
   if (replacement === null || replacement === storedKey) {
-    // eslint-disable-next-line no-throw-literal -- unchanged authority preserves the original confirmed absence
     throw first.error;
   }
   return await read(replacement);

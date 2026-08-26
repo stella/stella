@@ -24,6 +24,12 @@ export const CORPUS_INDEX_APPEND_PRODUCING_INTENT_STATUSES = [
   "applied",
 ] as const satisfies readonly CorpusIndexIntentStatus[];
 
+/** Append phases whose published document count must already be known. */
+export const CORPUS_INDEX_DOCUMENT_COUNT_REQUIRED_INTENT_STATUSES = [
+  "append_committed",
+  "applied",
+] as const satisfies readonly CorpusIndexIntentStatus[];
+
 export const CORPUS_INDEX_PROJECTION_WORK_STATUSES = [
   "eligible",
   "retry_scheduled",

@@ -13,7 +13,6 @@ import {
   legislationDocuments,
   legislationSources,
 } from "@/api/db/schema";
-import { toSafeId } from "@/api/lib/branded-types";
 import type { CorpusIndexManifest } from "@/api/lib/legal-search/corpus-index-manifest";
 import { deriveCorpusIndexProjectionDescriptor } from "@/api/lib/legal-search/corpus-index-projection-descriptor";
 import {
@@ -25,6 +24,10 @@ import {
   CORPUS_PROJECTION_STORE_MAX_BATCH_SIZE,
   type CorpusProjectionIntentLease,
 } from "@/api/lib/legal-search/corpus-index-projection-store";
+import {
+  brandPersistedCaseLawDecisionId,
+  brandPersistedLegislationDocumentId,
+} from "@/api/lib/safe-id-boundaries";
 
 type CorpusProjectionMaterialBase = {
   lease: CorpusProjectionIntentLease;
@@ -154,7 +157,7 @@ const readCaseLawMaterials = async (
   states: ReadonlyMap<string, StateSnapshot>,
 ): Promise<CorpusProjectionMaterialsResult> => {
   const entityIds = leases.map(({ entityId }) =>
-    toSafeId<"caseLawDecision">(entityId),
+    brandPersistedCaseLawDecisionId(entityId),
   );
   const rows = await tx
     .select({
@@ -269,7 +272,7 @@ const readLegislationMaterials = async (
   states: ReadonlyMap<string, StateSnapshot>,
 ): Promise<CorpusProjectionMaterialsResult> => {
   const entityIds = leases.map(({ entityId }) =>
-    toSafeId<"legislationDocument">(entityId),
+    brandPersistedLegislationDocumentId(entityId),
   );
   const rows = await tx
     .select({

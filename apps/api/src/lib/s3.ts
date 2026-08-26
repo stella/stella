@@ -793,6 +793,9 @@ const readS3ErrorBodyPrefix = async (response: Response): Promise<string> => {
       if (chunk.done) {
         break;
       }
+      if (!(chunk.value instanceof Uint8Array)) {
+        return panic("S3 error response stream returned a non-byte chunk");
+      }
       const remaining = S3_ERROR_BODY_PREFIX_MAX_BYTES - byteCount;
       const value = chunk.value.subarray(0, remaining);
       chunks.push(value);
