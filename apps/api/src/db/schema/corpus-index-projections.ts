@@ -3,6 +3,7 @@ import {
   CORPUS_INDEX_GENERATION_MAX_LENGTH,
 } from "@/api/lib/legal-search/corpus-generation-contract";
 import {
+  CORPUS_INDEX_APPEND_PRODUCING_INTENT_STATUSES,
   CORPUS_INDEX_DESIRED_ACTIONS,
   CORPUS_INDEX_INTENT_STATUSES,
 } from "@/api/lib/legal-search/corpus-index-projection-contract";
@@ -72,9 +73,11 @@ export const corpusIndexProjectionIntents = p.pgTable(
       })
       .onDelete("restrict"),
     p
-      .uniqueIndex("corpus_index_projection_intents_live_epoch_uidx")
+      .uniqueIndex("corpus_index_projection_intents_append_epoch_uidx")
       .on(t.family, t.generation, t.entityId, t.epoch)
-      .where(sql`${t.status} NOT IN ('settled', 'cancelled')`),
+      .where(
+        sql`${t.status} IN (${sqlValues(CORPUS_INDEX_APPEND_PRODUCING_INTENT_STATUSES)})`,
+      ),
     p
       .uniqueIndex("corpus_index_projection_intents_identity_uidx")
       .on(
@@ -99,6 +102,45 @@ export const corpusIndexProjectionIntents = p.pgTable(
     p
       .index("corpus_index_projection_intents_entity_idx")
       .on(t.family, t.generation, t.entityId, t.createdAt),
+    p
+      .index("corpus_index_projection_intents_expired_lease_idx")
+      .on(t.family, t.generation, t.status, t.leaseExpiresAt)
+      .where(
+        sql`${t.status} IN ('reserved', 'append_started', 'cleanup_started')`,
+      ),
+    p
+      .index("corpus_index_projection_intents_cleanup_claim_idx")
+      .on(
+        t.family,
+        t.generation,
+        t.indexId,
+        t.status,
+        t.cleanupNotBefore,
+        t.createdAt,
+      )
+      .where(sql`${t.status} = 'cleanup_pending'`),
+    p
+      .index("corpus_index_projection_intents_settlement_next_idx")
+      .on(
+        t.family,
+        t.generation,
+        t.indexId,
+        t.status,
+        t.cleanupStartedAt,
+        t.createdAt,
+      )
+      .where(sql`${t.status} = 'cleanup_committed'`),
+    p
+      .index("corpus_index_projection_intents_settlement_batch_idx")
+      .on(
+        t.family,
+        t.generation,
+        t.indexId,
+        t.status,
+        t.deleteOpstamp,
+        t.createdAt,
+      )
+      .where(sql`${t.status} = 'cleanup_committed'`),
     p.check(
       "corpus_index_projection_intents_family_values",
       sql`${t.family} IN (${sqlValues(CORPUS_FAMILIES)})`,
@@ -262,6 +304,8 @@ export const corpusIndexProjectionStates = p.pgTable(
       enum: CORPUS_INDEX_DESIRED_ACTIONS,
     }),
     appliedEpoch: p.bigint("applied_epoch", { mode: "bigint" }),
+    // Exact successfully applied revision. Cleanup keeps this immutable history
+    // pointer until a later append or erasure replaces it.
     appliedRevision: p
       .uuid("applied_revision")
       .$type<SafeId<"corpusIndexProjectionIntent">>(),

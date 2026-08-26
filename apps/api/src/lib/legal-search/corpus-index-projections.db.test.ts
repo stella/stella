@@ -248,7 +248,7 @@ test("one exact append revision becomes authoritative", async () => {
         )
       `),
     ),
-  ).toContain("corpus_index_projection_intents_live_epoch_uidx");
+  ).toContain("corpus_index_projection_intents_append_epoch_uidx");
 
   await db.execute(sql`
     UPDATE case_law_decisions SET projection_epoch = 2

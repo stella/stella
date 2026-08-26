@@ -215,10 +215,7 @@ export const corpusProjectionRevisionsQuery = (
     .join(" OR ");
 };
 
-type CorpusProjectionDeleteClient = Pick<
-  CorpusIndexClient,
-  "deleteByQuery" | "readDeleteSettlement" | "search"
->;
+type CorpusProjectionDeleteClient = Pick<CorpusIndexClient, "deleteByQuery">;
 
 type ProjectionRevisionOperationOptions = {
   client: CorpusProjectionDeleteClient;
@@ -239,7 +236,7 @@ export const deleteCorpusProjectionRevisions = async ({
   );
 
 type ReadCorpusProjectionDeleteSettlementOptions = {
-  client: CorpusProjectionDeleteClient;
+  client: Pick<CorpusIndexClient, "readDeleteSettlement">;
   indexId: string;
   requiredOpstamp: number;
 };
@@ -252,11 +249,17 @@ export const readCorpusProjectionDeleteSettlement = async ({
   Result<CorpusIndexDeleteSettlement, CorpusIndexError>
 > => await client.readDeleteSettlement(indexId, requiredOpstamp);
 
+type CountCorpusProjectionRevisionsOptions = {
+  client: Pick<CorpusIndexClient, "search">;
+  indexId: string;
+  revisions: readonly ProjectionRevision[];
+};
+
 export const countCorpusProjectionRevisions = async ({
   client,
   indexId,
   revisions,
-}: ProjectionRevisionOperationOptions): Promise<
+}: CountCorpusProjectionRevisionsOptions): Promise<
   Result<number, CorpusIndexError>
 > => {
   const searched = await client.search({
