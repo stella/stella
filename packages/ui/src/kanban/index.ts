@@ -23,7 +23,7 @@ export type {
   UseKanbanSortableOptions,
 } from "./sortable-interactions";
 export {
-  KANBAN_POINTER_ACTIVATION_DISTANCE,
+  KANBAN_MOUSE_ACTIVATION_DISTANCE,
   KANBAN_TOUCH_ACTIVATION_CONSTRAINT,
   KanbanDragHandle,
   KanbanSortableBoard,
@@ -35,7 +35,6 @@ export {
 export type { KanbanHorizontalEdge } from "./sortable-edge";
 export {
   getKanbanHorizontalEdge,
-  getKanbanHorizontalEdgeFromDragEnd,
   KANBAN_HORIZONTAL_EDGES,
 } from "./sortable-edge";
 export type {

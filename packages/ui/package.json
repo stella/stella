@@ -153,7 +153,8 @@
     "clean": "git clean -xdf dist .cache .turbo node_modules",
     "build": "tsdown",
     "pack:dry-run": "bun pm pack --dry-run",
-    "test": "bun test src",
+    "test": "bun test src --path-ignore-patterns '**/*.playwright.spec.ts'",
+    "test:browser": "playwright test --config playwright.config.ts",
     "typecheck": "bun ../../packages/scripts/src/tsc-native.ts --noEmit",
     "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --deny-warnings --type-aware packages/ui",
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/ui",
@@ -173,15 +174,16 @@
     "@base-ui/react": "catalog:",
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
+    "@playwright/test": "^1.62.0",
     "@stll/typescript-config": "workspace:*",
     "@types/react": "catalog:react19",
     "@types/react-dom": "catalog:react19",
     "bun-types": "catalog:",
-    "happy-dom": "^20.8.4",
     "react": "catalog:react19",
     "react-dom": "catalog:react19",
     "tailwindcss": "catalog:",
-    "tsdown": "catalog:"
+    "tsdown": "catalog:",
+    "vite": "catalog:"
   },
   "peerDependencies": {
     "@atlaskit/pragmatic-drag-and-drop": "^3.0.0",

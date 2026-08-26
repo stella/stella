@@ -6,7 +6,7 @@ import {
   DndContext,
   DragOverlay,
   KeyboardSensor,
-  PointerSensor,
+  MouseSensor,
   TouchSensor,
   useSensor,
   useSensors,
@@ -18,6 +18,7 @@ import type {
   DragEndEvent,
   DragOverlayProps,
   DragStartEvent,
+  DndContextProps,
   KeyboardCoordinateGetter,
   UniqueIdentifier,
 } from "@dnd-kit/core";
@@ -32,7 +33,7 @@ import { GripVerticalIcon } from "lucide-react";
 import { Button } from "../components/button";
 import { cn } from "../lib/utils";
 
-export const KANBAN_POINTER_ACTIVATION_DISTANCE = 8;
+export const KANBAN_MOUSE_ACTIVATION_DISTANCE = 8;
 
 export const KANBAN_TOUCH_ACTIVATION_CONSTRAINT = {
   delay: 150,
@@ -45,6 +46,10 @@ export type KanbanSortableBoardProps = {
   collisionDetection?: CollisionDetection | undefined;
   keyboardCoordinates?: KeyboardCoordinateGetter | undefined;
   autoScroll?: boolean | AutoScrollOptions | undefined;
+  /** Replaces the default mouse, touch, and keyboard sensors when supplied. */
+  sensors?: DndContextProps["sensors"] | undefined;
+  /** Overrides dnd-kit's screen-reader announcements when supplied. */
+  accessibility?: DndContextProps["accessibility"] | undefined;
   onDragStart?: ((event: DragStartEvent) => void) | undefined;
   onDragCancel?: ((event: DragCancelEvent) => void) | undefined;
   /** Rendered inside dnd-kit's portal while an item is active. */
@@ -67,13 +72,15 @@ export const KanbanSortableBoard = ({
   collisionDetection,
   keyboardCoordinates,
   autoScroll,
+  sensors,
+  accessibility,
   onDragStart,
   onDragCancel,
   overlay,
   overlayProps,
 }: KanbanSortableBoardProps) => {
   const [activeId, setActiveId] = React.useState<UniqueIdentifier | null>(null);
-  const sensors = useKanbanSortableSensors(keyboardCoordinates);
+  const defaultSensors = useKanbanSortableSensors(keyboardCoordinates);
 
   const handleDragStart = (event: DragStartEvent) => {
     setActiveId(event.active.id);
@@ -93,11 +100,12 @@ export const KanbanSortableBoard = ({
   return (
     <DndContext
       {...(autoScroll === undefined ? {} : { autoScroll })}
+      {...(accessibility === undefined ? {} : { accessibility })}
       {...(collisionDetection === undefined ? {} : { collisionDetection })}
       onDragCancel={handleDragCancel}
       onDragEnd={handleDragEnd}
       onDragStart={handleDragStart}
-      sensors={sensors}
+      sensors={sensors ?? defaultSensors}
     >
       {children}
       {overlay && (
@@ -111,8 +119,8 @@ export const useKanbanSortableSensors = (
   keyboardCoordinates: KeyboardCoordinateGetter = sortableKeyboardCoordinates,
 ) =>
   useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: { distance: KANBAN_POINTER_ACTIVATION_DISTANCE },
+    useSensor(MouseSensor, {
+      activationConstraint: { distance: KANBAN_MOUSE_ACTIVATION_DISTANCE },
     }),
     useSensor(TouchSensor, {
       activationConstraint: KANBAN_TOUCH_ACTIVATION_CONSTRAINT,
@@ -141,7 +149,7 @@ export const KanbanSortableList = ({
   >
     <div
       className={cn(
-        "min-h-0 touch-pan-y overflow-y-auto overscroll-y-contain",
+        "min-h-0 touch-auto overflow-y-auto overscroll-y-contain",
         className,
       )}
       {...props}
@@ -172,7 +180,7 @@ export const KanbanSortableColumns = ({
   >
     <div
       className={cn(
-        "flex min-h-0 touch-pan-x overflow-x-auto overscroll-x-contain",
+        "flex min-h-0 touch-auto overflow-x-auto overscroll-x-contain",
         className,
       )}
       {...props}

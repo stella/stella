@@ -7,7 +7,7 @@ import {
   KANBAN_HORIZONTAL_EDGES,
 } from "./sortable-edge";
 import {
-  KANBAN_POINTER_ACTIVATION_DISTANCE,
+  KANBAN_MOUSE_ACTIVATION_DISTANCE,
   KANBAN_TOUCH_ACTIVATION_CONSTRAINT,
   KanbanDragHandle,
   KanbanSortableColumns,
@@ -23,74 +23,47 @@ const rect = (left: number, width: number) => ({
   bottom: 0,
 });
 
-class ClientXEvent extends Event {
-  readonly clientX: number;
-
-  constructor(type: string, clientX: number) {
-    super(type);
-    this.clientX = clientX;
-  }
-}
-
-class TouchClientXEvent extends Event {
-  readonly changedTouches: {
-    item: (index: number) => { clientX: number } | null;
-  };
-  readonly touches: { item: (index: number) => { clientX: number } | null };
-
-  constructor(clientX: number) {
-    super("touchstart");
-    const touch = { clientX };
-    const touches = { item: (index: number) => (index === 0 ? touch : null) };
-    this.changedTouches = touches;
-    this.touches = touches;
-  }
-}
-
 describe("sortable board interactions", () => {
-  test("keeps pointer and touch activation distinct from scrolling", () => {
-    expect(KANBAN_POINTER_ACTIVATION_DISTANCE).toBe(8);
+  test("keeps mouse and touch activation distinct from scrolling", () => {
+    expect(KANBAN_MOUSE_ACTIVATION_DISTANCE).toBe(8);
     expect(KANBAN_TOUCH_ACTIVATION_CONSTRAINT).toEqual({
       delay: 150,
       tolerance: 8,
     });
   });
 
-  test("uses the grab point plus pointer movement to resolve the insertion edge", () => {
+  test("uses the current mouse or touch coordinate to resolve the insertion edge", () => {
     expect(
       getKanbanHorizontalEdge({
-        activatorEvent: new ClientXEvent("pointerdown", 110),
-        deltaX: 20,
-        activeRect: null,
+        currentClientX: 110,
+        translatedActiveRect: rect(600, 100),
         overRect: rect(100, 100),
       }),
     ).toBe(KANBAN_HORIZONTAL_EDGES.before);
 
     expect(
       getKanbanHorizontalEdge({
-        activatorEvent: new ClientXEvent("pointerdown", 110),
-        deltaX: 50,
-        activeRect: null,
+        currentClientX: 160,
+        translatedActiveRect: rect(600, 100),
         overRect: rect(100, 100),
       }),
     ).toBe(KANBAN_HORIZONTAL_EDGES.after);
   });
 
-  test("uses the touch grab point and keyboard item's center when no point exists", () => {
+  test("keeps mouse and touch edge resolution stable after horizontal scrolling", () => {
     expect(
       getKanbanHorizontalEdge({
-        activatorEvent: new TouchClientXEvent(120),
-        deltaX: 10,
-        activeRect: null,
+        currentClientX: 120,
+        translatedActiveRect: rect(-400, 100),
         overRect: rect(100, 100),
       }),
     ).toBe(KANBAN_HORIZONTAL_EDGES.before);
+  });
 
+  test("uses the translated keyboard item's center without a client coordinate", () => {
     expect(
       getKanbanHorizontalEdge({
-        activatorEvent: new Event("keydown"),
-        deltaX: 0,
-        activeRect: rect(160, 40),
+        translatedActiveRect: rect(160, 40),
         overRect: rect(100, 100),
       }),
     ).toBe(KANBAN_HORIZONTAL_EDGES.after);
@@ -120,9 +93,8 @@ describe("sortable board interactions", () => {
     );
 
     expect(html).toContain("overflow-x-auto");
-    expect(html).toContain("touch-pan-x");
+    expect(html).toContain("touch-auto");
     expect(html).toContain("overflow-y-auto");
-    expect(html).toContain("touch-pan-y");
     expect(html).toContain("size-11 touch-none");
     expect(html).toContain('aria-label="Move card"');
   });
