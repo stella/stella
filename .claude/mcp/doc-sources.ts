@@ -71,6 +71,10 @@ export const DOC_SOURCES = {
     dependencies: ["@base-ui/react"],
     url: "https://base-ui.com/llms.txt",
   },
+  DndKit: {
+    dependencies: ["@dnd-kit/core", "@dnd-kit/sortable"],
+    url: "https://dndkit.com/llms.txt",
+  },
   Valibot: {
     dependencies: ["valibot", "@valibot/to-json-schema"],
     url: "https://valibot.dev/llms.txt",

@@ -32,9 +32,10 @@ export {
   useKanbanSortable,
   useKanbanSortableSensors,
 } from "./sortable-interactions";
-export type { KanbanHorizontalEdge } from "./sortable-edge";
+export type { KanbanDirection, KanbanHorizontalEdge } from "./sortable-edge";
 export {
   getKanbanHorizontalEdge,
+  KANBAN_DIRECTIONS,
   KANBAN_HORIZONTAL_EDGES,
 } from "./sortable-edge";
 export type {

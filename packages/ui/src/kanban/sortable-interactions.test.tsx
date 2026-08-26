@@ -4,6 +4,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   getKanbanHorizontalEdge,
+  KANBAN_DIRECTIONS,
   KANBAN_HORIZONTAL_EDGES,
 } from "./sortable-edge";
 import {
@@ -65,6 +66,46 @@ describe("sortable board interactions", () => {
       getKanbanHorizontalEdge({
         translatedActiveRect: rect(160, 40),
         overRect: rect(100, 100),
+      }),
+    ).toBe(KANBAN_HORIZONTAL_EDGES.after);
+  });
+
+  test("uses keyboard indices for equal-center forward and backward moves", () => {
+    expect(
+      getKanbanHorizontalEdge({
+        translatedActiveRect: rect(100, 100),
+        overRect: rect(100, 100),
+        sourceIndex: 1,
+        targetIndex: 2,
+      }),
+    ).toBe(KANBAN_HORIZONTAL_EDGES.after);
+
+    expect(
+      getKanbanHorizontalEdge({
+        translatedActiveRect: rect(100, 100),
+        overRect: rect(100, 100),
+        sourceIndex: 2,
+        targetIndex: 1,
+      }),
+    ).toBe(KANBAN_HORIZONTAL_EDGES.before);
+  });
+
+  test("maps physical pointer and touch positions to logical RTL edges", () => {
+    expect(
+      getKanbanHorizontalEdge({
+        currentClientX: 110,
+        translatedActiveRect: rect(100, 100),
+        overRect: rect(100, 100),
+        direction: KANBAN_DIRECTIONS.ltr,
+      }),
+    ).toBe(KANBAN_HORIZONTAL_EDGES.before);
+
+    expect(
+      getKanbanHorizontalEdge({
+        currentClientX: 110,
+        translatedActiveRect: rect(100, 100),
+        overRect: rect(100, 100),
+        direction: KANBAN_DIRECTIONS.rtl,
       }),
     ).toBe(KANBAN_HORIZONTAL_EDGES.after);
   });

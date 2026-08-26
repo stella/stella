@@ -10,7 +10,8 @@ be rendered and tested without a surrounding application — and a change to one
 cannot reach into product code by accident. Lint enforces that boundary; the
 export map below is what "part of the design system" means.
 
-Peer dependencies: `react`, `react-dom`, `@base-ui/react`, `tailwindcss` (v4).
+Peer dependencies: `react`, `react-dom`, `@base-ui/react`, `tailwindcss` (v4),
+`@dnd-kit/core`, and `@dnd-kit/sortable`.
 
 ## Import
 
@@ -34,6 +35,49 @@ convenience; the subpaths are the real surface, and in-repo code uses those.
 `@stll/ui/lib/<name>` still resolve to the same modules and are kept for one
 minor. They will be removed after that; the export guard checks that both
 spellings land on the same module for as long as they both exist.
+
+## Sortable boards
+
+`@stll/ui/kanban` provides input and accessibility primitives only; the caller
+keeps item identifiers, order changes, and persisted mutations. Wrap the board
+in `KanbanSortableBoard`, render sortable items through `useKanbanSortable`,
+and attach the returned bindings to `KanbanDragHandle`.
+
+```tsx
+import {
+  KanbanDragHandle,
+  KanbanSortableBoard,
+  KanbanSortableList,
+  useKanbanSortable,
+} from "@stll/ui/kanban";
+
+const Card = ({ id }: { id: string }) => {
+  const { dragHandle, setNodeRef } = useKanbanSortable({ id });
+  return (
+    <article ref={setNodeRef}>
+      <KanbanDragHandle bindings={dragHandle} label="Move card" />
+    </article>
+  );
+};
+
+<KanbanSortableBoard onDragEnd={handleDragEnd}>
+  <KanbanSortableList items={cardIds}>
+    {cardIds.map((id) => (
+      <Card id={id} key={id} />
+    ))}
+  </KanbanSortableList>
+</KanbanSortableBoard>;
+```
+
+The default sensors are mouse (8px movement), touch (150ms delay with 8px
+tolerance), and keyboard. Scroll containers retain `touch-action: auto`; only
+`KanbanDragHandle` disables touch panning. `KanbanSortableBoard` also accepts
+custom `sensors`, `accessibility`, collision detection, keyboard coordinates,
+auto-scroll options, and an `overlay` render function.
+
+`getKanbanHorizontalEdge` accepts `direction: "ltr" | "rtl"` for physical
+mouse and touch coordinates. Keyboard callers should also provide source and
+target indices so equal-center moves still resolve to the correct logical edge.
 
 ## Styles
 
@@ -67,7 +111,9 @@ and bidi isolation.
 
 ```sh
 bun run build       # tsdown, one output module per source module, with .d.ts
-bun run test        # bun test src
+bun run test        # unit and browser interaction tests
+bun run test:unit   # unit tests only
+bun run test:browser # Chromium mobile-input tests
 bun run typecheck
 bun run lint
 ```
@@ -75,6 +121,8 @@ bun run lint
 `bun scripts/check-published-exports.ts packages/ui` (from the repository root)
 runs the publish path end to end: build, `prepare-publish`, `bun pm pack`, then
 resolves and imports every declared subpath from the built `dist`.
+
+`bun run pack:check` runs that published-package check for this package.
 
 This package is published, so a change here needs a changeset:
 

@@ -20,6 +20,8 @@ import type {
   DragStartEvent,
   DndContextProps,
   KeyboardCoordinateGetter,
+  SensorProps,
+  TouchSensorOptions,
   UniqueIdentifier,
 } from "@dnd-kit/core";
 import {
@@ -39,6 +41,119 @@ export const KANBAN_TOUCH_ACTIVATION_CONSTRAINT = {
   delay: 150,
   tolerance: 8,
 } as const;
+
+type TouchSensorProps = SensorProps<TouchSensorOptions>;
+
+type TouchEventWithLists = Event & {
+  changedTouches: TouchList;
+  touches: TouchList;
+};
+
+const hasTouchLists = (event: Event): event is TouchEventWithLists =>
+  "changedTouches" in event && "touches" in event;
+
+const getTouchIdentifier = (event: Event): number | null => {
+  if (!hasTouchLists(event)) {
+    return null;
+  }
+  return (
+    event.changedTouches.item(0)?.identifier ??
+    event.touches.item(0)?.identifier ??
+    null
+  );
+};
+
+const includesTouchIdentifier = (touches: TouchList, identifier: number) => {
+  for (let index = 0; index < touches.length; index += 1) {
+    if (touches.item(index)?.identifier === identifier) {
+      return true;
+    }
+  }
+  return false;
+};
+
+/**
+ * Keeps a delayed touch drag bound to the finger that activated it.
+ *
+ * dnd-kit's stock touch sensor attaches document-level lifecycle listeners,
+ * so a second finger can otherwise move, end, or cancel the active drag. The
+ * capture listeners below suppress only secondary touch changes before those
+ * listeners receive them; browser scrolling remains native because no default
+ * action is prevented here.
+ */
+class KanbanTouchSensor extends TouchSensor {
+  private readonly ownerDocument: Document;
+  private readonly touchIdentifier: number | null;
+
+  constructor(props: TouchSensorProps) {
+    super(props);
+    this.ownerDocument = getTouchDocument(props.event);
+    this.touchIdentifier = getTouchIdentifier(props.event);
+    this.ownerDocument.addEventListener("touchmove", this.handleTouchMove, {
+      capture: true,
+      passive: false,
+    });
+    this.ownerDocument.addEventListener("touchend", this.handleTouchEnd, {
+      capture: true,
+    });
+    this.ownerDocument.addEventListener("touchcancel", this.handleTouchCancel, {
+      capture: true,
+    });
+  }
+
+  private readonly handleTouchMove = (event: TouchEvent) => {
+    if (this.isPrimaryTouchChange(event)) {
+      return;
+    }
+    event.stopImmediatePropagation();
+  };
+
+  private readonly handleTouchEnd = (event: TouchEvent) => {
+    if (!this.isPrimaryTouchChange(event)) {
+      event.stopImmediatePropagation();
+      return;
+    }
+    this.detachIdentityListeners();
+  };
+
+  private readonly handleTouchCancel = (event: TouchEvent) => {
+    if (!this.isPrimaryTouchChange(event)) {
+      event.stopImmediatePropagation();
+      return;
+    }
+    this.detachIdentityListeners();
+  };
+
+  private readonly isPrimaryTouchChange = (event: TouchEvent) => {
+    if (this.touchIdentifier === null) {
+      return true;
+    }
+    return includesTouchIdentifier(event.changedTouches, this.touchIdentifier);
+  };
+
+  private readonly detachIdentityListeners = () => {
+    this.ownerDocument.removeEventListener("touchmove", this.handleTouchMove, {
+      capture: true,
+    });
+    this.ownerDocument.removeEventListener("touchend", this.handleTouchEnd, {
+      capture: true,
+    });
+    this.ownerDocument.removeEventListener(
+      "touchcancel",
+      this.handleTouchCancel,
+      {
+        capture: true,
+      },
+    );
+  };
+}
+
+const getTouchDocument = (event: Event): Document => {
+  if (event.target instanceof Node && event.target.ownerDocument) {
+    return event.target.ownerDocument;
+  }
+  return document;
+};
 
 export type KanbanSortableBoardProps = {
   children: React.ReactNode;
@@ -122,7 +237,7 @@ export const useKanbanSortableSensors = (
     useSensor(MouseSensor, {
       activationConstraint: { distance: KANBAN_MOUSE_ACTIVATION_DISTANCE },
     }),
-    useSensor(TouchSensor, {
+    useSensor(KanbanTouchSensor, {
       activationConstraint: KANBAN_TOUCH_ACTIVATION_CONSTRAINT,
     }),
     useSensor(KeyboardSensor, { coordinateGetter: keyboardCoordinates }),

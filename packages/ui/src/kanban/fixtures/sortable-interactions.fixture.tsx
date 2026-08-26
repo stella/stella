@@ -29,6 +29,11 @@ const SortableItem = ({ id }: { id: string }) => {
 
 const SortableFixture = () => (
   <KanbanSortableBoard
+    onDragStart={() => {
+      document.documentElement.dataset["dragStartedAt"] = String(
+        performance.now(),
+      );
+    }}
     onDragEnd={() => undefined}
     overlayProps={{ dropAnimation: null }}
     overlay={(activeId) =>
