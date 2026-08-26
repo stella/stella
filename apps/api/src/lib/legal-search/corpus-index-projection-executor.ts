@@ -479,6 +479,7 @@ export const executeCorpusProjectionAppendCycle = async ({
       materials.ready.length,
     );
     const window = materials.ready.slice(windowStart, windowEnd);
+    // oxlint-disable-next-line no-await-in-loop -- each completed window releases its payloads before the next read, bounding memory
     const loaded = await Promise.all(
       window.map(async (material) => ({
         material,
@@ -527,6 +528,7 @@ export const executeCorpusProjectionAppendCycle = async ({
         },
       });
     }
+    // oxlint-disable-next-line no-await-in-loop -- failures must be durably classified before any append in this window
     const classified = await classifyReservationFailures({
       runInTransaction,
       failures: preparationFailures,
@@ -543,6 +545,7 @@ export const executeCorpusProjectionAppendCycle = async ({
       // Start one physical request as a batch. Its shared timestamp is read
       // from PostgreSQL only after all state locks are held, immediately before
       // external I/O; crash recovery cannot settle ahead of a late append.
+      // oxlint-disable-next-line no-await-in-loop -- append requests transition and publish in persisted plan order
       const starts = await runInTransaction(
         async (tx) =>
           await startCorpusProjectionAppendBatchTx(tx, {
@@ -577,12 +580,14 @@ export const executeCorpusProjectionAppendCycle = async ({
         return panic("Started projection request no longer fits its plan");
       }
       result.requestCount += 1;
+      // oxlint-disable-next-line no-await-in-loop -- one committed append must settle before the next planned request starts
       const appended = await client.ingestCommittedBatch(
         request.indexId,
         startedPlan.value.at(0)?.ndjson ??
           panic("Projection request plan is empty"),
       );
       if (appended.isErr()) {
+        // oxlint-disable-next-line no-await-in-loop -- an unknown append must be fenced before later reservations are cancelled
         const abandoned = await runInTransaction(async (tx) => {
           const outcomes = await mapSequentially(
             started,
@@ -613,6 +618,7 @@ export const executeCorpusProjectionAppendCycle = async ({
         }
         addCancellation(
           result,
+          // oxlint-disable-next-line no-await-in-loop -- cancellation must settle before returning the stopped batch
           await cancelReservations({
             runInTransaction,
             leases: laterLeases,
@@ -623,6 +629,7 @@ export const executeCorpusProjectionAppendCycle = async ({
         return result;
       }
 
+      // oxlint-disable-next-line no-await-in-loop -- each published request must be CAS-finalized before the next request
       const committed = await runInTransaction(async (tx) => {
         const outcomes = await mapSequentially(
           started,

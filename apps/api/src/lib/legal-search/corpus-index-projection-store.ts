@@ -1073,8 +1073,7 @@ export const classifyCorpusProjectionReservationFailureTx = async (
     })
     .where(eq(corpusIndexProjectionIntents.id, intentId));
   const stillDesired =
-    state !== undefined &&
-    state.desiredAction === "upsert" &&
+    state?.desiredAction === "upsert" &&
     state.desiredEpoch === intent.epoch &&
     state.desiredFingerprint === intent.fingerprint &&
     state.desiredIndexId === intent.indexId;
