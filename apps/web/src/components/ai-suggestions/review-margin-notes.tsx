@@ -25,10 +25,6 @@ import { BidiText } from "@stll/ui/bidi-text";
 import { cn } from "@stll/ui/utils";
 
 import { layoutMarginNotes } from "@/components/ai-suggestions/review-margin-notes.logic";
-import {
-  folioLayoutBlockElement,
-  folioScrollRoot,
-} from "@/components/docx/folio-block-geometry";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useFormatter } from "@/i18n/formatting-context";
@@ -95,20 +91,19 @@ export const ReviewMarginNotes = ({
 }: ReviewMarginNotesProps) => {
   const columnRef = useRef<HTMLUListElement | null>(null);
   const [edges, setEdges] = useState<ColumnEdges>(NO_EDGES);
-  const blockIndexById = new Map(
-    blocks.map((block, index) => [block.id, index]),
-  );
   const noteById = new Map(notes.map((note) => [note.id, note]));
 
   /**
-   * One pass: read every rect, place them, write one transform each. Held
-   * through `useLatestCallback` so the scroll subscription below is set up
-   * once per editor rather than re-registered on every render.
+   * One pass: one batched `getBlockRects` read, then place and write one
+   * transform each. Held through `useLatestCallback` so the scroll
+   * subscription below is set up once per editor rather than re-registered
+   * on every render.
    */
   const relayout = useLatestCallback(() => {
     const column = columnRef.current;
-    const root = folioScrollRoot(editorRef);
-    if (column === null || root === null) {
+    const editor = editorRef.current;
+    const root = editor?.getScrollRoot() ?? null;
+    if (column === null || editor === null || root === null) {
       return;
     }
     const elements = new Map<string, HTMLElement>();
@@ -120,17 +115,23 @@ export const ReviewMarginNotes = ({
         elements.set(id, element);
       }
     }
+    const rects = editor.getBlockRects(notes.map((note) => note.blockId));
+    // `top` is content-box, scroll-independent; add back the scroll root's
+    // own viewport offset and subtract its current scroll to land in
+    // viewport coordinates, then subtract the column's viewport offset to
+    // land in the column's own coordinate space — the same space
+    // `getBoundingClientRect()` produced before.
+    const rootTop = root.getBoundingClientRect().top;
+    const scrollTop = root.scrollTop;
     const columnTop = column.getBoundingClientRect().top;
     const anchors = notes.map((note) => {
-      const index = blockIndexById.get(note.blockId);
-      const painted =
-        index === undefined ? null : folioLayoutBlockElement(root, index);
+      const rect = rects.get(note.blockId);
       return {
         id: note.id,
         anchorTop:
-          painted === null
+          rect === undefined
             ? null
-            : painted.getBoundingClientRect().top - columnTop,
+            : rootTop + (rect.top - scrollTop) - columnTop,
         height: elements.get(note.id)?.offsetHeight ?? 0,
       };
     });
@@ -180,6 +181,7 @@ export const ReviewMarginNotes = ({
     let frame: number | null = null;
     let attach: number | null = null;
     let framesLeft = SCROLL_ROOT_FRAME_BUDGET;
+    let unsubscribeLayout: (() => void) | null = null;
 
     const schedule = () => {
       if (frame !== null || abort.signal.aborted) {
@@ -191,14 +193,17 @@ export const ReviewMarginNotes = ({
       });
     };
 
+    // Only the inspector column's own size, not the scroll root's:
+    // repagination is covered by `onLayoutChange` below.
     const observer = new ResizeObserver(schedule);
     const tryAttach = () => {
       attach = null;
       if (abort.signal.aborted) {
         return;
       }
-      const root = folioScrollRoot(editorRef);
-      if (root === null) {
+      const editor = editorRef.current;
+      const root = editor?.getScrollRoot() ?? null;
+      if (editor === null || root === null) {
         framesLeft -= 1;
         if (framesLeft > 0) {
           attach = requestAnimationFrame(tryAttach);
@@ -214,9 +219,8 @@ export const ReviewMarginNotes = ({
         passive: true,
         signal: abort.signal,
       });
-      // Repagination and a resized inspector move the anchors without a
-      // scroll event of their own.
-      observer.observe(root);
+      // Repagination moves the anchors without a scroll event of its own.
+      unsubscribeLayout = editor.onLayoutChange(schedule);
       const column = columnRef.current;
       if (column !== null) {
         observer.observe(column);
@@ -228,6 +232,7 @@ export const ReviewMarginNotes = ({
     return () => {
       abort.abort();
       observer.disconnect();
+      unsubscribeLayout?.();
       if (frame !== null) {
         cancelAnimationFrame(frame);
       }
