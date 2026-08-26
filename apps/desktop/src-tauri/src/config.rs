@@ -5,6 +5,19 @@ use crate::types::DEFAULT_BRIDGE_PORT;
 const DEFAULT_WEB_PORT: u16 = 3000;
 const PRODUCTION_API_BASE_URL: &str = "https://api.stll.app";
 
+// Development builds must never claim production's persisted data or Keychain
+// ACLs. A locally signed binary otherwise makes the next release build look
+// like a new accessor and macOS presents an alarming credential prompt.
+#[cfg(debug_assertions)]
+pub const APP_DATA_DIR_NAME: &str = "legal.stella.desktop.development";
+#[cfg(not(debug_assertions))]
+pub const APP_DATA_DIR_NAME: &str = "legal.stella.desktop";
+
+#[cfg(debug_assertions)]
+pub const KEYCHAIN_SERVICE_NAME: &str = "stella-desktop-development";
+#[cfg(not(debug_assertions))]
+pub const KEYCHAIN_SERVICE_NAME: &str = "stella-desktop";
+
 // Comma-separated origins baked into the binary at compile time. Distribution
 // builds set STELLA_DESKTOP_DEFAULT_ORIGINS so the shipped client trusts the
 // matching SPA out of the box; builds without the variable default to

@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="660" height="400" viewBox="0 0 660 400">
+  <defs>
+    <linearGradient id="glass" x1="330" y1="181" x2="330" y2="239" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#ffffff" stop-opacity="0.86"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0.56"/>
+    </linearGradient>
+    <linearGradient id="arrow" x1="307" y1="210" x2="351" y2="210" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#54a6d8"/>
+      <stop offset="1" stop-color="#287fb8"/>
+    </linearGradient>
+    <filter id="glass-shadow" x="276" y="174" width="108" height="76" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="5" stdDeviation="7" flood-color="#164d70" flood-opacity="0.16"/>
+    </filter>
+  </defs>
+
+  <g filter="url(#glass-shadow)">
+    <rect x="284" y="182" width="92" height="56" rx="28" fill="url(#glass)" stroke="#ffffff" stroke-opacity="0.92"/>
+    <path d="M307 210H350M338 198L350 210L338 222" fill="none" stroke="url(#arrow)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>

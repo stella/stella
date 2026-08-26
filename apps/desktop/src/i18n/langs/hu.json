@@ -91,6 +91,7 @@
     "numberedList": "Számozott lista",
     "strikethrough": "Áthúzott",
     "underline": "Aláhúzott",
+    "unnamedClip": "Névtelen elem",
     "allClips": "Összes vágólapelem",
     "cancel": "Mégse",
     "capturePaused": "Rögzítés szüneteltetve",
@@ -133,6 +134,16 @@
     "search": "Keresés a vágólap előzményeiben",
     "searchPlaceholder": "Másolt szöveg keresése",
     "timeline": "Vágólap idővonala",
-    "title": "Vágólap"
+    "title": "Vágólap",
+    "welcomeCaptureDescription": "A bármely alkalmazásban másolt szöveg automatikusan megjelenik itt.",
+    "welcomeCaptureTitle": "Másoljon a megszokott módon.",
+    "welcomeDescription": "A Stella kéznél tartja a másolt szöveget, anélkül hogy megzavarná a munkát.",
+    "welcomeHelp": "A vágólap működése",
+    "welcomeLocalDescription": "A vágólap előzményei ezen a számítógépen maradnak.",
+    "welcomeLocalTitle": "Ezen az eszközön tárolva.",
+    "welcomeShortcutDescription": "A {shortcut} megnyomásával böngészhet az előzmények között és kiválaszthat egy kivágást.",
+    "welcomeShortcutTitle": "Bárhonnan megnyitható.",
+    "welcomeStart": "Másolás megkezdése",
+    "welcomeTitle": "Ismerje meg a vágólapot"
   }
 }

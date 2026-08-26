@@ -136,6 +136,7 @@ mod tests {
         copied_at: Utc::now(),
         group_id: None,
         id: "item-1".to_string(),
+        name: Some("Privileged draft".to_string()),
         plain_text: "privileged draft text".to_string(),
         source_app: None,
       }],

@@ -25,6 +25,13 @@ const BUN_GLOBAL_STORE_ROOT = path.resolve(
   "links",
 );
 const ANALYZE_MODE = "analyze";
+export const REACT_PLUGIN_EXCLUDE = [
+  /[/\\]node_modules[/\\]/u,
+  // These sanctioned wrappers accept opaque callbacks and dependency arrays.
+  // The compiler cannot validate their call-site dependencies, and their
+  // intentional exhaustive-deps suppressions otherwise emit on every load.
+  /[/\\]src[/\\]hooks[/\\]use-effect\.ts$/u,
+];
 const DEV_API_PROXY_PATHS = [
   "/api",
   "/v1",
@@ -286,7 +293,10 @@ export default defineConfig(({ mode }) => {
       "@tanstack/react-start",
     ),
     ensurePluginOption(
-      react({ compiler: REACT_COMPILER_OPTIONS }),
+      react({
+        compiler: REACT_COMPILER_OPTIONS,
+        exclude: REACT_PLUGIN_EXCLUDE,
+      }),
       "@vitejs/plugin-react with Oxc React Compiler",
     ),
     shouldAnalyze &&

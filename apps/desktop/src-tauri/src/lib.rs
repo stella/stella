@@ -3,6 +3,7 @@ mod bridge;
 mod clipboard;
 mod clipboard_commands;
 mod clipboard_store;
+mod clipboard_welcome;
 mod clipboard_window;
 mod commands;
 mod config;
@@ -30,7 +31,8 @@ macro_rules! generate_stella_handler {
 
 use std::sync::Arc;
 use tauri::{Emitter, Manager};
-use tauri_plugin_autostart::MacosLauncher;
+use tauri_plugin_autostart::{MacosLauncher, ManagerExt as AutostartManagerExt};
+use tauri_plugin_deep_link::DeepLinkExt;
 use tauri_plugin_notification::NotificationExt;
 use tokio::sync::Mutex;
 use tracing_subscriber::EnvFilter;
@@ -54,18 +56,23 @@ pub fn run() {
 
   let manager = Arc::new(Mutex::new(SessionManager::new()));
   let clipboard_manager = Arc::new(std::sync::Mutex::new(ClipboardManager::new()));
+  let launch_args = std::env::args().collect::<Vec<_>>();
   #[cfg(target_os = "macos")]
   let manager_for_single_instance = Arc::clone(&manager);
 
   tauri::Builder::default()
     .plugin(tauri_plugin_single_instance::init(
       move |app, args, _cwd| {
+        let reveal_clipboard = app_lifecycle::should_reveal_clipboard_on_launch(
+          args.iter().map(String::as_str),
+          false,
+        );
         #[cfg(target_os = "macos")]
         {
-          for arg in args {
+          for arg in &args {
             if arg.starts_with("stella://") {
               deep_link::handle_url(
-                &arg,
+                arg,
                 Arc::clone(&manager_for_single_instance),
                 app.clone(),
               );
@@ -76,11 +83,14 @@ pub fn run() {
         {
           let _ = (app, args);
         }
+        if reveal_clipboard {
+          clipboard_window::show(app);
+        }
       },
     ))
     .plugin(tauri_plugin_autostart::init(
       MacosLauncher::LaunchAgent,
-      None,
+      Some(vec![app_lifecycle::BACKGROUND_LAUNCH_ARGUMENT]),
     ))
     .plugin(tauri_plugin_clipboard_manager::init())
     .plugin(tauri_plugin_deep_link::init())
@@ -94,6 +104,14 @@ pub fn run() {
     .manage::<ClipboardEditorState>(Arc::new(std::sync::Mutex::new(None)))
     .setup(move |app| {
       let handle = app.handle().clone();
+      let initial_deep_links = app.deep_link().get_current()?;
+      let reveal_clipboard_on_launch =
+        app_lifecycle::should_reveal_clipboard_on_launch(
+          launch_args.iter().map(String::as_str),
+          initial_deep_links
+            .as_ref()
+            .is_some_and(|urls| !urls.is_empty()),
+        );
       let desktop_telemetry = desktop_telemetry::DesktopTelemetry::start();
       app.manage(desktop_telemetry.clone());
 
@@ -147,8 +165,7 @@ pub fn run() {
         }
       }
 
-      #[cfg(debug_assertions)]
-      if std::env::var_os("STELLA_OPEN_CLIPBOARD_ON_LAUNCH").is_some() {
+      if reveal_clipboard_on_launch {
         clipboard_window::show(&handle);
       }
 
@@ -306,13 +323,21 @@ pub fn run() {
         });
       }
 
-      // Enable auto-start on first launch
+      // Keep an enabled native registration synchronized with the plugin's
+      // configured background-launch argument. Enabling overwrites the
+      // existing registration without changing one the user disabled.
       {
-        use tauri_plugin_autostart::ManagerExt;
         let autostart = handle.autolaunch();
-        if let Ok(false) = autostart.is_enabled() {
-          let _ = autostart.enable();
-          tracing::info!("auto-start enabled on first launch");
+        match autostart.is_enabled() {
+          Ok(true) => {
+            if let Err(error) = autostart.enable() {
+              tracing::warn!(error = %error, "auto-start registration could not be refreshed");
+            }
+          }
+          Ok(false) => {}
+          Err(error) => {
+            tracing::warn!(error = %error, "auto-start registration could not be checked");
+          }
         }
       }
 
@@ -327,7 +352,6 @@ pub fn run() {
 
       // Register deep link handler
       {
-        use tauri_plugin_deep_link::DeepLinkExt;
         let manager_for_deep_link = Arc::clone(&manager);
         let handle_for_deep_link = handle.clone();
         let handle_deep_link_urls = move |urls: Vec<reqwest::Url>| {
@@ -344,7 +368,7 @@ pub fn run() {
           }
         };
 
-        if let Some(urls) = app.deep_link().get_current()? {
+        if let Some(urls) = initial_deep_links {
           handle_deep_link_urls(urls);
         }
 

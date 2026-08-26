@@ -91,6 +91,7 @@
     "numberedList": "Numeruotas sąrašas",
     "strikethrough": "Perbrauktas",
     "underline": "Pabrauktas",
+    "unnamedClip": "Bevardė iškarpa",
     "allClips": "Visos iškarpos",
     "cancel": "Atšaukti",
     "capturePaused": "Fiksavimas pristabdytas",
@@ -133,6 +134,16 @@
     "search": "Ieškoti iškarpinės istorijoje",
     "searchPlaceholder": "Ieškoti nukopijuoto teksto",
     "timeline": "Iškarpinės laiko juosta",
-    "title": "Iškarpinė"
+    "title": "Iškarpinė",
+    "welcomeCaptureDescription": "Bet kurioje programoje nukopijuotas tekstas čia atsiranda automatiškai.",
+    "welcomeCaptureTitle": "Kopijuokite kaip įprastai.",
+    "welcomeDescription": "Stella laiko nukopijuotą tekstą po ranka ir netrukdo dirbti.",
+    "welcomeHelp": "Kaip veikia iškarpinė",
+    "welcomeLocalDescription": "Iškarpinės istorija lieka šiame kompiuteryje.",
+    "welcomeLocalTitle": "Saugoma šiame įrenginyje.",
+    "welcomeShortcutDescription": "Paspauskite {shortcut}, kad peržiūrėtumėte istoriją ir pasirinktumėte iškarpą.",
+    "welcomeShortcutTitle": "Atidarykite bet kur.",
+    "welcomeStart": "Pradėti kopijuoti",
+    "welcomeTitle": "Susipažinkite su iškarpine"
   }
 }

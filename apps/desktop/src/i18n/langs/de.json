@@ -91,6 +91,7 @@
     "numberedList": "Nummerierte Liste",
     "strikethrough": "Durchgestrichen",
     "underline": "Unterstrichen",
+    "unnamedClip": "Unbenannter Clip",
     "allClips": "Alle Clips",
     "cancel": "Abbrechen",
     "capturePaused": "Erfassung pausiert",
@@ -133,6 +134,16 @@
     "search": "Zwischenablageverlauf durchsuchen",
     "searchPlaceholder": "Kopierten Text durchsuchen",
     "timeline": "Zwischenablage-Zeitleiste",
-    "title": "Zwischenablage"
+    "title": "Zwischenablage",
+    "welcomeCaptureDescription": "Text aus jeder App erscheint nach dem Kopieren automatisch hier.",
+    "welcomeCaptureTitle": "Kopieren Sie wie gewohnt.",
+    "welcomeDescription": "Stella hält kopierten Text griffbereit, ohne Ihre Arbeit zu unterbrechen.",
+    "welcomeHelp": "So funktioniert die Zwischenablage",
+    "welcomeLocalDescription": "Ihr Zwischenablageverlauf bleibt auf diesem Computer.",
+    "welcomeLocalTitle": "Auf diesem Gerät gespeichert.",
+    "welcomeShortcutDescription": "Drücken Sie {shortcut}, um den Verlauf zu durchsuchen und einen Eintrag auszuwählen.",
+    "welcomeShortcutTitle": "Überall öffnen.",
+    "welcomeStart": "Mit dem Kopieren beginnen",
+    "welcomeTitle": "Ihre neue Zwischenablage"
   }
 }

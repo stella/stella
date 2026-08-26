@@ -91,6 +91,7 @@
     "numberedList": "Liste numérotée",
     "strikethrough": "Barré",
     "underline": "Souligné",
+    "unnamedClip": "Extrait sans nom",
     "allClips": "Tous les extraits",
     "cancel": "Annuler",
     "capturePaused": "Capture en pause",
@@ -133,6 +134,16 @@
     "search": "Rechercher dans l’historique du presse-papiers",
     "searchPlaceholder": "Rechercher le texte copié",
     "timeline": "Chronologie du presse-papiers",
-    "title": "Presse-papiers"
+    "title": "Presse-papiers",
+    "welcomeCaptureDescription": "Le texte copié dans n’importe quelle application apparaît ici automatiquement.",
+    "welcomeCaptureTitle": "Copiez comme d’habitude.",
+    "welcomeDescription": "Stella garde le texte copié à portée de main sans interrompre votre travail.",
+    "welcomeHelp": "Fonctionnement du presse-papiers",
+    "welcomeLocalDescription": "L’historique du presse-papiers reste sur cet ordinateur.",
+    "welcomeLocalTitle": "Conservé sur cet appareil.",
+    "welcomeShortcutDescription": "Appuyez sur {shortcut} pour parcourir l’historique et choisir un extrait.",
+    "welcomeShortcutTitle": "Ouvrez-le partout.",
+    "welcomeStart": "Commencer à copier",
+    "welcomeTitle": "Découvrez votre presse-papiers"
   }
 }

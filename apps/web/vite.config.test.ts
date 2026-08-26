@@ -3,7 +3,11 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { createLogger, type ConfigEnv, type UserConfig } from "vite";
 
-import config, { capViteLogger, rewriteBrowserApiPath } from "./vite.config";
+import config, {
+  capViteLogger,
+  REACT_PLUGIN_EXCLUDE,
+  rewriteBrowserApiPath,
+} from "./vite.config";
 
 const KANBAN_DRAG_INTERACTIONS_PATH = path.resolve(
   import.meta.dirname,
@@ -13,6 +17,15 @@ const ATLASKIT_DRAG_IMPORT =
   /from "(@atlaskit\/pragmatic-drag-and-drop[^"]+)";/gu;
 
 describe("vite config", () => {
+  test("keeps opaque effect wrappers out of React compilation", () => {
+    const isExcluded = (filePath: string) =>
+      REACT_PLUGIN_EXCLUDE.some((pattern) => pattern.test(filePath));
+
+    expect(isExcluded("/repo/apps/web/src/hooks/use-effect.ts")).toBe(true);
+    expect(isExcluded("/repo/node_modules/example/index.tsx")).toBe(true);
+    expect(isExcluded("/repo/apps/web/src/routes/index.tsx")).toBe(false);
+  });
+
   test("matches the deployed browser API prefix contract", () => {
     expect(rewriteBrowserApiPath("/api/v1/me")).toBe("/v1/me");
     expect(rewriteBrowserApiPath("/api/health")).toBe("/health");

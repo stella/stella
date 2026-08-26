@@ -38,6 +38,15 @@ pub fn clipboard_get_snapshot(
 }
 
 #[tauri::command]
+pub fn clipboard_complete_welcome(
+  state: State<'_, ClipboardAppState>,
+) -> Result<ClipboardSnapshot, String> {
+  let mut manager = state.lock().map_err(|_| lock_error())?;
+  manager.complete_welcome()?;
+  Ok(manager.snapshot())
+}
+
+#[tauri::command]
 pub fn clipboard_set_capture_status(
   status: ClipboardCaptureStatus,
   state: State<'_, ClipboardAppState>,
@@ -163,6 +172,24 @@ pub fn clipboard_set_item_group(
   let snapshot = {
     let mut manager = state.lock().map_err(|_| lock_error())?;
     if !manager.set_item_group(&id, group_id)? {
+      return Err(ITEM_NOT_FOUND_ERROR.to_string());
+    }
+    manager.snapshot()
+  };
+  let _ = window.emit(HISTORY_EVENT, ());
+  Ok(snapshot)
+}
+
+#[tauri::command]
+pub fn clipboard_set_item_name(
+  id: String,
+  name: String,
+  state: State<'_, ClipboardAppState>,
+  window: WebviewWindow,
+) -> Result<ClipboardSnapshot, String> {
+  let snapshot = {
+    let mut manager = state.lock().map_err(|_| lock_error())?;
+    if !manager.set_item_name(&id, &name)? {
       return Err(ITEM_NOT_FOUND_ERROR.to_string());
     }
     manager.snapshot()

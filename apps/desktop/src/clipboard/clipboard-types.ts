@@ -14,6 +14,7 @@ export type ClipboardItem =
       copiedAt: string;
       groupId: string | null;
       id: string;
+      name: string | null;
       plainText: string;
       sourceApp: ClipboardSourceApp | null;
       type: "text";
@@ -23,6 +24,7 @@ export type ClipboardItem =
       groupId: string | null;
       html: string;
       id: string;
+      name: string | null;
       plainText: string;
       sourceApp: ClipboardSourceApp | null;
       type: "formattedText";
@@ -50,12 +52,15 @@ export type ClipboardPersistence =
   | { status: "memoryOnly" }
   | { status: "deletionOnly" };
 
+export type ClipboardWelcomeStatus = "initializing" | "pending" | "completed";
+
 export type ClipboardSnapshot = {
   captureStatus: ClipboardCaptureStatus;
   groups: ClipboardGroup[];
   items: ClipboardItem[];
   persistence: ClipboardPersistence;
   sourceAppVisuals: ClipboardSourceAppVisual[];
+  welcomeStatus: ClipboardWelcomeStatus;
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -85,6 +90,7 @@ export const isClipboardItem = (value: unknown): value is ClipboardItem => {
     typeof value["copiedAt"] !== "string" ||
     (value["groupId"] !== null && typeof value["groupId"] !== "string") ||
     typeof value["id"] !== "string" ||
+    (value["name"] !== null && typeof value["name"] !== "string") ||
     typeof value["plainText"] !== "string" ||
     (value["sourceApp"] !== null && !isClipboardSourceApp(value["sourceApp"]))
   ) {
@@ -155,6 +161,8 @@ export const isClipboardSnapshot = (
     value["items"].every(isClipboardItem) &&
     isPersistence(value["persistence"]) &&
     Array.isArray(value["sourceAppVisuals"]) &&
-    value["sourceAppVisuals"].every(isClipboardSourceAppVisual)
+    value["sourceAppVisuals"].every(isClipboardSourceAppVisual) &&
+    (value["welcomeStatus"] === "pending" ||
+      value["welcomeStatus"] === "completed")
   );
 };

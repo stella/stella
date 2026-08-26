@@ -91,6 +91,7 @@
     "numberedList": "Číslovaný zoznam",
     "strikethrough": "Prečiarknuté",
     "underline": "Podčiarknuté",
+    "unnamedClip": "Nepomenovaný klip",
     "allClips": "Všetky klipy",
     "cancel": "Zrušiť",
     "capturePaused": "Ukladanie pozastavené",
@@ -133,6 +134,16 @@
     "search": "Hľadať v histórii schránky",
     "searchPlaceholder": "Hľadať skopírovaný text",
     "timeline": "Časová os schránky",
-    "title": "Schránka"
+    "title": "Schránka",
+    "welcomeCaptureDescription": "Text skopírovaný v ľubovoľnej aplikácii sa tu zobrazí automaticky.",
+    "welcomeCaptureTitle": "Kopírujte ako zvyčajne.",
+    "welcomeDescription": "Stella uchováva skopírovaný text poruke bez toho, aby vás rušila pri práci.",
+    "welcomeHelp": "Ako funguje schránka",
+    "welcomeLocalDescription": "História schránky zostáva v tomto počítači.",
+    "welcomeLocalTitle": "Zostáva v tomto zariadení.",
+    "welcomeShortcutDescription": "Stlačením {shortcut} prechádzajte históriu a vyberte výstrižok.",
+    "welcomeShortcutTitle": "Otvorte ju odkiaľkoľvek.",
+    "welcomeStart": "Začať kopírovať",
+    "welcomeTitle": "Zoznámte sa so schránkou"
   }
 }

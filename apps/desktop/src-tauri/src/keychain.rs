@@ -1,8 +1,9 @@
 //! OS keychain storage for desktop edit session tokens.
 //!
-//! Each session token is stored as a separate keychain entry keyed by
-//! `stella-desktop:session:<sessionId>`. This keeps tokens out of the
-//! JSON session store on disk.
+//! Each session token is stored as a separate keychain entry under the
+//! build profile's service name, keyed by `session:<sessionId>`. This keeps
+//! tokens out of the JSON session store on disk without letting development
+//! builds claim production entries.
 
 use std::{
   collections::HashMap,
@@ -11,9 +12,9 @@ use std::{
   sync::{Mutex, OnceLock},
 };
 
+use crate::config::KEYCHAIN_SERVICE_NAME;
 use keyring_core::{Entry, Error};
 
-const SERVICE_NAME: &str = "stella-desktop";
 const CLIPBOARD_HISTORY_KEY: &str = "clipboard:history:v1";
 
 #[derive(Debug)]
@@ -36,13 +37,14 @@ fn entry_key(session_id: &str) -> String {
 
 fn entry(session_id: &str) -> Result<Entry, String> {
   ensure_default_store()?;
-  Entry::new(SERVICE_NAME, &entry_key(session_id))
+  Entry::new(KEYCHAIN_SERVICE_NAME, &entry_key(session_id))
     .map_err(|e| format!("keychain entry error: {e}"))
 }
 
 fn named_entry(key: &str) -> Result<Entry, String> {
   ensure_default_store()?;
-  Entry::new(SERVICE_NAME, key).map_err(|e| format!("keychain entry error: {e}"))
+  Entry::new(KEYCHAIN_SERVICE_NAME, key)
+    .map_err(|e| format!("keychain entry error: {e}"))
 }
 
 fn ensure_default_store() -> Result<(), String> {

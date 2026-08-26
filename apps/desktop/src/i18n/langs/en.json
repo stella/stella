@@ -93,6 +93,7 @@
     "numberedList": "Numbered list",
     "strikethrough": "Strikethrough",
     "underline": "Underline",
+    "unnamedClip": "Untitled clip",
     "allClips": "All clips",
     "cancel": "Cancel",
     "capturePaused": "Capture paused",
@@ -135,6 +136,16 @@
     "search": "Search clipboard history",
     "searchPlaceholder": "Search copied text",
     "timeline": "Clipboard timeline",
-    "title": "Clipboard"
+    "title": "Clipboard",
+    "welcomeCaptureDescription": "Text copied in any app appears here automatically.",
+    "welcomeCaptureTitle": "Copy as usual.",
+    "welcomeDescription": "Stella keeps copied text close at hand, without interrupting your work.",
+    "welcomeHelp": "How the clipboard works",
+    "welcomeLocalDescription": "Your clipboard history stays on this computer.",
+    "welcomeLocalTitle": "Kept on this device.",
+    "welcomeShortcutDescription": "Press {shortcut} to browse your history and choose a clip.",
+    "welcomeShortcutTitle": "Open it anywhere.",
+    "welcomeStart": "Start copying",
+    "welcomeTitle": "Meet your clipboard"
   }
 }

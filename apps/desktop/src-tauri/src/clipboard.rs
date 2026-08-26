@@ -15,6 +15,8 @@ use tauri::{AppHandle, Emitter};
 
 use crate::{
   clipboard_store::ClipboardStore,
+  clipboard_welcome::{ClipboardWelcome, ClipboardWelcomeStatus},
+  config::APP_DATA_DIR_NAME,
   desktop_telemetry::{
     DesktopErrorReport, DesktopTelemetry, DesktopTelemetryErrorCode,
     DesktopTelemetryOperation, DesktopTelemetryWindow,
@@ -48,6 +50,7 @@ const WINDOWS_MONITOR_PROCESSING_EXCLUSION_FORMAT: &str =
 const MAX_HISTORY_ITEMS: usize = 500;
 const MAX_ITEM_TEXT_BYTES: usize = 64 * 1024;
 const MAX_ITEM_HTML_BYTES: usize = 128 * 1024;
+const MAX_ITEM_NAME_CHARACTERS: usize = 80;
 const MAX_HISTORY_BYTES: usize = 16 * 1024 * 1024;
 const RETENTION_DAYS: i64 = 30;
 const RETENTION_SWEEP_INTERVAL: std::time::Duration =
@@ -105,6 +108,8 @@ pub enum ClipboardItem {
     #[serde(rename = "groupId", alias = "group_id")]
     group_id: Option<String>,
     id: String,
+    #[serde(default)]
+    name: Option<String>,
     #[serde(rename = "plainText", alias = "plain_text")]
     plain_text: String,
     #[serde(default, rename = "sourceApp", alias = "source_app")]
@@ -117,6 +122,8 @@ pub enum ClipboardItem {
     group_id: Option<String>,
     html: String,
     id: String,
+    #[serde(default)]
+    name: Option<String>,
     #[serde(rename = "plainText", alias = "plain_text")]
     plain_text: String,
     #[serde(default, rename = "sourceApp", alias = "source_app")]
@@ -133,6 +140,7 @@ impl ClipboardItem {
       } => plain_text.len() + html.len(),
     };
     content_bytes
+      + self.name().map_or(0, str::len)
       + self.source_app().map_or(0, |source_app| {
         source_app.name.len() + source_app.identifier.as_ref().map_or(0, String::len)
       })
@@ -157,6 +165,12 @@ impl ClipboardItem {
       Self::Text { plain_text, .. } | Self::FormattedText { plain_text, .. } => {
         plain_text
       }
+    }
+  }
+
+  fn name(&self) -> Option<&str> {
+    match self {
+      Self::Text { name, .. } | Self::FormattedText { name, .. } => name.as_deref(),
     }
   }
 
@@ -191,12 +205,21 @@ impl ClipboardItem {
     }
   }
 
+  fn set_name(&mut self, new_name: Option<String>) {
+    match self {
+      Self::Text { name, .. } | Self::FormattedText { name, .. } => {
+        *name = new_name;
+      }
+    }
+  }
+
   fn replace_content(&mut self, new_plain_text: String, new_html: Option<String>) {
-    let (copied_at, group_id, id, source_app) = match self {
+    let (copied_at, group_id, id, name, source_app) = match self {
       Self::Text {
         copied_at,
         group_id,
         id,
+        name,
         source_app,
         ..
       }
@@ -204,9 +227,16 @@ impl ClipboardItem {
         copied_at,
         group_id,
         id,
+        name,
         source_app,
         ..
-      } => (*copied_at, group_id.clone(), id.clone(), source_app.clone()),
+      } => (
+        *copied_at,
+        group_id.clone(),
+        id.clone(),
+        name.clone(),
+        source_app.clone(),
+      ),
     };
     *self = match new_html {
       Some(html) => Self::FormattedText {
@@ -214,6 +244,7 @@ impl ClipboardItem {
         group_id,
         html,
         id,
+        name,
         plain_text: new_plain_text,
         source_app,
       },
@@ -221,6 +252,7 @@ impl ClipboardItem {
         copied_at,
         group_id,
         id,
+        name,
         plain_text: new_plain_text,
         source_app,
       },
@@ -236,6 +268,7 @@ impl ClipboardItem {
     match self {
       Self::Text {
         group_id,
+        name,
         plain_text,
         source_app,
         ..
@@ -243,12 +276,14 @@ impl ClipboardItem {
         copied_at,
         group_id: group_id.clone(),
         id,
+        name: name.clone(),
         plain_text: plain_text.clone(),
         source_app: source_app.clone(),
       },
       Self::FormattedText {
         group_id,
         html,
+        name,
         plain_text,
         source_app,
         ..
@@ -257,6 +292,7 @@ impl ClipboardItem {
         group_id: group_id.clone(),
         html: html.clone(),
         id,
+        name: name.clone(),
         plain_text: plain_text.clone(),
         source_app: source_app.clone(),
       },
@@ -302,6 +338,7 @@ pub struct ClipboardSnapshot {
   pub items: Vec<ClipboardItem>,
   pub persistence: ClipboardPersistenceStatus,
   pub source_app_visuals: Vec<ClipboardSourceAppVisual>,
+  pub welcome_status: ClipboardWelcomeStatus,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -320,6 +357,7 @@ pub struct ClipboardManager {
   persistence: ClipboardPersistence,
   source_app_visuals: HashMap<String, ClipboardSourceAppVisual>,
   suppressed_content: Option<(String, Option<String>)>,
+  welcome: ClipboardWelcome,
 }
 
 enum ClipboardPersistence {
@@ -367,6 +405,7 @@ impl ClipboardManager {
       persistence: ClipboardPersistence::Initializing,
       source_app_visuals: HashMap::new(),
       suppressed_content: None,
+      welcome: ClipboardWelcome::new(),
     }
   }
 
@@ -389,7 +428,7 @@ impl ClipboardManager {
       return;
     };
     let store_path = data_dir
-      .join("legal.stella.desktop")
+      .join(APP_DATA_DIR_NAME)
       .join("clipboard-history.json.enc");
     let key = match keychain::get_or_create_clipboard_key() {
       Ok(key) => key,
@@ -440,7 +479,12 @@ impl ClipboardManager {
       items: self.items.clone(),
       persistence: self.persistence.status(),
       source_app_visuals,
+      welcome_status: self.welcome.status(),
     }
+  }
+
+  pub fn complete_welcome(&mut self) -> Result<(), String> {
+    self.welcome.complete()
   }
 
   pub fn set_capture_status(
@@ -597,6 +641,21 @@ impl ClipboardManager {
     Ok(true)
   }
 
+  pub fn set_item_name(&mut self, id: &str, name: &str) -> Result<bool, String> {
+    let name = name.trim();
+    if name.chars().count() > MAX_ITEM_NAME_CHARACTERS {
+      return Err("clipboard item name is invalid".to_string());
+    }
+    let checkpoint = self.checkpoint();
+    let Some(item) = self.items.iter_mut().find(|item| item.id() == id) else {
+      return Ok(false);
+    };
+    item.set_name((!name.is_empty()).then(|| name.to_string()));
+    prune_items_preserving(&mut self.items, Utc::now(), Some(id));
+    self.persist_or_restore(checkpoint)?;
+    Ok(true)
+  }
+
   pub fn item(&self, id: &str) -> Option<ClipboardItem> {
     self.items.iter().find(|item| item.id() == id).cloned()
   }
@@ -643,28 +702,36 @@ impl ClipboardManager {
         .insert(source_app_visual.key.clone(), source_app_visual);
     }
 
-    let preserved_group_id = self
+    let preserved_metadata = self
       .items
       .iter()
       .find(|item| item.same_content(&plain_text, html.as_deref()))
-      .and_then(|item| item.group_id().map(str::to_string));
+      .map(|item| {
+        (
+          item.group_id().map(str::to_string),
+          item.name().map(str::to_string),
+        )
+      });
     self
       .items
       .retain(|item| !item.same_content(&plain_text, html.as_deref()));
     let id = uuid::Uuid::new_v4().to_string();
+    let (group_id, name) = preserved_metadata.unwrap_or((None, None));
     let item = match html {
       Some(html) => ClipboardItem::FormattedText {
         copied_at,
-        group_id: preserved_group_id,
+        group_id,
         html,
         id,
+        name,
         plain_text,
         source_app,
       },
       None => ClipboardItem::Text {
         copied_at,
-        group_id: preserved_group_id,
+        group_id,
         id,
+        name,
         plain_text,
         source_app,
       },
@@ -1303,6 +1370,7 @@ mod tests {
       copied_at,
       group_id: None,
       id: uuid::Uuid::new_v4().to_string(),
+      name: None,
       plain_text: text.to_string(),
       source_app: None,
     }
@@ -1429,6 +1497,7 @@ mod tests {
       group_id: Some("research".to_string()),
       html: "<strong>Clause</strong>".to_string(),
       id: "original".to_string(),
+      name: Some("Key clause".to_string()),
       plain_text: "Clause".to_string(),
       source_app: Some(ClipboardSourceApp {
         identifier: Some("com.microsoft.Word".to_string()),
@@ -1449,8 +1518,80 @@ mod tests {
     assert_eq!(manager.items[0].plain_text(), original.plain_text());
     assert_eq!(manager.items[0].html(), original.html());
     assert_eq!(manager.items[0].group_id(), original.group_id());
+    assert_eq!(manager.items[0].name(), original.name());
     assert_eq!(manager.items[0].source_app(), original.source_app());
     assert_eq!(manager.items[1], original);
+  }
+
+  #[test]
+  fn item_names_are_bounded_and_survive_recapture() {
+    let now = Utc::now();
+    let mut manager = ClipboardManager::new();
+    manager.persistence = ClipboardPersistence::MemoryOnly;
+    assert!(capture(&mut manager, "Named content", None, now));
+    let item_id = manager.items[0].id().to_string();
+
+    assert!(manager.set_item_name(&item_id, "  Key clause  ").unwrap());
+    assert_eq!(manager.items[0].name(), Some("Key clause"));
+    assert!(capture(
+      &mut manager,
+      "Named content",
+      None,
+      now + Duration::minutes(1),
+    ));
+    assert_eq!(manager.items[0].name(), Some("Key clause"));
+
+    let oversized_name = "界".repeat(MAX_ITEM_NAME_CHARACTERS + 1);
+    let recaptured_item_id = manager.items[0].id().to_string();
+    assert!(
+      manager
+        .set_item_name(&recaptured_item_id, &oversized_name)
+        .is_err()
+    );
+    assert_eq!(manager.items[0].name(), Some("Key clause"));
+  }
+
+  #[test]
+  fn renaming_reapplies_the_total_history_byte_limit() {
+    let now = Utc::now();
+    let mut manager = ClipboardManager::new();
+    manager.persistence = ClipboardPersistence::MemoryOnly;
+    let target = text_item(now, "target");
+    let target_id = target.id().to_string();
+    manager.items.push(target);
+    let large_text = "x".repeat(MAX_ITEM_TEXT_BYTES);
+    for _ in 0..(MAX_HISTORY_BYTES / MAX_ITEM_TEXT_BYTES - 1) {
+      manager.items.push(text_item(now, &large_text));
+    }
+    let bytes_before_filler = manager
+      .items
+      .iter()
+      .map(ClipboardItem::byte_len)
+      .sum::<usize>();
+    let filler_overhead = text_item(now, "").byte_len();
+    let filler_size = MAX_HISTORY_BYTES - bytes_before_filler - filler_overhead - 1;
+    manager.items.push(text_item(now, &"x".repeat(filler_size)));
+    assert_eq!(
+      manager
+        .items
+        .iter()
+        .map(ClipboardItem::byte_len)
+        .sum::<usize>(),
+      MAX_HISTORY_BYTES - 1
+    );
+
+    assert!(manager.set_item_name(&target_id, "Key clause").unwrap());
+
+    let renamed = manager.item(&target_id).unwrap();
+    assert_eq!(renamed.name(), Some("Key clause"));
+    assert!(
+      manager
+        .items
+        .iter()
+        .map(ClipboardItem::byte_len)
+        .sum::<usize>()
+        <= MAX_HISTORY_BYTES
+    );
   }
 
   #[test]
@@ -1595,6 +1736,7 @@ mod tests {
       group_id: None,
       html: "<strong>formatted</strong>".to_string(),
       id: "item-id".to_string(),
+      name: Some("Formatted note".to_string()),
       plain_text: "formatted".to_string(),
       source_app: Some(ClipboardSourceApp {
         identifier: Some("com.apple.TextEdit".to_string()),
@@ -1607,11 +1749,27 @@ mod tests {
     assert_eq!(value["type"], "formattedText");
     assert!(value.get("copiedAt").is_some());
     assert_eq!(value["plainText"], "formatted");
+    assert_eq!(value["name"], "Formatted note");
     assert!(value.get("groupId").is_some());
     assert_eq!(value["sourceApp"]["identifier"], "com.apple.TextEdit");
     assert_eq!(value["sourceApp"]["name"], "TextEdit");
     assert!(value.get("copied_at").is_none());
     assert!(value.get("plain_text").is_none());
+  }
+
+  #[test]
+  fn persisted_items_without_a_name_remain_readable() {
+    let item = serde_json::from_value::<ClipboardItem>(serde_json::json!({
+      "type": "text",
+      "copiedAt": Utc::now(),
+      "groupId": null,
+      "id": "legacy-item",
+      "plainText": "Legacy content",
+      "sourceApp": null
+    }))
+    .unwrap();
+
+    assert_eq!(item.name(), None);
   }
 
   #[test]
