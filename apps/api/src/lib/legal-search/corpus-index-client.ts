@@ -134,12 +134,25 @@ export type CorpusIndexDeleteSettlement = {
   settled: boolean;
 };
 
+/** Result of checking one immutable manifest against its physical index. */
+export type CorpusIndexConfigAttestation =
+  | { status: "missing" }
+  | { status: "matching"; indexUri: string };
+
 export type CorpusIndexClient = {
   createIndex: (
     config: CorpusIndexConfig,
   ) => Promise<Result<void, CorpusIndexError>>;
   deleteIndex: (indexId: string) => Promise<Result<void, CorpusIndexError>>;
   indexExists: (indexId: string) => Promise<Result<boolean, CorpusIndexError>>;
+  /**
+   * Read the engine's materialized config and compare every manifest-pinned
+   * value. Quickwit adds defaults and a random doc-mapping UID to the GET
+   * response, so raw-object equality is not a valid contract check.
+   */
+  attestIndexConfig: (
+    config: CorpusIndexConfig,
+  ) => Promise<Result<CorpusIndexConfigAttestation, CorpusIndexError>>;
   /**
    * `commit` is required rather than defaulted: the difference between
    * the two modes is whether the caller may persist the acceptance, and
@@ -388,6 +401,96 @@ const ingestBatch = async ({
     catch: toCorpusIndexError,
   });
 
+const CONFIG_TAG_FIELDS_PATH = "$.doc_mapping.tag_fields";
+const isQuickwitOwnedConfigValue = (
+  path: string,
+  key: string,
+  value: unknown,
+): boolean =>
+  ((path === "$" && key === "index_uri") ||
+    (path === "$.doc_mapping" && key === "doc_mapping_uid")) &&
+  typeof value === "string" &&
+  value.length > 0;
+
+const isStringArray = (value: readonly unknown[]): value is readonly string[] =>
+  value.every((item) => typeof item === "string");
+
+const compareConfigKeys = (left: string, right: string): number => {
+  if (left < right) {
+    return -1;
+  }
+  return left > right ? 1 : 0;
+};
+
+const normalizeAttestedArray = (
+  path: string,
+  value: readonly unknown[],
+): readonly unknown[] =>
+  path === CONFIG_TAG_FIELDS_PATH && isStringArray(value)
+    ? value.toSorted(compareConfigKeys)
+    : value;
+
+/**
+ * Return the first manifest-pinned value that differs from Quickwit state.
+ *
+ * Final manifests pin materialized engine defaults. Only server-owned values
+ * such as `index_uri` and `doc_mapping_uid` are outside this comparison. Arrays
+ * remain exact: an extra field mapping or tokenizer is physical schema drift.
+ */
+const configDifference = (
+  expected: unknown,
+  observed: unknown,
+  path = "$",
+): string | null => {
+  if (Array.isArray(expected)) {
+    if (!Array.isArray(observed)) {
+      return path;
+    }
+    const normalizedExpected = normalizeAttestedArray(path, expected);
+    const normalizedObserved = normalizeAttestedArray(path, observed);
+    if (normalizedExpected.length !== normalizedObserved.length) {
+      return `${path}.length`;
+    }
+    for (const [index, expectedItem] of normalizedExpected.entries()) {
+      const difference = configDifference(
+        expectedItem,
+        normalizedObserved.at(index),
+        `${path}[${index}]`,
+      );
+      if (difference !== null) {
+        return difference;
+      }
+    }
+    return null;
+  }
+  if (isRecord(expected)) {
+    if (!isRecord(observed)) {
+      return path;
+    }
+    for (const [key, expectedValue] of Object.entries(expected)) {
+      const difference = configDifference(
+        expectedValue,
+        observed[key],
+        `${path}.${key}`,
+      );
+      if (difference !== null) {
+        return difference;
+      }
+    }
+    for (const key of Object.keys(observed)) {
+      if (
+        Object.hasOwn(expected, key) ||
+        isQuickwitOwnedConfigValue(path, key, observed[key])
+      ) {
+        continue;
+      }
+      return `${path}.${key}`;
+    }
+    return null;
+  }
+  return Object.is(expected, observed) ? null : path;
+};
+
 const buildClient = (cluster: QuickwitCluster): CorpusIndexClient => ({
   createIndex: async (config) =>
     await Result.tryPromise({
@@ -438,6 +541,55 @@ const buildClient = (cluster: QuickwitCluster): CorpusIndexClient => ({
           });
         }
         return true;
+      },
+      catch: toCorpusIndexError,
+    }),
+
+  attestIndexConfig: async (config) =>
+    await Result.tryPromise({
+      try: async () => {
+        const request = {
+          baseUrl: mutationBaseUrl(cluster),
+          path: `/api/v1/indexes/${config.index_id}`,
+          init: { method: "GET" },
+          timeoutMs: ADMIN_TIMEOUT_MS,
+        } satisfies CorpusIndexRequest;
+        const response = await sendRequest(request);
+        if (response.status === 404) {
+          return { status: "missing" } as const;
+        }
+        if (!response.ok) {
+          throw new CorpusIndexError({
+            message: `corpus index ${requestLabel(request)} -> ${response.status}`,
+            status: response.status,
+          });
+        }
+        const metadata = await response.json().catch((error: unknown) => {
+          throw requestFailure({
+            request,
+            error,
+            unaborted: "returned an unreadable body",
+          });
+        });
+        if (!isRecord(metadata) || !isRecord(metadata["index_config"])) {
+          throw new CorpusIndexError({
+            message: "corpus index metadata omitted its index config",
+          });
+        }
+        const observedConfig = metadata["index_config"];
+        const difference = configDifference(config, observedConfig);
+        if (difference !== null) {
+          throw new CorpusIndexError({
+            message: `corpus index ${config.index_id} configuration drift at ${difference}`,
+          });
+        }
+        const indexUri = observedConfig["index_uri"];
+        if (typeof indexUri !== "string" || indexUri.length === 0) {
+          throw new CorpusIndexError({
+            message: `corpus index ${config.index_id} metadata omitted its index URI`,
+          });
+        }
+        return { status: "matching", indexUri } as const;
       },
       catch: toCorpusIndexError,
     }),

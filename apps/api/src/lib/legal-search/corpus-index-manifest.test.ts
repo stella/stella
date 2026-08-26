@@ -11,9 +11,9 @@ import {
 
 const EXPECTED_DIGESTS = {
   case_law_v5:
-    "c4ce8a1f9b80f87639af82d6c3a4c426b3bf553e0398ab8ff08c663d7ad0a87b",
+    "07de324370d49c611adfaa9b0667853a936a33deaf16e36d69859c051bdfdce4",
   legislation_v2:
-    "fc0d1e8e972d95cae450f4863d5a9902db7c9634517e65f57748027a4ca2a265",
+    "4b10263aa850392fc929b596a776a7bda7746d39e190a4224aeb54510b310fba",
 } as const satisfies Record<keyof typeof CORPUS_INDEX_MANIFESTS, string>;
 
 test("the final-generation registry is exact and fails closed", () => {
@@ -135,7 +135,7 @@ test("v5 removes stale and repeated physical fields", () => {
   );
   expect(manifest.engine.binaryVersion).toBe("0.9.0");
   expect(manifest.projection.builderVersion).toBe("case-law-passages-v1");
-  expect(manifest.engine.indexConfig.version).toBe("0.8");
+  expect(manifest.engine.indexConfig.version).toBe("0.9");
   expect(manifest.engine.indexConfig.doc_mapping.mode).toBe("strict");
   expect(manifest.engine.indexConfig.doc_mapping.timestamp_field).toBe(
     "decision_date_ts",
@@ -184,6 +184,7 @@ test("v5 removes stale and repeated physical fields", () => {
     indexed: false,
     stored: true,
     fast: false,
+    fieldnorms: false,
   });
   expect(fields.get("decision_date_ts")).toMatchObject({
     type: "datetime",
@@ -191,6 +192,7 @@ test("v5 removes stale and repeated physical fields", () => {
     stored: false,
     fast: true,
     fast_precision: "seconds",
+    output_format: "rfc3339",
   });
   expect(fields.get("decision_year")).toEqual({
     name: "decision_year",
@@ -198,6 +200,8 @@ test("v5 removes stale and repeated physical fields", () => {
     indexed: false,
     stored: false,
     fast: true,
+    coerce: true,
+    output_format: "number",
   });
   expect(manifest.projection.yearFacetField).toBe("decision_year");
 });
@@ -228,6 +232,26 @@ test("final manifests make every storage and index cost explicit", () => {
       expect(fields.has(absent)).toBe(false);
     }
     expect(manifest.engine.indexConfig.doc_mapping.store_source).toBe(false);
+    expect(manifest.engine.indexConfig.doc_mapping.max_num_partitions).toBe(
+      200,
+    );
+    expect(manifest.engine.indexConfig.doc_mapping.index_field_presence).toBe(
+      false,
+    );
+    expect(manifest.engine.indexConfig.doc_mapping.store_document_size).toBe(
+      false,
+    );
+    expect(manifest.engine.indexConfig.indexing_settings).toMatchObject({
+      commit_timeout_secs: 60,
+      docstore_blocksize: 1_000_000,
+      docstore_compression_level: 8,
+      split_num_docs_target: 10_000_000,
+      resources: { heap_size: 2_000_000_000 },
+    });
+    expect(manifest.engine.indexConfig.ingest_settings).toEqual({
+      min_shards: 1,
+    });
+    expect(manifest.engine.indexConfig.retention).toBeNull();
     expect(manifest.engine.indexConfig.search_settings).toEqual({
       default_search_fields: ["title", "text"],
     });

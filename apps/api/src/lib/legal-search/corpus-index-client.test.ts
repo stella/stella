@@ -8,6 +8,10 @@ import {
   CORPUS_INDEX_INGEST_TIMEOUT_MS,
   getCorpusIndexClient,
 } from "@/api/lib/legal-search/corpus-index-client";
+import {
+  corpusIndexConfigFromManifest,
+  CORPUS_INDEX_MANIFESTS,
+} from "@/api/lib/legal-search/corpus-index-manifest";
 import { readCorpusIndexSearchPage } from "@/api/lib/legal-search/corpus-index-pagination";
 
 // Pins the corpus-index HTTP request contract. The engine defaults search
@@ -27,6 +31,7 @@ type RecordedRequest = {
 let requests: RecordedRequest[];
 let responseBody: unknown;
 let responseBodyForUrl: ((url: URL) => unknown) | null;
+let responseStatus: number;
 const originalFetch = globalThis.fetch;
 const originalCorpusIndexEndpoint = envBase.CORPUS_INDEX_ENDPOINT;
 const originalCorpusIndexSearchEndpoint = envBase.CORPUS_INDEX_SEARCH_ENDPOINT;
@@ -37,6 +42,7 @@ beforeEach(() => {
   requests = [];
   responseBody = {};
   responseBodyForUrl = null;
+  responseStatus = 200;
   const resolveUrl = (input: Parameters<typeof fetch>[0]): string => {
     if (typeof input === "string") {
       return input;
@@ -59,7 +65,7 @@ beforeEach(() => {
     });
     const body =
       responseBodyForUrl === null ? responseBody : responseBodyForUrl(url);
-    return new Response(JSON.stringify(body), { status: 200 });
+    return new Response(JSON.stringify(body), { status: responseStatus });
   };
   globalThis.fetch = Object.assign(stub, {
     preconnect: originalFetch.preconnect,
@@ -161,6 +167,163 @@ test("q09 mutations cannot leak onto its read endpoint", async () => {
 
   expect(result.isOk()).toBe(true);
   expect(requests.at(0)?.host).toBe("localhost:7291");
+});
+
+const finalCaseLawConfig = () =>
+  corpusIndexConfigFromManifest(
+    CORPUS_INDEX_MANIFESTS.case_law_v5,
+    "case_law_v5_cs_sk",
+  );
+
+test("config attestation distinguishes a missing immutable index", async () => {
+  responseStatus = 404;
+  Object.assign(envBase, {
+    CORPUS_INDEX_Q09_ENDPOINT: "http://localhost:7291",
+  });
+
+  const result =
+    await getCorpusIndexClient("q09").attestIndexConfig(finalCaseLawConfig());
+
+  expect(result.isOk()).toBe(true);
+  if (result.isOk()) {
+    expect(result.value).toEqual({ status: "missing" });
+  }
+});
+
+test("config attestation accepts Quickwit-owned metadata and defaults", async () => {
+  const config = finalCaseLawConfig();
+  responseBody = {
+    index_uid: `${config.index_id}:01JTEST`,
+    index_config: {
+      ...config,
+      index_uri: `s3://corpus-indexes/${config.index_id}`,
+      doc_mapping: {
+        ...config.doc_mapping,
+        doc_mapping_uid: "01JTESTDOCMAPPING",
+        tag_fields: config.doc_mapping.tag_fields.toReversed(),
+        max_num_partitions: 200,
+        index_field_presence: false,
+        store_document_size: false,
+      },
+      indexing_settings: {
+        ...config.indexing_settings,
+        split_num_docs_target: 10_000_000,
+        docstore_compression_level: 8,
+      },
+      ingest_settings: { min_shards: 1 },
+      retention: null,
+    },
+  };
+  Object.assign(envBase, {
+    CORPUS_INDEX_Q09_ENDPOINT: "http://localhost:7291",
+  });
+
+  const result = await getCorpusIndexClient("q09").attestIndexConfig(config);
+
+  expect(result.isOk()).toBe(true);
+  if (result.isOk()) {
+    expect(result.value).toEqual({
+      status: "matching",
+      indexUri: `s3://corpus-indexes/${config.index_id}`,
+    });
+  }
+});
+
+test("config attestation rejects semantic keys omitted from a manifest", async () => {
+  const config = corpusIndexConfigFromManifest(
+    CORPUS_INDEX_MANIFESTS.legislation_v2,
+    "legislation_v2_cze",
+  );
+  const { timestamp_field: expectedTimestamp, ...mappingWithoutTimestamp } =
+    config.doc_mapping;
+  expect(expectedTimestamp).toBeNull();
+  const configWithoutTimestamp = {
+    ...config,
+    doc_mapping: mappingWithoutTimestamp,
+  };
+  responseBody = {
+    index_config: {
+      ...configWithoutTimestamp,
+      index_uri: `s3://corpus-indexes/${config.index_id}`,
+      doc_mapping: {
+        ...mappingWithoutTimestamp,
+        timestamp_field: "effective_date",
+        doc_mapping_uid: "01JTESTDOCMAPPING",
+      },
+    },
+  };
+  Object.assign(envBase, {
+    CORPUS_INDEX_Q09_ENDPOINT: "http://localhost:7291",
+  });
+
+  const result = await getCorpusIndexClient("q09").attestIndexConfig(
+    configWithoutTimestamp,
+  );
+
+  expect(result.isErr()).toBe(true);
+  if (result.isErr()) {
+    expect(result.error.message).toContain(
+      "configuration drift at $.doc_mapping.timestamp_field",
+    );
+  }
+});
+
+test("config attestation fails closed on physical mapping drift", async () => {
+  const config = finalCaseLawConfig();
+  const fieldMappings = config.doc_mapping.field_mappings.map((field) =>
+    field.name === "text" ? { ...field, tokenizer: "raw" as const } : field,
+  );
+  responseBody = {
+    index_config: {
+      ...config,
+      index_uri: `s3://corpus-indexes/${config.index_id}`,
+      doc_mapping: { ...config.doc_mapping, field_mappings: fieldMappings },
+    },
+  };
+  Object.assign(envBase, {
+    CORPUS_INDEX_Q09_ENDPOINT: "http://localhost:7291",
+  });
+
+  const result = await getCorpusIndexClient("q09").attestIndexConfig(config);
+
+  expect(result.isErr()).toBe(true);
+  if (result.isErr()) {
+    expect(result.error.message).toContain("configuration drift");
+    expect(result.error.message).toContain("tokenizer");
+  }
+});
+
+test("config attestation rejects an extra physical field mapping", async () => {
+  const config = finalCaseLawConfig();
+  responseBody = {
+    index_config: {
+      ...config,
+      index_uri: `s3://corpus-indexes/${config.index_id}`,
+      doc_mapping: {
+        ...config.doc_mapping,
+        field_mappings: [
+          ...config.doc_mapping.field_mappings,
+          {
+            name: "unexpected",
+            type: "text",
+            indexed: true,
+            stored: false,
+            fast: false,
+          },
+        ],
+      },
+    },
+  };
+  Object.assign(envBase, {
+    CORPUS_INDEX_Q09_ENDPOINT: "http://localhost:7291",
+  });
+
+  const result = await getCorpusIndexClient("q09").attestIndexConfig(config);
+
+  expect(result.isErr()).toBe(true);
+  if (result.isErr()) {
+    expect(result.error.message).toContain("field_mappings.length");
+  }
 });
 
 test("search sends the documented sort_by parameter", async () => {
