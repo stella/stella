@@ -740,139 +740,150 @@ const processDecisionAttempt = async ({
       sourceRawContentType: true,
       sourceUrl: true,
     } as const;
-    let provisionalIdentified = await tx.query.caseLawDecisions.findFirst({
-      where:
-        provisionalClaimedDecisionId === undefined
-          ? caseLawDecisionIdentityWhere({
-              caseNumber: result.caseNumber,
-              language: result.language,
-              sourceDocumentId: result.sourceDocumentId,
-              sourceId,
-            })
-          : { id: { eq: provisionalClaimedDecisionId } },
-      columns: identityColumns,
-    });
-    if (
-      exactClaimedDecisionId !== undefined &&
-      provisionalIdentified === undefined
-    ) {
-      // A task from the previous rollout can insert the decision after a new
-      // task reserved its identities but before that reservation produced a
-      // row. Reconcile the durable reservation to the decision-table winner;
-      // otherwise every replay targets the abandoned UUID and loses the same
-      // publisher-identity uniqueness race forever.
-      const rolloutWinners = await tx.query.caseLawDecisions.findMany({
-        where: {
-          sourceId: { eq: sourceId },
-          sourceDocumentId: { in: exactSourceIdentityCandidates },
-        },
+    const resolveExistingDecision = async () => {
+      let provisionalIdentified = await tx.query.caseLawDecisions.findFirst({
+        where:
+          provisionalClaimedDecisionId === undefined
+            ? caseLawDecisionIdentityWhere({
+                caseNumber: result.caseNumber,
+                language: result.language,
+                sourceDocumentId: result.sourceDocumentId,
+                sourceId,
+              })
+            : { id: { eq: provisionalClaimedDecisionId } },
         columns: identityColumns,
-        limit: MAX_SOURCE_IDENTITY_CANDIDATES,
       });
-      const rolloutWinnerIds = [...new Set(rolloutWinners.map(({ id }) => id))];
-      if (rolloutWinnerIds.length > 1) {
-        panic("Publisher identities have conflicting decision rows");
-      }
-      const rolloutWinner = rolloutWinners.at(0);
-      if (rolloutWinner !== undefined) {
-        const abandonedDecisionId = exactClaimedDecisionId;
-        // audit: skip — rolling-deployment identity convergence; public data
-        await tx
-          .update(caseLawDecisionSourceIdentities)
-          .set({ decisionId: rolloutWinner.id })
-          .where(
-            and(
-              eq(caseLawDecisionSourceIdentities.sourceId, sourceId),
-              eq(
-                caseLawDecisionSourceIdentities.decisionId,
-                abandonedDecisionId,
-              ),
-              inArray(
-                caseLawDecisionSourceIdentities.sourceDocumentId,
-                exactSourceIdentityCandidates,
-              ),
-            ),
-          );
-        exactClaimedDecisionId = rolloutWinner.id;
-        provisionalClaimedDecisionId = rolloutWinner.id;
-        provisionalIdentified = rolloutWinner;
-      }
-    }
-    // A repair-only claim is consumable only while the decision is still
-    // stored under that degraded identity. Once upgraded, the retained audit
-    // mapping must not let an unrelated row reuse the heuristic fingerprint.
-    const repairClaimIsCurrent =
-      exactClaimedDecisionId !== undefined ||
-      repairClaimedDecisionId === undefined ||
-      (provisionalIdentified?.sourceDocumentId !== null &&
-        provisionalIdentified?.sourceDocumentId !== undefined &&
-        repairSourceIdentityCandidates.includes(
-          provisionalIdentified.sourceDocumentId,
-        ));
-    const claimedDecisionId = repairClaimIsCurrent
-      ? provisionalClaimedDecisionId
-      : undefined;
-    const exactIdentified =
-      claimedDecisionId === provisionalClaimedDecisionId
-        ? provisionalIdentified
-        : await tx.query.caseLawDecisions.findFirst({
-            where: caseLawDecisionIdentityWhere({
-              caseNumber: result.caseNumber,
-              language: result.language,
-              sourceDocumentId: result.sourceDocumentId,
-              sourceId,
-            }),
-            columns: identityColumns,
-          });
-    const identified =
-      exactIdentified ??
-      (claimedDecisionId === undefined &&
-      exactSourceIdentityCandidates.length > 1
-        ? await tx.query.caseLawDecisions.findFirst({
-            where: {
-              sourceId: { eq: sourceId },
-              sourceDocumentId: {
-                in: exactSourceIdentityCandidates.filter(
-                  (identity) => identity !== result.sourceDocumentId,
+      if (
+        exactClaimedDecisionId !== undefined &&
+        provisionalIdentified === undefined
+      ) {
+        // A task from the previous rollout can insert the decision after a new
+        // task reserved its identities but before that reservation produced a
+        // row. Reconcile the durable reservation to the decision-table winner;
+        // otherwise every replay targets the abandoned UUID and loses the same
+        // publisher-identity uniqueness race forever.
+        const rolloutWinners = await tx.query.caseLawDecisions.findMany({
+          where: {
+            sourceId: { eq: sourceId },
+            sourceDocumentId: { in: exactSourceIdentityCandidates },
+          },
+          columns: identityColumns,
+          limit: MAX_SOURCE_IDENTITY_CANDIDATES,
+        });
+        const rolloutWinnerIds = [
+          ...new Set(rolloutWinners.map(({ id }) => id)),
+        ];
+        if (rolloutWinnerIds.length > 1) {
+          panic("Publisher identities have conflicting decision rows");
+        }
+        const rolloutWinner = rolloutWinners.at(0);
+        if (rolloutWinner !== undefined) {
+          const abandonedDecisionId = exactClaimedDecisionId;
+          // audit: skip — rolling-deployment identity convergence; public data
+          await tx
+            .update(caseLawDecisionSourceIdentities)
+            .set({ decisionId: rolloutWinner.id })
+            .where(
+              and(
+                eq(caseLawDecisionSourceIdentities.sourceId, sourceId),
+                eq(
+                  caseLawDecisionSourceIdentities.decisionId,
+                  abandonedDecisionId,
                 ),
+                inArray(
+                  caseLawDecisionSourceIdentities.sourceDocumentId,
+                  exactSourceIdentityCandidates,
+                ),
+              ),
+            );
+          exactClaimedDecisionId = rolloutWinner.id;
+          provisionalClaimedDecisionId = rolloutWinner.id;
+          provisionalIdentified = rolloutWinner;
+        }
+      }
+      // A repair-only claim is consumable only while the decision is still
+      // stored under that degraded identity. Once upgraded, the retained audit
+      // mapping must not let an unrelated row reuse the heuristic fingerprint.
+      const repairClaimIsCurrent =
+        exactClaimedDecisionId !== undefined ||
+        repairClaimedDecisionId === undefined ||
+        (provisionalIdentified?.sourceDocumentId !== null &&
+          provisionalIdentified?.sourceDocumentId !== undefined &&
+          repairSourceIdentityCandidates.includes(
+            provisionalIdentified.sourceDocumentId,
+          ));
+      const claimedDecisionId = repairClaimIsCurrent
+        ? provisionalClaimedDecisionId
+        : undefined;
+      const exactIdentified =
+        claimedDecisionId === provisionalClaimedDecisionId
+          ? provisionalIdentified
+          : await tx.query.caseLawDecisions.findFirst({
+              where: caseLawDecisionIdentityWhere({
+                caseNumber: result.caseNumber,
+                language: result.language,
+                sourceDocumentId: result.sourceDocumentId,
+                sourceId,
+              }),
+              columns: identityColumns,
+            });
+      const identified =
+        exactIdentified ??
+        (claimedDecisionId === undefined &&
+        exactSourceIdentityCandidates.length > 1
+          ? await tx.query.caseLawDecisions.findFirst({
+              where: {
+                sourceId: { eq: sourceId },
+                sourceDocumentId: {
+                  in: exactSourceIdentityCandidates.filter(
+                    (identity) => identity !== result.sourceDocumentId,
+                  ),
+                },
               },
-            },
-            columns: identityColumns,
-          })
-        : undefined);
+              columns: identityColumns,
+            })
+          : undefined);
 
-    // Adapters that learned the publisher's document id after their first
-    // release may adopt a legacy null-id row, but only after proving which
-    // publisher document produced it. A docket can publish siblings, so
-    // encounter order is not identity.
-    const legacy =
-      identified || !result.sourceDocumentId || claimedDecisionId !== undefined
-        ? undefined
-        : await tx.query.caseLawDecisions.findFirst({
-            where: {
-              sourceId: { eq: sourceId },
-              caseNumber: result.caseNumber,
-              language: result.language,
-              sourceDocumentId: { isNull: true },
-            },
-            columns: identityColumns,
-          });
-    const ecliMatches =
-      legacy !== undefined &&
-      result.ecli !== undefined &&
-      legacy.ecli === result.ecli;
-    const legacyEcliContradicts =
-      legacy !== undefined &&
-      legacy.ecli !== null &&
-      result.ecli !== undefined &&
-      legacy.ecli !== result.ecli;
-    const sourceUrlMatches =
-      legacy !== undefined &&
-      !legacyEcliContradicts &&
-      legacy.sourceUrl !== null &&
-      result.legacySourceUrls?.includes(legacy.sourceUrl) === true;
-    const legacyMatches = ecliMatches || sourceUrlMatches;
-    const existing = identified ?? (legacyMatches ? legacy : undefined);
+      // Adapters that learned the publisher's document id after their first
+      // release may adopt a legacy null-id row, but only after proving which
+      // publisher document produced it. A docket can publish siblings, so
+      // encounter order is not identity.
+      const legacy =
+        identified ||
+        !result.sourceDocumentId ||
+        claimedDecisionId !== undefined
+          ? undefined
+          : await tx.query.caseLawDecisions.findFirst({
+              where: {
+                sourceId: { eq: sourceId },
+                caseNumber: result.caseNumber,
+                language: result.language,
+                sourceDocumentId: { isNull: true },
+              },
+              columns: identityColumns,
+            });
+      const ecliMatches =
+        legacy !== undefined &&
+        result.ecli !== undefined &&
+        legacy.ecli === result.ecli;
+      const legacyEcliContradicts =
+        legacy !== undefined &&
+        legacy.ecli !== null &&
+        result.ecli !== undefined &&
+        legacy.ecli !== result.ecli;
+      const sourceUrlMatches =
+        legacy !== undefined &&
+        !legacyEcliContradicts &&
+        legacy.sourceUrl !== null &&
+        result.legacySourceUrls?.includes(legacy.sourceUrl) === true;
+      const legacyMatches = ecliMatches || sourceUrlMatches;
+      const existing = identified ?? (legacyMatches ? legacy : undefined);
+      return {
+        claimedDecisionId,
+        existing,
+      };
+    };
+    const { claimedDecisionId, existing } = await resolveExistingDecision();
     const decisionId = claimedDecisionId ?? existing?.id ?? proposedDecisionId;
     const existingIdentity = existing?.sourceDocumentId ?? undefined;
     const incomingSupersedesExisting =
@@ -943,462 +954,525 @@ const processDecisionAttempt = async ({
       (result.isListingOnly === true &&
         !storedPartialObservation.isListingOnly));
 
-  if (
-    preservesExistingDetail &&
-    existing.corpusMirrorStatus !== CASE_LAW_CORPUS_MIRROR_STATUS.PENDING
-  ) {
-    // A listing-only result carries less information than an identified row
-    // that was previously enriched from detail. Advance only the source
-    // observation watermark: replacing metadata, dates, raw-source pointers
-    // or payload fields would make a temporary publisher regression durable.
-    // A pending corpus mirror deliberately continues below: it must replay
-    // the stored payload before this source page is allowed to advance.
-    const watermarkAdvanced = await scopedDb(
-      // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
-      async (tx) => {
-        // audit: skip — background case-law observation watermark; public data
-        return (
-          await tx
-            .update(caseLawDecisions)
-            .set({
-              sourceObservedAt: observedAt,
-              sourceObservationOrder: observationOrder,
-              sourceObservationHash: result.rawHash,
-              updatedAt: sql`${caseLawDecisions.updatedAt}`,
-            })
-            .where(
-              and(
-                eq(caseLawDecisions.id, existing.id),
-                storedObservationPrecedes({ order: observationOrder }),
-                isNull(caseLawDecisions.redactedAt),
-                eq(
-                  caseLawDecisions.corpusMirrorStatus,
-                  CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED,
-                ),
-              ),
-            )
-            .returning({ id: caseLawDecisions.id })
-        ).at(0);
-      },
-    );
-    if (!watermarkAdvanced) {
-      const current = await scopedDb((tx) =>
-        tx.query.caseLawDecisions.findFirst({
-          where: { id: { eq: existing.id } },
-          columns: {
-            corpusMirrorStatus: true,
-            sourceObservationOrder: true,
-            redactedAt: true,
+  const resolveExistingDecisionPolicy =
+    async (): Promise<ProcessResult | null> => {
+      if (
+        preservesExistingDetail &&
+        existing.corpusMirrorStatus !== CASE_LAW_CORPUS_MIRROR_STATUS.PENDING
+      ) {
+        // A listing-only result carries less information than an identified row
+        // that was previously enriched from detail. Advance only the source
+        // observation watermark: replacing metadata, dates, raw-source pointers
+        // or payload fields would make a temporary publisher regression durable.
+        // A pending corpus mirror deliberately continues below: it must replay
+        // the stored payload before this source page is allowed to advance.
+        const watermarkAdvanced = await scopedDb(
+          // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
+          async (tx) => {
+            // audit: skip — background case-law observation watermark; public data
+            return (
+              await tx
+                .update(caseLawDecisions)
+                .set({
+                  sourceObservedAt: observedAt,
+                  sourceObservationOrder: observationOrder,
+                  sourceObservationHash: result.rawHash,
+                  updatedAt: sql`${caseLawDecisions.updatedAt}`,
+                })
+                .where(
+                  and(
+                    eq(caseLawDecisions.id, existing.id),
+                    storedObservationPrecedes({ order: observationOrder }),
+                    isNull(caseLawDecisions.redactedAt),
+                    eq(
+                      caseLawDecisions.corpusMirrorStatus,
+                      CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED,
+                    ),
+                  ),
+                )
+                .returning({ id: caseLawDecisions.id })
+            ).at(0);
           },
-        }),
-      );
-      if (current?.redactedAt) {
+        );
+        if (!watermarkAdvanced) {
+          const current = await scopedDb((tx) =>
+            tx.query.caseLawDecisions.findFirst({
+              where: { id: { eq: existing.id } },
+              columns: {
+                corpusMirrorStatus: true,
+                sourceObservationOrder: true,
+                redactedAt: true,
+              },
+            }),
+          );
+          if (current?.redactedAt) {
+            return {
+              status: PROCESS_DECISION_STATUS.COMPLETE,
+              inserted: false,
+              searchVectorFailed: false,
+            };
+          }
+          if (
+            current?.corpusMirrorStatus ===
+            CASE_LAW_CORPUS_MIRROR_STATUS.PENDING
+          ) {
+            return {
+              status: PROCESS_DECISION_STATUS.RETRYABLE,
+              inserted: false,
+              reason: PROCESS_DECISION_RETRY_REASON.CORPUS_WRITE,
+            };
+          }
+          if (
+            !current ||
+            (current.sourceObservationOrder !== null &&
+              current.sourceObservationOrder >= observationOrder)
+          ) {
+            return {
+              status: PROCESS_DECISION_STATUS.COMPLETE,
+              inserted: false,
+              searchVectorFailed: false,
+            };
+          }
+          if (contentionReconciliation === CONTENTION_RECONCILIATION.RETRY) {
+            return {
+              status: PROCESS_DECISION_STATUS.RETRYABLE,
+              inserted: false,
+              reason: PROCESS_DECISION_RETRY_REASON.CONTENTION,
+            };
+          }
+          return await processDecisionAttempt({
+            input,
+            sourceId,
+            scopedDb,
+            observedAt,
+            observationOrder,
+            contentionReconciliation: CONTENTION_RECONCILIATION.RETRY,
+            refresh,
+          });
+        }
         return {
           status: PROCESS_DECISION_STATUS.COMPLETE,
           inserted: false,
           searchVectorFailed: false,
         };
       }
+
       if (
-        current?.corpusMirrorStatus === CASE_LAW_CORPUS_MIRROR_STATUS.PENDING
+        existing &&
+        existing.corpusMirrorStatus === CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED &&
+        refresh === DECISION_REFRESH.WHEN_SOURCE_CHANGED &&
+        shouldSkipRefresh({
+          existingMetadata: existing.metadata,
+          existingSourceRawContentType: existing.sourceRawContentType,
+          existingSourceHash: existing.sourceHash,
+          incomingMetadata: result.metadata,
+          incomingRawHash: result.rawHash,
+          incomingSourceRawContentType:
+            result.sourceRawContentType ?? "text/plain",
+          incomingUsesSourceRawBytes: result.sourceRawBytes !== undefined,
+        })
       ) {
-        return {
-          status: PROCESS_DECISION_STATUS.RETRYABLE,
-          inserted: false,
-          reason: PROCESS_DECISION_RETRY_REASON.CORPUS_WRITE,
-        };
-      }
-      if (
-        !current ||
-        (current.sourceObservationOrder !== null &&
-          current.sourceObservationOrder >= observationOrder)
-      ) {
+        const watermarkAdvanced = await scopedDb(
+          // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
+          async (tx) => {
+            // audit: skip — background case-law ingestion ordering metadata; public case-law data, not user actions
+            return (
+              await tx
+                .update(caseLawDecisions)
+                .set({
+                  sourceObservedAt: observedAt,
+                  sourceObservationOrder: observationOrder,
+                  sourceObservationHash: result.rawHash,
+                  // Drizzle applies the schema's on-update value unless this column is
+                  // explicit. A watermark-only replay is not a content modification.
+                  updatedAt: sql`${caseLawDecisions.updatedAt}`,
+                })
+                .where(
+                  and(
+                    eq(caseLawDecisions.id, existing.id),
+                    storedObservationPrecedes({ order: observationOrder }),
+                    isNull(caseLawDecisions.redactedAt),
+                    sql`${caseLawDecisions.sourceHash} IS NOT DISTINCT FROM ${existing.sourceHash}`,
+                    // `::text::jsonb`, never a bare `::jsonb`: the cast fixes the
+                    // bind parameter's type, and the driver then JSON-encodes the
+                    // already-serialized string, so the comparison sees a jsonb
+                    // *string* rather than the object and never matches.
+                    sql`${caseLawDecisions.metadata} IS NOT DISTINCT FROM ${JSON.stringify(existing.metadata)}::text::jsonb`,
+                  ),
+                )
+                .returning({ id: caseLawDecisions.id })
+            ).at(0);
+          },
+        );
+        if (!watermarkAdvanced) {
+          const current = await scopedDb((tx) =>
+            tx.query.caseLawDecisions.findFirst({
+              where: { id: { eq: existing.id } },
+              columns: {
+                corpusMirrorStatus: true,
+                sourceObservationOrder: true,
+                redactedAt: true,
+              },
+            }),
+          );
+          if (current?.redactedAt) {
+            return {
+              status: PROCESS_DECISION_STATUS.COMPLETE,
+              inserted: false,
+              searchVectorFailed: false,
+            };
+          }
+          if (
+            current?.corpusMirrorStatus ===
+            CASE_LAW_CORPUS_MIRROR_STATUS.PENDING
+          ) {
+            return {
+              status: PROCESS_DECISION_STATUS.RETRYABLE,
+              inserted: false,
+              reason: PROCESS_DECISION_RETRY_REASON.CORPUS_WRITE,
+            };
+          }
+          if (
+            !current ||
+            (current.sourceObservationOrder !== null &&
+              current.sourceObservationOrder >= observationOrder)
+          ) {
+            return {
+              status: PROCESS_DECISION_STATUS.COMPLETE,
+              inserted: false,
+              searchVectorFailed: false,
+            };
+          }
+          if (contentionReconciliation === CONTENTION_RECONCILIATION.RETRY) {
+            return {
+              status: PROCESS_DECISION_STATUS.RETRYABLE,
+              inserted: false,
+              reason: PROCESS_DECISION_RETRY_REASON.CONTENTION,
+            };
+          }
+          return await processDecisionAttempt({
+            input,
+            sourceId,
+            scopedDb,
+            observedAt,
+            observationOrder,
+            contentionReconciliation: CONTENTION_RECONCILIATION.RETRY,
+            refresh,
+          });
+        }
         return {
           status: PROCESS_DECISION_STATUS.COMPLETE,
           inserted: false,
           searchVectorFailed: false,
         };
       }
-      if (contentionReconciliation === CONTENTION_RECONCILIATION.RETRY) {
-        return {
-          status: PROCESS_DECISION_STATUS.RETRYABLE,
-          inserted: false,
-          reason: PROCESS_DECISION_RETRY_REASON.CONTENTION,
-        };
-      }
-      return await processDecisionAttempt({
-        input,
-        sourceId,
-        scopedDb,
-        observedAt,
-        observationOrder,
-        contentionReconciliation: CONTENTION_RECONCILIATION.RETRY,
-        refresh,
-      });
-    }
-    return {
-      status: PROCESS_DECISION_STATUS.COMPLETE,
-      inserted: false,
-      searchVectorFailed: false,
+
+      return null;
     };
+  const existingPolicyOutcome = await resolveExistingDecisionPolicy();
+  if (existingPolicyOutcome !== null) {
+    return existingPolicyOutcome;
   }
 
-  if (
-    existing &&
-    existing.corpusMirrorStatus === CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED &&
-    refresh === DECISION_REFRESH.WHEN_SOURCE_CHANGED &&
-    shouldSkipRefresh({
-      existingMetadata: existing.metadata,
-      existingSourceRawContentType: existing.sourceRawContentType,
-      existingSourceHash: existing.sourceHash,
-      incomingMetadata: result.metadata,
-      incomingRawHash: result.rawHash,
-      incomingSourceRawContentType: result.sourceRawContentType ?? "text/plain",
-      incomingUsesSourceRawBytes: result.sourceRawBytes !== undefined,
-    })
-  ) {
-    const watermarkAdvanced = await scopedDb(
-      // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
-      async (tx) => {
-        // audit: skip — background case-law ingestion ordering metadata; public case-law data, not user actions
-        return (
-          await tx
-            .update(caseLawDecisions)
-            .set({
-              sourceObservedAt: observedAt,
-              sourceObservationOrder: observationOrder,
-              sourceObservationHash: result.rawHash,
-              // Drizzle applies the schema's on-update value unless this column is
-              // explicit. A watermark-only replay is not a content modification.
-              updatedAt: sql`${caseLawDecisions.updatedAt}`,
-            })
-            .where(
-              and(
-                eq(caseLawDecisions.id, existing.id),
-                storedObservationPrecedes({ order: observationOrder }),
-                isNull(caseLawDecisions.redactedAt),
-                sql`${caseLawDecisions.sourceHash} IS NOT DISTINCT FROM ${existing.sourceHash}`,
-                // `::text::jsonb`, never a bare `::jsonb`: the cast fixes the
-                // bind parameter's type, and the driver then JSON-encodes the
-                // already-serialized string, so the comparison sees a jsonb
-                // *string* rather than the object and never matches.
-                sql`${caseLawDecisions.metadata} IS NOT DISTINCT FROM ${JSON.stringify(existing.metadata)}::text::jsonb`,
-              ),
-            )
-            .returning({ id: caseLawDecisions.id })
-        ).at(0);
-      },
-    );
-    if (!watermarkAdvanced) {
-      const current = await scopedDb((tx) =>
-        tx.query.caseLawDecisions.findFirst({
-          where: { id: { eq: existing.id } },
-          columns: {
-            corpusMirrorStatus: true,
-            sourceObservationOrder: true,
-            redactedAt: true,
-          },
-        }),
-      );
-      if (current?.redactedAt) {
-        return {
-          status: PROCESS_DECISION_STATUS.COMPLETE,
-          inserted: false,
-          searchVectorFailed: false,
-        };
-      }
-      if (
-        current?.corpusMirrorStatus === CASE_LAW_CORPUS_MIRROR_STATUS.PENDING
-      ) {
-        return {
-          status: PROCESS_DECISION_STATUS.RETRYABLE,
-          inserted: false,
-          reason: PROCESS_DECISION_RETRY_REASON.CORPUS_WRITE,
-        };
-      }
-      if (
-        !current ||
-        (current.sourceObservationOrder !== null &&
-          current.sourceObservationOrder >= observationOrder)
-      ) {
-        return {
-          status: PROCESS_DECISION_STATUS.COMPLETE,
-          inserted: false,
-          searchVectorFailed: false,
-        };
-      }
-      if (contentionReconciliation === CONTENTION_RECONCILIATION.RETRY) {
-        return {
-          status: PROCESS_DECISION_STATUS.RETRYABLE,
-          inserted: false,
-          reason: PROCESS_DECISION_RETRY_REASON.CONTENTION,
-        };
-      }
-      return await processDecisionAttempt({
-        input,
-        sourceId,
-        scopedDb,
-        observedAt,
-        observationOrder,
-        contentionReconciliation: CONTENTION_RECONCILIATION.RETRY,
-        refresh,
-      });
-    }
-    return {
-      status: PROCESS_DECISION_STATUS.COMPLETE,
-      inserted: false,
-      searchVectorFailed: false,
-    };
-  }
+  // Acquire the raw-source artifact before persisting its hash. A new row
+  // cannot safely advance without the artifact; an update preserves its old
+  // key and carries a retryable failure through the eventual row outcome.
+  const acquireSourceRawArtifact = async () => {
+    const rawPayload = preservesExistingDetail
+      ? undefined
+      : (result.sourceRawBytes ?? result.sourceRaw);
+    const rawContentType = result.sourceRawContentType ?? "text/plain";
 
-  // Upload sourceRaw to S3 — best-effort; failure must not
-  // prevent the decision from being inserted.
-  const rawPayload = preservesExistingDetail
-    ? undefined
-    : (result.sourceRawBytes ?? result.sourceRaw);
-  const rawContentType = result.sourceRawContentType ?? "text/plain";
-
-  let sourceRawS3Key: string | null = null;
-  let sourceRawContentType: string | null = null;
-  let s3UploadFailed = false;
-  if (preservesExistingDetail) {
-    sourceRawS3Key = existing.sourceRawS3Key;
-    sourceRawContentType = existing.sourceRawContentType;
-  } else if (rawPayload !== undefined) {
-    try {
-      sourceRawS3Key = await uploadSourceRaw({
-        sourceId,
-        data: rawPayload,
-        contentType: rawContentType,
-        storedKey: existing?.sourceRawS3Key ?? null,
-        storedContentType: existing?.sourceRawContentType ?? null,
-      });
-      sourceRawContentType = rawContentType;
-    } catch (error) {
-      if (!existing) {
-        // New decision: hold the page's cursor and retry the slice.
-        // Inserting with sourceRawS3Key: null would set sourceHash,
-        // causing the dedup check to skip it permanently — the raw
-        // source would be lost forever.
-        //
-        // Reported as retryable rather than thrown: the decision loop
-        // catches a throw, counts it as skipped, and lets the cursor
-        // advance, so a forward-only traversal passes the decision and
-        // never returns to it. Only a retryable outcome reaches the
-        // page-level hold.
-        logger.error("case_law.ingestion.source_raw_write_failed", {
-          sourceId,
-          caseNumber: result.caseNumber,
-          ...errorSystemFields(error),
-          ...pgErrorFields(error),
-          "error.detail": wrappedErrorDetail(error),
-        });
-        captureError(error, { sourceId, step: "uploadSourceRaw" });
-
-        return {
-          status: PROCESS_DECISION_STATUS.RETRYABLE,
-          inserted: false,
-          reason: PROCESS_DECISION_RETRY_REASON.SOURCE_RAW_WRITE,
-        };
-      }
-
-      captureError(error, { sourceId, step: "uploadSourceRaw" });
-
-      // Update: preserve existing S3 key and DO NOT advance sourceHash.
-      // If we wrote the new hash with the old key, the hash mismatch
-      // would never trigger again and the stale raw source could never
-      // be corrected through normal ingestion.
+    let sourceRawS3Key: string | null = null;
+    let sourceRawContentType: string | null = null;
+    let s3UploadFailed = false;
+    if (preservesExistingDetail) {
       sourceRawS3Key = existing.sourceRawS3Key;
       sourceRawContentType = existing.sourceRawContentType;
-      s3UploadFailed = true;
-    }
-  }
-
-  const sections = decisionSections(result);
-
-  // A metadata-first source keeps refreshing a decision it has no
-  // document for: the list endpoint's fields change, the hash moves, and
-  // the adapter returns the same empty AST it returned at first sight.
-  // Applying that over a decision whose document has since arrived — by
-  // hydration or backfill — would put the empty AST back, and under
-  // corpus storage would rewrite the objects empty and move the row's
-  // keys onto them, which is precisely the state the repair pass exists
-  // to undo. Nothing the refresh carries is a document, so nothing it
-  // carries may replace one: the metadata is updated and the payload,
-  // its object-storage pointers and the citations drawn from it are left
-  // as they are.
-  const incomingCarriesDocument = Boolean(
-    result.fulltext || hasUsableAst(result.documentAst),
-  );
-  const preserveStoredDocument =
-    existing !== undefined &&
-    !incomingCarriesDocument &&
-    (await hasStoredDocument(existing.id, scopedDb));
-  const pendingMirrorPayload =
-    existing?.corpusMirrorStatus === CASE_LAW_CORPUS_MIRROR_STATUS.PENDING &&
-    !incomingCarriesDocument
-      ? await loadPendingMirrorPayload(existing.id, scopedDb)
-      : null;
-
-  // Parsers report their own quality through `validateAndLog`, but a
-  // source whose parser never runs reports nothing at all. Emit the
-  // same signal here so every stored decision is accounted for, and
-  // split the severity the same way: no text is an error, text without
-  // structure is a warning. A refresh that preserves the stored document
-  // reports nothing: it did not store an empty decision, it left a full
-  // one alone, and these errors are what an operator sweeps for.
-  const astBlocks = hasUsableAst(result.documentAst)
-    ? result.documentAst.blocks.length
-    : 0;
-  const signal =
-    preserveStoredDocument || pendingMirrorPayload !== null
-      ? undefined
-      : storedDecisionSignal({
-          hasFulltext: Boolean(result.fulltext),
-          astBlocks,
+    } else if (rawPayload !== undefined) {
+      try {
+        sourceRawS3Key = await uploadSourceRaw({
+          sourceId,
+          data: rawPayload,
+          contentType: rawContentType,
+          storedKey: existing?.sourceRawS3Key ?? null,
+          storedContentType: existing?.sourceRawContentType ?? null,
         });
-  if (signal) {
-    const subject = {
-      sourceId,
-      caseNumber: result.caseNumber,
-      language: result.language,
-      url: result.sourceUrl ?? result.documentUrl ?? "",
-      fulltextLength: result.fulltext?.length ?? 0,
-    };
-    if (signal.level === "error") {
-      logger.error(signal.event, subject);
-    } else {
-      logger.warn(signal.event, subject);
-    }
-  }
+        sourceRawContentType = rawContentType;
+      } catch (error) {
+        if (!existing) {
+          // New decision: hold the page's cursor and retry the slice.
+          // Inserting with sourceRawS3Key: null would set sourceHash,
+          // causing the dedup check to skip it permanently — the raw
+          // source would be lost forever.
+          //
+          // Reported as retryable rather than thrown: the decision loop
+          // catches a throw, counts it as skipped, and lets the cursor
+          // advance, so a forward-only traversal passes the decision and
+          // never returns to it. Only a retryable outcome reaches the
+          // page-level hold.
+          logger.error("case_law.ingestion.source_raw_write_failed", {
+            sourceId,
+            caseNumber: result.caseNumber,
+            ...errorSystemFields(error),
+            ...pgErrorFields(error),
+            "error.detail": wrappedErrorDetail(error),
+          });
+          captureError(error, { sourceId, step: "uploadSourceRaw" });
 
-  // The publisher's own statement of the case's procedural history, where
-  // it supplies one; classification consults it before any heuristic.
-  const proceduralKeys = proceduralKeysFromMetadata(
-    result.metadata,
-    (caseNumber) => bareCitationKey(caseNumber),
-  );
-
-  const decisionIdentifiers = decisionIdentifiersFromMetadata({
-    caseNumber: result.caseNumber,
-    ecli: result.ecli ?? null,
-    identifiers: result.identifiers,
-  });
-  const identifierRows = decisionIdentifiers.map((identifier) => ({
-    type: identifier.type,
-    value: identifier.value,
-    normalizedValue: normalizeDecisionIdentifier(identifier),
-  }));
-  const citations = extractCitations(
-    sections.map((s) => ({ index: s.index, text: s.text })),
-  ).filter((c) => !isSelfCitation(c.citationText, decisionIdentifiers));
-
-  // Where the publisher supplies its own cited-decisions list, it is the
-  // one ground truth extraction can be measured against without measuring
-  // it against itself. Computed here, emitted only after the row write
-  // commits (a replayed decision must not re-count) — and emitted for
-  // zero-gap decisions too, or aggregated events could not produce a
-  // recall denominator.
-  // Measured only when the incoming payload carries a document: an empty
-  // payload has nothing for extraction to find, so every publisher
-  // citation would read as missed — on document-preserving refreshes and
-  // equally when a concurrent backfill wins the row between the read and
-  // the transaction. Emitted here rather than after the write because an
-  // ambiguous timeout can commit the row yet throw, and the replay
-  // dedup-skips before re-measuring; the source hash is the identity a
-  // consumer deduplicates retries on.
-  if (
-    incomingCarriesDocument &&
-    !preserveStoredDocument &&
-    result.publisherCitedCases &&
-    result.publisherCitedCases.length > 0
-  ) {
-    const recall = publisherCitationGap({
-      extracted: citations.map((c) => c.citationText),
-      publisherCited: result.publisherCitedCases,
-    });
-    const level = recall.missed.length > 0 ? "warn" : "info";
-    logger[level]("case_law.ingestion.citation_recall", {
-      caseNumber: result.caseNumber,
-      language: result.language,
-      url: result.sourceUrl ?? "",
-      sourceHash: result.rawHash,
-      publisherCitedCount: recall.publisherCitedCount,
-      missedCount: recall.missed.length,
-      missed: recall.missed.slice(0, 10).join("; "),
-    });
-  }
-
-  const languageGroupKey = result.ecli || `${sourceId}:${result.caseNumber}`;
-
-  // Corpus objects and every publisher alias now share the UUID reserved by
-  // identity resolution before any external write.
-
-  const corpusPayload: CorpusWritePayload =
-    pendingMirrorPayload === null
-      ? {
-          documentId: decisionId,
-          jurisdiction: result.country,
-          ...caseLawCanonicalPayload(result),
+          return {
+            type: "retry",
+            outcome: {
+              status: PROCESS_DECISION_STATUS.RETRYABLE,
+              inserted: false,
+              reason: PROCESS_DECISION_RETRY_REASON.SOURCE_RAW_WRITE,
+            },
+          } as const;
         }
-      : {
-          documentId: decisionId,
-          jurisdiction: result.country,
-          ...pendingMirrorPayload,
-        };
-  const mirrorCarriesDocument = Boolean(
-    corpusPayload.text || hasUsableAst(corpusPayload.ast),
-  );
 
-  const corpusPlan: CorpusWritePlan =
-    preserveStoredDocument && pendingMirrorPayload === null
-      ? { type: "preserve-stored" }
-      : planCorpusWrite(corpusStorageMode);
+        captureError(error, { sourceId, step: "uploadSourceRaw" });
 
-  const postgresPayload = {
-    fulltext: corpusPayload.text,
-    sections: corpusPayload.sections,
-    documentAst: corpusPayload.ast,
-  };
-
-  const payloadColumns = (() => {
-    switch (corpusPlan.type) {
-      case "postgres-only":
-        // This refresh supersedes whatever the corpus holds and nothing
-        // will follow to rewrite the pointers, so a row carrying keys from
-        // an earlier canonical/dual-write period would point at objects
-        // that no longer match its columns. Clear them.
-        return {
-          ...postgresPayload,
-          ...corpusMirrorColumns({
-            status: CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED,
-            written: null,
-          }),
-        };
-      case "postgres-mirrored":
-      case "object-storage":
-        // Persist retry intent with the Postgres payload. Clearing every old
-        // pointer makes the pending branch structurally unable to serve a
-        // stale mirror while an unchanged replay repairs it.
-        return {
-          ...postgresPayload,
-          ...corpusMirrorColumns({
-            status: CASE_LAW_CORPUS_MIRROR_STATUS.PENDING,
-          }),
-        };
-      case "preserve-stored":
-        // Every payload column, and every pointer into object storage,
-        // stays exactly as stored. Leaving them out of the update is
-        // what preserves them.
-        return {};
-      default: {
-        const unhandled: never = corpusPlan;
-        return panic(`Unhandled corpus write plan: ${String(unhandled)}`);
+        // Update: preserve existing S3 key and DO NOT advance sourceHash.
+        // If we wrote the new hash with the old key, the hash mismatch
+        // would never trigger again and the stale raw source could never
+        // be corrected through normal ingestion.
+        sourceRawS3Key = existing.sourceRawS3Key;
+        sourceRawContentType = existing.sourceRawContentType;
+        s3UploadFailed = true;
       }
     }
-  })();
 
-  const incomingCitationKey = citationKeyOf(result.caseNumber);
+    return {
+      type: "acquired",
+      artifact: { s3UploadFailed, sourceRawContentType, sourceRawS3Key },
+    } as const;
+  };
+  const sourceRawArtifact = await acquireSourceRawArtifact();
+  if (sourceRawArtifact.type === "retry") {
+    return sourceRawArtifact.outcome;
+  }
+  const {
+    sourceRawContentType,
+    sourceRawS3Key,
+    s3UploadFailed: rawUploadFailed,
+  } = sourceRawArtifact.artifact;
+  let s3UploadFailed = rawUploadFailed;
+
+  const preparePersistenceInputs = async () => {
+    const sections = decisionSections(result);
+
+    // A metadata-first source keeps refreshing a decision it has no
+    // document for: the list endpoint's fields change, the hash moves, and
+    // the adapter returns the same empty AST it returned at first sight.
+    // Applying that over a decision whose document has since arrived — by
+    // hydration or backfill — would put the empty AST back, and under
+    // corpus storage would rewrite the objects empty and move the row's
+    // keys onto them, which is precisely the state the repair pass exists
+    // to undo. Nothing the refresh carries is a document, so nothing it
+    // carries may replace one: the metadata is updated and the payload,
+    // its object-storage pointers and the citations drawn from it are left
+    // as they are.
+    const incomingCarriesDocument = Boolean(
+      result.fulltext || hasUsableAst(result.documentAst),
+    );
+    const preserveStoredDocument =
+      existing !== undefined &&
+      !incomingCarriesDocument &&
+      (await hasStoredDocument(existing.id, scopedDb));
+    const pendingMirrorPayload =
+      existing?.corpusMirrorStatus === CASE_LAW_CORPUS_MIRROR_STATUS.PENDING &&
+      !incomingCarriesDocument
+        ? await loadPendingMirrorPayload(existing.id, scopedDb)
+        : null;
+
+    // Parsers report their own quality through `validateAndLog`, but a
+    // source whose parser never runs reports nothing at all. Emit the
+    // same signal here so every stored decision is accounted for, and
+    // split the severity the same way: no text is an error, text without
+    // structure is a warning. A refresh that preserves the stored document
+    // reports nothing: it did not store an empty decision, it left a full
+    // one alone, and these errors are what an operator sweeps for.
+    const astBlocks = hasUsableAst(result.documentAst)
+      ? result.documentAst.blocks.length
+      : 0;
+    const signal =
+      preserveStoredDocument || pendingMirrorPayload !== null
+        ? undefined
+        : storedDecisionSignal({
+            hasFulltext: Boolean(result.fulltext),
+            astBlocks,
+          });
+    if (signal) {
+      const subject = {
+        sourceId,
+        caseNumber: result.caseNumber,
+        language: result.language,
+        url: result.sourceUrl ?? result.documentUrl ?? "",
+        fulltextLength: result.fulltext?.length ?? 0,
+      };
+      if (signal.level === "error") {
+        logger.error(signal.event, subject);
+      } else {
+        logger.warn(signal.event, subject);
+      }
+    }
+
+    // The publisher's own statement of the case's procedural history, where
+    // it supplies one; classification consults it before any heuristic.
+    const proceduralKeys = proceduralKeysFromMetadata(
+      result.metadata,
+      (caseNumber) => bareCitationKey(caseNumber),
+    );
+
+    const decisionIdentifiers = decisionIdentifiersFromMetadata({
+      caseNumber: result.caseNumber,
+      ecli: result.ecli ?? null,
+      identifiers: result.identifiers,
+    });
+    const identifierRows = decisionIdentifiers.map((identifier) => ({
+      type: identifier.type,
+      value: identifier.value,
+      normalizedValue: normalizeDecisionIdentifier(identifier),
+    }));
+    const citations = extractCitations(
+      sections.map((s) => ({ index: s.index, text: s.text })),
+    ).filter((c) => !isSelfCitation(c.citationText, decisionIdentifiers));
+
+    // Where the publisher supplies its own cited-decisions list, it is the
+    // one ground truth extraction can be measured against without measuring
+    // it against itself. Computed here, emitted only after the row write
+    // commits (a replayed decision must not re-count) — and emitted for
+    // zero-gap decisions too, or aggregated events could not produce a
+    // recall denominator.
+    // Measured only when the incoming payload carries a document: an empty
+    // payload has nothing for extraction to find, so every publisher
+    // citation would read as missed — on document-preserving refreshes and
+    // equally when a concurrent backfill wins the row between the read and
+    // the transaction. Emitted here rather than after the write because an
+    // ambiguous timeout can commit the row yet throw, and the replay
+    // dedup-skips before re-measuring; the source hash is the identity a
+    // consumer deduplicates retries on.
+    if (
+      incomingCarriesDocument &&
+      !preserveStoredDocument &&
+      result.publisherCitedCases &&
+      result.publisherCitedCases.length > 0
+    ) {
+      const recall = publisherCitationGap({
+        extracted: citations.map((c) => c.citationText),
+        publisherCited: result.publisherCitedCases,
+      });
+      const level = recall.missed.length > 0 ? "warn" : "info";
+      logger[level]("case_law.ingestion.citation_recall", {
+        caseNumber: result.caseNumber,
+        language: result.language,
+        url: result.sourceUrl ?? "",
+        sourceHash: result.rawHash,
+        publisherCitedCount: recall.publisherCitedCount,
+        missedCount: recall.missed.length,
+        missed: recall.missed.slice(0, 10).join("; "),
+      });
+    }
+
+    const languageGroupKey = result.ecli || `${sourceId}:${result.caseNumber}`;
+
+    // Corpus objects and every publisher alias now share the UUID reserved by
+    // identity resolution before any external write.
+
+    const corpusPayload: CorpusWritePayload =
+      pendingMirrorPayload === null
+        ? {
+            documentId: decisionId,
+            jurisdiction: result.country,
+            ...caseLawCanonicalPayload(result),
+          }
+        : {
+            documentId: decisionId,
+            jurisdiction: result.country,
+            ...pendingMirrorPayload,
+          };
+    const mirrorCarriesDocument = Boolean(
+      corpusPayload.text || hasUsableAst(corpusPayload.ast),
+    );
+
+    const corpusPlan: CorpusWritePlan =
+      preserveStoredDocument && pendingMirrorPayload === null
+        ? { type: "preserve-stored" }
+        : planCorpusWrite(corpusStorageMode);
+
+    const postgresPayload = {
+      fulltext: corpusPayload.text,
+      sections: corpusPayload.sections,
+      documentAst: corpusPayload.ast,
+    };
+
+    const payloadColumns = (() => {
+      switch (corpusPlan.type) {
+        case "postgres-only":
+          // This refresh supersedes whatever the corpus holds and nothing
+          // will follow to rewrite the pointers, so a row carrying keys from
+          // an earlier canonical/dual-write period would point at objects
+          // that no longer match its columns. Clear them.
+          return {
+            ...postgresPayload,
+            ...corpusMirrorColumns({
+              status: CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED,
+              written: null,
+            }),
+          };
+        case "postgres-mirrored":
+        case "object-storage":
+          // Persist retry intent with the Postgres payload. Clearing every old
+          // pointer makes the pending branch structurally unable to serve a
+          // stale mirror while an unchanged replay repairs it.
+          return {
+            ...postgresPayload,
+            ...corpusMirrorColumns({
+              status: CASE_LAW_CORPUS_MIRROR_STATUS.PENDING,
+            }),
+          };
+        case "preserve-stored":
+          // Every payload column, and every pointer into object storage,
+          // stays exactly as stored. Leaving them out of the update is
+          // what preserves them.
+          return {};
+        default: {
+          const unhandled: never = corpusPlan;
+          return panic(`Unhandled corpus write plan: ${String(unhandled)}`);
+        }
+      }
+    })();
+
+    const incomingCitationKey = citationKeyOf(result.caseNumber);
+    return {
+      citations,
+      corpusPayload,
+      corpusPlan,
+      identifierRows,
+      incomingCarriesDocument,
+      incomingCitationKey,
+      languageGroupKey,
+      mirrorCarriesDocument,
+      payloadColumns,
+      pendingMirrorPayload,
+      proceduralKeys,
+      sections,
+    };
+  };
+  const {
+    citations,
+    corpusPayload,
+    corpusPlan,
+    identifierRows,
+    incomingCarriesDocument,
+    incomingCitationKey,
+    languageGroupKey,
+    mirrorCarriesDocument,
+    payloadColumns,
+    pendingMirrorPayload,
+    proceduralKeys,
+    sections,
+  } = await preparePersistenceInputs();
 
   /**
    * Tell the citation graph which normalized identifiers this decision holds.
@@ -2148,10 +2222,8 @@ export const runIngestionPipeline = async ({
       catch: (cause) => cause,
     });
 
-  // oxlint-disable-next-line no-unreachable-loop -- successful pages advance the cursor and pagesProcessed at the loop tail; break paths halt ingestion
-  while (pagesProcessed < maxPages) {
+  const fetchNextObservedPage = async () => {
     if (signal?.aborted) {
-      haltReason = "Cycle timeout exceeded";
       logger.warn("case_law.ingestion.cycle_timeout", {
         adapterKey: adapter.key,
         cursor: cursor ?? "",
@@ -2159,21 +2231,20 @@ export const runIngestionPipeline = async ({
         inserted,
         skipped,
       });
-      break;
+      return { type: "halt", reason: "Cycle timeout exceeded" } as const;
     }
-
     const pageTimeout = adapter.pageTimeoutMs ?? ADAPTER_TIMEOUT.PAGE;
     const pageSignal = signal
       ? AbortSignal.any([signal, AbortSignal.timeout(pageTimeout)])
       : AbortSignal.timeout(pageTimeout);
     recentCursors.add(cursor);
-    // oxlint-disable-next-line no-await-in-loop -- sequential paginated crawl (each page's cursor depends on the previous page)
     const observedPageResult = await fetchObservedPage(cursor, pageSignal);
-
     if (Result.isError(observedPageResult)) {
       if (observedPageResult.error instanceof TimeoutError) {
-        haltReason = databaseTimeoutHaltReason(observedPageResult.error);
-        break;
+        return {
+          type: "halt",
+          reason: databaseTimeoutHaltReason(observedPageResult.error),
+        } as const;
       }
       if (observedPageResult.error instanceof Error) {
         throw observedPageResult.error;
@@ -2182,22 +2253,29 @@ export const runIngestionPipeline = async ({
         message: "Case-law source observation failed",
       });
     }
-
-    const observedPage = observedPageResult.value;
-    if (observedPage.type === "fetch-error") {
-      // Expected operational failure (a source outage fails every attempt),
-      // so no per-attempt exception capture: this halt is recorded in the
-      // ingestion-events row and the structured log, and the runner captures
-      // one exception per sustained stall episode instead.
-      haltReason = `Page fetch failed: ${observedPage.error.message}`;
+    if (observedPageResult.value.type === "fetch-error") {
+      // Expected operational failure: record one halt in the event/log path;
+      // the runner, rather than every attempt, captures sustained stalls.
+      const reason = `Page fetch failed: ${observedPageResult.value.error.message}`;
       logger.error("case_law.ingestion.adapter_halted", {
         adapterKey: adapter.key,
         cursor: cursor ?? "",
-        httpStatus: String(observedPage.error.httpStatus ?? ""),
-        reason: haltReason,
+        httpStatus: String(observedPageResult.value.error.httpStatus ?? ""),
+        reason,
         inserted,
         skipped,
       });
+      return { type: "halt", reason } as const;
+    }
+    return observedPageResult.value;
+  };
+
+  // oxlint-disable-next-line no-unreachable-loop -- successful pages advance the cursor and pagesProcessed at the loop tail; break paths halt ingestion
+  while (pagesProcessed < maxPages) {
+    // oxlint-disable-next-line no-await-in-loop -- sequential paginated crawl (each page's cursor depends on the previous page)
+    const observedPage = await fetchNextObservedPage();
+    if (observedPage.type === "halt") {
+      haltReason = observedPage.reason;
       break;
     }
 

@@ -5385,15 +5385,11 @@ export async function seed(organizationId?: string, userId?: string) {
   });
   const seedUserRates = buildSeedUserRates(seedUserIds);
 
-  if (process.env.NODE_ENV === "production") {
-    panic("Refusing to run in production.");
-  }
-
-  // Ensure referenced users exist in the target org before
-  // seeding matters, billing, and analytics data.
-  if (ORG_ID === DEFAULT_ORG_ID && USER_ID === DEFAULT_USER_ID) {
-    await ensureTestUsers(ORG_ID);
-  } else {
+  const ensureSeedUsers = async () => {
+    if (ORG_ID === DEFAULT_ORG_ID && USER_ID === DEFAULT_USER_ID) {
+      await ensureTestUsers(ORG_ID);
+      return;
+    }
     await ensurePrimarySeedUserInOrganization({
       organizationId: ORG_ID,
       userId: USER_ID,
@@ -5402,51 +5398,53 @@ export async function seed(organizationId?: string, userId?: string) {
       organizationId: ORG_ID,
       colleagueCount: DEFAULT_SEED_COLLEAGUE_COUNT,
     });
-  }
+  };
 
-  // Clean up any previous seed data so re-running for a different
-  // org works correctly (deterministic seedId means same IDs every run).
-  const allSeedContactIds = [
-    ...orgContacts,
-    ...personContacts,
-    ...moreOrgContacts,
-  ].map((c) => c.id);
-  const allSeedWorkspaceIds = [
-    ...seedWorkspaces.map((ws) => ws.id),
-    ...MORE_WORKSPACES.map((mw) => seedId(`extra-ws-${mw.reference}`)),
-  ];
-
-  if (allSeedWorkspaceIds.length > 0) {
-    await rootDb
-      .delete(chatMessages)
-      .where(sql`${chatMessages.workspaceId} IN ${allSeedWorkspaceIds}`);
-    await rootDb
-      .delete(chatThreads)
-      .where(sql`${chatThreads.workspaceId} IN ${allSeedWorkspaceIds}`);
-    // property_dependencies.depends_on_property_id uses ON DELETE RESTRICT,
-    // which blocks the workspace cascade from removing properties. Clear
-    // dependencies first so the cascade can complete.
-    await rootDb
-      .delete(propertyDependencies)
-      .where(
-        sql`${propertyDependencies.workspaceId} IN ${allSeedWorkspaceIds}`,
-      );
-    await rootDb
-      .delete(workspaces)
-      .where(sql`${workspaces.id} IN ${allSeedWorkspaceIds}`);
-  }
-  if (allSeedContactIds.length > 0) {
-    // Delete any workspaces referencing seed contacts (including
-    // manually-created ones) to avoid FK constraint violations.
+  const clearSeedData = async () => {
+    const allSeedContactIds = [
+      ...orgContacts,
+      ...personContacts,
+      ...moreOrgContacts,
+    ].map((contact) => contact.id);
+    const allSeedWorkspaceIds = [
+      ...seedWorkspaces.map((workspace) => workspace.id),
+      ...MORE_WORKSPACES.map((workspace) =>
+        seedId(`extra-ws-${workspace.reference}`),
+      ),
+    ];
+    if (allSeedWorkspaceIds.length > 0) {
+      await rootDb
+        .delete(chatMessages)
+        .where(sql`${chatMessages.workspaceId} IN ${allSeedWorkspaceIds}`);
+      await rootDb
+        .delete(chatThreads)
+        .where(sql`${chatThreads.workspaceId} IN ${allSeedWorkspaceIds}`);
+      // property_dependencies.depends_on_property_id uses ON DELETE RESTRICT,
+      // so dependencies must be removed before the workspace cascade.
+      await rootDb
+        .delete(propertyDependencies)
+        .where(
+          sql`${propertyDependencies.workspaceId} IN ${allSeedWorkspaceIds}`,
+        );
+      await rootDb
+        .delete(workspaces)
+        .where(sql`${workspaces.id} IN ${allSeedWorkspaceIds}`);
+    }
+    if (allSeedContactIds.length === 0) {
+      return;
+    }
+    // Include manually created workspaces that reference seed contacts, not
+    // only workspaces whose IDs came from this script.
     const clientWorkspaces = await rootDb.query.workspaces.findMany({
       where: { clientId: { in: allSeedContactIds } },
       columns: { id: true },
     });
-    const clientWorkspaceIds = clientWorkspaces.map((w) => w.id);
+    const clientWorkspaceIds = clientWorkspaces.map(
+      (workspace) => workspace.id,
+    );
     if (clientWorkspaceIds.length > 0) {
-      // chat_messages.workspace_id and chat_threads.workspace_id are
-      // ON DELETE RESTRICT, same as property_dependencies; clear them
-      // before the workspace delete cascades.
+      // These relations use ON DELETE RESTRICT and can belong to manually
+      // created workspaces that reference deterministic seed contacts.
       await rootDb
         .delete(chatMessages)
         .where(sql`${chatMessages.workspaceId} IN ${clientWorkspaceIds}`);
@@ -5465,75 +5463,88 @@ export async function seed(organizationId?: string, userId?: string) {
     await rootDb
       .delete(contacts)
       .where(sql`${contacts.id} IN ${allSeedContactIds}`);
+  };
+
+  if (process.env.NODE_ENV === "production") {
+    panic("Refusing to run in production.");
   }
+
+  // Ensure referenced users exist in the target org before seeding matters,
+  // billing, and analytics data; then clear deterministic IDs for replay.
+  await ensureSeedUsers();
+  await clearSeedData();
 
   console.log("Seeding development data...\n");
 
-  // 1. Contacts (original orgs + people)
-  const coreContacts = [...orgContacts, ...personContacts];
-  for (const c of coreContacts) {
-    // oxlint-disable-next-line no-await-in-loop -- sequential seeding preserves insert order
-    await rootDb
-      .insert(contacts)
-      .values({
-        id: c.id,
-        organizationId: ORG_ID,
-        type: c.type,
-        displayName: c.displayName,
-        prefix: "prefix" in c ? c.prefix : undefined,
-        firstName: "firstName" in c ? c.firstName : undefined,
-        lastName: "lastName" in c ? c.lastName : undefined,
-        suffix: "suffix" in c ? c.suffix : undefined,
-        organizationName:
-          "organizationName" in c ? c.organizationName : undefined,
-        notes: "notes" in c ? c.notes : undefined,
-        emails: "emails" in c ? c.emails : undefined,
-        phones: "phones" in c ? c.phones : undefined,
-        color: c.color,
-        registrationNumber:
-          "registrationNumber" in c ? c.registrationNumber : undefined,
-        taxId: "taxId" in c ? c.taxId : undefined,
-        bankAccounts: "bankAccounts" in c ? c.bankAccounts : undefined,
-        billingAddress: "billingAddress" in c ? c.billingAddress : undefined,
-        defaultHourlyRate:
-          "defaultHourlyRate" in c ? cents(c.defaultHourlyRate) : undefined,
-        currency: "currency" in c ? c.currency : undefined,
-        paymentTermDays: "paymentTermDays" in c ? c.paymentTermDays : undefined,
-        originatingAttorneyId: USER_ID,
-        responsibleAttorneyId: USER_ID,
-        createdBy: USER_ID,
-      })
-      .onConflictDoNothing();
-  }
-  // 1b. Additional org contacts for overview stress-testing
-  for (const c of moreOrgContacts) {
-    // oxlint-disable-next-line no-await-in-loop -- sequential seeding preserves insert order
-    await rootDb
-      .insert(contacts)
-      .values({
-        id: c.id,
-        organizationId: ORG_ID,
-        type: c.type,
-        displayName: c.displayName,
-        organizationName: c.organizationName,
-        registrationNumber: c.registrationNumber,
-        taxId: c.taxId,
-        billingAddress: c.billingAddress,
-        defaultHourlyRate: cents(c.defaultHourlyRate),
-        currency: c.currency,
-        paymentTermDays: c.paymentTermDays,
-        emails: c.emails,
-        color: c.color,
-        originatingAttorneyId: USER_ID,
-        responsibleAttorneyId: USER_ID,
-        createdBy: USER_ID,
-      })
-      .onConflictDoNothing();
-  }
-  const totalContacts = coreContacts.length + moreOrgContacts.length;
-  console.log(
-    `  Contacts: ${totalContacts} (${orgContacts.length + moreOrgContacts.length} orgs, ${personContacts.length} people)`,
-  );
+  const seedContacts = async () => {
+    // 1. Contacts (original orgs + people)
+    const coreContacts = [...orgContacts, ...personContacts];
+    for (const c of coreContacts) {
+      // oxlint-disable-next-line no-await-in-loop -- sequential seeding preserves insert order
+      await rootDb
+        .insert(contacts)
+        .values({
+          id: c.id,
+          organizationId: ORG_ID,
+          type: c.type,
+          displayName: c.displayName,
+          prefix: "prefix" in c ? c.prefix : undefined,
+          firstName: "firstName" in c ? c.firstName : undefined,
+          lastName: "lastName" in c ? c.lastName : undefined,
+          suffix: "suffix" in c ? c.suffix : undefined,
+          organizationName:
+            "organizationName" in c ? c.organizationName : undefined,
+          notes: "notes" in c ? c.notes : undefined,
+          emails: "emails" in c ? c.emails : undefined,
+          phones: "phones" in c ? c.phones : undefined,
+          color: c.color,
+          registrationNumber:
+            "registrationNumber" in c ? c.registrationNumber : undefined,
+          taxId: "taxId" in c ? c.taxId : undefined,
+          bankAccounts: "bankAccounts" in c ? c.bankAccounts : undefined,
+          billingAddress: "billingAddress" in c ? c.billingAddress : undefined,
+          defaultHourlyRate:
+            "defaultHourlyRate" in c ? cents(c.defaultHourlyRate) : undefined,
+          currency: "currency" in c ? c.currency : undefined,
+          paymentTermDays:
+            "paymentTermDays" in c ? c.paymentTermDays : undefined,
+          originatingAttorneyId: USER_ID,
+          responsibleAttorneyId: USER_ID,
+          createdBy: USER_ID,
+        })
+        .onConflictDoNothing();
+    }
+    // 1b. Additional org contacts for overview stress-testing
+    for (const c of moreOrgContacts) {
+      // oxlint-disable-next-line no-await-in-loop -- sequential seeding preserves insert order
+      await rootDb
+        .insert(contacts)
+        .values({
+          id: c.id,
+          organizationId: ORG_ID,
+          type: c.type,
+          displayName: c.displayName,
+          organizationName: c.organizationName,
+          registrationNumber: c.registrationNumber,
+          taxId: c.taxId,
+          billingAddress: c.billingAddress,
+          defaultHourlyRate: cents(c.defaultHourlyRate),
+          currency: c.currency,
+          paymentTermDays: c.paymentTermDays,
+          emails: c.emails,
+          color: c.color,
+          originatingAttorneyId: USER_ID,
+          responsibleAttorneyId: USER_ID,
+          createdBy: USER_ID,
+        })
+        .onConflictDoNothing();
+    }
+    const totalContacts = coreContacts.length + moreOrgContacts.length;
+    console.log(
+      `  Contacts: ${totalContacts} (${orgContacts.length + moreOrgContacts.length} orgs, ${personContacts.length} people)`,
+    );
+  };
+  await seedContacts();
 
   // 1c. Organization settings: pin the practice jurisdiction (the seeded
   // cast is a Czech firm) so jurisdiction-derived surfaces, notably the

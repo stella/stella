@@ -298,7 +298,7 @@ type EnvBaseInvariantInput = {
   isDev: boolean;
 };
 
-export const envBaseInvariantViolation = ({
+const backpressureInvariantViolation = ({
   CASE_LAW_DATABASE_URL,
   PUBLIC_LAW_DATABASE_URL,
   CORPUS_INDEX_BACKPRESSURE_DIMENSIONS,
@@ -306,28 +306,7 @@ export const envBaseInvariantViolation = ({
   CORPUS_INDEX_BACKPRESSURE_LOW_WATERMARK,
   CORPUS_INDEX_BACKPRESSURE_METRIC,
   CORPUS_INDEX_BACKPRESSURE_NAMESPACE,
-  CORPUS_INDEX_ENDPOINT,
-  CORPUS_INDEX_Q09_ENDPOINT,
-  CORPUS_INDEX_Q09_SEARCH_ENDPOINT,
-  CORPUS_INDEX_SEARCH_ENDPOINT,
-  CORPUS_INDEXING_ENABLED,
-  CORPUS_STORAGE_ENABLED,
-  CORPUS_STORAGE_MODE,
-  DATABASE_URL,
-  LEGAL_CORPUS_S3_BUCKET,
-  LEGAL_SEARCH_INDEX_GENERATION,
-  LEGAL_SEARCH_PROVIDER,
-  QUERY_EXPANSION_MODE,
-  S3_ACCESS_KEY_ID,
-  S3_CREDENTIALS_PROVIDER,
-  S3_ENDPOINT,
-  S3_SECRET_ACCESS_KEY,
-  isDev,
 }: EnvBaseInvariantInput): string | null => {
-  const hasPublicLawDatabaseUrl =
-    PUBLIC_LAW_DATABASE_URL !== undefined ||
-    CASE_LAW_DATABASE_URL !== undefined;
-
   if (
     CASE_LAW_DATABASE_URL !== undefined &&
     PUBLIC_LAW_DATABASE_URL === undefined
@@ -353,6 +332,18 @@ export const envBaseInvariantViolation = ({
   ) {
     return "CORPUS_INDEX_BACKPRESSURE_LOW_WATERMARK must be below CORPUS_INDEX_BACKPRESSURE_HIGH_WATERMARK.";
   }
+  return null;
+};
+
+const databaseTransportInvariantViolation = ({
+  CASE_LAW_DATABASE_URL,
+  DATABASE_URL,
+  PUBLIC_LAW_DATABASE_URL,
+  isDev,
+}: EnvBaseInvariantInput): string | null => {
+  const hasPublicLawDatabaseUrl =
+    PUBLIC_LAW_DATABASE_URL !== undefined ||
+    CASE_LAW_DATABASE_URL !== undefined;
   if (!isDev && !hasSecureDatabaseTransport(DATABASE_URL)) {
     return "DATABASE_URL must enable TLS outside loopback or Railway private networking.";
   }
@@ -371,6 +362,16 @@ export const envBaseInvariantViolation = ({
   if (!isDev && hasPublicLawDatabaseUrl) {
     return "Public-law database URLs are only supported in local development.";
   }
+  return null;
+};
+
+const corpusEndpointInvariantViolation = ({
+  CORPUS_INDEX_Q09_ENDPOINT,
+  CORPUS_INDEX_Q09_SEARCH_ENDPOINT,
+  CORPUS_INDEX_SEARCH_ENDPOINT,
+  QUERY_EXPANSION_MODE,
+  isDev,
+}: EnvBaseInvariantInput): string | null => {
   if (
     CORPUS_INDEX_SEARCH_ENDPOINT !== undefined &&
     !isTlsOrLoopbackUrl(CORPUS_INDEX_SEARCH_ENDPOINT, {
@@ -414,6 +415,22 @@ export const envBaseInvariantViolation = ({
   if (QUERY_EXPANSION_MODE === "on") {
     return 'QUERY_EXPANSION_MODE="on" requires dictionary-version-carrying cursors; not yet implemented — use "shadow".';
   }
+  return null;
+};
+
+const publicLawTopologyInvariantViolation = ({
+  CASE_LAW_DATABASE_URL,
+  CORPUS_INDEX_ENDPOINT,
+  CORPUS_INDEX_Q09_ENDPOINT,
+  CORPUS_INDEX_Q09_SEARCH_ENDPOINT,
+  CORPUS_INDEX_SEARCH_ENDPOINT,
+  CORPUS_INDEXING_ENABLED,
+  LEGAL_SEARCH_PROVIDER,
+  PUBLIC_LAW_DATABASE_URL,
+}: EnvBaseInvariantInput): string | null => {
+  const hasPublicLawDatabaseUrl =
+    PUBLIC_LAW_DATABASE_URL !== undefined ||
+    CASE_LAW_DATABASE_URL !== undefined;
   if (hasPublicLawDatabaseUrl && LEGAL_SEARCH_PROVIDER !== "corpus-index") {
     return 'Public-law database URLs require LEGAL_SEARCH_PROVIDER="corpus-index".';
   }
@@ -434,6 +451,26 @@ export const envBaseInvariantViolation = ({
   if (hasPublicLawDatabaseUrl && CORPUS_INDEXING_ENABLED) {
     return "CORPUS_INDEXING_ENABLED must be false when a public-law database URL is configured.";
   }
+  return null;
+};
+
+const storageAndIndexInvariantViolation = ({
+  CORPUS_INDEX_ENDPOINT,
+  CORPUS_INDEX_Q09_ENDPOINT,
+  CORPUS_INDEX_Q09_SEARCH_ENDPOINT,
+  CORPUS_INDEX_SEARCH_ENDPOINT,
+  CORPUS_INDEXING_ENABLED,
+  CORPUS_STORAGE_ENABLED,
+  CORPUS_STORAGE_MODE,
+  LEGAL_CORPUS_S3_BUCKET,
+  LEGAL_SEARCH_INDEX_GENERATION,
+  LEGAL_SEARCH_PROVIDER,
+  S3_ACCESS_KEY_ID,
+  S3_CREDENTIALS_PROVIDER,
+  S3_ENDPOINT,
+  S3_SECRET_ACCESS_KEY,
+  isDev,
+}: EnvBaseInvariantInput): string | null => {
   if (
     !isDev &&
     !isTlsOrLoopbackUrl(S3_ENDPOINT, {
@@ -495,3 +532,12 @@ export const envBaseInvariantViolation = ({
     isDev,
   });
 };
+
+export const envBaseInvariantViolation = (
+  input: EnvBaseInvariantInput,
+): string | null =>
+  backpressureInvariantViolation(input) ??
+  databaseTransportInvariantViolation(input) ??
+  corpusEndpointInvariantViolation(input) ??
+  publicLawTopologyInvariantViolation(input) ??
+  storageAndIndexInvariantViolation(input);

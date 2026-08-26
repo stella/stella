@@ -1,5 +1,3 @@
-import { panic } from "better-result";
-
 import type { Transaction } from "@/api/db/root";
 import type {
   AUDIT_ACTIVITY_CATEGORIES,
@@ -174,97 +172,105 @@ const executionColumns = (
   };
 };
 
+const entityActivityCategory = (event: AuditEvent): AuditActivityCategory => {
+  const createdEntity = event.changes?.["created"]?.new;
+  const createdKind =
+    typeof createdEntity === "object" &&
+    createdEntity !== null &&
+    "kind" in createdEntity
+      ? createdEntity.kind
+      : null;
+  const deletedEntity = event.changes?.["deleted"]?.old;
+  const deletedKind =
+    typeof deletedEntity === "object" &&
+    deletedEntity !== null &&
+    "kind" in deletedEntity
+      ? deletedEntity.kind
+      : null;
+  return event.metadata?.["kind"] === "task" ||
+    createdKind === "task" ||
+    deletedKind === "task"
+    ? "tasks"
+    : "documents";
+};
+
+const taskOrDocumentActivityCategory = (
+  event: AuditEvent,
+): AuditActivityCategory =>
+  event.metadata?.["kind"] === "task" ? "tasks" : "documents";
+
+const playbookActivityCategory = (event: AuditEvent): AuditActivityCategory =>
+  event.action === AUDIT_ACTION.EXECUTE ? "automation" : "other";
+
+const workspaceActivityCategory = (event: AuditEvent): AuditActivityCategory =>
+  event.changes?.["membersAdded"] !== undefined ||
+  event.changes?.["membersRemoved"] !== undefined
+    ? "team"
+    : "matter";
+
+type AuditActivityCategoryResolver =
+  | AuditActivityCategory
+  | ((event: AuditEvent) => AuditActivityCategory);
+
+const AUDIT_ACTIVITY_CATEGORY_BY_RESOURCE_TYPE = {
+  entity: entityActivityCategory,
+  field: taskOrDocumentActivityCategory,
+  entity_version: taskOrDocumentActivityCategory,
+  work_obligation: "tasks",
+  user_file: "documents",
+  workspace_member: "team",
+  workspace_contact: "team",
+  case_law_matter_link: "court",
+  case_law_decision_annotation: "court",
+  bilingual_translation_run: "automation",
+  document_translation_run: "automation",
+  document_review_run: "automation",
+  flow_run: "automation",
+  playbook: playbookActivityCategory,
+  workspace: workspaceActivityCategory,
+  audit_log: "other",
+  agent_skill: "other",
+  ai_memory: "other",
+  billing_code: "other",
+  chat_file: "other",
+  chat_message: "other",
+  chat_thread: "other",
+  clause: "other",
+  clause_category: "other",
+  clause_template_link: "other",
+  clause_variant: "other",
+  contact: "other",
+  contact_directory: "other",
+  document_type: "other",
+  usage_allocation: "other",
+  usage_entitlement: "other",
+  usage_event: "other",
+  desktop_edit_session: "other",
+  expense: "other",
+  flow_definition: "other",
+  folio_collab_session: "other",
+  invoice: "other",
+  machine_api_key: "other",
+  legal_list: "other",
+  legal_list_generation: "other",
+  legal_list_item: "other",
+  mcp_gateway_tool: "other",
+  organization_settings: "other",
+  property: "other",
+  rate_entry: "other",
+  report_export: "other",
+  rate_table: "other",
+  saved_search: "other",
+  style_set: "other",
+  template: "other",
+  time_entry: "other",
+  view: "other",
+  view_template: "other",
+} as const satisfies Record<AuditResourceType, AuditActivityCategoryResolver>;
+
 const activityCategoryForEvent = (event: AuditEvent): AuditActivityCategory => {
-  switch (event.resourceType) {
-    case "entity": {
-      const createdEntity = event.changes?.["created"]?.new;
-      const createdKind =
-        typeof createdEntity === "object" &&
-        createdEntity !== null &&
-        "kind" in createdEntity
-          ? createdEntity.kind
-          : null;
-      const deletedEntity = event.changes?.["deleted"]?.old;
-      const deletedKind =
-        typeof deletedEntity === "object" &&
-        deletedEntity !== null &&
-        "kind" in deletedEntity
-          ? deletedEntity.kind
-          : null;
-      return event.metadata?.["kind"] === "task" ||
-        createdKind === "task" ||
-        deletedKind === "task"
-        ? "tasks"
-        : "documents";
-    }
-    case "field":
-      return event.metadata?.["kind"] === "task" ? "tasks" : "documents";
-    case "entity_version":
-      return event.metadata?.["kind"] === "task" ? "tasks" : "documents";
-    case "work_obligation":
-      return "tasks";
-    case "user_file":
-      return "documents";
-    case "workspace_member":
-    case "workspace_contact":
-      return "team";
-    case "case_law_matter_link":
-    case "case_law_decision_annotation":
-      return "court";
-    case "bilingual_translation_run":
-    case "document_translation_run":
-    case "document_review_run":
-    case "flow_run":
-      return "automation";
-    case "playbook":
-      return event.action === AUDIT_ACTION.EXECUTE ? "automation" : "other";
-    case "workspace":
-      return event.changes?.["membersAdded"] !== undefined ||
-        event.changes?.["membersRemoved"] !== undefined
-        ? "team"
-        : "matter";
-    case "audit_log":
-    case "agent_skill":
-    case "ai_memory":
-    case "billing_code":
-    case "chat_file":
-    case "chat_message":
-    case "chat_thread":
-    case "clause":
-    case "clause_category":
-    case "clause_template_link":
-    case "clause_variant":
-    case "contact":
-    case "contact_directory":
-    case "document_type":
-    case "usage_allocation":
-    case "usage_entitlement":
-    case "usage_event":
-    case "desktop_edit_session":
-    case "expense":
-    case "flow_definition":
-    case "folio_collab_session":
-    case "invoice":
-    case "machine_api_key":
-    case "legal_list":
-    case "legal_list_generation":
-    case "legal_list_item":
-    case "mcp_gateway_tool":
-    case "organization_settings":
-    case "property":
-    case "rate_entry":
-    case "report_export":
-    case "rate_table":
-    case "saved_search":
-    case "style_set":
-    case "template":
-    case "time_entry":
-    case "view":
-    case "view_template":
-      return "other";
-    default:
-      return panic("Unsupported audit resource type");
-  }
+  const resolver = AUDIT_ACTIVITY_CATEGORY_BY_RESOURCE_TYPE[event.resourceType];
+  return typeof resolver === "function" ? resolver(event) : resolver;
 };
 
 const runIdForEvent = (

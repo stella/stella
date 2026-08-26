@@ -21,7 +21,7 @@ import {
   useRef,
   useState,
 } from "react";
-import type { RefObject } from "react";
+import type { Dispatch, RefObject, SetStateAction } from "react";
 
 import {
   useQuery,
@@ -1107,6 +1107,164 @@ type FileChatOverlayInnerProps = Omit<FileChatOverlayProps, "chatThreadId"> & {
   ensureFileThreadPersisted?: (() => Promise<ChatThreadId>) | undefined;
 };
 
+const getFileChatThreadRef = (
+  chatThreadId: ChatThreadId,
+  workspaceId: string | undefined,
+): ChatThreadRef =>
+  workspaceId === undefined
+    ? { scope: "global", threadId: chatThreadId }
+    : {
+        scope: "workspace",
+        threadId: chatThreadId,
+        workspaceId,
+      };
+
+const useFileChatReviewState = ({
+  activeDraft,
+  activeFile,
+}: Pick<FileChatOverlayInnerProps, "activeDraft" | "activeFile">) => {
+  let reviewEntityId: string | undefined;
+  if (activeFile !== undefined) {
+    reviewEntityId = resolveFileReviewSessionId({
+      type: "file",
+      entityId: activeFile.entityId,
+    });
+  } else if (activeDraft !== undefined) {
+    reviewEntityId = resolveFileReviewSessionId({
+      type: "draft",
+      toolCallId: activeDraft.toolCallId,
+    });
+  } else {
+    reviewEntityId = resolveFileReviewSessionId({ type: "none" });
+  }
+  const hasPendingReview = useReviewStore((state) => {
+    if (reviewEntityId === undefined) {
+      return false;
+    }
+    return (
+      state.sessions[reviewEntityId]?.some(
+        (item) => item.status === "pending" || item.status === "applying",
+      ) === true
+    );
+  });
+  return { hasPendingReview, reviewEntityId };
+};
+
+const useFileChatDocxLifecycle = ({
+  activeDraft,
+  activeFile,
+  docxEditorRef,
+  editorReady,
+  hasDocxEditSurface,
+  setEditorReady,
+}: Pick<
+  FileChatOverlayInnerProps,
+  "activeDraft" | "activeFile" | "docxEditorRef"
+> & {
+  editorReady: boolean;
+  hasDocxEditSurface: boolean;
+  setEditorReady: Dispatch<SetStateAction<boolean>>;
+}) => {
+  const lastSentDocxEditSnapshotRef = useRef<FolioAIEditSnapshot | null>(null);
+  const activeDocumentKey = activeFile
+    ? `${activeFile.entityId}:${activeFile.fileFieldId ?? ""}`
+    : activeDraft?.toolCallId;
+  const [readyForDocumentKey, setReadyForDocumentKey] =
+    useState(activeDocumentKey);
+  if (activeDocumentKey !== readyForDocumentKey) {
+    setReadyForDocumentKey(activeDocumentKey);
+    setEditorReady(false);
+  }
+  useExternalSyncEffect(() => {
+    lastSentDocxEditSnapshotRef.current = null;
+    return undefined;
+  }, [activeDocumentKey]);
+  useExternalSyncEffect(() => {
+    if (editorReady || !hasDocxEditSurface) {
+      return undefined;
+    }
+    const ensure = () =>
+      docxEditorRef?.current?.ensureEditorView({ focus: false });
+    ensure();
+    const probe = () => {
+      if (docxEditorRef?.current?.createAIEditSnapshot()) {
+        setEditorReady(true);
+        return true;
+      }
+      return false;
+    };
+    if (probe()) {
+      return undefined;
+    }
+    const id = window.setInterval(() => {
+      ensure();
+      if (probe()) {
+        window.clearInterval(id);
+      }
+    }, 80);
+    const fallbackTimer = window.setTimeout(() => {
+      window.clearInterval(id);
+      setEditorReady(true);
+    }, 3000);
+    return () => {
+      window.clearInterval(id);
+      window.clearTimeout(fallbackTimer);
+    };
+  }, [editorReady, hasDocxEditSurface, docxEditorRef, setEditorReady]);
+  return { lastSentDocxEditSnapshotRef };
+};
+
+const useFileChatPlaceholder = ({
+  activeDraft,
+  activeExternal,
+  activeFile,
+  docxEditSafety,
+}: Pick<
+  FileChatOverlayInnerProps,
+  "activeDraft" | "activeExternal" | "activeFile" | "docxEditSafety"
+>) => {
+  const t = useTranslations();
+  if (activeDraft !== undefined) {
+    return {
+      placeholder: t("chat.editableFilePlaceholder", {
+        fileName: activeDraft.fileName,
+      }),
+      placeholderAction: t("chat.editableFilePlaceholderAction"),
+      sourceLabel: activeDraft.fileName,
+    };
+  }
+  if (activeFile !== undefined) {
+    const canOfferEdit =
+      activeFile.editable === true && docxEditSafety !== "unsafe";
+    return {
+      placeholder: t(
+        canOfferEdit ? "chat.editableFilePlaceholder" : "chat.filePlaceholder",
+        { fileName: activeFile.fileName },
+      ),
+      placeholderAction: t(
+        canOfferEdit
+          ? "chat.editableFilePlaceholderAction"
+          : "chat.filePlaceholderAction",
+      ),
+      sourceLabel: activeFile.fileName,
+    };
+  }
+  if (activeExternal !== undefined) {
+    return {
+      placeholder: t("chat.externalSourcePlaceholder", {
+        title: activeExternal.title,
+      }),
+      placeholderAction: t("chat.externalSourcePlaceholderAction"),
+      sourceLabel: activeExternal.title,
+    };
+  }
+  return {
+    placeholder: undefined,
+    placeholderAction: undefined,
+    sourceLabel: undefined,
+  };
+};
+
 const FileChatOverlayInner = ({
   workspaceId,
   chatThreadId,
@@ -1140,18 +1298,8 @@ const FileChatOverlayInner = ({
   const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
   const userContext = useChatUserContext();
   const getUserContext = useLatestCallback(() => userContext);
-  const threadRef = useMemo<ChatThreadRef>(
-    () =>
-      workspaceId === undefined
-        ? {
-            scope: "global",
-            threadId: chatThreadId,
-          }
-        : {
-            scope: "workspace",
-            threadId: chatThreadId,
-            workspaceId,
-          },
+  const threadRef = useMemo(
+    () => getFileChatThreadRef(chatThreadId, workspaceId),
     [chatThreadId, workspaceId],
   );
   // Per-send anonymization now reads the shared per-thread store keyed by
@@ -1177,7 +1325,6 @@ const FileChatOverlayInner = ({
   const getContextMatterIds = useLatestCallback(
     () => contextMatterIds ?? UNSEEDED_CONTEXT_MATTER_IDS,
   );
-  const lastSentDocxEditSnapshotRef = useRef<FolioAIEditSnapshot | null>(null);
   // Seeded with the shared empty constant instead of normalizing during
   // render (the initializer would rebuild and discard the value every
   // render); the layout effect below fills it before anything reads it.
@@ -1192,30 +1339,9 @@ const FileChatOverlayInner = ({
   // renders while any suggestion is pending/applying (mirrors the bar's own
   // `isPending` gate). When it is, the thread card lifts above the bar so the
   // two floating surfaces never overlap.
-  let reviewEntityId: string | undefined;
-  if (activeFile !== undefined) {
-    reviewEntityId = resolveFileReviewSessionId({
-      type: "file",
-      entityId: activeFile.entityId,
-    });
-  } else if (activeDraft !== undefined) {
-    reviewEntityId = resolveFileReviewSessionId({
-      type: "draft",
-      toolCallId: activeDraft.toolCallId,
-    });
-  } else {
-    reviewEntityId = resolveFileReviewSessionId({ type: "none" });
-  }
-  const hasPendingReview = useReviewStore((state) => {
-    if (reviewEntityId === undefined) {
-      return false;
-    }
-    const session = state.sessions[reviewEntityId];
-    return (
-      session?.some(
-        (item) => item.status === "pending" || item.status === "applying",
-      ) === true
-    );
+  const { hasPendingReview, reviewEntityId } = useFileChatReviewState({
+    activeDraft,
+    activeFile,
   });
   const editModeOptionId = useChatEditModeStore((state) => state.optionId);
   const setEditModeOptionId = useChatEditModeStore(
@@ -1252,10 +1378,6 @@ const FileChatOverlayInner = ({
   // Suspense swap unmounts + remounts this subtree with fresh state,
   // and the poller racing with a second rerender can leave the gate
   // stuck closed even though the underlying view is live).
-  // eslint-disable-next-line react/react-compiler -- mount-time seed of readiness from the imperative Folio editor instance so a transition-induced remount of an already-ready editor starts ready; the ref read runs once in the useState initializer
-  const [editorReady, setEditorReady] = useState(() =>
-    Boolean(docxEditorRef?.current?.createAIEditSnapshot()),
-  );
   // Reset readiness when the active file changes (the new doc has its
   // own mount cycle). Done during render rather than in an effect: the
   // editor now creates its hidden view synchronously inside
@@ -1268,61 +1390,18 @@ const FileChatOverlayInner = ({
   // hold several file fields, so an entity-only key would keep `editorReady`
   // true when switching to another file/version on the same entity and skip the
   // snapshot poll for the newly mounted editor.
-  const activeDocumentKey = activeFile
-    ? `${activeFile.entityId}:${activeFile.fileFieldId ?? ""}`
-    : activeDraft?.toolCallId;
-  const [readyForDocumentKey, setReadyForDocumentKey] =
-    useState(activeDocumentKey);
-  if (activeDocumentKey !== readyForDocumentKey) {
-    setReadyForDocumentKey(activeDocumentKey);
-    setEditorReady(false);
-  }
-  useExternalSyncEffect(() => {
-    lastSentDocxEditSnapshotRef.current = null;
-    return undefined;
-  }, [activeDocumentKey]);
-  useExternalSyncEffect(() => {
-    if (editorReady || !hasDocxEditSurface) {
-      return undefined;
-    }
-    const ensure = () =>
-      docxEditorRef.current?.ensureEditorView({ focus: false });
-    ensure();
-    const probe = () => {
-      if (docxEditorRef.current?.createAIEditSnapshot()) {
-        setEditorReady(true);
-        return true;
-      }
-      return false;
-    };
-    if (probe()) {
-      return undefined;
-    }
-    const id = window.setInterval(() => {
-      // Re-call ensure on each tick: when the surrounding tree is in
-      // a concurrent transition (e.g. right after the "new chat" swap),
-      // the first ensure can be coalesced away by React's batching.
-      // The state setter is a no-op once the view is already created.
-      ensure();
-      if (probe()) {
-        window.clearInterval(id);
-      }
-    }, 80);
-    // Safety net: never leave the chat input gated indefinitely. If the probe
-    // hasn't succeeded after a few seconds (e.g. an edge case where the
-    // virtualised paged editor hasn't surfaced a non-empty doc to
-    // `createAIEditSnapshot` yet), unlock the input anyway —
-    // `canSubmitWithCurrentDocxSnapshot` runs at submit time and re-checks
-    // the snapshot, so a stale unlock can't send unanchored edits.
-    const fallbackTimer = window.setTimeout(() => {
-      window.clearInterval(id);
-      setEditorReady(true);
-    }, 3000);
-    return () => {
-      window.clearInterval(id);
-      window.clearTimeout(fallbackTimer);
-    };
-  }, [editorReady, hasDocxEditSurface, docxEditorRef]);
+  // eslint-disable-next-line react/react-compiler -- mount-time seed of readiness from the imperative Folio editor instance so a transition-induced remount of an already-ready editor starts ready; the ref read runs once in the useState initializer
+  const [editorReady, setEditorReady] = useState(() =>
+    Boolean(docxEditorRef?.current?.createAIEditSnapshot()),
+  );
+  const { lastSentDocxEditSnapshotRef } = useFileChatDocxLifecycle({
+    activeDraft,
+    activeFile,
+    docxEditorRef,
+    editorReady,
+    hasDocxEditSurface,
+    setEditorReady,
+  });
 
   // Subscribe to the inspector chip's pulse channel so the bar
   // glows when the user clicks the AI-suggestions facet.
@@ -1650,36 +1729,16 @@ const FileChatOverlayInner = ({
     openIfAIUnavailable();
   }, [openIfAIUnavailable]);
 
-  let filePlaceholder: string | undefined;
-  let filePlaceholderAction: string | undefined;
-  if (activeDraft) {
-    filePlaceholder = t("chat.editableFilePlaceholder", {
-      fileName: activeDraft.fileName,
-    });
-    filePlaceholderAction = t("chat.editableFilePlaceholderAction");
-  } else if (activeFile === undefined) {
-    if (activeExternal) {
-      filePlaceholder = t("chat.externalSourcePlaceholder", {
-        title: activeExternal.title,
-      });
-      filePlaceholderAction = t("chat.externalSourcePlaceholderAction");
-    }
-  } else {
-    // Only offer "…or edit" when the file can actually be edited: editable in
-    // principle AND not blocked as unsafe-to-rewrite (view only). Otherwise the
-    // placeholder promises an edit the user can't make.
-    const canOfferEdit =
-      activeFile.editable === true && docxEditSafety !== "unsafe";
-    filePlaceholder = t(
-      canOfferEdit ? "chat.editableFilePlaceholder" : "chat.filePlaceholder",
-      { fileName: activeFile.fileName },
-    );
-    filePlaceholderAction = t(
-      canOfferEdit
-        ? "chat.editableFilePlaceholderAction"
-        : "chat.filePlaceholderAction",
-    );
-  }
+  const {
+    placeholder: filePlaceholder,
+    placeholderAction: filePlaceholderAction,
+    sourceLabel: filePlaceholderSourceLabel,
+  } = useFileChatPlaceholder({
+    activeDraft,
+    activeExternal,
+    activeFile,
+    docxEditSafety,
+  });
 
   // Check eligibility for suggested prompts using draft state (avoids
   // unnecessary API calls when user is typing).
@@ -2472,8 +2531,7 @@ const FileChatOverlayInner = ({
           reservedCommands={{ hasPersistedThread: hasMessages }}
           skillsOrganizationId={activeOrganizationId}
           emptyPlaceholder={
-            (activeFile || activeDraft || activeExternal) &&
-            filePlaceholderAction ? (
+            filePlaceholderAction !== undefined ? (
               <span
                 className={cn(
                   "text-foreground-ghost flex min-w-0 items-center gap-1.5",
@@ -2485,9 +2543,7 @@ const FileChatOverlayInner = ({
                   as="span"
                   className="text-foreground-label max-w-64 truncate"
                 >
-                  {activeFile?.fileName ??
-                    activeDraft?.fileName ??
-                    activeExternal?.title}
+                  {filePlaceholderSourceLabel}
                 </BidiText>
               </span>
             ) : undefined

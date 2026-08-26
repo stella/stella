@@ -482,20 +482,129 @@ const isUnapprovedProceduralStatement = (
   return !APPROVED_PROCEDURAL_STATEMENTS.has(`${relativePath}:${hash}`);
 };
 
+type ConcurrentTimeoutState = {
+  concurrentBlockOpen: boolean;
+  lockTimeout: TimeoutState;
+  lockTimeoutCheckpoint: TimeoutState | undefined;
+  lockTimeoutRequiresRestore: boolean;
+  statementTimeout: TimeoutState;
+  statementTimeoutCheckpoint: TimeoutState | undefined;
+  statementTimeoutRequiresRestore: boolean;
+  statementTimeoutRestored: boolean;
+};
+
+const applyConcurrentTimeoutUpdate = ({
+  relativePath,
+  state,
+  timeoutUpdate,
+  violations,
+}: {
+  relativePath: string;
+  state: ConcurrentTimeoutState;
+  timeoutUpdate: TimeoutUpdate | undefined;
+  violations: string[];
+}): void => {
+  if (timeoutUpdate?.type === "checkpoint") {
+    if (timeoutUpdate.name === "statement") {
+      state.statementTimeoutCheckpoint = state.statementTimeout;
+    } else {
+      state.lockTimeoutCheckpoint = state.lockTimeout;
+    }
+    return;
+  }
+  if (timeoutUpdate?.type === "restore") {
+    const checkpoint =
+      timeoutUpdate.name === "statement"
+        ? state.statementTimeoutCheckpoint
+        : state.lockTimeoutCheckpoint;
+    if (checkpoint === undefined) {
+      violations.push(
+        `${relativePath}: ${timeoutUpdate.name} timeout restore lacks a checkpoint`,
+      );
+      return;
+    }
+    if (timeoutUpdate.name === "statement") {
+      state.statementTimeout = checkpoint;
+      state.statementTimeoutRequiresRestore = false;
+    } else {
+      state.lockTimeout = checkpoint;
+      state.lockTimeoutRequiresRestore = false;
+    }
+    return;
+  }
+  if (timeoutUpdate?.type === "set" && timeoutUpdate.scope === "session") {
+    if (timeoutUpdate.name === "statement") {
+      state.statementTimeout = timeoutUpdate.state;
+      state.statementTimeoutRequiresRestore =
+        timeoutUpdate.state === "unbounded";
+    } else {
+      state.lockTimeout = timeoutUpdate.state;
+      state.lockTimeoutRequiresRestore = timeoutUpdate.state !== "bounded";
+    }
+    return;
+  }
+  if (timeoutUpdate?.type === "reset") {
+    if (timeoutUpdate.name === "all" || timeoutUpdate.name === "statement") {
+      state.statementTimeout = "unset";
+    }
+    if (timeoutUpdate.name === "all" || timeoutUpdate.name === "lock") {
+      state.lockTimeout = "unset";
+      if (state.concurrentBlockOpen) {
+        state.lockTimeoutRequiresRestore = true;
+      }
+    }
+  }
+};
+
+const enforceConcurrentRestoreProtocol = ({
+  isConcurrentOperation,
+  isProtocolBridge,
+  isStatementRestore,
+  relativePath,
+  state,
+  violations,
+}: {
+  isConcurrentOperation: boolean;
+  isProtocolBridge: boolean;
+  isStatementRestore: boolean;
+  relativePath: string;
+  state: ConcurrentTimeoutState;
+  violations: string[];
+}): void => {
+  if (!state.concurrentBlockOpen) {
+    return;
+  }
+  if (isStatementRestore) {
+    state.statementTimeoutRestored = true;
+  }
+  if (state.statementTimeoutRestored && !state.lockTimeoutRequiresRestore) {
+    state.concurrentBlockOpen = false;
+    return;
+  }
+  if (!isConcurrentOperation && !isStatementRestore && !isProtocolBridge) {
+    violations.push(
+      `${relativePath}: timeouts are not restored immediately after concurrent index operations`,
+    );
+    state.concurrentBlockOpen = false;
+  }
+};
+
 const collectUnsafeConcurrentTimeouts = (
   relativePath: string,
   source: string,
 ) => {
   const violations = [];
   const statements = splitSqlStatements(source);
-  let statementTimeout: TimeoutState = "unset";
-  let lockTimeout: TimeoutState = "unset";
-  let statementTimeoutCheckpoint: TimeoutState | undefined;
-  let lockTimeoutCheckpoint: TimeoutState | undefined;
-  let statementTimeoutRequiresRestore = false;
-  let concurrentBlockOpen = false;
-  let statementTimeoutRestored = false;
-  let lockTimeoutRequiresRestore = false;
+  const state: ConcurrentTimeoutState = {
+    concurrentBlockOpen: false,
+    lockTimeout: "unset",
+    lockTimeoutCheckpoint: undefined,
+    lockTimeoutRequiresRestore: false,
+    statementTimeout: "unset",
+    statementTimeoutCheckpoint: undefined,
+    statementTimeoutRequiresRestore: false,
+    statementTimeoutRestored: false,
+  };
 
   for (const statement of statements) {
     if (isUnapprovedProceduralStatement(relativePath, statement)) {
@@ -511,7 +620,7 @@ const collectUnsafeConcurrentTimeouts = (
     const isStatementRestore =
       (timeoutUpdate?.type === "restore" &&
         timeoutUpdate.name === "statement" &&
-        statementTimeoutCheckpoint !== undefined) ||
+        state.statementTimeoutCheckpoint !== undefined) ||
       (timeoutUpdate?.type === "set" &&
         timeoutUpdate.name === "statement" &&
         timeoutUpdate.scope === "session" &&
@@ -529,68 +638,20 @@ const collectUnsafeConcurrentTimeouts = (
       );
     }
 
-    if (timeoutUpdate?.type === "checkpoint") {
-      if (timeoutUpdate.name === "statement") {
-        statementTimeoutCheckpoint = statementTimeout;
-      } else {
-        lockTimeoutCheckpoint = lockTimeout;
-      }
-    } else if (timeoutUpdate?.type === "restore") {
-      const checkpoint =
-        timeoutUpdate.name === "statement"
-          ? statementTimeoutCheckpoint
-          : lockTimeoutCheckpoint;
-      if (checkpoint === undefined) {
-        violations.push(
-          `${relativePath}: ${timeoutUpdate.name} timeout restore lacks a checkpoint`,
-        );
-      } else if (timeoutUpdate.name === "statement") {
-        statementTimeout = checkpoint;
-        statementTimeoutRequiresRestore = false;
-      } else {
-        lockTimeout = checkpoint;
-        lockTimeoutRequiresRestore = false;
-      }
-    } else if (
-      timeoutUpdate?.type === "set" &&
-      timeoutUpdate.scope === "session"
-    ) {
-      if (timeoutUpdate.name === "statement") {
-        statementTimeout = timeoutUpdate.state;
-        statementTimeoutRequiresRestore = timeoutUpdate.state === "unbounded";
-      } else {
-        lockTimeout = timeoutUpdate.state;
-        lockTimeoutRequiresRestore = timeoutUpdate.state !== "bounded";
-      }
-    } else if (timeoutUpdate?.type === "reset") {
-      if (timeoutUpdate.name === "all" || timeoutUpdate.name === "statement") {
-        statementTimeout = "unset";
-      }
-      if (timeoutUpdate.name === "all" || timeoutUpdate.name === "lock") {
-        lockTimeout = "unset";
-        if (concurrentBlockOpen) {
-          lockTimeoutRequiresRestore = true;
-        }
-      }
-    }
-
-    if (concurrentBlockOpen) {
-      if (isStatementRestore) {
-        statementTimeoutRestored = true;
-      }
-      if (statementTimeoutRestored && !lockTimeoutRequiresRestore) {
-        concurrentBlockOpen = false;
-      } else if (
-        !isConcurrentOperation &&
-        !isStatementRestore &&
-        !isProtocolBridge
-      ) {
-        violations.push(
-          `${relativePath}: timeouts are not restored immediately after concurrent index operations`,
-        );
-        concurrentBlockOpen = false;
-      }
-    }
+    applyConcurrentTimeoutUpdate({
+      relativePath,
+      state,
+      timeoutUpdate,
+      violations,
+    });
+    enforceConcurrentRestoreProtocol({
+      isConcurrentOperation,
+      isProtocolBridge,
+      isStatementRestore,
+      relativePath,
+      state,
+      violations,
+    });
 
     if (timeoutUpdate || isUnsupportedTransactionReversal) {
       continue;
@@ -599,22 +660,22 @@ const collectUnsafeConcurrentTimeouts = (
       continue;
     }
 
-    if (statementTimeout !== "unbounded") {
+    if (state.statementTimeout !== "unbounded") {
       violations.push(
         `${relativePath}: concurrent index operation has a timeout`,
       );
     }
-    concurrentBlockOpen = true;
-    statementTimeoutRestored = false;
-    lockTimeoutRequiresRestore = lockTimeout === "unbounded";
+    state.concurrentBlockOpen = true;
+    state.statementTimeoutRestored = false;
+    state.lockTimeoutRequiresRestore = state.lockTimeout === "unbounded";
   }
 
-  if (concurrentBlockOpen && lockTimeoutRequiresRestore) {
+  if (state.concurrentBlockOpen && state.lockTimeoutRequiresRestore) {
     violations.push(`${relativePath}: lock timeout is not restored`);
   }
   if (
-    (concurrentBlockOpen && !statementTimeoutRestored) ||
-    (!concurrentBlockOpen && statementTimeoutRequiresRestore)
+    (state.concurrentBlockOpen && !state.statementTimeoutRestored) ||
+    (!state.concurrentBlockOpen && state.statementTimeoutRequiresRestore)
   ) {
     violations.push(`${relativePath}: statement timeout is not restored`);
   }
@@ -714,6 +775,209 @@ const collectUnsafeConcurrentIndexes = async (): Promise<string[]> => {
   return violations.sort();
 };
 
+type TypeChangeTimeoutState = {
+  activePolicy: TypeChangePolicy | undefined;
+  activePolicyUsed: boolean;
+  lockTimeout: TimeoutState;
+  lockTimeoutCheckpoint: TimeoutState | undefined;
+  metadataOnlyBlockOpen: boolean;
+  sawCustomStatementBudget: boolean;
+  statementTimeout: TimeoutState;
+  statementTimeoutCheckpoint: TimeoutState | undefined;
+  statementTimeoutRequiresRestore: boolean;
+};
+
+const applyTypeChangePolicy = ({
+  declaredPolicy,
+  relativePath,
+  state,
+  violations,
+}: {
+  declaredPolicy: TypeChangePolicy;
+  relativePath: string;
+  state: TypeChangeTimeoutState;
+  violations: string[];
+}): void => {
+  if (state.metadataOnlyBlockOpen) {
+    violations.push(
+      `${relativePath}: statement timeout is not restored immediately after metadata-only type changes`,
+    );
+    state.metadataOnlyBlockOpen = false;
+  }
+  if (state.activePolicy && !state.activePolicyUsed) {
+    violations.push(`${relativePath}: type change policy is unused`);
+  }
+  state.activePolicy = declaredPolicy;
+  state.activePolicyUsed = false;
+};
+
+const closeCompletedBoundedRewritePolicy = ({
+  isTypeChange,
+  state,
+}: {
+  isTypeChange: boolean;
+  state: TypeChangeTimeoutState;
+}): void => {
+  if (
+    state.activePolicy === "boundedRewrite" &&
+    state.activePolicyUsed &&
+    !isTypeChange
+  ) {
+    state.activePolicy = undefined;
+    state.activePolicyUsed = false;
+  }
+};
+
+const enforceMetadataOnlyRestore = ({
+  isImmediateRestore,
+  isTypeChange,
+  relativePath,
+  state,
+  violations,
+}: {
+  isImmediateRestore: boolean;
+  isTypeChange: boolean;
+  relativePath: string;
+  state: TypeChangeTimeoutState;
+  violations: string[];
+}): void => {
+  if (!state.metadataOnlyBlockOpen) {
+    return;
+  }
+  if (!isTypeChange && !isImmediateRestore) {
+    violations.push(
+      `${relativePath}: statement timeout is not restored immediately after metadata-only type changes`,
+    );
+  }
+  if (!isTypeChange || isImmediateRestore) {
+    state.metadataOnlyBlockOpen = false;
+    state.activePolicy = undefined;
+    state.activePolicyUsed = false;
+  }
+};
+
+const applyTypeChangeTimeoutUpdate = ({
+  statement,
+  state,
+  timeoutUpdate,
+  relativePath,
+  violations,
+}: {
+  statement: string;
+  state: TypeChangeTimeoutState;
+  timeoutUpdate: TimeoutUpdate | undefined;
+  relativePath: string;
+  violations: string[];
+}): boolean => {
+  if (timeoutUpdate?.type === "checkpoint") {
+    if (timeoutUpdate.name === "lock") {
+      state.lockTimeoutCheckpoint = state.lockTimeout;
+    } else {
+      state.statementTimeoutCheckpoint = state.statementTimeout;
+    }
+    return true;
+  }
+  if (timeoutUpdate?.type === "restore") {
+    const checkpoint =
+      timeoutUpdate.name === "lock"
+        ? state.lockTimeoutCheckpoint
+        : state.statementTimeoutCheckpoint;
+    if (checkpoint === undefined) {
+      violations.push(
+        `${relativePath}: ${timeoutUpdate.name} timeout restore lacks a checkpoint`,
+      );
+    } else if (timeoutUpdate.name === "lock") {
+      state.lockTimeout = checkpoint;
+    } else {
+      state.statementTimeout = checkpoint;
+      state.statementTimeoutRequiresRestore = false;
+    }
+    return true;
+  }
+  if (timeoutUpdate?.type === "set") {
+    const nextState =
+      timeoutUpdate.scope === "session" ? timeoutUpdate.state : "unset";
+    if (timeoutUpdate.name === "lock") {
+      state.lockTimeout = nextState;
+    } else {
+      state.statementTimeout = nextState;
+      state.statementTimeoutRequiresRestore = nextState === "unbounded";
+    }
+    return true;
+  }
+  if (timeoutUpdate?.type === "reset") {
+    if (timeoutUpdate.name === "all" || timeoutUpdate.name === "lock") {
+      state.lockTimeout = "unset";
+    }
+    if (timeoutUpdate.name === "all" || timeoutUpdate.name === "statement") {
+      state.statementTimeout = "unset";
+    }
+    return true;
+  }
+  if (isCustomStatementBudget(statement)) {
+    state.sawCustomStatementBudget = true;
+    state.statementTimeout = "bounded";
+    return true;
+  }
+  return false;
+};
+
+const enforceTypeChangeBudget = ({
+  isCustomBoundedMigration,
+  relativePath,
+  state,
+  typeChangeClauseCount,
+  violations,
+}: {
+  isCustomBoundedMigration: boolean;
+  relativePath: string;
+  state: TypeChangeTimeoutState;
+  typeChangeClauseCount: number;
+  violations: string[];
+}): void => {
+  if (!isCustomBoundedMigration && !state.activePolicy) {
+    violations.push(
+      `${relativePath}: type change lacks an explicit execution policy`,
+    );
+    return;
+  }
+  if (state.lockTimeout !== "bounded") {
+    violations.push(`${relativePath}: type change has an unbounded lock wait`);
+  }
+  if (isCustomBoundedMigration) {
+    if (
+      !state.sawCustomStatementBudget ||
+      state.statementTimeout !== "bounded"
+    ) {
+      violations.push(
+        `${relativePath}: custom type rewrite lacks its bounded execution budget`,
+      );
+    }
+    return;
+  }
+  if (state.activePolicy === "metadataOnly" && typeChangeClauseCount > 1) {
+    violations.push(
+      `${relativePath}: multiple type changes in one statement are not supported by the metadata-only timeout policy`,
+    );
+    return;
+  }
+  state.activePolicyUsed = true;
+  if (state.activePolicy === "metadataOnly") {
+    if (state.statementTimeout !== "unbounded") {
+      violations.push(
+        `${relativePath}: type change has a bounded execution timeout`,
+      );
+    }
+    state.metadataOnlyBlockOpen = true;
+    return;
+  }
+  if (state.statementTimeout !== "bounded") {
+    violations.push(
+      `${relativePath}: type rewrite lacks a bounded execution timeout`,
+    );
+  }
+};
+
 const collectUnsafeTypeChangesInMigration = (
   relativePath: string,
   source: string,
@@ -723,15 +987,17 @@ const collectUnsafeTypeChangesInMigration = (
     CUSTOM_BOUNDED_TYPE_CHANGE_MIGRATIONS.has(relativePath);
   const statements = splitSqlStatements(source);
 
-  let lockTimeout: TimeoutState = "unset";
-  let statementTimeout: TimeoutState = "unset";
-  let lockTimeoutCheckpoint: TimeoutState | undefined;
-  let statementTimeoutCheckpoint: TimeoutState | undefined;
-  let statementTimeoutRequiresRestore = false;
-  let metadataOnlyBlockOpen = false;
-  let activePolicy: TypeChangePolicy | undefined;
-  let activePolicyUsed = false;
-  let sawCustomStatementBudget = false;
+  const state: TypeChangeTimeoutState = {
+    activePolicy: undefined,
+    activePolicyUsed: false,
+    lockTimeout: "unset",
+    lockTimeoutCheckpoint: undefined,
+    metadataOnlyBlockOpen: false,
+    sawCustomStatementBudget: false,
+    statementTimeout: "unset",
+    statementTimeoutCheckpoint: undefined,
+    statementTimeoutRequiresRestore: false,
+  };
 
   for (const statement of statements) {
     const typeChangeClauseCount = [...statement.matchAll(TYPE_CHANGE_CLAUSE)]
@@ -757,17 +1023,12 @@ const collectUnsafeTypeChangesInMigration = (
 
     const declaredPolicy = parseTypeChangePolicy(statement);
     if (declaredPolicy) {
-      if (metadataOnlyBlockOpen) {
-        violations.push(
-          `${relativePath}: statement timeout is not restored immediately after metadata-only type changes`,
-        );
-        metadataOnlyBlockOpen = false;
-      }
-      if (activePolicy && !activePolicyUsed) {
-        violations.push(`${relativePath}: type change policy is unused`);
-      }
-      activePolicy = declaredPolicy;
-      activePolicyUsed = false;
+      applyTypeChangePolicy({
+        declaredPolicy,
+        relativePath,
+        state,
+        violations,
+      });
       continue;
     }
 
@@ -776,135 +1037,48 @@ const collectUnsafeTypeChangesInMigration = (
     const isImmediateRestore =
       (timeoutUpdate?.type === "restore" &&
         timeoutUpdate.name === "statement" &&
-        statementTimeoutCheckpoint !== undefined) ||
+        state.statementTimeoutCheckpoint !== undefined) ||
       (timeoutUpdate?.type === "set" &&
         timeoutUpdate.name === "statement" &&
         timeoutUpdate.scope === "session" &&
         timeoutUpdate.state === "bounded");
 
+    closeCompletedBoundedRewritePolicy({ isTypeChange, state });
+    enforceMetadataOnlyRestore({
+      isImmediateRestore,
+      isTypeChange,
+      relativePath,
+      state,
+      violations,
+    });
     if (
-      activePolicy === "boundedRewrite" &&
-      activePolicyUsed &&
-      !isTypeChange
+      applyTypeChangeTimeoutUpdate({
+        relativePath,
+        state,
+        statement,
+        timeoutUpdate,
+        violations,
+      })
     ) {
-      activePolicy = undefined;
-      activePolicyUsed = false;
-    }
-
-    if (metadataOnlyBlockOpen) {
-      if (!isTypeChange && !isImmediateRestore) {
-        violations.push(
-          `${relativePath}: statement timeout is not restored immediately after metadata-only type changes`,
-        );
-        metadataOnlyBlockOpen = false;
-        activePolicy = undefined;
-        activePolicyUsed = false;
-      } else if (isImmediateRestore) {
-        metadataOnlyBlockOpen = false;
-        activePolicy = undefined;
-        activePolicyUsed = false;
-      }
-    }
-
-    if (timeoutUpdate?.type === "checkpoint") {
-      if (timeoutUpdate.name === "lock") {
-        lockTimeoutCheckpoint = lockTimeout;
-      } else {
-        statementTimeoutCheckpoint = statementTimeout;
-      }
-      continue;
-    }
-    if (timeoutUpdate?.type === "restore") {
-      const checkpoint =
-        timeoutUpdate.name === "lock"
-          ? lockTimeoutCheckpoint
-          : statementTimeoutCheckpoint;
-      if (checkpoint === undefined) {
-        violations.push(
-          `${relativePath}: ${timeoutUpdate.name} timeout restore lacks a checkpoint`,
-        );
-      } else if (timeoutUpdate.name === "lock") {
-        lockTimeout = checkpoint;
-      } else {
-        statementTimeout = checkpoint;
-        statementTimeoutRequiresRestore = false;
-      }
-      continue;
-    }
-    if (timeoutUpdate?.type === "set") {
-      const nextState =
-        timeoutUpdate.scope === "session" ? timeoutUpdate.state : "unset";
-      if (timeoutUpdate.name === "lock") {
-        lockTimeout = nextState;
-      } else {
-        statementTimeout = nextState;
-        statementTimeoutRequiresRestore = nextState === "unbounded";
-      }
-      continue;
-    }
-    if (timeoutUpdate?.type === "reset") {
-      if (timeoutUpdate.name === "all" || timeoutUpdate.name === "lock") {
-        lockTimeout = "unset";
-      }
-      if (timeoutUpdate.name === "all" || timeoutUpdate.name === "statement") {
-        statementTimeout = "unset";
-      }
-      continue;
-    }
-    if (isCustomStatementBudget(statement)) {
-      sawCustomStatementBudget = true;
-      statementTimeout = "bounded";
       continue;
     }
     if (!isTypeChange) {
       continue;
     }
 
-    if (!isCustomBoundedMigration && !activePolicy) {
-      violations.push(
-        `${relativePath}: type change lacks an explicit execution policy`,
-      );
-      continue;
-    }
-    if (lockTimeout !== "bounded") {
-      violations.push(
-        `${relativePath}: type change has an unbounded lock wait`,
-      );
-    }
-    if (isCustomBoundedMigration) {
-      if (!sawCustomStatementBudget || statementTimeout !== "bounded") {
-        violations.push(
-          `${relativePath}: custom type rewrite lacks its bounded execution budget`,
-        );
-      }
-      continue;
-    }
-    if (activePolicy === "metadataOnly" && typeChangeClauseCount > 1) {
-      violations.push(
-        `${relativePath}: multiple type changes in one statement are not supported by the metadata-only timeout policy`,
-      );
-      continue;
-    }
-    activePolicyUsed = true;
-    if (activePolicy === "metadataOnly" && statementTimeout !== "unbounded") {
-      violations.push(
-        `${relativePath}: type change has a bounded execution timeout`,
-      );
-    }
-    if (activePolicy === "metadataOnly") {
-      metadataOnlyBlockOpen = true;
-    }
-    if (activePolicy === "boundedRewrite" && statementTimeout !== "bounded") {
-      violations.push(
-        `${relativePath}: type rewrite lacks a bounded execution timeout`,
-      );
-    }
+    enforceTypeChangeBudget({
+      isCustomBoundedMigration,
+      relativePath,
+      state,
+      typeChangeClauseCount,
+      violations,
+    });
   }
 
-  if (activePolicy && !activePolicyUsed) {
+  if (state.activePolicy && !state.activePolicyUsed) {
     violations.push(`${relativePath}: type change policy is unused`);
   }
-  if (metadataOnlyBlockOpen || statementTimeoutRequiresRestore) {
+  if (state.metadataOnlyBlockOpen || state.statementTimeoutRequiresRestore) {
     violations.push(`${relativePath}: statement timeout is not restored`);
   }
 

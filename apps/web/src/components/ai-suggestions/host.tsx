@@ -655,39 +655,34 @@ export const PromptBar = (props: PromptBarProps) => {
     removeFile,
   } = editorController;
 
-  const isGenerating = status === "generating";
-  const busy = isGenerating || status === "applying";
-  const showBusyPlaceholder = shouldShowPromptBarBusyPlaceholder({
+  const {
+    busy,
+    composerActionMode,
+    composerSubmitDisabled,
+    inputDisabled,
+    isGenerating,
+    isSendBlocked,
+    retryOffer,
+    showBusyPlaceholder,
+  } = getPromptBarAvailability({
     isEmpty,
+    onRetry,
+    onStop,
     queueWhileGenerating,
+    sendDisabledReason,
     status,
   });
-  const isSendBlocked = sendDisabledReason !== undefined;
-  const inputDisabled = isSendBlocked;
-  const submitDisabled = busy || isSendBlocked;
   // With queuing enabled the composer keeps accepting input while a
   // response streams: `useChatSession` holds submitted drafts until the
   // turn finishes. The single action button still morphs to Stop while
   // generating (on every surface); sending mid-turn happens through
   // Enter/submit, which queues the draft — same behaviour as the main
   // chat, and structurally no second button can appear beside it.
-  const composerSubmitDisabled = queueWhileGenerating
-    ? status === "applying" || isSendBlocked
-    : submitDisabled;
   // After a stop the send arrow becomes Retry until the user starts
   // a new draft (the owner also clears `onRetry` then; the `isEmpty`
   // gate just avoids a one-render flash before that state lands).
   // Passing `undefined` otherwise keeps the offer out of the button's
   // state entirely, so it can never shadow Send while typing.
-  const retryOffer =
-    onRetry !== undefined && isEmpty && !busy && !isSendBlocked
-      ? onRetry
-      : undefined;
-  const composerActionMode = resolveChatComposerAction({
-    isGenerating,
-    onStop,
-    onRetry: retryOffer,
-  });
 
   // Glow on attention pulse — kicked from the inspector when the
   // user clicks the AI-suggestions chip so they see the bar light
@@ -1115,6 +1110,51 @@ export const PromptBar = (props: PromptBarProps) => {
       {...(dock === undefined ? {} : { dock })}
     />
   );
+};
+
+const getPromptBarAvailability = ({
+  isEmpty,
+  onRetry,
+  onStop,
+  queueWhileGenerating,
+  sendDisabledReason,
+  status,
+}: {
+  isEmpty: boolean;
+  onRetry: PromptBarProps["onRetry"];
+  onStop: PromptBarProps["onStop"];
+  queueWhileGenerating: boolean;
+  sendDisabledReason: PromptBarProps["sendDisabledReason"];
+  status: PromptBarProps["status"];
+}) => {
+  const isGenerating = status === "generating";
+  const busy = isGenerating || status === "applying";
+  const isSendBlocked = sendDisabledReason !== undefined;
+  const submitDisabled = busy || isSendBlocked;
+  const retryOffer =
+    onRetry !== undefined && isEmpty && !busy && !isSendBlocked
+      ? onRetry
+      : undefined;
+  return {
+    busy,
+    composerActionMode: resolveChatComposerAction({
+      isGenerating,
+      onStop,
+      onRetry: retryOffer,
+    }),
+    composerSubmitDisabled: queueWhileGenerating
+      ? status === "applying" || isSendBlocked
+      : submitDisabled,
+    inputDisabled: isSendBlocked,
+    isGenerating,
+    isSendBlocked,
+    retryOffer,
+    showBusyPlaceholder: shouldShowPromptBarBusyPlaceholder({
+      isEmpty,
+      queueWhileGenerating,
+      status,
+    }),
+  };
 };
 
 type SuggestionCardProps = {

@@ -826,340 +826,82 @@ export const RowActions = ({
       </Tooltip>
       <MenuPopup anchor={anchor ?? undefined}>
         {/* --- View / Edit --- */}
-        {resolvedOnOpen && (
-          <MenuItem onClick={resolvedOnOpen}>
-            <EyeIcon />
-            {t("common.preview")}
-          </MenuItem>
-        )}
-        {!isBulk && onRename && (
-          <MenuItem onClick={onRename}>
-            <PencilIcon />
-            {t("common.rename")}
-          </MenuItem>
-        )}
-        {!isCellContext && canUploadVersion && (
-          <MenuItem
-            disabled={uploadVersion.isPending}
-            onClick={handleUploadVersionSelect}
-          >
-            <UploadIcon />
-            {t("fileDetail.uploadNewVersion")}
-          </MenuItem>
-        )}
-        {canRunOcr && (
-          <MenuItem
-            className="min-h-11 sm:min-h-11"
-            disabled={isOcrPending}
-            onClick={() => {
-              detached(handleRunOcr(ocrSource), "row-actions.run-ocr");
-            }}
-          >
-            <ScanTextIcon />
-            {t("workspaces.files.runOcr")}
-          </MenuItem>
-        )}
-        {rowOcrSources.length > 0 && (
-          <MenuSub>
-            <MenuSubTrigger className="min-h-11 sm:min-h-11">
-              <ScanTextIcon />
-              {t("workspaces.files.runOcr")}
-            </MenuSubTrigger>
-            <MenuSubPopup>
-              {rowOcrSources.map((source) => (
-                <MenuItem
-                  className="min-h-11 sm:min-h-11"
-                  disabled={isOcrPending}
-                  key={source.fieldId}
-                  onClick={() => {
-                    detached(handleRunOcr(source), "row-actions.run-ocr");
-                  }}
-                >
-                  <ScanTextIcon />
-                  <BidiText as="span" className="max-w-64 truncate">
-                    {source.fileName}
-                  </BidiText>
-                </MenuItem>
-              ))}
-            </MenuSubPopup>
-          </MenuSub>
-        )}
-        {!isBulk && cellMetadataTarget && (
-          <>
-            {canRetryCell && (
-              <MenuItem
-                disabled={retryDisabled}
-                onClick={() =>
-                  detached(handleRetryCell(), "row-actions.retry-cell")
-                }
-              >
-                <RefreshCwIcon />
-                {t("common.retry")}
-              </MenuItem>
-            )}
-            <CellLockMenuItem
-              entityId={entity.entityId}
-              metadata={cellMetadataTarget.metadata}
-              propertyId={cellMetadataTarget.propertyId}
-              workspaceId={workspaceId}
-            />
-            <MenuSeparator />
-            <CellMetadataMenuSection
-              entityId={entity.entityId}
-              metadata={cellMetadataTarget.metadata}
-              propertyId={cellMetadataTarget.propertyId}
-              workspaceId={workspaceId}
-            />
-          </>
-        )}
-        {!isCellContext && !isBulk && isFolder && onSubfolderCreated && (
-          <CreateSubfolderMenuItem
-            entity={entity}
-            onSubfolderCreated={onSubfolderCreated}
-            workspaceId={workspaceId}
-          />
-        )}
-        {!isCellContext && canOpenInDesktop && (
-          <MenuItem
-            onClick={() => {
-              detached(handleOpenInDesktop(), "row-actions.open-in-desktop");
-            }}
-          >
-            <LaptopIcon />
-            {t("workspaces.files.desktopEdit.action")}
-          </MenuItem>
-        )}
-        {!isCellContext &&
-          !entity.readOnly &&
-          hasDesktopEditFileType &&
-          desktopEditLockState !== "unlocked" && (
-            <MenuItem
-              onClick={() => {
-                detached(handleReleaseLock(), "row-actions.release-lock");
-              }}
-            >
-              <LockOpenIcon />
-              {t("workspaces.files.desktopEdit.releaseLock")}
-            </MenuItem>
-          )}
+        <RowOpenMenuActions
+          canUploadVersion={canUploadVersion}
+          isBulk={isBulk}
+          isCellContext={isCellContext}
+          onOpen={resolvedOnOpen}
+          onRename={onRename}
+          onUploadVersion={handleUploadVersionSelect}
+          uploadVersionPending={uploadVersion.isPending}
+        />
+        <RowOcrMenuActions
+          canRunOcr={canRunOcr}
+          isPending={isOcrPending}
+          onRun={handleRunOcr}
+          rowSources={rowOcrSources}
+          selectedSource={ocrSource}
+        />
+        <RowCellMenuActions
+          canRetry={canRetryCell}
+          entityId={entity.entityId}
+          isBulk={isBulk}
+          metadataTarget={cellMetadataTarget}
+          onRetry={handleRetryCell}
+          retryDisabled={retryDisabled}
+          workspaceId={workspaceId}
+        />
+        <RowFolderDesktopMenuActions
+          canOpenInDesktop={canOpenInDesktop}
+          canReleaseDesktopLock={
+            !entity.readOnly &&
+            hasDesktopEditFileType &&
+            desktopEditLockState !== "unlocked"
+          }
+          entity={entity}
+          isBulk={isBulk}
+          isCellContext={isCellContext}
+          isFolder={isFolder}
+          onOpenInDesktop={handleOpenInDesktop}
+          onReleaseDesktopLock={handleReleaseLock}
+          onSubfolderCreated={onSubfolderCreated}
+          workspaceId={workspaceId}
+        />
 
         <MenuSeparator />
 
         {/* --- Features --- */}
-        {!isBulk && !isFolder && entity.kind !== "task" && file && (
-          <MenuItem onClick={openVersionHistory}>
-            {/* Same intent as the inspector's full-view button
-                (open this file in the document route — the
-                versions panel is just one of the facets there).
-                Match the icon + label so the two surfaces don't
-                look like two different actions. */}
-            <Maximize2Icon />
-            {t("workspaces.pdf.fullView")}
-          </MenuItem>
-        )}
-        <MenuItem onClick={handleChatAbout}>
-          <MessageSquareIcon />
-          {t("chat.chatAbout")}
-        </MenuItem>
-
-        {isCellContext && exportableOcrSources.length === 1 && (
-          <>
-            <MenuSeparator />
-            {exportableOcrSources.map((source) => (
-              <OcrExportMenuItems
-                key={source.fieldId}
-                exportStatus={source.exportStatus}
-                onDownload={(format) => {
-                  detached(
-                    handleOcrExport(source, format),
-                    "row-actions.ocr-export",
-                  );
-                }}
-                searchablePdfLabel={t("workspaces.files.downloadSearchablePdf")}
-                textLabel={t("workspaces.files.downloadExtractedText")}
-              />
-            ))}
-          </>
-        )}
-
-        {!isCellContext && (
-          <>
-            <MenuSeparator />
-
-            {/* --- File operations --- */}
-            {hasAnyFile && (isBulk || !hasDownloadVariants) && (
-              <MenuItem
-                onClick={() => {
-                  detached(handleDownload(), "row-actions.download");
-                }}
-              >
-                <DownloadIcon />
-                {t("common.download")}
-              </MenuItem>
-            )}
-            {hasDownloadVariants && (
-              <MenuSub>
-                <MenuSubTrigger>
-                  <DownloadIcon />
-                  {t("common.download")}
-                </MenuSubTrigger>
-                <MenuSubPopup>
-                  <MenuItem
-                    onClick={() => {
-                      detached(handleDownload(), "row-actions.download");
-                    }}
-                  >
-                    <DownloadIcon />
-                    {t("workspaces.files.downloadOriginal")}
-                  </MenuItem>
-                  {hasPdfConversion && (
-                    <MenuItem
-                      onClick={() => {
-                        detached(handleDownload("pdf"), "row-actions.download");
-                      }}
-                    >
-                      <FileOutputIcon />
-                      {t("workspaces.files.downloadPdf")}
-                    </MenuItem>
-                  )}
-                  {canScrub && (
-                    <Tooltip
-                      content={t("workspaces.files.downloadScrubbedHint")}
-                      render={
-                        <MenuItem
-                          onClick={() => {
-                            detached(
-                              handleDownload("scrubbed"),
-                              "row-actions.download",
-                            );
-                          }}
-                        >
-                          <EraserIcon />
-                          {t("workspaces.files.downloadScrubbed")}
-                        </MenuItem>
-                      }
-                    />
-                  )}
-                  {exportableOcrSources.length === 1 &&
-                    exportableOcrSources.map((source) => (
-                      <OcrExportMenuItems
-                        key={source.fieldId}
-                        exportStatus={source.exportStatus}
-                        onDownload={(format) => {
-                          detached(
-                            handleOcrExport(source, format),
-                            "row-actions.ocr-export",
-                          );
-                        }}
-                        searchablePdfLabel={t(
-                          "workspaces.files.downloadSearchablePdf",
-                        )}
-                        textLabel={t("workspaces.files.downloadExtractedText")}
-                      />
-                    ))}
-                  {exportableOcrSources.length > 1 &&
-                    exportableOcrSources.map((source) => (
-                      <MenuSub key={source.fieldId}>
-                        <MenuSubTrigger>
-                          <ScanTextIcon />
-                          <BidiText as="span" className="max-w-64 truncate">
-                            {source.fileName}
-                          </BidiText>
-                        </MenuSubTrigger>
-                        <MenuSubPopup>
-                          <OcrExportMenuItems
-                            exportStatus={source.exportStatus}
-                            onDownload={(format) => {
-                              detached(
-                                handleOcrExport(source, format),
-                                "row-actions.ocr-export",
-                              );
-                            }}
-                            searchablePdfLabel={t(
-                              "workspaces.files.downloadSearchablePdf",
-                            )}
-                            textLabel={t(
-                              "workspaces.files.downloadExtractedText",
-                            )}
-                          />
-                        </MenuSubPopup>
-                      </MenuSub>
-                    ))}
-                </MenuSubPopup>
-              </MenuSub>
-            )}
-            {hasAnyFolder && (
-              <MenuItem
-                onClick={() => {
-                  detached(handleZipDownload(), "row-actions.zip-download");
-                }}
-              >
-                <ArchiveIcon />
-                {t("workspaces.files.downloadAsZip")}
-              </MenuItem>
-            )}
-            <MenuItem
-              onClick={() => {
-                detached(handleDuplicate(), "row-actions.duplicate");
-              }}
-            >
-              <CopyIcon />
-              {t("common.duplicate")}
-            </MenuItem>
-            <MenuItem
-              onClick={() => {
-                openCopyToMatterDialog();
-              }}
-            >
-              <FolderSyncIcon />
-              {t("workspaces.copyToMatter.menuItem")}
-            </MenuItem>
-
-            <MenuSeparator />
-
-            {/* --- Destructive --- */}
-            <AlertDialog>
-              <AlertDialogTrigger
-                render={<MenuItem closeOnClick={false} variant="destructive" />}
-              >
-                <Trash2Icon />
-                {t("common.delete")}
-              </AlertDialogTrigger>
-              <AlertDialogPopup>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>
-                    {isBulk
-                      ? t("workspaces.deleteItems", {
-                          count: selectedEntities.length,
-                        })
-                      : t("workspaces.deleteItem")}
-                  </AlertDialogTitle>
-                  <AlertDialogDescription>
-                    {isBulk
-                      ? t("workspaces.deleteItemsDescription", {
-                          count: selectedEntities.length,
-                        })
-                      : t("common.deleteConfirmDescription", {
-                          name,
-                        })}
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogClose render={<Button variant="ghost" />}>
-                    {t("common.cancel")}
-                  </AlertDialogClose>
-                  <AlertDialogClose
-                    render={
-                      <Button onClick={handleDelete} variant="destructive" />
-                    }
-                  >
-                    {t("common.delete")}
-                  </AlertDialogClose>
-                </AlertDialogFooter>
-              </AlertDialogPopup>
-            </AlertDialog>
-          </>
-        )}
+        <RowFeatureMenuActions
+          file={file}
+          isBulk={isBulk}
+          isFolder={isFolder}
+          kind={entity.kind}
+          onChatAbout={handleChatAbout}
+          onOpenVersionHistory={openVersionHistory}
+        />
+        <RowCellOcrExportMenuActions
+          isCellContext={isCellContext}
+          onExport={handleOcrExport}
+          sources={exportableOcrSources}
+        />
+        <RowFileOperationsMenu
+          canScrub={canScrub}
+          exportableOcrSources={exportableOcrSources}
+          hasAnyFile={hasAnyFile}
+          hasAnyFolder={hasAnyFolder}
+          hasDownloadVariants={hasDownloadVariants}
+          hasPdfConversion={hasPdfConversion}
+          isBulk={isBulk}
+          isCellContext={isCellContext}
+          name={name}
+          onCopyToMatter={openCopyToMatterDialog}
+          onDelete={handleDelete}
+          onDownload={handleDownload}
+          onDuplicate={handleDuplicate}
+          onOcrExport={handleOcrExport}
+          onZipDownload={handleZipDownload}
+          selectedCount={bulkTargets.length}
+        />
       </MenuPopup>
       <CopyToMatterDialog
         entities={copyToMatterEntities}
@@ -1178,6 +920,466 @@ export const RowActions = ({
         />
       )}
     </Menu>
+  );
+};
+
+const RowOpenMenuActions = ({
+  canUploadVersion,
+  isBulk,
+  isCellContext,
+  onOpen,
+  onRename,
+  onUploadVersion,
+  uploadVersionPending,
+}: {
+  canUploadVersion: boolean;
+  isBulk: boolean;
+  isCellContext: boolean;
+  onOpen: (() => void) | undefined;
+  onRename: (() => void) | undefined;
+  onUploadVersion: () => void;
+  uploadVersionPending: boolean;
+}) => {
+  const t = useTranslations();
+  return (
+    <>
+      {onOpen !== undefined && (
+        <MenuItem onClick={onOpen}>
+          <EyeIcon />
+          {t("common.preview")}
+        </MenuItem>
+      )}
+      {!isBulk && onRename !== undefined && (
+        <MenuItem onClick={onRename}>
+          <PencilIcon />
+          {t("common.rename")}
+        </MenuItem>
+      )}
+      {!isCellContext && canUploadVersion && (
+        <MenuItem disabled={uploadVersionPending} onClick={onUploadVersion}>
+          <UploadIcon />
+          {t("fileDetail.uploadNewVersion")}
+        </MenuItem>
+      )}
+    </>
+  );
+};
+
+const RowOcrMenuActions = ({
+  canRunOcr,
+  isPending,
+  onRun,
+  rowSources,
+  selectedSource,
+}: {
+  canRunOcr: boolean;
+  isPending: boolean;
+  onRun: (source: OcrSource | undefined) => Promise<void>;
+  rowSources: readonly OcrSource[];
+  selectedSource: OcrSource | undefined;
+}) => {
+  const t = useTranslations();
+  return (
+    <>
+      {canRunOcr && (
+        <MenuItem
+          className="min-h-11 sm:min-h-11"
+          disabled={isPending}
+          onClick={() => detached(onRun(selectedSource), "row-actions.run-ocr")}
+        >
+          <ScanTextIcon />
+          {t("workspaces.files.runOcr")}
+        </MenuItem>
+      )}
+      {rowSources.length > 0 && (
+        <MenuSub>
+          <MenuSubTrigger className="min-h-11 sm:min-h-11">
+            <ScanTextIcon />
+            {t("workspaces.files.runOcr")}
+          </MenuSubTrigger>
+          <MenuSubPopup>
+            {rowSources.map((source) => (
+              <MenuItem
+                className="min-h-11 sm:min-h-11"
+                disabled={isPending}
+                key={source.fieldId}
+                onClick={() => detached(onRun(source), "row-actions.run-ocr")}
+              >
+                <ScanTextIcon />
+                <BidiText as="span" className="max-w-64 truncate">
+                  {source.fileName}
+                </BidiText>
+              </MenuItem>
+            ))}
+          </MenuSubPopup>
+        </MenuSub>
+      )}
+    </>
+  );
+};
+
+const RowCellMenuActions = ({
+  canRetry,
+  entityId,
+  isBulk,
+  metadataTarget,
+  onRetry,
+  retryDisabled,
+  workspaceId,
+}: {
+  canRetry: boolean;
+  entityId: string;
+  isBulk: boolean;
+  metadataTarget: RowActionsProps["cellMetadataTarget"];
+  onRetry: () => Promise<void>;
+  retryDisabled: boolean;
+  workspaceId: string;
+}) => {
+  const t = useTranslations();
+  if (isBulk || metadataTarget === null || metadataTarget === undefined) {
+    return null;
+  }
+  return (
+    <>
+      {canRetry && (
+        <MenuItem
+          disabled={retryDisabled}
+          onClick={() => detached(onRetry(), "row-actions.retry-cell")}
+        >
+          <RefreshCwIcon />
+          {t("common.retry")}
+        </MenuItem>
+      )}
+      <CellLockMenuItem
+        entityId={entityId}
+        metadata={metadataTarget.metadata}
+        propertyId={metadataTarget.propertyId}
+        workspaceId={workspaceId}
+      />
+      <MenuSeparator />
+      <CellMetadataMenuSection
+        entityId={entityId}
+        metadata={metadataTarget.metadata}
+        propertyId={metadataTarget.propertyId}
+        workspaceId={workspaceId}
+      />
+    </>
+  );
+};
+
+const RowFolderDesktopMenuActions = ({
+  canOpenInDesktop,
+  canReleaseDesktopLock,
+  entity,
+  isBulk,
+  isCellContext,
+  isFolder,
+  onOpenInDesktop,
+  onReleaseDesktopLock,
+  onSubfolderCreated,
+  workspaceId,
+}: {
+  canOpenInDesktop: boolean;
+  canReleaseDesktopLock: boolean;
+  entity: WorkspaceEntity;
+  isBulk: boolean;
+  isCellContext: boolean;
+  isFolder: boolean;
+  onOpenInDesktop: () => Promise<void>;
+  onReleaseDesktopLock: () => Promise<void>;
+  onSubfolderCreated: RowActionsProps["onSubfolderCreated"];
+  workspaceId: string;
+}) => {
+  const t = useTranslations();
+  if (isCellContext) {
+    return null;
+  }
+  return (
+    <>
+      {!isBulk && isFolder && onSubfolderCreated !== undefined && (
+        <CreateSubfolderMenuItem
+          entity={entity}
+          onSubfolderCreated={onSubfolderCreated}
+          workspaceId={workspaceId}
+        />
+      )}
+      {canOpenInDesktop && (
+        <MenuItem
+          onClick={() =>
+            detached(onOpenInDesktop(), "row-actions.open-in-desktop")
+          }
+        >
+          <LaptopIcon />
+          {t("workspaces.files.desktopEdit.action")}
+        </MenuItem>
+      )}
+      {canReleaseDesktopLock && (
+        <MenuItem
+          onClick={() =>
+            detached(onReleaseDesktopLock(), "row-actions.release-lock")
+          }
+        >
+          <LockOpenIcon />
+          {t("workspaces.files.desktopEdit.releaseLock")}
+        </MenuItem>
+      )}
+    </>
+  );
+};
+
+const RowFeatureMenuActions = ({
+  file,
+  isBulk,
+  isFolder,
+  kind,
+  onChatAbout,
+  onOpenVersionHistory,
+}: {
+  file: ReturnType<typeof getFirstFile>;
+  isBulk: boolean;
+  isFolder: boolean;
+  kind: WorkspaceEntity["kind"];
+  onChatAbout: () => void;
+  onOpenVersionHistory: (() => void) | undefined;
+}) => {
+  const t = useTranslations();
+  return (
+    <>
+      {!isBulk &&
+        !isFolder &&
+        kind !== "task" &&
+        file !== null &&
+        onOpenVersionHistory !== undefined && (
+          <MenuItem onClick={onOpenVersionHistory}>
+            <Maximize2Icon />
+            {t("workspaces.pdf.fullView")}
+          </MenuItem>
+        )}
+      <MenuItem onClick={onChatAbout}>
+        <MessageSquareIcon />
+        {t("chat.chatAbout")}
+      </MenuItem>
+    </>
+  );
+};
+
+const RowCellOcrExportMenuActions = ({
+  isCellContext,
+  onExport,
+  sources,
+}: {
+  isCellContext: boolean;
+  onExport: (source: OcrSource, format: OcrExportFormat) => Promise<void>;
+  sources: readonly OcrSource[];
+}) => {
+  const t = useTranslations();
+  if (!isCellContext || sources.length !== 1) {
+    return null;
+  }
+  return (
+    <>
+      <MenuSeparator />
+      {sources.map((source) => (
+        <OcrExportMenuItems
+          key={source.fieldId}
+          exportStatus={source.exportStatus}
+          onDownload={(format) =>
+            detached(onExport(source, format), "row-actions.ocr-export")
+          }
+          searchablePdfLabel={t("workspaces.files.downloadSearchablePdf")}
+          textLabel={t("workspaces.files.downloadExtractedText")}
+        />
+      ))}
+    </>
+  );
+};
+
+type RowFileOperationsMenuProps = {
+  canScrub: boolean;
+  exportableOcrSources: readonly OcrSource[];
+  hasAnyFile: boolean;
+  hasAnyFolder: boolean;
+  hasDownloadVariants: boolean;
+  hasPdfConversion: boolean;
+  isBulk: boolean;
+  isCellContext: boolean;
+  name: string;
+  onCopyToMatter: () => void;
+  onDelete: () => void;
+  onDownload: (variant?: DownloadVariant) => Promise<void>;
+  onDuplicate: () => Promise<void>;
+  onOcrExport: (source: OcrSource, format: OcrExportFormat) => Promise<void>;
+  onZipDownload: () => Promise<void>;
+  selectedCount: number;
+};
+
+const RowFileOperationsMenu = ({
+  canScrub,
+  exportableOcrSources,
+  hasAnyFile,
+  hasAnyFolder,
+  hasDownloadVariants,
+  hasPdfConversion,
+  isBulk,
+  isCellContext,
+  name,
+  onCopyToMatter,
+  onDelete,
+  onDownload,
+  onDuplicate,
+  onOcrExport,
+  onZipDownload,
+  selectedCount,
+}: RowFileOperationsMenuProps) => {
+  const t = useTranslations();
+  if (isCellContext) {
+    return null;
+  }
+  const renderOcrExport = (source: OcrSource) => (
+    <OcrExportMenuItems
+      exportStatus={source.exportStatus}
+      onDownload={(format) =>
+        detached(onOcrExport(source, format), "row-actions.ocr-export")
+      }
+      searchablePdfLabel={t("workspaces.files.downloadSearchablePdf")}
+      textLabel={t("workspaces.files.downloadExtractedText")}
+    />
+  );
+  return (
+    <>
+      <MenuSeparator />
+      {hasAnyFile && (isBulk || !hasDownloadVariants) && (
+        <MenuItem
+          onClick={() => detached(onDownload(), "row-actions.download")}
+        >
+          <DownloadIcon />
+          {t("common.download")}
+        </MenuItem>
+      )}
+      {hasDownloadVariants && (
+        <MenuSub>
+          <MenuSubTrigger>
+            <DownloadIcon />
+            {t("common.download")}
+          </MenuSubTrigger>
+          <MenuSubPopup>
+            <MenuItem
+              onClick={() => detached(onDownload(), "row-actions.download")}
+            >
+              <DownloadIcon />
+              {t("workspaces.files.downloadOriginal")}
+            </MenuItem>
+            {hasPdfConversion && (
+              <MenuItem
+                onClick={() =>
+                  detached(onDownload("pdf"), "row-actions.download")
+                }
+              >
+                <FileOutputIcon />
+                {t("workspaces.files.downloadPdf")}
+              </MenuItem>
+            )}
+            {canScrub && (
+              <Tooltip
+                content={t("workspaces.files.downloadScrubbedHint")}
+                render={
+                  <MenuItem
+                    onClick={() =>
+                      detached(onDownload("scrubbed"), "row-actions.download")
+                    }
+                  >
+                    <EraserIcon />
+                    {t("workspaces.files.downloadScrubbed")}
+                  </MenuItem>
+                }
+              />
+            )}
+            {exportableOcrSources.length === 1 &&
+              exportableOcrSources.map((source) => (
+                <OcrExportMenuItems
+                  key={source.fieldId}
+                  exportStatus={source.exportStatus}
+                  onDownload={(format) =>
+                    detached(
+                      onOcrExport(source, format),
+                      "row-actions.ocr-export",
+                    )
+                  }
+                  searchablePdfLabel={t(
+                    "workspaces.files.downloadSearchablePdf",
+                  )}
+                  textLabel={t("workspaces.files.downloadExtractedText")}
+                />
+              ))}
+            {exportableOcrSources.length > 1 &&
+              exportableOcrSources.map((source) => (
+                <MenuSub key={source.fieldId}>
+                  <MenuSubTrigger>
+                    <ScanTextIcon />
+                    <BidiText as="span" className="max-w-64 truncate">
+                      {source.fileName}
+                    </BidiText>
+                  </MenuSubTrigger>
+                  <MenuSubPopup>{renderOcrExport(source)}</MenuSubPopup>
+                </MenuSub>
+              ))}
+          </MenuSubPopup>
+        </MenuSub>
+      )}
+      {hasAnyFolder && (
+        <MenuItem
+          onClick={() => detached(onZipDownload(), "row-actions.zip-download")}
+        >
+          <ArchiveIcon />
+          {t("workspaces.files.downloadAsZip")}
+        </MenuItem>
+      )}
+      <MenuItem
+        onClick={() => detached(onDuplicate(), "row-actions.duplicate")}
+      >
+        <CopyIcon />
+        {t("common.duplicate")}
+      </MenuItem>
+      <MenuItem onClick={onCopyToMatter}>
+        <FolderSyncIcon />
+        {t("workspaces.copyToMatter.menuItem")}
+      </MenuItem>
+      <MenuSeparator />
+      <AlertDialog>
+        <AlertDialogTrigger
+          render={<MenuItem closeOnClick={false} variant="destructive" />}
+        >
+          <Trash2Icon />
+          {t("common.delete")}
+        </AlertDialogTrigger>
+        <AlertDialogPopup>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {isBulk
+                ? t("workspaces.deleteItems", { count: selectedCount })
+                : t("workspaces.deleteItem")}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {isBulk
+                ? t("workspaces.deleteItemsDescription", {
+                    count: selectedCount,
+                  })
+                : t("common.deleteConfirmDescription", { name })}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogClose render={<Button variant="ghost" />}>
+              {t("common.cancel")}
+            </AlertDialogClose>
+            <AlertDialogClose
+              render={<Button onClick={onDelete} variant="destructive" />}
+            >
+              {t("common.delete")}
+            </AlertDialogClose>
+          </AlertDialogFooter>
+        </AlertDialogPopup>
+      </AlertDialog>
+    </>
   );
 };
 

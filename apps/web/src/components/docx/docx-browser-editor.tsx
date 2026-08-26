@@ -106,7 +106,10 @@ import {
   resolveCheckpointAutosaveStatus,
 } from "./docx-edit-mode.logic";
 import type { AutosaveStatus } from "./docx-edit-mode.logic";
-import type { EditSessionErrorReason } from "./use-edit-session";
+import type {
+  EditSessionErrorReason,
+  EditSessionState,
+} from "./use-edit-session";
 import { useEditSession } from "./use-edit-session";
 
 const CHANGE_CHECKPOINT_DELAY = 2000;
@@ -1423,29 +1426,15 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
   // editor against `previewFile.buffer` for the few hundred ms before
   // the parent unmounts us — and the Stella fallback would flash.
   /* eslint-disable react/react-compiler -- editing buffers and the derived editor buffer are intentionally latched in refs across the save transition */
-  const preservedLoadedBufferSnapshot = preservedLoadedBufferRef.current;
-  const preservedLoadedBuffer =
-    preservedLoadedBufferSnapshot?.fieldId === fieldId
-      ? preservedLoadedBufferSnapshot.buffer
-      : null;
-  const lastEditingBuffer = lastEditingBufferRef.current;
-  const collaborationSeedBuffer =
-    collaborationSession?.seedDocumentBuffer ?? null;
-  const editorBuffer = selectDocxBrowserEditorBuffer({
-    collaborationSeedBuffer,
+  const editorBuffer = resolveAndPreserveDocxEditorBuffer({
+    collaborationSeedBuffer: collaborationSession?.seedDocumentBuffer ?? null,
+    fieldId,
     isCollaborativeEditing,
-    lastEditingBuffer,
-    preservedLoadedBuffer,
+    lastEditingBufferRef,
+    preservedLoadedBufferRef,
     previewBuffer: previewFile?.buffer,
     state,
   });
-  if (
-    (state.status === "editing" || isCollaborativeEditing) &&
-    editorBuffer !== undefined
-  ) {
-    lastEditingBufferRef.current = editorBuffer;
-    preservedLoadedBufferRef.current = null;
-  }
   /* eslint-enable react/react-compiler */
   const finishEditingLabel = t("folio.finishEditing");
 
@@ -1700,6 +1689,51 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
       </div>
     </div>
   );
+};
+
+type ResolveAndPreserveDocxEditorBufferOptions = {
+  collaborationSeedBuffer: ArrayBuffer | null;
+  fieldId: string;
+  isCollaborativeEditing: boolean;
+  lastEditingBufferRef: RefObject<ArrayBuffer | null>;
+  preservedLoadedBufferRef: RefObject<{
+    buffer: ArrayBuffer;
+    fieldId: string;
+  } | null>;
+  previewBuffer: ArrayBuffer | undefined;
+  state: EditSessionState;
+};
+
+const resolveAndPreserveDocxEditorBuffer = ({
+  collaborationSeedBuffer,
+  fieldId,
+  isCollaborativeEditing,
+  lastEditingBufferRef,
+  preservedLoadedBufferRef,
+  previewBuffer,
+  state,
+}: ResolveAndPreserveDocxEditorBufferOptions) => {
+  const preservedLoadedBufferSnapshot = preservedLoadedBufferRef.current;
+  const preservedLoadedBuffer =
+    preservedLoadedBufferSnapshot?.fieldId === fieldId
+      ? preservedLoadedBufferSnapshot.buffer
+      : null;
+  const editorBuffer = selectDocxBrowserEditorBuffer({
+    collaborationSeedBuffer,
+    isCollaborativeEditing,
+    lastEditingBuffer: lastEditingBufferRef.current,
+    preservedLoadedBuffer,
+    previewBuffer,
+    state,
+  });
+  if (
+    (state.status === "editing" || isCollaborativeEditing) &&
+    editorBuffer !== undefined
+  ) {
+    lastEditingBufferRef.current = editorBuffer;
+    preservedLoadedBufferRef.current = null;
+  }
+  return editorBuffer;
 };
 
 type UseDocxBrowserCollaborationOptions = {

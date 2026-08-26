@@ -391,38 +391,22 @@ const buildConditionMapFromRanges = (
   return map;
 };
 
-/**
- * Analyze a container element (w:body, w:hdr, or w:ftr) to
- * extract field information from its paragraphs.
- */
-const analyzeContainer = (
-  body: slimdom.Element,
-): {
+type AnalysisResult = {
   fields: FieldAccumulator;
   errors: TemplateStructureError[];
   placeholderCounts: Map<string, number>;
-  /** Map of placeholder path to its visibleWhen expr. */
   fieldConditions: Map<string, string | null>;
-} => {
-  const fields: FieldAccumulator = new Map();
-  const placeholderCounts = new Map<string, number>();
-  const errors: TemplateStructureError[] = [];
-  // Track per-field condition. `null` means the field
-  // appears outside any conditional (always visible).
-  const fieldConditions = new Map<string, string | null>();
+};
 
+const collectContainerStructure = (
+  body: slimdom.Element,
+  fields: FieldAccumulator,
+  errors: TemplateStructureError[],
+) => {
   const paragraphs = body.getElementsByTagNameNS(W_NS, "p");
-
-  // 1. Scan block directives for structural fields
   const directives = scanBlockDirectives(body);
   const { blocks, errors: parseErrors } = parseBlockTree(directives);
   errors.push(...parseErrors);
-
-  // Retain the full directive stream instead of relying on the flattened
-  // block result: nested blocks are intentionally consumed by parseBlockTree.
-  // The active loop path makes an unqualified condition available both as a
-  // global input and as a row-local input, matching the fill evaluator's
-  // global context overlaid with each row.
   const arrayScopes = new Map<number, readonly RowScope[]>();
   const activeArrays: RowScope[] = [];
   const directiveByParagraph = new Map(
@@ -453,61 +437,74 @@ const analyzeContainer = (
     }
     arrayScopes.set(i, [...activeArrays]);
   }
-
-  // Track which paragraph indices are directives (skip for
-  // placeholder scanning)
   const directiveIndices = new Set<number>();
   for (const d of directives) {
     directiveIndices.add(d.paragraphIndex);
   }
 
-  // Build paragraph → condition map from directives
-  const conditionMap = buildConditionMapFromRanges(
-    directives,
-    paragraphs.length,
-  );
+  return {
+    arrayScopes,
+    blocks,
+    conditionMap: buildConditionMapFromRanges(directives, paragraphs.length),
+    directiveIndices,
+    paragraphs,
+  };
+};
 
-  // 2. Analyze blocks for field types
+const collectLoopItemFields = ({
+  arrayScopes,
+  blocks,
+  directiveIndices,
+  fields,
+  paragraphs,
+}: ReturnType<typeof collectContainerStructure> & {
+  fields: FieldAccumulator;
+}): void => {
   for (const block of blocks) {
-    if (block.kind === "each") {
-      const blockScope = requireRowScopes(
-        arrayScopes,
-        block.contentStart - 1,
-      ).at(-1);
-      if (blockScope === undefined) {
-        panic(`Missing loop scope for block ${block.arrayPath}`);
+    if (block.kind !== "each") {
+      continue;
+    }
+    const blockScope = requireRowScopes(arrayScopes, block.contentStart - 1).at(
+      -1,
+    );
+    if (blockScope === undefined) {
+      panic(`Missing loop scope for block ${block.arrayPath}`);
+    }
+    const arrayPath = blockScope.scopedPath;
+    registerField(fields, arrayPath, "array");
+
+    const entry = fields.get(arrayPath);
+    for (let i = block.contentStart; i < block.contentEnd; i++) {
+      const para = paragraphs[i];
+      if (!para) {
+        break;
       }
-      const arrayPath = blockScope.scopedPath;
-      registerField(fields, arrayPath, "array");
+      if (directiveIndices.has(i)) {
+        continue;
+      }
 
-      // Scan content paragraphs for item field references
-      const entry = fields.get(arrayPath);
-      for (let i = block.contentStart; i < block.contentEnd; i++) {
-        const para = paragraphs[i];
-        if (!para) {
-          break;
-        }
-        if (directiveIndices.has(i)) {
-          continue;
-        }
-
-        const text = paragraphText(para);
-        const prefix = `${block.arrayPath}.`;
-        for (const match of text.matchAll(PLACEHOLDER_RE)) {
-          const name = match.groups?.["name"];
-          if (!name) {
-            continue;
-          }
-          if (name.startsWith(prefix)) {
-            const itemField = name.slice(prefix.length);
-            entry?.itemPaths.add(itemField);
-          }
+      const text = paragraphText(para);
+      const prefix = `${block.arrayPath}.`;
+      for (const match of text.matchAll(PLACEHOLDER_RE)) {
+        const name = match.groups?.["name"];
+        if (name?.startsWith(prefix)) {
+          entry?.itemPaths.add(name.slice(prefix.length));
         }
       }
     }
   }
+};
 
-  // 3. Scan all non-directive paragraphs for placeholders
+const collectParagraphPlaceholders = ({
+  arrayScopes,
+  conditionMap,
+  directiveIndices,
+  errors,
+  fieldConditions,
+  fields,
+  paragraphs,
+  placeholderCounts,
+}: ReturnType<typeof collectContainerStructure> & AnalysisResult): void => {
   for (let i = 0; i < paragraphs.length; i++) {
     if (directiveIndices.has(i)) {
       continue;
@@ -655,18 +652,31 @@ const analyzeContainer = (
       }
     }
   }
+};
+
+/**
+ * Analyze a container element (w:body, w:hdr, or w:ftr) to
+ * extract field information from its paragraphs.
+ */
+const analyzeContainer = (body: slimdom.Element): AnalysisResult => {
+  const fields: FieldAccumulator = new Map();
+  const placeholderCounts = new Map<string, number>();
+  const errors: TemplateStructureError[] = [];
+  const fieldConditions = new Map<string, string | null>();
+  const structure = collectContainerStructure(body, fields, errors);
+  collectLoopItemFields({ ...structure, fields });
+  collectParagraphPlaceholders({
+    ...structure,
+    errors,
+    fieldConditions,
+    fields,
+    placeholderCounts,
+  });
 
   return { fields, errors, placeholderCounts, fieldConditions };
 };
 
 // ── Merge helpers ────────────────────────────────────────
-
-type AnalysisResult = {
-  fields: FieldAccumulator;
-  errors: TemplateStructureError[];
-  placeholderCounts: Map<string, number>;
-  fieldConditions: Map<string, string | null>;
-};
 
 /**
  * Merge fields from a secondary container (header/footer)

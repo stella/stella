@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
+import type { Static } from "elysia";
 
 import {
   entities,
@@ -51,6 +52,70 @@ const updateWorkObligationBody = t.Object({
   sourceDescription: t.Optional(t.Nullable(t.String({ maxLength: 1000 }))),
   reason: t.Optional(t.String({ minLength: 1, maxLength: 1000 })),
 });
+
+type UpdateWorkObligationBody = Static<typeof updateWorkObligationBody>;
+type LockedWorkObligation = NonNullable<
+  Awaited<ReturnType<typeof lockWorkObligation>>
+>;
+
+const changesOwnerOfClosedObligation = (
+  body: UpdateWorkObligationBody,
+  existing: LockedWorkObligation,
+): boolean =>
+  body.ownerUserId !== undefined &&
+  body.ownerUserId !== existing.ownerUserId &&
+  (existing.status === WORK_OBLIGATION_STATUS.COMPLETED ||
+    existing.status === WORK_OBLIGATION_STATUS.CANCELLED);
+
+type WorkObligationTransitionViolation =
+  | "target_after_deadline"
+  | "delegation_reason_required"
+  | "deadline_reason_required";
+
+/** Ordered business-policy validation after related entity ownership is known. */
+const workObligationTransitionViolation = ({
+  body,
+  existing,
+  reason,
+}: {
+  body: UpdateWorkObligationBody;
+  existing: LockedWorkObligation;
+  reason: string | undefined;
+}): WorkObligationTransitionViolation | null => {
+  const nextWorkingTargetDate =
+    body.workingTargetDate === undefined
+      ? existing.workingTargetDate
+      : body.workingTargetDate;
+  const nextHardDeadlineDate =
+    body.hardDeadlineDate === undefined
+      ? existing.hardDeadlineDate
+      : body.hardDeadlineDate;
+
+  if (
+    nextWorkingTargetDate !== null &&
+    nextHardDeadlineDate !== null &&
+    nextWorkingTargetDate > nextHardDeadlineDate
+  ) {
+    return "target_after_deadline";
+  }
+  if (
+    body.ownerUserId !== undefined &&
+    existing.ownerUserId !== null &&
+    body.ownerUserId !== existing.ownerUserId &&
+    !reason
+  ) {
+    return "delegation_reason_required";
+  }
+  if (
+    body.hardDeadlineDate !== undefined &&
+    existing.hardDeadlineDate !== null &&
+    body.hardDeadlineDate !== existing.hardDeadlineDate &&
+    !reason
+  ) {
+    return "deadline_reason_required";
+  }
+  return null;
+};
 
 const updateWorkObligation = createSafeHandler(
   {
@@ -131,12 +196,7 @@ const updateWorkObligation = createSafeHandler(
           return { status: "not_found" as const };
         }
 
-        if (
-          body.ownerUserId !== undefined &&
-          body.ownerUserId !== existing.ownerUserId &&
-          (existing.status === WORK_OBLIGATION_STATUS.COMPLETED ||
-            existing.status === WORK_OBLIGATION_STATUS.CANCELLED)
-        ) {
+        if (changesOwnerOfClosedObligation(body, existing)) {
           return { status: "closed_owner_change" as const };
         }
 
@@ -157,39 +217,13 @@ const updateWorkObligation = createSafeHandler(
           }
         }
 
-        const nextWorkingTargetDate =
-          body.workingTargetDate === undefined
-            ? existing.workingTargetDate
-            : body.workingTargetDate;
-        const nextHardDeadlineDate =
-          body.hardDeadlineDate === undefined
-            ? existing.hardDeadlineDate
-            : body.hardDeadlineDate;
-
-        if (
-          nextWorkingTargetDate !== null &&
-          nextHardDeadlineDate !== null &&
-          nextWorkingTargetDate > nextHardDeadlineDate
-        ) {
-          return { status: "target_after_deadline" as const };
-        }
-
-        if (
-          body.ownerUserId !== undefined &&
-          existing.ownerUserId !== null &&
-          body.ownerUserId !== existing.ownerUserId &&
-          !reason
-        ) {
-          return { status: "delegation_reason_required" as const };
-        }
-
-        if (
-          body.hardDeadlineDate !== undefined &&
-          existing.hardDeadlineDate !== null &&
-          body.hardDeadlineDate !== existing.hardDeadlineDate &&
-          !reason
-        ) {
-          return { status: "deadline_reason_required" as const };
+        const transitionViolation = workObligationTransitionViolation({
+          body,
+          existing,
+          reason,
+        });
+        if (transitionViolation !== null) {
+          return { status: transitionViolation };
         }
 
         const now = new Date();
