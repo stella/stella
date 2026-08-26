@@ -15,21 +15,39 @@ export const DOC_SOURCES = {
   },
   TanStackStart: {
     dependency: "@tanstack/react-start",
-    url: "https://tanstack.com/start/latest/docs/framework/react/overview.md",
+    url: "https://tanstack.com/start/latest/llms.txt",
   },
   React: { dependency: "react", url: "https://react.dev/llms.txt" },
+  ReactEmail: {
+    dependency: "@react-email/components",
+    url: "https://react.email/docs/llms.txt",
+  },
   BaseUI: {
     dependency: "@base-ui/react",
     url: "https://base-ui.com/llms.txt",
   },
-  AtlassianDesign: {
-    dependency: "@atlaskit/pragmatic-drag-and-drop",
-    url: "https://atlassian.design/llms.txt",
-  },
   Valibot: { dependency: "valibot", url: "https://valibot.dev/llms.txt" },
   TipTap: {
     dependency: "@tiptap/core",
-    url: "https://tiptap.dev/llms.txt",
+    url: "https://tiptap.dev/docs/llms.txt",
+  },
+  Tauri: {
+    dependency: "@tauri-apps/api",
+    url: "https://v2.tauri.app/llms.txt",
+  },
+  Vite: { dependency: "vite", url: "https://vite.dev/llms.txt" },
+  Expo: { dependency: "expo", url: "https://docs.expo.dev/llms.txt" },
+  MCP: {
+    dependency: "@modelcontextprotocol/server",
+    url: "https://modelcontextprotocol.io/llms.txt",
+  },
+  AWSSDK: {
+    dependency: "@aws-sdk/client-s3",
+    url: "https://docs.aws.amazon.com/sdk-for-javascript/v3/developer-guide/llms.txt",
+  },
+  AGUI: {
+    dependency: "@ag-ui/core",
+    url: "https://docs.ag-ui.com/llms.txt",
   },
   Bun: { dependency: "bun-types", url: "https://bun.sh/llms.txt" },
   BetterAuth: {
