@@ -72,6 +72,13 @@ RUN bun build \
     --target bun \
     --outfile /app/better-auth-migration-audit.js \
     apps/api/src/scripts/better-auth-migration-audit.ts
+# Trusted Microsoft identity-map derivation for the Better Auth rehearsal. It
+# reads stored ID tokens only inside the isolated task and writes the verified
+# sub-to-oid map to the task's private tmpfs without logging identity values.
+RUN bun build \
+    --target bun \
+    --outfile /app/better-auth-microsoft-identity-map.js \
+    apps/api/src/scripts/better-auth-microsoft-identity-map.ts
 # Bounded Better Auth bridge backfill. The command reproduces the private
 # baseline before mutating and runs the post-backfill audit before succeeding.
 RUN bun build \
@@ -183,6 +190,7 @@ RUN groupadd --system --gid 1001 stella && \
 COPY --chown=stella:stella --from=builder /app/server /app/server
 COPY --chown=stella:stella --from=builder /app/backfill.js /app/backfill.js
 COPY --chown=stella:stella --from=builder /app/better-auth-migration-audit.js /app/better-auth-migration-audit.js
+COPY --chown=stella:stella --from=builder /app/better-auth-microsoft-identity-map.js /app/better-auth-microsoft-identity-map.js
 COPY --chown=stella:stella --from=builder /app/better-auth-17-backfill.js /app/better-auth-17-backfill.js
 COPY --chown=stella:stella --from=builder /app/document-processing-worker.js /app/document-processing-worker.js
 COPY --chown=stella:stella --from=builder /app/apps/legal-atlas-runner/dist/index.js /app/legal-atlas.js
