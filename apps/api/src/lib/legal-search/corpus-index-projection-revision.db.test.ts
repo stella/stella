@@ -132,15 +132,23 @@ test("projection mutations advance one durable revision per statement", async ()
 
 test("the revision shares the projection mutation transaction", async () => {
   const beforeRollback = await revision();
-  await expect(
-    db.transaction(async (tx) => {
+  // bun-types declares `.rejects.toThrow` as void, so awaiting it trips
+  // type-aware lint; capture the rejection explicitly instead.
+  const rejection: unknown = await db
+    .transaction(async (tx) => {
       await tx
         .update(corpusIndexProjectionStates)
         .set({ updatedAt: new Date("2026-08-26T00:00:03.000Z") })
         .where(eq(corpusIndexProjectionStates.entityId, ENTITY_IDS[0]));
       throw new Error("roll back revision fixture");
-    }),
-  ).rejects.toThrow("roll back revision fixture");
+    })
+    .then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+  expect(rejection).toBeInstanceOf(Error);
+  expect(rejection).toMatchObject({ message: "roll back revision fixture" });
   expect(await revision()).toBe(beforeRollback);
 });
 
