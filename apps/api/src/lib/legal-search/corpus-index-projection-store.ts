@@ -75,6 +75,11 @@ const validateLeaseMs = (leaseMs: number): number => {
   return leaseMs;
 };
 
+const corpusProjectionStateLockOrder = () => [
+  asc(corpusIndexProjectionStates.updatedAt),
+  asc(corpusIndexProjectionStates.entityId),
+];
+
 const readPostgresClock = async (tx: Transaction): Promise<Date> => {
   const rows = await tx
     .select({ value: sql<Date | string>`clock_timestamp()` })
@@ -309,10 +314,7 @@ export const prepareCorpusProjectionReplacementsTx = async (
         sql`${corpusIndexProjectionStates.desiredEpoch} > ${corpusIndexProjectionStates.appliedEpoch}`,
       ),
     )
-    .orderBy(
-      asc(corpusIndexProjectionStates.updatedAt),
-      asc(corpusIndexProjectionStates.entityId),
-    )
+    .orderBy(...corpusProjectionStateLockOrder())
     .limit(limit)
     .for("update", {
       of: corpusIndexProjectionStates,
@@ -543,7 +545,7 @@ export const startCorpusProjectionAppendBatchTx = async (
     first.generation,
     true,
   );
-  const orderedEntityIds = [...entityIds].sort();
+  const entityIdList = [...entityIds];
   await tx
     .select({ entityId: corpusIndexProjectionStates.entityId })
     .from(corpusIndexProjectionStates)
@@ -551,10 +553,10 @@ export const startCorpusProjectionAppendBatchTx = async (
       and(
         eq(corpusIndexProjectionStates.family, first.family),
         eq(corpusIndexProjectionStates.generation, first.generation),
-        inArray(corpusIndexProjectionStates.entityId, orderedEntityIds),
+        inArray(corpusIndexProjectionStates.entityId, entityIdList),
       ),
     )
-    .orderBy(asc(corpusIndexProjectionStates.entityId))
+    .orderBy(...corpusProjectionStateLockOrder())
     .limit(leases.length)
     .for("update");
   const exactLeases = or(
