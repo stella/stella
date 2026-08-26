@@ -8,6 +8,7 @@ import type {
   CaseLawPublicReadDb,
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
+import { corpusIndexReadContract } from "@/api/lib/legal-search/corpus-index-read-contract";
 
 type ScopedDbIsPublicReadDb = ScopedDb extends CaseLawPublicReadDb
   ? true
@@ -297,7 +298,15 @@ describe("public case-law route boundary", () => {
     expect(pgFtsSource).toContain("caseLawDecisions.decisionDate");
     expect(corpusIndexSource).toContain('field: "jurisdiction"');
     expect(corpusIndexSource).toContain('field: "court"');
-    expect(corpusIndexSource).toContain('field: "year"');
+    expect(corpusIndexSource).toContain(
+      "buildAggregations(query.limit, readContract.yearFacetField)",
+    );
+    expect(
+      corpusIndexReadContract("case_law", "case_law_v4").yearFacetField,
+    ).toBe("year");
+    expect(
+      corpusIndexReadContract("case_law", "case_law_v5").yearFacetField,
+    ).toBe("decision_year");
   });
 
   test("public search payload is aggregate public data only", async () => {
