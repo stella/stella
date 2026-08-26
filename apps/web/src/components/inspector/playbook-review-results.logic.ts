@@ -7,6 +7,8 @@
  * standard the card quotes) and the order the list is read in.
  */
 
+import type { ReviewFlag } from "@stll/api-contract";
+
 import type {
   ReferenceFile,
   ReviewPerspective,
@@ -79,6 +81,90 @@ export const isUndecidedDeviation = (item: ReviewResultItem): boolean =>
  *  the ones that still need an answer. */
 export const REVIEW_RESULT_FILTERS = ["coverage", "deviations"] as const;
 export type ReviewResultFilter = (typeof REVIEW_RESULT_FILTERS)[number];
+
+export type ReviewFlagTally = Record<ReviewFlag, number>;
+
+/** Written out per member rather than built from the list, for the same reason
+ *  the decision tally is: a flag added to the vocabulary fails typecheck here
+ *  instead of quietly counting nothing. */
+const emptyFlagTally = (): ReviewFlagTally => ({
+  "needs-review": 0,
+  important: 0,
+  "follow-up": 0,
+  contradiction: 0,
+  verified: 0,
+});
+
+/** How many of the listed findings carry each flag. Total over the vocabulary,
+ *  so a chip exists for every flag whether or not anything wears it. */
+export const tallyReviewFlags = (
+  items: readonly ReviewResultItem[],
+): ReviewFlagTally => {
+  const counts = emptyFlagTally();
+  for (const item of items) {
+    for (const flag of item.flags) {
+      counts[flag] += 1;
+    }
+  }
+  return counts;
+};
+
+/**
+ * Tokens that end in a period without ending a sentence.
+ *
+ * Deliberately short, and the split is deliberately conservative: the full
+ * text is one click away under "Why", so a missed split costs a caption a line,
+ * never a reader a sentence.
+ */
+const NON_TERMINAL_ABBREVIATIONS = new Set([
+  "e.g",
+  "i.e",
+  "cf",
+  "vs",
+  "no",
+  "nos",
+  "art",
+  "arts",
+  "cl",
+  "para",
+  "paras",
+  "sec",
+  "secs",
+  "approx",
+]);
+
+const SENTENCE_END = /[.!?]["'”’)\]]?(?=\s|$)/gu;
+
+/**
+ * The first sentence of a caption, which is all the collapsed card shows.
+ *
+ * Punctuation-based rather than locale-aware `Intl.Segmenter`: the caption is
+ * model-written prose whose language follows the document, and a segmenter
+ * keyed to the UI locale would be no more right about it. Initials, decimals,
+ * and the abbreviations above do not end a sentence.
+ */
+export const firstSentence = (text: string): string => {
+  const trimmed = text.trim();
+  for (const match of trimmed.matchAll(SENTENCE_END)) {
+    const end = match.index + match[0].length;
+    if (end >= trimmed.length) {
+      break;
+    }
+    const preceding = trimmed.slice(0, match.index).split(/\s+/u).at(-1) ?? "";
+    if (preceding.length <= 1) {
+      continue;
+    }
+    if (NON_TERMINAL_ABBREVIATIONS.has(preceding.toLowerCase())) {
+      continue;
+    }
+    // A decimal ("Net 30.5 days"), not a full stop.
+    if (/\d$/u.test(preceding) && /^\d/u.test(trimmed.slice(end))) {
+      continue;
+    }
+    return trimmed.slice(0, end);
+  }
+  return trimmed;
+};
 
 const severityRank = (severity: ReviewFinding["severity"]): number =>
   SEVERITY_ORDER.indexOf(severity);

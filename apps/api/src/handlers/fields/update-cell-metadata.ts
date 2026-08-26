@@ -2,6 +2,9 @@ import { Result, panic } from "better-result";
 import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
 
+import { REVIEW_FLAGS, REVIEW_FLAGS_MAX_ITEMS } from "@stll/api-contract";
+import type { ReviewFlag } from "@stll/api-contract";
+
 import { cellMetadata, entities, properties } from "@/api/db/schema";
 import type { CellMetadata } from "@/api/db/schema-validators";
 import { createSafeHandler } from "@/api/lib/api-handlers";
@@ -13,8 +16,10 @@ import { acquireCellLock } from "@/api/lib/cell-lock";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
-const manualFlagsSchema = t.Array(t.String({ minLength: 1, maxLength: 64 }), {
-  maxItems: 16,
+// The wire vocabulary is the column's vocabulary: a flag the cell control
+// cannot render is one this endpoint refuses rather than stores.
+const manualFlagsSchema = t.Array(t.UnionEnum([...REVIEW_FLAGS]), {
+  maxItems: REVIEW_FLAGS_MAX_ITEMS,
 });
 
 const config = {
@@ -45,7 +50,7 @@ type UpdateCellMetadataResult =
   | { status: "entity-read-only" }
   | { status: "property-not-found" };
 
-const normalizeManualFlags = (flags: string[]) =>
+const normalizeManualFlags = (flags: readonly ReviewFlag[]): ReviewFlag[] =>
   [...new Set(flags)].toSorted();
 
 const mergeManualFlags = ({
@@ -53,9 +58,9 @@ const mergeManualFlags = ({
   currentManualFlags,
   requestedManualFlags,
 }: {
-  baseManualFlags: string[];
-  currentManualFlags: string[];
-  requestedManualFlags: string[];
+  baseManualFlags: readonly ReviewFlag[];
+  currentManualFlags: readonly ReviewFlag[];
+  requestedManualFlags: readonly ReviewFlag[];
 }) => {
   const requestedFlagSet = new Set(requestedManualFlags);
   const baseFlagSet = new Set(baseManualFlags);

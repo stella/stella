@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import { REVIEW_FLAGS, REVIEW_FLAGS_MAX_ITEMS } from "@stll/api-contract";
+
 import { toSafeId } from "@/api/lib/branded-types";
 
 import {
@@ -151,12 +153,11 @@ describe("mark column flag metadata planning", () => {
     });
   });
 
-  test("skips cells that would exceed the manual flag cap", () => {
+  // The flag cap used to be a number this module carried. It is now the size
+  // of the vocabulary itself: a cell holding every flag has nothing left to
+  // gain, so the set can never grow past it.
+  test("a cell already carrying every flag is left alone", () => {
     const target = createTarget("ent_flag_cap", "ver_flag_cap");
-    const existingFlags = Array.from(
-      { length: 16 },
-      (_, index) => `flag-${index.toString().padStart(2, "0")}`,
-    );
     const mutation = buildColumnFlagMutation({
       workspaceId: WORKSPACE_ID,
       propertyId: PROPERTY_ID,
@@ -168,7 +169,7 @@ describe("mark column flag metadata planning", () => {
           entityVersionId: target.entityVersionId,
           metadata: {
             version: 1,
-            manualFlags: existingFlags,
+            manualFlags: [...REVIEW_FLAGS],
           },
         },
       ],
@@ -181,6 +182,38 @@ describe("mark column flag metadata planning", () => {
       insertValues: [],
       updatedCount: 0,
     });
+  });
+
+  test("marking a flagged cell adds one flag and never more than the vocabulary", () => {
+    const target = createTarget("ent_flag_grow", "ver_flag_grow");
+    const mutation = buildColumnFlagMutation({
+      workspaceId: WORKSPACE_ID,
+      propertyId: PROPERTY_ID,
+      flag: "verified",
+      set: true,
+      targets: [target],
+      existingRows: [
+        {
+          entityVersionId: target.entityVersionId,
+          metadata: {
+            version: 1,
+            manualFlags: ["contradiction", "follow-up", "important"],
+          },
+        },
+      ],
+      userId: USER_ID,
+      addedAt: ADDED_AT,
+    });
+
+    expect(mutation.insertValues.at(0)?.metadata.manualFlags).toEqual([
+      "contradiction",
+      "follow-up",
+      "important",
+      "verified",
+    ]);
+    expect(
+      mutation.insertValues.at(0)?.metadata.manualFlags.length,
+    ).toBeLessThanOrEqual(REVIEW_FLAGS_MAX_ITEMS);
   });
 
   test("removes the requested flag while preserving other flags and locks", () => {

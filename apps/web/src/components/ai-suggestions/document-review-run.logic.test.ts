@@ -186,6 +186,7 @@ const finding = (
   positionId: POSITION_ID,
   positionTitle: "Notice period",
   outcome: "deviation",
+  flags: [],
   payload: {
     finding: {
       positionId: POSITION_ID,
@@ -268,6 +269,7 @@ const decided = (
   id,
   runId,
   decision,
+  flags: [],
   decidedBy: decision === "open" ? null : REVIEWER_ID,
   decidedAt: decision === "open" ? null : "2026-08-12T09:00:00.000Z",
   applicationStatus: "pending",

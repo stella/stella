@@ -9,9 +9,11 @@ import {
   buildReviewResultItems,
   buildRunHistoryBasisSentence,
   buildRunSummarySentence,
+  firstSentence,
   isReviewDeviation,
   isUndecidedDeviation,
   sortReviewResultItems,
+  tallyReviewFlags,
 } from "@/components/inspector/playbook-review-results.logic";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -62,6 +64,7 @@ const row = (
     positionId,
     title: "Notice period",
     decision: "open",
+    flags: [],
     applicationStatus: "pending",
     suggestionId: null,
     ...rest,
@@ -137,6 +140,57 @@ describe("what counts as a deviation", () => {
     });
     expect(item !== undefined && isReviewDeviation(item)).toBe(true);
     expect(item !== undefined && isUndecidedDeviation(item)).toBe(false);
+  });
+});
+
+describe("counting the flags a reviewer set", () => {
+  test("counts every flag, and names the ones nobody used", () => {
+    const items = buildReviewResultItems({
+      positions: [position("position-1"), position("position-2")],
+      findings: [
+        row(FIRST_ID, { flags: ["follow-up", "important"] }),
+        row(SECOND_ID, { positionId: "position-2", flags: ["follow-up"] }),
+      ],
+    });
+
+    expect(tallyReviewFlags(items)).toEqual({
+      "needs-review": 0,
+      important: 1,
+      "follow-up": 2,
+      contradiction: 0,
+      verified: 0,
+    });
+  });
+});
+
+describe("the one caption sentence the card shows", () => {
+  test("cuts at the first full stop", () => {
+    expect(
+      firstSentence(
+        "The notice period is shorter than the standard. The standard asks for 60 days.",
+      ),
+    ).toBe("The notice period is shorter than the standard.");
+  });
+
+  test("keeps a single-sentence caption whole", () => {
+    expect(firstSentence("The clause matches the standard")).toBe(
+      "The clause matches the standard",
+    );
+  });
+
+  test("does not cut at an abbreviation or an initial", () => {
+    expect(
+      firstSentence("Shorter than market, e.g. the Elixir SPA at 60 days."),
+    ).toBe("Shorter than market, e.g. the Elixir SPA at 60 days.");
+    expect(firstSentence("Signed by J. Novak on behalf of the seller.")).toBe(
+      "Signed by J. Novak on behalf of the seller.",
+    );
+  });
+
+  test("does not cut inside a decimal", () => {
+    expect(firstSentence("The cap is 1.5x fees. The standard is 1x.")).toBe(
+      "The cap is 1.5x fees.",
+    );
   });
 });
 

@@ -13,6 +13,7 @@ import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { cn } from "@stll/ui/utils";
 
+import { folioLayoutBlockElement } from "@/components/docx/folio-block-geometry";
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import type { FileTab } from "@/components/inspector/inspector-tabs-store";
@@ -521,10 +522,11 @@ const findFolioBlockPage = (blockId: string): number | null => {
     );
     const ordinal = pmParagraphs.indexOf(pmParagraph);
     if (ordinal !== -1) {
-      const layoutBlocks = document.querySelectorAll(
-        ".layout-page [data-block-id]",
-      );
-      const layoutBlock = layoutBlocks[ordinal];
+      // Addressed by document position rather than by NodeList index: the
+      // layout only holds the pages folio has painted, so indexing into it
+      // positionally reads the wrong block on any document long enough to
+      // paginate lazily.
+      const layoutBlock = folioLayoutBlockElement(document, ordinal);
       if (layoutBlock) {
         const page = getPageNumberFromElement(layoutBlock);
         if (page !== null) {
@@ -534,12 +536,13 @@ const findFolioBlockPage = (blockId: string): number | null => {
     }
   }
 
-  // Direct fallback for `seq-NNNN` ids — those map to layout
-  // block ids by extracting the numeric suffix.
+  // Direct fallback for `seq-NNNN` ids — those carry the block's
+  // one-based document position in the suffix.
   const seqMatch = /^seq-(?<seq>\d+)$/u.exec(blockId);
   if (seqMatch) {
-    const direct = document.querySelector(
-      `.layout-page [data-block-id="block-${Number.parseInt(seqMatch.groups?.["seq"] ?? "0", 10)}"]`,
+    const direct = folioLayoutBlockElement(
+      document,
+      Number.parseInt(seqMatch.groups?.["seq"] ?? "0", 10) - 1,
     );
     if (direct) {
       const page = getPageNumberFromElement(direct);

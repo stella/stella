@@ -6,7 +6,12 @@
 // modules (erased at build time). Nothing here imports a handler slice, so the
 // background worker and the endpoints share one definition of what a run is.
 
-import { DOCUMENT_REVIEW_LIMITS } from "@stll/api-contract";
+import {
+  DOCUMENT_REVIEW_LIMITS,
+  REVIEW_FLAGS,
+  REVIEW_FLAGS_MAX_ITEMS,
+} from "@stll/api-contract";
+import type { ReviewFlag } from "@stll/api-contract";
 
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ConstantMap } from "@/api/lib/constant-map";
@@ -109,6 +114,22 @@ export const DOCUMENT_REVIEW_DECISION = {
   ACCEPTED: "accepted",
   DISMISSED: "dismissed",
 } as const satisfies ConstantMap<DocumentReviewDecision>;
+
+/**
+ * Reviewer flags a finding carries, alongside its decision.
+ *
+ * Deliberately the same vocabulary the files table's cell flags use, from the
+ * same list: flagging a finding "needs review" and flagging the cell that
+ * holds the same document's answer are the same gesture by the same person, so
+ * they are the same words. A flag is not a disposition — accept and dismiss
+ * stay the tracked-change verbs — and the two are set and read independently.
+ */
+export const DOCUMENT_REVIEW_FINDING_FLAGS = REVIEW_FLAGS;
+export type DocumentReviewFindingFlag = ReviewFlag;
+
+/** How many flags one finding row may carry: the vocabulary's own size, since
+ *  flags are a set. Mirrors the cell metadata cap for the same reason. */
+export const DOCUMENT_REVIEW_FINDING_FLAGS_MAX = REVIEW_FLAGS_MAX_ITEMS;
 
 /** Whether a proposed fix has been inserted into the draft. Kept apart from
  *  the reviewer's decision: accepting a finding does not itself mutate the

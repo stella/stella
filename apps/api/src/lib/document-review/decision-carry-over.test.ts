@@ -66,6 +66,7 @@ const finding = (
   outcome: "compliant",
   payload: payload(EXCERPT),
   decision: "open",
+  flags: [],
   ...overrides,
 });
 
@@ -126,9 +127,40 @@ describe("matchCarriedDecisions", () => {
     ).toEqual([]);
   });
 
-  test("carries nothing from an undecided prior finding", () => {
+  test("carries nothing from a prior finding nobody answered", () => {
     expect(
       matchCarriedDecisions({ current: [finding()], prior: [finding()] }),
+    ).toEqual([]);
+  });
+
+  // Flagging a finding is work a re-run must not erase, even when the reviewer
+  // has not yet decided it.
+  test("carries flags from a prior finding left open", () => {
+    const prior = finding({ flags: ["follow-up"] });
+    const current = finding();
+
+    expect(
+      matchCarriedDecisions({ current: [current], prior: [prior] }),
+    ).toEqual([{ findingId: current.id, priorFindingId: prior.id }]);
+  });
+
+  test("resets flags when the cited evidence changed", () => {
+    const prior = finding({ flags: ["contradiction"] });
+    const current = finding({
+      payload: payload("This Agreement is governed by Delaware law"),
+    });
+
+    expect(
+      matchCarriedDecisions({ current: [current], prior: [prior] }),
+    ).toEqual([]);
+  });
+
+  test("never overwrites flags already on the new finding", () => {
+    const prior = finding({ decision: "accepted", flags: ["important"] });
+    const current = finding({ flags: ["needs-review"] });
+
+    expect(
+      matchCarriedDecisions({ current: [current], prior: [prior] }),
     ).toEqual([]);
   });
 

@@ -83,6 +83,7 @@ const readDocumentReviewRun = createSafeHandler(
             outcome: documentReviewFindings.outcome,
             payload: documentReviewFindings.payload,
             decision: documentReviewFindings.decision,
+            flags: documentReviewFindings.flags,
             decidedBy: documentReviewFindings.decidedBy,
             decidedAt: documentReviewFindings.decidedAt,
             applicationStatus: documentReviewFindings.applicationStatus,
@@ -178,6 +179,7 @@ const readDocumentReviewRun = createSafeHandler(
         outcome: finding.outcome,
         payload: finding.payload,
         decision: finding.decision,
+        flags: finding.flags,
         decidedBy: finding.decidedBy,
         decidedAt:
           finding.decidedAt === null ? null : finding.decidedAt.toISOString(),

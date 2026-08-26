@@ -5,6 +5,8 @@ import {
   DOCUMENT_REVIEW_APPLICATION_STATUS,
   DOCUMENT_REVIEW_DECISION,
   DOCUMENT_REVIEW_DECISIONS,
+  DOCUMENT_REVIEW_FINDING_FLAGS,
+  DOCUMENT_REVIEW_FINDING_FLAGS_MAX,
   DOCUMENT_REVIEW_OUTCOMES,
   DOCUMENT_REVIEW_RUN_ACTIVE_STATUSES,
   DOCUMENT_REVIEW_RUN_ERROR_CODES,
@@ -49,6 +51,7 @@ const PIN_PROVENANCE_SQL_VALUES = quoted(PLAYBOOK_PIN_PROVENANCES);
 const OUTCOME_SQL_VALUES = quoted(DOCUMENT_REVIEW_OUTCOMES);
 
 const DECISION_SQL_VALUES = quoted(DOCUMENT_REVIEW_DECISIONS);
+const FINDING_FLAG_SQL_VALUES = quoted(DOCUMENT_REVIEW_FINDING_FLAGS);
 const APPLICATION_STATUS_SQL_VALUES = quoted(
   DOCUMENT_REVIEW_APPLICATION_STATUSES,
 );
@@ -247,6 +250,15 @@ export const documentReviewFindings = p.pgTable(
       .text("decided_by")
       .references(() => user.id, { onDelete: "set null" }),
     decidedAt: timestamptz("decided_at"),
+    // Reviewer flags, the same vocabulary the files table's cell flags use.
+    // A set, not a list: the CHECK below bounds it by the vocabulary's size,
+    // and the handler writes it deduplicated and sorted so two orderings of
+    // the same flags are one value.
+    flags: p
+      .text("flags", { enum: DOCUMENT_REVIEW_FINDING_FLAGS })
+      .array()
+      .notNull()
+      .default([]),
     // Applying a proposed fix is a separate durable action from accepting the
     // finding. The status survives a reload so the same tracked change cannot
     // be offered and inserted twice.
@@ -293,6 +305,15 @@ export const documentReviewFindings = p.pgTable(
     p.check(
       "document_review_findings_decision_timing_check",
       sql`(${table.decision} = ${OPEN_DECISION_SQL}) = (${table.decidedAt} IS NULL)`,
+    ),
+    // Every element is a flag the vocabulary names, and no finding holds more
+    // flags than the vocabulary has. Drizzle's `enum` option is compile-time
+    // only, and the array arrives element by element from the wire, so the
+    // column states the rule itself.
+    p.check(
+      "document_review_findings_flags_values_check",
+      sql`${table.flags} <@ ARRAY[${FINDING_FLAG_SQL_VALUES}]::text[]
+        AND cardinality(${table.flags}) <= ${sql.raw(String(DOCUMENT_REVIEW_FINDING_FLAGS_MAX))}`,
     ),
     p.check(
       "document_review_findings_application_status_values_check",

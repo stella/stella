@@ -1,12 +1,13 @@
 /**
- * Carry reviewer decisions across re-runs.
+ * Carry a reviewer's reading of a finding — the decision they took and the
+ * flags they put beside it — across re-runs.
  *
  * Re-reviewing a document must not silently discard the reading a lawyer
  * already did. When a new run reaches the same conclusion about the same
  * quoted text as the previous review of that document, the earlier decision
- * still applies and moves onto the new finding; when the conclusion or the
- * evidence changed, the finding stays `open`, because that is the case a
- * reviewer has to look at again.
+ * and flags still apply and move onto the new finding; when the conclusion or
+ * the evidence changed, the finding stays `open` and unflagged, because that
+ * is the case a reviewer has to look at again.
  *
  * Cost: two statements per completed run, regardless of how many findings it
  * holds. One SELECT reads this run's findings and the previous completed run's
@@ -27,6 +28,7 @@ import {
 } from "@/api/lib/document-review/run-contract";
 import type {
   DocumentReviewDecision,
+  DocumentReviewFindingFlag,
   DocumentReviewFindingPayload,
 } from "@/api/lib/document-review/run-contract";
 
@@ -37,9 +39,10 @@ export type CarryOverFinding = {
   outcome: string | null;
   payload: DocumentReviewFindingPayload;
   decision: DocumentReviewDecision;
+  flags: readonly DocumentReviewFindingFlag[];
 };
 
-/** One decision to copy: the new finding, and the decided finding it repeats. */
+/** One reading to copy: the new finding, and the answered finding it repeats. */
 export type CarriedDecision = {
   findingId: SafeId<"documentReviewFinding">;
   priorFindingId: SafeId<"documentReviewFinding">;
@@ -54,37 +57,46 @@ type MatchCarriedDecisionsArgs = {
   prior: readonly CarryOverFinding[];
 };
 
+/** Whether a prior finding holds a reading worth moving forward. Flags count
+ *  on their own: a reviewer who flagged a finding "follow-up" without yet
+ *  deciding it has still done work the re-run must not erase. */
+const wasAnswered = ({ decision, flags }: CarryOverFinding): boolean =>
+  decision !== DOCUMENT_REVIEW_DECISION.OPEN || flags.length > 0;
+
+/** Whether a new finding is still untouched, and so has room to inherit. A
+ *  row is born this way, which is what makes a replayed completion a no-op
+ *  rather than a reset. */
+const isUntouched = ({ decision, flags }: CarryOverFinding): boolean =>
+  decision === DOCUMENT_REVIEW_DECISION.OPEN && flags.length === 0;
+
 /**
- * Pair each new finding with the decided prior finding it repeats verbatim.
+ * Pair each new finding with the answered prior finding it repeats verbatim.
  *
- * Three conditions, all required: the same position, a prior finding that
- * someone actually decided, and an identical fingerprint
- * (same outcome over the same cited evidence). A prior finding left `open`
- * carries nothing — the new finding is already open — and a new finding that
- * somehow already carries a decision is never overwritten, which is what makes
- * a replayed completion a no-op rather than a reset.
+ * Three conditions, all required: the same position, a prior finding somebody
+ * actually answered (decided, flagged, or both), and an identical fingerprint
+ * (same outcome over the same cited evidence).
  */
 export const matchCarriedDecisions = ({
   current,
   prior,
 }: MatchCarriedDecisionsArgs): CarriedDecision[] => {
-  const decidedPrior = new Map<string, CarryOverFinding>();
+  const answeredPrior = new Map<string, CarryOverFinding>();
   for (const finding of prior) {
-    if (finding.decision === DOCUMENT_REVIEW_DECISION.OPEN) {
+    if (!wasAnswered(finding)) {
       continue;
     }
-    decidedPrior.set(comparisonKey(finding), finding);
+    answeredPrior.set(comparisonKey(finding), finding);
   }
-  if (decidedPrior.size === 0) {
+  if (answeredPrior.size === 0) {
     return [];
   }
 
   const carried: CarriedDecision[] = [];
   for (const finding of current) {
-    if (finding.decision !== DOCUMENT_REVIEW_DECISION.OPEN) {
+    if (!isUntouched(finding)) {
       continue;
     }
-    const previous = decidedPrior.get(comparisonKey(finding));
+    const previous = answeredPrior.get(comparisonKey(finding));
     if (previous === undefined) {
       continue;
     }
@@ -108,8 +120,8 @@ type CarryOverDecisionsArgs = {
 };
 
 /**
- * Copy the decisions a completed run inherits from the document's previous
- * review. Returns how many decisions moved.
+ * Copy the readings a completed run inherits from the document's previous
+ * review. Returns how many findings inherited one.
  *
  * "Previous review" is the newest completed run for the same document. There
  * is one basis shape and one finding shape now, so any earlier review of the
@@ -148,6 +160,7 @@ export const carryOverDecisions = async ({
       outcome: documentReviewFindings.outcome,
       payload: documentReviewFindings.payload,
       decision: documentReviewFindings.decision,
+      flags: documentReviewFindings.flags,
     })
     .from(documentReviewFindings)
     .where(
@@ -173,25 +186,31 @@ export const carryOverDecisions = async ({
   }
 
   // The prior rows are joined back by id rather than having their decision,
-  // decider, and timestamp shipped out and back as bind parameters: only ids
-  // cross the boundary, so no value is re-encoded on the way.
+  // decider, timestamp, and flags shipped out and back as bind parameters:
+  // only ids cross the boundary, so no value is re-encoded on the way.
   const pairs = carried.map(
     ({ findingId, priorFindingId }) =>
       sql`(${findingId}::uuid, ${priorFindingId}::uuid)`,
   );
-  // audit: skip — the reviewer's decision was audited when it was taken; this
-  // reattaches that same decision to the run that repeats its finding.
+  // The `WHERE` repeats the matcher's untouched test so a concurrent decision
+  // taken between the match and this statement wins over the inheritance.
+  //
+  // audit: skip — the reviewer's decision and flags were audited when they
+  // were taken; this reattaches the same reading to the run that repeats its
+  // finding.
   await tx.execute(sql`
     UPDATE ${documentReviewFindings} AS target
        SET decision = prior.decision,
            decided_by = prior.decided_by,
-           decided_at = prior.decided_at
+           decided_at = prior.decided_at,
+           flags = prior.flags
       FROM (VALUES ${sql.join(pairs, sql`, `)}) AS pair(finding_id, prior_finding_id)
       JOIN ${documentReviewFindings} AS prior ON prior.id = pair.prior_finding_id
      WHERE target.id = pair.finding_id
        AND target.workspace_id = ${workspaceId}
        AND prior.workspace_id = ${workspaceId}
-       AND target.decision = ${DOCUMENT_REVIEW_DECISION.OPEN}`);
+       AND target.decision = ${DOCUMENT_REVIEW_DECISION.OPEN}
+       AND cardinality(target.flags) = 0`);
 
   return carried.length;
 };

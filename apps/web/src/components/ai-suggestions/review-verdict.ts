@@ -27,6 +27,22 @@ type MissingReviewSeverity = Exclude<
 
 true satisfies MissingReviewSeverity extends never ? true : never;
 
+/**
+ * Which severities get the review surface's one accent — the clause map's
+ * ticks, a sidenote's rule. The rest is neutral ink: four colours is a legend,
+ * not a signal. Total over the engine's vocabulary, so a severity added on the
+ * server has to say whether it stops a deal.
+ */
+const DEAL_BREAKING_SEVERITY = {
+  blocker: true,
+  high: true,
+  medium: false,
+  low: false,
+} as const satisfies Record<ReviewSeverity, boolean>;
+
+export const isDealBreakingSeverity = (severity: ReviewSeverity): boolean =>
+  DEAL_BREAKING_SEVERITY[severity];
+
 const REVIEW_VERDICT_POLICY = {
   compliant: { risk: "clear", negotiation: "unavailable" },
   fallback: { risk: "flagged", negotiation: "available" },

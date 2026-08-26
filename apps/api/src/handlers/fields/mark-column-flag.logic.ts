@@ -1,3 +1,6 @@
+import { REVIEW_FLAG } from "@stll/api-contract";
+import type { ReviewFlag } from "@stll/api-contract";
+
 import type { CellMetadata } from "@/api/db/schema-validators";
 import { arrayOrEmpty } from "@/api/lib/array";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -6,8 +9,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { compareCodepoint } from "@/api/lib/collation";
 
 const CELL_METADATA_VERSION = 1;
-const MANUAL_FLAGS_MAX_ITEMS = 16;
-const VERIFIED_FLAG_ID = "verified";
+const VERIFIED_FLAG_ID = REVIEW_FLAG.VERIFIED;
 
 type CellMetadataInsert = {
   workspaceId: SafeId<"workspace">;
@@ -31,7 +33,7 @@ type ExistingCellMetadataRow = {
 type BuildColumnFlagMutationArgs = {
   workspaceId: SafeId<"workspace">;
   propertyId: SafeId<"property">;
-  flag: string;
+  flag: ReviewFlag;
   set: boolean;
   // When removing (`set: false`), restrict removal to cells whose flag was added
   // by the operation stamped with this timestamp. Powers a precise undo that
@@ -51,7 +53,7 @@ type ColumnFlagMutation = {
   updatedCount: number;
 };
 
-const normalizeManualFlags = (flags: string[]) =>
+const normalizeManualFlags = (flags: readonly ReviewFlag[]): ReviewFlag[] =>
   [...new Set(flags)].toSorted();
 
 export const sortColumnFlagTargetsForLocking = (
@@ -92,10 +94,10 @@ export const buildColumnFlagMutation = ({
         continue;
       }
 
-      if (existingFlags.length >= MANUAL_FLAGS_MAX_ITEMS) {
-        continue;
-      }
-
+      // No count guard: flags are a deduplicated set over a closed
+      // vocabulary, so the cap is the number of flags that exist. A cell
+      // already holding every one is caught by the identity test above, and
+      // no other cell can cross the cap by gaining one.
       const manualFlags = normalizeManualFlags([...existingFlags, flag]);
       const existingProvenance = existing?.flagProvenance ?? {};
       const flagProvenance = Object.fromEntries(

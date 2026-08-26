@@ -225,6 +225,13 @@ export {
   VIEW_SORTS_MAX,
   WORKSPACES_PER_ORGANIZATION_MAX,
 } from "./limits";
+export {
+  isReviewFlag,
+  REVIEW_FLAG,
+  REVIEW_FLAGS,
+  REVIEW_FLAGS_MAX_ITEMS,
+} from "./review-flags";
+export type { ReviewFlag } from "./review-flags";
 export { GLOBAL_SEARCH_RESULT_TYPES } from "./search";
 export type { GlobalSearchResultType } from "./search";
 export {

@@ -1,5 +1,7 @@
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 
+import type { ReviewFlag } from "@stll/api-contract";
+
 import { documentReviewRunPollInterval } from "@/components/ai-suggestions/document-review-run.logic";
 import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
@@ -192,19 +194,31 @@ type DecideReviewFindingArgs = {
    *  one finding per confirmed position. */
   findingId: DocumentReviewFindingRow["id"];
   decision: DocumentReviewDecision;
+  /** The finding's whole flag set, when this write changes it. Omitted leaves
+   *  the flags as they are, so a decision and a flag stay two gestures. */
+  flags?: readonly ReviewFlag[];
 };
 
-/** Record one decision against one finding. */
+/**
+ * Record one reviewer answer against one finding: the disposition, the flags,
+ * or both.
+ *
+ * `decision` is always sent, current value included, because Elysia coerces an
+ * absent optional `UnionEnum` to the first member of its vocabulary — which
+ * here would silently reopen the finding. The endpoint treats a restated
+ * decision as the no-op it is and leaves the decider and the moment alone.
+ */
 export const decideReviewFinding = async ({
   workspaceId,
   findingId,
   decision,
+  flags,
 }: DecideReviewFindingArgs) =>
   unwrapEden(
     await api
       .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
       ["document-reviews"].findings({ findingId })
-      .patch({ decision }),
+      .patch({ decision, ...(flags !== undefined && { flags: [...flags] }) }),
   );
 
 /** One recorded decision as the endpoint answers it. */

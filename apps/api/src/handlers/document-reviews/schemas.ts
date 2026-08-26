@@ -11,6 +11,8 @@ import {
 import {
   DOCUMENT_REVIEW_APPLICATION_STATUS,
   DOCUMENT_REVIEW_DECISIONS,
+  DOCUMENT_REVIEW_FINDING_FLAGS,
+  DOCUMENT_REVIEW_FINDING_FLAGS_MAX,
 } from "@/api/lib/document-review/run-contract";
 import type { DocumentReviewDecision } from "@/api/lib/document-review/run-contract";
 import { positionSchema } from "@/api/lib/workflow/playbook-positions";
@@ -42,6 +44,19 @@ export const decideReviewFindingBodySchema = t.Object({
   decision: t.UnionEnum([...DOCUMENT_REVIEW_DECISIONS]),
   applicationStatus: t.Optional(
     t.Literal(DOCUMENT_REVIEW_APPLICATION_STATUS.APPLIED),
+  ),
+  /**
+   * The finding's whole flag set, replacing whatever it held. Omitted leaves
+   * the flags alone, which is what lets a decision and a flag be taken as two
+   * separate gestures against one row.
+   *
+   * The same vocabulary as the column's CHECK and as the files table's cell
+   * flags, from the one list all three derive from.
+   */
+  flags: t.Optional(
+    t.Array(t.UnionEnum([...DOCUMENT_REVIEW_FINDING_FLAGS]), {
+      maxItems: DOCUMENT_REVIEW_FINDING_FLAGS_MAX,
+    }),
   ),
 });
 

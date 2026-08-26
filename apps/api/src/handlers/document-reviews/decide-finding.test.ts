@@ -10,6 +10,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { DocumentReviewFindingFlag } from "@/api/lib/document-review/run-contract";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -43,6 +44,7 @@ type StoredFinding = {
   decision: "open" | "accepted" | "dismissed";
   decidedBy: SafeId<"user"> | null;
   decidedAt: Date | null;
+  flags: DocumentReviewFindingFlag[];
   applicationStatus: "pending" | "applied";
   appliedBy: SafeId<"user"> | null;
   appliedAt: Date | null;
@@ -62,6 +64,7 @@ const storedFinding = (
     decision,
     decidedBy: decision === "open" ? null : USER_ID,
     decidedAt: decision === "open" ? null : new Date("2026-08-25T08:00:00Z"),
+    flags: [],
     applicationStatus: "pending",
     appliedBy: null,
     appliedAt: null,
@@ -72,6 +75,7 @@ type UpdateValues = {
   decision?: unknown;
   decidedBy?: unknown;
   decidedAt?: unknown;
+  flags?: unknown;
   applicationStatus?: unknown;
   appliedBy?: unknown;
   appliedAt?: unknown;
@@ -252,6 +256,71 @@ describe("decideDocumentReviewFinding", () => {
       },
     });
     expect(updates).toEqual([]);
+    expect(auditEvents).toEqual([]);
+  });
+
+  // Flagging is not deciding. The card sends the decision it already holds so
+  // the endpoint's required field is satisfied; that must not re-stamp when
+  // the decision was taken or who took it.
+  test("setting flags leaves the decision's decider and moment alone", async () => {
+    const { auditEvents, context, updates } = createHarness(
+      storedFinding("accepted"),
+    );
+
+    const result = await decideDocumentReviewFinding.handler({
+      ...context,
+      body: { decision: "accepted", flags: ["follow-up", "important"] },
+    });
+
+    expect(updates.at(0)).toEqual({
+      decision: "accepted",
+      decidedBy: USER_ID,
+      decidedAt: new Date("2026-08-25T08:00:00Z"),
+      // Stored as a set: deduplicated and in one order, whatever order the
+      // reviewer clicked them in.
+      flags: ["follow-up", "important"],
+    });
+    expect(result).toMatchObject({
+      decision: "accepted",
+      decidedAt: "2026-08-25T08:00:00.000Z",
+      flags: ["follow-up", "important"],
+    });
+    expect(auditEvents.at(0)).toMatchObject({
+      changes: { flags: { old: [], new: ["follow-up", "important"] } },
+    });
+  });
+
+  test("a body without flags changes none", async () => {
+    const rows = storedFinding("open");
+    const finding = rows.at(0);
+    if (finding !== undefined) {
+      finding.flags = ["contradiction"];
+    }
+    const { context, updates } = createHarness(rows);
+
+    const result = await decideDocumentReviewFinding.handler({
+      ...context,
+      body: { decision: "dismissed" },
+    });
+
+    expect(updates.at(0)).toEqual({
+      decision: "dismissed",
+      decidedBy: USER_ID,
+      decidedAt: expect.any(Date),
+    });
+    expect(result).toMatchObject({ flags: ["contradiction"] });
+  });
+
+  // Restating exactly what the row already says is not a reviewer action, so
+  // it leaves no audit trail of one.
+  test("audits nothing when the request changed nothing", async () => {
+    const { auditEvents, context } = createHarness(storedFinding("accepted"));
+
+    await decideDocumentReviewFinding.handler({
+      ...context,
+      body: { decision: "accepted", flags: [] },
+    });
+
     expect(auditEvents).toEqual([]);
   });
 

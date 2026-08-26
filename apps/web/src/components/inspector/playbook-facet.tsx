@@ -1,6 +1,7 @@
 /** Composable document review: playbook, reference documents, or both. */
 
 import { useRef, useState } from "react";
+import type { ComponentType, RefObject } from "react";
 
 import {
   useInfiniteQuery,
@@ -14,6 +15,7 @@ import {
   CheckIcon,
   ChevronRightIcon,
   ClipboardCheckIcon,
+  FlagIcon,
   MessageSquareIcon,
   PanelLeftIcon,
   PanelRightIcon,
@@ -21,14 +23,16 @@ import {
   RotateCcwIcon,
   ScanSearchIcon,
   SearchIcon,
+  StickyNoteIcon,
   XIcon,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 import { v7 as uuidv7 } from "uuid";
 import { useShallow } from "zustand/react/shallow";
 
-import { DOCUMENT_REVIEW_LIMITS } from "@stll/api-contract";
-import type { DocxEditorRef } from "@stll/folio-react";
+import { DOCUMENT_REVIEW_LIMITS, REVIEW_FLAGS } from "@stll/api-contract";
+import type { ReviewFlag } from "@stll/api-contract";
+import type { DocxEditorRef, FolioAIBlock } from "@stll/folio-react";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
@@ -39,7 +43,9 @@ import {
   InspectorTitle,
 } from "@stll/ui/inspector";
 import { LoaderState } from "@stll/ui/loader";
+import { Menu, MenuPopup, MenuTrigger } from "@stll/ui/menu";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
+import { SegmentedIconToggle } from "@stll/ui/segmented-icon-toggle";
 import { TextSeparator } from "@stll/ui/separator";
 import { Skeleton } from "@stll/ui/skeleton";
 import { Textarea } from "@stll/ui/textarea";
@@ -103,13 +109,17 @@ import {
   usePlaybookReviewStore,
 } from "@/components/ai-suggestions/playbook-review-store";
 import type { StartReviewResult } from "@/components/ai-suggestions/playbook-review-store";
+import { ReviewDealStrip } from "@/components/ai-suggestions/review-deal-strip";
 import type { DeltaCitation } from "@/components/ai-suggestions/review-delta";
 import { ReviewDeltaView } from "@/components/ai-suggestions/review-delta-view";
 import {
   findingHeaderLabel,
+  findingLabel,
   impactLabel,
   isDirectedImpact,
 } from "@/components/ai-suggestions/review-finding-label";
+import { ReviewMarginNotes } from "@/components/ai-suggestions/review-margin-notes";
+import type { ReviewMarginNote } from "@/components/ai-suggestions/review-margin-notes";
 import { REVIEW_SECTION_LABEL_CLASS } from "@/components/ai-suggestions/review-passage-side";
 import {
   POSITION_HEADER_META_CLASS,
@@ -121,28 +131,45 @@ import {
 } from "@/components/ai-suggestions/review-position-row";
 import { useReviewStore } from "@/components/ai-suggestions/review-store";
 import type { ReviewSuggestion } from "@/components/ai-suggestions/review-store";
-import { isNegotiableVerdict } from "@/components/ai-suggestions/review-verdict";
+import {
+  isDealBreakingSeverity,
+  isNegotiableVerdict,
+} from "@/components/ai-suggestions/review-verdict";
+import { useFolioDocumentBlocks } from "@/components/ai-suggestions/use-folio-document-blocks";
 import { useReviewActions } from "@/components/ai-suggestions/use-review-actions";
 import { DocumentIcon } from "@/components/document-icon";
 import { DOCUMENT_PANE } from "@/components/inspector/document-pane";
-import type { ReviewPaneSwap } from "@/components/inspector/document-pane";
+import type {
+  DocumentPane,
+  ReviewPaneSwap,
+} from "@/components/inspector/document-pane";
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
+import type { FileFacet } from "@/components/inspector/inspector-store-types";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import {
   buildReviewResultItems,
   buildRunHistoryBasisSentence,
   buildRunSummarySentence,
+  firstSentence,
   isReviewDeviation,
   isUndecidedDeviation,
   sortReviewResultItems,
   SUMMARY_SEPARATOR,
+  tallyReviewFlags,
 } from "@/components/inspector/playbook-review-results.logic";
 import type {
+  ReviewFlagTally,
   ReviewResultFilter,
   ReviewResultItem,
 } from "@/components/inspector/playbook-review-results.logic";
 import { ReviewExportMenu } from "@/components/inspector/review-export-menu";
 import { PlaybookStatusBadge } from "@/components/playbook-status-badge";
+import {
+  REVIEW_FLAG_PRESENTATION,
+  ReviewFlagGlyphs,
+  ReviewFlagMenuItems,
+  useReviewFlagLabel,
+} from "@/components/review-flags";
 import { SearchDialog } from "@/components/search-dialog";
 import Tooltip from "@/components/tooltip";
 import { RunSizeConfirmDialog } from "@/components/usage/run-size-confirm-dialog";
@@ -211,28 +238,26 @@ export const PlaybookFacet = ({
   // the document is already on screen and the switch would only take the
   // review away.
   const documentInMainPane =
-    routeSearch !== null && currentPane === DOCUMENT_PANE.document;
+    routeSearch !== null && currentPane !== DOCUMENT_PANE.review;
   const paneSwap: ReviewPaneSwap | null =
     routeSearch === null
       ? null
       : {
           pane: currentPane,
           onToggle: (pane) => {
-            // The two panes trade places in one gesture: the inspector shows the
+            // The panes trade places in one gesture: the inspector shows the
             // document exactly when the main pane does not.
             useInspectorTabsStore
               .getState()
-              .setFileFacet(
-                fileFieldId,
-                pane === DOCUMENT_PANE.review ? "preview" : "playbook",
-              );
+              .setFileFacet(fileFieldId, PANE_INSPECTOR_FACET[pane]);
             detached(
               navigate({
                 to: "/workspaces/$workspaceId/$viewId/document",
                 params: { workspaceId, viewId },
                 search: (prev) => ({
                   ...prev,
-                  pane: pane === DOCUMENT_PANE.review ? pane : undefined,
+                  // The default arrangement is the absence of the param.
+                  pane: pane === DOCUMENT_PANE.document ? undefined : pane,
                 }),
               }),
               "playbook-facet.swap-pane",
@@ -280,10 +305,13 @@ export const PlaybookFacet = ({
   // the floating bar use. The editor may not be mounted yet (the facet renders
   // over a hidden preview), which the fallback ref stands in for.
   const fallbackEditorRef = useRef<DocxEditorRef | null>(null);
+  // The one handle on the reviewed document: what applies a fix, and what the
+  // clause map and the margin notes read their geometry from.
+  const targetEditorRef = registration?.editorRef ?? fallbackEditorRef;
   const reviewActions = useReviewActions({
     entityId,
     persistence: { type: "workspace", workspaceId },
-    docxEditorRef: registration?.editorRef ?? fallbackEditorRef,
+    docxEditorRef: targetEditorRef,
     docxEditable: registration?.editable ?? false,
     requestDocxEditMode: registration?.requestEditMode,
   });
@@ -621,6 +649,7 @@ export const PlaybookFacet = ({
         <ReviewRunPanel
           currentEntityVersionId={currentEntityVersionId}
           editorAvailable={editorAvailable}
+          editorRef={targetEditorRef}
           history={{
             mode: historyRunId === null ? "tracked" : "history",
             onBackToLatest: () => viewTrackedRun(entityId, fileFieldId),
@@ -695,6 +724,18 @@ const EMPTY_RUNS: readonly DocumentReviewRunSummary[] = [];
 /** The matter view a document from another matter opens in: all of it. */
 const ALL_VIEW_ID = "all";
 
+/**
+ * Which facet the document's inspector tab shows in each arrangement: the
+ * document itself exactly when the main pane is not showing it. Total over the
+ * pane vocabulary so a new arrangement cannot leave the inspector on whatever
+ * the previous one happened to open.
+ */
+const PANE_INSPECTOR_FACET = {
+  document: "playbook",
+  review: "preview",
+  margin: "playbook",
+} as const satisfies Record<DocumentPane, FileFacet>;
+
 const referenceNameLookup = (
   references: readonly ReferenceFile[],
 ): ReferenceNameLookup =>
@@ -735,6 +776,9 @@ type ReviewRunPanelProps = {
   /** The document's current version, or `null` while it is not known yet. */
   currentEntityVersionId: string | null;
   editorAvailable: boolean;
+  /** The reviewed document's live editor: where the clause map reads the
+   *  block order and the margin notes read the painted geometry. */
+  editorRef: RefObject<DocxEditorRef | null>;
   suggestions: readonly ReviewSuggestion[];
   onAcceptSuggestion: (suggestion: ReviewSuggestion) => void;
   onRejectSuggestion: (suggestion: ReviewSuggestion) => void;
@@ -763,6 +807,7 @@ const ReviewRunPanel = ({
   versions,
   currentEntityVersionId,
   editorAvailable,
+  editorRef,
   suggestions,
   onAcceptSuggestion,
   onAddCounterpartyNote,
@@ -897,6 +942,7 @@ const ReviewRunPanel = ({
       decisionCounts={run.decisionCounts}
       decisionPending={decide.isPending}
       editorAvailable={editorAvailable}
+      editorRef={editorRef}
       findings={restored.findings}
       freshness={resolveReviewRunFreshness({ run, currentEntityVersionId })}
       history={history}
@@ -921,6 +967,11 @@ const ReviewRunPanel = ({
       }}
       onDecide={(findingId, decision) => {
         decide.mutate({ workspaceId, findingId, decision });
+      }}
+      // A flag is not a disposition, so the current decision rides along
+      // unchanged; the endpoint treats restating it as the no-op it is.
+      onSetFlags={(findingId, decision, flags) => {
+        decide.mutate({ workspaceId, findingId, decision, flags });
       }}
       onOpenReferenceCitation={(referenceFieldId, blockId) => {
         const reference = restored.basis.references.find(
@@ -977,6 +1028,8 @@ const LAUNCHER_BASIS_DIVIDER_LABEL = "and / or";
 const TARGET_AS_REFERENCE_LABEL =
   "The reviewed document cannot be its own reference.";
 const RECOMMENDATION_LABEL = "Recommendation:";
+const WHY_LABEL = "Why";
+const FLAG_FINDING_LABEL = "Flag";
 const ASK_IN_CHAT_LABEL = "Ask in chat";
 const CHAT_DRAFT_QUESTION = "How should I redraft the target on this point?";
 const CHAT_DRAFT_PASSAGES_PER_DOCUMENT = 2;
@@ -1997,6 +2050,9 @@ type ResultsViewProps = {
   runId: string;
   workspaceId: string;
   editorAvailable: boolean;
+  /** The reviewed document's live editor: the clause map's block order and
+   *  the margin notes' painted geometry both come from it. */
+  editorRef: RefObject<DocxEditorRef | null>;
   saveAsPlaybookPending: boolean;
   suggestions: readonly ReviewSuggestion[];
   onAcceptSuggestion: (suggestion: ReviewSuggestion) => void;
@@ -2010,11 +2066,25 @@ type ResultsViewProps = {
     findingId: DocumentReviewFindingRow["id"],
     decision: DocumentReviewDecision,
   ) => void;
+  onSetFlags: SetReviewFindingFlags;
   onOpenReferenceCitation: (referenceFieldId: string, blockId: string) => void;
   onReviewAgain: () => void;
   onSaveAsPlaybook: () => void;
   onScrollToBlock: (blockId: string) => void;
 };
+
+/**
+ * Replace one finding's flag set.
+ *
+ * The decision travels with it unchanged: flags and dispositions are separate
+ * axes, and the endpoint needs the decision on every write because an absent
+ * optional `UnionEnum` would be coerced back to `open`.
+ */
+type SetReviewFindingFlags = (
+  findingId: DocumentReviewFindingRow["id"],
+  decision: DocumentReviewDecision,
+  flags: readonly ReviewFlag[],
+) => void;
 
 const ResultsView = ({
   basis,
@@ -2033,11 +2103,13 @@ const ResultsView = ({
   runId,
   workspaceId,
   editorAvailable,
+  editorRef,
   saveAsPlaybookPending,
   suggestions,
   onAcceptSuggestion,
   onAddCounterpartyNote,
   onDecide,
+  onSetFlags,
   onOpenReferenceCitation,
   onRejectSuggestion,
   onReviewAgain,
@@ -2051,6 +2123,77 @@ const ResultsView = ({
   });
   const decisions = reviewDecisionProgress(decisionCounts);
   const flaggedCount = results.filter(isReviewDeviation).length;
+  const marginMode = paneSwap?.pane === DOCUMENT_PANE.margin;
+  // The document's own block order, for the clause map and the sidenotes.
+  // Nothing to place while the run answered nothing, so nothing is read.
+  const documentBlocks = useFolioDocumentBlocks(editorRef, results.length > 0);
+  // A sidenote hands its finding back to the list: the note is a pointer, the
+  // card is the thing. Local to this view, which survives the pane switch.
+  const [focusedFindingId, setFocusedFindingId] = useState<
+    DocumentReviewFindingRow["id"] | null
+  >(null);
+  // The sidenote hands back the id it was given; resolving it against the run
+  // is what turns it back into a finding this view can point the list at.
+  const openInPanel = (findingId: string) => {
+    const item = results.find((candidate) => candidate.id === findingId);
+    if (item === undefined) {
+      return;
+    }
+    setFocusedFindingId(item.id);
+    paneSwap?.onToggle(DOCUMENT_PANE.document);
+  };
+
+  const resultsBody = (() => {
+    if (marginMode) {
+      const { anchored, unanchored } = buildMarginNotes({
+        results,
+        perspective: basis.perspective,
+        insufficientEvidenceLabel: t("inspector.review.insufficientEvidence"),
+      });
+      return (
+        <ReviewMarginNotes
+          blocks={documentBlocks}
+          editorRef={editorRef}
+          notes={anchored}
+          onOpen={openInPanel}
+          onScrollToBlock={onScrollToBlock}
+          unanchored={unanchored}
+        />
+      );
+    }
+    return (
+      <div className="flex-1 overflow-y-auto px-2 py-2">
+        <ReviewFreshnessNotice
+          freshness={freshness}
+          onReviewAgain={onReviewAgain}
+        />
+        {results.length > 0 ? (
+          <ReviewResultList
+            blocks={documentBlocks}
+            decisionPending={decisionPending}
+            editorAvailable={editorAvailable}
+            focusItemId={focusedFindingId}
+            items={results}
+            negotiationBySourceId={negotiationBySourceId}
+            onAcceptSuggestion={onAcceptSuggestion}
+            onAddCounterpartyNote={onAddCounterpartyNote}
+            onDecide={onDecide}
+            onSetFlags={onSetFlags}
+            onOpenReferenceCitation={onOpenReferenceCitation}
+            onRejectSuggestion={onRejectSuggestion}
+            onScrollToBlock={onScrollToBlock}
+            perspective={basis.perspective}
+            readOnly={readOnly}
+            references={basis.references}
+            suggestions={suggestions}
+            targetFileFieldId={targetFileFieldId}
+          />
+        ) : (
+          <NoReviewIssues />
+        )}
+      </div>
+    );
+  })();
 
   return (
     <div className="bg-background flex h-full flex-col">
@@ -2095,7 +2238,17 @@ const ResultsView = ({
               {SAVE_AS_PLAYBOOK_LABEL}
             </Button>
           )}
-          <ReviewExportMenu runId={runId} workspaceId={workspaceId} />
+          <ReviewExportMenu
+            // The counterparty file is the document, so it is addressed by the
+            // field it lives on: nothing the run knows is in scope.
+            counterparty={
+              targetName.length === 0
+                ? null
+                : { fileFieldId: targetFileFieldId, fileName: targetName }
+            }
+            runId={runId}
+            workspaceId={workspaceId}
+          />
           <Button onClick={onReviewAgain} size="xs" variant="outline">
             {t("inspector.review.reviewAgain")}
           </Button>
@@ -2104,35 +2257,49 @@ const ResultsView = ({
 
       <ReviewHistorySection history={history} />
 
-      <div className="flex-1 overflow-y-auto px-2 py-2">
-        <ReviewFreshnessNotice
-          freshness={freshness}
-          onReviewAgain={onReviewAgain}
-        />
-        {results.length > 0 ? (
-          <ReviewResultList
-            decisionPending={decisionPending}
-            editorAvailable={editorAvailable}
-            items={results}
-            negotiationBySourceId={negotiationBySourceId}
-            onAcceptSuggestion={onAcceptSuggestion}
-            onAddCounterpartyNote={onAddCounterpartyNote}
-            onDecide={onDecide}
-            onOpenReferenceCitation={onOpenReferenceCitation}
-            onRejectSuggestion={onRejectSuggestion}
-            onScrollToBlock={onScrollToBlock}
-            perspective={basis.perspective}
-            readOnly={readOnly}
-            references={basis.references}
-            suggestions={suggestions}
-            targetFileFieldId={targetFileFieldId}
-          />
-        ) : (
-          <NoReviewIssues />
-        )}
-      </div>
+      {resultsBody}
     </div>
   );
+};
+
+/**
+ * One finding as a sidenote: what it is, how it cuts, and the one sentence
+ * explaining the difference. Only the flagged positions get a margin — a
+ * column of "Compliant" notes beside every clause is wallpaper, and the
+ * coverage list is where a reviewer goes to see what was checked.
+ */
+type MarginNoteSplit = {
+  /** Findings pinned to a clause of the reviewed document. */
+  anchored: ReviewMarginNote[];
+  /** Findings with nothing in the document to pin to. */
+  unanchored: Omit<ReviewMarginNote, "blockId">[];
+};
+
+const buildMarginNotes = ({
+  results,
+  perspective,
+  insufficientEvidenceLabel,
+}: {
+  results: readonly ReviewResultItem[];
+  perspective: ReviewPerspective;
+  insufficientEvidenceLabel: string;
+}): MarginNoteSplit => {
+  const notes = results.filter(isReviewDeviation).map((item) => ({
+    id: item.id,
+    blockId: item.finding.citations.at(0)?.blockId ?? null,
+    title: item.title,
+    label: findingLabel(item.finding, perspective),
+    caption: findingCaption(item.finding, insufficientEvidenceLabel),
+    accent: isDealBreakingSeverity(item.finding.severity),
+  }));
+  return {
+    // A missing clause cites nothing, because there is nothing in the
+    // document to point at; it gets a row under the column instead.
+    anchored: notes.flatMap((note) =>
+      note.blockId === null ? [] : [{ ...note, blockId: note.blockId }],
+    ),
+    unanchored: notes.filter((note) => note.blockId === null),
+  };
 };
 
 // TODO(i18n): English until the review surface is localized as a whole.
@@ -2332,43 +2499,67 @@ const RunHeaderStatusLine = ({
   );
 };
 
+/** Panel and main are layout glyphs and mirror under RTL; a sidenote's
+ *  meaning is orientation-free, so it does not. */
+const PaneDocumentIcon = ({ className }: { className?: string }) => (
+  <DirectionalIcon className={cn(className)} icon={PanelRightIcon} />
+);
+const PaneReviewIcon = ({ className }: { className?: string }) => (
+  <DirectionalIcon className={cn(className)} icon={PanelLeftIcon} />
+);
+
 // TODO(i18n): English until the review surface is localized as a whole.
-const SHOW_REVIEW_IN_MAIN_PANE_LABEL = "Show checks in main pane";
-const BACK_TO_DOCUMENT_LABEL = "Back to document";
+/** How each arrangement introduces itself in the control. Total over the pane
+ *  vocabulary, so a fourth arrangement has to state its glyph and its words
+ *  rather than rendering as a blank segment. */
+const PANE_PRESENTATION = {
+  document: {
+    icon: PaneDocumentIcon,
+    label: "Panel: findings beside the document",
+  },
+  review: { icon: PaneReviewIcon, label: "Main: findings in the wide pane" },
+  margin: {
+    icon: StickyNoteIcon,
+    label: "Margin: findings beside their clauses",
+  },
+} as const satisfies Record<
+  DocumentPane,
+  { icon: ComponentType<{ className?: string }>; label: string }
+>;
+
+/** The order the control offers them, narrowest column first. */
+const PANE_ORDER = [
+  DOCUMENT_PANE.document,
+  DOCUMENT_PANE.review,
+  DOCUMENT_PANE.margin,
+] as const satisfies readonly DocumentPane[];
+
+type UnofferedPane = Exclude<DocumentPane, (typeof PANE_ORDER)[number]>;
+true satisfies UnofferedPane extends never ? true : never;
+
+const PANE_OPTIONS = PANE_ORDER.map((pane) => ({
+  value: pane,
+  icon: PANE_PRESENTATION[pane].icon,
+  label: PANE_PRESENTATION[pane].label,
+}));
 
 /**
  * Move the review between the panes. Two documents' worth of prose does not
  * fit an inspector column, so a reviewer reading passages side by side wants
- * the wide pane; a reviewer editing wants the document there instead.
+ * the wide pane; a reviewer editing wants the document there instead; and a
+ * reviewer reading the deal end to end wants the findings in the margin.
  */
 const PaneSwapToggle = ({ swap }: { swap: ReviewPaneSwap | null }) => {
   if (swap === null) {
     return null;
   }
-  const showingReview = swap.pane === DOCUMENT_PANE.review;
   return (
-    <Button
-      onClick={() =>
-        swap.onToggle(
-          showingReview ? DOCUMENT_PANE.document : DOCUMENT_PANE.review,
-        )
-      }
-      size="xs"
-      tooltip={
-        showingReview ? BACK_TO_DOCUMENT_LABEL : SHOW_REVIEW_IN_MAIN_PANE_LABEL
-      }
-      variant="ghost"
-    >
-      <DirectionalIcon
-        className="size-3.5"
-        icon={showingReview ? PanelRightIcon : PanelLeftIcon}
-      />
-      <span className="sr-only">
-        {showingReview
-          ? BACK_TO_DOCUMENT_LABEL
-          : SHOW_REVIEW_IN_MAIN_PANE_LABEL}
-      </span>
-    </Button>
+    <SegmentedIconToggle
+      onChange={swap.onToggle}
+      options={PANE_OPTIONS}
+      size="touch"
+      value={swap.pane}
+    />
   );
 };
 
@@ -2450,6 +2641,12 @@ const NoReviewIssues = () => {
 
 type ReviewResultListProps = {
   items: readonly ReviewResultItem[];
+  /** The reviewed document's blocks, in document order: the clause map's
+   *  x-axis. Empty until the editor hands its snapshot over. */
+  blocks: readonly FolioAIBlock[];
+  /** A finding another surface asked the list to open — a clause-map segment,
+   *  a sidenote. `null` when nobody asked. */
+  focusItemId: DocumentReviewFindingRow["id"] | null;
   references: readonly ReferenceFile[];
   perspective: ReviewPerspective;
   targetFileFieldId: string;
@@ -2469,12 +2666,15 @@ type ReviewResultListProps = {
     findingId: DocumentReviewFindingRow["id"],
     decision: DocumentReviewDecision,
   ) => void;
+  onSetFlags: SetReviewFindingFlags;
   onOpenReferenceCitation: (referenceFieldId: string, blockId: string) => void;
   onScrollToBlock: (blockId: string) => void;
 };
 
 const ReviewResultList = ({
   items,
+  blocks,
+  focusItemId,
   references,
   perspective,
   targetFileFieldId,
@@ -2486,6 +2686,7 @@ const ReviewResultList = ({
   onAcceptSuggestion,
   onAddCounterpartyNote,
   onDecide,
+  onSetFlags,
   onOpenReferenceCitation,
   onRejectSuggestion,
   onScrollToBlock,
@@ -2498,14 +2699,59 @@ const ReviewResultList = ({
   const [filter, setFilter] = useState<ReviewResultFilter>(
     deviations.length > 0 ? "deviations" : "coverage",
   );
-  const visibleItems = filter === "deviations" ? deviations : orderedItems;
+  // Narrows whichever list the tabs chose to one flag. Off by default: the
+  // chips exist to find flagged work again, not to hide anything on arrival.
+  const [flagFilter, setFlagFilter] = useState<ReviewFlag | null>(null);
   const [expandedId, setExpandedId] = useState(
     deviations.at(0)?.id ?? orderedItems.at(0)?.id ?? null,
   );
+
+  // A finding named from outside opens whatever filter shows it. Adjusted
+  // during render (React's own pattern) rather than in an effect, so the card
+  // is already open in the commit the request arrives in.
+  const [answeredFocusId, setAnsweredFocusId] = useState(focusItemId);
+  if (focusItemId !== answeredFocusId) {
+    setAnsweredFocusId(focusItemId);
+    if (focusItemId !== null) {
+      setExpandedId(focusItemId);
+      setFlagFilter(null);
+      if (!deviations.some((item) => item.id === focusItemId)) {
+        setFilter("coverage");
+      }
+    }
+  }
+
+  // Counted over the whole run rather than the chosen tab, so a chip's number
+  // means "flagged in this review" and does not move when the tab does.
+  const flagCounts = tallyReviewFlags(orderedItems);
+  const tabItems = filter === "deviations" ? deviations : orderedItems;
+  const visibleItems =
+    flagFilter === null
+      ? tabItems
+      : tabItems.filter((item) => item.flags.includes(flagFilter));
   const visibleExpandedId =
     expandedId === null || visibleItems.some((item) => item.id === expandedId)
       ? expandedId
       : (visibleItems.at(0)?.id ?? null);
+
+  // Bring the opened card into view. The detail panel carries the id and only
+  // exists once expanded, which the commit above has already done.
+  useExternalSyncEffect(() => {
+    if (focusItemId === null) {
+      return;
+    }
+    document
+      .querySelector(`#${CSS.escape(`review-result-${focusItemId}`)}`)
+      ?.scrollIntoView({ block: "nearest" });
+  }, [focusItemId]);
+
+  const openFinding = (findingId: DocumentReviewFindingRow["id"]) => {
+    setExpandedId(findingId);
+    if (!visibleItems.some((item) => item.id === findingId)) {
+      setFilter("coverage");
+      setFlagFilter(null);
+    }
+  };
 
   return (
     <section>
@@ -2528,6 +2774,34 @@ const ReviewResultList = ({
           />
         </div>
       </div>
+      <ReviewFlagFilterChips
+        counts={flagCounts}
+        onSelect={setFlagFilter}
+        selected={flagFilter}
+      />
+      {/* Where the listed findings actually fall in the document. The list is
+          ordered by severity; this is the only view of them in the order a
+          reader meets them. */}
+      <ReviewDealStrip
+        blocks={blocks}
+        findings={visibleItems.map((item) => ({
+          id: item.id,
+          title: item.title,
+          blockId: item.finding.citations.at(0)?.blockId ?? null,
+          severity: item.finding.severity,
+        }))}
+        onSelect={({ blockId, findingId }) => {
+          onScrollToBlock(blockId);
+          // The strip hands back the id it was given; resolving it against the
+          // listed items is what turns it back into a row this list can open.
+          const item = visibleItems.find(
+            (candidate) => candidate.id === findingId,
+          );
+          if (item !== undefined) {
+            openFinding(item.id);
+          }
+        }}
+      />
       <ul className="space-y-1.5">
         {visibleItems.map((item) => (
           <ReviewResultCard
@@ -2540,6 +2814,7 @@ const ReviewResultList = ({
             onAcceptSuggestion={onAcceptSuggestion}
             onAddCounterpartyNote={onAddCounterpartyNote}
             onDecide={onDecide}
+            onSetFlags={onSetFlags}
             onOpenReferenceCitation={onOpenReferenceCitation}
             onRejectSuggestion={onRejectSuggestion}
             onScrollToBlock={onScrollToBlock}
@@ -2600,6 +2875,65 @@ const FilterTab = ({
   );
 };
 
+/**
+ * One chip per reviewer flag, with how many findings wear it.
+ *
+ * Absent entirely until something is flagged: a row of five zeroes is chrome
+ * for a feature nobody has used yet. Once it appears every flag keeps its
+ * chip, so clearing the last of one does not make the row jump.
+ *
+ * Glyph and count only — the name is the accessible name and the tooltip. Five
+ * named pills would wrap the pane twice and outweigh the findings they filter.
+ */
+const ReviewFlagFilterChips = ({
+  counts,
+  selected,
+  onSelect,
+}: {
+  counts: ReviewFlagTally;
+  selected: ReviewFlag | null;
+  onSelect: (flag: ReviewFlag | null) => void;
+}) => {
+  const format = useFormatter();
+  const getFlagLabel = useReviewFlagLabel();
+  if (!REVIEW_FLAGS.some((flag) => counts[flag] > 0)) {
+    return null;
+  }
+
+  return (
+    <div className="mb-2 flex flex-wrap items-center gap-1 px-1">
+      {REVIEW_FLAGS.map((flag) => {
+        const active = selected === flag;
+        const { color, icon: Icon } = REVIEW_FLAG_PRESENTATION[flag];
+        const label = getFlagLabel(flag);
+        return (
+          <Tooltip
+            content={label}
+            key={flag}
+            render={
+              <button
+                aria-label={label}
+                aria-pressed={active}
+                className={cn(
+                  "text-muted-foreground flex min-h-11 items-center gap-1 rounded-full border px-2.5 text-xs tabular-nums transition-colors",
+                  active
+                    ? "border-border bg-muted text-foreground"
+                    : "hover:bg-muted/70 border-transparent",
+                )}
+                onClick={() => onSelect(active ? null : flag)}
+                type="button"
+              />
+            }
+          >
+            <Icon className="size-3.5 shrink-0" style={{ color }} />
+            {format.number(counts[flag])}
+          </Tooltip>
+        );
+      })}
+    </div>
+  );
+};
+
 type ReviewResultCardProps = {
   item: ReviewResultItem;
   references: readonly ReferenceFile[];
@@ -2622,6 +2956,7 @@ type ReviewResultCardProps = {
     findingId: DocumentReviewFindingRow["id"],
     decision: DocumentReviewDecision,
   ) => void;
+  onSetFlags: SetReviewFindingFlags;
   onToggle: () => void;
   onOpenReferenceCitation: (referenceFieldId: string, blockId: string) => void;
   onScrollToBlock: (blockId: string) => void;
@@ -2658,6 +2993,7 @@ const ReviewResultCard = ({
   onAcceptSuggestion,
   onAddCounterpartyNote,
   onDecide,
+  onSetFlags,
   onOpenReferenceCitation,
   onRejectSuggestion,
   onScrollToBlock,
@@ -2718,6 +3054,10 @@ const ReviewResultCard = ({
           }
           label={
             <>
+              <ReviewFlagGlyphs
+                className="flex shrink-0 items-center gap-1"
+                flags={item.flags}
+              />
               {item.decision !== REVIEW_DECISION.OPEN && (
                 <span className={POSITION_HEADER_META_CLASS}>
                   {t(DECISION_LABEL[item.decision])}
@@ -2765,9 +3105,12 @@ const ReviewResultCard = ({
               passages: finding.citations,
             }}
           />
+          {/* One sentence. The comparison is what the card is for; the
+              reasoning behind it is a click away and not in the way of the
+              next finding. */}
           {caption !== null && (
             <p className="text-muted-foreground text-sm leading-6 text-pretty">
-              <BidiText as="span">{caption}</BidiText>
+              <BidiText as="span">{firstSentence(caption)}</BidiText>
             </p>
           )}
           {/* The standard's own passages did not agree with each other, which
@@ -2777,18 +3120,11 @@ const ReviewResultCard = ({
               {t("inspector.review.referencesDisagree")}
             </p>
           )}
-          {typeof finding.recommendation === "string" && (
-            <p className="text-foreground text-sm leading-6 text-pretty">
-              <span className="text-foreground-strong-muted font-medium">
-                {RECOMMENDATION_LABEL}
-              </span>{" "}
-              {finding.recommendation}
-            </p>
-          )}
-          <MatchedRefLine matchedRef={finding.matchedRef} />
-          <NegotiationBlock
+          <WhyDisclosure
+            caption={caption}
+            finding={finding}
+            id={detailId}
             negotiation={negotiation}
-            verdict={finding.verdict}
           />
           <ReviewCardActions
             decisionPending={decisionPending}
@@ -2814,6 +3150,7 @@ const ReviewResultCard = ({
               })
             }
             onDecide={(decision) => onDecide(item.id, decision)}
+            onSetFlags={(flags) => onSetFlags(item.id, item.decision, flags)}
             onRejectSuggestion={onRejectSuggestion}
             onScrollToBlock={onScrollToBlock}
             suggestion={suggestion}
@@ -2822,6 +3159,98 @@ const ReviewResultCard = ({
         </div>
       )}
     </li>
+  );
+};
+
+/**
+ * Everything behind the card's one caption sentence.
+ *
+ * The card answers "what is different"; this answers "why we say so" — the
+ * full reasoning, the rule or passage the verdict was decided by, what to say
+ * about it, and what to do. Collapsed, it costs one text button; the reviewer
+ * who trusts the comparison never pays for the argument behind it.
+ */
+const WhyDisclosure = ({
+  caption,
+  finding,
+  id,
+  negotiation,
+}: {
+  /** The whole caption, of which the card showed the first sentence. */
+  caption: string | null;
+  finding: ReviewFinding;
+  /** The card's detail id; the panel derives its own from it. */
+  id: string;
+  negotiation: Negotiation | undefined;
+}) => {
+  const [open, setOpen] = useState(false);
+  const panelId = `${id}-why`;
+  // The rationale behind a comparison caption is a second text the card never
+  // showed; behind a rationale caption it is the caption itself.
+  const rationale =
+    finding.explanation?.type === "comparison" ? finding.rationale : null;
+  const fullCaption =
+    caption !== null && firstSentence(caption) !== caption.trim()
+      ? caption
+      : null;
+  const hasNegotiation =
+    negotiation !== undefined &&
+    finding.verdict !== null &&
+    isNegotiableVerdict(finding.verdict);
+  const hasWhy =
+    fullCaption !== null ||
+    (rationale !== null && rationale.length > 0) ||
+    finding.matchedRef !== undefined ||
+    typeof finding.recommendation === "string" ||
+    hasNegotiation;
+  if (!hasWhy) {
+    return null;
+  }
+
+  return (
+    <div>
+      <button
+        aria-controls={panelId}
+        aria-expanded={open}
+        className="text-muted-foreground hover:text-foreground -mx-1 flex min-h-11 items-center gap-1 px-1 text-xs transition-colors"
+        onClick={() => setOpen(!open)}
+        type="button"
+      >
+        <DirectionalIcon
+          className={cn("size-3.5 transition-transform", open && "rotate-90")}
+          flip={!open}
+          icon={ChevronRightIcon}
+        />
+        {WHY_LABEL}
+      </button>
+      {open && (
+        <div className="space-y-2" id={panelId}>
+          {fullCaption !== null && (
+            <p className="text-muted-foreground text-sm leading-6 text-pretty">
+              <BidiText as="span">{fullCaption}</BidiText>
+            </p>
+          )}
+          {rationale !== null && rationale.length > 0 && (
+            <p className="text-muted-foreground text-sm leading-6 text-pretty">
+              <BidiText as="span">{rationale}</BidiText>
+            </p>
+          )}
+          <MatchedRefLine matchedRef={finding.matchedRef} />
+          <NegotiationBlock
+            negotiation={negotiation}
+            verdict={finding.verdict}
+          />
+          {typeof finding.recommendation === "string" && (
+            <p className="text-foreground text-sm leading-6 text-pretty">
+              <span className="text-foreground-strong-muted font-medium">
+                {RECOMMENDATION_LABEL}
+              </span>{" "}
+              {finding.recommendation}
+            </p>
+          )}
+        </div>
+      )}
+    </div>
   );
 };
 
@@ -2845,6 +3274,7 @@ type ReviewCardActionsProps = {
   onAddCounterpartyNote: (note: string) => void;
   onAskInChat: () => void;
   onDecide: (decision: DocumentReviewDecision) => void;
+  onSetFlags: (flags: readonly ReviewFlag[]) => void;
   onScrollToBlock: (blockId: string) => void;
 };
 
@@ -2867,6 +3297,7 @@ const ReviewCardActions = ({
   onAddCounterpartyNote,
   onAskInChat,
   onDecide,
+  onSetFlags,
   onRejectSuggestion,
   onScrollToBlock,
 }: ReviewCardActionsProps) => {
@@ -2909,6 +3340,9 @@ const ReviewCardActions = ({
           />
         </>
       )}
+      {!readOnly && (
+        <FindingFlagMenu flags={item.flags} onSetFlags={onSetFlags} />
+      )}
       <Button
         className="text-muted-foreground hover:text-foreground order-last ms-auto h-7 px-2 text-xs"
         onClick={onAskInChat}
@@ -2921,6 +3355,56 @@ const ReviewCardActions = ({
     </section>
   );
 };
+
+/**
+ * The reviewer flags on this finding, set through the same rows the files
+ * table's cell menu offers — one vocabulary, one control.
+ *
+ * A flag is orthogonal to the decision: it survives accepting, dismissing and
+ * reopening, and it carries onto the next run's finding when that run repeats
+ * this one.
+ */
+const FindingFlagMenu = ({
+  flags,
+  onSetFlags,
+}: {
+  flags: readonly ReviewFlag[];
+  onSetFlags: (flags: readonly ReviewFlag[]) => void;
+}) => (
+  <Menu>
+    <MenuTrigger
+      render={
+        <Button
+          className="text-muted-foreground hover:text-foreground h-7 px-2 text-xs"
+          size="sm"
+          variant="ghost"
+        />
+      }
+    >
+      {flags.length > 0 ? (
+        <ReviewFlagGlyphs
+          className="me-1 flex items-center gap-1"
+          flags={flags}
+        />
+      ) : (
+        <FlagIcon className="me-1 size-3.5" />
+      )}
+      {FLAG_FINDING_LABEL}
+    </MenuTrigger>
+    <MenuPopup className="min-w-44">
+      <ReviewFlagMenuItems
+        active={flags}
+        onToggle={(flag) =>
+          onSetFlags(
+            flags.includes(flag)
+              ? flags.filter((current) => current !== flag)
+              : [...flags, flag],
+          )
+        }
+      />
+    </MenuPopup>
+  </Menu>
+);
 
 /**
  * Which resolution a finding offers, decided by what its fix became.

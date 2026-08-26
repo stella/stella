@@ -8,6 +8,8 @@
  * an already active run (409).
  */
 
+import type { ReviewFlag } from "@stll/api-contract";
+
 import type {
   ReferenceFile,
   ReviewPerspective,
@@ -207,6 +209,9 @@ export type RestoredReviewFinding = {
   positionId: string;
   title: string;
   decision: DocumentReviewDecision;
+  /** The reviewer flags on this finding: the same vocabulary the files table's
+   *  cell flags use, set beside the decision rather than instead of it. */
+  flags: readonly ReviewFlag[];
   applicationStatus: DocumentReviewApplicationStatus;
   /** The staged DOCX suggestion carrying this finding's fix, when it has one. */
   suggestionId: string | null;
@@ -233,6 +238,7 @@ export const restoreReviewRun = ({
     positionId: row.positionId,
     title: row.positionTitle,
     decision: row.decision,
+    flags: row.flags,
     applicationStatus: row.applicationStatus,
     suggestionId: row.suggestionId,
     finding: row.payload.finding,
@@ -307,6 +313,7 @@ export const applyFindingDecision = (
     return {
       ...finding,
       decision: decided.decision,
+      flags: decided.flags,
       decidedBy: decided.decidedBy,
       decidedAt: decided.decidedAt,
       applicationStatus: decided.applicationStatus,

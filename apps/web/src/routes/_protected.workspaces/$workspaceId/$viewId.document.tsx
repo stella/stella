@@ -51,6 +51,7 @@ import {
   DOCUMENT_PANE,
   DOCUMENT_PANE_SEARCH_VALUES,
 } from "@/components/inspector/document-pane";
+import type { DocumentPane } from "@/components/inspector/document-pane";
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
 import type { FileFacet } from "@/components/inspector/inspector-store-types";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
@@ -356,6 +357,18 @@ const InspectorFieldLifecycle = ({ fieldId }: { fieldId: string }) => {
   return null;
 };
 
+/**
+ * Which facet the document's inspector tab opens on, per arrangement. Total
+ * over the pane vocabulary so a new arrangement cannot leave the inspector on
+ * whatever the previous one happened to open; `undefined` is the tab's own
+ * default, which the unswapped arrangement keeps.
+ */
+const INSPECTOR_FACET_BY_PANE = {
+  document: undefined,
+  review: "preview",
+  margin: "playbook",
+} as const satisfies Record<DocumentPane, FileFacet | undefined>;
+
 type InspectorFileOpenLifecycleProps = {
   entityId: string;
   fieldId: string;
@@ -633,6 +646,11 @@ function RouteComponentInner({
   // and the document moves to the inspector's preview. Only a DOCX has a
   // review to show, so anything else reads as the default arrangement.
   const showsReviewPane = pane === DOCUMENT_PANE.review && isDocxFile;
+  // Which facet the document's inspector tab opens on in each arrangement:
+  // the document itself exactly when this column is not showing it, and the
+  // review otherwise. `undefined` leaves the tab's own default alone, which is
+  // what a file with no review to show wants.
+  const inspectorFacet = isDocxFile ? INSPECTOR_FACET_BY_PANE[pane] : undefined;
   const usesNativeDocxDisplay = isDocxFile;
   const officeViewerFormat = getNativeOfficeViewerFormat(activeMimeType);
   const filePropertyId =
@@ -729,8 +747,9 @@ function RouteComponentInner({
         <InspectorFileOpenLifecycle
           entityId={entityId}
           // In the swapped arrangement the inspector is where the document is
-          // read, so the tab opens on its preview rather than its metadata.
-          facet={showsReviewPane ? "preview" : undefined}
+          // read, so the tab opens on its preview rather than its metadata; in
+          // the margin arrangement it is where the findings are.
+          facet={inspectorFacet}
           fieldId={fieldId}
           fileLabel={activeFileLabel}
           key={`${fieldId}:${filePropertyId}:${activeMimeType}:${activePdfFileId}:${activeFileLabel}:${pane}`}
