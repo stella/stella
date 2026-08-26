@@ -25,10 +25,6 @@ const readManifestDependencies = (manifestPath: string): string[] => {
 
 const getDependencyManifestPaths = (root: string): string[] => {
   const manifests = [path.join(root, "package.json")];
-  const docsMcpManifest = path.join(root, ".claude", "mcp", "package.json");
-  if (existsSync(docsMcpManifest)) {
-    manifests.push(docsMcpManifest);
-  }
   for (const workspaceRoot of ["apps", "packages"]) {
     const directory = path.join(root, workspaceRoot);
     for (const entry of readdirSync(directory, { withFileTypes: true })) {
