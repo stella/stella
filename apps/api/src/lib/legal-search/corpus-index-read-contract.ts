@@ -2,13 +2,13 @@ import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-cont
 import { corpusIndexClusterForGeneration } from "@/api/lib/legal-search/corpus-generation-contract";
 import { requireCorpusIndexManifest } from "@/api/lib/legal-search/corpus-index-manifest";
 
-type CaseLawIndexReadContract = {
+export type CaseLawIndexReadContract = {
   family: "case_law";
   openingPassageQuery: string;
   yearFacetField: string;
 };
 
-type LegislationIndexReadContract = {
+export type LegislationIndexReadContract = {
   family: "legislation";
   openingPassageQuery: string;
 };
@@ -23,10 +23,22 @@ export type CorpusIndexReadContract =
  * every field name from the immutable manifest so readers cannot drift from
  * writers when a generation changes shape.
  */
-export const corpusIndexReadContract = (
+export function corpusIndexReadContract(
+  family: "case_law",
+  generation: string,
+): CaseLawIndexReadContract;
+export function corpusIndexReadContract(
+  family: "legislation",
+  generation: string,
+): LegislationIndexReadContract;
+export function corpusIndexReadContract(
   family: CorpusFamily,
   generation: string,
-): CorpusIndexReadContract => {
+): CorpusIndexReadContract;
+export function corpusIndexReadContract(
+  family: CorpusFamily,
+  generation: string,
+): CorpusIndexReadContract {
   const cluster = corpusIndexClusterForGeneration(family, generation);
   if (cluster === "q08") {
     return family === "case_law"
@@ -54,4 +66,4 @@ export const corpusIndexReadContract = (
     default:
       return manifest satisfies never;
   }
-};
+}
