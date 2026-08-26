@@ -10,6 +10,7 @@ fi
 repo_root="$(cd "$(dirname "$0")/.." && pwd)"
 readonly repo_root
 readonly constraints_migration="20260825220000_better_auth_17_constraints"
+readonly constraints_sql="$repo_root/apps/api/drizzle/$constraints_migration/migration.sql"
 
 if [[ -z "${DATABASE_URL:-}" ]]; then
   echo "DATABASE_URL is required" >&2
@@ -20,12 +21,27 @@ if [[ ! "$DATABASE_URL" =~ @127\.0\.0\.1:[0-9]+/ ]]; then
   exit 1
 fi
 
-latest_migration="$(
-  find "$repo_root/apps/api/drizzle" -mindepth 1 -maxdepth 1 -type d -name '20*' \
-    -exec basename {} \; | sort | tail -1
+if command -v sha256sum >/dev/null 2>&1; then
+  constraints_hash="$(sha256sum "$constraints_sql" | awk '{ print $1 }')"
+elif command -v shasum >/dev/null 2>&1; then
+  constraints_hash="$(shasum -a 256 "$constraints_sql" | awk '{ print $1 }')"
+else
+  echo "sha256sum or shasum is required" >&2
+  exit 1
+fi
+readonly constraints_hash
+
+recorded_constraints="$(
+  psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -At \
+    -v constraints_migration="$constraints_migration" \
+    -v constraints_hash="$constraints_hash" <<'SQL'
+SELECT count(*) FROM drizzle.__drizzle_migrations
+WHERE name = :'constraints_migration'
+  AND hash = :'constraints_hash';
+SQL
 )"
-if [[ "$latest_migration" != "$constraints_migration" ]]; then
-  echo "Expected $constraints_migration to remain the latest migration; found $latest_migration" >&2
+if [[ "$recorded_constraints" -ne 1 ]]; then
+  echo "Expected exactly one matching Better Auth constraints migration receipt" >&2
   exit 1
 fi
 
@@ -34,7 +50,9 @@ recorded_before="$(
     'SELECT count(*) FROM drizzle.__drizzle_migrations'
 )"
 
-psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL' >/dev/null
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+  -v constraints_migration="$constraints_migration" \
+  -v constraints_hash="$constraints_hash" <<'SQL' >/dev/null
 BEGIN;
 DROP INDEX "account_issuer_account_id_uidx";
 ALTER TABLE "account"
@@ -49,7 +67,8 @@ VALUES (
   'constraint-retry-user', NULL, now()
 );
 DELETE FROM drizzle.__drizzle_migrations
-WHERE id = (SELECT max(id) FROM drizzle.__drizzle_migrations);
+WHERE name = :'constraints_migration'
+  AND hash = :'constraints_hash';
 COMMIT;
 SQL
 
@@ -94,7 +113,9 @@ SQL
   bun run src/db/migrate.ts
 )
 
-psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL' >/dev/null
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+  -v constraints_migration="$constraints_migration" \
+  -v constraints_hash="$constraints_hash" <<'SQL' >/dev/null
 BEGIN;
 ALTER TABLE "account"
   ALTER COLUMN "issuer" DROP NOT NULL;
@@ -102,7 +123,8 @@ ALTER TABLE "account"
   ADD CONSTRAINT "account_issuer_not_null_check"
   CHECK ("issuer" IS NOT NULL) NOT VALID;
 DELETE FROM drizzle.__drizzle_migrations
-WHERE id = (SELECT max(id) FROM drizzle.__drizzle_migrations);
+WHERE name = :'constraints_migration'
+  AND hash = :'constraints_hash';
 COMMIT;
 SQL
 

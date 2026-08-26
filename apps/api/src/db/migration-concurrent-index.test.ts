@@ -84,6 +84,10 @@ const APPROVED_PROCEDURAL_STATEMENTS = new Set([
   // body is static DDL; the conditional makes the file retryable after the
   // VALIDATE that follows it outside the migrator transaction.
   "20260818090000_case_law_decision_date_bounds/migration.sql:31f2786a7f7aed2d2e55bd3161acad6ad49e606ec1bc75e9235de07cdadd96e0",
+  // Fails the Better Auth cutover before any constraint or index state is
+  // committed when the trusted issuer backfill is incomplete. The static body
+  // performs one bounded existence read and raises; it executes no dynamic SQL.
+  "20260825220000_better_auth_17_constraints/migration.sql:4c1e0d5fdbb50e29863c067586c405148beb02f76a2af8ebbced851a866abc13",
 ]);
 
 type TimeoutState = "bounded" | "unbounded" | "unset";
