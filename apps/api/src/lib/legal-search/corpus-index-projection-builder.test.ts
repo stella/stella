@@ -51,6 +51,10 @@ const LEGISLATION_INPUT = {
   versionValidTo: null,
   eli: "eli/cz/sb/2012/89",
 } as const satisfies LegislationV2ProjectionInput;
+const DATED_CASE_LAW_INPUT = {
+  ...CASE_LAW_INPUT,
+  decisionDate: "2008-01-30",
+} as const satisfies CaseLawV5ProjectionInput;
 
 const manifestFields = (family: "case_law" | "legislation"): Set<string> =>
   new Set(
@@ -61,7 +65,7 @@ const manifestFields = (family: "case_law" | "legislation"): Set<string> =>
 
 test("case-law v5 emits exact attempt identity and one opening passage", () => {
   const documents = buildCaseLawV5ProjectionDocuments({
-    input: CASE_LAW_INPUT,
+    input: DATED_CASE_LAW_INPUT,
     payload: {
       text: `${"první ".repeat(400)}\n\n${"druhý ".repeat(400)}`,
       ast: null,
@@ -77,15 +81,30 @@ test("case-law v5 emits exact attempt identity and one opening passage", () => {
     jurisdiction: "CZE",
     is_opening: true,
     title: "4 As 3/2008 · NSS-4-AS-3-2008 — Nejvyšší správní soud",
-    decision_date_ts: UNDATED_DECISION_TIMESTAMP,
+    decision_date_ts: DATED_CASE_LAW_INPUT.decisionDate,
+    decision_year: 2008,
   });
   for (const [index, document] of documents.entries()) {
     expect(document.projection_revision).toBe(REVISION);
     expect("title" in document).toBe(index === 0);
+    expect("decision_year" in document).toBe(index === 0);
     expect(
       Object.keys(document).every((key) => manifestFields("case_law").has(key)),
     ).toBe(true);
   }
+});
+
+test("case-law v5 omits a year for an undated decision", () => {
+  const [document] = buildCaseLawV5ProjectionDocuments({
+    input: CASE_LAW_INPUT,
+    payload: { text: "Usnesení", ast: null },
+    revision: REVISION,
+  });
+
+  expect(document).toMatchObject({
+    decision_date_ts: UNDATED_DECISION_TIMESTAMP,
+  });
+  expect(document).not.toHaveProperty("decision_year");
 });
 
 test("legislation v2 emits one strict pointer-free document", () => {

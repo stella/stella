@@ -32,6 +32,7 @@ type CaseLawV5ProjectionDocument = SharedProjectionDocument & {
   court: string;
   decision_date?: string;
   decision_date_ts: string;
+  decision_year?: number;
   ecli?: string;
 };
 
@@ -74,11 +75,19 @@ type BuildCaseLawV5Options = ProjectionBuildBase & {
   input: CaseLawV5ProjectionInput;
 };
 
+const CASE_LAW_DECISION_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/u;
+
 export const buildCaseLawV5ProjectionDocuments = ({
   input,
   payload,
   revision,
 }: BuildCaseLawV5Options): CaseLawV5ProjectionDocument[] => {
+  if (
+    input.decisionDate !== null &&
+    !CASE_LAW_DECISION_DATE_PATTERN.test(input.decisionDate)
+  ) {
+    return panic("Case-law projection decision date is not canonical");
+  }
   const shared = {
     ...sharedFields(input, revision),
     case_number: input.caseNumber,
@@ -90,6 +99,8 @@ export const buildCaseLawV5ProjectionDocuments = ({
     ...(input.ecli === null ? {} : { ecli: input.ecli }),
   };
   const title = caseLawV5Title(input);
+  const decisionYear =
+    input.decisionDate === null ? null : Number(input.decisionDate.slice(0, 4));
   const chunks = chunkDocument({
     ast: hasUsableAst(payload.ast) ? payload.ast : null,
     fallbackText: payload.text,
@@ -101,6 +112,9 @@ export const buildCaseLawV5ProjectionDocuments = ({
       text: chunk.text,
       is_opening: chunk.seq === 0,
       ...(chunk.seq === 0 ? { title } : {}),
+      ...(chunk.seq === 0 && decisionYear !== null
+        ? { decision_year: decisionYear }
+        : {}),
       ...(chunk.anchorId === null ? {} : { anchor_id: chunk.anchorId }),
     });
   }
