@@ -17,7 +17,7 @@ import {
   timestampMatchesCasToken,
 } from "@/api/lib/db/timestamp-cas";
 import { ConcurrentModificationError } from "@/api/lib/errors/tagged-errors";
-import { corpusGeneration } from "@/api/lib/legal-search/corpus-family";
+import { legacyOperationalCorpusGeneration } from "@/api/lib/legal-search/corpus-family";
 import { writeCorpusDocument } from "@/api/lib/legal-search/corpus-storage";
 import type {
   DecisionSection,
@@ -503,7 +503,7 @@ const backfillCaseLawIndex = async (
   limit: number | null,
   bulk: { indexBatchSize: number | null; indexReadConcurrency: number | null },
 ): Promise<IndexBackfillResult> => {
-  const generation = corpusGeneration("case_law");
+  const generation = legacyOperationalCorpusGeneration("case_law");
   let indexed = 0;
 
   while (true) {
@@ -555,7 +555,7 @@ const backfillLegislationIndex = async (
   limit: number | null,
   bulk: { indexBatchSize: number | null; indexReadConcurrency: number | null },
 ): Promise<IndexBackfillResult> => {
-  const generation = corpusGeneration("legislation");
+  const generation = legacyOperationalCorpusGeneration("legislation");
   let indexed = 0;
 
   while (true) {

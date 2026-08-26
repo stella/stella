@@ -9,6 +9,8 @@ import type { CorpusFamily } from "@/api/lib/legal-search/corpus-family";
 import type { EmptyAst } from "@/api/lib/legal-search/document-types";
 import type { FacetBucket } from "@/api/lib/search/types";
 
+type LegalSearchDocumentFamily = Extract<CorpusFamily, "case_law">;
+
 /**
  * Provider-neutral contract for legal-corpus search. The app calls this,
  * never an engine directly, so swapping Postgres FTS for corpus index (and
@@ -21,8 +23,8 @@ export type LegalSearchEngine = (typeof LEGAL_SEARCH_ENGINES)[number];
 
 export type LegalSearchQuery = {
   query: string;
-  /** Document family to search; selects the index family. Default case_law. */
-  documentFamily?: CorpusFamily | undefined;
+  /** This provider contract returns decision-shaped case-law hits. */
+  documentFamily?: LegalSearchDocumentFamily | undefined;
   /** Maps from the decision's `country`. Required scoping in practice. */
   jurisdiction?: string | undefined;
   /** Maps from the decision's `decisionType`. */
@@ -103,8 +105,8 @@ export type LegalDocumentContext = {
  * cacheable for minutes.
  */
 export type LegalBrowseFacetsQuery = {
-  /** Document family to facet; selects the index family. Default case_law. */
-  documentFamily?: CorpusFamily | undefined;
+  /** Browse facets currently describe the case-law decision corpus. */
+  documentFamily?: LegalSearchDocumentFamily | undefined;
   /** Maps from the decision's `country`; scopes every facet to it. */
   jurisdiction?: string | undefined;
   /**

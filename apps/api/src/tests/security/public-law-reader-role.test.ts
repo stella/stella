@@ -8,7 +8,11 @@ import {
   stellaCaseLawReader,
   stellaPublicLawReader,
 } from "@/api/db/rls";
-import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
+import {
+  caseLawDecisions,
+  caseLawSources,
+  corpusIndexGenerations,
+} from "@/api/db/schema";
 import {
   readDecisionHandler,
   readDecisionTextColumnWritten,
@@ -35,6 +39,7 @@ import {
 } from "@/api/lib/case-law/language-alternate-counts";
 import { readNonRedistributableCaseLawSourceIdsQuery } from "@/api/lib/case-law/non-redistributable-sources";
 import { getCollator } from "@/api/lib/collation";
+import { readServingCorpusIndexGenerationTx } from "@/api/lib/legal-search/corpus-index-generation-store";
 import { rehydrateCorpusIndexProviderCandidates } from "@/api/lib/legal-search/corpus-index-provider";
 import { readDocumentContextDecision } from "@/api/lib/legal-search/document-context";
 import { readPgFtsBrowseFacets } from "@/api/lib/legal-search/pg-fts-browse-facets";
@@ -484,6 +489,44 @@ describe("public-law reader role", () => {
     expect(errorMessageChain(publisherPayloadRejection)).toContain(
       "legislation_documents",
     );
+  });
+
+  test("resolves both serving generations as the public-law reader role", async () => {
+    try {
+      await testDb.transaction(async (tx) => {
+        await tx.insert(corpusIndexGenerations).values([
+          {
+            family: "case_law",
+            generation: "case_law_v2",
+            cluster: "q08",
+            manifestDigest: "a".repeat(64),
+            status: "serving",
+          },
+          {
+            family: "legislation",
+            generation: "legislation_v1",
+            cluster: "q08",
+            manifestDigest: "a".repeat(64),
+            status: "serving",
+          },
+        ]);
+        await tx.execute(sql.raw(`SET LOCAL ROLE ${quoted(READER_ROLE)}`));
+        expect(
+          await readServingCorpusIndexGenerationTx(tx, "case_law"),
+        ).toMatchObject({ family: "case_law", generation: "case_law_v2" });
+        expect(
+          await readServingCorpusIndexGenerationTx(tx, "legislation"),
+        ).toMatchObject({
+          family: "legislation",
+          generation: "legislation_v1",
+        });
+        tx.rollback();
+      });
+    } catch (error) {
+      if (!(error instanceof TransactionRollbackError)) {
+        throw error;
+      }
+    }
   });
 
   test("executes the production legislation rehydration query as the reader role", async () => {
