@@ -1,0 +1,38 @@
+name: Documentation source policy
+
+# Quarantines for dependencies whose canonical docs have no llms.txt expire
+# within 31 days. Run the same Oxlint rule daily so an expiry is visible even
+# when no pull request happens to touch the dependency policy.
+
+on:
+  schedule:
+    - cron: "23 5 * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  docs-source-policy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: "package.json"
+
+      - name: Install dependencies
+        run: bun ci --ignore-scripts
+        env:
+          NPM_TOKEN: ""
+
+      - name: Check documentation source policy
+        run: bun run check:docs-sources

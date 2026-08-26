@@ -251,9 +251,9 @@ run_step "Oxlint override union guard" bun test \
 run_step "Ratchet guard" run_ratchet_guard
 run_step "Suppression waiver ledger" run_suppression_waiver_guard
 run_step "Crawl posture guard" run_crawl_posture_guard
-run_step "Documentation source dependency guard self-test" bun test \
-  scripts/docs-source-dependency-guard.test.ts
-run_step "Documentation source dependency guard" bun run check:docs-sources
+run_step "Documentation source policy rule self-test" bun test \
+  ./.oxlint-plugins/__tests__/docs-source-policy.test.ts
+run_step "Documentation source policy rule" bun run check:docs-sources
 run_step "exactMirror route guard" run_exact_mirror_guard
 run_step "MCP coverage guard" run_mcp_coverage_guard
 run_step "CLI registry snapshot" run_cli_registry_snapshot
