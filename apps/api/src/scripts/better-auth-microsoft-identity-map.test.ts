@@ -189,4 +189,12 @@ describe("parseBetterAuthMicrosoftIdentityMapArgs", () => {
       ]).status,
     ).toBe("error");
   });
+
+  test.each([
+    ["--output", "", "--writes-frozen"],
+    ["--output", "/rehearsal/identity-map.json", "--writes-frozen", "extra"],
+    ["--writes-frozen", "/rehearsal/identity-map.json", "--output"],
+  ])("rejects an invalid exact argument shape", (...args) => {
+    expect(parseBetterAuthMicrosoftIdentityMapArgs(args).status).toBe("error");
+  });
 });

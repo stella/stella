@@ -19,6 +19,7 @@ import {
 } from "jose";
 import { constants } from "node:fs";
 import { open, writeFile } from "node:fs/promises";
+import * as v from "valibot";
 
 import { hasSecureDatabaseTransport, resolveDatabaseUrl } from "@/api/db-url";
 import { safeOutboundFetchBytes } from "@/api/lib/safe-outbound-fetch";
@@ -40,6 +41,11 @@ const JWKS_FETCH_TIMEOUT_MS = 10_000;
 const JWKS_MAX_BYTES = 1024 * 1024;
 const TRANSACTION_TIMEOUT = "60s";
 const LOCK_TIMEOUT = "2s";
+const commandArgsSchema = v.strictTuple([
+  v.literal("--output"),
+  v.pipe(v.string(), v.minLength(1)),
+  v.literal("--writes-frozen"),
+]);
 
 class BetterAuthMicrosoftIdentityMapCommandError extends TaggedError(
   "BetterAuthMicrosoftIdentityMapCommandError",
@@ -56,20 +62,17 @@ class BetterAuthMicrosoftIdentityMapCommandError extends TaggedError(
 export const parseBetterAuthMicrosoftIdentityMapArgs = (
   args: readonly string[],
 ) => {
-  const outputPath = args.at(1);
-  return args.at(0) === "--output" &&
-    outputPath !== undefined &&
-    outputPath.length > 0 &&
-    args.at(2) === "--writes-frozen" &&
-    args.length === 3
-    ? Result.ok({ outputPath })
-    : Result.err(
-        new BetterAuthMicrosoftIdentityMapCommandError({
-          code: "invalid-arguments",
-          message:
-            "Usage: better-auth-microsoft-identity-map --output <private-path> --writes-frozen",
-        }),
-      );
+  const parsed = v.safeParse(commandArgsSchema, args);
+  if (!parsed.success) {
+    return Result.err(
+      new BetterAuthMicrosoftIdentityMapCommandError({
+        code: "invalid-arguments",
+        message:
+          "Usage: better-auth-microsoft-identity-map --output <private-path> --writes-frozen",
+      }),
+    );
+  }
+  return Result.ok({ outputPath: parsed.output[1] });
 };
 
 const readSources = async (database: ReturnType<typeof drizzle>) => {

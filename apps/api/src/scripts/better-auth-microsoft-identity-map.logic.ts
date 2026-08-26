@@ -221,13 +221,20 @@ export const deriveBetterAuthMicrosoftIdentityMap = async ({
     [];
   const accountRows = new Set<string>();
   const identityKeys = new Set<string>();
-  for (const source of sources) {
+  const sourceIterator = sources.values();
+  const processNextSource = async (): Promise<
+    Result<undefined, BetterAuthMicrosoftIdentityMapError>
+  > => {
+    const next = sourceIterator.next();
+    if (next.done) {
+      return Result.ok(undefined);
+    }
+    const source = next.value;
     if (accountRows.has(source.accountRowId)) {
       return invalidSourceState();
     }
     accountRows.add(source.accountRowId);
 
-    // oxlint-disable-next-line no-await-in-loop -- identity verification stays sequential to bound JWKS pressure and stop at the first untrusted row
     const verified = await verifySource({
       clientId,
       getSigningKey,
@@ -249,6 +256,11 @@ export const deriveBetterAuthMicrosoftIdentityMap = async ({
     }
     identityKeys.add(identityKey);
     microsoftAccounts.push(verified.value);
+    return processNextSource();
+  };
+  const processed = await processNextSource();
+  if (Result.isError(processed)) {
+    return processed;
   }
 
   microsoftAccounts.sort((left, right) => {
