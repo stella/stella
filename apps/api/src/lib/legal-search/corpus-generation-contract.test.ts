@@ -4,6 +4,7 @@ import {
   CORPUS_FAMILIES,
   CORPUS_INDEX_GENERATION_MAX_LENGTH,
   CORPUS_INDEX_GENERATION_STATUSES,
+  corpusIndexClusterForGeneration,
   isCorpusGeneration,
   parseCorpusFamily,
   parseCorpusIndexGenerationStatus,
@@ -11,6 +12,7 @@ import {
   QUICKWIT_CLUSTERS,
   requireQuickwitCluster,
 } from "@/api/lib/legal-search/corpus-generation-contract";
+import { CORPUS_INDEX_MANIFESTS } from "@/api/lib/legal-search/corpus-index-manifest";
 
 test("closed corpus and cluster values parse without a fallback", () => {
   for (const family of CORPUS_FAMILIES) {
@@ -45,4 +47,30 @@ test("generation names belong to exactly their declared family", () => {
       `case_law_v${"1".repeat(CORPUS_INDEX_GENERATION_MAX_LENGTH)}`,
     ),
   ).toBe(false);
+});
+
+test("every deployable generation selects one explicit Quickwit cluster", () => {
+  expect(corpusIndexClusterForGeneration("case_law", "case_law_v2")).toBe(
+    "q08",
+  );
+  expect(corpusIndexClusterForGeneration("case_law", "case_law_v5")).toBe(
+    "q09",
+  );
+  expect(corpusIndexClusterForGeneration("legislation", "legislation_v1")).toBe(
+    "q08",
+  );
+  expect(corpusIndexClusterForGeneration("legislation", "legislation_v2")).toBe(
+    "q09",
+  );
+  expect(() =>
+    corpusIndexClusterForGeneration("case_law", "case_law_v6"),
+  ).toThrow("Unknown case_law corpus index generation");
+});
+
+test("every final manifest generation selects its declared cluster", () => {
+  for (const manifest of Object.values(CORPUS_INDEX_MANIFESTS)) {
+    expect(
+      corpusIndexClusterForGeneration(manifest.family, manifest.generation),
+    ).toBe(manifest.cluster);
+  }
 });

@@ -2,6 +2,7 @@ import { panic, Result, TaggedError } from "better-result";
 
 import { envBase } from "@/api/env-base";
 import { fetchWithTimeout } from "@/api/lib/fetch";
+import type { QuickwitCluster } from "@/api/lib/legal-search/corpus-generation-contract";
 import {
   CORPUS_INDEX_COMMIT_TIMEOUT_SECS,
   type CorpusIndexConfig,
@@ -170,21 +171,42 @@ export type CorpusIndexClient = {
   ) => Promise<Result<CorpusIndexDeleteSettlement, CorpusIndexError>>;
 };
 
-const mutationBaseUrl = (): string => {
-  const value = envBase.CORPUS_INDEX_ENDPOINT;
+type CorpusIndexEndpointEnv =
+  | "CORPUS_INDEX_ENDPOINT"
+  | "CORPUS_INDEX_SEARCH_ENDPOINT"
+  | "CORPUS_INDEX_Q09_ENDPOINT"
+  | "CORPUS_INDEX_Q09_SEARCH_ENDPOINT";
+
+type CorpusIndexClusterConfig = {
+  mutationEnv: CorpusIndexEndpointEnv;
+  searchEnv: CorpusIndexEndpointEnv;
+};
+
+export const CORPUS_INDEX_CLUSTER_CONFIG = {
+  q08: {
+    mutationEnv: "CORPUS_INDEX_ENDPOINT",
+    searchEnv: "CORPUS_INDEX_SEARCH_ENDPOINT",
+  },
+  q09: {
+    mutationEnv: "CORPUS_INDEX_Q09_ENDPOINT",
+    searchEnv: "CORPUS_INDEX_Q09_SEARCH_ENDPOINT",
+  },
+} as const satisfies Record<QuickwitCluster, CorpusIndexClusterConfig>;
+
+const mutationBaseUrl = (cluster: QuickwitCluster): string => {
+  const { mutationEnv } = CORPUS_INDEX_CLUSTER_CONFIG[cluster];
+  const value = envBase[mutationEnv];
   if (value === undefined || value.length === 0) {
-    panic("CORPUS_INDEX_ENDPOINT is required for corpus index mutations");
+    panic(`${mutationEnv} is required for ${cluster} corpus index mutations`);
   }
   return value.replace(/(?<!\/)\/+$/u, "");
 };
 
-const searchBaseUrl = (): string => {
-  const value =
-    envBase.CORPUS_INDEX_SEARCH_ENDPOINT ?? envBase.CORPUS_INDEX_ENDPOINT;
+const searchBaseUrl = (cluster: QuickwitCluster): string => {
+  const { mutationEnv, searchEnv } = CORPUS_INDEX_CLUSTER_CONFIG[cluster];
+  const value = envBase[searchEnv] ?? envBase[mutationEnv];
   if (value === undefined || value.length === 0) {
-    panic(
-      "CORPUS_INDEX_SEARCH_ENDPOINT or CORPUS_INDEX_ENDPOINT is required when the corpus index search provider is selected",
-    );
+    panic(`${searchEnv} or ${mutationEnv} is required for ${cluster} search`);
   }
   return value.replace(/(?<!\/)\/+$/u, "");
 };
@@ -292,6 +314,7 @@ const parseRecordArray = (value: unknown): Record<string, unknown>[] | null => {
 type IngestReceiptMode = "compatible" | "exact-v2";
 
 type IngestBatchOptions = {
+  baseUrl: string;
   indexId: string;
   ndjson: string;
   commit: CorpusIndexCommitMode;
@@ -299,6 +322,7 @@ type IngestBatchOptions = {
 };
 
 const ingestBatch = async ({
+  baseUrl,
   indexId,
   ndjson,
   commit,
@@ -310,7 +334,7 @@ const ingestBatch = async ({
         .split("\n")
         .filter((line) => line.trim().length > 0).length;
       const response = await requestJson({
-        baseUrl: mutationBaseUrl(),
+        baseUrl,
         path: `/api/v1/${indexId}/ingest?commit=${commit}`,
         init: {
           method: "POST",
@@ -364,12 +388,12 @@ const ingestBatch = async ({
     catch: toCorpusIndexError,
   });
 
-const buildClient = (): CorpusIndexClient => ({
+const buildClient = (cluster: QuickwitCluster): CorpusIndexClient => ({
   createIndex: async (config) =>
     await Result.tryPromise({
       try: async () => {
         await requestJson({
-          baseUrl: mutationBaseUrl(),
+          baseUrl: mutationBaseUrl(cluster),
           path: "/api/v1/indexes",
           init: {
             method: "POST",
@@ -386,7 +410,7 @@ const buildClient = (): CorpusIndexClient => ({
     await Result.tryPromise({
       try: async () => {
         await requestJson({
-          baseUrl: mutationBaseUrl(),
+          baseUrl: mutationBaseUrl(cluster),
           path: `/api/v1/indexes/${indexId}`,
           init: { method: "DELETE" },
           timeoutMs: ADMIN_TIMEOUT_MS,
@@ -399,7 +423,7 @@ const buildClient = (): CorpusIndexClient => ({
     await Result.tryPromise({
       try: async () => {
         const response = await sendRequest({
-          baseUrl: mutationBaseUrl(),
+          baseUrl: mutationBaseUrl(cluster),
           path: `/api/v1/indexes/${indexId}`,
           init: { method: "GET" },
           timeoutMs: ADMIN_TIMEOUT_MS,
@@ -420,6 +444,7 @@ const buildClient = (): CorpusIndexClient => ({
 
   ingestBatch: async (indexId, ndjson, commit) =>
     await ingestBatch({
+      baseUrl: mutationBaseUrl(cluster),
       indexId,
       ndjson,
       commit,
@@ -428,6 +453,7 @@ const buildClient = (): CorpusIndexClient => ({
 
   ingestCommittedBatch: async (indexId, ndjson) =>
     await ingestBatch({
+      baseUrl: mutationBaseUrl(cluster),
       indexId,
       ndjson,
       commit: CORPUS_INDEX_COMMIT.waitFor,
@@ -458,7 +484,7 @@ const buildClient = (): CorpusIndexClient => ({
           body["snippet_fields"] = snippetFields.join(",");
         }
         const response = await requestJson({
-          baseUrl: searchBaseUrl(),
+          baseUrl: searchBaseUrl(cluster),
           path: `/api/v1/${indexId}/search`,
           init: {
             method: "POST",
@@ -507,7 +533,7 @@ const buildClient = (): CorpusIndexClient => ({
     await Result.tryPromise({
       try: async () => {
         const response = await requestJson({
-          baseUrl: searchBaseUrl(),
+          baseUrl: searchBaseUrl(cluster),
           path: `/api/v1/${indexId}/search`,
           init: {
             method: "POST",
@@ -532,7 +558,7 @@ const buildClient = (): CorpusIndexClient => ({
     await Result.tryPromise({
       try: async () => {
         const response = await requestJson({
-          baseUrl: mutationBaseUrl(),
+          baseUrl: mutationBaseUrl(cluster),
           path: `/api/v1/${indexId}/delete-tasks`,
           init: {
             method: "POST",
@@ -590,7 +616,7 @@ const buildClient = (): CorpusIndexClient => ({
           const currentSplitIds = new Set<string>();
           const readSplitPage = async (): Promise<void> => {
             const response = await requestJson({
-              baseUrl: mutationBaseUrl(),
+              baseUrl: mutationBaseUrl(cluster),
               path: `/api/v1/indexes/${indexId}/splits?offset=${offset}&limit=${SPLIT_PAGE_SIZE}&split_states=Published`,
               init: { method: "GET" },
               timeoutMs: remainingBudget(),
@@ -687,9 +713,16 @@ const buildClient = (): CorpusIndexClient => ({
     }),
 });
 
-let cached: CorpusIndexClient | null = null;
+const cachedClients = new Map<QuickwitCluster, CorpusIndexClient>();
 
-export const getCorpusIndexClient = (): CorpusIndexClient => {
-  cached ??= buildClient();
-  return cached;
+export const getCorpusIndexClient = (
+  cluster: QuickwitCluster,
+): CorpusIndexClient => {
+  const cached = cachedClients.get(cluster);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const client = buildClient(cluster);
+  cachedClients.set(cluster, client);
+  return client;
 };

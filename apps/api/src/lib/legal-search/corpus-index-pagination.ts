@@ -1,3 +1,4 @@
+import type { QuickwitCluster } from "@/api/lib/legal-search/corpus-generation-contract";
 import type { CorpusIndexHit } from "@/api/lib/legal-search/corpus-index-client";
 import { getCorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client";
 import type { RankedHit, ScoredCandidate } from "@/api/lib/legal-search/rerank";
@@ -14,6 +15,7 @@ type CorpusIndexRanking<TContext> = {
 };
 
 type CorpusIndexSearchPageInput<TContext> = {
+  cluster: QuickwitCluster;
   indexId: string;
   query: string;
   limit: number;
@@ -104,6 +106,7 @@ const windowAfterCursor = (
     : ranked.filter((hit) => isAfterSearchCursor(hit, parsedCursor));
 
 export const readCorpusIndexSearchPage = async <TContext>({
+  cluster,
   indexId,
   query,
   limit,
@@ -155,7 +158,7 @@ export const readCorpusIndexSearchPage = async <TContext>({
     // document-id order and the rank-based lexical score below would be
     // meaningless.
     // oxlint-disable-next-line no-await-in-loop -- offset pagination: each scan depends on the previous startOffset
-    const result = await getCorpusIndexClient().search({
+    const result = await getCorpusIndexClient(cluster).search({
       indexId,
       query,
       maxHits,

@@ -66,22 +66,16 @@ import {
   caseLawCorpusProjectionJoin,
   currentCaseLawCorpusProjection,
 } from "@/api/lib/legal-search/case-law-corpus-projection";
+import { corpusIndexClusterForGeneration } from "@/api/lib/legal-search/corpus-generation-contract";
 import type { CorpusIndexError } from "@/api/lib/legal-search/corpus-index-client";
 import { getCorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client";
+import { corpusIndexReadContract } from "@/api/lib/legal-search/corpus-index-read-contract";
 import {
   corpusIndexIdsFor,
   corpusIndexJurisdictions,
 } from "@/api/lib/legal-search/index-naming";
 import { logger } from "@/api/lib/observability/logger";
 import { isRecord } from "@/api/lib/type-guards";
-
-/**
- * Counts documents rather than passages. A passage-granular index holds
- * one entry per chunk and exactly one of them per document carries
- * `seq:0`, so this is the document count on the engine side whichever
- * granularity the family is indexed at.
- */
-const DOCUMENT_COUNT_QUERY = "seq:0";
 
 /** One short transaction's maximum accounting seed work. */
 export const CASE_LAW_CORPUS_INDEX_COUNT_BACKFILL_BATCH_SIZE = 1000;
@@ -365,6 +359,7 @@ const dispositionOf = (
 
 const readDeleteSettlement = async (
   scopedDb: ScopedDb,
+  generation: string,
   indexId: string,
 ): Promise<Result<IndexCensus["deleteSettlement"], CorpusIndexError>> => {
   const watermark = (
@@ -378,10 +373,9 @@ const readDeleteSettlement = async (
   if (watermark === undefined) {
     return Result.ok(null);
   }
-  const settlement = await getCorpusIndexClient().readDeleteSettlement(
-    indexId,
-    watermark.opstamp,
-  );
+  const settlement = await getCorpusIndexClient(
+    corpusIndexClusterForGeneration("case_law", generation),
+  ).readDeleteSettlement(indexId, watermark.opstamp);
   if (Result.isError(settlement)) {
     return Result.err(settlement.error);
   }
@@ -514,9 +508,11 @@ export const censusIndex = async ({
     generation,
     indexId,
   });
-  const counted = await getCorpusIndexClient().search({
+  const counted = await getCorpusIndexClient(
+    corpusIndexClusterForGeneration("case_law", generation),
+  ).search({
     indexId,
-    query: DOCUMENT_COUNT_QUERY,
+    query: corpusIndexReadContract("case_law", generation).openingPassageQuery,
     maxHits: 1,
   });
   if (Result.isError(counted)) {
@@ -525,7 +521,7 @@ export const censusIndex = async ({
 
   const shortfall = marked.markedIndexed - counted.value.numHits;
   const deleteSettlementResult = marked.hasPendingDelete
-    ? await readDeleteSettlement(scopedDb, indexId)
+    ? await readDeleteSettlement(scopedDb, generation, indexId)
     : Result.ok(null);
   if (Result.isError(deleteSettlementResult)) {
     return Result.err(deleteSettlementResult.error);

@@ -1,11 +1,12 @@
 import { Result } from "better-result";
 
-import {
-  type CorpusIndexHit,
-  getCorpusIndexClient,
+import type {
+  CorpusIndexClient,
+  CorpusIndexHit,
 } from "@/api/lib/legal-search/corpus-index-client";
 import { isCorpusIndexGeneration } from "@/api/lib/legal-search/index-naming";
 import { LIMITS } from "@/api/lib/limits";
+import { corpusIndexQueryDiffClientForGeneration } from "@/api/scripts/corpus-index-query-diff-client";
 import {
   divergedQueries,
   type GoldenQuery,
@@ -159,8 +160,6 @@ if (Result.isError(queries)) {
   fail(queries.error.message);
 }
 
-const client = getCorpusIndexClient();
-
 /**
  * Bounded offset scan until the top-N distinct documents are collected.
  * A passage-granularity index can put hundreds of one judgment's passages
@@ -173,6 +172,7 @@ const client = getCorpusIndexClient();
  * jurisdiction clause the search paths carry.
  */
 const runQuery = async (
+  client: CorpusIndexClient,
   generation: string,
   query: GoldenQuery,
 ): Promise<QueryRunOutcome> => {
@@ -216,11 +216,14 @@ const runQuery = async (
 };
 
 const rows: GoldenQueryDiffRow[] = [];
+const baseClient = corpusIndexQueryDiffClientForGeneration(baseGeneration);
+const candidateClient =
+  corpusIndexQueryDiffClientForGeneration(candidateGeneration);
 for (const query of queries.value) {
   // oxlint-disable-next-line no-await-in-loop -- one query at a time keeps the load on the engine bounded
   const [base, candidate] = await Promise.all([
-    runQuery(baseGeneration, query),
-    runQuery(candidateGeneration, query),
+    runQuery(baseClient, baseGeneration, query),
+    runQuery(candidateClient, candidateGeneration, query),
   ]);
   rows.push({
     query,

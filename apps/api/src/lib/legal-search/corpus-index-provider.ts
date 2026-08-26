@@ -21,6 +21,7 @@ import {
   currentCaseLawCorpusProjection,
 } from "@/api/lib/legal-search/case-law-corpus-projection";
 import { corpusGeneration } from "@/api/lib/legal-search/corpus-family";
+import { corpusIndexClusterForGeneration } from "@/api/lib/legal-search/corpus-generation-contract";
 import { corpusIndexBrowseFacets } from "@/api/lib/legal-search/corpus-index-facets";
 import { readCorpusIndexSearchPage } from "@/api/lib/legal-search/corpus-index-pagination";
 import { caseLawCorpusQuery } from "@/api/lib/legal-search/corpus-query";
@@ -172,6 +173,7 @@ const search = async (query: LegalSearchQuery): Promise<LegalSearchResult> => {
   }
 
   const searchPage = await readCorpusIndexSearchPage({
+    cluster: corpusIndexClusterForGeneration("case_law", generation),
     indexId,
     query: engineQuery,
     limit,

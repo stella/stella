@@ -7,14 +7,21 @@ import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId, SafeIdType } from "@/api/lib/branded-types";
 import type { TimestampCasToken } from "@/api/lib/db/timestamp-cas";
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-family";
+import { corpusIndexClusterForGeneration } from "@/api/lib/legal-search/corpus-generation-contract";
 import {
   CORPUS_INDEX_COMMIT,
   CorpusIndexError,
   getCorpusIndexClient,
 } from "@/api/lib/legal-search/corpus-index-client";
-import type { CorpusIndexCommitMode } from "@/api/lib/legal-search/corpus-index-client";
+import type {
+  CorpusIndexClient,
+  CorpusIndexCommitMode,
+} from "@/api/lib/legal-search/corpus-index-client";
 import { corpusIndexConfig } from "@/api/lib/legal-search/corpus-index-config";
-import { corpusIndexId } from "@/api/lib/legal-search/index-naming";
+import {
+  corpusIndexGeneration,
+  corpusIndexId,
+} from "@/api/lib/legal-search/index-naming";
 import { LIMITS } from "@/api/lib/limits";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -483,6 +490,7 @@ type CorpusIndexMarkMode<TBrand extends SafeIdType> =
     };
 
 type IngestBatchWithGuardArgs = {
+  client: CorpusIndexClient;
   commit: CorpusIndexCommitMode;
   indexId: string;
   ndjson: string;
@@ -503,9 +511,9 @@ const ingestBatchWithGuard = async ({
   indexId,
   ndjson,
   onLeaseLost,
+  client,
 }: IngestBatchWithGuardArgs): Promise<Result<void, CorpusIndexError>> => {
-  const effect = async () =>
-    await getCorpusIndexClient().ingestBatch(indexId, ndjson, commit);
+  const effect = async () => await client.ingestBatch(indexId, ndjson, commit);
   if (beforeRemoteEffect === undefined) {
     return await effect();
   }
@@ -745,21 +753,40 @@ export const createCorpusIndexer = <
 >(
   adapter: CorpusIndexAdapter<TBrand, TRow>,
 ) => {
+  const clientForGeneration = (generation: string): CorpusIndexClient =>
+    getCorpusIndexClient(
+      corpusIndexClusterForGeneration(adapter.family, generation),
+    );
+  const clientForIndexId = (indexId: string): CorpusIndexClient =>
+    clientForGeneration(corpusIndexGeneration(indexId));
+  const legacyWriterClientForGeneration = (
+    generation: string,
+  ): CorpusIndexClient => {
+    const cluster = corpusIndexClusterForGeneration(adapter.family, generation);
+    if (cluster !== "q08") {
+      return panic(
+        `Legacy ${adapter.family} corpus indexer cannot write final generation ${generation}`,
+      );
+    }
+    return getCorpusIndexClient(cluster);
+  };
+
   // Per-jurisdiction indexes are created on first write. Cache the ids we
   // have confirmed this process so we don't probe corpus index every batch.
   const ensuredIndexes = new Set<string>();
 
   const ensureIndex = async ({
     beforeRemoteEffect,
+    client,
     indexId,
   }: {
     beforeRemoteEffect?: GuardRemoteEffect;
+    client: CorpusIndexClient;
     indexId: string;
   }): Promise<Result<void, CorpusIndexError>> => {
     if (ensuredIndexes.has(indexId)) {
       return Result.ok(undefined);
     }
-    const client = getCorpusIndexClient();
     const indexExists = async () => await client.indexExists(indexId);
     const exists = beforeRemoteEffect
       ? await beforeRemoteEffect({
@@ -946,6 +973,7 @@ export const createCorpusIndexer = <
       };
 
   type RemoveTargets = {
+    client: CorpusIndexClient;
     indexId: string;
     operation: "delete" | "redact";
     scopedDb: ScopedDb;
@@ -961,6 +989,7 @@ export const createCorpusIndexer = <
 
   const removeManyWithOptions = async ({
     beforeRemoteEffect,
+    client,
     entityIds,
     indexId,
     onLeaseLost,
@@ -971,7 +1000,7 @@ export const createCorpusIndexer = <
       return Result.ok(undefined);
     }
     const deleteByQuery = async () =>
-      await getCorpusIndexClient().deleteByQuery(
+      await client.deleteByQuery(
         indexId,
         corpusDocumentsDeleteQuery(entityIds),
       );
@@ -1023,9 +1052,16 @@ export const createCorpusIndexer = <
     const { entityId, indexId, operation, scopedDb } = args;
     return await removeManyWithOptions(
       args.beforeRemoteEffect === undefined
-        ? { entityIds: [entityId], indexId, operation, scopedDb }
+        ? {
+            client: args.client,
+            entityIds: [entityId],
+            indexId,
+            operation,
+            scopedDb,
+          }
         : {
             beforeRemoteEffect: args.beforeRemoteEffect,
+            client: args.client,
             entityIds: [entityId],
             indexId,
             onLeaseLost: args.onLeaseLost,
@@ -1041,7 +1077,44 @@ export const createCorpusIndexer = <
     indexId: string,
     operation: "delete" | "redact" = "delete",
   ): Promise<Result<void, CorpusIndexError>> =>
-    await removeWithOptions({ entityId, scopedDb, indexId, operation });
+    await removeWithOptions({
+      client: clientForIndexId(indexId),
+      entityId,
+      indexId,
+      operation,
+      scopedDb,
+    });
+
+  type PublicRemoveWithOptionsArgs = {
+    indexId: string;
+    operation: "delete" | "redact";
+    scopedDb: ScopedDb;
+    entityId: SafeId<TBrand>;
+  } & RemoteEffectGuard;
+
+  const removeFenced = async (
+    args: PublicRemoveWithOptionsArgs,
+  ): Promise<Result<void, CorpusIndexError>> => {
+    const client = clientForIndexId(args.indexId);
+    if (args.beforeRemoteEffect === undefined) {
+      return await removeWithOptions({
+        client,
+        entityId: args.entityId,
+        indexId: args.indexId,
+        operation: args.operation,
+        scopedDb: args.scopedDb,
+      });
+    }
+    return await removeWithOptions({
+      beforeRemoteEffect: args.beforeRemoteEffect,
+      client,
+      entityId: args.entityId,
+      indexId: args.indexId,
+      onLeaseLost: args.onLeaseLost,
+      operation: args.operation,
+      scopedDb: args.scopedDb,
+    });
+  };
 
   /**
    * Index a batch of corpus-backed rows into the given generation. Two-query
@@ -1193,6 +1266,7 @@ export const createCorpusIndexer = <
     options: BackfillSelectedRowsOptions<TBrand, TRow>,
     timing: CorpusBackfillTiming,
   ): Promise<CorpusBackfillOutcome> => {
+    const client = legacyWriterClientForGeneration(generation);
     // Load text (S3) with bounded concurrency, then ingest one NDJSON batch.
     // A per-document read failure fails only that document; record it and let
     // the rest still commit.
@@ -1270,6 +1344,7 @@ export const createCorpusIndexer = <
         ...(options.type === "incremental"
           ? {}
           : { beforeRemoteEffect: options.beforeRemoteEffect }),
+        client,
         indexId,
       });
       timing.reserveMs += elapsedSince(reserveStartedAt);
@@ -1386,6 +1461,7 @@ export const createCorpusIndexer = <
                       indexId: unit.indexId,
                     }),
                 }),
+            client,
             entityIds: unit.entityIds,
             indexId: unit.indexId,
             operation: "delete",
@@ -1434,6 +1510,7 @@ export const createCorpusIndexer = <
                       indexId,
                     }),
                 }),
+            client,
             indexId,
             ndjson,
           });
@@ -1526,6 +1603,7 @@ export const createCorpusIndexer = <
                         indexId,
                       }),
                   }),
+              client,
               entityId: missedId,
               indexId,
               operation: "delete",
@@ -1585,6 +1663,6 @@ export const createCorpusIndexer = <
     backfillFenced,
     backfillRows,
     remove,
-    removeFenced: removeWithOptions,
+    removeFenced,
   };
 };

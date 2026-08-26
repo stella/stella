@@ -16,6 +16,7 @@ import {
   corpusStorageInvariantViolation,
   resolveCorpusStorageMode,
 } from "@/api/lib/corpus-storage-mode";
+import { parseCorpusIndexClusterForGeneration } from "@/api/lib/legal-search/corpus-generation-contract";
 import {
   QUERY_EXPANSION_MODES,
   type QueryExpansionMode,
@@ -166,6 +167,8 @@ export const envBaseServerSchema = {
   // admin endpoint below, which shared-corpus mode requires to stay unset.
   CORPUS_INDEX_SEARCH_ENDPOINT: v.optional(v.pipe(v.string(), v.url())),
   CORPUS_INDEX_ENDPOINT: v.optional(v.pipe(v.string(), v.url())),
+  CORPUS_INDEX_Q09_SEARCH_ENDPOINT: v.optional(v.pipe(v.string(), v.url())),
+  CORPUS_INDEX_Q09_ENDPOINT: v.optional(v.pipe(v.string(), v.url())),
   CORPUS_INDEX_S3_BUCKET: v.optional(v.string()),
   // Falls back to S3_BUCKET when unset (dev). Required when corpus
   // storage is on (enforced post-validation).
@@ -258,12 +261,15 @@ type EnvBaseInvariantInput = {
   CORPUS_INDEX_BACKPRESSURE_METRIC?: string | undefined;
   CORPUS_INDEX_BACKPRESSURE_NAMESPACE?: string | undefined;
   CORPUS_INDEX_ENDPOINT?: string | undefined;
+  CORPUS_INDEX_Q09_ENDPOINT?: string | undefined;
+  CORPUS_INDEX_Q09_SEARCH_ENDPOINT?: string | undefined;
   CORPUS_INDEX_SEARCH_ENDPOINT?: string | undefined;
   CORPUS_INDEXING_ENABLED: boolean;
   CORPUS_STORAGE_ENABLED: boolean;
   CORPUS_STORAGE_MODE?: CorpusStorageMode | undefined;
   DATABASE_URL: string;
   LEGAL_CORPUS_S3_BUCKET?: string | undefined;
+  LEGAL_SEARCH_INDEX_GENERATION: string;
   LEGAL_SEARCH_PROVIDER: "pg-fts" | "corpus-index";
   QUERY_EXPANSION_MODE: QueryExpansionMode;
   S3_ACCESS_KEY_ID?: string | undefined;
@@ -282,12 +288,15 @@ export const envBaseInvariantViolation = ({
   CORPUS_INDEX_BACKPRESSURE_METRIC,
   CORPUS_INDEX_BACKPRESSURE_NAMESPACE,
   CORPUS_INDEX_ENDPOINT,
+  CORPUS_INDEX_Q09_ENDPOINT,
+  CORPUS_INDEX_Q09_SEARCH_ENDPOINT,
   CORPUS_INDEX_SEARCH_ENDPOINT,
   CORPUS_INDEXING_ENABLED,
   CORPUS_STORAGE_ENABLED,
   CORPUS_STORAGE_MODE,
   DATABASE_URL,
   LEGAL_CORPUS_S3_BUCKET,
+  LEGAL_SEARCH_INDEX_GENERATION,
   LEGAL_SEARCH_PROVIDER,
   QUERY_EXPANSION_MODE,
   S3_ACCESS_KEY_ID,
@@ -355,6 +364,27 @@ export const envBaseInvariantViolation = ({
   if (!isDev && CORPUS_INDEX_SEARCH_ENDPOINT !== undefined) {
     return "CORPUS_INDEX_SEARCH_ENDPOINT is only supported in local development.";
   }
+  if (
+    CORPUS_INDEX_Q09_SEARCH_ENDPOINT !== undefined &&
+    !isTlsOrLoopbackUrl(CORPUS_INDEX_Q09_SEARCH_ENDPOINT, {
+      plaintextProtocol: "http:",
+      tlsProtocol: "https:",
+    })
+  ) {
+    return "CORPUS_INDEX_Q09_SEARCH_ENDPOINT must use HTTPS unless it targets a loopback address.";
+  }
+  if (!isDev && CORPUS_INDEX_Q09_SEARCH_ENDPOINT !== undefined) {
+    return "CORPUS_INDEX_Q09_SEARCH_ENDPOINT is only supported in local development.";
+  }
+  if (
+    CORPUS_INDEX_Q09_ENDPOINT !== undefined &&
+    !isTlsOrLoopbackUrl(CORPUS_INDEX_Q09_ENDPOINT, {
+      plaintextProtocol: "http:",
+      tlsProtocol: "https:",
+    })
+  ) {
+    return "CORPUS_INDEX_Q09_ENDPOINT must use HTTPS unless it targets a loopback address.";
+  }
   // REMOVAL CONDITION: delete this invariant in the PR that makes a corpus
   // cursor carry the dictionary version it was built against.
   //
@@ -371,11 +401,19 @@ export const envBaseInvariantViolation = ({
   if (hasPublicLawDatabaseUrl && LEGAL_SEARCH_PROVIDER !== "corpus-index") {
     return 'Public-law database URLs require LEGAL_SEARCH_PROVIDER="corpus-index".';
   }
-  if (hasPublicLawDatabaseUrl && CORPUS_INDEX_SEARCH_ENDPOINT === undefined) {
-    return "Public-law database URLs require CORPUS_INDEX_SEARCH_ENDPOINT.";
+  if (
+    hasPublicLawDatabaseUrl &&
+    CORPUS_INDEX_SEARCH_ENDPOINT === undefined &&
+    CORPUS_INDEX_Q09_SEARCH_ENDPOINT === undefined
+  ) {
+    return "Public-law database URLs require CORPUS_INDEX_SEARCH_ENDPOINT or CORPUS_INDEX_Q09_SEARCH_ENDPOINT.";
   }
-  if (hasPublicLawDatabaseUrl && CORPUS_INDEX_ENDPOINT !== undefined) {
-    return "CORPUS_INDEX_ENDPOINT must be unset when a public-law database URL is configured.";
+  if (
+    hasPublicLawDatabaseUrl &&
+    (CORPUS_INDEX_ENDPOINT !== undefined ||
+      CORPUS_INDEX_Q09_ENDPOINT !== undefined)
+  ) {
+    return "CORPUS_INDEX_ENDPOINT and CORPUS_INDEX_Q09_ENDPOINT must be unset when a public-law database URL is configured.";
   }
   if (hasPublicLawDatabaseUrl && CORPUS_INDEXING_ENABLED) {
     return "CORPUS_INDEXING_ENABLED must be false when a public-law database URL is configured.";
@@ -397,12 +435,37 @@ export const envBaseInvariantViolation = ({
   if (S3_CREDENTIALS_PROVIDER === "env" && !(hasAccessKey && hasSecretKey)) {
     return 'S3_CREDENTIALS_PROVIDER="env" requires static S3 credentials.';
   }
+  const caseLawCluster = parseCorpusIndexClusterForGeneration(
+    "case_law",
+    LEGAL_SEARCH_INDEX_GENERATION,
+  );
+  if (LEGAL_SEARCH_PROVIDER === "corpus-index" && caseLawCluster === null) {
+    return `Unknown case-law corpus index generation: ${LEGAL_SEARCH_INDEX_GENERATION}.`;
+  }
   if (
     LEGAL_SEARCH_PROVIDER === "corpus-index" &&
     CORPUS_INDEX_SEARCH_ENDPOINT === undefined &&
     CORPUS_INDEX_ENDPOINT === undefined
   ) {
-    return "LEGAL_SEARCH_PROVIDER=corpus-index requires CORPUS_INDEX_SEARCH_ENDPOINT or CORPUS_INDEX_ENDPOINT to be set.";
+    return "Serving legislation_v1 on q08 requires CORPUS_INDEX_SEARCH_ENDPOINT or CORPUS_INDEX_ENDPOINT.";
+  }
+  if (
+    LEGAL_SEARCH_PROVIDER === "corpus-index" &&
+    caseLawCluster === "q09" &&
+    CORPUS_INDEX_Q09_SEARCH_ENDPOINT === undefined &&
+    CORPUS_INDEX_Q09_ENDPOINT === undefined
+  ) {
+    return "Serving case_law_v5 on q09 requires CORPUS_INDEX_Q09_SEARCH_ENDPOINT or CORPUS_INDEX_Q09_ENDPOINT.";
+  }
+  if (CORPUS_INDEXING_ENABLED && CORPUS_INDEX_ENDPOINT === undefined) {
+    return "Corpus indexing requires CORPUS_INDEX_ENDPOINT for legislation_v1 on q08.";
+  }
+  if (
+    CORPUS_INDEXING_ENABLED &&
+    caseLawCluster === "q09" &&
+    CORPUS_INDEX_Q09_ENDPOINT === undefined
+  ) {
+    return "Indexing case_law_v5 on q09 requires CORPUS_INDEX_Q09_ENDPOINT.";
   }
 
   return corpusStorageInvariantViolation({

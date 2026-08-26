@@ -14,6 +14,7 @@ import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
+import { envBase } from "@/api/env-base";
 import {
   CENSUS_CYCLE_INTERVAL,
   CENSUS_DISPOSITION,
@@ -42,6 +43,7 @@ const NO_PENDING_DELETE = { count: 0, oldest: null } as const;
 /** Index ids the engine was asked to count, in request order. */
 let countedIndexIds: string[];
 let countedMaxHits: unknown[];
+let countedQueries: unknown[];
 
 const indexIdOfCountRequest = (url: string): string | undefined =>
   /\/api\/v1\/(?<indexId>[^/]+)\/search/u.exec(url)?.groups?.["indexId"];
@@ -76,6 +78,7 @@ const engineHolding = (
         typeof init?.body === "string" ? init.body : "{}",
       );
       countedMaxHits.push(body["max_hits"]);
+      countedQueries.push(body["query"]);
       return new Response(
         JSON.stringify({
           num_hits: numHits,
@@ -168,6 +171,7 @@ const databaseHolding = (
 beforeEach(() => {
   countedIndexIds = [];
   countedMaxHits = [];
+  countedQueries = [];
 });
 
 afterEach(() => {
@@ -231,6 +235,27 @@ describe("count seed driver", () => {
 });
 
 describe("index census", () => {
+  test("v5 counts the manifest opening passage", async () => {
+    engineHolding(10_000);
+    const generation = "case_law_v5";
+    const originalEndpoint = envBase.CORPUS_INDEX_Q09_ENDPOINT;
+    Object.assign(envBase, {
+      CORPUS_INDEX_Q09_ENDPOINT: "http://localhost:7291",
+    });
+    try {
+      const census = await censusIndex({
+        scopedDb: databaseHolding(10_000),
+        generation,
+        indexId: corpusIndexId(generation, "CZE"),
+      });
+      expect(census.isOk()).toBe(true);
+    } finally {
+      Object.assign(envBase, { CORPUS_INDEX_Q09_ENDPOINT: originalEndpoint });
+    }
+
+    expect(countedQueries).toEqual(["is_opening:true"]);
+  });
+
   test("noise inside the tolerance is not a shortfall", async () => {
     engineHolding(10_000 - CENSUS_TOLERANCE);
 

@@ -40,6 +40,7 @@ type CaseLawV5Manifest = CorpusIndexManifestBase & {
   projection: CorpusIndexProjectionContract & {
     layout: "passage";
     builderVersion: "case-law-passages-v1";
+    yearFacetField: "decision_year";
   };
   route: {
     type: "case_law_group";
@@ -85,6 +86,14 @@ const dateField = (name: string): CorpusIndexFieldMapping => ({
   stored: false,
   fast: true,
   input_formats: CORPUS_INDEX_DATE_INPUT_FORMATS,
+});
+
+const unsignedIntegerField = (name: string): CorpusIndexFieldMapping => ({
+  name,
+  type: "u64",
+  indexed: false,
+  stored: false,
+  fast: true,
 });
 
 const commonFields = (): CorpusIndexFieldMapping[] => [
@@ -174,6 +183,11 @@ const CASE_LAW_V5_INDEX_CONFIG = deepFreeze(
         rawField("case_number", { stored: false, fast: false }),
         rawField("court", { stored: false, fast: true }),
         dateField("decision_date"),
+        // Quickwit 0.9 supports only fixed, not calendar, date-histogram
+        // intervals. The projection emits this exact civil year on the one
+        // opening passage only, avoiding both leap-year drift and per-passage
+        // fast-field duplication for browse facets.
+        unsignedIntegerField("decision_year"),
         {
           ...dateField(DECISION_TIMESTAMP_FIELD),
           fast_precision: "seconds",
@@ -218,6 +232,7 @@ export const CORPUS_INDEX_MANIFESTS = deepFreeze({
       documentIdField: "document_id",
       projectionRevisionField: "projection_revision",
       openingField: "is_opening",
+      yearFacetField: "decision_year",
     },
     route: {
       type: "case_law_group",
