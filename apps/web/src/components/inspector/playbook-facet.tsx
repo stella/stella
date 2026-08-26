@@ -2696,14 +2696,25 @@ const ReviewResultList = ({
   // about the verdict moves a row, so a position keeps its place across runs.
   const orderedItems = sortReviewResultItems(items);
   const deviations = orderedItems.filter(isUndecidedDeviation);
-  const [filter, setFilter] = useState<ReviewResultFilter>(
-    deviations.length > 0 ? "deviations" : "coverage",
-  );
+  // A list mounted with a finding already named (a sidenote click swapped the
+  // pane) opens on that finding, in whichever tab shows it.
+  const focusedOnMount =
+    focusItemId !== null && orderedItems.some((item) => item.id === focusItemId)
+      ? focusItemId
+      : null;
+  const [filter, setFilter] = useState<ReviewResultFilter>(() => {
+    if (focusedOnMount !== null) {
+      return deviations.some((item) => item.id === focusedOnMount)
+        ? "deviations"
+        : "coverage";
+    }
+    return deviations.length > 0 ? "deviations" : "coverage";
+  });
   // Narrows whichever list the tabs chose to one flag. Off by default: the
   // chips exist to find flagged work again, not to hide anything on arrival.
   const [flagFilter, setFlagFilter] = useState<ReviewFlag | null>(null);
   const [expandedId, setExpandedId] = useState(
-    deviations.at(0)?.id ?? orderedItems.at(0)?.id ?? null,
+    focusedOnMount ?? deviations.at(0)?.id ?? orderedItems.at(0)?.id ?? null,
   );
 
   // A finding named from outside opens whatever filter shows it. Adjusted
