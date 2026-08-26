@@ -1,12 +1,16 @@
 import { describe, expect, test } from "bun:test";
 
-import { isClipboardSnapshot } from "../src/clipboard/clipboard-types";
+import {
+  CLIPBOARD_RETENTIONS,
+  isClipboardSnapshot,
+} from "../src/clipboard/clipboard-types";
 
 const snapshotWithWelcomeStatus = (welcomeStatus: unknown) => ({
   captureStatus: "active",
   groups: [],
   items: [],
   persistence: { status: "encrypted" },
+  retention: "month",
   sourceAppVisuals: [],
   welcomeStatus,
 });
@@ -28,5 +32,26 @@ describe("clipboard snapshot welcome state", () => {
     expect(isClipboardSnapshot(snapshotWithWelcomeStatus("initializing"))).toBe(
       false,
     );
+  });
+});
+
+describe("clipboard snapshot retention", () => {
+  test("accepts every native retention and rejects unknown ones", () => {
+    for (const retention of CLIPBOARD_RETENTIONS) {
+      expect(
+        isClipboardSnapshot({
+          ...snapshotWithWelcomeStatus("completed"),
+          retention,
+        }),
+      ).toBe(true);
+    }
+    for (const retention of [undefined, "forever", 30]) {
+      expect(
+        isClipboardSnapshot({
+          ...snapshotWithWelcomeStatus("completed"),
+          retention,
+        }),
+      ).toBe(false);
+    }
   });
 });

@@ -5,7 +5,7 @@ use tauri::{AppHandle, Emitter, State, WebviewWindow};
 use crate::{
   clipboard::{
     ClipboardAppState, ClipboardCaptureStatus, ClipboardGroup, ClipboardGroupColor,
-    ClipboardItem, ClipboardSnapshot, write_item,
+    ClipboardItem, ClipboardRetention, ClipboardSnapshot, write_item,
   },
   clipboard_window,
 };
@@ -55,6 +55,21 @@ pub fn clipboard_set_capture_status(
   let snapshot = {
     let mut manager = state.lock().map_err(|_| lock_error())?;
     manager.set_capture_status(status)?;
+    manager.snapshot()
+  };
+  let _ = window.emit(HISTORY_EVENT, ());
+  Ok(snapshot)
+}
+
+#[tauri::command]
+pub fn clipboard_set_retention(
+  retention: ClipboardRetention,
+  state: State<'_, ClipboardAppState>,
+  window: WebviewWindow,
+) -> Result<ClipboardSnapshot, String> {
+  let snapshot = {
+    let mut manager = state.lock().map_err(|_| lock_error())?;
+    manager.set_retention(retention)?;
     manager.snapshot()
   };
   let _ = window.emit(HISTORY_EVENT, ());

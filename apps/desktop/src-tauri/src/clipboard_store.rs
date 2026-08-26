@@ -115,7 +115,7 @@ impl ClipboardStore {
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::clipboard::{ClipboardCaptureStatus, ClipboardItem};
+  use crate::clipboard::{ClipboardCaptureStatus, ClipboardItem, ClipboardRetention};
   use chrono::Utc;
 
   fn unique_path() -> PathBuf {
@@ -140,6 +140,7 @@ mod tests {
         plain_text: "privileged draft text".to_string(),
         source_app: None,
       }],
+      retention: ClipboardRetention::Month,
     };
 
     store.persist(&state).unwrap();
@@ -160,6 +161,7 @@ mod tests {
         capture_status: ClipboardCaptureStatus::Active,
         groups: Vec::new(),
         items: Vec::new(),
+        retention: ClipboardRetention::Month,
       })
       .unwrap();
 
