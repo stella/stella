@@ -56,6 +56,13 @@ export class BetterAuthMicrosoftIdentityMapInfrastructureError extends TaggedErr
   message: string;
 }> {}
 
+type BetterAuthMicrosoftIdentityMapDerivationError =
+  | BetterAuthMicrosoftIdentityMapError
+  | BetterAuthMicrosoftIdentityMapInfrastructureError;
+
+type VerifiedMicrosoftIdentity =
+  BetterAuthTrustedIdentityMap["microsoftAccounts"][number];
+
 type DeriveBetterAuthMicrosoftIdentityMapOptions = {
   clientId: string;
   getSigningKey: JWTVerifyGetKey;
@@ -106,7 +113,12 @@ const verifySource = async ({
   now: Date;
   source: BetterAuthMicrosoftIdentitySource;
   tenantId: string;
-}) => {
+}): Promise<
+  Result<
+    VerifiedMicrosoftIdentity,
+    BetterAuthMicrosoftIdentityMapDerivationError
+  >
+> => {
   if (
     source.accountRowId.length === 0 ||
     source.legacyAccountId.length === 0 ||
@@ -212,8 +224,7 @@ export const deriveBetterAuthMicrosoftIdentityMap = async ({
 }: DeriveBetterAuthMicrosoftIdentityMapOptions): Promise<
   Result<
     BetterAuthTrustedIdentityMap,
-    | BetterAuthMicrosoftIdentityMapError
-    | BetterAuthMicrosoftIdentityMapInfrastructureError
+    BetterAuthMicrosoftIdentityMapDerivationError
   >
 > => {
   if (clientId.length === 0) {
@@ -247,11 +258,7 @@ export const deriveBetterAuthMicrosoftIdentityMap = async ({
   const identityKeys = new Set<string>();
   const sourceIterator = sources.values();
   const processNextSource = async (): Promise<
-    Result<
-      undefined,
-      | BetterAuthMicrosoftIdentityMapError
-      | BetterAuthMicrosoftIdentityMapInfrastructureError
-    >
+    Result<undefined, BetterAuthMicrosoftIdentityMapDerivationError>
   > => {
     const next = sourceIterator.next();
     if (next.done) {
