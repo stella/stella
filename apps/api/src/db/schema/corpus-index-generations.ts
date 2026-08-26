@@ -35,6 +35,10 @@ export const corpusIndexGenerations = p.pgTable(
     cluster: p.text({ enum: QUICKWIT_CLUSTERS }).notNull(),
     manifestDigest: p.varchar("manifest_digest", { length: 64 }).notNull(),
     status: p.text({ enum: CORPUS_INDEX_GENERATION_STATUSES }).notNull(),
+    projectionRevision: p
+      .bigint("projection_revision", { mode: "number" })
+      .default(1)
+      .notNull(),
     createdAt: timestamptz("created_at").defaultNow().notNull(),
     updatedAt: timestamptz("updated_at")
       .defaultNow()
@@ -65,6 +69,10 @@ export const corpusIndexGenerations = p.pgTable(
     p.check(
       "corpus_index_generations_manifest_digest_shape",
       sql`${t.manifestDigest} ~ '^[0-9a-f]{64}$'`,
+    ),
+    p.check(
+      "corpus_index_generations_projection_revision_positive",
+      sql`${t.projectionRevision} > 0`,
     ),
     p.check(
       "corpus_index_generations_name_matches_family",
