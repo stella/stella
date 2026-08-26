@@ -857,7 +857,6 @@ const ClipboardWelcomeDialog = ({ onClose }: ClipboardWelcomeDialogProps) => {
 
   const completeWelcome = () => {
     if (autostartChoice.status === "loading") {
-      onClose();
       return;
     }
     if (autostartChoice.status === "saving") {
