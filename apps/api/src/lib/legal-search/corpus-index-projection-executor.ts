@@ -386,6 +386,275 @@ const addCancellation = (
   result.leaseLost += cancellation.leaseLost;
 };
 
+type ProcessPreparedRequestsOptions = {
+  runInTransaction: ProjectionTransactionRunner;
+  client: ProjectionAppendClient;
+  materialsReady: readonly CorpusProjectionMaterial[];
+  requests: readonly PreparedProjectionRequest[];
+  requestIndex: number;
+  windowEnd: number;
+  result: CorpusProjectionAppendCycleResult;
+};
+
+const processPreparedRequests = async ({
+  runInTransaction,
+  client,
+  materialsReady,
+  requests,
+  requestIndex,
+  windowEnd,
+  result,
+}: ProcessPreparedRequestsOptions): Promise<"completed" | "append_unknown"> => {
+  const request = requests.at(requestIndex);
+  if (request === undefined) {
+    return "completed";
+  }
+  // Start one physical request as a batch. Its shared timestamp is read from
+  // PostgreSQL only after all state locks are held, immediately before
+  // external I/O; crash recovery cannot settle ahead of a late append.
+  const starts = await runInTransaction(
+    async (tx) =>
+      await startCorpusProjectionAppendBatchTx(tx, {
+        leases: request.entries.map(({ material }) => material.lease),
+      }),
+  );
+  result.cancelled += starts.filter(
+    ({ status }) => status === "stale_cancelled",
+  ).length;
+  result.leaseLost += starts.filter(
+    ({ status }) => status === "lease_lost",
+  ).length;
+  const entriesByIntent = new Map(
+    request.entries.map((entry) => [entry.material.lease.intentId, entry]),
+  );
+  const started = starts.flatMap(({ intentId, status }) => {
+    if (status !== "started") {
+      return [];
+    }
+    return [
+      entriesByIntent.get(intentId) ??
+        panic(`Lost started projection revision ${intentId}`),
+    ];
+  });
+  if (started.length === 0) {
+    return await processPreparedRequests({
+      runInTransaction,
+      client,
+      materialsReady,
+      requests,
+      requestIndex: requestIndex + 1,
+      windowEnd,
+      result,
+    });
+  }
+  const startedPlan = planCorpusProjectionAppendRequests(
+    started.map(({ entry }) => entry),
+  );
+  if (startedPlan.isErr() || startedPlan.value.length !== 1) {
+    return panic("Started projection request no longer fits its plan");
+  }
+  result.requestCount += 1;
+  const appended = await client.ingestCommittedBatch(
+    request.indexId,
+    startedPlan.value.at(0)?.ndjson ??
+      panic("Projection request plan is empty"),
+  );
+  if (appended.isErr()) {
+    const abandoned = await runInTransaction(async (tx) => {
+      const outcomes = await mapSequentially(
+        started,
+        async (preparedEntry) =>
+          await abandonCorpusProjectionAppendTx(tx, {
+            intentId: preparedEntry.material.lease.intentId,
+            leaseToken: preparedEntry.material.lease.leaseToken,
+            errorMessage: appended.error.message,
+          }),
+      );
+      return {
+        cleanupPending: outcomes.filter(
+          (outcome) => outcome === "cleanup_pending",
+        ).length,
+        leaseLost: outcomes.filter((outcome) => outcome === "lease_lost")
+          .length,
+      };
+    });
+    result.unknownCleanupPending += abandoned.cleanupPending;
+    result.leaseLost += abandoned.leaseLost;
+    const laterLeases = requests
+      .slice(requestIndex + 1)
+      .flatMap(({ entries: laterEntries }) =>
+        laterEntries.map(({ material }) => material.lease),
+      );
+    for (const { lease } of materialsReady.slice(windowEnd)) {
+      laterLeases.push(lease);
+    }
+    addCancellation(
+      result,
+      await cancelReservations({
+        runInTransaction,
+        leases: laterLeases,
+        errorMessage: "projection append stopped after an unknown request",
+      }),
+    );
+    result.status = "append_unknown";
+    return "append_unknown";
+  }
+
+  const committed = await runInTransaction(async (tx) => {
+    const outcomes = await mapSequentially(
+      started,
+      async (preparedEntry) =>
+        await commitCorpusProjectionAppendTx(tx, {
+          intentId: preparedEntry.material.lease.intentId,
+          leaseToken: preparedEntry.material.lease.leaseToken,
+          documentCount: preparedEntry.entry.documents.length,
+        }),
+    );
+    const counts = { applied: 0, staleCleanupPending: 0, leaseLost: 0 };
+    for (const outcome of outcomes) {
+      switch (outcome.status) {
+        case "applied":
+          counts.applied += 1;
+          break;
+        case "stale_cleanup_pending":
+          counts.staleCleanupPending += 1;
+          break;
+        case "lease_lost":
+          counts.leaseLost += 1;
+          break;
+        default:
+          outcome satisfies never;
+      }
+    }
+    return counts;
+  });
+  result.applied += committed.applied;
+  result.staleCleanupPending += committed.staleCleanupPending;
+  result.leaseLost += committed.leaseLost;
+  return await processPreparedRequests({
+    runInTransaction,
+    client,
+    materialsReady,
+    requests,
+    requestIndex: requestIndex + 1,
+    windowEnd,
+    result,
+  });
+};
+
+type ProcessPreparedWindowsOptions = {
+  runInTransaction: ProjectionTransactionRunner;
+  client: ProjectionAppendClient;
+  materialsReady: readonly CorpusProjectionMaterial[];
+  windowStart: number;
+  payloadReadConcurrency: number;
+  retryDelayMs: number;
+  payloadRetryLimit: number;
+  result: CorpusProjectionAppendCycleResult;
+};
+
+const processPreparedWindows = async ({
+  runInTransaction,
+  client,
+  materialsReady,
+  windowStart,
+  payloadReadConcurrency,
+  retryDelayMs,
+  payloadRetryLimit,
+  result,
+}: ProcessPreparedWindowsOptions): Promise<"completed" | "append_unknown"> => {
+  if (windowStart >= materialsReady.length) {
+    return "completed";
+  }
+  // A window is fully classified and appended before the next payload is
+  // read. Peak residency therefore follows Plane's bounded concurrency,
+  // rather than the reservation limit of up to hundreds of documents.
+  const windowEnd = Math.min(
+    windowStart + payloadReadConcurrency,
+    materialsReady.length,
+  );
+  const window = materialsReady.slice(windowStart, windowEnd);
+  const loaded = await Promise.all(
+    window.map(async (material) => ({
+      material,
+      loaded: await buildPreparedEntry(runInTransaction, material),
+    })),
+  );
+  const preparationFailures: ReservationFailure[] = [];
+  const prepared: PreparedProjectionEntry[] = [];
+  for (const item of loaded) {
+    if (item.loaded.isOk()) {
+      prepared.push(item.loaded.value);
+      continue;
+    }
+    const failure = item.loaded.error;
+    if (failure.kind === "payload_unavailable") {
+      result.unread += 1;
+      preparationFailures.push({
+        lease: item.material.lease,
+        failure: {
+          status: "retry_scheduled",
+          kind: failure.kind,
+          retryDelayMs,
+          maxAttempts: payloadRetryLimit,
+          message: failure.message,
+        },
+      });
+      continue;
+    }
+    preparationFailures.push({
+      lease: item.material.lease,
+      failure: {
+        status: "blocked",
+        kind: failure.kind,
+        message: failure.message,
+      },
+    });
+  }
+  const plan = planPreparedRequests(prepared);
+  for (const { material } of plan.blocked) {
+    preparationFailures.push({
+      lease: material.lease,
+      failure: {
+        status: "blocked",
+        kind: "revision_too_large",
+        message: "projection revision exceeds the append safety ceiling",
+      },
+    });
+  }
+  const classified = await classifyReservationFailures({
+    runInTransaction,
+    failures: preparationFailures,
+  });
+  result.retryScheduled += classified.retryScheduled;
+  result.blocked += classified.blocked;
+  result.cancelled += classified.staleCancelled;
+  result.leaseLost += classified.leaseLost;
+
+  const requestStatus = await processPreparedRequests({
+    runInTransaction,
+    client,
+    materialsReady,
+    requests: plan.requests,
+    requestIndex: 0,
+    windowEnd,
+    result,
+  });
+  if (requestStatus === "append_unknown") {
+    return requestStatus;
+  }
+  return await processPreparedWindows({
+    runInTransaction,
+    client,
+    materialsReady,
+    windowStart: windowEnd,
+    payloadReadConcurrency,
+    retryDelayMs,
+    payloadRetryLimit,
+    result,
+  });
+};
+
 /**
  * Execute one bounded append cycle. Plane chooses scope, cadence, limits, and
  * concurrency; this primitive owns durable ordering and exact outcomes.
@@ -466,202 +735,15 @@ export const executeCorpusProjectionAppendCycle = async ({
   result.cancelled += materialRetries.staleCancelled;
   result.leaseLost += materialRetries.leaseLost;
 
-  for (
-    let windowStart = 0;
-    windowStart < materials.ready.length;
-    windowStart += payloadReadConcurrency
-  ) {
-    // A window is fully classified and appended before the next payload is
-    // read. Peak residency therefore follows Plane's bounded concurrency,
-    // rather than the reservation limit of up to hundreds of documents.
-    const windowEnd = Math.min(
-      windowStart + payloadReadConcurrency,
-      materials.ready.length,
-    );
-    const window = materials.ready.slice(windowStart, windowEnd);
-    // oxlint-disable-next-line no-await-in-loop -- each completed window releases its payloads before the next read, bounding memory
-    const loaded = await Promise.all(
-      window.map(async (material) => ({
-        material,
-        loaded: await buildPreparedEntry(runInTransaction, material),
-      })),
-    );
-    const preparationFailures: ReservationFailure[] = [];
-    const prepared: PreparedProjectionEntry[] = [];
-    for (const item of loaded) {
-      if (item.loaded.isOk()) {
-        prepared.push(item.loaded.value);
-        continue;
-      }
-      const failure = item.loaded.error;
-      if (failure.kind === "payload_unavailable") {
-        result.unread += 1;
-        preparationFailures.push({
-          lease: item.material.lease,
-          failure: {
-            status: "retry_scheduled",
-            kind: failure.kind,
-            retryDelayMs,
-            maxAttempts: payloadRetryLimit,
-            message: failure.message,
-          },
-        });
-        continue;
-      }
-      preparationFailures.push({
-        lease: item.material.lease,
-        failure: {
-          status: "blocked",
-          kind: failure.kind,
-          message: failure.message,
-        },
-      });
-    }
-    const plan = planPreparedRequests(prepared);
-    for (const { material } of plan.blocked) {
-      preparationFailures.push({
-        lease: material.lease,
-        failure: {
-          status: "blocked",
-          kind: "revision_too_large",
-          message: "projection revision exceeds the append safety ceiling",
-        },
-      });
-    }
-    // oxlint-disable-next-line no-await-in-loop -- failures must be durably classified before any append in this window
-    const classified = await classifyReservationFailures({
-      runInTransaction,
-      failures: preparationFailures,
-    });
-    result.retryScheduled += classified.retryScheduled;
-    result.blocked += classified.blocked;
-    result.cancelled += classified.staleCancelled;
-    result.leaseLost += classified.leaseLost;
-
-    const requests = plan.requests;
-    for (let requestIndex = 0; requestIndex < requests.length; requestIndex++) {
-      const request =
-        requests.at(requestIndex) ?? panic("Lost planned projection request");
-      // Start one physical request as a batch. Its shared timestamp is read
-      // from PostgreSQL only after all state locks are held, immediately before
-      // external I/O; crash recovery cannot settle ahead of a late append.
-      // oxlint-disable-next-line no-await-in-loop -- append requests transition and publish in persisted plan order
-      const starts = await runInTransaction(
-        async (tx) =>
-          await startCorpusProjectionAppendBatchTx(tx, {
-            leases: request.entries.map(({ material }) => material.lease),
-          }),
-      );
-      result.cancelled += starts.filter(
-        ({ status }) => status === "stale_cancelled",
-      ).length;
-      result.leaseLost += starts.filter(
-        ({ status }) => status === "lease_lost",
-      ).length;
-      const entriesByIntent = new Map(
-        request.entries.map((entry) => [entry.material.lease.intentId, entry]),
-      );
-      const started = starts.flatMap(({ intentId, status }) => {
-        if (status !== "started") {
-          return [];
-        }
-        return [
-          entriesByIntent.get(intentId) ??
-            panic(`Lost started projection revision ${intentId}`),
-        ];
-      });
-      if (started.length === 0) {
-        continue;
-      }
-      const startedPlan = planCorpusProjectionAppendRequests(
-        started.map(({ entry }) => entry),
-      );
-      if (startedPlan.isErr() || startedPlan.value.length !== 1) {
-        return panic("Started projection request no longer fits its plan");
-      }
-      result.requestCount += 1;
-      // oxlint-disable-next-line no-await-in-loop -- one committed append must settle before the next planned request starts
-      const appended = await client.ingestCommittedBatch(
-        request.indexId,
-        startedPlan.value.at(0)?.ndjson ??
-          panic("Projection request plan is empty"),
-      );
-      if (appended.isErr()) {
-        // oxlint-disable-next-line no-await-in-loop -- an unknown append must be fenced before later reservations are cancelled
-        const abandoned = await runInTransaction(async (tx) => {
-          const outcomes = await mapSequentially(
-            started,
-            async (preparedEntry) =>
-              await abandonCorpusProjectionAppendTx(tx, {
-                intentId: preparedEntry.material.lease.intentId,
-                leaseToken: preparedEntry.material.lease.leaseToken,
-                errorMessage: appended.error.message,
-              }),
-          );
-          return {
-            cleanupPending: outcomes.filter(
-              (outcome) => outcome === "cleanup_pending",
-            ).length,
-            leaseLost: outcomes.filter((outcome) => outcome === "lease_lost")
-              .length,
-          };
-        });
-        result.unknownCleanupPending += abandoned.cleanupPending;
-        result.leaseLost += abandoned.leaseLost;
-        const laterLeases = requests
-          .slice(requestIndex + 1)
-          .flatMap(({ entries: laterEntries }) =>
-            laterEntries.map(({ material }) => material.lease),
-          );
-        for (const { lease } of materials.ready.slice(windowEnd)) {
-          laterLeases.push(lease);
-        }
-        addCancellation(
-          result,
-          // oxlint-disable-next-line no-await-in-loop -- cancellation must settle before returning the stopped batch
-          await cancelReservations({
-            runInTransaction,
-            leases: laterLeases,
-            errorMessage: "projection append stopped after an unknown request",
-          }),
-        );
-        result.status = "append_unknown";
-        return result;
-      }
-
-      // oxlint-disable-next-line no-await-in-loop -- each published request must be CAS-finalized before the next request
-      const committed = await runInTransaction(async (tx) => {
-        const outcomes = await mapSequentially(
-          started,
-          async (preparedEntry) =>
-            await commitCorpusProjectionAppendTx(tx, {
-              intentId: preparedEntry.material.lease.intentId,
-              leaseToken: preparedEntry.material.lease.leaseToken,
-              documentCount: preparedEntry.entry.documents.length,
-            }),
-        );
-        const counts = { applied: 0, staleCleanupPending: 0, leaseLost: 0 };
-        for (const outcome of outcomes) {
-          switch (outcome.status) {
-            case "applied":
-              counts.applied += 1;
-              break;
-            case "stale_cleanup_pending":
-              counts.staleCleanupPending += 1;
-              break;
-            case "lease_lost":
-              counts.leaseLost += 1;
-              break;
-            default:
-              outcome satisfies never;
-          }
-        }
-        return counts;
-      });
-      result.applied += committed.applied;
-      result.staleCleanupPending += committed.staleCleanupPending;
-      result.leaseLost += committed.leaseLost;
-    }
-  }
+  await processPreparedWindows({
+    runInTransaction,
+    client,
+    materialsReady: materials.ready,
+    windowStart: 0,
+    payloadReadConcurrency,
+    retryDelayMs,
+    payloadRetryLimit,
+    result,
+  });
   return result;
 };

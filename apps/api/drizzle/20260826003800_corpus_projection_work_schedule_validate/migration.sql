@@ -15,3 +15,6 @@ ALTER TABLE "corpus_index_projection_states"
 
 ALTER TABLE "corpus_index_projection_states"
   VALIDATE CONSTRAINT "corpus_index_projection_states_work_shape";--> statement-breakpoint
+
+ALTER TABLE "corpus_index_projection_intents"
+  VALIDATE CONSTRAINT "corpus_index_projection_intents_expected_document_count_shape";--> statement-breakpoint

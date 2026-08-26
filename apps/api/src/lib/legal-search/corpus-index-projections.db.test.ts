@@ -150,12 +150,13 @@ test("one exact append revision becomes authoritative", async () => {
       db.execute(sql`
         INSERT INTO corpus_index_projection_intents (
           id, family, generation, entity_id, epoch, fingerprint, index_id,
-          status, append_started_at, append_committed_at, applied_at
+          status, append_started_at, append_committed_at,
+          expected_document_count, applied_at
         ) VALUES (
           '0198e331-e578-7000-8000-000000000098', 'case_law', 'case_law_v5',
           ${FIRST_DECISION_ID}, 1, ${FIRST_FINGERPRINT},
           'case_law_v5_cs_sk', 'applied', clock_timestamp(),
-          clock_timestamp(), clock_timestamp()
+          clock_timestamp(), 1, clock_timestamp()
         )
       `),
     ),
@@ -191,7 +192,8 @@ test("one exact append revision becomes authoritative", async () => {
   `);
   await db.execute(sql`
     UPDATE corpus_index_projection_intents
-    SET status = 'append_committed', append_committed_at = clock_timestamp()
+    SET status = 'append_committed', expected_document_count = 1,
+        append_committed_at = clock_timestamp()
     WHERE id = ${FIRST_REVISION}
   `);
   await db.execute(sql`
@@ -293,7 +295,8 @@ test("one exact append revision becomes authoritative", async () => {
   `);
   await db.execute(sql`
     UPDATE corpus_index_projection_intents
-    SET status = 'append_committed', append_committed_at = clock_timestamp()
+    SET status = 'append_committed', expected_document_count = 1,
+        append_committed_at = clock_timestamp()
     WHERE id = ${SECOND_REVISION}
   `);
   await db.execute(sql`
@@ -387,7 +390,8 @@ test("an erasure epoch fences an in-flight append until exact cleanup settles", 
     await rejectionMessage(
       db.execute(sql`
         UPDATE corpus_index_projection_intents
-        SET status = 'append_committed', append_committed_at = clock_timestamp()
+        SET status = 'append_committed', expected_document_count = 1,
+            append_committed_at = clock_timestamp()
         WHERE id = ${RACED_REVISION}
       `),
     ),

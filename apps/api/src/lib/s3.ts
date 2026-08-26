@@ -772,11 +772,26 @@ export const getCorpusS3 = (): S3Client => {
 const OBJECT_READ_PRESIGN_TTL_SECONDS = 300;
 export const OBJECT_READ_TIMEOUT_MS = 5 * 60 * 1000;
 const S3_ERROR_BODY_PREFIX_MAX_BYTES = 8 * 1024;
-const S3_ERROR_CODE_PATTERN = /<Code>\s*(?<code>[^<]+?)\s*<\/Code>/u;
+const S3_ERROR_CODE_OPEN_TAG = "<Code>";
+const S3_ERROR_CODE_CLOSE_TAG = "</Code>";
 const MISSING_CORPUS_OBJECT_CODES: ReadonlySet<string> = new Set([
   "NoSuchKey",
   "NotFound",
 ]);
+
+const extractS3ErrorCode = (body: string): string | null => {
+  const openingTag = body.indexOf(S3_ERROR_CODE_OPEN_TAG);
+  if (openingTag === -1) {
+    return null;
+  }
+  const codeStart = openingTag + S3_ERROR_CODE_OPEN_TAG.length;
+  const closingTag = body.indexOf(S3_ERROR_CODE_CLOSE_TAG, codeStart);
+  if (closingTag === -1) {
+    return null;
+  }
+  const code = body.slice(codeStart, closingTag).trim();
+  return code.length === 0 ? null : code;
+};
 
 const readS3ErrorBodyPrefix = async (response: Response): Promise<string> => {
   const body = response.body;
@@ -787,11 +802,13 @@ const readS3ErrorBodyPrefix = async (response: Response): Promise<string> => {
   try {
     const chunks: Uint8Array[] = [];
     let byteCount = 0;
-    while (byteCount < S3_ERROR_BODY_PREFIX_MAX_BYTES) {
-      // oxlint-disable-next-line no-await-in-loop -- stream consumption is inherently ordered and byte-bounded
+    const readNextChunk = async (): Promise<void> => {
+      if (byteCount >= S3_ERROR_BODY_PREFIX_MAX_BYTES) {
+        return;
+      }
       const chunk = await reader.read();
       if (chunk.done) {
-        break;
+        return;
       }
       if (!(chunk.value instanceof Uint8Array)) {
         return panic("S3 error response stream returned a non-byte chunk");
@@ -801,9 +818,11 @@ const readS3ErrorBodyPrefix = async (response: Response): Promise<string> => {
       chunks.push(value);
       byteCount += value.byteLength;
       if (value.byteLength < chunk.value.byteLength) {
-        break;
+        return;
       }
-    }
+      await readNextChunk();
+    };
+    await readNextChunk();
     const bytes = new Uint8Array(byteCount);
     let offset = 0;
     for (const chunk of chunks) {
@@ -833,7 +852,7 @@ const readS3ResponseErrorCode = async (
   if (body.isErr()) {
     return null;
   }
-  return S3_ERROR_CODE_PATTERN.exec(body.value)?.groups?.["code"] ?? null;
+  return extractS3ErrorCode(body.value);
 };
 
 const throwCorpusObjectResponseError = async ({

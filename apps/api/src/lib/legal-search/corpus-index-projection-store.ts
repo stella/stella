@@ -76,6 +76,10 @@ const validateLeaseMs = (leaseMs: number): number => {
 };
 
 const corpusProjectionStateLockOrder = () => [
+  asc(corpusIndexProjectionStates.entityId),
+];
+
+const corpusProjectionStateQueueOrder = () => [
   asc(corpusIndexProjectionStates.updatedAt),
   asc(corpusIndexProjectionStates.entityId),
 ];
@@ -314,7 +318,7 @@ export const prepareCorpusProjectionReplacementsTx = async (
         sql`${corpusIndexProjectionStates.desiredEpoch} > ${corpusIndexProjectionStates.appliedEpoch}`,
       ),
     )
-    .orderBy(...corpusProjectionStateLockOrder())
+    .orderBy(...corpusProjectionStateQueueOrder())
     .limit(limit)
     .for("update", {
       of: corpusIndexProjectionStates,
