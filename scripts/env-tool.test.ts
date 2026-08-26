@@ -515,7 +515,7 @@ describe("environment doctor output", () => {
     },
     {
       expected:
-        "CORPUS_INDEX_Q09_ENDPOINT must use HTTPS unless it targets a loopback address.",
+        "CORPUS_INDEX_Q09_ENDPOINT must use HTTPS unless it targets loopback or the private corpus-index-v09 Cloud Map service.",
       overrides: {
         CORPUS_INDEX_Q09_ENDPOINT: "http://quickwit-admin.example.com",
       },

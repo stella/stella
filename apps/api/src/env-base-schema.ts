@@ -22,7 +22,10 @@ import {
   type QueryExpansionMode,
 } from "@/api/lib/legal-search/query-expansion-mode";
 import { isUsableStaticCredential } from "@/api/lib/s3-credentials";
-import { isTlsOrLoopbackUrl } from "@/api/lib/secure-service-url";
+import {
+  isLoopbackHostname,
+  isTlsOrLoopbackUrl,
+} from "@/api/lib/secure-service-url";
 
 /**
  * NODE_ENV values that identify a deployed (non-local) Stella
@@ -97,6 +100,22 @@ const boundedIntegerEnv = ({ fallback, min, max }: BoundedIntegerEnvOptions) =>
 
 const BACKPRESSURE_DIMENSIONS_PATTERN =
   /^[^=,\s]+=[^=,]+(?:,[^=,\s]+=[^=,]+)*$/u;
+
+const Q09_PRIVATE_SERVICE_HOSTNAME_PATTERN =
+  /^corpus-index-v09\.[a-z0-9-]+\.local$/u;
+
+const isSecureOrPrivateQ09MutationEndpoint = (value: string) => {
+  if (!URL.canParse(value)) {
+    return false;
+  }
+  const url = new URL(value);
+  return (
+    url.protocol === "https:" ||
+    (url.protocol === "http:" &&
+      (isLoopbackHostname(url.hostname) ||
+        Q09_PRIVATE_SERVICE_HOSTNAME_PATTERN.test(url.hostname.toLowerCase())))
+  );
+};
 
 const nonNegativeNumberEnv = (fallback: string) =>
   v.optional(
@@ -376,9 +395,12 @@ export const envBaseInvariantViolation = ({
   if (!isDev && CORPUS_INDEX_Q09_SEARCH_ENDPOINT !== undefined) {
     return "CORPUS_INDEX_Q09_SEARCH_ENDPOINT is only supported in local development.";
   }
-  // Mutation endpoints are private deployment control-plane inputs. Both
-  // q08 and q09 run on VPC-only Cloud Map HTTP; public or local read-only
-  // overrides use the separately validated *_SEARCH_ENDPOINT variables.
+  if (
+    CORPUS_INDEX_Q09_ENDPOINT !== undefined &&
+    !isSecureOrPrivateQ09MutationEndpoint(CORPUS_INDEX_Q09_ENDPOINT)
+  ) {
+    return "CORPUS_INDEX_Q09_ENDPOINT must use HTTPS unless it targets loopback or the private corpus-index-v09 Cloud Map service.";
+  }
   // REMOVAL CONDITION: delete this invariant in the PR that makes a corpus
   // cursor carry the dictionary version it was built against.
   //

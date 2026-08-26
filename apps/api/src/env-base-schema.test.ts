@@ -39,4 +39,15 @@ describe("corpus cluster endpoint transport", () => {
       "CORPUS_INDEX_Q09_SEARCH_ENDPOINT must use HTTPS unless it targets a loopback address.",
     );
   });
+
+  test("keeps a remote plaintext mutation endpoint forbidden", () => {
+    expect(
+      envBaseInvariantViolation({
+        ...deployedCorpusEnvironment,
+        CORPUS_INDEX_Q09_ENDPOINT: "http://quickwit-admin.example.com",
+      }),
+    ).toBe(
+      "CORPUS_INDEX_Q09_ENDPOINT must use HTTPS unless it targets loopback or the private corpus-index-v09 Cloud Map service.",
+    );
+  });
 });
