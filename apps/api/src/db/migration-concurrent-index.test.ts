@@ -88,6 +88,14 @@ const APPROVED_PROCEDURAL_STATEMENTS = new Set([
   // committed when the trusted issuer backfill is incomplete. The static body
   // performs one bounded existence read and raises; it executes no dynamic SQL.
   "20260825220000_better_auth_17_constraints/migration.sql:4c1e0d5fdbb50e29863c067586c405148beb02f76a2af8ebbced851a866abc13",
+  // Refuses to seed a legacy serving route over an existing generation bound
+  // to a different cluster. The static body reads two primary-key rows and
+  // raises; it executes no dynamic SQL.
+  "20260826004000_corpus_index_serving_generation/migration.sql:2a9afa811510709034b847b4ecdcf3f3a78d5c499cb4f584ac6ef0e9410d8419",
+  // Refuses to finish the reader cutover unless both families have a serving
+  // generation. The static body performs one bounded existence read over
+  // corpus_index_generations and raises; it executes no dynamic SQL.
+  "20260826004000_corpus_index_serving_generation/migration.sql:3cf1be3c49aad9abb99793f955b1c60e6d4fc5926ca1538e9ae2419a14242738",
 ]);
 
 type TimeoutState = "bounded" | "unbounded" | "unset";

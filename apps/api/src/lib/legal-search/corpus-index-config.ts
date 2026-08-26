@@ -419,7 +419,7 @@ const FAMILY_FIELDS: Record<CorpusFamily, CorpusIndexFieldMapping[]> = {
     // change: the engine never diffs the mapping of an index that exists, and
     // in `lenient` mode it would take the fields and drop them. An existing
     // legislation index would therefore need a generation bump to serve an
-    // as-of filter — `corpusGeneration("legislation")` is the flip.
+    // as-of filter; the serving-generation row is the flip.
     {
       name: "version_valid_from",
       type: "datetime",

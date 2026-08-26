@@ -36,8 +36,7 @@ import {
   caseLawCorpusProjectionJoin,
   currentCaseLawCorpusProjection,
 } from "@/api/lib/legal-search/case-law-corpus-projection";
-import { corpusGeneration } from "@/api/lib/legal-search/corpus-family";
-import { corpusIndexClusterForGeneration } from "@/api/lib/legal-search/corpus-generation-contract";
+import { readServingCorpusIndexGenerationTx } from "@/api/lib/legal-search/corpus-index-generation-store";
 import { readCorpusIndexSearchPage } from "@/api/lib/legal-search/corpus-index-pagination";
 import {
   caseLawCorpusQuery,
@@ -621,7 +620,10 @@ const searchCorpusIndexDecisions = async (
     return status(400, { message: "Invalid country" });
   }
 
-  const generation = corpusGeneration("case_law");
+  const serving = await caseLawDb(
+    async (tx) => await readServingCorpusIndexGenerationTx(tx, "case_law"),
+  );
+  const generation = serving.generation;
   // Scoped query → that country's index, plus a jurisdiction clause when that
   // index holds other countries; unscoped → the generation glob.
   const { indexId, jurisdictionClause } = corpusIndexRoute(
@@ -635,7 +637,7 @@ const searchCorpusIndexDecisions = async (
   }
 
   const searchPage = await readCorpusIndexSearchPage({
-    cluster: corpusIndexClusterForGeneration("case_law", generation),
+    cluster: serving.cluster,
     indexId,
     query,
     limit,

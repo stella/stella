@@ -4,7 +4,12 @@ import { drizzle } from "drizzle-orm/pglite";
 
 import type { Transaction } from "@/api/db/root";
 import { corpusIndexGenerations } from "@/api/db/schema";
-import { registerCorpusIndexGenerationTx } from "@/api/lib/legal-search/corpus-index-generation-store";
+import {
+  readServingCorpusIndexGenerationTx,
+  registerCorpusIndexGenerationTx,
+  resumeRetiringCorpusIndexGenerationTx,
+  setServingCorpusIndexGenerationTx,
+} from "@/api/lib/legal-search/corpus-index-generation-store";
 import {
   corpusIndexManifestDigest,
   requireCorpusIndexManifest,
@@ -95,5 +100,95 @@ test("generation registration fails closed on a drifted binding", async () => {
     );
   expect(rejection).toMatchObject({
     message: "Corpus generation contract mismatch: legislation/legislation_v2",
+  });
+});
+
+test("serving generation reads and flips are family-independent", async () => {
+  await register(CASE_LAW_TARGET);
+  await db.insert(corpusIndexGenerations).values([
+    {
+      family: "case_law",
+      generation: "case_law_v2",
+      cluster: "q08",
+      manifestDigest: "a".repeat(64),
+      status: "serving",
+    },
+    {
+      family: "legislation",
+      generation: "legislation_v1",
+      cluster: "q08",
+      manifestDigest: "b".repeat(64),
+      status: "serving",
+    },
+  ]);
+
+  expect(
+    await readServingCorpusIndexGenerationTx(
+      asTestRaw<Transaction>(db),
+      "case_law",
+    ),
+  ).toEqual({
+    family: "case_law",
+    generation: "case_law_v2",
+    cluster: "q08",
+  });
+
+  const promoted = await db.transaction(
+    async (tx) =>
+      await setServingCorpusIndexGenerationTx(
+        asTestRaw<Transaction>(tx),
+        CASE_LAW_TARGET,
+      ),
+  );
+  expect(promoted).toEqual({
+    family: "case_law",
+    generation: "case_law_v5",
+    cluster: "q09",
+  });
+  const immediateRollbackRejection: unknown = await db
+    .transaction(
+      async (tx) =>
+        await setServingCorpusIndexGenerationTx(asTestRaw<Transaction>(tx), {
+          family: "case_law",
+          generation: "case_law_v2",
+        }),
+    )
+    .then(
+      () => null,
+      (error: unknown) => error,
+    );
+  expect(immediateRollbackRejection).toMatchObject({
+    message: "Corpus serving target is not reconciled: case_law/case_law_v2",
+  });
+
+  await db.transaction(
+    async (tx) =>
+      await resumeRetiringCorpusIndexGenerationTx(asTestRaw<Transaction>(tx), {
+        family: "case_law",
+        generation: "case_law_v2",
+      }),
+  );
+  expect(
+    await db.transaction(
+      async (tx) =>
+        await setServingCorpusIndexGenerationTx(asTestRaw<Transaction>(tx), {
+          family: "case_law",
+          generation: "case_law_v2",
+        }),
+    ),
+  ).toEqual({
+    family: "case_law",
+    generation: "case_law_v2",
+    cluster: "q08",
+  });
+  expect(
+    await readServingCorpusIndexGenerationTx(
+      asTestRaw<Transaction>(db),
+      "legislation",
+    ),
+  ).toEqual({
+    family: "legislation",
+    generation: "legislation_v1",
+    cluster: "q08",
   });
 });

@@ -18,8 +18,7 @@ import {
   tSafeId,
 } from "@/api/lib/custom-schema";
 import { blendedRankSql } from "@/api/lib/legal-search/authority-sql";
-import { corpusGeneration } from "@/api/lib/legal-search/corpus-family";
-import { corpusIndexClusterForGeneration } from "@/api/lib/legal-search/corpus-generation-contract";
+import { readServingCorpusIndexGenerationTx } from "@/api/lib/legal-search/corpus-index-generation-store";
 import { readCorpusIndexSearchPage } from "@/api/lib/legal-search/corpus-index-pagination";
 import {
   corpusFreeTextClause,
@@ -354,7 +353,10 @@ const corpusIndexSearch = async (
   legislationDb: LegislationReadDb,
 ): Promise<{ hits: LegislationHit[]; nextCursor: string | null }> => {
   const limit = body.limit ?? LIMITS.caseLawSearchPageSizeDefault;
-  const generation = corpusGeneration("legislation");
+  const serving = await legislationDb(
+    async (tx) => await readServingCorpusIndexGenerationTx(tx, "legislation"),
+  );
+  const generation = serving.generation;
   const indexId = body.jurisdiction
     ? corpusIndexId(generation, body.jurisdiction)
     : corpusIndexPattern(generation);
@@ -365,7 +367,7 @@ const corpusIndexSearch = async (
   }
 
   const searchPage = await readCorpusIndexSearchPage({
-    cluster: corpusIndexClusterForGeneration("legislation", generation),
+    cluster: serving.cluster,
     indexId,
     query,
     limit,

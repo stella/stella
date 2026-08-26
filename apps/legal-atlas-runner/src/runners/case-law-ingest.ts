@@ -60,7 +60,7 @@ import { IngestionStallError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { backfillSearchIndex } from "@/api/lib/legal-search/case-law-search-index";
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
-import { corpusGeneration } from "@/api/lib/legal-search/corpus-family";
+import { legacyOperationalCorpusGeneration } from "@/api/lib/legal-search/corpus-family";
 import {
   DOCUMENT_FETCH_BUDGET_MS,
   fetchDecisionDocument,
@@ -1541,7 +1541,7 @@ export const runCaseLawIngest = async (
     if (!envBase.CORPUS_INDEXING_ENABLED) {
       return;
     }
-    const generation = corpusGeneration("legislation");
+    const generation = legacyOperationalCorpusGeneration("legislation");
     logInfo(`[legislation-corpus-index] Enabled for generation ${generation}`);
     while (true) {
       if (isDraining()) {

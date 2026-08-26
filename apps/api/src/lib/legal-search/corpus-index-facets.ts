@@ -1,9 +1,11 @@
 import { Result } from "better-result";
 
 import { LegalBrowseFacetsError } from "@/api/lib/legal-search/browse-facets";
-import { corpusGeneration } from "@/api/lib/legal-search/corpus-family";
-import { corpusIndexClusterForGeneration } from "@/api/lib/legal-search/corpus-generation-contract";
 import { getCorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client";
+import {
+  readServingCorpusIndexGenerationTx,
+  type ServingCorpusIndexGeneration,
+} from "@/api/lib/legal-search/corpus-index-generation-store";
 import { corpusIndexReadContract } from "@/api/lib/legal-search/corpus-index-read-contract";
 import { quoteCorpusValue } from "@/api/lib/legal-search/corpus-query";
 import { corpusIndexRoute } from "@/api/lib/legal-search/index-naming";
@@ -167,19 +169,28 @@ const parseTermsBuckets = (aggregation: unknown): FacetBucket[] | null => {
   return buckets;
 };
 
+type CorpusIndexBrowseFacetsDependencies = {
+  readServingGeneration: () => Promise<ServingCorpusIndexGeneration>;
+};
+
+const defaultCorpusIndexBrowseFacetsDependencies = {
+  readServingGeneration: async () => {
+    const { caseLawPublicReadDb } =
+      await import("@/api/lib/case-law-public-read-db");
+    return await caseLawPublicReadDb(
+      async (tx) => await readServingCorpusIndexGenerationTx(tx, "case_law"),
+    );
+  },
+} satisfies CorpusIndexBrowseFacetsDependencies;
+
 export const corpusIndexBrowseFacets = async (
   query: LegalBrowseFacetsQuery,
+  dependencies: CorpusIndexBrowseFacetsDependencies = defaultCorpusIndexBrowseFacetsDependencies,
 ): Promise<Result<LegalBrowseFacets, LegalBrowseFacetsError>> => {
   const family = query.documentFamily ?? "case_law";
-  const generation = corpusGeneration(family);
+  const serving = await dependencies.readServingGeneration();
+  const generation = serving.generation;
   const readContract = corpusIndexReadContract(family, generation);
-  if (readContract.family !== "case_law") {
-    return Result.err(
-      new LegalBrowseFacetsError({
-        message: "browse facets are only defined for the case-law corpus",
-      }),
-    );
-  }
   // Scoped query → that jurisdiction's index, plus a jurisdiction clause when
   // that index holds other jurisdictions; unscoped → the generation glob (one
   // multi-index aggregation across every index of the generation).
@@ -188,9 +199,7 @@ export const corpusIndexBrowseFacets = async (
     query.jurisdiction,
   );
 
-  const aggregated = await getCorpusIndexClient(
-    corpusIndexClusterForGeneration(family, generation),
-  ).aggregate({
+  const aggregated = await getCorpusIndexClient(serving.cluster).aggregate({
     indexId,
     query: browseFacetsQuery({
       excludedSourceIds: query.excludedSourceIds,

@@ -20,9 +20,8 @@ import {
   caseLawCorpusProjectionJoin,
   currentCaseLawCorpusProjection,
 } from "@/api/lib/legal-search/case-law-corpus-projection";
-import { corpusGeneration } from "@/api/lib/legal-search/corpus-family";
-import { corpusIndexClusterForGeneration } from "@/api/lib/legal-search/corpus-generation-contract";
 import { corpusIndexBrowseFacets } from "@/api/lib/legal-search/corpus-index-facets";
+import { readServingCorpusIndexGenerationTx } from "@/api/lib/legal-search/corpus-index-generation-store";
 import { readCorpusIndexSearchPage } from "@/api/lib/legal-search/corpus-index-pagination";
 import { caseLawCorpusQuery } from "@/api/lib/legal-search/corpus-query";
 import { loadDocumentContext } from "@/api/lib/legal-search/document-context";
@@ -135,7 +134,11 @@ export const rehydrateCorpusIndexProviderCandidates =
 
 const search = async (query: LegalSearchQuery): Promise<LegalSearchResult> => {
   const limit = query.limit;
-  const generation = corpusGeneration(query.documentFamily ?? "case_law");
+  const family = query.documentFamily ?? "case_law";
+  const serving = await caseLawPublicReadDb(
+    async (tx) => await readServingCorpusIndexGenerationTx(tx, family),
+  );
+  const generation = serving.generation;
 
   // Scoped query → that jurisdiction's index, plus a jurisdiction clause when
   // that index holds other jurisdictions; unscoped → the generation glob
@@ -173,7 +176,7 @@ const search = async (query: LegalSearchQuery): Promise<LegalSearchResult> => {
   }
 
   const searchPage = await readCorpusIndexSearchPage({
-    cluster: corpusIndexClusterForGeneration("case_law", generation),
+    cluster: serving.cluster,
     indexId,
     query: engineQuery,
     limit,

@@ -8,14 +8,13 @@ export {
 export type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";
 
 /**
- * Blue-green generation prefix per family. Index ids are
- * `<generation>_<jurisdiction>` (e.g. `case_law_v1_svk`,
- * `legislation_v1_svk`), or `<generation>_<group>` for case-law generations
- * from 3 on (`corpusIndexId`). Bumping a prefix rebuilds that family across
- * all jurisdictions, then you flip to it. case_law keeps its existing env
- * override for back-compat; other families default to `<family>_v1`.
+ * Compatibility boundary for pre-final public backfills. Readers and final
+ * projections use the database generation registry. Remove this after those
+ * public backfills are retired from every deployment.
  */
-export const corpusGeneration = (family: CorpusFamily): string => {
+export const legacyOperationalCorpusGeneration = (
+  family: CorpusFamily,
+): string => {
   switch (family) {
     case "case_law":
       return envBase.LEGAL_SEARCH_INDEX_GENERATION;
