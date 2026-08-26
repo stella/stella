@@ -396,6 +396,16 @@ test("replacement deletes and settles the old revision before reserving the new 
   expect(reopened).toEqual([
     { status: "cleanup_pending", deleteOpstamp: null, settledAt: null },
   ]);
+  expect(
+    await db.transaction(
+      async (tx) =>
+        await reopenCorpusProjectionCleanupTx(asTestRaw<Transaction>(tx), {
+          intentIds: [firstLease.intentId],
+          indexId: INDEX_ID,
+          errorMessage: "duplicate orphan census observation",
+        }),
+    ),
+  ).toBe(0);
   const reclaimed = await db.transaction(
     async (tx) =>
       await claimCorpusProjectionCleanupTx(asTestRaw<Transaction>(tx), {

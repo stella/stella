@@ -28,6 +28,18 @@ import {
 
 type ProjectionIntentId = SafeId<"corpusIndexProjectionIntent">;
 
+const CORPUS_PROJECTION_REOPEN_CONVERGED_STATUSES = [
+  "cleanup_pending",
+  "cleanup_started",
+  "cleanup_committed",
+] as const satisfies readonly CorpusIndexIntentStatus[];
+const CORPUS_PROJECTION_REOPENABLE_STATUSES = [
+  ...CORPUS_PROJECTION_REOPEN_CONVERGED_STATUSES,
+  "settled",
+] as const satisfies readonly CorpusIndexIntentStatus[];
+const CORPUS_PROJECTION_REOPEN_CONVERGED_STATUS_SET =
+  new Set<CorpusIndexIntentStatus>(CORPUS_PROJECTION_REOPEN_CONVERGED_STATUSES);
+
 const validateCleanupBatchSize = (limit: number): number => {
   if (
     !Number.isSafeInteger(limit) ||
@@ -600,7 +612,10 @@ export const reopenCorpusProjectionCleanupTx = async (
       and(
         inArray(corpusIndexProjectionIntents.id, intentIds),
         eq(corpusIndexProjectionIntents.indexId, indexId),
-        eq(corpusIndexProjectionIntents.status, "settled"),
+        inArray(
+          corpusIndexProjectionIntents.status,
+          CORPUS_PROJECTION_REOPENABLE_STATUSES,
+        ),
       ),
     );
   if (identities.length !== intentIds.length) {
@@ -683,10 +698,27 @@ export const reopenCorpusProjectionCleanupTx = async (
       ),
     )
     .returning({ id: corpusIndexProjectionIntents.id });
-  if (rows.length !== intentIds.length) {
-    return panic(
-      `Corpus projection cleanup reopen matched ${rows.length} of ${intentIds.length} settled revisions`,
-    );
+  const converged = await tx
+    .select({
+      id: corpusIndexProjectionIntents.id,
+      status: corpusIndexProjectionIntents.status,
+    })
+    .from(corpusIndexProjectionIntents)
+    .where(
+      and(
+        inArray(corpusIndexProjectionIntents.id, intentIds),
+        eq(corpusIndexProjectionIntents.indexId, indexId),
+      ),
+    )
+    .limit(intentIds.length);
+  if (
+    converged.length !== intentIds.length ||
+    converged.some(
+      ({ status }) =>
+        !CORPUS_PROJECTION_REOPEN_CONVERGED_STATUS_SET.has(status),
+    )
+  ) {
+    return panic("Corpus projection cleanup reopen identities changed");
   }
   return rows.length;
 };
