@@ -36,6 +36,7 @@ import {
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { Checkbox } from "@stll/ui/checkbox";
 import {
   Dialog,
   DialogClose,
@@ -52,6 +53,7 @@ import {
   InputGroupAddon,
   InputGroupInput,
 } from "@stll/ui/input-group";
+import { Label } from "@stll/ui/label";
 import {
   Menu,
   MenuItem,
@@ -770,8 +772,33 @@ type ClipboardWelcomeDialogProps = {
   onClose: () => void;
 };
 
+const AUTOSTART_ERROR = {
+  read: "read",
+  update: "update",
+} as const;
+
+type AutostartError = (typeof AUTOSTART_ERROR)[keyof typeof AUTOSTART_ERROR];
+
+type AutostartChoiceState =
+  | { status: "loading" }
+  | {
+      enabled: boolean;
+      error: AutostartError | null;
+      initialEnabled: boolean | null;
+      status: "ready";
+    }
+  | {
+      enabled: boolean;
+      initialEnabled: boolean | null;
+      status: "saving";
+    };
+
 const ClipboardWelcomeDialog = ({ onClose }: ClipboardWelcomeDialogProps) => {
   const t = useTranslations("clipboard");
+  const settingsT = useTranslations("settings");
+  const [autostartChoice, setAutostartChoice] = useState<AutostartChoiceState>({
+    status: "loading",
+  });
   const features = [
     {
       description: t("welcomeCaptureDescription"),
@@ -792,10 +819,103 @@ const ClipboardWelcomeDialog = ({ onClose }: ClipboardWelcomeDialogProps) => {
     },
   ];
 
+  useEffect(() => {
+    let mounted = true;
+    void invoke<boolean>("is_autostart_enabled")
+      .then((enabled) => {
+        if (!mounted) {
+          return undefined;
+        }
+        setAutostartChoice({
+          enabled,
+          error: null,
+          initialEnabled: enabled,
+          status: "ready",
+        });
+        return undefined;
+      })
+      .catch(() => {
+        reportDesktopError({
+          code: DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
+          operation: DESKTOP_TELEMETRY_OPERATIONS.autostartRead,
+          window: DESKTOP_TELEMETRY_WINDOWS.clipboard,
+        });
+        if (!mounted) {
+          return;
+        }
+        setAutostartChoice({
+          enabled: false,
+          error: AUTOSTART_ERROR.read,
+          initialEnabled: null,
+          status: "ready",
+        });
+      });
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const completeWelcome = () => {
+    if (autostartChoice.status === "loading") {
+      onClose();
+      return;
+    }
+    if (autostartChoice.status === "saving") {
+      return;
+    }
+    const { enabled, initialEnabled } = autostartChoice;
+    if (enabled === initialEnabled || (initialEnabled === null && !enabled)) {
+      onClose();
+      return;
+    }
+    setAutostartChoice({ enabled, initialEnabled, status: "saving" });
+    void invoke<boolean>("set_autostart", { enabled })
+      .then((updatedEnabled) => {
+        if (updatedEnabled === enabled) {
+          onClose();
+          return undefined;
+        }
+        reportDesktopError({
+          code: DESKTOP_TELEMETRY_ERROR_CODES.invalidResponse,
+          operation: DESKTOP_TELEMETRY_OPERATIONS.autostartUpdate,
+          window: DESKTOP_TELEMETRY_WINDOWS.clipboard,
+        });
+        setAutostartChoice({
+          enabled,
+          error: AUTOSTART_ERROR.update,
+          initialEnabled,
+          status: "ready",
+        });
+        return undefined;
+      })
+      .catch(() => {
+        reportDesktopError({
+          code: DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
+          operation: DESKTOP_TELEMETRY_OPERATIONS.autostartUpdate,
+          window: DESKTOP_TELEMETRY_WINDOWS.clipboard,
+        });
+        setAutostartChoice({
+          enabled,
+          error: AUTOSTART_ERROR.update,
+          initialEnabled,
+          status: "ready",
+        });
+      });
+  };
+
+  const autostartEnabled =
+    autostartChoice.status === "loading" ? false : autostartChoice.enabled;
+  const autostartError =
+    autostartChoice.status === "ready" ? autostartChoice.error : null;
+  const autostartErrorMessage =
+    autostartError === AUTOSTART_ERROR.read
+      ? settingsT("errorReadState")
+      : settingsT("errorUpdateAutostart");
+
   return (
     <Dialog
       onOpenChange={(open) => {
-        if (!open) {
+        if (!open && autostartChoice.status !== "saving") {
           onClose();
         }
       }}
@@ -839,11 +959,50 @@ const ClipboardWelcomeDialog = ({ onClose }: ClipboardWelcomeDialogProps) => {
               </div>
             ))}
           </div>
+          <Label
+            className="bg-muted/48 mt-3 min-h-14 w-full cursor-pointer items-start gap-3 rounded-2xl px-4 py-3"
+            htmlFor="clipboard-welcome-autostart"
+          >
+            <Checkbox
+              checked={autostartEnabled}
+              className="mt-0.5"
+              disabled={autostartChoice.status !== "ready"}
+              id="clipboard-welcome-autostart"
+              onCheckedChange={(enabled) => {
+                if (autostartChoice.status !== "ready") {
+                  return;
+                }
+                setAutostartChoice({
+                  enabled,
+                  error: null,
+                  initialEnabled: autostartChoice.initialEnabled,
+                  status: "ready",
+                });
+              }}
+            />
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-medium">
+                {settingsT("startOnLogin")}
+              </span>
+              <span className="text-muted-foreground mt-1 block text-sm leading-relaxed">
+                {settingsT("startOnLoginDescription")}
+              </span>
+              {autostartError ? (
+                <span
+                  className="text-destructive mt-1 block text-xs leading-relaxed"
+                  role="alert"
+                >
+                  {autostartErrorMessage}
+                </span>
+              ) : null}
+            </span>
+          </Label>
         </DialogPanel>
         <DialogFooter className="px-5 pb-5" variant="bare">
           <Button
             className="min-h-11 rounded-xl"
-            onClick={onClose}
+            disabled={autostartChoice.status !== "ready"}
+            onClick={completeWelcome}
             type="button"
           >
             {t("welcomeStart")}

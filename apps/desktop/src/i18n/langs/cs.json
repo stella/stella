@@ -61,6 +61,7 @@
     "errorEmailSupport": "stella desktop nemohl otevřít vaši poštovní aplikaci.",
     "errorReadState": "stella desktop nemohl přečíst svůj aktuální stav.",
     "errorRevealAppData": "stella desktop nemohl zobrazit data aplikace.",
+    "errorUpdateAutostart": "Aplikaci stella desktop se nepodařilo nastavit spouštění při přihlášení.",
     "errorUpdatePreferences": "stella desktop nemohl aktualizovat nastavení oznámení.",
     "general": "Obecné",
     "lastVerified": "Naposledy ověřeno",

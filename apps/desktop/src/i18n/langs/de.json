@@ -61,6 +61,7 @@
     "errorEmailSupport": "stella desktop konnte Ihre E-Mail-App nicht öffnen.",
     "errorReadState": "stella desktop konnte seinen aktuellen Status nicht lesen.",
     "errorRevealAppData": "stella desktop konnte die App-Daten nicht anzeigen.",
+    "errorUpdateAutostart": "stella desktop konnte den Start bei der Anmeldung nicht aktualisieren.",
     "errorUpdatePreferences": "stella desktop konnte die Benachrichtigungseinstellungen nicht aktualisieren.",
     "general": "Allgemein",
     "lastVerified": "Zuletzt überprüft",

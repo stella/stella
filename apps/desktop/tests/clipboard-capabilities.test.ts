@@ -3,15 +3,18 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 
 const DESKTOP_ROOT = path.join(import.meta.dir, "..");
-const COMMAND_PATTERN =
-  /\b(?:applySnapshotCommand|invoke(?:<[^>]+>)?|onCommand)\(\s*"(clipboard_[a-z_]+)"/gu;
+const INVOKE_COMMAND_PATTERN = /\binvoke(?:<[^>]+>)?\(\s*"([a-z_]+)"/gu;
+const SNAPSHOT_COMMAND_PATTERN =
+  /\b(?:applySnapshotCommand|onCommand)\(\s*"(clipboard_[a-z_]+)"/gu;
 
 const invokedClipboardCommands = async (sourcePath: string) => {
   const source = await readFile(path.join(DESKTOP_ROOT, sourcePath), "utf-8");
-  return [...source.matchAll(COMMAND_PATTERN)].flatMap((match) => {
-    const command = match.at(1);
-    return command ? [command] : [];
-  });
+  return [INVOKE_COMMAND_PATTERN, SNAPSHOT_COMMAND_PATTERN].flatMap((pattern) =>
+    [...source.matchAll(pattern)].flatMap((match) => {
+      const command = match.at(1);
+      return command ? [command] : [];
+    }),
+  );
 };
 
 const grantedCommands = async (capabilityPath: string) => {

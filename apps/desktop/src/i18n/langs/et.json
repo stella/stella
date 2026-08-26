@@ -61,6 +61,7 @@
     "errorEmailSupport": "stella desktop ei saanud teie meilirakendust avada.",
     "errorReadState": "stella desktop ei saanud oma praegust olekut lugeda.",
     "errorRevealAppData": "stella desktop ei saanud rakenduse andmeid kuvada.",
+    "errorUpdateAutostart": "stella desktop ei saanud sisselogimisel käivitamist uuendada.",
     "errorUpdatePreferences": "stella desktop ei saanud teavituste seadeid uuendada.",
     "general": "Üldine",
     "lastVerified": "Viimati kontrollitud",

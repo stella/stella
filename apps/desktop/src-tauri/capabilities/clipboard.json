@@ -5,6 +5,8 @@
   "permissions": [
     "core:event:allow-listen",
     "core:event:allow-unlisten",
+    "allow-is-autostart-enabled",
+    "allow-set-autostart",
     "allow-clipboard-get-snapshot",
     "allow-clipboard-complete-welcome",
     "allow-clipboard-set-capture-status",

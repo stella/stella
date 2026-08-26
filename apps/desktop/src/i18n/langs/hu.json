@@ -61,6 +61,7 @@
     "errorEmailSupport": "A stella desktop nem tudta megnyitni az e-mail alkalmazást.",
     "errorReadState": "A stella desktop nem tudta beolvasni az aktuális állapotát.",
     "errorRevealAppData": "A stella desktop nem tudta megjeleníteni az alkalmazásadatokat.",
+    "errorUpdateAutostart": "A stella desktop nem tudta frissíteni a bejelentkezéskori indítást.",
     "errorUpdatePreferences": "A stella desktop nem tudta frissíteni az értesítési beállításokat.",
     "general": "Általános",
     "lastVerified": "Utoljára ellenőrizve",
