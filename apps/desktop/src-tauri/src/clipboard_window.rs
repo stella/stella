@@ -29,6 +29,85 @@ fn capture_window_error(
   }
 }
 
+/// Docked frame in Tauri logical coordinates (origin top-left of the primary
+/// screen, y down) from a Cocoa work area (origin bottom-left, y up).
+#[cfg(target_os = "macos")]
+fn docked_frame(primary_height: f64, work_area: DockedRect) -> DockedRect {
+  let width = (work_area.width - (CLIPBOARD_WINDOW_INSET * 2.0)).max(1.0);
+  let available_height = (work_area.height - (CLIPBOARD_WINDOW_INSET * 2.0)).max(1.0);
+  let height = CLIPBOARD_WINDOW_HEIGHT.min(available_height);
+  let bottom = work_area.y + CLIPBOARD_WINDOW_INSET;
+  DockedRect {
+    x: work_area.x + CLIPBOARD_WINDOW_INSET,
+    y: primary_height - (bottom + height),
+    width,
+    height,
+  }
+}
+
+#[cfg(target_os = "macos")]
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct DockedRect {
+  x: f64,
+  y: f64,
+  width: f64,
+  height: f64,
+}
+
+#[cfg(target_os = "macos")]
+impl From<objc2_foundation::NSRect> for DockedRect {
+  fn from(rect: objc2_foundation::NSRect) -> Self {
+    Self {
+      x: rect.origin.x,
+      y: rect.origin.y,
+      width: rect.size.width,
+      height: rect.size.height,
+    }
+  }
+}
+
+// AppKit is queried directly: tao's `cursor_position` returns primary-scaled
+// physical pixels while its `monitor_from_point` compares against display
+// bounds in points, so on mixed-DPI setups the lookup misses and falls back
+// to the primary display. Screen frames and the mouse location share one
+// coordinate space here, so containment is exact.
+#[cfg(target_os = "macos")]
+fn position_window(_app: &AppHandle, window: &WebviewWindow) {
+  use objc2::MainThreadMarker;
+  use objc2_app_kit::{NSEvent, NSScreen};
+
+  let Some(main_thread) = MainThreadMarker::new() else {
+    let handle = window.app_handle().clone();
+    let window = window.clone();
+    let _ = handle.run_on_main_thread(move || {
+      position_window(window.app_handle(), &window);
+    });
+    return;
+  };
+
+  let screens = NSScreen::screens(main_thread);
+  let Some(primary) = screens.iter().next() else {
+    let _ = window.center();
+    return;
+  };
+  let primary_height = primary.frame().size.height;
+  let cursor = NSEvent::mouseLocation();
+  let under_cursor = screens.iter().find(|screen| {
+    let frame = screen.frame();
+    cursor.x >= frame.origin.x
+      && cursor.x < frame.origin.x + frame.size.width
+      && cursor.y >= frame.origin.y
+      && cursor.y < frame.origin.y + frame.size.height
+  });
+  let focused = NSScreen::mainScreen(main_thread);
+  let screen = under_cursor.or(focused).unwrap_or(primary);
+
+  let frame = docked_frame(primary_height, screen.visibleFrame().into());
+  let _ = window.set_size(LogicalSize::new(frame.width, frame.height));
+  let _ = window.set_position(LogicalPosition::new(frame.x, frame.y));
+}
+
+#[cfg(not(target_os = "macos"))]
 fn position_window(app: &AppHandle, window: &WebviewWindow) {
   let monitor = app
     .cursor_position()
@@ -236,4 +315,67 @@ pub fn show_editor(app: &AppHandle) -> Result<(), String> {
     );
     format!("clipboard editor could not be opened: {error}")
   })
+}
+
+#[cfg(all(test, target_os = "macos"))]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn docks_to_the_bottom_of_a_secondary_screen_above_the_primary() {
+    // External 2560x1440 display arranged above a 1728x1117 laptop screen,
+    // with a 25pt menu bar and no dock.
+    let frame = docked_frame(
+      1117.0,
+      DockedRect {
+        x: -416.0,
+        y: 1117.0,
+        width: 2560.0,
+        height: 1415.0,
+      },
+    );
+
+    assert_eq!(
+      frame,
+      DockedRect {
+        x: -398.0,
+        y: -18.0 - CLIPBOARD_WINDOW_HEIGHT,
+        width: 2524.0,
+        height: CLIPBOARD_WINDOW_HEIGHT,
+      }
+    );
+  }
+
+  #[test]
+  fn docks_to_the_bottom_of_the_primary_screen_above_the_dock() {
+    let frame = docked_frame(
+      1117.0,
+      DockedRect {
+        x: 0.0,
+        y: 70.0,
+        width: 1728.0,
+        height: 1022.0,
+      },
+    );
+
+    assert_eq!(frame.x, 18.0);
+    assert_eq!(frame.height, CLIPBOARD_WINDOW_HEIGHT);
+    assert_eq!(frame.y + frame.height, 1117.0 - 70.0 - 18.0);
+  }
+
+  #[test]
+  fn shrinks_on_a_short_work_area() {
+    let frame = docked_frame(
+      200.0,
+      DockedRect {
+        x: 0.0,
+        y: 0.0,
+        width: 400.0,
+        height: 200.0,
+      },
+    );
+
+    assert_eq!(frame.height, 200.0 - 36.0);
+    assert_eq!(frame.y, 18.0);
+  }
 }

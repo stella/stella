@@ -108,11 +108,14 @@ icns = { version = "0.4", default-features = false, features = ["pngio"] }
 objc2 = "0.6"
 objc2-app-kit = { version = "0.3", default-features = false, features = [
   "NSApplication",
+  "NSEvent",
   "NSRunningApplication",
+  "NSScreen",
   "NSWorkspace",
   "libc",
 ] }
 objc2-foundation = { version = "0.3", default-features = false, features = [
+  "NSGeometry",
   "NSURL",
 ] }
 plist = "1.10"
