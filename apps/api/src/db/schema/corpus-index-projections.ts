@@ -10,6 +10,10 @@ import {
   CORPUS_INDEX_PROJECTION_FAILURE_KINDS,
   CORPUS_INDEX_PROJECTION_WORK_STATUSES,
 } from "@/api/lib/legal-search/corpus-index-projection-contract";
+import {
+  corpusIndexProjectionIsBlocked,
+  corpusIndexProjectionNeedsWork,
+} from "@/api/lib/legal-search/corpus-index-projection-sql";
 
 import {
   globalCaseLawPolicies,
@@ -396,16 +400,12 @@ export const corpusIndexProjectionStates = p.pgTable(
         t.generation,
         sql`coalesce(${t.retryNotBefore}, ${t.updatedAt})`,
         t.entityId,
-      ).where(sql`
-        ${t.workStatus} IN ('eligible', 'retry_scheduled')
-        AND (
-          ${t.appliedAction} IS NULL
-          OR ${t.appliedAction} IS DISTINCT FROM ${t.desiredAction}
-          OR ${t.appliedEpoch} IS DISTINCT FROM ${t.desiredEpoch}
-          OR ${t.appliedFingerprint} IS DISTINCT FROM ${t.desiredFingerprint}
-          OR ${t.appliedIndexId} IS DISTINCT FROM ${t.desiredIndexId}
-        )
-      `),
+      )
+      .where(corpusIndexProjectionNeedsWork(t)),
+    p
+      .index("corpus_index_projection_states_blocked_idx")
+      .on(t.family, t.generation, t.entityId)
+      .where(corpusIndexProjectionIsBlocked(t.workStatus)),
     p
       .index("corpus_index_projection_states_applied_census_idx")
       .on(t.family, t.generation, t.appliedIndexId, t.entityId)
@@ -449,6 +449,11 @@ export const corpusIndexProjectionStates = p.pgTable(
           AND ${t.failureAttempts} > 0
           AND ${t.lastFailureKind} IS NOT NULL
           AND ${t.lastFailureMessage} IS NOT NULL
+        WHEN 'repair_scheduled' THEN
+          ${t.retryNotBefore} IS NULL
+          AND ${t.failureAttempts} = 0
+          AND ${t.lastFailureKind} IS NULL
+          AND ${t.lastFailureMessage} IS NULL
         WHEN 'blocked' THEN
           ${t.retryNotBefore} IS NULL
           AND ${t.failureAttempts} > 0

@@ -18,6 +18,7 @@ import {
   CORPUS_PROJECTION_APPEND_MAX_REVISIONS,
   corpusIndexUnknownAppendBarrierAt,
 } from "@/api/lib/legal-search/corpus-index-projection-engine";
+import { corpusIndexProjectionNeedsWork } from "@/api/lib/legal-search/corpus-index-projection-sql";
 
 export const CORPUS_PROJECTION_STORE_MAX_BATCH_SIZE =
   CORPUS_PROJECTION_APPEND_MAX_REVISIONS;
@@ -96,13 +97,9 @@ const readPostgresClock = async (tx: Transaction): Promise<Date> => {
   return value;
 };
 
-const pendingDesiredState = sql`(
-  ${corpusIndexProjectionStates.appliedAction} IS NULL
-  OR ${corpusIndexProjectionStates.appliedAction} IS DISTINCT FROM ${corpusIndexProjectionStates.desiredAction}
-  OR ${corpusIndexProjectionStates.appliedEpoch} IS DISTINCT FROM ${corpusIndexProjectionStates.desiredEpoch}
-  OR ${corpusIndexProjectionStates.appliedFingerprint} IS DISTINCT FROM ${corpusIndexProjectionStates.desiredFingerprint}
-  OR ${corpusIndexProjectionStates.appliedIndexId} IS DISTINCT FROM ${corpusIndexProjectionStates.desiredIndexId}
-)`;
+const pendingDesiredState = corpusIndexProjectionNeedsWork(
+  corpusIndexProjectionStates,
+);
 
 const noOutstandingIntent = sql`NOT EXISTS (
       SELECT 1
@@ -165,6 +162,7 @@ export const reserveCorpusProjectionIntentsTx = async (
         inArray(corpusIndexProjectionStates.workStatus, [
           "eligible",
           "retry_scheduled",
+          "repair_scheduled",
         ]),
         lte(runnableAt, eligibilityAt),
         inArray(corpusIndexGenerations.status, ["building", "serving"]),
@@ -1133,7 +1131,10 @@ export const classifyCorpusProjectionReservationFailureTx = async (
     case undefined:
       return "stale_cancelled";
     case "eligible":
-      return panic("Projection failure classification returned eligible work");
+    case "repair_scheduled":
+      return panic(
+        `Projection failure classification returned ${workStatus} work`,
+      );
     default:
       return workStatus satisfies never;
   }
