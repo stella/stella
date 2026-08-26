@@ -39,14 +39,6 @@ minimumReleaseAgeExcludes = [
   # anydoc 0.2.3 adds in-house Excel parsing while retaining the bounded PDF
   # parser. Keep every napi binding in the same temporary exception so Bun
   # cannot silently omit the native binary.
-  "@firecrawl/anydoc", # quarantine-expires: 2026-08-25T23:55:37.822Z
-  "@firecrawl/anydoc-darwin-arm64", # quarantine-expires: 2026-08-25T23:55:04.035Z
-  "@firecrawl/anydoc-darwin-x64", # quarantine-expires: 2026-08-25T23:54:57.302Z
-  "@firecrawl/anydoc-linux-arm64-gnu", # quarantine-expires: 2026-08-25T23:55:18.134Z
-  "@firecrawl/anydoc-linux-arm64-musl", # quarantine-expires: 2026-08-25T23:55:29.217Z
-  "@firecrawl/anydoc-linux-x64-gnu", # quarantine-expires: 2026-08-25T23:55:10.848Z
-  "@firecrawl/anydoc-linux-x64-musl", # quarantine-expires: 2026-08-25T23:55:24.021Z
-  "@firecrawl/anydoc-win32-x64-msvc", # quarantine-expires: 2026-08-25T23:55:34.100Z
   # First-party @stll packages are on public npm (open source). They share a
   # release cadence and would otherwise be blocked on every publish cycle.
   # Permanent exclusions record their original introduction for auditability.
