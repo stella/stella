@@ -55,7 +55,7 @@
       "version": "2.0.1"
     },
     {
-      "bom-ref": "pkg:cargo/aead@0.5.2",
+      "bom-ref": "pkg:cargo/aead@0.6.1",
       "evidence": {
         "identity": [
           {
@@ -76,7 +76,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "d122413f284cf2d62fb1b7db97e02edb8cda96d769b16e443a4f6195e35662b0"
+          "content": "1973cfbc1a2daf9cf550e74e1f088c28e7f7d8c1e1418fb6c9dc5184b7e84c99"
         }
       ],
       "licenses": [
@@ -98,9 +98,9 @@
           "value": "Cargo.lock"
         }
       ],
-      "purl": "pkg:cargo/aead@0.5.2",
+      "purl": "pkg:cargo/aead@0.6.1",
       "type": "library",
-      "version": "0.5.2"
+      "version": "0.6.1"
     },
     {
       "bom-ref": "pkg:cargo/aes@0.8.4",
@@ -151,7 +151,7 @@
       "version": "0.8.4"
     },
     {
-      "bom-ref": "pkg:cargo/aes-gcm@0.10.3",
+      "bom-ref": "pkg:cargo/aes@0.9.2",
       "evidence": {
         "identity": [
           {
@@ -172,7 +172,55 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "831010a0f742e1209b3bcea8fab6a8e149051ba6099432c8cb2cc117dec3ead1"
+          "content": "f8eb277bec05f56a0e0591f155a484cbd0f4f07ff2905051a48c72f004f7ed58"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0"
+          }
+        },
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "name": "aes",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "Cargo.lock"
+        }
+      ],
+      "purl": "pkg:cargo/aes@0.9.2",
+      "type": "library",
+      "version": "0.9.2"
+    },
+    {
+      "bom-ref": "pkg:cargo/aes-gcm@0.11.1",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "Cargo.lock",
+            "confidence": 0.6,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.6,
+                "technique": "manifest-analysis",
+                "value": "Cargo.lock"
+              }
+            ]
+          }
+        ]
+      },
+      "group": "",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "7f2b8006a0c83f52b62ba44a97b58bf76fe2f70a329e588f67f89691d93d498f"
         }
       ],
       "licenses": [
@@ -194,9 +242,9 @@
           "value": "Cargo.lock"
         }
       ],
-      "purl": "pkg:cargo/aes-gcm@0.10.3",
+      "purl": "pkg:cargo/aes-gcm@0.11.1",
       "type": "library",
-      "version": "0.10.3"
+      "version": "0.11.1"
     },
     {
       "bom-ref": "pkg:cargo/aho-corasick@1.1.5",
@@ -3216,6 +3264,54 @@
       "version": "0.4.4"
     },
     {
+      "bom-ref": "pkg:cargo/cipher@0.5.2",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "Cargo.lock",
+            "confidence": 0.6,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.6,
+                "technique": "manifest-analysis",
+                "value": "Cargo.lock"
+              }
+            ]
+          }
+        ]
+      },
+      "group": "",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "e8cf2a2c93cd704877c0858356ed03480ff301ee950b43f1cbe4573b088bfa6c"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0"
+          }
+        },
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "name": "cipher",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "Cargo.lock"
+        }
+      ],
+      "purl": "pkg:cargo/cipher@0.5.2",
+      "type": "library",
+      "version": "0.5.2"
+    },
+    {
       "bom-ref": "pkg:cargo/clipboard-rs@0.3.5",
       "evidence": {
         "identity": [
@@ -3348,6 +3444,54 @@
       "purl": "pkg:cargo/cmake@0.1.58",
       "type": "library",
       "version": "0.1.58"
+    },
+    {
+      "bom-ref": "pkg:cargo/cmov@0.5.4",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "Cargo.lock",
+            "confidence": 0.6,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.6,
+                "technique": "manifest-analysis",
+                "value": "Cargo.lock"
+              }
+            ]
+          }
+        ]
+      },
+      "group": "",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "0c9ea0ac24bc397ab3c98583a3c9ba74fa56b09a4449bbe172b9b1ddb016027a"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0"
+          }
+        },
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "name": "cmov",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "Cargo.lock"
+        }
+      ],
+      "purl": "pkg:cargo/cmov@0.5.4",
+      "type": "library",
+      "version": "0.5.4"
     },
     {
       "bom-ref": "pkg:cargo/combine@4.6.7",
@@ -3871,6 +4015,54 @@
       "purl": "pkg:cargo/core-graphics-types@0.2.0",
       "type": "library",
       "version": "0.2.0"
+    },
+    {
+      "bom-ref": "pkg:cargo/cpubits@0.1.1",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "Cargo.lock",
+            "confidence": 0.6,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.6,
+                "technique": "manifest-analysis",
+                "value": "Cargo.lock"
+              }
+            ]
+          }
+        ]
+      },
+      "group": "",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "15b85f9c39137c3a891689859392b1bd49812121d0d61c9caf00d46ed5ce06ae"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0"
+          }
+        },
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "name": "cpubits",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "Cargo.lock"
+        }
+      ],
+      "purl": "pkg:cargo/cpubits@0.1.1",
+      "type": "library",
+      "version": "0.1.1"
     },
     {
       "bom-ref": "pkg:cargo/cpufeatures@0.2.17",
@@ -4486,7 +4678,7 @@
       "version": "0.0.7"
     },
     {
-      "bom-ref": "pkg:cargo/ctr@0.9.2",
+      "bom-ref": "pkg:cargo/ctr@0.10.1",
       "evidence": {
         "identity": [
           {
@@ -4507,7 +4699,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "0369ee1ad671834580515889b80f2ea915f23b8be8d0daa4bbaf2ac5c7590835"
+          "content": "baaca1c4b237092596f64d571e9db6ce4109c4ef9742e27590f1709594461f21"
         }
       ],
       "licenses": [
@@ -4529,9 +4721,57 @@
           "value": "Cargo.lock"
         }
       ],
-      "purl": "pkg:cargo/ctr@0.9.2",
+      "purl": "pkg:cargo/ctr@0.10.1",
       "type": "library",
-      "version": "0.9.2"
+      "version": "0.10.1"
+    },
+    {
+      "bom-ref": "pkg:cargo/ctutils@0.4.2",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "Cargo.lock",
+            "confidence": 0.6,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.6,
+                "technique": "manifest-analysis",
+                "value": "Cargo.lock"
+              }
+            ]
+          }
+        ]
+      },
+      "group": "",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "7d5515a3834141de9eafb9717ad39eea8247b5674e6066c404e8c4b365d2a29e"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0"
+          }
+        },
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "name": "ctutils",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "Cargo.lock"
+        }
+      ],
+      "purl": "pkg:cargo/ctutils@0.4.2",
+      "type": "library",
+      "version": "0.4.2"
     },
     {
       "bom-ref": "pkg:cargo/darling@0.23.0",
@@ -8157,7 +8397,7 @@
       "version": "0.4.3"
     },
     {
-      "bom-ref": "pkg:cargo/ghash@0.5.1",
+      "bom-ref": "pkg:cargo/ghash@0.6.0",
       "evidence": {
         "identity": [
           {
@@ -8178,7 +8418,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "f0d8a4362ccb29cb0b265253fb0a2728f592895ee6854fd9bc13f2ffda266ff1"
+          "content": "2eecf2d5dc9b66b732b97707a0210906b1d30523eb773193ab777c0c84b3e8d5"
         }
       ],
       "licenses": [
@@ -8200,9 +8440,9 @@
           "value": "Cargo.lock"
         }
       ],
-      "purl": "pkg:cargo/ghash@0.5.1",
+      "purl": "pkg:cargo/ghash@0.6.0",
       "type": "library",
-      "version": "0.5.1"
+      "version": "0.6.0"
     },
     {
       "bom-ref": "pkg:cargo/gio@0.18.4",
@@ -10713,6 +10953,54 @@
       "purl": "pkg:cargo/inout@0.1.4",
       "type": "library",
       "version": "0.1.4"
+    },
+    {
+      "bom-ref": "pkg:cargo/inout@0.2.2",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "Cargo.lock",
+            "confidence": 0.6,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.6,
+                "technique": "manifest-analysis",
+                "value": "Cargo.lock"
+              }
+            ]
+          }
+        ]
+      },
+      "group": "",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "4250ce6452e92010fdf7268ccc5d14faa80bb12fc741938534c58f16804e03c7"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0"
+          }
+        },
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "name": "inout",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "Cargo.lock"
+        }
+      ],
+      "purl": "pkg:cargo/inout@0.2.2",
+      "type": "library",
+      "version": "0.2.2"
     },
     {
       "bom-ref": "pkg:cargo/ipnet@2.12.1",
@@ -14787,54 +15075,6 @@
       "version": "1.21.4"
     },
     {
-      "bom-ref": "pkg:cargo/opaque-debug@0.3.1",
-      "evidence": {
-        "identity": [
-          {
-            "concludedValue": "Cargo.lock",
-            "confidence": 0.6,
-            "field": "purl",
-            "methods": [
-              {
-                "confidence": 0.6,
-                "technique": "manifest-analysis",
-                "value": "Cargo.lock"
-              }
-            ]
-          }
-        ]
-      },
-      "group": "",
-      "hashes": [
-        {
-          "alg": "SHA-256",
-          "content": "c08d65885ee38876c4f86fa503fb49d7b507c2b62552df7c70b2fce627e06381"
-        }
-      ],
-      "licenses": [
-        {
-          "license": {
-            "id": "Apache-2.0"
-          }
-        },
-        {
-          "license": {
-            "id": "MIT"
-          }
-        }
-      ],
-      "name": "opaque-debug",
-      "properties": [
-        {
-          "name": "SrcFile",
-          "value": "Cargo.lock"
-        }
-      ],
-      "purl": "pkg:cargo/opaque-debug@0.3.1",
-      "type": "library",
-      "version": "0.3.1"
-    },
-    {
       "bom-ref": "pkg:cargo/open@5.4.1",
       "evidence": {
         "identity": [
@@ -16074,7 +16314,7 @@
       "version": "3.11.0"
     },
     {
-      "bom-ref": "pkg:cargo/polyval@0.6.2",
+      "bom-ref": "pkg:cargo/polyval@0.7.3",
       "evidence": {
         "identity": [
           {
@@ -16095,7 +16335,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "9d1fe60d06143b2430aa532c94cfe9e29783047f06c0d7fd359a9a51b729fa25"
+          "content": "f0fa31d631f2b2cb2a544d0aa321ce847a94764d701ca2becc411138b93d49cd"
         }
       ],
       "licenses": [
@@ -16117,9 +16357,9 @@
           "value": "Cargo.lock"
         }
       ],
-      "purl": "pkg:cargo/polyval@0.6.2",
+      "purl": "pkg:cargo/polyval@0.7.3",
       "type": "library",
-      "version": "0.6.2"
+      "version": "0.7.3"
     },
     {
       "bom-ref": "pkg:cargo/potential_utf@0.1.5",
@@ -17166,54 +17406,6 @@
       "purl": "pkg:cargo/rand_chacha@0.9.0",
       "type": "library",
       "version": "0.9.0"
-    },
-    {
-      "bom-ref": "pkg:cargo/rand_core@0.6.4",
-      "evidence": {
-        "identity": [
-          {
-            "concludedValue": "Cargo.lock",
-            "confidence": 0.6,
-            "field": "purl",
-            "methods": [
-              {
-                "confidence": 0.6,
-                "technique": "manifest-analysis",
-                "value": "Cargo.lock"
-              }
-            ]
-          }
-        ]
-      },
-      "group": "",
-      "hashes": [
-        {
-          "alg": "SHA-256",
-          "content": "ec0be4795e2f6a28069bec0b5ff3e2ac9bafc99e6a9a7dc3547996c5c816922c"
-        }
-      ],
-      "licenses": [
-        {
-          "license": {
-            "id": "Apache-2.0"
-          }
-        },
-        {
-          "license": {
-            "id": "MIT"
-          }
-        }
-      ],
-      "name": "rand_core",
-      "properties": [
-        {
-          "name": "SrcFile",
-          "value": "Cargo.lock"
-        }
-      ],
-      "purl": "pkg:cargo/rand_core@0.6.4",
-      "type": "library",
-      "version": "0.6.4"
     },
     {
       "bom-ref": "pkg:cargo/rand_core@0.9.5",
@@ -24653,7 +24845,7 @@
       "version": "1.13.3"
     },
     {
-      "bom-ref": "pkg:cargo/universal-hash@0.5.1",
+      "bom-ref": "pkg:cargo/universal-hash@0.6.1",
       "evidence": {
         "identity": [
           {
@@ -24674,7 +24866,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "fc1de2c688dc15305988b563c3854064043356019f97a4b46276fe734c4f07ea"
+          "content": "f4987bdc12753382e0bec4a65c50738ffaabc998b9cdd1f952fb5f39b0048a96"
         }
       ],
       "licenses": [
@@ -24696,9 +24888,9 @@
           "value": "Cargo.lock"
         }
       ],
-      "purl": "pkg:cargo/universal-hash@0.5.1",
+      "purl": "pkg:cargo/universal-hash@0.6.1",
       "type": "library",
-      "version": "0.5.1"
+      "version": "0.6.1"
     },
     {
       "bom-ref": "pkg:cargo/untrusted@0.9.0",
@@ -31165,29 +31357,29 @@
     },
     {
       "dependsOn": [
-        "pkg:cargo/crypto-common@0.1.7",
-        "pkg:cargo/generic-array@0.14.7"
+        "pkg:cargo/crypto-common@0.2.2",
+        "pkg:cargo/inout@0.2.2"
       ],
-      "ref": "pkg:cargo/aead@0.5.2"
+      "ref": "pkg:cargo/aead@0.6.1"
     },
     {
       "dependsOn": [
-        "pkg:cargo/cfg-if@1.0.4",
-        "pkg:cargo/cipher@0.4.4",
-        "pkg:cargo/cpufeatures@0.2.17"
+        "pkg:cargo/cipher@0.5.2",
+        "pkg:cargo/cpubits@0.1.1",
+        "pkg:cargo/cpufeatures@0.3.0"
       ],
-      "ref": "pkg:cargo/aes@0.8.4"
+      "ref": "pkg:cargo/aes@0.9.2"
     },
     {
       "dependsOn": [
-        "pkg:cargo/aead@0.5.2",
-        "pkg:cargo/aes@0.8.4",
-        "pkg:cargo/cipher@0.4.4",
-        "pkg:cargo/ctr@0.9.2",
-        "pkg:cargo/ghash@0.5.1",
-        "pkg:cargo/subtle@2.6.1"
+        "pkg:cargo/aead@0.6.1",
+        "pkg:cargo/aes@0.9.2",
+        "pkg:cargo/cipher@0.5.2",
+        "pkg:cargo/ctr@0.10.1",
+        "pkg:cargo/ctutils@0.4.2",
+        "pkg:cargo/ghash@0.6.0"
       ],
-      "ref": "pkg:cargo/aes-gcm@0.10.3"
+      "ref": "pkg:cargo/aes-gcm@0.11.1"
     },
     {
       "dependsOn": [
@@ -31665,10 +31857,11 @@
     },
     {
       "dependsOn": [
-        "pkg:cargo/crypto-common@0.1.7",
-        "pkg:cargo/inout@0.1.4"
+        "pkg:cargo/block-buffer@0.12.1",
+        "pkg:cargo/crypto-common@0.2.2",
+        "pkg:cargo/inout@0.2.2"
       ],
-      "ref": "pkg:cargo/cipher@0.4.4"
+      "ref": "pkg:cargo/cipher@0.5.2"
     },
     {
       "dependsOn": [
@@ -31694,6 +31887,10 @@
         "pkg:cargo/cc@1.4.2"
       ],
       "ref": "pkg:cargo/cmake@0.1.58"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/cmov@0.5.4"
     },
     {
       "dependsOn": [
@@ -31763,6 +31960,10 @@
       "ref": "pkg:cargo/core-graphics-types@0.2.0"
     },
     {
+      "dependsOn": [],
+      "ref": "pkg:cargo/cpubits@0.1.1"
+    },
+    {
       "dependsOn": [
         "pkg:cargo/libc@0.2.189"
       ],
@@ -31790,7 +31991,9 @@
     },
     {
       "dependsOn": [
-        "pkg:cargo/hybrid-array@0.4.14"
+        "pkg:cargo/getrandom@0.4.3",
+        "pkg:cargo/hybrid-array@0.4.14",
+        "pkg:cargo/rand_core@0.10.1"
       ],
       "ref": "pkg:cargo/crypto-common@0.2.2"
     },
@@ -31822,9 +32025,15 @@
     },
     {
       "dependsOn": [
-        "pkg:cargo/cipher@0.4.4"
+        "pkg:cargo/cipher@0.5.2"
       ],
-      "ref": "pkg:cargo/ctr@0.9.2"
+      "ref": "pkg:cargo/ctr@0.10.1"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/cmov@0.5.4"
+      ],
+      "ref": "pkg:cargo/ctutils@0.4.2"
     },
     {
       "dependsOn": [
@@ -32334,10 +32543,9 @@
     },
     {
       "dependsOn": [
-        "pkg:cargo/opaque-debug@0.3.1",
-        "pkg:cargo/polyval@0.6.2"
+        "pkg:cargo/polyval@0.7.3"
       ],
-      "ref": "pkg:cargo/ghash@0.5.1"
+      "ref": "pkg:cargo/ghash@0.6.0"
     },
     {
       "dependsOn": [
@@ -32779,10 +32987,9 @@
     },
     {
       "dependsOn": [
-        "pkg:cargo/block-padding@0.3.3",
-        "pkg:cargo/generic-array@0.14.7"
+        "pkg:cargo/hybrid-array@0.4.14"
       ],
-      "ref": "pkg:cargo/inout@0.1.4"
+      "ref": "pkg:cargo/inout@0.2.2"
     },
     {
       "dependsOn": [],
@@ -33406,10 +33613,6 @@
       "ref": "pkg:cargo/once_cell@1.21.4"
     },
     {
-      "dependsOn": [],
-      "ref": "pkg:cargo/opaque-debug@0.3.1"
-    },
-    {
       "dependsOn": [
         "pkg:cargo/dunce@1.0.5",
         "pkg:cargo/is-wsl@0.4.0",
@@ -33604,12 +33807,11 @@
     },
     {
       "dependsOn": [
-        "pkg:cargo/cfg-if@1.0.4",
-        "pkg:cargo/cpufeatures@0.2.17",
-        "pkg:cargo/opaque-debug@0.3.1",
-        "pkg:cargo/universal-hash@0.5.1"
+        "pkg:cargo/cpubits@0.1.1",
+        "pkg:cargo/cpufeatures@0.3.0",
+        "pkg:cargo/universal-hash@0.6.1"
       ],
-      "ref": "pkg:cargo/polyval@0.6.2"
+      "ref": "pkg:cargo/polyval@0.7.3"
     },
     {
       "dependsOn": [
@@ -34278,11 +34480,11 @@
     },
     {
       "dependsOn": [
-        "pkg:cargo/aes-gcm@0.10.3",
+        "pkg:cargo/aes-gcm@0.11.1",
         "pkg:cargo/ammonia@4.1.4",
         "pkg:cargo/apple-native-keyring-store@1.0.2",
         "pkg:cargo/axum@0.8.9",
-        "pkg:cargo/base64@0.22.1",
+        "pkg:cargo/base64@0.23.1",
         "pkg:cargo/chrono@0.4.45",
         "pkg:cargo/clipboard-rs@0.3.5",
         "pkg:cargo/dirs@6.0.0",
@@ -35165,10 +35367,10 @@
     },
     {
       "dependsOn": [
-        "pkg:cargo/crypto-common@0.1.7",
-        "pkg:cargo/subtle@2.6.1"
+        "pkg:cargo/crypto-common@0.2.2",
+        "pkg:cargo/ctutils@0.4.2"
       ],
-      "ref": "pkg:cargo/universal-hash@0.5.1"
+      "ref": "pkg:cargo/universal-hash@0.6.1"
     },
     {
       "dependsOn": [],
