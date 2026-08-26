@@ -1,0 +1,18 @@
+name: autofix.ci
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - bun.lock
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  dependabot-bun-dedupe:
+    uses: stella/.github/.github/workflows/dependabot-bun-dedupe.yml@dd6e8fa51339814159486cd92b5ae3a051eb15d2
