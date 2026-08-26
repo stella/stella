@@ -49,11 +49,11 @@
     "dev:errors": "tail -F .dev-logs/errors.jsonl"
   },
   "dependencies": {
-    "@aws-sdk/client-cloudwatch": "^3.1114.0",
-    "@aws-sdk/client-s3": "^3.1114.0",
-    "@aws-sdk/client-sesv2": "^3.1114.0",
-    "@aws-sdk/client-sts": "^3.1114.0",
-    "@aws-sdk/s3-request-presigner": "^3.1114.0",
+    "@aws-sdk/client-cloudwatch": "^3.1116.0",
+    "@aws-sdk/client-s3": "^3.1116.0",
+    "@aws-sdk/client-sesv2": "^3.1116.0",
+    "@aws-sdk/client-sts": "^3.1116.0",
+    "@aws-sdk/s3-request-presigner": "^3.1116.0",
     "@better-auth/api-key": "catalog:",
     "@better-auth/oauth-provider": "catalog:",
     "@elysia/cors": "^1.4.2",
