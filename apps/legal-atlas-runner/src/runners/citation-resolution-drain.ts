@@ -31,6 +31,7 @@ import {
   CITATION_RESOLUTION_RULES,
   countsByRule,
 } from "@/api/handlers/case-law/citation-resolution-status";
+import { pgErrorFields } from "@/api/lib/pg-error";
 
 /** How one turn ended. */
 export const CITATION_RESOLUTION_STEP = {
@@ -68,6 +69,18 @@ export type CitationResolutionDrainSummary = CitationResolutionCounts & {
    * never holds one cannot leak one.
    */
   lastErrorTag: string | undefined;
+  /**
+   * The most recent throw's Postgres SQLSTATE and schema identifiers, empty
+   * when it was not a database error.
+   *
+   * The tag above names the wrapper: every failure raised inside a prepared
+   * query arrives as `DrizzleQueryError`, so a wedged walk reports the same
+   * tag whether the statement hit a missing column, a privilege, or a
+   * constraint. These fields carry the part that distinguishes them, and
+   * `pgErrorFields` selects only identifiers naming database objects, so the
+   * no-message rule above still holds.
+   */
+  lastErrorPgFields: Record<string, string>;
   /**
    * Rows still waiting when the window closed, or null when the gauge could
    * not be read. The denominator every other number in the line is judged
@@ -163,6 +176,7 @@ const emptySummary = (): CitationResolutionDrainSummary => ({
   busy: 0,
   errored: 0,
   lastErrorTag: undefined,
+  lastErrorPgFields: {},
   pending: null,
   idleContradictionWindows: null,
 });
@@ -232,6 +246,7 @@ export const runCitationResolutionDrain = async ({
     } catch (error) {
       summary.errored += 1;
       summary.lastErrorTag = errorTag(error);
+      summary.lastErrorPgFields = pgErrorFields(error);
     }
     contradictingWindows = windowContradicts(summary)
       ? contradictingWindows + 1
@@ -282,6 +297,7 @@ export const runCitationResolutionDrain = async ({
       failureStreak += 1;
       summary.errored += 1;
       summary.lastErrorTag = errorTag(error);
+      summary.lastErrorPgFields = pgErrorFields(error);
       // From its own floor, not from the duty cycle: a backfill may set the
       // batch gap to zero, and a database refusing statements must not then be
       // asked again as fast as it can refuse.

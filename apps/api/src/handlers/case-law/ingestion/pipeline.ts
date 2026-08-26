@@ -100,7 +100,11 @@ import {
 } from "@/api/lib/legal-search/raw-source-storage";
 import type { WriteRawSourcePayloadOptions } from "@/api/lib/legal-search/raw-source-storage";
 import { logger } from "@/api/lib/observability/logger";
-import { isPgConstraintError, PG_ERROR } from "@/api/lib/pg-error";
+import {
+  isPgConstraintError,
+  PG_ERROR,
+  pgErrorFields,
+} from "@/api/lib/pg-error";
 
 export { sanitizeResult };
 
@@ -155,7 +159,7 @@ const databaseTimeoutHaltReason = (error: TimeoutError): string =>
  * otherwise consume the whole budget and truncate the cause — the part
  * that says why the write failed.
  */
-export const corpusWriteErrorDetail = (error: unknown): string => {
+export const wrappedErrorDetail = (error: unknown): string => {
   if (!(error instanceof Error)) {
     return String(error).slice(0, 512);
   }
@@ -1186,7 +1190,8 @@ const processDecisionAttempt = async ({
           sourceId,
           caseNumber: result.caseNumber,
           ...errorSystemFields(error),
-          "error.detail": corpusWriteErrorDetail(error),
+          ...pgErrorFields(error),
+          "error.detail": wrappedErrorDetail(error),
         });
         captureError(error, { sourceId, step: "uploadSourceRaw" });
 
@@ -2038,7 +2043,8 @@ const processDecisionAttempt = async ({
         caseNumber: result.caseNumber,
         country: result.country,
         ...errorSystemFields(error),
-        "error.detail": corpusWriteErrorDetail(error),
+        ...pgErrorFields(error),
+        "error.detail": wrappedErrorDetail(error),
       });
       captureError(error, { decisionId, step: "processDecision.corpusWrite" });
     }
@@ -2301,11 +2307,12 @@ export const runIngestionPipeline = async ({
             adapterKey: adapter.key,
             caseNumber: result.caseNumber,
             cursor: cursor ?? "",
-            "error.type": tag,
+            ...errorSystemFields(error),
+            ...pgErrorFields(error),
             // "message" is stripped by the logger sanitizer; use
             // "error.detail" so the SQL/HTTP/SDK reason reaches
             // CloudWatch. Case-law data is public, no PII concern.
-            "error.detail": message.slice(0, 512),
+            "error.detail": wrappedErrorDetail(error),
             consecutiveFailures,
           });
           captureError(error, {

@@ -1351,6 +1351,7 @@ export const runCaseLawIngest = async (
             pending: summary.pending ?? 0,
             windows: summary.idleContradictionWindows,
             lastErrorType: summary.lastErrorTag ?? "none",
+            ...summary.lastErrorPgFields,
           });
         }
         // A citing jurisdiction with no declared resolution policy is a

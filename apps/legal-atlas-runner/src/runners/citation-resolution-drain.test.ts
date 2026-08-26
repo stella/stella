@@ -80,6 +80,8 @@ type RunDrainOptions = {
   /** Pending gauge readings, in window order; the last repeats. */
   pending?: readonly number[];
   timing?: CitationResolutionDrainTiming;
+  /** What a `"throw"` step raises. */
+  thrown?: () => unknown;
 };
 
 const runDrain = async ({
@@ -87,6 +89,7 @@ const runDrain = async ({
   steps,
   timing = TIMING,
   turns,
+  thrown = () => new Error("batch failed"),
 }: RunDrainOptions): Promise<DrainRun> => {
   const events: DrainEvent[] = [];
   const summaries: CitationResolutionDrainSummary[] = [];
@@ -102,7 +105,7 @@ const runDrain = async ({
       taken += 1;
       draining ||= taken >= turns;
       if (step === "throw" || step === undefined) {
-        throw new Error("batch failed");
+        throw thrown();
       }
       return await Promise.resolve(step);
     },
@@ -187,6 +190,38 @@ test("a throwing batch backs off and the walk continues", async () => {
   expect(gapBefore(events, 1)).toBe(TIMING.batchDelayMs);
   expect(gapBefore(events, 2)).toBe(TIMING.batchDelayMs * 2);
   expect(summaries.at(-1)).toMatchObject({ errored: 4, lastErrorTag: "Error" });
+});
+
+test("a wedged walk reports which database error wedged it", async () => {
+  // Every failure raised inside a prepared query arrives as the same wrapper,
+  // so the tag alone reads "DrizzleQueryError" whether the statement hit a
+  // missing column, a privilege, or a constraint. Without the SQLSTATE beside
+  // it a stalled walk is diagnosable only from the database's own logs.
+  const { summaries } = await runDrain({
+    steps: ["throw"],
+    turns: 3,
+    thrown: () =>
+      new Error("Failed query: select ...", {
+        cause: Object.assign(new Error("permission denied"), {
+          // Bun's driver puts the SQLSTATE in `errno`; `code` is the generic
+          // category, which is why the category alone cannot name the fault.
+          errno: "42501",
+          code: "ERR_POSTGRES_SERVER_ERROR",
+          table: "case_law_citations",
+          column: "cited_court_hint",
+        }),
+      }),
+  });
+  expect(summaries.at(-1)?.lastErrorPgFields).toEqual({
+    "error.cause.pg_code": "42501",
+    "error.cause.pg_table": "case_law_citations",
+    "error.cause.pg_column": "cited_court_hint",
+  });
+});
+
+test("a walk stopped by something other than the database reports no pg fields", async () => {
+  const { summaries } = await runDrain({ steps: ["throw"], turns: 3 });
+  expect(summaries.at(-1)?.lastErrorPgFields).toEqual({});
 });
 
 test("the failure backoff has a floor of its own when pacing is zero", async () => {
