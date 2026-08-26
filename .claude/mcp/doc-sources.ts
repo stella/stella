@@ -89,7 +89,6 @@ export const DOC_SOURCES = {
       "@tiptap/extension-paragraph",
       "@tiptap/extension-placeholder",
       "@tiptap/extension-text",
-      "@tiptap/extensions",
       "@tiptap/pm",
       "@tiptap/react",
       "@tiptap/suggestion",
