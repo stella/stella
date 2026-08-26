@@ -3,7 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import type { Transaction } from "@/api/db/root";
-import { corpusIndexGenerations } from "@/api/db/schema/corpus-index-generations";
+import { corpusIndexGenerations } from "@/api/db/schema";
 import { registerCorpusIndexGenerationTx } from "@/api/lib/legal-search/corpus-index-generation-store";
 import {
   corpusIndexManifestDigest,
@@ -79,15 +79,21 @@ test("generation registration fails closed on a drifted binding", async () => {
     status: "building",
   });
 
-  await expect(
-    db.transaction(
+  // bun-types declares `.rejects.toThrow` as void, so awaiting it trips
+  // type-aware lint; capture the rejection explicitly instead.
+  const rejection: unknown = await db
+    .transaction(
       async (tx) =>
         await registerCorpusIndexGenerationTx(
           asTestRaw<Transaction>(tx),
           LEGISLATION_TARGET,
         ),
-    ),
-  ).rejects.toThrow(
-    "Corpus generation contract mismatch: legislation/legislation_v2",
-  );
+    )
+    .then(
+      () => null,
+      (error: unknown) => error,
+    );
+  expect(rejection).toMatchObject({
+    message: "Corpus generation contract mismatch: legislation/legislation_v2",
+  });
 });

@@ -2,7 +2,7 @@ import { panic } from "better-result";
 import { and, eq } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
-import { corpusIndexGenerations } from "@/api/db/schema/corpus-index-generations";
+import { corpusIndexGenerations } from "@/api/db/schema";
 import {
   corpusIndexManifestDigest,
   requireCorpusIndexManifest,
