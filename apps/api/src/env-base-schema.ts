@@ -376,15 +376,9 @@ export const envBaseInvariantViolation = ({
   if (!isDev && CORPUS_INDEX_Q09_SEARCH_ENDPOINT !== undefined) {
     return "CORPUS_INDEX_Q09_SEARCH_ENDPOINT is only supported in local development.";
   }
-  if (
-    CORPUS_INDEX_Q09_ENDPOINT !== undefined &&
-    !isTlsOrLoopbackUrl(CORPUS_INDEX_Q09_ENDPOINT, {
-      plaintextProtocol: "http:",
-      tlsProtocol: "https:",
-    })
-  ) {
-    return "CORPUS_INDEX_Q09_ENDPOINT must use HTTPS unless it targets a loopback address.";
-  }
+  // Mutation endpoints are private deployment control-plane inputs. Both
+  // q08 and q09 run on VPC-only Cloud Map HTTP; public or local read-only
+  // overrides use the separately validated *_SEARCH_ENDPOINT variables.
   // REMOVAL CONDITION: delete this invariant in the PR that makes a corpus
   // cursor carry the dictionary version it was built against.
   //
