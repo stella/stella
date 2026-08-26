@@ -434,7 +434,7 @@ test("failure classification locks projection state before its intent", async ()
   expect(intentLock).toBeGreaterThan(stateLock);
 });
 
-test("unknown append cleanup starts its barrier at failure observation", async () => {
+test("unknown append cleanup starts its barrier at append start", async () => {
   const appendStartedAt = new Date("2026-08-25T12:00:00.000Z");
   const failureObservedAt = new Date("2026-08-25T12:00:10.000Z");
   const leases = await db.transaction(
@@ -482,7 +482,7 @@ test("unknown append cleanup starts its barrier at failure observation", async (
     .from(corpusIndexProjectionIntents)
     .where(eq(corpusIndexProjectionIntents.id, lease.intentId));
   const expectedBarrier = corpusIndexUnknownAppendBarrierAt(
-    failureObservedAt,
+    appendStartedAt,
     CORPUS_INDEX_MANIFESTS.case_law_v5,
   );
   expect(intents).toEqual([
