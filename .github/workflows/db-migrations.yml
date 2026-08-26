@@ -11,6 +11,7 @@ on:
       - "apps/api/drizzle.config.ts"
       - "scripts/check-migration-safety.ts"
       - "scripts/check-migrations.sh"
+      - "scripts/rehearse-better-auth-constraint-retry.sh"
       - ".squawk.toml"
       - ".github/workflows/db-migrations.yml"
       - ".github/workflows/release.yml"
