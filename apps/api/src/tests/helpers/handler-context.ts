@@ -4,6 +4,10 @@ import type { roles } from "@stll/permissions";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
+import {
+  ORG_AI_CONFIG_STATUS,
+  type OrgAIConfigStatus,
+} from "@/api/lib/ai-config-loader-core";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -51,6 +55,7 @@ export type BaseTestHandlerContext = {
   ) => Promise<AccessibleWorkspace | null>;
   pinServerValidatedWorkspaceId: (workspaceId: SafeId<"workspace">) => boolean;
   orgAIConfig: OrgAIConfig | null;
+  orgAIConfigStatus: OrgAIConfigStatus;
   promptCachingEnabled: boolean;
   request: Request;
   route: string;
@@ -105,6 +110,7 @@ const createBaseContext = (): BaseTestHandlerContext => ({
   pinServerValidatedWorkspaceId: (workspaceId) =>
     workspaceId === DEFAULT_WORKSPACE_ID,
   orgAIConfig: null,
+  orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
   promptCachingEnabled: false,
   request: new Request("https://example.test/handler-context"),
   route: "/tests/handler-context",

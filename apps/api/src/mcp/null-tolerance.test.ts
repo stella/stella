@@ -85,6 +85,7 @@ const createContext = (): McpRequestContext => {
 
 const loadOrgSettingsMock = mock(async () => ({
   orgAIConfig: null,
+  orgAIConfigStatus: "ok",
   promptCachingEnabled: false,
 }));
 const realLoader = await import("@/api/lib/ai-config-loader");

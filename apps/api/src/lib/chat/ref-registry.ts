@@ -56,6 +56,24 @@ const SOURCE_CITATION_REF_LINK_REGEX = createRefLinkRegex(
   CHAT_SOURCE_CITATION_REF_PREFIX,
 );
 
+// Shape of a ref this registry mints: `<prefix>_<counter>`.
+const MINTED_REF_SHAPE = /^[a-z]+_[0-9]+$/u;
+
+/**
+ * Telemetry description of a ref the registry never minted. Such a ref is
+ * model-authored text captured by the link regex, not a token this turn
+ * produced, so only its shape travels: a short digest correlates repeats of
+ * the same ref without carrying its content.
+ */
+const describeUnresolvedRef = (ref: string) => ({
+  refDigest: new Bun.CryptoHasher("sha256")
+    .update(ref)
+    .digest("hex")
+    .slice(0, 8),
+  refLength: String(ref.length),
+  refMatchesMintedShape: String(MINTED_REF_SHAPE.test(ref)),
+});
+
 const escapeMarkdownLinkLabel = (label: string) =>
   label.replaceAll("\\", "\\\\").replaceAll("[", "\\[").replaceAll("]", "\\]");
 
@@ -361,13 +379,15 @@ export const createChatRefRegistry = (): ChatRefRegistry => {
     `${CHAT_SOURCE_CITATION_REF_PREFIX}${toSourceCitationRef(target)}`;
 
   const reportUnknownAssistantRef = (kind: string, ref: string) => {
-    // The ref itself is a per-turn opaque token (never a tenant id), so it is
-    // safe context; a hallucinated citation should be visible in telemetry.
     captureError(
       new TelemetryError({
         message: "Assistant text cited a chat ref this turn never minted",
       }),
-      { source: "chat-ref-registry", kind, ref },
+      {
+        source: "chat-ref-registry",
+        kind,
+        ...describeUnresolvedRef(ref),
+      },
     );
   };
 

@@ -18,8 +18,10 @@ import { decryptAIConfig } from "@/api/lib/ai-config-crypto";
 import {
   decryptOrgAIConfigRow,
   decryptOrgAIConfigRowOrThrow,
+  ORG_AI_CONFIG_STATUS,
   resolvePromptCachingPreference,
 } from "@/api/lib/ai-config-loader-core";
+import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
 import type { SafeId } from "@/api/lib/branded-types";
 
 /**
@@ -61,6 +63,7 @@ export const loadPromptCachingPreference = async (
 
 export type OrgSettingsForAuth = {
   orgAIConfig: OrgAIConfig | null;
+  orgAIConfigStatus: OrgAIConfigStatus;
   promptCachingEnabled: boolean;
 };
 
@@ -74,8 +77,9 @@ export type OrgSettingsForAuth = {
  * instead of throwing: this backs the shared per-request auth resolve, so a
  * single undecryptable row (key rotation, cross-env restore) must not fail
  * every request for the org. The decrypt failure is still captured (see
- * `decryptOrgAIConfigRow`); AI-invoking call sites use `loadOrgAIConfig`
- * instead, which surfaces a typed `ConfigurationError`.
+ * `decryptOrgAIConfigRow`) and reported as `orgAIConfigStatus:
+ * "unreadable"`, which AI-invoking call sites must fail closed on rather
+ * than reading the null as "this org has no config of its own".
  */
 export const loadOrgSettingsForAuth = async (
   organizationId: SafeId<"organization">,
@@ -100,7 +104,11 @@ export const loadOrgSettingsForAuth = async (
   });
   const orgAIConfig =
     decryptResult.status === "ok" ? decryptResult.config : null;
+  const orgAIConfigStatus =
+    decryptResult.status === "ok"
+      ? ORG_AI_CONFIG_STATUS.ok
+      : ORG_AI_CONFIG_STATUS.unreadable;
   const promptCachingEnabled = resolvePromptCachingPreference(row);
 
-  return { orgAIConfig, promptCachingEnabled };
+  return { orgAIConfig, orgAIConfigStatus, promptCachingEnabled };
 };

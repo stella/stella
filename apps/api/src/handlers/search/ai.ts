@@ -23,6 +23,7 @@ import { env } from "@/api/env";
 import { resolveSelectedWorkspaceIds } from "@/api/handlers/search/search";
 import { resolveCaching } from "@/api/lib/ai-config";
 import type { CachingDecision, OrgAIConfig } from "@/api/lib/ai-config";
+import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
 import { aiErrorStatusBody } from "@/api/lib/ai-error";
 import { captureError } from "@/api/lib/analytics/capture";
 import {
@@ -197,6 +198,7 @@ type SearchSummaryChatBody = Static<typeof searchSummaryChatBodySchema>;
 type SearchAIContext = {
   organizationId: SafeId<"organization">;
   orgAIConfig: OrgAIConfig | null;
+  orgAIConfigStatus: OrgAIConfigStatus;
   promptCachingEnabled: boolean;
   safeDb: SafeDb;
   scopedDb: ScopedDb;
@@ -351,6 +353,7 @@ export const refineSearchQuery = async ({
   body,
   organizationId,
   orgAIConfig,
+  orgAIConfigStatus,
   promptCachingEnabled,
   safeDb,
   scopedDb,
@@ -359,6 +362,7 @@ export const refineSearchQuery = async ({
   body: RefineSearchBody;
 }) => {
   const gate = requireTanStackAIAvailableForRole({
+    configStatus: orgAIConfigStatus,
     orgConfig: orgAIConfig,
     role: "fast",
   });
@@ -444,6 +448,7 @@ export const summarizeSearchResults = async ({
   userId,
   accessibleWorkspaceIds,
   orgAIConfig,
+  orgAIConfigStatus,
   promptCachingEnabled,
   safeDb,
   scopedDb,
@@ -451,6 +456,7 @@ export const summarizeSearchResults = async ({
   body: SummarizeSearchBody;
 }) => {
   const gate = requireTanStackAIAvailableForRole({
+    configStatus: orgAIConfigStatus,
     orgConfig: orgAIConfig,
     role: "fast",
   });

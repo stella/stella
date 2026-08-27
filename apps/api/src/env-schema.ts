@@ -3,12 +3,22 @@ import * as v from "valibot";
 
 import { DEPLOYED_NODE_ENVS } from "@/api/env-base-schema";
 import { SIGNUP_RATE_LIMIT_IP_SOURCE } from "@/api/lib/client-ip-config";
-import { isTlsOrLoopbackUrl } from "@/api/lib/secure-service-url";
+import {
+  isSecureGotenbergUrl,
+  isTlsOrLoopbackUrl,
+} from "@/api/lib/secure-service-url";
 
 const featureFlagSchema = v.optional(
   v.pipe(v.string(), v.parseBoolean()),
   "false",
 );
+
+/** Microsoft's shared authorization endpoints, which are not a directory. */
+const MICROSOFT_AUTH_MULTI_TENANT_IDS = new Set([
+  "common",
+  "consumers",
+  "organizations",
+]);
 
 type EmailProviderInput = {
   EMAIL_PROVIDER?: "ses" | "smtp" | undefined;
@@ -107,9 +117,11 @@ export const envApiServerSchema = {
   ),
   /**
    * Enables the post-deploy synthetic-monitoring session endpoint
-   * (handlers/smoke). Set only on non-production deployments; the
-   * route additionally refuses to exist when NODE_ENV is
-   * "production" regardless of this value.
+   * (handlers/smoke). Presence of this secret is the only gate: the
+   * deployed binary is built with NODE_ENV=production and Bun inlines
+   * that read, so the route cannot tell staging from production at
+   * runtime. Infrastructure must inject it on non-production
+   * deployments only (see handlers/smoke/routes.ts).
    */
   SMOKE_SESSION_SECRET: v.optional(v.pipe(v.string(), v.minLength(32))),
   /**
@@ -467,6 +479,7 @@ type EnvApiInvariantInput = {
   E2E_DISABLE_AUTH_RATE_LIMIT: boolean;
   EMAIL_PROVIDER?: "ses" | "smtp" | undefined;
   FRONTEND_URL: string;
+  GOTENBERG_URL: string;
   MICROSOFT_AUTH_CLIENT_ID?: string | undefined;
   MICROSOFT_AUTH_CLIENT_SECRET?: string | undefined;
   MICROSOFT_AUTH_TENANT_ID?: string | undefined;
@@ -486,6 +499,7 @@ export const envApiInvariantViolation = ({
   E2E_DISABLE_AUTH_RATE_LIMIT,
   EMAIL_PROVIDER,
   FRONTEND_URL,
+  GOTENBERG_URL,
   MICROSOFT_AUTH_CLIENT_ID,
   MICROSOFT_AUTH_CLIENT_SECRET,
   MICROSOFT_AUTH_TENANT_ID,
@@ -517,6 +531,23 @@ export const envApiInvariantViolation = ({
     );
     if (insecurePublicOrigin !== undefined) {
       return `${insecurePublicOrigin.name} must use HTTPS unless it targets a loopback address.`;
+    }
+    // Document content and the sidecar's basic-auth credentials travel this
+    // URL. Left unchecked since the self-hosting rework; the rule is back with
+    // the private-network forms that rework needed.
+    if (!isSecureGotenbergUrl(GOTENBERG_URL)) {
+      return "GOTENBERG_URL must use HTTPS unless it targets a loopback address or a private deployment network.";
+    }
+    // Microsoft's shared endpoints admit any account, personal ones included,
+    // so the tenant stops being an identity boundary. Name the directory.
+    if (
+      (MICROSOFT_AUTH_CLIENT_ID || MICROSOFT_AUTH_CLIENT_SECRET) &&
+      MICROSOFT_AUTH_TENANT_ID !== undefined &&
+      MICROSOFT_AUTH_MULTI_TENANT_IDS.has(
+        MICROSOFT_AUTH_TENANT_ID.toLowerCase(),
+      )
+    ) {
+      return `MICROSOFT_AUTH_TENANT_ID must name one directory, not ${[...MICROSOFT_AUTH_MULTI_TENANT_IDS].join(" / ")}.`;
     }
   }
   if (E2E_DISABLE_AUTH_RATE_LIMIT && nodeEnv !== "development") {

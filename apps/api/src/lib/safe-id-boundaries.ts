@@ -62,6 +62,10 @@ export const brandPersistedReportExportId = (
 export const brandPersistedFieldId = (fieldId: string): SafeId<"field"> =>
   toSafeId<"field">(fieldId);
 
+export const brandPersistedPendingUploadId = (
+  pendingUploadId: string,
+): SafeId<"pendingUpload"> => toSafeId<"pendingUpload">(pendingUploadId);
+
 export const brandPersistedEntityVersionId = (
   entityVersionId: string,
 ): SafeId<"entityVersion"> => toSafeId<"entityVersion">(entityVersionId);

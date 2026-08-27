@@ -51,7 +51,7 @@ describe("anonymizeTextFields", () => {
 
   test("injects name dictionaries into the API anonymization pipeline", async () => {
     let capturedDictionaries: unknown;
-    let gazetteerWorkspaceId: unknown;
+    let gazetteerScope: unknown;
     const loadNameDictionariesMock: AnonymizeTextFieldsDependencies["loadNameDictionaries"] =
       mock(async () => dictionaries);
     // SAFETY: this test double never touches the actual binding
@@ -86,8 +86,8 @@ describe("anonymizeTextFields", () => {
       createNativePipelineFromConfig: createNativePipelineFromConfigMock,
       createPipelineContext,
       deanonymise: (redactedText: string) => redactedText,
-      loadAnonymizationGazetteerEntries: async ({ workspaceId }) => {
-        gazetteerWorkspaceId = workspaceId;
+      loadAnonymizationGazetteerEntries: async ({ scope }) => {
+        gazetteerScope = scope;
         return [];
       },
       loadAnonymizationAllowlistCanonicals: async () => [],
@@ -106,11 +106,14 @@ describe("anonymizeTextFields", () => {
     });
 
     expect(loadNameDictionariesMock).toHaveBeenCalledTimes(1);
-    expect(gazetteerWorkspaceId).toBe("00000000-0000-4000-8000-000000000001");
+    expect(gazetteerScope).toEqual({
+      type: "workspace",
+      workspaceId: "00000000-0000-4000-8000-000000000001",
+    });
     expect(createNativePipelineFromConfigMock).toHaveBeenCalledTimes(1);
     expect(capturedDictionaries).toBe(dictionaries);
 
-    gazetteerWorkspaceId = "not-called";
+    gazetteerScope = "not-called";
     await anonymizeTextFieldsWithDependencies({
       dependencies,
       fields: ["Alice Novak"],
@@ -119,6 +122,6 @@ describe("anonymizeTextFields", () => {
       workspaceId: "org_test",
     });
 
-    expect(gazetteerWorkspaceId).toBeUndefined();
+    expect(gazetteerScope).toEqual({ type: "organization" });
   });
 });

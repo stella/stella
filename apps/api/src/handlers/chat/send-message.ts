@@ -1303,6 +1303,7 @@ const sendMessage = createSafeRootHandler(
     getWorkspaceAccess,
     memberRole,
     orgAIConfig,
+    orgAIConfigStatus,
     promptCachingEnabled,
     pinServerValidatedWorkspaceId,
     recordAuditEvent,
@@ -1332,6 +1333,7 @@ const sendMessage = createSafeRootHandler(
     }
 
     yield* requireTanStackAIAvailableForRole({
+      configStatus: orgAIConfigStatus,
       orgConfig: orgAIConfig,
       role: "chat",
     });
@@ -1996,6 +1998,7 @@ const sendMessage = createSafeRootHandler(
                   // class of leak this whole change exists to close.
                   //
                   const persistResult = await finalizeAssistantTurn({
+                    acceptedSendMode: body.sendMode,
                     dataScopeExpansion: {
                       newWorkspaceIds: resolved.workspaceIds,
                     },

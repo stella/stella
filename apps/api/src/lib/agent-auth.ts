@@ -311,7 +311,7 @@ export type AnonymousRegistrationResult = {
  * caller cannot probe for account existence.
  */
 export const startServiceAuthRegistration = async (
-  loginHint: string | null,
+  loginHint: string,
 ): Promise<ServiceAuthCeremony> => {
   const registrationId = createSafeId<"mcpOAuthClient">();
   const claimToken = generateOpaqueToken();
@@ -443,20 +443,23 @@ export const confirmServiceAuthRegistration = async ({
     return { status: "expired" };
   }
 
-  // The agent supplied an email hint (service_auth `login_hint`, or the email
-  // an anonymous claim was upgraded with): only the human who owns that email
-  // may bind it. Without this a forwarded/intercepted user_code lets a
-  // different signed-in member claim the agent for their own account. A
-  // mismatch returns the same not_found a wrong code would, so a claimer
-  // cannot probe which email a code belongs to.
-  if (registration.loginHint) {
-    const emailMatches = await confirmerEmailMatchesHint(
-      userId,
-      registration.loginHint,
-    );
-    if (!emailMatches) {
-      return { status: "not_found" };
-    }
+  // Every claimable registration carries the email hint the agent supplied
+  // (service_auth `login_hint`, or the email an anonymous claim was upgraded
+  // with), and only the human who owns that email may bind it: a forwarded
+  // user_code must not let a different signed-in member claim the agent for
+  // their own account. The column is nullable for rows written before the
+  // hint became mandatory, so an absent hint fails closed rather than
+  // skipping the check. A mismatch returns the same not_found a wrong code
+  // would, so a claimer cannot probe which email a code belongs to.
+  if (!registration.loginHint) {
+    return { status: "not_found" };
+  }
+  const emailMatches = await confirmerEmailMatchesHint(
+    userId,
+    registration.loginHint,
+  );
+  if (!emailMatches) {
+    return { status: "not_found" };
   }
 
   const codeResult = await issueAuthorizationCode({

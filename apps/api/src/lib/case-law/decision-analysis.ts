@@ -31,6 +31,8 @@ export const readDecisionAnalysis = definePublicLawSharedQuery(
     await tx.query.caseLawDecisions.findFirst({
       where: { id: { eq: decisionId } },
       columns: decisionAnalysisColumns,
-      with: { source: { columns: { adapterKey: true } } },
+      // `descriptor` carries the source's reuse terms and is read only to
+      // decide whether the text may be fed to a model; it is never returned.
+      with: { source: { columns: { adapterKey: true, descriptor: true } } },
     }),
 );

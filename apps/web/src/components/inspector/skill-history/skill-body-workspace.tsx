@@ -272,6 +272,7 @@ export const SkillBodyWorkspace = ({
         />
       ) : (
         <MarkdownHybridEditor
+          imagePolicy="data-only"
           baseline={
             comparedRevision.data === undefined
               ? undefined

@@ -24,6 +24,7 @@ import {
   ISSUES_TABLE_COLUMNS,
   renderIssuesTableDocx,
 } from "@/api/lib/document-review/issues-table";
+import { resolveReferenceScope } from "@/api/lib/document-review/reference-access";
 import { DOCUMENT_REVIEW_FINDINGS_PER_RUN_MAX } from "@/api/lib/document-review/run-contract";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
@@ -117,7 +118,17 @@ const exportDocumentReviewRun = createSafeHandler(
       ),
     );
 
-    const rows = buildIssuesTableRows({ basis: run.basis, findings });
+    const scopeReference = yield* Result.await(
+      resolveReferenceScope(safeDb, run.basis),
+    );
+    const rows = buildIssuesTableRows({
+      basis: run.basis,
+      findings: findings.map(({ topicTitle, payload, decision }) => ({
+        topicTitle,
+        payload: scopeReference(payload),
+        decision,
+      })),
+    });
     const exportName = `${withoutExtension(run.targetName)}${FILE_SUFFIX}`;
     const table: ExportTableInput = {
       columns: ISSUES_TABLE_COLUMNS.map(({ header }) => ({ header })),

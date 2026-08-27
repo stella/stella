@@ -28,10 +28,11 @@ const config = {
   body: t.Union([
     t.Object({
       type: t.Literal("service_auth"),
-      // The hint gates confirmation against the human's account email, so an
-      // arbitrary string would create a permanently unclaimable ceremony;
-      // require a valid address (same as the claim endpoint).
-      login_hint: t.Optional(t.String({ format: "email", maxLength: 320 })),
+      // The hint is what binds confirmation to one human's account email, so
+      // the ceremony cannot be started without it. An arbitrary string would
+      // create a permanently unclaimable ceremony; require a valid address
+      // (same as the claim endpoint).
+      login_hint: t.String({ format: "email", maxLength: 320 }),
     }),
     t.Object({
       type: t.Literal("anonymous"),
@@ -206,10 +207,7 @@ const agentIdentityHandler = createSafePublicHandler(
       });
     }
 
-    const loginHint = body.login_hint?.trim() ?? "";
-    const ceremony = await startServiceAuthRegistration(
-      loginHint.length > 0 ? loginHint : null,
-    );
+    const ceremony = await startServiceAuthRegistration(body.login_hint.trim());
 
     const verificationUri = getClaimVerificationUri();
     const verificationUriComplete = `${verificationUri}?user_code=${encodeURIComponent(ceremony.userCode)}`;

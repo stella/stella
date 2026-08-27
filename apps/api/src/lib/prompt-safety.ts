@@ -163,6 +163,37 @@ const promptDelimiter = (
   return delimiter;
 };
 
+type SanitizePromptLineOptions = {
+  maxLength: number;
+  text: string;
+};
+
+/**
+ * Single-line form for untrusted values interpolated inside a sentence
+ * (file names, titles, labels), where the fenced block {@link
+ * sanitizeForPrompt} produces would break the surrounding text. Applies the
+ * same strips (control chars, bidi/zero-width overrides, role markers, the
+ * delimiter sequences) and collapses newlines and tabs so a value cannot
+ * open a line of its own in the rendered prompt.
+ *
+ * Returns a plain string, not `PromptSafeText`: that brand means "fenced and
+ * labelled as data", which an inline value is not.
+ */
+export const sanitizePromptLine = ({
+  maxLength,
+  text,
+}: SanitizePromptLineOptions): string => {
+  let cleaned = stripPromptUnsafeChars(text);
+  for (const pattern of ROLE_MARKERS) {
+    cleaned = cleaned.replace(pattern, "");
+  }
+  cleaned = cleaned
+    .replace(/[\r\n\t]/gu, " ")
+    .replaceAll(DEFAULT_OPEN, " ")
+    .replaceAll(DEFAULT_CLOSE, " ");
+  return truncateAtUtf16Boundary(cleaned, maxLength);
+};
+
 /**
  * Promote untrusted input to text safe for prompt interpolation.
  *

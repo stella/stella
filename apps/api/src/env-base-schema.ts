@@ -35,6 +35,38 @@ import {
  */
 export const DEPLOYED_NODE_ENVS = new Set(["production", "staging"]);
 
+/** NODE_ENV values that identify a local (developer or test) run. */
+const LOCAL_NODE_ENVS = new Set(["development", "test"]);
+
+export const KNOWN_NODE_ENVS = [...LOCAL_NODE_ENVS, ...DEPLOYED_NODE_ENVS];
+
+export const NODE_ENV_KIND = {
+  local: "local",
+  deployed: "deployed",
+  unknown: "unknown",
+} as const;
+
+type NodeEnvKind = (typeof NODE_ENV_KIND)[keyof typeof NODE_ENV_KIND];
+
+/**
+ * Which kind of environment a NODE_ENV value names. Callers turn `unknown`
+ * into a boot failure or a reported issue: a misspelled value must not read
+ * as local, which is what relaxes the transport invariants below and opens
+ * the local-only routes. Unset is local, because every deployed image pins
+ * NODE_ENV while scripts and one-off commands routinely run without it.
+ */
+export const classifyNodeEnv = (nodeEnv: string | undefined): NodeEnvKind => {
+  if (nodeEnv === undefined || nodeEnv === "") {
+    return NODE_ENV_KIND.local;
+  }
+  if (LOCAL_NODE_ENVS.has(nodeEnv)) {
+    return NODE_ENV_KIND.local;
+  }
+  return DEPLOYED_NODE_ENVS.has(nodeEnv)
+    ? NODE_ENV_KIND.deployed
+    : NODE_ENV_KIND.unknown;
+};
+
 const databasePoolMaxValueSchema = v.pipe(
   v.string(),
   v.digits(),

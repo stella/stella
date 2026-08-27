@@ -96,6 +96,7 @@ void mock.module("@/api/lib/ai-config-loader", () => ({
   loadOrgAIConfig: loadOrgAIConfigMock,
   loadOrgSettingsForAuth: mock(async () => ({
     orgAIConfig: null,
+    orgAIConfigStatus: "ok",
     promptCachingEnabled: false,
   })),
   loadPromptCachingPreference: mock(async () => false),

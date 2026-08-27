@@ -46,6 +46,7 @@ const rewriteSkillResource = createSafeRootHandler(
     body,
     memberRole,
     orgAIConfig,
+    orgAIConfigStatus,
     params,
     promptCachingEnabled,
     safeDb,
@@ -53,6 +54,7 @@ const rewriteSkillResource = createSafeRootHandler(
     user,
   }) {
     yield* requireTanStackAIAvailableForRole({
+      configStatus: orgAIConfigStatus,
       orgConfig: orgAIConfig,
       role: "fast",
     });

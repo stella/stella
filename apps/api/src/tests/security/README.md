@@ -7,20 +7,31 @@ catch regressions that could violate SOC 2 Type II controls
 
 ## What is tested
 
-### `permission-guards.test.ts`
+### `exempt-route-guards.test.ts`
 
-Static analysis test that scans all handler route files for
-mutation endpoints (PUT, POST, PATCH, DELETE) and verifies each
-one has a `permission(...)` guard in its options object.
+Every handler route file is covered by the `require-safe-route-handlers`
+oxlint rule except the ~17 listed in its `oxlint.config.ts` override
+(public/protocol/auth/dev/SSE surfaces that do not fit the safe-handler
+config shape). This test is the independent check for exactly that
+exempt set, which the live lint rule cannot see:
 
-- Discovers route files automatically from `handlers/*/routes.ts`.
-- Parses mutation calls with a regex, then scans forward for a
-  `permission` call in the options window.
-- An allowlist covers intentionally unguarded endpoints (dev-only
-  routes, read-like POSTs). Adding to the allowlist requires code
-  review.
-- A staleness check ensures allowlist entries still correspond to
-  real endpoints, preventing forgotten exemptions.
+- Compares the oxlint override's file list against a checked-in expected
+  list, so the exemption cannot grow silently.
+- Scans each exempt file for mutation endpoints (`.post`/`.put`/`.patch`/
+  `.delete` with a string-literal path) and requires each one to be a
+  reviewed, checked-in allowlist entry. A staleness check ensures
+  allowlist entries still correspond to real endpoints.
+
+### `write-handler-permission-coverage.test.ts`
+
+Static census over every `{ config, handler }` endpoint in the handler
+tree (via the shared `discoverSafeHandlers` enumerator): a handler that
+declares `access: "write"` or `requiresUsage.actionType: "chat"` must
+carry a `permissions` grant beyond `workspace:["read"]` — the baseline
+every member, including the lowest-privileged role, already holds.
+A handler config may opt out with a `// permissions-exempt: <reason>`
+comment for a reviewed exception (e.g. a purpose-dependent grant checked
+in-handler rather than statically).
 
 ### `branded-types.test.ts`
 

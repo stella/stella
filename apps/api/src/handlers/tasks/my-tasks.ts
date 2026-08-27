@@ -1,4 +1,4 @@
-import { and, asc, eq, gt, ne, or, sql } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, ne, or, sql } from "drizzle-orm";
 import { type Static, t } from "elysia";
 
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -50,6 +50,7 @@ type MyTasksProps = {
   limit: number;
   status: MyTasksStatus | null;
   userId: SafeId<"user">;
+  activeWorkspaceIds: SafeId<"workspace">[];
   scopedDb: ScopedDb;
 };
 
@@ -58,12 +59,14 @@ export const myTasksHandler = async ({
   limit,
   status,
   userId,
+  activeWorkspaceIds,
   scopedDb,
 }: MyTasksProps) => {
   const conditions = [
     eq(taskAssignees.userId, userId),
     eq(entities.kind, "task"),
     ne(entities.status, TASK_STATUS.CANCELLED),
+    inArray(entities.workspaceId, activeWorkspaceIds),
   ];
 
   if (status) {

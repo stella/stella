@@ -3266,6 +3266,7 @@
         "disabledSuccess": "Dviejų veiksnių autentifikavimas išjungtas",
         "downloadCodes": "Atsisiųsti kaip tekstinį failą",
         "enable": "Įjungti dviejų veiksnių autentifikavimą",
+        "enableOtpDescription": "Išsiuntėme patvirtinimo kodą į jūsų el. paštą. Įveskite jį žemiau, kad patvirtintumėte dviejų veiksnių autentifikavimo įjungimą.",
         "enabledStatus": "Įjungta",
         "enabledSuccess": "Dviejų veiksnių autentifikavimas įjungtas",
         "enterCodeToConfirm": "Norėdami patvirtinti nustatymą, įveskite patvirtinimo kodą iš savo autentifikavimo programėlės.",

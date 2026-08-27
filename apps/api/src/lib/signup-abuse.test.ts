@@ -29,7 +29,7 @@ describe("new-account OTP abuse policy", () => {
     }
   });
 
-  test("allows an existing account without consuming signup capacity", async () => {
+  test("allows an existing account without spending its new-account capacity", async () => {
     const observedKeys: string[] = [];
     const result = await evaluateNewAccountOtpPolicy({
       accountExists: async (email) => email === "user@mailinator.com",
@@ -38,7 +38,7 @@ describe("new-account OTP abuse policy", () => {
         increment: async (key) => {
           observedKeys.push(key);
           return {
-            count: 1,
+            count: NEW_ACCOUNT_OTP_RATE_LIMITS.email.max + 1,
             nextReset: new Date(Date.now() + 60_000),
             start: Date.now(),
           };
@@ -47,11 +47,41 @@ describe("new-account OTP abuse policy", () => {
       email: " USER@MAILINATOR.COM ",
     });
 
+    // Exhausted counters do not turn into a refusal for an address that
+    // already has an account: sign-in stays governed by the auth limits.
     expect(result).toEqual({
       status: "allowed",
       reason: "existing_account",
     });
-    expect(observedKeys).toHaveLength(0);
+  });
+
+  test("consumes the same counters whether or not the address has an account", async () => {
+    const recordKeys = async (accountExists: boolean) => {
+      const observedKeys: string[] = [];
+      await evaluateNewAccountOtpPolicy({
+        accountExists: async () => accountExists,
+        clientIp: "192.0.2.1",
+        context: {
+          increment: async (key) => {
+            observedKeys.push(key);
+            return {
+              count: 1,
+              nextReset: new Date(Date.now() + 60_000),
+              start: Date.now(),
+            };
+          },
+        },
+        email: "user@example.com",
+      });
+      return observedKeys;
+    };
+
+    // Identical increments on both branches: a caller cannot read account
+    // existence off a counter it shares with the request.
+    const registered = await recordKeys(true);
+    const unregistered = await recordKeys(false);
+    expect(registered).toHaveLength(2);
+    expect(registered).toEqual(unregistered);
   });
 
   test("rejects a new disposable address after the shared email limit", async () => {

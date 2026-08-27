@@ -14,7 +14,6 @@ import {
   ambientComposeOverrideIssues,
   existingSelfhostComposeViolations,
   isImmutableApplicationImage,
-  isSecureSelfhostGotenbergUrl,
   materializeSelfhostTemplateForValidation,
   productionEnvironmentIssues,
   releaseManifestIssues,
@@ -116,23 +115,6 @@ describe("self-host production environment", () => {
     expect(isImmutableApplicationImage(image)).toBe(false);
   });
 
-  test.each([
-    "https://converter.example.com",
-    "http://localhost:3003",
-    "http://gotenberg:3000",
-  ])("accepts secure or generated Gotenberg URL %s", (url) => {
-    expect(isSecureSelfhostGotenbergUrl(url)).toBe(true);
-  });
-
-  test.each([
-    "http://converter.example.com",
-    "http://10.0.0.20:3000",
-    "http://gotenberg:3001",
-    "not a URL",
-  ])("rejects arbitrary remote plaintext Gotenberg URL %s", (url) => {
-    expect(isSecureSelfhostGotenbergUrl(url)).toBe(false);
-  });
-
   test("reports every deployment-specific environment issue", () => {
     const environment = materializeSelfhostTemplateForValidation(
       renderSelfhostEnvExample(),
@@ -146,9 +128,10 @@ describe("self-host production environment", () => {
         'GOTENBERG_URL="http://converter.example.com"',
       );
 
+    // The Gotenberg rule now lives in the API's own deployed-environment
+    // invariant, so the doctor reports it before its deployment checks run.
     expect(productionEnvironmentIssues(environment)).toEqual([
-      "STELLA_API_IMAGE must be a digest-qualified image.",
-      "GOTENBERG_URL must use HTTPS, loopback HTTP, or the generated private Compose endpoint.",
+      "GOTENBERG_URL must use HTTPS unless it targets a loopback address or a private deployment network.",
     ]);
   });
 

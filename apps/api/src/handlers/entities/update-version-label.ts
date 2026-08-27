@@ -52,13 +52,14 @@ export const updateVersionLabelHandler = async function* ({
 }: UpdateVersionLabelHandlerProps) {
   const params = { entityId, versionId };
   const body = { label };
-  const result = yield* Result.await(
+  const outcome = yield* Result.await(
     safeDb(async (tx) => {
       const existing = await tx
         .select({
           entityName: entities.name,
           kind: entities.kind,
           label: entityVersions.label,
+          readOnly: entities.readOnly,
         })
         .from(entityVersions)
         .innerJoin(
@@ -79,7 +80,10 @@ export const updateVersionLabelHandler = async function* ({
         .limit(1);
       const previous = existing.at(0);
       if (!previous) {
-        return [];
+        return { status: "not-found" as const };
+      }
+      if (previous.readOnly) {
+        return { status: "read-only" as const };
       }
 
       // Gate the write on liveness too, not just the pre-read: a delete-version
@@ -100,36 +104,50 @@ export const updateVersionLabelHandler = async function* ({
         )
         .returning({ id: entityVersions.id });
 
-      if (updated.length > 0) {
-        await recordAuditEvent(tx, {
-          action: AUDIT_ACTION.UPDATE,
-          resourceType: AUDIT_RESOURCE_TYPE.ENTITY_VERSION,
-          resourceId: params.versionId,
-          metadata: {
-            entityId: params.entityId,
-            entityName: previous.entityName,
-            kind: previous.kind,
-          },
-          changes: {
-            label: {
-              old: previous.label,
-              new: body.label,
-            },
-          },
-        });
+      if (updated.length === 0) {
+        return { status: "not-found" as const };
       }
 
-      return updated;
+      await recordAuditEvent(tx, {
+        action: AUDIT_ACTION.UPDATE,
+        resourceType: AUDIT_RESOURCE_TYPE.ENTITY_VERSION,
+        resourceId: params.versionId,
+        metadata: {
+          entityId: params.entityId,
+          entityName: previous.entityName,
+          kind: previous.kind,
+        },
+        changes: {
+          label: {
+            old: previous.label,
+            new: body.label,
+          },
+        },
+      });
+
+      return { status: "updated" as const };
     }),
   );
 
-  if (result.length === 0) {
-    return Result.err(
-      new HandlerError({ status: 404, message: "Version not found" }),
-    );
+  switch (outcome.status) {
+    case "not-found": {
+      return Result.err(
+        new HandlerError({ status: 404, message: "Version not found" }),
+      );
+    }
+    case "read-only": {
+      return Result.err(
+        new HandlerError({ status: 409, message: "Entity is read-only" }),
+      );
+    }
+    case "updated": {
+      return Result.ok({ updated: true });
+    }
+    default: {
+      const exhaustive: never = outcome;
+      return exhaustive;
+    }
   }
-
-  return Result.ok({ updated: true });
 };
 
 export default createSafeHandler(

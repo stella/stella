@@ -1,7 +1,6 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
-import { roles } from "@stll/permissions";
 import { BLOCK_DIRECTIVE_KINDS } from "@stll/template-conditions";
 
 import { listCategoriesHandler } from "@/api/handlers/clauses/categories";
@@ -54,6 +53,7 @@ import { startWorkflow } from "@/api/lib/workflow-queue";
 import type { Position } from "@/api/lib/workflow/playbook-positions";
 import { PLAYBOOK_RUN_PROJECTION } from "@/api/lib/workflow/playbook-run-projection";
 import type { McpRequestContext } from "@/api/mcp/context";
+import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
 import {
   defineTextFieldSpec,
   deriveTextFieldPaths,
@@ -998,7 +998,7 @@ const readClauseDetail = async ({
 const handleListClausesTool: TypedMcpToolHandler<
   v.InferInput<typeof LIST_CLAUSES_PROJECTION>
 > = async ({ args, context }) => {
-  if (!roles[context.memberRole].authorize({ workspace: ["read"] }).success) {
+  if (!hasEffectiveAuthority(context, { workspace: ["read"] })) {
     return errorResult("Forbidden");
   }
 
@@ -1209,7 +1209,7 @@ const handleSaveClauseTool: TypedMcpToolHandler<
 
   // Create branch.
   if (input.clause_id === undefined) {
-    if (!roles[context.memberRole].authorize({ clause: ["create"] }).success) {
+    if (!hasEffectiveAuthority(context, { clause: ["create"] })) {
       return errorResult("Forbidden");
     }
     // The schema guarantees title and body are present on create. Bind title
@@ -1270,7 +1270,7 @@ const handleSaveClauseTool: TypedMcpToolHandler<
 
   // Update branch. Bind clauseId in the narrowed scope: inside the closure below
   // TypeScript would otherwise widen input.clause_id back to string | undefined.
-  if (!roles[context.memberRole].authorize({ clause: ["update"] }).success) {
+  if (!hasEffectiveAuthority(context, { clause: ["update"] })) {
     return errorResult("Forbidden");
   }
   const clauseId = brandPersistedClauseId(input.clause_id);
@@ -1323,7 +1323,7 @@ const deleteClauseArgsSchema = v.strictObject({
 const handleDeleteClauseTool: TypedMcpToolHandler<
   v.InferInput<typeof DELETED_TRUE_PROJECTION>
 > = async ({ args, context }) => {
-  if (!roles[context.memberRole].authorize({ clause: ["delete"] }).success) {
+  if (!hasEffectiveAuthority(context, { clause: ["delete"] })) {
     return errorResult("Forbidden");
   }
 
@@ -1410,7 +1410,7 @@ const readPlaybookDetail = async ({
 const handleListPlaybooksTool: TypedMcpToolHandler<
   v.InferInput<typeof LIST_PLAYBOOKS_PROJECTION>
 > = async ({ args, context }) => {
-  if (!roles[context.memberRole].authorize({ workspace: ["read"] }).success) {
+  if (!hasEffectiveAuthority(context, { workspace: ["read"] })) {
     return errorResult("Forbidden");
   }
 
@@ -1479,7 +1479,7 @@ const workflowStartFailureResult = () =>
 const handleRunPlaybookTool: TypedMcpToolHandler<
   v.InferInput<typeof RUN_PLAYBOOK_PROJECTION>
 > = async ({ args, context }) => {
-  if (!roles[context.memberRole].authorize({ playbook: ["apply"] }).success) {
+  if (!hasEffectiveAuthority(context, { playbook: ["apply"] })) {
     return errorResult("Forbidden");
   }
 

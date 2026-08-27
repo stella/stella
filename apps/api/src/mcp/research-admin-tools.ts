@@ -9,7 +9,6 @@ import {
   RELATION_TYPES,
   searchConsolidatedLegislation,
 } from "@stll/boe";
-import { roles } from "@stll/permissions";
 
 import { DOCUMENT_PROCESSING_MODES } from "@/api/db/schema";
 import {
@@ -38,6 +37,7 @@ import {
   bindApprovedMcpAuditContext,
   type McpRequestContext,
 } from "@/api/mcp/context";
+import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
 import type {
   McpToolDefinition,
   McpToolHandler,
@@ -459,7 +459,7 @@ const searchLegislationArgsSchema = v.pipe(
 const handleSearchLegislationTool: TypedMcpToolHandler<
   v.InferInput<typeof SEARCH_LEGISLATION_PROJECTION>
 > = async ({ args, context }) => {
-  if (!roles[context.memberRole].authorize({ workspace: ["read"] }).success) {
+  if (!hasEffectiveAuthority(context, { workspace: ["read"] })) {
     return errorResult("Forbidden");
   }
 
@@ -559,7 +559,7 @@ const handleSearchLegislationTool: TypedMcpToolHandler<
 // --- list_audit_log -----------------------------------------------------
 
 const handleListAuditLogTool: McpToolHandler = async ({ args, context }) => {
-  if (!roles[context.memberRole].authorize({ auditLog: ["read"] }).success) {
+  if (!hasEffectiveAuthority(context, { auditLog: ["read"] })) {
     return errorResult("Forbidden");
   }
 
@@ -716,7 +716,7 @@ const handleAddMember = async ({
   matterId: string;
   userId: string;
 }) => {
-  if (!roles[context.memberRole].authorize({ workspace: ["update"] }).success) {
+  if (!hasEffectiveAuthority(context, { workspace: ["update"] })) {
     return errorResult("Forbidden");
   }
   const workspaceId = ensureActiveWorkspace({ context, workspaceId: matterId });
@@ -749,7 +749,7 @@ const handleRemoveMember = async ({
   matterId: string;
   userId: string;
 }) => {
-  if (!roles[context.memberRole].authorize({ workspace: ["update"] }).success) {
+  if (!hasEffectiveAuthority(context, { workspace: ["update"] })) {
     return errorResult("Forbidden");
   }
   const workspaceId = ensureActiveWorkspace({ context, workspaceId: matterId });
@@ -817,10 +817,7 @@ const handleManageOrganizationTool: TypedMcpToolHandler<
   }
 
   // update_org_settings.
-  if (
-    !roles[context.memberRole].authorize({ organizationSettings: ["update"] })
-      .success
-  ) {
+  if (!hasEffectiveAuthority(context, { organizationSettings: ["update"] })) {
     return errorResult("Forbidden");
   }
   const updated = await Result.gen(() =>

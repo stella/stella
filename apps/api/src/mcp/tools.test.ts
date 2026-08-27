@@ -2232,12 +2232,14 @@ describe("OpenAI-compatible MCP tools", () => {
     const anonymizeInput = anonymizeTextFieldsMock.mock.calls.at(-1)?.[0];
     expect(anonymizeInput).toMatchObject({
       fields: ["John Smith SPA"],
-      gazetteerEntries: [],
       organizationId: toSafeId<"organization">("org_1"),
       workspaceId: "ws_1",
     });
     expect(anonymizeInput?.scopedDb).toBeTypeOf("function");
-    expect(loadAnonymizationGazetteerEntriesMock).toHaveBeenCalledTimes(1);
+    // The redactor resolves the deny-list itself, from the workspace it is
+    // handed, so the egress path passes no gazetteer of its own.
+    expect(anonymizeInput?.gazetteerEntries).toBeUndefined();
+    expect(loadAnonymizationGazetteerEntriesMock).not.toHaveBeenCalled();
   });
 
   test("search batches anonymized titles by workspace", async () => {

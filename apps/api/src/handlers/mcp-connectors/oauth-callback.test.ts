@@ -5,6 +5,7 @@ import mcpOAuthCallback, {
   buildCallbackRedirectUrl,
 } from "@/api/handlers/mcp-connectors/oauth-callback";
 import { toSafeId } from "@/api/lib/branded-types";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 describe("buildCallbackRedirectUrl", () => {
@@ -140,5 +141,26 @@ describe("mcpOAuthCallback identity binding", () => {
 
     expect(reasonOf(result)).toBe("missing-code");
     expect(counter.calls).toBe(0);
+  });
+
+  // A safeDb failure surfaces as Result.err, not a thrown exception. The
+  // callback must still redirect (never a raw JSON error body) so the popup
+  // can close itself instead of showing an API error page.
+  test("redirects instead of leaking a raw error when a DB lookup fails", async () => {
+    const ctx = asTestRaw<CallbackCtx>({
+      query: { code: "auth-code", state: "state-token" },
+      safeDb: asTestRaw<CallbackCtx["safeDb"]>(async () =>
+        Result.err(new HandlerError({ status: 500, message: "db down" })),
+      ),
+      scopedDb: asTestRaw<CallbackCtx["scopedDb"]>(async () => undefined),
+      session: { activeOrganizationId: orgA },
+      user: { id: userA },
+      memberRole: { role: "owner" },
+      recordAuditEvent: async () => {},
+    });
+
+    const result = await mcpOAuthCallback.handler(ctx);
+
+    expect(reasonOf(result)).toBe("invalid-secret");
   });
 });

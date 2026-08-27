@@ -31,10 +31,6 @@ export const desktopEditSessionEventsHeadersSchema = t.Object({
   authorization: t.Optional(t.String()),
 });
 
-export const desktopEditSessionEventsQuerySchema = t.Object({
-  sessionToken: t.Optional(t.String()),
-});
-
 type SessionEventConnection = {
   cleanup: () => void;
   controller: ReadableStreamDefaultController;
@@ -103,16 +99,14 @@ registerSessionDelivery(deliverSessionEventLocal);
 
 type DesktopEditSessionEventsHandlerProps = {
   headers: { authorization?: string };
-  query: { sessionToken?: string };
   sessionId: SafeId<"desktopEditSession">;
 };
 
 export const desktopEditSessionEventsHandler = async ({
   headers: { authorization },
-  query: { sessionToken: legacySessionToken },
   sessionId,
 }: DesktopEditSessionEventsHandlerProps) => {
-  const sessionToken = getSessionToken({ authorization, legacySessionToken });
+  const sessionToken = getSessionToken(authorization);
 
   if (!sessionToken) {
     return status(401, {
@@ -250,29 +244,20 @@ export const desktopEditSessionEventsHandler = async ({
   });
 };
 
-type GetSessionTokenOptions = {
-  authorization: string | undefined;
-  legacySessionToken: string | undefined;
-};
-
-const getSessionToken = ({
-  authorization,
-  legacySessionToken,
-}: GetSessionTokenOptions): string | null => {
-  if (authorization) {
-    if (
-      !authorization.startsWith(BEARER_PREFIX) ||
-      authorization.length !== BEARER_PREFIX.length + SESSION_TOKEN_LENGTH
-    ) {
-      return null;
-    }
-    const bearerToken = authorization.slice(BEARER_PREFIX.length);
-    return SESSION_TOKEN_PATTERN.test(bearerToken) ? bearerToken : null;
+/**
+ * The desktop edit-session token travels in the Authorization header only:
+ * a query string lands in access logs, proxy caches, and referrers.
+ */
+const getSessionToken = (authorization: string | undefined): string | null => {
+  if (!authorization) {
+    return null;
   }
-
-  if (legacySessionToken && SESSION_TOKEN_PATTERN.test(legacySessionToken)) {
-    return legacySessionToken;
+  if (
+    !authorization.startsWith(BEARER_PREFIX) ||
+    authorization.length !== BEARER_PREFIX.length + SESSION_TOKEN_LENGTH
+  ) {
+    return null;
   }
-
-  return null;
+  const bearerToken = authorization.slice(BEARER_PREFIX.length);
+  return SESSION_TOKEN_PATTERN.test(bearerToken) ? bearerToken : null;
 };

@@ -50,13 +50,17 @@ const decodeCursor = (cursor: string) => {
 
 const myTasksEndpoint = createSafeRootHandler(
   config,
-  async function* ({ query, scopedDb, user }) {
+  async function* ({ getActiveWorkspaceIds, query, scopedDb, user }) {
     const cursor = query.cursor ? decodeCursor(query.cursor) : null;
     if (query.cursor && cursor === null) {
       return Result.err(
         new HandlerError({ status: 400, message: "Invalid cursor" }),
       );
     }
+
+    const activeWorkspaceIds = yield* Result.await(
+      Result.tryPromise(async () => await getActiveWorkspaceIds()),
+    );
 
     const response = yield* Result.await(
       Result.tryPromise(
@@ -66,6 +70,7 @@ const myTasksEndpoint = createSafeRootHandler(
             limit: query.limit ?? LIMITS.myTasksPageSizeDefault,
             status: query.status ?? null,
             userId: user.id,
+            activeWorkspaceIds,
             scopedDb,
           }),
       ),

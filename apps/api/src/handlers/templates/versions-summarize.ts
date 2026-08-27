@@ -22,7 +22,7 @@ const config = {
     "its predecessor, over the same diff templates.versions-diff returns. " +
     "Returns summary null when the two are identical, skipping the model " +
     "call. Consumes AI usage.",
-  permissions: { workspace: ["read"] },
+  permissions: { workspace: ["read"], chat: ["create"] },
   mcp: { type: "capability", reason: "template_authoring_ui" },
   access: "write",
   params: templateVersionSummarizeParamsSchema,

@@ -4,7 +4,6 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 import { APPLICATION_RLS_ROLE_NAME } from "../apps/api/src/db/role-names";
-import { isTlsOrLoopbackUrl } from "../apps/api/src/lib/secure-service-url";
 import {
   type ApiEnvironmentName,
   ENV_CATALOG,
@@ -122,7 +121,6 @@ const SELFHOST_VALIDATION_VALUES = {
 const SELFHOST_DEPLOYMENT_VALIDATION_VALUES = {
   STELLA_API_IMAGE: `ghcr.io/stella/stella-api@sha256:${"f".repeat(64)}`,
 } as const;
-const SELFHOST_GOTENBERG_URL = "http://gotenberg:3000/";
 
 export const materializeSelfhostTemplateForValidation = (text: string) => {
   let materialized = text;
@@ -146,16 +144,6 @@ const apiCatalogEntries = () =>
 
 export const isImmutableApplicationImage = (image: string) =>
   IMAGE_DIGEST_PATTERN.test(image);
-
-export const isSecureSelfhostGotenbergUrl = (value: string) => 
-  (
-    isTlsOrLoopbackUrl(value, {
-      plaintextProtocol: "http:",
-      tlsProtocol: "https:",
-    }) ||
-    (URL.canParse(value) && new URL(value).href === SELFHOST_GOTENBERG_URL)
-  )
-;
 
 export const renderSelfhostEnvExample = () => {
   const header = [
@@ -237,12 +225,6 @@ export const productionEnvironmentIssues = (text: string) => {
   const image = input["STELLA_API_IMAGE"];
   if (!image || !isImmutableApplicationImage(image)) {
     issues.push("STELLA_API_IMAGE must be a digest-qualified image.");
-  }
-  const gotenbergUrl = input["GOTENBERG_URL"];
-  if (!gotenbergUrl || !isSecureSelfhostGotenbergUrl(gotenbergUrl)) {
-    issues.push(
-      "GOTENBERG_URL must use HTTPS, loopback HTTP, or the generated private Compose endpoint.",
-    );
   }
   return issues;
 };

@@ -24,6 +24,16 @@ const isSecureRedisUrl = (value: string) => {
  */
 export const envDocumentProcessingWorkerServerSchema = {
   REDIS_URL: v.pipe(v.string(), v.url()),
+  /**
+   * Whether a `rediss://` connection verifies the server's certificate chain.
+   * On by default. Set to false only where the endpoint presents a
+   * certificate no trust anchor can validate — a self-signed certificate
+   * bound to a private address, say — and the network itself is the boundary.
+   */
+  REDIS_TLS_REJECT_UNAUTHORIZED: v.optional(
+    v.pipe(v.string(), v.parseBoolean()),
+    "true",
+  ),
   DOCUMENT_OCR_MODEL_DIR: v.optional(v.string()),
   /**
    * Batch mode: exit once the processing queue has been empty this many

@@ -242,6 +242,7 @@ export const SkillResourcePanel = ({
     }
     return (
       <MarkdownHybridEditor
+        imagePolicy="data-only"
         key={tab.id}
         markdown={toEditorMarkdown(tab.content)}
         onMarkdownChange={persistMarkdown}

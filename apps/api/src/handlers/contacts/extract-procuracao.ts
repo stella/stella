@@ -91,10 +91,18 @@ const config = {
  */
 const extractProcuracao = createSafeRootHandler(
   config,
-  async function* ({ session, body, orgAIConfig, user, safeDb }) {
+  async function* ({
+    session,
+    body,
+    orgAIConfig,
+    orgAIConfigStatus,
+    user,
+    safeDb,
+  }) {
     const organizationId = session.activeOrganizationId;
 
     yield* requireTanStackAIAvailableForRole({
+      configStatus: orgAIConfigStatus,
       orgConfig: orgAIConfig,
       role: "fast",
     });

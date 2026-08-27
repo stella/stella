@@ -12,13 +12,22 @@ import { panic } from "better-result";
 
 import { resolveDatabaseUrl } from "@/api/db-url";
 import {
-  DEPLOYED_NODE_ENVS,
+  classifyNodeEnv,
   envBaseInvariantViolation,
   envBaseServerSchema,
+  KNOWN_NODE_ENVS,
+  NODE_ENV_KIND,
 } from "@/api/env-base-schema";
 import { resolveCorpusStorageMode } from "@/api/lib/corpus-storage-mode";
 
 export { DEPLOYED_NODE_ENVS } from "@/api/env-base-schema";
+
+const nodeEnvKind = classifyNodeEnv(process.env.NODE_ENV);
+if (nodeEnvKind === NODE_ENV_KIND.unknown) {
+  panic(
+    `NODE_ENV="${process.env.NODE_ENV}" is not a recognized environment. Set one of ${KNOWN_NODE_ENVS.join(", ")}, or leave it unset for local development.`,
+  );
+}
 
 export const envBase = createEnv({
   server: envBaseServerSchema,
@@ -26,7 +35,7 @@ export const envBase = createEnv({
   runtimeEnv: {
     ...process.env,
     DATABASE_URL: resolveDatabaseUrl(),
-    isDev: !DEPLOYED_NODE_ENVS.has(process.env.NODE_ENV ?? ""),
+    isDev: nodeEnvKind === NODE_ENV_KIND.local,
   },
 });
 

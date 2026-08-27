@@ -30,6 +30,7 @@ import "katex/dist/katex.min.css";
 
 import "./markdown-hybrid-editor.css";
 
+import { isSafeMarkdownPreviewImageSrc } from "@/components/markdown-preview.logic";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { openIsolatedWindow } from "@/lib/open-isolated-window";
@@ -38,6 +39,15 @@ import { openIsolatedWindow } from "@/lib/open-isolated-window";
 const EMIT_DELAY_MS = 400;
 
 const NO_COMMENTS: readonly MarkdownEditorComment[] = [];
+
+/** Strips every rendered `<img>` under `host` whose source fails the data-only policy. */
+const enforceDataOnlyImagePolicy = (host: HTMLElement) => {
+  for (const img of host.querySelectorAll("img")) {
+    if (!isSafeMarkdownPreviewImageSrc(img.getAttribute("src"))) {
+      img.removeAttribute("src");
+    }
+  }
+};
 
 /** A comment the host owns, anchored to a range of {@link MarkdownHybridEditorProps.markdown}. */
 export type MarkdownEditorComment = {
@@ -50,12 +60,28 @@ export type MarkdownEditorComment = {
   author?: string | undefined;
 };
 
+/**
+ * Governs which image sources the editor's rendered (inactive) blocks fetch.
+ * `"data-only"` matches {@link MarkdownPreview}: only embedded `data:` image
+ * URIs render; anything else is stripped so opening the document cannot
+ * trigger an outbound request driven by its content. `"unrestricted"` renders
+ * every image url as-is. Every host must pick one explicitly.
+ */
+export type MarkdownImagePolicy = "data-only" | "unrestricted";
+
 export type MarkdownHybridEditorProps = {
   /** The markdown to edit. Read once per mount; the editor owns its state after
    * that (the host keys the component per file to force a reload on switch). */
   markdown: string;
   /** Fired (debounced) with the current markdown on every edit. */
   onMarkdownChange: (markdown: string) => void;
+  /**
+   * Decided at mount, like `markdown`: the engine builds image elements
+   * directly from source urls with no per-render hook, so this is enforced by
+   * watching the mounted DOM rather than by filtering source text. A host
+   * that needs a different policy must remount with a different `key`.
+   */
+  imagePolicy: MarkdownImagePolicy;
   readOnly?: boolean;
   /**
    * Text to diff against. Setting it puts the editor in diff mode: `markdown`
@@ -92,6 +118,7 @@ export type MarkdownHybridEditorProps = {
 export const MarkdownHybridEditor = ({
   markdown,
   onMarkdownChange,
+  imagePolicy,
   readOnly = false,
   baseline,
   comments = NO_COMMENTS,
@@ -140,7 +167,24 @@ export const MarkdownHybridEditor = ({
         model.setTaskCheckboxChecked(item, checked);
       },
     });
+    // The engine builds each image element's `src` straight from the source
+    // url and exposes no render hook to intercept it, so a disallowed source
+    // is stripped off the DOM instead: the observer starts before the initial
+    // content is appended so every later block (re)render is covered, and an
+    // immediate pass right after the append covers the first one.
+    const imageObserver =
+      imagePolicy === "data-only"
+        ? new MutationObserver(() => enforceDataOnlyImagePolicy(host))
+        : undefined;
+    imageObserver?.observe(host, {
+      attributeFilter: ["src"],
+      childList: true,
+      subtree: true,
+    });
     host.append(view.element);
+    if (imagePolicy === "data-only") {
+      enforceDataOnlyImagePolicy(host);
+    }
     const controller = new EditorController(model, view, {
       historyStrategy: new LocalHistoryStrategy(model),
     });
@@ -185,6 +229,7 @@ export const MarkdownHybridEditor = ({
     return () => {
       // A pending debounced edit would otherwise be lost on tab switch.
       emit.flush();
+      imageObserver?.disconnect();
       commentsSubscription.dispose();
       subscription.dispose();
       commentModeController?.dispose();

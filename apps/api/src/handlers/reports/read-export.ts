@@ -31,6 +31,12 @@ const DOWNLOAD_URL_EXPIRES_SECONDS = 5 * 60;
 const downloadFileName = (resultS3Key: string): string =>
   resultS3Key.endsWith(".pdf") ? "report.pdf" : "report.docx";
 
+// permissions-exempt: workspace:read is sufficient even though access is
+// "write". The one write here (nulling a stale resultS3Key) is bookkeeping
+// on a row the caller already owns (requestedBy = user.id, scoped below),
+// not a new grant of capability; creating the export required entity:create
+// at export-view.ts, so a caller with nothing to poll could never have
+// reached one.
 const config = {
   description:
     "Read a report export's status. Completed downloads include a short-lived URL; workspace exports include the created document ID.",

@@ -15,8 +15,10 @@ import * as v from "valibot";
 
 import { resolveDatabaseUrl } from "../apps/api/src/db-url";
 import {
-  DEPLOYED_NODE_ENVS,
+  classifyNodeEnv,
   envBaseInvariantViolation,
+  KNOWN_NODE_ENVS,
+  NODE_ENV_KIND,
 } from "../apps/api/src/env-base-schema";
 import { documentProcessingEnvInvariantViolation } from "../apps/api/src/env-document-processing-worker-schema";
 import {
@@ -888,10 +890,21 @@ const validateApiEnvironment = (input: DoctorInput): DoctorValidationResult => {
   }
 
   const nodeEnv = input["NODE_ENV"];
+  const nodeEnvKind = classifyNodeEnv(nodeEnv);
+  if (nodeEnvKind === NODE_ENV_KIND.unknown) {
+    return {
+      status: "invalid",
+      issues: [
+        `NODE_ENV: "${nodeEnv}" is not one of ${KNOWN_NODE_ENVS.join(", ")}.`,
+      ],
+      values: input,
+    };
+  }
+
   const runtimeInput = {
     ...input,
     DATABASE_URL: databaseUrl.value,
-    isDev: !DEPLOYED_NODE_ENVS.has(nodeEnv ?? ""),
+    isDev: nodeEnvKind === NODE_ENV_KIND.local,
   };
   const parsed = v.safeParse(v.object(API_ENV_SCHEMA), runtimeInput);
   if (!parsed.success) {

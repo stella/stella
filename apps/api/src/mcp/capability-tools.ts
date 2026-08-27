@@ -22,7 +22,6 @@ import {
   decodePaginationCursor,
   encodePaginationCursor,
 } from "@/api/lib/pagination";
-import { hasMemberPermission } from "@/api/lib/permission-authorization";
 import { brandPersistedWorkspaceId } from "@/api/lib/safe-id-boundaries";
 import { isRecord } from "@/api/lib/type-guards";
 import { synthesizeCapabilityContext } from "@/api/mcp/capability-context";
@@ -34,6 +33,7 @@ import {
   bindApprovedMcpAuditContext,
   type McpRequestContext,
 } from "@/api/mcp/context";
+import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
 import type { McpErrorCode, McpValidationIssue } from "@/api/mcp/error-codes";
 import capabilityCatalogRaw from "@/api/mcp/generated/capability-catalog.json";
 import { CAPABILITY_DISPATCH } from "@/api/mcp/generated/capability-dispatch";
@@ -63,6 +63,7 @@ import {
   stringProp,
   structuredErrorResult,
 } from "@/api/mcp/tool-utils";
+import { resolveUploadPurposeScope } from "@/api/mcp/upload-purpose-scope";
 
 // --- Catalog + dispatch runtime views ---------------------------------------
 
@@ -1343,22 +1344,48 @@ const executeInvoke = async ({
     };
   }
 
+  // 8. Purpose-dependent scope. One `uploads.*` domain scope covers three
+  // purposes that finalize into different resources, so the catalog scope alone
+  // would let a workspace-write consent install a skill. The purpose is read
+  // from the validated request on create and re-derived from the stored row on
+  // finalize, so relabelling the second call cannot widen the first.
+  const purposeScope = await resolveUploadPurposeScope({
+    body: validatedBody,
+    capabilityId: id,
+    context,
+    params: handlerParams,
+  });
+  if (purposeScope !== null && !context.grantedScopes.includes(purposeScope)) {
+    const requiredScopes = [...requiredScopesOf(entry), purposeScope];
+    return structuredErrorResult({
+      code: "missing_scope",
+      message: `Insufficient permissions. Capability "${id}" requires scope: ${purposeScope}`,
+      hint: oauthScopeRecoveryHint({
+        grantedScopes: context.grantedScopes,
+        missingScope: purposeScope,
+        requiredScopes,
+      }),
+    });
+  }
+
+  // 9. Authority. The safe wrapper checks the member role on its own, but only
+  // the role: a machine API key's permission set lives on the MCP session, so
+  // this is the one place the two can be ANDed. It runs on both paths and
+  // before the limiter below, so a caller who may not perform the capability is
+  // refused without consuming anyone else's budget. Configs without permissions
+  // (session-kind) skip the check, exactly as their wrapper does.
+  const permissions = endpoint.config.permissions;
+  if (
+    permissions !== undefined &&
+    !hasEffectiveAuthority(context, permissions)
+  ) {
+    return structuredErrorResult({
+      code: "permission_denied",
+      message: `Your member role does not permit capability "${id}"`,
+    });
+  }
+
   if (validateOnly) {
-    // Honest preflight: mirror the safe wrapper's member-permission gate (the
-    // wrapper is not called on this path), so a role that would be refused at
-    // execution is refused here too instead of getting a spurious
-    // `{ valid: true }`. Configs without permissions (session-kind) skip the
-    // check, exactly as their wrapper does.
-    const permissions = endpoint.config.permissions;
-    if (
-      permissions !== undefined &&
-      !hasMemberPermission({ role: context.memberRole }, permissions)
-    ) {
-      return structuredErrorResult({
-        code: "permission_denied",
-        message: `Your member role does not permit capability "${id}"`,
-      });
-    }
     return {
       egress: "structured",
       payload: { valid: true, capability: id },
@@ -1375,14 +1402,15 @@ const executeInvoke = async ({
     });
   }
 
-  // 8. Gateway rate limit. Most capabilities are scoped per organization and
-  // capability; skill-source calls share the REST client-IP budget. Capping
+  // 10. Gateway rate limit. Most capabilities are scoped per user, organization
+  // and capability; skill-source calls share the REST client-IP budget. Capping
   // before execution prevents a runaway agent from driving backend cost through
   // the generic path. validateOnly (above) is exempt: it never executes.
   const rate = await consumeInvokeCapabilityRateLimit({
     capabilityId: id,
     clientIp: context.clientIp ?? null,
     organizationId: context.organizationId,
+    userId: context.userId,
   });
   if (!rate.ok) {
     return structuredErrorResult({

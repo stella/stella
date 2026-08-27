@@ -2,6 +2,7 @@ import type { CallToolResult } from "@modelcontextprotocol/server";
 import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
 
 import { toSafeId } from "@/api/lib/branded-types";
+import type { AnonymizeTextFieldsInput } from "@/api/mcp/anonymization-core";
 import type { McpRequestContext } from "@/api/mcp/context";
 import type { McpEgressPlan } from "@/api/mcp/tool-types";
 import { serializeToolResult } from "@/api/mcp/tool-utils";
@@ -23,6 +24,59 @@ void mock.module("@/api/lib/anonymization-blacklist", () => ({
 }));
 
 const { finalizeToolEgress } = await import("@/api/mcp/egress");
+
+/** Deny-list term stored against `ws_2` only, never against the org tier. */
+const WORKSPACE_TERM = "Aurora Holdings";
+
+/**
+ * Stand-in redactor holding the same gazetteer contract as the real one: a
+ * caller-supplied gazetteer wins, otherwise it loads the one belonging to the
+ * workspace being anonymized, and it blanks every term that gazetteer names.
+ * Text reaching it under a payload-wide gazetteer would therefore be measured
+ * against the firm-wide half alone.
+ */
+const redactGazetteerTerms = async ({
+  fields,
+  gazetteerEntries,
+  organizationId,
+  scopedDb,
+  workspaceId,
+}: AnonymizeTextFieldsInput) => {
+  const entries =
+    gazetteerEntries ??
+    (await loadAnonymizationGazetteerEntriesMock({
+      organizationId,
+      scope: { type: "workspace", workspaceId },
+      scopedDb,
+    }));
+  const canonicals = asTestRaw<{ canonical: string }[]>(entries).map(
+    (entry) => entry.canonical,
+  );
+
+  return {
+    entityCount: canonicals.length,
+    fields: fields.map((field) => {
+      let redacted = field;
+      for (const canonical of canonicals) {
+        redacted = redacted.replaceAll(canonical, "[ORG_1]");
+      }
+      return redacted;
+    }),
+  };
+};
+
+/** The `ws_2` gazetteer carries the term; the firm-wide catalog does not. */
+const givenWorkspaceScopedTerm = (): void => {
+  anonymizeTextFieldsMock.mockImplementation(redactGazetteerTerms);
+  loadAnonymizationGazetteerEntriesMock.mockImplementation(
+    async ({ scope }: { scope: { type: string; workspaceId?: string } }) =>
+      await Promise.resolve(
+        scope.type === "workspace" && scope.workspaceId === "ws_2"
+          ? [{ canonical: WORKSPACE_TERM }]
+          : [],
+      ),
+  );
+};
 
 const finalizeMcpEgress = async (
   options: Parameters<typeof finalizeToolEgress>[0],
@@ -347,6 +401,74 @@ describe("finalizeMcpEgress", () => {
     expect(result.truncated).toBe(true);
     expect(result.nextCursor).not.toBeNull();
     expect(result.name).toBe("[PERSON_1] doc");
+  });
+
+  test("structured plan redacts a term the deny-list holds against one workspace only", async () => {
+    // The deny-list is org-wide terms plus the terms of the workspace whose
+    // text is being anonymized, so each group must be measured against its own
+    // workspace tier: a gazetteer resolved once for the whole payload sees the
+    // firm-wide half alone and leaves `ws_2`'s term standing.
+    givenWorkspaceScopedTerm();
+    const matters = [
+      { id: "ws_1", name: `${WORKSPACE_TERM} Ltd` },
+      { id: "ws_2", name: `${WORKSPACE_TERM} GmbH` },
+    ];
+
+    const payload = asTestRaw<{ matters: { id: string; name: string }[] }>(
+      parseText(
+        await finalizeMcpEgress({
+          context: createContext(),
+          mode: "anonymized",
+          response: {
+            egress: "structured",
+            payload: { matters },
+            textFields: matters.map((matter) => ({
+              apply: (value: string) => {
+                matter.name = value;
+              },
+              value: matter.name,
+              workspaceId: matter.id,
+            })),
+          },
+        }),
+      ),
+    );
+
+    expect(payload.matters[1]?.name).toBe("[ORG_1] GmbH");
+    // The term is not on the firm-wide catalog, so `ws_1` keeps it.
+    expect(payload.matters[0]?.name).toBe(`${WORKSPACE_TERM} Ltd`);
+    expect(
+      loadAnonymizationGazetteerEntriesMock.mock.calls.map(
+        (call) => asTestRaw<[{ scope: unknown }]>(call)[0].scope,
+      ),
+    ).toEqual([
+      { type: "workspace", workspaceId: "ws_1" },
+      { type: "workspace", workspaceId: "ws_2" },
+    ]);
+  });
+
+  test("compatSearch redacts a term the deny-list holds against one workspace only", async () => {
+    givenWorkspaceScopedTerm();
+    const results = [
+      {
+        id: "entity_2",
+        title: `${WORKSPACE_TERM} SPA`,
+        url: "https://example.test/2",
+        workspaceId: "ws_2",
+      },
+    ];
+
+    const payload = asTestRaw<{ results: { title: string }[] }>(
+      parseText(
+        await finalizeMcpEgress({
+          context: createContext(),
+          mode: "anonymized",
+          response: { egress: "compatSearch", nextCursor: null, results },
+        }),
+      ),
+    );
+
+    expect(payload.results[0]?.title).toBe("[ORG_1] SPA");
   });
 
   test("structured plan windows raw text and skips anonymization in default mode", async () => {

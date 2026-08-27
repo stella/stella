@@ -3266,6 +3266,7 @@
         "disabledSuccess": "Kahefaktoriline autentimine keelatud",
         "downloadCodes": "Laadi alla tekstifailina",
         "enable": "Luba kahefaktoriline autentimine",
+        "enableOtpDescription": "Saatsime teie e-postile kinnituskoodi. Sisestage see allpool kahefaktorilise autentimise lubamise kinnitamiseks.",
         "enabledStatus": "Lubatud",
         "enabledSuccess": "Kahefaktoriline autentimine lubatud",
         "enterCodeToConfirm": "Seadistuse kinnitamiseks sisestage kinnituskood oma autentimisrakendusest.",

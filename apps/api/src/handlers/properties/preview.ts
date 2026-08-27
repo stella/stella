@@ -58,11 +58,14 @@ const config = {
     "options, and the columns it depends on. Returns status ready with the " +
     "generated value, skipped when the dependency values are missing or " +
     "unusable on that document, unsupported when the document cannot be " +
-    "processed, or empty when the model returned nothing.",
+    "processed, or empty when the model returned nothing. Consumes AI usage.",
   permissions: { property: ["create"] },
-  access: "read",
+  // A model call runs even though nothing is persisted: an AI generation
+  // kickoff is a write by the same rule as any other (see CapabilityAccess).
+  access: "write",
   mcp: { type: "capability", reason: "workspace_schema" },
   body: previewBodySchema,
+  requiresUsage: { actionType: "chat", modelRole: "fast" },
 } satisfies HandlerConfig;
 
 const PREVIEW_TIMEOUT_MS = 60_000;
@@ -75,7 +78,15 @@ type PreviewResponse =
 
 const previewProperty = createSafeHandler(
   config,
-  async function* ({ safeDb, scopedDb, session, workspaceId, request, body }) {
+  async function* ({
+    safeDb,
+    scopedDb,
+    session,
+    user,
+    workspaceId,
+    request,
+    body,
+  }) {
     const entity = yield* Result.await(
       safeDb((tx) =>
         tx.query.entities.findFirst({
@@ -219,6 +230,17 @@ const previewProperty = createSafeHandler(
       orgAIConfig,
       promptCachingEnabled,
       serviceTier: "standard",
+      // Mirrors workflow-queue.ts's call to the same generator: without
+      // this the preview call still runs the model but is never recorded
+      // against usage, unlike every other caller of getBatchGenerator.
+      usageMetering: {
+        actionType: "chat",
+        organizationId: session.activeOrganizationId,
+        safeDb,
+        serviceTier: "standard",
+        userId: user.id,
+        workspaceId,
+      },
     });
 
     if (Result.isError(generateResult)) {

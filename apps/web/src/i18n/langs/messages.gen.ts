@@ -3269,6 +3269,7 @@ type Messages = {
         "disabledSuccess": "Two-factor authentication disabled";
         "downloadCodes": "Download as text file";
         "enable": "Enable two-factor authentication";
+        "enableOtpDescription": "We sent a verification code to your email. Enter it below to confirm enabling two-factor authentication.";
         "enabledStatus": "Enabled";
         "enabledSuccess": "Two-factor authentication enabled";
         "enterCodeToConfirm": "Enter the verification code from your authenticator app to confirm setup.";

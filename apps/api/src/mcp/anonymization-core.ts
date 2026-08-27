@@ -11,6 +11,7 @@ import { runChatAnonPipeline } from "@stll/anonymize-chat";
 import type { ChatAnonRuntime } from "@stll/anonymize-chat";
 
 import type { ScopedDb } from "@/api/db/safe-db";
+import type { AnonymizationGazetteerScope } from "@/api/lib/anonymization-blacklist";
 import type { SafeId } from "@/api/lib/branded-types";
 import { brandPersistedWorkspaceId } from "@/api/lib/safe-id-boundaries";
 import { buildFieldMarkers } from "@/api/mcp/field-markers";
@@ -56,8 +57,8 @@ export type AnonymizeTextFieldsDependencies = ChatAnonRuntime<
 > & {
   loadAnonymizationGazetteerEntries: (input: {
     organizationId: SafeId<"organization">;
+    scope: AnonymizationGazetteerScope;
     scopedDb: ScopedDb;
-    workspaceId?: SafeId<"workspace"> | undefined;
   }) => Promise<GazetteerEntry[]>;
   loadAnonymizationAllowlistCanonicals: (input: {
     organizationId: SafeId<"organization">;
@@ -151,10 +152,14 @@ export const anonymizeTextFieldsWithDependencies = async ({
     gazetteerEntries ??
     (await dependencies.loadAnonymizationGazetteerEntries({
       organizationId,
+      scope:
+        workspaceId === organizationId
+          ? { type: "organization" }
+          : {
+              type: "workspace",
+              workspaceId: brandPersistedWorkspaceId(workspaceId),
+            },
       scopedDb,
-      ...(workspaceId === organizationId
-        ? {}
-        : { workspaceId: brandPersistedWorkspaceId(workspaceId) }),
     }));
   const allowlist =
     excludedCanonicals ??

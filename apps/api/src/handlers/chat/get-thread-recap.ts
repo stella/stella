@@ -36,6 +36,7 @@ const getThreadRecap = createSafeRootHandler(
   async function* ({
     getWorkspaceAccess,
     orgAIConfig,
+    orgAIConfigStatus,
     params: { threadId },
     promptCachingEnabled,
     query: { workspaceId },
@@ -48,6 +49,7 @@ const getThreadRecap = createSafeRootHandler(
     if (
       Result.isError(
         requireTanStackAIAvailableForRole({
+          configStatus: orgAIConfigStatus,
           orgConfig: orgAIConfig,
           role: "fast",
         }),

@@ -346,6 +346,7 @@ describe("durable chat turn persistence", () => {
     }
 
     const result = await finalizeAssistantTurn({
+      acceptedSendMode: null,
       dataScopeExpansion: { newWorkspaceIds: [ids.wsA1] },
       existingIds: new Set([userMessageId]),
       execution,
@@ -430,6 +431,7 @@ describe("durable chat turn persistence", () => {
     let auditCalls = 0;
 
     const result = await finalizeAssistantTurn({
+      acceptedSendMode: null,
       dataScopeExpansion: { newWorkspaceIds: [ids.wsA1] },
       existingIds: new Set([userMessageId]),
       execution,

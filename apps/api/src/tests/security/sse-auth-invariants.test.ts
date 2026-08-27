@@ -37,6 +37,11 @@ const listSourceFiles = (relativeDir: string): string[] => {
 
 const readSource = (path: string) => readFileSync(path, "utf-8");
 
+/** Property list of a flat query-parameter schema, however it is named. */
+const QUERY_SCHEMA_PATTERN =
+  /(?:query\s*:|[Qq]uerySchema\s*=)\s*t\.Object\(\{([^}]*)\}/gu;
+const TOKEN_KEY_PATTERN = /token/iu;
+
 describe("SSE auth invariants", () => {
   test("browser EventSource connections do not carry bearer credentials in URLs", () => {
     const eventSourceFiles = listSourceFiles("apps/web/src").filter((path) =>
@@ -64,7 +69,13 @@ describe("SSE auth invariants", () => {
     for (const path of sseHandlerFiles) {
       const source = readSource(path);
 
-      expect(source).not.toMatch(/\bquery\s*\.\s*token\b/u);
+      // Any credential-shaped query key, whatever it is called: a query
+      // string reaches access logs, proxy caches, and referrer headers,
+      // so these handlers read credentials from headers only.
+      for (const [, properties] of source.matchAll(QUERY_SCHEMA_PATTERN)) {
+        expect(properties).not.toMatch(TOKEN_KEY_PATTERN);
+      }
+      expect(source).not.toMatch(/\bquery\s*[.:][^;\n]*token/iu);
       expect(source).not.toMatch(/\bvalidateBearerAuth\b/u);
       expect(source).not.toMatch(/\btoken\s*:\s*t\.String\b/u);
     }

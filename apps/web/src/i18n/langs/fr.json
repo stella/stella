@@ -3266,6 +3266,7 @@
         "disabledSuccess": "Authentification à deux facteurs désactivée",
         "downloadCodes": "Télécharger sous forme de fichier texte",
         "enable": "Activer l’authentification à deux facteurs",
+        "enableOtpDescription": "Nous avons envoyé un code de vérification à votre adresse e-mail. Saisissez-le ci-dessous pour confirmer l'activation de l'authentification à deux facteurs.",
         "enabledStatus": "Activée",
         "enabledSuccess": "Authentification à deux facteurs activée",
         "enterCodeToConfirm": "Saisissez le code de vérification de votre application d’authentification pour confirmer la configuration.",

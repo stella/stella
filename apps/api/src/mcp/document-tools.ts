@@ -3,7 +3,6 @@ import { and, asc, desc, eq, inArray, isNull, lt, or, sql } from "drizzle-orm";
 import * as v from "valibot";
 
 import { DOCUMENT_VERSION_UPLOAD_TRANSPORT } from "@stll/api-contract";
-import { roles } from "@stll/permissions";
 
 import {
   DEFAULT_DOCUMENT_PROCESSING_MODE,
@@ -77,6 +76,7 @@ import {
   UPLOAD_DOCUMENT_VERSION_INPUT_SCHEMA,
   uploadRemoteDocumentVersion,
 } from "@/api/mcp/document-file-upload";
+import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
 import {
   defineTextFieldSpec,
   deriveTextFieldPaths,
@@ -943,10 +943,10 @@ const documentsParentCondition = ({
 const handleListDocumentsTool: TypedMcpToolHandler<
   v.InferInput<typeof LIST_DOCUMENTS_PROJECTION>
 > = async ({ args, context }) => {
-  const hasPermission = roles[context.memberRole].authorize({
+  const hasPermission = hasEffectiveAuthority(context, {
     workspace: ["read"],
   });
-  if (!hasPermission.success) {
+  if (!hasPermission) {
     return errorResult("Forbidden");
   }
 
@@ -1440,9 +1440,9 @@ const loadDocumentProcessingStates = async ({
   // internal chat deliberately receives an escalation instead.
   const canQueueManualOcr =
     context.request !== undefined &&
-    roles[context.memberRole].authorize({
+    hasEffectiveAuthority(context, {
       entity: ["update"],
-    }).success &&
+    }) &&
     context.grantedScopes.includes("stella:matters_write");
 
   const resolveContentState = (): DocumentContentState => {
@@ -1626,10 +1626,10 @@ const loadDocumentProcessingStates = async ({
 const handleReadDocumentTool: TypedMcpToolHandler<
   v.InferInput<typeof READ_DOCUMENT_PROJECTION>
 > = async ({ args, context }) => {
-  const hasPermission = roles[context.memberRole].authorize({
+  const hasPermission = hasEffectiveAuthority(context, {
     workspace: ["read"],
   });
-  if (!hasPermission.success) {
+  if (!hasPermission) {
     return errorResult("Forbidden");
   }
 
@@ -1946,7 +1946,7 @@ const createDocumentEntity = async ({
 }): Promise<
   InternalToolResult<v.InferInput<typeof SAVE_DOCUMENT_PROJECTION>>
 > => {
-  if (!roles[context.memberRole].authorize({ entity: ["create"] }).success) {
+  if (!hasEffectiveAuthority(context, { entity: ["create"] })) {
     return errorResult("Forbidden");
   }
 
@@ -2103,7 +2103,7 @@ const updateDocumentEntity = async ({
 }): Promise<
   InternalToolResult<v.InferInput<typeof SAVE_DOCUMENT_PROJECTION>>
 > => {
-  if (!roles[context.memberRole].authorize({ entity: ["update"] }).success) {
+  if (!hasEffectiveAuthority(context, { entity: ["update"] })) {
     return errorResult("Forbidden");
   }
 
@@ -2227,7 +2227,7 @@ const resolveDocumentVersionUploadTarget = async ({
   context: McpRequestContext;
   entityId: string;
 }): Promise<DocumentVersionUploadTargetResult> => {
-  if (!roles[context.memberRole].authorize({ entity: ["update"] }).success) {
+  if (!hasEffectiveAuthority(context, { entity: ["update"] })) {
     return { status: "error", response: errorResult("Forbidden") };
   }
 
@@ -2339,7 +2339,7 @@ const handleDeleteDocumentTool: TypedMcpToolHandler<
   // Deleting a single version is an entity update; deleting the whole document
   // needs the stronger delete permission.
   if (parsed.output.version_id !== undefined) {
-    if (!roles[context.memberRole].authorize({ entity: ["update"] }).success) {
+    if (!hasEffectiveAuthority(context, { entity: ["update"] })) {
       return errorResult("Forbidden");
     }
     const versionId = brandPersistedEntityVersionId(parsed.output.version_id);
@@ -2361,7 +2361,7 @@ const handleDeleteDocumentTool: TypedMcpToolHandler<
     } satisfies v.InferInput<typeof DELETED_TRUE_PROJECTION>);
   }
 
-  if (!roles[context.memberRole].authorize({ entity: ["delete"] }).success) {
+  if (!hasEffectiveAuthority(context, { entity: ["delete"] })) {
     return errorResult("Forbidden");
   }
   const deleted = await Result.gen(() =>
@@ -2397,10 +2397,10 @@ const propertyPageCursorCodec = createTimestampIdCursorCodec({
 const handleListPropertiesTool: TypedMcpToolHandler<
   v.InferInput<typeof LIST_PROPERTIES_PROJECTION>
 > = async ({ args, context }) => {
-  const hasPermission = roles[context.memberRole].authorize({
+  const hasPermission = hasEffectiveAuthority(context, {
     workspace: ["read"],
   });
-  if (!hasPermission.success) {
+  if (!hasPermission) {
     return errorResult("Forbidden");
   }
 
@@ -2534,10 +2534,10 @@ const toFieldContent = (content: SetFieldValueContent): UpsertFieldContent => {
 const handleSetFieldValueTool: TypedMcpToolHandler<
   v.InferInput<typeof SET_FIELD_VALUE_PROJECTION>
 > = async ({ args, context }) => {
-  const hasPermission = roles[context.memberRole].authorize({
+  const hasPermission = hasEffectiveAuthority(context, {
     entity: ["create", "update"],
   });
-  if (!hasPermission.success) {
+  if (!hasPermission) {
     return errorResult("Forbidden");
   }
 

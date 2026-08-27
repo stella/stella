@@ -10,7 +10,6 @@ import {
   entityVersions,
   fields,
   pendingUploads,
-  PENDING_UPLOAD_RECOVERABLE_STATUSES,
   properties,
   propertyDependencies,
   userFiles,
@@ -36,7 +35,10 @@ import {
   ocrDerivativeCursorFilter,
   ocrDerivativePageOrder,
 } from "@/api/lib/ocr-derivative-pages";
-import { pendingUploadS3KeysForDeletion } from "@/api/lib/pending-upload-keys";
+import {
+  cancelRecoverableUploads,
+  pendingUploadS3KeysForDeletion,
+} from "@/api/lib/pending-upload-keys";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
@@ -202,31 +204,10 @@ export const deleteWorkspaceHandler = async function* ({
   // Workspace is sealed by status: "deleting", so no
   // concurrent uploads can insert new files.
   const fileQueryResult = await safeDb(async (tx) => {
-    // Cancel every non-finalized upload before enumerating its keys. A live
-    // server buffer writer can no longer commit after this compare-and-set;
-    // if it publishes concurrently, its failed persistence path deletes the
-    // reserved final object too. This closes the publish-vs-workspace-cascade
-    // race instead of merely snapshotting recovery intents before deleting
-    // their rows.
-    // audit: skip — internal upload-lease cancellation within the audited
-    // workspace delete; the user-visible DELETE event is recorded below.
-    await tx
-      .update(pendingUploads)
-      .set({
-        // Invalidate the writer's claim while keeping the row eligible for
-        // bounded repair if object cleanup fails and the workspace is
-        // reactivated. The writer's finalize CAS requires its original claim.
-        claimedAt: new Date(0),
-        claimedByRequestId: null,
-        rejectReason: "Workspace deletion cancelled the upload",
-        status: "failed",
-      })
-      .where(
-        and(
-          eq(pendingUploads.workspaceId, workspaceId),
-          inArray(pendingUploads.status, PENDING_UPLOAD_RECOVERABLE_STATUSES),
-        ),
-      );
+    // Cancel every non-finalized upload before enumerating its keys, closing
+    // the publish-vs-cascade race rather than merely snapshotting recovery
+    // intents before deleting their rows.
+    await cancelRecoverableUploads(tx, [workspaceId]);
 
     const workspaceEntityVersionIds = tx
       .select({ id: entityVersions.id })

@@ -134,10 +134,6 @@ const REFRESH_TOKEN_EXPIRES_IN = 30 * 24 * 60 * 60;
 const VERIFY_EMAIL_PATH = "/email-otp/verify-email";
 const SEND_VERIFICATION_OTP_PATH = "/email-otp/send-verification-otp";
 const SIGN_IN_EMAIL_PATH = "/sign-in/email";
-const NEW_SESSION_SECURITY_PATHS = new Set([
-  VERIFY_EMAIL_PATH,
-  SIGN_IN_EMAIL_PATH,
-]);
 const PREFERRED_NAME_MAX_LENGTH = 120;
 const WORD_EDIT_SHORTCUT_MAX_LENGTH = 16;
 
@@ -308,11 +304,30 @@ const isStellaTwoFactorSignInGatePath = (path: string | undefined): boolean =>
   path === SIGN_IN_EMAIL_OTP_PATH || isSocialSignInCallbackPath(path);
 
 /**
+ * Every better-auth path whose response can establish a new session: the two
+ * surfaces the second-factor gate already covers (passwordless email-OTP
+ * sign-in and the shared social callback), plus first-verification and the
+ * self-host credential path, which carry no second factor. Derived from the
+ * gate so a sign-in surface added there also raises the new-device notice
+ * instead of silently skipping it.
+ */
+export const isSessionCreatingAuthPath = (path: string | undefined): boolean =>
+  path === VERIFY_EMAIL_PATH ||
+  path === SIGN_IN_EMAIL_PATH ||
+  isStellaTwoFactorSignInGatePath(path);
+
+/**
  * Frontend route that presents the second-factor challenge (mirrors the path
  * the email-OTP sign-in step navigates to on `twoFactorRedirect`). Its search
  * schema defaults `redirectTo`, so no query string is required here.
  */
 const TWO_FACTOR_CHALLENGE_PATH = "/auth/two-factor";
+
+/**
+ * Frontend route that lists the account's active sessions (the settings page
+ * hosting the sessions card), linked from the new-device notice.
+ */
+const ACTIVE_SESSIONS_FRONTEND_PATH = "/settings/account/profile";
 
 /**
  * True when a sign-in endpoint's response body is the two-factor plugin's
@@ -414,27 +429,21 @@ export const resolveAuthoritativeSessionForSensitiveAuthPath = async <
 
 /**
  * Requires a fresh, single-use email verification code before letting any
- * path in `TWO_FACTOR_MANAGE_PATHS` proceed, so a hijacked session cannot
- * silently disable 2FA, rotate the TOTP secret via re-enable, read back the
- * current TOTP secret, or mint fresh backup codes with nothing but the
- * session cookie.
+ * path in `TWO_FACTOR_MANAGE_PATHS` proceed, so a session cookie alone can
+ * neither enroll a second factor, disable it, rotate the TOTP secret via
+ * re-enable, read back the current TOTP secret, nor mint fresh backup codes.
+ * Enrollment is gated like every other transition: binding an authenticator
+ * decides who can pass the challenge from then on.
  *
  * Resolves the session itself (this runs as a global `before` hook, ahead of
  * each endpoint's own session middleware) and no-ops when there is no
- * session (the endpoint's own middleware will reject the request) or the
- * user does not currently have 2FA enabled — first-time enrollment
- * (`/two-factor/enable` for a user without 2FA yet) is then left ungated as
- * a no-op for the plugin.
+ * session, because the endpoint's own middleware will reject the request.
  */
 const requireTwoFactorManageOtp = async ({
   body,
   session,
 }: RequireTwoFactorManageOtpArgs): Promise<void> => {
   if (!session) {
-    return;
-  }
-
-  if (session.user["twoFactorEnabled"] !== true) {
     return;
   }
 
@@ -1260,7 +1269,7 @@ const createAuth = () => {
         await assertSelfhostBootstrapSignUp(ctx.body);
       }),
       after: createAuthMiddleware(async (ctx) => {
-        if (!NEW_SESSION_SECURITY_PATHS.has(ctx.path) || env.isDev) {
+        if (!isSessionCreatingAuthPath(ctx.path) || env.isDev) {
           return;
         }
 
@@ -1338,7 +1347,7 @@ const createAuth = () => {
               device: deviceLabel,
               ipAddress: session.ipAddress ?? "Unknown",
               time: formattedTime,
-              sessionsUrl: `${env.FRONTEND_URL}/account/sessions`,
+              sessionsUrl: `${env.FRONTEND_URL}${ACTIVE_SESSIONS_FRONTEND_PATH}`,
               lang,
             }).catch((error: unknown) => {
               captureError(error, { source: "new-device-login-email" });
@@ -1545,6 +1554,34 @@ export const resolveMemberAuthorization = async (
   };
 };
 
+/**
+ * Whether the caller still belongs to the organization their session is
+ * scoped to. A session with no active organization answers `true`: an account
+ * still in onboarding belongs to none yet. Session handlers receive only
+ * `user.id`, so the organization is resolved and branded here, at the same
+ * boundary the rest of the session identity crosses.
+ */
+export const isActiveOrganizationMember = async ({
+  headers,
+  userId,
+}: {
+  headers: Headers;
+  userId: SafeId<"user">;
+}): Promise<boolean> => {
+  const resolved = await getAuth().api.getSession({ headers });
+  const activeOrganizationId = getSessionActiveOrganizationId(
+    resolved?.session,
+  );
+  if (activeOrganizationId === undefined) {
+    return true;
+  }
+  const authorization = await resolveMemberAuthorization({
+    organizationId: brandPersistedOrganizationId(activeOrganizationId),
+    userId,
+  });
+  return authorization !== null;
+};
+
 type WorkspaceRealtimeAudienceLookup = {
   userIds: readonly SafeId<"user">[];
   workspaceId: SafeId<"workspace">;
@@ -1676,7 +1713,7 @@ const resolveValidateAuth = async (
   });
 
   const orgSettings = await loadOrgSettingsForAuth(activeOrganizationId);
-  const { orgAIConfig, promptCachingEnabled } = orgSettings;
+  const { orgAIConfig, orgAIConfigStatus, promptCachingEnabled } = orgSettings;
 
   // Preserve the bounded workspace authorization already proved by the
   // membership lookup for the lifetime of this request's transactions. This
@@ -1807,6 +1844,7 @@ const resolveValidateAuth = async (
       safeDb,
       memberRole,
       orgAIConfig,
+      orgAIConfigStatus,
       promptCachingEnabled,
       /**
        * Records audit rows in the supplied tx. Identity fields

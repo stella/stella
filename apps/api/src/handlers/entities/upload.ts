@@ -919,6 +919,10 @@ const uploadEntityHandler = async function* ({
     key: sourceKey,
   });
 
+  // `yield*` on an Err suspends this generator via `.return()`, not `.throw()`,
+  // so a database error here skips `catch` entirely (finally still runs).
+  // Track intent to keep the object instead of relying on catch to clean it up.
+  let keepUploadedFile = false;
   try {
     const entityId = createSafeId<"entity">();
     const entityVersionId = createSafeId<"entityVersion">();
@@ -1175,7 +1179,6 @@ const uploadEntityHandler = async function* ({
     );
 
     if (!writeResult.ok) {
-      await cleanupUploadedS3Keys({ keys: s3Keys, fileId, workspaceId });
       return Result.err(
         new HandlerError({
           status: uploadWriteFailureStatus(writeResult.reason),
@@ -1185,10 +1188,12 @@ const uploadEntityHandler = async function* ({
     }
 
     if (writeResult.status === "replayed") {
-      await cleanupUploadedS3Keys({ keys: s3Keys, fileId, workspaceId });
       return Result.ok(writeResult.result);
     }
 
+    // Past this point the entity now owns the uploaded object; finally must
+    // not delete it.
+    keepUploadedFile = true;
     const fileName = writeResult.resolvedName;
 
     await processExtraction(entityId).catch((error: unknown) =>
@@ -1245,9 +1250,10 @@ const uploadEntityHandler = async function* ({
       fileName: fileName.value,
       renamed: fileName.renamed,
     });
-  } catch (error) {
-    await cleanupUploadedS3Keys({ keys: s3Keys, fileId, workspaceId });
-    throw error;
+  } finally {
+    if (!keepUploadedFile) {
+      await cleanupUploadedS3Keys({ keys: s3Keys, fileId, workspaceId });
+    }
   }
 };
 

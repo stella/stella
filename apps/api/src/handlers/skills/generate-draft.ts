@@ -96,12 +96,14 @@ const generateSkillDraft = createSafeRootHandler(
   async function* ({
     body,
     orgAIConfig,
+    orgAIConfigStatus,
     promptCachingEnabled,
     safeDb,
     session,
     user,
   }) {
     yield* requireTanStackAIAvailableForRole({
+      configStatus: orgAIConfigStatus,
       orgConfig: orgAIConfig,
       role: "fast",
     });

@@ -3266,6 +3266,7 @@
         "disabledSuccess": "Dvojfaktorové overenie vypnuté",
         "downloadCodes": "Stiahnuť ako textový súbor",
         "enable": "Zapnúť dvojfaktorové overenie",
+        "enableOtpDescription": "Na váš e-mail sme odoslali overovací kód. Pre potvrdenie zapnutia dvojfaktorového overenia ho zadajte nižšie.",
         "enabledStatus": "Zapnuté",
         "enabledSuccess": "Dvojfaktorové overenie zapnuté",
         "enterCodeToConfirm": "Na potvrdenie nastavenia zadajte overovací kód z overovacej aplikácie.",

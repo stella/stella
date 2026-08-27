@@ -8,7 +8,6 @@ import {
   useLocation,
 } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
-import * as v from "valibot";
 
 import { Button } from "@stll/ui/button";
 import {
@@ -43,13 +42,7 @@ import { managementRoles } from "@/lib/organization/consts";
 import { pageTitle } from "@/lib/page-title";
 import { loadAuthContext } from "@/routes/-auth-context";
 
-const searchSchema = v.object({
-  client_id: v.optional(v.string()),
-  scope: v.optional(v.string()),
-});
-
 export const Route = createFileRoute("/consent")({
-  validateSearch: searchSchema,
   beforeLoad: async ({ context, location }) => {
     const authContext = await loadAuthContext(context.queryClient);
     const bridgedQuery = getSignedOauthQueryFromHash(location.hash);
@@ -85,14 +78,8 @@ function ConsentPage() {
     select: (location) => getSignedOauthQueryFromHash(location.hash),
   });
   const bridgedParams = bridgedQuery ? new URLSearchParams(bridgedQuery) : null;
-  const searchClientId = Route.useSearch({
-    select: (search) => search.client_id ?? null,
-  });
-  const searchScope = Route.useSearch({
-    select: (search) => search.scope,
-  });
-  const clientId = searchClientId ?? bridgedParams?.get("client_id") ?? null;
-  const scope = searchScope ?? bridgedParams?.get("scope") ?? undefined;
+  const clientId = bridgedParams?.get("client_id") ?? null;
+  const scope = bridgedParams?.get("scope") ?? undefined;
   const activeOrganizationId = Route.useRouteContext({
     select: (ctx) => ctx.session?.activeOrganizationId ?? null,
   });

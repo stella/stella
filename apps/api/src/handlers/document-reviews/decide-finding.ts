@@ -25,7 +25,10 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 const config = {
   description:
     "Record a reviewer's decision on one review finding and, when requested, the durable application of its proposed edit.",
-  permissions: { workspace: ["read"] },
+  // entity:update because deciding a finding can durably apply its proposed
+  // edit to the reviewed document; workspace:read alone would let a member
+  // with no document-processing grant record and apply review decisions.
+  permissions: { workspace: ["read"], entity: ["update"] },
   // A disposition is a durable judgment on the workspace's review record, so
   // it must never be reachable through a read-only consent even though the
   // permission gate fronting the review surface is a workspace read.

@@ -113,7 +113,11 @@ export const createChatThirdPartyBoundary = ({
           ? Promise.resolve([])
           : loadAnonymizationGazetteerEntries({
               organizationId,
-              workspaceId,
+              // A global thread has no workspace tier to read.
+              scope:
+                workspaceId === undefined
+                  ? { type: "organization" }
+                  : { type: "workspace", workspaceId },
               scopedDb,
             }),
         excludedCanonicals: anonymizeFields

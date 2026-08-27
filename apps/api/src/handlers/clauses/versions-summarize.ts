@@ -22,7 +22,7 @@ const config = {
     "the clause's current body, over the same diff clauses.versions-diff " +
     "returns. Returns summary null when the two are identical, skipping the " +
     "model call. Consumes AI usage.",
-  permissions: { workspace: ["read"] },
+  permissions: { workspace: ["read"], chat: ["create"] },
   mcp: { type: "capability", reason: "knowledge_library_admin" },
   access: "write",
   params: clauseVersionSummarizeParamsSchema,

@@ -12,6 +12,7 @@ import {
 } from "@/api/db/schema";
 import { resolveCaching } from "@/api/lib/ai-config";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
+import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
 import { aiHandlerError } from "@/api/lib/ai-error";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
@@ -95,6 +96,7 @@ type OrganizeSuggestionsHandlerProps = {
   workspaceId: SafeId<"workspace">;
   organizationId: SafeId<"organization">;
   orgAIConfig: OrgAIConfig | null;
+  orgAIConfigStatus: OrgAIConfigStatus;
   promptCachingEnabled: boolean;
   body: OrganizeSuggestionsBody;
   userId: SafeId<"user">;
@@ -162,11 +164,13 @@ const organizeSuggestionsHandler = async function* ({
   workspaceId,
   organizationId,
   orgAIConfig,
+  orgAIConfigStatus,
   promptCachingEnabled,
   body,
   userId,
 }: OrganizeSuggestionsHandlerProps) {
   yield* requireTanStackAIAvailableForRole({
+    configStatus: orgAIConfigStatus,
     orgConfig: orgAIConfig,
     role: "fast",
   });
@@ -1060,7 +1064,7 @@ const config = {
     "moved, renamed, or deleted, so apply what you want with entities.move " +
     "and entities.rename. Per-document summaries are generated and cached " +
     "where missing, and the call consumes AI usage.",
-  permissions: { workspace: ["read"] },
+  permissions: { workspace: ["read"], chat: ["create"] },
   mcp: { type: "capability", reason: "document_processing" },
   access: "write",
   body: organizeSuggestionsBodySchema,
@@ -1080,6 +1084,7 @@ const organizeSuggestions = createSafeHandler(
     workspaceId,
     session,
     orgAIConfig,
+    orgAIConfigStatus,
     promptCachingEnabled,
     body,
     user,
@@ -1089,6 +1094,7 @@ const organizeSuggestions = createSafeHandler(
       workspaceId,
       organizationId: session.activeOrganizationId,
       orgAIConfig,
+      orgAIConfigStatus,
       promptCachingEnabled,
       body,
       userId: user.id,

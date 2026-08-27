@@ -103,6 +103,7 @@ const createProposalFromComments = createSafeRootHandler(
   async function* ({
     body,
     orgAIConfig,
+    orgAIConfigStatus,
     params,
     promptCachingEnabled,
     recordAuditEvent,
@@ -111,6 +112,7 @@ const createProposalFromComments = createSafeRootHandler(
     user,
   }) {
     yield* requireTanStackAIAvailableForRole({
+      configStatus: orgAIConfigStatus,
       orgConfig: orgAIConfig,
       role: "fast",
     });

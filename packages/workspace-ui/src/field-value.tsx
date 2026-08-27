@@ -200,6 +200,8 @@ const PersonAvatar = ({
       <img
         alt=""
         className="size-4 shrink-0 rounded-full object-cover"
+        loading="lazy"
+        referrerPolicy="no-referrer"
         src={image}
       />
     );

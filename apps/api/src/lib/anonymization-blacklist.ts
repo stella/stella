@@ -90,28 +90,37 @@ const GAZETTEER_ENTRY_BOUND =
   LIMITS.anonymizationBlacklistEntriesPerOrganization +
   LIMITS.anonymizationBlacklistEntriesPerWorkspace;
 
+/**
+ * Which tier of the catalog a load reads:
+ *   - `workspace`: the union of org-wide entries (workspace_id IS
+ *     NULL — the firm default catalog) and that workspace's own terms.
+ *   - `organization`: the org-wide half alone.
+ *
+ * A required discriminated field rather than an optional
+ * `workspaceId`, so reading only the firm-wide half is always a stated
+ * choice: a caller holding a workspace that omitted it would otherwise
+ * redact against the narrower term set without saying so.
+ */
+export type AnonymizationGazetteerScope =
+  | { type: "organization" }
+  | { type: "workspace"; workspaceId: SafeId<"workspace"> };
+
 export const loadAnonymizationGazetteerEntries = async ({
   organizationId,
-  workspaceId,
+  scope,
   scopedDb,
 }: {
   organizationId: SafeId<"organization">;
-  /**
-   * When provided, the load returns the union of:
-   *   - org-wide entries (workspace_id IS NULL) — the firm
-   *     default catalog.
-   *   - entries scoped to this workspace (workspace_id = $).
-   * When absent, only org-wide entries are returned.
-   */
-  workspaceId?: SafeId<"workspace"> | undefined;
+  scope: AnonymizationGazetteerScope;
   scopedDb: ScopedDb;
 }) => {
-  const workspaceMatch = workspaceId
-    ? or(
-        isNull(anonymizationBlacklistEntries.workspaceId),
-        eq(anonymizationBlacklistEntries.workspaceId, workspaceId),
-      )
-    : isNull(anonymizationBlacklistEntries.workspaceId);
+  const workspaceMatch =
+    scope.type === "workspace"
+      ? or(
+          isNull(anonymizationBlacklistEntries.workspaceId),
+          eq(anonymizationBlacklistEntries.workspaceId, scope.workspaceId),
+        )
+      : isNull(anonymizationBlacklistEntries.workspaceId);
 
   const rows = await scopedDb(
     async (tx) =>

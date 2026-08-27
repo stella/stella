@@ -12,6 +12,7 @@ import {
 
 import { env } from "@/api/env";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { toSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { StellaOpenRouterTextAdapter } from "@/api/lib/stella-openrouter-text-adapter";
@@ -491,6 +492,7 @@ describe("TanStack text model resolution", () => {
     };
 
     const unavailable = requireTanStackAIAvailableForRole({
+      configStatus: ORG_AI_CONFIG_STATUS.ok,
       orgConfig,
       role: "pdf",
     });
@@ -524,6 +526,7 @@ describe("TanStack text model resolution", () => {
       env.AI_PROVIDER = "mistral";
 
       const unavailable = requireTanStackAIAvailableForRole({
+        configStatus: ORG_AI_CONFIG_STATUS.ok,
         orgConfig: null,
         role: "pdf",
       });
@@ -573,12 +576,14 @@ describe("TanStack text model resolution", () => {
   test("reports TanStack availability per selected role", () => {
     expect(
       requireTanStackAIAvailableForRole({
+        configStatus: ORG_AI_CONFIG_STATUS.ok,
         orgConfig: orgConfigForProvider("openai"),
         role: "chat",
       }).isOk(),
     ).toBe(true);
 
     const unavailable = requireTanStackAIAvailableForRole({
+      configStatus: ORG_AI_CONFIG_STATUS.ok,
       orgConfig: orgConfigForProvider("openai_compatible"),
       role: "chat",
     });
@@ -590,6 +595,7 @@ describe("TanStack text model resolution", () => {
     }
 
     const unsupportedRole = requireTanStackAIAvailableForRole({
+      configStatus: ORG_AI_CONFIG_STATUS.ok,
       orgConfig: orgConfigForProvider("mistral"),
       role: "pdf",
     });
@@ -598,6 +604,22 @@ describe("TanStack text model resolution", () => {
     if (unsupportedRole.isErr()) {
       expect(unsupportedRole.error.status).toBe(400);
       expect(unsupportedRole.error.message).toContain("PDF flows");
+    }
+  });
+
+  test("an unreadable stored organization config is not treated as absent", () => {
+    // A stored config that failed to decrypt must not fall back to the
+    // shared instance provider, which would route the call somewhere the
+    // organization never configured.
+    const unreadable = requireTanStackAIAvailableForRole({
+      configStatus: ORG_AI_CONFIG_STATUS.unreadable,
+      orgConfig: null,
+      role: "chat",
+    });
+
+    expect(unreadable.isErr()).toBe(true);
+    if (unreadable.isErr()) {
+      expect(unreadable.error.status).toBe(503);
     }
   });
 

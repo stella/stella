@@ -8,7 +8,6 @@ import {
   RESOURCE_TYPE,
   WORKSPACE_CONTACT_ROLES,
 } from "@stll/api-contract";
-import { roles } from "@stll/permissions";
 
 import { entities, LIST_ITEM_TYPES } from "@/api/db/schema";
 import { lookupBusinessRegistryShared } from "@/api/handlers/contacts/business-registries-lookup";
@@ -68,6 +67,7 @@ import {
 import { createTaskEntityHandler } from "@/api/lib/tasks/create-task-entity";
 import { includes } from "@/api/lib/type-guards";
 import type { McpRequestContext } from "@/api/mcp/context";
+import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
 import {
   defineTextFieldSpec,
   deriveTextFieldPaths,
@@ -615,9 +615,7 @@ const handleSaveMatterTool: TypedMcpToolHandler<
 
   // Create branch.
   if (input.matter_id === undefined) {
-    if (
-      !roles[context.memberRole].authorize({ workspace: ["create"] }).success
-    ) {
+    if (!hasEffectiveAuthority(context, { workspace: ["create"] })) {
       return errorResult("Forbidden");
     }
     const name = input.name ?? "";
@@ -665,7 +663,7 @@ const handleSaveMatterTool: TypedMcpToolHandler<
   }
 
   // Update branch.
-  if (!roles[context.memberRole].authorize({ workspace: ["update"] }).success) {
+  if (!hasEffectiveAuthority(context, { workspace: ["update"] })) {
     return errorResult("Forbidden");
   }
   const workspaceId = ensureWorkspaceAccess({
@@ -764,7 +762,7 @@ const deleteMatterArgsSchema = v.strictObject({
 const handleDeleteMatterTool: TypedMcpToolHandler<
   v.InferInput<typeof DELETED_TRUE_PROJECTION>
 > = async ({ args, context }) => {
-  if (!roles[context.memberRole].authorize({ workspace: ["delete"] }).success) {
+  if (!hasEffectiveAuthority(context, { workspace: ["delete"] })) {
     return errorResult("Forbidden");
   }
 
@@ -819,7 +817,7 @@ const listContactsArgsSchema = v.strictObject({
 const handleListContactsTool: TypedMcpToolHandler<
   v.InferInput<typeof LIST_CONTACTS_PROJECTION>
 > = async ({ args, context }) => {
-  if (!roles[context.memberRole].authorize({ workspace: ["read"] }).success) {
+  if (!hasEffectiveAuthority(context, { workspace: ["read"] })) {
     return errorResult("Forbidden");
   }
 
@@ -925,7 +923,7 @@ const handleSaveContactTool: TypedMcpToolHandler<
 
   // Create branch.
   if (input.contact_id === undefined) {
-    if (!roles[context.memberRole].authorize({ contact: ["create"] }).success) {
+    if (!hasEffectiveAuthority(context, { contact: ["create"] })) {
       return errorResult("Forbidden");
     }
     // The schema guarantees type and display_name are present on create.
@@ -966,7 +964,7 @@ const handleSaveContactTool: TypedMcpToolHandler<
   }
 
   // Update branch.
-  if (!roles[context.memberRole].authorize({ contact: ["update"] }).success) {
+  if (!hasEffectiveAuthority(context, { contact: ["update"] })) {
     return errorResult("Forbidden");
   }
   const contactId = brandPersistedContactId(input.contact_id);
@@ -1010,7 +1008,7 @@ const deleteContactArgsSchema = v.strictObject({
 const handleDeleteContactTool: TypedMcpToolHandler<
   v.InferInput<typeof DELETED_TRUE_PROJECTION>
 > = async ({ args, context }) => {
-  if (!roles[context.memberRole].authorize({ contact: ["delete"] }).success) {
+  if (!hasEffectiveAuthority(context, { contact: ["delete"] })) {
     return errorResult("Forbidden");
   }
 
@@ -1045,7 +1043,7 @@ const lookupBusinessRegistryArgsSchema = v.strictObject({
 const handleLookupBusinessRegistryTool: TypedMcpToolHandler<
   v.InferInput<typeof LOOKUP_BUSINESS_REGISTRY_PROJECTION>
 > = async ({ args, context }) => {
-  if (!roles[context.memberRole].authorize({ workspace: ["read"] }).success) {
+  if (!hasEffectiveAuthority(context, { workspace: ["read"] })) {
     return errorResult("Forbidden");
   }
 
@@ -1239,7 +1237,7 @@ const readTaskDetail = async ({
 const handleListTasksTool: TypedMcpToolHandler<
   v.InferInput<typeof LIST_TASKS_PROJECTION>
 > = async ({ args, context }) => {
-  if (!roles[context.memberRole].authorize({ workspace: ["read"] }).success) {
+  if (!hasEffectiveAuthority(context, { workspace: ["read"] })) {
     return errorResult("Forbidden");
   }
 
@@ -1712,7 +1710,7 @@ const handleSaveTaskTool: TypedMcpToolHandler<
 
   // Create branch.
   if (input.task_id === undefined) {
-    if (!roles[context.memberRole].authorize({ entity: ["create"] }).success) {
+    if (!hasEffectiveAuthority(context, { entity: ["create"] })) {
       return errorResult("Forbidden");
     }
     const workspaceId = ensureActiveWorkspace({
@@ -1761,7 +1759,7 @@ const handleSaveTaskTool: TypedMcpToolHandler<
   }
 
   // Update branch.
-  if (!roles[context.memberRole].authorize({ entity: ["update"] }).success) {
+  if (!hasEffectiveAuthority(context, { entity: ["update"] })) {
     return errorResult("Forbidden");
   }
   const taskId = brandPersistedEntityId(input.task_id);
@@ -1973,7 +1971,7 @@ const resolveUnlinkWorkspaceContactId = async ({
 const handleLinkMatterContactTool: TypedMcpToolHandler<
   v.InferInput<typeof LINK_MATTER_CONTACT_PROJECTION>
 > = async ({ args, context }) => {
-  if (!roles[context.memberRole].authorize({ workspace: ["update"] }).success) {
+  if (!hasEffectiveAuthority(context, { workspace: ["update"] })) {
     return errorResult("Forbidden");
   }
 

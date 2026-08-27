@@ -128,21 +128,25 @@ export type InvokeRateLimitResult = { ok: boolean; retryAfterSeconds: number };
 
 /**
  * Consume one unit of the applicable invoke budget. Skill-source capabilities
- * share the REST client-IP counter; all others use the (organization,
- * capability) counter. `ok: false` once the window is exhausted;
- * `retryAfterSeconds` lets the caller render a retry hint. Dependencies are
- * injectable for tests.
+ * share the REST client-IP counter; all others use the (user, organization,
+ * capability) counter. The user belongs in the key: without it one caller's
+ * traffic exhausts the window for every other member of the org, which turns a
+ * per-caller cost cap into a shared outage. `ok: false` once the window is
+ * exhausted; `retryAfterSeconds` lets the caller render a retry hint.
+ * Dependencies are injectable for tests.
  */
 export const consumeInvokeCapabilityRateLimit = async ({
   capabilityId,
   clientIp = null,
   organizationId,
+  userId,
   guards = invokeCapabilityGuards,
   consumeSkillSource = consumeSkillSourceRateLimit,
 }: {
   capabilityId: string;
   clientIp?: string | null;
   organizationId: SafeId<"organization">;
+  userId: SafeId<"user">;
   guards?: FeedbackIntakeGuards;
   consumeSkillSource?: (input: {
     clientIp: string | null;
@@ -156,7 +160,7 @@ export const consumeInvokeCapabilityRateLimit = async ({
       const { limit } = policy;
       const ok = await guards.consumeCounter({
         bucket: INVOKE_CAPABILITY_BUCKET,
-        key: `${organizationId}:${capabilityId}`,
+        key: `${organizationId}:${userId}:${capabilityId}`,
         windowMs: limit.windowMs,
         max: limit.max,
       });

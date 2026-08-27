@@ -233,4 +233,88 @@ describe("updateWorkObligation", () => {
     expect(insertedLegacyObligation).toBe(true);
     expect(obligationReadCount).toBe(2);
   });
+
+  test("refuses a non-management member reassigning already-owned work to themselves", async () => {
+    const workspaceId = toSafeId<"workspace">(
+      "0198fa3d-fc8d-7000-8000-000000000021",
+    );
+    const entityId = toSafeId<"entity">("0198fa3d-fc8d-7000-8000-000000000022");
+    const actorUserId = toSafeId<"user">(
+      "0198fa3d-fc8d-7000-8000-000000000023",
+    );
+    const previousOwnerUserId = toSafeId<"user">(
+      "0198fa3d-fc8d-7000-8000-000000000024",
+    );
+
+    const { safeDb, scopedDb } = createScopedDbMock({
+      select: () => ({
+        from: (table: unknown) => ({
+          where: () => ({
+            limit: () => ({
+              for: async () => {
+                if (table === workspaceMembers) {
+                  return [{ userId: actorUserId }];
+                }
+                return [
+                  {
+                    entityId,
+                    workspaceId,
+                    ownerUserId: previousOwnerUserId,
+                    status: WORK_OBLIGATION_STATUS.ACTIVE,
+                    acknowledgedAt: new Date(),
+                    acknowledgedByUserId: previousOwnerUserId,
+                    type: "task",
+                    workingTargetDate: null,
+                    hardDeadlineDate: null,
+                    sourceType: "manual",
+                    sourceEntityId: null,
+                    sourceDescription: null,
+                  },
+                ];
+              },
+            }),
+          }),
+        }),
+      }),
+    });
+    const request = new Request("https://api.example.test/work-obligations");
+    const recordAuditEvent = createAuditRecorder({
+      organizationId: toSafeId<"organization">(
+        "0198fa3d-fc8d-7000-8000-000000000025",
+      ),
+      workspaceId,
+      userId: actorUserId,
+      request,
+      server: null,
+    });
+
+    const result = await updateWorkObligation.handler(
+      asTestRaw<UpdateContext>({
+        body: { ownerUserId: actorUserId, reason: "Taking this over" },
+        createAuditRecorder: () => recordAuditEvent,
+        memberRole: { role: "member" },
+        orgAIConfig: null,
+        params: { workspaceId, entityId },
+        recordAuditEvent,
+        request,
+        safeDb,
+        scopedDb,
+        session: {
+          activeOrganizationId: toSafeId<"organization">(
+            "0198fa3d-fc8d-7000-8000-000000000025",
+          ),
+        },
+        user: { id: actorUserId },
+        workspaceId,
+      }),
+    );
+
+    expect(result).toMatchObject({
+      code: 403,
+      response: {
+        message:
+          "Only an admin or owner can reassign work already owned by someone else",
+      },
+    });
+  });
 });

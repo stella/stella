@@ -4,6 +4,7 @@ import { describe, expect, test } from "bun:test";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { env } from "@/api/env";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import {
   assertRunSizeConfirmedForHandler,
   createSafeHandler,
@@ -66,6 +67,7 @@ describe("createSafeHandler workspace audit binding", () => {
       getWorkspaceAccess: async () => null,
       pinServerValidatedWorkspaceId: () => false,
       orgAIConfig: null,
+      orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
       promptCachingEnabled: false,
       recordAuditEvent: noopAuditRecorder,
       createAuditRecorder: (options?: {
@@ -255,6 +257,7 @@ const createContext = (
     getAccessibleWorkspaces: async () => [],
     getWorkspaceAccess: async () => null,
     orgAIConfig,
+    orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
     promptCachingEnabled: false,
     recordAuditEvent: noopAuditRecorder,
     createAuditRecorder: () => noopAuditRecorder,

@@ -48,6 +48,7 @@ const suggestThreadTitle = createSafeRootHandler(
   async function* ({
     getWorkspaceAccess,
     orgAIConfig,
+    orgAIConfigStatus,
     params: { threadId },
     promptCachingEnabled,
     query: { workspaceId },
@@ -113,6 +114,7 @@ const suggestThreadTitle = createSafeRootHandler(
     }
 
     yield* requireTanStackAIAvailableForRole({
+      configStatus: orgAIConfigStatus,
       orgConfig: orgAIConfig,
       role: "fast",
     });

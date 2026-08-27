@@ -36,6 +36,7 @@ import {
   reparseForDev,
 } from "@/api/handlers/case-law/decisions/dev-reparse";
 import { resolveCaching, type OrgAIConfig } from "@/api/lib/ai-config";
+import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
@@ -47,6 +48,7 @@ import { readDecisionAnalysis } from "@/api/lib/case-law/decision-analysis";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { detached } from "@/api/lib/detached";
 import type { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { allowsDerivedAi } from "@/api/lib/legal-search/corpus-source";
 import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
 import {
   getTanStackTextModelForRole,
@@ -296,6 +298,7 @@ export const generateAnalysis = async (
   scopedDb: ScopedDb,
   organizationId: SafeId<"organization">,
   orgAIConfig: OrgAIConfig | null,
+  orgAIConfigStatus: OrgAIConfigStatus,
   promptCachingEnabled: boolean,
 ): Promise<Result<GenerateAnalysisResponse, HandlerError>> => {
   // audit: skip — background AI analysis output
@@ -342,11 +345,26 @@ export const generateAnalysis = async (
     });
   }
 
+  // Sources carry different reuse terms. One whose terms withhold derived AI
+  // use is still read and served; its text is never sent to a model. Decided
+  // before AI availability because it is a property of the decision, not of
+  // how this deployment is configured.
+  if (
+    decision.source === null ||
+    !allowsDerivedAi(decision.source.descriptor)
+  ) {
+    return Result.ok({
+      status: "error",
+      error: "Analysis is unavailable for this decision",
+    });
+  }
+
   // AI availability is checked only on the path that actually invokes the
   // model: the cached/in-flight reads above must stay accessible when the
   // fast role is unavailable (a pre-existing bug ran this check before them,
   // locking finished analyses behind AI configuration).
   const available = requireTanStackAIAvailableForRole({
+    configStatus: orgAIConfigStatus,
     orgConfig: orgAIConfig,
     role: "fast",
   });
@@ -407,7 +425,7 @@ const config = {
     "when the decision is unknown or its text could not be parsed. " +
     "Generation runs in the background and a call made while one is already " +
     "running does not start a second.",
-  permissions: { workspace: ["read"] },
+  permissions: { workspace: ["read"], chat: ["create"] },
   mcp: { type: "capability", reason: "legal_corpus_admin" },
   // Writes a "generating" sentinel and kicks off background AI generation
   // that updates the decision row.
@@ -422,6 +440,7 @@ const generateDecisionAnalysis = createSafeRootHandler(
     session,
     scopedDb,
     orgAIConfig,
+    orgAIConfigStatus,
     promptCachingEnabled,
   }) {
     // AI availability is enforced inside generateAnalysis, after its cached
@@ -435,6 +454,7 @@ const generateDecisionAnalysis = createSafeRootHandler(
             scopedDb,
             session.activeOrganizationId,
             orgAIConfig,
+            orgAIConfigStatus,
             promptCachingEnabled,
           ),
       ),

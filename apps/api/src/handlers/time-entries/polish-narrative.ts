@@ -6,6 +6,7 @@ import {
   loadOrgAIConfig,
   loadPromptCachingPreference,
 } from "@/api/lib/ai-config-loader";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { aiHandlerError } from "@/api/lib/ai-error";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import { createSafeHandler } from "@/api/lib/api-handlers";
@@ -73,6 +74,7 @@ const polishTimeEntryNarrative = createSafeHandler(
     ]);
 
     yield* requireTanStackAIAvailableForRole({
+      configStatus: ORG_AI_CONFIG_STATUS.ok,
       orgConfig: orgAIConfig,
       role: "fast",
     });
