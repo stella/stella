@@ -5,6 +5,7 @@ import createStyleSetFromEditor from "@/api/handlers/style-sets/create-from-edit
 import deleteStyleSet from "@/api/handlers/style-sets/delete";
 import downloadStyleSet from "@/api/handlers/style-sets/download";
 import listStyleSets from "@/api/handlers/style-sets/list";
+import previewStyleSetFromEditor from "@/api/handlers/style-sets/preview-from-editor";
 import readStyleSetEditor from "@/api/handlers/style-sets/read-editor";
 import readStellaStyleEditor from "@/api/handlers/style-sets/read-stella-editor";
 import replaceStyleSet from "@/api/handlers/style-sets/replace";
@@ -41,6 +42,10 @@ export const styleSetsRoute = new Elysia({ prefix: "/style-sets" })
   })
   .get("/editor/stella", readStellaStyleEditor.handler, {
     permissions: readStellaStyleEditor.config.permissions,
+  })
+  .post("/editor/preview", previewStyleSetFromEditor.handler, {
+    body: previewStyleSetFromEditor.config.body,
+    permissions: previewStyleSetFromEditor.config.permissions,
   })
   .put("/editor", createStyleSetFromEditor.handler, {
     body: createStyleSetFromEditor.config.body,

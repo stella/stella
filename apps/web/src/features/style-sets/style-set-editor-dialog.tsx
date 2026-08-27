@@ -266,7 +266,15 @@ const LoadedStyleSetEditor = ({
           </div>
           <StyleSetEditorControls onChange={setSettings} settings={settings} />
         </div>
-        <StyleSetPreview settings={settings} />
+        <StyleSetPreview
+          organizationId={organizationId}
+          settings={settings}
+          source={
+            saveTarget.type === "stella"
+              ? { type: "stella" }
+              : { type: "saved", styleSetId: saveTarget.styleSetId }
+          }
+        />
       </div>
       <DialogFooter>
         <DialogClose render={<Button type="button" variant="outline" />}>

@@ -1,157 +1,104 @@
-import type { CSSProperties } from "react";
+import { lazy, Suspense } from "react";
+import type { ReactNode } from "react";
 
+import { useQuery } from "@tanstack/react-query";
+import { useDebounce } from "use-debounce";
 import { useTranslations } from "use-intl";
 
-import type {
-  NumberedParagraphStyleSettings,
-  ParagraphStyleSettings,
-  StyleSetEditorSettings,
-} from "@/features/style-sets/style-set-editor-types";
-import {
-  previewLineHeight,
-  previewNumberingMarkers,
-  previewPaperRatio,
-} from "@/features/style-sets/style-set-preview.logic";
+import "@stll/folio-react/editor.css";
 
-const PREVIEW_WIDTH_PX = 520;
-const PREVIEW_POINTS_SCALE = 0.78;
-const PREVIEW_BODY_TRANSLATION_KEY = "styleSets.editor.previewBody";
+import { DocxLoadingShell } from "@/components/docx/docx-loading-shell";
+import type { StyleSetEditorSettings } from "@/features/style-sets/style-set-editor-types";
+import {
+  styleSetPreviewOptions,
+  type StyleSetPreviewContent,
+  type StyleSetPreviewSource,
+} from "@/features/style-sets/style-set-queries";
+
+const DocxEditor = lazy(async () => {
+  const module = await import("@/components/docx/app-docx-editor");
+  return { default: module.DocxEditor };
+});
+
+const PREVIEW_DEBOUNCE_MS = 250;
+
+type StyleSetPreviewProps = {
+  organizationId: string;
+  settings: StyleSetEditorSettings;
+  source: StyleSetPreviewSource;
+};
 
 export const StyleSetPreview = ({
+  organizationId,
   settings,
-}: {
-  settings: StyleSetEditorSettings;
-}) => {
+  source,
+}: StyleSetPreviewProps) => {
   const t = useTranslations();
-  const markers = previewNumberingMarkers(settings);
-  const ratio = previewPaperRatio(settings.page);
-  const width = PREVIEW_WIDTH_PX;
-  const height = width * ratio;
-  const pageStyle = {
-    width,
-    minHeight: height,
-    paddingBlockStart: `${settings.page.marginTopPt * PREVIEW_POINTS_SCALE}px`,
-    paddingBlockEnd: `${settings.page.marginBottomPt * PREVIEW_POINTS_SCALE}px`,
-    paddingInlineStart: `${settings.page.marginLeftPt * PREVIEW_POINTS_SCALE}px`,
-    paddingInlineEnd: `${settings.page.marginRightPt * PREVIEW_POINTS_SCALE}px`,
-    fontFamily: settings.body.fontFamily,
-    fontSize: `${settings.body.fontSizePt * PREVIEW_POINTS_SCALE}px`,
-    lineHeight: previewLineHeight(settings.body.lineSpacing),
-    textAlign: previewAlignment(settings.body.alignment, "justify"),
-  } satisfies CSSProperties;
+  const [debouncedSettings] = useDebounce(settings, PREVIEW_DEBOUNCE_MS);
+  const content = {
+    title: t("styleSets.editor.previewTitle"),
+    introduction: t("styleSets.editor.previewIntroduction"),
+    investmentHeading: t("styleSets.editor.previewLevel1"),
+    investmentBody: t("styleSets.editor.previewBody"),
+    equityFinancingHeading: t("styleSets.editor.previewLevel2"),
+    equityFinancingBody: t("styleSets.editor.previewBody2"),
+    conversionPriceHeading: t("styleSets.editor.previewLevel3"),
+    conversionPriceBody: t("styleSets.editor.previewBody3"),
+    shareClassHeading: t("styleSets.editor.previewLevel3Second"),
+    shareClassBody: t("styleSets.editor.previewBody4"),
+    liquidityEventHeading: t("styleSets.editor.previewLevel2Second"),
+    liquidityEventBody: t("styleSets.editor.previewBody5"),
+    companyRepresentationsHeading: t("styleSets.editor.previewLevel1Second"),
+    companyRepresentationsBody: t("styleSets.editor.previewBody6"),
+    generalHeading: t("styleSets.editor.previewLevel1Third"),
+    generalBody: t("styleSets.editor.previewBody7"),
+  } satisfies StyleSetPreviewContent;
+  const preview = useQuery(
+    styleSetPreviewOptions({
+      organizationId,
+      source,
+      settings: debouncedSettings,
+      content,
+    }),
+  );
+  let previewResult: ReactNode;
+  if (preview.isError) {
+    previewResult = (
+      <div className="text-muted-foreground m-auto px-6 text-center text-sm">
+        {t("styleSets.editor.previewFailed")}
+      </div>
+    );
+  } else if (preview.data === undefined) {
+    previewResult = <DocxLoadingShell />;
+  } else {
+    previewResult = (
+      <Suspense fallback={<DocxLoadingShell />}>
+        <DocxEditor
+          autoOpenReviewSidebar={false}
+          className="folio-docx-preview h-full"
+          documentBuffer={preview.data}
+          enableWheelZoom={false}
+          initialZoom="fit-width"
+          loadingIndicator={<DocxLoadingShell />}
+          mode="viewing"
+          preserveDocumentWhileLoading
+          readOnly
+          showHeaderFooterEditing={false}
+          showPrintButton={false}
+          showReviewControls={false}
+          showToolbar={false}
+          showZoomControl={false}
+        />
+      </Suspense>
+    );
+  }
 
   return (
     <section
       aria-label={t("common.preview")}
-      className="bg-muted/48 flex min-h-full items-start justify-center overflow-auto p-6 sm:p-10"
+      className="bg-muted/48 flex min-h-0 overflow-hidden"
     >
-      <article
-        className="bg-background text-foreground border-border shrink-0 border shadow-sm"
-        dir="ltr"
-        style={pageStyle}
-      >
-        <PreviewParagraph className="text-balance" settings={settings.title}>
-          {t("styleSets.editor.previewTitle")}
-        </PreviewParagraph>
-        <p className="text-pretty" style={bodySpacing(settings)}>
-          {t("styleSets.editor.previewIntroduction")}
-        </p>
-        <NumberedPreviewParagraph
-          marker={markers.level1}
-          settings={settings.level1}
-        >
-          {t("styleSets.editor.previewLevel1")}
-        </NumberedPreviewParagraph>
-        <p className="text-pretty" style={bodySpacing(settings)}>
-          {t(PREVIEW_BODY_TRANSLATION_KEY)}
-        </p>
-        <NumberedPreviewParagraph
-          marker={markers.level2}
-          settings={settings.level2}
-        >
-          {t("styleSets.editor.previewLevel2")}
-        </NumberedPreviewParagraph>
-        <p className="text-pretty" style={bodySpacing(settings)}>
-          {t(PREVIEW_BODY_TRANSLATION_KEY)}
-        </p>
-        <NumberedPreviewParagraph
-          marker={markers.level3}
-          settings={settings.level3}
-        >
-          {t("styleSets.editor.previewLevel3")}
-        </NumberedPreviewParagraph>
-        <p className="text-pretty" style={bodySpacing(settings)}>
-          {t(PREVIEW_BODY_TRANSLATION_KEY)}
-        </p>
-      </article>
+      {previewResult}
     </section>
   );
 };
-
-const PreviewParagraph = ({
-  settings,
-  children,
-  className,
-}: {
-  settings: ParagraphStyleSettings;
-  children: string;
-  className?: string | undefined;
-}) => (
-  <p className={className} style={paragraphStyle(settings)}>
-    {children}
-  </p>
-);
-
-const NumberedPreviewParagraph = ({
-  settings,
-  marker,
-  children,
-}: {
-  settings: NumberedParagraphStyleSettings;
-  marker: string;
-  children: string;
-}) => (
-  <div
-    className="grid"
-    style={{
-      gridTemplateColumns: marker === "" ? "0 1fr" : "auto 1fr",
-      columnGap: `${settings.hangingPt * PREVIEW_POINTS_SCALE}px`,
-      marginInlineStart: `${Math.max(0, settings.indentLeftPt - settings.hangingPt) * PREVIEW_POINTS_SCALE}px`,
-    }}
-  >
-    <span
-      aria-hidden="true"
-      className="tabular-nums"
-      style={paragraphStyle(settings)}
-    >
-      {marker}
-    </span>
-    <PreviewParagraph settings={settings}>{children}</PreviewParagraph>
-  </div>
-);
-
-const paragraphStyle = (settings: ParagraphStyleSettings): CSSProperties => ({
-  fontFamily: settings.fontFamily,
-  fontSize: `${settings.fontSizePt * PREVIEW_POINTS_SCALE}px`,
-  fontWeight: settings.bold ? 700 : 400,
-  textAlign: previewAlignment(settings.alignment, "start"),
-  marginBlockStart: `${settings.spaceBeforePt * PREVIEW_POINTS_SCALE}px`,
-  marginBlockEnd: `${settings.spaceAfterPt * PREVIEW_POINTS_SCALE}px`,
-});
-
-const previewAlignment = (
-  alignment: ParagraphStyleSettings["alignment"],
-  fallback: CSSProperties["textAlign"],
-): CSSProperties["textAlign"] => {
-  if (alignment === "both") {
-    return "justify";
-  }
-  if (alignment === "left" || alignment === "center" || alignment === "right") {
-    return alignment;
-  }
-  return fallback;
-};
-
-const bodySpacing = (settings: StyleSetEditorSettings): CSSProperties => ({
-  marginBlockEnd: `${settings.body.spaceAfterPt * PREVIEW_POINTS_SCALE}px`,
-});

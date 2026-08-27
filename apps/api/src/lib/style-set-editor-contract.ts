@@ -1,6 +1,7 @@
 import { t } from "elysia";
 import type { Static } from "elysia";
 
+import { tSafeId } from "@/api/lib/custom-schema";
 import { expectedUpdatedAtSchema } from "@/api/lib/optimistic-concurrency";
 
 const fontFamilySchema = t.String({ minLength: 1, maxLength: 128 });
@@ -87,3 +88,44 @@ export const updateStyleSetFromEditorSchema = t.Object({
   expectedUpdatedAt: expectedUpdatedAtSchema,
   settings: styleSetEditorSettingsSchema,
 });
+
+const previewTextSchema = t.String({ minLength: 1, maxLength: 2000 });
+const styleSetPreviewContentSchema = t.Object({
+  title: previewTextSchema,
+  introduction: previewTextSchema,
+  investmentHeading: previewTextSchema,
+  investmentBody: previewTextSchema,
+  equityFinancingHeading: previewTextSchema,
+  equityFinancingBody: previewTextSchema,
+  conversionPriceHeading: previewTextSchema,
+  conversionPriceBody: previewTextSchema,
+  shareClassHeading: previewTextSchema,
+  shareClassBody: previewTextSchema,
+  liquidityEventHeading: previewTextSchema,
+  liquidityEventBody: previewTextSchema,
+  companyRepresentationsHeading: previewTextSchema,
+  companyRepresentationsBody: previewTextSchema,
+  generalHeading: previewTextSchema,
+  generalBody: previewTextSchema,
+});
+
+const styleSetPreviewRequestProperties = {
+  settings: styleSetEditorSettingsSchema,
+  content: styleSetPreviewContentSchema,
+};
+
+export const styleSetPreviewFromEditorSchema = t.Union([
+  t.Object({
+    ...styleSetPreviewRequestProperties,
+    type: t.Literal("stella"),
+  }),
+  t.Object({
+    ...styleSetPreviewRequestProperties,
+    type: t.Literal("saved"),
+    styleSetId: tSafeId("styleSet"),
+  }),
+]);
+
+export type StyleSetPreviewContent = Static<
+  typeof styleSetPreviewContentSchema
+>;

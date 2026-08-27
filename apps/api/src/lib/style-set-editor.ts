@@ -4,11 +4,15 @@ import {
   createStellaStyleDocumentPreset,
   extractDocumentStyleSet,
   FolioDocxReviewer,
+  paragraph,
 } from "@stll/folio-core/server";
 import type { DocumentPreset, DocumentStyleSet } from "@stll/folio-core/server";
 
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import type { StyleSetEditorSettings } from "@/api/lib/style-set-editor-contract";
+import type {
+  StyleSetEditorSettings,
+  StyleSetPreviewContent,
+} from "@/api/lib/style-set-editor-contract";
 
 const TWIPS_PER_POINT = 20;
 const HALF_POINTS_PER_POINT = 2;
@@ -127,6 +131,53 @@ export const createStyleSetEditorBuffer = async (
       ),
     ),
   );
+
+type CreateStyleSetEditorPreviewBufferOptions = {
+  source: DocumentPreset;
+  name: string;
+  settings: StyleSetEditorSettings;
+  content: StyleSetPreviewContent;
+};
+
+export const createStyleSetEditorPreviewBuffer = async ({
+  source,
+  name,
+  settings,
+  content,
+}: CreateStyleSetEditorPreviewBufferOptions): Promise<ArrayBuffer> => {
+  const preset = applyStyleSetEditorSettings(source, name, settings);
+  const roles = ensureRoleStyles(preset.styleSet);
+  const document = createEmptyDocument({ preset });
+  document.package.document.content = [
+    paragraph(content.title, { styleId: roles.title.styleId }),
+    paragraph(content.introduction, { styleId: roles.body.styleId }),
+    paragraph(content.investmentHeading, { styleId: roles.level1.styleId }),
+    paragraph(content.investmentBody, { styleId: roles.body.styleId }),
+    paragraph(content.equityFinancingHeading, {
+      styleId: roles.level2.styleId,
+    }),
+    paragraph(content.equityFinancingBody, { styleId: roles.body.styleId }),
+    paragraph(content.conversionPriceHeading, {
+      styleId: roles.level3.styleId,
+    }),
+    paragraph(content.conversionPriceBody, { styleId: roles.body.styleId }),
+    paragraph(content.shareClassHeading, { styleId: roles.level3.styleId }),
+    paragraph(content.shareClassBody, { styleId: roles.body.styleId }),
+    paragraph(content.liquidityEventHeading, {
+      styleId: roles.level2.styleId,
+    }),
+    paragraph(content.liquidityEventBody, { styleId: roles.body.styleId }),
+    paragraph(content.companyRepresentationsHeading, {
+      styleId: roles.level1.styleId,
+    }),
+    paragraph(content.companyRepresentationsBody, {
+      styleId: roles.body.styleId,
+    }),
+    paragraph(content.generalHeading, { styleId: roles.level1.styleId }),
+    paragraph(content.generalBody, { styleId: roles.body.styleId }),
+  ];
+  return await createDocx(document);
+};
 
 const projectStyleSetEditorSettings = (
   preset: DocumentPreset,
@@ -399,11 +450,14 @@ const numberedParagraphStyleSettings = (
   level: 1 | 2 | 3,
 ): StyleSetEditorSettings["level1"] => {
   const indentFirstLine = numberingLevel?.pPr?.indentFirstLine ?? 0;
+  const hangingIndent = numberingLevel?.pPr?.hangingIndent
+    ? Math.abs(indentFirstLine)
+    : Math.max(0, -indentFirstLine);
   return {
     ...paragraphStyleSettings(formatting),
     numberingFormat: numberingFormat(numberingLevel, level),
     indentLeftPt: fromTwips(numberingLevel?.pPr?.indentLeft ?? 0),
-    hangingPt: fromTwips(Math.max(0, -indentFirstLine)),
+    hangingPt: fromTwips(hangingIndent),
   };
 };
 
