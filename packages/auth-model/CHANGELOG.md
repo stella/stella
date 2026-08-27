@@ -1,5 +1,13 @@
 # @stll/auth-model
 
+## 0.2.1
+
+### Patch Changes
+
+- [#2526](https://github.com/stella/stella/pull/2526) [`355d6c1`](https://github.com/stella/stella/commit/355d6c1e48fef5d15f15435bd9ce26a0f88b4b2e) Thanks [@jan-kubica](https://github.com/jan-kubica)! - - @stll/auth-model: Require a verified email address before an organization invitation grants access.
+  - @stll/cli: Regenerate the route map for the `properties.preview` capability's access and scope.
+  - @stll/workspace-ui: Load person avatar images lazily and without a referrer.
+
 ## 0.2.0
 
 ### Minor Changes

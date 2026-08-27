@@ -1,5 +1,17 @@
 # @stll/cli
 
+## 0.6.8
+
+### Patch Changes
+
+- [#2525](https://github.com/stella/stella/pull/2525) [`fe88df0`](https://github.com/stella/stella/commit/fe88df042170c2e1e3ed844fb044ba683240d6fe) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Regenerate the capability catalog with the bounded workflow target-count input.
+
+- [#2526](https://github.com/stella/stella/pull/2526) [`355d6c1`](https://github.com/stella/stella/commit/355d6c1e48fef5d15f15435bd9ce26a0f88b4b2e) Thanks [@jan-kubica](https://github.com/jan-kubica)! - - @stll/auth-model: Require a verified email address before an organization invitation grants access.
+  - @stll/cli: Regenerate the route map for the `properties.preview` capability's access and scope.
+  - @stll/workspace-ui: Load person avatar images lazily and without a referrer.
+
+- [#2517](https://github.com/stella/stella/pull/2517) [`787c653`](https://github.com/stella/stella/commit/787c65351474e007eb8ae99b950035ba29aaa9b3) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Expose skill revision, proposal, and comment capabilities.
+
 ## 0.6.7
 
 ### Patch Changes

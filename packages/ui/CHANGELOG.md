@@ -1,5 +1,13 @@
 # @stll/ui
 
+## 0.7.0
+
+### Minor Changes
+
+- [#2524](https://github.com/stella/stella/pull/2524) [`746d6f3`](https://github.com/stella/stella/commit/746d6f3ecee8e92aa433bc4b30c5507ed5e3bb53) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add the shared review chrome: status badge, severity dot, decision actions, comment card, author avatar, out-of-date notice, and diff text.
+
+- [#2530](https://github.com/stella/stella/pull/2530) [`62e2d3e`](https://github.com/stella/stella/commit/62e2d3eda8809f5cd6996cb6e3b1515cd18da1f2) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add an `ApplicationShell` primitive for application navigation, page chrome, and optional inspector layouts.
+
 ## 0.6.0
 
 ### Minor Changes

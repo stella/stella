@@ -1,5 +1,15 @@
 # @stll/workspace-ui
 
+## 0.3.2
+
+### Patch Changes
+
+- [#2526](https://github.com/stella/stella/pull/2526) [`355d6c1`](https://github.com/stella/stella/commit/355d6c1e48fef5d15f15435bd9ce26a0f88b4b2e) Thanks [@jan-kubica](https://github.com/jan-kubica)! - - @stll/auth-model: Require a verified email address before an organization invitation grants access.
+  - @stll/cli: Regenerate the route map for the `properties.preview` capability's access and scope.
+  - @stll/workspace-ui: Load person avatar images lazily and without a referrer.
+- Updated dependencies [[`746d6f3`](https://github.com/stella/stella/commit/746d6f3ecee8e92aa433bc4b30c5507ed5e3bb53), [`62e2d3e`](https://github.com/stella/stella/commit/62e2d3eda8809f5cd6996cb6e3b1515cd18da1f2)]:
+  - @stll/ui@0.7.0
+
 ## 0.3.1
 
 ### Patch Changes
