@@ -26,7 +26,7 @@ import {
   assertNetworkBaselineCoverage,
   baselineWaterfallDepth,
   createNetworkCollector,
-  shallowerSample,
+  mergeResampledMetrics,
   summarizeCapture,
 } from "../helpers/network";
 import { createBrowserErrorCollector } from "../helpers/test";
@@ -467,7 +467,7 @@ const smokeRouteTarget = async ({
     }
     const again = await measureRouteTarget({ context, route });
     return resampleDeeperReading(
-      shallowerSample(metrics, again),
+      mergeResampledMetrics(metrics, again),
       remaining - 1,
     );
   };

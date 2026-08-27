@@ -804,16 +804,44 @@ export const WATERFALL_DEPTH_RESAMPLES = 2;
 export const baselineWaterfallDepth = (route: string): number | null =>
   readNetworkBaseline()?.[route]?.depth ?? null;
 
+const maxPerKey = (
+  left: Record<string, number>,
+  right: Record<string, number>,
+): Record<string, number> => {
+  const merged: Record<string, number> = { ...left };
+  for (const [key, value] of Object.entries(right)) {
+    merged[key] = Math.max(merged[key] ?? 0, value);
+  }
+  return Object.fromEntries(
+    Object.entries(merged).sort(([a], [b]) => a.localeCompare(b)),
+  );
+};
+
 /**
- * Keep the shallower of two samples of one route. Every other dimension
- * (request set, query counts, sizes) is compared upward per sample, so the
- * shallower sample stays a complete, self-consistent observation.
+ * Fold a re-measurement into the metrics of one route. Depth takes the
+ * minimum, because only jitter can push a sample above the true depth. Every
+ * other dimension takes the union or per-key maximum, so a regression the
+ * first sample caught (a new request, an N+1, an oversized body) survives a
+ * later sample that happened to read shallower.
  */
-export const shallowerSample = (
+export const mergeResampledMetrics = (
   current: RouteNetworkMetrics,
   candidate: RouteNetworkMetrics,
-): RouteNetworkMetrics =>
-  candidate.depth < current.depth ? candidate : current;
+): RouteNetworkMetrics => ({
+  requests: [...new Set([...current.requests, ...candidate.requests])].sort(),
+  requestCounts: maxPerKey(current.requestCounts, candidate.requestCounts),
+  depth: Math.min(current.depth, candidate.depth),
+  dbQueries: maxPerKey(current.dbQueries, candidate.dbQueries),
+  missingDbQueryCounts: maxPerKey(
+    current.missingDbQueryCounts,
+    candidate.missingDbQueryCounts,
+  ),
+  responseSizes: maxPerKey(current.responseSizes, candidate.responseSizes),
+  missingResponseSizeCounts: maxPerKey(
+    current.missingResponseSizeCounts,
+    candidate.missingResponseSizeCounts,
+  ),
+});
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
