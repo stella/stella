@@ -83,6 +83,24 @@ describe("waterfallDepth", () => {
     ).toBe(1);
   });
 
+  test("a faster response can raise the reading by one", () => {
+    // Pins the asymmetry the route-smoke resampling exists for: the same two
+    // requests read as one round or two depending only on how quickly the
+    // first one answered. Any change that makes this deterministic can drop
+    // WATERFALL_DEPTH_RESAMPLES.
+    const overlapping = [
+      { start: 0, end: 100 },
+      { start: 90, end: 200 },
+    ];
+    const firstAnsweredFaster = [
+      { start: 0, end: 80 },
+      { start: 90, end: 200 },
+    ];
+
+    expect(waterfallDepth(overlapping)).toBe(1);
+    expect(waterfallDepth(firstAnsweredFaster)).toBe(2);
+  });
+
   test("an independent late request does not chain", () => {
     // A quiet gap between launches makes this an idle prefetch, not another
     // route-load round.

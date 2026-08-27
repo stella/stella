@@ -154,6 +154,7 @@
     "@ag-ui/core": "0.1.1-canary.beta.0",
     "@base-ui/react": "1.7.0",
     "@better-auth/api-key": "1.7.1",
+    "@better-auth/core": "1.7.1",
     "@better-auth/oauth-provider": "1.7.1",
     "@libpdf/core": "0.4.1",
     "@mcp-ui/client": "7.1.1",

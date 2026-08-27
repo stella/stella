@@ -21,9 +21,12 @@ import {
 import { createUploadedDocumentRoute } from "../helpers/document";
 import {
   type RouteNetworkMetrics,
+  WATERFALL_DEPTH_RESAMPLES,
   assertNetworkBaseline,
   assertNetworkBaselineCoverage,
+  baselineWaterfallDepth,
   createNetworkCollector,
+  shallowerSample,
   summarizeCapture,
 } from "../helpers/network";
 import { createBrowserErrorCollector } from "../helpers/test";
@@ -450,6 +453,41 @@ const smokeRouteTarget = async ({
   results: Map<string, RouteNetworkMetrics>;
   route: SmokeRoute;
 }) => {
+  // A deeper reading than the budget is either a regression or a fast sample
+  // over-reading by one; only more samples tell them apart. A regression
+  // survives every re-measurement, jitter does not. Samples run one at a time
+  // on purpose: a second page in flight would distort the timing being read.
+  const budget = baselineWaterfallDepth(route.template);
+  const resampleDeeperReading = async (
+    metrics: RouteNetworkMetrics,
+    remaining: number,
+  ): Promise<RouteNetworkMetrics> => {
+    if (budget === null || metrics.depth <= budget || remaining === 0) {
+      return metrics;
+    }
+    const again = await measureRouteTarget({ context, route });
+    return resampleDeeperReading(
+      shallowerSample(metrics, again),
+      remaining - 1,
+    );
+  };
+
+  const metrics = await resampleDeeperReading(
+    await measureRouteTarget({ context, route }),
+    WATERFALL_DEPTH_RESAMPLES,
+  );
+  // Stored under the template it received; redirect targets arrive as
+  // "<template> target".
+  results.set(route.template, metrics);
+};
+
+const measureRouteTarget = async ({
+  context,
+  route,
+}: {
+  context: BrowserContext;
+  route: SmokeRoute;
+}): Promise<RouteNetworkMetrics> => {
   const page = await context.newPage();
   const browserErrors = createBrowserErrorCollector({
     tolerateColdMountWarning: true,
@@ -469,9 +507,8 @@ const smokeRouteTarget = async ({
     assertFinalDestination(page, route);
     browserErrors.assertEmpty(`unexpected browser errors on ${route.template}`);
     // Captured after the route shell and tracked API work are ready, so the
-    // manifest reflects the fully-rendered route. Stored under the template
-    // it received; redirect targets arrive as "<template> target".
-    results.set(route.template, summarizeCapture(await network.capture()));
+    // manifest reflects the fully-rendered route.
+    return summarizeCapture(await network.capture());
   } finally {
     detachNetwork();
     detachPage();

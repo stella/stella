@@ -351,8 +351,15 @@ const REQUEST_SEQUENCE_GAP_MS = 500;
 // on a fast response stays hidden behind an unrelated slow one.
 //
 // Load-monotonicity is the property the guard rests on: neither a slower
-// response nor a uniformly stretched timeline can raise the result, so an extra
-// level always means an extra level. Two rules buy it:
+// response nor a uniformly stretched timeline can raise the result. The
+// converse does not hold: a FASTER response ends a busy block earlier, so an
+// unrelated request that used to overlap it now launches after it and reads
+// as one more level. A single lucky sample therefore over-reads by one on a
+// route that did not change, which is why the route-smoke suite re-measures a
+// route before treating a deeper reading as a regression
+// (`WATERFALL_DEPTH_RESAMPLES`). Timing alone cannot separate a dependent
+// launch from a coincidentally later one; sampling is the honest fix. Two
+// rules buy the monotonicity that does hold:
 //   1. The sequence split reads LAUNCH times only. Segment boundaries therefore
 //      cannot move when responses take longer, and a uniform slowdown widens
 //      launch gaps, which only splits a sequence further.
@@ -785,6 +792,28 @@ const readNetworkBaseline = (): NetworkBaseline | null => {
   }
   return parsed;
 };
+
+// How many extra measurements a route gets when its first sample reads deeper
+// than the committed budget. Depth is a timing lower bound that a fast sample
+// can over-read by one (see `waterfallDepth`); a real extra round shows up in
+// every sample, jitter does not. Only suspected regressions pay for the extra
+// navigations.
+export const WATERFALL_DEPTH_RESAMPLES = 2;
+
+/** Committed depth budget for a route, or null when it has no baseline entry. */
+export const baselineWaterfallDepth = (route: string): number | null =>
+  readNetworkBaseline()?.[route]?.depth ?? null;
+
+/**
+ * Keep the shallower of two samples of one route. Every other dimension
+ * (request set, query counts, sizes) is compared upward per sample, so the
+ * shallower sample stays a complete, self-consistent observation.
+ */
+export const shallowerSample = (
+  current: RouteNetworkMetrics,
+  candidate: RouteNetworkMetrics,
+): RouteNetworkMetrics =>
+  candidate.depth < current.depth ? candidate : current;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
