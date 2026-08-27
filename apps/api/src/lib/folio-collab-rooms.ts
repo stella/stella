@@ -1,5 +1,6 @@
 import { panic } from "better-result";
-import { and, asc, eq, inArray, lt } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
+import type { SQL } from "drizzle-orm";
 
 import { roles } from "@stll/permissions";
 
@@ -171,6 +172,30 @@ type IssueFolioCollabTokenOptions = {
   workspaceId: SafeId<"workspace">;
 };
 
+type FolioCollabTokenCleanupDb = {
+  execute: (query: SQL) => Promise<unknown>;
+};
+
+export const cleanupExpiredFolioCollabRoomTokens = async ({
+  db,
+  workspaceId,
+}: {
+  db: FolioCollabTokenCleanupDb;
+  workspaceId: SafeId<"workspace">;
+}) => {
+  await db.execute(sql`
+    DELETE FROM ${folioCollabRoomTokens}
+    WHERE ${folioCollabRoomTokens.id} IN (
+      SELECT ${folioCollabRoomTokens.id}
+      FROM ${folioCollabRoomTokens}
+      WHERE ${folioCollabRoomTokens.workspaceId} = ${workspaceId}
+        AND ${folioCollabRoomTokens.expiresAt} < CURRENT_TIMESTAMP
+      ORDER BY ${folioCollabRoomTokens.expiresAt}, ${folioCollabRoomTokens.id}
+      LIMIT ${FOLIO_COLLAB_TOKEN_CLEANUP_BATCH_SIZE}
+    )
+  `);
+};
+
 export const issueFolioCollabToken = async ({
   generation,
   permissions,
@@ -182,28 +207,7 @@ export const issueFolioCollabToken = async ({
   const token = createFolioCollabToken();
   const now = new Date();
   const tokenExpiresAt = computeFolioCollabTokenExpiresAt(now);
-  const expiredTokens = await tx
-    .select({ id: folioCollabRoomTokens.id })
-    .from(folioCollabRoomTokens)
-    .where(
-      and(
-        eq(folioCollabRoomTokens.workspaceId, workspaceId),
-        lt(folioCollabRoomTokens.expiresAt, now),
-      ),
-    )
-    .orderBy(asc(folioCollabRoomTokens.expiresAt))
-    .limit(FOLIO_COLLAB_TOKEN_CLEANUP_BATCH_SIZE);
-  if (expiredTokens.length > 0) {
-    await tx.delete(folioCollabRoomTokens).where(
-      and(
-        eq(folioCollabRoomTokens.workspaceId, workspaceId),
-        inArray(
-          folioCollabRoomTokens.id,
-          expiredTokens.map(({ id }) => id),
-        ),
-      ),
-    );
-  }
+  await cleanupExpiredFolioCollabRoomTokens({ db: tx, workspaceId });
   await tx.insert(folioCollabRoomTokens).values({
     expiresAt: tokenExpiresAt,
     generation,

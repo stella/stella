@@ -11,7 +11,7 @@ import { and, eq, inArray, lt, sql } from "drizzle-orm";
 import { folioCollabRooms, folioCollabRoomTokens } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { issueFolioCollabToken } from "@/api/lib/folio-collab-rooms";
+import { cleanupExpiredFolioCollabRoomTokens } from "@/api/lib/folio-collab-rooms";
 import {
   getRlsFixture,
   releaseRlsFixture,
@@ -177,7 +177,7 @@ describe("folio collaboration room seed generation CAS", () => {
 });
 
 describe("folio collaboration room token retention", () => {
-  test("each issuance removes at most one bounded page of expired tokens", async () => {
+  test("expiry cleanup removes one bounded page of tokens", async () => {
     const generation = 1;
     const roomId = await insertRoom({ generation, seedState: "empty" });
     const expiredAt = new Date(Date.now() - 60_000);
@@ -194,17 +194,10 @@ describe("folio collaboration room token retention", () => {
       })),
     );
 
-    await testDb.transaction(
-      async (tx) =>
-        await issueFolioCollabToken({
-          generation,
-          permissions: { canEdit: true },
-          roomId,
-          tx,
-          userId: ids.userA1,
-          workspaceId: ids.wsA1,
-        }),
-    );
+    await cleanupExpiredFolioCollabRoomTokens({
+      db: testDb,
+      workspaceId: ids.wsA1,
+    });
 
     const remainingExpired = await testDb
       .select({ id: folioCollabRoomTokens.id })
