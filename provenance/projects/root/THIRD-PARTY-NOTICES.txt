@@ -45,7 +45,7 @@ Project: root
 - @react-email/components 1.0.12 — MIT
 - @react-email/render 2.1.0 — MIT
 - @resvg/resvg-js 2.6.2 — MPL-2.0
-- @silurus/ooxml 0.76.2 — MIT
+- @silurus/ooxml 0.82.1 — MIT
 - @sinclair/typebox 0.34.52 — MIT
 - @smithy/fetch-http-handler 5.7.2 — Apache-2.0
 - @standard-schema/spec 1.1.0 — MIT
