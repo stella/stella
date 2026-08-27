@@ -1073,14 +1073,14 @@
     "done": "Gatavs",
     "download": "Lejupielādēt",
     "dragAndDrop": {
-      "cancelled": "Pārvietošana atcelta. {itemName} netika pārvietots.",
-      "droppedOn": "{itemName} nomests uz {destinationName}.",
-      "movedNear": "{itemName} pārvietots blakus {destinationName}.",
-      "movedTo": "{itemName} pārvietots uz {destinationName}.",
-      "movingNear": "{itemName} tiek pārvietots blakus {destinationName}.",
-      "movingTo": "{itemName} tiek pārvietots uz {destinationName}.",
-      "pickedUp": "{itemName} pacelts.",
-      "selectedItems": "{count, plural, zero {Nav atlasītu vienumu} one {# atlasīts vienums} other {# atlasīti vienumi}}"
+      "cancelled": "{count, plural, zero {Pārvietošana atcelta. {itemName} netika pārvietoti.} one {Pārvietošana atcelta. {itemName} netika pārvietots.} other {Pārvietošana atcelta. {itemName} netika pārvietoti.}}",
+      "droppedOn": "{count, plural, zero {{itemName} nomesti uz {destinationName}.} one {{itemName} nomests uz {destinationName}.} other {{itemName} nomesti uz {destinationName}.}}",
+      "movedNear": "{count, plural, zero {{itemName} pārvietoti blakus {destinationName}.} one {{itemName} pārvietots blakus {destinationName}.} other {{itemName} pārvietoti blakus {destinationName}.}}",
+      "movedTo": "{count, plural, zero {{itemName} pārvietoti uz {destinationName}.} one {{itemName} pārvietots uz {destinationName}.} other {{itemName} pārvietoti uz {destinationName}.}}",
+      "movingNear": "{count, plural, zero {{itemName} tiek pārvietoti blakus {destinationName}.} one {{itemName} tiek pārvietots blakus {destinationName}.} other {{itemName} tiek pārvietoti blakus {destinationName}.}}",
+      "movingTo": "{count, plural, zero {{itemName} tiek pārvietoti uz {destinationName}.} one {{itemName} tiek pārvietots uz {destinationName}.} other {{itemName} tiek pārvietoti uz {destinationName}.}}",
+      "pickedUp": "{count, plural, zero {{itemName} pacelti.} one {{itemName} pacelts.} other {{itemName} pacelti.}}",
+      "selectedItems": "{count, plural, zero {# atlasītu vienumu} one {# atlasīts vienums} other {# atlasīti vienumi}}"
     },
     "duplicate": "Dublēt",
     "duplicated": "Dublēts",

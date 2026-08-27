@@ -1375,6 +1375,7 @@ const FilesystemRow = ({
                   count: entityIds.length,
                 })
               : name,
+            entityIds.length,
           );
         },
         onGenerateDragPreview: ({ nativeSetDragImage }) => {

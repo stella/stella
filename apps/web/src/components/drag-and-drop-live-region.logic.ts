@@ -1,9 +1,15 @@
 const DRAG_ANNOUNCEMENT_KEY = "stella/drag-announcement";
 
 type DragAnnouncementItem = {
-  type: "item";
+  count: number;
   name: string;
+  type: "item";
 };
+
+export type DragAnnouncementSubject = Pick<
+  DragAnnouncementItem,
+  "count" | "name"
+>;
 
 export type DragAnnouncementDestination = {
   type: "action" | "container" | "reorder";
@@ -40,8 +46,9 @@ type DropDataRecord = Record<string | symbol, unknown>;
 export const withDragAnnouncementData = (
   data: DragDataRecord,
   name: string,
+  count = 1,
 ): DragDataRecord => {
-  data[DRAG_ANNOUNCEMENT_KEY] = { type: "item", name };
+  data[DRAG_ANNOUNCEMENT_KEY] = { count, name, type: "item" };
   return data;
 };
 
@@ -69,7 +76,18 @@ const readAnnouncementData = (
     return null;
   }
   if (type === "item") {
-    return { type, name };
+    if (!("count" in value)) {
+      return null;
+    }
+    const { count } = value;
+    if (
+      typeof count !== "number" ||
+      !Number.isSafeInteger(count) ||
+      count <= 0
+    ) {
+      return null;
+    }
+    return { count, name, type };
   }
   if (type === "action" || type === "container" || type === "reorder") {
     return { type, name };
@@ -77,16 +95,16 @@ const readAnnouncementData = (
   return null;
 };
 
-export const getDragAnnouncementName = (
+export const getDragAnnouncementSubject = (
   data: Record<string | symbol, unknown>,
-): string | null => {
+): DragAnnouncementSubject | null => {
   const announcement = readAnnouncementData(data);
   if (!announcement) {
     return null;
   }
   switch (announcement.type) {
     case "item":
-      return announcement.name;
+      return { count: announcement.count, name: announcement.name };
     case "action":
     case "container":
     case "reorder":

@@ -11,6 +11,8 @@ import {
   ChevronRightIcon,
   FolderPlusIcon,
   GripVerticalIcon,
+  PencilIcon,
+  XIcon,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -36,6 +38,7 @@ import {
 import { MatterIcon } from "@/components/matter-icon";
 import {
   canMoveMatterFolder,
+  discardPendingMatterFolder,
   MAX_FOLDER_NAME_LENGTH,
   matterFolderPath,
   matterFolderMoveDestinations,
@@ -290,29 +293,25 @@ const FolderDragDropRow = ({
   const dragHandle =
     source === undefined ? null : (
       <Menu onOpenChange={setIsMoveMenuOpen}>
-        <Tooltip
-          content={t("workspaces.copyToMatter.dragFolder")}
+        <MenuTrigger
+          aria-label={t("workspaces.copyToMatter.moveFolder")}
+          disabled={!handleEnabled}
           render={
-            <MenuTrigger
-              aria-label={t("workspaces.copyToMatter.moveFolder")}
-              disabled={!handleEnabled}
-              render={
-                <button
-                  className={cn(
-                    "border-border/70 bg-background text-muted-foreground ms-auto flex size-6 shrink-0 touch-none items-center justify-center rounded border shadow-sm",
-                    handleEnabled
-                      ? "hover:text-foreground cursor-grab active:cursor-grabbing"
-                      : "cursor-not-allowed opacity-50",
-                  )}
-                  ref={dragHandleRef}
-                  type="button"
-                />
-              }
+            <button
+              className={cn(
+                "border-border/70 bg-background text-muted-foreground ms-auto flex size-6 shrink-0 touch-none items-center justify-center rounded border shadow-sm",
+                handleEnabled
+                  ? "hover:text-foreground cursor-grab active:cursor-grabbing"
+                  : "cursor-not-allowed opacity-50",
+              )}
+              ref={dragHandleRef}
+              type="button"
             />
           }
+          tooltip={t("workspaces.copyToMatter.dragFolder")}
         >
           <GripVerticalIcon className="size-3.5" />
-        </Tooltip>
+        </MenuTrigger>
         <MenuPopup align="end" className="w-56">
           <MenuGroupLabel>
             {t("workspaces.copyToMatter.moveFolderTo")}
@@ -564,6 +563,10 @@ type FolderPickerProps = {
   onChange: (target: MatterTarget) => void;
 };
 
+type FolderDraft =
+  | { type: "create"; name: string }
+  | { type: "edit"; name: string };
+
 const FolderPicker = ({ value, onChange }: FolderPickerProps) => {
   const t = useTranslations();
   const canCreate = usePermissions({ entity: ["create"] });
@@ -580,8 +583,8 @@ const FolderPicker = ({ value, onChange }: FolderPickerProps) => {
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(
     new Set(),
   );
-  /** `null` while the new-folder row is a button; a string while it is an input. */
-  const [draftName, setDraftName] = useState<string | null>(null);
+  /** `null` while the new-folder row is a button or staged preview. */
+  const [folderDraft, setFolderDraft] = useState<FolderDraft | null>(null);
   /** Set by Escape so the blur that follows unmounting does not stage the draft. */
   const draftCancelledRef = useRef(false);
 
@@ -625,9 +628,14 @@ const FolderPicker = ({ value, onChange }: FolderPickerProps) => {
             {
               onSuccess: () => {
                 detached(
-                  queryClient.invalidateQueries({
-                    queryKey: workspaceFoldersOptions(workspaceId).queryKey,
-                  }),
+                  Promise.all([
+                    queryClient.invalidateQueries({
+                      queryKey: workspaceFoldersOptions(workspaceId).queryKey,
+                    }),
+                    queryClient.invalidateQueries({
+                      queryKey: entitiesKeys.all(workspaceId),
+                    }),
+                  ]),
                   "matter-target-picker.invalidate-moved-folder",
                 );
               },
@@ -691,14 +699,33 @@ const FolderPicker = ({ value, onChange }: FolderPickerProps) => {
    * dialog's submit button is not dropped. An empty name closes the input.
    */
   const stageFolder = () => {
-    const staged = stageMatterFolder(value, draftName ?? "");
-    if (staged === null) {
-      setDraftName(null);
+    if (folderDraft === null) {
       return;
     }
-    onChange(staged);
-    expandFolderPath(staged.parentId);
-    setDraftName(null);
+    const name = folderDraft.name.trim();
+    if (name === "") {
+      setFolderDraft(null);
+      return;
+    }
+    switch (folderDraft.type) {
+      case "create": {
+        const staged = stageMatterFolder(value, name);
+        if (staged === null) {
+          return;
+        }
+        onChange(staged);
+        expandFolderPath(staged.parentId);
+        break;
+      }
+      case "edit": {
+        if (pendingFolder === null) {
+          return;
+        }
+        onChange({ ...pendingFolder, name });
+        break;
+      }
+    }
+    setFolderDraft(null);
   };
 
   /**
@@ -707,7 +734,7 @@ const FolderPicker = ({ value, onChange }: FolderPickerProps) => {
    * node renders them and the preview cannot sit somewhere the folder will not.
    */
   const newFolderDraft = (() => {
-    if (draftName !== null) {
+    if (folderDraft !== null) {
       return (
         <Input
           aria-label={t("workspaces.newFolder")}
@@ -721,7 +748,9 @@ const FolderPicker = ({ value, onChange }: FolderPickerProps) => {
             }
             stageFolder();
           }}
-          onChange={(e) => setDraftName(e.target.value)}
+          onChange={(e) =>
+            setFolderDraft({ type: folderDraft.type, name: e.target.value })
+          }
           onKeyDown={(e) => {
             if (e.key === "Enter") {
               e.preventDefault();
@@ -731,11 +760,11 @@ const FolderPicker = ({ value, onChange }: FolderPickerProps) => {
               // Cancel only the draft; the enclosing dialog dismisses on Escape.
               e.stopPropagation();
               draftCancelledRef.current = true;
-              setDraftName(null);
+              setFolderDraft(null);
             }
           }}
           placeholder={t("workspaces.newFolder")}
-          value={draftName}
+          value={folderDraft.name}
         />
       );
     }
@@ -787,6 +816,40 @@ const FolderPicker = ({ value, onChange }: FolderPickerProps) => {
               }
               selected={pendingFolder.selection.type === "pending"}
             />
+            <Tooltip
+              content={t("common.edit")}
+              render={
+                <button
+                  aria-label={t("common.edit")}
+                  className="text-muted-foreground hover:bg-muted hover:text-foreground flex size-6 shrink-0 items-center justify-center rounded"
+                  onClick={() => {
+                    draftCancelledRef.current = false;
+                    setFolderDraft({
+                      type: "edit",
+                      name: pendingFolder.name,
+                    });
+                  }}
+                  type="button"
+                />
+              }
+            >
+              <PencilIcon className="size-3.5" />
+            </Tooltip>
+            <Tooltip
+              content={t("common.remove")}
+              render={
+                <button
+                  aria-label={t("common.remove")}
+                  className="text-muted-foreground hover:bg-muted hover:text-foreground flex size-6 shrink-0 items-center justify-center rounded"
+                  onClick={() =>
+                    onChange(discardPendingMatterFolder(pendingFolder))
+                  }
+                  type="button"
+                />
+              }
+            >
+              <XIcon className="size-3.5" />
+            </Tooltip>
             {dragHandle}
           </div>
         )}
@@ -795,12 +858,12 @@ const FolderPicker = ({ value, onChange }: FolderPickerProps) => {
   };
 
   const newFolderButton =
-    canCreate && draftName === null && pendingFolder === null ? (
+    canCreate && folderDraft === null && pendingFolder === null ? (
       <button
         className="hover:bg-accent text-muted-foreground flex w-full items-center gap-1 rounded px-2 py-1 text-start text-sm"
         onClick={() => {
           draftCancelledRef.current = false;
-          setDraftName("");
+          setFolderDraft({ type: "create", name: "" });
           expandFolderPath(value.parentId);
         }}
         type="button"

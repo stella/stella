@@ -1076,13 +1076,13 @@ type Messages = {
     "done": "Done";
     "download": "Download";
     "dragAndDrop": {
-      "cancelled": "Move cancelled. {itemName} was not moved.";
-      "droppedOn": "Dropped {itemName} on {destinationName}.";
-      "movedNear": "Moved {itemName} near {destinationName}.";
-      "movedTo": "Moved {itemName} to {destinationName}.";
-      "movingNear": "Moving {itemName} near {destinationName}.";
-      "movingTo": "Moving {itemName} to {destinationName}.";
-      "pickedUp": "Picked up {itemName}.";
+      "cancelled": "{count, plural, one {Move cancelled. {itemName} was not moved.} other {Move cancelled. {itemName} were not moved.}}";
+      "droppedOn": "{count, plural, one {Dropped {itemName} on {destinationName}.} other {Dropped {itemName} on {destinationName}.}}";
+      "movedNear": "{count, plural, one {Moved {itemName} near {destinationName}.} other {Moved {itemName} near {destinationName}.}}";
+      "movedTo": "{count, plural, one {Moved {itemName} to {destinationName}.} other {Moved {itemName} to {destinationName}.}}";
+      "movingNear": "{count, plural, one {Moving {itemName} near {destinationName}.} other {Moving {itemName} near {destinationName}.}}";
+      "movingTo": "{count, plural, one {Moving {itemName} to {destinationName}.} other {Moving {itemName} to {destinationName}.}}";
+      "pickedUp": "{count, plural, one {Picked up {itemName}.} other {Picked up {itemName}.}}";
       "selectedItems": "{count, plural, one {# selected item} other {# selected items}}";
     };
     "duplicate": "Duplicate";

@@ -102,6 +102,18 @@ export const selectPendingMatterTarget = (
   };
 };
 
+/** Remove a staged folder while preserving the user's existing destination. */
+export const discardPendingMatterFolder = (
+  target: PendingMatterTarget,
+): MatterTarget => ({
+  type: "existing",
+  workspaceId: target.workspaceId,
+  parentId:
+    target.selection.type === "existing"
+      ? target.selection.parentId
+      : target.parentId,
+});
+
 /**
  * Move a staged folder without creating it early. Keeping this as a pending
  * target means cancelling the dialog still leaves no orphan on the server.
@@ -189,7 +201,7 @@ export const matterFolderMoveDestinations = (
     }
   }
 
-  const destinationName = (folder: NamedFolderLink) => {
+  const destinationPath = (folder: NamedFolderLink) => {
     if (nameCounts.get(folder.name) === 1) {
       return folder.name;
     }
@@ -207,6 +219,29 @@ export const matterFolderMoveDestinations = (
     return names.toReversed().join(" / ");
   };
 
+  const pathByFolderId = new Map<string, string>();
+  const folderIdsByPath = new Map<string, string[]>();
+  for (const folder of folders) {
+    const path = destinationPath(folder);
+    pathByFolderId.set(folder.entityId, path);
+    const folderIds = folderIdsByPath.get(path);
+    if (folderIds === undefined) {
+      folderIdsByPath.set(path, [folder.entityId]);
+    } else {
+      folderIds.push(folder.entityId);
+    }
+  }
+
+  const duplicatePathIndexByFolderId = new Map<string, number>();
+  for (const folderIds of folderIdsByPath.values()) {
+    if (folderIds.length === 1) {
+      continue;
+    }
+    for (const [index, folderId] of folderIds.toSorted().entries()) {
+      duplicatePathIndexByFolderId.set(folderId, index + 1);
+    }
+  }
+
   const destinations: MatterFolderMoveDestination[] = [];
   if (!invalidParentIds.has(null)) {
     destinations.push({ parentId: null, name: rootName });
@@ -215,9 +250,19 @@ export const matterFolderMoveDestinations = (
     if (invalidParentIds.has(folder.entityId)) {
       continue;
     }
+    const path = pathByFolderId.get(folder.entityId);
+    if (path === undefined) {
+      continue;
+    }
+    const duplicatePathIndex = duplicatePathIndexByFolderId.get(
+      folder.entityId,
+    );
     destinations.push({
       parentId: folder.entityId,
-      name: destinationName(folder),
+      name:
+        duplicatePathIndex === undefined
+          ? path
+          : `${path} (${duplicatePathIndex})`,
     });
   }
   return destinations;

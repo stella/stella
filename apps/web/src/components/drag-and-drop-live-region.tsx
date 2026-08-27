@@ -12,8 +12,9 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 import {
   type DragAnnouncementDestination,
   type DragAnnouncementPhase,
-  getDragAnnouncementName,
+  type DragAnnouncementSubject,
   getDragAnnouncementMessageKey,
+  getDragAnnouncementSubject,
   getDropAnnouncementDestination,
 } from "./drag-and-drop-live-region.logic";
 
@@ -24,10 +25,14 @@ export const DragAndDropLiveRegion = () => {
   useExternalSyncEffect(() => {
     const formatDestination = ({
       destination,
-      itemName,
       phase,
+      subject,
     }: AnnounceDestinationOptions) => {
-      const values = { destinationName: destination.name, itemName };
+      const values = {
+        count: subject.count,
+        destinationName: destination.name,
+        itemName: subject.name,
+      };
       const messageKey = getDragAnnouncementMessageKey(phase, destination.type);
       switch (messageKey) {
         case "movingTo":
@@ -46,9 +51,10 @@ export const DragAndDropLiveRegion = () => {
     };
     const stopMonitoring = registerDragAnnouncements(
       {
-        cancelled: (itemName) => t("cancelled", { itemName }),
+        cancelled: ({ count, name }) =>
+          t("cancelled", { count, itemName: name }),
         destination: formatDestination,
-        pickedUp: (itemName) => t("pickedUp", { itemName }),
+        pickedUp: ({ count, name }) => t("pickedUp", { count, itemName: name }),
       },
       lastDestinationRef,
     );
@@ -64,14 +70,14 @@ export const DragAndDropLiveRegion = () => {
 
 type AnnounceDestinationOptions = {
   destination: DragAnnouncementDestination;
-  itemName: string;
   phase: DragAnnouncementPhase;
+  subject: DragAnnouncementSubject;
 };
 
 type DragAnnouncementFormatter = {
-  cancelled: (itemName: string) => string;
+  cancelled: (subject: DragAnnouncementSubject) => string;
   destination: (options: AnnounceDestinationOptions) => string;
-  pickedUp: (itemName: string) => string;
+  pickedUp: (subject: DragAnnouncementSubject) => string;
 };
 
 type DestinationTracker = {
@@ -83,21 +89,22 @@ const registerDragAnnouncements = (
   lastDestination: DestinationTracker,
 ) =>
   monitorForElements({
-    canMonitor: ({ source }) => getDragAnnouncementName(source.data) !== null,
+    canMonitor: ({ source }) =>
+      getDragAnnouncementSubject(source.data) !== null,
     onDragStart: ({ source }) => {
-      const itemName = getDragAnnouncementName(source.data);
-      if (!itemName) {
+      const subject = getDragAnnouncementSubject(source.data);
+      if (!subject) {
         return;
       }
       lastDestination.current = null;
-      announce(format.pickedUp(itemName));
+      announce(format.pickedUp(subject));
     },
     onDropTargetChange: ({ source, location }) => {
-      const itemName = getDragAnnouncementName(source.data);
+      const subject = getDragAnnouncementSubject(source.data);
       const destination = getDropAnnouncementDestination(
         location.current.dropTargets,
       );
-      if (!itemName || !destination) {
+      if (!subject || !destination) {
         lastDestination.current = null;
         return;
       }
@@ -106,11 +113,11 @@ const registerDragAnnouncements = (
         return;
       }
       lastDestination.current = destinationKey;
-      announce(format.destination({ destination, itemName, phase: "moving" }));
+      announce(format.destination({ destination, phase: "moving", subject }));
     },
     onDrop: ({ source, location }) => {
-      const itemName = getDragAnnouncementName(source.data);
-      if (!itemName) {
+      const subject = getDragAnnouncementSubject(source.data);
+      if (!subject) {
         return;
       }
       const destination = getDropAnnouncementDestination(
@@ -118,9 +125,9 @@ const registerDragAnnouncements = (
       );
       lastDestination.current = null;
       if (!destination) {
-        announce(format.cancelled(itemName));
+        announce(format.cancelled(subject));
         return;
       }
-      announce(format.destination({ destination, itemName, phase: "moved" }));
+      announce(format.destination({ destination, phase: "moved", subject }));
     },
   });

@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   getDragAnnouncementMessageKey,
-  getDragAnnouncementName,
+  getDragAnnouncementSubject,
   getDropAnnouncementDestination,
   withDragAnnouncementData,
   withDropAnnouncementData,
@@ -15,7 +15,19 @@ describe("drag-and-drop announcement data", () => {
       "Case timeline",
     );
 
-    expect(getDragAnnouncementName(data)).toBe("Case timeline");
+    expect(getDragAnnouncementSubject(data)).toEqual({
+      count: 1,
+      name: "Case timeline",
+    });
+  });
+
+  test("preserves the item count for plural agreement", () => {
+    const data = withDragAnnouncementData({}, "3 selected items", 3);
+
+    expect(getDragAnnouncementSubject(data)).toEqual({
+      count: 3,
+      name: "3 selected items",
+    });
   });
 
   test("uses the nearest accessible drop target", () => {
@@ -73,7 +85,7 @@ describe("drag-and-drop announcement data", () => {
       "stella/drag-announcement": { type: "item", name: 42 },
     };
 
-    expect(getDragAnnouncementName(malformed)).toBeNull();
+    expect(getDragAnnouncementSubject(malformed)).toBeNull();
     expect(getDropAnnouncementDestination([{ data: malformed }])).toBeNull();
   });
 });

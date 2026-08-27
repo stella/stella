@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   canMoveMatterFolder,
+  discardPendingMatterFolder,
   matterFolderPath,
   matterFolderMoveDestinations,
   reparentPendingMatterFolder,
@@ -144,6 +145,35 @@ describe("staging a folder in the matter picker", () => {
     }
     expect(selectPendingMatterTarget(selectedElsewhere)).toEqual(pending);
   });
+
+  test("discards the staged folder without losing the existing destination", () => {
+    const pending = {
+      type: "pending",
+      workspaceId: WORKSPACE_ID,
+      name: "Pleadings",
+      parentId: FOLDER_ID,
+      selection: { type: "existing", parentId: CREATED_ID },
+    } as const satisfies MatterTarget;
+
+    expect(discardPendingMatterFolder(pending)).toEqual({
+      type: "existing",
+      workspaceId: WORKSPACE_ID,
+      parentId: CREATED_ID,
+    });
+    expect(
+      discardPendingMatterFolder({
+        type: "pending",
+        workspaceId: WORKSPACE_ID,
+        name: "Pleadings",
+        parentId: FOLDER_ID,
+        selection: { type: "pending" },
+      }),
+    ).toEqual({
+      type: "existing",
+      workspaceId: WORKSPACE_ID,
+      parentId: FOLDER_ID,
+    });
+  });
 });
 
 describe("revealing a folder's path in the matter picker", () => {
@@ -241,6 +271,30 @@ describe("choosing a folder move destination with the keyboard", () => {
     ).toContainEqual({
       parentId: "other-archive",
       name: "Other / Archive",
+    });
+  });
+
+  test("numbers destinations deterministically when full paths are identical", () => {
+    const duplicatePaths = [
+      { entityId: "root-a", parentId: null, name: "Client" },
+      { entityId: "root-b", parentId: null, name: "Client" },
+      { entityId: "folder-a", parentId: "root-a", name: "Files" },
+      { entityId: "folder-b", parentId: "root-b", name: "Files" },
+    ];
+
+    const destinations = matterFolderMoveDestinations(
+      duplicatePaths,
+      { kind: "pending", parentId: null },
+      "(Root folder)",
+    );
+
+    expect(destinations).toContainEqual({
+      parentId: "folder-a",
+      name: "Client / Files (1)",
+    });
+    expect(destinations).toContainEqual({
+      parentId: "folder-b",
+      name: "Client / Files (2)",
     });
   });
 
