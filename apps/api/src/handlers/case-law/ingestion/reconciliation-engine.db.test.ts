@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
+import { afterAll, beforeAll, beforeEach, expect, mock, test } from "bun:test";
 import { and, eq, inArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
@@ -190,6 +190,23 @@ const unwalkableSliceStub: SourceReconciliation = {
       });
     }
     return await Promise.resolve({ items: [], totalPages: 1 });
+  },
+};
+
+/**
+ * The same publisher, with a build that fails the way a database driver does:
+ * the whole failed statement in the outer message and the SQLSTATE one
+ * `cause` hop down, which is the shape a query wrapper produces.
+ */
+const drivenFailureStub: SourceReconciliation = {
+  ...stubReconciliation,
+  buildDecision: async () => {
+    const cause = Object.assign(new Error('column "reason" does not exist'), {
+      errno: "42703",
+    });
+    return await Promise.reject(
+      new Error(`Failed query: select ${"a, ".repeat(300)}from x`, { cause }),
+    );
   },
 };
 
@@ -1387,4 +1404,38 @@ test("the docket half of the identity index applies the same filter", async () =
     summary: { slice: OWED_SLICE, keyable: 2, heldBefore: 1, parked: 1 },
   });
   expect(builds).toHaveLength(1);
+});
+
+test("a failed item build records the database cause, not just the error tag", async () => {
+  // Parking stores the tag alone, so this log line is the only record of why
+  // a listed decision could not be built. A driver error spends its whole
+  // outer message on the failed statement and carries the SQLSTATE one
+  // `cause` hop down: a sink that reads the tag reports "DrizzleQueryError"
+  // and nothing an operator can act on.
+  const sourceId = await seedSource();
+  const realLoggerModule = await import("@/api/lib/observability/logger");
+  const warned: Record<string, unknown>[] = [];
+  await mock.module("@/api/lib/observability/logger", () => ({
+    logger: {
+      warn: (_event: string, attributes: Record<string, unknown>) => {
+        warned.push(attributes);
+      },
+      error: () => undefined,
+      info: () => undefined,
+    },
+  }));
+
+  try {
+    await runUnit(sourceId, drivenFailureStub);
+  } finally {
+    await mock.module("@/api/lib/observability/logger", () => realLoggerModule);
+  }
+
+  const failure = warned.find(
+    (attributes) => attributes["identityKey"] !== undefined,
+  );
+  expect(failure?.["error.cause.pg_code"]).toBe("42703");
+  // Bounded apart from the outer message: the statement alone would consume
+  // the whole budget and leave the cause truncated away.
+  expect(failure?.["error.detail"]).toContain('column "reason" does not exist');
 });

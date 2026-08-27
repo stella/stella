@@ -52,6 +52,7 @@ import {
   allocateSourceObservationOrder,
   PROCESS_DECISION_STATUS,
   processDecision,
+  wrappedErrorDetail,
 } from "@/api/handlers/case-law/ingestion/pipeline";
 import type {
   FailedSliceCandidate,
@@ -69,7 +70,7 @@ import {
 } from "@/api/handlers/case-law/ingestion/reconciliation-plan";
 import type { SafeId } from "@/api/lib/branded-types";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
-import { errorTag } from "@/api/lib/errors/utils";
+import { errorSystemFields, errorTag } from "@/api/lib/errors/utils";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import { storedObservationHasDetail } from "@/api/lib/legal-search/ingestion-normalization";
@@ -93,6 +94,7 @@ import {
   selectTrackedIdentityKeys,
 } from "@/api/lib/legal-search/reconciliation-store";
 import { logger } from "@/api/lib/observability/logger";
+import { pgErrorFields } from "@/api/lib/pg-error";
 
 /** Parked items rebuilt in one unit; each costs a publisher fetch. */
 const PARKED_RETRY_BATCH = 25;
@@ -833,7 +835,13 @@ const ingestListedItem = async ({
       adapterKey,
       slice,
       identityKey: item.identityKey,
-      "error.type": errorTag(error),
+      ...errorSystemFields(error),
+      ...pgErrorFields(error),
+      // The park below keeps only the tag, which cannot separate a
+      // publisher refusing one document from the corpus refusing to store
+      // it. "message" is stripped by the logger sanitizer, so the reason
+      // travels under "error.detail". Case-law data is public, no PII concern.
+      "error.detail": wrappedErrorDetail(error),
     });
     await park(errorTag(error));
   }
@@ -1305,7 +1313,9 @@ export const runReconciliationWorkUnit = async ({
               adapterKey,
               slice: unit.slice,
               reason: unit.reason,
-              "error.type": errorTag(error),
+              ...errorSystemFields(error),
+              ...pgErrorFields(error),
+              "error.detail": wrappedErrorDetail(error),
             });
             throw error;
           }),
