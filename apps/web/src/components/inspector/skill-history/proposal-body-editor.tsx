@@ -1,13 +1,17 @@
 import { Skeleton } from "@stll/ui/skeleton";
 
 import { MarkdownHybridEditor } from "@/components/markdown/markdown-hybrid-editor";
-import { toEditorMarkdown } from "@/components/skill-body-markdown";
+import {
+  toEditorMarkdown,
+  toStoredMarkdown,
+} from "@/components/skill-body-markdown";
 
 type ProposalBodyEditorProps = {
   /** Undefined while the proposal is still loading. */
   proposal: { id: string; body: string; baseBody: string } | undefined;
   editable: boolean;
-  onBodyChange: (editorMarkdown: string) => void;
+  /** Receives the stored form: the proposal's frontmatter re-prepended. */
+  onBodyChange: (storedMarkdown: string) => void;
 };
 
 /**
@@ -37,7 +41,9 @@ export const ProposalBodyEditor = ({
       baseline={toEditorMarkdown(proposal.baseBody)}
       key={`${proposal.id}:${String(editable)}`}
       markdown={toEditorMarkdown(proposal.body)}
-      onMarkdownChange={onBodyChange}
+      onMarkdownChange={(editorMarkdown) => {
+        onBodyChange(toStoredMarkdown(editorMarkdown, proposal.body));
+      }}
       readOnly={!editable}
     />
   );

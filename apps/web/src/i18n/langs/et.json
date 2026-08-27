@@ -3416,6 +3416,7 @@
     }
   },
   "skillHistory": {
+    "acceptStale": "Võta vastu ja kirjuta uuemad muudatused üle",
     "backToCurrent": "Tagasi praeguse versiooni juurde",
     "basedOnCurrent": "Põhineb praegusel versioonil",
     "clearComparison": "Tühista võrdlus",

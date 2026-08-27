@@ -18,7 +18,9 @@ const createSkillProposalParamsSchema = t.Object({
 });
 
 const createSkillProposalBodySchema = t.Object({
-  body: t.Optional(t.String({ maxLength: LIMITS.agentSkillBodyMaxChars })),
+  body: t.Optional(
+    t.String({ minLength: 1, maxLength: LIMITS.agentSkillBodyMaxChars }),
+  ),
   summary: t.Optional(
     t.String({ maxLength: LIMITS.agentSkillProposalSummaryMaxChars }),
   ),

@@ -5,6 +5,7 @@ import { t } from "elysia";
 import { abortableTx } from "@/api/db/safe-db";
 import { agentSkillProposals, agentSkillRevisions } from "@/api/db/schema";
 import { loadVisibleSkill } from "@/api/lib/agent-skills/access";
+import { loadLatestSkillRevision } from "@/api/lib/agent-skills/revisions";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
@@ -76,7 +77,11 @@ const getSkillProposal = createSafeRootHandler(
           });
         }
 
-        return row;
+        const latest = await loadLatestSkillRevision(tx, {
+          skillId: params.skillId,
+          organizationId: session.activeOrganizationId,
+        });
+        return { ...row, baseIsCurrent: latest?.id === row.baseRevisionId };
       }),
     );
 

@@ -26,6 +26,9 @@ const reviewSkillProposalParamsSchema = t.Object({
 
 const reviewSkillProposalBodySchema = t.Object({
   decision: t.UnionEnum(["accepted", "rejected"]),
+  // Accepting a proposal whose base is no longer the current revision
+  // discards every edit made since; the reviewer must say so explicitly.
+  allowStale: t.Optional(t.Boolean()),
 });
 
 const config = {
@@ -73,6 +76,7 @@ const reviewSkillProposal = createSafeRootHandler(
             id: agentSkillProposals.id,
             body: agentSkillProposals.body,
             status: agentSkillProposals.status,
+            baseRevisionId: agentSkillProposals.baseRevisionId,
           })
           .from(agentSkillProposals)
           .where(
@@ -128,6 +132,21 @@ const reviewSkillProposal = createSafeRootHandler(
           };
         }
 
+        const currentRevision = await loadLatestSkillRevision(tx, {
+          skillId: params.skillId,
+          organizationId: session.activeOrganizationId,
+        });
+        if (
+          currentRevision !== undefined &&
+          currentRevision.id !== proposal.baseRevisionId &&
+          body.allowStale !== true
+        ) {
+          throw new HandlerError({
+            status: 409,
+            message:
+              "The skill changed since this proposal was written; pass allowStale to accept it anyway",
+          });
+        }
         // The revision trigger coalesces consecutive saves by the same author;
         // an accepted proposal must land as its own revision so it can be
         // linked back as the result.

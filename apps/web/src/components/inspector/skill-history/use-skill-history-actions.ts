@@ -41,6 +41,8 @@ type AddCommentInput = {
 type ReviewProposalInput = {
   proposalId: string;
   decision: "accepted" | "rejected";
+  /** Accept even though the skill changed since the proposal's base. */
+  allowStale?: boolean;
 };
 
 /**
@@ -165,10 +167,11 @@ export const useSkillHistoryActions = ({
   const reviewProposal = async ({
     proposalId,
     decision,
+    allowStale = false,
   }: ReviewProposalInput) => {
     const response = await skill
       .proposals({ proposalId: toSafeId<"agentSkillProposal">(proposalId) })
-      .review.post({ decision });
+      .review.post({ decision, allowStale });
     if (response.error) {
       report(response.error);
       return false;

@@ -141,6 +141,8 @@ type ProposalActionBarProps = {
   initialSummary: string;
   isAuthor: boolean;
   canManage: boolean;
+  /** The skill moved on since the proposal's base; accepting overwrites it. */
+  isStale: boolean;
   onSummaryChange: (summary: string) => void;
   onSubmitForReview: () => void;
   onDelete: () => void;
@@ -196,7 +198,7 @@ export const ProposalActionBar = ({
       {canManage && isOpen ? (
         <>
           <Button onClick={onAccept} size="xs">
-            {t("common.accept")}
+            {isStale ? t("skillHistory.acceptStale") : t("common.accept")}
           </Button>
           <Button onClick={onReject} size="xs" variant="outline">
             {t("skillHistory.reject")}

@@ -3416,6 +3416,7 @@
     }
   },
   "skillHistory": {
+    "acceptStale": "قبول واستبدال التعديلات الأحدث",
     "backToCurrent": "العودة إلى النسخة الحالية",
     "basedOnCurrent": "مبني على المراجعة الحالية",
     "clearComparison": "إلغاء المقارنة",

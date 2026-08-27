@@ -115,7 +115,10 @@ const loadCommentTarget = async (
             eq(agentSkillRevisions.organizationId, organizationId),
           ),
         )
-        .limit(1);
+        .limit(1)
+        // Serializes with the revision trigger so a concurrent save cannot
+        // coalesce into this revision after the comment read its body.
+        .for("share");
 
       const revision = rows.at(0);
       if (!revision) {

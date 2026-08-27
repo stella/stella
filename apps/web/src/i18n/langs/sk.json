@@ -3416,6 +3416,7 @@
     }
   },
   "skillHistory": {
+    "acceptStale": "Prijať a prepísať novšie úpravy",
     "backToCurrent": "Späť na aktuálne znenie",
     "basedOnCurrent": "Vychádza z aktuálnej revízie",
     "clearComparison": "Zrušiť porovnanie",

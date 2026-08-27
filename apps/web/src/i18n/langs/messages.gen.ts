@@ -3419,6 +3419,7 @@ type Messages = {
     };
   };
   "skillHistory": {
+    "acceptStale": "Accept and overwrite newer edits";
     "backToCurrent": "Back to current";
     "basedOnCurrent": "Based on the current revision";
     "clearComparison": "Clear comparison";

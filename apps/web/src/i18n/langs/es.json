@@ -3416,6 +3416,7 @@
     }
   },
   "skillHistory": {
+    "acceptStale": "Aceptar y sobrescribir cambios más recientes",
     "backToCurrent": "Volver a la versión actual",
     "basedOnCurrent": "Basada en la revisión actual",
     "clearComparison": "Quitar la comparación",

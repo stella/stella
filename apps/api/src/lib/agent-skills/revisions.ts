@@ -7,6 +7,14 @@ import type { SafeId } from "@/api/lib/branded-types";
 type LatestSkillRevisionOptions = {
   skillId: SafeId<"agentSkill">;
   organizationId: SafeId<"organization">;
+  /**
+   * Hold a share lock on the row for the rest of the transaction. Anything
+   * that anchors to the revision (a proposal, a comment) takes it so the
+   * revision trigger, which locks the latest row for update before
+   * coalescing a save into it, serializes behind the anchor instead of
+   * rewriting the body underneath it.
+   */
+  lock?: "share";
 };
 
 type LatestSkillRevision = {
@@ -21,9 +29,9 @@ type LatestSkillRevision = {
  */
 export const loadLatestSkillRevision = async (
   tx: Transaction,
-  { skillId, organizationId }: LatestSkillRevisionOptions,
+  { skillId, organizationId, lock }: LatestSkillRevisionOptions,
 ): Promise<LatestSkillRevision | undefined> => {
-  const rows = await tx
+  const query = tx
     .select({
       id: agentSkillRevisions.id,
       revisionNumber: agentSkillRevisions.revisionNumber,
@@ -38,6 +46,7 @@ export const loadLatestSkillRevision = async (
     )
     .orderBy(desc(agentSkillRevisions.revisionNumber))
     .limit(1);
+  const rows = lock === "share" ? await query.for("share") : await query;
 
   return rows.at(0);
 };

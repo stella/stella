@@ -48,7 +48,11 @@ export const ProposalReview = ({
     if (proposal === undefined) {
       return;
     }
-    const decided = await actions.reviewProposal({ proposalId, decision });
+    const decided = await actions.reviewProposal({
+      proposalId,
+      decision,
+      allowStale: !proposal.baseIsCurrent,
+    });
     if (!decided) {
       return;
     }
@@ -62,6 +66,7 @@ export const ProposalReview = ({
           canManage={canManage}
           initialSummary={proposal.summary}
           isAuthor={isAuthor}
+          isStale={!proposal.baseIsCurrent}
           onAccept={() => {
             detached(decide("accepted"), "skill-history.accept");
           }}
