@@ -1604,6 +1604,7 @@ describe("MCP anonymization canary corpus", () => {
       const rationaleSeed = mkSeed(tool, 13);
       const talkingPointSeed = mkSeed(tool, 14);
       const escalationSeed = mkSeed(tool, 15);
+      const purposeSeed = mkSeed(tool, 16);
       const tx = {
         query: {
           playbookDefinitions: {
@@ -1623,6 +1624,7 @@ describe("MCP anonymization canary corpus", () => {
                     sourceId: "11111111-1111-4111-8111-111111111111",
                     issue: issueSeed,
                     severity: "high",
+                    purpose: purposeSeed,
                     guidance: guidanceSeed,
                     negotiation: {
                       rationale: rationaleSeed,
@@ -1722,6 +1724,7 @@ describe("MCP anonymization canary corpus", () => {
         rationaleSeed,
         talkingPointSeed,
         escalationSeed,
+        purposeSeed,
       ];
       expectNoSeedLeak(result, seeds);
       expectSeedsQueuedForAnonymization(seeds);

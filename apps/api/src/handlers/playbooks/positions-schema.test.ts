@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   playbookPositionsSchema,
+  POSITION_PURPOSE_MAX_LENGTH,
   positionSchema,
 } from "@/api/lib/workflow/playbook-positions";
 
@@ -97,6 +98,31 @@ describe("positionSchema — extract / graded discriminated union", () => {
   test("rejects an unknown mode", () => {
     expect(
       Value.Check(positionSchema, { ...extractPosition, mode: "review" }),
+    ).toBe(false);
+  });
+});
+
+describe("purpose — what the term is for, on either standard", () => {
+  test("accepts a graded position without a purpose", () => {
+    expect(Value.Check(positionSchema, gradedPosition)).toBe(true);
+  });
+
+  test("accepts a purpose on a tiers-standard position an author wrote", () => {
+    expect(
+      Value.Check(positionSchema, {
+        ...gradedPosition,
+        purpose:
+          "Fixes whose courts decide a dispute; drives cost and enforceability for both sides.",
+      }),
+    ).toBe(true);
+  });
+
+  test("rejects a purpose past one sentence's worth", () => {
+    expect(
+      Value.Check(positionSchema, {
+        ...gradedPosition,
+        purpose: "x".repeat(POSITION_PURPOSE_MAX_LENGTH + 1),
+      }),
     ).toBe(false);
   });
 });

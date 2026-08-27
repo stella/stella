@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 
+import type { ReviewParty } from "@/api/lib/document-review/contract";
 import {
   DOCUMENT_REVIEW_APPLICATION_STATUSES,
   DOCUMENT_REVIEW_APPLICATION_STATUS,
@@ -34,6 +35,7 @@ import {
   wsOrganizationPolicies,
 } from "./common";
 import { workspaces } from "./contacts";
+import { entities, entityVersions } from "./entities";
 
 const quoted = (values: readonly string[]) =>
   sql.join(
@@ -331,5 +333,55 @@ export const documentReviewFindings = p.pgTable(
       })
       .onDelete("cascade"),
     ...wsOrganizationPolicies("document_review_findings"),
+  ],
+);
+
+/**
+ * The target document's parties, detected once per document version so the
+ * review launcher can show "We act for" before any proposal pass runs.
+ *
+ * One row per version: the answer is deterministic for a version's content,
+ * so a re-detection overwrites the row (see `promptVersion` below) rather
+ * than accumulating history the way a run does.
+ */
+export const documentReviewParties = p.pgTable(
+  "document_review_parties",
+  {
+    id: pUuid<"documentReviewParty">().primaryKey(),
+    organizationId: safeOrganizationId("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    workspaceId: safeWorkspaceId("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    entityId: safeUuid<"entity">("entity_id").notNull(),
+    entityVersionId: safeUuid<"entityVersion">("entity_version_id")
+      .notNull()
+      .references(() => entityVersions.id, { onDelete: "cascade" }),
+    // Bumped when the detection prompt changes shape, so a stale row is
+    // recomputed instead of read as today's answer.
+    promptVersion: p.smallint("prompt_version").notNull(),
+    parties: jsonb().$type<ReviewParty[]>().notNull(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    p
+      .uniqueIndex("document_review_parties_entity_version_uidx")
+      .on(table.entityVersionId),
+    p
+      .foreignKey({
+        columns: [table.entityId, table.workspaceId],
+        foreignColumns: [entities.id, entities.workspaceId],
+        name: "document_review_parties_entity_workspace_fk",
+      })
+      .onDelete("cascade"),
+    p
+      .foreignKey({
+        columns: [table.workspaceId, table.organizationId],
+        foreignColumns: [workspaces.id, workspaces.organizationId],
+        name: "document_review_parties_workspace_organization_fk",
+      })
+      .onDelete("cascade"),
+    ...wsOrganizationPolicies("document_review_parties"),
   ],
 );

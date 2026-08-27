@@ -5,7 +5,9 @@ import decideDocumentReviewFinding from "@/api/handlers/document-reviews/decide-
 import exportDocumentReviewRun from "@/api/handlers/document-reviews/export-run";
 import listDocumentReviewRuns from "@/api/handlers/document-reviews/list-runs";
 import listDocumentReviewSources from "@/api/handlers/document-reviews/list-sources";
+import reviewParties from "@/api/handlers/document-reviews/parties";
 import proposePositions from "@/api/handlers/document-reviews/propose-positions";
+import proposePositionsStream from "@/api/handlers/document-reviews/propose-positions-stream";
 import readDocumentReviewRun from "@/api/handlers/document-reviews/read-run";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
 
@@ -22,6 +24,14 @@ export const documentReviewsRoute = new Elysia({
   .post("/positions", proposePositions.handler, {
     body: proposePositions.config.body,
     permissions: proposePositions.config.permissions,
+  })
+  .post("/positions/stream", proposePositionsStream.handler, {
+    body: proposePositionsStream.config.body,
+    permissions: proposePositionsStream.config.permissions,
+  })
+  .post("/parties", reviewParties.handler, {
+    body: reviewParties.config.body,
+    permissions: reviewParties.config.permissions,
   })
   .post("/runs", createDocumentReviewRun.handler, {
     body: createDocumentReviewRun.config.body,

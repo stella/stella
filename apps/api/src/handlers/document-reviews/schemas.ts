@@ -68,7 +68,7 @@ export type DocumentReviewDecisionInput = Assignable<
 // The side a comparison is judged for: one of the target's parties by the
 // role the document gives it, or no side. Required so a client cannot leave
 // it out and get a side by default.
-const reviewPerspectiveSchema = t.Union([
+export const reviewPerspectiveSchema = t.Union([
   t.Object({ type: t.Literal("neutral") }),
   t.Object({
     type: t.Literal("party"),
@@ -93,6 +93,14 @@ export const proposeReviewPositionsBodySchema = t.Object({
   /** Positions the reviewer already has (a playbook they picked); the proposal
    *  keeps them and does not repeat their issues. */
   seededPositions: reviewPositionsSchema,
+  /**
+   * The side the proposal is written for. An input, not an afterthought: what
+   * a term is FOR and what a later comparison should examine both read
+   * differently from each side of the same deal, and both are written into the
+   * position here. The same schema the run sends, so the side confirmed with
+   * the checklist is the side the run judges by.
+   */
+  perspective: reviewPerspectiveSchema,
 });
 
 /**

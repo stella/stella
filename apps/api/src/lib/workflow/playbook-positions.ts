@@ -202,6 +202,22 @@ export const negotiationSchema = t.Object({
 });
 export type Negotiation = Static<typeof negotiationSchema>;
 
+// ── Purpose: what the term is FOR ─────────────────────
+// One sentence on the legal and economic function the term performs in this
+// kind of deal, written from the side the review takes ("Caps the seller's
+// exposure for warranty claims; drives the buyer's recovery ceiling").
+//
+// `guidance` says what a later comparison examines; `purpose` says why anyone
+// negotiates the term at all. A reviewer confirming a proposed checklist reads
+// a short quotation out of a document they may not have written, so without
+// this they are asked to approve a term whose function is never stated.
+//
+// Optional and independent of `standard.source`: a reference-derived position
+// gets one from the proposal pass, and a playbook author can write one for a
+// tiers-standard position by hand. Reviewer-facing only — grading never reads
+// it.
+export const POSITION_PURPOSE_MAX_LENGTH = 240;
+
 const gradedPositionSchema = t.Object({
   mode: t.Literal("graded"),
   sourceId: t.String({ format: "uuid" }),
@@ -210,6 +226,7 @@ const gradedPositionSchema = t.Object({
   standard: positionStandardSchema,
   check: t.Optional(deterministicCheckSchema),
   ask: askConfigSchema,
+  purpose: t.Optional(t.String({ maxLength: POSITION_PURPOSE_MAX_LENGTH })),
   guidance: t.Optional(t.String({ maxLength: 2000 })),
   negotiation: t.Optional(negotiationSchema),
   enabled: t.Boolean(),

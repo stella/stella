@@ -13,11 +13,29 @@
  * — will grade against. What the pass deliberately did not turn into a
  * position comes back as `skipped`, so the reviewer sees the size of what was
  * left out instead of assuming the checklist is exhaustive.
+ *
+ * Two ways out, one prompt and one normalizer behind them
+ * (`reference-position-normalizer.ts`): `proposeReferencePositions` answers
+ * once with the whole plan, and `streamReferenceProposal` reports each piece
+ * as the model closes it. A checklist of forty terms takes minutes to write;
+ * the streaming path is what stops the reviewer watching a spinner for all of
+ * them.
  */
 
+import type { ModelMessage } from "@tanstack/ai";
 import { Result } from "better-result";
-import * as v from "valibot";
 
+import {
+  createPartialProposalReader,
+  createProposalNormalizer,
+  normalizeProposal,
+  proposedPositionsSchema,
+} from "@/api/handlers/document-reviews/reference-position-normalizer";
+import type {
+  ReferenceSource,
+  ReviewPositionProposal,
+  ReviewProposalEvent,
+} from "@/api/handlers/document-reviews/reference-position-normalizer";
 import type { AIRequestServiceTier, OrgAIConfig } from "@/api/lib/ai-config";
 import { resolveCaching } from "@/api/lib/ai-config";
 import {
@@ -25,305 +43,83 @@ import {
   type AIUsageMetering,
 } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
-import {
-  REVIEW_PARTIES_MAX,
-  REVIEW_PARTY_NAME_MAX_LENGTH,
-  REVIEW_PARTY_ROLE_MAX_LENGTH,
-  REVIEW_SKIP_REASON_MAX_LENGTH,
-  REVIEW_SKIP_SUBJECT_MAX_LENGTH,
-  REVIEW_SKIPPED_MAX,
-} from "@/api/lib/document-review/contract";
-import type {
-  ReviewParty,
-  ReviewSkippedTerm,
-} from "@/api/lib/document-review/contract";
+import { perspectivePartyPhrase } from "@/api/lib/document-review/contract";
+import type { ReviewPerspective } from "@/api/lib/document-review/contract";
 import {
   buildReviewDocumentParts,
   reviewDocumentsScopeKey,
 } from "@/api/lib/document-review/review-document-messages";
 import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
-import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
-import type { PreparedDocxFile } from "@/api/lib/workflow/generate-batch";
 import {
-  POSITION_SEVERITIES,
-  POSITION_TERM_KINDS,
-} from "@/api/lib/workflow/playbook-positions";
-import type {
-  Position,
-  PositionSeverity,
-  PositionTermKind,
-  ReferencePassage,
-} from "@/api/lib/workflow/playbook-positions";
+  generateTanStackObjectForRole,
+  streamTanStackObjectForRole,
+} from "@/api/lib/tanstack-ai-generate";
+import type { PreparedDocxFile } from "@/api/lib/workflow/generate-batch";
+import type { Position } from "@/api/lib/workflow/playbook-positions";
 
 const ROLE = "pdf" as const;
+
+/** The batch path holds a request open with nothing to show, so it fails
+ *  before a reviewer gives up on it. */
 const TIMEOUT_MS = 120_000;
 
-/** Matches `positionStandardSchema`'s `passages` bound. A position that needs
- *  more than this to state its standard is not one term. */
-const PASSAGES_PER_POSITION_MAX = 12;
-const ISSUE_MAX_LENGTH = 256;
-const GUIDANCE_MAX_LENGTH = 2000;
-
-const proposedPositionSchema = v.strictObject({
-  /** What shape of term this is. Decides how the comparison is expressed and
-   *  edited, so it is chosen here, once, rather than per grading. */
-  termKind: v.picklist(POSITION_TERM_KINDS),
-  issue: v.pipe(v.string(), v.minLength(1), v.maxLength(ISSUE_MAX_LENGTH)),
-  /** What the later comparison should examine, and why the severity is what
-   *  it is; becomes the position's reviewer guidance. */
-  guidance: v.pipe(v.string(), v.maxLength(GUIDANCE_MAX_LENGTH)),
-  severity: v.picklist(POSITION_SEVERITIES),
-  passages: v.array(
-    v.strictObject({ sourceKey: v.string(), blockId: v.string() }),
-  ),
-});
-
-const skippedTermSchema = v.strictObject({
-  subject: v.pipe(v.string(), v.maxLength(REVIEW_SKIP_SUBJECT_MAX_LENGTH)),
-  reason: v.pipe(v.string(), v.maxLength(REVIEW_SKIP_REASON_MAX_LENGTH)),
-});
-
-type ProposedSkippedTerm = v.InferOutput<typeof skippedTermSchema>;
-
-/** Trims the model's text, drops half-stated entries, and reports each
- *  subject once. */
-export const normalizeSkipped = (
-  skipped: readonly ProposedSkippedTerm[],
-): ReviewSkippedTerm[] => {
-  const seen = new Set<string>();
-  const normalized: ReviewSkippedTerm[] = [];
-  for (const entry of skipped) {
-    const subject = entry.subject.trim();
-    const reason = entry.reason.trim();
-    if (subject.length === 0 || reason.length === 0) {
-      continue;
-    }
-    const key = subject.toLocaleLowerCase("und");
-    if (seen.has(key)) {
-      continue;
-    }
-    seen.add(key);
-    normalized.push({ subject, reason });
-    if (normalized.length === REVIEW_SKIPPED_MAX) {
-      break;
-    }
-  }
-  return normalized;
-};
-
-/**
- * Severity, held to what the term can carry. `blocker` is the walk-away tier,
- * and only a stated quantity — money, a liability cap, a time bar — walks a
- * deal away on its own. A protection or a wording standard may still be `high`,
- * but calling every clause a blocker is what turns a review into a list nobody
- * can triage.
- */
-export const cappedSeverity = (
-  severity: PositionSeverity,
-  termKind: PositionTermKind,
-): PositionSeverity =>
-  severity === "blocker" && termKind !== "parameter" ? "high" : severity;
-
-// No transforms here: the schema is handed to the provider as JSON Schema,
-// which cannot express them. Whitespace is normalized in `normalizeParties`.
-const proposedPartySchema = v.strictObject({
-  role: v.pipe(
-    v.string(),
-    v.minLength(1),
-    v.maxLength(REVIEW_PARTY_ROLE_MAX_LENGTH),
-  ),
-  name: v.nullable(
-    v.pipe(v.string(), v.maxLength(REVIEW_PARTY_NAME_MAX_LENGTH)),
-  ),
-});
-
-type ProposedParty = v.InferOutput<typeof proposedPartySchema>;
-
-/** Trims the model's text and drops entries left without a role. */
-export const normalizeParties = (
-  parties: readonly ProposedParty[],
-): ReviewParty[] => {
-  const normalized: ReviewParty[] = [];
-  for (const party of parties.slice(0, REVIEW_PARTIES_MAX)) {
-    const role = party.role.trim();
-    if (role.length === 0) {
-      continue;
-    }
-    const name = party.name?.trim() ?? "";
-    normalized.push({ role, name: name.length === 0 ? null : name });
-  }
-  return normalized;
-};
-
-export const proposedPositionsSchema = v.strictObject({
-  // Cardinality is normalized below. Providers do not reliably honor JSON
-  // Schema array limits, so excess suggestions stay recoverable.
-  positions: v.array(proposedPositionSchema),
-  // What was read and deliberately not compared.
-  skipped: v.array(skippedTermSchema),
-  // The target's parties, so the lawyer can say which one they act for.
-  parties: v.array(proposedPartySchema),
-});
-
-type ProposedPosition = v.InferOutput<typeof proposedPositionSchema>;
-
-/** Where a prepared reference document came from, so a verified block can be
- *  pinned as a passage that outlives this request. */
-export type ReferenceSource = {
-  workspaceId: SafeId<"workspace">;
-  entityId: SafeId<"entity">;
-  entityVersionId: SafeId<"entityVersion">;
-  file: PreparedDocxFile;
-};
-
-type SourceIndex = ReadonlyMap<
-  string,
-  { source: ReferenceSource; blocks: ReadonlyMap<string, string> }
->;
-
-const indexSources = (sources: readonly ReferenceSource[]): SourceIndex =>
-  new Map(
-    sources.map((source) => [
-      source.file.simplifiedName,
-      {
-        source,
-        blocks: new Map(
-          source.file.blocks.map((block) => [block.id, block.text]),
-        ),
-      },
-    ]),
-  );
-
-/**
- * Verify the proposed passages against the documents they claim to quote. A
- * passage the reference does not contain is dropped, and a position left with
- * none is dropped with it: a standard nobody can quote is not a standard.
- */
-const verifyPassages = (
-  proposed: readonly ProposedPosition["passages"][number][],
-  sources: SourceIndex,
-): ReferencePassage[] => {
-  const seen = new Set<string>();
-  const passages: ReferencePassage[] = [];
-  for (const { sourceKey, blockId } of proposed) {
-    const entry = sources.get(sourceKey);
-    const text = entry?.blocks.get(blockId);
-    if (entry === undefined || text === undefined || text.trim().length === 0) {
-      continue;
-    }
-    const key = `${entry.source.entityVersionId}:${blockId}`;
-    if (seen.has(key)) {
-      continue;
-    }
-    seen.add(key);
-    passages.push({
-      workspaceId: entry.source.workspaceId,
-      entityId: entry.source.entityId,
-      fileFieldId: entry.source.file.fileFieldId,
-      entityVersionId: entry.source.entityVersionId,
-      blockId,
-      text,
-    });
-    if (passages.length === PASSAGES_PER_POSITION_MAX) {
-      break;
-    }
-  }
-  return passages;
-};
-
-const normalizeIssue = (value: string): string =>
-  value.trim().toLocaleLowerCase("und");
-
-type NormalizeProposedPositionsArgs = {
-  proposed: readonly ProposedPosition[];
-  seededPositions: readonly Position[];
-  sources: readonly ReferenceSource[];
-  positionsMax: number;
-};
-
-/**
- * The confirmed list the reviewer edits: what they already had, then every
- * proposed position whose standard is grounded and whose issue is new.
- *
- * The ask is `auto` with nothing derived: a reference-standard position is
- * compared against the document's own blocks and never extracts a value, so
- * there is no question to derive.
- */
-export const normalizeProposedPositions = ({
-  proposed,
-  seededPositions,
-  sources,
-  positionsMax,
-}: NormalizeProposedPositionsArgs): Position[] => {
-  const index = indexSources(sources);
-  const merged = [...seededPositions];
-  const seen = new Set(
-    seededPositions.map((position) => normalizeIssue(position.issue)),
-  );
-  for (const candidate of proposed) {
-    if (merged.length >= positionsMax) {
-      break;
-    }
-    const issue = candidate.issue.trim();
-    const normalized = normalizeIssue(issue);
-    if (normalized.length === 0 || seen.has(normalized)) {
-      continue;
-    }
-    const passages = verifyPassages(candidate.passages, index);
-    if (passages.length === 0) {
-      continue;
-    }
-    seen.add(normalized);
-    const guidance = candidate.guidance.trim();
-    merged.push({
-      mode: "graded",
-      sourceId: Bun.randomUUIDv7(),
-      issue,
-      severity: cappedSeverity(candidate.severity, candidate.termKind),
-      standard: {
-        source: "reference",
-        termKind: candidate.termKind,
-        passages,
-      },
-      ask: { mode: "auto" },
-      ...(guidance.length === 0 ? {} : { guidance }),
-      enabled: true,
-    });
-  }
-  return merged;
-};
+/** The streaming path reports every position as it lands, so a long checklist
+ *  is progress rather than a stall; the ceiling is what a stuck provider hits,
+ *  not what a slow answer hits. */
+const STREAM_TIMEOUT_MS = 300_000;
 
 const SYSTEM_PROMPT = `You turn reference legal documents into a review checklist for a new target document (F0). References are examples, not policy and not proof of market practice.
 
+The user message names the side the review takes. Write every position from that side.
+
 One position is ONE reviewable term, never a clause, a section or a framework. Split anything larger into its terms. termKind says which shape it is:
-- parameter: one stated quantity — a time bar, a liability cap, de minimis, a basket, a notice period, a long-stop date, a rate. The issue names the term and what it applies to: "Time-bar: leakage claims", "Cap: title warranties".
+- parameter: one stated quantity — a time bar, a liability cap, de minimis, a basket, a notice period, an interest rate, a period measured between two events. The issue names the term and what it applies to: "Time-bar: leakage claims", "Cap: title warranties".
 - enumeration: one list-shaped definition or set of heads — Leakage limbs, Permitted Leakage items, warranty categories, the components of Losses. One position per list, and quote the block of every limb.
-- presence: a defined term or protection that should exist — a "Losses" definition, a W&I policy, a MAC condition, a gross-up.
+- presence: a defined term or protection that should exist — a "Losses" definition, a W&I policy, a MAC condition, a gross-up, a locked-box mechanism.
 - language: a standard of wording with no parameter behind it — the "Fairly Disclosed" standard, a knowledge qualifier, sandbagging.
 
-issue is a short noun phrase naming the term. guidance is one line: what the later comparison should examine, and why the severity is what it is. severity is blocker only for money, liability-cap and time-bar terms; everything else is high, medium or low.
+termKind is an engine field. Never name it, or any other field name, in issue, purpose or guidance: a lawyer reads those, not the engine.
+
+issue is a short noun phrase naming the term.
+purpose is ONE sentence, at most 240 characters, on the legal and economic function the term performs in this kind of deal, from the side the review takes and what it does to the other side: "Caps the seller's exposure for warranty claims; drives the buyer's recovery ceiling."
+guidance is one line saying what the later comparison should examine — name the comparable attribute (the value, the limbs, whether it is present, or the wording) and the reference's stance on it — and why the severity is what it is.
+severity is blocker only for money, liability-cap and time-bar terms; everything else is high, medium or low.
+
+A value that belongs to one deal is not comparable and is never a position: calendar dates (the locked-box date, signing, closing, the long-stop date), the purchase price and any component of it, share counts and the size of a particular holding, party names, addresses, account details, and any "[●]" blank. Where a comparable term sits behind such a value, propose that term instead:
+- the length between two dates rather than either date — "Locked-box period length (locked-box date to closing)", a parameter measured in months;
+- whether the mechanism exists at all — "Locked-box mechanism present", a presence term;
+- the rate or formula applied to the price rather than the price — "Ticking interest on the purchase price", a parameter.
+Where no comparable term sits behind it, put it in skipped with the reason "deal-specific value".
 
 passages are the reference blocks that state the term. Cite only exact block IDs supplied in the input, only from reference documents, never from F0. Fewest that carry the term, up to twelve; for an enumeration, every limb. A term you cannot quote is not a position.
 
-Put in skipped, and do not propose, anything deal-specific or structural: signing and closing sequence, the difference between a preliminary and a final agreement, party names and addresses, schedule and annex lists, execution mechanics, and pricing particular to one deal. subject names it; reason says in a few words why it is not comparable.
+Put in skipped, and do not propose, anything else deal-specific or structural: signing and closing sequence, the difference between a preliminary and a final agreement, party names and addresses, schedule and annex lists, and execution mechanics. subject names it; reason says in a few words why it is not comparable.
 
 Do not judge the target, score it, or propose wording. Do not repeat a position the reviewer already has.
 
-parties lists the target's sides only: role is the defined term the target uses (Purchaser, Seller, Landlord, Licensee), name is the legal name when the target states it, otherwise null. Omit guarantors, agents and notaries unless they are principal parties.`;
+parties lists the target's sides only: role is the defined term the target uses (Purchaser, Seller, Landlord, Licensee), name is the legal name when the target states it, otherwise null. Omit guarantors, agents and notaries unless they are principal parties.
 
-/** What the proposal pass hands back: the plan to confirm, what it left
- *  uncompared, and the sides the lawyer can act for. */
-export type ReviewPositionProposal = {
-  positions: Position[];
-  skipped: ReviewSkippedTerm[];
-  parties: ReviewParty[];
+Output parties first, then positions ordered by severity — every blocker and high before any medium or low — then skipped. Finish each position completely before starting the next.`;
+
+/** The side the review takes, stated where the model reads it: after the
+ *  documents (the cached region) and before the checklist it is asked for. */
+const perspectiveLine = (perspective: ReviewPerspective): string => {
+  switch (perspective.type) {
+    case "party":
+      return `Side the review takes: ${perspectivePartyPhrase(perspective)}. Write purpose and guidance from that side.`;
+    case "neutral":
+      return "Side the review takes: none. Write purpose and guidance without taking a side, naming what the term does to each side instead.";
+    default:
+      perspective satisfies never;
+      return "";
+  }
 };
 
-export type ProposeReferencePositionsArgs = {
+type ProposalRequestArgs = {
   target: PreparedDocxFile;
   references: readonly ReferenceSource[];
   seededPositions: readonly Position[];
-  positionsMax: number;
+  perspective: ReviewPerspective;
   targetEntityVersionId: SafeId<"entityVersion">;
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
@@ -332,13 +128,17 @@ export type ProposeReferencePositionsArgs = {
   serviceTier: AIRequestServiceTier;
   usageMetering: AIUsageMetering;
   abortSignal: AbortSignal;
+  timeoutMs: number;
 };
 
-export const proposeReferencePositions = async ({
+/** Everything both paths send. One prompt, one schema, one cache scope: the
+ *  streaming call and the batch call differ only in how the answer comes
+ *  back. */
+const buildProposalRequest = ({
   target,
   references,
   seededPositions,
-  positionsMax,
+  perspective,
   targetEntityVersionId,
   organizationId,
   workspaceId,
@@ -347,10 +147,8 @@ export const proposeReferencePositions = async ({
   serviceTier,
   usageMetering,
   abortSignal,
-}: ProposeReferencePositionsArgs): Promise<
-  Result<ReviewPositionProposal, WorkflowIntegrationError>
-> => {
-  const referenceFiles = references.map((reference) => reference.file);
+  timeoutMs,
+}: ProposalRequestArgs) => {
   const caching = resolveCaching({
     promptCachingEnabled,
     role: ROLE,
@@ -359,7 +157,7 @@ export const proposeReferencePositions = async ({
       references.map((reference) => reference.entityVersionId),
     ),
   });
-  const aiAnalytics = createTanStackAIAnalyticsCallbacks({
+  const analytics = createTanStackAIAnalyticsCallbacks({
     feature: "document-review.positions",
     modelRole: ROLE,
     orgAIConfig,
@@ -375,57 +173,168 @@ export const proposeReferencePositions = async ({
     .map((position) => `- ${position.issue}`)
     .join("\n");
 
-  return await Result.tryPromise({
-    try: async () => {
-      const output = await generateTanStackObjectForRole({
-        role: ROLE,
-        orgAIConfig,
-        organizationId,
-        analytics: aiAnalytics,
-        caching,
-        serviceTier,
-        tenantWorkspaceIds: [workspaceId],
-        system: SYSTEM_PROMPT,
-        // Documents first (the shared, cached region), the seeds last.
-        messages: [
-          {
-            role: "user",
-            content: [
-              ...buildReviewDocumentParts({
-                target,
-                references: referenceFiles,
-                caching,
-              }),
-              {
-                type: "text",
-                content: `Positions the reviewer already has (do not repeat):\n${seeded || "(none)"}`,
-              },
-            ],
-          },
-        ],
-        abortSignal: AbortSignal.any([
-          abortSignal,
-          AbortSignal.timeout(TIMEOUT_MS),
-        ]),
-        outputSchema: proposedPositionsSchema,
-      });
-      return {
-        positions: normalizeProposedPositions({
-          proposed: output.positions,
-          seededPositions,
-          sources: references,
-          positionsMax,
+  // Documents first (the shared, cached region), then everything that varies
+  // per call. Annotated rather than inferred: this is the provider's message
+  // contract, and a part shape that stops matching it must fail here and not
+  // at the call site.
+  const messages: ModelMessage[] = [
+    {
+      role: "user",
+      content: [
+        ...buildReviewDocumentParts({
+          target,
+          references: references.map((reference) => reference.file),
+          caching,
         }),
-        skipped: normalizeSkipped(output.skipped),
-        parties: normalizeParties(output.parties),
-      };
+        { type: "text", content: perspectiveLine(perspective) },
+        {
+          type: "text",
+          content: `Positions the reviewer already has (do not repeat):\n${seeded || "(none)"}`,
+        },
+      ],
     },
+  ];
+
+  return {
+    analytics,
+    options: {
+      role: ROLE,
+      orgAIConfig,
+      organizationId,
+      analytics,
+      caching,
+      serviceTier,
+      tenantWorkspaceIds: [workspaceId],
+      system: SYSTEM_PROMPT,
+      messages,
+      abortSignal: AbortSignal.any([
+        abortSignal,
+        AbortSignal.timeout(timeoutMs),
+      ]),
+      outputSchema: proposedPositionsSchema,
+    },
+  };
+};
+
+export type ProposeReferencePositionsArgs = Omit<
+  ProposalRequestArgs,
+  "timeoutMs"
+> & {
+  positionsMax: number;
+};
+
+export const proposeReferencePositions = async ({
+  positionsMax,
+  ...request
+}: ProposeReferencePositionsArgs): Promise<
+  Result<ReviewPositionProposal, WorkflowIntegrationError>
+> => {
+  const { analytics, options } = buildProposalRequest({
+    ...request,
+    timeoutMs: TIMEOUT_MS,
+  });
+
+  return await Result.tryPromise({
+    try: async () =>
+      normalizeProposal({
+        output: await generateTanStackObjectForRole(options),
+        seededPositions: request.seededPositions,
+        sources: request.references,
+        positionsMax,
+        newSourceId: Bun.randomUUIDv7,
+      }),
     catch: (cause) => {
-      aiAnalytics.captureError(cause);
+      analytics.captureError(cause);
       return new WorkflowIntegrationError({
         message: "Review position proposal failed",
         cause,
       });
     },
   });
+};
+
+// ── Streaming ─────────────────────────────────────────
+
+/** The proposal as it arrives, plus the terminal count so a client knows the
+ *  list is whole rather than truncated by a dropped connection. */
+export type ReviewProposalStreamEvent =
+  | ReviewProposalEvent
+  | { type: "done"; positionCount: number; skippedCount: number };
+
+export type StreamReferenceProposalArgs = ProposeReferencePositionsArgs;
+
+/**
+ * The same proposal, reported as the model writes it. Throws on a failed or
+ * truncated stream, so the caller decides what the reviewer sees; every event
+ * it did yield before that stays valid.
+ *
+ * @yields the target's sides, then each verified position and each skipped
+ * term as the model closes it, then one `done` carrying the totals.
+ */
+export const streamReferenceProposal = async function* ({
+  positionsMax,
+  ...request
+}: StreamReferenceProposalArgs): AsyncGenerator<ReviewProposalStreamEvent> {
+  const { analytics, options } = buildProposalRequest({
+    ...request,
+    timeoutMs: STREAM_TIMEOUT_MS,
+  });
+  const normalizer = createProposalNormalizer({
+    seededPositions: request.seededPositions,
+    sources: request.references,
+    positionsMax,
+    newSourceId: Bun.randomUUIDv7,
+  });
+  const read = createPartialProposalReader(normalizer);
+  const counts = { positions: 0, skipped: 0 };
+
+  const count = (event: ReviewProposalEvent): void => {
+    switch (event.type) {
+      case "position":
+        counts.positions += 1;
+        break;
+      case "skipped":
+        counts.skipped += 1;
+        break;
+      case "parties":
+        break;
+      default:
+        event satisfies never;
+    }
+  };
+
+  try {
+    for await (const chunk of streamTanStackObjectForRole(options)) {
+      switch (chunk.type) {
+        case "delta":
+          break;
+        case "partial":
+          for (const event of read(chunk.partial, false)) {
+            count(event);
+            yield event;
+          }
+          break;
+        case "complete":
+          for (const event of read(chunk.object, true)) {
+            count(event);
+            yield event;
+          }
+          break;
+        default:
+          chunk satisfies never;
+      }
+    }
+  } catch (error) {
+    analytics.captureError(error);
+    throw new WorkflowIntegrationError({
+      message: "Review position proposal stream failed",
+      cause: error,
+    });
+  }
+
+  yield {
+    type: "done",
+    positionCount: counts.positions,
+    skippedCount: counts.skipped,
+  };
 };

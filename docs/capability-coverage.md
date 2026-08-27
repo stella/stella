@@ -545,7 +545,7 @@ mechanics, and similar), not gaps in coverage.
 | provider_secret        | 20    |
 | public_indexing        | 3     |
 | reader_annotations     | 4     |
-| realtime_stream        | 2     |
+| realtime_stream        | 3     |
 | search_ui              | 5     |
 | session_token_exchange | 13    |
 | ui_navigation_state    | 9     |

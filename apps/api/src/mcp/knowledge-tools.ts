@@ -480,7 +480,7 @@ type PlaybookDetailPayload = {
 
 /**
  * Every redactable field on one playbook detail response: the playbook's own
- * name/description, and per position its issue, guidance, and ask question
+ * name/description, and per position its issue, purpose, guidance, and ask question
  * (the manual/extract question, or an auto position's derived question) —
  * plus, for a graded position, each tier rule (acceptable and not-acceptable
  * red lines), inline ideal language, and each fallback entry's text and label.
@@ -533,6 +533,15 @@ const playbookDetailTextFieldSpecs = (
     read: (item) => item.question,
     apply: (item, value) => {
       item.question = value;
+    },
+  }),
+  defineTextFieldSpec({
+    path: "playbook.positions.items[].purpose",
+    items: (payload) => gradedPositions(payload.playbook.positions.items),
+    scope: () => organizationId,
+    read: (item) => item.purpose,
+    apply: (item, value) => {
+      item.purpose = value;
     },
   }),
   defineTextFieldSpec({
