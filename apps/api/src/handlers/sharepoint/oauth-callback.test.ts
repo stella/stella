@@ -1,10 +1,17 @@
 import { Result } from "better-result";
-import { describe, expect, test } from "bun:test";
+import { describe, expect, mock, test } from "bun:test";
 
 import sharepointOAuthCallback from "@/api/handlers/sharepoint/oauth-callback";
 import { toSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+
+// The deployment flag is read at env import time; the gate itself is not
+// under test here, so replace it wholesale (a full module mock, no partial).
+void mock.module("@/api/handlers/sharepoint/enablement", () => ({
+  assertSharepointConnectionEnabled: async () =>
+    await Promise.resolve(Result.ok(undefined)),
+}));
 
 type CallbackCtx = Parameters<typeof sharepointOAuthCallback.handler>[0];
 
@@ -21,8 +28,7 @@ const reasonOf = (result: unknown): string | null => {
   return new URL(location ?? "").searchParams.get("reason");
 };
 
-// The org-settings lookup that gates the whole handler and the state-row
-// lookup both go through safeDb; queue their results in call order.
+// The state-row lookup goes through safeDb; queue results in call order.
 const queuedSafeDb = (results: unknown[]): CallbackCtx["safeDb"] =>
   asTestRaw<CallbackCtx["safeDb"]>(async () => {
     const next = results.shift();
@@ -40,7 +46,6 @@ describe("sharepointOAuthCallback", () => {
     const ctx = asTestRaw<CallbackCtx>({
       query: { code: "auth-code", state: "state-token" },
       safeDb: queuedSafeDb([
-        { sharepointConnectionEnabled: true },
         new HandlerError({ status: 500, message: "db down" }),
       ]),
       scopedDb: asTestRaw<CallbackCtx["scopedDb"]>(async () => undefined),
