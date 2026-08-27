@@ -551,7 +551,10 @@ describe("detect-e2e-changes", () => {
   test("shares and launch-verifies a version-keyed browser cache", () => {
     expect(
       workflow.match(/uses: \.\/\.github\/actions\/setup-playwright/gu),
-    ).toHaveLength(3);
+    ).toHaveLength(4);
+    const ciChecks = workflowJob("ci-checks");
+    expect(ciChecks).toContain("Check UI browser test scope");
+    expect(ciChecks).toContain("Test UI browser interactions");
     expect(marketingCapture).toContain(
       [
         "uses: ./.github/actions/setup-playwright",

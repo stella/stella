@@ -152,7 +152,7 @@
     "clean": "git clean -xdf dist .cache .turbo node_modules",
     "build": "tsdown",
     "pack:dry-run": "bun pm pack --dry-run",
-    "test": "bun run test:unit && bun run test:browser",
+    "test": "bun run test:unit",
     "test:unit": "bun test src --path-ignore-patterns '**/*.playwright.spec.ts'",
     "test:browser": "playwright test --config playwright.config.ts",
     "pack:check": "cd ../.. && bun scripts/check-published-exports.ts packages/ui",

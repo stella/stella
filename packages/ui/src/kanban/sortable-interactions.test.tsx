@@ -36,16 +36,16 @@ describe("sortable board interactions", () => {
   test("uses the current mouse or touch coordinate to resolve the insertion edge", () => {
     expect(
       getKanbanHorizontalEdge({
+        input: "pointer",
         currentClientX: 110,
-        translatedActiveRect: rect(600, 100),
         overRect: rect(100, 100),
       }),
     ).toBe(KANBAN_HORIZONTAL_EDGES.before);
 
     expect(
       getKanbanHorizontalEdge({
+        input: "pointer",
         currentClientX: 160,
-        translatedActiveRect: rect(600, 100),
         overRect: rect(100, 100),
       }),
     ).toBe(KANBAN_HORIZONTAL_EDGES.after);
@@ -54,27 +54,17 @@ describe("sortable board interactions", () => {
   test("keeps mouse and touch edge resolution stable after horizontal scrolling", () => {
     expect(
       getKanbanHorizontalEdge({
+        input: "pointer",
         currentClientX: 120,
-        translatedActiveRect: rect(-400, 100),
         overRect: rect(100, 100),
       }),
     ).toBe(KANBAN_HORIZONTAL_EDGES.before);
   });
 
-  test("uses the translated keyboard item's center without a client coordinate", () => {
+  test("uses keyboard indices for forward and backward moves", () => {
     expect(
       getKanbanHorizontalEdge({
-        translatedActiveRect: rect(160, 40),
-        overRect: rect(100, 100),
-      }),
-    ).toBe(KANBAN_HORIZONTAL_EDGES.after);
-  });
-
-  test("uses keyboard indices for equal-center forward and backward moves", () => {
-    expect(
-      getKanbanHorizontalEdge({
-        translatedActiveRect: rect(100, 100),
-        overRect: rect(100, 100),
+        input: "keyboard",
         sourceIndex: 1,
         targetIndex: 2,
       }),
@@ -82,8 +72,7 @@ describe("sortable board interactions", () => {
 
     expect(
       getKanbanHorizontalEdge({
-        translatedActiveRect: rect(100, 100),
-        overRect: rect(100, 100),
+        input: "keyboard",
         sourceIndex: 2,
         targetIndex: 1,
       }),
@@ -93,8 +82,8 @@ describe("sortable board interactions", () => {
   test("maps physical pointer and touch positions to logical RTL edges", () => {
     expect(
       getKanbanHorizontalEdge({
+        input: "pointer",
         currentClientX: 110,
-        translatedActiveRect: rect(100, 100),
         overRect: rect(100, 100),
         direction: KANBAN_DIRECTIONS.ltr,
       }),
@@ -102,8 +91,8 @@ describe("sortable board interactions", () => {
 
     expect(
       getKanbanHorizontalEdge({
+        input: "pointer",
         currentClientX: 110,
-        translatedActiveRect: rect(100, 100),
         overRect: rect(100, 100),
         direction: KANBAN_DIRECTIONS.rtl,
       }),

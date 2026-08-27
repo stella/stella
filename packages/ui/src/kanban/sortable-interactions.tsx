@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { createPortal } from "react-dom";
 
 import {
   DndContext,
@@ -82,22 +83,42 @@ const includesTouchIdentifier = (touches: TouchList, identifier: number) => {
  * action is prevented here.
  */
 class KanbanTouchSensor extends TouchSensor {
+  private readonly identityListeners: AbortController;
   private readonly ownerDocument: Document;
   private readonly touchIdentifier: number | null;
 
   constructor(props: TouchSensorProps) {
-    super(props);
+    const identityListeners = new AbortController();
+    super({
+      ...props,
+      onAbort: (active) => {
+        identityListeners.abort();
+        props.onAbort(active);
+      },
+      onCancel: () => {
+        identityListeners.abort();
+        props.onCancel();
+      },
+      onEnd: () => {
+        identityListeners.abort();
+        props.onEnd();
+      },
+    });
+    this.identityListeners = identityListeners;
     this.ownerDocument = getTouchDocument(props.event);
     this.touchIdentifier = getTouchIdentifier(props.event);
     this.ownerDocument.addEventListener("touchmove", this.handleTouchMove, {
       capture: true,
       passive: false,
+      signal: identityListeners.signal,
     });
     this.ownerDocument.addEventListener("touchend", this.handleTouchEnd, {
       capture: true,
+      signal: identityListeners.signal,
     });
     this.ownerDocument.addEventListener("touchcancel", this.handleTouchCancel, {
       capture: true,
+      signal: identityListeners.signal,
     });
   }
 
@@ -132,19 +153,7 @@ class KanbanTouchSensor extends TouchSensor {
   };
 
   private readonly detachIdentityListeners = () => {
-    this.ownerDocument.removeEventListener("touchmove", this.handleTouchMove, {
-      capture: true,
-    });
-    this.ownerDocument.removeEventListener("touchend", this.handleTouchEnd, {
-      capture: true,
-    });
-    this.ownerDocument.removeEventListener(
-      "touchcancel",
-      this.handleTouchCancel,
-      {
-        capture: true,
-      },
-    );
+    this.identityListeners.abort();
   };
 }
 
@@ -167,7 +176,7 @@ export type KanbanSortableBoardProps = {
   accessibility?: DndContextProps["accessibility"] | undefined;
   onDragStart?: ((event: DragStartEvent) => void) | undefined;
   onDragCancel?: ((event: DragCancelEvent) => void) | undefined;
-  /** Rendered inside dnd-kit's portal while an item is active. */
+  /** Rendered in document.body while an item is active. */
   overlay?:
     | ((activeId: UniqueIdentifier | null) => React.ReactNode)
     | undefined;
@@ -223,9 +232,12 @@ export const KanbanSortableBoard = ({
       sensors={sensors ?? defaultSensors}
     >
       {children}
-      {overlay && (
-        <DragOverlay {...overlayProps}>{overlay(activeId)}</DragOverlay>
-      )}
+      {overlay && typeof document !== "undefined"
+        ? createPortal(
+            <DragOverlay {...overlayProps}>{overlay(activeId)}</DragOverlay>,
+            document.body,
+          )
+        : null}
     </DndContext>
   );
 };

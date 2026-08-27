@@ -75,9 +75,10 @@ tolerance), and keyboard. Scroll containers retain `touch-action: auto`; only
 custom `sensors`, `accessibility`, collision detection, keyboard coordinates,
 auto-scroll options, and an `overlay` render function.
 
-`getKanbanHorizontalEdge` accepts `direction: "ltr" | "rtl"` for physical
-mouse and touch coordinates. Keyboard callers should also provide source and
-target indices so equal-center moves still resolve to the correct logical edge.
+`getKanbanHorizontalEdge` takes `input: "pointer"` with a current client-x and
+`direction: "ltr" | "rtl"` for mouse and touch input. Keyboard calls use
+`input: "keyboard"` and require source and target indices, so every move has a
+logical edge without relying on ambiguous geometry.
 
 ## Styles
 
@@ -111,7 +112,7 @@ and bidi isolation.
 
 ```sh
 bun run build       # tsdown, one output module per source module, with .d.ts
-bun run test        # unit and browser interaction tests
+bun run test        # unit tests
 bun run test:unit   # unit tests only
 bun run test:browser # Chromium mobile-input tests
 bun run typecheck

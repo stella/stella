@@ -16,49 +16,50 @@ export const KANBAN_DIRECTIONS = {
 export type KanbanDirection =
   (typeof KANBAN_DIRECTIONS)[keyof typeof KANBAN_DIRECTIONS];
 
-export type KanbanHorizontalEdgeOptions = {
+type KanbanPointerHorizontalEdgeOptions = {
+  input: "pointer";
   /** The drag's current viewport x coordinate for mouse or touch input. */
-  currentClientX?: number | undefined;
-  /** The active item's final translated rectangle, used for keyboard input. */
-  translatedActiveRect: ClientRect;
+  currentClientX: number;
   overRect: ClientRect;
-  /** The source item's position when a keyboard move needs a logical edge. */
-  sourceIndex?: number | undefined;
-  /** The target item's position when a keyboard move needs a logical edge. */
-  targetIndex?: number | undefined;
   /** Maps physical mouse and touch positions to the board's logical order. */
   direction?: KanbanDirection | undefined;
 };
+
+type KanbanKeyboardHorizontalEdgeOptions = {
+  input: "keyboard";
+  /** The source item's position in logical board order. */
+  sourceIndex: number;
+  /** The target item's position in logical board order. */
+  targetIndex: number;
+};
+
+export type KanbanHorizontalEdgeOptions =
+  | KanbanPointerHorizontalEdgeOptions
+  | KanbanKeyboardHorizontalEdgeOptions;
 
 /**
  * Resolves a horizontal insertion edge without consulting application data.
  *
  * Mouse and touch callers pass their current viewport coordinate. Keyboard
- * callers can pass source and target indices to resolve a logical move even
- * when the rectangles share a center. Otherwise the final translated active
- * rectangle provides the closest equivalent position. This deliberately avoids
- * drag deltas, which include scroll reconciliation and are not viewport
- * coordinates.
+ * callers pass source and target indices, making every logical move
+ * unambiguous. This deliberately avoids drag deltas, which include scroll
+ * reconciliation and are not viewport coordinates.
  */
 export const getKanbanHorizontalEdge = ({
-  currentClientX,
-  translatedActiveRect,
-  overRect,
-  sourceIndex,
-  targetIndex,
-  direction = KANBAN_DIRECTIONS.ltr,
+  ...options
 }: KanbanHorizontalEdgeOptions): KanbanHorizontalEdge => {
-  if (
-    currentClientX === undefined &&
-    sourceIndex !== undefined &&
-    targetIndex !== undefined
-  ) {
-    return sourceIndex < targetIndex
+  if (options.input === "keyboard") {
+    return options.sourceIndex < options.targetIndex
       ? KANBAN_HORIZONTAL_EDGES.after
       : KANBAN_HORIZONTAL_EDGES.before;
   }
 
-  const currentX = currentClientX ?? getRectCenterX(translatedActiveRect);
+  const {
+    currentClientX,
+    direction = KANBAN_DIRECTIONS.ltr,
+    overRect,
+  } = options;
+  const currentX = currentClientX;
   const physicalEdge =
     currentX < getRectCenterX(overRect)
       ? KANBAN_HORIZONTAL_EDGES.before
