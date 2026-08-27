@@ -4354,6 +4354,7 @@ type Messages = {
     };
     "justification": "Justification:";
     "kanban": {
+      "collapsedSubgroup": "{count} items hidden";
       "deleteAll": "Delete all";
       "deleteAllConfirm": "Delete all {count} items in \"{column}\"?";
       "hideColumn": "Hide column";
@@ -4744,6 +4745,7 @@ type Messages = {
       "filter": "Filter";
       "filterByPlaceholder": "Filter by…";
       "filtersWithCount": "{count, plural, one {# filter} other {# filters}}";
+      "group": "Group";
       "groupBy": "Group by:";
       "groupItemCount": "{count, plural, one {# item} other {# items}}";
       "hideColumn": "Hide column";
@@ -4782,6 +4784,7 @@ type Messages = {
       };
       "saveAsTemplate": "Save as preset…";
       "selectProperty": "Select property";
+      "subgroup": "Sub-group";
       "switcherLabel": "Saved views";
       "templates": {
         "created": "Preset saved";
@@ -4807,6 +4810,7 @@ type Messages = {
         "week": "Week";
       };
       "useTemplate": "Use preset…";
+      "viewSettings": "View settings";
     };
     "workflow": {
       "allManualInputsDescription": "Please add at least one AI property to start the workflow";

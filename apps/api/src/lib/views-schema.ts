@@ -106,6 +106,7 @@ const kanbanLayoutSchema = v.strictObject({
   type: v.literal("kanban"),
   ...versionedBaseLayoutSchema,
   groupByPropertyId: v.optional(v.pipe(v.string(), v.minLength(1))),
+  subgroupByPropertyId: v.optional(v.pipe(v.string(), v.minLength(1))),
 });
 
 const calendarLayoutSchema = v.strictObject({
@@ -313,6 +314,7 @@ const tViewLayoutDefinition = t.Union([
       type: t.Literal("kanban"),
       ...tVersionedBaseLayoutSchema,
       groupByPropertyId: t.Optional(t.String({ minLength: 1 })),
+      subgroupByPropertyId: t.Optional(t.String({ minLength: 1 })),
     },
     strictObjectOptions,
   ),

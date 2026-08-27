@@ -81,12 +81,15 @@ export const cleanStalePropertyIds = (
     }
   }
 
-  if (
-    layout.type === "kanban" &&
-    isStaleGroupByPropertyId(layout.groupByPropertyId, propertyIds)
-  ) {
-    layout.groupByPropertyId = undefined;
-    changed = true;
+  if (layout.type === "kanban") {
+    if (isStaleGroupByPropertyId(layout.groupByPropertyId, propertyIds)) {
+      layout.groupByPropertyId = undefined;
+      changed = true;
+    }
+    if (isStaleGroupByPropertyId(layout.subgroupByPropertyId, propertyIds)) {
+      layout.subgroupByPropertyId = undefined;
+      changed = true;
+    }
   }
 
   if (layout.type === "calendar") {

@@ -95,6 +95,7 @@ export type WorkspaceKanbanViewLayout<
   PropertyId extends WorkspacePropertyIdentifier = WorkspacePropertyIdentifier,
 > = WorkspaceViewLayoutBase<PropertyId> & {
   groupByPropertyId?: PropertyId | undefined;
+  subgroupByPropertyId?: PropertyId | undefined;
   type: "kanban";
 };
 

@@ -4351,6 +4351,7 @@
     },
     "justification": "Begründung:",
     "kanban": {
+      "collapsedSubgroup": "{count} Elemente ausgeblendet",
       "deleteAll": "Alle löschen",
       "deleteAllConfirm": "Alle {count} Einträge in „{column}“ löschen?",
       "hideColumn": "Spalte ausblenden",
@@ -4741,6 +4742,7 @@
       "filter": "Filtern",
       "filterByPlaceholder": "Filtern nach…",
       "filtersWithCount": "{count, plural, one {# Filter} other {# Filter}}",
+      "group": "Gruppe",
       "groupBy": "Gruppieren nach:",
       "groupItemCount": "{count, plural, one {# Element} other {# Elemente}}",
       "hideColumn": "Spalte ausblenden",
@@ -4779,6 +4781,7 @@
       },
       "saveAsTemplate": "Als Voreinstellung speichern…",
       "selectProperty": "Eigenschaft auswählen",
+      "subgroup": "Untergruppe",
       "switcherLabel": "Gespeicherte Ansichten",
       "templates": {
         "created": "Voreinstellung gespeichert",
@@ -4803,7 +4806,8 @@
         "startDate": "Startdatum",
         "week": "Woche"
       },
-      "useTemplate": "Voreinstellung verwenden…"
+      "useTemplate": "Voreinstellung verwenden…",
+      "viewSettings": "Ansichtseinstellungen"
     },
     "workflow": {
       "allManualInputsDescription": "Fügen Sie mindestens eine KI-Eigenschaft hinzu, um den Arbeitsablauf zu starten",

@@ -4351,6 +4351,7 @@
     },
     "justification": "Justificación:",
     "kanban": {
+      "collapsedSubgroup": "{count} elementos ocultos",
       "deleteAll": "Eliminar todo",
       "deleteAllConfirm": "¿Eliminar los {count} elementos de \"{column}\"?",
       "hideColumn": "Ocultar columna",
@@ -4741,6 +4742,7 @@
       "filter": "Filtrar",
       "filterByPlaceholder": "Filtrar por…",
       "filtersWithCount": "{count, plural, one {# filtro} other {# filtros}}",
+      "group": "Grupo",
       "groupBy": "Agrupar por:",
       "groupItemCount": "{count, plural, one {# elemento} other {# elementos}}",
       "hideColumn": "Ocultar columna",
@@ -4779,6 +4781,7 @@
       },
       "saveAsTemplate": "Guardar como preajuste…",
       "selectProperty": "Seleccionar propiedad",
+      "subgroup": "Subgrupo",
       "switcherLabel": "Vistas guardadas",
       "templates": {
         "created": "Preajuste guardado",
@@ -4803,7 +4806,8 @@
         "startDate": "Fecha de inicio",
         "week": "Semana"
       },
-      "useTemplate": "Usar preajuste…"
+      "useTemplate": "Usar preajuste…",
+      "viewSettings": "Configuración de vista"
     },
     "workflow": {
       "allManualInputsDescription": "Añada al menos una propiedad de IA para iniciar el flujo de trabajo",

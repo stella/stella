@@ -320,6 +320,7 @@ const arbLayout = fc.oneof(
       type: fc.constant("kanban" as const),
       ...baseLayoutFields,
       groupByPropertyId: arbPropertyId,
+      subgroupByPropertyId: arbPropertyId,
     },
     {
       requiredKeys: [
@@ -390,6 +391,7 @@ const declaredLayoutKeys = new Set([
   "columnOrder",
   "columnPinning",
   "groupByPropertyId",
+  "subgroupByPropertyId",
   "datePropertyId",
   "endDatePropertyId",
   "additionalDatePropertyIds",
@@ -506,6 +508,20 @@ describe("view calculations", () => {
     expect(parseViewLayout(layout).calculations).toEqual([
       { propertyId: "fee", kind: "sum" },
     ]);
+    expect(Value.Check(tViewLayoutSchema, layout)).toBe(true);
+  });
+
+  test("kanban group and subgroup properties round-trip", () => {
+    const layout = {
+      ...kanbanLayout,
+      groupByPropertyId: "status",
+      subgroupByPropertyId: "assignee",
+    } satisfies ViewLayout;
+
+    expect(parseViewLayout(layout)).toMatchObject({
+      groupByPropertyId: "status",
+      subgroupByPropertyId: "assignee",
+    });
     expect(Value.Check(tViewLayoutSchema, layout)).toBe(true);
   });
 

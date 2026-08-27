@@ -189,11 +189,16 @@ export const Route = createFileRoute(
               activeView.layout.groupByPropertyId ?? "",
               properties,
             ),
+            ...(activeView.layout.subgroupByPropertyId
+              ? [activeView.layout.subgroupByPropertyId]
+              : []),
           ]
         : [];
     const shouldLoadVisibleFields =
       activeView.layout.type === "filesystem" ||
-      activeView.layout.type === "table";
+      activeView.layout.type === "table" ||
+      (activeView.layout.type === "kanban" &&
+        activeView.layout.subgroupByPropertyId !== undefined);
     const fieldIds = shouldLoadVisibleFields
       ? visibleEntityFieldIds({
           hiddenProperties: activeView.layout.hiddenProperties,
@@ -217,6 +222,24 @@ export const Route = createFileRoute(
           sorts: activeView.layout.sorts,
           limit: DEFAULT_ENTITY_WINDOW_SIZE,
           excludedKinds,
+          fieldMode,
+          fieldIds,
+        }),
+      );
+      return;
+    }
+
+    if (
+      activeView.layout.type === "kanban" &&
+      activeView.layout.subgroupByPropertyId !== undefined
+    ) {
+      await ensureRouteInfiniteQueryData(
+        queryClient,
+        entitiesWindowOptions({
+          workspaceId,
+          filters: activeView.layout.filters,
+          sorts: activeView.layout.sorts,
+          limit: DEFAULT_ENTITY_WINDOW_SIZE,
           fieldMode,
           fieldIds,
         }),

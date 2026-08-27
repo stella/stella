@@ -17,6 +17,7 @@ import { useTranslations } from "use-intl";
 import type { OptionColor } from "@stll/api/types";
 import type { KanbanGroup } from "@stll/ui/kanban";
 import {
+  buildKanbanBoardMatrix,
   getKanbanGroupingPropertyId,
   getKanbanGroups,
   isKanbanGroupingRenderable,
@@ -52,6 +53,7 @@ import {
   isPlaybookVerdictProperty,
 } from "@/lib/workspaces/playbook-verdicts";
 import {
+  entitiesWindowOptions,
   entitiesKeys,
   useKanbanGroupOptions,
   visibleEntityFieldIds,
@@ -62,7 +64,12 @@ import { mergeLayout } from "@/lib/workspaces/view-layout";
 import { EmptyState } from "@/routes/_protected.workspaces/$workspaceId/-components/empty-state";
 import { KanbanColumn } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-column";
 import type { KanbanCalculations } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-column";
-import { resolveWorkspaceKanbanGrouping } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.logic";
+import { KanbanSubgroupBoard } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-subgroup-board";
+import {
+  resolveWorkspaceKanbanGrouping,
+  resolveWorkspaceKanbanGroupValue,
+  resolveWorkspaceKanbanSubgroup,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.logic";
 import { useWorkspaceKanbanSchema } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/use-kanban-schema";
 import {
   uploadFileEntitiesBatched,
@@ -160,6 +167,10 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
   const { hiddenProperties } = view.layout;
   const configuredGroupBy =
     view.layout.type === "kanban" ? (view.layout.groupByPropertyId ?? "") : "";
+  const configuredSubgroupBy =
+    view.layout.type === "kanban"
+      ? (view.layout.subgroupByPropertyId ?? "")
+      : "";
 
   // Reset local column order when the groupBy property changes so stale
   // column positions from the previous grouping don't leak through.
@@ -179,12 +190,24 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
     [configuredGroupBy, schema],
   );
   const groupByPropertyId = getKanbanGroupingPropertyId(grouping);
+  const subgroup = useMemo(
+    () =>
+      resolveWorkspaceKanbanSubgroup(
+        configuredSubgroupBy,
+        groupByPropertyId,
+        schema,
+      ),
+    [configuredSubgroupBy, groupByPropertyId, schema],
+  );
+  const subgroupByPropertyId = getKanbanGroupingPropertyId(subgroup);
   const isStatusGrouping =
     grouping.type === "built-in" &&
     grouping.group.id === getInternalPropertyId("status");
   const isBuiltInGrouping = grouping.type === "built-in";
   const groupByProperty =
     grouping.type === "property" ? grouping.property : null;
+  const subgroupByProperty =
+    subgroup.type === "property" ? subgroup.property : null;
   // Verdict tiers are system-computed; card moves and uploads into a verdict
   // column must not overwrite the graded value.
   const isReadOnlyVerdictGrouping =
@@ -213,12 +236,60 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
       visibleEntityFieldIds({
         hiddenProperties,
         properties,
-        requiredPropertyIds: groupByProperty ? [groupByProperty.id] : [],
+        requiredPropertyIds: [groupByProperty, subgroupByProperty]
+          .filter((property) => property !== null)
+          .map((property) => property.id),
       }),
-    [groupByProperty, hiddenProperties, properties],
+    [groupByProperty, hiddenProperties, properties, subgroupByProperty],
   );
 
   const { filters, sorts } = view.layout;
+  const hasRenderableSubgroup = isKanbanGroupingRenderable(subgroup);
+  const subgroupQuery = useInfiniteQuery({
+    ...entitiesWindowOptions({
+      workspaceId,
+      filters,
+      sorts,
+      limit: KANBAN_GROUP_PAGE_SIZE,
+      fieldMode: "visible",
+      fieldIds,
+    }),
+    enabled:
+      hasRenderableSubgroup &&
+      isKanbanGroupingRenderable(grouping) &&
+      subgroupByPropertyId !== null,
+  });
+  const subgroupEntities = useMemo(
+    () =>
+      subgroupQuery.data
+        ? subgroupQuery.data.pages.flatMap((page) => page.entities)
+        : [],
+    [subgroupQuery.data],
+  );
+  const subgroupMatrix = useMemo(() => {
+    if (
+      !hasRenderableSubgroup ||
+      !isKanbanGroupingRenderable(grouping) ||
+      subgroupByPropertyId === null
+    ) {
+      return null;
+    }
+    return buildKanbanBoardMatrix({
+      group: grouping,
+      subgroup,
+      rows: subgroupEntities,
+      uncategorizedLabel: t("common.uncategorized"),
+      resolveGroupValue: ({ grouping: axis, row }) =>
+        resolveWorkspaceKanbanGroupValue(axis, row),
+    });
+  }, [
+    grouping,
+    hasRenderableSubgroup,
+    subgroup,
+    subgroupByPropertyId,
+    subgroupEntities,
+    t,
+  ]);
 
   const calculations: KanbanCalculations = {
     selections: view.layout.calculations,
@@ -486,6 +557,28 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
   const handleRenameEntity = (entityId: string, newName: string) => {
     renameEntity.mutate({ workspaceId, entityId, name: newName });
   };
+
+  if (subgroupMatrix !== null) {
+    return (
+      <KanbanSubgroupBoard
+        cardFields={cardFields}
+        hasMore={subgroupQuery.hasNextPage}
+        isLoadingMore={subgroupQuery.isFetchingNextPage}
+        matrix={subgroupMatrix}
+        onLoadMore={() => {
+          if (subgroupQuery.hasNextPage && !subgroupQuery.isFetchingNextPage) {
+            detached(
+              subgroupQuery.fetchNextPage(),
+              "kanban-view.fetch-subgroups-next-page",
+            );
+          }
+        }}
+        onRenameEntity={handleRenameEntity}
+        properties={properties}
+        workspaceId={workspaceId}
+      />
+    );
+  }
 
   const handleReorderColumn = (
     sourceValue: string,

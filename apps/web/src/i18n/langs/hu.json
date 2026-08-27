@@ -4351,6 +4351,7 @@
     },
     "justification": "Indoklás:",
     "kanban": {
+      "collapsedSubgroup": "{count} elem elrejtve",
       "deleteAll": "Összes törlése",
       "deleteAllConfirm": "Törli az összes {count} elemet a(z) „{column}” oszlopban?",
       "hideColumn": "Oszlop elrejtése",
@@ -4741,6 +4742,7 @@
       "filter": "Szűrés",
       "filterByPlaceholder": "Szűrés…",
       "filtersWithCount": "{count, plural, one {# szűrő} other {# szűrő}}",
+      "group": "Csoport",
       "groupBy": "Csoportosítás:",
       "groupItemCount": "{count, plural, one {# elem} other {# elem}}",
       "hideColumn": "Oszlop elrejtése",
@@ -4779,6 +4781,7 @@
       },
       "saveAsTemplate": "Mentés előbeállításként…",
       "selectProperty": "Tulajdonság kiválasztása",
+      "subgroup": "Alcsoport",
       "switcherLabel": "Mentett nézetek",
       "templates": {
         "created": "Előbeállítás mentve",
@@ -4803,7 +4806,8 @@
         "startDate": "Kezdő dátum",
         "week": "Hét"
       },
-      "useTemplate": "Előbeállítás használata…"
+      "useTemplate": "Előbeállítás használata…",
+      "viewSettings": "Nézetbeállítások"
     },
     "workflow": {
       "allManualInputsDescription": "A munkafolyamat indításához adjon hozzá legalább egy AI tulajdonságot",

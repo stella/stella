@@ -141,6 +141,9 @@ const remapLayout = (
       groupByPropertyId: base.groupByPropertyId
         ? remapPropertyId(base.groupByPropertyId, propertyIdMap)
         : undefined,
+      subgroupByPropertyId: base.subgroupByPropertyId
+        ? remapPropertyId(base.subgroupByPropertyId, propertyIdMap)
+        : undefined,
     };
   }
 

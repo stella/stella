@@ -4351,6 +4351,7 @@
     },
     "justification": "Pagrindimas:",
     "kanban": {
+      "collapsedSubgroup": "Paslėpta elementų: {count}",
       "deleteAll": "Ištrinti visus",
       "deleteAllConfirm": "Ištrinti visus {count} elementus stulpelyje \"{column}\"?",
       "hideColumn": "Slėpti stulpelį",
@@ -4741,6 +4742,7 @@
       "filter": "Filtruoti",
       "filterByPlaceholder": "Filtruoti pagal…",
       "filtersWithCount": "{count, plural, one {# filtras} few {# filtrai} other {# filtrų}}",
+      "group": "Grupė",
       "groupBy": "Grupuoti pagal:",
       "groupItemCount": "{count, plural, one {# elementas} few {# elementai} many {# elemento} other {# elementų}}",
       "hideColumn": "Slėpti stulpelį",
@@ -4779,6 +4781,7 @@
       },
       "saveAsTemplate": "Išsaugoti kaip išankstinį nustatymą…",
       "selectProperty": "Pasirinkti savybę",
+      "subgroup": "Pogrupis",
       "switcherLabel": "Įrašyti rodiniai",
       "templates": {
         "created": "Išankstinis nustatymas išsaugotas",
@@ -4803,7 +4806,8 @@
         "startDate": "Pradžios data",
         "week": "Savaitė"
       },
-      "useTemplate": "Naudoti išankstinį nustatymą…"
+      "useTemplate": "Naudoti išankstinį nustatymą…",
+      "viewSettings": "Rodinio nustatymai"
     },
     "workflow": {
       "allManualInputsDescription": "Norėdami paleisti darbo eigą, pridėkite bent vieną AI savybę",

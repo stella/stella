@@ -12,6 +12,8 @@ import type { WorkspaceEntity, WorkspaceProperty } from "@/lib/types";
 
 import {
   resolveWorkspaceKanbanGrouping,
+  resolveWorkspaceKanbanGroupValue,
+  resolveWorkspaceKanbanSubgroup,
   workspaceKanbanSchema,
 } from "./kanban-view.logic";
 
@@ -218,6 +220,45 @@ describe("kanban column lists", () => {
         ["draft", "gray"],
         ["review", "amber"],
       ],
+    );
+  });
+});
+
+describe("kanban subgroup placement", () => {
+  test("the same property cannot control both axes", () => {
+    const property = singleSelectProperty("assignee");
+    const schema = schemaFor([property]);
+    const group = resolveWorkspaceKanbanGrouping(property.id, schema);
+    const subgroup = resolveWorkspaceKanbanSubgroup(
+      property.id,
+      property.id,
+      schema,
+    );
+
+    expect(group.type).toBe("property");
+    expect(subgroup.type).toBe("none");
+  });
+
+  test("a single-select field places a task in its colleague lane", () => {
+    const property = singleSelectProperty("assignee");
+    const row = entity("task-1", "task");
+    row.fields[property.id] = {
+      id: toSafeId<"field">("field-1"),
+      propertyId: property.id,
+      content: {
+        version: 1,
+        type: "single-select",
+        value: "Anna Nováková",
+      },
+    };
+    const subgroup = resolveWorkspaceKanbanSubgroup(
+      property.id,
+      getInternalPropertyId("status"),
+      schemaFor([property]),
+    );
+
+    expect(resolveWorkspaceKanbanGroupValue(subgroup, row)).toBe(
+      "Anna Nováková",
     );
   });
 });

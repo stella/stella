@@ -150,3 +150,40 @@ export const resolveWorkspaceKanbanGrouping = (
     groupBy: resolveKanbanGroupBy(configuredGroupBy, schema.properties),
     schema,
   });
+
+/** A subgroup is opt-in and can never repeat the primary grouping. */
+export const resolveWorkspaceKanbanSubgroup = (
+  configuredSubgroupBy: string,
+  groupByPropertyId: string | null,
+  schema: WorkspaceKanbanSchema,
+): WorkspaceKanbanGrouping =>
+  resolveKanbanGrouping({
+    groupBy:
+      configuredSubgroupBy === groupByPropertyId ? "" : configuredSubgroupBy,
+    schema,
+  });
+
+/** Resolve the stored value that places an entity on either board axis. */
+export const resolveWorkspaceKanbanGroupValue = (
+  grouping: WorkspaceKanbanGrouping,
+  entity: WorkspaceEntity,
+): string | null => {
+  if (grouping.type === "none") {
+    return null;
+  }
+  if (grouping.type === "property") {
+    const content = entity.fields[grouping.property.id]?.content;
+    return content?.type === "single-select" ? content.value : null;
+  }
+
+  switch (grouping.group.id) {
+    case "_status":
+      return entity.status;
+    case "_kind":
+      return entity.kind;
+    case "_created-by":
+      return entity.createdBy;
+    default:
+      return null;
+  }
+};
