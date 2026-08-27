@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { hashAuthoredSkillContent } from "./authored-content-hash";
+import { hashAuthoredSkillContent } from "@/api/lib/agent-skills/authored-content-hash";
 
 const baseSkill = {
   body: "Summarise this document.",

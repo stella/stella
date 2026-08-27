@@ -198,9 +198,8 @@ export const agentSkillProposals = p.pgTable(
     skillId: safeUuid<"agentSkill">("skill_id")
       .notNull()
       .references(() => agentSkills.id, { onDelete: "cascade" }),
-    baseRevisionId: safeUuid<"agentSkillRevision">("base_revision_id")
-      .notNull()
-      .references(() => agentSkillRevisions.id, { onDelete: "cascade" }),
+    baseRevisionId:
+      safeUuid<"agentSkillRevision">("base_revision_id").notNull(),
     body: p.text().notNull(),
     summary: p.text().notNull().default(""),
     status: p
@@ -214,9 +213,7 @@ export const agentSkillProposals = p.pgTable(
       .text("reviewer_id")
       .references(() => user.id, { onDelete: "set null" }),
     decidedAt: timestamptz("decided_at"),
-    resultRevisionId: safeUuid<"agentSkillRevision">(
-      "result_revision_id",
-    ).references(() => agentSkillRevisions.id, { onDelete: "set null" }),
+    resultRevisionId: safeUuid<"agentSkillRevision">("result_revision_id"),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
     updatedAt: timestamptz("updated_at")
       .notNull()
@@ -243,6 +240,22 @@ export const agentSkillProposals = p.pgTable(
       .index("agent_skill_proposals_org_skill_idx")
       .on(table.organizationId, table.skillId),
     p.index("agent_skill_proposals_base_revision_idx").on(table.baseRevisionId),
+    // Named explicitly: Drizzle's generated names exceed Postgres' 63-byte
+    // identifier limit and would be truncated.
+    p
+      .foreignKey({
+        name: "agent_skill_proposals_base_revision_fk",
+        columns: [table.baseRevisionId],
+        foreignColumns: [agentSkillRevisions.id],
+      })
+      .onDelete("cascade"),
+    p
+      .foreignKey({
+        name: "agent_skill_proposals_result_revision_fk",
+        columns: [table.resultRevisionId],
+        foreignColumns: [agentSkillRevisions.id],
+      })
+      .onDelete("set null"),
     ...agentSkillChildPolicies("agent_skill_proposals", "agent_skill_proposal"),
   ],
 );

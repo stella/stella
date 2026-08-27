@@ -43,6 +43,10 @@ const LIVE_MODE: BodyMode = {
   commenting: false,
 };
 
+// Stable empty list while a query has no data yet: a fresh `[]` per render
+// would defeat memoized children.
+const NO_ROWS: readonly never[] = [];
+
 const NO_EDITOR_COMMENTS: readonly MarkdownEditorComment[] = [];
 
 type SkillBodyWorkspaceProps = {
@@ -128,7 +132,7 @@ export const SkillBodyWorkspace = ({
   // text corresponds to; comment mode is read-only, so the text cannot drift
   // while a comment is being written.
   const latestRevisionId = revisions.data?.items.at(0)?.id ?? null;
-  const bodyComments = (comments.data?.items ?? []).filter(
+  const bodyComments = (comments.data?.items ?? NO_ROWS).filter(
     (comment) => comment.proposalId === null,
   );
   // Only the open comments written against the revision the live text
@@ -243,8 +247,8 @@ export const SkillBodyWorkspace = ({
           });
         }}
         openProposalId={openProposalId}
-        proposals={proposals.data?.items ?? []}
-        revisions={revisions.data?.items ?? []}
+        proposals={proposals.data?.items ?? NO_ROWS}
+        revisions={revisions.data?.items ?? NO_ROWS}
       />
       {commenting ? (
         <CommentList

@@ -8,6 +8,7 @@ import {
   RESERVED_AGENT_SKILL_COMMANDS,
   agentSkills,
 } from "@/api/db/schema";
+import { hashAuthoredSkillContent } from "@/api/lib/agent-skills/authored-content-hash";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -17,7 +18,6 @@ import { PG_ERROR } from "@/api/lib/pg-error";
 import { authorizeSkillInstallScope } from "@/api/lib/skills/install";
 import { includes } from "@/api/lib/type-guards";
 
-import { hashAuthoredSkillContent } from "./authored-content-hash";
 import { uniqueSlug } from "./slug";
 
 const createSkillBodySchema = t.Object({

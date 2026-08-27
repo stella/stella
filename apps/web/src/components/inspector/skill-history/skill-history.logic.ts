@@ -27,6 +27,8 @@ export type SkillCommentRow = Awaited<
  * Eden client returns, so a new server-side status fails to typecheck here
  * rather than falling through to a default label.
  */
+const NO_MEMBERS: readonly never[] = [];
+
 export const SKILL_PROPOSAL_STATUSES = [
   "draft",
   "proposed",
@@ -106,7 +108,7 @@ export const createMemberNameLookup = ({
   fallback,
 }: MemberNameLookupOptions): MemberNameLookup => {
   const names = new Map(
-    (members ?? []).map((member) => [
+    (members ?? NO_MEMBERS).map((member) => [
       member.userId,
       member.user.name?.trim() || member.user.email,
     ]),

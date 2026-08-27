@@ -137,8 +137,8 @@ const resolveCommentAnchor = ({
   proposalId,
   revisionId,
 }: {
-  proposalId?: SafeId<"agentSkillProposal">;
-  revisionId?: SafeId<"agentSkillRevision">;
+  proposalId?: SafeId<"agentSkillProposal"> | undefined;
+  revisionId?: SafeId<"agentSkillRevision"> | undefined;
 }): CommentAnchor | null => {
   if (proposalId !== undefined && revisionId === undefined) {
     return { type: "proposal", proposalId };

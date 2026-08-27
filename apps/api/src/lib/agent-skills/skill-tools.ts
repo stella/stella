@@ -8,7 +8,6 @@ import type { SkillMetadata } from "@stll/skills";
 import type { SafeDb } from "@/api/db/safe-db";
 import { agentSkillResources, agentSkills } from "@/api/db/schema";
 import type { AgentSkillOrigin } from "@/api/db/schema";
-import { hashAuthoredSkillContent } from "@/api/handlers/skills/authored-content-hash";
 import {
   RESOURCE_PATH_PATTERN,
   inferResourceKind,
@@ -26,6 +25,8 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { toTanStackValibotSchema as toTanStackToolSchema } from "@/api/lib/tanstack-ai-schema";
+
+import { hashAuthoredSkillContent } from "./authored-content-hash";
 
 type AvailableSkillMetadata = SkillMetadata & {
   source?: "built-in" | "installed" | undefined;

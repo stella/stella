@@ -4,6 +4,7 @@ import { t } from "elysia";
 import { BLUEPRINT_IDS, getBlueprint, parseSkillFile } from "@stll/skills";
 
 import { AGENT_SKILL_SCOPES } from "@/api/db/schema";
+import { hashAuthoredSkillContent } from "@/api/lib/agent-skills/authored-content-hash";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -13,7 +14,6 @@ import {
 } from "@/api/lib/skills/install";
 import type { ParsedSkillPackage } from "@/api/lib/skills/skill-package";
 
-import { hashAuthoredSkillContent } from "./authored-content-hash";
 import { uniqueSlug } from "./slug";
 
 const encoder = new TextEncoder();

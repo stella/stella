@@ -8,6 +8,7 @@ import {
   canManageSkill,
   loadVisibleSkill,
 } from "@/api/lib/agent-skills/access";
+import { hashAuthoredSkillContent } from "@/api/lib/agent-skills/authored-content-hash";
 import { isDecidedProposalStatus } from "@/api/lib/agent-skills/proposal-status";
 import { loadLatestSkillRevision } from "@/api/lib/agent-skills/revisions";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
@@ -16,8 +17,6 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-
-import { hashAuthoredSkillContent } from "../authored-content-hash";
 
 const reviewSkillProposalParamsSchema = t.Object({
   skillId: tSafeId("agentSkill"),

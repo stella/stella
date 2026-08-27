@@ -13,26 +13,32 @@ export const createSerializedSaver = (
 ) => {
   const queues = new Map<string, SaveQueue>();
 
-  const run = async (key: string, first: string) => {
-    const queue = queues.get(key) ?? { inFlight: false, pending: null };
-    queues.set(key, queue);
-    queue.inFlight = true;
-    let next: string | null = first;
-    while (next !== null) {
-      // oxlint-disable-next-line no-await-in-loop -- sequential save queue: each write must land before the newer value is sent
-      await write(key, next);
-      next = queue.pending;
-      queue.pending = null;
+  // Each write lands before the value queued behind it is sent; the chain
+  // ends when nothing newer arrived while the last write was in flight.
+  const drain = async (
+    key: string,
+    queue: SaveQueue,
+    value: string,
+  ): Promise<void> => {
+    await write(key, value);
+    const next = queue.pending;
+    queue.pending = null;
+    if (next === null) {
+      queue.inFlight = false;
+      return;
     }
-    queue.inFlight = false;
+    await drain(key, queue, next);
   };
 
   return (key: string, value: string): void => {
-    const queue = queues.get(key);
-    if (queue?.inFlight) {
-      queue.pending = value;
+    const existing = queues.get(key);
+    if (existing?.inFlight) {
+      existing.pending = value;
       return;
     }
-    detached(run(key, value), "skill-history.serialized-save");
+    const queue = existing ?? { inFlight: false, pending: null };
+    queues.set(key, queue);
+    queue.inFlight = true;
+    detached(drain(key, queue, value), "skill-history.serialized-save");
   };
 };
