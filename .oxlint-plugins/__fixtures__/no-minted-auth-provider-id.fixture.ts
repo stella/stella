@@ -9,11 +9,11 @@ import { randomUUID } from "node:crypto";
 
 type Branded<T extends string> = string & { readonly __brand: T };
 
-const toSafeId = <T extends string>(value: string): Branded<T> =>
-  value as Branded<T>;
-const brandPersistedUserId = (value: string): Branded<"user"> =>
-  toSafeId<"user">(value);
-const row = { userId: "muhj1L1fC3PjrknOMMhCP6Cf0uieeuBZ" };
+// Declared, not implemented: the rule reads call shapes, and an implementation
+// would need the very cast the type-aware lint forbids.
+declare const toSafeId: <T extends string>(value: string) => Branded<T>;
+declare const brandPersistedUserId: (value: string) => Branded<"user">;
+declare const row: { userId: string };
 
 // A UUID minted under an auth-provider type argument.
 // oxlint-disable-next-line no-minted-auth-provider-id/no-minted-auth-provider-id
