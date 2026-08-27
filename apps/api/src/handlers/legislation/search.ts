@@ -162,7 +162,10 @@ const pgSearch = async (
       d.source_url,
       ts_headline(
         ${headlineRegconfig},
-        coalesce(nullif(d.fulltext, ''), sd.searchable_text),
+        left(
+          coalesce(nullif(d.fulltext, ''), sd.searchable_text),
+          ${LIMITS.searchHeadlineDocumentMaxChars}
+        ),
         ${ftsSearch.headlineQuery},
         ${TS_HEADLINE_CONFIG}
       ) AS headline,

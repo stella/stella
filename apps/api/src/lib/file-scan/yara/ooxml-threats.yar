@@ -20,12 +20,18 @@ rule ooxml_external_relationship
         verdict = "suspicious"
 
     strings:
-        $target_mode = "TargetMode" ascii nocase
-        $external = "External" ascii nocase
-        $http = /https?:\/\// ascii nocase
+        // One <Relationship> element resolving outside the package.
+        // [^>] keeps each match inside a single element.
+        $external = /<Relationship[^>]{0,512}TargetMode[\s]{0,8}=[\s]{0,8}"External"/ ascii nocase
+        // The same element when it carries the hyperlink relationship
+        // type, which every document body link produces.
+        $hyperlink = /<Relationship[^>]{0,512}\/hyperlink"[^>]{0,512}TargetMode[\s]{0,8}=[\s]{0,8}"External"/ ascii nocase
 
     condition:
-        $target_mode and $external and $http
+        // Fires only when an external relationship is something other than
+        // a hyperlink. Both strings start at the same `<Relationship`, so
+        // the counts differ exactly by the non-hyperlink elements.
+        #external > #hyperlink
 }
 
 rule ooxml_activex

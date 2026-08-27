@@ -15,11 +15,17 @@ const ruleFiles = [...new Bun.Glob("*.yar").scanSync(YARA_DIR)];
 // probe (scripts/image-smoke.ts), which asserts the count is non-zero.
 export const yaraRuleFileCount = ruleFiles.length;
 
-const compiled = compile(
-  ruleFiles
-    .map((f) => readFileSync(path.join(YARA_DIR, f), "utf-8"))
-    .join("\n"),
-);
+const ruleSource = ruleFiles
+  .map((f) => readFileSync(path.join(YARA_DIR, f), "utf-8"))
+  .join("\n");
+
+const compiled = compile(ruleSource);
+
+// Derived from the rule files rather than listed by hand, so the coverage
+// contract test (yara-coverage.test.ts) sees a rule the moment it is added.
+export const yaraRuleNames: readonly string[] = [
+  ...ruleSource.matchAll(/^rule\s+(\w+)/gmu),
+].flatMap((m) => (m[1] === undefined ? [] : [m[1]]));
 
 const YARA_SEVERITY_MAP: Record<string, Match["severity"]> = {
   malicious: "critical",

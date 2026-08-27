@@ -5,6 +5,7 @@ import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { LIMITS } from "@/api/lib/limits";
 import { countWorkflowTargetEntities } from "@/api/lib/workflow-target-queries";
 
 const config = {
@@ -16,7 +17,11 @@ const config = {
   access: "read",
   mcp: { type: "capability", reason: "workflow_orchestration" },
   body: t.Object({
-    entityIds: t.Optional(t.Array(tSafeId("entity"))),
+    // Bounded by what a run may actually be launched against: counting a
+    // larger set than `workspaces.workflow-start` accepts sizes nothing.
+    entityIds: t.Optional(
+      t.Array(tSafeId("entity"), { maxItems: LIMITS.flowRunInputEntitiesMax }),
+    ),
   }),
 } satisfies HandlerConfig;
 

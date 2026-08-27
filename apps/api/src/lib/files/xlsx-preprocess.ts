@@ -1,4 +1,6 @@
-import JSZip from "jszip";
+import { Result } from "better-result";
+
+import { loadDocxArchive } from "@/api/lib/docx-archive";
 
 const REGEX_HAS_PAGE_SET_UP_PR = /<pageSetUpPr[\s/>]/u;
 const REGEX_EXTRACT_PAGE_SET_UP_PR = /<pageSetUpPr(?<attrs>[^/]*?)\/>/gu;
@@ -107,20 +109,25 @@ export const patchSheetXml = (xml: string): string => {
  * every worksheet so LibreOffice does not tile wide spreadsheets
  * across multiple pages.
  *
- * Returns the original buffer unchanged when:
+ * Sheet XML is inflated through the bounded archive reader, so the patch is a
+ * print-layout nicety that can never decompress more than the archive caps
+ * allow. Returns the original buffer unchanged when:
  * - The buffer is not a valid ZIP (e.g. legacy binary .xls)
+ * - The archive is outside the decompression caps
  * - The ZIP does not contain `xl/workbook.xml` (not an OOXML file)
  */
 export const applyFitToPage = async (
   buffer: ArrayBuffer,
 ): Promise<ArrayBuffer> => {
-  let zip: JSZip;
-  try {
-    zip = await JSZip.loadAsync(buffer);
-  } catch {
-    // Not a ZIP — likely a legacy binary .xls; return as-is
+  const loaded = await Result.tryPromise(
+    async () => await loadDocxArchive(buffer),
+  );
+  if (Result.isError(loaded)) {
     return buffer;
   }
+
+  const archive = loaded.value;
+  const { zip } = archive;
 
   // Guard: must be an OOXML spreadsheet
   if (!zip.file("xl/workbook.xml")) {
@@ -131,16 +138,25 @@ export const applyFitToPage = async (
     REGEX_SHEET_FILENAME.test(p),
   );
 
-  await Promise.all(
-    sheetPaths.map(async (path) => {
-      const entry = zip.file(path);
-      if (!entry) {
-        return;
-      }
-      const xml = await entry.async("string");
-      zip.file(path, patchSheetXml(xml));
-    }),
+  const sheets = await Result.tryPromise(
+    async () =>
+      await Promise.all(
+        sheetPaths.map(async (path) => ({
+          path,
+          xml: await archive.readEntryString(path),
+        })),
+      ),
   );
+  if (Result.isError(sheets)) {
+    return buffer;
+  }
 
-  return zip.generateAsync({ type: "arraybuffer" });
+  for (const { path, xml } of sheets.value) {
+    if (xml === null) {
+      continue;
+    }
+    zip.file(path, patchSheetXml(xml));
+  }
+
+  return await zip.generateAsync({ type: "arraybuffer" });
 };

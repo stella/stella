@@ -1,3 +1,6 @@
+// A PDF name token ends at whitespace or at one of the PDF delimiter
+// characters; the classes below spell out the full set.
+
 rule pdf_javascript_js
 {
     meta:
@@ -6,14 +9,14 @@ rule pdf_javascript_js
 
     strings:
         $header = "%PDF-" ascii
-        // Match /JS followed by a PDF delimiter to avoid
-        // false positives on font subset names (/JSUIQA+Arial)
-        $js = /\/JS[\s\x00(<]/ ascii
-        // XFA forms use JavaScript for form logic;
-        // require both /XFA and /AcroForm to confirm a
-        // legitimate XFA form (not just a stray /XFA string).
-        $xfa = "/XFA" ascii
-        $acroform = "/AcroForm" ascii
+        // Match /JS as a complete name token to avoid false positives
+        // on font subset names (/JSUIQA+Arial)
+        $js = /\/JS[\s\x00\/<>()\[\]{}%]/ ascii
+        // XFA forms carry JavaScript as form logic. Both names must be
+        // present as name tokens for the document to read as such a form;
+        // pdf_xfa_form_javascript then reports it at a lower verdict.
+        $xfa = /\/XFA[\s\x00\/<>()\[\]{}%]/ ascii
+        $acroform = /\/AcroForm[\s\x00\/<>()\[\]{}%]/ ascii
 
     condition:
         $header and $js and not ($xfa and $acroform)
@@ -28,13 +31,28 @@ rule pdf_javascript_full
     strings:
         $header = "%PDF-" ascii
         $js = "/JavaScript" ascii
-        // XFA forms use JavaScript for form logic;
-        // require both /XFA and /AcroForm (see above).
-        $xfa = "/XFA" ascii
-        $acroform = "/AcroForm" ascii
+        $xfa = /\/XFA[\s\x00\/<>()\[\]{}%]/ ascii
+        $acroform = /\/AcroForm[\s\x00\/<>()\[\]{}%]/ ascii
 
     condition:
         $header and $js and not ($xfa and $acroform)
+}
+
+rule pdf_xfa_form_javascript
+{
+    meta:
+        description = "PDF XFA form declares JavaScript form logic"
+        verdict = "suspicious"
+
+    strings:
+        $header = "%PDF-" ascii
+        $js = /\/JS[\s\x00\/<>()\[\]{}%]/ ascii
+        $javascript = "/JavaScript" ascii
+        $xfa = /\/XFA[\s\x00\/<>()\[\]{}%]/ ascii
+        $acroform = /\/AcroForm[\s\x00\/<>()\[\]{}%]/ ascii
+
+    condition:
+        $header and ($js or $javascript) and $xfa and $acroform
 }
 
 rule pdf_launch
@@ -45,7 +63,7 @@ rule pdf_launch
 
     strings:
         $header = "%PDF-" ascii
-        $launch = /\/Launch[\s\x00\/<(]/ ascii
+        $launch = /\/Launch[\s\x00\/<>()\[\]{}%]/ ascii
 
     condition:
         $header and $launch
@@ -59,7 +77,7 @@ rule pdf_submit_form
 
     strings:
         $header = "%PDF-" ascii
-        $submit = /\/SubmitForm[\s\x00\/<(]/ ascii
+        $submit = /\/SubmitForm[\s\x00\/<>()\[\]{}%]/ ascii
 
     condition:
         $header and $submit
@@ -73,7 +91,7 @@ rule pdf_goto_remote
 
     strings:
         $header = "%PDF-" ascii
-        $goto = /\/GoToR[\s\x00\/<(]/ ascii
+        $goto = /\/GoToR[\s\x00\/<>()\[\]{}%]/ ascii
 
     condition:
         $header and $goto
@@ -87,7 +105,7 @@ rule pdf_goto_embedded
 
     strings:
         $header = "%PDF-" ascii
-        $goto = /\/GoToE[\s\x00\/<(]/ ascii
+        $goto = /\/GoToE[\s\x00\/<>()\[\]{}%]/ ascii
 
     condition:
         $header and $goto
@@ -101,7 +119,7 @@ rule pdf_rich_media
 
     strings:
         $header = "%PDF-" ascii
-        $rich = /\/RichMedia[\s\x00\/<(]/ ascii
+        $rich = /\/RichMedia[\s\x00\/<>()\[\]{}%]/ ascii
 
     condition:
         $header and $rich

@@ -37,7 +37,7 @@ describe("htmlToMarkdown", () => {
     );
   });
 
-  test("anchors render as markdown links with href preserved verbatim", () => {
+  test("anchors render as markdown links; destinations are bracketed only when needed", () => {
     expect(
       htmlToMarkdown('<p><a href="https://example.com">Example</a></p>'),
     ).toBe("[Example](https://example.com)\n");
@@ -45,6 +45,20 @@ describe("htmlToMarkdown", () => {
       htmlToMarkdown('<p><a href="#stella-workspace=ws_1">WS</a></p>'),
     ).toBe("[WS](#stella-workspace=ws_1)\n");
     expect(htmlToMarkdown('<p><a href="">no</a></p>')).toBe("[no]()\n");
+  });
+
+  test("a closing paren in the href does not close the link early", () => {
+    expect(
+      htmlToMarkdown(
+        '<p><a href="https://example.com/wiki/Foo_(bar)">Foo</a></p>',
+      ),
+    ).toBe("[Foo](<https://example.com/wiki/Foo_(bar)>)\n");
+  });
+
+  test("angle brackets and backslashes in the href are escaped", () => {
+    expect(htmlToMarkdown('<p><a href="a<b>c\\d">x</a></p>')).toBe(
+      "[x](<a\\<b\\>c\\\\d>)\n",
+    );
   });
 
   test("u/sub/sup pass through as raw HTML (no markdown equivalent)", () => {

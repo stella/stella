@@ -50,7 +50,11 @@ type ThreatDocxOpts = {
   extraFiles?: Record<string, string>;
 };
 
-/** Creates a DOCX ZIP with injected threat content for YARA tests. */
+/**
+ * Creates a DOCX ZIP with injected content for rule tests. Entries are
+ * DEFLATE-compressed, as a real OOXML writer produces them, so the rules
+ * are exercised against inflated entries rather than raw archive bytes.
+ */
 const makeThreatDocx = async (opts: ThreatDocxOpts): Promise<Uint8Array> => {
   const zip = new JSZip();
   zip.file(
@@ -69,7 +73,7 @@ const makeThreatDocx = async (opts: ThreatDocxOpts): Promise<Uint8Array> => {
       zip.file(name, content);
     }
   }
-  return zip.generateAsync({ type: "uint8array" });
+  return zip.generateAsync({ type: "uint8array", compression: "DEFLATE" });
 };
 
 /** OLE2 binary with compound file magic. */
@@ -221,6 +225,62 @@ describe("pdf threats", () => {
     );
     expect(r.verdict).not.toBe("pass");
     expect(r.findings.some((f) => f.message.includes("OpenAction"))).toBe(true);
+  });
+
+  test("PDF with /Launch last in the dictionary → reject", async () => {
+    const r = Result.unwrap(
+      await scanFile({
+        buffer: await makePdf("<</F(cmd.exe)/S/Launch>>"),
+        declaredMimeType: "application/pdf",
+        fileName: "key-last.pdf",
+      }),
+    );
+    expect(r.verdict).toBe("reject");
+    expect(r.findings.some((f) => f.rule === "pdf_launch")).toBe(true);
+  });
+
+  test.each([
+    ["pdf_submit_form", "<</F(http://x)/S/SubmitForm>>"],
+    ["pdf_goto_remote", "<</F(remote.pdf)/S/GoToR>>"],
+    ["pdf_goto_embedded", "<</D(part)/S/GoToE>>"],
+    ["pdf_rich_media", "<</Subtype/Flash/S/RichMedia>>"],
+  ])("PDF with %s last in the dictionary → flagged", async (rule, payload) => {
+    const r = Result.unwrap(
+      await scanFile({
+        buffer: await makePdf(payload),
+        declaredMimeType: "application/pdf",
+        fileName: "key-last.pdf",
+      }),
+    );
+    expect(r.findings.some((f) => f.rule === rule)).toBe(true);
+  });
+
+  test("PDF with stray XFA/AcroForm words still rejects /JS", async () => {
+    const r = Result.unwrap(
+      await scanFile({
+        buffer: await makePdf("% XFA AcroForm\n/JS (alert(1))"),
+        declaredMimeType: "application/pdf",
+        fileName: "stray-words.pdf",
+      }),
+    );
+    expect(r.verdict).toBe("reject");
+    expect(r.findings.some((f) => f.rule === "pdf_javascript_js")).toBe(true);
+  });
+
+  test("XFA form with JavaScript is reported, not exempted", async () => {
+    const r = Result.unwrap(
+      await scanFile({
+        buffer: await makePdf(
+          "<</AcroForm<</XFA 5 0 R>>>>\n<</S/JavaScript/JS (this.f())>>",
+        ),
+        declaredMimeType: "application/pdf",
+        fileName: "xfa-form.pdf",
+      }),
+    );
+    expect(r.verdict).toBe("warn");
+    expect(r.findings.some((f) => f.rule === "pdf_xfa_form_javascript")).toBe(
+      true,
+    );
   });
 
   test("clean PDF → pass", async () => {
@@ -456,13 +516,34 @@ describe("svg active content", () => {
 // -- OOXML threat tests (YARA) --
 
 describe("ooxml threats", () => {
+  const XXE_CONTENT_TYPES =
+    '<?xml version="1.0"?>' +
+    "<!DOCTYPE foo " +
+    '[<!ENTITY xxe SYSTEM "file:///etc/passwd">]>' +
+    "<Types>&xxe;</Types>";
+
+  test("entry content is matched after inflation, not in the raw archive", async () => {
+    const buffer = await makeThreatDocx({
+      // Repeated so DEFLATE genuinely compresses the part.
+      contentTypesXml: XXE_CONTENT_TYPES.repeat(20),
+    });
+    const raw = new TextDecoder("latin1").decode(buffer);
+    expect(raw).not.toContain("<!ENTITY");
+
+    const r = Result.unwrap(
+      await scanFile({
+        buffer,
+        declaredMimeType: DOCX_MIME,
+        fileName: "compressed-xxe.docx",
+      }),
+    );
+    expect(r.verdict).toBe("reject");
+    expect(r.findings.some((f) => f.rule === "ooxml_xxe_entity")).toBe(true);
+  });
+
   test("DOCX with XXE entity declaration → reject", async () => {
     const buffer = await makeThreatDocx({
-      contentTypesXml:
-        '<?xml version="1.0"?>' +
-        "<!DOCTYPE foo " +
-        '[<!ENTITY xxe SYSTEM "file:///etc/passwd">]>' +
-        "<Types>&xxe;</Types>",
+      contentTypesXml: XXE_CONTENT_TYPES,
     });
     const r = Result.unwrap(
       await scanFile({
@@ -496,6 +577,63 @@ describe("ooxml threats", () => {
     expect(r.findings.some((f) => f.rule.includes("ooxml_external"))).toBe(
       true,
     );
+  });
+
+  test("DOCX whose external relationships are hyperlinks → pass", async () => {
+    const buffer = await makeThreatDocx({
+      relsXml:
+        '<?xml version="1.0"?>' +
+        '<Relationships xmlns="http://schemas.openxmlformats.org/' +
+        'package/2006/relationships">' +
+        '<Relationship Id="rId4" ' +
+        'Type="http://schemas.openxmlformats.org/officeDocument/2006/' +
+        'relationships/hyperlink" ' +
+        'Target="https://example.com/terms" TargetMode="External"/>' +
+        '<Relationship Id="rId5" ' +
+        'Type="http://schemas.openxmlformats.org/officeDocument/2006/' +
+        'relationships/hyperlink" ' +
+        'Target="https://example.com/privacy" TargetMode="External"/>' +
+        "</Relationships>",
+    });
+    const r = Result.unwrap(
+      await scanFile({
+        buffer,
+        declaredMimeType: DOCX_MIME,
+        fileName: "hyperlinks.docx",
+      }),
+    );
+    expect(r.verdict).toBe("pass");
+    expect(
+      r.findings.some((f) => f.rule === "ooxml_external_relationship"),
+    ).toBe(false);
+  });
+
+  test("DOCX mixing a hyperlink with another external target → warn", async () => {
+    const buffer = await makeThreatDocx({
+      relsXml:
+        '<?xml version="1.0"?>' +
+        "<Relationships>" +
+        '<Relationship Id="rId4" ' +
+        'Type="http://schemas.openxmlformats.org/officeDocument/2006/' +
+        'relationships/hyperlink" ' +
+        'Target="https://example.com/terms" TargetMode="External"/>' +
+        '<Relationship Id="rId5" ' +
+        'Type="http://schemas.openxmlformats.org/officeDocument/2006/' +
+        'relationships/frame" ' +
+        'Target="https://evil.example/f" TargetMode="External"/>' +
+        "</Relationships>",
+    });
+    const r = Result.unwrap(
+      await scanFile({
+        buffer,
+        declaredMimeType: DOCX_MIME,
+        fileName: "mixed-rels.docx",
+      }),
+    );
+    expect(r.verdict).not.toBe("pass");
+    expect(
+      r.findings.some((f) => f.rule === "ooxml_external_relationship"),
+    ).toBe(true);
   });
 
   test("DOCX with ActiveX control → reject", async () => {

@@ -40,6 +40,12 @@ type HostBridgeState = {
 
 const UTF_8_ENCODER = new TextEncoder();
 
+// A VM that drains no jobs with no host work outstanding can never settle its
+// result promise. Require several consecutive idle passes, separated by a
+// macrotask yield, before concluding that, so host work registered from a
+// queued task still gets a chance to land.
+const VM_IDLE_PASSES_BEFORE_STALL = 3;
+
 const isDumpedError = (value: unknown): value is DumpedError =>
   typeof value === "object" && value !== null;
 
@@ -367,6 +373,13 @@ const createTimeoutError = (limits: SandboxLimits): SandboxError =>
   new SandboxError({
     reason: "timeout",
     message: `Sandbox execution exceeded ${limits.maxDurationMs}ms.`,
+  });
+
+const createStalledError = (): SandboxError =>
+  new SandboxError({
+    reason: "timeout",
+    message:
+      "Sandbox execution stalled: the script awaits a promise that can never settle.",
   });
 
 const createHostCallLimitError = (limits: SandboxLimits): SandboxError =>
@@ -1084,6 +1097,8 @@ const driveVmUntilSettled = async ({
   limits,
   deadline,
 }: DriveVmUntilSettledProps): Promise<DriveVmUntilSettledResult> => {
+  let idlePasses = 0;
+
   while (true) {
     const drained = ctx.runtime.executePendingJobs();
     if (drained.error) {
@@ -1125,6 +1140,7 @@ const driveVmUntilSettled = async ({
     }
 
     if (state.pendingHostWork.size > 0) {
+      idlePasses = 0;
       // oxlint-disable-next-line no-await-in-loop -- VM event loop: must wait for host progress before pumping the next VM step
       const waitResult = await waitForHostProgress({
         pendingHostWork: state.pendingHostWork,
@@ -1143,8 +1159,20 @@ const driveVmUntilSettled = async ({
       continue;
     }
 
-    // oxlint-disable-next-line no-await-in-loop -- VM event loop: yields the microtask queue before pumping the next VM step
-    await Promise.resolve();
+    if (drained.value > 0) {
+      idlePasses = 0;
+      // oxlint-disable-next-line no-await-in-loop -- VM event loop: microtask yield between VM steps while the VM still drains jobs
+      await Promise.resolve();
+      continue;
+    }
+
+    idlePasses += 1;
+    if (idlePasses >= VM_IDLE_PASSES_BEFORE_STALL) {
+      return Result.err(createStalledError());
+    }
+
+    // oxlint-disable-next-line no-await-in-loop -- VM event loop: macrotask yield keeps host timers and I/O live while the VM is idle
+    await Bun.sleep(0);
   }
 };
 

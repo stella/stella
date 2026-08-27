@@ -14,8 +14,10 @@
 import { renderComposite, resolvePath } from "@stll/template-conditions";
 
 import { arrayOrEmpty } from "@/api/lib/array";
+import { LIMITS } from "@/api/lib/limits";
 import { isRecord } from "@/api/lib/type-guards";
 
+import { compileBoundedPattern } from "./bounded-pattern";
 import {
   mapRepeatablePath,
   readRowSubPath,
@@ -64,15 +66,21 @@ const validatePart = (
   }
 
   if (part.pattern !== undefined && part.pattern !== "") {
-    // Anchor so the pattern must describe the whole part value. An invalid
-    // pattern in the manifest is skipped, mirroring the fill form.
-    let re: RegExp;
-    try {
-      re = new RegExp(`^(?:${part.pattern})$`, "u");
-    } catch {
+    // Anchored to the whole part value by the compiler. A manifest pattern the
+    // fill form cannot honour either (invalid, or outside the bounded-match
+    // shapes) is skipped rather than enforced.
+    const compiled = compileBoundedPattern(part.pattern);
+    if (compiled.status === "invalid") {
       return null;
     }
-    if (!re.test(raw)) {
+    if (raw.length > LIMITS.templateFieldPatternValueMaxLength) {
+      return {
+        path,
+        partKey: part.key,
+        message: `Field "${path}": part "${part.key}" is longer than ${LIMITS.templateFieldPatternValueMaxLength} characters.`,
+      };
+    }
+    if (!compiled.regex.test(raw)) {
       return {
         path,
         partKey: part.key,

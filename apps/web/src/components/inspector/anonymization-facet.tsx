@@ -149,7 +149,7 @@ const LABEL_TRANSLATION_KEYS = {
 type LabelTranslationKey = keyof typeof LABEL_TRANSLATION_KEYS;
 
 const isLabelTranslationKey = (label: string): label is LabelTranslationKey =>
-  label in LABEL_TRANSLATION_KEYS;
+  Object.hasOwn(LABEL_TRANSLATION_KEYS, label);
 
 type AnonymizationFacetProps = {
   workspaceId: string;

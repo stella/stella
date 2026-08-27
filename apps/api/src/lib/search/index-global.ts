@@ -16,6 +16,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { decisionIdentifierProjection } from "@/api/lib/case-law/decision-identifiers";
 import { redistributableSourceJoin } from "@/api/lib/case-law/search-sql";
 import { compareCodepoint } from "@/api/lib/collation";
+import { LIMITS } from "@/api/lib/limits";
 import {
   brandPersistedCaseLawDecisionId,
   brandPersistedChatThreadId,
@@ -512,11 +513,15 @@ const buildSearchFilterFragments = ({
     hasSearchQuery,
     () => sql`AND cst.tsv @@ ${tsQuery}`,
   );
+  // The truncation belongs here, not at the call sites: `ts_headline` cost
+  // grows with the document it is handed, and a per-branch `left(...)` is a
+  // bound each new branch has to remember. Snippets come from the head of the
+  // text either way.
   const searchHeadline = (document: SQL): SQL =>
     hasSearchQuery
       ? sql`ts_headline(
           ${headlineRegconfig},
-          ${document},
+          left(${document}, ${LIMITS.searchHeadlineDocumentMaxChars}),
           ${tsQuery},
           ${TS_HEADLINE_CONFIG}
         ) AS headline`
@@ -710,7 +715,7 @@ export const searchGlobal = async ({
         file_field.field_id AS file_field_id,
         file_field.property_id AS file_property_id,
         file_field.mime_type,
-        ${searchHeadline(sql`sd.title || ' ' || left(sd.searchable_text, 2000)`)},
+        ${searchHeadline(sql`sd.title || ' ' || sd.searchable_text`)},
         ${searchScore({ tsv: sql`sd.tsv`, updatedAt: sql`sd.updated_at` })},
         sd.updated_at
       FROM search_documents sd
@@ -748,7 +753,7 @@ export const searchGlobal = async ({
         wsd.workspace_id AS id,
         wsd.title,
         w.color,
-        ${searchHeadline(sql`wsd.title || ' ' || left(wsd.searchable_text, 2000)`)},
+        ${searchHeadline(sql`wsd.title || ' ' || wsd.searchable_text`)},
         ${searchScore({
           tsv: sql`wsd.tsv`,
           updatedAt: sql`wsd.updated_at`,
@@ -785,7 +790,7 @@ export const searchGlobal = async ({
         csd.contact_id AS id,
         csd.contact_type,
         csd.title,
-        ${searchHeadline(sql`csd.title || ' ' || left(csd.searchable_text, 2000)`)},
+        ${searchHeadline(sql`csd.title || ' ' || csd.searchable_text`)},
         ${searchScore({ tsv: sql`csd.tsv`, updatedAt: sql`csd.updated_at` })},
         csd.updated_at
       FROM contact_search_documents csd
@@ -867,7 +872,7 @@ export const searchGlobal = async ({
         t.workspace_id,
         w.name AS workspace_name,
         cst.title,
-        ${searchHeadline(sql`cst.title || ' ' || left(cst.searchable_text, 2000)`)},
+        ${searchHeadline(sql`cst.title || ' ' || cst.searchable_text`)},
         ${searchScore({ tsv: sql`cst.tsv`, updatedAt: sql`t.updated_at` })},
         t.updated_at
       FROM chat_thread_search_documents cst
