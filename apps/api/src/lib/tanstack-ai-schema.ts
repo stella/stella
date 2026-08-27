@@ -3,7 +3,12 @@ import type {
   StandardSchemaV1,
 } from "@standard-schema/spec";
 import type { SchemaInput } from "@tanstack/ai";
-import { toStandardJsonSchema } from "@valibot/to-json-schema";
+import {
+  type ConversionConfig,
+  toJsonSchema,
+  toStandardJsonSchema,
+} from "@valibot/to-json-schema";
+import { panic } from "better-result";
 import type { GenericSchema, InferInput, InferOutput } from "valibot";
 
 import type { ProviderSafeJsonSchemaProjectionOptions } from "@/api/lib/provider-safe-json-schema";
@@ -81,16 +86,39 @@ const strictifyJsonSchema = (
   return isJsonObject(strictified) ? strictified : schema;
 };
 
+// Pure string normalization is applied by Valibot after the provider response
+// returns. It has no JSON Schema representation, so omit it from the provider
+// contract while retaining every representable constraint around it. All
+// other unsupported actions still fail conversion at this boundary.
+const PROVIDER_SCHEMA_IGNORED_ACTIONS = ["trim"];
+
+const valibotJsonSchemaTarget = (
+  target: StandardJSONSchemaV1.Target,
+): NonNullable<ConversionConfig["target"]> => {
+  if (target === "draft-2020-12") {
+    return "draft-2020-12";
+  }
+  if (target === "openapi-3.0") {
+    return "openapi-3.0";
+  }
+  return "draft-07";
+};
+
 // Providers (notably Google Gemini) reject tool schemas that carry keywords
 // outside their OpenAPI-3.0 subset. Project into the portable subset after
 // strictification injects `additionalProperties: false`. Dropped keywords here
 // are expected for known valibot shapes (e.g. `v.record` -> `propertyNames`);
 // this pure path does not log.
 const toProviderSafeJsonSchema = (
-  schema: Record<string, unknown>,
+  schema: unknown,
   options: ProviderSafeJsonSchemaProjectionOptions,
-): Record<string, unknown> =>
-  projectToProviderSafeJsonSchema(strictifyJsonSchema(schema), options).schema;
+): Record<string, unknown> => {
+  if (!isJsonObject(schema)) {
+    return panic("Valibot produced a non-object JSON Schema");
+  }
+  return projectToProviderSafeJsonSchema(strictifyJsonSchema(schema), options)
+    .schema;
+};
 
 export const toTanStackValibotSchema = <TSchema extends GenericSchema>(
   schema: TSchema,
@@ -107,12 +135,20 @@ export const toTanStackValibotSchema = <TSchema extends GenericSchema>(
       jsonSchema: {
         input: (options) =>
           toProviderSafeJsonSchema(
-            standardSchema["~standard"].jsonSchema.input(options),
+            toJsonSchema(schema, {
+              target: valibotJsonSchemaTarget(options.target),
+              typeMode: "input",
+              ignoreActions: PROVIDER_SCHEMA_IGNORED_ACTIONS,
+            }),
             providerProjectionOptions,
           ),
         output: (options) =>
           toProviderSafeJsonSchema(
-            standardSchema["~standard"].jsonSchema.output(options),
+            toJsonSchema(schema, {
+              target: valibotJsonSchemaTarget(options.target),
+              typeMode: "output",
+              ignoreActions: PROVIDER_SCHEMA_IGNORED_ACTIONS,
+            }),
             providerProjectionOptions,
           ),
       },

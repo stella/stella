@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
-import { detectDocumentTranslationSourceLanguage } from "./source-language";
+import {
+  detectDocumentTranslationSourceLanguage,
+  resolveDocumentTranslationSourceLanguage,
+} from "./source-language";
 
 describe("document translation source-language detection", () => {
   test("detects a substantial English document", () => {
@@ -29,6 +32,20 @@ describe("document translation source-language detection", () => {
     if (result.type === "detected") {
       expect(result.language).toBe("JA");
     }
+  });
+
+  test("prefers the language declared by the document over text inference", () => {
+    expect(
+      resolveDocumentTranslationSourceLanguage({
+        declaredLanguage: "CS",
+        text: `This agreement is written entirely in English so text-only
+          detection would disagree with the document metadata.`,
+      }),
+    ).toEqual({
+      type: "detected",
+      language: "CS",
+      confidence: "high",
+    });
   });
 
   test("returns unknown for content without enough language evidence", () => {

@@ -7,7 +7,6 @@
  */
 
 import { useRef, useState } from "react";
-import type { ReactElement } from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useRouteContext } from "@tanstack/react-router";
@@ -101,29 +100,44 @@ const sourceStatusKey = ({
     : "translate.dialog.sourceNeedsSelection";
 };
 
-type TranslateDocumentDialogProps = {
+type TranslateDocumentDialogCommonProps = {
   workspaceId: string;
   viewId: string;
   entityId: string;
   fieldId: string;
   entityVersionKey: number | string;
   isDocx: boolean;
-  trigger?: ReactElement | undefined;
   /** Disable when the underlying field is missing or the user cannot create output. */
   disabled?: boolean | undefined;
 };
 
+type TranslateDocumentDialogProps = TranslateDocumentDialogCommonProps &
+  (
+    | {
+        mode?: "trigger" | undefined;
+        onOpenChange?: never;
+        open?: never;
+      }
+    | {
+        mode: "controlled";
+        onOpenChange: (open: boolean) => void;
+        open: boolean;
+      }
+  );
+
 const DEFAULT_CHOICE: TranslationChoice = "translated:deepl";
-export const TranslateDocumentDialog = ({
-  workspaceId,
-  viewId,
-  entityId,
-  fieldId,
-  entityVersionKey,
-  isDocx,
-  trigger,
-  disabled = false,
-}: TranslateDocumentDialogProps) => {
+export const TranslateDocumentDialog = (
+  props: TranslateDocumentDialogProps,
+) => {
+  const {
+    workspaceId,
+    viewId,
+    entityId,
+    fieldId,
+    entityVersionKey,
+    isDocx,
+    disabled = false,
+  } = props;
   const t = useTranslations();
   const locale = useLocale();
   const analytics = useAnalytics();
@@ -137,7 +151,15 @@ export const TranslateDocumentDialog = ({
     deepLAvailabilityOptions({ organizationId: activeOrganizationId }),
   );
 
-  const [open, setOpen] = useState(false);
+  const [triggerOpen, setTriggerOpen] = useState(false);
+  const open = props.mode === "controlled" ? props.open : triggerOpen;
+  const setDialogOpen = (nextOpen: boolean) => {
+    if (props.mode === "controlled") {
+      props.onOpenChange(nextOpen);
+      return;
+    }
+    setTriggerOpen(nextOpen);
+  };
   const [choice, setChoice] = useState<TranslationChoice>(DEFAULT_CHOICE);
   const documentKey = `${entityId}:${fieldId}`;
   const [sourceSelectionState, setSourceSelectionState] = useState<{
@@ -353,11 +375,11 @@ export const TranslateDocumentDialog = ({
           fieldId: sourceFieldId,
           policy: null,
         });
-        setOpen(true);
+        setDialogOpen(true);
         return;
       }
       setRunId(data.runId);
-      setOpen(true);
+      setDialogOpen(true);
     },
     onError: (error: unknown) => {
       analytics.captureError(error);
@@ -395,14 +417,14 @@ export const TranslateDocumentDialog = ({
           setRunId(null);
           setCommentPolicyState({ type: "unchecked" });
         }
-        setOpen(nextOpen);
+        setDialogOpen(nextOpen);
       }}
       open={open}
     >
-      <DialogTrigger
-        disabled={disabled}
-        render={
-          trigger ?? (
+      {props.mode !== "controlled" && (
+        <DialogTrigger
+          disabled={disabled}
+          render={
             <Button
               aria-label={t("common.translate")}
               disabled={disabled}
@@ -412,9 +434,9 @@ export const TranslateDocumentDialog = ({
             >
               <LanguagesIcon className="size-3.5" />
             </Button>
-          )
-        }
-      />
+          }
+        />
+      )}
       <DialogPopup>
         <DialogHeader>
           <DialogTitle>{t("translate.dialog.title")}</DialogTitle>
