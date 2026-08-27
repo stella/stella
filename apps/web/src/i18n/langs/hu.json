@@ -3415,6 +3415,33 @@
       "usageUnitsThisPeriod": "Használati egységek ebben az időszakban"
     }
   },
+  "skillHistory": {
+    "backToCurrent": "Vissza az aktuális változatra",
+    "basedOnCurrent": "Az aktuális változaton alapul",
+    "clearComparison": "Összehasonlítás törlése",
+    "commentFromEarlierRevision": "Korábbi változathoz írva",
+    "commentMeta": "{author} · {date}",
+    "comments": "Megjegyzések",
+    "commentsEmpty": "Jelöljön ki szöveget a megjegyzéshez.",
+    "noRevisions": "Még nincs változat",
+    "outOfDate": "Elavult",
+    "proposalMeta": "{author} · {date}",
+    "proposalNoSummary": "Nincs összefoglaló",
+    "proposals": "Módosítási javaslatok",
+    "proposalsEmpty": "Még nincs javaslat",
+    "proposeChange": "Módosítás javaslása",
+    "reject": "Elutasítás",
+    "resolveComment": "Megoldva",
+    "restoreRevision": "Változat visszaállítása",
+    "revisionLabel": "{number}. változat · {author} · {date}",
+    "statusAccepted": "Elfogadva",
+    "statusDraft": "Piszkozat",
+    "statusProposed": "Elbírálás alatt",
+    "statusRejected": "Elutasítva",
+    "submitForReview": "Beküldés elbírálásra",
+    "summaryLabel": "Összefoglaló",
+    "summaryPlaceholder": "Mi változik?"
+  },
   "statutes": {
     "asOf": "Ezen a napon hatályos szöveg",
     "backToList": "Összes jogszabály",

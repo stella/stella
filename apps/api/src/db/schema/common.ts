@@ -22,6 +22,7 @@ import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import { member, organization, user } from "@/api/db/auth-schema";
 import { jsonb, timestamptz } from "@/api/db/columns";
 import {
+  agentSkillChildPolicies,
   agentSkillPolicies,
   agentSkillResourcePolicies,
   aiMemoryPolicies,
@@ -468,6 +469,7 @@ export {
 };
 
 export {
+  agentSkillChildPolicies,
   agentSkillPolicies,
   agentSkillResourcePolicies,
   aiMemoryPolicies,

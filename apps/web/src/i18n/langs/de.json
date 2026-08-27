@@ -3415,6 +3415,33 @@
       "usageUnitsThisPeriod": "Nutzungseinheiten in diesem Zeitraum"
     }
   },
+  "skillHistory": {
+    "backToCurrent": "Zurück zur aktuellen Fassung",
+    "basedOnCurrent": "Basiert auf der aktuellen Fassung",
+    "clearComparison": "Vergleich aufheben",
+    "commentFromEarlierRevision": "Zu einer früheren Fassung verfasst",
+    "commentMeta": "{author} · {date}",
+    "comments": "Kommentare",
+    "commentsEmpty": "Text markieren, um ihn zu kommentieren.",
+    "noRevisions": "Noch keine Fassungen",
+    "outOfDate": "Veraltet",
+    "proposalMeta": "{author} · {date}",
+    "proposalNoSummary": "Keine Zusammenfassung",
+    "proposals": "Änderungsvorschläge",
+    "proposalsEmpty": "Noch keine Vorschläge",
+    "proposeChange": "Änderung vorschlagen",
+    "reject": "Ablehnen",
+    "resolveComment": "Erledigen",
+    "restoreRevision": "Diese Fassung wiederherstellen",
+    "revisionLabel": "Fassung {number} · {author} · {date}",
+    "statusAccepted": "Angenommen",
+    "statusDraft": "Entwurf",
+    "statusProposed": "In Prüfung",
+    "statusRejected": "Abgelehnt",
+    "submitForReview": "Zur Prüfung einreichen",
+    "summaryLabel": "Zusammenfassung",
+    "summaryPlaceholder": "Was ändert sich?"
+  },
   "statutes": {
     "asOf": "Fassung gültig am",
     "backToList": "Alle Rechtsvorschriften",

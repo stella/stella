@@ -3415,6 +3415,33 @@
       "usageUnitsThisPeriod": "Šio laikotarpio naudojimo vienetai"
     }
   },
+  "skillHistory": {
+    "backToCurrent": "Grįžti į dabartinę versiją",
+    "basedOnCurrent": "Sukurta iš dabartinės versijos",
+    "clearComparison": "Panaikinti palyginimą",
+    "commentFromEarlierRevision": "Parašyta ankstesnei versijai",
+    "commentMeta": "{author} · {date}",
+    "comments": "Komentarai",
+    "commentsEmpty": "Pažymėkite tekstą, kad jį pakomentuotumėte.",
+    "noRevisions": "Versijų dar nėra",
+    "outOfDate": "Pasenusi",
+    "proposalMeta": "{author} · {date}",
+    "proposalNoSummary": "Santraukos nėra",
+    "proposals": "Pakeitimų pasiūlymai",
+    "proposalsEmpty": "Pasiūlymų dar nėra",
+    "proposeChange": "Siūlyti pakeitimą",
+    "reject": "Atmesti",
+    "resolveComment": "Išspręsti",
+    "restoreRevision": "Atkurti šią versiją",
+    "revisionLabel": "{number} versija · {author} · {date}",
+    "statusAccepted": "Priimtas",
+    "statusDraft": "Juodraštis",
+    "statusProposed": "Peržiūrimas",
+    "statusRejected": "Atmestas",
+    "submitForReview": "Pateikti peržiūrai",
+    "summaryLabel": "Santrauka",
+    "summaryPlaceholder": "Kas keičiasi?"
+  },
   "statutes": {
     "asOf": "Tekstas, galiojęs",
     "backToList": "Visi teisės aktai",

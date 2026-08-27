@@ -61,6 +61,40 @@ export const knowledgeKeys = {
       skillId,
       "detail",
     ],
+    revisions: (organizationId: string, skillId: string) => [
+      ...knowledgeKeys.skills.all(organizationId),
+      skillId,
+      "revisions",
+    ],
+    // `revisionId` is null while nothing is selected for comparison; the
+    // option factory disables the query for that key rather than inventing a
+    // placeholder id that would collide across skills.
+    revision: (
+      organizationId: string,
+      skillId: string,
+      revisionId: string | null,
+    ) => [
+      ...knowledgeKeys.skills.revisions(organizationId, skillId),
+      revisionId,
+    ],
+    proposals: (organizationId: string, skillId: string) => [
+      ...knowledgeKeys.skills.all(organizationId),
+      skillId,
+      "proposals",
+    ],
+    proposal: (
+      organizationId: string,
+      skillId: string,
+      proposalId: string | null,
+    ) => [
+      ...knowledgeKeys.skills.proposals(organizationId, skillId),
+      proposalId,
+    ],
+    comments: (organizationId: string, skillId: string) => [
+      ...knowledgeKeys.skills.all(organizationId),
+      skillId,
+      "comments",
+    ],
   },
   templates: {
     all: (organizationId: string) => ["templates", organizationId],
@@ -743,6 +777,112 @@ export const skillDetailOptions = (organizationId: string, skillId: string) =>
       return unwrapEden(response);
     },
     staleTime: STALE_TIME.FIVE.MINUTES,
+  });
+
+// Revision history of a skill's instruction body, newest first and without
+// bodies. Bounded server-side (one row per body change), so a plain list is
+// enough.
+export const skillRevisionsOptions = (
+  organizationId: string,
+  skillId: string,
+) =>
+  queryOptions({
+    queryKey: knowledgeKeys.skills.revisions(organizationId, skillId),
+    queryFn: async ({ signal }) => {
+      const response = await api
+        .skills({ skillId: toSafeId<"agentSkill">(skillId) })
+        .revisions.get({ fetch: { signal } });
+      return unwrapEden(response);
+    },
+    staleTime: STALE_TIME.FIVE.MINUTES,
+  });
+
+// One recorded revision in full. `revisionId` is null while the history menu
+// has no selection, which disables the query instead of fetching.
+export const skillRevisionOptions = (
+  organizationId: string,
+  skillId: string,
+  revisionId: string | null,
+) =>
+  queryOptions({
+    queryKey: knowledgeKeys.skills.revision(
+      organizationId,
+      skillId,
+      revisionId,
+    ),
+    queryFn: async ({ signal }) => {
+      if (revisionId === null) {
+        panic("skill revision: query ran without a selected revision");
+      }
+      const response = await api
+        .skills({ skillId: toSafeId<"agentSkill">(skillId) })
+        .revisions({ revisionId: toSafeId<"agentSkillRevision">(revisionId) })
+        .get({ fetch: { signal } });
+      return unwrapEden(response);
+    },
+    enabled: revisionId !== null,
+    staleTime: STALE_TIME.FIVE.MINUTES,
+  });
+
+// Every proposal raised against the skill, newest first and without bodies.
+// Unfiltered: the toolbar counts the open ones and renders the decided ones
+// from the same list, so a per-status cache entry would only fan out requests.
+export const skillProposalsOptions = (
+  organizationId: string,
+  skillId: string,
+) =>
+  queryOptions({
+    queryKey: knowledgeKeys.skills.proposals(organizationId, skillId),
+    queryFn: async ({ signal }) => {
+      const response = await api
+        .skills({ skillId: toSafeId<"agentSkill">(skillId) })
+        .proposals.get({ query: {}, fetch: { signal } });
+      return unwrapEden(response);
+    },
+    staleTime: STALE_TIME.FIVE.MINUTES,
+  });
+
+// One proposal with its body and the body of the revision it branched from.
+// `proposalId` is null while no proposal is open, which disables the query.
+export const skillProposalOptions = (
+  organizationId: string,
+  skillId: string,
+  proposalId: string | null,
+) =>
+  queryOptions({
+    queryKey: knowledgeKeys.skills.proposal(
+      organizationId,
+      skillId,
+      proposalId,
+    ),
+    queryFn: async ({ signal }) => {
+      if (proposalId === null) {
+        panic("skill proposal: query ran without an open proposal");
+      }
+      const response = await api
+        .skills({ skillId: toSafeId<"agentSkill">(skillId) })
+        .proposals({
+          proposalId: toSafeId<"agentSkillProposal">(proposalId),
+        })
+        .get({ fetch: { signal } });
+      return unwrapEden(response);
+    },
+    enabled: proposalId !== null,
+    staleTime: STALE_TIME.FIVE.MINUTES,
+  });
+
+// Every comment anchored to the skill, across its revisions and proposals.
+// No staleTime: the review view is opened to act on comments, so each mount
+// should see the current set.
+export const skillCommentsOptions = (organizationId: string, skillId: string) =>
+  queryOptions({
+    queryKey: knowledgeKeys.skills.comments(organizationId, skillId),
+    queryFn: async ({ signal }) => {
+      const response = await api
+        .skills({ skillId: toSafeId<"agentSkill">(skillId) })
+        .comments.get({ fetch: { signal } });
+      return unwrapEden(response);
+    },
   });
 
 // ── MCP queries ─────────────────────────────────────

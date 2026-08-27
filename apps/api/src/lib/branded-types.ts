@@ -14,7 +14,10 @@ const safeIdSchema = v.pipe(
 export type SafeIdType =
   | "accountDeletionRequest"
   | "agentSkill"
+  | "agentSkillComment"
+  | "agentSkillProposal"
   | "agentSkillResource"
+  | "agentSkillRevision"
   | "aiMemory"
   | "anonymizationAllowlistEntry"
   | "anonymizationBlacklistEntry"

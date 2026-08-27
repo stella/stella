@@ -27,9 +27,21 @@ type IdentityDisposition =
 export const RESOURCE_IDENTITY_DISPOSITION = {
   accountDeletionRequest: { type: "non_resource", reason: "workflow" },
   agentSkill: { type: "resource", resourceType: RESOURCE_TYPE.AGENT_SKILL },
+  agentSkillComment: {
+    type: "resource",
+    resourceType: RESOURCE_TYPE.AGENT_SKILL_COMMENT,
+  },
+  agentSkillProposal: {
+    type: "resource",
+    resourceType: RESOURCE_TYPE.AGENT_SKILL_PROPOSAL,
+  },
   agentSkillResource: {
     type: "resource",
     resourceType: RESOURCE_TYPE.AGENT_SKILL_RESOURCE,
+  },
+  agentSkillRevision: {
+    type: "resource",
+    resourceType: RESOURCE_TYPE.AGENT_SKILL_REVISION,
   },
   aiMemory: { type: "resource", resourceType: RESOURCE_TYPE.AI_MEMORY },
   anonymizationAllowlistEntry: {

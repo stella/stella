@@ -3415,6 +3415,33 @@
       "usageUnitsThisPeriod": "Selle perioodi kasutusühikud"
     }
   },
+  "skillHistory": {
+    "backToCurrent": "Tagasi praeguse versiooni juurde",
+    "basedOnCurrent": "Põhineb praegusel versioonil",
+    "clearComparison": "Tühista võrdlus",
+    "commentFromEarlierRevision": "Kirjutatud varasema versiooni kohta",
+    "commentMeta": "{author} · {date}",
+    "comments": "Kommentaarid",
+    "commentsEmpty": "Kommenteerimiseks vali tekst.",
+    "noRevisions": "Versioone veel pole",
+    "outOfDate": "Aegunud",
+    "proposalMeta": "{author} · {date}",
+    "proposalNoSummary": "Kokkuvõte puudub",
+    "proposals": "Muudatusettepanekud",
+    "proposalsEmpty": "Ettepanekuid veel pole",
+    "proposeChange": "Tee muudatusettepanek",
+    "reject": "Lükka tagasi",
+    "resolveComment": "Lahenda",
+    "restoreRevision": "Taasta see versioon",
+    "revisionLabel": "Versioon {number} · {author} · {date}",
+    "statusAccepted": "Vastu võetud",
+    "statusDraft": "Mustand",
+    "statusProposed": "Läbivaatamisel",
+    "statusRejected": "Tagasi lükatud",
+    "submitForReview": "Esita läbivaatamiseks",
+    "summaryLabel": "Kokkuvõte",
+    "summaryPlaceholder": "Mis muutub?"
+  },
   "statutes": {
     "asOf": "Kehtinud tekst kuupäeval",
     "backToList": "Kõik õigusaktid",

@@ -17,6 +17,7 @@ import {
 } from "@/api/lib/public-law-relations";
 import {
   createSchemaPglite,
+  installPgliteAgentSkillRevisionTrigger,
   installPgliteSchemaPrerequisites,
   installPgliteWorkspaceAccessObjects,
 } from "@/api/tests/pglite-schema";
@@ -326,6 +327,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
     await db.execute(sql.raw(statement));
   }
   await installPgliteWorkspaceAccessObjects(db);
+  await installPgliteAgentSkillRevisionTrigger(db);
 
   for (const statement of ROLE_GRANT_STATEMENTS) {
     // oxlint-disable-next-line no-await-in-loop -- grants run sequentially on one test DB connection

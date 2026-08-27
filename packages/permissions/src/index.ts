@@ -34,7 +34,7 @@ export const statements = {
   chat: ["create", "update", "delete"],
   organizationSettings: ["update"],
   auditLog: ["read"],
-  agentSkill: ["create", "update", "delete"],
+  agentSkill: ["create", "update", "delete", "propose", "comment"],
   firmMemory: ["create", "update"],
 } as const;
 
@@ -107,7 +107,7 @@ const memberStellaGrants = {
   chat: ["create", "update", "delete"],
   organizationSettings: [],
   auditLog: [],
-  agentSkill: ["create", "update", "delete"],
+  agentSkill: ["create", "update", "delete", "propose", "comment"],
   firmMemory: [],
 } satisfies StellaPermissionMap;
 

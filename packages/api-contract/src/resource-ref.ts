@@ -6,7 +6,10 @@ import { isSafeIdValue, toSafeId, type SafeId } from "./safe-id";
 /** Stable product nouns. Presentation labels and storage table names may differ. */
 export const RESOURCE_TYPE = {
   AGENT_SKILL: "agent_skill",
+  AGENT_SKILL_COMMENT: "agent_skill_comment",
+  AGENT_SKILL_PROPOSAL: "agent_skill_proposal",
   AGENT_SKILL_RESOURCE: "agent_skill_resource",
+  AGENT_SKILL_REVISION: "agent_skill_revision",
   AI_MEMORY: "ai_memory",
   BILLING_CODE: "billing_code",
   CASE_LAW_DECISION: "case_law_decision",
@@ -58,7 +61,10 @@ export type ResourceType = (typeof RESOURCE_TYPE)[keyof typeof RESOURCE_TYPE];
  */
 export const RESOURCE_ID_TYPE = {
   [RESOURCE_TYPE.AGENT_SKILL]: "agentSkill",
+  [RESOURCE_TYPE.AGENT_SKILL_COMMENT]: "agentSkillComment",
+  [RESOURCE_TYPE.AGENT_SKILL_PROPOSAL]: "agentSkillProposal",
   [RESOURCE_TYPE.AGENT_SKILL_RESOURCE]: "agentSkillResource",
+  [RESOURCE_TYPE.AGENT_SKILL_REVISION]: "agentSkillRevision",
   [RESOURCE_TYPE.AI_MEMORY]: "aiMemory",
   [RESOURCE_TYPE.BILLING_CODE]: "billingCode",
   [RESOURCE_TYPE.CASE_LAW_DECISION]: "caseLawDecision",

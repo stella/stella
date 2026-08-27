@@ -3415,6 +3415,33 @@
       "usageUnitsThisPeriod": "Jednotky využití za toto období"
     }
   },
+  "skillHistory": {
+    "backToCurrent": "Zpět na aktuální znění",
+    "basedOnCurrent": "Vychází z aktuální revize",
+    "clearComparison": "Zrušit porovnání",
+    "commentFromEarlierRevision": "Napsáno ke starší revizi",
+    "commentMeta": "{author} · {date}",
+    "comments": "Komentáře",
+    "commentsEmpty": "Komentář přidáte označením textu.",
+    "noRevisions": "Zatím žádné revize",
+    "outOfDate": "Neaktuální",
+    "proposalMeta": "{author} · {date}",
+    "proposalNoSummary": "Bez shrnutí",
+    "proposals": "Návrhy změn",
+    "proposalsEmpty": "Zatím žádné návrhy",
+    "proposeChange": "Navrhnout změnu",
+    "reject": "Zamítnout",
+    "resolveComment": "Vyřešit",
+    "restoreRevision": "Obnovit tuto revizi",
+    "revisionLabel": "Revize {number} · {author} · {date}",
+    "statusAccepted": "Přijato",
+    "statusDraft": "Koncept",
+    "statusProposed": "K posouzení",
+    "statusRejected": "Zamítnuto",
+    "submitForReview": "Odeslat k posouzení",
+    "summaryLabel": "Shrnutí",
+    "summaryPlaceholder": "Co se mění?"
+  },
   "statutes": {
     "asOf": "Znění účinné k",
     "backToList": "Všechny předpisy",

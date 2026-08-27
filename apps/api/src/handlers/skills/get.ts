@@ -17,9 +17,8 @@ const config = {
   description:
     "Read one agent skill in full: its instruction body, scope, origin, " +
     "version, license, compatibility, source URL, slash command, and every " +
-    "resource file with its content. A team skill can only be read here by " +
-    "an admin or owner and a private one only by its author, which is " +
-    "stricter than skills.list, where both are visible without their bodies.",
+    "resource file with its content. A team skill is readable by every " +
+    "member of the organization; a private one only by its author.",
   permissions: { chat: ["create"] },
   access: "read",
   mcp: { type: "capability", reason: "agent_tool_authoring" },
@@ -28,7 +27,7 @@ const config = {
 
 const getSkill = createSafeRootHandler(
   config,
-  async function* ({ memberRole, params, safeDb, session, user }) {
+  async function* ({ params, safeDb, session, user }) {
     const rows = yield* Result.await(
       safeDb((tx) =>
         tx
@@ -67,17 +66,9 @@ const getSkill = createSafeRootHandler(
       );
     }
 
-    if (
-      skill.scope === "team" &&
-      !["admin", "owner"].includes(memberRole.role)
-    ) {
-      // Non-admins can still see team skills in the list, but reading the full
-      // body is gated on the same role check as edit/delete to keep the editor
-      // and the permission model in sync.
-      return Result.err(
-        new HandlerError({ status: 403, message: "Forbidden" }),
-      );
-    }
+    // Team skills run on behalf of every member, and members propose and
+    // comment on them, so their bodies are readable org-wide (the row policy
+    // says the same). Editing stays gated on admin/owner in skills.update.
     if (skill.scope === "private" && skill.userId !== user.id) {
       return Result.err(
         new HandlerError({ status: 403, message: "Forbidden" }),

@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { t } from "elysia";
 import * as v from "valibot";
 
+import { stripMarkdownFences } from "@/api/lib/agent-skills/markdown-fences";
 import { resolveCaching } from "@/api/lib/ai-config";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
@@ -155,7 +156,7 @@ const generateSkillDraft = createSafeRootHandler(
       return Result.err(generation.error);
     }
 
-    const markdown = stripFences(generation.value.markdown).trim();
+    const markdown = stripMarkdownFences(generation.value.markdown);
     if (!markdown) {
       return Result.err(
         new HandlerError({
@@ -266,16 +267,6 @@ Companion files (the "resources" array):
     "Return the complete updated skill now, including all companion files.",
   );
   return sections.join("\n\n");
-};
-
-const stripFences = (raw: string): string => {
-  const trimmed = raw.trim();
-  if (!trimmed) {
-    return "";
-  }
-  const fencePattern = /^```(?:[a-zA-Z0-9_-]*)\n(?<body>[\s\S]*?)\n```$/u;
-  const fenceMatch = fencePattern.exec(trimmed);
-  return fenceMatch?.groups?.["body"]?.trim() ?? trimmed;
 };
 
 export default generateSkillDraft;

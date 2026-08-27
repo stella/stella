@@ -586,6 +586,18 @@ export const CAPABILITY_DISPATCH = {
   "reports.read-export": {
     load: async () => await import("@/api/handlers/reports/read-export"),
   },
+  "skills.comments.create": {
+    load: async () => await import("@/api/handlers/skills/comments/create"),
+  },
+  "skills.comments.delete": {
+    load: async () => await import("@/api/handlers/skills/comments/delete"),
+  },
+  "skills.comments.list": {
+    load: async () => await import("@/api/handlers/skills/comments/list"),
+  },
+  "skills.comments.update": {
+    load: async () => await import("@/api/handlers/skills/comments/update"),
+  },
   "skills.create": {
     load: async () => await import("@/api/handlers/skills/create"),
   },
@@ -614,6 +626,28 @@ export const CAPABILITY_DISPATCH = {
   "skills.list-commands": {
     load: async () => await import("@/api/handlers/skills/list-commands"),
   },
+  "skills.proposals.create": {
+    load: async () => await import("@/api/handlers/skills/proposals/create"),
+  },
+  "skills.proposals.delete": {
+    load: async () => await import("@/api/handlers/skills/proposals/delete"),
+  },
+  "skills.proposals.from-comments.create": {
+    load: async () =>
+      await import("@/api/handlers/skills/proposals/from-comments/create"),
+  },
+  "skills.proposals.get": {
+    load: async () => await import("@/api/handlers/skills/proposals/get"),
+  },
+  "skills.proposals.list": {
+    load: async () => await import("@/api/handlers/skills/proposals/list"),
+  },
+  "skills.proposals.review": {
+    load: async () => await import("@/api/handlers/skills/proposals/review"),
+  },
+  "skills.proposals.update": {
+    load: async () => await import("@/api/handlers/skills/proposals/update"),
+  },
   "skills.resources.create": {
     load: async () => await import("@/api/handlers/skills/resources/create"),
   },
@@ -631,6 +665,12 @@ export const CAPABILITY_DISPATCH = {
   },
   "skills.resources.upload": {
     load: async () => await import("@/api/handlers/skills/resources/upload"),
+  },
+  "skills.revisions.get": {
+    load: async () => await import("@/api/handlers/skills/revisions/get"),
+  },
+  "skills.revisions.list": {
+    load: async () => await import("@/api/handlers/skills/revisions/list"),
   },
   "skills.seed": {
     load: async () => await import("@/api/handlers/skills/seed"),
