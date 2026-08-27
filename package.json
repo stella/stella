@@ -200,6 +200,7 @@
     "eslint": "10.8.1",
     "eslint-plugin-drizzle": "0.2.3",
     "fast-check": "^4.9.0",
+    "franc": "6.2.0",
     "jszip": "3.10.1",
     "lucide-react": "1.30.0",
     "oxc-transform-react": "0.145.0",

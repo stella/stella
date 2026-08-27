@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   canStartDocumentTranslation,
   commentPolicyStateForSource,
+  resolvedDocumentTranslationSource,
 } from "./translate-document-dialog.logic";
 
 describe("document translation start availability", () => {
@@ -15,6 +16,8 @@ describe("document translation start availability", () => {
         isRunning: false,
         isStarting: false,
         hasCommentPolicy: false,
+        hasPreparedAiSource: false,
+        hasResolvedAiSource: false,
         requiresCommentPolicy: false,
         sameLanguage: false,
       }),
@@ -28,6 +31,8 @@ describe("document translation start availability", () => {
       isLoadingRun: false,
       isRunning: false,
       isStarting: false,
+      hasPreparedAiSource: true,
+      hasResolvedAiSource: true,
       requiresCommentPolicy: true,
       sameLanguage: false,
     };
@@ -37,6 +42,46 @@ describe("document translation start availability", () => {
     expect(
       canStartDocumentTranslation({ ...options, hasCommentPolicy: true }),
     ).toBeTrue();
+  });
+});
+
+describe("document translation source resolution", () => {
+  test("uses a version-bound automatic detection", () => {
+    expect(
+      resolvedDocumentTranslationSource({
+        selection: { type: "automatic" },
+        detection: {
+          type: "detected",
+          language: "EN-GB",
+          confidence: "high",
+        },
+      }),
+    ).toBe("EN-GB");
+  });
+
+  test.each([
+    { type: "ambiguous", candidates: ["CS", "SK"] as const },
+    { type: "unknown" } as const,
+  ])("requires a manual choice for $type detection", (detection) => {
+    expect(
+      resolvedDocumentTranslationSource({
+        selection: { type: "automatic" },
+        detection,
+      }),
+    ).toBeNull();
+  });
+
+  test("lets a manual choice override automatic detection", () => {
+    expect(
+      resolvedDocumentTranslationSource({
+        selection: { type: "manual", language: "DE" },
+        detection: {
+          type: "detected",
+          language: "EN-GB",
+          confidence: "high",
+        },
+      }),
+    ).toBe("DE");
   });
 });
 

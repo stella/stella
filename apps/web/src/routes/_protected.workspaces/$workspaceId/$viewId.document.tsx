@@ -740,6 +740,7 @@ function RouteComponentInner({
                   <TranslateDocumentDialog
                     disabled={!canCreateEntity}
                     entityId={entityId}
+                    entityVersionKey={entity.currentVersionId}
                     fieldId={fieldId}
                     isDocx={isDocxFile}
                     viewId={viewId}
@@ -796,6 +797,7 @@ function RouteComponentInner({
                               <TranslateDocumentDialog
                                 disabled={!canCreateEntity}
                                 entityId={entityId}
+                                entityVersionKey={entity.currentVersionId}
                                 fieldId={fieldId}
                                 isDocx
                                 viewId={viewId}

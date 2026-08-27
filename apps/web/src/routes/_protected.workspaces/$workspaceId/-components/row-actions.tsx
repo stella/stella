@@ -218,11 +218,6 @@ export const RowActions = ({
   const uploadVersion = useUploadVersion();
   const requestChatAbout = useRequestChatAbout(workspaceId);
   const retryCell = useRetryCell(toSafeId<"workspace">(workspaceId));
-  const canCreateEntity = usePermissions({ entity: ["create"] });
-  const viewMatch = useMatch({
-    from: "/_protected/workspaces/$workspaceId/$viewId",
-    shouldThrow: false,
-  });
   const [copyToMatterOpen, setCopyToMatterOpen] = useState(false);
   const [copyToMatterEntities, setCopyToMatterEntities] = useState<
     CopyToMatterEntity[]
@@ -232,21 +227,6 @@ export const RowActions = ({
   const { data: properties } = useQuery(propertiesOptions(workspaceId));
   const uploadVersionInputRef = useRef<HTMLInputElement>(null);
   const file = getFirstFile(entity);
-  const contextField = cellMetadataTarget
-    ? entity.fields[cellMetadataTarget.propertyId]
-    : undefined;
-  const translationFile = (() => {
-    if (!cellMetadataTarget) {
-      return file;
-    }
-    if (contextField?.content.type !== "file") {
-      return null;
-    }
-    return {
-      fieldId: contextField.id,
-      mimeType: contextField.content.mimeType,
-    };
-  })();
   const name = getEntityName(entity);
   const isFolder = entity.kind === "folder";
   const isBulk = selectedEntities !== undefined && selectedEntities.length > 1;
@@ -896,16 +876,13 @@ export const RowActions = ({
 
         {/* --- Features --- */}
         <RowFeatureMenuActions
-          canCreateEntity={canCreateEntity}
-          entityId={entity.entityId}
+          cellMetadataTarget={cellMetadataTarget}
+          entity={entity}
           file={file}
           isBulk={isBulk}
           isFolder={isFolder}
-          kind={entity.kind}
           onChatAbout={handleChatAbout}
           onOpenVersionHistory={openVersionHistory}
-          translationFile={translationFile}
-          viewId={viewMatch?.params.viewId ?? "all"}
           workspaceId={workspaceId}
         />
         <RowCellOcrExportMenuActions
@@ -1157,36 +1134,50 @@ const RowFolderDesktopMenuActions = ({
 };
 
 const RowFeatureMenuActions = ({
-  canCreateEntity,
-  entityId,
+  cellMetadataTarget,
+  entity,
   file,
   isBulk,
   isFolder,
-  kind,
   onChatAbout,
   onOpenVersionHistory,
-  translationFile,
-  viewId,
   workspaceId,
 }: {
-  canCreateEntity: boolean;
-  entityId: string;
+  cellMetadataTarget: RowActionsProps["cellMetadataTarget"];
+  entity: WorkspaceEntity;
   file: ReturnType<typeof getFirstFile>;
   isBulk: boolean;
   isFolder: boolean;
-  kind: WorkspaceEntity["kind"];
   onChatAbout: () => void;
   onOpenVersionHistory: (() => void) | undefined;
-  translationFile: { fieldId: string; mimeType: string } | null;
-  viewId: string;
   workspaceId: string;
 }) => {
   const t = useTranslations();
+  const canCreateEntity = usePermissions({ entity: ["create"] });
+  const viewMatch = useMatch({
+    from: "/_protected/workspaces/$workspaceId/$viewId",
+    shouldThrow: false,
+  });
+  const contextField = cellMetadataTarget
+    ? entity.fields[cellMetadataTarget.propertyId]
+    : undefined;
+  const translationFile = (() => {
+    if (!cellMetadataTarget) {
+      return file;
+    }
+    if (contextField?.content.type !== "file") {
+      return null;
+    }
+    return {
+      fieldId: contextField.id,
+      mimeType: contextField.content.mimeType,
+    };
+  })();
   return (
     <>
       {!isBulk &&
         !isFolder &&
-        kind !== "task" &&
+        entity.kind !== "task" &&
         file !== null &&
         onOpenVersionHistory !== undefined && (
           <MenuItem onClick={onOpenVersionHistory}>
@@ -1201,7 +1192,8 @@ const RowFeatureMenuActions = ({
       {!isBulk && translationFile && (
         <TranslateDocumentDialog
           disabled={!canCreateEntity}
-          entityId={entityId}
+          entityId={entity.entityId}
+          entityVersionKey={entity.version}
           fieldId={translationFile.fieldId}
           isDocx={translationFile.mimeType === DOCX_MIME}
           trigger={
@@ -1210,7 +1202,7 @@ const RowFeatureMenuActions = ({
               {t("common.translate")}
             </MenuItem>
           }
-          viewId={viewId}
+          viewId={viewMatch?.params.viewId ?? "all"}
           workspaceId={workspaceId}
         />
       )}

@@ -68,18 +68,6 @@ const createDocumentTranslationRun = createSafeHandler<
         }),
       );
     }
-    if (
-      body.engine === DOCUMENT_TRANSLATION_ENGINE.AI &&
-      (body.sourceLang === undefined || body.sourceLang === "auto")
-    ) {
-      return Result.err(
-        new HandlerError({
-          status: 422,
-          message: "AI translation requires a source language",
-        }),
-      );
-    }
-
     const sources = yield* Result.await(
       safeDb((tx) =>
         tx
@@ -116,6 +104,18 @@ const createDocumentTranslationRun = createSafeHandler<
     if (!source || source.content.type !== "file") {
       return Result.err(
         new HandlerError({ status: 404, message: "Source document not found" }),
+      );
+    }
+    if (
+      body.engine === DOCUMENT_TRANSLATION_ENGINE.AI &&
+      body.entityVersionId !== source.entityVersionId
+    ) {
+      return Result.err(
+        new HandlerError({
+          status: 409,
+          message:
+            "The document changed after translation was prepared. Reopen the translation dialog.",
+        }),
       );
     }
     const sourceContent = source.content;
