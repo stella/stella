@@ -20,6 +20,7 @@ import {
   getPreferredChatSendMode,
   isThirdPartyBoundaryRefusalError,
   isThirdPartyBoundaryRefusalPayload,
+  normalizeChatAnonLocaleLanguage,
   parseChatTransportErrorMessage,
   parseChatTransportErrorPayload,
   runChatAnonPipeline,
@@ -46,6 +47,27 @@ describe("chat anonymization pipeline contract", () => {
       labels: [...DEFAULT_CHAT_ANON_ENTITY_LABELS],
       workspaceId: "workspace-A",
     });
+  });
+
+  test("maps supported locales to pipeline scopes and preserves the all-language fallback", () => {
+    expect(normalizeChatAnonLocaleLanguage("pt_BR-u-nu-latn")).toBe("pt-br");
+    expect(normalizeChatAnonLocaleLanguage("en-US")).toBe("en");
+    expect(normalizeChatAnonLocaleLanguage("ar")).toBe(null);
+
+    expect(
+      buildChatAnonPipelineConfig({
+        hasGazetteer: false,
+        locale: "pt_BR",
+        workspaceId: "workspace-A",
+      }),
+    ).toMatchObject({ nameCorpusLanguages: ["pt-br"] });
+    expect(
+      buildChatAnonPipelineConfig({
+        hasGazetteer: false,
+        locale: "ar",
+        workspaceId: "workspace-A",
+      }),
+    ).not.toHaveProperty("nameCorpusLanguages");
   });
 
   test("parses only the shared chat transport error payload shape", () => {
