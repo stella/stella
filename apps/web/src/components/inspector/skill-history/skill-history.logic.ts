@@ -86,6 +86,10 @@ export const canManageSkill = ({
       );
     case "private":
       return ownerUserId === userId;
+    default: {
+      const exhaustive: never = scope;
+      return exhaustive;
+    }
   }
 };
 
