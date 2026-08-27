@@ -130,7 +130,7 @@ export const nextClipboardIndex = (
     return 0;
   }
   const offset = direction === "next" ? 1 : -1;
-  return (currentIndex + offset + itemCount) % itemCount;
+  return Math.max(0, Math.min(currentIndex + offset, itemCount - 1));
 };
 
 export const quickCopyIndex = (key: string, itemCount: number) => {

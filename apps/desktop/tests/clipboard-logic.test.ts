@@ -142,9 +142,11 @@ test("source apps receive a stable tint from the bounded palette", () => {
 });
 
 describe("keyboard indexes", () => {
-  test("timeline navigation wraps in either direction", () => {
-    expect(nextClipboardIndex(1, "next", 2)).toBe(0);
-    expect(nextClipboardIndex(0, "previous", 2)).toBe(1);
+  test("timeline navigation stops at either edge", () => {
+    expect(nextClipboardIndex(0, "next", 2)).toBe(1);
+    expect(nextClipboardIndex(1, "next", 2)).toBe(1);
+    expect(nextClipboardIndex(1, "previous", 2)).toBe(0);
+    expect(nextClipboardIndex(0, "previous", 2)).toBe(0);
   });
 
   test("quick copy only accepts visible slots one through nine", () => {

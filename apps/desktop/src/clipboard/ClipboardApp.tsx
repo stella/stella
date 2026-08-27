@@ -157,25 +157,33 @@ const focusTimeline = (node: HTMLDivElement | null) => {
   }
 };
 
-const scrollCardIntoView = (id: string) => {
+const focusCard = (rail: HTMLDivElement | null, id: string) => {
   requestAnimationFrame(() => {
-    document
-      .querySelector(`[data-clipboard-id="${CSS.escape(id)}"]`)
-      ?.scrollIntoView({
-        behavior: "smooth",
-        block: "nearest",
-        inline: "center",
-      });
-  });
-};
+    if (!rail) {
+      return;
+    }
+    const card = rail.querySelector<HTMLElement>(
+      `[data-clipboard-id="${CSS.escape(id)}"]`,
+    );
+    if (!card) {
+      return;
+    }
+    card
+      .querySelector<HTMLElement>("[data-clipboard-card-trigger]")
+      ?.focus({ preventScroll: true });
 
-const focusCard = (id: string) => {
-  requestAnimationFrame(() => {
-    document
-      .querySelector<HTMLElement>(
-        `[data-clipboard-id="${CSS.escape(id)}"] [data-clipboard-card-trigger]`,
-      )
-      ?.focus();
+    const railBounds = rail.getBoundingClientRect();
+    const cardBounds = card.getBoundingClientRect();
+    const left =
+      cardBounds.left +
+      cardBounds.width / 2 -
+      (railBounds.left + railBounds.width / 2);
+    rail.scrollBy({
+      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+        ? "auto"
+        : "smooth",
+      left,
+    });
   });
 };
 
@@ -1024,6 +1032,7 @@ const ClipboardApp = () => {
   const t = useTranslations("clipboard");
   const searchInputRef = useRef<HTMLInputElement>(null);
   const timelineRef = useRef<HTMLDivElement>(null);
+  const timelineRailRef = useRef<HTMLDivElement>(null);
   const contextMenuTriggerRef = useRef<HTMLElement>(null);
   const snapshotRequestIdRef = useRef(0);
   const [snapshot, setSnapshot] = useState<ClipboardSnapshot>(EMPTY_SNAPSHOT);
@@ -1143,7 +1152,7 @@ const ClipboardApp = () => {
   useEffect(() => {
     const focusActiveCard = () => {
       if (activeItemId) {
-        focusCard(activeItemId);
+        focusCard(timelineRailRef.current, activeItemId);
         return;
       }
       timelineRef.current?.focus();
@@ -1392,8 +1401,7 @@ const ClipboardApp = () => {
     setSelectedIndex(index);
     const item = filteredItems.at(index);
     if (item) {
-      scrollCardIntoView(item.id);
-      focusCard(item.id);
+      focusCard(timelineRailRef.current, item.id);
     }
   };
 
@@ -1613,7 +1621,8 @@ const ClipboardApp = () => {
         ) : (
           <div
             aria-label={t("timeline")}
-            className="absolute inset-0 flex snap-x scrollbar-none items-stretch gap-3 overflow-x-auto px-5 py-1"
+            className="absolute inset-0 flex scrollbar-none items-stretch gap-3 overflow-x-auto overscroll-x-none px-5 py-1"
+            ref={timelineRailRef}
             role="list"
           >
             {filteredItems.map((item, index) => {
