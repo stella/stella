@@ -112,6 +112,7 @@ const postJson = async <TSchema extends v.GenericSchema>({
     body: JSON.stringify(body),
     headers: { "Content-Type": "application/json" },
     method: "POST",
+    redirect: "error",
     signal: AbortSignal.timeout(10_000),
   });
 

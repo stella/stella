@@ -553,4 +553,62 @@ describe("collaboration server", () => {
       await fakeApi.destroy();
     }
   });
+
+  test("does not forward room tokens through API redirects", async () => {
+    let redirectedRequests = 0;
+    const redirectTarget = Bun.serve({
+      fetch: () => {
+        redirectedRequests += 1;
+        return Response.json({ message: "Redirect target reached." });
+      },
+      port: 0,
+    });
+    const redirectTargetPort = redirectTarget.port;
+    if (redirectTargetPort === undefined) {
+      throw new Error("Redirect target did not expose a listening port.");
+    }
+
+    const redirectingApi = Bun.serve({
+      fetch: () =>
+        Response.redirect(
+          `http://127.0.0.1:${String(redirectTargetPort)}/token-target`,
+          307,
+        ),
+      port: 0,
+    });
+    const redirectingApiPort = redirectingApi.port;
+    if (redirectingApiPort === undefined) {
+      throw new Error("Redirecting API did not expose a listening port.");
+    }
+
+    const collabServer = await createCollabServer({
+      apiUrl: `http://127.0.0.1:${String(redirectingApiPort)}`,
+      port: 0,
+    });
+    const ydoc = new Doc();
+    let authenticationFailed = false;
+    const provider = new HocuspocusProvider({
+      document: ydoc,
+      name: "folio_collab_room_test",
+      onAuthenticationFailed: () => {
+        authenticationFailed = true;
+      },
+      token: "collab_token_redirect_test",
+      url: collabServer.websocketUrl,
+    });
+
+    try {
+      await waitFor(
+        () => authenticationFailed,
+        "Provider was not rejected after the API redirect.",
+      );
+      expect(redirectedRequests).toBe(0);
+    } finally {
+      provider.destroy();
+      ydoc.destroy();
+      await collabServer.destroy();
+      await redirectingApi.stop(true);
+      await redirectTarget.stop(true);
+    }
+  });
 });

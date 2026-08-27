@@ -117,25 +117,32 @@ const claimConcurrently = async ({
   );
 
 describe("folio collaboration room ownership", () => {
-  test("rejects a base version from another entity or workspace", () => {
+  test("rejects a base version from another entity or workspace", async () => {
     const roomId = createSafeId<"folioCollabRoom">();
     roomIds.push(roomId);
 
-    expect(
-      testDb
-        .insert(folioCollabRooms)
-        .values({
-          baseVersionId: ids.entityVersionA2,
-          docxCheckpointFileId: createSafeId<"userFile">(),
-          entityId: ids.entityA1,
-          fileName: "contract.docx",
-          id: roomId,
-          propertyId: ids.filePropertyA1,
-          workspaceId: ids.wsA1,
-          yjsSnapshotFileId: createSafeId<"userFile">(),
-        })
-        .execute(),
-    ).rejects.toThrow('Failed query: insert into "folio_collab_rooms"');
+    const rejection = await testDb
+      .insert(folioCollabRooms)
+      .values({
+        baseVersionId: ids.entityVersionA2,
+        docxCheckpointFileId: createSafeId<"userFile">(),
+        entityId: ids.entityA1,
+        fileName: "contract.docx",
+        id: roomId,
+        propertyId: ids.filePropertyA1,
+        workspaceId: ids.wsA1,
+        yjsSnapshotFileId: createSafeId<"userFile">(),
+      })
+      .execute()
+      .then(
+        () => null,
+        (error: unknown) => error,
+      );
+
+    expect(rejection).toBeInstanceOf(Error);
+    expect(String(rejection)).toContain(
+      'Failed query: insert into "folio_collab_rooms"',
+    );
   });
 });
 
