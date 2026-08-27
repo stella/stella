@@ -96,5 +96,9 @@ export const canManageSkill = ({
       return includes(SKILL_MANAGER_ROLES, memberRole.role);
     case "private":
       return skill.userId === userId;
+    default: {
+      const exhaustive: never = skill.scope;
+      return exhaustive;
+    }
   }
 };

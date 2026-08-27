@@ -130,6 +130,10 @@ const loadCommentTarget = async (
 
       return { revisionId: revision.id, text: revision.body };
     }
+    default: {
+      const exhaustive: never = anchor;
+      return exhaustive;
+    }
   }
 };
 

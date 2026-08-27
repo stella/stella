@@ -3,10 +3,7 @@ import { and, desc, eq } from "drizzle-orm";
 import { t } from "elysia";
 
 import { abortableTx } from "@/api/db/safe-db";
-import {
-  AGENT_SKILL_PROPOSAL_STATUSES,
-  agentSkillProposals,
-} from "@/api/db/schema";
+import { agentSkillProposals } from "@/api/db/schema";
 import { loadVisibleSkill } from "@/api/lib/agent-skills/access";
 import { loadLatestSkillRevision } from "@/api/lib/agent-skills/revisions";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
@@ -18,31 +15,21 @@ const listSkillProposalsParamsSchema = t.Object({
   skillId: tSafeId("agentSkill"),
 });
 
-const listSkillProposalsQuerySchema = t.Object({
-  // Built from the status list rather than `t.UnionEnum`: Elysia coerces an
-  // absent optional `UnionEnum` to its first member, which would silently
-  // narrow an unfiltered listing to drafts.
-  status: t.Optional(
-    t.Union(AGENT_SKILL_PROPOSAL_STATUSES.map((status) => t.Literal(status))),
-  ),
-});
-
 const config = {
   description:
     "List the change proposals raised against an agent skill, newest first " +
-    "and without their bodies, optionally filtered by status. baseIsCurrent " +
+    "and without their bodies. baseIsCurrent " +
     "reports whether a proposal still branches from the skill's newest " +
     "revision.",
   permissions: { chat: ["create"] },
   access: "read",
   mcp: { type: "capability", reason: "agent_tool_authoring" },
   params: listSkillProposalsParamsSchema,
-  query: listSkillProposalsQuerySchema,
 } satisfies HandlerConfig;
 
 const listSkillProposals = createSafeRootHandler(
   config,
-  async function* ({ params, query, safeDb, session }) {
+  async function* ({ params, safeDb, session }) {
     const items = yield* Result.await(
       abortableTx(safeDb, async (tx) => {
         await loadVisibleSkill(tx, {
@@ -79,9 +66,6 @@ const listSkillProposals = createSafeRootHandler(
                 agentSkillProposals.organizationId,
                 session.activeOrganizationId,
               ),
-              query.status
-                ? eq(agentSkillProposals.status, query.status)
-                : undefined,
             ),
           )
           .orderBy(
