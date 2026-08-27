@@ -105,9 +105,13 @@ export type {
   KanbanSavedViewState,
   ResolvedWorkspaceKanbanView,
   ResolveWorkspaceKanbanViewParams,
+  WorkspaceKanbanBuiltInGroupLabel,
   WorkspaceKanbanGroupingChoice,
+  WorkspaceKanbanGroupingPickerLabels,
+  WorkspaceKanbanGroupingPickerProps,
   WorkspaceKanbanProperty,
 } from "./kanban-view";
+export { WorkspaceKanbanGroupingPicker } from "./kanban-grouping-picker";
 export { WorkspaceViewSwitcher } from "./view-switcher";
 export type {
   WorkspaceViewSwitcherEditing,

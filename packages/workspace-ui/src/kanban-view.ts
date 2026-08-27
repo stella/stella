@@ -94,18 +94,28 @@ export type WorkspaceKanbanGroupingChoice = {
   type: "built-in" | "property";
 };
 
+export type WorkspaceKanbanBuiltInGroupLabel<TRow> = (
+  group: KanbanBuiltInGroup<TRow>,
+) => string;
+
 /** Property-aware data for a Group or Sub-group picker. */
 export const getWorkspaceKanbanGroupingChoices = <
   TRow,
   TProperty extends WorkspaceKanbanProperty,
 >({
+  getBuiltInGroupLabel,
   schema,
 }: {
+  getBuiltInGroupLabel: WorkspaceKanbanBuiltInGroupLabel<TRow>;
   schema: KanbanSchema<TRow, TProperty>;
 }): WorkspaceKanbanGroupingChoice[] => {
   const choices: WorkspaceKanbanGroupingChoice[] = [];
   for (const group of schema.builtInGroups) {
-    choices.push({ id: group.id, label: group.id, type: "built-in" });
+    choices.push({
+      id: group.id,
+      label: getBuiltInGroupLabel(group),
+      type: "built-in",
+    });
   }
   for (const property of schema.properties) {
     if (schema.getPropertyOptions(property) === null) {
@@ -114,6 +124,24 @@ export const getWorkspaceKanbanGroupingChoices = <
     choices.push({ id: property.id, label: property.name, type: "property" });
   }
   return choices;
+};
+
+export type WorkspaceKanbanGroupingPickerLabels = {
+  none: string;
+  placeholder: string;
+};
+
+export type WorkspaceKanbanGroupingPickerProps<
+  TRow,
+  TProperty extends WorkspaceKanbanProperty,
+> = {
+  allowNone: boolean;
+  excludedGroupBy?: string | undefined;
+  getBuiltInGroupLabel: WorkspaceKanbanBuiltInGroupLabel<TRow>;
+  labels: WorkspaceKanbanGroupingPickerLabels;
+  onValueChange: (groupBy: string) => void;
+  schema: KanbanSchema<TRow, TProperty>;
+  value: string;
 };
 
 export type ResolveWorkspaceKanbanViewParams<TRow, TProperty> = {

@@ -62,8 +62,13 @@ const state: KanbanSavedViewState = {
 
 describe("workspace kanban view adapter", () => {
   test("derives picker choices from built-in groups and authoritative property options", () => {
-    expect(getWorkspaceKanbanGroupingChoices({ schema })).toEqual([
-      { id: "_status", label: "_status", type: "built-in" },
+    expect(
+      getWorkspaceKanbanGroupingChoices({
+        getBuiltInGroupLabel: () => "Status",
+        schema,
+      }),
+    ).toEqual([
+      { id: "_status", label: "Status", type: "built-in" },
       { id: "owner", label: "Owner", type: "property" },
     ]);
   });
