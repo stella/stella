@@ -225,13 +225,22 @@ pub(super) fn build_address_shared_data(
     }),
   );
 
+  // The deny list resolves regions and countries into one country set where
+  // "empty" means "every country"; the state abbreviations must follow the
+  // same set, or a region-only or empty scope loses them while keeping the
+  // matching cities.
+  let allowed_countries = super::deny_list::resolve_countries(
+    ctx.config.deny_list_regions.as_deref(),
+    scoped.deny_list_countries.as_deref(),
+  );
+
   Ok(AddressSharedData {
     boundary_words,
     br_cep_cue_words: build_br_cue_words(&street_types, &boundaries),
     us_state_abbreviations: scoped_country_words(
       "address-state-abbreviations.json",
       "US",
-      scoped.deny_list_countries.as_deref(),
+      allowed_countries.as_deref(),
     )?,
   })
 }
@@ -578,6 +587,13 @@ mod tests {
   fn state_abbreviations(
     countries: &[&str],
   ) -> Result<Vec<String>, AssembleError> {
+    scoped_state_abbreviations(countries, &[])
+  }
+
+  fn scoped_state_abbreviations(
+    countries: &[&str],
+    regions: &[&str],
+  ) -> Result<Vec<String>, AssembleError> {
     let mut config = config(Vec::new());
     config.deny_list_countries = Some(
       countries
@@ -585,6 +601,8 @@ mod tests {
         .map(|country| (*country).to_owned())
         .collect(),
     );
+    config.deny_list_regions =
+      Some(regions.iter().map(|region| (*region).to_owned()).collect());
     let context = AssembleContext {
       config: &config,
       dictionaries: None,
@@ -602,6 +620,27 @@ mod tests {
         .any(|state| state == "DE")
     );
     assert!(state_abbreviations(&["DE"])?.is_empty());
+    Ok(())
+  }
+
+  /// An empty country list means "every country" to `resolveCountries`, so it
+  /// must not strip the US state abbreviations either.
+  #[test]
+  fn empty_country_scope_keeps_us_states() -> Result<(), AssembleError> {
+    assert!(state_abbreviations(&[])?.iter().any(|state| state == "DE"));
+    Ok(())
+  }
+
+  /// A region that resolves to the US pulls in US cities, so it must pull in
+  /// the US state abbreviations even when `denyListCountries` omits "US".
+  #[test]
+  fn region_scope_keeps_us_states() -> Result<(), AssembleError> {
+    assert!(
+      scoped_state_abbreviations(&["GB"], &["Americas"])?
+        .iter()
+        .any(|state| state == "DE")
+    );
+    assert!(scoped_state_abbreviations(&["GB"], &["Europe"])?.is_empty());
     Ok(())
   }
 

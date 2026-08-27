@@ -571,7 +571,7 @@ fn region_codes(name: &str) -> RegionLookup {
 }
 
 /// Mirrors `resolveCountries`. `None` means "all countries".
-fn resolve_countries(
+pub(super) fn resolve_countries(
   regions: Option<&[String]>,
   countries: Option<&[String]>,
 ) -> Option<Vec<String>> {
