@@ -275,6 +275,7 @@ export const DOC_SOURCE_EXCLUSIONS = [
   "expect-type",
   "expo-doctor",
   "fast-check",
+  "franc",
   "i18n-unused",
   "immer",
   "input-otp",
