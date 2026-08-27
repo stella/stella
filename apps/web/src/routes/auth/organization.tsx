@@ -25,6 +25,7 @@ import {
   FramePanel,
   FrameTitle,
 } from "@stll/ui/frame";
+import { getInitials } from "@stll/ui/initials";
 import { Input } from "@stll/ui/input";
 import { Skeleton } from "@stll/ui/skeleton";
 import { stellaToast } from "@stll/ui/toast";
@@ -38,7 +39,6 @@ import { authClient } from "@/lib/auth";
 import { detached } from "@/lib/detached";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
-import { getInitials } from "@/lib/get-initials";
 import {
   getOauthHashFragment,
   getOauthRedirectUrl,

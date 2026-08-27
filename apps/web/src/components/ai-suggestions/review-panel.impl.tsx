@@ -19,13 +19,31 @@ import {
 import { useTranslations } from "use-intl";
 
 import { diffWordSegments } from "@stll/folio-react";
-import type { DocxEditorRef, FolioAIBlockPreviewRun } from "@stll/folio-react";
+import type {
+  DocxEditorRef,
+  FolioAIBlockPreviewRun,
+  WordDiffSegment,
+} from "@stll/folio-react";
 import { Avatar, AvatarFallback } from "@stll/ui/avatar";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { Input } from "@stll/ui/input";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
+import type { ReviewDecisionState } from "@stll/ui/review-decision-actions";
+import { ReviewDecisionActions } from "@stll/ui/review-decision-actions";
+import type { ReviewDiffSegmentType } from "@stll/ui/review-diff-text";
+import {
+  ReviewDiffDeletion,
+  ReviewDiffInsertion,
+  ReviewDiffText,
+} from "@stll/ui/review-diff-text";
+import type { ReviewSeverityLevel } from "@stll/ui/review-severity-dot";
+import {
+  ReviewSeverityDot,
+  reviewSeverityTone,
+} from "@stll/ui/review-severity-dot";
+import { ReviewStatusBadge } from "@stll/ui/review-status-badge";
 import {
   Select,
   SelectItem,
@@ -93,50 +111,35 @@ export type ReviewPanelProps = {
   embedded?: boolean | undefined;
 };
 
-type SeverityTone = { dot: string; chip: string; chipActive: string };
+/**
+ * The panel's severity vocabulary on the product's shared review scale. It
+ * has no "critical" tier and adds an "unspecified" one, which carries the
+ * same weight as "low": the model declined to rank it, not that it is safe.
+ */
+const REVIEW_SEVERITY_LEVEL = {
+  high: "high",
+  medium: "medium",
+  low: "low",
+  unspecified: "low",
+} as const satisfies Record<ReviewSeverityKey, ReviewSeverityLevel>;
 
-// Severity colour swatches. Each pair has a `dark:` variant so the
-// rule that flags hardcoded colours in object property values is a
-// false positive here; suppressed at the constant declarations
-// rather than inside the object so reformatting can't split the
-// suppression away from the value.
-const HIGH_DOT = "bg-destructive";
-const HIGH_CHIP = "border-destructive/30 text-destructive";
-const HIGH_CHIP_ACTIVE =
-  "bg-destructive/10 border-destructive text-destructive dark:text-destructive";
+/** Where a suggestion stands, in the shared review vocabulary. "Skipped" is a
+ *  suggestion the apply engine could not place, which reads as dismissed. */
+const REVIEW_DECISION_STATE = {
+  pending: "pending",
+  applying: "applying",
+  accepted: "accepted",
+  rejected: "rejected",
+  skipped: "dismissed",
+} as const satisfies Record<ReviewSuggestion["status"], ReviewDecisionState>;
 
-const MEDIUM_DOT = "bg-warning";
-const MEDIUM_CHIP = "border-warning/30 text-warning-foreground";
-const MEDIUM_CHIP_ACTIVE =
-  "bg-warning/10 border-warning text-warning-foreground dark:text-warning-foreground";
-
-const LOW_DOT = "bg-foreground-strong-muted";
-const LOW_CHIP = "border-foreground-disabled text-foreground";
-const LOW_CHIP_ACTIVE = "bg-accent border-foreground text-foreground";
-
-const severityTone = (severity: ReviewSeverityKey): SeverityTone => {
-  switch (severity) {
-    case "high":
-      return { dot: HIGH_DOT, chip: HIGH_CHIP, chipActive: HIGH_CHIP_ACTIVE };
-    case "medium":
-      return {
-        dot: MEDIUM_DOT,
-        chip: MEDIUM_CHIP,
-        chipActive: MEDIUM_CHIP_ACTIVE,
-      };
-    case "low":
-      return { dot: LOW_DOT, chip: LOW_CHIP, chipActive: LOW_CHIP_ACTIVE };
-    case "unspecified":
-      return {
-        dot: "bg-muted-foreground",
-        chip: "border-border text-muted-foreground",
-        chipActive: "bg-muted border-border text-foreground",
-      };
-    default:
-      severity satisfies never;
-      return { dot: "", chip: "", chipActive: "" };
-  }
-};
+/** folio's word diff names its sides `del`/`ins`; the shared diff renderer
+ *  spells them out. Total, so a new folio segment kind cannot render blank. */
+const REVIEW_DIFF_SEGMENT_TYPE = {
+  equal: "equal",
+  del: "delete",
+  ins: "insert",
+} as const satisfies Record<WordDiffSegment["type"], ReviewDiffSegmentType>;
 
 export const ReviewPanelImpl = ({
   entityId,
@@ -216,11 +219,13 @@ export const ReviewPanelImpl = ({
   });
 
   const groups = (() => {
-    const groupTone = (items: readonly ReviewSuggestion[]): SeverityTone => {
+    const groupLevel = (
+      items: readonly ReviewSuggestion[],
+    ): ReviewSeverityLevel => {
       const highest = SEVERITY_ORDER.find((sev) =>
         items.some((item) => item.severity === sev),
       );
-      return severityTone(highest ?? "unspecified");
+      return REVIEW_SEVERITY_LEVEL[highest ?? "unspecified"];
     };
 
     if (groupAxis === "severity") {
@@ -236,7 +241,7 @@ export const ReviewPanelImpl = ({
                 key: sev,
                 label: severityLabels[sev],
                 items: list,
-                tone: severityTone(sev),
+                level: REVIEW_SEVERITY_LEVEL[sev],
               },
             ]
           : [];
@@ -266,7 +271,7 @@ export const ReviewPanelImpl = ({
         area === REVIEW_UNSPECIFIED_AREA
           ? t("docxReview.areaUnspecified")
           : area;
-      return { key: area, label, items, tone: groupTone(items) };
+      return { key: area, label, items, level: groupLevel(items) };
     });
   })();
 
@@ -421,13 +426,7 @@ export const ReviewPanelImpl = ({
                *  group when grouping by area; matches the severity
                *  directly when grouping by severity. */}
               <h3 className="text-muted-foreground mb-2 flex items-center gap-2 px-1 text-[11px] font-medium tracking-[0.06em] uppercase">
-                <span
-                  aria-hidden="true"
-                  className={cn(
-                    "size-1.5 shrink-0 rounded-full",
-                    group.tone.dot,
-                  )}
-                />
+                <ReviewSeverityDot level={group.level} />
                 <span>{group.label}</span>
                 <span className="text-foreground-ghost tabular-nums">
                   {format.number(group.items.length)}
@@ -770,20 +769,6 @@ const cssFontFamily = (fontFamily: string | undefined): string | undefined => {
   return `${first}, sans-serif`;
 };
 
-// Word-diff segments carry no id of their own (recomputed fresh from
-// `before`/`after` on every render), so keys derive from type + text plus an
-// occurrence counter so the same word appearing twice stays unique without
-// leaning on the array index.
-const withStableKeys = <T,>(items: readonly T[], base: (item: T) => string) => {
-  const counts = new Map<string, number>();
-  return items.map((item) => {
-    const b = base(item);
-    const n = counts.get(b) ?? 0;
-    counts.set(b, n + 1);
-    return { item, key: `${b}-${n}` };
-  });
-};
-
 const RedlinePreview = ({
   preview,
   srSummary,
@@ -799,9 +784,6 @@ const RedlinePreview = ({
   );
   const muted = "text-foreground-strong-muted";
   const contextCls = "text-foreground";
-  const insCls = "bg-success/15 text-success px-1 py-0.5 rounded-sm";
-  const delCls =
-    "bg-destructive/10 text-destructive line-through decoration-destructive/70 px-1 py-0.5 rounded-sm";
 
   const arrow = (
     <DirectionalIcon
@@ -835,23 +817,19 @@ const RedlinePreview = ({
     if (!hasShared) {
       return (
         <>
-          <span className={delCls}>{before}</span>
+          <ReviewDiffDeletion>{before}</ReviewDiffDeletion>
           {arrow}
-          <span className={insCls}>{after}</span>
+          <ReviewDiffInsertion>{after}</ReviewDiffInsertion>
         </>
       );
     }
-    return withStableKeys(segments, (seg) => `${seg.type}-${seg.text}`).map(
-      ({ item: seg, key }) => {
-        if (seg.type === "equal") {
-          return <span key={key}>{seg.text}</span>;
-        }
-        return (
-          <span className={cn(seg.type === "del" ? delCls : insCls)} key={key}>
-            {seg.text}
-          </span>
-        );
-      },
+    return (
+      <ReviewDiffText
+        segments={segments.map((seg) => ({
+          text: seg.text,
+          type: REVIEW_DIFF_SEGMENT_TYPE[seg.type],
+        }))}
+      />
     );
   };
 
@@ -868,16 +846,17 @@ const RedlinePreview = ({
               ),
               contextCls,
             )}
-            {renderFormattedRuns(
-              slicePreviewRuns(
-                preview.sourceRuns,
-                preview.matchStart,
-                preview.matchEnd,
-              ),
-              delCls,
-            )}
+            <ReviewDiffDeletion>
+              {renderFormattedRuns(
+                slicePreviewRuns(
+                  preview.sourceRuns,
+                  preview.matchStart,
+                  preview.matchEnd,
+                ),
+              )}
+            </ReviewDiffDeletion>
             {arrow}
-            <span className={insCls}>{preview.after}</span>
+            <ReviewDiffInsertion>{preview.after}</ReviewDiffInsertion>
             {renderFormattedRuns(
               slicePreviewRuns(
                 preview.sourceRuns,
@@ -904,9 +883,11 @@ const RedlinePreview = ({
       if (preview.sourceRuns !== undefined) {
         return (
           <p aria-label={srSummary} className={baseCls} role="group">
-            {renderFormattedRuns(preview.sourceRuns, delCls)}
+            <ReviewDiffDeletion>
+              {renderFormattedRuns(preview.sourceRuns)}
+            </ReviewDiffDeletion>
             {arrow}
-            <span className={insCls}>{preview.after}</span>
+            <ReviewDiffInsertion>{preview.after}</ReviewDiffInsertion>
           </p>
         );
       }
@@ -919,13 +900,15 @@ const RedlinePreview = ({
       if (preview.sourceRuns !== undefined) {
         return (
           <p aria-label={srSummary} className={baseCls} role="group">
-            {renderFormattedRuns(preview.sourceRuns, delCls)}
+            <ReviewDiffDeletion>
+              {renderFormattedRuns(preview.sourceRuns)}
+            </ReviewDiffDeletion>
           </p>
         );
       }
       return (
         <p aria-label={srSummary} className={baseCls} role="group">
-          <span className={delCls}>{preview.before}</span>
+          <ReviewDiffDeletion>{preview.before}</ReviewDiffDeletion>
         </p>
       );
     case "insertBeforeBlock":
@@ -942,7 +925,7 @@ const RedlinePreview = ({
                 {arrow}
               </>
             )}
-          <span className={insCls}>{preview.after}</span>
+          <ReviewDiffInsertion>{preview.after}</ReviewDiffInsertion>
         </p>
       );
     case "commentOnBlock":
@@ -981,7 +964,7 @@ const RedlinePreview = ({
                 {arrow}
               </>
             )}
-          <span className={insCls}>{partyList}</span>
+          <ReviewDiffInsertion>{partyList}</ReviewDiffInsertion>
         </p>
       );
     }
@@ -1012,7 +995,7 @@ const SuggestionRow = ({
   const severityLabels = useSeverityLabels();
   const isResolved = item.status !== "pending" && item.status !== "applying";
   const isApplying = item.status === "applying";
-  const tone = severityTone(item.severity);
+  const severityLevel = REVIEW_SEVERITY_LEVEL[item.severity];
   const showArea =
     item.area.length > 0 && item.area !== REVIEW_UNSPECIFIED_AREA;
   const isAccepted = item.status === "accepted";
@@ -1065,13 +1048,13 @@ const SuggestionRow = ({
           )}
         </div>
         {canRevert && (
-          <button
-            className="text-muted-foreground hover:text-foreground relative mt-1 rounded px-1 py-0.5 text-[11px] transition-colors hover:underline"
-            onClick={onRevert}
-            type="button"
-          >
-            {t("docxReview.revert")}
-          </button>
+          <ReviewDecisionActions
+            className="relative mt-1"
+            onRevert={onRevert}
+            revertLabel={t("docxReview.revert")}
+            size="xs"
+            state={REVIEW_DECISION_STATE[item.status]}
+          />
         )}
       </li>
     );
@@ -1100,10 +1083,7 @@ const SuggestionRow = ({
         type="button"
       />
       <div className="pointer-events-none flex items-start gap-2.5">
-        <span
-          aria-hidden="true"
-          className={cn("mt-1.5 size-2 shrink-0 rounded-full", tone.dot)}
-        />
+        <ReviewSeverityDot className="mt-1.5 size-2" level={severityLevel} />
         <div className="min-w-0 flex-1 space-y-1.5">
           {/* AI's reasoning carries the most useful framing for the
            *  card title; promote it when present. The redline below
@@ -1124,22 +1104,16 @@ const SuggestionRow = ({
            *  the user oriented without competing with the redline
            *  for visual weight. */}
           <div className="text-muted-foreground flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[11px]">
-            <span
-              className={cn(
-                "inline-flex items-center gap-1 font-medium",
-                // `tone.chip` is `border-* text-*`; the border
-                // classes are inert on a borderless span and only
-                // the text color renders. Reuses the constants we
-                // already have rather than minting new ones.
-                tone.chip,
-              )}
+            {/* The shared status badge, stripped of its pill chrome: the meta
+                row is a run of `·`-separated fragments, so severity carries
+                only the tone's colour here. */}
+            <ReviewStatusBadge
+              className="border-transparent px-0 py-0"
+              icon={<ReviewSeverityDot level={severityLevel} />}
+              tone={reviewSeverityTone(severityLevel)}
             >
-              <span
-                aria-hidden="true"
-                className={cn("size-1.5 rounded-full", tone.dot)}
-              />
               {severityLabels[item.severity]}
-            </span>
+            </ReviewStatusBadge>
             {item.blockLabel && (
               <>
                 <span aria-hidden="true">·</span>
@@ -1161,26 +1135,15 @@ const SuggestionRow = ({
         </div>
       </div>
       {!isApplying && (
-        <div className="relative mt-2 flex items-center gap-1.5">
-          <Button
-            className="h-7 px-2.5 text-xs"
-            onClick={onAccept}
-            size="sm"
-            variant="default"
-          >
-            <CheckIcon className="me-1 size-3.5" />
-            {t("common.accept")}
-          </Button>
-          <Button
-            className="h-7 px-2.5 text-xs"
-            onClick={onReject}
-            size="sm"
-            variant="outline"
-          >
-            <XIcon className="me-1 size-3.5" />
-            {t("docxReview.reject")}
-          </Button>
-        </div>
+        <ReviewDecisionActions
+          acceptLabel={t("common.accept")}
+          className="relative mt-2"
+          onAccept={onAccept}
+          onReject={onReject}
+          rejectLabel={t("docxReview.reject")}
+          size="xs"
+          state="pending"
+        />
       )}
       {isApplying && (
         <div
@@ -1206,13 +1169,12 @@ const SuggestionRow = ({
             {item.status === "skipped" && t("docxReview.statusSkipped")}
           </span>
           {canRevert && (
-            <button
-              className="hover:text-foreground rounded px-1.5 py-0.5 transition-colors hover:underline"
-              onClick={onRevert}
-              type="button"
-            >
-              {t("docxReview.revert")}
-            </button>
+            <ReviewDecisionActions
+              onRevert={onRevert}
+              revertLabel={t("docxReview.revert")}
+              size="xs"
+              state={REVIEW_DECISION_STATE[item.status]}
+            />
           )}
         </div>
       )}

@@ -22,16 +22,16 @@ import { useTranslations } from "use-intl";
 import { markerPattern } from "@stll/template-conditions";
 import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
+import {
+  ReviewDiffDeletion,
+  ReviewDiffInsertion,
+} from "@stll/ui/review-diff-text";
 import { cn } from "@stll/ui/utils";
 
 import Tooltip from "@/components/tooltip";
 import { UserAvatar } from "@/components/user-avatar";
 import { detached } from "@/lib/detached";
 import { formatFullTimestamp, formatRelativeTime } from "@/lib/relative-time";
-import {
-  TRACKED_DELETION_STYLE,
-  TRACKED_INSERTION_STYLE,
-} from "@/lib/track-changes-style";
 
 export const VersionList = ({ children }: React.PropsWithChildren) => (
   <div className="flex flex-col gap-px p-1">{children}</div>
@@ -383,16 +383,16 @@ const DiffSegmentParagraph = ({ segment }: { segment: VersionDiffSegment }) => {
   }
   if (segment.kind === "added") {
     return (
-      <ins style={TRACKED_INSERTION_STYLE}>
+      <ReviewDiffInsertion>
         <MarkerAwareText text={segment.text} />
-      </ins>
+      </ReviewDiffInsertion>
     );
   }
   if (segment.kind === "removed") {
     return (
-      <del style={TRACKED_DELETION_STYLE}>
+      <ReviewDiffDeletion>
         <MarkerAwareText text={segment.text} />
-      </del>
+      </ReviewDiffDeletion>
     );
   }
   return (
@@ -405,16 +405,16 @@ const DiffSegmentParagraph = ({ segment }: { segment: VersionDiffSegment }) => {
 const DiffRunSpan = ({ run }: { run: VersionDiffRun }) => {
   if (run.kind === "del") {
     return (
-      <del style={TRACKED_DELETION_STYLE}>
+      <ReviewDiffDeletion>
         <MarkerAwareText text={run.text} />
-      </del>
+      </ReviewDiffDeletion>
     );
   }
   if (run.kind === "ins") {
     return (
-      <ins style={TRACKED_INSERTION_STYLE}>
+      <ReviewDiffInsertion>
         <MarkerAwareText text={run.text} />
-      </ins>
+      </ReviewDiffInsertion>
     );
   }
   return <MarkerAwareText text={run.text} />;

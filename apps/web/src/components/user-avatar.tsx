@@ -1,57 +1,21 @@
-import type { ComponentProps } from "react";
-
-import { Avatar, AvatarFallback, AvatarImage } from "@stll/ui/avatar";
 import { BidiText } from "@stll/ui/bidi-text";
+import {
+  ReviewAuthorAvatar,
+  UNKNOWN_AUTHOR_LABEL,
+} from "@stll/ui/review-author-avatar";
 import { cn } from "@stll/ui/utils";
 
 import { getDisplayName } from "@/lib/get-display-name";
-import { getInitials } from "@/lib/get-initials";
 
 /**
- * Shown when a user has neither a name nor an email to fall back on.
- * Not translated, matching the label this component has always rendered
- * for that state; every identity surface in the app shows the same string.
+ * A user's avatar anywhere in the app.
+ *
+ * The rendering lives in the design system as `ReviewAuthorAvatar`, shared
+ * with the review chrome; this module stays the app's single owner of user
+ * identity (`no-hand-rolled-user-identity` points every call site here), so
+ * the name and the app's unknown-user label are bound in one place.
  */
-export const UNKNOWN_USER_LABEL = "Unknown user";
-
-type UserAvatarProps = Omit<
-  ComponentProps<typeof Avatar>,
-  "children" | "className"
-> & {
-  image?: string | null | undefined;
-  name?: string | null;
-  deleted?: boolean | undefined;
-  className?: string | undefined;
-  fallbackClassName?: string | undefined;
-};
-
-export const UserAvatar = ({
-  deleted = false,
-  image,
-  name,
-  className,
-  fallbackClassName,
-  ...avatarProps
-}: UserAvatarProps) => {
-  const displayName = getDisplayName(name) ?? UNKNOWN_USER_LABEL;
-
-  return (
-    <Avatar
-      {...avatarProps}
-      className={cn(className, deleted && "opacity-60 grayscale")}
-    >
-      {image ? <AvatarImage alt={displayName} src={image} /> : null}
-      <AvatarFallback
-        className={cn(
-          fallbackClassName,
-          deleted && "bg-muted text-muted-foreground",
-        )}
-      >
-        {getInitials(name ?? null)}
-      </AvatarFallback>
-    </Avatar>
-  );
-};
+export const UserAvatar = ReviewAuthorAvatar;
 
 type UserIdentityProps = {
   as?: "div" | "span";
@@ -80,13 +44,14 @@ export const UserIdentity = ({
   nameClassName,
   secondaryClassName,
 }: UserIdentityProps) => {
-  const displayName = getDisplayName(name, secondaryText) ?? UNKNOWN_USER_LABEL;
+  const displayName =
+    getDisplayName(name, secondaryText) ?? UNKNOWN_AUTHOR_LABEL;
   const Component = element;
 
   return (
     <Component className={cn("flex min-w-0 items-center gap-2", className)}>
       {hideAvatar ? null : (
-        <UserAvatar
+        <ReviewAuthorAvatar
           className={avatarClassName}
           deleted={deleted}
           fallbackClassName={avatarFallbackClassName}

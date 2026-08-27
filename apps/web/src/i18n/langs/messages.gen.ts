@@ -3434,7 +3434,6 @@ type Messages = {
     "basedOnCurrent": "Based on the current revision";
     "clearComparison": "Clear comparison";
     "commentFromEarlierRevision": "Written against an earlier revision";
-    "commentMeta": "{author} · {date}";
     "comments": "Comments";
     "commentsEmpty": "Select text in the body to comment on it.";
     "noRevisions": "No revisions yet";

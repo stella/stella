@@ -3431,7 +3431,6 @@
     "basedOnCurrent": "Põhineb praegusel versioonil",
     "clearComparison": "Tühista võrdlus",
     "commentFromEarlierRevision": "Kirjutatud varasema versiooni kohta",
-    "commentMeta": "{author} · {date}",
     "comments": "Kommentaarid",
     "commentsEmpty": "Kommenteerimiseks vali tekst.",
     "noRevisions": "Versioone veel pole",

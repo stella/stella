@@ -8,8 +8,11 @@ import { eslintCompatPlugin } from "@oxlint/plugins";
 // The ban is deliberately scoped to imports from the avatar primitive module.
 // Anonymous sign-in, organization identity, the component gallery, and DOCX
 // author shortcuts are explicit file exceptions because they are not user
-// identities. The `raw-user-avatar-primitive` ratchet metric covers aliases or
-// indirect imports the module-level AST rule cannot identify.
+// identities. `user-avatar.tsx` needs none: the rendering moved to the design
+// system (`@stll/ui/review/review-author-avatar`), so the owner no longer
+// touches the primitive either. The `raw-user-avatar-primitive` ratchet metric
+// covers aliases or indirect imports the module-level AST rule cannot
+// identify.
 
 import {
   filenameForContext,
@@ -19,12 +22,11 @@ import {
 
 // The grouped alias (@stll/ui/components/avatar) is deprecated but still
 // resolves to this module, so both spellings are the primitive.
-const AVATAR_MODULES: readonly string[] = [
+const AVATAR_MODULES: ReadonlySet<string> = new Set([
   "@stll/ui/avatar",
   "@stll/ui/components/avatar",
-];
+]);
 const ALLOWED_FILES = [
-  "apps/web/src/components/user-avatar.tsx",
   "apps/web/src/components/public-workspace-shell.tsx",
   "apps/web/src/routes/auth/organization.tsx",
   "apps/web/src/routes/dev/-components/ui-playground.tsx",
@@ -60,7 +62,7 @@ export default eslintCompatPlugin({
             const source = node.source;
             if (
               !isStringLiteral(source) ||
-              !AVATAR_MODULES.includes(source.value) ||
+              !AVATAR_MODULES.has(source.value) ||
               !Array.isArray(node.specifiers)
             ) {
               return;

@@ -31,17 +31,12 @@ import { useRef } from "react";
 import type { RefObject } from "react";
 
 import { matchesKeyboardEvent } from "@tanstack/react-hotkeys";
-import {
-  CheckIcon,
-  ChevronDownIcon,
-  ChevronUpIcon,
-  RotateCcwIcon,
-  XIcon,
-} from "lucide-react";
+import { ChevronDownIcon, ChevronUpIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import type { DocxEditorRef } from "@stll/folio-react";
 import { Button } from "@stll/ui/button";
+import { ReviewDecisionActions } from "@stll/ui/review-decision-actions";
 import {
   Select,
   SelectItem,
@@ -314,56 +309,43 @@ export const ReviewBar = ({
       </Button>
       <span aria-hidden="true" className="bg-border mx-0.5 h-5 w-px" />
       {activeAction === "revert" && (
-        <Button
-          className="h-7 px-2.5 text-xs"
-          onClick={revertActive}
-          size="sm"
-          tooltip={t("docxReview.revert")}
-          variant="outline"
-        >
-          <RotateCcwIcon className="me-1 size-3.5 @max-[80rem]/file-viewer:me-0" />
-          <span className="@max-[80rem]/file-viewer:hidden">
-            {t("docxReview.revert")}
-          </span>
-        </Button>
+        <ReviewDecisionActions
+          onRevert={revertActive}
+          // Unlike accept/reject, revert keeps its label at every width: it is
+          // the only action in this state and a ghost button with a hidden
+          // label would collapse to nothing.
+          revertLabel={t("docxReview.revert")}
+          size="xs"
+          state="accepted"
+        />
       )}
       {activeAction !== "revert" && activeAction !== "resolved" && (
-        <>
-          <Button
-            className="h-7 px-2.5 text-xs"
-            disabled={activeAction === "busy"}
-            onClick={() => {
-              detached(acceptAndAdvance(), "review-bar.accept-and-advance");
-            }}
-            size="sm"
-            tooltip={`${t("common.accept")} · ${formatHotkeyForPlatform(
-              acceptHotkey,
-              hotkeyPlatform,
-            )}`}
-            variant="default"
-          >
-            <CheckIcon className="me-1 size-3.5 @max-[80rem]/file-viewer:me-0" />
+        <ReviewDecisionActions
+          acceptLabel={
             <span className="@max-[80rem]/file-viewer:hidden">
               {t("common.accept")}
             </span>
-          </Button>
-          <Button
-            className="h-7 px-2.5 text-xs"
-            disabled={activeAction === "busy"}
-            onClick={rejectAndAdvance}
-            size="sm"
-            tooltip={`${t("docxReview.reject")} · ${formatHotkeyForPlatform(
-              rejectHotkey,
-              hotkeyPlatform,
-            )}`}
-            variant="outline"
-          >
-            <XIcon className="me-1 size-3.5 @max-[80rem]/file-viewer:me-0" />
+          }
+          acceptTooltip={`${t("common.accept")} · ${formatHotkeyForPlatform(
+            acceptHotkey,
+            hotkeyPlatform,
+          )}`}
+          onAccept={() => {
+            detached(acceptAndAdvance(), "review-bar.accept-and-advance");
+          }}
+          onReject={rejectAndAdvance}
+          rejectLabel={
             <span className="@max-[80rem]/file-viewer:hidden">
               {t("docxReview.reject")}
             </span>
-          </Button>
-        </>
+          }
+          rejectTooltip={`${t("docxReview.reject")} · ${formatHotkeyForPlatform(
+            rejectHotkey,
+            hotkeyPlatform,
+          )}`}
+          size="xs"
+          state={activeAction === "busy" ? "applying" : "pending"}
+        />
       )}
       {pendingItems.length > 0 && (
         <AcceptAllButton
