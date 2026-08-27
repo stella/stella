@@ -1,10 +1,12 @@
 import { describe, expect, test } from "bun:test";
 
 import type { FieldContent } from "@/api/db/schema-validators";
+import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { allocateFileObject } from "@/api/lib/files/file-object-ids";
 
 import {
+  getFolderSubtree,
   remapFileIds,
   type EntitySnapshot,
   type FileMapping,
@@ -86,5 +88,51 @@ describe("remapFileIds", () => {
     expect(firstContent.id).toBe(firstNewFileId);
     expect(secondContent.id).toBe(secondNewFileId);
     expect(firstContent.id).not.toBe(secondContent.id);
+  });
+});
+
+describe("getFolderSubtree", () => {
+  const folder = (
+    id: SafeId<"entity">,
+    parentId: SafeId<"entity"> | null,
+  ): EntitySnapshot => ({
+    currentVersion: { fields: [] },
+    id,
+    kind: "folder",
+    name: id,
+    parentId,
+  });
+
+  test("collects the root and every descendant once", () => {
+    const child = toSafeId<"entity">("entity_child");
+    const grandchild = toSafeId<"entity">("entity_grandchild");
+    const subtree = getFolderSubtree(
+      [
+        folder(firstEntityId, null),
+        folder(child, firstEntityId),
+        folder(grandchild, child),
+        folder(secondEntityId, null),
+      ],
+      firstEntityId,
+    );
+
+    expect(subtree?.map((entity) => entity.id)).toEqual([
+      firstEntityId,
+      child,
+      grandchild,
+    ]);
+  });
+
+  test("refuses a snapshot whose parent chain closes into a cycle", () => {
+    // Two folders each parented to the other: the walk would enqueue forever.
+    expect(() =>
+      getFolderSubtree(
+        [
+          folder(firstEntityId, secondEntityId),
+          folder(secondEntityId, firstEntityId),
+        ],
+        firstEntityId,
+      ),
+    ).toThrow("Entity parent chain contains a cycle");
   });
 });

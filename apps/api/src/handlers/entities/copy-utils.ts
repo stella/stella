@@ -451,8 +451,17 @@ export const getFolderSubtree = (
 
   const subtree: EntitySnapshot[] = [];
   const queue = [root];
+  // The queue grows while it is walked, so a parent cycle in the snapshot
+  // would enqueue forever. A cycle cannot exist in a well-formed tree; seeing
+  // one means the rows contradict the model, and copying half a cycle would
+  // persist the contradiction.
+  const visited = new Set<SafeId<"entity">>();
 
   for (const entity of queue) {
+    if (visited.has(entity.id)) {
+      panic("Entity parent chain contains a cycle");
+    }
+    visited.add(entity.id);
     subtree.push(entity);
     const children = childrenByParentId.get(entity.id);
     if (!children) {

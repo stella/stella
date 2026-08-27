@@ -125,6 +125,7 @@
     "domhandler": "^6.0.1",
     "drizzle-orm": "catalog:",
     "elysia": "catalog:",
+    "entities": "^4.5.0",
     "franc": "catalog:",
     "ip-address": "^10.5.0",
     "jose": "^6.2.10",

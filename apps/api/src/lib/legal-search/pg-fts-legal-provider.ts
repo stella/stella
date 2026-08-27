@@ -116,7 +116,10 @@ const search = async (query: LegalSearchQuery): Promise<LegalSearchResult> => {
       d.source_url,
       ts_headline(
         ${headlineRegconfig},
-        coalesce(nullif(body_preview.text, ''), d.fulltext, sd.searchable_text),
+        left(
+          coalesce(nullif(body_preview.text, ''), d.fulltext, sd.searchable_text),
+          ${LIMITS.searchHeadlineDocumentMaxChars}
+        ),
         ${ftsSearch.headlineQuery},
         ${TS_HEADLINE_CONFIG}
       ) AS headline,

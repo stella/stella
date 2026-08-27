@@ -10,6 +10,25 @@ const INLINE_ESCAPE = /(?<ch>[\\`*_~[\]<>|])/g;
 const escapeText = (text: string): string =>
   text.replace(INLINE_ESCAPE, "\\$<ch>");
 
+// CommonMark's bracketed link-destination form `(<dest>)` tolerates any
+// byte except an unescaped `<`, `>`, or newline, whereas the bare form
+// `(dest)` ends at the first unescaped `)` — a `)` in the href (common in
+// wiki/query-string URLs) would otherwise close the link early.
+// Destinations that the bare form serializes unambiguously stay bare so
+// downstream consumers matching `](#stella-…)` hrefs keep working.
+const LINK_DESTINATION_ESCAPE = /(?<ch>[\\<>])/g;
+const NEEDS_BRACKETED_DESTINATION = /[\s()<>\\]/;
+
+const renderLinkDestination = (href: string): string => {
+  if (!NEEDS_BRACKETED_DESTINATION.test(href)) {
+    return href;
+  }
+  const escaped = href
+    .replace(/\r?\n/g, " ")
+    .replace(LINK_DESTINATION_ESCAPE, "\\$<ch>");
+  return `<${escaped}>`;
+};
+
 const collapseWhitespace = (text: string): string => text.replace(/\s+/g, " ");
 
 const endsWithWhitespace = (text: string): boolean =>
@@ -94,7 +113,7 @@ const renderInlineElement = (el: Element): string => {
       return "  \n";
     case "a": {
       const href = el.attribs["href"] ?? "";
-      return `[${renderInline(el.children)}](${href})`;
+      return `[${renderInline(el.children)}](${renderLinkDestination(href)})`;
     }
     case "u":
     case "sub":

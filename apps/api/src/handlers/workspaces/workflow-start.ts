@@ -21,8 +21,15 @@ const config = {
   permissions: { workspace: ["update"] },
   mcp: { type: "capability", reason: "workflow_orchestration" },
   body: t.Object({
-    entityIds: t.Optional(t.Array(tSafeId("entity"))),
-    entityIdsOrder: t.Optional(t.Array(tSafeId("entity"))),
+    // A run targets documents of one matter, so the matter's own entity cap
+    // is the most a caller can name. `workspaces.read-workflow-target-count`
+    // carries the same bound so a sizeable set is always a startable one.
+    entityIds: t.Optional(
+      t.Array(tSafeId("entity"), { maxItems: LIMITS.entitiesCount }),
+    ),
+    entityIdsOrder: t.Optional(
+      t.Array(tSafeId("entity"), { maxItems: LIMITS.entitiesCount }),
+    ),
     propertyIds: t.Optional(
       t.Array(tSafeId("property"), { maxItems: LIMITS.propertiesCount }),
     ),

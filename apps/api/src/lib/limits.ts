@@ -70,6 +70,11 @@ export const LIMITS = {
   /** Maximum nesting the folder review snapshot follows. A deeper tree is
    *  reported as incomplete instead of turning recursion into an open bound. */
   folderConsistencyTraversalDepthMax: 32,
+  /** Levels the move handler walks up an entity's parent chain to prove the
+   *  target is not one of its own descendants. A chain still continuing at the
+   *  cap refuses the move: a truncated walk cannot prove the absence of a
+   *  cycle. */
+  entityAncestorWalkDepthMax: 100,
   /** Per-replica concurrency for the legacy workflow worker. The topology
    *  expansion preserves today's budget while every tier still routes here. */
   workflowStandardWorkerConcurrency: 10,
@@ -140,6 +145,14 @@ export const LIMITS = {
   templateCategoriesCount: 100,
   templateRecipesCount: 100,
   templateRecipeFieldsMax: 50,
+  /** Longest `pattern` a template manifest may carry for one field or field
+   *  part. The manifest rides inside an uploaded DOCX, so the pattern is
+   *  compiled and matched in-process at fill time; a longer one is skipped
+   *  rather than compiled. */
+  templateFieldPatternMaxLength: 200,
+  /** Longest submitted value a manifest `pattern` is matched against. A longer
+   *  value is rejected as a field error instead of being matched. */
+  templateFieldPatternValueMaxLength: 1000,
   clausesPerOrganization: 500,
   clausesPageSizeDefault: 50,
   clausesPageSizeMax: 200,
@@ -313,6 +326,11 @@ export const LIMITS = {
   /** Max messages returned before or after a history expansion target. */
   chatHistoryExpansionSideMax: 5,
   extractedContentMaxChars: 500_000,
+  /** Leading characters of a document handed to `ts_headline` for a result
+   *  snippet. Every search branch bounds its document the same way: the cost
+   *  of the highlight scales with the text passed in, and a full decision
+   *  fulltext is orders of magnitude larger than the snippet it yields. */
+  searchHeadlineDocumentMaxChars: 2000,
   /** Maximum encrypted OCR page-geometry payload before AES-GCM overhead. */
   documentOcrPayloadMaxBytes: 16 * 1024 * 1024,
   /** Maximum source PDF the local OCR provider will read and render. */
@@ -326,6 +344,13 @@ export const LIMITS = {
    *  organization. Reaching it rejects the deletion rather than dropping the
    *  remainder: an unrecorded page is an object nothing can name again. */
   organizationStorageTeardownPagesMax: 1000,
+  /** Source pixels (width × height) the thumbnail pipeline will decode. The
+   *  encoded file size does not bound the work: a small file can declare a
+   *  surface of any size, so the budget is checked against the header
+   *  dimensions before the surface is allocated. */
+  imageDerivativeSourcePixelsMax: 40_000_000,
+  /** Wall-clock ceiling for one thumbnail plus blur placeholder. */
+  imageDerivativeTimeoutMs: 30_000,
   /** Hard timeout for adding a searchable text layer to one PDF. */
   ocrPdfGenerationTimeoutMs: 2 * 60_000,
   /** Hard timeout (ms) for the sandboxed extraction subprocess. */

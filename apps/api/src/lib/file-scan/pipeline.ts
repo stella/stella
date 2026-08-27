@@ -1,3 +1,4 @@
+import { createArchiveContentScanner } from "@/api/lib/file-scan/archive";
 import {
   composeScanners,
   createZipBombGuard,
@@ -6,13 +7,31 @@ import type { Match } from "@/api/lib/file-scan/scanner";
 import type { ScanFinding, ScanVerdict } from "@/api/lib/file-scan/types";
 import { yaraScanner } from "@/api/lib/file-scan/yara";
 
+const MAX_ZIP_ENTRIES = 1000;
+
 const zipBombGuard = createZipBombGuard({
-  maxEntries: 1000,
+  maxEntries: MAX_ZIP_ENTRIES,
   maxTotalUncompressedBytes: 500 * 1024 * 1024,
   maxCompressionRatio: 1000,
 });
 
-export const scanner = composeScanners(zipBombGuard, yaraScanner);
+// Inflated bytes are held in memory for rule evaluation, so this budget is
+// far below the size at which the guard above rejects an archive outright.
+const archiveContentScanner = createArchiveContentScanner({
+  inner: yaraScanner,
+  budget: {
+    maxEntries: MAX_ZIP_ENTRIES,
+    maxEntryBytes: 32 * 1024 * 1024,
+    maxTotalBytes: 32 * 1024 * 1024,
+  },
+  guard: zipBombGuard,
+});
+
+export const scanner = composeScanners(
+  zipBombGuard,
+  yaraScanner,
+  archiveContentScanner,
+);
 
 const MATCH_SEVERITY_TO_VERDICT: Record<
   NonNullable<Match["severity"]>,

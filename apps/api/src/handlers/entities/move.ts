@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
@@ -15,6 +15,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { LIMITS } from "@/api/lib/limits";
 import { syncWorkspaceSearchActivity } from "@/api/lib/search/index-global";
 
 const moveEntityBodySchema = t.Object({
@@ -129,17 +130,24 @@ export const moveEntityHandler = async function* ({
       // If the entity being moved is a folder, prevent cycles
       // by checking that the target parent is not a descendant.
       if (entity.kind === "folder") {
-        const isDescendant = await checkIsDescendant(
+        const relation = await readAncestorRelation({
           tx,
-          body.parentId,
-          body.entityId,
+          startId: body.parentId,
+          targetAncestorId: body.entityId,
           workspaceId,
-        );
+        });
 
-        if (isDescendant) {
+        if (relation === "descendant") {
           throw new HandlerError({
             status: 400,
             message: "Cannot move a folder into one of its descendants",
+          });
+        }
+        if (relation === "depth-exceeded") {
+          throw new HandlerError({
+            status: 400,
+            message:
+              "Cannot verify the move target: the folder chain is nested too deeply",
           });
         }
       }
@@ -178,22 +186,35 @@ export const moveEntityHandler = async function* ({
   return Result.ok({});
 };
 
+/** `unrelated` is the only relation that lets the move proceed: the walk
+ *  reached the top of the chain without meeting the target. */
+type AncestorRelation = "descendant" | "unrelated" | "depth-exceeded";
+
+type ReadAncestorRelationProps = {
+  tx: Transaction;
+  startId: SafeId<"entity">;
+  targetAncestorId: SafeId<"entity">;
+  workspaceId: SafeId<"workspace">;
+};
+
 /**
  * Walk up the parent chain from `startId` using a recursive
- * CTE (single query) to check if `targetAncestorId` is an
- * ancestor. Returns true if the start is a descendant of the
- * target.
+ * CTE (single query) to check whether `targetAncestorId` is an
+ * ancestor.
  *
- * The CTE is bounded to 100 levels to guard against data
- * corruption (circular parent references).
+ * The walk is bounded to `entityAncestorWalkDepthMax` levels so a circular
+ * parent reference cannot make it run forever. A chain that still continues
+ * at the cap returns `depth-exceeded`: the query cannot prove the target is
+ * absent from the untraversed remainder, so the caller refuses the move
+ * instead of reading a truncated walk as "no cycle".
  */
-const checkIsDescendant = async (
-  tx: Transaction,
-  startId: SafeId<"entity">,
-  targetAncestorId: SafeId<"entity">,
-  workspaceId: SafeId<"workspace">,
-): Promise<boolean> => {
-  const result = await tx.execute<{ found: boolean }>(sql`
+const readAncestorRelation = async ({
+  tx,
+  startId,
+  targetAncestorId,
+  workspaceId,
+}: ReadAncestorRelationProps): Promise<AncestorRelation> => {
+  const result = await tx.execute<{ found: boolean; truncated: boolean }>(sql`
     WITH RECURSIVE ancestors AS (
       SELECT ${entities.id}, ${entities.parentId}, 1 AS depth
       FROM ${entities}
@@ -204,14 +225,30 @@ const checkIsDescendant = async (
       FROM ${entities} e
       INNER JOIN ancestors a ON e.id = a.parent_id
       WHERE e.workspace_id = ${workspaceId}
-        AND a.depth < 100
+        AND a.depth < ${LIMITS.entityAncestorWalkDepthMax}
     )
-    SELECT EXISTS (
-      SELECT 1 FROM ancestors WHERE id = ${targetAncestorId}
-    ) AS found
+    SELECT
+      EXISTS (
+        SELECT 1 FROM ancestors WHERE id = ${targetAncestorId}
+      ) AS found,
+      EXISTS (
+        SELECT 1 FROM ancestors
+        WHERE depth >= ${LIMITS.entityAncestorWalkDepthMax}
+          AND parent_id IS NOT NULL
+      ) AS truncated
   `);
 
-  return result.at(0)?.found === true;
+  const row = result.at(0);
+  if (row === undefined) {
+    // Both columns are `EXISTS` aggregates, so the query answers one row for
+    // any input. No row means the walk did not run: reading that as "no
+    // ancestor" would let the move through without the check.
+    panic("Ancestor relation query returned no row");
+  }
+  if (row.found) {
+    return "descendant";
+  }
+  return row.truncated ? "depth-exceeded" : "unrelated";
 };
 
 const config = {

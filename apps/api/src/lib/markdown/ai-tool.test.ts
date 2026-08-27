@@ -125,6 +125,35 @@ describe("ai tool", () => {
     expect(serialized.prompt).toContain("https://safe.example");
   });
 
+  test("serialize strips an entity-encoded dangerous href scheme", () => {
+    // HTML-entity-encoding the scheme's leading characters keeps the raw
+    // attribute text from looking like an absolute URL to a check that
+    // never decodes it, while any HTML-entity-aware reader downstream
+    // decodes it back to a live `javascript:` link.
+    const encodedJsScheme = "&#106;avascript:alert(1)";
+    const xss: AITool = {
+      version: 1,
+      type: "ai-model",
+      prompt: `<p><a href="${encodedJsScheme}">click</a></p>`,
+      dependencies: [],
+    };
+    const serialized = serializeAITool(xss);
+    // oxlint-disable-next-line no-script-url -- asserting the unsafe scheme was stripped
+    expect(serialized.prompt).not.toContain("javascript:");
+    expect(serialized.prompt).toBe("[click]()\n");
+  });
+
+  test("serialize preserves an href entity that decodes to an allowed scheme", () => {
+    const xss: AITool = {
+      version: 1,
+      type: "ai-model",
+      prompt: '<p><a href="&#104;ttps://safe.example">ok</a></p>',
+      dependencies: [],
+    };
+    const serialized = serializeAITool(xss);
+    expect(serialized.prompt).toContain("https://safe.example");
+  });
+
   test("serialize allows tel: and mailto: href schemes", () => {
     const tool: AITool = {
       version: 1,

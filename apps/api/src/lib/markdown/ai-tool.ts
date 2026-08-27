@@ -1,4 +1,5 @@
 import * as cheerio from "cheerio";
+import { decodeHTMLAttribute } from "entities";
 
 import type { ConditionNode } from "@stll/conditions";
 
@@ -90,10 +91,14 @@ const sanitizeHtml = (html: string): string =>
         if (tagName !== "a") {
           return;
         }
-        const href = el.getAttribute("href");
-        if (!href) {
+        const rawHref = el.getAttribute("href");
+        if (!rawHref) {
           return;
         }
+        // getAttribute returns the attribute text as written; downstream
+        // consumers decode entities, so validate the decoded value and emit
+        // exactly what was checked.
+        const href = decodeHTMLAttribute(rawHref);
         if (!URL.canParse(href, "https://placeholder.invalid")) {
           el.removeAttribute("href");
           return;
@@ -101,7 +106,9 @@ const sanitizeHtml = (html: string): string =>
         const url = new URL(href, "https://placeholder.invalid");
         if (!ALLOWED_HREF_SCHEMES.has(url.protocol)) {
           el.removeAttribute("href");
+          return;
         }
+        el.setAttribute("href", href);
       },
     })
     .transform(html);

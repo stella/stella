@@ -358,6 +358,27 @@ describe("runSandbox", () => {
     }
   });
 
+  it("stops a script awaiting a never-settling promise without holding the loop to its deadline", async () => {
+    // The VM drains no jobs and no host work is outstanding, so the result
+    // promise can never settle: the run must end on that fact rather than
+    // pumping the event loop until `maxDurationMs`. The elapsed bound is a bug
+    // guard, not a timing measurement: correct behaviour returns in
+    // milliseconds, so the margin against the 10s budget absorbs any runner
+    // load.
+    const startedAt = Date.now();
+    const result = await runSandbox({
+      source: `await new Promise(() => {}); return "unreachable";`,
+      registry: baseRegistry,
+      limits: { maxDurationMs: 10_000 },
+    });
+
+    expect(Date.now() - startedAt).toBeLessThan(5000);
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isError(result)) {
+      expect(result.error.reason).toBe("timeout");
+    }
+  });
+
   it("times out at the deadline instead of waiting for unfinished host work", async () => {
     // The host call blocks on a gate the test releases only AFTER the run has
     // returned, so the run terminating with `timeout` at all proves the

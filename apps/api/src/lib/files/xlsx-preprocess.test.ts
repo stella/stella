@@ -1,6 +1,8 @@
 import { describe, expect, it } from "bun:test";
 import JSZip from "jszip";
 
+import { DOCX_MAX_ENTRIES } from "@/api/lib/docx-archive";
+
 import { applyFitToPage, patchSheetXml } from "./xlsx-preprocess";
 
 const EXPECTED_FIT_TO_PAGE = 'fitToPage="1"';
@@ -172,6 +174,21 @@ describe("applyFitToPage", () => {
     // Plain text: not a ZIP
     const encoder = new TextEncoder();
     const buf = encoder.encode("not a zip file").buffer;
+    const out = await applyFitToPage(buf);
+    expect(out).toBe(buf);
+  });
+
+  it("returns the original buffer when the archive exceeds the entry cap", async () => {
+    // The patch is optional print styling, so an archive the bounded reader
+    // refuses is forwarded untouched rather than inflated in-process.
+    const zip = new JSZip();
+    zip.file("xl/workbook.xml", "<workbook/>");
+    zip.file("xl/worksheets/sheet1.xml", sheetXmlWithNoPageSetup);
+    for (let index = 0; index < DOCX_MAX_ENTRIES; index += 1) {
+      zip.file(`filler/${index}.txt`, "x");
+    }
+    const buf = await zip.generateAsync({ type: "arraybuffer" });
+
     const out = await applyFitToPage(buf);
     expect(out).toBe(buf);
   });
