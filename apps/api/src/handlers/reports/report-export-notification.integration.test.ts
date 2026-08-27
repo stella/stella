@@ -14,6 +14,7 @@ import { notifyReportExportStatus } from "@/api/handlers/reports/report-export-n
 import type { ReportExportNotificationEmail } from "@/api/handlers/reports/report-export-notification";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -362,7 +363,7 @@ type CreateTestUserOptions = {
 const createTestUser = async ({
   emailVerified = true,
 }: CreateTestUserOptions = {}) => {
-  const id = toSafeId<"user">(Bun.randomUUIDv7());
+  const id = mintAuthProviderId<"user">();
   const email = `${id}@test.local`;
   await testDb.insert(user).values({
     email,

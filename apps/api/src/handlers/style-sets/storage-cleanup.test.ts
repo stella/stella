@@ -12,8 +12,8 @@ import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import type { AuditRecorder } from "@/api/lib/audit-log";
-import { createSafeId } from "@/api/lib/branded-types";
 import { DatabaseError } from "@/api/lib/errors/tagged-errors";
+import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 type CleanupClaim = { delayMs?: number; s3Key: string; styleSetId: string };
@@ -64,8 +64,8 @@ const recordAuditEvent: AuditRecorder = async () => undefined;
 const createRejectedStyleSet = async () =>
   await createStoredStyleSet({
     safeDb: failingSafeDb,
-    organizationId: createSafeId<"organization">(),
-    userId: createSafeId<"user">(),
+    organizationId: mintAuthProviderId<"organization">(),
+    userId: mintAuthProviderId<"user">(),
     name: "Kancelářské styly",
     buffer: Buffer.from("style set"),
     recordAuditEvent,

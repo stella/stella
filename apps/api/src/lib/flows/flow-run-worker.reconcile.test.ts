@@ -24,6 +24,7 @@ import type {
   FlowStep,
   FlowTriggerSource,
 } from "@/api/lib/flows/flow-types";
+import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
@@ -55,9 +56,9 @@ const SNAPSHOT: FlowDefinitionSnapshot = {
 };
 
 describe("reconcileOrphanedFlowRuns", () => {
-  const organizationId = createSafeId<"organization">();
+  const organizationId = mintAuthProviderId<"organization">();
   const workspaceId = createSafeId<"workspace">();
-  const userId = createSafeId<"user">();
+  const userId = mintAuthProviderId<"user">();
   const nonTerminalRunIds: SafeId<"flowRun">[] = [];
   const stalledRunIds: SafeId<"flowRun">[] = [];
   const STALL_WINDOW_MS = 15 * 60 * 1000;

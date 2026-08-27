@@ -7,6 +7,7 @@ import {
 } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import { legacyWorkObligationValues } from "@/api/lib/work-obligations/legacy-work-obligation";
+import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 
 describe("legacy work obligation mapping", () => {
   test("replay maps the same legacy deadline to the same governed state", () => {
@@ -18,7 +19,7 @@ describe("legacy work obligation mapping", () => {
       agendaSource: "calendar",
       status: "done",
       dueDate: "2026-02-01",
-      createdBy: createSafeId<"user">(),
+      createdBy: mintAuthProviderId<"user">(),
       createdAt,
       updatedAt: null,
       assigneeUserIds: [],
@@ -39,7 +40,7 @@ describe("legacy work obligation mapping", () => {
   });
 
   test("derives ownership only from one unambiguous assignee", () => {
-    const assignee = createSafeId<"user">();
+    const assignee = mintAuthProviderId<"user">();
     const task = {
       id: createSafeId<"entity">(),
       workspaceId: createSafeId<"workspace">(),
@@ -47,7 +48,7 @@ describe("legacy work obligation mapping", () => {
       agendaSource: null,
       status: "open",
       dueDate: null,
-      createdBy: createSafeId<"user">(),
+      createdBy: mintAuthProviderId<"user">(),
       createdAt: new Date("2026-01-01T00:00:00Z"),
       updatedAt: null,
       assigneeUserIds: [assignee],
@@ -60,7 +61,7 @@ describe("legacy work obligation mapping", () => {
     expect(
       legacyWorkObligationValues({
         ...task,
-        assigneeUserIds: [assignee, createSafeId<"user">()],
+        assigneeUserIds: [assignee, mintAuthProviderId<"user">()],
       }),
     ).toMatchObject({
       ownerUserId: null,

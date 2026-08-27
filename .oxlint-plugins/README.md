@@ -152,6 +152,7 @@ runtime validation, or integration tests.
 
 - [`no-async-context-enter-with`](./no-async-context-enter-with.ts) (`no-async-context-enter-with`): bans `AsyncLocalStorage.enterWith`, whose ambient context can leak into unrelated background work; use `run`.
 - [`no-bare-error`](./no-bare-error.ts) (`no-bare-error`): requires structured tagged errors or `panic()` instead of unclassified `new Error()` values.
+- [`no-minted-auth-provider-id`](./no-minted-auth-provider-id.ts) (`no-minted-auth-provider-id`): bans handing a generated UUID to `toSafeId<"user" | "organization">` or a persisted user/organization brand; those ids come from the auth provider and are not UUIDs.
 - [`no-swallowed-rejection`](./no-swallowed-rejection.ts) (`no-swallowed-rejection`): rejects `.catch()` handlers that silently turn failures into constant empty values.
 - [`no-unpaired-playbook-verdict`](./no-unpaired-playbook-verdict.ts) (`no-unpaired-playbook-verdict`): requires playbook verdict changes to preserve the associated reason and audit context.
 - [`require-detached-label-shape`](./require-detached-label-shape.ts) (`require-detached-label-shape`): requires monitored detached work to use stable `feature.action` labels.

@@ -1,5 +1,5 @@
 import { toSafeId } from "@/api/lib/branded-types";
-import type { SafeId, SafeIdType } from "@/api/lib/branded-types";
+import type { AuthProviderIdType, SafeId } from "@/api/lib/branded-types";
 import { isUuid } from "@/api/lib/custom-schema";
 
 type ActorSessionIdentityInput = {
@@ -244,31 +244,19 @@ export const brandPersistedOrganizationId = (
 ): SafeId<"organization"> => toSafeId<"organization">(organizationId);
 
 /**
- * Id types minted by the auth provider rather than by `createSafeId`. Their
- * columns are opaque text, never `uuid`: Better Auth's default generator
- * (`AUTH_DATABASE_ID_OPTIONS` declares none) produces 32 base62 characters,
- * and self-hosted deployments may configure a UUID generator instead. A
- * predicate over one of these ids must therefore accept every shape the
- * column can hold; `parseAuthProviderId` is the only way to build one, and
- * its type parameter is closed over this list so a UUID-only parser cannot be
- * pointed at an auth-provider id by mistake.
- */
-export const AUTH_PROVIDER_ID_TYPES = [
-  "organization",
-  "user",
-] as const satisfies readonly SafeIdType[];
-
-export type AuthProviderIdType = (typeof AUTH_PROVIDER_ID_TYPES)[number];
-
-/**
- * Widest shape any supported auth id generator emits. Pinned against the real
- * generator in `safe-id-boundaries.test.ts`.
+ * Widest shape any supported auth id generator emits (`AUTH_DATABASE_ID_OPTIONS`
+ * declares none, so the default base62 applies; a configured generator may
+ * produce UUIDs). Pinned against the real generator in
+ * `safe-id-boundaries.test.ts`.
  */
 export const AUTH_PROVIDER_ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/u;
 
 /**
  * Validate an auth-provider id received from outside the database (webhook
- * metadata, a dev seed, a row about to be branded) before branding it.
+ * metadata, a dev seed, a row about to be branded) before branding it. The
+ * type parameter is closed over `AuthProviderIdType`, so a UUID-only parser
+ * cannot be pointed at one of these ids and this parser cannot brand a minted
+ * one.
  */
 export const parseAuthProviderId = <T extends AuthProviderIdType>(
   value: string,

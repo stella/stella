@@ -10,6 +10,7 @@ import {
   workObligations,
 } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
+import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import { updateTaskHandler } from "./update";
@@ -27,7 +28,7 @@ describe("updateTaskHandler feature compatibility", () => {
   test("rejects non-task item types while Legal Lists is disabled", async () => {
     const taskId = createSafeId<"entity">();
     const workspaceId = createSafeId<"workspace">();
-    const userId = createSafeId<"user">();
+    const userId = mintAuthProviderId<"user">();
     const { safeDb } = createScopedDbMock({
       update: () => {
         throw new Error("database should not be accessed");
@@ -57,7 +58,7 @@ describe("updateTaskHandler feature compatibility", () => {
   test("permits the ordinary task item type while Legal Lists is disabled", async () => {
     const taskId = createSafeId<"entity">();
     const workspaceId = createSafeId<"workspace">();
-    const userId = createSafeId<"user">();
+    const userId = mintAuthProviderId<"user">();
     const { safeDb } = createScopedDbMock({
       update: () => ({
         set: () => ({
@@ -83,7 +84,7 @@ describe("updateTaskHandler feature compatibility", () => {
   test("keeps an existing obligation synchronized while enforcement is disabled", async () => {
     const taskId = createSafeId<"entity">();
     const workspaceId = createSafeId<"workspace">();
-    const userId = createSafeId<"user">();
+    const userId = mintAuthProviderId<"user">();
     const workflowUpdates: Record<string, unknown>[] = [];
     const workflow = {
       entityId: taskId,
@@ -137,7 +138,7 @@ describe("updateTaskHandler feature compatibility", () => {
   test("rejects a legacy due date after an existing hard deadline", async () => {
     const taskId = createSafeId<"entity">();
     const workspaceId = createSafeId<"workspace">();
-    const userId = createSafeId<"user">();
+    const userId = mintAuthProviderId<"user">();
     const workflow = {
       entityId: taskId,
       workspaceId,
@@ -184,7 +185,7 @@ describe("updateTaskHandler legacy deadline compatibility", () => {
   test("moves the working target and hard deadline together", async () => {
     const taskId = createSafeId<"entity">();
     const workspaceId = createSafeId<"workspace">();
-    const userId = createSafeId<"user">();
+    const userId = mintAuthProviderId<"user">();
     const workflowUpdates: Record<string, unknown>[] = [];
     const eventBatches: Record<string, unknown>[][] = [];
     const workflow = {

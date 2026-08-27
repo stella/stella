@@ -1,8 +1,7 @@
 import { generateId } from "@better-auth/core/utils/id";
 
 import { toSafeId } from "@/api/lib/branded-types";
-import type { SafeId } from "@/api/lib/branded-types";
-import type { AuthProviderIdType } from "@/api/lib/safe-id-boundaries";
+import type { AuthProviderIdType, SafeId } from "@/api/lib/branded-types";
 
 // Better Auth's default id length; `AUTH_DATABASE_ID_OPTIONS` declares no
 // generator, so this is exactly what the `user`, `organization`, and `member`

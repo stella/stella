@@ -9,6 +9,7 @@ import {
   DatabaseRlsError,
 } from "@/api/lib/errors/tagged-errors";
 import { PG_ERROR } from "@/api/lib/pg-error";
+import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 
 /**
  * A transaction that fails before its callback runs.
@@ -38,8 +39,8 @@ const failedTransaction = async (error: unknown) => {
   const outcome = await createSafeDb(
     rejectingDb(error),
     [createSafeId<"workspace">()],
-    createSafeId<"organization">(),
-    createSafeId<"user">(),
+    mintAuthProviderId<"organization">(),
+    mintAuthProviderId<"user">(),
   )(unreachableCallback);
 
   if (!Result.isError(outcome)) {
