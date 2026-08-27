@@ -160,6 +160,7 @@ export const DOC_SOURCES = {
     dependencies: [
       "better-auth",
       "@better-auth/api-key",
+      "@better-auth/core",
       "@better-auth/oauth-provider",
     ],
     url: "https://better-auth.com/llms.txt",
