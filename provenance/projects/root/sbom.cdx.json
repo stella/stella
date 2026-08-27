@@ -8465,7 +8465,7 @@
           "name": "Yuki Yokotani <silurus.dev@gmail.com>"
         }
       ],
-      "bom-ref": "pkg:npm/@silurus/ooxml@0.76.2",
+      "bom-ref": "pkg:npm/@silurus/ooxml@0.82.1",
       "description": "Browser-based OOXML viewer (docx/xlsx/pptx) — Rust/WASM parser + Canvas renderer",
       "evidence": {
         "identity": [
@@ -8528,13 +8528,13 @@
           "value": "apps/api/node_modules/@silurus/ooxml/package.json"
         }
       ],
-      "purl": "pkg:npm/%40silurus/ooxml@0.76.2",
+      "purl": "pkg:npm/%40silurus/ooxml@0.82.1",
       "scope": "required",
       "tags": [
         "xml"
       ],
       "type": "library",
-      "version": "0.76.2"
+      "version": "0.82.1"
     },
     {
       "authors": [
@@ -18588,6 +18588,9 @@
             "location": "apps/api/src/lib/legal-search/corpus-index-facets.ts#1"
           },
           {
+            "location": "apps/api/src/lib/legal-search/corpus-index-generation-store.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/legal-search/corpus-index-manifest.ts#1"
           },
           {
@@ -18606,6 +18609,9 @@
             "location": "apps/api/src/lib/legal-search/corpus-index-projection-cleanup-store.ts#1"
           },
           {
+            "location": "apps/api/src/lib/legal-search/corpus-index-projection-convergence.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/legal-search/corpus-index-projection-descriptor.ts#1"
           },
           {
@@ -18622,6 +18628,9 @@
           },
           {
             "location": "apps/api/src/lib/legal-search/corpus-index-projection-materials.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/legal-search/corpus-index-projection-revision.ts#1"
           },
           {
             "location": "apps/api/src/lib/legal-search/corpus-index-projection-store.ts#1"
@@ -18985,6 +18994,12 @@
           },
           {
             "location": "apps/api/src/scripts/better-auth-17-backfill.ts#10"
+          },
+          {
+            "location": "apps/api/src/scripts/better-auth-microsoft-identity-map.logic.ts#1"
+          },
+          {
+            "location": "apps/api/src/scripts/better-auth-microsoft-identity-map.ts#11"
           },
           {
             "location": "apps/api/src/scripts/better-auth-migration-audit.logic.ts#9"
@@ -22292,6 +22307,9 @@
             "location": "apps/api/src/lib/legal-search/case-law-source-ingestion-lease.ts#1"
           },
           {
+            "location": "apps/api/src/lib/legal-search/corpus-index-generation-store.ts#2"
+          },
+          {
             "location": "apps/api/src/lib/legal-search/corpus-index-projection-bootstrap.ts#2"
           },
           {
@@ -22301,6 +22319,9 @@
             "location": "apps/api/src/lib/legal-search/corpus-index-projection-cleanup-store.ts#2"
           },
           {
+            "location": "apps/api/src/lib/legal-search/corpus-index-projection-convergence.ts#2"
+          },
+          {
             "location": "apps/api/src/lib/legal-search/corpus-index-projection-desired-state.ts#2"
           },
           {
@@ -22308,6 +22329,12 @@
           },
           {
             "location": "apps/api/src/lib/legal-search/corpus-index-projection-materials.ts#2"
+          },
+          {
+            "location": "apps/api/src/lib/legal-search/corpus-index-projection-revision.ts#2"
+          },
+          {
+            "location": "apps/api/src/lib/legal-search/corpus-index-projection-sql.ts#1"
           },
           {
             "location": "apps/api/src/lib/legal-search/corpus-index-projection-store.ts#2"
@@ -22664,6 +22691,12 @@
             "location": "apps/api/src/scripts/better-auth-17-backfill.ts#13"
           },
           {
+            "location": "apps/api/src/scripts/better-auth-microsoft-identity-map.ts#13"
+          },
+          {
+            "location": "apps/api/src/scripts/better-auth-microsoft-identity-map.ts#14"
+          },
+          {
             "location": "apps/api/src/scripts/better-auth-migration-audit.logic.ts#10"
           },
           {
@@ -22785,6 +22818,9 @@
           },
           {
             "location": "apps/api/src/scripts/better-auth-17-backfill.ts#13"
+          },
+          {
+            "location": "apps/api/src/scripts/better-auth-microsoft-identity-map.ts#14"
           },
           {
             "location": "apps/api/src/scripts/better-auth-migration-audit.ts#14"
@@ -25144,6 +25180,15 @@
           },
           {
             "location": "apps/api/src/mcp/auth.ts#2"
+          },
+          {
+            "location": "apps/api/src/scripts/better-auth-microsoft-identity-map.logic.ts#2"
+          },
+          {
+            "location": "apps/api/src/scripts/better-auth-microsoft-identity-map.logic.ts#3"
+          },
+          {
+            "location": "apps/api/src/scripts/better-auth-microsoft-identity-map.ts#19"
           }
         ]
       },
@@ -25337,7 +25382,7 @@
             "location": "apps/web/src/lib/value-types.ts#22"
           },
           {
-            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#35"
+            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#36"
           },
           {
             "location": "apps/desktop/src/clipboard/ClipboardEditor.tsx#12"
@@ -26204,7 +26249,7 @@
             "location": "apps/web/src/routes/onboarding/-components/steps/catalogue-step.tsx#10"
           },
           {
-            "location": "apps/web/src/routes/onboarding/-components/steps/download-step.tsx#3"
+            "location": "apps/web/src/routes/onboarding/-components/steps/download-step.tsx#8"
           },
           {
             "location": "apps/web/src/routes/onboarding/-components/steps/invite-step.tsx#3"
@@ -30724,7 +30769,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/-hooks/use-sort-labels.ts#1"
           },
           {
-            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#36"
+            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#37"
           },
           {
             "location": "apps/desktop/src/clipboard/ClipboardEditor.tsx#13"
@@ -31990,7 +32035,7 @@
             "location": "apps/web/src/routes/onboarding/-components/steps/catalogue-step.tsx#11"
           },
           {
-            "location": "apps/web/src/routes/onboarding/-components/steps/download-step.tsx#4"
+            "location": "apps/web/src/routes/onboarding/-components/steps/download-step.tsx#9"
           },
           {
             "location": "apps/web/src/routes/onboarding/-components/steps/invite-step.tsx#4"
@@ -32529,6 +32574,9 @@
           },
           {
             "location": "apps/api/src/mcp/valibot-tool-definition.ts#3"
+          },
+          {
+            "location": "apps/api/src/scripts/better-auth-microsoft-identity-map.ts#22"
           },
           {
             "location": "apps/api/src/scripts/better-auth-migration-audit.logic.ts#12"
