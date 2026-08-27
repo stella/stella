@@ -1075,6 +1075,16 @@ type Messages = {
     "documentation": "Documentation";
     "done": "Done";
     "download": "Download";
+    "dragAndDrop": {
+      "cancelled": "{count, plural, one {Move cancelled. {itemName} was not moved.} other {Move cancelled. {itemName} were not moved.}}";
+      "droppedOn": "{count, plural, one {Dropped {itemName} on {destinationName}.} other {Dropped {itemName} on {destinationName}.}}";
+      "movedNear": "{count, plural, one {Moved {itemName} near {destinationName}.} other {Moved {itemName} near {destinationName}.}}";
+      "movedTo": "{count, plural, one {Moved {itemName} to {destinationName}.} other {Moved {itemName} to {destinationName}.}}";
+      "movingNear": "{count, plural, one {Moving {itemName} near {destinationName}.} other {Moving {itemName} near {destinationName}.}}";
+      "movingTo": "{count, plural, one {Moving {itemName} to {destinationName}.} other {Moving {itemName} to {destinationName}.}}";
+      "pickedUp": "{count, plural, one {Picked up {itemName}.} other {Picked up {itemName}.}}";
+      "selectedItems": "{count, plural, one {# selected item} other {# selected items}}";
+    };
     "duplicate": "Duplicate";
     "duplicated": "Duplicated";
     "edit": "Edit";
@@ -4069,9 +4079,12 @@ type Messages = {
       "copyOption": "Copy (keep original)";
       "description": "Copy or move \"{name}\" to another Matter";
       "descriptionCount": "Copy or move {count, plural, one {# item} other {# items}} to another Matter";
+      "dragFolder": "Drag to move folder";
       "goToMatter": "Go to matter";
       "menuItem": "Copy/Move to Matter";
       "moveButton": "Move";
+      "moveFolder": "Move folder";
+      "moveFolderTo": "Move folder to";
       "moveOption": "Move (delete original)";
       "moved": "Moved to Matter";
       "noOtherMatters": "No other Matters available";

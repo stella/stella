@@ -5,25 +5,57 @@ import {
   cleanup,
 } from "@atlaskit/pragmatic-drag-and-drop-live-region";
 import { monitorForElements } from "@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter";
+import { useTranslations } from "use-intl";
 
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 
 import {
   type DragAnnouncementDestination,
   type DragAnnouncementPhase,
-  formatDragCancellationAnnouncement,
-  formatDragDestinationAnnouncement,
-  formatDragPickupAnnouncement,
-  getDragAnnouncementName,
+  type DragAnnouncementSubject,
+  getDragAnnouncementMessageKey,
+  getDragAnnouncementSubject,
   getDropAnnouncementDestination,
 } from "./drag-and-drop-live-region.logic";
 
 export const DragAndDropLiveRegion = () => {
+  const t = useTranslations("common.dragAndDrop");
   const lastDestinationRef = useRef<string | null>(null);
 
   useExternalSyncEffect(() => {
+    const formatDestination = ({
+      destination,
+      phase,
+      subject,
+    }: AnnounceDestinationOptions) => {
+      const values = {
+        count: subject.count,
+        destinationName: destination.name,
+        itemName: subject.name,
+      };
+      const messageKey = getDragAnnouncementMessageKey(phase, destination.type);
+      switch (messageKey) {
+        case "movingTo":
+          return t("movingTo", values);
+        case "movingNear":
+          return t("movingNear", values);
+        case "droppedOn":
+          return t("droppedOn", values);
+        case "movedTo":
+          return t("movedTo", values);
+        case "movedNear":
+          return t("movedNear", values);
+        default:
+          return messageKey satisfies never;
+      }
+    };
     const stopMonitoring = registerDragAnnouncements(
-      DRAG_ANNOUNCEMENT_FORMATTER,
+      {
+        cancelled: ({ count, name }) =>
+          t("cancelled", { count, itemName: name }),
+        destination: formatDestination,
+        pickedUp: ({ count, name }) => t("pickedUp", { count, itemName: name }),
+      },
       lastDestinationRef,
     );
 
@@ -31,31 +63,25 @@ export const DragAndDropLiveRegion = () => {
       stopMonitoring();
       cleanup();
     };
-  }, []);
+  }, [t]);
 
   return null;
 };
 
 type AnnounceDestinationOptions = {
   destination: DragAnnouncementDestination;
-  itemName: string;
   phase: DragAnnouncementPhase;
+  subject: DragAnnouncementSubject;
 };
 
 type DragAnnouncementFormatter = {
-  cancelled: (itemName: string) => string;
+  cancelled: (subject: DragAnnouncementSubject) => string;
   destination: (options: AnnounceDestinationOptions) => string;
-  pickedUp: (itemName: string) => string;
+  pickedUp: (subject: DragAnnouncementSubject) => string;
 };
 
 type DestinationTracker = {
   current: string | null;
-};
-
-const DRAG_ANNOUNCEMENT_FORMATTER: DragAnnouncementFormatter = {
-  cancelled: formatDragCancellationAnnouncement,
-  destination: formatDragDestinationAnnouncement,
-  pickedUp: formatDragPickupAnnouncement,
 };
 
 const registerDragAnnouncements = (
@@ -63,21 +89,22 @@ const registerDragAnnouncements = (
   lastDestination: DestinationTracker,
 ) =>
   monitorForElements({
-    canMonitor: ({ source }) => getDragAnnouncementName(source.data) !== null,
+    canMonitor: ({ source }) =>
+      getDragAnnouncementSubject(source.data) !== null,
     onDragStart: ({ source }) => {
-      const itemName = getDragAnnouncementName(source.data);
-      if (!itemName) {
+      const subject = getDragAnnouncementSubject(source.data);
+      if (!subject) {
         return;
       }
       lastDestination.current = null;
-      announce(format.pickedUp(itemName));
+      announce(format.pickedUp(subject));
     },
     onDropTargetChange: ({ source, location }) => {
-      const itemName = getDragAnnouncementName(source.data);
+      const subject = getDragAnnouncementSubject(source.data);
       const destination = getDropAnnouncementDestination(
         location.current.dropTargets,
       );
-      if (!itemName || !destination) {
+      if (!subject || !destination) {
         lastDestination.current = null;
         return;
       }
@@ -86,11 +113,11 @@ const registerDragAnnouncements = (
         return;
       }
       lastDestination.current = destinationKey;
-      announce(format.destination({ destination, itemName, phase: "moving" }));
+      announce(format.destination({ destination, phase: "moving", subject }));
     },
     onDrop: ({ source, location }) => {
-      const itemName = getDragAnnouncementName(source.data);
-      if (!itemName) {
+      const subject = getDragAnnouncementSubject(source.data);
+      if (!subject) {
         return;
       }
       const destination = getDropAnnouncementDestination(
@@ -98,9 +125,9 @@ const registerDragAnnouncements = (
       );
       lastDestination.current = null;
       if (!destination) {
-        announce(format.cancelled(itemName));
+        announce(format.cancelled(subject));
         return;
       }
-      announce(format.destination({ destination, itemName, phase: "moved" }));
+      announce(format.destination({ destination, phase: "moved", subject }));
     },
   });

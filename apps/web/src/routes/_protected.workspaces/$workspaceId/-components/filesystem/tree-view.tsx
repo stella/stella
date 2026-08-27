@@ -37,7 +37,6 @@ import { cn } from "@stll/ui/utils";
 
 import { DocumentIcon } from "@/components/document-icon";
 import {
-  formatSelectedItemsAnnouncement,
   withDragAnnouncementData,
   withDropAnnouncementData,
 } from "@/components/drag-and-drop-live-region.logic";
@@ -1371,7 +1370,12 @@ const FilesystemRow = ({
               kind: node.kind,
               mimeType: file?.mimeType ?? null,
             },
-            isMulti ? formatSelectedItemsAnnouncement(entityIds.length) : name,
+            isMulti
+              ? t("common.dragAndDrop.selectedItems", {
+                  count: entityIds.length,
+                })
+              : name,
+            entityIds.length,
           );
         },
         onGenerateDragPreview: ({ nativeSetDragImage }) => {
@@ -1457,6 +1461,7 @@ const FilesystemRow = ({
     getCurrentSelectedIds,
     getCurrentAncestorIds,
     moveEntitiesToFolder,
+    t,
   ]);
 
   // Shared cells: Name + Type. The presentation (indent, guide lines, chevron,
