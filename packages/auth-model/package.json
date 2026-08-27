@@ -1,6 +1,6 @@
 {
   "name": "@stll/auth-model",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Portable Better Auth core contract and parity checks.",
   "keywords": [
     "authentication",

@@ -436,7 +436,7 @@
     },
     "packages/ai-catalog": {
       "name": "@stll/ai-catalog",
-      "version": "0.1.1",
+      "version": "0.1.2",
       "dependencies": {
         "valibot": "catalog:",
       },
@@ -495,7 +495,7 @@
     },
     "packages/auth-model": {
       "name": "@stll/auth-model",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "devDependencies": {
         "@stll/typescript-config": "workspace:*",
         "better-auth": "catalog:",
@@ -562,7 +562,7 @@
     },
     "packages/cli": {
       "name": "@stll/cli",
-      "version": "0.6.6",
+      "version": "0.6.7",
       "bin": {
         "stella": "./dist/cli.js",
       },
@@ -808,7 +808,7 @@
     },
     "packages/ui": {
       "name": "@stll/ui",
-      "version": "0.5.2",
+      "version": "0.6.0",
       "dependencies": {
         "class-variance-authority": "^0.7.1",
         "clsx": "^2.1.1",
@@ -859,7 +859,7 @@
     },
     "packages/workspace-ui": {
       "name": "@stll/workspace-ui",
-      "version": "0.3.0",
+      "version": "0.3.1",
       "dependencies": {
         "@stll/calculations": "workspace:^",
         "@stll/conditions": "workspace:^",

@@ -1,5 +1,11 @@
 # @stll/ai-catalog
 
+## 0.1.2
+
+### Patch Changes
+
+- [#2450](https://github.com/stella/stella/pull/2450) [`fe5e771`](https://github.com/stella/stella/commit/fe5e7716a5d322aa23fbc3c8f683ae27a6142f51) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Refresh gpt-5.6 rate schedule to match upstream cost metadata.
+
 ## 0.1.1
 
 ### Patch Changes
