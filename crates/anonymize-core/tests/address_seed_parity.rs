@@ -261,6 +261,71 @@ fn keeps_date_like_street_name_in_address_seed_span() {
   assert!(!result.redaction.redacted_text.contains("May 15 Street"));
 }
 
+/// A barrier entity between two halves of an address splits the seed cluster.
+/// Each half is then judged on its own, and a street with no city beside it
+/// carries only one kind of evidence, so it used to be dropped. Standalone
+/// street detection is off here, matching the shipped default, so the run
+/// evidence is what has to keep the street.
+#[test]
+fn keeps_both_halves_of_an_address_split_by_a_case_number() {
+  let literal = |pattern: &str| SearchPattern::LiteralWithOptions {
+    pattern: String::from(pattern),
+    case_insensitive: Some(true),
+    whole_words: Some(true),
+  };
+  let prepared = PreparedEngine::new(prepared_config! {
+    regex_patterns: vec![SearchPattern::Regex(String::from(
+      r"\d:\d{2}-cv-\d{5}",
+    ))],
+    regex_meta: vec![RegexMatchMeta::new("case number", 0.9)],
+    literal_patterns: vec![literal("Paris"), literal("Street")],
+    literal_options: SearchOptions {
+      literal: LiteralSearchOptions {
+        case_insensitive: true,
+        whole_words: false,
+      },
+      ..SearchOptions::default()
+    },
+    slices: PreparedEngineSlices {
+      regex: PatternSlice { start: 0, end: 1 },
+      deny_list: PatternSlice { start: 0, end: 1 },
+      street_types: PatternSlice { start: 1, end: 2 },
+      ..PreparedEngineSlices::default()
+    },
+    deny_list_data: Some(DenyListMatchData {
+      labels: vec![vec![String::from("address")]].into(),
+      custom_labels: vec![vec![]].into(),
+      originals: vec![String::from("Paris")],
+      pattern_meta: stella_anonymize_core::DenyListPatternMetaSet::default(),
+      sources: vec![vec![String::from("city")]].into(),
+      filters: Some(DenyListFilterData::default()),
+    }),
+    address_seed_data: Some(AddressSeedData::default()),
+    ..empty_config(PreparedEngineSlices::default())
+  })
+  .expect("address seed data should prepare");
+
+  let result = prepared
+    .redact_static_entities(
+      "Notices to 123 Main Street, Case No. 1:23-cv-04567, Paris 75002.",
+      &OperatorConfig::default(),
+    )
+    .expect("static redaction should succeed");
+
+  let addresses = address_texts(&result);
+  assert!(
+    addresses.contains(&"123 Main Street"),
+    "street half was dropped; addresses: {addresses:?}",
+  );
+  assert!(
+    addresses.contains(&"Paris 75002"),
+    "city half was dropped; addresses: {addresses:?}",
+  );
+  assert!(!result.redaction.redacted_text.contains("Main Street"));
+  // The barrier still keeps the case number out of the address span.
+  assert!(!result.redaction.redacted_text.contains("1:23-cv-04567"));
+}
+
 #[test]
 fn clusters_address_seeds_across_multibyte_text_gap() {
   let prepared = PreparedEngine::new(prepared_config! {

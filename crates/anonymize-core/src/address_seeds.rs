@@ -384,17 +384,29 @@ impl PreparedAddressSeedData {
     }
     let mut boundary_starts = None;
     let mut results = Vec::new();
+    let runs = run_evidence(&clusters);
 
     for cluster in clusters {
-      let (score, growth) = score_cluster(&cluster).map_or_else(
-        || {
+      let (score, growth) = match score_cluster(&cluster) {
+        Some(score) => (score, self.cluster_growth(&cluster, full_text)),
+        // A barrier split this cluster off an address that does carry enough
+        // evidence, so it is still address material. Keep the span tight: on
+        // its own it has no destination to bound its right edge.
+        None
+          if runs
+            .get(cluster.run)
+            .is_some_and(|evidence| evidence.is_sufficient()) =>
+        {
           (
-            self.standalone_street_score(&cluster, full_text),
+            AddressEvidence::collect(&cluster.seeds).score(),
             SpanGrowth::StreetNameOnly,
           )
-        },
-        |score| (score, self.cluster_growth(&cluster, full_text)),
-      );
+        }
+        None => (
+          self.standalone_street_score(&cluster, full_text),
+          SpanGrowth::StreetNameOnly,
+        ),
+      };
       if score < 0.6 {
         continue;
       }
@@ -1047,6 +1059,10 @@ struct SeedCluster {
   seeds: Vec<Seed>,
   start: usize,
   end: usize,
+  /// Clusters separated only by a barrier entity share a run: they were one
+  /// candidate address before a case number, date, or person split them. A
+  /// distance gap starts a new run, because those seeds are unrelated.
+  run: usize,
 }
 
 impl SeedCluster {
@@ -2064,37 +2080,47 @@ fn cluster_seeds(
   };
 
   let mut clusters = Vec::new();
+  let mut run = 0usize;
   let mut current = SeedCluster {
     seeds: vec![first.clone()],
     start: first.start,
     end: first.end,
+    run,
   };
   for seed in seeds.iter().skip(1) {
-    let gap_ok = within_text_window(
+    let within_window = within_text_window(
       full_text,
       current.end,
       seed.start,
       ADDRESS_CLUSTER_MAX_GAP,
-    ) && !has_cluster_barrier(
-      full_text,
-      current.end,
-      seed.start,
-      ClusterJoin {
-        cluster: &current,
-        seed,
-      },
-      entity_index,
     );
-    if gap_ok {
+    let barrier = within_window
+      && has_cluster_barrier(
+        full_text,
+        current.end,
+        seed.start,
+        ClusterJoin {
+          cluster: &current,
+          seed,
+        },
+        entity_index,
+      );
+    if within_window && !barrier {
       current.seeds.push(seed.clone());
       current.end = current.end.max(seed.end);
       continue;
+    }
+    // Only a distance gap breaks the run. A barrier split keeps it, so the
+    // fragments can still vouch for each other as address evidence.
+    if !within_window {
+      run = run.saturating_add(1);
     }
     clusters.push(current);
     current = SeedCluster {
       seeds: vec![seed.clone()],
       start: seed.start,
       end: seed.end,
+      run,
     };
   }
   clusters.push(current);
@@ -2356,57 +2382,88 @@ fn has_paragraph_break(text: &str) -> bool {
   false
 }
 
-/// `None` when the cluster carries fewer than two kinds of address evidence,
-/// which is too little for an address on its own. Standalone street detection
-/// re-scores exactly that case; see `standalone_street_score`.
-fn score_cluster(cluster: &SeedCluster) -> Option<f64> {
-  let mut has_street_word = false;
-  let mut has_postal_code = false;
-  let mut has_city = false;
-  let mut has_state = false;
-  let mut has_address_trigger = false;
+/// Which kinds of address evidence a set of seeds carries, one bit per
+/// `SeedType`.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+struct AddressEvidence(u8);
 
-  for seed in &cluster.seeds {
-    match seed.kind {
-      SeedType::StreetWord => has_street_word = true,
-      SeedType::PostalCode => has_postal_code = true,
-      SeedType::City => has_city = true,
-      SeedType::State => has_state = true,
-      SeedType::AddressTrigger => has_address_trigger = true,
+impl AddressEvidence {
+  const fn bit(kind: SeedType) -> u8 {
+    match kind {
+      SeedType::StreetWord => 1,
+      SeedType::PostalCode => 1 << 1,
+      SeedType::City => 1 << 2,
+      SeedType::State => 1 << 3,
+      SeedType::AddressTrigger => 1 << 4,
     }
   }
 
-  let type_count = [
-    has_street_word,
-    has_postal_code,
-    has_city,
-    has_state,
-    has_address_trigger,
-  ]
-  .into_iter()
-  .filter(|seen| *seen)
-  .count();
-  if type_count < 2 {
-    return None;
+  fn collect<'seed>(seeds: impl IntoIterator<Item = &'seed Seed>) -> Self {
+    Self(
+      seeds
+        .into_iter()
+        .fold(0, |bits, seed| bits | Self::bit(seed.kind)),
+    )
   }
 
-  let mut score = ADDRESS_SCORE_BASE;
-  if has_postal_code {
-    score += 0.15;
+  const fn merge(self, other: Self) -> Self {
+    Self(self.0 | other.0)
   }
-  if has_city {
-    score += 0.15;
+
+  const fn contains(self, kind: SeedType) -> bool {
+    self.0 & Self::bit(kind) != 0
   }
-  if has_state {
-    score += 0.15;
+
+  /// Two kinds of evidence is the floor for an address on its own.
+  const fn is_sufficient(self) -> bool {
+    self.0.count_ones() >= 2
   }
-  if has_street_word {
-    score += 0.15;
+
+  fn score(self) -> f64 {
+    let mut score = ADDRESS_SCORE_BASE;
+    if self.contains(SeedType::PostalCode) {
+      score += 0.15;
+    }
+    if self.contains(SeedType::City) {
+      score += 0.15;
+    }
+    if self.contains(SeedType::State) {
+      score += 0.15;
+    }
+    if self.contains(SeedType::StreetWord) {
+      score += 0.15;
+    }
+    if self.contains(SeedType::AddressTrigger) {
+      score += 0.1;
+    }
+    score.min(ADDRESS_SCORE_MAX)
   }
-  if has_address_trigger {
-    score += 0.1;
+}
+
+/// `None` when the cluster carries fewer than two kinds of address evidence,
+/// which is too little for an address on its own. A cluster split off by a
+/// barrier is re-scored against its run; standalone street detection covers
+/// what remains. See `run_evidence` and `standalone_street_score`.
+fn score_cluster(cluster: &SeedCluster) -> Option<f64> {
+  let evidence = AddressEvidence::collect(&cluster.seeds);
+  evidence.is_sufficient().then(|| evidence.score())
+}
+
+/// Evidence per barrier run, indexed by `SeedCluster::run`. A case number,
+/// date, or person between two halves of an address splits the cluster but
+/// does not make either half unrelated, so the halves qualify together.
+fn run_evidence(clusters: &[SeedCluster]) -> Vec<AddressEvidence> {
+  let mut runs: Vec<AddressEvidence> = Vec::new();
+  for cluster in clusters {
+    if runs.len() <= cluster.run {
+      runs.resize(cluster.run.saturating_add(1), AddressEvidence::default());
+    }
+    let Some(existing) = runs.get_mut(cluster.run) else {
+      continue;
+    };
+    *existing = existing.merge(AddressEvidence::collect(&cluster.seeds));
   }
-  Some(score.min(ADDRESS_SCORE_MAX))
+  runs
 }
 
 fn nearest_left_non_address(
