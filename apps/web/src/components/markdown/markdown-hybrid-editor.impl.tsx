@@ -111,6 +111,9 @@ export const MarkdownHybridEditor = ({
   return (
     <div
       aria-label={t("markdownEditor.rawLabel")}
+      // Markdown source is a left-to-right document even under an RTL locale:
+      // syntax markers, caret movement, and block layout must not mirror.
+      dir="ltr"
       className={cn(
         "markdown-hybrid-editor min-h-0 flex-1 overflow-y-auto",
         className,
