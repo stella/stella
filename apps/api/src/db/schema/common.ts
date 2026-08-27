@@ -81,7 +81,11 @@ import type {
 import type { ClauseMetadata } from "@/api/handlers/clauses/metadata";
 import type { TemplateRecipeDefinition } from "@/api/handlers/template-recipes/definition";
 import { createSafeId } from "@/api/lib/branded-types";
-import type { SafeId, SafeIdType } from "@/api/lib/branded-types";
+import type {
+  MintedSafeIdType,
+  SafeId,
+  SafeIdType,
+} from "@/api/lib/branded-types";
 import type { ClauseBody } from "@/api/lib/clauses/types";
 import type { DocumentSource } from "@/api/lib/document-source";
 import type { TemplateManifest } from "@/api/lib/docx/types";
@@ -311,13 +315,15 @@ export const safeWorkspaceId = (name: string) =>
 export const safeOrganizationId = (name: string) =>
   p.varchar(name, { length: 128 }).$type<SafeId<"organization">>();
 
-export const safeUuid = <T extends SafeIdType>(name: string) =>
+// A `uuid` column can only hold an id this codebase mints; auth-provider ids
+// (`user`, `organization`) are text and never fit here.
+export const safeUuid = <T extends MintedSafeIdType>(name: string) =>
   p.uuid(name).$type<SafeId<T>>();
 
 export const centsColumn = (name: string) =>
   p.integer(name).$type<CentsAmount>();
 
-export const pUuid = <T extends SafeIdType>() =>
+export const pUuid = <T extends MintedSafeIdType>() =>
   p
     .uuid()
     .$defaultFn(createSafeId<T>)
