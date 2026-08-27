@@ -736,9 +736,7 @@ export const folioCollabRooms = p.pgTable(
     entityId: safeUuid<"entity">("entity_id").notNull(),
     propertyId: safeUuid<"property">("property_id").notNull(),
     generation: p.bigint("generation", { mode: "number" }).notNull().default(0),
-    baseVersionId: safeUuid<"entityVersion">("base_version_id")
-      .notNull()
-      .references(() => entityVersions.id),
+    baseVersionId: safeUuid<"entityVersion">("base_version_id").notNull(),
     fileName: p.varchar("file_name", { length: 256 }).notNull(),
     yjsSnapshotFileId: safeUuid<"userFile">("yjs_snapshot_file_id").notNull(),
     yjsSnapshotSizeBytes: p.integer("yjs_snapshot_size_bytes"),
@@ -824,6 +822,15 @@ export const folioCollabRooms = p.pgTable(
         name: "folio_collab_rooms_property_workspace_fk",
       })
       .onDelete("cascade"),
+    p.foreignKey({
+      columns: [table.baseVersionId, table.entityId, table.workspaceId],
+      foreignColumns: [
+        entityVersions.id,
+        entityVersions.entityId,
+        entityVersions.workspaceId,
+      ],
+      name: "folio_collab_rooms_base_version_entity_workspace_fk",
+    }),
     ...wsPolicies(),
   ],
 );

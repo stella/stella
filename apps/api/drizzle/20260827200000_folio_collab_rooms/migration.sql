@@ -84,8 +84,9 @@ ALTER TABLE "folio_collab_rooms"
   ADD CONSTRAINT "folio_collab_rooms_workspace_id_workspaces_id_fk"
   FOREIGN KEY ("workspace_id") REFERENCES "workspaces"("id") ON DELETE CASCADE;--> statement-breakpoint
 ALTER TABLE "folio_collab_rooms"
-  ADD CONSTRAINT "folio_collab_rooms_base_version_id_entity_versions_id_fk"
-  FOREIGN KEY ("base_version_id") REFERENCES "entity_versions"("id");--> statement-breakpoint
+  ADD CONSTRAINT "folio_collab_rooms_base_version_entity_workspace_fk"
+  FOREIGN KEY ("base_version_id", "entity_id", "workspace_id")
+  REFERENCES "entity_versions"("id", "entity_id", "workspace_id");--> statement-breakpoint
 ALTER TABLE "folio_collab_rooms"
   ADD CONSTRAINT "folio_collab_rooms_seed_claimed_by_user_id_fk"
   FOREIGN KEY ("seed_claimed_by") REFERENCES "user"("id") ON DELETE SET NULL;--> statement-breakpoint

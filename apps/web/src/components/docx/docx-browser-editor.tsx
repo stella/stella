@@ -1106,13 +1106,19 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
       return;
     }
 
-    setAutosaveStatus("pending");
     hasSessionChangesRef.current = true;
     markDirty();
     clearQueuedChangeCheckpoint();
+    if (isCollaborativeEditing) {
+      setAutosaveStatus("synced");
+      return;
+    }
+
+    setAutosaveStatus("pending");
     scheduleChangeCheckpointSave();
   }, [
     clearQueuedChangeCheckpoint,
+    isCollaborativeEditing,
     isUnlocked,
     markDirty,
     scheduleChangeCheckpointSave,

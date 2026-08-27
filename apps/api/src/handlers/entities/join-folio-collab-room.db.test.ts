@@ -116,6 +116,29 @@ const claimConcurrently = async ({
     ),
   );
 
+describe("folio collaboration room ownership", () => {
+  test("rejects a base version from another entity or workspace", () => {
+    const roomId = createSafeId<"folioCollabRoom">();
+    roomIds.push(roomId);
+
+    expect(
+      testDb
+        .insert(folioCollabRooms)
+        .values({
+          baseVersionId: ids.entityVersionA2,
+          docxCheckpointFileId: createSafeId<"userFile">(),
+          entityId: ids.entityA1,
+          fileName: "contract.docx",
+          id: roomId,
+          propertyId: ids.filePropertyA1,
+          workspaceId: ids.wsA1,
+          yjsSnapshotFileId: createSafeId<"userFile">(),
+        })
+        .execute(),
+    ).rejects.toThrow('Failed query: insert into "folio_collab_rooms"');
+  });
+});
+
 describe("folio collaboration room seed generation CAS", () => {
   test("concurrent first claims elect exactly one seeder", async () => {
     const roomId = await insertRoom({ generation: 0, seedState: "empty" });
@@ -180,10 +203,10 @@ describe("folio collaboration room token retention", () => {
   test("expiry cleanup removes one bounded page of tokens", async () => {
     const generation = 1;
     const roomId = await insertRoom({ generation, seedState: "empty" });
-    const expiredAt = new Date(Date.now() - 60_000);
+    const oldestExpiredAtMs = Date.UTC(2000, 0, 1);
     await testDb.insert(folioCollabRoomTokens).values(
       Array.from({ length: 101 }, (_, index) => ({
-        expiresAt: expiredAt,
+        expiresAt: new Date(oldestExpiredAtMs + index),
         generation,
         id: createSafeId<"folioCollabRoomToken">(),
         permissions: { canEdit: true },

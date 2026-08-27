@@ -8,6 +8,8 @@ import { applyUpdate, encodeStateAsUpdate } from "yjs";
 
 import { FetchBoundaryError } from "@stll/errors";
 
+import { isSecureStellaApiUrl } from "./env-schema";
+
 type CollabAuthContext = {
   roomId: string;
   tokenState: CollabRoomTokenState;
@@ -160,6 +162,12 @@ export const createCollabServer = async ({
   maxDebounceMs = 10_000,
   port,
 }: CreateCollabServerOptions) => {
+  if (!isSecureStellaApiUrl(apiUrl)) {
+    panic(
+      "STELLA_API_URL must use HTTPS unless it targets a loopback address.",
+    );
+  }
+
   const tokenStates = new Map<string, CollabRoomTokenState>();
 
   const clearRoomTokenRefresh = (state: CollabRoomTokenState) => {
