@@ -145,6 +145,7 @@ test.describe("DOCX upload + inspector", () => {
     await expect(translationDialog).toBeVisible();
     await translationDialog
       .getByRole("button", { exact: true, name: "Close" })
+      .filter({ hasText: "Close" })
       .click();
 
     await fileButton.click();
