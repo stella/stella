@@ -121,16 +121,17 @@ export const filterClipboardItems = (
   });
 };
 
-export const nextClipboardIndex = (
+export const adjacentClipboardIndex = (
   currentIndex: number,
   direction: "next" | "previous",
   itemCount: number,
 ) => {
   if (itemCount === 0) {
-    return 0;
+    return null;
   }
   const offset = direction === "next" ? 1 : -1;
-  return Math.max(0, Math.min(currentIndex + offset, itemCount - 1));
+  const nextIndex = currentIndex + offset;
+  return nextIndex < 0 || nextIndex >= itemCount ? null : nextIndex;
 };
 
 export const quickCopyIndex = (key: string, itemCount: number) => {
