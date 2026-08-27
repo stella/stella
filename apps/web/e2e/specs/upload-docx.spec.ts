@@ -139,10 +139,13 @@ test.describe("DOCX upload + inspector", () => {
     });
     await expect(translateAction).toBeVisible();
     await translateAction.click();
-    await expect(
-      page.getByRole("dialog", { name: "Translate document" }),
-    ).toBeVisible();
-    await page.getByRole("button", { exact: true, name: "Close" }).click();
+    const translationDialog = page.getByRole("dialog", {
+      name: "Translate document",
+    });
+    await expect(translationDialog).toBeVisible();
+    await translationDialog
+      .getByRole("button", { exact: true, name: "Close" })
+      .click();
 
     await fileButton.click();
 
