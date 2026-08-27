@@ -5,25 +5,51 @@ import {
   cleanup,
 } from "@atlaskit/pragmatic-drag-and-drop-live-region";
 import { monitorForElements } from "@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter";
+import { useTranslations } from "use-intl";
 
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 
 import {
   type DragAnnouncementDestination,
   type DragAnnouncementPhase,
-  formatDragCancellationAnnouncement,
-  formatDragDestinationAnnouncement,
-  formatDragPickupAnnouncement,
   getDragAnnouncementName,
+  getDragAnnouncementMessageKey,
   getDropAnnouncementDestination,
 } from "./drag-and-drop-live-region.logic";
 
 export const DragAndDropLiveRegion = () => {
+  const t = useTranslations("common.dragAndDrop");
   const lastDestinationRef = useRef<string | null>(null);
 
   useExternalSyncEffect(() => {
+    const formatDestination = ({
+      destination,
+      itemName,
+      phase,
+    }: AnnounceDestinationOptions) => {
+      const values = { destinationName: destination.name, itemName };
+      const messageKey = getDragAnnouncementMessageKey(phase, destination.type);
+      switch (messageKey) {
+        case "movingTo":
+          return t("movingTo", values);
+        case "movingNear":
+          return t("movingNear", values);
+        case "droppedOn":
+          return t("droppedOn", values);
+        case "movedTo":
+          return t("movedTo", values);
+        case "movedNear":
+          return t("movedNear", values);
+        default:
+          return messageKey satisfies never;
+      }
+    };
     const stopMonitoring = registerDragAnnouncements(
-      DRAG_ANNOUNCEMENT_FORMATTER,
+      {
+        cancelled: (itemName) => t("cancelled", { itemName }),
+        destination: formatDestination,
+        pickedUp: (itemName) => t("pickedUp", { itemName }),
+      },
       lastDestinationRef,
     );
 
@@ -31,7 +57,7 @@ export const DragAndDropLiveRegion = () => {
       stopMonitoring();
       cleanup();
     };
-  }, []);
+  }, [t]);
 
   return null;
 };
@@ -50,12 +76,6 @@ type DragAnnouncementFormatter = {
 
 type DestinationTracker = {
   current: string | null;
-};
-
-const DRAG_ANNOUNCEMENT_FORMATTER: DragAnnouncementFormatter = {
-  cancelled: formatDragCancellationAnnouncement,
-  destination: formatDragDestinationAnnouncement,
-  pickedUp: formatDragPickupAnnouncement,
 };
 
 const registerDragAnnouncements = (

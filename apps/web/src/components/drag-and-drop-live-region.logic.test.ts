@@ -1,10 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
 import {
-  formatDragCancellationAnnouncement,
-  formatDragDestinationAnnouncement,
-  formatDragPickupAnnouncement,
-  formatSelectedItemsAnnouncement,
   getDragAnnouncementMessageKey,
   getDragAnnouncementName,
   getDropAnnouncementDestination,
@@ -71,55 +67,6 @@ describe("drag-and-drop announcement data", () => {
       "movedNear",
     ]);
   });
-
-  test("formats the centralized English live-region copy", () => {
-    expect(formatDragPickupAnnouncement("Contract.pdf")).toBe(
-      "Picked up Contract.pdf.",
-    );
-    expect(formatDragCancellationAnnouncement("Contract.pdf")).toBe(
-      "Move cancelled. Contract.pdf was not moved.",
-    );
-    expect(formatSelectedItemsAnnouncement(3)).toBe("3 selected items");
-  });
-
-  test.each([
-    {
-      destination: { name: "Contract review", type: "action" },
-      expected: "Moving Contract.pdf to Contract review.",
-      phase: "moving",
-    },
-    {
-      destination: { name: "Contract review", type: "action" },
-      expected: "Dropped Contract.pdf on Contract review.",
-      phase: "moved",
-    },
-    {
-      destination: { name: "Finance", type: "container" },
-      expected: "Moved Contract.pdf to Finance.",
-      phase: "moved",
-    },
-    {
-      destination: { name: "Documents", type: "reorder" },
-      expected: "Moving Contract.pdf near Documents.",
-      phase: "moving",
-    },
-    {
-      destination: { name: "Documents", type: "reorder" },
-      expected: "Moved Contract.pdf near Documents.",
-      phase: "moved",
-    },
-  ] as const)(
-    "formats the $phase $destination.type destination announcement",
-    ({ destination, expected, phase }) => {
-      expect(
-        formatDragDestinationAnnouncement({
-          destination,
-          itemName: "Contract.pdf",
-          phase,
-        }),
-      ).toBe(expected);
-    },
-  );
 
   test("ignores malformed data owned by another drag source", () => {
     const malformed = {

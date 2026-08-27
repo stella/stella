@@ -1075,6 +1075,16 @@ type Messages = {
     "documentation": "Documentation";
     "done": "Done";
     "download": "Download";
+    "dragAndDrop": {
+      "cancelled": "Move cancelled. {itemName} was not moved.";
+      "droppedOn": "Dropped {itemName} on {destinationName}.";
+      "movedNear": "Moved {itemName} near {destinationName}.";
+      "movedTo": "Moved {itemName} to {destinationName}.";
+      "movingNear": "Moving {itemName} near {destinationName}.";
+      "movingTo": "Moving {itemName} to {destinationName}.";
+      "pickedUp": "Picked up {itemName}.";
+      "selectedItems": "{count, plural, one {# selected item} other {# selected items}}";
+    };
     "duplicate": "Duplicate";
     "duplicated": "Duplicated";
     "edit": "Edit";
@@ -4073,6 +4083,8 @@ type Messages = {
       "goToMatter": "Go to matter";
       "menuItem": "Copy/Move to Matter";
       "moveButton": "Move";
+      "moveFolder": "Move folder";
+      "moveFolderTo": "Move folder to";
       "moveOption": "Move (delete original)";
       "moved": "Moved to Matter";
       "noOtherMatters": "No other Matters available";

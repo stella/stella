@@ -18,6 +18,13 @@ import { BidiText } from "@stll/ui/bidi-text";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { Input } from "@stll/ui/input";
 import { Label } from "@stll/ui/label";
+import {
+  Menu,
+  MenuGroupLabel,
+  MenuItem,
+  MenuPopup,
+  MenuTrigger,
+} from "@stll/ui/menu";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
@@ -126,7 +133,6 @@ type FolderDragDropRowProps = {
   folders: readonly WorkspaceFolder[];
   sourceEnabled: boolean;
   targetEnabled: boolean;
-  dragHandleLabel: string;
   onMove: (source: MatterFolderDragData, targetParentId: string | null) => void;
   children: (options: {
     isDropTarget: boolean;
@@ -140,10 +146,10 @@ const FolderDragDropRow = ({
   folders,
   sourceEnabled,
   targetEnabled,
-  dragHandleLabel,
   onMove,
   children,
 }: FolderDragDropRowProps) => {
+  const t = useTranslations();
   const rowRef = useRef<HTMLDivElement>(null);
   const dragHandleRef = useRef<HTMLButtonElement>(null);
   const [isDropTarget, setIsDropTarget] = useState(false);
@@ -155,6 +161,46 @@ const FolderDragDropRow = ({
   const sourceName = source?.name;
   const targetParentId = target?.parentId;
   const targetName = target?.name;
+  const keyboardSourceData = (() => {
+    if (source === undefined) {
+      return undefined;
+    }
+    switch (source.kind) {
+      case "existing":
+        return {
+          type: MATTER_FOLDER_DRAG_TYPE,
+          kind: "existing",
+          folderId: source.folderId,
+          parentId: source.parentId,
+          name: source.name,
+        } as const satisfies MatterFolderDragData;
+      case "pending":
+        return {
+          type: MATTER_FOLDER_DRAG_TYPE,
+          kind: "pending",
+          parentId: source.parentId,
+          name: source.name,
+        } as const satisfies MatterFolderDragData;
+      default:
+        return source satisfies never;
+    }
+  })();
+  const moveDestinations =
+    keyboardSourceData === undefined
+      ? []
+      : [
+          {
+            parentId: null,
+            name: t("workspaces.copyToMatter.rootFolder"),
+          },
+          ...folders.map((folder) => ({
+            parentId: folder.entityId,
+            name: folder.name,
+          })),
+        ].filter(({ parentId }) =>
+          canDropMatterFolder(keyboardSourceData, folders, parentId),
+        );
+  const handleEnabled = sourceEnabled && moveDestinations.length > 0;
 
   useExternalSyncEffect(() => {
     const element = rowRef.current;
@@ -197,7 +243,7 @@ const FolderDragDropRow = ({
 
     const dragHandle = dragHandleRef.current;
     if (
-      sourceEnabled &&
+      handleEnabled &&
       sourceKind !== undefined &&
       sourceParentId !== undefined &&
       sourceName !== undefined &&
@@ -236,7 +282,7 @@ const FolderDragDropRow = ({
   }, [
     folders,
     handleMove,
-    sourceEnabled,
+    handleEnabled,
     sourceFolderId,
     sourceKind,
     sourceName,
@@ -248,25 +294,51 @@ const FolderDragDropRow = ({
 
   const dragHandle =
     source === undefined ? null : (
-      <Tooltip
-        content={dragHandleLabel}
-        render={
-          <button
-            aria-label={dragHandleLabel}
-            className={cn(
-              "border-border/70 bg-background text-muted-foreground ms-auto flex size-6 shrink-0 touch-none items-center justify-center rounded border shadow-sm",
-              sourceEnabled
-                ? "hover:text-foreground cursor-grab active:cursor-grabbing"
-                : "cursor-not-allowed opacity-50",
-            )}
-            disabled={!sourceEnabled}
-            ref={dragHandleRef}
-            type="button"
-          />
-        }
-      >
-        <GripVerticalIcon className="size-3.5" />
-      </Tooltip>
+      <Menu>
+        <Tooltip
+          content={t("workspaces.copyToMatter.dragFolder")}
+          render={
+            <MenuTrigger
+              aria-label={t("workspaces.copyToMatter.moveFolder")}
+              disabled={!handleEnabled}
+              render={
+                <button
+                  className={cn(
+                    "border-border/70 bg-background text-muted-foreground ms-auto flex size-6 shrink-0 touch-none items-center justify-center rounded border shadow-sm",
+                    handleEnabled
+                      ? "hover:text-foreground cursor-grab active:cursor-grabbing"
+                      : "cursor-not-allowed opacity-50",
+                  )}
+                  ref={dragHandleRef}
+                  type="button"
+                />
+              }
+            />
+          }
+        >
+          <GripVerticalIcon className="size-3.5" />
+        </Tooltip>
+        <MenuPopup align="end" className="w-56">
+          <MenuGroupLabel>
+            {t("workspaces.copyToMatter.moveFolderTo")}
+          </MenuGroupLabel>
+          {keyboardSourceData === undefined
+            ? null
+            : moveDestinations.map((destination) => (
+                <MenuItem
+                  key={destination.parentId ?? "root"}
+                  onClick={() =>
+                    handleMove(keyboardSourceData, destination.parentId)
+                  }
+                >
+                  <EntityKindIcon className="size-4 shrink-0" kind="folder" />
+                  <BidiText as="span" className="truncate">
+                    {destination.name}
+                  </BidiText>
+                </MenuItem>
+              ))}
+        </MenuPopup>
+      </Menu>
     );
 
   return <div ref={rowRef}>{children({ isDropTarget, dragHandle })}</div>;
@@ -574,18 +646,18 @@ const FolderPicker = ({ value, onChange }: FolderPickerProps) => {
     },
   );
 
-  if (isLoading || folders === undefined) {
-    return (
-      <div className="border-border h-60 max-h-[35dvh] rounded-md border p-2">
-        <p className="text-muted-foreground text-sm">{t("common.loading")}</p>
-      </div>
-    );
-  }
-
   if (isError) {
     return (
       <div className="border-border h-60 max-h-[35dvh] rounded-md border p-2">
         <p className="text-destructive text-sm">{t("errors.actionFailed")}</p>
+      </div>
+    );
+  }
+
+  if (isLoading || folders === undefined) {
+    return (
+      <div className="border-border h-60 max-h-[35dvh] rounded-md border p-2">
+        <p className="text-muted-foreground text-sm">{t("common.loading")}</p>
       </div>
     );
   }
@@ -706,7 +778,6 @@ const FolderPicker = ({ value, onChange }: FolderPickerProps) => {
     }
     return (
       <FolderDragDropRow
-        dragHandleLabel={t("workspaces.copyToMatter.dragFolder")}
         folders={folders}
         onMove={moveFolder}
         source={{
@@ -766,7 +837,6 @@ const FolderPicker = ({ value, onChange }: FolderPickerProps) => {
     return (
       <div key={folder.entityId}>
         <FolderDragDropRow
-          dragHandleLabel={t("workspaces.copyToMatter.dragFolder")}
           folders={folders}
           onMove={moveFolder}
           source={{
@@ -842,7 +912,6 @@ const FolderPicker = ({ value, onChange }: FolderPickerProps) => {
     <ScrollArea className="border-border h-60 max-h-[35dvh] rounded-md border">
       <div className="p-1">
         <FolderDragDropRow
-          dragHandleLabel={t("workspaces.copyToMatter.dragFolder")}
           folders={folders}
           onMove={moveFolder}
           sourceEnabled={false}

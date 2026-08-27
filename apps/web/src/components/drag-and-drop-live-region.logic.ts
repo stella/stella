@@ -33,43 +33,6 @@ export const getDragAnnouncementMessageKey = (
   destinationType: DragAnnouncementDestination["type"],
 ) => MESSAGE_KEY_BY_PHASE[phase][destinationType];
 
-type FormatDestinationAnnouncementOptions = {
-  destination: DragAnnouncementDestination;
-  itemName: string;
-  phase: DragAnnouncementPhase;
-};
-
-export const formatDragDestinationAnnouncement = ({
-  destination,
-  itemName,
-  phase,
-}: FormatDestinationAnnouncementOptions): string => {
-  const messageKey = getDragAnnouncementMessageKey(phase, destination.type);
-  switch (messageKey) {
-    case "movingTo":
-      return `Moving ${itemName} to ${destination.name}.`;
-    case "movingNear":
-      return `Moving ${itemName} near ${destination.name}.`;
-    case "droppedOn":
-      return `Dropped ${itemName} on ${destination.name}.`;
-    case "movedTo":
-      return `Moved ${itemName} to ${destination.name}.`;
-    case "movedNear":
-      return `Moved ${itemName} near ${destination.name}.`;
-    default:
-      return messageKey satisfies never;
-  }
-};
-
-export const formatDragCancellationAnnouncement = (itemName: string): string =>
-  `Move cancelled. ${itemName} was not moved.`;
-
-export const formatDragPickupAnnouncement = (itemName: string): string =>
-  `Picked up ${itemName}.`;
-
-export const formatSelectedItemsAnnouncement = (count: number): string =>
-  `${count} selected items`;
-
 type DragAnnouncementData = DragAnnouncementItem | DragAnnouncementDestination;
 type DragDataRecord = Record<string, unknown>;
 type DropDataRecord = Record<string | symbol, unknown>;
