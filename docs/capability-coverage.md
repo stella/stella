@@ -534,9 +534,9 @@ mechanics, and similar), not gaps in coverage.
 | reader_annotations     | 4     |
 | realtime_stream        | 2     |
 | search_ui              | 5     |
-| session_token_exchange | 13    |
+| session_token_exchange | 11    |
 | ui_navigation_state    | 8     |
 | upload_mechanics       | 14    |
 | url_preview            | 2     |
 
-Total: 149
+Total: 147
