@@ -243,11 +243,19 @@ export const brandPersistedOrganizationId = (
   organizationId: string,
 ): SafeId<"organization"> => toSafeId<"organization">(organizationId);
 
+/**
+ * Shape of an id minted by Better Auth's default generator, which the `user`,
+ * `organization`, and `member` tables store as opaque `text` rather than a
+ * UUID. Every check on one of those ids reads this pattern so that no call
+ * site can assume a narrower format than the columns actually hold.
+ */
+export const AUTH_GENERATED_ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/u;
+
 /** Validate an organization id received from an external system before branding it. */
 export const parseExternalOrganizationId = (
   organizationId: string,
 ): SafeId<"organization"> | null =>
-  /^[A-Za-z0-9_-]{1,128}$/u.test(organizationId)
+  AUTH_GENERATED_ID_PATTERN.test(organizationId)
     ? toSafeId<"organization">(organizationId)
     : null;
 
