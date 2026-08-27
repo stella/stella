@@ -13,21 +13,24 @@ export const createSerializedSaver = (
 ) => {
   const queues = new Map<string, SaveQueue>();
 
-  // Each write lands before the value queued behind it is sent; the chain
-  // ends when nothing newer arrived while the last write was in flight.
+  // Each write lands before the value queued behind it is sent. A rejected
+  // write still hands the queue on, so the newest value is not stranded.
   const drain = async (
     key: string,
     queue: SaveQueue,
     value: string,
   ): Promise<void> => {
-    await write(key, value);
-    const next = queue.pending;
-    queue.pending = null;
-    if (next === null) {
-      queue.inFlight = false;
-      return;
+    try {
+      await write(key, value);
+    } finally {
+      const next = queue.pending;
+      queue.pending = null;
+      if (next === null) {
+        queue.inFlight = false;
+      } else {
+        detached(drain(key, queue, next), "skill-history.serialized-save");
+      }
     }
-    await drain(key, queue, next);
   };
 
   return (key: string, value: string): void => {

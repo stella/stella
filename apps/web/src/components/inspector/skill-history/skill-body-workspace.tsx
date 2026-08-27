@@ -184,7 +184,6 @@ export const SkillBodyWorkspace = ({
         revisionId: latestRevisionId,
         start: start + frontmatterLength,
         end: end + frontmatterLength,
-        anchorText: liveMarkdown.slice(start, end),
         body: text,
       }),
       "skill-history.add-comment",

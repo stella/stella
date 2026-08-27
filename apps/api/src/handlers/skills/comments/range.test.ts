@@ -82,4 +82,14 @@ describe("comment range validation", () => {
       ),
     ).toBe(true);
   });
+
+  it("rejects negative offsets", () => {
+    for (const range of [
+      { rangeStart: -1, rangeEnd: 3, textLength: 10 },
+      { rangeStart: 0, rangeEnd: -1, textLength: 10 },
+    ]) {
+      const result = validateCommentRange(range);
+      expect(Result.isError(result)).toBe(true);
+    }
+  });
 });

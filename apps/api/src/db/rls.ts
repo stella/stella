@@ -882,6 +882,19 @@ const agentSkillChildVisibleCheck = (tableName: string) => sql`(
   )
 )`;
 
+/**
+ * Revisions are written only by the `record_agent_skill_revision` trigger
+ * (SECURITY DEFINER), so the app role gets a select policy and nothing else:
+ * with no insert/update/delete policy, row security refuses those outright.
+ */
+export const agentSkillRevisionPolicies = () => [
+  p.pgPolicy("agent_skill_revision_select", {
+    for: "select",
+    to: stella,
+    using: agentSkillChildVisibleCheck("agent_skill_revisions"),
+  }),
+];
+
 export const agentSkillChildPolicies = (
   tableName: string,
   policyPrefix: string,

@@ -1,6 +1,7 @@
 import {
   agentSkillChildPolicies,
   agentSkillPolicies,
+  agentSkillRevisionPolicies,
   agentSkillResourcePolicies,
   jsonb,
   organization,
@@ -154,7 +155,7 @@ export const agentSkillRevisions = p.pgTable(
     p
       .index("agent_skill_revisions_org_skill_idx")
       .on(table.organizationId, table.skillId),
-    ...agentSkillChildPolicies("agent_skill_revisions", "agent_skill_revision"),
+    ...agentSkillRevisionPolicies(),
   ],
 );
 
@@ -231,7 +232,7 @@ export const agentSkillProposals = p.pgTable(
     ),
     p.check(
       "agent_skill_proposals_result_check",
-      sql`${table.status} = 'accepted' OR ${table.resultRevisionId} IS NULL`,
+      sql`(${table.status} = 'accepted') = (${table.resultRevisionId} IS NOT NULL)`,
     ),
     p
       .index("agent_skill_proposals_skill_status_idx")

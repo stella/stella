@@ -29,9 +29,6 @@ const createSkillCommentBodySchema = t.Object({
   proposalId: t.Optional(tSafeId("agentSkillProposal")),
   rangeStart: t.Integer({ minimum: 0 }),
   rangeEnd: t.Integer({ minimum: 0 }),
-  anchorText: t.String({
-    maxLength: LIMITS.agentSkillCommentAnchorTextMaxChars,
-  }),
   body: t.String({
     minLength: 1,
     maxLength: LIMITS.agentSkillCommentBodyMaxChars,
@@ -43,8 +40,8 @@ const config = {
     "Comment on a character range of one revision of an agent skill, or of a " +
     "proposal's body. Pass exactly one of revisionId and proposalId; a " +
     "comment on a proposal is also anchored to the revision that proposal " +
-    "branched from. anchorText is the quoted source, kept so the comment " +
-    "survives the text moving on.",
+    "branched from. The quoted source text is captured from the range so the " +
+    "comment survives the text moving on.",
   permissions: { agentSkill: ["comment"] },
   access: "write",
   mcp: { type: "capability", reason: "agent_tool_authoring" },
@@ -204,7 +201,11 @@ const createSkillComment = createSafeRootHandler(
             proposalId,
             rangeStart: body.rangeStart,
             rangeEnd: body.rangeEnd,
-            anchorText: body.anchorText,
+            // Quoted from the validated range, never taken from the caller,
+            // so the stored quote always matches what was selected.
+            anchorText: target.text
+              .slice(body.rangeStart, body.rangeEnd)
+              .slice(0, LIMITS.agentSkillCommentAnchorTextMaxChars),
             body: body.body,
             authorId: user.id,
           })

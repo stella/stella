@@ -57,6 +57,7 @@ const createSkillProposal = createSafeRootHandler(
         const baseRevision = await loadLatestSkillRevision(tx, {
           skillId: params.skillId,
           organizationId: session.activeOrganizationId,
+          lock: "share",
         });
         if (!baseRevision) {
           panic("agent skill has no revision");

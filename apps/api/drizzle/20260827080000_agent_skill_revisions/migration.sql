@@ -29,7 +29,7 @@ CREATE TABLE "agent_skill_proposals" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "agent_skill_proposals_status_check" CHECK ("status" IN ('draft', 'proposed', 'accepted', 'rejected')),
 	CONSTRAINT "agent_skill_proposals_decision_timing_check" CHECK (("status" IN ('accepted', 'rejected')) = ("decided_at" IS NOT NULL)),
-	CONSTRAINT "agent_skill_proposals_result_check" CHECK ("status" = 'accepted' OR "result_revision_id" IS NULL)
+	CONSTRAINT "agent_skill_proposals_result_check" CHECK (("status" = 'accepted') = ("result_revision_id" IS NOT NULL))
 );--> statement-breakpoint
 
 CREATE TABLE "agent_skill_comments" (
@@ -82,45 +82,6 @@ ALTER TABLE "agent_skill_proposals" ENABLE ROW LEVEL SECURITY;--> statement-brea
 ALTER TABLE "agent_skill_comments" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 
 CREATE POLICY "agent_skill_revision_select" ON "agent_skill_revisions" AS PERMISSIVE FOR SELECT TO "stella" USING ((
-  organization_id =
-  (SELECT current_setting('app.organization_id', true)) AND EXISTS (
-    SELECT 1
-    FROM agent_skills s
-    WHERE s.id = skill_id
-      AND s.organization_id = agent_skill_revisions.organization_id
-      AND (s.scope = 'team' OR s.user_id = (SELECT current_setting('app.user_id', true)))
-  )
-));--> statement-breakpoint
-CREATE POLICY "agent_skill_revision_insert" ON "agent_skill_revisions" AS PERMISSIVE FOR INSERT TO "stella" WITH CHECK ((
-  organization_id =
-  (SELECT current_setting('app.organization_id', true)) AND EXISTS (
-    SELECT 1
-    FROM agent_skills s
-    WHERE s.id = skill_id
-      AND s.organization_id = agent_skill_revisions.organization_id
-      AND (s.scope = 'team' OR s.user_id = (SELECT current_setting('app.user_id', true)))
-  )
-));--> statement-breakpoint
-CREATE POLICY "agent_skill_revision_update" ON "agent_skill_revisions" AS PERMISSIVE FOR UPDATE TO "stella" USING ((
-  organization_id =
-  (SELECT current_setting('app.organization_id', true)) AND EXISTS (
-    SELECT 1
-    FROM agent_skills s
-    WHERE s.id = skill_id
-      AND s.organization_id = agent_skill_revisions.organization_id
-      AND (s.scope = 'team' OR s.user_id = (SELECT current_setting('app.user_id', true)))
-  )
-)) WITH CHECK ((
-  organization_id =
-  (SELECT current_setting('app.organization_id', true)) AND EXISTS (
-    SELECT 1
-    FROM agent_skills s
-    WHERE s.id = skill_id
-      AND s.organization_id = agent_skill_revisions.organization_id
-      AND (s.scope = 'team' OR s.user_id = (SELECT current_setting('app.user_id', true)))
-  )
-));--> statement-breakpoint
-CREATE POLICY "agent_skill_revision_delete" ON "agent_skill_revisions" AS PERMISSIVE FOR DELETE TO "stella" USING ((
   organization_id =
   (SELECT current_setting('app.organization_id', true)) AND EXISTS (
     SELECT 1
@@ -231,7 +192,9 @@ CREATE POLICY "agent_skill_comment_delete" ON "agent_skill_comments" AS PERMISSI
   )
 ));--> statement-breakpoint
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "agent_skill_revisions" TO stella;--> statement-breakpoint
+-- Revisions are history: the app role reads them, only the trigger below
+-- (SECURITY DEFINER) writes them.
+GRANT SELECT ON TABLE "agent_skill_revisions" TO stella;--> statement-breakpoint
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "agent_skill_proposals" TO stella;--> statement-breakpoint
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "agent_skill_comments" TO stella;--> statement-breakpoint
 

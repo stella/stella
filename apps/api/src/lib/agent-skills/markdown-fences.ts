@@ -8,7 +8,7 @@ export const stripMarkdownFences = (raw: string): string => {
   if (!trimmed) {
     return "";
   }
-  const fencePattern = /^```(?:[a-zA-Z0-9_-]*)\n(?<body>[\s\S]*?)\n```$/u;
+  const fencePattern = /^```(?:[a-zA-Z0-9_-]*)\r?\n(?<body>[\s\S]*?)\r?\n```$/u;
   const fenceMatch = fencePattern.exec(trimmed);
   return fenceMatch?.groups?.["body"]?.trim() ?? trimmed;
 };

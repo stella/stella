@@ -17,8 +17,6 @@ import type { SkillProposalStatus } from "./skill-history.logic";
 
 // The comment endpoint stores the quoted source alongside the offsets so the
 // comment survives the text moving on; it is capped server-side.
-const ANCHOR_TEXT_MAX_CHARS = 2000;
-
 /** The statuses an author may write directly, as opposed to a review decision. */
 type AuthoringProposalStatus = Extract<
   SkillProposalStatus,
@@ -34,7 +32,6 @@ type AddCommentInput = {
   revisionId: string;
   start: number;
   end: number;
-  anchorText: string;
   body: string;
 };
 
@@ -85,14 +82,12 @@ export const useSkillHistoryActions = ({
     revisionId,
     start,
     end,
-    anchorText,
     body,
   }: AddCommentInput) => {
     const response = await skill.comments.post({
       revisionId: toSafeId<"agentSkillRevision">(revisionId),
       rangeStart: start,
       rangeEnd: end,
-      anchorText: anchorText.slice(0, ANCHOR_TEXT_MAX_CHARS),
       body,
     });
     if (response.error) {
@@ -192,7 +187,11 @@ export const useSkillHistoryActions = ({
         .patch({ body });
       if (response.error) {
         report(response.error);
+        return;
       }
+      invalidate(
+        knowledgeKeys.skills.proposal(organizationId, skillId, proposalId),
+      );
     },
   );
   const writeProposalSummary = useLatestCallback(

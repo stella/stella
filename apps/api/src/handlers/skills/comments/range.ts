@@ -20,6 +20,14 @@ export const validateCommentRange = ({
   rangeEnd,
   textLength,
 }: CommentRange): Result<void, HandlerError> => {
+  if (rangeStart < 0 || rangeEnd < 0) {
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message: "Comment range cannot be negative",
+      }),
+    );
+  }
   if (rangeEnd < rangeStart) {
     return Result.err(
       new HandlerError({

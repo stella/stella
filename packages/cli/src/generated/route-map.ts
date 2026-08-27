@@ -27409,7 +27409,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "skills", "comments-create"],
                 capabilityId: "skills.comments.create",
                 description:
-                  "Comment on a character range of one revision of an agent skill, or of a proposal's body. Pass exactly one of revisionId and proposalId; a comment on a proposal is also anchored to the revision that proposal branched from. anchorText is the quoted source, kept so the comment survives the text moving on.",
+                  "Comment on a character range of one revision of an agent skill, or of a proposal's body. Pass exactly one of revisionId and proposalId; a comment on a proposal is also anchored to the revision that proposal branched from. The quoted source text is captured from the range so the comment survives the text moving on.",
                 access: "write",
                 flags: [
                   {
@@ -27442,15 +27442,6 @@ export const generatedRouteMap: RouteNode = {
                   {
                     kind: "string",
                     repeatable: false,
-                    flag: "--anchor-text",
-                    prop: "anchorText",
-                    required: true,
-                    part: "body",
-                    partPath: "anchorText",
-                  },
-                  {
-                    kind: "string",
-                    repeatable: false,
                     flag: "--body",
                     prop: "body",
                     required: true,
@@ -27467,12 +27458,7 @@ export const generatedRouteMap: RouteNode = {
                   properties: {
                     body: {
                       type: "object",
-                      required: [
-                        "rangeStart",
-                        "rangeEnd",
-                        "anchorText",
-                        "body",
-                      ],
+                      required: ["rangeStart", "rangeEnd", "body"],
                       properties: {
                         revisionId: {
                           minLength: 36,
@@ -27515,10 +27501,6 @@ export const generatedRouteMap: RouteNode = {
                               type: "integer",
                             },
                           ],
-                        },
-                        anchorText: {
-                          maxLength: 2000,
-                          type: "string",
                         },
                         body: {
                           minLength: 1,

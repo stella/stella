@@ -130,6 +130,7 @@ const createProposalFromComments = createSafeRootHandler(
         const revision = await loadLatestSkillRevision(tx, {
           skillId: params.skillId,
           organizationId: session.activeOrganizationId,
+          lock: "share",
         });
         if (!revision) {
           panic("agent skill has no revision");
@@ -330,9 +331,8 @@ const buildSummary = ({
 }): string => {
   const prefix = `Applied ${applied} ${applied === 1 ? "comment" : "comments"}: `;
   const trimmed = generated.trim();
-  return trimmed
-    ? `${prefix}${trimmed.slice(0, SUMMARY_MAX_CHARS)}`
-    : prefix.trimEnd();
+  const room = Math.max(0, SUMMARY_MAX_CHARS - prefix.length);
+  return trimmed ? `${prefix}${trimmed.slice(0, room)}` : prefix.trimEnd();
 };
 
 const buildPrompt = ({

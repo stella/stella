@@ -23,6 +23,7 @@ import { member, organization, user } from "@/api/db/auth-schema";
 import { jsonb, timestamptz } from "@/api/db/columns";
 import {
   agentSkillChildPolicies,
+  agentSkillRevisionPolicies,
   agentSkillPolicies,
   agentSkillResourcePolicies,
   aiMemoryPolicies,
@@ -470,6 +471,7 @@ export {
 
 export {
   agentSkillChildPolicies,
+  agentSkillRevisionPolicies,
   agentSkillPolicies,
   agentSkillResourcePolicies,
   aiMemoryPolicies,
