@@ -4066,6 +4066,7 @@
       "copyOption": "Másolás (eredeti megtartása)",
       "description": "\"{name}\" másolása vagy áthelyezése másik ügyiratba",
       "descriptionCount": "{count, plural, one {# elem} other {# elem}} másolása vagy áthelyezése másik ügyiratba",
+      "dragFolder": "Húzza a mappa áthelyezéséhez",
       "goToMatter": "Ugrás az ügyirathoz",
       "menuItem": "Másolás/Áthelyezés ügyiratba",
       "moveButton": "Áthelyezés",

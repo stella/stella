@@ -4066,6 +4066,7 @@
       "copyOption": "Kopieren (Original behalten)",
       "description": "\"{name}\" in eine andere Akte kopieren oder verschieben",
       "descriptionCount": "{count, plural, one {# Element} other {# Elemente}} in eine andere Akte kopieren oder verschieben",
+      "dragFolder": "Ordner durch Ziehen verschieben",
       "goToMatter": "Zur Akte",
       "menuItem": "In Akte kopieren/verschieben",
       "moveButton": "Verschieben",

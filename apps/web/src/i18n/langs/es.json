@@ -4066,6 +4066,7 @@
       "copyOption": "Copiar (mantener original)",
       "description": "Copiar o mover \"{name}\" a otro asunto",
       "descriptionCount": "Copiar o mover {count, plural, one {# elemento} other {# elementos}} a otro asunto",
+      "dragFolder": "Arrastrar para mover la carpeta",
       "goToMatter": "Ir al asunto",
       "menuItem": "Copiar/Mover a asunto",
       "moveButton": "Mover",

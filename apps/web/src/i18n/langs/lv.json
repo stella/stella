@@ -4066,6 +4066,7 @@
       "copyOption": "Kopēt (saglabāt oriģinālu)",
       "description": "Kopēt vai pārvietot \"{name}\" uz citu lietu",
       "descriptionCount": "Kopēt vai pārvietot {count, plural, zero {# vienību} one {# vienību} other {# vienības}} uz citu lietu",
+      "dragFolder": "Velciet, lai pārvietotu mapi",
       "goToMatter": "Doties uz lietu",
       "menuItem": "Kopēt/Pārvietot uz lietu",
       "moveButton": "Pārvietot",

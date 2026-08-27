@@ -1,8 +1,17 @@
-import { useRef, useState } from "react";
+import { type ReactNode, useRef, useState } from "react";
 
+import {
+  draggable,
+  dropTargetForElements,
+} from "@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter";
+import { combine } from "@atlaskit/pragmatic-drag-and-drop/utils/combine";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Result } from "better-result";
-import { ChevronRightIcon, FolderPlusIcon } from "lucide-react";
+import {
+  ChevronRightIcon,
+  FolderPlusIcon,
+  GripVerticalIcon,
+} from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
@@ -10,28 +19,284 @@ import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { Input } from "@stll/ui/input";
 import { Label } from "@stll/ui/label";
 import { ScrollArea } from "@stll/ui/scroll-area";
+import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
+import {
+  withDragAnnouncementData,
+  withDropAnnouncementData,
+} from "@/components/drag-and-drop-live-region.logic";
 import { MatterIcon } from "@/components/matter-icon";
 import {
+  canMoveMatterFolder,
   MAX_FOLDER_NAME_LENGTH,
   matterFolderPath,
+  reparentPendingMatterFolder,
   resolveMatterTarget,
+  selectExistingMatterTarget,
+  selectPendingMatterTarget,
   stageMatterFolder,
 } from "@/components/matter-target-picker.logic";
 import type { MatterTarget } from "@/components/matter-target-picker.logic";
 import Tooltip from "@/components/tooltip";
 import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
-import { useCreateEntities } from "@/lib/workspaces/mutations/entities";
+import {
+  useCreateEntities,
+  useMoveEntity,
+} from "@/lib/workspaces/mutations/entities";
 import { workspacesOptions } from "@/lib/workspaces/queries";
 import {
   entitiesKeys,
   workspaceFoldersOptions,
 } from "@/lib/workspaces/queries/entities";
 import type { WorkspaceFolder } from "@/lib/workspaces/queries/entities";
+
+const MATTER_FOLDER_DRAG_TYPE = "stella.matter-folder-drag";
+
+type MatterFolderDragSource =
+  | {
+      kind: "existing";
+      folderId: string;
+      parentId: string | null;
+      name: string;
+    }
+  | {
+      kind: "pending";
+      parentId: string | null;
+      name: string;
+    };
+
+type MatterFolderDragData = MatterFolderDragSource & {
+  type: typeof MATTER_FOLDER_DRAG_TYPE;
+};
+
+type MatterFolderDropTarget = {
+  parentId: string | null;
+  name: string;
+};
+
+const isNullableString = (value: unknown): value is string | null =>
+  value === null || typeof value === "string";
+
+const isMatterFolderDragData = (
+  data: Record<string | symbol, unknown>,
+): data is MatterFolderDragData => {
+  if (
+    data["type"] !== MATTER_FOLDER_DRAG_TYPE ||
+    !isNullableString(data["parentId"]) ||
+    typeof data["name"] !== "string"
+  ) {
+    return false;
+  }
+  switch (data["kind"]) {
+    case "existing":
+      return typeof data["folderId"] === "string";
+    case "pending":
+      return true;
+    default:
+      return false;
+  }
+};
+
+const canDropMatterFolder = (
+  source: MatterFolderDragData,
+  folders: readonly WorkspaceFolder[],
+  targetParentId: string | null,
+) => {
+  switch (source.kind) {
+    case "existing":
+      return canMoveMatterFolder(folders, source.folderId, targetParentId);
+    case "pending":
+      return source.parentId !== targetParentId;
+    default: {
+      const exhaustive: never = source;
+      return exhaustive;
+    }
+  }
+};
+
+type FolderDragDropRowProps = {
+  source?: MatterFolderDragSource | undefined;
+  target?: MatterFolderDropTarget | undefined;
+  folders: readonly WorkspaceFolder[];
+  sourceEnabled: boolean;
+  targetEnabled: boolean;
+  dragHandleLabel: string;
+  onMove: (source: MatterFolderDragData, targetParentId: string | null) => void;
+  children: (options: {
+    isDropTarget: boolean;
+    dragHandle: ReactNode;
+  }) => ReactNode;
+};
+
+const FolderDragDropRow = ({
+  source,
+  target,
+  folders,
+  sourceEnabled,
+  targetEnabled,
+  dragHandleLabel,
+  onMove,
+  children,
+}: FolderDragDropRowProps) => {
+  const rowRef = useRef<HTMLDivElement>(null);
+  const dragHandleRef = useRef<HTMLButtonElement>(null);
+  const [isDropTarget, setIsDropTarget] = useState(false);
+  const handleMove = useLatestCallback(onMove);
+  const sourceKind = source?.kind;
+  const sourceFolderId =
+    source?.kind === "existing" ? source.folderId : undefined;
+  const sourceParentId = source?.parentId;
+  const sourceName = source?.name;
+  const targetParentId = target?.parentId;
+  const targetName = target?.name;
+
+  useExternalSyncEffect(() => {
+    const element = rowRef.current;
+    if (!element) {
+      return undefined;
+    }
+
+    const registrations = [];
+    if (
+      targetEnabled &&
+      targetParentId !== undefined &&
+      targetName !== undefined
+    ) {
+      registrations.push(
+        dropTargetForElements({
+          element,
+          canDrop: ({ source: dragSource }) =>
+            isMatterFolderDragData(dragSource.data) &&
+            canDropMatterFolder(dragSource.data, folders, targetParentId),
+          getData: () =>
+            withDropAnnouncementData(
+              { folderId: targetParentId },
+              { type: "container", name: targetName },
+            ),
+          onDragEnter: () => setIsDropTarget(true),
+          onDragLeave: () => setIsDropTarget(false),
+          onDrop: ({ source: dragSource }) => {
+            setIsDropTarget(false);
+            if (
+              !isMatterFolderDragData(dragSource.data) ||
+              !canDropMatterFolder(dragSource.data, folders, targetParentId)
+            ) {
+              return;
+            }
+            handleMove(dragSource.data, targetParentId);
+          },
+        }),
+      );
+    }
+
+    const dragHandle = dragHandleRef.current;
+    if (
+      sourceEnabled &&
+      sourceKind !== undefined &&
+      sourceParentId !== undefined &&
+      sourceName !== undefined &&
+      dragHandle !== null
+    ) {
+      registrations.push(
+        draggable({
+          element,
+          dragHandle,
+          getInitialData: () =>
+            withDragAnnouncementData(
+              sourceKind === "existing"
+                ? {
+                    type: MATTER_FOLDER_DRAG_TYPE,
+                    kind: "existing",
+                    folderId: sourceFolderId,
+                    parentId: sourceParentId,
+                    name: sourceName,
+                  }
+                : {
+                    type: MATTER_FOLDER_DRAG_TYPE,
+                    kind: "pending",
+                    parentId: sourceParentId,
+                    name: sourceName,
+                  },
+              sourceName,
+            ),
+        }),
+      );
+    }
+
+    if (registrations.length === 0) {
+      return undefined;
+    }
+    return combine(...registrations);
+  }, [
+    folders,
+    handleMove,
+    sourceEnabled,
+    sourceFolderId,
+    sourceKind,
+    sourceName,
+    sourceParentId,
+    targetEnabled,
+    targetName,
+    targetParentId,
+  ]);
+
+  const dragHandle =
+    source === undefined ? null : (
+      <Tooltip
+        content={dragHandleLabel}
+        render={
+          <button
+            aria-label={dragHandleLabel}
+            className={cn(
+              "border-border/70 bg-background text-muted-foreground ms-auto flex size-6 shrink-0 touch-none items-center justify-center rounded border shadow-sm",
+              sourceEnabled
+                ? "hover:text-foreground cursor-grab active:cursor-grabbing"
+                : "cursor-not-allowed opacity-50",
+            )}
+            disabled={!sourceEnabled}
+            ref={dragHandleRef}
+            type="button"
+          />
+        }
+      >
+        <GripVerticalIcon className="size-3.5" />
+      </Tooltip>
+    );
+
+  return <div ref={rowRef}>{children({ isDropTarget, dragHandle })}</div>;
+};
+
+type FolderSelectionButtonProps = {
+  name: string;
+  selected: boolean;
+  onSelect: () => void;
+};
+
+const FolderSelectionButton = ({
+  name,
+  selected,
+  onSelect,
+}: FolderSelectionButtonProps) => (
+  <button
+    className={cn(
+      "hover:bg-accent flex min-w-0 flex-1 items-center gap-1 rounded px-2 py-1 text-start text-sm",
+      selected && "bg-accent",
+    )}
+    onClick={onSelect}
+    type="button"
+  >
+    <EntityKindIcon className="size-4 shrink-0" kind="folder" />
+    <BidiText as="span" className="truncate">
+      {name}
+    </BidiText>
+  </button>
+);
 
 /**
  * Handles the case where the user types a new folder name in the picker. The
@@ -40,9 +305,9 @@ import type { WorkspaceFolder } from "@/lib/workspaces/queries/entities";
  *
  * Returns a `Result` whose value is a `ResolvedMatterTarget`:
  * - `workspaceId`: the chosen matter, unchanged from the input.
- * - `parentId`: the folder to write into. For a `pending` target this is the
- *   id of the folder just created; for an `existing` target it is the input's
- *   `parentId` (`null` means the matter root).
+ * - `parentId`: the selected folder to write into. This is the newly created
+ *   folder id when it remains selected, or the later existing selection.
+ *   `null` means the matter root.
  * The error branch carries the failed folder creation; nothing was written.
  *
  * Callers must replace a `pending` target with the resolved one, or a retry
@@ -120,6 +385,19 @@ export const MatterTargetPicker = ({
             w.name.toLowerCase().includes(query) ||
             (w.client?.displayName ?? "").toLowerCase().includes(query),
         );
+  const selectedMatter =
+    value === null
+      ? undefined
+      : matters.find((workspace) => workspace.id === value.workspaceId);
+  const orderedVisibleMatters =
+    query === "" && selectedMatter !== undefined
+      ? [
+          selectedMatter,
+          ...visibleMatters.filter(
+            (workspace) => workspace.id !== selectedMatter.id,
+          ),
+        ]
+      : visibleMatters;
 
   return (
     <div className="space-y-4">
@@ -131,7 +409,12 @@ export const MatterTargetPicker = ({
           type="search"
           value={search}
         />
-        <ScrollArea className="border-border h-48 rounded-md border">
+        <ScrollArea
+          className={cn(
+            "border-border rounded-md border",
+            showFolderPicker && value !== null ? "h-20" : "h-48",
+          )}
+        >
           <div className="p-1">
             {(() => {
               if (matters.length === 0) {
@@ -148,7 +431,7 @@ export const MatterTargetPicker = ({
                   </p>
                 );
               }
-              return visibleMatters.map((workspace) => {
+              return orderedVisibleMatters.map((workspace) => {
                 const isSelected = value?.workspaceId === workspace.id;
                 return (
                   <button
@@ -157,13 +440,17 @@ export const MatterTargetPicker = ({
                       isSelected && "bg-accent",
                     )}
                     key={workspace.id}
-                    onClick={() =>
+                    onClick={() => {
+                      if (value?.workspaceId === workspace.id) {
+                        onChange(selectExistingMatterTarget(value, null));
+                        return;
+                      }
                       onChange({
                         type: "existing",
                         workspaceId: workspace.id,
                         parentId: null,
-                      })
-                    }
+                      });
+                    }}
                     type="button"
                   >
                     <MatterIcon
@@ -213,6 +500,9 @@ type FolderPickerProps = {
 const FolderPicker = ({ value, onChange }: FolderPickerProps) => {
   const t = useTranslations();
   const canCreate = usePermissions({ entity: ["create"] });
+  const canMove = usePermissions({ entity: ["update"] });
+  const queryClient = useQueryClient();
+  const moveEntity = useMoveEntity();
   const workspaceId = value.workspaceId;
   const {
     data: folders,
@@ -228,9 +518,65 @@ const FolderPicker = ({ value, onChange }: FolderPickerProps) => {
   /** Set by Escape so the blur that follows unmounting does not stage the draft. */
   const draftCancelledRef = useRef(false);
 
-  if (isLoading) {
+  const moveFolder = useLatestCallback(
+    (source: MatterFolderDragData, targetParentId: string | null) => {
+      switch (source.kind) {
+        case "pending": {
+          if (value.type !== "pending") {
+            return;
+          }
+          onChange(reparentPendingMatterFolder(value, targetParentId));
+          if (targetParentId !== null) {
+            setExpandedFolders((previous) =>
+              new Set(previous).add(targetParentId),
+            );
+          }
+          return;
+        }
+        case "existing": {
+          if (
+            folders === undefined ||
+            !canMoveMatterFolder(folders, source.folderId, targetParentId)
+          ) {
+            return;
+          }
+          if (targetParentId !== null) {
+            setExpandedFolders((previous) =>
+              new Set(previous).add(targetParentId),
+            );
+          }
+          moveEntity.mutate(
+            {
+              workspaceId,
+              entityId: source.folderId,
+              parentId: targetParentId,
+            },
+            {
+              onSuccess: () => {
+                detached(
+                  queryClient.invalidateQueries({
+                    queryKey: workspaceFoldersOptions(workspaceId).queryKey,
+                  }),
+                  "matter-target-picker.invalidate-moved-folder",
+                );
+              },
+              onError: () => {
+                stellaToast.add({
+                  title: t("errors.actionFailed"),
+                  type: "error",
+                });
+              },
+            },
+          );
+          return;
+        }
+      }
+    },
+  );
+
+  if (isLoading || folders === undefined) {
     return (
-      <div className="border-border h-32 rounded-md border p-2">
+      <div className="border-border h-60 max-h-[35dvh] rounded-md border p-2">
         <p className="text-muted-foreground text-sm">{t("common.loading")}</p>
       </div>
     );
@@ -238,14 +584,23 @@ const FolderPicker = ({ value, onChange }: FolderPickerProps) => {
 
   if (isError) {
     return (
-      <div className="border-border h-32 rounded-md border p-2">
+      <div className="border-border h-60 max-h-[35dvh] rounded-md border p-2">
         <p className="text-destructive text-sm">{t("errors.actionFailed")}</p>
       </div>
     );
   }
 
-  const rootFolders = folders ? folders.filter((f) => f.parentId === null) : [];
+  const rootFolders = folders.filter((folder) => folder.parentId === null);
   const pendingFolder = value.type === "pending" ? value : null;
+  const selectedExistingParentId = (() => {
+    if (value.type === "existing") {
+      return value.parentId;
+    }
+    if (value.selection.type === "existing") {
+      return value.selection.parentId;
+    }
+    return undefined;
+  })();
 
   const toggleExpand = (folderId: string) => {
     setExpandedFolders((prev) => {
@@ -265,9 +620,6 @@ const FolderPicker = ({ value, onChange }: FolderPickerProps) => {
    * anywhere up the chain would hide it.
    */
   const expandFolderPath = (folderId: string | null) => {
-    if (folders === undefined) {
-      return;
-    }
     const path = matterFolderPath(folders, folderId);
     if (path.length === 0) {
       return;
@@ -296,7 +648,7 @@ const FolderPicker = ({ value, onChange }: FolderPickerProps) => {
    * then the staged row. Both are the same thing at different moments, so one
    * node renders them and the preview cannot sit somewhere the folder will not.
    */
-  const newFolderSlot = (() => {
+  const newFolderDraft = (() => {
     if (draftName !== null) {
       return (
         <Input
@@ -329,36 +681,64 @@ const FolderPicker = ({ value, onChange }: FolderPickerProps) => {
         />
       );
     }
-    if (pendingFolder !== null) {
-      return (
-        <div className="bg-accent flex min-w-0 flex-1 items-center gap-1 rounded px-2 py-1 text-sm">
-          <EntityKindIcon className="size-4 shrink-0" kind="folder" />
-          <BidiText as="span" className="truncate">
-            {pendingFolder.name}
-          </BidiText>
-        </div>
-      );
-    }
     return null;
   })();
+  const hasNewFolderSlot = newFolderDraft !== null || pendingFolder !== null;
 
   /**
    * Called from the two positions that can hold the slot, both keyed off
    * `value.parentId`: the destination the folder will be created in.
    */
-  const renderNewFolderSlot = (depth: number) =>
-    newFolderSlot === null ? null : (
-      <div
-        className="flex items-center gap-1"
-        style={{ paddingInlineStart: `${depth * 16 + 8}px` }}
+  const renderNewFolderSlot = (depth: number) => {
+    if (newFolderDraft !== null) {
+      return (
+        <div
+          className="flex items-center gap-1"
+          style={{ paddingInlineStart: `${depth * 16 + 8}px` }}
+        >
+          <span className="w-4" />
+          {newFolderDraft}
+        </div>
+      );
+    }
+    if (pendingFolder === null) {
+      return null;
+    }
+    return (
+      <FolderDragDropRow
+        dragHandleLabel={t("workspaces.copyToMatter.dragFolder")}
+        folders={folders}
+        onMove={moveFolder}
+        source={{
+          kind: "pending",
+          parentId: pendingFolder.parentId,
+          name: pendingFolder.name,
+        }}
+        sourceEnabled={!moveEntity.isPending}
+        targetEnabled={false}
       >
-        <span className="w-4" />
-        {newFolderSlot}
-      </div>
+        {({ dragHandle }) => (
+          <div
+            className="flex items-center gap-1"
+            style={{ paddingInlineStart: `${depth * 16 + 8}px` }}
+          >
+            <span className="w-4" />
+            <FolderSelectionButton
+              name={pendingFolder.name}
+              onSelect={() =>
+                onChange(selectPendingMatterTarget(pendingFolder))
+              }
+              selected={pendingFolder.selection.type === "pending"}
+            />
+            {dragHandle}
+          </div>
+        )}
+      </FolderDragDropRow>
     );
+  };
 
   const newFolderButton =
-    canCreate && draftName === null ? (
+    canCreate && draftName === null && pendingFolder === null ? (
       <button
         className="hover:bg-accent text-muted-foreground flex w-full items-center gap-1 rounded px-2 py-1 text-start text-sm"
         onClick={() => {
@@ -374,74 +754,84 @@ const FolderPicker = ({ value, onChange }: FolderPickerProps) => {
     ) : null;
 
   const renderFolder = (folder: WorkspaceFolder, depth: number) => {
-    const children = folders
-      ? folders.filter((f) => f.parentId === folder.entityId)
-      : [];
-    const hasNewFolderSlot =
-      newFolderSlot !== null && value.parentId === folder.entityId;
-    const hasChildren = children.length > 0 || hasNewFolderSlot;
+    const children = folders.filter(
+      (child) => child.parentId === folder.entityId,
+    );
+    const hasNestedNewFolderSlot =
+      hasNewFolderSlot && value.parentId === folder.entityId;
+    const hasChildren = children.length > 0 || hasNestedNewFolderSlot;
     const isExpanded = expandedFolders.has(folder.entityId);
-    const isSelected =
-      value.type === "existing" && value.parentId === folder.entityId;
+    const isSelected = selectedExistingParentId === folder.entityId;
 
     return (
       <div key={folder.entityId}>
-        <div
-          className="flex items-center gap-1"
-          style={{ paddingInlineStart: `${depth * 16 + 8}px` }}
+        <FolderDragDropRow
+          dragHandleLabel={t("workspaces.copyToMatter.dragFolder")}
+          folders={folders}
+          onMove={moveFolder}
+          source={{
+            kind: "existing",
+            folderId: folder.entityId,
+            parentId: folder.parentId,
+            name: folder.name,
+          }}
+          sourceEnabled={canMove && !moveEntity.isPending}
+          target={{ parentId: folder.entityId, name: folder.name }}
+          targetEnabled={
+            (canMove || pendingFolder !== null) && !moveEntity.isPending
+          }
         >
-          {hasChildren ? (
-            <Tooltip
-              content={folder.name}
-              render={
-                <button
-                  className="hover:bg-muted rounded p-0.5"
-                  aria-expanded={isExpanded}
-                  aria-label={folder.name}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    toggleExpand(folder.entityId);
-                  }}
-                  type="button"
-                />
-              }
+          {({ isDropTarget, dragHandle }) => (
+            <div
+              className={cn(
+                "flex items-center gap-1 rounded",
+                isDropTarget && "bg-primary/8 ring-primary/40 ring-1",
+              )}
+              style={{ paddingInlineStart: `${depth * 16 + 8}px` }}
             >
-              <DirectionalIcon
-                className={cn(
-                  "size-3 transition-transform",
-                  isExpanded && "rotate-90",
-                )}
-                flip={!isExpanded}
-                icon={ChevronRightIcon}
+              {hasChildren ? (
+                <Tooltip
+                  content={folder.name}
+                  render={
+                    <button
+                      className="hover:bg-muted rounded p-0.5"
+                      aria-expanded={isExpanded}
+                      aria-label={folder.name}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleExpand(folder.entityId);
+                      }}
+                      type="button"
+                    />
+                  }
+                >
+                  <DirectionalIcon
+                    className={cn(
+                      "size-3 transition-transform",
+                      isExpanded && "rotate-90",
+                    )}
+                    flip={!isExpanded}
+                    icon={ChevronRightIcon}
+                  />
+                </Tooltip>
+              ) : (
+                <span className="w-4" />
+              )}
+              <FolderSelectionButton
+                name={folder.name}
+                onSelect={() =>
+                  onChange(selectExistingMatterTarget(value, folder.entityId))
+                }
+                selected={isSelected}
               />
-            </Tooltip>
-          ) : (
-            <span className="w-4" />
+              {dragHandle}
+            </div>
           )}
-          <button
-            className={cn(
-              "hover:bg-accent flex min-w-0 flex-1 items-center gap-1 rounded px-2 py-1 text-start text-sm",
-              isSelected && "bg-accent",
-            )}
-            onClick={() =>
-              onChange({
-                type: "existing",
-                workspaceId,
-                parentId: folder.entityId,
-              })
-            }
-            type="button"
-          >
-            <EntityKindIcon className="size-4 shrink-0" kind="folder" />
-            <BidiText as="span" className="truncate">
-              {folder.name}
-            </BidiText>
-          </button>
-        </div>
+        </FolderDragDropRow>
         {hasChildren && isExpanded && (
           <div>
             {children.map((child) => renderFolder(child, depth + 1))}
-            {hasNewFolderSlot && renderNewFolderSlot(depth + 1)}
+            {hasNestedNewFolderSlot && renderNewFolderSlot(depth + 1)}
           </div>
         )}
       </div>
@@ -449,22 +839,37 @@ const FolderPicker = ({ value, onChange }: FolderPickerProps) => {
   };
 
   return (
-    <ScrollArea className="border-border h-32 rounded-md border">
+    <ScrollArea className="border-border h-60 max-h-[35dvh] rounded-md border">
       <div className="p-1">
-        <button
-          className={cn(
-            "hover:bg-accent flex w-full items-center gap-1 rounded px-2 py-1 text-start text-sm",
-            value.type === "existing" && value.parentId === null && "bg-accent",
-          )}
-          onClick={() =>
-            onChange({ type: "existing", workspaceId, parentId: null })
+        <FolderDragDropRow
+          dragHandleLabel={t("workspaces.copyToMatter.dragFolder")}
+          folders={folders}
+          onMove={moveFolder}
+          sourceEnabled={false}
+          target={{
+            parentId: null,
+            name: t("workspaces.copyToMatter.rootFolder"),
+          }}
+          targetEnabled={
+            (canMove || pendingFolder !== null) && !moveEntity.isPending
           }
-          type="button"
         >
-          <span className="text-muted-foreground">
-            {t("workspaces.copyToMatter.rootFolder")}
-          </span>
-        </button>
+          {({ isDropTarget }) => (
+            <button
+              className={cn(
+                "hover:bg-accent flex w-full items-center gap-1 rounded px-2 py-1 text-start text-sm",
+                selectedExistingParentId === null && "bg-accent",
+                isDropTarget && "bg-primary/8 ring-primary/40 ring-1",
+              )}
+              onClick={() => onChange(selectExistingMatterTarget(value, null))}
+              type="button"
+            >
+              <span className="text-muted-foreground">
+                {t("workspaces.copyToMatter.rootFolder")}
+              </span>
+            </button>
+          )}
+        </FolderDragDropRow>
         {rootFolders.map((folder) => renderFolder(folder, 0))}
         {value.parentId === null && renderNewFolderSlot(0)}
         {newFolderButton}

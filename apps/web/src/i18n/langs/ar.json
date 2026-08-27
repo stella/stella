@@ -4066,6 +4066,7 @@
       "copyOption": "نسخ (مع الاحتفاظ بالأصل)",
       "description": "نسخ «{name}» أو نقله إلى ملف قانوني آخر",
       "descriptionCount": "نسخ {count, plural, zero {لا عناصر} one {عنصر واحد} two {عنصرين} few {# عناصر} many {# عنصرًا} other {# عنصر}} أو نقلها إلى ملف قانوني آخر",
+      "dragFolder": "اسحب لنقل المجلد",
       "goToMatter": "الانتقال إلى الملف القانوني",
       "menuItem": "نسخ/نقل إلى ملف قانوني",
       "moveButton": "نقل",

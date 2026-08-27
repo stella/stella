@@ -2,8 +2,12 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import {
+  canMoveMatterFolder,
   matterFolderPath,
+  reparentPendingMatterFolder,
   resolveMatterTarget,
+  selectExistingMatterTarget,
+  selectPendingMatterTarget,
   stageMatterFolder,
 } from "@/components/matter-target-picker.logic";
 import type { MatterTarget } from "@/components/matter-target-picker.logic";
@@ -42,6 +46,7 @@ describe("staging a folder in the matter picker", () => {
       workspaceId: WORKSPACE_ID,
       name: "Pleadings",
       parentId: FOLDER_ID,
+      selection: { type: "pending" },
     });
   });
 
@@ -60,6 +65,7 @@ describe("staging a folder in the matter picker", () => {
       workspaceId: WORKSPACE_ID,
       name: "Exhibits",
       parentId: FOLDER_ID,
+      selection: { type: "pending" },
     });
   });
 
@@ -76,6 +82,66 @@ describe("staging a folder in the matter picker", () => {
     });
     expect(stageMatterFolder(root, "   ")).toBeNull();
     expect(stageMatterFolder(root, "")).toBeNull();
+  });
+
+  test("reparents a staged folder without resolving it", () => {
+    const pending = {
+      type: "pending",
+      workspaceId: WORKSPACE_ID,
+      name: "Pleadings",
+      parentId: FOLDER_ID,
+      selection: { type: "pending" },
+    } as const satisfies MatterTarget;
+
+    expect(reparentPendingMatterFolder(pending, CREATED_ID)).toEqual({
+      type: "pending",
+      workspaceId: WORKSPACE_ID,
+      name: "Pleadings",
+      parentId: CREATED_ID,
+      selection: { type: "pending" },
+    });
+    expect(reparentPendingMatterFolder(pending, null)).toEqual({
+      type: "pending",
+      workspaceId: WORKSPACE_ID,
+      name: "Pleadings",
+      parentId: null,
+      selection: { type: "pending" },
+    });
+  });
+
+  test("keeps the same staged target for a no-op move", () => {
+    const pending = {
+      type: "pending",
+      workspaceId: WORKSPACE_ID,
+      name: "Pleadings",
+      parentId: FOLDER_ID,
+      selection: { type: "pending" },
+    } as const satisfies MatterTarget;
+
+    expect(reparentPendingMatterFolder(pending, FOLDER_ID)).toBe(pending);
+  });
+
+  test("keeps the staged folder when another destination is selected", () => {
+    const pending = {
+      type: "pending",
+      workspaceId: WORKSPACE_ID,
+      name: "Pleadings",
+      parentId: null,
+      selection: { type: "pending" },
+    } as const satisfies MatterTarget;
+
+    const selectedElsewhere = selectExistingMatterTarget(pending, FOLDER_ID);
+    expect(selectedElsewhere).toEqual({
+      type: "pending",
+      workspaceId: WORKSPACE_ID,
+      name: "Pleadings",
+      parentId: null,
+      selection: { type: "existing", parentId: FOLDER_ID },
+    });
+    if (selectedElsewhere.type !== "pending") {
+      throw new Error("selecting elsewhere must preserve the staged folder");
+    }
+    expect(selectPendingMatterTarget(selectedElsewhere)).toEqual(pending);
   });
 });
 
@@ -113,6 +179,31 @@ describe("revealing a folder's path in the matter picker", () => {
   });
 });
 
+describe("moving folders in the matter picker", () => {
+  const TREE = [
+    { entityId: "root", parentId: null },
+    { entityId: "sibling", parentId: null },
+    { entityId: "child", parentId: "root" },
+    { entityId: "grandchild", parentId: "child" },
+  ];
+
+  test("allows reparenting to another branch or the matter root", () => {
+    expect(canMoveMatterFolder(TREE, "child", "sibling")).toBe(true);
+    expect(canMoveMatterFolder(TREE, "child", null)).toBe(true);
+  });
+
+  test("rejects no-op, self, and descendant destinations", () => {
+    expect(canMoveMatterFolder(TREE, "child", "root")).toBe(false);
+    expect(canMoveMatterFolder(TREE, "child", "child")).toBe(false);
+    expect(canMoveMatterFolder(TREE, "child", "grandchild")).toBe(false);
+  });
+
+  test("rejects folders and destinations outside the loaded tree", () => {
+    expect(canMoveMatterFolder(TREE, "missing", null)).toBe(false);
+    expect(canMoveMatterFolder(TREE, "child", "missing")).toBe(false);
+  });
+});
+
 describe("resolving a matter target before a write", () => {
   test("passes an existing target through without creating anything", async () => {
     const { calls, createFolder } = recordingCreate(CREATED_ID);
@@ -137,6 +228,7 @@ describe("resolving a matter target before a write", () => {
         workspaceId: WORKSPACE_ID,
         name: "Pleadings",
         parentId: FOLDER_ID,
+        selection: { type: "pending" },
       },
       createFolder,
     );
@@ -149,6 +241,28 @@ describe("resolving a matter target before a write", () => {
     );
   });
 
+  test("creates a staged folder but writes to a later selected destination", async () => {
+    const { calls, createFolder } = recordingCreate(CREATED_ID);
+
+    const resolved = await resolveMatterTarget(
+      {
+        type: "pending",
+        workspaceId: WORKSPACE_ID,
+        name: "Pleadings",
+        parentId: null,
+        selection: { type: "existing", parentId: FOLDER_ID },
+      },
+      createFolder,
+    );
+
+    expect(calls).toEqual([
+      { workspaceId: WORKSPACE_ID, parentId: null, name: "Pleadings" },
+    ]);
+    expect(resolved).toEqual(
+      Result.ok({ workspaceId: WORKSPACE_ID, parentId: FOLDER_ID }),
+    );
+  });
+
   test("surfaces a failed create as an error instead of writing to the parent", async () => {
     const resolved = await resolveMatterTarget(
       {
@@ -156,6 +270,7 @@ describe("resolving a matter target before a write", () => {
         workspaceId: WORKSPACE_ID,
         name: "Pleadings",
         parentId: null,
+        selection: { type: "pending" },
       },
       async () => {
         throw new Error("Entities limit reached");

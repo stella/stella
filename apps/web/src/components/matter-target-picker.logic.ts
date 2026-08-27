@@ -10,9 +10,10 @@ export type ResolvedMatterTarget = {
 /**
  * The matter picker's value. A `pending` folder is staged in the UI only:
  * nothing is created until {@link resolveMatterTarget} runs, so cancelling the
- * dialog leaves no orphan behind. `pending.parentId` is always an existing
- * folder (or the matter root), which makes nesting a pending folder
- * unrepresentable.
+ * dialog leaves no orphan behind. Its creation location and the selected copy
+ * destination are separate, so selecting another folder does not discard it.
+ * `pending.parentId` is always an existing folder (or the matter root), which
+ * makes nesting a pending folder unrepresentable.
  */
 export type MatterTarget =
   | ({ type: "existing" } & ResolvedMatterTarget)
@@ -21,10 +22,25 @@ export type MatterTarget =
       workspaceId: string;
       name: string;
       parentId: string | null;
+      selection:
+        | { type: "existing"; parentId: string | null }
+        | { type: "pending" };
     };
+
+export type PendingMatterTarget = Extract<MatterTarget, { type: "pending" }>;
 
 /** Matches the server's entity-name bound (`handlers/entities/create.ts`). */
 export const MAX_FOLDER_NAME_LENGTH = 255;
+
+const matterFolderCreationParentId = (target: MatterTarget) => {
+  if (target.type === "existing") {
+    return target.parentId;
+  }
+  if (target.selection.type === "existing") {
+    return target.selection.parentId;
+  }
+  return target.parentId;
+};
 
 /**
  * Stage a folder under whatever the picker has selected. Returns `null` for a
@@ -42,8 +58,67 @@ export const stageMatterFolder = (
     type: "pending",
     workspaceId: target.workspaceId,
     name: trimmed,
-    // The current selection, so a pending folder never nests in another.
+    // A second pending folder replaces the first beside its selected target;
+    // pending folders never nest in one another.
+    parentId: matterFolderCreationParentId(target),
+    selection: { type: "pending" },
+  };
+};
+
+/** Select an existing destination without discarding a staged folder. */
+export const selectExistingMatterTarget = (
+  target: MatterTarget,
+  parentId: string | null,
+): MatterTarget => {
+  if (target.type === "existing") {
+    return {
+      type: "existing",
+      workspaceId: target.workspaceId,
+      parentId,
+    };
+  }
+  return {
+    type: "pending",
+    workspaceId: target.workspaceId,
+    name: target.name,
     parentId: target.parentId,
+    selection: { type: "existing", parentId },
+  };
+};
+
+/** Select the staged folder itself as the destination again. */
+export const selectPendingMatterTarget = (
+  target: PendingMatterTarget,
+): PendingMatterTarget => {
+  if (target.selection.type === "pending") {
+    return target;
+  }
+  return {
+    type: "pending",
+    workspaceId: target.workspaceId,
+    name: target.name,
+    parentId: target.parentId,
+    selection: { type: "pending" },
+  };
+};
+
+/**
+ * Move a staged folder without creating it early. Keeping this as a pending
+ * target means cancelling the dialog still leaves no orphan on the server.
+ */
+export const reparentPendingMatterFolder = (
+  target: PendingMatterTarget,
+  parentId: string | null,
+): PendingMatterTarget => {
+  if (target.parentId === parentId) {
+    return target;
+  }
+  return {
+    type: "pending",
+    workspaceId: target.workspaceId,
+    name: target.name,
+    parentId,
+    selection: target.selection,
   };
 };
 
@@ -80,6 +155,29 @@ export const matterFolderPath = (
   return path.toReversed();
 };
 
+/**
+ * Whether dragging a folder to a new parent would change the tree without
+ * creating a cycle. The server enforces the same invariant; keeping it here
+ * prevents invalid drop targets from presenting as actionable.
+ */
+export const canMoveMatterFolder = (
+  folders: readonly FolderLink[],
+  folderId: string,
+  targetParentId: string | null,
+): boolean => {
+  const source = folders.find((folder) => folder.entityId === folderId);
+  if (source === undefined || source.parentId === targetParentId) {
+    return false;
+  }
+  if (targetParentId === null) {
+    return true;
+  }
+  if (!folders.some((folder) => folder.entityId === targetParentId)) {
+    return false;
+  }
+  return !matterFolderPath(folders, targetParentId).includes(folderId);
+};
+
 type CreateFolder = (folder: {
   workspaceId: string;
   parentId: string | null;
@@ -87,8 +185,9 @@ type CreateFolder = (folder: {
 }) => Promise<{ entityId: string }>;
 
 /**
- * Turn a {@link MatterTarget} into a {@link ResolvedMatterTarget}, creating the
- * staged folder if there is one. An `existing` target never touches the network.
+ * Turn a {@link MatterTarget} into a {@link ResolvedMatterTarget}. A pending
+ * folder is created even when the user subsequently selected another
+ * destination; an `existing` target never touches the network.
  */
 export const resolveMatterTarget = async (
   target: MatterTarget,
@@ -113,6 +212,9 @@ export const resolveMatterTarget = async (
   }
   return Result.ok({
     workspaceId: target.workspaceId,
-    parentId: created.value.entityId,
+    parentId:
+      target.selection.type === "pending"
+        ? created.value.entityId
+        : target.selection.parentId,
   });
 };

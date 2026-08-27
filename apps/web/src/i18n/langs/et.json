@@ -4066,6 +4066,7 @@
       "copyOption": "Kopeeri (säilita originaal)",
       "description": "Kopeeri või teisalda \"{name}\" teise toimikusse",
       "descriptionCount": "Kopeeri või teisalda {count, plural, one {# üksus} other {# üksust}} teise toimikusse",
+      "dragFolder": "Lohista kausta teisaldamiseks",
       "goToMatter": "Mine toimikusse",
       "menuItem": "Kopeeri/Teisalda toimikusse",
       "moveButton": "Teisalda",

@@ -4066,6 +4066,7 @@
       "copyOption": "Copiar (manter original)",
       "description": "Copiar ou mover \"{name}\" para outro caso",
       "descriptionCount": "Copiar ou mover {count, plural, one {# item} other {# itens}} para outro caso",
+      "dragFolder": "Arraste para mover a pasta",
       "goToMatter": "Ir para o caso",
       "menuItem": "Copiar/Mover para caso",
       "moveButton": "Mover",

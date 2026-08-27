@@ -4066,6 +4066,7 @@
       "copyOption": "Kopírovať (ponechať originál)",
       "description": "Skopírovať alebo presunúť \"{name}\" do iného spisu",
       "descriptionCount": "Skopírovať alebo presunúť {count, plural, one {# položku} few {# položky} other {# položiek}} do iného spisu",
+      "dragFolder": "Potiahnutím presunúť priečinok",
       "goToMatter": "Prejsť do spisu",
       "menuItem": "Kopírovať/Presunúť do spisu",
       "moveButton": "Presunúť",
