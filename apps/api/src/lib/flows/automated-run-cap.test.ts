@@ -27,6 +27,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { FlowStep, FlowTriggerSource } from "@/api/lib/flows/flow-types";
 import { MAX_AUTOMATED_FLOW_RUNS_PER_DEFINITION_PER_DAY } from "@/api/lib/flows/flow-types";
+import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
@@ -125,9 +126,9 @@ describe("insertAutomatedFlowRunWithinCap", () => {
     await testDb.$count(flowRuns, eq(flowRuns.definitionId, definitionId));
 
   beforeAll(async () => {
-    organizationId = createSafeId<"organization">();
+    organizationId = mintAuthProviderId<"organization">();
     workspaceId = createSafeId<"workspace">();
-    const userId = createSafeId<"user">();
+    const userId = mintAuthProviderId<"user">();
 
     await testDb.insert(organization).values({
       id: organizationId,

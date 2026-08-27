@@ -22,6 +22,7 @@ import {
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { FlowStep, FlowTrigger } from "@/api/lib/flows/flow-types";
+import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
@@ -64,8 +65,8 @@ const WILDCARD_UPLOAD_TRIGGER = {
 } as const satisfies FlowTrigger;
 
 describe("startAutomatedFlowRun authorization gate", () => {
-  const organizationId = createSafeId<"organization">();
-  const authorId = createSafeId<"user">();
+  const organizationId = mintAuthProviderId<"organization">();
+  const authorId = mintAuthProviderId<"user">();
   // The author is a member of this matter and a stranger to the other.
   const authorizedWorkspaceId = createSafeId<"workspace">();
   const unauthorizedWorkspaceId = createSafeId<"workspace">();

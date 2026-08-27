@@ -13,6 +13,7 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import { extractionRuns, workspaces } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";
+import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
@@ -22,11 +23,11 @@ import { createExtractionRunStore, type ExtractionRunDb } from "./store";
 let testDb: TestDatabase;
 let store: ReturnType<typeof createExtractionRunStore>;
 
-const organizationId = createSafeId<"organization">();
-const otherOrganizationId = createSafeId<"organization">();
+const organizationId = mintAuthProviderId<"organization">();
+const otherOrganizationId = mintAuthProviderId<"organization">();
 const workspaceId = createSafeId<"workspace">();
 const otherWorkspaceId = createSafeId<"workspace">();
-const userId = createSafeId<"user">();
+const userId = mintAuthProviderId<"user">();
 
 beforeAll(async () => {
   testDb = await getTestDb();

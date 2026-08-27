@@ -22,6 +22,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { startStragglerCatchUp } from "@/api/lib/workflow/straggler-catchup";
 import type { StragglerRunStarter } from "@/api/lib/workflow/straggler-catchup";
+import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
@@ -30,7 +31,7 @@ type StartedRun = Parameters<StragglerRunStarter>[0];
 let client: Awaited<ReturnType<typeof createTestPglite>> | undefined;
 let db: ReturnType<typeof drizzle>;
 
-const ORG_ID = toSafeId<"organization">(Bun.randomUUIDv7());
+const ORG_ID = mintAuthProviderId<"organization">();
 const USER_ID = "user_straggler_test";
 const CONTACT_ID = toSafeId<"contact">(Bun.randomUUIDv7());
 /** The workspace whose run just finished. */

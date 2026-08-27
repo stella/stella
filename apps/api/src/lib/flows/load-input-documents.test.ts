@@ -20,6 +20,7 @@ import { organization, user } from "@/api/db/auth-schema";
 import { entities, extractedContent, workspaces } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";
+import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
@@ -77,8 +78,8 @@ const { loadInputDocuments, FlowStepError } =
   await import("@/api/lib/flows/flow-executor");
 
 describe("loadInputDocuments", () => {
-  const organizationId = createSafeId<"organization">();
-  const userId = createSafeId<"user">();
+  const organizationId = mintAuthProviderId<"organization">();
+  const userId = mintAuthProviderId<"user">();
   const workspaceId = createSafeId<"workspace">();
   const extractedEntityId = createSafeId<"entity">();
   const pendingEntityId = createSafeId<"entity">();

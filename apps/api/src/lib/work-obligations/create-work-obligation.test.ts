@@ -7,6 +7,7 @@ import {
 } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import { createWorkObligation } from "@/api/lib/work-obligations/create-work-obligation";
+import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 describe("createWorkObligation", () => {
@@ -24,7 +25,7 @@ describe("createWorkObligation", () => {
       tx,
       entityId: createSafeId<"entity">(),
       workspaceId: createSafeId<"workspace">(),
-      actorUserId: createSafeId<"user">(),
+      actorUserId: mintAuthProviderId<"user">(),
       ownerUserId: null,
       agendaKind: "task",
       taskStatus: "open",

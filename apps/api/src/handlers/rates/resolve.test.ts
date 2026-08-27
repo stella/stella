@@ -22,6 +22,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { cents } from "@/api/lib/money";
 import { validateOrgUserId } from "@/api/lib/validated-org-user-id";
 import type { ValidatedOrgUserId } from "@/api/lib/validated-org-user-id";
+import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createPropertyRunReclaimer } from "@/api/tests/property-run-reclaim";
@@ -323,7 +324,7 @@ describe("resolveRate HTTP handler", () => {
   test("404s when the queried user is not a member of the organization", async () => {
     const result = await resolveRateHandler.handler(
       contextFor({
-        userId: toSafeId<"user">(Bun.randomUUIDv7()),
+        userId: mintAuthProviderId<"user">(),
         date: "2025-06-01",
       }),
     );

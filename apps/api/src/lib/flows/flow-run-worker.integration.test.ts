@@ -36,6 +36,7 @@ import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { FlowStep, FlowTrigger } from "@/api/lib/flows/flow-types";
+import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
@@ -164,8 +165,8 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
   let workspaceId: SafeId<"workspace">;
 
   beforeAll(async () => {
-    organizationId = createSafeId<"organization">();
-    userId = createSafeId<"user">();
+    organizationId = mintAuthProviderId<"organization">();
+    userId = mintAuthProviderId<"user">();
     workspaceId = createSafeId<"workspace">();
     const propertyId = createSafeId<"property">();
 

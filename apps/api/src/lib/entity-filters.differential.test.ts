@@ -13,6 +13,7 @@ import { entities, entityVersions, fields, properties } from "@/api/db/schema";
 import type { EntityKind, FieldContent } from "@/api/db/schema-validators";
 import { toSafeId } from "@/api/lib/branded-types";
 import { applyFilters, buildFilterConditions } from "@/api/lib/entity-filters";
+import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 import { createPropertyRunReclaimer } from "@/api/tests/property-run-reclaim";
 
@@ -32,7 +33,7 @@ let client: Awaited<ReturnType<typeof createTestPglite>> | undefined;
 let db: RawDb;
 let reclaimRun: () => Promise<void>;
 
-const ORG_ID = toSafeId<"organization">(Bun.randomUUIDv7());
+const ORG_ID = mintAuthProviderId<"organization">();
 const WS_ID = toSafeId<"workspace">(Bun.randomUUIDv7());
 const CONTACT_ID = toSafeId<"contact">(Bun.randomUUIDv7());
 
